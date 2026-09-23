@@ -1187,7 +1187,10 @@ default and says that instead.
 - **The frame handed out is a copy.** `GetFrameBufferRgba` returns a new array each call. The shim refills one buffer
   per picture, and Mistress hands the array to its render thread, so a live array would be written by the next frame
   while it is drawn. MarsCore hands out its live buffer and has the same exposure on its immediate path; that was not
-  changed here. The cost is one allocation of the frame's size per picture shown.
+  changed here. The cost is one allocation of the frame's size per picture shown. *Retired 2026-09-23 by §6.13: the frame
+  handed out is still a copy, but into an array lent rather than given. A caller that holds it keeps it unwritten, as
+  before; one that hands it back through `IFrameBufferPool` gets it lent again, and Mistress does, so the allocation is
+  gone from its loop. MarsCore is unchanged and keeps the exposure described here.*
 - **The debugger.** `MarsRtDebugTarget` gives the console Mars's memory names: RDRAM, DMEM, IMEM, PIFRAM, ROM (read
   only), and CPU, the processor's kernel view through the direct segments and the TLB, never faulting. It gives the
   CPU's, the RSP's and the VI's registers, disassembly by Mars's two disassemblers, the summary and the cheats. Both
@@ -4271,3 +4274,166 @@ built**; the number to beat, should it be taken up, is the Dam at 10.44 ms.
 - **aarch64.** The table is portable — only its vector handlers are x86-64's. The build without them was checked as
   §6.10.1 checked it, `target_arch = "x86_64"` renamed in `src/rsp/` to a value no target has: clippy reported the
   nineteen renamed conditions and nothing else. The real target and the osx-arm64 job were not run.
+
+#### 6.13 The picture lent, not given (2026-09-23)
+
+The handheld's `[fps]` line, read by the parent session on the Legion Go S, showed the loop's time outside `RunFrame`
+(`total − run`) at about 1 ms at one multiple, **6 to 7 ms at two and 12 to 13 at four**, with `RunFrame` itself 16 to
+24 ms against 11 to 12 in a bench of the same scene: consistent with full collections stopping every thread. A probe
+on this desktop (`~/.cache/emusen/probe/mars-speed/fpsprobe/`, Donkey Kong 64's title) found the source: 1.2 MB
+allocated a frame at one and 4.7 MB at two, a gen-2 collection every four or five frames, all of it
+`GetFrameBufferRgba`, which returned `_frame.AsSpan().ToArray()` (§5.5). The C# core allocates nothing there,
+because it hands out its live buffer. This section removes the allocation without taking on that exposure.
+
+**The claim.** With Mistress wired as it now is, a MarsRT frame allocates no array: the picture is copied into an array
+lent by the core, which Mistress hands back exactly once, when nothing can read it again. No array anything can still
+read is written or lent again, the picture on screen never goes back to an older one, and a caller that does not hand
+arrays back sees exactly the old behaviour.
+
+##### 6.13.1 The design
+
+*The contract* is a capability, `IFrameBufferPool.ReturnFrameBuffer(byte[])`, beside `IFrameSerial` in
+`CoreCapabilities.cs`, and its terms are `EmuSen_Multicore.md` §16's. `GetFrameBufferRgba` still returns a copy that is
+the caller's alone; a caller finished with it may return it once, from any thread, and the core may lend it again.
+Hotaru, Pharaoh, the screenshot and resume-thumbnail paths and every test return nothing and are unaffected.
+
+*The lending* is `EmuSen/Cores/FrameBufferLending.cs`: at most four arrays waiting and a record of the last eight lent,
+under one lock. An array is taken back only if it is in the record, at the current length, with room; a second return,
+a foreign array, one of a size since changed and anything returned after `Dispose` are dropped. `MarsRtCore` keeps its
+own `_frame`, which `TakePicture` fills from the library as before, and `GetFrameBufferRgba` copies it into a lent
+array. The copy is the price of keeping `_frame` the core's; §6.13.4 says what it costs.
+
+*The frame control* (`EmuSen_Serenity.md` §2.8) takes a `release` with each offer and calls it when the offer is
+superseded, is not the one its cached image came from, and has no draw operation that could still copy it. Doing so
+safely needed the defect below fixed first: the control must only ever move forward.
+
+*Mistress* hands frames over through `FrameHandOff`, whose frames carry a state so that the thread that moves one out of
+*waiting* owns its array: the UI thread by presenting it, the emulation thread by replacing it unseen, which returns it
+at once. The `release` it passes is a route to the session's core, cut in `ShutDownCurrentSession`, so that the last
+picture on screen cannot keep an ended session's core and its native machine reachable.
+
+**The defect fixed on the way.** The control copied an operation's array whenever the operation's version differed
+from the cached one's, so an operation drawn late with an older version copied an older picture over a newer one.
+`A_draw_operation_rendered_late_never_takes_the_picture_backwards` was written first and failed against the unchanged
+control, the older operation drawing its red where the newer green had been shown (line 50 of the test, "Expected
+(0, 200, 0), Actual (200, 0, 0)"). The rule is now "only newer than anything copied", with a stale operation drawing
+the cache. It was latent, since Avalonia's compositor applies batches in order; with lent arrays it would have been a
+torn picture, the older operation's array being by then another frame's.
+
+**Why not the C# core's way.** Handing out `_frame` itself would remove the copy too, and the tearing risk with it
+would be exactly MarsCore's. The frame control copies an offer out on the render thread, so a live array is safe only
+while the render thread copies before the next `TakePicture`, which nothing guarantees and a paused render thread,
+a minimised window or a slow compositor break. MarsCore is left as it is (§5.5).
+
+##### 6.13.2 The evidence
+
+In `EmuSen.WiseMan`, headless:
+
+- `GameFrameReleaseTests` (Serenity, 4): the backwards draw above; an array given back once and only when nothing in the
+  control can read it — an unread offer when superseded, a drawn one when a newer is drawn, the cached one never while
+  it is cached, nothing when an operation is disposed twice or drawn again; a held operation disposed undrawn letting
+  its array go; the same array offered four times, as Moon and Mercury offer theirs, never given back.
+- `FrameHandOffTests` (Mistress, 5): frames replaced before the UI thread took them returned once and a presented one
+  left to the control; a route kept per core and cut at the session's end; the ended session's core collected while
+  its last picture is still on screen, and nothing returned to it afterwards; and, with MarsRT, the hand-off and the
+  control wired as `MainWindow` wires them, the two tests that follow.
+- *No tearing.* 400 frames of the synthetic N64 system on a seeded schedule that holds up to four draw operations,
+  draws them late and out of order and disposes them at random: 188 pictures presented, 187 draws of which 83 were
+  late and 54 fell on a changed picture. After every frame each array lent and not yet returned is byte-identical to
+  the copy taken when it was lent, the core never lends one of them, and every draw is pixel-identical to the newest
+  version drawn so far. The lending made 9 arrays and reused 391, so a premature return would have had its array
+  rewritten within a frame or two.
+- *Nothing of the frame's size allocated.* On the same path, 120 frames after 30 of warming: 667 to 670 bytes a frame against
+  a 1,228,800-byte picture, and no array made after the warming (2 in all).
+- `FrameBufferLendingTests` (5): a returned array lent again and a held one never; a double return lent once; a
+  foreign array, even of the lent size, and one lent at another size dropped; the record and the free list bounded
+  whatever is returned; a closed lending taking nothing.
+- `MarsRtFrontendTests.The_frame_handed_out_is_a_copy_the_next_frame_does_not_touch`, kept under its name with the
+  claim widened to the new contract: the held array stays byte-identical through twelve frames whose arrays are
+  returned each time and reused (at most one made), is never among them, and once returned is lent again holding the
+  new picture.
+- The blast radius: the Mistress, Serenity (with the slang tests), Hotaru, MarsRT and lending classes, 996 tests,
+  all passed.
+
+##### 6.13.3 Mutants
+
+Each applied alone, built, and run against the frame tests above, the source restored after each (`mutants.py`
+beside the probe in `~/.cache/emusen/probe/mars-speed/fpspool/`):
+
+| Mutant | Caught by |
+| --- | --- |
+| An offer held by a draw operation released one version early (`> _copiedVersion + 1`) | `With_MarsRT_lending_no_array_the_screen_can_read_is_written_and_the_picture_never_goes_back` |
+| The stale operation's rule restored: any other version copies (`!=`) | the same; `A_draw_operation_rendered_late_never_takes_the_picture_backwards` |
+| A frame the hand-off drops is not released | `Frames_replaced_before_the_screen_took_them_go_back_once_and_a_presented_one_is_the_screen_s`; the no-tearing test |
+| The cached offer not protected | `An_array_is_given_back_once_and_only_when_nothing_here_can_read_it`; the no-tearing and allocation tests |
+| The lending takes back an array it has not lent | `Returning_an_array_twice_does_not_lend_it_twice`; `A_foreign_array_or_one_lent_at_another_size_is_dropped` |
+| The route not cut when the session ends | `Once_a_session_ends_the_picture_left_on_screen_neither_keeps_its_core_nor_returns_to_it`; `A_core_that_does_not_lend_gets_no_route_and_one_that_does_keeps_its_route_until_the_session_ends` |
+
+*What the pattern says.* The one-version-early mutant is caught only by the randomised test, not by the scripted one:
+the scripted sequence never holds an operation exactly one version past the last copy when that version is
+superseded, and the randomised schedule does within its first frames. The foreign-array case survived the first
+version of the lending test, whose foreign array was returned before any length was set and was dropped for its
+length instead; a foreign array of the lent length was added and catches it.
+
+##### 6.13.4 Speed, and the prediction's fate
+
+*The prediction, stated before measuring:* in a desktop loop shaped like Mistress's, `total − run` at two and four falls
+to the size of the copy into the lent array alone, about 1 ms at four, and the gen-2 collections disappear.
+
+*The loop* is a probe, `~/.cache/emusen/probe/mars-speed/fpspool/`: `RunFrame`, the audio drained, and, when the serial
+moved, `GetFrameBufferRgba` offered through a newest-wins slot to a render thread that copies it with
+`SKImage.FromPixelCopy`, as the frame control does. In the pooled build the render thread returns the array it showed
+once it has copied a newer one, and the producer returns one replaced unseen. Unpaced, Donkey Kong 64's title (480
+lines, interlaced), rows sent once, the processor rasteriser, four workers, presentation deferred; 300 frames warmed
+and 300 measured, the two builds interleaved, three rounds (`ab.sh`, `ab-2026-09-23.txt` there):
+
+| Multiple (frame) | build | `RunFrame` ms | loop ms | `total − run` ms | of which the copy | allocated a frame | gen-2 in 300 | pause in 300 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1× (640×480) | new array | 3.41–3.53 | 3.48–3.61 | 0.07–0.08 | 0.07–0.08 | 1,202 KiB | 75 | 8.0–8.9 ms |
+| | lent | 3.35–3.41 | **3.38–3.45** | 0.03 | 0.03 | 1.9 KiB | **0** | 0 |
+| 2× (1280×960) | new array | 7.19–7.44 | 7.54–7.79 | 0.35–0.37 | 0.34–0.36 | 4,802 KiB | 100 | 30.0–31.0 ms |
+| | lent | 7.25–7.32 | **7.51–7.61** | 0.26–0.28 | 0.25–0.27 | 1.9 KiB | **0** | 0 |
+| 4× (2560×1920) | new array | 22.19–22.46 | 26.40–26.64 | 4.17–4.21 | 4.15–4.20 | 19,202 KiB | 100 | 100.7–101.2 ms |
+| | lent | 24.10–24.73 | **25.71–26.39** | 1.61–1.67 | 1.59–1.65 | 1.9 KiB | **0** | 0 |
+
+Every collection the new arrays caused was a gen-2 (the counts of all three generations are equal), since each array
+is large-object heap.
+
+*The prediction's fate.* **The collections disappear**, as predicted: 75 and 100 in 300 frames to none, and with them
+8 to 101 ms of pause. **`total − run` falls to the copy alone**, as predicted in kind: what is left outside `RunFrame` is
+the copy into the lent array to within 0.02 ms. **Its size was short of the prediction at four:** 1.6 ms, not about 1,
+because the frame there is 2,560 by 1,920, 19.7 MB, twice the 640 by 240 picture the estimate had in mind; the copy
+runs at about 12 GB/s at every multiple.
+
+**What the prediction did not say, and the table does:** at four the loop is no faster. The 2.5 ms the emulation thread
+no longer spends outside `RunFrame` reappear inside it, 22.2 to 24.1–24.7 ms, and the loop moves only from 26.4–26.6 to
+25.7–26.4. The loop at four on this desktop is bound by the deferred walk (§6.11), whose join inside `RunFrame` absorbs
+whatever the emulation thread saves. Two checks say so. Padding the lent build's loop with a spin after the offer
+brings `RunFrame` back down by what it pads and leaves the loop where it was: 2.5 ms of spin, `RunFrame` 22.21 ms and
+the loop 26.43; 5 ms, 20.16 and 26.87. And with presentation immediate, where there is no walk to join, `total − run`
+falls from 3.76–3.81 to 1.38–1.39 ms with `RunFrame` unmoved within its noise (95 to 102 ms, the walk now inside it,
+two rounds). At one and two, where the emulation thread is the bound, the loop gains about 0.1 ms, 4 and 1.5 per cent of it.
+
+*What the desktop cannot show.* The handheld's excess was 6 to 13 ms and not 0.3 to 4: its collections are far dearer
+than this machine's one millisecond each, and §6.1 found it bound on the emulation thread. The prediction for it,
+stated here before the parent session measures it: `total − run` at two and four falls to the copy there, 1 ms or a
+little more at four, `RunFrame` returns toward the bench's 11 to 12 ms where it was inflated by collections, and the
+gen-2 count in Mistress's own log is zero.
+
+##### 6.13.5 What is not done
+
+- **The copy.** `GetFrameBufferRgba` still copies `_frame` into the lent array, 1.6 ms at four on this desktop. Writing
+  the library's picture straight into a lent array in `TakePicture` would remove it, at the price of the core no longer
+  owning the picture it answers screenshots and tests with, and of `GetFrameBufferRgba` lending the same array to two
+  callers. Not built.
+- **The C# core.** Its live buffer and its exposure are unchanged (§5.5); lending there would add a copy it does not
+  make today.
+- **The small allocations.** The audio drain's `short[]`, 1.5 KiB a frame, and 0.2 KiB inside `RunFrame`, both gen-0
+  and collected every few thousand frames; and on Mistress's path the hand-off's frame and the control's offer, a
+  few hundred bytes. None was removed.
+- **A lease.** A caller that returns the same array twice across a re-lend is not detectable by array (`EmuSen_Multicore.md`
+  §16); Mistress returns once by construction.
+- **The handheld.** Not measured here, by instruction; the prediction for it is stated above.
+- **A real window.** Every test is headless; Avalonia's live compositor, its order of rendering and disposing draw
+  operations, and the GPU backend's copy were not instrumented. The rules of `EmuSen_Serenity.md` §2.8 do not depend
+  on that order.

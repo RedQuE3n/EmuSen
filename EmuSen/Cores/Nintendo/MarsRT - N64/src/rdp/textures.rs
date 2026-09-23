@@ -81,8 +81,8 @@ impl Rdp {
         let coordinates = self.command[1];
         self.clear_attributes();
 
-        let dsdx = ((coordinates >> 16) as i16 as i32) << 11;
-        let dtdy = (coordinates as i16 as i32) << 11;
+        let dsdx = (((coordinates >> 16) as i16 as i32) << 11) / self.multiple.scale;
+        let dtdy = ((coordinates as i16 as i32) << 11) / self.multiple.scale;
         self.attribute_value[ATTRIBUTE_S] = ((coordinates >> 48) as i32) << 16;
         self.attribute_value[ATTRIBUTE_T] = (((coordinates >> 32) & 0xFFFF) as i32) << 16;
 

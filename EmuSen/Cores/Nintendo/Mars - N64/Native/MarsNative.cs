@@ -7,7 +7,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Native
     // MarsRT's Rust library, loaded once; when it is absent, refused or turned off, every component runs its C# twin - see Mars_Native.md §1.
     public static unsafe class MarsNative
     {
-        public const uint InterfaceVersion = 7;
+        public const uint InterfaceVersion = 8;
         public const string Variable = "EMUSEN_MARS_NATIVE";
 
         private static readonly Lazy<(nint Handle, string Report)> Library = new(Load);

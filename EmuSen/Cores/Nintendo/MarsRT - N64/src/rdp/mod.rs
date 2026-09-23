@@ -6,6 +6,7 @@ mod coverage;
 mod depth;
 mod fill;
 mod filter;
+pub mod gpu;
 mod lod;
 mod modes;
 mod one_cycle;
@@ -21,6 +22,33 @@ mod walker;
 pub use modes::{BlendSelectors, CombinerSelectors, Modes, SET_MASK_IMAGE};
 pub use split::{Split, Step};
 use texture_memory::LoadKind;
+
+/// `Rdp.SpanRows`: the console's rows and columns of walker scratch, which a processor at a multiple widens by it.
+pub const SPAN_ROWS: usize = 1024;
+
+/// Walker scratch of `n` entries, as C#'s `Widen` allocates it.
+fn scratch<T: Copy>(value: T, n: usize) -> Box<[T]> {
+    vec![value; n].into_boxed_slice()
+}
+
+/// C#'s `[SkipInState]` `_scale`, `_scaled` and `Drew`: a processor drawing at a multiple into a memory nothing in the machine reads
+/// (Mars_Rdp.md §11); `device` is `ShadeOn`, a processor whose rows go to the device, and the two flags say what the device's copies
+/// would have to hold again (Mars_Gpu.md §7.1).
+#[derive(Clone, Copy, Debug)]
+pub struct Multiple {
+    pub scale: i32,
+    pub scaled: bool,
+    pub drew: bool,
+    pub device: bool,
+    pub texture_memory_changed: bool,
+    pub tiles_changed: bool,
+}
+
+impl Default for Multiple {
+    fn default() -> Self {
+        Multiple { scale: 1, scaled: false, drew: false, device: false, texture_memory_changed: true, tiles_changed: true }
+    }
+}
 
 use crate::state::{State, StateReader, StateResult, StateWriter, boxed};
 
@@ -188,15 +216,15 @@ pub struct Rdp {
     pub combine: u64,
     pub combined: Color,
     pub command: [u64; 22],
-    pub coverage: Box<[u8; 1024]>,
+    pub coverage: Box<[u8]>,
     pub depth_correct_dx: i32,
     pub depth_correct_dy: i32,
     pub depth_image: u32,
     pub depth_slope: i32,
     pub depth_step: i32,
-    pub edge_invalid: Box<[bool; 4096]>,
-    pub edge_left: Box<[i32; 4096]>,
-    pub edge_right: Box<[i32; 4096]>,
+    pub edge_invalid: Box<[bool]>,
+    pub edge_left: Box<[i32]>,
+    pub edge_right: Box<[i32]>,
     pub environment_color: Color,
     pub fill_color: u32,
     pub fog_color: Color,
@@ -231,11 +259,11 @@ pub struct Rdp {
     pub shade_correct_dx: [i32; 4],
     pub shade_correct_dy: [i32; 4],
     pub shade_step: [i32; 4],
-    pub span_attributes: Box<[i32; 8192]>,
-    pub span_drawn: Box<[bool; 1024]>,
-    pub span_left: Box<[i32; 1024]>,
-    pub span_major_x: Box<[i32; 1024]>,
-    pub span_right: Box<[i32; 1024]>,
+    pub span_attributes: Box<[i32]>,
+    pub span_drawn: Box<[bool]>,
+    pub span_left: Box<[i32]>,
+    pub span_major_x: Box<[i32]>,
+    pub span_right: Box<[i32]>,
     pub taken: i32,
     pub texel0: Color,
     pub texel1: Color,
@@ -248,6 +276,8 @@ pub struct Rdp {
     pub modes: Modes,
     /// `[SkipInState]` in C#: this processor's share of a list shared by several, and the stamps that assemble their scratch.
     pub split: crate::Skip<Split>,
+    /// `[SkipInState]` in C#: the multiple this processor draws at, and whether it has drawn.
+    pub multiple: crate::Skip<Multiple>,
 }
 
 impl Default for Rdp {
@@ -271,15 +301,15 @@ impl Default for Rdp {
             combine: 0,
             combined: Color::default(),
             command: [0; 22],
-            coverage: boxed(0),
+            coverage: scratch(0, SPAN_ROWS),
             depth_correct_dx: 0,
             depth_correct_dy: 0,
             depth_image: 0,
             depth_slope: 0,
             depth_step: 0,
-            edge_invalid: boxed(false),
-            edge_left: boxed(0),
-            edge_right: boxed(0),
+            edge_invalid: scratch(false, SPAN_ROWS * 4),
+            edge_left: scratch(0, SPAN_ROWS * 4),
+            edge_right: scratch(0, SPAN_ROWS * 4),
             environment_color: Color::default(),
             fill_color: 0,
             fog_color: Color::default(),
@@ -314,11 +344,11 @@ impl Default for Rdp {
             shade_correct_dx: [0; 4],
             shade_correct_dy: [0; 4],
             shade_step: [0; 4],
-            span_attributes: boxed(0),
-            span_drawn: boxed(false),
-            span_left: boxed(0),
-            span_major_x: boxed(0),
-            span_right: boxed(0),
+            span_attributes: scratch(0, SPAN_ROWS * ATTRIBUTES),
+            span_drawn: scratch(false, SPAN_ROWS),
+            span_left: scratch(0, SPAN_ROWS),
+            span_major_x: scratch(0, SPAN_ROWS),
+            span_right: scratch(0, SPAN_ROWS),
             taken: 0,
             texel0: Color::default(),
             texel1: Color::default(),
@@ -329,6 +359,7 @@ impl Default for Rdp {
             tiles: [TextureTile::default(); 8],
             modes: Modes::default(),
             split: crate::Skip(Split::default()),
+            multiple: crate::Skip(Multiple::default()),
         };
         rdp.refresh();
         rdp
@@ -499,25 +530,43 @@ pub struct RdpMemory<'a> {
     rdram_len: usize,
     hidden: *mut u8,
     hidden_len: usize,
+    /// Where loads read: the machine's RDRAM, which for a processor at a multiple is not the frame it draws into (Mars_Rdp.md §11).
+    texture: *const u8,
+    texture_len: usize,
+    /// The device a processor at the multiple records its rows for instead of shading them, or null (Mars_Gpu.md §5).
+    gpu: *mut gpu::GpuRasteriser,
     check: Option<(&'a crate::memory::dp_threads::Shared, i64, &'a crate::memory::dp_threads::Checked)>,
     _memories: std::marker::PhantomData<&'a mut [u8]>,
 }
 
 impl<'a> RdpMemory<'a> {
     pub fn new(rdram: &'a mut [u8], hidden: &'a mut [u8]) -> Self {
-        RdpMemory { rdram: rdram.as_mut_ptr(), rdram_len: rdram.len(), hidden: hidden.as_mut_ptr(), hidden_len: hidden.len(), check: None, _memories: std::marker::PhantomData }
+        RdpMemory { rdram: rdram.as_mut_ptr(), rdram_len: rdram.len(), hidden: hidden.as_mut_ptr(), hidden_len: hidden.len(), texture: rdram.as_ptr(), texture_len: rdram.len(), gpu: std::ptr::null_mut(), check: None, _memories: std::marker::PhantomData }
+    }
+
+    /// A processor at a multiple's view: its own frame and hidden bits for every pixel, the machine's RDRAM for every load, and no verifier.
+    pub fn scaled(frame: &'a mut [u8], hidden: &'a mut [u8], texture: &'a [u8]) -> Self {
+        RdpMemory { rdram: frame.as_mut_ptr(), rdram_len: frame.len(), hidden: hidden.as_mut_ptr(), hidden_len: hidden.len(), texture: texture.as_ptr(), texture_len: texture.len(), gpu: std::ptr::null_mut(), check: None, _memories: std::marker::PhantomData }
+    }
+
+    /// `scaled` by raw pointer, for a worker's thread.
+    ///
+    /// # Safety
+    /// As `shared`, for the frame; the texture memory is read only and must stay allocated for `'a`.
+    pub(crate) unsafe fn scaled_shared(frame: (*mut u8, usize), hidden: (*mut u8, usize), texture: (*const u8, usize)) -> Self {
+        RdpMemory { rdram: frame.0, rdram_len: frame.1, hidden: hidden.0, hidden_len: hidden.1, texture: texture.0, texture_len: texture.1, gpu: std::ptr::null_mut(), check: None, _memories: std::marker::PhantomData }
     }
 
     /// # Safety
     /// Both memories must stay allocated for `'a`, and no other thread may touch a byte this view touches unless ordered by the page marks.
     pub(crate) unsafe fn shared(rdram: (*mut u8, usize), hidden: (*mut u8, usize), check: Option<(&'a crate::memory::dp_threads::Shared, i64, &'a crate::memory::dp_threads::Checked)>) -> Self {
-        RdpMemory { rdram: rdram.0, rdram_len: rdram.1, hidden: hidden.0, hidden_len: hidden.1, check, _memories: std::marker::PhantomData }
+        RdpMemory { rdram: rdram.0, rdram_len: rdram.1, hidden: hidden.0, hidden_len: hidden.1, texture: rdram.0, texture_len: rdram.1, gpu: std::ptr::null_mut(), check, _memories: std::marker::PhantomData }
     }
 
     /// A view of no memory, where every read is past the end and reads zero.
     pub(crate) fn nothing() -> RdpMemory<'static> {
         let dangling = std::ptr::NonNull::<u8>::dangling().as_ptr();
-        RdpMemory { rdram: dangling, rdram_len: 0, hidden: dangling, hidden_len: 0, check: None, _memories: std::marker::PhantomData }
+        RdpMemory { rdram: dangling, rdram_len: 0, hidden: dangling, hidden_len: 0, texture: dangling, texture_len: 0, gpu: std::ptr::null_mut(), check: None, _memories: std::marker::PhantomData }
     }
 
     #[inline(always)]
@@ -573,6 +622,119 @@ impl<'a> RdpMemory<'a> {
     #[inline(always)]
     pub fn be32(&self, at: usize) -> u32 {
         u32::from_be_bytes([self.get(at), self.get(at + 1), self.get(at + 2), self.get(at + 3)])
+    }
+
+    /// The same view with a device to record for: `ShadeOn`'s target.
+    pub fn with_gpu(mut self, gpu: *mut gpu::GpuRasteriser) -> Self {
+        self.gpu = gpu;
+        self
+    }
+
+    /// The device this view's rows go to, if one does.
+    #[inline(always)]
+    pub(super) fn gpu(&mut self) -> Option<&mut gpu::GpuRasteriser> {
+        // SAFETY: the rasteriser outlives the view and is this thread's while it runs the word (the drain's rule).
+        unsafe { self.gpu.as_mut() }
+    }
+
+    /// The length of the memory loads read, which is the frame's unless the processor draws at a multiple.
+    #[inline(always)]
+    pub fn texture_len(&self) -> usize {
+        self.texture_len
+    }
+
+    /// A load's word: verified as a read of the machine's RDRAM when the frame is that memory.
+    #[inline(always)]
+    pub fn texture_be32(&self, at: usize) -> u32 {
+        assert!(at + 3 < self.texture_len);
+        if self.texture == self.rdram.cast_const() {
+            for i in 0..4 {
+                self.touch(at + i, false);
+            }
+        }
+        // SAFETY: in bounds; see `shared` and `scaled_shared`.
+        unsafe { u32::from_be_bytes([self.texture.add(at).read(), self.texture.add(at + 1).read(), self.texture.add(at + 2).read(), self.texture.add(at + 3).read()]) }
+    }
+}
+
+impl Rdp {
+    /// `DrawAt`: this processor draws at the multiple, its scratch widened by it; the memory it draws into is the caller's at every accept.
+    pub fn draw_at(&mut self, scale: i32) {
+        self.multiple.scale = scale;
+        self.multiple.scaled = scale > 1;
+        self.widen(scale);
+    }
+
+    /// `Widen`: the per-row and per-column scratch sized for a multiple of the console's rows and columns.
+    pub(super) fn widen(&mut self, scale: i32) {
+        let n = SPAN_ROWS * scale.max(1) as usize;
+        self.span_drawn = scratch(false, n);
+        self.span_left = scratch(0, n);
+        self.span_right = scratch(0, n);
+        self.edge_left = scratch(0, n * 4);
+        self.edge_right = scratch(0, n * 4);
+        self.edge_invalid = scratch(false, n * 4);
+        self.span_attributes = scratch(0, n * ATTRIBUTES);
+        self.span_major_x = scratch(0, n);
+        self.coverage = scratch(0, n);
+        self.split.coverage = scratch(0, n);
+    }
+
+    /// `Rescale`: after the state copied from the native processor, its images and scissor are the machine's and are taken to the multiple.
+    pub fn rescale(&mut self) {
+        if !self.multiple.scaled {
+            return;
+        }
+        let scale = self.multiple.scale;
+        let area = (scale * scale) as u32;
+        self.color_image = self.color_image.wrapping_mul(area);
+        self.color_image_width *= scale;
+        self.depth_image = self.depth_image.wrapping_mul(area);
+        self.scissor_left *= scale;
+        self.scissor_top *= scale;
+        self.scissor_right *= scale;
+        self.scissor_bottom *= scale;
+    }
+
+    /// `Follow`: the native processor decides what draws alone; the one at the multiple follows it, unless it shades on the device, which always draws alone.
+    #[inline(always)]
+    pub fn follow(&mut self, native: &Rdp) {
+        if !self.multiple.device {
+            self.split.alone = native.split.alone;
+        }
+    }
+
+    /// `ShadeOn`: only a processor at a multiple, drawing alone; the machine's own picture is never the device's (Mars_GpuPlan.md §0).
+    pub fn shade_on_device(&mut self, on: bool) {
+        assert!(!on || self.multiple.scaled, "the device shades the multiple, never the machine's picture");
+        self.multiple.device = on;
+        if on {
+            self.split.alone = true;
+            self.split.workers = 1;
+        }
+    }
+
+    /// `NewScaled`: a processor at the multiple standing where the native one stands, its scratch widened and its images rescaled.
+    pub fn new_scaled(native: &Rdp, scale: i32) -> Rdp {
+        let mut scaled = Rdp::default();
+        scaled.draw_at(scale);
+        scaled.copy_state_from(native);
+        scaled.rescale();
+        scaled
+    }
+
+    #[inline(always)]
+    pub fn scale(&self) -> i32 {
+        self.multiple.scale
+    }
+
+    #[inline(always)]
+    pub fn scaled(&self) -> bool {
+        self.multiple.scaled
+    }
+
+    pub fn drew(&self) -> bool {
+        self.multiple.drew
     }
 }
 

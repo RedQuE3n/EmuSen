@@ -31,7 +31,7 @@ pub struct Split {
     pub blended: i64,
     pub shift: i64,
     pub past_shift: i64,
-    pub coverage: Box<[i64; 1024]>,
+    pub coverage: Box<[i64]>,
     pub primitives: i64,
     pub serialised: i64,
     pub hazard_loads: i64,
@@ -55,7 +55,7 @@ impl Default for Split {
             blended: 0,
             shift: 0,
             past_shift: 0,
-            coverage: crate::state::boxed(0),
+            coverage: vec![0; super::SPAN_ROWS].into_boxed_slice(),
             primitives: 0,
             serialised: 0,
             hazard_loads: 0,
@@ -272,8 +272,14 @@ impl Rdp {
     /// `CopyStateFrom`: everything the state holds, the decoded modes, the stamps and the extents, so a joining processor stands where the leader stands.
     pub fn copy_state_from(&mut self, other: &Rdp) {
         let (worker, workers) = (self.split.worker, self.split.workers);
+        let multiple = *self.multiple;
         self.clone_from(other);
         self.configure(worker, workers);
+        // The walker's scratch is read at the console's width, and widened again after for a processor at a multiple (Mars_Rdp.md §11).
+        *self.multiple = multiple;
+        if multiple.scaled {
+            self.widen(multiple.scale);
+        }
     }
 }
 

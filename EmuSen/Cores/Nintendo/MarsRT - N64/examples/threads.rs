@@ -1,5 +1,6 @@
 //! A timed run with the picture on, in one of MarsRT's thread modes, printing ms a frame and the joined state's hash. See Mars_Native.md §5.6.8.
-//! `cargo run --release --example threads -- <rom> <state or -> <frames> <plain|threaded|deferred|split> [workers] [blocks]`
+//! `cargo run --release --example threads -- <rom> <state or -> <frames> <plain|threaded|deferred|split> [workers] [blocks] [scale=N] [aa=N] [gpu]`;
+//! the last three as the shim's `RenderScale`, `Antialiasing` and `Gpu` (Mars_Native.md §6.4).
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -19,6 +20,8 @@ fn main() {
     let mode = args[4].as_str();
     let workers: usize = args.get(5).and_then(|w| w.parse().ok()).unwrap_or(4);
     let blocks = args.iter().skip(5).any(|a| a == "blocks");
+    let number = |key: &str| args.iter().skip(5).find_map(|a| a.strip_prefix(key).and_then(|v| v.parse::<i32>().ok())).unwrap_or(1);
+    let (scale, aa, gpu) = (number("scale="), number("aa="), args.iter().skip(5).any(|a| a == "gpu"));
 
     let mut core = Core::new(Machine::load_rom(Arc::new(image), true, None, None));
     core.scanout.repeat_rows = true;
@@ -29,6 +32,10 @@ fn main() {
     core.machine.set_threaded_rdp(mode != "plain");
     core.machine.set_deferred(mode == "deferred" || mode == "split");
     core.machine.set_recompiler(blocks);
+    core.set_multiple(scale, aa, gpu);
+    if gpu {
+        eprintln!("device: {}", core.gpu_report());
+    }
 
     let started = Instant::now();
     for _ in 0..frames {

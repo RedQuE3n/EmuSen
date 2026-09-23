@@ -589,6 +589,7 @@ namespace EmuSen.Cores.Nintendo.Mars
         {
             JoinPresentation();
             vi.Scan();
+            vi.RasterEdited = false;
             _frameWidth = Compose(vi, vi.FrameHeight, vi.Serrate, RepeatRows, ref _frame);
             _frameSerial++;
             _rowRepeat = vi.Serrate || RepeatRows ? 1 : 2;
@@ -601,14 +602,16 @@ namespace EmuSen.Cores.Nintendo.Mars
             JoinPresentation();
 
             bool walk = vi.Prepare(_scan);
-            if (walk) vi.Capture(_scan, walkRepeats: !SkipRepeatedScans);
+            if (walk) vi.Capture(_scan, walkRepeats: !SkipRepeatedScans || vi.RasterEdited);
 
-            // A scan that would write the raster already there is not walked, and the picture on show is already it - see Mars_Video.md §2.8.
-            if (walk && _scan.Repeats && SkipRepeatedScans)
+            // A scan that would write the raster already there is not walked, and the picture on show is already it unless the raster was edited since - see Mars_Video.md §2.8.
+            if (walk && _scan.Repeats && SkipRepeatedScans && !vi.RasterEdited)
             {
                 RepeatedScans++;
                 return;
             }
+
+            vi.RasterEdited = false;
 
             int rows = vi.FrameHeight;
             bool serrate = vi.Serrate, repeatRows = RepeatRows;

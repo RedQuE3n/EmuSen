@@ -68,6 +68,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
 
         private bool _wasBlank;
 
+        // True once a border, a held line's expiry or a blank has changed the raster since the last walk, so a repeat is no longer the picture on show - see Mars_Video.md §2.8.
+        [EmuSen.Common.SkipInState] internal bool RasterEdited;
+
         public Vi(MemoryBus bus) => _bus = bus;
 
         public uint Read32(uint offset) => offset < Registers * 4 ? _registers[offset >> 2] : 0;

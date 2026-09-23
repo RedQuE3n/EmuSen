@@ -3400,7 +3400,7 @@ part of (below). The last column is what the C# history already measured for the
 
 | # | if this were free | the Dam, from 14.50 | Ocarina, from 6.78 | Mario, from 5.80 | priced by the C# history? |
 | --- | --- | --- | --- | --- | --- |
-| 1 | the vector unit (5.25, 2.44, 2.43 ms) | 9.3 | 4.3 | 3.4 | `Mars_RspVector.md` §14: the same arithmetic in host vectors bought C# 4, 19 and 22 per cent with the processor at 27 to 36 per cent of its thread; here the vector unit alone is 36 to 42, and the plain path it would be checked against is what MarsRT already runs. Not a recompiler lever, and not measured in Rust. |
+| 1 | the vector unit (5.25, 2.44, 2.43 ms) | 9.3 | 4.3 | 3.4 | `Mars_RspVector.md` §14: the same arithmetic in host vectors bought C# 4, 19 and 22 per cent with the processor at 27 to 36 per cent of its thread; here the vector unit alone is 36 to 42, and the plain path it would be checked against is what MarsRT already runs. Not a recompiler lever, and not measured in Rust. *Built in §6.10: 14.35 to 11.67, 6.75 to 5.57, 5.74 to 4.58 ms, the unit a sixth of each frame.* |
 | 2 | the decoded tier (2.11, 0.66, 0.28) | 12.4 | 6.1 | 5.5 | §5.8.3 compiled the blocks entered beside a running processor and measured the Dam two per cent worse; the batch that would pay for it is priced at 0.3 ms and not built. Compiled code runs twice the decoded tier's instructions for 0.27 ms in Ocarina of Time, so the tier compiled at that rate would leave about 0.4 of the Dam's 2.1; the ceiling is the whole 2.1. |
 | 3 | the processor's decode and dispatch (1.64, 0.54, 0.48) | 12.9 | 6.2 | 5.3 | `Mars_Rsp.md` §11 to §12: straight lines compiled with the handlers folded bought C# a quarter to a third of its thread, and §11.2's two tiers made them cheap enough for the device; §3.4 says why a Rust interpreter at 8 ns loses to them at 3. Not built in Rust. |
 | 4 | the presenter's join (0.63, 0.69, 0.99) | 13.9 | 6.1 | 4.8 | Not priced for MarsRT: §5.6.8's counters could not see it. The C# core walks in four bands at 1.8 to 2.9 ms (§5.4.4) against MarsRT's one thread at 2.9 to 4.5, and a frame that is shorter than the walk before it waits; bands, a cheaper walk, or a second frame of latency would each take it, the last a play decision. |
@@ -3432,7 +3432,8 @@ threading cannot afford. It is ranked last and not recommended.
 build next — the second is §5.8.3's, measured a loss once and waiting on the batch, and the third is a compiler for
 the processor, `Mars_Rsp.md` §11's whole design over again — and the prediction for each is stated here so it can be wrong in writing: a vector unit in host vectors,
 exact against the plain path as §3 requires, takes the Dam from 14.5 to between 10 and 12 ms and the other two by
-1 to 1.5 ms each — the vector unit's share is not all arithmetic, and C#'s §14 did not make its unit free; and
+1 to 1.5 ms each — the vector unit's share is not all arithmetic, and C#'s §14 did not make its unit free (*held,
+§6.10: 11.67 ms, and 1.18 and 1.15 off the others*); and
 either bands or a deeper queue for the presenter take Super Mario 64 from 5.8 to about 5.0 and Ocarina of Time to
 about 6.2, with the Dam gaining half a millisecond. Held as §3.4 taught, since neither is measured in Rust.
 
@@ -3450,3 +3451,247 @@ about 6.2, with the Dam gaining half a millisecond. Held as §3.4 taught, since 
   should carry over and their sizes need not, since a cache miss charged to `set_element` here is a larger miss
   there. Repeating the batch on the device is the two lines the README gives, once its Python has `elfutils`.
 - Anything under half a per cent: those rows are ten to thirty samples.
+
+#### 6.10 The vector unit in host vectors (2026-09-23)
+
+§6.9 ranked the vector unit first of the levers left on the emulation thread — 5.25, 2.44 and 2.43 ms of the three
+gameplay frames, a third of each, with `set_element`, one element of one register written, the hottest frame in it —
+and stated a prediction for it: a vector unit in host vectors, exact against the plain path, would take the Dam from
+14.5 ms to between 10 and 12, and the other two games down by 1 to 1.5 ms. This section is that unit, the evidence
+that it is exact, and the measurement that tests the prediction. **The prediction held**: 11.67 ms at the Dam, 1.18
+and 1.15 ms off the other two.
+
+**The claim.** `src/rsp/simd.rs` runs the vector unit's arithmetic eight elements at a time in SSE2, SSSE3 and
+SSE4.1, beside the element-by-element unit of §3, which is unchanged and is its oracle. Every vector operation and
+every vector load and store leaves the processor, DMEM and the machine exactly as the element-by-element unit leaves
+them: registers, the accumulator to its last bit, VCO, VCC, VCE and the divide unit.
+
+**The layout, changed once for both paths.** The C# twin of §3 kept the register file as 256 elements and the
+accumulator as eight 64-bit words, the save state's shapes. MarsRT's processor now keeps the register file as
+thirty-two lanes of eight elements, element 0 first, so that a register is one 128-bit load and one store, and the
+accumulator as three thirds of eight lanes — high, middle and low sixteen bits — as `Mars_RspVector.md` §15 keeps the
+C# eight-lane unit's and as every fast reference keeps theirs, because SSE has no 64-bit arithmetic shift and no
+64-bit compare, and a 48-bit value in thirds needs neither. The state is not changed: it still carries C#'s eight
+words, widened from the thirds when written and narrowed when read (`rsp::widen`, `rsp::narrow`), and every state on
+disk loads. The element-by-element unit reads and writes the same thirds through the `Memory` trait — `acc` composes a
+word from them and `set_acc` splits one — so it computes exactly what it computed on the words.
+
+*The bits above 47, found by the C# oracle and not by the crate.* A state no machine wrote can carry noise above bit
+47 of an accumulator word, and `MarsNativeStateTests.Every_field_filled_with_noise_comes_back_from_rust_byte_for_byte`
+fills every field with it and requires the state back byte for byte. The first version of the layout dropped those
+bits at a load, and all eight of that test's cases failed, while the crate's processor tests, which draw no such
+bits, passed (its full suite was not run on that version). They are
+now a fourth array beside the thirds, `accumulator_top`, which no instruction reads. It follows the words' old rule
+exactly: an instruction that writes a lane's whole accumulator (`accumulate`, and the eight-lane unit's
+`set_thirds`) clears them, and one that writes only the low sixteen bits (`set_acc_low`, the unit's `set_low`) keeps
+them. The random programs below give a quarter of their seeds noise there, and a mutant that keeps the bits through a
+whole write is caught (the mutant table).
+
+**What runs eight lanes at a time**, and how:
+
+- *The element selector* is one `pshufb` with a key from a table of the sixteen patterns built at compile time from
+  `Mars_RspVector.md` §2's rule; selectors 0 and 1 skip it. Both sources and the destination are loaded whole before
+  anything is written, so reading before writing holds by construction.
+- *The multiplies* are `pmullw` with `pmulhw` for signed by signed and `pmulhuw` for unsigned by unsigned; the mixed
+  families (`VMUDM`/`VMADM` signed by unsigned, `VMUDN`/`VMADN` the other way round) take the unsigned high word less
+  the unsigned operand where the signed one is negative, which is the exact thirty-two-bit product since every mixed
+  product fits thirty-two signed bits. The fraction multiplies double the product in thirds with the sign taken
+  before the doubling, which is right for the one product past thirty-one bits, `0x8000 × 0x8000`; the plain forms
+  add `0x8000` as an exclusive-or of bit 15 with its carry propagated. The accumulating forms add in thirds with an
+  unsigned carry from each third and the carry of a carry from the middle (`add48`), and there is no fourth third,
+  which is the wrap of `Mars_RspVector.md` §6.1.
+- *The clamps* are the three shapes of `Mars_RspVector.md` §7: the signed clamp of bits 47:16 is one `packssdw` of the
+  middle and high thirds interleaved; the low clamp keeps the low third while the high third equals the middle's sign
+  and is 0 or all ones by the high third's sign otherwise; the unsigned clamp is zero below zero and all ones once the
+  high third is positive or zero with the middle's top bit set. The quarter multiplies shift the interleaved pair right
+  one before the pack and mask the low four bits. `VRNDP`, `VRNDN` and `VMACQ` add a masked addend through `add48`.
+- *The adds.* `VADD` saturates `min(s, t) + carry` then adds `max(s, t)`, since the smaller operand plus one saturates
+  only when both are the largest positive value; `VSUB` saturates `t + carry` and corrects by one where that
+  saturated; the accumulator's low third takes the unclamped sums. `VABS` is an and-not, an exclusive-or with the
+  sign and a saturating subtract, which maps `-0x8000` to `0x7FFF` and leaves the accumulator the wrapped negation.
+  `VADDC` and `VSUBC` take their carries and borrows from `paddusw`/`psubusw` against the wrapped result.
+- *The compares, clips and merge* are lane masks: the flags are unpacked from VCO, VCC and VCE into masks by one
+  broadcast, an and and a compare against the eight bit weights, and packed back by `packsswb` and `pmovmskb`. The
+  choices are `pblendvb`. `VCL` updates a lane's less-or-equal only where the signs differed and not-equal was clear,
+  and its greater-or-equal only where neither was set, as §8 of that page says.
+- *The logic, `VSAR` and the nineteen functions that zero `vd`* are one or two instructions each.
+- *The loads and stores of the byte to quad formats* (`LBV` to `LQV`, `SBV` to `SQV`) move whole elements where they
+  do — an even element and an even count, and for a store no wrap inside the register — as one sixteen-byte read of
+  DMEM, a byte exchange by `pshufb` and a masked blend into the register, or the register's bytes blended into
+  DMEM's and written back. Where those sixteen bytes would leave DMEM the same move is taken element by element, with
+  DMEM's wrap left to `data`'s mask, as the byte loop leaves it.
+
+**What stays element by element, and why.** The six reciprocal instructions and `VMOV`: each reads one element, looks
+up a table or moves one lane, and the eight-lane part of them — the shuffled `vt` into the accumulator's low third —
+is one store; the SIMD path calls the element-by-element code for the rest, as the C# unit does (§14 of that page)
+and as all three references do. The other thirteen load and store formats (`LRV`, `LPV`, `LUV`, `LHV`, `LFV`, `LTV`,
+and `SRV`, `SPV`, `SUV`, `SHV`, `SFV`, `SWV`, `STV`), which rotate, widen, narrow or spread across registers: each
+would be a shuffle table of its own, and how much of the games' traffic they are was not counted. `MFC2`, `MTC2`, `CFC2` and `CTC2`, which move sixteen bits. And the dispatch: the function's switch of
+sixty-four is a jump table in both paths, and §6.9's decode row is untouched by this section.
+
+**The switch.** `Memory::simd` says which path runs; it is true only where `rsp::simd_supported` found SSSE3 and
+SSE4.1 at run time, and the SIMD functions carry `#[target_feature]` so they compile for any x86-64 and run only there.
+The default is on, `EMUSEN_MARSRT_RSP_SIMD=0` turns it off for a process, `Machine::set_rsp_simd` for a machine (it
+survives a state load, and is in no state and no equality), and `mars_rsp_set_simd` for the C# twin's component. On
+aarch64 and every other host the module is not compiled and the element-by-element unit runs, as it did.
+
+##### 6.10.1 The evidence
+
+Five oracles, the first four the element-by-element unit.
+
+1. **Random programs, compared after every step** (`tests::rsp`,
+   `the_simd_vector_unit_leaves_the_state_the_element_by_element_one_leaves`). 150 seeds, each 1,024 instruction
+   words — 40 per cent vector operations of every function and selector, 18 per cent vector loads and stores of every
+   format including the four that do not exist, 6 per cent COP2 moves, and the scalar ALU, loads, stores, branches,
+   breaks and COP0 reads — over registers drawn half at random and half from the edges (0, 1, 2, `0x7FFE`, `0x7FFF`,
+   `0x8000`, `0x8001`, `0xFFFE`, `0xFFFF`, `0x00FF`, `0xFF00`, `0x0100`), each accumulator third drawn the same way,
+   the flags a third of the time from their edges, the divide unit random, and a third of the scalar registers an
+   address within seventeen bytes of an alignment or of DMEM's end. Two machines step 4,000 times from one state
+   through `sp_step`, the machine's own entry, restarting at every break as `MarsNativeRspTests` restarts; after
+   every step the two processors and the two DMEMs are compared, and at the end the two machines' whole states.
+   600,000 steps: 221,664 vector operations, 108,846 vector loads and stores, 11,863 breaks. Identical.
+2. **Every function at every selector**, twelve rounds each from fresh edge-drawn state, a round in three naming one
+   register twice or all three the same: 12,288 single instructions, identical.
+3. **The whole-element loads and stores at the edges**: both directions, the five formats, every element, every
+   address of DMEM's last 48 bytes and first 32 — which is where the sixteen-byte window leaves DMEM and where a store
+   would wrap the register — 12,800 instructions, identical.
+4. **The clamps' boundaries** (`the_accumulating_multiplies_agree_where_each_clamp_turns`): the six accumulating
+   multiplies, both rounds and `VMACQ`, with each lane's accumulator set so that the sum lands on one of twelve
+   boundaries of the four clamps, or one either side — 0, `0x7FFF_0000`, `0x7FFF_FFFF`, `0x8000_0000`, `0xFFFF_FFFF`,
+   2³², the largest and smallest 48-bit values and the negative mirrors — 18,000 instructions, identical. This test
+   exists because of mutant 7 below.
+5. **Against the C# core, and the games.** `MarsNativeRspTests`, C#'s plain and SIMD processors against MarsRT's
+   through the component interface over the three entry points, 150 seeds of 3,000 steps each, runs the C# twin's
+   Rust side with its SIMD path on, since it is the default, and passes; so do all 659 tests of WiseMan's
+   `MarsRt|MarsNative` filter, the state tests above among them, and all 455 of the crate's. The three games, from
+   power-on and from their gameplay states, 600 frames each, compared every frame in state, picture and sound
+   against the machine whose vector unit is element by element (`a_machine_whose_vector_unit_runs_in_host_vectors_is_the_machine_element_by_element`):
+   unthreaded and joined, and on four workers deferred through the recompiler with snapshots — twelve runs, 7,200
+   frames, identical. Every benchmark run below ended on the same state hash as the build before this section:
+   `4DEACE55468AA765`, `6881AF7D3E8BF471` and `18279384D87951D7`, in all 45 runs.
+
+`cargo clippy --all-targets` is clean. The build for a host without the module — the osx-arm64 job's case — was
+checked here by compiling the crate with `target_arch = "x86_64"` in `rsp/mod.rs` renamed to a value no target has:
+clippy reported nothing but the renamed condition itself, so no item the scalar path needs is behind the x86 gate
+and nothing left outside it is unused. The real aarch64 target is not installed on this machine, and the CI job was
+not run.
+
+##### 6.10.2 Mutants
+
+Ten, each applied alone to the SIMD path and run against the crate's `tests::rsp`. Where a random-program failure is
+listed, it is the first seed and step at which the two paths parted.
+
+| Mutant | Random programs | Every function and selector | Loads and stores at the edges | Clamp boundaries |
+| --- | --- | --- | --- | --- |
+| The signed clamp saturates at `0x7FFE` | caught | caught | — | — |
+| `VMUDL`'s product written to the middle third, not the low | seed 2, step 59 | function 04, selector 0 | — | — |
+| Selector 13 (element 5) shuffles element 4 | seed 2, step 34 | function 00, selector 13 | — | — |
+| `VADDC`'s carries inverted in VCO | seed 2, step 33 | function 14 | — | — |
+| `VMUDL`'s unsigned high product taken signed in lane 7 | seed 2, step 59 | function 04 | — | — |
+| `add48` drops the carry of a carry into the high third | seed 12, step 4 | function 02 (`VRNDP`) | — | — |
+| The unsigned clamp's `> 0x7FFF_FFFF` taken as `>=` | survived | survived | — | **caught**, `VMACU` |
+| The whole-element load takes an odd element | seed 4, step 51 | — | caught at `0xFD0` | — |
+| `VCL` updates greater-or-equal where not-equal was set | seed 2, step 10 | function 24 | — | — |
+| A whole accumulator write keeps bits 63:48 | seed 2, step 5 | function 00 | — | caught |
+
+*What the pattern says.* The five mutants the plan named, and four more, fall to the random programs on their first
+seeds and to the sweep. The seventh is §3.3's survivor again, in the other core and the other unit: the boundary is
+reachable only through an accumulate whose sum lands on `0x7FFF_FFFF` exactly, and neither a uniform nor an
+edge-drawn accumulator lands there — a plain `VMULU` never can, its sum being even — so it survived 600,000 steps
+and 12,288 single instructions, and fell at once to a test that puts the sum there on purpose. §3.3 recorded the
+C# twin's version as surviving; the clamp-boundary test would catch that one too, since it compares whatever the
+element-by-element unit computes. One further mutant was argued equivalent and not made: the fast path first
+refused a window that ran past DMEM's end, and loosening that bound by a byte changes nothing, because `data` and
+`set_data` mask the address to twelve bits exactly as the byte loop does. The bound was removed; the element-by-element
+fallback for such windows is test 3's case.
+
+##### 6.10.3 Speed, and the prediction's fate
+
+Three interleaved rounds of 600 frames from the gameplay states, on an otherwise idle desktop (load 1.3 at the
+start), each round running the build before this section (WiseMan 8d5e2c7), this section's build, and this section's
+build with `EMUSEN_MARSRT_RSP_SIMD=0` — the element-by-element unit on the new layout — in turn. Production's shape,
+`examples/threads <rom> <state> 600 split 4 blocks`:
+
+| ms a frame | before | SIMD | element by element, new layout |
+| --- | --- | --- | --- |
+| GoldenEye, the Dam | 14.477, 14.352, 14.306 | **11.658, 11.670, 11.696** | 14.894, 14.949, 15.002 |
+| Ocarina of Time | 6.733, 6.754, 6.764 | **5.602, 5.563, 5.572** | 6.941, 7.040, 6.948 |
+| Super Mario 64 | 5.737, 5.760, 5.721 | **4.629, 4.584, 4.579** | 5.905, 5.963, 5.984 |
+
+Medians: the Dam 14.35 to 11.67 ms, **2.68 ms and 19 per cent**; Ocarina of Time 6.75 to 5.57, **1.18 ms, 17.5
+per cent**; Super Mario 64 5.74 to 4.58, **1.15 ms, 20 per cent**. No round of one column overlaps another's. The
+processor alone, `examples/frames … 600 blocks`, one thread, the rasteriser on it, three rounds of the first two
+builds:
+
+| ms a frame | before | SIMD |
+| --- | --- | --- |
+| GoldenEye, the Dam | 22.175, 22.084, 22.022 | 19.430, 19.424, 19.584 |
+| Ocarina of Time | 10.548, 10.542, 10.514 | 9.093, 9.199, 9.130 |
+| Super Mario 64 | 10.398, 10.434, 10.398 | 8.950, 8.972, 8.963 |
+
+2.65, 1.41 and 1.44 ms. The Dam saves the same on one thread as on five; the two lighter games save a quarter of a
+millisecond more on one, and the threaded runs' own counters say where it went: the emulation thread that waited
+for the workers 0.000 to 0.007 ms a frame before now waits 0.12 to 0.14 ms in Ocarina of Time (sites 2 and 11, a load
+and a transfer into the processor waiting for the draw) and 0.22 to 0.24 in Super Mario 64 (site 8, the deferred
+capture waiting for the draw). The thread now reaches those sites before the workers have finished — the first
+sign in this page that a faster emulation thread can meet the split's workers rather than never seeing them.
+
+*The prediction.* "From 14.5 to between 10 and 12 ms, and the other two by 1 to 1.5 ms each": 11.67, and 1.18 and
+1.15. **It held**, in the upper half of its range for the Dam. Its reasoning held too — "the vector unit's share is
+not all arithmetic, and C#'s §14 did not make its unit free" — and the sample below says by how much: the unit
+kept a third of its cost.
+
+*The element-by-element unit on the new layout* is 3 to 4 per cent slower than before: `acc` now composes a word
+from three loads and `set_acc` stores three thirds and the bits above them, where the words were one load and one
+store. A first version, whose low-third write also went through `acc` and `set_acc`, was 10 to 12 per cent slower
+(16.19, 15.83, 16.13 ms at the Dam in the same kind of round); giving the trait a `set_acc_low` that writes the
+low third alone recovered most of it. The element-by-element unit is the
+oracle and off by default, so its speed is recorded and not pursued.
+
+##### 6.10.4 Where the frame goes now
+
+One sampled run of each game, threaded, as §6.9's (`rtsample.py`; its grouping now also names the SIMD unit's
+frames, which no older binary has, so §6.9's reports are unchanged); 5,898, 2,348 and 1,742 samples, the shares
+multiplied by the medians above. The sampled frames ran 2 to 3 per cent above them.
+
+| ms a frame, share | the Dam | Ocarina of Time | Super Mario 64 |
+| --- | --- | --- | --- |
+| RSP: the vector unit, with its loads and stores | **1.83, 15.7%** (5.25, 36.2%) | **0.90, 16.1%** (2.44, 36.0%) | **0.80, 17.4%** (2.43, 41.8%) |
+| RSP: decode and dispatch | 1.90, 16.3% (1.64) | 0.72, 12.9% (0.54) | 0.67, 14.5% (0.48) |
+| RSP: the lock-step | 0.96, 8.2% (0.83) | 0.30, 5.5% (0.26) | 0.29, 6.3% (0.25) |
+| RSP: the scalar unit and its loads and stores | 0.79, 6.8% (1.02) | 0.25, 4.4% (0.39) | 0.31, 6.7% (0.34) |
+| RSP in all | **5.57, 47.7%** (8.8, 61%) | **2.21, 39.6%** (3.65, 54%) | **2.07, 45.2%** (3.5, 60%) |
+| the presenter's join | 0.79, 6.7% (0.63) | 0.86, 15.4% (0.69) | 1.13, 24.6% (0.99) |
+| decoded blocks, loop and handlers | 2.48, 21.3% (2.11) | 0.68, 12.3% (0.66) | 0.24, 5.2% (0.28) |
+| RDP: waiting for the workers | 0.00 | 0.06, 1.1% | 0.19, 4.1% |
+
+In brackets, §6.9's two-run means. The vector unit is a sixth of each frame where it was a third to two fifths, and
+at the Dam it is no longer the processor's largest part: its decode and dispatch is, 1.9 ms, which §6.9's third lever
+— a compiler for the processor — is the answer to and which this section did not touch. On Super Mario 64 the
+presenter's join is now the largest single thing on the thread, a quarter of the frame, which is §6.9's fourth lever.
+Two readings are not explained. The decode row reads 0.18 to 0.26 ms more than §6.9's on every game and the
+lock-step 0.04 to 0.13, and the Dam's decoded blocks 0.35 ms more, on code this section changed only by moving the vector dispatch into
+`execute` and not at all; the frame fell by less than the vector unit's row (2.68 against 3.42 ms at the Dam) by
+about that much. Whether that is the sampler's attribution across the new call into a `target_feature` function,
+the layout of `Rsp::run` after the dispatch moved, or a cost that moved rather than vanished, one run a game cannot
+say.
+
+##### 6.10.5 What is not done
+
+- **NEON.** aarch64 — the osx-arm64 build and any ARM handheld — runs the element-by-element unit. Nothing here
+  measures what it would buy there; the arithmetic ports nearly instruction for instruction — `pshufb` is `tbl` —
+  except `pmovmskb`, which NEON has no form of and which would be the lane masks anded with their bit weights and
+  added across.
+- **The handheld.** `deck@10.1.1.205` did not answer (the connection timed out) at the time of writing, so the Legion
+  Go S — where §6.1 found the Dam at 90 per cent of its console and this section should matter most — is not measured.
+  It needs only the two builds above and the three rounds.
+- **The other thirteen load and store formats**, `VMOV` and the reciprocals, element by element, above, and no count
+  of how often the games reach them.
+- **The processor's decode and dispatch**, now its largest part at the Dam, and the lock-step: neither is this lever.
+- **The element-by-element unit's 3 to 4 per cent**, recorded and not pursued.
+- **The C# twin's component on the new trait.** `Pinned` keeps C#'s arrays, so its SIMD path reaches the accumulator
+  through the trait's defaults, composing and splitting words each operation. It is exact — `MarsNativeRspTests`
+  above — and its speed is not measured; the component is off in C# (§4).
+- **AVX2.** The unit is 128 bits wide and every operation touches one register; 256-bit lanes would help only a
+  pair of independent operations, which a step at a time never has.
+- **The unexplained 0.3 ms** of §6.10.4, and the CI's own run of the osx-arm64 and win-x64 jobs.

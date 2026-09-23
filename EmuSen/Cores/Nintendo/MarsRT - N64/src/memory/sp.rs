@@ -171,6 +171,10 @@ impl Memory for Lent<'_> {
         self.p.accumulator_top[i] = (value >> 48) as u16;
     }
     #[inline(always)]
+    fn set_acc_low(&mut self, element: usize, value: u16) {
+        self.p.accumulator[2][element & 7] = value
+    }
+    #[inline(always)]
     fn register(&self, register: usize) -> [u16; 8] {
         self.p.vector[register & 31]
     }

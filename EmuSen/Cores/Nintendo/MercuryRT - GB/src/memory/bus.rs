@@ -3,6 +3,7 @@
 use crate::Skip;
 use crate::apu::Apu;
 use crate::memory::cartridge::Cartridge;
+use crate::memory::mappers::Mapper;
 use crate::ppu::Ppu;
 use crate::state::{StateReader, StateResult, StateWriter};
 
@@ -59,12 +60,18 @@ pub struct MemoryBus {
     pub joypad: Skip<Joypad>,
     /// What the test corpus printed, for the harness to read - see Mercury_Memory.md §10.
     pub serial_log: Skip<Vec<u8>>,
+    /// The cartridge and its board, reached through the bus as C#'s `_cart` is; walked by the machine, not here.
+    pub cart: Cartridge,
+    pub mapper: Mapper,
 }
 
 impl MemoryBus {
     /// `new MemoryBus(cart)`: the colour console's banks are twice and four times the size.
-    pub fn new(cgb: bool) -> Self {
+    pub fn new(cart: Cartridge, mapper: Mapper) -> Self {
+        let cgb = cart.is_cgb();
         MemoryBus {
+            cart,
+            mapper,
             apu: Apu::default(),
             double_speed: false,
             hdma_blocks_left: 0,
@@ -142,7 +149,8 @@ impl MemoryBus {
     }
 
     /// The bus's fields in C#'s ordinal order, the cartridge's `_cart` copy among them.
-    pub fn write_state(&self, w: &mut StateWriter, cart: &Cartridge) {
+    pub fn write_state(&self, w: &mut StateWriter) {
+        let cart = &self.cart;
         w.class("Apu", &self.apu);
         w.bool("DoubleSpeed", self.double_speed);
         w.i32("HdmaBlocksLeft", self.hdma_blocks_left);
@@ -176,7 +184,7 @@ impl MemoryBus {
         w.u8("_tma", self.tma);
     }
 
-    pub fn read_state(&mut self, r: &mut StateReader, cart: &mut Cartridge) -> StateResult {
+    pub fn read_state(&mut self, r: &mut StateReader) -> StateResult {
         r.class(&mut self.apu)?; // Apu
         self.double_speed = r.bool()?; // DoubleSpeed
         self.hdma_blocks_left = r.i32()?; // HdmaBlocksLeft
@@ -195,7 +203,7 @@ impl MemoryBus {
         r.bytes(&mut self.wram)?; // Wram
         self.wram_bank = r.i32()?; // WramBank
         self.base_clock_phase = r.bool()?; // _baseClockPhase
-        cart.read_as_field(r)?; // _cart
+        self.cart.read_as_field(r)?; // _cart
         self.div_counter = r.u16()?; // _divCounter
         self.last_timer_edge = r.bool()?; // _lastTimerEdge
         self.oam_dma_cycles_left = r.i32()?; // _oamDmaCyclesLeft
@@ -209,5 +217,380 @@ impl MemoryBus {
         self.tima_reload_delay = r.i32()?; // _timaReloadDelay
         self.tma = r.u8()?; // _tma
         Ok(())
+    }
+}
+
+const TIMER: u8 = 1 << 2;
+const SERIAL: u8 = 1 << 3;
+
+impl MemoryBus {
+    #[inline(always)]
+    fn vram_offset(&self, address: u16) -> usize {
+        (self.vram_bank as usize).wrapping_mul(VRAM_BANK_SIZE).wrapping_add(address as usize - 0x8000)
+    }
+
+    /// $C000-$DFFF and its $E000 echo fold to the same 8K; the top half is the banked one.
+    #[inline(always)]
+    fn wram_offset(&self, address: u16) -> usize {
+        let offset = address as usize & 0x1FFF;
+        if offset < WRAM_BANK_SIZE { offset } else { (self.wram_bank as usize).wrapping_mul(WRAM_BANK_SIZE).wrapping_add(offset - WRAM_BANK_SIZE) }
+    }
+
+    pub fn oam_dma_active(&self) -> bool {
+        self.oam_dma_cycles_left > 0
+    }
+
+    /// The CPU loses VRAM while the PPU draws from it, and OAM for the scan too and a whole OAM DMA - see Mercury_Ppu.md §7.
+    #[inline(always)]
+    fn vram_accessible(&self) -> bool {
+        !self.ppu.lcd_enabled() || !self.ppu.is_mode(crate::ppu::PpuMode::Drawing)
+    }
+
+    #[inline(always)]
+    fn oam_accessible(&self) -> bool {
+        !self.oam_dma_active() && (!self.ppu.lcd_enabled() || !(self.ppu.is_mode(crate::ppu::PpuMode::OamScan) || self.ppu.is_mode(crate::ppu::PpuMode::Drawing)))
+    }
+
+    /// What a DMA charged the CPU, taken once and cleared - see Mercury_Cgb.md §4.1.
+    pub fn take_pending_stall(&mut self) -> i32 {
+        std::mem::take(&mut self.stall_cycles)
+    }
+
+    pub fn read(&mut self, address: u16) -> u8 {
+        match address {
+            ..0x8000 => self.mapper.read_rom(&self.cart, address),
+            ..0xA000 => {
+                if self.vram_accessible() {
+                    self.vram[self.vram_offset(address)]
+                } else {
+                    0xFF
+                }
+            }
+            ..0xC000 => self.mapper.read_ram(&self.cart, address),
+            ..0xFE00 => self.wram[self.wram_offset(address)],
+            ..0xFEA0 => {
+                if self.oam_accessible() {
+                    self.oam[(address - 0xFE00) as usize]
+                } else {
+                    0xFF
+                }
+            }
+            ..0xFF00 => 0x00,
+            ..0xFF80 => self.read_io(address),
+            ..=0xFFFE => self.high_ram[(address - 0xFF80) as usize],
+            _ => self.interrupt_enable,
+        }
+    }
+
+    pub fn write(&mut self, address: u16, data: u8) {
+        match address {
+            ..0x8000 => self.mapper.write_rom(&self.cart, address, data),
+            ..0xA000 => {
+                if self.vram_accessible() {
+                    let offset = self.vram_offset(address);
+                    self.vram[offset] = data;
+                }
+            }
+            ..0xC000 => self.mapper.write_ram(&mut self.cart, address, data),
+            ..0xFE00 => {
+                let offset = self.wram_offset(address);
+                self.wram[offset] = data;
+            }
+            ..0xFEA0 => {
+                if self.oam_accessible() {
+                    self.oam[(address - 0xFE00) as usize] = data;
+                }
+            }
+            ..0xFF00 => {}
+            ..0xFF80 => self.write_io(address, data),
+            ..=0xFFFE => self.high_ram[(address - 0xFF80) as usize] = data,
+            _ => self.interrupt_enable = data,
+        }
+    }
+
+    fn read_joypad(&self) -> u8 {
+        let select = self.io[0x00];
+        let j = &*self.joypad;
+        let mut low = 0x0F;
+        if select & 0x10 == 0 {
+            low &= !((j.right as u8) | (j.left as u8) << 1 | (j.up as u8) << 2 | (j.down as u8) << 3);
+        }
+        if select & 0x20 == 0 {
+            low &= !((j.a as u8) | (j.b as u8) << 1 | (j.select as u8) << 2 | (j.start as u8) << 3);
+        }
+        0xC0 | (select & 0x30) | (low & 0x0F)
+    }
+
+    fn read_io(&self, address: u16) -> u8 {
+        match address {
+            0xFF00 => self.read_joypad(),
+            0xFF01 => self.serial_data,
+            0xFF02 => self.serial_control | if *self.cgb { 0x7C } else { 0x7E },
+            0xFF04 => (self.div_counter >> 8) as u8,
+            0xFF05 => self.tima,
+            0xFF06 => self.tma,
+            0xFF07 => self.tac | 0xF8,
+            0xFF0F => self.interrupt_flags | 0xE0,
+            0xFF10..=0xFF26 | 0xFF30..=0xFF3F => self.apu.read_register(address),
+            0xFF40 => self.ppu.lcdc,
+            0xFF41 => self.ppu.read_stat(),
+            0xFF42 => self.ppu.scy,
+            0xFF43 => self.ppu.scx,
+            0xFF44 => self.ppu.ly,
+            0xFF45 => self.ppu.lyc,
+            0xFF47 => self.ppu.bgp,
+            0xFF48 => self.ppu.obp0,
+            0xFF49 => self.ppu.obp1,
+            0xFF4A => self.ppu.wy,
+            0xFF4B => self.ppu.wx,
+            _ if *self.cgb => self.read_cgb_io(address),
+            _ => self.io[(address - 0xFF00) as usize],
+        }
+    }
+
+    fn write_io(&mut self, address: u16, data: u8) {
+        match address {
+            0xFF00 => self.io[0x00] = data & 0x30,
+            0xFF01 => self.serial_data = data,
+            0xFF02 => self.write_serial_control(data),
+            0xFF04 => self.div_counter = 0,
+            0xFF05 => {
+                self.tima = data;
+                self.tima_reload_delay = 0;
+            }
+            0xFF06 => self.tma = data,
+            0xFF07 => self.tac = data & 0x07,
+            0xFF0F => self.interrupt_flags = data & 0x1F,
+            0xFF10..=0xFF26 | 0xFF30..=0xFF3F => self.apu.write_register(address, data),
+            0xFF40 => self.ppu.write_lcdc(data, &mut self.interrupt_flags),
+            0xFF41 => self.ppu.write_stat(data, &mut self.interrupt_flags),
+            0xFF42 => self.ppu.scy = data,
+            0xFF43 => self.ppu.scx = data,
+            0xFF44 => {}
+            0xFF45 => self.ppu.write_lyc(data, &mut self.interrupt_flags),
+            0xFF46 => {
+                self.io[0x46] = data;
+                self.oam_dma_page = data;
+                self.oam_dma_index = 0;
+                self.oam_dma_cycles_left = 0xA0 * 4;
+            }
+            0xFF47 => self.ppu.bgp = data,
+            0xFF48 => self.ppu.obp0 = data,
+            0xFF49 => self.ppu.obp1 = data,
+            0xFF4A => self.ppu.wy = data,
+            0xFF4B => self.ppu.wx = data,
+            _ => {
+                if *self.cgb && self.write_cgb_io(address, data) {
+                    return;
+                }
+                self.io[(address - 0xFF00) as usize] = data;
+            }
+        }
+    }
+
+    /// A sink, not a link: an internally clocked transfer completes at once and shifts in $FF - see Mercury_Memory.md §10.
+    fn write_serial_control(&mut self, data: u8) {
+        self.serial_control = data & if *self.cgb { 0x83 } else { 0x81 };
+        if self.serial_control & 0x81 != 0x81 {
+            return;
+        }
+        self.serial_log.push(self.serial_data);
+        self.serial_data = 0xFF;
+        self.serial_control &= 0x7F;
+        self.interrupt_flags |= SERIAL;
+    }
+
+    fn read_cgb_io(&self, address: u16) -> u8 {
+        match address {
+            0xFF4D => 0x7E | if self.double_speed { 0x80 } else { 0 } | self.speed_switch_armed as u8,
+            0xFF4F => (0xFE | self.vram_bank) as u8,
+            0xFF51 => (self.hdma_source >> 8) as u8,
+            0xFF52 => (self.hdma_source & 0xF0) as u8,
+            0xFF53 => ((self.hdma_destination >> 8) & 0x1F) as u8,
+            0xFF54 => (self.hdma_destination & 0xF0) as u8,
+            0xFF55 => {
+                if self.hdma_blocks_left == 0 {
+                    0xFF
+                } else {
+                    (self.hdma_blocks_left - 1) as u8
+                }
+            }
+            0xFF68 => self.ppu.read_bg_palette_index(),
+            0xFF69 => self.ppu.read_bg_palette_data(),
+            0xFF6A => self.ppu.read_obj_palette_index(),
+            0xFF6B => self.ppu.read_obj_palette_data(),
+            0xFF70 => (0xF8 | self.wram_bank) as u8,
+            _ => self.io[(address - 0xFF00) as usize],
+        }
+    }
+
+    fn write_cgb_io(&mut self, address: u16, data: u8) -> bool {
+        match address {
+            0xFF4D => self.speed_switch_armed = data & 0x01 != 0,
+            0xFF4F => self.vram_bank = (data & 0x01) as i32,
+            0xFF51 => self.hdma_source = ((data as u16) << 8) | (self.hdma_source & 0xF0),
+            0xFF52 => self.hdma_source = (self.hdma_source & 0xFF00) | (data & 0xF0) as u16,
+            0xFF53 => self.hdma_destination = (((data & 0x1F) as u16) << 8) | (self.hdma_destination & 0xF0),
+            0xFF54 => self.hdma_destination = (self.hdma_destination & 0x1F00) | (data & 0xF0) as u16,
+            0xFF55 => self.start_hdma(data),
+            0xFF68 => self.ppu.write_bg_palette_index(data),
+            0xFF69 => self.ppu.write_bg_palette_data(data),
+            0xFF6A => self.ppu.write_obj_palette_index(data),
+            0xFF6B => self.ppu.write_obj_palette_data(data),
+            0xFF6C => {}
+            0xFF70 => self.wram_bank = if data & 0x07 == 0 { 1 } else { (data & 0x07) as i32 },
+            _ => return false,
+        }
+        true
+    }
+
+    /// STOP performs the switch KEY1 armed; it is not a stop at all on a CGB - see Mercury_Cgb.md §5.
+    pub fn stop(&mut self) {
+        if !*self.cgb || !self.speed_switch_armed {
+            return;
+        }
+        self.double_speed = !self.double_speed;
+        self.speed_switch_armed = false;
+        self.base_clock_phase = false;
+    }
+
+    fn start_hdma(&mut self, data: u8) {
+        if self.hdma_is_h_blank_driven && self.hdma_blocks_left > 0 && data & 0x80 == 0 {
+            self.hdma_blocks_left = 0;
+            self.hdma_is_h_blank_driven = false;
+            return;
+        }
+        self.hdma_blocks_left = (data & 0x7F) as i32 + 1;
+        self.hdma_is_h_blank_driven = data & 0x80 != 0;
+        if self.hdma_is_h_blank_driven {
+            return;
+        }
+        while self.hdma_blocks_left > 0 {
+            self.transfer_hdma_block();
+        }
+    }
+
+    fn on_h_blank_started(&mut self) {
+        if self.hdma_is_h_blank_driven && self.hdma_blocks_left > 0 {
+            self.transfer_hdma_block();
+        }
+    }
+
+    /// Eight machine cycles a block, half as long in double speed - see Mercury_Cgb.md §4.1.
+    fn transfer_hdma_block(&mut self) {
+        self.stall_cycles += if self.double_speed { 16 } else { 32 };
+        for _ in 0..16 {
+            let value = self.read(self.hdma_source);
+            let offset = (self.vram_bank as usize).wrapping_mul(VRAM_BANK_SIZE).wrapping_add((self.hdma_destination & 0x1FFF) as usize);
+            self.vram[offset] = value;
+            self.hdma_source = self.hdma_source.wrapping_add(1);
+            self.hdma_destination = (self.hdma_destination.wrapping_add(1)) & 0x1FFF;
+        }
+        self.hdma_blocks_left -= 1;
+        if self.hdma_blocks_left == 0 {
+            self.hdma_is_h_blank_driven = false;
+        }
+    }
+
+    /// The DMA controller drives the bus itself, so the PPU's CPU-side blocking does not apply to it.
+    fn read_for_dma(&self, address: u16) -> u8 {
+        match address {
+            ..0x8000 => self.mapper.read_rom(&self.cart, address),
+            ..0xA000 => self.vram[self.vram_offset(address)],
+            ..0xC000 => self.mapper.read_ram(&self.cart, address),
+            _ => self.wram[self.wram_offset(address & 0xDFFF)],
+        }
+    }
+
+    /// 160 machine cycles, one OAM byte each - see Mercury_Memory.md §6.
+    #[inline(always)]
+    fn step_oam_dma(&mut self) {
+        if self.oam_dma_cycles_left == 0 {
+            return;
+        }
+        self.oam_dma_cycles_left -= 1;
+        if self.oam_dma_cycles_left & 3 != 0 || self.oam_dma_index >= 0xA0 {
+            return;
+        }
+        let address = ((self.oam_dma_page as u16) << 8).wrapping_add(self.oam_dma_index as u16);
+        self.oam[self.oam_dma_index as usize] = self.read_for_dma(address);
+        self.oam_dma_index += 1;
+    }
+
+    #[inline(always)]
+    pub fn tick(&mut self, cycles: i32) {
+        for _ in 0..cycles {
+            self.step_one_cycle();
+        }
+        self.mapper.tick(&self.cart, cycles);
+    }
+
+    /// TIMA counts falling edges of one selected bit of the DIV counter - see Mercury_Memory.md §5.
+    #[inline(always)]
+    fn step_one_cycle(&mut self) {
+        if self.double_speed {
+            self.base_clock_phase = !self.base_clock_phase;
+            if self.base_clock_phase {
+                self.step_base_clock();
+            }
+        } else {
+            self.step_base_clock();
+        }
+
+        self.step_oam_dma();
+        self.div_counter = self.div_counter.wrapping_add(1);
+        self.apu.on_div_bit(self.div_counter & if self.double_speed { 0x2000 } else { 0x1000 } != 0);
+
+        if self.tima_reload_delay > 0 {
+            self.tima_reload_delay -= 1;
+            if self.tima_reload_delay == 0 {
+                self.tima = self.tma;
+                self.interrupt_flags |= TIMER;
+            }
+        }
+
+        let mask: u16 = match self.tac & 0x03 {
+            0 => 1 << 9,
+            1 => 1 << 3,
+            2 => 1 << 5,
+            _ => 1 << 7,
+        };
+        let edge = self.div_counter & mask != 0 && self.tac & 0x04 != 0;
+        if self.last_timer_edge && !edge {
+            self.tima = self.tima.wrapping_add(1);
+            if self.tima == 0 {
+                self.tima_reload_delay = 4;
+            }
+        }
+        self.last_timer_edge = edge;
+    }
+
+    #[inline(always)]
+    fn step_base_clock(&mut self) {
+        if self.ppu.tick(&mut self.interrupt_flags, &self.vram, &self.oam, *self.cgb) {
+            self.on_h_blank_started();
+        }
+        self.apu.tick();
+    }
+}
+
+impl crate::cpu::CpuBus for MemoryBus {
+    #[inline(always)]
+    fn read(&mut self, address: u16) -> u8 {
+        MemoryBus::read(self, address)
+    }
+
+    #[inline(always)]
+    fn write(&mut self, address: u16, data: u8) {
+        MemoryBus::write(self, address, data)
+    }
+
+    #[inline(always)]
+    fn tick(&mut self, cycles: i32) {
+        MemoryBus::tick(self, cycles)
+    }
+
+    fn stop(&mut self) {
+        MemoryBus::stop(self)
     }
 }

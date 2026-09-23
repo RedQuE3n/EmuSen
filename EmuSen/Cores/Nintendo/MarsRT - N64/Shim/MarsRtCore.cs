@@ -16,7 +16,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
     public enum MarsRtSpace : uint { Rdram = 0, Dmem = 1, Imem = 2, PifRam = 3, Rom = 4, Cpu = 5 }
 
     // MarsRT, the N64 core in Rust, behind the interfaces MarsCore implements; the boundary is crossed once a frame - see Mars_Native.md §5.2 and §5.5.
-    public sealed unsafe partial class MarsRtCore : ICore, ISnapshotCore, IStateFormat, IFrameSerial, IRepeatedRows, IFrameBufferPool, ICoreSettings, ICheatRegistryHost, IDisposable
+    public sealed unsafe partial class MarsRtCore : ICore, ISnapshotCore, IStateFormat, IFrameSerial, IRepeatedRows, IFrameBufferPool, ICoreSettings, ICheatRegistryHost, IFrameProfiler, IDisposable
     {
         private static readonly delegate* unmanaged<byte*, nuint, uint, byte*, nuint, byte*, nuint, nint> LoadRomExport = (delegate* unmanaged<byte*, nuint, uint, byte*, nuint, byte*, nuint, nint>)MarsNative.Export("mars_machine_load_rom");
         private static readonly delegate* unmanaged<byte*, nuint, uint, nint> BootExport = (delegate* unmanaged<byte*, nuint, uint, nint>)MarsNative.Export("mars_machine_boot");
@@ -51,6 +51,8 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private static readonly delegate* unmanaged<nint, uint, long> MemorySize = (delegate* unmanaged<nint, uint, long>)MarsNative.Export("mars_machine_memory_size");
         private static readonly delegate* unmanaged<nint, uint, uint, byte*, nuint, long> ReadMemory = (delegate* unmanaged<nint, uint, uint, byte*, nuint, long>)MarsNative.Export("mars_machine_read_memory");
         private static readonly delegate* unmanaged<nint, uint, uint, byte*, nuint, long> WriteMemory = (delegate* unmanaged<nint, uint, uint, byte*, nuint, long>)MarsNative.Export("mars_machine_write_memory");
+        private static readonly delegate* unmanaged<nint, long*, nuint, long> FrameProfile = (delegate* unmanaged<nint, long*, nuint, long>)MarsNative.Export("mars_machine_frame_profile");
+        private static readonly delegate* unmanaged<nint, short*, nuint, long> PeekAudio = (delegate* unmanaged<nint, short*, nuint, long>)MarsNative.Export("mars_machine_peek_audio");
         private static readonly delegate* unmanaged<nint, uint*, nuint, long> SetRomPatches = (delegate* unmanaged<nint, uint*, nuint, long>)MarsNative.Export("mars_machine_set_rom_patches");
         private static readonly delegate* unmanaged<nint, uint, ulong> Cop0Export = (delegate* unmanaged<nint, uint, ulong>)MarsNative.Export("mars_machine_cop0");
         private static readonly delegate* unmanaged<nint, ulong*, nuint, long> CpuRegistersExport = (delegate* unmanaged<nint, ulong*, nuint, long>)MarsNative.Export("mars_machine_cpu_registers");
@@ -84,7 +86,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private bool _useBlocks = true, _verifyBlocks;
         private int _blockTier;
 
-        public static bool Available => LoadRomExport != null && MemorySize != null && SetRomPatches != null;
+        public static bool Available => LoadRomExport != null && MemorySize != null && SetRomPatches != null && FrameProfile != null && PeekAudio != null;
 
         // A stock console unless asked, as MarsCore; null defers to --nobattery.
         public MarsRtCore(bool expansionPak = false, bool? batteryRamDisabled = null)
@@ -573,15 +575,47 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             SyncRomPatches();
             bool resuming = IsHaltedAtBreakpoint;
             IsHaltedAtBreakpoint = false;
-            if (Observed) { if (!RunObserved(handle, resuming)) return; }
-            else AdvanceExport(handle);
-            ApplyCheatsAtFrameEnd();
-            FrameLog.RecordFrame(TotalFrames, ReadWidth);
-            Breakpoints.NoteFrame(TotalFrames);
-            if (TotalFrames % MarsCore.SaveEveryNFrames == 0) SaveSram();
-            if (_skipRendering) return;
-            PresentExport(handle);
-            TakePicture();
+            try
+            {
+                if (Observed) { if (!RunObserved(handle, resuming)) return; }
+                else AdvanceExport(handle);
+                ApplyCheatsAtFrameEnd();
+                FrameLog.RecordFrame(TotalFrames, ReadWidth);
+                Breakpoints.NoteFrame(TotalFrames);
+                if (TotalFrames % MarsCore.SaveEveryNFrames == 0) SaveSram();
+                if (_skipRendering) return;
+                PresentExport(handle);
+                TakePicture();
+            }
+            finally
+            {
+                ReadPhases(handle);
+            }
+        }
+
+        // The library's phases for the frame just run, read once as it ends - see Mars_Native.md §6.6.2.
+        private void ReadPhases(nint handle)
+        {
+            long* nanos = stackalloc long[5];
+            FrameProfile(handle, nanos, 5);
+            for (int p = 0; p < _phases.Length; p++) _phases[p] = (_phases[p].Name, nanos[p] / 1e6);
+        }
+
+        private readonly (string Name, double Milliseconds)[] _phases =
+        {
+            ("machine", 0), ("machine/rdp-wait", 0), ("present", 0), ("present/rdp-wait", 0), ("present/walk-join", 0),
+        };
+
+        public IReadOnlyList<(string Name, double Milliseconds)> LastFramePhases => _phases;
+
+        // The samples not yet drained, left for the frontend's drain, as Mars's Ai.Peek - see Mars_Native.md §6.6.2.
+        public short[] PeekAudioSamples()
+        {
+            if (_handle == 0) return Array.Empty<short>();
+            long count = PeekAudio(_handle, null, 0);
+            var samples = new short[count];
+            fixed (short* data = samples) PeekAudio(_handle, data, (nuint)samples.Length);
+            return samples;
         }
 
         // The interpreter's steps, the given number, as MarsCorpusTests steps the C# core; through the blocks when they are on.

@@ -53,7 +53,12 @@ pub struct Core {
     pub gpu: bool,
     /// Whether a multiple has been applied yet; until then even the values a fresh core holds are sent (Mars_Native.md §6.4.8).
     pub multiple_applied: bool,
+    /// The last frame's phases on the host's thread, in nanoseconds, in `PHASES`' order (Mars_Native.md §6.6.2).
+    pub profile: [i64; PHASES],
 }
+
+/// `machine`, `machine/rdp-wait`, `present`, `present/rdp-wait`, `present/walk-join`: the phases `mars_machine_frame_profile` reports.
+pub const PHASES: usize = 5;
 
 impl Drop for Core {
     /// A walk still out reads the device's pictures and the shadow, so it is joined before the machine goes.
@@ -64,7 +69,28 @@ impl Drop for Core {
 
 impl Core {
     pub fn new(machine: Machine) -> Core {
-        Core { machine, scanout: Scanout::default(), frame_serial: 0, skip_rendering: false, shown: false, render_scale: 1, antialiasing: 1, gpu: false, multiple_applied: false }
+        Core { machine, scanout: Scanout::default(), frame_serial: 0, skip_rendering: false, shown: false, render_scale: 1, antialiasing: 1, gpu: false, multiple_applied: false, profile: [0; PHASES] }
+    }
+
+    /// Every wait of this thread for the display processor's drain, in nanoseconds; zero while it runs on this thread.
+    pub fn drain_waited(&self) -> i64 {
+        self.machine.bus.dp.threads.as_deref().map_or(0, |t| t.counters.page_wait_nanos + t.counters.range_wait_nanos + t.counters.join_nanos)
+    }
+
+    /// The machine to the field's end, its time and its waits for the drain the frame's first two phases.
+    pub fn advance(&mut self) {
+        let (started, waited) = (std::time::Instant::now(), self.drain_waited());
+        self.machine.run_frame();
+        self.profile = [started.elapsed().as_nanos() as i64, (self.drain_waited() - waited).max(0), 0, 0, 0];
+    }
+
+    /// `present`, its time, its waits for the drain and for the walk still out the frame's last three phases.
+    pub fn present_profiled(&mut self) {
+        let (started, waited, joined) = (std::time::Instant::now(), self.drain_waited(), self.scanout.presenter_waits().1);
+        self.present();
+        self.profile[2] = started.elapsed().as_nanos() as i64;
+        self.profile[3] = (self.drain_waited() - waited).max(0);
+        self.profile[4] = (self.scanout.presenter_waits().1 - joined).max(0);
     }
 
     /// `Present`: the VI's scan of what the machine left, at once or deferred as the machine is set; the serial moves when the shown frame does.
@@ -381,7 +407,7 @@ pub unsafe extern "C" fn mars_machine_run_frame(core: *mut Core) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mars_machine_advance(core: *mut Core) {
     if let Some(c) = unsafe { core.as_mut() } {
-        c.machine.run_frame();
+        c.advance();
     }
 }
 
@@ -392,8 +418,38 @@ pub unsafe extern "C" fn mars_machine_advance(core: *mut Core) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mars_machine_present(core: *mut Core) {
     if let Some(c) = unsafe { core.as_mut() } {
-        c.present();
+        c.present_profiled();
     }
+}
+
+/// The last frame's phases in nanoseconds, in `PHASES`' order, copied up to `len`; returns how many there are. A frame not presented
+/// reports its presentation as zero.
+///
+/// # Safety
+/// `core` must be live or null; `out` valid for `len` values, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mars_machine_frame_profile(core: *const Core, out: *mut i64, len: usize) -> i64 {
+    let Some(c) = (unsafe { core.as_ref() }) else { return STATUS_NULL as i64 };
+    if !out.is_null() {
+        unsafe { ptr::copy_nonoverlapping(c.profile.as_ptr(), out, len.min(PHASES)) };
+    }
+    PHASES as i64
+}
+
+/// `AiInterface.Peek`: the samples not yet drained, oldest first, copied up to `len` and left where they are; returns how many there are.
+///
+/// # Safety
+/// `core` must be live or null; `out` valid for `len` samples, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mars_machine_peek_audio(core: *const Core, out: *mut i16, len: usize) -> i64 {
+    let Some(c) = (unsafe { core.as_ref() }) else { return STATUS_NULL as i64 };
+    let samples = &c.machine.bus.ai.samples;
+    if !out.is_null() {
+        for (i, &sample) in samples.iter().take(len).enumerate() {
+            unsafe { *out.add(i) = sample };
+        }
+    }
+    samples.len() as i64
 }
 
 /// The interpreter alone for `steps` instructions, as the corpus runs.

@@ -69,7 +69,13 @@ pub unsafe extern "C" fn mars_debug_set_ranges(core: *mut Core, kind: u32, tripl
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mars_debug_run_frame(core: *mut Core, flags: u32, pc: *mut u64) -> u32 {
     let Some(c) = (unsafe { core.as_mut() }) else { return 0 };
+    if flags & 2 == 0 {
+        c.profile = [0; super::PHASES];
+    }
+    let (started, waited) = (std::time::Instant::now(), c.drain_waited());
     let why = c.machine.run_frame_debug(flags & 1 != 0, flags & 2 != 0);
+    c.profile[0] += started.elapsed().as_nanos() as i64;
+    c.profile[1] += (c.drain_waited() - waited).max(0);
     if !pc.is_null() {
         unsafe { *pc = c.machine.cpu.pc };
     }

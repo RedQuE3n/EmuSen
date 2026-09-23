@@ -254,7 +254,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => (Array.Empty<byte>(), 0, 0);
 
         // The samples live in the library and a drain would take them from the frontend, so none are copied here.
-        public (short[] Samples, int SampleRate) GetAudioSamples() => (Array.Empty<short>(), _core.AudioSampleRate);
+        public (short[] Samples, int SampleRate) GetAudioSamples() => (_core.PeekAudioSamples(), _core.AudioSampleRate);
 
         public string GetSummaryText()
         {

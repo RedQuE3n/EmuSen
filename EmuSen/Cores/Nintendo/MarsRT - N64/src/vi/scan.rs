@@ -407,7 +407,7 @@ pub fn present_deferred(bus: &mut MemoryBus, out: &mut Scanout) -> Presented {
         out.capture.device_scanned = false;
         if repeats {
             // The device captures no scaled bytes, so its repeat is its last picture, walked again only if another scan has replaced it (Mars_Gpu.md §14);
-            // a repeat over an edited raster is walked as well, which C# does not do (Mars_Native.md §5.6.2), so it takes the same path (§6.4.4).
+            // a repeat over an edited raster is walked as well, which C# does not do (Mars_Native.md §5.6.5), so it takes the same path (§6.4.4).
             if (out.walk_repeats || out.raster_edited) && job.scale > 1 && can_scan_out {
                 if out.capture.device_scan_at == bus.dp.multiple.scan_outs && !(out.device_raster && out.raster_edits_pending()) {
                     out.capture.device_scanned = true;

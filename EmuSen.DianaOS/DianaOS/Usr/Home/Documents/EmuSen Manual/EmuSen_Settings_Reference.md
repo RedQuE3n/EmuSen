@@ -1234,8 +1234,10 @@ running core between frames, and this one cannot be, so it is declared beside th
 filter is by the frontend (§4.40), and `ApplyConsoleSettings` never hands it to either core.
 
 **The rows below it.** They are Mars's, and they keep their values whichever engine runs. MarsRT honours the
-Expansion Pak, the three thread rows and Skip Repeated Scans, adds a Recompiler row of its own, and ignores the
-resolution multiple, antialiasing and the device; each row's hint says which. Its defaults are Mars's since
+Expansion Pak, the three thread rows and Skip Repeated Scans, adds a Recompiler row of its own, and ~~ignores the
+resolution multiple, antialiasing and the device; each row's hint says which~~ *since 2026-09-23 honours the
+resolution multiple, antialiasing and the graphics card as well, exact against Mars at each (`Mars_Native.md` §6.4),
+so no row is ignored*. Its defaults are Mars's since
 2026-09-22. ~~At the time of writing MarsRT draws on the emulation thread and takes about twice Mars's time per frame
 (`Mars_Native.md` §5.7: 13 ms against 6 ms in Super Mario 64 on the development desktop), which is inside a frame on
 that machine and was not measured on a slow one; the row is for choosing it, not a recommendation of it.~~ *Retired
@@ -1257,8 +1259,10 @@ the N64 on either engine** (§4.21b).
 
 **What MarsRT does not offer yet.** ROM-patch cheats (no N64 code format makes one, but one added by hand does
 nothing on MarsRT); breakpoints, stepping, watches and coverage in the DianaOS console, which refuses `bp` and `step`
-with "cannot be halted by this core" while `regs`, `mem` and `disasm` work; internal resolution,
-antialiasing, the graphics card, the threaded display processor and deferred presentation.
+with "cannot be halted by this core" while `regs`, `mem` and `disasm` work; ~~internal resolution,
+antialiasing, the graphics card, the threaded display processor and deferred presentation~~ *(the threaded display
+processor and deferred presentation arrived 2026-09-22, and internal resolution, antialiasing and the graphics card
+2026-09-23)*.
 
 **Tests:** `MarsRtEngineTests` drives a real window on the headless platform: the row and its storage; a game on Mars
 until MarsRT is chosen and then on MarsRT, with rewind empty; states through the hotkeys that load into the C# Mars;

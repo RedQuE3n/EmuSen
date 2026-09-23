@@ -4,6 +4,11 @@ use std::arch::x86_64::*;
 
 use super::{DATA_MASK, Memory, Reciprocal, Rsp, rd, rt};
 
+/// What a decoded handler knows of the element selector: nothing, that it is 0 or 1 and selects the whole register, or that it shuffles.
+pub(super) const ANY_SELECTOR: u8 = 0;
+pub(super) const WHOLE: u8 = 1;
+pub(super) const SHUFFLED: u8 = 2;
+
 const HIGH: usize = 0;
 const MIDDLE: usize = 1;
 const LOW: usize = 2;
@@ -237,7 +242,20 @@ impl<M: Memory> Rsp<M> {
     /// `vector_op`, eight lanes at a time; the reciprocals and `VMOV` stay element by element, a table lookup on one lane.
     #[target_feature(enable = "sse2,ssse3,sse4.1")]
     pub(super) fn vector_op_simd(&mut self, instruction: u32) {
-        let function = instruction & 0x3F;
+        sixty_four!(dispatch!(self, vector_function, instruction & 0x3F, instruction))
+    }
+
+    #[inline]
+    #[target_feature(enable = "sse2,ssse3,sse4.1")]
+    fn vector_function<const F: u32>(&mut self, instruction: u32) {
+        self.vector_lanes::<F, ANY_SELECTOR>(instruction)
+    }
+
+    /// One vector function, the constant naming it; `KNOWN` says whether the selector is known at decode (Mars_Native.md §6.12).
+    #[inline]
+    #[target_feature(enable = "sse2,ssse3,sse4.1")]
+    pub(super) fn vector_lanes<const F: u32, const KNOWN: u8>(&mut self, instruction: u32) {
+        let function = F;
         if function == 0x37 || function == 0x3F {
             return;
         }
@@ -248,7 +266,7 @@ impl<M: Memory> Rsp<M> {
 
         let s = vector(self.m.register(vs));
         let mut t = vector(self.m.register(vt));
-        if selector > 1 {
+        if KNOWN == SHUFFLED || (KNOWN == ANY_SELECTOR && selector > 1) {
             // SAFETY: the table's rows are sixteen bytes.
             t = _mm_shuffle_epi8(t, unsafe { _mm_loadu_si128(SELECT[selector].as_ptr() as *const __m128i) });
         }

@@ -189,6 +189,7 @@ impl Machine {
         machine.blocks = std::mem::take(&mut self.blocks);
         machine.cpu.hooks = std::mem::take(&mut self.cpu.hooks);
         machine.bus.sp.trace = std::mem::take(&mut self.bus.sp.trace);
+        machine.bus.sp.decoded = std::mem::take(&mut self.bus.sp.decoded);
         machine.bus.sp.processor.simd = self.bus.sp.processor.simd;
         if machine.rdram_bytes() != self.rdram_bytes() {
             machine.blocks.clear();
@@ -340,6 +341,11 @@ impl Machine {
     /// The signal processor's vector unit in host vectors or element by element; on only where the host has it (Mars_Native.md §6.10).
     pub fn set_rsp_simd(&mut self, on: bool) {
         *self.bus.sp.processor.simd = on && crate::rsp::simd_supported();
+    }
+
+    /// The signal processor through its decoded table or the interpreter; exact either way, and it survives a state load (Mars_Native.md §6.12).
+    pub fn set_rsp_blocks(&mut self, on: bool) {
+        self.bus.sp.decoded.on = on;
     }
 
     /// The interpreter alone, as the corpus runs it: `Cpu.Step`, the given number of times; through the blocks when they are on.

@@ -27,10 +27,12 @@ pub(crate) struct Mode {
     pub average: i32,
     /// The vector unit's SIMD path set on the machine under test, and the reference's then element by element (Mars_Native.md §6.10); none leaves both at the default.
     pub rsp_simd: Option<bool>,
+    /// The signal processor through its decoded table set on the machine under test, and the reference then the interpreter (Mars_Native.md §6.12).
+    pub rsp_blocks: Option<bool>,
 }
 
 impl Mode {
-    const PLAIN: Mode = Mode { threaded: false, deferred: false, workers: 1, blocks: false, observed: false, scale: 1, gpu: false, average: 1, rsp_simd: None };
+    const PLAIN: Mode = Mode { threaded: false, deferred: false, workers: 1, blocks: false, observed: false, scale: 1, gpu: false, average: 1, rsp_simd: None, rsp_blocks: None };
 }
 
 /// How its state is compared: joined every frame, or a snapshot every frame replayed into a scratch machine, which leaves the drain running across frames.
@@ -57,6 +59,9 @@ impl Run {
         machine.set_gpu(mode.gpu);
         if let Some(on) = mode.rsp_simd {
             machine.set_rsp_simd(on);
+        }
+        if let Some(on) = mode.rsp_blocks {
+            machine.set_rsp_blocks(on);
         }
         let mut scanout = Scanout::default();
         scanout.repeat_rows = true;
@@ -175,8 +180,11 @@ fn first_difference(a: &[u8], b: &[u8]) -> usize {
 pub(crate) fn compare(folder: &str, rom: &str, state: Option<&str>, frames: u64, mode: Mode, how: Compare) -> u64 {
     // Averaged on the device, the reference is the device at once, since the processor's picture parts from it after a decline (Mars_Native.md §6.4).
     let on_device = mode.gpu && mode.average > 1;
-    let mut reference = Run::load(folder, rom, state, Mode { scale: mode.scale, average: mode.average, gpu: on_device, rsp_simd: mode.rsp_simd.map(|_| false), ..Mode::PLAIN });
+    let mut reference = Run::load(folder, rom, state, Mode { scale: mode.scale, average: mode.average, gpu: on_device, rsp_simd: mode.rsp_simd.map(|_| false), rsp_blocks: mode.rsp_blocks.map(|_| false), ..Mode::PLAIN });
     let mut subject = Run::load(folder, rom, state, mode);
+    if mode.rsp_blocks == Some(true) {
+        assert!(subject.machine.bus.sp.decoded.on && !reference.machine.bus.sp.decoded.on, "{rom}: the two processors are not the table and the interpreter");
+    }
     if mode.rsp_simd == Some(true) {
         assert!(*subject.machine.bus.sp.processor.simd && !*reference.machine.bus.sp.processor.simd, "{rom}: the two vector units are not the two paths");
     }
@@ -310,7 +318,7 @@ fn a_machine_whose_list_several_processors_share_is_the_machine_at_once() {
 #[test]
 fn a_machine_at_a_multiple_split_and_deferred_is_the_machine_at_once_at_that_multiple() {
     for scale in [2, 4] {
-        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: false, average: 1, rsp_simd: None }, Compare::Snapshot);
+        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: false, average: 1, rsp_simd: None, rsp_blocks: None }, Compare::Snapshot);
     }
 }
 
@@ -323,7 +331,7 @@ fn a_machine_at_a_multiple_on_the_device_is_the_machine_at_once_on_the_processor
         return;
     }
     for scale in [2, 4] {
-        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: true, average: 1, rsp_simd: None }, Compare::Snapshot);
+        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: true, average: 1, rsp_simd: None, rsp_blocks: None }, Compare::Snapshot);
     }
 }
 
@@ -336,7 +344,7 @@ fn a_machine_averaged_on_the_device_split_and_deferred_is_the_device_at_once() {
         return;
     }
     for (scale, average) in [(4, 2), (4, 4), (2, 2)] {
-        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: true, average, rsp_simd: None }, Compare::Snapshot);
+        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: true, average, rsp_simd: None, rsp_blocks: None }, Compare::Snapshot);
     }
 }
 
@@ -352,6 +360,14 @@ fn a_machine_whose_vector_unit_runs_in_host_vectors_is_the_machine_element_by_el
     each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, rsp_simd: Some(true), ..Mode::PLAIN }, Compare::Snapshot);
 }
 
+/// The signal processor through its decoded table against the interpreter, the reference's: unthreaded, and on four workers deferred
+/// through the blocks (Mars_Native.md §6.12).
+#[test]
+fn a_machine_whose_signal_processor_runs_decoded_is_the_machine_interpreted() {
+    each_game(Mode { rsp_blocks: Some(true), ..Mode::PLAIN }, Compare::Join);
+    each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, rsp_blocks: Some(true), ..Mode::PLAIN }, Compare::Snapshot);
+}
+
 #[test]
 fn a_recompiled_machine_is_the_interpreted_machine() {
     each_game(Mode { blocks: true, ..Mode::PLAIN }, Compare::Join);
@@ -359,7 +375,7 @@ fn a_recompiled_machine_is_the_interpreted_machine() {
 
 #[test]
 fn a_recompiled_machine_on_four_workers_deferred_is_the_interpreted_machine_a_picture_late() {
-    each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale: 1, gpu: false, average: 1, rsp_simd: None }, Compare::Snapshot);
+    each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale: 1, gpu: false, average: 1, rsp_simd: None, rsp_blocks: None }, Compare::Snapshot);
 }
 
 /// Every debugger table armed and nothing halting, unthreaded and on four workers deferred: the observed loop leaves what the plain
@@ -381,7 +397,7 @@ fn a_game_halted_at_breakpoints_and_resumed_is_the_game_run_through() {
     };
     let frames = frames();
     for threaded in [false, true] {
-        let mode = Mode { threaded, deferred: threaded, workers: if threaded { 4 } else { 1 }, blocks: true, observed: false, scale: 1, gpu: false, average: 1, rsp_simd: None };
+        let mode = Mode { threaded, deferred: threaded, workers: if threaded { 4 } else { 1 }, blocks: true, observed: false, scale: 1, gpu: false, average: 1, rsp_simd: None, rsp_blocks: None };
         for (rom, state) in GAMES {
             let Some(state) = state else { continue };
             if !std::path::Path::new(&format!("{folder}/{rom}")).exists() {

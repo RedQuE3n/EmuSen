@@ -11,6 +11,7 @@ mod gpu;
 mod multiple;
 mod rom;
 mod rsp;
+mod rsp_blocks;
 mod save;
 mod sites;
 mod support;

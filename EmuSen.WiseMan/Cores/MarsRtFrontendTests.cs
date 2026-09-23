@@ -284,7 +284,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void Mars_s_debugger_commands_read_MarsRT_and_refuse_to_halt_it()
+        public void Mars_s_debugger_commands_read_MarsRT_halt_it_and_step_it()
         {
             string rom = Rom(SyntheticN64Rom.Build(patches: (0, InterruptsOnSpin)));
             CoreBundle bundle = CoreFactory.Load(rom, engine: CoreCatalog.MarsRtEngine);
@@ -306,8 +306,16 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x80, romSpace.Read(0));
 
             Assert.Contains("5A", new MemCommand().Execute(target, new[] { "mem", "RDRAM", "300", "4" }, null).Output);
-            Assert.Contains("cannot be halted", new BreakCommand().Execute(target, new[] { "bp", "add", "A4000040" }, null).Output);
-            Assert.NotEqual(0, new StepCommand().Execute(target, new[] { "step", "main" }, null).ExitCode);
+            // Since Mars_Native.md §6.5 the processor halts at a breakpoint and steps; the RSP still cannot, as on Mars.
+            Assert.Contains("added", new BreakCommand().Execute(target, new[] { "bp", "add", "A400004C" }, null).Output);
+            bundle.Core.RunFrame();
+            Assert.True(bundle.Core.IsHaltedAtBreakpoint);
+            Assert.Equal(unchecked((int)0xA400_004C), bundle.Core.HaltedAddress);
+            target.Breakpoints.RemoveBreakpoint(target.Breakpoints.GetBreakpoints()[0].Id);
+            Assert.Equal(0, new StepCommand().Execute(target, new[] { "step", "cpu" }, null).ExitCode);
+            bundle.Core.RunFrame();
+            Assert.Equal(unchecked((int)0xA400_0050), bundle.Core.HaltedAddress);
+            Assert.Contains("cannot be halted", new StepCommand().Execute(target, new[] { "step", "rsp" }, null).Output);
             Assert.Contains("MarsRT", target.GetSummaryText());
         }
 

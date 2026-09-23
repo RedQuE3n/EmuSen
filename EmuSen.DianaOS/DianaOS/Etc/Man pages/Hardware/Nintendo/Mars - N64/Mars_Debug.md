@@ -15,6 +15,11 @@ step must run what it counted, `step over` must come back to the caller, a watch
 and one test runs `disasm cpu` through the command itself, which is half of the phase's done-when
 (`Mars_Gameplan.md` §4.6). The rest of the evidence is the breakage round (§8) and the cost (§7).
 
+*Since 2026-09-22 the claims are `MarsDebugClaims`, run against this core as `MarsDebugTests` and against MarsRT as
+`MarsRtDebugTests` with the same transcripts; MarsRT's hooks, which are tables in its Rust loop rather than these
+seams, are `Mars_Native.md` §6.5, and so is what that stage found about this core (§6.5.2: the call stack is tracked on
+every frame, armed or not).*
+
 ## 1. Where the registries live
 
 **On the core, as on Mercury and Venus.** `MarsCore` owns `Breakpoints`, `Watches`, `FrameLog`, `Coverage`,

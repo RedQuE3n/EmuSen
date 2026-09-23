@@ -716,8 +716,9 @@ and its raster with it.
   which C# reaches only through them, is kept.
 - **The threaded RDP, its page marks and every `WaitFor*`.** MarsRT runs the RDP inline on the emulation thread, as
   C# does with `ThreadedRdp` off, and the marks exist only to make the threaded path wait.
-- **The debugger:** breakpoints, coverage, the call stack's observers, watches and the frame log. `RunFrame`'s
-  debugging loop is not ported. MarsRT runs `RunQuietly`'s loop, the C# path taken when nothing is armed.
+- ~~**The debugger:** breakpoints, coverage, the call stack's observers, watches and the frame log. `RunFrame`'s
+  debugging loop is not ported. MarsRT runs `RunQuietly`'s loop, the C# path taken when nothing is armed.~~ *§6.5:
+  ported as tables in the Rust loop and a frame that stops with its reasons; the plain frame is still `RunQuietly`'s.*
 - **Cheats, `ICoreSettings`, the multiple, antialiasing, the device and deferred presentation.** The shim scans at
   one, immediately. *Cheats and `ICoreSettings` arrived in §5.5; the rest is still out.*
 - ~~**`CoreFactory` registration.** Nothing chooses MarsRT yet.~~ *§5.5: a per-console setting chooses it.*
@@ -1186,7 +1187,8 @@ default and says that instead.
   processors are published with `CanHalt = false`, so `bp` and `step` refuse with "cannot be halted by this core"
   rather than arming a registry nothing consults. Watches, the frame log, coverage, the call stack, labels and the
   dashboard's audio peek are absent or inert. The memory exports read memories only, never registers, so a read
-  disturbs nothing.
+  disturbs nothing. *Since §6.5:* the processor can halt, and every registry but the audio peek is live; the target
+  hands out the core's own, as `MarsDebugTarget` does.
 - **One thread.** The shim must be driven from one thread. A state load replaces the Rust machine, and a read racing
   it would read freed memory, where the C# Mars's arrays are merely racy. Every current caller is on the emulation
   thread: the frame loop, and the console, whose commands Mistress drains there.
@@ -1320,8 +1322,9 @@ This checks the published core and the published factory, not the published wind
 #### 5.5.4 What is left
 
 - ROM-patch cheats, as argued above.
-- The debugger's breakpoints, stepping, watches, coverage, call stack and labels, all of which need hooks inside the
-  Rust loop. The deep inspection §5 planned through the state transfer was not built.
+- ~~The debugger's breakpoints, stepping, watches, coverage, call stack and labels, all of which need hooks inside the
+  Rust loop. The deep inspection §5 planned through the state transfer was not built.~~ *Done in §6.5, as hooks inside
+  the Rust loop; the state transfer stays the inspector's read path.*
 - The seven settings MarsRT ignores. Each arrives with the stage that implements it: the threaded RDP and deferred
   presentation with §5.6, and the multiple, antialiasing and the device later. *Four arrived with §5.6.*
 - The wait a threaded RDP will need in `Core::read_memory` and `Core::write_memory`. *Done in §5.6.4.*
@@ -2188,8 +2191,9 @@ is a property of what it is doing, and one state is not a sample.
 - **Nothing is chained, nothing is extended, and no block holds more than sixty-four words.** `Mars_Recompiler.md`
   §10 to §12 measured all three in C# and kept none; this page has not measured them in Rust, and its own numbers
   (§5.8.8) say where the time is instead.
-- **The debugger, the coverage recorder and single-stepping** are outside MarsRT altogether (§5.2.5), so nothing here
-  had to keep them working.
+- ~~**The debugger, the coverage recorder and single-stepping** are outside MarsRT altogether (§5.2.5), so nothing here
+  had to keep them working.~~ *§6.5 brought them in, and an observed frame runs the interpreter, so the blocks still
+  need not know them; what a debugger through the blocks would cost is §6.5.6.*
 - **Code is not freed a block at a time.** §5.8.4's bound drops everything at once, and no game has reached it.
 - **The verifier runs on one thread.** It needs the display processor unthreaded, since it clones the machine.
 
@@ -2445,10 +2449,10 @@ and comes before.
 
 ### 6.5 Stage E: the debugger's hooks
 
-**What is missing.** Breakpoints, stepping, watches, the coverage recorder, the call stack's observers, labels and the
+**What was missing.** Breakpoints, stepping, watches, the coverage recorder, the call stack's observers, labels and the
 frame log: everything `RunFrame`'s debugging loop does that `RunQuietly`'s does not (§5.2.5). MarsRT's debug target
-serves the inspector through the state transfer, which is read-only; `run_steps` exists and is exact through the
-blocks (§5.8), so stepping is the one hook already there.
+served the inspector through the state transfer, which is read-only; `run_steps` existed and is exact through the
+blocks (§5.8), so stepping was the one hook already there.
 
 **The design constraint** is §3.2's rule, which stage 5 kept: the native side never calls C#. So the hooks cannot be
 callbacks. They are tables C# pushes down — breakpoint addresses, watch ranges, a coverage buffer — and a frame that
@@ -2457,16 +2461,267 @@ the C# takes `RunFrame`'s loop only when something is armed, and returns *why* i
 shim turns into the debug target's events. Coverage is written by Rust into a buffer C# reads at the frame's end; the
 call stack is tracked in Rust and read through the transfer.
 
-**The recompiler is part of this.** A breakpoint inside a block must stop at the instruction, not the block's end,
-and a watch must see a store the compiled code made inline. The C# core's answer (`Mars_Recompiler.md`) is that an
-armed observer disables the blocks for the frame; the same rule here costs nothing to prove and is exact by
-construction, and a finer one is not worth building until someone debugs at speed.
+**Built, 2026-09-22.** The claim is the C# core's (`Mars_Debug.md`): a breakpoint stops in front of its instruction
+and a resume runs it, a step runs what it counted, `step over` comes back to the caller, a watch sees a store where it
+landed, a data breakpoint halts after the store that wrote it, coverage and the profiler count only while armed. The
+oracle is `MarsDebugTests`, made an abstract set of claims (`MarsDebugClaims`) over a rig (`MarsDebugRig`, one for
+each engine) and run twice, as `MarsDebugTests` against the C# core and `MarsRtDebugTests` against MarsRT, with the same
+expected addresses, counts and contexts. Of the original twenty-four, twenty-two are shared; the two that are not are
+named below, and one claim was added to both.
 
-**Oracle.** The debugger's WiseMan tests, which drive DianaOS's `h-*` commands against the C# core, run against both
-engines with the same expected transcripts. Where a test cannot pass on MarsRT, the doc says which and why.
+#### 6.5.1 What the machine does: tables, an observed frame, and what it records
 
-**What it decides.** Nothing for a player. It is a condition of stage G, and of the coverage-driven work the C# core
-has been used for.
+`cpu/hooks.rs` holds the tables and the logs (`Cpu.hooks`, a `Skip` field last in the struct so the compiled code's
+offsets stand; `sp.trace` holds the signal processor's). Nothing in it is in the state; a load carries it across, as
+the blocks are carried (`load_state`).
+
+**The tables.** Enabled breakpoints as pairs of first and last address, compared as the registry compares them, as
+signed 32-bit integers; the watches and the data breakpoints as ranges of one memory (RDRAM, DMEM, IMEM, PIF RAM by
+`ffi::space`'s numbers — a watch on the `CPU` space sees nothing, as on the C# core, since a store is reported by
+where it landed); the depth `step over` and `step out` wait for and the depth guard; and seven flags: track calls,
+report stores, stop after an interrupt, stop before every instruction, record coverage, record the signal processor's
+coverage, profile.
+
+**The observed frame** (`Machine::run_frame_debug`) is `RunFrame`'s loop with the instructions between the checks run
+in Rust: the interpreter alone, no block and no idle skip, the signal processor stepped from the tick as the interpreter
+steps it. Before each instruction it asks the tables (`Hooks::stop_before`) and, if any holds, returns a bit-set of
+reasons — the address is in a breakpoint range; stop before every instruction; the depth is at or under the target or
+over the guard; a store landed in a data-breakpoint range; an interrupt was entered; a log is full — with the machine
+at a step boundary and the program counter on the instruction it stopped in front of. Then it records what the C# loop
+records before `Cpu.Step()`: the coverage bit at the address's low twenty-four bits, and one instruction for the
+profiler's innermost routine. Two things the loop must keep straight, both C#'s: *the instruction a halt stopped in front
+of runs unchecked* when the host resumes, which is what makes `continue` leave a breakpoint instead of stopping on it
+again; and *a stop the registry says no to continues the frame*, its start and its cap kept, where a halt the host
+returned from begins the frame's clock again at the next `RunFrame`, as C#'s does — `_lastFrameCycles` is in the state,
+so the two kinds of resume had to be told apart (a first version measured every resume from the resume, and the
+crate's halted-and-resumed test caught it at the first frame's end).
+
+**The seams inside the step** are compiled into the observed step alone. `Cpu::step` is `step_in::<false>` and the
+observed loop's `step_hooked` is `step_in::<true>`, one generic body whose seams are `if HOOKED && …`; the plain step,
+the blocks' handlers (`ops.rs`) and the compiled code are the `false` instantiation and carry no load, no test and no
+branch for any of this. The tables and the trace are boxed, so `Cpu` and the signal processor's interface each grow by
+a pointer. Both were decided by measurement, §6.5.5, and the second is the one that mattered.
+
+- *Calls and returns*, C#'s `CallObserver` and `ReturnObserver`: `jal`, `jalr` and a taken branch-and-link push as
+  they execute, so the call's own delay slot is already a frame deeper; a `jr` through `ra` marks the return, and the
+  pop comes at the end of the slot's own step (`return_after_slot`), which is what lands `step over` after the call
+  and not one instruction past it. A `jr` through any other register is a jump. The stack is capped at 512 frames and a
+  pop with nothing open is counted, as the registry does both. Every push and pop is also logged, so the C# registry
+  can replay them and keep its own frames, its entry points and its call counts.
+- *Stores*, C#'s `MemoryBus.Report`: after an `sb`, `sh`, `sw`, `sd`, `sc` or `scd` lands — the only stores C# reports;
+  the unaligned and coprocessor stores go through `Write32` there and are not — the bytes it left are read back, a
+  whole word for the windows that latch one, and each byte that a watch or a data breakpoint covers is logged with
+  its memory, offset, value and the storing instruction's address, and a data breakpoint's byte sets the stop for the
+  next boundary.
+- *Interrupts*, C#'s `InterruptObserver`: `enter_exception` with the interrupt code sets the stop, so the frame ends
+  before the handler's first instruction.
+- *The signal processor's coverage*: the observed step's tick (`tick_traced`) takes a recording twin of the processor's
+  loop while its trace is armed (`Rsp::run_traced`, and the two event instructions recorded by the machine that runs
+  them); the plain tick does not look. So `cov rsp` armed alone puts the frame on the observed loop, where the C# core
+  keeps `RunQuietly` and only drops `RunIdle`'s whole run of the processor and the native step: the same instructions
+  are seen one at a time either way, and the difference is the frame's speed while the recorder is armed, not what it
+  records.
+
+**The four decisions the brief asked for**, then:
+
+1. *The recompiler's blocks.* An armed CPU table runs the interpreter for the frame — C#'s rule, and exact by
+   construction, since §5.8 proves the blocks against the interpreter and this stage proves the observed loop against
+   the plain one. Nothing was built to stop inside a block or to see a tier-3 inline store; the tables are on the
+   interpreter's paths only, and the compiled code is untouched. A finer rule waits for someone who debugs at speed.
+2. *The idle-loop skip* is off in an observed frame, as it is in C#'s observed loop (`RunIdle` is reached only through
+   `StepBlock`): the coverage recorder sees the loop's two instructions and the profiler charges them, which is what
+   the C# core's counts show, and the state is the same either way (§5.2's proof of the skip).
+3. *The RSP lock-step* is the interpreter's own: the processor stepped from the tick, one instruction a cycle, as
+   `Cpu.Step` steps it in C#. With its coverage armed the tick records; the idle loop never runs it whole in an observed
+   frame because the observed frame has no idle loop.
+4. *A stop with the threaded RDP running* leaves the machine at a step boundary and the drain where it was: nothing
+   waits at the stop itself, because nothing has to — every host read of RDRAM waits for the drain (`Core::read_memory`,
+   §5.6.4), a state save waits or holds (`Frozen`), and the shim's picture is taken only at a frame's end. A state
+   saved at a halt and one saved after the unstopped run of the same frame brought to the same instruction count are
+   byte-identical (the crate's `a_frame_halted_and_resumed_is_the_frame_run_through`, and the game proofs below with
+   four workers deferred).
+
+#### 6.5.2 What the shim does: the registries pushed, the logs drained, the registry asked
+
+`MarsRtCore` now owns the seven registries `MarsCore` owns (`Watches`, `FrameLog`, `Breakpoints`, `Coverage`,
+`RspCoverage`, `CallStack`, `Labels`), wired the same way (`Breakpoints.CallStack`, the frame-number provider, the
+entry-point observer), and `MarsRtDebugTarget` hands them out; `A_frontend_bundle_wires_the_target_to_the_core` holds
+on MarsRT as it holds on the C# core, and the processor's `DebugCpu` says it can halt.
+
+**The frame.** `RunFrame` asks the same question `MarsCore.RunFrame` asks — `Breakpoints.IsQuiet`, the two coverage
+registries, the profiler, and whether a watch or a data breakpoint exists — and takes `mars_machine_advance` when
+nothing is armed, which is the plain frame with the tables empty. Otherwise (`RunObserved`):
+
+1. The first instruction is checked here, as C#'s loop checks it (`CouldBreak && ShouldBreak(pc)`), unless the frame
+   resumes a halt, in which case it runs unchecked.
+2. The registries are pushed down (`mars_debug_set`, `_set_breakpoints`, `_set_ranges`): the enabled breakpoints, the
+   write watches and the write data breakpoints by memory, the depth target and the guard, and the flags. Calls are
+   tracked and interrupts stop in every observed frame; stores are reported while the target listens; *stop before
+   every instruction* is pushed while a step is armed, or while the registry already owes a break (a data or event
+   break left pending by a halt that reported another), so that the registry gets its next question at the next
+   instruction. Three read-only getters were added to `BreakpointRegistry` for this — `IsSingleStepArmed`,
+   `StepDepthTarget`, `HasPendingBreak` — since the fields they read were private and the loop that used to read them
+   is now elsewhere.
+3. `mars_debug_run_frame` runs to the field's end or a stop.
+4. The logs are drained into the registries in the order the observers would have been called: each logged byte to
+   `Watches.RecordWrite` with `PC=<the store's address>` as its context and to `Breakpoints.NoteWrite`; each push and
+   pop to `CallStack.NotePush` and `NotePop`, stamped with the frame they happened in; the profile's runs to a new
+   `CallStackRegistry.NoteInstructions(owner, count)`, which charges a run a core counted itself; the coverage bitmap
+   ORed into the registry by a new `CoverageRegistry.Merge(bitmap, instructions)` and cleared on the Rust side, so the
+   registry stays the one accumulator and `cov clear` means what it means. An interrupt stop calls
+   `Breakpoints.NoteInterrupt(Irq)`, as the C# observer would have during the step.
+5. **The registry decides.** `ShouldBreak(pc)` is asked at the stop with everything it would have seen in C# already
+   noted, and its answer is the halt: `IsHaltedAtBreakpoint`, `HaltedAddress`, `LastBreakReason` are its. If it says no
+   — a condition that did not hold, a logpoint, a forbidden range, a data breakpoint whose value did not match, an
+   interrupt nobody was running to — the frame continues from that instruction, unchecked, its clock kept. Rust's
+   tables are therefore *candidates*, over-approximations the registry narrows; nothing of the registry's semantics is
+   reimplemented in Rust, and a stop the registry refuses costs one crossing of the boundary and nothing else.
+
+A log that fills (65,536 entries) stops the frame with its own reason, is drained, and the frame continues, so a watch
+on a hot address loses no event and no count. At a frame's end the shim does what `MarsCore.RunFrame` does after its
+loop: the cheats, `FrameLog.RecordFrame` (big-endian reads through the same memory reads the target's spaces use),
+`Breakpoints.NoteFrame`, the periodic save, the picture. A halt returns before any of it, as C#'s does.
+
+**What is C#'s alone, and why.** Two of the twenty-four claims stay on the C# fixture:
+
+- *`A_jump_through_another_register_does_not_return`* runs a frame with nothing armed and reads a depth of one. The C#
+  core tracks the call stack on every frame, armed or not: its observers are delegates the opcode handlers test for
+  null, and `MarsCore.LoadRom` always sets them, so even `RunQuietly`'s blocks take the slow path for every call (a
+  finding about the C# core, recorded and not changed here: `Mars_Debug.md` §7 measured the seams as free when the
+  target was attached, and did not measure a frame with none, which is every frontend frame). MarsRT tracks the stack
+  only in an observed frame, because a push per call on the plain path is the cost this stage was told not to add,
+  and the compiled code would need a call-out it does not have. So on MarsRT `bt` with nothing armed shows the stack as
+  the last observed frame left it, and a `step out` from a routine entered before observation began has nothing to
+  pop to — the same as the C# core's after its 512-frame cap. The rule itself (a `jr` through another register is a
+  jump) holds on MarsRT in an observed frame, which `A_jump_through_another_register_does_not_return_in_an_observed_frame`
+  shows, and `A_plain_frame_leaves_the_stack_where_the_last_observed_frame_left_it` fixes the difference so it cannot
+  drift unnoticed.
+- *`A_store_is_reported_only_while_the_observer_listens`* is a test of the C# `MemoryBus` object. MarsRT's counterpart,
+  `A_store_is_reported_only_while_the_target_listens`, counts the events a watch collects across a frame with it and a
+  frame without, and the crate's `a_store_is_reported_only_while_something_listens_and_only_in_a_range_that_covers_it`
+  holds the machine to the same rule.
+
+One claim was added to both: `A_halt_leaves_the_coverage_and_the_profile_current`, because a halt is a frame's end for
+every counter and the shim's drain at a stop is what makes it so.
+
+#### 6.5.3 The evidence
+
+*The claims.* `MarsDebugTests` (25: the 23 shared and the two that are the C# core's) and `MarsRtDebugTests` (33: the
+23 shared, four of MarsRT's own, and the six game cases below) green, the same transcripts; the crate's own
+`tests/debug.rs` (18) drives the machine directly, the hooks' unit tests in `cpu/hooks.rs` (6) the tables alone.
+
+*Exactness, the tables armed and nothing that halts.* Every table armed — a breakpoint at an address no game runs, a
+watch over four kilobytes of RDRAM and a data breakpoint over its first 256 bytes (in the crate the stop after each such
+store is taken and resumed, as the host resumes when the registry says no; through the shim the data breakpoint carries
+a value no byte can have, so the registry says no at every one of those stops), a stop after every interrupt, coverage on
+both processors, the profiler, a depth guard — against the same game run plain, state, picture and sound after every
+frame, 300 frames from the three gameplay states, unthreaded and on four workers deferred:
+
+- the crate's `a_game_halted_at_breakpoints_and_resumed_is_the_game_run_through` and
+  `an_observed_machine_with_every_table_armed_is_the_machine_plain` (`tests/games.rs`), the latter from power-on as
+  well as from the states, twelve runs identical, the reference the interpreter as §5.6's runs have it;
+- WiseMan's `MarsRtDebugTests.A_game_with_every_table_armed_is_the_game_run_plain`, through the shim and the
+  registries, the reference the production configuration with its blocks: six runs identical. What the tables saw meanwhile, from the registries at the end of each run: 561, 547 and 548 million
+instructions recorded and charged (Super Mario 64, Ocarina of Time, GoldenEye), 163, 117 and 408 million on the
+signal processor, 5.4, 5.3 and 28.5 million store bytes watched on the page each game writes most (its 4 KB measured
+over twenty frames: 17, 44 and 62 thousand bytes a frame), 688, 592 and 1,034 entry points, the data breakpoint's hit
+count zero, and the stack at 470, 504 and 507 frames — near the registry's cap of 512, which is what a stack tracked
+from an arbitrary instant and popped only by `jr ra` drifts to on a game whose threads and handlers leave by other
+roads; the C# core's does the same from `LoadRom`.
+
+*Exactness, halted and resumed.* A breakpoint at the general exception vector on every third frame, halted at and
+resumed as a host resumes, the frames between run plain through the blocks; the unstopped run brought to each halt's
+instruction count with `run_steps` and compared there, and at every frame's end in state, picture and sound:
+
+- the crate's `a_game_halted_at_breakpoints_and_resumed_is_the_game_run_through`: Super Mario 64 535 halts, Ocarina
+  of Time 2,538, GoldenEye 1,057 in 300 frames, 62, 119 and 115 mid-frame states compared, all identical, unthreaded
+  and on four workers deferred;
+- WiseMan's `A_game_halted_at_breakpoints_and_resumed_is_the_game_run_through`, the halts through
+  `Breakpoints.ShouldBreak` and the resumes through `RunFrame`, the same games and modes, the same halt counts, all
+  identical.
+
+Two defects the resume proofs found and the claims did not, both in the first version: a resumed frame restarted
+`_lastFrameCycles`' measure, so a frame that had stopped and gone on disagreed with the plain frame at its end in that
+field alone (the crate's `a_frame_halted_and_resumed_is_the_frame_run_through`, frame 1, byte 20 of the state); and
+the crate's halted game test compared a deferred picture with the frame before's, which is the rule for a subject
+deferred against a reference that is not, where both machines there are deferred (frame 3). The first was the loop's
+and is fixed by the `continuing` flag above; the second was the test's.
+
+*The other suites.* The crate's 417 tests pass with `cargo test --release` (the games and the corpus skip without their
+files) and `cargo clippy --all-targets` is clean. In WiseMan, the DianaOS filter's 721 tests, `MarsRtTests` (320),
+`MarsRtEngineTests` (7), `HardwareLoadTests` (5), `MarsRtFrontendTests` (15) and `MarsRTViTests` pass. One frontend
+test failed, as it should have: `Mars_s_debugger_commands_read_MarsRT_and_refuse_to_halt_it` pinned the behaviour this
+stage retires, and is turned round as `…_halt_it_and_step_it` — a breakpoint added through `bp`, halted at, `step cpu`
+landing on the delay slot, and `step rsp` still refused. Its old form had a second assertion that passed for the wrong
+reason: `step main` failed because `main` names no processor (the main one is `cpu`) and is not a count, not because
+the processor could not halt. `MarsRtThreadsTests` with the gameplay states was run at 100 frames a game and cut by the
+run's fifty-minute bound after 26 of its cases, all passing; its comparisons against the threaded C# core take minutes
+each and are outside this stage's blast radius, which is the observed loop the plain frame never enters. The corpus
+(`n64-systemtest`) is not on this machine's path for WiseMan and did not run; it exercises `run_steps`, which this stage
+did not change.
+
+#### 6.5.4 Mutants
+
+Five rules broken in turn, each one textual change, run against the crate's `tests::debug` (18) and WiseMan's
+`MarsRtDebugTests` (33, the game proofs skipped):
+
+| broken | crate | WiseMan |
+| --- | --- | --- |
+| a breakpoint fires after its instruction instead of before: the tables asked after the step, of the address that ran | six of the eighteen: `a_breakpoint_stops_in_front_of_its_instruction…`, `stopping_before_each_instruction…`, `a_call_is_pushed…`, `stepping_to_a_depth…`, `the_profiler_charges…`, `a_state_loaded…` | six of the thirty-three: the breakpoint, step, step-out, run-to-interrupt, halt-counters and state-at-a-halt claims |
+| a return does not pop the stack: `note_return` logs the pop and leaves the frame | `a_call_is_pushed…popped_once_its_slot_has_run`, `stepping_to_a_depth…`, `a_state_loaded_keeps_the_tables_and_the_stack` | `Stepping_over_a_call_stops_after_it_in_the_caller`, `Inside_a_call_the_backtrace_names_it_and_stepping_out_returns_to_the_caller` |
+| coverage recorded while disarmed: the bitmap kept and written whatever the flag says | `coverage_records_what_the_processor_ran_only_while_armed…` | none: **a survivor at the claims' level**, and why is worth stating. The shim drains the bitmap only while the registry is armed and `CoverageRegistry.Merge` refuses a merge while it is not, so a machine that records while disarmed is stopped twice before a claim could see it; the claim `Coverage_records_what_the_processor_ran_only_while_armed` holds against this mutant by the guards above it, and the crate's test is what holds the machine itself to the rule. |
+| a data breakpoint halts before its store: the store reported before it lands, so the bytes reported are the old ones | `a_data_breakpoint_stops_after_the_store_that_wrote_it_and_a_watch_logs_every_byte`: the bytes logged are the old ones | `A_data_breakpoint_halts_after_the_store_that_wrote_it`: it halts with the old word in memory |
+| a frame that stops but leaves the counters stale: the logs drained only at the field's end | none, by construction: the crate reads the machine's logs itself | `A_halt_leaves_the_coverage_and_the_profile_current`, `Inside_a_call_the_backtrace_names_it…` (an empty backtrace at the halt), `A_data_breakpoint_halts_after_the_store_that_wrote_it` (the pending note never reaches the registry, so it says no and the frame runs on) |
+
+The fifth is the one this design makes possible and the C# core cannot have — the C# observers write into the
+registries as the instruction runs — and it is the one the added claim was written for.
+
+#### 6.5.5 Speed
+
+*The plain frame must not slow down, and the tables must cost nothing while empty.* Measured with `examples/threads`
+built before the hooks and after them, the two binaries interleaved and the order swapped each round, three rounds of
+600 frames from each gameplay state, split four workers, deferred, blocks (the production configuration); the state
+hash is the same in every run, so what is timed is exact.
+
+| ms a frame, before → after | Super Mario 64 | Ocarina of Time | GoldenEye, the Dam |
+| --- | --- | --- | --- |
+| 1. flags tested on the shared step, the tables inline in `Cpu` | 5.90, 5.73, 5.72 → 5.77, 5.76, 5.77 | 6.79, 6.76, 6.77 → 6.79, 6.79, 6.80 | 14.34, 14.36, 14.33 → 14.48, 14.48, 14.47 |
+| 2. the seams in the observed step alone, the tables still inline | 5.76, 5.73, 5.75 → 5.88, 5.89, 5.83 | 6.80, 6.76, 6.81 → 6.85, 6.81, 6.84 | 14.36, 14.41, 14.33 → 14.56, 15.03, 14.69 |
+| 3. the seams in the observed step alone, the tables boxed | 5.73, 5.88, 5.69 → 5.72, 5.73, 5.72 | 6.78, 6.91, 6.81 → 6.78, 6.78, 6.80 | 14.42, 14.33, 14.31 → 14.34, 14.30, 14.35 |
+
+**The prediction, and its retirement.** The first row cost GoldenEye one per cent in every round, and the prediction
+was that the four flag tests on the shared paths were the cost, since the Dam's frame is mostly decoded blocks beside a
+running signal processor and every one of their stores and jumps went through the tested handlers. The second row
+retired it: with the seams compiled out of the plain step the Dam was no better, and Super Mario 64 was worse. The
+third row found the cost: the tables — six vectors, a map, a bitmap's pointer, some three hundred bytes — were inline in
+`Cpu`, which sits before the bus in `Machine`, and moving them shifted every hot field of the bus; boxed, the machine
+keeps its shape and all three games are level within the rounds' noise (the Dam's rounds spread 0.1 ms in either
+build). The split is kept although it measured nothing on its own: it costs one generic parameter in the source, and it
+makes "the plain step carries no seam" true by construction rather than by a measurement that, as the second row shows,
+cannot see a change smaller than a layout's.
+
+*An observed frame's cost* was not measured on its own. The crate's armed comparisons — a plain interpreter and an
+observed machine together, every frame's state saved and compared — take 13, 16 and 32 s for 300 frames of the three
+states, so an observed frame is within an order of magnitude of a plain one; C#'s observed loop is slower still, and
+neither is what a player runs. Nothing was done about it.
+
+#### 6.5.6 What is not done
+
+- **Breakpoints inside a block, watches on a tier-3 inline store, and coverage through the blocks**: the observed frame
+  is the interpreter's, by the rule above. A debugger that wanted speed would need the blocks' dispatcher to consult
+  the breakpoint table at each entry and the compiled code to call out for stores and calls, which is the C# core's
+  design and its cost.
+- **Reads** are not reported on either core (`Mars_Debug.md` §3), so `watch r`, `bp read` and the uninitialised-read
+  check arm and never fire; the uninitialised-read check makes the target listen, as in C#, and its writes are not
+  marked on MarsRT since nothing would read the marks.
+- **Transfers** — the DMAs and the display processor's pixels — are not reported, as in C#.
+- **The stack in a plain frame**, above.
+- **`runto` a scanline** is not fed, as in C#.
+- **Breakpoints on the RSP** (`Mars_Debug.md` §5): none on either core.
+- **The dashboard's audio peek** (§5.5.4) is still empty.
+- The interface is 7: `mars_debug_set`, `_set_breakpoints`, `_set_ranges`, `_run_frame`, `_writes`, `_calls`,
+  `_profile`, `_coverage`, `_counters`, and the tests' `mars_machine_pc`, `_physical`, `_bus_write32`, `_bus_read32`,
+  `_set_cop0`, `_mi_raise`, `_rsp_step`.
 
 ### 6.6 Stage F: parity leftovers
 

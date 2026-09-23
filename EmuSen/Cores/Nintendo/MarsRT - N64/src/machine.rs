@@ -56,12 +56,16 @@ pub struct Options {
     pub deferred: bool,
     /// `DpInterface.VerifyMarks`: every byte the drain touches checked against the marks; on in debug builds and with `EMUSEN_MARSRT_VERIFY_RDP=1`.
     pub verify_rdp: bool,
+    /// `DpInterface.Scale`: the multiple the picture is drawn at beside the machine's own, the resolution times the antialiasing (Mars_Native.md §6.4).
+    pub scale: i32,
+    /// `DpInterface.Gpu`: the multiple shaded on a compute device when one exists; the machine's picture is never the device's.
+    pub gpu: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
         let verify = cfg!(debug_assertions) || std::env::var("EMUSEN_MARSRT_VERIFY_RDP").is_ok_and(|v| v == "1");
-        Options { idle_skip: true, rsp_whole: true, threaded_rdp: false, rdp_workers: 1, deferred: false, verify_rdp: verify }
+        Options { idle_skip: true, rsp_whole: true, threaded_rdp: false, rdp_workers: 1, deferred: false, verify_rdp: verify, scale: 1, gpu: false }
     }
 }
 
@@ -190,6 +194,13 @@ impl Machine {
         }
         machine.bus.vi_rebase();
         machine.bus.ai_rebase();
+
+        // The device outlives a state read, emptied as the shadow is (`ResetScaled`), rather than being opened again.
+        self.bus.dp.join();
+        let old = &mut self.bus.dp.multiple.0;
+        let fresh = &mut machine.bus.dp.multiple.0;
+        (fresh.gpu, fresh.wants_gpu, fresh.scan_outs) = (old.gpu.take(), old.wants_gpu, old.scan_outs);
+        fresh.gpu_report = std::mem::take(&mut old.gpu_report);
 
         *self = machine;
         Ok(())
@@ -371,8 +382,22 @@ impl Machine {
         self.apply_threads();
     }
 
-    /// The drain made to match the options; a load's words are replayed first, so none is left for it.
+    /// `Scale`'s setter: the multiple the picture is drawn at, one to eight as C# clamps it; a change takes effect at the next frame.
+    pub fn set_scale(&mut self, scale: i32) {
+        self.options.scale = scale.clamp(1, 8);
+        self.apply_threads();
+    }
+
+    /// `Gpu`'s setter: the device asked for; what it got is `bus.dp.gpu_report()`.
+    pub fn set_gpu(&mut self, on: bool) {
+        self.options.gpu = on;
+        self.apply_threads();
+    }
+
+    /// The drain and the multiple made to match the options; a load's words are replayed first, so none is left for the drain.
     fn apply_threads(&mut self) {
+        self.bus.dp_set_scale(self.options.scale);
+        self.bus.dp_set_gpu(self.options.gpu);
         let want = self.options.threaded_rdp && self.bus.dp.pending.is_empty();
         self.bus.dp_set_threaded(want, self.options.verify_rdp, self.options.rdp_workers);
     }

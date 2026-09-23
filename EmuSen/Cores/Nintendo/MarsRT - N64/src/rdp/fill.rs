@@ -1,6 +1,6 @@
 //! The colour image, the scissor, the fill cycle, and the commands that reach the walker: C#'s `Rdp.Fill.cs`.
 
-use super::{ATTRIBUTE_S, ATTRIBUTE_Z, COPY_CYCLE, FILL_CYCLE, ONE_CYCLE, Rdp, RdpMemory, Rows, TWO_CYCLE, sign_extend};
+use super::{ATTRIBUTE_S, ATTRIBUTE_Z, ATTRIBUTES, COPY_CYCLE, FILL_CYCLE, ONE_CYCLE, Rdp, RdpMemory, Rows, TWO_CYCLE, sign_extend};
 
 /// Quarter pixels, as a command carries them.
 #[inline(always)]
@@ -23,15 +23,17 @@ impl Rdp {
             3 => 4,
             _ => 0,
         };
-        self.color_image_width = ((word >> 32) & 0x3FF) as i32 + 1;
-        self.color_image = (word as u32) & 0x00FF_FFFF;
+        let scale = self.multiple.scale;
+        self.color_image_width = (((word >> 32) & 0x3FF) as i32 + 1) * scale;
+        self.color_image = ((word as u32) & 0x00FF_FFFF).wrapping_mul((scale * scale) as u32);
     }
 
     pub(super) fn set_scissor(&mut self, word: u64) {
-        self.scissor_left = quarters(word >> 44);
-        self.scissor_top = quarters(word >> 32);
-        self.scissor_right = quarters(word >> 12);
-        self.scissor_bottom = quarters(word);
+        let scale = self.multiple.scale;
+        self.scissor_left = quarters(word >> 44) * scale;
+        self.scissor_top = quarters(word >> 32) * scale;
+        self.scissor_right = quarters(word >> 12) * scale;
+        self.scissor_bottom = quarters(word) * scale;
         self.scissor_field = ((word >> 25) & 1) != 0;
         self.scissor_keep_odd = ((word >> 24) & 1) != 0;
     }
@@ -44,11 +46,14 @@ impl Rdp {
 
     /// A rectangle is a primitive with its major edge on the left and no slope; fill and copy include the bottom row.
     pub(super) fn walk_rectangle(&mut self, word: u64) -> Rows {
+        // A fill or copy draws the edge's own pixel, so at a multiple the edge moves out to that pixel's last (Mars_Rdp.md §11).
         let copy_or_fill = self.modes.cycle_type >= COPY_CYCLE;
-        let right = quarters(word >> 44);
-        let bottom = quarters(word >> 32) | if copy_or_fill { 3 } else { 0 };
-        let left = quarters(word >> 12);
-        let top = quarters(word);
+        let scale = self.multiple.scale;
+        let inclusive = if copy_or_fill { (scale - 1) * 4 } else { 0 };
+        let right = quarters(word >> 44) * scale + inclusive;
+        let bottom = (quarters(word >> 32) * scale + inclusive) | if copy_or_fill { 3 } else { 0 };
+        let left = quarters(word >> 12) * scale;
+        let top = quarters(word) * scale;
 
         let right_x = ((right >> 2) << 16) | ((right & 3) << 14);
         let left_x = ((left >> 2) << 16) | ((left & 3) << 14);
@@ -64,14 +69,15 @@ impl Rdp {
         let c1 = self.command[1];
         let c2 = self.command[2];
         let c3 = self.command[3];
+        let scale = self.multiple.scale;
         let rows = self.walk(
             major_on_left,
-            sign_extend(edges as u32, 14),
-            sign_extend((edges >> 16) as u32, 14),
-            sign_extend((edges >> 32) as u32, 14),
-            sign_extend((c2 >> 32) as u32, 28),
-            sign_extend((c3 >> 32) as u32, 28),
-            sign_extend((c1 >> 32) as u32, 28),
+            sign_extend(edges as u32, 14) * scale,
+            sign_extend((edges >> 16) as u32, 14) * scale,
+            sign_extend((edges >> 32) as u32, 14) * scale,
+            sign_extend((c2 >> 32) as u32, 28).wrapping_mul(scale),
+            sign_extend((c3 >> 32) as u32, 28).wrapping_mul(scale),
+            sign_extend((c1 >> 32) as u32, 28).wrapping_mul(scale),
             sign_extend(c2 as u32, 30),
             sign_extend(c3 as u32, 30),
             sign_extend(c1 as u32, 30),
@@ -114,6 +120,16 @@ impl Rdp {
             self.attribute_de[ATTRIBUTE_Z] = (cmd[at + 1] >> 32) as i32;
             self.attribute_dy[ATTRIBUTE_Z] = cmd[at + 1] as i32;
         }
+
+        // A step across or down a pixel of the multiple is the step's share (Mars_Rdp.md §11).
+        if self.multiple.scaled {
+            let scale = self.multiple.scale;
+            for c in 0..ATTRIBUTES {
+                self.attribute_dx[c] /= scale;
+                self.attribute_de[c] /= scale;
+                self.attribute_dy[c] /= scale;
+            }
+        }
     }
 
     pub(super) fn clear_attributes(&mut self) {
@@ -124,6 +140,11 @@ impl Rdp {
     }
 
     pub(super) fn draw(&mut self, rows: Rows, major_on_left: bool, tile: i32, max_level: i32, mem: &mut RdpMemory) {
+        self.multiple.drew = true;
+        if let Some(gpu) = mem.gpu() {
+            self.record_for_the_device(gpu, rows, major_on_left, tile, max_level);
+            return;
+        }
         match self.modes.cycle_type {
             FILL_CYCLE => self.fill_spans(rows, mem),
             ONE_CYCLE => self.draw_one_cycle(rows, major_on_left, tile, max_level, mem),

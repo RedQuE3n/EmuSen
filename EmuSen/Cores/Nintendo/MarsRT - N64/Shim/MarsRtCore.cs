@@ -24,6 +24,8 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private static readonly delegate* unmanaged<nint, void> AdvanceExport = (delegate* unmanaged<nint, void>)MarsNative.Export("mars_machine_advance");
         private static readonly delegate* unmanaged<nint, void> PresentExport = (delegate* unmanaged<nint, void>)MarsNative.Export("mars_machine_present");
         private static readonly delegate* unmanaged<nint, uint, uint, void> SetThreads = (delegate* unmanaged<nint, uint, uint, void>)MarsNative.Export("mars_machine_set_threads");
+        private static readonly delegate* unmanaged<nint, int, int, uint, void> SetMultiple = (delegate* unmanaged<nint, int, int, uint, void>)MarsNative.Export("mars_machine_set_multiple");
+        private static readonly delegate* unmanaged<nint, byte*, nuint, long> GpuReportExport = (delegate* unmanaged<nint, byte*, nuint, long>)MarsNative.Export("mars_machine_gpu_report");
         private static readonly delegate* unmanaged<nint, long*, nuint, long> ThreadCounters = (delegate* unmanaged<nint, long*, nuint, long>)MarsNative.Export("mars_threads_counters");
         private static readonly delegate* unmanaged<nint, ulong, void> RunStepsExport = (delegate* unmanaged<nint, ulong, void>)MarsNative.Export("mars_machine_run_steps");
         private static readonly delegate* unmanaged<nint, uint, void> SetOptions = (delegate* unmanaged<nint, uint, void>)MarsNative.Export("mars_machine_set_options");
@@ -71,6 +73,10 @@ namespace EmuSen.Cores.Nintendo.MarsRT
 
         // Mars's defaults since 2026-09-22, measured on the desktop and the handheld; each is exact either way - see Mars_Native.md §6.2.
         private bool _threadedRdp = true, _deferredPresentation = true, _skipRepeatedScans = true, _verifyRdp;
+
+        // The multiple, the averaging and the device as asked for; what they got is the library's - see Mars_Native.md §6.4.
+        private int _renderScale = 1, _antialiasing = 1;
+        private bool _gpu;
         private int _rdpWorkers = Math.Clamp(Environment.ProcessorCount / 3, 1, 4);
 
         // The recompiler, on since 2026-09-22 at the tier §5.8.7 recommends; off is the interpreter, exact as well - see Mars_Native.md §5.8.
@@ -151,7 +157,43 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             long serial = FrameSerialOf(_handle);
             SetThreads(_handle, (_threadedRdp ? 1u : 0) | (_deferredPresentation ? 2u : 0) | (_skipRepeatedScans ? 0 : 4u) | (_verifyRdp ? 8u : 0), (uint)_rdpWorkers);
             SetRecompiler(_handle, (_useBlocks ? 1u : 0) | (_verifyBlocks ? 2u : 0) | ((uint)_blockTier << 4));
+            SetMultiple(_handle, _renderScale, _antialiasing, _gpu ? 1u : 0);
             if (!_skipRendering && FrameSerialOf(_handle) != serial) TakePicture();
+        }
+
+        // Mars's RenderScale: the picture drawn at a multiple of the console's beside the exact drawing, on the library's threads; takes effect at the next frame - see Mars_Native.md §6.4.
+        public int RenderScale
+        {
+            get => _renderScale;
+            set { _renderScale = Math.Clamp(value, 1, 4); ApplyOptions(); }
+        }
+
+        // Mars's Antialiasing: the drawing that many times finer than shown and averaged down, held to four with the resolution - see Mars_Native.md §6.4.
+        public int Antialiasing
+        {
+            get => _antialiasing;
+            set { _antialiasing = Math.Clamp(value, 1, 4); ApplyOptions(); }
+        }
+
+        public int EffectiveAntialiasing => Math.Max(1, Math.Min(_antialiasing, 4 / _renderScale));
+
+        // Mars's Gpu: asked of the library, which reports what it got - see Mars_Native.md §6.4.
+        public bool Gpu
+        {
+            get => _gpu;
+            set { _gpu = value; ApplyOptions(); }
+        }
+
+        public string GpuReport
+        {
+            get
+            {
+                if (_handle == 0) return "off";
+                long length = GpuReportExport(_handle, null, 0);
+                var text = new byte[length];
+                fixed (byte* data = text) GpuReportExport(_handle, data, (nuint)text.Length);
+                return Encoding.UTF8.GetString(text);
+            }
         }
 
         // Mars's ThreadedRdp: the display processor's lists on a thread of MarsRT's own, behind page marks - see Mars_Native.md §5.6.
@@ -235,12 +277,12 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         }
 
         // Declared before VideoSettings, whose initializer reads it; static fields initialise in textual order.
-        private static readonly string[] Honoured = { "ExpansionPak", "ThreadedRdp", "RdpWorkers", "DeferredPresentation", "SkipRepeatedScans" };
+        private static readonly string[] Honoured = { "ExpansionPak", "ThreadedRdp", "RdpWorkers", "DeferredPresentation", "SkipRepeatedScans", "RenderScale", "Antialiasing", "Gpu" };
 
         // MarsRT's own key for Mars's UseBlocks, which is no setting of Mars's; before VideoSettings for the same reason - see Mars_Native.md §5.8.
         private static readonly CoreSetting Recompiler = new("Recompiler", "Compile the processor's code", "The processor's code is compiled to the host's machine code in blocks, each compared with memory before it runs, on a thread of its own. Exact: frame for frame the interpreter, which is what off leaves running, slower.", CoreSettingKind.Switch, "true");
 
-        // Mars's keys, so one graphics tab serves either engine; the multiple, antialiasing and the device are not honoured yet - see Mars_Native.md §5.5 and §5.6.
+        // Mars's keys, so one graphics tab serves either engine, every one honoured since stage D - see Mars_Native.md §5.5, §5.6 and §6.4.
         public static readonly IReadOnlyList<CoreSetting> VideoSettings =
             MarsCore.VideoSettings.Select(s => Honoured.Contains(s.Key) ? Threads(s) : s with { Hint = IgnoredHint + s.Hint }).Append(Recompiler).ToArray();
 
@@ -266,6 +308,9 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             "DeferredPresentation" => DeferredPresentation ? "true" : "false",
             "SkipRepeatedScans" => SkipRepeatedScans ? "true" : "false",
             "Recompiler" => UseBlocks ? "true" : "false",
+            "RenderScale" => RenderScale.ToString(),
+            "Antialiasing" => Antialiasing == 1 ? "Off" : $"{Antialiasing}x",
+            "Gpu" => Gpu ? "true" : "false",
             _ => _ignored.TryGetValue(Setting(key).Key, out string? value) ? value : Setting(key).Default,
         };
 
@@ -288,6 +333,9 @@ namespace EmuSen.Cores.Nintendo.MarsRT
                 case "DeferredPresentation": DeferredPresentation = accepted == "true"; break;
                 case "SkipRepeatedScans": SkipRepeatedScans = accepted == "true"; break;
                 case "Recompiler": UseBlocks = accepted == "true"; break;
+                case "RenderScale": RenderScale = int.Parse(accepted); break;
+                case "Antialiasing": Antialiasing = accepted == "Off" ? 1 : accepted[0] - '0'; break;
+                case "Gpu": Gpu = accepted == "true"; break;
                 default: _ignored[key] = accepted; break;
             }
         }

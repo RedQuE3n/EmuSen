@@ -7,6 +7,8 @@ mod debug;
 mod devices;
 mod fpu;
 mod games;
+mod gpu;
+mod multiple;
 mod rom;
 mod save;
 mod sites;

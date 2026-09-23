@@ -58,6 +58,18 @@ impl Rdp {
         let major_step = (dxhdy >> 2) & !1;
         let mut minor_step = (dxmdy >> 2) & !1;
 
+        // The edges are given at the console's row top; at a multiple the walk begins at the multiple's, some sub-scanlines on (Mars_Rdp.md §11).
+        let scaled = self.multiple.scaled;
+        if scaled {
+            let scale = self.multiple.scale;
+            let ahead = (yh & !3) - ((yh / scale) & !3) * scale;
+            major = major.wrapping_add(ahead.wrapping_mul(major_step));
+            minor = minor.wrapping_add(ahead.wrapping_mul(minor_step));
+            for (value, de) in running.iter_mut().zip(self.attribute_de) {
+                *value = value.wrapping_add((ahead >> 2).wrapping_mul(de));
+            }
+        }
+
         let copy = self.modes.cycle_type == COPY_CYCLE;
         let mut per_half_pixel = [0i32; ATTRIBUTES];
         if !copy {
@@ -77,7 +89,7 @@ impl Rdp {
 
             if k >= close {
                 if (k & 3) == 0 {
-                    left = 0xFFF;
+                    left = if scaled { i32::MAX } else { 0xFFF };
                     right = 0;
                     over = true;
                     under = true;
@@ -92,13 +104,13 @@ impl Rdp {
                 over &= left_over && right_over;
                 under &= left_under && right_under;
 
-                let crossed = quarter_pixel(right_edge) < quarter_pixel(left_edge);
+                let crossed = if scaled { (right_edge >> 14) < (left_edge >> 14) } else { quarter_pixel(right_edge) < quarter_pixel(left_edge) };
                 let invalid = k < upper || k >= lower || crossed;
                 outside &= invalid;
 
                 let ku = k as usize;
-                self.edge_left[ku] = left_at & 0x1FFF;
-                self.edge_right[ku] = right_at & 0x1FFF;
+                self.edge_left[ku] = if scaled { left_at } else { left_at & 0x1FFF };
+                self.edge_right[ku] = if scaled { right_at } else { right_at & 0x1FFF };
                 self.edge_invalid[ku] = invalid;
 
                 if !invalid {
@@ -108,7 +120,7 @@ impl Rdp {
 
                 if (k & 3) == sample_sub {
                     let row = (k >> 2) as usize;
-                    self.span_major_x[row] = sign_extend((major >> 16) as u32, 12);
+                    self.span_major_x[row] = if scaled { major >> 16 } else { sign_extend((major >> 16) as u32, 12) };
                     let fraction = (major >> 8) & 0xFF;
                     let at = row * ATTRIBUTES;
                     for c in 0..ATTRIBUTES {
@@ -146,6 +158,15 @@ impl Rdp {
         let clip_left = self.scissor_left * 2;
         let clip_right = self.scissor_right * 2;
 
+        // At a multiple the column keeps its full width, so nothing wraps at the console's (Mars_Rdp.md §11).
+        if self.multiple.scaled {
+            let wide = ((x >> 13) & !1) | sticky;
+            let under = wide < clip_left;
+            let wide = if under { clip_left } else { wide };
+            let over = wide >= clip_right;
+            return (if over { clip_right } else { wide }, under, over);
+        }
+
         let at = ((x >> 13) & 0x1FFE) | sticky;
         let under = (x & 0x0800_0000) != 0 || (at < clip_left && (x & 0x0400_0000) == 0);
 
@@ -157,6 +178,9 @@ impl Rdp {
 
     /// Negative tops start at the scissor and tops past the last row stand; otherwise the lower of the two wins.
     fn upper_limit(&self, yh: i32) -> i32 {
+        if self.multiple.scaled {
+            return if yh < 0 { self.scissor_top } else { yh.max(self.scissor_top) };
+        }
         if (yh & 0x2000) != 0 {
             self.scissor_top
         } else if (yh & 0x1000) != 0 {
@@ -167,6 +191,9 @@ impl Rdp {
     }
 
     fn lower_limit(&self, yl: i32) -> i32 {
+        if self.multiple.scaled {
+            return if yl < 0 { yl } else { yl.min(self.scissor_bottom) };
+        }
         if (yl & 0x2000) != 0 {
             yl
         } else if (yl & 0x1000) != 0 {

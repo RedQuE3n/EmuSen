@@ -486,8 +486,8 @@ fn processors_sharing_a_list_leave_what_one_leaves() {
     }
 }
 
-#[test]
-fn a_load_from_the_drawn_image_and_a_live_carry_are_drawn_as_at_once() {
+/// Shaded triangles, a live carry, a load from the image being drawn, and two-cycle triangles weighing memory alpha: what a split draws alone.
+pub(super) fn hazards() -> Vec<u64> {
     let mut list = shaded(0x0F0F_0F0F, true, false, false);
     list.pop();
     list.push(combine(4, 0, 11, 7, 4, 7, 4, 7));
@@ -497,7 +497,12 @@ fn a_load_from_the_drawn_image_and_a_live_carry_are_drawn_as_at_once() {
     list.push((0x35 << 56) | (2 << 51) | (16 << 41));
     list.push((0x34 << 56) | ((31u64 << 2) << 12) | (15 << 2));
     list.extend(shaded(0xF0F0_F0F0, true, true, true));
+    list
+}
 
+#[test]
+fn a_load_from_the_drawn_image_and_a_live_carry_are_drawn_as_at_once() {
+    let list = hazards();
     let (mut once, mut shared) = (at_once(), split(3));
     hand_over(&mut once, &list, LIST);
     hand_over(&mut shared, &list, LIST);

@@ -19,10 +19,16 @@ pub(crate) struct Mode {
     pub blocks: bool,
     /// Every debugger table armed and nothing that halts: the observed loop, stopped and resumed wherever a table fires (Mars_Native.md §6.5).
     pub observed: bool,
+    /// The multiple the picture is drawn at beside the machine's own; the reference draws at the same, and a machine at one is compared in state (Mars_Native.md §6.4).
+    pub scale: i32,
+    /// The multiple shaded on the device, when one exists; the reference is the processor at the same multiple (Mars_Gpu.md §11).
+    pub gpu: bool,
+    /// The antialiasing average the scan-out takes of the multiple, one for none (Mars_Video.md §2.10).
+    pub average: i32,
 }
 
 impl Mode {
-    const PLAIN: Mode = Mode { threaded: false, deferred: false, workers: 1, blocks: false, observed: false };
+    const PLAIN: Mode = Mode { threaded: false, deferred: false, workers: 1, blocks: false, observed: false, scale: 1, gpu: false, average: 1 };
 }
 
 /// How its state is compared: joined every frame, or a snapshot every frame replayed into a scratch machine, which leaves the drain running across frames.
@@ -45,8 +51,11 @@ impl Run {
         machine.set_threaded_rdp(mode.threaded);
         machine.set_deferred(mode.deferred);
         machine.set_recompiler(mode.blocks);
+        machine.set_scale(mode.scale);
+        machine.set_gpu(mode.gpu);
         let mut scanout = Scanout::default();
         scanout.repeat_rows = true;
+        scanout.average = mode.average;
         if let Some(state) = state {
             machine.restore_state(&std::fs::read(format!("{folder}/{state}")).unwrap()).unwrap();
             scanout.forget();
@@ -159,14 +168,32 @@ fn first_difference(a: &[u8], b: &[u8]) -> usize {
 
 /// Runs a game in both machines and returns the frames compared; panics at the first frame they part.
 pub(crate) fn compare(folder: &str, rom: &str, state: Option<&str>, frames: u64, mode: Mode, how: Compare) -> u64 {
-    let mut reference = Run::load(folder, rom, state, Mode::PLAIN);
+    // Averaged on the device, the reference is the device at once, since the processor's picture parts from it after a decline (Mars_Native.md §6.4).
+    let on_device = mode.gpu && mode.average > 1;
+    let mut reference = Run::load(folder, rom, state, Mode { scale: mode.scale, average: mode.average, gpu: on_device, ..Mode::PLAIN });
     let mut subject = Run::load(folder, rom, state, mode);
+    if mode.gpu {
+        assert!(subject.machine.bus.dp.multiple.can_scan_out(), "{rom}: the device was asked for and not got: {}", subject.machine.bus.dp.gpu_report());
+    }
+    let mut at_one = (mode.scale > 1).then(|| Run::load(folder, rom, state, Mode::PLAIN));
     let mut scratch = Machine::new(reference.machine.rdram_bytes()).unwrap();
     let mut previous = reference.picture();
     assert!(previous == subject.picture(), "{rom}: the pictures after the load differ");
+    let (mut shown_at_the_multiple, mut parted_after_a_decline) = (0u64, 0u64);
     for n in 1..=frames {
         reference.frame(n);
         subject.frame(n);
+        if let Some(one) = at_one.as_mut() {
+            one.frame(n);
+            let (want, got) = (state_of(&mut one.machine), state_of(&mut reference.machine));
+            assert!(want == got, "{rom} {state:?} at {}: the multiple changed the state at frame {n}, byte {}", mode.scale, first_difference(&want, &got));
+            let (at_one, at_scale) = (one.picture(), reference.picture());
+            if reference.scanout.raster_scaled().1 == mode.scale {
+                shown_at_the_multiple += 1;
+            } else if mode.average == 1 {
+                assert!(at_scale == at_one, "{rom}: frame {n} at {} is neither the multiple's nor the console's picture", mode.scale);
+            }
+        }
 
         let want = state_of(&mut reference.machine);
         let got = if how == Compare::Snapshot { snapshot_of(&mut subject.machine, &mut scratch) } else { state_of(&mut subject.machine) };
@@ -176,7 +203,13 @@ pub(crate) fn compare(folder: &str, rom: &str, state: Option<&str>, frames: u64,
         let shown = subject.picture();
         let expected = if mode.deferred { &previous } else { &picture };
         assert!(expected.0 == shown.0 && expected.1 == shown.1 && expected.2 == shown.2, "{rom}: frame {n} shows {:?} not {:?}", (shown.0, shown.1, shown.2), (expected.0, expected.1, expected.2));
-        assert!(expected.3 == shown.3, "{rom} {mode:?}: the picture after frame {n} differs from byte {}", first_difference(&expected.3, &shown.3));
+        // The device draws nothing of a primitive it declines, as C#'s does (Mars_Native.md §6.4.3); only then may its picture part from the processor's.
+        let declined = subject.machine.bus.dp.multiple.gpu.as_ref().map_or(0, |g| g.counters.primitives_not_shaded);
+        if mode.gpu && !on_device && declined > 0 && expected.3 != shown.3 {
+            parted_after_a_decline += 1;
+        } else {
+            assert!(expected.3 == shown.3, "{rom} {mode:?}: the picture after frame {n} differs from byte {}", first_difference(&expected.3, &shown.3));
+        }
         previous = picture;
 
         let (a, b) = (reference.machine.bus.ai.drain(1 << 20), subject.machine.bus.ai.drain(1 << 20));
@@ -202,6 +235,13 @@ pub(crate) fn compare(folder: &str, rom: &str, state: Option<&str>, frames: u64,
     }
     if mode.deferred {
         eprintln!("  scans repeated and not walked: {}", subject.scanout.repeated_scans);
+    }
+    if mode.scale > 1 {
+        if let Some(gpu) = subject.machine.bus.dp.multiple.gpu.as_ref() {
+            eprintln!("  on the device: {:?}; pictures parted from the processor's after a decline: {parted_after_a_decline}", gpu.counters);
+        }
+        eprintln!("  frames shown at the multiple: {shown_at_the_multiple} of {frames}");
+        assert!(state.is_none() || shown_at_the_multiple > frames / 2, "{rom}: the multiple was shown in {shown_at_the_multiple} frames of {frames}");
     }
     frames
 }
@@ -257,6 +297,41 @@ fn a_machine_whose_list_several_processors_share_is_the_machine_at_once() {
     }
 }
 
+/// At two and at four: the split with four workers, deferred, against the machine at once at the same multiple, picture for picture, and
+/// the machine at one in state (Mars_Native.md §6.4).
+#[test]
+fn a_machine_at_a_multiple_split_and_deferred_is_the_machine_at_once_at_that_multiple() {
+    for scale in [2, 4] {
+        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: false, average: 1 }, Compare::Snapshot);
+    }
+}
+
+/// At two and at four on the device, split and deferred, against the processor at once at the same multiple: the device's frames are the
+/// processor's, picture for picture, on real games (Mars_Gpu.md §11, Mars_Native.md §6.4). Stands down without a Vulkan device.
+#[test]
+fn a_machine_at_a_multiple_on_the_device_is_the_machine_at_once_on_the_processor() {
+    if crate::rdp::gpu::GpuDevice::device_names().is_empty() {
+        eprintln!("no Vulkan device: not run");
+        return;
+    }
+    for scale in [2, 4] {
+        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: true, average: 1 }, Compare::Snapshot);
+    }
+}
+
+/// Averaged on the device, split and deferred, against the device at once at the same multiple and averaging: exact, since the two
+/// decline the same primitives; the processor at once is compared too, and must agree while nothing has been declined (Mars_Gpu.md §15).
+#[test]
+fn a_machine_averaged_on_the_device_split_and_deferred_is_the_device_at_once() {
+    if crate::rdp::gpu::GpuDevice::device_names().is_empty() {
+        eprintln!("no Vulkan device: not run");
+        return;
+    }
+    for (scale, average) in [(4, 2), (4, 4), (2, 2)] {
+        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: true, average }, Compare::Snapshot);
+    }
+}
+
 #[test]
 fn a_recompiled_machine_is_the_interpreted_machine() {
     each_game(Mode { blocks: true, ..Mode::PLAIN }, Compare::Join);
@@ -264,7 +339,7 @@ fn a_recompiled_machine_is_the_interpreted_machine() {
 
 #[test]
 fn a_recompiled_machine_on_four_workers_deferred_is_the_interpreted_machine_a_picture_late() {
-    each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false }, Compare::Snapshot);
+    each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale: 1, gpu: false, average: 1 }, Compare::Snapshot);
 }
 
 /// Every debugger table armed and nothing halting, unthreaded and on four workers deferred: the observed loop leaves what the plain
@@ -286,7 +361,7 @@ fn a_game_halted_at_breakpoints_and_resumed_is_the_game_run_through() {
     };
     let frames = frames();
     for threaded in [false, true] {
-        let mode = Mode { threaded, deferred: threaded, workers: if threaded { 4 } else { 1 }, blocks: true, observed: false };
+        let mode = Mode { threaded, deferred: threaded, workers: if threaded { 4 } else { 1 }, blocks: true, observed: false, scale: 1, gpu: false, average: 1 };
         for (rom, state) in GAMES {
             let Some(state) = state else { continue };
             if !std::path::Path::new(&format!("{folder}/{rom}")).exists() {
@@ -386,3 +461,4 @@ fn a_run_that_carries_its_blocks_and_one_loaded_from_its_state_agree() {
         );
     }
 }
+

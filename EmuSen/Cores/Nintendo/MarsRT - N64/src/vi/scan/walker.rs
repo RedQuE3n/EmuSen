@@ -1,7 +1,7 @@
 //! C#'s `Vi.Walker`: the rows of one walk, with the caches that make it cheap. Every cache is a pure function of memory and the registers. See Mars_Native.md §5.4.
 
 use super::filters::{Pixel, divot, gamma, mix, pull, step};
-use super::{Job, Picture, View};
+use super::{Job, Picture, Rasters, View};
 
 /// `Vi.RowSpan`: every source pixel one row can reach, and the neighbour beyond.
 pub(super) const ROW_SPAN: i32 = super::RASTER_WIDTH as i32 * 4 + 2;
@@ -76,16 +76,26 @@ pub struct Walker {
 }
 
 impl Walker {
-    /// `Vi.Walk` at one, over live memory or a capture of it, as one band.
-    pub fn walk(&mut self, job: &Job, view: View, raster: &mut [u8]) {
+    /// `Vi.Walk`, over live memory or a capture of it, as one band: at one over the machine's memory into the console's raster, at a
+    /// multiple over the shadow into the raster at the multiple, the origin aligned first and multiplied after (Mars_Video.md §2.9, §2.11).
+    pub fn walk(&mut self, job: &Job, view: View, scaled: Option<View>, rasters: &mut Rasters) {
+        let scale = job.scale();
         let aligned = if job.wide { job.origin & 0xFF_FFFC } else { job.origin & 0xFF_FFFE };
-        let source = Source { rdram: view.rdram, hidden: view.hidden, base: view.base, length: view.length, origin: aligned, wide: job.wide, width: job.width };
-        self.begin(job);
-        self.rows(&job.picture, &source, job.resample, job.divot, raster, 0, job.picture.rows);
+        let (picture, view, origin, width, raster_width) = if scale > 1 {
+            let shadow = scaled.expect("a walk at a multiple reads the shadow");
+            (job.scaled_picture, shadow, aligned.wrapping_mul((scale * scale) as u32), job.width * scale, super::RASTER_WIDTH as i32 * scale)
+        } else {
+            (job.picture, view, aligned, job.width, super::RASTER_WIDTH as i32)
+        };
+        let source = Source { rdram: view.rdram, hidden: view.hidden, base: view.base, length: view.length, origin, wide: job.wide, width };
+        self.begin(job, width);
+        rasters.output_scale = scale;
+        let raster = rasters.at(scale);
+        self.rows(&picture, &source, job.resample, job.divot, raster, raster_width, 0, picture.rows);
     }
 
-    /// `Walker.Begin`: the modes, the slots emptied, and the window opened.
-    fn begin(&mut self, job: &Job) {
+    /// `Walker.Begin`: the modes, the slots emptied, and the window opened at the frame buffer's width.
+    fn begin(&mut self, job: &Job, width: i32) {
         let span = 2 * ROW_SPAN as usize;
         if self.samples.len() != span {
             self.samples = vec![Pixel::default(); span];
@@ -97,18 +107,17 @@ impl Walker {
         self.dither = job.dither;
         self.gamma = job.gamma;
         self.slot_live = [false; 2];
-        if job.width != self.window_width {
-            self.window = vec![Pixel::default(); (WINDOW_LINES * job.width) as usize];
-            self.window_width = job.width;
+        if width != self.window_width {
+            self.window = vec![Pixel::default(); (WINDOW_LINES * width) as usize];
+            self.window_width = width;
         }
         self.window_count = 0;
     }
 
     /// `Walker.Rows`: from one row to another, into the raster.
     #[allow(clippy::too_many_arguments)]
-    fn rows(&mut self, picture: &Picture, source: &Source, resample: bool, divot: bool, raster: &mut [u8], from: i32, to: i32) {
+    fn rows(&mut self, picture: &Picture, source: &Source, resample: bool, divot: bool, raster: &mut [u8], raster_width: i32, from: i32, to: i32) {
         let width = source.width;
-        let raster_width = super::RASTER_WIDTH as i32;
         let first = (picture.start_x >> 10) as i32;
         let line_of = |row: i32| picture.start_y.wrapping_add((row as u32).wrapping_mul(picture.step_y)) >> 10;
         let mut bug = if from > 0 && line_of(from - 1) == line_of(from) { 2 } else { 0 };

@@ -720,7 +720,8 @@ and its raster with it.
   debugging loop is not ported. MarsRT runs `RunQuietly`'s loop, the C# path taken when nothing is armed.~~ *§6.5:
   ported as tables in the Rust loop and a frame that stops with its reasons; the plain frame is still `RunQuietly`'s.*
 - **Cheats, `ICoreSettings`, the multiple, antialiasing, the device and deferred presentation.** The shim scans at
-  one, immediately. *Cheats and `ICoreSettings` arrived in §5.5; the rest is still out.*
+  one, immediately. *Cheats and `ICoreSettings` arrived in §5.5, deferred presentation in §5.6, and the multiple,
+  antialiasing and the device in §6.4.*
 - ~~**`CoreFactory` registration.** Nothing chooses MarsRT yet.~~ *§5.5: a per-console setting chooses it.*
 
 ### 5.3 The RDP
@@ -753,6 +754,8 @@ path (`Rdp.Gpu.cs` and the change flags it reads), the interface's verifier (`To
 counters (`Primitives` and its three siblings), `Drew`, and the Debug build's `VerifyModes`. All are `[SkipInState]`.
 With one processor `Owns` is always true and `Classify` returns `Ready` for every command; at scale one every product
 with `_scale` is the identity, a rectangle's `inclusive` is zero, and `_scaled` selects the branches that were ported.
+*The shared list was ported in §5.6, and drawing at a multiple and the device path in §6.4, each still
+`[SkipInState]`, so the argument stands for them as ported.*
 That is an argument from reading. The evidence is the differential below, which would show a byte the argument missed.
 
 **Four decisions.**
@@ -897,7 +900,8 @@ and here the boundary is crossed once per full sync, which is the shape §5 chos
 
 **Left out, and not proven.**
 
-- Everything listed under what the port leaves out: the shared list, the multiple, the device, the verifier.
+- Everything listed under what the port leaves out: the shared list, the multiple, the device, the verifier. *Since
+  proven: the shared list and the verifier in §5.6, the multiple and the device in §6.4.*
 - `DpInterface` itself, the interface's registers and its ring, which belong to the machine stage.
 - YUV texels, flipped texture rectangles and keyed combines are covered by the random lists and by no game's.
 - The replay covers lists as they arrive at a processor, not the game's own evolution of memory; the machine stage's
@@ -943,7 +947,8 @@ frame to show. The stub's "false when the VI shows nothing" would have invited a
 false, which the C# never does.
 
 **What is left out:** the deferred path (`Prepare`, `Capture` and `Walk` on the pool, and the repeat test of
-`Mars_Video.md` §2.8), the multiple, averaging, the device, and the bands. Only the last bears on exactness, and the
+`Mars_Video.md` §2.8), the multiple, averaging, the device, and the bands (*all but the bands ported since, in §5.6 and
+§6.4*). Only the last bears on exactness, and the
 argument that it does not is `Mars_Video.md` §2.12's: the rows are independent and the fetch bug's counter has a
 closed form, so one band over every row writes the raster four bands write. The differential below is incidentally a
 second test of that argument across two implementations: on the sixteen-processor machine it ran on, the C# oracle
@@ -1111,7 +1116,8 @@ machine stage's decision.
 
 **Left for the machine stage.** The call itself: the machine calls `scan` at the field's end, where `RunFrame` calls
 `Present`, and after a load, where `LoadState` does, and does not reset the `Scanout` when it loads. The deferred
-presentation, the repeat test, the bands, the multiple and the device are not ported.
+presentation, the repeat test, the bands, the multiple and the device are not ported. *The deferred presentation and
+the repeat test arrived with §5.6, the multiple and the device with §6.4; the bands are still not ported.*
 
 ### 5.5 MarsRT in the frontends (2026-09-22)
 
@@ -1161,7 +1167,8 @@ default and says that instead.
   hint begins "MarsRT does not implement this yet and ignores it." Those are the hints the core answers. The window
   shows the catalogue's, which are Mars's, so the Engine row's hint carries the qualification there.
   *Since §5.6:* `ThreadedRdp`, `RdpWorkers`, `DeferredPresentation` and `SkipRepeatedScans` act as well, and three
-  settings remain ignored.
+  settings remain ignored. *Since §6.4, 2026-09-23, none does: `RenderScale`, `Antialiasing` and `Gpu` act, their
+  hints are Mars's, and `IgnoredHint` prefixes nothing.*
 - **Cheats, in `MarsCore.RunFrame`'s order.** They are applied after the frame, before the periodic save and before
   the picture, and only while Status.IE is set (`Mars_Cheats.md` §5.1). That order needed the frame split in two:
   `mars_machine_advance` runs the machine to the field's end, and `mars_machine_present` scans. `ApplyCheats`, the
@@ -1326,7 +1333,8 @@ This checks the published core and the published factory, not the published wind
   Rust loop. The deep inspection §5 planned through the state transfer was not built.~~ *Done in §6.5, as hooks inside
   the Rust loop; the state transfer stays the inspector's read path.*
 - The seven settings MarsRT ignores. Each arrives with the stage that implements it: the threaded RDP and deferred
-  presentation with §5.6, and the multiple, antialiasing and the device later. *Four arrived with §5.6.*
+  presentation with §5.6, and the multiple, antialiasing and the device later. *Four arrived with §5.6, and the last
+  three with §6.4.*
 - The wait a threaded RDP will need in `Core::read_memory` and `Core::write_memory`. *Done in §5.6.4.*
 - An engine choice in Hotaru and Pharaoh, which still build the C# Mars.
 - `IFrameProfiler` phases, and the dashboard's audio peek.
@@ -1348,7 +1356,7 @@ The switches are `Machine::set_threaded_rdp`, `set_rdp_workers` and `set_deferre
 §5.2 to §5.4 proved therefore stays the default until this one has been proven in play. The shim now honours Mars's
 `ThreadedRdp`, `RdpWorkers`, `DeferredPresentation` and `SkipRepeatedScans` keys, with MarsRT's defaults of off, one,
 off and on. Their hints no longer say "ignored", and the settings still ignored are three: the multiple, antialiasing
-and the device. *Since 2026-09-22 the shim's defaults are Mars's own — on, one per three cores, on — by §6.2; the
+and the device. *Retired by §6.4 (2026-09-23): the three are honoured, and no setting is ignored.* *Since 2026-09-22 the shim's defaults are Mars's own — on, one per three cores, on — by §6.2; the
 machine in the library still boots with them off.* The interface version is 5, which adds `mars_machine_set_threads` and `mars_threads_counters`
 (`src/ffi/threads.rs`).
 
@@ -1791,7 +1799,8 @@ cache, or the seqlock of the idle ranges. Those are covered only by the tests an
 
 #### 5.6.10 What is left
 
-- The multiple, antialiasing and the device, which MarsRT does not draw yet.
+- ~~The multiple, antialiasing and the device, which MarsRT does not draw yet.~~ *Drawn since §6.4, on the threads and
+  deferred.*
 - The C# core's four failures (§5.6.2, §5.6.5, §5.6.6). They are the C#'s to fix, and the WiseMan tests that show them
   are the ones to turn around when it is.
 - Rewind for MarsRT. §5.5 kept it off per console until a snapshot is proven. A snapshot with workers running is now
@@ -2424,7 +2433,7 @@ concern as much as this stage's.
 
 ### 6.4 Stage D: the multiple, antialiasing and the device
 
-**What it is.** The three settings whose hint still reads "MarsRT does not implement this yet": `RenderScale`, the
+**What it is.** The three settings whose hint still read "MarsRT does not implement this yet" (*until §6.4, below*): `RenderScale`, the
 rasteriser at one to four times the console's resolution (`Mars_Video.md`), `Antialiasing`, and `Gpu`, the device path
 of `Mars_Gpu.md`, phases 0 to 7 with §14's tiles and §15's device average. In C# the multiple is 18 lines across six
 files of the rasteriser and the walker's hardware widths; the device path is 1,288 lines and its shaders.
@@ -2446,6 +2455,264 @@ machine's discrete card. On the handheld's integrated device the figure is unmea
 whether the multiple is what that device's frame has room for. If A finds the handheld CPU-bound at 1×, this stage is
 for the desktop's multiple and comes after E; if it finds it RDP-bound, this stage's device path is the next lever
 and comes before.
+*Retired 2026-09-23 (§6.4.6): the 150 to 250 quoted here is `pacebench`'s unit, a console frame, not a rate of the
+processor path. At 4× MarsRT's device ran Mario at 198 per cent and Ocarina at 208 in that unit, above the range, and
+2.7 to 4.6 times MarsRT's processor at the same multiple.*
+
+**Built, 2026-09-23.** The claim is `Mars_Video.md` §2.9–§2.11's and `Mars_Gpu.md` §5–§15's, made of MarsRT: the display
+processor draws the picture at one to four times the console's resolution beside the machine's own drawing, which is
+what the game reads back and what the state holds; the antialiasing setting draws finer still and averages it down,
+the product held to four with the averaging giving way first; and with the device on, the multiple is shaded, walked
+and averaged on a Vulkan compute device through `ash`, running the C# path's five SPIR-V binaries byte for byte. Each
+is exact against the C# core at the same settings, picture for picture, and none of it changes the state. The three
+hints that read "MarsRT does not implement this yet" now read as Mars's, and MarsRT ignores no setting of Mars's.
+
+#### 6.4.1 The multiple on the processor
+
+**What was ported** is C#'s own, and the page it lives on is `Mars_Rdp.md` §11: a processor at the multiple beside
+the native one (`ScaledDrawing` in `memory/dp.rs`, C#'s `_scale`, `_scaledRdram`, `_scaledHidden` and
+`_scaledProcessor`), fed every word after it and drawing into a shadow of RDRAM the multiple squared as large, its
+loads reading the machine's RDRAM (`RdpMemory::scaled`, whose `texture` view is the machine's memory while its frame
+is the shadow). The rasteriser's changes are the ones C# makes and no others: the colour and depth images and the
+scissor scaled at their commands (`fill.rs`, `modes.rs`) and after a state copy (`Rescale`); a rectangle's inclusive
+edge moved out to its pixel's last; the attribute steps divided by the multiple; the walker's hardware widths opened
+(`walker.rs`: no 0xFFF, 0x1FFF or twelve-bit sign on a column, a limit or the major edge), and the start sub-scanline
+(`ahead`: the edges are given at the console's row top, and the walk at the multiple starts some sub-scanlines on); the copy mode stepping each pixel by its own
+coordinate (`draw_copy_scaled`, C#'s `DrawCopyScaled`); the texture rectangle's steps shared; and the walker's scratch
+widened by the multiple (`Widen`), which is why its arrays became boxed slices. `set_scale` rebuilds the shadow and the
+processor, as C#'s `Scale` setter does; a state read empties both, as `ResetScaled` does.
+
+**On the drain** each worker gets a processor at the multiple beside its own (`ScaledStart`, `Threads::start`),
+configured for the same share of rows, fed the same word right after it and made to *follow* the native one's
+decision to draw a primitive alone (`Rdp::follow`), since the two cannot always decide it alike: a rectangle's own
+right edge is a console coordinate at either multiple while the image's width is not, so a rectangle past the width
+is alone at one and would not be at two. The leader assembles the others' scratch at the multiple as it does its own.
+The shadow needs no marks of its own: it is written by the processors at the multiple only, in the order the native
+ones write the machine's, and read by the scan-out behind the marks the native drawing already waits on.
+
+**The scan-out** (`vi/scan.rs`) follows `Mars_Video.md` §2.9: `Prepare` takes the multiple once something has drawn
+there (`ScaledDrawn`), the job carries the picture at the multiple, `ReachScaled` and the capture take the shadow's
+lines as the machine's are taken, a repeat's shape includes the multiple and the device, `Darken` and the blank edit
+both rasters, and `Compose` returns the width it composed, so the frontend receives 1,280 by 960 at two. The average
+is `BoxAverage` over the raster at the multiple, taken in `Compose` and only when the averaging divides the raster's
+multiple (§2.10). `Core::set_multiple` (`ffi/multiple.rs`) is `MarsCore.ApplyMultiple`: the drawn multiple is the
+resolution times the effective averaging, held to four, and a walk still out is joined before either changes.
+
+#### 6.4.2 The device
+
+`rdp/gpu/device.rs` is `GpuDevice.cs` on `ash` 0.38, `rdp/gpu/mod.rs` is `GpuRasteriser.cs` and `rdp/gpu/record.rs` is
+`Rdp.Gpu.cs`: the same enumeration and ranking (discrete, integrated, virtual, other; the portability extensions for
+MoltenVK), the same buffers, one descriptor set a program written at record time, the same barrier after every
+command and to the host at the end, one submission left pending (§14.2), the rows binned into 64 by 1 tiles (§14.1),
+the scan on the device over its own memory (§13) and the average over a raster it keeps (§15). The shaders are not
+compiled here: `include_bytes!` takes `Mars - N64/Rdp/Gpu/Shaders/*.spv`, and a test compares the five against the files
+on disk, so the two cores' device paths share every instruction the device runs and differ only in host code.
+
+**Without Vulkan.** `ash` is built with its `loaded` feature, so the loader is opened at run time by `libloading` and
+the library links against nothing new. `Entry::load` failing is `"Vulkan is not available: …"` in the report and the
+processor draws, as the C# path's `TryCreate` answers. Every device test asks `GpuDevice::device_names` first and
+stands down, which is what a CI runner sees. Verified here by hiding every driver from the loader
+(`VK_LOADER_DRIVERS_DISABLE='*'`): the sixteen device tests and the settings tests pass, and the interface test checks
+that the asking is refused with a reason.
+
+**Two decisions that are not C#'s.** A device that still fits the memory at a new multiple, or survives a state read,
+is kept and emptied (`GpuRasteriser::clear`) rather than opened again, since opening a Vulkan device is the slowest
+thing either core does between frames; what a keep must do is what `ResetScaled` does to the shadow, and
+`after_a_state_is_read_the_device_holds_what_the_processor_path_holds` holds it. And the device is carried across a
+state read by moving it from the old machine to the new, since MarsRT's read builds a machine and C#'s reads into the
+old one.
+
+**Licences.** `ash` is MIT OR Apache-2.0 and `libloading` ISC, both compatible with the GPL-3.0; recorded in
+`Cargo.toml` beside Cranelift's note.
+
+#### 6.4.3 The evidence
+
+**Against the C# core, picture for picture.** `MarsRT_at_a_multiple_leaves_what_the_csharp_core_at_that_multiple_leaves`
+runs MarsRT through the shim (four workers, deferred or not, the recompiler at tier 2) beside the C# core at the same
+`RenderScale`, `Antialiasing` and `Gpu`, and a third machine, the C# core at one with the picture off, whose state the
+multiple must not change. Every frame compares the state byte for byte, the picture's shape and every byte of it, and
+the sound. Nine settings on each of the three play states, at once and deferred, 300 frames each: 2× and 4× on the
+processor, 2× with 2× antialiasing (drawn at four, shown at two), 4× with 4× antialiasing (held to none by
+`EffectiveAntialiasing`), 1× with 2× antialiasing, and on the device 2×, 4×, 2× with 2× antialiasing (averaged on the
+device) and 1× with 4× antialiasing (drawn at four, averaged by four on the device). **54 runs, 16,200 frames, all
+exact**; in every run the picture was at the multiple in at least 297 of the 300 frames, and on the device the two
+cores' reports named the same card. The C# oracle runs unthreaded, for the race in §6.4.4.
+
+**Against MarsRT itself, in the crate** (`cargo test --release`, 449 tests with the states, all passing):
+
+- `a_machine_at_a_multiple_split_and_deferred_is_the_machine_at_once_at_that_multiple`: at 2× and 4×, four workers,
+  deferred, recompiled, snapshot every frame, against the machine at once at the same multiple, picture for picture,
+  and the machine at one in state; six runs of 300 frames, 3,600 frames.
+- `a_machine_at_a_multiple_on_the_device_is_the_machine_at_once_on_the_processor`: the same at 2× and 4× on the device,
+  against the processor; 3,600 frames, identical in state and picture except for Ocarina's play state, where 23 of 300
+  pictures part after the device declines (§6.4.4), at both multiples.
+- `a_machine_averaged_on_the_device_split_and_deferred_is_the_device_at_once`: 4× by 2, 4× by 4 and 2× by 2 on the
+  device, deferred and split, against the device at once; 5,400 frames.
+- The multiple's own ten (`tests/multiple.rs`): C#'s `Drawing_at_a_multiple_leaves_the_machines_memory_as_at_one`,
+  `A_fill_at_a_multiple_is_the_fill_at_one_at_every_pixel_of_the_multiple`, `After_a_state_is_read_the_multiple_is_drawn_and_shown_again`,
+  `A_frame_buffer_high_in_memory_scans_out_at_a_multiple_as_a_low_one_does` (the case `MarsViTests`' page, §2.11,
+  records; at 2×, 3× and 4×, at once and deferred) and `The_average_of_a_square_is_its_rounded_mean_channel_by_channel`,
+  and five of MarsRT's: the split at a multiple byte for byte against one processor over five lists (the last two a
+  load from the drawn image with a live carry, and rectangles past the image's width), a change of the multiple
+  between lists, the scan-out N times as wide and averaged back to the console's, the deferred walk a frame late, and
+  the core's frame following `set_multiple`.
+- The device's sixteen (`tests/gpu.rs`), `MarsGpuRasteriserTests`' cases on MarsRT: fills, shaded and depth-tested
+  triangles (one and two cycles, sixteen and thirty-two bits, keyed), textures through the divider's range and edges,
+  and copy-mode rectangles, each on the device against the processor at 2×, 3× and 4× over the whole memory at the
+  multiple, with no primitive declined and no column past the width; the scissor wider than the image counted; the
+  device refused the machine's own picture; the interface on and off at 2×, 3× and 4× with one, three and four
+  workers; one setting at one changing nothing; the scan-out over thirteen VI modes at 2×, 3× and 4× at once and
+  deferred; the average over twenty-three scans (borders, fades, blanks, fields, repeats) at 2× by 2, 4× by 2 and 4×
+  by 4, walking repeats or skipping them; averaging moved onto the device between fields; a walk left pending with a
+  frame drawn or a state read after it; the repeated capture with and without a scan between; the device after a
+  state read; and the five shaders against the C# files.
+- The C# settings cases on the shim (`MarsRtFrontendTests`): Mars's keys with every hint Mars's, the values checked,
+  clamped and read back, `EffectiveAntialiasing` at 4× with 2× and at 2× with 2×, and `Gpu` set and read.
+
+With every Vulkan driver hidden the device and multiple tests pass as well (27 of them, each device test saying it
+stood down), and `cargo clippy --all-targets` is clean. `GpuDevice` is opened on the RX 6800 alone, by standing
+instruction; the integrated device and llvmpipe were not run.
+
+#### 6.4.4 Four defects found on the way, and a race of the C# core's
+
+Each was found by an oracle, shown failing, fixed, and is now held by the test that found it or by one written for it.
+
+- **The immediate scan claimed the deferred capture's device picture.** C#'s immediate scan is a job of its own
+  (`_immediate`), so its device scan cannot mark the deferred job's; MarsRT's scan-out has one capture record, and
+  `present_now`'s device scan wrote its count into it. A deferred repeat after an immediate scan then reused a device
+  picture that was the immediate scan's. `a_repeated_capture_walked_again_on_the_device_is_the_processor_s`, with a
+  scan between, failed at byte 164 at two; the fix restores the record after the immediate scan.
+- **The device report did not survive a state read.** MarsRT's read builds a new machine and moves the device into it;
+  the report stayed behind, so the shim said "off" while the device drew. Found by the C# comparison's report check;
+  `after_a_state_is_read_the_device_holds_what_the_processor_path_holds` now asserts the report, and fails without the
+  fix.
+- **A repeat over an edited raster walked a capture the device never took.** MarsRT walks a deferred scan that repeats
+  the last when a border or a blank has changed the raster since (§5.6.5, one of the C# failures it does not follow);
+  C# never walks a repeat with `SkipRepeatedScans` on. The device's repeat logic (§14.3) was reached only with every
+  scan walked, so MarsRT's extra walk went to the processor's path over the scaled capture, which with the device is
+  never taken. While the device averages, the raster counts as edited at every scan (a span is sent whether or not it
+  darkens anything), so every repeat took that path: the C# comparison failed in the four averaged cases at frame 8,
+  and `a_machine_averaged_on_the_device_split_and_deferred_is_the_device_at_once` reproduced it in the crate at the
+  same byte (20,544) of Ocarina's frame 8. The repeat now takes the device's path whenever it is walked; the averaging
+  test runs with repeats skipped as well and fails without the fix, at step 1.
+- **The scan decided whether the multiple had drawn before the drain had run what it was handed.** `Prepare` reads
+  `ScaledDrawn` before any wait, and on the drain that flag is the workers' progress, so the first scan after a load or
+  a change of the multiple showed the console's picture or the multiple's by timing: one run in three of Super Mario 64
+  at two on the device showed 1,280 by 1,152 at frame 2 where the C# core showed 640 by 576. MarsRT now joins the drain
+  first while nothing has drawn, which costs a join once per load or change, and the answer is the words handed over.
+  **The C# core has the same race** (`Vi.Prepare` reads `DpInterface.ScaledDrawn`, which on the drain is the workers'
+  `Drew`, before `Capture`'s wait), so the C# comparison's oracle is the C# core unthreaded, which is deterministic;
+  documented here and not fixed, as the brief asks of C# findings.
+
+**A finding about the C# device path, not a defect of the port.** A primitive the device declines (`Declined.Carry`,
+`Declined.Image`) is drawn nowhere: `Rdp.Gpu.cs` returns, and the CPU path never sees it. `Mars_Gpu.md` §9.1 found
+no carry in three frames of three games and redirected the work on that basis; from Ocarina's play state the device
+declines 259 primitives in 300 frames (83 for the carry, 176 for an eight-bit image), and 23 of the 300 pictures part
+from the processor's. MarsRT does the same, by construction, so the two cores' device paths agree and the device
+against the processor on that state does not. Super Mario 64's and GoldenEye's states and all three games from
+power-on decline nothing. The crate's game test on the device therefore lets a picture part from the processor's
+only after a decline, and counts it.
+
+#### 6.4.5 Mutants
+
+Eleven, each put in by hand or by a runner in the scratchpad that restores the source after each, against the crate's
+device and multiple tests and, for the one that survived them, the C# comparison:
+
+| Mutant | Tests | Reading |
+|---|---|---|
+| tiles 32 wide on the host, the shader's 64 (the positive control) | 10 of the device tests fail | caught |
+| the scan's submission drops the frame's last batch (a dropped pending write) | 3 fail | caught |
+| the presenter reads the scanned picture without waiting for the device | 3 fail | caught |
+| a device kept across a state read is not emptied | 1 fails | caught |
+| the immediate scan's record not restored (§6.4.4's first defect) | 1 fails | caught |
+| the report not carried across a state read (the second) | 1 fails | caught |
+| a repeat over an edited raster walked on the processor (the third) | 1 fails, only with repeats skipped | caught |
+| the processor at the multiple does not follow the native one's decision to draw alone | 1 fails | caught |
+| the walk at the multiple masks the origin to twenty-four bits (§2.11's defect, reintroduced) | 3 fail | caught |
+| no start sub-scanline at the multiple (`ahead` zero) | none in the crate; the C# comparison fails at frame 6 of Mario at 2× | caught by the C# oracle alone |
+| a dark column's coverage cleared, not kept, in `write_device_picture` | none | **equivalent** |
+
+The sub-scanline mutant survives the crate's device and multiple tests because every oracle there is MarsRT's own walker at the multiple: the
+split, the device and the deferred path all share it, so a wrong start is wrong in all of them alike. Only the C# core
+is an independent oracle for it, which is the argument for keeping the comparison through the shim. The coverage
+mutant is equivalent on this path by construction: the raster `write_device_picture` fills is composed with its fourth
+byte made opaque (`compose_into`), no scan reads a raster's coverage back, and while the device averages the raster is
+the device's and this function is not called.
+
+#### 6.4.6 Speed
+
+**The prediction, stated before the measurement** (the brief's reading of `Mars_Gpu.md`): on this machine's RX 6800 the
+device at 4× runs at 150 to 192 per cent, and 4× antialiasing shown at one at 174 to 248 per cent. Those are
+`pacebench`'s figures for the C# device path in §14.6 and §15.4, and their unit is not the processor path's rate but a
+game's frame rate on the console: 192 per cent is 10.38 ms, so 100 per cent is 19.9 ms, the figure every pair in those
+tables gives. The ranges were for Mario, Ocarina and Wave Race; GoldenEye was not among them.
+
+**How it was measured.** `MarsRtThreadsTests.Bench_at_a_multiple` (`EMUSEN_MARSRT_BENCH=1`, `SCALE`, `AA`), WiseMan
+built in Release: from each play state, 600 frames flat out with the picture on, deferred and split over the shim's
+default workers, the recompiler at tier 2 on MarsRT and the blocks on C#, four configurations interleaved and the
+order reversed in the middle round, three rounds, medians. Each run's report named the card or said "off". The 1×
+frame was measured apart, with `examples/threads` (`split 4 blocks`) against the same example built from a clean
+extract of 83dca1d, interleaved and alternated the same way.
+
+**1×, against 83dca1d**, ms a frame, medians of three, the joined state's hash identical in all eighteen runs:
+
+| Game | 83dca1d | now |
+|---|---|---|
+| Super Mario 64 | 5.76 | 5.77 |
+| Ocarina of Time | 6.80 | 6.79 |
+| GoldenEye 007 | 14.39 | 14.44 |
+
+Level, as it should be: at one the machine carries an empty `ScaledDrawing` and one test of the scale a word.
+
+**At a multiple**, ms a frame, medians of three:
+
+| Game | Setting | MarsRT processor | MarsRT device | C# processor | C# device |
+|---|---|---|---|---|---|
+| Super Mario 64 | 2× | 13.86 | **6.09** | 20.30 | 8.70 |
+| | 4× | 41.71 | **10.03** | 62.40 | 12.54 |
+| | 1×, antialiasing 4× | 41.52 | **6.40** | 63.50 | 10.26 |
+| Ocarina of Time | 2× | 14.38 | **6.74** | 21.73 | 8.09 |
+| | 4× | 43.66 | **9.55** | 63.77 | 10.69 |
+| | 1×, antialiasing 4× | 44.75 | **7.11** | 64.10 | 8.95 |
+| GoldenEye 007 | 2× | 20.83 | **15.70** | 24.77 | 17.09 |
+| | 4× | 52.71 | **19.29** | 72.75 | 20.92 |
+| | 1×, antialiasing 4× | 53.52 | **15.54** | 72.27 | 18.36 |
+
+**The prediction's fate: exceeded, and retired.** In `pacebench`'s unit MarsRT's device at 4× runs Mario at 198 per
+cent and Ocarina at 208, above the range's top of 192; with 4× antialiasing shown at one, Mario at 311 and Ocarina at
+280, above 248. GoldenEye, outside the range's games, is at 103 and 128. Read the other way the brief read it, as a
+ratio to the processor path at the same multiple, the device is 4.2, 4.6 and 2.7 times MarsRT's processor at 4×, and
+6.5, 6.3 and 3.4 times with 4× antialiasing: the prediction's 1.5 to 2.5 was far short. Why the device gains more on
+MarsRT than on C#: the device's own work is the same shaders, and the host's share, walking and binning rows and the
+join, is where MarsRT's rasteriser is faster (§5.3, two times the C# one), so the device takes a larger fraction of a
+smaller frame. MarsRT's device is ahead of C#'s in every row: C#'s takes 8 to 60 per cent longer. GoldenEye gains
+least because its frame is the heaviest of the three before any drawing (14.4 ms at one, against 5.8 and 6.8), and
+the device takes none of that.
+
+`pacebench` itself was not run; its numbers and the bench's are both flat-out frame times from the same states, and
+the C# device rows here (12.54 ms at 4× in Mario) sit near §14.6's (10.38) without matching it, since the bench
+alternates four configurations in one process and `pacebench` runs one; the comparison that matters, MarsRT against C#
+at the same settings in the same process, is interleaved.
+
+#### 6.4.7 What is not done
+
+- **The integrated device and llvmpipe.** Every device test ran on the RX 6800 alone; `EMUSEN_MARS_GPU_TEST_DEVICES=all`
+  was not run, and neither the Legion Go S's device nor MoltenVK has seen MarsRT's device path. Stage A's question,
+  whether the handheld's frame has room for the multiple, is unanswered.
+- **The validation layer.** §14.4's configuration was not run over MarsRT's device path; its ordering is C#'s by
+  construction (the same barriers, the same pending submission), and the tests' agreement is the only witness here.
+- **The race in the C# core** (§6.4.4) is documented and not fixed; the C# comparison's oracle runs unthreaded because
+  of it. A fix is for `Vi.Prepare` to wait on the drain before reading `ScaledDrawn` while nothing has drawn, as
+  MarsRT now does.
+- **The declined primitives** (§6.4.4) are drawn nowhere on either core's device path. The two options `Mars_Gpu.md`
+  §9.1 priced, recomputing the neighbour or drawing the primitive on the processor, are now needed by a game and are
+  not built.
+- **The device's report in the window.** The shim exposes `GpuReport` as `MarsCore` does, and no frontend shows either.
+- **The bands and the walk at a multiple on the processor split across threads** are C#'s and not ported; MarsRT's
+  walk is one band, at the multiple as at one.
+- **Mistress.** No play session at a multiple on MarsRT; headless only, by standing instruction.
+- **The transition off the device** deviates for up to two frames as C#'s does (`Mars_Gpu.md` §15.2), and no test holds
+  it on either core.
 
 ### 6.5 Stage E: the debugger's hooks
 

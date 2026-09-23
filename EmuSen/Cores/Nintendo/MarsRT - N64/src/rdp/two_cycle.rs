@@ -65,7 +65,8 @@ impl Rdp {
                 values[ATTRIBUTE_Z] = self.primitive_z;
             }
 
-            let clipped = (if major_on_left { left - self.span_major_x[yu] } else { self.span_major_x[yu] - right }) & 0xFFF;
+            let clipped = if major_on_left { left - self.span_major_x[yu] } else { self.span_major_x[yu] - right };
+            let clipped = if self.multiple.scaled { clipped } else { clipped & 0xFFF };
             for c in 0..ATTRIBUTES {
                 values[c] = values[c].wrapping_add(steps[c].wrapping_mul(clipped));
             }
@@ -247,7 +248,7 @@ impl Rdp {
     }
 
     /// Both texels and the second's successor (0), both (1), the first alone (2), or neither (3); and whether a level is measured.
-    fn two_cycle_texels(&self) -> (i32, bool) {
+    pub(super) fn two_cycle_texels(&self) -> (i32, bool) {
         let m = &self.modes;
         let (first, second) = (&m.first_combine_cycle, &m.second_combine_cycle);
 

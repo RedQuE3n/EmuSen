@@ -99,14 +99,13 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(MarsCore.VideoSettings.Select(s => s.Key).Append("Recompiler"), settings.Settings.Select(s => s.Key));
             foreach (CoreSetting setting in settings.Settings)
             {
-                if (setting.Key is "ExpansionPak" or "SkipRepeatedScans") Assert.Equal(MarsCore.VideoSettings.Single(s => s.Key == setting.Key).Hint, setting.Hint);
-                else if (setting.Key is "ThreadedRdp" or "RdpWorkers" or "DeferredPresentation" or "Recompiler") Assert.DoesNotContain("ignores it", setting.Hint);
-                else Assert.StartsWith("MarsRT does not implement this yet and ignores it.", setting.Hint);
+                if (setting.Key is "ExpansionPak" or "SkipRepeatedScans" or "RenderScale" or "Antialiasing" or "Gpu") Assert.Equal(MarsCore.VideoSettings.Single(s => s.Key == setting.Key).Hint, setting.Hint);
+                else Assert.DoesNotContain("ignores it", setting.Hint);
             }
         }
 
         [Fact]
-        public void A_setting_MarsRT_ignores_is_still_checked_and_read_back_and_an_unknown_key_is_refused()
+        public void Every_setting_is_checked_and_read_back_and_an_unknown_key_is_refused()
         {
             using var core = new MarsRtCore();
             ICoreSettings settings = core;
@@ -122,6 +121,14 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal("false", settings.Get("ThreadedRdp"));
             settings.Set("RdpWorkers", "99");
             Assert.Equal("8", settings.Get("RdpWorkers"));
+            Assert.Equal(4, core.RenderScale);
+            Assert.Equal(2, core.Antialiasing);
+            Assert.Equal(1, core.EffectiveAntialiasing);
+            settings.Set("RenderScale", "2");
+            Assert.Equal(2, core.EffectiveAntialiasing);
+            settings.Set("Gpu", "True");
+            Assert.Equal("true", settings.Get("Gpu"));
+            Assert.True(core.Gpu);
 
             Assert.Throws<ArgumentException>(() => settings.Set("RdpWorkers", "many"));
             Assert.Throws<ArgumentException>(() => settings.Set("Antialiasing", "5x"));

@@ -97,6 +97,8 @@ Neither. `EmuSen/Cores/CoreCapabilities.cs` holds small optional interfaces a co
 | `ICoprocessorHalt` | `IsHaltedOnCoprocessor`, `HaltedProcessorName` | Venus |
 | `ICoprocessorLoad` | `CoprocessorClocks` — executed/offered against a per-frame budget | Venus |
 | `ITraceFlushable` | `FlushVerboseTrace()` | Venus |
+| `IFrameSerial`, `IRepeatedRows` | whether the picture changed, and how often its rows are shown (§14, §15) | Mars, MarsRT |
+| `IFrameBufferPool` | `ReturnFrameBuffer(array)` — a lent picture handed back (§16) | MarsRT |
 
 Same shape `IDebugTarget` already uses for `Coverage`/`CallStack`, and the `IBusTraceTarget` the validation rig grew for cycle-accurate 6502 vectors.
 
@@ -369,4 +371,38 @@ was not taken on here.
 `Rows_sent_once_are_the_repeated_frames_own_rows` holds that the rows sent once are the even rows of the repeated
 frame, with half its height and a repeat of two, deferred and immediate, and that an interlaced frame, which has
 nothing to repeat, is unchanged with a repeat of one. Dropping the repeat at the deferred swap fails it.
+
+## 16. A picture a core lends (2026-09-23)
+
+`GetFrameBufferRgba` returns an array, and until now the contract said nothing about who owns it. Two answers were in
+use. Venus, Moon, Mercury and the C# Mars hand out their own live buffer, which the next frame rewrites, so a caller
+that keeps it past the next `RunFrame` reads a changing picture; Mistress survives this because the frame control
+copies an offer out on the render thread, usually before the next frame (`EmuSen_Serenity.md` §2.6), and the risk
+of a torn picture is accepted (`Mars_Native.md` §5.5). MarsRT handed out a new array every call, which is safe and
+cost an allocation the size of the picture per frame, 19 MB at four.
+
+`IFrameBufferPool` is a third answer, opted into by a core and by a frontend together. A core that implements it
+still hands every caller an array that is **the caller's alone**: nothing the core does writes it or lends it to
+anyone else. A caller that is finished with it may call `ReturnFrameBuffer(array)` once, from any thread, and the core
+may then lend it again. A caller that never returns anything, which is every caller but Mistress, sees exactly the old
+MarsRT behaviour. MarsRT is the one implementer.
+
+`EmuSen/Cores/FrameBufferLending.cs` is the bookkeeping, so that a second core could lend the same way. It keeps two
+short arrays under one lock: at most **four** returned arrays waiting to be lent again, and a record of the last
+**eight** arrays lent. `Lend(length)` takes a waiting array of that length, or makes an uninitialised one outside the
+lock; a change of length throws the waiting ones away. `Return(array)` takes an array back only if it is in the record,
+removing it from the record, and only if its length is the current one and there is room; everything else is counted
+as dropped and left to the collector. So a second return of the same lend, an array the core never lent, one lent at a
+size since changed, and one returned to a core closed by `Dispose` all do nothing
+(`Returning_an_array_twice_does_not_lend_it_twice`, `A_foreign_array_or_one_lent_at_another_size_is_dropped`,
+`A_closed_lending_takes_nothing_back`). A caller that keeps more than eight arrays out has the oldest forgotten, which
+makes it the caller's for good rather than a hazard (`The_lending_stays_bounded_whatever_is_returned`). `ArrayPool<byte>.Shared` was
+not used and not measured: it rounds a request up to a power of two, so a 19 MB picture would rent 32 MB, it keeps
+arrays per processor where this needs a handful in all, and its arrays go to any renter in the process, so the record
+that makes a foreign return harmless here would not exist.
+
+**What it cannot tell.** An array is its own identity, so a caller that returns an array, receives the same array
+again from a later lend, and then returns it a second time on the strength of the first lend, returns what someone
+else now holds. No bookkeeping by array can see that; a lease object could, at an allocation a frame, and was not
+built. The one caller, Mistress, returns each array once by construction (`EmuSen_Serenity.md` §2.8).
 

@@ -313,3 +313,23 @@ fn run_at(m: &mut Machine, list: &[u64], at: u32) {
     hand_over(m, list, at);
     m.join_rdp();
 }
+
+/// A setting sent again unchanged, as the shim sent every setting before every frame Mistress ran, must leave a deferred walk out:
+/// joining it threw away the overlap and cost 3 to 4 ms a frame on the handheld (Mars_Native.md §6.4.8).
+#[test]
+fn the_multiple_sent_again_unchanged_leaves_the_deferred_walk_out() {
+    let mut machine = at_once();
+    machine.set_deferred(true);
+    let mut core = Core::new(machine);
+    core.set_multiple(2, 1, false);
+    for color in [0x1234_1234u32, 0x4321_4321] {
+        run(&mut core.machine, &scene(color, false, 0, false));
+        program_vi(&mut core.machine);
+        core.present();
+    }
+    let joined = core.scanout.joined;
+    core.set_multiple(2, 1, false);
+    assert_eq!(core.scanout.joined, joined, "an unchanged multiple joined the walk out");
+    core.set_multiple(1, 1, false);
+    assert_eq!(core.scanout.joined, joined + 1, "a changed multiple must still join the walk made at the old one");
+}

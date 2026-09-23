@@ -10,6 +10,11 @@ impl Core {
         let render_scale = render_scale.clamp(1, 4);
         let antialiasing = antialiasing.clamp(1, 4);
         let effective = antialiasing.min(4 / render_scale).max(1);
+        // Sent again unchanged every frame by the shim until §6.4.8; a no-op must leave the deferred walk out.
+        if self.multiple_applied && (render_scale, antialiasing, gpu) == (self.render_scale, self.antialiasing, self.gpu) {
+            return;
+        }
+        self.multiple_applied = true;
         if self.machine.join_presentation(&mut self.scanout) {
             self.frame_serial += 1;
         }

@@ -50,6 +50,8 @@ pub struct Core {
     pub render_scale: i32,
     pub antialiasing: i32,
     pub gpu: bool,
+    /// Whether a multiple has been applied yet; until then even the values a fresh core holds are sent (Mars_Native.md §6.4.8).
+    pub multiple_applied: bool,
 }
 
 impl Drop for Core {
@@ -61,7 +63,7 @@ impl Drop for Core {
 
 impl Core {
     pub fn new(machine: Machine) -> Core {
-        Core { machine, scanout: Scanout::default(), frame_serial: 0, skip_rendering: false, shown: false, render_scale: 1, antialiasing: 1, gpu: false }
+        Core { machine, scanout: Scanout::default(), frame_serial: 0, skip_rendering: false, shown: false, render_scale: 1, antialiasing: 1, gpu: false, multiple_applied: false }
     }
 
     /// `Present`: the VI's scan of what the machine left, at once or deferred as the machine is set; the serial moves when the shown frame does.

@@ -25,7 +25,54 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         private static readonly delegate* unmanaged<nint, short*, nuint, long, long> DrainOf = (delegate* unmanaged<nint, short*, nuint, long, long>)MercuryNative.Export("mercury_machine_drain_audio");
         private static readonly delegate* unmanaged<nint, byte*, nuint, long> SerialOf = (delegate* unmanaged<nint, byte*, nuint, long>)MercuryNative.Export("mercury_machine_serial");
 
+        private static readonly delegate* unmanaged<nint, long> TotalFramesOf = (delegate* unmanaged<nint, long>)MercuryNative.Export("mercury_machine_total_frames");
+        private static readonly delegate* unmanaged<nint, uint, long> SpaceSizeOf = (delegate* unmanaged<nint, uint, long>)MercuryNative.Export("mercury_machine_space_size");
+        private static readonly delegate* unmanaged<nint, uint, int, byte*, nuint, long> ReadSpaceOf = (delegate* unmanaged<nint, uint, int, byte*, nuint, long>)MercuryNative.Export("mercury_machine_read_space");
+        private static readonly delegate* unmanaged<nint, uint, int, byte*, nuint, long> WriteSpaceOf = (delegate* unmanaged<nint, uint, int, byte*, nuint, long>)MercuryNative.Export("mercury_machine_write_space");
+        private static readonly delegate* unmanaged<nint, byte*, nuint, long> SavePathOf = (delegate* unmanaged<nint, byte*, nuint, long>)MercuryNative.Export("mercury_machine_save_path");
+        private static readonly delegate* unmanaged<nint, ushort*, ushort*, nuint, void> SetRomPatchesOf = (delegate* unmanaged<nint, ushort*, ushort*, nuint, void>)MercuryNative.Export("mercury_machine_set_rom_patches");
+
         public const int FrameBytes = 160 * 144 * 4;
+
+        // MercuryCore.Spaces' names, numbered as the C ABI numbers them.
+        public static readonly string[] SpaceNames = { "ROM", "VRAM", "CARTRAM", "WRAM", "OAM", "HRAM", "CPUBUS" };
+
+        public static bool Complete => Available && TotalFramesOf != null && SetRomPatchesOf != null;
+
+        public long TotalFrames => TotalFramesOf(Handle);
+
+        public int SpaceSize(int space) => (int)SpaceSizeOf(Handle, (uint)space);
+
+        // Read as MercuryCore.ReadSpace reads, a byte at a time from address on; CPUBUS reads have their side effects.
+        public void ReadSpace(int space, int address, Span<byte> into)
+        {
+            fixed (byte* data = into) ReadSpaceOf(Handle, (uint)space, address, data, (nuint)into.Length);
+        }
+
+        public void WriteSpace(int space, int address, ReadOnlySpan<byte> from)
+        {
+            fixed (byte* data = from) WriteSpaceOf(Handle, (uint)space, address, data, (nuint)from.Length);
+        }
+
+        // The save path the machine's state carries, null as C# has it - see Mercury_Native.md §6.1, D3.
+        public string? SavePath()
+        {
+            long n = SavePathOf(Handle, null, 0);
+            if (n < 0) return null;
+            var text = new byte[n];
+            fixed (byte* data = text) SavePathOf(Handle, data, (nuint)text.Length);
+            return Encoding.UTF8.GetString(text);
+        }
+
+        // Addresses, then 256 entries each: 0x100 | patched for an original byte a patch replaces, 0 where none does.
+        public void SetRomPatches(ushort[] addresses, ushort[] tables)
+        {
+            fixed (ushort* a = addresses)
+            fixed (ushort* t = tables)
+            {
+                SetRomPatchesOf(Handle, a, t, (nuint)addresses.Length);
+            }
+        }
 
         private nint _handle;
 

@@ -175,8 +175,18 @@ namespace EmuSen.DianaOS.DianaOS.Var
         }
 
         // Master off counts as zero, so TryPatchRom's hot path stays one int compare.
-        private void RecountRomPatches() =>
+        private void RecountRomPatches()
+        {
             _enabledRomPatches = _masterEnabled ? _cheats.Count(c => c.Kind == CheatKind.RomPatch && c.Enabled) : 0;
+            System.Threading.Interlocked.Increment(ref _version);
+        }
+
+        private int _version;
+
+        // Bumped by every change, so a core that copies the ROM patches elsewhere knows when to copy again - see Mercury_Native.md §8.3.
+        public int Version => System.Threading.Volatile.Read(ref _version);
+
+        public int EnabledRomPatches => _enabledRomPatches;
 
         public IReadOnlyList<CheatInfo> GetCheats() =>
             Snapshot().Select(c => new CheatInfo(c.Id, c.Kind, c.Writes, c.Compare, c.Description, c.Enabled)).ToList();

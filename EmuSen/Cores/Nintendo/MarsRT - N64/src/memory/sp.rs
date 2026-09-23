@@ -4,6 +4,7 @@ use crate::memory::bus::MemoryBus;
 use crate::memory::dp_threads::site;
 use crate::memory::mi::interrupt;
 use crate::Skip;
+use crate::rsp::decoded::Decoded;
 use crate::rsp::{self, DATA_MASK, Memory, PC_MASK, Trace};
 use crate::state::{State, StateReader, StateResult, StateWriter};
 
@@ -100,6 +101,8 @@ pub struct SpInterface {
     pub single_step: bool,
     /// The processor's coverage while `cov rsp` is armed, in no state; while it exists the idle loop steps the processor a cycle at a time (Mars_Native.md §6.5).
     pub trace: Skip<Option<Box<Trace>>>,
+    /// IMEM decoded a word at a time, each entry checked against IMEM before it runs; in no state (Mars_Native.md §6.12).
+    pub decoded: Skip<Decoded>,
 }
 
 impl State for SpInterface {
@@ -322,9 +325,20 @@ fn asks(value: u32, clear_bit: u32, set: bool) -> bool {
 }
 
 impl MemoryBus {
+    /// One step to the next event, through the decoded table when it is on (Mars_Native.md §6.12).
     #[inline(always)]
-    fn rsp_core(&mut self) -> rsp::Rsp<Lent<'_>> {
-        rsp::Rsp::over(Lent { p: &mut self.sp.processor, imem: &self.sp_imem, dmem: &mut self.sp_dmem })
+    fn rsp_step_core(&mut self) -> bool {
+        let (sp, imem, dmem) = (&mut self.sp, &self.sp_imem, &mut self.sp_dmem);
+        let mut core = rsp::Rsp::over(Lent { p: &mut sp.processor, imem, dmem });
+        if sp.decoded.on { sp.decoded.step(&mut core) } else { core.step() }
+    }
+
+    /// `Rsp::run`, through the decoded table when it is on.
+    #[inline(always)]
+    fn rsp_run_core(&mut self, budget: u64) -> u64 {
+        let (sp, imem, dmem) = (&mut self.sp, &self.sp_imem, &mut self.sp_dmem);
+        let mut core = rsp::Rsp::over(Lent { p: &mut sp.processor, imem, dmem });
+        if sp.decoded.on { sp.decoded.run(&mut core, budget) } else { core.run(budget) }
     }
 
     pub fn sp_read32(&mut self, offset: u32) -> u32 {
@@ -407,7 +421,7 @@ impl MemoryBus {
             return;
         }
         if cycles <= 1 && !self.sp.single_step {
-            if !self.rsp_core().step() {
+            if !self.rsp_step_core() {
                 self.rsp_event();
                 if self.sp.single_step {
                     self.sp.processor.halted = true;
@@ -427,7 +441,7 @@ impl MemoryBus {
         }
         let mut left = cycles.max(1) as u64;
         loop {
-            let ran = self.rsp_core().run(left);
+            let ran = self.rsp_run_core(left);
             left -= ran;
             if left == 0 {
                 return;
@@ -450,7 +464,7 @@ impl MemoryBus {
         if self.sp.trace.is_some() {
             return self.rsp_step_one_traced();
         }
-        if !self.rsp_core().step() {
+        if !self.rsp_step_core() {
             self.rsp_event();
         }
     }
@@ -505,7 +519,7 @@ impl MemoryBus {
         if self.sp.processor.halted || budget <= 0 {
             return 0;
         }
-        let mut ran = self.rsp_core().run(budget as u64) as i64;
+        let mut ran = self.rsp_run_core(budget as u64) as i64;
         if ran < budget && !self.sp.processor.halted {
             self.rsp_event();
             if self.sp.single_step {
@@ -516,8 +530,13 @@ impl MemoryBus {
         ran
     }
 
+    /// The processor's steps up to its next event, the event left unrun; for measurement (Mars_Native.md §6.12).
+    pub fn rsp_run_pure(&mut self, budget: u64) -> u64 {
+        if self.sp.processor.halted { 0 } else { self.rsp_run_core(budget) }
+    }
+
     /// `StepManaged` for the two instructions that reach the machine: a COP0 move and a break.
-    fn rsp_event(&mut self) {
+    pub fn rsp_event(&mut self) {
         let instruction = fetch(&self.sp_imem, self.sp.processor.pc);
         let p = &mut self.sp.processor;
         p.pc = p.next_pc;

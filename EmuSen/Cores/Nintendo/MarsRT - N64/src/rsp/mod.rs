@@ -1,5 +1,24 @@
 //! The signal processor, ported from Mars's C# plain path, which stays its oracle. See Mars_Native.md §3.
 
+/// Expands `$mac!(args; 0 1 … 63)`: a choice among 64 constants written once, for the interpreter's matches and the decoded tables.
+macro_rules! sixty_four {
+    ($mac:ident!($($args:tt)*)) => {
+        $mac!($($args)*; 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31
+            32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63)
+    };
+}
+
+/// `match value { n => self.method::<n>(arg), … }` over the 64 constants.
+macro_rules! dispatch {
+    ($self:ident, $method:ident, $value:expr, $arg:expr; $($n:literal)*) => {
+        match $value {
+            $($n => $self.$method::<$n>($arg),)*
+            _ => unreachable!(),
+        }
+    };
+}
+
+pub mod decoded;
 #[cfg(target_arch = "x86_64")]
 mod simd;
 
@@ -545,7 +564,13 @@ impl<M: Memory> Rsp<M> {
 
     #[inline(always)]
     fn execute(&mut self, instruction: u32) {
-        match instruction >> 26 {
+        sixty_four!(dispatch!(self, main, instruction >> 26, instruction))
+    }
+
+    /// One primary opcode, the constant naming it: the interpreter's arm and a decoded handler are this one source (Mars_Native.md §6.12).
+    #[inline(always)]
+    fn main<const OP: u32>(&mut self, instruction: u32) {
+        match OP {
             0x00 => self.special(instruction),
             0x01 => self.regimm(instruction),
             0x02 => self.jump(instruction),
@@ -650,11 +675,17 @@ impl<M: Memory> Rsp<M> {
 
     #[inline(always)]
     fn special(&mut self, instruction: u32) {
+        sixty_four!(dispatch!(self, special_function, instruction & 0x3F, instruction))
+    }
+
+    /// One function of the special group, the constant naming it; shared with the decoded handlers as `main` is.
+    #[inline(always)]
+    fn special_function<const F: u32>(&mut self, instruction: u32) {
         let shift = (instruction >> 6) & 0x1F;
         let t = self.read(rt(instruction));
         let s = self.read(rs(instruction));
         let d = rd(instruction);
-        match instruction & 0x3F {
+        match F {
             0x00 => self.write(d, t << shift),
             0x02 => self.write(d, t >> shift),
             0x03 => self.write(d, ((t as i32) >> shift) as u32),

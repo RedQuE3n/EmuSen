@@ -65,6 +65,23 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);Cores/Nintendo/MarsRT - N64/target/**</DefaultItemExcludes>
   </PropertyGroup>
 
+  <!-- MercuryRT, the Rust Game Boy core, built and copied the same way; without it the Game Boy runs on the C# Mercury - see Mercury_Native.md §2. -->
+  <PropertyGroup>
+    <MercuryRtDir>$(MSBuildThisFileDirectory)Cores\Nintendo\MercuryRT - GB\</MercuryRtDir>
+    <MercuryRtTarget>$(MSBuildProjectDirectory)/obj/mercuryrt</MercuryRtTarget>
+    <MercuryRtFile Condition="$([MSBuild]::IsOSPlatform('Windows'))">mercuryrt.dll</MercuryRtFile>
+    <MercuryRtFile Condition="$([MSBuild]::IsOSPlatform('OSX'))">libmercuryrt.dylib</MercuryRtFile>
+    <MercuryRtFile Condition="'$(MercuryRtFile)' == ''">libmercuryrt.so</MercuryRtFile>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Cores/Nintendo/MercuryRT - GB/target/**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <Target Name="BuildMercuryRt" BeforeTargets="BeforeBuild" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
+    <Exec Command="cargo build --profile $(EmuSenNativeProfile) --manifest-path &quot;$(MercuryRtDir)Cargo.toml&quot; --target-dir &quot;$(MercuryRtTarget)&quot;" ContinueOnError="true" StandardOutputImportance="low" />
+    <ItemGroup Condition="Exists('$(MercuryRtTarget)/$(EmuSenNativeProfile)/$(MercuryRtFile)')">
+      <None Include="$(MercuryRtTarget)/$(EmuSenNativeProfile)/$(MercuryRtFile)" Link="$(MercuryRtFile)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
   <Target Name="BuildEmuSenNative" BeforeTargets="BeforeBuild" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
     <Exec Command="cargo build --profile $(EmuSenNativeProfile) --manifest-path &quot;$(EmuSenNativeDir)Cargo.toml&quot; --target-dir &quot;$(EmuSenNativeTarget)&quot;" ContinueOnError="true" StandardOutputImportance="low" />
     <ItemGroup Condition="Exists('$(EmuSenNativeTarget)/$(EmuSenNativeProfile)/$(EmuSenNativeFile)')">

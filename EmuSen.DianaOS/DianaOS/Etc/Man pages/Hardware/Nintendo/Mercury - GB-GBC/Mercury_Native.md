@@ -676,3 +676,57 @@ rewind. Mercury has no `ISnapshotCore`, so rewind uses the full state on both en
 | P4 | Nothing observable changes on the desktop or at 33% quota; Yellow at 10% quota rises from 178% to 250–350% | Stage 5 |
 | P5 | The once-a-frame boundary costs under 3% of MercuryRT's frame | Stage 5 |
 | P6 | No recompiler and no threads are needed for MercuryRT to beat C# on every measured configuration | Stage 5; refuted by any configuration in which it does not |
+
+## 8. The work, stage by stage
+
+### 8.1 Stage 1: the state, byte for byte (done 2026-09-23)
+
+*Order.* Stage 1 was done before stage 0. The state reader needs no corpus, and stage 0's two decisions (Q3, Q6) are
+the user's to make.
+
+**What was built.** The crate is `EmuSen/Cores/Nintendo/MercuryRT - GB/`. It holds Rust structs for every serialised
+type, and a `State` impl for each class C# walks. `Mapper` is an enum of the five boards, where C# has an interface.
+There is no board tag in the state, so the header builds the board and the state then fills it. The crate has:
+
+- `state.rs`: MarsRT's codec plus `BinaryWriter` strings, with the 7-bit length and `ReadString`'s refusals;
+- `machine.rs`: the header, then the cartridge, board, CPU and bus walks;
+- a C ABI of `mercury_machine_new`, `_free`, `_load_state`, `_save_state_size`, `_save_state` and `_state_layout`;
+- `naming.rs`, MarsRT's rule applied to eight modules.
+
+On the C# side there are `Shim/MercuryNative.cs` (the loader, `EMUSEN_MERCURY_NATIVE=0` to turn it off) and
+`Shim/MercuryMachine.cs` (the handle). `EmuSen.csproj` builds the crate with cargo beside MarsRT's, into
+`obj/mercuryrt`, and copies `libmercuryrt.so` into every consumer's output.
+
+**The oracles, all identical** (`EmuSen.WiseMan/Cores/MercuryRtStateTests.cs`, 25 cases; crate tests, 11):
+
+- **Running machines.** Eleven synthetic ROMs cover every board, with and without RAM, battery, clock and rumble, on
+  both consoles. Each runs a program that counts in WRAM, copies the count to cart RAM, keys a pulse note and scrolls,
+  for 300 frames. The C# state goes into Rust and back out byte for byte. Its layout listing matches C#'s own
+  reflection walk line for line: 170–177 fields, 17,338–410,564 bytes.
+- **Noise.** The same eleven, with every serialised field filled with distinct noise. The save path is non-ASCII and
+  long enough for a two-byte length.
+- **Bytes no C# writer makes.** Four bools and a class flag of 2, and a PPU mode of 7, read as C#'s reader reads them.
+- **Refusals.** A truncated state, a foreign magic and a wrong version change nothing. A short image and an unsupported
+  board are refused, and the board with C#'s exception type.
+- **Real games.** Tetris, Link's Awakening, Kirby's Dream Land and Pokémon Yellow are identical at frames 0, 300, 600
+  and 900, with the bench's input. They run from `EMUSEN_MERCURYRT_ROMS`, a directory of scratch copies; absent, the
+  case passes without running.
+
+**Mutants: 10, all caught.** The runner (scratch, `mutants.py`) applies one edit, runs `cargo test` and WiseMan's
+`MercuryRt` filter, then restores the file. Only one oracle caught each of four mutants:
+
+| Mutant | Caught by |
+|---|---|
+| Cpu `A`/`B` swapped in the writer | crate, WiseMan running machines |
+| String length prefix continuing at 127 | crate only; WiseMan's 150-byte path is past 127 either way |
+| An unknown PPU mode written back as 0 | WiseMan odd-bytes case only |
+| `_baseClockPhase` read into `_lastTimerEdge` | crate, WiseMan noise |
+| MBC3's `_cart` written after `_clock` | crate, WiseMan running and noise |
+| A bool read as `== 1` | WiseMan odd-bytes case only |
+| The save path not read back | crate, WiseMan noise |
+| Envelope `Period`/`Timer` swapped in the writer | crate, WiseMan running |
+| A failed load keeping the partial read | crate only |
+| `LengthCounter.Maximum` not read | WiseMan noise only; it never changes in a running machine |
+
+**What stage 1 does not establish.** It establishes that MercuryRT holds a C# state. It says nothing about running one.
+The skipped fields of §3.1 exist in Rust (`Skip<T>`) but are untouched by any test yet.

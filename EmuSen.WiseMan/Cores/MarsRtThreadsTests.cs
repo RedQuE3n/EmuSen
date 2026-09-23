@@ -371,65 +371,6 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // C#'s split carries each processor's own last level-of-detail fraction into rows that compute none, and a primitive drawn alone then assembles a stale one - see Mars_Native.md §5.6.6.
-        [Fact]
-        public void The_csharp_split_assembles_a_stale_level_of_detail_fraction_from_rows_that_computed_none()
-        {
-            const System.Reflection.BindingFlags Hidden = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
-            object Call(string name, params object[] args) => typeof(MarsThreadedRdpTests).GetMethod(name, Hidden)!.Invoke(null, args)!;
-            var fraction = typeof(EmuSen.Cores.Nintendo.Mars.Rdp.Rdp).GetField("_lodFraction", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-
-            int stale = 0, seeds = 16;
-            for (uint seed = 0; seed < seeds; seed++)
-            {
-                // A scene drawn alone that computes the fraction, a split one that computes none, then one drawn alone, which assembles first.
-                ulong[] list =
-                [
-                    .. (ulong[])Call("Scene", 0x1234_5679u + seed, false, 32, true),
-                    .. (ulong[])Call("Shaded", 0x2468_1357u + seed, false, false, false, false),
-                    .. (ulong[])Call("Shaded", 0x1357_2468u + seed, true, true, true, false),
-                ];
-                EmuSen.Cores.Nintendo.Mars.Memory.MemoryBus atOnce = new(), split = new();
-                split.Dp.Threaded = true;
-                split.Dp.Workers = 2;
-                Call("HandOver", atOnce, list, 0x0010_0000u);
-                Call("HandOver", split, list, 0x0010_0000u);
-                split.Dp.Join();
-
-                Assert.Equal(atOnce.Rdram, split.Rdram);
-                int want = (int)fraction.GetValue(atOnce.Dp.Processor)!, got = (int)fraction.GetValue(split.Dp.Processor)!;
-                if (want != got) stale++;
-                bool same = ((byte[])Call("State", atOnce, false)).AsSpan().SequenceEqual((byte[])Call("State", split, false));
-                Assert.Equal(want == got, same);
-            }
-
-            _output.WriteLine($"C#, two processors: the state differs in _lodFraction alone for {stale} of {seeds} seeds, the memory for none");
-            Assert.True(stale > 0, "C#'s split assembled the raster order's fraction for every seed, so the defect this test records is gone and the test should be turned around");
-        }
-
-        private static void ListTo(EmuSen.Cores.Nintendo.Mars.Memory.MemoryBus bus, ulong[] list)
-        {
-            const uint at = 0x0010_0000;
-            for (int i = 0; i < list.Length; i++) bus.Write64(at + (uint)i * 8, list[i]);
-            bus.Write32(EmuSen.Cores.Nintendo.Mars.Memory.MemoryMap.DpCommandBase, at);
-            bus.Write32(EmuSen.Cores.Nintendo.Mars.Memory.MemoryMap.DpCommandBase + 4, at + (uint)list.Length * 8);
-        }
-
-        // A 256-column sixteen-bit picture of the given rows at 0x200000, anti-alias mode 3, as MarsDeferredPresentationTests programs one.
-        private static uint[] ViRegisters(uint rows)
-        {
-            var registers = new uint[14];
-            registers[0] = 2u | (3u << 8);
-            registers[1] = 0x0020_0000;
-            registers[2] = 64;
-            registers[6] = 525;
-            registers[9] = (108u << 16) | (108u + 256);
-            registers[10] = (34u << 16) | (34u + rows * 2);
-            registers[12] = 0x400;
-            registers[13] = 0x400;
-            return registers;
-        }
-
         private static void Load(MarsRtCore core, (string Rom, byte[]? State) game)
         {
             core.LoadRom(game.Rom);

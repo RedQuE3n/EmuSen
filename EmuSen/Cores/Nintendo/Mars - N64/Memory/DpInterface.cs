@@ -157,6 +157,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         [EmuSen.Common.SkipInState] private int _faulted;
         [EmuSen.Common.SkipInState] private long _pauseAt = -1;
 
+        // How often a waiter at a barrier raised the pause point to its own word, which a test reads to know the case was met - see §2.8.
+        [EmuSen.Common.SkipInState] public long PausesRaised;
+
         // For each page of RDRAM, the count of words that must have run before anyone writes it, and before anyone reads it; zero when nothing is due - see §2.6.
         [EmuSen.Common.SkipInState] private readonly long[] _marks;
         [EmuSen.Common.SkipInState] private readonly long[] _writeMarks;
@@ -260,7 +263,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             public void Reset(int parties) => (_parties, _arrived) = (parties, 0);
 
-            public void Arrive()
+            public void Arrive(long word)
             {
                 int generation = Volatile.Read(ref _generation);
                 if (Interlocked.Increment(ref _arrived) == _parties)
@@ -272,7 +275,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 }
 
                 SpinWait spin = default;
-                while (Volatile.Read(ref _generation) == generation && Volatile.Read(ref _owner._faulted) == 0) spin.SpinOnce(-1);
+                while (Volatile.Read(ref _generation) == generation && Volatile.Read(ref _owner._faulted) == 0)
+                {
+                    _owner.RaisePauseTo(word);
+                    spin.SpinOnce(-1);
+                }
             }
         }
 
@@ -1121,27 +1128,27 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                             break;
 
                         case Rdp.Rdp.Step.Leader:
-                            _barrier.Arrive();
+                            _barrier.Arrive(completed + 1);
                             if (w.Index == 0)
                             {
                                 Assemble();
                                 p.Execute();
                                 s?.Execute();
                             }
-                            _barrier.Arrive();
+                            _barrier.Arrive(completed + 1);
                             break;
 
                         case Rdp.Rdp.Step.All:
-                            _barrier.Arrive();
+                            _barrier.Arrive(completed + 1);
                             p.Execute();
                             s?.Execute();
                             break;
 
                         case Rdp.Rdp.Step.AllJoined:
-                            _barrier.Arrive();
+                            _barrier.Arrive(completed + 1);
                             p.Execute();
                             s?.Execute();
-                            _barrier.Arrive();
+                            _barrier.Arrive(completed + 1);
                             break;
                     }
 
@@ -1188,6 +1195,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             SpinWait spin = default;
             while (Volatile.Read(ref _pauseRequested) != 0 && Volatile.Read(ref _pauseAt) == completed && Volatile.Read(ref _stopping) == 0) spin.SpinOnce(-1);
             Volatile.Write(ref w.Standing, -1);
+        }
+
+        // A waiter at a barrier is inside its word and cannot stand short of it, so a pause point short of it is raised to it - see §2.8.
+        private void RaisePauseTo(long word)
+        {
+            if (Volatile.Read(ref _pauseRequested) == 0) return;
+            long at = Volatile.Read(ref _pauseAt);
+            if (at >= 0 && at < word && Interlocked.CompareExchange(ref _pauseAt, word, at) == at) Interlocked.Increment(ref PausesRaised);
         }
 
         // The thread, between two words, until the request is withdrawn - see §2.7.

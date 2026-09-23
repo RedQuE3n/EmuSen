@@ -404,6 +404,113 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(State(atOnce), State(split));
         }
 
+        // Fills alternating over four images, so every other command is a barrier every processor must reach - see Mars_Rdp.md §2.8.
+        private static ulong[] Barriers(int fills)
+        {
+            var list = new System.Collections.Generic.List<ulong> { FillCycle, Scissor(0, 0, Width, Rows), (0x37UL << 56) | 0x0F0F_0F0F };
+            for (uint i = 0; i < fills; i++)
+            {
+                list.Add((0x3FUL << 56) | (2UL << 51) | ((ulong)(Width - 1) << 32) | (Framebuffer + (i % 4) * Width * 2));
+                uint row = i * 3 % (Rows - 2);
+                list.Add(FillRectangle(0, row, Width - 1, row + 1));
+            }
+            list.Add(SyncFull);
+            return list.ToArray();
+        }
+
+        // A pause that finds some processors waiting at a barrier and the rest short of it must still be answered - see Mars_Rdp.md §2.8.
+        [Fact]
+        public void A_pause_that_finds_some_processors_at_a_barrier_and_the_rest_short_of_it_is_answered()
+        {
+            ulong[] list = Barriers(1500);
+            MemoryBus atOnce = new();
+            HandOver(atOnce, list);
+            byte[] finished = State(atOnce);
+            long raised = 0;
+
+            for (int attempt = 0; attempt < 100; attempt++)
+            {
+                var bus = new MemoryBus();
+                bus.Dp.Threaded = true;
+                bus.Dp.Workers = 4;
+                HandOver(bus, list);
+                System.Threading.Thread.SpinWait(attempt * 997 % 20_000);
+                var pause = System.Threading.Tasks.Task.Run(() => bus.Dp.Pause());
+                if (!pause.Wait(TimeSpan.FromSeconds(5)))
+                {
+                    bus.Dp.Resume();
+                    Assert.Fail($"four processors: the pause at attempt {attempt} was never answered");
+                }
+                bus.Dp.Resume();
+                bus.Dp.Join();
+                Assert.Equal(finished, State(bus));
+                raised += bus.Dp.PausesRaised;
+                bus.Dp.Threaded = false;
+            }
+
+            Assert.True(raised > 0, "no pause found a processor at a barrier, so the case was not reached");
+        }
+
+        // Pauses, resumes and snapshots from another thread while two to four processors run barriers, under a watchdog; every snapshot loads to the finished list.
+        [Theory]
+        [InlineData(2)]
+        [InlineData(3)]
+        [InlineData(4)]
+        public void Pauses_and_snapshots_while_the_processors_run_barriers_are_all_answered_and_exact(int workers)
+        {
+            ulong[] list = Barriers(3000);
+            int pending = 0;
+            long raised = 0;
+
+            for (int round = 0; round < 8; round++)
+            {
+                // Both machines take the same two pieces at the same place, so their registers agree.
+                int cut = list.Length / 3 + round * 97;
+                MemoryBus atOnce = new();
+                HandOver(atOnce, list[..cut]);
+                HandOver(atOnce, list[cut..], List + (uint)cut * 8);
+                byte[] finished = State(atOnce);
+
+                var bus = new MemoryBus();
+                bus.Dp.Threaded = true;
+                bus.Dp.Workers = workers;
+                var taken = new System.Collections.Generic.List<(byte[] Snapshot, bool Whole)>();
+                var run = System.Threading.Tasks.Task.Run(() =>
+                {
+                    HandOver(bus, list[..cut]);
+                    for (int i = 0; i < 40; i++)
+                    {
+                        System.Threading.Thread.SpinWait((round * 40 + i) * 613 % 12_000);
+                        if (i % 4 == 3) taken.Add((State(bus, snapshot: true), i > 20));
+                        else { bus.Dp.Pause(); bus.Dp.Resume(); }
+                        if (i == 20) HandOver(bus, list[cut..], List + (uint)cut * 8);
+                    }
+                    bus.Dp.Join();
+                });
+                if (!run.Wait(TimeSpan.FromSeconds(30)))
+                {
+                    bus.Dp.Resume();
+                    Assert.Fail($"{workers} processors, round {round}: a pause or a snapshot was never answered");
+                }
+                run.GetAwaiter().GetResult();
+                Assert.Equal(finished, State(bus));
+                raised += bus.Dp.PausesRaised;
+                bus.Dp.Threaded = false;
+
+                foreach (var (snapshot, whole) in taken)
+                {
+                    var loaded = new MemoryBus();
+                    if (BitConverter.ToInt32(snapshot, snapshot.Length - 4 - 8 * DpInterface.SnapshotWords) > 0) pending++;
+                    Load(loaded, snapshot);
+                    if (!whole) HandOver(loaded, list[cut..], List + (uint)cut * 8);
+                    Assert.Equal(finished, State(loaded));
+                }
+            }
+
+            Assert.True(pending > 0, "no snapshot was taken with words still pending, so the case was not reached");
+            Assert.True(raised > 0, "no pause found a processor at a barrier, so the case was not reached");
+        }
+
         // A one-cycle scene of shaded, depth-tested triangles over a full frame buffer; to the edge, their right edges cross a scissor as wide as the image - see Mars_Rdp.md §2.8.
         private static ulong[] Shaded(uint seed, bool toTheEdge, bool twoCycle = false, bool memoryAlphaFirst = false, bool gentle = false)
         {

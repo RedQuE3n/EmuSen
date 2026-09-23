@@ -13,6 +13,7 @@ use crate::memory::dp::DpInterface;
 use crate::memory::isviewer::IsViewer;
 use crate::memory::mi::MiInterface;
 use crate::memory::pi::PiInterface;
+use crate::memory::rom_patches::RomPatches;
 use crate::memory::save::SaveChip;
 use crate::memory::si::SiInterface;
 use crate::memory::sp::SpInterface;
@@ -62,6 +63,8 @@ pub struct MemoryBus {
     pub written: Skip<i64>,
     /// `Cart`: the cartridge, shared by every copy of the machine.
     pub cart: Skip<Option<Arc<RomImage>>>,
+    /// `RomPatcher`: the host's ROM patches, none when there are none (Mars_Native.md §6.6.1).
+    pub rom_patches: Skip<Option<Arc<RomPatches>>>,
 }
 
 impl MemoryBus {
@@ -87,6 +90,7 @@ impl MemoryBus {
             next_event: Skip(0),
             written: Skip(0),
             cart: Skip(None),
+            rom_patches: Skip(None),
         }
     }
 

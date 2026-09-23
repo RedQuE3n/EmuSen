@@ -10,6 +10,7 @@ mod games;
 mod gpu;
 mod multiple;
 mod rom;
+mod rom_patches;
 mod rsp;
 mod rsp_blocks;
 mod save;

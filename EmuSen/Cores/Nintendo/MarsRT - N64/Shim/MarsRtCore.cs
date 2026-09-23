@@ -150,14 +150,26 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             set { _rspWhole = value; ApplyOptions(); }
         }
 
+        // What was last sent to _appliedHandle, so a setter re-sends only what changed; Mistress sets SkipRendering before every frame - see Mars_Native.md §6.4.8.
+        private nint _appliedHandle;
+        private (uint Options, uint Threads, uint Workers, uint Recompiler, int Scale, int Antialiasing, uint Gpu) _applied;
+
         private void ApplyOptions()
         {
             if (_handle == 0) return;
-            SetOptions(_handle, (_skipRendering ? 1u : 0) | (_idleSkip ? 0 : 2u) | (_rspWhole ? 0 : 4u) | (_repeatRows ? 16u : 0));
+            var want = ((_skipRendering ? 1u : 0) | (_idleSkip ? 0 : 2u) | (_rspWhole ? 0 : 4u) | (_repeatRows ? 16u : 0),
+                (_threadedRdp ? 1u : 0) | (_deferredPresentation ? 2u : 0) | (_skipRepeatedScans ? 0 : 4u) | (_verifyRdp ? 8u : 0), (uint)_rdpWorkers,
+                (_useBlocks ? 1u : 0) | (_verifyBlocks ? 2u : 0) | ((uint)_blockTier << 4),
+                _renderScale, _antialiasing, _gpu ? 1u : 0);
+            bool fresh = _appliedHandle != _handle;
+            if (!fresh && want == _applied) return;
+            if (fresh || want.Item1 != _applied.Options) SetOptions(_handle, want.Item1);
             long serial = FrameSerialOf(_handle);
-            SetThreads(_handle, (_threadedRdp ? 1u : 0) | (_deferredPresentation ? 2u : 0) | (_skipRepeatedScans ? 0 : 4u) | (_verifyRdp ? 8u : 0), (uint)_rdpWorkers);
-            SetRecompiler(_handle, (_useBlocks ? 1u : 0) | (_verifyBlocks ? 2u : 0) | ((uint)_blockTier << 4));
-            SetMultiple(_handle, _renderScale, _antialiasing, _gpu ? 1u : 0);
+            if (fresh || want.Item2 != _applied.Threads || want.Item3 != _applied.Workers) SetThreads(_handle, want.Item2, want.Item3);
+            if (fresh || want.Item4 != _applied.Recompiler) SetRecompiler(_handle, want.Item4);
+            if (fresh || (want.Item5, want.Item6, want.Item7) != (_applied.Scale, _applied.Antialiasing, _applied.Gpu)) SetMultiple(_handle, want.Item5, want.Item6, want.Item7);
+            _appliedHandle = _handle;
+            _applied = want;
             if (!_skipRendering && FrameSerialOf(_handle) != serial) TakePicture();
         }
 

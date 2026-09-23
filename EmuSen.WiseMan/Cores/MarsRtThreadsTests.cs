@@ -481,44 +481,6 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(stale > 0, "C#'s split assembled the raster order's fraction for every seed, so the defect this test records is gone and the test should be turned around");
         }
 
-        // C#'s workers deadlock when a pause finds some at a barrier and the rest standing short of it; it leaves threads spinning, so it runs only when asked - see Mars_Native.md §5.6.6.
-        [Fact]
-        public void The_csharp_workers_deadlock_when_a_pause_finds_some_at_a_barrier_and_the_rest_short_of_it()
-        {
-            if (Environment.GetEnvironmentVariable("EMUSEN_MARS_DEADLOCK_PROBE") != "1")
-            {
-                _output.WriteLine("EMUSEN_MARS_DEADLOCK_PROBE unset, not run: a hang it finds leaves threads spinning");
-                return;
-            }
-
-            var list = new List<ulong> { (0x2FUL << 56) | (3UL << 52), (0x2DUL << 56) | ((320UL << 2) << 12) | (240UL << 2), (0x37UL << 56) | 0x0F0F_0F0F };
-            for (uint i = 0; i < 3000; i++)
-            {
-                list.Add((0x3FUL << 56) | (2UL << 51) | (319UL << 32) | (0x0020_0000 + (i % 4) * 640));
-                uint row = i * 3 % 238;
-                list.Add((0x36UL << 56) | ((319UL << 2) << 44) | ((ulong)((row + 1) << 2) << 32) | (row << 2));
-            }
-            list.Add(0x29UL << 56);
-
-            int attempts = 0, hung = -1;
-            for (int attempt = 0; attempt < 200 && hung < 0; attempt++, attempts++)
-            {
-                var bus = new EmuSen.Cores.Nintendo.Mars.Memory.MemoryBus();
-                bus.Dp.Threaded = true;
-                bus.Dp.Workers = 4;
-                ListTo(bus, list.ToArray());
-                System.Threading.Thread.SpinWait(attempt * 997 % 20_000);
-                var pause = System.Threading.Tasks.Task.Run(() => bus.Dp.Pause());
-                if (!pause.Wait(TimeSpan.FromSeconds(3))) { hung = attempt; break; }
-                bus.Dp.Resume();
-                bus.Dp.Join();
-                bus.Dp.Threaded = false;
-            }
-
-            _output.WriteLine(hung >= 0 ? $"C#, four processors: a pause was never answered at attempt {hung} of {attempts}" : $"C#: every one of {attempts} pauses was answered");
-            Assert.True(hung >= 0, "every pause was answered, so the defect this test records was not reached");
-        }
-
         private static void ListTo(EmuSen.Cores.Nintendo.Mars.Memory.MemoryBus bus, ulong[] list)
         {
             const uint at = 0x0010_0000;

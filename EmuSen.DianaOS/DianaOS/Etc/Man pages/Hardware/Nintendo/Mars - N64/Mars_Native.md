@@ -3402,7 +3402,7 @@ part of (below). The last column is what the C# history already measured for the
 | --- | --- | --- | --- | --- | --- |
 | 1 | the vector unit (5.25, 2.44, 2.43 ms) | 9.3 | 4.3 | 3.4 | `Mars_RspVector.md` §14: the same arithmetic in host vectors bought C# 4, 19 and 22 per cent with the processor at 27 to 36 per cent of its thread; here the vector unit alone is 36 to 42, and the plain path it would be checked against is what MarsRT already runs. Not a recompiler lever, and not measured in Rust. *Built in §6.10: 14.35 to 11.67, 6.75 to 5.57, 5.74 to 4.58 ms, the unit a sixth of each frame.* |
 | 2 | the decoded tier (2.11, 0.66, 0.28) | 12.4 | 6.1 | 5.5 | §5.8.3 compiled the blocks entered beside a running processor and measured the Dam two per cent worse; the batch that would pay for it is priced at 0.3 ms and not built. Compiled code runs twice the decoded tier's instructions for 0.27 ms in Ocarina of Time, so the tier compiled at that rate would leave about 0.4 of the Dam's 2.1; the ceiling is the whole 2.1. |
-| 3 | the processor's decode and dispatch (1.64, 0.54, 0.48) | 12.9 | 6.2 | 5.3 | `Mars_Rsp.md` §11 to §12: straight lines compiled with the handlers folded bought C# a quarter to a third of its thread, and §11.2's two tiers made them cheap enough for the device; §3.4 says why a Rust interpreter at 8 ns loses to them at 3. Not built in Rust. |
+| 3 | the processor's decode and dispatch (1.64, 0.54, 0.48) | 12.9 | 6.2 | 5.3 | `Mars_Rsp.md` §11 to §12: straight lines compiled with the handlers folded bought C# a quarter to a third of its thread, and §11.2's two tiers made them cheap enough for the device; §3.4 says why a Rust interpreter at 8 ns loses to them at 3. Not built in Rust. *Built in §6.12 as a decoded table, C#'s first tier: 11.69 to 10.44, 5.59 to 5.42, 4.57 to 4.47 ms; the Cranelift tier priced at 0.85 ms at most for the Dam and not built.* |
 | 4 | the presenter's join (0.63, 0.69, 0.99) | 13.9 | 6.1 | 4.8 | Not priced for MarsRT: §5.6.8's counters could not see it. The C# core walks in four bands at 1.8 to 2.9 ms (§5.4.4) against MarsRT's one thread at 2.9 to 4.5, and a frame that is shorter than the walk before it waits; bands, a cheaper walk, or a second frame of latency would each take it, the last a play decision. |
 | 5 | the dispatcher, comparison included (1.11, 0.65, 0.31) | 13.4 | 6.1 | 5.5 | `Mars_Recompiler.md` §9 to §12: the entry is memory, and extension, density and chaining measured nothing in C#; §5.8.8 measured the comparison removed at 0.1 to 0.35 ms and two rewrites at nothing. |
 | 6 | the lock-step's own overhead (0.83, 0.26, 0.25) | 13.7 | 6.5 | 5.5 | §5.8.3's batch, 0.3 ms priced; `Mars_Rsp.md` §13's two routes, one slower and one a two per cent ceiling with an undo, neither kept. |
@@ -3695,3 +3695,282 @@ say.
 - **AVX2.** The unit is 128 bits wide and every operation touches one register; 256-bit lanes would help only a
   pair of independent operations, which a step at a time never has.
 - **The unexplained 0.3 ms** of §6.10.4, and the CI's own run of the osx-arm64 and win-x64 jobs.
+
+#### 6.12 The signal processor's instructions decoded once (2026-09-23)
+
+§6.10.4 left the processor's decode and dispatch its largest part at the Dam, 1.9 ms of an 11.7 ms frame, with the
+lock-step's own overhead another 0.96, and §6.9 ranked the lever third with a ceiling of 9.8 ms at the Dam if the
+row cost nothing. This section takes the row apart, builds the first tier C#'s `Mars_Rsp.md` §11 built — IMEM decoded
+once, each instruction's handler chosen at decode — under the lock-step's rule, and prices the second. **The Dam
+went from 11.69 to 10.44 ms threaded and from 19.52 to 18.04 on one thread; the other two games by 0.10 to 0.18 ms
+threaded and 0.33 to 0.42 on one. The prediction stated before the table was written held; the one revised from
+the microbenchmark did not.** The Cranelift tier is priced and not built.
+
+**The claim.** `src/rsp/decoded.rs` runs the processor from a table of one entry a word of IMEM. Every step it takes
+leaves the processor, DMEM, IMEM, the interface and the MI exactly as the interpreter leaves them at the same step,
+in the lock-step as in the whole runs, and every observable interaction — the COP0 moves, the break, the transfers,
+the status and semaphore, the display processor's registers, the interrupt — happens at the same step, because the
+table never runs one: an event is left to the machine's `rsp_event`, exactly where the interpreter leaves it.
+
+##### 6.12.1 What decode and dispatch was made of
+
+*Where the steps are taken.* A build with counters on every entry point (not kept), 300 frames of each gameplay
+state, four workers, deferred, tier 2, per frame:
+
+| per frame | the Dam | Ocarina of Time | Super Mario 64 |
+| --- | ---: | ---: | ---: |
+| steps one at a time from a tick (`sp_step(1)`), of them events | 372,733 (13,029) | 104,989 (5,139) | 49,235 (1,527) |
+| calls of many cycles (`sp_step_many`), cycles | 1,451, 32,265 | 499, 7,295 | 175, 1,689 |
+| whole runs from the idle loop (`rsp_run_to_event`), steps | 19,786, 648,696 | 9,851, 318,888 | 10,353, 462,603 |
+| of the whole runs, those ended by an event | 19,413 | 9,636 | 10,041 |
+| events in all | 33,541 | 14,944 | 11,610 |
+| **share of the steps taken in whole runs** | **62%** | **74%** | **90%** |
+
+So the part of the processor's work that may run many instructions at once — the idle loop's run to the next event,
+§5.2's `RunIdle`, and the tick's many-cycle call — is most of it in every game, in runs of 33 steps on average at the
+Dam and 45 in Super Mario 64. The Dam's steps one at a time are the 38 per cent §5.8.3 is about: the CPU's decoded
+blocks entered beside a running processor tick it once an instruction.
+
+*What the row was.* The Dam's baseline, sampled the same day with the build before this section (`b1`, 5,835 samples,
+the shares times the 11.69 ms median below), and regrouped so that the innermost frames the rows are made of are
+named (`split.py` beside the speed tooling; §6.9's grouping put the interpreter's step and its counters in two rows,
+which this one keeps apart):
+
+| the processor at the Dam, ms a frame | the interpreter | what the table does to it |
+| --- | ---: | --- |
+| `execute`: the opcode's jump table and the scalar arms inlined into it | 1.07 | the table replaces with one indirect call; the arms become handlers |
+| `is_event`: the event test, where the fetch's load latency lands | 0.30 | the entry's kind, chosen at decode |
+| the fetch's byte swap and the fetch | 0.31 | off the dispatch's path: the entry is found by the program counter alone |
+| `special`'s second jump table | 0.17 | a handler per function |
+| the fields `rt`, `rd` | 0.28 | not removed: the handlers take them from the word |
+| the vector unit's own switch of 64 functions (inside `vector_op_simd`, 0.66 in all) | part of the vector row | a handler per function and selector kind |
+| the counters' update, `run`'s loop, `tick`, `sp_step`, the lent memory | 0.73 | the counters and the halt once a straight run in whole runs; the rest not |
+| **the processor in all** | **5.62** | |
+
+The decode proper — fetch, swap, event test, two switches — is about 1.9 ms of the 5.62, and none of it depends on
+anything but the word, which is what a table caches. What a table cannot remove is the call it puts in place of the
+switch, the field extraction inside the handler, and, in the lock-step, everything around the step: the tick, the
+halt tests, the lent memory, the counters, since the CPU may read the program counter after any of them.
+
+*The microbenchmark* (`examples/rsp_bench`, kept): 24 whole machines taken while the processor ran in each gameplay
+state, each run again 4,000 steps, one tick at a time or in runs to the next event, the events run untimed, so that
+the number is the step's own. Three interleaved rounds, medians, ns a step, the build before against the table:
+
+| ns a step | the Dam | Ocarina of Time | Super Mario 64 |
+| --- | ---: | ---: | ---: |
+| one tick at a time: before, the table | 4.31, 4.06 | 4.54, 4.15 | 3.91, 4.09 |
+| in whole runs: before, the table | 3.49, 3.16 | 3.83, 3.45 | 3.51, 3.20 |
+
+A third of a nanosecond a step in whole runs, a quarter to four tenths in the lock-step at two games and a sixth of one
+*slower* at the third. On a processor running no-operations the whole run cost 1.28 to 1.65 ns a step before and 1.12 after, and
+that number moved by 0.7 ns between two runs of one binary (1.12 and 1.86), so it is an alignment's as much as a
+design's and is not used below.
+
+##### 6.12.2 The design
+
+*One entry a word, not blocks.* The table is 1,024 entries of sixteen bytes: the handler, the four bytes of IMEM it
+was decoded from as the host reads them, and a word of information — whether the instruction is an event, a branch or
+jump, or pure, and for a pure one the length of the run of pure instructions from it, at most 64. C#'s blocks are
+runs found by their first address, compiled, and compared whole with IMEM on entry; a table indexed by the word
+needs no lookup and no comparison of a run, is entered at any address — a branch into the middle of a run finds that
+address's own entry and its own length — and has no shape to refuse. The price is an indirect call an instruction,
+where C#'s compiled block calls its handlers directly.
+
+*The handlers are the interpreter's arms.* `Rsp::execute` became a 64-way choice among `main::<OP>` and `special` one
+among `special_function::<F>`, both generic over the constant they used to match on, and the vector unit's function
+switch one among `vector_lanes::<F, KNOWN>`, where `KNOWN` says whether the selector is known at decode to take the
+whole register, known to shuffle, or unknown, as it is to the interpreter. A handler is the arm itself: an
+instruction interpreted and the same instruction from the table are one piece of source, as C#'s §12 required. At
+decode, an instruction whose only effect is a write to `r0` — the ALU and shift functions, the immediates, the loads,
+`MFC2` and `CFC2` — gets a handler that does nothing, `JALR` excepted, which also jumps; the vector operations get
+the SIMD path's function directly when the host has it, and the handler still tests `Memory::simd` so that
+`set_rsp_simd` needs no rebuild.
+
+*Validity: every entry compared with IMEM before every use.* The alternative, clearing entries when IMEM is written,
+has to find every writer, and there are at least seven: a transfer into IMEM, the CPU's stores of one, two, four and
+eight bytes through the bus, boot's IPL head, the host's memory writes through the C ABI, a state load, and the crate's
+own tests, which write `sp_imem` directly — `tests::rsp`'s selector sweep rewrites word 0 before every step. A writer
+missed is an instruction run stale, silently. Comparing is one load of IMEM, which the step needs anyway for the
+instruction's fields, and one compare; with it removed (an inexact build, for pricing only) the straight run of
+no-operations cost 1.120 ns a step against 1.117 with it, so its cost is below this bench's resolution. This is also
+what C# does: `Mars_Rsp.md` §11 invalidates nothing, since "every entry compares". The table survives a state load
+(`load_state` carries it across, as it carries the recompiler), which the comparison makes safe.
+
+*Straight runs, and the one piece of bookkeeping they drop.* In a whole run, outside a delay slot (`next_pc` is the
+program counter plus four), the entry's length says how many pure instructions follow; the run takes up to that many,
+cut to the budget left, comparing each word with IMEM as it goes and stopping at the first that has become impure,
+and moves the two counters once at the end. A pure instruction neither reads nor writes the counters, so the
+counters after the run are the interpreter's after the same steps. The length is a hint: a stale one can only end the
+run early or be caught by the comparison of the word it overruns into, which then stops it. The halt is tested once
+at the run's start, since only an event can halt the processor and the run stops before one.
+
+*Where the lock-step allows it, and where it does not.* The table runs many instructions at once only where the
+machine already did — the idle loop's run to the next event and the tick's many-cycle call — and adds no new place:
+the question of which steps may be taken ahead of the CPU is §5.2's and §5.8.3's, unchanged. Inside those calls the
+CPU does not run, so nothing can observe the counters between two steps, and IMEM cannot change, since the processor
+writes it only by a transfer, an event, which ends the run. One tick at a time — 38 per cent of the Dam's steps — the
+table caches the decode only: the counters are moved before the handler, as the interpreter moves them, so the CPU
+reads the same program counter at every cycle. Making that path out of line, so that its indirect call has one site
+rather than one inlined into each of the CPU's decoded operations, was measured and is not kept (the Dam 10.48 to
+10.93 against 10.34 to 10.50 in the same three interleaved rounds, a first set that ended at a load of 5).
+
+*The switch.* On by default; `EMUSEN_MARSRT_RSP_BLOCKS=0` turns it off for a process and `Machine::set_rsp_blocks` for
+a machine, which survives a state load. The C# twin of §3 (`Pinned`) has no table and runs the interpreter.
+
+##### 6.12.3 The evidence
+
+1. **Random programs one tick at a time, compared after every step**
+   (`tests::rsp_blocks::the_decoded_table_steps_as_the_interpreter_steps_one_tick_at_a_time`). Two machines, the
+   table and the interpreter, from one state; programs of every class the table decodes differently — the vector unit
+   at both selector kinds and its loads and stores, the scalar unit with `r0` among the destinations, branches either
+   way by up to twelve words, jumps, register jumps and links, breaks, COP0 reads of the status, semaphore and display
+   registers, and COP0 writes of the transfer registers and the status (single-step set one time in eight) — with
+   registers primed so that the transfers bring code from RDRAM into IMEM; between steps the CPU writes a word into
+   IMEM, half the time just ahead of the processor, or starts a transfer into it. 150 seeds of 3,000 steps, half with
+   the SIMD path and half element by element: 450,000 steps, 52,014 events, 10,542 breaks, 1,784 transfers into IMEM by
+   the processor, 58,482 taken branches landing in the middle of a straight run, 33,710 CPU writes and 11,173 CPU
+   transfers into IMEM, 35,237 steps under single-step. After every step the processor, the interface, DMEM, IMEM and
+   the MI are compared, and the whole states at the end. Identical.
+2. **Every entry point** (`…runs_as_the_interpreter_runs_in_every_entry`): the same programs, each call drawn among a
+   tick, a many-cycle call of 2 to 59 cycles and a whole run to the next event with a budget of 1 to 299; 150 seeds of
+   800 calls, 39,730, 40,020 and 40,250 of each, 3,133,136 steps, 8,928 CPU writes and 2,971 CPU transfers into IMEM,
+   compared after every call, the whole runs' step counts included, and the states at the end. Identical.
+3. **A word rewritten under the table** (`a_word_rewritten_under_the_table_is_run_as_rewritten`): forty no-operations
+   run straight, a CPU store turns the seventeenth into a break, and the run stops there with the interpreter's
+   counters; a transfer then fills IMEM with `ADDIU r1, r1, 1` and 500 steps leave `r1` at 500. Both vector paths.
+4. **The crate's processor tests with the table on**, since it is the default: `tests::rsp`'s SIMD oracles, whose
+   sweeps rewrite IMEM word 0 before each of 43,088 single instructions, so that every one is a new decode.
+5. **The games** (`tests::games::a_machine_whose_signal_processor_runs_decoded_is_the_machine_interpreted`): the three
+   games from power-on and from their gameplay states, 600 frames each, the table against the interpreter, every
+   frame compared in state, picture and sound, unthreaded and joined and on four workers deferred through the
+   recompiler with snapshots: twelve runs, 7,200 frames, identical. Every benchmark run below ended on the state hash
+   of the build before this section, `4DEACE55468AA765`, `6881AF7D3E8BF471` and `18279384D87951D7`, threaded and not,
+   the same three §6.10 recorded.
+6. **The rest.** All 459 of the crate's tests with the gameplay states present (their games at 120 frames); the
+   corpus through MarsRT's three recompiler tiers, 1,722 lines identical to the interpreter's; WiseMan's
+   `MarsRt|MarsNative` filter, 659 tests, among them `MarsNativeRspTests` — the C# twin's Rust side, which runs the
+   interpreter this section refactored — and the corpus line for line against the C# core with the shim's default,
+   the table, "Failed 46 of 4637". `cargo clippy --all-targets` is clean.
+
+##### 6.12.4 Mutants
+
+Seven, each applied alone to a copy of the crate and run against `tests::rsp_blocks` at 40 seeds without link-time
+optimisation (`mutants.py` beside the speed tooling). The five the plan named are given in the table's terms, since a
+table has no blocks to invalidate or enter.
+
+| Mutant | Caught by |
+| --- | --- |
+| A straight run trusts every entry after its first: the table not checked after a transfer into IMEM | every entry, seed 1001, call 0 (the whole runs ran 6 and 67 steps); the rewritten word |
+| An event counted pure for a run's length: a run past a status write | every entry, seed 1001, call 0 (6 and 10 steps); the rewritten word |
+| A straight run begun in a delay slot: the branch's target dropped at a run's end | every entry, seed 1001, call 0 (counters `FF4, FF8` against `A00, A04`) |
+| Selector 2 given the handler for a selector that takes the whole register | one tick at a time, seed 2, step 2,724; every entry, seed 1002, call 198 |
+| A run entered in the middle given the length recorded at its head | every entry, seed 1001, call 0; the rewritten word |
+| `JALR` to `r0` folded to nothing with the other writes to `r0` | one tick at a time, seed 1, step 53; every entry, seed 1001, call 660 |
+| The run's halt test removed | **survives, equivalent**: every caller — the tick, the many-cycle loop after each event, the idle loop's run, the bench's entry — tests the halt first |
+
+*What the pattern says.* The mutants of the straight run fall at the first whole call of the first seed, because a
+random program's first run is nearly always long enough to cross what they break; the tick-only test catches none of
+them, which is right — it never takes a straight run — and is why both tests exist. The two decode mutants fall to
+both random tests, since a wrong handler is wrong on whichever path runs it.
+
+##### 6.12.5 Speed, and the predictions' fate
+
+*The prediction, stated before the table was written:* about a nanosecond a step off the processor's 5 — the
+fetch's swap, the event test, the second switch and the vector unit's own switch, against the cost of a call — which
+over the Dam's 1.05 million steps is **about 1.1 ms, the Dam to about 10.6 ms**, and proportionally less for the other
+two. *Revised after the microbenchmark:* its third of a nanosecond in whole runs and quarter in the lock-step came to
+**about 0.3 ms at the Dam**.
+
+Three interleaved rounds of 600 frames from the gameplay states, the build before this section (a clean checkout of
+2d85f17), this section's build, and this section's build with `EMUSEN_MARSRT_RSP_BLOCKS=0`; production's shape,
+`examples/threads <rom> <state> 600 split 4 blocks`, at a load of 1.4 at the start:
+
+| ms a frame | before | the table | the interpreter, this build |
+| --- | --- | --- | --- |
+| GoldenEye, the Dam | 11.685, 11.589, 11.760 | **10.423, 10.451, 10.441** | 11.706, 11.722, 11.678 |
+| Ocarina of Time | 5.586, 5.599, 5.593 | **5.465, 5.398, 5.418** | 5.564, 5.567, 5.621 |
+| Super Mario 64 | 4.571, 4.568, 4.584 | **4.467, 4.517, 4.460** | 4.590, 4.555, 4.555 |
+
+Medians: the Dam 11.69 to 10.44 ms, **1.24 ms and 10.6 per cent**; Ocarina of Time 5.59 to 5.42, **0.18 ms, 3.1 per
+cent**; Super Mario 64 4.57 to 4.47, **0.10 ms, 2.3 per cent**. No round of the table overlaps a round of the build
+before. The processor alone, `examples/frames … 600 blocks`, one thread, three rounds (the first began at a load of
+5, the rounds agree to 0.2 ms) and a fourth for the hashes:
+
+| ms a frame | before | the table | the interpreter, this build |
+| --- | --- | --- | --- |
+| GoldenEye, the Dam | 19.433, 19.523, 19.667, 19.528 | 18.102, 18.042, 18.003, 18.013 | 19.780, 19.490, 19.521, 19.488 |
+| Ocarina of Time | 9.129, 9.106, 9.322, 9.090 | 8.793, 8.705, 8.691, 8.696 | 9.151, 9.162, 9.147, 9.139 |
+| Super Mario 64 | 8.961, 8.973, 8.984, 9.015 | 8.642, 8.595, 8.741, 8.654 | 8.988, 9.014, 8.993, 8.960 |
+
+1.48, 0.42 and 0.33 ms. The two lighter games gain twice to three times as much on one thread as on five, and the
+threaded runs' counters say where it went, as they did in §6.10.3: the emulation thread's wait for the workers rose
+from 0.13 to 0.30 ms a frame in Ocarina of Time and from 0.27 to 0.43 in Super Mario 64, the thread now arriving
+at the load and capture sites before the draw is done. The Dam's workers are never waited for, and it keeps its whole
+gain.
+
+*The predictions.* The first — 1.1 ms, the Dam to about 10.6 — **held**, at 1.24 ms and 10.44. The revision from the
+microbenchmark — about 0.3 ms — **is retired**: the game gained four times what the bench's per-step difference
+promised. The sample below says why: a quarter of the gain is not the processor's at all. The interpreter was
+`#[inline(always)]` from `execute` up through the tick, so the whole of it was inlined into every call site of the
+tick in the CPU's decoded blocks, and the CPU's own decoded loop (`decoded::run`) shrank when the table replaced it
+with a lookup and a call: 1.18 to 0.90 ms at the Dam, 0.41 to 0.29 in Ocarina of Time, 0.18 to 0.10 in Super Mario 64.
+A bench that runs the processor alone cannot see a cost that the processor's code imposes on the code it is inlined
+into; the lesson is §3.4's again, from the other side — where the processor's step sits matters as much as what it
+does.
+
+*The interpreter on this build* is within a round of the build before in the games, threaded and not, but 10 per cent
+slower in the microbenchmark's whole runs (3.85 to 4.04 ns a step against 3.45 to 3.54): the 64-way choices among
+constants did not compile to quite the old switches. It is the table's oracle and off by default, so its speed is
+recorded and not pursued.
+
+##### 6.12.6 Where the processor's time goes now
+
+The same grouping as §6.12.1, sampled the same day, `b1` before and `s1`, `s2` with the table (5,835, 5,077 and
+5,151 samples at the Dam; 2,286 and 2,195 in Ocarina of Time; 1,690 and 1,832 in Super Mario 64), the shares times the
+medians above:
+
+| ms a frame | the Dam, before | the Dam, the table (two runs) | Ocarina, before, table | Mario, before, table |
+| --- | ---: | ---: | --- | --- |
+| decode and dispatch | 2.15 | 1.91, 1.92 | 0.65, 0.63 | 0.72, 0.61 |
+| the vector unit | 1.96 | 1.23, 1.33 | 0.76, 0.61 | 0.73, 0.58 |
+| the scalar unit, loads and stores | 0.68 | 0.85, 0.80 | 0.30, 0.31 | 0.29, 0.36 |
+| the lock-step: tick, `sp_step`, the counters | 0.73 | 0.56, 0.54 | 0.24, 0.21 | 0.16, 0.11 |
+| events | 0.10 | 0.09, 0.09 | 0.04, 0.04 | 0.02, 0.02 |
+| **the processor** | **5.62** | **4.62, 4.68** | **1.98, 1.81** | **1.92, 1.68** |
+| the CPU's decoded loop, for the reason above | 1.18 | 0.90, 0.93 | 0.41, 0.29 | 0.18, 0.10 |
+
+The decode row keeps its size in name only: at the Dam it is now `Decoded::step` (0.55 ms — the tick's steps, one
+lookup, one comparison and one call each, where the load of the entry and of IMEM stall), the run and its straight
+loop (0.38), the handlers' entry frames and the SIMD path's test in them (about 0.35) and the fields the handlers
+extract (0.2); the switches, the swap
+and the event test are gone from it. The vector unit's row fell by 0.6 to 0.7 ms because its own switch of 64 went with
+them, and the scalar row rose by 0.1 to 0.15 because the arms that `execute` held inline are now attributed to their
+handlers. The processor at the Dam is 44 per cent of the frame, from 48.
+
+##### 6.12.7 The second tier, priced and not built
+
+A Cranelift tier would compile a straight run to one function that calls its handlers directly, or holds the scalar
+ones inline, entered after one comparison of the run's words — `Mars_Rsp.md` §12's fold, on the crate's existing
+compiler (`src/cpu/blocks/jit/`) and its thread. What it could remove is the table's own cost *inside whole runs*: the
+run and straight loops, the indirect calls and the handlers' entries, and the scalar arms' register traffic — about
+1.37 ms of the Dam's decode row outside `Decoded::step`, of which the whole runs take 62 per cent by the counters:
+**a ceiling of about 0.85 ms at the Dam, 8 per cent**, less in the other two, whose decode rows are 0.6 ms in all.
+It could not touch the tick's steps, which are one instruction a call and which `Mars_Rsp.md` §13 measured a compiled
+single step to *lose* on, nor the lock-step's 0.55 ms. What the C# history says a fold buys once blocks exist is two to
+three per cent of the frame (§12 of that page). Against a realistic third to a half of the ceiling — 0.3 to 0.4 ms —
+stand a second compiled path under the exactness contract, a compile queue beside the CPU's, and its verifier. **Not
+built**; the number to beat, should it be taken up, is the Dam at 10.44 ms.
+
+##### 6.12.8 What is not done
+
+- **The tick's steps.** 38 per cent of the Dam's steps are taken one at a time beside the CPU's decoded blocks; the
+  table saves them the decode and not the call, the lookup's loads or the tick around it. §5.8.3's run-ahead batch,
+  priced at 0.3 ms and not built, is still the lever there.
+- **The handlers' fields.** Every handler extracts its registers from the word; entries with the fields decoded would
+  need a larger entry or a second array, and neither was measured.
+- **The handheld.** Not measured, as in §6.10.5; the change should matter there as here, since §6.1 found the
+  handheld bound on the same thread.
+- **The interpreter's 10 per cent in the microbenchmark**, above, recorded and not pursued.
+- **aarch64.** The table is portable — only its vector handlers are x86-64's. The build without them was checked as
+  §6.10.1 checked it, `target_arch = "x86_64"` renamed in `src/rsp/` to a value no target has: clippy reported the
+  nineteen renamed conditions and nothing else. The real target and the osx-arm64 job were not run.

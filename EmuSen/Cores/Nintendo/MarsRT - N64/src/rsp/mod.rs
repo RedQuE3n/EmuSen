@@ -69,6 +69,12 @@ pub trait Memory {
             self.set_element(register, i, v);
         }
     }
+    /// The low sixteen bits of one lane's accumulator, the rest kept.
+    #[inline(always)]
+    fn set_acc_low(&mut self, element: usize, value: u16) {
+        let old = self.acc(element);
+        self.set_acc(element, (old & !0xFFFFu64) | value as u64);
+    }
     /// Sixteen bytes of DMEM from an address at most 0xFF0, which do not wrap.
     #[inline(always)]
     fn data_block(&self, address: usize) -> [u8; 16] {
@@ -784,8 +790,7 @@ impl<M: Memory> Rsp<M> {
 
     #[inline(always)]
     fn set_acc_low(&mut self, element: usize, value: u16) {
-        let old = self.acc(element);
-        self.set_acc(element, (old & !0xFFFFu64) | value as u64);
+        self.m.set_acc_low(element, value)
     }
 
     fn vector_op(&mut self, instruction: u32) {

@@ -174,7 +174,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
 
         private static long Check(long result) => result >= 0 ? result : throw new InvalidDataException($"MercuryRT could not write the state: {Describe(result)}.");
 
-        private nint Handle => _handle != 0 ? _handle : throw new ObjectDisposedException(nameof(MercuryMachine));
+        public nint Handle => _handle != 0 ? _handle : throw new ObjectDisposedException(nameof(MercuryMachine));
 
         public void Dispose()
         {

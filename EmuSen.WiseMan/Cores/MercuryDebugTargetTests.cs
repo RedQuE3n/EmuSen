@@ -8,18 +8,26 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // MercuryDebugTarget and the SM83 disassembler under it - see Mercury_Debug.md.
-    public class MercuryDebugTargetTests : IDisposable
+    // The Game Boy's debug target and the SM83 disassembler under it, on either engine - see Mercury_Debug.md and Mercury_Native.md §8.5.
+    public abstract class MercuryDebugTargetClaims : IDisposable
     {
         private readonly List<string> _temporaryFiles = new();
+        private readonly List<MercuryDebugRig> _rigs = new();
 
         public void Dispose()
         {
+            foreach (MercuryDebugRig rig in _rigs) rig.Dispose();
             foreach (string path in _temporaryFiles)
             {
                 try { File.Delete(path); } catch (IOException) { }
             }
         }
+
+        // The engine under the claims.
+        protected abstract MercuryDebugRig Rig(string rom);
+
+        // What the target's summary calls the engine.
+        protected abstract string EngineName { get; }
 
         private string WriteRom(byte cgbFlag = 0x00, params (int Offset, byte[] Bytes)[] patches)
         {
@@ -28,11 +36,11 @@ namespace EmuSen.WiseMan.Cores
             return path;
         }
 
-        private (MercuryCore Core, MercuryDebugTarget Target) Load(byte cgbFlag = 0x00, params (int Offset, byte[] Bytes)[] patches)
+        private (MercuryDebugRig Core, IDebugTarget Target) Load(byte cgbFlag = 0x00, params (int Offset, byte[] Bytes)[] patches)
         {
-            var core = new MercuryCore();
-            core.LoadRom(WriteRom(cgbFlag, patches));
-            return (core, new MercuryDebugTarget(core));
+            MercuryDebugRig rig = Rig(WriteRom(cgbFlag, patches));
+            _rigs.Add(rig);
+            return (rig, rig.Target);
         }
 
         private static string Text(DisassembledInstruction instruction) =>
@@ -187,9 +195,14 @@ namespace EmuSen.WiseMan.Cores
             target.RefreshProviders();
 
             var values = target.CpuRegisters.Current.ToDictionary(v => v.Name, v => v.Value);
-            Assert.Equal(core.Cpu!.PC, values["PC"]);
-            Assert.Equal(core.Cpu.SP, values["SP"]);
-            Assert.Equal(core.Cpu.A, values["A"]);
+            Assert.Equal((ulong)core.Pc, values["PC"]);
+            Assert.Equal(0xFFFEUL, values["SP"]);
+            Assert.Equal(0x01UL, values["A"]);
+
+            core.RunFrame();
+            target.RefreshProviders();
+            Assert.Equal((ulong)core.Pc, target.CpuRegisters.Current.Single(v => v.Name == "PC").Value);
+            Assert.Equal(core.Pc, target.DebugCpus[0].ProgramCounter!());
         }
 
         [Fact]
@@ -222,10 +235,10 @@ namespace EmuSen.WiseMan.Cores
         {
             var (core, target) = Load();
 
-            core.Bus!.Oam[0] = 32;      // Y = 16, on screen
-            core.Bus.Oam[1] = 24;
-            core.Bus.Oam[4] = 0;        // Y = -16, entirely above the panel
-            core.Bus.Oam[8] = 200;      // Y = 184, entirely below it
+            core.WriteSpace("OAM", 0, 32);      // Y = 16, on screen
+            core.WriteSpace("OAM", 1, 24);
+            core.WriteSpace("OAM", 4, 0);       // Y = -16, entirely above the panel
+            core.WriteSpace("OAM", 8, 200);     // Y = 184, entirely below it
 
             target.RefreshProviders();
 
@@ -240,8 +253,8 @@ namespace EmuSen.WiseMan.Cores
             var (core, target) = Load();
 
             // Row 0: low plane $80, high plane $80, which is colour 3 in the leftmost pixel only.
-            core.Bus!.Vram[0] = 0x80;
-            core.Bus.Vram[1] = 0x80;
+            core.WriteSpace("VRAM", 0, 0x80);
+            core.WriteSpace("VRAM", 1, 0x80);
 
             var space = target.GetMemorySpaces().First(s => s.Name == "VRAM");
             byte[] pixels = target.DecodeTilePixels(space, 0, 2);
@@ -283,7 +296,7 @@ namespace EmuSen.WiseMan.Cores
             core.RunFrame();
 
             string summary = target.GetSummaryText();
-            Assert.Contains("GBC (Mercury)", summary);
+            Assert.Contains($"GBC ({EngineName})", summary);
             Assert.Contains("CGB", summary);
             Assert.Contains("ROM,", summary);
         }
@@ -299,9 +312,11 @@ namespace EmuSen.WiseMan.Cores
 
                 Assert.True(CoreFactory.IsSupported(path));
 
-                var bundle = CoreFactory.Load(path);
-                Assert.IsType<MercuryCore>(bundle.Core);
-                Assert.IsType<MercuryDebugTarget>(bundle.DebugTarget);
+                var (rig, _) = Load();
+                var bundle = CoreFactory.Load(path, engine: rig.Engine);
+                Assert.IsType(rig.CoreType, bundle.Core);
+                Assert.IsType(rig.TargetType, bundle.DebugTarget);
+                (bundle.Core as IDisposable)?.Dispose();
                 Assert.IsType<GbGameSharkCheatCodec>(bundle.CheatAutoDetectCodec);
                 Assert.IsType<GbGameGenieCheatCodec>(bundle.CheatExplicitCodec);
             }
@@ -315,5 +330,18 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal("GB", CoreCatalog.ConsoleForRom("pocket.gb"));
             Assert.Equal("GB", CoreCatalog.ConsoleForRom("pocket.gbc"));
         }
+    }
+
+    public class MercuryDebugTargetTests : MercuryDebugTargetClaims
+    {
+        protected override MercuryDebugRig Rig(string rom) => MercuryDebugRig.Mercury(rom);
+        protected override string EngineName => "Mercury";
+    }
+
+    // The same claims on MercuryRT's target, which shows a mirror refreshed from the Rust machine's state - see Mercury_Native.md §8.5.
+    public class MercuryRtDebugTargetTests : MercuryDebugTargetClaims
+    {
+        protected override MercuryDebugRig Rig(string rom) => MercuryDebugRig.MercuryRt(rom);
+        protected override string EngineName => "MercuryRT";
     }
 }

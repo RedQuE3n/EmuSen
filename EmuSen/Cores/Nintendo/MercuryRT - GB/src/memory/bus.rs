@@ -252,6 +252,19 @@ impl MemoryBus {
         !self.oam_dma_active() && (!self.ppu.lcd_enabled() || !(self.ppu.is_mode(crate::ppu::PpuMode::OamScan) || self.ppu.is_mode(crate::ppu::PpuMode::Drawing)))
     }
 
+    /// Where C#'s `Write` reports a CPU store to its `IWriteObserver`, as `(space, offset)`, decided before the store lands; `None` where it
+    /// reports nothing. Cart RAM is reported whatever the board does with the byte, as C#'s is. See Mercury_Native.md §8.5.
+    pub fn reported_space(&self, address: u16) -> Option<(u32, u32)> {
+        match address {
+            0x8000..0xA000 => self.vram_accessible().then(|| (1, self.vram_offset(address) as u32)),
+            0xA000..0xC000 => Some((2, (address - 0xA000) as u32)),
+            0xC000..0xFE00 => Some((3, self.wram_offset(address) as u32)),
+            0xFE00..0xFEA0 => self.oam_accessible().then(|| (4, (address - 0xFE00) as u32)),
+            0xFF80..=0xFFFE => Some((5, (address - 0xFF80) as u32)),
+            _ => None,
+        }
+    }
+
     /// What a DMA charged the CPU, taken once and cleared - see Mercury_Cgb.md §4.1.
     pub fn take_pending_stall(&mut self) -> i32 {
         std::mem::take(&mut self.stall_cycles)

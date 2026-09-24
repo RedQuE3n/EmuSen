@@ -981,3 +981,41 @@ the state did not move is checked in §9.3, against hashes of states the unmodif
 frontends were already told. `Mercury_Apu.md` §6's "95.11 clocks per sample" was the design and is now the behaviour.
 The audio differential against gambatte (`Mercury_HardwareTests.md` §6) compared against a mislabelled rate before this
 date; that comparison was not re-run. No corpus verdict can move: sound never feeds the machine.
+
+### 9.2 D2: the cartridge's clock in double speed
+
+**Before.** A synthetic MBC3+TIMER colour cartridge enables the clock, optionally sets `KEY1` and executes `STOP`,
+then latches the clock and copies its seconds register to WRAM forever. After 1,200 frames, which are 20.09 s of
+console time, both engines read **40 s** in double speed and 20 s in single speed.
+
+**The fix.** `MemoryBus.Tick` hands the board base-clock cycles: the CPU's cycles in single speed, half of them in
+double speed. The halving is exact. Every `Tick` is a whole number of machine cycles, which is four T-cycles, or a
+DMA stall of 16 or 32. So the count is always even, and `_baseClockPhase` is false at every `Tick` boundary: the
+argument by which §8.4 found mutant M20 equivalent. `Mbc3.Tick` still counts to `CpuClockHz`, now in base-clock
+cycles. That is 128 of them per tick of a 32.768 kHz crystal.
+
+**Prediction.** Both engines read 20 s at either speed. A frame-by-frame lock-step run of the double-speed program on
+both engines is identical in every field, the clock's sub-second count included. Nothing that never enters double speed
+changes. The four games do not. Of the eleven boards, none runs the clock in double speed, and no corpus ROM runs an
+MBC3 clock at all. So their states at recorded frames still hash as the unmodified build's did (§9.3).
+
+**After.** Both engines read 20 s at both speeds, and the lock-step case
+(`D2_the_clock_in_double_speed_runs_identically_on_both_engines`) was identical for 1,200 frames in state, picture and
+sound.
+
+**The referee.** The MiSTer Game Boy core counts its MBC3 clock on `ce_32k` (`rtl/mappers/mbc3.v:193`, the sub-second
+counter; `:244-251`, the carry into seconds). `ce_32k` is `clk_sys` divided by 1,024 (`Gameboy.sv:405-410`), and
+`clk_sys` is 33.554432 MHz (`rtl/pll/pll_0002.v:28`), which gives exactly 32,768 Hz. It is generated beside, not from,
+the CPU enables `ce_cpu` and `ce_cpu2x` that `speedcontrol` produces (`Gameboy.sv:798-820`). So the RTL agrees with the
+fix: the clock does not double. The RTC in `mbc3.v` is its own Verilog, not a translation of an emulator's code, so this
+agreement is evidence of some weight.
+
+The referee also shows two things Mercury does not do. Neither was changed here.
+
+- **A write to the seconds register zeroes the sub-second counter** (`mbc3.v:228-230`). Mercury's `Mbc3.WriteRam`
+  leaves `_cyclesIntoSecond` as it was. That makes the next second arrive early by up to a second after a game sets the
+  clock. This is a defect candidate with no test. It is not in §6.1, and Q4's rule (§5) says it is fixed in both
+  engines together when it is taken up.
+- **Fast-counting of seconds restored from a save file** (`mbc3.v:174`, `diffSeconds`). This catches the clock up by
+  wall-clock time between sessions. Mercury's clock is not in the `.srm` at all, and it stops while the emulator is
+  closed. That is a missing feature (`Mercury_Memory.md` §9), not a timing defect.

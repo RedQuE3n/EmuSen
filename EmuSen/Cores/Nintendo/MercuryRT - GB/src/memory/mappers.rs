@@ -204,7 +204,7 @@ impl Mapper {
         }
     }
 
-    /// Clocked with the CPU's cycles, for the board with a real-time clock - see Mercury_Native.md §6.1, D2.
+    /// Clocked with base-clock cycles, for the board with a real-time clock - see Mercury_Native.md §9.2.
     #[inline(always)]
     pub fn tick(&mut self, cart: &Cartridge, cycles: i32) {
         if let Mapper::Mbc3(m) = self {

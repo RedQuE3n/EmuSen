@@ -1260,3 +1260,26 @@ no test writes to the player's `home/Shaders/`.
 - **A `VkPipelineCache` is still not built.** §8.6 measured it at zero on drivers that have a disk cache.
 - **The Shaders window's slider virtualisation** (§8.8's fifth lever) is out of scope. This lever makes the window's
   preset loads faster; its 944-row build is unchanged.
+
+### 9.9 The handheld, after both levers (2026-09-24)
+
+Measured by the parent session after the merge (9269ec9): the research's production bench (`deck-out/base`,
+57937b2) against a bench built from WiseMan with both levers (`deck-out/after`), the same case lines, three rounds
+with the order alternated, 300 frames each, the picture in the panel's 1920×1200. **On the charger this time**
+(`power_supply` online 1), where §8.4's run was on battery, so the base figures here are not §8.4's and each lever is
+read only against the base of this run. Render thread, median of the three rounds' medians:
+
+| Case | Before (ms) | After (ms) | gen2 per 300 frames, before → after |
+|---|---|---|---|
+| N64 4× (2560×960 ×2), `crt-lottes` | 13.75 | **8.09** | 93–100 → 0 |
+| N64 1× (640×240 ×2), `crt-royale` | 7.43 | 5.48 | 108–111 → 0 |
+| SNES, `crt-lottes` | 7.23 | 5.70 | 150 → 0 |
+| SNES, `crt-royale` | 6.01 | 4.54 | 75 → 0 |
+| SNES, Mega Bezel SMOOTH-ADV | 14.37 | 13.18 | 43–46 → 0 |
+
+The N64 4× case, the one §8.4 found missing the frame, lands where the prototype put it (8.22 ms in §8.4's lever run),
+and every case's full collections are gone. The gains are smaller than the desktop's for Mega Bezel (−1.2 ms against
+−2.3) because on this device its passes, not its transfers, are most of its frame. Raw results:
+`~/.cache/emusen/probe/shaders/handheld/results-handheld-recheck.txt`; the bench host is
+`~/.cache/emusen/probe/shaders/shaderbench-after/` built with `SerenityRoot` at the main tree. Not measured: preset
+load times on the device after lever 2, and a run on battery.

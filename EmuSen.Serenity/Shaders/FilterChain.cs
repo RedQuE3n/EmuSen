@@ -29,7 +29,19 @@ namespace EmuSen.Serenity.Shaders
                 ?? throw new InvalidOperationException($"Pass {i} of the '{filter.Name}' filter did not compile: {errors}")).ToArray();
             _builders = _effects.Select(effect => new SKRuntimeShaderBuilder(effect)).ToArray();
             _surfaces = new SKSurface?[_effects.Length];
+            SetParameters(null);
         }
+
+        private readonly Dictionary<string, float> _values = new(StringComparer.Ordinal);
+
+        // Values by id over the filter's defaults; an id it does not declare is ignored, one left out is its default - see EmuSen_Serenity.md §3.7.
+        public void SetParameters(IReadOnlyDictionary<string, float>? values)
+        {
+            foreach (Slang.SlangParameter parameter in Filter.Parameters ?? Array.Empty<Slang.SlangParameter>())
+                _values[parameter.Id] = values is not null && values.TryGetValue(parameter.Id, out float value) ? value : parameter.Initial;
+        }
+
+        public float ValueOf(string id) => _values.TryGetValue(id, out float value) ? value : float.NaN;
 
         // A new frame replaced the last: that one joins the history, which now owns it, or is freed.
         public void Advance(SKImage? previous)
@@ -133,6 +145,7 @@ namespace EmuSen.Serenity.Shaders
                     case "originalSize": builder.Uniforms[name] = new[] { (float)originalWidth, originalHeight }; break;
                     case "outputSize": builder.Uniforms[name] = new[] { (float)width, height }; break;
                     case "frameCount": builder.Uniforms[name] = (float)(_frames % 65536); break;
+                    case var id when _values.TryGetValue(id, out float value): builder.Uniforms[name] = value; break;
                     default: throw new InvalidOperationException($"The '{Filter.Name}' filter asks for a uniform called '{name}', which no pass provides.");
                 }
             }

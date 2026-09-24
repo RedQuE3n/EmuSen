@@ -339,8 +339,8 @@ mod tests {
     #[test]
     fn a_breakpoint_range_compares_as_the_int_the_registry_keeps() {
         let h = Hooks { breakpoints: vec![(0x150, 0x152), (-5, -1)], ..Hooks::default() };
-        assert!(h.covers(0x151));
-        assert!(!h.covers(0x153));
+        assert!(h.covers(0x150) && h.covers(0x151) && h.covers(0x152));
+        assert!(!h.covers(0x14F) && !h.covers(0x153));
         assert!(!h.covers(0xFFFF));
     }
 
@@ -380,6 +380,8 @@ mod tests {
         h.depth_target = 0;
         assert_eq!(h.stop_before(0), stop::DEPTH);
         h.note_call(1, 2, false);
+        assert_eq!(h.stop_before(0), stop::FRAME);
+        h.depth_guard = 1;
         assert_eq!(h.stop_before(0), stop::FRAME);
         h.depth_guard = 0;
         assert_eq!(h.stop_before(0), stop::DEPTH);

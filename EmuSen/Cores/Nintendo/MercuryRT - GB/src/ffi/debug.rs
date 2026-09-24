@@ -141,9 +141,7 @@ pub unsafe extern "C" fn mercury_debug_profile(machine: *mut Machine, out: *mut 
     hooks.flush();
     let count = hooks.profile.len();
     if !out.is_null() && len >= 2 * count {
-        let mut runs: Vec<(u32, i64)> = hooks.profile.drain().collect();
-        runs.sort_unstable();
-        for (i, (owner, instructions)) in runs.into_iter().enumerate() {
+        for (i, (owner, instructions)) in std::mem::take(&mut hooks.profile).into_iter().enumerate() {
             // SAFETY: `out` holds `len` values, at least two for each run.
             unsafe {
                 *out.add(2 * i) = owner as i64;

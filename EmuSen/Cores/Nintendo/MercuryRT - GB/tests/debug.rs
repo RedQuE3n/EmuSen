@@ -97,6 +97,9 @@ fn coverage_records_what_the_processor_ran_only_while_armed() {
     assert!(ran(0x153) && ran(0x154));
     assert!(!ran(0x150) && !ran(0x151) && !ran(0x156));
     assert!(m.hooks.covered > 1000);
+    m.hooks.configure(false, false, false, false, false, false);
+    m.run_frame_debug(0).unwrap();
+    assert!(m.hooks.coverage.is_none());
 }
 
 #[test]

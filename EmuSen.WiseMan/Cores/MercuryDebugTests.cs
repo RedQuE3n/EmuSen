@@ -243,6 +243,26 @@ namespace EmuSen.WiseMan.Cores
             Assert.False(core.Coverage.WasExecuted(Entry + 3));
         }
 
+        // Disarmed in a frame something else observes, the recorder keeps nothing to hand over when it is armed again.
+        [Fact]
+        public void Coverage_disarmed_records_nothing_even_in_a_frame_that_is_observed()
+        {
+            MercuryDebugRig core = Load(CallOnce);
+            core.Coverage.Arm();
+            HaltAt(core, Entry);
+            core.Coverage.Disarm();
+            core.Coverage.Clear();
+            core.Breakpoints.AddBreakpoint(0x7000);
+
+            core.RunFrame();
+            core.Coverage.Arm();
+            core.RunFrame();
+
+            Assert.True(core.Coverage.WasExecuted(Entry + 3));
+            Assert.False(core.Coverage.WasExecuted(0x160));
+            Assert.False(core.Coverage.WasExecuted(Entry));
+        }
+
         // A halt is a frame's end for every counter: what ran before it is recorded when it is reported.
         [Fact]
         public void A_halt_leaves_the_coverage_and_the_profile_current()

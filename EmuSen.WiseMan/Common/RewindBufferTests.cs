@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using EmuSen.Common;
 using EmuSen.Cores;
 
@@ -45,8 +47,11 @@ namespace EmuSen.WiseMan.Common
                 w.Flush();
             }
 
+            public int Loads;
+
             public void LoadState(Stream stream)
             {
+                Loads++;
                 var r = new BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true);
                 Counter = r.ReadInt32();
                 TotalFrames = r.ReadInt64();
@@ -247,6 +252,227 @@ namespace EmuSen.WiseMan.Common
         {
             var (_, buffer) = Run(120, interval: 4);
             Assert.Equal(2.0, buffer.BufferedSeconds(60.0), precision: 3);
+        }
+
+        private static byte[] Save(ICore core)
+        {
+            using var stream = new MemoryStream();
+            core.SaveState(stream);
+            return stream.ToArray();
+        }
+
+        // Frames run with a capture every <interval>th, and the core's own state saved at each capture, by the buffer's frame.
+        private static (FakeCore Core, RewindBuffer Buffer, Dictionary<long, byte[]> Saved) Record(int frames, int interval, long budget = RewindBuffer.DefaultBudgetBytes)
+        {
+            var core = new FakeCore();
+            var buffer = new RewindBuffer { Enabled = true, IntervalFrames = interval, BudgetBytes = budget };
+            var saved = new Dictionary<long, byte[]>();
+            buffer.CaptureNow(core);
+            saved[buffer.Frame] = Save(core);
+            for (int i = 0; i < frames; i++)
+            {
+                core.RunFrame();
+                if (buffer.OnFrameCompleted(core)) saved[buffer.Frame] = Save(core);
+            }
+            return (core, buffer, saved);
+        }
+
+        // Moments are the snapshots, one each, stamped with the frame they were taken at - see §5.1.
+        [Fact]
+        public void There_is_one_moment_per_snapshot_stamped_with_its_frame()
+        {
+            var (core, buffer, saved) = Record(40, interval: 4);
+            IReadOnlyList<RewindMoment> moments = buffer.Moments();
+            Assert.Equal(buffer.Depth + 1, moments.Count);
+            Assert.Equal(new long[] { 0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40 }, moments.Select(m => m.Frame));
+            Assert.Equal(moments.Select(m => m.Frame), moments.Select(m => m.CoreFrames));
+            Assert.Equal(saved.Keys.OrderBy(k => k), moments.Select(m => m.Frame));
+
+            Assert.True(buffer.Rewind(core));
+            Assert.Equal(36, buffer.Frame);
+            Assert.Equal(36, buffer.Moments().Last().Frame);
+            Assert.Equal(buffer.Depth + 1, buffer.Moments().Count);
+        }
+
+        // Straight to the k-th moment back in one load, the state saved there byte for byte, and the newer moments gone - see §5.2.
+        [Theory]
+        [InlineData(0)]
+        [InlineData(1)]
+        [InlineData(4)]
+        [InlineData(10)]
+        public void Rewinding_to_a_moment_restores_the_state_saved_there_in_one_load(int back)
+        {
+            var (core, buffer, saved) = Record(40, interval: 4);
+            IReadOnlyList<RewindMoment> moments = buffer.Moments();
+            RewindMoment target = moments[moments.Count - 1 - back];
+            int loads = core.Loads;
+
+            Assert.True(buffer.RewindTo(core, target.Frame));
+
+            Assert.Equal(1, core.Loads - loads);
+            Assert.Equal(saved[target.Frame], Save(core));
+            Assert.Equal(target.Frame, buffer.Frame);
+            Assert.Equal(moments.Take(moments.Count - back).Select(m => m.Frame), buffer.Moments().Select(m => m.Frame));
+            Assert.Equal(buffer.Depth + 1, buffer.Moments().Count);
+        }
+
+        // Stepping back k times and going to the k-th moment land on the same bytes, and play on from it the same - see §5.2.
+        [Fact]
+        public void Rewinding_to_a_moment_and_stepping_back_to_it_are_the_same_machine()
+        {
+            var (stepped, byStep, _) = Record(60, interval: 3);
+            var (direct, byMoment, _) = Record(60, interval: 3);
+            for (int i = 0; i < 7; i++) Assert.True(byStep.Rewind(stepped));
+            Assert.True(byMoment.RewindTo(direct, byMoment.Moments()[^8].Frame));
+            Assert.Equal(Save(stepped), Save(direct));
+
+            for (int i = 0; i < 9; i++)
+            {
+                stepped.RunFrame(); byStep.OnFrameCompleted(stepped);
+                direct.RunFrame(); byMoment.OnFrameCompleted(direct);
+            }
+            Assert.Equal(byStep.Moments().Select(m => m.Frame), byMoment.Moments().Select(m => m.Frame));
+            Assert.True(byMoment.RewindTo(direct, byMoment.Moments()[^5].Frame));
+            for (int i = 0; i < 4; i++) Assert.True(byStep.Rewind(stepped));
+            Assert.Equal(Save(stepped), Save(direct));
+        }
+
+        // A reel's preview and a test's expectation: the bytes of any moment, and the chain left where it was - see §5.2.
+        [Fact]
+        public void The_state_at_a_moment_is_rebuilt_without_moving_the_chain()
+        {
+            var (core, buffer, saved) = Record(40, interval: 4);
+            byte[] now = Save(core);
+            int depth = buffer.Depth;
+            foreach (RewindMoment moment in buffer.Moments()) Assert.Equal(saved[moment.Frame], buffer.StateAt(moment.Frame));
+
+            Assert.Equal(depth, buffer.Depth);
+            Assert.Equal(now, Save(core));
+            Assert.Null(buffer.StateAt(41));
+            Assert.False(buffer.RewindTo(core, 41));
+            Assert.Equal(depth, buffer.Depth);
+            Assert.True(buffer.Rewind(core));
+            Assert.Equal(saved[36], Save(core));
+        }
+
+        // Trimming to the budget drops the oldest snapshot and its moment together - see §5.1.
+        [Fact]
+        public void The_budget_drops_a_moment_with_its_snapshot()
+        {
+            var (core, buffer, saved) = Record(300, interval: 1, budget: 1024);
+            IReadOnlyList<RewindMoment> moments = buffer.Moments();
+            Assert.True(moments.Count < 250, $"{moments.Count} moments held");
+            Assert.Equal(buffer.Depth + 1, moments.Count);
+            Assert.Equal(300, moments[^1].Frame);
+            Assert.Equal(Enumerable.Range(301 - moments.Count, moments.Count).Select(f => (long)f), moments.Select(m => m.Frame));
+
+            Assert.True(buffer.RewindTo(core, moments[0].Frame));
+            Assert.Equal(saved[moments[0].Frame], Save(core));
+        }
+
+        // A picture of four quadrants, each its own colour.
+        private static byte[] Quadrants(int width, int rows)
+        {
+            var rgba = new byte[width * rows * 4];
+            for (int y = 0; y < rows; y++)
+                for (int x = 0; x < width; x++)
+                {
+                    int o = (y * width + x) * 4;
+                    bool right = x >= width / 2, bottom = y >= rows / 2;
+                    rgba[o] = (byte)(right ? 255 : 0);
+                    rgba[o + 1] = (byte)(bottom ? 255 : 0);
+                    rgba[o + 2] = (byte)(right && bottom ? 0 : 128);
+                    rgba[o + 3] = 255;
+                }
+            return rgba;
+        }
+
+        private static (int R, int G, int B) At(byte[] rgba, int width, int x, int y) => (rgba[(y * width + x) * 4], rgba[(y * width + x) * 4 + 1], rgba[(y * width + x) * 4 + 2]);
+
+        // Downscaled to the width asked for, the shown height kept in proportion, and each quadrant its colour to RGB565's precision - see §5.3.
+        [Fact]
+        public void A_thumbnail_is_the_frame_downscaled_to_the_asked_width()
+        {
+            RewindThumbnail wide = RewindThumbnail.From(Quadrants(320, 240), 320, 240, 1, 160)!;
+            Assert.Equal((160, 120), (wide.Width, wide.Height));
+            Assert.Equal(160 * 120 * 2, wide.Bytes);
+            byte[] rgba = wide.ToRgba();
+            Assert.Equal((0, 0, 132), At(rgba, 160, 10, 10));
+            Assert.Equal((255, 0, 132), At(rgba, 160, 150, 10));
+            Assert.Equal((0, 255, 132), At(rgba, 160, 10, 110));
+            Assert.Equal((255, 255, 0), At(rgba, 160, 150, 110));
+
+            // Rows handed over once and shown twice are a frame twice as tall.
+            RewindThumbnail repeated = RewindThumbnail.From(Quadrants(640, 240), 640, 240, 2, 160)!;
+            Assert.Equal((160, 120), (repeated.Width, repeated.Height));
+            Assert.Equal((255, 255, 0), At(repeated.ToRgba(), 160, 150, 110));
+
+            // Never enlarged, and nothing from a frame too short for its size.
+            Assert.Equal(100, RewindThumbnail.From(Quadrants(100, 90), 100, 90, 1, 160)!.Width);
+            Assert.Null(RewindThumbnail.From(new byte[16], 320, 240, 1, 160));
+        }
+
+        // A picture joins the snapshot just taken, once, and goes when its snapshot goes - see §5.3.
+        [Fact]
+        public void A_picture_belongs_to_the_newest_moment_and_leaves_with_it()
+        {
+            var core = new FakeCore();
+            var buffer = new RewindBuffer { Enabled = true, IntervalFrames = 2, ThumbnailWidth = 160 };
+            byte[] frame = Quadrants(256, 224);
+            Assert.Null(buffer.AttachThumbnail(frame, 256, 224, 1));
+
+            for (int i = 0; i < 10; i++)
+            {
+                core.RunFrame();
+                if (buffer.OnFrameCompleted(core)) Assert.NotNull(buffer.AttachThumbnail(frame, 256, 224, 1));
+                else Assert.Null(buffer.AttachThumbnail(frame, 256, 224, 1));
+            }
+
+            IReadOnlyList<RewindMoment> moments = buffer.Moments();
+            Assert.Equal(5, moments.Count);
+            Assert.All(moments, m => Assert.Equal((160, 140), (m.Thumbnail!.Width, m.Thumbnail.Height)));
+            Assert.Equal(5L * 160 * 140 * 2, buffer.ThumbnailBytes);
+
+            Assert.True(buffer.Rewind(core));
+            Assert.Equal(4L * 160 * 140 * 2, buffer.ThumbnailBytes);
+            Assert.True(buffer.RewindTo(core, buffer.Moments()[1].Frame));
+            Assert.Equal(2L * 160 * 140 * 2, buffer.ThumbnailBytes);
+            buffer.Clear();
+            Assert.Equal(0, buffer.ThumbnailBytes);
+
+            var off = new RewindBuffer { Enabled = true, IntervalFrames = 1 };
+            core.RunFrame();
+            Assert.True(off.OnFrameCompleted(core));
+            Assert.Null(off.AttachThumbnail(frame, 256, 224, 1));
+        }
+
+        // Over the picture budget the older half is thinned: the newest pictures stay dense, the oldest keeps its picture, the snapshots all stay - see §5.4.
+        [Fact]
+        public void Past_the_picture_budget_older_pictures_thin_out_and_the_snapshots_stay()
+        {
+            var core = new FakeCore();
+            int each = 160 * 140 * 2;
+            var buffer = new RewindBuffer { Enabled = true, IntervalFrames = 1, ThumbnailWidth = 160, ThumbnailBudgetBytes = 40L * each };
+            byte[] frame = Quadrants(256, 224);
+            buffer.CaptureNow(core);
+            buffer.AttachThumbnail(frame, 256, 224, 1);
+            for (int i = 0; i < 400; i++)
+            {
+                core.RunFrame();
+                if (buffer.OnFrameCompleted(core)) buffer.AttachThumbnail(frame, 256, 224, 1);
+                Assert.True(buffer.ThumbnailBytes <= buffer.ThumbnailBudgetBytes);
+            }
+
+            IReadOnlyList<RewindMoment> moments = buffer.Moments();
+            Assert.Equal(401, moments.Count);
+            long[] pictured = moments.Where(m => m.Thumbnail is not null).Select(m => m.Frame).ToArray();
+            Assert.Equal(buffer.ThumbnailBytes, pictured.Length * (long)each);
+            Assert.True(pictured.Length >= 20, $"{pictured.Length} pictures kept of 40 allowed");
+            Assert.Equal(0, pictured[0]);
+            Assert.Equal(400, pictured[^1]);
+            Assert.Equal(Enumerable.Range(401 - 10, 10).Select(f => (long)f), pictured[^10..]);
+            long[] gaps = pictured.Zip(pictured.Skip(1), (a, b) => b - a).ToArray();
+            Assert.True(gaps[0] > gaps[^1], $"the oldest gap {gaps[0]} is not wider than the newest {gaps[^1]}");
         }
     }
 }

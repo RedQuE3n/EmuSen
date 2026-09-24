@@ -333,6 +333,44 @@ namespace EmuSen.Serenity.Slang
             });
         }
 
+        // Each row uploaded once into rows, then blitted to repeat times its height by nearest filtering, which repeats each row exactly - see EmuSen_Serenity.md §9.2.
+        internal void UploadRepeated(SlangImage image, ReadOnlySpan<byte> rgba, SlangImage rows, uint repeat, SlangBuffer staging)
+        {
+            fixed (byte* source = rgba) System.Buffer.MemoryCopy(source, staging.Mapped, (long)staging.Size, rgba.Length);
+            lock (_submit) RunLocked(commands =>
+            {
+                Transition(commands, rows, ImageLayout.TransferDstOptimal, from: ImageLayout.Undefined);
+                var region = new BufferImageCopy
+                {
+                    ImageSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1), ImageExtent = new Extent3D(rows.Width, rows.Height, 1),
+                };
+                Vk.CmdCopyBufferToImage(commands, staging.Handle, rows.Handle, ImageLayout.TransferDstOptimal, 1, &region);
+                Transition(commands, rows, ImageLayout.TransferSrcOptimal);
+                Transition(commands, image, ImageLayout.TransferDstOptimal);
+                var blit = new ImageBlit
+                {
+                    SrcSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1),
+                    DstSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1),
+                };
+                blit.SrcOffsets[1] = new Offset3D((int)rows.Width, (int)rows.Height, 1);
+                blit.DstOffsets[1] = new Offset3D((int)rows.Width, (int)(rows.Height * repeat), 1);
+                Vk.CmdBlitImage(commands, rows.Handle, ImageLayout.TransferSrcOptimal, image.Handle, ImageLayout.TransferDstOptimal, 1, &blit, Filter.Nearest);
+                if (image.Levels > 1) GenerateMipmaps(commands, image);
+                else Transition(commands, image, ImageLayout.ShaderReadOnlyOptimal);
+            });
+        }
+
+        // A transfer's writes to a buffer made visible to the host, which a fence alone does not do.
+        internal void HostReadBarrier(CommandBuffer commands, SlangBuffer buffer)
+        {
+            var barrier = new BufferMemoryBarrier
+            {
+                SType = StructureType.BufferMemoryBarrier, SrcAccessMask = AccessFlags.TransferWriteBit, DstAccessMask = AccessFlags.HostReadBit,
+                SrcQueueFamilyIndex = Vk.QueueFamilyIgnored, DstQueueFamilyIndex = Vk.QueueFamilyIgnored, Buffer = buffer.Handle, Offset = 0, Size = Vk.WholeSize,
+            };
+            Vk.CmdPipelineBarrier(commands, PipelineStageFlags.TransferBit, PipelineStageFlags.HostBit, 0, 0, null, 1, &barrier, 0, null);
+        }
+
         public void Dispose()
         {
             if (_disposed) return;

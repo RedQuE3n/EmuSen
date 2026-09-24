@@ -31,6 +31,12 @@ namespace EmuSen.Serenity.Slang
 
         public bool Built => _build.IsCompleted;
 
+        // Built, drawable and not stopped: the frame control then makes no image of the source - see EmuSen_Serenity.md §9.3.
+        internal bool Ready => !_disposed && _build.IsCompletedSuccessfully && _build.Result is not null;
+
+        // The built chain, for a test that counts its readbacks.
+        internal SlangChain? Chain => _build.IsCompletedSuccessfully ? _build.Result : null;
+
         // Failed is called on whichever thread found the problem, once; built is called when building ends either way.
         public SlangRunner(string presetPath, Action<string>? failed = null, Action? built = null)
         {
@@ -83,15 +89,18 @@ namespace EmuSen.Serenity.Slang
                 if (newFrame || !_advanced) { chain.Advance(rgba, width, height, rowRepeat); _advanced = true; }
                 if (newFrame || retuned || _output is null || _output.Width != pw || _output.Height != ph)
                 {
-                    byte[] pixels = chain.Render(pw, ph);
+                    // Let go first, so the readback it holds can take the new picture - see EmuSen_Serenity.md §9.1.
                     _output?.Dispose();
-                    _output = SKImage.FromPixelCopy(new SKImageInfo(pw, ph, SKColorType.Rgba8888, SKAlphaType.Opaque), pixels);
+                    _output = null;
+                    _output = chain.RenderImage(pw, ph);
                     SlangProbe.Current?.Phase(SlangProbe.ImageMade);
                 }
             }
             catch (Exception e) when (e is InvalidOperationException or ArgumentException)
             {
                 Fail($"{Path.GetFileName(PresetPath)} stopped: {e.Message}");
+                _output?.Dispose();
+                _output = null;
                 chain.Dispose();
                 _disposed = true;
                 return false;

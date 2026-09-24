@@ -378,24 +378,23 @@ namespace EmuSen.Serenity
                     }
                     try
                     {
-                        bool copy = fresh || _owner._cachedImage is null;
                         if (_owner._activeFilter is { } filter && _owner._chain is null) { _owner._chain = new FilterChain(filter); _owner._chain.SetParameters(_owner._shaderParameters); }
-                        if (copy)
-                        {
-                            var sourceInfo = new SKImageInfo(source.Width, source.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-                            SKImage? previous = _owner._cachedImage;
-                            _owner._cachedImage = SKImage.FromPixelCopy(sourceInfo, source.Rgba);
 
-                            // A filter that looks back keeps the frame just replaced; otherwise it is freed as before.
-                            if (_owner._chain is { } running) running.Advance(previous);
-                            else previous?.Dispose();
-                        }
+                        // A preset that will draw reads the array itself, so no image of the source is made, and one made earlier is now stale - see EmuSen_Serenity.md §9.3.
+                        bool presetOnly = _owner._slang is { Ready: true } && _owner._chain is null;
+                        if (presetOnly && fresh) { _owner._cachedImage?.Dispose(); _owner._cachedImage = null; }
+                        bool copy = !presetOnly && (fresh || _owner._cachedImage is null);
+                        if (copy) CopySource(source);
                         if (fresh) _owner.Copied(source);
                         long copied = System.Diagnostics.Stopwatch.GetTimestamp();
 
-                        if (_owner._slang is { } slang && DrawSlang(canvas, slang, copy, source)) { }
-                        else if (_owner._chain is { } chain) DrawFiltered(canvas, chain, grContext, _owner._cachedImage!, source);
-                        else Draw(canvas, _owner._cachedImage!, source);
+                        if (_owner._slang is { } slang && DrawSlang(canvas, slang, presetOnly ? fresh : copy, source)) { }
+                        else
+                        {
+                            if (_owner._cachedImage is null) { CopySource(source); copy = true; }
+                            if (_owner._chain is { } chain) DrawFiltered(canvas, chain, grContext, _owner._cachedImage!, source);
+                            else Draw(canvas, _owner._cachedImage!, source);
+                        }
 
                         // Flushed here so the texture's upload, which Skia defers to a flush, is timed with the draw - see EmuSen_Serenity.md §2.5.
                         Slang.SlangProbe.Current?.Phase(Slang.SlangProbe.FlushBegin);
@@ -408,6 +407,17 @@ namespace EmuSen.Serenity
                         _owner.PutReader(source);
                     }
                 }
+            }
+
+            private void CopySource(Offer source)
+            {
+                var sourceInfo = new SKImageInfo(source.Width, source.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+                SKImage? previous = _owner._cachedImage;
+                _owner._cachedImage = SKImage.FromPixelCopy(sourceInfo, source.Rgba);
+
+                // A filter that looks back keeps the frame just replaced; otherwise it is freed as before.
+                if (_owner._chain is { } running) running.Advance(previous);
+                else previous?.Dispose();
             }
 
             private SKRect Destination(Offer source)

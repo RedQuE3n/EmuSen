@@ -7,6 +7,8 @@ using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Library;
 
+using EmuSen.LunaP.Windowing;
+
 namespace EmuSen.Mistress.Views
 {
     // Resume where you left off, and the play records the library reads - see EmuSen_Settings_Reference.md §4.31 and §4.32.
@@ -47,7 +49,7 @@ namespace EmuSen.Mistress.Views
 
             if (_session is { IsRomLoaded: true }) PauseEmulation();
             var ask = new ResumeWindow(Path.GetFileNameWithoutExtension(romPath), SaveLibrary.PicturePathFor(state), File.GetLastWriteTime(state));
-            ResumeChoice? choice = await ask.ShowDialog<ResumeChoice?>(this);
+            ResumeChoice? choice = await SheetLayer.ShowDialog<ResumeChoice?>(ask, this);
             if (choice is { } chosen && ask.Remember)
             {
                 _appSettings.ResumeOnLaunch = chosen == ResumeChoice.Resume ? AppSettings.ResumeAlways : AppSettings.ResumeNever;

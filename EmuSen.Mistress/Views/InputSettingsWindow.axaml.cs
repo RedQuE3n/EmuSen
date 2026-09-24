@@ -20,7 +20,7 @@ using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Mistress.Views
 {
-    public partial class InputSettingsWindow : ToolWindow
+    public partial class InputSettingsWindow : ToolWindow, IPadCapturing
     {
         private readonly ControllerKeyBindings _keyBindings;
         private readonly GamepadBindings _gamepadBindings;
@@ -35,6 +35,32 @@ namespace EmuSen.Mistress.Views
         private (string Console, PadControl Button)? _listeningForPad;
         private DispatcherTimer? _padPollTimer;
         private DispatcherTimer? _statusPollTimer;
+
+        // The button that chose Rebind Pad is still down when listening starts, so a press counts only after all are let go - see EmuSen_Settings_Reference.md §4.45.4.
+        private bool _padArmed;
+        private bool _padReleaseWait;
+        private readonly System.Diagnostics.Stopwatch _padListening = new();
+
+        // How long a pad capture waits for a press before giving up, since every button it could be cancelled with is one it could bind.
+        public TimeSpan PadCaptureTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
+        public PadCapture Capturing =>
+            _listeningForPad is not null || _padReleaseWait ? PadCapture.PadButton
+            : _listeningForKey is not null || _listeningForHotkey is not null ? PadCapture.Key
+            : PadCapture.None;
+
+        public void CancelCapture()
+        {
+            ClearKeyListening();
+            StopListeningForPad();
+        }
+
+        private void StopListeningForPad()
+        {
+            _padPollTimer?.Stop();
+            if (_listeningForPad is { } target) _rebindPadButtons[target].Content = RebindPadText;
+            _listeningForPad = null;
+        }
 
         // XAML handlers fire during InitializeComponent - see EmuSen_Settings_Reference.md §4.6.
         private bool _initialized;
@@ -84,8 +110,8 @@ namespace EmuSen.Mistress.Views
             UpdateDeadzoneText();
             UpdateControllerStatus();
 
-            // Tunnel, not bubbling, or the focused button eats the key - see EmuSen_Settings_Reference.md §4.2.
-            AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
+            // Tunnel, not bubbling, or the focused button eats the key (§4.2); on the content, which a sheet takes with it (§4.45.2).
+            ((Control)Content!).AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
 
             // Notices a pad plugged in or out while the window is open.
             if (_gamepad is not null)
@@ -447,6 +473,8 @@ namespace EmuSen.Mistress.Views
 
             _listeningForPad = (console, button);
             _rebindPadButtons[(console, button)].Content = ListeningPadText;
+            _padArmed = false;
+            _padListening.Restart();
 
             _padPollTimer?.Stop();
             _padPollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
@@ -456,6 +484,17 @@ namespace EmuSen.Mistress.Views
 
         private void PollForPadButton()
         {
+            // The bound button is let go before the pad is the interface's again, or binding South would press Rebind Pad once more.
+            if (_padReleaseWait)
+            {
+                if (_gamepad?.GetAnyPressedButton() is null)
+                {
+                    _padReleaseWait = false;
+                    _padPollTimer?.Stop();
+                }
+                return;
+            }
+
             // Guarded locally so the timer stops itself - see EmuSen_Settings_Reference.md §4.6.
             if (_gamepad is null || _listeningForPad is not { } target)
             {
@@ -467,13 +506,22 @@ namespace EmuSen.Mistress.Views
             if (!PadControls.IsButton(control, out PadButton button)) return;
 
             SDL.GamepadButton? pressed = _gamepad.GetAnyPressedButton();
-            if (pressed is not SDL.GamepadButton padButton) return;
+            if (!_padArmed)
+            {
+                _padArmed = pressed is null;
+                return;
+            }
+            if (pressed is not SDL.GamepadButton padButton)
+            {
+                if (_padListening.Elapsed >= PadCaptureTimeout) StopListeningForPad();
+                return;
+            }
 
             _gamepadBindings.For(console).Rebind(button, padButton);
             _gamepadBindings.Save();
 
-            _padPollTimer?.Stop();
             _listeningForPad = null;
+            _padReleaseWait = true;
             RefreshPadLabels();
         }
 

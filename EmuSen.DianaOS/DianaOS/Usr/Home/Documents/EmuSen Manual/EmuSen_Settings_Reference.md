@@ -776,7 +776,7 @@ library if it is showing.
 
 | Button | Library | Pad menu | Another window |
 |---|---|---|---|
-| D-pad, left stick | up and down move one title; left and right step the console filter, wrapping | up and down wrap; left and right change an entry that has a value | up and down move the focus (Tab and Shift+Tab), or the rows of a list, or an open dropdown; left and right step a closed dropdown |
+| D-pad, left stick | up and down move one title; left and right step the console filter, wrapping | up and down wrap; left and right change an entry that has a value | ~~up and down move the focus (Tab and Shift+Tab), or the rows of a list, or an open dropdown; left and right step a closed dropdown~~ *since 2026-09-24 all four move the focus by position, and a list, a dropdown or a slider keeps the ones it uses (§4.45.3)* |
 | South | start the game | choose | press the button, flip the switch, open or commit the dropdown |
 | East | back to a suspended game | close | close an open dropdown, else the window |
 | L1, R1 | ten titles | | previous and next tab |
@@ -799,7 +799,8 @@ idea in the other direction, so the chord's own Start is not a press in the menu
 **Other windows are driven through their keys, not rewritten.** `PadWindowRouter` synthesises the key events a
 keyboard user would type, and sets a dropdown's index or a switch's state directly where a key would need the popup
 open. Every LunaP window is therefore reachable without knowing a pad exists, including ones not yet written. The
-cost is that it is only as good as the window's tab order. A window takes the pad only while it is the *active*
+cost is that it is only as good as the window's tab order. *Retired 2026-09-24: the focus now moves by position, and
+a window's tab order no longer decides what the pad reaches (§4.45.3).* A window takes the pad only while it is the *active*
 window, so a debug window left open beside a game takes nothing from the game.
 
 **Big screen.** `AppSettings.BigScreen`, the `--bigscreen` argument, or `SteamDeck=1` in the environment, which a
@@ -1325,3 +1326,130 @@ and in a game Start alone stays the game's while Back and Start together, or the
 
 What it still does not reach: SDL's own mapping of a device's buttons to `South`, `East` and the rest, and the
 120 Hz rate at which a real pad changes, are SDL's and the device's.
+
+#### 4.45.2 Game Mode shows one window, so the others are drawn inside it
+
+**The question.** Every settings window was a second top-level window shown with `Show(owner)`. What SteamOS's Game
+Mode does with one was not known, and no device was at hand. The answer below is read from gamescope's source
+(`src/steamcompmgr.cpp` on its `master` of 2026-09-23; which build SteamOS stable ships was not established) and from
+reports, and is therefore a reading, not an observation.
+
+- Game Mode runs `gamescope -e`, which gives every window of a process the process's Steam app id. A window without
+  one is never shown, so a file chooser drawn by another process (a desktop portal) would not appear.
+- A second top-level window of the same process **is** shown and takes the keyboard: `pick_primary_focus_and_override`
+  follows `WM_TRANSIENT_FOR` from the focused window, which Avalonia sets for an owned window, and a newer mapped
+  window wins a tie anyway. But it is shown **instead of** the main window, which is not painted under it, and it is
+  scaled to fill the screen, so a 680 by 560 window is enlarged and letterboxed. Closing it returns focus to the main
+  window. gamescope draws no title bar and sends no close request, so a window without a close button of its own
+  can only be left by quitting the game from Steam.
+- A dropdown (an override-redirect window) is drawn above the focused window, and while it extends past a small
+  window gamescope rescales the whole picture to fit it in.
+- If the player has pinned the main window through Steam's window switcher, transient windows are not followed and a
+  settings window would not appear at all.
+
+**The decision.** In a big-screen session, which Game Mode starts (§4.43), windows are presented on sheets inside the
+main window (LunaP's `SheetLayer`, `LunaP.md` §90) instead of being shown. The reading above says a window would
+appear, so the change is not a workaround for a window that never shows; it is chosen because a sheet avoids every
+cost the reading lists: no letterboxed enlargement of a desk-sized window, no rescaling while a dropdown is open, no
+dependence on the window switcher's pin, the game still visible around the sheet, and one focus model for the pad to
+drive. Desktop Mode, and any session that is not big-screen, keeps real windows, where a pointer and a window
+manager make them the better choice.
+
+**The mechanism.** `MainWindow.axaml` places a `SheetLayer` named `Sheets` over everything, and `StartPadNavigation`
+sets its `PresentsWindows` to the big-screen flag, its hint to the pad's buttons, and its scale to the window's
+height over 720 points, between 1 and 2. Every window Mistress opens goes through `SheetLayer.Show` (the settings
+windows, the cheat windows through their `WindowSlot`s, the screenshot viewer, and the RetroArch preset picker, whose
+owner is itself on a sheet), and the two dialogs through `SheetLayer.ShowDialog`: the resume question of §4.31, which
+a big-screen session previously answered in a second window at the start of every game with a resume state, and
+Browse ROMs. `Dialogs` in LunaP now does the same for the confirmations, so the "different copy of the game" question
+(§4.37) lands on a sheet too.
+
+Three rules follow the pad menu's (§4.29). A sheet over a running game pauses it, and the last sheet to close resumes
+it only if the sheet was what paused it. The game hears no key while a sheet is up: `SetButtonFromKey` leaves a key
+bound to a game button alone while `Sheets.IsPresenting`, since the pad router's synthesised arrows and Enter tunnel
+through the main window on their way to the sheet and were otherwise claimed as game input (a mutant that drops the
+check fails two cases, on the slider and on the dropdown). And `OtherWindow` answers the sheet on screen before any
+real window, so the pad goes to it.
+
+**Tests.** `PadSettingsWindowTests` starts a big-screen window with a synthetic SNES game running and opens each
+window from the pad's menu with the pad; each case asserts that no owned window exists, that the game is paused while
+the sheet is up and running again after B.
+
+**What only the device can confirm.** That Game Mode sets the session up as the source says; that the scale chosen
+reads well on a Legion Go S's 8-inch 1920 by 1200 panel; and, for Desktop Mode, nothing new.
+
+#### 4.45.3 Focus moves by position, and every control is reached
+
+§4.29 moved the focus with Tab and Shift+Tab. That reaches every control, but in the order the window declared them,
+so down on the bindings grid walked along a row (Rebind Key, Clear, Rebind Pad, Clear Pad) before reaching the next,
+and there was no way out of a list: down in a list moves its rows, and a list's last row is not a Tab. The router now
+moves by position.
+
+**Directions.** Up, down, left and right ask Avalonia 12.1's directional search (`FocusManager.FindNextElement`, its
+port of WinUI's XY focus) for the nearest control that way, first inside the innermost scrolling area holding the
+focus, then in the ancestors' areas, then in the whole sheet. Searching the area first matters: a control scrolled
+below the visible part of a page is further down than the buttons under the page, and a search of the sheet alone
+jumped to those buttons and left the rest of the page unreachable (a mutant that drops the area-first pass fails the
+bindings case). A scrolling area that is itself the nearest thing is entered at its nearest control, or passed over
+if it holds none. The focus change scrolls the area to show the control, which is Avalonia's own behaviour for a
+focus given by navigation.
+
+Controls that take left and right keep them: a closed dropdown steps its choice (and saves it, as choosing does), a
+slider moves by its small change. Up and down in a list move its rows until the first or last, then leave it.
+
+**Tabs.** The shoulders change tab and put the focus on the new page's top control. The tab strip is one stop for
+the d-pad: moving up into it lands on the selected tab, never another, because a tab header that receives the focus
+by navigation selects its tab, and the first version of this router switched tabs whenever up happened to be nearer
+another header. Left and right on the strip change tab. Down from the strip goes into the page. That last rule is a
+workaround: Avalonia 12.1's search, asked for the control below a tab header, answers the header beside it on the same
+row, and alternates between two headers for as long as it is asked.
+
+**Dropdowns.** Accept opens one; up and down then move the highlight, which moves the focus and not the choice;
+accept chooses; back closes without choosing. Previously up and down set the choice at every step, so passing over
+"RetroArch Preset..." on the way to another entry opened the preset picker.
+
+**Checkboxes in a table.** Accept on a row of a `LunaTable` whose row holds a checkbox ticks it, through the
+checkbox, so the table's own write-through runs (the cheat list, §4.45.5).
+
+**The audit.** WiseMan's `PadAudit.Reachable` presses every direction from every control reached, starting where the
+sheet puts the focus, on every tab, and lists the controls a player could operate (buttons, switches, dropdowns,
+sliders, text boxes, list rows and the selected tab) that no press reached. It found, before the fixes above: in
+Preferences, the Close button, below the edge of a sheet shorter than the window, because the window stacked its tabs
+over a Close button with no scrolling (the panes now scroll, and the buttons are docked); on System Files, which has
+nothing to focus, no way down from the tab strip at all; and in every tabbed window, a walk that changed the selected
+tab. `PadAudit.Reach` finds a pad path to a named control and walks it with the pad alone, which is how the operating
+cases below get to each control.
+
+**What each window's case operates.** Graphics: a dropdown stepped left and right with the stored value checked, opened,
+moved and chosen, opened, moved and backed out of; a switch; Reset This Console; the tabs. Preferences: a switch and a
+dropdown on another tab. Controller Bindings: the slider, a switch, a pad rebind, and a key rebind backed out of
+(§4.45.4). Each leaves with B.
+
+**Mutants.** Five were made against the router and the window: dropping the tab-strip rule (four cases fail),
+dropping the scrolling-area search (one), the game keeping its keys under a sheet (two), a sheet not pausing (three),
+and never letting a list go at its edge, **which survived**: no window in this section has a list. It is caught by
+the cheat list's case in §4.45.5.
+
+**What it does not cover.** The system file pickers (Browse... beside a path, Save As... and Load From... in the
+cheat window) are reached and pressed but open the platform's dialog, which in Game Mode is drawn by another process
+and, on the reading of §4.45.2, never shown. A path can be typed instead (§4.45.6).
+
+#### 4.45.4 Rebinding from the pad
+
+Two defects made the Controller Bindings window unusable with a pad alone, and neither was visible with a mouse.
+
+- **Rebind Pad bound the button that pressed it.** The capture polls for the first held button every 50 ms, and the
+  A that chose Rebind Pad was still held at the first poll, so it was bound. The capture now waits for every button to
+  be let go before it listens, and after binding waits again until the bound button is let go before the pad is the
+  interface's, or binding A would press Rebind Pad a second time. A capture no one answers gives up after five
+  seconds, because every button it could be cancelled with is a button it could bind.
+- **Rebind Key heard the pad.** The router synthesises keys, and the capture's tunnel handler took the first one (the
+  Tab of a d-pad press, in §4.29's router) as the binding. The window now says what it is capturing through
+  `IPadCapturing`; the router stands aside entirely while a pad button is captured, and while a key is captured
+  passes only B, which cancels it.
+
+The key capture's handler was on the window, and a window on a sheet does not see keys typed on its content
+(`LunaP.md` §90.6), so it moved to the window's content. Tests: the rebind case holds A through the first poll and
+asserts nothing was bound (a mutant that listens at once fails it), binds North, and checks the pad stays the
+window's until North is let go; `A_pad_capture_nobody_answers_gives_up` holds the timeout.
+

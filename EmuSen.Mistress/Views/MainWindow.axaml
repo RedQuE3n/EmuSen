@@ -164,6 +164,9 @@
                     </DockPanel>
                 </Border>
             </Border>
+
+            <!-- Game Mode's settings and cheats, drawn here rather than as windows of their own - see EmuSen_Settings_Reference.md §4.45.2. -->
+            <luna:SheetLayer x:Name="Sheets" />
         </Grid>
 
     </DockPanel>

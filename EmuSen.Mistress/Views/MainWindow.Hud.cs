@@ -100,7 +100,7 @@ namespace EmuSen.Mistress.Views
             {
                 if (!_pausedInBackground) return;
                 _pausedInBackground = false;
-                if (GameFrame.IsVisible && IsPaused && !PadMenuPanel.IsVisible) ResumeEmulation();
+                if (GameFrame.IsVisible && IsPaused && !PadMenuPanel.IsVisible && !Sheets.IsPresenting) ResumeEmulation();
             };
         }
 

@@ -113,7 +113,7 @@ namespace EmuSen.Mistress.Views
                         current.StartsWith(SlangPrefix, StringComparison.Ordinal) ? current[SlangPrefix.Length..] : null,
                         preset => Changed(console, ScreenFilterKey, SlangPrefix + preset), console);
                     PresetPicker.Closed += (_, _) => FillFilter();
-                    PresetPicker.Show(this);
+                    _ = SheetLayer.Show(PresetPicker, this);
                 }
                 else if (!value.StartsWith("RetroArch: ", StringComparison.Ordinal)) Changed(console, ScreenFilterKey, value);
             };

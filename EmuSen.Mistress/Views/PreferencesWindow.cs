@@ -103,7 +103,10 @@ namespace EmuSen.Mistress.Views
                 }));
             tabs.Add("System Files", Pane(SystemFiles()));
 
-            Content = Ui.Stack(12, tabs, Ui.Buttons(Ui.Button("Close", Close))).Margin(16);
+            // A dock and scrolling panes, so a sheet shorter than the window still shows Close - see EmuSen_Settings_Reference.md §4.45.3.
+            Control buttons = Ui.Buttons(Ui.Button("Close", Close)).Margin(0, 12, 0, 0);
+            DockPanel.SetDock(buttons, Dock.Bottom);
+            Content = new DockPanel { LastChildFill = true, Children = { buttons, tabs } }.Margin(16);
 
             _onlineCovers.IsChecked = _settings.OnlineCovers;
             _onlineCovers.IsCheckedChanged += (_, _) => { _settings.OnlineCovers = _onlineCovers.IsChecked == true; _settings.Save(); };
@@ -125,7 +128,7 @@ namespace EmuSen.Mistress.Views
             _theme.Chose += ChoseTheme;
         }
 
-        private static Control Pane(params Control[] rows) => Ui.Stack(12, rows).Margin(4, 12, 4, 4);
+        private static Control Pane(params Control[] rows) => new ScrollViewer { Content = Ui.Stack(12, rows).Margin(4, 12, 4, 4) };
 
         // Nothing to install here: a game that needs a chip's dump asks for it the first time it starts - see EmuSen_Firmware.md §3.
         private static Control SystemFiles()

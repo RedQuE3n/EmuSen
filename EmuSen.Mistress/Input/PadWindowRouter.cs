@@ -1,59 +1,182 @@
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
+using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Mistress.Input
 {
-    // A pad driving a window that was built for a keyboard: every command becomes the keys that already do it - see EmuSen_Settings_Reference.md §4.29.
+    // What a window is listening for while it rebinds a control; the pad router stands aside for it - see EmuSen_Settings_Reference.md §4.45.4.
+    public enum PadCapture { None, Key, PadButton }
+
+    // A window that captures a key or a pad button, and can be told to stop.
+    public interface IPadCapturing
+    {
+        PadCapture Capturing { get; }
+        void CancelCapture();
+    }
+
+    // A pad driving a window built for a keyboard and a pointer: focus moves by position, and each control is operated the way its own keys would - see EmuSen_Settings_Reference.md §4.29 and §4.45.3.
     public static class PadWindowRouter
     {
         public static void Send(Window window, UiButton button)
         {
-            var focused = window.FocusManager?.GetFocusedElement() as InputElement;
-            bool inList = focused is ListBoxItem || focused is ListBox || (focused as Visual)?.FindAncestorOfType<ListBox>() is not null;
-            ComboBox? open = window.GetVisualDescendants().OfType<ComboBox>().FirstOrDefault(c => c.IsDropDownOpen);
-            var tabs = window.GetVisualDescendants().OfType<TabControl>().FirstOrDefault();
+            Control root = RootOf(window);
+            TopLevel? top = TopLevel.GetTopLevel(root);
+            var focused = top?.FocusManager?.GetFocusedElement() as InputElement;
+            ComboBox? open = root.GetVisualDescendants().OfType<ComboBox>().FirstOrDefault(c => c.IsDropDownOpen);
+
+            if (window is IPadCapturing capturing && capturing.Capturing != PadCapture.None)
+            {
+                if (capturing.Capturing == PadCapture.Key && button == UiButton.Back) capturing.CancelCapture();
+                return;
+            }
+
+            // Focus left under the sheet, or nowhere, starts again at the window's first control.
+            if (open is null && (focused is not Visual at || !IsWithin(at, root)))
+            {
+                FocusFirst(root);
+                if (button is UiButton.Up or UiButton.Down or UiButton.Left or UiButton.Right) return;
+                focused = top?.FocusManager?.GetFocusedElement() as InputElement;
+            }
 
             switch (button)
             {
                 case UiButton.Up:
                 case UiButton.Down:
+                {
                     bool down = button == UiButton.Down;
-                    if (open is not null) { Step(open, down ? 1 : -1); return; }
-                    if (inList && focused is not ComboBox) { Key(window, focused, down ? Avalonia.Input.Key.Down : Avalonia.Input.Key.Up); return; }
-                    Key(window, focused, Avalonia.Input.Key.Tab, down ? KeyModifiers.None : KeyModifiers.Shift);
+                    if (open is not null) { Key(focused ?? open, down ? Avalonia.Input.Key.Down : Avalonia.Input.Key.Up); return; }
+                    if (focused is ListBoxItem row && row.FindAncestorOfType<ListBox>() is { } list && !AtEdge(list, row, down))
+                    {
+                        Key(row, down ? Avalonia.Input.Key.Down : Avalonia.Input.Key.Up);
+                        return;
+                    }
+                    Move(root, focused, down ? NavigationDirection.Down : NavigationDirection.Up);
                     return;
+                }
 
                 case UiButton.Left:
                 case UiButton.Right:
-                    if (focused is ComboBox combo && !combo.IsDropDownOpen) { Step(combo, button == UiButton.Right ? 1 : -1); return; }
-                    Key(window, focused, button == UiButton.Right ? Avalonia.Input.Key.Right : Avalonia.Input.Key.Left);
+                {
+                    int by = button == UiButton.Right ? 1 : -1;
+                    if (open is not null) return;
+                    if (focused is ComboBox combo) { Step(combo, by); return; }
+                    if (focused is Slider slider) { Key(slider, by > 0 ? Avalonia.Input.Key.Right : Avalonia.Input.Key.Left); return; }
+                    if (focused is TabItem tab && tab.FindAncestorOfType<TabControl>() is { } strip) { StepTab(strip, by, focusHeader: true); return; }
+                    Move(root, focused, by > 0 ? NavigationDirection.Right : NavigationDirection.Left);
                     return;
+                }
 
                 case UiButton.PageUp:
                 case UiButton.PageDown:
-                    if (tabs is not null && tabs.ItemCount > 0)
-                        tabs.SelectedIndex = (tabs.SelectedIndex + (button == UiButton.PageDown ? 1 : tabs.ItemCount - 1)) % tabs.ItemCount;
+                {
+                    TabControl? tabs = (focused as Visual)?.FindAncestorOfType<TabControl>(includeSelf: true)
+                        ?? root.GetVisualDescendants().OfType<TabControl>().FirstOrDefault();
+                    if (open is null && tabs is not null) StepTab(tabs, button == UiButton.PageDown ? 1 : -1, focusHeader: false);
                     return;
+                }
 
                 case UiButton.Accept:
+                    if (open is not null) { Key(focused ?? open, Avalonia.Input.Key.Enter); if (open.IsDropDownOpen) Close(open); return; }
                     if (focused is TextBox) { SteamKeyboard.Show(); return; }
-                    if (open is not null) { open.IsDropDownOpen = false; open.Focus(); return; }
                     if (focused is ComboBox closed) { closed.IsDropDownOpen = true; return; }
+                    if (focused is TabItem header) { header.IsSelected = true; return; }
                     if (focused is ToggleButton toggle) { toggle.IsChecked = toggle.IsChecked != true; return; }
                     if (focused is Button pressed) { pressed.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); return; }
-                    Key(window, focused, Avalonia.Input.Key.Enter);
+                    if (focused is ListBoxItem item && item.GetVisualDescendants().OfType<ToggleButton>().FirstOrDefault(t => t.IsEffectivelyEnabled) is { } tick)
+                    {
+                        tick.IsChecked = tick.IsChecked != true;
+                        return;
+                    }
+                    if (focused is not null) Key(focused, Avalonia.Input.Key.Enter);
                     return;
 
                 case UiButton.Back:
-                    if (open is not null) { open.IsDropDownOpen = false; open.Focus(); return; }
+                    if (open is not null) { Close(open); return; }
                     window.Close();
                     return;
             }
+        }
+
+        // The sheet a presented window is drawn on, else the window itself.
+        public static Control RootOf(Window window) => SheetLayer.PresenterOf(window)?.SheetOf(window) ?? window;
+
+        private static bool IsWithin(Visual visual, Control root) =>
+            ReferenceEquals(visual, root) || visual.GetVisualAncestors().Contains(root);
+
+        private static void FocusFirst(Control root)
+        {
+            InputElement? first = root.GetVisualDescendants().OfType<InputElement>()
+                .FirstOrDefault(e => e.Focusable && e.IsEffectivelyEnabled && e.IsEffectivelyVisible && e is not ScrollViewer);
+            first?.Focus(NavigationMethod.Directional);
+        }
+
+        private static bool AtEdge(ListBox list, ListBoxItem row, bool down)
+        {
+            int index = list.IndexFromContainer(row);
+            return down ? index >= list.ItemCount - 1 : index <= 0;
+        }
+
+        // By position, nearest scrolling area first, so a control scrolled out of view is reached before one beyond the area - see §4.45.3.
+        private static void Move(Control root, InputElement? from, NavigationDirection direction)
+        {
+            if (TopLevel.GetTopLevel(root)?.FocusManager is not { } focus || from is null) return;
+
+            // Down from a tab header goes into its page; Avalonia 12.1's search answers a header beside it on the same row - §4.45.3.
+            if (from is TabItem && direction == NavigationDirection.Down && from.FindAncestorOfType<TabControl>() is { } strip && PageHost(strip) is { } page)
+            {
+                (FirstIn(page) ?? Next(focus, page, root, direction))?.Focus(NavigationMethod.Directional);
+                return;
+            }
+
+            for (Visual? scope = (from as Visual)?.FindAncestorOfType<ScrollViewer>(); scope is not null && IsWithin(scope, root);
+                 scope = scope.FindAncestorOfType<ScrollViewer>())
+            {
+                if (Next(focus, from, (InputElement)scope, direction) is { } inside) { inside.Focus(NavigationMethod.Directional); return; }
+            }
+
+            Next(focus, from, root, direction)?.Focus(NavigationMethod.Directional);
+        }
+
+        // A tab strip is entered at its selected tab, since focusing another would select it - L1 and R1 are what change tabs.
+        private static InputElement? Next(IFocusManager focus, InputElement from, InputElement scope, NavigationDirection direction)
+        {
+            InputElement? next = null;
+            InputElement at = from;
+            for (int tries = 0; next is null; tries++)
+            {
+                if (tries == 16) return null;
+                if (focus.FindNextElement(direction, new FindNextElementOptions { SearchRoot = scope, FocusedElement = at }) is not InputElement found
+                    || ReferenceEquals(found, at) || !IsWithin(found, (Control)scope)) return null;
+
+                // A scrolling area is entered at the control it holds nearest the way the pad moved, or passed over when it holds none.
+                if (found is ScrollViewer area)
+                {
+                    next = focus.FindNextElement(direction, new FindNextElementOptions { SearchRoot = area, FocusedElement = from }) as InputElement;
+                    if (next is not null && (next is ScrollViewer || !IsWithin(next, area))) next = null;
+                    at = area;
+                    continue;
+                }
+
+                // Another header of the strip the focus is already on is passed over; the strip is one stop.
+                if (found is TabItem { IsSelected: false } && from is TabItem && ReferenceEquals(found.GetVisualParent(), from.GetVisualParent()))
+                {
+                    at = found;
+                    continue;
+                }
+
+                next = found;
+            }
+
+            if (next is TabItem { IsSelected: false } other && other.FindAncestorOfType<TabControl>() is { } tabs
+                && tabs.ContainerFromIndex(tabs.SelectedIndex) is TabItem selected)
+                return ReferenceEquals(selected, from) ? null : selected;
+            return next;
         }
 
         // A dropdown moved by one without being opened, which also commits it, as the arrow keys do on a closed one.
@@ -63,9 +186,39 @@ namespace EmuSen.Mistress.Input
             combo.SelectedIndex = System.Math.Clamp(combo.SelectedIndex + by, 0, combo.ItemCount - 1);
         }
 
-        private static void Key(Window window, InputElement? focused, Key key, KeyModifiers modifiers = KeyModifiers.None)
+        // Closed without choosing: the highlight moved the focus, never the selection.
+        private static void Close(ComboBox open)
         {
-            InputElement target = focused ?? window;
+            open.IsDropDownOpen = false;
+            open.Focus(NavigationMethod.Directional);
+        }
+
+        // The next tab, wrapping; the focus goes to its header from the strip, else into its page.
+        private static void StepTab(TabControl tabs, int by, bool focusHeader)
+        {
+            int count = tabs.ItemCount;
+            if (count == 0) return;
+            tabs.SelectedIndex = (tabs.SelectedIndex + by + count) % count;
+            TopLevel.GetTopLevel(tabs)?.UpdateLayout();
+
+            if (focusHeader && tabs.ContainerFromIndex(tabs.SelectedIndex) is InputElement header) { header.Focus(NavigationMethod.Directional); return; }
+
+            InputElement? first = PageHost(tabs) is { } page ? FirstIn(page) : null;
+            (first ?? tabs.ContainerFromIndex(tabs.SelectedIndex) as InputElement)?.Focus(NavigationMethod.Directional);
+        }
+
+        private static ContentPresenter? PageHost(TabControl tabs) =>
+            tabs.GetVisualDescendants().OfType<ContentPresenter>().FirstOrDefault(p => p.Name == "PART_SelectedContentHost");
+
+        // The control nearest the top left of a page, as a sheet starts.
+        private static InputElement? FirstIn(Control page) =>
+            page.GetVisualDescendants().OfType<InputElement>()
+                .Where(e => e.Focusable && e.IsEffectivelyEnabled && e.IsEffectivelyVisible && e is not ScrollViewer)
+                .OrderBy(e => System.Math.Round(e.TranslatePoint(default, page)?.Y ?? 0)).ThenBy(e => e.TranslatePoint(default, page)?.X ?? 0)
+                .FirstOrDefault();
+
+        private static void Key(InputElement target, Key key, KeyModifiers modifiers = KeyModifiers.None)
+        {
             target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key, KeyModifiers = modifiers, Source = target });
             target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = key, KeyModifiers = modifiers, Source = target });
         }

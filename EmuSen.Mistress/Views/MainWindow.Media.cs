@@ -105,7 +105,7 @@ namespace EmuSen.Mistress.Views
             if (MediaGrid.Selected is not MediaItem item) return;
             if (item.Kind == MediaKind.Screenshot)
             {
-                new ScreenshotWindow(item.Path, $"{item.Title}, {item.Label}").Show(this);
+                _ = EmuSen.LunaP.Windowing.SheetLayer.Show(new ScreenshotWindow(item.Path, $"{item.Title}, {item.Label}"), this);
                 return;
             }
             if (item.Game is not RomEntry game)

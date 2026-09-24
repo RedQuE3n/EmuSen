@@ -5090,7 +5090,8 @@ into the leading worker's stream, as a command the ring carries, so that the mac
 it captures at one. Its ceiling on the title is the join's 3.7 ms a frame less what the processor's depth reads would
 then wait for, 1.8 ms at one and more with the device shading beside them: under 2 ms a frame. On the processor at a
 multiple: a verifier of the shadow's writes against the 1× boxes scaled, which would let the narrowed capture be kept
-there, and the 2.5 ms a frame with it.
+there, and the 2.5 ms a frame with it. *The device's lever is built in §6.15 (2026-09-24): the title at two on the device
+fell by 1.46 ms a frame, its site-8 wait and join to nothing.*
 
 ##### 6.14.9 What is not done
 
@@ -5098,6 +5099,7 @@ there, and the 2.5 ms a frame with it.
   the depth image first, which would change raster order, could shorten them.
 - **The multiple** (§6.14.8): the device's join at every scan, under 2 ms a frame on the title, and the capture kept
   whole on the processor at a multiple, 2.5 ms a frame on the title, each priced with the design change it needs.
+  *The first is built in §6.15.*
 - **The remaining site-3 waits**, 0.2 to 0.3 ms a frame on the title: the end of a load's range keeps thirty-two bytes
   of slack, and a writer still waits for the page's mark rather than the last range that reaches it.
 - **The unthreaded path's residual** (§6.14.1): the RDP's checks, 1.5 to 2 per cent of Super Mario 64's unthreaded
@@ -5113,3 +5115,208 @@ there, and the 2.5 ms a frame with it.
   this desktop's; and at 2× with the device, `… scale=2 gpu trace=<file>`: every light field's present should wait
   about as long as the drain takes over the list, at site 8 with this section's build, and the frame should be the
   base's, since §6.14.8 left that path as it was.
+
+#### 6.15 The scan-out on the drain's leader, at a multiple on the device (2026-09-24)
+
+§6.14.8 found that at a multiple with the device the emulation thread waits, every other field, for the whole display
+list before the scan-out, and priced the lever that would remove the wait: the scan-out ordered into the leading
+worker's stream. This section builds it. The wait had two faces. With the capture narrowed at the multiple it was a
+join (`DpInterface::scan_out`, `scan_into_raster` and `read_back_scaled` each joined the drain before touching the
+device): 7.45 ms at the median of a light field on this desktop. With the capture kept whole, as 093d7dd left it, the
+same wait appeared at site 8 instead, and that is the form the handheld showed (`examples/threads … split 4 blocks
+scale=2 gpu`, 15.62 to 15.79 ms a frame, 4.27 to 4.32 ms a frame waited, nearly all at site 8, joins 0.006 ms). A fix
+has to remove the wait in whichever form it takes, so both counters are reported below.
+
+**The claim.** At a multiple on the device, with the list on workers, the emulation thread no longer waits for the list
+to reach the scan-out; the picture, the state and the sound are unchanged, deferred and at once, against the processor
+at the same multiple and against the C# core; the rules of §6.4, the lending of §6.13 and the consistency of states,
+snapshots, setting changes and observed frames hold as before.
+
+##### 6.15.1 The design
+
+*Where the device work runs.* `scan_out` and `scan_into_raster` no longer join the drain. With a drain running they hand
+the work (`DeviceWork`, the scan's parameters, or the raster's size, seed, spans and walk) to the leading worker
+through a ring of eight slots, each tagged with `issued`, the count of words handed over when the scan was asked for.
+The leader, between words, runs every piece whose tag its own count has reached (`serve_device`), in the order handed
+over. Two facts make that the scan at once: with a device only the leader's processor at the multiple records rows for
+it (Mars_Gpu.md §11), so the leader having passed word *n* means every row drawn by words before *n* has been recorded;
+and the leader runs no word past *n* until the scan is submitted, so nothing drawn after the scan was asked for reaches
+it. The scan thus lands on the device exactly where it landed when the machine's thread joined and submitted it, and
+the device's command stream is the unthreaded path's. Without a drain the scan is submitted at once, as before.
+
+*The hand-over* is two counts, `device_tail` (the machine's thread, SeqCst) and `device_head` (the leader, Release), and
+the slot between them is written only by the machine's thread before the tail passes it and taken only by the leader
+before the head passes it. The ring's depth, eight, is not a bound that binds: a present hands over one piece, two at
+most, and the next present joins the presenter first; a ninth would wait for a slot.
+
+*Where synchronisation now happens.* Four places wait for the leader's device work, and nothing else touches the device
+while it is owed:
+
+- **A reader of the picture**, the presenter or the machine's thread in an immediate scan, waits in `Pictures` until
+  every piece asked for has been submitted (`asked` counted on the machine's thread, `submitted` on the leader's, a
+  condition variable only to sleep on), and only then on the fence, as §14.2 of Mars_Gpu.md has it. So the order is
+  submission before fence before read; each of the two has its mutant (§6.15.3).
+- **`join`**, and so `read_back_scaled`, a state read (§6.4.2 moves the device into the new machine only after it) and
+  the host's memory access, waits for the device work as well as the words.
+- **`stop`**, which every setting change of the multiple, the device, the worker count or the threads goes through,
+  runs the device work before the drain ends, and **a drain's end** runs it too unless a worker has faulted; a fault
+  abandons it (`Pictures::abandon`) so that no reader waits for a scan that will never be submitted, and the fault is
+  raised where it always was.
+- **The presenter's join** at the next present, which is where the wait the machine's thread no longer makes on the list
+  goes, if the list is still running then.
+
+A state save and a snapshot need nothing new: the device is `[SkipInState]` (§6.4.1), a save waits for the words as
+before (`wait_all`) and a snapshot holds the workers where they stand (§5.6.4). The leader may run a scan while held,
+which touches nothing a state holds.
+
+*The capture on the device.* With the scan ordered on the leader, the capture no longer has to hold the whole reach: the
+device walks its own memory and no shadow is copied, so the only bytes the capture reads are the ones the walk at one
+reads, and `capture_range` narrows the device's capture at a multiple exactly as at one (§6.14.3). The processor at a
+multiple keeps C#'s reach and coarse wait, for §6.14.8's reason, which is unchanged.
+
+*Two small changes that follow.* `publish_raster` no longer asks the device whether it already holds a raster of the
+size (the device may be the leader's at that moment); it sends the seed whenever the host's raster could seed, and the
+device takes it only when it has no raster of that size, which is the decision the machine's thread used to make.
+And the device's pictures are kept beside the device (`ScaledDrawing::pictures`), so that a scan or a presenter reaches
+them without borrowing the device.
+
+**What this departs from.** `Mars_Gpu.md` §13.2 and §14.2 say the scan-out is submitted on the machine's thread after
+a join; that is still the C# core's rule, and MarsRT now departs from it. C#'s `DpInterface.ScanOut` still joins.
+
+##### 6.15.2 The evidence
+
+- *The crate's device tests* (`tests/gpu.rs`, 21): the earlier scan tests run again on a drain of three, the scan
+  run by the leader: the scan-out byte for byte against the processor over thirteen VI modes at two, three and four,
+  deferred and at once; the average scan after scan; a walk left pending; a repeated capture; the device after a state
+  read. Five new tests hold the ordering itself: `the_leader_runs_a_scan_after_the_words_handed_before_it_and_before_those_handed_after`
+  (the words before the scan and after it handed over while the workers stand, the scan asked for between, and the
+  picture the scan at once shows: a rectangle drawn by the last word before the scan and not one drawn by the first
+  after it); `a_picture_read_before_the_leader_has_run_its_scan_waits_for_the_scan` (the leader held short of its
+  device work for 50 ms while the picture is read, at once, deferred and averaged); `a_drain_stopped_while_its_leader_owes_a_scan_runs_the_scan_first`
+  (threads off, the worker count changed, or a state read, while the leader is held for 100 ms);
+  `a_read_back_straight_after_a_scan_waits_for_the_leader_s_scan`; and `a_join_waits_for_the_scans_handed_to_the_leader`,
+  which reads the device's own count of scans after a join made while the leader is held.
+- *Site 8 on the device* (`tests/sites.rs`, 21): the device's capture at two still waits for a draw on the last line
+  the walk at one reads, and goes ahead of one below it where the base's coarse wait would have waited, with the page
+  asserted marked and the picture the list at once leaves.
+- *The game comparisons* (`tests/games.rs`): the seven games at two and at four on the device, deferred and now also at
+  once, split on four workers against the processor at once at the multiple; the device averaged; and the processor
+  at the multiple split and deferred: 63 comparisons of 300 frames, identical in state, picture and sound, Donkey Kong
+  64's title among them.
+- *Against C#, in WiseMan*: `MarsRT_at_a_multiple_leaves_what_the_csharp_core_at_that_multiple_leaves`, the 27 cases
+  (three games, nine settings of multiple, antialiasing and device, each deferred and at once), all exact. The rewind
+  suites (§6.6.3) now run each game at one and again at two on the device: 16 of 16 pass, 882 states compared at
+  interval one per game, every landing's picture a load's, no freeze in 600 operations. The frontend suites (Mistress's
+  hand-off, the frame control, the lending, MarsRT's frontend), 36 tests, pass, with a new one holding a frame through
+  60 frames of Super Mario 64 at two on the device, deferred on four workers, while the others are returned and lent
+  again.
+- The crate's `cargo test --release`, 483 tests, passes, and passes with every driver hidden from the loader
+  (`VK_LOADER_DRIVERS_DISABLE='*'`), where the device tests stand down. Clippy on all targets reports one warning,
+  `chunks_exact_to_as_chunks` in `ffi/mod.rs`, which this change does not touch.
+- *ThreadSanitizer*, §5.6.7's recipe, over the device, site, thread and scan tests: 19 reports outside libtest's
+  channel, none in the hand-over, the leader's service, `Pictures` or the drain; they are the loader's and driver's
+  allocations (`free` and `pthread_mutex_lock` under `GpuDevice::try_create`, uninstrumented) and the `OnceLock`s of
+  §6.14.5. *The positive control*: the tail stored Relaxed, so that the slot's write is not ordered before the leader's
+  read, gives 90 reports, about 65 of them on the slot (`device_due`, the `DeviceWork` taken and dropped).
+- *The validation layer*, with `VK_LAYER_SYNCVAL_SHADER_ACCESSES_HEURISTIC=1` (Mars_Gpu.md §14.4): the device tests
+  and Donkey Kong 64's device comparisons, 60 frames each, report nothing. *The positive control*, the barrier after
+  every dispatch removed, is reported: 54 hazards over the device tests and 2 over the game. The log file the layer
+  writes held nothing for the device tests even with the control, which opens many instances in one process, so those
+  runs were read from the layer's standard output instead, which the test harness does not capture.
+
+##### 6.15.3 Mutants
+
+Each applied alone, built, and run against the named suites, the source restored (`mutants.py` in
+`~/.cache/emusen/probe/marsrt-gpu-join/`):
+
+| Mutant | Caught by |
+| --- | --- |
+| the leader runs a scan one word early, before the last draw handed before it | `the_leader_runs_a_scan_after_the_words_handed_before_it_and_before_those_handed_after` |
+| the leader runs a scan one word late, after the first word handed after it | the same |
+| a picture read without waiting for the leader to submit it | seven device tests |
+| a picture read before the fence (the image read before the device has finished it) | six device tests |
+| a stop that does not run the leader's device work | `a_drain_stopped_while_its_leader_owes_a_scan_runs_the_scan_first` |
+| a join that does not wait for the leader's device work | `a_join_waits_for_the_scans_handed_to_the_leader` |
+| the device's capture at a multiple waits for nothing | `site_8_on_the_device_the_capture_waits_for_a_draw_on_the_last_line_the_walk_reads` |
+| the device's capture at a multiple keeps C#'s reach (the base's) | `site_8_on_the_device_the_capture_goes_ahead_of_a_draw_below_the_lines_the_walk_reads` |
+| a snapshot (a rewind step, a state save while the workers run) that does not hold the workers | the device game comparison, Donkey Kong 64's title |
+| the lending hands out an array it has just lent (`FrameBufferLending`) | the new device lending test, and §6.13's |
+| a barrier that waits for a worker gone home at a stop (§6.15.4's defect) | `a_machine_dropped_while_its_workers_wait_at_barriers_ends` |
+
+All eleven were caught. *What the pattern says.* The join's mutant survived the first version of the tests: no path a
+game takes touches the device after a join without also passing a stop, whose own wait covered it, and a read-back
+straight after a scan, under ThreadSanitizer, showed nothing either, since the driver's own locks, which TSan sees
+through its interceptors, order the two threads' device calls whether or not the join waited. It is caught only by a
+test that asks the device's own count after the join, which is an instrument of the claim, not of a game.
+
+##### 6.15.4 A defect found on the way: a machine dropped at a barrier never ended
+
+The WiseMan rewind suite hung on its first run after the change, for half an hour, with two RDP workers each at a whole
+core and the machine's thread in `Threads::end`, joining them: a core disposed while its drain was mid-list.
+`Threads::drop` ends the drain without waiting for the words, and a worker that sees the stop at the top of its loop
+leaves, while those already waiting at a barrier (`Step::Leader`, `All`, `AllJoined`, §5.6.6) wait for it for good.
+`a_machine_dropped_while_its_workers_wait_at_barriers_ends` (forty drops of a split machine part way through 3,000
+image changes, under a deadline) fails the same way on a39a73d, unmodified, so the defect is older than this work; the
+change only made it likelier, since the drain's end now runs the device work first and so keeps the workers moving
+through barriers when the stop comes. A barrier now sends its waiters home at a stop, and they run nothing more, which
+is all a dropped machine needs. A stop that is not a drop waits for every word first and never meets the case.
+
+##### 6.15.5 Speed, and the prediction's fate
+
+*The prediction, stated before the rounds* (the brief's, and §6.14.8's ceiling): Donkey Kong 64's title at two on the
+device falls by 1.5 to 2 ms a frame, the join or site-8 wait going to nearly nothing and about 2 ms reappearing at the
+processor's depth reads (site 2), as at one; the other six states, and every state at one, stay within their spreads.
+
+*The measurement.* `examples/threads <rom> <state> 600 split 4 blocks [scale=2 gpu]`, a39a73d's crate against this
+section's, three rounds interleaved with the order rotated, under the bench lock at a load below three; every pair of
+builds gave the same state hash (ms a frame, range and median; the waits per frame):
+
+| | before | after | waits before | waits after |
+| --- | --- | --- | --- | --- |
+| **Donkey Kong 64, title, 2× device** | 13.20–13.42 (13.23) | **11.74–11.90 (11.77)** | 8: 3.80–3.86; joins 0.008 | 2: 2.29–2.30, 3: 0.26, 8: 0.16; joins 0 |
+| Donkey Kong 64, title, 1× | 10.79–10.93 (10.84) | 10.72–10.99 (10.78) | 2: 1.69–1.76, 3: 0.17 | the same |
+| Super Mario 64, 2× device | 5.30–5.34 (5.33) | 5.29–5.47 (5.36) | 8: 0.44–0.86; joins 0.22–0.43 | 8: 0.87–0.91; joins 0 |
+| Super Mario 64, 1× | 3.46–3.58 (3.50) | 3.47–3.58 (3.51) | 8: 0.36 | 8: 0.33–0.36 |
+| Ocarina of Time, 2× device | 5.43–5.54 (5.44) | 5.41–5.55 (5.43) | 2: 0.13–0.32, 11: 0.08–0.22 | 2: 0.31–0.33, 11: 0.25–0.26 |
+| Ocarina of Time, 1× | 4.48–4.55 (4.50) | 4.42–4.46 (4.44) | 2: 0.13, 11: 0.18 | the same |
+| GoldenEye, the Dam, 2× device | 10.70–10.82 (10.78) | 10.65–10.74 (10.69) | 8: 0.07; joins 0.09 | 8: 0.05; joins 0 |
+| GoldenEye, the Dam, 1× | 9.55–9.70 (9.56) | 9.58–9.71 (9.61) | none | none |
+| Super Mario 64 from power-on, 2× device | 3.64–3.76 (3.76) | 3.65–3.72 (3.67) | 8: 0.25–0.27; joins 0.13 | 8: 0.23–0.28; joins 0 |
+| Super Mario 64 from power-on, 1× | 3.01–3.06 (3.06) | 2.96–3.10 (2.98) | 8: 0.07 | 8: 0.07 |
+| Ocarina of Time from power-on, 2× device | 3.52–3.55 (3.54) | 3.46–3.52 (3.47) | 8: 0.23, 11: 0.15; joins 0.04 | 8: 0.23, 11: 0.13; joins 0 |
+| Ocarina of Time from power-on, 1× | 3.01–3.12 (3.04) | 3.03–3.22 (3.15) | 8: 0.15, 11: 0.12 | the same |
+| GoldenEye from power-on, 2× device | 2.68–2.69 (2.68) | 2.60–2.62 (2.61) | joins 0.007 | none |
+| GoldenEye from power-on, 1× | 2.61–2.71 (2.61) | 2.60–2.73 (2.68) | none | none |
+
+On the desktop the base now shows the handheld's form, the wait at site 8 (3.8 ms a frame) and not the join, since
+093d7dd restored C#'s capture at the multiple after §6.14.8's join was measured. One traced run each (600 frames, the
+first twenty left out) says where the frame went: the light fields' present fell from 8.45 ms at the median (7.77 of it
+at site 8) to 0.38, and the heavy fields' emulation rose from 17.6 to 22.6 ms, since the list now runs beside the heavy
+field and the processor's depth reads there wait for the draws that hold them (site 2), which is §6.14.4's necessary
+wait. The leader spends 0.29 to 0.32 ms a frame running the scans.
+
+*The prediction's fate.* **The title fell by 1.46 ms at the median** (13.23 to 11.77), the ranges apart, at the bottom of
+the predicted range and just under it. The waits moved as predicted: site 8 from 3.8 to 0.16 ms a frame, the joins to
+none, and 2.3 ms reappearing at site 2 and 0.26 at site 3, a little more than at one (1.7), as §6.14.8 said it would be
+with the device shading beside the depth reads. The other states are within their spreads at one and at two, or a
+little faster where the base joined (GoldenEye and Ocarina of Time from power-on, 0.07 ms). *What the prediction did
+not say:* on the other games the wait the emulation thread no longer makes on the list reappears as the presenter's
+join at the next present (Super Mario 64 at two: 0.76 to 1.49 ms a frame; the Dam 0.53 to 0.90), because the presenter
+now waits for the leader's submission, and the frame is unmoved: those games' lists end well within the next field.
+Donkey Kong 64's does not wait there (0.05 ms), since its heavy field is longer than its list.
+
+##### 6.15.6 What is not done
+
+- **The handheld.** Not measured here, by instruction. What to measure, with the prediction for each:
+  `examples/threads dk64-us.v64 dk64-us-title.state 600 split 4 blocks scale=2 gpu` before (a39a73d) and after, three
+  rounds interleaved: the site-8 wait of 4.27 to 4.32 ms a frame goes to about 0.2, the joins stay near nothing, and
+  site 2 appears at 2.5 to 3 ms a frame (more than here, the handheld's drain being slower beside its emulation thread);
+  the frame falls by 1.3 to 1.8 ms, from 15.62–15.79 to about 14.0–14.4, under the 16.7 ms target. The `trace=` column
+  for the drain's joins should be zero in every field, and the light fields' present well under a millisecond.
+- **The depth reads.** Site 2 is now the title's whole wait at the multiple as at one (§6.14.4), and it is necessary;
+  nothing here shortens it.
+- **The C# core** still joins the drain at its scan-out (`Mars_Gpu.md` §13.2), and its capture at a multiple is
+  C#'s. The same design would apply there.
+- **The processor at a multiple** still keeps the capture whole, 2.5 ms a frame on the title (§6.14.8); its lever, a
+  verifier of the shadow's writes, is not built.
+- **Other GPU devices.** Every device test ran on the RX 6800 alone (the integrated card and llvmpipe were not asked for).

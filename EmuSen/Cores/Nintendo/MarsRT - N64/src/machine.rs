@@ -199,10 +199,7 @@ impl Machine {
 
         // The device outlives a state read, emptied as the shadow is (`ResetScaled`), rather than being opened again.
         self.bus.dp.join();
-        let old = &mut self.bus.dp.multiple.0;
-        let fresh = &mut machine.bus.dp.multiple.0;
-        (fresh.gpu, fresh.wants_gpu, fresh.scan_outs) = (old.gpu.take(), old.wants_gpu, old.scan_outs);
-        fresh.gpu_report = std::mem::take(&mut old.gpu_report);
+        machine.bus.dp.multiple.0.take_device_from(&mut self.bus.dp.multiple.0);
 
         *self = machine;
         Ok(())

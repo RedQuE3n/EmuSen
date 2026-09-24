@@ -291,6 +291,83 @@ fn site_8_the_capture_goes_ahead_of_a_draw_below_the_lines_the_walk_reads() {
     }
 }
 
+/// `picture` at two on the device, or none without one; the scan is the device's and its capture the walk's bytes at one (Mars_Native.md §6.15).
+fn on_the_device(m: &mut Machine) -> bool {
+    picture(m);
+    m.set_scale(2);
+    m.set_gpu(true);
+    m.bus.dp.multiple.can_scan_out()
+}
+
+/// Two deferred scans with nothing drawn between, the second a repeat and not walked, and the picture the first showed.
+fn scanned_twice(m: &mut Machine) -> Vec<u8> {
+    let mut out = Scanout::default();
+    scan::present_deferred(&mut m.bus, &mut out);
+    scan::present_deferred(&mut m.bus, &mut out);
+    out.join();
+    let mut seen = out.frame;
+    seen.extend_from_slice(&out.repeated_scans.to_le_bytes());
+    seen
+}
+
+/// On the device at a multiple the capture still waits for a draw on the last line the walk at one reads, so that the repeat of the next
+/// scan is decided over what the list at once leaves (Mars_Native.md §6.15).
+#[test]
+fn site_8_on_the_device_the_capture_waits_for_a_draw_on_the_last_line_the_walk_reads() {
+    if crate::rdp::gpu::GpuDevice::device_names().is_empty() {
+        return;
+    }
+    // Something drawn at the multiple already, or the scan joins the drain to learn whether anything has (Mars_Native.md §6.4.4).
+    let setup = |m: &mut Machine| {
+        assert!(on_the_device(m));
+        hand_over(m, &fill_list(), LIST);
+        m.join_rdp();
+        assert!(m.bus.dp.scaled_drawn());
+    };
+    after_a_held_list(setup, &fill_rows(10, 10), scanned_twice);
+}
+
+/// On the device at a multiple the capture goes ahead of a draw below the lines the walk at one reads, where C#'s reach and coarse wait,
+/// kept on the processor at a multiple, would wait for it; the device's scan is ordered after it by the drain's leader (Mars_Native.md §6.15).
+#[test]
+fn site_8_on_the_device_the_capture_goes_ahead_of_a_draw_below_the_lines_the_walk_reads() {
+    if crate::rdp::gpu::GpuDevice::device_names().is_empty() {
+        return;
+    }
+    let list = fill_rows(12, 20);
+    let (mut once, mut drain) = (at_once(), threaded());
+    assert!(on_the_device(&mut once) && on_the_device(&mut drain));
+    // Something drawn at the multiple already, or the scan joins the drain to learn whether anything has (Mars_Native.md §6.4.4).
+    for m in [&mut once, &mut drain] {
+        hand_over(m, &fill_list(), LIST);
+        m.join_rdp();
+        assert!(m.bus.dp.scaled_drawn());
+    }
+    hand_over(&mut once, &list, LIST);
+    drain.bus.dp.threads.as_deref().unwrap().hold();
+    hand_over(&mut drain, &list, LIST);
+    assert!(drain.bus.dp.marks.marks[((FRAMEBUFFER + 11 * WIDTH * 2 - 1) >> 12) as usize].load(Relaxed) != 0, "the capture's page is not marked, so the case was not reached");
+
+    let resume = drain.bus.dp.threads.as_deref().unwrap().resumer();
+    let watchdog = std::thread::spawn(move || {
+        std::thread::sleep(HELD);
+        resume();
+    });
+    let (mut seen, mut want) = (Scanout::default(), Scanout::default());
+    let started = Instant::now();
+    scan::present_deferred(&mut drain.bus, &mut seen);
+    let waited = started.elapsed();
+    scan::present_deferred(&mut once.bus, &mut want);
+    seen.join();
+    want.join();
+    watchdog.join().unwrap();
+
+    assert!(waited < HELD - Duration::from_millis(50), "the capture waited {waited:?} for a list that does not reach the lines the walk reads");
+    assert!(seen.frame == want.frame, "the device's picture is not the one the list at once leaves");
+    drain.join_rdp();
+    assert!(state(&once) == state(&drain), "the machines part after the list");
+}
+
 #[test]
 fn site_9_a_cheats_read_waits_for_the_draw_and_its_write_for_the_load() {
     after_a_held_list(|_| {}, &fill_list(), |m| vec![m.bus.cheat_read8(FRAMEBUFFER + 0x101)]);

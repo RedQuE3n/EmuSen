@@ -3,7 +3,7 @@
 //! The rule: between a word's publish and the join, the drain owns the processor and may touch the RDRAM bytes the word's marks name; the
 //! emulation thread touches such a byte only after an Acquire of `completed` at or past the word that last touches it (`wait`).
 
-use std::cell::Cell;
+use std::cell::{Cell, UnsafeCell};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::Ordering::{AcqRel, Acquire, Relaxed, Release, SeqCst};
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, AtomicU64, fence};
@@ -12,7 +12,7 @@ use std::thread::{self, JoinHandle, Thread};
 use std::time::Instant;
 
 use crate::memory::ram::{Detached, Ram};
-use crate::rdp::gpu::GpuRasteriser;
+use crate::rdp::gpu::{DeviceWork, GpuRasteriser, Pictures};
 use crate::rdp::{self, Rdp, RdpMemory, Step, command_id, command_length};
 
 /// `_ring.Length`: the words handed over and not yet run.
@@ -21,6 +21,8 @@ pub const RING: usize = 1 << 16;
 const RANGE_COUNT: usize = 1 << 13;
 const IDLE_RANGES: usize = 256;
 const BOX_COUNT: usize = 1 << 14;
+/// Device work outstanding at once: a present hands over two at most, and the machine waits for a slot beyond these.
+const DEVICE_SLOTS: usize = 8;
 /// Pages of the largest RDRAM, 8 MB in 4 KB.
 pub const PAGES: usize = 2048;
 /// `Idle`: an image's mark while its batch is open, everything handed over so far.
@@ -203,9 +205,17 @@ pub struct ScaledStart<'a> {
     pub scale: i32,
     /// The device the leader's processor at the multiple records for, or null; with a device there is one such processor (Mars_Gpu.md §11).
     pub gpu: *mut GpuRasteriser,
+    /// The device's pictures, whose readers wait for the work handed to the leader (Mars_Native.md §6.15).
+    pub pictures: Option<Arc<Pictures>>,
 }
 
-/// `SpinBarrier`: all arrive before any leaves, a fault lets all through, and a waiter raises a pause point to its word (Mars_Native.md §5.6.6).
+/// One piece of device work and the word the leader's count must reach first; written by the machine's thread before `device_tail`
+/// passes it, taken by the leader before `device_head` does.
+#[derive(Default)]
+struct DeviceSlot(UnsafeCell<Option<(i64, DeviceWork)>>);
+
+/// `SpinBarrier`: all arrive before any leaves, a fault lets all through, a stop sends all home, and a waiter raises a pause point to
+/// its word (Mars_Native.md §5.6.6, §6.15).
 struct Barrier {
     parties: u32,
     arrived: AtomicU32,
@@ -214,21 +224,28 @@ struct Barrier {
 }
 
 impl Barrier {
-    fn arrive(&self, shared: &Shared, word: i64) {
+    /// False when the drain is stopping, and the worker goes home without running the command, since a worker that saw the stop first
+    /// has already left and will never arrive.
+    #[must_use]
+    fn arrive(&self, shared: &Shared, word: i64) -> bool {
         let generation = self.generation.load(Acquire);
         if self.arrived.fetch_add(1, AcqRel) + 1 == self.parties {
             self.passed.fetch_add(1, Relaxed);
             self.arrived.store(0, Relaxed);
             self.generation.store(generation.wrapping_add(1), Release);
-            return;
+            return true;
         }
         let mut spins = 0;
         while self.generation.load(Acquire) == generation && !shared.faulted.load(Acquire) {
+            if shared.stopping.load(Acquire) {
+                return false;
+            }
             if shared.pause_request.load(Acquire) != 0 {
                 raise(&shared.pause_at, word);
             }
             backoff(&mut spins);
         }
+        true
     }
 }
 
@@ -268,6 +285,16 @@ pub struct Shared {
     scaled_gpu: *mut GpuRasteriser,
     /// `ScaledDrawn` over the workers: set once any processor at the multiple has drawn.
     scaled_drawn: AtomicBool,
+    /// Device work the leader runs once its count reaches each item's word: a ring the machine's thread fills to `device_tail` and the
+    /// leader empties to `device_head`, handed over by those two counts alone (Mars_Native.md §6.15).
+    device: Box<[DeviceSlot]>,
+    device_tail: AtomicU64,
+    pub device_head: AtomicU64,
+    pictures: Option<Arc<Pictures>>,
+    pub device_nanos: AtomicI64,
+    /// A test's hold on the leader short of the device work it is due to run.
+    #[cfg(test)]
+    pub hold_device: AtomicBool,
     pub drain_words: AtomicI64,
     pub drain_nanos: AtomicI64,
     pub drain_starts: AtomicI64,
@@ -591,6 +618,8 @@ pub struct Threads {
     /// The workers' processors at the multiple past the first, which is the interface's own.
     extra_scaled: Vec<Detached<Rdp>>,
     issued: i64,
+    /// Device work handed to the leader, which `device_done` meets when it has all run.
+    device_asked: u64,
     shadow_taken: i32,
     shadow_first: u64,
     color_image: u32,
@@ -695,6 +724,13 @@ impl Threads {
             scaled_hidden_len: scaled.as_ref().map_or(0, |s| s.hidden.len()),
             scaled_gpu: scaled.as_ref().map_or(std::ptr::null_mut(), |s| s.gpu),
             scaled_drawn: AtomicBool::new(drawn),
+            device: (0..DEVICE_SLOTS).map(|_| DeviceSlot::default()).collect(),
+            device_tail: AtomicU64::new(0),
+            device_head: AtomicU64::new(0),
+            pictures: scaled.as_ref().and_then(|s| s.pictures.clone()),
+            device_nanos: AtomicI64::new(0),
+            #[cfg(test)]
+            hold_device: AtomicBool::new(false),
             drain_words: AtomicI64::new(0),
             drain_nanos: AtomicI64::new(0),
             drain_starts: AtomicI64::new(0),
@@ -713,6 +749,7 @@ impl Threads {
             extra,
             extra_scaled,
             issued: 0,
+            device_asked: 0,
             shadow_taken: 0,
             shadow_first: 0,
             color_image: 0,
@@ -1348,11 +1385,53 @@ impl Threads {
         self.check_fault();
     }
 
-    /// `Join`: everything handed over has run, the leader holds each scratch field as raster order left it, and the marks and ranges are forgotten.
+    /// A scan's device work handed to the leader, to run once its count reaches the words handed over so far; the device is its from then on (Mars_Native.md §6.15).
+    pub fn hand_device(&mut self, work: DeviceWork) {
+        debug_assert!(!self.shared.scaled_gpu.is_null(), "device work for a drain with no device");
+        let tail = self.device_asked;
+        if tail - self.shared.device_head.load(Acquire) >= DEVICE_SLOTS as u64 {
+            self.kick_surely();
+            let mut spins = 0;
+            while tail - self.shared.device_head.load(Acquire) >= DEVICE_SLOTS as u64 {
+                self.check_fault();
+                backoff(&mut spins);
+            }
+        }
+        if let Some(p) = &self.shared.pictures {
+            p.ask();
+        }
+        // SAFETY: the slot is this thread's until the store below passes it, since the leader's Release of `device_head` past it was acquired above.
+        unsafe { *self.shared.device[tail as usize % DEVICE_SLOTS].0.get() = Some((self.issued, work)) };
+        self.device_asked = tail + 1;
+        self.shared.device_tail.store(tail + 1, SeqCst);
+        self.kick_surely();
+    }
+
+    /// True while device work handed to the leader has not all run.
+    fn device_owed(&self) -> bool {
+        self.shared.device_head.load(Acquire) < self.device_asked
+    }
+
+    /// Every piece of device work handed to the leader has run, so the device is this thread's again; the Acquire orders what it did.
+    pub fn wait_device(&self) {
+        if self.device_owed() {
+            self.kick_surely();
+            let mut spins = 0;
+            while self.device_owed() {
+                self.check_fault();
+                backoff(&mut spins);
+            }
+        }
+        self.check_fault();
+    }
+
+    /// `Join`: everything handed over has run, the device work with it, the leader holds each scratch field as raster order left it, and the
+    /// marks and ranges are forgotten.
     pub fn join(&mut self) {
         let started = Instant::now();
-        let waited = self.shared.completed() < self.issued;
+        let waited = self.shared.completed() < self.issued || self.device_owed();
         self.wait_until(self.issued);
+        self.wait_device();
         assemble(&self.shared);
         self.shared.marks.clear();
         self.shared.ranges_appended.store(0, Release);
@@ -1403,6 +1482,19 @@ impl Threads {
         }
     }
 
+    /// A test's hold on the leader's device work, and its release from any thread, which wakes the leader.
+    #[cfg(test)]
+    pub fn hold_device(&self) -> impl Fn() + Send + Sync + 'static {
+        self.shared.hold_device.store(true, SeqCst);
+        let (shared, threads) = (self.shared.clone(), self.threads.clone());
+        move || {
+            shared.hold_device.store(false, SeqCst);
+            for t in &threads {
+                t.unpark();
+            }
+        }
+    }
+
     /// A test's way to end a hold from another thread.
     #[cfg(test)]
     pub fn resumer(&self) -> impl FnOnce() + Send + 'static {
@@ -1432,16 +1524,26 @@ impl Threads {
     pub fn stop(&mut self) {
         if !self.shared.faulted.load(Acquire) {
             self.wait_until(self.issued);
+            self.wait_device();
             assemble(&self.shared);
         }
         self.end();
     }
 
     fn end(&mut self) {
+        // Device work handed over is run before the leader stops, unless it has failed; whatever is left is abandoned so no reader waits for it.
+        let mut spins = 0;
+        while self.device_owed() && !self.shared.faulted.load(Acquire) {
+            self.kick_surely();
+            backoff(&mut spins);
+        }
         self.shared.stopping.store(true, SeqCst);
         self.wake_all();
         for drain in self.drains.drain(..) {
             let _ = drain.join();
+        }
+        if let Some(p) = &self.shared.pictures {
+            p.abandon();
         }
         self.shared.marks.clear();
         // SAFETY: every worker has ended, so the leader is the machine's again.
@@ -1516,7 +1618,28 @@ fn work(shared: Arc<Shared>, index: usize) {
         let message = panic.downcast_ref::<String>().cloned().or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default();
         shared.record_fault(format!("a panic on worker {index}: {message}"));
         shared.workers[index].completed.store(i64::MAX >> 1, Release);
+        if let Some(p) = &shared.pictures {
+            p.abandon();
+        }
     }
+}
+
+/// The leader runs the device work whose word its count has reached, in the order handed over, outside the queue's lock (Mars_Native.md §6.15).
+fn serve_device(shared: &Shared, completed: i64) {
+    let started = Instant::now();
+    while device_due(shared, completed, Acquire) {
+        let head = shared.device_head.load(Relaxed);
+        // SAFETY: `device_due` acquired `device_tail` past this slot, so the machine's thread has written it and will not until `device_head` passes it.
+        let (_, work) = unsafe { (*shared.device[head as usize % DEVICE_SLOTS].0.get()).take() }.expect("a slot the tail has passed holds its work");
+        // SAFETY: the device is the leader's while its processor at the multiple records for it, and the machine's thread reaches it only after `wait_device`.
+        work.run(unsafe { &mut *shared.scaled_gpu });
+        drop(work);
+        if let Some(p) = &shared.pictures {
+            p.submit();
+        }
+        shared.device_head.store(head + 1, Release);
+    }
+    shared.device_nanos.fetch_add(started.elapsed().as_nanos() as i64, Relaxed);
 }
 
 /// `RunWorker`: every word in order, each command as its step asks, standing when asked and sleeping when there is nothing.
@@ -1530,6 +1653,9 @@ fn run_worker(shared: &Shared, index: usize) {
     loop {
         if shared.stopping.load(Acquire) {
             return;
+        }
+        if index == 0 && device_due(shared, completed, Acquire) {
+            serve_device(shared, completed);
         }
         if shared.pause_request.load(Acquire) != 0 && stand(shared, index, completed) {
             continue;
@@ -1571,21 +1697,31 @@ fn run_worker(shared: &Shared, index: usize) {
                 Step::More => {}
                 Step::Ready => execute(&mut memory, &mut at_multiple),
                 Step::Leader => {
-                    shared.barrier.arrive(shared, completed + 1);
+                    if !shared.barrier.arrive(shared, completed + 1) {
+                        return;
+                    }
                     if index == 0 {
                         assemble(shared);
                         execute(&mut memory, &mut at_multiple);
                     }
-                    shared.barrier.arrive(shared, completed + 1);
+                    if !shared.barrier.arrive(shared, completed + 1) {
+                        return;
+                    }
                 }
                 Step::All => {
-                    shared.barrier.arrive(shared, completed + 1);
+                    if !shared.barrier.arrive(shared, completed + 1) {
+                        return;
+                    }
                     execute(&mut memory, &mut at_multiple);
                 }
                 Step::AllJoined => {
-                    shared.barrier.arrive(shared, completed + 1);
+                    if !shared.barrier.arrive(shared, completed + 1) {
+                        return;
+                    }
                     execute(&mut memory, &mut at_multiple);
-                    shared.barrier.arrive(shared, completed + 1);
+                    if !shared.barrier.arrive(shared, completed + 1) {
+                        return;
+                    }
                 }
             }
             if !scaled.is_null() && (*scaled).drew() && !shared.scaled_drawn.load(Relaxed) {
@@ -1598,9 +1734,25 @@ fn run_worker(shared: &Shared, index: usize) {
 }
 
 /// `Sleep`: a moment's spinning for more, then parked until kicked; the flag and the fence keep a kick from passing unseen.
+/// The leader's device work is due once its count reaches the first piece's word; the leader's alone to ask, and a test may hold it back.
+#[inline(always)]
+fn device_due(shared: &Shared, completed: i64, order: std::sync::atomic::Ordering) -> bool {
+    #[cfg(test)]
+    if shared.hold_device.load(order) {
+        return false;
+    }
+    let head = shared.device_head.load(Relaxed);
+    if shared.device_tail.load(order) == head {
+        return false;
+    }
+    // SAFETY: the load of `device_tail` above acquired this slot's writing, and only this thread takes it.
+    unsafe { (*shared.device[head as usize % DEVICE_SLOTS].0.get()).as_ref() }.is_some_and(|(at, _)| *at <= completed)
+}
+
 fn sleep(shared: &Shared, index: usize, completed: i64) {
+    let due = |order| index == 0 && device_due(shared, completed, order);
     for _ in 0..400 {
-        if shared.issued.load(Acquire) != completed || shared.pause_request.load(Acquire) != 0 || shared.stopping.load(Acquire) {
+        if shared.issued.load(Acquire) != completed || shared.pause_request.load(Acquire) != 0 || shared.stopping.load(Acquire) || due(Acquire) {
             return;
         }
         for _ in 0..50 {
@@ -1609,7 +1761,7 @@ fn sleep(shared: &Shared, index: usize, completed: i64) {
     }
     let me = &shared.workers[index];
     me.sleeping.store(true, SeqCst);
-    if shared.issued.load(SeqCst) == completed && shared.pause_request.load(SeqCst) == 0 && !shared.stopping.load(SeqCst) {
+    if shared.issued.load(SeqCst) == completed && shared.pause_request.load(SeqCst) == 0 && !shared.stopping.load(SeqCst) && !due(SeqCst) {
         thread::park();
     }
     me.sleeping.store(false, SeqCst);

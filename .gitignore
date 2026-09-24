@@ -76,6 +76,8 @@ known-differences.db
 *.db-shm
 catalogue.db
 dumps.db
+spirv-cache.db
+spirv-cache.db.damaged
 
 # Python bytecode from the analysis tools.
 __pycache__/

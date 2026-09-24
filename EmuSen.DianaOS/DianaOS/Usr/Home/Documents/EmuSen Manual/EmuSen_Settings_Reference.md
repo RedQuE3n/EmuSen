@@ -1977,6 +1977,17 @@ Before this, LunaP's new case caught the `GroupedList` rule's removal (`LunaP.md
   are Avalonia's headless renderer at the size Game Mode uses. Neither has been seen on the handheld.
 - The headings do not fold (`LunaP.md` §94.4), and a download cannot be cancelled from the window.
 
+#### 4.48.8 A RetroArch preset builds faster, and faster again the second time (2026-09-24)
+
+Choosing a RetroArch preset, in this window or when a game starts, now compiles its passes at once on every processor
+but one, and keeps what each shader stage compiled to in `home/Shaders/spirv-cache.db`. On the desktop a Mega Bezel
+preset that took 4.7 s to build now takes 0.64 s the first time and 0.48 s after that; `crt-royale` went from 1.2 s to
+0.18 and 0.11. Nothing is
+asked of the player and there is no setting: the file may be deleted at any time and is rebuilt as presets are used,
+it keeps itself under 64 MB by dropping what was used least recently, a pack update cannot be served from it stale,
+and if it cannot be read the preset is compiled as before. What was built and measured is `EmuSen_Serenity.md` §9;
+the frame a running preset costs fell as well (§9.6), which the player sees only as headroom.
+
 ### 4.49 Rewind as a reel of pictures (2026-09-24)
 
 **What the player asked for.** "When you're in game and select the rewind button from the quick menu, I want it to

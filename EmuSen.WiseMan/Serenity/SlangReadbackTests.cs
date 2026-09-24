@@ -212,6 +212,27 @@ namespace EmuSen.WiseMan.Serenity
             if (!mipmapped) Assert.Equal(RepeatRows(Picture(w, h, 2), w, h, repeat), device.Render(vw, vh));
         }
 
+        // Mars at four under a pack preset, the case the handheld misses frames on: rows repeated on the device draw what rows repeated on the host draw - see §9.2.
+        [Theory]
+        [InlineData("crt/crt-lottes.slangp", 2560, 960)]
+        [InlineData("crt/crt-royale.slangp", 2560, 960)]
+        [InlineData("crt/crt-lottes.slangp", 640, 240)]
+        public void A_pack_preset_over_an_n64_frame_draws_the_same_from_rows_repeated_on_the_device(string relative, int w, int h)
+        {
+            string? pack = Environment.GetEnvironmentVariable(SlangPresetTests.PackVariable);
+            if (_gpu is null || string.IsNullOrEmpty(pack)) return;
+            SlangPreset preset = SlangPreset.Load(Path.Combine(pack, relative));
+            using var device = new SlangChain(_gpu, preset);
+            using var host = new SlangChain(_gpu, preset);
+            for (int frame = 0; frame < 3; frame++)
+            {
+                byte[] picture = ShaderBench.Pattern(w, h, frame);
+                device.Advance(picture, w, h, 2);
+                host.Advance(RepeatRows(picture, w, h, 2), w, h * 2, 1);
+                Assert.Equal(host.Render(1440, 1080), device.Render(1440, 1080));
+            }
+        }
+
         // The same frame at another repeat, or the same height made of other rows, is uploaded as what it is.
         [Fact]
         public void A_change_of_repeat_at_the_same_height_is_uploaded_as_the_new_shape()

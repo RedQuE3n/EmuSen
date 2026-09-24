@@ -129,6 +129,56 @@ namespace EmuSen.Serenity.Slang
             return new SpirvReflection(uniforms, push, samplers);
         }
 
+        // The module with every Input variable no instruction reads left out of its entry points' interfaces, or the same array if there is none - see EmuSen_Serenity.md §10.3.
+        public static byte[] WithoutUnreadInputs(byte[] spirv)
+        {
+            const int OpEntryPoint = 15, OpFunction = 54;
+            const uint StorageInput = 1;
+            uint[] words = new uint[spirv.Length / 4];
+            Buffer.BlockCopy(spirv, 0, words, 0, words.Length * 4);
+            if (words.Length < 5 || words[0] != Magic) return spirv;
+
+            // A variable is read only inside a function; any word there equal to its id counts, so a literal that happens to match keeps an input, never drops one.
+            var inputs = new HashSet<uint>();
+            var read = new HashSet<uint>();
+            var entries = new List<(int At, int Interface)>();
+            bool inFunctions = false;
+            for (int at = 5; at < words.Length;)
+            {
+                int count = (int)(words[at] >> 16), op = (int)(words[at] & 0xFFFF);
+                if (count == 0 || at + count > words.Length) return spirv;
+                inFunctions |= op == OpFunction;
+                if (inFunctions) for (int i = at + 1; i < at + count; i++) read.Add(words[i]);
+                else if (op == OpVariable && count >= 4 && words[at + 3] == StorageInput) inputs.Add(words[at + 2]);
+                else if (op == OpEntryPoint)
+                {
+                    int name = at + 3;
+                    while (name < at + count && (words[name] & 0xFF000000) != 0 && (words[name] & 0xFF0000) != 0 && (words[name] & 0xFF00) != 0 && (words[name] & 0xFF) != 0) name++;
+                    entries.Add((at, name + 1));
+                }
+                at += count;
+            }
+
+            inputs.ExceptWith(read);
+            if (inputs.Count == 0) return spirv;
+            var kept = new List<uint>(words.Length);
+            int copied = 0;
+            foreach (var (at, first) in entries)
+            {
+                int end = at + (int)(words[at] >> 16);
+                kept.AddRange(words[copied..at]);
+                var interfaceIds = words[first..end].Where(id => !inputs.Contains(id)).ToArray();
+                kept.Add((uint)(first - at + interfaceIds.Length) << 16 | (uint)OpEntryPoint);
+                kept.AddRange(words[(at + 1)..first]);
+                kept.AddRange(interfaceIds);
+                copied = end;
+            }
+            kept.AddRange(words[copied..]);
+            byte[] pruned = new byte[kept.Count * 4];
+            Buffer.BlockCopy(kept.ToArray(), 0, pruned, 0, pruned.Length);
+            return pruned;
+        }
+
         // A SPIR-V literal string: UTF-8, zero-terminated, packed four bytes to a word.
         private static string Text(uint[] operands, int from)
         {

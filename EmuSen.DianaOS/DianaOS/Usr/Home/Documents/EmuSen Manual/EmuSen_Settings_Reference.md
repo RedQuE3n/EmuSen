@@ -1567,3 +1567,11 @@ The pad menu resumes the game for the moment between closing itself and a sheet 
   reads through;
 - that Steam's own chord for its keyboard still types into a focused box, for a player who prefers it.
 
+**What the device confirmed (2026-09-24, Legion Go S, SteamOS 3.8.27, build 78bf8ea).** Mistress started from Game
+Mode carries `XDG_CURRENT_DESKTOP=gamescope` and `XDG_SESSION_DESKTOP=gamescope` (read from its `/proc` environment),
+so big-screen mode and the sheets are on; gamescope runs the session at 1280×800, a sheet scale of 800/720 ≈ 1.11. The
+player reported every control of the settings windows and the cheat flow reachable and usable by pad, which also
+answers the button-mapping question for the South/East grammar these read through. Still unconfirmed: the second-window
+behaviour of the shipping gamescope, which no sheet now exercises except the file dialog, and Steam's own keyboard
+chord.
+

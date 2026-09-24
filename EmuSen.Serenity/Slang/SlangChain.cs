@@ -146,6 +146,7 @@ namespace EmuSen.Serenity.Slang
             byte[] vertex = cache?.Compile(source.Vertex, SlangStage.Vertex, spec.ShaderPath) ?? SlangCompiler.Compile(source.Vertex, SlangStage.Vertex, spec.ShaderPath);
             byte[] fragment = cache?.Compile(source.Fragment, SlangStage.Fragment, spec.ShaderPath) ?? SlangCompiler.Compile(source.Fragment, SlangStage.Fragment, spec.ShaderPath);
             SpirvReflection reflection = SpirvReflection.Merge(SpirvReflection.Read(vertex), SpirvReflection.Read(fragment));
+            fragment = SpirvReflection.WithoutUnreadInputs(fragment);
 
             // The last pass is what the screen shows, so it is 8-bit whatever it asks, sRGB if it says so, as RetroArch's swapchain is.
             bool last = index == count - 1;
@@ -181,7 +182,18 @@ namespace EmuSen.Serenity.Slang
             };
             var reference = new AttachmentReference { Attachment = 0, Layout = ImageLayout.ColorAttachmentOptimal };
             var subpass = new SubpassDescription { PipelineBindPoint = PipelineBindPoint.Graphics, ColorAttachmentCount = 1, PColorAttachments = &reference };
-            var info = new RenderPassCreateInfo { SType = StructureType.RenderPassCreateInfo, AttachmentCount = 1, PAttachments = &attachment, SubpassCount = 1, PSubpasses = &subpass };
+            // The pass's writes and final transition made visible to a later pass's shaders - see EmuSen_Serenity.md §10.
+            var sampled = new SubpassDependency
+            {
+                SrcSubpass = 0, DstSubpass = Vk.SubpassExternal,
+                SrcStageMask = PipelineStageFlags.ColorAttachmentOutputBit, SrcAccessMask = AccessFlags.ColorAttachmentWriteBit,
+                DstStageMask = PipelineStageFlags.VertexShaderBit | PipelineStageFlags.FragmentShaderBit, DstAccessMask = AccessFlags.ShaderReadBit,
+            };
+            var info = new RenderPassCreateInfo
+            {
+                SType = StructureType.RenderPassCreateInfo, AttachmentCount = 1, PAttachments = &attachment, SubpassCount = 1, PSubpasses = &subpass,
+                DependencyCount = 1, PDependencies = &sampled,
+            };
             SlangVulkan.Check(_vk.CreateRenderPass(_gpu.Device, &info, null, out RenderPass renderPass), "vkCreateRenderPass");
             return renderPass;
         }

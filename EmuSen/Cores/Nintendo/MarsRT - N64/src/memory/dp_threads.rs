@@ -214,7 +214,8 @@ pub struct ScaledStart<'a> {
 #[derive(Default)]
 struct DeviceSlot(UnsafeCell<Option<(i64, DeviceWork)>>);
 
-/// `SpinBarrier`: all arrive before any leaves, a fault lets all through, and a waiter raises a pause point to its word (Mars_Native.md §5.6.6).
+/// `SpinBarrier`: all arrive before any leaves, a fault lets all through, a stop sends all home, and a waiter raises a pause point to
+/// its word (Mars_Native.md §5.6.6, §6.15).
 struct Barrier {
     parties: u32,
     arrived: AtomicU32,
@@ -223,21 +224,28 @@ struct Barrier {
 }
 
 impl Barrier {
-    fn arrive(&self, shared: &Shared, word: i64) {
+    /// False when the drain is stopping, and the worker goes home without running the command, since a worker that saw the stop first
+    /// has already left and will never arrive.
+    #[must_use]
+    fn arrive(&self, shared: &Shared, word: i64) -> bool {
         let generation = self.generation.load(Acquire);
         if self.arrived.fetch_add(1, AcqRel) + 1 == self.parties {
             self.passed.fetch_add(1, Relaxed);
             self.arrived.store(0, Relaxed);
             self.generation.store(generation.wrapping_add(1), Release);
-            return;
+            return true;
         }
         let mut spins = 0;
         while self.generation.load(Acquire) == generation && !shared.faulted.load(Acquire) {
+            if shared.stopping.load(Acquire) {
+                return false;
+            }
             if shared.pause_request.load(Acquire) != 0 {
                 raise(&shared.pause_at, word);
             }
             backoff(&mut spins);
         }
+        true
     }
 }
 
@@ -1689,21 +1697,31 @@ fn run_worker(shared: &Shared, index: usize) {
                 Step::More => {}
                 Step::Ready => execute(&mut memory, &mut at_multiple),
                 Step::Leader => {
-                    shared.barrier.arrive(shared, completed + 1);
+                    if !shared.barrier.arrive(shared, completed + 1) {
+                        return;
+                    }
                     if index == 0 {
                         assemble(shared);
                         execute(&mut memory, &mut at_multiple);
                     }
-                    shared.barrier.arrive(shared, completed + 1);
+                    if !shared.barrier.arrive(shared, completed + 1) {
+                        return;
+                    }
                 }
                 Step::All => {
-                    shared.barrier.arrive(shared, completed + 1);
+                    if !shared.barrier.arrive(shared, completed + 1) {
+                        return;
+                    }
                     execute(&mut memory, &mut at_multiple);
                 }
                 Step::AllJoined => {
-                    shared.barrier.arrive(shared, completed + 1);
+                    if !shared.barrier.arrive(shared, completed + 1) {
+                        return;
+                    }
                     execute(&mut memory, &mut at_multiple);
-                    shared.barrier.arrive(shared, completed + 1);
+                    if !shared.barrier.arrive(shared, completed + 1) {
+                        return;
+                    }
                 }
             }
             if !scaled.is_null() && (*scaled).drew() && !shared.scaled_drawn.load(Relaxed) {

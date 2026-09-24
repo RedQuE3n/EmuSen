@@ -36,7 +36,7 @@ fn interrupts() -> Vec<u8> {
 }
 
 fn load(image: Vec<u8>) -> Machine {
-    Machine::load_rom(image, None).expect("a board with no mapper")
+    Machine::load_rom(image).expect("a board with no mapper")
 }
 
 fn state(m: &Machine) -> Vec<u8> {

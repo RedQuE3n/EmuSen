@@ -6,6 +6,9 @@ using EmuSen.Cores;
 
 namespace EmuSen.Common
 {
+    // One held snapshot as a reel sees it: when it was taken and its picture, if it still has one - see EmuSen_Rewind_And_FastForward.md §5.1.
+    public readonly record struct RewindMoment(long Frame, long CoreFrames, RewindThumbnail? Thumbnail);
+
     // Core-agnostic rewind over any ICore - see EmuSen_Rewind_And_FastForward.md §1.
     public sealed class RewindBuffer
     {
@@ -24,6 +27,32 @@ namespace EmuSen.Common
         private Task<byte[]>? _encoding;
 
         private int _intervalFrames = DefaultIntervalFrames;
+
+        // One per snapshot held, oldest first, in step with the chain - see §5.1.
+        private sealed class Slot
+        {
+            public long Frame;
+            public long CoreFrames;
+            public RewindThumbnail? Thumbnail;
+        }
+
+        private readonly LinkedList<Slot> _moments = new();
+        private long _frames;
+        private long _thumbnailBytes;
+
+        public const int DefaultThumbnailWidth = 160;
+        public const long DefaultThumbnailBudgetBytes = 32L * 1024 * 1024;
+
+        // 0 keeps no pictures; a frontend that shows a reel sets it - see §5.3.
+        public int ThumbnailWidth { get; set; }
+
+        // Past it the older pictures are thinned, never the snapshots - see §5.4.
+        public long ThumbnailBudgetBytes { get; set; } = DefaultThumbnailBudgetBytes;
+
+        public long ThumbnailBytes => _thumbnailBytes;
+
+        // Frames completed while enabled, rewound with the chain; a moment's Frame is this at its capture - see §5.1.
+        public long Frame => _frames;
 
         public bool Enabled { get; set; }
 
@@ -50,17 +79,20 @@ namespace EmuSen.Common
             return frameRateHz <= 0 ? 0 : Depth * (double)_intervalFrames / frameRateHz;
         }
 
-        // Call once per completed frame - no-ops off an interval boundary.
-        public void OnFrameCompleted(ICore core)
+        // Call once per completed frame - no-ops off an interval boundary; true when it took a snapshot, whose picture the caller may attach (§5.3).
+        public bool OnFrameCompleted(ICore core)
         {
-            if (!Enabled) return;
-            if (++_framesSinceCapture < _intervalFrames) return;
+            if (!Enabled) return false;
+            _frames++;
+            if (++_framesSinceCapture < _intervalFrames) return false;
             _framesSinceCapture = 0;
-            CaptureNow(core);
+            return Capture(core);
         }
 
         // Snapshots immediately, ignoring IntervalFrames - seeds the chain.
-        public void CaptureNow(ICore core)
+        public void CaptureNow(ICore core) => Capture(core);
+
+        private bool Capture(ICore core)
         {
             Settle();
             _scratch.SetLength(0);
@@ -75,7 +107,7 @@ namespace EmuSen.Common
             if (length == 0)
             {
                 Clear();
-                return;
+                return false;
             }
 
             // The spare buffer is reused when it fits, so a capture allocates no state-sized array - see §1.8.
@@ -88,7 +120,8 @@ namespace EmuSen.Common
             {
                 Clear();
                 _newest = state;
-                return;
+                _moments.AddLast(new Slot { Frame = _frames, CoreFrames = core.TotalFrames });
+                return true;
             }
 
             // Encoded on another thread; the chain takes the delta when it is next looked at - see §1.8.
@@ -96,6 +129,110 @@ namespace EmuSen.Common
             _newest = state;
             _spare = previous;
             _encoding = Task.Run(() => XorDeltaCodec.Encode(previous, state));
+            _moments.AddLast(new Slot { Frame = _frames, CoreFrames = core.TotalFrames });
+            return true;
+        }
+
+        // The picture of the snapshot just taken, from the frame on screen at it; null when pictures are off or it has one - see §5.3.
+        public RewindThumbnail? AttachThumbnail(ReadOnlySpan<byte> rgba, int width, int rows, int rowRepeat)
+        {
+            if (ThumbnailWidth <= 0 || _moments.Last is not { Value: { Thumbnail: null } newest }) return null;
+
+            RewindThumbnail? thumbnail = RewindThumbnail.From(rgba, width, rows, rowRepeat, ThumbnailWidth);
+            if (thumbnail is null) return null;
+
+            newest.Thumbnail = thumbnail;
+            _thumbnailBytes += thumbnail.Bytes;
+            TrimThumbnails();
+            return thumbnail;
+        }
+
+        // Oldest first; only on the thread that drives the buffer - see §5.1.
+        public IReadOnlyList<RewindMoment> Moments()
+        {
+            Settle();
+            var moments = new List<RewindMoment>(_moments.Count);
+            foreach (Slot slot in _moments) moments.Add(new RewindMoment(slot.Frame, slot.CoreFrames, slot.Thumbnail));
+            return moments;
+        }
+
+        // A held snapshot's bytes, rebuilt on a copy without moving the chain; null when no moment has that frame - see §5.2.
+        public byte[]? StateAt(long frame)
+        {
+            Settle();
+            if (StepsTo(frame) is not int steps) return null;
+
+            byte[] state = (byte[])_newest!.Clone();
+            LinkedListNode<byte[]>? delta = _deltas.Last;
+            for (int i = 0; i < steps; i++, delta = delta!.Previous) XorDeltaCodec.Apply(state, delta!.Value);
+            return state;
+        }
+
+        // Straight to a held snapshot with one load, dropping every newer one as stepping does - see §5.2.
+        public bool RewindTo(ICore core, long frame)
+        {
+            Settle();
+            if (StepsTo(frame) is not int steps) return false;
+
+            for (int i = 0; i < steps; i++)
+            {
+                byte[] delta = _deltas.Last!.Value;
+                _deltas.RemoveLast();
+                _deltaBytes -= delta.Length;
+                XorDeltaCodec.Apply(_newest!, delta);
+                DropNewestMoment();
+            }
+
+            using var stream = new MemoryStream(_newest!, writable: false);
+            core.LoadState(stream);
+
+            _framesSinceCapture = 0;
+            _frames = frame;
+            return true;
+        }
+
+        // How many deltas lie between the newest snapshot and the moment of this frame.
+        private int? StepsTo(long frame)
+        {
+            if (_newest is null) return null;
+            int steps = 0;
+            for (LinkedListNode<Slot>? node = _moments.Last; node is not null; node = node.Previous, steps++)
+            {
+                if (node.Value.Frame == frame) return steps;
+            }
+            return null;
+        }
+
+        private void DropNewestMoment()
+        {
+            if (_moments.Last is not { } last) return;
+            _thumbnailBytes -= last.Value.Thumbnail?.Bytes ?? 0;
+            _moments.RemoveLast();
+        }
+
+        private void DropOldestMoment()
+        {
+            if (_moments.First is not { } first) return;
+            _thumbnailBytes -= first.Value.Thumbnail?.Bytes ?? 0;
+            _moments.RemoveFirst();
+        }
+
+        // Every second picture of the older half goes, so the reel keeps its reach and loses density with age - see §5.4.
+        private void TrimThumbnails()
+        {
+            while (_thumbnailBytes > ThumbnailBudgetBytes)
+            {
+                var pictured = new List<Slot>();
+                foreach (Slot slot in _moments) if (slot.Thumbnail is not null) pictured.Add(slot);
+                if (pictured.Count == 0) return;
+
+                int older = Math.Max(1, pictured.Count / 2);
+                for (int i = older >= 2 ? 1 : 0; i < older; i += 2)
+                {
+                    _thumbnailBytes -= pictured[i].Thumbnail!.Bytes;
+                    pictured[i].Thumbnail = null;
+                }
+            }
         }
 
         // Takes the delta an earlier capture left encoding, if one is, so the chain is whole before it is moved - see §1.8.
@@ -122,11 +259,13 @@ namespace EmuSen.Common
 
             // In place: _newest now holds the PREVIOUS snapshot - see §1.3.
             XorDeltaCodec.Apply(_newest, delta);
+            DropNewestMoment();
 
             using var stream = new MemoryStream(_newest, writable: false);
             core.LoadState(stream);
 
             _framesSinceCapture = 0;
+            _frames = _moments.Last!.Value.Frame;
             return true;
         }
 
@@ -139,6 +278,8 @@ namespace EmuSen.Common
             _newest = null;
             _spare = null;
             _framesSinceCapture = 0;
+            _moments.Clear();
+            _thumbnailBytes = 0;
         }
 
         // Drops the OLDEST deltas, costing reach and nothing else - see §1.3.
@@ -148,6 +289,7 @@ namespace EmuSen.Common
             {
                 _deltaBytes -= _deltas.First!.Value.Length;
                 _deltas.RemoveFirst();
+                DropOldestMoment();
             }
         }
     }

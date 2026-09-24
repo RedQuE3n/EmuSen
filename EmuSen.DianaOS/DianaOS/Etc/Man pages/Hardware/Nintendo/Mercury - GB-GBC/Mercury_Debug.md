@@ -136,12 +136,70 @@ auto-detector ambiguous for no gain.
 
 ## 6. What is not implemented
 
-- **No call stack.** `CallStackRegistry` wants a seam in the core's own `CALL`
-  and `RET` handling; the seam does not exist yet and the interface allows null.
+- ~~**No call stack.** `CallStackRegistry` wants a seam in the core's own `CALL`
+  and `RET` handling; the seam does not exist yet and the interface allows null.~~
+  *Retired 2026-09-24: the seam exists, §7.*
 - **No expression context**, no access counters, no freezes, no DMA log. All
   default to null, which the interface treats as "unavailable for this core".
+  Without an expression context a breakpoint's `if` condition is always true and a
+  logpoint records its expression's text, on both engines.
+- **Reads are not reported.** `watch r`, `bp read` and `bp uninit` arm and never
+  fire, as on Mars (`Mars_Debug.md` §3).
+- **`runto scanline` is not fed**, and `bp when` lists no condition: the core
+  detects none.
 - **`SetChannelMuted` is a no-op** until there are channels.
 - **`DmaChannels` reports HDMA as one row**, and only on a colour cartridge.
   OAM DMA is not in the table: it completes within the write that starts it
   (`Mercury_Memory.md` §6), so there is never a moment at which a channel view
   could show it in progress.
+
+## 7. The seams the registries were waiting for (2026-09-24)
+
+*Written for MercuryRT's stage 6 (`Mercury_Native.md` §8.5), which needed a C# oracle
+for every claim it makes, and found that five of the registries' own seams had never
+been wired on this core.*
+
+The debugger's claims were written as one abstract set, `MercuryDebugClaims`, and run
+first against the unmodified C# core. 13 of 26 failed there. None is a fault in the
+machine: each is a registry the target hands out and the core never feeds.
+
+- **No call stack** (§6): `step over`, `step out`, `bt`, `bp depth` and `profile`
+  were refused or empty, and `cov funcs` found nothing.
+- **Data breakpoints never fired.** `bp write` armed a breakpoint that
+  `BreakpointRegistry.NoteWrite` would have honoured, but `OnWrite` fed only the
+  watches.
+- **`runto irq` and `runto frame` never fired.** Nothing called `NoteInterrupt` or
+  `NoteFrame`.
+- **A watch went deaf after a reload.** The target set itself as the observer of the
+  bus that existed when it was made, and `LoadRom` builds a new bus.
+
+**What was added.**
+
+- **The SM83 reports calls and returns.** `Cpu` has three `[SkipInState]`
+  delegates. `CALL` when taken and `RST` report (source, target) after the push. The
+  interrupt dispatch reports (return address, vector). `RET`, a taken `RET cc` and
+  `RETI` report a return. `MercuryCore.LoadRom` wires them to `CallStack` as
+  `NotePush`/`NotePop`. An interrupt is a frame of kind `Irq` and also calls
+  `Breakpoints.NoteInterrupt(Irq)`.
+- **An interrupt is a frame, unlike on Mars.** The SM83's dispatch pushes a return
+  address, and `RETI` pops it. Leaving the dispatch off the stack would make every
+  `RETI` an unmatched return. Mars's exceptions push nothing and return by `ERET`, so
+  there the stack is calls only.
+- **The profiler** is charged once a step, before it runs, as `Coverage.Record` is,
+  and the registry's entry-point observer feeds `cov funcs`.
+- **`OnWrite` feeds `NoteWrite`**, and `EndFrame` calls `NoteFrame` after the cheats.
+- **The core keeps the write observer.** `MercuryCore.WriteObserver` hands it to each
+  bus `LoadRom` builds, so a watch outlives a reload.
+
+**What it costs a plain frame.** A C# Mercury frame already asked `ShouldBreak` before
+every instruction, and that was 6.7% of the samples (`Mercury_Native.md` §6.3). The
+additions are one null-checked delegate call per call, return and dispatch, and a
+profiler test per step. They were not timed, because the C# core's frame is not the
+product (`Mercury_Native.md` §1).
+
+**The C# core tracks the stack on every frame.** Its delegates are always set, so
+even a frame with nothing armed pushes and pops. MercuryRT tracks the stack only in a
+frame that something observes (`Mercury_Native.md` §8.5.2). Both are held to that
+difference by a named test: `A_call_made_in_a_frame_nothing_observes_is_on_the_stack`
+for C#, and `A_plain_frame_leaves_the_stack_where_the_last_observed_frame_left_it` for
+MercuryRT.

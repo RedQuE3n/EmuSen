@@ -1,6 +1,8 @@
 //! C#'s `MercuryCore`: the machine, and its state in the C# core's own format. See Mercury_Native.md §3.1.
 
+use crate::Skip;
 use crate::cpu::{Cpu, IllegalOpcode};
+use crate::debug::{Hooks, ObservedBus, stop};
 use crate::memory::bus::MemoryBus;
 use crate::memory::cartridge::{Cartridge, RomError};
 use crate::state::{StateError, StateReader, StateResult, StateWriter};
@@ -41,12 +43,19 @@ impl Model {
     }
 }
 
+/// `run_frame_debug`'s flags: the first step runs unchecked, as the one a halt stopped in front of does.
+pub const RUN_UNCHECKED: u32 = 1;
+/// ... and the frame is the one the last call stopped inside, its budget kept, rather than a new call of `RunFrame`.
+pub const RUN_CONTINUING: u32 = 2;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Machine {
     pub total_frames: i64,
     pub cycles_into_frame: i64,
     pub cpu: Cpu,
     pub bus: MemoryBus,
+    /// The debugger's tables and logs; in no state, so a load keeps them - see Mercury_Native.md §8.5.
+    pub hooks: Skip<Box<Hooks>>,
 }
 
 impl Machine {
@@ -78,7 +87,7 @@ impl Machine {
             bus.rom_patches = old.rom_patches.clone();
             bus.ppu.skip_rendering = old.ppu.skip_rendering;
         }
-        Machine { total_frames: 0, cycles_into_frame: 0, cpu, bus }
+        Machine { total_frames: 0, cycles_into_frame: 0, cpu, bus, hooks: Skip(Box::default()) }
     }
 
     /// True while the machine is a Game Boy Color, whatever its cartridge.
@@ -110,6 +119,50 @@ impl Machine {
         self.cycles_into_frame -= budget;
         self.total_frames += 1;
         Ok(())
+    }
+
+    /// `MercuryCore.RunFrame` with its seams: before each step the tables are asked, and a frame that meets one returns the reasons
+    /// (`debug::stop`) with the machine at a step boundary; zero is the frame's end. What it records goes to the hooks' logs.
+    pub fn run_frame_debug(&mut self, flags: u32) -> Result<u32, IllegalOpcode> {
+        let Machine { cpu, bus, hooks, cycles_into_frame, total_frames } = self;
+        let hooks: &mut Hooks = hooks;
+        if flags & RUN_CONTINUING == 0 {
+            hooks.budget = if bus.double_speed { CYCLES_PER_FRAME * 2 } else { CYCLES_PER_FRAME };
+        }
+        let budget = hooks.budget;
+        let mut unchecked = flags & RUN_UNCHECKED != 0;
+        while *cycles_into_frame < budget {
+            if !unchecked {
+                let why = hooks.stop_before(cpu.pc);
+                if why != stop::FRAME {
+                    return Ok(why);
+                }
+            }
+            unchecked = false;
+            hooks.record(cpu.pc);
+            let mark = hooks.writes_log.len();
+            let (ie, iflags) = (bus.interrupt_enable, bus.interrupt_flags);
+            let stepped = cpu.step(&mut ObservedBus { bus, hooks }, ie, iflags);
+            hooks.stamp(mark, cpu.last_instruction_pc);
+            let (cycles, serviced) = stepped?;
+            if serviced >= 0 {
+                bus.interrupt_flags &= !(1u8 << serviced);
+            }
+            let stall = bus.take_pending_stall();
+            if stall > 0 {
+                bus.tick(stall);
+            }
+            *cycles_into_frame += (cycles + stall) as i64;
+            if bus.ppu.frame_complete {
+                bus.ppu.frame_complete = false;
+                *cycles_into_frame = 0;
+                *total_frames += 1;
+                return Ok(stop::FRAME);
+            }
+        }
+        *cycles_into_frame -= budget;
+        *total_frames += 1;
+        Ok(stop::FRAME)
     }
 
     /// `MercuryCore.ReadSpace` by number: ROM, VRAM, CARTRAM, WRAM, OAM, HRAM, then CPUBUS through the real decode.
@@ -153,7 +206,15 @@ impl Machine {
             }
             4 => bus.oam[wrap(address, 0xA0)] = value,
             5 => bus.high_ram[wrap(address, 0x7F)] = value,
-            6 => bus.write((address & 0xFFFF) as u16, value),
+            // C#'s CPUBUS write is `Bus.Write`, which its observer hears whoever calls it: a cheat's poke, the debugger's.
+            6 => {
+                let address = (address & 0xFFFF) as u16;
+                let reported = if self.hooks.writes { bus.reported_space(address) } else { None };
+                bus.write(address, value);
+                if let Some((space, offset)) = reported {
+                    self.hooks.note_write(space, offset, value, self.cpu.last_instruction_pc);
+                }
+            }
             _ => {}
         }
     }
@@ -198,7 +259,8 @@ impl Machine {
         let cgb_hardware = if version >= CONSOLE_IN_HEADER { r.bool()? } else { self.bus.cart.is_cgb() };
         if cgb_hardware != *self.bus.cgb_hardware {
             let (cart, mapper) = Cartridge::from_image(self.bus.cart.rom.to_vec()).expect("an image a machine was built from builds again");
-            let rebuilt = Machine::build(cart, mapper, cgb_hardware, Some(&self.bus));
+            let mut rebuilt = Machine::build(cart, mapper, cgb_hardware, Some(&self.bus));
+            std::mem::swap(&mut rebuilt.hooks, &mut self.hooks);
             *self = rebuilt;
         }
         self.total_frames = r.i64()?; // TotalFrames

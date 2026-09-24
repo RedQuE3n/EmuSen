@@ -302,6 +302,7 @@ impl Cpu {
 
             0xC9 => {
                 self.pc = self.pop(bus);
+                bus.note_return();
                 16
             }
             0xC0 => self.return_if(bus, !self.flag(FLAG_Z)),
@@ -311,12 +312,14 @@ impl Cpu {
             0xD9 => {
                 self.pc = self.pop(bus);
                 self.ime = true;
+                bus.note_return();
                 16
             }
 
             0xC7 | 0xCF | 0xD7 | 0xDF | 0xE7 | 0xEF | 0xF7 | 0xFF => {
                 self.push(bus, self.pc);
                 self.pc = (op & 0x38) as u16;
+                bus.note_call(self.last_instruction_pc, self.pc, false);
                 16
             }
 
@@ -489,6 +492,7 @@ impl Cpu {
         }
         self.push(bus, self.pc);
         self.pc = target;
+        bus.note_call(self.last_instruction_pc, target, false);
         24
     }
 
@@ -497,6 +501,7 @@ impl Cpu {
             return 8;
         }
         self.pc = self.pop(bus);
+        bus.note_return();
         20
     }
 }

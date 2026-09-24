@@ -71,7 +71,7 @@ The only board here whose RAM is on the mapper chip: 512 nibbles, echoed through
 
 Seven ROM bank bits (so 128 banks, still with the 0-becomes-1 rule) and a `$A000` window that points at either RAM or one of five real-time-clock registers, depending on whether the bank select is `$08-$0C`.
 
-The clock is **latched**: writing 0 then 1 to `$6000-$7FFF` copies the running counters into the registers a game reads, so a game never sees seconds tick over mid-read. Bit 6 of the day-high register halts the clock; bit 7 is a sticky overflow that stays set until the game clears it. `Tick` advances it from the CPU clock.
+The clock is **latched**: writing 0 then 1 to `$6000-$7FFF` copies the running counters into the registers a game reads, so a game never sees seconds tick over mid-read. Bit 6 of the day-high register halts the clock; bit 7 is a sticky overflow that stays set until the game clears it. `Tick` advances it from the base clock: the chip has its own 32.768 kHz crystal, so in CGB double speed it counts half the CPU's cycles. Until 2026-09-24 it counted the CPU's, and ran twice as fast in double speed (`Mercury_Native.md` §6.1, D2, fixed in §9.2).
 
 ### 4.5 MBC5
 

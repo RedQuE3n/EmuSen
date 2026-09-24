@@ -11,7 +11,7 @@ using EmuSen.Galaxia.Library;
 namespace EmuSen.Cores.Nintendo.MercuryRT
 {
     // MercuryRT behind the Game Boy's ICore: the machine in Rust, the registries, saves and cheats' rules in C# - see Mercury_Native.md §8.3.
-    public sealed class MercuryRtCore : ICore, ICheatRegistryHost, IStateFormat, IFrameBufferPool, IDisposable
+    public sealed partial class MercuryRtCore : ICore, ICheatRegistryHost, IStateFormat, IFrameBufferPool, IDisposable
     {
         private const int SaveEveryNFrames = 300;
 
@@ -26,6 +26,9 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         private bool _skipRendering;
         private int _patchVersion = -1;
 
+        // The battery save's file, the host's and in no state - see Mercury_Native.md §9.3.
+        private string? _savePath;
+
         // The C# machine the debugger reads, refreshed from MercuryRT's state; its registries are this core's - see Mercury_Native.md §8.3.
         public MercuryCore Mirror { get; } = new();
 
@@ -39,13 +42,16 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         public long TotalFrames => _machine?.TotalFrames ?? 0;
         public int AudioSampleRate => 44100;
         public IReadOnlyList<PadButton> SupportedButtons => MercuryCore.PadButtons;
-        int IStateFormat.StateVersion => 5;
+        int IStateFormat.StateVersion => 6;
 
         public WatchRegistry Watches => Mirror.Watches;
         public FrameLogRegistry FrameLog => Mirror.FrameLog;
         public BreakpointRegistry Breakpoints => Mirror.Breakpoints;
         public CoverageRegistry Coverage => Mirror.Coverage;
         public LabelRegistry Labels => Mirror.Labels;
+        public CallStackRegistry CallStack => Mirror.CallStack;
+
+        public MercuryRtCore() => CallStack.FrameNumberProvider = () => _eventFrame;
 
         public CheatRegistry Cheats
         {
@@ -82,17 +88,19 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
                 if (header.Ram.Length > 0) saved = AtomicFile.TryRead(savePath);
             }
 
-            var machine = new MercuryMachine(image, savePath);
+            var machine = new MercuryMachine(image);
             if (saved is not null) machine.WriteSpace(2, 0, saved.AsSpan(0, Math.Min(saved.Length, header.Ram.Length)));
             machine.SetOptions(_skipRendering);
 
             _machine?.Dispose();
             _machine = machine;
             _header = header;
+            _savePath = savePath;
             _rom = image;
             _patchVersion = -1;
             machine.SetButtons(_buttons);
             Mirror.LoadRom(path);
+            IsHaltedAtBreakpoint = false;
         }
 
         public void SetButton(int port, PadButton button, bool pressed)
@@ -104,14 +112,24 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             _machine?.SetButtons(_buttons);
         }
 
-        // MercuryCore.RunFrame and EndFrame; breakpoints and coverage are not yet honoured here (Mercury_Native.md §8.3).
+        // MercuryCore.RunFrame and EndFrame; the observed loop when anything is armed, and a halt returns before the frame's end - see Mercury_Native.md §8.5.
         public void RunFrame()
         {
             if (_machine is null) throw new InvalidOperationException("RunFrame() called before LoadRom().");
             RefreshRomPatches();
-            _machine.RunFrame();
+            bool resuming = IsHaltedAtBreakpoint;
+            IsHaltedAtBreakpoint = false;
+            if (Observed)
+            {
+                if (!RunObserved(_machine.Handle, resuming)) return;
+            }
+            else
+            {
+                _machine.RunFrame();
+            }
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
             ApplyCheats();
+            Breakpoints.NoteFrame(TotalFrames);
             if (TotalFrames % SaveEveryNFrames == 0) SaveSram();
         }
 
@@ -130,11 +148,11 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
 
         public short[] DequeueAudioSamples(int maxFrames) => _machine?.DrainAudio(maxFrames) ?? Array.Empty<short>();
 
-        // Cartridge.SaveSram, with the path the machine's state carries, as C#'s does.
+        // Cartridge.SaveSram: the path this session chose at load, which no state can change.
         public void SaveSram()
         {
             if (_machine is null || _header is null || !_header.HasBattery || _header.Ram.Length == 0) return;
-            if (_machine.SavePath() is not { } path) return;
+            if (_savePath is not { } path) return;
             var ram = new byte[_header.Ram.Length];
             _machine.ReadSpace(2, 0, ram);
             AtomicFile.Write(path, ram);
@@ -169,7 +187,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             if (BitConverter.ToUInt32(state, 0) != 0x4352454D) throw new InvalidDataException("Not a Mercury save state.");
             if (state.Length < 8) throw new EndOfStreamException("Unable to read beyond the end of the stream.");
             int version = BitConverter.ToInt32(state, 4);
-            if (version != 5) throw new InvalidDataException($"Save state version {version} is not 5.");
+            if (version is < 5 or > 6) throw new InvalidDataException($"Save state version {version} is not one this build reads (5 to 6).");
             _machine.Load(state);
         }
 
@@ -186,6 +204,11 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         {
             int space = Array.IndexOf(MercuryMachine.SpaceNames, spaceName);
             if (_machine is null || space < 0) return;
+            if (space == CpuBusSpace && Listening)
+            {
+                WriteObserved(_machine.Handle, address, value);
+                return;
+            }
             _machine.WriteSpace(space, address, stackalloc byte[] { value });
         }
 
@@ -202,9 +225,8 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             return value;
         }
 
-        // The debugger's view: the mirror loaded from MercuryRT's state, its reads and writes sent to MercuryRT - see Mercury_Native.md §8.3.
-        public MercuryDebugTarget CreateDebugTarget() => new(Mirror, new MercuryDebugHost(
-            ReadSpace, WriteSpace, SyncMirror, ApplyCheats, () => TotalFrames, (_, _) => SyncMutes()));
+        // The debugger's view: the mirror loaded from MercuryRT's state, its reads and writes sent to MercuryRT, its halts this core's - see Mercury_Native.md §8.5.
+        public MercuryRtDebugTarget CreateDebugTarget() => new(this);
 
         public void SyncMirror()
         {
@@ -212,7 +234,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             Mirror.LoadState(new MemoryStream(_machine.Save()));
         }
 
-        private void SyncMutes()
+        public void SyncMutes()
         {
             if (_machine is null || Mirror.Bus is null) return;
             uint mask = 0;

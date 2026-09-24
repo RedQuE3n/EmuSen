@@ -8,7 +8,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory.Mappers
     {
         private const int RamSize = 512;
 
-        private readonly Cartridge _cart;
+        // Version 5 wrote the cartridge again here - see Mercury_Native.md §9.3.
+        [EmuSen.Common.RetiredFromState] private readonly Cartridge _cart;
 
         private bool _ramEnabled;
         private int _romBank = 1;

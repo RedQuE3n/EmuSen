@@ -649,7 +649,7 @@ machine had at that frame and shows the picture a load of it shows, rewinding an
 600 operations a game never froze, and the pictures the screen still holds are never overwritten
 (`Mars_Native.md` §6.6.3). For a player on MarsRT the hotkey now works as on the other consoles: every fourth frame
 is kept, as far back as the 96 MB budget reaches, and a step back shows the frame at once rather than a frame late.
-Each capture writes a 13 MB state on the emulation thread, into an array kept for it, so it adds no garbage collection; its time is not measured yet (`Mars_Native.md` §6.6.3).
+Each capture writes a 13 MB state on the emulation thread, into an array kept for it: on the development desktop 2.5 to 3.8 ms one frame in four, about 1 ms a frame in all with the buffer's own encoding, and 0 to 2 of the buffer's garbage collections in 300 frames (`Mars_Native.md` §6.6.3). The handheld was not measured.
 
 ### 4.26 The graphics window: one tab per console, the settings its core offers
 

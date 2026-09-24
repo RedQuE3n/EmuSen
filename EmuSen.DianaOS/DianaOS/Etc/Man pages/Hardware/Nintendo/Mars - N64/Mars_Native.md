@@ -3312,15 +3312,35 @@ set elsewhere broke it again because its path has a space, which `Exec`'s shell 
 turns both into warnings, so a round built on the old library reports every Rust mutant as a survivor. The runner now
 treats MSB3073 as a failed build. The C# mutants were unaffected, since the compiler needs no script.
 
-**What it costs.** Not measured yet. `MarsRtRewindTests.Bench_rewind` (behind `EMUSEN_MARSRT_BENCH`) interleaves 300
-frames with rewind on and off, three rounds on each game state, and reports the frame, the capture's share, the dearest
-capture and the gen-2 collections; it was written to run under the shared bench lock with the load below three, and
-through this stage's session the host's load stayed between 7 and 28 from other agents' work, so it was not run, and
-no timing is quoted here. What is measured without a clock: a capture writes one 12,986,889-byte state and a step
-reads one, neither allocating it (above), and the delta is encoded on a pool thread, not the emulation thread. The
-prediction, stated before measuring: a capture costs the emulation thread about 1 ms at one frame in four on this
-desktop (the state write, dominated by RDRAM's 8 MB copy), so under a third of a millisecond a frame, and no gen-2
-collection.
+**What it costs.** *The prediction, stated before measuring:* a capture costs the emulation thread about 1 ms one
+frame in four on this desktop (the state write, dominated by RDRAM's 8 MB copy), so under a third of a millisecond a
+frame, and no gen-2 collection.
+
+*The measurement.* `MarsRtRewindTests.Bench_rewind` (behind `EMUSEN_MARSRT_BENCH`), under the shared bench lock with
+the load at 2.9 when it began: Mistress's settings, 60 frames warmed and 300 measured, rewind on and off interleaved,
+three rounds with the order alternated, on the three game states. The frame is `RunFrame` and the capture together, as
+Mistress's loop runs them.
+
+| Game | Frame, rewind off | Frame, rewind on | Of it the capture, a frame | The dearest capture | Gen-2 in 300, on |
+| --- | --- | --- | --- | --- | --- |
+| Super Mario 64 | 3.65–4.23 ms | 4.61–5.38 ms | 0.69–0.95 ms | 4.76–5.58 ms | 0–2 |
+| Ocarina of Time | 5.62–5.77 ms | 6.63–6.86 ms | 0.70–0.74 ms | 3.42–3.73 ms | 0–2 |
+| GoldenEye, the Dam | 11.17–11.31 ms | 12.18–12.51 ms | 0.63–0.73 ms | 3.26–4.81 ms | 0–2 |
+
+With rewind off no round had a gen-2 collection.
+
+*The prediction's fate.* **Short by a factor of three.** A capture costs 2.5 to 3.8 ms on average, one frame in four,
+so 0.63 to 0.95 ms a frame, not a third of one; the state write is more than the RDRAM copy, since `save_state` sizes
+the snapshot and then writes it, holding the workers twice (§5.6.4), and walks every field. **And the frame grows by
+more than the capture:** 0.9 to 1.2 ms in all, so 0.2 to 0.4 ms of it is inside `RunFrame`, most likely the delta
+encoder on a pool thread competing for the cache and a core, which was not separated. **The collections were not
+removed:** 0 to 2 gen-2 in 300 frames with rewind on, none with it off. They are not the core's, whose capture
+allocates 252 bytes (above); they are `RewindBuffer`'s own, the delta arrays it encodes and trims, which are
+large-object arrays whenever a delta passes 85 KB. That is the buffer's design for every core, and was not changed.
+
+*What it means for play.* On this desktop the frame stays far inside its 16.7 or 20 ms. The handheld, whose
+collections §6.13 found far dearer and whose emulation thread is the bound (§6.1), was not measured; a capture there
+is likely to cost a few milliseconds one frame in four. Mistress has no switch to turn rewind off, for any console; if the handheld needs one, that is where it would go.
 
 #### 6.6.4 What is not done
 

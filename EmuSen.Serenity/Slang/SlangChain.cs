@@ -39,11 +39,22 @@ namespace EmuSen.Serenity.Slang
         private readonly SlangImage?[] _history;
         private readonly SlangImage _blank;
         private readonly SlangBuffer _vertices;
-        private SlangBuffer? _staging, _readback;
+        private SlangBuffer? _staging;
+        private SlangImage? _rows;
         private int _head;
-        private uint _originalWidth, _originalHeight;
+        private uint _originalWidth, _originalHeight, _uploadRows, _uploadRepeat;
         private uint _frameCount;
         private bool _disposed;
+
+        // Readbacks an image may be lent, and one never lent for a copy; a lent one is written again only once its image lets go - see EmuSen_Serenity.md §9.1.
+        private readonly List<ReadbackSlot> _readbacks = new();
+        private ReadbackSlot? _scratch;
+        internal const int MaxLent = 3;
+
+        // Images made by copying because every lendable readback was still held, for a test.
+        internal int CopiedImages { get; private set; }
+
+        internal int ReadbackCount => _readbacks.Count;
 
         public SlangPreset Preset { get; }
 
@@ -305,12 +316,13 @@ namespace EmuSen.Serenity.Slang
             if (pass.Previous is not null) { _vk.DestroyFramebuffer(_gpu.Device, pass.PreviousFramebuffer, null); pass.Previous.Dispose(); pass.Previous = null; }
         }
 
-        // A new frame joins the history, uploaded with its repeated rows expanded, since a slang pass sees the picture as the screen would.
+        // A new frame joins the history with its repeated rows, since a slang pass sees the picture as the screen would; the rows are repeated on the device - see EmuSen_Serenity.md §9.2.
         public void Advance(ReadOnlySpan<byte> rgba, int width, int height, int rowRepeat)
         {
             SlangProbe.Current?.Phase(SlangProbe.AdvanceBegin);
-            uint w = (uint)width, h = (uint)(height * Math.Max(1, rowRepeat));
-            if (w != _originalWidth || h != _originalHeight)
+            uint repeat = (uint)Math.Max(1, rowRepeat);
+            uint w = (uint)width, rows = (uint)height, h = rows * repeat;
+            if (w != _originalWidth || h != _originalHeight || rows != _uploadRows || repeat != _uploadRepeat)
             {
                 _vk.DeviceWaitIdle(_gpu.Device);
                 for (int i = 0; i < _history.Length; i++)
@@ -319,29 +331,71 @@ namespace EmuSen.Serenity.Slang
                     _history[i] = Blank(w, h, Format.R8G8B8A8Unorm, _passes[0].Spec.MipmapInput);
                 }
                 _staging?.Dispose();
-                _staging = _gpu.CreateBuffer(w * h * 4, BufferUsageFlags.TransferSrcBit);
-                (_originalWidth, _originalHeight) = (w, h);
+                _staging = _gpu.CreateBuffer(w * rows * 4, BufferUsageFlags.TransferSrcBit);
+                _rows?.Dispose();
+                _rows = repeat > 1 ? _gpu.CreateImage(w, rows, Format.R8G8B8A8Unorm, false) : null;
+                (_originalWidth, _originalHeight, _uploadRows, _uploadRepeat) = (w, h, rows, repeat);
             }
             _head = (_head + _history.Length - 1) % _history.Length;
-            if (rowRepeat <= 1) _gpu.Upload(_history[_head]!, rgba[..(int)(w * h * 4)], _staging!);
-            else _gpu.Upload(_history[_head]!, Expand(rgba, width, height, rowRepeat), _staging!);
+            ReadOnlySpan<byte> picture = rgba[..(int)(w * rows * 4)];
+            if (_rows is null) _gpu.Upload(_history[_head]!, picture, _staging!);
+            else _gpu.UploadRepeated(_history[_head]!, picture, _rows, repeat, _staging!);
             _frameCount++;
             SlangProbe.Current?.Phase(SlangProbe.AdvanceEnd);
         }
 
-        private static byte[] Expand(ReadOnlySpan<byte> rgba, int width, int height, int repeat)
-        {
-            var tall = new byte[width * height * repeat * 4];
-            int row = width * 4;
-            for (int y = 0; y < height; y++)
-                for (int r = 0; r < repeat; r++) rgba.Slice(y * row, row).CopyTo(tall.AsSpan((y * repeat + r) * row, row));
-            return tall;
-        }
-
         private SlangImage OriginalAt(int back) => _history[(_head + Math.Min(back, _history.Length - 1)) % _history.Length]!;
 
-        // Runs every pass for the viewport's size and returns the last one's pixels, RGBA8, a row after row.
+        // Runs every pass for the viewport's size and returns a copy of the last one's pixels, RGBA8, a row after row.
         public byte[] Render(int viewWidth, int viewHeight)
+        {
+            _scratch ??= new ReadbackSlot();
+            ulong bytes = RenderInto(_scratch, viewWidth, viewHeight);
+            var pixels = new byte[bytes];
+            fixed (byte* p = pixels) System.Buffer.MemoryCopy(_scratch.Buffer!.Mapped, p, (long)bytes, (long)bytes);
+            return pixels;
+        }
+
+        // Runs every pass and returns an image over the readback itself, no copy; the readback is not written again while Skia holds the image - see EmuSen_Serenity.md §9.1.
+        public SKImage RenderImage(int viewWidth, int viewHeight)
+        {
+            var info = new SKImageInfo(Math.Max(1, viewWidth), Math.Max(1, viewHeight), SKColorType.Rgba8888, SKAlphaType.Opaque);
+            ReadbackSlot? slot = Lendable((ulong)info.BytesSize64);
+            if (slot is null)
+            {
+                _scratch ??= new ReadbackSlot();
+                RenderInto(_scratch, viewWidth, viewHeight);
+                CopiedImages++;
+                return SKImage.FromPixelCopy(info, (nint)_scratch.Buffer!.Mapped, info.RowBytes) ?? throw new InvalidOperationException("Skia refused the chain's picture");
+            }
+            RenderInto(slot, viewWidth, viewHeight);
+            slot.Lend();
+            var pixmap = new SKPixmap(info, (nint)slot.Buffer!.Mapped, info.RowBytes);
+            SKImage? image = SKImage.FromPixels(pixmap, ReadbackSlot.Released, slot);
+            if (image is null) { slot.Return(); throw new InvalidOperationException("Skia refused the chain's picture"); }
+            return image;
+        }
+
+        // A readback no image holds and large enough, one made if none is, or null when every one the chain may lend is held.
+        private ReadbackSlot? Lendable(ulong bytes)
+        {
+            ReadbackSlot? found = null;
+            for (int i = _readbacks.Count - 1; i >= 0; i--)
+            {
+                ReadbackSlot slot = _readbacks[i];
+                if (slot.Held) continue;
+                if (slot.Buffer!.Size >= bytes) { found ??= slot; continue; }
+                slot.Retire();
+                _readbacks.RemoveAt(i);
+            }
+            if (found is not null || _readbacks.Count >= MaxLent) return found;
+            found = new ReadbackSlot();
+            _readbacks.Add(found);
+            return found;
+        }
+
+        // The passes run for the viewport's size and the last one's pixels left in the slot's buffer, visible to the host.
+        private ulong RenderInto(ReadbackSlot slot, int viewWidth, int viewHeight)
         {
             if (_originalWidth == 0) throw new InvalidOperationException("No frame has been given to the chain yet.");
             SlangProbe.Current?.Phase(SlangProbe.RenderBegin);
@@ -356,11 +410,12 @@ namespace EmuSen.Serenity.Slang
             }
 
             ulong bytes = (ulong)vw * vh * 4;
-            if (_readback is null || _readback.Size < bytes)
+            if (slot.Buffer is null || slot.Buffer.Size < bytes)
             {
-                _readback?.Dispose();
-                _readback = _gpu.CreateBuffer(bytes, BufferUsageFlags.TransferDstBit);
+                slot.Buffer?.Dispose();
+                slot.Buffer = _gpu.CreateBuffer(bytes, BufferUsageFlags.TransferDstBit);
             }
+            SlangBuffer readback = slot.Buffer;
 
             for (int i = 0; i < _passes.Length; i++) Bind(i, vw, vh);
             SlangProbe.Current?.Phase(SlangProbe.Bound);
@@ -371,7 +426,8 @@ namespace EmuSen.Serenity.Slang
                 SlangImage final = _passes[^1].Output!;
                 _gpu.Transition(commands, final, ImageLayout.TransferSrcOptimal);
                 var region = new BufferImageCopy { ImageSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1), ImageExtent = new Extent3D(vw, vh, 1) };
-                _vk.CmdCopyImageToBuffer(commands, final.Handle, ImageLayout.TransferSrcOptimal, _readback!.Handle, 1, &region);
+                _vk.CmdCopyImageToBuffer(commands, final.Handle, ImageLayout.TransferSrcOptimal, readback.Handle, 1, &region);
+                _gpu.HostReadBarrier(commands, readback);
                 _gpu.Transition(commands, final, ImageLayout.ShaderReadOnlyOptimal);
             });
 
@@ -382,11 +438,8 @@ namespace EmuSen.Serenity.Slang
                 (pass.Output, pass.Previous) = (pass.Previous, pass.Output);
                 (pass.OutputFramebuffer, pass.PreviousFramebuffer) = (pass.PreviousFramebuffer, pass.OutputFramebuffer);
             }
-
-            var pixels = new byte[bytes];
-            fixed (byte* p = pixels) System.Buffer.MemoryCopy(_readback!.Mapped, p, (long)bytes, (long)bytes);
             SlangProbe.Current?.Phase(SlangProbe.Copied);
-            return pixels;
+            return bytes;
         }
 
         private readonly record struct Texture(SlangImage Image, bool Linear, SlangWrap Wrap, bool Mipmap);
@@ -572,7 +625,53 @@ namespace EmuSen.Serenity.Slang
             _blank.Dispose();
             _vertices.Dispose();
             _staging?.Dispose();
-            _readback?.Dispose();
+            _rows?.Dispose();
+            foreach (ReadbackSlot slot in _readbacks) slot.Retire();
+            _readbacks.Clear();
+            _scratch?.Retire();
+        }
+    }
+
+    // One readback buffer and whether an image holds it; Skia's release, on whatever thread, gives it back - see EmuSen_Serenity.md §9.1.
+    internal sealed class ReadbackSlot
+    {
+        private readonly object _lock = new();
+        private bool _held, _retired;
+
+        public SlangBuffer? Buffer;
+
+        public bool Held { get { lock (_lock) return _held; } }
+
+        public static readonly SKImageRasterReleaseDelegate Released = (_, context) => ((ReadbackSlot)context).Return();
+
+        public void Lend()
+        {
+            lock (_lock) _held = true;
+        }
+
+        public void Return()
+        {
+            lock (_lock)
+            {
+                _held = false;
+                if (_retired) Free();
+            }
+        }
+
+        // No longer lent; freed now, or when the image holding it lets go.
+        public void Retire()
+        {
+            lock (_lock)
+            {
+                _retired = true;
+                if (!_held) Free();
+            }
+        }
+
+        private void Free()
+        {
+            Buffer?.Dispose();
+            Buffer = null;
         }
     }
 }

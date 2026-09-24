@@ -71,7 +71,16 @@ fn main() {
         let (c, s) = (&t.counters, t.shared());
         let busy = s.drain_nanos.load(std::sync::atomic::Ordering::Relaxed);
         let sites: Vec<String> = c.nanos_per_site.iter().enumerate().filter(|(_, n)| per_frame(**n) >= 0.01).map(|(i, n)| format!("{i}: {:.2}", per_frame(*n))).collect();
-        format!("; waited {:.3} ms a frame (by site {}); joined {:.3} ({} joins that waited); the first worker busy {:.3}", per_frame(c.nanos_per_site.iter().sum::<i64>()), sites.join(", "), per_frame(c.join_nanos), c.joins, per_frame(busy))
+        let (served, device) = (s.device_head.load(std::sync::atomic::Ordering::Relaxed), s.device_nanos.load(std::sync::atomic::Ordering::Relaxed));
+        format!(
+            "; waited {:.3} ms a frame (by site {}); joined {:.3} ({} joins that waited); the first worker busy {:.3}, on the device's scans {:.3} ({served} handed to it)",
+            per_frame(c.nanos_per_site.iter().sum::<i64>()),
+            sites.join(", "),
+            per_frame(c.join_nanos),
+            c.joins,
+            per_frame(busy),
+            per_frame(device)
+        )
     });
 
     core.machine.join_presentation(&mut core.scanout);

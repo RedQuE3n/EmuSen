@@ -5,9 +5,10 @@ use crate::memory::bus::{MemoryBus, SP_MEM_SIZE};
 use crate::memory::dp_threads::{PAGES, PageMarks, ScaledStart, Threads, site};
 use crate::memory::mi::interrupt;
 use crate::memory::ram::{Detached, Ram};
-use crate::rdp::gpu::{GpuDevice, GpuRasteriser};
+use crate::rdp::gpu::{DeviceWork, GpuDevice, GpuRasteriser, Pictures, ScanParameters};
 use crate::rdp::{Rdp, RdpMemory};
 use crate::state::{State, StateError, StateReader, StateResult, StateWriter};
+use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 
 /// `DpInterface.SnapshotWords`: a snapshot's tail always holds this many words, the unused ones zero.
@@ -27,17 +28,37 @@ pub struct ScaledDrawing {
     pub gpu_report: String,
     /// Counts the device's scans and its rebuilds, so a job can tell whether the picture the device holds is still its own (Mars_Gpu.md §14).
     pub scan_outs: u64,
+    /// The device's pictures, kept here so the machine's thread reaches them without the device, which the drain's leader may hold (Mars_Native.md §6.15).
+    pictures: Option<Arc<Pictures>>,
 }
 
 impl Default for ScaledDrawing {
     fn default() -> Self {
-        ScaledDrawing { scale: 1, rdram: Ram::zeroed(0), hidden: Ram::zeroed(0), processor: None, wants_gpu: false, gpu: None, gpu_report: "off".into(), scan_outs: 0 }
+        ScaledDrawing { scale: 1, rdram: Ram::zeroed(0), hidden: Ram::zeroed(0), processor: None, wants_gpu: false, gpu: None, gpu_report: "off".into(), scan_outs: 0, pictures: None }
     }
 }
 
 impl ScaledDrawing {
-    /// `RebuildGpu`: the device path made or dropped to match the scale and the wish; a rasteriser whose memory still fits is kept and emptied, as `ResetScaled` empties it.
+    /// The device's pictures, for a presenter or a scan, none without a device.
+    pub fn pictures(&self) -> Option<Arc<Pictures>> {
+        self.pictures.clone()
+    }
+
+    /// The device moved in from another machine's drawing, as a state read moves it; nothing may be recording for it.
+    pub fn take_device_from(&mut self, old: &mut ScaledDrawing) {
+        (self.gpu, self.wants_gpu, self.scan_outs) = (old.gpu.take(), old.wants_gpu, old.scan_outs);
+        self.gpu_report = std::mem::take(&mut old.gpu_report);
+        self.pictures = old.pictures.take();
+    }
+
+    /// `RebuildGpu`, and the pictures kept beside it.
     fn rebuild_gpu(&mut self) {
+        self.remake_gpu();
+        self.pictures = self.gpu.as_ref().map(|g| g.pictures());
+    }
+
+    /// `RebuildGpu`: the device path made or dropped to match the scale and the wish; a rasteriser whose memory still fits is kept and emptied, as `ResetScaled` empties it.
+    fn remake_gpu(&mut self) {
         self.scan_outs += 1;
         if !self.wants_gpu || self.scale <= 1 {
             self.gpu = None;
@@ -316,24 +337,35 @@ impl DpInterface {
         &self.multiple.gpu_report
     }
 
-    /// `ScanOut`: the VI's walk over the device's own memory, once the drawing is finished, submitted without waiting (Mars_Gpu.md §14).
-    pub fn scan_out(&mut self, scan: &crate::rdp::gpu::ScanParameters) {
-        self.join();
+    /// `ScanOut`: the VI's walk over the device's own memory, submitted without waiting (Mars_Gpu.md §14); with a drain, by its leader at the
+    /// word handed over last, so this thread does not join it (Mars_Native.md §6.15).
+    pub fn scan_out(&mut self, scan: &ScanParameters) {
         let m = &mut self.multiple.0;
-        if let Some(gpu) = m.gpu.as_mut() {
+        if m.gpu.is_none() {
+            return;
+        }
+        m.scan_outs += 1;
+        // The device is not borrowed while a drain runs, since its leader may be using it.
+        if let Some(t) = self.threads.as_mut() {
+            t.hand_device(DeviceWork::Scan(*scan));
+        } else if let Some(gpu) = m.gpu.as_mut() {
             gpu.scan_out(scan);
-            m.scan_outs += 1;
         }
     }
 
-    /// `ScanIntoRaster`: the VI's clears and walk into the raster the device keeps while it averages, submitted without waiting (Mars_Gpu.md §15).
+    /// `ScanIntoRaster`: the VI's clears and walk into the raster the device keeps while it averages, submitted without waiting (Mars_Gpu.md §15);
+    /// with a drain, by its leader as `scan_out` is, the seed and the spans copied for it.
     #[allow(clippy::too_many_arguments)]
-    pub fn scan_into_raster(&mut self, width: usize, height: usize, side: usize, seed: &[u8], clear: bool, spans: &[u32], walk: bool, scan: &crate::rdp::gpu::ScanParameters) {
-        self.join();
+    pub fn scan_into_raster(&mut self, width: usize, height: usize, side: usize, seed: &[u8], clear: bool, spans: &[u32], walk: bool, scan: &ScanParameters) {
         let m = &mut self.multiple.0;
-        if let Some(gpu) = m.gpu.as_mut() {
+        if m.gpu.is_none() {
+            return;
+        }
+        m.scan_outs += 1;
+        if let Some(t) = self.threads.as_mut() {
+            t.hand_device(DeviceWork::Raster { width, height, side, seed: seed.to_vec(), clear, spans: spans.to_vec(), walk, scan: *scan });
+        } else if let Some(gpu) = m.gpu.as_mut() {
             gpu.scan_into_raster(width, height, side, seed, clear, spans, walk, scan);
-            m.scan_outs += 1;
         }
     }
 
@@ -538,7 +570,8 @@ impl MemoryBus {
                 debug_assert!(self.dp.pending.is_empty(), "a load's words run before a drain starts");
                 let scaled = &mut self.dp.multiple.0;
                 let gpu = scaled.gpu_pointer();
-                let at_multiple = scaled.processor.as_mut().map(|p| ScaledStart { processor: p, rdram: &scaled.rdram, hidden: &scaled.hidden, scale: scaled.scale, gpu });
+                let pictures = scaled.pictures.clone();
+                let at_multiple = scaled.processor.as_mut().map(|p| ScaledStart { processor: p, rdram: &scaled.rdram, hidden: &scaled.hidden, scale: scaled.scale, gpu, pictures });
                 let threads = Threads::start(&mut self.dp.processor, &self.rdram, &self.rdram_hidden, &self.dp.marks.0.0, verify, workers, at_multiple);
                 *self.dp.threads = Some(Box::new(threads));
             }

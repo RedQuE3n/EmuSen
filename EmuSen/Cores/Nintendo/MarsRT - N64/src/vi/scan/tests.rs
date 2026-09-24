@@ -472,6 +472,7 @@ fn band_geometries() -> Vec<(&'static str, [u32; 14])> {
         ("PAL, tallest", regs(2, 3, 320, 0x200, 0x200, 128, 640, 44, 288, 0, 0).sync(625).words()),
         ("a top offset", regs(2, 3, 320, 0x400, 0x400, 108, 320, 100, 150, 0, 0).words()),
         ("too short to split", regs(2, 3, 320, 0x400, 0x400, 108, 320, 34, 63, 0, 0).words()),
+        ("a buffer narrower than half the picture, filtered", regs(2, 0, 64, 0x400, 0x400, 108, 256, 34, 120, 0x80, 0x40).control(DIVOT_ON).words()),
     ]
 }
 
@@ -508,7 +509,7 @@ fn a_deferred_walk_in_any_number_of_bands_is_the_immediate_walk() {
             compared += 1;
         }
     }
-    assert_eq!(compared, 9 * 8);
+    assert_eq!(compared, 10 * 8);
 }
 
 /// The wait at the new site: a band held on its helper for 300 ms holds the join for all of it, and the picture then shown is whole (Mars_Native.md §6.11).

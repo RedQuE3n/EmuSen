@@ -418,40 +418,56 @@ namespace EmuSen.WiseMan.Cores
             return list.ToArray();
         }
 
-        // A pause that finds some processors waiting at a barrier and the rest short of it must still be answered - see Mars_Rdp.md §2.8.
-        [Fact]
-        public void A_pause_that_finds_some_processors_at_a_barrier_and_the_rest_short_of_it_is_answered()
+        // A pause that finds some processors waiting at a barrier and the rest short of it must still be answered; the hold makes every pause find it - see Mars_Rdp.md §2.9.1.
+        [Theory]
+        [InlineData(2)]
+        [InlineData(3)]
+        [InlineData(4)]
+        public void A_pause_that_finds_some_processors_at_a_barrier_and_the_rest_short_of_it_is_answered(int workers)
         {
-            ulong[] list = Barriers(1500);
+            ulong[] list = Barriers(200);
             MemoryBus atOnce = new();
             HandOver(atOnce, list);
             byte[] finished = State(atOnce);
-            long raised = 0;
 
-            for (int attempt = 0; attempt < 100; attempt++)
+            for (int attempt = 0; attempt < 30; attempt++)
             {
                 var bus = new MemoryBus();
                 bus.Dp.Threaded = true;
-                bus.Dp.Workers = 4;
+                bus.Dp.Workers = workers;
+                bus.Dp.HoldBeforeImageChange = 1;
                 HandOver(bus, list);
-                System.Threading.Thread.SpinWait(attempt * 997 % 20_000);
+                AtTheBarrier(bus, workers, $"{workers} processors, attempt {attempt}");
+                long raised = bus.Dp.PausesRaised;
                 var pause = System.Threading.Tasks.Task.Run(() => bus.Dp.Pause());
                 if (!pause.Wait(TimeSpan.FromSeconds(5)))
                 {
+                    bus.Dp.HoldBeforeImageChange = 0;
                     bus.Dp.Resume();
-                    Assert.Fail($"four processors: the pause at attempt {attempt} was never answered");
+                    Assert.Fail($"{workers} processors: the pause at attempt {attempt} was never answered");
                 }
+                Assert.True(bus.Dp.PausesRaised > raised, $"{workers} processors, attempt {attempt}: the pause point was not raised, so the case was not met");
+                bus.Dp.HoldBeforeImageChange = 0;
                 bus.Dp.Resume();
                 bus.Dp.Join();
                 Assert.Equal(finished, State(bus));
-                raised += bus.Dp.PausesRaised;
                 bus.Dp.Threaded = false;
             }
+        }
 
-            Assert.True(raised > 0, "no pause found a processor at a barrier, so the case was not reached");
+        // Waits until every processor but the held one waits at the barrier of the image change the held one stands short of.
+        private static void AtTheBarrier(MemoryBus bus, int workers, string what)
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (bus.Dp.BarrierWaiters != workers - 1)
+            {
+                if (clock.Elapsed > TimeSpan.FromSeconds(10)) Assert.Fail($"{what}: {bus.Dp.BarrierWaiters} of {workers - 1} processors reached the held barrier");
+                System.Threading.Thread.Yield();
+            }
         }
 
         // Pauses, resumes and snapshots from another thread while two to four processors run barriers, under a watchdog; every snapshot loads to the finished list.
+        // Odd rounds hold the last processor short of each image change, so every pause and snapshot in them meets the case; even rounds run free, by timing.
         [Theory]
         [InlineData(2)]
         [InlineData(3)]
@@ -459,13 +475,13 @@ namespace EmuSen.WiseMan.Cores
         public void Pauses_and_snapshots_while_the_processors_run_barriers_are_all_answered_and_exact(int workers)
         {
             ulong[] list = Barriers(3000);
-            int pending = 0;
-            long raised = 0;
+            int pending = 0, held = 0, missed = 0;
 
             for (int round = 0; round < 8; round++)
             {
                 // Both machines take the same two pieces at the same place, so their registers agree.
                 int cut = list.Length / 3 + round * 97;
+                bool hold = round % 2 == 1;
                 MemoryBus atOnce = new();
                 HandOver(atOnce, list[..cut]);
                 HandOver(atOnce, list[cut..], List + (uint)cut * 8);
@@ -474,27 +490,32 @@ namespace EmuSen.WiseMan.Cores
                 var bus = new MemoryBus();
                 bus.Dp.Threaded = true;
                 bus.Dp.Workers = workers;
+                bus.Dp.HoldBeforeImageChange = hold ? 1 : 0;
                 var taken = new System.Collections.Generic.List<(byte[] Snapshot, bool Whole)>();
                 var run = System.Threading.Tasks.Task.Run(() =>
                 {
                     HandOver(bus, list[..cut]);
                     for (int i = 0; i < 40; i++)
                     {
-                        System.Threading.Thread.SpinWait((round * 40 + i) * 613 % 12_000);
+                        if (hold) AtTheBarrier(bus, workers, $"{workers} processors, round {round}, step {i}");
+                        else System.Threading.Thread.SpinWait((round * 40 + i) * 613 % 12_000);
+                        long raised = bus.Dp.PausesRaised;
                         if (i % 4 == 3) taken.Add((State(bus, snapshot: true), i > 20));
                         else { bus.Dp.Pause(); bus.Dp.Resume(); }
+                        if (hold) { held++; if (bus.Dp.PausesRaised == raised) missed++; }
                         if (i == 20) HandOver(bus, list[cut..], List + (uint)cut * 8);
                     }
+                    bus.Dp.HoldBeforeImageChange = 0;
                     bus.Dp.Join();
                 });
                 if (!run.Wait(TimeSpan.FromSeconds(30)))
                 {
+                    bus.Dp.HoldBeforeImageChange = 0;
                     bus.Dp.Resume();
-                    Assert.Fail($"{workers} processors, round {round}: a pause or a snapshot was never answered");
+                    Assert.Fail($"{workers} processors, round {round}{(hold ? ", held" : "")}: a pause or a snapshot was never answered");
                 }
                 run.GetAwaiter().GetResult();
                 Assert.Equal(finished, State(bus));
-                raised += bus.Dp.PausesRaised;
                 bus.Dp.Threaded = false;
 
                 foreach (var (snapshot, whole) in taken)
@@ -508,7 +529,7 @@ namespace EmuSen.WiseMan.Cores
             }
 
             Assert.True(pending > 0, "no snapshot was taken with words still pending, so the case was not reached");
-            Assert.True(raised > 0, "no pause found a processor at a barrier, so the case was not reached");
+            Assert.True(held == 160 && missed == 0, $"{workers} processors: {missed} of {held} held pauses and snapshots did not raise the pause point, so the case was not met in them");
         }
 
         // A range read whose first bytes no pending draw holds still waits for the draws that hold the rest of it - see Mars_Rdp.md §2.6.3.

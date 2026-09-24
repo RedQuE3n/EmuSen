@@ -84,7 +84,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
             // Mercury does not time its own subsystems, and an empty list is the documented way to say so.
             _hardwareLoad = new(() => Array.Empty<DebugLoadInfo>(), Array.Empty<DebugLoadInfo>());
 
-            if (core.Bus != null) core.Bus.WriteObserver = this;
+            core.WriteObserver = this;
         }
 
         public string CoreName => _core.CoreName;
@@ -103,6 +103,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
 
         public CoverageRegistry? Coverage => _core.Coverage;
         public LabelRegistry? Labels => _core.Labels;
+        public CallStackRegistry? CallStack => _core.CallStack;
 
         public long FrameCount => _host?.FrameCount() ?? _core.TotalFrames;
 
@@ -135,6 +136,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
             new DebugCpu("cpu", "SM83", _core.Breakpoints)
             {
                 Coverage = _core.Coverage,
+                CallStack = _core.CallStack,
                 CodeSpace = MercuryCore.SpaceCpuBus,
                 Registers = _cpuRegisters,
                 ProgramCounter = () => _core.Cpu?.PC ?? 0,
@@ -182,8 +184,12 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
             _hardwareLoad.Refresh();
         }
 
-        public void OnWrite(string spaceName, int address, byte value) =>
+        // A store reaches the watches and the data breakpoints both - see Mercury_Debug.md §6.
+        public void OnWrite(string spaceName, int address, byte value)
+        {
             Watches.RecordWrite(spaceName, address, value, DescribeWriteSite);
+            Breakpoints.NoteWrite(spaceName, address, value);
+        }
 
         private string DescribeWriteSite() =>
             _core.Cpu is null ? "" : $"PC=${_core.Cpu.LastInstructionPC:X4}";

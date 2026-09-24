@@ -558,17 +558,26 @@ rewind. Mercury has no `ISnapshotCore`, so rewind uses the full state on both en
   - D2 (the clock in double speed) changes how state evolves, but not the format;
   - D3 (the host path in the state) and the triple cartridge copy are one format change, to state version 6. That
     shrinks Yellow's state by 64 KB and removes `_savePath` and the string primitive the port would otherwise need.
+  *Decided by the user on 2026-09-24: fix all three now, in both engines in lock-step, each shown by a test before and
+  after; D3 is state version 6, and version-5 states still load.*
 - **Q4, whether the port carries Mercury's known simplifications.** The simplifications include the per-line renderer,
   mode 3 not lengthening for sprites, internal cycles at the end of an instruction, instant GP-HDMA, and the 79
   non-passing corpus ROMs of §3.4. The recommendation is to port them exactly and improve afterwards, because an
   improvement made during the port has no oracle. After the port, improvements are made either in both engines, while C#
   is the oracle, or in Rust alone with the corpus as the oracle, once C# is frozen. That second choice is the user's.
+  *Decided by the user on 2026-09-24: improvements after the port land in both engines in lock-step, with C# the
+  oracle, until the C# core moves to its legacy branch.*
 - **Q5, the C# Mercury's future.** *Partly decided by the user on 2026-09-23:* every C# core will eventually move to a
   legacy branch. §3.7 says how the oracle survives the move. Two questions stay open: when the Engine row's default
   flips to MercuryRT, and whether C# is still offered to players until the move.
+  *Decided by the user on 2026-09-24: the Engine row's default flips to MercuryRT after stages 6 and 7 and a session of
+  play on the handheld, the condition MarsRT's flip had (`Mars_Native.md` §6.2).*
 - **Q6, the corpus's place.** Is the corpus kept gitignored under `TestRoms/hardware/`, as `Mercury_HardwareTests.md`
   §3 intends? Is WiseMan's theory changed from "passes" to "matches the recorded baseline"? That changes a committed
   test's meaning, which is why it is asked rather than done.
+  *Decided by the user on 2026-09-24: the corpus stays gitignored under `TestRoms/hardware/`, and the committed theory
+  becomes "matches the recorded baseline", so a verdict that changes in either direction fails until the baseline is
+  re-recorded.*
 - **Risk: P1 is wide by design.** No component like Mercury's tick loop was measured in Mars. If stage 2's number comes
   in under 1.2×, the port is still worth finishing on grounds 1 and 3 of §1.2. The later lever, batching the devices
   (§1.2), would then be the next question, with its own prediction.

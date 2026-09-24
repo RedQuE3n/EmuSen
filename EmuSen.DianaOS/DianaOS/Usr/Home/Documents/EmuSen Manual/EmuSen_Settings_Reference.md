@@ -2099,8 +2099,8 @@ none of this has been tried on the handheld.
 **What changed.** Mistress used `RewindBuffer`'s default interval, a snapshot every 4 frames: fifteen a second on a
 60 Hz console. The player found that too many save states once the reel (§4.49) made them visible, and asked for four
 a second. Mistress now sets the interval when a game loads from that console's own frame rate,
-`RewindIntervalFor(hz) = round(hz / 4)`: 15 frames on the NES, Game Boy, SNES and N64 at 60 Hz, 13 on a 50 Hz PAL
-game (12.5 rounded, 3.85 a second). `RewindBuffer.DefaultIntervalFrames` stays 4, so the harness and every other user
+`RewindIntervalFor(hz) = round(hz / 4)`: 15 frames on the NES, Game Boy, SNES and N64 at 60 Hz, 12 on a 50 Hz PAL
+game (`Math.Round` takes 12.5 to the even 12, so 4.17 a second). `RewindBuffer.DefaultIntervalFrames` stays 4, so the harness and every other user
 of the buffer are unchanged.
 
 **A held rewind keeps its speed.** The hotkey held used to step back one snapshot every frame, four frames of history

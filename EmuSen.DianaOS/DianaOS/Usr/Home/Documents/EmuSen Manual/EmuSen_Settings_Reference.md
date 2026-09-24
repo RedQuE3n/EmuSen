@@ -1822,8 +1822,8 @@ slider reaches its own Reset; Reset All and Use sit above the sliders; B closes.
 **A defect the pad found.** Using a shader refreshes the list, to move the *In use* pill, and a refreshed
 `GroupedList` replaced every row's container, the focused one with it, which left the focus on nothing: the next
 d-pad press did nothing at all. With a mouse the defect is invisible. `GroupedList.Refresh` now puts the focus back on
-the row it keeps selected, or on the first row, unselected, when none is kept (`LunaP.md` §94.5), and a mutant without
-that fails both LunaP's case and this window's pad case.
+the row it keeps selected, or on the first row, unselected, when none is kept (`LunaP.md` §94.5). Before the rule the
+pad-menu case stopped with no focused control after A on a row (observed); a mutant without it fails LunaP's case.
 
 **A second, of the same kind.** **Use This Shader** is disabled once it has been pressed (it reads *In Use*), and
 **Reset All** once nothing differs from the default; a button disabled under the focus loses it, and the pad was dead
@@ -1831,26 +1831,32 @@ again. Whichever of the two was pressed now hands the focus on, to the other but
 first slider, else to the list's selected row (`FocusNearby`). Found by the pad-menu case, whose next walk had no
 starting point; a mutant that never hands it on fails that case.
 
-**Where the two buttons sit.** They are right-aligned above the column of Reset buttons, Reset All then Use. Left
-where they were first put, at the left under the shader's name, up from a slider's Reset went past them to the search
-box, and the Game Boy tab's Use was unreachable by pad whenever a shader other than the one in use was shown; the
-audit reported it, and a walk from a Game Boy LCD row (right to its first slider, up to its Reset, up again) now ends
-on Use.
+**Where the two buttons sit.** They are right-aligned above the column of Reset buttons, Reset All then Use, so that
+from a row a pad reaches Use in three presses (right to the first slider, up to its Reset, up again, measured on a
+Game Boy LCD row). They were first at the left under the shader's name, and the audit then reported the Game Boy
+tab's Use unreachable; **that report came from the audit, not from the layout** (it was made by the version that did
+not yet put scrolling back, below): with the audit corrected, the left placement is reachable too (the mutant that puts it back survives, §4.48.6). The right
+placement is kept for the shorter path, which is a judgement, not a measured need.
 
-**The audit had to change.** `PadAudit` walked breadth first, remembering each control it reached and pressing every
-direction from it again later. Two things in this window broke that, and both would break it for any window like it:
+**The audit had to change.** `PadAudit` walked breadth first, remembering each control it reached by instance and
+later focusing it directly to press every direction from it. This window broke that in two ways:
 
-- **A virtualised list recycles its row containers as it scrolls**, so a row reached early might later be drawing
-  another model, and the walk thought a row it had not explored had been seen. The Game Boy tab's **Update Pack**,
-  under a list longer than the sheet, was reported unreachable, though a walk down the list with the pad reaches it
-  (checked row by row). Rows are now known by list and index, and other controls by where they sit in the tree.
 - **The right half is rebuilt by the list's selection**, and a row given the focus is selected by it, so a slider
-  reached from one row was gone once the walk had visited another, and a list is entered at its selected row, so the
-  same press from the same place led elsewhere. The walk now reaches every control it explores **by replaying the
-  path it was found by**, from the starting control with every list's selection put back as it was, never by
-  focusing it directly. This is slower (the path is replayed before each press) and exact: the state a control is
-  explored in is the state it was found in. Every scrolling area's offset is put back too: a move is by position, and
-  the first version, which restored only the lists, lost the walk down the sliders once the column had scrolled.
+  reached from one row was gone once the walk had visited another; and a list is entered at its selected row, so the
+  same press from the same place led elsewhere once the walk had moved the selection. The Game Boy tab's **Update
+  Pack** was reported unreachable, though a walk down the list with the pad reaches it (checked row by row). The walk
+  now reaches every control it explores **by replaying the path it was found by**, from the starting control, with
+  every list's selection and every scrolling area's offset put back as they were, never by focusing it directly.
+  This is slower (the path is replayed before each press) and exact: the state a control is explored in is the state
+  it was found in. The first version restored only the lists and lost the walk down the sliders once their column had
+  scrolled, since a move is by position. Controls other than rows are known by where they sit in the tree, so a
+  pane rebuilt the same way is the same controls.
+- **A virtualised list recycles its row containers as it scrolls**: walking 60 rows down the real pack's list used
+  13 containers, 47 of them reused for a later row, while the Game Boy tab's 11 rows reused none. A row is therefore
+  known by its list and index, not by the container drawing it. **This was not the cause of the Update Pack report**
+  (no container was reused there), and no audit case today has a list long enough to need it: the mutant that keys
+  rows by container survives (§4.48.6). It is kept because a longer list in any audited window would make the walk
+  treat a row it has not explored as seen.
 
 `Every_control_of_each_settings_sheet_is_reached_by_the_pad("Shaders")` audits the sheet and
 `In_desktop_mode_a_real_window_is_driven_and_every_control_reached("ShowShaderSettings")` the desktop window; the
@@ -1858,7 +1864,7 @@ four existing windows' audits and the cheat sheets' pass under the new walk unch
 
 #### 4.48.6 Tests, pictures and mutants
 
-**Tests.** `ShaderSettingsWindowTests` (11): the built-ins, None first, and the one in use selected on every tab;
+**Tests.** `ShaderSettingsWindowTests` (10): the built-ins, None first, and the one in use selected on every tab;
 Use storing for one console and telling the frontend, by Enter; grouping, readable names, word-by-word search over
 name, folder and path, the category dropdown, and the wrapping path; recents newest first and out of the way of a
 search; the download filling every tab; a built-in's sliders stored per console and per shader, reset one and all;
@@ -1873,5 +1879,47 @@ menu, CRT (Lottes) used, a slider moved with the value reaching the frame contro
 at the window's own 980×660 against the real pack, and `pad-shaders-search`, `pad-shaders-slider` and
 `pad-shaders-lottes` on a 1280×800 Game Mode sheet.
 
-**Mutants.** Listed with their results in §4.48.7's companion list below.
+**The cost of drawing a filter headlessly.** The first version of the running-game case took 85 s: every capture of
+the main window drew CRT (Lottes) on the CPU, where a Skia runtime effect costs about 150 µs a pixel, some 18 s for
+the 400×300 picture. The case now sizes the frame control to 24×24 before it draws; the chain it checks is the same.
+Likewise the pad-menu case moves its sliders before the filter is in use and applies it last.
+
+**Mutants** (each built and run against the cases in its blast radius, then restored from git):
+
+| Mutant | Result |
+|---|---|
+| `ApplyScreenFilter` never sets `ShaderParameters` | caught: the running-game case and the pad-menu case |
+| search over the name alone | caught: the grouping and search case |
+| a value moved back to its default is stored rather than removed | caught: the built-in parameters case |
+| Use does not record the recent | caught: the recents case |
+| a float widened directly, not through `decimal` | caught: the built-in parameters case (0.041) |
+| a disabled button keeps the focus | caught: the pad-menu case |
+| a search hides None | caught: the search case and the pad case over the graphics sheet |
+| the audit does not put the lists' selections back | caught: the desktop audit of the Shaders window |
+| **any console's change re-applies the running console's shader** | **survived**, and is equivalent: re-applying the running console's own stored shader and values changes nothing that can be observed, so the console check in `ShaderChanged` saves work and guards nothing |
+| **the audit keys rows by container** | **survived**: no audited list is long enough to recycle a container (above) |
+| **the Use and Reset All buttons back at the left** | **survived**: both placements are reachable (above) |
+
+Before this, LunaP's new case caught the `GroupedList` rule's removal (`LunaP.md` §94.5).
+
+#### 4.48.7 What is not done
+
+- **The sliders are not virtualised.** A Mega Bezel preset's 944 rows take 1.9 s to build, during which the window
+  does not answer; nothing else measured comes near it (`crt-royale`, 46, in 288 ms). The fix is a virtualised list of
+  rows, or building them in batches; neither was done. Nor can the parameters be searched, which is what a list of 944
+  wants.
+- **No preview.** A preset is known by its name and folder, not by a picture of what it draws.
+- **Favourites** were decided against (§4.48.1).
+- **A value cannot be typed**, only stepped (`LunaP.md` §94.4).
+- **A preset that will not build is found only when it is used**: the status bar says why (§4.41) and the list does
+  not mark it beforehand.
+- **Only the built-in path is proved end to end.** The test that a slider reaches the chain a running game draws
+  with uses CRT (Lottes). For a RetroArch preset the window's values reach `GameFrameControl.ShaderParameters` by the
+  same code, and Serenity's own tests prove the control hands them to a built preset (`EmuSen_Serenity.md` §7.6), but
+  no one test runs a preset in a running game, since it needs a Vulkan device.
+- **Stored values are never pruned.** A preset removed from the pack, or a parameter renamed by an update, leaves its
+  values in `graphics.json`; an id the shader no longer declares is ignored, so this is untidy and not harmful.
+- **The pad and the 1280×800 text are proved headlessly only.** The walks and the audit are WiseMan's; the pictures
+  are Avalonia's headless renderer at the size Game Mode uses. Neither has been seen on the handheld.
+- The headings do not fold (`LunaP.md` §94.4), and a download cannot be cancelled from the window.
 

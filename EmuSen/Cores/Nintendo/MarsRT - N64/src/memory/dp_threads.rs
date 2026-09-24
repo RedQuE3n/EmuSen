@@ -1237,13 +1237,22 @@ impl Threads {
 
     /// `WaitForRange` and `WaitForReadRange`: every marked page of the range, each for its own bytes.
     pub fn wait_range(&mut self, from: i64, count: i64, site: usize, write: bool) {
+        self.wait_range_as(from, count, site, write, !write);
+    }
+
+    /// A read of a range that the pending draws' boxes do not narrow, for a capture at a multiple (Mars_Native.md §6.14).
+    pub fn wait_range_whole(&mut self, from: i64, count: i64, site: usize) {
+        self.wait_range_as(from, count, site, false, false);
+    }
+
+    fn wait_range_as(&mut self, from: i64, count: i64, site: usize, write: bool, narrow: bool) {
         let length = self.shared.rdram_len as i64;
         let first = from.clamp(0, length) >> 12;
         let last = ((from + count).clamp(0, length) - 1) >> 12;
         let started = Instant::now();
         self.waiting += 1;
         let mut waited = false;
-        self.read_range = (!write).then_some((from, from + count, None));
+        self.read_range = narrow.then_some((from, from + count, None));
         let mut page = first;
         while page <= last {
             let p = page as usize;

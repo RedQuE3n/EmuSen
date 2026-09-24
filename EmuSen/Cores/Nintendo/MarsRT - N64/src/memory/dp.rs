@@ -270,6 +270,14 @@ impl DpInterface {
         }
     }
 
+    /// `WaitForReadRange` as C# waits, for every pending draw on the range's marked pages, which a capture at a multiple keeps (Mars_Native.md §6.14).
+    #[inline]
+    pub fn wait_read_range_whole(&mut self, from: u32, count: u32, site: usize) {
+        if let Some(t) = self.threads.as_mut() {
+            t.wait_range_whole(from as i64, count as i64, site);
+        }
+    }
+
     /// `WaitForRange`.
     #[inline]
     pub fn wait_write_range(&mut self, from: u32, count: u32, site: usize) {

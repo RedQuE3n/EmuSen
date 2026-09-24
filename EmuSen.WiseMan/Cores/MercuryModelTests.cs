@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Mercury;
+using EmuSen.Cores.Nintendo.Mercury.Debug;
 using EmuSen.Cores.Nintendo.Mercury.Memory;
 using EmuSen.Cores.Nintendo.Mercury.Video;
 using EmuSen.Cores.Nintendo.MercuryRT;
@@ -344,6 +345,88 @@ namespace EmuSen.WiseMan.Cores
             second.Rust.ReadSpace(6, 0xFF00, p1);
             Assert.Equal(0xDE, second.Csharp.Bus!.Read(0xFF00));
             Assert.Equal(0xDE, p1[0]);
+        }
+
+        // The debugger's palette 0 is the four colours the probe draws, and MercuryRT's mirror is on the machine's console from the load on - see Mercury_Model.md §5.
+        [Theory]
+        [InlineData((byte)0x00, GbModel.Auto)]
+        [InlineData((byte)0x00, GbModel.GameBoyColor)]
+        [InlineData((byte)0x80, GbModel.GameBoy)]
+        public void The_debugger_shows_the_console_the_game_runs_on_on_both_engines(byte cgb, GbModel model)
+        {
+            CoreOptions.BatteryRamDisabled = true;
+            string path = Path.Combine(_dir, $"debug-{cgb:X2}-{model}.gb");
+            byte[] rom = ProbeRom(cgb, 0x70, licensee: 0x01);
+            File.WriteAllBytes(path, rom);
+            var cs = new MercuryCore { Model = model };
+            cs.LoadRom(path);
+            using var rt = new MercuryRtCore { Model = model };
+            rt.LoadRom(path);
+            Assert.Equal(cs.Bus!.CgbHardware, rt.Mirror.Bus!.CgbHardware);
+            Assert.Equal(cs.Bus!.DmgCompat, rt.Mirror.Bus!.DmgCompat);
+
+            var csTarget = new MercuryDebugTarget(cs);
+            var rtTarget = rt.CreateDebugTarget();
+            for (int f = 0; f < 10; f++)
+            {
+                cs.RunFrame();
+                rt.RunFrame();
+            }
+            csTarget.RefreshProviders();
+            rtTarget.RefreshProviders();
+
+            static string Show(IReadOnlyList<EmuSen.Cauldron.DebugPaletteInfo> palettes) =>
+                string.Join("|", palettes.Select(p => string.Join(" ", p.Colors.Select(c => $"{c.r:X2}{c.g:X2}{c.b:X2}"))));
+            string shown = Show(csTarget.Palettes.Current);
+            _output.WriteLine($"${cgb:X2} on {model}: {shown}");
+            Assert.Equal(shown, Show(rtTarget.Palettes.Current));
+            Assert.Equal(3, csTarget.Palettes.Current.Count);
+
+            byte[] frame = rt.GetFrameBufferRgba();
+            Assert.Equal(Enumerable.Range(0, 4).Select(x => $"{frame[x * 4]:X2}{frame[x * 4 + 1]:X2}{frame[x * 4 + 2]:X2}"),
+                csTarget.Palettes.Current[0].Colors.Select(c => $"{c.r:X2}{c.g:X2}{c.b:X2}"));
+            if (!cs.Bus!.DmgCompat) return;
+
+            // The object registers through object palettes 0 and 1, from the table the boot ROM chose.
+            var (bg, obj0, obj1) = CompatibilityPalettes.ForNumber(CompatibilityPalettes.PaletteNumber(rom));
+            static int Expand(int five) => (five << 3) | (five >> 2);
+            static string Through(byte register, ushort[] palette) => string.Join(" ", Enumerable.Range(0, 4)
+                .Select(c => palette[(register >> (c * 2)) & 3]).Select(v => $"{Expand(v & 0x1F):X2}{Expand((v >> 5) & 0x1F):X2}{Expand(v >> 10):X2}"));
+            var ppu = cs.Bus!.Ppu;
+            Assert.Equal($"{Through(ppu.Bgp, bg)}|{Through(ppu.Obp0, obj0)}|{Through(ppu.Obp1, obj1)}", shown);
+        }
+
+        // A rebuild for another console's state keeps the debugger's call stack following the game, on both engines - see Mercury_Model.md §5.
+        [Theory]
+        [InlineData((byte)0x00, GbModel.GameBoyColor, GbModel.Auto)]
+        [InlineData((byte)0x80, GbModel.GameBoy, GbModel.Auto)]
+        public void A_rebuild_for_a_state_keeps_the_debuggers_call_stack_on_both_engines(byte cgb, GbModel madeOn, GbModel loadedOn)
+        {
+            CoreOptions.BatteryRamDisabled = true;
+            byte[] rom = SyntheticGbRom.Build(cgbFlag: cgb, patches: new[] { (0, new byte[] { 0xCD, 0x00, 0x02, 0x18, 0xFE }), (0xB0, new byte[] { 0x18, 0xFE }) });
+            string path = Path.Combine(_dir, $"calls-{cgb:X2}.gb");
+            File.WriteAllBytes(path, rom);
+            var maker = new MercuryCore { Model = madeOn };
+            maker.LoadRom(path);
+            using var saved = new MemoryStream();
+            maker.SaveState(saved);
+
+            var cs = new MercuryCore { Model = loadedOn };
+            cs.LoadRom(path);
+            using var rt = new MercuryRtCore { Model = loadedOn };
+            rt.LoadRom(path);
+            cs.Breakpoints.AddBreakpoint(0x7000);
+            rt.Breakpoints.AddBreakpoint(0x7000);
+            Assert.NotEqual(maker.CoreName, cs.CoreName);
+            cs.LoadState(new MemoryStream(saved.ToArray()));
+            rt.LoadState(new MemoryStream(saved.ToArray()));
+            Assert.Equal(maker.CoreName, cs.CoreName);
+            Assert.Equal(maker.CoreName, rt.CoreName);
+
+            cs.RunFrame();
+            rt.RunFrame();
+            Assert.Equal(new[] { 0x0200 }, cs.CallStack.Frames.Select(f => (int)f.Target));
+            Assert.Equal(new[] { 0x0200 }, rt.CallStack.Frames.Select(f => (int)f.Target));
         }
 
         // The setting through ICoreSettings on both engines: read, refused, and before the first frame a change reloads the game at once.

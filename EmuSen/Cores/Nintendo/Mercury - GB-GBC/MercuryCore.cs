@@ -20,8 +20,11 @@ namespace EmuSen.Cores.Nintendo.Mercury
         // "MERC" little-endian, then the format version - see EmuSen_Save_States.md §3.
         private const uint StateMagic = 0x4352454D;
 
-        // 2 added the PPU to the bus walk, 3 the colour banks and HDMA, 4 the APU, 5 the serial port - see EmuSen_Save_States.md §1.
-        private const int StateVersion = 5;
+        // 2 added the PPU to the bus walk, 3 the colour banks and HDMA, 4 the APU, 5 the serial port, 6 dropped the save path and two cartridge copies - see EmuSen_Save_States.md §7.
+        private const int StateVersion = 6;
+
+        // The oldest version LoadState still reads, its retired fields walked and dropped - see Mercury_Native.md §9.3.
+        private const int OldestReadableVersion = 5;
         int global::EmuSen.Cores.IStateFormat.StateVersion => StateVersion;
 
         private const int SaveEveryNFrames = 300;
@@ -48,6 +51,27 @@ namespace EmuSen.Cores.Nintendo.Mercury
         }
         public CoverageRegistry Coverage { get; } = new();
         public LabelRegistry Labels { get; } = new();
+        public CallStackRegistry CallStack { get; } = new();
+
+        // Kept here and handed to each new bus, so a watch outlives a reload - see Mercury_Debug.md §7.
+        private Memory.IWriteObserver? _writeObserver;
+
+        public Memory.IWriteObserver? WriteObserver
+        {
+            get => _writeObserver;
+            set
+            {
+                _writeObserver = value;
+                if (Bus is not null) Bus.WriteObserver = value;
+            }
+        }
+
+        public MercuryCore()
+        {
+            Breakpoints.CallStack = CallStack;
+            CallStack.FrameNumberProvider = () => TotalFrames;
+            CallStack.EntryPointObserver = Coverage.RecordEntryPoint;
+        }
 
         // Handed out before a ROM exists; once one does, the PPU's own buffer is returned instead.
         private readonly byte[] _frame = new byte[ScreenWidthPixels * ScreenHeightPixels * 4];
@@ -98,8 +122,18 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public void LoadRom(string path)
         {
             Cart = Cartridge.Load(path);
-            Bus = new MemoryBus(Cart) { RomPatcher = new global::EmuSen.Cores.CheatRomPatcher(Cheats) };
-            Cpu = new Cpu.Core.Cpu(Bus);
+            Bus = new MemoryBus(Cart) { RomPatcher = new global::EmuSen.Cores.CheatRomPatcher(Cheats), WriteObserver = _writeObserver };
+            Cpu = new Cpu.Core.Cpu(Bus)
+            {
+                CallObserver = (source, target) => CallStack.NotePush(source, target, CallFrameKind.Call),
+                ReturnObserver = CallStack.NotePop,
+                InterruptObserver = (source, target) =>
+                {
+                    CallStack.NotePush(source, target, CallFrameKind.Irq);
+                    Breakpoints.NoteInterrupt(CallFrameKind.Irq);
+                },
+            };
+            CallStack.Reset();
 
             Bus.Reset();
             Cpu.Reset(Bus.Cgb);
@@ -142,6 +176,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
 
                 resuming = false;
                 if (Coverage.IsArmed) Coverage.Record(Cpu.PC);
+                if (CallStack.IsProfiling) CallStack.NoteInstruction();
 
                 // Step ticks the bus itself, one machine cycle at a time - see Mercury_Cpu.md §3.
                 int cycles = Cpu.Step(Bus.InterruptEnable, Bus.InterruptFlags, out int serviced);
@@ -173,6 +208,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
 
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
             ApplyCheats();
+            Breakpoints.NoteFrame(TotalFrames);
 
             if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();
         }
@@ -230,15 +266,16 @@ namespace EmuSen.Cores.Nintendo.Mercury
             if (r.ReadUInt32() != StateMagic) throw new InvalidDataException("Not a Mercury save state.");
 
             int version = r.ReadInt32();
-            if (version != StateVersion) throw new InvalidDataException($"Save state version {version} is not {StateVersion}.");
+            if (version is < OldestReadableVersion or > StateVersion) throw new InvalidDataException($"Save state version {version} is not one this build reads ({OldestReadableVersion} to {StateVersion}).");
+            bool retired = version < StateVersion;
 
             TotalFrames = r.ReadInt64();
             _cyclesIntoFrame = r.ReadInt64();
 
-            StateSerializer.Read(r, Cart);
-            StateSerializer.Read(r, Cart.Mapper);
-            StateSerializer.Read(r, Cpu);
-            StateSerializer.Read(r, Bus);
+            StateSerializer.Read(r, Cart, includeRetired: retired);
+            StateSerializer.Read(r, Cart.Mapper, includeRetired: retired);
+            StateSerializer.Read(r, Cpu, includeRetired: retired);
+            StateSerializer.Read(r, Bus, includeRetired: retired);
         }
     }
 }

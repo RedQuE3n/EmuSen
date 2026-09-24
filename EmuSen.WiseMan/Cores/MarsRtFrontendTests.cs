@@ -374,7 +374,8 @@ namespace EmuSen.WiseMan.Cores
             }
 
             output.WriteLine($"{presented} frames presented and {skipped} not; the machine {slow / skipped:F3} ms a frame with the idle loop run instruction by instruction and {fast / skipped:F3} ms the frame after it");
-            Assert.True(slow > 2 * fast, "the frames with the idle loop run were not slow enough to catch a report of the frame before");
+            // A report one frame late puts slow below fast; 1.5 leaves room for a noisy runner (Windows CI measured 1.99 against the old 2) - see Mars_Native.md §6.3.
+            Assert.True(slow > 1.5 * fast, "the frames with the idle loop run were not slow enough to catch a report of the frame before");
         }
 
         // The dashboard's peek is the undrained queue, oldest first, and leaves it for the drain, on both engines - see Mars_Native.md §6.6.2.

@@ -189,5 +189,61 @@ namespace EmuSen.WiseMan.Common
             Array.Fill(b, value);
             return b;
         }
+
+        // Mirrors Mercury's version 6: a host string the state dropped, and a second reference to an object it already carries - see EmuSen_Save_States.md §7.
+        private sealed class Board
+        {
+            public byte[] Ram = new byte[4];
+            [RetiredFromState] public string? Path = "host";
+            [RetiredFromState] public int Old = 5;
+            public int Value;
+        }
+
+        private sealed class Holder
+        {
+            public Board Cart = new();
+            [RetiredFromState] public Board Copy = null!;
+            public int Tag;
+
+            public static Holder Make()
+            {
+                var h = new Holder();
+                h.Copy = h.Cart;
+                return h;
+            }
+        }
+
+        [Fact]
+        public void A_retired_field_is_not_written_and_its_older_bytes_are_read_with_the_values_dropped()
+        {
+            var source = Holder.Make();
+            Array.Fill(source.Cart.Ram, (byte)0x11);
+            source.Cart.Value = 3;
+            source.Tag = 9;
+            Assert.Equal(1 + 4 + sizeof(int) + sizeof(int), Write(source).Length);
+
+            var older = new MemoryStream();
+            using (var w = new BinaryWriter(older, System.Text.Encoding.UTF8, leaveOpen: true)) StateSerializer.Write(w, source, includeRetired: true);
+            byte[] bytes = older.ToArray();
+            Assert.Equal(2 * (1 + sizeof(int) + 4 + 1 + "host".Length + sizeof(int)) + sizeof(int), bytes.Length);
+
+            // Each board is its flag, then Old, Path, Ram and Value by name; the copy comes second, so filling its RAM differently shows which one stands.
+            int board = 1 + sizeof(int) + 1 + "host".Length + 4 + sizeof(int);
+            int copyRam = board + 1 + sizeof(int) + 1 + "host".Length;
+            Array.Fill(bytes, (byte)0x22, copyRam, 4);
+
+            var target = Holder.Make();
+            target.Cart.Path = "mine";
+            target.Cart.Old = 1;
+            using var r = new BinaryReader(new MemoryStream(bytes));
+            StateSerializer.Read(r, target, includeRetired: true);
+
+            Assert.Equal(bytes.Length, r.BaseStream.Position);
+            Assert.Equal("mine", target.Cart.Path);
+            Assert.Equal(1, target.Cart.Old);
+            Assert.Equal(3, target.Cart.Value);
+            Assert.Equal(9, target.Tag);
+            Assert.All(target.Cart.Ram, b => Assert.Equal(0x22, b));
+        }
     }
 }

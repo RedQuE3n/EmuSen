@@ -115,7 +115,7 @@ namespace EmuSen.Cores
                         new GbGameGenieCheatCodec(),
                         null);
 
-                // The same codecs, and the C# target over a mirror MercuryRT's state refreshes - see Mercury_Native.md §8.3.
+                // The same codecs, and MercuryRT's target: a mirror for what it shows, the core's hooks for what halts - see Mercury_Native.md §8.5.
                 case MercuryRtCore mercuryRt:
                     return new CoreBundle(
                         mercuryRt,

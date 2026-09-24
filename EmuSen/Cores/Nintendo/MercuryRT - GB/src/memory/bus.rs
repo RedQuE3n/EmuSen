@@ -151,9 +151,8 @@ impl MemoryBus {
         self.hdma_is_h_blank_driven = false;
     }
 
-    /// The bus's fields in C#'s ordinal order, the cartridge's `_cart` copy among them.
+    /// The bus's fields in C#'s ordinal order; version 6 no longer writes the cartridge's `_cart` copy (Mercury_Native.md §9.3).
     pub fn write_state(&self, w: &mut StateWriter) {
-        let cart = &self.cart;
         w.class("Apu", &self.apu);
         w.bool("DoubleSpeed", self.double_speed);
         w.i32("HdmaBlocksLeft", self.hdma_blocks_left);
@@ -172,7 +171,6 @@ impl MemoryBus {
         w.bytes("Wram", &self.wram);
         w.i32("WramBank", self.wram_bank);
         w.bool("_baseClockPhase", self.base_clock_phase);
-        cart.write_as_field(w, "_cart");
         w.u16("_divCounter", self.div_counter);
         w.bool("_lastTimerEdge", self.last_timer_edge);
         w.i32("_oamDmaCyclesLeft", self.oam_dma_cycles_left);
@@ -206,7 +204,7 @@ impl MemoryBus {
         r.bytes(&mut self.wram)?; // Wram
         self.wram_bank = r.i32()?; // WramBank
         self.base_clock_phase = r.bool()?; // _baseClockPhase
-        self.cart.read_as_field(r)?; // _cart
+        self.cart.read_retired_copy(r)?; // _cart
         self.div_counter = r.u16()?; // _divCounter
         self.last_timer_edge = r.bool()?; // _lastTimerEdge
         self.oam_dma_cycles_left = r.i32()?; // _oamDmaCyclesLeft
@@ -252,6 +250,19 @@ impl MemoryBus {
     #[inline(always)]
     fn oam_accessible(&self) -> bool {
         !self.oam_dma_active() && (!self.ppu.lcd_enabled() || !(self.ppu.is_mode(crate::ppu::PpuMode::OamScan) || self.ppu.is_mode(crate::ppu::PpuMode::Drawing)))
+    }
+
+    /// Where C#'s `Write` reports a CPU store to its `IWriteObserver`, as `(space, offset)`, decided before the store lands; `None` where it
+    /// reports nothing. Cart RAM is reported whatever the board does with the byte, as C#'s is. See Mercury_Native.md §8.5.
+    pub fn reported_space(&self, address: u16) -> Option<(u32, u32)> {
+        match address {
+            0x8000..0xA000 => self.vram_accessible().then(|| (1, self.vram_offset(address) as u32)),
+            0xA000..0xC000 => Some((2, (address - 0xA000) as u32)),
+            0xC000..0xFE00 => Some((3, self.wram_offset(address) as u32)),
+            0xFE00..0xFEA0 => self.oam_accessible().then(|| (4, (address - 0xFE00) as u32)),
+            0xFF80..=0xFFFE => Some((5, (address - 0xFF80) as u32)),
+            _ => None,
+        }
     }
 
     /// What a DMA charged the CPU, taken once and cleared - see Mercury_Cgb.md §4.1.
@@ -534,7 +545,8 @@ impl MemoryBus {
         for _ in 0..cycles {
             self.step_one_cycle();
         }
-        self.mapper.tick(&self.cart, cycles);
+        // The cartridge's clock has its own crystal: base-clock cycles, half the CPU's in double speed (Mercury_Native.md §9.2).
+        self.mapper.tick(&self.cart, if self.double_speed { cycles >> 1 } else { cycles });
     }
 
     /// TIMA counts falling edges of one selected bit of the DIV counter - see Mercury_Memory.md §5.

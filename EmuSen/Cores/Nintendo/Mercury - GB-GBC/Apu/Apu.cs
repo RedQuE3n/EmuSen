@@ -52,9 +52,10 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
 
         public int BufferedSamples => _buffer.Count;
 
+        // Divided in doubles: 95.109 clocks, not 95, or 44,100 Hz comes out 0.115% fast - see Mercury_Native.md §9.1.
         public void SetSampleRate(int sampleRate)
         {
-            _cyclesPerSample = MercuryCore.CpuClockHz / sampleRate;
+            _cyclesPerSample = (double)MercuryCore.CpuClockHz / sampleRate;
             _chargeFactor = Math.Pow(HighPassSeed, _cyclesPerSample);
         }
 

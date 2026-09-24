@@ -23,7 +23,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         public const int WramBankSize = 0x1000;
         public const int VramBankSize = 0x2000;
 
-        private readonly Cartridge _cart;
+        // Version 5 wrote the cartridge again here - see Mercury_Native.md §9.3.
+        [EmuSen.Common.RetiredFromState] private readonly Cartridge _cart;
 
         // Colour mode is decided once at construction from the header - see Mercury_Cgb.md §1.
         [SkipInState] public readonly bool Cgb;
@@ -383,7 +384,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         public void Tick(int cycles)
         {
             for (int i = 0; i < cycles; i++) StepOneCycle();
-            _cart.Mapper.Tick(cycles);
+
+            // The cartridge's clock has its own crystal, so it counts base-clock cycles, half the CPU's in double speed - see Mercury_Native.md §9.2.
+            _cart.Mapper.Tick(DoubleSpeed ? cycles >> 1 : cycles);
         }
 
         // TIMA counts falling edges of one selected bit of the DIV counter - see Mercury_Memory.md §5.

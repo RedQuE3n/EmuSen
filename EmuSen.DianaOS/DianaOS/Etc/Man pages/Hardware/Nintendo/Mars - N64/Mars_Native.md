@@ -5330,7 +5330,8 @@ At the multiple the median falls 1.98 ms (16.79 to 14.81), under the 16.7 ms tar
 - **Not measured:** the `trace=` run the prediction also asked for.
 - **In Mistress** (build with libmarsrt 795edd41, the same day), the player reported DK64 at 2x on the device running
   at full speed, where §6.14 had it at about 45 frames a second on the title. That is the player's reading of the
-  frame counter, not a bench figure.
+  frame counter, not a bench figure. The player then set 3x (the device on, antialiasing off, four workers, read
+  back from the handheld's `graphics.json`) and reported full speed there too. No bench was run at 3x.
 
 ##### 6.15.7 What is not done
 

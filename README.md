@@ -21,7 +21,7 @@ Every other console is an empty, reserved folder. Per-game results are in [the g
 
 MarsRT was the first port and is the most finished. It produces the same machine state, picture and sound as the C# core after every frame, and it has everything the C# core has: the threaded display processor, the resolution multiple, antialiasing, the GPU path, debugger hooks and rewind, plus a Cranelift recompiler. It became the default N64 engine after it was played on a Lenovo Legion Go S running SteamOS, where Donkey Kong 64 plays at full speed at 3× internal resolution. The C# core still runs wherever the Rust library is missing. The full story is in [`Mars_Native.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Nintendo/Mars%20-%20N64/Mars_Native.md).
 
-MercuryRT, the Game Boy port, has the whole machine, the debugger and builds for every platform, and CI checks that its sound, picture and save states come out bit for bit the same on Linux, Windows and macOS. You can pick it in the Game Boy's graphics settings; it becomes the default after a session of play on the handheld. Porting it turned up three bugs in the C# Mercury, which are now fixed in both engines. Unlike MarsRT it isn't much faster than the C# core, because the cost is in the cycle-by-cycle design rather than the language. Still ahead: running the rest of the Game Boy tests through both engines, recording reference traces, and moving the C# core to a legacy branch. See [`Mercury_Native.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Nintendo/Mercury%20-%20GB-GBC/Mercury_Native.md).
+MercuryRT, the Game Boy port, has the whole machine, the debugger and builds for every platform, and CI checks that its sound, picture and save states come out bit for bit the same on Linux, Windows and macOS. It can be selected in the Game Boy's graphics settings and becomes the default after a session of play on the handheld. Porting it turned up three bugs in the C# Mercury, which are now fixed in both engines. Unlike MarsRT it isn't much faster than the C# core, because the cost is in the cycle-by-cycle design rather than the language. Still ahead: running the rest of the Game Boy tests through both engines, recording reference traces, and moving the C# core to a legacy branch. See [`Mercury_Native.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Nintendo/Mercury%20-%20GB-GBC/Mercury_Native.md).
 
 MoonRT, the NES port, is planned and paused ([`Moon_Native.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Nintendo/Moon%20-%20NES/Moon_Native.md)), and Venus will follow. The reasoning for moving the cores to Rust, and for keeping everything else in C#, is in [`EmuSen_Stack.md`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Stack.md).
 
@@ -31,16 +31,16 @@ Two kinds of reference sit outside the project. A probe written in Rust dumps th
 
 ## Mistress, the frontend
 
-Mistress is the main app. Its library is laid out like OpenEmu's: a sidebar of consoles, with Game Boy and Game Boy Color on separate shelves, and your games as a grid of covers or a list. It is built to work from a controller as well as a keyboard. On SteamOS's Game Mode, settings windows open as sheets inside the main window, and every control, including cheats and an on-screen keyboard, can be reached with the pad.
+Mistress is the main app. Its library is laid out like OpenEmu's: a sidebar of consoles, with Game Boy and Game Boy Color on separate shelves, and the games shown as a grid of covers or as a list. It is built to work from a controller as well as a keyboard. On SteamOS's Game Mode, settings windows open as sheets inside the main window, and every control, including cheats and an on-screen keyboard, can be reached with the pad.
 
 Other things it does:
 
-- save states, and rewind: it keeps four snapshots a second and shows them as a strip of pictures you pick a moment from
+- save states, and rewind: four snapshots a second, shown as a strip of pictures to pick a moment from
 - per-console graphics settings, including the N64 engine and resolution, and the Game Boy model (Auto, Game Boy or Game Boy Color)
-- a Shaders window with the built-in screen filters (a CRT shader and the handheld LCDs) next to RetroArch's slang presets, which it downloads only when you ask
+- a Shaders window with the built-in screen filters (a CRT shader and the handheld LCDs) next to RetroArch's slang presets, which are downloaded only on request
 - per-console controller bindings, hotkeys and cheats
 
-**Hotaru** is a lighter frontend that takes a ROM on the command line and puts the debug shell in the terminal you started it from.
+**Hotaru** is a lighter frontend that takes a ROM on the command line and puts the debug shell in the terminal it was started from.
 
 Both frontends are built on **LunaP**, a small Avalonia toolkit that lives in its own repository, [RedQuE3n/EmuSen.LunaP](https://github.com/RedQuE3n/EmuSen.LunaP).
 
@@ -100,7 +100,7 @@ Linux is where EmuSen is developed and played, on a desktop and on a Legion Go S
 
 ## Documentation
 
-The code keeps its comments to a line; the explanations live in the docs, which you can read on GitHub or from inside the emulator with `man` and `cat`.
+The code keeps its comments to a line; the explanations live in the docs, which are readable on GitHub or from inside the emulator with `man` and `cat`.
 
 - [The docs index](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/README.md) is the place to start.
 - [`EmuSen Manual/`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/) has the project-level docs: the architecture overview, the debugging tools reference, the settings reference, the stack, the games list.
@@ -112,7 +112,7 @@ EmuSen is **Emu**lator **Sen**shi, after *Sailor Moon*. Each core is named for a
 
 ## ROMs
 
-No ROMs are included and none will be. Bring your own legally obtained dumps.
+No ROMs are included, and none will be. Games have to come from legally obtained dumps.
 
 ## Credits
 

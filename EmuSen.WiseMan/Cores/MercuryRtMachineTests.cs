@@ -353,16 +353,16 @@ namespace EmuSen.WiseMan.Cores
 
         public string Summary => $"{_frames} frames identical in state{(_soundAndPicture ? ", sound and picture" : "")}, {_samples} samples, {Serial} serial bytes, {Csharp.Cpu!.Cycles} CPU cycles";
 
-        public MercuryRtPair(byte[] rom, bool skipRendering, MercuryCore? transferAt = null, int stateEvery = 1, bool soundAndPicture = true, byte[]? state = null)
+        public MercuryRtPair(byte[] rom, bool skipRendering, MercuryCore? transferAt = null, int stateEvery = 1, bool soundAndPicture = true, byte[]? state = null, GbModel model = GbModel.Auto)
         {
             Assert.True(MercuryMachine.Available, MercuryNative.Report);
             CoreOptions.BatteryRamDisabled = true;
             _skip = skipRendering;
             _stateEvery = stateEvery;
             _soundAndPicture = soundAndPicture;
-            Csharp = Load(rom);
+            Csharp = Load(rom, model);
             Csharp.SkipRendering = skipRendering;
-            Rust = new MercuryMachine(rom);
+            Rust = new MercuryMachine(rom, model);
             Rust.SetOptions(skipRendering);
             if (transferAt is not null)
             {
@@ -379,12 +379,12 @@ namespace EmuSen.WiseMan.Cores
             CompareState("load");
         }
 
-        private static MercuryCore Load(byte[] rom)
+        private static MercuryCore Load(byte[] rom, GbModel model)
         {
             string path = SyntheticGbRom.WriteTemp(rom);
             try
             {
-                var core = new MercuryCore();
+                var core = new MercuryCore { Model = model };
                 core.LoadRom(path);
                 return core;
             }

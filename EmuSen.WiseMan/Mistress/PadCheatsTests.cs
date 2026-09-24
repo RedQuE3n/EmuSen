@@ -88,7 +88,7 @@ namespace EmuSen.WiseMan.Mistress
             typeof(MainWindow).GetMethod("StopEmulationThread", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
 
         // Each character reached on the keys with the d-pad, rows first, the short way round a row, and pressed with A.
-        private static void TypeByPad(PadDriver pad, OnScreenKeyboard keyboard, string text)
+        internal static void TypeByPad(PadDriver pad, OnScreenKeyboard keyboard, string text)
         {
             (int Row, int Column) Where(string key)
             {

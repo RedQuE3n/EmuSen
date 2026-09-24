@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using EmuSen.Serenity.Slang;
+
 namespace EmuSen.Serenity.Shaders
 {
     // CRT filters ported to SkSL; crt-lottes is Timothy Lottes' public-domain shader at its default settings - see EmuSen_Serenity.md §3.4.
@@ -8,17 +11,17 @@ uniform shader source;
 uniform float2 inputSize;
 uniform float2 outputSize;
 
-const float hardScan = -8.0;
-const float hardPix = -3.0;
-const float warpX = 0.031;
-const float warpY = 0.041;
-const float maskDark = 0.5;
-const float maskLight = 1.5;
-const float brightBoost = 1.0;
-const float hardBloomPix = -1.5;
-const float hardBloomScan = -2.0;
-const float bloomAmount = 0.15;
-const float shape = 2.0;
+uniform float hardScan;
+uniform float hardPix;
+uniform float warpX;
+uniform float warpY;
+uniform float maskDark;
+uniform float maskLight;
+uniform float brightBoost;
+uniform float hardBloomPix;
+uniform float hardBloomScan;
+uniform float bloomAmount;
+uniform float shape;
 
 float ToLinear1(float c) { return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4); }
 float3 ToLinear(float3 c) { return float3(ToLinear1(c.r), ToLinear1(c.g), ToLinear1(c.b)); }
@@ -119,9 +122,26 @@ half4 main(float2 coord) {
 }
 ";
 
+        // crt-lottes.slang's own #pragma parameter lines for the eleven the port kept, labelled for a person; above Lottes, which reads it as it is built - see EmuSen_Serenity.md §3.7.
+        public static IReadOnlyList<SlangParameter> LottesParameters { get; } = new SlangParameter[]
+        {
+            new("hardScan", "Scanline hardness", -8f, -20f, 0f, 1f),
+            new("hardPix", "Pixel hardness", -3f, -20f, 0f, 1f),
+            new("warpX", "Curvature, horizontal", 0.031f, 0f, 0.125f, 0.01f),
+            new("warpY", "Curvature, vertical", 0.041f, 0f, 0.125f, 0.01f),
+            new("maskDark", "Mask dark", 0.5f, 0f, 2f, 0.1f),
+            new("maskLight", "Mask light", 1.5f, 0f, 2f, 0.1f),
+            new("brightBoost", "Brightness boost", 1f, 0f, 2f, 0.05f),
+            new("hardBloomPix", "Bloom softness, horizontal", -1.5f, -2f, -0.5f, 0.1f),
+            new("hardBloomScan", "Bloom softness, vertical", -2f, -4f, -1f, 0.1f),
+            new("bloomAmount", "Bloom amount", 0.15f, 0f, 1f, 0.05f),
+            new("shape", "Filter kernel shape", 2f, 0f, 10f, 0.05f),
+        };
+
         public static ScreenFilter Lottes { get; } = new("CRT (Lottes)",
             new[] { new FilterPass(LottesSksl, PassScale.Viewport) },
             new[] { "NES", "SNES", "N64" },
-            "crt-lottes by Timothy Lottes, public domain, from libretro's slang-shaders");
+            "crt-lottes by Timothy Lottes, public domain, from libretro's slang-shaders",
+            LottesParameters);
     }
 }

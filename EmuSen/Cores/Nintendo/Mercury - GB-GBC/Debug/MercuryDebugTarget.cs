@@ -391,10 +391,33 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
                 return palettes;
             }
 
+            if (bus.DmgCompat)
+            {
+                palettes.Add(CompatibilityPalette(0, ppu.Bgp, ppu.BgPaletteRam, 0));
+                palettes.Add(CompatibilityPalette(1, ppu.Obp0, ppu.ObjPaletteRam, 0));
+                palettes.Add(CompatibilityPalette(2, ppu.Obp1, ppu.ObjPaletteRam, 1));
+                return palettes;
+            }
+
             palettes.Add(ShadePalette(0, ppu.Bgp));
             palettes.Add(ShadePalette(1, ppu.Obp0));
             palettes.Add(ShadePalette(2, ppu.Obp1));
             return palettes;
+        }
+
+        // A DMG palette register's shades through a colour palette, as the Color shows a Game Boy game - see Mercury_Model.md §4.1.
+        private static DebugPaletteInfo CompatibilityPalette(int index, byte register, byte[] paletteRam, int palette)
+        {
+            var colors = new List<(byte r, byte g, byte b)>(4);
+
+            for (int c = 0; c < 4; c++)
+            {
+                int entry = (palette * 8) + (((register >> (c * 2)) & 0x03) * 2);
+                int rgb555 = paletteRam[entry] | (paletteRam[entry + 1] << 8);
+                colors.Add((Expand(rgb555 & 0x1F), Expand((rgb555 >> 5) & 0x1F), Expand((rgb555 >> 10) & 0x1F)));
+            }
+
+            return new DebugPaletteInfo(index, colors);
         }
 
         private static DebugPaletteInfo ShadePalette(int index, byte register)

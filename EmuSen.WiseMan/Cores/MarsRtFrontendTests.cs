@@ -458,6 +458,41 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(fresh, reused);
         }
 
+        // The lending on a game at two on the device, deferred on four workers, whose scans the drain's leader runs - see Mars_Native.md §6.15.
+        [Fact]
+        public void At_two_on_the_device_a_frame_held_is_never_written_and_those_returned_are_lent_again()
+        {
+            string? folder = Environment.GetEnvironmentVariable(MarsRtTests.StatesVariable);
+            if (folder is null || !File.Exists(Path.Combine(folder, "sm64.z64")) || !File.Exists(Path.Combine(folder, "sm64.state"))) { output.WriteLine("sm64 absent, not run"); return; }
+            if (EmuSen.Cores.Nintendo.Mars.Rdp.Gpu.GpuDevice.DeviceNames().Count == 0) { output.WriteLine("no Vulkan device: not run"); return; }
+            using var core = new MarsRtCore(expansionPak: true, batteryRamDisabled: true) { ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true, SkipRendering = false };
+            ((ICoreSettings)core).Set("RenderScale", "2");
+            ((ICoreSettings)core).Set("Gpu", "true");
+            core.LoadRom(Rom(File.ReadAllBytes(Path.Combine(folder, "sm64.z64"))));
+            core.LoadState(new MemoryStream(File.ReadAllBytes(Path.Combine(folder, "sm64.state"))));
+            for (int frame = 0; frame < 10; frame++) core.RunFrame();
+
+            byte[] shown = core.GetFrameBufferRgba();
+            byte[] kept = (byte[])shown.Clone();
+            Assert.Equal(MarsCore.ScreenWidthPixels * 2, core.ScreenWidth);
+            long made = core.FrameBuffers.Made;
+            int changed = 0;
+            byte[] last = kept;
+            for (int frame = 0; frame < 60; frame++)
+            {
+                core.RunFrame();
+                byte[] other = core.GetFrameBufferRgba();
+                Assert.NotSame(shown, other);
+                if (!other.AsSpan().SequenceEqual(last)) changed++;
+                last = (byte[])other.Clone();
+                core.ReturnFrameBuffer(other);
+            }
+            Assert.True(changed >= 20, $"the picture changed in {changed} of 60 frames, so the lending was not tested");
+            Assert.Equal(kept, shown);
+            Assert.True(core.FrameBuffers.Made - made <= 1, $"{core.FrameBuffers.Made - made} arrays made for 60 frames returned each time");
+            output.WriteLine($"{core.GpuReport}: the held frame unchanged through 60 frames, {changed} of them new pictures, {core.FrameBuffers.Made - made} arrays made");
+        }
+
         [Fact]
         public void Mars_s_debugger_commands_read_MarsRT_halt_it_and_step_it()
         {

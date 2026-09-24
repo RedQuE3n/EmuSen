@@ -55,9 +55,35 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // Mistress's settings for MarsRT: four workers, the picture deferred, the recompiler on.
-        private static MarsRtCore Production() => new(expansionPak: true, batteryRamDisabled: true) { ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true, SkipRendering = false };
+        private static MarsRtCore Production(bool device = false) => AtTwoOnTheDevice(new(expansionPak: true, batteryRamDisabled: true) { ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true, SkipRendering = false }, device);
 
-        private static MarsRtCore OneThread() => new(expansionPak: true, batteryRamDisabled: true) { ThreadedRdp = false, DeferredPresentation = false, SkipRendering = false, UseBlocks = false };
+        private static MarsRtCore OneThread(bool device = false) => AtTwoOnTheDevice(new(expansionPak: true, batteryRamDisabled: true) { ThreadedRdp = false, DeferredPresentation = false, SkipRendering = false, UseBlocks = false }, device);
+
+        // At two on the device, whose scans the drain's leader runs, when asked - see Mars_Native.md §6.15.
+        private static MarsRtCore AtTwoOnTheDevice(MarsRtCore core, bool device)
+        {
+            if (!device) return core;
+            ((EmuSen.Cores.ICoreSettings)core).Set("RenderScale", "2");
+            ((EmuSen.Cores.ICoreSettings)core).Set("Gpu", "true");
+            return core;
+        }
+
+        // The three games at one, and again at two on the device.
+        public static TheoryData<string, string, bool> GamesAndDevice()
+        {
+            var data = new TheoryData<string, string, bool>();
+            foreach (bool device in new[] { false, true })
+                foreach (var (rom, state) in new[] { ("sm64.z64", "sm64.state"), ("oot.z64", "oot.state"), ("ge.z64", "ge-dam.state") })
+                    data.Add(rom, state, device);
+            return data;
+        }
+
+        private bool NoDevice(bool device)
+        {
+            if (!device || EmuSen.Cores.Nintendo.Mars.Rdp.Gpu.GpuDevice.DeviceNames().Count > 0) return false;
+            _output.WriteLine("no Vulkan device: not run");
+            return true;
+        }
 
         // The same input for a frame whichever run reaches it, so a frame run again after a rewind is the frame the reference ran.
         private static void Drive(MarsRtCore core)
@@ -92,9 +118,9 @@ namespace EmuSen.WiseMan.Cores
         private static string Picture(MarsRtCore core) => $"{core.ScreenWidth}x{core.ScreenHeight}/{core.RowRepeat} {Hash(core.GetFrameBufferRgba())}";
 
         // Frame by frame on one thread: the state, the picture the frame presented, and the picture a load of that state presents.
-        private static Dictionary<long, (string State, string Shown, string Loaded)> Reference((string Rom, byte[] State) game, int frames)
+        private static Dictionary<long, (string State, string Shown, string Loaded)> Reference((string Rom, byte[] State) game, int frames, bool device)
         {
-            using MarsRtCore reference = OneThread(), loader = OneThread();
+            using MarsRtCore reference = OneThread(device), loader = OneThread(device);
             reference.LoadRom(game.Rom);
             loader.LoadRom(game.Rom);
             reference.LoadState(game.State);
@@ -201,18 +227,18 @@ namespace EmuSen.WiseMan.Cores
 
         // Every frame of the run and every step back compared with the reference: the state always, the picture wherever a step lands - see Mars_Native.md §6.6.3.
         [Theory]
-        [MemberData(nameof(Games))]
-        public void Rewinding_with_the_workers_deferred_lands_on_the_state_and_picture_the_machine_had(string romName, string stateName)
+        [MemberData(nameof(GamesAndDevice))]
+        public void Rewinding_with_the_workers_deferred_lands_on_the_state_and_picture_the_machine_had(string romName, string stateName, bool device)
         {
-            if (Game(romName, stateName) is not { } game) return;
+            if (NoDevice(device) || Game(romName, stateName) is not { } game) return;
             int frames = Frames(600);
-            var history = Reference(game, frames + 1);
+            var history = Reference(game, frames + 1, device);
             long first = history.Keys.Min(), last = first + frames;
             int[] distances = { 1, 2, 3, 5, 8, 13, 21, 4, 7, 1 };
 
             foreach (int interval in new[] { 1, RewindBuffer.DefaultIntervalFrames })
             {
-                using MarsRtCore subject = Production();
+                using MarsRtCore subject = Production(device);
                 subject.LoadRom(game.Rom);
                 subject.LoadState(game.State);
                 var rewind = new RewindBuffer { Enabled = true, IntervalFrames = interval };
@@ -261,7 +287,7 @@ namespace EmuSen.WiseMan.Cores
                     rewound += distance;
                 }
 
-                _output.WriteLine($"{romName} {stateName}, interval {interval}: {ran} frames run to reach {frames}, {steps} steps back in {burst} bursts, {stateChecks} states compared, all identical; {pending} of {captures} captures held words unrun and {replayed} landings replayed some; the picture where a step landed was a load's in {shownAsLoaded} of {steps} and the one the frame first presented in {shownAsReference}; rewind held {rewind.Depth} steps, {rewind.BufferedBytes >> 20} MB; the landings' unrun commands {string.Join(" ", commands.Select(c => $"{c.Key:X2}x{c.Value}"))}");
+                _output.WriteLine($"{romName} {stateName}{(device ? ", at two on the device " + subject.GpuReport : "")}, interval {interval}: {ran} frames run to reach {frames}, {steps} steps back in {burst} bursts, {stateChecks} states compared, all identical; {pending} of {captures} captures held words unrun and {replayed} landings replayed some; the picture where a step landed was a load's in {shownAsLoaded} of {steps} and the one the frame first presented in {shownAsReference}; rewind held {rewind.Depth} steps, {rewind.BufferedBytes >> 20} MB; the landings' unrun commands {string.Join(" ", commands.Select(c => $"{c.Key:X2}x{c.Value}"))}");
                 long[] counters = subject.ThreadCounterValues();
                 Assert.True(counters[0] == 1 && counters[1] > 0, "the drain never ran, so the workers were never busy at a snapshot");
             }
@@ -269,10 +295,10 @@ namespace EmuSen.WiseMan.Cores
 
         // Rewind and advance alternated at random while the workers are busy, each operation watched: none may take longer than the watchdog allows.
         [Theory]
-        [MemberData(nameof(Games))]
-        public void Alternating_rewind_and_advance_with_the_workers_busy_never_freezes(string romName, string stateName)
+        [MemberData(nameof(GamesAndDevice))]
+        public void Alternating_rewind_and_advance_with_the_workers_busy_never_freezes(string romName, string stateName, bool device)
         {
-            if (Game(romName, stateName) is not { } game) return;
+            if (NoDevice(device) || Game(romName, stateName) is not { } game) return;
             int operations = Frames(600);
             var watchdog = TimeSpan.FromSeconds(30);
             int tail = -1, snapshots = 0, withWords = 0, steps = 0, frames = 0;
@@ -280,7 +306,7 @@ namespace EmuSen.WiseMan.Cores
             string last = "";
             var log = new Queue<string>();
 
-            using MarsRtCore subject = Production();
+            using MarsRtCore subject = Production(device);
             subject.LoadRom(game.Rom);
             subject.LoadState(game.State);
             var rewind = new RewindBuffer { Enabled = true, IntervalFrames = 1 };
@@ -333,7 +359,7 @@ namespace EmuSen.WiseMan.Cores
                 if (!work.Wait(watchdog)) Assert.Fail($"{romName}: frozen for {watchdog.TotalSeconds} s at {last}; before it: {string.Join("; ", log)}");
             }
 
-            _output.WriteLine($"{romName} {stateName}: {operations} operations, {frames} frames run and {steps} steps back without a freeze; {withWords} of {snapshots} snapshots taken where a capture was, or alone, caught words unrun ({words} in all)");
+            _output.WriteLine($"{romName} {stateName}{(device ? ", at two on the device " + subject.GpuReport : "")}: {operations} operations, {frames} frames run and {steps} steps back without a freeze; {withWords} of {snapshots} snapshots taken where a capture was, or alone, caught words unrun ({words} in all)");
             Assert.True(steps > operations / 2 && frames > operations, "too few rewinds or frames to stress anything");
         }
     }

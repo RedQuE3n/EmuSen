@@ -3413,6 +3413,21 @@ tests, at 240 frames a game.
 | Rewind on for the C# core too | the window's run test |
 | Rewind still off for MarsRT | the window's run test; the held hotkey |
 
+**Addendum, 2026-09-24: a moment chosen from the reel.** Mistress's rewind reel (`EmuSen_Settings_Reference.md` §4.49)
+goes straight to a snapshot `k` back with one load rather than `k` steps (`EmuSen_Rewind_And_FastForward.md` §5.2).
+`MarsRtRewindToMomentTests` prove it on MarsRT as Mistress runs it — four workers, the picture deferred, pictures
+attached as the loop attaches them — on the synthetic system with the RSP: 300 frames, 75 moments, then one back, the
+middle and the oldest in turn, each leaving `SaveState` hashing to the hash taken at that capture and `TotalFrames`
+restored, with 40 frames played between choices. The oldest of 75 moments took 6.64 ms straight and 275.7 ms by 74
+steps, and both landings hash alike. Game states were not used; the three-game landing test above is still the
+evidence for play.
+
+*What the first run found.* The proof failed on a machine that had only been booted: its first load changes one byte,
+`Bus.Si.Controllers[0].Pak.Dirty`, which `machine.rs` sets on every load (as `MemoryBus.cs` does in the C# core) so that
+the frontend writes the loaded pak to its file. After one load the round trip is exact. The tests above never met it
+because every one starts from a game's state. `On_a_fresh_MarsRT_the_first_load_changes_the_pak_s_dirty_flag_alone`
+names the byte from the state's layout; the proof now loads the machine's own state before it starts.
+
 *Two things the round showed.* The Rust mutant first survived, twice, and neither time was it the test's fault alone.
 Once the count above was wrong; and once the build had not rebuilt the library at all. The host's `/tmp` had filled
 under its per-user quota, so MSBuild's `Exec` could not write its script and cargo never ran, and a temporary folder

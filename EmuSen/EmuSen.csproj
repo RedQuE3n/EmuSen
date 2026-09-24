@@ -75,15 +75,26 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);Cores/Nintendo/MercuryRT - GB/target/**</DefaultItemExcludes>
   </PropertyGroup>
 
-  <Target Name="BuildMercuryRt" BeforeTargets="BeforeBuild" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
-    <Exec Command="cargo build --profile $(EmuSenNativeProfile) --manifest-path &quot;$(MercuryRtDir)Cargo.toml&quot; --target-dir &quot;$(MercuryRtTarget)&quot;" ContinueOnError="true" StandardOutputImportance="low" />
+  <!-- A machine without Rust builds the C# cores alone; one with it must build the Rust ones, so a failed cargo step fails the build instead of leaving an old library in place - see Mars_Native.md §1. -->
+  <Target Name="FindCargo" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
+    <Exec Command="cargo --version" ContinueOnError="true" StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ExitCode" PropertyName="CargoExitCode" />
+    </Exec>
+    <PropertyGroup>
+      <CargoFound Condition="'$(CargoExitCode)' == '0'">true</CargoFound>
+    </PropertyGroup>
+    <Warning Condition="'$(CargoFound)' != 'true'" Text="cargo was not found: MarsRT and MercuryRT are not built, and their consoles run on the C# cores alone." />
+  </Target>
+
+  <Target Name="BuildMercuryRt" BeforeTargets="BeforeBuild" DependsOnTargets="FindCargo" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
+    <Exec Condition="'$(CargoFound)' == 'true'" Command="cargo build --profile $(EmuSenNativeProfile) --manifest-path &quot;$(MercuryRtDir)Cargo.toml&quot; --target-dir &quot;$(MercuryRtTarget)&quot;" StandardOutputImportance="low" />
     <ItemGroup Condition="Exists('$(MercuryRtTarget)/$(EmuSenNativeProfile)/$(MercuryRtFile)')">
       <None Include="$(MercuryRtTarget)/$(EmuSenNativeProfile)/$(MercuryRtFile)" Link="$(MercuryRtFile)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
   </Target>
 
-  <Target Name="BuildEmuSenNative" BeforeTargets="BeforeBuild" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
-    <Exec Command="cargo build --profile $(EmuSenNativeProfile) --manifest-path &quot;$(EmuSenNativeDir)Cargo.toml&quot; --target-dir &quot;$(EmuSenNativeTarget)&quot;" ContinueOnError="true" StandardOutputImportance="low" />
+  <Target Name="BuildEmuSenNative" BeforeTargets="BeforeBuild" DependsOnTargets="FindCargo" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
+    <Exec Condition="'$(CargoFound)' == 'true'" Command="cargo build --profile $(EmuSenNativeProfile) --manifest-path &quot;$(EmuSenNativeDir)Cargo.toml&quot; --target-dir &quot;$(EmuSenNativeTarget)&quot;" StandardOutputImportance="low" />
     <ItemGroup Condition="Exists('$(EmuSenNativeTarget)/$(EmuSenNativeProfile)/$(EmuSenNativeFile)')">
       <None Include="$(EmuSenNativeTarget)/$(EmuSenNativeProfile)/$(EmuSenNativeFile)" Link="$(EmuSenNativeFile)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>

@@ -28,6 +28,16 @@ the panic log. `EMUSEN_MARS_NATIVE=0` turns the library off. **Every component f
 library is absent, refused or off.**
 `MarsNativeTests` pins the load.
 
+**A failed cargo step fails the build (2026-09-23).** The cargo `Exec` used to carry `ContinueOnError`, so that a
+machine without Rust would still build; it also meant a machine *with* Rust whose cargo step failed built anyway, kept
+the previous library, and said so only in an MSB3073 warning. That happened for real: with `/tmp` full, an agent's
+mutant rounds ran against a library the build had silently not rebuilt, and read as survivors. The two cases are now
+told apart. A `FindCargo` target runs `cargo --version` first; without cargo the build warns once — *"cargo was not
+found: MarsRT and MercuryRT are not built, and their consoles run on the C# cores alone"* — and goes on, and with
+cargo the build step runs without `ContinueOnError`, so its failure fails the build. Checked three ways: a normal
+build succeeds; a crate with a syntax error fails the build with cargo's exit code 101 where it had succeeded before;
+and with cargo removed from the `PATH` the build warns and succeeds.
+
 ## 2. A panic never crosses into C#
 
 `emusen_native_set_crash_log` gives the library a path, `DataStore.Logs/native_crash_<pid>.txt`. Its panic hook writes

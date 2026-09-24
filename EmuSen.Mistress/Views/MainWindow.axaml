@@ -57,7 +57,7 @@
         <!-- Built from LunaActions in BuildMenus() - see EmuSen_Settings_Reference.md §4.12. -->
         <lunac:MenuBar x:Name="MenuStrip" DockPanel.Dock="Top" />
 
-        <Border DockPanel.Dock="Bottom"
+        <Border DockPanel.Dock="Bottom" x:Name="StatusBar"
                 Padding="6,3"
                 Background="{DynamicResource SystemChromeLowColor}">
             <Grid ColumnDefinitions="*,Auto">

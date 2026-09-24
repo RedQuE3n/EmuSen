@@ -2128,3 +2128,18 @@ moments rather than fifteenth-second ones.
 reel holds at least one moment per interval played; a mutant that leaves the default interval is caught. The held
 rewind's pacing is not asserted by a test; `MarsRtEngineTests`' hold test still passes under it.
 
+### 4.51 The status bar can be hidden, whole or in part (2026-09-24)
+
+Preferences ▸ Appearance has three switches, all on by default and stored in `appsettings.json`:
+
+- **Status Bar** (`ShowStatusBar`): the bar along the bottom of the main window. Off, it is gone, and with it every
+  message it would have carried ("State saved", errors), since nothing else shows them.
+- **Messages** (`ShowStatusText`): the text at its left, the game's name, Paused, State saved and errors.
+- **Frame Rate** (`ShowFpsBar`): the frames-per-second readout at its right. Off, the emulation loop stops posting
+  the line to the window; it still writes `[fps]` to the console, which the Steam log keeps.
+
+The bar also goes when both of its parts are off, so an empty strip is never left. A change applies at once
+(`PreferencesWindow.StatusBarChanged` → `MainWindow.ApplyStatusBar`) and holds across starts. The player first asked
+for the frame rate alone, then for the whole bar and a switch for each part. `LibraryScreenTests.The_status_bar_and_its_parts_follow_preferences_at_once_and_are_remembered`
+walks the switches and a restart; mutants that drop the live hook or keep an empty bar are caught.
+

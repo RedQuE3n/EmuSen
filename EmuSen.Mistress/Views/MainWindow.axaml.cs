@@ -169,6 +169,7 @@ namespace EmuSen.Mistress.Views
             _hardwareDashboard = new LunaAction("_Hardware Dashboard...", () => OpenCoretopWindow(_debugTarget));
             _rewindReel = new LunaAction("Re_wind...", () => OpenRewindReel(resumeAfter: false));
             InitializeComponent();
+            ApplyStatusBar();
             SetUpLibraryScreen();
             BuildMenus();
             // The tick follows the window, so a window-manager key cannot leave it lying - see §4.19.
@@ -460,8 +461,17 @@ namespace EmuSen.Mistress.Views
         {
             // Non-modal, so re-scan on close rather than leaving a stale library behind it.
             var window = new PreferencesWindow(_appSettings);
+            window.StatusBarChanged += ApplyStatusBar;
             window.Closed += (_, _) => { ScanArtwork(); ApplyOnlineCovers(); if (LibraryView.IsVisible) RefreshLibrary(); };
             _ = SheetLayer.Show(window, this);
+        }
+
+        // The bar goes when it is switched off or when both its parts are - see EmuSen_Settings_Reference.md §4.51.
+        private void ApplyStatusBar()
+        {
+            StatusText.IsVisible = _appSettings.ShowStatusText;
+            FpsText.IsVisible = _appSettings.ShowFpsBar;
+            StatusBar.IsVisible = _appSettings.ShowStatusBar && (_appSettings.ShowStatusText || _appSettings.ShowFpsBar);
         }
 
         private void ShowDebugLogging()
@@ -1338,7 +1348,7 @@ namespace EmuSen.Mistress.Views
                         string line = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms){breakdown}{presentation}{outside}";
                         Console.WriteLine($"[fps] {line}");
 
-                        Dispatcher.UIThread.Post(() => FpsText.Text = line);
+                        if (_appSettings.ShowFpsBar) Dispatcher.UIThread.Post(() => FpsText.Text = line);
                         framesInWindow = 0;
                         offeredInWindow = 0;
                         Array.Clear(phaseMsInWindow);

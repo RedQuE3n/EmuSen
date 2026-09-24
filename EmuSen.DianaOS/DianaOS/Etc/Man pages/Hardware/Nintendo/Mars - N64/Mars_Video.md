@@ -259,6 +259,26 @@ the picture on show does not hold that change.
 `The_csharp_deferred_path_keeps_a_stale_picture_when_a_repeat_follows_an_expired_line` finds C# showing a stale
 picture for two frames. MarsRT walks a repeat whenever the raster has been changed in this way. The C# is unchanged.
 
+*Fixed 2026-09-23 (419583a).* §2.8's argument was right about the walk and wrong about the picture. The walk is a pure
+function of the job and its bytes, so a repeat's walk writes the raster the last walk wrote; but the raster is not the
+walk's alone, since `Prepare` darkens it (§2.4) before any walk, and the picture on show was composed after the last
+walk and before this darkening. The premise the skip needs is therefore not "the walk would write what is there" but
+"the picture on show is the raster", and the second fails whenever a darkening between the two walks changed a byte.
+The scan-out now records exactly that (`Vi.RasterEdited`): `Darken` sets it only if the span it clears held a byte that
+was not already zero, and a blank sets it if the raster or its multiple held one, so the columns either side of the
+picture, which §2.4 clears on every active line of every frame, set it once and not every frame. While the device
+averages, the raster at the multiple is the device's and a span is sent whether or not it clears anything, so there
+every darkening sets it, as in MarsRT. The flag is cleared when a walk or a composition is queued, and by the
+immediate path's scan. `PresentDeferred` skips a repeat only if the flag is clear; otherwise it walks it, and passes
+the flag to `Capture` as `walkRepeats`, so a repeat on the device takes the device's path (`Mars_Gpu.md` §14) rather
+than the processor's over a capture the device never took, which is the defect `Mars_Native.md` §6.4.4 met in MarsRT.
+`A_deferred_repeat_after_a_held_line_expired_shows_the_darkened_picture` (`MarsDeferredPresentationTests`) is the
+record of `MarsRtThreadsTests` moved and turned round: a tall picture three frames and a short one four, the machines'
+states compared every frame. Unfixed, two deferred pictures differ from the immediate picture of the frame before;
+fixed, none does, and four repeats are still skipped where the old rule skipped five, so the rule costs one walk here,
+the one that follows the expiry. The mutant that skips a repeat whatever the flag fails it. The setting's hint,
+"Exact; the picture is the same either way", was not true until this change.
+
 **A loaded state forgets the capture**, since the raster it presents at once is not the one the last walk wrote;
 the scan after a load always walks.
 
@@ -307,7 +327,10 @@ denser. The job takes the multiple's lines as it takes the console's (`ReachScal
 another thread (§2.7) reads one frame, and the repeat test of §2.8 includes the multiple, so a change of it is never
 a repeat. `Walk` chooses the multiple's source, picture and raster and records which it walked (`OutputScale`);
 `Raster` returns that raster and `OutputWidth` its width; `Darken` writes the darkened lines into both rasters, and a
-blank clears both. `MarsCore.Compose` returns the width it composed and multiplies the rows by the multiple, and
+blank clears both. *2026-09-23 (05d41e4): with the display processor threaded, "once it has drawn there" was the drain's
+progress when `Prepare` read it, before any wait, so the first scan after a load or a change of the multiple chose by
+timing (`Mars_Native.md` §6.4.4); `Prepare` now asks `DpInterface.ScaledDrawnHandedOver`, which joins the drain first
+while nothing has drawn, and `Mars_Rdp.md` §2.9.4 records the test.* `MarsCore.Compose` returns the width it composed and multiplies the rows by the multiple, and
 `ScreenWidth` follows it, so the frontend receives a 640×480 frame at two and 1,280×960 at four and scales it as it
 would any other. Nothing about the walk's rules changes: the same registers, the same fetch, the same filters, on a
 denser source.

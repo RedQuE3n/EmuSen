@@ -641,6 +641,11 @@ the middle of one, which games do — could not be answered, and a test reproduc
 workers is proven in play, `OnFrameCompleted` is skipped for Mars; the hotkey then has no history to step back
 through. The other cores' rewind is unchanged.
 
+*2026-09-23:* the C# core's snapshot with several workers had a second way to hang, a pause that found some workers at
+a barrier and the rest short of it; a snapshot every frame from Ocarina of Time's state met it within a second of play.
+It is fixed, with the race that parted the split from itself in the same game (`Mars_Rdp.md` §2.9.1, §2.9.5). Rewind
+stays off until it is proven in play, which headless runs cannot do.
+
 ### 4.26 The graphics window: one tab per console, the settings its core offers
 
 *2026-09-20.* Settings → Graphics Settings... opens a LunaP `ToolWindow` built in code like the preferences: a hint,

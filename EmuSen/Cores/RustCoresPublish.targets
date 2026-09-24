@@ -1,0 +1,37 @@
+<Project>
+  <!-- The Rust cores' libraries in a publish for another platform: the host's dropped, each crate's prebuilt one taken from $(EmuSenNativePrebuilt)/<rid>/, or a warning - see Mars_Native.md §6.3, Mercury_Native.md §8.6. -->
+  <Import Project="RustCores.props" Condition="'$(EmuSenRustCoresImported)' != 'true'" />
+
+  <PropertyGroup>
+    <!-- A distribution's SDK names its host by distribution (fedora.44-x64); the portable name is what a publish asks for. -->
+    <EmuSenNativeForeign Condition="'$(RuntimeIdentifier)' != '' And '$(RuntimeIdentifier)' != '$(NETCoreSdkRuntimeIdentifier)' And '$(RuntimeIdentifier)' != '$(NETCoreSdkPortableRuntimeIdentifier)'">true</EmuSenNativeForeign>
+    <EmuSenPublishLibraryPrefix Condition="!$(RuntimeIdentifier.StartsWith('win'))">lib</EmuSenPublishLibraryPrefix>
+    <EmuSenPublishLibrarySuffix Condition="$(RuntimeIdentifier.StartsWith('win'))">.dll</EmuSenPublishLibrarySuffix>
+    <EmuSenPublishLibrarySuffix Condition="$(RuntimeIdentifier.StartsWith('osx'))">.dylib</EmuSenPublishLibrarySuffix>
+    <EmuSenPublishLibrarySuffix Condition="'$(EmuSenPublishLibrarySuffix)' == ''">.so</EmuSenPublishLibrarySuffix>
+  </PropertyGroup>
+
+  <Target Name="RustCoresForeignLibraries"
+          AfterTargets="ComputeResolvedFilesToPublishList"
+          Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForeign)' == 'true'">
+    <PropertyGroup>
+      <_EmuSenHostLibraryNames>;@(EmuSenRustCrate->'lib%(Identity).so;%(Identity).dll;lib%(Identity).dylib');</_EmuSenHostLibraryNames>
+    </PropertyGroup>
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="$(_EmuSenHostLibraryNames.Contains(';%(Filename)%(Extension);'))" />
+      <_EmuSenForeignLibrary Include="@(EmuSenRustCrate)">
+        <PublishFile>$(EmuSenPublishLibraryPrefix)%(Identity)$(EmuSenPublishLibrarySuffix)</PublishFile>
+      </_EmuSenForeignLibrary>
+      <_EmuSenForeignLibrary Condition="'$(EmuSenNativePrebuilt)' != ''">
+        <Prebuilt>$(EmuSenNativePrebuilt)/$(RuntimeIdentifier)/%(PublishFile)</Prebuilt>
+      </_EmuSenForeignLibrary>
+    </ItemGroup>
+    <Warning Condition="'%(_EmuSenForeignLibrary.Prebuilt)' == '' Or !Exists('%(_EmuSenForeignLibrary.Prebuilt)')"
+             Text="No %(_EmuSenForeignLibrary.Core) library for $(RuntimeIdentifier): this publish runs %(_EmuSenForeignLibrary.Console) on %(_EmuSenForeignLibrary.Fallback) alone. Build %(_EmuSenForeignLibrary.PublishFile) with the Rust cores workflow and pass -p:EmuSenNativePrebuilt=&lt;dir&gt; holding $(RuntimeIdentifier)/%(_EmuSenForeignLibrary.PublishFile)." />
+    <ItemGroup>
+      <_EmuSenForeignPrebuilt Include="@(_EmuSenForeignLibrary->'%(Prebuilt)')" Condition="'%(_EmuSenForeignLibrary.Prebuilt)' != '' And Exists('%(_EmuSenForeignLibrary.Prebuilt)')" />
+      <ResolvedFileToPublish Include="@(_EmuSenForeignPrebuilt)" RelativePath="%(_EmuSenForeignPrebuilt.PublishFile)" CopyToPublishDirectory="PreserveNewest" AssetType="native" />
+    </ItemGroup>
+  </Target>
+</Project>

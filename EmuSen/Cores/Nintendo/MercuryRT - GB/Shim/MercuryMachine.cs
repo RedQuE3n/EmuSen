@@ -93,10 +93,10 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             SetSampleRate(44100);
         }
 
-        // C#'s Apu.SetSampleRate, integer division and Math.Pow both evaluated here - see Mercury_Native.md §3.3.
+        // C#'s Apu.SetSampleRate, the division and Math.Pow both evaluated here - see Mercury_Native.md §3.3 and §9.1.
         public void SetSampleRate(int sampleRate)
         {
-            double cyclesPerSample = 4194304 / sampleRate;
+            double cyclesPerSample = 4194304.0 / sampleRate;
             SetSampleRateOf(Handle, cyclesPerSample, Math.Pow(EmuSen.Cores.Nintendo.Mercury.Audio.Apu.HighPassSeed, cyclesPerSample));
         }
 

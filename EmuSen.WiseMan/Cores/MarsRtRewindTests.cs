@@ -70,6 +70,23 @@ namespace EmuSen.WiseMan.Cores
             core.SetAxis(0, PadAxis.RightX, (frame % 7 - 3) / 3.0);
         }
 
+        private static readonly System.Reflection.FieldInfo Newest = typeof(RewindBuffer).GetField("_newest", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+
+        // The words unrun in the snapshot the buffer holds newest: after a capture the one just taken, after a step the one landed on.
+        private static int Unrun(RewindBuffer rewind) => Newest.GetValue(rewind) is byte[] state ? BitConverter.ToInt32(state, state.Length - 4 - 8 * DpInterface.SnapshotWords) : 0;
+
+        // The display processor's command numbers among the words the snapshot the buffer holds newest left unrun.
+        private static void Tally(RewindBuffer rewind, SortedDictionary<int, int> commands)
+        {
+            if (Newest.GetValue(rewind) is not byte[] state) return;
+            int tail = state.Length - 4 - 8 * DpInterface.SnapshotWords, count = BitConverter.ToInt32(state, tail);
+            for (int i = 0; i < count; i++)
+            {
+                int command = (int)(BitConverter.ToUInt64(state, tail + 4 + 8 * i) >> 56) & 0x3F;
+                commands[command] = commands.GetValueOrDefault(command) + 1;
+            }
+        }
+
         private static string Hash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
 
         private static string Picture(MarsRtCore core) => $"{core.ScreenWidth}x{core.ScreenHeight}/{core.RowRepeat} {Hash(core.GetFrameBufferRgba())}";
@@ -162,20 +179,19 @@ namespace EmuSen.WiseMan.Cores
                 var rewind = new RewindBuffer { Enabled = true, IntervalFrames = interval };
                 rewind.CaptureNow(subject);
 
-                int ran = 0, rewound = 0, steps = 0, stateChecks = 0, shownAsReference = 0, shownAsLoaded = 0, pending = 0, captures = 0, burst = 0;
+                int ran = 0, rewound = 0, steps = 0, stateChecks = 0, shownAsReference = 0, shownAsLoaded = 0, pending = 0, captures = 0, replayed = 0, burst = 0;
                 var reached = new HashSet<long>();
+                var commands = new SortedDictionary<int, int>();
                 while (subject.TotalFrames < last)
                 {
                     Drive(subject);
                     subject.RunFrame();
-                    // A snapshot here stands where the capture does, so its tail says whether the capture found words unrun.
-                    if (interval == 1)
+                    rewind.OnFrameCompleted(subject);
+                    if (subject.TotalFrames % interval == 0)
                     {
-                        byte[] snapshot = subject.Save(snapshot: true);
-                        pending += BitConverter.ToInt32(snapshot, snapshot.Length - 4 - 8 * DpInterface.SnapshotWords) > 0 ? 1 : 0;
+                        pending += Unrun(rewind) > 0 ? 1 : 0;
                         captures++;
                     }
-                    rewind.OnFrameCompleted(subject);
                     ran++;
                     long at = subject.TotalFrames;
                     if (interval == 1 || at % 60 == 0)
@@ -192,6 +208,8 @@ namespace EmuSen.WiseMan.Cores
                         long before = subject.TotalFrames;
                         if (!rewind.Rewind(subject)) break;
                         steps++;
+                        replayed += Unrun(rewind) > 0 ? 1 : 0;
+                        Tally(rewind, commands);
                         long landed = subject.TotalFrames;
                         Assert.True(step == 0 ? landed <= before - interval && landed > before - 2 * interval : landed == before - interval, $"{romName}, interval {interval}: a step back from frame {before} landed on {landed}");
                         Assert.True(history[landed].State == Hash(subject.Save(false)), $"{romName}, interval {interval}: the step back from {before} to {landed} is not the state the machine had");
@@ -204,7 +222,7 @@ namespace EmuSen.WiseMan.Cores
                     rewound += distance;
                 }
 
-                _output.WriteLine($"{romName} {stateName}, interval {interval}: {ran} frames run to reach {frames}, {steps} steps back in {burst} bursts, {stateChecks} states compared, all identical; {pending} of {captures} captures found words unrun; the picture where a step landed was a load's in {shownAsLoaded} of {steps} and the one the frame first presented in {shownAsReference}; rewind held {rewind.Depth} steps, {rewind.BufferedBytes >> 20} MB");
+                _output.WriteLine($"{romName} {stateName}, interval {interval}: {ran} frames run to reach {frames}, {steps} steps back in {burst} bursts, {stateChecks} states compared, all identical; {pending} of {captures} captures held words unrun and {replayed} landings replayed some; the picture where a step landed was a load's in {shownAsLoaded} of {steps} and the one the frame first presented in {shownAsReference}; rewind held {rewind.Depth} steps, {rewind.BufferedBytes >> 20} MB; the landings' unrun commands {string.Join(" ", commands.Select(c => $"{c.Key:X2}x{c.Value}"))}");
                 long[] counters = subject.ThreadCounterValues();
                 Assert.True(counters[0] == 1 && counters[1] > 0, "the drain never ran, so the workers were never busy at a snapshot");
             }

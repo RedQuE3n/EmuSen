@@ -34,6 +34,8 @@ namespace EmuSen.Mistress
         }
 
         // The platform/font/X11 sequence this used to spell out lives in LunaApp now - see EmuSen_LunaP.md §3.
-        public static AppBuilder BuildAvaloniaApp() => LunaApp.Configure<App>();
+        // gamescope fills the screen with every new window, a dropdown's list included - see EmuSen_Settings_Reference.md §4.45.8.
+        public static AppBuilder BuildAvaloniaApp() => LunaApp.Configure<App>().EmbedPopups(
+            Views.MainWindow.WantsBigScreen(EmuSen.Galaxia.Models.AppSettings.Load().BigScreen, Environment.GetCommandLineArgs(), Environment.GetEnvironmentVariable));
     }
 }

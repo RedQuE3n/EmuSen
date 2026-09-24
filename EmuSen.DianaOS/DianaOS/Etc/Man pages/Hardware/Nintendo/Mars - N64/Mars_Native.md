@@ -5305,9 +5305,34 @@ join at the next present (Super Mario 64 at two: 0.76 to 1.49 ms a frame; the Da
 now waits for the leader's submission, and the frame is unmoved: those games' lists end well within the next field.
 Donkey Kong 64's does not wait there (0.05 ms), since its heavy field is longer than its list.
 
-##### 6.15.6 What is not done
+##### 6.15.6 The handheld (measured 2026-09-24, after the merge 1e650ea)
 
-- **The handheld.** Not measured here, by instruction. What to measure, with the prediction for each:
+The Legion Go S, SteamOS 3.8.27, power profile "custom", Mistress closed; the agent's `threads` builds of a39a73d and
+of the branch, copied over (both need glibc 2.34 at most), three rounds interleaved with the order reversed each
+round, DK64's title state, 600 frames, `split 4 blocks`:
+
+| DK64 title | a39a73d, ms a frame | branch, ms a frame |
+|---|---|---|
+| 2x on the device | 16.59, 16.79, 16.83 | 14.92, 14.70, 14.81 |
+| 1x | 14.44, 14.68, 14.72 | 14.91, 14.58, 14.58 |
+
+At the multiple the median falls 1.98 ms (16.79 to 14.81), under the 16.7 ms target. Against the prediction of
+§6.15.7's first item, which was written before the measurement and is kept as written:
+
+- **Confirmed:** site 8 fell from 4.44–4.60 to 0.11–0.13 ms a frame (predicted about 0.2); the drain's joins from 7 to
+  0 (predicted near nothing); site 2 appeared at 2.62–2.75 (predicted 2.5 to 3).
+- **The drop was larger than predicted, and the frame longer.** Predicted a fall of 1.3 to 1.8 ms from 15.62–15.79 to
+  14.0–14.4; measured a fall of 1.98 ms from 16.59–16.83 to 14.70–14.92. The base itself ran about a millisecond
+  slower than on 2026-09-23 (§6.14), in the same session and on the same states. The two builds were measured
+  interleaved, so the fall is the comparison to trust; why the base was slower that day was not investigated.
+- **At one nothing moved**, as §6.15.5 found on the desktop: the medians are 14.68 and 14.58, inside each other's
+  spread. The state hash (2D024DBB873B763A) was the same in all twelve runs.
+- **Not measured:** the `trace=` run the prediction also asked for, and the frame rate in Mistress, where the
+  presenter and the audio add to the bench's figure (§6.14 had 17.4 ms in Mistress against the bench's 15.7).
+
+##### 6.15.7 What is not done
+
+- **The handheld.** Not measured by the branch, by instruction; measured after the merge, §6.15.6. What to measure, with the prediction for each:
   `examples/threads dk64-us.v64 dk64-us-title.state 600 split 4 blocks scale=2 gpu` before (a39a73d) and after, three
   rounds interleaved: the site-8 wait of 4.27 to 4.32 ms a frame goes to about 0.2, the joins stay near nothing, and
   site 2 appears at 2.5 to 3 ms a frame (more than here, the handheld's drain being slower beside its emulation thread);

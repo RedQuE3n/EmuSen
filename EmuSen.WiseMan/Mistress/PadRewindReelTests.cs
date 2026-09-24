@@ -410,6 +410,60 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        // EMUSEN_REWIND_REEL_GAME="<rom>|<state>" renders the reel over a real game, for a person to look at; unset, it does nothing.
+        [Fact]
+        public Task A_real_game_on_the_reel_is_rendered_for_a_look() => Session.Dispatch(() =>
+        {
+            if (Environment.GetEnvironmentVariable("EMUSEN_REWIND_REEL_GAME")?.Split('|') is not [string rom, string state])
+            {
+                _out.WriteLine("EMUSEN_REWIND_REEL_GAME unset, not run");
+                return;
+            }
+
+            foreach (bool bigScreen in new[] { true, false })
+            {
+                foreach (string old in Directory.GetFiles(_romDir)) File.Delete(old);
+                File.Copy(rom, Path.Combine(_romDir, Path.GetFileName(rom)));
+                new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = bigScreen }.Save();
+                var window = new MainWindow { Width = 1280, Height = 800 };
+                window.Show();
+                var pad = new PadDriver(window);
+                window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
+                pad.A();
+                window.PauseEmulation();
+                WaitUntilParked(window);
+                typeof(MainWindow).GetMethod("LoadStateFromConsole", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { state });
+                window.ResumeEmulation();
+                Play(window, 720);
+                string name = Path.GetFileNameWithoutExtension(rom) + (bigScreen ? "-sheet" : "-desktop");
+
+                if (bigScreen)
+                {
+                    RewindReelWindow reel = OpenReel(window, pad);
+                    pad.Left(6);
+                    Settle(window);
+                    UiTest.Dump("rewind-reel-" + name, UiTest.Capture(window));
+                    pad.L1();
+                    Settle(window);
+                    UiTest.Dump("rewind-reel-" + name + "-stride", UiTest.Capture(window));
+                    pad.B();
+                }
+                else
+                {
+                    typeof(MainWindow).GetMethod("OpenRewindReel", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { false });
+                    WaitFor(() => window.OwnedWindows.OfType<RewindReelWindow>().Any());
+                    RewindReelWindow reel = window.OwnedWindows.OfType<RewindReelWindow>().Single();
+                    reel.Strip.Move(-6);
+                    Settle(reel);
+                    UiTest.Dump("rewind-reel-" + name, UiTest.Capture(reel));
+                    reel.Close();
+                }
+
+                Stop(window);
+                window.Close();
+            }
+        }, default);
+
         [Fact]
         public Task On_the_desktop_a_click_chooses_and_a_double_click_rewinds() => Session.Dispatch(() =>
         {

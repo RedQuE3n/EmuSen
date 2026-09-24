@@ -11,7 +11,10 @@ the machine that page describes, not a second machine.*
 Colour mode is decided **once, at construction**, from the `$0143` header byte
 that `Cartridge.Cgb` already parsed (`Mercury_Memory.md` §2.1). Both
 `CgbSupport.Enhanced` (`$80`) and `CgbSupport.Required` (`$C0`) select it. There
-is no runtime toggle and no setting.
+is no runtime toggle. Since 2026-09-24 there is a setting: the Model row can put
+any cartridge on either console, and a Game Boy cartridge on the Color runs in the
+Color's compatibility mode (`Mercury_Model.md`). *Auto*, the default, is the rule
+above.
 
 The consequence is that `MemoryBus` sizes its own memory in its constructor —
 16K of VRAM instead of 8K, 32K of WRAM instead of 8K — and every colour register
@@ -182,7 +185,12 @@ observable to a game that uses the documented arm-then-`STOP` sequence.
 - **No DMG-on-CGB compatibility palettes.** A monochrome cartridge runs as a
   monochrome cartridge, in greys. Real hardware would colourise it from a table
   the boot ROM picks by header checksum. That table is a boot-ROM artefact, not a
-  hardware behaviour, and Mercury has no boot ROM.
+  hardware behaviour, and Mercury has no boot ROM. *Retired 2026-09-24:* under the
+  Model setting's *Game Boy Color* a monochrome cartridge is coloured, and the
+  claim was half wrong. The table is the boot ROM's, but the indirection through
+  BGP and OBP, DMG sprite priority and the locked registers are hardware
+  (`Mercury_Referee.md` §4.8, `Mercury_Model.md` §3–§4). *Auto* still runs it in
+  greys.
 - **`OPRI` (`$FF6C`) is accepted and ignored.** It selects DMG-style sprite
   priority on a CGB, and Mercury never enters the mode that would need it.
 - **No infrared port (`$FF56`).** Four games use it, all for trading.

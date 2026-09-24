@@ -127,6 +127,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             _patchVersion = -1;
             machine.SetButtons(_buttons);
             Mirror.LoadRom(path);
+            Mirror.Model = _model;
             IsHaltedAtBreakpoint = false;
         }
 

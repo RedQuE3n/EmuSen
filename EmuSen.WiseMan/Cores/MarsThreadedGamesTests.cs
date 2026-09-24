@@ -73,6 +73,14 @@ namespace EmuSen.WiseMan.Cores
             MarsCore scratch = new(expansionPak: true, batteryRamDisabled: true) { UseBlocks = false, ThreadedRdp = false, SkipRendering = true };
             scratch.LoadRom(rom);
 
+            // Deferred and unthreaded, whose count of repeats a threaded capture must match, since a capture freed early compares bytes still being drawn - see Mars_Rdp.md §2.9.2.
+            MarsCore? counter = deferred && workers > 0 ? new(expansionPak: true, batteryRamDisabled: true) { UseBlocks = true, ThreadedRdp = false, DeferredPresentation = true, SkipRendering = false } : null;
+            if (counter is not null)
+            {
+                counter.LoadRom(rom);
+                counter.LoadState(new MemoryStream(state));
+            }
+
             byte[] previous = reference.GetFrameBufferRgba().ToArray();
             int pictures = 0;
             for (int frame = 1; frame <= frames; frame++)
@@ -80,6 +88,11 @@ namespace EmuSen.WiseMan.Cores
                 Drive(reference, subject, frame);
                 reference.RunFrame();
                 subject.RunFrame();
+                if (counter is not null)
+                {
+                    Drive(counter, counter, frame);
+                    counter.RunFrame();
+                }
                 if (every < 0)
                 {
                     using var snapshot = new MemoryStream();
@@ -101,6 +114,7 @@ namespace EmuSen.WiseMan.Cores
             long words = subject.Bus!.Dp.DrainWords;
             foreach (var (count, _) in subject.Bus.Dp.WorkerLoads) words += count;
             if (workers > 0) Assert.True(words > 0, "nothing reached the drain, so the threaded case was not met");
+            if (counter is not null) Assert.True(counter.RepeatedScans == subject.RepeatedScans, $"{subject.RepeatedScans} repeats skipped threaded, {counter.RepeatedScans} unthreaded");
             _output.WriteLine($"{romName} {stateName}, workers {workers}, deferred {deferred}, state every {every}: {frames} frames exact; {pictures} distinct pictures, {words} words on the drain, {subject.RepeatedScans} repeats skipped");
         }
 

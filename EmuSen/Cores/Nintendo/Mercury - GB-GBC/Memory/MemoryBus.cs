@@ -383,7 +383,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         public void Tick(int cycles)
         {
             for (int i = 0; i < cycles; i++) StepOneCycle();
-            _cart.Mapper.Tick(cycles);
+
+            // The cartridge's clock has its own crystal, so it counts base-clock cycles, half the CPU's in double speed - see Mercury_Native.md §9.2.
+            _cart.Mapper.Tick(DoubleSpeed ? cycles >> 1 : cycles);
         }
 
         // TIMA counts falling edges of one selected bit of the DIV counter - see Mercury_Memory.md §5.

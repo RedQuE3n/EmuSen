@@ -534,7 +534,8 @@ impl MemoryBus {
         for _ in 0..cycles {
             self.step_one_cycle();
         }
-        self.mapper.tick(&self.cart, cycles);
+        // The cartridge's clock has its own crystal: base-clock cycles, half the CPU's in double speed (Mercury_Native.md §9.2).
+        self.mapper.tick(&self.cart, if self.double_speed { cycles >> 1 } else { cycles });
     }
 
     /// TIMA counts falling edges of one selected bit of the DIV counter - see Mercury_Memory.md §5.

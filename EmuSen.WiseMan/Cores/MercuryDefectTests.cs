@@ -104,6 +104,17 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(20, seconds);
         }
 
+        // The same program on both engines in lock-step, the clock's sub-second count compared in every frame's state.
+        [Fact]
+        public void D2_the_clock_in_double_speed_runs_identically_on_both_engines()
+        {
+            var pair = new MercuryRtPair(ClockRom(doubleSpeed: true), skipRendering: false);
+            pair.Run(1200, null);
+            Assert.True(pair.Csharp.Bus!.DoubleSpeed, "the program never reached double speed");
+            Assert.Equal(20, pair.Csharp.Bus!.Wram[0]);
+            _output.WriteLine(pair.Summary);
+        }
+
         // Counts in WRAM and copies the count to cart RAM, so a battery save always has something new to write.
         private static byte[] BatteryRom() => SyntheticGbRom.Build(cartridgeType: 0x03, ramSizeCode: 0x02, patches: (0, new byte[]
         {

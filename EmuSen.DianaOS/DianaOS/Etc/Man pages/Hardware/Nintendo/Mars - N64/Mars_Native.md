@@ -1364,7 +1364,8 @@ thread while the next frame runs. The claim is that neither changes anything the
 
 The design being ported is the C# core's (`Mars_Rdp.md` §2.6 to §2.8, `Mars_Video.md` §2.7 and §2.8). MarsRT on one
 thread is the oracle. The C# core threaded is a second oracle wherever it is exact, and §5.6.2, §5.6.5 and §5.6.6
-record four places where it is not.
+record four places where it is not. *All four were fixed in C# on 2026-09-23, each with its test turned round
+(`Mars_Rdp.md` §2.9, `Mars_Video.md` §2.8).*
 
 The switches are `Machine::set_threaded_rdp`, `set_rdp_workers` and `set_deferred`, all off by default. The path
 §5.2 to §5.4 proved therefore stays the default until this one has been proven in play. The shim now honours Mars's
@@ -1448,6 +1449,9 @@ MarsRT departs from C# in the following places.
   - *Why the games miss it:* every VI capture, every SP DMA into the RSP and every SI transfer to the PIF is a range
     read of more than eight bytes, so the defect sits on the C# core's most-used wait. No game comparison has caught
     it, because the drain has usually finished before the capture reads.
+  - *Fixed in C# on 2026-09-23, commit 7fbf4b1, the test turned round:* the C# now narrows only a read inside one
+    aligned doubleword, and `MarsThreadedRdpTests.A_range_read_whose_first_bytes_no_draw_holds_still_waits_for_the_draws_that_hold_the_rest`
+    holds the read waiting (`Mars_Rdp.md` §2.9.2).
 - **The workers are threads of MarsRT's own.** C# queues a single drain on the pool and gives several workers threads
   of their own. A MarsRT worker parks when it has nothing to do.
   - The publish wakes it after a Relaxed test of its sleeping flag.
@@ -1525,6 +1529,9 @@ the bytes it waited for, so the walk cannot read a byte the drain is still writi
   picture of the frame before.
 - *In MarsRT:* the scan-out notes whether a border or a blank has changed the raster since the last walk, and walks a
   repeat when one has. `a_deferred_scan_repeating_after_a_held_line_expired_shows_the_darkened_picture` holds this.
+- *Fixed in C# on 2026-09-23, commit 419583a, the test turned round:* the C# follows MarsRT's rule, a darkening counted
+  only where it changed a byte, and `MarsDeferredPresentationTests.A_deferred_repeat_after_a_held_line_expired_shows_the_darkened_picture`
+  finds no stale picture (`Mars_Video.md` §2.8).
 
 #### 5.6.6 The list shared by several processors
 
@@ -1552,6 +1559,10 @@ Each failure was found by a test.
     hang leaves threads spinning.
   - *A candidate, not a proof.* `Mars_Rdp.md` §2.8 records a freeze met in Super Mario 64 whose cause was inferred and
     not proven. This deadlock could cause it, and it has not been shown to.
+  - *Fixed in C# on 2026-09-23, commit a72533c, the test turned round:* MarsRT's rule, a waiter raising the point to its
+    own word, now in `DpInterface`; `MarsThreadedRdpTests.A_pause_that_finds_some_processors_at_a_barrier_and_the_rest_short_of_it_is_answered`
+    and a stress of pauses and snapshots under a watchdog hang on the unfixed code and pass on the fixed (`Mars_Rdp.md`
+    §2.9.1). The freeze is still not proven to have been this.
 - **The level-of-detail fraction is a carry that C#'s inventory missed.**
   - *How.* A one-cycle row starts from the processor's own last fraction. A primitive that computes no fraction writes
     that value at every pixel, with its row's stamp. So each processor carries its own last value, and a primitive
@@ -1562,6 +1573,11 @@ Each failure was found by a test.
     state wrong in `_lodFraction` alone, for 8 of 16 seeds, with the memory right. Against MarsRT's split, the C#
     split parts at frame 6 of the Dam, again in `_lodFraction` alone.
   - *In MarsRT:* the fraction is stamped only on rows that compute it.
+  - *Fixed in C# on 2026-09-23, commit 51f3377, the test turned round:* the C# stamps it the same way;
+    `MarsThreadedRdpTests.A_primitive_drawn_alone_after_rows_that_measured_no_level_assembles_the_raster_orders_fraction`
+    is exact for all sixteen seeds, and the Dam no longer parts from MarsRT's split (§5.6.7). The two-cycle path of
+    both cores stamps the fraction the old way when level of detail is off; that is argued and not shown, and left
+    (`Mars_Rdp.md` §2.9.3).
 - **A load is joined only if a draw has reached its bytes since the image was set.**
   - *How.* A load before an image's first draw is run apart, so the draws after it may write its source before a
     slower processor has read it. Raster order has the load read first.
@@ -1574,6 +1590,9 @@ Each failure was found by a test.
     holds this.
   - *In C#:* the rule is unchanged. Its race is argued from the code and not shown in C#, because a race that timing
     hides cannot be shown by a test without a race detector.
+  - *Shown and fixed in C# on 2026-09-23, commit 4291e9e:* the C# game comparison with four processors from Ocarina's
+    state, under a loaded machine, parted from the C# core unthreaded in 10 of 16 runs; with MarsRT's rule ported,
+    in 0 of 18 (`Mars_Rdp.md` §2.9.5).
 
 **One rule C# can keep and Rust cannot.**
 - *The read.* In a shared primitive, the pixel at the image's width reads the next row's first bytes, and that row's
@@ -1627,11 +1646,12 @@ the Dam.
 | two and four workers against one thread | 300 | identical |
 | MarsRT threaded against the C# core threaded, blocks off, at once | 600 | identical |
 | the same, both deferred | 600 | identical |
-| MarsRT's four workers against the C# core's four | 300 | identical in five; the Dam parts at frame 6, in `_lodFraction` (§5.6.6) |
+| MarsRT's four workers against the C# core's four | 300 | identical in five; the Dam parts at frame 6, in `_lodFraction` (§5.6.6). *Since the C# fix of 2026-09-23 (51f3377), identical in all six.* |
 
 **The C# failures.** Each is shown by a WiseMan test that asserts the C# behaviour: the range read, the deferred
 repeat, the fraction and the deadlock. Fixing the C# therefore fails the test, and the test is then to be turned
-around.
+around. *Turned round on 2026-09-23 with the fixes (`Mars_Rdp.md` §2.9); the tests now live
+in `MarsThreadedRdpTests` and `MarsDeferredPresentationTests` and assert the exact behaviour.*
 
 **ThreadSanitizer, on a stable compiler.**
 - *The setup.* No nightly compiler is installed, and the Fedora toolchain ships no Rust TSan runtime. The
@@ -1815,8 +1835,8 @@ cache, or the seqlock of the idle ranges. Those are covered only by the tests an
 
 - ~~The multiple, antialiasing and the device, which MarsRT does not draw yet.~~ *Drawn since §6.4, on the threads and
   deferred.*
-- The C# core's four failures (§5.6.2, §5.6.5, §5.6.6). They are the C#'s to fix, and the WiseMan tests that show them
-  are the ones to turn around when it is.
+- ~~The C# core's four failures (§5.6.2, §5.6.5, §5.6.6). They are the C#'s to fix, and the WiseMan tests that show them
+  are the ones to turn around when it is.~~ *Fixed and turned round 2026-09-23 (`Mars_Rdp.md` §2.9).*
 - ~~Rewind for MarsRT. §5.5 kept it off per console until a snapshot is proven. A snapshot with workers running is now
   proven headlessly in every frame of six games, but turning rewind on is a decision for play.~~ *On since §6.6.3.*
 - The defaults. The switches are wired through the shim and default off. Whether to turn them on for MarsRT in
@@ -2641,7 +2661,10 @@ Each was found by an oracle, shown failing, fixed, and is now held by the test t
   first while nothing has drawn, which costs a join once per load or change, and the answer is the words handed over.
   **The C# core has the same race** (`Vi.Prepare` reads `DpInterface.ScaledDrawn`, which on the drain is the workers'
   `Drew`, before `Capture`'s wait), so the C# comparison's oracle is the C# core unthreaded, which is deterministic;
-  documented here and not fixed, as the brief asks of C# findings.
+  documented here and not fixed, as the brief asks of C# findings. *Fixed in C# on 2026-09-23, commit 05d41e4:
+  `Prepare` asks `ScaledDrawnHandedOver`, which joins first while nothing has drawn, as MarsRT does; the test that shows
+  the race and its fix is `Mars_Rdp.md` §2.9.4's. The comparison at the multiple keeps its unthreaded oracle, which
+  still suffices.*
 
 **A finding about the C# device path, not a defect of the port.** A primitive the device declines (`Declined.Carry`,
 `Declined.Image`) is drawn nowhere: `Rdp.Gpu.cs` returns, and the CPU path never sees it. `Mars_Gpu.md` §9.1 found
@@ -2651,6 +2674,12 @@ from the processor's. MarsRT does the same, by construction, so the two cores' d
 against the processor on that state does not. Super Mario 64's and GoldenEye's states and all three games from
 power-on decline nothing. The crate's game test on the device therefore lets a picture part from the processor's
 only after a decline, and counts it.
+
+*Considered for the C# on 2026-09-23 and left.* Drawing a declined primitive on the processor path would need the
+device's memory read back before it and written back after, per primitive, which is the round trip the device path
+exists to avoid (`Mars_Gpu.md` §9.1, §11.2), and a C# change alone would part the C# device path from MarsRT's, which
+is the only comparison either has at the multiple on the device. It touches only the device at a multiple, never the
+1× default. It remains a finding for the device's design, to be settled in both cores together.
 
 #### 6.4.5 Mutants
 
@@ -3087,10 +3116,13 @@ Each is small, has its own oracle, and can be given to an agent beside larger wo
 - **Rewind for the N64** is off on both engines in Mistress, because the C# core's snapshot with several workers froze
   a game (`EmuSen_Settings_Reference.md` §4.21b, §4.44). MarsRT's snapshot is proven headlessly in every frame of six
   games (§5.6.4) and its pause point is a barrier the C# core lacks. Turning it on for MarsRT alone is a play decision
-  of the same kind as stage B's, and the C# core's stays off until its failure is fixed.
-- **The C# core's four failures** (§5.6.2, §5.6.5, §5.6.6): each has a WiseMan test that shows it and is marked as the
+  of the same kind as stage B's, and the C# core's stays off until its failure is fixed. *The failure the tests could
+  reach, the pause barrier's deadlock, was fixed in C# on 2026-09-23 (a72533c, `Mars_Rdp.md` §2.9.1); the freeze itself
+  was never reproduced, so turning rewind back on is still a play decision.*
+- ~~**The C# core's four failures** (§5.6.2, §5.6.5, §5.6.6): each has a WiseMan test that shows it and is marked as the
   C# core's; the work is to fix each in C# and turn its test around. The pause barrier's is the one that may be a
-  game's freeze, and comes first.
+  game's freeze, and comes first.~~ *Done 2026-09-23: a72533c (the pause barrier), 7fbf4b1 (the range read), 419583a
+  (the deferred repeat), 51f3377 (the fraction), and 05d41e4 for §6.4.4's race; `Mars_Rdp.md` §2.9.*
 - **MarsRT's single-thread regression** of 1.5 to 3.5 per cent (§5.6.8), found and not explained: a bisection with the
   interleaved bench between the RDP merge and the threads' merge, about two hours, and either a cause or a recorded
   negative.
@@ -3378,7 +3410,7 @@ retired from the Engine row when:
 WiseMan suites that make those claims need it to build and run; `EmuSen_Stack.md`'s rule keeps a 2D core in C# and
 says nothing against a reference. So the C# core stays as the oracle in the test harness for as long as MarsRT is
 graded against it, and "retired" means it is no longer offered to a player. Its four failures (§6.6) matter less
-then, but its exactness still does.
+then, but its exactness still does. *They were fixed on 2026-09-23.*
 
 **The recommendation** is to keep it offered until 1 to 3 hold, and to keep it as the oracle indefinitely. A port
 that removed its own reference would have to be graded against something else, and there is nothing else that is

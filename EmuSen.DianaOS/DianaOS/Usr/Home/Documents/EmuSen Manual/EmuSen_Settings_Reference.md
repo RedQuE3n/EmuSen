@@ -641,8 +641,9 @@ the middle of one, which games do — could not be answered, and a test reproduc
 workers is proven in play, `OnFrameCompleted` is skipped for Mars; the hotkey then has no history to step back
 through. The other cores' rewind is unchanged.
 
-*2026-09-23: rewind is on for MarsRT (Rust) and still off for Mars (C#).* The C# core's pause can still deadlock its
-workers, and a WiseMan test still shows it (`Mars_Native.md` §5.6.6), so nothing changes for it. MarsRT's snapshot
+*2026-09-23: rewind is on for MarsRT (Rust) and still off for Mars (C#).* ~~The C# core's pause can still deadlock its
+workers, and a WiseMan test still shows it (`Mars_Native.md` §5.6.6), so nothing changes for it.~~ *That deadlock was
+fixed the same day, in the next paragraph; the C# core's rewind stays off until it is played.* MarsRT's snapshot
 pauses its workers at a word each answers by number, and rewinding it with four workers and the picture deferred —
 Mistress's settings — was checked frame by frame on three games: every step back lands on exactly the state the
 machine had at that frame and shows the picture a load of it shows, rewinding and playing alternated at random for
@@ -650,6 +651,11 @@ machine had at that frame and shows the picture a load of it shows, rewinding an
 (`Mars_Native.md` §6.6.3). For a player on MarsRT the hotkey now works as on the other consoles: every fourth frame
 is kept, as far back as the 96 MB budget reaches, and a step back shows the frame at once rather than a frame late.
 Each capture writes a 13 MB state on the emulation thread, into an array kept for it: on the development desktop 2.5 to 3.8 ms one frame in four, about 1 ms a frame in all with the buffer's own encoding, and 0 to 2 of the buffer's garbage collections in 300 frames (`Mars_Native.md` §6.6.3). The handheld was not measured.
+
+*2026-09-23:* the C# core's snapshot with several workers had a second way to hang, a pause that found some workers at
+a barrier and the rest short of it; a snapshot every frame from Ocarina of Time's state met it within a second of play.
+It is fixed, with the race that parted the split from itself in the same game (`Mars_Rdp.md` §2.9.1, §2.9.5). Rewind
+stays off until it is proven in play, which headless runs cannot do.
 
 ### 4.26 The graphics window: one tab per console, the settings its core offers
 

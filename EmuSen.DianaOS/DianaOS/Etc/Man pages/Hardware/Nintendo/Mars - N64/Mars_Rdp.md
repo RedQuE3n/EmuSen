@@ -349,7 +349,8 @@ changed. A second finding corrects this section. The statement above, that "any 
 wait", does not hold for a read. `WaitForReadRange` narrows by the boxes that hold the range's first eight bytes. A
 capture whose first bytes no pending draw holds is therefore freed, even while draws still hold its later rows.
 `The_csharp_interface_lets_a_range_read_pass_the_draws_that_hold_all_but_its_first_bytes` shows it with the thread
-paused. The C# is unchanged.
+paused. The C# is unchanged. *Retired 2026-09-23 (7fbf4b1): only a read inside one aligned doubleword is narrowed now,
+and a range read keeps the page wait; §2.9.2.*
 
 ### 2.7 The thread held between two words
 
@@ -446,21 +447,26 @@ before that pixel reads it — which is the fact §10.2's inventory established 
 detail writes each processor's own last `_lodFraction` at every pixel, with its row's stamp. So a primitive drawn
 alone then assembles a stale value.
 `The_csharp_split_assembles_a_stale_level_of_detail_fraction_from_rows_that_computed_none` finds the state wrong in
-that field alone for 8 of 16 seeds. It never reaches a picture.
+that field alone for 8 of 16 seeds. It never reaches a picture. *Fixed 2026-09-23 (51f3377): a one-cycle row stamps
+the fraction only when it measures one; §2.9.3, which also records the same shape in the two-cycle path, not fixed.*
 
 **A snapshot with several processors** (§2.7) needs a point every processor stands at. The pause point is the furthest
 word any processor has reached when it sees the request: each raises the point to its own position if that is
 further, runs on to it if it is short of it, and stands there; the request is answered when all stand at the same
 word. A processor short of the point can never be waited for at a barrier by one past it, because a barrier is taken
 at a command's last word and a processor stops only before gathering a word. The cost is that the slowest processor
-runs to the fastest's position, which is about a primitive.
+runs to the fastest's position, which is about a primitive. *The sentence "a processor short of the point can never
+be waited for at a barrier by one past it" is true and was not enough: the waiters that deadlock are at the point, not
+past it (below, and §2.9.1).*
 
 *2026-09-22: the argument has a gap* (`Mars_Native.md` §5.6.6). A processor waiting at a barrier for word *k* + 1 is
 not past the point but at it. If the others were short of the barrier when the request came, they stand at *k*, and
 the waiter never gets through. MarsRT's port deadlocked this way on four workers.
 `The_csharp_workers_deadlock_when_a_pause_finds_some_at_a_barrier_and_the_rest_short_of_it`, run behind
 `EMUSEN_MARS_DEADLOCK_PROBE=1`, finds the C# pause unanswered too. This is a candidate cause of the Super Mario 64
-freeze described below, and it has not been shown to be that cause.
+freeze described below, and it has not been shown to be that cause. *Fixed 2026-09-23 (a72533c): a waiter at a
+barrier raises the pause point to its own word; §2.9.1. The freeze remains unexplained: the fix removes a cause that
+could produce it, and no run has shown that it was the one.*
 
 *The first version stood only at a command's boundary, and hung.* The play harness takes no snapshots, so the case
 was met in the frontend, in play: a game hands its list over in pieces, and a piece can end inside a command — the
@@ -484,6 +490,244 @@ test failed — every run for the serialisation, the load and the image change, 
 The rasteriser bench replays the three recorded frames of §7 with the same RDRAM hashes at one, two and four
 processors; the probe grades 1,800 frames with the byte-level verifier on. None of it is a proof of the design;
 all of it is what the design predicts and nothing yet contradicts.
+
+### 2.9 The port's findings, fixed in the C# core (2026-09-23)
+
+MarsRT's port of §2.6 to §2.8 (`Mars_Native.md` §5.6) found four places where this core was not exact, each recorded
+with a WiseMan test that showed the C# behaviour, and left; its stage D (§6.4.4 there) found a race in the scan, and
+its ThreadSanitizer run a race in §2.8's third rule that was argued for the C# and not shown. This section records
+each one's cause, what was changed, the evidence before and after, and the mutant that reintroduces it. The deferred
+repeat is `Mars_Video.md` §2.8's and is recorded there; the rest are the drain's. Every test named below was run on the
+unfixed code first and failed there, and each mutant is the unfixed line put back alone into an otherwise fixed copy
+of the source: its named test fails, and the rest of `MarsThreadedRdpTests` (32 tests then) or
+`MarsDeferredPresentationTests` (19) passes, so no other test in the class depends on the defect.
+
+#### 2.9.1 The pause barrier's deadlock (a72533c)
+
+*The cause.* §2.8's pause point is the furthest word any processor has reached when it sees the request. A processor
+that has gathered word *k* + 1, a command whose step is a barrier, and is waiting there for the rest, is inside
+*k* + 1 and never returns to the top of its loop, where a processor stands; the rest, arriving at *k*, set the point to
+*k* and stand. Nothing then moves: the waiter needs them at the barrier, and they wait for the point to change. With
+two processors this needs only one to be a command ahead of the other at a barrier, which an image change makes every
+few commands.
+
+*The fix.* While it spins, a barrier's waiter raises an existing pause point that is short of its own word to that
+word (`RaisePauseTo`). The processors standing at *k* see the point move, run word *k* + 1 through the barrier, and
+stand at *k* + 1, where the waiter, now through, also stands. The raise is a compare-and-exchange from the value read,
+and only of a point already set (at least zero): a waiter that read the request before a `Resume` cannot then write a
+stale point over `Resume`'s −1, since its exchange expects the old value. The raise is counted (`PausesRaised`) so that
+a test can say the case was met. The rest of §2.8's argument holds as written: nobody is ever past a barrier's word
+while one of its waiters is still waiting, so raising the point to that word never asks a processor to go back.
+
+*The evidence.* `A_pause_that_finds_some_processors_at_a_barrier_and_the_rest_short_of_it_is_answered` hands 1,500
+fills alternating over four images to four processors and asks for a pause after a spin that differs per attempt, a
+hundred attempts, each under a five-second watchdog; after each, the list is run out and the state compared with the
+list run at once. `Pauses_and_snapshots_while_the_processors_run_barriers_are_all_answered_and_exact`, at two, three and
+four processors, hands a list of 3,000 such fills over in two pieces and, from another thread, pauses, resumes and
+takes snapshots forty times per round across eight rounds, under a thirty-second watchdog per round; each snapshot
+is loaded into an unthreaded machine, its tail run, and compared with the finished list. Both assert that at least one
+pause was raised, and that at least one snapshot carried pending words. On the unfixed code every case hung at its
+first round (the pause test at attempt 0, the stress at round 0 for two, three and four processors); fixed, all pass,
+and the probe `The_csharp_workers_deadlock_…` of `MarsRtThreadsTests`, which it replaces, is gone. The mutant that
+never raises the point hangs both tests again. The deadlock is a hang and not a race on a byte, so it is shown by a
+watchdog and not by the verifier: no byte is written wrongly, the processors simply never answer.
+
+*What it reaches in play, and what it does not settle.* A pause is asked for only by a snapshot (`MemoryBus.WriteState`
+with `snapshot`, which `Hold`s), and the only caller of a snapshot in Mistress is the rewind buffer, off for the N64
+since the Super Mario 64 freeze of §2.8 (`EmuSen_Settings_Reference.md` §4.21b). So the deadlock could not have met a
+player since then, and it is a candidate for that freeze, whose cause was never established. Whether rewind is turned
+back on is a decision for play; this section says only that the hang the headless tests could reach is gone.
+
+#### 2.9.2 A range read narrowed by its first bytes (7fbf4b1)
+
+*The cause.* §2.6.3 narrows a read by the boxes of the pending draws that hold its eight bytes, and `Wait` applied
+that to whatever range it was given, testing only the aligned eight bytes at the range's start. `WaitRange` calls it
+page by page, so a page of a capture, an SP DMA or an SI transfer whose first eight bytes no pending draw held was
+freed at once, although pending draws held its later bytes.
+
+*The fix.* Only a read that lies inside one aligned doubleword (`(from ^ (to − 1)) & ~7 == 0`) is narrowed; a range
+keeps §2.6.1's page and range wait. This is MarsRT's rule (`Mars_Native.md` §5.6.2).
+
+*The evidence.* `A_range_read_whose_first_bytes_no_draw_holds_still_waits_for_the_draws_that_hold_the_rest` pauses
+the thread with a fill of rows 8 and 9 pending and reads the page from row 6.4 as a range: unfixed, the read returns
+at once and the bytes it lets through at row 8 are undrawn; fixed, it is still waiting after 500 ms, returns on
+`Resume`, and reads the drawn bytes. The mutant that narrows every read fails it.
+
+*What the fix costs,* since this is the busiest wait in the core: §2.9.7. *What it reached in play:* with the display
+processor threaded and four processors, the fixed core skips 150 of Ocarina of Time's 300 scans as repeats and 149 of
+Super Mario 64's, the counts it skips unthreaded; the code before the fixes skipped 82 to 87 and 131 to 132. Its
+capture was freed while draws into the page past the buffer on show (§2.6.2's Wave Race case) were still being made,
+so the bytes it compared, and copied, were changing under it. No picture was wrong, since those bytes are the capture's
+slack and the walk does not reach them, but the capture was reading bytes still being drawn at every scan, which is
+the defect's reach in play. The attribution to this fix alone is checked in §2.9.6.
+
+#### 2.9.3 The level-of-detail fraction stamped by rows that measured none (51f3377)
+
+*The cause.* `Rdp.OneCycle.cs` stamped `_lodFraction` with every row's stamp, and a row whose primitive measures no
+level writes the processor's own last fraction at every pixel. With the list shared, each processor's own value is the
+fraction of its own last measuring row, so the latest stamp could carry a value that raster order had overwritten.
+
+*The fix.* A one-cycle row stamps the fraction only when it measures one (`measures`, the condition under which its
+pixels compute a level). A row that does not measure leaves the fraction and its stamp alone, so the assembly takes
+the value of the last row in raster order that did.
+
+*The evidence.* `A_primitive_drawn_alone_after_rows_that_measured_no_level_assembles_the_raster_orders_fraction`, the
+case of `MarsRtThreadsTests`' record moved here and turned round: sixteen seeds of a measuring scene, a split one that
+measures none, and one drawn alone. Unfixed, the state differs in `_lodFraction` alone for 8 of 16 seeds, the memory for
+none; fixed, all sixteen are exact. The mutant that stamps every row fails it.
+
+*The same shape, left in the two-cycle path.* `Rdp.TwoCycle.cs` stamps the fraction at every textured pixel and writes
+the processor's own value when level of detail is off, which by the argument above has the same defect for a
+two-cycle textured primitive without level of detail, shared, followed by one drawn alone. MarsRT's `two_cycle.rs`
+does the same. No test has shown it, since the synthetic scenes of `MarsThreadedRdpTests` draw no textured two-cycle
+primitive, and the rule of this project is that a defect is shown before it is fixed; it is recorded here as the next
+case to write, and a fix would have to be made in both cores at once to keep their comparison (`Mars_Native.md`
+§5.6.7) meaningful. Like the one-cycle case, it cannot reach a picture: a combiner that reads the fraction turns
+level of detail on.
+
+#### 2.9.4 The scan deciding from the drain's progress whether the multiple drew (05d41e4)
+
+*The cause.* `Vi.Prepare` chose the multiple's picture when `DpInterface.ScaledDrawn`, and on the drain that flag is
+set by the processors as they draw, before `Capture`'s wait; the first scan after a load or a change of the multiple
+therefore showed the console's picture or the multiple's by timing. `Mars_Native.md` §6.4.4 found it in MarsRT's port
+and kept the C# comparison's oracle unthreaded because of it.
+
+*The fix.* `ScaledDrawnHandedOver` joins the drain first when the flag is false and words are pending, so the answer is
+that of every word handed over. Once true the flag stays true until a load empties the multiple's memory (§11), so the
+join is paid only while nothing has drawn there, once per load or change, and never at one.
+
+*The evidence.* `A_scan_decides_whether_the_multiple_drew_from_the_words_handed_over`, with one processor and with
+two: the multiple at two, the drain paused with a scene pending and released from another thread after 300 ms.
+Unfixed, `Prepare` returns at once with the picture at one where the list run at once gives two; fixed, it waits for
+the release and gives two. The mutant that reads `ScaledDrawn` fails both.
+
+#### 2.9.5 A load before the image's first draw, run apart (4291e9e)
+
+*The cause.* §2.8's third rule joins a load when a draw since the image was set may have reached its bytes
+(`LoadReachesDrawn`, over the drawn-to extents). A load made before the image's first draw was therefore run by each
+processor apart, and the draws after it, which a fast processor runs while a slow one has not yet loaded, can write
+the load's source first. Raster order has the load read first. MarsRT's port found the race with ThreadSanitizer in
+Ocarina of Time (`Mars_Native.md` §5.6.6) and changed its rule; the C# was left, since a race that timing hides cannot be
+shown by an equality test, and nothing had shown it.
+
+*It was shown in play here.* The game comparison of §2.9.6, run while other agents' builds and tests kept the
+machine's load at 10 to 20, parted the C# core with four processors from itself unthreaded, from Ocarina of Time's
+state, in 10 of 16 runs across three modes: the state compared every frame (1 of 4), every sixtieth frame (3 of 4)
+and a snapshot every frame (6 of 8). The first difference was in the CPU's registers (and once RDRAM) at frames 9, 78,
+209 and 282, or in the picture's top rows at frames 84 and 288. The code before this branch, where it did not hang
+(§2.9.1), parted in 1 of 8 of the same runs, at frame 84 as the fixed code did; so the race is older than the fixes,
+and the fixes changed how often timing met it. The game reads its depth buffer from the CPU (§2.6.3), which is how a
+drawing race reaches the processor's registers.
+
+*The fix.* MarsRT's rule: a load is joined when its bytes meet the first 1,024 rows of the current colour image or depth
+image at the colour image's width, the span a draw under any scissor can reach before the next image change, which is
+itself a barrier. The drawn-to extents are no longer read, and are gone. More loads are joined, which costs barriers;
+§2.9.7 measures it.
+
+*The evidence.* With the rule, the same three modes ran 18 of 18 exact under the same load. The synthetic case,
+`A_load_from_the_current_image_before_its_first_draw_is_run_by_every_processor_together` (MarsRT's, ported), fills a
+second image, sets the first, loads from it before any draw and then fills over the loaded rows, forty times at two
+to four processors. On the unfixed rule all forty ran the load apart and none left a wrong state, which is the point
+MarsRT's page made: the test holds the rule, and only the games, by timing, or a race detector, show the race. The
+mutant is the unfixed rule, which fails the test as the unfixed code did.
+
+*What is not covered.* The rule is a superset: it joins loads that no draw of the image would reach. A load from an
+image other than the current two, drawn earlier, is ordered by the image change's barrier and was never at issue.
+
+#### 2.9.6 The core against itself in play
+
+`MarsThreadedGamesTests` runs the core, with compiled blocks in both processors as it ships, from the three gameplay
+states (`EMUSEN_MARSRT_STATES`), against itself unthreaded and presented at once, with the same input, 300 frames, and
+compares the state and the picture after every frame: threaded on one processor and on four, at once; deferred alone,
+threaded on one and on four, a picture a frame late; four processors deferred with the state compared every sixtieth
+frame, so the drain runs across frames; and four processors deferred with a snapshot taken every frame and loaded into
+a scratch machine. Every run reports the words its drain ran, so a run in which nothing reached the drain cannot pass,
+and a deferred threaded run must skip exactly as many repeats as a third machine deferred and unthreaded.
+
+| from the state, 300 frames | Super Mario 64 | Ocarina of Time | GoldenEye, the Dam |
+| --- | --- | --- | --- |
+| threaded, one processor, at once | exact | exact | exact |
+| threaded, four, at once | exact | exact | exact |
+| deferred, unthreaded | exact, 149 repeats | exact, 150 | exact, 54 |
+| deferred, threaded on one | exact, 149 | exact, 150 | exact, 54 |
+| deferred, four | exact, 149 | exact, 150 | exact, 54 |
+| deferred, four, state every sixtieth frame | exact | exact | exact |
+| deferred, four, a snapshot every frame | exact | exact | exact |
+
+The drain ran 2.5, 1.8 and 5.6 million words on one processor, 10.1, 7.4 and 22.2 million counted over four (each
+processor runs every word). The table is the final code's, run while the machine's load was about 12.
+
+*What the snapshot row found before the fixes.* The same run of the code before this branch hung in Ocarina of Time in
+3 of 3 runs, at frames 22, 9 and 34, a snapshot never answered within thirty seconds; hung in Super Mario 64 in 1 of 3,
+at frame 166; and parted in GoldenEye at frame 6 in `_lodFraction` alone in 2 of 2, which is §2.9.3. So the pause
+barrier's deadlock is met in play, by a snapshot every frame from Ocarina of Time's state within a second of play, and
+the fraction in the Dam, as MarsRT's comparison had said. A snapshot every frame is heavier than the rewind buffer's
+one in four, so this measures the rate an hour of rewind would meet, not the rate a player saw; §2.9.1's statement
+about the Super Mario 64 freeze is unchanged.
+
+*The mutants against the games.* The range read's (§2.9.2) passes every state and picture comparison and fails the
+repeat count in every deferred threaded mode: Ocarina of Time skips 78 to 82 repeats threaded against 150, Super Mario
+64 131 against 149. The deadlock's is the snapshot row's hang above; the fraction's part in the Dam was seen on the code before all the
+fixes, and the fraction's mutant alone was not run against the games. The repeat's and the scan race's are not reached by these
+rows: the first needs a held line's expiry followed by a repeat, and Super Mario 64 deferred and unthreaded skipped the
+same 149 repeats before the fix and after, so these frames hold none; the second needs a multiple, which the rows do
+not set. The unit tests of §2.9.4 and `Mars_Video.md` §2.8 hold those two.
+
+*MarsRT against the fixed core.* `MarsRtThreadsTests` was rerun against the fixed C# core: MarsRT threaded against the
+C# threaded, at once and deferred, 300 frames of each of the six games, exact; MarsRT's four processors against the C#
+core's four, exact in all six, where before the fraction's fix the Dam parted at frame 6; and MarsRT at a multiple
+against the C# core at the multiple, 27 cases of 150 frames with and without the device, exact (run before §2.9.5's
+rule, which that comparison's unthreaded oracle does not use).
+
+#### 2.9.7 What the fixes cost
+
+*The method.* `pacebench` flat out from the three gameplay states, 900 frames after 120 of warm-up, at one with
+production's settings: compiled blocks, the display processor threaded, deferred presentation, repeats skipped, and
+four processors, the default on this sixteen-core desktop (one per three cores). Two harnesses were built apart, one
+over the code before this branch (f55bfc0) and one over the fixed code, and run in three rounds with the order
+reversed each round; each run took the bench lock and began only with the one-minute load below 3, since other
+agents were using the machine. The mean `RunFrame` is given, then the emulation thread's waits for the drain.
+
+| ms a frame, four processors | before | after |
+| --- | --- | --- |
+| Super Mario 64 | 6.44, 5.74, 5.66 (waits 1.31, 1.24, 1.15) | 6.37, 6.19, 6.15 (waits 1.68, 1.55, 1.52) |
+| Ocarina of Time | 7.92, 7.29, 7.20 | 7.45, 7.23, 7.38 |
+| GoldenEye, the Dam | 16.96, 16.75, 16.86 (waits 0.01, 0.00, 0.01) | 16.95, 17.10, 16.96 (waits 0.11, 0.11, 0.12) |
+
+| ms a frame, one processor | before | after |
+| --- | --- | --- |
+| Super Mario 64 | 15.50, 14.98, 15.04 | 15.96, 16.47, 15.93 |
+| Ocarina of Time | 13.75, 13.68, 14.06 | 13.70, 14.15, 13.69 |
+| GoldenEye, the Dam | 23.53, 23.00, 23.26 (waits 7.13, 6.59, 6.99) | 25.29, 25.88, 25.35 (waits 7.81, 9.13, 9.09) |
+
+The final state hashes of the two builds are the same in every run but one: GoldenEye's with four processors, where
+the code before this branch ends in a state that differs from its own at one processor, the fraction of §2.9.3, and the
+fixed code's with four equals both builds' at one.
+
+*What the fixes cost.* Ocarina of Time's rounds overlap at both counts, and the Dam's at four; those are recorded as
+costing nothing measurable. Super Mario 64 at four is 0.3 to 0.5 ms a frame slower in every round but the first, about
+7 per cent, and at one 0.5 to 1.5 ms; the Dam at one is 1.8 to 2.9 ms slower, 8 to 12 per cent. That the fixes cost
+nothing is therefore **not** true of the range read, and the claim is withdrawn for it.
+
+*Which fix.* A third harness, the fixed code with §2.9.2's line alone put back, ran Super Mario 64 at four at 5.64,
+5.78 and 5.85 ms against the fixed code's 6.10, 6.11 and 6.09, with the waits 1.12 to 1.20 ms against 1.47 to 1.61: the
+whole cost is the range read's. At one processor the pause, the fraction, the hazard load and the split do not run, and
+the repeat rule walks nothing more in these frames (the counts of §2.9.6), so the range read is the only change left
+there, by elimination rather than by a separate run.
+
+*Why, and what was tried.* A capture reaches past the lines the walk reads (`Mars_Video.md` §2.7's slack), and in these
+games past the buffer on show into the next one, which the list is drawing; the capture now waits for those draws, as
+a range read must, where before it copied the bytes as they were being drawn. Whether the waits were for draws that
+really hold the bytes, or a page wait wider than the draws, was tested: the range read was narrowed by the boxes over
+its whole length, exactly (`Within`'s test as one interval of pixels a box row), and measured against the build with
+§2.9.2's line put back. Super Mario 64's waits stayed at 1.52 to 2.08 ms against 1.14 to 1.25, and the frame at 5.98 to
+7.49 against 5.59 to 6.22: the waits are for draws that do hold the bytes, the narrowing bought nothing, and it was
+reverted. The lever that is left is the capture's reach. `Mars_Native.md` §5.6.9 records that a capture one line
+short, three lines short, or without its span slack survives every mutant round in MarsRT as equivalent, while one
+ending at the last line or one past it is caught; so the walk needs less than the capture takes, and a capture cut to
+the walk's own reach would wait only for bytes the walk reads. It was not built: the reach is §2.7's argument, which
+throws on a walk outside the capture, and changing it is a change to the scan-out's design to be made in both cores
+together, not a fix of this section.
 
 ## 3. The command stream
 

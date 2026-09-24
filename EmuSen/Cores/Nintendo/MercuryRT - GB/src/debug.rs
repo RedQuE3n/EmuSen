@@ -1,7 +1,7 @@
 //! The debugger's hooks: tables the host pushes down, and what an observed frame records for it to read back.
 //! Nothing here calls the host; a frame that meets a table ends early with a reason. See Mercury_Native.md §8.5.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::cpu::CpuBus;
 use crate::memory::bus::MemoryBus;
@@ -86,8 +86,9 @@ pub struct Hooks {
     /// The bitmap while coverage is armed, drained and cleared by the host.
     pub coverage: Option<Box<[u8]>>,
     pub covered: i64,
-    /// Instructions by the routine they ran in, zero outside any call; drained by the host.
-    pub profile: HashMap<u32, i64>,
+    /// Instructions by the routine they ran in, zero outside any call; drained by the host. Not a `HashMap`: that one changed the
+    /// plain `MemoryBus::read`'s code, which shares its hasher with the ROM-patch table (Mercury_Native.md §8.5.5).
+    pub profile: BTreeMap<u32, i64>,
     owner: u32,
     run: i64,
     /// The budget the frame an observed loop is inside began with, kept while the host continues it past a stop it refused.
@@ -116,7 +117,7 @@ impl Default for Hooks {
             writes_log: Vec::new(),
             coverage: None,
             covered: 0,
-            profile: HashMap::new(),
+            profile: BTreeMap::new(),
             owner: 0,
             run: 0,
             budget: 0,

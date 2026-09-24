@@ -181,8 +181,8 @@ namespace EmuSen.Mistress.Views
                 new SourceListItem(FavouritesKey, "Favourites", favourites.ToString()),
                 new SourceListItem(RecentKey, "Recently Played", recent.ToString()),
             });
-            var consoles = new SourceListGroup("Consoles", EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder
-                .Select(c => new SourceListItem(ConsoleKeyPrefix + c.DisplayName, c.Console, _allScan.Entries.Count(e => e.CoreDisplayName == c.DisplayName).ToString()))
+            var consoles = new SourceListGroup("Consoles", EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder
+                .Select(s => new SourceListItem(ConsoleKeyPrefix + s.Name, s.Label, _allScan.Entries.Count(e => e.Shelf == s.Name).ToString()))
                 .ToArray());
             LibrarySidebar.Fill(new[] { library, consoles, CollectionsGroup() }, SidebarKey);
         }

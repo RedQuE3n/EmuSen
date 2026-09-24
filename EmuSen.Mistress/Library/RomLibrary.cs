@@ -23,6 +23,9 @@ namespace EmuSen.Mistress.Library
         // Which console this file belongs to, decided by extension - see EmuSen_Multicore.md §10.
         public string CoreDisplayName =>
             EmuSen.Cores.CoreCatalog.ByExtension(Path.GetExtension(FullPath))?.DisplayName ?? "Unknown";
+
+        // The library shelf, which splits the Game Boy's core into Game Boy and Game Boy Color - see EmuSen_Settings_Reference.md §4.46.
+        public string Shelf => EmuSen.Cores.CoreCatalog.ShelfFor(FullPath) ?? "Unknown";
     }
 
     // CoreDisplayName is the console the scan was narrowed to, null when it was not.
@@ -62,13 +65,14 @@ namespace EmuSen.Mistress.Library
             List<RomEntry> entries;
             try
             {
-                var only = EmuSen.Cores.CoreCatalog.ByDisplayName(coreDisplayName);
+                var shelf = EmuSen.Cores.CoreCatalog.ShelfByName(coreDisplayName);
 
                 entries = Directory.EnumerateFiles(romDirectory, "*", Recursive)
-                    .Where(f => only is null
+                    .Where(f => shelf is null
                         ? Extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase)
-                        : only.SupportsExtension(Path.GetExtension(f)))
+                        : shelf.Core.SupportsExtension(Path.GetExtension(f)))
                     .Select(f => new RomEntry(f))
+                    .Where(e => shelf is null || e.Shelf == shelf.Name)
                     .OrderBy(e => e.Title, StringComparer.OrdinalIgnoreCase)
                     .ToList();
             }
@@ -87,13 +91,13 @@ namespace EmuSen.Mistress.Library
         {
             string? console = Narrowed(coreDisplayName);
             if (console is null || all.Status is not (RomLibraryStatus.Ok or RomLibraryStatus.Empty)) return all with { CoreDisplayName = console };
-            List<RomEntry> entries = all.Entries.Where(e => e.CoreDisplayName == console).ToList();
+            List<RomEntry> entries = all.Entries.Where(e => e.Shelf == console).ToList();
             return new RomLibraryResult(entries.Count == 0 ? RomLibraryStatus.Empty : RomLibraryStatus.Ok, all.Directory, entries, console);
         }
 
-        // The display name only when it names a real core in this build.
+        // The shelf's name only when it names a real shelf in this build.
         private static string? Narrowed(string? coreDisplayName) =>
-            EmuSen.Cores.CoreCatalog.ByDisplayName(coreDisplayName)?.DisplayName;
+            EmuSen.Cores.CoreCatalog.ShelfByName(coreDisplayName)?.Name;
 
         // The one place the "why is my list empty" wording lives, so the
         // inline library and the modal browser can't drift apart.

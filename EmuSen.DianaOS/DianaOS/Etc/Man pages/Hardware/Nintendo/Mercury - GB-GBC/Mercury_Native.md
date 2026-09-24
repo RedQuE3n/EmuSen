@@ -496,7 +496,7 @@ of §3.2, which names every byte. For synthetic ROMs these states can be regener
 time.
 
 **3. A live differential on the legacy branch, built on demand.** The legacy branch keeps C# Mercury and its WiseMan
-tests. A test project there loads MercuryRT's library built from `main`, by a path, as `MarsRtPublish.targets`'
+tests. A test project there loads MercuryRT's library built from `main`, by a path, as `RustCoresPublish.targets`'
 `EmuSenNativePrebuilt` already does for foreign platforms. It then runs §3.3's frame-by-frame comparison live. This is
 the tool for when a golden trace disagrees and the question is "which engine moved?". Three things couple the branches:
 
@@ -582,7 +582,9 @@ rewind. Mercury has no `ISnapshotCore`, so rewind uses the full state on both en
   in under 1.2×, the port is still worth finishing on grounds 1 and 3 of §1.2. The later lever, batching the devices
   (§1.2), would then be the next question, with its own prediction.
 - **Risk: bit-exact sound across platforms.** §3.3 removes `pow`. Nothing else in the mixer is platform-dependent by
-  argument. That argument is untested on Windows and macOS until stage 7.
+  argument. That argument is untested on Windows and macOS until stage 7. *Stage 7 (§8.6) wrote the test, as digests
+  recorded on linux-x64 that the workflow holds win-x64 and osx-arm64 to. The result waits on the workflow's first
+  run.*
 
 ## 6. What the review found in the C# core
 
@@ -952,6 +954,165 @@ by the real games alone.
   and throws `EndOfStreamException`.
 - MercuryRT's `GetFrameBufferRgba` is a copy.
 
+### 8.6 Stage 7: platforms and CI (2026-09-24)
+
+*Numbering.* Stage 6, the debugger's hooks, was done at the same time on its own branch. §8.5 is left for its record.
+
+**What the stage started from.** Stage 1 added MercuryRT to the build beside MarsRT, as a second copy of MarsRT's
+properties and target. The publish side and the workflow still knew only MarsRT. `MarsRtPublish.targets` removed the
+host's library from a foreign publish by MarsRT's three file names, and `marsrt.yml` built one crate.
+
+**Predictions, stated before measuring.**
+
+- **S1.** An unmodified win-x64 publish made on this machine carries the Linux `libmercuryrt.so`, with no warning.
+  The reason is that the publish targets remove only MarsRT's names. MercuryRT would then be missing on Windows, and
+  nothing would say so.
+- **S2.** After the change, the three local build cases of `Mars_Native.md` §1 behave the same with either crate:
+  a normal build succeeds, a broken crate fails the build, and a build without cargo warns and succeeds.
+- **S3.** The Game Boy's picture and state are identical on linux-x64, win-x64 and osx-arm64 in both engines, because
+  the machine is integer arithmetic. The sound is identical too (§5's risk, argued in §3.3).
+- **S4.** The part of S3 most likely to fail is `Math.Pow`, which each platform's C library answers. If it differs,
+  the two engines still agree with each other on every platform, because the shim evaluates the power in C# and
+  passes it down (§3.3). The platform then differs from Linux in both engines at once.
+
+**The design.** The machinery is one list, not a second copy:
+
+- **`EmuSen/Cores/RustCores.props`** has one row per crate: the library's name, the crate's folder, the core's name,
+  its console, and the C# core the console falls back to.
+- **`EmuSen.csproj`** imports it. `FindCargo` probes once. `BuildRustCores` runs `cargo build` once per row, batched
+  over the list, into `$(EmuSenCargoTargetRoot)/<library>`. That root is `EmuSen/obj` by default, so the libraries
+  stay in `obj/marsrt` and `obj/mercuryrt`, which scratch scripts already copy. It is a property so that a scratch
+  build can move cargo's output off the tree; this stage's builds went to `~/.cache/emusen/probe/mercuryrt-platforms/`.
+  The host library names are formed from a prefix and a suffix, so a new crate adds no file-name properties.
+- **`EmuSen/Cores/RustCoresPublish.targets`** replaces `MarsRtPublish.targets` and is imported by Mistress and
+  Hotaru. On a foreign runtime identifier it removes every row's three host names from the publish. For each row, it
+  then either takes `$(EmuSenNativePrebuilt)/<rid>/<library>` or warns with that row's console and fallback. The
+  foreign test compares against the portable identifier as well as the SDK's (`fedora.44-x64` here), as before.
+- **`.github/workflows/rust-cores.yml`**, which was `marsrt.yml`, is a crate × platform matrix: two crates on the same
+  four runners, which gives eight jobs and eight artefacts named `<crate>-<rid>`. A second job, `wiseman`, runs on
+  linux-x64, win-x64 and osx-arm64:
+  - it checks out the repository and `RedQuE3n/EmuSen.LunaP` (`openemu-library`) side by side, as `LunaP.props`
+    expects;
+  - it builds WiseMan with `EmuSenNative=false`, so that cargo stays out of the build;
+  - it copies the two shipped libraries beside the test assembly;
+  - it runs the Rust-against-C# tests of both cores (`MarsRt`, `MarsRT`, `MarsNative`, `MercuryRt`), which are 770
+    tests here.
+
+The list has one limitation: the workflow's matrix repeats it, because YAML cannot read an MSBuild file. A new crate
+is therefore a row in two files, and the workflow's comment says so.
+
+**The platform digests** (`EmuSen.WiseMan/Cores/MercuryRtPlatformTests.cs`). The existing tests compare MercuryRT
+with C# Mercury on one machine. S3 is a claim across machines, so it needs a fixed reference. The reference is
+digests recorded here on linux-x64 and committed. The file has three tests:
+
+- **Picture, sound and state.** Four synthetic programs run 600 frames on both engines:
+  - "four channels" keys all four channels, panned apart, and fills tile data while the LCD is on;
+  - "busy" (§8.1's program) runs on an MBC5 colour cartridge;
+  - "interrupts" runs on MBC3 with a wave note;
+  - "colour" uses HDMA and double speed.
+
+  The SHA-256 of every sample, of every frame's RGBA and of the final state must first be equal between the two
+  engines on the platform, and then equal to Linux's.
+- **The C# mixer's doubles.** The same programs, except "colour", run on C# alone. After every frame the high-pass
+  filter's two capacitors are hashed bit for bit.
+- **The two powers.** `Math.Pow(0.999958, 95)` and `Math.Pow(0.999958, 95.108…)` must give Linux's bits,
+  `3FEFDF60DC188482` and `3FEFDF574D84E421`.
+
+**How sensitive the digests are (measured with mutants).**
+
+| Mutant | Picture, sound and state (4) | C# mixer's doubles (3) | Powers |
+|---|---|---|---|
+| The charge factor one ulp higher, in both engines | all pass | not run (written after this mutant) | pass (the test computes its own) |
+| The same, in C# alone | all pass; the engines' samples still agree | **all 3 fail** | pass |
+| The charge factor 2²⁰ ulps higher, in both engines | "four channels" **fails** on sound; the rest pass | not run | pass |
+
+So the samples alone would not show a platform whose `pow` differs in the last place. A relative difference of
+2×10⁻¹⁰ reaches the samples of only one of the four programs within 600 frames. This result says what each test is
+for:
+
+- the powers test detects a library difference directly;
+- the capacitor digest detects any difference in the C# mixer's arithmetic below what a sample's truncation hides;
+- the sample digests detect what reaches the listener.
+
+MercuryRT's own doubles cannot be reached without a new export. Adding one is ABI growth, which is outside this
+stage, so on another platform MercuryRT's mixer is held only by its samples: to Linux's, and to C#'s, frame by frame.
+
+**Evidence, on this machine.**
+
+- **S1 holds** on the unmodified tree. The win-x64 publish of Mistress put a 680,648-byte ELF `libmercuryrt.so` in
+  `lib/EmuSen/`, and there was no `mercuryrt.dll`. The one warning was MarsRT's.
+- **S2 holds.** The list's order puts MarsRT first.
+
+  | Case | Result |
+  |---|---|
+  | Normal build | Both crates built, both libraries in `EmuSen/bin` and in WiseMan's output, byte-identical to cargo's |
+  | MercuryRT with a syntax error | Build failed, cargo exit 101, after MarsRT had built; checked again on the final targets |
+  | MarsRT with a syntax error | Build failed, cargo exit 101, and MercuryRT was not attempted |
+  | Cargo hidden from `PATH` | Build succeeded with one warning naming both cores, and no library in the output |
+
+  The last row first showed a second warning: the probe's own MSB3073 for the missing command. The probe now ignores
+  its exit code instead of continuing on error (`Mars_Native.md` §1).
+- **The fallback happens.** A throwaway console program was put beside the no-cargo build's assemblies. It asked
+  `CoreFactory` for MercuryRT and got `MercuryCore`, with the notice "MercuryRT (Rust) is not available
+  (libmercuryrt.so not found beside the assemblies); Mercury (C#) is running." With the two libraries copied in, it
+  got `MercuryRtCore` and no notice. With `EMUSEN_MERCURY_NATIVE=0` set, it got C# again, with that reason. All three
+  runs gave the same frame-60 picture hash.
+- **Publishes.** All used Mistress, `-c Release --self-contained`. The stand-ins were small files, because only their
+  placement was under test.
+
+  | Publish | Warnings | Rust libraries in `lib/EmuSen/` |
+  |---|---|---|
+  | linux-x64 (the host by its portable name) | none | `libmarsrt.so` 8,334,176 B and `libmercuryrt.so` 680,648 B, both identical to cargo's `dist` output |
+  | win-x64, no prebuilt directory | MarsRT's and MercuryRT's | none |
+  | win-x64, both stand-ins | none | `marsrt.dll`, `mercuryrt.dll` |
+  | win-x64, MarsRT's stand-in only | MercuryRT's | `marsrt.dll` |
+  | osx-arm64, both stand-ins | none | `libmarsrt.dylib`, `libmercuryrt.dylib` |
+
+  The same console program, run inside the linux-x64 publish, loaded both published libraries and got
+  `MercuryRtCore`. The `dist` profile takes MercuryRT's library from 11.1 MB (release, with line tables) to 0.68 MB.
+- **The CI job's Linux instance, reproduced.** The committed tree was extracted with `git archive`. LunaP's
+  `openemu-library` was extracted beside it from GitHub's tarball, with the committed `LunaP.props` unchanged. It was
+  built as the job builds it, and the two `dist` libraries were copied in by the job's own step script.
+  - Before the copy, 4 of the 8 platform tests failed, each with "libmercuryrt.so not found beside the assemblies".
+    The other four are the C#-only tests.
+  - After the copy, the job's filter passed **770 of 770 in 1 min 27 s**.
+  - The crate job's Linux steps also passed: `cargo test --release --target x86_64-unknown-linux-gnu` passed MercuryRT's
+    11 tests, then the `dist` build ran. Its `Exports` script, run with the matrix values substituted, counted 24
+    `mercury_` exports.
+- **Lint.** `actionlint` 1.7.12 with `shellcheck` 0.11.0 found one warning (`ls | grep`), which was fixed, and then
+  none.
+
+**What only CI can verify, and has not yet run.** Nothing in this list was run here; the workflow is correct by
+reading and by lint alone.
+
+- **S3 and S4 on win-x64 and osx-arm64.** They are answered by the `wiseman` job's first step, which prints each
+  platform's digests and powers in full. The outcomes read as follows:
+  - all green holds S3;
+  - a failed powers test together with failed capacitor digests is S4, a platform library, and the sample digests
+    show whether the listener can hear it;
+  - an engine-against-engine failure would be a defect in MercuryRT on that platform.
+- **The crate on the three other targets.** This covers MercuryRT's 11 crate tests there, the `dist` build for all
+  four identifiers, and the exports, which are counted on Linux and macOS but not on Windows.
+- **MarsRT's WiseMan tests on Windows and macOS.** `Mars_Native.md` §6.3 left these for later, and this job is their
+  first run.
+- **The layout on the runners.** This is the two-checkout layout, `setup-dotnet` 10, and the artefact download into one
+  folder.
+
+**What is not done.**
+
+- **osx-x64 has no WiseMan run.** Its runner is arm64, and its crate tests run under Rosetta and may fail.
+- **The csproj's cargo path is exercised only on Linux.** The `wiseman` job builds with `EmuSenNative=false`, so it
+  tests the libraries that ship rather than a Windows or macOS developer's build. `FindCargo` under `cmd` and the
+  `lib`-less Windows name in `BuildRustCores` are argued, not run.
+- **MercuryRT's crate suite is thin.** It holds stage 1's 11 codec tests; its machine tests live in WiseMan. On a
+  foreign platform the crate job proves that it compiles and round-trips state, and WiseMan proves the rest.
+- **No foreign publish has been run on its platform,** for MercuryRT as for MarsRT.
+- **The games and the corpus stay local.** They need ROMs, and CI has none.
+- **LunaP is taken from a branch, not a commit.** A LunaP change that breaks EmuSen's build would show up here as a
+  red job, not as an EmuSen change.
+- **Criterion 1 of §4 is still not met.** The Engine row's default for GB is still C# Mercury (Q5). This stage makes
+  MercuryRT available on every platform; it does not make it the one players get.
+
 ## 9. The three defects fixed, in both engines (2026-09-24)
 
 *Written 2026-09-24, on the user's decision recorded under Q3 (§5).* Each defect of §6.1 was fixed in C# Mercury and
@@ -1109,3 +1270,46 @@ argument for the version-5 cases.
 - A state from any version before 5 was refused before and still is.
 - The frontends' own state records (`StateRecord.StateVersion`) now say 6 for new Game Boy states. Mistress refuses
   only newer versions (§6 of `EmuSen_Save_States.md`), so an old record for a version-5 state still loads.
+
+### 9.4 The recorded baselines the fixes moved, re-recorded deliberately
+
+Stage 7 (§8.6) committed `MercuryRtPlatformTests` on WiseMan while the fixes were being made. It holds both engines'
+sound, picture and state after 600 frames of four synthetic programs, and the C# mixer's capacitors, to digests
+recorded on linux-x64. It was merged into this branch after D3, and so it met the fixes for the first time there.
+
+**Prediction, stated before the run.**
+
+- Every sound digest and every capacitor digest moves (D1: a different sample clock and a different charge factor).
+- Every state digest moves (D3: version 6 is a different byte string).
+- No picture digest moves: none of the three fixes reaches the renderer.
+- The two engines stay equal to each other on every digest.
+
+**Result.** It held on all four programs. Seven of eight cases failed against the old digests, each on its sound or
+capacitors. Only `The_high_pass_charge_factors_are_linuxs` passed; it computes both `Math.Pow` values itself and
+names both. The four picture digests came out byte-identical to stage 7's, and the two engines agreed on all twelve
+new digests. The new values were then recorded in the test.
+
+| Program | Sound (before → after) | State (before → after) | Capacitors (before → after) |
+|---|---|---|---|
+| four channels | `80D5E574…` → `420DFAA8…` | `9E73C418…` → `04BEB9D4…` | `9597B2BA…` → `50E85615…` |
+| busy | `C5414EFA…` → `B327BA1B…` | `768FAE58…` → `2C9A5F6A…` | `510D50CA…` → `8FB248BA…` |
+| interrupts | `8199C9D1…` → `2802C96F…` | `838CF3A8…` → `033ADBB7…` | `15CA5785…` → `4D930F46…` |
+| colour | `28854D0C…` → `D3A2D8F2…` | `D5272466…` → `900245C1…` | — |
+
+These were recorded on linux-x64 only. Windows and macOS meet the new digests on CI's next run, which is §8.6's
+open item: nothing is claimed for them here. `pow(seed, 95)` in that test is now the charge factor of a mixer that
+no longer exists. It is kept, because the two values side by side are how a reader sees what D1 changed.
+
+**Other baselines.** The corpus transcript and the state hashes of §9.3 did not move, so nothing else was
+re-recorded.
+
+**What the referee pass adds to D2** (`Mercury_Referee.md` §2.8, committed on WiseMan after D2). Both references agree
+against Mercury on four more MBC3 rules:
+
+- writing the seconds register zeroes the sub-second count (the one §9.2 also found);
+- the registers are 6, 6, 5 and 9 bits wide;
+- a register carries only on reaching exactly 59, 59 or 23;
+- MBC5's RAM enable compares all eight bits.
+
+None of these fell out of D2's test: its program never writes the clock and never lets a register overflow. So none was
+fixed here, and each stays a candidate with no test, to be fixed in both engines together (Q4, §5).

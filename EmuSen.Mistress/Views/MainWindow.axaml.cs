@@ -442,7 +442,10 @@ namespace EmuSen.Mistress.Views
         }
 
         // The running game's console, else the library's filter: cheats are for the game being played - see EmuSen_Settings_Reference.md §4.45.5.
-        private string CheatConsole => _session is { IsRomLoaded: true } ? _activeConsole : SelectedConsole;
+        private string CheatConsole => _session is { IsRomLoaded: true } ? _activeConsole : CoreOfShelf(SelectedConsole);
+
+        // The cheat windows know cores, not shelves: the Game Boy Color shelf is Mercury's - see EmuSen_Settings_Reference.md §4.46.
+        private static string CoreOfShelf(string shelf) => EmuSen.Cores.CoreCatalog.ShelfByName(shelf)?.Core.DisplayName ?? shelf;
 
         // Never needs a ROM: it manages a folder and a list, not a session. See §4.14.
         private void ShowCheatDatabase()
@@ -962,8 +965,8 @@ namespace EmuSen.Mistress.Views
             RefreshLibrary();
 
             // An open cheat window is showing the old console's systems.
-            _cheatDatabaseWindow.Current?.SetConsole(chosen);
-            _activeCheatsWindow.Current?.SetConsole(chosen, ConsoleCodecs(chosen));
+            _cheatDatabaseWindow.Current?.SetConsole(CoreOfShelf(chosen));
+            _activeCheatsWindow.Current?.SetConsole(CoreOfShelf(chosen), ConsoleCodecs(CoreOfShelf(chosen)));
         }
 
         // A running game wins over the filter - its codecs are the ones that can actually be applied.
@@ -1018,9 +1021,9 @@ namespace EmuSen.Mistress.Views
                 : pool.Where(e => FilterBar.Matches(search, e.Title)).ToList();
 
             // Off the whole scan, not the search subset, so the tag cannot flicker while typing.
-            bool mixed = _libraryScan.Entries.Select(e => e.CoreDisplayName).Distinct().Count() > 1;
+            bool mixed = _libraryScan.Entries.Select(e => e.Shelf).Distinct().Count() > 1;
             MixedConsoles = mixed;
-            LibraryList.Label = e => mixed ? $"{e.Title}   —   {e.CoreDisplayName}" : e.Title;
+            LibraryList.Label = e => mixed ? $"{e.Title}   —   {e.Shelf}" : e.Title;
             LibraryList.Refresh(shownEntries);
             _shownEntries = shownEntries;
             LibraryGrid.Refresh(shownEntries);

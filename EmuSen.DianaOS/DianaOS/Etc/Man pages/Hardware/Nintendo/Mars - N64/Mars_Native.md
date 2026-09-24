@@ -36,7 +36,11 @@ told apart. A `FindCargo` target runs `cargo --version` first; without cargo the
 found: MarsRT and MercuryRT are not built, and their consoles run on the C# cores alone"* — and goes on, and with
 cargo the build step runs without `ContinueOnError`, so its failure fails the build. Checked three ways: a normal
 build succeeds; a crate with a syntax error fails the build with cargo's exit code 101 where it had succeeded before;
-and with cargo removed from the `PATH` the build warns and succeeds.
+and with cargo removed from the `PATH` the build warns and succeeds. *Re-checked 2026-09-24,* when the build became one
+target over a list of crates (§6.3's last paragraph, `Mercury_Native.md` §8.6). The same three results held with
+either crate broken. The check above had not mentioned that "warns once" was two warnings: the probe's own `Exec` also
+left an MSB3073 for the missing command. The probe now ignores its exit code instead of continuing on error, and only
+the one warning is left.
 
 ## 2. A panic never crosses into C#
 
@@ -2514,6 +2518,28 @@ each exports `mars_machine_run_frame`, `mars_machine_set_recompiler` and `mars_b
 out beside the repository (`RedQuE3n/EmuSen.LunaP`), which is left for when a foreign publish is made from these
 artefacts; and no publish for another platform has yet been made and run, which is stage B's engine default's
 concern as much as this stage's.
+
+**The machinery generalised, 2026-09-24** (`Mercury_Native.md` §8.6, MercuryRT's stage 7). What this section built for
+one library now serves a list of crates, and MarsRT is its first row:
+
+- `EmuSen/Cores/RustCores.props` names each crate: its library, its directory, and the C# core its console falls back
+  to. `EmuSen.csproj`'s `BuildEmuSenNative` and `BuildMercuryRt` became one `BuildRustCores` target, batched over the
+  list. It builds MarsRT first, and the first crate to fail stops the build. `EmuSenNativeTarget`, `EmuSenNativeDir`
+  and `EmuSenNativeFile` are gone. Cargo's output root is `EmuSenCargoTargetRoot`, `EmuSen/obj` by default, so the
+  library is still built in `EmuSen/obj/marsrt/`.
+- `MarsRtPublish.targets` moved to `EmuSen/Cores/RustCoresPublish.targets`. For each crate it removes all three host
+  names from a foreign publish and takes `$(EmuSenNativePrebuilt)/<rid>/<library>`, or warns. The property and the
+  folder layout are unchanged, so the directory the recipe above names now holds `mercuryrt.dll` beside `marsrt.dll`.
+- `.github/workflows/marsrt.yml` became `rust-cores.yml`, a crate × platform matrix. MarsRT's four jobs are this
+  section's steps, and its artefacts keep the names `marsrt-<rid>`.
+- The workflow gained the job the paragraph above left for later: WiseMan's tests of MarsRT against Mars on
+  linux-x64, win-x64 and osx-arm64, run against the libraries the matrix ships, with LunaP checked out beside the
+  repository.
+- One behaviour changed. `FindCargo`'s probe used to leave an MSB3073 warning beside its own warning when cargo was
+  absent. It now leaves only its own.
+
+MarsRT's publish was checked again after the change and did not regress. The linux-x64 publish still carries the
+`dist` library, and a win-x64 publish without a library still warns and carries none.
 
 ### 6.4 Stage D: the multiple, antialiasing and the device
 

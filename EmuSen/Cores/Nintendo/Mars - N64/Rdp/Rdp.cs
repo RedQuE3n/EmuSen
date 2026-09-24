@@ -48,9 +48,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         [EmuSen.Common.SkipInState] private long _rowStamp;
         [EmuSen.Common.SkipInState] private long _lastShadedStamp, _memoryStamp, _pastStoredStamp, _texel0Stamp, _texel1Stamp, _lodStamp, _blendedStamp, _shiftStamp, _pastShiftStamp;
 
-        // The furthest pixel a draw may have reached in each image since it was set, so a load from those bytes can be told - see §2.8.
-        [EmuSen.Common.SkipInState] private long _colorDrawnTo, _depthDrawnTo;
-
         // What the list asked of several processors: primitives, those one drew alone, and loads every one waited for - see Mars_Performance.md §35.
         [EmuSen.Common.SkipInState] public long Primitives, SerialisedPrimitives, HazardLoads, AliasedReads;
         [EmuSen.Common.SkipInState] private long[] _coverageStamp = new long[SpanRows];
@@ -132,7 +129,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                     _primitiveSequence++;
                     Primitives++;
                     if (_workers == 1) return Step.Ready;
-                    Reached();
                     _alone = Serialised(id);
                     if (_alone) SerialisedPrimitives++;
                     return _alone ? Step.Leader : Step.Ready;
@@ -176,14 +172,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             return Math.Max(rows * width, (rows - 1) * width + (_scissorRight >> 2) + 3);
         }
 
-        private void Reached()
-        {
-            long reach = Reach();
-            _colorDrawnTo = Math.Max(_colorDrawnTo, reach);
-            if (CycleType <= TwoCycle && DepthUpdate) _depthDrawnTo = Math.Max(_depthDrawnTo, reach);
-        }
-
-        // Whether a load reads bytes a draw since the images were set may have written, by the interface's own extent for a load - see §2.8.
+        // Whether a load reads bytes a draw into the current images may write before the next image change, by the interface's own extent for a load - see §2.8.
         private bool LoadReachesDrawn(ulong word, bool block)
         {
             int sl = (int)(word >> 44) & 0xFFF, tl = (int)(word >> 32) & 0xFFF, sh = (int)(word >> 12) & 0xFFF, th = (int)word & 0xFFF;
@@ -203,9 +192,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 to = _textureImage + (th >> 2) * rowBytes + (((long)sh >> 2) + 1) * bits / 8 + 32;
             }
 
-            long bytes = Math.Max(_colorImageBytes, 1);
-            bool color = _colorDrawnTo > 0 && from < _colorImage + _colorDrawnTo * bytes && to > _colorImage - 2 * bytes;
-            bool depth = _depthDrawnTo > 0 && from < _depthImage + _depthDrawnTo * 2 && to > _depthImage;
+            // Any draw before the next image change, itself a barrier, can reach this far, so a load before the image's first draw is joined too - see Mars_Rdp.md §2.9.5.
+            long bytes = Math.Max(_colorImageBytes, 1), most = 1024L * _colorImageWidth + 1024 + 3;
+            bool color = from < _colorImage + most * bytes && to > _colorImage - 2 * bytes;
+            bool depth = from < _depthImage + most * 2 && to > _depthImage;
             return color || depth;
         }
 
@@ -297,7 +287,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             Refresh();
 
             _primitiveSequence = other._primitiveSequence;
-            (_colorDrawnTo, _depthDrawnTo) = (other._colorDrawnTo, other._depthDrawnTo);
             (_lastShadedStamp, _memoryStamp, _pastStoredStamp, _texel0Stamp, _texel1Stamp, _lodStamp, _blendedStamp, _shiftStamp, _pastShiftStamp) =
                 (other._lastShadedStamp, other._memoryStamp, other._pastStoredStamp, other._texel0Stamp, other._texel1Stamp, other._lodStamp, other._blendedStamp, other._shiftStamp, other._pastShiftStamp);
             Array.Copy(other._coverageStamp, _coverageStamp, other._coverageStamp.Length);

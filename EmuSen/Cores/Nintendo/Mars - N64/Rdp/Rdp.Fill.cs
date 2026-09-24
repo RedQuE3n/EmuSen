@@ -31,7 +31,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             _colorImageBytes = _colorImageSize switch { 1 => 1, 2 => 2, 3 => 4, _ => 0 };
             _colorImageWidth = ((int)((word >> 32) & 0x3FF) + 1) * _scale;
             _colorImage = ((uint)word & 0x00FF_FFFF) * (uint)(_scale * _scale);
-            _colorDrawnTo = 0;
         }
 
         private void Scissor(ulong word)

@@ -84,6 +84,8 @@ namespace EmuSen.WiseMan.Fixtures
                 case EmuSen.Mistress.Input.UiButton.Search: Y(); break;
                 case EmuSen.Mistress.Input.UiButton.Menu: Start(); break;
                 case EmuSen.Mistress.Input.UiButton.Options: Select(); break;
+                case EmuSen.Mistress.Input.UiButton.First: L2(); break;
+                case EmuSen.Mistress.Input.UiButton.Last: R2(); break;
                 default: throw new System.ArgumentOutOfRangeException(nameof(button), button, "No single pad button maps to it.");
             }
         }
@@ -100,6 +102,8 @@ namespace EmuSen.WiseMan.Fixtures
         public void Select() => Tap(SDL.GamepadButton.Back);
         public void L1() => Tap(SDL.GamepadButton.LeftShoulder);
         public void R1() => Tap(SDL.GamepadButton.RightShoulder);
+        public void L2() => Push(SDL.GamepadAxis.LeftTrigger, 1.0);
+        public void R2() => Push(SDL.GamepadAxis.RightTrigger, 1.0);
         public void Guide() => Tap(SDL.GamepadButton.Guide);
     }
 }

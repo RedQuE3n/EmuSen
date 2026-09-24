@@ -228,6 +228,7 @@ namespace EmuSen.Mistress.Views
                 _padMenuEntries.Add(new PadMenuEntry(() => $"Save State  (slot {_stateSlot})", SaveState));
                 _padMenuEntries.Add(new PadMenuEntry(() => $"Load State  (slot {_stateSlot})", LoadState));
                 _padMenuEntries.Add(new PadMenuEntry(() => $"State Slot      <  {_stateSlot}  >", () => StepStateSlot(1), StepStateSlot, closes: false));
+                _padMenuEntries.Add(new PadMenuEntry(RewindMenuText, RewindFromPadMenu, closes: false));
                 _padMenuEntries.Add(new PadMenuEntry(() => $"Speed      <  {DescribeSpeed(_baseSpeedPercent)}  >", () => StepSpeed(1), StepSpeed, closes: false));
                 _padMenuEntries.Add(new PadMenuEntry(() => "Reset", ResetEmulation));
             }

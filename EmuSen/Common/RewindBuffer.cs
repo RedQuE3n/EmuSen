@@ -136,15 +136,21 @@ namespace EmuSen.Common
         // The picture of the snapshot just taken, from the frame on screen at it; null when pictures are off or it has one - see §5.3.
         public RewindThumbnail? AttachThumbnail(ReadOnlySpan<byte> rgba, int width, int rows, int rowRepeat)
         {
-            if (ThumbnailWidth <= 0 || _moments.Last is not { Value: { Thumbnail: null } newest }) return null;
+            if (ThumbnailWidth <= 0 || _moments.Last is not { Value.Thumbnail: null }) return null;
 
             RewindThumbnail? thumbnail = RewindThumbnail.From(rgba, width, rows, rowRepeat, ThumbnailWidth);
-            if (thumbnail is null) return null;
+            return thumbnail is not null && AttachThumbnail(thumbnail) ? thumbnail : null;
+        }
+
+        // A picture already made, for a snapshot taken while the frame on screen had not changed; false when pictures are off or it has one - see §5.3.
+        public bool AttachThumbnail(RewindThumbnail thumbnail)
+        {
+            if (ThumbnailWidth <= 0 || _moments.Last is not { Value: { Thumbnail: null } newest }) return false;
 
             newest.Thumbnail = thumbnail;
             _thumbnailBytes += thumbnail.Bytes;
             TrimThumbnails();
-            return thumbnail;
+            return true;
         }
 
         // Oldest first; only on the thread that drives the buffer - see §5.1.

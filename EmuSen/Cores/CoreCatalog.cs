@@ -102,6 +102,46 @@ namespace EmuSen.Cores
                  .ThenBy(c => c.Console, StringComparer.OrdinalIgnoreCase)
                  .ToArray();
 
+        // What the library's console filter and sidebar list: one shelf per core, but two for the Game Boy's, whose games a player knows as two consoles - see EmuSen_Settings_Reference.md §4.46.
+        public sealed record LibraryShelf(string Name, string Label, CoreDescriptor Core);
+
+        public const string GameBoyColorShelf = "Game Boy Color (Mercury)";
+
+        public static IReadOnlyList<LibraryShelf> ShelvesInReleaseOrder { get; } =
+            ConsolesInReleaseOrder.SelectMany(c => ReferenceEquals(c, Mercury)
+                ? new[] { new LibraryShelf(c.DisplayName, c.Console, c), new LibraryShelf(GameBoyColorShelf, "GBC", c) }
+                : new[] { new LibraryShelf(c.DisplayName, c.Console, c) }).ToArray();
+
+        // Null for AllConsoles or a name no shelf has.
+        public static LibraryShelf? ShelfByName(string? name) =>
+            ShelvesInReleaseOrder.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+
+        // The shelf a ROM sits on, or null for a file no core claims.
+        public static string? ShelfFor(string romPath) =>
+            ByExtension(System.IO.Path.GetExtension(romPath)) is not { } core ? null
+            : ReferenceEquals(core, Mercury) && IsGameBoyColor(romPath) ? GameBoyColorShelf
+            : core.DisplayName;
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> ColorByPath = new();
+
+        // A .gbc file, or a .gb whose header asks for the Color (0x80 or 0xC0 at 0x143, as Mercury reads it); cached, since a scan asks per file.
+        public static bool IsGameBoyColor(string romPath) =>
+            ColorByPath.GetOrAdd(romPath, path =>
+            {
+                if (string.Equals(System.IO.Path.GetExtension(path), ".gbc", StringComparison.OrdinalIgnoreCase)) return true;
+                try
+                {
+                    using var file = System.IO.File.OpenRead(path);
+                    if (file.Length <= 0x143) return false;
+                    file.Position = 0x143;
+                    return file.ReadByte() is 0x80 or 0xC0;
+                }
+                catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+                {
+                    return false;
+                }
+            });
+
         // Read off the core itself rather than restated here, so a pad cannot drift from what the core reads.
         private static readonly Dictionary<string, IReadOnlyList<Galaxia.Input.PadButton>> ButtonsByConsole =
             new(StringComparer.OrdinalIgnoreCase)
@@ -195,6 +235,6 @@ namespace EmuSen.Cores
         public static string? EngineChosen(string console, string? stored) => stored ?? EngineFor(console)?.Default;
 
         public static IReadOnlyList<string> FilterChoices { get; } =
-            new[] { AllConsoles }.Concat(Cores.Select(c => c.DisplayName)).ToArray();
+            new[] { AllConsoles }.Concat(Cores.SelectMany(c => ReferenceEquals(c, Mercury) ? new[] { c.DisplayName, GameBoyColorShelf } : new[] { c.DisplayName })).ToArray();
     }
 }

@@ -66,15 +66,21 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         [Fact]
-        public void The_filter_list_offers_all_consoles_first_then_every_core()
+        public void The_filter_list_offers_all_consoles_first_then_every_shelf_with_the_color_after_the_game_boy()
         {
             Assert.Equal(CoreCatalog.AllConsoles, CoreCatalog.FilterChoices[0]);
-            Assert.Equal(CoreCatalog.Cores.Count + 1, CoreCatalog.FilterChoices.Count);
+            Assert.Equal(CoreCatalog.ShelvesInReleaseOrder.Count + 1, CoreCatalog.FilterChoices.Count);
 
             foreach (var core in CoreCatalog.Cores)
             {
                 Assert.Contains(core.DisplayName, CoreCatalog.FilterChoices);
             }
+
+            string gameBoy = CoreCatalog.ByExtension(".gb")!.DisplayName;
+            int at = CoreCatalog.FilterChoices.ToList().IndexOf(gameBoy);
+            Assert.Equal(CoreCatalog.GameBoyColorShelf, CoreCatalog.FilterChoices[at + 1]);
+            Assert.Same(CoreCatalog.ByExtension(".gb"), CoreCatalog.ShelfByName(CoreCatalog.GameBoyColorShelf)!.Core);
+            Assert.Equal("GBC", CoreCatalog.ShelfByName(CoreCatalog.GameBoyColorShelf)!.Label);
         }
 
         // Galaxia persists it and the catalog displays it, so the two spellings must not drift.

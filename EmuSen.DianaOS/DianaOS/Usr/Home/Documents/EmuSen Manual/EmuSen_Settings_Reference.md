@@ -830,10 +830,12 @@ resuming unconditionally, letting accept repeat, dropping the synthesised Tab, a
   physical pad that a headless run does not have, and are verified only by hand. A fake `GamepadManager` is the
   harness extension that would close this.~~ *Closed 2026-09-24 by §4.45.1: the pad is now simulated inside
   `GamepadManager`, beneath the mapping, and the threshold is under test.*
-- *Text entry.* Closed the same day by §4.30, as far as it can be closed without a Deck to try it on.
+- *Text entry.* Closed the same day by §4.30, as far as it can be closed without a Deck to try it on. *Closed again,
+  differently, by §4.45.6.*
 - *File pickers and the binding capture.* The system's file dialog is not an Avalonia window and the router cannot see
   it. The controller-binding window can be walked and its capture started from the pad, but what the capture then
-  hears is that window's own business and was not changed.
+  hears is that window's own business and was not changed. *Since 2026-09-24 the capture is the pad's too (§4.45.4),
+  and a path can be typed where the dialog would be needed (§4.45.6); the dialog itself is still out of reach.*
 - *Menus of the menu bar.* A popup is its own top level (§4.24), and the router does not drive it. In big-screen mode
   the bar is hidden, so this is a desktop-mode gap only.
 - *A defect the tests found on the way, fixed beside this work:* stepping the filter onto "SNES (Venus)" was saved as
@@ -1541,4 +1543,27 @@ Browse... opens a picker Game Mode may never show.
 
 **What only the device can confirm.** That the keys are big enough to read on a handheld at arm's length (they are 44
 points, unscaled by the sheet), and that nothing in Game Mode steals the pad's buttons from the keyboard.
+
+#### 4.45.7 What is left, and what only the device can confirm
+
+**Windows not made pad-operable, on purpose.** The DianaOS console is a shell and wants a keyboard; the hardware and
+runtime dashboards show numbers and have nothing to operate; Browse ROMs, the menu bar's second library, is reached
+only from the menu bar, which big-screen mode hides, and the library itself is the pad's. All four are still reached
+from the menu bar in Desktop Mode. The online cover window and the collection prompts were not audited.
+
+**Gaps that remain.** The platform file dialog (Browse..., Save As..., Load From...), in any mode. The menu bar's
+popups in Desktop Mode (§4.29). A key rebind from the pad is refused rather than possible, since the pad has no keys.
+The pad menu resumes the game for the moment between closing itself and a sheet opening over it.
+
+**Only the device can confirm:**
+
+- that SteamOS's shipping gamescope treats a second window as its source does (§4.45.2); the sheets make the answer
+  matter less, and the one window that is still a second window in Game Mode is the platform's file dialog;
+- that `XDG_CURRENT_DESKTOP=gamescope` reaches a game started from Game Mode, which decides big-screen mode (§4.43)
+  and therefore whether windows become sheets;
+- that the sheet's scale (the window's height over 720 points) and the keyboard's 44-point keys read well on a Legion
+  Go S's 8-inch panel at arm's length;
+- that SDL maps the Legion Go S's buttons to South, East and the rest as a Deck's are mapped, which everything above
+  reads through;
+- that Steam's own chord for its keyboard still types into a focused box, for a player who prefers it.
 

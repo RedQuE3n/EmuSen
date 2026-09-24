@@ -29,6 +29,15 @@ namespace EmuSen.Endymion.Input
 
         public bool Started => _started;
 
+        // Read in place of the device when set, so a test drives the same path a real pad does - see EmuSen_Settings_Reference.md §4.45.
+        public SimulatedPad? Simulated { get; set; }
+
+        private bool Button(SDL.GamepadButton button) =>
+            Simulated is { } pad ? pad.IsHeld(button) : SDL.GetGamepadButton(_gamepad, button);
+
+        private short RawAxisValue(SDL.GamepadAxis axis) =>
+            Simulated is { } pad ? pad.Axis(axis) : SDL.GetGamepadAxis(_gamepad, axis);
+
         // Idempotent, and on the thread that polls, as SDL asks.
         public void Start()
         {
@@ -63,7 +72,7 @@ namespace EmuSen.Endymion.Input
         // once per RescanInterval - see EmuSen_Settings_Reference.md §4.4.
         public void Poll()
         {
-            if (!_sdlInitialized) return;
+            if (Simulated is not null || !_sdlInitialized) return;
 
             if (!_available)
             {
@@ -81,7 +90,7 @@ namespace EmuSen.Endymion.Input
         public bool AnalogStickAsDpad { get; set; } = true;
         public double StickDeadzone { get; set; } = 0.5;
 
-        public bool IsConnected => _available && _gamepad != IntPtr.Zero;
+        public bool IsConnected => Simulated is not null || (_available && _gamepad != IntPtr.Zero);
 
         // Null when nothing is connected - see EmuSen_Settings_Reference.md §4.4.
         public string? ControllerName
@@ -89,6 +98,7 @@ namespace EmuSen.Endymion.Input
             get
             {
                 if (!IsConnected) return null;
+                if (Simulated is { } pad) return pad.Name;
                 string? name = SDL.GetGamepadName(_gamepad);
                 return string.IsNullOrEmpty(name) ? "Unknown controller" : name;
             }
@@ -98,7 +108,7 @@ namespace EmuSen.Endymion.Input
         // its position - see EmuSen_Settings_Reference.md §4.6.
         public string? ButtonLabel(SDL.GamepadButton button)
         {
-            if (!IsConnected) return null;
+            if (!IsConnected || Simulated is not null) return null;
             SDL.GamepadButtonLabel label = SDL.GetGamepadButtonLabel(_gamepad, button);
             return label == SDL.GamepadButtonLabel.Unknown ? null : label.ToString();
         }
@@ -120,7 +130,7 @@ namespace EmuSen.Endymion.Input
 
             if (!Bindings.ButtonToPad.TryGetValue(button, out SDL.GamepadButton sdlButton)) return false;
 
-            return SDL.GetGamepadButton(_gamepad, sdlButton);
+            return Button(sdlButton);
         }
 
         // Sticks -1 to 1 with right and down positive, as SDL and the RetroPad have them, and triggers 0 to 1 - see EmuSen_Input.md §7.
@@ -138,7 +148,7 @@ namespace EmuSen.Endymion.Input
                 _ => SDL.GamepadAxis.RightTrigger,
             };
 
-            double value = Math.Clamp(SDL.GetGamepadAxis(_gamepad, source) / (double)short.MaxValue, -1.0, 1.0);
+            double value = Math.Clamp(RawAxisValue(source) / (double)short.MaxValue, -1.0, 1.0);
             return Math.Abs(value) < AnalogDeadzone ? 0 : value;
         }
 
@@ -149,19 +159,19 @@ namespace EmuSen.Endymion.Input
 
             return button switch
             {
-                PadButton.Left => SDL.GetGamepadAxis(_gamepad, SDL.GamepadAxis.LeftX) < -threshold,
-                PadButton.Right => SDL.GetGamepadAxis(_gamepad, SDL.GamepadAxis.LeftX) > threshold,
-                PadButton.Up => SDL.GetGamepadAxis(_gamepad, SDL.GamepadAxis.LeftY) < -threshold,
-                PadButton.Down => SDL.GetGamepadAxis(_gamepad, SDL.GamepadAxis.LeftY) > threshold,
+                PadButton.Left => RawAxisValue(SDL.GamepadAxis.LeftX) < -threshold,
+                PadButton.Right => RawAxisValue(SDL.GamepadAxis.LeftX) > threshold,
+                PadButton.Up => RawAxisValue(SDL.GamepadAxis.LeftY) < -threshold,
+                PadButton.Down => RawAxisValue(SDL.GamepadAxis.LeftY) > threshold,
                 _ => false,
             };
         }
 
         // The pad's own buttons and axes, whatever a console's bindings say, for steering the interface - see EmuSen_Settings_Reference.md §4.29.
-        public bool IsRawPressed(SDL.GamepadButton button) => IsConnected && SDL.GetGamepadButton(_gamepad, button);
+        public bool IsRawPressed(SDL.GamepadButton button) => IsConnected && Button(button);
 
         public double RawAxis(SDL.GamepadAxis axis) =>
-            IsConnected ? Math.Clamp(SDL.GetGamepadAxis(_gamepad, axis) / (double)short.MaxValue, -1.0, 1.0) : 0;
+            IsConnected ? Math.Clamp(RawAxisValue(axis) / (double)short.MaxValue, -1.0, 1.0) : 0;
 
         // First currently-held pad button, for InputSettingsWindow's rebind
         // capture - see EmuSen_Settings_Reference.md §4.6.
@@ -169,11 +179,11 @@ namespace EmuSen.Endymion.Input
         {
             if (!IsConnected) return null;
 
-            SDL.UpdateGamepads();
+            if (Simulated is null) SDL.UpdateGamepads();
             foreach (SDL.GamepadButton b in Enum.GetValues<SDL.GamepadButton>())
             {
                 if (b == SDL.GamepadButton.Invalid || b == SDL.GamepadButton.Count) continue;
-                if (SDL.GetGamepadButton(_gamepad, b)) return b;
+                if (Button(b)) return b;
             }
             return null;
         }

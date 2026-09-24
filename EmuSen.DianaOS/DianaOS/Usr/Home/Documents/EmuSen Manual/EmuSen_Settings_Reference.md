@@ -824,10 +824,11 @@ resuming unconditionally, letting accept repeat, dropping the synthesised Tab, a
 
 **What it does not cover.**
 
-- *No test holds a real pad.* The cases enter at `OnPadCommand` and at `PadNavigator.Feed`. The mapping from SDL's
+- ~~*No test holds a real pad.* The cases enter at `OnPadCommand` and at `PadNavigator.Feed`. The mapping from SDL's
   buttons to `UiButton`, the stick threshold of 0.55 and the release wait after a menu closes are read from a
   physical pad that a headless run does not have, and are verified only by hand. A fake `GamepadManager` is the
-  harness extension that would close this.
+  harness extension that would close this.~~ *Closed 2026-09-24 by §4.45.1: the pad is now simulated inside
+  `GamepadManager`, beneath the mapping, and the threshold is under test.*
 - *Text entry.* Closed the same day by §4.30, as far as it can be closed without a Deck to try it on.
 - *File pickers and the binding capture.* The system's file dialog is not an Avalonia window and the router cannot see
   it. The controller-binding window can be walked and its capture started from the pad, but what the capture then
@@ -1300,3 +1301,27 @@ process started with the library off, since the library is loaded once per proce
 asserts rewind empty on Mars and filling on MarsRT, and `Holding_rewind_on_MarsRT_steps_the_game_back_and_letting_go_plays_it_on`
 holds the hotkey; the ROM patches, the phases and rewind have their evidence and mutants in `Mars_Native.md` §6.6.1 to
 §6.6.3.*
+
+### 4.45 Every window from the pad, and Game Mode's one window (2026-09-24)
+
+§4.29 made the library and a menu over the game work from a controller, and drove every other window through the keys
+a keyboard would type. That left the settings windows only as usable as their tab order, the cheats out of the pad's
+reach, and one question unasked: whether a second window appears at all in SteamOS's Game Mode. This section is the
+work that closes those, in the order it was done.
+
+#### 4.45.1 A pad with no device behind it
+
+The cases of §4.29 entered at `OnPadCommand`, above the layer that reads the pad, so the mapping from SDL's buttons,
+the stick threshold and the wait for release were verified only by hand. `GamepadManager.Simulated` now takes a
+`SimulatedPad`, a set of held buttons and axis values; while one is set, every read the manager makes of SDL (a
+button, an axis, the first button held, the controller's name) reads it instead, and `Poll` leaves SDL alone. The
+seam is inside the manager rather than a second implementation beside it, so everything above it, from
+`IsRawPressed` to the window's own `PadTick`, is the code a physical pad runs.
+
+WiseMan's `PadDriver` installs one in a `MainWindow`, stops the window's 16 ms timer and ticks `PadTick` itself, so a
+press is one poll down and one poll up, as the shortest real press is. `PadInputPathTests` holds the two things that
+had no test: the stick moves the library at 0.6 and not at 0.5 (a mutant lowering the threshold to 0.45 fails it),
+and in a game Start alone stays the game's while Back and Start together, or the guide button, open the menu.
+
+What it still does not reach: SDL's own mapping of a device's buttons to `South`, `East` and the rest, and the
+120 Hz rate at which a real pad changes, are SDL's and the device's.

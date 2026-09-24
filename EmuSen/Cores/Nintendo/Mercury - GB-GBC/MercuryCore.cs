@@ -50,7 +50,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public LabelRegistry Labels { get; } = new();
         public CallStackRegistry CallStack { get; } = new();
 
-        // Kept here and handed to each new bus, so a watch outlives a reload - see Mercury_Debug.md §6.
+        // Kept here and handed to each new bus, so a watch outlives a reload - see Mercury_Debug.md §7.
         private Memory.IWriteObserver? _writeObserver;
 
         public Memory.IWriteObserver? WriteObserver

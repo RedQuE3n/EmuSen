@@ -310,7 +310,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0, core.Breakpoints.GetDataBreakpoints()[0].HitCount);
         }
 
-        // A call is a frame on the stack from the moment it is made, and its return pops it - see Mercury_Debug.md §6.
+        // A call is a frame on the stack from the moment it is made, and its return pops it - see Mercury_Debug.md §7.
         [Fact]
         public void Stepping_over_a_call_stops_after_it_in_the_caller()
         {

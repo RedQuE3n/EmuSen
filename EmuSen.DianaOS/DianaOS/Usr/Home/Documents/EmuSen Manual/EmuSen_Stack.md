@@ -64,6 +64,7 @@ Both predate this document and both are the model:
 
 - **The ROM catalogue** (`EmuSen.Galaxia/Library/Catalogue/catalogue-schema.sql`, driven by `EmuSen/Common/Catalogue/SqliteCatalogue.cs`) — see `EmuSen_Galaxia.md` §7.
 - **The known-differences dictionary** (`Dictionary/schema.sql`) — see `EmuSen_Debugging_Tools_Reference_v5.md` §3.49. Its three triggers make `status = 'proven'` unreachable without a passing verification row, which is the project's evidence discipline expressed as something an author cannot talk past rather than as a convention they might forget.
+- **The SPIR-V cache** (`EmuSen.Serenity/Slang/spirv-cache-schema.sql`, driven by `SpirvCache.cs` beside it; `home/Shaders/spirv-cache.db`), added 2026-09-24 — see `EmuSen_Serenity.md` §9.4. A deletable cache keyed by content, bounded at 64 MB. It differs from the rule below in two stated ways: the driver sits in `EmuSen.Serenity`, which is not a leaf (it already takes seven packages and three projects, and every program that references it already ships `Microsoft.Data.Sqlite` through `EmuSen`), and its schema is embedded rather than copied beside the binary, so the cache has no file of its own to be missing. A file of another `user_version` is emptied rather than migrated, which a cache may do and §4.3's two databases may not.
 
 Two structural rules they establish, and which anything new must follow:
 

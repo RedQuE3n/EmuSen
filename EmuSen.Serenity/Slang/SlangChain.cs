@@ -61,13 +61,19 @@ namespace EmuSen.Serenity.Slang
         // Every parameter the passes declare, with the preset's value as its default where it gives one - see EmuSen_Serenity.md §7.6.
         public IReadOnlyList<SlangParameter> Parameters { get; }
 
-        public SlangChain(SlangVulkan gpu, SlangPreset preset)
+        // Passes compiled on every processor but one, leaving one for the emulation thread - see EmuSen_Serenity.md §9.5.
+        public static int DefaultBuilders => Math.Max(1, Environment.ProcessorCount - 1);
+
+        public SlangChain(SlangVulkan gpu, SlangPreset preset, SpirvCache? cache = null) : this(gpu, preset, cache, DefaultBuilders) { }
+
+        internal SlangChain(SlangVulkan gpu, SlangPreset preset, SpirvCache? cache, int builders)
         {
             _gpu = gpu;
             _vk = gpu.Vk;
             Preset = preset;
 
-            _passes = preset.Passes.Select((spec, i) => Build(spec, i, preset.Passes.Count)).ToArray();
+            _passes = new Pass[preset.Passes.Count];
+            BuildPasses(preset, cache, builders);
             Parameters = SlangParameters.Merge(_passes.Select(p => p.Source), preset.Parameters);
             SetParameters(null);
 
@@ -116,11 +122,29 @@ namespace EmuSen.Serenity.Slang
             return Enum.TryParse(spelled, out Format format) ? format : fallback;
         }
 
-        private Pass Build(SlangPassSpec spec, int index, int count)
+        // Every pass built, in parallel when asked; on any failure the passes built so far are freed and the lowest-numbered pass's error is thrown, as a serial build would.
+        private void BuildPasses(SlangPreset preset, SpirvCache? cache, int builders)
+        {
+            int count = _passes.Length;
+            var failures = new Exception?[count];
+            void One(int i)
+            {
+                try { Build(preset.Passes[i], i, count, cache); }
+                catch (Exception e) { failures[i] = e; }
+            }
+            if (builders <= 1 || count <= 1) { for (int i = 0; i < count && failures.All(f => f is null); i++) One(i); }
+            else System.Threading.Tasks.Parallel.For(0, count, new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = builders }, One);
+
+            if (failures.FirstOrDefault(f => f is not null) is not { } first) return;
+            foreach (Pass? pass in _passes) if (pass is not null) FreePass(pass);
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
+        }
+
+        private void Build(SlangPassSpec spec, int index, int count, SpirvCache? cache)
         {
             SlangSource source = SlangSource.Load(spec.ShaderPath);
-            byte[] vertex = SlangCompiler.Compile(source.Vertex, SlangStage.Vertex, spec.ShaderPath);
-            byte[] fragment = SlangCompiler.Compile(source.Fragment, SlangStage.Fragment, spec.ShaderPath);
+            byte[] vertex = cache?.Compile(source.Vertex, SlangStage.Vertex, spec.ShaderPath) ?? SlangCompiler.Compile(source.Vertex, SlangStage.Vertex, spec.ShaderPath);
+            byte[] fragment = cache?.Compile(source.Fragment, SlangStage.Fragment, spec.ShaderPath) ?? SlangCompiler.Compile(source.Fragment, SlangStage.Fragment, spec.ShaderPath);
             SpirvReflection reflection = SpirvReflection.Merge(SpirvReflection.Read(vertex), SpirvReflection.Read(fragment));
 
             // The last pass is what the screen shows, so it is 8-bit whatever it asks, sRGB if it says so, as RetroArch's swapchain is.
@@ -128,11 +152,23 @@ namespace EmuSen.Serenity.Slang
             Format plain = spec.SrgbFramebuffer ? Format.R8G8B8A8Srgb : spec.FloatFramebuffer ? Format.R16G16B16A16Sfloat : Format.R8G8B8A8Unorm;
             Format format = last ? (spec.SrgbFramebuffer ? Format.R8G8B8A8Srgb : Format.R8G8B8A8Unorm) : ParseFormat(source.FramebufferFormat, plain);
 
+            // Registered before its objects are made, so a failure part way frees what was made.
             var pass = new Pass { Spec = spec, Source = source, Reflection = reflection, Format = format };
+            _passes[index] = pass;
             pass.RenderPass = CreateRenderPass(format);
             CreatePipeline(pass, vertex, fragment);
             if (reflection.Uniforms is { } ubo) pass.Uniforms = _gpu.CreateBuffer(ubo.Size, BufferUsageFlags.UniformBufferBit);
-            return pass;
+        }
+
+        private void FreePass(Pass pass)
+        {
+            DropOutputs(pass);
+            pass.Uniforms?.Dispose();
+            _vk.DestroyPipeline(_gpu.Device, pass.Pipeline, null);
+            _vk.DestroyPipelineLayout(_gpu.Device, pass.Layout, null);
+            _vk.DestroyDescriptorPool(_gpu.Device, pass.Pool, null);
+            _vk.DestroyDescriptorSetLayout(_gpu.Device, pass.SetLayout, null);
+            _vk.DestroyRenderPass(_gpu.Device, pass.RenderPass, null);
         }
 
         private RenderPass CreateRenderPass(Format format)
@@ -610,16 +646,7 @@ namespace EmuSen.Serenity.Slang
             if (_disposed) return;
             _disposed = true;
             _vk.DeviceWaitIdle(_gpu.Device);
-            foreach (Pass pass in _passes)
-            {
-                DropOutputs(pass);
-                pass.Uniforms?.Dispose();
-                _vk.DestroyPipeline(_gpu.Device, pass.Pipeline, null);
-                _vk.DestroyPipelineLayout(_gpu.Device, pass.Layout, null);
-                _vk.DestroyDescriptorPool(_gpu.Device, pass.Pool, null);
-                _vk.DestroyDescriptorSetLayout(_gpu.Device, pass.SetLayout, null);
-                _vk.DestroyRenderPass(_gpu.Device, pass.RenderPass, null);
-            }
+            foreach (Pass pass in _passes) FreePass(pass);
             foreach (SlangImage? image in _history) image?.Dispose();
             foreach (SlangImage lut in _luts.Values) lut.Dispose();
             _blank.Dispose();

@@ -18,7 +18,7 @@ namespace EmuSen.WiseMan.Serenity
     // What one shaded frame costs on the render thread, stage by stage, on a real GL context and the slang device - see EmuSen_Serenity.md §8.1.
     public static unsafe class ShaderBench
     {
-        public sealed record Case(string Kind, string Shader, int SourceWidth, int SourceHeight, int RowRepeat, int WindowWidth, int WindowHeight, int Frames, int Warmup, double Pace);
+        public sealed record Case(string Kind, string Shader, int SourceWidth, int SourceHeight, int RowRepeat, int WindowWidth, int WindowHeight, int Frames, int Warmup, double Pace, string Cache = "", int Builders = 0);
 
         // A new frame every this many draws; the draws between redraw the same frame, as a paused or repeating game gives.
         public static int Every = Math.Max(1, int.Parse(Environment.GetEnvironmentVariable("EMUSEN_BENCH_EVERY") ?? "1"));
@@ -31,7 +31,8 @@ namespace EmuSen.WiseMan.Serenity
             var (ww, wh) = Size(d.GetValueOrDefault("window", "1920x1080"));
             return new Case(d.GetValueOrDefault("kind", "none"), d.GetValueOrDefault("shader", ""), sw, sh, int.Parse(d.GetValueOrDefault("repeat", "1")),
                 ww, wh, int.Parse(d.GetValueOrDefault("frames", "600")), int.Parse(d.GetValueOrDefault("warmup", "60")),
-                double.Parse(d.GetValueOrDefault("pace", "60"), CultureInfo.InvariantCulture));
+                double.Parse(d.GetValueOrDefault("pace", "60"), CultureInfo.InvariantCulture),
+                d.GetValueOrDefault("cache", ""), int.Parse(d.GetValueOrDefault("builders", "0")));
         }
 
         // A preset's build, whole and in parts, after a small preset has warmed the compiler and the device.
@@ -43,12 +44,17 @@ namespace EmuSen.WiseMan.Serenity
             if (!File.Exists(stock)) stock = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(c.Shader))))!, "stock.slang");
             if (File.Exists(stock)) { var warm = SlangSource.Load(stock); SlangCompiler.Compile(warm.Vertex, SlangStage.Vertex, stock); }
 
+            // cache= none (the default), a database's path, or fresh:<directory> for a new empty one; opened before the clock starts. builders= passes compiled at once (0: the default).
+            string? fresh = c.Cache.StartsWith("fresh:", StringComparison.Ordinal) ? Path.Combine(c.Cache["fresh:".Length..], $"{Guid.NewGuid():N}.db") : null;
+            using SpirvCache? cache = c.Cache is "" or "none" ? null : new SpirvCache(fresh ?? c.Cache);
+            int builders = c.Builders > 0 ? c.Builders : SlangChain.DefaultBuilders;
             var clock = Stopwatch.StartNew();
             SlangPreset preset = SlangPreset.Load(c.Shader);
             double presetMs = clock.Elapsed.TotalMilliseconds;
             clock.Restart();
-            using (var chain = new SlangChain(gpu, preset)) { }
+            using (var chain = new SlangChain(gpu, preset, cache, builders)) { }
             double chainMs = clock.Elapsed.TotalMilliseconds;
+            string cached = cache is null ? "" : FormattableString.Invariant($" cache.hits={cache.Hits} cache.misses={cache.Misses} cache.stored={cache.Stored} cache.problem={(cache.Problem is null ? "none" : "yes")}");
 
             clock.Restart();
             var sources = preset.Passes.Select(p => SlangSource.Load(p.ShaderPath)).ToArray();
@@ -63,7 +69,12 @@ namespace EmuSen.WiseMan.Serenity
             clock.Restart();
             foreach (SlangTextureSpec lut in preset.Textures) using (SKBitmap.Decode(lut.Path)) { }
             double lutMs = clock.Elapsed.TotalMilliseconds;
-            string line = FormattableString.Invariant($"kind=load shader={Path.GetFileNameWithoutExtension(c.Shader)} passes={preset.Passes.Count} luts={preset.Textures.Count} load.chain={chainMs:F0} load.preset={presetMs:F1} load.source={sourceMs:F0} load.compile={compileMs:F0} load.lut={lutMs:F0} load.rest={chainMs - sourceMs - compileMs - lutMs:F0}");
+            if (fresh is not null)
+            {
+                cache!.Dispose();
+                foreach (string file in new[] { fresh, fresh + "-wal", fresh + "-shm" }) File.Delete(file);
+            }
+            string line = FormattableString.Invariant($"kind=load shader={Path.GetFileNameWithoutExtension(c.Shader)} passes={preset.Passes.Count} luts={preset.Textures.Count} load.chain={chainMs:F0} load.preset={presetMs:F1} load.source={sourceMs:F0} load.compile={compileMs:F0} load.lut={lutMs:F0} load.rest={chainMs - sourceMs - compileMs - lutMs:F0} builders={builders}") + cached;
             log(line);
             return line;
         }

@@ -40,6 +40,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             (bool texel0, bool texel1) = CombinerTexels();
             bool lodFraction = CombineColorC == 13 || CombineAlphaC == 0;
             bool lod = LodEnabled || lodFraction;
+            bool measures = lod && (texel0 || texel1 || lodFraction);
 
             int ditherColor = 7, ditherAlpha = 0;
             bool dither = ((RgbDither << 2) | AlphaDither) != 0xF;
@@ -50,7 +51,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 if (!_spanDrawn[y] || _spanRight[y] < _spanLeft[y] || !Owns(y)) continue;
 
                 _rowStamp = Stamp(y);
-                _lastShadedStamp = _memoryStamp = _pastStoredStamp = _lodStamp = _rowStamp;
+                _lastShadedStamp = _memoryStamp = _pastStoredStamp = _rowStamp;
+
+                // A row that measures no level keeps the fraction it found, which is not this row's to stamp - see Mars_Rdp.md §2.8.
+                if (measures) _lodStamp = _rowStamp;
                 if (texel0 || texel1) _texel0Stamp = _rowStamp;
                 if (texel1) _texel1Stamp = _rowStamp;
 
@@ -77,7 +81,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                     int ds = steps[AttributeS], dt = steps[AttributeT], dw = steps[AttributeW];
 
                     // Each pixel's level is the one its predecessor measured for its texel 1, when there was one - see Mars_RdpLod.md §2.
-                    if (lod && (texel0 || texel1 || lodFraction) && !levelReady)
+                    if (measures && !levelReady)
                     {
                         level = PixelLevelOfDetail(values[AttributeS], values[AttributeT], values[AttributeW], ds, dt, dw, y + 1, nextRowDrawn,
                             n == last, n == last - 1, longSpan, midSpan, tile, maxLevel);

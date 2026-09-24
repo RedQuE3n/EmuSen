@@ -6,7 +6,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory.Mappers
     // Two bank registers and a mode bit that decides which of them the low ROM window follows - see Mercury_Memory.md §4.2.
     public sealed class Mbc1 : IMapper
     {
-        private readonly Cartridge _cart;
+        // Version 5 wrote the cartridge again here - see Mercury_Native.md §9.3.
+        [EmuSen.Common.RetiredFromState] private readonly Cartridge _cart;
 
         private bool _ramEnabled;
         private int _bank1 = 1;   // 5 bits, never 0

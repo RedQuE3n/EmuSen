@@ -13,37 +13,55 @@ namespace EmuSen.Common
     [AttributeUsage(AttributeTargets.Field)]
     public class AliasOfSerializedFieldAttribute : Attribute { }
 
+    // A field an older state version wrote and the current one does not: walked only for that older version - see EmuSen_Save_States.md §7.
+    [AttributeUsage(AttributeTargets.Field)]
+    public class RetiredFromStateAttribute : Attribute { }
+
     // Walks every instance field (public and private, excluding static/const and anything marked - see EmuSen_Save_States.md §1.
     public static class StateSerializer
     {
-        public static void Write(BinaryWriter w, object obj)
+        // includeRetired writes an older version's bytes, retired fields included - see EmuSen_Save_States.md §7.
+        public static void Write(BinaryWriter w, object obj, bool includeRetired = false)
         {
-            foreach (FieldInfo field in GetStateFields(obj.GetType(), includeAliases: false))
+            foreach (FieldInfo field in GetStateFields(obj.GetType(), includeAliases: false, includeRetired))
             {
-                WriteValue(w, field.FieldType, field.GetValue(obj));
+                WriteValue(w, field.FieldType, field.GetValue(obj), includeRetired);
             }
         }
 
-        // includeAliases: true only when reading a pre-v1 file - see EmuSen_Save_States.md §2.
-        public static void Read(BinaryReader r, object obj, bool includeAliases = false)
+        // includeAliases: true only when reading a pre-v1 file - see EmuSen_Save_States.md §2; includeRetired, §7.
+        public static void Read(BinaryReader r, object obj, bool includeAliases = false, bool includeRetired = false)
         {
-            foreach (FieldInfo field in GetStateFields(obj.GetType(), includeAliases))
+            foreach (FieldInfo field in GetStateFields(obj.GetType(), includeAliases, includeRetired))
             {
-                ReadValue(r, field, obj, includeAliases);
+                ReadValue(r, field, obj, includeAliases, includeRetired);
             }
         }
 
-        private static FieldInfo[] GetStateFields(Type type, bool includeAliases)
+        private static FieldInfo[] GetStateFields(Type type, bool includeAliases, bool includeRetired)
         {
             return type
                 .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                 .Where(f => f.GetCustomAttribute<SkipInStateAttribute>() == null)
                 .Where(f => includeAliases || f.GetCustomAttribute<AliasOfSerializedFieldAttribute>() == null)
+                .Where(f => includeRetired || f.GetCustomAttribute<RetiredFromStateAttribute>() == null)
                 .OrderBy(f => f.Name, StringComparer.Ordinal)
                 .ToArray();
         }
 
-        private static void WriteValue(BinaryWriter w, Type t, object? value)
+        // A retired scalar or string is consumed and its value dropped; a retired reference is read into what it references - see EmuSen_Save_States.md §7.
+        private static void DiscardValue(BinaryReader r, Type t)
+        {
+            if (t == typeof(string)) { r.ReadString(); return; }
+            if (t.IsEnum) { r.ReadInt32(); return; }
+            if (t == typeof(bool) || t == typeof(byte) || t == typeof(sbyte)) { r.ReadByte(); return; }
+            if (t == typeof(short) || t == typeof(ushort) || t == typeof(char)) { r.ReadUInt16(); return; }
+            if (t == typeof(int) || t == typeof(uint) || t == typeof(float)) { r.ReadUInt32(); return; }
+            if (t == typeof(long) || t == typeof(ulong)) { r.ReadUInt64(); return; }
+            throw new NotSupportedException($"StateSerializer: a retired {t} field cannot be discarded - add a case.");
+        }
+
+        private static void WriteValue(BinaryWriter w, Type t, object? value, bool includeRetired)
         {
             if (t == typeof(byte)) { w.Write((byte)value!); return; }
             if (t == typeof(sbyte)) { w.Write((sbyte)value!); return; }
@@ -73,14 +91,14 @@ namespace EmuSen.Common
             if (t.IsArray)
             {
                 // Every element is assumed pre-constructed, which is how the owning classes initialise these.
-                foreach (object item in (Array)value!) Write(w, item);
+                foreach (object item in (Array)value!) Write(w, item, includeRetired);
                 return;
             }
 
             // A struct is its fields, in the same order a class's are.
             if (t.IsValueType)
             {
-                Write(w, value!);
+                Write(w, value!, includeRetired);
                 return;
             }
 
@@ -89,16 +107,22 @@ namespace EmuSen.Common
             {
                 bool hasValue = value != null;
                 w.Write(hasValue);
-                if (hasValue) Write(w, value!);
+                if (hasValue) Write(w, value!, includeRetired);
                 return;
             }
 
             throw new NotSupportedException($"StateSerializer: unsupported field type {t} - add a case or mark it [SkipInState].");
         }
 
-        private static void ReadValue(BinaryReader r, FieldInfo field, object owner, bool includeAliases)
+        private static void ReadValue(BinaryReader r, FieldInfo field, object owner, bool includeAliases, bool includeRetired)
         {
             Type t = field.FieldType;
+
+            if (includeRetired && (t.IsValueType || t == typeof(string)) && field.GetCustomAttribute<RetiredFromStateAttribute>() != null)
+            {
+                DiscardValue(r, t);
+                return;
+            }
 
             if (t == typeof(byte)) { field.SetValue(owner, r.ReadByte()); return; }
             if (t == typeof(sbyte)) { field.SetValue(owner, r.ReadSByte()); return; }
@@ -138,7 +162,7 @@ namespace EmuSen.Common
                 for (int i = 0; i < array.Length; i++)
                 {
                     object item = array.GetValue(i)!;
-                    Read(r, item, includeAliases);
+                    Read(r, item, includeAliases, includeRetired);
                     if (values) array.SetValue(item, i);
                 }
                 return;
@@ -147,7 +171,7 @@ namespace EmuSen.Common
             if (t.IsValueType)
             {
                 object boxed = field.GetValue(owner)!;
-                Read(r, boxed, includeAliases);
+                Read(r, boxed, includeAliases, includeRetired);
                 field.SetValue(owner, boxed);
                 return;
             }
@@ -155,7 +179,7 @@ namespace EmuSen.Common
             if (t.IsClass || t.IsInterface)
             {
                 bool hasValue = r.ReadBoolean();
-                if (hasValue) Read(r, field.GetValue(owner)!, includeAliases);
+                if (hasValue) Read(r, field.GetValue(owner)!, includeAliases, includeRetired);
                 return;
             }
 

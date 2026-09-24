@@ -1112,3 +1112,245 @@ reading and by lint alone.
   red job, not as an EmuSen change.
 - **Criterion 1 of §4 is still not met.** The Engine row's default for GB is still C# Mercury (Q5). This stage makes
   MercuryRT available on every platform; it does not make it the one players get.
+
+## 9. The three defects fixed, in both engines (2026-09-24)
+
+*Written 2026-09-24, on the user's decision recorded under Q3 (§5).* Each defect of §6.1 was fixed in C# Mercury and
+MercuryRT together. For each, a test was written first and committed while it failed on both engines, on the unmodified
+build (`f2c7f99`). The tests are `EmuSen.WiseMan/Cores/MercuryDefectTests.cs`, one case per engine through `ICore`
+alone, so neither engine's answer is read through the other's objects.
+
+### 9.1 D1: the sample rate
+
+**Before.** 600 frames of 70,224 cycles are 10.0456 s of console time. At a labelled 44,100 Hz that is 443,012.0 stereo
+frames. Both engines drained **443,520**, which is 44,150.6 a second: §6.1's measurement, reproduced.
+
+**The fix.** `Apu.SetSampleRate` divides in doubles, so a sample is 95.1089 clocks rather than 95. MercuryRT does not
+divide on its own: the shim's `MercuryMachine.SetSampleRate` computes the same double and `Math.Pow` once, in C#, and
+passes both down (§3.3). The Rust machine's own default, used only where no shim is present (`examples/frames.rs`),
+got the same change.
+
+**Prediction, stated before the run.** Both engines drain 443,012 ± 1; the two engines stay identical in sound, because
+they share the two doubles; and nothing in the state moves, because the mixer's accumulator is not state (§3.1).
+
+**After.** Both engines drained **443,012**, 44,100.0 a second. The parity suite (`MercuryRt` filter, 81 cases, the
+four games and the corpus included) passed: state, picture and sound identical every frame. Kirby's 3,000 frames from
+boot are 210,572,292 cycles, and 2 × ⌊210,572,292 / 95.1089⌋ = 4,428,022 samples is what both engines drained. That
+the state did not move is checked in §9.3, against hashes of states the unmodified build wrote.
+
+**What it changes.** Every Game Boy game's sound comes out 0.115% slower in samples per frame, which is the rate the
+frontends were already told. `Mercury_Apu.md` §6's "95.11 clocks per sample" was the design and is now the behaviour.
+The audio differential against gambatte (`Mercury_HardwareTests.md` §6) compared against a mislabelled rate before this
+date; that comparison was not re-run. No corpus verdict can move: sound never feeds the machine.
+
+### 9.2 D2: the cartridge's clock in double speed
+
+**Before.** A synthetic MBC3+TIMER colour cartridge enables the clock, optionally sets `KEY1` and executes `STOP`,
+then latches the clock and copies its seconds register to WRAM forever. After 1,200 frames, which are 20.09 s of
+console time, both engines read **40 s** in double speed and 20 s in single speed.
+
+**The fix.** `MemoryBus.Tick` hands the board base-clock cycles: the CPU's cycles in single speed, half of them in
+double speed. The halving is exact. Every `Tick` is a whole number of machine cycles, which is four T-cycles, or a
+DMA stall of 16 or 32. So the count is always even, and `_baseClockPhase` is false at every `Tick` boundary: the
+argument by which §8.4 found mutant M20 equivalent. `Mbc3.Tick` still counts to `CpuClockHz`, now in base-clock
+cycles. That is 128 of them per tick of a 32.768 kHz crystal.
+
+**Prediction.** Both engines read 20 s at either speed. A frame-by-frame lock-step run of the double-speed program on
+both engines is identical in every field, the clock's sub-second count included. Nothing that never enters double speed
+changes. The four games do not. Of the eleven boards, none runs the clock in double speed, and no corpus ROM runs an
+MBC3 clock at all. So their states at recorded frames still hash as the unmodified build's did (§9.3).
+
+**After.** Both engines read 20 s at both speeds, and the lock-step case
+(`D2_the_clock_in_double_speed_runs_identically_on_both_engines`) was identical for 1,200 frames in state, picture and
+sound.
+
+**The referee.** The MiSTer Game Boy core counts its MBC3 clock on `ce_32k` (`rtl/mappers/mbc3.v:193`, the sub-second
+counter; `:244-251`, the carry into seconds). `ce_32k` is `clk_sys` divided by 1,024 (`Gameboy.sv:405-410`), and
+`clk_sys` is 33.554432 MHz (`rtl/pll/pll_0002.v:28`), which gives exactly 32,768 Hz. It is generated beside, not from,
+the CPU enables `ce_cpu` and `ce_cpu2x` that `speedcontrol` produces (`Gameboy.sv:798-820`). So the RTL agrees with the
+fix: the clock does not double. The RTC in `mbc3.v` is its own Verilog, not a translation of an emulator's code, so this
+agreement is evidence of some weight.
+
+The referee also shows two things Mercury does not do. Neither was changed here.
+
+- **A write to the seconds register zeroes the sub-second counter** (`mbc3.v:228-230`). Mercury's `Mbc3.WriteRam`
+  leaves `_cyclesIntoSecond` as it was. That makes the next second arrive early by up to a second after a game sets the
+  clock. This is a defect candidate with no test. It is not in §6.1, and Q4's rule (§5) says it is fixed in both
+  engines together when it is taken up.
+- **Fast-counting of seconds restored from a save file** (`mbc3.v:174`, `diffSeconds`). This catches the clock up by
+  wall-clock time between sessions. Mercury's clock is not in the `.srm` at all, and it stops while the emulator is
+  closed. That is a missing feature (`Mercury_Memory.md` §9), not a timing defect.
+
+### 9.3 D3: the host's path in the state, and state version 6
+
+**Before.** A battery cartridge saved a state at frame 10 while played from path A. The state was loaded while the same
+ROM was played from path B, and play continued to frame 300, where the autosave runs. On both engines the loader
+wrote **A's** `.srm` and never B's. With the loader under `--nobattery`, it still wrote A's. With the saver under
+`--nobattery`, the state carried `""`, and the loader wrote its cart RAM to **`.tmp` in the working directory**. These
+are §6.1's two measurements, now on both engines.
+
+**The fix, and the format change it forces.** The path is the host's. A running machine still needs one, so the field
+stays in the class. What changes is that the state walk no longer visits it. The same version drops the two extra
+copies of the cartridge, each mapper's `_cart` and the bus's, which cost Pokémon Yellow 64 KB (§3.1). All three
+fields carry a new attribute, `[RetiredFromState]` (`EmuSen_Save_States.md` §7). The current format skips them. A
+version-5 read walks them where version 5 wrote them: the path is read and dropped, and each copy is read into the
+one cartridge, as version 5's reader did.
+
+- **C#.** `MercuryCore` writes version 6 and reads 5 and 6.
+- **MercuryRT.** Rust has no reflection, so its reader carries the version the header names (`StateReader::before`).
+  The cartridge, each board and the bus read the retired fields only for a version before 6. `Cartridge` lost its
+  `save_path`.
+- **The C ABI.** `mercury_machine_new` lost its path argument, and `mercury_machine_save_path` is gone, so the
+  interface version is 2. The shim keeps the path itself, from `LoadRom`, as C#'s `Cartridge` does. This removes the
+  ABI parameter and the string primitive §2.3 said D3 alone required. The string reader stays, for version 5.
+
+**Prediction, stated before the run.**
+
+- All six cases of the path test pass on both engines.
+- Every version-6 state is smaller by the path and two copies of the cart RAM. For Yellow that is 148,420 → 82,879.
+- The unmodified build's version-5 states load on both engines into the machine that wrote them.
+- Nothing about how a machine runs changes.
+
+**How "version 5 still loads" was proven, rather than argued.** Before the fix, the unmodified build ran the
+synthetic program on all eleven boards for 300 frames, set the save path to `/mercury-v5/A.srm`, and saved. The
+SHA-256 prefixes of those eleven states are in the test (`Version5Boards`). After the fix, the test runs the same
+program on the fixed build, and regenerates version 5's bytes with `StateSerializer.Write(includeRetired: true)`. It
+then asserts four things:
+
+1. the bytes hash to the recorded values;
+2. both engines read them into a machine whose version-6 state equals the writer's;
+3. C#'s path stays null;
+4. the two engines then run 120 frames identically.
+
+(1) is a double check. It shows the retired walk reproduces version 5 byte for byte. It also shows that D1 and D2 left
+these eleven machines' states exactly where the unmodified build put them. The same was done for the four games, from
+states the unmodified build saved at frames 3,000 and 3,600 and kept outside the repository
+(`EMUSEN_MERCURY_V5_STATES`). Each game's version-5 state at frame 3,000 was loaded into both engines. Each engine ran
+600 frames with the bench's input, and the result equalled the unmodified build's own frame-3,600 state loaded fresh.
+
+**After.**
+
+- The path test: 6 of 6 pass.
+- Version 5 on the eleven boards: 11 of 11. Version 5 on the four games: 4 of 4.
+- Crate tests: 11. The Rust test builds a version-5 state from a version-6 one, and gives each of the three copies its
+  own fill; the last copy stands.
+- State-format filters: `MercuryRtStateTests` (layout, noise, odd bytes, refusals and games), `StateSerializerTests`
+  (with a case for the attribute) and `MercuryRtCoreTests`. All pass, 60 cases in all.
+
+Sizes, version 5 → version 6:
+
+| Machine | Version 5 | Version 6 |
+|---|---|---|
+| Tetris (no MBC) | 17,338 | 17,333 |
+| Kirby's Dream Land (MBC1, no RAM) | 17,348 | 17,343 |
+| Link's Awakening (MBC1 + 8 KB) | 41,924 | 25,535 |
+| Pokémon Yellow (MBC5 + 32 KB, CGB) | 148,420 | 82,879, as predicted |
+| Synthetic MBC3 + clock + 32 KB, CGB | 148,489 | 82,897 |
+| Synthetic MBC5 + rumble + 128 KB | 410,615 | 148,415 |
+
+The synthetic states' version-5 sizes include the 17-byte test path three times; the games' do not, because they
+were saved under `--nobattery` with a null path.
+
+**The whole parity suite and the corpus after all three fixes.** The `MercuryRt` and `MercuryDefectTests` filters
+passed, 106 cases, with the games and the corpus. The C# corpus transcript matches the recorded baseline
+(`Mercury_Native.md` §3.4) in all 173 verdicts and verdict frames, 94 passing. It was taken after D1 and D2, and again
+after D3. **No baseline was re-recorded, because none moved.** None could: D1 touches no state, no corpus ROM runs an
+MBC3 clock, and D3 changes only the serialized form.
+
+**What changed in the tests.** Two changes follow from the format. `MercuryRtStateTests`' layout walk skips retired
+fields as the serializer does. Its odd-bytes case now patches `Mapper._ramEnabled` in place of the retired
+`Mapper._cart` presence flag. The noise case no longer writes a save path, because no path is in the state.
+`MercuryRtPair` no longer resets the path after a transfer, a workaround §8.2 recorded for D3. It gained a `state`
+argument for the version-5 cases.
+
+**What this does not cover.**
+
+- A version-5 state written by a MercuryRT built before this date is the same bytes as C#'s (§8.1), so it is
+  covered.
+- A state from any version before 5 was refused before and still is.
+- The frontends' own state records (`StateRecord.StateVersion`) now say 6 for new Game Boy states. Mistress refuses
+  only newer versions (§6 of `EmuSen_Save_States.md`), so an old record for a version-5 state still loads.
+
+### 9.4 The recorded baselines the fixes moved, re-recorded deliberately
+
+Stage 7 (§8.6) committed `MercuryRtPlatformTests` on WiseMan while the fixes were being made. It holds both engines'
+sound, picture and state after 600 frames of four synthetic programs, and the C# mixer's capacitors, to digests
+recorded on linux-x64. It was merged into this branch after D3, and so it met the fixes for the first time there.
+
+**Prediction, stated before the run.**
+
+- Every sound digest and every capacitor digest moves (D1: a different sample clock and a different charge factor).
+- Every state digest moves (D3: version 6 is a different byte string).
+- No picture digest moves: none of the three fixes reaches the renderer.
+- The two engines stay equal to each other on every digest.
+
+**Result.** It held on all four programs. Seven of eight cases failed against the old digests, each on its sound or
+capacitors. Only `The_high_pass_charge_factors_are_linuxs` passed; it computes both `Math.Pow` values itself and
+names both. The four picture digests came out byte-identical to stage 7's, and the two engines agreed on all twelve
+new digests. The new values were then recorded in the test.
+
+| Program | Sound (before → after) | State (before → after) | Capacitors (before → after) |
+|---|---|---|---|
+| four channels | `80D5E574…` → `420DFAA8…` | `9E73C418…` → `04BEB9D4…` | `9597B2BA…` → `50E85615…` |
+| busy | `C5414EFA…` → `B327BA1B…` | `768FAE58…` → `2C9A5F6A…` | `510D50CA…` → `8FB248BA…` |
+| interrupts | `8199C9D1…` → `2802C96F…` | `838CF3A8…` → `033ADBB7…` | `15CA5785…` → `4D930F46…` |
+| colour | `28854D0C…` → `D3A2D8F2…` | `D5272466…` → `900245C1…` | — |
+
+These were recorded on linux-x64 only. Windows and macOS meet the new digests on CI's next run, which is §8.6's
+open item: nothing is claimed for them here. `pow(seed, 95)` in that test is now the charge factor of a mixer that
+no longer exists. It is kept, because the two values side by side are how a reader sees what D1 changed.
+
+**Other baselines.** The corpus transcript and the state hashes of §9.3 did not move, so nothing else was
+re-recorded.
+
+**What the referee pass adds to D2** (`Mercury_Referee.md` §2.8, committed on WiseMan after D2). Both references agree
+against Mercury on four more MBC3 rules:
+
+- writing the seconds register zeroes the sub-second count (the one §9.2 also found);
+- the registers are 6, 6, 5 and 9 bits wide;
+- a register carries only on reaching exactly 59, 59 or 23;
+- MBC5's RAM enable compares all eight bits.
+
+None of these fell out of D2's test: its program never writes the clock and never lets a register overflow. So none was
+fixed here, and each stays a candidate with no test, to be fixed in both engines together (Q4, §5).
+
+### 9.5 Mutants of the three fixes
+
+**Method.** Fourteen hand-made mutants were run in a copy of the tree at `716ddc2`, the D3 commit, so that no source in
+the working tree was touched. For each mutant:
+
+- one edit was applied;
+- the crate's tests were run, for a Rust edit;
+- WiseMan was built;
+- the `MercuryDefectTests`, `MercuryRtStateTests`, `StateSerializerTests`, `MercuryRtCoreTests` and HDMA filters were
+  run with the four games;
+- the file was restored.
+
+The unmutated copy passed all 68 cases first, as the control. The runner is `mutants.py`, in the scratch directory
+(`~/.cache/emusen/probe/mercury-defects/mut/`).
+
+| Mutant | Caught by |
+|---|---|
+| M1 C#'s `SetSampleRate` divides in integers again | the D1 test (C#), and every lock-step comparison, because the shim computes its own rate |
+| M2 the shim divides in integers | the D1 test (Rust), and every lock-step comparison |
+| M3 the Rust machine's own default divides in integers | **survived** (argued below) |
+| M4 C# counts the clock in CPU cycles | both D2 tests |
+| M5 Rust counts the clock in CPU cycles | both D2 tests |
+| M6 C# halves the clock's cycles at single speed too | both D2 tests, and the version-5 hash of the MBC3 board |
+| M7 C#'s save path back in the state | 47 cases: the D3 tests, the layout listing, and every cross-engine comparison |
+| M8 Rust does not consume version 5's path | the crate test, and every version-5 case |
+| M9 Rust reads the cartridge copies in version 6 too | the crate test, the D3 tests, and every state comparison |
+| M10 the serializer restores a retired value instead of dropping it | the serializer's own case, and the version-5 cases (C#'s path is no longer null) |
+| M11 Rust lets the first cartridge copy stand, not the last | **the crate test only** |
+| M12 the shim forgets the save path | the D3 tests, and the battery test |
+| M13 C# reads version 5 without its retired fields | every version-5 case |
+| M14 Rust's reader is not told the header's version | every version-5 case |
+
+**Thirteen of fourteen are caught.** M11 is caught only by the crate's test, the one that gives each of version 5's
+three copies its own fill. A version-5 state that C# wrote has three identical copies, so no WiseMan case can see which
+copy stands.
+
+**M3 is equivalent through the ABI.** `Machine::load_rom` sets the Rust machine's default rate, and
+`MercuryMachine`'s constructor replaces it with the shim's before any frame runs. The default is read only by
+`examples/frames.rs`, which has no shim. So the mutant changes the samples that example drains and nothing any
+frontend runs. It is left untested on purpose.

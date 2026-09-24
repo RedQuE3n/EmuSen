@@ -37,13 +37,14 @@ pub struct Cartridge {
     pub has_timer: Skip<bool>,
     pub has_rumble: Skip<bool>,
     pub header_checksum_valid: Skip<bool>,
-    /// C#'s `_savePath`: null until a load or a battery save names it, then a string (Mercury_Native.md §6.1, D3).
-    pub save_path: Option<String>,
 }
 
+/// The version that stopped writing the save path and the cartridge's two copies (Mercury_Native.md §9.3).
+pub const RETIRED_CART_COPIES: i32 = 6;
+
 impl Cartridge {
-    /// `Cartridge.FromImage`, with the board it builds; the save path is the host's, as `LoadSram` sets it.
-    pub fn from_image(image: Vec<u8>, save_path: Option<String>) -> Result<(Cartridge, Mapper), RomError> {
+    /// `Cartridge.FromImage`, with the board it builds; the battery save's path is the host's, and no part of the machine.
+    pub fn from_image(image: Vec<u8>) -> Result<(Cartridge, Mapper), RomError> {
         if image.len() < 0x0150 {
             return Err(RomError::TooShort(image.len()));
         }
@@ -64,7 +65,6 @@ impl Cartridge {
             has_rumble: Skip(matches!(kind, 0x1C | 0x1D | 0x1E | 0x22)),
             ram: vec![0; ram_size_for(image[0x0149], kind)],
             header_checksum_valid: Skip(header_checksum(&image) == image[HEADER_CHECKSUM_ADDRESS]),
-            save_path,
             rom: Skip(image),
         };
         Ok((cart, mapper))
@@ -80,22 +80,20 @@ impl Cartridge {
 
     pub fn write_state(&self, w: &mut StateWriter) {
         w.bytes("Ram", &self.ram);
-        w.string("_savePath", self.save_path.as_deref());
     }
 
+    /// Version 5 wrote the host's save path after the RAM; it is read and dropped, so a state cannot redirect a battery save.
     pub fn read_state(&mut self, r: &mut StateReader) -> StateResult {
         r.bytes(&mut self.ram)?; // Ram
-        self.save_path = Some(r.string()?); // _savePath
+        if r.before(RETIRED_CART_COPIES) {
+            r.string()?; // _savePath, dropped
+        }
         Ok(())
     }
 
-    /// A class-typed `_cart` field elsewhere in the state: the present flag, then the same two fields.
-    pub fn write_as_field(&self, w: &mut StateWriter, name: &str) {
-        w.group_class(name, |w| self.write_state(w));
-    }
-
-    pub fn read_as_field(&mut self, r: &mut StateReader) -> StateResult {
-        if r.bool()? {
+    /// Version 5's class-typed `_cart` copy elsewhere in the state: the present flag, then the same fields, into this one cartridge.
+    pub fn read_retired_copy(&mut self, r: &mut StateReader) -> StateResult {
+        if r.before(RETIRED_CART_COPIES) && r.bool()? {
             self.read_state(r)?;
         }
         Ok(())
@@ -150,26 +148,26 @@ mod tests {
 
     #[test]
     fn the_header_decides_the_board_the_ram_and_the_colour_mode() {
-        let (cart, mapper) = Cartridge::from_image(image(0x03, 0x02, 0x00), None).unwrap();
+        let (cart, mapper) = Cartridge::from_image(image(0x03, 0x02, 0x00)).unwrap();
         assert!(matches!(mapper, Mapper::Mbc1(_)));
         assert_eq!((cart.ram.len(), *cart.has_battery, cart.is_cgb(), cart.title.as_str()), (8192, true, false, "WISEMAN"));
         assert!(*cart.header_checksum_valid);
-        let (cart, mapper) = Cartridge::from_image(image(0x06, 0x03, 0xC0), None).unwrap();
+        let (cart, mapper) = Cartridge::from_image(image(0x06, 0x03, 0xC0)).unwrap();
         assert!(matches!(mapper, Mapper::Mbc2(_)));
         assert_eq!((cart.ram.len(), *cart.cgb), (512, CgbSupport::Required));
-        let (cart, mapper) = Cartridge::from_image(image(0x10, 0x03, 0x80), None).unwrap();
+        let (cart, mapper) = Cartridge::from_image(image(0x10, 0x03, 0x80)).unwrap();
         assert!(matches!(mapper, Mapper::Mbc3(_)));
         assert_eq!((cart.ram.len(), *cart.has_timer, *cart.cgb), (32768, true, CgbSupport::Enhanced));
-        let (cart, mapper) = Cartridge::from_image(image(0x1E, 0x04, 0x00), None).unwrap();
+        let (cart, mapper) = Cartridge::from_image(image(0x1E, 0x04, 0x00)).unwrap();
         assert!(matches!(mapper, Mapper::Mbc5(_)));
         assert_eq!((cart.ram.len(), *cart.has_rumble, *cart.has_battery), (131072, true, true));
-        assert!(matches!(Cartridge::from_image(image(0x09, 0x05, 0x00), None).unwrap().1, Mapper::NoMbc(_)));
+        assert!(matches!(Cartridge::from_image(image(0x09, 0x05, 0x00)).unwrap().1, Mapper::NoMbc(_)));
     }
 
     #[test]
     fn what_csharp_refuses_is_refused() {
-        assert_eq!(Cartridge::from_image(vec![0; 0x14F], None).err(), Some(RomError::TooShort(0x14F)));
-        assert_eq!(Cartridge::from_image(image(0x22, 0, 0), None).err(), Some(RomError::UnsupportedType(0x22)));
-        assert_eq!(Cartridge::from_image(image(0x04, 0, 0), None).err(), Some(RomError::UnsupportedType(0x04)));
+        assert_eq!(Cartridge::from_image(vec![0; 0x14F]).err(), Some(RomError::TooShort(0x14F)));
+        assert_eq!(Cartridge::from_image(image(0x22, 0, 0)).err(), Some(RomError::UnsupportedType(0x22)));
+        assert_eq!(Cartridge::from_image(image(0x04, 0, 0)).err(), Some(RomError::UnsupportedType(0x04)));
     }
 }

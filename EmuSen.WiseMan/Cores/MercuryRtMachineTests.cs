@@ -353,7 +353,7 @@ namespace EmuSen.WiseMan.Cores
 
         public string Summary => $"{_frames} frames identical in state{(_soundAndPicture ? ", sound and picture" : "")}, {_samples} samples, {Serial} serial bytes, {Csharp.Cpu!.Cycles} CPU cycles";
 
-        public MercuryRtPair(byte[] rom, bool skipRendering, MercuryCore? transferAt = null, int stateEvery = 1, bool soundAndPicture = true)
+        public MercuryRtPair(byte[] rom, bool skipRendering, MercuryCore? transferAt = null, int stateEvery = 1, bool soundAndPicture = true, byte[]? state = null)
         {
             Assert.True(MercuryMachine.Available, MercuryNative.Report);
             CoreOptions.BatteryRamDisabled = true;
@@ -362,16 +362,19 @@ namespace EmuSen.WiseMan.Cores
             _soundAndPicture = soundAndPicture;
             Csharp = Load(rom);
             Csharp.SkipRendering = skipRendering;
-            Rust = new MercuryMachine(rom, null);
+            Rust = new MercuryMachine(rom);
             Rust.SetOptions(skipRendering);
             if (transferAt is not null)
             {
-                // Both fresh, so the fields no state carries start equal (§3.1); the save path goes back to null, because D3 puts "" in it.
                 using var stream = new MemoryStream();
                 transferAt.SaveState(stream);
-                Csharp.LoadState(new MemoryStream(stream.ToArray()));
-                typeof(EmuSen.Cores.Nintendo.Mercury.Memory.Cartridge).GetField("_savePath", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(Csharp.Cart, null);
-                Rust.Load(stream.ToArray());
+                state = stream.ToArray();
+            }
+            if (state is not null)
+            {
+                // Both fresh, so the fields no state carries start equal (§3.1).
+                Csharp.LoadState(new MemoryStream(state));
+                Rust.Load(state);
             }
             CompareState("load");
         }

@@ -1,9 +1,8 @@
 //! C#'s `MercuryCore`: the machine, and its state in the C# core's own format. See Mercury_Native.md §3.1.
 
-use crate::cpu::Cpu;
+use crate::cpu::{Cpu, IllegalOpcode};
 use crate::memory::bus::MemoryBus;
 use crate::memory::cartridge::{Cartridge, RomError};
-use crate::memory::mappers::Mapper;
 use crate::state::{StateError, StateReader, StateResult, StateWriter};
 
 pub const CPU_CLOCK_HZ: i64 = 4_194_304;
@@ -17,8 +16,6 @@ pub const STATE_VERSION: i32 = 5;
 pub struct Machine {
     pub total_frames: i64,
     pub cycles_into_frame: i64,
-    pub cart: Cartridge,
-    pub mapper: Mapper,
     pub cpu: Cpu,
     pub bus: MemoryBus,
 }
@@ -27,11 +24,99 @@ impl Machine {
     /// `MercuryCore.LoadRom` after the file is read: the board, the bus, then both resets, in C#'s order.
     pub fn load_rom(image: Vec<u8>, save_path: Option<String>) -> Result<Machine, RomError> {
         let (cart, mapper) = Cartridge::from_image(image, save_path)?;
-        let mut bus = MemoryBus::new(cart.is_cgb());
+        let mut bus = MemoryBus::new(cart, mapper);
         let mut cpu = Cpu::default();
         bus.reset();
         cpu.reset(*bus.cgb);
-        Ok(Machine { total_frames: 0, cycles_into_frame: 0, cart, mapper, cpu, bus })
+        // C#'s SetSampleRate(44100) divides in integers (Mercury_Native.md §6.1, D1); the shim passes C#'s own Math.Pow.
+        let cycles_per_sample = (CPU_CLOCK_HZ / 44_100) as f64;
+        bus.apu.set_sample_rate(cycles_per_sample, crate::apu::HIGH_PASS_SEED.powf(cycles_per_sample));
+        Ok(Machine { total_frames: 0, cycles_into_frame: 0, cpu, bus })
+    }
+
+    /// `MercuryCore.RunFrame` without its debugger seams: until the PPU completes a frame, or a budget for an LCD that is off.
+    pub fn run_frame(&mut self) -> Result<(), IllegalOpcode> {
+        let budget = if self.bus.double_speed { CYCLES_PER_FRAME * 2 } else { CYCLES_PER_FRAME };
+        while self.cycles_into_frame < budget {
+            let (ie, iflags) = (self.bus.interrupt_enable, self.bus.interrupt_flags);
+            let (cycles, serviced) = self.cpu.step(&mut self.bus, ie, iflags)?;
+            if serviced >= 0 {
+                self.bus.interrupt_flags &= !(1u8 << serviced);
+            }
+            let stall = self.bus.take_pending_stall();
+            if stall > 0 {
+                self.bus.tick(stall);
+            }
+            self.cycles_into_frame += (cycles + stall) as i64;
+            if self.bus.ppu.frame_complete {
+                self.bus.ppu.frame_complete = false;
+                self.cycles_into_frame = 0;
+                self.total_frames += 1;
+                return Ok(());
+            }
+        }
+        self.cycles_into_frame -= budget;
+        self.total_frames += 1;
+        Ok(())
+    }
+
+    /// `MercuryCore.ReadSpace` by number: ROM, VRAM, CARTRAM, WRAM, OAM, HRAM, then CPUBUS through the real decode.
+    pub fn read_space(&mut self, space: u32, address: i32) -> u8 {
+        let bus = &mut self.bus;
+        match space {
+            0 => usize::try_from(address).ok().and_then(|a| bus.cart.rom.get(a)).copied().unwrap_or(0xFF),
+            1 => bus.vram[wrap(address, bus.vram.len())],
+            2 => {
+                if bus.cart.ram.is_empty() {
+                    0xFF
+                } else {
+                    bus.cart.ram[wrap(address, bus.cart.ram.len())]
+                }
+            }
+            3 => bus.wram[wrap(address, bus.wram.len())],
+            4 => bus.oam[wrap(address, bus.oam.len())],
+            5 => bus.high_ram[wrap(address, bus.high_ram.len())],
+            6 => bus.read((address & 0xFFFF) as u16),
+            _ => 0,
+        }
+    }
+
+    /// `MercuryCore.WriteSpace`: ROM is the cartridge mask, and a debug write must not corrupt the image.
+    pub fn write_space(&mut self, space: u32, address: i32, value: u8) {
+        let bus = &mut self.bus;
+        match space {
+            1 => {
+                let i = wrap(address, bus.vram.len());
+                bus.vram[i] = value;
+            }
+            2 => {
+                if !bus.cart.ram.is_empty() {
+                    let i = wrap(address, bus.cart.ram.len());
+                    bus.cart.ram[i] = value;
+                }
+            }
+            3 => {
+                let i = wrap(address, bus.wram.len());
+                bus.wram[i] = value;
+            }
+            4 => bus.oam[wrap(address, 0xA0)] = value,
+            5 => bus.high_ram[wrap(address, 0x7F)] = value,
+            6 => bus.write((address & 0xFFFF) as u16, value),
+            _ => {}
+        }
+    }
+
+    pub fn space_size(&self, space: u32) -> usize {
+        match space {
+            0 => self.bus.cart.rom.len(),
+            1 => self.bus.vram.len(),
+            2 => self.bus.cart.ram.len(),
+            3 => self.bus.wram.len(),
+            4 => 0xA0,
+            5 => 0x7F,
+            6 => 0x10000,
+            _ => 0,
+        }
     }
 
     /// `MercuryCore.SaveState`: the header, then the cartridge, its board, the CPU and the bus, each walked as C# walks it.
@@ -40,10 +125,10 @@ impl Machine {
         w.i32("Version", STATE_VERSION);
         w.i64("TotalFrames", self.total_frames);
         w.i64("_cyclesIntoFrame", self.cycles_into_frame);
-        w.group("Cart", |w| self.cart.write_state(w));
-        w.group("Mapper", |w| self.mapper.write_state(w, &self.cart));
+        w.group("Cart", |w| self.bus.cart.write_state(w));
+        w.group("Mapper", |w| self.bus.mapper.write_state(w, &self.bus.cart));
         w.group("Cpu", |w| crate::state::State::write_state(&self.cpu, w));
-        w.group("Bus", |w| self.bus.write_state(w, &self.cart));
+        w.group("Bus", |w| self.bus.write_state(w));
     }
 
     fn read_state(&mut self, r: &mut StateReader) -> StateResult {
@@ -57,10 +142,10 @@ impl Machine {
         }
         self.total_frames = r.i64()?; // TotalFrames
         self.cycles_into_frame = r.i64()?; // _cyclesIntoFrame
-        self.cart.read_state(r)?;
-        self.mapper.read_state(r, &mut self.cart)?;
+        self.bus.cart.read_state(r)?;
+        self.bus.mapper.read_state(r, &mut self.bus.cart)?;
         crate::state::State::read_state(&mut self.cpu, r)?;
-        self.bus.read_state(r, &mut self.cart)
+        self.bus.read_state(r)
     }
 
     /// `MercuryCore.LoadState`'s fields; a failed load changes nothing, and bytes past the state are ignored as C# ignores them.
@@ -94,6 +179,11 @@ impl Machine {
     }
 }
 
+/// C#'s `((address % size) + size) % size`, zero for an empty space.
+fn wrap(address: i32, size: usize) -> usize {
+    if size == 0 { 0 } else { address.rem_euclid(size as i32) as usize }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,13 +208,13 @@ mod tests {
     fn a_state_round_trips_through_every_board() {
         for (kind, ram, cgb) in [(0x00, 0, 0), (0x03, 2, 0), (0x06, 0, 0xC0), (0x10, 3, 0x80), (0x1E, 4, 0)] {
             let mut m = Machine::load_rom(rom(kind, ram, cgb), Some("/tmp/π/x.srm".into())).unwrap();
-            m.cart.ram.iter_mut().enumerate().for_each(|(i, b)| *b = i as u8);
+            m.bus.cart.ram.iter_mut().enumerate().for_each(|(i, b)| *b = i as u8);
             m.bus.ppu.scx = 7;
             let state = save(&m);
             let mut back = Machine::load_rom(rom(kind, ram, cgb), None).unwrap();
             back.load_state(&state).unwrap();
             assert_eq!(save(&back), state);
-            assert_eq!(back.cart.save_path.as_deref(), Some("/tmp/π/x.srm"));
+            assert_eq!(back.bus.cart.save_path.as_deref(), Some("/tmp/π/x.srm"));
         }
     }
 
@@ -139,7 +229,7 @@ mod tests {
         state[offset] = 0xAB;
         let mut back = m.clone();
         back.load_state(&state).unwrap();
-        assert_eq!(back.cart.ram[0], 0xAB);
+        assert_eq!(back.bus.cart.ram[0], 0xAB);
     }
 
     #[test]

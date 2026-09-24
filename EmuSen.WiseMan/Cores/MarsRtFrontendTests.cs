@@ -80,13 +80,16 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void Only_the_N64_has_an_engine_to_choose_and_its_default_is_the_csharp_Mars()
+        public void The_N64_and_the_Game_Boy_have_an_engine_to_choose_and_each_defaults_to_its_csharp_core()
         {
             CoreSetting engine = CoreCatalog.EngineFor("N64")!;
             Assert.Equal(CoreCatalog.EngineKey, engine.Key);
             Assert.Equal(CoreCatalog.MarsEngine, engine.Default);
             Assert.Equal(new[] { CoreCatalog.MarsEngine, CoreCatalog.MarsRtEngine }, engine.Choices);
-            foreach (string console in new[] { "SNES", "NES", "GB" }) Assert.Null(CoreCatalog.EngineFor(console));
+            foreach (string console in new[] { "SNES", "NES" }) Assert.Null(CoreCatalog.EngineFor(console));
+            CoreSetting gameBoy = CoreCatalog.EngineFor("GB")!;
+            Assert.Equal(CoreCatalog.MercuryEngine, gameBoy.Default);
+            Assert.Equal(new[] { CoreCatalog.MercuryEngine, CoreCatalog.MercuryRtEngine }, gameBoy.Choices);
             Assert.DoesNotContain(CoreCatalog.SettingsFor("N64"), s => s.Key == CoreCatalog.EngineKey);
         }
 

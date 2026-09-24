@@ -150,6 +150,8 @@ namespace EmuSen.Mistress.Views
                 Placeholder = placeholder,
                 BrowseTitle = title,
                 Path = current ?? "",
+                // Typed as well as browsed: Game Mode never shows the platform's picker - see EmuSen_Settings_Reference.md §4.45.6.
+                IsEditable = true,
             };
 
             picker.PathPicked += picked =>

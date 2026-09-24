@@ -441,15 +441,18 @@ namespace EmuSen.Mistress.Views
             _ = SheetLayer.Show(new DebugSettingsWindow(), this);
         }
 
+        // The running game's console, else the library's filter: cheats are for the game being played - see EmuSen_Settings_Reference.md §4.45.5.
+        private string CheatConsole => _session is { IsRomLoaded: true } ? _activeConsole : SelectedConsole;
+
         // Never needs a ROM: it manages a folder and a list, not a session. See §4.14.
         private void ShowCheatDatabase()
         {
             _cheatDatabaseWindow.Show(this, () => new CheatDatabaseWindow(_appSettings, () => _cheats,
-                ConsoleCodecs(SelectedConsole).AutoDetect,
+                ConsoleCodecs(CheatConsole).AutoDetect,
                 () => _activeCheatsWindow.Current?.Refresh(),
                 ShowActiveCheats,
                 () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems,
-                SelectedConsole));
+                CheatConsole));
         }
 
         
@@ -457,13 +460,14 @@ namespace EmuSen.Mistress.Views
         // The menu item and the database window's button are the same door - see §4.14.
         private void ShowActiveCheats()
         {
-            var codecs = ConsoleCodecs(SelectedConsole);
+            var codecs = ConsoleCodecs(CheatConsole);
             _activeCheatsWindow.Show(this, () => new ActiveCheatsWindow(_cheats,
                 codecs.AutoDetect,
                 codecs.Explicit,
                 RequestCheatApply,
                 () => CheatListName(_cheatsRomPath),
-                SelectedConsole),
+                CheatConsole,
+                ShowCheatDatabase),
                 refresh: w => w.Refresh());
         }
 

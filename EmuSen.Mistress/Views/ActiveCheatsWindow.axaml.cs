@@ -113,10 +113,15 @@ namespace EmuSen.Mistress.Views
 
         public ActiveCheatsWindow() : this(new CheatRegistry()) { }
 
+        // The database window, which is how a game's cheats arrive when the menu bar is hidden - see EmuSen_Settings_Reference.md §4.45.5.
+        private readonly Action? _openDatabase;
+
         public ActiveCheatsWindow(CheatRegistry registry, ICheatCodeCodec? pokeCodec = null, ICheatCodeCodec? patchCodec = null,
-            Func<bool>? applyNow = null, Func<string?>? saveName = null, string? console = null)
+            Func<bool>? applyNow = null, Func<string?>? saveName = null, string? console = null, Action? openDatabase = null)
         {
             InitializeComponent();
+            _openDatabase = openDatabase;
+            DatabaseButton.IsEnabled = openDatabase is not null;
             BuildCheatColumns();
             _registry = registry;
             _pokeCodec = pokeCodec;
@@ -150,6 +155,11 @@ namespace EmuSen.Mistress.Views
                 HintText formats = Ui.Hint("");
 
                 addButton.Click += OnAddClick;
+
+                // A code is typed on the keys it is written in: Game Genie letters for the NES, hexadecimal for the rest - see §4.45.6.
+                EmuSen.Mistress.Input.PadKeyboard.Use(codeBox, console.Console == "NES"
+                    ? new[] { KeyboardLayout.GameGenie, KeyboardLayout.Code, KeyboardLayout.Letters }
+                    : new[] { KeyboardLayout.Code, KeyboardLayout.Letters });
 
                 StackPanel panel = Ui.Stack(6,
                     new TextBlock { Text = $"Add a {console.Console} cheat", FontWeight = Avalonia.Media.FontWeight.Bold },
@@ -258,7 +268,7 @@ namespace EmuSen.Mistress.Views
 
             if (cheats.Count == 0)
             {
-                StatusText.Text = "Load a game's cheats from Settings > Cheat Database..., or add a code on a console tab.";
+                StatusText.Text = "Load a game's cheats from the Cheat Database, or add a code on a console tab.";
             }
 
             // A console whose core has no codec cannot parse a typed code at all - see EmuSen_Multicore.md §4.
@@ -473,5 +483,7 @@ namespace EmuSen.Mistress.Views
         }
 
         private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
+
+        private void OnDatabaseClick(object? sender, RoutedEventArgs e) => _openDatabase?.Invoke();
     }
 }

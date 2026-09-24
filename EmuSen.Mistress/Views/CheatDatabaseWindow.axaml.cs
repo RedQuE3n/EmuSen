@@ -88,6 +88,9 @@ namespace EmuSen.Mistress.Views
             AttributionText.Text = CheatDatabaseInstaller.Attribution;
             DirectoryPicker.Path = _settings.CheatDatabaseDirectory ?? "";
             DirectoryPicker.PathPicked += OnDirectoryPicked;
+            // A folder typed, and a game loaded with Enter, for a pad in Game Mode - see EmuSen_Settings_Reference.md §4.45.5.
+            DirectoryPicker.IsEditable = true;
+            GamesList.AddHandler(KeyDownEvent, (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) { e.Handled = true; LoadSelectedGame(); } }, handledEventsToo: true);
             ActiveCheatsButton.IsEnabled = _openActiveCheats is not null;
             PruneButton.IsEnabled = _supportedSystems is not null;
 

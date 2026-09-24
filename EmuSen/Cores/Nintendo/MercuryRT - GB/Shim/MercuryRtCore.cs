@@ -11,7 +11,7 @@ using EmuSen.Galaxia.Library;
 namespace EmuSen.Cores.Nintendo.MercuryRT
 {
     // MercuryRT behind the Game Boy's ICore: the machine in Rust, the registries, saves and cheats' rules in C# - see Mercury_Native.md §8.3.
-    public sealed partial class MercuryRtCore : ICore, ICheatRegistryHost, IStateFormat, IFrameBufferPool, IDisposable
+    public sealed partial class MercuryRtCore : ICore, ICheatRegistryHost, IStateFormat, IFrameBufferPool, ICoreSettings, IDisposable
     {
         private const int SaveEveryNFrames = 300;
 
@@ -34,7 +34,8 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
 
         public static bool Available => MercuryMachine.Complete;
 
-        public string CoreName => _header?.Cgb is null or CgbSupport.None ? "GB" : "GBC";
+        // The console running, as MercuryCore names it; a state from the other console changes it - see Mercury_Model.md §5.
+        public string CoreName => _machine?.CgbHardware == true ? "GBC" : "GB";
         public int ScreenWidth => MercuryCore.ScreenWidthPixels;
         public int ScreenHeight => MercuryCore.ScreenHeightPixels;
         public double FrameRateHz => MercuryCore.CpuClockHz / (double)MercuryCore.CyclesPerFrame;
@@ -42,7 +43,32 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         public long TotalFrames => _machine?.TotalFrames ?? 0;
         public int AudioSampleRate => 44100;
         public IReadOnlyList<PadButton> SupportedButtons => MercuryCore.PadButtons;
-        int IStateFormat.StateVersion => 6;
+        int IStateFormat.StateVersion => 7;
+
+        private GbModel _model;
+        private string? _romPath;
+
+        // MercuryCore.Model: the console the next load builds, and a change before the first frame loads the game again at once.
+        public GbModel Model
+        {
+            get => _model;
+            set
+            {
+                if (value == _model) return;
+                _model = value;
+                if (_machine is not null && TotalFrames == 0 && _romPath is { Length: > 0 } path) LoadRom(path);
+            }
+        }
+
+        public IReadOnlyList<CoreSetting> Settings => MercuryCore.ModelSettings;
+
+        public string Get(string key) => key == MercuryCore.ModelKey ? MercuryCore.ModelName(Model) : throw new ArgumentException($"Mercury has no setting named {key}.", nameof(key));
+
+        public void Set(string key, string value)
+        {
+            if (key != MercuryCore.ModelKey) throw new ArgumentException($"Mercury has no setting named {key}.", nameof(key));
+            Model = MercuryCore.ParseModel(value);
+        }
 
         public WatchRegistry Watches => Mirror.Watches;
         public FrameLogRegistry FrameLog => Mirror.FrameLog;
@@ -88,7 +114,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
                 if (header.Ram.Length > 0) saved = AtomicFile.TryRead(savePath);
             }
 
-            var machine = new MercuryMachine(image);
+            var machine = new MercuryMachine(image, _model);
             if (saved is not null) machine.WriteSpace(2, 0, saved.AsSpan(0, Math.Min(saved.Length, header.Ram.Length)));
             machine.SetOptions(_skipRendering);
 
@@ -96,10 +122,12 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             _machine = machine;
             _header = header;
             _savePath = savePath;
+            _romPath = path;
             _rom = image;
             _patchVersion = -1;
             machine.SetButtons(_buttons);
             Mirror.LoadRom(path);
+            Mirror.Model = _model;
             IsHaltedAtBreakpoint = false;
         }
 
@@ -187,7 +215,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             if (BitConverter.ToUInt32(state, 0) != 0x4352454D) throw new InvalidDataException("Not a Mercury save state.");
             if (state.Length < 8) throw new EndOfStreamException("Unable to read beyond the end of the stream.");
             int version = BitConverter.ToInt32(state, 4);
-            if (version is < 5 or > 6) throw new InvalidDataException($"Save state version {version} is not one this build reads (5 to 6).");
+            if (version is < 5 or > 7) throw new InvalidDataException($"Save state version {version} is not one this build reads (5 to 7).");
             _machine.Load(state);
         }
 

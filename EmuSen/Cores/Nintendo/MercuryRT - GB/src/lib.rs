@@ -15,7 +15,7 @@ use std::ffi::{CStr, c_char};
 use std::sync::OnceLock;
 
 /// The interface version; C# refuses a library whose number is not the one it was written against.
-pub const INTERFACE_VERSION: u32 = 2;
+pub const INTERFACE_VERSION: u32 = 3;
 
 /// A field C# marks `[SkipInState]`: derived or host state, in no state and no part of the machine's identity.
 #[derive(Clone, Copy, Debug, Default)]

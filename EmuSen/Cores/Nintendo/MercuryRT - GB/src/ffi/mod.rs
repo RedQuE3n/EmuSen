@@ -25,17 +25,21 @@ fn status(result: Result<usize, crate::state::StateError>) -> i64 {
     }
 }
 
-/// `MercuryCore.LoadRom` from an image; the battery save's path is the host's (Mercury_Native.md §9.3). Null on refusal, with the reason in `status`.
+/// A model number that is not Auto, Game Boy or Game Boy Color.
+pub const STATUS_UNKNOWN_MODEL: i32 = -11;
+
+/// `MercuryCore.LoadRom` from an image on the console `model` chooses, in `GbModel`'s order (Mercury_Model.md §1); the battery save's path is the host's. Null on refusal, with the reason in `status`.
 ///
 /// # Safety
 /// `rom` valid for `len` bytes; `status` writable or null.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mercury_machine_new(rom: *const u8, len: usize, status: *mut i32) -> *mut Machine {
+pub unsafe extern "C" fn mercury_machine_new(rom: *const u8, len: usize, model: u32, status: *mut i32) -> *mut Machine {
     let image = unsafe { input(rom, len) }.to_vec();
-    let (machine, code) = match Machine::load_rom(image) {
-        Ok(m) => (Box::into_raw(Box::new(m)), 0),
-        Err(RomError::TooShort(_)) => (ptr::null_mut(), STATUS_TOO_SHORT),
-        Err(RomError::UnsupportedType(_)) => (ptr::null_mut(), STATUS_UNSUPPORTED_BOARD),
+    let (machine, code) = match crate::machine::Model::from_u32(model).map(|model| Machine::load_rom(image, model)) {
+        None => (ptr::null_mut(), STATUS_UNKNOWN_MODEL),
+        Some(Ok(m)) => (Box::into_raw(Box::new(m)), 0),
+        Some(Err(RomError::TooShort(_))) => (ptr::null_mut(), STATUS_TOO_SHORT),
+        Some(Err(RomError::UnsupportedType(_))) => (ptr::null_mut(), STATUS_UNSUPPORTED_BOARD),
     };
     if let Some(s) = unsafe { status.as_mut() } {
         *s = code;
@@ -224,6 +228,15 @@ pub unsafe extern "C" fn mercury_machine_step(machine: *mut Machine) -> i32 {
         }
         Err(_) => STATUS_ILLEGAL_OPCODE,
     }
+}
+
+/// 1 while the machine is a Game Boy Color, 0 for a Game Boy; a state from the other console changes it (Mercury_Model.md §5).
+///
+/// # Safety
+/// `machine` must be live or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mercury_machine_cgb_hardware(machine: *const Machine) -> i32 {
+    unsafe { machine.as_ref() }.map_or(STATUS_NULL, |m| m.cgb_hardware() as i32)
 }
 
 /// # Safety

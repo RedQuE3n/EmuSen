@@ -211,6 +211,7 @@ namespace EmuSen.WiseMan.Cores
             var layout = new LayoutWalk();
             layout.Line("Magic", "u32", 4);
             layout.Line("Version", "i32", 4);
+            layout.Line("Console", "bool", 1);
             layout.Line("TotalFrames", "i64", 8);
             layout.Line("_cyclesIntoFrame", "i64", 8);
             layout.Walk("Cart.", core.Cart!);

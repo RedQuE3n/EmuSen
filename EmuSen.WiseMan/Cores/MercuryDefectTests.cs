@@ -230,7 +230,7 @@ namespace EmuSen.WiseMan.Cores
             SavePath.SetValue(source.Cart, "/mercury-v5/A.srm");
             byte[] v5 = WriteVersion5(source), v6 = Save(source);
             Assert.True(Sha(v5) == sha, $"the version-5 writer's bytes hash {Sha(v5)}, not the unmodified build's {sha}");
-            Assert.Equal(6, BitConverter.ToInt32(v6, 4));
+            Assert.Equal(7, BitConverter.ToInt32(v6, 4));
             Assert.DoesNotContain("mercury-v5", System.Text.Encoding.UTF8.GetString(v6));
 
             MercuryCore cs = LoadCs(rom);

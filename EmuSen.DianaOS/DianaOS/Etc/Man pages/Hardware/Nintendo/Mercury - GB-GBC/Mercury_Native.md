@@ -1515,6 +1515,10 @@ one cartridge, as version 5's reader did.
   interface version is 2. The shim keeps the path itself, from `LoadRom`, as C#'s `Cartridge` does. This removes the
   ABI parameter and the string primitive §2.3 said D3 alone required. The string reader stays, for version 5.
 
+*Superseded in part, 2026-09-24.* The Model setting made the state version 7, one byte naming the console after the
+version, and gave `mercury_machine_new` a model argument, so the interface version is 3 (`Mercury_Model.md` §5).
+Everything above about version 6 still holds, and version 7 reads 5 and 6 as described here.
+
 **Prediction, stated before the run.**
 
 - All six cases of the path test pass on both engines.

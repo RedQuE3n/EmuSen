@@ -14,6 +14,28 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
 
         public bool Cgb => _bus.Cgb;
 
+        // A Game Boy cartridge on a Game Boy Color: DMG rendering, its shades looked up in colour palettes - see Mercury_Model.md §4.1.
+        public bool Compat => _bus.DmgCompat;
+
+        // What the boot ROM writes for a Game Boy cartridge: object palettes 0 and 1, then background palette 0 - see Mercury_Model.md §3.
+        public void LoadCompatibilityPalettes(int number)
+        {
+            var (background, object0, object1) = CompatibilityPalettes.ForNumber(number);
+            for (int i = 0; i < 4; i++)
+            {
+                ObjPaletteRam[i * 2] = (byte)object0[i];
+                ObjPaletteRam[(i * 2) + 1] = (byte)(object0[i] >> 8);
+                ObjPaletteRam[8 + (i * 2)] = (byte)object1[i];
+                ObjPaletteRam[8 + (i * 2) + 1] = (byte)(object1[i] >> 8);
+                BgPaletteRam[i * 2] = (byte)background[i];
+                BgPaletteRam[(i * 2) + 1] = (byte)(background[i] >> 8);
+            }
+
+            // Both indices auto-incremented from 0 through what was written: sixteen object bytes, eight background ones.
+            ObjPaletteIndex = 0x80 | 16;
+            BgPaletteIndex = 0x80 | 8;
+        }
+
         public byte ReadBgPaletteIndex() => (byte)(BgPaletteIndex | 0x40);
 
         public byte ReadObjPaletteIndex() => (byte)(ObjPaletteIndex | 0x40);

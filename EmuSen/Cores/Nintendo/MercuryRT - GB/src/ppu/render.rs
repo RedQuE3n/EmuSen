@@ -34,7 +34,7 @@ impl Ppu {
     fn render_background(&mut self, line: usize, window: bool, vram: &[u8], cgb: bool, bg_color: &mut [u8; SCREEN_WIDTH], bg_priority: &mut [bool; SCREEN_WIDTH]) {
         if !cgb && self.lcdc & 0x01 == 0 {
             for x in 0..SCREEN_WIDTH {
-                self.write_pixel(line, x, 0);
+                self.write_shade(line, x, false, 0, 0);
             }
             return;
         }
@@ -67,7 +67,7 @@ impl Ppu {
             if cgb {
                 color_pixel(&mut self.frame_rgba, line, x, &self.bg_palette_ram, (attributes & 7) as usize, color as usize);
             } else {
-                self.write_pixel(line, x, shade(self.bgp, color));
+                self.write_shade(line, x, false, 0, shade(self.bgp, color));
             }
         }
     }
@@ -145,9 +145,20 @@ impl Ppu {
                 if cgb {
                     color_pixel(&mut self.frame_rgba, line, x, &self.obj_palette_ram, (attributes & 7) as usize, color as usize);
                 } else {
-                    self.write_pixel(line, x, shade(palette, color));
+                    self.write_shade(line, x, true, ((attributes & 0x10) >> 4) as usize, shade(palette, color));
                 }
             }
+        }
+    }
+
+    /// A DMG shade: grey on a Game Boy, and on a Game Boy Color the colour at that index of the palette the boot ROM chose (Mercury_Model.md §4.1).
+    #[inline(always)]
+    fn write_shade(&mut self, line: usize, x: usize, object: bool, palette: usize, shade: u8) {
+        if *self.compat {
+            let ram = if object { &self.obj_palette_ram } else { &self.bg_palette_ram };
+            color_pixel(&mut self.frame_rgba, line, x, ram, palette, shade as usize);
+        } else {
+            self.write_pixel(line, x, shade);
         }
     }
 

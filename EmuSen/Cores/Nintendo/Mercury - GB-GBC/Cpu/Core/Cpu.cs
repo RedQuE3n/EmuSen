@@ -84,6 +84,16 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
             Cycles = 0;
         }
 
+        // What a Game Boy Color's boot ROM hands a Game Boy cartridge: B is the title checksum, and HL is left where the logo map was drawn - see Mercury_Model.md §3.2.
+        public void ResetForCompatibility(byte titleChecksum)
+        {
+            Reset(cgb: true);
+            AF = 0x1180;
+            BC = (ushort)(titleChecksum << 8);
+            DE = 0x0008;
+            HL = titleChecksum is 0x43 or 0x58 ? (ushort)0x991A : (ushort)0x007C;
+        }
+
         // Runs the machine itself as it goes; returns the T-cycles consumed - see Mercury_Cpu.md §3.
         public int Step(byte interruptEnable, byte interruptFlags, out int servicedBit)
         {

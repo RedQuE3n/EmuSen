@@ -10,7 +10,7 @@ using EmuSen.Galaxia.Input;
 namespace EmuSen.Cores.Nintendo.Mercury
 {
     // The Game Boy's ICore implementation; colour is an additive mode on this same core - see Mercury_Core.md §1.
-    public sealed partial class MercuryCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ICheatRegistryHost, global::EmuSen.Cores.IStateFormat
+    public sealed partial class MercuryCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ICheatRegistryHost, global::EmuSen.Cores.IStateFormat, global::EmuSen.Cores.ICoreSettings
     {
         public const int CpuClockHz = 4194304;
 
@@ -20,8 +20,12 @@ namespace EmuSen.Cores.Nintendo.Mercury
         // "MERC" little-endian, then the format version - see EmuSen_Save_States.md §3.
         private const uint StateMagic = 0x4352454D;
 
-        // 2 added the PPU to the bus walk, 3 the colour banks and HDMA, 4 the APU, 5 the serial port, 6 dropped the save path and two cartridge copies - see EmuSen_Save_States.md §7.
-        private const int StateVersion = 6;
+        // 2 PPU, 3 colour banks and HDMA, 4 APU, 5 serial, 6 no save path or cartridge copies, 7 the console - see EmuSen_Save_States.md §7.
+        private const int StateVersion = 7;
+
+        // Version 6 dropped the save path and the cartridge copies; version 7 names the console before the walks - see Mercury_Model.md §5.
+        private const int RetiredCartCopies = 6;
+        private const int ConsoleInHeader = 7;
 
         // The oldest version LoadState still reads, its retired fields walked and dropped - see Mercury_Native.md §9.3.
         private const int OldestReadableVersion = 5;
@@ -61,8 +65,8 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public const int ScreenWidthPixels = 160;
         public const int ScreenHeightPixels = 144;
 
-        // The header decides, once, at load - see Mercury_Cgb.md §1.
-        public string CoreName => Cart?.Cgb is null or Memory.CgbSupport.None ? "GB" : "GBC";
+        // The console running, not the cartridge's flag: the Model setting can put either on either - see Mercury_Model.md §5.
+        public string CoreName => Bus?.CgbHardware == true ? "GBC" : "GB";
 
         public int ScreenWidth => ScreenWidthPixels;
         public int ScreenHeight => ScreenHeightPixels;
@@ -101,17 +105,32 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public void LoadRom(string path)
         {
             Cart = Cartridge.Load(path);
-            Bus = new MemoryBus(Cart) { RomPatcher = new global::EmuSen.Cores.CheatRomPatcher(Cheats) };
-            Cpu = new Cpu.Core.Cpu(Bus);
-
-            Bus.Reset();
-            Cpu.Reset(Bus.Cgb);
-            Bus.Ppu.SkipRendering = _skipRendering;
-            Bus.Apu.SetSampleRate(AudioSampleRate);
+            Bus = null;
+            Build(ConsoleFor(Model, Cart.Cgb));
 
             TotalFrames = 0;
             _cyclesIntoFrame = 0;
             IsHaltedAtBreakpoint = false;
+        }
+
+        // The machine a load builds on one console; a rebuild for a state keeps the host's side of the old one - see Mercury_Model.md §5.
+        private void Build(bool cgbHardware)
+        {
+            MemoryBus? old = Bus;
+            Bus = new MemoryBus(Cart!, cgbHardware) { RomPatcher = new global::EmuSen.Cores.CheatRomPatcher(Cheats) };
+            Cpu = new Cpu.Core.Cpu(Bus);
+
+            Bus.Reset();
+            if (Bus.DmgCompat) Cpu.ResetForCompatibility(Video.CompatibilityPalettes.HandOffChecksum(Cart!.Rom));
+            else Cpu.Reset(Bus.Cgb);
+            Bus.Ppu.SkipRendering = _skipRendering;
+            Bus.Apu.SetSampleRate(AudioSampleRate);
+
+            if (old is null) return;
+            Bus.Joypad = old.Joypad;
+            Bus.WriteObserver = old.WriteObserver;
+            Bus.Apu.MaxBufferedSamples = old.Apu.MaxBufferedSamples;
+            for (int i = 0; i < Audio.Apu.ChannelCount; i++) Bus.Apu.SetChannelMuted(i, old.Apu.IsChannelMuted(i));
         }
 
         public void SetButton(int port, PadButton button, bool pressed)
@@ -212,6 +231,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
 
             w.Write(StateMagic);
             w.Write(StateVersion);
+            w.Write(Bus.CgbHardware);
             w.Write(TotalFrames);
             w.Write(_cyclesIntoFrame);
 
@@ -234,7 +254,11 @@ namespace EmuSen.Cores.Nintendo.Mercury
 
             int version = r.ReadInt32();
             if (version is < OldestReadableVersion or > StateVersion) throw new InvalidDataException($"Save state version {version} is not one this build reads ({OldestReadableVersion} to {StateVersion}).");
-            bool retired = version < StateVersion;
+            bool retired = version < RetiredCartCopies;
+
+            // Older states were made on the console the header chose; a state from the other console rebuilds the machine as that one.
+            bool cgbHardware = version >= ConsoleInHeader ? r.ReadBoolean() : Cart.Cgb != CgbSupport.None;
+            if (cgbHardware != Bus.CgbHardware) Build(cgbHardware);
 
             TotalFrames = r.ReadInt64();
             _cyclesIntoFrame = r.ReadInt64();

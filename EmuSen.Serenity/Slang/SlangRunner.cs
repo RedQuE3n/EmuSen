@@ -85,7 +85,7 @@ namespace EmuSen.Serenity.Slang
         }
 
         // On the render thread, under the owner's lock: false draws nothing and the caller draws the picture plain.
-        public bool Draw(SKCanvas canvas, byte[] rgba, int width, int height, int rowRepeat, bool newFrame, SKRect destination)
+        public bool Draw(SKCanvas canvas, byte[] rgba, int width, int height, bool newFrame, SKRect destination)
         {
             if (_disposed || !_build.IsCompletedSuccessfully || _build.Result is not { } chain) return false;
             float scale = Math.Max(Math.Abs(canvas.TotalMatrix.ScaleX), 0.01f);
@@ -94,7 +94,8 @@ namespace EmuSen.Serenity.Slang
             {
                 bool retuned = _appliedVersion != _valuesVersion;
                 if (retuned) { chain.SetParameters(_values); _appliedVersion = _valuesVersion; }
-                if (newFrame || !_advanced) { chain.Advance(rgba, width, height, rowRepeat); _advanced = true; }
+                // The rows once, as the console sent them and as a libretro core hands them over; the destination alone carries the repeat - see EmuSen_Serenity.md §10.6.
+                if (newFrame || !_advanced) { chain.Advance(rgba, width, height, 1); _advanced = true; }
                 if (newFrame || retuned || _output is null || _output.Width != pw || _output.Height != ph)
                 {
                     // Let go first, so the readback it holds can take the new picture - see EmuSen_Serenity.md §9.1.

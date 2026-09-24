@@ -280,12 +280,12 @@ namespace EmuSen.WiseMan.Serenity
                 byte[] solid = new byte[8 * 8 * 4];
                 for (int i = 0; i < solid.Length; i += 4) (solid[i], solid[i + 1], solid[i + 2], solid[i + 3]) = ((byte)(frame * 40), 100, 30, 255);
                 (byte, byte, byte) expected = ((byte)(255 - frame * 40), 155, 225);
-                Assert.True(runner.Draw(target.Canvas, solid, 8, 8, 1, true, destination));
+                Assert.True(runner.Draw(target.Canvas, solid, 8, 8, true, destination));
                 context.Flush();
                 Assert.Equal(expected, Centre(target, 64, 64));
                 context.PurgeResources();
                 target.Canvas.Clear(SKColors.Black);
-                Assert.True(runner.Draw(target.Canvas, solid, 8, 8, 1, false, destination));
+                Assert.True(runner.Draw(target.Canvas, solid, 8, 8, false, destination));
                 context.Flush();
                 Assert.Equal(expected, Centre(target, 64, 64));
             }
@@ -301,8 +301,8 @@ namespace EmuSen.WiseMan.Serenity
             for (int frame = 0; frame < 30; frame++)
             {
                 byte[] picture = Picture(8, 8, frame % 5);
-                Assert.True(runner.Draw(surface.Canvas, picture, 8, 8, 1, true, new SKRect(0, 0, 32, 32)));
-                Assert.True(runner.Draw(surface.Canvas, picture, 8, 8, 1, false, new SKRect(0, 0, 32, 32)));
+                Assert.True(runner.Draw(surface.Canvas, picture, 8, 8, true, new SKRect(0, 0, 32, 32)));
+                Assert.True(runner.Draw(surface.Canvas, picture, 8, 8, false, new SKRect(0, 0, 32, 32)));
             }
             Assert.Equal(1, runner.Chain!.ReadbackCount);
             Assert.Equal(0, runner.Chain.CopiedImages);

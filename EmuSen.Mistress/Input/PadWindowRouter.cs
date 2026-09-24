@@ -21,6 +21,12 @@ namespace EmuSen.Mistress.Input
         void CancelCapture();
     }
 
+    // A window that takes some pad buttons itself; what it declines goes to the router - see EmuSen_Settings_Reference.md §4.49.
+    public interface IPadDriven
+    {
+        bool OnPad(UiButton button);
+    }
+
     // A pad driving a window built for a keyboard and a pointer: focus moves by position, and each control is operated the way its own keys would - see EmuSen_Settings_Reference.md §4.29 and §4.45.3.
     public static class PadWindowRouter
     {
@@ -43,6 +49,8 @@ namespace EmuSen.Mistress.Input
                 if (capturing.Capturing == PadCapture.Key && button == UiButton.Back) capturing.CancelCapture();
                 return;
             }
+
+            if (open is null && window is IPadDriven driven && driven.OnPad(button)) return;
 
             // Focus left under the sheet, or nowhere, starts again at the window's first control.
             if (open is null && (focused is not Visual at || !IsWithin(at, root)))

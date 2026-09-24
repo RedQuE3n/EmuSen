@@ -52,6 +52,7 @@ namespace EmuSen.Mistress.Views
         private readonly LunaAction _slotMenu;
         private readonly LunaAction _fullscreen;
         private readonly LunaAction _hardwareDashboard;
+        private readonly LunaAction _rewindReel;
         private readonly ActionGroup _speeds = new();
         private readonly ActionGroup _slots = new();
 
@@ -66,7 +67,8 @@ namespace EmuSen.Mistress.Views
         private volatile bool _rewindHeld;
 
         private readonly EmuSen.Common.SpeedController _speed = new();
-        private readonly EmuSen.Common.RewindBuffer _rewind = new() { Enabled = true };
+        // Pictures for the reel ride along with each snapshot - see EmuSen_Settings_Reference.md §4.49.
+        private readonly EmuSen.Common.RewindBuffer _rewind = new() { Enabled = true, ThumbnailWidth = EmuSen.Common.RewindBuffer.DefaultThumbnailWidth };
 
         // What the Speed menu picked, read by EmulationLoop - see EmuSen_Settings_Reference.md §4.13.
         private volatile int _baseSpeedPercent = EmuSen.Common.SpeedController.NormalPercent;
@@ -159,6 +161,7 @@ namespace EmuSen.Mistress.Views
             _slotMenu = new LunaAction("State Sl_ot", () => { });
             _fullscreen = new LunaAction("_Fullscreen", a => IsFullScreen = a.IsChecked) { IsCheckable = true };
             _hardwareDashboard = new LunaAction("_Hardware Dashboard...", () => OpenCoretopWindow(_debugTarget));
+            _rewindReel = new LunaAction("Re_wind...", () => OpenRewindReel(resumeAfter: false));
             InitializeComponent();
             SetUpLibraryScreen();
             BuildMenus();
@@ -671,7 +674,7 @@ namespace EmuSen.Mistress.Views
                     LunaAction.Separator(),
                     _speedMenu,
                     LunaAction.Separator(),
-                    _saveState, _loadState, _slotMenu),
+                    _saveState, _loadState, _slotMenu, _rewindReel),
                 new LunaMenu("_View", _asGrid!, _asList!,
                     new LunaAction("_Larger Covers", () => TileScale.Value = Math.Min(MaximumTileScale, TileScale.Value + 0.25)),
                     new LunaAction("S_maller Covers", () => TileScale.Value = Math.Max(MinimumTileScale, TileScale.Value - 0.25)),
@@ -719,6 +722,7 @@ namespace EmuSen.Mistress.Views
             _saveState.IsEnabled = running;
             _loadState.IsEnabled = running;
             _slotMenu.IsEnabled = running;
+            _rewindReel.IsEnabled = running;
             _pause.IsChecked = running && IsPaused;
 
             // Checking a member unchecks its siblings and runs no handler; ActionGroup.Checked is read-only.
@@ -1239,7 +1243,7 @@ namespace EmuSen.Mistress.Views
 
                     // Right after RunFrame, which is what produces new samples to drain.
                     // Off for the C# N64 core, whose snapshot with several rasteriser workers froze a game; on for MarsRT, whose is proven - see EmuSen_Settings_Reference.md §4.21b and §4.44.
-                    if (session.Core is not null and not EmuSen.Cores.Nintendo.Mars.MarsCore) _rewind.OnFrameCompleted(session.Core);
+                    bool captured = session.Core is not null and not EmuSen.Cores.Nintendo.Mars.MarsCore && _rewind.OnFrameCompleted(session.Core);
 
                     // Drained every frame either way, so a muted stretch cannot back the buffer up - see EmuSen_Audio_Sync.md §4.
                     short[] samples = session.DequeueAudioSamples(int.MaxValue);
@@ -1263,10 +1267,12 @@ namespace EmuSen.Mistress.Views
                     if (!session.SkipRendering && (serial is null || serial != offeredSerial))
                     {
                         byte[] frame = session.GetFrameBufferRgba();
+                        if (captured) Picture(session, frame, serial);
                         SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release);
                         offeredSerial = serial;
                         offeredInWindow++;
                     }
+                    else if (captured && !session.SkipRendering) PictureUnchanged(session, serial);
 
                     loopMark = Stopwatch.GetTimestamp();
                     handOffTicks += loopMark - afterAudio;

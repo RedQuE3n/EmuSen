@@ -5327,8 +5327,10 @@ At the multiple the median falls 1.98 ms (16.79 to 14.81), under the 16.7 ms tar
   interleaved, so the fall is the comparison to trust; why the base was slower that day was not investigated.
 - **At one nothing moved**, as §6.15.5 found on the desktop: the medians are 14.68 and 14.58, inside each other's
   spread. The state hash (2D024DBB873B763A) was the same in all twelve runs.
-- **Not measured:** the `trace=` run the prediction also asked for, and the frame rate in Mistress, where the
-  presenter and the audio add to the bench's figure (§6.14 had 17.4 ms in Mistress against the bench's 15.7).
+- **Not measured:** the `trace=` run the prediction also asked for.
+- **In Mistress** (build with libmarsrt 795edd41, the same day), the player reported DK64 at 2x on the device running
+  at full speed, where §6.14 had it at about 45 frames a second on the title. That is the player's reading of the
+  frame counter, not a bench figure.
 
 ##### 6.15.7 What is not done
 

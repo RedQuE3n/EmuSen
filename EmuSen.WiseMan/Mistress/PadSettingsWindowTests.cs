@@ -312,5 +312,107 @@ namespace EmuSen.WiseMan.Mistress
 
         private static void Poll(InputSettingsWindow window) =>
             typeof(InputSettingsWindow).GetMethod("PollForPadButton", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
+
+        // The question a game with a resume state asks as it starts: on a sheet in Game Mode, answered with A, or B to not start at all - see EmuSen_Settings_Reference.md §4.45.2.
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public Task The_resume_question_is_asked_on_a_sheet_and_answered_by_pad(bool resume) => Session.Dispatch(() =>
+        {
+            File.WriteAllBytes(Path.Combine(_romDir, "Game.sfc"), SyntheticRom.BuildBlank());
+            new AppSettings
+            {
+                RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeAsk, BigScreen = true,
+                StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs"),
+            }.Save();
+            var window = new MainWindow { Width = 1280, Height = 800 };
+            window.Show();
+            var pad = new PadDriver(window);
+            window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
+            pad.A();
+            Choose(window, pad, "Close Game");
+            Assert.True(window.GetControl<Control>("LibraryView").IsVisible);
+
+            pad.A();
+            var ask = Assert.IsType<ResumeWindow>(Sheets(window).Current);
+            Assert.Empty(window.OwnedWindows);
+            Assert.Equal("ResumeButton", (Focused(window) as Control)?.Name);
+            Picture(window, "resume");
+
+            if (resume) pad.A(); else pad.B();
+
+            Assert.False(Sheets(window).IsPresenting);
+            Assert.Equal(resume, window.GetControl<Control>("GameFrame").IsVisible);
+            Assert.Equal(!resume, window.GetControl<Control>("LibraryView").IsVisible);
+            Stop(window);
+            window.Close();
+        }, default);
+
+        // The preset picker opened from a dropdown on one sheet, over it, operated and left by pad - see EmuSen_Settings_Reference.md §4.45.3.
+        [Fact]
+        public Task The_RetroArch_preset_picker_opens_over_the_graphics_sheet_and_a_preset_is_chosen_by_pad() => Session.Dispatch(() =>
+        {
+            string pack = EmuSen.Mistress.Library.SlangPackDownload.DefaultDirectory;
+            Directory.CreateDirectory(Path.Combine(pack, "crt"));
+            File.WriteAllText(Path.Combine(pack, "crt", "crt-lottes.slangp"), "");
+            File.WriteAllText(Path.Combine(pack, "crt", "zfast-crt.slangp"), "");
+
+            (MainWindow window, PadDriver pad) = GameModeWithAGame();
+            Choose(window, pad, "Graphics Settings");
+            var graphics = Sheets(window).Current;
+            var filter = (Dropdown)Reach(window, pad, e => e is Dropdown { Name: "SNES.ScreenFilter" });
+            pad.A();
+            pad.Down(filter.ItemCount);
+            pad.A();
+
+            Assert.IsType<SlangPresetWindow>(Sheets(window).Current);
+            Assert.Empty(Unreachable(window, pad));
+            Reach(window, pad, e => e is ListBoxItem { Content: "crt/zfast-crt.slangp" });
+            Picture(window, "slang-picker");
+            pad.A();
+
+            Assert.Same(graphics, Sheets(window).Current);
+            Assert.Equal("slang:crt/zfast-crt.slangp", Stored("SNES", GraphicsSettingsWindow.ScreenFilterKey));
+            pad.B();
+            Assert.False(Sheets(window).IsPresenting);
+            Stop(window);
+            window.Close();
+        }, default);
+
+        // Desktop Mode keeps real windows; the headless platform never makes one active, so the router is handed the window the pad would have found.
+        [Theory]
+        [InlineData("ShowDebugLogging")]
+        [InlineData("ShowGraphicsSettings")]
+        [InlineData("ShowActiveCheats")]
+        [InlineData("ShowPreferences")]
+        public Task In_desktop_mode_a_real_window_is_driven_and_every_control_reached(string opener) => Session.Dispatch(() =>
+        {
+            File.WriteAllBytes(Path.Combine(_romDir, "Game.sfc"), SyntheticRom.BuildBlank());
+            new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            var window = new MainWindow { Width = 1280, Height = 800 };
+            window.Show();
+
+            typeof(MainWindow).GetMethod(opener, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
+            Window other = Assert.Single(window.OwnedWindows);
+            Assert.False(Sheets(window).IsPresenting);
+            void Press(UiButton b) => PadWindowRouter.Send(other, b);
+
+            var missing = new List<string>();
+            TabControl? tabs = other.GetVisualDescendants().OfType<TabControl>().FirstOrDefault();
+            Press(UiButton.Down);
+            for (int page = 0; page < (tabs?.ItemCount ?? 1); page++)
+            {
+                if (page > 0) Press(UiButton.PageDown);
+                other.UpdateLayout();
+                HashSet<InputElement> reached = PadAudit.Reachable(other, Press);
+                missing.AddRange(PadAudit.Operable(other).Where(c => !reached.Contains(c)).Select(c => $"[{(tabs?.SelectedItem as TabItem)?.Header}] {PadAudit.Describe(c)}"));
+            }
+            foreach (string m in missing) _out.WriteLine("unreachable: " + m);
+            Assert.Empty(missing);
+
+            Press(UiButton.Back);
+            Assert.False(other.IsVisible);
+            window.Close();
+        }, default);
     }
 }

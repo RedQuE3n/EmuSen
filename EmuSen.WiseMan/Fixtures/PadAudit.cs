@@ -22,7 +22,10 @@ namespace EmuSen.WiseMan.Fixtures
             root.GetVisualDescendants().OfType<InputElement>().Where(IsOperable).ToList();
 
         // Every control reachable by a pad from where the focus is now; left and right are not pressed where the control itself takes them.
-        public static HashSet<InputElement> Reachable(Control root, PadDriver pad, int limit = 400)
+        public static HashSet<InputElement> Reachable(Control root, PadDriver pad, int limit = 400) => Reachable(root, pad.Press, limit);
+
+        // The same walk with the presses sent some other way, such as straight to the router for a window the headless platform will not make active.
+        public static HashSet<InputElement> Reachable(Control root, System.Action<EmuSen.Mistress.Input.UiButton> press, int limit = 400)
         {
             TopLevel top = TopLevel.GetTopLevel(root)!;
             InputElement Focused() => (InputElement)top.FocusManager!.GetFocusedElement()!;
@@ -41,13 +44,13 @@ namespace EmuSen.WiseMan.Fixtures
                 foreach (int direction in takesSideways ? new[] { 0, 1 } : new[] { 0, 1, 2, 3 })
                 {
                     from.Focus(NavigationMethod.Directional);
-                    switch (direction)
+                    press(direction switch
                     {
-                        case 0: pad.Up(); break;
-                        case 1: pad.Down(); break;
-                        case 2: pad.Left(); break;
-                        case 3: pad.Right(); break;
-                    }
+                        0 => EmuSen.Mistress.Input.UiButton.Up,
+                        1 => EmuSen.Mistress.Input.UiButton.Down,
+                        2 => EmuSen.Mistress.Input.UiButton.Left,
+                        _ => EmuSen.Mistress.Input.UiButton.Right,
+                    });
 
                     InputElement to = Focused();
                     if (seen.Add(to)) queue.Enqueue(to);

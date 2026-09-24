@@ -139,7 +139,7 @@ namespace EmuSen.Mistress.Input
             // Down from a tab header goes into its page; Avalonia 12.1's search answers a header beside it on the same row - §4.45.3.
             if (from is TabItem && direction == NavigationDirection.Down && from.FindAncestorOfType<TabControl>() is { } strip && PageHost(strip) is { } page)
             {
-                (FirstIn(page) ?? Next(focus, page, root, direction))?.Focus(NavigationMethod.Directional);
+                (FirstIn(page) ?? Next(focus, page, root, direction) ?? Nearest(root, page, direction))?.Focus(NavigationMethod.Directional);
                 return;
             }
 
@@ -149,8 +149,42 @@ namespace EmuSen.Mistress.Input
                 if (Next(focus, from, (InputElement)scope, direction) is { } inside) { inside.Focus(NavigationMethod.Directional); return; }
             }
 
-            Next(focus, from, root, direction)?.Focus(NavigationMethod.Directional);
+            // Nothing in line with the focus: the nearest control that way at all, so a button off to one side is still reached - §4.45.3.
+            (Next(focus, from, root, direction) ?? Nearest(root, from, direction))?.Focus(NavigationMethod.Directional);
         }
+
+        // Avalonia 12.1's search answers nothing for a control below and wholly to one side; this scores by distance that way, then twice the distance across.
+        private static InputElement? Nearest(Control root, InputElement from, NavigationDirection direction)
+        {
+            if (from.TranslatePoint(default, root) is not { } origin) return null;
+            var here = new Rect(origin, from.Bounds.Size);
+
+            InputElement? best = null;
+            double bestScore = double.MaxValue;
+            foreach (InputElement candidate in root.GetVisualDescendants().OfType<InputElement>())
+            {
+                if (ReferenceEquals(candidate, from) || !candidate.Focusable || !candidate.IsEffectivelyEnabled || !candidate.IsEffectivelyVisible) continue;
+                if (candidate is ScrollViewer || candidate is TabItem { IsSelected: false }) continue;
+                if (candidate.TranslatePoint(default, root) is not { } at) continue;
+                var there = new Rect(at, candidate.Bounds.Size);
+
+                (double along, double across) = direction switch
+                {
+                    NavigationDirection.Down => (there.Top - here.Bottom, Gap(here.Left, here.Right, there.Left, there.Right)),
+                    NavigationDirection.Up => (here.Top - there.Bottom, Gap(here.Left, here.Right, there.Left, there.Right)),
+                    NavigationDirection.Right => (there.Left - here.Right, Gap(here.Top, here.Bottom, there.Top, there.Bottom)),
+                    _ => (here.Left - there.Right, Gap(here.Top, here.Bottom, there.Top, there.Bottom)),
+                };
+                if (along < -1) continue;
+
+                double score = System.Math.Max(along, 0) + 2 * across;
+                if (score < bestScore) { bestScore = score; best = candidate; }
+            }
+            return best;
+        }
+
+        private static double Gap(double start, double end, double otherStart, double otherEnd) =>
+            otherEnd < start ? start - otherEnd : otherStart > end ? otherStart - end : 0;
 
         // A tab strip is entered at its selected tab, since focusing another would select it - L1 and R1 are what change tabs.
         private static InputElement? Next(IFocusManager focus, InputElement from, InputElement scope, NavigationDirection direction)
@@ -160,13 +194,13 @@ namespace EmuSen.Mistress.Input
             for (int tries = 0; next is null; tries++)
             {
                 if (tries == 16) return null;
-                if (focus.FindNextElement(direction, new FindNextElementOptions { SearchRoot = scope, FocusedElement = at }) is not InputElement found
+                if (focus.FindNextElement(direction, new FindNextElementOptions { SearchRoot = scope, FocusedElement = at}) is not InputElement found
                     || ReferenceEquals(found, at) || !IsWithin(found, (Control)scope)) return null;
 
                 // A scrolling area is entered at the control it holds nearest the way the pad moved, or passed over when it holds none.
                 if (found is ScrollViewer area)
                 {
-                    next = focus.FindNextElement(direction, new FindNextElementOptions { SearchRoot = area, FocusedElement = from }) as InputElement;
+                    next = focus.FindNextElement(direction, new FindNextElementOptions { SearchRoot = area, FocusedElement = from}) as InputElement;
                     if (next is not null && (next is ScrollViewer || !IsWithin(next, area))) next = null;
                     at = area;
                     continue;

@@ -1727,7 +1727,7 @@ behind the machine (§4.21b), a moment's picture is the frame before it.
 **Choosing a moment discards the newer history,** as the held rewind does; the reasoning, and what it costs, is
 `EmuSen_Rewind_And_FastForward.md` §5.2. Nothing is discarded until A.
 
-**Tests.** `PadRewindReelTests`, eight cases, each on a real `MainWindow` running a synthetic SNES ROM whose backdrop
+**Tests.** `PadRewindReelTests`, eight cases and a ninth that only renders, each on a real `MainWindow` running a synthetic SNES ROM whose backdrop
 changes colour every frame, played unthrottled until it has history and driven by the simulated pad:
 
 - A, three moments back, with the game already paused: the whole state afterwards equals `StateAt` of that tile byte for
@@ -1750,7 +1750,12 @@ The core's side is `RewindBufferTests` and `RewindToMomentTests` (§5.2 there), 
 **Pictures looked at.** Rendered with `EMUSEN_UI_DUMP`: the reel on a sheet at 1,280×800, with Now selected and three
 back; and the desktop dialog, with Now and a chosen tile. The first renders showed the large picture and each tile's
 picture pinned to the left of its box, and at 1,280×800 the reel's own hint and buttons cut off below the sheet; the
-pictures are centred and the stage lowered from 360 to 280 pixels, after which everything fits.
+pictures are centred and the stage lowered from 360 to 280 pixels, after which everything fits. The synthetic ROM's
+pictures are flat colours, so `A_real_game_on_the_reel_is_rendered_for_a_look` renders the same reel over a real game
+when `EMUSEN_REWIND_REEL_GAME` names a ROM and a state copied out of the library (unset, it does nothing). Over Yoshi's
+Island and Super Mario Land 2, on the sheet and on the desktop, the 160-pixel pictures are legible as tiles — Yoshi,
+the coin counter, the Game Boy's status line — and the large picture is the same 160 pixels enlarged about twice,
+blocky but readable; it is not the frame (§5.6 of the rewind document).
 
 **Mutants.** Fifteen, each alone, built and run against `RewindBufferTests`, `RewindToMomentTests` and
 `PadRewindReelTests` (37 cases), with the source restored after each:

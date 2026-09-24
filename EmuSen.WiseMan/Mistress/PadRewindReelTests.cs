@@ -183,7 +183,9 @@ namespace EmuSen.WiseMan.Mistress
             RewindReelWindow reel = OpenReel(window, pad);
             Assert.True(window.IsPaused);
             List<ReelMoment> moments = Moments(reel);
-            Assert.True(moments.Count > 20, $"{moments.Count} tiles");
+            // Four snapshots a second of the console's own frames - see EmuSen_Settings_Reference.md §4.50.
+            Assert.Equal((int)Math.Round(Game(window).FrameRateHz / 4), Rewind(window).IntervalFrames);
+            Assert.True(moments.Count >= 240 / Rewind(window).IntervalFrames, $"{moments.Count} tiles at one every {Rewind(window).IntervalFrames} frames");
             Assert.True(moments[^1].IsNow);
             Assert.Same(moments[^1], reel.Strip.Selected);
             Assert.Equal(frameBefore, moments[^1].Frame);

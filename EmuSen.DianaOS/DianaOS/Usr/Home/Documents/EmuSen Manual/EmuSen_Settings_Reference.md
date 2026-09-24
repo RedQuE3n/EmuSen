@@ -2093,3 +2093,27 @@ and starts one inside that window. No test holds that window open without a hook
 has no picture; there is no redo; nothing for the C# Mars; the reel opened from the desktop menu while running reads
 its moments between a frame and that frame's capture, so its Now can be one frame newer than its labels count; and
 none of this has been tried on the handheld.
+
+### 4.50 Rewind takes four snapshots a second (2026-09-24)
+
+**What changed.** Mistress used `RewindBuffer`'s default interval, a snapshot every 4 frames: fifteen a second on a
+60 Hz console. The player found that too many save states once the reel (§4.49) made them visible, and asked for four
+a second. Mistress now sets the interval when a game loads from that console's own frame rate,
+`RewindIntervalFor(hz) = round(hz / 4)`: 15 frames on the NES, Game Boy, SNES and N64 at 60 Hz, 13 on a 50 Hz PAL
+game (12.5 rounded, 3.85 a second). `RewindBuffer.DefaultIntervalFrames` stays 4, so the harness and every other user
+of the buffer are unchanged.
+
+**A held rewind keeps its speed.** The hotkey held used to step back one snapshot every frame, four frames of history
+a frame: four times real speed. With snapshots 15 frames apart, a step a frame would run at fifteen times. It now steps
+once every `round(interval / 4)` frames (4 at 60 Hz), so it still plays back at about four times real speed, showing
+about fifteen pictures a second rather than sixty. `HeldRewindSpeedup` is that 4.
+
+**What it buys.** A quarter of the captures: a quarter of the snapshot encoding on the emulation thread, of the reel's
+pictures (§4.49 measured them as most of rewind's memory on the SNES and Game Boy), and the same memory budget now
+reaching about four times as far back. What it costs is granularity: the reel and a held rewind land on quarter-second
+moments rather than fifteenth-second ones.
+
+**Tests.** `PadRewindReelTests` asserts the interval is a quarter second of the running console's frames and that the
+reel holds at least one moment per interval played; a mutant that leaves the default interval is caught. The held
+rewind's pacing is not asserted by a test; `MarsRtEngineTests`' hold test still passes under it.
+

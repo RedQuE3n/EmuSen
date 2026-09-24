@@ -530,7 +530,7 @@ memory-space naming (110).
 | 3 | The mixer: `EmitSample`, the high-pass, the queue and its drop-oldest rule, `Drain` | Samples identical every frame against C#; `Apu` unit tests through the rig | hours |
 | 4 | The renderer: DMG and CGB background, window and sprites, both priority orders | RGBA identical every frame; the synthetic PPU and CGB tests through the rig | hours |
 | 5 | Shim and frontends: `MercuryRtCore`; an Engine row for GB in `CoreCatalog.EngineFor`; `CoreFactory.Create`; battery saves; cheats, both codecs, with the Game Genie table; `FrameLog`; exception mapping; crash log | The seven commercial-ROM suites on both engines; states crossing engines in both directions; the fallback when the library is absent | a day |
-| 6 | Debugger hooks: breakpoints, stepping, coverage and the write log as pushed tables and drained logs; `MercuryRtDebugTarget` over the state view | `MercuryDebugTargetTests` on both engines; games with every table armed identical to plain runs | 1–2 days |
+| 6 | Debugger hooks: breakpoints, stepping, coverage and the write log as pushed tables and drained logs; `MercuryRtDebugTarget` over the state view (*done 2026-09-24, §8.5*) | `MercuryDebugTargetTests` on both engines; games with every table armed identical to plain runs | 1–2 days |
 | 7 | Platforms and CI: the second crate in the workflow's matrix; `MarsRtPublish.targets` and `EmuSen.csproj`'s single-library build generalised to a list of crates | Crate tests on four platforms; WiseMan's synthetic systems per platform | hours to half a day |
 | 8 | Parity: the rest of WiseMan's Mercury tests through `MercuryRig`; mutants for every stage not yet covered | §3.5, §3.6 | a day |
 | 9 | Goldens: traces and interval states recorded from C# (§3.7), MercuryRT graded against them on `main`, and the legacy-branch differential project written and run once | Every golden reproduced by MercuryRT; one deliberately broken trace caught | half a day |
@@ -679,6 +679,11 @@ rewind. Mercury has no `ISnapshotCore`, so rewind uses the full state on both en
 
 *Retired 2026-09-23 (§8.2):* P1 is refuted, with 0.82–1.02 of C#'s time measured. P2 is refuted in direction: the
 renderer is slower in Rust. P5 holds. P3, P4 and P6 are still open.
+
+*Retired in part 2026-09-24 (§8.5.5):* P3 holds by construction for breakpoints and coverage, not by sampling. The plain
+frame has no breakpoint or coverage check, because those seams are compiled into the observed step alone. The patch check
+remains in the plain frame. With no Game Genie code enabled it is a test of an empty `Option` on each ROM read (§8.3),
+and it was not sampled, so that third of P3 is open. P4 and P6 are still open.
 
 ## 8. The work, stage by stage
 
@@ -873,8 +878,9 @@ refreshes, cheats, the frame count and mutes. The shim hands out a C# target ove
 loaded from MercuryRT's state on every `RefreshProviders`. Memory reads and writes go to MercuryRT directly. The mirror's
 registries are the shim's, so watches, labels and the frame log behave as on C#.
 
-**Not yet:** breakpoints, stepping, coverage, and the write log that feeds watches. These are stage 6's hooks. The
-Engine row's hint says so.
+~~**Not yet:** breakpoints, stepping, coverage, and the write log that feeds watches. These are stage 6's hooks. The
+Engine row's hint says so.~~ *Built in stage 6 (§8.5), and the hint now says MercuryRT stops at breakpoints. Since then
+the target is `MercuryRtDebugTarget`, which keeps this mirror for what it shows.*
 
 **Evidence** (`EmuSen.WiseMan/Cores/MercuryRtCoreTests.cs`, 6 cases, all through `ICore` or `IDebugTarget` alone):
 
@@ -942,3 +948,308 @@ by the real games alone.
 - A truncated state is refused whole by MercuryRT. C# stops part-way through reading it, leaving a half-loaded machine,
   and throws `EndOfStreamException`.
 - MercuryRT's `GetFrameBufferRgba` is a copy.
+
+### 8.5 Stage 6: the debugger's hooks (done 2026-09-24)
+
+**What was missing.** After stage 5, `bp`, `step` and `watch` armed on MercuryRT and nothing happened. The shim ran every
+frame through the plain loop, and the debug target's mirror (§8.3) was a copy that never ran. §2.1 listed the four seams
+and the mechanism for each. `Mars_Native.md` §6.5 had built that mechanism for MarsRT: tables pushed down, a frame that
+ends early with a reason, logs drained, and the registry deciding.
+
+**The prediction, stated before the code.** The plain frame would be unchanged: after/before p50 within ±2% on each of
+§1.1's four games. The seams were to be compiled into an observed step only, and the one layout change was to be one
+pointer added to `Machine` after the bus.
+
+#### 8.5.1 A finding first: the C# core's own debugger lacked five seams
+
+The claims were written as one abstract set, `MercuryDebugClaims` over a `MercuryDebugRig`, as `MarsDebugClaims` was.
+They were run first against the unmodified C# core. **13 of 26 failed there.** Each failure is a registry that
+`MercuryDebugTarget` hands out and the core never feeds:
+
+- no call stack, so `step over`, `step out`, `bt`, `bp depth`, `profile` and `cov funcs` had nothing;
+- data breakpoints never fired, because `OnWrite` fed the watches alone;
+- `runto irq` and `runto frame` never fired;
+- a watch went deaf after `LoadRom`, which builds a new bus that the target had not attached to.
+
+The machine was not at fault in any of them, and none is D1–D3. The five seams were added to C# Mercury in their own
+commit (0dcdf6d), each held by a claim, before MercuryRT was given the same claims. `Mercury_Debug.md` §7 records what was
+added and why an interrupt is a frame on this core when it is not on Mars. With them all 26 claims pass on C#.
+
+The stage asked for stepping on MercuryRT, `step over` included, under the C# target's claims, and the C# target had no
+`step over`. The alternative was to port the refusal. That would have left `step over` refused on both engines, and it
+was not chosen. The seams are C#'s debugger, not its machine: no state, picture or sound changed, and §8.2's oracle ran
+unchanged over them (§8.5.4).
+
+#### 8.5.2 What the machine does
+
+`src/debug.rs` holds the tables and the logs (`Hooks`, boxed, in `Machine.hooks: Skip<…>`). None of it is in the state,
+so a load keeps it, as MarsRT's does.
+
+**The seams are on the bus type, not on a flag.** The SM83's step is generic over `CpuBus`. That trait gained two
+methods, `note_call` and `note_return`, whose default bodies are empty. `ObservedBus` wraps the machine's bus and the
+hooks, forwards every access, and implements those two methods and `write`'s report. The plain step is still
+monomorphised on `MemoryBus` itself, so it carries no load, test or branch for any of this. MarsRT reached the same
+place with a `HOOKED` const parameter on `step_in` (`Mars_Native.md` §6.5.1). Mercury's step was already generic over its
+bus, so the bus was the cheaper place.
+
+**The observed frame** (`Machine::run_frame_debug`) is `RunFrame`'s loop. Before each step it asks `stop_before(pc)`,
+which returns a bit-set of reasons:
+
+- the address is in a breakpoint range;
+- stop before every step;
+- the depth is at or under the target, or over the guard;
+- a store landed in a data-breakpoint range;
+- an interrupt was dispatched;
+- a log is full.
+
+If any reason holds, the frame returns with the machine at a step boundary. Otherwise it records the coverage bit and the
+profiler's count, as C#'s loop does before `Cpu.Step`, and steps. Two flags carry C#'s two kinds of resume:
+
+- `RUN_UNCHECKED` runs the first step unasked, as a halt's instruction runs;
+- `RUN_CONTINUING` keeps the budget the frame began with, as C#'s loop keeps it past a `ShouldBreak` that said no.
+
+The second matters in one case. A frame that switches to double speed ends on the 70,224-cycle budget it began with,
+before the slowed PPU completes. The crate's `a_frame_continued_past_a_refused_stop_keeps_the_budget_it_began_with`
+holds it, and fails on mutant M9.
+
+**Stores.** `ObservedBus::write` asks `MemoryBus::reported_space` where C#'s `Write` would report the store, before the
+store lands. VRAM and OAM report only when the CPU can reach them. Cart RAM reports whatever the board does with the
+byte, as C# does. The value logged is the byte written, not the byte read back. Mars rereads, but C#'s Mercury passes
+`data` to its observer.
+
+The storing instruction's address is written after the step (`Hooks::stamp`). The SM83 sets `LastInstructionPC` before
+an instruction's first bus access, and a dispatch leaves it alone. So after a step it is the value C#'s context factory
+read at every store in that step.
+
+A host write to `CPUBUS` is reported too, whether from a GameShark poke at a frame's end or the console's `write`,
+because C#'s `WriteSpace` goes through `Bus.Write` and its observer hears it. MarsRT has no such path.
+
+**Calls.** `CALL` when taken and `RST` note (source, target) after the push. The dispatch notes (return address,
+vector) as an interrupt. `RET`, a taken `RET cc` and `RETI` note a return.
+
+The stack here is the registry's own. The shim pushes the registry's frames' targets down with the other tables
+(`mercury_debug_set_stack`), and the frame moves them. MarsRT keeps an independent stack in Rust (§6.5.1 of that page),
+which a `bt reset` or the registry's cap can leave disagreeing with the registry. Here they cannot disagree past one
+push of the tables, and `The_registrys_stack_is_the_depth_the_machine_stops_at` holds it.
+
+The profile's runs are kept by owner in a `BTreeMap`, drained sorted. §8.5.5 explains why it is not a `HashMap`.
+
+**Coverage** is one bit for each of the 64K addresses, 8 KB. That is the first 8 KB of the registry's 24-bit bitmap,
+which `CoverageRegistry.Merge` ORs in. MarsRT's bitmap is 2 MB.
+
+#### 8.5.3 What the shim does
+
+`MercuryRtCore.Debug.cs` follows `MarsRtCore.Debug.cs` with four differences.
+
+- **The frame is observed** when `!Breakpoints.IsQuiet || Coverage.IsArmed || CallStack.IsProfiling || Listening`.
+  `Listening` also needs a debug target to have been made. C#'s bus reports stores only once a `MercuryDebugTarget` has
+  attached, and `A_store_is_reported_only_while_a_target_listens` holds both engines to that.
+- **No first check in C#.** MarsRT's `RunObserved` asks `ShouldBreak(pc)` in C# before the first step. Here Rust asks.
+  The tables are a superset of every case in which `ShouldBreak` returns true or changes anything: a breakpoint range
+  covers every logpoint, condition and hit count; *stop before each* is pushed while a step counts down or a break is
+  owed; and the depth covers the depth checks. So skipping the question where no table holds skips only calls that
+  would have returned false and changed nothing. The difference shows only when a frame begins past its budget, where
+  C#'s loop never asks. MarsRT's pre-check would ask.
+- **Host writes** to `CPUBUS` push the tables, write, and drain while the core listens (§8.5.2).
+- **The target is its own class.** `MercuryRtDebugTarget` wraps the stage-5 `MercuryDebugTarget` over the mirror for
+  everything it shows. It hands out the core's registries and a `DebugCpu` whose program counter is MercuryRT's, read
+  live (`mercury_machine_pc`). Stage 5's target read the mirror's counter, which is stale between refreshes. Its summary
+  names `(MercuryRT)`.
+
+At each stop the logs are drained in the order the C# observers would have run: each store to `Watches.RecordWrite`
+(context `PC=$xxxx`) and to `Breakpoints.NoteWrite`, then each push and pop, then the profile's runs, then the coverage
+bitmap. An interrupt stop calls `NoteInterrupt(Irq)`. Then the registry is asked, and its answer is the halt. Rust's
+tables are candidates, and nothing of the registry's semantics is in Rust. At a frame's end the shim calls
+`Breakpoints.NoteFrame` after the cheats, as C#'s `EndFrame` now does.
+
+The interface is 2: `mercury_debug_set`, `_set_stack`, `_set_breakpoints`, `_set_ranges`, `_run_frame`, `_writes`,
+`_calls`, `_profile`, `_coverage`, `_depth`, and `mercury_machine_pc`.
+
+#### 8.5.4 The evidence, and the mutants
+
+**The claims.** `MercuryDebugClaims` (`EmuSen.WiseMan/Cores/MercuryDebugTests.cs`) is 26 cases, run as
+`MercuryDebugTests` on C# and as `MercuryRtDebugTests` on MercuryRT, with the same expected addresses, counts and
+contexts. They cover:
+
+- a breakpoint and its resume, `step n` from a halt and between frames, a logpoint's 5,800-odd passes a frame, and a
+  disabled breakpoint and a forbidden range;
+- watches: every store with its instruction as context, a call's push into HRAM, a cheat's poke and a console `write`,
+  and a reload;
+- coverage armed, disarmed and cleared, including a disarmed frame that a breakpoint makes observed;
+- a halt that leaves coverage and the profile current;
+- a data breakpoint halting after its store, and one on a value never written, refused at every store;
+- `step over`, `step out` and `bt` through a call and through an interrupt to its `RETI`, and the depth guard;
+- `runto irq` and `runto frame`, the profiler's counts, and `cov funcs`;
+- an illegal opcode in an observed frame, with C#'s message;
+- halts at the vblank vector on every third frame, against the program run plain;
+- the frontend bundle's wiring;
+- the console's own `bp`, `step`, `step out`, `step over` and `bt`.
+
+Before the stage the set had 25 of these claims. Twelve of them failed on C#, and so did the C#-only case, which is
+§8.5.1's 13 of 26. On MercuryRT 22 of the 25 failed. Three passed:
+
+- the disabled breakpoint and the forbidden range, where nothing was to halt;
+- the data breakpoint on a value never written, where nothing was to halt either;
+- the illegal opcode, which the plain frame throws.
+
+One claim differs by engine, and each side is pinned by a named test (`Mercury_Debug.md` §7). The C# core tracks the
+stack in every frame. MercuryRT tracks it only in an observed one, as MarsRT does.
+
+MercuryRT has seven cases of its own:
+
+- a call made in an observed frame is on the stack;
+- a plain frame leaves the stack where the last observed frame left it;
+- the registry's stack is the depth the machine stops at, after a `bt reset`;
+- stores are reported only once a target listens, compared with C#'s event for event;
+- the three proofs below: games and synthetic programs armed, and games halted.
+
+`MercuryDebugTargetTests` became an abstract set run on both engines, and its 34 cases pass on each.
+
+**Exactness with every table armed and nothing halting** (`A_game_with_every_table_armed_is_the_game_run_plain`, and
+the synthetic twin). Both engines were armed alike:
+
+- a breakpoint nothing reaches;
+- a logpoint at the vblank vector;
+- a breakpoint over `$0048`–`$005F` inside a forbidden range, so the registry refuses every stop;
+- data breakpoints over WRAM's first page and all of HRAM, on the value 256, which no byte has;
+- a depth guard of 512;
+- coverage and the profiler;
+- watches over 4 KB of WRAM, HRAM, OAM, all of VRAM and cart RAM.
+
+The runs were compared against C# run plain, after every frame, in state, picture and sound. At the end the registries'
+transcripts were compared between the engines: every hit count, logpoint total, coverage map, profile by routine,
+backtrace, unmatched return, entry point, watch's total, site histogram and last 500 events. All identical:
+
+| Run | Frames | Steps recorded and charged | Stores watched | Logpoint passes | Entry points | Depth at the end |
+|---|---|---|---|---|---|---|
+| Tetris | 600 | 4,492,667 | 118,488 | 579 | 92 | 510 |
+| Link's Awakening | 600 | 7,587,570 | 141,152 | 515 | 105 | 511 |
+| Kirby's Dream Land | 600 | 4,208,689 | 277,637 | 535 | 122 | 3 |
+| Pokémon Yellow | 600 | 8,605,943 | 107,335 | 531 | 144 | 5, 8 unmatched returns |
+| interrupts, count, call, VRAM and OAM programs | 300 each | 1.76–5.26 million | 2–877,799 | 0–300 | 0–2 | 0 |
+
+Tetris's and Link's Awakening's stacks climb to the cap of 512 on both engines. Those games leave routines by roads
+other than `RET`, as Mars's games did (`Mars_Native.md` §6.5.3). The VRAM and OAM programs store through their whole
+space whether the PPU is drawing or not. They exist so that a store the bus refuses is not reported (mutants M7 and M8).
+
+**Exactness halted and resumed** (`A_game_halted_at_breakpoints_and_resumed_is_the_game_run_through`). A breakpoint at
+`$0040` was armed on every third frame of 900 on both engines. At each halt the C# and Rust states were compared, the
+two were resumed, and each frame's end was compared against C# run plain, with picture and sound. The halts were:
+
+- the interrupts program, 300;
+- Tetris, 290;
+- Kirby's Dream Land, 277;
+- Pokémon Yellow, 260;
+- Link's Awakening, 258.
+
+All were identical. The crate's `tests/debug.rs` (15 cases) proves the same properties on the machine alone. Its cases
+include a frame continued past a refused stop after a speed switch, a full log drained with nothing lost, and games
+armed against plain from `EMUSEN_MERCURYRT_ROMS`: four games, 600 frames, identical.
+
+**The blast radius.** The Mercury, CoreCatalog, CoreFactory, Engine and GraphicsSettings filters were run with the four
+games and the corpus: 361 tests, all passing. That includes `MercuryRtMachineTests`, since the SM83's opcodes gained the
+`note_*` calls. The crate has 35 tests: 20 unit tests, 9 of them the hooks', and the 15 in `tests/debug.rs`.
+
+**Mutants: 19, all caught.** Each was applied, then the crate's tests and WiseMan's two debug classes ran with the
+games, and the file was restored (scratch `mutants.py`).
+
+| Mutant | Caught by |
+|---|---|
+| M1 the tables asked after the step, of the address that ran | crate (6); WiseMan (21) |
+| M2 a return does not pop the machine's stack | crate (4); WiseMan (7), the armed games among them |
+| M3 the coverage bitmap kept, and recording, once disarmed | crate `coverage_records…`; WiseMan `Coverage_disarmed_records_nothing_even_in_a_frame_that_is_observed` |
+| M4 a store's instruction never stamped | crate; WiseMan's watch contexts and the armed games |
+| M5 a host write to `CPUBUS` not reported | crate; `A_watch_hears_a_cheat_poke_and_a_debugger_write_to_the_bus` |
+| M6 an interrupt dispatch not noted | crate (2); WiseMan, the armed games among them |
+| M7 a VRAM store the bus refuses reported anyway | the armed games and the VRAM program only |
+| M8 an OAM store the bus refuses reported anyway | the OAM program only |
+| M9 a continued frame begins its budget again | crate `a_frame_continued_past_a_refused_stop_keeps_the_budget_it_began_with` only |
+| M10 the depth guard one frame late | crate; `The_depth_guard_halts_a_call_past_it` |
+| M11 the profile's run charged after the push | crate; the halt, profiler and armed-game cases |
+| M12 stop-before-each only where a breakpoint is | crate; the step cases |
+| M13 a data breakpoint's store never stops | crate; `A_data_breakpoint_halts_after_the_store_that_wrote_it` |
+| M14 an interrupt dispatch never stops | crate; `Run_to_interrupt_stops_at_the_vector` |
+| C1 the shim drains the logs only at a frame's end | the halt, data-breakpoint and armed-game cases |
+| C2 no stop before each instruction for a break owed | `Run_to_frame_stops_at_the_start_of_the_frame_after_it` only |
+| C3 the registry's stack not pushed down | `The_registrys_stack_is_the_depth_the_machine_stops_at` only |
+| C4 stores reported with no target listening | `A_store_is_reported_only_while_a_target_listens` only |
+| C5 a resumed frame checks the instruction it halted at | the step, step-over and console cases |
+
+MarsRT's coverage mutant survived at the claims' level (`Mars_Native.md` §6.5.4). M3 does not survive here, because a
+claim was written for the one path that can see it: a frame that is observed for another reason while coverage is
+disarmed.
+
+**Two mutants that no claim can catch, by design.** The tables are candidates, and the registry refuses any stop it
+would not have made. So a table that is too *wide* costs a crossing and changes nothing a claim can see. Two were run
+to show it:
+
+- W1, the depth guard one frame early (`>=`);
+- W2, a breakpoint range one address wider at its start.
+
+Both survived every oracle. The crate's unit tests now pin both edges exactly, and both mutants fail there. A table that
+is too *narrow* misses a stop, and every M-mutant above is of that kind.
+
+#### 8.5.5 Speed
+
+**The first measurement refuted the prediction.** The `frames` example was built before the stage (4c64563) and after
+it. The two were interleaved under the bench lock, the order swapped each round, 3,000 frames each, with identical state
+hashes. Plain-frame p50 in ms:
+
+| Game | before, 3 rounds | after, 3 rounds | after/before |
+|---|---|---|---|
+| Tetris | 0.528, 0.527, 0.519 | 0.496, 0.495, 0.500 | 0.95 |
+| Link's Awakening | 0.462, 0.463, 0.464 | 0.487, 0.486, 0.489 | 1.05 |
+| Kirby's Dream Land | 0.559, 0.557, 0.568 | 0.550, 0.548, 0.547 | 0.98 |
+| Pokémon Yellow | 0.604, 0.605, 0.601 | 0.596, 0.597, 0.598 | 0.99 |
+
+Two games moved 5%, in opposite directions, steadily across rounds. That is outside ±2%, and the direction is not a
+cost.
+
+**What moved.** The two binaries' symbol tables were compared. Every function of the plain path has the same size,
+including `run_frame`, `execute`, `call`, `push` and `pop`, with two exceptions:
+
+- `Machine::load_rom`, which allocates the hooks;
+- `MemoryBus::read`, from 1,068 bytes to 837.
+
+`read` was not edited. It holds the Game Genie table's `HashMap` lookup, and the profile's `HashMap<u32, i64>` added a
+second instantiation over the same hasher. That changed what LLVM inlined into `read`.
+
+A third build added only the boxed field to the pre-stage crate. It moved Tetris to 0.502 ms and Link's Awakening to
+0.468 ms: part of the shift, in the same directions.
+
+**The profile moved to a `BTreeMap`.** After that, the symbol tables are identical except for `load_rom`. The timing was
+repeated with the three builds rotated:
+
+| Game | before | layout only | after | after/before |
+|---|---|---|---|---|
+| Tetris | 0.516, 0.520, 0.542 | 0.501, 0.505, 0.501 | 0.527, 0.525, 0.522 | 1.00–1.02 |
+| Link's Awakening | 0.467, 0.461, 0.463 | 0.468, 0.472, 0.469 | 0.469, 0.468, 0.470 | 1.01–1.02 |
+| Kirby's Dream Land | 0.566, 0.559, 0.562 | 0.548, 0.547, 0.547 | 0.566, 0.563, 0.563 | 1.00 |
+| Pokémon Yellow | 0.603, 0.602, 0.605 | 0.603, 0.603, 0.599 | 0.615, 0.611, 0.611 | 1.01–1.02 |
+
+**The prediction holds on the second build.** Every game is within ±2%, and the after/before ratio sits between 1.00
+and 1.02 on all four. That consistent direction is inside the band and was not investigated further.
+
+The layout-only build is 3% faster than both on Tetris and Kirby. Its boxed field is a 320-byte array rather than
+`Hooks`, which is the one other difference. So the struct's layout moves these games by a few per cent either way, as
+it moved MarsRT's (`Mars_Native.md` §6.5.5). That is a property of the machine's layout, not of the hooks.
+
+**An observed frame's cost** was not measured alone. The armed game proof, three engines with a state saved each frame,
+takes 21 s for 2,400 frames.
+
+#### 8.5.6 What is not done
+
+- **Reads are not reported** on either engine. `watch r`, `bp read` and `bp uninit` arm and never fire. MercuryRT
+  logs, and so marks for the uninitialised-read check, only the stores a watch or data breakpoint covers. C# marks every
+  store, but nothing reads the marks.
+- **The stack in a plain frame** is not tracked, as on MarsRT (§8.5.4).
+- **Transfers.** OAM DMA and HDMA are not reported as stores on either engine, and host writes to spaces other than
+  `CPUBUS` are not reported either, as in C#.
+- **`runto scanline`** is not fed, and **conditions** have no expression context, on either engine
+  (`Mercury_Debug.md` §6).
+- **The dashboard's audio peek** on MercuryRT's target is empty. The mirror's APU queue is not in the state (§3.1). This
+  is stage 5's gap, and MarsRT closed its own in `Mars_Native.md` §6.6.2.
+- **The C# core's plain frame** was not timed with its new seams (`Mercury_Debug.md` §7).
+- **Speed of an observed frame**, above.
+- **The settings reference** has no Game Boy engine entry to update. `EmuSen_Settings_Reference.md` §4.44 covers the
+  N64 alone. The Engine row's hint in `CoreCatalog` now says MercuryRT stops at breakpoints.

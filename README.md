@@ -116,4 +116,4 @@ No ROMs are included, and none will be. Games have to come from legally obtained
 
 ## Credits
 
-The main hardware references are the [SNESdev wiki](https://snes.nesdev.org/), the NESdev wiki, Pan Docs and the n64brew wiki. [MesenCE](https://github.com/nesdev-org/MesenCE) is consulted as an architecture reference, and the code here is written rather than transcribed. EmuSen is GPL-3.0, so anything built on it stays open.
+The main hardware references are the [SNESdev wiki](https://snes.nesdev.org/),[MiSTer-devel repo](https://github.com/mister-devel), the NESdev wiki, Pan Docs and the n64brew wiki. [MesenCE](https://github.com/nesdev-org/MesenCE) is consulted as an architecture reference, and the code here is written rather than transcribed. EmuSen is GPL-3.0, so anything built on it stays open.

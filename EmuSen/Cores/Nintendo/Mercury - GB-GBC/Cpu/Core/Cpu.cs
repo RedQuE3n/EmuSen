@@ -40,7 +40,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
 
         public ushort LastInstructionPC { get; private set; }
 
-        // The debugger's seams, set by MercuryCore: a call or restart (source, target), a return, an interrupt dispatch (return address, vector) - see Mercury_Debug.md §6.
+        // The debugger's seams, set by MercuryCore: a call or restart (source, target), a return, an interrupt dispatch (return address, vector) - see Mercury_Debug.md §7.
         [SkipInState] public Action<ushort, ushort>? CallObserver;
         [SkipInState] public Action? ReturnObserver;
         [SkipInState] public Action<ushort, ushort>? InterruptObserver;

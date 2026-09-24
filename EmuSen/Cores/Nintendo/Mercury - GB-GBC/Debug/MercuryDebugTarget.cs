@@ -184,7 +184,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
             _hardwareLoad.Refresh();
         }
 
-        // A store reaches the watches and the data breakpoints both - see Mercury_Debug.md §6.
+        // A store reaches the watches and the data breakpoints both - see Mercury_Debug.md §7.
         public void OnWrite(string spaceName, int address, byte value)
         {
             Watches.RecordWrite(spaceName, address, value, DescribeWriteSite);

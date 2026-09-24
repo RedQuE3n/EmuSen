@@ -641,6 +641,16 @@ the middle of one, which games do — could not be answered, and a test reproduc
 workers is proven in play, `OnFrameCompleted` is skipped for Mars; the hotkey then has no history to step back
 through. The other cores' rewind is unchanged.
 
+*2026-09-23: rewind is on for MarsRT (Rust) and still off for Mars (C#).* The C# core's pause can still deadlock its
+workers, and a WiseMan test still shows it (`Mars_Native.md` §5.6.6), so nothing changes for it. MarsRT's snapshot
+pauses its workers at a word each answers by number, and rewinding it with four workers and the picture deferred —
+Mistress's settings — was checked frame by frame on three games: every step back lands on exactly the state the
+machine had at that frame and shows the picture a load of it shows, rewinding and playing alternated at random for
+600 operations a game never froze, and the pictures the screen still holds are never overwritten
+(`Mars_Native.md` §6.6.3). For a player on MarsRT the hotkey now works as on the other consoles: every fourth frame
+is kept, as far back as the 96 MB budget reaches, and a step back shows the frame at once rather than a frame late.
+Each capture writes a 13 MB state on the emulation thread, into an array kept for it, so it adds no garbage collection; its time is not measured yet (`Mars_Native.md` §6.6.3).
+
 ### 4.26 The graphics window: one tab per console, the settings its core offers
 
 *2026-09-20.* Settings → Graphics Settings... opens a LunaP `ToolWindow` built in code like the preferences: a hint,
@@ -1264,11 +1274,13 @@ default and says that instead.
 **What stays the same across the two.** Save states are one format (a state saved on either loads on the other, and
 see below), battery saves are the same `.srm` and `.mpk` files, cheats go
 through the same registry and apply under the same rule, and the controller map is the same. A state's record
-(§4.37) gives the same core name and state version for both, so it does not say which engine wrote it. **Rewind stays off for
-the N64 on either engine** (§4.21b).
+(§4.37) gives the same core name and state version for both, so it does not say which engine wrote it. ~~**Rewind stays off for
+the N64 on either engine** (§4.21b).~~ *Since 2026-09-23 rewind is on for MarsRT and off for Mars (C#) alone (§4.21b,
+`Mars_Native.md` §6.6.3), so this is the one thing that differs between the engines in play.*
 
-**What MarsRT does not offer yet.** ROM-patch cheats (no N64 code format makes one, but one added by hand does
-nothing on MarsRT); breakpoints, stepping, watches and coverage in the DianaOS console, which refuses `bp` and `step`
+**What MarsRT does not offer yet.** ~~ROM-patch cheats (no N64 code format makes one, but one added by hand does
+nothing on MarsRT)~~ *(applied since 2026-09-23, exact against Mars frame by frame, `Mars_Native.md` §6.6.1; a patch
+changed while a frame runs reaches MarsRT's cartridge at the next frame and Mars's at once)*; breakpoints, stepping, watches and coverage in the DianaOS console, which refuses `bp` and `step`
 with "cannot be halted by this core" while `regs`, `mem` and `disasm` work; ~~internal resolution,
 antialiasing, the graphics card, the threaded display processor and deferred presentation~~ *(the threaded display
 processor and deferred presentation arrived 2026-09-22, and internal resolution, antialiasing and the graphics card
@@ -1278,4 +1290,7 @@ processor and deferred presentation arrived 2026-09-22, and internal resolution,
 until MarsRT is chosen and then on MarsRT, with rewind empty; states through the hotkeys that load into the C# Mars;
 a battery save read at the start and written at the stop; a `.cht` cheat reaching RDRAM; and the fallback, in a child
 process started with the library off, since the library is loaded once per process. `MarsRtFrontendTests` and
-`MarsRtSaveFileTests` hold the core's side. The mutants are `Mars_Native.md` §5.5.2.
+`MarsRtSaveFileTests` hold the core's side. The mutants are `Mars_Native.md` §5.5.2. *Since 2026-09-23 the run test
+asserts rewind empty on Mars and filling on MarsRT, and `Holding_rewind_on_MarsRT_steps_the_game_back_and_letting_go_plays_it_on`
+holds the hotkey; the ROM patches, the phases and rewind have their evidence and mutants in `Mars_Native.md` §6.6.1 to
+§6.6.3.*

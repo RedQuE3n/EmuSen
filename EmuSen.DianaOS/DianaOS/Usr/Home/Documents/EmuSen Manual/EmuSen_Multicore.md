@@ -93,7 +93,7 @@ Neither. `EmuSen/Cores/CoreCapabilities.cs` holds small optional interfaces a co
 
 | Interface | What it says | Who implements |
 | --- | --- | --- |
-| `IFrameProfiler` | `LastFramePhases` — ordered `(Name, Milliseconds)` | Venus, Moon |
+| `IFrameProfiler` | `LastFramePhases` — ordered `(Name, Milliseconds)` | Venus, Moon, MarsRT (`Mars_Native.md` §6.6.2) |
 | `ICoprocessorHalt` | `IsHaltedOnCoprocessor`, `HaltedProcessorName` | Venus |
 | `ICoprocessorLoad` | `CoprocessorClocks` — executed/offered against a per-frame budget | Venus |
 | `ITraceFlushable` | `FlushVerboseTrace()` | Venus |

@@ -1176,7 +1176,7 @@ default and says that instead.
   `mars_machine_read_memory` and `mars_machine_write_memory` by space number: RDRAM, DMEM, IMEM and PIF RAM. Past a
   memory's end a read is zero and a write is dropped, as `ReadForCheat` and `WriteForCheat` have it. A write that lands
   counts as one the idle loop would see (`Written`), as C#'s does. The gate reads `mars_machine_cop0(12)`.
-- **ROM patches are not applied.** C# consults `CheatRomPatcher` on every cartridge read. MarsRT would need either a
+- ~~**ROM patches are not applied.**~~ *Applied since §6.6.1, 2026-09-23.* C# consults `CheatRomPatcher` on every cartridge read. MarsRT would need either a
   call from Rust into C# on that path, which §3.2 rules out, or the patch list held beside the cartridge reads in
   `memory/bus_access.rs`, which this stage did not own. No N64 code format produces a ROM patch (the explicit codec
   slot is empty, `Mars_Cheats.md` §1). So only a patch added to the registry by hand is affected, and on MarsRT it is
@@ -1206,7 +1206,8 @@ default and says that instead.
   with several rasteriser workers hung. MarsRT has no workers, so that reason does not reach it today. But §5.6 gives
   it a threaded RDP, and the rule is kept per console until a snapshot is proven there, rather than argued per engine.
   *Since §5.6:* a snapshot with the workers running is proven headlessly in every frame of six games (§5.6.7). The
-  rule stands until one is proven in play.
+  rule stands until one is proven in play. *Since §6.6.3, 2026-09-23, rewind is on for MarsRT: its landings with four
+  workers deferred were proven through `RewindBuffer` and the shim, and the rule is kept for the C# core alone.*
 - **States** are unchanged: MarsRT reads and writes Mars's format (§5.1), version 1 through `IStateFormat`. A state
   of the other memory size rebuilds the machine in Rust, and the shim's `ExpansionPak` now follows it, as MarsCore's
   `_expansionPak` does. A state's record gives the same core name for both engines, so it does not say which wrote it.
@@ -1289,7 +1290,7 @@ as well.
 | The battery switch ignored | the `batteryRamDisabled` test |
 | The live frame buffer handed out | the copy test |
 | The factory building MarsRT without asking whether it is there | the fallback, in its child process |
-| Rewind left on for MarsRT | Mistress's run test, by the buffer's depth |
+| Rewind left on for MarsRT | Mistress's run test, by the buffer's depth *(the rule inverted in §6.6.3: the test now asserts it on)* |
 | A landed write not counted as one the idle loop sees (Rust) | `cargo test` alone; **equivalent between frames** |
 | The CPU space ignoring the TLB (Rust) | **survived**, then caught once the TLB comparison was written |
 
@@ -1331,7 +1332,7 @@ This checks the published core and the published factory, not the published wind
 
 #### 5.5.4 What is left
 
-- ROM-patch cheats, as argued above.
+- ~~ROM-patch cheats, as argued above.~~ *Done in §6.6.1.*
 - ~~The debugger's breakpoints, stepping, watches, coverage, call stack and labels, all of which need hooks inside the
   Rust loop. The deep inspection §5 planned through the state transfer was not built.~~ *Done in §6.5, as hooks inside
   the Rust loop; the state transfer stays the inspector's read path.*
@@ -1340,7 +1341,7 @@ This checks the published core and the published factory, not the published wind
   three with §6.4.*
 - The wait a threaded RDP will need in `Core::read_memory` and `Core::write_memory`. *Done in §5.6.4.*
 - An engine choice in Hotaru and Pharaoh, which still build the C# Mars.
-- `IFrameProfiler` phases, and the dashboard's audio peek.
+- ~~`IFrameProfiler` phases, and the dashboard's audio peek.~~ *Done in §6.6.2.*
 
 ### 5.6 Threads (2026-09-22)
 
@@ -1806,8 +1807,8 @@ cache, or the seqlock of the idle ranges. Those are covered only by the tests an
   deferred.*
 - The C# core's four failures (§5.6.2, §5.6.5, §5.6.6). They are the C#'s to fix, and the WiseMan tests that show them
   are the ones to turn around when it is.
-- Rewind for MarsRT. §5.5 kept it off per console until a snapshot is proven. A snapshot with workers running is now
-  proven headlessly in every frame of six games, but turning rewind on is a decision for play.
+- ~~Rewind for MarsRT. §5.5 kept it off per console until a snapshot is proven. A snapshot with workers running is now
+  proven headlessly in every frame of six games, but turning rewind on is a decision for play.~~ *On since §6.6.3.*
 - The defaults. The switches are wired through the shim and default off. Whether to turn them on for MarsRT in
   Mistress is a decision for play, which headless tests cannot make. *Turned on 2026-09-22, §6.2.*
 
@@ -3060,7 +3061,7 @@ neither is what a player runs. Nothing was done about it.
 - **The stack in a plain frame**, above.
 - **`runto` a scanline** is not fed, as in C#.
 - **Breakpoints on the RSP** (`Mars_Debug.md` §5): none on either core.
-- **The dashboard's audio peek** (§5.5.4) is still empty.
+- ~~**The dashboard's audio peek** (§5.5.4) is still empty.~~ *Filled in §6.6.2.*
 - The interface is 7: `mars_debug_set`, `_set_breakpoints`, `_set_ranges`, `_run_frame`, `_writes`, `_calls`,
   `_profile`, `_coverage`, `_counters`, and the tests' `mars_machine_pc`, `_physical`, `_bus_write32`, `_bus_read32`,
   `_set_cop0`, `_mi_raise`, `_rsp_step`.
@@ -3083,6 +3084,256 @@ Each is small, has its own oracle, and can be given to an agent beside larger wo
 - **MarsRT's single-thread regression** of 1.5 to 3.5 per cent (§5.6.8), found and not explained: a bisection with the
   interleaved bench between the RDP merge and the threads' merge, about two hours, and either a cause or a recorded
   negative.
+
+*Done 2026-09-23, the first three items, in §6.6.1 to §6.6.3; §6.6.4 says what they leave. The C# core's four failures
+and the single-thread regression are another agent's and are not touched here.* The native interface is 9 since
+§6.6.1.
+
+#### 6.6.1 ROM patches beside the cartridge (2026-09-23)
+
+**The claim.** A ROM patch in the cheat registry reaches every read of the cartridge on MarsRT exactly as it does on
+the C# core: the processor's loads of any width, the peripheral interface's transfers into RDRAM, and the boot's
+copy excepted on both. With patches added, disabled, masked by the master switch and added again between frames,
+MarsRT's state and picture are the C# core's after every frame.
+
+**Why the list is pushed, and what is pushed.** The C# core asks `CheatRegistry.TryPatchRom` for each byte of each
+cartridge word (`MemoryBus.Patched`). MarsRT cannot call C# from that path (§3.2), so the registry's answer has to be
+held in Rust. Two ways were weighed. Porting `TryPatchRom`'s rules (first matching cheat, then first matching write,
+the repetition resolved by division for a forward stride and by a walk otherwise, the compare against the
+cartridge's byte) would put a second copy of those rules in Rust, to drift from the first. Instead the registry
+resolves itself: `CheatRegistry.ResolveRomPatches(limit)` walks every byte a patch can name, asks the registry's own
+`TryResolveRepetition` which repetition and offset `TryPatchRom` would pick for it, and returns (address, value,
+compare) in the order `TryPatchRom` tries them. Rust keeps that list sorted by address with the order kept among
+equal addresses (`memory/rom_patches.rs`), and `read_cart32` substitutes each of a word's four bytes by the first
+entry whose compare is none or the cartridge's byte. With no patches the list is `None`, and the read is one branch
+more than before.
+
+**When it is pushed.** `CheatRegistry.Version` now moves on every change (the one private method every mutator
+calls, `RecountRomPatches`, increments it). The shim compares the registry and its version with what it last pushed
+before each `RunFrame` and `RunSteps`, when the registry is handed over, and when a machine is built, and resolves and
+pushes again only when either moved (`mars_machine_set_rom_patches`, interface 9). The list survives a state load, as
+the cartridge does. So a change made between frames lands before the next frame on both cores. A change made by
+another thread *during* a frame lands at once on the C# core, which reads the registry live, and at the next frame on
+MarsRT; no test separates the two, since nothing a test drives changes the registry mid-frame, and the frontends
+change it from the UI thread at an arbitrary instruction, so neither core's timing is one a player can rely on.
+
+**The evidence.**
+- `RomPatchResolutionTests.The_resolved_bytes_answer_every_read_as_TryPatchRom_does`: 60 seeded registries of one to
+  six patch cheats each, of one to three writes, widths 1, 2 and 4 in either byte order, repeat counts of zero to five,
+  strides from −5 to 8, value steps, compares, disabled cheats, a RAM poke beside them, and every tenth with the
+  master switch off. Every address of the 576 the writes can reach, over eight cartridge bytes each: 276,480 reads,
+  in every one of which the resolved list and `TryPatchRom` agree.
+- `The_limit_drops_what_lies_past_it_and_the_version_moves_on_every_change`: a four-byte patch across the end keeps
+  its two bytes inside; add, disable, master off, remove and clear each give a new version.
+- `MarsRtFrontendTests.With_rom_patches_MarsRT_leaves_the_state_and_the_picture_Mars_leaves_frame_by_frame`: the
+  synthetic system with five patches on one registry both cores share — the VI origin's immediate in the program the
+  boot copies out (so the picture shows RDRAM from zero), a sixteen-fold repeated big-endian halfword through the
+  data every field's transfer reads, the byte load's byte with a compare that holds, the halfword load's with one that
+  does not, and the word the processor loads after the cartridge latch. At frame 25 the repeated patch is disabled, at
+  40 the master switch goes off, at 50 it comes back with a sixth patch added. 80 frames, state and picture identical
+  to the C# core's after each; against MarsRT with no patches, 80 states and 79 pictures differ, so the patches were
+  seen.
+- `cargo test`: six cases in `tests/rom_patches.rs`, the C# `MarsCheatTests` cartridge cases ported (a load by ROM
+  offset at every width, a transfer, the compare, the first match kept across the sort, past the end, the host's list
+  replaced, cleared and kept across a state load).
+- The blast radius: the cheat, registry, cheat-wiring and MarsRT frontend classes, 139 tests, passed.
+
+**Mutants.** Ten, each alone (`mutants.py` in the session's scratchpad).
+
+| Mutant | Caught by |
+| --- | --- |
+| Each byte asked for at the next lane's address | five `cargo` cases; the frame-by-frame comparison |
+| The compare ignored (Rust) | three `cargo` cases; the frame-by-frame comparison |
+| The last matching entry wins, not the first | `cargo` alone |
+| The word's quick reject a lane short | `cargo` alone |
+| A state load drops the list | `cargo` alone |
+| The shim pushes on a new registry only, not a new version | the frame-by-frame comparison |
+| The shim does not push before a frame | the frame-by-frame comparison |
+| `SetEnabled` does not move the version | the frame-by-frame comparison; the version test |
+| The resolution takes the repetition it enumerates, not `TryPatchRom`'s | the 276,480 reads alone |
+| The resolution drops the compare | the 276,480 reads; the frame-by-frame comparison |
+
+*What the pattern says.* Three are caught by `cargo` alone. Two of them are orderings the synthetic system never
+produces (two patches on one address, a word read whose first byte lies below the lowest patch), and the third needs a
+state loaded while patches are on, which no WiseMan comparison does. The repetition mutant is the one the resolution
+was designed against: with a forward stride shorter than the width, repetitions overlap, and `TryPatchRom`'s division
+picks the later one where enumeration meets the earlier first; only the randomised registries reach it.
+
+#### 6.6.2 The frame's phases and the dashboard's audio peek (2026-09-23)
+
+**What the C# core exposes.** Nothing, for the phases: `MarsCore` implements no `IFrameProfiler`, and
+`EmuSen_Multicore.md` §5 lists only Venus and Moon. Mistress's fps line and Pharaoh's profile read whatever a core
+publishes, by capability. So "the same shape on both engines" cannot hold for the phases, and the C# core, being
+another agent's, was not given any; MarsRT's are new, and their tests hold them to the frame, not to C#. For the
+audio peek C# has one: `MarsDebugTarget.GetAudioSamples` returns `Ai.Peek()`, a copy of the samples the frontend has
+not drained, which Pharaoh's `audiodump` reads. MarsRT's target returned an empty array.
+
+**The phases.** The library times its own two calls on the host's thread and keeps the last frame's five numbers
+in `Core::profile`; the shim reads them once, as `RunFrame` ends (`mars_machine_frame_profile`), and hands the
+same array out until the next frame.
+
+| Phase | What it is |
+| --- | --- |
+| `machine` | `mars_machine_advance`: the processor, the signal processor, the devices, and the display processor when it runs on this thread |
+| `machine/rdp-wait` | inside it, this thread's waits for the display processor's drain: pages, ranges and joins |
+| `present` | `mars_machine_present`: the scan, or the capture and hand-off of a deferred one |
+| `present/rdp-wait` | inside it, the scan's waits for the drain (site 8) |
+| `present/walk-join` | inside it, the wait for the previous frame's deferred walk |
+
+The advance starts all five afresh, so a frame not presented reports no presentation. The observed frame (§6.5) adds
+its time into `machine` across the calls a halt splits it into. Work on other threads — the drain itself, the
+presenter's walk — is no phase, since a top-level list is read as parts of the frame and those overlap it.
+
+**The peek.** `mars_machine_peek_audio` copies the undrained queue, oldest first, and leaves it; the shim's
+`PeekAudioSamples` and the target's `GetAudioSamples` return that.
+
+**The evidence.**
+- `MarsRT_reports_the_phases_of_the_frame_just_run`: 150 frames of the synthetic system with four workers deferred.
+  Every frame gives the five names in order, none negative, `machine` above zero, `machine` plus `present` no more
+  than the frame's wall time, and no child longer than its parent. Each fifth frame is not presented and reports zero
+  presentation (30 frames), each other reports some (120). Each fourth runs the idle loop instruction by instruction
+  and costs 1.9 to 2.2 ms against 0.04 to 0.05 for the frame after it, so a report of the frame before would be caught
+  by 45 times.
+- `MarsRT_s_phases_on_a_game_are_each_frame_s_own`, on the three game states, 300 frames each, four workers deferred
+  and the recompiler on: the same bounds every frame. Ocarina of Time waited on the drain inside the machine in 110
+  frames and inside the presentation in 89 to 91; Super Mario 64 and the Dam never waited inside the machine and waited
+  in the presentation in 100 and 9 to 56 frames.
+- `The_audio_peek_is_what_Mars_s_peek_is_and_the_drain_still_takes_it`: 90 frames on both engines; after each, the two
+  peeks are identical, a second peek sees the same, and on each fourth the drain takes exactly what was peeked and
+  leaves the peek empty. 16,708 samples peeked, 6,596 drained.
+
+**A defect the first test found.** The shim first named the phases in another order than the library wrote them, so
+`present` carried the drain's waits and `machine/rdp-wait` carried the presentation; the first run failed at frame 1
+with a child of 0.261 ms under a parent of 0.169. The names now follow the library's order, and a mutant restores
+the old one.
+
+**Mutants.** Eight in a first round: four caught, two survived and two did not build. One survivor read the phases
+at a frame's start *as well as* its end, so the end's read still won and it was no mutant; it was rewritten to read at
+the start alone. The other reported the drain's waits cumulative, which the synthetic system cannot show because it
+never waits; the game test was written for it. The two that did not build were rewritten, one in the shim rather than
+the Rust. A second round ran the four again with the game test beside, and caught all four.
+
+| Mutant | Caught by |
+| --- | --- |
+| The phases read as the next frame starts, the frame before's | the synthetic test; the game test, three games |
+| The phases read only on a presented frame | the synthetic test |
+| The advance keeps the last frame's presentation | the synthetic test |
+| The drain's waits reported cumulative, not the frame's | the game test, three games |
+| The names in another order than the library's | the synthetic test |
+| The peek drains | the peek test |
+| The peek newest first | the peek test (the synthetic phases test failed in the same run as well, and why was not found) |
+| The target's peek empty, as before | the peek test |
+
+#### 6.6.3 Rewind for MarsRT (2026-09-23)
+
+**The decision.** Mistress now captures rewind history for every core but the C# Mars: `OnFrameCompleted` is skipped
+for `MarsCore` alone. The C# core's reason stands — its snapshot with several workers can meet a pause some workers
+answer at a barrier and the rest short of it, and `The_csharp_workers_deadlock_when_a_pause_finds_some_at_a_barrier_and_the_rest_short_of_it`
+still shows it (§5.6.6). MarsRT's pause is a numbered request each worker answers at a word boundary that holds still
+(§5.6.4), and it is the snapshot that is proven below, through the same `RewindBuffer`, the same shim and the same
+settings Mistress gives it.
+
+**A defect fixed first: a capture allocated a state, and a step two.** Rewind captures a snapshot every fourth frame.
+The shim's `SaveSnapshot` wrote the state into a new array and then into the stream, and `LoadState(Stream)` copied
+the stream into a new `MemoryStream` and that into another new array. With the Expansion Pak a MarsRT snapshot is
+12,986,889 bytes, so `A_capture_and_a_step_back_allocate_no_array_of_the_state_s_size` measured, against the unchanged
+shim, 12,987,630 bytes allocated on the emulation thread a capture and 26,948,540 a step back: large-object arrays,
+which are gen-2 collections, the cost §6.13 had just removed from the picture. The snapshot is now written into an
+array the shim keeps and the stream is read into another; the same test measures 252 bytes a capture and 112 a step.
+One array is made the first time each is used. What `RewindBuffer` itself allocates is not the core's: the delta it
+encodes on a pool thread, which a step taken before the encoding finishes runs inline on the emulation thread (the
+test waits 50 ms before measuring a step for that reason, and records it).
+
+**The claim.** With four workers and the picture deferred, rewinding lands on exactly the state the machine had at
+the frame it lands on, and shows exactly the picture a load of that state shows; the lent pictures (§6.13) are kept
+through the rewind path's offers; and alternating rewind and advance with the workers busy never freezes.
+
+**The evidence.**
+- `MarsRtRewindTests.Rewinding_with_the_workers_deferred_lands_on_the_state_and_picture_the_machine_had`, on the three
+  game states. A reference, MarsRT on one thread with the interpreter, records for 601 frames each frame's state, the
+  picture that frame presented, and the picture a load of that state presents, by SHA-256. The subject is Mistress's
+  MarsRT: four workers, deferred, the recompiler on, rewound through a `RewindBuffer`. It runs until it has reached
+  600 frames past the state; the input is a function of the frame number, so a frame run again is the frame the
+  reference ran. Every thirtieth new frame it steps back by 1, 2, 3, 5, 8, 13, 21, 4, 7 and 1 in turn, checking each
+  step: the frame it lands on is the one before by the interval, its full state is the reference's, and its picture is
+  a load's.
+
+  | Interval | Frames run a game | Steps back | States compared | Result, three games |
+  | --- | --- | --- | --- | --- |
+  | 1 (every frame captured) | 741 | 141 | 882, every frame run and every landing | identical |
+  | 4 (Mistress's) | 1,438 | 198 | 216 to 224, every sixtieth frame and every landing | identical |
+
+  The captures themselves were read back from the buffer. At interval 1, 123 of 741 captures held words unrun in
+  Super Mario 64, 128 in Ocarina of Time and 10 at the Dam; at interval 4, 124 of 371, 82 of 348 and none of 348. So
+  164 of the 1,017 landings replayed a tail, and a tally of those tails' command numbers holds triangles, rectangles
+  and fills, not only syncs and modes. In all 1,017 landings the picture was a load's, and also the one the frame had
+  first presented: the held lines a load forgets (§5.6.5) never changed a picture in these runs.
+
+  *A count retired.* The first version of this test counted words in a snapshot it took itself just before the
+  capture, and reported 187 landings with tails; that snapshot's hold let the workers run on, so the capture after it
+  seldom held any, and the number described the test's snapshot, not rewind's. The Rust mutant below survived that
+  version, which is how it was found.
+- `Alternating_rewind_and_advance_with_the_workers_busy_never_freezes`, on the three states: 600 seeded operations,
+  each advancing one to five frames (a third of them spinning up to 40,000 iterations before the capture, the rest
+  capturing at once), stepping back one to five, or taking a snapshot alone, and each watched by a 30-second
+  watchdog on a thread of its own. In the final run, 1,161 to 1,192 frames and 491 to 500 steps back a game, and no
+  watchdog fired. On every other advanced frame, and in the snapshot operations, a snapshot taken where the capture
+  stands found words unrun in 99 of 612 (Super Mario 64), 35 of 614 (Ocarina of Time) and 15 of 576 (the Dam),
+  520,857 words in all: the pause was met with the workers busy. An earlier version, which spun before every capture,
+  found words in only 8, 1 and 0 of 56 to 70, and was changed for that reason.
+- `FrameHandOffTests.With_MarsRT_rewinding_between_frames_no_array_the_screen_can_read_is_written`: the hand-off and
+  the frame control as `MainWindow` wires them, MarsRT with four workers deferred, 500 seeded turns of a frame or one
+  to three steps back, each step offering a lent picture as Mistress's rewind path does, draw operations held and
+  drawn at random. 336 frames and 316 steps, 652 pictures offered; after every turn each array still held is
+  byte-identical to its copy, the core never lends one it holds, and none is given back twice (17 arrays made, 635
+  reused).
+- `MarsRtEngineTests`, a real window: the C# Mars's rewind stays empty after 60 frames and MarsRT's fills;
+  `Holding_rewind_on_MarsRT_steps_the_game_back_and_letting_go_plays_it_on` holds the hotkey until the game is 40
+  frames back, lets go, and waits for 60 more frames.
+
+**Mutants.** Eight, each alone (`mutants.py`, `m_rewind.py`), against the four rewind tests and the two window
+tests, at 240 frames a game.
+
+| Mutant | Caught by |
+| --- | --- |
+| A capture writes the last capture's bytes again | the landing test, three games |
+| A step back lands one frame on (a frame run after the load) | the landing test, three games |
+| A snapshot's unrun words dropped on load (Rust) | the landing test, three games |
+| The picture not taken after a load | the landing test, three games |
+| A capture allocates its state again | the allocation test |
+| A step back reads through a new copy again | the allocation test |
+| Rewind on for the C# core too | the window's run test |
+| Rewind still off for MarsRT | the window's run test; the held hotkey |
+
+*Two things the round showed.* The Rust mutant first survived, twice, and neither time was it the test's fault alone.
+Once the count above was wrong; and once the build had not rebuilt the library at all. The host's `/tmp` had filled
+under its per-user quota, so MSBuild's `Exec` could not write its script and cargo never ran, and a temporary folder
+set elsewhere broke it again because its path has a space, which `Exec`'s shell line does not quote. `ContinueOnError`
+turns both into warnings, so a round built on the old library reports every Rust mutant as a survivor. The runner now
+treats MSB3073 as a failed build. The C# mutants were unaffected, since the compiler needs no script.
+
+**What it costs.** Not measured yet. `MarsRtRewindTests.Bench_rewind` (behind `EMUSEN_MARSRT_BENCH`) interleaves 300
+frames with rewind on and off, three rounds on each game state, and reports the frame, the capture's share, the dearest
+capture and the gen-2 collections; it was written to run under the shared bench lock with the load below three, and
+through this stage's session the host's load stayed between 7 and 28 from other agents' work, so it was not run, and
+no timing is quoted here. What is measured without a clock: a capture writes one 12,986,889-byte state and a step
+reads one, neither allocating it (above), and the delta is encoded on a pool thread, not the emulation thread. The
+prediction, stated before measuring: a capture costs the emulation thread about 1 ms at one frame in four on this
+desktop (the state write, dominated by RDRAM's 8 MB copy), so under a third of a millisecond a frame, and no gen-2
+collection.
+
+#### 6.6.4 What is not done
+
+- **The C# core's rewind** stays off; its pause is the other agent's to fix (§5.6.6), and its snapshot was not run
+  through these tests.
+- **A MarsRT snapshot loaded into the C# core**, which §5.6.4 left untested, is still untested; rewind never does it.
+- **A registry changed mid-frame** reaches MarsRT's cartridge at the next frame and the C# core's at once (§6.6.1).
+- **The phases on the C# core**, which has none, and a hardware-load panel from them, as Moon's `coretop` bars are
+  built from its phases; neither was built.
+- **Rewind in play.** Every test is headless. The hotkey in a real window was held for one stretch on the synthetic
+  system; a player's session on a handheld, with its dearer collections and slower cores, was not run.
+- **The snapshot's pause with more than four workers**, and on a four-core host where the workers share cores with
+  the emulation thread, were not run.
 
 ### 6.7 Stage G: the C# core
 

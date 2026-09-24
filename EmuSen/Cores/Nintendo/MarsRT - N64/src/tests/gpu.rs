@@ -732,8 +732,8 @@ fn the_scan_out_on_the_device_is_the_processor_s_byte_for_byte() {
     ];
     for scale in [2, 3, 4] {
         for deferred in [false, true] {
-            let through = |gpu: bool, registers: &[u32; 14], size: u64| {
-                let mut m = machine(scale, gpu, 1);
+            let through = |gpu: bool, workers: usize, registers: &[u32; 14], size: u64| {
+                let mut m = machine(scale, gpu, workers);
                 m.set_deferred(deferred);
                 hand(&mut m, &shaded(0x7E57_5CA2, size, false, false), 0x0010_0000);
                 program(&mut m, registers);
@@ -741,9 +741,13 @@ fn the_scan_out_on_the_device_is_the_processor_s_byte_for_byte() {
                 scan(&mut m, &mut out, deferred)
             };
             for (i, (registers, size)) in modes.iter().enumerate() {
-                let (cpu, device) = (through(false, registers, *size), through(true, registers, *size));
+                let cpu = through(false, 1, registers, *size);
                 assert!(cpu.iter().any(|&b| b != 0));
-                assert_same_frame(&cpu, &device, &format!("mode {i} at {scale}x {}", if deferred { "deferred" } else { "immediate" }));
+                // Unthreaded, and on a drain whose leader runs the scan (Mars_Native.md §6.15).
+                for workers in [1, 3] {
+                    let device = through(true, workers, registers, *size);
+                    assert_same_frame(&cpu, &device, &format!("mode {i} at {scale}x {} on {workers} workers", if deferred { "deferred" } else { "immediate" }));
+                }
             }
         }
     }
@@ -790,9 +794,11 @@ fn averaging_on_the_device_is_the_processor_s_scan_after_scan() {
         (&bordered, 0, false),
     ];
     // Every scan walked, as C# walks them with SkipRepeatedScans off, and repeats skipped, where MarsRT still walks one over an edited raster (§6.4.4).
-    for (scale, side, deferred, walk_repeats) in [(2, 2, false, true), (4, 2, false, true), (4, 4, false, true), (2, 2, true, true), (4, 2, true, true), (4, 4, true, true), (2, 2, true, false), (4, 4, true, false)] {
+    // Each again on a drain of three, whose leader runs the device's clears, walks and averages (Mars_Native.md §6.15).
+    let cases = [(2, 2, false, true), (4, 2, false, true), (4, 4, false, true), (2, 2, true, true), (4, 2, true, true), (4, 4, true, true), (2, 2, true, false), (4, 4, true, false)];
+    for (scale, side, deferred, walk_repeats, workers) in cases.iter().flat_map(|&(a, b, c, d)| [(a, b, c, d, 1), (a, b, c, d, 3)]) {
         let make = |gpu: bool| {
-            let mut m = machine(scale, gpu, 1);
+            let mut m = machine(scale, gpu, if gpu { workers } else { 1 });
             m.set_deferred(deferred);
             hand(&mut m, &shaded(0x7E57_5CA2, 2, false, false), 0x0010_0000);
             let mut out = Scanout::default();
@@ -817,7 +823,7 @@ fn averaging_on_the_device_is_the_processor_s_scan_after_scan() {
                 seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
             }
             let (expected, actual) = (step(&mut cpu, &mut cpu_out, s, seed), step(&mut device, &mut device_out, s, seed));
-            assert_same_frame(&expected, &actual, &format!("{scale}x averaged by {side}, {}, walking repeats {walk_repeats}, step {k}", if deferred { "deferred" } else { "immediate" }));
+            assert_same_frame(&expected, &actual, &format!("{scale}x averaged by {side}, {}, walking repeats {walk_repeats}, {workers} workers, step {k}", if deferred { "deferred" } else { "immediate" }));
         }
         assert!(device_out.repeated_captures > 0 || !deferred, "some scan repeats the one before it, which is the repeat's own path");
         eprintln!("{scale}x by {side} {}: {} repeated captures", if deferred { "deferred" } else { "immediate" }, device_out.repeated_captures);
@@ -873,9 +879,9 @@ fn a_walk_left_pending_shows_the_frame_it_captured() {
         return;
     }
     for scale in [2, 4] {
-        for state_read_between in [false, true] {
+        for (state_read_between, workers) in [(false, 1), (true, 1), (false, 3), (true, 3)] {
             let through = |gpu: bool| {
-                let mut m = machine(scale, gpu, 1);
+                let mut m = machine(scale, gpu, if gpu { workers } else { 1 });
                 m.set_deferred(true);
                 hand(&mut m, &shaded(0x7E57_5CA2, 2, false, false), 0x0010_0000);
                 program(&mut m, &with(vi_registers(2, 0, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0), DITHER_FILTER | DIVOT_ON, 525));
@@ -893,7 +899,7 @@ fn a_walk_left_pending_shows_the_frame_it_captured() {
             };
             let (cpu, device) = (through(false), through(true));
             assert!(cpu.iter().any(|&b| b != 0));
-            assert_same_frame(&cpu, &device, &format!("at {scale}x with {} between", if state_read_between { "a state read" } else { "a frame drawn" }));
+            assert_same_frame(&cpu, &device, &format!("at {scale}x with {} between, {workers} workers", if state_read_between { "a state read" } else { "a frame drawn" }));
         }
     }
 }
@@ -905,9 +911,9 @@ fn a_repeated_capture_walked_again_on_the_device_is_the_processor_s() {
         return;
     }
     for scale in [2, 4] {
-        for scanned_between in [false, true] {
+        for (scanned_between, workers) in [(false, 1), (true, 1), (false, 3), (true, 3)] {
             let through = |gpu: bool| {
-                let mut m = machine(scale, gpu, 1);
+                let mut m = machine(scale, gpu, if gpu { workers } else { 1 });
                 m.set_deferred(true);
                 hand(&mut m, &shaded(0x7E57_5CA2, 2, false, false), 0x0010_0000);
                 let registers = vi_registers(2, 0, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0);
@@ -927,7 +933,7 @@ fn a_repeated_capture_walked_again_on_the_device_is_the_processor_s() {
             let (cpu, device) = (through(false), through(true));
             assert!(cpu.2 && device.2, "the second capture repeats the first on both paths");
             assert!(cpu.0 == cpu.1);
-            assert_same_frame(&cpu.1, &device.1, &format!("at {scale}x{} the repeated walk", if scanned_between { " with a scan between" } else { "" }));
+            assert_same_frame(&cpu.1, &device.1, &format!("at {scale}x{} the repeated walk, {workers} workers", if scanned_between { " with a scan between" } else { "" }));
         }
     }
 }
@@ -938,9 +944,9 @@ fn after_a_state_is_read_the_device_holds_what_the_processor_path_holds() {
     if devices().is_empty() {
         return;
     }
-    for shaded_before_the_state in [false, true] {
+    for (shaded_before_the_state, workers) in [(false, 1), (true, 1), (false, 3), (true, 3)] {
         let through = |gpu: bool| {
-            let mut m = machine(2, gpu, 1);
+            let mut m = machine(2, gpu, if gpu { workers } else { 1 });
             assert_eq!(gpu, m.bus.dp.multiple.can_scan_out());
             hand(&mut m, &shaded(0x51A7_E000, 2, false, false), 0x0010_0000);
             if shaded_before_the_state {
@@ -955,8 +961,185 @@ fn after_a_state_is_read_the_device_holds_what_the_processor_path_holds() {
         };
         let cpu = through(false);
         assert!(cpu.0.iter().any(|&b| b != 0));
-        assert_identical(&cpu, &through(true), &format!("after a state is read, {} before it", if shaded_before_the_state { "shaded" } else { "recorded" }));
+        assert_identical(&cpu, &through(true), &format!("after a state is read, {} before it, {workers} workers", if shaded_before_the_state { "shaded" } else { "recorded" }));
     }
+}
+
+// The scan's device work on the drain's leader (Mars_Native.md §6.15).
+
+/// The words of a list written and handed over, without joining the drain.
+fn hand_only(m: &mut Machine, list: &[u64], at: u32) {
+    for (i, &word) in list.iter().enumerate() {
+        m.bus.write64(at + i as u32 * 8, word);
+    }
+    m.bus.write32(DP_COMMAND_BASE, at);
+    m.bus.write32(DP_COMMAND_BASE + 4, at + list.len() as u32 * 8);
+}
+
+/// The whole sixteen-bit picture at `FRAMEBUFFER`, a pixel of the device's memory a pixel of the scan.
+fn whole_picture(scale: u32) -> crate::rdp::gpu::ScanParameters {
+    crate::rdp::gpu::ScanParameters { origin: FRAMEBUFFER * scale * scale, width: WIDTH * scale, step_x: 1 << 10, step_y: 1 << 10, rows: ROWS * scale, columns: WIDTH * scale, anti_alias: 3, ..Default::default() }
+}
+
+/// The device work handed to the leader runs after every word handed before it and before every word handed after it, as the scan at
+/// once does: the words and the scan are handed over while the workers stand, so none has run when the scan is asked for.
+#[test]
+fn the_leader_runs_a_scan_after_the_words_handed_before_it_and_before_those_handed_after() {
+    if devices().is_empty() {
+        return;
+    }
+    // The last word before the scan fills one rectangle and the first after it another, in the same colour, over a cleared picture.
+    let before = [FILL_CYCLE, color_image(FRAMEBUFFER, 2, WIDTH), scissor(0, 0, WIDTH * 4, ROWS * 4), fill_color(0x0843_0843), fill_rectangle(0, 0, WIDTH * 4 - 4, ROWS * 4 - 4), fill_color(0xF83F_F83F), fill_rectangle(40 * 4, 30 * 4, 120 * 4, 90 * 4)];
+    let after = [fill_rectangle(160 * 4, 120 * 4, 240 * 4, 180 * 4)];
+    for (scale, workers) in [(2, 1), (2, 3), (4, 4)] {
+        let run = |threaded: bool| {
+            let mut m = Machine::new(RDRAM_SIZE).unwrap();
+            m.set_scale(scale as i32);
+            m.set_gpu(true);
+            if threaded {
+                m.set_verify_rdp(true);
+                m.set_rdp_workers(workers);
+                m.set_threaded_rdp(true);
+                m.bus.dp.threads.as_ref().unwrap().hold();
+            }
+            hand_only(&mut m, &before, 0x0010_0000);
+            m.bus.dp.scan_out(&whole_picture(scale));
+            hand_only(&mut m, &after, 0x0011_0000);
+            if threaded {
+                assert!(m.bus.dp.threads.as_ref().unwrap().pending() > 0, "the words ran before the scan was asked for");
+                m.bus.dp.threads.as_ref().unwrap().resume();
+            }
+            let mut words = Vec::new();
+            m.bus.dp.multiple.pictures().expect("a device").scanned(|w| words = w.to_vec());
+            m.join_rdp();
+            words
+        };
+        let (at_once, on_the_leader) = (run(false), run(true));
+        let pixel = |x: u32, y: u32| at_once[(y * scale * WIDTH * scale + x * scale) as usize];
+        assert!(pixel(80, 60) != pixel(200, 150) && pixel(200, 150) == pixel(10, 10), "the scan at once shows the first rectangle and not the second");
+        let at = at_once.iter().zip(&on_the_leader).position(|(a, b)| a != b);
+        assert!(at.is_none() && at_once.len() == on_the_leader.len(), "{scale}x on {workers} workers: the leader's scan differs from the scan at once at pixel {at:?}");
+    }
+}
+
+/// A test's hold on the leader's device work, let go from another thread after a while.
+fn let_go_later(m: &Machine, millis: u64) -> std::thread::JoinHandle<()> {
+    let release = m.bus.dp.threads.as_ref().expect("a drain").hold_device();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(millis));
+        release();
+    })
+}
+
+/// A picture read while the leader has not yet run the scan it was handed waits for it, at once and deferred: the leader is held short
+/// of its device work for fifty milliseconds while the machine's thread, or the presenter, reads the picture.
+#[test]
+fn a_picture_read_before_the_leader_has_run_its_scan_waits_for_the_scan() {
+    if devices().is_empty() {
+        return;
+    }
+    let registers = with(vi_registers(2, 0, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0), DITHER_FILTER | DIVOT_ON, 525);
+    for (scale, deferred, average) in [(2, true, 1), (2, false, 1), (4, true, 1), (4, true, 2), (4, false, 4)] {
+        let through = |workers: usize| {
+            let mut m = machine(scale, true, workers);
+            m.set_deferred(deferred);
+            hand(&mut m, &shaded(0x7E57_5CA2, 2, false, false), 0x0010_0000);
+            program(&mut m, &registers);
+            let mut out = Scanout::default();
+            out.average = average;
+            let held = (workers > 1).then(|| let_go_later(&m, 50));
+            let frame = scan(&mut m, &mut out, deferred);
+            if let Some(held) = held {
+                held.join().unwrap();
+            }
+            frame
+        };
+        let (unthreaded, on_the_leader) = (through(1), through(3));
+        assert!(unthreaded.iter().any(|&b| b != 0));
+        assert_same_frame(&unthreaded, &on_the_leader, &format!("{scale}x averaged by {average}, {}", if deferred { "deferred" } else { "at once" }));
+    }
+}
+
+/// The drain stopped, restarted or replaced by a state read while the leader owes a deferred scan: the scan runs first, and the walk
+/// out shows it. The leader is held short of it for a hundred milliseconds while the machine's thread makes the change.
+#[test]
+fn a_drain_stopped_while_its_leader_owes_a_scan_runs_the_scan_first() {
+    if devices().is_empty() {
+        return;
+    }
+    let registers = with(vi_registers(2, 0, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0), DITHER_FILTER | DIVOT_ON, 525);
+    for change in ["unthreaded", "two workers", "a state read"] {
+        let through = |workers: usize| {
+            let mut m = machine(2, true, workers);
+            m.set_deferred(true);
+            hand(&mut m, &shaded(0x7E57_5CA2, 2, false, false), 0x0010_0000);
+            program(&mut m, &registers);
+            let snapshot = m.save_state_vec(true).unwrap();
+            let mut out = Scanout::default();
+            let held = (workers > 1).then(|| let_go_later(&m, 100));
+            m.present(&mut out);
+            match change {
+                "unthreaded" => m.set_threaded_rdp(false),
+                "two workers" => m.set_rdp_workers(2),
+                _ => m.restore_state(&snapshot).unwrap(),
+            }
+            if let Some(held) = held {
+                held.join().unwrap();
+            }
+            m.join_presentation(&mut out);
+            out.frame.clone()
+        };
+        let (unthreaded, on_the_leader) = (through(1), through(3));
+        assert!(unthreaded.iter().any(|&b| b != 0));
+        assert_same_frame(&unthreaded, &on_the_leader, &format!("{change} while the leader owes the scan"));
+    }
+}
+
+/// The device read back straight after a scan was handed to the leader, no word between: the read's join waits for the leader's scan,
+/// or the two threads meet in the device; an equality cannot see that, ThreadSanitizer can (Mars_Native.md §6.15).
+#[test]
+fn a_read_back_straight_after_a_scan_waits_for_the_leader_s_scan() {
+    if devices().is_empty() {
+        return;
+    }
+    let registers = with(vi_registers(2, 0, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0), DITHER_FILTER | DIVOT_ON, 525);
+    let through = |workers: usize| {
+        let mut m = machine(2, true, workers);
+        m.set_deferred(true);
+        let mut out = Scanout::default();
+        let mut shadows = Vec::new();
+        for scene in 0..8u32 {
+            hand(&mut m, &shaded(0x7E57_5CA2 ^ scene, 2, false, false), 0x0010_0000);
+            program(&mut m, &registers);
+            m.present(&mut out);
+            m.bus.dp.read_back_scaled(FRAMEBUFFER * 4, WIDTH * 2 * 4 * 16);
+            shadows.push(m.bus.dp.multiple.rdram[(FRAMEBUFFER * 4) as usize..(FRAMEBUFFER * 4 + WIDTH * 2 * 4 * 16) as usize].to_vec());
+        }
+        m.join_presentation(&mut out);
+        (shadows, out.frame.clone())
+    };
+    let (unthreaded, on_the_leader) = (through(1), through(3));
+    assert!(unthreaded.0 == on_the_leader.0, "the shadow read back differs");
+    assert_same_frame(&unthreaded.1, &on_the_leader.1, "the last scan");
+}
+
+/// A join returns only once the leader has run every scan handed to it, so the device is the machine's thread's again after it: the
+/// leader is held short of the scan while the join is asked, with no word left to run, and the device's own count of scans is read.
+#[test]
+fn a_join_waits_for_the_scans_handed_to_the_leader() {
+    if devices().is_empty() {
+        return;
+    }
+    let mut m = machine(2, true, 3);
+    hand(&mut m, &shaded(0x7E57_5CA2, 2, false, false), 0x0010_0000);
+    let scans = |m: &Machine| m.bus.dp.multiple.gpu.as_ref().expect("a device").counters.scans;
+    let before = scans(&m);
+    let held = let_go_later(&m, 50);
+    m.bus.dp.scan_out(&whole_picture(2));
+    m.join_rdp();
+    let after = scans(&m);
+    held.join().unwrap();
+    assert_eq!(after, before + 1, "the join returned before the leader ran the scan it was handed");
 }
 
 /// The stop-or-go measurement of Mars_Gpu.md §6.5 on MarsRT, by hand with `EMUSEN_MARS_GPU_BENCH=1`: not a test of anything.

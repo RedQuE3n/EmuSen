@@ -712,6 +712,29 @@ fn a_snapshot_taken_while_workers_wait_at_barriers_is_answered_and_loads() {
     assert!(barriers >= 40 * 3000, "{barriers} barriers passed");
 }
 
+/// A machine dropped while its workers are at barriers ends: a worker that sees the stop before a barrier leaves, and the ones already
+/// waiting there must leave as well rather than wait for it (Mars_Native.md §6.15).
+#[test]
+fn a_machine_dropped_while_its_workers_wait_at_barriers_ends() {
+    let run = std::thread::spawn(move || {
+        let list = barriers(3000);
+        for attempt in 0..40u32 {
+            let mut shared = split(4);
+            hand_over(&mut shared, &list, LIST);
+            for _ in 0..(attempt * 997) % 20_000 {
+                std::hint::spin_loop();
+            }
+            drop(shared);
+        }
+    });
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while !run.is_finished() {
+        assert!(std::time::Instant::now() < deadline, "a machine was never dropped: its workers wait at a barrier for one that has left");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    run.join().expect("the run failed");
+}
+
 /// A load from the colour image before the image's first draw, then draws over its rows: every processor loads before any draws, where C#'s rule lets a slow one load what a fast one drew (Mars_Native.md §5.6.6).
 #[test]
 fn a_load_from_the_current_image_before_its_first_draw_is_run_by_every_processor_together() {

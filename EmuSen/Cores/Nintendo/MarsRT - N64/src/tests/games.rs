@@ -333,16 +333,17 @@ fn a_machine_at_a_multiple_split_and_deferred_is_the_machine_at_once_at_that_mul
     }
 }
 
-/// At two and at four on the device, split and deferred, against the processor at once at the same multiple: the device's frames are the
-/// processor's, picture for picture, on real games (Mars_Gpu.md §11, Mars_Native.md §6.4). Stands down without a Vulkan device.
+/// At two and at four on the device, split, deferred and at once, against the processor at once at the same multiple: the device's frames
+/// are the processor's, picture for picture, on real games (Mars_Gpu.md §11, Mars_Native.md §6.4), with the scans run by the drain's
+/// leader (§6.15). Stands down without a Vulkan device.
 #[test]
 fn a_machine_at_a_multiple_on_the_device_is_the_machine_at_once_on_the_processor() {
     if crate::rdp::gpu::GpuDevice::device_names().is_empty() {
         eprintln!("no Vulkan device: not run");
         return;
     }
-    for scale in [2, 4] {
-        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: true, average: 1, rsp_simd: None, rsp_blocks: None, bands: 0 }, Compare::Snapshot);
+    for (scale, deferred) in [(2, true), (4, true), (2, false), (4, false)] {
+        each_game(Mode { threaded: true, deferred, workers: 4, blocks: true, observed: false, scale, gpu: true, average: 1, rsp_simd: None, rsp_blocks: None, bands: 0 }, Compare::Snapshot);
     }
 }
 

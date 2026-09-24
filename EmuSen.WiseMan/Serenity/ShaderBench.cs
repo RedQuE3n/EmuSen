@@ -364,7 +364,7 @@ namespace EmuSen.WiseMan.Serenity
         }
 
         // A surfaceless EGL context on a chosen device, desktop GL as Avalonia's GLX one is, with timer queries.
-        private sealed class GlContext : IDisposable
+        internal sealed class GlContext : IDisposable
         {
             private const string Egl = "libEGL.so.1";
             [DllImport(Egl)] private static extern nint eglGetProcAddress(string name);

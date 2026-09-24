@@ -9,6 +9,7 @@ namespace EmuSen.WiseMan.Serenity
     public class ShaderBenchTests(ITestOutputHelper output)
     {
         public const string BenchVariable = "EMUSEN_SHADER_BENCH";
+        public const string GlVariable = "EMUSEN_BENCH_GL_DEVICE";
 
         [Fact]
         public void A_short_bench_case_reports_the_chain_s_stages_and_leaves_no_probe()

@@ -1,0 +1,22 @@
+<Project>
+  <!-- The Rust cores: one row per crate, read by EmuSen.csproj's cargo build and by RustCoresPublish.targets - see Mercury_Native.md §8.6. -->
+  <PropertyGroup>
+    <EmuSenRustCoresImported>true</EmuSenRustCoresImported>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Identity is the crate's library name; the fallback names the C# core a console runs on without the library. -->
+    <EmuSenRustCrate Include="marsrt">
+      <Dir>$(MSBuildThisFileDirectory)Nintendo\MarsRT - N64\</Dir>
+      <Core>MarsRT</Core>
+      <Console>the N64</Console>
+      <Fallback>Mars (C#)</Fallback>
+    </EmuSenRustCrate>
+    <EmuSenRustCrate Include="mercuryrt">
+      <Dir>$(MSBuildThisFileDirectory)Nintendo\MercuryRT - GB\</Dir>
+      <Core>MercuryRT</Core>
+      <Console>the Game Boy</Console>
+      <Fallback>Mercury (C#)</Fallback>
+    </EmuSenRustCrate>
+  </ItemGroup>
+</Project>

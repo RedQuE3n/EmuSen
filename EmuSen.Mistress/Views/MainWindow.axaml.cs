@@ -66,6 +66,12 @@ namespace EmuSen.Mistress.Views
         private volatile bool _turboHeld;
         private volatile bool _rewindHeld;
 
+        // Four snapshots a second of console time, and a held rewind still plays back at four times speed - see EmuSen_Settings_Reference.md §4.50.
+        internal const double RewindSnapshotsPerSecond = 4, HeldRewindSpeedup = 4;
+        private int _heldRewindTicks;
+
+        internal static int RewindIntervalFor(double frameRateHz) => Math.Max(1, (int)Math.Round(frameRateHz / RewindSnapshotsPerSecond));
+
         private readonly EmuSen.Common.SpeedController _speed = new();
         // Pictures for the reel ride along with each snapshot - see EmuSen_Settings_Reference.md §4.49.
         private readonly EmuSen.Common.RewindBuffer _rewind = new() { Enabled = true, ThumbnailWidth = EmuSen.Common.RewindBuffer.DefaultThumbnailWidth };
@@ -889,6 +895,7 @@ namespace EmuSen.Mistress.Views
                 _gamepad.LeftStickIsAnalog = _session.SupportedAxes.Contains(PadAxis.LeftX);
 
                 _rewind.Clear(); // a discontinuous jump - see §1.4
+                _rewind.IntervalFrames = RewindIntervalFor(_session.FrameRateHz);
                 _audioPlayer.RateControl.Reset();
 
                 // Built by CoreFactory alongside the core, so this window names no concrete target.
@@ -1219,7 +1226,12 @@ namespace EmuSen.Mistress.Views
                 if (_rewindHeld && session.Core is not null)
                 {
                     session.SkipRendering = false;
-                    if (!_rewind.Rewind(session.Core)) nextTick = clock.Elapsed;
+                    // One step every interval/speedup ticks, so a sparse history does not rewind in a blur.
+                    if (++_heldRewindTicks >= Math.Max(1, (int)Math.Round(_rewind.IntervalFrames / HeldRewindSpeedup)))
+                    {
+                        _heldRewindTicks = 0;
+                        if (!_rewind.Rewind(session.Core)) nextTick = clock.Elapsed;
+                    }
                     // No RunFrame() ran, so these would otherwise be stale - see §3.
                     _debugTarget?.RefreshProviders();
                     session.DequeueAudioSamples(int.MaxValue);

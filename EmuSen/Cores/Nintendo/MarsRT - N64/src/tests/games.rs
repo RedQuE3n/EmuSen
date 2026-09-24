@@ -265,8 +265,16 @@ pub(crate) fn compare(folder: &str, rom: &str, state: Option<&str>, frames: u64,
     frames
 }
 
-const GAMES: [(&str, Option<&str>); 6] =
-    [("sm64.z64", None), ("oot.z64", None), ("ge.z64", None), ("sm64.z64", Some("sm64.state")), ("oot.z64", Some("oot.state")), ("ge.z64", Some("ge-dam.state"))];
+/// The six of §5.6.7, and Donkey Kong 64's title, whose processor reads the depth image and whose capture met a list's last draws (Mars_Native.md §6.14).
+const GAMES: [(&str, Option<&str>); 7] = [
+    ("sm64.z64", None),
+    ("oot.z64", None),
+    ("ge.z64", None),
+    ("sm64.z64", Some("sm64.state")),
+    ("oot.z64", Some("oot.state")),
+    ("ge.z64", Some("ge-dam.state")),
+    ("dk64-us.v64", Some("dk64-us-title.state")),
+];
 
 fn frames() -> u64 {
     std::env::var("EMUSEN_MARSRT_FRAMES").ok().and_then(|v| v.parse().ok()).unwrap_or(if cfg!(debug_assertions) { 20 } else { 300 })

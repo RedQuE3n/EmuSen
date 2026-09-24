@@ -597,18 +597,19 @@ fn publish_raster(bus: &mut MemoryBus, out: &mut Scanout, job: Option<&Job>) {
     }
 }
 
-/// `Vi.Reach`: from a line and a row's span before the window's first line to two of each after its last, clamped (Mars_Video.md §2.7).
+/// `Vi.Reach` narrowed to the walker's own reads: its window's lines two above the first line to three below the last, and a sample's
+/// neighbours a line and three pixels past the last column below the last line; C#'s slack of lines and row spans is not kept (Mars_Native.md §6.14).
 fn reach(job: &Job, length: u32) -> (u32, u32) {
     let picture = &job.picture;
     let (width, bytes) = (job.width as i64, if job.wide { 4 } else { 2 });
     let origin = job.aligned_origin() as i64;
-    let row_span = walker::ROW_SPAN as i64;
-    let first_line = (picture.start_y >> 10) as i64 - 3;
-    let last_line = ((picture.start_y as i64 + (picture.rows - 1).max(0) as i64 * picture.step_y as i64) >> 10) + 4;
-    let from = origin + ((first_line - 1) * width - row_span - 4) * bytes;
-    let to = origin + ((last_line + 2) * width + 2 * row_span + 4) * bytes;
-    let from = from.clamp(0, length as i64) & !1;
-    let to = to.clamp(from, length as i64);
+    let line = |row: i64| (picture.start_y as i64 + row * picture.step_y as i64) >> 10;
+    let (top, bottom) = (line(0), line((picture.rows - 1).max(0) as i64));
+    let last_column = (picture.start_x as i64 + (picture.columns - 1).max(0) as i64 * picture.step_x as i64) >> 10;
+    let first = ((top - 2) * width).min((top - 1) * width - 2);
+    let last = ((bottom + 4) * width - 1).max((bottom + 2) * width + last_column + 3);
+    let from = (origin + first * bytes).clamp(0, length as i64) & !1;
+    let to = (origin + (last + 1) * bytes).clamp(from, length as i64);
     (from as u32, (to - from) as u32)
 }
 

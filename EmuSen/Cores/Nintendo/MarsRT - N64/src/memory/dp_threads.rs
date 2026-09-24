@@ -519,6 +519,22 @@ fn holds(b: &DrawBox, from: i64, to: i64) -> bool {
     within(b, b.color, b.bytes, from, to) || (b.depth != u32::MAX && within(b, b.depth, 2, from, to))
 }
 
+/// `holds` over a range, row by row: every pixel `row` can name lies between the first row's column -4 and the last row's scissor plus three.
+fn holds_range(b: &DrawBox, from: i64, to: i64) -> bool {
+    let rows = match b.kind {
+        EMPTY => return false,
+        TRIANGLE => ((b.row_first >> 2) as i64, ((b.row_last - 1) >> 2) as i64),
+        _ => (b.row_first as i64, b.row_last as i64),
+    };
+    let meets = |image: u32, bytes: i64| {
+        let (image, width) = (image as i64, b.width.max(1) as i64);
+        let first = image + (rows.0 * width - 4) * bytes;
+        let last = image + (rows.1 * width + b.scissor_right as i64 + 4) * bytes;
+        rows.0 <= rows.1 && from < last && to > first
+    };
+    meets(b.color, b.bytes.max(1) as i64) || (b.depth != u32::MAX && meets(b.depth, 2))
+}
+
 fn within(b: &DrawBox, image: u32, bytes: i32, from: i64, to: i64) -> bool {
     let (image, bytes, width) = (image as i64, bytes.max(1) as i64, b.width.max(1) as i64);
     let mut at = from;
@@ -599,6 +615,8 @@ pub struct Threads {
     batch_start: i64,
     pub(crate) taking: bool,
     waiting: i32,
+    /// The range a read is waiting over, and the last pending draw found to reach it, found once for all its pages.
+    read_range: Option<(i64, i64, Option<i64>)>,
     pub counters: Counters,
     /// A test's way to lose the publish's wake-up, as a store and a load reordered at the publish can.
     #[cfg(test)]
@@ -719,6 +737,7 @@ impl Threads {
             batch_start: 0,
             taking: false,
             waiting: 0,
+            read_range: None,
             counters: Counters::default(),
             #[cfg(test)]
             lose_wakeups: false,
@@ -1041,6 +1060,26 @@ impl Threads {
         0
     }
 
+    /// The last pending draw whose box can reach any byte of a range, by rows (`holds_range`); zero when none, `IDLE` when the ring cannot say.
+    fn last_holding_range(&self, from: i64, to: i64, completed: i64) -> i64 {
+        let appended = self.shared.boxes_appended.load(Relaxed);
+        let mut i = appended - 1;
+        while i >= 0 {
+            if appended - i > BOX_COUNT as i64 {
+                return IDLE;
+            }
+            let b = self.shared.boxes[(i as usize) & (BOX_COUNT - 1)].load();
+            if b.end <= completed {
+                return 0;
+            }
+            if holds_range(&b, from, to) {
+                return b.end;
+            }
+            i -= 1;
+        }
+        0
+    }
+
     /// The open batch's ranges changed under the sequence the verifier reads them by.
     fn idle_edit(&self, edit: impl FnOnce(&Shared)) {
         let s = &*self.shared;
@@ -1095,12 +1134,14 @@ impl Threads {
         let bits = 4i64 << self.texture_size;
         let row_bytes = (self.texture_width as i64 * bits + 7) / 8;
         let image = self.texture_image as i64;
-        let (from, to) = if block {
+        let (start, to) = if block {
             let left = ((sl << 20) >> 20) as i64;
-            (image + (tl & 0x3FF) as i64 * row_bytes + left * bits / 8 - 16, image + (tl & 0x3FF) as i64 * row_bytes + (sh as i64 + 1) * bits / 8 + 32)
+            (image + (tl & 0x3FF) as i64 * row_bytes + left * bits / 8, image + (tl & 0x3FF) as i64 * row_bytes + (sh as i64 + 1) * bits / 8 + 32)
         } else {
-            (image + (tl >> 2) as i64 * row_bytes + (sl >> 2) as i64 * bits / 8 - 16, image + (th >> 2) as i64 * row_bytes + ((sh as i64 >> 2) + 1) * bits / 8 + 32)
+            (image + (tl >> 2) as i64 * row_bytes + (sl >> 2) as i64 * bits / 8, image + (th >> 2) as i64 * row_bytes + ((sh as i64 >> 2) + 1) * bits / 8 + 32)
         };
+        // The first window is read from the first texel's pointer aligned down to eight bytes; C# keeps sixteen bytes of slack (Mars_Native.md §6.14).
+        let from = if self.texture_size >= 1 { start & !7 } else { start - 16 };
         let to = to.max(from + 1);
         self.mark(from, to - from, after, false, false);
         self.append(from, to, after, after, false);
@@ -1202,6 +1243,7 @@ impl Threads {
         let started = Instant::now();
         self.waiting += 1;
         let mut waited = false;
+        self.read_range = (!write).then_some((from, from + count, None));
         let mut page = first;
         while page <= last {
             let p = page as usize;
@@ -1213,6 +1255,7 @@ impl Threads {
             page += 1;
         }
         self.waiting -= 1;
+        self.read_range = None;
         if waited {
             self.counters.range_waits += 1;
             self.counters.range_wait_nanos += started.elapsed().as_nanos() as i64;
@@ -1231,10 +1274,19 @@ impl Threads {
             return false;
         }
 
-        // A small read waits only for the last pending draw whose box holds it; C# narrows a range by its first eight bytes too, which this does not.
+        // A read waits only for the last pending draw whose box can reach it: a small one by its eight bytes, a range by its rows (Mars_Native.md §6.14).
         let mut goal = if mark == IDLE { self.issued } else { mark };
-        if !write && to - from <= 8 {
-            let holding = self.last_holding(from, completed);
+        if !write {
+            let holding = match self.read_range {
+                _ if to - from <= 8 => self.last_holding(from, completed),
+                Some((_, _, Some(found))) => found,
+                Some((whole_from, whole_to, None)) => {
+                    let found = self.last_holding_range(whole_from, whole_to, completed);
+                    self.read_range = Some((whole_from, whole_to, Some(found)));
+                    found
+                }
+                None => IDLE,
+            };
             if holding != IDLE && holding < goal {
                 self.counters.reads_narrowed += 1;
                 if holding <= completed {

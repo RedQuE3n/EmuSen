@@ -1,5 +1,6 @@
 //! Each of C#'s wait sites met with a draw or a load still pending on a held drain: the access must wait for it and see what the list at once left. See Mars_Native.md §5.6.3.
 
+use std::sync::atomic::Ordering::Relaxed;
 use std::time::{Duration, Instant};
 
 use super::threads::{FRAMEBUFFER, LIST, TEXTURE, WIDTH, at_once, hand_over, scene, state, threaded};
@@ -13,12 +14,17 @@ const HELD: Duration = Duration::from_millis(300);
 
 /// Rows 0 to 7 of the frame buffer filled with a word that is also `addiu t0, zero, 5`.
 fn fill_list() -> Vec<u64> {
+    fill_rows(0, 7)
+}
+
+/// The rows from `top` to `bottom` filled so.
+fn fill_rows(top: u64, bottom: u64) -> Vec<u64> {
     vec![
         (0x2F << 56) | (3 << 52),
         (0x3F << 56) | (2 << 51) | (((WIDTH - 1) as u64) << 32) | FRAMEBUFFER as u64,
         (0x2D << 56) | (((WIDTH << 2) as u64) << 12) | (240 << 2),
         (0x37 << 56) | FILL as u64,
-        (0x36 << 56) | ((((WIDTH - 1) << 2) as u64) << 44) | ((7u64 << 2) << 32),
+        (0x36 << 56) | ((((WIDTH - 1) << 2) as u64) << 44) | ((bottom << 2) << 32) | (top << 2),
         0x29 << 56,
     ]
 }
@@ -49,6 +55,35 @@ fn after_a_held_list(setup: impl Fn(&mut Machine), list: &[u64], access: impl Fn
     assert!(state(&once) == state(&drain), "the machines part after the list");
 }
 
+/// Both machines set up alike and the list handed to each, the threaded one's drain held; the access, which must not wait for the list,
+/// must see what the list at once leaves, and the machines must agree once the drain is released. `page` must be marked, or the case was not reached.
+fn ahead_of_a_held_list(setup: impl Fn(&mut Machine), list: &[u64], page: usize, access: impl Fn(&mut Machine) -> Vec<u8>) {
+    let (mut once, mut drain) = (at_once(), threaded());
+    setup(&mut once);
+    setup(&mut drain);
+    hand_over(&mut once, list, LIST);
+    drain.bus.dp.threads.as_deref().unwrap().hold();
+    hand_over(&mut drain, list, LIST);
+    let marks = &drain.bus.dp.marks;
+    assert!(marks.marks[page >> 12].load(Relaxed) != 0, "the access's page is not marked, so the case was not reached");
+
+    let resume = drain.bus.dp.threads.as_deref().unwrap().resumer();
+    let watchdog = std::thread::spawn(move || {
+        std::thread::sleep(HELD);
+        resume();
+    });
+    let started = Instant::now();
+    let seen = access(&mut drain);
+    let waited = started.elapsed();
+    let want = access(&mut once);
+    watchdog.join().unwrap();
+
+    assert!(waited < HELD - Duration::from_millis(50), "the access waited {waited:?} for a list that does not reach its bytes");
+    assert!(seen == want, "the access saw what the list at once does not leave");
+    drain.join_rdp();
+    assert!(state(&once) == state(&drain), "the machines part after the list");
+}
+
 /// The processor in kernel mode at a KSEG0 address.
 fn at(m: &mut Machine, pc: u32) {
     m.cpu.pc = 0xFFFF_FFFF_0000_0000 | pc as u64;
@@ -72,6 +107,34 @@ fn site_0_a_bus_read_waits_for_the_draw() {
 fn site_1_a_bus_write_waits_for_the_load_that_reads_its_bytes() {
     after_a_held_list(|_| {}, &scene(0x0102_0304, true, 16, false), |m| {
         m.bus.write32(TEXTURE + 0x40, 0xDEAD_BEEF);
+        vec![]
+    });
+}
+
+/// A sixteen-bit tile of 32 by 16 texels loaded from `image`, which need not be aligned.
+fn load_from(image: u32) -> Vec<u64> {
+    vec![
+        (0x3D << 56) | (2 << 51) | (63 << 32) | image as u64,
+        (0x35 << 56) | (2 << 51) | (16 << 41),
+        (0x34 << 56) | ((31u64 << 2) << 12) | (15 << 2),
+        0x29 << 56,
+    ]
+}
+
+/// A load's first window is read from its first texel aligned down to eight bytes, so a write to those bytes waits for it (Mars_Native.md §6.14).
+#[test]
+fn site_1_a_bus_write_to_the_bytes_below_an_unaligned_loads_first_texel_waits_for_the_load() {
+    after_a_held_list(|_| {}, &load_from(TEXTURE + 0x104), |m| {
+        m.bus.write32(TEXTURE + 0x100, 0xDEAD_BEEF);
+        vec![]
+    });
+}
+
+/// A write below the eight bytes a load's first window reads meets its page and not its bytes, so it goes ahead of the load (Mars_Native.md §6.14).
+#[test]
+fn site_1_a_bus_write_below_a_loads_first_window_goes_ahead_of_it() {
+    ahead_of_a_held_list(|_| {}, &load_from(TEXTURE + 0x104), (TEXTURE + 0xFC) as usize, |m| {
+        m.bus.write32(TEXTURE + 0xFC, 0xDEAD_BEEF);
         vec![]
     });
 }
@@ -191,6 +254,41 @@ fn site_8_the_deferred_capture_waits_for_the_draw() {
         out.join();
         out.frame
     });
+}
+
+/// `picture`'s last line is 7, so the walk's window reads line 10, and a draw there alone still holds the capture (Mars_Native.md §6.14).
+#[test]
+fn site_8_the_capture_waits_for_a_draw_on_the_last_line_the_walk_reads() {
+    let setup = |m: &mut Machine| picture(m);
+    for deferred in [false, true] {
+        after_a_held_list(setup, &fill_rows(10, 10), |m| {
+            let mut out = Scanout::default();
+            if deferred {
+                scan::present_deferred(&mut m.bus, &mut out);
+                out.join();
+            } else {
+                scan::present_now(&mut m.bus, &mut out);
+            }
+            out.frame
+        });
+    }
+}
+
+/// A draw below every line the walk reads meets the capture's pages and not its bytes, so the capture goes ahead of it (Mars_Native.md §6.14).
+#[test]
+fn site_8_the_capture_goes_ahead_of_a_draw_below_the_lines_the_walk_reads() {
+    for deferred in [false, true] {
+        ahead_of_a_held_list(picture, &fill_rows(12, 20), (FRAMEBUFFER + 11 * WIDTH * 2 - 1) as usize, |m| {
+            let mut out = Scanout::default();
+            if deferred {
+                scan::present_deferred(&mut m.bus, &mut out);
+                out.join();
+            } else {
+                scan::present_now(&mut m.bus, &mut out);
+            }
+            out.frame
+        });
+    }
 }
 
 #[test]

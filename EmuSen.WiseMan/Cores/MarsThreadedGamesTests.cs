@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores.Nintendo.Mars;
+using EmuSen.Cores.Nintendo.Mars.Native;
+using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Galaxia.Input;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
@@ -81,7 +83,9 @@ namespace EmuSen.WiseMan.Cores
                 if (every < 0)
                 {
                     using var snapshot = new MemoryStream();
-                    subject.SaveSnapshot(snapshot);
+                    var taking = System.Threading.Tasks.Task.Run(() => subject.SaveSnapshot(snapshot));
+                    if (!taking.Wait(TimeSpan.FromSeconds(30))) throw new Xunit.Sdk.XunitException($"frame {frame}: the snapshot was never answered");
+                    taking.GetAwaiter().GetResult();
                     snapshot.Position = 0;
                     scratch.LoadState(snapshot);
                     Same(frame, Save(reference), Save(scratch));
@@ -97,7 +101,7 @@ namespace EmuSen.WiseMan.Cores
             long words = subject.Bus!.Dp.DrainWords;
             foreach (var (count, _) in subject.Bus.Dp.WorkerLoads) words += count;
             if (workers > 0) Assert.True(words > 0, "nothing reached the drain, so the threaded case was not met");
-            _output.WriteLine($"{romName} {stateName}, workers {workers}, deferred {deferred}, state every {every}: {frames} frames exact; {pictures} distinct pictures, {words} words on the drain, {subject.RepeatedScans} repeats skipped, {subject.Bus.Dp.PausesRaised} pauses raised");
+            _output.WriteLine($"{romName} {stateName}, workers {workers}, deferred {deferred}, state every {every}: {frames} frames exact; {pictures} distinct pictures, {words} words on the drain, {subject.RepeatedScans} repeats skipped");
         }
 
         private static byte[] Save(MarsCore core)
@@ -110,7 +114,18 @@ namespace EmuSen.WiseMan.Cores
         private static void Same(int frame, byte[] want, byte[] got)
         {
             if (want.AsSpan().SequenceEqual(got)) return;
-            throw new Xunit.Sdk.XunitException($"frame {frame}: the states differ from byte {want.AsSpan().CommonPrefixLength(got)} of {want.Length} ({got.Length})");
+            throw new Xunit.Sdk.XunitException($"frame {frame}: the states differ from byte {want.AsSpan().CommonPrefixLength(got)} of {want.Length} ({got.Length}), in {Differing(want, got)}");
+        }
+
+        // The fields two states of one length differ in, named by MarsRT's layout of the format when its library is here.
+        private static string Differing(byte[] a, byte[] b)
+        {
+            if (!MarsRtCore.Available || a.Length != b.Length) return "fields not named";
+            using var machine = new MarsMachine(BitConverter.ToInt32(a, 8));
+            machine.Load(a);
+            var names = machine.Layout(snapshot: false).Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Split(' '))
+                .Where(p => !a.AsSpan(int.Parse(p[0]), int.Parse(p[1])).SequenceEqual(b.AsSpan(int.Parse(p[0]), int.Parse(p[1])))).Select(p => p[3]);
+            return string.Join(", ", names.Take(8));
         }
 
         // The same input to both cores, as MarsRtThreadsTests drives them.

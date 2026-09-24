@@ -1664,3 +1664,52 @@ caught by both.
 choice being built separately) does not move it between shelves: the shelf is the cartridge's, not the player's
 setting.
 
+
+### 4.47 The Game Boy's Model: Auto, Game Boy or Game Boy Color (2026-09-24)
+
+**What the player sees.** The GB tab of Graphics Settings has a **Model** row under Engine: *Auto* (the default),
+*Game Boy* and *Game Boy Color*. The row is an ordinary core-setting dropdown. So the pad cycles it with Left and
+Right, and the mouse opens it (§4.45).
+
+- *Auto* is the old behaviour: the cartridge's header decides.
+- *Game Boy* runs every game on a Game Boy, a colour game in its own monochrome mode.
+- *Game Boy Color* runs every game on a Game Boy Color, a Game Boy game in the colours the Color's start-up picks for
+  it.
+
+The choice is stored in `graphics.json` under `Consoles.GB`, key `Model`, and it takes effect when a game is next
+loaded, as the Engine row's choice does (§4.44).
+
+**Why it is a core setting and not a frontend switch.** The model is Mercury's `ICoreSettings` setting, declared once
+as `MercuryCore.ModelSettings` and returned by `CoreCatalog.SettingsFor("GB")`, as the N64 declares its video settings.
+Both engines honour it:
+
+- `MercuryCore` and `MercuryRtCore` each read it at load;
+- a change before a game's first frame loads the game again at once, as the Expansion Pak row does.
+
+Mistress does nothing model-specific. It hands the core its console's settings after the load and before the first
+frame (`ApplyConsoleSettings`), and the core rebuilds itself if the stored model differs.
+
+**One change to Mistress that the row needed.** `_activeConsole` names the console whose settings, pad bindings,
+screen filter and cheats apply. It was set from the core's `CoreName`, which a Game Boy Color game reports as `GBC`.
+No tab and no binding set is named `GBC`, so the GB tab's settings never reached colour games. A Model choice of
+*Game Boy* would have been ignored for exactly the games it matters to.
+
+`_activeConsole` is now the catalogue's console for the ROM (`CoreCatalog.ConsoleForRom`, `GB` for every Game Boy
+game). `CoreName` still says which machine is running. The same change gives colour games the GB tab's screen filter,
+the GB pad bindings and the Game Boy cheat console, which they did not get before. That is intended, and nothing
+depended on the old behaviour: no binding set or graphics key is named `GBC` (the `GBC` library shelf, §4.46, is a shelf and not a console).
+
+**States, saves and the shelf.**
+
+- A save state records the console it was made on, and resumes on it whatever the row now says (Mercury state
+  version 7, `Mercury_Model.md` §5).
+- Battery saves and state files are keyed by the ROM's path, so they do not move when the model changes.
+- The library shelf is the cartridge's (§4.46), so it does not move either.
+
+**Tests.** `MercuryModelSettingTests` covers two things:
+
+- the row's three choices, its default and a stored choice, with the window rendered to PNG and looked at;
+- a game loaded in Mistress on the chosen console, on both engines: a Game Boy game on *Game Boy Color*, and a `$80`
+  game on *Game Boy*.
+
+The machine-level behaviour of each choice is `Mercury_Model.md` §6.

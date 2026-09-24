@@ -132,6 +132,28 @@ namespace EmuSen.WiseMan.Cores
             Assert.Throws<InvalidOperationException>(() => new MercuryRtCore().RunFrame());
         }
 
+        // Every named space read and sized as MercuryCore reads it, wrapping, past the ROM's end and on a cart with no RAM - mutant M22 (§8.4).
+        [Theory]
+        [InlineData((byte)0x00, (byte)0x00)]
+        [InlineData((byte)0x03, (byte)0x02)]
+        public void Every_space_reads_and_sizes_as_mercurys(byte kind, byte ramCode)
+        {
+            CoreOptions.BatteryRamDisabled = true;
+            string rom = Rom($"spaces-{kind}", SyntheticGbRom.Build(cartridgeType: kind, ramSizeCode: ramCode, patches: (0, new byte[] { 0x18, 0xFE })));
+            var cs = (MercuryCore)CoreFactory.Load(rom).Core;
+            var rt = (MercuryRtCore)CoreFactory.Load(rom, engine: CoreCatalog.MercuryRtEngine).Core;
+            for (int i = 0; i < 5; i++) { cs.RunFrame(); rt.RunFrame(); }
+            foreach (string space in MercuryMachine.SpaceNames.Append("NOSUCH"))
+            {
+                Assert.Equal(cs.SpaceSize(space), rt.SpaceSize(space));
+                foreach (int address in new[] { 0, 1, 0x7F, 0xA0, 0x1FFF, 0x2000, 0x7FFF, 0x8000, 0xFF44, 0xFFFF, 0x10000, -1, -0x2001 })
+                {
+                    if (space == "ROM" && address < 0) continue;
+                    Assert.True(cs.ReadSpace(space, address) == rt.ReadSpace(space, address), $"{space} at {address}: C# {cs.ReadSpace(space, address)}, Rust {rt.ReadSpace(space, address)}");
+                }
+            }
+        }
+
         [Fact]
         public void The_debug_target_shows_mercuryrts_machine_and_writes_reach_it()
         {

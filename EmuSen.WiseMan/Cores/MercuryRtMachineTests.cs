@@ -104,6 +104,121 @@ namespace EmuSen.WiseMan.Cores
             var pair = new MercuryRtPair(InterruptsRom(0x03, 0x02, 0x80), skipRendering: skip);
             pair.Run(300, null);
         }
+
+        // HALT with IME clear and an interrupt pending, the HALT bug's one case, then EI's one-instruction delay into a pending interrupt - mutant M3 survived without it (§8.4).
+        [Fact]
+        public void The_halt_bug_and_the_ei_delay_step_identically()
+        {
+            byte[] rom = SyntheticGbRom.Build(patches: new (int, byte[])[]
+            {
+                (0x50 - 0x150, new byte[] { 0x0C, 0xD9 }),
+                (0, new byte[]
+                {
+                    0xF3, 0x3E, 0x04, 0xE0, 0xFF, 0x3E, 0x04, 0xE0, 0x0F, 0x06, 0x00, 0x76, 0x04, 0x78, 0xEA, 0x00, 0xC0,
+                    0x0E, 0x00, 0xFB, 0x04, 0x04, 0x79, 0xEA, 0x01, 0xC0, 0x18, 0xFE,
+                }),
+            });
+            var pair = new MercuryRtPair(rom, skipRendering: false);
+            for (int i = 0; i < 40; i++) Assert.True(pair.Step());
+            Assert.Equal(2, pair.Csharp.Bus!.Wram[0]);
+            Assert.Equal(1, pair.Csharp.Bus!.Wram[1]);
+        }
+
+        // The window's line counter is back to 0 at every frame's end, so only a comparison inside the frame sees it counted with rendering skipped - mutant M12 (§8.4).
+        [Fact]
+        public void The_window_counts_its_lines_with_rendering_skipped_instruction_by_instruction()
+        {
+            var pair = new MercuryRtPair(InterruptsRom(0x03, 0x02, 0x00), skipRendering: true);
+            int windowLines = 0;
+            for (int i = 0; i < 20000; i++)
+            {
+                Assert.True(pair.Step());
+                windowLines = Math.Max(windowLines, pair.Csharp.Bus!.Ppu.WindowLine);
+            }
+            Assert.True(windowLines > 50, $"the window drew {windowLines} lines");
+        }
+
+        // On a colour console, map attributes with the priority bit over a solid tile, and a black sprite the background must hide - mutant M14 (§8.4).
+        [Fact]
+        public void The_colour_background_priority_bit_hides_a_sprite_identically()
+        {
+            byte[] rom = SyntheticGbRom.Build(cgbFlag: 0xC0, patches: (0, new byte[]
+            {
+                0x3E, 0x00, 0xE0, 0x40, 0x3E, 0x01, 0xE0, 0x4F, 0x21, 0x00, 0x98, 0x01, 0x00, 0x04,
+                0x3E, 0x80, 0x22, 0x0B, 0x78, 0xB1, 0x20, 0xF8,
+                0x3E, 0x00, 0xE0, 0x4F, 0x21, 0x00, 0x80, 0x06, 0x10, 0x3E, 0xFF, 0x22, 0x05, 0x20, 0xFC,
+                0x21, 0x00, 0xFE, 0x36, 0x20, 0x23, 0x36, 0x20, 0x23, 0x36, 0x00, 0x23, 0x36, 0x00,
+                0x3E, 0x80, 0xE0, 0x6A, 0xAF, 0x06, 0x08, 0xE0, 0x6B, 0x05, 0x20, 0xFB,
+                0x3E, 0x93, 0xE0, 0x40, 0x18, 0xFE,
+            }));
+            var pair = new MercuryRtPair(rom, skipRendering: false);
+            pair.Run(30, null);
+            byte[] picture = pair.Csharp.GetFrameBufferRgba();
+            int sprite = (16 * 160 + 24) * 4;
+            Assert.True(pair.Csharp.Bus!.Oam[1] == 0x20 && picture[sprite] == 0xFF, $"the sprite's pixel is {picture[sprite]:X2}, so the priority bit was not exercised");
+        }
+
+        // A sweep whose first step fits in 11 bits and whose check of the next does not, so only the second check silences the channel - mutant M15 (§8.4).
+        [Fact]
+        public void The_sweeps_second_overflow_check_silences_identically()
+        {
+            byte[] rom = SyntheticGbRom.Build(patches: (0, new byte[]
+            {
+                0x3E, 0x11, 0xE0, 0x10, 0x3E, 0xF0, 0xE0, 0x12, 0x3E, 0x14, 0xE0, 0x13, 0x3E, 0x85, 0xE0, 0x14, 0x18, 0xFE,
+            }));
+            var pair = new MercuryRtPair(rom, skipRendering: false);
+            pair.Run(10, null);
+            var pulse = pair.Csharp.Bus!.Apu.Pulse1;
+            Assert.True(pulse.Frequency == 1950 && !pulse.Enabled, $"frequency {pulse.Frequency}, enabled {pulse.Enabled}: the second check was not what silenced it");
+        }
+
+        // MBC1 and MBC3 turn a written bank 0 into bank 1; MBC5 does not, and MBC2's register sits behind address bit 8 - mutant M18 (§8.4).
+        [Theory]
+        [InlineData(0x01, 0x42)]
+        [InlineData(0x0F, 0x42)]
+        [InlineData(0x19, 0x00)]
+        [InlineData(0x05, 0x42)]
+        public void A_written_bank_zero_selects_what_each_board_selects_identically(byte kind, byte expected)
+        {
+            byte[] rom = SyntheticGbRom.Build(romBanks: 4, cartridgeType: kind, patches: new (int, byte[])[]
+            {
+                (0, new byte[] { 0xAF, 0xEA, 0x00, 0x21, 0xFA, 0x00, 0x40, 0xEA, 0x00, 0xC0, 0x18, 0xFE }),
+                (0x4000 - 0x150, new byte[] { 0x42 }),
+            });
+            var pair = new MercuryRtPair(rom, skipRendering: false);
+            pair.Run(2, null);
+            Assert.Equal(expected, pair.Csharp.Bus!.Wram[0]);
+        }
+
+        // MBC3 copies its clock only on a 0 then a 1, so a lone 1 must leave the latched seconds as they were - mutant M19 (§8.4).
+        [Fact]
+        public void The_mbc3_clock_latches_only_on_zero_then_one_identically()
+        {
+            byte[] rom = SyntheticGbRom.Build(romBanks: 4, cartridgeType: 0x10, ramSizeCode: 0x03, patches: (0, new byte[]
+            {
+                0x3E, 0x0A, 0xEA, 0x00, 0x00, 0x3E, 0x08, 0xEA, 0x00, 0x40, 0x3E, 0x05, 0xEA, 0x00, 0xA0,
+                0x3E, 0x01, 0xEA, 0x00, 0x60, 0xFA, 0x00, 0xA0, 0xEA, 0x00, 0xC0,
+                0xAF, 0xEA, 0x00, 0x60, 0x3E, 0x01, 0xEA, 0x00, 0x60, 0xFA, 0x00, 0xA0, 0xEA, 0x01, 0xC0, 0x18, 0xFE,
+            }));
+            var pair = new MercuryRtPair(rom, skipRendering: false);
+            pair.Run(2, null);
+            Assert.Equal(0, pair.Csharp.Bus!.Wram[0]);
+            Assert.Equal(5, pair.Csharp.Bus!.Wram[1]);
+        }
+
+        // An OAM DMA from WRAM watched instruction by instruction, so where each byte lands is in every comparison - mutant M7 survived frame-level runs (§8.4).
+        [Fact]
+        public void An_oam_dma_steps_identically_byte_by_byte()
+        {
+            byte[] rom = SyntheticGbRom.Build(patches: (0, new byte[]
+            {
+                0x21, 0x00, 0xC0, 0x06, 0xA0, 0x70, 0x23, 0x05, 0x20, 0xFB, 0x3E, 0xC0, 0xE0, 0x46,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x18, 0xF4,
+            }));
+            var pair = new MercuryRtPair(rom, skipRendering: false);
+            for (int i = 0; i < 3000; i++) Assert.True(pair.Step());
+            Assert.Equal(0xA0, pair.Csharp.Bus!.Oam[0]);
+        }
     }
 
     // Random programs on MercuryRT and the C# Mercury, compared instruction by instruction - see Mercury_Native.md §8.2; a class of its own so it runs beside the others.

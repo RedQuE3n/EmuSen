@@ -891,6 +891,52 @@ Engine row's hint says so.
 The blast radius was the Mercury, cheat, factory, catalog, engine and graphics-settings filters: 568 tests. Two failed.
 They asserted that only the N64 has an Engine row, and were updated to expect the Game Boy's.
 
+### 8.4 Mutants for stages 2–5 (done 2026-09-23)
+
+**Method.** There were 23 hand-made mutants. Each was applied, then the crate's tests and WiseMan's `MercuryRt` filter
+ran with the four games, and the file was restored. The first round ran **without the corpus**: the runner passed
+`EMUSEN_MERCURYRT_ROMS` and not `EMUSEN_MERCURYRT_CORPUS`, so the corpus case passed without running. That is one
+reason survivors were many. The survivors were re-run with the corpus and with one new targeted test each.
+
+| Mutant | First round | After the new test and the corpus |
+|---|---|---|
+| M1 ADD's half-carry ignores the carry-in | random programs | — |
+| M2 EI takes effect at once | random programs | — |
+| M3 the HALT bug never arms | survived | halt-bug test; corpus |
+| M4 a taken CALL costs 20 | random programs | — |
+| M5 TIMA reloads after 3 cycles | interrupt programs | — |
+| M6 the timer counts rising edges | interrupt programs | — |
+| M7 an OAM DMA byte lands a cycle early | survived | **survived** (argued below) |
+| M8 VRAM open while drawing | random programs | — |
+| M9 an HDMA block charges 16 cycles | HDMA program, random programs, games | — |
+| M10 STAT on level, not edge | interrupt programs | — |
+| M11 mode 3 ignores SCX's fine scroll | busy programs | — |
+| M12 the window counts only when rendering | survived | window test with rendering skipped, instruction by instruction |
+| M13 the DMG sprite sort unstable on equal X | games only | — |
+| M14 the CGB priority bit ignored | survived | priority test |
+| M15 the sweep's second check dropped | survived | sweep test; corpus |
+| M16 the envelope on sequencer step 6 | games only | — |
+| M17 the high-pass charges after the output | busy programs | — |
+| M18 MBC1's bank 0 not remapped | survived | bank-zero test; corpus |
+| M19 MBC3 latches on any 1 | survived | latch test |
+| M20 KEY1's switch keeps the base-clock phase | pattern ambiguous, not run | **survived** (equivalent, below) |
+| M21 the ROM patch table ignored | cheat test | — |
+| M22 an absent CARTRAM space reads 0 | survived | space-by-space test |
+| M23 the save path always null | battery test | — |
+
+**Result.** 21 of 23 are caught. Seven were caught only after a test was written for them. Two (M13 and M16) are caught
+by the real games alone.
+
+**The two left, argued rather than tested:**
+
+- **M20 is equivalent.** The base-clock phase flips once per T-cycle in double speed, and the bus always ticks whole
+  machine cycles, which are an even number of T-cycles. So the phase is false at every instruction boundary. In single
+  speed it is never touched, so STOP's reset of it changes nothing.
+- **M7 is equivalent at every machine-cycle boundary.** Both placements have landed the same number of bytes by the end
+  of each 4-cycle group. The one reader that could tell them apart is the renderer's OAM read at `drawing_end`, a dot
+  inside a machine cycle, during an OAM DMA, with sprites enabled. No test aligns a DMA with a line's render, so this
+  case is untested, not proven equivalent.
+
 **Divergences kept, and written down:**
 
 - A truncated state is refused whole by MercuryRT. C# stops part-way through reading it, leaving a half-loaded machine,

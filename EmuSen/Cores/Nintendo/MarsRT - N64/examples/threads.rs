@@ -37,7 +37,7 @@ fn main() {
         eprintln!("device: {}", core.gpu_report());
     }
 
-    // `trace=<file>`: one line a frame, the emulation, the present, the presenter's join and its job, in nanoseconds (Mars_Native.md §6.11).
+    // `trace=<file>`: one line a frame, the emulation, the present, the presenter's join and its job, site 8 and the drain's joins, in nanoseconds (Mars_Native.md §6.11, §6.14).
     let trace = args.iter().skip(5).find_map(|a| a.strip_prefix("trace="));
     let mut lines = String::new();
     let started = Instant::now();
@@ -48,18 +48,22 @@ fn main() {
         }
         let (waited, joined, walked) = (core.scanout.presenter_waits().1, core.scanout.joined, core.scanout.presenter_nanos);
         let site8 = core.machine.bus.dp.threads.as_deref().map_or(0, |t| t.counters.nanos_per_site[8]);
+        let drain_joined = core.machine.bus.dp.threads.as_deref().map_or(0, |t| t.counters.join_nanos);
         let t0 = Instant::now();
         core.machine.run_frame();
         let t1 = Instant::now();
         let presented = core.machine.present(&mut core.scanout);
         let t2 = Instant::now();
         let site8 = core.machine.bus.dp.threads.as_deref().map_or(0, |t| t.counters.nanos_per_site[8]) - site8;
+        let drain_joined = core.machine.bus.dp.threads.as_deref().map_or(0, |t| t.counters.join_nanos) - drain_joined;
         let joined = core.scanout.joined - joined;
         lines += &format!("{frame} {} {} {} {} {} {} {site8}\n", (t1 - t0).as_nanos(), (t2 - t1).as_nanos(), core.scanout.presenter_waits().1 - waited, joined, if joined > 0 { core.scanout.presenter_nanos - walked } else { 0 }, presented.walked as u8);
+        lines.pop();
+        lines += &format!(" {drain_joined}\n");
     }
     let elapsed = started.elapsed();
     if let Some(path) = trace {
-        std::fs::write(path, "frame emulation present join_wait joined presenter walked site8\n".to_string() + &lines).expect("the trace");
+        std::fs::write(path, "frame emulation present join_wait joined presenter walked site8 drain_join\n".to_string() + &lines).expect("the trace");
     }
     let (joins_waited, waited) = core.scanout.presenter_waits();
     let per_frame = |nanos: i64| nanos as f64 / 1e6 / frames as f64;
@@ -67,7 +71,7 @@ fn main() {
         let (c, s) = (&t.counters, t.shared());
         let busy = s.drain_nanos.load(std::sync::atomic::Ordering::Relaxed);
         let sites: Vec<String> = c.nanos_per_site.iter().enumerate().filter(|(_, n)| per_frame(**n) >= 0.01).map(|(i, n)| format!("{i}: {:.2}", per_frame(*n))).collect();
-        format!("; waited {:.3} ms a frame (by site {}); the first worker busy {:.3}", per_frame(c.nanos_per_site.iter().sum::<i64>()), sites.join(", "), per_frame(busy))
+        format!("; waited {:.3} ms a frame (by site {}); joined {:.3} ({} joins that waited); the first worker busy {:.3}", per_frame(c.nanos_per_site.iter().sum::<i64>()), sites.join(", "), per_frame(c.join_nanos), c.joins, per_frame(busy))
     });
 
     core.machine.join_presentation(&mut core.scanout);

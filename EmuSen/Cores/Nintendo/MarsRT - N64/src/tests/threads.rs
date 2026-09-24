@@ -423,7 +423,7 @@ fn seeded_lists_with_processor_accesses_between_leave_what_the_lists_at_once_lea
     }
 }
 
-/// A read of a range waits for every pending draw on its pages, where C# frees one whose first eight bytes no pending draw holds (Mars_Native.md §5.6.2).
+/// A read of a range waits for the pending draws that can reach any of its bytes, where C# frees one whose first eight bytes no pending draw holds (Mars_Native.md §5.6.2).
 #[test]
 fn a_range_read_whose_first_bytes_no_draw_holds_still_waits_for_the_draws_that_hold_the_rest() {
     let list = [FILL_CYCLE, color_image(FRAMEBUFFER), scissor(0, 0, WIDTH, ROWS), (0x37 << 56) | 0x1234_5678, fill_rectangle(0, 8, WIDTH - 1, 9), SYNC_FULL];
@@ -448,6 +448,44 @@ fn a_range_read_whose_first_bytes_no_draw_holds_still_waits_for_the_draws_that_h
     watchdog.join().unwrap();
     assert!(waited >= std::time::Duration::from_millis(250), "the read went ahead of the draw after {waited:?}");
     assert!(seen[..] == once.bus.rdram[row..row + 0x80], "the read saw the rows before the draw");
+}
+
+/// A range read on the rows of a batch's first draw goes ahead once that draw is done, though the batch's range and marks cover it until the
+/// batch ends; the old coarse wait held it for the whole batch (Mars_Native.md §6.14).
+#[test]
+fn a_range_read_goes_ahead_of_the_batch_once_the_draws_that_reach_its_rows_are_done() {
+    let mut list = vec![FILL_CYCLE, color_image(FRAMEBUFFER), scissor(0, 0, WIDTH, ROWS), (0x37 << 56) | 0x1234_5678, fill_rectangle(0, 0, WIDTH - 1, 10)];
+    let first_done = list.len() as i64;
+    for i in 0..400u32 {
+        list.push((0x37 << 56) | (0x0101_0101 * (i & 0xFF)) as u64);
+        list.push(fill_rectangle(0, 100, WIDTH - 1, ROWS - 1));
+    }
+    list.push(SYNC_FULL);
+    let (from, count) = (FRAMEBUFFER, WIDTH * 2 * 9);
+    let (mut once, mut drain) = (at_once(), threaded());
+    hand_over(&mut once, &list, LIST);
+    hand_over(&mut drain, &list, LIST);
+    threads(&drain).wait_until(first_done);
+    threads(&drain).hold();
+    let issued = threads(&drain).issued();
+    let completed = issued - threads(&drain).pending();
+    assert!(completed < issued - 2, "the batch finished before the hold ({completed} of {issued}), so the case was not reached");
+    assert!(write_mark(&drain, from) >= issued - 1, "the page is not marked to the batch's end, so the coarse wait would not have held it");
+
+    let resume = threads(&drain).resumer();
+    let watchdog = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        resume();
+    });
+    let started = std::time::Instant::now();
+    drain.bus.dp.wait_read_range(from, count, site::VI);
+    let waited = started.elapsed();
+    let seen = drain.bus.rdram[from as usize..(from + count) as usize].to_vec();
+    watchdog.join().unwrap();
+    assert!(waited < std::time::Duration::from_millis(250), "the read waited {waited:?} for draws that cannot reach its rows");
+    assert!(seen[..] == once.bus.rdram[from as usize..(from + count) as usize], "the read saw rows the first draw had not yet left");
+    drain.join_rdp();
+    assert!(state(&once) == state(&drain), "the machines part after the list");
 }
 
 pub(super) fn split(workers: usize) -> Machine {

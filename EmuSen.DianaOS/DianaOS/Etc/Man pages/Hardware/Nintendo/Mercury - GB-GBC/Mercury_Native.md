@@ -677,6 +677,9 @@ rewind. Mercury has no `ISnapshotCore`, so rewind uses the full state on both en
 | P5 | The once-a-frame boundary costs under 3% of MercuryRT's frame | Stage 5 |
 | P6 | No recompiler and no threads are needed for MercuryRT to beat C# on every measured configuration | Stage 5; refuted by any configuration in which it does not |
 
+*Retired 2026-09-23 (§8.2):* P1 is refuted, with 0.82–1.02 of C#'s time measured. P2 is refuted in direction: the
+renderer is slower in Rust. P5 holds. P3, P4 and P6 are still open.
+
 ## 8. The work, stage by stage
 
 ### 8.1 Stage 1: the state, byte for byte (done 2026-09-23)
@@ -730,3 +733,166 @@ On the C# side there are `Shim/MercuryNative.cs` (the loader, `EMUSEN_MERCURY_NA
 
 **What stage 1 does not establish.** It establishes that MercuryRT holds a C# state. It says nothing about running one.
 The skipped fields of §3.1 exist in Rust (`Skip<T>`) but are untouched by any test yet.
+
+### 8.2 Stages 2–4: the machine, the mixer and the renderer (done 2026-09-23)
+
+*Order.* §4 planned three stages: the machine first, then the mixer, then the renderer. They were written together and
+proven together, because the oracle below compares all three every frame. Each claim can still be read on its own:
+state equality with `SkipRendering` on proves the machine without the renderer, sample equality proves the mixer, and
+RGBA equality proves the renderer.
+
+**What was built.** Every line of the C# machine has a Rust counterpart, in the C# order:
+
+- `cpu/`: the SM83's step, opcodes, `$CB` table and ALU, generic over a `CpuBus` trait so the step is monomorphised;
+- `memory/bus.rs`: decode, access blocking, the timer's edge detector, OAM DMA, both HDMA modes and their stall,
+  KEY1 and STOP, the serial sink, the joypad matrix, and the per-T-cycle clock;
+- `memory/mappers.rs`: the five boards as an enum, MBC3's clock included;
+- `ppu/`: the mode machine, the STAT line, the window counter and the line renderer;
+- `apu/`: the channels, the sequencer and the mixer.
+
+The known C# defects are copied deliberately:
+
+- D1's integer division, with `Math.Pow` evaluated in C# and passed down;
+- D2's clock counted in CPU cycles;
+- D3's save path in the state.
+
+The C ABI gained the calls a frame needs: run a frame, step, buttons, options, sample rate, mutes, picture, audio and
+serial. `examples/frames.rs` runs the machine in a process with no .NET in it.
+
+**The oracle** (`EmuSen.WiseMan/Cores/MercuryRtMachineTests.cs`, 38 cases, 7 min 22 s). It compares the whole C#
+state after every frame, and after every instruction where stated. It compares the drained samples and the RGBA frame
+after every frame. It compares the serial log. When they differ, it names the first differing field from the layout.
+Everything below was identical:
+
+- **Synthetic programs.** Three programs ran on all eleven boards, 600 frames each.
+  - A counter.
+  - An interrupt program: timer, STAT, vblank and serial handlers into HALT, OAM DMA every vblank, a window, sprites,
+    and a wave note.
+  - A colour program: both HDMA modes every frame, VRAM and WRAM banking, palette ports, and KEY1 plus STOP toggling
+    double speed at frames 60, 316 and 572.
+- **Random programs.** On every board, 16 random ROMs ran at 5,000 instructions each, compared after every instruction:
+  775,483 instructions. Four seeds keep the eleven illegal opcodes; 26 programs stopped on one, in both engines, at the
+  same instruction, with C#'s message.
+- **Games.** Tetris, Link's Awakening, Kirby's Dream Land and Pokémon Yellow ran 3,000 frames from boot with the bench's
+  input. Each then ran 600 frames from a state C# saved at frame 3,000, loaded into both engines fresh.
+- **The corpus.** All 173 ROMs of §3.4 ran to their verdicts or 3,600 frames: 31,986 frames. The serial log was
+  compared every frame, and the state every 30 frames and at the end.
+
+A first attempt at the transferred-state case gave the expected failure. C# was continued from frame 3,000 while Rust
+was loaded fresh, and the sound differed at frame 1. §3.1's skipped mixer fields carried the C# instance's history, which
+no state holds. Loading both engines fresh made them identical. The test resets the fresh C# core's save path to null
+after loading, because D3 would otherwise make its 300th-frame save write `.tmp` into the working directory.
+
+**The first like-for-like speed (measured, retiring P1 and P2).** Three interleaved rounds were run with
+`mercbench`, flat out, under the bench lock, with the picture copied and the audio drained every frame on both engines.
+Both engines ended every run with the same state hash.
+
+| Game | C# p50 ms (3 rounds) | MercuryRT p50 ms | C#/RT |
+|---|---|---|---|
+| Tetris | 0.641 / 0.669 / 0.627 | 0.553 / 0.790 / 0.541 | 1.16 / 0.85 (a noisy round) / 1.16 |
+| Link's Awakening | 0.560 / 0.574 / 0.618 | 0.505 / 0.508 / 0.508 | 1.11 / 1.13 / 1.22 |
+| Kirby's Dream Land | 0.681 / 0.701 / 0.704 | 0.596 / 0.604 / 0.592 | 1.14 / 1.16 / 1.19 |
+| Pokémon Yellow | 0.705 / 0.705 / 0.712 | 0.720 / 0.711 / 0.711 | 0.98 / 0.99 / 1.00 |
+| Double-speed loop | 0.912 / 0.896 / 0.897 | 0.759 / 0.757 / 0.827 | 1.20 / 1.18 / 1.08 |
+
+With the renderer skipped, both engines ran the same machine, the like-for-like comparison §1.3 named:
+
+| Game | C# p50 ms | MercuryRT p50 ms | C#/RT |
+|---|---|---|---|
+| Tetris | 0.528 / 0.539 / 0.545 | 0.396 / 0.391 / 0.386 | 1.33 / 1.38 / 1.41 |
+| Pokémon Yellow | 0.565 / 0.554 / 0.558 | 0.531 / 0.525 / 0.512 | 1.06 / 1.06 / 1.09 |
+
+- **P1 is refuted.** A line-for-line MercuryRT takes 0.82–1.02 of C#'s time on whole frames (about 1.0–1.2×), against
+  a predicted 0.50–0.80 with a central 0.62. Yellow gains nothing. The machine core gains 1.06–1.41×, near the
+  pessimistic end of the row §1.3 marked as unmeasured. Why Yellow's machine gains a sixth of what Tetris's does is not
+  explained. Both run the same per-cycle loop.
+- **P2 is refuted in direction.** The renderer is slower in Rust. It is the difference between the two tables:
+  0.14–0.16 ms against C#'s about 0.10 on Tetris, and 0.19 ms against about 0.15 on Yellow.
+- **P5 holds.** `examples/frames` runs the same frames with no .NET in the process: Tetris 0.513/0.519 ms whole and
+  0.370/0.369 skipped, Yellow 0.692/0.691 and 0.508/0.522. That is the same as through the ABI, so the once-a-frame
+  boundary costs nothing measurable.
+
+**Where MercuryRT's time goes** (`rtsample.py`, 5,558 samples of Yellow). By innermost inlined function, the per-cycle
+clock takes about 52%:
+
+- `tick`, 18%;
+- `step_one_cycle`, 16%;
+- the channels' `step_timer`, 7%;
+- `step_oam_dma`, 6%;
+- `on_div_bit`, 2%;
+- the counters' `wrapping_add`, 7%.
+
+The renderer takes about 21%: `render_background` 12%, `color_pixel` 5%, `tile_row_address` 2% and `expand` 2%. This
+is the same picture §1.1 drew for C#. The port moved the costs without changing them, and the cost is the design (one
+step of every device per T-cycle), not the language. The lever named in §1.2 (catching devices up in batches), and a
+renderer written for the compiler rather than line for line, are the next questions. Each needs its own prediction.
+
+**The debugging trap met on the way, and an intermittent failure it explains.** The first mutant run stopped with
+every command's output failing. `/tmp` is a 16 GB tmpfs, shared with other sessions' scratch space, and it had filled.
+The crate's build output now lives under `~/.cache/emusen/probe/mercuryrt/`, as the project keeps probe binaries.
+
+In the main checkout, the first run after the merge failed five random-program cases: one after 7 s, then four in
+under a millisecond each, with no message captured. The failure did not reproduce in three later runs. Each case writes
+16 temporary ROMs through `SyntheticGbRom.WriteTemp`, and that pattern is what a filling temporary directory produces.
+It was reproduced: the same binary ran with `TMPDIR` on a private 64 MB tmpfs (`unshare -rm`), and the tmpfs was filled
+20 s in. One case failed after 18 s, and the other ten failed in 1 ms or less, each with `IOException: No space left on
+device` on its ROM file.
+
+Two other explanations were tried and do not match:
+
+- **A mutant library left in a build output.** Mutant M1 fails six cases, each after seconds, on `Cpu.F`.
+- **Overwriting the loaded library during a run**, with a different build or a byte-identical copy. Both crash the test
+  host outright.
+
+The failure is environmental, and no code was changed for it.
+
+### 8.3 Stage 5: the shim and the Engine row (done 2026-09-23)
+
+**What was built.** `Shim/MercuryRtCore.cs` implements `ICore`, `ICheatRegistryHost`, `IStateFormat` and
+`IFrameBufferPool` over the machine:
+
+- **Header.** It parses the header with the C# `Cartridge`, so a bad image throws C#'s own exceptions.
+- **Battery saves.** It reads the battery save as C# reads it. It writes it with the path the machine's state carries,
+  as C# does (D3).
+- **Frame.** It runs C#'s end-of-frame work in C#'s order: frame log, cheats, and the 300th-frame save.
+- **Picture.** It lends picture copies through `FrameBufferLending`, as MarsRT does. C# Mercury hands out its live
+  array (§6.3).
+
+`CoreCatalog.EngineFor("GB")` offers *Mercury (C#)*, the default, and *MercuryRT (Rust)*. `CoreFactory` builds MercuryRT
+only when it is asked for and available. `EngineNotice` says why it is not running when it is not. The Engine row
+appears on Mistress's GB tab through the existing window code.
+
+**Game Genie without calls from Rust to C#.** `CheatRegistry` gained a `Version`, bumped by every change. When it moves,
+the shim flattens `TryPatchRom` into a table: one entry per address a patch touches, 256 entries of `0x100 | patched`
+or 0. It finds the addresses by probing each ROM address with every compare byte in use, plus zero, then asks the
+registry for all 256 originals of each address it found. The registry's rules stay in C#. The table is exact for every
+original byte, so a compare-gated code behaves across banks as it does in C#.
+
+**The debugger, for now.** `MercuryDebugTarget` gained an optional `MercuryDebugHost`, which routes reads, writes,
+refreshes, cheats, the frame count and mutes. The shim hands out a C# target over a mirror `MercuryCore`, which is
+loaded from MercuryRT's state on every `RefreshProviders`. Memory reads and writes go to MercuryRT directly. The mirror's
+registries are the shim's, so watches, labels and the frame log behave as on C#.
+
+**Not yet:** breakpoints, stepping, coverage, and the write log that feeds watches. These are stage 6's hooks. The
+Engine row's hint says so.
+
+**Evidence** (`EmuSen.WiseMan/Cores/MercuryRtCoreTests.cs`, 6 cases, all through `ICore` or `IDebugTarget` alone):
+
+- **Cheats.** A compare-gated ROM patch and a RAM poke ran for 300 frames, then 60 more with the master switch off.
+  State, picture and sound were identical every frame.
+- **Battery.** A random `.srm` was loaded by both engines, and after 300 frames both wrote the same bytes. C#'s save was
+  moved aside before MercuryRT's frame, so the comparison cannot pass on one engine's file.
+- **States.** States saved on either engine were byte-identical, and each loaded on the other. After the crossing, 120
+  frames were identical. Both refusals are C#'s.
+- **Debugger.** The target's CPU registers and frame count equal the C# target's, and a WRAM write through it reaches
+  MercuryRT.
+- **Games.** The four games ran 1,500 frames through `CoreFactory` with input, identical.
+
+The blast radius was the Mercury, cheat, factory, catalog, engine and graphics-settings filters: 568 tests. Two failed.
+They asserted that only the N64 has an Engine row, and were updated to expect the Game Boy's.
+
+**Divergences kept, and written down:**
+
+- A truncated state is refused whole by MercuryRT. C# stops part-way through reading it, leaving a half-loaded machine,
+  and throws `EndOfStreamException`.
+- MercuryRT's `GetFrameBufferRgba` is a copy.

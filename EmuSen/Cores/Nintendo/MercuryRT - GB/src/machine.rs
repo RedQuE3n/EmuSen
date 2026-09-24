@@ -60,6 +60,65 @@ impl Machine {
         Ok(())
     }
 
+    /// `MercuryCore.ReadSpace` by number: ROM, VRAM, CARTRAM, WRAM, OAM, HRAM, then CPUBUS through the real decode.
+    pub fn read_space(&mut self, space: u32, address: i32) -> u8 {
+        let bus = &mut self.bus;
+        match space {
+            0 => usize::try_from(address).ok().and_then(|a| bus.cart.rom.get(a)).copied().unwrap_or(0xFF),
+            1 => bus.vram[wrap(address, bus.vram.len())],
+            2 => {
+                if bus.cart.ram.is_empty() {
+                    0xFF
+                } else {
+                    bus.cart.ram[wrap(address, bus.cart.ram.len())]
+                }
+            }
+            3 => bus.wram[wrap(address, bus.wram.len())],
+            4 => bus.oam[wrap(address, bus.oam.len())],
+            5 => bus.high_ram[wrap(address, bus.high_ram.len())],
+            6 => bus.read((address & 0xFFFF) as u16),
+            _ => 0,
+        }
+    }
+
+    /// `MercuryCore.WriteSpace`: ROM is the cartridge mask, and a debug write must not corrupt the image.
+    pub fn write_space(&mut self, space: u32, address: i32, value: u8) {
+        let bus = &mut self.bus;
+        match space {
+            1 => {
+                let i = wrap(address, bus.vram.len());
+                bus.vram[i] = value;
+            }
+            2 => {
+                if !bus.cart.ram.is_empty() {
+                    let i = wrap(address, bus.cart.ram.len());
+                    bus.cart.ram[i] = value;
+                }
+            }
+            3 => {
+                let i = wrap(address, bus.wram.len());
+                bus.wram[i] = value;
+            }
+            4 => bus.oam[wrap(address, 0xA0)] = value,
+            5 => bus.high_ram[wrap(address, 0x7F)] = value,
+            6 => bus.write((address & 0xFFFF) as u16, value),
+            _ => {}
+        }
+    }
+
+    pub fn space_size(&self, space: u32) -> usize {
+        match space {
+            0 => self.bus.cart.rom.len(),
+            1 => self.bus.vram.len(),
+            2 => self.bus.cart.ram.len(),
+            3 => self.bus.wram.len(),
+            4 => 0xA0,
+            5 => 0x7F,
+            6 => 0x10000,
+            _ => 0,
+        }
+    }
+
     /// `MercuryCore.SaveState`: the header, then the cartridge, its board, the CPU and the bus, each walked as C# walks it.
     pub fn write_state(&self, w: &mut StateWriter) {
         w.u32("Magic", STATE_MAGIC);
@@ -118,6 +177,11 @@ impl Machine {
         self.write_state(&mut w);
         w.into_layout()
     }
+}
+
+/// C#'s `((address % size) + size) % size`, zero for an empty space.
+fn wrap(address: i32, size: usize) -> usize {
+    if size == 0 { 0 } else { address.rem_euclid(size as i32) as usize }
 }
 
 #[cfg(test)]

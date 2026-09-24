@@ -173,12 +173,18 @@ namespace EmuSen.Cores
         public const string MarsEngine = "Mars (C#)";
         public const string MarsRtEngine = "MarsRT (Rust)";
 
+        public const string MercuryEngine = "Mercury (C#)";
+        public const string MercuryRtEngine = "MercuryRT (Rust)";
+
         // Which implementation runs a console, for the consoles that have more than one; the first is the default - see EmuSen_Settings_Reference.md §4.44.
         private static readonly Dictionary<string, CoreSetting> EngineByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
             ["N64"] = new(EngineKey, "Engine",
                 "Which implementation runs the console. Mars (C#) is the reference. MarsRT (Rust) is exact against it in state, picture and sound, reads the same save states and battery saves, and runs its display processor threaded and its code compiled as Mars does; it honours every setting below, the resolution multiple, antialiasing and the graphics card included. Measured a little faster than Mars on a desktop and about a tenth faster on a handheld. Takes effect when a game is next loaded.",
                 CoreSettingKind.Choice, MarsEngine, Choices: new[] { MarsEngine, MarsRtEngine }),
+            ["GB"] = new(EngineKey, "Engine",
+                "Which implementation runs the console. Mercury (C#) is the reference. MercuryRT (Rust) is exact against it in state, picture and sound and reads the same save states and battery saves; its debugger view is refreshed from its state, and it does not yet stop at breakpoints. Takes effect when a game is next loaded.",
+                CoreSettingKind.Choice, MercuryEngine, Choices: new[] { MercuryEngine, MercuryRtEngine }),
         };
 
         // Null for a console with one implementation.

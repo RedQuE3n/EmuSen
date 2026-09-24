@@ -78,7 +78,7 @@ namespace EmuSen.WiseMan.Fixtures
         private sealed class MercuryRtRig : MercuryDebugRig
         {
             private readonly MercuryRtCore _core = new();
-            private readonly IDebugTarget _target;
+            private readonly MercuryRtDebugTarget _target;
 
             public MercuryRtRig(string rom) : base(rom)
             {
@@ -91,7 +91,7 @@ namespace EmuSen.WiseMan.Fixtures
             public override Type TargetType => _target.GetType();
             public override Type CoreType => typeof(MercuryRtCore);
             public override string? Engine => CoreCatalog.MercuryRtEngine;
-            public override int Pc => _target.DebugCpus[0].ProgramCounter!();
+            public override int Pc => _core.Pc;
             public override byte ReadSpace(string space, int address) => _core.ReadSpace(space, address);
             public override void WriteSpace(string space, int address, byte value) => _core.WriteSpace(space, address, value);
             public override void Dispose() => _core.Dispose();

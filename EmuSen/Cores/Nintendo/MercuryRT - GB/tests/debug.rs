@@ -225,6 +225,25 @@ fn an_illegal_opcode_in_an_observed_frame_is_the_plain_frames_error() {
     assert_eq!(state(&m), state(&plain));
 }
 
+/// KEY1 and STOP into double speed mid-frame, then a count: the frame the switch is in ends on the budget it began with, 70,224
+/// CPU cycles, before the slowed PPU completes, so a stop refused after the switch must not begin the budget again.
+#[test]
+fn a_frame_continued_past_a_refused_stop_keeps_the_budget_it_began_with() {
+    let mut image = rom(&[0x3E, 0x01, 0xE0, 0x4D, 0x10, 0x00, 0x21, 0x00, 0xC0, 0x34, 0x18, 0xFD], &[]);
+    image[0x143] = 0x80;
+    image[HEADER_CHECKSUM_ADDRESS] = header_checksum(&image);
+    let mut plain = load(image.clone());
+    let mut observed = load(image);
+    observed.hooks.breakpoints = vec![(0x159, 0x159)];
+    for f in 0..4 {
+        plain.run_frame().unwrap();
+        let stops = run_through(&mut observed, 0);
+        assert!(!stops.is_empty());
+        assert_eq!(state(&observed), state(&plain), "frame {f}");
+    }
+    assert!(plain.bus.double_speed);
+}
+
 /// Every table armed and every stop resumed, against the same machine run plain: state, picture and sound after every frame.
 fn assert_armed_is_plain(image: Vec<u8>, frames: usize) {
     let mut plain = load(image.clone());

@@ -11,10 +11,14 @@ using EmuSen.DianaOS.DianaOS.Var;
 
 namespace EmuSen.Cores.Nintendo.Mercury.Debug
 {
+    // Where a target over a mirror reads, writes and refreshes, when the machine it shows runs elsewhere - see Mercury_Native.md §8.3.
+    public sealed record MercuryDebugHost(Func<string, int, byte> Read, Action<string, int, byte> Write, Action Refresh, Action ApplyCheats, Func<long> FrameCount, Action<int, bool> SetChannelMuted);
+
     // A space backed by a name the core already knows how to read and write - see Mercury_Debug.md §2.
     internal sealed class MercuryDebugMemorySpace : IDebugMemorySpace
     {
         private readonly MercuryCore _core;
+        private readonly MercuryDebugHost? _host;
         private readonly string _space;
 
         public string Name { get; }
@@ -22,9 +26,10 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
         public bool IsWritable { get; }
         public bool HasSideEffects { get; }
 
-        public MercuryDebugMemorySpace(MercuryCore core, string space, string name, bool isWritable, bool hasSideEffects)
+        public MercuryDebugMemorySpace(MercuryCore core, MercuryDebugHost? host, string space, string name, bool isWritable, bool hasSideEffects)
         {
             _core = core;
+            _host = host;
             _space = space;
             Name = name;
             Size = core.SpaceSize(space);
@@ -32,11 +37,13 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
             HasSideEffects = hasSideEffects;
         }
 
-        public byte Read(int address) => _core.ReadSpace(_space, Wrap(address));
+        public byte Read(int address) => _host is null ? _core.ReadSpace(_space, Wrap(address)) : _host.Read(_space, Wrap(address));
 
         public void Write(int address, byte value)
         {
-            if (IsWritable) _core.WriteSpace(_space, Wrap(address), value);
+            if (!IsWritable) return;
+            if (_host is null) _core.WriteSpace(_space, Wrap(address), value);
+            else _host.Write(_space, Wrap(address), value);
         }
 
         private int Wrap(int address) => Size == 0 ? 0 : ((address % Size) + Size) % Size;
@@ -46,6 +53,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
     public sealed class MercuryDebugTarget : IDebugTarget, IWriteObserver
     {
         private readonly MercuryCore _core;
+        private readonly MercuryDebugHost? _host;
 
         private readonly List<IDebugMemorySpace> _spaces = new();
 
@@ -58,9 +66,10 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
         private readonly PollingProvider<IReadOnlyList<DebugAudioChannelInfo>> _audioChannels;
         private readonly PollingProvider<IReadOnlyList<DebugLoadInfo>> _hardwareLoad;
 
-        public MercuryDebugTarget(MercuryCore core)
+        public MercuryDebugTarget(MercuryCore core, MercuryDebugHost? host = null)
         {
             _core = core;
+            _host = host;
 
             BuildSpaces();
 
@@ -86,12 +95,16 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
         public CheatRegistry Cheats => _core.Cheats;
 
         // The Apply button, which must not wait for a frame the pause is not running - see EmuSen_Cheats.md §6.
-        public void ApplyCheats() => _core.ApplyCheats();
+        public void ApplyCheats()
+        {
+            if (_host is null) _core.ApplyCheats();
+            else _host.ApplyCheats();
+        }
 
         public CoverageRegistry? Coverage => _core.Coverage;
         public LabelRegistry? Labels => _core.Labels;
 
-        public long FrameCount => _core.TotalFrames;
+        public long FrameCount => _host?.FrameCount() ?? _core.TotalFrames;
 
         public int MaxSprites => Ppu.SpriteCount;
 
@@ -158,6 +171,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
 
         public void RefreshProviders()
         {
+            _host?.Refresh();
             _cpuRegisters.Refresh();
             _videoRegisters.Refresh();
             _apuRegisters.Refresh();
@@ -176,15 +190,15 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
 
         private void BuildSpaces()
         {
-            _spaces.Add(new MercuryDebugMemorySpace(_core, MercuryCore.SpaceRom, "ROM", false, false));
-            _spaces.Add(new MercuryDebugMemorySpace(_core, MercuryCore.SpaceVram, "VRAM", true, false));
-            _spaces.Add(new MercuryDebugMemorySpace(_core, MercuryCore.SpaceCartRam, "CARTRAM", true, false));
-            _spaces.Add(new MercuryDebugMemorySpace(_core, MercuryCore.SpaceWram, "WRAM", true, false));
-            _spaces.Add(new MercuryDebugMemorySpace(_core, MercuryCore.SpaceOam, "OAM", true, false));
-            _spaces.Add(new MercuryDebugMemorySpace(_core, MercuryCore.SpaceHram, "HRAM", true, false));
+            _spaces.Add(new MercuryDebugMemorySpace(_core, _host, MercuryCore.SpaceRom, "ROM", false, false));
+            _spaces.Add(new MercuryDebugMemorySpace(_core, _host, MercuryCore.SpaceVram, "VRAM", true, false));
+            _spaces.Add(new MercuryDebugMemorySpace(_core, _host, MercuryCore.SpaceCartRam, "CARTRAM", true, false));
+            _spaces.Add(new MercuryDebugMemorySpace(_core, _host, MercuryCore.SpaceWram, "WRAM", true, false));
+            _spaces.Add(new MercuryDebugMemorySpace(_core, _host, MercuryCore.SpaceOam, "OAM", true, false));
+            _spaces.Add(new MercuryDebugMemorySpace(_core, _host, MercuryCore.SpaceHram, "HRAM", true, false));
 
             // $FF00 answers the joypad matrix and $FF41 recomputes STAT, so a bulk scan here is not free.
-            _spaces.Add(new MercuryDebugMemorySpace(_core, MercuryCore.SpaceCpuBus, "CPUBUS", true, true));
+            _spaces.Add(new MercuryDebugMemorySpace(_core, _host, MercuryCore.SpaceCpuBus, "CPUBUS", true, true));
         }
 
         public IReadOnlyList<IDebugMemorySpace> GetMemorySpaces() => _spaces;
@@ -407,7 +421,11 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
 
         private static byte Expand(int channel) => (byte)((channel << 3) | (channel >> 2));
 
-        public void SetChannelMuted(int index, bool muted) => _core.Bus?.Apu.SetChannelMuted(index, muted);
+        public void SetChannelMuted(int index, bool muted)
+        {
+            _core.Bus?.Apu.SetChannelMuted(index, muted);
+            _host?.SetChannelMuted(index, muted);
+        }
 
         // A non-destructive peek, unlike ICore.DequeueAudioSamples - see EmuSen_Audio_Sync.md §7.
         public (short[] Samples, int SampleRate) GetAudioSamples() =>

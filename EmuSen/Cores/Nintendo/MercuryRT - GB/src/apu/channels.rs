@@ -115,6 +115,193 @@ impl Default for NoiseChannel {
     }
 }
 
+const DUTY_PATTERNS: [[u8; 8]; 4] = [[0, 0, 0, 0, 0, 0, 0, 1], [1, 0, 0, 0, 0, 0, 0, 1], [1, 0, 0, 0, 0, 1, 1, 1], [0, 1, 1, 1, 1, 1, 1, 0]];
+const DIVISORS: [i32; 8] = [8, 16, 32, 48, 64, 80, 96, 112];
+
+impl Envelope {
+    pub fn load(&mut self, nrx2: u8) {
+        self.initial_volume = (nrx2 >> 4) as i32;
+        self.increasing = nrx2 & 0x08 != 0;
+        self.period = (nrx2 & 0x07) as i32;
+    }
+
+    pub fn trigger(&mut self) {
+        self.volume = self.initial_volume;
+        self.timer = if self.period == 0 { 8 } else { self.period };
+        self.finished = false;
+    }
+
+    /// A period of zero is off, not "step every tick" - see Mercury_Apu.md §3.1.
+    pub fn clock(&mut self) {
+        if self.period == 0 || self.finished {
+            return;
+        }
+        self.timer = self.timer.wrapping_sub(1);
+        if self.timer > 0 {
+            return;
+        }
+        self.timer = self.period;
+        let next = self.volume + if self.increasing { 1 } else { -1 };
+        if !(0..=15).contains(&next) {
+            self.finished = true;
+            return;
+        }
+        self.volume = next;
+    }
+}
+
+impl LengthCounter {
+    pub fn load(&mut self, value: i32) {
+        self.counter = self.maximum.wrapping_sub(value);
+    }
+
+    pub fn trigger(&mut self) {
+        if self.counter == 0 {
+            self.counter = self.maximum;
+        }
+    }
+
+    /// True on the tick it reaches zero, which is the tick the channel goes quiet.
+    pub fn clock(&mut self) -> bool {
+        if !self.enabled || self.counter == 0 {
+            return false;
+        }
+        self.counter = self.counter.wrapping_sub(1);
+        self.counter == 0
+    }
+}
+
+impl PulseChannel {
+    #[inline(always)]
+    pub fn output(&self) -> i32 {
+        if self.enabled && self.dac_enabled && DUTY_PATTERNS[self.duty as usize][self.step as usize] != 0 { self.envelope.volume } else { 0 }
+    }
+
+    #[inline(always)]
+    pub fn step_timer(&mut self) {
+        self.timer = self.timer.wrapping_sub(1);
+        if self.timer > 0 {
+            return;
+        }
+        self.timer = (2048 - self.frequency) * 4;
+        self.step = (self.step + 1) & 0x07;
+    }
+
+    pub fn trigger(&mut self) {
+        self.enabled = self.dac_enabled;
+        self.timer = (2048 - self.frequency) * 4;
+        self.envelope.trigger();
+        self.length.trigger();
+        if !self.has_sweep {
+            return;
+        }
+        self.sweep_shadow = self.frequency;
+        self.sweep_timer = if self.sweep_period == 0 { 8 } else { self.sweep_period };
+        self.sweep_running = self.sweep_period > 0 || self.sweep_shift > 0;
+        if self.sweep_shift > 0 {
+            self.compute_sweep(false);
+        }
+    }
+
+    pub fn clock_sweep(&mut self) {
+        if !self.has_sweep || !self.sweep_running {
+            return;
+        }
+        self.sweep_timer = self.sweep_timer.wrapping_sub(1);
+        if self.sweep_timer > 0 {
+            return;
+        }
+        self.sweep_timer = if self.sweep_period == 0 { 8 } else { self.sweep_period };
+        if self.sweep_period == 0 {
+            return;
+        }
+        self.compute_sweep(true);
+    }
+
+    /// Overflowing 11 bits disables the channel outright, and hardware checks again with the new frequency.
+    fn compute_sweep(&mut self, apply: bool) {
+        let delta = self.sweep_shadow >> self.sweep_shift;
+        let next = if self.sweep_negate { self.sweep_shadow - delta } else { self.sweep_shadow + delta };
+        if next > 2047 {
+            self.enabled = false;
+            return;
+        }
+        if !apply || self.sweep_shift == 0 {
+            return;
+        }
+        self.sweep_shadow = next;
+        self.frequency = next;
+        let shifted = self.sweep_shadow >> self.sweep_shift;
+        let recheck = if self.sweep_negate { self.sweep_shadow - shifted } else { self.sweep_shadow + shifted };
+        if recheck > 2047 {
+            self.enabled = false;
+        }
+    }
+}
+
+impl WaveChannel {
+    #[inline(always)]
+    pub fn output(&self) -> i32 {
+        if !self.enabled || !self.dac_enabled || self.volume_code == 0 {
+            return 0;
+        }
+        let byte = self.ram[(self.position >> 1) as usize];
+        let sample = if self.position & 1 == 0 { byte >> 4 } else { byte & 0x0F } as i32;
+        sample >> (self.volume_code - 1)
+    }
+
+    #[inline(always)]
+    pub fn step_timer(&mut self) {
+        self.timer = self.timer.wrapping_sub(1);
+        if self.timer > 0 {
+            return;
+        }
+        self.timer = (2048 - self.frequency) * 2;
+        self.position = (self.position + 1) & 0x1F;
+    }
+
+    pub fn trigger(&mut self) {
+        self.enabled = self.dac_enabled;
+        self.timer = (2048 - self.frequency) * 2;
+        self.position = 0;
+        self.length.trigger();
+    }
+}
+
+impl NoiseChannel {
+    #[inline(always)]
+    pub fn output(&self) -> i32 {
+        if self.enabled && self.dac_enabled && self.lfsr & 0x01 == 0 { self.envelope.volume } else { 0 }
+    }
+
+    #[inline(always)]
+    pub fn step_timer(&mut self) {
+        self.timer = self.timer.wrapping_sub(1);
+        if self.timer > 0 {
+            return;
+        }
+        self.timer = DIVISORS[self.divisor_code as usize] << self.clock_shift;
+        self.step_lfsr();
+    }
+
+    pub fn trigger(&mut self) {
+        self.enabled = self.dac_enabled;
+        self.timer = DIVISORS[self.divisor_code as usize] << self.clock_shift;
+        self.lfsr = 0x7FFF;
+        self.envelope.trigger();
+        self.length.trigger();
+    }
+
+    /// Short mode feeds the same bit into position 6 as well, shortening the period to 127.
+    fn step_lfsr(&mut self) {
+        let feedback = (self.lfsr ^ (self.lfsr >> 1)) & 0x01;
+        self.lfsr = (self.lfsr >> 1) | (feedback << 14);
+        if self.short_mode {
+            self.lfsr = (self.lfsr & !0x40) | (feedback << 6);
+        }
+    }
+}
+
 impl State for Envelope {
     fn write_state(&self, w: &mut StateWriter) {
         w.bool("Finished", self.finished);

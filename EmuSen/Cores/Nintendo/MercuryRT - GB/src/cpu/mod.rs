@@ -1,4 +1,7 @@
-//! C#'s `Cpu/Core/Cpu.cs`: the SM83's registers and flags. See Mercury_Cpu.md.
+//! C#'s `Cpu/Core/Cpu.cs`: the SM83's registers, its step and its bus cycles. See Mercury_Cpu.md.
+
+mod alu;
+mod opcodes;
 
 use crate::Skip;
 use crate::state::{State, StateReader, StateResult, StateWriter};
@@ -7,6 +10,24 @@ pub const FLAG_Z: u8 = 0x80;
 pub const FLAG_N: u8 = 0x40;
 pub const FLAG_H: u8 = 0x20;
 pub const FLAG_C: u8 = 0x10;
+
+const INTERRUPT_VECTORS: [u16; 5] = [0x0040, 0x0048, 0x0050, 0x0058, 0x0060];
+
+/// All the SM83 can see - C#'s `ICpuBus`, here a generic so the step is monomorphised.
+pub trait CpuBus {
+    fn read(&mut self, address: u16) -> u8;
+    fn write(&mut self, address: u16, data: u8);
+    /// Runs the rest of the machine forward while the CPU is mid-instruction - see Mercury_Cpu.md §3.
+    fn tick(&mut self, cycles: i32);
+    fn stop(&mut self);
+}
+
+/// An opcode no SM83 has; C# throws `NotSupportedException` with its address.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct IllegalOpcode {
+    pub opcode: u8,
+    pub pc: u16,
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Cpu {
@@ -34,6 +55,18 @@ pub struct Cpu {
 impl Cpu {
     pub fn af(&self) -> u16 {
         ((self.a as u16) << 8) | self.f as u16
+    }
+
+    pub fn bc(&self) -> u16 {
+        ((self.b as u16) << 8) | self.c as u16
+    }
+
+    pub fn de(&self) -> u16 {
+        ((self.d as u16) << 8) | self.e as u16
+    }
+
+    pub fn hl(&self) -> u16 {
+        ((self.h as u16) << 8) | self.l as u16
     }
 
     /// The flag register's low nibble is not wired, and reads back zero however it is written.
@@ -68,6 +101,121 @@ impl Cpu {
         self.halt_bug = false;
         self.cycles = 0;
     }
+
+    /// `Cpu.Step`: one instruction or one interrupt dispatch, ticking the bus as it goes; returns the T-cycles and the bit serviced.
+    #[inline(always)]
+    pub fn step<B: CpuBus>(&mut self, bus: &mut B, interrupt_enable: u8, interrupt_flags: u8) -> Result<(i32, i32), IllegalOpcode> {
+        *self.ticked_this_step = 0;
+        let pending = (interrupt_enable & interrupt_flags & 0x1F) != 0;
+        self.interrupt_pending = pending;
+
+        if self.halted {
+            if !pending {
+                return Ok((self.advance(bus, 4), -1));
+            }
+            self.halted = false;
+        }
+
+        if self.ime && pending {
+            let bit = lowest_set_bit(interrupt_enable & interrupt_flags);
+            let cycles = self.service_interrupt(bus, bit);
+            return Ok((self.advance(bus, cycles), bit));
+        }
+
+        if self.ime_scheduled {
+            self.ime_scheduled = false;
+            self.ime = true;
+        }
+
+        self.last_instruction_pc = self.pc;
+        let opcode = self.fetch(bus);
+        if self.halt_bug {
+            self.pc = self.pc.wrapping_sub(1);
+            self.halt_bug = false;
+        }
+
+        let cycles = self.execute(bus, opcode)?;
+        Ok((self.advance(bus, cycles), -1))
+    }
+
+    /// The cycles an instruction spends thinking rather than on the bus, settled at its end - see Mercury_Cpu.md §3.1.
+    #[inline(always)]
+    fn advance<B: CpuBus>(&mut self, bus: &mut B, cycles: i32) -> i32 {
+        self.cycles += cycles as i64;
+        if cycles > *self.ticked_this_step {
+            bus.tick(cycles - *self.ticked_this_step);
+        }
+        cycles
+    }
+
+    /// One machine cycle: the rest of the machine runs, then the transfer lands at its end.
+    #[inline(always)]
+    fn read_cycle<B: CpuBus>(&mut self, bus: &mut B, address: u16) -> u8 {
+        bus.tick(4);
+        *self.ticked_this_step += 4;
+        bus.read(address)
+    }
+
+    #[inline(always)]
+    fn write_cycle<B: CpuBus>(&mut self, bus: &mut B, address: u16, data: u8) {
+        bus.tick(4);
+        *self.ticked_this_step += 4;
+        bus.write(address, data);
+    }
+
+    fn service_interrupt<B: CpuBus>(&mut self, bus: &mut B, bit: i32) -> i32 {
+        self.ime = false;
+        self.push(bus, self.pc);
+        self.pc = INTERRUPT_VECTORS[bit as usize];
+        20
+    }
+
+    #[inline(always)]
+    fn fetch<B: CpuBus>(&mut self, bus: &mut B) -> u8 {
+        let pc = self.pc;
+        self.pc = pc.wrapping_add(1);
+        self.read_cycle(bus, pc)
+    }
+
+    #[inline(always)]
+    fn fetch16<B: CpuBus>(&mut self, bus: &mut B) -> u16 {
+        let low = self.fetch(bus) as u16;
+        let high = self.fetch(bus) as u16;
+        low | (high << 8)
+    }
+
+    fn push<B: CpuBus>(&mut self, bus: &mut B, value: u16) {
+        self.sp = self.sp.wrapping_sub(1);
+        self.write_cycle(bus, self.sp, (value >> 8) as u8);
+        self.sp = self.sp.wrapping_sub(1);
+        self.write_cycle(bus, self.sp, value as u8);
+    }
+
+    fn pop<B: CpuBus>(&mut self, bus: &mut B) -> u16 {
+        let low = self.read_cycle(bus, self.sp) as u16;
+        self.sp = self.sp.wrapping_add(1);
+        let high = self.read_cycle(bus, self.sp) as u16;
+        self.sp = self.sp.wrapping_add(1);
+        low | (high << 8)
+    }
+
+    #[inline(always)]
+    fn flag(&self, mask: u8) -> bool {
+        self.f & mask != 0
+    }
+
+    #[inline(always)]
+    fn set_flag(&mut self, mask: u8, on: bool) {
+        if on {
+            self.f |= mask;
+        } else {
+            self.f &= !mask;
+        }
+    }
+}
+
+fn lowest_set_bit(value: u8) -> i32 {
+    (0..5).find(|bit| value & (1 << bit) != 0).unwrap_or(-1)
 }
 
 impl State for Cpu {

@@ -2,6 +2,7 @@
 
 pub mod apu;
 pub mod cpu;
+pub mod debug;
 pub mod ffi;
 pub mod machine;
 pub mod memory;

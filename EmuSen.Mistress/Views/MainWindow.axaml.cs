@@ -847,8 +847,8 @@ namespace EmuSen.Mistress.Views
                 _session.LoadRom(path);
                 if (_session.EngineNotice is { } engineNotice) Console.WriteLine("[core] " + engineNotice);
 
-                // The pad this ROM's console reads, not whatever the last one used.
-                _activeConsole = _session.CoreName;
+                // The catalogue's console, not the core's name: a Game Boy core says GBC while it is a Color, and the GB tab is its settings - see §4.47.
+                _activeConsole = console == "Unknown" ? _session.CoreName : console;
 
                 // What the graphics window holds for this console, or each setting's own default - see EmuSen_Settings_Reference.md §4.26.
                 ApplyConsoleSettings(_session, _activeConsole);

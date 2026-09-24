@@ -151,9 +151,8 @@ impl MemoryBus {
         self.hdma_is_h_blank_driven = false;
     }
 
-    /// The bus's fields in C#'s ordinal order, the cartridge's `_cart` copy among them.
+    /// The bus's fields in C#'s ordinal order; version 6 no longer writes the cartridge's `_cart` copy (Mercury_Native.md §9.3).
     pub fn write_state(&self, w: &mut StateWriter) {
-        let cart = &self.cart;
         w.class("Apu", &self.apu);
         w.bool("DoubleSpeed", self.double_speed);
         w.i32("HdmaBlocksLeft", self.hdma_blocks_left);
@@ -172,7 +171,6 @@ impl MemoryBus {
         w.bytes("Wram", &self.wram);
         w.i32("WramBank", self.wram_bank);
         w.bool("_baseClockPhase", self.base_clock_phase);
-        cart.write_as_field(w, "_cart");
         w.u16("_divCounter", self.div_counter);
         w.bool("_lastTimerEdge", self.last_timer_edge);
         w.i32("_oamDmaCyclesLeft", self.oam_dma_cycles_left);
@@ -206,7 +204,7 @@ impl MemoryBus {
         r.bytes(&mut self.wram)?; // Wram
         self.wram_bank = r.i32()?; // WramBank
         self.base_clock_phase = r.bool()?; // _baseClockPhase
-        self.cart.read_as_field(r)?; // _cart
+        self.cart.read_retired_copy(r)?; // _cart
         self.div_counter = r.u16()?; // _divCounter
         self.last_timer_edge = r.bool()?; // _lastTimerEdge
         self.oam_dma_cycles_left = r.i32()?; // _oamDmaCyclesLeft
@@ -534,7 +532,8 @@ impl MemoryBus {
         for _ in 0..cycles {
             self.step_one_cycle();
         }
-        self.mapper.tick(&self.cart, cycles);
+        // The cartridge's clock has its own crystal: base-clock cycles, half the CPU's in double speed (Mercury_Native.md §9.2).
+        self.mapper.tick(&self.cart, if self.double_speed { cycles >> 1 } else { cycles });
     }
 
     /// TIMA counts falling edges of one selected bit of the DIV counter - see Mercury_Memory.md §5.

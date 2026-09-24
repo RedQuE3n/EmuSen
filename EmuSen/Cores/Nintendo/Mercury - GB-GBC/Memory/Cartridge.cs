@@ -40,7 +40,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
 
         [SkipInState] public IMapper Mapper = null!;
 
-        private string? _savePath;
+        // The host's file, not the machine's: version 5 carried it, so a state could redirect a battery save - see Mercury_Native.md §9.3.
+        [RetiredFromState] private string? _savePath;
 
         public int RomBanks => Rom.Length / RomBankSize;
         public int RamBanks => Ram.Length / RamBankSize;

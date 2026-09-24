@@ -26,6 +26,9 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         private bool _skipRendering;
         private int _patchVersion = -1;
 
+        // The battery save's file, the host's and in no state - see Mercury_Native.md §9.3.
+        private string? _savePath;
+
         // The C# machine the debugger reads, refreshed from MercuryRT's state; its registries are this core's - see Mercury_Native.md §8.3.
         public MercuryCore Mirror { get; } = new();
 
@@ -39,7 +42,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         public long TotalFrames => _machine?.TotalFrames ?? 0;
         public int AudioSampleRate => 44100;
         public IReadOnlyList<PadButton> SupportedButtons => MercuryCore.PadButtons;
-        int IStateFormat.StateVersion => 5;
+        int IStateFormat.StateVersion => 6;
 
         public WatchRegistry Watches => Mirror.Watches;
         public FrameLogRegistry FrameLog => Mirror.FrameLog;
@@ -82,13 +85,14 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
                 if (header.Ram.Length > 0) saved = AtomicFile.TryRead(savePath);
             }
 
-            var machine = new MercuryMachine(image, savePath);
+            var machine = new MercuryMachine(image);
             if (saved is not null) machine.WriteSpace(2, 0, saved.AsSpan(0, Math.Min(saved.Length, header.Ram.Length)));
             machine.SetOptions(_skipRendering);
 
             _machine?.Dispose();
             _machine = machine;
             _header = header;
+            _savePath = savePath;
             _rom = image;
             _patchVersion = -1;
             machine.SetButtons(_buttons);
@@ -130,11 +134,11 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
 
         public short[] DequeueAudioSamples(int maxFrames) => _machine?.DrainAudio(maxFrames) ?? Array.Empty<short>();
 
-        // Cartridge.SaveSram, with the path the machine's state carries, as C#'s does.
+        // Cartridge.SaveSram: the path this session chose at load, which no state can change.
         public void SaveSram()
         {
             if (_machine is null || _header is null || !_header.HasBattery || _header.Ram.Length == 0) return;
-            if (_machine.SavePath() is not { } path) return;
+            if (_savePath is not { } path) return;
             var ram = new byte[_header.Ram.Length];
             _machine.ReadSpace(2, 0, ram);
             AtomicFile.Write(path, ram);
@@ -169,7 +173,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             if (BitConverter.ToUInt32(state, 0) != 0x4352454D) throw new InvalidDataException("Not a Mercury save state.");
             if (state.Length < 8) throw new EndOfStreamException("Unable to read beyond the end of the stream.");
             int version = BitConverter.ToInt32(state, 4);
-            if (version != 5) throw new InvalidDataException($"Save state version {version} is not 5.");
+            if (version is < 5 or > 6) throw new InvalidDataException($"Save state version {version} is not one this build reads (5 to 6).");
             _machine.Load(state);
         }
 

@@ -52,7 +52,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(core.Bus!.Wram[0] != 0 || core.TotalFrames == 300, "the machine never ran");
 
             byte[] state = Save(core);
-            using var machine = new MercuryMachine(rom, null);
+            using var machine = new MercuryMachine(rom);
             machine.Load(state);
             AssertSameBytes(state, machine.Save());
             string layout = machine.Layout();
@@ -60,7 +60,7 @@ namespace EmuSen.WiseMan.Cores
             _output.WriteLine($"type ${kind:X2}: {state.Length} bytes, {layout.Count(c => c == '\n')} fields compared by name, offset, length and type");
         }
 
-        // One distinct value per field, so a field read into its neighbour's place shows; the save path non-ASCII and long enough for a two-byte length.
+        // One distinct value per field, so a field read into its neighbour's place shows.
         [Theory]
         [MemberData(nameof(Boards))]
         public void Every_field_filled_with_noise_comes_back_from_rust_byte_for_byte(byte kind, byte ramCode, byte cgb)
@@ -74,11 +74,10 @@ namespace EmuSen.WiseMan.Cores
             Fill(core.Cart!.Mapper, noise, seen);
             Fill(core.Cpu!, noise, seen);
             Fill(core.Bus!, noise, seen);
-            typeof(Cartridge).GetField("_savePath", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(core.Cart, "/sävé/" + new string('é', 70) + ".srm");
             typeof(MercuryCore).GetField("_cyclesIntoFrame", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(core, noise.NextInt64());
 
             byte[] state = Save(core);
-            using var machine = new MercuryMachine(rom, null);
+            using var machine = new MercuryMachine(rom);
             machine.Load(state);
             AssertSameBytes(state, machine.Save());
             AssertSameLayout(Layout(core, state), machine.Layout());
@@ -94,11 +93,11 @@ namespace EmuSen.WiseMan.Cores
             for (int i = 0; i < 10; i++) core.RunFrame();
             byte[] state = Save(core);
 
-            using var machine = new MercuryMachine(rom, null);
+            using var machine = new MercuryMachine(rom);
             machine.Load(state);
             string layout = machine.Layout();
             byte[] odd = (byte[])state.Clone();
-            foreach (string field in new[] { "Cpu.Ime", "Bus.DoubleSpeed", "Bus.Ppu.StatLine", "Bus.Apu.Pulse1.HasSweep", "Mapper._cart" }) odd[OffsetOf(layout, field)] = 2;
+            foreach (string field in new[] { "Cpu.Ime", "Bus.DoubleSpeed", "Bus.Ppu.StatLine", "Bus.Apu.Pulse1.HasSweep", "Mapper._ramEnabled" }) odd[OffsetOf(layout, field)] = 2;
             BitConverter.GetBytes(7).CopyTo(odd, OffsetOf(layout, "Bus.Ppu.Mode"));
 
             MercuryCore reader = Load(rom);
@@ -118,7 +117,7 @@ namespace EmuSen.WiseMan.Cores
             byte[] rom = SyntheticGbRom.Build(cartridgeType: 0x03, ramSizeCode: 0x02);
             byte[] state = Save(Load(rom));
 
-            using var machine = new MercuryMachine(rom, null);
+            using var machine = new MercuryMachine(rom);
             machine.Load(state);
             Assert.Throws<InvalidDataException>(() => machine.Load(state.AsSpan(0, state.Length - 1)));
             Assert.Throws<InvalidDataException>(() => machine.Load(new byte[] { 0x4D, 0x41, 0x52, 0x54, 5, 0, 0, 0 }));
@@ -127,8 +126,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.Throws<InvalidDataException>(() => machine.Load(version));
             AssertSameBytes(state, machine.Save());
 
-            Assert.Throws<InvalidDataException>(() => new MercuryMachine(new byte[0x14F], null));
-            Assert.Throws<NotSupportedException>(() => new MercuryMachine(SyntheticGbRom.Build(cartridgeType: 0x22), null));
+            Assert.Throws<InvalidDataException>(() => new MercuryMachine(new byte[0x14F]));
+            Assert.Throws<NotSupportedException>(() => new MercuryMachine(SyntheticGbRom.Build(cartridgeType: 0x22)));
         }
 
         // Real cartridges past their title screens, the Start and A presses of Mercury_Native.md §1.1's bench.
@@ -147,7 +146,7 @@ namespace EmuSen.WiseMan.Cores
             {
                 byte[] rom = File.ReadAllBytes(path);
                 MercuryCore core = Load(rom);
-                using var machine = new MercuryMachine(rom, null);
+                using var machine = new MercuryMachine(rom);
                 for (int frame = 0; frame <= 900; frame++)
                 {
                     int k = frame % 90;
@@ -281,7 +280,7 @@ namespace EmuSen.WiseMan.Cores
 
         private static IEnumerable<FieldInfo> StateFields(Type type) => type
             .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-            .Where(f => f.GetCustomAttribute<SkipInStateAttribute>() == null)
+            .Where(f => f.GetCustomAttribute<SkipInStateAttribute>() == null && f.GetCustomAttribute<RetiredFromStateAttribute>() == null)
             .OrderBy(f => f.Name, StringComparer.Ordinal);
 
         private static void Fill(object target, Random noise, HashSet<object> seen)

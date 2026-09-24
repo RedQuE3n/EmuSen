@@ -7,7 +7,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let rom = std::fs::read(&args[1]).expect("rom");
     let frames: usize = args[2].parse().expect("frames");
-    let mut m = Machine::load_rom(rom, None).expect("a supported board");
+    let mut m = Machine::load_rom(rom).expect("a supported board");
     *m.bus.ppu.skip_rendering = args.get(3).is_some_and(|s| s == "skip");
     let mut audio = vec![0i16; 1 << 16];
     let drive = |m: &mut Machine, f: usize| {

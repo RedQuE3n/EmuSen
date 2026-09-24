@@ -1,7 +1,10 @@
 using System;
 using System.IO;
+using System.Linq;
+using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Mercury;
+using EmuSen.Cores.Nintendo.Mercury.Memory;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
@@ -156,6 +159,129 @@ namespace EmuSen.WiseMan.Cores
             Assert.False(strayWritten, "the loader wrote its cart RAM to .tmp in the working directory");
             Assert.False(File.Exists(srmA), "the loader wrote the saver's battery save");
             Assert.Equal(!loaderWithoutBattery, File.Exists(srmB));
+        }
+
+        // MercuryRtStateTests' program: counts in WRAM, copies the count to cart RAM, keys a pulse note and scrolls.
+        private static readonly byte[] Busy =
+        {
+            0x3E, 0x0A, 0xEA, 0x00, 0x00, 0x3E, 0xF0, 0xE0, 0x12, 0x3E, 0x87, 0xE0, 0x14,
+            0x21, 0x00, 0xC0, 0x34, 0x7E, 0xEA, 0x00, 0xA0, 0xE0, 0x43, 0x18, 0xF4,
+        };
+
+        // SHA-256 prefixes of the version-5 states the unmodified build (f2c7f99) wrote for Busy at frame 300, with its save path set to /mercury-v5/A.srm.
+        public static TheoryData<byte, byte, byte, string> Version5Boards => new()
+        {
+            { 0x00, 0x00, 0x00, "A8F5A6AE499B01D8" }, { 0x08, 0x02, 0x00, "4CE8AB33C05B5A53" }, { 0x03, 0x02, 0x00, "C904450EE75DBBEC" },
+            { 0x03, 0x03, 0x80, "A4947B8697CBAEC0" }, { 0x06, 0x00, 0x00, "45C6CF989CA6BA94" }, { 0x06, 0x00, 0xC0, "77EEB044A60922C5" },
+            { 0x10, 0x03, 0x00, "414D74B71818B3E4" }, { 0x13, 0x03, 0xC0, "8616742760CEF290" }, { 0x1B, 0x03, 0x80, "72F2BFB3C1FD3EAF" },
+            { 0x1E, 0x04, 0x00, "99523C6CA29E10ED" }, { 0x19, 0x00, 0xC0, "0BB6C2ED37B31BE9" },
+        };
+
+        private static MercuryCore LoadCs(byte[] rom)
+        {
+            string path = SyntheticGbRom.WriteTemp(rom);
+            try
+            {
+                var core = new MercuryCore();
+                core.LoadRom(path);
+                return core;
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        private static byte[] Save(MercuryCore core)
+        {
+            using var stream = new MemoryStream();
+            core.SaveState(stream);
+            return stream.ToArray();
+        }
+
+        private static string Sha(byte[] bytes) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))[..16];
+
+        private static readonly System.Reflection.FieldInfo SavePath = typeof(Cartridge).GetField("_savePath", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+
+        // Version 5's bytes from a running C# core: MercuryCore.SaveState's header and walks, the retired fields included (EmuSen_Save_States.md §7).
+        private static byte[] WriteVersion5(MercuryCore core)
+        {
+            using var stream = new MemoryStream();
+            using (var w = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true))
+            {
+                w.Write(0x4352454Du);
+                w.Write(5);
+                w.Write(core.TotalFrames);
+                w.Write((long)typeof(MercuryCore).GetField("_cyclesIntoFrame", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(core)!);
+                foreach (object part in new object[] { core.Cart!, core.Cart!.Mapper, core.Cpu!, core.Bus! }) StateSerializer.Write(w, part, includeRetired: true);
+            }
+            return stream.ToArray();
+        }
+
+        // D3's format half: version 6 carries neither the path nor the two copies, and the unmodified build's version-5 states still load, on both engines, dropping the path.
+        [Theory]
+        [MemberData(nameof(Version5Boards))]
+        public void D3_version_5_states_the_unmodified_build_wrote_load_on_both_engines(byte kind, byte ramCode, byte cgb, string sha)
+        {
+            CoreOptions.BatteryRamDisabled = true;
+            byte[] rom = SyntheticGbRom.Build(romBanks: 4, cartridgeType: kind, ramSizeCode: ramCode, cgbFlag: cgb, patches: (0, Busy));
+            MercuryCore source = LoadCs(rom);
+            for (int f = 0; f < 300; f++) source.RunFrame();
+            SavePath.SetValue(source.Cart, "/mercury-v5/A.srm");
+            byte[] v5 = WriteVersion5(source), v6 = Save(source);
+            Assert.True(Sha(v5) == sha, $"the version-5 writer's bytes hash {Sha(v5)}, not the unmodified build's {sha}");
+            Assert.Equal(6, BitConverter.ToInt32(v6, 4));
+            Assert.DoesNotContain("mercury-v5", System.Text.Encoding.UTF8.GetString(v6));
+
+            MercuryCore cs = LoadCs(rom);
+            cs.LoadState(new MemoryStream(v5));
+            Assert.True(Save(cs).AsSpan().SequenceEqual(v6), "C# read version 5 into a different machine");
+            Assert.Null(SavePath.GetValue(cs.Cart));
+
+            using var rt = new MercuryMachine(rom);
+            rt.Load(v5);
+            Assert.True(rt.Save().AsSpan().SequenceEqual(v6), "MercuryRT read version 5 into a different machine");
+
+            var pair = new MercuryRtPair(rom, skipRendering: false, state: v5);
+            pair.Run(120, null);
+            _output.WriteLine($"type ${kind:X2} cgb ${cgb:X2}: version 5 {v5.Length} bytes (hash {sha}), version 6 {v6.Length}; {pair.Summary}");
+        }
+
+        // The bench's input: Start for five frames of every ninety, then A for five.
+        private static uint GameScript(int frame) => (frame % 90) switch
+        {
+            >= 0 and < 5 => 1u << 7,
+            >= 45 and < 50 => 1u << 4,
+            _ => 0u,
+        };
+
+        // Real games' version-5 states from the unmodified build, at frames 3000 and 3600, from a directory kept outside the repository; absent, not run.
+        [Fact]
+        public void D3_real_games_version_5_states_resume_where_the_unmodified_build_went()
+        {
+            string? roms = Environment.GetEnvironmentVariable(MercuryRtStateTests.RomsVariable);
+            string? states = Environment.GetEnvironmentVariable("EMUSEN_MERCURY_V5_STATES");
+            if (roms is null || states is null || !Directory.Exists(roms) || !Directory.Exists(states))
+            {
+                _output.WriteLine("EMUSEN_MERCURYRT_ROMS or EMUSEN_MERCURY_V5_STATES unset, not run");
+                return;
+            }
+            CoreOptions.BatteryRamDisabled = true;
+            foreach (string path in Directory.GetFiles(roms, "*.gb*").Order(StringComparer.Ordinal))
+            {
+                string name = Path.GetFileNameWithoutExtension(path);
+                string early = Path.Combine(states, $"{name}-3000.state"), late = Path.Combine(states, $"{name}-3600.state");
+                if (!File.Exists(early) || !File.Exists(late)) continue;
+                byte[] rom = File.ReadAllBytes(path);
+                var pair = new MercuryRtPair(rom, skipRendering: false, state: File.ReadAllBytes(early));
+                pair.Run(600, f => GameScript(f + 3000));
+                MercuryCore then = LoadCs(rom);
+                then.LoadState(new MemoryStream(File.ReadAllBytes(late)));
+                byte[] want = Save(then), got = Save(pair.Csharp);
+                int same = want.AsSpan().CommonPrefixLength(got);
+                Assert.True(same == want.Length && want.Length == got.Length, $"{name}: 600 frames on from the old build's frame-3000 state differ at byte {same} from its frame-3600 state");
+                _output.WriteLine($"{name}: version 5 at frame 3000 ({new FileInfo(early).Length} bytes), run 600 frames on both engines, equals the old build's frame 3600 ({want.Length} bytes in version 6); {pair.Summary}");
+            }
         }
     }
 }

@@ -1019,3 +1019,93 @@ The referee also shows two things Mercury does not do. Neither was changed here.
 - **Fast-counting of seconds restored from a save file** (`mbc3.v:174`, `diffSeconds`). This catches the clock up by
   wall-clock time between sessions. Mercury's clock is not in the `.srm` at all, and it stops while the emulator is
   closed. That is a missing feature (`Mercury_Memory.md` §9), not a timing defect.
+
+### 9.3 D3: the host's path in the state, and state version 6
+
+**Before.** A battery cartridge saved a state at frame 10 while played from path A. The state was loaded while the same
+ROM was played from path B, and play continued to frame 300, where the autosave runs. On both engines the loader
+wrote **A's** `.srm` and never B's. With the loader under `--nobattery`, it still wrote A's. With the saver under
+`--nobattery`, the state carried `""`, and the loader wrote its cart RAM to **`.tmp` in the working directory**. These
+are §6.1's two measurements, now on both engines.
+
+**The fix, and the format change it forces.** The path is the host's. A running machine still needs one, so the field
+stays in the class. What changes is that the state walk no longer visits it. The same version drops the two extra
+copies of the cartridge, each mapper's `_cart` and the bus's, which cost Pokémon Yellow 64 KB (§3.1). All three
+fields carry a new attribute, `[RetiredFromState]` (`EmuSen_Save_States.md` §7). The current format skips them. A
+version-5 read walks them where version 5 wrote them: the path is read and dropped, and each copy is read into the
+one cartridge, as version 5's reader did.
+
+- **C#.** `MercuryCore` writes version 6 and reads 5 and 6.
+- **MercuryRT.** Rust has no reflection, so its reader carries the version the header names (`StateReader::before`).
+  The cartridge, each board and the bus read the retired fields only for a version before 6. `Cartridge` lost its
+  `save_path`.
+- **The C ABI.** `mercury_machine_new` lost its path argument, and `mercury_machine_save_path` is gone, so the
+  interface version is 2. The shim keeps the path itself, from `LoadRom`, as C#'s `Cartridge` does. This removes the
+  ABI parameter and the string primitive §2.3 said D3 alone required. The string reader stays, for version 5.
+
+**Prediction, stated before the run.**
+
+- All six cases of the path test pass on both engines.
+- Every version-6 state is smaller by the path and two copies of the cart RAM. For Yellow that is 148,420 → 82,879.
+- The unmodified build's version-5 states load on both engines into the machine that wrote them.
+- Nothing about how a machine runs changes.
+
+**How "version 5 still loads" was proven, rather than argued.** Before the fix, the unmodified build ran the
+synthetic program on all eleven boards for 300 frames, set the save path to `/mercury-v5/A.srm`, and saved. The
+SHA-256 prefixes of those eleven states are in the test (`Version5Boards`). After the fix, the test runs the same
+program on the fixed build, and regenerates version 5's bytes with `StateSerializer.Write(includeRetired: true)`. It
+then asserts four things:
+
+1. the bytes hash to the recorded values;
+2. both engines read them into a machine whose version-6 state equals the writer's;
+3. C#'s path stays null;
+4. the two engines then run 120 frames identically.
+
+(1) is a double check. It shows the retired walk reproduces version 5 byte for byte. It also shows that D1 and D2 left
+these eleven machines' states exactly where the unmodified build put them. The same was done for the four games, from
+states the unmodified build saved at frames 3,000 and 3,600 and kept outside the repository
+(`EMUSEN_MERCURY_V5_STATES`). Each game's version-5 state at frame 3,000 was loaded into both engines. Each engine ran
+600 frames with the bench's input, and the result equalled the unmodified build's own frame-3,600 state loaded fresh.
+
+**After.**
+
+- The path test: 6 of 6 pass.
+- Version 5 on the eleven boards: 11 of 11. Version 5 on the four games: 4 of 4.
+- Crate tests: 11. The Rust test builds a version-5 state from a version-6 one, and gives each of the three copies its
+  own fill; the last copy stands.
+- State-format filters: `MercuryRtStateTests` (layout, noise, odd bytes, refusals and games), `StateSerializerTests`
+  (with a case for the attribute) and `MercuryRtCoreTests`. All pass, 60 cases in all.
+
+Sizes, version 5 → version 6:
+
+| Machine | Version 5 | Version 6 |
+|---|---|---|
+| Tetris (no MBC) | 17,338 | 17,333 |
+| Kirby's Dream Land (MBC1, no RAM) | 17,348 | 17,343 |
+| Link's Awakening (MBC1 + 8 KB) | 41,924 | 25,535 |
+| Pokémon Yellow (MBC5 + 32 KB, CGB) | 148,420 | 82,879, as predicted |
+| Synthetic MBC3 + clock + 32 KB, CGB | 148,489 | 82,897 |
+| Synthetic MBC5 + rumble + 128 KB | 410,615 | 148,415 |
+
+The synthetic states' version-5 sizes include the 17-byte test path three times; the games' do not, because they
+were saved under `--nobattery` with a null path.
+
+**The whole parity suite and the corpus after all three fixes.** The `MercuryRt` and `MercuryDefectTests` filters
+passed, 106 cases, with the games and the corpus. The C# corpus transcript matches the recorded baseline
+(`Mercury_Native.md` §3.4) in all 173 verdicts and verdict frames, 94 passing. It was taken after D1 and D2, and again
+after D3. **No baseline was re-recorded, because none moved.** None could: D1 touches no state, no corpus ROM runs an
+MBC3 clock, and D3 changes only the serialized form.
+
+**What changed in the tests.** Two changes follow from the format. `MercuryRtStateTests`' layout walk skips retired
+fields as the serializer does. Its odd-bytes case now patches `Mapper._ramEnabled` in place of the retired
+`Mapper._cart` presence flag. The noise case no longer writes a save path, because no path is in the state.
+`MercuryRtPair` no longer resets the path after a transfer, a workaround §8.2 recorded for D3. It gained a `state`
+argument for the version-5 cases.
+
+**What this does not cover.**
+
+- A version-5 state written by a MercuryRT built before this date is the same bytes as C#'s (§8.1), so it is
+  covered.
+- A state from any version before 5 was refused before and still is.
+- The frontends' own state records (`StateRecord.StateVersion`) now say 6 for new Game Boy states. Mistress refuses
+  only newer versions (§6 of `EmuSen_Save_States.md`), so an old record for a version-5 state still loads.

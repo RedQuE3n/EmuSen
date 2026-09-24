@@ -23,15 +23,14 @@ fn status(result: Result<usize, crate::state::StateError>) -> i64 {
     }
 }
 
-/// `MercuryCore.LoadRom` from an image; `save_path_len` negative is C#'s null. Null on refusal, with the reason in `status`.
+/// `MercuryCore.LoadRom` from an image; the battery save's path is the host's (Mercury_Native.md §9.3). Null on refusal, with the reason in `status`.
 ///
 /// # Safety
-/// `rom` valid for `len` bytes; `save_path` valid for `save_path_len` bytes when that is not negative; `status` writable or null.
+/// `rom` valid for `len` bytes; `status` writable or null.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mercury_machine_new(rom: *const u8, len: usize, save_path: *const u8, save_path_len: isize, status: *mut i32) -> *mut Machine {
+pub unsafe extern "C" fn mercury_machine_new(rom: *const u8, len: usize, status: *mut i32) -> *mut Machine {
     let image = unsafe { input(rom, len) }.to_vec();
-    let path = (save_path_len >= 0).then(|| String::from_utf8_lossy(unsafe { input(save_path, save_path_len as usize) }).into_owned());
-    let (machine, code) = match Machine::load_rom(image, path) {
+    let (machine, code) = match Machine::load_rom(image) {
         Ok(m) => (Box::into_raw(Box::new(m)), 0),
         Err(RomError::TooShort(_)) => (ptr::null_mut(), STATUS_TOO_SHORT),
         Err(RomError::UnsupportedType(_)) => (ptr::null_mut(), STATUS_UNSUPPORTED_BOARD),
@@ -265,20 +264,6 @@ pub unsafe extern "C" fn mercury_machine_write_space(machine: *mut Machine, spac
         m.write_space(space, address.wrapping_add(i as i32), b);
     }
     len as i64
-}
-
-/// The save path the state carries as UTF-8, copied up to `len`; its length, or -2 for C#'s null.
-///
-/// # Safety
-/// `machine` must be live or null; `out` valid for `len` bytes, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mercury_machine_save_path(machine: *const Machine, out: *mut u8, len: usize) -> i64 {
-    let Some(m) = (unsafe { machine.as_ref() }) else { return STATUS_NULL as i64 };
-    let Some(path) = &m.bus.cart.save_path else { return -2 };
-    if !out.is_null() {
-        unsafe { ptr::copy_nonoverlapping(path.as_ptr(), out, path.len().min(len)) };
-    }
-    path.len() as i64
 }
 
 /// Game Genie's table: `count` addresses, and 256 entries each of `0x100 | patched` or 0; a count of zero clears it.

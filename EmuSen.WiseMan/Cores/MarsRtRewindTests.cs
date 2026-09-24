@@ -160,6 +160,45 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(stepped / steps < size / 16, $"{stepped / steps} bytes a step back against a snapshot of {size}");
         }
 
+        // What rewind costs the emulation thread on MarsRT at Mistress's interval: frames with and without it, interleaved; only with EMUSEN_MARSRT_BENCH - see Mars_Native.md §6.6.3.
+        [Theory]
+        [MemberData(nameof(Games))]
+        public void Bench_rewind(string romName, string stateName)
+        {
+            if (Environment.GetEnvironmentVariable(MarsRtTests.BenchVariable) is null) { _output.WriteLine("EMUSEN_MARSRT_BENCH unset, not run"); return; }
+            if (Game(romName, stateName) is not { } game) return;
+            var clock = new System.Diagnostics.Stopwatch();
+            var rows = new List<string>();
+            for (int round = 0; round < 3; round++)
+            {
+                foreach (bool on in round % 2 == 0 ? new[] { false, true } : new[] { true, false })
+                {
+                    using MarsRtCore core = Production();
+                    core.LoadRom(game.Rom);
+                    core.LoadState(game.State);
+                    var rewind = new RewindBuffer { Enabled = on };
+                    double total = 0, capturing = 0, worst = 0;
+                    int gen2 = 0;
+                    for (int frame = -60; frame < 300; frame++)
+                    {
+                        if (frame == 0) gen2 = GC.CollectionCount(2);
+                        Drive(core);
+                        clock.Restart();
+                        core.RunFrame();
+                        double run = clock.Elapsed.TotalMilliseconds;
+                        rewind.OnFrameCompleted(core);
+                        double all = clock.Elapsed.TotalMilliseconds;
+                        if (frame < 0) continue;
+                        total += all;
+                        capturing += all - run;
+                        worst = Math.Max(worst, all - run);
+                    }
+                    rows.Add($"round {round}, rewind {(on ? "on " : "off")}: {total / 300:F2} ms a frame, {capturing / 300:F2} of it the capture, the dearest capture {worst:F2} ms, {GC.CollectionCount(2) - gen2} gen-2 collections");
+                }
+            }
+            foreach (string row in rows) _output.WriteLine($"{romName}: {row}");
+        }
+
         // Every frame of the run and every step back compared with the reference: the state always, the picture wherever a step lands - see Mars_Native.md §6.6.3.
         [Theory]
         [MemberData(nameof(Games))]

@@ -1761,7 +1761,10 @@ branch's base (7ea79b1) and on this branch, interleaved, three rounds, with the 
 The unthreaded path is 1.5 to 3.5 per cent slower on Super Mario 64 and 2.5 to 3 per cent slower on Ocarina of Time,
 and unchanged on GoldenEye. The candidates are the marks' tests, which the unthreaded path makes too, and `Ram`'s
 accessors, which check each access's bounds. Neither has been measured apart, and the cost is recorded here as a
-regression that has been found and not yet explained.
+regression that has been found and not yet explained. *Explained by §6.14.1 (2026-09-23): the step is 1cad784, the first buildable commit
+of the branch, and it is the price per access of three tests that answer "nothing to do" without a drain — the page
+marks, the RDP memory's verifier branch and bounds checks, and `Ram`'s bounds checks; without all three the unthreaded
+path runs in the base's time. On the current tree the RDP's checks still cost Super Mario 64 1.5 to 2 per cent.*
 
 #### 5.6.9 Mutants
 
@@ -3125,7 +3128,8 @@ Each is small, has its own oracle, and can be given to an agent beside larger wo
   (the deferred repeat), 51f3377 (the fraction), and 05d41e4 for §6.4.4's race; `Mars_Rdp.md` §2.9.*
 - **MarsRT's single-thread regression** of 1.5 to 3.5 per cent (§5.6.8), found and not explained: a bisection with the
   interleaved bench between the RDP merge and the threads' merge, about two hours, and either a cause or a recorded
-  negative.
+  negative. *Done in §6.14.1: the three tests of 1cad784 together, and a residual of the RDP's checks on the current tree,
+  priced and not built.*
 
 *Done 2026-09-23, the first three items, in §6.6.1 to §6.6.3; §6.6.4 says what they leave. The C# core's four failures
 and the single-thread regression are another agent's and are not touched here.* The native interface is 9 since
@@ -4797,3 +4801,315 @@ gen-2 count in Mistress's own log is zero.
 - **A real window.** Every test is headless; Avalonia's live compositor, its order of rendering and disposing draw
   operations, and the GPU backend's copy were not instrumented. The rules of `EmuSen_Serenity.md` §2.8 do not depend
   on that order.
+
+#### 6.14 Two puzzles: the one-thread regression, and Donkey Kong 64's wait at the scan-out (2026-09-23)
+
+Two questions were left open by earlier sections, and this one answers both. §5.6.8 found MarsRT's unthreaded path 1.5 to
+3.5 per cent slower after the threads' merge and "recorded [it] as a regression that has been found and not yet
+explained"; §6.6 priced its bisection at two hours. And Donkey Kong 64's title, the user's state, ran 13.4 to 14.4 ms a
+frame on the handheld and 11.6 on this desktop, with `examples/threads … split 4 blocks` reporting the emulation thread
+waiting about 3 ms a frame at wait site 8 while the first worker was busy about 3 ms; the three control games wait
+0.02 ms there. The first question gets a bisection and, as far as the builds allow, an attribution (§6.14.1). The second
+gets a diagnosis (§6.14.2), three narrowings of what the machine's thread waits for, each exact (§6.14.3 to §6.14.6),
+the place the wait then moves to, which is necessary (§6.14.4), and, at the multiple, a join at every scan on the device and a
+capture kept whole on the processor, both diagnosed and priced and neither built (§6.14.8).
+
+##### 6.14.1 The one-thread regression, bisected
+
+*The builds.* Between the RDP's merge and 709e2ce the threads' branch has eleven commits. The first two — b6a613c, the
+drain, and c8601c4, its merge of WiseMan — do not compile: each fails with twelve errors, halves of modules that 1cad784
+completes. So the smallest buildable step is from the branch's base to 1cad784, the drain and the wait sites together.
+The base is 7ea79b1, as in §5.6.8, and 0877875, WiseMan as the branch first took it, which is 7ea79b1 without four
+frontend files (739 lines, none on the machine's path). Every run is `examples/frames <rom> <state> 600 scan` on one
+thread, §5.6.8's command, under the lock, in rounds with the order rotated; every build of a game gave the same state
+hash.
+
+*The reproduction and the bisection* (made by a helper agent; three rounds; ms a frame):
+
+| | 7ea79b1 | 1cad784 | 876d1e1 | ac10631 | 709e2ce |
+| --- | --- | --- | --- | --- | --- |
+| Super Mario 64 | 13.06–13.30 | 13.47–13.77 | 13.47–13.78 | 13.38–13.59 | 13.47–13.78 |
+| Ocarina of Time | 15.11–15.42 | 15.44–15.66 | 15.31–15.59 | 15.37–15.40 | 15.39–15.46 |
+| GoldenEye, the Dam | 27.95–27.99 | 28.12–28.27 | 27.96–27.97 | 27.97–28.12 | 27.92–27.99 |
+
+The step is at 1cad784, and nothing after it moves the time again. §5.6.8's numbers are reproduced: two per cent on
+Super Mario 64 and one and a half on Ocarina of Time. On GoldenEye 1cad784 alone is 0.1 to 0.3 ms slower and the
+commits after it are not, so there is no step there that lasts.
+
+*The attribution.* §5.6.8 named two candidates. 1cad784 adds three things to every access the unthreaded path makes,
+each a test that answers the same way whenever no drain runs, and a variant of 1cad784 was built without each, and
+without all three:
+
+- *the marks*: `read_marked` and `write_marked`, an atomic load of the page's mark and a branch, at every CPU load, store
+  and fetch, every bus access and every device's DMA (answer false at compile time);
+- *the RDP's memory checks*: `RdpMemory::touch`'s verifier branch and the bounds assertions of `get`, `set` and their
+  hidden-bit twins, at every byte the rasteriser reads or writes (the branch removed, the assertions made debug-only);
+- *`Ram`'s assertions*: the bounds checks of `read`, `write`, `be32` and `put_be32` (made debug-only).
+
+Three rounds, seven builds, the order rotated (ms a frame):
+
+| | 0877875 | 7ea79b1 | 1cad784 | without the marks | without the RDP's checks | without `Ram`'s assertions | without all three |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Super Mario 64 | 13.04–13.16 | 13.07–13.34 | 13.41–13.56 | 13.26–13.40 | 13.24–13.38 | 13.39–13.43 | 13.11–13.24 |
+| Ocarina of Time | 15.08–15.38 | 15.13–15.17 | 15.33–15.63 | 15.20–15.30 | 15.16–15.35 | 15.35 (and two runs of 16.6 and 26.2 under another agent's load) | 15.02–15.09 |
+
+*The verdict.* The regression is real, and it is the three tests together: without all three, 1cad784 runs in 7ea79b1's
+time on both games (13.11–13.24 against 13.07–13.34; 15.02–15.09 against 15.13–15.17), and 1cad784 itself lies outside
+both ranges. Of the three, the marks and the RDP's checks each recover two thirds to three quarters of it alone, by the
+medians, and `Ram`'s assertions a fifth or less; but the parts overlap each other, their sum exceeds the whole, and
+each is within about twice the spread of a build's three runs, so no finer split is claimed than that. It is not a
+single cause but a price per access, paid on a path where every one of the tests answers "nothing to do".
+
+*On the current tree.* The three tests are still there, and the same three variants were built from WiseMan at f55bfc0
+(its crate is 88cef31's) and measured against it unmodified, three rounds each way, with the same hashes (ms a frame):
+
+| | unmodified | without the marks | without the RDP's checks | without `Ram`'s assertions |
+| --- | --- | --- | --- | --- |
+| Super Mario 64, `blocks` | 8.63–8.82 | 8.67–9.00 | **8.47–8.52** | 8.63–8.67 |
+| Ocarina of Time, `blocks` | 8.74–9.05 | 8.76–8.96 | 8.66–8.80 (and one run of 10.6) | 8.71–8.94 |
+| GoldenEye, the Dam, `blocks` | 18.09–18.94 | 18.03–18.89 | 18.02–18.10 | 18.13–18.71 |
+| Super Mario 64, `scan` | 11.50–11.53 | **11.41–11.43** | **11.33–11.40** | 11.54–11.55 |
+| Ocarina of Time, `scan` | 13.27–13.30 | 13.13–13.58 | 13.26–13.32 | 13.32 |
+
+The RDP's checks still cost Super Mario 64 1.5 to 2 per cent on one thread, in both modes, outside the spread; the
+marks 0.8 per cent through the interpreter and nothing measurable with blocks, where the variant does not reach the
+marks the compiled code emits inline; `Ram`'s assertions nothing. On Ocarina of Time and the Dam no variant leaves the
+unmodified build's spread. *Not fixed, and why.* The unthreaded path is no longer what a player runs (§6.2 turned the
+threads on), and on the threads the RDP's checks run on the workers, off the emulation thread. The assertions guard raw
+reads and writes that are sound only in bounds, and the verifier's branch is what §5.6's verified runs check with; the
+way to remove both from a release build without losing either is a processor generic over a verifying and a
+non-verifying memory, priced here at up to two per cent of Super Mario 64's unthreaded frame and not built.
+
+##### 6.14.2 Site 8 in Donkey Kong 64's title: what the capture waited for
+
+*Site 8* is the VI's capture (§5.6.3): `present_now` and `present_deferred` call `wait_read_range` over `reach`, the
+bytes of RDRAM the walk may read, before the walk or the capture's copy reads them.
+
+*The scene.* The title draws 320 by 240 sixteen-bit pictures into two frame buffers that are adjacent in RDRAM, A at
+0x02A200 and B at 0x04FA00 (A + 153,600 bytes, exactly one picture), with one depth image at 0x5D5600. The VI's origin is
+one line into the buffer shown. The per-frame trace of §6.11.1, run at production's shape (600 frames, the first twenty
+left out), shows the same two-field rhythm §6.11.1 found in the other games: heavy fields of 19.1 ms of emulation
+(median, 293 of them) alternating with light ones of 0.21 ms (287). Every one of the 287 light fields' presents waited
+at site 8, 5.95 ms at the median; no heavy field's present waited more than 1.3 ms.
+
+*What it waited for.* A diagnostic build printed, at every site-8 wait, the capture's range, the page marks it met, the
+open batch's ranges that overlap it and the draws pending (the instrument was not kept). The waits come in two kinds,
+alternating with the buffer shown:
+
+- **A shown, B being drawn.** `reach` asked for 0x028674 to 0x052990: all of A, and 12,176 bytes, nineteen lines, of
+  B's top. The list draws B with a scissor whose first row is line 10, and the draws that reach B's lines 10 to 18 are
+  among the list's last: the last pending draw whose box meets the range ended within about a hundred words of the
+  batch's end, 22,000 words in. So the capture waited for nearly the whole list. The walk itself never reads those
+  lines (§6.14.3): they are C#'s slack, `Vi.Reach`'s four lines and two lines and two row spans past the last line,
+  which at a 320-pixel width is sixteen lines of row span alone.
+- **B shown, A being drawn.** `reach` asked for 0x04DE74 to 0x078190, which starts eleven lines above B, in A's last
+  lines. A's drawn extent, the batch's colour range, ends at 0x04DE80, twelve bytes into the capture: the batch range is
+  the rows drawn widened by `MarkDraw`'s slack, and the capture's own slack reached back into it. No pending draw's box
+  met the range. But a range read of more than eight bytes kept the coarse wait (§5.6.2), which waits for the page's
+  mark — the batch's end — whenever any pending range overlaps the page. So it waited for the whole list again.
+
+So both waits were conservative, each in a different way: the first for bytes nothing reads, the second for a batch
+whose draws reach none of the bytes read.
+
+##### 6.14.3 Three narrowings
+
+**The capture narrowed to the walk's reads.** `reach` now asks for exactly what `Walker` can read, derived from its code
+rather than C#'s slack. With *L* the source line of a row (`start_y + row·step_y >> 10`), *w* the frame buffer's width and
+*c* the last column a row samples (`start_x + (columns − 1)·step_x >> 10`):
+
+- the window (`Walker::lines`) fetches whole lines *L* − 2 to *L* + 3 for every row;
+- a sample reads its own pixel, the next one when resampling, their divot neighbours, and the anti-aliasing or dither
+  filter's neighbours one line above and below, on the row's line and the line below it.
+
+So the reads lie between pixel min((*L*₀ − 2)·*w*, (*L*₀ − 1)·*w* − 2) and max((*L*ₙ + 4)·*w* − 1, (*L*ₙ + 2)·*w* + *c* + 3)
+of the origin, for the first and last rows' lines *L*₀ and *L*ₙ, at two or four bytes a pixel. Both terms of the upper
+bound are reached — the window's by every picture, the column term by a picture wider than twice its buffer, filtered,
+divoted and resampled with a fractional start — and a bound one pixel shorter in either panics in `Source::within`,
+which is the walk's own check that it reads only captured bytes (§6.14.6). For the title with A shown, the
+capture now ends at 0x04FC80, B's first line.
+
+**A range read narrowed by the pending draws' boxes.** §5.6.2 narrowed only reads of eight bytes or fewer, by the last
+pending draw whose box holds them, and left a range read waiting for the page's mark, because C#'s narrowing of a range
+by its first eight bytes is wrong (it frees a range whose later bytes a pending draw holds). A range read now waits for
+the last pending draw whose box can reach *any* of its bytes. `holds_range` tests a box by rows: every pixel `row` can
+name for a box lies between column −4 of its first row and its scissor plus three on its last, of the colour image and,
+when the draw writes depth, the depth image. That is wider than `holds`, never narrower, so it frees only what `holds`
+would free byte by byte. The pending boxes are scanned newest first once per range read, and only when a page of the
+range needs waiting; the scan stops at the first finished box, and a box ring that has wrapped answers "cannot say", as
+`last_holding` does. It applies to every range read — the capture at one, the SI's transfers, the SP's DMA rows and the block test's
+words — and their site tests hold it (§6.14.6).
+
+**A load's first window, aligned down to eight bytes.** A tile, block or palette load reads the image through
+`image_window`, sixteen bytes from its pointer aligned down to eight. `MarkLoad` marked from sixteen bytes before the
+first texel, which is C#'s. For a texel size of eight bits or more the first texel's pointer is exactly what `MarkLoad`
+computes, so the load's range now starts at that pointer aligned down to eight (a four-bit load reads nothing and keeps
+the old slack). The title stores to the four bytes before a texture that a load of the pending list reads (a site-3
+wait of 1.7 to 3.4 ms, in about one frame of three); those bytes are no longer in the load's range. Its end keeps its
+thirty-two bytes of slack.
+
+**Only at one.** At a multiple the capture keeps C#'s reach and coarse wait (`capture_range`); §6.14.8 says why and what
+that costs.
+
+**Why each is exact.** The claim of §5.6 is unchanged: the threaded machine's state, picture and sound are the
+unthreaded machine's. A wait may be narrowed wherever what it no longer waits for cannot change what the access reads or
+writes. The capture's bytes outside the walk's reads are read by nothing but the capture's own copy and its repeat test;
+the boxes are the verifier's own record of every byte each draw writes (§5.6.2), checked on every write in the verified
+runs; and the load's first window starts where `image_window` starts.
+
+**What changes against C#.** The two cores no longer capture the same bytes, which §5.6.9 had kept for its own sake.
+The shown picture cannot differ, since the walk reads only what is captured. What can differ is how often a deferred
+capture repeats: a repeat is now decided over the bytes the walk reads, so a change in C#'s slack alone no longer
+forces a walk whose raster would be the same. The picture is then the same one; the frame serial, which moves when a
+walk is handed back, moves less often. No test compares the two cores' serials.
+
+##### 6.14.4 Where the wait went: the depth image
+
+With the capture freed, the light field's wait did not vanish; most of it moved. The title's processor reads the depth
+image, halfwords at rows 103 to 220 of 0x5D5600, about two a frame, just after handing the list over, while the drain
+is a few thousand words in. Those reads were narrowed already (a load of two bytes is a small read), and the last
+pending draw whose box holds them is typically five to ten thousand words into a 22,000-word list: the wait is for that
+draw, and no earlier point would do, because the unthreaded machine has finished the list before the processor reads a
+byte. So site 2 is now the title's wait, and it is necessary: exactness demands it, and only a faster drain shortens it.
+The remaining site-3 waits, stores into two regions a pending load reads, are 0.2 to 0.3 ms a frame and were not taken
+further.
+
+In one round under the lock, before the load change: base 12.449 ms a frame, waiting 3.07 ms at site 8; narrowed
+12.002 ms, waiting 1.97 at site 2 and 0.36 at site 3; the same state hash. The three rounds are §6.14.7.
+
+##### 6.14.5 The evidence
+
+- *Site tests* (`tests/sites.rs`, 19): `site_8_the_capture_waits_for_a_draw_on_the_last_line_the_walk_reads` (a fill of
+  line 10 alone, the window's last line for a picture whose last line is 7, holds both the immediate scan and the
+  deferred capture); `site_8_the_capture_goes_ahead_of_a_draw_below_the_lines_the_walk_reads` (a fill of lines 12 to 20,
+  on a page the capture reads, does not); `site_1_a_bus_write_to_the_bytes_below_an_unaligned_loads_first_texel_waits_for_the_load`
+  and `site_1_a_bus_write_below_a_loads_first_window_goes_ahead_of_it`, the same pair for a load from an unaligned
+  image. A test that asserts an access goes ahead also asserts that its page was marked, so that it cannot pass by never
+  meeting the case, and that the access saw what the list at once leaves.
+- *Thread tests* (25): `a_range_read_goes_ahead_of_the_batch_once_the_draws_that_reach_its_rows_are_done` holds the drain
+  after a list's first fill (rows 0 to 10) with 800 words of fills of rows 100 to 239 still pending in the same batch, and
+  reads rows 0 to 8: the page is marked to the batch's end, and the read goes ahead and sees the first fill. The
+  existing `a_range_read_whose_first_bytes_no_draw_holds_still_waits_for_the_draws_that_hold_the_rest` still passes,
+  since a draw that holds any byte holds the read.
+- *Scan tests* (18): the band geometries gain "a buffer narrower than half the picture, filtered", width 64 with 256
+  columns, anti-aliasing, divot and resampling on and a fractional start both ways, which is the geometry whose column
+  term is reached.
+- *The game comparisons* (`tests/games.rs`), now seven: the six of §5.6.7 and Donkey Kong 64 from its title. All
+  sixteen comparisons, 300 frames each — threaded joined and snapshot, deferred, split at two to four workers, at a
+  multiple on the processor and the device, averaged, SIMD, decoded, banded, recompiled at four workers, observed,
+  halted and resumed, carried — are identical in state, picture and sound for all seven. The six that reach the
+  multiple, the device or deferral were run again after the multiple's guard (§6.14.8), and are identical.
+- The crate's `cargo test --release`, 469 tests, passes; clippy on all targets is clean.
+- *ThreadSanitizer*, §5.6.7's recipe, over the site, thread and scan tests: 13 reports, all in memory TSan cannot see
+  ordered because std is not instrumented — libtest's result channel, the allocator reusing a finished test's memory,
+  and the `OnceLock`s that hold the SIMD and decoded defaults (§6.10, §6.12). None is in the drain, the marks, the
+  capture or the walk.
+
+##### 6.14.6 Mutants
+
+Applied one at a time to the crate, the named suites run, the source restored (`mutants.py` in
+`~/.cache/emusen/marsrt-perf/`):
+
+| Mutant | Caught by |
+| --- | --- |
+| `holds_range`'s last row one short — the narrowing one step too far | `site_8_the_capture_waits_for_a_draw_on_the_last_line_the_walk_reads` |
+| `holds_range`'s first row one late | the same, and the SI's and the SP's site tests |
+| range reads never narrowed (the coarse wait of §5.6.2) | `a_range_read_goes_ahead_of_the_batch_once_the_draws_that_reach_its_rows_are_done` |
+| range reads narrowed by their first eight bytes (C#'s rule) | both immediate and deferred site-8 tests, the new one, and §5.6.2's |
+| `reach`'s window one pixel short | every site-8 test and three band tests (the walk's `within` panics) |
+| `reach`'s column term one pixel short | `a_deferred_walk_in_any_number_of_bands_is_the_immediate_walk`, at the new geometry only |
+| `reach`'s first line one pixel late | every site-8 test and four scan tests |
+| `MarkLoad`'s first window not aligned down | both new site-1 tests, by the verifier |
+
+All eight were caught. The column term's is caught by one geometry alone, and was not caught until its vertical start
+was made fractional: with a whole step the row below is never sampled, and the bound is a line conservative there.
+
+##### 6.14.7 Speed, and the prediction's fate
+
+*The prediction, stated before the three rounds* (one round under the lock had already been taken, §6.14.4): the
+title's frame at production's shape falls by 0.5 to 1 ms, the 3.1 ms a frame that round waited at site 8 going and
+about 2 ms of it reappearing at sites 2 and 3; the other four states stay within their spread, since their waits are
+small and none of them met the capture's slack as the title does.
+
+*The measurement.* `examples/threads <rom> <state> 600 split 4 blocks`, the base (f55bfc0's crate) and the change
+interleaved, three rounds under the lock with the order rotated, every pair of builds on a game with the same state
+hash:
+
+| ms a frame | before | after | waits before (ms a frame, by site) | after |
+| --- | --- | --- | --- | --- |
+| Donkey Kong 64, title | 11.61–11.76 | 10.72–11.60 | 8: 2.65–2.69 | 2: 1.70–1.89, 3: 0.17–0.18 |
+| Super Mario 64 | 3.54–3.85 | 3.52–3.62 | 8: 0.35–0.46 | 8: 0.34–0.40 |
+| Ocarina of Time | 4.47–5.72 | 4.52–4.88 | 2: 0.13–0.40, 11: 0.16–0.43 | 2: 0.14–0.16, 11: 0.18–0.23 |
+| GoldenEye, the Dam (ge.z64) | 9.71–9.82 | 9.59–9.71 | under 0.01 | under 0.01 |
+| GoldenEye, the Dam (the US image) | 9.90–9.97 | 9.71–10.40 | 8: 0.01–0.02 | none |
+
+*The prediction's fate.* **The title fell by 0.93 ms at the median** (11.71 to 10.78), at the top of the predicted range;
+the after-build's first round (11.60) is inside the before-build's range, the other two a millisecond under it. The
+waits moved as predicted: site 8 to nothing, sites 2 and 3 to 1.9 to 2.1 ms. The other states are within their spreads
+(Ocarina of Time's first round before, 5.72, is an outlier the rest of its runs do not share), and the new range scan
+costs nothing that shows. Super Mario 64's site-8 wait of about 0.4 ms is unchanged, so the draws it waits for have
+boxes that meet the lines the walk reads; it was not examined further.
+
+##### 6.14.8 The multiple: a join at every scan on the device, and the capture kept whole
+
+The parent session measured the title through the shim at 2× with the device on and four workers: `RunFrame` at a mean
+of 16.5 ms on this desktop (p50 17.4, p90 22.0), alternating about 19 and 13 ms, against 11.6 ms at one. The per-frame
+trace, now with a column for the drain's joins (`examples/threads … trace=`; `Threads::join` has counted them since
+§5.6, and the example now prints them), says where the difference goes. One run each under the lock, 600 frames, the
+first twenty left out:
+
+| the title, split 4, blocks | ms a frame | light fields' present (median) | of it, site 8 | of it, the drain's join | the waits (ms a frame) | first worker busy |
+| --- | --- | --- | --- | --- | --- | --- |
+| at one, this section's build | 10.86 | 0.01 | 0 | 0 | 2: 1.76, 3: 0.17 | 2.74 |
+| 2×, device, narrowed at the multiple too | 13.18 | 8.16 | 0.14 | 7.45, in 287 of 287 | 8: 0.08 | 3.97 |
+| 2×, device, this section's build | 13.15 | 8.06 | 7.59 | 0 (7 of 287 waited) | 8: 3.78 | 3.98 |
+| 2×, device, the base | 13.15 | — | — | — | 8: 3.75 | 3.95 |
+| 2×, processor, narrowed at the multiple too | 16.75 | 0.20 | 0.13 | 0 | 2: 6.59, 3: 0.71 | 10.49 |
+| 2×, processor, this section's build | 19.23 | 20.12 | 19.82 | 0 | 8: 9.90 | 10.00 |
+
+*On the device.* The device's own rule (`Mars_Gpu.md` §13.2) is that the scan-out is submitted on the machine's thread
+while the rasteriser submits from the leading worker, so `DpInterface::scan_out`, `scan_into_raster` and
+`read_back_scaled` join the drain before touching the device: the device must be idle, one command buffer does not
+take two threads, and the frame's shading reaches the device only at the scan. With the capture's wait narrowed at the
+multiple as at one (the second row), the light field's present stops at site 8 for 0.14 ms and then waits 7.45 ms in the
+join, for the same list; the frame is the base's to within 0.03 ms. So on the device the join, not the capture, is the
+bound, and narrowing the capture there buys nothing. That join is not a site-8 wait, which is why §6.14.2's counters
+could not show it: 3.7 ms a frame averaged over both fields, the difference the parent measured between one and 2×.
+
+*On the processor at 2×* there is no join, and narrowing the capture at the multiple was worth 2.5 ms a frame (19.23 to
+16.75): the wait moved from site 8 to the processor's depth reads, as at one, and shrank. It is not kept.
+`capture_range` keeps C#'s reach and coarse wait whenever the job's scale is above one. The capture at a multiple also
+copies the shadow's lines (`take_scaled` over `reach_scaled`), and those bytes are waited for only through the words
+that drew the same lines at one. C#'s slack at one is what covers the shadow's own slack at the multiple, and the claim
+that a 1× box bounds every byte the same draw writes at the multiple is not checked by anything: the verifier checks
+RDRAM at one. With the narrowed wait, a pending draw whose 1× box misses the lines read could still be writing the
+shadow's slack while the capture copies it, which is a data race in Rust whatever the value. The multiple-guard commit
+(093d7dd) restores the base's behaviour there, and the game comparisons at the multiple pass either way.
+
+*Priced, not built.* Two levers, each a design change rather than a narrower wait. On the device: the scan-out ordered
+into the leading worker's stream, as a command the ring carries, so that the machine's thread waits only for the bytes
+it captures at one. Its ceiling on the title is the join's 3.7 ms a frame less what the processor's depth reads would
+then wait for, 1.8 ms at one and more with the device shading beside them: under 2 ms a frame. On the processor at a
+multiple: a verifier of the shadow's writes against the 1× boxes scaled, which would let the narrowed capture be kept
+there, and the 2.5 ms a frame with it.
+
+##### 6.14.9 What is not done
+
+- **The depth image's reads** (§6.14.4). Necessary for exactness; only a faster drain, or one that ran the draws holding
+  the depth image first, which would change raster order, could shorten them.
+- **The multiple** (§6.14.8): the device's join at every scan, under 2 ms a frame on the title, and the capture kept
+  whole on the processor at a multiple, 2.5 ms a frame on the title, each priced with the design change it needs.
+- **The remaining site-3 waits**, 0.2 to 0.3 ms a frame on the title: the end of a load's range keeps thirty-two bytes
+  of slack, and a writer still waits for the page's mark rather than the last range that reaches it.
+- **The unthreaded path's residual** (§6.14.1): the RDP's checks, 1.5 to 2 per cent of Super Mario 64's unthreaded
+  frame, and the marks through the interpreter, 0.8; priced, not built.
+- **The C# core.** Its `Vi.Reach`, its coarse range reads and `MarkLoad`'s slack are unchanged. The same narrowings would
+  apply there at one, and C#'s narrowing of a range by its first eight bytes stays a defect (§5.6.2).
+- **The shim's comparisons.** The WiseMan suites that compare MarsRT with the C# core through the shim
+  (`MarsRtThreadsTests`) were not rerun; the crate's own comparisons are against MarsRT unthreaded, the oracle of §5.6.
+- **The handheld.** Not measured here, by instruction. What to measure there, with the prediction for each:
+  `examples/threads` on the title at one, `split <n> blocks` with the handheld's worker count, before and after: site 8
+  goes to nothing and site 2 appears, and the frame falls by what site 8 waited less what site 2 then waits, predicted
+  a little under a millisecond as here, and more if the handheld's drain is slower beside its emulation thread than
+  this desktop's; and at 2× with the device, `… scale=2 gpu trace=<file>`: every light field's present should wait
+  about as long as the drain takes over the list, at site 8 with this section's build, and the frame should be the
+  base's, since §6.14.8 left that path as it was.

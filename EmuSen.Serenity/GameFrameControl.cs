@@ -427,7 +427,7 @@ namespace EmuSen.Serenity
             }
 
             private bool DrawSlang(SKCanvas canvas, Slang.SlangRunner slang, bool newFrame, Offer source) =>
-                slang.Draw(canvas, source.Rgba, source.Width, source.Height, source.RowRepeat, newFrame, Destination(source));
+                slang.Draw(canvas, source.Rgba, source.Width, source.Height, newFrame, Destination(source));
 
             private void DrawFiltered(SKCanvas canvas, FilterChain chain, GRContext? context, SKImage sourceImage, Offer source) =>
                 chain.Draw(canvas, context, sourceImage, source.RowRepeat, Destination(source));

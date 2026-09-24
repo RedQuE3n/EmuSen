@@ -225,4 +225,92 @@ namespace EmuSen.WiseMan.Serenity
             Assert.Same(fragment, SpirvReflection.WithoutUnreadInputs(fragment));
         }
     }
+
+    // A progressive frame reaches a preset with its rows once, as a libretro core hands it over, so no preset takes it for an interlaced one - see EmuSen_Serenity.md §10.6.
+    public class SlangRowsOnceTests : IDisposable
+    {
+        private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenSlangRows", Guid.NewGuid().ToString("N"));
+
+        public SlangRowsOnceTests() => Directory.CreateDirectory(_root);
+
+        public void Dispose()
+        {
+            try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        }
+
+        private static SlangRunner Built(string preset)
+        {
+            var runner = new SlangRunner(preset);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (!runner.Built && clock.ElapsedMilliseconds < 60000) System.Threading.Thread.Sleep(5);
+            return runner;
+        }
+
+        private static string Hash(ReadOnlySpan<byte> pixels) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(pixels));
+
+        [Fact]
+        public void A_progressive_frame_reaches_the_preset_with_its_rows_once()
+        {
+            if (SlangVulkan.TryCreate(out _) is not { } probe) return;
+            probe.Dispose();
+            File.WriteAllText(Path.Combine(_root, "size.slang"), """
+                #version 450
+                layout(push_constant) uniform Push { vec4 OriginalSize; } params;
+                layout(std140, set = 0, binding = 0) uniform UBO { mat4 MVP; } global;
+                #pragma stage vertex
+                layout(location = 0) in vec4 Position;
+                layout(location = 1) in vec2 TexCoord;
+                layout(location = 0) out vec2 vTexCoord;
+                void main() { gl_Position = global.MVP * Position; vTexCoord = TexCoord; }
+                #pragma stage fragment
+                layout(location = 0) in vec2 vTexCoord;
+                layout(location = 0) out vec4 FragColor;
+                void main() { FragColor = vec4(params.OriginalSize.y / 255.0, params.OriginalSize.x / 255.0, 0.0, 1.0); }
+                """);
+            string preset = Path.Combine(_root, "size.slangp");
+            File.WriteAllText(preset, "shaders = 1\nshader0 = size.slang\n");
+            using SlangRunner runner = Built(preset);
+
+            using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(16, 16, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul));
+            Assert.True(runner.Draw(surface.Canvas, new byte[12 * 8 * 4], 12, 8, newFrame: true, new SkiaSharp.SKRect(0, 0, 16, 16)));
+            using var pixels = surface.PeekPixels();
+            SkiaSharp.SKColor centre = pixels.GetPixelColor(8, 8);
+            Assert.Equal((8, 12), ((int)centre.Red, (int)centre.Green));
+        }
+
+        // Royale emulates interlacing on 288.5 to 576.5 lines, fields alternating by FrameCount: a still frame as 480 rows alternates, as 240 it holds.
+        [Fact]
+        public void A_still_progressive_frame_under_royale_draws_the_same_picture_every_frame()
+        {
+            string? pack = Environment.GetEnvironmentVariable(SlangPresetTests.PackVariable);
+            if (string.IsNullOrEmpty(pack)) return;
+            if (SlangVulkan.TryCreate(out _) is not { } gpu) return;
+            string preset = Path.Combine(pack, "crt/crt-royale.slangp");
+            byte[] still = ShaderBench.Pattern(320, 240, 0);
+
+            using (gpu)
+            using (var chain = new SlangChain(gpu, SlangPreset.Load(preset)))
+            {
+                var doubled = new List<string>();
+                for (int f = 0; f < 4; f++)
+                {
+                    chain.Advance(still, 320, 240, 2);
+                    doubled.Add(Hash(chain.Render(320, 480)));
+                }
+                Assert.NotEqual(doubled[0], doubled[1]);
+                Assert.Equal(doubled[0], doubled[2]);
+            }
+
+            using SlangRunner runner = Built(preset);
+            using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(320, 480, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul));
+            var drawn = new List<string>();
+            for (int f = 0; f < 4; f++)
+            {
+                Assert.True(runner.Draw(surface.Canvas, still, 320, 240, newFrame: true, new SkiaSharp.SKRect(0, 0, 320, 480)));
+                using var pixels = surface.PeekPixels();
+                drawn.Add(Hash(pixels.GetPixelSpan()));
+            }
+            Assert.Single(drawn.Distinct());
+        }
+    }
 }

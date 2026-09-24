@@ -681,9 +681,53 @@ rule, which that comparison's unthreaded oracle does not use).
 
 #### 2.9.7 What the fixes cost
 
-*Pending.* The interleaved measurement (pacebench at 1× with production's settings, three rounds of base and fixed,
-each run under the bench lock with the load below 3) was waiting for a quiet machine when this section was written;
-its result replaces this paragraph.
+*The method.* `pacebench` flat out from the three gameplay states, 900 frames after 120 of warm-up, at one with
+production's settings: compiled blocks, the display processor threaded, deferred presentation, repeats skipped, and
+four processors, the default on this sixteen-core desktop (one per three cores). Two harnesses were built apart, one
+over the code before this branch (f55bfc0) and one over the fixed code, and run in three rounds with the order
+reversed each round; each run took the bench lock and began only with the one-minute load below 3, since other
+agents were using the machine. The mean `RunFrame` is given, then the emulation thread's waits for the drain.
+
+| ms a frame, four processors | before | after |
+| --- | --- | --- |
+| Super Mario 64 | 6.44, 5.74, 5.66 (waits 1.31, 1.24, 1.15) | 6.37, 6.19, 6.15 (waits 1.68, 1.55, 1.52) |
+| Ocarina of Time | 7.92, 7.29, 7.20 | 7.45, 7.23, 7.38 |
+| GoldenEye, the Dam | 16.96, 16.75, 16.86 (waits 0.01, 0.00, 0.01) | 16.95, 17.10, 16.96 (waits 0.11, 0.11, 0.12) |
+
+| ms a frame, one processor | before | after |
+| --- | --- | --- |
+| Super Mario 64 | 15.50, 14.98, 15.04 | 15.96, 16.47, 15.93 |
+| Ocarina of Time | 13.75, 13.68, 14.06 | 13.70, 14.15, 13.69 |
+| GoldenEye, the Dam | 23.53, 23.00, 23.26 (waits 7.13, 6.59, 6.99) | 25.29, 25.88, 25.35 (waits 7.81, 9.13, 9.09) |
+
+The final state hashes of the two builds are the same in every run but one: GoldenEye's with four processors, where
+the code before this branch ends in a state that differs from its own at one processor, the fraction of §2.9.3, and the
+fixed code's with four equals both builds' at one.
+
+*What the fixes cost.* Ocarina of Time's rounds overlap at both counts, and the Dam's at four; those are recorded as
+costing nothing measurable. Super Mario 64 at four is 0.3 to 0.5 ms a frame slower in every round but the first, about
+7 per cent, and at one 0.5 to 1.5 ms; the Dam at one is 1.8 to 2.9 ms slower, 8 to 12 per cent. That the fixes cost
+nothing is therefore **not** true of the range read, and the claim is withdrawn for it.
+
+*Which fix.* A third harness, the fixed code with §2.9.2's line alone put back, ran Super Mario 64 at four at 5.64,
+5.78 and 5.85 ms against the fixed code's 6.10, 6.11 and 6.09, with the waits 1.12 to 1.20 ms against 1.47 to 1.61: the
+whole cost is the range read's. At one processor the pause, the fraction, the hazard load and the split do not run, and
+the repeat rule walks nothing more in these frames (the counts of §2.9.6), so the range read is the only change left
+there, by elimination rather than by a separate run.
+
+*Why, and what was tried.* A capture reaches past the lines the walk reads (`Mars_Video.md` §2.7's slack), and in these
+games past the buffer on show into the next one, which the list is drawing; the capture now waits for those draws, as
+a range read must, where before it copied the bytes as they were being drawn. Whether the waits were for draws that
+really hold the bytes, or a page wait wider than the draws, was tested: the range read was narrowed by the boxes over
+its whole length, exactly (`Within`'s test as one interval of pixels a box row), and measured against the build with
+§2.9.2's line put back. Super Mario 64's waits stayed at 1.52 to 2.08 ms against 1.14 to 1.25, and the frame at 5.98 to
+7.49 against 5.59 to 6.22: the waits are for draws that do hold the bytes, the narrowing bought nothing, and it was
+reverted. The lever that is left is the capture's reach. `Mars_Native.md` §5.6.9 records that a capture one line
+short, three lines short, or without its span slack survives every mutant round in MarsRT as equivalent, while one
+ending at the last line or one past it is caught; so the walk needs less than the capture takes, and a capture cut to
+the walk's own reach would wait only for bytes the walk reads. It was not built: the reach is §2.7's argument, which
+throws on a walk outside the capture, and changing it is a change to the scan-out's design to be made in both cores
+together, not a fix of this section.
 
 ## 3. The command stream
 

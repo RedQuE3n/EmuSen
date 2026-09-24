@@ -1313,3 +1313,44 @@ against Mercury on four more MBC3 rules:
 
 None of these fell out of D2's test: its program never writes the clock and never lets a register overflow. So none was
 fixed here, and each stays a candidate with no test, to be fixed in both engines together (Q4, §5).
+
+### 9.5 Mutants of the three fixes
+
+**Method.** Fourteen hand-made mutants were run in a copy of the tree at `716ddc2`, the D3 commit, so that no source in
+the working tree was touched. For each mutant:
+
+- one edit was applied;
+- the crate's tests were run, for a Rust edit;
+- WiseMan was built;
+- the `MercuryDefectTests`, `MercuryRtStateTests`, `StateSerializerTests`, `MercuryRtCoreTests` and HDMA filters were
+  run with the four games;
+- the file was restored.
+
+The unmutated copy passed all 68 cases first, as the control. The runner is `mutants.py`, in the scratch directory
+(`~/.cache/emusen/probe/mercury-defects/mut/`).
+
+| Mutant | Caught by |
+|---|---|
+| M1 C#'s `SetSampleRate` divides in integers again | the D1 test (C#), and every lock-step comparison, because the shim computes its own rate |
+| M2 the shim divides in integers | the D1 test (Rust), and every lock-step comparison |
+| M3 the Rust machine's own default divides in integers | **survived** (argued below) |
+| M4 C# counts the clock in CPU cycles | both D2 tests |
+| M5 Rust counts the clock in CPU cycles | both D2 tests |
+| M6 C# halves the clock's cycles at single speed too | both D2 tests, and the version-5 hash of the MBC3 board |
+| M7 C#'s save path back in the state | 47 cases: the D3 tests, the layout listing, and every cross-engine comparison |
+| M8 Rust does not consume version 5's path | the crate test, and every version-5 case |
+| M9 Rust reads the cartridge copies in version 6 too | the crate test, the D3 tests, and every state comparison |
+| M10 the serializer restores a retired value instead of dropping it | the serializer's own case, and the version-5 cases (C#'s path is no longer null) |
+| M11 Rust lets the first cartridge copy stand, not the last | **the crate test only** |
+| M12 the shim forgets the save path | the D3 tests, and the battery test |
+| M13 C# reads version 5 without its retired fields | every version-5 case |
+| M14 Rust's reader is not told the header's version | every version-5 case |
+
+**Thirteen of fourteen are caught.** M11 is caught only by the crate's test, the one that gives each of version 5's
+three copies its own fill. A version-5 state that C# wrote has three identical copies, so no WiseMan case can see which
+copy stands.
+
+**M3 is equivalent through the ABI.** `Machine::load_rom` sets the Rust machine's default rate, and
+`MercuryMachine`'s constructor replaces it with the shim's before any frame runs. The default is read only by
+`examples/frames.rs`, which has no shim. So the mutant changes the samples that example drains and nothing any
+frontend runs. It is left untested on purpose.

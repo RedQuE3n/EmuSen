@@ -81,7 +81,7 @@ namespace EmuSen.WiseMan.Mistress
             Dropdown engine = window.GetLogicalDescendants().OfType<Dropdown>().Where(d => d.Name == $"N64.{CoreCatalog.EngineKey}").Distinct().Single();
             Assert.Equal(new[] { CoreCatalog.MarsEngine, CoreCatalog.MarsRtEngine }, engine.Items.Cast<object>().Select(o => o.ToString()));
             Assert.Equal(CoreCatalog.MarsEngine, engine.SelectedItem);
-            Assert.DoesNotContain(window.GetLogicalDescendants().OfType<Control>(), c => c.Name is string name && name.EndsWith("." + CoreCatalog.EngineKey) && name != $"N64.{CoreCatalog.EngineKey}");
+            Assert.DoesNotContain(window.GetLogicalDescendants().OfType<Control>(), c => c.Name is string name && name.EndsWith("." + CoreCatalog.EngineKey) && name != $"N64.{CoreCatalog.EngineKey}" && name != $"GB.{CoreCatalog.EngineKey}");
 
             engine.SelectedItem = CoreCatalog.MarsRtEngine;
             Dispatcher.UIThread.RunJobs();

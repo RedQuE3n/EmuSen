@@ -63,6 +63,8 @@ pub struct MemoryBus {
     /// The cartridge and its board, reached through the bus as C#'s `_cart` is; walked by the machine, not here.
     pub cart: Cartridge,
     pub mapper: Mapper,
+    /// Game Genie's reads, flattened by the shim from C#'s registry: per address, 0x100 | patched for each original byte a patch replaces.
+    pub rom_patches: Skip<Option<Box<std::collections::HashMap<u16, [u16; 256]>>>>,
 }
 
 impl MemoryBus {
@@ -105,6 +107,7 @@ impl MemoryBus {
             cgb: Skip(cgb),
             joypad: Skip(Joypad::default()),
             serial_log: Skip(Vec::new()),
+            rom_patches: Skip(None),
         }
     }
 
@@ -258,7 +261,16 @@ impl MemoryBus {
 
     pub fn read(&mut self, address: u16) -> u8 {
         match address {
-            ..0x8000 => self.mapper.read_rom(&self.cart, address),
+            ..0x8000 => {
+                let value = self.mapper.read_rom(&self.cart, address);
+                if let Some(patches) = &*self.rom_patches
+                    && let Some(table) = patches.get(&address)
+                    && table[value as usize] & 0x100 != 0
+                {
+                    return table[value as usize] as u8;
+                }
+                value
+            }
             ..0xA000 => {
                 if self.vram_accessible() {
                     self.vram[self.vram_offset(address)]

@@ -225,6 +225,79 @@ pub unsafe extern "C" fn mercury_machine_step(machine: *mut Machine) -> i32 {
     }
 }
 
+/// # Safety
+/// `machine` must be live or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mercury_machine_total_frames(machine: *const Machine) -> i64 {
+    unsafe { machine.as_ref() }.map_or(STATUS_NULL as i64, |m| m.total_frames)
+}
+
+/// # Safety
+/// `machine` must be live or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mercury_machine_space_size(machine: *const Machine, space: u32) -> i64 {
+    unsafe { machine.as_ref() }.map_or(STATUS_NULL as i64, |m| m.space_size(space) as i64)
+}
+
+/// `len` bytes of a space from `address` on, each read as `MercuryCore.ReadSpace` reads one; CPUBUS reads have their side effects.
+///
+/// # Safety
+/// `machine` must be live or null; `out` valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mercury_machine_read_space(machine: *mut Machine, space: u32, address: i32, out: *mut u8, len: usize) -> i64 {
+    let Some(m) = (unsafe { machine.as_mut() }) else { return STATUS_NULL as i64 };
+    if out.is_null() {
+        return STATUS_NULL as i64;
+    }
+    let out = unsafe { std::slice::from_raw_parts_mut(out, len) };
+    for (i, b) in out.iter_mut().enumerate() {
+        *b = m.read_space(space, address.wrapping_add(i as i32));
+    }
+    len as i64
+}
+
+/// # Safety
+/// `machine` must be live or null; `data` valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mercury_machine_write_space(machine: *mut Machine, space: u32, address: i32, data: *const u8, len: usize) -> i64 {
+    let Some(m) = (unsafe { machine.as_mut() }) else { return STATUS_NULL as i64 };
+    for (i, &b) in unsafe { input(data, len) }.iter().enumerate() {
+        m.write_space(space, address.wrapping_add(i as i32), b);
+    }
+    len as i64
+}
+
+/// The save path the state carries as UTF-8, copied up to `len`; its length, or -2 for C#'s null.
+///
+/// # Safety
+/// `machine` must be live or null; `out` valid for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mercury_machine_save_path(machine: *const Machine, out: *mut u8, len: usize) -> i64 {
+    let Some(m) = (unsafe { machine.as_ref() }) else { return STATUS_NULL as i64 };
+    let Some(path) = &m.bus.cart.save_path else { return -2 };
+    if !out.is_null() {
+        unsafe { ptr::copy_nonoverlapping(path.as_ptr(), out, path.len().min(len)) };
+    }
+    path.len() as i64
+}
+
+/// Game Genie's table: `count` addresses, and 256 entries each of `0x100 | patched` or 0; a count of zero clears it.
+///
+/// # Safety
+/// `machine` must be live or null; `addresses` valid for `count` and `tables` for `count * 256` entries.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mercury_machine_set_rom_patches(machine: *mut Machine, addresses: *const u16, tables: *const u16, count: usize) {
+    let Some(m) = (unsafe { machine.as_mut() }) else { return };
+    if count == 0 || addresses.is_null() || tables.is_null() {
+        *m.bus.rom_patches = None;
+        return;
+    }
+    let addresses = unsafe { std::slice::from_raw_parts(addresses, count) };
+    let tables = unsafe { std::slice::from_raw_parts(tables, count * 256) };
+    let map = addresses.iter().zip(tables.chunks_exact(256)).map(|(&a, t)| (a, t.try_into().expect("256 entries"))).collect();
+    *m.bus.rom_patches = Some(Box::new(map));
+}
+
 /// The state's layout as UTF-8 text, copied up to `len` bytes; returns its whole length, or a negative status.
 ///
 /// # Safety

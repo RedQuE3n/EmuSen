@@ -1376,7 +1376,9 @@ real window, so the pad goes to it.
 
 **Tests.** `PadSettingsWindowTests` starts a big-screen window with a synthetic SNES game running and opens each
 window from the pad's menu with the pad; each case asserts that no owned window exists, that the game is paused while
-the sheet is up and running again after B.
+the sheet is up and running again after B. `The_resume_question_is_asked_on_a_sheet_and_answered_by_pad` closes a game
+from the pad's menu, starts it again, finds the question on a sheet with Resume focused, and answers it with A (the
+game resumes) and with B (it does not start).
 
 **What only the device can confirm.** That Game Mode sets the session up as the source says; that the scale chosen
 reads well on a Legion Go S's 8-inch 1920 by 1200 panel; and, for Desktop Mode, nothing new.
@@ -1396,6 +1398,13 @@ jumped to those buttons and left the rest of the page unreachable (a mutant that
 bindings case). A scrolling area that is itself the nearest thing is entered at its nearest control, or passed over
 if it holds none. The focus change scrolls the area to show the control, which is Avalonia's own behaviour for a
 focus given by navigation.
+
+When Avalonia's search answers nothing, the router takes the nearest control that way at all, scored by the distance
+that way plus twice the distance across. The search answers nothing for a control that lies below and wholly to one
+side of the focus with every strategy it offers (projection, rectilinear distance, direction distance) and with
+occlusion ignored, which is how Preferences' Close button, right-aligned under left-aligned switches, was unreachable
+in Desktop Mode though reachable on a sheet, where the switches are wider. Found by the Desktop Mode audit below; a
+mutant without the fallback fails it.
 
 Controls that take left and right keep them: a closed dropdown steps its choice (and saves it, as choosing does), a
 slider moves by its small change. Up and down in a list move its rows until the first or last, then leave it.
@@ -1425,6 +1434,19 @@ over a Close button with no scrolling (the panes now scroll, and the buttons are
 nothing to focus, no way down from the tab strip at all; and in every tabbed window, a walk that changed the selected
 tab. `PadAudit.Reach` finds a pad path to a named control and walks it with the pad alone, which is how the operating
 cases below get to each control.
+
+**Desktop Mode.** Real windows are driven by the same router. The headless platform never makes a window active,
+so `OtherWindow` cannot find one there, and `In_desktop_mode_a_real_window_is_driven_and_every_control_reached` hands
+the router the window directly and audits Debug Logging (the one settings window only the menu bar opens), Graphics,
+Active Cheats and Preferences. That the pad reaches the active window on a desktop is the code of §4.29 and was not
+changed; it is verified by hand only.
+
+**The RetroArch preset picker**, opened from a screen-filter dropdown on the graphics sheet, goes on a sheet over it
+and comes back to it. The audit reached everything in it, and choosing a preset with A did nothing: the list had a
+plain `KeyDown` handler for Enter, and the list claims Enter before a plain handler hears it, so Enter from a real
+keyboard never used a preset either. It listens to handled events now, as the cheat database's games list does for
+the same reason. `The_RetroArch_preset_picker_opens_over_the_graphics_sheet_and_a_preset_is_chosen_by_pad` failed
+before the change.
 
 **What each window's case operates.** Graphics: a dropdown stepped left and right with the stored value checked, opened,
 moved and chosen, opened, moved and backed out of; a switch; Reset This Console; the tabs. Preferences: a switch and a

@@ -68,6 +68,26 @@ namespace EmuSen.WiseMan.Fixtures
             Tick();
         }
 
+        // One of the interface's buttons, pressed as the pad button the window maps it from.
+        public void Press(EmuSen.Mistress.Input.UiButton button)
+        {
+            switch (button)
+            {
+                case EmuSen.Mistress.Input.UiButton.Up: Up(); break;
+                case EmuSen.Mistress.Input.UiButton.Down: Down(); break;
+                case EmuSen.Mistress.Input.UiButton.Left: Left(); break;
+                case EmuSen.Mistress.Input.UiButton.Right: Right(); break;
+                case EmuSen.Mistress.Input.UiButton.Accept: A(); break;
+                case EmuSen.Mistress.Input.UiButton.Back: B(); break;
+                case EmuSen.Mistress.Input.UiButton.PageUp: L1(); break;
+                case EmuSen.Mistress.Input.UiButton.PageDown: R1(); break;
+                case EmuSen.Mistress.Input.UiButton.Search: Y(); break;
+                case EmuSen.Mistress.Input.UiButton.Menu: Start(); break;
+                case EmuSen.Mistress.Input.UiButton.Options: Select(); break;
+                default: throw new System.ArgumentOutOfRangeException(nameof(button), button, "No single pad button maps to it.");
+            }
+        }
+
         public void Up(int times = 1) => Tap(SDL.GamepadButton.DPadUp, times);
         public void Down(int times = 1) => Tap(SDL.GamepadButton.DPadDown, times);
         public void Left(int times = 1) => Tap(SDL.GamepadButton.DPadLeft, times);

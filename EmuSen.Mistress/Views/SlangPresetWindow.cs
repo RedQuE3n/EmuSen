@@ -56,7 +56,8 @@ namespace EmuSen.Mistress.Views
             _filter.Changed += ShowPresets;
             _list.Chose += _ => _use.IsEnabled = _list.Selected is not null;
             _list.DoubleTapped += (_, _) => Use();
-            _list.KeyDown += (_, e) => { if (e.Key == Key.Enter) Use(); };
+            // Handled events too: the list claims Enter itself, so a plain KeyDown never heard it - see EmuSen_Settings_Reference.md §4.45.3.
+            _list.AddHandler(KeyDownEvent, (_, e) => { if (e.Key == Key.Enter) Use(); }, handledEventsToo: true);
 
             Control hint = Ui.Hint("libretro's slang shader pack, the one RetroArch's online updater fetches, from buildbot.libretro.com. EmuSen ships none of it; it is downloaded to this machine only when you ask, and each shader keeps the licence its authors gave it.");
             Control top = Ui.Stack(8, hint, Ui.Row(12, _download, _status), _filter);

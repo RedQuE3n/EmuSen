@@ -222,8 +222,9 @@ dotnet publish EmuSen.Mistress/EmuSen.Mistress.csproj -c Release -r linux-x64 \
 
 Swap `linux-x64` for `win-x64`, `osx-x64` or `osx-arm64`.
 
-MarsRT, the Rust N64 core, is built by `cargo` for the machine publishing and copied in; for another platform pass its
-library, built where it runs by the MarsRT workflow (`.github/workflows/marsrt.yml`, artefacts `marsrt-<rid>`):
+The Rust cores, MarsRT (N64) and MercuryRT (Game Boy), are built by `cargo` for the machine publishing and copied in;
+for another platform pass their libraries, built where they run by the Rust cores workflow
+(`.github/workflows/rust-cores.yml`, artefacts `marsrt-<rid>` and `mercuryrt-<rid>`):
 
 ```sh
 dotnet publish EmuSen.Mistress/EmuSen.Mistress.csproj -c Release -r win-x64 \
@@ -231,8 +232,8 @@ dotnet publish EmuSen.Mistress/EmuSen.Mistress.csproj -c Release -r win-x64 \
     -p:ErrorOnDuplicatePublishOutputFiles=false -p:EmuSenNativePrebuilt=/path/to/native -o out/win-x64
 ```
 
-where `/path/to/native/win-x64/marsrt.dll` is the artefact. Without it the publish warns and the N64 runs on Mars (C#)
-there.
+where `/path/to/native/win-x64/` holds the two artefacts, `marsrt.dll` and `mercuryrt.dll`. For each one missing the
+publish warns, and that console runs on its C# core there: the N64 on Mars (C#), the Game Boy on Mercury (C#).
 
 Two things worth knowing, both documented in [`EmuSen_Settings_Reference.md`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Settings_Reference.md) §4.9:
 

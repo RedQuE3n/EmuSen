@@ -10,7 +10,7 @@ Around the cores there is a frontend, a debugging shell built into the emulator,
 
 | Console | Core | Where it stands |
 |---|---|---|
-| Nintendo 64 | **MarsRT** (Rust), the default; **Mars** (C#) | Super Mario 64, Ocarina of Time, GoldenEye 007 and Donkey Kong 64 run. Up to 4× internal resolution, antialiasing, an optional Vulkan path and a recompiler |
+| Nintendo 64 | **MarsRT** (Rust), the default; **Mars** (C#) | Super Mario 64, Ocarina of Time, GoldenEye 007 and Donkey Kong 64 run. Many others do as well, but haven't gotten to full testing. Most problematic roms work. Up to 4× internal resolution, antialiasing, an optional Vulkan path and a recompiler |
 | SNES | **Venus** (C#) | Runs commercial games, including SA-1, SuperFX, NEC DSP and OBC1 cartridges. Several play well; none has a verified playthrough |
 | Game Boy / Color | **Mercury** (C#), the default; **MercuryRT** (Rust) | Everything but the boot ROM, the link cable and the Super Game Boy. Passes 94 of the 173 blargg and mooneye hardware test ROMs |
 | NES | **Moon** (C#) | CPU, PPU, full APU and sixteen mapper boards. Plays Super Mario Bros. 3 and others, but has had far less play-testing than the SNES core |

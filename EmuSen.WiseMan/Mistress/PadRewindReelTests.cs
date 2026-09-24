@@ -97,6 +97,11 @@ namespace EmuSen.WiseMan.Mistress
         private static void Choose(MainWindow window, PadDriver pad, string entry)
         {
             pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
+            ChooseInOpenMenu(window, pad, entry);
+        }
+
+        private static void ChooseInOpenMenu(MainWindow window, PadDriver pad, string entry)
+        {
             string[] lines = MenuLines(window);
             int at = Array.FindIndex(lines, l => l.StartsWith(entry, StringComparison.Ordinal));
             Assert.True(at >= 0, $"No '{entry}' in the pad menu: {string.Join(", ", lines)}");
@@ -225,32 +230,62 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         [Fact]
-        public Task B_cancels_leaving_the_machine_and_the_history_exactly_as_they_were_and_resumes_what_the_menu_paused() => Session.Dispatch(() =>
+        public Task B_cancels_leaving_the_machine_and_the_history_exactly_as_they_were() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = WithAGame(bigScreen: true);
             Play(window, 240);
 
-            RewindReelWindow reel = OpenReel(window, pad);
+            // Paused by the player, so it stays paused after B and the state after can be compared; measured before the reel reads anything.
+            window.PauseEmulation();
             WaitUntilParked(window);
             ICore core = Game(window).Core!;
             byte[] before = Save(core);
             long[] history = Rewind(window).Moments().Select(m => m.Frame).ToArray();
             int depth = Rewind(window).Depth;
 
+            RewindReelWindow reel = OpenReel(window, pad);
             pad.Left(5);
             pad.L1();
             Settle(window);
             Assert.False(reel.Strip.Selected!.IsNow);
-            byte[] still = Save(core);
 
             pad.B();
             WaitFor(() => !Sheets(window).IsPresenting);
-            Assert.Equal(before, still);
+            Settle(window);
+            WaitUntilParked(window);
+            Assert.True(window.IsPaused);
+            Assert.Equal(before, Save(core));
             Assert.Equal(history, Rewind(window).Moments().Select(m => m.Frame).ToArray());
             Assert.Equal(depth, Rewind(window).Depth);
-            Assert.False(window.IsPaused);
-            long resumedFrom = history[^1];
-            WaitFor(() => Game(window).TotalFrames > resumedFrom + 10);
+
+            Stop(window);
+            window.Close();
+        }, default);
+
+        // The present is a tile, and choosing it is no rewind: the machine and the history are untouched.
+        [Fact]
+        public Task A_on_now_changes_nothing() => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = WithAGame(bigScreen: true);
+            Play(window, 120);
+            window.PauseEmulation();
+            WaitUntilParked(window);
+            ICore core = Game(window).Core!;
+            byte[] before = Save(core);
+            long[] history = Rewind(window).Moments().Select(m => m.Frame).ToArray();
+
+            RewindReelWindow reel = OpenReel(window, pad);
+            pad.Left(2);
+            pad.Right(2);
+            Assert.True(reel.Strip.Selected!.IsNow);
+            pad.A();
+            WaitFor(() => !Sheets(window).IsPresenting);
+            Settle(window);
+            WaitUntilParked(window);
+
+            Assert.Equal(before, Save(core));
+            Assert.Equal(history, Rewind(window).Moments().Select(m => m.Frame).ToArray());
+            Assert.True(window.IsPaused);
 
             Stop(window);
             window.Close();
@@ -310,7 +345,10 @@ namespace EmuSen.WiseMan.Mistress
             pad.Left();
             Assert.Same(moments[0], reel.Strip.Selected);
 
+            // B resumes the game the menu paused.
             pad.B();
+            WaitFor(() => !Sheets(window).IsPresenting);
+            Assert.False(window.IsPaused);
             Stop(window);
             window.Close();
         }, default);

@@ -2414,6 +2414,28 @@ config, so the engine is one decision. **The engine's default is still Mars (C#)
 `CoreCatalog` and the factory's rule for a null engine, and it waits, as this stage said it should, for a session of
 play on each machine with the crash log clean.
 
+**The engine flipped, 2026-09-24.** MarsRT (Rust) is the N64 row's default and first choice. It was not quite the one
+line predicted, and the difference is worth stating:
+
+- **The factory's null stayed the reference.** Forty-odd tests call `CoreFactory.Load(rom)` with no engine and cast
+  the result to `MarsCore`; they grade Mars, and a null that meant "the player's default" would have moved every one
+  of them onto MarsRT silently. So the player's default is resolved one step up, `CoreCatalog.EngineChosen(console,
+  stored)`, which `ConfiguredEngine` (Hotaru, Pharaoh, the peer probe) and Mistress both call; the factory is only
+  ever handed a name by a frontend. The Mars performance probe calls the factory itself and still measures Mars (C#).
+- **The notice named the default.** An unknown engine ran Mars and said "*the default* is running"; with MarsRT the
+  default that would have been false, so the notice now names the core that started. And the early return for the
+  default engine would have hidden a missing library on the default; it is gone, so a platform without
+  `libmarsrt.so` says so for every N64 game.
+- **One test read Mars's registers from Mistress's running core** (`MainWindowSaveStateThreadTests`). It now saves the
+  running core's state and reads it through Mars (C#), since both engines write that format, so it grades MarsRT's
+  hotkey path too.
+
+The condition this stage set, a session of play on each machine with a clean crash log, was met on the handheld
+(§6.15.6, no crash log) and not on the desktop, where the N64 had run on Mars (C#); the player made the call. Stage
+G's first criterion (§6.7) now holds wherever the library ships. Tests: the engine, frontend, Mistress, Hotaru,
+Pharaoh and MercuryRT suites, 1,097 cases, pass; a catalogue that forgets the default and a notice that names the
+default instead of the running core are each caught.
+
 ### 6.3 Stage C: every platform
 
 **The gap.** `EmuSen.csproj` builds the crate only when the publish's runtime identifier is the host's

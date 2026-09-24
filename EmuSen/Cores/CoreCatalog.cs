@@ -180,8 +180,8 @@ namespace EmuSen.Cores
         private static readonly Dictionary<string, CoreSetting> EngineByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
             ["N64"] = new(EngineKey, "Engine",
-                "Which implementation runs the console. Mars (C#) is the reference. MarsRT (Rust) is exact against it in state, picture and sound, reads the same save states and battery saves, and runs its display processor threaded and its code compiled as Mars does; it honours every setting below, the resolution multiple, antialiasing and the graphics card included. Measured a little faster than Mars on a desktop and about a tenth faster on a handheld. Takes effect when a game is next loaded.",
-                CoreSettingKind.Choice, MarsEngine, Choices: new[] { MarsEngine, MarsRtEngine }),
+                "Which implementation runs the console. MarsRT (Rust) is the default: exact against Mars (C#) in state, picture and sound, reading the same save states and battery saves, and honouring every setting below, the resolution multiple, antialiasing and the graphics card included. Mars (C#) is the reference it is graded against, and runs instead where MarsRT's library is missing. Takes effect when a game is next loaded.",
+                CoreSettingKind.Choice, MarsRtEngine, Choices: new[] { MarsRtEngine, MarsEngine }),
             ["GB"] = new(EngineKey, "Engine",
                 "Which implementation runs the console. Mercury (C#) is the reference. MercuryRT (Rust) is exact against it in state, picture and sound and reads the same save states and battery saves; its debugger view is refreshed from its state, and it does not yet stop at breakpoints. Takes effect when a game is next loaded.",
                 CoreSettingKind.Choice, MercuryEngine, Choices: new[] { MercuryEngine, MercuryRtEngine }),
@@ -190,6 +190,9 @@ namespace EmuSen.Cores
         // Null for a console with one implementation.
         public static CoreSetting? EngineFor(string console) =>
             EngineByConsole.TryGetValue(console, out var engine) ? engine : null;
+
+        // The engine a frontend runs for a console: the stored choice, else the row's default; null for a console with one - see EmuSen_Settings_Reference.md §4.44.
+        public static string? EngineChosen(string console, string? stored) => stored ?? EngineFor(console)?.Default;
 
         public static IReadOnlyList<string> FilterChoices { get; } =
             new[] { AllConsoles }.Concat(Cores.Select(c => c.DisplayName)).ToArray();

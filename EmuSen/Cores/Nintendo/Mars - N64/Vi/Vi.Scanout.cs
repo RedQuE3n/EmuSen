@@ -54,9 +54,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             if (blank)
             {
                 System.Array.Clear(_held);
-                System.Array.Clear(_raster);
-                if (_deviceRaster) { _deviceClear = true; _deviceSpans.Clear(); }
-                else System.Array.Clear(_rasterScaled);
+                RasterEdited |= Clear(_raster);
+                if (_deviceRaster) { _deviceClear = true; _deviceSpans.Clear(); RasterEdited = true; }
+                else RasterEdited |= Clear(_rasterScaled);
             }
             else
             {
@@ -82,7 +82,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             Reach(job);
 
             // The scaled memory is read in place of the machine's once something has drawn into it - see Mars_Video.md §2.9.
-            job.Scale = _bus.Dp.ScaledDrawn ? _bus.Dp.Scale : 1;
+            job.Scale = _bus.Dp.ScaledDrawnHandedOver ? _bus.Dp.Scale : 1;
             if (job.Scale > 1)
             {
                 int n = job.Scale;
@@ -329,20 +329,29 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         {
             if (line >= RasterHeight || count <= 0) return;
 
-            System.Array.Clear(_raster, (line * RasterWidth + from) * 4, count * 4);
+            RasterEdited |= Clear(_raster.AsSpan((line * RasterWidth + from) * 4, count * 4));
 
             // The raster at the multiple darkens the same lines and columns, each at the multiple - see Mars_Video.md §2.9.
             if (_deviceRaster)
             {
                 DarkenOnTheDevice(line, from, count);
+                RasterEdited = true;
                 return;
             }
 
             int n = _rasterScale;
             if (n > 1 && _rasterScaled.Length > 0)
             {
-                for (int i = 0; i < n; i++) System.Array.Clear(_rasterScaled, ((line * n + i) * RasterWidth * n + from * n) * 4, count * n * 4);
+                for (int i = 0; i < n; i++) RasterEdited |= Clear(_rasterScaled.AsSpan(((line * n + i) * RasterWidth * n + from * n) * 4, count * n * 4));
             }
+        }
+
+        // Zeroes the bytes and says whether any was not already zero, which is whether the raster changed - see Mars_Video.md §2.8.
+        private static bool Clear(System.Span<byte> bytes)
+        {
+            if (bytes.IndexOfAnyExcept((byte)0) < 0) return false;
+            bytes.Clear();
+            return true;
         }
 
         // One pass over the picture: each row starts a new line of the frame buffer, each step a new pixel of it - see §2.5.

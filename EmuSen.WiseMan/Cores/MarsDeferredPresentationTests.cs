@@ -321,6 +321,51 @@ namespace EmuSen.WiseMan.Cores
             Assert.False(job.Repeats);
         }
 
+        // A repeat that follows a held line's expiry is walked, since the expiry darkened the raster the picture on show was composed from - see Mars_Video.md §2.8.
+        [Fact]
+        public void A_deferred_repeat_after_a_held_line_expired_shows_the_darkened_picture()
+        {
+            string rom = SyntheticN64Rom.WriteTemp(SyntheticN64Rom.BuildRunningFromRdram(new uint[] { 0x1000_FFFF, 0x0000_0000 }));
+            try
+            {
+                MarsCore now = new(batteryRamDisabled: true) { UseBlocks = false, SkipRendering = false };
+                MarsCore later = new(batteryRamDisabled: true) { UseBlocks = false, SkipRendering = false, DeferredPresentation = true };
+                now.LoadRom(rom);
+                later.LoadRom(rom);
+                foreach (MarsCore core in new[] { now, later })
+                {
+                    uint state = 0x2468_ACE0;
+                    for (int i = 0; i < 0x30000; i++)
+                    {
+                        state = state * 1103515245 + 12345;
+                        core.Bus!.Rdram[Framebuffer - 0x8000 + i] = (byte)(state >> 16);
+                    }
+                }
+
+                uint[] tall = Registers(2, 3, 64, 0x400, 0x400, 108, 256, 34, 120, 0, 0), shortened = Registers(2, 3, 64, 0x400, 0x400, 108, 256, 34, 60, 0, 0);
+                byte[]? previous = null;
+                int stale = 0, changed = 0;
+                foreach (uint[] registers in new[] { tall, tall, tall, shortened, shortened, shortened, shortened })
+                {
+                    Program(now.Bus!, registers);
+                    Program(later.Bus!, registers);
+                    now.RunFrame();
+                    later.RunFrame();
+                    Assert.Equal(State(now), State(later));
+                    if (previous != null && !later.GetFrameBufferRgba().AsSpan().SequenceEqual(previous)) stale++;
+                    if (previous != null && !now.GetFrameBufferRgba().AsSpan().SequenceEqual(previous)) changed++;
+                    previous = now.GetFrameBufferRgba().ToArray();
+                }
+
+                Assert.True(later.RepeatedScans >= 2 && changed >= 1, $"the case was not reached: {later.RepeatedScans} repeats skipped, the immediate picture changed {changed} times");
+                Assert.True(stale == 0, $"{stale} deferred pictures differ from the immediate picture of the frame before");
+            }
+            finally
+            {
+                File.Delete(rom);
+            }
+        }
+
         // The anti-alias filter reads the hidden bits beside each word, so a change in those alone must end the repeat too - see Mars_Video.md §2.8.
         [Fact]
         public void A_change_in_the_hidden_bits_alone_ends_the_repeat()

@@ -222,7 +222,8 @@ namespace EmuSen.Mistress.Views
             if (TypingIntoATextField(e)) return;
 
             // A suspended game must not collect the keys used to browse the library - see EmuSen_Settings_Reference.md §4.18.
-            if (!LibraryView.IsVisible && _keyBindings.For(_activeConsole).TryGetControl(key, out PadControl control))
+            // A sheet over the game takes its keys; they are not the game's - see EmuSen_Settings_Reference.md §4.45.2.
+            if (!LibraryView.IsVisible && !Sheets.IsPresenting && _keyBindings.For(_activeConsole).TryGetControl(key, out PadControl control))
             {
                 _keyboardHeld[(int)control] = pressed;
                 if (PadControls.IsButton(control, out PadButton button)) ApplyButtonState(button);
@@ -359,7 +360,7 @@ namespace EmuSen.Mistress.Views
         // Lists the ROM directory directly, as an alternative to the OS picker - see §4.11.
         private async Task BrowseRomsAsync()
         {
-            string? selected = await new RomBrowserWindow(_appSettings.RomDirectory).ShowDialog<string?>(this);
+            string? selected = await SheetLayer.ShowDialog<string>(new RomBrowserWindow(_appSettings.RomDirectory), this);
             if (selected is null) return;
 
             await StartGameAsync(selected, Path.GetFileName(selected));
@@ -371,7 +372,7 @@ namespace EmuSen.Mistress.Views
                 _session is null ? null : _activeConsole);
             // A rebind has to reach the menu, or it advertises the old key - see §4.19.
             window.Closed += (_, _) => SyncMenuState();
-            window.Show(this);
+            _ = SheetLayer.Show(window, this);
         }
 
         private void ShowGraphicsSettings()
@@ -382,7 +383,7 @@ namespace EmuSen.Mistress.Views
                 if (_session is not null && console == _activeConsole) RequestOnEmulationThread(session => ApplyConsoleSettings(session, console));
                 if (_session is not null && console == _activeConsole) ApplyScreenFilter(console);
             }, _session is null ? null : _activeConsole, HttpFactory);
-            window.Show(this);
+            _ = SheetLayer.Show(window, this);
         }
 
         // On the UI thread: the filter belongs to the control that draws, not to the core - see EmuSen_Settings_Reference.md §4.40.
@@ -432,12 +433,12 @@ namespace EmuSen.Mistress.Views
             // Non-modal, so re-scan on close rather than leaving a stale library behind it.
             var window = new PreferencesWindow(_appSettings);
             window.Closed += (_, _) => { ScanArtwork(); ApplyOnlineCovers(); if (LibraryView.IsVisible) RefreshLibrary(); };
-            window.Show(this);
+            _ = SheetLayer.Show(window, this);
         }
 
         private void ShowDebugLogging()
         {
-            new DebugSettingsWindow().Show(this);
+            _ = SheetLayer.Show(new DebugSettingsWindow(), this);
         }
 
         // Never needs a ROM: it manages a folder and a list, not a session. See §4.14.
@@ -671,7 +672,7 @@ namespace EmuSen.Mistress.Views
                 new LunaMenu("_Settings",
                     new LunaAction("_Controller Bindings...", ShowControllerBindings),
                     new LunaAction("_Graphics Settings...", ShowGraphicsSettings),
-                    new LunaAction("_Debug Logging...", () => new DebugSettingsWindow().Show(this)),
+                    new LunaAction("_Debug Logging...", ShowDebugLogging),
                     new LunaAction("_Preferences...", ShowPreferences),
                     new LunaAction("Chea_t Database...", ShowCheatDatabase),
                     new LunaAction("_Active Cheats...", ShowActiveCheats),

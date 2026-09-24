@@ -58,6 +58,12 @@ namespace EmuSen.Mistress.Views
                 Opened += (_, _) => IsFullScreen = true;
             }
 
+            // One window on screen in a big-screen session, so the others are drawn inside this one - see EmuSen_Settings_Reference.md §4.45.2.
+            Sheets.PresentsWindows = _bigScreen;
+            Sheets.Hint = "A  Choose      B  Back      L1 R1  Tab      Left Right  Change";
+            Sheets.PresentedChanged += OnSheetsChanged;
+            SizeChanged += (_, e) => Sheets.Scale = Math.Clamp(e.NewSize.Height / 720.0, 1.0, 2.0);
+
             PadMenuList.Label = entry => entry.Text();
             _padTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
             _padTimer.Tick += (_, _) => PadTick();
@@ -111,9 +117,27 @@ namespace EmuSen.Mistress.Views
             return false;
         }
 
-        // Another window has the pad only while it is the active one, so a debug window left open beside a game takes nothing.
+        private bool _sheetPaused;
+
+        // A sheet over a game pauses it, and its last one resumes only what it paused - the pad menu's rule (§4.29).
+        private void OnSheetsChanged()
+        {
+            if (Sheets.IsPresenting)
+            {
+                if (_sheetPaused || !GameOnScreen || IsPaused) return;
+                PauseEmulation();
+                _sheetPaused = true;
+                return;
+            }
+
+            if (_sheetPaused && GameOnScreen && IsPaused && !_padMenuOpen) ResumeEmulation();
+            _sheetPaused = false;
+        }
+
+        // A sheet first; else another window, which has the pad only while it is the active one, so a debug window left open beside a game takes nothing.
         private Window? OtherWindow() =>
-            OwnedWindows.LastOrDefault(w => w.IsVisible && w.IsActive)
+            Sheets.Current
+            ?? OwnedWindows.LastOrDefault(w => w.IsVisible && w.IsActive)
             ?? (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Windows
                 .LastOrDefault(w => !ReferenceEquals(w, this) && w.IsVisible && w.IsActive);
 

@@ -382,8 +382,7 @@ pub fn present_now(bus: &mut MemoryBus, out: &mut Scanout) -> Presented {
     let (vi, dp) = (&mut bus.vi, &mut bus.dp);
     let walked = match prepare(vi, Some(dp), out).0 {
         Some(job) => {
-            let (from, count) = reach(&job, bus.rdram.len() as u32);
-            bus.dp.wait_read_range(from, count, site::VI);
+            let (from, count) = capture_range(bus, &job);
             out.capture.device_scanned = false;
             if job.scale > 1 && bus.dp.multiple.can_scan_out() {
                 // C#'s immediate scan is a job of its own: its picture replaces the device's, and the deferred capture's record must not say it is that capture's.
@@ -419,8 +418,7 @@ pub fn present_deferred(bus: &mut MemoryBus, out: &mut Scanout) -> Presented {
     let (rows, serrate, repeat_rows) = (frame_height(&bus.vi.registers), serrate(&bus.vi.registers), out.repeat_rows);
 
     if let Some(job) = job {
-        let (from, count) = reach(&job, bus.rdram.len() as u32);
-        bus.dp.wait_read_range(from, count, site::VI);
+        let (from, count) = capture_range(bus, &job);
         let can_scan_out = bus.dp.multiple.can_scan_out();
         let shape = Shape { job, from, count, can_scan_out };
         let repeats = out.capture.repeats(shape, bus);
@@ -595,6 +593,35 @@ fn publish_raster(bus: &mut MemoryBus, out: &mut Scanout, job: Option<&Job>) {
         out.capture.device_scanned = true;
         out.capture.device_scan_at = bus.dp.multiple.scan_outs;
     }
+}
+
+/// The bytes a scan captures, waited for at site 8: at one what the walk reads and the draws that reach it; at a multiple C#'s reach and
+/// wait, since the shadow's lines the capture copies are waited for only through the words that drew the same lines at one (Mars_Native.md §6.14).
+fn capture_range(bus: &mut MemoryBus, job: &Job) -> (u32, u32) {
+    let length = bus.rdram.len() as u32;
+    if job.scale > 1 {
+        let (from, count) = reach_with_slack(job, length);
+        bus.dp.wait_read_range_whole(from, count, site::VI);
+        return (from, count);
+    }
+    let (from, count) = reach(job, length);
+    bus.dp.wait_read_range(from, count, site::VI);
+    (from, count)
+}
+
+/// `Vi.Reach`: from a line and a row's span before the window's first line to two of each after its last, clamped (Mars_Video.md §2.7).
+fn reach_with_slack(job: &Job, length: u32) -> (u32, u32) {
+    let picture = &job.picture;
+    let (width, bytes) = (job.width as i64, if job.wide { 4 } else { 2 });
+    let origin = job.aligned_origin() as i64;
+    let row_span = walker::ROW_SPAN as i64;
+    let first_line = (picture.start_y >> 10) as i64 - 3;
+    let last_line = ((picture.start_y as i64 + (picture.rows - 1).max(0) as i64 * picture.step_y as i64) >> 10) + 4;
+    let from = origin + ((first_line - 1) * width - row_span - 4) * bytes;
+    let to = origin + ((last_line + 2) * width + 2 * row_span + 4) * bytes;
+    let from = from.clamp(0, length as i64) & !1;
+    let to = to.clamp(from, length as i64);
+    (from as u32, (to - from) as u32)
 }
 
 /// `Vi.Reach` narrowed to the walker's own reads: its window's lines two above the first line to three below the last, and a sample's

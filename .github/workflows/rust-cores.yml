@@ -1,0 +1,173 @@
+# The Rust cores (EmuSen/Cores/RustCores.props), built and tested where they run, one library a crate a platform - see Mars_Native.md §6.3, Mercury_Native.md §8.6.
+name: Rust cores
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'EmuSen/Cores/Nintendo/MarsRT - N64/**'
+      - 'EmuSen/Cores/Nintendo/MercuryRT - GB/**'
+      - 'EmuSen/Cores/RustCores.props'
+      - 'EmuSen/Cores/RustCoresPublish.targets'
+      - 'EmuSen/EmuSen.csproj'
+      - 'EmuSen.WiseMan/Cores/MarsRt*'
+      - 'EmuSen.WiseMan/Cores/MarsNative*'
+      - 'EmuSen.WiseMan/Cores/MercuryRt*'
+      - '.github/workflows/rust-cores.yml'
+
+jobs:
+  library:
+    name: ${{ matrix.crate.name }} ${{ matrix.platform.rid }}
+    runs-on: ${{ matrix.platform.os }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.crate.dir }}
+    env:
+      LIBRARY: ${{ matrix.platform.prefix }}${{ matrix.crate.name }}${{ matrix.platform.suffix }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The crates of RustCores.props; symbol is the prefix every export the shim looks up carries.
+        crate:
+          - name: marsrt
+            dir: 'EmuSen/Cores/Nintendo/MarsRT - N64'
+            symbol: mars_
+          - name: mercuryrt
+            dir: 'EmuSen/Cores/Nintendo/MercuryRT - GB'
+            symbol: mercury_
+        platform:
+          # ubuntu-22.04 for its glibc (2.35), so the library loads on older distributions than the one that built it.
+          - rid: linux-x64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            prefix: lib
+            suffix: .so
+            test: true
+          - rid: win-x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            prefix: ''
+            suffix: .dll
+            test: true
+          - rid: osx-arm64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            prefix: lib
+            suffix: .dylib
+            test: true
+          # Built on the arm64 runner with Apple's toolchain, which links x86_64; its tests run under Rosetta and may not.
+          - rid: osx-x64
+            os: macos-latest
+            target: x86_64-apple-darwin
+            prefix: lib
+            suffix: .dylib
+            test: rosetta
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: '${{ matrix.crate.dir }} -> target'
+          key: ${{ matrix.crate.name }}-${{ matrix.platform.rid }}
+
+      # The crate's own suite; the games and the corpus skip without their files. MarsRT's block tests run compiled code, which is the check on each platform's JIT rules.
+      - name: Test
+        if: matrix.platform.test == true
+        run: cargo test --release --target ${{ matrix.platform.target }}
+
+      - name: Test under Rosetta
+        if: matrix.platform.test == 'rosetta'
+        continue-on-error: true
+        run: cargo test --release --target ${{ matrix.platform.target }}
+
+      - name: Build
+        run: cargo build --profile dist --target ${{ matrix.platform.target }}
+
+      - name: Exports
+        shell: bash
+        run: |
+          file="target/${{ matrix.platform.target }}/dist/$LIBRARY"
+          case "${{ matrix.platform.rid }}" in
+            win-*) ;;
+            *) nm -gU "$file" 2>/dev/null | grep -c ' _\?${{ matrix.crate.symbol }}' || nm -D "$file" | grep -c ' ${{ matrix.crate.symbol }}' ;;
+          esac
+          ls -la "$file"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.crate.name }}-${{ matrix.platform.rid }}
+          path: ${{ matrix.crate.dir }}/target/${{ matrix.platform.target }}/dist/${{ env.LIBRARY }}
+          if-no-files-found: error
+
+  # WiseMan's tests of the Rust cores against the C# cores, run on each platform against the libraries the job above ships; osx-x64 is left out, its runner being arm64.
+  wiseman:
+    name: WiseMan ${{ matrix.rid }}
+    needs: library
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            os: ubuntu-22.04
+          - rid: win-x64
+            os: windows-latest
+          - rid: osx-arm64
+            os: macos-latest
+    steps:
+      # LunaP.props takes the toolkit from the sibling checkout, so both are checked out side by side.
+      - uses: actions/checkout@v4
+        with:
+          path: EmuSen-Project
+
+      - uses: actions/checkout@v4
+        with:
+          repository: RedQuE3n/EmuSen.LunaP
+          ref: openemu-library
+          path: EmuSen.LunaP
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: marsrt-${{ matrix.rid }}
+          path: native
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: mercuryrt-${{ matrix.rid }}
+          path: native
+
+      # EmuSenNative=false: cargo stays out of this build, and the tests load the shipped libraries.
+      - name: Build
+        working-directory: EmuSen-Project
+        run: dotnet build EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release -p:EmuSenNative=false
+
+      - name: The libraries beside the tests
+        shell: bash
+        run: |
+          out=EmuSen-Project/EmuSen.WiseMan/bin/Release/net10.0
+          cp native/* "$out/"
+          ls -la "$out"/*marsrt* "$out"/*mercuryrt*
+
+      # Printed in full, so each platform's digests can be read off the log.
+      - name: Test the platform digests
+        working-directory: EmuSen-Project
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MercuryRtPlatformTests" --logger "console;verbosity=detailed"
+
+      - name: Test the Rust cores against the C# cores
+        working-directory: EmuSen-Project
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wiseman-${{ matrix.rid }}
+          path: results
+          if-no-files-found: ignore

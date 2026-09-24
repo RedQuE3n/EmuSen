@@ -250,21 +250,21 @@ impl Mapper {
         }
     }
 
-    /// The board's fields in C#'s ordinal order, its `_cart` copy among them.
-    pub fn write_state(&self, w: &mut StateWriter, cart: &Cartridge) {
+    /// The board's fields in C#'s ordinal order; version 6 no longer writes its `_cart` copy (Mercury_Native.md §9.3).
+    pub fn write_state(&self, w: &mut StateWriter) {
         match self {
-            Mapper::NoMbc(_) => cart.write_as_field(w, "_cart"),
-            Mapper::Mbc1(m) => m.write_state(w, cart),
-            Mapper::Mbc2(m) => m.write_state(w, cart),
-            Mapper::Mbc3(m) => m.write_state(w, cart),
-            Mapper::Mbc5(m) => m.write_state(w, cart),
+            Mapper::NoMbc(_) => {}
+            Mapper::Mbc1(m) => m.write_state(w),
+            Mapper::Mbc2(m) => m.write_state(w),
+            Mapper::Mbc3(m) => m.write_state(w),
+            Mapper::Mbc5(m) => m.write_state(w),
         }
     }
 
-    /// C# reads the `_cart` copy into the one cartridge object, so the copy read last is the one that stands.
+    /// A version-5 state's `_cart` copy is read into the one cartridge object, so the copy read last stands, as C# reads it.
     pub fn read_state(&mut self, r: &mut StateReader, cart: &mut Cartridge) -> StateResult {
         match self {
-            Mapper::NoMbc(_) => cart.read_as_field(r), // _cart
+            Mapper::NoMbc(_) => cart.read_retired_copy(r), // _cart, version 5 only
             Mapper::Mbc1(m) => m.read_state(r, cart),
             Mapper::Mbc2(m) => m.read_state(r, cart),
             Mapper::Mbc3(m) => m.read_state(r, cart),
@@ -274,11 +274,10 @@ impl Mapper {
 }
 
 impl Mbc1 {
-    fn write_state(&self, w: &mut StateWriter, cart: &Cartridge) {
+    fn write_state(&self, w: &mut StateWriter) {
         w.bool("_advancedMode", self.advanced_mode);
         w.i32("_bank1", self.bank1);
         w.i32("_bank2", self.bank2);
-        cart.write_as_field(w, "_cart");
         w.bool("_ramEnabled", self.ram_enabled);
     }
 
@@ -286,21 +285,20 @@ impl Mbc1 {
         self.advanced_mode = r.bool()?; // _advancedMode
         self.bank1 = r.i32()?; // _bank1
         self.bank2 = r.i32()?; // _bank2
-        cart.read_as_field(r)?; // _cart
+        cart.read_retired_copy(r)?; // _cart, version 5 only
         self.ram_enabled = r.bool()?; // _ramEnabled
         Ok(())
     }
 }
 
 impl Mbc2 {
-    fn write_state(&self, w: &mut StateWriter, cart: &Cartridge) {
-        cart.write_as_field(w, "_cart");
+    fn write_state(&self, w: &mut StateWriter) {
         w.bool("_ramEnabled", self.ram_enabled);
         w.i32("_romBank", self.rom_bank);
     }
 
     fn read_state(&mut self, r: &mut StateReader, cart: &mut Cartridge) -> StateResult {
-        cart.read_as_field(r)?; // _cart
+        cart.read_retired_copy(r)?; // _cart, version 5 only
         self.ram_enabled = r.bool()?; // _ramEnabled
         self.rom_bank = r.i32()?; // _romBank
         Ok(())
@@ -308,8 +306,7 @@ impl Mbc2 {
 }
 
 impl Mbc3 {
-    fn write_state(&self, w: &mut StateWriter, cart: &Cartridge) {
-        cart.write_as_field(w, "_cart");
+    fn write_state(&self, w: &mut StateWriter) {
         w.bytes("_clock", &self.clock);
         w.i64("_cyclesIntoSecond", self.cycles_into_second);
         w.u8("_lastLatchWrite", self.last_latch_write);
@@ -320,7 +317,7 @@ impl Mbc3 {
     }
 
     fn read_state(&mut self, r: &mut StateReader, cart: &mut Cartridge) -> StateResult {
-        cart.read_as_field(r)?; // _cart
+        cart.read_retired_copy(r)?; // _cart, version 5 only
         r.bytes(&mut self.clock)?; // _clock
         self.cycles_into_second = r.i64()?; // _cyclesIntoSecond
         self.last_latch_write = r.u8()?; // _lastLatchWrite
@@ -333,8 +330,7 @@ impl Mbc3 {
 }
 
 impl Mbc5 {
-    fn write_state(&self, w: &mut StateWriter, cart: &Cartridge) {
-        cart.write_as_field(w, "_cart");
+    fn write_state(&self, w: &mut StateWriter) {
         w.i32("_ramBank", self.ram_bank);
         w.bool("_ramEnabled", self.ram_enabled);
         w.i32("_romBank", self.rom_bank);
@@ -342,7 +338,7 @@ impl Mbc5 {
     }
 
     fn read_state(&mut self, r: &mut StateReader, cart: &mut Cartridge) -> StateResult {
-        cart.read_as_field(r)?; // _cart
+        cart.read_retired_copy(r)?; // _cart, version 5 only
         self.ram_bank = r.i32()?; // _ramBank
         self.ram_enabled = r.bool()?; // _ramEnabled
         self.rom_bank = r.i32()?; // _romBank

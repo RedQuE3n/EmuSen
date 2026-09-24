@@ -6,7 +6,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory.Mappers
     // Nine ROM bank bits split across two registers, and the only board here that can select bank 0 - see Mercury_Memory.md §4.5.
     public sealed class Mbc5 : IMapper
     {
-        private readonly Cartridge _cart;
+        // Version 5 wrote the cartridge again here - see Mercury_Native.md §9.3.
+        [EmuSen.Common.RetiredFromState] private readonly Cartridge _cart;
 
         private bool _ramEnabled;
         private int _romBank = 1;

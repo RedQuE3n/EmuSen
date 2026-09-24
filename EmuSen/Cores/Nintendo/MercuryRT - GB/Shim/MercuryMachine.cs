@@ -7,7 +7,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
     // MercuryRT's machine behind its handle, its state read and written in the C# Mercury's own format - see Mercury_Native.md §3.2.
     public sealed unsafe class MercuryMachine : IDisposable
     {
-        private static readonly delegate* unmanaged<byte*, nuint, byte*, nint, int*, nint> New = (delegate* unmanaged<byte*, nuint, byte*, nint, int*, nint>)MercuryNative.Export("mercury_machine_new");
+        private static readonly delegate* unmanaged<byte*, nuint, int*, nint> New = (delegate* unmanaged<byte*, nuint, int*, nint>)MercuryNative.Export("mercury_machine_new");
         private static readonly delegate* unmanaged<nint, void> Free = (delegate* unmanaged<nint, void>)MercuryNative.Export("mercury_machine_free");
         private static readonly delegate* unmanaged<nint, byte*, nuint, int> LoadState = (delegate* unmanaged<nint, byte*, nuint, int>)MercuryNative.Export("mercury_machine_load_state");
         private static readonly delegate* unmanaged<nint, long> SizeOf = (delegate* unmanaged<nint, long>)MercuryNative.Export("mercury_machine_save_state_size");
@@ -29,7 +29,6 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         private static readonly delegate* unmanaged<nint, uint, long> SpaceSizeOf = (delegate* unmanaged<nint, uint, long>)MercuryNative.Export("mercury_machine_space_size");
         private static readonly delegate* unmanaged<nint, uint, int, byte*, nuint, long> ReadSpaceOf = (delegate* unmanaged<nint, uint, int, byte*, nuint, long>)MercuryNative.Export("mercury_machine_read_space");
         private static readonly delegate* unmanaged<nint, uint, int, byte*, nuint, long> WriteSpaceOf = (delegate* unmanaged<nint, uint, int, byte*, nuint, long>)MercuryNative.Export("mercury_machine_write_space");
-        private static readonly delegate* unmanaged<nint, byte*, nuint, long> SavePathOf = (delegate* unmanaged<nint, byte*, nuint, long>)MercuryNative.Export("mercury_machine_save_path");
         private static readonly delegate* unmanaged<nint, ushort*, ushort*, nuint, void> SetRomPatchesOf = (delegate* unmanaged<nint, ushort*, ushort*, nuint, void>)MercuryNative.Export("mercury_machine_set_rom_patches");
 
         public const int FrameBytes = 160 * 144 * 4;
@@ -54,16 +53,6 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             fixed (byte* data = from) WriteSpaceOf(Handle, (uint)space, address, data, (nuint)from.Length);
         }
 
-        // The save path the machine's state carries, null as C# has it - see Mercury_Native.md §6.1, D3.
-        public string? SavePath()
-        {
-            long n = SavePathOf(Handle, null, 0);
-            if (n < 0) return null;
-            var text = new byte[n];
-            fixed (byte* data = text) SavePathOf(Handle, data, (nuint)text.Length);
-            return Encoding.UTF8.GetString(text);
-        }
-
         // Addresses, then 256 entries each: 0x100 | patched for an original byte a patch replaces, 0 where none does.
         public void SetRomPatches(ushort[] addresses, ushort[] tables)
         {
@@ -78,16 +67,14 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
 
         public static bool Available => New != null;
 
-        // The ROM image and C#'s save path, null as C# has it under --nobattery; the board is built from the header as C# builds it.
-        public MercuryMachine(ReadOnlySpan<byte> rom, string? savePath)
+        // The ROM image; the board is built from the header as C# builds it, and the battery save's path stays the host's.
+        public MercuryMachine(ReadOnlySpan<byte> rom)
         {
             if (!Available) throw new InvalidOperationException($"MercuryRT is not in use: {MercuryNative.Report}");
-            byte[]? path = savePath is null ? null : Encoding.UTF8.GetBytes(savePath);
             int status;
             fixed (byte* image = rom)
-            fixed (byte* text = path)
             {
-                _handle = New(image, (nuint)rom.Length, text, path is null ? -1 : path.Length, &status);
+                _handle = New(image, (nuint)rom.Length, &status);
             }
             if (_handle == 0) throw status == -10 ? new NotSupportedException($"Cartridge type ${rom[0x147]:X2} is not implemented - see Mercury_Memory.md §4.") : new InvalidDataException($"MercuryRT refused the image: {Describe(status)}.");
             SetSampleRate(44100);

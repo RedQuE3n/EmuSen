@@ -20,8 +20,11 @@ namespace EmuSen.Cores.Nintendo.Mercury
         // "MERC" little-endian, then the format version - see EmuSen_Save_States.md §3.
         private const uint StateMagic = 0x4352454D;
 
-        // 2 added the PPU to the bus walk, 3 the colour banks and HDMA, 4 the APU, 5 the serial port - see EmuSen_Save_States.md §1.
-        private const int StateVersion = 5;
+        // 2 added the PPU to the bus walk, 3 the colour banks and HDMA, 4 the APU, 5 the serial port, 6 dropped the save path and two cartridge copies - see EmuSen_Save_States.md §7.
+        private const int StateVersion = 6;
+
+        // The oldest version LoadState still reads, its retired fields walked and dropped - see Mercury_Native.md §9.3.
+        private const int OldestReadableVersion = 5;
         int global::EmuSen.Cores.IStateFormat.StateVersion => StateVersion;
 
         private const int SaveEveryNFrames = 300;
@@ -230,15 +233,16 @@ namespace EmuSen.Cores.Nintendo.Mercury
             if (r.ReadUInt32() != StateMagic) throw new InvalidDataException("Not a Mercury save state.");
 
             int version = r.ReadInt32();
-            if (version != StateVersion) throw new InvalidDataException($"Save state version {version} is not {StateVersion}.");
+            if (version is < OldestReadableVersion or > StateVersion) throw new InvalidDataException($"Save state version {version} is not one this build reads ({OldestReadableVersion} to {StateVersion}).");
+            bool retired = version < StateVersion;
 
             TotalFrames = r.ReadInt64();
             _cyclesIntoFrame = r.ReadInt64();
 
-            StateSerializer.Read(r, Cart);
-            StateSerializer.Read(r, Cart.Mapper);
-            StateSerializer.Read(r, Cpu);
-            StateSerializer.Read(r, Bus);
+            StateSerializer.Read(r, Cart, includeRetired: retired);
+            StateSerializer.Read(r, Cart.Mapper, includeRetired: retired);
+            StateSerializer.Read(r, Cpu, includeRetired: retired);
+            StateSerializer.Read(r, Bus, includeRetired: retired);
         }
     }
 }

@@ -120,3 +120,29 @@ measured: loading a state from the same scene, the common case, leaves the two p
 Each core keeps its state version as a private constant (Venus 3, Moon 3, Mercury 5, Mars 1, with Mars's rewind snapshots at 2), and each decides for itself what it will read: Venus reads any version up to its own, the other three only their own. `IStateFormat.StateVersion` (`EmuSen/Cores/CoreCapabilities.cs`) publishes the first number and deliberately not the second. A frontend recording a state beside it needs to know what was written; what a core accepts is the core's policy, and a frontend that copied it would be a second copy of four rules that drift independently. So Mistress refuses only what no core could read (a state from another console, or a version newer than the one this build writes) and lets the core judge everything else, adding the state's provenance to whatever the core says when it refuses (`EmuSen_Settings_Reference.md` §4.37).
 
 All four cores implement it by returning their existing constant, so the interface cannot disagree with the header the core writes. Not covered: the Mars snapshot version, which only rewind reads and which never reaches a file.
+
+## 7. Retiring a field (`[RetiredFromState]`, 2026-09-24)
+
+`[RetiredFromState]` marks a field that an older version of a core's state carried and the current version does not.
+It exists because of Mercury version 6 (`Mercury_Native.md` §9.3). Version 5 carried the host's battery-save path,
+and it carried the cartridge three times. That let a state decide where a session's battery save was written. The
+field stays in the class, because the running machine still uses it. What changes is only whether a walk visits it:
+
+- `StateSerializer.Write(w, obj)` and `Read(r, obj)` skip it. That is the current format.
+- `Read(r, obj, includeRetired: true)` walks it in its ordinal place, which is where the older writer put it. A retired
+  scalar or string is read and its value dropped; that is the point of retiring the save path. A retired reference is
+  read into the object it references, as the older reader read it. So Mercury's retired `_cart` copies still land in
+  the one cartridge, the last copy standing.
+- `Write(w, obj, includeRetired: true)` writes the older version's bytes. Nothing in a core calls it. A test uses it
+  to regenerate the older format and checks the result against hashes of states the older build actually wrote. That
+  is how the claim that the older format still reads was proven, rather than argued.
+
+**How it differs from `[AliasOfSerializedField]` (§2).** An alias is a second name for bytes another field already
+carries, and a pre-v1 read restores it. A retired field is data the format no longer wants. An older read consumes
+its bytes, and for a value it deliberately does not restore them.
+
+**What it does not cover.** Only one step back. A core that retires fields twice needs to know which version retired
+which field, and the attribute carries no version. Mercury is the first user and has one step (5 to 6). A second
+retirement should add the version to the attribute rather than a second flag.
+
+Mercury's entry in §6 changes accordingly: it writes 6 and reads 5 and 6.

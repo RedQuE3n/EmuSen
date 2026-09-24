@@ -1575,3 +1575,24 @@ answers the button-mapping question for the South/East grammar these read throug
 behaviour of the shipping gamescope, which no sheet now exercises except the file dialog, and Steam's own keyboard
 chord.
 
+#### 4.45.8 Dropdown lists drawn inside the window
+
+**The defect.** The same day, on the same device: every dropdown on a sheet (the screen filter, the core version)
+opened its list at the size of the screen. On Linux, Avalonia 12.1 opens a dropdown's list, like a menu or a tooltip,
+as a top-level window of its own, and gamescope scales each new top-level window to fill the screen. The sheets of
+§4.45.2 moved windows inside the main one and left popups where they were; the gamescope reading behind §4.45.2 had
+said a window is rescaled when a dropdown sticks out past it, not that the dropdown is itself a window.
+
+**The fix.** `Program.BuildAvaloniaApp` calls LunaP's `EmbedPopups` (LunaP §92) with the same decision that turns on
+big-screen mode (`MainWindow.WantsBigScreen`: the setting, `--bigscreen`, or a Game Mode session, §4.43). It binds
+Avalonia's `X11PlatformOptions.OverlayPopups`, which draws a popup in the window's overlay layer instead of in a
+window. The decision is made before the first window exists, from `AppSettings.Load()` and the environment, because
+platform options are read once at startup: turning the big-screen setting on or off takes effect at the next launch.
+Desktop Mode is unchanged.
+
+**What it gives up.** An embedded list cannot reach past the window's edge, which in a full-screen session has
+nothing beyond it.
+
+**Evidence.** LunaP's `BootstrapTests` shows the option is bound when asked for and not otherwise, and a mutant that
+binds nothing is caught. That the list is now drawn at its own size under gamescope is for the device to confirm.
+

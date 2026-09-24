@@ -1147,7 +1147,7 @@ include a frame continued past a refused stop after a speed switch, a full log d
 armed against plain from `EMUSEN_MERCURYRT_ROMS`: four games, 600 frames, identical.
 
 **The blast radius.** The Mercury, CoreCatalog, CoreFactory, Engine and GraphicsSettings filters were run with the four
-games and the corpus: 361 tests, all passing. That includes `MercuryRtMachineTests`, since the SM83's opcodes gained the
+games and the corpus at the stage's last commit: 397 tests, all passing. That includes `MercuryRtMachineTests`, since the SM83's opcodes gained the
 `note_*` calls. The crate has 35 tests: 20 unit tests, 9 of them the hooks', and the 15 in `tests/debug.rs`.
 
 **Mutants: 19, all caught.** Each was applied, then the crate's tests and WiseMan's two debug classes ran with the

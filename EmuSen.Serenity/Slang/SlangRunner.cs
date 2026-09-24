@@ -17,6 +17,14 @@ namespace EmuSen.Serenity.Slang
             return (device, report);
         }, LazyThreadSafetyMode.ExecutionAndPublication);
 
+        // One SPIR-V cache for the process, opened on the first build; one that cannot open leaves every build compiling - see EmuSen_Serenity.md §9.4.
+        private static readonly Lazy<SpirvCache> SharedCache = new(() => new SpirvCache(CachePath ?? SpirvCache.DefaultPath), LazyThreadSafetyMode.ExecutionAndPublication);
+
+        // Where the shared cache is opened, when not the default; a test sets it before any preset is built.
+        internal static string? CachePath;
+
+        public static SpirvCache Cache => SharedCache.Value;
+
         private readonly Task<SlangChain?> _build;
         private readonly Action<string>? _failed;
         private SKImage? _output;
@@ -54,7 +62,7 @@ namespace EmuSen.Serenity.Slang
             {
                 var (device, report) = Shared.Value;
                 if (device is null) { Fail(report); return null; }
-                return new SlangChain(device, SlangPreset.Load(PresetPath));
+                return new SlangChain(device, SlangPreset.Load(PresetPath), Cache);
             }
             catch (Exception e) when (e is IOException or InvalidDataException or SlangCompileException or InvalidOperationException or ArgumentException or UnauthorizedAccessException)
             {

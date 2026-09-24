@@ -882,6 +882,8 @@ Gains are the desktop's, render thread, 1080p SNES unless said; effort is judged
 | 5 | Virtualising the Shaders window's sliders (L7) | not measured here: settings reference §4.48.2's 944 rows in 1.9 s, ~2 ms a row, against the ~25 rows a window shows | — | moderate (a LunaP list of rows and headings) | UI only |
 | — | One submission; not clearing; caching descriptors; a pipeline cache; re-running only new frames | ≈0, or already done | | | recorded so as not to be re-proposed |
 
+*The first two were built into production on 2026-09-24, with the cache in SQLite rather than files: §9.*
+
 **The recommended order** is the table's. The first two are small, exact (identical pictures), cost no latency and
 between them remove most of a light preset's avoidable frame cost and nearly all of a heavy preset's build time. The
 third is the one that makes a slang preset cost what a built-in filter costs. ~~It is the one the handheld is most
@@ -912,3 +914,349 @@ default; no case measured there needs it to stay inside the frame once the first
   though the path's fixed costs cannot.
 - **Correctness of the presets themselves** against RetroArch's output, still §7.4's open question; here the
   prototypes were compared only against production, picture for picture.
+
+## 9. The first two levers, built (2026-09-24)
+
+§8.8's first two levers, built into the production path on the branch `shader-levers`: the approach of the
+prototypes (§8.5.2, §8.5.4, §8.6), rebuilt, not their code. The prototypes chose a lever by environment variable
+over a copy of Serenity; here each is simply what the path does. Lever 3 (interop) and lever 4 (two frames in flight)
+were not built (§9.8).
+
+### 9.1 The readback lent to Skia
+
+**What it does.** `SlangChain.RenderImage` runs the passes and returns an `SKImage` made with `SKImage.FromPixels`
+over the mapped readback buffer itself: no array, no host copy, no Skia copy. `Render`, which returns an array, stays
+for the tests and copies out of a readback of its own (the *scratch* one, never lent).
+
+**The lifetime rule.** The mapped memory is written again by a later render, so an image must never read it after
+that. Each readback is a `ReadbackSlot` that is *held* from the moment an image is made over it until Skia's raster
+release call (the delegate `FromPixels` takes), on whatever thread Skia makes that call. A held slot is never
+written: a render takes a slot that is not held and is large enough, makes a new one if none is, up to three
+(`MaxLent`), and past that renders into the scratch readback and returns a copy. `CopiedImages` counts those copies;
+a test asserts that steady drawing makes none, and the bench does not report the count. A slot grown for a larger view is retired, not resized,
+if an image holds it; a chain disposed under a held slot leaves the slot to be freed by the release. `SlangRunner`
+lets its last image go *before* rendering the next, so in steady state one readback serves every frame.
+
+**What Skia does with the memory, measured rather than assumed.** On a direct GL context (the bench's, as §8.1's) a
+raster image drawn onto a GPU surface is uploaded **at the draw**, not at the flush, and its pixels are released at
+the image's `Dispose`, before any flush: an image drawn, its memory then rewritten and the context flushed, shows the
+first contents; the release call comes at `Dispose` with no flush between. So under `GameFrameControl`, which draws
+and flushes within one `RenderTo` (§2.5), nothing reads the mapped memory once the draw returns, and one slot would be
+enough. The held flag does not rest on that: it makes the rule hold for a Skia that defers the upload to a flush (a
+recording context, another backend), where a second slot would then be taken.
+
+**A barrier production lacked.** The readback's copy is now followed by a buffer barrier to `HOST_READ` at the host
+stage. A fence's signal does not by itself make a transfer's writes visible to the host; the old path read the
+buffer without it. On RADV's host-coherent memory its absence changes nothing observable (its mutant survived,
+§9.7), and the validation layer does not track host access; it is there because the memory model asks for it.
+
+### 9.2 The rows repeated on the device
+
+`Advance` uploads a frame's rows once, into an image of their own height (`_rows`), and blits that image to the
+history image's full height with nearest filtering; the staging buffer is the frame's size, not twice it. For an
+integer repeat *r* the blit is exact: destination row *y* samples source coordinate (*y* + ½)/*r*, which is never a
+whole number, so the nearest texel is ⌊*y*/*r*⌋ with no rounding case for a driver to decide. A frame with mipmapped
+input gets its chain generated after the blit, as before. The upload is reshaped when the width, the rows **or the
+repeat** change, not only the height, since the same height can be 480 rows once or 240 twice
+(`A_change_of_repeat_at_the_same_height_is_uploaded_as_the_new_shape`).
+
+### 9.3 No image of the source under a preset
+
+`GameFrameControl` made an `SKImage` of every new frame before offering it to the preset, which never draws it
+(§8.3: 0.7 ms at N64 4×). Now, when a preset is built, drawable (`SlangRunner.Ready`) and no built-in filter chain is
+set, no image is made, and the one made earlier (while the preset was still building) is dropped at the first new
+frame, since it is then older than the frame shown. If the preset later declines to draw (it failed mid-draw, or was
+turned off), the image is made then, from the offer §2.8 keeps readable for exactly that; turning a preset off with
+no new frame therefore shows the newest frame, not the one copied before the preset was built
+(`A_preset_that_draws_takes_no_source_image_and_turning_it_off_shows_the_newest_frame`). With a built-in filter set as
+well, nothing changed: its chain keeps the frames it looks back at.
+
+### 9.4 The SPIR-V cache, in SQLite
+
+**Why SQLite.** A cache of compiled shaders is program-written data, and `EmuSen_Stack.md` §1 gives that to SQLite.
+The prototype's loose files are not kept.
+
+**Where the driver lives.** §2.3's rule is that a leaf may hold the contract and not the driver. `EmuSen.Serenity`
+takes `Microsoft.Data.Sqlite` and `SQLitePCLRaw.bundle_e_sqlite3` itself, at `EmuSen`'s versions, because it is not a
+leaf in that sense: it already references seven packages (three with natives) and three projects. It closes no cycle,
+since a package is not a project. And no program gains a library: `EmuSen` references Serenity and both packages, and
+every program that references Serenity (Mistress, Hotaru, WiseMan) references `EmuSen`. The alternative, an interface
+here and the SQLite class in `EmuSen` handed in by each frontend and by the bench, buys a separability nothing uses.
+
+**Where the database lives.** `home/Shaders/spirv-cache.db` (`SpirvCache.DefaultPath`, `DataStore.Shaders`), beside
+the packs it serves and outside the pack's own folder, which a pack update replaces whole (§4.41 of the settings
+reference); like `games.db`, under Galaxia's data home, not `/tmp`. `SlangRunner` opens one cache for the process on
+the first build.
+
+**The key, and why no row can be stale.** A row is keyed by the SHA-256 of, each part length-prefixed: a format tag;
+the compiler's *identity* (the loaded Shaderc library's own SHA-256, found among the process's modules; the SPIR-V
+version it reports; the binding's version; and `SlangCompiler.Options`, the string of every option a compile is
+set); the stage; the file name the compiler is given; and the stage's text after its includes. The options string is
+built from the same constants `Compile` uses, so neither can change without the other. **EmuSen passes Shaderc no
+defines**; the string says `defines=none`, so that adding any means changing it, and with it every key. A changed
+shader, an updated pack, a new Shaderc or a new option is a new key, never a changed row; rows are only ever inserted
+(`INSERT OR IGNORE`) or deleted.
+
+**A damaged row or file.** Each row carries the SHA-256 of its SPIR-V; a row whose bytes do not match, or that does not
+begin with SPIR-V's magic, is deleted and compiled again, never handed to the device. A file that is not a database,
+or that SQLite reports corrupt, is moved aside to `spirv-cache.db.damaged` and a new one begun; if even that fails,
+the cache is off for the process and every stage is compiled. **Nothing the database does can stop a build**: every
+failure falls back to Shaderc.
+
+**Locks and concurrency.** One connection per `SpirvCache`, its statements under a lock; the compiles themselves run
+outside it. The journal is WAL, so another process (Hotaru beside Mistress) reads while one writes, and a key is the
+primary key, so two builders of the same stage cannot both insert it. A statement blocked by another process waits at
+most about a second (`busy_timeout` 250 ms under a one-second command timeout) and is then skipped; the third blocked
+statement in the process turns the cache off, so a database held for good costs a build about three and a half seconds
+(measured, §9.7), not one per stage.
+
+**The bound.** 64 MB of SPIR-V (`SpirvCache.DefaultLimit`). Past it, the least recently used rows go until three
+quarters of the bound remains; a hit refreshes a row's use at most hourly, so a warm build writes almost nothing.
+The five presets §8.6 builds (Lottes, `lcd-grid-v2`, guest-advanced, royale, Mega Bezel SMOOTH-ADV) fill 5.6 MB in
+140 rows, so the bound holds about sixty presets of that weight. A pack update's new keys push the old version's rows
+out; they do not grow the file without end.
+
+**The schema** is `EmuSen.Serenity/Slang/spirv-cache-schema.sql`, embedded in the assembly rather than copied beside
+it, so the cache has no file of its own to be missing. `PRAGMA user_version` is 1; a file of another version is
+emptied and begun again, which a cache may do (§4.3 of `EmuSen_Stack.md` is the gap this does not have).
+
+### 9.5 Passes built in parallel
+
+`SlangChain` builds its passes with `Parallel.For` on every processor but one (`DefaultBuilders`), leaving one for the
+emulation thread. What a pass's build touches is its own: its source file, a Shaderc compiler made for the call, and
+Vulkan objects whose creation needs no external synchronisation on the device. A pass is recorded in the chain before
+its objects are made, so a failure part way frees what was made; **on any failure every pass built is freed** (the
+serial build leaked them before) and the error thrown is the lowest-numbered broken pass's, the one a serial build
+would have met first (`A_parallel_build_that_fails_says_what_a_serial_build_would`). §8.6 noted that the pictures of a
+preset built this way had not been compared; they now are, for royale, guest-advanced and Mega Bezel SMOOTH-ADV
+(`A_preset_built_in_parallel_draws_what_one_built_pass_by_pass_draws`).
+
+### 9.6 What it measured
+
+**The frame.** These are §8.3's 22 cases, interleaved: for each case the production build (`57937b2`) and the lever's
+(`d564dd8`) ran back to back, in an order that rotated. There were three rounds under the bench lock. Each figure is
+the median over rounds of each run's median, render thread, in milliseconds. The raw results and scripts are in
+`~/.cache/emusen/probe/shaders/levers/` (`results-lever1.txt`, `matrix-ab.sh`, `ab.py`). The prototype's column is
+§8.5's, measured against its own control:
+
+| Case | Production | Built | Change | Prototype's change | gen2 /300, before → after | Pictures |
+|---|---|---|---|---|---|---|
+| SNES `crt-lottes` 1080p | 2.53 | **1.82** | −0.71 | −0.67 (`direct`) | 150 → 0 | same |
+| SNES `crt-guest-advanced` | 2.69 | **1.90** | −0.79 | | 150 → 0 | same |
+| SNES `crt-royale` | 2.58 | **1.77** | −0.82 | −0.67 | 67 → 0 | same |
+| SNES Mega Bezel POTATO | 2.72 | **1.85** | −0.86 | | 91 → 0 | same |
+| SNES Mega Bezel SMOOTH-ADV | 6.25 | **3.94** | −2.31 | −2.29 | 98 → 0 | same |
+| GB `lcd-grid-v2` | 1.97 | **1.34** | −0.63 | | 150 → 0 | same |
+| N64 1× `crt-lottes` | 3.45 | **1.99** | −1.46 | | 300 → 0 | same |
+| N64 1× `crt-royale` | 3.12 | **1.97** | −1.15 | | 99 → 0 | same |
+| N64 4× `crt-lottes` | 9.28 | **3.07** | −6.20 | −6.29 (9.31 → 3.02) | 86 → 0 | same |
+| N64 4× `crt-royale` | 9.43 | **3.69** | −5.73 | | 86 → 1 | same |
+| SNES 4K `crt-lottes` | 13.56 | **5.28** | −8.29 | −8.47 | 150 → 0 | same |
+| SNES 4K `crt-royale` | 8.27 | **4.45** | −3.82 | | 120 → 0 | same |
+| SNES 4K Mega Bezel SMOOTH-ADV | 13.05 | **9.23** | −3.82 | | 150 → 0 | same |
+
+The nine cases with no preset (no filter and the built-in filters, for SNES, GB, N64 at both multiples and 4K) moved
+by at most 0.02 ms and drew the same pictures.
+
+The stages moved where they should:
+
+- The host copy (0.41–7.52 ms) and the image copy (0.15–1.45 ms) are gone.
+- The source copy under a preset is now 0.00 ms; it was up to 0.71.
+- `Advance` fell from 4.5–4.7 to 1.45–1.50 ms at N64 4×, and from 0.75–0.88 to 0.24 at 1×.
+- Skia's `DrawImage` grew by 0.04–0.06 ms at 1080p, since its upload now reads the mapped buffer rather than its own
+  copy. At 4K it moved by −0.19 to +0.07. Its GL time is unchanged.
+
+Most of what is left of a light preset's 1.8 ms is the readback, the two waits and Skia's upload, which only interop
+(§8.5.1) removes. Allocation a frame fell from 5–25 MB to 3.6 KB for a one-pass preset and to 15–118 KB for a
+multi-pass one. The rest is `Bind`'s per-pass lists, which this lever did not touch. The one gen2 collection left
+came in one of N64 4× royale's three runs.
+
+The built lever matches the prototype within 0.2 ms wherever the two overlap.
+
+**Against the predictions.** These were written to `~/.cache/emusen/probe/shaders/levers/PREDICTIONS.md` before the
+first run:
+
+- The 1080p range (−0.55 to −0.80) held for Lottes and guest-advanced. Royale and POTATO gained more than it
+  (−0.82, −0.86).
+- Mega Bezel's range held.
+- The 4K royale and Mega Bezel range (−1.8 to −3.5) is **refuted**: both gained −3.82. At 4K their host copy and
+  image copy (2.3 and 1.3–1.4 ms) cost more than their arrays' allocation, not less.
+- N64 4× Lottes held; royale missed its range by 0.09 ms. N64 1× Lottes gained more than predicted (−1.46 against at
+  most −1.3).
+- The prediction of no collections and under 10 KB a frame is **refuted in both halves**: by the one collection, and
+  by the multi-pass presets' lists.
+
+**For the handheld.** N64 4× under Lottes missed the frame there (§8.4, 16.3 ms), and the prototype of this lever took
+it to 8.2 ms against a 13.9 ms control. On the desktop the built lever equals the prototype. It has not been run on
+the handheld (§9.8).
+
+**The build.** This is `kind=load` over the same five presets as §8.6, interleaved, three rounds, medians in
+milliseconds. One round filled a warm database first; *cold* means a new, empty database for each run. The results
+are in `results-load2.txt` and `loadsum.py`:
+
+| Preset | Production | Built, serial, no cache | Parallel | Parallel, cold | Cache, serial | **Both** | Prototype's both (§8.6) |
+|---|---|---|---|---|---|---|---|
+| `crt-lottes` | 99 | 99 | 103 | 105 | 23 | **23** | 30 |
+| `handheld/lcd-grid-v2` | 103 | 99 | 99 | 101 | 23 | **23** | 27 |
+| `crt-guest-advanced` | 980 | 970 | 100 | 146 | 54 | **55** | 56 |
+| `crt-royale` | 1,230 | 1,242 | 156 | 175 | 137 | **109** | 112 |
+| Mega Bezel SMOOTH-ADV | 4,663 | 4,670 | 582 | 637 | 548 | **475** | 478 |
+
+**A player's first build of a preset** is the *parallel, cold* column: Mega Bezel from 4.66 s to 0.64, royale from
+1.23 s to 0.18. **Every later build** is the *both* column: 0.48 s and 0.11.
+
+Storing in SQLite costs a cold build 2–55 ms over parallel compilation alone: creating the database, and up to Mega
+Bezel's 90 inserts. On a warm build it costs nothing measurable. The warm builds match the prototype's loose files within
+3 ms for the multi-pass presets. The one-pass presets are 4–7 ms faster than the files. The likely reason is the
+prototype's per-file existence check and open against one indexed lookup; that was argued, not isolated.
+
+**Against the predictions** (the same file, written before the lever was first built):
+
+- The cold and warm ranges held for every multi-pass preset.
+- The one-pass presets were faster than their warm range (23 against 25–35 ms). That put them outside the ±10%
+  predicted against the file cache.
+- The database's size (5–7 MB) held, at 5.6.
+
+Built serially and uncached, the built chain matches production within 1%. So the parallel column measures the lever,
+not a change in what a pass's build does.
+
+### 9.7 The evidence
+
+**Pictures.** Every case of §8.3's matrix drew byte-identical pictures before and after, on all three hashed frames of
+all three rounds: 22 of 22. `ab.py` exits non-zero on any difference. The tree with both levers ran the same 22 cases
+once more against production (`results-final-pictures.txt`), with the same result.
+
+In the suite (`SlangReadbackTests`, `SpirvCacheTests`), these are compared:
+
+- the image over the readback, against the copy `Render` gives;
+- rows repeated on the device, against rows repeated on the host, for repeats 2, 3 and 4, sampled nearest and
+  through a mip chain;
+- `crt-lottes` and `crt-royale` over a 2560×960 N64 frame repeated twice, and `crt-lottes` over 640×240, drawn at
+  1440×1080 (`A_pack_preset_over_an_n64_frame_draws_the_same_from_rows_repeated_on_the_device`). N64 4× under a pack
+  preset is the case the handheld misses frames on;
+- a change of repeat at the same height;
+- a cached build against an uncached one;
+- an edited include against a fresh build;
+- a parallel build of royale, guest-advanced and Mega Bezel against a serial one, parameters and three frames each.
+
+**Lifetimes.**
+
+- `An_image_still_held_keeps_its_picture_while_later_frames_are_rendered` holds four images, one past the limit. Each
+  is rendered into its own readback, or into the copy. The test checks every held image's pixels after all four
+  renders, and again after one image is let go and a fifth is rendered.
+- `An_image_outlives_its_chain_with_its_picture_intact` disposes the chain under a held image.
+- `A_running_preset_draws_every_frame_from_one_readback_and_copies_none` runs a `SlangRunner` for thirty frames and
+  thirty redraws.
+- `On_a_gl_canvas_every_draw_shows_its_own_frame_even_when_skia_uploads_it_again` draws on a real GL context (the
+  bench's EGL one; gated on `EMUSEN_BENCH_GL_DEVICE`). After each frame it purges Skia's resources and redraws with no
+  new frame, so that Skia uploads from the mapped memory a second time. Every draw shows its own frame.
+
+Before any of this was built, a scratch test on the same context established what Skia does (§9.1): it uploads at the
+draw, it releases at `Dispose`, and a rewrite before the flush is not shown.
+
+**The validation layer.** It ran as `VK_LAYER_KHRONOS_validation` with `VK_LAYER_VALIDATE_SYNC=1`,
+`VK_LAYER_SYNCVAL_SHADER_ACCESSES_HEURISTIC=1` and the duplicate-message limit off. It covered six short bench runs
+through the real draw path: Lottes, royale, Mega Bezel, `lcd-grid-v2`, N64 1× Lottes and N64 4× royale (`vbench.sh`;
+the layer's output is kept for each case).
+
+- **The unmodified build reports 2,082 findings, and so does each lever, message for message.** There are 2,080
+  `SYNC-HAZARD-READ-AFTER-WRITE` at `vkCmdDraw`, in royale and Mega Bezel, and two
+  `VUID-RuntimeSpirv-OpEntryPoint-08743` at Mega Bezel's pipeline creation. Neither lever adds or removes one.
+- These findings are production's, not this work's. §7.4's silent run missed them because it ran the pack presets
+  under `dotnet test`, where the log file came back empty for every run of more than one test class. A run of the
+  royale tests alone logged 150 of them. Why the larger runs lose the output was not established.
+- The read-after-write is a pass sampling an image whose `vkCmdEndRenderPass` layout transition has no dependency on
+  the next pass's fragment stage. `SlangChain`'s render passes declare no subpass dependency, so only the implicit
+  external one applies, and it covers only the top and bottom of the pipe. That cause is read from the layer's
+  message and the render pass's creation; no fix has tested it. On RADV it shows in no picture compared here. It is
+  recorded, not fixed (§9.8).
+
+**Positive controls.** Each ran through the same six cases:
+
+- The rows image was written and blitted in `GENERAL`, with no barrier between. The layer reported 52
+  `SYNC-HAZARD-READ-AFTER-WRITE` at `vkCmdBlitImage`, 26 in each N64 case.
+- Queue access, which needs external synchronisation, was injected into `CreateBuffer`, which the parallel builders
+  call at once. The layer reported 1,313 `UNASSIGNED-Threading-MultipleThreads-Write`. The clean tree, with parallel
+  builds, has none.
+
+So the layer sees both a missing transfer barrier and a race among the builders, and its silence about both in the
+built tree is evidence.
+
+**Negative results on the way.**
+
+- The first positive control ran under `dotnet test` with the log file and reported nothing. §7.4's own control, run
+  again the same way, reported nothing too. So the bench, with one process for each case, was used instead.
+- Once, a restored source file kept an older timestamp, and the incremental build that followed kept the mutant. The
+  runner now touches every file it restores.
+
+**Mutants.** Each was applied alone, built and run against the Serenity tests (`mutants.log`):
+
+| Mutant | Caught by |
+|---|---|
+| A readback an image holds is written again | `An_image_still_held_keeps_its_picture_…` |
+| The image is made without marking its readback held | the test host crashes (use after free) |
+| A disposed chain frees a readback an image still holds | the test host crashes |
+| Rows blitted with linear filtering | seven tests, the N64 ones among them |
+| The blit one row short | the same seven |
+| The upload reshaped by height alone, not by repeat | `A_change_of_repeat_at_the_same_height_…` |
+| The source image taken before the preset was built is kept | `A_preset_that_draws_takes_no_source_image_…` |
+| The source copied under a preset as before | the same |
+| The runner renders before letting its last image go | **survived** the first run; caught by `A_running_preset_draws_every_frame_from_one_readback_…`, written for it |
+| The readback's host-read barrier removed | **survives** (below) |
+| The key without the stage's text, the stage, the compiler's identity or the file name | `Every_input_to_a_compile_is_in_its_key`, and in turn the edited include, the two stages kept apart, another compiler's row, the second build's counts |
+| The key's parts not length-prefixed | **survived** the first run, because the test's colliding pair was not two neighbouring parts of the key; caught once it was |
+| The compile options (where defines would be) left out of the identity | `Every_input_to_a_compile_is_in_its_key` |
+| A row served without its digest checked | `A_damaged_row_is_compiled_again_and_never_returned` |
+| A file that is not a database not set aside | `A_file_that_is_not_a_database_…` |
+| A locked database retried for ever, or waited on thirty seconds a statement | `A_locked_database_is_compiled_around_…` |
+| Eviction takes the most recent, a hit does not refresh, or there is no bound | `The_cache_keeps_to_its_bound_…` |
+| A second writer of a stage fails instead of being ignored | `Two_builds_of_one_preset_at_once_…` |
+| Parallel passes stored in the order they finish | the parallel-build picture tests and the concurrent-build test |
+| A parallel build reports the last broken pass | `A_parallel_build_that_fails_says_what_a_serial_build_would` |
+
+The host-read barrier's mutant survives because on this device's host-coherent, host-cached memory the writes are
+visible without it. Neither a picture nor the layer, which does not track host access, can tell the difference. The
+barrier stays because the memory model requires it. **No test here would catch its removal on a device that needed
+it.**
+
+**The concurrent build** (`Two_builds_of_one_preset_at_once_neither_damage_nor_duplicate_the_cache`). Two caches over
+one file, as two processes would have, build royale at once with four builders each. Afterwards:
+
+- the file passes `PRAGMA integrity_check`;
+- it holds exactly one row for each distinct stage (24);
+- the two caches' stores sum to 24;
+- both chains draw what an uncached serial build draws.
+
+**Failure.**
+
+- A file of random bytes is set aside, and the build goes on.
+- A row with one bit flipped is deleted and compiled again.
+- A database held under an exclusive lock cannot be opened, and every stage compiles.
+- A database whose writes are held costs two skipped stores; the third turns the cache off. That took 3.5 s in all.
+
+**The suite's own presets** are cached in its scratch directory (`home/tmp/WiseMan/`), set by a module initializer, so
+no test writes to the player's `home/Shaders/`.
+
+### 9.8 What is not done
+
+- **Neither lever has run on the handheld.** The parent session measures it there. The desktop figures match the
+  prototype's, which the handheld did measure (§8.4).
+- **Nothing ran in a real window.** As in §8.9, the bench stands in for Mistress's render thread. §9.1's
+  measurement of what Skia does with a raster image was on the bench's EGL context (the same radeonsi driver), not in
+  Avalonia's own GL context in a window. If a window's context behaves differently, the held flag is what keeps a
+  deferred upload safe.
+- **Levers 3 and 4** (interop, and two frames in flight) were not built; they were not approved. Most of a light
+  preset's remaining 1.8 ms at 1080p is what interop would remove.
+- **The chain's own synchronisation hazard is not fixed** (§9.7). `SlangChain`'s render passes have no subpass
+  dependency that makes a pass's output visible to the next pass's fragment shader, and the layer reports this in
+  royale and Mega Bezel in the unmodified build. It predates this work. The fix is one `VkSubpassDependency` for each
+  render pass, and it needs a picture comparison of its own.
+- **`Bind`'s per-frame allocations** (15–118 KB a frame for multi-pass presets) and the one gen2 collection left in
+  N64 4× royale are not addressed. §8.5.5 bounded what caching descriptors could save.
+- **The host-read barrier is untested** where it would matter (§9.7).
+- **The cache is not pruned by pack.** Rows for a pack version no longer installed are left to the LRU bound; they
+  are not deleted when the pack is replaced. Nor is the cache shared across machines or filled ahead of time: the
+  first build of each preset still compiles, in parallel.
+- **A `VkPipelineCache` is still not built.** §8.6 measured it at zero on drivers that have a disk cache.
+- **The Shaders window's slider virtualisation** (§8.8's fifth lever) is out of scope. This lever makes the window's
+  preset loads faster; its 944-row build is unchanged.

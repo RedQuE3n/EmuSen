@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EmuSen.Galaxia;
@@ -100,6 +101,47 @@ namespace EmuSen.WiseMan.Mistress
             Choose(window, MainWindow.AllGamesKey);
             Assert.Equal(3, Shown(window).Length);
             window.Close();
+        }, default);
+
+        // The status bar and each of its parts follow Preferences at once and are remembered - see EmuSen_Settings_Reference.md §4.51.
+        [Fact]
+        public Task The_status_bar_and_its_parts_follow_preferences_at_once_and_are_remembered() => Session.Dispatch(() =>
+        {
+            MainWindow window = Open(AppSettings.LibraryList);
+            Control bar = window.GetControl<Border>("StatusBar");
+            TextBlock text = window.GetControl<TextBlock>("StatusText"), fps = window.GetControl<TextBlock>("FpsText");
+            Assert.True(bar.IsVisible && text.IsVisible && fps.IsVisible);
+
+            Invoke(window, "ShowPreferences");
+            Dispatcher.UIThread.RunJobs();
+            var preferences = window.OwnedWindows.OfType<PreferencesWindow>().Single();
+            LunaSwitch Toggle(string name) => preferences.GetLogicalDescendants().OfType<LunaSwitch>().Single(t => t.Name == name);
+            void Set(string name, bool on) { Toggle(name).IsChecked = on; Dispatcher.UIThread.RunJobs(); }
+
+            Set("ShowFpsBarSwitch", false);
+            Assert.True(bar.IsVisible && text.IsVisible);
+            Assert.False(fps.IsVisible);
+
+            Set("ShowStatusTextSwitch", false);
+            Assert.False(bar.IsVisible);
+
+            Set("ShowStatusTextSwitch", true);
+            Assert.True(bar.IsVisible && text.IsVisible);
+
+            Set("ShowStatusBarSwitch", false);
+            Assert.False(bar.IsVisible);
+            AppSettings saved = AppSettings.Load();
+            Assert.False(saved.ShowStatusBar);
+            Assert.True(saved.ShowStatusText);
+            Assert.False(saved.ShowFpsBar);
+            preferences.Close();
+            window.Close();
+
+            var again = new MainWindow { Width = 1024, Height = 768 };
+            again.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(again.GetControl<Border>("StatusBar").IsVisible);
+            again.Close();
         }, default);
 
         // The Game Boy's core on two shelves, the Color's listed after it and chosen like any console - see EmuSen_Settings_Reference.md §4.46.

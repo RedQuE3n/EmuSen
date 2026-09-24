@@ -26,6 +26,12 @@ namespace EmuSen.Mistress.Views
         private readonly LunaSwitch _bigScreen = new() { Name = "BigScreenSwitch", Label = "Start in big screen mode" };
         private readonly LunaSwitch _pauseInBackground = new() { Name = "PauseInBackgroundSwitch", Label = "Pause the game when another window is in front" };
         private readonly LunaSwitch _onlineCovers = new() { Name = "OnlineCoversSwitch", Label = "Look up missing covers online" };
+        private readonly LunaSwitch _showStatusBar = new() { Name = "ShowStatusBarSwitch", Label = "Show the status bar" };
+        private readonly LunaSwitch _showStatusText = new() { Name = "ShowStatusTextSwitch", Label = "Show messages" };
+        private readonly LunaSwitch _showFpsBar = new() { Name = "ShowFpsBarSwitch", Label = "Show the frame rate" };
+
+        // Raised when a status-bar switch moves, so the main window applies it at once.
+        public event Action? StatusBarChanged;
         private readonly Dropdown _theme = new() { Name = "ThemeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
         private readonly Dropdown _resume = new() { Name = "ResumeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
 
@@ -100,6 +106,24 @@ namespace EmuSen.Mistress.Views
                     Label = "Theme",
                     Hint = "Colours and fonts for every window. Drop a theme file in the themes folder and it appears here; a change applies without a restart.",
                     Content = _theme,
+                },
+                new FieldRow
+                {
+                    Label = "Status Bar",
+                    Hint = "The bar along the bottom of the window. With it off, messages such as \"State saved\" are not shown anywhere.",
+                    Content = _showStatusBar,
+                },
+                new FieldRow
+                {
+                    Label = "Messages",
+                    Hint = "The text at the bottom left: the game's name, Paused, State saved and errors.",
+                    Content = _showStatusText,
+                },
+                new FieldRow
+                {
+                    Label = "Frame Rate",
+                    Hint = "The frames-per-second readout at the bottom right while a game runs.",
+                    Content = _showFpsBar,
                 }));
             tabs.Add("System Files", Pane(SystemFiles()));
 
@@ -112,6 +136,12 @@ namespace EmuSen.Mistress.Views
             _onlineCovers.IsCheckedChanged += (_, _) => { _settings.OnlineCovers = _onlineCovers.IsChecked == true; _settings.Save(); };
             _bigScreen.IsChecked = _settings.BigScreen;
             _bigScreen.IsCheckedChanged += (_, _) => { _settings.BigScreen = _bigScreen.IsChecked == true; _settings.Save(); };
+            _showStatusBar.IsChecked = _settings.ShowStatusBar;
+            _showStatusBar.IsCheckedChanged += (_, _) => { _settings.ShowStatusBar = _showStatusBar.IsChecked == true; _settings.Save(); StatusBarChanged?.Invoke(); };
+            _showStatusText.IsChecked = _settings.ShowStatusText;
+            _showStatusText.IsCheckedChanged += (_, _) => { _settings.ShowStatusText = _showStatusText.IsChecked == true; _settings.Save(); StatusBarChanged?.Invoke(); };
+            _showFpsBar.IsChecked = _settings.ShowFpsBar;
+            _showFpsBar.IsCheckedChanged += (_, _) => { _settings.ShowFpsBar = _showFpsBar.IsChecked == true; _settings.Save(); StatusBarChanged?.Invoke(); };
             _pauseInBackground.IsChecked = _settings.PauseInBackground;
             _pauseInBackground.IsCheckedChanged += (_, _) => { _settings.PauseInBackground = _pauseInBackground.IsChecked == true; _settings.Save(); };
 

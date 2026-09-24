@@ -46,6 +46,11 @@ namespace EmuSen.Galaxia.Models
         // Full screen, no menu bar and larger type, for a handheld or a television; a Steam Deck's session asks for it by itself - see EmuSen_Settings_Reference.md §4.29.
         public bool BigScreen { get; set; } = false;
 
+        // The status bar at the bottom of the main window, and each of its two parts - see EmuSen_Settings_Reference.md §4.51.
+        public bool ShowStatusBar { get; set; } = true;
+        public bool ShowStatusText { get; set; } = true;
+        public bool ShowFpsBar { get; set; } = true;
+
         // Ask, Resume or Restart when a game with a resume state starts - see EmuSen_Settings_Reference.md §4.31.
         public string ResumeOnLaunch { get; set; } = ResumeAsk;
         public const string ResumeAsk = "Ask";

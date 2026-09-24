@@ -12,6 +12,7 @@ Hardware notes for the `Moon - NES` core (`EmuSen/Cores/Nintendo/Moon - NES/`).
 | `Moon_Debug.md` | `MoonDebugTarget`/`IDebugTarget` — memory spaces, registers, the tile/tilemap decoders, the disassembler, and what a second implementation did and did not prove |
 | `Moon_Cheats.md` | Game Genie and raw code decoding, the bit tables and where they came from, how a patch reaches the CPU, and the Game Genie cartridge that is not built |
 | `Moon_TestRoms.md` | The blargg `$6000` reporting protocol, the `--testroms` runner, why a verdict waits for the running status, and what the runner does not cover |
+| `Moon_Native.md` | The port to Rust as MoonRT: the measured C# baseline (and the tenth of a core where Moon falls below full speed), the speed prediction stated before the work in the light of Mercury's refuted one, why Moon's renderer is part of its machine, the state format with its twice-written bus, the stages, and the defects the review found (the APU running ahead of the picture by every DMA cycle) |
 
 The core runs, renders and makes sound, but is incomplete: no PAL, no emphasis bits, no expansion audio, and ten of the common mappers rather than all of them. The PPU's *clock* is per dot as of 2026-08-05; its *renderer* is still per line. Each page states its own gaps.
 

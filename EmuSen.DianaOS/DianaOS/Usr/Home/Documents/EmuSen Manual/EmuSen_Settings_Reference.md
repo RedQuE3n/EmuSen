@@ -1248,8 +1248,12 @@ Mode, and matching `KDE` instead of `gamescope`. Each was caught, the last by tw
 ### 4.44 The N64's engine: Mars (C#) or MarsRT (Rust) (2026-09-22)
 
 Graphics Settings' N64 tab now begins, after the screen filter, with **Engine**, a dropdown of *Mars (C#)* and
-*MarsRT (Rust)*. It is stored in `graphics.json` as `Consoles.N64.Engine`. The default is Mars (C#), so a player who
-never opens the row plays exactly as before. ~~And so does every frontend but Mistress: Hotaru, Pharaoh, the probe and
+*MarsRT (Rust)*. It is stored in `graphics.json` as `Consoles.N64.Engine`. ~~The default is Mars (C#), so a player who
+never opens the row plays exactly as before.~~ *Since 2026-09-24 the default is MarsRT (Rust), listed first: a player
+who never opens the row plays on MarsRT, and one who chose Mars (C#) keeps it, since the stored value wins. Every
+frontend resolves the row the same way, `CoreCatalog.EngineChosen` (the stored choice, else the row's default). The
+factory asked for no engine at all still builds Mars (C#), the reference, so a test that names nothing grades Mars;
+a frontend always names one.* ~~And so does every frontend but Mistress: Hotaru, Pharaoh, the probe and
 the tests build the C# Mars whatever the file says.~~ *Since 2026-09-22 Hotaru, Pharaoh and the probe read the same
 value (`CoreFactory.ConfiguredEngine`) and print the same notice when the engine asked for cannot run; the tests
 build what they ask for.* MarsRT is the N64 core in Rust (`Mars_Native.md` §5), exact against Mars in state, picture
@@ -1276,13 +1280,17 @@ so no row is ignored*. Its defaults are Mars's since
 that machine and was not measured on a slow one; the row is for choosing it, not a recommendation of it.~~ *Retired
 2026-09-22: with its threads and recompiler on, MarsRT measures a little faster than Mars on the development
 desktop and eight to nine per cent faster on a handheld (`Mars_Native.md` §5.8.8 and §6.1). The default stays Mars
-until it has been played on both.*
+until it has been played on both.* *It was played on the Legion Go S, Donkey Kong 64 at full speed at 2x and 3x on the
+graphics card with no crash log (`Mars_Native.md` §6.15.6), and made the default on 2026-09-24 at the player's word,
+without the desktop session §6.2 of that page had asked for.*
 
 **When MarsRT cannot run.** If `libmarsrt.so` is missing, speaks another interface, or is turned off with
 `EMUSEN_MARS_NATIVE=0`, the game runs on Mars (C#), and the status bar says so after the game's name, quoting what
 the library loader found, for example *"MarsRT (Rust) is not available (turned off by EMUSEN_MARS_NATIVE=0); Mars
-(C#) is running."* The same line is printed with `[core]`. A value no build knows, such as a hand edit, runs the
-default and says that instead.
+(C#) is running."* The same line is printed with `[core]`. A value no build knows, such as a hand edit, runs ~~the
+default~~ *Mars (C#), the reference,* and says that instead, naming the engine that is running. *Since MarsRT became
+the default, a platform without the library shows the "not available" line for every N64 game until Mars (C#) is
+chosen in the row.*
 
 **What stays the same across the two.** Save states are one format (a state saved on either loads on the other, and
 see below), battery saves are the same `.srm` and `.mpk` files, cheats go
@@ -1293,8 +1301,9 @@ the N64 on either engine** (§4.21b).~~ *Since 2026-09-23 rewind is on for MarsR
 
 **What MarsRT does not offer yet.** ~~ROM-patch cheats (no N64 code format makes one, but one added by hand does
 nothing on MarsRT)~~ *(applied since 2026-09-23, exact against Mars frame by frame, `Mars_Native.md` §6.6.1; a patch
-changed while a frame runs reaches MarsRT's cartridge at the next frame and Mars's at once)*; breakpoints, stepping, watches and coverage in the DianaOS console, which refuses `bp` and `step`
-with "cannot be halted by this core" while `regs`, `mem` and `disasm` work; ~~internal resolution,
+changed while a frame runs reaches MarsRT's cartridge at the next frame and Mars's at once)*; ~~breakpoints, stepping, watches and coverage in the DianaOS console, which refuses `bp` and `step`
+with "cannot be halted by this core" while `regs`, `mem` and `disasm` work;~~ *(the debugger's hooks arrived
+2026-09-22, `Mars_Native.md` §6.5)*; ~~internal resolution,
 antialiasing, the graphics card, the threaded display processor and deferred presentation~~ *(the threaded display
 processor and deferred presentation arrived 2026-09-22, and internal resolution, antialiasing and the graphics card
 2026-09-23)*.

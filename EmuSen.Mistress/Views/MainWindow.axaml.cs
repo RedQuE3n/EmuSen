@@ -839,7 +839,7 @@ namespace EmuSen.Mistress.Views
                 // Off the path, not the session: no core exists yet to ask - see EmuSen_Multicore.md §12.
                 string console = EmuSen.Cores.CoreCatalog.ConsoleForRom(path) ?? "Unknown";
                 // The engine is chosen before the core exists, from the graphics window's row - see EmuSen_Settings_Reference.md §4.44.
-                _session = new EmulatorSession { Cheats = _cheats, Engine = _graphics.Value(console, EmuSen.Cores.CoreCatalog.EngineKey) };
+                _session = new EmulatorSession { Cheats = _cheats, Engine = EmuSen.Cores.CoreCatalog.EngineChosen(console, _graphics.Value(console, EmuSen.Cores.CoreCatalog.EngineKey)) };
                 StartLogging(console);
                 _session.LoadRom(path);
                 if (_session.EngineNotice is { } engineNotice) Console.WriteLine("[core] " + engineNotice);

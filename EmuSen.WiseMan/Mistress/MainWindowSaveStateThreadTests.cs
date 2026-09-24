@@ -105,7 +105,10 @@ namespace EmuSen.WiseMan.Mistress
             WaitUntilParked(window);
 
             Assert.InRange(Game(window).TotalFrames, saved, saved + 60);
-            AssertOneInstant((MarsCore)Game(window).Core!);
+            // Read back through Mars (C#), since either engine writes its format; the running one is the default, MarsRT.
+            string parked = Path.Combine(_root, "parked.state");
+            Game(window).Core!.SaveState(parked);
+            AssertOneInstant(Load(parked));
 
             window.Close();
         }, default);

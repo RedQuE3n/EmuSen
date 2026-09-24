@@ -36,7 +36,7 @@ namespace EmuSen.Cores
     {
         public static bool IsSupported(string romPath) => CoreCatalog.IsRomExtension(Extension(romPath));
 
-        // <headless> only means anything to a core that owns a window-ish resource; <engine> is a CoreCatalog.EngineFor name, and null is the default - see EmuSen_Settings_Reference.md §4.44.
+        // <headless> only means anything to a core that owns a window-ish resource; <engine> is a CoreCatalog.EngineFor name, and null is the reference core, not the player's default - see EmuSen_Settings_Reference.md §4.44.
         public static ICore Create(string romPath, bool headless = true, string? engine = null) => Extension(romPath) switch
         {
             ".smc" or ".sfc" => new VenusCore(headless),
@@ -58,17 +58,27 @@ namespace EmuSen.Cores
 
         // The engine graphics.json stores for the ROM's console, so every frontend makes the one decision Mistress's row records; null where nothing is stored - see EmuSen_Settings_Reference.md §4.44.
         public static string? ConfiguredEngine(string romPath) =>
-            CoreCatalog.ConsoleForRom(romPath) is { } console ? GraphicsConfig.Load().Value(console, CoreCatalog.EngineKey) : null;
+            CoreCatalog.ConsoleForRom(romPath) is { } console ? CoreCatalog.EngineChosen(console, GraphicsConfig.Load().Value(console, CoreCatalog.EngineKey)) : null;
 
         // Why the engine asked for is not running, or null when it is; an unavailable MarsRT says what MarsNative found - see Mars_Native.md §5.5.
         public static string? EngineNotice(string romPath, string? engine, ICore core)
         {
-            if (engine is null || CoreCatalog.EngineFor(CoreCatalog.ConsoleForRom(romPath) ?? "") is not { } choice || engine == choice.Default) return null;
-            if (choice.Choices?.Contains(engine) != true) return $"No {choice.Label.ToLowerInvariant()} is named \"{engine}\"; {choice.Default} is running.";
+            if (engine is null || CoreCatalog.EngineFor(CoreCatalog.ConsoleForRom(romPath) ?? "") is not { } choice) return null;
+            if (choice.Choices?.Contains(engine) != true) return $"No {choice.Label.ToLowerInvariant()} is named \"{engine}\"; {Running(core)} is running.";
             if (engine == CoreCatalog.MarsRtEngine && core is not MarsRtCore) return $"{CoreCatalog.MarsRtEngine} is not available ({MarsNative.Report}); {CoreCatalog.MarsEngine} is running.";
             if (engine == CoreCatalog.MercuryRtEngine && core is not MercuryRtCore) return $"{CoreCatalog.MercuryRtEngine} is not available ({MercuryNative.Report}); {CoreCatalog.MercuryEngine} is running.";
             return null;
         }
+
+        // The catalog's name for the core that is running, for a notice that must not name the default when the reference is what started.
+        private static string Running(ICore core) => core switch
+        {
+            MarsRtCore => CoreCatalog.MarsRtEngine,
+            MarsCore => CoreCatalog.MarsEngine,
+            MercuryRtCore => CoreCatalog.MercuryRtEngine,
+            MercuryCore => CoreCatalog.MercuryEngine,
+            _ => core.CoreName,
+        };
 
         // Split out so a caller that loaded the core itself can still get the rest of the wiring.
         public static CoreBundle Bundle(ICore core, CheatRegistry? cheats = null,

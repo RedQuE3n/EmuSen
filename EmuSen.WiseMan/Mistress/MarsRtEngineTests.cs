@@ -79,30 +79,23 @@ namespace EmuSen.WiseMan.Mistress
             window.Show();
 
             Dropdown engine = window.GetLogicalDescendants().OfType<Dropdown>().Where(d => d.Name == $"N64.{CoreCatalog.EngineKey}").Distinct().Single();
-            Assert.Equal(new[] { CoreCatalog.MarsEngine, CoreCatalog.MarsRtEngine }, engine.Items.Cast<object>().Select(o => o.ToString()));
-            Assert.Equal(CoreCatalog.MarsEngine, engine.SelectedItem);
+            Assert.Equal(new[] { CoreCatalog.MarsRtEngine, CoreCatalog.MarsEngine }, engine.Items.Cast<object>().Select(o => o.ToString()));
+            Assert.Equal(CoreCatalog.MarsRtEngine, engine.SelectedItem);
             Assert.DoesNotContain(window.GetLogicalDescendants().OfType<Control>(), c => c.Name is string name && name.EndsWith("." + CoreCatalog.EngineKey) && name != $"N64.{CoreCatalog.EngineKey}" && name != $"GB.{CoreCatalog.EngineKey}");
 
-            engine.SelectedItem = CoreCatalog.MarsRtEngine;
+            engine.SelectedItem = CoreCatalog.MarsEngine;
             Dispatcher.UIThread.RunJobs();
 
             Assert.Equal("N64", told);
-            Assert.Equal(CoreCatalog.MarsRtEngine, GraphicsConfig.Load().Value("N64", CoreCatalog.EngineKey));
+            Assert.Equal(CoreCatalog.MarsEngine, GraphicsConfig.Load().Value("N64", CoreCatalog.EngineKey));
             window.Close();
         }, default);
 
         [Fact]
-        public Task A_game_runs_on_Mars_until_MarsRT_is_chosen_and_then_on_MarsRT_with_rewind_on_for_MarsRT_alone() => Session.Dispatch(() =>
+        public Task A_game_runs_on_MarsRT_until_Mars_is_chosen_and_then_on_Mars_with_rewind_on_for_MarsRT_alone() => Session.Dispatch(() =>
         {
             Assert.True(MarsRtCore.Available, MarsNative.Report);
             MainWindow window = Start();
-            Assert.IsType<MarsCore>(Game(window).Core);
-            WaitFor(() => Game(window).TotalFrames > 60);
-            Assert.Equal(0, Rewind(window).Depth);
-            window.Close();
-
-            Choose(CoreCatalog.MarsRtEngine);
-            window = Start();
             EmulatorSession game = Game(window);
             Assert.IsType<MarsRtCore>(game.Core);
             Assert.Null(game.EngineNotice);
@@ -112,6 +105,14 @@ namespace EmuSen.WiseMan.Mistress
             WaitFor(() => game.TotalFrames > 60 && game.FrameSerial != serial);
             Assert.True(Rewind(window).Depth > 0, "MarsRT's frames left no rewind history");
             Assert.Equal("true", ((ICoreSettings)game.Core!).Get("ExpansionPak"));
+            window.Close();
+
+            Choose(CoreCatalog.MarsEngine);
+            window = Start();
+            Assert.IsType<MarsCore>(Game(window).Core);
+            Assert.Null(Game(window).EngineNotice);
+            WaitFor(() => Game(window).TotalFrames > 60);
+            Assert.Equal(0, Rewind(window).Depth);
             window.Close();
         }, default);
 

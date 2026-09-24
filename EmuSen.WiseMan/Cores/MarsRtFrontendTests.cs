@@ -76,16 +76,21 @@ namespace EmuSen.WiseMan.Cores
             CoreBundle unknown = CoreFactory.Load(rom, engine: "MarsJS");
             Assert.IsType<MarsCore>(unknown.Core);
             Assert.Contains("MarsJS", unknown.Notice);
+            Assert.EndsWith($"{CoreCatalog.MarsEngine} is running.", unknown.Notice);
             Assert.Null(CoreFactory.Load(rom, engine: CoreCatalog.MarsEngine).Notice);
         }
 
         [Fact]
-        public void The_N64_and_the_Game_Boy_have_an_engine_to_choose_and_each_defaults_to_its_csharp_core()
+        public void The_N64_defaults_to_MarsRT_and_the_Game_Boy_to_its_csharp_core()
         {
             CoreSetting engine = CoreCatalog.EngineFor("N64")!;
             Assert.Equal(CoreCatalog.EngineKey, engine.Key);
-            Assert.Equal(CoreCatalog.MarsEngine, engine.Default);
-            Assert.Equal(new[] { CoreCatalog.MarsEngine, CoreCatalog.MarsRtEngine }, engine.Choices);
+            Assert.Equal(CoreCatalog.MarsRtEngine, engine.Default);
+            Assert.Equal(new[] { CoreCatalog.MarsRtEngine, CoreCatalog.MarsEngine }, engine.Choices);
+            Assert.Equal(CoreCatalog.MarsRtEngine, CoreCatalog.EngineChosen("N64", null));
+            Assert.Equal(CoreCatalog.MarsEngine, CoreCatalog.EngineChosen("N64", CoreCatalog.MarsEngine));
+            Assert.Equal(CoreCatalog.MercuryEngine, CoreCatalog.EngineChosen("GB", null));
+            Assert.Null(CoreCatalog.EngineChosen("SNES", null));
             foreach (string console in new[] { "SNES", "NES" }) Assert.Null(CoreCatalog.EngineFor(console));
             CoreSetting gameBoy = CoreCatalog.EngineFor("GB")!;
             Assert.Equal(CoreCatalog.MercuryEngine, gameBoy.Default);

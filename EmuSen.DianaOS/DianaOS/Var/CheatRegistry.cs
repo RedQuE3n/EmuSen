@@ -186,8 +186,10 @@ namespace EmuSen.DianaOS.DianaOS.Var
 
         private int _version;
 
-        // Moves on every change, so a core holding its own copy of the patches knows when to take them again - see Mars_Native.md §6.6.1.
+        // Bumped by every change, so a core that copies the ROM patches elsewhere knows when to copy again - see Mars_Native.md §6.6.1 and Mercury_Native.md §8.3.
         public int Version => System.Threading.Volatile.Read(ref _version);
+
+        public int EnabledRomPatches => _enabledRomPatches;
 
         public IReadOnlyList<CheatInfo> GetCheats() =>
             Snapshot().Select(c => new CheatInfo(c.Id, c.Kind, c.Writes, c.Compare, c.Description, c.Enabled)).ToList();

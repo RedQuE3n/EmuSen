@@ -9,6 +9,7 @@ using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.Mercury.Cheats;
 using EmuSen.Cores.Nintendo.Mercury.Debug;
+using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.Moon.Cheats;
 using EmuSen.Cores.Nintendo.Moon.Debug;
@@ -40,7 +41,7 @@ namespace EmuSen.Cores
         {
             ".smc" or ".sfc" => new VenusCore(headless),
             ".nes" => new MoonCore(),
-            ".gb" or ".gbc" => new MercuryCore(),
+            ".gb" or ".gbc" => engine == CoreCatalog.MercuryRtEngine && MercuryRtCore.Available ? new MercuryRtCore() : new MercuryCore(),
             ".z64" or ".n64" or ".v64" => engine == CoreCatalog.MarsRtEngine && MarsRtCore.Available ? new MarsRtCore(expansionPak: true) : new MarsCore(expansionPak: true),
             var other => throw new NotSupportedException(
                 $"No core in this build handles '{other}' - see CoreCatalog for what is registered."),
@@ -65,6 +66,7 @@ namespace EmuSen.Cores
             if (engine is null || CoreCatalog.EngineFor(CoreCatalog.ConsoleForRom(romPath) ?? "") is not { } choice || engine == choice.Default) return null;
             if (choice.Choices?.Contains(engine) != true) return $"No {choice.Label.ToLowerInvariant()} is named \"{engine}\"; {choice.Default} is running.";
             if (engine == CoreCatalog.MarsRtEngine && core is not MarsRtCore) return $"{CoreCatalog.MarsRtEngine} is not available ({MarsNative.Report}); {CoreCatalog.MarsEngine} is running.";
+            if (engine == CoreCatalog.MercuryRtEngine && core is not MercuryRtCore) return $"{CoreCatalog.MercuryRtEngine} is not available ({MercuryNative.Report}); {CoreCatalog.MercuryEngine} is running.";
             return null;
         }
 
@@ -99,6 +101,15 @@ namespace EmuSen.Cores
                     return new CoreBundle(
                         mercury,
                         new MercuryDebugTarget(mercury),
+                        new GbGameSharkCheatCodec(),
+                        new GbGameGenieCheatCodec(),
+                        null);
+
+                // The same codecs, and the C# target over a mirror MercuryRT's state refreshes - see Mercury_Native.md §8.3.
+                case MercuryRtCore mercuryRt:
+                    return new CoreBundle(
+                        mercuryRt,
+                        mercuryRt.CreateDebugTarget(),
                         new GbGameSharkCheatCodec(),
                         new GbGameGenieCheatCodec(),
                         null);

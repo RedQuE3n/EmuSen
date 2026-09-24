@@ -308,6 +308,7 @@ namespace EmuSen.Serenity.Slang
         // A new frame joins the history, uploaded with its repeated rows expanded, since a slang pass sees the picture as the screen would.
         public void Advance(ReadOnlySpan<byte> rgba, int width, int height, int rowRepeat)
         {
+            SlangProbe.Current?.Phase(SlangProbe.AdvanceBegin);
             uint w = (uint)width, h = (uint)(height * Math.Max(1, rowRepeat));
             if (w != _originalWidth || h != _originalHeight)
             {
@@ -325,6 +326,7 @@ namespace EmuSen.Serenity.Slang
             if (rowRepeat <= 1) _gpu.Upload(_history[_head]!, rgba[..(int)(w * h * 4)], _staging!);
             else _gpu.Upload(_history[_head]!, Expand(rgba, width, height, rowRepeat), _staging!);
             _frameCount++;
+            SlangProbe.Current?.Phase(SlangProbe.AdvanceEnd);
         }
 
         private static byte[] Expand(ReadOnlySpan<byte> rgba, int width, int height, int repeat)
@@ -342,6 +344,7 @@ namespace EmuSen.Serenity.Slang
         public byte[] Render(int viewWidth, int viewHeight)
         {
             if (_originalWidth == 0) throw new InvalidOperationException("No frame has been given to the chain yet.");
+            SlangProbe.Current?.Phase(SlangProbe.RenderBegin);
             uint vw = (uint)Math.Max(1, viewWidth), vh = (uint)Math.Max(1, viewHeight);
 
             uint sw = _originalWidth, sh = _originalHeight;
@@ -360,10 +363,11 @@ namespace EmuSen.Serenity.Slang
             }
 
             for (int i = 0; i < _passes.Length; i++) Bind(i, vw, vh);
+            SlangProbe.Current?.Phase(SlangProbe.Bound);
 
             _gpu.Run(commands =>
             {
-                for (int i = 0; i < _passes.Length; i++) Draw(commands, i);
+                for (int i = 0; i < _passes.Length; i++) { Draw(commands, i); SlangProbe.Current?.Mark(commands, i); }
                 SlangImage final = _passes[^1].Output!;
                 _gpu.Transition(commands, final, ImageLayout.TransferSrcOptimal);
                 var region = new BufferImageCopy { ImageSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1), ImageExtent = new Extent3D(vw, vh, 1) };
@@ -371,6 +375,7 @@ namespace EmuSen.Serenity.Slang
                 _gpu.Transition(commands, final, ImageLayout.ShaderReadOnlyOptimal);
             });
 
+            SlangProbe.Current?.Phase(SlangProbe.Ran);
             foreach (Pass pass in _passes)
             {
                 if (!pass.WantsFeedback) continue;
@@ -380,6 +385,7 @@ namespace EmuSen.Serenity.Slang
 
             var pixels = new byte[bytes];
             fixed (byte* p = pixels) System.Buffer.MemoryCopy(_readback!.Mapped, p, (long)bytes, (long)bytes);
+            SlangProbe.Current?.Phase(SlangProbe.Copied);
             return pixels;
         }
 

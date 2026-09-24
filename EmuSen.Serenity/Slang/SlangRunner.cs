@@ -86,6 +86,7 @@ namespace EmuSen.Serenity.Slang
                     byte[] pixels = chain.Render(pw, ph);
                     _output?.Dispose();
                     _output = SKImage.FromPixelCopy(new SKImageInfo(pw, ph, SKColorType.Rgba8888, SKAlphaType.Opaque), pixels);
+                    SlangProbe.Current?.Phase(SlangProbe.ImageMade);
                 }
             }
             catch (Exception e) when (e is InvalidOperationException or ArgumentException)

@@ -1122,6 +1122,10 @@ OpenEmu's sidebar has a Collections group beneath the consoles, and so does this
 
 ### 4.40 A screen filter per console (2026-09-21)
 
+*Superseded 2026-09-24 by §4.48: the dropdown described here is gone from Graphics Settings, replaced by a row that
+opens the Shaders window. The stored `ScreenFilter` value, and everything below about when it is applied, is
+unchanged.*
+
 Graphics Settings now opens every console's tab with **Screen Filter**, a dropdown of `ScreenFilters` (`EmuSen_Serenity.md` §3.1), whatever the core offers below it. It is stored in `graphics.json` beside that console's core settings under the key `ScreenFilter`, which no core declares and so no core is ever handed (`ApplyConsoleSettings` passes a core only the keys it lists). The filter is applied to the frame control on the UI thread when a game starts, from its console's value, and at once when the value changes while that console's game is running; another console's change leaves the running picture alone. "Reset This Console" clears it with the rest. A console with no core settings used to show only "No graphics settings yet"; it now has the filter row and a note that the core has nothing else to offer.
 
 **Why per console.** The filter a person wants is a property of the screen the console was played on: a CRT for the home consoles, an LCD for the handhelds, and not the same CRT for all of them. Accurate filters of both kinds are being planned (the CRT and handheld LCD surveys of 2026-09-21); this row is where they will appear, with no change to it.
@@ -1130,6 +1134,9 @@ Graphics Settings now opens every console's tab with **Screen Filter**, a dropdo
 
 
 ### 4.41 RetroArch's shaders, downloaded on request (2026-09-21)
+
+*Superseded 2026-09-24 by §4.48: the presets are listed in the Shaders window beside the built-in filters, and
+`SlangPresetWindow` is retired. The storage, the pack and its download below are unchanged.*
 
 Each console's **Screen Filter** dropdown (§4.40) now ends with **RetroArch Preset...**. Choosing it opens a picker, `SlangPresetWindow`, that lists every `.slangp` in the downloaded pack. The list can be narrowed by the pack's top-level folder (`crt`, `handheld` and so on) and by a search over the path. **Use This Preset**, a double-click or Enter stores the choice. Cancel, or closing the window, leaves the dropdown as it was.
 
@@ -1669,6 +1676,306 @@ caught by both.
 choice being built separately) does not move it between shelves: the shelf is the cartridge's, not the player's
 setting.
 
+### 4.47 The Game Boy's Model: Auto, Game Boy or Game Boy Color (2026-09-24)
+
+**What the player sees.** The GB tab of Graphics Settings has a **Model** row under Engine: *Auto* (the default),
+*Game Boy* and *Game Boy Color*. The row is an ordinary core-setting dropdown. So the pad cycles it with Left and
+Right, and the mouse opens it (§4.45).
+
+- *Auto* is the old behaviour: the cartridge's header decides.
+- *Game Boy* runs every game on a Game Boy, a colour game in its own monochrome mode.
+- *Game Boy Color* runs every game on a Game Boy Color, a Game Boy game in the colours the Color's start-up picks for
+  it.
+
+The choice is stored in `graphics.json` under `Consoles.GB`, key `Model`, and it takes effect when a game is next
+loaded, as the Engine row's choice does (§4.44).
+
+**Why it is a core setting and not a frontend switch.** The model is Mercury's `ICoreSettings` setting, declared once
+as `MercuryCore.ModelSettings` and returned by `CoreCatalog.SettingsFor("GB")`, as the N64 declares its video settings.
+Both engines honour it:
+
+- `MercuryCore` and `MercuryRtCore` each read it at load;
+- a change before a game's first frame loads the game again at once, as the Expansion Pak row does.
+
+Mistress does nothing model-specific. It hands the core its console's settings after the load and before the first
+frame (`ApplyConsoleSettings`), and the core rebuilds itself if the stored model differs.
+
+**One change to Mistress that the row needed.** `_activeConsole` names the console whose settings, pad bindings,
+screen filter and cheats apply. It was set from the core's `CoreName`, which a Game Boy Color game reports as `GBC`.
+No tab and no binding set is named `GBC`, so the GB tab's settings never reached colour games. A Model choice of
+*Game Boy* would have been ignored for exactly the games it matters to.
+
+`_activeConsole` is now the catalogue's console for the ROM (`CoreCatalog.ConsoleForRom`, `GB` for every Game Boy
+game). `CoreName` still says which machine is running. The same change gives colour games the GB tab's screen filter,
+the GB pad bindings and the Game Boy cheat console, which they did not get before. That is intended, and nothing
+depended on the old behaviour: no binding set or graphics key is named `GBC` (the `GBC` library shelf, §4.46, is a shelf and not a console).
+
+**States, saves and the shelf.**
+
+- A save state records the console it was made on, and resumes on it whatever the row now says (Mercury state
+  version 7, `Mercury_Model.md` §5).
+- Battery saves and state files are keyed by the ROM's path, so they do not move when the model changes.
+- The library shelf is the cartridge's (§4.46), so it does not move either.
+
+**Tests.** `MercuryModelSettingTests` covers two things:
+
+- the row's three choices, its default and a stored choice, with the window rendered to PNG and looked at;
+- a game loaded in Mistress on the chosen console, on both engines: a Game Boy game on *Game Boy Color*, and a `$80`
+  game on *Game Boy*.
+
+The machine-level behaviour of each choice is `Mercury_Model.md` §6.
+
+### 4.48 Shaders: a window of their own, tabbed by console (2026-09-24)
+
+**What was asked.** The player wanted a settings entry for shaders alone, tabbed by console as Graphics Settings is,
+where a shader could be chosen and configured, and said that RetroArch's names could not be read whole and the list
+could not be filtered. Before this, a console's shader was the last row of Graphics Settings' tab (§4.40), and
+RetroArch's presets were a picker of 2,658 relative paths (§4.41), cut at the window's edge, searched as one
+substring, with no way to change a parameter.
+
+#### 4.48.1 The window, and one list of every shader
+
+**Where it opens.** Settings ▸ **Shaders...**, the pad menu's **Shaders**, the in-game bar's Options ▸ **Shaders...**,
+and the **Shaders...** button on each of Graphics Settings' tabs (§4.48.4). It is `ShaderSettingsWindow`, a LunaP
+`ToolWindow`, drawn on a sheet in Game Mode like every other window (§4.45.2). Its tabs are
+`CoreCatalog.ConsolesInReleaseOrder`, the same tabs in the same order as Graphics Settings, and it opens on the running
+game's console, or on the console of the Graphics tab its button was pressed on.
+
+**One list.** Each tab's left half is a `GroupedList` (`LunaP.md` §94.1) holding the built-in filters and the pack's
+presets together (`ShaderCatalog`):
+
+- **Built into EmuSen** comes first: *None*, then `ScreenFilters.NamesFor(console)`, so a console is offered the
+  filters that suit it, as §4.40's dropdown was.
+- **Each preset sits under its folder** in the pack, the group a heading drawn on the group's first row, with the
+  folder's levels joined by " / " and each level made readable: `bezel/Mega_Bezel/Presets/Base_CRT_Presets` is
+  *bezel / Mega Bezel / Presets / Base CRT Presets*. A heading counts its group's rows.
+- **A name is the file's name made readable**: the extension dropped, underscores as spaces, runs of spaces as one, so
+  `MBZ__0__SMOOTH-ADV__GDV.slangp` reads *MBZ 0 SMOOTH-ADV GDV*. Hyphens are kept, because they are how the pack's
+  authors write names (`crt-royale-kurozumi`) and how a player will type them. Names and headings wrap; nothing in the
+  list is cut.
+- **The shader in use is marked** with an *In use* pill, and the list opens with it selected and scrolled into view.
+- **The selected shader's whole path is always shown**, above its sliders, under its name: the path inside the pack
+  and, on the next line, the pack's folder on this machine, in the monospace face, wrapping. A built-in shows its
+  credit (`ScreenFilter.Credit`) instead.
+
+**Search and category.** The search box above the list matches **every word** typed, in any case, against a row's
+name, its folder heading and its relative path (`FilterBar.MatchesWords`, `LunaP.md` §94.3), so "royale kuro",
+"mega gdv" and "handheld/lcd" each find what a person means. The **Category** dropdown beside it narrows to *All*,
+*Built into EmuSen* or one of the pack's top-level folders. **None stays at the top whatever is searched**, so going
+back to no shader never needs the search cleared.
+
+**Choosing is two steps.** Moving onto a row shows that shader and its sliders; **Use This Shader**, Enter, A on the
+pad, or a double click applies it. A pad's highlight selects every row it passes (§4.45.3), and applying on selection
+would build every RetroArch preset passed over on the way down the list (a chain compiles each pass, `EmuSen_Serenity.md`
+§7.4); showing costs a read of the preset's sources and nothing on the device. The button reads **In Use**, disabled,
+for the shader already applied.
+
+**Recents, not favourites: the decision.** The last five shaders used on a console head its list as *Recently used*,
+newest first, with the folder as a second line, while nothing is searched and the category is *All*; a search finds
+them in their own folders anyway. Favourites were not built. A favourite needs a control on each row, and a
+`GroupedList` row is not interactive (its heading rides on the row, §94.1); on a pad it would be one more button in
+the one place where A already means "use". Recents cost the player nothing, and in practice they are the short list a
+favourites feature would be: few people alternate between more than a handful of shaders per console. If that
+judgement proves wrong, a favourite is a second list beside `RecentShaders` in the same file, and the group already
+exists.
+
+**Without the pack.** The list is then only the built-ins, and directly under them, where the presets would be, is a
+box headed *RetroArch's shaders* with what the pack is (libretro's `shaders_slang.zip`, about 54 MB, the file
+RetroArch's updater fetches, none of it shipped) and **Download Pack** (`SlangPackDownload`, unchanged from §4.41).
+One download fills every tab. With a pack, the box is one line at the list's foot, the preset count and the pack's
+build date, and **Update Pack**.
+
+#### 4.48.2 Configuring the shader shown
+
+**A slider per parameter** (`SliderRow`, `LunaP.md` §94.2) in the right half, under the shader's name: the parameter's
+description as its label (its id when it has none), its declared minimum, maximum and step, its value, its default
+beside the value while the two differ, and a **Reset** button above the slider's right end. **Reset All** beside Use
+returns every slider of that shader on that console to its default, and is enabled only while something differs.
+
+- **A RetroArch preset's parameters** are `SlangParameters.Read` (`EmuSen_Serenity.md` §7.6): every pass's
+  `#pragma parameter`, the first declaration of an id winning, and **the preset's own values as the defaults**, so a
+  reset returns to what the preset's author chose rather than to the bare shader's number.
+- **A built-in filter's** are its `ScreenFilter.Parameters` (`EmuSen_Serenity.md` §3.7): eleven for CRT (Lottes), the
+  response and dot shadow for the LCDs. Scanlines and Simple CRT have none, and say so.
+- **A parameter whose range has no width is a heading** (`SlangParameters.IsHeading`), which is how presets label
+  groups in RetroArch's menu; it is drawn as a section heading, and one that is only decoration (`---`, `===`) is left
+  out.
+
+**Reading off the UI thread.** A preset's sources are read on a worker and the sliders built when they arrive, so a
+large preset never stalls the list; a row passed over before its read finishes does not build sliders for it. The
+read is cached per path for the window's life and cleared by a download. Measured on the development desktop with the
+pack of 2026-09-22 (`A_pack_preset_with_hundreds_of_parameters_is_shown_in_measured_time`, with `EMUSEN_SLANG_PACK`):
+`crt-royale`, 46 sliders, read and built in 288 ms; `bezel/Mega_Bezel/Presets/MBZ__0__SMOOTH-ADV`, 944 sliders (953
+parameters less nine headings), in **1.9 s**, nearly all of it building 944 rows on the UI thread, since the read
+alone is 61 ms (§7.6). That second number is the cost of not virtualising the sliders, and it is recorded in §4.48.7.
+
+**Numbers shown as they were written.** A parameter's numbers are `float`s, and 0.041f widened to a double is
+0.041000001, which the row showed to four places (0.0410). The window widens through `decimal`, which gives the
+seven significant digits the float was written with, so the row shows 0.041. Found in the first rendered picture.
+
+#### 4.48.3 Where the values are kept, and how they reach a running game
+
+**Storage.** `graphics.json` (`EmuSen_Config_Reference.md` §3.3) gains two maps beside `Consoles`. The shader is keyed
+by exactly the value its console's `ScreenFilter` would hold, so a built-in is its name and a preset is `slang:` and
+its path in the pack:
+
+```json
+"ShaderParameters": {
+  "SNES": {
+    "CRT (Lottes)": { "maskDark": "0.3", "brightBoost": "1.05" },
+    "slang:crt/crt-royale.slangp": { "crtgamma": "2.2" }
+  },
+  "GB": { "Game Boy LCD": { "shadowOpacity": "0" } }
+},
+"RecentShaders": {
+  "SNES": [ "slang:crt/crt-royale.slangp", "CRT (Lottes)" ]
+}
+```
+
+- **Per console and per shader**, as asked: the same preset may be tuned differently for the NES and the SNES, and a
+  console's values for one shader survive a switch to another and back.
+- **Only values that differ from the default are written.** A slider moved back to its default, a Reset, or Reset All
+  removes the entry, and a shader or console left with nothing is removed with it, so the file holds exactly the
+  player's changes.
+- **Values are text**, written with the invariant culture, as `Consoles`' are (§3.3's reason: no schema per shader, and
+  a hand edit that does not parse is skipped rather than failing the load).
+- `RecentShaders` holds at most five per console, newest first; *None* is never recorded.
+- **Graphics Settings' Reset This Console** clears the console's `ScreenFilter` with its core settings (§4.40) and
+  leaves its shader parameters and recents: those belong to the Shaders window, which has its own resets. The
+  accessors are `ParametersFor`, `SetParameter`, `ForgetParameter`, `RecentFor` and `NoteRecent`.
+
+**Live changes.** A choice or a slider saves at once and calls the frontend's `ShaderChanged(console)`, which does
+nothing unless a game of that console is running, and then runs `ApplyScreenFilter` on the UI thread. That reads the
+stored shader, parses its stored values to floats (skipping any that do not parse), and sets
+`GameFrameControl.ShaderParameters` **before** `ActiveFilter` and `ActiveSlangPreset`, so that a chain or runner built
+for a newly chosen shader starts from the player's values. For a slider, the shader has not changed, and both setters
+return at once (the same filter reference, the same preset path), so nothing is rebuilt: the frame control hands the
+values to the running `FilterChain` or `SlangRunner`, which use them at the next draw, and a runner draws again even
+when the game is paused (`EmuSen_Serenity.md` §7.6). A slider for a shader that is not the one in use, or on another
+console's tab, is saved and reaches nothing until that shader is used.
+
+#### 4.48.4 Graphics Settings' row
+
+The **Screen Filter** dropdown and its **RetroArch Preset...** entry are gone from `GraphicsSettingsWindow`. Each tab's
+first row is now **Shader**: the current shader's name (*CRT (Lottes)*, or *crt-royale (RetroArch, crt)*) and a
+**Shaders...** button that opens the Shaders window on the same console, on a sheet over Graphics Settings; the name
+follows the choice when it closes. `ScreenFilterKey` and the `slang:` format are unchanged, so every existing
+`graphics.json` means what it meant. `SlangPresetWindow` is retired, superseded by this window, along with the
+dropdown's `ChooseRetroArch` and `SlangLabel`. A shader change made from inside Graphics Settings calls
+`ShadersChanged` rather than the window's own callback, so moving a slider does not re-apply the core's settings on the
+emulation thread.
+
+#### 4.48.5 From the pad, and on a Game Mode sheet
+
+Everything is operated with the pad (`PadWindowRouter`, §4.45.3): the shoulders change tab; A on the search box opens
+the on-screen keyboard (§4.45.6) and Start puts it away with the list already narrowed; up and down walk the list,
+showing each shader; A uses one; right goes to the right half; left and right move a slider by its step; up from a
+slider reaches its own Reset; Reset All and Use sit above the sliders; B closes. At 1280×800 the sheet is scaled by
+800/720 (§4.45.2) and the text is legible in the rendered pictures.
+
+**A defect the pad found.** Using a shader refreshes the list, to move the *In use* pill, and a refreshed
+`GroupedList` replaced every row's container, the focused one with it, which left the focus on nothing: the next
+d-pad press did nothing at all. With a mouse the defect is invisible. `GroupedList.Refresh` now puts the focus back on
+the row it keeps selected, or on the first row, unselected, when none is kept (`LunaP.md` §94.5). Before the rule the
+pad-menu case stopped with no focused control after A on a row (observed); a mutant without it fails LunaP's case.
+
+**A second, of the same kind.** **Use This Shader** is disabled once it has been pressed (it reads *In Use*), and
+**Reset All** once nothing differs from the default; a button disabled under the focus loses it, and the pad was dead
+again. Whichever of the two was pressed now hands the focus on, to the other button if it is enabled, else to the
+first slider, else to the list's selected row (`FocusNearby`). Found by the pad-menu case, whose next walk had no
+starting point; a mutant that never hands it on fails that case.
+
+**Where the two buttons sit.** They are right-aligned above the column of Reset buttons, Reset All then Use, so that
+from a row a pad reaches Use in three presses (right to the first slider, up to its Reset, up again, measured on a
+Game Boy LCD row). They were first at the left under the shader's name, and the audit then reported the Game Boy
+tab's Use unreachable; **that report came from the audit, not from the layout** (it was made by the version that did
+not yet put scrolling back, below): with the audit corrected, the left placement is reachable too (the mutant that puts it back survives, §4.48.6). The right
+placement is kept for the shorter path, which is a judgement, not a measured need.
+
+**The audit had to change.** `PadAudit` walked breadth first, remembering each control it reached by instance and
+later focusing it directly to press every direction from it. This window broke that in two ways:
+
+- **The right half is rebuilt by the list's selection**, and a row given the focus is selected by it, so a slider
+  reached from one row was gone once the walk had visited another; and a list is entered at its selected row, so the
+  same press from the same place led elsewhere once the walk had moved the selection. The Game Boy tab's **Update
+  Pack** was reported unreachable, though a walk down the list with the pad reaches it (checked row by row). The walk
+  now reaches every control it explores **by replaying the path it was found by**, from the starting control, with
+  every list's selection and every scrolling area's offset put back as they were, never by focusing it directly.
+  This is slower (the path is replayed before each press) and exact: the state a control is explored in is the state
+  it was found in. The first version restored only the lists and lost the walk down the sliders once their column had
+  scrolled, since a move is by position. Controls other than rows are known by where they sit in the tree, so a
+  pane rebuilt the same way is the same controls.
+- **A virtualised list recycles its row containers as it scrolls**: walking 60 rows down the real pack's list used
+  13 containers, 47 of them reused for a later row, while the Game Boy tab's 11 rows reused none. A row is therefore
+  known by its list and index, not by the container drawing it. **This was not the cause of the Update Pack report**
+  (no container was reused there), and no audit case today has a list long enough to need it: the mutant that keys
+  rows by container survives (§4.48.6). It is kept because a longer list in any audited window would make the walk
+  treat a row it has not explored as seen.
+
+`Every_control_of_each_settings_sheet_is_reached_by_the_pad("Shaders")` audits the sheet and
+`In_desktop_mode_a_real_window_is_driven_and_every_control_reached("ShowShaderSettings")` the desktop window; the
+four existing windows' audits and the cheat sheets' pass under the new walk unchanged.
+
+#### 4.48.6 Tests, pictures and mutants
+
+**Tests.** `ShaderSettingsWindowTests` (10): the built-ins, None first, and the one in use selected on every tab;
+Use storing for one console and telling the frontend, by Enter; grouping, readable names, word-by-word search over
+name, folder and path, the category dropdown, and the wrapping path; recents newest first and out of the way of a
+search; the download filling every tab; a built-in's sliders stored per console and per shader, reset one and all;
+a preset's own values as defaults and its headings; **a slider moved while a game runs reaching the `FilterChain` the
+frame control draws with** (the chain's own value read back before and after, and another console's slider leaving it
+alone); the desktop pictures; the large-preset timing. `ScreenFilterSettingTests` now drives the Shaders window for
+§4.40's cases and checks Graphics Settings' row on every tab. `PadSettingsWindowTests`: the window from the Graphics
+sheet searched with the on-screen keyboard, a preset used and a slider moved and reset by pad; the window from the pad
+menu, CRT (Lottes) used, a slider moved with the value reaching the frame control, and Reset All; and both audits.
+
+**Pictures** (`EMUSEN_UI_DUMP`, looked at): `shaders-desktop-preset`, `-lottes`, `-bezel`, `-search` and `-nopack`
+at the window's own 980×660 against the real pack, and `pad-shaders-search`, `pad-shaders-slider` and
+`pad-shaders-lottes` on a 1280×800 Game Mode sheet.
+
+**The cost of drawing a filter headlessly.** The first version of the running-game case took 85 s: every capture of
+the main window drew CRT (Lottes) on the CPU, where a Skia runtime effect costs about 150 µs a pixel, some 18 s for
+the 400×300 picture. The case now sizes the frame control to 24×24 before it draws; the chain it checks is the same.
+Likewise the pad-menu case moves its sliders before the filter is in use and applies it last.
+
+**Mutants** (each built and run against the cases in its blast radius, then restored from git):
+
+| Mutant | Result |
+|---|---|
+| `ApplyScreenFilter` never sets `ShaderParameters` | caught: the running-game case and the pad-menu case |
+| search over the name alone | caught: the grouping and search case |
+| a value moved back to its default is stored rather than removed | caught: the built-in parameters case |
+| Use does not record the recent | caught: the recents case |
+| a float widened directly, not through `decimal` | caught: the built-in parameters case (0.041) |
+| a disabled button keeps the focus | caught: the pad-menu case |
+| a search hides None | caught: the search case and the pad case over the graphics sheet |
+| the audit does not put the lists' selections back | caught: the desktop audit of the Shaders window |
+| **any console's change re-applies the running console's shader** | **survived**, and is equivalent: re-applying the running console's own stored shader and values changes nothing that can be observed, so the console check in `ShaderChanged` saves work and guards nothing |
+| **the audit keys rows by container** | **survived**: no audited list is long enough to recycle a container (above) |
+| **the Use and Reset All buttons back at the left** | **survived**: both placements are reachable (above) |
+
+Before this, LunaP's new case caught the `GroupedList` rule's removal (`LunaP.md` §94.5).
+
+#### 4.48.7 What is not done
+
+- **The sliders are not virtualised.** A Mega Bezel preset's 944 rows take 1.9 s to build, during which the window
+  does not answer; nothing else measured comes near it (`crt-royale`, 46, in 288 ms). The fix is a virtualised list of
+  rows, or building them in batches; neither was done. Nor can the parameters be searched, which is what a list of 944
+  wants.
+- **No preview.** A preset is known by its name and folder, not by a picture of what it draws.
+- **Favourites** were decided against (§4.48.1).
+- **A value cannot be typed**, only stepped (`LunaP.md` §94.4).
+- **A preset that will not build is found only when it is used**: the status bar says why (§4.41) and the list does
+  not mark it beforehand.
+- **Only the built-in path is proved end to end.** The test that a slider reaches the chain a running game draws
+  with uses CRT (Lottes). For a RetroArch preset the window's values reach `GameFrameControl.ShaderParameters` by the
+  same code, and Serenity's own tests prove the control hands them to a built preset (`EmuSen_Serenity.md` §7.6), but
+  no one test runs a preset in a running game, since it needs a Vulkan device.
+- **Stored values are never pruned.** A preset removed from the pack, or a parameter renamed by an update, leaves its
+  values in `graphics.json`; an id the shader no longer declares is ignored, so this is untidy and not harmful.
+- **The pad and the 1280×800 text are proved headlessly only.** The walks and the audit are WiseMan's; the pictures
+  are Avalonia's headless renderer at the size Game Mode uses. Neither has been seen on the handheld.
+- The headings do not fold (`LunaP.md` §94.4), and a download cannot be cancelled from the window.
 
 ### 4.49 Rewind as a reel of pictures (2026-09-24)
 
@@ -1687,7 +1994,7 @@ picture of the selected moment with how long ago it was, and under it a strip of
 at the left, **Now** at the right and selected first. Each tile is labelled with its distance back, from the frames the
 buffer counted and the console's frame rate: two decimals under ten seconds, since moments are a fifteenth of a second
 apart; one decimal under a minute; then minutes and seconds. The strip is LunaP's `TileStrip<T>` (LunaP `docs/LunaP.md`
-§94), built for this: one row, virtualised, the selected tile centred and ringed as the library's covers are.
+§95), built for this: one row, virtualised, the selected tile centred and ringed as the library's covers are.
 
 **The controls.**
 

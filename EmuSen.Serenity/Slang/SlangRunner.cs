@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,6 +21,8 @@ namespace EmuSen.Serenity.Slang
         private readonly Action<string>? _failed;
         private SKImage? _output;
         private bool _advanced, _disposed;
+        private IReadOnlyDictionary<string, float>? _values;
+        private int _valuesVersion, _appliedVersion = -1;
 
         public string PresetPath { get; }
 
@@ -60,6 +63,13 @@ namespace EmuSen.Serenity.Slang
             _failed?.Invoke(problem);
         }
 
+        // Under the owner's lock; the chain takes them at its next draw, which renders again even with no new frame - see EmuSen_Serenity.md §7.6.
+        public void SetParameters(IReadOnlyDictionary<string, float>? values)
+        {
+            _values = values;
+            _valuesVersion++;
+        }
+
         // On the render thread, under the owner's lock: false draws nothing and the caller draws the picture plain.
         public bool Draw(SKCanvas canvas, byte[] rgba, int width, int height, int rowRepeat, bool newFrame, SKRect destination)
         {
@@ -68,8 +78,10 @@ namespace EmuSen.Serenity.Slang
             int pw = Math.Max(1, (int)Math.Round(destination.Width * scale)), ph = Math.Max(1, (int)Math.Round(destination.Height * scale));
             try
             {
+                bool retuned = _appliedVersion != _valuesVersion;
+                if (retuned) { chain.SetParameters(_values); _appliedVersion = _valuesVersion; }
                 if (newFrame || !_advanced) { chain.Advance(rgba, width, height, rowRepeat); _advanced = true; }
-                if (newFrame || _output is null || _output.Width != pw || _output.Height != ph)
+                if (newFrame || retuned || _output is null || _output.Width != pw || _output.Height != ph)
                 {
                     byte[] pixels = chain.Render(pw, ph);
                     _output?.Dispose();

@@ -152,6 +152,15 @@ on purpose, so the file needs no schema per console and a hand edit that the cor
 rather than failing the load. `Value`, `SetValue` and `Forget` are the accessors; Mistress's graphics window writes
 them and saves at once.
 
+*2026-09-24:* two more maps, written by Mistress's Shaders window (`EmuSen_Settings_Reference.md` §4.48.3).
+**`ShaderParameters`** is each console's values for each shader's parameters, the shader keyed exactly as that
+console's `ScreenFilter` value would be (a built-in's name, or `slang:` and a preset's path in the pack), the values
+text: `"ShaderParameters": { "SNES": { "CRT (Lottes)": { "maskDark": "0.3" } } }`. Only values that differ from the
+default are held; resetting one removes it, and a shader or console left empty goes with it. **`RecentShaders`** is
+each console's last five shaders used, newest first: `"RecentShaders": { "SNES": [ "slang:crt/crt-royale.slangp" ] }`.
+The accessors are `ParametersFor`, `SetParameter`, `ForgetParameter`, `RecentFor` and `NoteRecent`; `Forget(console)`
+leaves both maps alone.
+
 ### 3.4 `cheats/<name>.json` — `CheatFile`
 
 New capability, not a migration: `CheatRegistry` previously had no persistence at all, so every cheat was lost on exit.

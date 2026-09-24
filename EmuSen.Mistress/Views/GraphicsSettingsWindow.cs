@@ -26,8 +26,11 @@ namespace EmuSen.Mistress.Views
         private readonly Func<System.Net.Http.HttpClient> _http;
         private readonly string _pack;
 
-        // The picker the "RetroArch Preset..." entry opened last, for a test to drive.
-        public SlangPresetWindow? PresetPicker { get; private set; }
+        // The Shaders window the button opened last, for a test to drive.
+        public ShaderSettingsWindow? ShaderWindow { get; private set; }
+
+        // What a shader change calls instead of the constructor's callback, so a slider does not re-apply the core's settings.
+        public Action<string>? ShadersChanged { get; set; }
 
         public GraphicsSettingsWindow(GraphicsConfig config, Action<string>? changed, string? selectedConsole,
             Func<System.Net.Http.HttpClient>? http = null, string? pack = null)
@@ -75,51 +78,25 @@ namespace EmuSen.Mistress.Views
         // A stored value naming a preset in the downloaded pack, by its path inside it - see EmuSen_Settings_Reference.md §4.41.
         public const string SlangPrefix = "slang:";
 
-        // The dropdown's last entry, which opens the picker rather than being a filter itself.
-        public const string ChooseRetroArch = "RetroArch Preset...";
-
-        public static string SlangLabel(string relative) => "RetroArch: " + System.IO.Path.GetFileNameWithoutExtension(relative);
-
         private Control BuildConsolePanel(string console)
         {
             IReadOnlyList<CoreSetting> settings = CoreCatalog.SettingsFor(console);
             var panel = new StackPanel { Spacing = 12, Margin = new Avalonia.Thickness(0, 8, 0, 0) };
             var refreshers = new List<Action>();
 
-            // First on every tab: it belongs to the window the picture is drawn in, not to the core, so every console has it.
-            var filter = new Dropdown { Name = $"{console}.{ScreenFilterKey}", HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 160 };
-            void FillFilter()
-            {
-                _filling = true;
-                string current = _config.Value(console, ScreenFilterKey) ?? EmuSen.Serenity.Shaders.ScreenFilters.None;
-                var names = EmuSen.Serenity.Shaders.ScreenFilters.NamesFor(console).ToList();
-                string selected = names.Contains(current) ? current : EmuSen.Serenity.Shaders.ScreenFilters.None;
-                if (current.StartsWith(SlangPrefix, StringComparison.Ordinal))
-                {
-                    selected = SlangLabel(current[SlangPrefix.Length..]);
-                    names.Add(selected);
-                }
-                names.Add(ChooseRetroArch);
-                filter.Fill(names, selected);
-                _filling = false;
-            }
-            filter.Chose += chosen =>
-            {
-                if (_filling || chosen is not string value) return;
-                if (value == ChooseRetroArch)
-                {
-                    string current = _config.Value(console, ScreenFilterKey) ?? "";
-                    PresetPicker = new SlangPresetWindow(_http, _pack,
-                        current.StartsWith(SlangPrefix, StringComparison.Ordinal) ? current[SlangPrefix.Length..] : null,
-                        preset => Changed(console, ScreenFilterKey, SlangPrefix + preset), console);
-                    PresetPicker.Closed += (_, _) => FillFilter();
-                    _ = SheetLayer.Show(PresetPicker, this);
-                }
-                else if (!value.StartsWith("RetroArch: ", StringComparison.Ordinal)) Changed(console, ScreenFilterKey, value);
-            };
-            FillFilter();
-            refreshers.Add(FillFilter);
-            panel.Children.Add(new FieldRow { Label = "Screen Filter", Hint = "Drawn over the picture as it is shown, never in the game's own frame; changes apply at once.", Content = filter });
+            // First on every tab: it belongs to the window the picture is drawn in, not to the core, so every console has it - see EmuSen_Settings_Reference.md §4.48.
+            var shaderName = new TextBlock { Name = $"{console}.ShaderInUse", VerticalAlignment = VerticalAlignment.Center, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+            var shaders = Ui.Button("Shaders...", () => OpenShaders(console));
+            shaders.Name = $"{console}.Shaders";
+            void ShowShader() => shaderName.Text = ShaderSettingsWindow.Describe(_config.Value(console, ScreenFilterKey));
+            ShowShader();
+            refreshers.Add(ShowShader);
+            var shaderRow = new DockPanel { LastChildFill = true };
+            shaders.Margin = new Avalonia.Thickness(0, 0, 12, 0);
+            DockPanel.SetDock(shaders, Dock.Left);
+            shaderRow.Children.Add(shaders);
+            shaderRow.Children.Add(shaderName);
+            panel.Children.Add(new FieldRow { Label = "Shader", Hint = "Drawn over the picture as it is shown, never in the game's own frame. Chosen, searched and adjusted in the Shaders window.", Content = shaderRow });
 
             // Before the core's own rows, since it decides which core reads them - see EmuSen_Settings_Reference.md §4.44.
             if (CoreCatalog.EngineFor(console) is { } engine)
@@ -170,6 +147,14 @@ namespace EmuSen.Mistress.Views
             void Fill() { _filling = true; string current = Current(); dropdown.Fill(items, items.Contains(current) ? current : setting.Default); _filling = false; }
             Fill();
             return (dropdown, Fill);
+        }
+
+        // On a sheet over this one, on the same console; the row's label follows it when it closes.
+        private void OpenShaders(string console)
+        {
+            ShaderWindow = new ShaderSettingsWindow(_config, ShadersChanged ?? _changed, console, _http, _pack);
+            ShaderWindow.Closed += (_, _) => { foreach ((_, Action refresh) in _panels) refresh(); };
+            _ = SheetLayer.Show(ShaderWindow, this);
         }
 
         // Saved at once, like the preferences, and the frontend told which console so a running one can take it - see §4.26.

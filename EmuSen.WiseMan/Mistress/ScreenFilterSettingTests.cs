@@ -50,30 +50,42 @@ namespace EmuSen.WiseMan.Mistress
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 
-        private static Dropdown Filter(Window w, string console) =>
-            w.GetLogicalDescendants().OfType<Dropdown>().Where(d => d.Name == $"{console}.{GraphicsSettingsWindow.ScreenFilterKey}").Distinct().Single();
+        private static ShaderPanel Choose(ShaderSettingsWindow window, string console, string stored)
+        {
+            ShaderPanel panel = window.PanelFor(console);
+            panel.List.SelectedIndex = panel.List.Models.ToList().FindIndex(e => e.Stored == stored && !e.Recent);
+            Dispatcher.UIThread.RunJobs();
+            panel.Use();
+            Dispatcher.UIThread.RunJobs();
+            return panel;
+        }
 
+        // The row that replaced the dropdown: every tab names its console's shader and opens the Shaders window on that console - see EmuSen_Settings_Reference.md §4.48.4.
         [Fact]
-        public Task Every_console_s_tab_offers_the_filters_and_a_choice_is_saved_for_that_console_alone() => Session.Dispatch(() =>
+        public Task Every_console_s_tab_names_its_shader_and_opens_the_shaders_window_on_that_console() => Session.Dispatch(() =>
         {
             var config = new GraphicsConfig();
+            config.SetValue("SNES", GraphicsSettingsWindow.ScreenFilterKey, "slang:crt/crt-royale.slangp");
             string? told = null;
             var window = new GraphicsSettingsWindow(config, console => told = console, null);
             window.Show();
 
             foreach (string console in CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console))
             {
-                Dropdown filter = Filter(window, console);
-                Assert.Equal(ScreenFilters.NamesFor(console).Append(GraphicsSettingsWindow.ChooseRetroArch), filter.Items.Cast<object>().Select(o => o.ToString()));
-                Assert.Equal(ScreenFilters.None, filter.SelectedItem);
+                Assert.Single(window.GetLogicalDescendants().OfType<Button>().Where(b => b.Name == $"{console}.Shaders").Distinct());
+                string expected = console == "SNES" ? "crt-royale (RetroArch, crt)" : ScreenFilters.None;
+                Assert.Equal(expected, window.GetLogicalDescendants().OfType<TextBlock>().Distinct().Single(t => t.Name == $"{console}.ShaderInUse").Text);
             }
 
-            Filter(window, "SNES").SelectedItem = "Scanlines";
+            window.GetLogicalDescendants().OfType<Button>().Distinct().Single(b => b.Name == "NES.Shaders").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            ShaderSettingsWindow shaders = Assert.IsType<ShaderSettingsWindow>(window.ShaderWindow);
+            Assert.Equal("NES", (shaders.GetLogicalDescendants().OfType<Tabs>().Single().SelectedItem as TabItem)?.Header);
+            Choose(shaders, "NES", "Scanlines");
+            Assert.Equal("NES", told);
+            Assert.Equal("Scanlines", GraphicsConfig.Load().Value("NES", GraphicsSettingsWindow.ScreenFilterKey));
+            shaders.Close();
             Dispatcher.UIThread.RunJobs();
-
-            Assert.Equal("SNES", told);
-            Assert.Equal("Scanlines", GraphicsConfig.Load().Value("SNES", GraphicsSettingsWindow.ScreenFilterKey));
-            Assert.Null(GraphicsConfig.Load().Value("NES", GraphicsSettingsWindow.ScreenFilterKey));
+            Assert.Equal("Scanlines", window.GetLogicalDescendants().OfType<TextBlock>().Distinct().Single(t => t.Name == "NES.ShaderInUse").Text);
             window.Close();
         }, default);
 
@@ -92,14 +104,12 @@ namespace EmuSen.WiseMan.Mistress
             GameFrameControl frame = window.GetControl<GameFrameControl>("GameFrame");
             Assert.Equal(ShaderEffect.Crt, frame.ActiveEffect);
 
-            typeof(MainWindow).GetMethod("ShowGraphicsSettings", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
-            GraphicsSettingsWindow settings = window.OwnedWindows.OfType<GraphicsSettingsWindow>().Single();
-            Filter(settings, "NES").SelectedItem = ScreenFilters.None;
-            Dispatcher.UIThread.RunJobs();
+            typeof(MainWindow).GetMethod("ShowShaderSettings", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
+            ShaderSettingsWindow settings = window.OwnedWindows.OfType<ShaderSettingsWindow>().Single();
+            Choose(settings, "NES", ScreenFilters.None);
             Assert.Equal(ShaderEffect.Crt, frame.ActiveEffect);
 
-            Filter(settings, "SNES").SelectedItem = ScreenFilters.None;
-            Dispatcher.UIThread.RunJobs();
+            Choose(settings, "SNES", ScreenFilters.None);
             Assert.Equal(ShaderEffect.None, frame.ActiveEffect);
             settings.Close();
             window.Close();
@@ -117,53 +127,6 @@ namespace EmuSen.WiseMan.Mistress
             File.WriteAllText(Path.Combine(pack, EmuSen.Mistress.Library.SlangPackDownload.StampFile), "2026-09-22 02:00 UTC");
             return pack;
         }
-
-        [Fact]
-        public Task The_last_entry_opens_the_pack_s_presets_and_the_one_used_is_stored_and_shown() => Session.Dispatch(() =>
-        {
-            FakePack();
-            var config = new GraphicsConfig();
-            var window = new GraphicsSettingsWindow(config, null, null);
-            window.Show();
-
-            Filter(window, "SNES").SelectedItem = GraphicsSettingsWindow.ChooseRetroArch;
-            Dispatcher.UIThread.RunJobs();
-            SlangPresetWindow picker = Assert.IsType<SlangPresetWindow>(window.PresetPicker);
-            var list = picker.GetLogicalDescendants().OfType<LunaList<string>>().Single(l => l.Name == "PresetList");
-            Assert.Equal(new[] { "crt/crt-lottes.slangp", "crt/crt-royale.slangp", "handheld/lcd-grid-v2.slangp" }, list.Models);
-            Assert.Contains("3 presets", picker.GetLogicalDescendants().OfType<TextBlock>().Single(t => t.Name == "PackStatus").Text);
-
-            var search = picker.GetLogicalDescendants().OfType<FilterBar>().Single();
-            search.SearchText = "royale";
-            typeof(SlangPresetWindow).GetMethod("ShowPresets", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(picker, null);
-            Assert.Equal(new[] { "crt/crt-royale.slangp" }, list.Models);
-
-            list.SelectedIndex = 0;
-            typeof(SlangPresetWindow).GetMethod("Use", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(picker, null);
-            Dispatcher.UIThread.RunJobs();
-
-            Assert.Equal("slang:crt/crt-royale.slangp", GraphicsConfig.Load().Value("SNES", GraphicsSettingsWindow.ScreenFilterKey));
-            Assert.Equal("RetroArch: crt-royale", Filter(window, "SNES").SelectedItem);
-            window.Close();
-        }, default);
-
-        [Fact]
-        public Task Cancelling_the_picker_leaves_the_filter_as_it_was() => Session.Dispatch(() =>
-        {
-            FakePack();
-            var config = new GraphicsConfig();
-            config.SetValue("SNES", GraphicsSettingsWindow.ScreenFilterKey, "Scanlines");
-            config.Save();
-            var window = new GraphicsSettingsWindow(config, null, null);
-            window.Show();
-            Filter(window, "SNES").SelectedItem = GraphicsSettingsWindow.ChooseRetroArch;
-            Dispatcher.UIThread.RunJobs();
-            window.PresetPicker!.Close();
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal("Scanlines", Filter(window, "SNES").SelectedItem);
-            Assert.Equal("Scanlines", GraphicsConfig.Load().Value("SNES", GraphicsSettingsWindow.ScreenFilterKey));
-            window.Close();
-        }, default);
 
         [Fact]
         public Task A_game_draws_its_console_s_preset_from_the_pack_and_one_not_there_is_said_and_drawn_plain() => Session.Dispatch(() =>

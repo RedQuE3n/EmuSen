@@ -2,7 +2,7 @@
 //! observed, halted or refused and resumed is the frame run plain. See Mercury_Native.md §8.5.
 
 use mercuryrt::debug::{Call, Range, Write, stop};
-use mercuryrt::machine::{Machine, RUN_CONTINUING, RUN_UNCHECKED};
+use mercuryrt::machine::{Machine, Model, RUN_CONTINUING, RUN_UNCHECKED};
 use mercuryrt::memory::cartridge::{HEADER_CHECKSUM_ADDRESS, header_checksum};
 
 const ENTRY: usize = 0x150;
@@ -36,7 +36,7 @@ fn interrupts() -> Vec<u8> {
 }
 
 fn load(image: Vec<u8>) -> Machine {
-    Machine::load_rom(image).expect("a board with no mapper")
+    Machine::load_rom(image, Model::Auto).expect("a board with no mapper")
 }
 
 fn state(m: &Machine) -> Vec<u8> {
@@ -312,4 +312,16 @@ fn a_game_halted_at_breakpoints_and_resumed_is_the_game_run_through() {
         assert_eq!(state(&halted), state(&plain), "frame {f}");
     }
     assert_eq!(halts, 100);
+}
+
+#[test]
+fn a_state_from_the_other_console_rebuilds_the_machine_and_keeps_its_hooks() {
+    let colour = Machine::load_rom(rom(COUNT_FOREVER, &[]), Model::GameBoyColor).expect("a board with no mapper");
+    let saved = state(&colour);
+    let mut m = load(rom(COUNT_FOREVER, &[]));
+    m.hooks.breakpoints = vec![(0x153, 0x153)];
+    m.load_state(&saved).expect("a state of the other console");
+    assert!(m.cgb_hardware());
+    assert_eq!(m.hooks.breakpoints, vec![(0x153, 0x153)]);
+    assert_eq!(m.run_frame_debug(0), Ok(stop::BREAKPOINT));
 }

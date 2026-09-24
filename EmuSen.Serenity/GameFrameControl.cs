@@ -89,10 +89,32 @@ namespace EmuSen.Serenity
                     _slang?.Dispose();
                     _slang = value is null ? null : new Slang.SlangRunner(value, problem => SlangFailed?.Invoke(problem),
                         () => Avalonia.Threading.Dispatcher.UIThread.Post(InvalidateVisual));
+                    _slang?.SetParameters(_shaderParameters);
                 }
                 InvalidateVisual();
             }
         }
+
+        private IReadOnlyDictionary<string, float>? _shaderParameters;
+
+        // The player's values for the filter or preset drawn, by parameter id; both take them at their next draw - see EmuSen_Serenity.md §7.6.
+        public IReadOnlyDictionary<string, float>? ShaderParameters
+        {
+            get { lock (_cacheLock) return _shaderParameters; }
+            set
+            {
+                lock (_cacheLock)
+                {
+                    _shaderParameters = value is null ? null : new Dictionary<string, float>(value, StringComparer.Ordinal);
+                    _chain?.SetParameters(_shaderParameters);
+                    _slang?.SetParameters(_shaderParameters);
+                }
+                InvalidateVisual();
+            }
+        }
+
+        // What the running filter's chain holds for a parameter, NaN when there is no chain yet, for a test.
+        internal float FilterParameter(string id) { lock (_cacheLock) return _chain?.ValueOf(id) ?? float.NaN; }
 
         // Whether the preset has finished building, for a test that waits on it.
         internal bool SlangBuilt { get { lock (_cacheLock) return _slang?.Built ?? true; } }
@@ -357,7 +379,7 @@ namespace EmuSen.Serenity
                     try
                     {
                         bool copy = fresh || _owner._cachedImage is null;
-                        if (_owner._activeFilter is { } filter && _owner._chain is null) _owner._chain = new FilterChain(filter);
+                        if (_owner._activeFilter is { } filter && _owner._chain is null) { _owner._chain = new FilterChain(filter); _owner._chain.SetParameters(_owner._shaderParameters); }
                         if (copy)
                         {
                             var sourceInfo = new SKImageInfo(source.Width, source.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);

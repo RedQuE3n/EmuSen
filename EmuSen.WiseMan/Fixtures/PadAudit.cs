@@ -27,37 +27,13 @@ namespace EmuSen.WiseMan.Fixtures
         // The same walk with the presses sent some other way, such as straight to the router for a window the headless platform will not make active.
         public static HashSet<InputElement> Reachable(Control root, System.Action<EmuSen.Mistress.Input.UiButton> press, int limit = 400)
         {
-            TopLevel top = TopLevel.GetTopLevel(root)!;
-            InputElement Focused() => (InputElement)top.FocusManager!.GetFocusedElement()!;
-
-            var seen = new HashSet<InputElement>();
-            var queue = new Queue<InputElement>();
-            InputElement start = Focused();
-            seen.Add(start);
-            queue.Enqueue(start);
-
-            while (queue.Count > 0 && seen.Count < limit)
+            System.Action[] presses =
             {
-                InputElement from = queue.Dequeue();
-                bool takesSideways = from is ComboBox or Slider or TabItem;
-
-                foreach (int direction in takesSideways ? new[] { 0, 1 } : new[] { 0, 1, 2, 3 })
-                {
-                    from.Focus(NavigationMethod.Directional);
-                    press(direction switch
-                    {
-                        0 => EmuSen.Mistress.Input.UiButton.Up,
-                        1 => EmuSen.Mistress.Input.UiButton.Down,
-                        2 => EmuSen.Mistress.Input.UiButton.Left,
-                        _ => EmuSen.Mistress.Input.UiButton.Right,
-                    });
-
-                    InputElement to = Focused();
-                    if (seen.Add(to)) queue.Enqueue(to);
-                }
-            }
-
-            return seen;
+                () => press(EmuSen.Mistress.Input.UiButton.Up), () => press(EmuSen.Mistress.Input.UiButton.Down),
+                () => press(EmuSen.Mistress.Input.UiButton.Left), () => press(EmuSen.Mistress.Input.UiButton.Right),
+            };
+            Dictionary<object, List<int>> paths = Walk(root, presses, _ => false, limit, out _);
+            return root.GetVisualDescendants().OfType<InputElement>().Where(e => paths.ContainsKey(KeyOf(e))).ToHashSet();
         }
 
         // Finds a pad path from the focus to a control, then goes back and walks it with the pad alone; the search is repeated from where a walk ends, since a move can depend on the scroll position it left.
@@ -75,34 +51,106 @@ namespace EmuSen.WiseMan.Fixtures
         private static InputElement? TryReach(Control root, PadDriver pad, System.Func<InputElement, bool> target, int limit)
         {
             TopLevel top = TopLevel.GetTopLevel(root)!;
-            InputElement Focused() => (InputElement)top.FocusManager!.GetFocusedElement()!;
             System.Action[] presses = { () => pad.Up(), () => pad.Down(), () => pad.Left(), () => pad.Right() };
+            InputElement start = (InputElement)top.FocusManager!.GetFocusedElement()!;
+            object startKey = KeyOf(start);
 
-            InputElement start = Focused();
-            var path = new Dictionary<InputElement, List<int>> { [start] = new List<int>() };
-            var queue = new Queue<InputElement>(new[] { start });
-            InputElement? found = target(start) ? start : null;
+            Dictionary<object, List<int>> paths = Walk(root, presses, target, limit, out object? found);
+            Assert.True(found is not null, "No pad path to the control asked for.");
+            Refocus(top, startKey, start);
+            foreach (int direction in paths[found!]) presses[direction]();
+            return top.FocusManager!.GetFocusedElement() is InputElement end && Equals(KeyOf(end), found) && target(end) ? end : null;
+        }
 
-            while (found is null && queue.Count > 0 && path.Count < limit)
+        // Breadth first over every direction from every control reached, each left from as the walk found it, by replaying its path - see EmuSen_Settings_Reference.md §4.48.5.
+        private static Dictionary<object, List<int>> Walk(Control root, System.Action[] presses, System.Func<InputElement, bool> target, int limit, out object? found)
+        {
+            TopLevel top = TopLevel.GetTopLevel(root)!;
+            InputElement? Focused() => top.FocusManager!.GetFocusedElement() as InputElement;
+
+            InputElement start = Focused()!;
+            object startKey = KeyOf(start);
+            var paths = new Dictionary<object, List<int>> { [startKey] = new List<int>() };
+            var queue = new Queue<object>(new[] { startKey });
+            found = target(start) ? startKey : null;
+
+            // Every list's selection and every scrolling area's offset as the walk began: a row given the focus is selected, a list is entered at its selected row, and a move is by position.
+            var selections = root.GetVisualDescendants().OfType<ListBox>().Select(l => (List: l, Index: l.SelectedIndex)).ToList();
+            var scrolls = root.GetVisualDescendants().OfType<ScrollViewer>().Select(v => (Viewer: v, Offset: v.Offset)).ToList();
+
+            // From the start along the path, lists and scrolling put back first, never by focusing the control directly: a pane that follows a selection makes the path the state a control was found in.
+            InputElement? At(object key)
             {
-                InputElement from = queue.Dequeue();
+                foreach ((ListBox list, int index) in selections)
+                    if (list.SelectedIndex != index) list.SelectedIndex = index;
+                top.UpdateLayout();
+                foreach ((ScrollViewer viewer, Vector offset) in scrolls)
+                    if (((Visual)viewer).IsAttachedToVisualTree() && viewer.Offset != offset) viewer.Offset = offset;
+                top.UpdateLayout();
+                Refocus(top, startKey, start);
+                foreach (int direction in paths[key]) presses[direction]();
+                return Focused() is { } replayed && Equals(KeyOf(replayed), key) ? replayed : null;
+            }
+
+            while (found is null && queue.Count > 0 && paths.Count < limit)
+            {
+                object key = queue.Dequeue();
+                if (At(key) is not { } from) continue;
                 bool takesSideways = from is ComboBox or Slider or TabItem;
                 foreach (int direction in takesSideways ? new[] { 0, 1 } : new[] { 0, 1, 2, 3 })
                 {
-                    from.Focus(NavigationMethod.Directional);
+                    if (At(key) is null) break;
                     presses[direction]();
-                    InputElement to = Focused();
-                    if (path.ContainsKey(to)) continue;
-                    path[to] = new List<int>(path[from]) { direction };
-                    queue.Enqueue(to);
-                    if (target(to)) { found = to; break; }
+                    if (Focused() is not { } to) continue;
+                    object toKey = KeyOf(to);
+                    if (paths.ContainsKey(toKey)) continue;
+                    paths[toKey] = new List<int>(paths[key]) { direction };
+                    queue.Enqueue(toKey);
+                    if (target(to)) { found = toKey; break; }
                 }
             }
+            return paths;
+        }
 
-            Assert.True(found is not null, "No pad path to the control asked for.");
-            start.Focus(NavigationMethod.Directional);
-            foreach (int direction in path[found!]) presses[direction]();
-            return ReferenceEquals(found, Focused()) ? found : null;
+        // A row is its list and index, since a virtualised list recycles containers; anything else is where it sits in the tree, so a pane rebuilt the same way is the same controls.
+        private static object KeyOf(InputElement e)
+        {
+            if (e is ListBoxItem row && row.FindAncestorOfType<ListBox>() is { } list && list.IndexFromContainer(row) is var index and >= 0) return (list, index);
+            var steps = new List<int>();
+            Visual? top = TopLevel.GetTopLevel(e);
+            for (Visual? child = e, parent = e.GetVisualParent(); parent is not null && !ReferenceEquals(child, top); child = parent, parent = parent.GetVisualParent())
+                steps.Add(parent.GetVisualChildren().ToList().IndexOf(child!));
+            steps.Reverse();
+            return string.Join('/', steps);
+        }
+
+        // The control a key names in the window as it is now, focused as the pad would, or null when nothing is there.
+        private static InputElement? Refocus(TopLevel top, object key, InputElement fallback)
+        {
+            InputElement? element = null;
+            if (key is (ListBox list, int index))
+            {
+                list.ScrollIntoView(index);
+                list.UpdateLayout();
+                element = list.ContainerFromIndex(index) as InputElement;
+            }
+            else if (key is string path)
+            {
+                Visual? at = top;
+                foreach (string step in path.Split('/', System.StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var children = at?.GetVisualChildren().ToList();
+                    int i = int.Parse(step);
+                    at = children is not null && i >= 0 && i < children.Count ? children[i] : null;
+                }
+                element = at as InputElement;
+            }
+            else element = fallback;
+
+            if (element is null || !((Visual)element).IsAttachedToVisualTree() || !element.IsEffectivelyVisible || !element.Focusable) return null;
+            element.Focus(NavigationMethod.Directional);
+            top.UpdateLayout();
+            return element;
         }
 
         public static string Describe(InputElement e) => e switch

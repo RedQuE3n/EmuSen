@@ -162,6 +162,56 @@ namespace EmuSen.WiseMan.Serenity
             Assert.Equal((0, 0, 0), picture.At(0, 0));
         }, default);
 
+        private static Picture Redraw(Window window)
+        {
+            using WriteableBitmap captured = window.CaptureRenderedFrame()!;
+            var capture = EmuSen.WiseMan.Fixtures.UiTest.Capture(captured);
+            return new Picture { Rgba = capture.Rgba, Width = capture.Width };
+        }
+
+        private static float Held(GameFrameControl control, string id) =>
+            (float)typeof(GameFrameControl).GetMethod("FilterParameter", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(control, new object[] { id })!;
+
+        // A value set on the running control reaches the chain at its next draw with no new frame, and leaving it out returns to the default - see EmuSen_Serenity.md §3.7.
+        [Fact]
+        public Task A_lottes_parameter_set_while_it_runs_reaches_the_picture_without_a_new_frame() => Session.Dispatch(() =>
+        {
+            var control = new GameFrameControl { ActiveFilter = CrtFilters.Lottes };
+            var window = new Window { Width = 64, Height = 64, Content = control };
+            window.Show();
+            control.UpdateFrame(Solid(16, 16, 0xC0, 0xC0, 0xC0), 16, 16);
+            double lit = Redraw(window).Luma(32, 34);
+            Assert.Equal(1f, Held(control, "brightBoost"));
+
+            control.ShaderParameters = new System.Collections.Generic.Dictionary<string, float> { ["brightBoost"] = 0f, ["notDeclared"] = 5f };
+            double dark = Redraw(window).Luma(32, 34);
+            Assert.Equal(0f, Held(control, "brightBoost"));
+            Assert.True(lit > 40, $"lit {lit}");
+            Assert.Equal(0, dark);
+
+            control.ShaderParameters = null;
+            Assert.Equal(lit, Redraw(window).Luma(32, 34));
+            Assert.Equal(1f, Held(control, "brightBoost"));
+            window.Close();
+        }, default);
+
+        // A parameter reaches the pass that declares it and not only the first: the DMG's dot shadow is in its second pass.
+        [Fact]
+        public Task A_dmg_whose_dot_shadow_is_set_to_zero_casts_none() => Session.Dispatch(() =>
+        {
+            byte[] frame = Solid(4, 4, 0xFF, 0xFF, 0xFF);
+            int i = (1 * 4 + 1) * 4;
+            (frame[i], frame[i + 1], frame[i + 2]) = (0, 0, 0);
+            var control = new GameFrameControl { ActiveFilter = HandheldFilters.DmgLcd, ShaderParameters = new System.Collections.Generic.Dictionary<string, float> { ["shadowOpacity"] = 0f } };
+            var window = new Window { Width = 64, Height = 64, Content = control };
+            window.Show();
+            for (int n = 0; n < 4; n++) { control.UpdateFrame(frame, 4, 4); Redraw(window); }
+            Picture picture = Redraw(window);
+            window.Close();
+
+            Assert.Equal(picture.Luma(8, 56), picture.Luma(40, 38), 0);
+        }, default);
+
         // The chain keeps as many earlier frames as its passes read, and no more.
         [Fact]
         public Task A_filter_keeps_the_frames_it_looks_back_at() => Session.Dispatch(() =>

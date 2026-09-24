@@ -113,7 +113,8 @@ jobs:
       matrix:
         include:
           - rid: linux-x64
-            os: ubuntu-22.04
+            # 24.04, not the library job's 22.04: the tests load SDL3's prebuilt native library, which needs glibc 2.38 (22.04 has 2.35).
+            os: ubuntu-24.04
           - rid: win-x64
             os: windows-latest
           - rid: osx-arm64

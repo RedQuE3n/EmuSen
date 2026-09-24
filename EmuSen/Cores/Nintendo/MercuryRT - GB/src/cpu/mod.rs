@@ -20,6 +20,12 @@ pub trait CpuBus {
     /// Runs the rest of the machine forward while the CPU is mid-instruction - see Mercury_Cpu.md §3.
     fn tick(&mut self, cycles: i32);
     fn stop(&mut self);
+    /// A call, a restart or an interrupt dispatch has pushed its return and jumped; the debugger's seam, empty on the plain bus.
+    #[inline(always)]
+    fn note_call(&mut self, _source: u16, _target: u16, _interrupt: bool) {}
+    /// A return has popped its address; the debugger's seam, empty on the plain bus.
+    #[inline(always)]
+    fn note_return(&mut self) {}
 }
 
 /// An opcode no SM83 has; C# throws `NotSupportedException` with its address.
@@ -174,8 +180,10 @@ impl Cpu {
 
     fn service_interrupt<B: CpuBus>(&mut self, bus: &mut B, bit: i32) -> i32 {
         self.ime = false;
-        self.push(bus, self.pc);
+        let from = self.pc;
+        self.push(bus, from);
         self.pc = INTERRUPT_VECTORS[bit as usize];
+        bus.note_call(from, self.pc, true);
         20
     }
 

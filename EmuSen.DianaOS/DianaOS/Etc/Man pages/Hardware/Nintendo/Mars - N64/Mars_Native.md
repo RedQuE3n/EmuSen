@@ -2541,6 +2541,20 @@ one library now serves a list of crates, and MarsRT is its first row:
 MarsRT's publish was checked again after the change and did not regress. The linux-x64 publish still carries the
 `dist` library, and a win-x64 publish without a library still warns and carries none.
 
+**MarsRT's WiseMan tests on Windows and macOS, first runs (2026-09-24, `rust-cores.yml`, runs 36028263031 and
+36030648210).** The first run passed 769 of 770 on each; the second, 770 of 770 on each. The two failures did not
+recur, and each was a threshold, not a difference between the engines:
+
+- **win-x64, `MarsRT_reports_the_phases_of_the_frame_just_run`:** the frames running the idle loop instruction by
+  instruction took 5.110 ms against 2.568 ms for the frames after them, a ratio of 1.99 against the test's 2. The
+  test exists to catch a profiler reporting the previous frame, which would put the ratio below 1, so the threshold is
+  now 1.5: the defect is still caught, and a runner's noise is not.
+- **osx-arm64, `A_capture_and_a_step_back_allocate_no_array_of_the_state_s_size`:** 1,219,413 bytes and 30.17 ms a
+  capture, and 1,624,652 bytes a step back, against a limit of 1/16 of the 12,986,889-byte snapshot. The likeliest
+  reading is that the capture's delta, encoded on a pool thread, had not finished on a three-core runner and was run
+  inline; that is argued, not shown. The threshold is **not** changed: whether a capture allocates this much on Apple
+  silicon is a question for a Mac, not for a looser test.
+
 ### 6.4 Stage D: the multiple, antialiasing and the device
 
 **What it is.** The three settings whose hint still read "MarsRT does not implement this yet" (*until §6.4, below*): `RenderScale`, the

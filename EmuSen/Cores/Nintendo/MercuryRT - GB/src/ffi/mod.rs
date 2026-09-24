@@ -1,5 +1,7 @@
 //! MercuryRT's C ABI. A negative return is a status. See Mercury_Native.md §2.3.
 
+pub mod debug;
+
 use std::ptr;
 
 use crate::machine::Machine;

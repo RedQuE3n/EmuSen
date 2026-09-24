@@ -55,6 +55,27 @@ namespace EmuSen.Cores.Nintendo.Mercury
         }
         public CoverageRegistry Coverage { get; } = new();
         public LabelRegistry Labels { get; } = new();
+        public CallStackRegistry CallStack { get; } = new();
+
+        // Kept here and handed to each new bus, so a watch outlives a reload - see Mercury_Debug.md §7.
+        private Memory.IWriteObserver? _writeObserver;
+
+        public Memory.IWriteObserver? WriteObserver
+        {
+            get => _writeObserver;
+            set
+            {
+                _writeObserver = value;
+                if (Bus is not null) Bus.WriteObserver = value;
+            }
+        }
+
+        public MercuryCore()
+        {
+            Breakpoints.CallStack = CallStack;
+            CallStack.FrameNumberProvider = () => TotalFrames;
+            CallStack.EntryPointObserver = Coverage.RecordEntryPoint;
+        }
 
         // Handed out before a ROM exists; once one does, the PPU's own buffer is returned instead.
         private readonly byte[] _frame = new byte[ScreenWidthPixels * ScreenHeightPixels * 4];
@@ -107,6 +128,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
             Cart = Cartridge.Load(path);
             Bus = null;
             Build(ConsoleFor(Model, Cart.Cgb));
+            CallStack.Reset();
 
             TotalFrames = 0;
             _cyclesIntoFrame = 0;
@@ -117,8 +139,17 @@ namespace EmuSen.Cores.Nintendo.Mercury
         private void Build(bool cgbHardware)
         {
             MemoryBus? old = Bus;
-            Bus = new MemoryBus(Cart!, cgbHardware) { RomPatcher = new global::EmuSen.Cores.CheatRomPatcher(Cheats) };
-            Cpu = new Cpu.Core.Cpu(Bus);
+            Bus = new MemoryBus(Cart!, cgbHardware) { RomPatcher = new global::EmuSen.Cores.CheatRomPatcher(Cheats), WriteObserver = _writeObserver };
+            Cpu = new Cpu.Core.Cpu(Bus)
+            {
+                CallObserver = (source, target) => CallStack.NotePush(source, target, CallFrameKind.Call),
+                ReturnObserver = CallStack.NotePop,
+                InterruptObserver = (source, target) =>
+                {
+                    CallStack.NotePush(source, target, CallFrameKind.Irq);
+                    Breakpoints.NoteInterrupt(CallFrameKind.Irq);
+                },
+            };
 
             Bus.Reset();
             if (Bus.DmgCompat) Cpu.ResetForCompatibility(Video.CompatibilityPalettes.HandOffChecksum(Cart!.Rom));
@@ -128,7 +159,6 @@ namespace EmuSen.Cores.Nintendo.Mercury
 
             if (old is null) return;
             Bus.Joypad = old.Joypad;
-            Bus.WriteObserver = old.WriteObserver;
             Bus.Apu.MaxBufferedSamples = old.Apu.MaxBufferedSamples;
             for (int i = 0; i < Audio.Apu.ChannelCount; i++) Bus.Apu.SetChannelMuted(i, old.Apu.IsChannelMuted(i));
         }
@@ -164,6 +194,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
 
                 resuming = false;
                 if (Coverage.IsArmed) Coverage.Record(Cpu.PC);
+                if (CallStack.IsProfiling) CallStack.NoteInstruction();
 
                 // Step ticks the bus itself, one machine cycle at a time - see Mercury_Cpu.md §3.
                 int cycles = Cpu.Step(Bus.InterruptEnable, Bus.InterruptFlags, out int serviced);
@@ -195,6 +226,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
 
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
             ApplyCheats();
+            Breakpoints.NoteFrame(TotalFrames);
 
             if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();
         }

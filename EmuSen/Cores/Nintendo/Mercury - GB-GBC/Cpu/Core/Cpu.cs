@@ -1,3 +1,4 @@
+using System;
 using EmuSen.Common;
 
 namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
@@ -38,6 +39,11 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
         [SkipInState] private int _tickedThisStep;
 
         public ushort LastInstructionPC { get; private set; }
+
+        // The debugger's seams, set by MercuryCore: a call or restart (source, target), a return, an interrupt dispatch (return address, vector) - see Mercury_Debug.md §7.
+        [SkipInState] public Action<ushort, ushort>? CallObserver;
+        [SkipInState] public Action? ReturnObserver;
+        [SkipInState] public Action<ushort, ushort>? InterruptObserver;
 
         public long Cycles { get; private set; }
 
@@ -171,8 +177,10 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
         private int ServiceInterrupt(int bit)
         {
             Ime = false;
-            Push(PC);
+            ushort from = PC;
+            Push(from);
             PC = InterruptVectors[bit];
+            InterruptObserver?.Invoke(from, PC);
             return 20;
         }
 

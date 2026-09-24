@@ -143,14 +143,14 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
                 case 0xD4: return Call(!Flag(FlagC));
                 case 0xDC: return Call(Flag(FlagC));
 
-                case 0xC9: PC = Pop(); return 16;
+                case 0xC9: PC = Pop(); ReturnObserver?.Invoke(); return 16;
                 case 0xC0: return ReturnIf(!Flag(FlagZ));
                 case 0xC8: return ReturnIf(Flag(FlagZ));
                 case 0xD0: return ReturnIf(!Flag(FlagC));
                 case 0xD8: return ReturnIf(Flag(FlagC));
 
                 // The only instruction that re-enables interrupts with no one-instruction delay.
-                case 0xD9: PC = Pop(); Ime = true; return 16;
+                case 0xD9: PC = Pop(); Ime = true; ReturnObserver?.Invoke(); return 16;
 
                 case 0xC7: return Restart(0x00);
                 case 0xCF: return Restart(0x08);
@@ -269,6 +269,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
 
             Push(PC);
             PC = target;
+            CallObserver?.Invoke(LastInstructionPC, target);
             return 24;
         }
 
@@ -277,6 +278,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
             if (!taken) return 8;
 
             PC = Pop();
+            ReturnObserver?.Invoke();
             return 20;
         }
 
@@ -284,6 +286,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
         {
             Push(PC);
             PC = vector;
+            CallObserver?.Invoke(LastInstructionPC, vector);
             return 16;
         }
     }

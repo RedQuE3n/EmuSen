@@ -41,6 +41,7 @@ namespace EmuSen.Mistress.Views
             Button save = HudMenuButton("HudSave", SaveGlyph, "Save and Load", _saveState, _loadState, _slotMenu);
             Button options = HudMenuButton("HudOptions", OptionsGlyph, "Options", _speedMenu,
                 new LunaAction("_Graphics Settings...", ShowGraphicsSettings),
+                new LunaAction("S_haders...", ShowShaderSettings),
                 new LunaAction("_Controller Bindings...", ShowControllerBindings),
                 new LunaAction("Active _Cheats...", ShowActiveCheats),
                 new LunaAction("Take a _Screenshot", TakeScreenshot));

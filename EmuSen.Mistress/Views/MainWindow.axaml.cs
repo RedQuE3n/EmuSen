@@ -382,8 +382,17 @@ namespace EmuSen.Mistress.Views
                 // On the emulation thread, between frames, and only when the running game is that console's - see §4.26.
                 if (_session is not null && console == _activeConsole) RequestOnEmulationThread(session => ApplyConsoleSettings(session, console));
                 if (_session is not null && console == _activeConsole) ApplyScreenFilter(console);
-            }, _session is null ? null : _activeConsole, HttpFactory);
+            }, _session is null ? null : _activeConsole, HttpFactory) { ShadersChanged = ShaderChanged };
             _ = SheetLayer.Show(window, this);
+        }
+
+        // Its own window, on the running game's console - see EmuSen_Settings_Reference.md §4.48.
+        private void ShowShaderSettings() =>
+            _ = SheetLayer.Show(new ShaderSettingsWindow(_graphics, ShaderChanged, _session is null ? null : _activeConsole, HttpFactory), this);
+
+        private void ShaderChanged(string console)
+        {
+            if (_session is not null && console == _activeConsole) ApplyScreenFilter(console);
         }
 
         // On the UI thread: the filter belongs to the control that draws, not to the core - see EmuSen_Settings_Reference.md §4.40.
@@ -391,10 +400,20 @@ namespace EmuSen.Mistress.Views
         {
             string? stored = _graphics.Value(console, GraphicsSettingsWindow.ScreenFilterKey);
             EmuSen.Serenity.Shaders.ScreenFilterChoice choice = EmuSen.Serenity.Shaders.ScreenFilters.Find(stored);
+            // Before the shader, so a chain or runner built for it starts from the player's values - see EmuSen_Settings_Reference.md §4.48.3.
+            GameFrame.ShaderParameters = ShaderParameterValues(console, stored ?? choice.Name);
             GameFrame.ActiveEffect = choice.Effect;
             GameFrame.ActiveFilter = choice.Filter;
             GameFrame.ActiveSlangPreset = SlangPresetPath(stored);
             GameFrame.InvalidateVisual();
+        }
+
+        private Dictionary<string, float> ShaderParameterValues(string console, string shader)
+        {
+            var values = new Dictionary<string, float>(StringComparer.Ordinal);
+            foreach ((string id, string text) in _graphics.ParametersFor(console, shader))
+                if (float.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float value)) values[id] = value;
+            return values;
         }
 
         private bool _slangFailuresShown;
@@ -679,6 +698,7 @@ namespace EmuSen.Mistress.Views
                 new LunaMenu("_Settings",
                     new LunaAction("_Controller Bindings...", ShowControllerBindings),
                     new LunaAction("_Graphics Settings...", ShowGraphicsSettings),
+                    new LunaAction("_Shaders...", ShowShaderSettings),
                     new LunaAction("_Debug Logging...", ShowDebugLogging),
                     new LunaAction("_Preferences...", ShowPreferences),
                     new LunaAction("Chea_t Database...", ShowCheatDatabase),

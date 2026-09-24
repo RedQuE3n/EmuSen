@@ -114,6 +114,7 @@ namespace EmuSen.WiseMan.Mistress
 
         [Theory]
         [InlineData("Graphics Settings")]
+        [InlineData("Shaders")]
         [InlineData("Controller Bindings")]
         [InlineData("Preferences")]
         public Task Every_control_of_each_settings_sheet_is_reached_by_the_pad(string entry) => Session.Dispatch(() =>
@@ -389,41 +390,109 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // The preset picker opened from a dropdown on one sheet, over it, operated and left by pad - see EmuSen_Settings_Reference.md §4.45.3.
+        // The Shaders window opened from the graphics sheet's row, over it, searched with the on-screen keyboard, a preset used, a slider moved and reset, and left by pad - see EmuSen_Settings_Reference.md §4.48.5.
         [Fact]
-        public Task The_RetroArch_preset_picker_opens_over_the_graphics_sheet_and_a_preset_is_chosen_by_pad() => Session.Dispatch(() =>
+        public Task The_shaders_window_opens_over_the_graphics_sheet_and_is_searched_used_and_adjusted_by_pad() => Session.Dispatch(() =>
         {
-            string pack = EmuSen.Mistress.Library.SlangPackDownload.DefaultDirectory;
-            Directory.CreateDirectory(Path.Combine(pack, "crt"));
-            File.WriteAllText(Path.Combine(pack, "crt", "crt-lottes.slangp"), "");
-            File.WriteAllText(Path.Combine(pack, "crt", "zfast-crt.slangp"), "");
-
+            ShaderSettingsWindowTests.FakePack();
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
             Choose(window, pad, "Graphics Settings");
             var graphics = Sheets(window).Current;
-            var filter = (Dropdown)Reach(window, pad, e => e is Dropdown { Name: "SNES.ScreenFilter" });
-            pad.A();
-            pad.Down(filter.ItemCount);
+            Reach(window, pad, e => e is Button { Name: "SNES.Shaders" });
             pad.A();
 
-            Assert.IsType<SlangPresetWindow>(Sheets(window).Current);
+            var shaders = Assert.IsType<ShaderSettingsWindow>(Sheets(window).Current);
+            Assert.Equal("SNES", (Tabs(window).SelectedItem as TabItem)?.Header);
             Assert.Empty(Unreachable(window, pad));
-            Reach(window, pad, e => e is ListBoxItem { Content: "crt/zfast-crt.slangp" });
-            Picture(window, "slang-picker");
-            pad.A();
+            TabTo(window, pad, "SNES");
 
+            var search = (TextBox)Reach(window, pad, e => e is TextBox && e.FindAncestorOfType<FilterBar>() is { Name: "SNES.ShaderSearch" });
+            pad.A();
+            OnScreenKeyboard keyboard = OnScreenKeyboard.OpenOver(window)!;
+            Assert.Same(search, keyboard.Target);
+            PadCheatsTests.TypeByPad(pad, keyboard, "kuro");
+            pad.Start();
+            ShaderPanel snes = shaders.PanelFor("SNES");
+            Assert.Equal(new[] { "None", "crt-royale-kurozumi" }, snes.List.Models.Select(e => e.Name));
+            Picture(window, "shaders-search");
+
+            Reach(window, pad, e => e is ListBoxItem item && item.Content?.ToString() == "crt-royale-kurozumi");
+            Pump(snes);
+            pad.A();
+            Assert.Equal("slang:crt/crt-royale-kurozumi.slangp", Stored("SNES", GraphicsSettingsWindow.ScreenFilterKey));
+
+            var slider = (Slider)Reach(window, pad, e => e is Slider s && s.FindAncestorOfType<SliderRow>() is { Label: "Scanline weight" });
+            pad.Right();
+            Assert.Equal("6", GraphicsConfig.Load().ParametersFor("SNES", "slang:crt/crt-royale-kurozumi.slangp")["SCAN"]);
+            Assert.Same(slider, Focused(window));
+            Picture(window, "shaders-slider");
+            pad.Up();
+            Assert.Equal("Reset Scanline weight", Avalonia.Automation.AutomationProperties.GetName((Focused(window) as Control)!));
+            pad.A();
+            Assert.Empty(GraphicsConfig.Load().ParametersFor("SNES", "slang:crt/crt-royale-kurozumi.slangp"));
+
+            pad.B();
             Assert.Same(graphics, Sheets(window).Current);
-            Assert.Equal("slang:crt/zfast-crt.slangp", Stored("SNES", GraphicsSettingsWindow.ScreenFilterKey));
+            Assert.Equal("crt-royale-kurozumi (RetroArch, crt)", Sheet(window).GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "SNES.ShaderInUse").Text);
             pad.B();
             Assert.False(Sheets(window).IsPresenting);
             Stop(window);
             window.Close();
         }, default);
 
+        // Straight from the pad's menu: a built-in filter's slider moved, Reset All, moved again, then the filter used and the value drawn with - see EmuSen_Settings_Reference.md §4.48.5.
+        [Fact]
+        public Task The_shaders_window_from_the_pad_menu_adjusts_a_built_in_filter_and_resets_it_all() => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = GameModeWithAGame();
+            Choose(window, pad, "Shaders");
+            var shaders = Assert.IsType<ShaderSettingsWindow>(Sheets(window).Current);
+            Assert.True(IsPaused(window));
+            ShaderPanel snes = shaders.PanelFor("SNES");
+            var frame = window.GetControl<EmuSen.Serenity.GameFrameControl>("GameFrame");
+
+            Reach(window, pad, e => e is ListBoxItem item && item.Content?.ToString() == "CRT (Lottes)");
+            Assert.Equal("CRT (Lottes)", snes.Shown?.Stored);
+            Reach(window, pad, e => e is Slider s && s.FindAncestorOfType<SliderRow>() is { Label: "Mask dark" });
+            pad.Left();
+            pad.Left();
+            Assert.Equal("0.3", GraphicsConfig.Load().ParametersFor("SNES", "CRT (Lottes)")["maskDark"]);
+            Assert.Null(frame.ActiveFilter);
+            Picture(window, "shaders-lottes");
+
+            Reach(window, pad, e => e is Button { Name: "SNES.ResetShader" });
+            pad.A();
+            Assert.Empty(GraphicsConfig.Load().ShaderParameters);
+            Assert.IsType<Button>(Focused(window));
+            Assert.All(snes.Sliders, s => Assert.True(s.IsDefault));
+
+            Reach(window, pad, e => e is Slider s && s.FindAncestorOfType<SliderRow>() is { Label: "Mask dark" });
+            pad.Left();
+            Reach(window, pad, e => e is Button { Name: "SNES.UseShader" });
+            pad.A();
+            Assert.IsType<Button>(Focused(window));
+            Assert.Equal("CRT (Lottes)", Stored("SNES", GraphicsSettingsWindow.ScreenFilterKey));
+            Assert.Equal("CRT (Lottes)", frame.ActiveFilter?.Name);
+            Assert.Equal(0.4f, frame.ShaderParameters!["maskDark"], 4);
+
+            pad.B();
+            Assert.False(Sheets(window).IsPresenting);
+            Assert.False(IsPaused(window));
+            Stop(window);
+            window.Close();
+        }, default);
+
+        private static void Pump(ShaderPanel panel)
+        {
+            for (int i = 0; i < 2000 && !panel.Reading.IsCompleted; i++) { Avalonia.Threading.Dispatcher.UIThread.RunJobs(); System.Threading.Thread.Sleep(1); }
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        }
+
         // Desktop Mode keeps real windows; the headless platform never makes one active, so the router is handed the window the pad would have found.
         [Theory]
         [InlineData("ShowDebugLogging")]
         [InlineData("ShowGraphicsSettings")]
+        [InlineData("ShowShaderSettings")]
         [InlineData("ShowActiveCheats")]
         [InlineData("ShowPreferences")]
         public Task In_desktop_mode_a_real_window_is_driven_and_every_control_reached(string opener) => Session.Dispatch(() =>

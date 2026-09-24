@@ -58,7 +58,7 @@ namespace EmuSen.Mistress.Input
                 case UiButton.Down:
                 {
                     bool down = button == UiButton.Down;
-                    if (open is not null) { Key(focused ?? open, down ? Avalonia.Input.Key.Down : Avalonia.Input.Key.Up); return; }
+                    if (open is not null) { Highlight(open, focused, down ? 1 : -1); return; }
                     if (focused is ListBoxItem row && row.FindAncestorOfType<ListBox>() is { } list && !AtEdge(list, row, down))
                     {
                         Key(row, down ? Avalonia.Input.Key.Down : Avalonia.Input.Key.Up);
@@ -90,7 +90,7 @@ namespace EmuSen.Mistress.Input
                 }
 
                 case UiButton.Accept:
-                    if (open is not null) { Key(focused ?? open, Avalonia.Input.Key.Enter); if (open.IsDropDownOpen) Close(open); return; }
+                    if (open is not null) { Choose(open, focused); return; }
                     if (focused is TextBox box) { PadKeyboard.Open(box); return; }
                     if (focused is ComboBox closed) { closed.IsDropDownOpen = true; return; }
                     if (focused is TabItem header) { header.IsSelected = true; return; }
@@ -227,6 +227,23 @@ namespace EmuSen.Mistress.Input
         {
             if (combo.ItemCount == 0) return;
             combo.SelectedIndex = System.Math.Clamp(combo.SelectedIndex + by, 0, combo.ItemCount - 1);
+        }
+
+        // The focus moved among an open list's items directly, as a key sent there would reach the page behind when the list is drawn in the window - see EmuSen_Settings_Reference.md §4.45.9.
+        private static void Highlight(ComboBox open, InputElement? focused, int by)
+        {
+            if (open.ItemCount == 0) return;
+            int at = focused is ComboBoxItem item && open.IndexFromContainer(item) is >= 0 and var i ? i : open.SelectedIndex;
+            int next = System.Math.Clamp(at + by, 0, open.ItemCount - 1);
+            open.ScrollIntoView(next);
+            (open.ContainerFromIndex(next) as InputElement)?.Focus(NavigationMethod.Directional);
+        }
+
+        // The highlighted item chosen, then the list closed.
+        private static void Choose(ComboBox open, InputElement? focused)
+        {
+            if (focused is ComboBoxItem item && open.IndexFromContainer(item) is >= 0 and var i) open.SelectedIndex = i;
+            Close(open);
         }
 
         // Closed without choosing: the highlight moved the focus, never the selection.

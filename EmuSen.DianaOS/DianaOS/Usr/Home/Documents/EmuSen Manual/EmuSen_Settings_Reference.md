@@ -1594,5 +1594,31 @@ Desktop Mode is unchanged.
 nothing beyond it.
 
 **Evidence.** LunaP's `BootstrapTests` shows the option is bound when asked for and not otherwise, and a mutant that
-binds nothing is caught. That the list is now drawn at its own size under gamescope is for the device to confirm.
+binds nothing is caught. That the list is now drawn at its own size under gamescope is for the device to confirm; the
+player confirmed it the same day.
+
+#### 4.45.9 The highlight in an open list, and the page behind it
+
+**What the player saw.** With the list drawn in the window (§4.45.8), up and down in an open dropdown moved no
+visible highlight, the page behind the list moved instead, and backing out showed the choice had been changed.
+
+**What was reproduced, and what was not.** A headless run (whose platform draws every popup in the window's
+overlay layer, as the device now does - LunaP §92.6) showed the focus moving from item to item as it should and the blue staying on the
+item selected before the list opened: the moved focus was marked only by FluentTheme's one-pixel ring. That is fixed
+in LunaP (§93): while a list is open the accent follows the focus. The page moving was **not** reproduced
+headlessly: the page's scroll offset did not change. The router used to move the focus by sending an arrow key to
+the focused item, and a key that nothing marks handled rises through the dropdown to the page's scroll viewer. It
+now moves the focus among the open list's items itself (`PadWindowRouter.Highlight`) and chooses with A by setting
+the selection (`Choose`), so no key is sent while a list is open, whichever way the platform routes one. Whether
+that was the page's cause is for the device to confirm.
+
+**Sheets ask for it themselves.** LunaP's `SheetLayer` now sets `EmbeddedPopups` on every sheet (LunaP §92.5),
+which puts `Popup.ShouldUseOverlayLayer` on every list under it, so a sheet's dropdowns stay in the window on any
+platform, and independently of the startup option of §4.45.8.
+
+**Tests.** `PadSettingsWindowTests.An_open_dropdown_drawn_in_the_window_moves_its_highlight_and_not_the_page`
+checks that the sheet's list asks for the overlay layer, and checks the focus on each item in turn, the selection unchanged by moving or by
+B, the scroll offset unchanged throughout, and A choosing and storing the highlighted item. A mutant that leaves the
+highlight where it is and one that makes A choose nothing are both caught. The old key-sending path passes this test
+too, since the headless platform does not move the page, so the test does not show the page defect gone.
 

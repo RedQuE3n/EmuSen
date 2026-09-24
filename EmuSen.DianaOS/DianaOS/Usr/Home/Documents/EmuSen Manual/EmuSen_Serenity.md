@@ -334,6 +334,7 @@ All headless, in `EmuSen.WiseMan/Serenity/`, through `HeadlessUnitTestSession` �
 - `GameFrameControlRenderTests.cs` — the real render path, added specifically to close the "nothing exercises this" gap that hid the §2.2 crash. Byte-identical repeated output, 120 consecutive frames without throwing, and the exact scanline pixel math.
 - `BuiltInShadersTests.cs` — asserts the SkSL source itself, via the `InternalsVisibleTo` in `AssemblyInfo.cs`.
 - `FramePresenterEffectCyclingTests.cs` — `NextEffect`'s cycle, without a window.
+- `ShaderBenchTests.cs` — §8.1's bench runs a short case and reports every stage; skipped unless `EMUSEN_SHADER_BENCH=1` and a pack are given, since it needs a GL device.
 - `Common/LeafAssemblyTests.cs` — §1's reference set.
 
 ## 7. RetroArch's shaders
@@ -407,7 +408,7 @@ Values:
 - `TotalSubFrames` and `CurrentSubFrame` are 1.
 - `OriginalFPS` is 60.
 
-**Why readback.** The chain ends by copying its last image into host memory, and the frontend is to draw that as an ordinary bitmap. Handing a Vulkan image to Avalonia's compositor directly would save the copy. However, it needs the compositor to be on Vulkan and to import the image, which Avalonia exposes only on some backends. The copy also keeps this runtime independent of what Avalonia is drawing with. Its cost is not yet measured inside Mistress. On the test device, ten frames of `crt-royale` (12 passes, 256×224 to 1024×896, readback included) took 24 ms, about 2.4 ms a frame.
+**Why readback.** The chain ends by copying its last image into host memory, and the frontend is to draw that as an ordinary bitmap. Handing a Vulkan image to Avalonia's compositor directly would save the copy. However, it needs the compositor to be on Vulkan and to import the image, which Avalonia exposes only on some backends. The copy also keeps this runtime independent of what Avalonia is drawing with. Its cost is not yet measured inside Mistress. On the test device, ten frames of `crt-royale` (12 passes, 256×224 to 1024×896, readback included) took 24 ms, about 2.4 ms a frame. *(2026-09-24: measured stage by stage on a real GL context in §8, where the readback and what follows it are most of a light preset's frame, and the premise that the compositor must be on Vulkan is retired: a GL context imports the device's image, §8.5.1.)*
 
 **Tests** (`SlangChainTests`, 12, on the RX 6800 by default):
 - An identity pass returns the picture byte for byte.
@@ -463,3 +464,340 @@ Measured on the pack of 2026-09-22 (§7), reading and not compiling, on the deve
 No value is clamped to its declared range here. The frontend's sliders cannot leave the range, and a preset may itself set a value outside a pass's declared range, which RetroArch draws as given.
 
 **Tests.** `SlangChainTests.A_value_set_on_a_built_chain_reaches_the_next_render_and_leaving_it_out_returns_to_the_preset_s`: `Read` gives the preset's 0.2 as the default of a gain declared 1.0; the chain lists the same; it draws red 51, then 153 for 0.6, then 51 again for `null`, and ignores an undeclared id. `SlangFrameControlTests.A_parameter_set_on_the_control_reaches_the_drawn_preset_without_a_new_frame`: through the real headless render pass, 51, then 204 for 0.8 with no new frame, then 51. Mutants: the chain ignoring the values (two red); the runner not rendering again when only the values changed (the frame-control case red); `Merge` ignoring the preset's values (three red, including §7.4's override case).
+
+---
+
+## 8. What a shaded frame costs, and the levers ranked (2026-09-24)
+
+A research pass: measure where a shaded frame's time goes, state what each candidate change should be worth before
+measuring it, then measure it on a prototype or bound it. Nothing in the production path was changed except the
+bench's listening points (§8.1). The prototypes live outside the repository and on the scratch branch
+`shader-research-proto`; §8.5 says what each would take to build properly.
+
+### 8.1 The bench, and what it measures
+
+**The tool.** `EmuSen.WiseMan/Serenity/ShaderBench.cs` drives the real `GameFrameControl` draw path, the one Mistress's
+render thread runs: `UpdateFrame`, `CaptureDrawOp`, and `DrawOp.RenderTo` onto a GPU surface of a real **OpenGL**
+context, which is what Avalonia's Skia draws with under X11 (§2.5 was read under GLX). The context is made
+headlessly, surfaceless, through EGL's device platform on a chosen card (`EMUSEN_BENCH_GL_DEVICE`, a substring of
+`GL_RENDERER`; on the desktop `6800`, since the first device EGL lists is the processor's integrated one). A slang
+preset runs on its own `SlangVulkan` device as in Mistress (§7.4, §7.5). A console host outside the repository,
+`~/.cache/emusen/probe/shaders/shaderbench/`, compiles the same file and is named `EmuSen.WiseMan` so that Serenity's
+`InternalsVisibleTo` admits it; `ShaderBenchTests` keeps the file compiling and running under the test harness
+(gated, since it needs a GL device).
+
+**The listening points.** `SlangProbe.Current`, null outside a bench, is told the CPU phases (the advance's start and
+end, the render's start, descriptors bound, submission, fence waited, the readback copied, the Skia image made, the
+flush) and is handed each command buffer at its start, after each pass and at its end, where the bench writes Vulkan
+**timestamp queries**. Skia's own GPU work is timed with a `GL_TIME_ELAPSED` query around `RenderTo`. In production
+each point is a static field read and a null test.
+
+**The protocol.** Frames paced at 60 Hz, as Mistress's are (flat out, the RX 6800 clocks up and a Lottes pass takes
+0.48 ms instead of the paced 0.69: the pacing is part of the measurement, not noise); 60 frames of warm-up, 300
+measured; after each frame a `glFinish`, timed separately, so that no frame's GL work leaks into the next. The
+picture is a gradient under a checker that moves every frame, so no stage can skip work. Each case is its own
+process; cases are interleaved in rotated order over three rounds, every run under the bench lock
+(`~/.cache/emusen/probe/mars-speed/bench.lock`); a table's figure is the median over rounds of each run's median.
+Three extra frames after the measured ones are hashed off the surface, so that a prototype can be checked picture for
+picture against production. Runner, case lists and raw results: `~/.cache/emusen/probe/shaders/` (`matrix.sh`,
+`cases-*.txt`, `results-*.txt`, `summarise.py`).
+
+**The stages** (all milliseconds on the render thread unless marked GPU):
+
+| Stage | What it is |
+|---|---|
+| source copy | `GameFrameControl` copying the offered frame into an `SKImage` (§2.6) |
+| advance | `SlangChain.Advance`: rows expanded (N64, §2.7), host copy into the staging buffer, record, submit, **wait** |
+| chain wait | `SlangChain.Render`'s submission, from `vkQueueSubmit` returning to its fence signalled |
+| passes (GPU) | first timestamp to the last pass's; readback (GPU): last pass to the end of `vkCmdCopyImageToBuffer` |
+| host copy | `new byte[w·h·4]` and `MemoryCopy` out of the mapped readback buffer |
+| image copy | `SlangRunner`: `SKImage.FromPixelCopy` of that array |
+| draw image | `DrawImage` of the raster image onto the GPU canvas, which is where Skia uploads it |
+| flush | `GRContext.Flush` (§2.5) |
+| GL (GPU) | Skia's GL work for the frame: the upload's copy and the draw |
+| total | the whole of `RenderTo`: what the render thread spends on the frame |
+
+**What it does not measure.** Avalonia's compositor, the swap and vsync, and the window system; the GPU contention
+between the slang device and the compositor under a live desktop (here only one frame's GL work is ever queued);
+the emulation thread, and the cost of the collections in §8.3 to a heap the size of Mistress's (the bench's is
+small); content: the synthetic picture exercises every stage but is not a game's.
+
+### 8.2 The predictions, stated before any measurement
+
+Written to `~/.cache/emusen/probe/shaders/PREDICTIONS.md` before the first run. The verdicts are §8.3 to §8.6's.
+
+| | Prediction | Verdict |
+|---|---|---|
+| P1 | Light presets (Lottes, `lcd-grid-v2`): GPU passes under 10% of the frame; readback, copies and Skia's upload at least 60% | **Refuted** in its first half: Lottes' one pass is 27%, `lcd-grid-v2` 17%. Held in its second: 67% and 79% |
+| P2 | `crt-royale` and Mega Bezel: GPU passes at least 50% | **Refuted** at 1080p on the RX 6800: 22% and 38% |
+| P3 | 1080p totals: Lottes ~2, guest-advanced ~2.5, royale 3–4, Mega Bezel 6–10 ms; at 4K the transfers ~4× | Lottes 2.6, guest-advanced 2.7, **royale 2.5 (over-predicted)**, Mega Bezel 6.4; 4K readback 4.0×, but the frame **5.3×** (§8.3) |
+| P4 | Each of the two submissions costs ≥0.1 ms beyond its GPU time | Held: the upload's record, submit and wait cost 0.36 ms around 0.04 ms of GPU work; the chain's fence wakes 0.09 ms after the GPU finishes |
+| P5 | The per-frame readback array causes ≥1 gen2 collection a second | Held, by far: one every other frame, 30 a second |
+| P6 | The SkSL built-ins cost the render thread under 0.5 ms, less than slang Lottes | Held: 0.09 ms against 2.59, for the same GPU work (0.75 ms GL, 0.69 ms Vulkan) |
+| P7 | Handheld: GPU passes 3–5× the desktop's; Mega Bezel over 16.7 ms | Not yet tested (§8.4) |
+| L1 | No readback (interop): −1.5 to −2.5 ms at 1080p, −5 to −8 at 4K | −1.4 at 1080p held; **4K −11.3 exceeded the range**, because the allocation it also removes costs more at 4K than predicted |
+| L1b | Async readback hides the passes' time | Held: −1.2 (Lottes) to −3.0 ms (Mega Bezel), at a frame of latency |
+| L1c | No array and no Skia copy: −0.5 to −1 ms at 1080p, and no gen2 | Held: −0.68, no collections |
+| L2 | Not re-running for an unchanged frame: already so, gain ~0 | Held: a redraw costs 0.05 ms and runs no pass |
+| L3 | Passes at source size: the preset decides; no general gain | Argued only; not measured |
+| L4 | Shaderc is ≥70% of a build; a SPIR-V cache cuts ≥70%; a `VkPipelineCache` adds <10% on RADV | Held on all three (§8.6) |
+| L5 | One submission instead of two: −0.05 to −0.15 ms | **Refuted**: −0.02 and −0.03 ms, inside the noise |
+| L6 | Output at the window's size: already so | Held by reading `SlangRunner.Draw`; §8.3's 4K rows bound what a smaller output would save |
+| L7 | Virtualising the Shaders window: 1.9 s to under 0.2 s | Not measured here (§8.8) |
+| L8 | Built-ins moved to Vulkan: a regression while the readback stays; slang to SkSL impossible | Held by P6's figures and §3.2 |
+
+### 8.3 The desktop: where a shaded frame goes
+
+Ryzen 7 7700X, RX 6800 (RADV for the slang device, radeonsi for GL), Fedora 44, Mesa's shader cache warm. Paced at
+60 Hz, three rounds, medians. The window is 1920×1080 (4K where marked), and the picture is letterboxed into it:
+
+| Case | Out | Total | Source copy | Advance | Chain wait | Passes GPU | Readback GPU | Host copy | Image copy | Draw image | GL GPU | MB/frame | gen2 /300 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| SNES, none | 1234×1080 | **0.07** | | | | | | | | | 0.07 | 0 | 0 |
+| SNES, built-in CRT (Lottes) | 1234×1080 | **0.09** | | | | | | | | | 0.75 | 0 | 0 |
+| SNES, `crt-lottes` | 1234×1080 | **2.59** | 0.02 | 0.39 | 1.18 | 0.69 | 0.40 | 0.46 | 0.16 | 0.32 | 0.43 | 5.1 | 150 |
+| SNES, `crt-guest-advanced` | 1234×1080 | **2.66** | 0.02 | 0.39 | 1.11 | 0.65 | 0.41 | 0.49 | 0.16 | 0.32 | 0.43 | 5.1 | 150 |
+| SNES, `crt-royale` | 1234×1080 | **2.46** | 0.02 | 0.39 | 1.02 | 0.55 | 0.40 | 0.40 | 0.15 | 0.31 | 0.42 | 5.1 | 67 |
+| SNES, Mega Bezel POTATO | 1234×1080 | **2.78** | 0.02 | 0.39 | 1.01 | 0.52 | 0.41 | 0.52 | 0.17 | 0.31 | 0.43 | 5.1 | 92 |
+| SNES, Mega Bezel SMOOTH-ADV | 1234×1080 | **6.37** | 0.02 | 0.39 | 2.88 | 2.39 | 0.41 | 2.06 | 0.18 | 0.33 | 0.43 | 5.2 | 97 |
+| GB, none | 1200×1080 | **0.06** | | | | | | | | | 0.06 | 0 | 0 |
+| GB, built-in Game Boy LCD | 1200×1080 | **0.11** | | | | | | | | | 0.10 | 0 | 0 |
+| GB, `handheld/lcd-grid-v2` | 1200×1080 | **2.09** | 0.01 | 0.38 | 0.83 | 0.36 | 0.40 | 0.46 | 0.15 | 0.28 | 0.42 | 5.0 | 150 |
+| N64 1×, none | 1440×1080 | **0.11** | | | | | | | | | 0.10 | 0 | 0 |
+| N64 1×, built-in CRT (Lottes) | 1440×1080 | **0.12** | | | | | | | | | 0.79 | 0 | 0 |
+| N64 1×, `crt-lottes` | 1440×1080 | **3.46** | 0.04 | 0.94 | 1.25 | 0.73 | 0.47 | 0.39 | 0.21 | 0.34 | 0.49 | 7.1 | 300 |
+| N64 1×, `crt-royale` | 1440×1080 | **3.22** | 0.04 | 0.80 | 1.01 | 0.49 | 0.47 | 0.50 | 0.20 | 0.34 | 0.49 | 7.1 | 99 |
+| N64 4×, none | 1440×1080 | **1.03** | | | | | | | | | 0.76 | 0 | 0 |
+| N64 4×, `crt-lottes` | 1440×1080 | **9.32** | 0.72 | 4.54 | 1.07 | 0.56 | 0.47 | 2.28 | 0.33 | 0.40 | 0.49 | 24.7 | 86 |
+| N64 4×, `crt-royale` | 1440×1080 | **9.26** | 0.70 | 4.60 | 1.70 | 1.18 | 0.47 | 0.81 | 0.31 | 0.41 | 0.49 | 24.7 | 86 |
+| SNES 4K, none | 2469×2160 | **0.08** | | | | | | | | | 0.16 | 0 | 0 |
+| SNES 4K, built-in CRT (Lottes) | 2469×2160 | **0.09** | | | | | | | | | 1.87 | 0 | 0 |
+| SNES 4K, `crt-lottes` | 2469×2160 | **13.76** | 0.02 | 0.20 | 3.49 | 1.83 | 1.61 | 7.57 | 1.29 | 1.22 | 1.66 | 20.4 | 150 |
+| SNES 4K, `crt-royale` | 2469×2160 | **8.31** | 0.02 | 0.41 | 2.80 | 1.13 | 1.61 | 2.29 | 1.28 | 1.43 | 1.67 | 20.4 | 120 |
+| SNES 4K, Mega Bezel SMOOTH-ADV | 2469×2160 | **12.93** | 0.02 | 0.19 | 7.04 | 5.34 | 1.62 | 2.36 | 1.24 | 1.33 | 1.67 | 20.5 | 150 |
+
+(N64 frames are sent with their rows once and a repeat of two, §2.7: 640×240 at 1×, 2560×960 at 4×.)
+
+**What the table says.**
+
+- **A preset's frame is mostly not its shaders.** For every light-to-middling preset at 1080p the passes are
+  0.36–0.73 ms of a 2.1–3.5 ms frame. The rest is fixed by the path, not the preset: the readback on the GPU
+  (0.40 ms), two synchronous waits, a host copy into a new array, a second copy into Skia, and Skia's upload of it back
+  to the same GPU (0.43 ms of GL time). The built-in filters, which have none of that, cost the render thread
+  0.09–0.12 ms for the same order of GPU work.
+- **The per-frame array is the most expensive single stage at large sizes.** `Render` allocates a new array the size
+  of the picture every frame (5 MB at 1080p, 20 MB at 4K); each is a large-object allocation, and a gen2 collection
+  follows every other frame. Its cost varies with the heap: 0.4–0.5 ms at 1080p for the light presets, **2.1 ms** for
+  Mega Bezel (a larger heap: its 23 lookup images), and **7.6 ms** at 4K for Lottes, where the same copy into a
+  reused array is 1.2 ms (§8.5). The collections pause every managed thread, the emulation thread included; the bench
+  counts 0.1–0.2 ms of pause a frame on its small heap, and does not know what they cost Mistress's.
+- **The N64 frame is dominated by its row expansion.** `Advance` expands the repeated rows on the processor into a new
+  20 MB array at 4× and copies it into the staging buffer, and the upload of twice the rows takes 1.5 ms of GPU time:
+  4.5 ms of a 9.3 ms frame. `GameFrameControl`'s own copy of the source, which the slang path never draws, is another
+  0.7 ms.
+- **Nothing on this desktop misses a 60 Hz frame**; the worst, Lottes at 4K, spends 13.8 ms of 16.7 on the render
+  thread. The GPU is idle most of the frame even for Mega Bezel at 4K (7.0 ms of Vulkan and 1.7 of GL work).
+
+### 8.4 The handheld
+
+**Not yet measured.** The Legion Go S (Z1 Extreme, RDNA 3 integrated, 1920×1200 panel, SteamOS) was not reachable
+from this session with a method the session was allowed to use. Everything to run there is built: self-contained
+linux-x64 publishes of both benches (natives asking for glibc 2.27 at most, the device has 2.41) in
+`~/.cache/emusen/probe/shaders/deck-out/{base,proto}`, the case lists in `~/.cache/emusen/probe/shaders/deck/`
+(SNES, Game Boy and N64 letterboxed into 1920×1200, the levers, the build times), and `deck-run.sh`, which runs all
+of them into `~/emusen-bench/shaders/results-*.txt` there. P7 and these predictions for the device stand untested:
+
+- **H1.** The transfer stages cost more there, not less: one memory serves both processors, so the readback, the two
+  host copies and Skia's upload compete with the GPU's own bandwidth; Lottes at 1371×1200 over 4 ms.
+- **H2.** The passes are 3–5× the RX 6800's; Mega Bezel SMOOTH-ADV's alone over 8 ms, and with the path's fixed costs
+  the frame over 16.7 ms.
+- **H3.** The levers' order does not change, but interop gains more than on the desktop, since the GPU work it removes
+  (readback and upload, 0.8 ms a frame here) is taken from a GPU that is then the bound.
+
+### 8.5 The levers, measured
+
+Each lever was built as a prototype over a copy of Serenity (`~/.cache/emusen/probe/shaders/proto-src/`), chosen per
+run by `EMUSEN_PROTO`, so a lever and its control are the same binary. Every lever below that does not add latency
+drew **byte-identical pictures** to the control on the three hashed frames; the asynchronous ones drew the control's
+pictures one frame later, as designed. Render-thread milliseconds, desktop, paced, three rounds, medians:
+
+| Lever | Lottes 1080p | royale 1080p | Mega Bezel 1080p | Lottes 4K | N64 4× Lottes |
+|---|---|---|---|---|---|
+| none (the control) | 2.53 | 2.50 | 6.38 | 13.78 | 9.31 |
+| `reuse`: one array, kept | 2.15 | | | 7.69 | |
+| `direct`: Skia reads the mapped readback, no array, no Skia copy | 1.86 | 1.83 | 4.09 | 5.31 | |
+| `onesubmit`: the upload recorded into the chain's submission | 2.52 | | | | 9.29 |
+| `async`: two frames in flight, the one before shown | 1.33 | | | | |
+| `direct,async` | 0.66 | 0.73 | 1.13 | 1.55 | |
+| `interop`: GL imports the device's image, no readback | 1.12 | 1.10 | 3.30 | 2.48 | |
+| `interop,async` | 0.27 | 0.39 | 0.78 | 0.32 | |
+| `dontcare`: intermediate passes not cleared | 2.58 | 2.49 | 6.31 | | |
+| `gpuexpand`: rows repeated by a blit on the device | | | | | 4.80 |
+| `nosourcecopy`: no `SKImage` of the source while a preset draws | | | | | 8.99 |
+| `gpuexpand,direct,nosourcecopy` | | | | | 3.02 |
+| `gpuexpand,direct,async,nosourcecopy` | | | | | 1.18 |
+| `gpuexpand,interop,async,nosourcecopy` | | | | | 0.64 |
+
+GPU time a frame, from the timestamps and the GL query: the control's Lottes at 1080p is 1.09 ms of Vulkan and
+0.43 of GL; with `interop` 0.65 and 0.02. At 4K, 3.45 and 1.66 against 1.99 and 0.05. The asynchronous rows move the
+passes' time off the render thread, not off the GPU.
+
+#### 8.5.1 No readback: the device's image imported by the GL context (`interop`)
+
+**What was built.** The last pass's image is copied on the device (0.02–0.05 ms) into one of two images allocated
+with `VK_KHR_external_memory_fd` as dedicated, exportable memory, released to the external queue family in layout
+`GENERAL`; its file descriptor is imported into the GL context with `GL_EXT_memory_object_fd`
+(`glImportMemoryFdEXT`, dedicated, optimal tiling, `glTexStorageMem2DEXT`) and wrapped for Skia with
+`GRBackendTexture` and `SKImage.FromTexture`. Synchronisation in the prototype is the CPU waiting on the Vulkan fence
+before GL draws, and the bench's `glFinish` before the image is written again two frames later.
+
+**What it showed.** RADV and radeonsi agree on the image's layout: every picture is byte-identical to the readback's.
+It removes the readback's GPU copy, the host copy, the Skia copy and Skia's upload: −1.41 ms at 1080p for Lottes,
+−3.08 for Mega Bezel, −11.3 at 4K; and 0.85 ms of GPU work a frame at 1080p, 3.1 ms at 4K. With `async` the render
+thread's whole cost is 0.27–0.78 ms.
+
+**What building it would take.** Enabling the extension on the slang device; the two exported images and their GL
+textures, made on the render thread in Avalonia's own GL context (the lease's `GRContext`, which is the context the
+prototype's calls stand in for) or through Avalonia 12.1's `ICompositionGpuInterop.ImportImage` and
+`CompositionDrawingSurface.UpdateWithSemaphoresAsync`, whose presence in 12.1.0 was checked in its assembly;
+**GPU-side synchronisation** (`GL_EXT_semaphore_fd`: the device signals, GL waits before it draws and signals when it
+has, the device waits before it writes that image again), since the prototype's CPU wait and `glFinish` are the
+bench's, not a compositor's; and a fallback to the readback where the extensions are missing, which is Windows'
+ANGLE (it would want an NT handle and D3D11) and macOS (IOSurface through MoltenVK). Mars_Gpu.md §16 decided the same
+question for Mars's picture and did not build it, because there the copy was off the thread that bounds the frame
+rate; here too the render thread is not the emulation thread, but the preset's whole cost is on it.
+
+**What it does not show.** The prototype never ran under a compositor; whether Avalonia's GLX context accepts the
+same import (the same radeonsi, so expected) is untested. Nor was a second vendor tried: NVIDIA and Intel's
+proprietary and Mesa drivers were not in reach.
+
+#### 8.5.2 No array, no Skia copy (`direct`), and the array kept (`reuse`)
+
+`direct` makes the Skia image with `SKImage.FromPixels` over the mapped readback buffer, so nothing is copied on the
+processor at all; Skia's upload reads the mapped memory (host-cached, as `SlangVulkan.CreateBuffer` prefers). It is
+safe in the synchronous path because the buffer is written again only by the next `Render`, and `SlangRunner`
+replaces the image in the same call before anything can draw it. −0.68 ms at 1080p, −2.28 for Mega Bezel, −8.47 at
+4K, and no collections. `reuse` alone (one array kept, still copied twice) gets about half: −0.38 at 1080p, −6.09 at
+4K, which measures the allocation by itself: at 4K the new array, not the copy, is 6 ms of the 7.6.
+
+#### 8.5.3 Two frames in flight (`async`)
+
+Two command buffers, fences, readback buffers and present images; a frame waits for the previous one's fence before
+it writes the staging buffer, submits its own and returns, and the picture shown is the previous frame's. Gains the
+whole chain wait: −1.21 ms for Lottes alone, −2.96 on top of `direct` for Mega Bezel. **The cost is a frame of
+latency**, 16.7 ms more between a button and the picture, which in an emulator is a real cost and why this is ranked
+below levers that have none. RetroArch pays the same kind of cost by default with three swapchain images (§8.7).
+
+#### 8.5.4 The rows repeated on the device (`gpuexpand`), and a negative result on the way
+
+The first prototype recorded one buffer-to-image copy region per repeated row, 1,920 regions at 4×: −2.6 ms, with the
+upload's GPU time still 1.0 ms and 2.7 ms of `Advance` spent outside the wait, which holds a 9.8 MB copy and the
+recording of the regions. That RADV makes each region a meta operation of its own is the likely reason; it was argued
+from the numbers, not confirmed in the driver. **Kept as a negative result.** The second uploads the rows once into an image of their own height
+and blits it to the full height with nearest filtering, which for an integer factor duplicates each row exactly:
+−4.5 ms (9.31 to 4.80), the upload's GPU time halved (1.48 to 0.79 ms), identical pictures. `nosourcecopy` removes
+`GameFrameControl`'s `SKImage` of a source the preset never draws: −0.3 ms at N64 4× (the stage itself is 0.7 ms; the
+rest moved into noise), and near nothing for a SNES frame.
+
+#### 8.5.5 Levers that bought nothing
+
+- **One submission (`onesubmit`).** The upload's record, submit and wait (0.23–0.39 ms) disappear from `Advance` and
+  reappear in the chain's wait; the totals move by 0.02 ms. Refuted (L5).
+- **Not clearing intermediate passes (`dontcare`)**, as RetroArch does (§8.7): the passes' GPU time is unchanged
+  within noise on RDNA 2 (Lottes 0.66 against 0.63, Mega Bezel 2.36 against 2.38), whose clears are fast clears.
+  Recorded so that it is not tried again for speed; it is still what the spec allows.
+- **Descriptor updates and uniform fills every frame** were not prototyped: `render.size.bind` is 0.002 ms for one
+  pass and 0.25 ms for Mega Bezel's 48 (0.30 at 4K), which bounds what caching them could save. RetroArch rewrites
+  them every frame as well.
+- **Not re-running the chain for an unchanged frame** is already done (`SlangRunner.Draw` renders only for a new
+  frame, a new size or new parameter values): a redraw with no new frame costs 0.05 ms and runs no pass
+  (`EMUSEN_BENCH_EVERY=2`). The built-in `FilterChain`, by contrast, redraws its passes on every repaint (0.69 ms of GL
+  for Lottes at 1080p), which the render thread does not see but the GPU does.
+
+### 8.6 A preset's build time
+
+`kind=load`: after a small shader has warmed Shaderc and the device, `new SlangChain` is timed whole, then its parts
+separately. Three rounds, medians, after a round that filled the caches:
+
+| Preset | Passes | Build | Shaderc | Build, driver cache off | SPIR-V cache | Parallel passes | Both |
+|---|---|---|---|---|---|---|---|
+| `crt-lottes` | 1 | 105 ms | 79 | 116 | 24 | 102 | 30 |
+| `handheld/lcd-grid-v2` | 1 | 98 | 76 | 105 | | | 27 |
+| `crt-guest-advanced` | 12 | 970 | 926 | 1,052 | 53 | 99 | 56 |
+| `crt-royale` | 12 | 1,238 | 1,089 | 1,679 | 141 | 150 | 112 |
+| Mega Bezel SMOOTH-ADV | 48 | 4,641 | 3,570 | 6,141 | 559 | 579 | 478 |
+
+- **Shaderc is 75–95% of a build** (L4 held). A **SPIR-V cache**, keyed by a hash of each stage's expanded text, takes
+  a repeat build of Mega Bezel from 4.6 s to 0.56, royale from 1.24 s to 0.14 (L4 held).
+- **Compiling the passes in parallel**, which the prediction did not consider, does almost as much and helps the
+  *first* build too: Mega Bezel 0.58 s, royale 0.15, on this 16-thread processor. Shaderc ran from many threads at
+  once (`Parallel.For` over the passes) without error; the pictures of a preset so built were not compared.
+- **A `VkPipelineCache` buys nothing here.** With Mesa's disk cache turned off (`MESA_SHADER_CACHE_DISABLE=true`)
+  the driver's compilation is 0.44 s of royale's build and 1.5 s of Mega Bezel's, and a persisted pipeline cache gives
+  back exactly the warm figure (1,230 against 1,238 ms; 4,639 against 4,641); with Mesa's cache on, which is the
+  default, there is nothing left for it. It would matter on a driver without a disk cache, which none here is.
+- A build runs off the render thread (§7.5), so its time is a wait for the filtered picture, not a stall; but it is
+  what a player browsing presets in the Shaders window waits for at each one.
+
+### 8.7 How RetroArch does it
+
+Read from RetroArch's source at commit `ce5544fd` (`~/Projects/retroarch-reference`; no code taken):
+
+- **It presents the chain directly.** The last pass's pipeline is built against the swapchain's render pass
+  (`gfx/drivers_shader/shader_vulkan.cpp:2886-2888`) and drawn inside the frame's render pass on the backbuffer
+  (`gfx/drivers/vulkan.c:7024-7028`); host memory is touched only for screenshots and recording. The glcore driver
+  likewise draws its last pass into the default framebuffer. That is §8.5.1's lever, which RetroArch has because it
+  owns the swapchain; EmuSen does not, since Avalonia does.
+- **The CPU never waits for the frame it just submitted.** Frames in flight equal the swapchain images, 3 by default
+  (`config.def.h:390-392`), each with its own command buffer and fence, and the frame waits only on the fence of the
+  frame that used its slot before (`gfx/common/vulkan_common.c:1527-1542`). That is §8.5.3's lever, with its latency.
+- **One command buffer carries the whole frame**: upload, passes, menu and present transition, one submission. §8.5.5
+  found no gain in merging EmuSen's two.
+- **The core's frame is written once**, into a host-visible linear texture per frame in flight that the first pass
+  samples directly, or into it by the core itself through `get_current_software_framebuffer`, with a staging copy only
+  where linear sampling is not supported.
+- **It re-runs the chain for a duplicate frame**, and when paused it pushes the cached frame through the whole chain
+  again (`gfx/video_driver.c:3335-3353`); EmuSen already does better here (§8.5.5).
+- **SPIR-V is cached on disk**, keyed by a hash of the vertex and fragment source, under the cache directory when one
+  is configured (`gfx/drivers_shader/slang_process.cpp:770-807`, `slang_cache.cpp:27-40`). The **pipeline cache is
+  created empty and never saved** (`gfx/drivers/vulkan.c:4719-4727`; `vkGetPipelineCacheData` appears nowhere in its
+  drivers), which agrees with §8.6: on drivers with their own disk caches a persisted one adds nothing.
+- **Intermediate passes are not cleared** (`LOAD_OP_DONT_CARE`, `shader_vulkan.cpp:93-99`), which §8.5.5 found
+  worth nothing on RDNA 2. A pass without a scale type is source ×1, the last viewport ×1
+  (`shader_vulkan.cpp:4150-4160`), as §7.1 reads them.
+
+Every cited line above was re-read at that line. The uncited statements (the glcore driver, the one command buffer,
+the linear upload texture) are from a subagent's reading of the drivers and were not re-derived line by line.
+
+### 8.8 The ranking, and the order of work
+
+Gains are the desktop's, render thread, 1080p SNES unless said; effort is judged from the prototypes.
+
+| Rank | Lever | Measured gain | Latency | Effort | Risk |
+|---|---|---|---|---|---|
+| 1 | **Skia reads the mapped readback (`direct`), the rows repeated by a blit (`gpuexpand`), no source image under a preset (`nosourcecopy`)** | −0.7 ms (Lottes), −2.3 (Mega Bezel), −8.5 at 4K; N64 4× 9.3 → 3.0 ms; no gen2 collections | none | small: ~60 lines in `SlangChain`, `SlangRunner`, `SlangVulkan`, `GameFrameControl` | the mapped buffer's lifetime (argued in §8.5.2; wants a test that a redraw never shows the next frame) |
+| 2 | **A SPIR-V cache and passes compiled in parallel** | Mega Bezel's build 4.6 s → 0.48; royale 1.24 → 0.11 | — | small: a cache directory under `DataStore`, a content hash, `Parallel.For` | a stale cache is impossible by construction (content-keyed); disk use a few MB |
+| 3 | **Interop, synchronous** | −1.4 ms (Lottes), −3.1 (Mega Bezel), −11.3 at 4K; −0.85 ms of GPU work (−3.1 at 4K) | none | large: extension, import in Avalonia's context, semaphores, per-platform fallback | only a real window can prove it under the compositor; one vendor tried |
+| 4 | **Two frames in flight** | on top of 1: −1.2 to −3.0 ms; on top of 3: to 0.27–0.78 ms total | **+1 frame** | moderate: slots, fences, per-slot buffers, resizes | latency is a player-visible cost; worth it only where the render thread is the bound |
+| 5 | Virtualising the Shaders window's sliders (L7) | not measured here: settings reference §4.48.2's 944 rows in 1.9 s, ~2 ms a row, against the ~25 rows a window shows | — | moderate (a LunaP list of rows and headings) | UI only |
+| — | One submission; not clearing; caching descriptors; a pipeline cache; re-running only new frames | ≈0, or already done | | | recorded so as not to be re-proposed |
+
+**The recommended order** is the table's. The first two are small, exact (identical pictures), cost no latency and
+between them remove most of a light preset's avoidable frame cost and nearly all of a heavy preset's build time. The
+third is the one that makes a slang preset cost what a built-in filter costs, and it is the one the handheld is most
+likely to need (H3); it should be decided on §8.4's numbers once they exist, as Mars_Gpu.md §16 said of its own
+interop. The fourth trades latency for render-thread time and should come last, if at all, and then as a setting.
+
+### 8.9 What this does not cover
+
+- **The handheld** (§8.4): nothing was measured there.
+- **Mistress itself**: no number here was read in a real window. The bench stands in for the render thread; the
+  compositor's own work, the swap and vsync, and the UI thread's contention for the control's lock are outside it.
+- **The emulation thread**: the gen2 collections of §8.3 pause it, and how long they pause it on Mistress's heap was
+  not measured.
+- **Other GPUs and drivers**: one discrete AMD card, RADV and radeonsi. The integrated card of this desktop was not
+  used, by standing instruction; NVIDIA, Intel, Windows and macOS were not in reach.
+- **Game content**: a synthetic moving picture, not captured frames; a shader's GPU time can depend on the picture,
+  though the path's fixed costs cannot.
+- **Correctness of the presets themselves** against RetroArch's output, still §7.4's open question; here the
+  prototypes were compared only against production, picture for picture.

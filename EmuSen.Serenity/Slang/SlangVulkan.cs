@@ -258,14 +258,18 @@ namespace EmuSen.Serenity.Slang
             Check(Vk.ResetCommandBuffer(_commands, 0), "vkResetCommandBuffer");
             var begin = new CommandBufferBeginInfo { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
             Check(Vk.BeginCommandBuffer(_commands, &begin), "vkBeginCommandBuffer");
+            SlangProbe.Current?.Mark(_commands, SlangProbe.SubmissionBegin);
             record(_commands);
+            SlangProbe.Current?.Mark(_commands, SlangProbe.SubmissionEnd);
             Check(Vk.EndCommandBuffer(_commands), "vkEndCommandBuffer");
             CommandBuffer commands = _commands;
             var submit = new SubmitInfo { SType = StructureType.SubmitInfo, CommandBufferCount = 1, PCommandBuffers = &commands };
             Fence fence = _fence;
             Check(Vk.QueueSubmit(_queue, 1, &submit, fence), "vkQueueSubmit");
+            SlangProbe.Current?.Phase(SlangProbe.Submitted);
             Check(Vk.WaitForFences(Device, 1, &fence, true, ulong.MaxValue), "vkWaitForFences");
             Check(Vk.ResetFences(Device, 1, &fence), "vkResetFences");
+            SlangProbe.Current?.Phase(SlangProbe.Waited);
         }
 
         // Every level of an image moved to a layout, with the widest barrier, since a chain's passes run one after another anyway.

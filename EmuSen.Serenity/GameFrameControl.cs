@@ -398,7 +398,9 @@ namespace EmuSen.Serenity
                         else Draw(canvas, _owner._cachedImage!, source);
 
                         // Flushed here so the texture's upload, which Skia defers to a flush, is timed with the draw - see EmuSen_Serenity.md §2.5.
+                        Slang.SlangProbe.Current?.Phase(Slang.SlangProbe.FlushBegin);
                         grContext?.Flush();
+                        Slang.SlangProbe.Current?.Phase(Slang.SlangProbe.FlushEnd);
                         _owner.Presented(copy, copied - started, System.Diagnostics.Stopwatch.GetTimestamp() - copied, grContext is not null, source.Width, source.Height);
                     }
                     finally

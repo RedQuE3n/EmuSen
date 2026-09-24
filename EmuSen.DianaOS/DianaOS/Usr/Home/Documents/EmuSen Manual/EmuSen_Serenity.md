@@ -534,7 +534,7 @@ Written to `~/.cache/emusen/probe/shaders/PREDICTIONS.md` before the first run. 
 | P4 | Each of the two submissions costs ≥0.1 ms beyond its GPU time | Held: the upload's record, submit and wait cost 0.36 ms around 0.04 ms of GPU work; the chain's fence wakes 0.09 ms after the GPU finishes |
 | P5 | The per-frame readback array causes ≥1 gen2 collection a second | Held, by far: one every other frame, 30 a second |
 | P6 | The SkSL built-ins cost the render thread under 0.5 ms, less than slang Lottes | Held: 0.09 ms against 2.59, for the same GPU work (0.75 ms GL, 0.69 ms Vulkan) |
-| P7 | Handheld: GPU passes 3–5× the desktop's; Mega Bezel over 16.7 ms | Not yet tested (§8.4) |
+| P7 | Handheld: GPU passes 3–5× the desktop's; Mega Bezel over 16.7 ms; royale 8–10 ms | **Refuted** on all three (§8.4): 2.4–9.8×, mostly above 5; Mega Bezel 13.3 ms; royale 6.5 |
 | L1 | No readback (interop): −1.5 to −2.5 ms at 1080p, −5 to −8 at 4K | −1.4 at 1080p held; **4K −11.3 exceeded the range**, because the allocation it also removes costs more at 4K than predicted |
 | L1b | Async readback hides the passes' time | Held: −1.2 (Lottes) to −3.0 ms (Mega Bezel), at a frame of latency |
 | L1c | No array and no Skia copy: −0.5 to −1 ms at 1080p, and no gen2 | Held: −0.68, no collections |
@@ -600,12 +600,18 @@ Ryzen 7 7700X, RX 6800 (RADV for the slang device, radeonsi for GL), Fedora 44, 
 
 ### 8.4 The handheld
 
-**Not yet measured.** The Legion Go S (Z1 Extreme, RDNA 3 integrated, 1920×1200 panel, SteamOS) was not reachable
-from this session with a method the session was allowed to use. Everything to run there is built: self-contained
-linux-x64 publishes of both benches (natives asking for glibc 2.27 at most, the device has 2.41) in
-`~/.cache/emusen/probe/shaders/deck-out/{base,proto}`, the case lists in `~/.cache/emusen/probe/shaders/deck/`
-(SNES, Game Boy and N64 letterboxed into 1920×1200, the levers, the build times), and `deck-run.sh`, which runs all
-of them into `~/emusen-bench/shaders/results-*.txt` there. P7 and these predictions for the device stand untested:
+**The device and the run.** Legion Go S: Ryzen Z1 Extreme (RDNA 3 integrated graphics, one memory for both
+processors), SteamOS on kernel 6.18.50-valve1, glibc 2.41, platform profile `custom`, energy preference
+`balance_performance`, **on battery** (`power_supply` online 0), so its clocks are the battery's, not the charger's.
+The benches are the self-contained linux-x64 publishes in `~/.cache/emusen/probe/shaders/deck-out/{base,proto}`
+(natives asking for glibc 2.27 at most), run by `deck-run.sh 3` from `~/emusen-bench/shaders/` with the case lists
+in `~/.cache/emusen/probe/shaders/deck/`: the same protocol as §8.1, three interleaved rounds under a lock of the
+device's own, the picture letterboxed into the panel's 1920×1200. The run was started by the parent session. For the
+record: a first attempt in the background died with the SSH session that started it, and the run was repeated in the
+foreground; only the repeat's results exist, so this touches no number. Raw results, copied back:
+`~/.cache/emusen/probe/shaders/handheld/`.
+
+**The predictions for it**, written with the desktop's results in hand but before any run on the device:
 
 - **H1.** The transfer stages cost more there, not less: one memory serves both processors, so the readback, the two
   host copies and Skia's upload compete with the GPU's own bandwidth; Lottes at 1371×1200 over 4 ms.
@@ -613,6 +619,100 @@ of them into `~/emusen-bench/shaders/results-*.txt` there. P7 and these predicti
   the frame over 16.7 ms.
 - **H3.** The levers' order does not change, but interop gains more than on the desktop, since the GPU work it removes
   (readback and upload, 0.8 ms a frame here) is taken from a GPU that is then the bound.
+
+**Where the frame goes** (the production build; stages as in §8.3; medians over three rounds of each run's median):
+
+| Case | Out | Total | Advance | Chain wait | Passes GPU | Readback GPU | Host copy | Image copy | Draw image | GL GPU | gen2 /300 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| SNES, none | 1371×1200 | **0.16** | | | | | | | | 0.14 | 0 |
+| SNES, built-in CRT (Lottes) | 1371×1200 | **0.30** | | | | | | | | 3.59 | 0 |
+| SNES, `crt-lottes` | 1371×1200 | **9.39** | 0.42 | 5.29 | 4.46 | 0.61 | 1.70 | 0.74 | 1.00 | 0.60 | 150 |
+| SNES, `crt-guest-advanced` | 1371×1200 | **9.43** | 0.43 | 4.94 | 4.07 | 0.61 | 1.71 | 0.71 | 1.01 | 0.62 | 150 |
+| SNES, `crt-royale` | 1371×1200 | **6.53** | 0.38 | 3.70 | 3.11 | 0.29 | 0.89 | 0.40 | 0.64 | 0.30 | 75 |
+| SNES, Mega Bezel POTATO | 1371×1200 | **9.50** | 0.43 | 4.27 | 3.43 | 0.57 | 1.98 | 0.76 | 1.07 | 0.60 | 98 |
+| SNES, Mega Bezel SMOOTH-ADV | 1371×1200 | **13.26** | 0.32 | 9.73 | 9.21 | 0.17 | 0.79 | 0.37 | 0.54 | 0.16 | 44 |
+| GB, none | 1333×1200 | **0.10** | | | | | | | | 0.14 | 0 |
+| GB, built-in Game Boy LCD | 1333×1200 | **0.15** | | | | | | | | 0.20 | 0 |
+| GB, `handheld/lcd-grid-v2` | 1333×1200 | **4.30** | 0.34 | 1.37 | 0.86 | 0.28 | 1.45 | 0.38 | 0.60 | 0.17 | 150 |
+| N64 1×, none | 1600×1200 | **0.14** | | | | | | | | 0.17 | 0 |
+| N64 1×, `crt-lottes` | 1600×1200 | **12.06** | 1.57 | 6.20 | 5.27 | 0.71 | 1.77 | 0.84 | 1.27 | 0.70 | 300 |
+| N64 1×, `crt-royale` | 1600×1200 | **8.68** | 0.93 | 4.78 | 4.10 | 0.34 | 1.05 | 0.51 | 0.71 | 0.34 | 112 |
+| N64 4×, none | 1600×1200 | **1.77** | | | | | | | | 0.39 | 0 |
+| N64 4×, `crt-lottes` | 1600×1200 | **16.34** | 5.68 | 6.15 | 5.46 | 0.34 | 1.35 | 0.47 | 0.70 | 0.34 | 93 |
+
+**What it says.**
+
+- **On the handheld the passes are the larger half of a preset's frame**, the reverse of the desktop: Lottes' pass is
+  4.46 of 9.39 ms, Mega Bezel's 9.21 of 13.26. The path's fixed costs are still 3–5 ms of the rest.
+- **The GPU's clock moves between runs, and the transfer stages with it.** Battery power and a light load leave the
+  integrated GPU in one of a few clock states, and the readback's GPU time falls into three clusters across runs
+  (about 0.61, 0.29 and 0.17 ms for the same 6.6 MB), with Skia's GL time following it. Royale's rounds were 6.3,
+  9.8 and 6.5 ms for this reason; a run is a sample of a clock state as much as of the code. The heavier the preset,
+  the higher the clock: Mega Bezel's own readback is the fastest of any. The lever runs below were a separate run, in
+  which the control's clocks sat lower in the transfer stages (Lottes' readback 0.17 ms, its total 7.12), so they are
+  compared only within that run.
+- **One case misses the frame.** N64 4× under `crt-lottes` spends a median 16.3 ms on the render thread, with the mean
+  over 16.7 in two rounds of three (17.4, 17.7); the row expansion is 5.7 ms of it. Every other case fits, Mega Bezel
+  with 3–4 ms to spare for the compositor, which the bench does not include.
+- **The collections cost three times as much.** The per-frame arrays cause the same gen2 collections as on the
+  desktop, but a light preset's pauses sum to about 100 ms over 300 frames against the desktop's 33.
+- **The built-in filters are cheaper on the GPU as well**: the built-in Lottes is 3.59 ms of GL work to the slang
+  pass's 4.46 of Vulkan work at the same size, and 0.30 ms of the render thread to its 9.39.
+
+**The levers there** (the prototype build, one run of three rounds, medians; the control is the same binary with no
+lever set, and every lever drew the control's pictures, the asynchronous ones one frame late, as on the desktop):
+
+| Lever | Lottes | royale | Mega Bezel | N64 4× Lottes |
+|---|---|---|---|---|
+| none (the control) | 7.12 | 5.56 | 13.40 | 13.87 |
+| `reuse` | 6.62 | | | |
+| `direct` | 5.77 | | 12.09 | |
+| `async` | 2.34 | | | |
+| `direct,async,nosourcecopy` | 0.85 | 0.91 | 1.92 | |
+| `interop` | 5.13 | | 11.20 | |
+| `interop,async,nosourcecopy` | 0.22 | 0.34 | 1.06 | |
+| `gpuexpand` | | | | 10.50 |
+| `gpuexpand,direct,nosourcecopy` | | | | 8.22 |
+| `gpuexpand,direct,async,nosourcecopy` | | | | 2.39 |
+| `gpuexpand,interop,async,nosourcecopy` | | | | 1.17 |
+
+`direct` gains −1.35 ms for Lottes (the desktop's −0.68) and −1.31 for Mega Bezel; `interop` −1.99 and −2.20. The
+first lever of §8.8 takes N64 4× from 13.9 to 8.2 ms, and from the production run's 16.3, which missed frames, to well
+inside the frame. The asynchronous rows gain the whole chain wait, 4.4–9.7 ms, which on this device is most of the
+frame.
+
+**The predictions' verdicts.**
+
+- **P7**, passes 3–5× the desktop's: **refuted as a range.** The ratio runs from 2.4× (`lcd-grid-v2`) to 9.8× (N64 4×
+  Lottes); per output pixel, the handheld's panel being 23% larger, 1.9× to 7.9×. Mega Bezel alone is inside (3.9×,
+  3.1 per pixel); the light and middling presets are above it, 5.6–8.4×. Its second half, Mega Bezel over 16.7 ms:
+  **refuted** (13.3 median, means 13.5–14.4). Its royale estimate (8–10 ms): **refuted**, 6.5 (the clock-state
+  spread above reaches 9.8 in one round).
+- **H1**, the transfer stages dearer and Lottes over 4 ms: **held.** The readback, the two host copies, Skia's draw
+  and its GL work sum to 4.7 ms for Lottes against the desktop's 1.8; the frame is 9.4 ms.
+- **H2**, the passes 3–5×, Mega Bezel's over 8 ms and its frame over 16.7: **partly held.** Mega Bezel's passes are
+  9.2 ms (held); the range is P7's and refuted with it; the frame is 13.3 ms (refuted).
+- **H3**, the order unchanged and interop gaining more because it frees a GPU that is the bound: **refuted in its
+  reason, mixed in its figure.** On one memory the readback and the device-side copy that replaces it cost the same
+  (0.17 against 0.16 ms), and the GL draw of the imported image costs what the upload-and-draw did (0.16 ms), so
+  interop frees almost no GPU time here; its render-thread gain is larger than the desktop's for Lottes (−1.99 against
+  −1.41) and smaller for Mega Bezel (−2.20 against −3.08). The order of the synchronous levers is unchanged; what
+  changes is the weight of the asynchronous one (§8.8).
+
+**A preset's build there** (`kind=load`, one filling round then three measured, medians):
+
+| Preset | Build | Shaderc | Build, driver cache off | SPIR-V cache | Parallel passes | Both |
+|---|---|---|---|---|---|---|
+| `crt-royale` | 2,205 ms | 2,021 | 3,029 | 167 | 248 | 147 |
+| Mega Bezel SMOOTH-ADV | 8,602 | 6,328 | 10,229 | 556 | 663 | 499 |
+
+Builds take 1.8–1.9× the desktop's, Shaderc still most of it; either cache or parallel compilation brings Mega Bezel
+from 8.6 s to about half a second, as on the desktop.
+
+**What this does not cover.** The charger's clocks, and any control of the GPU's clock state (none was pinned, by
+design, since a player's device is not pinned either); Game Mode's gamescope compositor, under which Mistress would
+really run on this device; interop through Avalonia's own GL context; and the thermal state over a session
+longer than the bench's minutes.
 
 ### 8.5 The levers, measured
 
@@ -784,13 +884,24 @@ Gains are the desktop's, render thread, 1080p SNES unless said; effort is judged
 
 **The recommended order** is the table's. The first two are small, exact (identical pictures), cost no latency and
 between them remove most of a light preset's avoidable frame cost and nearly all of a heavy preset's build time. The
-third is the one that makes a slang preset cost what a built-in filter costs, and it is the one the handheld is most
-likely to need (H3); it should be decided on §8.4's numbers once they exist, as Mars_Gpu.md §16 said of its own
-interop. The fourth trades latency for render-thread time and should come last, if at all, and then as a setting.
+third is the one that makes a slang preset cost what a built-in filter costs. ~~It is the one the handheld is most
+likely to need (H3); it should be decided on §8.4's numbers once they exist.~~ *Retired 2026-09-24 by §8.4's
+numbers:* on the handheld it frees almost no GPU time and gains −2.0 to −2.2 ms of the render thread, about what the
+first lever gains there (−1.3) plus the upload, so it does not move up; it stays third, for the desktop's large windows.
+The fourth trades latency for render-thread time and should come last, if at all, and then as a setting.
+
+**The handheld's weights** (§8.4), gains against its own control: the first lever −1.35 ms for Lottes and −5.65 for
+N64 4× Lottes, which takes the one case that missed frames (16.3 ms) well inside the frame (8.2); the second, Mega
+Bezel's build 8.6 s → 0.5; the third −2.0 to −2.2. The fourth is worth far more there than on the desktop, because
+the passes' wait is most of the frame (4.4–9.7 ms): with the first it leaves 0.85–1.92 ms. Whether a frame of latency
+is worth that on the handheld is a player's choice, which is the argument for making it a setting rather than a
+default; no case measured there needs it to stay inside the frame once the first lever is in.
 
 ### 8.9 What this does not cover
 
-- **The handheld** (§8.4): nothing was measured there.
+- **The handheld** (§8.4) was measured on battery, headlessly; not on the charger, not under Game
+  Mode's compositor, and with its GPU's clock state left to the driver, which moves the transfer stages by up to 3×
+  between runs.
 - **Mistress itself**: no number here was read in a real window. The bench stands in for the render thread; the
   compositor's own work, the swap and vsync, and the UI thread's contention for the control's lock are outside it.
 - **The emulation thread**: the gen2 collections of §8.3 pause it, and how long they pause it on Mistress's heap was

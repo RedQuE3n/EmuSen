@@ -157,6 +157,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         [EmuSen.Common.SkipInState] private int _faulted;
         [EmuSen.Common.SkipInState] private long _pauseAt = -1;
 
+        // A test's switch: nonzero holds the last worker short of each image change until a pause is asked, so the others wait at its barrier - see Mars_Rdp.md §2.9.1.
+        [EmuSen.Common.SkipInState] public int HoldBeforeImageChange;
+
         // How often a waiter at a barrier raised the pause point to its own word, which a test reads to know the case was met - see §2.8.
         [EmuSen.Common.SkipInState] public long PausesRaised;
 
@@ -246,6 +249,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             public Thread? Thread;
             public long Completed;
             public long Standing = -1;
+            public long HeldAt = -1;
             public int Sleeping;
             public long Words, Ticks;
 
@@ -262,6 +266,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             public SpinBarrier(DpInterface owner) => _owner = owner;
 
             public void Reset(int parties) => (_parties, _arrived) = (parties, 0);
+
+            public int Arrived => Volatile.Read(ref _arrived);
 
             public void Arrive(long word)
             {
@@ -507,6 +513,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public (long Words, long Ticks)[] WorkerLoads => Array.ConvertAll(_workers, w => (w.Words, w.Ticks));
 
         public long Barriers => _barrier.Passed;
+
+        // How many workers wait at the barrier now, which a test reads to pause at a known moment - see Mars_Rdp.md §2.9.1.
+        public int BarrierWaiters => _barrier.Arrived;
 
         // Reads past a row's end made for another processor's row, by whichever processor made them - see §2.8.
         public long AliasedReads
@@ -1122,6 +1131,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                         continue;
                     }
 
+                    if (Volatile.Read(ref HoldBeforeImageChange) != 0 && HoldHere(w, completed)) continue;
+
                     p.RunningWord = completed + 1;
                     ulong word = _ring[(int)(completed & (_ring.Length - 1))];
                     Rdp.Rdp.Step step = p.Gather(word);
@@ -1206,6 +1217,19 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             SpinWait spin = default;
             while (Volatile.Read(ref _pauseRequested) != 0 && Volatile.Read(ref _pauseAt) == completed && Volatile.Read(ref _stopping) == 0) spin.SpinOnce(-1);
             Volatile.Write(ref w.Standing, -1);
+        }
+
+        // The last worker, before a word that sets an image, spins until a pause is asked or the switch is cleared, once per word; true when it held - see Mars_Rdp.md §2.9.1.
+        private bool HoldHere(Worker w, long completed)
+        {
+            if (w.Index != _workers.Length - 1 || w.HeldAt == completed) return false;
+            int id = (int)(_ring[(int)(completed & (_ring.Length - 1))] >> 56) & 0x3F;
+            if (id is not (0x3F or 0x3E)) return false;
+
+            w.HeldAt = completed;
+            SpinWait spin = default;
+            while (Volatile.Read(ref HoldBeforeImageChange) != 0 && Volatile.Read(ref _pauseRequested) == 0 && Volatile.Read(ref _stopping) == 0) spin.SpinOnce(-1);
+            return true;
         }
 
         // A waiter at a barrier is inside its word and cannot stand short of it, so a pause point short of it is raised to it - see §2.8.

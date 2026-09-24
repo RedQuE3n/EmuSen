@@ -842,6 +842,9 @@ resuming unconditionally, letting accept repeat, dropping the synthesised Tab, a
 
 ### 4.30 Text from a pad: Steam's keyboard is asked for, not rebuilt
 
+*Retired 2026-09-24 by §4.45.6: a pad now opens Mistress's own on-screen keyboard, and `SteamKeyboard` is gone. The
+section is kept for the argument it made and the reason it no longer holds.*
+
 *2026-09-21.* §4.29 left text entry to a keyboard the player does not have. On SteamOS there is already an on-screen
 keyboard, the player already knows it, and Steam opens it for any client that asks through the URL
 `steam://open/keyboard`. `SteamKeyboard.Show` hands that URL to the running client. What it types arrives as
@@ -1408,8 +1411,11 @@ row, and alternates between two headers for as long as it is asked.
 accept chooses; back closes without choosing. Previously up and down set the choice at every step, so passing over
 "RetroArch Preset..." on the way to another entry opened the preset picker.
 
-**Checkboxes in a table.** Accept on a row of a `LunaTable` whose row holds a checkbox ticks it, through the
-checkbox, so the table's own write-through runs (the cheat list, §4.45.5).
+**Lists.** A row given the focus by navigation is selected by it, which is Avalonia's own rule and was measured
+rather than assumed: a line that also selected the row on accept changed no test's outcome when removed, and was
+removed. Accept then sends Enter to the row, which is how a list that acts on a row (the cheat database's games, the
+RetroArch preset list) is told to. Accept on a row of a `LunaTable` whose row holds a checkbox ticks it instead,
+through the checkbox, so the table's own write-through runs (the cheat list, §4.45.5).
 
 **The audit.** WiseMan's `PadAudit.Reachable` presses every direction from every control reached, starting where the
 sheet puts the focus, on every tab, and lists the controls a player could operate (buttons, switches, dropdowns,
@@ -1428,7 +1434,7 @@ dropdown on another tab. Controller Bindings: the slider, a switch, a pad rebind
 **Mutants.** Five were made against the router and the window: dropping the tab-strip rule (four cases fail),
 dropping the scrolling-area search (one), the game keeping its keys under a sheet (two), a sheet not pausing (three),
 and never letting a list go at its edge, **which survived**: no window in this section has a list. It is caught by
-the cheat list's case in §4.45.5.
+three of §4.45.5's cases, where the cheat list and the database's lists stand between the code boxes and the buttons.
 
 **What it does not cover.** The system file pickers (Browse... beside a path, Save As... and Load From... in the
 cheat window) are reached and pressed but open the platform's dialog, which in Game Mode is drawn by another process
@@ -1452,4 +1458,65 @@ The key capture's handler was on the window, and a window on a sheet does not se
 (`LunaP.md` §90.6), so it moved to the window's content. Tests: the rebind case holds A through the first poll and
 asserts nothing was bound (a mutant that listens at once fails it), binds North, and checks the pad stays the
 window's until North is let go; `A_pad_capture_nobody_answers_gives_up` holds the timeout.
+
+#### 4.45.5 Cheats from the pad, during play
+
+**The route.** The pad's menu has a Cheats entry, over a game and in the library, which opens Active Cheats (§4.14) the
+way the menu bar does. It opens on the running game's console tab: both cheat windows were handed the library's console
+filter, so with the filter on all consoles a running SNES game's cheats window opened on General, and the running
+game's codecs (§4.14's "a running game's codecs beat the catalog's") reached no tab. `CheatConsole` is now the running
+game's console when there is one, and the filter otherwise; this is a change for Desktop Mode too, and a correction.
+
+Active Cheats gained a **Cheat Database...** button beside Apply, the mirror of the database's Active Cheats button,
+since with the menu bar hidden it was the only way to the database. The database opens on a sheet over the cheats and
+B comes back to them.
+
+**The flow, as the test drives it.** On the SNES tab the pad reaches the code box, and A opens the on-screen keyboard
+(§4.45.6) with the hexadecimal layout; `7E010042` is typed with the d-pad and A, and Start puts the keyboard away. The
+description box opens it with letters. Add adds the cheat, enabled. A on the cheat's row ticks it off and on through
+the table's checkbox. Apply Cheats, with the game paused under the sheet, pokes at once (§4.15's paused case), and the
+test reads `0x42` at `$7E:0100` through the running core's debug target. B closes the sheet and the game runs again.
+A second case loads a game's cheats from a two-game database folder with the pad alone: the system row, the game row,
+A to load (the games list now loads on Enter as it does on a double click), B back to the cheats, A to tick one on.
+
+**Code layouts per console.** The code box offers the layout the console's codes are written in first: the sixteen
+Game Genie letters for the NES, hexadecimal for the others (a Game Boy Game Genie or GameShark code, an SNES Game Genie
+or Pro Action Replay code and an N64 GameShark code are all hexadecimal with separators), then the other layouts
+behind the Next key.
+
+**Tests.** `PadCheatsTests`, five cases: the flow above; the database from the cheats and back; the database loaded by
+pad; and the reachability audit of both cheat sheets with two cheats in the list. Mutants: a table row that A does not
+tick (two cases fail), the keyboard not taking the pad (two), and the list edge of §4.45.3 (three).
+
+**What it does not cover.** Save As... and Load From... open the platform's file dialog (§4.45.3). Download from
+libretro works from the pad but its progress and failure are only shown as status text, unchanged.
+
+#### 4.45.6 Text from a pad: a keyboard of Mistress's own
+
+**The decision, and the one it replaces.** §4.30 asked Steam for its keyboard through `steam://open/keyboard` and argued
+that a keyboard of Mistress's own would be a second keyboard, laid out differently, on a machine that already had one.
+That argument was about prose. What a pad user is asked to type here is mostly a cheat code, sixteen hexadecimal digits
+and a separator, on which Steam's QWERTY layout puts every digit three or four moves away and the digits on a separate
+page. The URL's reliability was also the claim §4.30 said to check first on a device, and it was never checked; the
+evidence found since (§4.45.2's reading) is indirect: SDL's X11 backend opens the keyboard the same way under Steam,
+and an osu! report says it popped up in Game Mode, while a 2025 forum report says Steam's own keyboard chord stopped
+working there. A keyboard drawn in the window has none of those unknowns, and it is testable: the flow in §4.45.5 types
+through it with the pad.
+
+So a pad now opens LunaP's `OnScreenKeyboard` (`LunaP.md` §91) on any text box: A on a focused box in any window or
+sheet, and Y in the library, which focuses the search box. Steam's keyboard is still the player's, through Steam's own
+chord (the Steam button and X), and types into a focused box as it always did; Mistress just no longer asks for it.
+`SteamKeyboard` and its two tests were removed; the two cases that used it now assert the on-screen keyboard.
+
+**The buttons on the keyboard** (`PadKeyboard.Send`): the d-pad moves the highlight, A types the key, B erases the
+character before the caret and, with nothing left to erase, puts the keyboard away, Y types a space, Select shifts,
+the shoulders change the layout, and Start is Done. Done keeps the text; the keyboard's own Escape (from a real
+keyboard) puts back the text the box had. The hint line under the keys says all of this.
+
+**Paths.** The path rows in Preferences and the cheat database's folder are now editable (`PathPickerRow.IsEditable`,
+`LunaP.md` §91.4), so a folder can be typed with the keyboard, committed when the focus leaves the box, where
+Browse... opens a picker Game Mode may never show.
+
+**What only the device can confirm.** That the keys are big enough to read on a handheld at arm's length (they are 44
+points, unscaled by the sheet), and that nothing in Game Mode steals the pad's buttons from the keyboard.
 

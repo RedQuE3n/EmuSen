@@ -6,6 +6,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
+using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Mistress.Input
@@ -29,6 +30,13 @@ namespace EmuSen.Mistress.Input
             TopLevel? top = TopLevel.GetTopLevel(root);
             var focused = top?.FocusManager?.GetFocusedElement() as InputElement;
             ComboBox? open = root.GetVisualDescendants().OfType<ComboBox>().FirstOrDefault(c => c.IsDropDownOpen);
+
+            // An open keyboard takes every button until it is put away.
+            if (OnScreenKeyboard.OpenOver(root) is { } keyboard)
+            {
+                PadKeyboard.Send(keyboard, button);
+                return;
+            }
 
             if (window is IPadCapturing capturing && capturing.Capturing != PadCapture.None)
             {
@@ -83,7 +91,7 @@ namespace EmuSen.Mistress.Input
 
                 case UiButton.Accept:
                     if (open is not null) { Key(focused ?? open, Avalonia.Input.Key.Enter); if (open.IsDropDownOpen) Close(open); return; }
-                    if (focused is TextBox) { SteamKeyboard.Show(); return; }
+                    if (focused is TextBox box) { PadKeyboard.Open(box); return; }
                     if (focused is ComboBox closed) { closed.IsDropDownOpen = true; return; }
                     if (focused is TabItem header) { header.IsSelected = true; return; }
                     if (focused is ToggleButton toggle) { toggle.IsChecked = toggle.IsChecked != true; return; }
@@ -93,6 +101,7 @@ namespace EmuSen.Mistress.Input
                         tick.IsChecked = tick.IsChecked != true;
                         return;
                     }
+                    // A row given the focus by navigation is already selected (Avalonia's own rule); Enter is how a list that acts on a row is told to - §4.45.3.
                     if (focused is not null) Key(focused, Avalonia.Input.Key.Enter);
                     return;
 

@@ -146,6 +146,7 @@ namespace EmuSen.Mistress.Views
             if (button == UiButton.Guide) button = UiButton.Menu;
 
             if (OtherWindow() is { } other) PadWindowRouter.Send(other, button);
+            else if (EmuSen.LunaP.Controls.OnScreenKeyboard.OpenOver(this) is { } keyboard) PadKeyboard.Send(keyboard, button);
             else if (_padMenuOpen) PadMenuCommand(button);
             else if (LibraryView.IsVisible) LibraryPadCommand(button);
         }
@@ -171,11 +172,11 @@ namespace EmuSen.Mistress.Views
             }
         }
 
-        // The search box takes the focus and Steam's keyboard is asked for; the list still moves under it, so a match can be picked without leaving.
+        // The search box takes the focus and the on-screen keyboard opens on it; once it is put away the list still moves under the box - see §4.45.6.
         private void SearchFromThePad()
         {
             LibraryFilter.FocusSearch();
-            SteamKeyboard.Show();
+            if (FocusManager?.GetFocusedElement() is TextBox box) PadKeyboard.Open(box);
         }
 
         // Back out of the search box to the list, keeping what was typed.
@@ -235,6 +236,7 @@ namespace EmuSen.Mistress.Views
                 _padMenuEntries.Add(new PadMenuEntry(() => $"Back to {_currentDisplayName}", ToggleLibrary));
             }
 
+            _padMenuEntries.Add(new PadMenuEntry(() => "Cheats", ShowActiveCheats));
             _padMenuEntries.Add(new PadMenuEntry(() => "Graphics Settings", ShowGraphicsSettings));
             _padMenuEntries.Add(new PadMenuEntry(() => "Controller Bindings", ShowControllerBindings));
             _padMenuEntries.Add(new PadMenuEntry(() => "Preferences", ShowPreferences));

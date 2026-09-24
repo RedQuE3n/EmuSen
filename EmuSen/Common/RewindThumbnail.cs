@@ -31,19 +31,28 @@ namespace EmuSen.Common
             int th = Math.Max(1, (int)Math.Round((double)tw * shownHeight / width));
             var pixels = new byte[tw * th * 2];
 
+            // The sample columns once per picture, not once per pixel - see §5.3.
+            Span<int> left = tw <= 1024 ? stackalloc int[tw] : new int[tw];
+            Span<int> right = tw <= 1024 ? stackalloc int[tw] : new int[tw];
+            for (int x = 0; x < tw; x++)
+            {
+                long x0 = (long)x * width / tw, x1 = Math.Max(x0 + 1, (long)(x + 1) * width / tw);
+                left[x] = (int)(x0 + (x1 - x0) / 4) * 4;
+                right[x] = (int)(x0 + 3 * (x1 - x0) / 4) * 4;
+            }
+
             int o = 0;
             for (int y = 0; y < th; y++)
             {
                 long y0 = (long)y * shownHeight / th, y1 = Math.Max(y0 + 1, (long)(y + 1) * shownHeight / th);
-                int rowA = (int)((y0 + (y1 - y0) / 4) / repeat), rowB = (int)((y0 + 3 * (y1 - y0) / 4) / repeat);
+                ReadOnlySpan<byte> rowA = rgba.Slice((int)((y0 + (y1 - y0) / 4) / repeat) * width * 4, width * 4);
+                ReadOnlySpan<byte> rowB = rgba.Slice((int)((y0 + 3 * (y1 - y0) / 4) / repeat) * width * 4, width * 4);
                 for (int x = 0; x < tw; x++)
                 {
-                    long x0 = (long)x * width / tw, x1 = Math.Max(x0 + 1, (long)(x + 1) * width / tw);
-                    int colA = (int)(x0 + (x1 - x0) / 4), colB = (int)(x0 + 3 * (x1 - x0) / 4);
-                    int a = (rowA * width + colA) * 4, b = (rowA * width + colB) * 4, c = (rowB * width + colA) * 4, d = (rowB * width + colB) * 4;
-                    int r = (rgba[a] + rgba[b] + rgba[c] + rgba[d] + 2) >> 2;
-                    int g = (rgba[a + 1] + rgba[b + 1] + rgba[c + 1] + rgba[d + 1] + 2) >> 2;
-                    int bl = (rgba[a + 2] + rgba[b + 2] + rgba[c + 2] + rgba[d + 2] + 2) >> 2;
+                    int a = left[x], b = right[x];
+                    int r = (rowA[a] + rowA[b] + rowB[a] + rowB[b] + 2) >> 2;
+                    int g = (rowA[a + 1] + rowA[b + 1] + rowB[a + 1] + rowB[b + 1] + 2) >> 2;
+                    int bl = (rowA[a + 2] + rowA[b + 2] + rowB[a + 2] + rowB[b + 2] + 2) >> 2;
                     ushort packed = (ushort)(((r >> 3) << 11) | ((g >> 2) << 5) | (bl >> 3));
                     pixels[o++] = (byte)packed;
                     pixels[o++] = (byte)(packed >> 8);

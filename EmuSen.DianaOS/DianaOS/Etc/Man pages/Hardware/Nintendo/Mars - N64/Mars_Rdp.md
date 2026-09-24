@@ -532,6 +532,28 @@ and the probe `The_csharp_workers_deadlock_…` of `MarsRtThreadsTests`, which i
 never raises the point hangs both tests again. The deadlock is a hang and not a race on a byte, so it is shown by a
 watchdog and not by the verifier: no byte is written wrongly, the processors simply never answer.
 
+*Retired the same day: the coverage above was timing's.* Both tests reached the case only when a spin happened to put
+the pause between one processor's arrival at a barrier and another's. On a later, differently loaded machine the
+two-processor stress failed its "at least one pause was raised" assertion in 6 of 6 runs, while the fixed code answered
+every pause: the case was simply not met. An assertion that the case was reached, where reaching it depends on the
+scheduler, proves the case only on the runs that happened to reach it, and a test that passes on one machine and not on
+another has proved less than its name. The tests now make the case, rather than wait for it:
+
+- `HoldBeforeImageChange`, a switch of the interface's for tests, makes the last worker spin before a word that sets an
+  image (a one-word command, which is every command of these lists) until a pause is asked, once per word. The other
+  workers run that word, which is `Step.All`, and wait at its barrier. `BarrierWaiters` reads how many wait there.
+- The pause test, now at two, three and four processors, holds, waits until every processor but the held one is at the
+  barrier, and only then pauses; thirty attempts each, and every pause must raise the point (`PausesRaised`) as well as
+  be answered and leave the finished list's state. So each attempt meets the case by construction.
+- The stress holds on its odd rounds, waiting for the barrier before each of the forty pauses and snapshots, and runs
+  free on its even rounds, where timing chooses the moment as before. Every one of the 160 held pauses and snapshots
+  must raise the point; the free rounds keep their watchdog and their exactness, and claim no coverage.
+
+Fixed, the two tests passed 8 runs of 8 while the machine's load stood between 7.6 and 41.8 (other agents' builds). With
+the waiter's raise removed, every one of the six cases hung in both of two runs, the pause test at attempt 0 at every
+count; the two-processor stress once got through its free first round and hung at the first held one, which is the
+difference the hold makes. The switch costs the workers a load and a test per word while it is off; interleaved against the build without it, three rounds at four processors, Super Mario 64 ran 6.24, 6.19, 6.36 ms against 6.34, 6.13, 6.11 and Ocarina of Time 7.17, 7.27, 7.25 against 7.25, 7.18, 7.17, overlapping in both, with the same state hashes.
+
 *What it reaches in play, and what it does not settle.* A pause is asked for only by a snapshot (`MemoryBus.WriteState`
 with `snapshot`, which `Hold`s), and the only caller of a snapshot in Mistress is the rewind buffer, off for the N64
 since the Super Mario 64 freeze of §2.8 (`EmuSen_Settings_Reference.md` §4.21b). So the deadlock could not have met a

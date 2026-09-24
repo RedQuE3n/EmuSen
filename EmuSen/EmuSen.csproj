@@ -52,51 +52,39 @@
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
   </ItemGroup>
 
-  <!-- MarsRT, the Rust N64 core, built by cargo for this machine when it is installed and copied beside the assemblies; without it Mars runs its C# paths - see Mars_Native.md §1. A publish for another platform swaps the library in MarsRtPublish.targets, §6.3. -->
+  <!-- The Rust cores, built by cargo for this machine when it is installed and copied beside the assemblies; without one its console runs on the C# core - see Mars_Native.md §1, Mercury_Native.md §8.6. A publish for another platform swaps the libraries in RustCoresPublish.targets. -->
+  <Import Project="Cores\RustCores.props" />
+
   <PropertyGroup>
-    <EmuSenNativeDir>$(MSBuildThisFileDirectory)Cores\Nintendo\MarsRT - N64\</EmuSenNativeDir>
-    <EmuSenNativeTarget>$(MSBuildProjectDirectory)/obj/marsrt</EmuSenNativeTarget>
-    <EmuSenNativeFile Condition="$([MSBuild]::IsOSPlatform('Windows'))">marsrt.dll</EmuSenNativeFile>
-    <EmuSenNativeFile Condition="$([MSBuild]::IsOSPlatform('OSX'))">libmarsrt.dylib</EmuSenNativeFile>
-    <EmuSenNativeFile Condition="'$(EmuSenNativeFile)' == ''">libmarsrt.so</EmuSenNativeFile>
     <EmuSenNativeForHost Condition="'$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == '$(NETCoreSdkRuntimeIdentifier)' Or '$(RuntimeIdentifier)' == '$(NETCoreSdkPortableRuntimeIdentifier)'">true</EmuSenNativeForHost>
     <EmuSenNativeProfile Condition="'$(_IsPublishing)' == 'true'">dist</EmuSenNativeProfile>
     <EmuSenNativeProfile Condition="'$(EmuSenNativeProfile)' == ''">release</EmuSenNativeProfile>
-    <DefaultItemExcludes>$(DefaultItemExcludes);Cores/Nintendo/MarsRT - N64/target/**</DefaultItemExcludes>
-  </PropertyGroup>
-
-  <!-- MercuryRT, the Rust Game Boy core, built and copied the same way; without it the Game Boy runs on the C# Mercury - see Mercury_Native.md §2. -->
-  <PropertyGroup>
-    <MercuryRtDir>$(MSBuildThisFileDirectory)Cores\Nintendo\MercuryRT - GB\</MercuryRtDir>
-    <MercuryRtTarget>$(MSBuildProjectDirectory)/obj/mercuryrt</MercuryRtTarget>
-    <MercuryRtFile Condition="$([MSBuild]::IsOSPlatform('Windows'))">mercuryrt.dll</MercuryRtFile>
-    <MercuryRtFile Condition="$([MSBuild]::IsOSPlatform('OSX'))">libmercuryrt.dylib</MercuryRtFile>
-    <MercuryRtFile Condition="'$(MercuryRtFile)' == ''">libmercuryrt.so</MercuryRtFile>
-    <DefaultItemExcludes>$(DefaultItemExcludes);Cores/Nintendo/MercuryRT - GB/target/**</DefaultItemExcludes>
+    <!-- Each crate builds into <root>/<library name>; overridable so a scratch build keeps cargo's output off the tree. -->
+    <EmuSenCargoTargetRoot Condition="'$(EmuSenCargoTargetRoot)' == ''">$(MSBuildProjectDirectory)/obj</EmuSenCargoTargetRoot>
+    <EmuSenHostLibraryPrefix Condition="!$([MSBuild]::IsOSPlatform('Windows'))">lib</EmuSenHostLibraryPrefix>
+    <EmuSenHostLibrarySuffix Condition="$([MSBuild]::IsOSPlatform('Windows'))">.dll</EmuSenHostLibrarySuffix>
+    <EmuSenHostLibrarySuffix Condition="$([MSBuild]::IsOSPlatform('OSX'))">.dylib</EmuSenHostLibrarySuffix>
+    <EmuSenHostLibrarySuffix Condition="'$(EmuSenHostLibrarySuffix)' == ''">.so</EmuSenHostLibrarySuffix>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Cores/*/*RT - */target/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <!-- A machine without Rust builds the C# cores alone; one with it must build the Rust ones, so a failed cargo step fails the build instead of leaving an old library in place - see Mars_Native.md §1. -->
   <Target Name="FindCargo" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
-    <Exec Command="cargo --version" ContinueOnError="true" StandardOutputImportance="low" StandardErrorImportance="low">
+    <Exec Command="cargo --version" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low">
       <Output TaskParameter="ExitCode" PropertyName="CargoExitCode" />
     </Exec>
     <PropertyGroup>
       <CargoFound Condition="'$(CargoExitCode)' == '0'">true</CargoFound>
     </PropertyGroup>
-    <Warning Condition="'$(CargoFound)' != 'true'" Text="cargo was not found: MarsRT and MercuryRT are not built, and their consoles run on the C# cores alone." />
+    <Warning Condition="'$(CargoFound)' != 'true'" Text="cargo was not found: @(EmuSenRustCrate->'%(Core)', ' and ') are not built, and their consoles run on the C# cores alone." />
   </Target>
 
-  <Target Name="BuildMercuryRt" BeforeTargets="BeforeBuild" DependsOnTargets="FindCargo" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
-    <Exec Condition="'$(CargoFound)' == 'true'" Command="cargo build --profile $(EmuSenNativeProfile) --manifest-path &quot;$(MercuryRtDir)Cargo.toml&quot; --target-dir &quot;$(MercuryRtTarget)&quot;" StandardOutputImportance="low" />
-    <ItemGroup Condition="Exists('$(MercuryRtTarget)/$(EmuSenNativeProfile)/$(MercuryRtFile)')">
-      <None Include="$(MercuryRtTarget)/$(EmuSenNativeProfile)/$(MercuryRtFile)" Link="$(MercuryRtFile)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    </ItemGroup>
-  </Target>
-
-  <Target Name="BuildEmuSenNative" BeforeTargets="BeforeBuild" DependsOnTargets="FindCargo" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
-    <Exec Condition="'$(CargoFound)' == 'true'" Command="cargo build --profile $(EmuSenNativeProfile) --manifest-path &quot;$(EmuSenNativeDir)Cargo.toml&quot; --target-dir &quot;$(EmuSenNativeTarget)&quot;" StandardOutputImportance="low" />
-    <ItemGroup Condition="Exists('$(EmuSenNativeTarget)/$(EmuSenNativeProfile)/$(EmuSenNativeFile)')">
-      <None Include="$(EmuSenNativeTarget)/$(EmuSenNativeProfile)/$(EmuSenNativeFile)" Link="$(EmuSenNativeFile)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  <!-- One cargo build per crate of RustCores.props, in its order; the first to fail stops the build. -->
+  <Target Name="BuildRustCores" BeforeTargets="BeforeBuild" DependsOnTargets="FindCargo" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
+    <Exec Condition="'$(CargoFound)' == 'true'" Command="cargo build --profile $(EmuSenNativeProfile) --manifest-path &quot;%(EmuSenRustCrate.Dir)Cargo.toml&quot; --target-dir &quot;$(EmuSenCargoTargetRoot)/%(EmuSenRustCrate.Identity)&quot;" StandardOutputImportance="low" />
+    <ItemGroup>
+      <_EmuSenRustLibrary Include="@(EmuSenRustCrate->'$(EmuSenCargoTargetRoot)/%(Identity)/$(EmuSenNativeProfile)/$(EmuSenHostLibraryPrefix)%(Identity)$(EmuSenHostLibrarySuffix)')" />
+      <None Include="@(_EmuSenRustLibrary)" Condition="Exists('%(_EmuSenRustLibrary.FullPath)')" Link="%(_EmuSenRustLibrary.Filename)%(_EmuSenRustLibrary.Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
   </Target>
 

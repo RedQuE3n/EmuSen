@@ -1631,3 +1631,36 @@ B, the scroll offset unchanged throughout, and A choosing and storing the highli
 highlight where it is and one that makes A choose nothing are both caught. The old key-sending path passes this test
 too, since the headless platform does not move the page, so the test does not show the page defect gone.
 
+### 4.46 Game Boy and Game Boy Color on separate shelves (2026-09-24)
+
+**What changed.** The library's console filter (the facet in big-screen mode, the sidebar's Consoles group on the
+desktop) listed one entry per core, so every Game Boy and Game Boy Color game shared *Game Boy (Mercury)*. There is
+now a second entry directly after it, *Game Boy Color (Mercury)*, labelled **GBC** in the sidebar, with its own count.
+The player asked for it on 2026-09-24.
+
+**What decides the shelf.** A `.gbc` file, or a `.gb` file whose header byte at `0x143` is `0x80` (Color-enhanced) or
+`0xC0` (Color only), is a Game Boy Color game; every other Game Boy file is a Game Boy game. These are the two values
+Mercury itself reads to decide the model (`Cartridge.cs`), so the shelf and the machine agree. The extension alone
+would not do: on the development desktop all 1,915 Game Boy files end in `.gb` and 17 of them carry the Color flag,
+while the handheld's library keeps 426 `.gbc` files in a folder of their own. A `.gb` file costs one byte read per
+scan, cached by path for the process's life; a file too short to have a header, or one that cannot be read, is a
+Game Boy game.
+
+**What is a shelf and what is a core.** The shelf is the library's word (`CoreCatalog.LibraryShelf`,
+`ShelvesInReleaseOrder`, `ShelfFor`); the core is still one. A game's `CoreDisplayName` stays *Game Boy (Mercury)*
+on both shelves, so artwork, covers, the database lookup and the core that loads are unchanged; its `Shelf` is what
+the filter, the sidebar's counts and the list's console tag use. The stored filter (`appsettings.json`'s
+`SelectedCore`) may now name the Color shelf; the two cheat windows, which know cores, are handed Mercury for it.
+The Color shelf sits after the Game Boy rather than in release order (1998, after the N64), because the player asked
+for the two together.
+
+**Tests.** `RomLibraryTests.Game_Boy_Color_games_sit_on_their_own_shelf_by_extension_or_header` (both header values,
+the extension, a plain `.gb`, a header-less file, the core name unchanged, narrowing by scan and by filter) and
+`LibraryScreenTests.Game_Boy_Color_games_have_their_own_row_in_the_sidebar` (the GBC row after GB with its count,
+choosing it, the stored filter), with the sidebar rendered and looked at. A mutant that ignores the header byte is
+caught by both.
+
+**Not the same as the model setting.** Which machine a Game Boy game *runs on* (a Game Boy or a Game Boy Color, the
+choice being built separately) does not move it between shelves: the shelf is the cartridge's, not the player's
+setting.
+

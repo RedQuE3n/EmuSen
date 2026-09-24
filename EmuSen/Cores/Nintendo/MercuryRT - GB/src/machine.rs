@@ -28,8 +28,8 @@ impl Machine {
         let mut cpu = Cpu::default();
         bus.reset();
         cpu.reset(*bus.cgb);
-        // C#'s SetSampleRate(44100) divides in integers (Mercury_Native.md §6.1, D1); the shim passes C#'s own Math.Pow.
-        let cycles_per_sample = (CPU_CLOCK_HZ / 44_100) as f64;
+        // C#'s SetSampleRate(44100), divided in doubles (Mercury_Native.md §9.1); the shim passes C#'s own Math.Pow.
+        let cycles_per_sample = CPU_CLOCK_HZ as f64 / 44_100.0;
         bus.apu.set_sample_rate(cycles_per_sample, crate::apu::HIGH_PASS_SEED.powf(cycles_per_sample));
         Ok(Machine { total_frames: 0, cycles_into_frame: 0, cpu, bus })
     }

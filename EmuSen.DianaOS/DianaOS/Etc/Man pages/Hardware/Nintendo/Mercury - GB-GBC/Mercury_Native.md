@@ -951,3 +951,33 @@ by the real games alone.
 - A truncated state is refused whole by MercuryRT. C# stops part-way through reading it, leaving a half-loaded machine,
   and throws `EndOfStreamException`.
 - MercuryRT's `GetFrameBufferRgba` is a copy.
+
+## 9. The three defects fixed, in both engines (2026-09-24)
+
+*Written 2026-09-24, on the user's decision recorded under Q3 (§5).* Each defect of §6.1 was fixed in C# Mercury and
+MercuryRT together. For each, a test was written first and committed while it failed on both engines, on the unmodified
+build (`f2c7f99`). The tests are `EmuSen.WiseMan/Cores/MercuryDefectTests.cs`, one case per engine through `ICore`
+alone, so neither engine's answer is read through the other's objects.
+
+### 9.1 D1: the sample rate
+
+**Before.** 600 frames of 70,224 cycles are 10.0456 s of console time. At a labelled 44,100 Hz that is 443,012.0 stereo
+frames. Both engines drained **443,520**, which is 44,150.6 a second: §6.1's measurement, reproduced.
+
+**The fix.** `Apu.SetSampleRate` divides in doubles, so a sample is 95.1089 clocks rather than 95. MercuryRT does not
+divide on its own: the shim's `MercuryMachine.SetSampleRate` computes the same double and `Math.Pow` once, in C#, and
+passes both down (§3.3). The Rust machine's own default, used only where no shim is present (`examples/frames.rs`),
+got the same change.
+
+**Prediction, stated before the run.** Both engines drain 443,012 ± 1; the two engines stay identical in sound, because
+they share the two doubles; and nothing in the state moves, because the mixer's accumulator is not state (§3.1).
+
+**After.** Both engines drained **443,012**, 44,100.0 a second. The parity suite (`MercuryRt` filter, 81 cases, the
+four games and the corpus included) passed: state, picture and sound identical every frame. Kirby's 3,000 frames from
+boot are 210,572,292 cycles, and 2 × ⌊210,572,292 / 95.1089⌋ = 4,428,022 samples is what both engines drained. That
+the state did not move is checked in §9.3, against hashes of states the unmodified build wrote.
+
+**What it changes.** Every Game Boy game's sound comes out 0.115% slower in samples per frame, which is the rate the
+frontends were already told. `Mercury_Apu.md` §6's "95.11 clocks per sample" was the design and is now the behaviour.
+The audio differential against gambatte (`Mercury_HardwareTests.md` §6) compared against a mislabelled rate before this
+date; that comparison was not re-run. No corpus verdict can move: sound never feeds the machine.

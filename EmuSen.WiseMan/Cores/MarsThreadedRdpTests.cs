@@ -581,6 +581,40 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(measured > 0, "no seed measured a fraction, so the case was not reached");
         }
 
+        // A load from the current image before its first draw is run by every processor together, since the draws after it may overwrite its source - see Mars_Rdp.md §2.9.5.
+        [Fact]
+        public void A_load_from_the_current_image_before_its_first_draw_is_run_by_every_processor_together()
+        {
+            var list = new System.Collections.Generic.List<ulong> { FillCycle, Scissor(0, 0, Width, Rows), (0x37UL << 56) | 0x0102_0304 };
+            list.Add((0x3FUL << 56) | (2UL << 51) | ((ulong)(Width - 1) << 32) | (Framebuffer + 0x4_0000));
+            list.Add(FillRectangle(0, 0, Width - 1, 63));
+            list.Add((0x3FUL << 56) | (2UL << 51) | ((ulong)(Width - 1) << 32) | Framebuffer);
+            list.Add((0x3DUL << 56) | (2UL << 51) | ((ulong)(Width - 1) << 32) | Framebuffer);
+            list.Add((0x35UL << 56) | (2UL << 51) | (16UL << 41));
+            list.Add((0x34UL << 56) | ((31UL << 2) << 12) | (15UL << 2));
+            list.Add((0x37UL << 56) | 0x7E7E_7E7E);
+            for (uint row = 0; row < 16; row++) list.Add(FillRectangle(0, row, Width - 1, row));
+            list.Add(SyncFull);
+
+            int differ = 0, apart = 0;
+            for (int attempt = 0; attempt < 40; attempt++)
+            {
+                MemoryBus atOnce = new(), split = new();
+                split.Dp.Threaded = true;
+                split.Dp.Workers = 2 + attempt % 3;
+                foreach (MemoryBus bus in new[] { atOnce, split })
+                    for (uint i = 0; i < Width * 2 * 16 / 4; i++) bus.Write32(Framebuffer + i * 4, 0x1111_1111u * i);
+                HandOver(atOnce, list.ToArray());
+                HandOver(split, list.ToArray());
+                split.Dp.Join();
+
+                if (split.Dp.Processor.HazardLoads == 0) apart++;
+                if (!State(atOnce).AsSpan().SequenceEqual(State(split))) differ++;
+            }
+
+            Assert.True(apart == 0 && differ == 0, $"of 40 attempts, {apart} ran the load apart and {differ} left a state other than the list run at once");
+        }
+
         // The scan decides whether the multiple has drawn from every word handed over, not from how far the drain has run - see Mars_Rdp.md §11.
         [Theory]
         [InlineData(1)]

@@ -27,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The crates of RustCores.props; symbol is the prefix every export the shim looks up carries.
+        # The crates of RustCores.props, repeated because YAML cannot read it; symbol is the prefix of the exports the shim looks up.
         crate:
           - name: marsrt
             dir: 'EmuSen/Cores/Nintendo/MarsRT - N64'

@@ -7,7 +7,8 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
     // MercuryRT's machine behind its handle, its state read and written in the C# Mercury's own format - see Mercury_Native.md §3.2.
     public sealed unsafe class MercuryMachine : IDisposable
     {
-        private static readonly delegate* unmanaged<byte*, nuint, int*, nint> New = (delegate* unmanaged<byte*, nuint, int*, nint>)MercuryNative.Export("mercury_machine_new");
+        private static readonly delegate* unmanaged<byte*, nuint, uint, int*, nint> New = (delegate* unmanaged<byte*, nuint, uint, int*, nint>)MercuryNative.Export("mercury_machine_new");
+        private static readonly delegate* unmanaged<nint, int> CgbHardwareOf = (delegate* unmanaged<nint, int>)MercuryNative.Export("mercury_machine_cgb_hardware");
         private static readonly delegate* unmanaged<nint, void> Free = (delegate* unmanaged<nint, void>)MercuryNative.Export("mercury_machine_free");
         private static readonly delegate* unmanaged<nint, byte*, nuint, int> LoadState = (delegate* unmanaged<nint, byte*, nuint, int>)MercuryNative.Export("mercury_machine_load_state");
         private static readonly delegate* unmanaged<nint, long> SizeOf = (delegate* unmanaged<nint, long>)MercuryNative.Export("mercury_machine_save_state_size");
@@ -40,6 +41,9 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
 
         public long TotalFrames => TotalFramesOf(Handle);
 
+        // A Game Boy Color, whatever its cartridge; a state from the other console changes it - see Mercury_Model.md §5.
+        public bool CgbHardware => CgbHardwareOf(Handle) == 1;
+
         public int SpaceSize(int space) => (int)SpaceSizeOf(Handle, (uint)space);
 
         // Read as MercuryCore.ReadSpace reads, a byte at a time from address on; CPUBUS reads have their side effects.
@@ -67,14 +71,14 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
 
         public static bool Available => New != null;
 
-        // The ROM image; the board is built from the header as C# builds it, and the battery save's path stays the host's.
-        public MercuryMachine(ReadOnlySpan<byte> rom)
+        // The ROM image on the console the model chooses; the board is built from the header as C# builds it, and the battery save's path stays the host's.
+        public MercuryMachine(ReadOnlySpan<byte> rom, EmuSen.Cores.Nintendo.Mercury.GbModel model = EmuSen.Cores.Nintendo.Mercury.GbModel.Auto)
         {
             if (!Available) throw new InvalidOperationException($"MercuryRT is not in use: {MercuryNative.Report}");
             int status;
             fixed (byte* image = rom)
             {
-                _handle = New(image, (nuint)rom.Length, &status);
+                _handle = New(image, (nuint)rom.Length, (uint)model, &status);
             }
             if (_handle == 0) throw status == -10 ? new NotSupportedException($"Cartridge type ${rom[0x147]:X2} is not implemented - see Mercury_Memory.md §4.") : new InvalidDataException($"MercuryRT refused the image: {Describe(status)}.");
             SetSampleRate(44100);
@@ -169,6 +173,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             -7 => "the buffer is too small",
             -9 => "an image shorter than the 336-byte header",
             -10 => "a cartridge type no board implements",
+            -11 => "a model that is not Auto, Game Boy or Game Boy Color",
             _ => $"status {status}",
         };
 

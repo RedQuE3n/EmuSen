@@ -75,6 +75,13 @@ next to three real DMG ones would be inventing hardware.
 `RenderPaletteSwatch` is built from the same list rather than from a second walk
 of palette memory, so the swatch grid and the palette table cannot disagree.
 
+*Added 2026-09-24.* A Game Boy game on a Game Boy Color (the Model setting's
+compatibility mode, `Mercury_Model.md` §4) reports three palettes too, because the
+game has three palette registers. Each is its register's four shades looked up in
+the colour palette the Color renders it through: BGP in background palette 0, OBP0
+and OBP1 in object palettes 0 and 1. Before this, the list showed greys the screen
+did not, which a test on both engines caught (`Mercury_Model.md` §6.4).
+
 ## 4. The disassembler
 
 A second opcode table, independent of the one the CPU executes from, for the same

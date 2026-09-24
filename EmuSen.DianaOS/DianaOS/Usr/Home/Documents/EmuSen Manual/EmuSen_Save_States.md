@@ -146,3 +146,10 @@ which field, and the attribute carries no version. Mercury is the first user and
 retirement should add the version to the attribute rather than a second flag.
 
 Mercury's entry in §6 changes accordingly: it writes 6 and reads 5 and 6.
+
+**Mercury version 7 (2026-09-24)** adds one byte, not a retirement. After the version, it writes the console the state
+was made on: 1 for a Game Boy Color, 0 for a Game Boy. The walks that follow depend on that byte, because the Color's
+VRAM and WRAM are larger. A load whose byte names the other console rebuilds the machine as that console before
+reading (`Mercury_Model.md` §5). Versions 5 and 6 carry no byte, and they are read as made on the console the
+cartridge's header chose, which was the only console they could have been made on. Mercury now writes 7 and reads 5
+to 7.

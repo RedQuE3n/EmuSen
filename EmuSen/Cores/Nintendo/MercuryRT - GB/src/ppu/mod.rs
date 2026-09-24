@@ -1,5 +1,6 @@
 //! C#'s `Ppu/`: the LCD controller's registers, mode machine and colour palettes. See Mercury_Ppu.md and Mercury_Cgb.md §2.
 
+pub mod compat;
 pub mod render;
 pub mod timing;
 
@@ -65,6 +66,8 @@ pub struct Ppu {
     pub wy: u8,
     pub frame_rgba: Skip<Vec<u8>>,
     pub skip_rendering: Skip<bool>,
+    /// A Game Boy cartridge on a Game Boy Color: DMG rendering, its shades looked up in colour palettes (Mercury_Model.md §4.1).
+    pub compat: Skip<bool>,
 }
 
 impl Default for Ppu {
@@ -96,6 +99,7 @@ impl Default for Ppu {
             wy: 0,
             frame_rgba: Skip(vec![0; SCREEN_WIDTH * SCREEN_HEIGHT * 4]),
             skip_rendering: Skip(false),
+            compat: Skip(false),
         }
     }
 }
@@ -133,6 +137,18 @@ impl Ppu {
         self.obj_palette_index = 0;
         self.bg_palette_ram = [0xFF; PALETTE_RAM_SIZE];
         self.obj_palette_ram = [0xFF; PALETTE_RAM_SIZE];
+    }
+
+    /// What the boot ROM writes for a Game Boy cartridge: object palettes 0 and 1, then background palette 0 (Mercury_Model.md §3).
+    pub fn load_compatibility_palettes(&mut self, number: usize) {
+        let [background, object0, object1] = compat::for_number(number);
+        for i in 0..4 {
+            self.obj_palette_ram[i * 2..i * 2 + 2].copy_from_slice(&object0[i].to_le_bytes());
+            self.obj_palette_ram[8 + i * 2..8 + i * 2 + 2].copy_from_slice(&object1[i].to_le_bytes());
+            self.bg_palette_ram[i * 2..i * 2 + 2].copy_from_slice(&background[i].to_le_bytes());
+        }
+        self.obj_palette_index = 0x80 | 16;
+        self.bg_palette_index = 0x80 | 8;
     }
 
     pub fn clear_screen(&mut self) {

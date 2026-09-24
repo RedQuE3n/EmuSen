@@ -202,6 +202,7 @@ namespace EmuSen.Cores
         private static readonly Dictionary<string, IReadOnlyList<CoreSetting>> SettingsByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
             ["N64"] = Nintendo.Mars.MarsCore.VideoSettings,
+            ["GB"] = Nintendo.Mercury.MercuryCore.ModelSettings,
         };
 
         public static IReadOnlyList<CoreSetting> SettingsFor(string console) =>

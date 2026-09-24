@@ -286,6 +286,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(before, Save(core));
             Assert.Equal(history, Rewind(window).Moments().Select(m => m.Frame).ToArray());
             Assert.True(window.IsPaused);
+            Assert.False(Status(window).Text?.StartsWith("Rewind", StringComparison.Ordinal), $"choosing Now said '{Status(window).Text}'");
 
             Stop(window);
             window.Close();
@@ -320,6 +321,11 @@ namespace EmuSen.WiseMan.Mistress
             List<ReelMoment> moments = Moments(reel);
             double reach = moments[0].SecondsBack;
             Assert.True(reach > 12, $"{reach:F1} seconds held");
+
+            // Every label is its distance at the console's own rate, which is not 60 - the SNES's is 60.0988.
+            long now = moments[^1].Frame;
+            double hz = Game(window).FrameRateHz;
+            Assert.All(moments, m => Assert.Equal(m.IsNow ? "Now" : ReelMoment.Ago((now - m.Frame) / hz), m.Label));
 
             pad.L1();
             Settle(window);

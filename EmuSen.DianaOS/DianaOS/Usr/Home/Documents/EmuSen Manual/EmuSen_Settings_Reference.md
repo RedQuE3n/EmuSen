@@ -657,6 +657,11 @@ a barrier and the rest short of it; a snapshot every frame from Ocarina of Time'
 It is fixed, with the race that parted the split from itself in the same game (`Mars_Rdp.md` §2.9.1, §2.9.5). Rewind
 stays off until it is proven in play, which headless runs cannot do.
 
+*2026-09-24:* the history is now also a reel of pictures the player chooses from, from the pad's menu or Emulation →
+Rewind... (§4.49). Each snapshot carries a 160-pixel picture; the C# Mars still keeps no history, so its menu entry says
+so. On MarsRT a moment chosen from the reel was proven to be exactly the state saved at it, on a synthetic system with
+four workers and the picture deferred (`Mars_Native.md` §6.6.3, `EmuSen_Rewind_And_FastForward.md` §5.2).
+
 ### 4.26 The graphics window: one tab per console, the settings its core offers
 
 *2026-09-20.* Settings → Graphics Settings... opens a LunaP `ToolWindow` built in code like the preferences: a hint,
@@ -1664,3 +1669,115 @@ caught by both.
 choice being built separately) does not move it between shelves: the shelf is the cartridge's, not the player's
 setting.
 
+
+### 4.49 Rewind as a reel of pictures (2026-09-24)
+
+**What the player asked for.** "When you're in game and select the rewind button from the quick menu, I want it to
+pull up a reel you can go back through and select where you want to rewind to." Holding Backspace already walked the
+history back a snapshot at a time (§4.21b, `EmuSen_Rewind_And_FastForward.md` §4); there was no way to see the
+history, and nothing on the pad reached it.
+
+**Where it is.** The pad's menu over a game has **Rewind** after State Slot. With no history it reads *Rewind (nothing
+to go back to yet)*, or *Rewind (not kept for Mars (C#))* on the C# N64 core, which keeps none (§4.21b); choosing it
+then does nothing and the menu stays, so an empty reel never opens. On the desktop, **Emulation → Rewind...** opens the
+same reel. No hotkey was added: Backspace is already rewind, held.
+
+**What it shows.** A window titled Rewind — on a sheet in Game Mode (§4.45.2), a dialog on the desktop — holding a large
+picture of the selected moment with how long ago it was, and under it a strip of every moment that has a picture, oldest
+at the left, **Now** at the right and selected first. Each tile is labelled with its distance back, from the frames the
+buffer counted and the console's frame rate: two decimals under ten seconds, since moments are a fifteenth of a second
+apart; one decimal under a minute; then minutes and seconds. The strip is LunaP's `TileStrip<T>` (LunaP `docs/LunaP.md`
+§94), built for this: one row, virtualised, the selected tile centred and ringed as the library's covers are.
+
+**The controls.**
+
+| Input | Does |
+| --- | --- |
+| Left, Right (d-pad or stick) | one moment older or newer; stops at the ends |
+| L1, R1 | the nearest moment at least five seconds older or newer, else the end |
+| L2, R2 | the oldest moment, Now |
+| A | rewind to the selected moment and resume; on Now, resume with nothing changed |
+| B | cancel: resume exactly where the game was |
+| Down, then Left or Right | the Rewind Here and Cancel buttons, for a pad user who wants them |
+| pointer | a press selects a tile, a double-press rewinds to it; Rewind Here and Cancel |
+| keyboard | the strip's own keys (Left, Right, Home, End, Page Up and Down, Enter); Escape cancels |
+
+On a sheet, the footer names these buttons in place of the sheets' usual ones, and is put back when the reel closes.
+The reel handles the shoulders, the triggers, and Left, Right and A while the strip has the focus, through a new
+`IPadDriven` a window may implement; everything else is `PadWindowRouter`'s as before (§4.45.3).
+
+**Pausing.** Opened from the pad's menu, the reel takes over the pause the menu made: the game does not run a frame
+between the menu and the reel, and after A or B it resumes only if the menu had paused it. Opened from the desktop menu
+with the game running, it pauses first and resumes after. A game the player had paused stays paused either way.
+
+**How it is built.** The moments are read on the emulation thread, which owns the buffer, as a request (§4.21a) while the
+game is paused, together with a picture of the frame on screen for the Now tile; the reel is built from them on the UI
+thread. A choice goes back to the emulation thread as another request: `RewindBuffer.RewindTo` (one load, however far
+back), then the providers refreshed, the audio drained and the rate control reset, and the restored frame presented —
+what the held rewind does after its step. Cancelling sends nothing: the machine is not touched after the reel's
+moments are read.
+
+**The pictures.** Every snapshot Mistress takes gets a picture 160 pixels wide (`EmuSen_Rewind_And_FastForward.md`
+§5.3), from the frame the loop is about to show. When the core says its picture has not changed since the last one it
+offered (`FrameSerial`), the picture made for that frame is attached again, or, if none was, the frame is fetched for
+it. A frame skipped by fast-forward gets none, and its moment is not on the reel (§5.6 there). The pictures are capped
+at 32 MB; past that the older ones thin out and the snapshots stay (§5.4 there). On MarsRT, whose picture is a frame
+behind the machine (§4.21b), a moment's picture is the frame before it.
+
+**Choosing a moment discards the newer history,** as the held rewind does; the reasoning, and what it costs, is
+`EmuSen_Rewind_And_FastForward.md` §5.2. Nothing is discarded until A.
+
+**Tests.** `PadRewindReelTests`, eight cases, each on a real `MainWindow` running a synthetic SNES ROM whose backdrop
+changes colour every frame, played unthrottled until it has history and driven by the simulated pad:
+
+- A, three moments back, with the game already paused: the whole state afterwards equals `StateAt` of that tile byte for
+  byte, the buffer's frame is the tile's, the game stays paused, and the tile's label is its distance at the console's
+  rate.
+- B after moving five back and a stride, with the game paused by the player: the whole state, measured before the reel
+  opened, equal after it closed; the history's frames and depth unchanged; the game still paused.
+- A on Now: state and history unchanged, and nothing said about a rewind.
+- A from the menu with the game running: rewound, and resumed.
+- The shoulders stride five seconds within half a second, twice and back; the triggers reach both ends; Left at the
+  oldest stays; every tile's label is its distance at the console's rate; B resumes the game the menu paused.
+- The pad audit: the strip has the focus when the reel opens, and every operable control on the sheet — the strip,
+  Rewind Here, Cancel — is reached by the d-pad (`PadAudit.Reachable`); A on Cancel is the button's.
+- No history (the buffer cleared while paused): the entry names why, A leaves the menu open, no sheet.
+- On the desktop: the reel is a dialog; a press on a tile selects it, a second press rewinds to it, and the state is
+  that tile's `StateAt`.
+
+The core's side is `RewindBufferTests` and `RewindToMomentTests` (§5.2 there), on the SNES, the Game Boy and MarsRT.
+
+**Pictures looked at.** Rendered with `EMUSEN_UI_DUMP`: the reel on a sheet at 1,280×800, with Now selected and three
+back; and the desktop dialog, with Now and a chosen tile. The first renders showed the large picture and each tile's
+picture pinned to the left of its box, and at 1,280×800 the reel's own hint and buttons cut off below the sheet; the
+pictures are centred and the stage lowered from 360 to 280 pixels, after which everything fits.
+
+**Mutants.** Fifteen, each alone, built and run against `RewindBufferTests`, `RewindToMomentTests` and
+`PadRewindReelTests` (37 cases), with the source restored after each:
+
+| Mutant | Caught by |
+| --- | --- |
+| `RewindTo` applies one delta too few | twelve cases, on every core |
+| `RewindTo` keeps the newer moments | nine |
+| `RewindTo` loads at every step | the one-load test, three cases |
+| a picture goes to the oldest moment | seven |
+| the budget thins the newer half | the budget test |
+| a picture ignores row repeat | the downscale test |
+| opening the reel loads the newest snapshot | A three back, and B |
+| cancel does not resume the game the menu paused | the stride test's B, and Cancel reached by the pad |
+| the router does not consult `IPadDriven` | four reel cases |
+| the loop attaches no pictures | seven reel cases |
+| the stride is five tiles, not five seconds | the stride test |
+| an empty history is not refused | the no-history test |
+| the labels use 60 Hz | **survived** at first; caught once the stride test compared every tile's label at the console's rate |
+| Now rewinds to the newest snapshot | **survived** at first — Now's frame is a moment's only one time in four, and otherwise the load is refused and nothing changes; caught once the Now test also read the status line |
+| the menu's pause is not handed over to the reel | **survives** |
+
+The survivor is near-equivalent: without the hand-over, closing the menu resumes the game and the reel pauses it again
+in the same call on the UI thread, microseconds later, so a frame runs between them only if the emulation thread wakes
+and starts one inside that window. No test holds that window open without a hook into the loop, and none was added.
+
+**Not done.** The preview is the 160-pixel picture enlarged, not the frame; a moment on a frame fast-forward skipped
+has no picture; there is no redo; nothing for the C# Mars; the reel opened from the desktop menu while running reads
+its moments between a frame and that frame's capture, so its Now can be one frame newer than its labels count; and
+none of this has been tried on the handheld.

@@ -159,3 +159,162 @@ These are **held**, not edge-triggered, unlike every other hotkey in either fron
 `Tab` sets `e.Handled = true`, or Avalonia consumes it for focus traversal and the emulation thread never sees it.
 
 Rewind takes over the frame entirely: the loop steps the chain back, refreshes providers, drains audio, presents, and skips `RunFrame()` altogether for that iteration. Running out of history resyncs the pacing clock so holding Backspace at the start of the buffer doesn't accumulate a backlog of missed ticks.
+
+---
+
+## 5. Moments: the history as something to choose from
+
+*2026-09-24.* Holding the rewind key walks back one snapshot at a time and shows each as it goes (§4). Mistress's
+reel (`EmuSen_Settings_Reference.md` §4.49) shows the whole history at once as pictures and jumps to the one chosen.
+That asks three things of the buffer that stepping never did: a list of what it holds, with when each was taken; a
+picture of each; and a way to reach any of them. The buffer still knows nothing of any console.
+
+### 5.1 A moment per snapshot
+
+`RewindBuffer.Moments()` returns one `RewindMoment` per snapshot held, oldest first: `Frame`, the buffer's own count
+of frames completed while it was enabled; `CoreFrames`, the core's `TotalFrames` at the capture; and `Thumbnail`, its
+picture or null. The list is kept in step with the chain by the same four events that move the chain: a capture
+appends one, a step back (`Rewind`) removes the newest, the budget's trim (§1.5) removes the oldest with its delta,
+and `Clear` — including the restart a change of state size forces (§1.3) — empties it. So whenever a snapshot is held,
+`Moments().Count == Depth + 1`, and the tests assert it after every kind of move.
+
+The buffer counts frames itself rather than trusting the core's counter, because the reel's labels are *time played*
+and a core's `TotalFrames` is whatever its state format says it is. `Frame` is rewound with the chain: a step back sets
+it to the newest remaining moment's. `CoreFrames` is kept beside it for a check, not for display: on the SNES, the
+Game Boy and MarsRT a chosen moment's `CoreFrames` equals the core's `TotalFrames` after the load
+(`RewindToMomentTests`).
+
+`Moments()` settles an encoding still in flight (§1.8) and must be called on the thread that drives the buffer.
+
+### 5.2 Going straight to a moment, and what happens to the newer ones
+
+**`RewindTo(core, frame)`** takes the moment with that `Frame`, `k` snapshots back. It XORs the newest `k` deltas
+into the anchor in place — exactly the arithmetic `k` calls of `Rewind` do — drops the `k` newer moments with them,
+and then loads **once**. Stepping instead would load `k` times. **`StateAt(frame)`** rebuilds a moment's bytes on a copy
+of the anchor without moving anything, which is what a test compares against and what a preview of the real frame
+would need; it costs a state-sized copy and the same `k` XORs.
+
+*Stepping versus going straight, measured.* The XORs are the same either way; what going straight saves is `k − 1`
+loads. On MarsRT's synthetic system (a 12,986,889-byte state) the oldest of 75 moments took **6.64 ms** straight and
+**275.7 ms** by 74 steps — one load of that state is about 3.6 ms. On the SNES synthetic ROM (a 727,850-byte
+state) the oldest of 751 moments took **1.05 ms** straight and **576 ms** by 750 steps. Two later runs, beside other
+tests, gave 12.4 and 14.9 ms against 323 and 566 ms on MarsRT, and 2.50 against 487 ms on the SNES: the ratio, forty to
+five hundred times, is the finding, and it grows with `k`. Keyframes, so that a far moment
+needs fewer XORs, were not built: the XORs are not where the time goes.
+
+**Choosing a moment discards the newer history, as stepping back does.** The chain is anchored at its newest end
+(§1.3). To keep the snapshots newer than the chosen one would take a second anchor — the newest full state set aside,
+13 MB on the N64 — and, at the first capture after resuming, a second timeline branching from the chosen moment, which
+the reel would then have to draw as a fork. That was judged not worth building for the case it serves, a choice made
+by mistake, which the reel answers before it happens: nothing is discarded until the player presses A, the reel shows
+the picture and the time of what A will restore, B leaves everything as it was, and the rightmost tile, *Now*, resumes
+without a load. What it costs: once A is pressed, the present is gone, and a second look at the reel starts from the
+chosen moment.
+
+**Proofs** (`RewindToMomentTests`, `RewindBufferTests`). On each core a run at Mistress's interval hashes the core's own
+state at every capture; then three choices in turn — one back, the middle, the oldest — each with 40 frames of play
+re-recorded between them, must each leave the core's `SaveState` hashing to the hash taken at that moment, with
+`CoreFrames` restored:
+
+| Core | Machine | Moments | Result |
+| --- | --- | --- | --- |
+| Venus (SNES) | synthetic ROM counting in direct page, 600 frames | 151 | three choices, each the saved state |
+| Mercury (Game Boy) | synthetic ROM counting through work RAM, 600 frames | 151 | three choices, each the saved state |
+| MarsRT (N64) | synthetic system with the RSP, four RDP workers, picture deferred, 300 frames | 75 | three choices, each the saved state |
+
+Going straight and stepping land on the same bytes and play on the same (`Rewinding_to_a_moment_and_stepping_back_to_it_are_the_same_machine`,
+and the timing tests on SNES and MarsRT, which compare the two landings' hashes). In Mistress, `PadRewindReelTests`
+compares the whole state after A with `StateAt` of the tile chosen, byte for byte.
+
+**A finding on the way: a fresh MarsRT is not its own state.** The first MarsRT proof failed. Saving a machine that
+had never been loaded, loading that, and saving again differs in exactly one byte,
+`Bus.Si.Controllers[0].Pak.Dirty`: a load marks the controller pak dirty, in the Rust core (`machine.rs`) as in the C#
+one (`MemoryBus.cs`), so that the frontend writes the loaded pak's contents to its file. It is a request to the host,
+not machine behaviour, and after one load the round trip is exact, which is why `MarsRtRewindTests` — which always
+start from a game's state — never met it. The proof now loads the machine's own state first, and
+`On_a_fresh_MarsRT_the_first_load_changes_the_pak_s_dirty_flag_alone` pins the one byte by name from the state's layout.
+Its consequence for a player is one extra write of the pak file after the first rewind of a session.
+
+### 5.3 Pictures
+
+The buffer has no picture of its own — the frame belongs to the frontend's loop — so the frontend hands it one.
+`OnFrameCompleted` now answers whether it took a snapshot, and when it did, `AttachThumbnail(rgba, width, rows,
+rowRepeat)` gives the newest moment a picture of that frame; a second call for the same moment does nothing.
+`ThumbnailWidth` (0 by default, so Pharaoh and Hotaru keep none) is the picture's width; Mistress sets 160.
+
+`RewindThumbnail.From` keeps the frame's *shown* proportions — `rows × rowRepeat` tall, so a core that leaves row
+doubling to the frontend is not squashed — never enlarges, and averages four samples per output pixel, at the quarter
+points of the source box it covers, whatever the source's size. It stores RGB565, two bytes a pixel, half of RGBA:
+
+| Console | Frame | Picture | Bytes |
+| --- | --- | --- | --- |
+| SNES | 256×224 | 160×140 | 44,800 |
+| Game Boy | 160×144 | 160×144 (kept) | 46,080 |
+| N64, NTSC | 320×240 | 160×120 | 38,400 |
+| N64, PAL (Super Mario 64 Europe) | 640×576 | 160×144 | 46,080 |
+
+`ToRgba` expands one for display. The first version computed each sample's column with a 64-bit division per pixel and
+took 158 to 189 µs a picture; computing the columns once per picture took it to 70 to 93 µs, bit-identical on eight
+frame shapes from 100×90 to 1280×960 with row doubling (checked against the first version, then the check was removed).
+
+A picture that did not change — a core that reports the same `FrameSerial` (`EmuSen_Multicore.md` §14) — is attached again as the same
+object (`AttachThumbnail(RewindThumbnail)`) rather than made again; §5.4's accounting counts it once per moment, which
+over-states the memory and never under-states it. The frontend's rules for which frame a moment gets are `EmuSen_Settings_Reference.md` §4.49's.
+
+### 5.4 The picture budget
+
+`ThumbnailBudgetBytes`, 32 MB by default, caps the pictures, not the snapshots. Past it, every second picture of the
+older half goes, repeatedly, until the pictures fit: the newest stay dense, the density falls with age, the oldest
+picture survives, and **no snapshot is dropped** — a moment without a picture is still in the chain, and is only absent
+from the reel. At 44,800 bytes a picture the budget holds 749 SNES pictures, 50 seconds at 15 a second, before the
+first thinning. `Past_the_picture_budget_older_pictures_thin_out_and_the_snapshots_stay` runs 400 captures against a
+budget of 40 pictures: never over, at least 20 kept, the first and last kept, the newest ten contiguous, the oldest gap
+wider than the newest.
+
+### 5.5 Costs, predicted and measured
+
+Predicted on 2026-09-24 before anything was measured (the list is kept beside the bench, in
+`~/.cache/emusen/probe/rewind-reel/predictions.txt`), then measured with `rewindbench`, a console that runs the loop
+Mistress runs — `RunFrame`, the audio drained, `OnFrameCompleted`, the frame fetched and given back, a picture attached
+on a capture — flat out, 300 frames of warm-up excluded. Timing runs interleave three modes on one build — rewind off,
+rewind without pictures, rewind with pictures — rotating their order each round, each run under
+`flock ~/.cache/emusen/probe/mars-speed/bench.lock`, on three games from the library copied to a scratch folder and
+started from states in play: Yoshi's Island and Super Mario Land 2 with Right held, Super Mario 64 (Europe) in the
+castle, MarsRT with four workers and the picture deferred. One build rather than two, because pictures are a property
+(`ThumbnailWidth`), not a compile-time change.
+
+| | Predicted | Measured |
+| --- | --- | --- |
+| A picture's bytes | 44,800 SNES, 46,080 Game Boy, 38,400 N64 | as predicted for the SNES and the Game Boy. **Wrong for this N64 game**: a PAL Super Mario 64 frame is 640×576, so 160×144 and 46,080 bytes; 38,400 is an NTSC 320×240 frame's |
+| One picture | 20 to 100 µs | **first version outside it, 158 to 189 µs**; after the columns were computed once (§5.3), medians of 68.0 µs (SNES), 68.8 µs (Game Boy), 105.8 µs (N64 640×576) |
+| A frame, pictures against rewind alone | +5 to 25 µs, not distinguishable from the noise | SNES: −110 µs, median of five paired rounds spread from −461 to +16 — not distinguishable. **Game Boy: +36 µs, four of five rounds +24 to +48 — distinguishable**: 5.7 % of a 0.62 ms headless frame, 0.2 % of a frame's 16.7 ms at full speed, and twice the picture's own share of 17 µs, the rest not attributed. N64 (six rounds, four modes): +50 µs, 4.41 against 4.36 ms, inside the spread |
+| Rewind itself, for scale | — | SNES +256 µs a frame (9 %), Game Boy +23 µs (4 %), N64 +307 µs (8 %), headless |
+| Memory | the 32 MB cap reached after about 50 s, then held | Yoshi's Island: 750 moments at 50 s, thinned to 563 pictures, 24.1 MB; at 499 s, 7,500 moments, 581 pictures, 24.8 MB, **chain 2.8 MB**. Super Mario Land 2: the pictures swing between 24.7 and 31.7 MB from one thinning to the next, chain 2.2 MB at 502 s. Super Mario 64: chain 93.4 MB at 60 s, where the 96 MB budget binds, pictures 25.0 MB |
+| Choosing the oldest moment | direct saves `k − 1` loads | §5.2: forty to five hundred times faster than stepping |
+
+*The N64 runs, and a noise source.* The first interleaved N64 run showed pictures costing 1.4 to 1.8 ms a frame in
+three rounds of five. A second run of six rounds with a fourth mode, pictures made and dropped, found runs of the same
+size — +1 to +3 ms a frame, `RunFrame` itself slower — in single rounds of the rewind-only and picture modes alike, and
+once with rewind off in the first run: it is the machine's (other work sharing the processor with MarsRT's workers,
+which the bench's lock does not exclude), not the pictures'. Garbage collection was the same with and without pictures,
+4/3/3 collections against 3/3/3 and one to two milliseconds of pauses in 1,200 frames. The medians above are over those
+episodes.
+
+*What the memory runs show that was not predicted.* **On the SNES and the Game Boy the pictures, not the snapshots,
+are now most of rewind's memory**: 24.8 MB of pictures against a chain of 2.8 MB in Yoshi's Island with eight minutes
+held. Before the reel those games' rewind cost a few megabytes; with it, 27 to 35. On the N64 the chain is still the
+larger, 93 MB to 25. `ThumbnailBudgetBytes` is the knob, and Mistress does not expose it. The N64 memory run's managed
+heap reached 372 MB at its peak, against about 120 MB of chain and pictures held; it was not measured without
+pictures, and is recorded here, not attributed.
+
+### 5.6 Not done
+
+- **No picture for a frame fast-forward skipped.** A capture on a frame that was not drawn has no picture, and its
+  moment is not on the reel. At 200 % with the default skip, captures fall on drawn frames always or never, depending
+  on how the buffer's count lines up with the core's. Forcing a draw on capture frames would cost up to a quarter of
+  the drawing fast-forward skips, and was not done.
+- **The preview is the picture enlarged**, not the frame: the reel shows the 160-pixel picture at the size of its
+  stage. A full-size preview would need a second machine to load `StateAt` into, or a larger picture.
+- **No redo** (§5.2), no reel in Pharaoh, and nothing for the C# Mars, which keeps no history (§4.21b of the settings
+  reference).
+- **Not measured on the handheld.**

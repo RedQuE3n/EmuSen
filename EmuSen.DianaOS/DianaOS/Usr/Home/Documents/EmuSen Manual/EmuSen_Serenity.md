@@ -373,7 +373,7 @@ The plan of §3.6, carried out in stages, each committed working. The pack is li
 
 `SlangChain` builds one pipeline per pass: a render pass with one colour attachment cleared to black, a four-vertex strip carrying `Position` and `TexCoord`, dynamic viewport and scissor, and no blending. The descriptor set layout and push-constant range come from §7.3's reflection. Each frame has two calls:
 
-- `Advance` uploads the core's picture into a ring of history images, with repeated rows expanded first (§2.7), because a slang pass sees the picture as the screen would.
+- `Advance` uploads the core's picture into a ring of history images, with repeated rows expanded first (§2.7), because a slang pass sees the picture as the screen would. *(2026-09-24: retired for the frame control. The premise was wrong for the screen a CRT preset emulates, which receives a progressive field's rows once, and the doubled picture made some twenty presets emulate interlacing on every 240p N64 game. `SlangRunner` now advances the chain with the rows once; the chain keeps the argument. See §10.6.)*
 - `Render` sizes every pass, fills every block, draws the passes in one submission, and copies the last one back.
 
 **The semantics, as libretro's spec gives them.**
@@ -952,6 +952,9 @@ buffer without it. On RADV's host-coherent memory its absence changes nothing ob
 
 ### 9.2 The rows repeated on the device
 
+*(2026-09-24: the frame control no longer asks for this; since §10.6 the runner gives the chain a progressive
+field's rows once. What follows still describes `SlangChain.Advance` with a repeat above one, which the tests use.)*
+
 `Advance` uploads a frame's rows once, into an image of their own height (`_rows`), and blits that image to the
 history image's full height with nearest filtering; the staging buffer is the frame's size, not twice it. For an
 integer repeat *r* the blit is exact: destination row *y* samples source coordinate (*y* + ½)/*r*, which is never a
@@ -1169,7 +1172,11 @@ the layer's output is kept for each case).
   the next pass's fragment stage. `SlangChain`'s render passes declare no subpass dependency, so only the implicit
   external one applies, and it covers only the top and bottom of the pipe. That cause is read from the layer's
   message and the render pass's creation; no fix has tested it. On RADV it shows in no picture compared here. It is
-  recorded, not fixed (§9.8).
+  recorded, not fixed (§9.8). *(2026-09-24: fixed and the cause demonstrated in §10. The argued cause held: a
+  subpass dependency to `EXTERNAL` takes the hazards to zero and removing it brings back every one. The
+  `08743`s were a separate cause, two Mega Bezel shaders' unwritten and unread inputs, §10.3. The run of more than one
+  test class losing the log is sidestepped rather than explained: the tests now take the layer's findings in
+  process, §10.4.)*
 
 **Positive controls.** Each ran through the same six cases:
 
@@ -1247,10 +1254,10 @@ no test writes to the player's `home/Shaders/`.
   deferred upload safe.
 - **Levers 3 and 4** (interop, and two frames in flight) were not built; they were not approved. Most of a light
   preset's remaining 1.8 ms at 1080p is what interop would remove.
-- **The chain's own synchronisation hazard is not fixed** (§9.7). `SlangChain`'s render passes have no subpass
-  dependency that makes a pass's output visible to the next pass's fragment shader, and the layer reports this in
-  royale and Mega Bezel in the unmodified build. It predates this work. The fix is one `VkSubpassDependency` for each
-  render pass, and it needs a picture comparison of its own.
+- ~~**The chain's own synchronisation hazard is not fixed** (§9.7).~~ *Retired 2026-09-24: fixed in §10, with the
+  picture comparison this bullet asked for (every bench case byte-identical, §10.5).* `SlangChain`'s render passes had
+  no subpass dependency that made a pass's output visible to the next pass's fragment shader, and the layer reported
+  this in royale and Mega Bezel in the unmodified build. It predated this work.
 - **`Bind`'s per-frame allocations** (15–118 KB a frame for multi-pass presets) and the one gen2 collection left in
   N64 4× royale are not addressed. §8.5.5 bounded what caching descriptors could save.
 - **The host-read barrier is untested** where it would matter (§9.7).
@@ -1283,3 +1290,397 @@ and every case's full collections are gone. The gains are smaller than the deskt
 `~/.cache/emusen/probe/shaders/handheld/results-handheld-recheck.txt`; the bench host is
 `~/.cache/emusen/probe/shaders/shaderbench-after/` built with `SerenityRoot` at the main tree. Not measured: preset
 load times on the device after lever 2, and a run on battery.
+
+## 10. The chain's synchronisation, and the flicker under CRT presets (2026-09-24)
+
+§9.7 recorded a synchronisation hazard in `SlangChain` and argued its cause. The user asked whether it explained a
+flicker they had seen under the CRT presets. This section reproduces the hazard, classifies it, demonstrates its
+cause and fixes it. It then takes up the separate question of what makes a preset flicker here, and the answer to
+that is mostly not the hazard. Scripts, logs and raw results are in `~/.cache/emusen/probe/shaders/sync/`. Its
+`PREDICTIONS.md` holds the predictions, each written before the measurement it predicts.
+
+### 10.1 What the layer reported, classified
+
+The bench (§8.1) ran under `VK_LAYER_KHRONOS_validation` with synchronisation validation, the shader-access heuristic
+and no message limit, one process per case (`vbench.sh`). It covered seventeen cases: §8.3's thirteen slang cases,
+plus `crt-guest-advanced-ntsc`, `phosphor-persistence` (feedback), `mix_frames` (history) and `bob-deinterlacing`.
+Each run draws 26 frames. The unmodified build (`9269ec9`) reported **5,408 `SYNC-HAZARD-READ-AFTER-WRITE` at
+`vkCmdDraw` and 5 `VUID-RuntimeSpirv-OpEntryPoint-08743`**. These are the messages §9.7 counted over its six cases.
+
+To say which pass and which image each message is about, an uncommitted copy of the chain printed, for every pass,
+its pipeline, its descriptor set, its output views and what each binding resolves to. `classify.py` joined that with
+the handles in the layer's messages (`classified-base.txt`). All 5,408 are the same kind of finding:
+
+- **Read-after-write**, never write-after-read or write-after-write.
+- The reader is a **fragment shader** in pass *j*, sampling the output of an earlier pass *i* < *j* **of the same
+  frame**, by `Source`, by `PassOutputN` or by alias.
+- The prior access is **the layout transition that `vkCmdEndRenderPass` performs** (colour attachment to
+  shader-read) at the end of pass *i*.
+- The layer reports each (pass, binding) once a frame. That gives 13 a frame in guest-advanced, 15 in royale, 7 in
+  Mega Bezel POTATO, 50 in SMOOTH-ADV, 26 in guest-advanced-ntsc and 2 in phosphor-persistence. Lottes,
+  `lcd-grid-v2`, `mix_frames` and `bob-deinterlacing` report nothing: none has a pass that reads another pass's
+  output from the same frame.
+
+What was **not** reported is as informative:
+
+- **Feedback** (`PassFeedbackN`, alias + `Feedback`) is never flagged. It reads last frame's image, written in an
+  earlier submission that the host waited for.
+  - A pass whose output is read as feedback keeps two images and swaps them after each frame (§7.4).
+  - So in the classification that pass's current output appears as "image A" on odd frames and "image B" on even
+    ones. Both are reads of the same frame's output.
+- **History** (`Original`, `OriginalHistoryN`) is never flagged. `Advance` uploads it in its own submission.
+- **Lookup images** are never flagged. They are uploaded once, when the preset is built.
+- **An output with a mip chain** is never flagged, because `GenerateMipmaps` follows the pass with `Transition`'s
+  all-commands barrier. That is why the reads of guest-advanced's mipmapped output are absent.
+- **The readback and the row blit** (§9.1, §9.2) are never flagged. The same all-commands barriers cover them, and
+  §9.7's positive control showed that the layer reports a missing one there.
+
+### 10.2 The cause, and the fix
+
+Each pass's render pass declared no `VkSubpassDependency`, so Vulkan supplied an implicit one at each end of the
+subpass. The implicit dependency out of the subpass has the colour writes and the final layout transition as its
+source, and `BOTTOM_OF_PIPE` with no access as its destination. That destination orders nothing that comes later and
+makes nothing visible to it. The next pass's fragment shader may therefore sample the image before the transition to
+shader-read has finished, or before the colour writes are visible to its caches. §9.7 read this cause from the
+messages but did not test it.
+
+**The fix** is one dependency on every pass's render pass, from subpass 0 to `VK_SUBPASS_EXTERNAL`:
+
+| | Stages | Access |
+|---|---|---|
+| source | colour-attachment output | colour-attachment write |
+| destination | vertex shader, fragment shader | shader read |
+
+The destination names the vertex stage because libretro lets a vertex shader sample a pass's output, and the
+descriptor layouts already give every sampler to both stages. A sweep of every `.slang` in the pack found no preset
+that does this, so a test preset does (§10.5).
+
+No dependency *into* the subpass was added, because there is no write-after-read to order:
+
+- Within a frame, nothing reads a pass's output before the pass writes it.
+- Across frames, the host waits for each submission before it records the next.
+
+**How RetroArch does it** (`gfx/drivers_shader/shader_vulkan.cpp`, read, nothing copied). Its render passes declare
+no dependency either. After each pass's `vkCmdEndRenderPass` it records an explicit image barrier, from
+colour-attachment output and write to fragment shader and read, and moves the image to shader-read-only itself.
+
+- The masks are the ones chosen here, except that RetroArch's barrier names only the fragment stage.
+- A barrier after the pass and a dependency on the pass order the same accesses. The dependency was kept because it
+  needs no layout bookkeeping outside the render pass.
+
+**Why no picture on this machine ever showed it** is argued, not demonstrated:
+
+- RADV turns the source half of the implicit dependency into a wait for the pixel shaders and a flush of the colour
+  caches at the end of every render pass, whatever the destination.
+- The image being sampled was written only in this frame, after the submission began with its caches invalidated, so
+  no stale line can be read.
+- The hazard could therefore become visible on a driver that does less for that source half, such as another
+  vendor's or a tiled mobile GPU's. This machine cannot test that.
+
+### 10.3 `VUID-RuntimeSpirv-OpEntryPoint-08743`
+
+The rule is that every user-defined input of a stage must be written as an output by the stage before it, location
+for location and component for component. Printing each pass's module handles beside the layer's messages traced the
+five messages to three shaders:
+
+- Mega Bezel POTATO, `hsm-crt-dariusg-gdv-mini.inc`. The fragment stage declares
+  `layout(location = 1) in float maskFade;`, and the vertex stage has no output at location 1.
+- Mega Bezel SMOOTH-ADV, `bezel-images.inc`, included by `bezel-images-under-crt` and `bezel-images-over-crt`. The
+  fragment stage declares `layout(location = 8) in vec3 BEZEL_FRAME_ORIGINAL_COLOR_RGB;`, and the vertex stage writes
+  only locations 6 and 7.
+
+**No instruction in either shader reads the variable.** It is a declaration left behind in the pack.
+
+- RetroArch compiles the same text with glslang and builds the same interface.
+- An input like this would read an undefined value, but since nothing reads it, nothing on screen depends on it.
+- The pipeline is nonetheless invalid, and a driver is entitled to reject it.
+
+**The fix** is `SpirvReflection.WithoutUnreadInputs`. It runs after a fragment stage is compiled or served from the
+cache.
+
+- It leaves out of the entry point's interface list any `Input` variable that no instruction inside a function refers
+  to, and corrects the instruction's word count.
+- This is valid SPIR-V. SPIR-V 1.3, which Vulkan 1.1 uses, requires the interface to list the inputs the entry point
+  *uses*, and an unused input need not be listed.
+- It runs after the cache, so the cache's rows stay Shaderc's output and no key changes.
+- A module with nothing to drop is returned as the same array.
+
+**The test for "read" is deliberately one-sided.** Any word in a function body equal to the variable's id counts as a
+use, so a literal that happens to match keeps an input but never drops one. The first version scanned the whole
+module, and in the test it kept `AlsoUnread`, whose id matched a literal among the declarations. That is why the scan
+starts at the first `OpFunction`.
+
+**What it does not fix** is an input that *is* read but never written. That would be a real shader defect, with an
+undefined value on screen. No bench case has one, and the layer would still report it, which is right.
+
+### 10.4 The layer in process, for the tests
+
+§9.7 found that the layer's log file came back empty under `dotnet test` whenever more than one test class ran. The
+tests now avoid the file rather than explain that. `SlangVulkan.TryCreate` takes an internal sink, and with one it
+loads the layer:
+
+- It enables `VK_LAYER_KHRONOS_validation`, configured through `VK_EXT_layer_settings`: `validate_sync` and
+  `syncval_shader_accesses_heuristic` on, `enable_message_limit` off.
+- A `VK_EXT_debug_utils` messenger hands every validation and performance message to the sink.
+- The public `TryCreate` passes no sink, so no frontend loads the layer.
+
+**The messenger must be made after the instance exists.** The first version chained it into `VkInstanceCreateInfo`.
+It received the loader's messages during instance creation and nothing afterwards, so the first tests passed while the
+layer reported to no one. The messenger is now made with `vkCreateDebugUtilsMessengerEXT` once the instance exists.
+
+**Silence proves something only if the layer is listening.** After each run the tests create a zero-sized buffer,
+which is `VUID-VkBufferCreateInfo-size-00912`, and assert that the sink received that message. This check is what
+exposed the messenger mistake above.
+
+**Where the layer is not installed**, instance creation fails and the tests return, as every GPU test here does
+without a device. On such a machine these tests say nothing.
+
+### 10.5 The evidence
+
+**Validation after the fix.** The same seventeen cases under the same settings gave **zero findings on every case**,
+N64 4× and 4K SMOOTH-ADV included (`validation-fix/`).
+
+**Positive controls.** Each control was the fixed tree with one change, run over the same seventeen cases:
+
+| Control | Findings |
+|---|---|
+| Subpass dependency removed (`DependencyCount = 0`) | 5,408 `SYNC-HAZARD-READ-AFTER-WRITE`, exactly the unmodified build's count |
+| Unread inputs kept | 5 `VUID-…-08743`, and no hazard |
+
+So the dependency removes every hazard and nothing else does, and the interface change removes every VUID and
+nothing else does.
+
+**Pictures.** The bench hashes three frames per run after the measured ones.
+
+- Against `9269ec9`, interleaved, three rounds of all thirteen slang cases: **13 of 13 cases byte-identical, on
+  every frame of every round** (`summary-time.md`).
+- The seventeen validation runs matched frame for frame before and after.
+- On the N64 frame the still bench (§10.6) gave the same sequence pattern for all 101 `crt/` presets before and
+  after. For the three `zfast` presets this holds once alpha is excluded; the first sweep hashed their undefined
+  alpha.
+- **So nothing the fix changes is visible on RADV.** That was prediction P2. It fits §10.2's argument, and it means
+  the fix changes no picture a player has seen on this hardware.
+
+**Cost.** The prediction was a change within ±0.05 ms for one-pass presets and at most +0.10 ms for royale and Mega
+Bezel. The table gives the render thread's time in ms: the median of three rounds' medians, interleaved under the
+bench lock (`results-time.txt`).
+
+| Case | `9269ec9` | Fixed | Change |
+|---|---|---|---|
+| SNES `crt-lottes` 1080p | 1.79 | 1.80 | +0.01 |
+| SNES `crt-guest-advanced` | 1.87 | 1.90 | +0.02 |
+| SNES `crt-royale` | 1.74 | 1.76 | +0.02 |
+| SNES Mega Bezel POTATO | 1.84 | 1.85 | +0.01 |
+| SNES Mega Bezel SMOOTH-ADV | 3.92 | 3.91 | −0.01 |
+| GB `lcd-grid-v2` | 1.33 | 1.34 | +0.01 |
+| N64 1× `crt-lottes` | 1.98 | 1.97 | −0.01 |
+| N64 1× `crt-royale` | 1.94 | 1.96 | +0.01 |
+| N64 4× `crt-lottes` | 2.86 | 2.86 | −0.01 |
+| N64 4× `crt-royale` | 3.57 | 3.55 | −0.02 |
+| SNES 4K `crt-lottes` | 5.30 | 5.29 | −0.01 |
+| SNES 4K `crt-royale` | 4.45 | 4.42 | −0.03 |
+| SNES 4K Mega Bezel SMOOTH-ADV | 9.17 | 9.17 | +0.01 |
+
+- Every change is within ±0.03 ms, the size of the spread from round to round. The prediction held.
+- The passes' GPU time (`chain.gpu.passes`) moved by at most 0.04 ms, and by 0.07 ms in one case: N64 1× Lottes.
+  Lottes is a one-pass preset, so that fall cannot come from a dependency between passes, and it is read as noise.
+- The fix costs nothing measurable here, which fits §10.2's argument that RADV already did the waiting.
+
+**Mutants.** Each mutant was applied alone to the worktree, built, and run against `SlangSyncTests`, `SlangChainTests`
+and `SlangReadbackTests` with the pack (`mutants.py`, `mutants.log`). "The four validation tests" below are those for
+the test preset, royale, guest-advanced and POTATO.
+
+| Mutant | Caught by |
+|---|---|
+| No subpass dependency | the four validation tests |
+| The dependency's destination without the fragment stage | the four validation tests |
+| The destination without the vertex stage | **survived** the first run, because no preset sampled in a vertex shader. Caught by the test preset once its fourth pass did (§10.2) |
+| No destination access (an execution dependency only) | the four validation tests |
+| From the top of the pipe, with no source access | the four validation tests |
+| Unread inputs kept | the validation tests for the test preset and for POTATO |
+| Every input dropped, read or not | a test-host crash: the driver was given a fragment stage without its `vTexCoord` |
+| The whole module scanned for reads | `An_input_no_instruction_reads_…`, and the same two validation tests |
+| The entry point's word count not corrected | a test-host crash |
+
+Both crashes count as caught, as §9.7's did, but they were caught by a crash, not by an assertion.
+
+### 10.6 What makes a preset flicker here
+
+The hazard changes no picture on this machine (§10.5), so it cannot be what the user saw on it. The user's machines
+are this desktop's RX 6800 and a Legion Go S, both on RADV, and §10.2's argument covers both. The question therefore
+became what else could make a preset's picture unstable from frame to frame. The candidates were:
+
+- feedback swapped at the wrong time;
+- history uninitialised or wrong;
+- `FrameCount` or `FrameDirection` wrong;
+- a frame run again, or not run, when it should be;
+- the lent readback overwritten;
+- uninitialised images.
+
+**The still bench** (`still-base/Program.cs`, a probe, not committed) tests these by builds and hashes:
+
+- It builds a preset twice and gives each chain the same still frame N times, as a running game on a static screen
+  would.
+- It hashes each picture with its alpha set opaque. The frame control draws the image opaque, so alpha is never seen.
+- It reports how many distinct pictures there were, their pattern, the steady state's period, and whether the two
+  chains agree frame for frame.
+- It ran over all 101 presets in the pack's `crt/`, on two frames: a 256×224 SNES-shaped frame, and a 640×240
+  N64-shaped frame with its rows repeated twice, as the frame control then sent it (`still-base-crt.txt`).
+
+**What it found, sorted:**
+
+- **Most presets hold still.** One picture for every frame, and both chains agree.
+- **Some presets animate by design.** They change every frame, both chains agree, and each uses `FrameCount` for
+  grain, noise, rolling scan or jitter:
+  - `newpixie-crt`, `crt-mattias`, `crt-pocket`, `metacrt`, `monoCRT`, `simple-crt`, `gizmo-crt`,
+    `crt-beans-rgb`/`-vga` and `crt-maximus-royale` change every frame.
+  - `crt-yah` changes every five frames with a period of a hundred, because its noise runs at 12 Hz.
+  - `crt-1tap-bloom` settles after 53 frames. Its moving average is eye adaptation, through feedback.
+- **The NTSC and composite presets alternate on both frames**: `crt-hyllian-ntsc`, `-ntsc-rainbow`,
+  `crt-consumer-1w-ntsc-XL` and `crtsim`. This is the colour subcarrier's phase alternating by `FrameCount`, which is
+  what those shaders emulate.
+- **`gizmo-slotmask-crt` is the one preset whose two chains disagree.** This is a pack defect, recorded and not
+  fixed:
+  - About 260 of 1.2 million pixels differ, by up to 216 levels, all at the edge of its curved screen.
+  - The shader calls `fwidth` after an early `return` for pixels outside the curve. So it takes derivatives in
+    non-uniform control flow, where they are undefined.
+  - It sparkles at the border in RetroArch too, for the same reason, and the fix changes nothing about it.
+  - It refutes prediction P5 for one preset, for a reason unrelated to the hazard.
+- **Some presets leave alpha undefined**: `zfast-crt`, `simple-crt`, `crt-geom-deluxe` and Mega Bezel. The last pass
+  writes only `.rgb`, so alpha differs between frames and between chains. It is never visible, because the image is
+  drawn opaque.
+- **On the N64 frame only, 24 presets alternate between two pictures every frame.** On the SNES frame the same
+  presets hold still. They are royale and all its variants, the guest-advanced family, `crt-geom`, `crt-geom-mini`,
+  `fake-crt-geom`, `crt-geom-deluxe`, `crt-consumer`, `crt-Cyclon`, `crt-beans-fast`, `crt-easymode-halation`,
+  `crt-nobody`, `crt-interlaced-halation` and `zfast-crt-composite`.
+
+**The cause of the N64 alternation.** These presets emulate interlacing when the picture is tall enough to be an
+interlaced one:
+
+- Royale does so for 288.5 to 576.5 lines (`interlace_detect_toggle`, on by default).
+- Guest-advanced does so at 375 lines and up (`inter` 375, `interm` 1).
+- Each shows one field's lines, and moves to the other field as `FrameCount`'s parity changes.
+
+The frame control sent a progressive N64 field, 240 rows, with its rows repeated to 480 before the preset saw it
+(§7.4, §9.2). So the preset took every 240p game for a 480i one. A still screen then alternates between two pictures
+at half the rate new frames arrive. Mars offers a new picture only when the game draws one (Mars_Video.md §2.8), so
+on a 20 or 30 fps game the alternation runs at 10 or 15 Hz, unevenly paced. That is a visible, irregular line flicker.
+
+**Against RetroArch** (read from `~/Projects/retroarch-reference` and `~/Projects/parallel-n64-reference`).
+parallel-n64 hands `video_cb` 240 rows for a progressive field, and 480 only for an interlaced one:
+
+- under angrylion (`vi.c`), the height is `480 >> !serrate`;
+- under parallel-rdp, it is the scan-out's height, `(480 >> !serrate) × scale`.
+
+So RetroArch's royale does not interlace a 240p N64 game, and EmuSen's did. The §7.4 premise, "a slang pass sees the
+picture as the screen would", was wrong for a CRT preset. The screen it emulates receives 240 lines per field. The
+repeat is this frontend's way of filling a progressive display, not part of the signal.
+
+**The fix.** `SlangRunner` now advances the chain with the rows once.
+
+- The destination rectangle already carries the repeat (§2.7), so the shape on screen is unchanged.
+- The chain keeps its repeat argument, and §9.2's blit stays for a caller that wants it. The frame control no longer
+  does.
+- SNES, GB and interlaced N64 frames arrive with a repeat of one and are untouched.
+- At Mars's 4× the preset now sees 960 rows, which is what parallel-rdp's 4× upscale gives RetroArch. At 960 rows
+  guest-advanced still emulates interlacing (960 ≥ 375), in both frontends, and royale does not (960 is outside its
+  range).
+
+**The evidence for the fix:**
+
+- **The still bench after the fix** (`still-fix-n64-rows-once.txt` against `-rows-twice.txt`, the same tree). On the
+  N64 frame 5 presets alternate instead of 24. Four are the NTSC and composite presets, which alternate on the SNES
+  frame too. The fifth is `crt-guest-advanced-ntsc`, whose NTSC pass picks a two-phase pattern for a picture 640
+  wide.
+- **The tests.** `A_still_progressive_frame_under_royale_draws_the_same_picture_every_frame` shows the defect and the
+  fix in one test:
+  - The chain, given the frame as 480 rows, alternates: frames 0 and 1 differ, and frames 0 and 2 agree.
+  - The runner, given the same frame, draws one picture four times.
+- `A_progressive_frame_reaches_the_preset_with_its_rows_once` reads `OriginalSize` back through a preset.
+- A mutant runner that repeats the rows as before fails both tests.
+- **Pictures.** The rows-once tree against the fixed tree, interleaved, three rounds of the thirteen slang cases
+  (`results-rows.txt`, `summary-rows.md`):
+  - The nine SNES, GB and 4K cases are byte-identical.
+  - The four N64 cases differ, which is intended: the preset now works on 240 rows, or 960 at 4×, where it had 480
+    or 1,920. Each build drew the same three pictures in every round.
+  - Looked at (`dump/royale-n64-compare.png`): with the rows repeated, royale's picture moves up and down by a
+    line between consecutive frames of a still screen, which is the alternation the bench counted. With the rows
+    once, the frames are identical, and the preset draws a scanline structure for 240 lines where it drew one for
+    480.
+  - The validation layer stays at zero on all seventeen cases.
+- **Cost.** It was predicted at −0.05 to −0.15 ms at N64 1×, −0.2 to −0.5 at 4× Lottes and −0.5 to −1.0 at 4×
+  royale. Measured, in ms:
+
+  | Case | Fixed | Rows once | Change |
+  |---|---|---|---|
+  | N64 1× Lottes | 1.96 | 1.98 | +0.02 |
+  | N64 1× royale | 1.94 | 1.95 | +0.01 |
+  | N64 4× Lottes | 2.85 | 2.80 | −0.05 |
+  | N64 4× royale | 3.60 | 3.23 | −0.37 |
+
+  **All three predictions are refuted, and all in the same direction: the gain is smaller than predicted.**
+  - `Advance` fell by only 0.02 to 0.06 ms. The blit to the doubled height was cheap, and the upload of the rows,
+    which remains, is most of `Advance`.
+  - At 1× the passes' work did not measurably shrink.
+  - At 4× royale's GPU passes fell from 1.17 to 0.86 ms, because its source-scaled passes now run at half the
+    height.
+  - The nine unchanged cases moved by −0.06 to +0.03 ms. That is wider than the ±0.03 predicted (P7) for cases the
+    change cannot touch, and it is the noise of this pair of runs.
+
+**Other divergences from RetroArch, found on the way.** None of them makes a flicker here.
+
+- **`FrameCount` counts pictures drawn, not console frames. This is not fixed.**
+  - RetroArch increments it at every video frame. That includes a core's duplicated frame (the chain runs again,
+    history is pushed, feedback swaps), frames while paused (the cached frame is drawn at the display's rate), and
+    even fast-forward frames it skips drawing.
+  - EmuSen advances it once for each new offer the frame control draws.
+  - So on an N64 game at 20 fps, a `FrameCount` animation runs at a third of RetroArch's rate, and a paused game's
+    picture holds still where RetroArch's keeps animating.
+  - For a genuinely interlaced (480i) N64 picture, the field alternation still follows the game's frame rate.
+  - A fix needs the frontend to pass a console frame number with each offer. Whether a paused picture should keep
+    animating is the user's choice.
+- **RetroArch defines `_HAS_ORIGINALASPECT_UNIFORMS`, `_HAS_FRAMETIME_UNIFORMS` and `_HAS_SENSOR_UNIFORMS`** in every
+  stage it compiles (`glslang_util.c`). EmuSen passes Shaderc no defines (§9.4), so a shader written for them takes its
+  fallback. For instance, `crt-yah`'s frame-rate compensation assumes 60 fps instead of reading `FrameTimeDelta`.
+  That makes nothing unstable, but it is a difference.
+- **These agree with RetroArch, and none showed anything in the still bench:**
+  - `FrameDirection` is 1, as RetroArch's is when not rewinding.
+  - Feedback swaps after the frame's passes.
+  - History and feedback start cleared.
+  - The lent readback is never written while an image holds it (§9.1's tests).
+
+### 10.7 Does this explain the user's flicker?
+
+**The synchronisation hazard does not, on the user's hardware.** It is real and it is fixed. It broke the API's rules
+and could have shown on another driver. But on RADV its fix changes no picture, in any bench case or in any of the 101
+CRT presets. A defect whose fix changes no picture cannot be what the user saw.
+
+**The interlace emulation on N64 frames very probably does, if the flicker was on an N64 game** under royale,
+guest-advanced or any of the other presets listed in §10.6:
+
+- On a still screen it shows as line flicker over the whole picture at 10 to 30 Hz, unevenly paced by the game's
+  frame rate. That matches "weird flickering with the CRT shaders".
+- It is gone after §10.6's fix.
+
+Under a SNES or Game Boy game none of this applies. What still changes from frame to frame there is presets
+animating on purpose (grain, noise, NTSC phase) and one pack shader's border sparkle (`gizmo-slotmask-crt`).
+
+Which game and preset the user saw the flicker under was not established. If the flicker persists, that is the
+question to ask.
+
+### 10.8 What this does not cover
+
+- **No other vendor's driver was run.** §10.2's reason the hazard never showed is argued from RADV's behaviour, and
+  the claim that it could show elsewhere is untested. The fix is what the specification requires either way.
+- **Nothing ran in a real window**, as in §9.8. The flicker findings are the chain's and the runner's pictures,
+  hashed. The frame control's own redraw pacing was not observed in Mistress.
+- **The handheld was not run.** The parent session runs it.
+- **`FrameCount`'s rate** (§10.6) is not fixed. Nor is RetroArch's behaviour of running the chain again on a
+  duplicated or paused frame.
+- **`gizmo-slotmask-crt`'s border sparkle and the undefined alphas** belong to the pack and are not worked around.
+- **A fragment input that is read but never written** would still be reported by the layer, and still be undefined
+  on screen (§10.3).
+- **The validation tests say nothing where the layer is not installed** (§10.4). Where it is installed, they check
+  that it is listening.
+- **The still bench swept only the pack's `crt/` presets.** Presets in the other categories (`bezel/`, `handheld/`,
+  `ntsc/` and the rest) were run only where the bench cases include them.

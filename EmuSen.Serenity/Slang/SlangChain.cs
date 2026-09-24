@@ -47,7 +47,7 @@ namespace EmuSen.Serenity.Slang
 
         public SlangPreset Preset { get; }
 
-        // Every parameter the passes declare, with the preset's value where it gives one.
+        // Every parameter the passes declare, with the preset's value as its default where it gives one - see EmuSen_Serenity.md §7.6.
         public IReadOnlyList<SlangParameter> Parameters { get; }
 
         public SlangChain(SlangVulkan gpu, SlangPreset preset)
@@ -56,10 +56,9 @@ namespace EmuSen.Serenity.Slang
             _vk = gpu.Vk;
             Preset = preset;
 
-            var declared = new List<SlangParameter>();
-            _passes = preset.Passes.Select((spec, i) => Build(spec, i, preset.Passes.Count, declared)).ToArray();
-            Parameters = declared;
-            foreach (SlangParameter parameter in declared) _parameters[parameter.Id] = preset.Parameters.TryGetValue(parameter.Id, out float value) ? value : parameter.Initial;
+            _passes = preset.Passes.Select((spec, i) => Build(spec, i, preset.Passes.Count)).ToArray();
+            Parameters = SlangParameters.Merge(_passes.Select(p => p.Source), preset.Parameters);
+            SetParameters(null);
 
             // History is as deep as the deepest OriginalHistory# any pass samples, plus the frame itself.
             int depth = 0;
@@ -89,6 +88,15 @@ namespace EmuSen.Serenity.Slang
             fixed (float* q = quad) System.Buffer.MemoryCopy(q, _vertices.Mapped, 64, 64);
         }
 
+        // Values by id over the defaults, read by the next Render; an id no pass declares is ignored, one left out is its default - see EmuSen_Serenity.md §7.6.
+        public void SetParameters(IReadOnlyDictionary<string, float>? values)
+        {
+            foreach (SlangParameter parameter in Parameters)
+                _parameters[parameter.Id] = values is not null && values.TryGetValue(parameter.Id, out float value) ? value : parameter.Initial;
+        }
+
+        public float ValueOf(string id) => _parameters.TryGetValue(id, out float value) ? value : float.NaN;
+
         public static Format ParseFormat(string? name, Format fallback)
         {
             if (string.IsNullOrEmpty(name)) return fallback;
@@ -97,13 +105,12 @@ namespace EmuSen.Serenity.Slang
             return Enum.TryParse(spelled, out Format format) ? format : fallback;
         }
 
-        private Pass Build(SlangPassSpec spec, int index, int count, List<SlangParameter> declared)
+        private Pass Build(SlangPassSpec spec, int index, int count)
         {
             SlangSource source = SlangSource.Load(spec.ShaderPath);
             byte[] vertex = SlangCompiler.Compile(source.Vertex, SlangStage.Vertex, spec.ShaderPath);
             byte[] fragment = SlangCompiler.Compile(source.Fragment, SlangStage.Fragment, spec.ShaderPath);
             SpirvReflection reflection = SpirvReflection.Merge(SpirvReflection.Read(vertex), SpirvReflection.Read(fragment));
-            foreach (SlangParameter parameter in source.Parameters) if (declared.All(p => p.Id != parameter.Id)) declared.Add(parameter);
 
             // The last pass is what the screen shows, so it is 8-bit whatever it asks, sRGB if it says so, as RetroArch's swapchain is.
             bool last = index == count - 1;

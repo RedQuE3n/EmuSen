@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using EmuSen.Serenity.Slang;
 
 namespace EmuSen.Serenity.Shaders
 {
@@ -8,8 +9,8 @@ namespace EmuSen.Serenity.Shaders
     // One SkSL pass; History is how many earlier frames it reads, as history1 to historyN - see EmuSen_Serenity.md §3.2.
     public sealed record FilterPass(string Sksl, PassScale Scale, bool LinearSource = false, int History = 0);
 
-    // A screen filter: its passes, the consoles it suits (null for every one), and whose work it rests on - see EmuSen_Serenity.md §3.3.
-    public sealed record ScreenFilter(string Name, IReadOnlyList<FilterPass> Passes, IReadOnlyList<string>? Consoles, string Credit)
+    // A screen filter: its passes, the consoles it suits (null for every one), whose work it rests on, and the uniforms a player may set - see EmuSen_Serenity.md §3.3 and §3.7.
+    public sealed record ScreenFilter(string Name, IReadOnlyList<FilterPass> Passes, IReadOnlyList<string>? Consoles, string Credit, IReadOnlyList<SlangParameter>? Parameters = null)
     {
         public int History
         {

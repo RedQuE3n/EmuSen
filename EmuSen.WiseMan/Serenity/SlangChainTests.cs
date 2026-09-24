@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -169,6 +170,29 @@ namespace EmuSen.WiseMan.Serenity
             Assert.Equal(51, overridden.Render(4, 2)[0]);
         }
 
+        // §7.6: the preset's value is the default a reset returns to; a value set on a built chain reaches its next Render; an undeclared id is ignored.
+        [Fact]
+        public void A_value_set_on_a_built_chain_reaches_the_next_render_and_leaving_it_out_returns_to_the_preset_s()
+        {
+            Shader("gain.slang", "void main() { FragColor = vec4(params.gain, 0.0, 0.0, 1.0); }\n");
+            SlangPreset preset = Preset("shaders = 1\nshader0 = gain.slang\ngain = 0.2\n");
+            SlangParameter read = Assert.Single(SlangParameters.Read(preset));
+            Assert.Equal(new SlangParameter("gain", "Gain", 0.2f, 0f, 1f, 0.1f), read);
+            if (_gpu is null) return;
+
+            using var chain = new SlangChain(_gpu, preset);
+            Assert.Equal(read, Assert.Single(chain.Parameters));
+            chain.Advance(Picture(), 4, 2, 1);
+            Assert.Equal(51, chain.Render(4, 2)[0]);
+
+            chain.SetParameters(new Dictionary<string, float> { ["gain"] = 0.6f, ["notDeclared"] = 1f });
+            Assert.Equal(153, chain.Render(4, 2)[0]);
+            Assert.True(float.IsNaN(chain.ValueOf("notDeclared")));
+
+            chain.SetParameters(null);
+            Assert.Equal(51, chain.Render(4, 2)[0]);
+        }
+
         [Fact]
         public void Sizes_are_given_as_width_height_and_reciprocals_and_a_scaled_pass_is_that_size()
         {
@@ -212,6 +236,7 @@ namespace EmuSen.WiseMan.Serenity
             var clock = Stopwatch.StartNew();
             using var chain = new SlangChain(_gpu, SlangPreset.Load(Path.Combine(pack, relative)));
             _output.WriteLine($"built in {clock.ElapsedMilliseconds} ms, {chain.Preset.Passes.Count} passes, {chain.Parameters.Count} parameters");
+            Assert.Equal(SlangParameters.Read(chain.Preset), chain.Parameters);
             byte[] picture = Picture(256, 224, 128);
             byte[] output = Array.Empty<byte>();
             clock.Restart();
@@ -296,6 +321,61 @@ namespace EmuSen.WiseMan.Serenity
             string preset = Invert();
             var centre = await Session.Dispatch(() => Centre(preset), default);
             Assert.Equal((245, 235, 225), centre);
+        }
+
+        // §7.6: a value set on the control while the preset runs is drawn at the next paint, with no new frame from the game.
+        [Fact]
+        public async System.Threading.Tasks.Task A_parameter_set_on_the_control_reaches_the_drawn_preset_without_a_new_frame()
+        {
+            if (SlangVulkan.TryCreate(out _) is not { } probe) return;
+            probe.Dispose();
+            File.WriteAllText(Path.Combine(_root, "gain.slang"), """
+                #version 450
+                layout(push_constant) uniform Push { float gain; } params;
+                #pragma parameter gain "Gain" 1.0 0.0 1.0 0.1
+                layout(std140, set = 0, binding = 0) uniform UBO { mat4 MVP; } global;
+                #pragma stage vertex
+                layout(location = 0) in vec4 Position;
+                layout(location = 1) in vec2 TexCoord;
+                layout(location = 0) out vec2 vTexCoord;
+                void main() { gl_Position = global.MVP * Position; vTexCoord = TexCoord; }
+                #pragma stage fragment
+                layout(location = 0) in vec2 vTexCoord;
+                layout(location = 0) out vec4 FragColor;
+                void main() { FragColor = vec4(params.gain, 0.0, 0.0, 1.0); }
+                """);
+            string preset = Path.Combine(_root, "gain.slangp");
+            File.WriteAllText(preset, "shaders = 1\nshader0 = gain.slang\ngain = 0.2\n");
+
+            var reds = await Session.Dispatch(() =>
+            {
+                var control = new EmuSen.Serenity.GameFrameControl { ActiveSlangPreset = preset };
+                var window = new Avalonia.Controls.Window { Width = 64, Height = 64, Content = control };
+                window.Show();
+                try
+                {
+                    var clock = Stopwatch.StartNew();
+                    while (!control.SlangBuilt && clock.ElapsedMilliseconds < 20000) System.Threading.Thread.Sleep(10);
+                    control.UpdateFrame(new byte[8 * 8 * 4], 8, 8);
+                    int Red()
+                    {
+                        using var captured = Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window)!;
+                        var capture = EmuSen.WiseMan.Fixtures.UiTest.Capture(captured);
+                        return capture.Rgba[(32 * capture.Width + 32) * 4];
+                    }
+                    int atPreset = Red();
+                    control.ShaderParameters = new Dictionary<string, float> { ["gain"] = 0.8f };
+                    int set = Red();
+                    control.ShaderParameters = null;
+                    return (atPreset, set, Red());
+                }
+                finally
+                {
+                    window.Close();
+                }
+            }, default);
+
+            Assert.Equal((51, 204, 51), reds);
         }
 
         [Fact]

@@ -313,3 +313,15 @@ fn a_game_halted_at_breakpoints_and_resumed_is_the_game_run_through() {
     }
     assert_eq!(halts, 100);
 }
+
+#[test]
+fn a_state_from_the_other_console_rebuilds_the_machine_and_keeps_its_hooks() {
+    let colour = Machine::load_rom(rom(COUNT_FOREVER, &[]), Model::GameBoyColor).expect("a board with no mapper");
+    let saved = state(&colour);
+    let mut m = load(rom(COUNT_FOREVER, &[]));
+    m.hooks.breakpoints = vec![(0x153, 0x153)];
+    m.load_state(&saved).expect("a state of the other console");
+    assert!(m.cgb_hardware());
+    assert_eq!(m.hooks.breakpoints, vec![(0x153, 0x153)]);
+    assert_eq!(m.run_frame_debug(0), Ok(stop::BREAKPOINT));
+}

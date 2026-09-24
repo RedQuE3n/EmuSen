@@ -55,8 +55,12 @@ pub struct MemoryBus {
     pub tima: u8,
     pub tima_reload_delay: i32,
     pub tma: u8,
-    /// Decided once from the header, as C#'s readonly `Cgb` is.
+    /// Colour mode, a Game Boy Color running a cartridge made for it; decided once, as C#'s readonly `Cgb` is (Mercury_Model.md §2).
     pub cgb: Skip<bool>,
+    /// The console itself, which stays a Game Boy Color while it runs a Game Boy cartridge.
+    pub cgb_hardware: Skip<bool>,
+    /// A Game Boy cartridge on a Game Boy Color: the colour registers locked and DMG rendering through colour palettes (Mercury_Model.md §4).
+    pub dmg_compat: Skip<bool>,
     pub joypad: Skip<Joypad>,
     /// What the test corpus printed, for the harness to read - see Mercury_Memory.md §10.
     pub serial_log: Skip<Vec<u8>>,
@@ -68,9 +72,11 @@ pub struct MemoryBus {
 }
 
 impl MemoryBus {
-    /// `new MemoryBus(cart)`: the colour console's banks are twice and four times the size.
-    pub fn new(cart: Cartridge, mapper: Mapper) -> Self {
-        let cgb = cart.is_cgb();
+    /// `new MemoryBus(cart, cgbHardware)`: the colour console's banks are twice and four times the size, whatever it runs.
+    pub fn new(cart: Cartridge, mapper: Mapper, cgb_hardware: bool) -> Self {
+        let (cgb, compat) = (cgb_hardware && cart.is_cgb(), cgb_hardware && !cart.is_cgb());
+        let mut ppu = Ppu::default();
+        *ppu.compat = compat;
         MemoryBus {
             cart,
             mapper,
@@ -85,11 +91,11 @@ impl MemoryBus {
             interrupt_flags: 0,
             io: [0; 0x80],
             oam: [0; 0xA0],
-            ppu: Ppu::default(),
+            ppu,
             speed_switch_armed: false,
-            vram: vec![0; VRAM_BANK_SIZE * if cgb { 2 } else { 1 }],
+            vram: vec![0; VRAM_BANK_SIZE * if cgb_hardware { 2 } else { 1 }],
             vram_bank: 0,
-            wram: vec![0; WRAM_BANK_SIZE * if cgb { 8 } else { 2 }],
+            wram: vec![0; WRAM_BANK_SIZE * if cgb_hardware { 8 } else { 2 }],
             wram_bank: 1,
             base_clock_phase: false,
             div_counter: 0,
@@ -105,6 +111,8 @@ impl MemoryBus {
             tima_reload_delay: 0,
             tma: 0,
             cgb: Skip(cgb),
+            cgb_hardware: Skip(cgb_hardware),
+            dmg_compat: Skip(compat),
             joypad: Skip(Joypad::default()),
             serial_log: Skip(Vec::new()),
             rom_patches: Skip(None),
@@ -137,6 +145,9 @@ impl MemoryBus {
         self.reset_cgb();
         self.ppu.reset();
         self.apu.reset();
+        if *self.dmg_compat {
+            self.ppu.load_compatibility_palettes(crate::ppu::compat::palette_number(&self.cart.rom));
+        }
     }
 
     fn reset_cgb(&mut self) {
@@ -354,6 +365,7 @@ impl MemoryBus {
             0xFF4A => self.ppu.wy,
             0xFF4B => self.ppu.wx,
             _ if *self.cgb => self.read_cgb_io(address),
+            _ if *self.dmg_compat => self.read_compat_io(address),
             _ => self.io[(address - 0xFF00) as usize],
         }
     }
@@ -391,6 +403,9 @@ impl MemoryBus {
             0xFF4B => self.ppu.wx = data,
             _ => {
                 if *self.cgb && self.write_cgb_io(address, data) {
+                    return;
+                }
+                if *self.dmg_compat && self.write_compat_io(address, data) {
                     return;
                 }
                 self.io[(address - 0xFF00) as usize] = data;
@@ -449,6 +464,28 @@ impl MemoryBus {
             0xFF6B => self.ppu.write_obj_palette_data(data),
             0xFF6C => {}
             0xFF70 => self.wram_bank = if data & 0x07 == 0 { 1 } else { (data & 0x07) as i32 },
+            _ => return false,
+        }
+        true
+    }
+
+    /// With a Game Boy cartridge the colour registers read $FF and ignore writes, except VRAM bank and the palette indices (Mercury_Model.md §4.2).
+    fn read_compat_io(&self, address: u16) -> u8 {
+        match address {
+            0xFF4C | 0xFF4D | 0xFF56 | 0xFF6C | 0xFF70 | 0xFF51..=0xFF55 | 0xFF69 | 0xFF6B => 0xFF,
+            0xFF4F => (0xFE | self.vram_bank) as u8,
+            0xFF68 => self.ppu.read_bg_palette_index(),
+            0xFF6A => self.ppu.read_obj_palette_index(),
+            _ => self.io[(address - 0xFF00) as usize],
+        }
+    }
+
+    fn write_compat_io(&mut self, address: u16, data: u8) -> bool {
+        match address {
+            0xFF4F => self.vram_bank = (data & 0x01) as i32,
+            0xFF68 => self.ppu.write_bg_palette_index(data),
+            0xFF6A => self.ppu.write_obj_palette_index(data),
+            0xFF4C | 0xFF4D | 0xFF56 | 0xFF69 | 0xFF6B | 0xFF6C | 0xFF70 | 0xFF51..=0xFF55 => {}
             _ => return false,
         }
         true

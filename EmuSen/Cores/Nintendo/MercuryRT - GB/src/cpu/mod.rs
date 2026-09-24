@@ -102,6 +102,15 @@ impl Cpu {
         self.cycles = 0;
     }
 
+    /// What a Game Boy Color's boot ROM hands a Game Boy cartridge: B the title checksum, HL where the logo map was drawn - see Mercury_Model.md §3.2.
+    pub fn reset_for_compatibility(&mut self, title_checksum: u8) {
+        self.reset(true);
+        self.set_af(0x1180);
+        self.set_bc((title_checksum as u16) << 8);
+        self.set_de(0x0008);
+        self.set_hl(if matches!(title_checksum, 0x43 | 0x58) { 0x991A } else { 0x007C });
+    }
+
     /// `Cpu.Step`: one instruction or one interrupt dispatch, ticking the bus as it goes; returns the T-cycles and the bit serviced.
     #[inline(always)]
     pub fn step<B: CpuBus>(&mut self, bus: &mut B, interrupt_enable: u8, interrupt_flags: u8) -> Result<(i32, i32), IllegalOpcode> {

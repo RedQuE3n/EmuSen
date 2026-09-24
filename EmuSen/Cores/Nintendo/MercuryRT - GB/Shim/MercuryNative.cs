@@ -7,7 +7,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
     // MercuryRT's Rust library, loaded once; absent, refused or turned off, the Game Boy runs on the C# Mercury - see Mercury_Native.md §2.3.
     public static unsafe class MercuryNative
     {
-        public const uint InterfaceVersion = 2;
+        public const uint InterfaceVersion = 3;
         public const string Variable = "EMUSEN_MERCURY_NATIVE";
 
         private static readonly Lazy<(nint Handle, string Report)> Library = new(Load);

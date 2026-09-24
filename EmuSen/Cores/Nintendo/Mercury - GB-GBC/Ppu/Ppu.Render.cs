@@ -35,7 +35,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
             {
                 Array.Clear(_bgColorIndex);
                 Array.Clear(_bgPriority);
-                for (int x = 0; x < ScreenWidth; x++) WritePixel(line, x, 0);
+                for (int x = 0; x < ScreenWidth; x++) WriteShade(line, x, BgPaletteRam, 0, 0);
                 return;
             }
 
@@ -70,7 +70,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
                 _bgPriority[x] = (attributes & 0x80) != 0;
 
                 if (Cgb) WriteColorPixel(line, x, BgPaletteRam, attributes & 0x07, color);
-                else WritePixel(line, x, Shade(Bgp, color));
+                else WriteShade(line, x, BgPaletteRam, 0, Shade(Bgp, color));
             }
         }
 
@@ -127,7 +127,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
                     if (BackgroundWins(x, behindBackground)) continue;
 
                     if (Cgb) WriteColorPixel(line, x, ObjPaletteRam, attributes & 0x07, color);
-                    else WritePixel(line, x, Shade(palette, color));
+                    else WriteShade(line, x, ObjPaletteRam, (attributes & 0x10) >> 4, Shade(palette, color));
                 }
             }
         }
@@ -181,6 +181,13 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
         }
 
         private static int Shade(byte palette, int color) => (palette >> (color * 2)) & 0x03;
+
+        // A DMG shade: grey on a Game Boy, and on a Game Boy Color the colour at that index of the palette the boot ROM chose - see Mercury_Model.md §4.1.
+        private void WriteShade(int line, int x, byte[] paletteRam, int palette, int shade)
+        {
+            if (Compat) WriteColorPixel(line, x, paletteRam, palette, shade);
+            else WritePixel(line, x, shade);
+        }
 
         private void WritePixel(int line, int x, int shade)
         {

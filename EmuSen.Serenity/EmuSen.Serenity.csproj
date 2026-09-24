@@ -31,6 +31,17 @@
          EmuSen_Serenity.md §7.3. Their reflection is read from the SPIR-V here rather than taking SPIRV-Cross as well. -->
     <PackageReference Include="Silk.NET.Shaderc" Version="2.23.0" />
     <PackageReference Include="Silk.NET.Vulkan" Version="2.23.0" />
+    <!-- The compiled SPIR-V cache is program-written data, so SQLite (EmuSen_Stack.md §2.3). The same two packages and
+         versions as EmuSen, which every consumer of this project already references, so no program gains a
+         library; Serenity is not a leaf in §2.3's sense and takes no project reference to reach them - see
+         EmuSen_Serenity.md §9.4. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Embedded rather than copied, so the cache has no file of its own to be missing - see EmuSen_Serenity.md §9.4. -->
+    <EmbeddedResource Include="Slang\spirv-cache-schema.sql" LogicalName="EmuSen.Serenity.Slang.spirv-cache-schema.sql" />
   </ItemGroup>
 
   <ItemGroup>

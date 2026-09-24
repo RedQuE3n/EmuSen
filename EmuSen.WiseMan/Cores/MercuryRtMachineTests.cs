@@ -72,7 +72,7 @@ namespace EmuSen.WiseMan.Cores
         [MemberData(nameof(Boards))]
         public void A_busy_program_runs_identically_on_every_board(byte kind, byte ramCode, byte cgb)
         {
-            var pair = new Pair(SyntheticGbRom.Build(romBanks: 4, cartridgeType: kind, ramSizeCode: ramCode, cgbFlag: cgb, patches: (0, Busy)), skipRendering: false);
+            var pair = new MercuryRtPair(SyntheticGbRom.Build(romBanks: 4, cartridgeType: kind, ramSizeCode: ramCode, cgbFlag: cgb, patches: (0, Busy)), skipRendering: false);
             pair.Run(600, null);
             _output.WriteLine($"type ${kind:X2} cgb ${cgb:X2}: {pair.Summary}");
         }
@@ -81,7 +81,7 @@ namespace EmuSen.WiseMan.Cores
         [MemberData(nameof(Boards))]
         public void Interrupts_halt_dma_and_the_window_run_identically(byte kind, byte ramCode, byte cgb)
         {
-            var pair = new Pair(InterruptsRom(kind, ramCode, cgb), skipRendering: false);
+            var pair = new MercuryRtPair(InterruptsRom(kind, ramCode, cgb), skipRendering: false);
             pair.Run(600, null);
             Assert.True(pair.Serial > 100, $"the vblank handler ran {pair.Serial} times");
             _output.WriteLine($"type ${kind:X2} cgb ${cgb:X2}: {pair.Summary}");
@@ -90,7 +90,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Hdma_both_modes_and_double_speed_run_identically()
         {
-            var pair = new Pair(ColourRom(), skipRendering: false);
+            var pair = new MercuryRtPair(ColourRom(), skipRendering: false);
             pair.Run(600, null);
             Assert.True(pair.Csharp.Bus!.DoubleSpeed, "the program never reached double speed");
             _output.WriteLine(pair.Summary);
@@ -101,9 +101,19 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(true)]
         public void Rendering_skipped_or_not_leaves_the_same_machine(bool skip)
         {
-            var pair = new Pair(InterruptsRom(0x03, 0x02, 0x80), skipRendering: skip);
+            var pair = new MercuryRtPair(InterruptsRom(0x03, 0x02, 0x80), skipRendering: skip);
             pair.Run(300, null);
         }
+    }
+
+    // Random programs on MercuryRT and the C# Mercury, compared instruction by instruction - see Mercury_Native.md §8.2; a class of its own so it runs beside the others.
+    public class MercuryRtRandomProgramTests
+    {
+        private readonly ITestOutputHelper _output;
+
+        public MercuryRtRandomProgramTests(ITestOutputHelper output) => _output = output;
+
+        public static TheoryData<byte, byte, byte> Boards => MercuryRtStateTests.Boards;
 
         // Random bytes as code on every board, the state compared after every instruction; an illegal opcode must stop both.
         [Theory]
@@ -122,7 +132,7 @@ namespace EmuSen.WiseMan.Cores
                     for (int i = 0x150; i < rom.Length; i++)
                         if (rom[i] is 0xD3 or 0xDB or 0xDD or 0xE3 or 0xE4 or 0xEB or 0xEC or 0xED or 0xF4 or 0xFC or 0xFD) rom[i] = 0x00;
                 rom[0x14D] = EmuSen.Cores.Nintendo.Mercury.Memory.Cartridge.ComputeHeaderChecksum(rom);
-                var pair = new Pair(rom, skipRendering: false);
+                var pair = new MercuryRtPair(rom, skipRendering: false);
                 for (int i = 0; i < 5000; i++, steps++)
                 {
                     if (!pair.Step()) { illegal++; break; }
@@ -130,6 +140,17 @@ namespace EmuSen.WiseMan.Cores
             }
             _output.WriteLine($"type ${kind:X2} cgb ${cgb:X2}: {steps} instructions identical, {illegal} of 16 programs stopped on an illegal opcode in both");
         }
+
+    }
+
+    // Real cartridges on both engines, frame by frame - see Mercury_Native.md §8.2.
+    public class MercuryRtGameTests
+    {
+        private readonly ITestOutputHelper _output;
+
+        public MercuryRtGameTests(ITestOutputHelper output) => _output = output;
+
+        public const string RomsVariable = MercuryRtStateTests.RomsVariable;
 
         [Fact]
         public void Real_games_run_identically_from_boot_and_from_a_transferred_state()
@@ -143,15 +164,33 @@ namespace EmuSen.WiseMan.Cores
             foreach (string path in Directory.GetFiles(folder, "*.gb*").Order(StringComparer.Ordinal))
             {
                 byte[] rom = File.ReadAllBytes(path);
-                var pair = new Pair(rom, skipRendering: false);
+                var pair = new MercuryRtPair(rom, skipRendering: false);
                 pair.Run(3000, Script);
                 _output.WriteLine($"{Path.GetFileName(path)} from boot: {pair.Summary}");
 
-                var later = new Pair(rom, skipRendering: false, transferAt: pair.Csharp);
+                var later = new MercuryRtPair(rom, skipRendering: false, transferAt: pair.Csharp);
                 later.Run(600, f => Script(f + 3000));
                 _output.WriteLine($"{Path.GetFileName(path)} from its frame-3000 state: {later.Summary}");
             }
         }
+
+        private static uint? Script(int frame) => (frame % 90) switch
+        {
+            >= 0 and < 5 => 1u << 7,
+            >= 45 and < 50 => 1u << 4,
+            _ => 0u,
+        };
+
+    }
+
+    // The hardware corpus on both engines, ROM by ROM - see Mercury_Native.md §8.2.
+    public class MercuryRtCorpusTests
+    {
+        private readonly ITestOutputHelper _output;
+
+        public MercuryRtCorpusTests(ITestOutputHelper output) => _output = output;
+
+        public const string CorpusVariable = MercuryRtMachineTests.CorpusVariable;
 
         // Every corpus ROM to its verdict or 3600 frames; serial every frame, state every 30 frames and at the end.
         [Fact]
@@ -167,7 +206,7 @@ namespace EmuSen.WiseMan.Cores
             int frames = 0;
             foreach (string path in files)
             {
-                var pair = new Pair(File.ReadAllBytes(path), skipRendering: true, stateEvery: 30, soundAndPicture: false);
+                var pair = new MercuryRtPair(File.ReadAllBytes(path), skipRendering: true, stateEvery: 30, soundAndPicture: false);
                 for (int f = 0; f < 3600; f++, frames++)
                 {
                     if (!pair.Frame(null, f)) break;
@@ -179,150 +218,144 @@ namespace EmuSen.WiseMan.Cores
             _output.WriteLine($"{files.Count} ROMs, {frames} frames identical in serial every frame and in state every 30 frames and at the end");
         }
 
-        private static uint? Script(int frame) => (frame % 90) switch
+    }
+
+    internal sealed class MercuryRtPair
+    {
+        private static readonly PadButton[] Order = { PadButton.Right, PadButton.Left, PadButton.Up, PadButton.Down, PadButton.A, PadButton.B, PadButton.Select, PadButton.Start };
+
+        public readonly MercuryCore Csharp;
+        public readonly MercuryMachine Rust;
+        private readonly bool _skip;
+        private readonly int _stateEvery;
+        private readonly bool _soundAndPicture;
+        private readonly byte[] _frame = new byte[MercuryMachine.FrameBytes];
+        private long _samples;
+        private int _frames;
+        private string? _layout;
+
+        public int Serial => Csharp.Bus!.SerialLog.Count;
+
+        public string Summary => $"{_frames} frames identical in state{(_soundAndPicture ? ", sound and picture" : "")}, {_samples} samples, {Serial} serial bytes, {Csharp.Cpu!.Cycles} CPU cycles";
+
+        public MercuryRtPair(byte[] rom, bool skipRendering, MercuryCore? transferAt = null, int stateEvery = 1, bool soundAndPicture = true)
         {
-            >= 0 and < 5 => 1u << 7,
-            >= 45 and < 50 => 1u << 4,
-            _ => 0u,
-        };
-
-        private sealed class Pair
-        {
-            private static readonly PadButton[] Order = { PadButton.Right, PadButton.Left, PadButton.Up, PadButton.Down, PadButton.A, PadButton.B, PadButton.Select, PadButton.Start };
-
-            public readonly MercuryCore Csharp;
-            public readonly MercuryMachine Rust;
-            private readonly bool _skip;
-            private readonly int _stateEvery;
-            private readonly bool _soundAndPicture;
-            private readonly byte[] _frame = new byte[MercuryMachine.FrameBytes];
-            private long _samples;
-            private int _frames;
-            private string? _layout;
-
-            public int Serial => Csharp.Bus!.SerialLog.Count;
-
-            public string Summary => $"{_frames} frames identical in state{(_soundAndPicture ? ", sound and picture" : "")}, {_samples} samples, {Serial} serial bytes, {Csharp.Cpu!.Cycles} CPU cycles";
-
-            public Pair(byte[] rom, bool skipRendering, MercuryCore? transferAt = null, int stateEvery = 1, bool soundAndPicture = true)
+            Assert.True(MercuryMachine.Available, MercuryNative.Report);
+            CoreOptions.BatteryRamDisabled = true;
+            _skip = skipRendering;
+            _stateEvery = stateEvery;
+            _soundAndPicture = soundAndPicture;
+            Csharp = Load(rom);
+            Csharp.SkipRendering = skipRendering;
+            Rust = new MercuryMachine(rom, null);
+            Rust.SetOptions(skipRendering);
+            if (transferAt is not null)
             {
-                Assert.True(MercuryMachine.Available, MercuryNative.Report);
-                CoreOptions.BatteryRamDisabled = true;
-                _skip = skipRendering;
-                _stateEvery = stateEvery;
-                _soundAndPicture = soundAndPicture;
-                Csharp = Load(rom);
-                Csharp.SkipRendering = skipRendering;
-                Rust = new MercuryMachine(rom, null);
-                Rust.SetOptions(skipRendering);
-                if (transferAt is not null)
-                {
-                    // Both fresh, so the fields no state carries start equal (§3.1); the save path goes back to null, because D3 puts "" in it.
-                    using var stream = new MemoryStream();
-                    transferAt.SaveState(stream);
-                    Csharp.LoadState(new MemoryStream(stream.ToArray()));
-                    typeof(EmuSen.Cores.Nintendo.Mercury.Memory.Cartridge).GetField("_savePath", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(Csharp.Cart, null);
-                    Rust.Load(stream.ToArray());
-                }
-                CompareState("load");
-            }
-
-            private static MercuryCore Load(byte[] rom)
-            {
-                string path = SyntheticGbRom.WriteTemp(rom);
-                try
-                {
-                    var core = new MercuryCore();
-                    core.LoadRom(path);
-                    return core;
-                }
-                finally
-                {
-                    File.Delete(path);
-                }
-            }
-
-            public void Run(int frames, Func<int, uint?>? script)
-            {
-                for (int f = 0; f < frames; f++) Assert.True(Frame(script, f), $"frame {f}: both stopped on an illegal opcode, which a frame run here does not expect");
-            }
-
-            // False when both engines stopped on the same illegal opcode.
-            public bool Frame(Func<int, uint?>? script, int f)
-            {
-                if (script?.Invoke(f) is { } mask)
-                {
-                    for (int b = 0; b < Order.Length; b++) Csharp.SetButton(0, Order[b], (mask & (1u << b)) != 0);
-                    Rust.SetButtons(mask);
-                }
-
-                Exception? csharp = Record(() => Csharp.RunFrame());
-                Exception? rust = Record(() => Rust.RunFrame());
-                Assert.True(csharp?.Message == rust?.Message, $"frame {_frames}: C# {csharp?.Message ?? "ran"}, Rust {rust?.Message ?? "ran"}");
-                _frames++;
-
-                Assert.True(Csharp.Bus!.SerialLog.SequenceEqual(Rust.SerialLog()), $"frame {_frames}: the serial logs differ");
-                if (_soundAndPicture)
-                {
-                    short[] a = Csharp.DequeueAudioSamples(int.MaxValue), b = Rust.DrainAudio(int.MaxValue);
-                    int same = a.AsSpan().CommonPrefixLength(b);
-                    Assert.True(same == a.Length && a.Length == b.Length, $"frame {_frames}: {a.Length} C# samples, {b.Length} Rust, first difference at {same}");
-                    _samples += a.Length;
-                    if (!_skip)
-                    {
-                        Rust.CopyFrame(_frame);
-                        int pixel = Csharp.GetFrameBufferRgba().AsSpan().CommonPrefixLength(_frame);
-                        Assert.True(pixel == _frame.Length, $"frame {_frames}: the pictures differ first at byte {pixel} (x {pixel / 4 % 160}, y {pixel / 640})");
-                    }
-                }
-                if (_frames % _stateEvery == 0 || csharp is not null) CompareState($"frame {_frames}");
-                return csharp is null;
-            }
-
-            // One instruction on each, compared; false when both stopped on the same illegal opcode.
-            public bool Step()
-            {
-                MemoryBusStep(out bool illegal);
-                int rust = Rust.Step();
-                Assert.True(illegal == (rust == -20), $"C# {(illegal ? "threw" : "stepped")}, Rust returned {rust}");
-                if (!illegal) CompareState($"pc ${Csharp.Cpu!.PC:X4}");
-                return !illegal;
-            }
-
-            private void MemoryBusStep(out bool illegal)
-            {
-                var bus = Csharp.Bus!;
-                illegal = false;
-                try
-                {
-                    Csharp.Cpu!.Step(bus.InterruptEnable, bus.InterruptFlags, out int serviced);
-                    if (serviced >= 0) bus.InterruptFlags &= (byte)~(1 << serviced);
-                    int stall = bus.TakePendingStall();
-                    if (stall > 0) bus.Tick(stall);
-                }
-                catch (NotSupportedException)
-                {
-                    illegal = true;
-                }
-            }
-
-            private static Exception? Record(Action action)
-            {
-                try { action(); return null; }
-                catch (NotSupportedException e) { return e; }
-            }
-
-            public void CompareState(string when)
-            {
+                // Both fresh, so the fields no state carries start equal (§3.1); the save path goes back to null, because D3 puts "" in it.
                 using var stream = new MemoryStream();
-                Csharp.SaveState(stream);
-                byte[] want = stream.ToArray(), got = Rust.Save();
-                int first = want.AsSpan().CommonPrefixLength(got);
-                if (first == want.Length && want.Length == got.Length) return;
-                _layout ??= Rust.Layout();
-                string field = _layout.Split('\n').Where(l => l.Length > 0).Select(l => l.Split(' ')).LastOrDefault(p => int.Parse(p[0]) <= first) is { } line ? line[^1] : "?";
-                Assert.Fail($"{when}: the states differ first at byte {first}, in {field}: C# {(first < want.Length ? want[first] : -1)}, Rust {(first < got.Length ? got[first] : -1)}");
+                transferAt.SaveState(stream);
+                Csharp.LoadState(new MemoryStream(stream.ToArray()));
+                typeof(EmuSen.Cores.Nintendo.Mercury.Memory.Cartridge).GetField("_savePath", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(Csharp.Cart, null);
+                Rust.Load(stream.ToArray());
             }
+            CompareState("load");
+        }
+
+        private static MercuryCore Load(byte[] rom)
+        {
+            string path = SyntheticGbRom.WriteTemp(rom);
+            try
+            {
+                var core = new MercuryCore();
+                core.LoadRom(path);
+                return core;
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        public void Run(int frames, Func<int, uint?>? script)
+        {
+            for (int f = 0; f < frames; f++) Assert.True(Frame(script, f), $"frame {f}: both stopped on an illegal opcode, which a frame run here does not expect");
+        }
+
+        // False when both engines stopped on the same illegal opcode.
+        public bool Frame(Func<int, uint?>? script, int f)
+        {
+            if (script?.Invoke(f) is { } mask)
+            {
+                for (int b = 0; b < Order.Length; b++) Csharp.SetButton(0, Order[b], (mask & (1u << b)) != 0);
+                Rust.SetButtons(mask);
+            }
+
+            Exception? csharp = Record(() => Csharp.RunFrame());
+            Exception? rust = Record(() => Rust.RunFrame());
+            Assert.True(csharp?.Message == rust?.Message, $"frame {_frames}: C# {csharp?.Message ?? "ran"}, Rust {rust?.Message ?? "ran"}");
+            _frames++;
+
+            Assert.True(Csharp.Bus!.SerialLog.SequenceEqual(Rust.SerialLog()), $"frame {_frames}: the serial logs differ");
+            if (_soundAndPicture)
+            {
+                short[] a = Csharp.DequeueAudioSamples(int.MaxValue), b = Rust.DrainAudio(int.MaxValue);
+                int same = a.AsSpan().CommonPrefixLength(b);
+                Assert.True(same == a.Length && a.Length == b.Length, $"frame {_frames}: {a.Length} C# samples, {b.Length} Rust, first difference at {same}");
+                _samples += a.Length;
+                if (!_skip)
+                {
+                    Rust.CopyFrame(_frame);
+                    int pixel = Csharp.GetFrameBufferRgba().AsSpan().CommonPrefixLength(_frame);
+                    Assert.True(pixel == _frame.Length, $"frame {_frames}: the pictures differ first at byte {pixel} (x {pixel / 4 % 160}, y {pixel / 640})");
+                }
+            }
+            if (_frames % _stateEvery == 0 || csharp is not null) CompareState($"frame {_frames}");
+            return csharp is null;
+        }
+
+        // One instruction on each, compared; false when both stopped on the same illegal opcode.
+        public bool Step()
+        {
+            MemoryBusStep(out bool illegal);
+            int rust = Rust.Step();
+            Assert.True(illegal == (rust == -20), $"C# {(illegal ? "threw" : "stepped")}, Rust returned {rust}");
+            if (!illegal) CompareState($"pc ${Csharp.Cpu!.PC:X4}");
+            return !illegal;
+        }
+
+        private void MemoryBusStep(out bool illegal)
+        {
+            var bus = Csharp.Bus!;
+            illegal = false;
+            try
+            {
+                Csharp.Cpu!.Step(bus.InterruptEnable, bus.InterruptFlags, out int serviced);
+                if (serviced >= 0) bus.InterruptFlags &= (byte)~(1 << serviced);
+                int stall = bus.TakePendingStall();
+                if (stall > 0) bus.Tick(stall);
+            }
+            catch (NotSupportedException)
+            {
+                illegal = true;
+            }
+        }
+
+        private static Exception? Record(Action action)
+        {
+            try { action(); return null; }
+            catch (NotSupportedException e) { return e; }
+        }
+
+        public void CompareState(string when)
+        {
+            using var stream = new MemoryStream();
+            Csharp.SaveState(stream);
+            byte[] want = stream.ToArray(), got = Rust.Save();
+            int first = want.AsSpan().CommonPrefixLength(got);
+            if (first == want.Length && want.Length == got.Length) return;
+            _layout ??= Rust.Layout();
+            string field = _layout.Split('\n').Where(l => l.Length > 0).Select(l => l.Split(' ')).LastOrDefault(p => int.Parse(p[0]) <= first) is { } line ? line[^1] : "?";
+            Assert.Fail($"{when}: the states differ first at byte {first}, in {field}: C# {(first < want.Length ? want[first] : -1)}, Rust {(first < got.Length ? got[first] : -1)}");
         }
     }
 }

@@ -148,6 +148,47 @@ namespace EmuSen.WiseMan.Mistress
 
         private static string? Stored(string console, string key) => GraphicsConfig.Load().Value(console, key);
 
+        // A dropdown's list on a sheet, which asks for it inside the window (§4.45.8): the pad moves the focus among its items, never the page behind - see EmuSen_Settings_Reference.md §4.45.9.
+        [Fact]
+        public Task An_open_dropdown_drawn_in_the_window_moves_its_highlight_and_not_the_page() => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = GameModeWithAGame();
+            Choose(window, pad, "Graphics Settings");
+            TabTo(window, pad, "N64");
+            var engine = (Dropdown)Reach(window, pad, e => e is Dropdown { Name: "N64.Engine" });
+            ScrollViewer page = engine.FindAncestorOfType<ScrollViewer>()!;
+            Vector scrolled = page.Offset;
+            int was = engine.SelectedIndex;
+            Assert.True(engine.ItemCount >= 2);
+
+            pad.A();
+            Assert.True(engine.IsDropDownOpen);
+            Assert.True(engine.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.Popup>().Single().ShouldUseOverlayLayer);
+            Assert.Same(engine.ContainerFromIndex(was), Focused(window));
+            pad.Down();
+            Assert.Same(engine.ContainerFromIndex(was + 1), Focused(window));
+            pad.Down(engine.ItemCount);
+            Assert.Same(engine.ContainerFromIndex(engine.ItemCount - 1), Focused(window));
+            Assert.Equal(was, engine.SelectedIndex);
+            Assert.Equal(scrolled, page.Offset);
+            Picture(window, "dropdown-in-window");
+
+            pad.B();
+            Assert.False(engine.IsDropDownOpen);
+            Assert.Equal(was, engine.SelectedIndex);
+            Assert.Same(engine, Focused(window));
+
+            pad.A();
+            pad.Down();
+            pad.A();
+            Assert.False(engine.IsDropDownOpen);
+            Assert.Equal(was + 1, engine.SelectedIndex);
+            Assert.Equal(engine.SelectedItem as string, Stored("N64", "Engine"));
+            Assert.Equal(scrolled, page.Offset);
+            Stop(window);
+            window.Close();
+        }, default);
+
         [Fact]
         public Task Graphics_by_pad_tabs_a_dropdown_stepped_opened_committed_and_cancelled_a_switch_and_reset() => Session.Dispatch(() =>
         {

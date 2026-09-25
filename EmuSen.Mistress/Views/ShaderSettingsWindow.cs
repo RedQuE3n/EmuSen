@@ -468,7 +468,7 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
-            _owner.ReadAsync(entry.Relative!).ContinueWith(read => Dispatcher.UIThread.Post(() =>
+            void Arrived(Task<IReadOnlyList<SlangParameter>> read)
             {
                 if (reading == _reading)
                 {
@@ -477,7 +477,12 @@ namespace EmuSen.Mistress.Views
                 }
                 done.TrySetResult();
                 if (reading == _reading) PrefetchBeside(entry);
-            }), TaskScheduler.Default);
+            }
+
+            // Parameters already in the cache are built now, in the same step, not a dispatcher turn later - see EmuSen_Settings_Reference.md §4.48.10.
+            Task<IReadOnlyList<SlangParameter>> pending = _owner.ReadAsync(entry.Relative!);
+            if (pending.IsCompleted) Arrived(pending);
+            else pending.ContinueWith(read => Dispatcher.UIThread.Post(() => Arrived(read)), TaskScheduler.Default);
         }
 
         // The presets a row away from the settled one, so the usual next step finds its parameters read - see EmuSen_Settings_Reference.md §4.48.9.

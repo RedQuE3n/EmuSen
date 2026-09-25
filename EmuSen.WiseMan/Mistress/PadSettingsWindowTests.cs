@@ -549,6 +549,32 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        // A Graphics tab scrolled to its foot, left and come back to: the pad starts at a control in view and the page stays where it was - see EmuSen_Settings_Reference.md §4.48.10.
+        [Fact]
+        public Task A_tab_change_back_to_a_scrolled_page_starts_at_a_control_in_view() => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = GameModeWithAGame();
+            Choose(window, pad, "Graphics Settings");
+            TabTo(window, pad, "N64");
+            ScrollViewer page = (ScrollViewer)((Avalonia.Controls.Presenters.ContentPresenter)Tabs(window).GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First(p => p.Name == "PART_SelectedContentHost")).Content!;
+            InputElement last = PadAudit.Operable(page).OrderBy(e => ((Visual)e).TranslatePoint(default, page)?.Y ?? 0).Last();
+            Reach(window, pad, e => ReferenceEquals(e, last));
+            window.UpdateLayout();
+            Vector scrolled = page.Offset;
+            Assert.True(scrolled.Y > 0, "the N64 page does not scroll at 1280x800");
+
+            TabTo(window, pad, "NES");
+            TabTo(window, pad, "N64");
+            var focused = Assert.IsAssignableFrom<Control>(Focused(window));
+            _out.WriteLine($"focus after the tab change: {PadAudit.Describe((InputElement)focused)}, page at {page.Offset.Y} of {scrolled.Y}");
+            Assert.Equal(scrolled, page.Offset);
+            Assert.True(focused.TranslatePoint(default, page) is { } at && at.Y + focused.Bounds.Height > 0 && at.Y < page.Bounds.Height);
+            pad.B();
+            pad.B();
+            Stop(window);
+            window.Close();
+        }, default);
+
         // Back on a tab whose parameter list is scrolled part way down, the pad starts at a control in view, and the list stays where it was - see EmuSen_Settings_Reference.md §4.48.10.
         [Fact]
         public Task A_tab_change_never_puts_the_focus_on_a_row_scrolled_out_of_view() => Session.Dispatch(() =>
@@ -574,6 +600,17 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Null(focused.FindAncestorOfType<SliderList>());
             Assert.Equal(scrolled, scroll.Offset);
             Picture(window, "shaders-tab-return");
+
+            // Up to the tab strip and down into the page again, the page now laid out with the rows above the view built.
+            for (int i = 0; i < 6 && Focused(window) is not TabItem; i++) pad.Up();
+            Assert.IsType<TabItem>(Focused(window));
+            window.UpdateLayout();
+            Assert.Contains(snes.Sliders, r => r.TranslatePoint(default, scroll) is { } at && at.Y + r.Bounds.Height <= 0);
+            pad.Down();
+            focused = Assert.IsAssignableFrom<Control>(Focused(window));
+            _out.WriteLine($"focus down from the tab strip: {PadAudit.Describe((InputElement)focused)}");
+            Assert.Null(focused.FindAncestorOfType<SliderList>());
+            Assert.Equal(scrolled, scroll.Offset);
             pad.B();
             Stop(window);
             window.Close();

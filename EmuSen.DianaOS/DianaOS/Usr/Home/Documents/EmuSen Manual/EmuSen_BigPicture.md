@@ -1,6 +1,6 @@
 # EmuSen_BigPicture — a plan for a big-picture mode in Mistress that renders ES-DE themes
 
-*Written 2026-09-24. Nothing is built.* The user asked for a big-picture mode in Mistress like EmulationStation's,
+*Written 2026-09-24. Stage (a), the theme loader, was built the same day; its record is §12. Nothing else is built.* The user asked for a big-picture mode in Mistress like EmulationStation's,
 starting with the theme they like, Art Book Next. They made two choices. First, Mistress reads ES-DE themes, so that
 Art Book Next and other ES-DE themes load as their authors made them. A look-alike built from Mistress's own controls
 was not wanted. Second, game media comes from ScreenScraper. This page plans that work. It inventories the theme
@@ -992,6 +992,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 | P10 | A new account scrapes the whole library, without videos, over two to three sessions in two days | Stage d, first full run |
 | P11 | Art Book Next's archive is 205–230 MB | Stage f |
 | P12 | With no videos scraped, the video element's render is identical to ES-DE's (§4.7) | Stage b |
+| P13–P18 | Stage (a)'s predictions: coverage, errors, skipped includes, load time, triggers, the default variant (§12.1) | Stage a (§12.5) |
 
 ---
 
@@ -1073,3 +1074,283 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   `EmuSen_Galaxia.md` §3, §5.4; `EmuSen_Stack.md` §2.3, §4.1, §5; `EmuSen_Multicore.md` §9;
   `EmuSen_Serenity.md` §2; `EmuSen_Mistress_LibraryPlan.md` §2, §4; LunaP `docs/LunaP.md` §1, §21, §88, §90, §91,
   §95, and `PLAN-icons.md` §1, §5, §8.
+
+---
+
+## 12. Stage (a): the ES-DE theme loader
+
+*Opened 2026-09-24.* Stage (a) builds the loader of §4.1 in `EmuSen.Mistress/BigPicture/Theme/`, to §10.1's scope: the
+whole of `THEMES.md`'s format, not only Art Book Next's part of it. It has no Avalonia types. Its output is a resolved,
+immutable scene model per view. Drawing is stage (b).
+
+### 12.1 Predictions, written before the loader was built
+
+The reference section of `THEMES.md` ("Element types and their properties") documents **15 element types and 467
+properties**. They were counted by a scratch script that reads the section's `` * `name` - type: TYPE `` lines. The
+navigation-sounds section adds a sixteenth type, `sound`, with one property (`path`). The format therefore has **468
+(element type, property) pairs**.
+
+- **P13.** Art Book Next sets **172 of the 468 pairs (37%)**, the static count of §3.3. The loader's union over every
+  combination it is run with will find exactly 172. A difference will name either a block that the static walk counted
+  but no choice selects, or a property the walk missed.
+- **P14.** Every combination run loads with **zero errors, zero unknown elements and zero unknown properties**, for the
+  five EmuSen systems (`nes`, `snes`, `n64`, `gb`, `gbc`) and the four collections of §3.1.
+- **P15.** Each load skips exactly **one** include, silently, as "built from a variable": `colors.xml`'s
+  `${customizationPath}`. It is undefined in 30 of the 31 colour schemes, and in `custom` it names a file the clone does
+  not have. `_metadata-global/${system.theme}.xml` exists for all nine systems (checked), and the grid variants'
+  `_coversize/${systemCoverSize}.xml` exists for every value those files set, so neither is skipped.
+- **P16.** Loading one system's two views takes **under 20 ms** on the desktop once warm, so the loader's share of P6
+  (nine systems in 150 ms) holds with room to spare.
+- **P17.** With no scraped media, the 12 `noMedia` overrides of §3.2 replace each of the 12 variants that carry one
+  with `gamelist-list-basic` or its `-nh` twin, in the gamelist view only. The system view keeps the chosen variant.
+- **P18.** With no variant chosen, the loader picks the **first declared**, `gamelist-list-metadata-cover`. `THEMES.md`
+  does not say which variant ES-DE picks, so this is the loader's rule, and not yet shown to be ES-DE's, until stage (b)
+  runs ES-DE.
+
+### 12.2 What the loader implements
+
+The code is nine files in `EmuSen.Mistress/BigPicture/Theme/`. None names an Avalonia, LunaP or core type.
+
+| File | What it holds |
+|---|---|
+| `ThemeCatalog.cs` | The schema: 16 element types, 468 properties, each with its type, literal default, "same value as" default, default stated in words, range, allowed values, the view it is limited to, and whether it is deferred |
+| `ThemeCapabilities.cs` | `capabilities.xml`: variants with labels and overrides, colour schemes, font sizes, languages, aspect ratios, transition profiles, suppressed built-ins |
+| `ThemeChoices.cs` | The system and its twelve system variables; the player's choices; their resolution against the capabilities; the variant triggers |
+| `ThemeLoader.cs` | One parse per variant, in the documented parsing order; includes, variables, selection blocks, views and elements |
+| `ThemeViewBuilder.cs` | Merging, typing, ranges, view limits, defaults, bindings, drawing order |
+| `ThemeValueParser.cs`, `ThemeValues.cs` | The seven documented types, paths, list splitting, clamping |
+| `ThemeDiagnostics.cs`, `ResolvedTheme.cs` | Diagnostics with a severity, and the immutable output |
+
+**Where the catalogue came from.** A scratch script read every `` * `name` - type: TYPE `` line of the reference section,
+with the default, range, allowed values and view limit written beneath it, and drafted the catalogue from them. The
+draft was then corrected by hand in 25 places, each of which the reference states in words rather than as a literal:
+
+- the defaults stated as a rule: the carousel's and grid's `text` (the system's full name); the textlist's
+  `selectorWidth` (the element's width) and `selectorHeight` (1.5 times `fontSize`); `interpolation` on image, video,
+  animation, badges and rating (nearest at 0, 90, 180 or 270 degrees, else linear); the text's `container` (true for
+  `description`) and `containerStartDelay` (4.5 s vertical, 1.5 s horizontal); the datetime's `displayRelative` (true
+  for `lastplayed`); the help system's `pos` and `fontSize`, which differ for vertical screens;
+- the datetime's `format`, whose default is written as "the ISO 8601 standard notation `%Y-%m-%d`";
+- the pair rules: a zero axis of `size` on image, video (and its `imageSize`) and animation, and of `tileSize`, means
+  "from the aspect ratio"; `-1` on the grid's `itemSize` and `itemSpacing` and the badges' `itemMargin` means "the other
+  axis"; the rating's `size` sizes by one axis and caps y at 0.5;
+- the badges' `customBadgeIcon` keys, which are the badge slots.
+
+The catalogue is then checked two ways (§12.6): against 39 entries read from `THEMES.md` by hand, and by a test that
+sets every one of the 468 properties on a synthetic theme and reads back its typed value.
+
+**The grammar, as built. Cited unless marked "chosen", in which case §12.4 gives the reason.**
+
+- **Files.** Without `capabilities.xml` the theme is not loaded. An empty file, or one holding only a comment, declares
+  nothing, as `THEMES.md` says it may. The entry file is `<theme>/<system.theme>/theme.xml`, else `<theme>/theme.xml`.
+- **Parsing order.** Every `<theme>`, `<variant>` and `<aspectRatio>` block is processed in nine passes over its
+  children: transitions (in a variant), variables, colour schemes, font sizes, languages, includes, views, variants,
+  aspect ratios. Each pass keeps file order. An include runs all nine passes on its file at its own place.
+- **Selection blocks.** Name lists split on commas and whitespace. A `<variant>` applies when it names the variant or
+  `all`. A `<colorScheme>`, `<fontSize>`, `<language>` or `<aspectRatio>` applies when it names the selected one. Names
+  a block uses but capabilities does not declare are warned about once and never selected.
+- **Includes.** `./` is the including file's folder, `~` is home, and backslashes are separators. A missing include
+  written out is an error. One built from a variable, whether its variable is undefined, it resolves empty, or its file
+  is missing, is a debug note, and the load goes on. Include loops are refused as an error, where ES-DE would hang
+  (chosen).
+- **Variables.** One global namespace. The twelve system variables come first, and their `.autoCollections`,
+  `.customCollections` and `.noCollections` forms are empty for the other kinds of system. A variable's value is
+  substituted when it is defined (chosen), so a later redefinition of a variable it names does not change it. A
+  redefinition inside a variant or aspect ratio changes the global value, from that point in the parse on.
+- **Elements.** Definitions of one type and name in one view merge property by property, and the last value wins.
+  Names and views may be lists. An element keeps the position of its first definition.
+- **Views.** `system`, `gamelist` and `all`, which holds only `sound`. An element type in a view the reference does not
+  list for it is ignored with a warning. A property limited to the other view ("can only be used in the `system`
+  view") is ignored with a warning, and its default applies.
+- **Primary elements.** One per view: a second carousel, grid or textlist is ignored with a warning (chosen).
+- **Drawing order.** zIndex low to high; ties by first definition (chosen); `helpsystem`, `clock` and `systemstatus`,
+  which have no zIndex, last.
+- **Triggers.** For the gamelist view only, `noMedia` before `noVideos`, one step deep. `mediaType` defaults to
+  `miximage`. The system view is parsed with the chosen variant and the gamelist view with the triggered one.
+- **Transitions.** A chosen built-in, unless suppressed, or a chosen theme profile; else, for Automatic, the variant's
+  `<transitions>`, then the first profile declared, then instant.
+
+**The output.** `ResolvedTheme` holds the selection, the gamelist's variant after the triggers, the two views, the
+sounds, the transition profile, the files read and every diagnostic. Each `ResolvedElement` holds its type, name,
+first-definition order, zIndex, the typed values the theme set (`Explicit`), those values plus every documented default
+that has one (`Effective`), and its **bindings**: the data the theme does not supply, by name. These are the media an
+`imageType` asks for (with `image` expanded to miximage, screenshot, titlescreen and cover), a text's `metadata` or
+`systemdata`, a datetime's field, the rating, the badge slots, the help entries, the clock, the system status, the
+gamelist info, the gameselector's selection, and the carousel's, grid's or textlist's list of systems or games. A video
+element binds `videoFallbackImage`, the image it shows in place of the deferred video (§10.1, Q4). Every path is
+absolute and carries whether it exists and whether it was built from a variable.
+
+### 12.3 Error behaviour
+
+`THEMES.md` ("Debugging during theme development") gives three outcomes. An error unthemes the system. An invalid value
+is reset to its default with a warning. Numbers out of range are clamped without a word. The loader keeps the
+partially parsed views of an unthemed system readable for inspection, and `IsThemed` is false.
+
+| Condition | Severity | Effect | Source |
+|---|---|---|---|
+| `capabilities.xml` missing or malformed | error | theme not loaded | cited |
+| No `theme.xml` for the system | error | unthemed | cited |
+| Malformed XML in any file read; a root other than `<theme>` | error | unthemed | cited |
+| An unknown tag, element or property | error | unthemed | cited as "enforced more strictly"; the unknown-property case is inferred |
+| The legacy `extra` attribute | error | unthemed | cited |
+| `<variant>`, `<aspectRatio>` or `<include>` inside `<view>`; a variant in a variant | error | unthemed | cited |
+| A view other than `system`, `gamelist` or `all`; a missing `name` | error | unthemed | cited ("mandatory") |
+| A property with no value | error | unthemed | cited (the log line in `THEMES.md`) |
+| A value in the wrong format (a pair of one number, a five-digit colour, `yes` for a boolean) | error | unthemed | cited ("sanitization for valid data format") |
+| An undefined variable in a property | error | unthemed | cited ("a missing variable") |
+| A missing include written out | error | unthemed | cited |
+| An include loop | error | unthemed | chosen; ES-DE hangs |
+| An `imageType` naming an unknown type | error | that element is not rendered | cited |
+| An `imageType` repeating a type | warning | the property is ignored | cited |
+| An enum value not in its list | warning | default | cited |
+| An element or property in a view it does not support | warning | ignored | chosen |
+| A second primary element | warning | ignored | chosen |
+| A property empty once its variables are substituted | warning | ignored | chosen |
+| A missing file written out in a property | warning | kept, `Exists` false | cited |
+| An unknown attribute | warning | ignored | chosen |
+| Languages declared without `en_US` | warning | languages not loaded | cited; ES-DE logs it as an error, but the theme loads |
+| A missing include or file built from a variable | debug | skipped, or kept with `Exists` false | cited |
+| A number out of range | none | clamped | cited |
+
+### 12.4 Where `THEMES.md` is silent: the loader's choices
+
+Each of these is a decision, not a finding. Each is to be checked against ES-DE when stage (b) installs it, and each
+has a test that fixes the choice, so that a correction shows up as a failing test.
+
+1. **The default variant** is the first selectable one declared, else the first. P18 was written as "the first
+   declared", and was refined while building to skip a non-selectable first variant. For Art Book Next the two rules
+   give the same answer.
+2. **A variant's `selectable` defaults to true.** It is documented as defaulting to true only for transition profiles.
+3. **A variable is substituted when it is defined, not when it is used.** `THEMES.md` documents nesting and the global
+   namespace, but not whether `<b>${a}</b>` follows a later redefinition of `a`. Only a theme that redefines a variable
+   another variable names can tell the difference. Art Book Next does not.
+4. **`<variant name="all">` applies even when the theme declares no variants.**
+5. **Font size**: `medium` if declared, else the first in the menu order.
+6. **Automatic aspect ratio**: the declared ratio nearest the screen's, measured as |log(r₁/r₂)|, so that 2:1 is as far
+   from 1:1 as 1:2 is.
+7. **Languages.** When capabilities declares none, every `<language>` block is skipped. The one selected is the chosen
+   language if declared, else `en_US`. An `<include>` inside a `<language>` block runs in the language pass. §3.2
+   predicted this for Art Book Next's metadata files, which carry `<language>` blocks for locales the table in
+   `THEMES.md` does not list (`ar_SA`, for instance).
+8. **A bare child of `<colorScheme>` or `<fontSize>` is taken as a variable,** with a warning. `THEMES.md`'s own example
+   in "Color schemes" writes `<panelColor>` directly inside `<colorScheme>`, although the text says that colour schemes
+   hold `<variables>`.
+9. **"Can only be used if …" conditions are not enforced.** For example, `verticalAlignment` "can only be used if
+   `container` is `false`", and Art Book Next sets both. The loader keeps the typed value, and whether it takes effect
+   is the renderer's business.
+10. **A path with neither `./` nor `~`** is resolved from the file's folder.
+
+`THEMES.md` also contradicts itself twice. The textlist's `textHorizontalScrolling` is typed BOOLEAN, but its entry
+lists "valid values are `vertical` or `horizontal`". The loader types it as a boolean. The language example declares
+`pt_PR`, which is not in the language table, and the loader drops it with a warning.
+
+### 12.5 Results on Art Book Next (measured 2026-09-24)
+
+The ES-DE edition was read in place from `~/Projects/art-book-next-es-de-reference` (`d772d07`). Nothing from it was
+copied into the repository or into a test fixture.
+
+**Predictions retired.**
+
+| # | Predicted | Measured | Verdict |
+|---|---|---|---|
+| P13 | 172 of 468 pairs set | **172 of 468**. The union was taken over 9 systems × 20 variants × 12 aspect ratios × 2 schemes (`dark-screenshots`, `custom`), 4,320 loads, and its per-element lists equal §3.3's word for word | held exactly |
+| P14 | no errors, no unknown elements or properties | **0 errors, 0 warnings, 0 unknown** in 2,700 loads (9 systems × 20 variants × 16:10, 16:9, 4:3 × 5 schemes), and in all 48 aspect-ratio × font-size pairs | held |
+| P15 | one silent include skip per load | **exactly one debug note per load, the same include**: `${customizationPath}` undefined in 30 schemes; in `custom`, `theme-customizations/colors.xml` not found. No other include was skipped and no path was missing | held |
+| P16 | under 20 ms per system | **0.91 ms per system, both views**, warm, mean of 200 loads across the nine systems. Nine systems take about 8 ms, against P6's 150 ms | held, by a factor of 20 |
+| P17 | 12 overrides fall to the basic list, gamelist only | **12 of 12**; each `-nh` variant falls to `gamelist-list-basic-nh` and each other to `gamelist-list-basic`; the system view kept the chosen variant in all 20 | held |
+| P18 | the first declared variant by default | **`gamelist-list-metadata-cover`**; 16:10 is automatic at 1280×800; scheme `dark-screenshots`, font size `medium`, transitions `instant` | held for this theme; ES-DE's own rule is still unknown (§12.4, item 1) |
+
+**The inventory.** The tool is `ThemeInventoryTool` in WiseMan, run as
+`EMUSEN_THEME_INSPECT=<theme folder> EMUSEN_THEME_CHOICES="system=snes;aspect=16:10;scheme=…;variant=…" dotnet test
+--filter ThemeInventoryTool`. It prints every element in drawing order, with its bindings and every property the theme
+set as a typed value (with `defaults` in the choices, the defaults too), then what is unknown, what is unsupported, and
+every diagnostic. It was run for `snes` over 16:10, 16:9 and 4:3, four schemes (`dark-screenshots`, `light-noir`,
+`snes-outline`, `custom`) and four variants, 48 runs:
+
+| Variant | Files read | System view | Gamelist view | Properties set (16:10 / 16:9 / 4:3) | Unsupported |
+|---|---|---|---|---|---|
+| `gamelist-list-metadata-cover` | 5 | 8 elements | 28 elements | 332 / 331 / 322 | `video.delay`, `iterationCount`, `onIterationsDone`, `pillarboxes` |
+| `gamelist-list-screenshot-marquee` | 5 | 8 | 13 | 206 | the same four |
+| `gamelist-list-basic-nh` | 5 | 8 | 11 | 174 | none |
+| `gamelist-grid-cover` | 6 (adds `_coversize/4-3.xml`) | 8 | 12 | 206 | none |
+
+- **The colour scheme changes no count.** All four schemes give the same elements and the same properties, and differ
+  only in values. That is what §3.2 implies, since Art Book Next's schemes hold variables only.
+- **4:3 sets fewer properties than 16:10.** It leaves `pos` and `size` unset on three of the hidden metadata icons, and
+  `fontSize` on two hidden texts. Those elements are `visible` false in that variant, so nothing is lost.
+- **The only unsupported properties are the four video playback ones** the theme sets. §10.1 deferred them. The video
+  element `game-art` resolves to `videoFallbackImage:cover` in the metadata-and-boxart variant, as §4.7 requires.
+- **Every path resolved to a file that exists** in all 48 runs, fonts, SVGs and PNGs included, and all seven sounds.
+
+**Negative results.** No property of the theme needed a catalogue change, no element or property was unknown, and no
+choice was ambiguous. The run therefore tested the loader's handling of what Art Book Next uses and not of the other 296
+pairs. Those rest on the synthetic tests of §12.6 alone, which have no oracle but `THEMES.md`.
+
+### 12.6 Tests and mutants
+
+**Tests.** 154 in `EmuSen.WiseMan/Mistress/BigPicture/`, plus the inventory tool, all on themes written by the tests
+through `SyntheticTheme` (`EmuSen.WiseMan/Fixtures/`), except the five reference tests. Theory cases count one each.
+
+| Class | Tests | Covers |
+|---|---|---|
+| `ThemeCapabilitiesTests` | 28 | labels, overrides, fallbacks, table orders, duplicates and reserved names, languages without `en_US`, transition defaults, the default variant, scheme, font size and language, automatic aspect ratio (7 screens), triggers (precedence, one step, gamelist only), transitions resolution |
+| `ThemeLoaderTests` | 36 | `THEMES.md`'s own variables example, all nine parsing steps in one file written in reverse order, includes at their own place, scheme order, scheme and font-size blocks, bare scheme children, languages, nested and eagerly substituted variables, the twelve system variables, include paths from the including file, the system folder, `~` and backslashes, missing and variable includes, Art Book Next's undefined-variable include, loops, a file included twice, misplaced blocks, `all`, name lists, undeclared names, merging, views and name lists, sounds, drawing order |
+| `ThemeErrorTests` | 32 | every row of §12.3, and a Batocera-format theme refused |
+| `ThemeCatalogTests` | 53 | the counts per element, 39 entries checked against `THEMES.md` by hand, views and zIndex, **all 468 properties set and read back typed**, **all 336 literal defaults**, same-as and computed defaults, colours, booleans, clamping, zero and `-1` axes, list splitting, bindings, the deferred set |
+| `ArtBookNextReferenceTests` | 5 | §12.5; each skips with its reason when the clone is absent (checked by pointing `EMUSEN_ARTBOOKNEXT` at a missing folder: 5 skipped, reason shown) |
+
+**Mutants.** 28, applied one at a time by `~/.cache/emusen/probe/bigpicture/mutate_loader.py` (outside the repository,
+like the other workbench runners), each built and run against the BigPicture tests, the source restored after each and the tree
+rebuilt clean at the end. **All 28 were caught.**
+
+| # | Mutant | Caught by (synthetic / reference tests) |
+|---|---|---|
+| M1 | variables stored unsubstituted, so nesting fails | 4 / 0 |
+| M2 | include paths resolved from the entry file, not the including file | 1 / 1 |
+| M3 | colour-scheme blocks applied in reverse file order | 1 / 0 |
+| M4 | Automatic takes the first declared ratio, ignoring the screen | 1 / 1 |
+| M5 | colour schemes before plain variables | 2 / 0 |
+| M6 | variants before general configuration | 4 / 0 |
+| M7 | aspect ratios before variants | 3 / 0 |
+| M8 | includes before colour schemes and font sizes | 2 / 0 |
+| M9 | an include naming an undefined variable is an error | 1 / 3 |
+| M10 | a missing explicit include is skipped | 1 / 0 |
+| M11 | an undefined variable in a property is kept literally | 1 / 0 |
+| M12 | include loops not detected | test host crashed (stack overflow) |
+| M13 | `noVideos` before `noMedia` | 2 / 0 |
+| M14 | triggers two steps deep | 2 / 0 |
+| M15 | the triggered variant used for the system view | 1 / 0 |
+| M16 | `all` not applied | 2 / 0 |
+| M17 | merging keeps the first value | 3 / 0 |
+| M18 | zIndex ties by last definition | 1 / 0 |
+| M19 | six-digit colours transparent | 13 / 0 |
+| M20 | floats not clamped | 1 / 0 |
+| M21 | an invalid `imageType` does not stop the element | 1 / 0 |
+| M22 | view-limited properties accepted in the other view | 1 / 0 |
+| M23 | a second primary element kept | 1 / 0 |
+| M24 | same-as defaults ignored | 1 / 0 |
+| M25 | kind-specific system variables filled for every kind | 1 / 0 |
+| M26 | language blocks applied with no language declared | 1 / 0 |
+| M27 | start-up transitions default to instant | 1 / 0 |
+| M28 | a zero size axis clamped | 1 / 0 |
+
+**What the mutants say about Art Book Next as an oracle.** The reference tests caught three of the 28: M2, M4 and M9.
+M12 crashed the whole run, so it says nothing either way. Under the other 24 broken loaders Art Book Next still loads
+with no error and its five tests pass, because it does not nest variables across redefinitions, never lets two scheme blocks set one variable, and never relies
+on the parsing order beyond `colors.xml`'s include. A theme that loads is weak evidence that a loader is right. The
+synthetic tests carry the grammar.
+
+### 12.7 Not done in stage (a)
+
+- **Nothing was checked against ES-DE itself.** ES-DE is not installed (§7). Every choice of §12.4, and the claim that
+  the unknown-property case is an error, wait for stage (b).
+- **The "can only be used if" conditions** are not enforced (§12.4, item 9). The renderer decides.
+- **No drawing, no LunaP controls, no ScreenScraper, no UI.** Those are stages (b) to (f).
+- **No settings persistence.** `ThemeChoices` is a record, and nothing yet stores it under `BigPicture` in
+  `appsettings.json` (§6).
+- **Media presence for the triggers is supplied by the caller.** Nothing scans a media folder yet; stage (f) connects the
+  triggers to the media store.
+- **Only one theme was run.** The other 65 themes of ES-DE's list were not loaded. They would test the 296 pairs Art Book
+  Next does not use.
+- **`gameselector` links** (an element's `gameselector` property naming a gameselector element) are kept as strings and
+  not checked against the view's gameselectors.

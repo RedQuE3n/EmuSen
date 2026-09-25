@@ -31,7 +31,7 @@ namespace EmuSen.Mistress.Views
         private readonly Func<HttpClient> _http;
         private readonly Tabs _tabs = new() { Name = "ConsoleTabs" };
         private readonly List<ShaderPanel> _panels = new();
-        private readonly Dictionary<string, IReadOnlyList<SlangParameter>> _read = new(StringComparer.Ordinal);
+        private readonly RecentCache<string, IReadOnlyList<SlangParameter>> _read = new(CacheLimit, StringComparer.Ordinal);
 
         internal string Pack { get; }
         internal IReadOnlyList<ShaderEntry> Presets { get; private set; } = Array.Empty<ShaderEntry>();
@@ -105,32 +105,45 @@ namespace EmuSen.Mistress.Views
         // How long the list's selection must hold still before the shown preset is read and its sliders built - see EmuSen_Settings_Reference.md §4.48.9.
         public TimeSpan Settle { get; set; } = TimeSpan.FromMilliseconds(120);
 
+        // The clock the settle is timed by; a test gives its own, so no settle depends on how fast the machine runs - see EmuSen_Settings_Reference.md §4.48.10.
+        public TimeProvider Time { get; set; } = TimeProvider.System;
+
         // Background reads of the rows beside a settled one, at most this many at once - see EmuSen_Settings_Reference.md §4.48.9.
         public const int PrefetchLimit = 2;
 
-        // Counters a test reads: sources read from disk, and the reads of them that were prefetches.
+        // The presets' parameters kept, the most recently used; a read ahead takes a place like any other - see EmuSen_Settings_Reference.md §4.48.10.
+        public const int CacheLimit = 8;
+
+        // Counters a test reads: sources read from disk, the reads of them that were prefetches, and what the cache holds and dropped.
         public int ReadsStarted { get; private set; }
         public int PrefetchesStarted { get; private set; }
         public int PrefetchesRunning { get { lock (_read) return _prefetching; } }
+        public int Cached { get { lock (_read) return _read.Count; } }
+        public int Evicted { get { lock (_read) return _read.Evicted; } }
+        public int EvictedUnused { get { lock (_read) return _read.EvictedUnused; } }
 
-        private readonly Dictionary<string, Task<IReadOnlyList<SlangParameter>>> _inFlight = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, (Task<IReadOnlyList<SlangParameter>> Task, bool Wanted)> _inFlight = new(StringComparer.Ordinal);
         private int _prefetching, _packGeneration;
 
         private string FullPath(string relative) => Path.GetFullPath(Path.Combine(Pack, relative));
 
         public bool IsRead(string relative)
         {
-            lock (_read) return _read.ContainsKey(FullPath(relative));
+            lock (_read) return _read.Contains(FullPath(relative));
         }
 
         // Read off the UI thread once per preset, a read already running shared rather than repeated; a Mega Bezel preset declares hundreds.
-        internal Task<IReadOnlyList<SlangParameter>> ReadAsync(string relative)
+        internal Task<IReadOnlyList<SlangParameter>> ReadAsync(string relative, bool ahead = false)
         {
             string path = FullPath(relative);
             lock (_read)
             {
-                if (_read.TryGetValue(path, out var known)) return Task.FromResult(known);
-                if (_inFlight.TryGetValue(path, out var running)) return running;
+                if (_read.TryGet(path, out var known)) return Task.FromResult(known);
+                if (_inFlight.TryGetValue(path, out var running))
+                {
+                    if (!ahead) _inFlight[path] = running with { Wanted = true };
+                    return running.Task;
+                }
                 int generation = _packGeneration;
                 ReadsStarted++;
                 // Whoever waits on the read finds it in the cache, since the task handed out ends only once it is stored.
@@ -138,15 +151,12 @@ namespace EmuSen.Mistress.Views
                 {
                     lock (_read)
                     {
-                        if (generation == _packGeneration)
-                        {
-                            _inFlight.Remove(path);
-                            if (done.IsCompletedSuccessfully) _read[path] = done.Result;
-                        }
+                        if (generation == _packGeneration && _inFlight.Remove(path, out var ended) && done.IsCompletedSuccessfully)
+                            _read.Add(path, done.Result, used: ended.Wanted);
                     }
                     return done.Result;
                 }, TaskScheduler.Default);
-                _inFlight[path] = task;
+                _inFlight[path] = (task, !ahead);
                 return task;
             }
         }
@@ -157,11 +167,11 @@ namespace EmuSen.Mistress.Views
             string path = FullPath(relative);
             lock (_read)
             {
-                if (_read.ContainsKey(path) || _inFlight.ContainsKey(path) || _prefetching >= PrefetchLimit || !File.Exists(path)) return;
+                if (_read.Contains(path) || _inFlight.ContainsKey(path) || _prefetching >= PrefetchLimit || !File.Exists(path)) return;
                 _prefetching++;
                 PrefetchesStarted++;
             }
-            ReadAsync(relative).ContinueWith(_ => { lock (_read) _prefetching--; }, TaskScheduler.Default);
+            ReadAsync(relative, ahead: true).ContinueWith(_ => { lock (_read) _prefetching--; }, TaskScheduler.Default);
         }
 
         internal void Download() => Downloading = DownloadAsync();
@@ -215,11 +225,14 @@ namespace EmuSen.Mistress.Views
         private readonly Button _resetAll;
         private readonly SliderList _parameters;
         private readonly HintText _parametersNote = new();
+        private readonly FilterBar _parameterSearch;
         private readonly IReadOnlyList<ShaderEntry> _builtIns;
         private int _reading;
         private ShaderEntry? _builtFor;
         private (ShaderEntry Entry, int Reading, TaskCompletionSource Done)? _settling;
         private bool _keying;
+        private long? _lastKeyMove;
+        private System.Threading.ITimer? _settleTimer;
 
         public string Console { get; }
 
@@ -232,6 +245,8 @@ namespace EmuSen.Mistress.Views
         public GroupedList<ShaderEntry> List => _list;
 
         public FilterBar Filter => _filter;
+
+        public FilterBar ParameterSearch => _parameterSearch;
 
         // The rows that exist now; the list is virtualised, so a long preset's are only those in view and a few beyond.
         public IEnumerable<SliderRow> Sliders => _parameters.Realized;
@@ -272,10 +287,17 @@ namespace EmuSen.Mistress.Views
 
             _parameters = new SliderList { Name = $"{console}.ShaderParameters", Padding = new Thickness(0, 0, 14, 0) };
             _parameters.ValueChanged += Changed;
+            // Kept across shaders, so a word looked for is looked for in the next preset too - see EmuSen_Settings_Reference.md §4.48.10.
+            _parameterSearch = new FilterBar { Name = $"{console}.ParameterSearch", Placeholder = "Search parameters", ShowFacet = false, SearchDelay = TimeSpan.Zero, IsVisible = false, Margin = new Thickness(0, 2, 14, 0) };
+            _parameterSearch.Changed += () =>
+            {
+                _parameters.Search = _parameterSearch.SearchText;
+                ShowCount();
+            };
 
             _filter.Changed += Refresh;
-            // Only a key moving the selection waits for it to settle; a click, a jump and the focus leaving the list do not - see EmuSen_Settings_Reference.md §4.48.9.
-            _list.Chose += entry => { if (entry is not null) Show(entry, now: !_keying); };
+            // Only a key move that follows another inside the settle waits; a click, a jump, a first step and the focus leaving the list do not - see EmuSen_Settings_Reference.md §4.48.10.
+            _list.Chose += entry => { if (entry is not null) Show(entry, now: !_keying || FirstStep()); };
             _list.AddHandler(KeyDownEvent, (_, _) => _keying = true, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
             _list.AddHandler(KeyDownEvent, (_, _) => _keying = false, Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
             _list.PropertyChanged += (_, e) => { if (e.Property == IsKeyboardFocusWithinProperty && e.NewValue is false) SettleNow(); };
@@ -303,7 +325,7 @@ namespace EmuSen.Mistress.Views
             var actions = Ui.Row(8, _resetAll, _use);
             actions.HorizontalAlignment = HorizontalAlignment.Right;
             actions.Margin = new Thickness(0, 0, 14, 0);
-            var header = Ui.Stack(6, _name, _where, actions, _parametersNote);
+            var header = Ui.Stack(6, _name, _where, actions, _parametersNote, _parameterSearch);
             header.Margin = new Thickness(0, 0, 0, 8);
             var right = new DockPanel { LastChildFill = true };
             DockPanel.SetDock(header, Dock.Top);
@@ -414,11 +436,21 @@ namespace EmuSen.Mistress.Views
             var done = new TaskCompletionSource();
             Reading = done.Task;
             _settling = (entry, reading, done);
+            _settleTimer?.Dispose();
             if (now) { SettleNow(); return; }
-            Task.Delay(_owner.Settle).ContinueWith(_ => Dispatcher.UIThread.Post(() =>
+            _settleTimer = _owner.Time.CreateTimer(_ => Dispatcher.UIThread.Post(() =>
             {
                 if (_settling is { } settling && settling.Reading == reading) SettleNow();
-            }), TaskScheduler.Default);
+            }), null, _owner.Settle, System.Threading.Timeout.InfiniteTimeSpan);
+        }
+
+        // A key move after the selection has held still for the settle reads at once; only the moves that follow inside it wait - see EmuSen_Settings_Reference.md §4.48.10.
+        private bool FirstStep()
+        {
+            long now = _owner.Time.GetTimestamp();
+            bool first = _lastKeyMove is not long last || _owner.Time.GetElapsedTime(last, now) >= _owner.Settle;
+            _lastKeyMove = now;
+            return first;
         }
 
         // Ends a settle still waiting: the shown shader is read and its sliders built now.
@@ -441,21 +473,27 @@ namespace EmuSen.Mistress.Views
             }
             if (!File.Exists(Path.Combine(_owner.Pack, entry.Relative!)))
             {
+                _parameterSearch.IsVisible = false;
                 _parametersNote.Text = "This preset is not in the downloaded pack, so it is drawn plain until the pack has it again.";
                 done.TrySetResult();
                 return;
             }
 
-            _owner.ReadAsync(entry.Relative!).ContinueWith(read => Dispatcher.UIThread.Post(() =>
+            void Arrived(Task<IReadOnlyList<SlangParameter>> read)
             {
                 if (reading == _reading)
                 {
                     if (read.IsCompletedSuccessfully) BuildSliders(entry, read.Result);
-                    else _parametersNote.Text = $"Its parameters could not be read: {read.Exception?.GetBaseException().Message}";
+                    else { _parameterSearch.IsVisible = false; _parametersNote.Text = $"Its parameters could not be read: {read.Exception?.GetBaseException().Message}"; }
                 }
                 done.TrySetResult();
                 if (reading == _reading) PrefetchBeside(entry);
-            }), TaskScheduler.Default);
+            }
+
+            // Parameters already in the cache are built now, in the same step, not a dispatcher turn later - see EmuSen_Settings_Reference.md §4.48.10.
+            Task<IReadOnlyList<SlangParameter>> pending = _owner.ReadAsync(entry.Relative!);
+            if (pending.IsCompleted) Arrived(pending);
+            else pending.ContinueWith(read => Dispatcher.UIThread.Post(() => Arrived(read)), TaskScheduler.Default);
         }
 
         // The presets a row away from the settled one, so the usual next step finds its parameters read - see EmuSen_Settings_Reference.md §4.48.9.
@@ -473,7 +511,6 @@ namespace EmuSen.Mistress.Views
         {
             IReadOnlyDictionary<string, string> stored = Config.ParametersFor(Console, entry.Stored);
             int count = parameters.Count(p => !SlangParameters.IsHeading(p));
-            _parametersNote.Text = count == 0 ? "This shader has nothing to adjust." : $"{count} {(count == 1 ? "parameter" : "parameters")}. Left and right move a slider; the button above one returns it to its default.";
 
             var items = new List<object>(parameters.Count);
             foreach (SlangParameter parameter in parameters)
@@ -495,10 +532,24 @@ namespace EmuSen.Mistress.Views
                 {
                     Name = $"{Console}.Parameter.{parameter.Id}",
                     Tag = parameter.Id,
+                    Keywords = parameter.Id,
                 });
             }
             _builtFor = entry;
             _parameters.ItemsSource = items;
+            _parameterSearch.IsVisible = _parameters.Sliders.Any();
+            ShowCount();
+        }
+
+        // How many parameters there are, and while a search narrows them, how many match - see EmuSen_Settings_Reference.md §4.48.10.
+        private void ShowCount()
+        {
+            if (_builtFor is null) return;
+            int count = _parameters.Sliders.Count(), matching = _parameters.Matching.Count();
+            string noun = count == 1 ? "parameter" : "parameters";
+            _parametersNote.Text = count == 0 ? "This shader has nothing to adjust."
+                : _parameters.Search.Length > 0 ? $"{matching} of {count} {noun} match “{_parameters.Search}”. Left and right move a slider; the button above one returns it to its default."
+                : $"{count} {noun}. Left and right move a slider; the button above one returns it to its default.";
         }
 
         // A float as the decimal it was written as, so 0.041f is 0.041 and not 0.041000001, which the row would show to four places.

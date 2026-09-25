@@ -96,10 +96,11 @@ namespace EmuSen.Mistress.BigPicture.Scene
             TimeSpan delay = TimeSpan.FromSeconds(e.Float("containerStartDelay") ?? (horizontal ? 1.5f : 4.5f));
             text.ScrollDirection = horizontal ? EmuSen.LunaP.Motion.TextScrollDirection.Horizontal : EmuSen.LunaP.Motion.TextScrollDirection.Vertical;
             text.ScrollWholeLines = !horizontal && e.Bool("containerVerticalSnap") != false;
+            double unit = m.HorizontalContainerSpeedPerEm * text.FontSize;
             text.Scroll = horizontal
-                ? new EmuSen.LunaP.Motion.TextScroll(delay, m.HorizontalContainerSpeedPerEm * text.FontSize * speed, m.HorizontalContainerGapPerUnit * (e.Float("containerScrollGap") ?? 1.5f) * text.FontSize)
-                : new EmuSen.LunaP.Motion.TextScroll(delay, m.VerticalContainerLinesPerSecond * text.LineHeight * speed, 0,
-                    TimeSpan.FromSeconds(e.Float("containerResetDelay") ?? 7), m.VerticalContainerFadeIn);
+                ? new EmuSen.LunaP.Motion.TextScroll(delay, unit * speed, m.HorizontalContainerGapSeconds * (e.Float("containerScrollGap") ?? 1.5f) * unit)
+                : new EmuSen.LunaP.Motion.TextScroll(delay, m.VerticalContainerSpeedPerEm * text.FontSize * speed, 0,
+                    TimeSpan.FromSeconds(e.Float("containerResetDelay") ?? 7), m.VerticalContainerFadeIn, WholePixels: true);
         }
 
         // The typesetting both elements share: font, size, colour, alignment, case, spacing, background and the box rules.

@@ -108,6 +108,6 @@ namespace EmuSen.Mistress.BigPicture.Scene
             e.Bool("textHorizontalScrolling") == false ? default : new(
                 TimeSpan.FromSeconds(e.Float("textHorizontalScrollDelay") ?? 3),
                 b.Data.Motion.MarqueeSpeedPerEm * fontSize * (e.Float("textHorizontalScrollSpeed") ?? 1),
-                b.Data.Motion.MarqueeGapPerUnit * (e.Float("textHorizontalScrollGap") ?? 1.5f) * fontSize);
+                b.Data.Motion.MarqueeGapSeconds * (e.Float("textHorizontalScrollGap") ?? 1.5f) * b.Data.Motion.MarqueeSpeedPerEm * fontSize);
     }
 }

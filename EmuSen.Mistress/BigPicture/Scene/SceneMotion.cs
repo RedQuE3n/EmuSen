@@ -3,8 +3,8 @@ using Avalonia.Animation.Easings;
 
 namespace EmuSen.Mistress.BigPicture.Scene
 {
-    // A held direction's timing: the first repeat's delay, the interval, and a faster tier after a while held.
-    public sealed record SceneRepeatRule(TimeSpan Delay, TimeSpan Interval, TimeSpan? FastAfter = null, TimeSpan? FastInterval = null);
+    // A held direction's timing: the first repeat's delay, the interval, and from FastAfter a faster interval, the switch moving FastJump items at once.
+    public sealed record SceneRepeatRule(TimeSpan Delay, TimeSpan Interval, TimeSpan? FastAfter = null, TimeSpan? FastInterval = null, int FastJump = 1);
 
     // How the scene moves, as ES-DE 3.4.1 was measured moving - see EmuSen_BigPicture.md §14.7.
     public sealed record SceneMotion
@@ -14,34 +14,43 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public required SceneRepeatRule CarouselRepeat { get; init; }
         public required SceneRepeatRule CarouselFastRepeat { get; init; }
         public required SceneRepeatRule ListRepeat { get; init; }
-        public bool ListWraps { get; init; }
 
-        // The gamelist's metadata and media fade out while the list moves fast, and back in when it stops.
+        // The gamelist's metadata and media fade out from the first repeat of a held direction, and back in when scrolling stops.
         public TimeSpan MetadataFadeOut { get; init; }
         public TimeSpan MetadataFadeIn { get; init; }
 
-        // An image or video with scrollFadeIn fades in over this when the game changes.
+        // An image or video with scrollFadeIn rises from this opacity to full over ScrollFadeIn when the game changes.
         public TimeSpan ScrollFadeIn { get; init; }
+        public double ScrollFadeInFrom { get; init; }
 
-        // The textlist's selected name: pixels a second per unit of textHorizontalScrollSpeed and per pixel of font size, and the gap per unit in font sizes.
+        // The textlist's selected name: font sizes a second at speed 1, and the gap as seconds of that travel per unit of textHorizontalScrollGap.
         public double MarqueeSpeedPerEm { get; init; }
-        public double MarqueeGapPerUnit { get; init; }
+        public double MarqueeGapSeconds { get; init; }
 
-        // Text containers: the same for the horizontal type; the vertical type's speed per unit in line heights a second, and its fade-in.
+        // Text containers: the horizontal type as the marquee; the vertical type's font sizes a second at speed 1, whole-pixel steps, and its fade-in at the top.
         public double HorizontalContainerSpeedPerEm { get; init; }
-        public double HorizontalContainerGapPerUnit { get; init; }
-        public double VerticalContainerLinesPerSecond { get; init; }
+        public double HorizontalContainerGapSeconds { get; init; }
+        public double VerticalContainerSpeedPerEm { get; init; }
         public TimeSpan VerticalContainerFadeIn { get; init; }
 
-        // The slide between the system and gamelist views.
+        // The camera pan between the system and gamelist views, a screen height, the gamelist below.
         public TimeSpan ViewSlide { get; init; }
         public Easing? ViewSlideEasing { get; init; }
 
+        private static TimeSpan Ms(double ms) => TimeSpan.FromMilliseconds(ms);
+
         public static SceneMotion Esde { get; } = new()
         {
-            CarouselRepeat = new(TimeSpan.Zero, TimeSpan.Zero),
-            CarouselFastRepeat = new(TimeSpan.Zero, TimeSpan.Zero),
-            ListRepeat = new(TimeSpan.Zero, TimeSpan.Zero),
+            CarouselStep = Ms(400), CarouselEasing = new QuadraticEaseOut(),
+            CarouselRepeat = new(Ms(500), Ms(200)),
+            CarouselFastRepeat = new(Ms(500), Ms(180), Ms(1580), Ms(80)),
+            ListRepeat = new(Ms(500), Ms(114), Ms(1703), Ms(15.9), 4),
+            MetadataFadeOut = Ms(149), MetadataFadeIn = Ms(150),
+            ScrollFadeIn = Ms(326), ScrollFadeInFrom = 0.5,
+            MarqueeSpeedPerEm = 131.5 / 30, MarqueeGapSeconds = 1,
+            HorizontalContainerSpeedPerEm = 131.5 / 30, HorizontalContainerGapSeconds = 1,
+            VerticalContainerSpeedPerEm = 37.03 / 30, VerticalContainerFadeIn = Ms(298),
+            ViewSlide = Ms(402), ViewSlideEasing = new CubicEaseOut(),
         };
     }
 }

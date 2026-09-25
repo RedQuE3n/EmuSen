@@ -52,17 +52,24 @@ namespace EmuSen.Mistress.BigPicture.Scene
         {
             Current.Advance(now);
             if (_leaving is null) return;
-            double w = Current.Data.Screen.Width, p = _slide.ValueAt(now);
-            _leaving.Root.RenderTransform = new TranslateTransform(-_direction * p * w, 0);
-            Current.Root.RenderTransform = new TranslateTransform(_direction * (1 - p) * w, 0);
+            double h = Current.Data.Screen.Height, p = _slide.ValueAt(now), y = _direction * (1 - p) * h;
+            _leaving.Root.RenderTransform = new TranslateTransform(0, -_direction * p * h);
+            Current.Root.RenderTransform = new TranslateTransform(0, y);
+            foreach (SceneEntry e in Overlays(_leaving)) e.Control!.IsVisible = false;
+            foreach (SceneEntry e in Overlays(Current)) e.Control!.RenderTransform = new TranslateTransform(0, -y);
             if (_slide.IsSettledAt(now)) Finish();
         }
+
+        // The help bar, clock and status stay on the screen while the views pan beneath them: the new view's at once, the old view's gone.
+        private static System.Collections.Generic.IEnumerable<SceneEntry> Overlays(SceneView view) =>
+            System.Linq.Enumerable.Where(view.Scene.Entries, e => e.Control is not null && e.Element.Type is "helpsystem" or "clock" or "systemstatus");
 
         private void Finish()
         {
             if (_leaving is not null) Root.Children.Remove(_leaving.Root);
             _leaving = null;
             Current.Root.RenderTransform = null;
+            foreach (SceneEntry e in Overlays(Current)) e.Control!.RenderTransform = null;
         }
     }
 }

@@ -133,8 +133,24 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public static IReadOnlyList<Motion> Motions { get; } =
         [
             new("carousel held", "system", (v, now) => { if (!v.IsMoving || now == TimeSpan.Zero) v.Step(1, now); }),
-            new("list held", "gamelist", (v, now) => { if (now == TimeSpan.Zero) v.Press(1, now); }),
+            new("list held", "gamelist", HeldToAndFro()),
         ];
+
+        // A direction held down the list, and back up from its end, so the list never rests at an end.
+        private static Action<SceneView, TimeSpan> HeldToAndFro()
+        {
+            int direction = 0;
+            return (v, now) =>
+            {
+                int last = v.Data.System.Games.Count - 1;
+                if (direction == 0 || (direction > 0 && v.Data.GameIndex >= last) || (direction < 0 && v.Data.GameIndex <= 0))
+                {
+                    direction = direction > 0 ? -1 : 1;
+                    v.Release(now);
+                    v.Press(direction, now);
+                }
+            };
+        }
 
         public static List<string> RunMotions(string theme, string media, IEnumerable<(int W, int H)> sizes, int frames, string? device, Action<string> log, IReadOnlyList<Motion>? motions = null)
         {
@@ -147,7 +163,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             SyntheticLibrary.WriteMedia(media);
             foreach ((int w, int h) in sizes)
             {
-                IReadOnlyList<SceneSystem> systems = SyntheticLibrary.Load(theme, new ThemeChoices { ScreenWidth = w, ScreenHeight = h });
+                IReadOnlyList<SceneSystem> systems = SyntheticLibrary.Load(theme, new ThemeChoices { ScreenWidth = w, ScreenHeight = h })
+                    .Select(s => s with { Games = Enumerable.Repeat(s.Games, 10).SelectMany(g => g).ToList() }).ToList();
                 var info = new SKImageInfo(w, h, SKColorType.Rgba8888, SKAlphaType.Premul);
                 foreach (Motion motion in motions)
                 {

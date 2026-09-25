@@ -107,12 +107,6 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(panel.Reading.IsCompleted);
         }
 
-        private static void Wait(int milliseconds)
-        {
-            var clock = Stopwatch.StartNew();
-            while (clock.ElapsedMilliseconds < milliseconds) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(1); }
-        }
-
         private static int IndexOf(ShaderPanel panel, string relative) => panel.List.Models.ToList().FindIndex(e => e.Relative == relative && !e.Recent);
 
         private static void FocusRow(ShaderSettingsWindow window, ShaderPanel panel, int index)
@@ -182,6 +176,79 @@ namespace EmuSen.WiseMan.Mistress
             Assert.All(panel.Parameters, p => Assert.True(p.IsDefault));
             Assert.True(panel.ParameterList.Reveal(last)!.IsDefault);
             Assert.Empty(GraphicsConfig.Load().ShaderParameters);
+            window.Close();
+        }, default);
+
+        private static void SearchParameters(ShaderPanel panel, string text)
+        {
+            panel.ParameterSearch.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "PART_Search").Text = text;
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        private static string? Note(ShaderPanel panel) => panel.GetVisualDescendants().OfType<HintText>().Single(h => h.Text?.Contains("parameter") == true || h.Text?.Contains("nothing") == true).Text;
+
+        // The search box over the parameters narrows them by description or id, keeps a heading's rows when the heading matches, and stays as the shader changes - see EmuSen_Settings_Reference.md §4.48.10.
+        [Fact]
+        public Task The_parameters_are_narrowed_by_a_search_of_their_descriptions_and_ids() => Session.Dispatch(() =>
+        {
+            (ShaderSettingsWindow window, ShaderPanel panel) = Open();
+            Assert.False(panel.ParameterSearch.IsVisible);
+            panel.List.SelectedIndex = IndexOf(panel, "big/huge.slangp");
+            Pump(panel);
+            UiTest.Capture(window);
+            Assert.True(panel.ParameterSearch.IsVisible);
+
+            SearchParameters(panel, "0917");
+            UiTest.AssertLaidOut(window, "shaders-browse-944-search");
+            Assert.Equal(new[] { "Parameter 0917" }, panel.ParameterList.Matching.Select(p => p.Label));
+            Assert.Equal(new object[] { "--- Section 8 ---", panel.ParameterList.Matching.Single() }, panel.ParameterList.ItemsSource!.Cast<object>());
+            Assert.StartsWith("1 of 944 parameters match “0917”.", Note(panel));
+            SliderRow row = Assert.Single(panel.Sliders);
+            ShaderSettingsWindowTests.Press(row, Key.Right);
+            Assert.Equal("0.55", GraphicsConfig.Load().ParametersFor("SNES", "slang:big/huge.slangp")["P0917"]);
+
+            SearchParameters(panel, "p0005");
+            Assert.Equal(new[] { "P0005" }, panel.ParameterList.Matching.Select(p => (string)p.Tag!));
+            SearchParameters(panel, "section 2");
+            Assert.Equal(105, panel.ParameterList.Matching.Count());
+            Assert.Equal("P0213", panel.ParameterList.Matching.First().Tag);
+            SearchParameters(panel, "nothing like it");
+            Assert.Empty(panel.ParameterList.Matching);
+            Assert.StartsWith("0 of 944 parameters match", Note(panel));
+
+            // Reset All still reaches every parameter, matched or not.
+            SearchParameters(panel, "0003");
+            panel.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SNES.ResetShader").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.All(panel.Parameters, p => Assert.True(p.IsDefault));
+            Assert.Equal(Big, panel.Parameters.Count);
+
+            // Kept as the shader changes, and cleared by emptying the box.
+            SearchParameters(panel, "glow");
+            panel.List.SelectedIndex = IndexOf(panel, "row/p00.slangp");
+            Pump(panel);
+            Assert.Equal(new[] { "Glow strength" }, panel.ParameterList.Matching.Select(p => p.Label));
+            Assert.StartsWith("1 of 2 parameters match", Note(panel));
+            SearchParameters(panel, "");
+            Assert.Equal(2, panel.ParameterList.Matching.Count());
+            Assert.StartsWith("2 parameters.", Note(panel));
+            window.Close();
+        }, default);
+
+        // Every control of the window with a long preset shown, the parameter search among them, reached by the pad on the desktop.
+        [Fact]
+        public Task With_a_long_preset_shown_every_control_on_the_desktop_is_reached_by_pad() => Session.Dispatch(() =>
+        {
+            (ShaderSettingsWindow window, ShaderPanel panel) = Open();
+            panel.List.SelectedIndex = IndexOf(panel, "big/huge.slangp");
+            Pump(panel);
+            UiTest.Capture(window);
+            FocusRow(window, panel, IndexOf(panel, "big/huge.slangp"));
+            void Press(UiButton b) => PadWindowRouter.Send(window, b);
+            HashSet<InputElement> reached = PadAudit.Reachable(window, Press);
+            var missing = PadAudit.Operable(window).Where(c => !reached.Contains(c)).Select(PadAudit.Describe).ToList();
+            foreach (string m in missing) _out.WriteLine("unreachable: " + m);
+            Assert.Contains(PadAudit.Operable(window), c => c is TextBox t && t.FindAncestorOfType<FilterBar>() == panel.ParameterSearch);
+            Assert.Empty(missing);
             window.Close();
         }, default);
 

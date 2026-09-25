@@ -225,6 +225,7 @@ namespace EmuSen.Mistress.Views
         private readonly Button _resetAll;
         private readonly SliderList _parameters;
         private readonly HintText _parametersNote = new();
+        private readonly FilterBar _parameterSearch;
         private readonly IReadOnlyList<ShaderEntry> _builtIns;
         private int _reading;
         private ShaderEntry? _builtFor;
@@ -244,6 +245,8 @@ namespace EmuSen.Mistress.Views
         public GroupedList<ShaderEntry> List => _list;
 
         public FilterBar Filter => _filter;
+
+        public FilterBar ParameterSearch => _parameterSearch;
 
         // The rows that exist now; the list is virtualised, so a long preset's are only those in view and a few beyond.
         public IEnumerable<SliderRow> Sliders => _parameters.Realized;
@@ -284,6 +287,13 @@ namespace EmuSen.Mistress.Views
 
             _parameters = new SliderList { Name = $"{console}.ShaderParameters", Padding = new Thickness(0, 0, 14, 0) };
             _parameters.ValueChanged += Changed;
+            // Kept across shaders, so a word looked for is looked for in the next preset too - see EmuSen_Settings_Reference.md §4.48.10.
+            _parameterSearch = new FilterBar { Name = $"{console}.ParameterSearch", Placeholder = "Search parameters", ShowFacet = false, SearchDelay = TimeSpan.Zero, IsVisible = false, Margin = new Thickness(0, 2, 14, 0) };
+            _parameterSearch.Changed += () =>
+            {
+                _parameters.Search = _parameterSearch.SearchText;
+                ShowCount();
+            };
 
             _filter.Changed += Refresh;
             // Only a key move that follows another inside the settle waits; a click, a jump, a first step and the focus leaving the list do not - see EmuSen_Settings_Reference.md §4.48.10.
@@ -315,7 +325,7 @@ namespace EmuSen.Mistress.Views
             var actions = Ui.Row(8, _resetAll, _use);
             actions.HorizontalAlignment = HorizontalAlignment.Right;
             actions.Margin = new Thickness(0, 0, 14, 0);
-            var header = Ui.Stack(6, _name, _where, actions, _parametersNote);
+            var header = Ui.Stack(6, _name, _where, actions, _parametersNote, _parameterSearch);
             header.Margin = new Thickness(0, 0, 0, 8);
             var right = new DockPanel { LastChildFill = true };
             DockPanel.SetDock(header, Dock.Top);
@@ -418,6 +428,7 @@ namespace EmuSen.Mistress.Views
                 : ScreenFilters.Find(entry.Stored).Filter?.Credit is { Length: > 0 } credit ? $"{ShaderCatalog.BuiltIn}. {credit}" : ShaderCatalog.BuiltIn;
             _builtFor = null;
             _parameters.ItemsSource = null;
+            _parameterSearch.IsVisible = false;
             _parametersNote.Text = entry.IsPreset ? "Reading the preset's parameters..." : string.Empty;
             ShowState();
 
@@ -500,7 +511,6 @@ namespace EmuSen.Mistress.Views
         {
             IReadOnlyDictionary<string, string> stored = Config.ParametersFor(Console, entry.Stored);
             int count = parameters.Count(p => !SlangParameters.IsHeading(p));
-            _parametersNote.Text = count == 0 ? "This shader has nothing to adjust." : $"{count} {(count == 1 ? "parameter" : "parameters")}. Left and right move a slider; the button above one returns it to its default.";
 
             var items = new List<object>(parameters.Count);
             foreach (SlangParameter parameter in parameters)
@@ -522,10 +532,24 @@ namespace EmuSen.Mistress.Views
                 {
                     Name = $"{Console}.Parameter.{parameter.Id}",
                     Tag = parameter.Id,
+                    Keywords = parameter.Id,
                 });
             }
             _builtFor = entry;
             _parameters.ItemsSource = items;
+            _parameterSearch.IsVisible = _parameters.Sliders.Any();
+            ShowCount();
+        }
+
+        // How many parameters there are, and while a search narrows them, how many match - see EmuSen_Settings_Reference.md §4.48.10.
+        private void ShowCount()
+        {
+            if (_builtFor is null) return;
+            int count = _parameters.Sliders.Count(), matching = _parameters.Matching.Count();
+            string noun = count == 1 ? "parameter" : "parameters";
+            _parametersNote.Text = count == 0 ? "This shader has nothing to adjust."
+                : _parameters.Search.Length > 0 ? $"{matching} of {count} {noun} match “{_parameters.Search}”. Left and right move a slider; the button above one returns it to its default."
+                : $"{count} {noun}. Left and right move a slider; the button above one returns it to its default.";
         }
 
         // A float as the decimal it was written as, so 0.041f is 0.041 and not 0.041000001, which the row would show to four places.

@@ -21,7 +21,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             Data = data with { Motion = Motion };
             Now = now;
             _selectedAt = now;
-            _shownAt = now;
+            _changed = false;
             _position = Glide.At(Index);
             _repeat = new SceneRepeat();
             Root = new Panel { Width = data.Screen.Width, Height = data.Screen.Height };
@@ -74,6 +74,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             Data = IsSystemView ? Data with { SystemIndex = target } : Data with { GameIndex = target };
             _position = Slides ? _position.Toward(to, now, Motion.CarouselStep, Motion.CarouselEasing) : Glide.At(to);
             _selectedAt = now;
+            _changed = true;
             Scene = Rebuild();
             Apply();
             return true;
@@ -134,7 +135,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         }
 
         private Glide _metadata = Glide.At(1);
-        private readonly TimeSpan _shownAt;
+        private bool _changed;
 
         // A game's metadata and media, which ES-DE fades out while the list scrolls fast: its fields but the system's names, dates, ratings, badges, media, and whatever the theme marks.
         private bool IsGameMetadata(ResolvedElement e) => !IsSystemView && (e.Bool("metadataElement") == true || e.Type switch
@@ -150,7 +151,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         private void Apply()
         {
-            double fadeIn = Motion.ScrollFadeIn > TimeSpan.Zero && _selectedAt > _shownAt ? new Glide(Motion.ScrollFadeInFrom, 1, _selectedAt, Motion.ScrollFadeIn).ValueAt(Now) : 1;
+            double fadeIn = Motion.ScrollFadeIn > TimeSpan.Zero && _changed ? new Glide(Motion.ScrollFadeInFrom, 1, _selectedAt, Motion.ScrollFadeIn).ValueAt(Now) : 1;
             double metadata = _metadata.ValueAt(Now);
             foreach (SceneEntry entry in Scene.Entries)
             {

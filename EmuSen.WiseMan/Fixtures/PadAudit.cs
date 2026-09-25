@@ -86,6 +86,7 @@ namespace EmuSen.WiseMan.Fixtures
             object startKey = KeyOf(start);
             var paths = new Dictionary<object, List<int>> { [startKey] = new List<int>() };
             var queue = new Queue<object>(new[] { startKey });
+            var failed = new HashSet<object>();
             found = target(start) ? startKey : null;
 
             // Every list's selection and every scrolling area's offset as the walk began: a row given the focus is selected, a list is entered at its selected row, and a move is by position.
@@ -109,15 +110,16 @@ namespace EmuSen.WiseMan.Fixtures
             while (found is null && queue.Count > 0 && paths.Count < limit && enough?.Invoke(paths) != true)
             {
                 object key = queue.Dequeue();
-                if (At(key) is not { } from) continue;
+                if (At(key) is not { } from) { failed.Add(key); continue; }
                 bool takesSideways = from is ComboBox or Slider or TabItem;
                 foreach (int direction in takesSideways ? new[] { 0, 1 } : new[] { 0, 1, 2, 3 })
                 {
-                    if (At(key) is null) break;
+                    if (At(key) is null) { failed.Add(key); break; }
                     presses[direction]();
                     if (Focused() is not { } to) continue;
                     object toKey = KeyOf(to);
-                    if (paths.ContainsKey(toKey)) continue;
+                    // A control first found by a path that would not replay is explored again from the next path that reaches it.
+                    if (paths.ContainsKey(toKey) && !failed.Remove(toKey)) continue;
                     paths[toKey] = new List<int>(paths[key]) { direction };
                     queue.Enqueue(toKey);
                     if (target(to)) { found = toKey; break; }

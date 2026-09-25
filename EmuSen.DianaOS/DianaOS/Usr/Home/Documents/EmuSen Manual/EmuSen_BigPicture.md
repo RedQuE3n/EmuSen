@@ -1028,6 +1028,22 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 
 ---
 
+### 10.1 Decided by the user (2026-09-24)
+
+- **Q1, the theme:** the **ES-DE edition**, `art-book-next-es-de`.
+- **Q2, the resolution:** answered from the device, not asked. Game Mode's gamescope session is started with
+  `-w 1280 -h 800` (read from the running process on 2026-09-24), so Mistress draws at 1280×800 there; the panel
+  itself is 1920×1200. Both are 16:10, so the variant chosen is the same; performance is to be measured at 1280×800
+  first and at 1920×1200 on the desktop's Desktop Mode window.
+- **Q3, how much of the format:** **the full ES-DE format**, not only what Art Book Next uses. §3's inventory becomes
+  the first test theme and the order in which elements are built, not the boundary of the work; §7's estimate grows
+  accordingly, and stage (a)'s golden tests must cover every element type and property ES-DE documents.
+- **Q4, videos:** **not now.** Stage (g) is deferred; the video element renders its fallback image, as ES-DE does
+  when no video file exists.
+- **Q5, developer credentials:** **the user's own machines only.** Published builds do not carry them; a build
+  without the local file cannot scrape.
+- Q6–Q10 remain open; each is asked when its stage reaches it.
+
 ## 11. Sources
 
 - ES-DE: `THEMES.md`, `USERGUIDE.md`, `LICENSE`, `es-app/src/scrapers/ScreenScraper.cpp` and `.h`, read at master on

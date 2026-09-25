@@ -23,5 +23,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 [.. SceneGpuBench.NoLevers, SceneGpuBench.ImmutableBitmaps]))
                 _output.WriteLine(line);
         });
+
+        [ArtBookNextFact]
+        public System.Threading.Tasks.Task Gpu_moving_frame_cost() => UiTest.Run(() =>
+        {
+            if (Environment.GetEnvironmentVariable("EMUSEN_BIGPICTURE_GPU") != "1") return;
+            string device = Environment.GetEnvironmentVariable("EMUSEN_BIGPICTURE_GL_DEVICE") is { Length: > 0 } d ? d : "RX 6800";
+            int frames = int.TryParse(Environment.GetEnvironmentVariable("EMUSEN_BIGPICTURE_FRAMES"), CultureInfo.InvariantCulture, out int f) ? f : 240;
+            foreach (string line in SceneGpuBench.RunMotions(ArtBookNextFactAttribute.Folder, SceneRenderTool.MediaRoot, [(1280, 800), (1920, 1200)], frames, device, _output.WriteLine))
+                _output.WriteLine(line);
+        });
     }
 }

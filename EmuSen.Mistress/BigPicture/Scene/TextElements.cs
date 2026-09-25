@@ -87,6 +87,20 @@ namespace EmuSen.Mistress.BigPicture.Scene
             };
         }
 
+        // A container's scroll, from the theme's delays, speed and gap and ES-DE's measured rates (§14.7); the view sets its time.
+        private static void Contain(SceneBuilder b, ResolvedElement e, FontText text)
+        {
+            SceneMotion m = b.Data.Motion;
+            bool horizontal = e.String("containerType") == "horizontal";
+            float speed = e.Float("containerScrollSpeed") ?? 1;
+            TimeSpan delay = TimeSpan.FromSeconds(e.Float("containerStartDelay") ?? (horizontal ? 1.5f : 4.5f));
+            text.ScrollDirection = horizontal ? EmuSen.LunaP.Motion.TextScrollDirection.Horizontal : EmuSen.LunaP.Motion.TextScrollDirection.Vertical;
+            text.Scroll = horizontal
+                ? new EmuSen.LunaP.Motion.TextScroll(delay, m.HorizontalContainerSpeedPerEm * text.FontSize * speed, m.HorizontalContainerGapPerUnit * (e.Float("containerScrollGap") ?? 1.5f) * text.FontSize)
+                : new EmuSen.LunaP.Motion.TextScroll(delay, m.VerticalContainerLinesPerSecond * text.LineHeight * speed, 0,
+                    TimeSpan.FromSeconds(e.Float("containerResetDelay") ?? 7), m.VerticalContainerFadeIn);
+        }
+
         // The typesetting both elements share: font, size, colour, alignment, case, spacing, background and the box rules.
         private static FontText Set(SceneBuilder b, ResolvedElement e, string value)
         {
@@ -110,6 +124,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
                 text.Ellipsis = null;
                 if (e.String("containerType") == "horizontal") text.Wrap = false;
                 else text.TextVerticalAlignment = Avalonia.Layout.VerticalAlignment.Top;
+                Contain(b, e, text);
             }
 
             if (e.Color("backgroundColor") is { A: > 0 } background)

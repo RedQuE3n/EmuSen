@@ -126,6 +126,76 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return lines;
         }
 
+        // One moving case: a view held moving by a script of presses, each frame's clock step, layout and GPU draw timed at 60 Hz of its own clock.
+        public sealed record Motion(string Name, string View, Action<SceneView, TimeSpan> Script);
+
+        // A carousel stepped again as each step ends, and a list held down: the two motions that redraw the most.
+        public static IReadOnlyList<Motion> Motions { get; } =
+        [
+            new("carousel held", "system", (v, now) => { if (!v.IsMoving || now == TimeSpan.Zero) v.Step(1, now); }),
+            new("list held", "gamelist", (v, now) => { if (now == TimeSpan.Zero) v.Press(1, now); }),
+        ];
+
+        public static List<string> RunMotions(string theme, string media, IEnumerable<(int W, int H)> sizes, int frames, string? device, Action<string> log, IReadOnlyList<Motion>? motions = null)
+        {
+            motions ??= Motions;
+            var lines = new List<string>();
+            using var gl = ShaderBench.GlContext.Create(device);
+            using GRGlInterface glInterface = GRGlInterface.CreateOpenGl(ShaderBench.GlContext.GetProc) ?? throw new InvalidOperationException("no GL interface");
+            using GRContext context = GRContext.CreateGl(glInterface) ?? throw new InvalidOperationException("no GRContext");
+            uint query = gl.NewQuery();
+            SyntheticLibrary.WriteMedia(media);
+            foreach ((int w, int h) in sizes)
+            {
+                IReadOnlyList<SceneSystem> systems = SyntheticLibrary.Load(theme, new ThemeChoices { ScreenWidth = w, ScreenHeight = h });
+                var info = new SKImageInfo(w, h, SKColorType.Rgba8888, SKAlphaType.Premul);
+                foreach (Motion motion in motions)
+                {
+                    ForgetPictures();
+                    SceneData data = SyntheticLibrary.Data(systems, new Size(w, h), media, system: 1, game: 0);
+                    var view = new SceneView(data, motion.View, TimeSpan.Zero);
+                    var window = new Window { Width = w, Height = h, Content = view.Root, Background = Brushes.Black, SizeToContent = SizeToContent.Manual };
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+                    using SKSurface gpu = SKSurface.Create(context, true, info) ?? throw new InvalidOperationException("no GPU surface");
+                    var update = new List<double>();
+                    var cpu = new List<double>();
+                    var gpuMs = new List<double>();
+                    var wall = new List<double>();
+                    for (int i = 0; i < frames + 5; i++)
+                    {
+                        TimeSpan now = TimeSpan.FromTicks(i * TimeSpan.TicksPerSecond / 60);
+                        long t0 = Stopwatch.GetTimestamp();
+                        motion.Script(view, now);
+                        view.Advance(now);
+                        window.UpdateLayout();
+                        long t1 = Stopwatch.GetTimestamp();
+                        gl.BeginQuery(query);
+                        gpu.Canvas.Clear(SKColors.Black);
+                        Draw(gpu.Canvas, window, w, h);
+                        context.Flush(true, false);
+                        long t2 = Stopwatch.GetTimestamp();
+                        gl.EndQuery();
+                        gl.Finish();
+                        long t3 = Stopwatch.GetTimestamp();
+                        if (i < 5) continue;
+                        update.Add(Ms(t1 - t0));
+                        cpu.Add(Ms(t2 - t1));
+                        wall.Add(Ms(t3 - t0));
+                        gpuMs.Add(gl.QueryNanoseconds(query) / 1e6);
+                    }
+
+                    Stat u = Of(update), c = Of(cpu), g = Of(gpuMs), all = Of(wall);
+                    log($"{motion.Name} {w}x{h}: clock step and layout {u}; GPU record+flush {c}; GL {g}; whole frame {all}, max {wall.Max():F2} ms");
+                    lines.Add(FormattableString.Invariant($"case=motion-{motion.Name.Replace(' ', '-')}-{w}x{h} update={u.Median:F2}/{u.P95:F2} gpu.cpu={c.Median:F2} gpu.gl={g.Median:F2} frame={all.Median:F2}/{all.P95:F2} max={wall.Max():F2}"));
+                    window.Close();
+                    context.PurgeResources();
+                }
+            }
+
+            return lines;
+        }
+
         // A full redraw through the headless compositor: every visual invalidated, then the frame read back as RGBA.
         private static byte[] Compositor(Window window, out double ms)
         {

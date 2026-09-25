@@ -99,7 +99,15 @@ namespace EmuSen.Mistress.BigPicture.Scene
                 TextAlignment = SceneUnits.Horizontal(e.String("horizontalAlignment")),
                 HorizontalMargin = SceneUnits.Px(e.Float("horizontalMargin") ?? 0, b.W),
                 LetterCase = SceneUnits.Case(e.String("letterCase")),
+                Marquee = Marquee(b, e, SceneUnits.Px(fontSize, b.H)),
             };
         }
+
+        // The selected name's sideways scroll, from the theme's delay, speed and gap and ES-DE's measured rates (§14.7); the view sets its time.
+        private static EmuSen.LunaP.Motion.TextScroll Marquee(SceneBuilder b, ResolvedElement e, double fontSize) =>
+            e.Bool("textHorizontalScrolling") == false ? default : new(
+                TimeSpan.FromSeconds(e.Float("textHorizontalScrollDelay") ?? 3),
+                b.Data.Motion.MarqueeSpeedPerEm * fontSize * (e.Float("textHorizontalScrollSpeed") ?? 1),
+                b.Data.Motion.MarqueeGapPerUnit * (e.Float("textHorizontalScrollGap") ?? 1.5f) * fontSize);
     }
 }

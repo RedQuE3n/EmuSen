@@ -992,6 +992,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 | P10 | A new account scrapes the whole library, without videos, over two to three sessions in two days | Stage d, first full run |
 | P11 | Art Book Next's archive is 205–230 MB | Stage f |
 | P12 | With no videos scraped, the video element's render is identical to ES-DE's (§4.7) | Stage b |
+| P13–P18 | Stage (a)'s predictions: coverage, errors, skipped includes, load time, triggers, the default variant (§12.1) | Stage a (§12.5) |
 
 ---
 
@@ -1073,3 +1074,35 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   `EmuSen_Galaxia.md` §3, §5.4; `EmuSen_Stack.md` §2.3, §4.1, §5; `EmuSen_Multicore.md` §9;
   `EmuSen_Serenity.md` §2; `EmuSen_Mistress_LibraryPlan.md` §2, §4; LunaP `docs/LunaP.md` §1, §21, §88, §90, §91,
   §95, and `PLAN-icons.md` §1, §5, §8.
+
+---
+
+## 12. Stage (a): the ES-DE theme loader
+
+*Opened 2026-09-24.* Stage (a) builds the loader of §4.1 in `EmuSen.Mistress/BigPicture/Theme/`, to §10.1's scope: the
+whole of `THEMES.md`'s format, not only Art Book Next's part of it. It has no Avalonia types. Its output is a resolved,
+immutable scene model per view. Drawing is stage (b).
+
+### 12.1 Predictions, written before the loader was built
+
+The reference section of `THEMES.md` ("Element types and their properties") documents **15 element types and 467
+properties**. They were counted by a scratch script that reads the section's `` * `name` - type: TYPE `` lines. The
+navigation-sounds section adds a sixteenth type, `sound`, with one property (`path`). The format therefore has **468
+(element type, property) pairs**.
+
+- **P13.** Art Book Next sets **172 of the 468 pairs (37%)**, the static count of §3.3. The loader's union over every
+  combination it is run with will find exactly 172. A difference will name either a block that the static walk counted
+  but no choice selects, or a property the walk missed.
+- **P14.** Every combination run loads with **zero errors, zero unknown elements and zero unknown properties**, for the
+  five EmuSen systems (`nes`, `snes`, `n64`, `gb`, `gbc`) and the four collections of §3.1.
+- **P15.** Each load skips exactly **one** include, silently, as "built from a variable": `colors.xml`'s
+  `${customizationPath}`. It is undefined in 30 of the 31 colour schemes, and in `custom` it names a file the clone does
+  not have. `_metadata-global/${system.theme}.xml` exists for all nine systems (checked), and the grid variants'
+  `_coversize/${systemCoverSize}.xml` exists for every value those files set, so neither is skipped.
+- **P16.** Loading one system's two views takes **under 20 ms** on the desktop once warm, so the loader's share of P6
+  (nine systems in 150 ms) holds with room to spare.
+- **P17.** With no scraped media, the 12 `noMedia` overrides of §3.2 replace each of the 12 variants that carry one
+  with `gamelist-list-basic` or its `-nh` twin, in the gamelist view only. The system view keeps the chosen variant.
+- **P18.** With no variant chosen, the loader picks the **first declared**, `gamelist-list-metadata-cover`. `THEMES.md`
+  does not say which variant ES-DE picks, so this is the loader's rule, and not yet shown to be ES-DE's, until stage (b)
+  runs ES-DE.

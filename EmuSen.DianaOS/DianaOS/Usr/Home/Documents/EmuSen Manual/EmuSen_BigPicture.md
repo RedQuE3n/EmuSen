@@ -1780,3 +1780,27 @@ Mode, where gamescope's compositing shares the GPU with it.
 
 **P28 is not retired.** It waits for the handheld's results. Until then, §14.3 is the design's evidence. A handheld
 twenty times slower than the RX 6800 on both the CPU and GPU shares would still draw the system view in about 7 ms.
+
+### 14.5 Predictions for motion, written before ES-DE was recorded
+
+`THEMES.md` gives none of the durations, speeds or curves below. These were written from memory of using ES-DE and
+from the property defaults, before any recording, and are retired in §14.7.
+
+- **P29, the carousel step.** One step settles in 150–400 ms (P4's range), decelerating (an ease-out), and takes the
+  same time whatever the distance still to go. The unfocused opacity and the scale follow the same curve as the slide.
+- **P30, key repeat.** Holding a direction repeats after 400–500 ms, then every 60–150 ms. `fastScrolling` adds a
+  faster tier after about a second or two of holding.
+- **P31, the text list.** Moving the selection by one row does not animate: the selector and the rows jump.
+- **P32, the selected name's horizontal scroll.** It starts `textHorizontalScrollDelay` (3 s) after the selection
+  settles, moves at a constant speed of 50–150 px/s at 1280×800 for the default speed of 1, and repeats with a gap.
+- **P33, the vertical text container.** It starts after `containerStartDelay` (Art Book Next: 6 s), moves at a
+  constant 20–40 px/s at 1280×800, stops when the last line shows, waits `containerResetDelay` (7 s), then returns to
+  the top with a fade and starts again.
+- **P34, `scrollFadeIn`.** A game's image fades in over 150–300 ms when the selection changes.
+- **P35, the video element without a video file.** The static image appears with the selection, with no delay and no
+  fade.
+- **P36, the slide transition** between the system and gamelist views takes 200–500 ms, decelerating.
+- **P37, settled frames.** When a motion ends, Mistress's frame equals its static render of the new state pixel for
+  pixel, and ES-DE's settled positions to 1 px.
+- **P38, the moving frame's cost.** A frame of the carousel mid-slide costs no more on the GPU than a full redraw at
+  rest (§14.3), under 1 ms on the desktop.

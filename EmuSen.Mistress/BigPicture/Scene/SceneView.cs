@@ -21,6 +21,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             Data = data with { Motion = Motion };
             Now = now;
             _selectedAt = now;
+            _shownAt = now;
             _position = Glide.At(Index);
             _repeat = new SceneRepeat();
             Root = new Panel { Width = data.Screen.Width, Height = data.Screen.Height };
@@ -85,6 +86,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         {
             Advance(now);
             _repeat.Release();
+            if (_metadata.To < 1) _metadata = _metadata.Toward(1, now, Motion.MetadataFadeIn);
         }
 
         private SceneRepeatRule RepeatRule => Primary?.Type == "carousel" ? (Primary.Bool("fastScrolling") == true ? Motion.CarouselFastRepeat : Motion.CarouselRepeat) : Motion.ListRepeat;
@@ -92,26 +94,58 @@ namespace EmuSen.Mistress.BigPicture.Scene
         // Moves the view's clock on: key repeats that fall due, then every time-derived state at the new time.
         public void Advance(TimeSpan now)
         {
-            foreach ((int direction, TimeSpan at) in _repeat.Due(now)) Step(direction, at);
+            foreach ((int direction, TimeSpan at) in _repeat.Due(now))
+            {
+                if (!IsSystemView && _repeat.IsFast(at) && _metadata.To > 0) _metadata = _metadata.Toward(0, at, Motion.MetadataFadeOut);
+                Step(direction, at);
+            }
+
             Now = now;
             Apply();
         }
 
         // Whether anything is still moving, so a host can stop asking for frames.
-        public bool IsMoving => !_position.IsSettledAt(Now) || _repeat.Held;
+        public bool IsMoving => !_position.IsSettledAt(Now) || _repeat.Held || !_metadata.IsSettledAt(Now) || (Now < _selectedAt + Motion.ScrollFadeIn && Scene.Entries.Any(e => FadesIn(e.Element))) || Scrolls;
+
+        // A text that may scroll keeps asking for frames: a conservative answer, since its loop never ends.
+        private bool Scrolls => Scene.Entries.Any(e => e.Control is FontText { ScrollDirection: not TextScrollDirection.None, Scroll.Speed: > 0 } or TextRowList { Marquee.Speed: > 0 });
+
+        private readonly System.Collections.Generic.Dictionary<Control, double> _opacity = new();
 
         private SceneBuilder Rebuild()
         {
             SceneBuilder scene = SceneBuilder.Build(View, Data);
             Root.Children.Clear();
             Root.Children.Add(scene.Canvas);
+            _opacity.Clear();
+            foreach (SceneEntry e in scene.Entries)
+                if (e.Control is { } c) _opacity[c] = c.Opacity;
             return scene;
         }
 
+        private Glide _metadata = Glide.At(1);
+        private readonly TimeSpan _shownAt;
+
+        // A game's metadata and media, which ES-DE fades out while the list scrolls fast: its fields but the system's names, dates, ratings, badges, media, and whatever the theme marks.
+        private bool IsGameMetadata(ResolvedElement e) => !IsSystemView && (e.Bool("metadataElement") == true || e.Type switch
+        {
+            "text" => e.String("metadata") is { } m && m is not ("systemName" or "systemFullname" or "sourceSystemName" or "sourceSystemFullname"),
+            "datetime" or "rating" or "badges" or "video" => true,
+            "image" => e.List("imageType").Count > 0,
+            _ => false,
+        });
+
+        // An element fading in on a change of game (scrollFadeIn), in the gamelist only.
+        private bool FadesIn(ResolvedElement e) => !IsSystemView && e.Bool("scrollFadeIn") == true;
+
         private void Apply()
         {
+            double fadeIn = Motion.ScrollFadeIn > TimeSpan.Zero && _selectedAt > _shownAt ? new Glide(0, 1, _selectedAt, Motion.ScrollFadeIn).ValueAt(Now) : 1;
+            double metadata = _metadata.ValueAt(Now);
             foreach (SceneEntry entry in Scene.Entries)
             {
+                if (entry.Control is { } control && _opacity.TryGetValue(control, out double own))
+                    control.Opacity = own * (FadesIn(entry.Element) ? fadeIn : 1) * (IsGameMetadata(entry.Element) ? metadata : 1);
                 if (entry.Control is ImageCarousel carousel) carousel.Position = _position.ValueAt(Now);
                 else if (entry.Control is TextRowList list) list.MarqueeTime = Now - _selectedAt;
                 else if (entry.Control is FontText { ScrollDirection: not TextScrollDirection.None } text) text.ScrollTime = Now - _selectedAt;

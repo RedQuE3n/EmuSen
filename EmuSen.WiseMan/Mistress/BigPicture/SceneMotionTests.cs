@@ -161,6 +161,44 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(Ms(2500), d().ScrollTime);
         });
 
+        private static double OpacityOf(SceneView view, string name) => view.Scene.Entries.Single(e => e.Element.Name == name).Control!.Opacity;
+
+        [Fact]
+        public Task A_scrollFadeIn_image_fades_in_on_each_new_game_but_not_when_the_view_opens() => UiTest.Run(() =>
+        {
+            string elements = List() + "<image name=\"art\"><pos>0.5 0</pos><size>0.4 0.5</size><imageType>cover</imageType><scrollFadeIn>true</scrollFadeIn><opacity>0.8</opacity></image>"
+                + "<image name=\"plain\"><pos>0.5 0.5</pos><size>0.4 0.5</size><imageType>cover</imageType></image>";
+            var view = new SceneView(Data("", elements, Round), "gamelist", Ms(0));
+            Assert.Equal(0.8, OpacityOf(view, "art"), 6);
+            view.Step(1, Ms(1000));
+            Assert.Equal(0, OpacityOf(view, "art"), 6);
+            view.Advance(Ms(1150));
+            Assert.Equal(0.4, OpacityOf(view, "art"), 6);
+            Assert.Equal(1, OpacityOf(view, "plain"), 6);
+            view.Advance(Ms(1300));
+            Assert.Equal(0.8, OpacityOf(view, "art"), 6);
+        });
+
+        [Fact]
+        public Task Metadata_fades_out_while_the_list_scrolls_fast_and_back_in_when_it_stops() => UiTest.Run(() =>
+        {
+            string elements = List() + "<text name=\"dev\"><pos>0.5 0</pos><size>0.5 0.2</size><metadata>developer</metadata><color>FFFFFF</color></text>"
+                + "<text name=\"sys\"><pos>0.5 0.5</pos><size>0.5 0.2</size><metadata>systemName</metadata><color>FFFFFF</color></text>";
+            var view = new SceneView(Data("", elements, Round, game: 0), "gamelist", Ms(0));
+            view.Press(1, Ms(0));
+            view.Advance(Ms(900));
+            Assert.Equal(1, OpacityOf(view, "dev"), 6);
+            view.Advance(Ms(1050));
+            Assert.Equal(0.5, OpacityOf(view, "dev"), 6);
+            Assert.Equal(1, OpacityOf(view, "sys"), 6);
+            view.Release(Ms(1200));
+            Assert.Equal(0, OpacityOf(view, "dev"), 6);
+            view.Advance(Ms(1300));
+            Assert.Equal(0.5, OpacityOf(view, "dev"), 6);
+            view.Advance(Ms(1400));
+            Assert.Equal(1, OpacityOf(view, "dev"), 6);
+        });
+
         [Fact]
         public Task A_slide_moves_both_views_across_and_settles_on_the_gamelist_alone() => UiTest.Run(() =>
         {

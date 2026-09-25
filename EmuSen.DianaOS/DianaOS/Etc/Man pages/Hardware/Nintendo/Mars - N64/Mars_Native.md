@@ -5758,6 +5758,50 @@ similar share of the emulation thread at 2× on the device; the lag bound takes 
 clock within 100 MHz of the base's in each — the prediction being that the device is not power-bound on the charger;
 `znver4` and `rspv4` within ±3 per cent.
 
+*The run* (2026-09-24, 23:14–23:33, the parent session; the device on its charger at 100 per cent, Mistress closed,
+the script started under `systemd-run --user`). A first attempt at 22:29 was started with `nohup` from ssh and died
+after five results: the device sets `KillUserProcesses=True` (`/etc/systemd/logind.conf.d/`), with linger off, so a
+job an ssh session starts dies with that session's scope. Its five rows (`results-partial-2229.txt`) agree with the
+second run's to 1 per cent and are not used. All 72 runs of the second finished. Every configuration ended on the base's hash for its game —
+`2D024DBB873B763A` for DK64 and `4DEACE55468AA765` for the Dam — except `lag`, which is inexact by design. The main
+thread's sampled clock stayed between 4,629 and 4,823 MHz in every run.
+
+**The Dam's runs were disturbed, and the table is read by the minimum.** DK64's three rounds agree to about 1 per
+cent. The Dam's do not: round 1's run from `pgo` to `spin40`, and round 2's last two runs (`base`, `pgo`), are 0.6–1.8
+ms slower than the same configuration in the other rounds, with unchanged clocks. Interference that only adds time
+leaves each configuration's fastest run as the better estimate, so both games are given by the minimum of three.
+The medians disagree only where a disturbed run is a median: the Dam's base median (11.67) is itself disturbed, which
+is why `summ.py`'s median column shows the Dam's `znver4`, `rspv4`, `split2` and `spin40` 4–5 per cent ahead. The
+cause of the disturbance was not found: the parent session's own ssh polls ran once a minute throughout both
+games, a second session collected the first attempt's file once at 23:16, and nothing else was run on the device.
+
+| configuration | DK64 title, ms (vs base) | the Dam, ms (vs base) | prediction |
+| --- | --- | --- | --- |
+| base | 12.38 | 11.10 | — |
+| pgo | 11.37 (**−8.1 %**; median −8.5 %) | 10.33 (**−6.9 %**) | −6 to −12 %: **held** |
+| pgobolt | 11.60 (−6.3 %) | 10.37 (−6.6 %) | not predicted; BOLT on top of PGO buys nothing here, as on the desktop |
+| znver4 | 12.33 (−0.4 %) | 11.04 (−0.5 %) | ±3 %: held |
+| rspv4 | 12.24 (−1.1 %) | 11.10 (0.0 %) | ±3 %: held |
+| split2 (two workers) | 13.18 (**+6.5 %**) | 11.07 (−0.3 %) | ±3 %: **refuted on DK64** |
+| split3 | 12.72 (+2.8 %) | 11.10 (0.0 %) | ±3 %: held |
+| spin40 | 12.62 (+1.9 %) | 11.09 (−0.1 %) | ±3 %: held |
+| pin | 12.56 (+1.5 %) | 11.29 (+1.7 %) | ±3 %: held |
+| lag (inexact bound) | 10.05 (**−18.8 %**) | 9.63 (**−13.2 %**) | −12 to −20 %: held |
+| base2x | 13.86 | 15.77 | — |
+| pgo2x | 13.07 (**−5.7 %** of base2x) | 15.30 (**−3.0 %**) | "a similar share of the emulation thread": not judged — the frame at 2× is not the emulation thread alone |
+
+What it settles:
+- **PGO carries to the handheld** at about the desktop's size, exact, on both games. It remains lever 1.
+- **The handheld is not power-bound on the charger.** No configuration moved the clock, and the thread placements —
+  three workers, the shorter spin, pinning — are within 3 per cent of the base.
+- **Four workers stay.** Two cost DK64 6.5 per cent here, as the desktop's two cost it 9. This is the one
+  threads prediction refuted, and it refutes it in the direction of keeping the production shape.
+- **The run-ahead's bound holds on the device:** 19 per cent on DK64 and 13 per cent on the Dam.
+- **2× is where the handheld is tight.** The Dam at 2× is 15.77 ms against a 16.7 ms budget at 60 Hz, 5.5 per cent
+  of headroom; PGO widens it to 8.4 per cent. DK64's title at 2× has 17 per cent.
+
+The raw file and `summ.py`'s output are kept in `~/.cache/emusen/probe/mars-speed/deck-levers/results-2026-09-24-full.txt`.
+
 ##### 6.16.9 The levers, ranked
 
 Ceilings are the frame if the lever's component cost nothing; measured and bounded numbers are this section's.
@@ -5774,7 +5818,7 @@ Ranked by what they buy the Dam and DK64, the two games the handheld needs, agai
 | 6a | the vector unit alone multiversioned for AVX2 or AVX-512 | ≈ −0.1, inside the spread | ≈ −0.1 | — | ≈ −0.03 | measured | not worth building |
 | 7 | BOLT | −0.3, not over PGO | −0.2 | −0.19 | −0.08 | measured | — |
 | 8 | fastmem | < 0.2 | < 0.2 | < 0.3 | < 0.2 | priced | a week, and page protection against the marks |
-| 9 | worker count, spin, pinning | none on the desktop | none | none | none | measured here; the handheld pending | — |
+| 9 | worker count, spin, pinning | none on the desktop; none on the handheld (§6.16.8) | none; two workers +6.5 % on the handheld | none | none | measured on both | — |
 | 10 | Cranelift `speed_and_size` | none | none | — | none | measured | — |
 
 ##### 6.16.10 The order recommended
@@ -5788,11 +5832,11 @@ Ranked by what they buy the Dam and DK64, the two games the handheld needs, agai
    should be re-priced on its frame rather than on this one.
 3. **Then sample again**, and choose between the processor's Cranelift tier and the dispatcher by what the new frame
    shows; the host-float fast path is DK64's lever and waits for DK64 to need it.
-4. The handheld's run of §6.16.8 decides whether the threads' placement is a lever there at all.
+4. The handheld's run of §6.16.8 answered that the threads' placement is not a lever there: nothing moved by more than 3 per cent except two workers, which lose. PGO held on it at 7–8 per cent.
 
 ##### 6.16.11 What is not done
 
-- **The handheld** (§6.16.8), and every number above on its half-size cache.
+- **The handheld's profile.** §6.16.8 measured the levers there, not where its frame goes; the Dam's disturbed rounds were not explained.
 - **PGO through the shim**: the profile was measured in the examples, not in `libmarsrt.so` under Mistress, and not
   at a multiple or on the device on this desktop.
 - **The exact run-ahead**, which is priced and not built; its price rests on the snapshot's copy as measured and on

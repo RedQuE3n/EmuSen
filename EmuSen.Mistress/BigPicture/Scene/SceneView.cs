@@ -56,23 +56,27 @@ namespace EmuSen.Mistress.BigPicture.Scene
         // Whether the primary element slides between items; ES-DE's itemTransitions, and only its carousel and grid have one.
         private bool Slides => Primary is { Type: "carousel" } p && p.String("itemTransitions") != "instant";
 
-        // One step of the selection, as a press gives it.
-        public void Step(int delta, TimeSpan now)
+        // One step of the selection, as a tap gives it: a carousel and a list both wrap at their ends.
+        public void Step(int delta, TimeSpan now) => Move(delta, now, held: false);
+
+        // A move of the selection; a held list stops at its end, where a carousel wraps; false when nothing moved.
+        private bool Move(int delta, TimeSpan now, bool held)
         {
             Now = now;
             int count = Count;
-            if (count == 0 || delta == 0) return;
+            if (count == 0 || delta == 0) return false;
             int target = Index + delta;
-            bool wraps = IsSystemView || Primary?.Type == "carousel" || Motion.ListWraps;
+            bool wraps = Primary?.Type == "carousel" || !held;
             if (wraps) target = ((target % count) + count) % count;
             else target = Math.Clamp(target, 0, count - 1);
-            if (target == Index) return;
+            if (target == Index) return false;
             double to = _position.To + (wraps ? delta : target - Index);
             Data = IsSystemView ? Data with { SystemIndex = target } : Data with { GameIndex = target };
             _position = Slides ? _position.Toward(to, now, Motion.CarouselStep, Motion.CarouselEasing) : Glide.At(to);
             _selectedAt = now;
             Scene = Rebuild();
             Apply();
+            return true;
         }
 
         // A direction held from a time on; the repeats it gives are stepped by Advance.
@@ -86,6 +90,11 @@ namespace EmuSen.Mistress.BigPicture.Scene
         {
             Advance(now);
             _repeat.Release();
+            FadeMetadataIn(now);
+        }
+
+        private void FadeMetadataIn(TimeSpan now)
+        {
             if (_metadata.To < 1) _metadata = _metadata.Toward(1, now, Motion.MetadataFadeIn);
         }
 
@@ -94,10 +103,11 @@ namespace EmuSen.Mistress.BigPicture.Scene
         // Moves the view's clock on: key repeats that fall due, then every time-derived state at the new time.
         public void Advance(TimeSpan now)
         {
-            foreach ((int direction, TimeSpan at) in _repeat.Due(now))
+            foreach ((int delta, TimeSpan at) in _repeat.Due(now))
             {
-                if (!IsSystemView && _repeat.IsFast(at) && _metadata.To > 0) _metadata = _metadata.Toward(0, at, Motion.MetadataFadeOut);
-                Step(direction, at);
+                if (IsSystemView) Move(delta, at, held: true);
+                else if (Move(delta, at, held: true)) { if (_metadata.To > 0) _metadata = _metadata.Toward(0, at, Motion.MetadataFadeOut); }
+                else FadeMetadataIn(at);
             }
 
             Now = now;
@@ -140,7 +150,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         private void Apply()
         {
-            double fadeIn = Motion.ScrollFadeIn > TimeSpan.Zero && _selectedAt > _shownAt ? new Glide(0, 1, _selectedAt, Motion.ScrollFadeIn).ValueAt(Now) : 1;
+            double fadeIn = Motion.ScrollFadeIn > TimeSpan.Zero && _selectedAt > _shownAt ? new Glide(Motion.ScrollFadeInFrom, 1, _selectedAt, Motion.ScrollFadeIn).ValueAt(Now) : 1;
             double metadata = _metadata.ValueAt(Now);
             foreach (SceneEntry entry in Scene.Entries)
             {

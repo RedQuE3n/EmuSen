@@ -26,9 +26,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             CarouselRepeat = new(Ms(500), Ms(200)),
             CarouselFastRepeat = new(Ms(500), Ms(200), Ms(1000), Ms(100)),
             ListRepeat = new(Ms(400), Ms(100), Ms(1000), Ms(50)),
-            MetadataFadeOut = Ms(100), MetadataFadeIn = Ms(200), ScrollFadeIn = Ms(300),
-            MarqueeSpeedPerEm = 2, MarqueeGapPerUnit = 1,
-            HorizontalContainerSpeedPerEm = 2, HorizontalContainerGapPerUnit = 1, VerticalContainerLinesPerSecond = 1, VerticalContainerFadeIn = Ms(400),
+            MetadataFadeOut = Ms(100), MetadataFadeIn = Ms(200), ScrollFadeIn = Ms(300), ScrollFadeInFrom = 0.5,
+            MarqueeSpeedPerEm = 2, MarqueeGapSeconds = 1,
+            HorizontalContainerSpeedPerEm = 2, HorizontalContainerGapSeconds = 1, VerticalContainerSpeedPerEm = 1.5, VerticalContainerFadeIn = Ms(400),
             ViewSlide = Ms(400), ViewSlideEasing = new CubicEaseInOut(),
         };
 
@@ -110,6 +110,27 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         });
 
         [Fact]
+        public Task A_list_wraps_on_a_tap_stops_at_its_end_when_held_and_jumps_at_the_fast_tier() => UiTest.Run(() =>
+        {
+            SceneMotion jump = Round with { ListRepeat = new(Ms(400), Ms(100), Ms(1050), Ms(50), 4) };
+            string elements = List() + "<text name=\"dev\"><pos>0.5 0</pos><size>0.5 0.2</size><metadata>developer</metadata><color>FFFFFF</color></text>";
+            var tap = new SceneView(Data("", elements, jump, game: 11), "gamelist", Ms(0));
+            tap.Step(1, Ms(0));
+            Assert.Equal(0, tap.Data.GameIndex);
+
+            var held = new SceneView(Data("", elements, jump, game: 0), "gamelist", Ms(0));
+            held.Press(1, Ms(0));
+            held.Advance(Ms(1000));
+            Assert.Equal(8, held.Data.GameIndex);
+            held.Advance(Ms(1050));
+            Assert.Equal(11, held.Data.GameIndex);
+            Assert.Equal(0, OpacityOf(held, "dev"), 6);
+            held.Advance(Ms(1200));
+            Assert.Equal(11, held.Data.GameIndex);
+            Assert.True(OpacityOf(held, "dev") > 0);
+        });
+
+        [Fact]
         public Task Fast_scrolling_takes_the_carousels_faster_tier_only_when_the_theme_asks() => UiTest.Run(() =>
         {
             var slow = new SceneView(Data(Carousel("<fastScrolling>false</fastScrolling>"), "", Round, systemIndex: 0), "system", Ms(0));
@@ -121,7 +142,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             }
 
             Assert.Equal(7, slow.Target);
-            Assert.Equal(9, fast.Target);
+            Assert.Equal(10, fast.Target);
         });
 
         [Fact]
@@ -156,7 +177,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(Ms(2000), d().Scroll.Delay);
             Assert.Equal(Ms(3000), d().Scroll.EndPause);
             Assert.Equal(Ms(400), d().Scroll.FadeIn);
-            Assert.Equal(1 * d().LineHeight * 2, d().Scroll.Speed, 6);
+            Assert.Equal(1.5 * d().FontSize * 2, d().Scroll.Speed, 6);
+            Assert.True(d().Scroll.WholePixels);
+            Assert.True(d().ScrollWholeLines);
             view.Advance(Ms(2500));
             Assert.Equal(Ms(2500), d().ScrollTime);
         });
@@ -171,9 +194,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var view = new SceneView(Data("", elements, Round), "gamelist", Ms(0));
             Assert.Equal(0.8, OpacityOf(view, "art"), 6);
             view.Step(1, Ms(1000));
-            Assert.Equal(0, OpacityOf(view, "art"), 6);
-            view.Advance(Ms(1150));
             Assert.Equal(0.4, OpacityOf(view, "art"), 6);
+            view.Advance(Ms(1150));
+            Assert.Equal(0.6, OpacityOf(view, "art"), 6);
             Assert.Equal(1, OpacityOf(view, "plain"), 6);
             view.Advance(Ms(1300));
             Assert.Equal(0.8, OpacityOf(view, "art"), 6);
@@ -186,11 +209,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 + "<text name=\"sys\"><pos>0.5 0.5</pos><size>0.5 0.2</size><metadata>systemName</metadata><color>FFFFFF</color></text>";
             var view = new SceneView(Data("", elements, Round, game: 0), "gamelist", Ms(0));
             view.Press(1, Ms(0));
-            view.Advance(Ms(900));
+            view.Advance(Ms(399));
             Assert.Equal(1, OpacityOf(view, "dev"), 6);
-            view.Advance(Ms(1050));
+            view.Advance(Ms(450));
             Assert.Equal(0.5, OpacityOf(view, "dev"), 6);
             Assert.Equal(1, OpacityOf(view, "sys"), 6);
+            view.Advance(Ms(1050));
+            Assert.Equal(0, OpacityOf(view, "dev"), 6);
             view.Release(Ms(1200));
             Assert.Equal(0, OpacityOf(view, "dev"), 6);
             view.Advance(Ms(1300));
@@ -210,7 +235,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(2, stage.Root.Children.Count);
             stage.Advance(Ms(1200));
             var leaving = (TranslateTransform)stage.Root.Children[0].RenderTransform!;
-            Assert.Equal(-W * new CubicEaseInOut().Ease(0.5), leaving.X, 6);
+            var coming = (TranslateTransform)stage.Root.Children[1].RenderTransform!;
+            Assert.Equal(-H * new CubicEaseInOut().Ease(0.5), leaving.Y, 6);
+            Assert.Equal(H * (1 - new CubicEaseInOut().Ease(0.5)), coming.Y, 6);
+            Assert.Equal(0, leaving.X);
             stage.Advance(Ms(1400));
             Assert.Single(stage.Root.Children);
             Assert.Equal(0, SceneAssets.Differing(Static(data, "gamelist"), window.Frame()));

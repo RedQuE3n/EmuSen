@@ -1692,3 +1692,91 @@ mipmapped sampling of downscaled pictures (§13.4).
 - **P28, the handheld** (Legion Go S at 1280×800). A full redraw of the system view takes **under 8 ms** (P7's
   figure), so a frame in which everything moves fits 16.7 ms with room to spare, and stage (c) can be built on full
   redraws with no lever. The CPU's share is about twice the desktop's.
+
+### 14.2 The route, and whether it is faithful
+
+`SceneGpuBench` (WiseMan) builds a view exactly as §13's tools do, shows it in a headless window so that layout runs,
+and then draws the window three ways:
+
+1. through the headless compositor on the CPU, every visual invalidated, as §13.4 measured;
+2. with `DrawingContextHelper.RenderAsync`, Avalonia's public entry for drawing a visual tree onto any `SKCanvas`,
+   onto a raster surface;
+3. with the same call onto a GPU surface, `SKSurface.Create(GRContext, …)`. The `GRContext` is Skia's GL backend over
+   a surfaceless EGL context on a named device. `ShaderBench` already opens that context for Serenity's measurements
+   (`EmuSen_Serenity.md` §8.1). A Mistress window on Linux draws through Avalonia's GLX context, which is the same
+   driver (radeonsi) and the same Skia backend.
+
+Routes 2 and 3 use Avalonia's own `DrawingContextImpl`, so every `DrawImage`, sampling option, layer and glyph run is
+issued by the code a window runs. They differ from a window in one respect: a window records on the UI thread and
+replays on the render thread, and the route does both on one thread. The bench therefore also times the controls'
+`Render` alone, into Skia's no-draw canvas, which is the UI thread's share.
+
+Each frame is timed from the start of recording to `glFinish`, with a GL timer query around the GPU work. Frames are
+medians of 120 after five warm-up frames. The GPU frame's pixels are read back and compared with the other two.
+
+**Faithfulness (measured 2026-09-25, RX 6800).**
+
+| | System 1280×800 | Gamelist 1280×800 | System 1920×1200 | Gamelist 1920×1200 |
+|---|---|---|---|---|
+| GPU against CPU route: pixels over 8 levels apart, largest difference | 0.025%, 35 | 0.069%, 47 | 0.017%, 40 | 0.064%, 50 |
+| GPU against compositor | 0.27%, 142 | 1.86%, 140 | 0.17%, 144 | 1.21%, 140 |
+| CPU route against compositor | 0.24%, 142 | 1.80%, 139 | 0.16%, 143 | 1.15%, 139 |
+
+- **The GPU rasterises the scene as the CPU does.** 99.93% or more of pixels agree to 8 levels. The rest lie on the
+  edges of slices, glyphs and the cover. `diff-gpu` images under `~/.cache/emusen/bigpicture/gpu/` show them.
+- **The larger difference against the compositor belongs to the route, not to the GPU,** because the CPU route shows
+  it too. It lies entirely on glyph edges. The headless compositor draws text with subpixel (LCD) anti-aliasing: 353
+  colour-fringed pixels in the help bar's words, against none from `RenderAsync`, which draws text in grey levels. Text
+  is a small share of any frame's cost, so this does not bear on the timings.
+
+### 14.3 The desktop's GPU frame: P24–P27
+
+`SceneGpuBenchTool`, run as `EMUSEN_BIGPICTURE_GPU=1 dotnet test --filter SceneGpuBenchTool`. All times are in ms,
+medians of 120 frames.
+
+| | System 1280×800 | Gamelist 1280×800 | System 1920×1200 | Gamelist 1920×1200 |
+|---|---|---|---|---|
+| CPU raster, route 2 (stage b's cost) | 45.6 | 20.6 | 89.8 | 38.1 |
+| Controls' `Render` alone (no-draw canvas) | 0.04–0.24 | 0.11–0.13 | 0.05 | 0.12–0.15 |
+| GPU: recording and flush on the CPU | 0.16–0.20 | 0.31–0.42 | 0.19 | 0.32–0.46 |
+| GPU: GL timer | 0.03 | 0.04 | 0.16 | 0.06 |
+| **GPU: start to `glFinish`** | **0.33–0.35** | **0.46–0.60** | **0.46–0.47** | **0.50–0.71** |
+| GPU: first frame (upload and mip levels) | 4–22 | 3–11 | 5–8 | 4–6 |
+
+The ranges span the two variants and the runs.
+
+- **The GPU frame is 130 times cheaper than the CPU's.** The system view's 45.6 ms is 0.35 ms on the GPU. Mipmapped
+  sampling, which §13.4 found to be the CPU's whole cost, is what texture hardware does for free.
+- **P24 fails as written, and the failure is the route's text, not the GPU.** The prediction compared against the
+  compositor, and the gamelist has 1.86% and 1.21% of its pixels over 8 levels from it, against a bound of 1%. Against
+  the CPU route, whose text is drawn the same way, the GPU is within 8 levels on 99.93% or more (§14.2).
+- **P25 holds, and its split was wrong.** Every frame is under 0.75 ms, against bounds of 3 and 4. The prediction
+  gave the CPU's share as 1.5–2.5 ms, and it is 0.16–0.46 ms; the GL time is under 0.2 ms.
+- **P26 holds.** The first frame, which uploads every picture and builds its mip levels, takes 3–22 ms.
+- **P27 holds.** Handing Skia immutable bitmaps of the same premultiplied pixels gives an identical picture and the
+  same frame time, within run-to-run spread: 0.33 against 0.33 ms, 0.46 against 0.60. Skia uploads a `WriteableBitmap`
+  once and reuses its texture while the bitmap is unchanged.
+
+**What this settles for stage (c).** On the desktop a frame in which everything moves costs under a millisecond,
+about 1/25 of a 60 Hz frame, so motion can be built on plain full redraws. No lever of §14's brief (static layers
+composed once, finished carousel items cached, mip levels kept on the GPU) has anything to save here: the last
+already happens, and the first two would save part of a fraction of a millisecond.
+
+### 14.4 The handheld bench: P28
+
+The bench runs as a self-contained program, so the handheld needs neither the SDK nor the repository. It is
+`~/.cache/emusen/probe/bigpicture/deck-gpu/`, outside the repository, with a README. It holds:
+
+- `out/`, a linux-x64 publish of a console host that compiles `SceneGpuBench.cs`, `SyntheticLibrary.cs` and
+  `ShaderBench.cs`, as the shader bench's host does (§8.4 of `EmuSen_Serenity.md`); its natives ask for glibc 2.38 at
+  most;
+- `theme/`, a private copy of Art Book Next;
+- `run.sh`, which runs three rounds and writes the results with the CPU, the power state and whether gamescope runs.
+
+The device ends processes an ssh session leaves behind, so the README starts the bench as a transient user unit:
+`systemd-run --user --unit=emusen-bigpicture-gpu --collect /bin/bash "$HOME/emusen-bench/bigpicture-gpu/run.sh" 3`.
+It needs no window and no display server: EGL's device platform opens the render node, so it runs the same in Game
+Mode, where gamescope's compositing shares the GPU with it.
+
+**P28 is not retired.** It waits for the handheld's results. Until then, §14.3 is the design's evidence. A handheld
+twenty times slower than the RX 6800 on both the CPU and GPU shares would still draw the system view in about 7 ms.

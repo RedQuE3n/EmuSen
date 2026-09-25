@@ -29,6 +29,27 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         public static IReadOnlyList<Variant> NoLevers { get; } = [new("as built")];
 
+        private static readonly Type ImagePixels = typeof(EmuSen.LunaP.Controls.FittedImage).Assembly.GetType("EmuSen.LunaP.Media.ImagePixels")!;
+
+        // P27's lever: every processed picture handed to Skia as an immutable bitmap of the same premultiplied pixels.
+        public static Variant ImmutableBitmaps { get; } = new("immutable bitmaps", window =>
+        {
+            window.CaptureRenderedFrame()?.Dispose();
+            var prepared = (System.Collections.IDictionary)ImagePixels.GetField("Prepared", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+            foreach (object key in prepared.Keys.Cast<object>().ToList())
+            {
+                if (prepared[key] is not WriteableBitmap wb) continue;
+                using ILockedFramebuffer fb = wb.Lock();
+                prepared[key] = new Bitmap(fb.Format, AlphaFormat.Premul, fb.Address, fb.Size, fb.Dpi, fb.RowBytes);
+            }
+        });
+
+        // Every variant the handheld bench times after the as-built one.
+        public static IReadOnlyList<Variant> Levers => [ImmutableBitmaps];
+
+        // Every case starts from no processed pictures, so a lever's bitmaps never reach the next case.
+        private static void ForgetPictures() => ImagePixels.GetMethod("Forget", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, null);
+
         // Runs every size and view on the calling thread, which must be the headless session's UI thread; returns one summary line per case.
         public static List<string> Run(string theme, string media, IEnumerable<(int W, int H)> sizes, IEnumerable<string> views, int frames, string? device, Action<string> log,
             string? pngFolder = null, IReadOnlyList<Variant>? variants = null)
@@ -41,6 +62,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             using GRContext context = GRContext.CreateGl(glInterface) ?? throw new InvalidOperationException("no GRContext");
             uint query = gl.NewQuery();
             SyntheticLibrary.WriteMedia(media);
+            var references = new Dictionary<(string, int), byte[]>();
 
             foreach ((int w, int h) in sizes)
             {
@@ -49,6 +71,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 foreach (string view in views)
                     foreach (Variant variant in variants)
                     {
+                        ForgetPictures();
                         SceneData data = SyntheticLibrary.Data(systems, new Size(w, h), media, system: 1, game: 2);
                         SceneBuilder scene = SceneBuilder.Build(data.System.Theme.View(view), data);
                         var window = new Window { Width = w, Height = h, Content = scene.Canvas, Background = Brushes.Black, SizeToContent = SizeToContent.Manual };
@@ -72,13 +95,18 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                         Timing gpuTiming = Time(frames, () => { gpu.Canvas.Clear(SKColors.Black); Draw(gpu.Canvas, window, w, h); }, context, gl, query);
 
                         byte[] cpuPixels = Read(cpu, info), gpuPixels = Read(gpu, info);
-                        Difference immediate = Compare(cpuPixels, compositor), device2 = Compare(gpuPixels, compositor);
+                        Difference immediate = Compare(cpuPixels, compositor), device2 = Compare(gpuPixels, compositor), raster = Compare(gpuPixels, cpuPixels);
+                        references.TryAdd((view, w), gpuPixels);
+                        Difference lever = Compare(gpuPixels, references[(view, w)]);
                         string name = $"{view} {w}x{h} [{variant.Name}]";
                         if (pngFolder is not null)
                         {
                             string stem = $"{view}-{w}x{h}-{variant.Name.Replace(' ', '-')}";
                             Png(System.IO.Path.Combine(pngFolder, stem + "-gpu.png"), gpuPixels, w, h);
                             Png(System.IO.Path.Combine(pngFolder, stem + "-cpu.png"), cpuPixels, w, h);
+                            Png(System.IO.Path.Combine(pngFolder, stem + "-compositor.png"), compositor, w, h);
+                            Png(System.IO.Path.Combine(pngFolder, stem + "-diff-gpu.png"), DiffImage(gpuPixels, compositor), w, h);
+                            Png(System.IO.Path.Combine(pngFolder, stem + "-diff-cpu.png"), DiffImage(cpuPixels, compositor), w, h);
                         }
 
                         log($"{name}: first GPU frame {firstGpuMs:F1} ms; compositor (headless CPU, readback included) {compositorMs:F2} ms");
@@ -87,8 +115,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                         log($"  GPU: record+flush on the CPU             {gpuTiming}");
                         log($"  GPU: GL time                             {gpuTiming.Gpu}");
                         log($"  GPU: wall to glFinish                    {gpuTiming.Wall}   vs compositor: {device2}");
+                        log($"  GPU against CPU immediate: {raster}; against the first variant on the GPU: {lever}");
                         lines.Add(FormattableString.Invariant(
-                            $"case={view}-{w}x{h} lever={variant.Name.Replace(' ', '_')} gl=\"{gl.Renderer}\" record={record.Cpu.Median:F2} cpu={cpuTiming.Cpu.Median:F2} gpu.cpu={gpuTiming.Cpu.Median:F2} gpu.gl={gpuTiming.Gpu.Median:F2} gpu.wall={gpuTiming.Wall.Median:F2} gpu.wall.p95={gpuTiming.Wall.P95:F2} first={firstGpuMs:F1} cpu.vs.compositor={immediate.Short} gpu.vs.compositor={device2.Short}"));
+                            $"case={view}-{w}x{h} lever={variant.Name.Replace(' ', '_')} gl=\"{gl.Renderer}\" record={record.Cpu.Median:F2} cpu={cpuTiming.Cpu.Median:F2} gpu.cpu={gpuTiming.Cpu.Median:F2} gpu.gl={gpuTiming.Gpu.Median:F2} gpu.wall={gpuTiming.Wall.Median:F2} gpu.wall.p95={gpuTiming.Wall.P95:F2} first={firstGpuMs:F1} cpu.vs.compositor={immediate.Short} gpu.vs.compositor={device2.Short} gpu.vs.cpu={raster.Short} vs.first.variant={lever.Short}"));
                         window.Close();
                         context.PurgeResources();
                     }
@@ -204,6 +233,20 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return new Difference(any, over2, over8, max, total == 0 ? 0 : (double)sum / total, Math.Max(1, total));
         }
 
+        // The largest channel difference per pixel, times eight, as grey on black.
+        public static byte[] DiffImage(byte[] a, byte[] b)
+        {
+            var d = new byte[a.Length];
+            for (int i = 0; i < a.Length; i += 4)
+            {
+                int v = Math.Max(Math.Max(Math.Abs(a[i] - b[i]), Math.Abs(a[i + 1] - b[i + 1])), Math.Abs(a[i + 2] - b[i + 2]));
+                d[i] = d[i + 1] = d[i + 2] = (byte)Math.Min(255, v * 8);
+                d[i + 3] = 255;
+            }
+
+            return d;
+        }
+
         public static void Png(string path, byte[] rgba, int w, int h)
         {
             System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
@@ -215,24 +258,5 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 png.SaveTo(file);
             }
         }
-    }
-
-    // EMUSEN_BIGPICTURE_GPU=1 runs the GPU bench on the device EMUSEN_BIGPICTURE_GL_DEVICE names (the RX 6800 by default) - see EmuSen_BigPicture.md §14.
-    public class SceneGpuBenchTool
-    {
-        private readonly Xunit.Abstractions.ITestOutputHelper _output;
-
-        public SceneGpuBenchTool(Xunit.Abstractions.ITestOutputHelper output) => _output = output;
-
-        [ArtBookNextFact]
-        public System.Threading.Tasks.Task Gpu_frame_cost() => UiTest.Run(() =>
-        {
-            if (Environment.GetEnvironmentVariable("EMUSEN_BIGPICTURE_GPU") != "1") return;
-            string device = Environment.GetEnvironmentVariable("EMUSEN_BIGPICTURE_GL_DEVICE") is { Length: > 0 } d ? d : "RX 6800";
-            int frames = int.TryParse(Environment.GetEnvironmentVariable("EMUSEN_BIGPICTURE_FRAMES"), CultureInfo.InvariantCulture, out int f) ? f : 60;
-            string png = System.IO.Path.Combine(SceneRenderTool.Cache, "gpu");
-            foreach (string line in SceneGpuBench.Run(ArtBookNextFactAttribute.Folder, SceneRenderTool.MediaRoot, [(1280, 800), (1920, 1200)], ["system", "gamelist"], frames, device, _output.WriteLine, png))
-                _output.WriteLine(line);
-        });
     }
 }

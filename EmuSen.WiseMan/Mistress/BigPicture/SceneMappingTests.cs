@@ -51,6 +51,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private static Case C(string type, string property, string a, string b) => new(type, property, a, b);
 
+        private const string LongText = "A long description that cannot fit in the small box it is given here";
+
 
         // The two values of each pair, with the context that lets the property show; common properties are generated below.
         private static readonly Case[] Specific =
@@ -164,6 +166,19 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             C("textlist", "letterCase", "none", "uppercase"),
             C("textlist", "lineSpacing", "1.5", "2.5"),
             C("textlist", "indicators", "none", "symbols"),
+            C("carousel", "itemTransitions", "animate", "instant") with { Moves = "step", At = 100 },
+            C("carousel", "fastScrolling", "false", "true") with { Moves = "hold", At = 2000 },
+            C("textlist", "textHorizontalScrolling", "false", "true") with { Context = "size=0.3 1", At = 4000 },
+            C("textlist", "textHorizontalScrollSpeed", "1", "3") with { Context = "size=0.3 1;textHorizontalScrollDelay=0", At = 500 },
+            C("textlist", "textHorizontalScrollDelay", "0", "5") with { Context = "size=0.3 1", At = 1000 },
+            C("textlist", "textHorizontalScrollGap", "0.5", "3") with { Context = "size=0.3 1;textHorizontalScrollDelay=0", At = 1500 },
+            C("text", "containerStartDelay", "0", "5") with { Context = "container=true;size=0.9 0.2;text=" + LongText, At = 2000 },
+            C("text", "containerScrollSpeed", "1", "3") with { Context = "container=true;size=0.9 0.2;containerStartDelay=0;text=" + LongText, At = 1000 },
+            C("text", "containerResetDelay", "0.5", "10") with { Context = "container=true;size=0.9 0.2;containerStartDelay=0;text=" + LongText, At = 4000 },
+            C("text", "containerScrollGap", "0.5", "3") with { Context = "container=true;containerType=horizontal;size=0.9 0.2;containerStartDelay=0;text=" + LongText, At = 7000 },
+            C("text", "containerVerticalSnap", "true", "false") with { Context = "container=true;size=0.9 0.2;text=" + LongText },
+            C("image", "scrollFadeIn", "false", "true") with { Remove = "path", Context = "imageType=cover", Moves = "step", At = 100 },
+            C("video", "scrollFadeIn", "false", "true") with { Moves = "step", At = 100 },
             C("textlist", "systemNameSuffix", "false", "true") with { System = 5 },
             C("textlist", "letterCaseSystemNameSuffix", "uppercase", "lowercase") with { System = 5, Context = "systemNameSuffix=true" },
 

@@ -482,6 +482,40 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        // A preset of 944 parameters on the Game Mode sheet: only the rows in view are built, every control is still reached, and the pad walks down and moves a slider far down - see EmuSen_Settings_Reference.md §4.48.9.
+        [Fact]
+        public Task A_long_preset_s_sliders_on_the_sheet_are_reached_and_walked_by_pad() => Session.Dispatch(() =>
+        {
+            ShaderBrowseTests.WriteBig(ShaderSettingsWindowTests.FakePack());
+            (MainWindow window, PadDriver pad) = GameModeWithAGame();
+            Choose(window, pad, "Shaders");
+            var shaders = Assert.IsType<ShaderSettingsWindow>(Sheets(window).Current);
+            ShaderPanel snes = shaders.PanelFor("SNES");
+
+            Reach(window, pad, e => e is ListBoxItem item && item.Content?.ToString() == "huge");
+            Pump(snes);
+            window.UpdateLayout();
+            Assert.Equal(944, snes.Parameters.Count);
+            Assert.InRange(snes.Sliders.Count(), 1, 40);
+            Assert.Empty(Unreachable(window, pad));
+            TabTo(window, pad, "SNES");
+            Assert.Equal("huge", snes.Shown?.Name);
+
+            Reach(window, pad, e => e is Slider s && s.FindAncestorOfType<SliderRow>() is { Label: "Parameter 0001" });
+            pad.Down(2 * 30);
+            Assert.Equal("Parameter 0031", (Focused(window) as Visual)?.FindAncestorOfType<SliderRow>()?.Label);
+            Assert.IsType<Slider>(Focused(window));
+            Assert.InRange(snes.Sliders.Count(), 1, 40);
+            pad.Right();
+            Assert.Equal("0.55", GraphicsConfig.Load().ParametersFor("SNES", "slang:big/huge.slangp")["P0031"]);
+            Picture(window, "shaders-944-walked");
+
+            pad.B();
+            Assert.False(Sheets(window).IsPresenting);
+            Stop(window);
+            window.Close();
+        }, default);
+
         private static void Pump(ShaderPanel panel)
         {
             for (int i = 0; i < 2000 && !panel.Reading.IsCompleted; i++) { Avalonia.Threading.Dispatcher.UIThread.RunJobs(); System.Threading.Thread.Sleep(1); }

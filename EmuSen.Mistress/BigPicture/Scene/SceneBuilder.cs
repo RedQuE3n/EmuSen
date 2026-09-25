@@ -91,7 +91,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         {
             NormalizedCanvas.SetPosition(control, SceneUnits.ToPoint(e.Pair("pos")));
             NormalizedCanvas.SetOrigin(control, SceneUnits.ToPoint(e.Pair("origin")));
-            if (NormalizedCanvas.GetSize(control) == default) NormalizedCanvas.SetSize(control, SceneUnits.ToSize(e.Pair("size")));
+            if (!control.IsSet(NormalizedCanvas.SizeProperty)) NormalizedCanvas.SetSize(control, SceneUnits.ToSize(e.Pair("size")));
             NormalizedCanvas.SetRotation(control, e.Float("rotation") ?? 0);
             NormalizedCanvas.SetRotationOrigin(control, SceneUnits.ToPoint(e.Pair("rotationOrigin"), new Point(0.5, 0.5)));
             NormalizedCanvas.SetDepth(control, order);

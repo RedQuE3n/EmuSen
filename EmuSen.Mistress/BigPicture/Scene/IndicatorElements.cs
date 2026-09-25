@@ -143,11 +143,11 @@ namespace EmuSen.Mistress.BigPicture.Scene
             return control;
         }
 
-        // backgroundHorizontalPadding is left and right by the width, backgroundVerticalPadding top and bottom by the height, in whole pixels so the outward margin matches.
+        // backgroundHorizontalPadding is left and right by the width; backgroundVerticalPadding top and bottom by the height.
         private static Thickness Padding(SceneBuilder b, ResolvedElement e)
         {
             NormalizedPair h = e.Pair("backgroundHorizontalPadding") ?? default, v = e.Pair("backgroundVerticalPadding") ?? default;
-            return new Thickness(Math.Round(h.X * b.W), Math.Round(v.X * b.H), Math.Round(h.Y * b.W), Math.Round(v.Y * b.H));
+            return new Thickness(h.X * b.W, v.X * b.H, h.Y * b.W, v.Y * b.H);
         }
     }
 }

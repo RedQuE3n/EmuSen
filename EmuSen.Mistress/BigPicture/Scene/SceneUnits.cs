@@ -18,8 +18,8 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         public static Color ToColor(ThemeColor? c, Color fallback) => c is { } v ? ToColor(v) : fallback;
 
-        // A fraction of an axis in pixels, kept to hundredths so float noise is not ceiled into a whole pixel by layout rounding.
-        public static double Px(double fraction, double axis) => Math.Round(fraction * axis * 100) / 100;
+        // A fraction of an axis in pixels; the scene places without layout rounding, so no rounding is needed here (§13.8).
+        public static double Px(double fraction, double axis) => fraction * axis;
 
         public static Point ToPoint(NormalizedPair? p, Point fallback = default) => p is { } v ? new Point(v.X, v.Y) : fallback;
 

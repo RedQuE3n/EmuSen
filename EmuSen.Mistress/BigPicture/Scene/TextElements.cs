@@ -95,6 +95,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             float speed = e.Float("containerScrollSpeed") ?? 1;
             TimeSpan delay = TimeSpan.FromSeconds(e.Float("containerStartDelay") ?? (horizontal ? 1.5f : 4.5f));
             text.ScrollDirection = horizontal ? EmuSen.LunaP.Motion.TextScrollDirection.Horizontal : EmuSen.LunaP.Motion.TextScrollDirection.Vertical;
+            text.ScrollWholeLines = !horizontal && e.Bool("containerVerticalSnap") != false;
             text.Scroll = horizontal
                 ? new EmuSen.LunaP.Motion.TextScroll(delay, m.HorizontalContainerSpeedPerEm * text.FontSize * speed, m.HorizontalContainerGapPerUnit * (e.Float("containerScrollGap") ?? 1.5f) * text.FontSize)
                 : new EmuSen.LunaP.Motion.TextScroll(delay, m.VerticalContainerLinesPerSecond * text.LineHeight * speed, 0,

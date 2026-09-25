@@ -5425,3 +5425,381 @@ At the multiple the median falls 1.98 ms (16.79 to 14.81), under the 16.7 ms tar
 - **The processor at a multiple** still keeps the capture whole, 2.5 ms a frame on the title (§6.14.8); its lever, a
   verifier of the shadow's writes, is not built.
 - **Other GPU devices.** Every device test ran on the RX 6800 alone (the integrated card and llvmpipe were not asked for).
+
+#### 6.16 What is left on the thread, and what Rust itself can buy (2026-09-24)
+
+§6.9 sampled a production frame, ranked the levers left, and set the order that §6.10 to §6.15 then followed. Those
+sections built four of its levers and changed what a frame is made of; this section samples it again, says what each
+built lever retired against what §6.9 predicted, and then prices the levers the C# core could never have used: the
+compiler's own profile-guided optimisation, a post-link layout pass, instruction sets beyond SSE4.1, the recompiler's
+settings, fastmem through a fault handler, and the threads' placement — and, because the fresh profile pointed at it,
+the lock-step of the signal processor beside the CPU's blocks, which §5.8.3 left decoded. Nothing here changes
+production. Every prototype is outside the repository, and every timed build of a game ended on the base's state
+hash unless it is marked inexact, which only one is.
+
+**The findings in one paragraph.** On this desktop the emulation thread of the Dam is now 9.65 ms: the signal
+processor 4.5 of it (47 per cent), the CPU's decoded tier 2.2, the dispatcher 1.1 and the software float 0.6. The
+vector unit that was §6.9's first row is a quarter of what it was, and the presenter's join is gone. Of the Rust-only
+levers, **profile-guided optimisation is the one that pays**: 7 to 12 per cent on every state in the cleaner batch,
+exact, for a build step. BOLT, the AVX2 and AVX-512 builds and Cranelift's other optimisation level are each within
+about four per cent, the vector unit multiversioned within one, and BOLT added nothing on top of PGO. Fastmem stays
+unrecommended. The largest lever the profile shows is not
+a language feature: **the signal processor run ahead of the CPU to its next event**, which lets the blocks beside it
+compile. An inexact prototype bounds it at 14 to 18 per cent on the Dam and Donkey Kong 64, and counters taken on the
+exact machine say the undo it needs would almost never run.
+
+##### 6.16.1 The method, and what it cannot see
+
+*The builds.* The base is WiseMan 2b9664e, whose crate is 2e4d8c3's, built as the examples are (`release`: fat LTO,
+one codegen unit, `panic = "abort"`, line tables). Every variant is built from the same source into its own target
+directory under `~/.cache/emusen/probe/mars-speed/research-target/`, the source copied to
+`research/crates/<name>/` where a prototype changes it.
+
+*The timing.* `examples/threads <rom> <state> 600 split 4 blocks`, production's shape, for the Dam (`ge.z64`), Ocarina
+of Time, Super Mario 64 and Donkey Kong 64's title (`dk64-us.v64`), all builds of a round run one after another with
+the order rotated between rounds, each run under the shared bench lock (`research/bench.sh`). The machine was shared
+with another agent's .NET builds and a running Mistress through most of the evening, so every run first waits until
+the rest of the machine has been under 1.2 busy processors for a second (logged as `busy=` beside each run); a build
+that starts mid-run is not caught by that gate, and the three or four outliers of 11 to 14 ms in the tables below are
+that. Medians of three rounds are quoted, all runs are printed in `research/results-r*.tsv`, and a difference is called
+a result only where the rounds do not overlap. The base itself moved between batches — the Dam 9.65 (the morning's
+three rounds, 9.63 to 9.77), 9.68 and 9.98 — so each lever is compared with the base of its own batch.
+
+*The sampler.* §6.9's `rtsample.py`, one stop a millisecond, the grouping of `rtreport.py` with §6.12's `split.py` for
+the processor's rows, the shares multiplied by the morning's unsampled medians: 9.648, 4.490, 3.530 and 10.866 ms.
+Two runs of the Dam and DK64 (9,362 and 10,684 samples), four of the two lighter games (6,907 and 4,431), because a
+light frame gives fewer samples a second.
+
+*The counters.* `perf stat` 7.2 extracted from Fedora's package into `research-tools/root/` (no root needed), per
+thread, user mode, over whole 600-frame runs, so a count divided by 600 is a frame's (the state's load included).
+
+*What it cannot see.* The same four as §6.9: no input is pressed; nothing inside a compiled block; no caller for a
+shared handler; and the device, where only the parent session can run (§6.16.8). And one new: under PGO the
+compiler inlines `decoded::run` and `Blocks::step` into `Machine::run_frame` without inline records that
+`eu-addr2line` can read for all of it, so a PGO build's samples cannot be grouped as the base's are; the PGO build is
+measured by time and counters only.
+
+##### 6.16.2 The fresh profile
+
+The emulation thread, ms a frame and share, the processor's rows by `split.py`:
+
+| component | the Dam, 9.65 | DK64 title, 10.87 | Ocarina, 4.49 | Mario, 3.53 |
+| --- | ---: | ---: | ---: | ---: |
+| RSP: decode and dispatch | 1.81, 18.8% | 1.55, 14.3% | 0.60, 13.4% | 0.61, 17.4% |
+| RSP: the vector unit | 1.28, 13.3% | 0.82, 7.6% | 0.70, 15.6% | 0.63, 17.9% |
+| RSP: the scalar unit, loads and stores | 0.78, 8.0% | 0.51, 4.7% | 0.26, 5.7% | 0.30, 8.4% |
+| RSP: the lock-step (tick, `sp_step`, counters) | 0.57, 5.9% | 0.63, 5.8% | 0.19, 4.2% | 0.10, 2.7% |
+| RSP: events | 0.08, 0.9% | 0.08, 0.7% | 0.03, 0.8% | 0.03, 0.8% |
+| **the signal processor** | **4.52, 46.8%** | **3.58, 33.0%** | **1.78, 39.6%** | **1.67, 47.2%** |
+| decoded blocks: loop and handlers | 2.21, 22.9% | 2.51, 23.1% | 0.74, 16.5% | 0.30, 8.5% |
+| dispatcher: `Blocks::step` and the entry | 0.83, 8.6% | 0.84, 7.8% | 0.54, 11.9% | 0.23, 6.5% |
+| dispatcher: the entry comparison (`memcmp`) | 0.26, 2.7% | 0.32, 3.0% | 0.12, 2.7% | 0.06, 1.6% |
+| compiled blocks | 0.11, 1.1% | 0.08, 0.7% | 0.29, 6.4% | 0.20, 5.6% |
+| CPU: the coprocessor | 0.58, 6.0% | 0.94, 8.7% | 0.39, 8.6% | 0.17, 4.9% |
+| CPU: the TLB | 0.17, 1.8% | 0.04, 0.4% | 0.01, 0.3% | 0.01, 0.3% |
+| RDP on this thread: marks, ranges, publish, `Take` | 0.45, 4.7% | 0.33, 3.0% | 0.16, 3.5% | 0.16, 4.5% |
+| RDP: waiting for the workers | 0.00 | **1.81, 16.7%** | 0.20, 4.6% | 0.31, 8.9% |
+| the presenter's join | 0.04, 0.5% | 0.04, 0.4% | 0.02, 0.3% | 0.22, 6.3% |
+| bus, devices, idle loop, frame loop, other | 0.36, 3.7% | 0.30, 2.8% | 0.20, 4.4% | 0.19, 5.4% |
+
+*What it says.*
+
+- **The signal processor is still the largest thing on every thread but one**, and its largest part is no longer the
+  vector unit but decode and dispatch: 1.8 ms at the Dam, of which the tick's single steps (`Decoded::step`) are
+  0.49, the field extraction in the handlers (`rt`, `rd`) 0.24, the straight loop and `Decoded::run` 0.35, the
+  byte swap of every word 0.11 and the handlers' entry frames the rest (`research/samples/all-ge.rsp`).
+- **The CPU beside the running processor is the second thing.** At the Dam and DK64 the decoded tier is 2.2 and 2.5
+  ms and compiled code a tenth of a millisecond: 98 and 88 per cent of their block instructions run decoded
+  (`examples/frames` counters: DK64 35.9 M of 290.8 M compiled in 600 frames), because a block entered while the
+  processor runs is left decoded (§5.8.3). The dispatcher is another 1.1 ms on each.
+- **DK64's title waits 1.8 ms a frame for the workers** (site 2, the depth reads of §6.14.4), the largest single row
+  of that frame, and necessary.
+- **The coprocessor is 0.94 ms on DK64**, twice the Dam's share. Of it the software float's arithmetic proper
+  (`round`, `add_signed`, `multiply`, `square_root`, `to_integer`, `divide`) is 0.25 ms, and the rest is the
+  dispatch into it: `execute_format`, `execute_cop1`, `ops::cop1` and the loads and stores (`research/fpushare.py`).
+- **The hardware's view** (`perf stat`, the emulation thread, 600 frames): the Dam retires 144 million instructions a
+  frame at 2.79 a cycle, mispredicts 693 thousand branches (3.0 per cent), misses the L1 data cache 430 thousand times
+  and the L1 instruction cache 5.5 thousand; DK64 158 million, 2.60 a cycle, 800 thousand mispredictions. At fifteen to
+  twenty cycles each the mispredictions are a fifth of the Dam's cycles; the instruction cache is under half a per cent.
+  The four rasteriser workers are on the processor the whole run (13 billion user cycles each in three seconds),
+  spinning in `sleep` between words.
+
+*The predictions for the profile*, written before it was sampled (`research/PREDICTIONS.md`, P1): the processor 42 to
+50 per cent of the Dam with each of its rows as found — held; the decoded tier second at the Dam, 18 to 25 per cent —
+held; on the lighter games a wait for the workers the next row after the processor, larger than the presenter's join —
+held for Mario, refuted for Ocarina, where the dispatcher (0.54 ms) is next; DK64's site-2 wait its largest row and the
+processor under 35 per cent — held; the join under 0.2 ms on every game — refuted for Mario, 0.22 ms, §6.11.7's
+residual.
+
+##### 6.16.3 What the built levers retired, against §6.9
+
+The same rows, §6.9's two-run means and this section's, ms a frame:
+
+| row | the Dam: §6.9 → now | Ocarina | Mario | built in | what §6.9 predicted, and its fate |
+| --- | --- | --- | --- | --- | --- |
+| the vector unit | 5.25 → 1.28 (−76%) | 2.44 → 0.70 | 2.43 → 0.63 | §6.10 | the Dam to 10–12 ms: held (§6.10.3) |
+| decode and dispatch | 1.64 → 1.81 | 0.54 → 0.60 | 0.48 → 0.61 | §6.12 | row unchanged in name, 1.24 ms off the Dam's frame, a quarter of it the CPU's loop: held |
+| the lock-step | 0.83 → 0.57 | 0.26 → 0.19 | 0.25 → 0.10 | §6.12 | not predicted |
+| the scalar unit | 1.02 → 0.78 | 0.39 → 0.26 | 0.34 → 0.30 | §6.10, §6.12 | not predicted |
+| the presenter's join | 0.63 → 0.04 | 0.69 → 0.02 | 0.99 → 0.22 | §6.11 | Mario to about 5.0, Ocarina 6.2, the Dam −0.5: retired, the bands took more (§6.11.5) |
+| decoded tier | 2.11 → 2.21 | 0.66 → 0.74 | 0.28 → 0.30 | — | untouched |
+| dispatcher with `memcmp` | 1.11 → 1.09 | 0.65 → 0.66 | 0.31 → 0.29 | — | untouched |
+| the coprocessor | 0.52 → 0.58 | 0.37 → 0.39 | 0.17 → 0.17 | — | untouched |
+| RDP marks and `Take` | 0.54 → 0.45 | 0.18 → 0.16 | 0.15 → 0.16 | — | untouched |
+| waiting for the workers | 0.00 → 0.00 | 0.01 → 0.20 | 0.01 → 0.31 | — | new: a faster thread now meets the workers (§6.10.3) |
+| **the frame** | **14.50 → 9.65** | **6.78 → 4.49** | **5.80 → 3.53** | | |
+
+The vector unit retired three quarters of itself on every game and the join nearly all of itself; together they are
+4.6 of the Dam's 4.85 ms and 3.8 and 2.6 of the other two games'. What the frame lost elsewhere the lighter games
+partly gave back as waits for the workers, which is §6.10.3's observation at a larger size: once the emulation thread
+is faster, the drain is sometimes the bound. The rows no built lever touched — the decoded tier, the dispatcher, the
+coprocessor — are the same size, and are now two fifths of the Dam's frame.
+
+##### 6.16.4 The Rust-only levers of the build: PGO, BOLT, instruction sets, Cranelift's level
+
+*Predictions*, written in `research/PREDICTIONS.md` before any of these was built, and quoted with their fates below.
+
+**Profile-guided optimisation.** `-Cprofile-generate` on the whole build (the crate, Cranelift, std as linked), trained
+on states *disjoint from the measured ones* (`research/train.sh`: Wave Race 64, Banjo-Kazooie, Kirby 64 and Majora's
+Mask from the library's states, GoldenEye, DK64 and Ocarina of Time from power-on, 600 to 1,200 frames each, threaded
+and on one thread), merged with Fedora's `llvm-profdata` 22.1.8 (the compiler's LLVM is 22.1.8), and `-Cprofile-use`.
+A second profile trained on the four measured states themselves bounds the bias of training on the test.
+
+| ms a frame, median of 3 | base | PGO | PGO, in-sample | BOLT | PGO + BOLT |
+| --- | --- | --- | --- | --- | --- |
+| the Dam | 9.684 | **9.016 (−6.9%)** | 9.130 | 9.378 (−3.2%) | 9.132 |
+| Ocarina of Time | 4.579 | **4.121 (−10.0%)** | 4.191 | 4.385 (−4.2%) | 4.109 |
+| Super Mario 64 | 3.534 | **3.124 (−11.6%)** | 3.210 | 3.451 (−2.4%) | 3.151 |
+| DK64 title | 10.965 | **10.154 (−7.4%)** | 10.151 | 10.749 (−2.0%) | 10.384 |
+
+A second batch (r3) gave PGO −9.1, −9.8, −11.5 and −3.6 per cent, the last with one 13.4 ms run in three; every
+round of PGO is under every round of the base on the Dam, Ocarina and Mario in both batches. Every PGO run ended on
+the base's hash. *Prediction P2a* — 4 to 10 per cent, most on the Dam and DK64, least on Mario — **held in size and
+failed in shape**: Mario gained most. *P2b* — the in-sample profile better by under 2 per cent — held, and more: it
+is no better at all, so the disjoint training set is not costing anything measurable.
+
+*Why it pays, from the counters* (whole 600-frame runs, the emulation thread): at the Dam the thread retires 5.6 per
+cent fewer instructions (144.5 to 136.4 million a frame) and 5.9 per cent fewer cycles; at DK64 29 per cent fewer
+instructions and 21 per cent fewer cycles, of which the frame keeps only 7 because the thread then waits longer at
+site 2. Mispredictions do not move (693 to 707 thousand a frame at the Dam, 800 to 805 at DK64): the interpreters'
+indirect dispatch is data-dependent and the profile cannot predict it. The instruction cache's misses fall by two
+thirds, from a level that was already negligible. So PGO's gain is inlining and code layout on the paths the
+profile names hot — the decoded loop, the dispatcher and the processor's table — and not branch prediction.
+
+*What it costs, and what it is not.* A build step and a training set that needs commercial ROMs, which CI does not
+have: the profile would be produced on this machine and checked in (`llvm-profdata` output, a few megabytes), or
+produced at publish time where the ROMs are. A stale profile is safe — LLVM ignores a function whose hash no longer
+matches, so the loss is speed on the changed functions, never behaviour — and the profile is portable across x86-64
+targets and not to aarch64, where the SIMD paths differ. The cdylib and the examples share the functions the
+profile names, so a profile trained through the examples applies to `libmarsrt.so`; that is argued, and not measured
+through the shim.
+
+**BOLT** (Fedora's `llvm-bolt` 22.1.8, the binary linked with `--emit-relocs`, `perf record -j any,u` over the same
+training set, `ext-tsp` block order, `cdsort` function order, hot and cold split): 2 to 4 per cent alone, nothing on
+top of PGO and 1 to 2 per cent worse than PGO alone on the two heavy games. BOLT halved the taken branches in the
+profile's hot functions, but the counters over a whole run of the Dam show no fewer cycles than the base's, so its
+gain alone is not established beyond the bench's spread. *P4a* (0 to 3 per cent) and *P4b* (under 1 per cent over
+PGO) held. It is not recommended: PGO gives what it gives and more.
+
+**Instruction sets beyond SSE4.1.** Two kinds of build, each a bound rather than a candidate, since production must
+keep the portable path: the whole crate for a newer target (`-Ctarget-cpu=x86-64-v3`, `x86-64-v4`, `znver4`), and the
+multiversioned vector unit — only the signal processor's SIMD functions given the AVX2 set (`rspv3`) or the AVX2 and
+AVX-512 set (`rspv4`), the rest untouched, which is what runtime dispatch would ship. Medians, change against the
+base of the same batch; r2 is three rounds of every build, r4 four rounds of the base, the two multiversioned builds
+and `x86-64-v4` alone:
+
+| change in ms a frame | the Dam | Ocarina | Mario | DK64 title |
+| --- | --- | --- | --- | --- |
+| whole crate, `x86-64-v3` (r2) | +0.8% | −1.5% | −1.0% | −0.7% |
+| whole crate, `x86-64-v4` (r2 / r4) | −0.9% / **−3.1%** | −3.8% / — | −0.6% / **−4.1%** | −2.2% / +3.6% (runs 10.8 to 16.7, undecided) |
+| whole crate, `znver4` (r2) | +0.6% | −1.9% | −1.5% | −0.9% |
+| the vector unit alone, AVX2 set (r4) | −1.2% | — | −0.5% | −1.0% |
+| the vector unit alone, AVX-512 set (r4) | −0.5% | — | −1.2% | −0.2% |
+
+Every run of every build ended on the base's hash. **The multiversioned vector unit is worth about one per cent**,
+inside the rounds' spread: the unit is one 128-bit register an operation, and wider registers have nothing to widen
+(§6.10.5 said so of AVX2 before this was measured); what the AVX-512 build could gain from mask registers and
+three-operand blends is what LLVM's own lowering of the SSE intrinsics found, and it found nothing measurable. The
+whole-crate `x86-64-v4` build is the one row that is outside its spread on two games — 3 to 4 per cent on the Dam and
+Mario in r4, whose rounds do not overlap the base's — and its gain is therefore not in the vector unit but spread
+through the scalar code (BMI, three-operand forms, wider moves). It cannot ship as one binary; a second, v4-only
+build of the library chosen at load time could, at the cost of a second artefact per publish, and *P3a* (within ±2
+per cent) is **refuted by one to two points for v4** and held for v3 and `znver4`. *P3b* and *P8a* held: the vector
+unit multiversioned is not worth building.
+
+**Cranelift's `speed_and_size`** in place of `speed` (`research/crates/clss`): −0.5, −1.2 and −0.2 per cent on the
+Dam, Mario and DK64 in r4, inside the spread. A first batch (r2) had DK64 at +14 per cent, with runs from 11.4 to
+14.6 ms; on one thread (`examples/frames`, two runs each way) the two settings ran DK64 in 16.68 and 16.70 ms with the
+same counters, so that reading was the machine's load and not the code. *P5a* — under 1 per cent, because compiled
+code is 0.1 to 0.3 ms of any frame — held. The other settings (the register allocator's algorithm) were not tried
+for the same reason: nothing done to 0.1 to 0.3 ms can show in a frame until the compiled share grows, which is
+§6.16.5's lever and not this one.
+
+##### 6.16.5 The signal processor beside the CPU: a bound on running it ahead
+
+§5.8.3 found that compiling a block for a running processor, stepping it once a cycle from the compiled code, costs
+more than it saves, and leaves such blocks decoded; `Mars_Rsp.md` §13 measured a C# prototype of running the
+processor ahead to its next event, inexact, at 7.5 per cent of Ocarina of Time's mean frame and 2 of its drawing
+frames, and declined it because the undo it needs was the most delicate machinery on the thread for the least return.
+**Two things are new in MarsRT.** The games that matter here are the Dam and DK64, whose blocks run 98 and 88 per cent
+decoded for exactly this reason, which C#'s core did not have (its blocks stepped the processor from compiled code);
+and the undo can now be priced, because MarsRT can count what would trigger it.
+
+*The prototype* (`research/crates/lag`, off unless `EMUSEN_LAG=1`, and inexact by design). The tick owes the processor
+its cycles instead of stepping it; the dispatcher pays what is owed in one call (`sp_step_many`) before each block,
+before the idle loop and at the frame's end; and a block entered while the processor runs takes its compiled quiet
+variant, the processor's cycles for the block owed after it. So the processor runs at most one block behind the CPU,
+and its events land up to a block late. The same binary counts, with the lag off — that is, on the exact machine —
+every CPU access to the processor's memories, registers and program counter while it runs, and the processor's single
+steps and events.
+
+| 600 frames, split 4, blocks | base (ms) | lag (ms, median of 3) | change | lag + a snapshot a payment | compiled block instructions, base → lag |
+| --- | --- | --- | --- | --- | --- |
+| the Dam | 9.68–9.98 | **8.32** | −14 to −17% | 10.64 | 4.0 M → 202.7 M of 214.6 M |
+| DK64 title | 11.08 | **9.05** | −18.3% | 11.11 | 35.9 M → 268.1 M of 290.8 M |
+| Ocarina of Time | 4.57 | **4.14** | −9.4% | 4.60 | 121.6 M → 167.8 M of 188.3 M |
+| Super Mario 64 | 3.69 | **3.44** | −6.8% | 3.60 | 58.3 M → 79.1 M of 86.4 M |
+
+*The work stayed the same.* The CPU retired exactly the base's instruction count over 600 frames in Ocarina, Mario
+and DK64 and 55 fewer in 7.5 billion at the Dam; Ocarina's final state is even the exact hash. The bound is therefore
+a bound on the same game's frames, not on a game doing different work, which is the objection `Mars_Rsp.md` §13
+recorded against its own Wave Race run.
+
+*Where the Dam's frame goes under the bound* (`rtsample`, one run, `research/samples/l1-ge.*`): the decoded tier's 2.2
+ms is 0.15, compiled code rises to 0.92, the dispatcher to 1.18 and its comparison 0.25; the signal processor falls
+from 4.52 to 4.18, its lock-step from 0.57 to 0.29, and its decode and dispatch is now almost all in whole runs (1.85).
+At DK64 the site-2 wait rose only from 1.81 to 2.03 ms, which is why its bound is the larger.
+
+*The counters on the exact machine*, a frame: **no CPU read of the processor's memories, registers or program
+counter while it runs, in any of the four states, and 0.3 to 0.5 register writes** (Ocarina, DK64; none at the Dam
+or in Mario). Single steps from the tick 366 thousand at the Dam and 426 thousand at DK64, of which 12.8 and 14.8
+thousand were events.
+
+*What an exact version must pay.* Run the processor ahead to its next event, stopping before it as `Decoded::run`
+already does; let the CPU run to that event's cycle under the guard compiled blocks already have (`stop` includes the
+event); run the event in lock-step; and keep, from each window's start, what an undo needs should the CPU touch the
+processor inside the window — its registers (720 bytes) and DMEM. The copy's price was measured by taking the whole
+snapshot at every payment of the prototype (`EMUSEN_SNAP=1`): 34 ns at the Dam and 27 at DK64, from 68 and 64 thousand
+copies a frame. At one snapshot a window, and a window an event, that is **0.44 ms at the Dam and 0.40 at DK64**, an
+upper bound, since a log of DMEM's stores in the window is cheaper than a copy of all of it. Two other costs are not
+in the prototype: a window averages about 29 cycles at the Dam (366 thousand steps between 12.8 thousand events), so
+the last block of each window will often not fit under the guard and run decoded; and the events that only read
+(the processor's `MFC0` of status and DMA-busy) need not end a window if nothing the CPU wrote is read, which
+lengthens windows and is part of the design, not a given. **The exact lever is therefore priced at 0.7 to 1.2 ms
+at the Dam (7 to 12 per cent) and 1.2 to 1.6 at DK64**, with the undo itself a cold path that the counters say runs
+under once a frame. That is argued from a measured bound and a measured copy, not measured.
+
+*Prediction P6* held at the Dam (−12 to −22 per cent predicted), held for Ocarina, and was refuted upward for DK64 (−8
+to −15 predicted, −18 measured) and for Mario by two points.
+
+##### 6.16.6 Threads on this desktop: the worker count and the spin
+
+`split 2` and `split 3` against production's four, and the workers' `sleep` spinning 40 rounds before parking rather
+than 400 (`research/crates/spin`, `EMUSEN_SPIN_ROUNDS`), three rounds (r3):
+
+| ms a frame, median | four workers | two | three | four, spin 40 |
+| --- | --- | --- | --- | --- |
+| the Dam | 9.98 | 10.01 (+0.4%) | 9.75 (−2.3%) | 10.04 (+0.6%) |
+| Ocarina of Time | 4.57 | 5.32 (+16.6%) | 4.91 (+7.5%) | 4.54 (−0.6%) |
+| Super Mario 64 | 3.69 | 4.58 (+23.9%) | 3.85 (+4.1%) | 3.58 (−3.0%) |
+| DK64 title | 11.08 | 12.09 (+9.1%) | 11.44 (+3.3%) | 11.98 (+8.2%) |
+
+Four workers are needed on three games of four: with two, the emulation thread waits for the drain at the capture and
+the loads. The shorter spin costs DK64 8 per cent — its site-2 wait is a worker woken from the futex rather than
+caught spinning — and buys nothing measurable elsewhere. On this desktop, where power is not the bound, **neither is
+a lever**. The handheld is another question — the four workers are on-CPU the whole frame, and there they share a
+package budget with the thread that is the bound — and the parent session's run is what answers it (§6.16.8).
+*P7a* held for the Dam and DK64 and did not foresee the lighter games' loss with two workers; its spin clause was
+refuted by DK64.
+
+##### 6.16.7 Fastmem, the coprocessor, allocation and locks, re-priced
+
+**Fastmem.** §6.9's verdict was that a host mapping could serve only the loads and stores compiled code emits, whose
+whole row was under 0.3 ms. Today the compiled rows are 0.08 to 0.29 ms, as then. The loads and stores through the
+interpreter's handlers — the decoded tier's `ops::lw` and `sw`, `read32`, the page marks, the alignment test, the
+TLB's `try_translate` — are 1.02 ms at the Dam, 1.01 at DK64, 0.43 in Ocarina and 0.21 in Mario
+(`research/memshare.py`), but a host mapping does not reach them: they are the interpreter's own code, and what makes
+them cost is the dispatch around each access, the mark test that §6.9 showed a mapping must keep, and at the Dam the
+translation, which a mapping would reach only by mapping every TLB entry's page into the host's space. If the
+run-ahead of §6.16.5 is built, most of those accesses move into compiled code (0.92 ms of it at the Dam under the
+bound), and fastmem's reach becomes the segment, bounds and alignment tests there: a handful of register operations
+an access. **Still not recommended**; the ceiling is under 0.2 ms on every game until the run-ahead exists, and a
+fraction of the compiled row after.
+
+**The coprocessor: host floating point, which only Rust can check.** C#'s §16 declined a host-float fast case
+because the MIPS inexact flag must be produced bit for bit, and .NET cannot read the host's floating-point status.
+Rust can (`_mm_getcsr`, or `stmxcsr` through `core::arch::asm!`): an add, multiply, divide or square root done on
+the host with MXCSR's rounding set to the guest's, its flags read back, and the software path taken whenever an
+operand or the result is denormal, infinite or NaN or an enabled exception is raised, is exact by construction on
+the cases it keeps. Its ceiling is the arithmetic proper: 0.25 ms at DK64, 0.11 at the Dam. The rest of the 0.94 ms
+row is dispatch into the coprocessor, which a fast path does not touch and compiled code inlining the moves would.
+Priced, not prototyped.
+
+**Allocation and locks.** Allocation is 0.1 per cent of every thread (`malloc`, `free`, `munmap` together under 0.02
+ms); the unparking of the workers is 0.04 to 0.05 ms at DK64 (`futex_wake`); `sched_yield` in the presenter's join is
+the join's own row. Nothing here is a lever.
+
+##### 6.16.8 The handheld
+
+The Legion Go S could not be reached from this session. The binaries and a script are staged for the parent session
+in `~/.cache/emusen/probe/mars-speed/deck-levers/` (`README.txt` says what each is): the base, PGO, PGO with BOLT, the
+`znver4` and `rspv4` bounds, the spin setting and the lag bound, each needing glibc 2.34 at most, run on DK64's title
+and the Dam, three rounds interleaved and rotated, with the main thread's core clock sampled from `scaling_cur_freq`
+beside each run, plus two, three and four workers, the main thread pinned alone on a core with its SMT sibling kept
+free, and the title at 2× on the device with and without PGO:
+
+```
+cd ~/deck-levers && bash run.sh 3 "dk64 ge" > results-$(date +%m%d-%H%M).txt; python3 summ.py results-*.txt
+```
+
+*Predictions for it*, written before it is run: PGO takes 6 to 12 per cent off both games at one, as here, and a
+similar share of the emulation thread at 2× on the device; the lag bound takes 12 to 20 per cent off both; `split2`,
+`split3`, `spin40` and `pin` stay within ±3 per cent of the base on the charger's 40 W profile, with the main thread's
+clock within 100 MHz of the base's in each — the prediction being that the device is not power-bound on the charger;
+`znver4` and `rspv4` within ±3 per cent.
+
+##### 6.16.9 The levers, ranked
+
+Ceilings are the frame if the lever's component cost nothing; measured and bounded numbers are this section's.
+Ranked by what they buy the Dam and DK64, the two games the handheld needs, against their effort.
+
+| # | lever | the Dam (9.65) | DK64 (10.87) | Ocarina (4.49) | Mario (3.53) | status | effort |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | PGO in the release build | **−0.67 to −0.91 ms, measured** | **−0.40 to −0.81, measured** | −0.45, measured | −0.41, measured | exact by construction | a day: a training script, a checked-in profile, the publish step |
+| 2 | the processor run ahead to its next event, with an undo | bound −1.4 to −1.7; exact priced −0.7 to −1.2 | bound −2.0; priced −1.2 to −1.6 | bound −0.43 | bound −0.25 | the undo's trigger counted at < 1 a frame | a week: the design, the undo, its tests and mutants |
+| 3 | a Cranelift tier for the processor's whole runs | ceiling ≈ 1.3 (decode outside the tick's steps); after lever 2 ≈ 1.8 | ≈ 1.1; after 2 ≈ 1.2 | ≈ 0.45 | ≈ 0.5 | §6.12.7's price, raised by lever 2, which puts the steps into whole runs | days, under the exactness contract |
+| 4 | the dispatcher (chaining, extension) | ceiling 1.09; 1.43 after lever 2 | 1.17; 1.61 after 2 | 0.66 | 0.29 | C# measured nothing (`Mars_Recompiler.md` §9–§12); to be re-priced by a ring bench only after lever 2 | days |
+| 5 | host floating point with MXCSR flags | ceiling 0.11 | ceiling 0.25 | ≈ 0.1 | ≈ 0.05 | priced | days, with a differential against the software float |
+| 6 | a second library built for `x86-64-v4`, chosen at load | −0.3, measured | undecided | −0.17 (r2) | −0.15, measured | measured, not shippable as one binary | a day, and a second artefact per publish |
+| 6a | the vector unit alone multiversioned for AVX2 or AVX-512 | ≈ −0.1, inside the spread | ≈ −0.1 | — | ≈ −0.03 | measured | not worth building |
+| 7 | BOLT | −0.3, not over PGO | −0.2 | −0.19 | −0.08 | measured | — |
+| 8 | fastmem | < 0.2 | < 0.2 | < 0.3 | < 0.2 | priced | a week, and page protection against the marks |
+| 9 | worker count, spin, pinning | none on the desktop | none | none | none | measured here; the handheld pending | — |
+| 10 | Cranelift `speed_and_size` | none | none | — | none | measured | — |
+
+##### 6.16.10 The order recommended
+
+1. **PGO**, now: the only lever measured that is exact by construction, portable across x86-64, and a build step.
+   What remains to decide is where the profile is made, since the training needs ROMs (§6.16.4).
+2. **The run-ahead of the signal processor**, next: the largest lever on the two games the handheld needs, its
+   bound measured and its undo priced. It should be built as §6.10 to §6.15 were — the design written first, the
+   lag prototype's numbers as the ceiling to beat, the random-program differential extended with CPU writes into the
+   processor's side inside a window, the seven games — and it changes the arithmetic of levers 3, 4 and 8, which
+   should be re-priced on its frame rather than on this one.
+3. **Then sample again**, and choose between the processor's Cranelift tier and the dispatcher by what the new frame
+   shows; the host-float fast path is DK64's lever and waits for DK64 to need it.
+4. The handheld's run of §6.16.8 decides whether the threads' placement is a lever there at all.
+
+##### 6.16.11 What is not done
+
+- **The handheld** (§6.16.8), and every number above on its half-size cache.
+- **PGO through the shim**: the profile was measured in the examples, not in `libmarsrt.so` under Mistress, and not
+  at a multiple or on the device on this desktop.
+- **The exact run-ahead**, which is priced and not built; its price rests on the snapshot's copy as measured and on
+  two arguments (window length, read-only events) that are not.
+- **The processor's Cranelift tier, chaining, the host-float fast path**: priced, not prototyped.
+- **Pinning on the desktop**, which was not measured here; the handheld script measures it.
+- **The rasteriser in AVX2**: its code is on the workers, off the emulation thread at one, and the whole-crate builds
+  that include it moved DK64, the one game that waits for its workers, by 0.7 to 2.2 per cent; a hand-written AVX2
+  rasteriser was not attempted.
+- **Other states.** Four states, no input, as §6.9; the Dam under the WiseMan comparisons compiles thirty times more.

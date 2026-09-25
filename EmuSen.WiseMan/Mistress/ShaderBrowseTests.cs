@@ -50,6 +50,7 @@ namespace EmuSen.WiseMan.Mistress
             Write("shaders/glow.slang", Shader(new[] { ("GLOW", "Glow strength", 0.25, 0.0, 1.0, 0.05), ("SCAN", "Scanline weight", 3.0, 1.0, 8.0, 1.0) }));
             WriteBig(_pack);
             for (int i = 0; i < Row; i++) Write($"row/p{i:D2}.slangp", "shaders = 1\nshader0 = ../shaders/glow.slang\n");
+            Write(SlangPackDownload.StampFile, "2026-09-22 02:00 UTC");
         }
 
         // big/huge.slangp: 944 parameters under nine headings, named P0001 onwards, each 0.5 in 0 to 1 by 0.05.
@@ -88,9 +89,9 @@ namespace EmuSen.WiseMan.Mistress
             return text.ToString();
         }
 
-        private (ShaderSettingsWindow Window, ShaderPanel Panel) Open(GraphicsConfig? config = null)
+        private (ShaderSettingsWindow Window, ShaderPanel Panel) Open(GraphicsConfig? config = null, TimeProvider? clock = null)
         {
-            var window = new ShaderSettingsWindow(config ?? new GraphicsConfig(), null, "SNES", pack: _pack);
+            var window = new ShaderSettingsWindow(config ?? new GraphicsConfig(), null, "SNES", pack: _pack) { Time = clock ?? new ManualClock() };
             window.Show();
             ShaderPanel panel = window.PanelFor("SNES");
             Pump(panel);
@@ -104,12 +105,6 @@ namespace EmuSen.WiseMan.Mistress
             while (!panel.Reading.IsCompleted && limit.ElapsedMilliseconds < 5000) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(1); }
             Dispatcher.UIThread.RunJobs();
             Assert.True(panel.Reading.IsCompleted);
-        }
-
-        private static void Wait(int milliseconds)
-        {
-            var clock = Stopwatch.StartNew();
-            while (clock.ElapsedMilliseconds < milliseconds) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(1); }
         }
 
         private static int IndexOf(ShaderPanel panel, string relative) => panel.List.Models.ToList().FindIndex(e => e.Relative == relative && !e.Recent);
@@ -184,6 +179,79 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        private static void SearchParameters(ShaderPanel panel, string text)
+        {
+            panel.ParameterSearch.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "PART_Search").Text = text;
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        private static string? Note(ShaderPanel panel) => panel.GetVisualDescendants().OfType<HintText>().Single(h => h.Text?.Contains("parameter") == true || h.Text?.Contains("nothing") == true).Text;
+
+        // The search box over the parameters narrows them by description or id, keeps a heading's rows when the heading matches, and stays as the shader changes - see EmuSen_Settings_Reference.md §4.48.10.
+        [Fact]
+        public Task The_parameters_are_narrowed_by_a_search_of_their_descriptions_and_ids() => Session.Dispatch(() =>
+        {
+            (ShaderSettingsWindow window, ShaderPanel panel) = Open();
+            Assert.False(panel.ParameterSearch.IsVisible);
+            panel.List.SelectedIndex = IndexOf(panel, "big/huge.slangp");
+            Pump(panel);
+            UiTest.Capture(window);
+            Assert.True(panel.ParameterSearch.IsVisible);
+
+            SearchParameters(panel, "0917");
+            UiTest.AssertLaidOut(window, "shaders-browse-944-search");
+            Assert.Equal(new[] { "Parameter 0917" }, panel.ParameterList.Matching.Select(p => p.Label));
+            Assert.Equal(new object[] { "--- Section 8 ---", panel.ParameterList.Matching.Single() }, panel.ParameterList.ItemsSource!.Cast<object>());
+            Assert.StartsWith("1 of 944 parameters match “0917”.", Note(panel));
+            SliderRow row = Assert.Single(panel.Sliders);
+            ShaderSettingsWindowTests.Press(row, Key.Right);
+            Assert.Equal("0.55", GraphicsConfig.Load().ParametersFor("SNES", "slang:big/huge.slangp")["P0917"]);
+
+            SearchParameters(panel, "p0005");
+            Assert.Equal(new[] { "P0005" }, panel.ParameterList.Matching.Select(p => (string)p.Tag!));
+            SearchParameters(panel, "section 2");
+            Assert.Equal(105, panel.ParameterList.Matching.Count());
+            Assert.Equal("P0213", panel.ParameterList.Matching.First().Tag);
+            SearchParameters(panel, "nothing like it");
+            Assert.Empty(panel.ParameterList.Matching);
+            Assert.StartsWith("0 of 944 parameters match", Note(panel));
+
+            // Reset All still reaches every parameter, matched or not.
+            SearchParameters(panel, "0003");
+            panel.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SNES.ResetShader").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.All(panel.Parameters, p => Assert.True(p.IsDefault));
+            Assert.Equal(Big, panel.Parameters.Count);
+
+            // Kept as the shader changes, and cleared by emptying the box.
+            SearchParameters(panel, "glow");
+            panel.List.SelectedIndex = IndexOf(panel, "row/p00.slangp");
+            Pump(panel);
+            Assert.Equal(new[] { "Glow strength" }, panel.ParameterList.Matching.Select(p => p.Label));
+            Assert.StartsWith("1 of 2 parameters match", Note(panel));
+            SearchParameters(panel, "");
+            Assert.Equal(2, panel.ParameterList.Matching.Count());
+            Assert.StartsWith("2 parameters.", Note(panel));
+            window.Close();
+        }, default);
+
+        // Every control of the window with a long preset shown, the parameter search among them, reached by the pad on the desktop.
+        [Fact]
+        public Task With_a_long_preset_shown_every_control_on_the_desktop_is_reached_by_pad() => Session.Dispatch(() =>
+        {
+            (ShaderSettingsWindow window, ShaderPanel panel) = Open();
+            panel.List.SelectedIndex = IndexOf(panel, "big/huge.slangp");
+            Pump(panel);
+            UiTest.Capture(window);
+            FocusRow(window, panel, IndexOf(panel, "big/huge.slangp"));
+            void Press(UiButton b) => PadWindowRouter.Send(window, b);
+            HashSet<InputElement> reached = PadAudit.Reachable(window, Press);
+            var missing = PadAudit.Operable(window).Where(c => !reached.Contains(c)).Select(PadAudit.Describe).ToList();
+            foreach (string m in missing) _out.WriteLine("unreachable: " + m);
+            Assert.Contains(PadAudit.Operable(window), c => c is TextBox t && t.FindAncestorOfType<FilterBar>() == panel.ParameterSearch);
+            Assert.Empty(missing);
+            window.Close();
+        }, default);
+
         // Down from a slider reaches the next row's Reset, then its slider, the list scrolling as it goes and building only what comes into view.
         [Fact]
         public Task The_pad_walks_down_a_long_parameter_list_row_by_row() => Session.Dispatch(() =>
@@ -218,17 +286,20 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // A held pad passes over rows; only where it stops is read, and the name and path follow every row at once.
+        // A held pad passes over rows: its first step reads at once, the rest wait, and only where it stops is read next; timed by a clock the test moves, never the machine's.
         [Fact]
-        public Task A_fast_walk_reads_only_where_it_stops() => Session.Dispatch(() =>
+        public Task A_fast_walk_reads_its_first_step_and_where_it_stops_and_nothing_between() => Session.Dispatch(() =>
         {
-            (ShaderSettingsWindow window, ShaderPanel panel) = Open();
-            int start = IndexOf(panel, "row/p00.slangp");
-            FocusRow(window, panel, start);
-            Wait(400);
+            var clock = new ManualClock();
+            (ShaderSettingsWindow window, ShaderPanel panel) = Open(clock: clock);
+            FocusRow(window, panel, IndexOf(panel, "row/p00.slangp"));
+            Prefetched(window);
+            clock.Advance(TimeSpan.FromSeconds(1));
             int loads = panel.Loads, reads = window.ReadsStarted - window.PrefetchesStarted;
 
-            for (int i = 1; i <= 6; i++)
+            PadWindowRouter.Send(window, UiButton.Down);
+            Assert.Equal(loads + 1, panel.Loads);
+            for (int i = 2; i <= 6; i++)
             {
                 PadWindowRouter.Send(window, UiButton.Down);
                 Dispatcher.UIThread.RunJobs();
@@ -236,16 +307,36 @@ namespace EmuSen.WiseMan.Mistress
                 Assert.StartsWith($"row/p{i:D2}.slangp\nin ", TextOf(panel, "SNES.ShaderPath"));
                 Assert.Empty(panel.Parameters);
             }
-            Assert.Equal(loads, panel.Loads);
-            Assert.Equal(reads, window.ReadsStarted - window.PrefetchesStarted);
+            Assert.Equal(loads + 1, panel.Loads);
+            Assert.Equal(1, clock.Pending);
 
+            clock.Advance(window.Settle - TimeSpan.FromMilliseconds(1));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(loads + 1, panel.Loads);
+            clock.Advance(TimeSpan.FromMilliseconds(1));
             Pump(panel);
             UiTest.Capture(window);
-            Assert.Equal(loads + 1, panel.Loads);
+            Assert.Equal(loads + 2, panel.Loads);
             Assert.Equal(reads + 1, window.ReadsStarted - window.PrefetchesStarted);
             Assert.Equal("p06", panel.Shown?.Name);
             Assert.Equal(new[] { "Glow strength", "Scanline weight" }, panel.Parameters.Select(p => p.Label));
             Assert.NotEmpty(panel.Sliders);
+
+            // One step after the selection has held still reads at once; a second inside the settle waits for it.
+            clock.Advance(window.Settle);
+            PadWindowRouter.Send(window, UiButton.Down);
+            Assert.Equal(loads + 3, panel.Loads);
+            Pump(panel);
+            Assert.Equal("p07", panel.Shown?.Name);
+            Assert.Equal(2, panel.Parameters.Count);
+            clock.Advance(window.Settle - TimeSpan.FromMilliseconds(1));
+            PadWindowRouter.Send(window, UiButton.Down);
+            Assert.Equal(loads + 3, panel.Loads);
+            Assert.Empty(panel.Parameters);
+            clock.Advance(window.Settle);
+            Pump(panel);
+            Assert.Equal(loads + 4, panel.Loads);
+            Assert.Equal("p08", panel.Shown?.Name);
             window.Close();
         }, default);
 
@@ -254,36 +345,39 @@ namespace EmuSen.WiseMan.Mistress
         public Task Use_Enter_and_a_click_do_not_wait_for_the_settle() => Session.Dispatch(() =>
         {
             var told = new List<string>();
-            var window = new ShaderSettingsWindow(new GraphicsConfig(), told.Add, "SNES", pack: _pack) { Settle = TimeSpan.FromSeconds(30) };
+            var clock = new ManualClock();
+            var window = new ShaderSettingsWindow(new GraphicsConfig(), told.Add, "SNES", pack: _pack) { Time = clock };
             window.Show();
             ShaderPanel panel = window.PanelFor("SNES");
             Pump(panel);
             FocusRow(window, panel, IndexOf(panel, "row/p00.slangp"));
 
             PadWindowRouter.Send(window, UiButton.Down);
-            Assert.Equal("p01", panel.Shown?.Name);
+            PadWindowRouter.Send(window, UiButton.Down);
+            Assert.Equal("p02", panel.Shown?.Name);
             Assert.False(panel.Reading.IsCompleted);
             int loads = panel.Loads;
             PadWindowRouter.Send(window, UiButton.Accept);
             Assert.Equal(loads + 1, panel.Loads);
-            Assert.Equal("slang:row/p01.slangp", GraphicsConfig.Load().Value("SNES", GraphicsSettingsWindow.ScreenFilterKey));
+            Assert.Equal("slang:row/p02.slangp", GraphicsConfig.Load().Value("SNES", GraphicsSettingsWindow.ScreenFilterKey));
             Assert.Equal(new[] { "SNES" }, told);
             Pump(panel);
             Assert.Equal(2, panel.Parameters.Count);
 
-            // A click on a row, which a mouse's press selects: shown at once, never waiting the thirty seconds.
+            // A click on a row, which a mouse's press selects: shown at once, the clock never moved.
             int target = IndexOf(panel, "row/p05.slangp");
             panel.List.ScrollIntoView(target);
-            window.UpdateLayout();
+            UiTest.Capture(window);
             Control row = panel.List.ContainerFromIndex(target)!;
             Point at = row.TranslatePoint(new Point(row.Bounds.Width / 2, row.Bounds.Height / 2), window)!.Value;
+            Assert.Same(row, (window.InputHitTest(at) as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true));
             window.MouseDown(at, MouseButton.Left);
             window.MouseUp(at, MouseButton.Left);
             Assert.Equal("p05", panel.Shown?.Name);
             Pump(panel);
             Assert.Equal(2, panel.Parameters.Count);
 
-            // Moved by a key, then the focus taken off the list to the sliders' side: the settle ends there.
+            // Moved by a key inside the settle, then the focus taken off the list to the sliders' side: the settle ends there.
             FocusRow(window, panel, target);
             PadWindowRouter.Send(window, UiButton.Down);
             Assert.False(panel.Reading.IsCompleted);
@@ -293,6 +387,53 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(2, panel.Parameters.Count);
             window.Close();
         }, default);
+
+        // The parameters kept are the eight used last, reads ahead among them; what falls out first is what was used first, and unused reads ahead are counted as they go - see EmuSen_Settings_Reference.md §4.48.10.
+        [Fact]
+        public Task The_parameter_cache_keeps_the_most_recent_eight_reads_ahead_included() => Session.Dispatch(() =>
+        {
+            (ShaderSettingsWindow window, ShaderPanel panel) = Open();
+            foreach (string stop in new[] { "row/p00.slangp", "row/p03.slangp", "row/p06.slangp", "row/p09.slangp" })
+            {
+                panel.List.SelectedIndex = IndexOf(panel, stop);
+                Pump(panel);
+                Prefetched(window);
+                Assert.InRange(window.Cached, 1, ShaderSettingsWindow.CacheLimit);
+            }
+
+            Assert.Equal(12, window.ReadsStarted);
+            Assert.Equal(ShaderSettingsWindow.CacheLimit, window.Cached);
+            Assert.Equal(4, window.Evicted);
+            Assert.Equal(2, window.EvictedUnused);
+            foreach (string gone in new[] { "row/p00.slangp", "row/p01.slangp", "big/huge.slangp", "row/p03.slangp" }) Assert.False(window.IsRead(gone), gone);
+            foreach (string kept in new[] { "row/p02.slangp", "row/p04.slangp", "row/p05.slangp", "row/p06.slangp", "row/p07.slangp", "row/p08.slangp", "row/p09.slangp", "row/p10.slangp" }) Assert.True(window.IsRead(kept), kept);
+
+            // Moved back onto a row that fell out: read again, as the most recent.
+            panel.List.SelectedIndex = IndexOf(panel, "row/p00.slangp");
+            Pump(panel);
+            Assert.Equal(2, panel.Parameters.Count);
+            Assert.True(window.IsRead("row/p00.slangp"));
+            window.Close();
+        }, default);
+
+        [Fact]
+        public void A_recent_cache_drops_the_least_recently_used_and_counts_the_unused()
+        {
+            var cache = new RecentCache<string, int>(3);
+            cache.Add("a", 1, used: true);
+            cache.Add("b", 2, used: false);
+            cache.Add("c", 3, used: false);
+            Assert.True(cache.TryGet("b", out int b));
+            Assert.Equal(2, b);
+            cache.Add("d", 4, used: true);
+            Assert.False(cache.Contains("a"));
+            Assert.Equal((1, 0), (cache.Evicted, cache.EvictedUnused));
+            cache.Add("e", 5, used: true);
+            Assert.False(cache.Contains("c"));
+            Assert.Equal((2, 1), (cache.Evicted, cache.EvictedUnused));
+            Assert.Equal(new[] { true, true, true }, new[] { "b", "d", "e" }.Select(cache.Contains));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new RecentCache<string, int>(0));
+        }
 
         // After a settle the preset rows either side are read in the background, at most two at once, and the next step finds its row read.
         [Fact]

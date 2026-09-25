@@ -52,8 +52,8 @@ namespace EmuSen.Mistress.Input
 
             if (open is null && window is IPadDriven driven && driven.OnPad(button)) return;
 
-            // Focus left under the sheet, or nowhere, starts again at the window's first control.
-            if (open is null && (focused is not Visual at || !IsWithin(at, root)))
+            // Focus left under the sheet, nowhere, or on a control since hidden starts again at the window's first control - see EmuSen_Settings_Reference.md §4.48.10.
+            if (open is null && (focused is not Visual at || !IsWithin(at, root) || !focused.IsEffectivelyVisible))
             {
                 FocusFirst(root);
                 if (button is UiButton.Up or UiButton.Down or UiButton.Left or UiButton.Right) return;
@@ -281,9 +281,17 @@ namespace EmuSen.Mistress.Input
         // The control nearest the top left of a page, as a sheet starts.
         private static InputElement? FirstIn(Control page) =>
             page.GetVisualDescendants().OfType<InputElement>()
-                .Where(e => e.Focusable && e.IsEffectivelyEnabled && e.IsEffectivelyVisible && e is not ScrollViewer)
+                .Where(e => e.Focusable && e.IsEffectivelyEnabled && e.IsEffectivelyVisible && e is not ScrollViewer && InView((Visual)e, page))
                 .OrderBy(e => System.Math.Round(e.TranslatePoint(default, page)?.Y ?? 0)).ThenBy(e => e.TranslatePoint(default, page)?.X ?? 0)
                 .FirstOrDefault();
+
+        // Whether some of a control shows through every scrolling area around it inside the page; a row scrolled away is not the page's first control - see EmuSen_Settings_Reference.md §4.48.10.
+        private static bool InView(Visual e, Control page)
+        {
+            for (ScrollViewer? area = e.FindAncestorOfType<ScrollViewer>(); area is not null && IsWithin(area, page); area = area.FindAncestorOfType<ScrollViewer>())
+                if (e.TranslatePoint(default, area) is not { } at || !new Rect(at, e.Bounds.Size).Intersects(new Rect(area.Bounds.Size))) return false;
+            return true;
+        }
 
         private static void Key(InputElement target, Key key, KeyModifiers modifiers = KeyModifiers.None)
         {

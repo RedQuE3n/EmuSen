@@ -2076,7 +2076,7 @@ model that delay.
   sliders were rebuilt at once whichever row the last press selected, and the count happened to match; with the
   settle, the audit's end state on the Game Boy tab showed a preset's second row that the walk had never seen. The walk
   now returns to the state it began in before counting, which is what "reachable from where the focus is" means.
-- **Observed, not changed.** `PadWindowRouter.FirstIn`, which puts the focus on a page's top control when the tab
+- *(Changed since: §4.48.10.)* **Observed, not changed.** `PadWindowRouter.FirstIn`, which puts the focus on a page's top control when the tab
   changes, chose a row of the parameter list scrolled above the view (a Reset 47 points above the window's top), since
   a row clipped by its scroll viewer is still "visible". The old `StackPanel` list had the same exposure. A `LostFocus`
   handler on the window (with `handledEventsToo`) saw nothing when that tab change moved the focus off a button on the
@@ -2133,16 +2133,165 @@ LunaP's own six mutants are in `LunaP.md` §97.5.
 
 **What is not done.**
 
-- **The parameters cannot be searched**, which a list of 944 still wants (§4.48.7).
-- **A leading-edge settle** (above) was not built; a single pad step onto a small preset is about 100 ms slower.
-- **The parameter cache is not bounded.** It holds every preset read in the window's life, now including prefetches;
+- **The parameters cannot be searched**, which a list of 944 still wants (§4.48.7). *(Retired: §4.48.10.)*
+- **A leading-edge settle** (above) was not built; a single pad step onto a small preset is about 100 ms slower. *(Retired: §4.48.10.)*
+- *(Retired: §4.48.10, eight entries.)* **The parameter cache is not bounded.** It holds every preset read in the window's life, now including prefetches;
   a walk that stops on many rows holds each one's parameters until the window closes or the pack is downloaded.
 - **Prefetched reads may go unused**: a player who moves two rows, or elsewhere, has paid for up to two reads on a
   worker thread for nothing. They are bounded at two at a time and one pair per stop.
-- **The settle cases run in real time.** The fast-walk case presses six rows with no pause between; a machine that
+- *(Retired: §4.48.10, a clock the tests own.)* **The settle cases run in real time.** The fast-walk case presses six rows with no pause between; a machine that
   stalled for more than 120 ms between two presses would let a settle fire mid-walk and fail it.
 - **Proved headlessly only**, as everything in §4.48: the numbers are the headless renderer's, on the desktop; a real
   window adds the compositor's frame to every figure, and the handheld has not been measured.
+
+#### 4.48.10 A step after a pause reads at once, the parameters can be searched, and the cache is bounded (2026-09-24)
+
+§4.48.9 left five things undone, and the player asked for them in turn: the ~100 ms a single pad step onto a small
+preset had lost to the settle, the focus a tab change put on a row out of view, a search of the parameters, a bound on
+the parameter cache, and settle tests that depended on the speed of the machine.
+
+**1. A leading edge on the settle.** A key move made after the selection has held still for the settle (120 ms) reads
+and builds at once; only the moves that follow it inside the window wait, and the last of those reads when the
+selection stops. So a single step costs what a click does, and a held walk still reads nothing between its first row
+and its last. The price is one read and build of a walk's first row that the walk then leaves; a real held pad pays
+it anyway, since `PadNavigator` waits 400 ms before it repeats (read from its code, not measured). A preset whose
+parameters are already in the cache is now built in the same step as the move rather than a dispatcher turn later.
+
+*Predictions, made before measuring:* a pad step from a row the player stopped on (so its neighbour was read ahead),
+**15–40 ms** (from 137–163); two steps without stopping, unchanged, **+0 to +20 ms**, the first step's build now done
+at once; the held walk and its stop, unchanged at 80.5 ms a row and about 160 ms; a click and a selection set by
+code, unchanged.
+
+*Measured:* `ShaderBrowseBenchTests`, the build of §4.48.9 (dc321fc5, "before") against this one ("after"),
+interleaved three times, medians in ms, runs in `~/.cache/emusen/probe/shader-browse/runs/`:
+
+| Case | `crt-lottes` | `crt-royale` | `crt-guest-advanced` | `MBZ__0__SMOOTH-ADV` |
+|---|---|---|---|---|
+| pad, one row from a row stopped on | 161 → **28** | 148 → **25** | 141 → **15** | 150 → **18** |
+| pad, two rows without stopping | 151 → **155** | 199 → **156** | 145 → **138** | 182 → **149** |
+| click on the row | 75 → **83** | 86 → **88** | 27 → **30** | 89 → **91** |
+| selection set by code | 71 → **82** | 89 → **95** | 15 → **30** | 67 → **65** |
+| held pad over 40 Mega Bezel rows, per row | 80.5 → **80.6** | | | |
+| from the last press of that walk to a usable row | 163 → **160** | | | |
+
+The single step landed inside its prediction on every preset, and against the build before any of this work (2b9664e:
+32, 80, 155 and 1,033 ms, §4.48.9) it is now as fast or faster on all four. Two steps without stopping came in
+**under** the prediction for `crt-royale` and Mega Bezel (−43 and −33 ms): the first step, now built at once, reads the
+rows beside it ahead, and the second step's row is one of them, so the settle that follows ends on a read already
+done. That effect was not predicted. **Not explained:** a click and a selection set by code on `crt-lottes` measured
+about 10 ms slower (71 → 82, 75 → 83), in both runs made after the parameter search was added and not in the run made
+before it (83 → 70, 84 → 76, `runs-leading-first/`); `crt-guest-advanced`'s selection moved 15 → 30 but its before
+column ranged 15–28 across runs. Showing the search box without hiding it between presets (below) did not change it.
+
+**2. A tab change never starts on a row out of view.** Changing tab puts the focus on the page's top control
+(`PadWindowRouter.FirstIn`, §4.45.3). A row of the parameter list scrolled above the view is still "visible" to
+Avalonia, and with the list scrolled it was the topmost control of all, so the pad landed on a Reset some rows up and
+the list scrolled back to show it (recorded as observed in §4.48.9). `FirstIn` now passes over a control that some
+scrolling area around it, inside the page, does not show. Scrolling the chosen control into view instead was the
+other option offered; choosing the first control in view is what "the page's top control" already meant for a page
+that does not scroll, and it leaves the list where the player left it.
+`A_tab_change_never_puts_the_focus_on_a_row_scrolled_out_of_view` walks thirty rows down a 944-row list on the
+sheet, changes tab twice, and requires the focus outside the list and the list's offset unchanged; written before
+LunaP's §97.7, it failed without the rule with the focus on "Reset Parameter 0017". **It no longer tells the two
+apart**: the row above the view it had caught was the container LunaP kept for a focus long gone, and once §97.7 let
+that go, the rows the list builds above its view (half a view, §97.2) lie below the page's top controls. The rule is
+proved instead by `A_tab_change_back_to_a_scrolled_page_starts_at_a_control_in_view`, on the N64 Graphics tab,
+whose page scrolls: reached to its last control (the page at 651 points), left for NES and come back to, the focus
+lands on `N64.RenderScale` and the page stays at 651; without the rule the focus went to the page's **Shaders...**
+button and the page scrolled back to 66. So the defect was the router's all along, and wider than the Shaders window:
+every scrolling settings page was put back near its top when its tab was left and taken again, which is also a change
+of behaviour a player may notice. The first-control rule for a sheet opening (`FocusFirst`) was not changed.
+
+**3. Searching a shader's parameters.** A search box above the list ("Search parameters", `{console}.ParameterSearch`)
+narrows the rows to those whose description or slang id holds every word typed, in any case; a heading that matches
+keeps every row under it, and a heading over a matching row stays above it. The narrowing is LunaP's
+(`SliderList.Search`, `LunaP.md` §97.8), with the id given as each row's keywords. The note reads, for example, "1 of
+944 parameters match “0917”" while a search is set. The search is kept as the shader changes, so a word looked for in one
+preset is looked for in the next; Reset All still resets every parameter, matched or not. The box is shown while the
+shader shown has parameters, and is reached by the pad: on the desktop (a new audit of the window with the 944-row
+preset shown) and on the 1280×800 sheet, where it is typed with the on-screen keyboard.
+
+**4. The parameter cache keeps eight.** It was every preset read in the window's life. It is now `RecentCache`, the
+eight used most recently (`ShaderSettingsWindow.CacheLimit`): a read or a move onto a preset makes it the most recent,
+and the least recent goes when a ninth arrives. Reads ahead take places like any other; one dropped before anyone
+moved onto it is counted (`EvictedUnused`), so what the prefetch wastes can be read off. Eight is a guess at "the last
+few stops and their neighbours", not a measurement: a Mega Bezel preset's parameters are a few hundred kilobytes, and
+reading one again costs 40–190 ms.
+
+**5. The settle is timed by a clock the tests own.** `ShaderSettingsWindow.Time` is a `TimeProvider`: the settle's
+timer and the leading edge's measure of stillness both come from it. WiseMan's `ManualClock` moves only when a test
+advances it, and fires the timers it made as their time comes, so the settle cases press, advance 119 ms, check that
+nothing was read, advance 1 ms, and check that it was. No machine is fast or slow enough to change them. The reads
+themselves are still real work on real threads; the cases wait for those, not for time.
+
+**Found on the way.**
+
+- **`PadAudit` counted a row built out of view.** LunaP's fix for the focused row (§97.3) kept that row's container
+  after the focus had gone, so a row two hundred rows down stayed built; the audit counted it as shown and could not
+  reach it (`Parameter 0192`). Fixed in LunaP (`LunaP.md` §97.7), and the audit no longer counts a row a virtualising
+  panel keeps built outside its view.
+- **Two shaders' rows at one index are different controls.** The audit knew a control in an item's container by list,
+  index and path, so the "Glow strength" slider of a neighbouring preset and "Parameter 0001" were one key, and the
+  walk never explored the second. The key now includes the control's accessible name.
+- **A path that will not replay hid a control.** The walk records each control by the first path that reaches it; one
+  whose shortest path depended on a scroll offset was never explored, and the pad-menu case could not find "Mask dark"
+  once the search box stood between the buttons and the rows. A control first found by a path that would not replay
+  is now explored again from the next path that reaches it.
+- **The audit now stops once it has found every control shown**, instead of walking to its limit of 400 paths. On the
+  944-row sheet the full walk took 7 min 23 s, since each path is replayed from the start; it now takes seconds.
+- **A focus left on a hidden control.** The desktop audit of the 944-row preset threw from Avalonia's directional
+  search ("FocusedElementBounds needs to be set"): a replay had left the focus on the search box after a shader with
+  nothing to adjust hid it. The router now treats a focus that is not effectively visible as no focus and starts again
+  at the first control. A direct reproduction was tried and failed: hiding the focused box in a test made Avalonia
+  clear the focus at once, so how the replay left it there was not found; the audit case is the one that fails without
+  the rule.
+- **A pack without its stamp file lays the list out unbounded.** The browse tests' pack had no stamp, so the window took
+  it for "not downloaded" and gave the shader list an `Auto` row (§4.48.1's layout without a pack), which grew past the
+  window: a click on a row near the bottom hit nothing. The tests now write the stamp. A real pack always has one;
+  presets present without it are not a state the download leaves, and the layout was not changed.
+
+**Tests** (the blast radius, 84 with the Graphics window's, all passing): `ShaderBrowseTests` gains the leading-edge walk
+(`A_fast_walk_reads_its_first_step_and_where_it_stops_and_nothing_between`, on a `ManualClock`), the search
+(`The_parameters_are_narrowed_by_a_search_of_their_descriptions_and_ids`), the cache
+(`The_parameter_cache_keeps_the_most_recent_eight_reads_ahead_included`, and `RecentCache` alone) and the desktop audit
+with the long preset shown; `PadSettingsWindowTests` gains the two tab-change cases and the search typed on the sheet.
+
+**Pictures** (in `~/.cache/emusen/probe/shader-browse/png/`, looked at): `shaders-browse-944-search` on the desktop,
+`pad-shaders-944-search` and `pad-shaders-tab-return` on the sheet, with §4.48.9's set rendered again. The search box
+sits under the note, the width of the list; after a tab change the Category dropdown holds the focus and the
+parameter list is where it was left.
+
+**Mutants** (each alone, against the cases in its blast radius, then restored):
+
+| Mutant | Result |
+|---|---|
+| no leading edge | caught: the fast-walk case and the prefetch case |
+| the settle timed by the machine's clock, not `Time` | caught: the fast-walk case |
+| the cache unbounded | caught: the cache case |
+| reads ahead counted as used | caught: the cache case (`EvictedUnused`) |
+| the search box narrows nothing | caught: the search case and the sheet search case |
+| ids not searched | caught: the search case |
+| a tab change may start on a row out of view | **survived at first**: the Shaders case no longer separates them (above); caught by the Graphics case written for it |
+| a focus on a hidden control is moved from | caught: the long-preset desktop audit and the pad-menu case |
+| the audit gives up on a path that would not replay | caught: the pad-menu case |
+| the audit counts rows built out of view | caught: the long-preset sheet case |
+| **the audit keys rebuilt items without their names** | **survived**: the collision it prevents was seen (a neighbouring preset's "Glow strength" and "Parameter 0001" under one key, in a failed walk's dump), but the walk that showed it was cured by building cached parameters in the same step; no case today depends on the name. It is kept, since nothing stops two shaders' rows sharing an index |
+
+LunaP's five new mutants are in `LunaP.md` §97.8.
+
+**For the handheld.** `~/.cache/emusen/probe/shader-browse/handheld-bench.sh` builds two commits beside a checkout
+(git worktrees, removed afterwards), runs the bench from each interleaved, and prints the medians:
+`bash handheld-bench.sh <EmuSen checkout> <slang pack folder> [rounds] [before] [after]`. It needs the .NET 10 SDK,
+python3, and LunaP beside the checkout at 9e8d201 or later. It was run here once, before only (the sibling LunaP
+checkout lacked 9e8d201, which the after build needs, and the script stopped as it should).
+
+**What is not done.**
+
+- The ~10 ms on `crt-lottes`' click, above, is measured and not explained.
+- Eight entries is a chosen number; the cache's memory was not measured.
+- `FocusFirst`, the rule for a sheet's first control, still counts a control out of view.
+- How the audit's replay left the focus on a hidden control is not known.
+- The handheld numbers are the coordinator's to take.
 
 ### 4.49 Rewind as a reel of pictures (2026-09-24)
 

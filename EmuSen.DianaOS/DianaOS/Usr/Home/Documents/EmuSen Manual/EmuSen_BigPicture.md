@@ -1,6 +1,6 @@
 # EmuSen_BigPicture — a plan for a big-picture mode in Mistress that renders ES-DE themes
 
-*Written 2026-09-24. Stage (a), the theme loader, was built the same day; its record is §12. Nothing else is built.* The user asked for a big-picture mode in Mistress like EmulationStation's,
+*Written 2026-09-24. Stage (a), the theme loader, was built the same day; its record is §12. Stage (b), the two views drawn statically with LunaP controls, followed on 2026-09-24 and 25; its record is §13. Nothing else is built.* The user asked for a big-picture mode in Mistress like EmulationStation's,
 starting with the theme they like, Art Book Next. They made two choices. First, Mistress reads ES-DE themes, so that
 Art Book Next and other ES-DE themes load as their authors made them. A look-alike built from Mistress's own controls
 was not wanted. Second, game media comes from ScreenScraper. This page plans that work. It inventories the theme
@@ -414,6 +414,15 @@ reason `EmuSen_Mistress_LibraryPlan.md` §2 gives. Game Boy and Game Boy Color s
 shelves (§4.46 of the settings reference), so the mapping is per shelf.
 
 ### 4.2 Three layers, and why the view is one drawn control rather than a tree of controls
+
+> **Retired 2026-09-24, before any of it was built.** The single Skia-drawn control argued below was superseded by the
+> user's decision of §10.1: "make sure we are drawing this with LunaP and if something is missing from LunaP, add it".
+> The argument is kept because its premises were not wrong, only outweighed. It judged the view by what one frontend
+> needed, and a single drawn control is the cheaper shape for one frontend. The user judged it by what the toolkit
+> should be able to do: every part a theme draws (an image fitted and tinted, text in a font from a file, an SVG, a
+> list, a carousel, a rating) is a thing another LunaP consumer can also want, and a drawn control in Mistress would
+> have kept all of it out of reach. Whether the three reasons below held up once the controls were written, and the
+> cost of a tree against one draw pass (P19), are recorded in §13, not argued here.
 
 1. **The loader** reads `capabilities.xml` and then, per system, the theme's files, applying §2.2's order. Its output
    is a `ResolvedView` for each system and view: a list of elements, each a type, a name and a dictionary of typed
@@ -980,10 +989,10 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 
 | # | Prediction | Retired when |
 |---|---|---|
-| P1 | Text boxes match ES-DE's height to within 2 px at 1280×800 | Stage b |
-| P2 | Our SVG renderer and `Svg.Skia` agree to an IoU of at least 0.98 on §3.5's 36 files | Stage b |
-| P3 | Our SVG renderer and LunaSVG (from ES-DE captures) agree to at least 0.97 | Stage b |
-| P4 | A carousel step settles in 150–400 ms, positions equal to ES-DE's to 1 px | Stage c |
+| P1 | Text boxes match ES-DE's height to within 2 px at 1280×800 | Stage b: held (§13.10) |
+| P2 | Our SVG renderer and `Svg.Skia` agree to an IoU of at least 0.98 on §3.5's 36 files | Stage b: held (§13.7) |
+| P3 | Our SVG renderer and LunaSVG (from ES-DE captures) agree to at least 0.97 | Stage b: failed (§13.8) |
+| P4 | A carousel step settles in 150–400 ms, positions equal to ES-DE's to 1 px | Stage c; settled positions held in stage b (§13.8) |
 | P5 | One `video-normalized` clip decodes in under 5% of a Legion Go S core | Stage g |
 | P6 | The theme loads for nine systems in under 150 ms (desktop) and 400 ms (Legion Go S) | Stage b |
 | P7 | A steady frame costs under 3 ms (desktop) and 8 ms (Legion Go S, 1280×800), and under 12 ms at 1920×1200 | Stage b, handheld in e |
@@ -991,8 +1000,9 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 | P9 | Hash lookup identifies 75–95% of 40 random files; headerless hashes add at most 5 points | Stage d |
 | P10 | A new account scrapes the whole library, without videos, over two to three sessions in two days | Stage d, first full run |
 | P11 | Art Book Next's archive is 205–230 MB | Stage f |
-| P12 | With no videos scraped, the video element's render is identical to ES-DE's (§4.7) | Stage b |
+| P12 | With no videos scraped, the video element's render is identical to ES-DE's (§4.7) | Stage b: failed as identical (§13.8) |
 | P13–P18 | Stage (a)'s predictions: coverage, errors, skipped includes, load time, triggers, the default variant (§12.1) | Stage a (§12.5) |
+| P19–P23 | Stage (b)'s predictions: frame cost, SVG against `Svg.Skia` by file, properties mapped, geometry from the theme, the font size (§13.1) | Stage b (§13.10) |
 
 ---
 
@@ -1354,3 +1364,302 @@ synthetic tests carry the grammar.
   Next does not use.
 - **`gameselector` links** (an element's `gameselector` property naming a gameselector element) are kept as strings and
   not checked against the view's gameselectors.
+
+---
+
+## 13. Stage (b): the two views drawn statically, with LunaP controls
+
+*Opened 2026-09-24.* Stage (b) draws a `ResolvedView` (§12) at rest: the system view with its carousel, and a gamelist
+view with its list, media and metadata. Under §10.1 every visible part is a LunaP control, and what LunaP lacked was
+added to LunaP (its `docs/LunaP.md` §98 onwards). The mapping from ES-DE properties to control properties lives in
+Mistress, in `EmuSen.Mistress/BigPicture/Scene/`, and is a pure function of the view and the data. Nothing moves;
+time is stage (c).
+
+ES-DE was not available when the stage opened. It became available part way through (the user downloaded the
+AppImage), and is run only from a copy under `~/.cache/emusen/bigpicture/esde/`, with its own `--home` there.
+
+### 13.1 Predictions, written before the controls were built
+
+The inventory of §3.3 gives the 172 (element, property) pairs Art Book Next sets. By element: carousel 17, textlist
+16, grid 24, image 13, video 14, text 20, datetime 11, rating 8, badges 12, helpsystem 14, clock 10, systemstatus 12,
+sound 1.
+
+- **P19, frame cost.** With every image decoded and cached, one steady headless render of either view (layout and
+  Skia's CPU raster, as `Avalonia.Headless` does it, not the GPU path P7 prices) costs **under 8 ms at 1280×800** and
+  under 2.25 times that at 1920×1200. The first build of a view, decoding, SVG rasterising and shaping included, costs
+  **under 250 ms**.
+- **P20, SVG against `Svg.Skia`.** Of Art Book Next's 241 SVG files, our renderer refuses **exactly the six** that hold
+  `text`, `filter` or `script` (`coco`, `emulators`, `epic`, `symbian`, `vpinball`, `windows3x`), and draws the other
+  235 at an intersection-over-union of coverage of **at least 0.98 each at 256 px**, the median above 0.995. This is
+  P2 with its population named: P2 was written for §3.5's 36 files, which are a subset.
+- **P21, properties mapped.** Without the grid (stage f, §7), **137 of the 172** pairs change what is drawn. The 35
+  left are the grid's 24; the carousel's `itemTransitions` and `fastScrolling`, the text's `containerStartDelay` and
+  `containerVerticalSnap`, and the video's `delay`, `iterationCount`, `onIterationsDone` and `pillarboxes`, all of
+  which are about time or playback; the sound's `path`; and the badges' `controllerSize` and `folderLinkSize`, whose
+  data (the controller badge and the folder link) §3.8 defers. If the grid is built, 161.
+- **P22, geometry from the theme.** Every `pos`, `size` and `maxSize` in `aspect-ratio-16-10.xml` that carries a pixel
+  comment of its 768×480 design gives the box the scene lays out, to within 1 px at 1280×800 and 1920×1200, for the
+  elements drawn in the views tested.
+- **P23, the font size.** `fontSize` × screen height is the em size handed to the rasteriser, not the height of a
+  rasterised 'S'. §4.4 left this open. It decides every text box's height, and it can only be told from ES-DE.
+
+P1 (text heights against ES-DE within 2 px), P3 (the SVG renderer against LunaSVG, 0.97) and P12 (the video element
+identical to ES-DE's without videos) are this stage's too, and need ES-DE.
+
+### 13.2 What was built
+
+**In LunaP** (branch `bigpicture-controls`; its `docs/LunaP.md` §98–§101.8). None of these controls knows about ES-DE:
+- `NormalizedCanvas`, which places children by fractions of itself;
+- `FittedImage`, which fills, contains, covers or tiles an image, tints it by a colour or a gradient, and sets its
+  saturation, corner radius and sampling;
+- `FontText`, with `FontFiles`, which reads a typeface from a file once per path and never registers it with
+  Avalonia's font manager;
+- `SvgDocument` and `SvgPicture`, which draw the SVG subset of §4.5 and refuse a whole file that needs more;
+- `TextRowList` and `ImageCarousel`;
+- `StarRating`, `BadgeStrip`, `HintBar`, `ClockLabel` and `DeviceStatusBar`.
+
+LunaP still references Avalonia and nothing else. The image effects are applied on the CPU once per picture, size
+and effect, because a Skia lease would have broken that rule (LunaP §98.2).
+
+**In Mistress**, in `BigPicture/Scene/`:
+- `SceneBuilder.Build(view, data)` is a pure function of a `ResolvedView` and a `SceneData`. `SceneData` holds the
+  systems with their resolved themes, the games, the selection, a media source, the time and the device's status.
+- One file per group of elements holds the mapping.
+- `SceneMapping` lists every pair the scene reads.
+- `EsdeMediaFolder` reads an ES-DE `downloaded_media` tree in place.
+- `HelpPrompts` holds Mistress's own help words and glyphs (§3.6, Q9 still open).
+
+**In WiseMan:**
+- `SyntheticLibrary` writes the shared inputs: invented games with invented metadata, flat labelled PNGs of known
+  sizes, empty ROM files and ES-DE `gamelist.xml` files. No real art is used.
+- `SceneAssets` holds the test pictures, an icon and a font.
+- The tools render PNGs and time frames (`SceneRenderTool`, `SceneFrameBench`), write the ES-DE inputs
+  (`EsdeInputsTool`), and render Mistress in the state an ES-DE capture was taken in (`EsdeCompareTool`).
+
+### 13.3 What is mapped: P21
+
+- **Of the 172 pairs Art Book Next sets, the scene reads 136.** The prediction was 137.
+- **The one it lost after the prediction is `video.interpolation`.** Against ES-DE, the static image a video element
+  shows in the video's place is filtered linearly even though the theme sets `nearest` (§13.8). The property is taken
+  to govern the video alone, which §10.1 defers.
+- **The other 35 are those §13.1 named:**
+  - the grid's 24 (stage f);
+  - the carousel's `itemTransitions` and `fastScrolling`, and the text's `containerStartDelay` and
+    `containerVerticalSnap`, which are about time (stage c);
+  - the video's `delay`, `iterationCount`, `onIterationsDone` and `pillarboxes`, which are about playback (stage g);
+  - the sound's `path` (stage e);
+  - the badges' `controllerSize` and `folderLinkSize`, whose data §3.8 defers.
+- **Beyond Art Book Next the scene reads 98 more pairs,** the ones that serve the same elements.
+- **The claim is checked, not asserted.** `SceneMappingTests` builds a synthetic theme for every pair `SceneMapping`
+  lists, renders it with two values and requires the pixels to differ: 234 cases. A second test requires the case list
+  and the mapping's list to be the same set.
+
+### 13.4 Frame cost: P19, and what the harness costs
+
+`SceneFrameBench` times 30 headless frames after 3 warm-up frames, and reports the median. For every configuration it
+also counts the pixels that differ from a full HighQuality redraw.
+
+| 1280×800 / 1920×1200 | System view | Gamelist view |
+|---|---|---|
+| Harness: empty window, full redraw | 5.9 / 14.7 ms | the same |
+| Harness: empty window, nothing invalidated (readback only) | 1.1 / 3.0 ms | the same |
+| Full redraw, every visual invalidated | **44.1 / 87.4 ms** | **15.2 / 26.2 ms** |
+| Unchanged view, nothing invalidated | **1.1 / 2.7 ms**, pixels identical | **1.2 / 3.0 ms**, identical |
+| Only the clock invalidated (a minute's tick) | 5.8 / 14.4 ms | — |
+| First build and first frame | 513 / 194 ms | 58 / 65 ms |
+
+- **P19 fails for a full redraw and holds at rest.** At rest the controls cost nothing: the compositor does not
+  redraw an unchanged view, and what remains is the harness's readback. A full redraw of the system view costs 38 ms
+  of controls at 1280×800 (44.1 − 5.9), against a prediction of under 8 ms. The first build costs 513 ms against a
+  prediction of under 250. That run is also the process's first decode, first SVG rasterisation and first JIT; the
+  second size takes 194 ms.
+- **Where the time goes.** It is Skia's mipmapped sampling of the carousel's downscaled artwork, measured three ways:
+  - MediumQuality gives pixels and times identical to HighQuality when shrinking, so HighQuality already samples
+    mipmapped there;
+  - LowQuality takes 10.0 ms;
+  - invalidating only the carousel costs as much as invalidating everything.
+- **The user chose full quality (2026-09-25)**, so only levers whose pixels equal a HighQuality redraw were eligible.
+  None helped:
+
+  | Lever | Result |
+  |---|---|
+  | An immutable bitmap instead of a `WriteableBitmap` | 43.35 ms against 43.60, so Skia is not rebuilding mips per frame |
+  | Unfocused opacity carried in the tint instead of a layer | no measurable change |
+  | `BitmapCache` on the carousel | no saving; pixels changed by up to 131 |
+  | Not redrawing an unchanged view | already what the compositor does |
+
+  One rejected change is recorded so it is not proposed again. Drawing bitmaps prepared at display size 1:1 on whole
+  pixels took the system view to ~10 ms, but it resamples once at a different quality. The user rejected it.
+- **The gamelist rose from 7.8 to 15.2 ms at 1280×800 during the stage.** That is the cost of drawing the video's
+  static image linearly, as ES-DE does (§13.8), where the theme's `nearest` had been cheap.
+- **What was not measured.** Headless Skia renders on the CPU; the application renders on the GPU, where this sampling
+  is cheap. The GPU frame, and anything on the Legion Go S, is P7's and stage (e)'s.
+
+### 13.5 Tests
+
+| Class | Tests | What it holds |
+|---|---|---|
+| `SceneMappingTests` | 2 (234 cases in one) | every mapped pair changes the pixels; the case list equals the mapping's list |
+| `SceneSemanticsTests` | 15 | what a property maps to: the zIndex order; corner radii and horizontal paddings by the width, font sizes and vertical paddings by the height; the outward background of §13.8; `size` over `maxSize` and a video's image sizes over its own; a container's missing ellipsis; strftime; badge slots; status entries; the name suffix for collections only |
+| `SceneReferenceTests` | 2 | P21 and P22 on Art Book Next, skipping visibly without it |
+| `SvgOracleTests` | 1 | P20 on Art Book Next |
+
+**A defect the semantics tests found.** `SceneBuilder.Place` replaced a control's size with the element's own
+`size` whenever the control's size equalled (0, 0). A fitted image sets (0, 0) on purpose, so a video with both
+`size` and `imageMaxSize` was drawn at its `size`. `Place` now asks whether the size was set. Art Book Next's
+`game-art` sets no `size`, which is why its reference tests passed.
+
+### 13.6 Geometry from the theme: P22
+
+Art Book Next's `aspect-ratio-16-10.xml` writes 38 of its values beside a comment giving the value in pixels of a
+768×480 design. `SceneReferenceTests` reads them in place and lays out every variant's two views at 1280×800 and
+1920×1200. It then checks the box of every element that uses a commented value: 644 checks.
+
+- **P22 holds. The worst error is 0.6 px.**
+- **One comment disagrees with its own fraction.** The grid variants' logo writes `0.05` beside "22", and 0.05 × 480
+  is 24. The engine lays out by the fraction, so the check uses the fraction there and reports the disagreement.
+- **The 0.6 px** is `game-name`'s `0.062` against its comment's 30/480 = 0.0625.
+- **Two corrections came out of this check.**
+  - The theme's `0.41666667`, read as a float, is 800.00064 px of 1920, and Avalonia's layout rounding took the
+    ceiling of 801. LunaP now keeps computed positions and sizes to hundredths (its §101.7).
+  - The scene then turned layout rounding off altogether, because ES-DE places at fractional pixels (§13.8). That took
+    the worst error from 1.0 to 0.6 px.
+
+### 13.7 SVG against `Svg.Skia`: P2 and P20
+
+- **The setup.** `Svg.Skia` 5.1.1 is the oracle. It is MS-PL through `Svg.Custom`, so it is referenced by WiseMan
+  only, which is never distributed, and never by LunaP or Mistress (§4.5).
+- **The metric.** Both renderers draw every SVG of Art Book Next with the same 256-pixel `width` and `height` written
+  into the markup. The score is the IoU of coverage, weighting each pixel by its alpha.
+- **Refused: 7 of 241.** The prediction was 6. It missed `lowresnx.svg`, which puts a `<g>` inside a `clipPath`, where
+  SVG 1.1 allows only shapes.
+- **Drawn: 234,** at IoU **0.9959 at worst, median 1.0000,** none below 0.98. The largest mean colour difference is
+  1.02 of 255. P20 holds for the drawn files, and P2 holds.
+- **A negative result on method.** The first comparison left each renderer to infer its own viewport, and reported
+  IoUs of 0 on four files and under 0.98 on 24. Every one of those was the harness (LunaP §99.5).
+
+### 13.8 Against ES-DE 3.4.1: P1, P3, P4, P12 and P23
+
+**The setup.**
+- ES-DE 3.4.1 (r51) ran from a copy of the user's AppImage, with checksum 3c61a44d…3581, under
+  `~/.cache/emusen/bigpicture/esde/`.
+- Every run used `--home` in that folder, at `--resolution 1280 800` and `1920 1200` with `--fullscreen-padding off`.
+- Settings were written into the scratch home's `es_settings.xml`:
+
+  | Setting | Value |
+  |---|---|
+  | ROM and media directories | the synthetic library under `~/.cache/emusen/bigpicture/` |
+  | Theme | Art Book Next, linked into the scratch themes folder |
+  | Variant | `gamelist-list-metadata-cover` |
+  | Colour scheme | `dark-screenshots` |
+  | Aspect ratio | 16:10 |
+  | Startup system | `snes` |
+  | Startup view | system or gamelist |
+  | `DisplayClock` | true |
+
+- Runs lasted 5–14 s. Each window was captured with `spectacle`, and ES-DE was then closed by PID.
+- Mistress rendered the same state: ES-DE's system order, its game order, the first game selected, the captured
+  clock's time, and Bluetooth only.
+- The client area was located in each capture by the crop origin that best aligned the logo: (82, 101) at 1280×800
+  and (81, 100) at 1920×1200. Captures and scripts stay under `~/.cache/emusen/bigpicture/`, and no test depends on
+  them.
+
+**What ES-DE showed that the scene then followed:**
+- **The carousel fills its row with repeats.** With five systems in a row that holds about seven, the item after the
+  last is the first again (LunaP §101.7).
+- **The help bar's, clock's and status's backgrounds grow outward from the positioned box.** The clock's box started
+  at `pos` − padding: 26.6 across (38.3 − 11.7) and 25 down (38.3 − 13.3). The status's right edge was at
+  `pos` + padding.
+- **Favourites come first in the list, each marked with a star.** Names sit centred in a 44 px band at the top of each
+  58.33 px pitch, and the selected background is as wide as the name plus the margins (LunaP §101.8). The documented
+  default for that band is 1.5 × `fontSize` = 45 px, 1 px more than measured.
+- **The video element's static image is filtered linearly,** although the theme sets `interpolation nearest`: the
+  cover's white border is blended at both edges in ES-DE.
+- **ES-DE places at fractional pixels.** Turning off the scene's layout rounding took the cover's mean difference
+  from 1.75 to 1.51 levels.
+- **The clock is off by default,** by the setting `DisplayClock` false, whatever the theme sets. Mistress will need
+  that setting.
+
+**Measured after those changes:**
+
+| | 1280×800 | 1920×1200 |
+|---|---|---|
+| List: selected background, ES-DE / Mistress | x 47–278, y 210–251 / x 46–279, y 208–252 | — |
+| List: name ink | within 1 px across and down | — |
+| Metadata text ink (description, date, players, play time) | within 1–2 px | within 1–2 px |
+| Carousel: settled slice edges | within 0.5–1 px | within 0.5–1 px |
+| Cover (P12): mean difference; pixels differing by more than 8 | 1.51 levels; 4.2% | 4.32 levels; 4.6% |
+| Logo IoU (P3) | 0.922 | 0.944 |
+| Favourite badge IoU | 0.899 | 0.836 |
+| Rating stars IoU | 0.712 | 0.492 |
+| Metadata icons IoU (30 px thin strokes at 0x33 alpha) | 0.595–0.616 | 0.429–0.502 |
+| System view: pixels differing by more than 8 | 11.9% | 13.6% |
+
+**The predictions against these numbers:**
+- **P1 holds.** Every text measured agrees with ES-DE to within 2 px, and the list's names to within 1.
+- **P23 holds.** The names' ink heights agree when the font size is the em size handed to the rasteriser, so
+  `fontSize` × height is that em size, not the height of a rasterised 'S'.
+- **P4, its settled half, holds** to 1 px. The durations are stage (c).
+- **P12 does not hold as "identical".** The flat colour inside the cover is equal, and 95.8% of pixels are within 8
+  levels. The rest lie on the label's glyph edges and the border, where the two engines' filters differ.
+- **P3 fails.** The large logo reaches 0.92–0.94, and the thin 30-pixel icons 0.43–0.62. Their ink boxes agree to
+  1–2 px, and ES-DE draws each icon about 6% smaller inside the same 40-pixel box: 29 × 30 against 30 × 32.
+  Mistress's size follows the viewBox mapping exactly. ES-DE's cannot be explained without reading its source, which
+  is out of bounds, so the difference is recorded, not copied. With such thin, faint strokes a 1 px difference halves
+  the overlap, so this IoU measures placement as much as rasterisation. P3's threshold was the wrong instrument for
+  icons of this size.
+- **The system view's remaining difference is image softness.** ES-DE's pixel-art slices are visibly softer, as if
+  resampled twice. Mistress's are sharper in all four of Avalonia's sampling modes (within 0.4 points of each other).
+  The best alignment between the two images is a zero shift, so the geometry agrees. Matching the softness would mean
+  blurring deliberately, which the user's full-quality rule excludes.
+- **The help bar's words and icons are ES-DE's own** ("MENU, SELECT, SCREENSAVER, CHOOSE"), so they differ by design
+  (§3.6).
+
+### 13.9 Mutants
+
+The runners are `~/.cache/emusen/probe/bigpicture/mutate_lunap.py` and `mutate_scene.py`, outside the repositories.
+Each builds, runs its tests and restores the source, and the scene runner rebuilds clean at the end.
+
+- **LunaP: 34 mutants, all caught** (its §101.6 and §101.7). Two survived their first run, on weak tests (CSS
+  specificity, the rating's cut), and were caught once the tests were strengthened.
+- **The scene: 25 mutants, all caught.** A 26th, pixels kept to hundredths, was retired with the code it tested, which
+  §13.6's switch to fractional placement made dead.
+  - **13 survived the first run.** The differential test proves that each property has an effect, not the right one:
+    the drawing order; the axis of corner radius, font size and vertical padding; size against maxSize; a video's own
+    image sizes; the container's ellipsis; strftime's `%m`; which badges show; the battery entry; the outward padding;
+    the name suffix on regular systems.
+  - **All 13 were caught once `SceneSemanticsTests` existed,** and writing those tests found the defect of §13.5.
+  - **The reference tests caught one mutant alone, S1 (origin ignored).** As in stage (a), a real theme that renders is
+    weak evidence that the mapping is right.
+
+### 13.10 Predictions retired
+
+| # | Predicted | Measured | Verdict |
+|---|---|---|---|
+| P1 | text boxes within 2 px of ES-DE at 1280×800 | list names within 1 px; metadata texts within 1–2 px at both sizes | held |
+| P2 | IoU ≥ 0.98 against `Svg.Skia` on §3.5's files | 0.9959 or better on all 234 drawn | held |
+| P3 | IoU ≥ 0.97 against LunaSVG in ES-DE captures | logo 0.92–0.94; thin icons 0.43–0.62, ES-DE's ~6% smaller in the same box | failed; the instrument recorded as unfit for thin icons |
+| P4 | settled positions equal to ES-DE's to 1 px | slice edges within 0.5–1 px; durations untested | the settled half held |
+| P12 | the video element's render identical to ES-DE's | same colours and box; 4.2–4.6% of pixels differ on edges, and ES-DE filters linearly despite `nearest` | failed as "identical" |
+| P19 | steady frame under 8 ms headless at 1280×800; first build under 250 ms | at rest 1.1 ms (harness readback); full redraw 44 ms system, 15 ms gamelist; first build 513 ms | failed for a full redraw; held at rest |
+| P20 | exactly six refused; the rest at 0.98 or more | seven refused (`lowresnx`); the rest 0.9959 or more | half held |
+| P21 | 137 of 172 mapped | 136, after `video.interpolation` was dropped on ES-DE's evidence | held, less the one |
+| P22 | commented geometry within 1 px | 644 checks, worst 0.6 px; one comment disagrees with its fraction | held |
+| P23 | `fontSize` × height is the em size | name ink agrees with ES-DE to 1 px on that reading | held |
+
+### 13.11 Not done in stage (b)
+
+- **No grid** (stage f), so none of its 24 pairs is mapped.
+- **Nothing moves** (stage c). That covers the carousel's slide, the list's scroll, the text containers' scrolling and
+  the delays, and P4's durations.
+- **The ES-DE comparison ran on one variant and one colour scheme**, at two sizes. The other 19 variants and 30
+  schemes were laid out (§13.6), not captured.
+- **The scene is not in Mistress's window.** Nothing shows it outside the tests; that is stage (e).
+- **Settings the scene will need** are not carried in `SceneData`: `DisplayClock`, favourites-first ordering (the host
+  orders the games for now) and ES-DE's hidden-metadata switch.
+- **P3's icons are not resolved.** Why ES-DE draws a 40-pixel icon 6% smaller is not known.
+- **P19 on the GPU and on the handheld** is not measured.
+- **The `indicators` value `ascii`** is drawn as the symbols, unverified.
+- **No capture of a collection, a folder, the grid or the other help scopes** was taken.
+- **§12.4's ten loader choices were not checked against ES-DE.** The default variant, for one, was set explicitly in
+  every run.

@@ -20,7 +20,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         {
             View = view;
             Data = data;
-            Canvas = new NormalizedCanvas { Width = data.Screen.Width, Height = data.Screen.Height };
+            Canvas = new NormalizedCanvas { Width = data.Screen.Width, Height = data.Screen.Height, UseLayoutRounding = false };
         }
 
         public ResolvedView View { get; }
@@ -47,6 +47,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             if (control is not null)
             {
                 Place(e, control, order);
+                control.UseLayoutRounding = false; // ES-DE places at fractional pixels (§13.8).
                 Canvas.Children.Add(control);
             }
 

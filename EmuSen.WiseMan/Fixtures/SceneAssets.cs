@@ -71,10 +71,12 @@ namespace EmuSen.WiseMan.Fixtures
             };
         }
 
-        public static RenderedFrame Render(SceneBuilder scene)
+        public static RenderedFrame Render(SceneBuilder scene, Action<Window>? adjust = null)
         {
             var window = new Window { Width = scene.W, Height = scene.H, Content = scene.Canvas, Background = Brushes.Black };
             window.Show();
+            Dispatcher.UIThread.RunJobs();
+            adjust?.Invoke(window);
             Dispatcher.UIThread.RunJobs();
             window.CaptureRenderedFrame()?.Dispose();
             foreach (Visual v in window.GetSelfAndVisualDescendants()) v.InvalidateVisual();

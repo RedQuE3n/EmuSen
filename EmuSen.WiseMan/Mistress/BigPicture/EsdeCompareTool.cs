@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Avalonia;
+using Avalonia.VisualTree;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.BigPicture.Scene;
 using EmuSen.Mistress.BigPicture.Theme;
@@ -18,13 +19,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         public EsdeCompareTool(ITestOutputHelper output) => _output = output;
 
-        // ES-DE's system order for the five systems, read from its capture: GB, GBC, SNES, N64, NES.
+        // ES-DE's system order read from its capture (GB, GBC, SNES, N64, NES), and its default game order, favourites first.
         public static readonly string[] EsdeOrder = ["gb", "gbc", "snes", "n64", "nes"];
 
         public static IReadOnlyList<SceneSystem> Systems(int w, int h, string variant)
         {
             IReadOnlyList<SceneSystem> loaded = SyntheticLibrary.Load(ArtBookNextFactAttribute.Folder, new ThemeChoices { ScreenWidth = w, ScreenHeight = h, Variant = variant, ColorScheme = "dark-screenshots" });
-            return EsdeOrder.Select(n => loaded.Single(s => s.System.Name == n)).ToList();
+            return EsdeOrder.Select(n => loaded.Single(s => s.System.Name == n))
+                .Select(s => s with { Games = s.Games.OrderByDescending(g => g.Favorite).ThenBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList() }).ToList();
         }
 
         public static SceneData Data(IReadOnlyList<SceneSystem> systems, int w, int h, DateTime now) =>
@@ -50,6 +52,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 {
                     SceneBuilder scene = SceneBuilder.Build(data.System.Theme.View(view), data);
                     SceneAssets.Render(scene).SavePng(Path.Combine(folder, $"mistress-{view}-{variant}-{w}x{h}.png"));
+                    foreach (var mode in new[] { Avalonia.Media.Imaging.BitmapInterpolationMode.LowQuality, Avalonia.Media.Imaging.BitmapInterpolationMode.MediumQuality, Avalonia.Media.Imaging.BitmapInterpolationMode.None })
+                    {
+                        SceneBuilder probe = SceneBuilder.Build(data.System.Theme.View(view), data);
+                        SceneAssets.Render(probe, window => { foreach (var i in window.GetVisualDescendants().OfType<FittedImage>()) i.Interpolation = mode; })
+                            .SavePng(Path.Combine(folder, $"probe-{mode}-{view}-{w}x{h}.png"));
+                    }
                     foreach (SceneEntry e in scene.Entries.Where(e => e.Control is not null))
                     {
                         scene.Canvas.Measure(new Size(w, h));

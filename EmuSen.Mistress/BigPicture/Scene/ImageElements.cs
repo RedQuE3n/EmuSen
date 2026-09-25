@@ -50,6 +50,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             NormalizedPair? Own(string name) => own ? (e.Explicit.GetValueOrDefault(name) as PairValue)?.Value : e.Pair(name);
             Size(b, image, e, Own("imageSize"), Own("imageMaxSize"), Own("imageCropSize"), e.Pair("imageCropPos"));
             Paint(b, image, e, "imageCornerRadius");
+            image.Interpolation = Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality; // ES-DE draws the static image linearly even with interpolation nearest (§13.8).
             return image;
         }
 

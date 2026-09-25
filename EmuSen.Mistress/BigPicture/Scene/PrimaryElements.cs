@@ -63,6 +63,10 @@ namespace EmuSen.Mistress.BigPicture.Scene
                 types.Select(t => b.Data.Media?.Find(system.System, g, t)).FirstOrDefault(p => p is not null) ?? fallback, g.Name)).ToList();
         }
 
+        // ES-DE marks favourites and folders before the name unless indicators is none; the marks are LunaP's own drawings (§3.6).
+        private static TextRowMarker Marker(ResolvedElement e, SceneGame g) =>
+            e.String("indicators") == "none" ? TextRowMarker.None : g.Folder ? TextRowMarker.Folder : g.Favorite ? TextRowMarker.Star : TextRowMarker.None;
+
         internal static Control? TextList(SceneBuilder b, ResolvedElement e)
         {
             SceneSystem system = b.Data.System;
@@ -70,7 +74,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             string suffixCase = e.String("letterCaseSystemNameSuffix") ?? "uppercase";
             IReadOnlyList<TextRow> rows = b.View.Name == "system"
                 ? b.Data.Systems.Select(s => new TextRow(s.System.FullName)).ToList()
-                : system.Games.Select(g => new TextRow(suffix ? $"{g.Name} [{SceneUnits.Cased(system.System.Name, suffixCase)}]" : g.Name, g.Folder)).ToList();
+                : system.Games.Select(g => new TextRow(suffix ? $"{g.Name} [{SceneUnits.Cased(system.System.Name, suffixCase)}]" : g.Name, g.Folder, Marker(e, g))).ToList();
             float fontSize = e.Float("fontSize") ?? 0.045f;
             Size margins = SceneUnits.ToSize(e.Pair("selectedBackgroundMargins"));
             return new TextRowList
@@ -86,6 +90,8 @@ namespace EmuSen.Mistress.BigPicture.Scene
                 SelectedSecondaryColor = e.Color("selectedSecondaryColor") is { } ss ? SceneUnits.ToColor(ss) : null,
                 SelectorColor = SceneUnits.ToColor(e.Color("selectorColor"), Color.FromRgb(0x33, 0x33, 0x33)),
                 SelectorHeight = SceneUnits.Px(e.Float("selectorHeight") ?? fontSize * 1.5f, b.H),
+                TextBandHeight = SceneUnits.Px(e.Float("selectorHeight") ?? fontSize * 1.5f, b.H),
+                SelectedBackgroundFitsText = true,
                 SelectorOffsetY = SceneUnits.Px(e.Float("selectorVerticalOffset") ?? 0, b.H),
                 SelectedBackgroundColor = SceneUnits.ToColor(e.Color("selectedBackgroundColor"), Colors.Transparent),
                 SelectedBackgroundMargins = new Thickness(SceneUnits.Px(margins.Width, b.W), 0, SceneUnits.Px(margins.Height, b.W), 0),

@@ -83,7 +83,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             C("video", "colorEnd", "FFFFFF", "0000FF") with { Context = "color=FFFFFF" },
             C("video", "gradientType", "horizontal", "vertical") with { Context = "color=FF0000;colorEnd=0000FF" },
             C("video", "saturation", "1", "0"),
-            C("video", "interpolation", "nearest", "linear"),
 
             C("text", "text", "One thing", "Another"),
             C("text", "metadata", "name", "developer") with { Remove = "text" },
@@ -162,6 +161,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             C("textlist", "horizontalMargin", "0", "0.1"),
             C("textlist", "letterCase", "none", "uppercase"),
             C("textlist", "lineSpacing", "1.5", "2.5"),
+            C("textlist", "indicators", "none", "symbols"),
             C("textlist", "systemNameSuffix", "false", "true") with { System = 5 },
             C("textlist", "letterCaseSystemNameSuffix", "uppercase", "lowercase") with { System = 5, Context = "systemNameSuffix=true" },
 

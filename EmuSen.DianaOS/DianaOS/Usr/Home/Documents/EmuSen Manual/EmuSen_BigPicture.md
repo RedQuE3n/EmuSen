@@ -415,6 +415,15 @@ shelves (§4.46 of the settings reference), so the mapping is per shelf.
 
 ### 4.2 Three layers, and why the view is one drawn control rather than a tree of controls
 
+> **Retired 2026-09-24, before any of it was built.** The single Skia-drawn control argued below was superseded by the
+> user's decision of §10.1: "make sure we are drawing this with LunaP and if something is missing from LunaP, add it".
+> The argument is kept because its premises were not wrong, only outweighed. It judged the view by what one frontend
+> needed, and a single drawn control is the cheaper shape for one frontend. The user judged it by what the toolkit
+> should be able to do: every part a theme draws (an image fitted and tinted, text in a font from a file, an SVG, a
+> list, a carousel, a rating) is a thing another LunaP consumer can also want, and a drawn control in Mistress would
+> have kept all of it out of reach. Whether the three reasons below held up once the controls were written, and the
+> cost of a tree against one draw pass (P19), are recorded in §13, not argued here.
+
 1. **The loader** reads `capabilities.xml` and then, per system, the theme's files, applying §2.2's order. Its output
    is a `ResolvedView` for each system and view: a list of elements, each a type, a name and a dictionary of typed
    property values with every variable substituted. The output is fixed once the player's selection is fixed.
@@ -1354,3 +1363,44 @@ synthetic tests carry the grammar.
   Next does not use.
 - **`gameselector` links** (an element's `gameselector` property naming a gameselector element) are kept as strings and
   not checked against the view's gameselectors.
+
+---
+
+## 13. Stage (b): the two views drawn statically, with LunaP controls
+
+*Opened 2026-09-24.* Stage (b) draws a `ResolvedView` (§12) at rest: the system view with its carousel, and a gamelist
+view with its list, media and metadata. Under §10.1 every visible part is a LunaP control, and what LunaP lacked was
+added to LunaP (its `docs/LunaP.md` §98 onwards). The mapping from ES-DE properties to control properties lives in
+Mistress, in `EmuSen.Mistress/BigPicture/Scene/`, and is a pure function of the view and the data. Nothing moves;
+time is stage (c).
+
+ES-DE was not available when the stage opened. It became available part way through (the user downloaded the
+AppImage), and is run only from a copy under `~/.cache/emusen/bigpicture/esde/`, with its own `--home` there.
+
+### 13.1 Predictions, written before the controls were built
+
+The inventory of §3.3 gives the 172 (element, property) pairs Art Book Next sets. By element: carousel 17, textlist
+16, grid 24, image 13, video 14, text 20, datetime 11, rating 8, badges 12, helpsystem 14, clock 10, systemstatus 12,
+sound 1.
+
+- **P19, frame cost.** With every image decoded and cached, one steady headless render of either view (layout and
+  Skia's CPU raster, as `Avalonia.Headless` does it, not the GPU path P7 prices) costs **under 8 ms at 1280×800** and
+  under 2.25 times that at 1920×1200. The first build of a view, decoding, SVG rasterising and shaping included, costs
+  **under 250 ms**.
+- **P20, SVG against `Svg.Skia`.** Of Art Book Next's 241 SVG files, our renderer refuses **exactly the six** that hold
+  `text`, `filter` or `script` (`coco`, `emulators`, `epic`, `symbian`, `vpinball`, `windows3x`), and draws the other
+  235 at an intersection-over-union of coverage of **at least 0.98 each at 256 px**, the median above 0.995. This is
+  P2 with its population named: P2 was written for §3.5's 36 files, which are a subset.
+- **P21, properties mapped.** Without the grid (stage f, §7), **137 of the 172** pairs change what is drawn. The 35
+  left are the grid's 24; the carousel's `itemTransitions` and `fastScrolling`, the text's `containerStartDelay` and
+  `containerVerticalSnap`, and the video's `delay`, `iterationCount`, `onIterationsDone` and `pillarboxes`, all of
+  which are about time or playback; the sound's `path`; and the badges' `controllerSize` and `folderLinkSize`, whose
+  data (the controller badge and the folder link) §3.8 defers. If the grid is built, 161.
+- **P22, geometry from the theme.** Every `pos`, `size` and `maxSize` in `aspect-ratio-16-10.xml` that carries a pixel
+  comment of its 768×480 design gives the box the scene lays out, to within 1 px at 1280×800 and 1920×1200, for the
+  elements drawn in the views tested.
+- **P23, the font size.** `fontSize` × screen height is the em size handed to the rasteriser, not the height of a
+  rasterised 'S'. §4.4 left this open. It decides every text box's height, and it can only be told from ES-DE.
+
+P1 (text heights against ES-DE within 2 px), P3 (the SVG renderer against LunaSVG, 0.97) and P12 (the video element
+identical to ES-DE's without videos) are this stage's too, and need ES-DE.

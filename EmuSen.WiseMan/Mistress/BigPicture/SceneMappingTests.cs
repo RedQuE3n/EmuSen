@@ -44,6 +44,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             public int Game { get; init; } = 4;
             public int System { get; init; } = 1;
             public bool HideMetadata { get; init; }
+            public double? At { get; init; }
+            public string Moves { get; init; } = "";
             public override string ToString() => $"{Type}.{Property}";
         }
 
@@ -291,7 +293,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Status = new EmuSen.LunaP.Controls.DeviceStatus(Wifi: true, BatteryPercent: 70),
             };
             string view = Element(c, value).Contains("<view name=\"system\"") ? "system" : "gamelist";
-            return (SceneAssets.Render(SceneBuilder.Build(data.System.Theme.View(view), data)), data.System.Theme);
+            if (c.At is not { } at) return (SceneAssets.Render(SceneBuilder.Build(data.System.Theme.View(view), data)), data.System.Theme);
+            var moving = new SceneView(data, view, TimeSpan.Zero);
+            if (c.Moves == "step") moving.Step(1, TimeSpan.Zero);
+            if (c.Moves == "hold") moving.Press(1, TimeSpan.Zero);
+            using var host = new SceneMotionHost(moving);
+            return (host.At(TimeSpan.FromMilliseconds(at)), data.System.Theme);
         }
 
         [Fact]

@@ -52,8 +52,8 @@ namespace EmuSen.Mistress.Input
 
             if (open is null && window is IPadDriven driven && driven.OnPad(button)) return;
 
-            // Focus left under the sheet, or nowhere, starts again at the window's first control.
-            if (open is null && (focused is not Visual at || !IsWithin(at, root)))
+            // Focus left under the sheet, nowhere, or on a control since hidden starts again at the window's first control - see EmuSen_Settings_Reference.md §4.48.10.
+            if (open is null && (focused is not Visual at || !IsWithin(at, root) || !focused.IsEffectivelyVisible))
             {
                 FocusFirst(root);
                 if (button is UiButton.Up or UiButton.Down or UiButton.Left or UiButton.Right) return;

@@ -428,7 +428,6 @@ namespace EmuSen.Mistress.Views
                 : ScreenFilters.Find(entry.Stored).Filter?.Credit is { Length: > 0 } credit ? $"{ShaderCatalog.BuiltIn}. {credit}" : ShaderCatalog.BuiltIn;
             _builtFor = null;
             _parameters.ItemsSource = null;
-            _parameterSearch.IsVisible = false;
             _parametersNote.Text = entry.IsPreset ? "Reading the preset's parameters..." : string.Empty;
             ShowState();
 
@@ -474,6 +473,7 @@ namespace EmuSen.Mistress.Views
             }
             if (!File.Exists(Path.Combine(_owner.Pack, entry.Relative!)))
             {
+                _parameterSearch.IsVisible = false;
                 _parametersNote.Text = "This preset is not in the downloaded pack, so it is drawn plain until the pack has it again.";
                 done.TrySetResult();
                 return;
@@ -484,7 +484,7 @@ namespace EmuSen.Mistress.Views
                 if (reading == _reading)
                 {
                     if (read.IsCompletedSuccessfully) BuildSliders(entry, read.Result);
-                    else _parametersNote.Text = $"Its parameters could not be read: {read.Exception?.GetBaseException().Message}";
+                    else { _parameterSearch.IsVisible = false; _parametersNote.Text = $"Its parameters could not be read: {read.Exception?.GetBaseException().Message}"; }
                 }
                 done.TrySetResult();
                 if (reading == _reading) PrefetchBeside(entry);

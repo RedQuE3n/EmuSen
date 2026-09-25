@@ -5847,3 +5847,146 @@ Ranked by what they buy the Dam and DK64, the two games the handheld needs, agai
   that include it moved DK64, the one game that waits for its workers, by 0.7 to 2.2 per cent; a hand-written AVX2
   rasteriser was not attempted.
 - **Other states.** Four states, no input, as §6.9; the Dam under the WiseMan comparisons compiles thirty times more.
+
+#### 6.17 The release library profile-guided (2026-09-25)
+
+§6.16.10 put profile-guided optimisation first: measured in the `threads` example at 7 to 12 per cent on this desktop
+and 7 to 8 on the handheld, exact, for a build step. This section builds that step into the library Mistress loads,
+`libmarsrt.so` behind the shim, and says where the profile comes from, what it holds, how a build knows whether it
+still fits, and how much of it survives an edit. Its first finding changed the design before anything was timed: a
+profile is keyed on names that depend on more than the source, and §6.16.4's two claims about where a profile applies
+were both wrong for the library that ships.
+
+##### 6.17.1 What a profile is keyed on
+
+LLVM's instrumented profile holds, for each function, a name, a hash of its control-flow graph and its counters. A
+build given the profile looks each of its functions up by name and uses the record only if the hash matches; a
+function with no record, or with a record of another shape, is compiled as without the profile. The names are the
+symbols. Since Rust 1.98 they are v0-mangled, and every crate's path in them carries a *disambiguator*
+(`CskGwq5vWJMSK_6marsrt`), a hash of what cargo passes as `-C metadata`; an internal function's name is further
+prefixed with its codegen unit's name (`marsrt.f0f0e0c77e6f1f9c-cgu.0;`), which carries another. Cargo's metadata hashes
+the package, its dependencies, the target, the compiler's whole `rustc -vV` and the profile's settings. It does not
+hash `RUSTFLAGS` — were it otherwise, the research's instrumented and guided builds would have named their functions
+differently and §6.16.4 would have measured nothing — so an instrumented build and the build that uses its profile
+name their functions alike, provided everything else is equal.
+
+Measured by building the library and reading the disambiguators in its symbols (`research`'s tools,
+`~/.cache/emusen/probe/mars-speed/pgo/scripts/names.sh`):
+
+| build of the same source | `marsrt`'s disambiguator | `cranelift_codegen`'s | `core`'s |
+| --- | --- | --- | --- |
+| Fedora's rustc 1.98.1, `--profile release` | `kGwq5vWJMSK` | `cf7Ha6Guiq1` | `iU9uQXeQYGI` |
+| Fedora's rustc 1.98.1, `--profile dist` | `2kBkitA4ESG` | `fSZn0polhyn` | `iU9uQXeQYGI` |
+| Fedora's rustc 1.98.1, `--profile dist --target x86_64-unknown-linux-gnu` | `ktKlGesFdsi` | `cnMst1hh60m` | `iU9uQXeQYGI` |
+
+`core` is the standard library, built once by the toolchain, and does not change; every crate cargo compiles does. The
+`release` row is the research's own profile's (`research/pgo-out.profdata` names `CskGwq5vWJMSK_6marsrt`). And LLVM
+agrees: the `dist` library built with the research's profile and `-Cllvm-args=-pgo-warn-missing-function` reports
+**1,215 functions with no profile data; the `release` library built with the same profile reports none.**
+
+So two sentences of §6.16.4 are retired. *"The cdylib and the examples share the functions the profile names, so a
+profile trained through the examples applies to `libmarsrt.so`"* holds for a `release` build and not for the `dist`
+build that a publish makes (§6.3), because `dist` differs from `release` in its debug information and its stripping,
+both of which cargo hashes. *"The profile is portable across x86-64 targets"* does not hold at all: the target is in
+the hash, and so is the compiler's version string, which differs between Fedora's rustc and the upstream build of the
+same release (`rustc 1.98.1 (48a229cea 2026-09-01) (Fedora 1.98.1-1.fc44)` against `rustc 1.98.1 (48a229cea
+2026-09-01)`). What is portable is the *source*: the control-flow hashes of the same source under the same compiler
+are the same, which is what makes a profile trained once apply wherever the names match.
+
+The design therefore calls the unit a **flavour** — a compiler, a cargo profile, and either the host or an explicit
+target — and trains every flavour that is built. A profile holding several flavours is one file: their names do not
+collide, and each build finds its own.
+
+##### 6.17.2 The design
+
+*Where the profile is made.* Training runs commercial games, which CI does not have and the repository never holds.
+The profile is therefore made on this desktop by `pgo/train.sh` in the crate and checked in as `pgo/marsrt.profdata`,
+with a manifest, `pgo/marsrt.pgo`, that names the LLVM version that wrote it, the source it was trained on, the
+flavours it holds, the toolchain CI must use, and every training run by file name and the first 16 hex digits of its
+SHA-256. A publish anywhere, CI included, then uses the checked-in file and needs no game.
+
+*The flavours trained.* Three, the three builds that are made:
+
+| flavour | who builds it |
+| --- | --- |
+| Fedora's rustc, `release`, host | `dotnet build` on this desktop — the tests, and Mistress run from the tree |
+| Fedora's rustc, `dist`, host | `dotnet publish` on this desktop — `out/`, and every build the handheld has run |
+| upstream Rust 1.98.1, `dist`, `x86_64-unknown-linux-gnu` | CI's linux-x64 library |
+
+CI's Windows and macOS libraries are a fourth to seventh flavour that cannot be trained here, because an instrumented
+library must run to be trained and this desktop runs neither. They build with the profile and get no guidance from
+it, and say so (below). The upstream toolchain is installed without rustup into
+`~/.cache/emusen/toolchains/rust-1.98.1` (`rustc`, `cargo`, `rust-std`, `llvm-tools` from static.rust-lang.org); its
+LLVM is 22.1.8, as Fedora's is.
+
+*How it is trained.* `pgo/train.sh` builds each flavour's library with `-Cprofile-generate` into a scratch target
+directory (build scripts' own counters sent elsewhere, so the profile holds the library alone), and runs the training
+list through `pgo/driver`: a console program that does what Mistress's frame loop does to a core — `EmulatorSession`
+with the MarsRT engine through `CoreFactory`, the debug target refreshed, audio drained, the picture taken when its
+serial changes — and prints milliseconds a frame and the SHA-256 of the state at the end. One process a run; each
+writes its counters at exit. Each flavour's counters are merged by an `llvm-profdata` of the flavour's own LLVM version
+(the raw format is that version's, and the script refuses a mismatch); the three results are merged into one file.
+
+*Every build uses it.* `EmuSen.csproj` builds each crate of `RustCores.props` once (a batched target), and a crate with
+`pgo/<name>.profdata` is given `-Cprofile-use` through `--config build.rustflags` — a TOML array, because the path has
+a space in it and `RUSTFLAGS` splits on spaces. The flag names a copy, `obj/<name>/pgo/<name>-<hash>.profdata`,
+named by the first 16 hex digits of the profile's SHA-256. The copy is the point: cargo rebuilds when its flags
+change, not when a file they name does, and without it a refreshed profile would reach the library's own crate
+(whose build script watches the file) and not Cranelift, whose compiled bitcode would keep the old one. CI does the
+same with `CARGO_BUILD_RUSTFLAGS` and a copy in the workspace. `-p:EmuSenPgo=false` builds without it.
+
+*What a build checks* (`build.rs`, the crate's first build script, which runs wherever cargo does):
+
+- **The LLVM version.** The manifest's `llvm` against the version `rustc -vV` reports. A different major version
+  **fails the build**, naming both and the way out. The raw and indexed formats are versioned by LLVM release; a
+  newer LLVM reads an older profile, an older one refuses a newer, and a toolchain update is exactly when a profile
+  should be refreshed. `train.sh` requires the exact version for its merges.
+- **The flavour.** The build's compiler, cargo profile and target against the manifest's list. An untrained flavour
+  **warns** that it builds and that nothing in it is guided.
+- **The source.** A digest (FNV-1a over `src/` without its tests, `Cargo.toml` and `Cargo.lock`) against the one the
+  profile was trained on. A difference **warns** that the build is correct and that each function changed since
+  loses its guidance.
+
+A warning is a `cargo:warning`, which cargo repeats on every build that finds the library fresh as well as on the one
+that ran the script, and which MSBuild's `Exec` shows as a build warning (`EXEC : warning : marsrt@0.1.0: …`, checked
+on a rebuild that compiled nothing). The verdict is also written beside the library (`<profile
+directory>/marsrt-pgo.txt`: `matched`, `stale`, `untrained`, `instrumented` or `none`), which CI prints and makes a
+`::warning::` annotation on the run, and which `train.sh` reads to know the source and the flavour it trained. A
+stale or untrained build is never wrong, only slower: LLVM compiles a function whose record is missing or of another
+shape exactly as without the profile.
+
+*CI.* The library job reads the manifest's `toolchain` and installs that release rather than whatever `stable` is,
+so the upstream flavour's names match and the LLVM check cannot fail on a toolchain update CI chose by itself; MercuryRT,
+with no profile, stays on `stable`. The `dist` build takes the profile; the tests before it do not, since a test
+harness is another crate and no profile names it. The WiseMan job downloads the libraries and runs the comparison with
+the C# core on each platform, as before, so the check that the three platforms agree is now a check on the guided
+Linux library and the unguided Windows and macOS ones.
+
+##### 6.17.3 The predictions, written before any build was timed
+
+- **P1, the flavour.** A `dist` library given a profile trained only through `release` runs within ±2 per cent of
+  the unguided `dist` on all four games: nothing of the crate's is matched (§6.17.1), and what `core` holds is not on
+  the hot path.
+- **P2, the gain through the shim.** The guided `dist` library, published by `dotnet publish` and timed through the
+  driver, is faster than the unguided one by **4.5 to 7.5 per cent on the Dam, 5 to 8 on Donkey Kong 64's title, 7
+  to 10 on Ocarina of Time and 8 to 11.5 on Super Mario 64**. The example's gains were 6.9, 7.4, 10.0 and 11.6 per
+  cent; the shim adds C# work each frame that no profile touches (the picture's copy, the audio, the loop — 0.2 ms on
+  Mario, §6.16's 3.53 against the driver's 3.74), which dilutes the gain by that share; and the training set shares no
+  ROM with the measured games, where the research's shared three, which should cost at most two points (§6.16.4's
+  in-sample profile was no better than its disjoint one).
+- **P3, exactness.** Every run of every build ends on the unguided build's state hash for its game; the WiseMan tests
+  of MarsRT and of the frontends, and the corpus line for line (46 of 4637), pass on the guided `release` library.
+- **P4, the unrelated edit.** A branch added to a function of the state writer, which no measured frame runs, leaves
+  the gain within one point on all four games, and the build says `stale`: only that function and those it was
+  inlined into before instrumentation lose their records, and none of them is hot.
+- **P5, the hot edit.** The same kind of branch added on the exception path of `cpu::blocks::decoded::run`, the
+  decoded tier's loop, which costs nothing on a measured frame but changes the function's shape, **costs the Dam and
+  Donkey Kong 64 a quarter to a half of their gain and the two lighter games under a quarter**: the loop is 23 per cent
+  of the heavy games' thread and 8 to 17 of the others' (§6.16.2), and its handlers, called through pointers, keep
+  their own records.
+- **P6, the CI flavour.** The upstream `dist --target` build of the crate from another directory is `matched` and
+  reports fewer than ten functions without profile data: the checkout's path is not in cargo's hash.
+- **P7, the handheld** (for the run staged in §6.17.9, which the parent session makes): through the shim, the guided
+  library takes **5 to 8 per cent off Donkey Kong 64's title and the Dam at one**, the example's 8.1 and 6.9 per cent
+  there (§6.16.8) diluted as on the desktop, **4 to 9 off Mario and Ocarina**, and **2 to 6 at two on the device**
+  (the example's 5.7 and 3.0); every hash one per game.

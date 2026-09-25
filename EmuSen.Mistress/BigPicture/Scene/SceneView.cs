@@ -44,6 +44,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         public TimeSpan SelectedAt => _selectedAt;
 
+        // Where the primary element is going, in items, not wrapped.
+        public double Target => _position.To;
+
         private bool IsSystemView => ViewName == "system";
         private int Count => IsSystemView ? Data.Systems.Count : Data.System.Games.Count;
         private int Index => IsSystemView ? Data.SystemIndex : Data.GameIndex;

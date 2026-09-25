@@ -1961,7 +1961,7 @@ Before this, LunaP's new case caught the `GroupedList` rule's removal (`LunaP.md
 - **The sliders are not virtualised.** A Mega Bezel preset's 944 rows take 1.9 s to build, during which the window
   does not answer; nothing else measured comes near it (`crt-royale`, 46, in 288 ms). The fix is a virtualised list of
   rows, or building them in batches; neither was done. Nor can the parameters be searched, which is what a list of 944
-  wants.
+  wants. *(Retired 2026-09-24: the list is virtualised, §4.48.9. The parameters still cannot be searched.)*
 - **No preview.** A preset is known by its name and folder, not by a picture of what it draws.
 - **Favourites** were decided against (§4.48.1).
 - **A value cannot be typed**, only stepped (`LunaP.md` §94.4).
@@ -1987,6 +1987,162 @@ asked of the player and there is no setting: the file may be deleted at any time
 it keeps itself under 64 MB by dropping what was used least recently, a pack update cannot be served from it stale,
 and if it cannot be read the preset is compiled as before. What was built and measured is `EmuSen_Serenity.md` §9;
 the frame a running preset costs fell as well (§9.6), which the player sees only as headroom.
+
+#### 4.48.9 Moving onto a preset is fast: a virtualised parameter list, a settle, and the rows beside read ahead (2026-09-24)
+
+**What was asked.** "Is there a way we can speed up browsing through the shaders?", and then, "the moving onto a preset
+specifically". The measurement the work started from (headless, Release, the real 2,658-preset pack): the first move
+onto `crt-lottes` took 196 ms, `crt-royale` 239 ms, `crt-guest-advanced` 560 ms and Mega Bezel's `MBZ__0__SMOOTH-ADV`
+1,862 ms; a held pad walking Mega Bezel-class rows cost 1.18 s a row. For six presets of about 900 parameters, reading
+and parsing off the UI thread took 89–188 ms and **building the sliders on the UI thread took 972–1,536 ms**: one
+`SliderRow` per parameter in a plain `StackPanel`, nearly all of them below the window (§4.48.7 recorded it as not done).
+
+**Three changes.**
+
+1. **The parameter list is virtualised.** It is LunaP's new `SliderList` (`LunaP.md` §97): the parameters are
+   `SliderItem`s, the headings strings, and only the rows in view and half a view either side are built. The values
+   live in the items, so Reset All, the stored values and the preset's defaults need no row: Reset All sets every
+   item back, and a row built later shows it. Every behaviour of §4.48.2–§4.48.5 is kept: headings, values per console
+   and per shader, the preset's values as defaults, per-row Reset and Reset All, live application, the "N parameters"
+   note and the names `{console}.Parameter.{id}`, which each row still carries.
+2. **A settle while the selection moves.** The name and the path follow every row at once. The read and the sliders
+   wait until the selection has held still for 120 ms (`ShaderSettingsWindow.Settle`), **but only when a key moved
+   it**, that is, the arrow keys or the pad's d-pad, which the router sends as keys (§4.45.3). A click, a selection set
+   by code, **Use** (the button, Enter or A), and the focus leaving the list end a settle at once: a click is not a
+   walk, Use needs nothing shown to apply a shader (it stores `Shown`, and `ApplyScreenFilter` reads the stored values
+   itself), and a player who presses right from the list to reach the sliders has plainly stopped. Stale reads are
+   still dropped by the reading counter, as before.
+3. **The rows beside are read ahead.** After a settle, the preset rows directly above and below are read in the
+   background into the window's parameter cache, at most two reads at once (`PrefetchLimit`); a row already read,
+   being read or missing is skipped. A read already running is shared rather than started again, so a player who
+   moves onto a row whose prefetch is still running waits for that read, not a second one. Nothing further is read.
+
+**Predictions, made before the after-build was measured.** From the before-build's own numbers (below) and the split
+above: a click onto Mega Bezel **150–300 ms** (a read of 100–190 ms plus a dozen rows), `crt-royale` 120–170,
+`crt-guest-advanced` 150–250, `crt-lottes` 50–70; a held walk **80–90 ms a row**, the repeat interval being the floor;
+the stop at the end of a walk **250–350 ms** (settle, read, rows); a pad step from a row the player stopped on,
+whose neighbour was therefore prefetched, **140–170 ms** (settle and rows). One prediction was retired before it could
+be tested: that a keyboard *jump* (a selection set by code) would cost a click plus 120 ms. Making the settle apply only
+to key moves, below, removed the case.
+
+**Measured.** `ShaderBrowseBenchTests`, gated on `EMUSEN_SLANG_PACK` like
+`A_pack_preset_with_hundreds_of_parameters_is_shown_in_measured_time`, run from two Release builds, before (WiseMan
+2b9664e with only the bench added) and after, interleaved before/after three times, on the development desktop with
+the pack of 2026-09-24. **The time to a usable row is end to end**: from the act to the shown preset's sliders built,
+laid out and drawn (a render of the window). Each case opens a fresh window, so the parameter cache starts empty; the
+pack's files are in the OS's cache after the unmeasured warm-up. Medians of three, in ms (the runs are in
+`~/.cache/emusen/probe/shader-browse/runs/`):
+
+| Case | `crt-lottes` | `crt-royale` | `crt-guest-advanced` | `MBZ__0__SMOOTH-ADV` |
+|---|---|---|---|---|
+| click on the row | 90 → **75** | 139 → **86** | 215 → **26** | 1,121 → **84** |
+| selection set by code | 78 → **71** | 100 → **90** | 149 → **26** | 1,133 → **58** |
+| pad, two rows without stopping | 36 → **150** | 99 → **190** | 156 → **140** | 1,205 → **177** |
+| pad, one row from a row stopped on | 32 → **137** | 80 → **148** | 155 → **140** | 1,033 → **148** |
+
+| Case | Before | After |
+|---|---|---|
+| held pad over 40 Mega Bezel-class rows, per row (a press every 80 ms, the next delayed while the UI thread is busy) | 478 (388–542) | **80.4–80.5** |
+| from the last press of that walk to a usable row | 879 (829–957) | **160** |
+
+Against the predictions: the walk (80.5, predicted 80–90) and the stopped-row step (148, predicted 140–170) landed;
+the click onto Mega Bezel (84) and the stop after a walk (160) came in **under** the predicted 150–300 and 250–350.
+The predictions used the 89–188 ms cold read; here the whole click, read included, is 81–96 ms, so the read of files
+the OS has cached is well under that (the read was not timed on its own). The before column is this bench's, not the
+figures quoted at the top (a walk of 1.18 s a row there, 0.39–0.54 s here; 1,862 ms onto Mega Bezel there, 1,121–1,288
+ms here): those were taken by another harness whose method is not reproduced, and the difference was not
+investigated. Before and after here were measured by the same code in the same runs.
+
+**What got slower, and why it is kept.** A single pad step onto a small preset now waits the settle: `crt-lottes`
+went from 32–36 ms to 137–150 ms, `crt-royale` from 80–99 to 148–190. That is the price of the settle as asked: the
+step cannot know it is not the first of a walk. A leading-edge settle (show at once when the previous key move was
+more than 120 ms ago, wait only for the ones after) would give single steps back their old cost while still reading
+nothing during a walk, at the cost of one read and build of the first row of every walk; it was not built, since the
+request was a trailing settle, and it is recorded below. A real held pad settles once on the first row anyway, by
+reading of the code rather than measurement: `PadNavigator` waits 400 ms before it repeats. The bench's walk does not
+model that delay.
+
+**Found on the way.**
+
+- **Avalonia recycles the container holding the focus in a plain `ItemsControl`** (LunaP §97.3), which left the pad
+  on nothing after the tab changed onto a scrolled parameter list. Found by the graphics-sheet pad case, fixed in
+  `SliderList`.
+- **`PadAudit` keyed a control by its place in the visual tree**, which a virtualising panel does not keep: it appends
+  and hides containers as it scrolls, so one index could mean two rows. A control inside an item's container is now
+  known by its items control, the item's index and its way down from the container, the rule §4.48.5 already applied
+  to list rows; `Refocus` scrolls the item into view first. Without it the sheet audit reported the SNES, N64 and NES
+  tabs' rows unreachable.
+- **`PadAudit` counted operable controls in whatever state its last press left.** Before the settle a shown shader's
+  sliders were rebuilt at once whichever row the last press selected, and the count happened to match; with the
+  settle, the audit's end state on the Game Boy tab showed a preset's second row that the walk had never seen. The walk
+  now returns to the state it began in before counting, which is what "reachable from where the focus is" means.
+- **Observed, not changed.** `PadWindowRouter.FirstIn`, which puts the focus on a page's top control when the tab
+  changes, chose a row of the parameter list scrolled above the view (a Reset 47 points above the window's top), since
+  a row clipped by its scroll viewer is still "visible". The old `StackPanel` list had the same exposure. A `LostFocus`
+  handler on the window (with `handledEventsToo`) saw nothing when that tab change moved the focus off a button on the
+  page being switched away, possibly because the page was already detached; not investigated. The panel ends the
+  settle on the list's `IsKeyboardFocusWithin` turning false, not on `LostFocus`.
+- **The end of a 944-row list is an estimate until reached**: setting the offset to the end reached the last row on
+  the third attempt (LunaP §97.4).
+
+**The scroll bar.** The parameter list's bar is now always drawn at full width with a thumb of at least 40 points,
+as the shader list's has been since `LunaP.md` §96; the old parameter list's bar auto-hid.
+
+**Tests.** `ShaderBrowseTests` (5), each against a pack the test writes, one preset of 944 parameters under nine
+headings and twelve small presets in a row:
+
+- a 944-parameter preset builds 8 of its rows at the top and at most 40 anywhere; scrolled to the end, its last row is
+  there, named `SNES.Parameter.P0952`, and a key moves it and stores 0.55; Reset All sets all 944 back, rows or not;
+- the pad walks sixty rows down that list from the first slider, Reset and slider alternating, with at most nine rows
+  realised at any time, then moves the slider and goes up to its Reset;
+- a fast walk of six rows updates the name and path at every row, reads nothing and builds nothing until it stops, then
+  reads once, where it stopped;
+- with the settle set to 30 s, A on a row reached by a key move applies it and builds it at once, a click shows a row at
+  once, and right from the list ends a pending settle;
+- after a settle the rows either side are read in the background, two reads and never more than two at once, rows two
+  away and the 944-parameter preset are not read, and the next step reads only its own next neighbour.
+
+`PadSettingsWindowTests.A_long_preset_s_sliders_on_the_sheet_are_reached_and_walked_by_pad` puts the 944-parameter
+preset on the 1280×800 Game Mode sheet, audits every tab (nothing unreachable), walks thirty rows down by pad and moves
+the slider there. The existing cases changed only where they asked for every row: `ShaderSettingsWindowTests` reads
+the whole list from `ShaderPanel.Parameters` and scrolls a row into view before pressing it (`Row`), and the
+running-game case selects the NES tab before pressing a slider on it, which a person would have to. The audits of
+§4.48.5, on the sheet and on the desktop, pass unchanged: `Every_control_of_each_settings_sheet_is_reached_by_the_pad`
+and `In_desktop_mode_a_real_window_is_driven_and_every_control_reached`, with the cheat and rewind pad cases that share
+`PadAudit`. 56 cases in the blast radius, all passing.
+
+**Pictures** (`EMUSEN_UI_DUMP`, the real pack where named, looked at; in
+`~/.cache/emusen/probe/shader-browse/png/`): `shaders-desktop-preset`, `-lottes`, `-bezel` (a 223-parameter preset),
+`-search`, `-nopack`, `shaders-browse-944-top`, `-end` and `-walked` at 980×660, and `pad-shaders-search`,
+`pad-shaders-slider`, `pad-shaders-lottes` and `pad-shaders-944-walked` on the 1280×800 sheet.
+
+**Mutants** (each alone, built and run against the cases in its blast radius, then restored):
+
+| Mutant | Result |
+|---|---|
+| every parameter row realised (a `StackPanel` under the list) | caught: the 944-parameter case and the pad walk |
+| no settle: every key move reads and builds | caught: the fast-walk case and the Use/click case |
+| prefetch without bound: every preset row, no limit | caught: the fast-walk case and the prefetch case |
+| no prefetch | caught: the prefetch case |
+| the focus leaving the list does not end the settle | caught: the Use/click case |
+| **Use waits for the settle** | **survived, and is covered by another path**: Use refreshes the list to move the *In use* pill, and `GroupedList.Refresh` replaces the focused row and hands the focus back (`LunaP.md` §94.5), which ends the settle through the focus rule. With the focus rule removed as well, the Use/click case fails (Loads 2, expected 3). The explicit call is kept, so Use does not depend on how `Refresh` restores the focus |
+| the audit keys controls in an item's container by tree path | caught: the pad-menu case |
+| the audit counts in the state its last press left | caught: the graphics-sheet case and the long-preset sheet case |
+
+LunaP's own six mutants are in `LunaP.md` §97.5.
+
+**What is not done.**
+
+- **The parameters cannot be searched**, which a list of 944 still wants (§4.48.7).
+- **A leading-edge settle** (above) was not built; a single pad step onto a small preset is about 100 ms slower.
+- **The parameter cache is not bounded.** It holds every preset read in the window's life, now including prefetches;
+  a walk that stops on many rows holds each one's parameters until the window closes or the pack is downloaded.
+- **Prefetched reads may go unused**: a player who moves two rows, or elsewhere, has paid for up to two reads on a
+  worker thread for nothing. They are bounded at two at a time and one pair per stop.
+- **The settle cases run in real time.** The fast-walk case presses six rows with no pause between; a machine that
+  stalled for more than 120 ms between two presses would let a settle fire mid-walk and fail it.
+- **Proved headlessly only**, as everything in §4.48: the numbers are the headless renderer's, on the desktop; a real
+  window adds the compositor's frame to every figure, and the handheld has not been measured.
 
 ### 4.49 Rewind as a reel of pictures (2026-09-24)
 

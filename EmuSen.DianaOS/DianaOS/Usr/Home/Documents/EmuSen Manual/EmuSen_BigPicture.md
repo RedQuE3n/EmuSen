@@ -1663,3 +1663,32 @@ Each builds, runs its tests and restores the source, and the scene runner rebuil
 - **No capture of a collection, a folder, the grid or the other help scopes** was taken.
 - **§12.4's ten loader choices were not checked against ES-DE.** The default variant, for one, was set explicitly in
   every run.
+
+---
+
+## 14. Stage (c): the GPU frame, then motion
+
+*Opened 2026-09-25.* §13.4 measured a full redraw of the system view at 44 ms on the CPU, in `Avalonia.Headless`, and
+left the GPU frame unmeasured. Stage (c) redraws every frame while something moves, so that number decides how motion
+is built. This section first measures the frame on a GPU (§14.1–§14.4), then builds motion (§14.5 onwards).
+
+### 14.1 Predictions for the GPU frame, written before it was measured
+
+The route (§14.2) draws the scene's LunaP control tree with Avalonia's own Skia drawing code onto a `GRContext` over a
+surfaceless EGL context, the device and API a Mistress window on Linux uses. Stage (b)'s numbers are the baseline:
+full redraw on the CPU 44.1 ms (system) and 15.2 ms (gamelist) at 1280×800, 87.4 and 26.2 ms at 1920×1200, most of it
+mipmapped sampling of downscaled pictures (§13.4).
+
+- **P24, the route is faithful.** Its picture equals the headless compositor's CPU picture except where the two
+  rasterisers anti-alias or filter differently: at least 99% of pixels within 8 levels in both views at both sizes.
+- **P25, the desktop.** On the RX 6800, a full redraw of either view takes **under 3 ms** from the start of recording
+  to `glFinish` at 1280×800, and under 4 ms at 1920×1200. The CPU's share (the controls' `Render`, Avalonia's drawing
+  code and Skia's GPU recording) is the larger part, about 1.5–2.5 ms; the GL time is under 1 ms, because trilinear
+  sampling is what the hardware does natively.
+- **P26, the first frame.** The first GPU frame of a view, which uploads every picture and builds its mip levels,
+  costs under 50 ms on the desktop.
+- **P27, no per-frame upload.** The processed pictures are `WriteableBitmap`s. Skia uploads each once and reuses the
+  texture while the bitmap is unchanged, so replacing them with immutable bitmaps changes the GPU frame by under 5%.
+- **P28, the handheld** (Legion Go S at 1280×800). A full redraw of the system view takes **under 8 ms** (P7's
+  figure), so a frame in which everything moves fits 16.7 ms with room to spare, and stage (c) can be built on full
+  redraws with no lever. The CPU's share is about twice the desktop's.

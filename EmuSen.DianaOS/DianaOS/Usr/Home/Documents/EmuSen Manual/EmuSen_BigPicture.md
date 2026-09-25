@@ -1043,6 +1043,15 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 - **Q5, developer credentials:** **the user's own machines only.** Published builds do not carry them; a build
   without the local file cannot scrape.
 - Q6–Q10 remain open; each is asked when its stage reaches it.
+- **Drawn with LunaP (the user, 2026-09-24): "make sure we are drawing this with LunaP and if something is missing
+  from LunaP, add it".** This supersedes §4's one Skia-drawn control in Mistress. Every visible part is a LunaP
+  control, and what LunaP lacks is added to LunaP under its own conventions (a `docs/LunaP.md` section, tests, the API
+  baseline, palette-only colours where a theme does not set one): an SVG image (the renderer §4 argued for, now in
+  LunaP), the carousel, the grid and text list as themed, text in a theme's own fonts, rating, badges, the help bar,
+  the clock and system status, and a positioned canvas for ES-DE's normalised coordinates and origins. The ES-DE
+  loader (XML, variables, includes, variants, colour schemes, aspect ratios) is format-specific and stays in
+  `EmuSen.Mistress/BigPicture/`, with no Avalonia types, producing a scene the Mistress layer builds from LunaP
+  controls. Q10 (own SVG renderer or `Svg.Skia`) is therefore answered: our own, in LunaP.
 
 ## 11. Sources
 

@@ -1804,3 +1804,42 @@ from the property defaults, before any recording, and are retired in §14.7.
   pixel, and ES-DE's settled positions to 1 px.
 - **P38, the moving frame's cost.** A frame of the carousel mid-slide costs no more on the GPU than a full redraw at
   rest (§14.3), under 1 ms on the desktop.
+
+### 14.6 The time model, as built
+
+**The scene owns the clock, and nothing reads wall time.** Every time is a `TimeSpan` that the host passes in, as
+`PadNavigator.Feed(held, now)` takes its time (§4.29 of the settings reference). Tests step it with round numbers. In
+the window (stage e), the host will pass the render loop's frame time.
+
+- **LunaP's half (its §102).**
+  - `Glide` is a value moving between two numbers over a span of the host's clock, with an Avalonia easing.
+  - `ImageCarousel.Position` draws the row at a fractional item.
+  - `TextScroll` is the rule a self-scrolling text follows: a loop for one line, and for a column a run to the end, a
+    pause and a fade-in at the top.
+  - `FontText` and `TextRowList`'s selected row take that rule with a time since they were shown or selected.
+  - None of them knows about ES-DE, and none keeps a clock.
+- **Mistress's half, in `BigPicture/Scene/`.**
+  - `SceneView` is one view that moves.
+    - A change of selection (`Step`, or `Press` and `Release` for a held direction) rebuilds the view from its
+      `ResolvedView` and the new data, exactly as §13's static builder does.
+    - `Advance(now)` fires the key repeats that have fallen due, then pushes every time-derived state into the
+      controls: the carousel's position from its glide, the list's and the containers' times since the selection,
+      `scrollFadeIn`, and the metadata fade.
+  - `SceneRepeat` is a held direction's repeats: a first delay, an interval, and a faster tier after a while held.
+  - `SceneStage` holds the two views and the move between them, instant or sliding, as the theme's transition
+    profile says.
+  - `SceneMotion` holds every duration, curve and rate, and `SceneMotion.Esde` holds the values measured from ES-DE
+    (§14.7).
+  - Each theme property that governs motion (`itemTransitions`, `fastScrolling`, `textHorizontalScroll*`,
+    `container*`, `scrollFadeIn`) is read where §13's mapping reads the rest.
+
+**Why the view is rebuilt on each step, not updated in place.** The rebuild is §13's pure function of (view, data), so
+a frame at any time is the static frame of its data with the time-derived state applied. That makes the strongest
+test possible: when a motion settles, its frame must equal a fresh static render of the new state, pixel for pixel.
+`A_carousel_step_eases_to_the_next_item_and_settles_on_the_static_picture` checks exactly that, and so does the slide
+between views. The cost is a rebuild per step, not per frame. Between steps, a frame only sets positions, times and
+opacities. §14.8 measures what a rebuild costs while a direction is held.
+
+**The motion state is the scene's, not the controls'.** The rebuild makes new controls, so any state a control kept
+would be lost at each step. The carousel's glide, the time of the selection and the metadata fade therefore live in
+`SceneView`, and are applied to whichever controls exist.

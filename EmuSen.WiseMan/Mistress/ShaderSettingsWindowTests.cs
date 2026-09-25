@@ -250,33 +250,33 @@ namespace EmuSen.WiseMan.Mistress
             ShaderPanel snes = window.PanelFor("SNES");
             ChooseRow(snes, e => e.Stored == CrtFilters.Lottes.Name);
 
-            List<SliderRow> sliders = snes.Sliders.ToList();
-            Assert.Equal(CrtFilters.LottesParameters.Select(p => p.Description), sliders.Select(s => s.Label));
-            SliderRow boost = sliders.Single(s => s.Label == "Brightness boost");
+            Assert.Equal(CrtFilters.LottesParameters.Select(p => p.Description), snes.Parameters.Select(s => s.Label));
+            SliderRow boost = Row(snes, "Brightness boost");
             Assert.Equal((0.0, 2.0, 0.05, 1.0), (boost.Minimum, boost.Maximum, boost.Step, boost.DefaultValue), new ToleranceComparer());
 
-            SliderRow warp = sliders.Single(s => s.Label == "Curvature, vertical");
+            SliderRow warp = Row(snes, "Curvature, vertical");
             Assert.Contains(warp.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == "0.041");
 
-            Press(boost, Key.Right);
+            Press(Row(snes, "Brightness boost"), Key.Right);
             Assert.Equal("1.05", GraphicsConfig.Load().ParametersFor("SNES", CrtFilters.Lottes.Name)["brightBoost"]);
             Assert.Empty(told);
-            Press(sliders[0], Key.Left);
+            Press(Row(snes, snes.Parameters[0].Label), Key.Left);
             Assert.Equal(2, GraphicsConfig.Load().ParametersFor("SNES", CrtFilters.Lottes.Name).Count);
             Assert.Empty(GraphicsConfig.Load().ParametersFor("NES", CrtFilters.Lottes.Name));
 
             snes.Use();
             Assert.Equal(new[] { "SNES" }, told);
-            Press(boost, Key.Right);
+            Press(Row(snes, "Brightness boost"), Key.Right);
             Assert.Equal(new[] { "SNES", "SNES" }, told);
 
-            Press(boost, Key.Left);
-            Press(boost, Key.Left);
+            Press(Row(snes, "Brightness boost"), Key.Left);
+            Press(Row(snes, "Brightness boost"), Key.Left);
             Assert.False(GraphicsConfig.Load().ParametersFor("SNES", CrtFilters.Lottes.Name).ContainsKey("brightBoost"));
 
             snes.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "SNES.ResetShader").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             Assert.Empty(GraphicsConfig.Load().ShaderParameters);
             Assert.All(snes.Sliders, s => Assert.True(s.IsDefault));
+            Assert.All(snes.Parameters, s => Assert.True(s.IsDefault));
             window.Close();
         }, default);
 
@@ -322,14 +322,16 @@ namespace EmuSen.WiseMan.Mistress
             var shaders = window.OwnedWindows.OfType<ShaderSettingsWindow>().Single();
             ShaderPanel snes = shaders.PanelFor("SNES");
             Assert.Equal(CrtFilters.Lottes.Name, snes.Shown?.Stored);
-            Press(snes.Sliders.Single(s => s.Label == "Brightness boost"), Key.Left);
+            Press(Row(snes, "Brightness boost"), Key.Left);
             UiTest.Capture(window);
             Assert.Equal(0.95f, Held(frame, "brightBoost"), 4);
             Assert.Equal(0.8f, Held(frame, "maskDark"));
 
             ShaderPanel nes = shaders.PanelFor("NES");
+            Tabs tabs = shaders.GetLogicalDescendants().OfType<Tabs>().Single();
+            tabs.SelectedItem = tabs.Items.OfType<TabItem>().Single(t => (string?)t.Header == "NES");
             ChooseRow(nes, e => e.Stored == CrtFilters.Lottes.Name);
-            Press(nes.Sliders.Single(s => s.Label == "Brightness boost"), Key.Right);
+            Press(Row(nes, "Brightness boost"), Key.Right);
             Assert.Equal("1.05", GraphicsConfig.Load().ParametersFor("NES", CrtFilters.Lottes.Name)["brightBoost"]);
             UiTest.Capture(window);
             Assert.Equal(0.95f, Held(frame, "brightBoost"), 4);
@@ -399,6 +401,10 @@ namespace EmuSen.WiseMan.Mistress
             panel.Filter.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "PART_Search").Text = text;
             Dispatcher.UIThread.RunJobs();
         }
+
+        // A parameter's row scrolled into view, since the list builds only the rows in view - see EmuSen_Settings_Reference.md §4.48.9.
+        internal static SliderRow Row(ShaderPanel panel, string label) =>
+            panel.ParameterList.Reveal(panel.Parameters.Single(p => p.Label == label)) ?? throw new InvalidOperationException(label + " has no row after scrolling to it.");
 
         internal static void Press(SliderRow row, Key key)
         {

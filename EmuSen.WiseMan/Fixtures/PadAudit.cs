@@ -109,19 +109,39 @@ namespace EmuSen.WiseMan.Fixtures
                     if (target(to)) { found = toKey; break; }
                 }
             }
+            // Left as the walk began, so what is then counted operable is the window the walk explored, not the state its last press left - see EmuSen_Settings_Reference.md §4.48.9.
+            if (found is null) At(startKey);
             return paths;
         }
 
-        // A row is its list and index, since a virtualised list recycles containers; anything else is where it sits in the tree, so a pane rebuilt the same way is the same controls.
+        // A row is its list and index, and a control inside an item's container its items control, index and way down from the container, since a virtualised panel recycles and reorders containers; anything else is where it sits in the tree - see EmuSen_Settings_Reference.md §4.48.9.
         private static object KeyOf(InputElement e)
         {
             if (e is ListBoxItem row && row.FindAncestorOfType<ListBox>() is { } list && list.IndexFromContainer(row) is var index and >= 0) return (list, index);
+            for (Visual? at = e; at is not null && at is not TopLevel; at = at.GetVisualParent())
+                if (at is Control container && ItemsControl.ItemsControlFromItemContainer(container) is { } owner && owner.IndexFromContainer(container) is var item and >= 0)
+                    return (owner, item, PathFrom(container, e));
+            return PathFrom(TopLevel.GetTopLevel(e)!, e);
+        }
+
+        private static string PathFrom(Visual from, Visual e)
+        {
             var steps = new List<int>();
-            Visual? top = TopLevel.GetTopLevel(e);
-            for (Visual? child = e, parent = e.GetVisualParent(); parent is not null && !ReferenceEquals(child, top); child = parent, parent = parent.GetVisualParent())
+            for (Visual? child = e, parent = e.GetVisualParent(); parent is not null && !ReferenceEquals(child, from); child = parent, parent = parent.GetVisualParent())
                 steps.Add(parent.GetVisualChildren().ToList().IndexOf(child!));
             steps.Reverse();
             return string.Join('/', steps);
+        }
+
+        private static Visual? Follow(Visual? at, string path)
+        {
+            foreach (string step in path.Split('/', System.StringSplitOptions.RemoveEmptyEntries))
+            {
+                var children = at?.GetVisualChildren().ToList();
+                int i = int.Parse(step);
+                at = children is not null && i >= 0 && i < children.Count ? children[i] : null;
+            }
+            return at;
         }
 
         // The control a key names in the window as it is now, focused as the pad would, or null when nothing is there.
@@ -134,17 +154,13 @@ namespace EmuSen.WiseMan.Fixtures
                 list.UpdateLayout();
                 element = list.ContainerFromIndex(index) as InputElement;
             }
-            else if (key is string path)
+            else if (key is (ItemsControl owner, int item, string within))
             {
-                Visual? at = top;
-                foreach (string step in path.Split('/', System.StringSplitOptions.RemoveEmptyEntries))
-                {
-                    var children = at?.GetVisualChildren().ToList();
-                    int i = int.Parse(step);
-                    at = children is not null && i >= 0 && i < children.Count ? children[i] : null;
-                }
-                element = at as InputElement;
+                owner.ScrollIntoView(item);
+                owner.UpdateLayout();
+                element = Follow(owner.ContainerFromIndex(item), within) as InputElement;
             }
+            else if (key is string path) element = Follow(top, path) as InputElement;
             else element = fallback;
 
             if (element is null || !((Visual)element).IsAttachedToVisualTree() || !element.IsEffectivelyVisible || !element.Focusable) return null;
@@ -153,11 +169,12 @@ namespace EmuSen.WiseMan.Fixtures
             return element;
         }
 
-        public static string Describe(InputElement e) => e switch
+        // A control's text or name, and the name a reader hears where that says more, so a slider's Reset is told from the next one's.
+        public static string Describe(InputElement e) => (e switch
         {
             ContentControl { Content: string text } c => $"{c.GetType().Name} '{text}'",
             TextBox t => $"TextBox {t.Name ?? t.PlaceholderText}",
             _ => $"{e.GetType().Name} {(e as Control)?.Name}",
-        };
+        }) + (Avalonia.Automation.AutomationProperties.GetName((StyledElement)e) is { Length: > 0 } heard ? $" ({heard})" : "");
     }
 }

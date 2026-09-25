@@ -102,18 +102,66 @@ namespace EmuSen.Mistress.Views
             Built = SlangPackDownload.Installed(Pack);
         }
 
-        // Read off the UI thread once per preset; a Mega Bezel preset declares hundreds.
+        // How long the list's selection must hold still before the shown preset is read and its sliders built - see EmuSen_Settings_Reference.md §4.48.9.
+        public TimeSpan Settle { get; set; } = TimeSpan.FromMilliseconds(120);
+
+        // Background reads of the rows beside a settled one, at most this many at once - see EmuSen_Settings_Reference.md §4.48.9.
+        public const int PrefetchLimit = 2;
+
+        // Counters a test reads: sources read from disk, and the reads of them that were prefetches.
+        public int ReadsStarted { get; private set; }
+        public int PrefetchesStarted { get; private set; }
+        public int PrefetchesRunning { get { lock (_read) return _prefetching; } }
+
+        private readonly Dictionary<string, Task<IReadOnlyList<SlangParameter>>> _inFlight = new(StringComparer.Ordinal);
+        private int _prefetching, _packGeneration;
+
+        private string FullPath(string relative) => Path.GetFullPath(Path.Combine(Pack, relative));
+
+        public bool IsRead(string relative)
+        {
+            lock (_read) return _read.ContainsKey(FullPath(relative));
+        }
+
+        // Read off the UI thread once per preset, a read already running shared rather than repeated; a Mega Bezel preset declares hundreds.
         internal Task<IReadOnlyList<SlangParameter>> ReadAsync(string relative)
         {
-            string path = Path.GetFullPath(Path.Combine(Pack, relative));
+            string path = FullPath(relative);
             lock (_read)
-                if (_read.TryGetValue(path, out var known)) return Task.FromResult(known);
-            return Task.Run(() =>
             {
-                IReadOnlyList<SlangParameter> parameters = SlangParameters.Read(SlangPreset.Load(path));
-                lock (_read) _read[path] = parameters;
-                return parameters;
-            });
+                if (_read.TryGetValue(path, out var known)) return Task.FromResult(known);
+                if (_inFlight.TryGetValue(path, out var running)) return running;
+                int generation = _packGeneration;
+                ReadsStarted++;
+                // Whoever waits on the read finds it in the cache, since the task handed out ends only once it is stored.
+                Task<IReadOnlyList<SlangParameter>> task = Task.Run(() => SlangParameters.Read(SlangPreset.Load(path))).ContinueWith(done =>
+                {
+                    lock (_read)
+                    {
+                        if (generation == _packGeneration)
+                        {
+                            _inFlight.Remove(path);
+                            if (done.IsCompletedSuccessfully) _read[path] = done.Result;
+                        }
+                    }
+                    return done.Result;
+                }, TaskScheduler.Default);
+                _inFlight[path] = task;
+                return task;
+            }
+        }
+
+        // Reads a preset into the cache in the background unless it is there, being read, or the limit is reached - see EmuSen_Settings_Reference.md §4.48.9.
+        internal void Prefetch(string relative)
+        {
+            string path = FullPath(relative);
+            lock (_read)
+            {
+                if (_read.ContainsKey(path) || _inFlight.ContainsKey(path) || _prefetching >= PrefetchLimit || !File.Exists(path)) return;
+                _prefetching++;
+                PrefetchesStarted++;
+            }
+            ReadAsync(relative).ContinueWith(_ => { lock (_read) _prefetching--; }, TaskScheduler.Default);
         }
 
         internal void Download() => Downloading = DownloadAsync();
@@ -135,7 +183,12 @@ namespace EmuSen.Mistress.Views
                 using HttpClient http = _http();
                 http.Timeout = TimeSpan.FromMinutes(30);
                 await SlangPackDownload.FetchAsync(http, Pack, progress);
-                lock (_read) _read.Clear();
+                lock (_read)
+                {
+                    _read.Clear();
+                    _inFlight.Clear();
+                    _packGeneration++;
+                }
             }
             catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or TaskCanceledException or UnauthorizedAccessException)
             {
@@ -160,10 +213,13 @@ namespace EmuSen.Mistress.Views
         private readonly MonoText _where = new() { TextWrapping = TextWrapping.Wrap };
         private readonly Button _use;
         private readonly Button _resetAll;
-        private readonly StackPanel _parameters = new() { Spacing = 4 };
+        private readonly SliderList _parameters;
         private readonly HintText _parametersNote = new();
         private readonly IReadOnlyList<ShaderEntry> _builtIns;
         private int _reading;
+        private ShaderEntry? _builtFor;
+        private (ShaderEntry Entry, int Reading, TaskCompletionSource Done)? _settling;
+        private bool _keying;
 
         public string Console { get; }
 
@@ -177,7 +233,16 @@ namespace EmuSen.Mistress.Views
 
         public FilterBar Filter => _filter;
 
-        public IEnumerable<SliderRow> Sliders => _parameters.Children.OfType<SliderRow>();
+        // The rows that exist now; the list is virtualised, so a long preset's are only those in view and a few beyond.
+        public IEnumerable<SliderRow> Sliders => _parameters.Realized;
+
+        // Every parameter of the shader shown, realised or not.
+        public IReadOnlyList<SliderItem> Parameters => _parameters.Sliders.ToList();
+
+        public SliderList ParameterList => _parameters;
+
+        // Settled reads and builds, one per stop of the selection, for a test.
+        public int Loads { get; private set; }
 
         internal ShaderPanel(ShaderSettingsWindow owner, string console)
         {
@@ -205,8 +270,15 @@ namespace EmuSen.Mistress.Views
             _name.Name = $"{console}.ShaderName";
             _where.Name = $"{console}.ShaderPath";
 
+            _parameters = new SliderList { Name = $"{console}.ShaderParameters", Padding = new Thickness(0, 0, 14, 0) };
+            _parameters.ValueChanged += Changed;
+
             _filter.Changed += Refresh;
-            _list.Chose += entry => { if (entry is not null) Show(entry); };
+            // Only a key moving the selection waits for it to settle; a click, a jump and the focus leaving the list do not - see EmuSen_Settings_Reference.md §4.48.9.
+            _list.Chose += entry => { if (entry is not null) Show(entry, now: !_keying); };
+            _list.AddHandler(KeyDownEvent, (_, _) => _keying = true, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+            _list.AddHandler(KeyDownEvent, (_, _) => _keying = false, Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
+            _list.PropertyChanged += (_, e) => { if (e.Property == IsKeyboardFocusWithinProperty && e.NewValue is false) SettleNow(); };
             _list.DoubleTapped += (_, _) => Use();
             // Handled events too: the list claims Enter itself, and the pad's A is sent as Enter - see EmuSen_Settings_Reference.md §4.45.3.
             _list.AddHandler(KeyDownEvent, (_, e) => { if (e.Key == Key.Enter) Use(); }, handledEventsToo: true);
@@ -233,11 +305,10 @@ namespace EmuSen.Mistress.Views
             actions.Margin = new Thickness(0, 0, 14, 0);
             var header = Ui.Stack(6, _name, _where, actions, _parametersNote);
             header.Margin = new Thickness(0, 0, 0, 8);
-            var scroll = new ScrollViewer { Name = $"{console}.ShaderParameters", Content = _parameters, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 14, 0) };
             var right = new DockPanel { LastChildFill = true };
             DockPanel.SetDock(header, Dock.Top);
             right.Children.Add(header);
-            right.Children.Add(scroll);
+            right.Children.Add(_parameters);
 
             ColumnDefinitions = new ColumnDefinitions("5*,20,6*");
             Margin = new Thickness(0, 8, 0, 0);
@@ -272,7 +343,7 @@ namespace EmuSen.Mistress.Views
             _list.Select(current);
             if (failure is not null) return;
             Shown = null;
-            Show(current);
+            Show(current, now: true);
         }
 
         internal void ShowPack(string text, bool busy)
@@ -286,9 +357,10 @@ namespace EmuSen.Mistress.Views
             _list.Refresh(ShaderCatalog.Shown(_builtIns, _owner.Presets, Config.RecentFor(Console), _filter.SearchText, _filter.Facet as string ?? ShaderCatalog.AllCategories));
         }
 
-        // Applies the shown shader to this console, marks it and remembers it among the recent ones.
+        // Applies the shown shader to this console, marks it and remembers it among the recent ones; its sliders need not be shown yet.
         public void Use()
         {
+            SettleNow();
             if (Shown is not { } entry || entry.Stored == Current) return;
             Config.SetValue(Console, GraphicsSettingsWindow.ScreenFilterKey, entry.Stored);
             if (entry.Stored != ScreenFilters.None) Config.NoteRecent(Console, entry.Stored, ShaderCatalog.RecentKept);
@@ -318,35 +390,62 @@ namespace EmuSen.Mistress.Views
             _list.Focus(NavigationMethod.Directional);
         }
 
-        private void Show(ShaderEntry entry)
+        // The name and path at once; the read and the sliders once the selection has held still, or at once when asked - see EmuSen_Settings_Reference.md §4.48.9.
+        private void Show(ShaderEntry entry, bool now = false)
         {
             entry = entry with { Recent = false, Group = ShaderCatalog.For(entry.Stored).Group };
-            if (Shown == entry) return;
+            if (Shown == entry)
+            {
+                if (now) SettleNow();
+                return;
+            }
             Shown = entry;
             _name.Text = entry.Name;
             _where.Text = entry.IsPreset
                 ? $"{entry.Relative}\nin {Path.GetFullPath(_owner.Pack)}"
                 : ScreenFilters.Find(entry.Stored).Filter?.Credit is { Length: > 0 } credit ? $"{ShaderCatalog.BuiltIn}. {credit}" : ShaderCatalog.BuiltIn;
-            _parameters.Children.Clear();
+            _builtFor = null;
+            _parameters.ItemsSource = null;
+            _parametersNote.Text = entry.IsPreset ? "Reading the preset's parameters..." : string.Empty;
             ShowState();
 
             int reading = ++_reading;
+            _settling?.Done.TrySetResult();
+            var done = new TaskCompletionSource();
+            Reading = done.Task;
+            _settling = (entry, reading, done);
+            if (now) { SettleNow(); return; }
+            Task.Delay(_owner.Settle).ContinueWith(_ => Dispatcher.UIThread.Post(() =>
+            {
+                if (_settling is { } settling && settling.Reading == reading) SettleNow();
+            }), TaskScheduler.Default);
+        }
+
+        // Ends a settle still waiting: the shown shader is read and its sliders built now.
+        private void SettleNow()
+        {
+            if (_settling is not { } settling) return;
+            _settling = null;
+            Load(settling.Entry, settling.Reading, settling.Done);
+        }
+
+        private void Load(ShaderEntry entry, int reading, TaskCompletionSource done)
+        {
+            Loads++;
             if (!entry.IsPreset)
             {
                 BuildSliders(entry, ScreenFilters.Find(entry.Stored).Filter?.Parameters ?? Array.Empty<SlangParameter>());
-                Reading = Task.CompletedTask;
+                done.TrySetResult();
+                PrefetchBeside(entry);
                 return;
             }
             if (!File.Exists(Path.Combine(_owner.Pack, entry.Relative!)))
             {
                 _parametersNote.Text = "This preset is not in the downloaded pack, so it is drawn plain until the pack has it again.";
-                Reading = Task.CompletedTask;
+                done.TrySetResult();
                 return;
             }
 
-            _parametersNote.Text = "Reading the preset's parameters...";
-            var done = new TaskCompletionSource();
-            Reading = done.Task;
             _owner.ReadAsync(entry.Relative!).ContinueWith(read => Dispatcher.UIThread.Post(() =>
             {
                 if (reading == _reading)
@@ -355,48 +454,61 @@ namespace EmuSen.Mistress.Views
                     else _parametersNote.Text = $"Its parameters could not be read: {read.Exception?.GetBaseException().Message}";
                 }
                 done.TrySetResult();
+                if (reading == _reading) PrefetchBeside(entry);
             }), TaskScheduler.Default);
         }
 
-        // A slider per parameter over its declared range, the preset's own value as the default; a zero-width one is a heading.
+        // The presets a row away from the settled one, so the usual next step finds its parameters read - see EmuSen_Settings_Reference.md §4.48.9.
+        private void PrefetchBeside(ShaderEntry entry)
+        {
+            int at = _list.SelectedIndex;
+            if (at < 0 || _list.Selected is not { } selected || selected.Stored != entry.Stored) return;
+            foreach (int beside in new[] { at + 1, at - 1 })
+                if (beside >= 0 && beside < _list.Models.Count && _list.Models[beside] is { IsPreset: true, Relative: { } relative })
+                    _owner.Prefetch(relative);
+        }
+
+        // A slider per parameter over its declared range, the preset's own value as the default; a zero-width one is a heading; only the rows in view are built.
         private void BuildSliders(ShaderEntry entry, IReadOnlyList<SlangParameter> parameters)
         {
             IReadOnlyDictionary<string, string> stored = Config.ParametersFor(Console, entry.Stored);
             int count = parameters.Count(p => !SlangParameters.IsHeading(p));
             _parametersNote.Text = count == 0 ? "This shader has nothing to adjust." : $"{count} {(count == 1 ? "parameter" : "parameters")}. Left and right move a slider; the button above one returns it to its default.";
 
+            var items = new List<object>(parameters.Count);
             foreach (SlangParameter parameter in parameters)
             {
                 if (SlangParameters.IsHeading(parameter))
                 {
                     if (!string.IsNullOrWhiteSpace(parameter.Description.Trim(' ', '-', '=', '*', '#', '[', ']')))
-                        _parameters.Children.Add(new SectionHeader { Text = parameter.Description.Trim(), Margin = new Thickness(0, 10, 0, 0), TextWrapping = TextWrapping.Wrap });
+                        items.Add(parameter.Description.Trim());
                     continue;
                 }
 
-                var row = new SliderRow
+                items.Add(new SliderItem(
+                    string.IsNullOrWhiteSpace(parameter.Description) ? parameter.Id : parameter.Description.Trim(),
+                    Exact(parameter.Minimum),
+                    Exact(parameter.Maximum),
+                    Exact(parameter.Step),
+                    Exact(parameter.Initial),
+                    Exact(stored.TryGetValue(parameter.Id, out string? text) && float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) ? value : parameter.Initial))
                 {
                     Name = $"{Console}.Parameter.{parameter.Id}",
-                    Label = string.IsNullOrWhiteSpace(parameter.Description) ? parameter.Id : parameter.Description.Trim(),
-                    Minimum = Exact(parameter.Minimum),
-                    Maximum = Exact(parameter.Maximum),
-                    Step = Exact(parameter.Step),
-                    DefaultValue = Exact(parameter.Initial),
-                    Value = Exact(stored.TryGetValue(parameter.Id, out string? text) && float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) ? value : parameter.Initial),
-                };
-                string id = parameter.Id;
-                row.ValueChanged += _ => Changed(entry, id, row);
-                _parameters.Children.Add(row);
+                    Tag = parameter.Id,
+                });
             }
+            _builtFor = entry;
+            _parameters.ItemsSource = items;
         }
 
         // A float as the decimal it was written as, so 0.041f is 0.041 and not 0.041000001, which the row would show to four places.
         private static double Exact(float value) => (double)(decimal)value;
 
-        private void Changed(ShaderEntry entry, string id, SliderRow row)
+        private void Changed(SliderItem item)
         {
-            if (row.IsDefault) Config.ForgetParameter(Console, entry.Stored, id);
-            else Config.SetParameter(Console, entry.Stored, id, ((float)Math.Round(row.Value, 6)).ToString(CultureInfo.InvariantCulture));
+            if (_builtFor is not { } entry || item.Tag is not string id) return;
+            if (item.IsDefault) Config.ForgetParameter(Console, entry.Stored, id);
+            else Config.SetParameter(Console, entry.Stored, id, ((float)Math.Round(item.Value, 6)).ToString(CultureInfo.InvariantCulture));
             Config.Save();
             ShowState();
             if (entry.Stored == Current) _owner.Changed(Console);
@@ -407,7 +519,7 @@ namespace EmuSen.Mistress.Views
             if (Shown is not { } entry) return;
             Config.ForgetParameter(Console, entry.Stored);
             Config.Save();
-            foreach (SliderRow row in Sliders) row.Value = row.DefaultValue;
+            foreach (SliderItem item in _parameters.Sliders) item.Value = item.DefaultValue;
             ShowState();
             if (entry.Stored == Current) _owner.Changed(Console);
         }

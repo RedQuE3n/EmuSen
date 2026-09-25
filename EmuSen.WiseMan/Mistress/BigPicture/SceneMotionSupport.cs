@@ -19,15 +19,18 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     {
         private readonly Window _window;
 
-        public SceneMotionHost(SceneView view)
+        public SceneMotionHost(SceneView view) : this(view.Root, view.Data.Screen.Width, view.Data.Screen.Height) => _view = view;
+
+        public SceneMotionHost(Control root, double width, double height)
         {
-            View = view;
-            _window = new Window { Width = view.Data.Screen.Width, Height = view.Data.Screen.Height, Content = view.Root, Background = Brushes.Black, SizeToContent = SizeToContent.Manual };
+            _window = new Window { Width = width, Height = height, Content = root, Background = Brushes.Black, SizeToContent = SizeToContent.Manual };
             _window.Show();
             Dispatcher.UIThread.RunJobs();
         }
 
-        public SceneView View { get; }
+        private readonly SceneView? _view;
+
+        public SceneView View => _view ?? throw new InvalidOperationException("this host shows a bare control");
 
         public Window Window => _window;
 

@@ -516,6 +516,36 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        // Back on a tab whose parameter list is scrolled part way down, the pad starts at a control in view, and the list stays where it was - see EmuSen_Settings_Reference.md §4.48.10.
+        [Fact]
+        public Task A_tab_change_never_puts_the_focus_on_a_row_scrolled_out_of_view() => Session.Dispatch(() =>
+        {
+            ShaderBrowseTests.WriteBig(ShaderSettingsWindowTests.FakePack());
+            (MainWindow window, PadDriver pad) = GameModeWithAGame();
+            Choose(window, pad, "Shaders");
+            var shaders = Assert.IsType<ShaderSettingsWindow>(Sheets(window).Current);
+            ShaderPanel snes = shaders.PanelFor("SNES");
+            Reach(window, pad, e => e is ListBoxItem item && item.Content?.ToString() == "huge");
+            Pump(snes);
+            Reach(window, pad, e => e is Slider s && s.FindAncestorOfType<SliderRow>() is { Label: "Parameter 0001" });
+            pad.Down(2 * 20);
+            ScrollViewer scroll = snes.ParameterList.GetVisualDescendants().OfType<ScrollViewer>().First();
+            Vector scrolled = scroll.Offset;
+            Assert.True(scrolled.Y > 0);
+            Assert.Contains(snes.Sliders, r => r.TranslatePoint(default, scroll) is { Y: < 0 } at && at.Y + r.Bounds.Height <= 0);
+
+            TabTo(window, pad, "N64");
+            TabTo(window, pad, "SNES");
+            var focused = Assert.IsAssignableFrom<Control>(Focused(window));
+            _out.WriteLine($"focus after the tab change: {PadAudit.Describe((InputElement)focused)}");
+            Assert.Null(focused.FindAncestorOfType<SliderList>());
+            Assert.Equal(scrolled, scroll.Offset);
+            Picture(window, "shaders-tab-return");
+            pad.B();
+            Stop(window);
+            window.Close();
+        }, default);
+
         private static void Pump(ShaderPanel panel)
         {
             for (int i = 0; i < 2000 && !panel.Reading.IsCompleted; i++) { Avalonia.Threading.Dispatcher.UIThread.RunJobs(); System.Threading.Thread.Sleep(1); }

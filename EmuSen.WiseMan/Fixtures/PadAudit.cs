@@ -19,7 +19,19 @@ namespace EmuSen.WiseMan.Fixtures
             && !(e is ToggleButton && (e as Visual)!.FindAncestorOfType<ListBoxItem>() is not null);
 
         public static List<InputElement> Operable(Control root) =>
-            root.GetVisualDescendants().OfType<InputElement>().Where(IsOperable).ToList();
+            root.GetVisualDescendants().OfType<InputElement>().Where(e => IsOperable(e) && !Unseen(e)).ToList();
+
+        // A row a virtualising panel keeps built outside its view is the panel's bookkeeping, not a control the window shows - see EmuSen_Settings_Reference.md §4.48.10.
+        private static bool Unseen(InputElement e)
+        {
+            for (Visual? at = e; at is not null && at is not TopLevel; at = at.GetVisualParent())
+            {
+                if (at is not Control container || ItemsControl.ItemsControlFromItemContainer(container) is not { ItemsPanelRoot: VirtualizingPanel }) continue;
+                if (container.FindAncestorOfType<ScrollViewer>() is not { } area) return false;
+                return ((Visual)e).TranslatePoint(default, area) is not { } where || !new Rect(where, ((Visual)e).Bounds.Size).Intersects(new Rect(area.Bounds.Size));
+            }
+            return false;
+        }
 
         // Every control reachable by a pad from where the focus is now; left and right are not pressed where the control itself takes them.
         public static HashSet<InputElement> Reachable(Control root, PadDriver pad, int limit = 400) => Reachable(root, pad.Press, limit);
@@ -32,7 +44,9 @@ namespace EmuSen.WiseMan.Fixtures
                 () => press(EmuSen.Mistress.Input.UiButton.Up), () => press(EmuSen.Mistress.Input.UiButton.Down),
                 () => press(EmuSen.Mistress.Input.UiButton.Left), () => press(EmuSen.Mistress.Input.UiButton.Right),
             };
-            Dictionary<object, List<int>> paths = Walk(root, presses, _ => false, limit, out _);
+            // The walk ends once every control the window offers now is found, rather than exploring to the limit.
+            HashSet<object> wanted = Operable(root).Select(KeyOf).ToHashSet();
+            Dictionary<object, List<int>> paths = Walk(root, presses, _ => false, limit, out _, p => wanted.All(p.ContainsKey));
             return root.GetVisualDescendants().OfType<InputElement>().Where(e => paths.ContainsKey(KeyOf(e))).ToHashSet();
         }
 
@@ -63,7 +77,7 @@ namespace EmuSen.WiseMan.Fixtures
         }
 
         // Breadth first over every direction from every control reached, each left from as the walk found it, by replaying its path - see EmuSen_Settings_Reference.md §4.48.5.
-        private static Dictionary<object, List<int>> Walk(Control root, System.Action[] presses, System.Func<InputElement, bool> target, int limit, out object? found)
+        private static Dictionary<object, List<int>> Walk(Control root, System.Action[] presses, System.Func<InputElement, bool> target, int limit, out object? found, System.Func<Dictionary<object, List<int>>, bool>? enough = null)
         {
             TopLevel top = TopLevel.GetTopLevel(root)!;
             InputElement? Focused() => top.FocusManager!.GetFocusedElement() as InputElement;
@@ -92,7 +106,7 @@ namespace EmuSen.WiseMan.Fixtures
                 return Focused() is { } replayed && Equals(KeyOf(replayed), key) ? replayed : null;
             }
 
-            while (found is null && queue.Count > 0 && paths.Count < limit)
+            while (found is null && queue.Count > 0 && paths.Count < limit && enough?.Invoke(paths) != true)
             {
                 object key = queue.Dequeue();
                 if (At(key) is not { } from) continue;
@@ -114,13 +128,13 @@ namespace EmuSen.WiseMan.Fixtures
             return paths;
         }
 
-        // A row is its list and index, and a control inside an item's container its items control, index and way down from the container, since a virtualised panel recycles and reorders containers; anything else is where it sits in the tree - see EmuSen_Settings_Reference.md §4.48.9.
+        // A row is its list and index; a control in an item's container its items control, index, way down and the name a reader hears, since containers are recycled and items rebuilt; else its place in the tree - see EmuSen_Settings_Reference.md §4.48.10.
         private static object KeyOf(InputElement e)
         {
             if (e is ListBoxItem row && row.FindAncestorOfType<ListBox>() is { } list && list.IndexFromContainer(row) is var index and >= 0) return (list, index);
             for (Visual? at = e; at is not null && at is not TopLevel; at = at.GetVisualParent())
                 if (at is Control container && ItemsControl.ItemsControlFromItemContainer(container) is { } owner && owner.IndexFromContainer(container) is var item and >= 0)
-                    return (owner, item, PathFrom(container, e));
+                    return (owner, item, PathFrom(container, e), Avalonia.Automation.AutomationProperties.GetName(e) ?? "");
             return PathFrom(TopLevel.GetTopLevel(e)!, e);
         }
 
@@ -154,7 +168,7 @@ namespace EmuSen.WiseMan.Fixtures
                 list.UpdateLayout();
                 element = list.ContainerFromIndex(index) as InputElement;
             }
-            else if (key is (ItemsControl owner, int item, string within))
+            else if (key is (ItemsControl owner, int item, string within, string _))
             {
                 owner.ScrollIntoView(item);
                 owner.UpdateLayout();

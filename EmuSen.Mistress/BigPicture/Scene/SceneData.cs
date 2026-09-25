@@ -47,6 +47,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public DateTime Now { get; init; } = new(2026, 9, 24, 12, 0, 0);
         public DeviceStatus Status { get; init; } = new(Wifi: true, BatteryPercent: 80);
         public bool HideMetadata { get; init; }
+        public SceneMotion Motion { get; init; } = SceneMotion.Esde;
 
         public SceneSystem System => Systems[Math.Clamp(SystemIndex, 0, Systems.Count - 1)];
 

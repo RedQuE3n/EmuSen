@@ -3171,11 +3171,12 @@ enables each one by hand, while Mistress's collections are the player's own and 
 
 **Tests** (WiseMan, headless, the pad through `PadDriver`): `GamelistOptionsTests` (8: the sort keys, the filter values,
 the quick selector, the random entry, the names, the shelves' order and grouping, last played, a folder's description)
-and `ThemedCollectionsTests` (13: the collections in the carousel; the automatic collections from the records, their
+and `ThemedCollectionsTests` (12: the collections in the carousel; the automatic collections from the records, their
 pictures and suffix under the game's own system; the Collections list's folders; how an entry of it is drawn; a theme's
 folder; a collection made on the settings sheet and edited with North; the options sheet sorting, filtering and jumping
 with B and Back; either stick; the settings sheet's switches; every control of the three sheets reached by the pad).
-`CollectionsPictureTool` writes the pictures with `EMUSEN_BIGPICTURE_PNG=1`. LunaP gained the tick and the thumbstick
+`CollectionsPictureTool` writes the pictures with `EMUSEN_BIGPICTURE_PNG=1`, and `CollectionsBenchTool` the costs of
+§22.9 with `EMUSEN_BIGPICTURE_BENCH=1`. The mutants are in §22.8 of the plan. LunaP gained the tick and the thumbstick
 glyph (its `docs/LunaP.md` §150 and §151).
 
 **What it does not cover.**

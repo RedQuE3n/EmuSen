@@ -3834,7 +3834,106 @@ In LunaP: `ThemedListTests.A_tick_marks_a_row_in_the_star_s_room_with_its_own_sh
 sort stepped from the wrong starting row. That so few failed first is weak evidence of the tests' strength; the mutants
 (§22.8) are the stronger.
 
-<!-- 22.8 to 22.10 follow the mutants and the measurements. -->
+*Amended after the mutants:* two tests were strengthened when their mutants survived (C25, C50 in §22.8), and a line of
+code was removed as redundant (C13).
+
+### 22.8 Mutants
+
+The runners are `~/.cache/emusen/probe/bigpicture/mutate_collections.py` (56 mutants in Mistress and Galaxia, against
+`ThemedCollectionsTests`, `GamelistOptionsTests`, `ThemedLibraryPadTests` and `SceneMappingTests`) and
+`mutate_collections_lunap.py` (8 in LunaP, against `PadGlyphTests` and `ThemedListTests`). Each mutant was built and run
+alone under `nice -n 10`, with builds at `-m:2`, and its file restored; the tree was rebuilt clean after each round. The
+logs are `run-collections-part1-C1-C19.log`, `run-collections-part2.log`, `run-collections-part3.log`,
+`run-collections-rerun.log`, `run-collections-rerun2.log`, `mutants-collections-lunap-first.txt` and
+`mutants-collections-lunap.txt`.
+
+**Two interruptions, and what they left.** The first round was cut off at 17:58 by a hardware reset of the desktop,
+an AMD fault that heavy load triggers, as the freezes of §15.14 were; the machine's own log was not read for this
+section. The mutant in flight, C21,
+was left in `IndicatorElements.cs`; it was found and restored before anything else was built, the tree was rebuilt
+clean, and the round was resumed from C20, whose result had not been written. The runner was then changed to keep the
+original of the file it mutates beside it and to put it back on its next start. The second interruption was a pause
+for a firmware update, taken during C49; the runner's own backup restored that file, and the round resumed from C49 after
+a clean rebuild. No verdict below comes from a build that held another mutant.
+
+| # | Rule broken | Result |
+|---|---|---|
+| C1 | the automatic collections on by default | caught by 6 |
+| C2 | custom collections after the automatic ones | caught by 3 |
+| C3, C4 | favorites holds every game; favorites draws its stars | caught |
+| C5–C7 | last played oldest first; no limit; a counted game with no date left out | caught |
+| C8–C10 | a themed collection grouped; Always ignored; a hidden collection shown | caught |
+| C11, C12 | the folders in reverse; B inside a collection goes to the systems | caught |
+| C13 | leaving a collection does not set the top list's cursor | **survived: equivalent**; the line was removed |
+| C14–C16 | A launches a collection; a folder pictures another game than the first named; the description names no source system | caught |
+| C17–C21 | a grouped entry: its folder mark kept; its metadata shown; the description hidden too; its system name kept; A reads Launch | caught |
+| C22, C23 | a collection's game looked up, or suffixed, under the collection | caught |
+| C24 | the sort not applied | caught by 3 |
+| C25 | every list takes the current list's sort | **survived**; caught after the test was strengthened |
+| C26–C35 | the filter not applied; missing values first; no name after the key; favourites not on top; all of a field's values required; the name filter minding case; a field with one value offered; no Unknown; favourites' letters beside the star; no star | caught |
+| C36–C38 | the jump not made; Back not cancelling; B not applying | caught |
+| C39–C42 | the random entry staying put; ignoring Disabled; moving systems with Games only; the right stick unmapped | caught |
+| C43–C49 | North searching while editing; never taking a game out; no tick; members unmarked; a name keeping the forbidden characters; a new collection not edited; Finish Editing ignored | caught |
+| C50 | the help bar's North keeps Search while editing | **survived**; caught after the test was strengthened |
+| C51–C56 | no Random in the help bar; a settings change waiting for the next showing; a switch storing nothing; Sort favorites ignored for the systems; the default sort ignored; the heading ignored inside a collection | caught |
+| T1–T4 | LunaP's tick drawn as the star, as the folder, keeping no room, its lowest point raised | caught (T3 was written ambiguously first, matching two lines, and rewritten) |
+| G1–G4 | the thumbstick drawn as the guide; no ring; the disc filling the ring; named as the guide | caught |
+
+**63 of 64 caught; the one survivor was equivalent, and the code it mutated is gone.** Two were caught only after
+their tests were strengthened:
+- **C13.** Leaving a folder set the top list's cursor to the folder left. The top list's cursor already held it: it was
+  remembered when A was pressed on that folder, and nothing inside the folder can change the top list's key. The
+  assignment was dead code and was removed (`1f943eaf`), which the tests pass without.
+- **C25.** The mutant sorted every system's list by the current list's sort. The test did look at another system after
+  sorting, but only under a rating sort, and that system's games have no rating, so they fell back to the name order that
+  is also the default. The test now looks at another system right after a name-descending sort, which exposes it.
+- **C50.** The test asserted the help context's flag, not what the help bar shows. It now requires the entry on North
+  to read Collection while editing and Search after.
+
+### 22.9 Measurements
+
+`CollectionsBenchTool`, run with `EMUSEN_BIGPICTURE_BENCH=1`, on the desktop, Debug build, headless with no window, so
+the scene is built and not laid out or drawn. The library is synthetic: 3,508 games over the five systems, one favourite
+in seventeen, one game in five played, three custom collections of 200 games, and the three automatic collections on.
+The output is `~/.cache/emusen/probe/bigpicture/collections/bench.txt`.
+
+| Measure | Result |
+|---|---|
+| `Show` without the collections | median 1.2 ms of five warm |
+| `Show` with them, building the shelves included | median 3.9 ms; building the shelves alone 1.15 ms; ratio 3.29 |
+| A list step in snes (1,100 games) | median 0.10 ms |
+| A list step in all games (3,508) | median 0.46 ms; ratio 4.5 |
+| Gamelist Options' model over all games: 27 quick-selector entries, 20 filter values | 6.3 ms the first time, then a median of 2.4 ms |
+
+### 22.10 Predictions retired, and the broad run
+
+| # | Predicted | Measured | Verdict |
+|---|---|---|---|
+| P68 | the broad run passes with no failure this branch causes | 824 passed, 10 skipped, none failed | held |
+| P69 | a warm Show with the collections under 1.5 times one without | 3.29 times (3.9 against 1.2 ms) | **failed.** The collections add nine lists to sort at each Show, the all-games one of 3,508; the ratio is large because the Show without them is small on the synthetic theme. The added 2.7 ms is not the cost that matters on a real theme, where §15.8 measured the first frame at about 50 ms warm; that frame was not measured here |
+| P70 | a step in all games within 1.5 times a step in a system | 4.5 times (0.46 against 0.10 ms) | **failed, and the cause is not the sort.** The listed games are kept per list, so a step does not sort again; but each step rebuilds the scene, and the text list's rows are built for every game of the list, so a step's cost grows with the list's length (3,508 against 1,100 games, 3.2 times; the rest is not attributed). That is stage (c)'s design (§14.8, whose lever skips the rebuild while a list is held), and it applies to any long system as much as to a collection |
+| P71 | Gamelist Options opened over all games in under 100 ms | its model in 6.3 ms, then 2.4 ms | **held for the model only**; the sheet's layout and first drawing were not measured |
+
+**The broad run**, once, at the end, after a clean rebuild: the Mistress filter without `ShaderSettingsWindowTests`,
+`ShaderBrowseBench` and `SceneGpuBench`, under `nice -n 10`, 834 tests, 824 passed and 10 skipped (the picture, bench
+and live tools, which need their variables), none failed, in 3 min 15 s. No GPU test was run. One pass is weak
+evidence against an intermittent failure, as §15.14 says of its own.
+
+**Pictures.** `CollectionsPictureTool`, with `EMUSEN_BIGPICTURE_PNG=1`, writes nine at 1280×800 to
+`~/.cache/emusen/bigpicture/png/collections/`, on Art Book Next with the synthetic media, and one on the synthetic
+theme. They were looked at:
+- `carousel-collections` and `carousel-all-games`: Art Book Next's own tag and database logos and artwork for the two
+  systems, as ES-DE drew them in §22.2 (`runs/r3/sheet.png`).
+- `grouped-collections-folders`: Beat and Platform with no folder mark, one game's cover, the description naming three
+  games with "[SNES]", and no rating or dates. The first build showed a folder mark, the rating, dates and players, and a
+  second "COLLECTIONS" line under the logo; each was changed to what `runs/r2b/g03` shows (§22.6).
+- `gamelist-options-sheet`, `filter-sheet`: the sheets over the dimmed view; the filter sheet with Racing chosen, the
+  ratings in half-star values and Unknown last (Unknown was first until the picture showed it, and was moved), and
+  "Nothing to filter" for publisher, players and completed.
+- `filtered-list-racing-by-rating`: two games left, the higher rated first.
+- `jump-to-letter-open` and `-after`: the list of characters, star first, and Ember Circuit selected after E.
+- `editing-platform-ticks-synthetic`: the ticks before two members, the favourite's star on a third, and COLLECTION on
+  the help bar's North.
 
 ### 22.11 Not done
 

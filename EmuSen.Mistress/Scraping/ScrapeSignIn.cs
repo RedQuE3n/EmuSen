@@ -48,7 +48,7 @@ namespace EmuSen.Mistress.Scraping
                 case ScrapeStatus.TooManyRequests or ScrapeStatus.DailyQuota or ScrapeStatus.DailyKoQuota:
                     return new(SignInResult.TooMany, null, "ScreenScraper is refusing more requests for now. Try again later.");
                 case ScrapeStatus.Failed:
-                    return new(SignInResult.Unreachable, null, ScrapeRedactor.Redact($"ScreenScraper could not be reached: {said}"));
+                    return new(SignInResult.Unreachable, null, ScrapeRedactor.Redact($"ScreenScraper did not answer normally: {said}"));
                 default:
                     return new(SignInResult.Unreadable, null, ScrapeRedactor.Redact($"ScreenScraper's answer could not be read: {said}"));
             }

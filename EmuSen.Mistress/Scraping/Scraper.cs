@@ -263,6 +263,7 @@ namespace EmuSen.Mistress.Scraping
                 if (!changed.AsSpan().SequenceEqual(bytes))
                 {
                     if (!await TurnAsync(stop)) return Stopped(item);
+                    Activity?.Invoke(new ScrapeActivity(path, item.System, ScrapeStep.LookingUp));
                     JeuInfosAnswer second = await AskAsync(path, systemId, RomHashes.Of(changed), fileName, stop);
                     if (second.Status != ScrapeStatus.NotFound) answer = second;
                     if (second.Status == ScrapeStatus.Found) matchedBy = "transformed";

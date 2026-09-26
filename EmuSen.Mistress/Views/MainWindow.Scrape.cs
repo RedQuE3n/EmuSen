@@ -49,7 +49,7 @@ namespace EmuSen.Mistress.Views
 
         public event Action? ScrapeChanged;
 
-        internal ScrapeStatusWindow? ScrapeStatusShown => _scrapeStatus;
+        public ScrapeStatusWindow? ScrapeStatusShown => _scrapeStatus;
 
         public Scraper? ScrapeWorker => _scraper;
         public MediaStore? ScrapeStore => _mediaStore;
@@ -190,8 +190,7 @@ namespace EmuSen.Mistress.Views
             }
             IReadOnlyList<QueuedGame> queued = store.Queue();
             if (queued.Count == 0) return false;
-            QuotaSnapshot? before = _scrapeQuota?.Snapshot();
-            var run = new ScrapeProgress(queued.Count, ScrapeClock.Now) { RequestsAtStart = before?.RequestsToday, DayAtStart = before?.Day };
+            var run = new ScrapeProgress(queued.Count, ScrapeClock.Now);
             _scrapeRun = run;
             ReadScrapeSnapshot();
 
@@ -238,6 +237,7 @@ namespace EmuSen.Mistress.Views
             if (_scrapeClosed) return;
             if (_scrapeStatus is { } open)
             {
+                open.Refresh();
                 SheetLayer.Activate(open);
                 return;
             }

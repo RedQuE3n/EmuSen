@@ -36,6 +36,18 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         // The status every jeuInfos answers with instead of looking, when set; 0 looks.
         public int ForcedStatus;
 
+        // A status for one game's MD5 alone, with the body it answers.
+        public readonly ConcurrentDictionary<string, (int Code, string Body)> StatusByMd5 = new(StringComparer.OrdinalIgnoreCase);
+
+        // The one member account ssuserInfos accepts; any other, or none, is 403 as the live server answered (plan §17.9). Null accepts any.
+        public (string User, string Password)? Member;
+
+        public string MemberLevel = "3";
+
+        // ssuserInfos answers this status and body instead, when set.
+        public int ForcedUserStatus;
+        public string ForcedUserBody = "Erreur : forced by the test";
+
         // What the ssuser block says; null leaves the block out.
         public JsonObject? User = Quota(maxThreads: 1, perMinute: 60, perDay: 20000, koPerDay: 2000, today: 10, koToday: 1);
 
@@ -74,7 +86,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 if (!url.Contains("screenscraper.fr")) return Other(url);
                 if (url.Contains("/mediaJeu.php")) return MediaAnswer(url);
                 if (url.Contains("/jeuInfos.php")) return JeuInfosAnswer(url);
-                if (url.Contains("/ssuserInfos.php")) return Json(new JsonObject { ["header"] = Header(), ["response"] = new JsonObject { ["ssuser"] = User?.DeepClone() } });
+                if (url.Contains("/ssuserInfos.php")) return UserInfosAnswer(url);
                 return new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = new StringContent("Erreur") };
             }
             finally
@@ -83,15 +95,31 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             }
         }
 
+        private HttpResponseMessage UserInfosAnswer(string url)
+        {
+            if (ForcedUserStatus != 0) return new HttpResponseMessage((HttpStatusCode)ForcedUserStatus) { Content = new StringContent(ForcedUserBody) };
+            string ssid = Param(url, "ssid"), sspassword = Param(url, "sspassword");
+            if (Member is { } member && (ssid != member.User || sspassword != member.Password))
+                return new HttpResponseMessage(HttpStatusCode.Forbidden) { Content = new StringContent("Erreur de login : Vérifier les identifiants utilisateurs !") };
+            var user = (JsonObject?)User?.DeepClone();
+            if (user is not null)
+            {
+                user["id"] = ssid;
+                user["niveau"] = MemberLevel;
+            }
+            return Json(new JsonObject { ["header"] = Header(), ["response"] = new JsonObject { ["ssuser"] = user } });
+        }
+
         private HttpResponseMessage JeuInfosAnswer(string url)
         {
             if (ForcedStatus != 0) return new HttpResponseMessage((HttpStatusCode)ForcedStatus) { Content = new StringContent("Erreur : forced by the test") };
             string md5 = Param(url, "md5");
+            if (StatusByMd5.TryGetValue(md5, out var forced)) return new HttpResponseMessage((HttpStatusCode)forced.Code) { Content = new StringContent(forced.Body) };
             FakeGame? game;
             lock (Games) game = Games.FirstOrDefault(g => g.Md5s.Contains(md5, StringComparer.OrdinalIgnoreCase));
             if (game is null) return new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("Erreur : Rom/Iso/Dossier non trouvée !  ") };
 
-            string credentials = $"devid={DevId}&devpassword={DevPassword}&softname={SoftName}&ssid=&sspassword=";
+            string credentials = $"devid={DevId}&devpassword={DevPassword}&softname={SoftName}&ssid={Uri.EscapeDataString(Param(url, "ssid"))}&sspassword={Uri.EscapeDataString(Param(url, "sspassword"))}";
             var medias = new JsonArray(game.Media.Select(m => (JsonNode)new JsonObject
             {
                 ["type"] = m.Type, ["parent"] = "jeu", ["region"] = m.Region, ["format"] = m.Format, ["crc"] = "00000000",

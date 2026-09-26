@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Avalonia.Controls;
@@ -9,6 +11,7 @@ using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Theme;
 using EmuSen.LunaP.Windowing;
+using EmuSen.Mistress.BigPicture;
 
 namespace EmuSen.Mistress.Views
 {
@@ -29,16 +32,16 @@ namespace EmuSen.Mistress.Views
         private readonly LunaSwitch _showStatusText = new() { Name = "ShowStatusTextSwitch", Label = "Show messages" };
         private readonly LunaSwitch _showFpsBar = new() { Name = "ShowFpsBarSwitch", Label = "Show the frame rate" };
         private readonly LunaSwitch _navigationSounds = new() { Name = "NavigationSoundsSwitch", Label = "Play the theme's navigation sounds" };
-        private readonly Dropdown _libraryStyle = new() { Name = "LibraryStyleDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
-
-        private static readonly (string Value, string Text)[] LibraryStyles =
-        {
-            (AppSettings.LibraryStyleMistress, "Mistress"),
-            (AppSettings.LibraryStyleTheme, "ES-DE theme"),
-        };
+        private readonly Dropdown _bigPictureTheme = new() { Name = "BigPictureThemeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
+        private IReadOnlyList<BigPictureLook> _looks = [];
+        private string[] _lookTexts = [];
+        private PathPickerRow? _themeFolder;
 
         // Opens the theme's settings sheet; set by the main window, which owns the themed view.
         public Action? OpenThemeSettings { get; set; }
+
+        // Called when the big picture theme is chosen here, so the view beneath applies it at once.
+        public Action? ThemeChosen { get; set; }
 
         public const string ScrapingTab = "Scraping";
 
@@ -151,15 +154,15 @@ namespace EmuSen.Mistress.Views
                 },
                 new FieldRow
                 {
-                    Label = "Library Style",
-                    Hint = "In big screen mode, the library as Mistress draws it, or as an ES-DE theme draws it. The theme is used only when the folder below holds one that loads; otherwise Mistress's library is shown.",
-                    Content = _libraryStyle,
+                    Label = "Big Picture Theme",
+                    Hint = "In big screen mode, EmuSen's own library, or an ES-DE theme's. The same list as Theme Settings, Themes tab. A theme is shown only when it loads; otherwise EmuSen's own library is.",
+                    Content = _bigPictureTheme,
                 },
                 new FieldRow
                 {
-                    Label = "ES-DE Theme",
-                    Hint = "A theme folder for ES-DE (one holding capabilities.xml), such as Art Book Next. It is only ever read, and nothing of it is copied.",
-                    Content = Picker("BigPictureThemeBox", "(none)", "Choose ES-DE Theme Folder", _settings.BigPictureTheme, p => _settings.BigPictureTheme = p),
+                    Label = "ES-DE Theme Folder",
+                    Hint = "A theme folder for ES-DE (one holding capabilities.xml) to read in place, which then joins the list above. It is only ever read, and nothing of it is copied.",
+                    Content = _themeFolder = Picker("BigPictureThemeBox", "(none)", "Choose ES-DE Theme Folder", _settings.BigPictureTheme, p => { _settings.BigPictureTheme = p; ShowBigPictureTheme(); ThemeChosen?.Invoke(); }),
                 },
                 new FieldRow
                 {
@@ -197,13 +200,13 @@ namespace EmuSen.Mistress.Views
             _showFpsBar.IsCheckedChanged += (_, _) => { _settings.ShowFpsBar = _showFpsBar.IsChecked == true; _settings.Save(); StatusBarChanged?.Invoke(); };
             _navigationSounds.IsChecked = _settings.NavigationSounds;
             _navigationSounds.IsCheckedChanged += (_, _) => { _settings.NavigationSounds = _navigationSounds.IsChecked == true; _settings.Save(); };
-            string[] styleTexts = LibraryStyles.Select(c => c.Text).ToArray();
-            _libraryStyle.Fill(styleTexts, LibraryStyles.FirstOrDefault(c => c.Value == _settings.LibraryStyle).Text ?? styleTexts[1]);
-            _libraryStyle.Chose += chosen =>
+            ShowBigPictureTheme();
+            _bigPictureTheme.Chose += chosen =>
             {
-                if (LibraryStyles.FirstOrDefault(c => c.Text == chosen as string).Value is not string value) return;
-                _settings.LibraryStyle = value;
-                _settings.Save();
+                int i = Array.IndexOf(_lookTexts, chosen as string);
+                if (i < 0) return;
+                BigPictureLooks.Choose(_settings, _looks[i]);
+                ThemeChosen?.Invoke();
             };
             _pauseInBackground.IsChecked = _settings.PauseInBackground;
             _pauseInBackground.IsCheckedChanged += (_, _) => { _settings.PauseInBackground = _pauseInBackground.IsChecked == true; _settings.Save(); };
@@ -219,6 +222,19 @@ namespace EmuSen.Mistress.Views
 
             _theme.Fill(LunaTheme.Available(), LunaTheme.Current);
             _theme.Chose += ChoseTheme;
+        }
+
+        // The list and its selection read again from the settings, as after a choice on the Theme Settings sheet.
+        public void ShowBigPictureTheme()
+        {
+            List<BigPictureLook> looks = BigPictureLooks.All(_settings).ToList();
+            string[] texts = looks.Select(l => l.BuiltIn ? $"{l.Name} (built in)" : looks.Count(o => o.Name == l.Name) > 1 ? $"{l.Name} ({Path.GetFileName(l.Theme!.Directory)})" : l.Name).ToArray();
+            string selected = texts[Math.Max(0, looks.FindIndex(l => BigPictureLooks.IsCurrent(_settings, l)))];
+            if (_themeFolder is not null) _themeFolder.Path = _settings.BigPictureTheme ?? "";
+            if (texts.SequenceEqual(_lookTexts) && Equals(_bigPictureTheme.SelectedItem, selected)) return;
+            _looks = looks;
+            _lookTexts = texts;
+            _bigPictureTheme.Fill(texts, selected);
         }
 
         private static Control Pane(params Control[] rows) => new ScrollViewer { Content = Ui.Stack(12, rows).Margin(4, 12, 4, 4) };

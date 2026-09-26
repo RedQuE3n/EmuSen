@@ -33,6 +33,9 @@ namespace EmuSen.Mistress.BigPicture
         private string _view = "system";
         private string? _system;
         private string _filter = "";
+        private string? _mediaKey;
+        private readonly Dictionary<string, MediaPresence> _presence = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, ResolvedTheme> _themes = new(StringComparer.Ordinal);
 
         public ThemedLibrary(Func<TimeSpan> clock) => _clock = clock;
 
@@ -72,7 +75,7 @@ namespace EmuSen.Mistress.BigPicture
         public IEnumerable<string> SoundFiles => _systems.SelectMany(s => s.Theme.Sounds.Values).Where(p => p.Exists).Select(p => p.Absolute).Distinct();
 
         // Reads the theme when its folder changed, then builds the stage at the kept selection; false, with Error, when there is nothing to show.
-        public bool Show(string themeDirectory, Size screen, IReadOnlyList<ThemedShelf> shelves, ISceneMedia? media)
+        public bool Show(string themeDirectory, Size screen, IReadOnlyList<ThemedShelf> shelves, ISceneMedia? media, string? mediaKey = null)
         {
             if (screen.Width < 1 || screen.Height < 1) return Stage is not null;
             var clock = Stopwatch.StartNew();
@@ -80,7 +83,11 @@ namespace EmuSen.Mistress.BigPicture
             {
                 _capabilities = ThemeCapabilitiesReader.Read(themeDirectory);
                 _directory = themeDirectory;
+                _themes.Clear();
             }
+
+            if (mediaKey != _mediaKey || mediaKey is null) _presence.Clear();
+            _mediaKey = mediaKey;
 
             if (_capabilities.Diagnostics.FirstOrDefault(d => d.Severity == ThemeSeverity.Error) is { } broken)
                 return Fail($"The theme could not be read: {broken.Message}");
@@ -94,9 +101,10 @@ namespace EmuSen.Mistress.BigPicture
             foreach (ThemedShelf shelf in shelves.Where(s => s.Games.Count > 0))
             {
                 scan.Start();
-                MediaPresence? presence = Presence(shelf);
+                MediaPresence presence = Presence(shelf);
                 scan.Stop();
-                ResolvedTheme theme = ThemeLoader.Load(_capabilities, shelf.System, choices, presence);
+                string key = $"{shelf.System.Name}|{choices.ScreenWidth}x{choices.ScreenHeight}|{string.Join(",", presence.Types.Order(StringComparer.Ordinal))}";
+                if (!_themes.TryGetValue(key, out ResolvedTheme? theme)) _themes[key] = theme = ThemeLoader.Load(_capabilities, shelf.System, choices, presence);
                 if (theme.IsThemed) systems.Add(new SceneSystem(shelf.System, theme, shelf.Games));
             }
             _systems = systems;
@@ -119,14 +127,16 @@ namespace EmuSen.Mistress.BigPicture
             return false;
         }
 
-        // Which media a system's games have, for the theme's noMedia and noVideos variants; a type counts once any game has it.
-        private MediaPresence? Presence(ThemedShelf shelf)
+        // Which media a system's games have, for the theme's noMedia and noVideos variants; a type counts once any game has it, and the answer is kept until the games or the media change.
+        private MediaPresence Presence(ThemedShelf shelf)
         {
             if (_media is null) return MediaPresence.None;
+            string key = $"{shelf.System.Name}|{shelf.Games.Count}|{(shelf.Games.Count == 0 ? "" : shelf.Games[0].File + shelf.Games[^1].File)}";
+            if (_presence.TryGetValue(key, out MediaPresence? kept)) return kept;
             var found = new HashSet<string>(StringComparer.Ordinal);
             foreach (string type in ThemeCapabilities.MediaTypes)
                 if (shelf.Games.Any(g => _media.Find(shelf.System, g, type) is not null)) found.Add(type);
-            return new MediaPresence(found);
+            return _presence[key] = new MediaPresence(found);
         }
 
         // The data the kept selection gives: the system by name, its games narrowed by the search, the game by file.

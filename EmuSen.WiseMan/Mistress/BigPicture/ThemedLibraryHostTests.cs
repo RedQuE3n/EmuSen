@@ -73,6 +73,26 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(0, s.Loop(8000));
         }, default);
 
+        // A library of thousands, with a media folder that has none of them: the media scan is paid once, not on every return to the library.
+        [Fact]
+        public Task A_large_library_is_scanned_for_media_once_and_not_on_every_showing() => Session.Dispatch(() =>
+        {
+            string media = Path.Combine(Path.GetTempPath(), "EmuSenEmptyMedia", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(media);
+            using var s = new ThemedSession(settings: a => a.EsdeMediaDirectory = media);
+            for (int i = 0; i < 3500; i++) File.WriteAllBytes(Path.Combine(s.RomDirectory, $"Filler {i:D4}.nes"), []);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            Refresh(s);
+            double first = clock.Elapsed.TotalMilliseconds, firstScan = s.Themed.MediaTime.TotalMilliseconds, firstTheme = s.Themed.LoadTime.TotalMilliseconds;
+            clock.Restart();
+            Refresh(s);
+            double second = clock.Elapsed.TotalMilliseconds;
+            _out.WriteLine($"3,508 games: first refresh {first:F0} ms (media scan {firstScan:F0} ms, themes {firstTheme:F1} ms); second {second:F0} ms (media scan {s.Themed.MediaTime.TotalMilliseconds:F2} ms, themes {s.Themed.LoadTime.TotalMilliseconds:F2} ms)");
+            Assert.True(s.Shown);
+            Assert.True(s.Themed.MediaTime.TotalMilliseconds < firstScan / 10, $"{s.Themed.MediaTime.TotalMilliseconds} against {firstScan}");
+            Directory.Delete(media, true);
+        }, default);
+
         [Fact]
         public void SDL_s_pad_types_and_names_give_the_families()
         {

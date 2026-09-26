@@ -84,6 +84,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
                 static string S(List<double> v) { v.Sort(); return v.Count == 0 ? "none" : FormattableString.Invariant($"median {v[v.Count / 2]:F2}, p95 {v[(int)(v.Count * 0.95)]:F2}, max {v[^1]:F2} (n={v.Count})"); }
                 _output.WriteLine($"lag {lagMs} ms: centre error px {S(errors)}; settled {S(settled)}; width px {S(widths)}; opacity {S(alphas)}");
+                if (lagMs != 5) continue;
+                Assert.True(settled.Max() <= 1, $"settled centres off by {settled.Max():F2} px");
+                Assert.True(errors[(int)(errors.Count * 0.95)] <= 3, $"moving centres off by {errors[(int)(errors.Count * 0.95)]:F2} px at p95");
+                Assert.True(alphas.Max() <= 0.05, $"opacity off by {alphas.Max():F3}");
             }
         });
 

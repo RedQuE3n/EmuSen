@@ -51,6 +51,26 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private static RenderedFrame Static(SceneData data, string view) => SceneAssets.Render(SceneBuilder.Build(data.System.Theme.View(view), data));
 
+        // The values §14.7 records from ES-DE 3.4.1's recordings, so a change to one is a change to the record.
+        [Fact]
+        public void The_ES_DE_motion_is_what_was_measured()
+        {
+            SceneMotion m = SceneMotion.Esde;
+            Assert.Equal(Ms(400), m.CarouselStep);
+            Assert.IsType<QuadraticEaseOut>(m.CarouselEasing);
+            Assert.Equal(new SceneRepeatRule(Ms(500), Ms(200)), m.CarouselRepeat);
+            Assert.Equal(new SceneRepeatRule(Ms(500), Ms(180), Ms(1580), Ms(80)), m.CarouselFastRepeat);
+            Assert.Equal(new SceneRepeatRule(Ms(500), Ms(114), Ms(1703), Ms(15.9), 4), m.ListRepeat);
+            Assert.Equal((Ms(149), Ms(150)), (m.MetadataFadeOut, m.MetadataFadeIn));
+            Assert.Equal((Ms(326), 0.5), (m.ScrollFadeIn, m.ScrollFadeInFrom));
+            Assert.Equal(131.5 / 30, m.MarqueeSpeedPerEm, 9);
+            Assert.Equal(1, m.MarqueeGapSeconds);
+            Assert.Equal(37.03 / 30, m.VerticalContainerSpeedPerEm, 9);
+            Assert.Equal(Ms(298), m.VerticalContainerFadeIn);
+            Assert.Equal(Ms(402), m.ViewSlide);
+            Assert.IsType<CubicEaseOut>(m.ViewSlideEasing);
+        }
+
         [Fact]
         public Task A_carousel_step_eases_to_the_next_item_and_settles_on_the_static_picture() => UiTest.Run(() =>
         {

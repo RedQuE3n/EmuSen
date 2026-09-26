@@ -92,11 +92,7 @@ namespace EmuSen.Mistress.Views
 
         private void OnPadChanged(PadConnection change)
         {
-            if (!change.Connected)
-            {
-                _padActive.Remove(change.Pad.Id);
-                if (_lastPadId == change.Pad.Id) _lastPadId = null;
-            }
+            if (!change.Connected) _padActive.Remove(change.Pad.Id);
             // The library's hint names the pad's buttons or the keyboard's, so the first pad in and the last out redraw it.
             if (_gamepad.Pads.Count == (change.Connected ? 1 : 0) && LibraryView.IsVisible && !ThemedLibraryShown) ShowLibraryEntries();
             if (_appSettings.ControllerNotifications) PadNotice.Show($"{(change.Connected ? "Controller connected" : "Controller disconnected")}: {change.Pad.Name}");

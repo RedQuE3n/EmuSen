@@ -191,6 +191,19 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(PadFamily.Nintendo, Bar(s).PadFamily);
         }, default);
 
+        // A theme's own icons follow the swap: the function on East takes the theme's b icon, as ES-DE's help system is "updated accordingly".
+        [Fact]
+        public void The_swap_gives_each_function_the_theme_s_icon_for_its_new_button()
+        {
+            var icons = new[] { "button_a_XBOX", "button_b_XBOX", "button_x_XBOX", "button_y_XBOX" }
+                .ToDictionary(k => k, k => new EmuSen.Mistress.BigPicture.Theme.ThemePath(k, "/theme/" + k + ".svg", false, true));
+            var plain = EmuSen.Mistress.BigPicture.Scene.HelpPrompts.For("gamelist", ["a", "b", "y"], icons, PadFamily.Xbox);
+            var swapped = EmuSen.Mistress.BigPicture.Scene.HelpPrompts.For("gamelist", ["a", "b", "y"], icons, PadFamily.Xbox, swapped: true);
+            Assert.Equal(new[] { "/theme/button_a_XBOX.svg", "/theme/button_b_XBOX.svg", "/theme/button_y_XBOX.svg" }, plain.Select(e => e.IconPath));
+            Assert.Equal(new[] { "/theme/button_b_XBOX.svg", "/theme/button_a_XBOX.svg", "/theme/button_x_XBOX.svg" }, swapped.Select(e => e.IconPath));
+            Assert.Equal(new[] { "Launch", "Back", "Search" }, swapped.Select(e => e.Label));
+        }
+
         // With the swap, East chooses and South goes back in the view, and the help bar names those buttons.
         [Fact]
         public Task The_swap_trades_the_view_s_buttons_and_the_help_bar_follows() => Session.Dispatch(() =>

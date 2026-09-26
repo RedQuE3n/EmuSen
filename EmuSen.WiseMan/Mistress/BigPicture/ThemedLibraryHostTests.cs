@@ -111,6 +111,19 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Directory.Delete(media, true);
         }, default);
 
+        // §4.9's search is North, which ES-DE's help entries call y; x names nothing in this grammar.
+        [Fact]
+        public void The_help_entries_name_the_buttons_of_the_pad_table()
+        {
+            var none = new Dictionary<string, EmuSen.Mistress.BigPicture.Theme.ThemePath>();
+            var gamelist = EmuSen.Mistress.BigPicture.Scene.HelpPrompts.For("gamelist", ["y", "x", "a", "b", "back", "start", "l", "rt"], none);
+            Assert.Equal(new[] { "Search", "Launch", "Back", "Favorite", "Menu", "Page", "Last" }, gamelist.Select(e => e.Label));
+            Assert.Equal(new PadGlyphButton?[] { PadGlyphButton.North, PadGlyphButton.South, PadGlyphButton.East, PadGlyphButton.Select, PadGlyphButton.Start, PadGlyphButton.LeftShoulder, PadGlyphButton.RightTrigger },
+                gamelist.Select(e => e.Button));
+            var system = EmuSen.Mistress.BigPicture.Scene.HelpPrompts.For("system", ["all"], none);
+            Assert.Equal(new[] { "System", "Select", "Menu" }, system.Select(e => e.Label));
+        }
+
         [Fact]
         public void SDL_s_pad_types_and_names_give_the_families()
         {
@@ -169,6 +182,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Assert.Equal(0, outside);
                 seen.Add((family, frame));
             }
+
+            // A view built after the change draws the same family: back to the system view and in again.
+            s.Pad.B();
+            Assert.Equal(PadFamily.Xbox, Bar().PadFamily);
+            s.Pad.A();
+            Assert.Equal(PadFamily.Xbox, Bar().PadFamily);
 
             // The view's own state did not move.
             Assert.Equal("snes", s.System);
@@ -240,9 +259,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             }
 
             Assert.Equal(new DeviceStatus(), EmuSen.Mistress.BigPicture.DeviceStatusReader.Read(root));
-            Put("power_supply/hidpp_battery_0/type", "Battery");
-            Put("power_supply/hidpp_battery_0/scope", "Device");
-            Put("power_supply/hidpp_battery_0/capacity", "15");
+            Put("power_supply/AAA-mouse-battery/type", "Battery");
+            Put("power_supply/AAA-mouse-battery/scope", "Device");
+            Put("power_supply/AAA-mouse-battery/capacity", "15");
             Put("power_supply/BAT0/type", "Battery");
             Put("power_supply/BAT0/capacity", "64");
             Put("power_supply/BAT0/status", "Charging");

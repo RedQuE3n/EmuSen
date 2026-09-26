@@ -2552,3 +2552,98 @@ tool). They run on WiseMan's `PadDriver` with a clock the test moves. Mutants ar
   media folder on the desktop (§15 of the plan). Later showings reuse the answer.
 - The search is Mistress's, not ES-DE's: ES-DE offers no search box in a gamelist.
 - The system order is the shelves' release order; ES-DE's own order was not established.
+
+### 4.53 Big picture: the theme's settings, the grid, and themes downloaded on request (2026-09-26)
+
+Stage (f) of `EmuSen_BigPicture.md` (its §16 is the record: predictions, measurements, mutants). This section is what a
+player meets.
+
+**Theme Settings.** A sheet over the view, opened from the pad menu's **Theme Settings** (big-screen sessions, outside a
+game) or from Preferences ▸ Appearance ▸ **Theme Settings…**. Its **Options** tab is built from the theme's
+`capabilities.xml`, so it offers exactly what the theme declares:
+
+| Row | What it lists | Stored as |
+|---|---|---|
+| Variant | the variants the theme marks selectable, in its own order, under their `en_US` labels | `Variant` |
+| Colour Scheme | every declared scheme, under its label | `ColorScheme` |
+| Font Size | the declared sizes, in THEMES.md's menu order (Medium, Large, Small, Extra Large, Extra Small) | `FontSize` |
+| Aspect Ratio | Automatic, then the declared ratios in the table's order | `AspectRatio` (none for Automatic) |
+| Language | only when the theme declares languages; Art Book Next declares none | `Language` |
+| Transitions | Automatic, the theme's selectable profiles, then the built-in ones it does not suppress | `Transitions` (none for Automatic) |
+
+A row the theme declares nothing for is left out. A label two entries share is followed by the entry's name. The first
+time, each row shows what the loader would pick on its own (§12.4 of the plan): the first selectable variant, the first
+scheme, Medium, Automatic.
+
+- **A choice applies at once.** It is saved and the view beneath the sheet is rebuilt at the same system and game before
+  the sheet closes; there is no Apply button.
+- **Choices are kept per theme.** `appsettings.json` holds them under `BigPicture`, keyed by the theme folder's full
+  path, so switching themes and back restores each one's. A stored name the theme no longer declares (an update renamed
+  a variant, say) is not an error: the loader falls back to its default for that row.
+
+**The grid variants.** A theme's game list can be a grid, as Art Book Next's three "Grid" variants are. Mistress draws
+it with LunaP's `ImageGrid` and moves it as ES-DE 3.4.1 was measured moving (`EmuSen_BigPicture.md` §16.5):
+
+| Button | In a grid game list |
+|---|---|
+| Left, right | the previous or next game, across the end of a row to the next; a tap wraps at the ends of the list, a hold stops there |
+| Up, down | the game a row above or below; they stop at the first and last rows, and down into a short last row takes its last game |
+| L1, R1 | a page: the whole rows shown |
+| Held | 500 ms, then a step every 200 ms, with no faster speed |
+
+Each step eases the selected cover up and the last one down over 250 ms; when the selection passes the last row shown,
+the rows slide over the same 250 ms and the selected row stays on the bottom row. The game's metadata fades out while a
+direction is held, as over the list. A grid game list takes all four directions, so left and right do not change the
+system there as they do over a list; East goes back to the system view, where they do.
+
+**Variant triggers use the media Mistress has.** A theme can switch a variant for the game lists when a system's games
+have no media of some kind (`noMedia`) or no videos (`noVideos`). Mistress answers from the ES-DE media folder when one
+is set (§4.52), and the cover type also from its own art folder (§4.33). A type counts when any game of the system has a
+file of it. Files are found under ES-DE's own names and extensions: `.png`, `.jpg` and `.webp` for pictures, and
+`.mp4`, `.mkv`, `.avi`, `.wmv`, `.mov` and `.webm` for videos (ES-DE's `USERGUIDE.md`). Before this stage videos were
+never found, so `noVideos` fired on every system; a `.jpeg` file, which ES-DE does not read, is no longer read either.
+Each type folder is listed once per system, and read again at the next showing when it has changed.
+
+**Themes.** The **Themes** tab lists the themes Mistress downloaded, then the folder set in Preferences when it is
+another one, with where each came from:
+
+- **Download Art Book Next** fetches GitHub's archive of the theme's `main` branch
+  (`codeload.github.com/anthonycaccese/art-book-next-es-de/zip/refs/heads/main`, about 220 MB) into
+  `home/Themes/art-book-next-es-de/` (`DataStore.Themes`). Nothing is fetched until the player presses it; EmuSen ships no
+  theme. The newest commit is asked of GitHub's API first and recorded, with the date, in `.emusen-theme` beside the
+  theme. When no theme was set, the new one is used at once, and its About sheet opens, once, after the first download.
+- **The archive is checked before it replaces anything.** It is written beside its final place (`.zip.part`), unpacked
+  into a sibling folder (`.part`), entry by entry, refusing any entry that would land outside it, and swapped in only
+  when its `capabilities.xml` reads without error and a `theme.xml` loads. A failed, stopped or broken download leaves
+  the theme that was there as it was, and nothing beside it.
+- **Check for Update** asks GitHub for the branch's newest commit; when it differs from the stamp the button becomes
+  **Update**. An update keeps the player's `theme-customizations/` folder byte for byte, over anything the archive
+  carries there: that folder is where Art Book Next's README tells a player to put a custom `colors.xml`, artwork and
+  logos.
+- **Remove** asks first, then deletes the folder. It is offered only for a folder Mistress downloaded (directly under
+  `home/Themes`, with its stamp); a folder read in place is never written, let alone removed.
+- **Use** makes a listed theme the big-screen library's theme and sets Library Style to the theme.
+- **Closing the sheet stops a download in flight**, as does closing the window under it; nothing keeps fetching behind a
+  closed sheet (a sheet is not closed when its window is, so both are handled).
+
+**About.** Each listed theme has an **About** sheet: its name; its author (for a downloaded theme, the owner of its
+GitHub repository); its licence and credits, read at display time from the theme's own `README.md` (the sections whose
+headings name a licence and credits), else from a `LICENSE` file, else a line saying it states none; its source and
+commit; and a statement that the theme was downloaded at the player's request, or is read in place, and is not part of
+EmuSen. EmuSen carries no copy of any theme's text: for Art Book Next the sheet shows the licence line of its README, a
+CC BY-NC-SA 2.0 licence, as the README states it on the day it is read.
+
+**Tests.** `ThemeSettingsSheetTests` (the rows from a synthetic theme and from Art Book Next, a choice applied beneath
+the open sheet and equal to a fresh build, choices per theme and a stale one, Preferences, every control reached by the
+pad, the download flow with its About sheet and an update, and the two closing cases), `ThemeDownloadsTests` (a fake
+GitHub: the download and its stamp, an update keeping `theme-customizations`, five broken downloads, a cancelled one,
+removal, the attribution) `ThemedLibraryTriggerTests` (the extensions, presence by listing, the variant following the
+media), `GridSceneTests` (the measured layout, a step, a slide, the ends, the repeats, the metadata fade, a step while
+moving, the units, and Art Book Next's grid against ES-DE's still) and `ThemedGridPadTests` (the pad over a grid). Every server is a fake written for the tests; no test reaches the network.
+
+**What it does not cover.**
+- Only Art Book Next has a download button. Another GitHub theme, ES-DE's theme list and a GitLab theme are §6's plan and
+  are not built; a theme folder can still be chosen in Preferences and read in place.
+- The download is not resumable: a stopped download starts again from the beginning.
+- The stamp is the only record of where a theme came from; a downloaded folder whose stamp is deleted is treated as read
+  in place, and cannot be removed from the sheet.

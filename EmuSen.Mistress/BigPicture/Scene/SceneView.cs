@@ -1,4 +1,5 @@
 using System;
+using Avalonia;
 using System.Linq;
 using Avalonia.Controls;
 using EmuSen.LunaP.Controls;
@@ -26,6 +27,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             _repeat = new SceneRepeat();
             Root = new Panel { Width = data.Screen.Width, Height = data.Screen.Height };
             Scene = Rebuild();
+            _scroll = Glide.At(Grid()?.ScrollFor(Index) ?? 0);
             Apply();
         }
 
@@ -55,10 +57,10 @@ namespace EmuSen.Mistress.BigPicture.Scene
         private bool Slides => Primary is { Type: "carousel" } p && p.String("itemTransitions") != "instant";
 
         // One step of the selection, as a tap gives it: a carousel and a list both wrap at their ends.
-        public void Step(int delta, TimeSpan now) => Move(delta, now, held: false);
+        public void Step(int delta, TimeSpan now) => Move(delta, now, held: false, vertical: false);
 
         // A move by several items that stops at a list's ends, as a page or a jump to the first or last does; false when nothing moved.
-        public bool Jump(int delta, TimeSpan now) => Move(delta, now, held: true);
+        public bool Jump(int delta, TimeSpan now) => Move(delta, now, held: true, vertical: false);
 
         // Raised for every move of the selection, the repeats of a held direction included, with its signed size and whether it was held.
         public event Action<int, bool>? Stepped;
@@ -78,7 +80,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         // When the view next looks different from now: now while anything moves, a later time for a text still in its pause, null when it is still for good (§15).
         public TimeSpan? NextChange(TimeSpan now)
         {
-            if (!_position.IsSettledAt(now) || _repeat.Held || !_metadata.IsSettledAt(now)) return now;
+            if (!_position.IsSettledAt(now) || _repeat.Held || !_metadata.IsSettledAt(now) || !_scroll.IsSettledAt(now) || !_focus.IsSettledAt(now)) return now;
             if (_changed && now < _selectedAt + Motion.ScrollFadeIn && Scene.Entries.Any(e => e.Control is not null && FadesIn(e.Element))) return now;
             TimeSpan? next = null;
             foreach (SceneEntry e in Scene.Entries)
@@ -95,8 +97,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
         }
 
         // A move of the selection; a held list stops at its end, where a carousel wraps; false when nothing moved.
-        private bool Move(int delta, TimeSpan now, bool held)
+        private bool Move(int delta, TimeSpan now, bool held, bool vertical)
         {
+            if (Primary?.Type == "grid") return MoveGrid(delta, now, held, vertical);
             Now = now;
             int count = Count;
             if (count == 0 || delta == 0) return false;
@@ -134,11 +137,73 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         private bool _stale;
 
-        // A direction held from a time on; the repeats it gives are stepped by Advance.
-        public void Press(int direction, TimeSpan now)
+        // A direction held from a time on; the repeats it gives are stepped by Advance; a grid's vertical direction moves by rows.
+        public void Press(int direction, TimeSpan now, bool vertical = false)
         {
-            Step(direction, now);
+            _vertical = vertical && Primary?.Type == "grid";
+            Move(direction, now, held: false, _vertical);
             _repeat.Press(direction, now, RepeatRule);
+        }
+
+        private bool _vertical;
+        private Glide _scroll = Glide.At(0);
+        private Glide _focus = Glide.At(1);
+        private int _focusFrom = -1;
+        private double _fromLevel = 1, _toLevel;
+
+        // The grid's layout at the element's size, as the control will lay it out; null when the view's primary element is no grid.
+        public GridGeometry? Grid()
+        {
+            if (Primary?.Type != "grid" || Scene.Entries.FirstOrDefault(e => e.Control is ImageGrid) is not { Control: ImageGrid grid } entry) return null;
+            Size box = SceneUnits.ToSize(entry.Element.Pair("size"));
+            return grid.GeometryFor(new Size(box.Width * Data.Screen.Width, box.Height * Data.Screen.Height));
+        }
+
+        // An item's focus at a time: the selection rising from its level, the item left falling from its own, the rest none.
+        private double FocusOf(int index, TimeSpan at)
+        {
+            double p = _focus.ValueAt(at);
+            if (index == Index) return _focusFrom == Index ? 1 : _toLevel + (1 - _toLevel) * p;
+            return index == _focusFrom ? _fromLevel * (1 - p) : 0;
+        }
+
+        // ES-DE's grid, measured: across a row's end to the next row; a tap wraps at the list's ends and a hold stops; up and down stop at the first and last rows, and down into a short last row takes its last item (§16).
+        private bool MoveGrid(int delta, TimeSpan now, bool held, bool vertical)
+        {
+            Now = now;
+            int count = Count;
+            if (count == 0 || delta == 0 || Grid() is not { } g) return false;
+            int target;
+            if (vertical)
+            {
+                target = Index + Math.Sign(delta) * g.Columns;
+                if (target < 0) return false;
+                if (target >= count)
+                {
+                    if (g.RowOf(Index) >= g.RowOf(count - 1)) return false;
+                    target = count - 1;
+                }
+            }
+            else
+            {
+                target = Index + delta;
+                target = held ? Math.Clamp(target, 0, count - 1) : ((target % count) + count) % count;
+            }
+            if (target == Index) return false;
+
+            (_fromLevel, _toLevel) = (FocusOf(Index, now), FocusOf(target, now));
+            _focusFrom = Index;
+            _focus = Primary!.String("itemTransitions") == "instant" ? Glide.At(1) : new Glide(0, 1, now, Motion.GridStep, Motion.GridEasing);
+            double scroll = g.ScrollFor(target);
+            _scroll = Primary.String("rowTransitions") == "instant" ? Glide.At(scroll) : _scroll.Toward(scroll, now, Motion.GridStep, Motion.GridEasing);
+            Data = IsSystemView ? Data with { SystemIndex = target } : Data with { GameIndex = target };
+            _selectedAt = now;
+            _changed = true;
+            Scene = Rebuild();
+            _stale = false;
+            Apply();
+            Stepped?.Invoke(delta, held);
+            return true;
         }
 
         public void Release(TimeSpan now)
@@ -157,15 +222,15 @@ namespace EmuSen.Mistress.BigPicture.Scene
             _stale = false;
         }
 
-        private SceneRepeatRule RepeatRule => Primary?.Type == "carousel" ? (Primary.Bool("fastScrolling") == true ? Motion.CarouselFastRepeat : Motion.CarouselRepeat) : Motion.ListRepeat;
+        private SceneRepeatRule RepeatRule => Primary?.Type == "grid" ? Motion.GridRepeat : Primary?.Type == "carousel" ? (Primary.Bool("fastScrolling") == true ? Motion.CarouselFastRepeat : Motion.CarouselRepeat) : Motion.ListRepeat;
 
         // Moves the view's clock on: key repeats that fall due, then every time-derived state at the new time.
         public void Advance(TimeSpan now)
         {
             foreach ((int delta, TimeSpan at) in _repeat.Due(now))
             {
-                if (IsSystemView) Move(delta, at, held: true);
-                else if (Move(delta, at, held: true)) { if (_metadata.To > 0) _metadata = _metadata.Toward(0, at, Motion.MetadataFadeOut); }
+                if (IsSystemView) Move(delta, at, held: true, _vertical);
+                else if (Move(delta, at, held: true, _vertical)) { if (_metadata.To > 0) _metadata = _metadata.Toward(0, at, Motion.MetadataFadeOut); }
                 else FadeMetadataIn(at);
             }
 
@@ -174,7 +239,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         }
 
         // Whether anything is still moving, so a host can stop asking for frames.
-        public bool IsMoving => !_position.IsSettledAt(Now) || _repeat.Held || !_metadata.IsSettledAt(Now) || (Now < _selectedAt + Motion.ScrollFadeIn && Scene.Entries.Any(e => FadesIn(e.Element))) || Scrolls;
+        public bool IsMoving => !_position.IsSettledAt(Now) || !_scroll.IsSettledAt(Now) || !_focus.IsSettledAt(Now) || _repeat.Held || !_metadata.IsSettledAt(Now) || (Now < _selectedAt + Motion.ScrollFadeIn && Scene.Entries.Any(e => FadesIn(e.Element))) || Scrolls;
 
         // A text that may scroll keeps asking for frames: a conservative answer, since its loop never ends.
         private bool Scrolls => Scene.Entries.Any(e => e.Control is FontText { ScrollDirection: not TextScrollDirection.None, Scroll.Speed: > 0 } or TextRowList { Marquee.Speed: > 0 });
@@ -216,6 +281,14 @@ namespace EmuSen.Mistress.BigPicture.Scene
                 if (entry.Control is { } control && _opacity.TryGetValue(control, out double own))
                     control.Opacity = own * (FadesIn(entry.Element) ? fadeIn : 1) * (IsGameMetadata(entry.Element) ? metadata : 1);
                 if (entry.Control is ImageCarousel carousel) carousel.Position = _position.ValueAt(Now);
+                else if (entry.Control is ImageGrid grid)
+                {
+                    grid.ScrollRow = _scroll.ValueAt(Now);
+                    grid.FocusFrom = _focusFrom;
+                    grid.FocusFromLevel = _fromLevel;
+                    grid.FocusToLevel = _toLevel;
+                    grid.FocusProgress = _focus.ValueAt(Now);
+                }
                 else if (entry.Control is TextRowList list) list.MarqueeTime = Now - _selectedAt;
                 else if (entry.Control is FontText { ScrollDirection: not TextScrollDirection.None } text) text.ScrollTime = Now - _selectedAt;
             }

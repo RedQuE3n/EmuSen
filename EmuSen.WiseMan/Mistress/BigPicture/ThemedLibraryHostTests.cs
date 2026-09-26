@@ -116,10 +116,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public void The_help_entries_name_the_buttons_of_the_pad_table()
         {
             var none = new Dictionary<string, EmuSen.Mistress.BigPicture.Theme.ThemePath>();
-            var gamelist = EmuSen.Mistress.BigPicture.Scene.HelpPrompts.For("gamelist", ["y", "x", "a", "b", "back", "start", "l", "rt"], none);
+            var gamelist = EmuSen.Mistress.BigPicture.Scene.HelpPrompts.For("gamelist", ["y", "a", "b", "back", "start", "l", "rt"], none);
             Assert.Equal(new[] { "Search", "Launch", "Back", "Favorite", "Menu", "Page", "Last" }, gamelist.Select(e => e.Label));
             Assert.Equal(new PadGlyphButton?[] { PadGlyphButton.North, PadGlyphButton.South, PadGlyphButton.East, PadGlyphButton.Select, PadGlyphButton.Start, PadGlyphButton.LeftShoulder, PadGlyphButton.RightTrigger },
                 gamelist.Select(e => e.Button));
+            Assert.Empty(EmuSen.Mistress.BigPicture.Scene.HelpPrompts.For("gamelist", ["x"], none));
             var system = EmuSen.Mistress.BigPicture.Scene.HelpPrompts.For("system", ["all"], none);
             Assert.Equal(new[] { "System", "Select", "Menu" }, system.Select(e => e.Label));
         }

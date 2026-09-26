@@ -82,6 +82,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Settle();
         }
 
+        // Select on the list's entry: the one menu of gamelist rows, collection entries and game entries.
+        internal static void OpenMenu(ThemedSession s)
+        {
+            s.Pad.Select();
+            s.Settle();
+            Assert.IsType<GameOptionsWindow>(Sheets(s).Current);
+        }
+
         internal static SheetLayer Sheets(ThemedSession s) => s.Window.GetControl<SheetLayer>("Sheets");
 
         internal static Control Sheet(ThemedSession s) => Sheets(s).SheetOf(Sheets(s).Current!)!;
@@ -104,13 +112,17 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
 
         [Fact]
-        public Task Automatic_collections_are_off_until_turned_on_then_follow_the_systems_in_ES_DE_s_measured_order() => Session.Dispatch(() =>
+        public Task Automatic_collections_are_on_for_a_fresh_settings_file_and_follow_the_systems_in_ES_DE_s_measured_order() => Session.Dispatch(() =>
         {
-            using (var plain = new ThemedSession())
+            // The choice (Q11): a settings file written before this work, or none, gives all three.
+            Assert.Equal([BigPictureCollections.AllGames, BigPictureCollections.Favorites, BigPictureCollections.LastPlayed], new AppSettings().BigPictureCollections.AutoCollections);
+            Assert.Equal(3, System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{}")!.BigPictureCollections.AutoCollections.Count);
+            using (var fresh = new ThemedSession(settings: a => a.BigPictureCollections = new BigPictureCollections()))
             {
-                Records(plain).CreateCollection("Platform", DateTime.Now);
-                Refresh(plain);
-                Assert.Equal(["nes", "gb", "snes"], Systems(plain));
+                Records(fresh).CreateCollection("Platform", DateTime.Now);
+                Refresh(fresh);
+                // An empty custom collection still has its entry in Collections, as THEMES.md's defaultImage for one implies.
+                Assert.Equal(["nes", "gb", "snes", "collections", "all"], Systems(fresh));
             }
 
             using var s = new ThemedSession(settings: AllAuto);
@@ -336,6 +348,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             string chosen = ThemedSession.SnesGames[2];
             s.Pad.Y();
             Assert.Contains(made.Id, Records(s).CollectionsOf(Rom(s, chosen)));
+            Assert.False(Records(s).IsFavourite(Rom(s, chosen)));
             Assert.Null(OnScreenKeyboard.OpenOver(s.Window));
             Assert.Equal(chosen, s.Game);
             Assert.True(s.Themed.SelectedGame!.InCollection);
@@ -345,7 +358,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(s.Themed.Stage.Current.Data.Help.Editing);
             HintBar help = s.Themed.Stage.Current.Scene.Entries.Select(e => e.Control).OfType<HintBar>().Single();
             Assert.Contains(help.Entries!, h => h.Label == "Collection" && h.Button == PadGlyphButton.North);
-            Assert.DoesNotContain(help.Entries!, h => h.Label == "Search");
+            Assert.DoesNotContain(help.Entries!, h => h.Label == "Favorite");
 
             // The collection now shows in the carousel, grouped, holding the game.
             s.Pad.B();
@@ -355,21 +368,24 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.A();
             Assert.Equal([chosen], Listed(s));
 
-            // North again takes it out; then Finish Editing in the options, and North searches as before.
+            // North again takes it out; then Finish Editing from Select's menu on the collection's own entry, which has no game's entries, and North is the favourite again.
             s.Pad.Y();
             Assert.Empty(Records(s).Members(made.Id));
-            Choose(s, "Gamelist Options");
-            Reach(s, e => e is Button { Name: "GamelistFinishEditing" });
+            s.Pad.B();
+            Assert.True(s.Themed.SelectedGame!.IsCollection);
+            OpenMenu(s);
+            Assert.DoesNotContain(((GameOptionsWindow)Sheets(s).Current!).Options, o => o.Label.Contains("Favourites") || o.Label.StartsWith("Edit This Game"));
+            Reach(s, e => e is Button { Content: string finish } && finish.StartsWith("Finish Editing"));
             s.Pad.A();
             s.Settle();
             Assert.Null(s.Themed.Editing);
             Assert.False(s.Themed.Stage!.Current.Data.Help.Editing);
-            Assert.Contains(s.Themed.Stage.Current.Scene.Entries.Select(e => e.Control).OfType<HintBar>().Single().Entries!, h => h.Label == "Search");
-            s.Pad.B();
+            Assert.Contains(s.Themed.Stage.Current.Scene.Entries.Select(e => e.Control).OfType<HintBar>().Single().Entries!, h => h.Label == "Favorite");
             s.Pad.B();
             Enter(s, "snes");
             s.Pad.Y();
-            Assert.NotNull(OnScreenKeyboard.OpenOver(s.Window));
+            Assert.Null(OnScreenKeyboard.OpenOver(s.Window));
+            Assert.True(Records(s).IsFavourite(Rom(s, s.Game!)));
 
             // A second collection of the same name is numbered, as ES-DE numbers it.
             Assert.Equal("Beat Up (1)", CollectionShelves.Unique("Beat Up", Records(s).Collections().Select(c => c.Name)));
@@ -387,8 +403,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             string[] byName = Listed(s);
 
             // Back cancels: the sort is stepped, then the Back button closes the sheet with nothing applied.
-            Choose(s, "Gamelist Options");
-            Assert.IsType<GamelistOptionsWindow>(Sheets(s).Current);
+            OpenMenu(s);
+            // One menu under Select, in ES-DE's order: the list's rows, then the game's entries (Q12).
+            Assert.Equal(["Jump To...", "Sort Games By", "Filter Gamelist", "Search...", "Add to Favourites", "Edit This Game's Metadata", "Scrape This Game..."],
+                ((GameOptionsWindow)Sheets(s).Current!).Options.Select(o => o.Label));
+            Assert.Empty(s.Window.OwnedWindows);
             Reach(s, e => e is Dropdown { Name: "GamelistSortBy" });
             s.Pad.Right();
             s.Pad.Select();
@@ -396,7 +415,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(byName, Listed(s));
 
             // B applies: name, descending.
-            Choose(s, "Gamelist Options");
+            OpenMenu(s);
             Reach(s, e => e is Dropdown { Name: "GamelistSortBy" });
             s.Pad.Right();
             s.Pad.B();
@@ -413,7 +432,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(byName.Reverse(), Listed(s));
 
             // Rating, descending, from ScreenScraper's text: a game without a rating goes last.
-            Choose(s, "Gamelist Options");
+            OpenMenu(s);
             Reach(s, e => e is Dropdown { Name: "GamelistSortBy" });
             s.Pad.Right(2);
             s.Pad.B();
@@ -421,7 +440,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal([ThemedSession.SnesGames[4], ThemedSession.SnesGames[0], ThemedSession.SnesGames[1], ThemedSession.SnesGames[2], ThemedSession.SnesGames[3]], Listed(s));
 
             // The filter screen: Racing alone.
-            Choose(s, "Gamelist Options");
+            OpenMenu(s);
             Reach(s, e => e is Button { Name: "GamelistFilterButton" });
             s.Pad.A();
             s.Settle();
@@ -432,7 +451,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.A();
             s.Pad.B();
             s.Settle();
-            Assert.IsType<GamelistOptionsWindow>(Sheets(s).Current);
+            Assert.IsType<GameOptionsWindow>(Sheets(s).Current);
             Assert.Equal("1 filter set", Named<TextBlock>(s, "GamelistFilterState").Text);
             s.Pad.B();
             Assert.Equal([ThemedSession.SnesGames[0], ThemedSession.SnesGames[2]], Listed(s));
@@ -447,7 +466,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal([ThemedSession.SnesGames[0], ThemedSession.SnesGames[2]], Listed(s));
 
             // The filter is reset on its screen; the jump goes to the first game of the letter chosen.
-            Choose(s, "Gamelist Options");
+            OpenMenu(s);
             Reach(s, e => e is Button { Name: "GamelistFilterButton" });
             s.Pad.A();
             s.Settle();
@@ -461,7 +480,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(byName, Listed(s));
             Assert.Equal(GameSort.Default, s.Themed.CurrentSort);
 
-            Choose(s, "Gamelist Options");
+            OpenMenu(s);
             Reach(s, e => e is Dropdown { Name: "GamelistJumpTo" });
             Assert.Equal(new[] { "A", "B", "C", "D", "E" }, Named<Dropdown>(s, "GamelistJumpTo").Items.Cast<object>().Select(o => o.ToString()));
             Assert.Equal(GamelistOptions.FirstLetter(s.Game!), Named<Dropdown>(s, "GamelistJumpTo").SelectedItem as string);
@@ -512,7 +531,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         });
 
         [Theory]
-        [InlineData("Gamelist Options")]
+        [InlineData("Select menu in a custom collection")]
         [InlineData("Filter Gamelist")]
         [InlineData("Game Collection Settings")]
         public Task Every_control_of_the_collection_sheets_is_reached_by_the_pad(string sheet) => Run(s =>
@@ -526,7 +545,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             {
                 Enter(s, sheet == "Filter Gamelist" ? "snes" : "collections");
                 if (sheet != "Filter Gamelist") s.Pad.A();
-                Choose(s, "Gamelist Options");
+                OpenMenu(s);
+                if (sheet != "Filter Gamelist")
+                    Assert.Contains(((GameOptionsWindow)Sheets(s).Current!).Options, o => o.Label == "Add/Remove Games to This Collection");
                 if (sheet == "Filter Gamelist")
                 {
                     Reach(s, e => e is Button { Name: "GamelistFilterButton" });

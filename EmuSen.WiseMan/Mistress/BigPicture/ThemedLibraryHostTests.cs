@@ -133,13 +133,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Directory.Delete(media, true);
         }, default);
 
-        // §4.9's search is North, which ES-DE's help entries call y; x names nothing in this grammar.
+        // North is the favourite, which ES-DE's help entries call y (Q15, §22.5); x names nothing in this grammar.
         [Fact]
         public void The_help_entries_name_the_buttons_of_the_pad_table()
         {
             var none = new Dictionary<string, EmuSen.Mistress.BigPicture.Theme.ThemePath>();
             var gamelist = EmuSen.Mistress.BigPicture.Scene.HelpPrompts.For("gamelist", ["y", "a", "b", "back", "start", "l", "rt"], none);
-            Assert.Equal(new[] { "Search", "Launch", "Back", "Options", "Menu", "Page", "Last" }, gamelist.Select(e => e.Label));
+            Assert.Equal(new[] { "Favorite", "Launch", "Back", "Options", "Menu", "Jump", "Last" }, gamelist.Select(e => e.Label));
             Assert.Equal(new PadGlyphButton?[] { PadGlyphButton.North, PadGlyphButton.South, PadGlyphButton.East, PadGlyphButton.Select, PadGlyphButton.Start, PadGlyphButton.LeftShoulder, PadGlyphButton.RightTrigger },
                 gamelist.Select(e => e.Button));
             Assert.Empty(EmuSen.Mistress.BigPicture.Scene.HelpPrompts.For("gamelist", ["x"], none));
@@ -224,8 +224,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.Right();
             s.Pad.A();
             s.Pad.Down();
-            s.Pad.Select();
-            s.Pad.A();
+            s.Pad.Y();
             Assert.True(s.Themed.SelectedGame!.Favorite);
             s.Pad.B();
             Assert.Equal("system", s.View);

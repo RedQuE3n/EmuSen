@@ -8,6 +8,7 @@ using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.BigPicture;
 using EmuSen.Mistress.BigPicture.Scene;
+using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Library;
 
 namespace EmuSen.Mistress.Views
@@ -17,10 +18,8 @@ namespace EmuSen.Mistress.Views
     {
         // The custom collection being edited, for this session only, as ES-DE's edit mode is.
         private (long Id, string Name)? _editedCollection;
-        private GamelistOptionsWindow? _gamelistOptions;
         private CollectionSettingsWindow? _collectionSettings;
 
-        internal GamelistOptionsWindow? GamelistOptionsSheet => _gamelistOptions;
         internal CollectionSettingsWindow? CollectionSettingsSheet => _collectionSettings;
 
         // The library's systems followed by ES-DE's collections, from the same records the sidebar shows.
@@ -63,42 +62,55 @@ namespace EmuSen.Mistress.Views
             ShowLibraryEntries();
         }
 
-        // Pad menu entries over the themed view, beside Theme Settings.
+        // ES-DE's main menu entry, in the pad menu over the themed view; the gamelist options are Select's menu (§4.58).
         private void AddCollectionMenuEntries(List<Input.PadMenuEntry> entries)
         {
             if (!ThemedLibraryShown || !LibraryView.IsVisible || _themed is null) return;
-            if (_themed.ViewName == "gamelist") entries.Add(new Input.PadMenuEntry(() => "Gamelist Options", ShowGamelistOptions));
             entries.Add(new Input.PadMenuEntry(() => "Game Collection Settings", ShowCollectionSettings));
         }
 
-        // ES-DE's gamelist options for the list on screen, as a sheet; what it closes with is applied beneath it.
-        internal void ShowGamelistOptions()
+        // Jump To, Sort Games By and Filter Gamelist first in Select's menu, then Search, which ES-DE has not (§4.58).
+        partial void AddGamelistOptions(SceneGame game, List<GameOption> options)
         {
-            if (_themed is not { ViewName: "gamelist" } themed || _gamelistOptions is not null) return;
-            SceneGame? game = themed.SelectedGame;
+            if (_themed is not { ViewName: "gamelist" } themed) return;
             IReadOnlyList<(string Label, int Index)> letters = themed.Letters();
-            string? letter = game is null ? null : themed.FavoritesOnTop && game.Favorite && letters.Any(l => l.Label == GamelistOptions.Star) ? GamelistOptions.Star : GamelistOptions.FirstLetter(game.Name);
-            CustomCollection? collection = themed.CurrentCollectionId is { } id && _collections.FirstOrDefault(c => c.Id == id) is { } c
-                ? new CustomCollection(c.Id, c.Name, _records.Members(c.Id)) : null;
-            var model = new GamelistOptionsModel(letters, letter, GameSort.All(themed.IsCollection), themed.CurrentSort, themed.CurrentFilter,
-                themed.Unfiltered, collection, _editedCollection?.Name);
-            var window = _gamelistOptions = new GamelistOptionsWindow(model);
-            window.Closed += (_, _) =>
-            {
-                if (_gamelistOptions == window) _gamelistOptions = null;
-                if (window.Result is { } result) ApplyGamelistOptions(result, collection);
-            };
-            _ = SheetLayer.Show(window, this);
+            string letter = themed.FavoritesOnTop && game.Favorite && letters.Any(l => l.Label == GamelistOptions.Star)
+                ? GamelistOptions.Star : GamelistOptions.FirstLetter(GamelistOptions.SortKey(game));
+            var model = new GamelistOptionsModel(letters, letter, GameSort.All(themed.IsCollection), themed.CurrentSort, themed.CurrentFilter, themed.Unfiltered);
+            options.AddRange(new GamelistOptionRows(model, this).Options(ApplyGamelistOptions));
+            options.Add(new GameOption("Search...", SearchThemedGamelist));
         }
 
-        private void ApplyGamelistOptions(GamelistOptionsResult result, CustomCollection? collection)
+        // The collection being edited finished from any list, or the list's own custom collection edited, as ES-DE's menu offers them.
+        partial void AddCollectionOptions(SceneGame game, List<GameOption> options)
+        {
+            if (_themed?.CurrentCollectionId is { } id && _collections.FirstOrDefault(c => c.Id == id) is { } shown && _editedCollection?.Id != id)
+                options.Add(new GameOption("Add/Remove Games to This Collection", () => SetEditedCollection((shown.Id, shown.Name))));
+            if (_editedCollection is { } editing)
+                options.Add(new GameOption($"Finish Editing '{editing.Name}' Collection", () => SetEditedCollection(null)));
+        }
+
+        private void SetEditedCollection((long Id, string Name)? collection)
+        {
+            _editedCollection = collection;
+            ApplyCollectionSettings();
+            _themed?.Refresh(UiClock());
+            ScheduleThemedFrame();
+        }
+
+        private void ApplyGamelistOptions(GamelistOptionsResult result)
         {
             if (_themed is null) return;
-            if (result.Edit == CollectionEdit.Start && collection is not null) _editedCollection = (collection.Id, collection.Name);
-            if (result.Edit == CollectionEdit.Finish) _editedCollection = null;
-            ApplyCollectionSettings();
             _themed.ApplyOptions(result.Sort, result.Filter, result.Letter, UiClock());
             ScheduleThemedFrame();
+        }
+
+        // The search box, which North opened before North became the favourite (§4.58).
+        private void SearchThemedGamelist()
+        {
+            if (_themedSearch is null) return;
+            ShowThemedSearchBar(open: true);
+            PadKeyboard.Open(_themedSearch);
         }
 
         internal void ShowCollectionSettings()

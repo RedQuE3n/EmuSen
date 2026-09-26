@@ -170,10 +170,6 @@ namespace EmuSen.Mistress.Views
                 case ThemedAction.Options when command.Game is { } game:
                     ShowGameOptions(game);
                     break;
-                case ThemedAction.Search when _themedSearch is not null:
-                    ShowThemedSearchBar(open: true);
-                    PadKeyboard.Open(_themedSearch);
-                    break;
                 case ThemedAction.ClearSearch when _themedSearch is not null:
                     _themedSearch.Text = "";
                     break;

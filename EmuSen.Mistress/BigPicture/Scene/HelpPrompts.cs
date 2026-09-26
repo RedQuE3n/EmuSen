@@ -25,13 +25,13 @@ namespace EmuSen.Mistress.BigPicture.Scene
         [
             new("up/down", "Choose", PadGlyphButton.DPadUpDown, "dpad_updown"),
             new("left/right", "System", PadGlyphButton.DPadLeftRight, "dpad_leftright"),
-            new("l", "Page", PadGlyphButton.LeftShoulder, "button_l"),
-            new("r", "Page", PadGlyphButton.RightShoulder, "button_r"),
+            new("l", "Jump", PadGlyphButton.LeftShoulder, "button_l"),
+            new("r", "Jump", PadGlyphButton.RightShoulder, "button_r"),
             new("lt", "First", PadGlyphButton.LeftTrigger, "button_lt"),
             new("rt", "Last", PadGlyphButton.RightTrigger, "button_rt"),
             new("a", "Launch", PadGlyphButton.South, "button_a_{0}"),
             new("b", "Back", PadGlyphButton.East, "button_b_{0}"),
-            new("y", "Search", PadGlyphButton.North, "button_y_{0}"),
+            new("y", "Favorite", PadGlyphButton.North, "button_y_{0}"),
             new("back", "Options", PadGlyphButton.Select, "button_back_{1}"),
             new("start", "Menu", PadGlyphButton.Start, "button_start_{1}"),
         ];

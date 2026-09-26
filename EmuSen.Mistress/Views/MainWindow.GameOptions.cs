@@ -69,11 +69,15 @@ namespace EmuSen.Mistress.Views
             var options = new List<GameOption>();
             AddGamelistOptions(game, options);
             AddCollectionOptions(game, options);
-            bool favourite = _records.IsFavourite(game.File);
-            options.Add(new GameOption(favourite ? "Remove from Favourites" : "Add to Favourites", () => ToggleThemedFavourite(game)));
-            options.Add(new GameOption("Edit This Game's Metadata", () => ShowMetadataEditor(game.File, game.Name)));
-            // Scraping only ever starts where the player asks for it - see EmuSen_BigPicture.md §17.14.
-            if (!ScrapeRunning) options.Add(new GameOption("Scrape This Game...", () => _ = ConfirmAndScrapeAsync(ScrapeScope.ThisGame(game.File))));
+            // A grouped collection's entry is no game: it has the list's rows and nothing of a game's (§4.58).
+            if (!game.IsCollection)
+            {
+                bool favourite = _records.IsFavourite(game.File);
+                options.Add(new GameOption(favourite ? "Remove from Favourites" : "Add to Favourites", () => ToggleThemedFavourite(game)));
+                options.Add(new GameOption("Edit This Game's Metadata", () => ShowMetadataEditor(game.File, game.Name)));
+                // Scraping only ever starts where the player asks for it - see EmuSen_BigPicture.md §17.14.
+                if (!ScrapeRunning) options.Add(new GameOption("Scrape This Game...", () => _ = ConfirmAndScrapeAsync(ScrapeScope.ThisGame(game.File))));
+            }
             var window = _gameOptions = new GameOptionsWindow(game.Name, options);
             window.Closed += (_, _) => { if (ReferenceEquals(_gameOptions, window)) _gameOptions = null; };
             _ = SheetLayer.Show(window, this);

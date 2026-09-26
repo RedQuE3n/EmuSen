@@ -95,7 +95,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
             ThemedCollectionsTests.Enter(s, "snes");
             s.Run(800);
-            ThemedCollectionsTests.Choose(s, "Gamelist Options");
+            ThemedCollectionsTests.OpenMenu(s);
             ThemedCollectionsTests.Reach(s, e => e is Dropdown { Name: "GamelistSortBy" });
             s.Pad.Right(3);
             s.Settle();
@@ -112,7 +112,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Run(800);
             Save(s, "filtered-list-racing-by-rating-1280x800");
 
-            ThemedCollectionsTests.Choose(s, "Gamelist Options");
+            ThemedCollectionsTests.OpenMenu(s);
             ThemedCollectionsTests.Reach(s, e => e is Button { Name: "GamelistFilterButton" });
             s.Pad.A();
             s.Settle();
@@ -125,7 +125,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.B();
             s.Run(800);
 
-            ThemedCollectionsTests.Choose(s, "Gamelist Options");
+            ThemedCollectionsTests.OpenMenu(s);
             ThemedCollectionsTests.Reach(s, e => e is Dropdown { Name: "GamelistJumpTo" });
             s.Pad.A();
             s.Settle();
@@ -146,8 +146,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ThemedCollectionsTests.Enter(s, "collections");
             s.Pad.Down();
             s.Pad.A();
-            ThemedCollectionsTests.Choose(s, "Gamelist Options");
-            ThemedCollectionsTests.Reach(s, e => e is Button { Name: "GamelistEditCollection" });
+            ThemedCollectionsTests.OpenMenu(s);
+            ThemedCollectionsTests.Reach(s, e => e is Button { Content: "Add/Remove Games to This Collection" });
             s.Pad.A();
             s.Settle();
             s.Pad.B();

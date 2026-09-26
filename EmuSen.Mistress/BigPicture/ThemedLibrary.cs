@@ -24,7 +24,7 @@ namespace EmuSen.Mistress.BigPicture
     // The custom collection being edited, and the files in it (§22).
     public sealed record EditedCollection(long Id, string Name, IReadOnlySet<string> Members);
 
-    public enum ThemedAction { None, Launch, Favourite, Search, ClearSearch, Menu, Leave, Options, ToggleCollection }
+    public enum ThemedAction { None, Launch, Favourite, ClearSearch, Menu, Leave, Options, ToggleCollection }
 
     // What a button asked of the window, beyond what the view does by itself.
     public readonly record struct ThemedCommand(ThemedAction Action, SceneGame? Game = null);
@@ -110,7 +110,7 @@ namespace EmuSen.Mistress.BigPicture
             Choices = choices;
             var systems = new List<SceneSystem>();
             var scan = new Stopwatch();
-            foreach (ThemedShelf shelf in shelves.Where(s => s.Games.Count > 0))
+            foreach (ThemedShelf shelf in shelves.Where(s => s.Games.Count > 0 || s.Folders is { Count: > 0 }))
             {
                 scan.Start();
                 MediaPresence presence = Presence(shelf);
@@ -298,10 +298,10 @@ namespace EmuSen.Mistress.BigPicture
                     result = new ThemedCommand(ThemedAction.Leave);
                     break;
                 case UiButton.PageUp when gamelist:
-                    view.Jump(-PageSize(view), now);
+                    view.Jump(-ShoulderJump, now);
                     break;
                 case UiButton.PageDown when gamelist:
-                    view.Jump(PageSize(view), now);
+                    view.Jump(ShoulderJump, now);
                     break;
                 case UiButton.First when gamelist:
                     view.Jump(-view.Index, now);
@@ -312,8 +312,9 @@ namespace EmuSen.Mistress.BigPicture
                 case UiButton.Search when gamelist && Editing is not null && view.Data.Game is { Folder: false } member:
                     result = new ThemedCommand(ThemedAction.ToggleCollection, member);
                     break;
-                case UiButton.Search when gamelist:
-                    result = new ThemedCommand(ThemedAction.Search);
+                // ES-DE's Y: the favourite, except while a collection is edited (above); the search is in Select's menu (§4.58).
+                case UiButton.Search when gamelist && view.Data.Game is { Folder: false } favourite:
+                    result = new ThemedCommand(ThemedAction.Favourite, favourite);
                     break;
                 case UiButton.Random:
                     RandomEntry(now);
@@ -331,11 +332,8 @@ namespace EmuSen.Mistress.BigPicture
             return result;
         }
 
-        // A page is the rows the list shows at once, as its own height and pitch give them; ten when the primary element is not a list.
-        public static int PageSize(SceneView view) => view.Grid() is { } grid ? grid.WholeRows * grid.Columns :
-            view.Scene.Entries.Select(e => e.Control).OfType<TextRowList>().FirstOrDefault() is { RowPitch: > 0 } list && list.Bounds.Height > 0
-                ? Math.Max(1, (int)Math.Floor(list.Bounds.Height / list.RowPitch + 1e-6))
-                : 10;
+        // USERGUIDE: the shoulders "jump 10 games in the gamelists", stopping at the ends; the choice was this over a page on 2026-09-26 (Q14).
+        public const int ShoulderJump = 10;
 
         // The search box's text narrows every gamelist; the selection stays on its game while that game still matches.
         public void SetFilter(string text, TimeSpan now)

@@ -400,6 +400,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(byName.Reverse(), Listed(s));
             Assert.Equal(new GameSort(GameSortKey.Name, true), s.Themed.CurrentSort);
 
+            // Every other list keeps its own order, including the ones listed beneath while this one was sorted.
+            s.Pad.Left(2);
+            Assert.Equal("nes", s.System);
+            Assert.Equal(ThemedSession.NesGames, Listed(s));
+            Assert.Equal(GameSort.Default, s.Themed.CurrentSort);
+            s.Pad.Right(2);
+            Assert.Equal(byName.Reverse(), Listed(s));
+
             // Rating, descending, from ScreenScraper's text: a game without a rating goes last.
             Choose(s, "Gamelist Options");
             Reach(s, e => e is Dropdown { Name: "GamelistSortBy" });

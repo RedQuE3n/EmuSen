@@ -187,6 +187,32 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Contains("states no licence", Named<TextBlock>(detail, "ThemeDetailLicence0").Text);
         }, default);
 
+        // Q27: until the host has answered, the licence line says it is being read and Download waits; then the line is shown and Download offered.
+        [Fact]
+        public Task Download_waits_for_the_licence_line() => Session.Dispatch(() =>
+        {
+            var hosts = FakeThemeHosts.Standard();
+            Serve(hosts);
+            using var s = new ThemedSession();
+            ThemeBrowserWindow browser = OpenBrowser(s, OpenSettings(s));
+            var hold = hosts.HoldRepository = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Named<LunaList<ThemeBrowserEntry>>(browser, "ThemeBrowserList").Select(browser.Entries[0]);
+            Click(Named<Button>(browser, "ThemeBrowserDetails"));
+            s.Settle();
+            ThemeDetailWindow detail = Assert.IsType<ThemeDetailWindow>(Sheets(s).Current);
+            Pump(() => false, 200);
+            Assert.False(detail.DetailsLoading.IsCompleted);
+            Assert.StartsWith("Reading the licence line", Named<TextBlock>(detail, "ThemeDetailLicence0").Text);
+            Assert.False(Named<Button>(detail, "ThemeDetailDownload").IsEnabled);
+            Click(Named<Button>(detail, "ThemeDetailDownload"));
+            Assert.Null(detail.Downloading);
+
+            hold.SetResult();
+            Assert.True(Pump(() => detail.DetailsLoading.IsCompleted));
+            Assert.Equal("Creative Commons BY-NC-SA 4.0, as stated for this synthetic theme.", Named<TextBlock>(detail, "ThemeDetailLicence0").Text);
+            Assert.True(Named<Button>(detail, "ThemeDetailDownload").IsEnabled);
+        }, default);
+
         // Download from the detail: progress, the theme installed and used when none was, its About sheet once, the Themes tab listing it with Use beside EmuSen's own.
         [Fact]
         public Task A_theme_downloads_from_its_detail_and_appears_in_the_themes_tab() => Session.Dispatch(() =>
@@ -227,6 +253,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [Theory]
         [InlineData("cancel")]
         [InlineData("detail")]
+        [InlineData("browser")]
         [InlineData("window")]
         public Task A_stopped_download_leaves_nothing_half_written(string how) => Session.Dispatch(() =>
         {
@@ -245,6 +272,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
             if (how == "cancel") Click(Named<Button>(detail, "ThemeDetailCancel"));
             else if (how == "detail") s.Pad.B();
+            else if (how == "browser") browser.Close();
             else s.Window.Close();
             Assert.True(Pump(() => detail.Downloading!.IsCompleted, 3000), "the download was still running after it was stopped");
             Assert.False(detail.Downloading!.IsCompletedSuccessfully);

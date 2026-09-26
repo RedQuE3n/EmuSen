@@ -74,6 +74,9 @@ namespace EmuSen.WiseMan.Fixtures
         public readonly TaskCompletionSource Stalled = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public string? StallArchiveOf { get; set; }
         public double? StallFraction { get; set; }
+
+        // While set, a repository's answer waits for it, so a test sees the detail before the host has spoken.
+        public TaskCompletionSource? HoldRepository { get; set; }
         public bool ListFails { get; set; }
 
         public FakeThemeHosts() => Server = new OnlineCoverTests.FakeServer { Answer = Answer };
@@ -140,6 +143,8 @@ namespace EmuSen.WiseMan.Fixtures
             foreach (FakeTheme t in Themes)
             {
                 ThemeSource s = t.Source;
+                if (url == s.RepositoryAddress && HoldRepository is { } hold)
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new HeldStream(JsonSerializer.SerializeToUtf8Bytes(new { default_branch = s.Branch }), hold.Task)) };
                 if (url == s.RepositoryAddress)
                     return Text(t.Source.Host == ThemeHost.GitHub
                         ? JsonSerializer.Serialize(new { default_branch = s.Branch, license = t.HostLicence is null ? null : new { key = "x", name = t.HostLicence, spdx_id = "X" } })
@@ -187,6 +192,22 @@ namespace EmuSen.WiseMan.Fixtures
             }
             using SKData png = bitmap.Encode(SKEncodedImageFormat.Png, 90);
             return png.ToArray();
+        }
+
+        // A body that waits for a release before it sends anything.
+        private sealed class HeldStream(byte[] body, Task release) : MemoryStream(body)
+        {
+            public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancel = default)
+            {
+                await release.WaitAsync(cancel);
+                return await base.ReadAsync(buffer, cancel);
+            }
+
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                release.Wait();
+                return base.Read(buffer, offset, count);
+            }
         }
 
         // An archive whose body sends a part (one byte by default) and then waits until the request is cancelled.

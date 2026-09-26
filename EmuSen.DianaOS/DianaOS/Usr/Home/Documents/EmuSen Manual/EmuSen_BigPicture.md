@@ -4614,6 +4614,15 @@ Collections (A13); an uncounted game joining the collections (A14); and the sort
 amendment, §22.11). That none survived its first run is weaker evidence than a round with survivors strengthened: the
 tests were written or changed, in this round, with these rules in view.
 
+**The merges, and the last broad run.** WiseMan was merged twice into this branch: with §21 and §23 (game options), and
+then with §24 (controllers). At the second, `PadHeld` had moved to `MainWindow.Controllers.cs`, so the thumbstick clicks
+were added there, and the help entries now take both the A/B swap of §24 and this section's context. One controllers
+test pressed North to search and was changed to the favourite. After it, a clean rebuild, the narrow run (BigPicture,
+game metadata and options, scraping, the library screen, Preferences, pad settings, pad devices, controllers and pad
+navigation: 566 passed, 15 skipped, none failed) and the one broad Mistress run (without `ShaderSettingsWindowTests`,
+`ShaderBrowseBench` and `SceneGpuBench`: 878 tests, 863 passed, 15 skipped, none failed, 3 min 16 s). LunaP's suite after
+its merge: 1,350 of 1,350.
+
 ## 23. The game options menu and the metadata editor (2026-09-26)
 
 *Opened 2026-09-26, on the third item of the player's list of what big picture lacks against ES-DE:* the per-game options

@@ -462,7 +462,7 @@ namespace EmuSen.Mistress.Views
         private void ShowPreferences()
         {
             // Non-modal, so re-scan on close rather than leaving a stale library behind it.
-            var window = new PreferencesWindow(_appSettings, this);
+            var window = new PreferencesWindow(_appSettings, this) { OpenThemeSettings = ShowThemeSettings };
             window.StatusBarChanged += ApplyStatusBar;
             window.Closed += (_, _) => { ScanArtwork(); ApplyOnlineCovers(); ApplyScraping(); if (LibraryView.IsVisible) RefreshLibrary(); };
             _ = SheetLayer.Show(window, this);

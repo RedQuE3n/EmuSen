@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using EmuSen.Mistress.BigPicture.Scene;
 using EmuSen.Mistress.BigPicture.Theme;
 
@@ -27,6 +29,24 @@ namespace EmuSen.Mistress.Scraping
         }
 
         public string? Find(ThemeSystem system, SceneGame game, string mediaType) => Locate(system.Name, game.File, mediaType).Path;
+
+        // The folders' own listings for the variant triggers (§16), and a cover from the player's folder or OpenEmu's counts too.
+        public IReadOnlySet<string> Present(ThemeSystem system, IReadOnlyList<SceneGame> games)
+        {
+            var found = new HashSet<string>(_scraped.Present(system, games), StringComparer.Ordinal);
+            if (_esde is not null) found.UnionWith(_esde.Present(system, games));
+            if (!found.Contains(ScrapeRules.Cover.EsdeType) && games.Any(g => Cover(system.Name, g.File) is not null)) found.Add(ScrapeRules.Cover.EsdeType);
+            return found;
+        }
+
+        // Changes when a file is added to or taken from any folder a picture could come from; the player's folder is the caller's to key.
+        public string? Stamp(ThemeSystem system)
+        {
+            string openEmu = _openEmu is not null && Directory.Exists(_openEmu)
+                ? string.Join(",", Directory.EnumerateDirectories(_openEmu).Select(d => Directory.GetLastWriteTimeUtc(d).Ticks))
+                : "";
+            return $"{_scraped.Stamp(system)}|{_esde?.Stamp(system)}|{openEmu}";
+        }
 
         // The library's cover for a ROM on the shelf ES-DE calls esdeSystem.
         public string? Cover(string esdeSystem, string romPath) => Locate(esdeSystem, romPath, ScrapeRules.Cover.EsdeType).Path;

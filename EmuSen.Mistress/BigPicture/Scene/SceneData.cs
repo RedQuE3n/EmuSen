@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.BigPicture.Theme;
@@ -36,6 +37,13 @@ namespace EmuSen.Mistress.BigPicture.Scene
     public interface ISceneMedia
     {
         string? Find(ThemeSystem system, SceneGame game, string mediaType);
+
+        // Which of ES-DE's media types any of the games has, for the variant triggers.
+        IReadOnlySet<string> Present(ThemeSystem system, IReadOnlyList<SceneGame> games) =>
+            ThemeCapabilities.MediaTypes.Where(t => games.Any(g => Find(system, g, t) is not null)).ToHashSet(StringComparer.Ordinal);
+
+        // A value that changes when a system's media may have changed; null when asking again is the only test.
+        string? Stamp(ThemeSystem system) => null;
     }
 
     // Everything a view is drawn from besides the theme: the systems and games, the selection, the media, the time and the device.

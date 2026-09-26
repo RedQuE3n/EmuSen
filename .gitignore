@@ -78,6 +78,14 @@ catalogue.db
 dumps.db
 spirv-cache.db
 spirv-cache.db.damaged
+media.db
+
+# ScreenScraper's credentials: EmuSen's developer file and the player's member
+# account. Both live in the config directory with mode 0600, outside every
+# repository; these lines are the second guard, and a WiseMan test the third.
+# See EmuSen_BigPicture.md §5.7.
+screenscraper-developer.json
+screenscraper.json
 
 # Python bytecode from the analysis tools.
 __pycache__/

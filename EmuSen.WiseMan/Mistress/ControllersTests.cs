@@ -218,7 +218,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // The swap trades Accept and Back, and Search moves to West, in the library, the menu, a sheet and the hints.
+        // The swap trades Accept and Back, and nothing else, in the library, the menu, a sheet, the keyboard and the hints.
         [Fact]
         public Task The_swap_trades_accept_and_back_everywhere_in_the_interface() => Session.Dispatch(() =>
         {
@@ -240,10 +240,11 @@ namespace EmuSen.WiseMan.Mistress
             first.A();
             Assert.False(window.GetControl<SheetLayer>("Sheets").IsPresenting);
 
-            first.Y();
-            Assert.Null(OnScreenKeyboard.OpenOver(window));
+            // X and Y are not swapped: Y still searches, and the keyboard's own A and B trade places.
             first.X();
-            StringAssert(OnScreenKeyboard.OpenOver(window)!.Hint, "B  Type      A  Erase      X  Space");
+            Assert.Null(OnScreenKeyboard.OpenOver(window));
+            first.Y();
+            StringAssert(OnScreenKeyboard.OpenOver(window)!.Hint, "B  Type      A  Erase      Y  Space");
             first.Start();
             Assert.Null(OnScreenKeyboard.OpenOver(window));
             first.A();

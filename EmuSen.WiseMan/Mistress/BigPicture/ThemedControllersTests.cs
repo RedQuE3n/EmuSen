@@ -202,7 +202,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var plain = EmuSen.Mistress.BigPicture.Scene.HelpPrompts.For("gamelist", ["a", "b", "y"], icons, PadFamily.Xbox);
             var swapped = EmuSen.Mistress.BigPicture.Scene.HelpPrompts.For("gamelist", ["a", "b", "y"], icons, PadFamily.Xbox, swapped: true);
             Assert.Equal(new[] { "/theme/button_a_XBOX.svg", "/theme/button_b_XBOX.svg", "/theme/button_y_XBOX.svg" }, plain.Select(e => e.IconPath));
-            Assert.Equal(new[] { "/theme/button_b_XBOX.svg", "/theme/button_a_XBOX.svg", "/theme/button_x_XBOX.svg" }, swapped.Select(e => e.IconPath));
+            Assert.Equal(new[] { "/theme/button_b_XBOX.svg", "/theme/button_a_XBOX.svg", "/theme/button_y_XBOX.svg" }, swapped.Select(e => e.IconPath));
             Assert.Equal(new[] { "Launch", "Back", "Search" }, swapped.Select(e => e.Label));
         }
 
@@ -220,7 +220,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             IReadOnlyList<HintEntry> entries = Bar(s).Entries;
             Assert.Equal(PadGlyphButton.East, entries.Single(e => e.Label == "Launch").Button);
             Assert.Equal(PadGlyphButton.South, entries.Single(e => e.Label == "Back").Button);
-            Assert.Equal(PadGlyphButton.West, entries.Single(e => e.Label == "Search").Button);
+            Assert.Equal(PadGlyphButton.North, entries.Single(e => e.Label == "Search").Button);
             (int inside, int outside) = Changed(s, plain, s.Capture());
             _out.WriteLine($"swap: {inside} pixels changed in the help bar, {outside} outside it");
             Assert.Equal(0, outside);

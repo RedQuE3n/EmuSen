@@ -40,7 +40,7 @@ namespace EmuSen.Mistress.Views
                 UiButton.PageDown => pad.IsRawPressed(SDL.GamepadButton.RightShoulder),
                 UiButton.First => pad.RawAxis(SDL.GamepadAxis.LeftTrigger) > 0.5,
                 UiButton.Last => pad.RawAxis(SDL.GamepadAxis.RightTrigger) > 0.5,
-                UiButton.Search => pad.IsRawPressed(swap ? SDL.GamepadButton.West : SDL.GamepadButton.North),
+                UiButton.Search => pad.IsRawPressed(SDL.GamepadButton.North),
                 _ => pad.IsRawPressed(SDL.GamepadButton.Guide),
             };
         }

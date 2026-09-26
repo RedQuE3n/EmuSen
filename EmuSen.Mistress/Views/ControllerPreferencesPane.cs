@@ -18,7 +18,7 @@ namespace EmuSen.Mistress.Views
 
         private readonly AppSettings _settings;
         private readonly Dropdown _type = new() { Name = "ControllerTypeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
-        private readonly LunaSwitch _swap = new() { Name = "SwapPadButtonsSwitch", Label = "Swap the A/B and X/Y buttons" };
+        private readonly LunaSwitch _swap = new() { Name = "SwapPadButtonsSwitch", Label = "Swap the A and B buttons" };
         private readonly LunaSwitch _firstOnly = new() { Name = "FirstControllerOnlySwitch", Label = "Only the first controller" };
         private readonly LunaSwitch _notices = new() { Name = "ControllerNotificationsSwitch", Label = "Show a notice" };
 
@@ -55,7 +55,7 @@ namespace EmuSen.Mistress.Views
             new FieldRow
             {
                 Label = "Button Swap",
-                Hint = "A and B trade what they do, and so do X and Y, in the library, the menus and every sheet, for a controller with a Nintendo layout. Games keep their own bindings.",
+                Hint = "A and B trade what they do in the library, the menus and every sheet, for a controller with a Nintendo layout. Games keep their own bindings.",
                 Content = _swap,
             },
             new FieldRow

@@ -46,8 +46,6 @@ namespace EmuSen.Mistress.BigPicture.Scene
         {
             PadGlyphButton.South => p with { Button = PadGlyphButton.East, IconKey = p.IconKey.Replace("button_a_", "button_b_") },
             PadGlyphButton.East => p with { Button = PadGlyphButton.South, IconKey = p.IconKey.Replace("button_b_", "button_a_") },
-            PadGlyphButton.West => p with { Button = PadGlyphButton.North, IconKey = p.IconKey.Replace("button_x_", "button_y_") },
-            PadGlyphButton.North => p with { Button = PadGlyphButton.West, IconKey = p.IconKey.Replace("button_y_", "button_x_") },
             _ => p,
         };
 

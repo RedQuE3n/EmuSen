@@ -49,7 +49,7 @@ namespace EmuSen.Mistress.BigPicture
 
         public PadFamily Family { get; private set; }
 
-        // The swap of the A/B and X/Y functions, which the help bar follows (settings reference §4.61).
+        // The swap of the A and B functions, which the help bar follows (settings reference §4.61).
         public bool SwapFaceButtons { get; private set; }
 
         public DeviceStatus Status { get; set; } = new();

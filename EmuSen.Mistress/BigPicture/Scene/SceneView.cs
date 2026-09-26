@@ -57,10 +57,10 @@ namespace EmuSen.Mistress.BigPicture.Scene
         private bool Slides => Primary is { Type: "carousel" } p && p.String("itemTransitions") != "instant";
 
         // One step of the selection, as a tap gives it: a carousel and a list both wrap at their ends.
-        public void Step(int delta, TimeSpan now) => Move(delta, now, held: false);
+        public void Step(int delta, TimeSpan now) => Move(delta, now, held: false, vertical: false);
 
         // A move by several items that stops at a list's ends, as a page or a jump to the first or last does; false when nothing moved.
-        public bool Jump(int delta, TimeSpan now) => Move(delta, now, held: true);
+        public bool Jump(int delta, TimeSpan now) => Move(delta, now, held: true, vertical: false);
 
         // Raised for every move of the selection, the repeats of a held direction included, with its signed size and whether it was held.
         public event Action<int, bool>? Stepped;
@@ -97,9 +97,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
         }
 
         // A move of the selection; a held list stops at its end, where a carousel wraps; false when nothing moved.
-        private bool Move(int delta, TimeSpan now, bool held)
+        private bool Move(int delta, TimeSpan now, bool held, bool vertical)
         {
-            if (Primary?.Type == "grid") return MoveGrid(delta, now, held, _vertical);
+            if (Primary?.Type == "grid") return MoveGrid(delta, now, held, vertical);
             Now = now;
             int count = Count;
             if (count == 0 || delta == 0) return false;
@@ -141,7 +141,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public void Press(int direction, TimeSpan now, bool vertical = false)
         {
             _vertical = vertical && Primary?.Type == "grid";
-            Step(direction, now);
+            Move(direction, now, held: false, _vertical);
             _repeat.Press(direction, now, RepeatRule);
         }
 
@@ -191,8 +191,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             }
             if (target == Index) return false;
 
-            _fromLevel = FocusOf(Index, now);
-            _toLevel = FocusOf(target, now);
+            (_fromLevel, _toLevel) = (FocusOf(Index, now), FocusOf(target, now));
             _focusFrom = Index;
             _focus = Primary!.String("itemTransitions") == "instant" ? Glide.At(1) : new Glide(0, 1, now, Motion.GridStep, Motion.GridEasing);
             double scroll = g.ScrollFor(target);
@@ -230,8 +229,8 @@ namespace EmuSen.Mistress.BigPicture.Scene
         {
             foreach ((int delta, TimeSpan at) in _repeat.Due(now))
             {
-                if (IsSystemView) Move(delta, at, held: true);
-                else if (Move(delta, at, held: true)) { if (_metadata.To > 0) _metadata = _metadata.Toward(0, at, Motion.MetadataFadeOut); }
+                if (IsSystemView) Move(delta, at, held: true, _vertical);
+                else if (Move(delta, at, held: true, _vertical)) { if (_metadata.To > 0) _metadata = _metadata.Toward(0, at, Motion.MetadataFadeOut); }
                 else FadeMetadataIn(at);
             }
 

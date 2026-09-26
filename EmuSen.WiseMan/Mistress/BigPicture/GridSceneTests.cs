@@ -124,8 +124,42 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
             var held = new SceneView(Data(Grid(), game: 9), "gamelist", TimeSpan.Zero);
             held.Press(1, Ms(0));
-            held.Advance(Ms(3000));
+            held.Advance(Ms(2500));
             Assert.Equal(11, held.Index);
+        }
+
+        // A step taken while the last still moves starts from where the two items are: the one left keeps its part-grown focus as its level.
+        [Fact]
+        public void A_step_while_moving_starts_from_the_items_current_focus()
+        {
+            var view = new SceneView(Data(Grid()), "gamelist", TimeSpan.Zero);
+            view.Step(1, Ms(0));
+            view.Step(1, Ms(100));
+            view.Advance(Ms(100));
+            ImageGrid grid = Control(view);
+            Assert.Equal((1, 2), (grid.FocusFrom, grid.SelectedIndex));
+            Assert.Equal(new QuadraticEaseOut().Ease(0.4), grid.FocusFromLevel, 3);
+            Assert.Equal(0, grid.FocusToLevel, 3);
+            view.Step(-1, Ms(150));
+            view.Advance(Ms(150));
+            double left = new QuadraticEaseOut().Ease(0.2);
+            Assert.Equal((2, 1), (Control(view).FocusFrom, Control(view).SelectedIndex));
+            Assert.Equal(new QuadraticEaseOut().Ease(0.4) * (1 - left), Control(view).FocusToLevel, 3);
+        }
+
+        // The mapping's units: a -1 axis of itemSize is the other axis's pixels, corner radii are fractions of the width, a page is the whole rows shown.
+        [Fact]
+        public void Item_sizes_corner_radii_and_pages_are_in_ES_DE_s_units()
+        {
+            var view = new SceneView(Data(Grid("<imageCornerRadius>0.05</imageCornerRadius>").Replace("<itemSize>0.2 0.3</itemSize>", "<itemSize>0.2 -1</itemSize>")), "gamelist", TimeSpan.Zero);
+            Assert.Equal(128, Control(view).ItemSize.Width, 3);
+            Assert.Equal(128, Control(view).ItemSize.Height, 3);
+            Assert.Equal(0.05 * W, Control(view).ImageCornerRadius, 3);
+            var tall = new SceneView(Data(Grid().Replace("<itemSize>0.2 0.3</itemSize>", "<itemSize>-1 0.3</itemSize>")), "gamelist", TimeSpan.Zero);
+            Assert.Equal(120, Control(tall).ItemSize.Width, 3);
+            Assert.Equal(120, Control(tall).ItemSize.Height, 3);
+            var page = new SceneView(Data(Grid()), "gamelist", TimeSpan.Zero);
+            Assert.Equal(8, EmuSen.Mistress.BigPicture.ThemedLibrary.PageSize(page));
         }
 
         // A held direction steps at the press, at 500 ms and then every 200 ms, with no faster tier, on either axis.

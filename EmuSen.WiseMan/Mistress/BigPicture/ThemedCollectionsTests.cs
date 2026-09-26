@@ -402,6 +402,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Enter(s, "snes");
             string[] byName = Listed(s);
 
+            // The pad menu keeps ES-DE's main-menu entry only; the gamelist options are Select's (Q12).
+            s.Pad.Start();
+            Assert.Contains("Game Collection Settings", MenuLines(s));
+            Assert.DoesNotContain(MenuLines(s), l => l.StartsWith("Gamelist", StringComparison.Ordinal));
+            s.Pad.B();
+
             // Back cancels: the sort is stepped, then the Back button closes the sheet with nothing applied.
             OpenMenu(s);
             // One menu under Select, in ES-DE's order: the list's rows, then the game's entries (Q12).

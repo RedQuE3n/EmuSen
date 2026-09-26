@@ -130,7 +130,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public sealed record Motion(string Name, string View, Action<SceneView, TimeSpan> Script);
 
         // A carousel stepped again as each step ends, and a list held down: the two motions that redraw the most.
-        public static IReadOnlyList<Motion> Motions { get; } =
+        public static IReadOnlyList<Motion> Motions =>
         [
             new("carousel held", "system", (v, now) => { if (!v.IsMoving || now == TimeSpan.Zero) v.Step(1, now); }),
             new("list held", "gamelist", HeldToAndFro()),
@@ -154,7 +154,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         public static List<string> RunMotions(string theme, string media, IEnumerable<(int W, int H)> sizes, int frames, string? device, Action<string> log, IReadOnlyList<Motion>? motions = null)
         {
-            motions ??= Motions;
+
             var lines = new List<string>();
             using var gl = ShaderBench.GlContext.Create(device);
             using GRGlInterface glInterface = GRGlInterface.CreateOpenGl(ShaderBench.GlContext.GetProc) ?? throw new InvalidOperationException("no GL interface");
@@ -166,7 +166,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 IReadOnlyList<SceneSystem> systems = SyntheticLibrary.Load(theme, new ThemeChoices { ScreenWidth = w, ScreenHeight = h })
                     .Select(s => s with { Games = Enumerable.Repeat(s.Games, 10).SelectMany(g => g).ToList() }).ToList();
                 var info = new SKImageInfo(w, h, SKColorType.Rgba8888, SKAlphaType.Premul);
-                foreach (Motion motion in motions)
+                foreach (Motion motion in motions ?? Motions)
                 {
                     ForgetPictures();
                     SceneData data = SyntheticLibrary.Data(systems, new Size(w, h), media, system: 1, game: 0);
@@ -179,6 +179,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     var cpu = new List<double>();
                     var gpuMs = new List<double>();
                     var wall = new List<double>();
+                    var slow = new List<string>();
+                    int gen0 = GC.CollectionCount(0), gen1 = GC.CollectionCount(1), gen2 = GC.CollectionCount(2);
+                    TimeSpan paused = GC.GetTotalPauseDuration();
+                    long allocated = GC.GetTotalAllocatedBytes();
                     for (int i = 0; i < frames + 5; i++)
                     {
                         TimeSpan now = TimeSpan.FromTicks(i * TimeSpan.TicksPerSecond / 60);
@@ -195,6 +199,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                         gl.EndQuery();
                         gl.Finish();
                         long t3 = Stopwatch.GetTimestamp();
+                        if (Ms(t3 - t0) > 8) slow.Add(FormattableString.Invariant($"#{i} {Ms(t3 - t0):F1} ms (update {Ms(t1 - t0):F1}, record {Ms(t2 - t1):F1}){(view.SelectedAt == now ? " stepped" : "")}"));
                         if (i < 5) continue;
                         update.Add(Ms(t1 - t0));
                         cpu.Add(Ms(t2 - t1));
@@ -204,6 +209,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
                     Stat u = Of(update), c = Of(cpu), g = Of(gpuMs), all = Of(wall);
                     log($"{motion.Name} {w}x{h}: clock step and layout {u}; GPU record+flush {c}; GL {g}; whole frame {all}, max {wall.Max():F2} ms");
+                    log($"  frames over 8 ms, warm-up included: {slow.Count}: {string.Join("; ", slow.Take(8))}");
+                    log(FormattableString.Invariant($"  collections gen0/1/2 {GC.CollectionCount(0) - gen0}/{GC.CollectionCount(1) - gen1}/{GC.CollectionCount(2) - gen2}, pauses {(GC.GetTotalPauseDuration() - paused).TotalMilliseconds:F1} ms, {(GC.GetTotalAllocatedBytes() - allocated) / (double)(frames + 5) / 1024:F0} KiB a frame"));
                     lines.Add(FormattableString.Invariant($"case=motion-{motion.Name.Replace(' ', '-')}-{w}x{h} update={u.Median:F2}/{u.P95:F2} gpu.cpu={c.Median:F2} gpu.gl={g.Median:F2} frame={all.Median:F2}/{all.P95:F2} max={wall.Max():F2}"));
                     window.Close();
                     context.PurgeResources();

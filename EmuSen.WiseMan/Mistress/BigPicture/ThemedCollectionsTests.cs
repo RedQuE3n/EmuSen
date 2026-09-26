@@ -343,6 +343,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(TextRowMarker.Tick, list.Items![2].Marker);
             Assert.Equal(TextRowMarker.None, list.Items![1].Marker);
             Assert.True(s.Themed.Stage.Current.Data.Help.Editing);
+            HintBar help = s.Themed.Stage.Current.Scene.Entries.Select(e => e.Control).OfType<HintBar>().Single();
+            Assert.Contains(help.Entries!, h => h.Label == "Collection" && h.Button == PadGlyphButton.North);
+            Assert.DoesNotContain(help.Entries!, h => h.Label == "Search");
 
             // The collection now shows in the carousel, grouped, holding the game.
             s.Pad.B();
@@ -361,6 +364,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Settle();
             Assert.Null(s.Themed.Editing);
             Assert.False(s.Themed.Stage!.Current.Data.Help.Editing);
+            Assert.Contains(s.Themed.Stage.Current.Scene.Entries.Select(e => e.Control).OfType<HintBar>().Single().Entries!, h => h.Label == "Search");
             s.Pad.B();
             s.Pad.B();
             Enter(s, "snes");

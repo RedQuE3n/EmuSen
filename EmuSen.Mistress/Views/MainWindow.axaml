@@ -95,7 +95,7 @@
                 </Border>
                 <Grid>
                 <DockPanel x:Name="LibraryContent" Margin="12">
-                    <Grid DockPanel.Dock="Top" x:Name="LibraryToolbar" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,8">
+                    <Grid DockPanel.Dock="Top" x:Name="LibraryToolbar" ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,0,0,8">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
                             <lunac:ButtonBar x:Name="LibraryViewButtons" VerticalAlignment="Center" />
                             <lunac:ButtonBar x:Name="LibraryCategoryButtons" VerticalAlignment="Center" />
@@ -110,6 +110,8 @@
                                          FacetLabel="Console:"
                                          Placeholder="Search titles"
                                          MinWidth="220" />
+                        <!-- Full screen on the desktop is big picture, as Steam's button is - see EmuSen_Settings_Reference.md §4.54. -->
+                        <lunac:ButtonBar Grid.Column="4" x:Name="BigPictureButtons" Margin="12,0,0,0" VerticalAlignment="Center" />
                     </Grid>
                     <TextBlock DockPanel.Dock="Top"
                                x:Name="LibraryHeaderText"

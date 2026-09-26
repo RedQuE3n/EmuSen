@@ -16,16 +16,43 @@ namespace EmuSen.WiseMan.Fixtures
 
         public SimulatedPad Pad { get; } = new();
 
+        // Every simulated pad plugged into the window, this one first; others are plugged and pulled through it - see EmuSen_Settings_Reference.md §4.61.
+        public SimulatedPads Devices { get; }
+
+        public GamepadManager Gamepad { get; }
+
         public PadDriver(MainWindow window)
         {
             _window = window;
-            var gamepad = (GamepadManager)typeof(MainWindow).GetField("_gamepad", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
-            gamepad.Simulated = Pad;
+            Gamepad = (GamepadManager)typeof(MainWindow).GetField("_gamepad", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+            Devices = SimulatedPads.With(Pad);
+            Gamepad.UseDevices(Devices);
 
             // The window's 16 ms timer would tick at whatever moment the dispatcher runs; the test ticks instead.
             var timer = (DispatcherTimer?)typeof(MainWindow).GetField("_padTimer", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window);
             timer?.Stop();
         }
+
+        private PadDriver(PadDriver first, SimulatedPad pad)
+        {
+            _window = first._window;
+            Gamepad = first.Gamepad;
+            Devices = first.Devices;
+            Pad = pad;
+        }
+
+        // Another pad plugged in beside this one; the window sees it at its next poll.
+        public PadDriver Plug(string name, SDL.GamepadType type = SDL.GamepadType.Unknown)
+        {
+            var pad = new SimulatedPad { Name = name, Type = type };
+            Devices.Connect(pad);
+            return new PadDriver(this, pad);
+        }
+
+        // This pad pulled out, and plugged back in; each is seen at the next poll.
+        public void Unplug() => Devices.Disconnect(Pad);
+
+        public void Replug() => Devices.Connect(Pad);
 
         public void Tick()
         {

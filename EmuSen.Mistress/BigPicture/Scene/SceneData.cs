@@ -92,6 +92,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
         // The connected pad's printing, which the help bar's buttons are drawn in (§15).
         public PadFamily Family { get; init; }
 
+        // The A and B functions swapped, so the help bar names the other buttons (settings reference §4.61).
+        public bool SwapFaceButtons { get; init; }
+
         // ES-DE's DisplayClock setting, off in ES-DE by default whatever the theme sets (§13.8); the tests of stage (b) draw it.
         public bool ShowClock { get; init; } = true;
 

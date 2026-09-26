@@ -43,6 +43,13 @@ namespace EmuSen.Galaxia.Models
         public bool AnalogStickAsDpad { get; set; } = true;
         public double StickDeadzone { get; set; } = 0.5;
 
+        // Controllers in the interface, as ES-DE's input device settings: the help bar's button set, the swap, the first pad alone, the notices - see EmuSen_Settings_Reference.md §4.61.
+        public string ControllerType { get; set; } = ControllerTypeAutomatic;
+        public const string ControllerTypeAutomatic = "Automatic";
+        public bool SwapPadButtons { get; set; } = false;
+        public bool FirstControllerOnly { get; set; } = false;
+        public bool ControllerNotifications { get; set; } = true;
+
         // Full screen, no menu bar and larger type, for a handheld or a television; a Steam Deck's session asks for it by itself - see EmuSen_Settings_Reference.md §4.29.
         public bool BigScreen { get; set; } = false;
 

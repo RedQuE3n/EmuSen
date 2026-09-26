@@ -87,7 +87,7 @@ namespace EmuSen.Mistress.Views
             {
                 _themed.Status = DeviceStatusReader.Read();
                 _themed.PlaySound = _appSettings.NavigationSounds ? PlayUiSound : null;
-                _themed.SetFamily(PadFamilies.Of(_gamepad.ControllerType, _gamepad.ControllerName));
+                _themed.SetPadLayout(HelpFamily, _appSettings.SwapPadButtons);
                 string mediaKey = $"{_appSettings.EsdeMediaDirectory}|{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(_artwork)}|{ScrapeMediaKey}";
                 ApplyCollectionSettings();
                 shown = _themed.Show(_appSettings.BigPictureTheme!, LibraryView.Bounds.Size, WithCollections(ThemedShelves()), ThemedMedia(), mediaKey,

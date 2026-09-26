@@ -1,18 +1,19 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using SDL3;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Endymion.Input
 {
-    // Polls the first connected SDL3 gamepad into PadButton state - see EmuSen_Input.md §4.
+    // Polls every connected SDL3 gamepad; the first one opened is player 1's - see EmuSen_Input.md §4 and EmuSen_Settings_Reference.md §4.61.
     public class GamepadManager : IDisposable
     {
         // Swapped when a ROM for a different console loads - see EmuSen_Input.md §5.1.
         public GamepadBindingMap Bindings { get; set; }
 
-        private IntPtr _gamepad;
-        private bool _available;
+        private IPadDevices _devices;
+        private readonly List<ConnectedPad> _pads = new();
         private bool _sdlInitialized, _started;
 
         // Rate-limits the hot-plug rescan in Poll() - see EmuSen_Settings_Reference.md §4.4.
@@ -21,22 +22,46 @@ namespace EmuSen.Endymion.Input
         private TimeSpan _lastRescan = -RescanInterval;
 
         // start: false leaves SDL untouched until Start, which a window calls once it is shown - see EmuSen_Settings_Reference.md §4.42.
-        public GamepadManager(GamepadBindingMap bindings, bool start = true)
+        public GamepadManager(GamepadBindingMap bindings, bool start = true, IPadDevices? devices = null)
         {
             Bindings = bindings;
+            _devices = devices ?? new SdlPadDevices();
             if (start) Start();
         }
 
         public bool Started => _started;
 
+        // Raised from Poll for each pad plugged in or pulled out after Start; the pads present at Start are not announced.
+        public event Action<PadConnection>? PadChanged;
+
+        // Every open pad, in the order they were opened; the first is player 1's and the first controller's.
+        public IReadOnlyList<ConnectedPad> Pads => _pads;
+
+        public ConnectedPad? Primary => _pads.Count > 0 ? _pads[0] : null;
+
+        // ES-DE's "Only accept input from first controller": the interface reads the first pad alone - see EmuSen_Settings_Reference.md §4.61.
+        public bool FirstControllerOnly { get; set; }
+
+        // How many of Pads, from the first, the interface reads.
+        public int FrontendPadCount => FirstControllerOnly ? Math.Min(1, _pads.Count) : _pads.Count;
+
         // Read in place of the device when set, so a test drives the same path a real pad does - see EmuSen_Settings_Reference.md §4.45.
-        public SimulatedPad? Simulated { get; set; }
+        public SimulatedPad? Simulated
+        {
+            get => (_devices as SimulatedPads)?.First;
+            set => UseDevices(value is null ? new SdlPadDevices() : SimulatedPads.With(value));
+        }
 
-        private bool Button(SDL.GamepadButton button) =>
-            Simulated is { } pad ? pad.IsHeld(button) : SDL.GetGamepadButton(_gamepad, button);
+        public IPadDevices Devices => _devices;
 
-        private short RawAxisValue(SDL.GamepadAxis axis) =>
-            Simulated is { } pad ? pad.Axis(axis) : SDL.GetGamepadAxis(_gamepad, axis);
+        // Lets go of every pad on the old devices and starts on the new ones.
+        public void UseDevices(IPadDevices devices)
+        {
+            CloseAll();
+            _started = false;
+            _devices = devices;
+            Start();
+        }
 
         // Idempotent, and on the thread that polls, as SDL asks.
         public void Start()
@@ -44,89 +69,65 @@ namespace EmuSen.Endymion.Input
             if (_started) return;
             _started = true;
 
-            // Gamepad subsystem only, and InitSubSystem rather than Init -
-            // see EmuSen_Settings_Reference.md §4.10.
-            _sdlInitialized = SDL.InitSubSystem(SDL.InitFlags.Gamepad);
+            _sdlInitialized = _devices.Init();
             if (!_sdlInitialized) return;
 
-            TryOpenFirstController();
+            OpenAttached(announce: false);
         }
 
-        private void TryOpenFirstController()
+        private void OpenAttached(bool announce)
         {
-            // SDL3 enumerates gamepads directly, no joystick-index filtering.
-            uint[]? pads = SDL.GetGamepads(out int count);
-            for (int i = 0; pads is not null && i < count; i++)
+            foreach (uint id in _devices.Attached())
             {
-                _gamepad = SDL.OpenGamepad(pads[i]);
-                if (_gamepad != IntPtr.Zero)
-                {
-                    _available = true;
-                    return;
-                }
+                if (_pads.Exists(p => p.Id == id)) continue;
+                IntPtr handle = _devices.Open(id);
+                if (handle == IntPtr.Zero) continue;
+                var pad = new ConnectedPad(_devices, id, handle);
+                _pads.Add(pad);
+                if (announce) PadChanged?.Invoke(new PadConnection(pad, Connected: true));
             }
-            _available = false;
         }
 
         // Whether a rescan is due; the subtraction is where a MinValue start overflowed - see EmuSen_Settings_Reference.md §4.4.
         internal static bool RescanDue(TimeSpan now, TimeSpan last) => now - last >= RescanInterval;
 
-        // Call once per frame tick; rescans for a hot-plugged pad at most
-        // once per RescanInterval - see EmuSen_Settings_Reference.md §4.4.
+        // Call once per frame tick: lets go of pads pulled out, and opens new ones on SDL's events or the one-a-second rescan - see EmuSen_Settings_Reference.md §4.4 and §4.61.
         public void Poll()
         {
-            if (Simulated is not null || !_sdlInitialized) return;
+            if (!_sdlInitialized) return;
 
-            // A pad pulled out is let go, so the rescan below can open whichever pad is plugged in next.
-            if (_available && !SDL.GamepadConnected(_gamepad))
+            for (int i = 0; i < _pads.Count; i++)
             {
-                SDL.CloseGamepad(_gamepad);
-                _gamepad = IntPtr.Zero;
-                _available = false;
+                ConnectedPad pad = _pads[i];
+                if (_devices.IsAttached(pad.Handle)) continue;
+                _pads.RemoveAt(i--);
+                pad.Close();
+                PadChanged?.Invoke(new PadConnection(pad, Connected: false));
             }
 
-            if (!_available)
+            TimeSpan now = _rescanClock.Elapsed;
+            if (_devices.DevicesChanged() | RescanDue(now, _lastRescan))
             {
-                TimeSpan now = _rescanClock.Elapsed;
-                if (RescanDue(now, _lastRescan))
-                {
-                    _lastRescan = now;
-                    TryOpenFirstController();
-                }
+                _lastRescan = now;
+                OpenAttached(announce: true);
             }
-            SDL.UpdateGamepads();
+            _devices.Update();
         }
 
         // Stick-as-d-pad and its threshold - see EmuSen_Settings_Reference.md §4.4.
         public bool AnalogStickAsDpad { get; set; } = true;
         public double StickDeadzone { get; set; } = 0.5;
 
-        public bool IsConnected => Simulated is not null || (_available && _gamepad != IntPtr.Zero);
+        public bool IsConnected => _pads.Count > 0;
 
-        // Null when nothing is connected - see EmuSen_Settings_Reference.md §4.4.
-        public string? ControllerName
-        {
-            get
-            {
-                if (!IsConnected) return null;
-                if (Simulated is { } pad) return pad.Name;
-                string? name = SDL.GetGamepadName(_gamepad);
-                return string.IsNullOrEmpty(name) ? "Unknown controller" : name;
-            }
-        }
+        // Player 1's pad's name; null when nothing is connected - see EmuSen_Settings_Reference.md §4.4.
+        public string? ControllerName => Primary?.Name;
 
-        // SDL's own reading of what the pad is (Xbox, PlayStation, Nintendo, or not known), from its vendor and product - see EmuSen_Settings_Reference.md §4.52.
-        public SDL.GamepadType ControllerType =>
-            !IsConnected ? SDL.GamepadType.Unknown : Simulated is { } pad ? pad.Type : SDL.GetGamepadType(_gamepad);
+        // SDL's own reading of what player 1's pad is (Xbox, PlayStation, Nintendo, or not known), from its vendor and product - see EmuSen_Settings_Reference.md §4.52.
+        public SDL.GamepadType ControllerType => Primary?.Type ?? SDL.GamepadType.Unknown;
 
-        // The connected pad's own printed label for a button, falling back to
-        // its position - see EmuSen_Settings_Reference.md §4.6.
-        public string? ButtonLabel(SDL.GamepadButton button)
-        {
-            if (!IsConnected || Simulated is not null) return null;
-            SDL.GamepadButtonLabel label = SDL.GetGamepadButtonLabel(_gamepad, button);
-            return label == SDL.GamepadButtonLabel.Unknown ? null : label.ToString();
-        }
+        // Player 1's pad's own printed label for a button, falling back to its position - see EmuSen_Settings_Reference.md §4.6.
+        public string? ButtonLabel(SDL.GamepadButton button) => Primary?.ButtonLabel(button);
 
         // Set when the loaded console reads the left stick as a stick, so it stops standing in for the d-pad - see EmuSen_Input.md §7.3.
         public bool LeftStickIsAnalog { get; set; }
@@ -145,7 +146,7 @@ namespace EmuSen.Endymion.Input
 
             if (!Bindings.ButtonToPad.TryGetValue(button, out SDL.GamepadButton sdlButton)) return false;
 
-            return Button(sdlButton);
+            return Primary!.IsRawPressed(sdlButton);
         }
 
         // Sticks -1 to 1 with right and down positive, as SDL and the RetroPad have them, and triggers 0 to 1 - see EmuSen_Input.md §7.
@@ -163,55 +164,55 @@ namespace EmuSen.Endymion.Input
                 _ => SDL.GamepadAxis.RightTrigger,
             };
 
-            double value = Math.Clamp(RawAxisValue(source) / (double)short.MaxValue, -1.0, 1.0);
+            double value = Primary!.RawAxis(source);
             return Math.Abs(value) < AnalogDeadzone ? 0 : value;
         }
 
         // Axis range is -32768..32767; the deadzone is a fraction of it.
         private bool StickDirectionPressed(PadButton button)
         {
+            ConnectedPad pad = Primary!;
             short threshold = (short)(Math.Clamp(StickDeadzone, 0.05, 0.95) * short.MaxValue);
 
             return button switch
             {
-                PadButton.Left => RawAxisValue(SDL.GamepadAxis.LeftX) < -threshold,
-                PadButton.Right => RawAxisValue(SDL.GamepadAxis.LeftX) > threshold,
-                PadButton.Up => RawAxisValue(SDL.GamepadAxis.LeftY) < -threshold,
-                PadButton.Down => RawAxisValue(SDL.GamepadAxis.LeftY) > threshold,
+                PadButton.Left => pad.AxisValue(SDL.GamepadAxis.LeftX) < -threshold,
+                PadButton.Right => pad.AxisValue(SDL.GamepadAxis.LeftX) > threshold,
+                PadButton.Up => pad.AxisValue(SDL.GamepadAxis.LeftY) < -threshold,
+                PadButton.Down => pad.AxisValue(SDL.GamepadAxis.LeftY) > threshold,
                 _ => false,
             };
         }
 
-        // The pad's own buttons and axes, whatever a console's bindings say, for steering the interface - see EmuSen_Settings_Reference.md §4.29.
-        public bool IsRawPressed(SDL.GamepadButton button) => IsConnected && Button(button);
+        // Player 1's pad's own buttons and axes, whatever a console's bindings say - see EmuSen_Settings_Reference.md §4.29.
+        public bool IsRawPressed(SDL.GamepadButton button) => Primary?.IsRawPressed(button) ?? false;
 
-        public double RawAxis(SDL.GamepadAxis axis) =>
-            IsConnected ? Math.Clamp(RawAxisValue(axis) / (double)short.MaxValue, -1.0, 1.0) : 0;
+        public double RawAxis(SDL.GamepadAxis axis) => Primary?.RawAxis(axis) ?? 0;
 
-        // First currently-held pad button, for InputSettingsWindow's rebind
-        // capture - see EmuSen_Settings_Reference.md §4.6.
+        // First button held on any pad the interface reads, for InputSettingsWindow's rebind capture - see EmuSen_Settings_Reference.md §4.6 and §4.61.
         public SDL.GamepadButton? GetAnyPressedButton()
         {
             if (!IsConnected) return null;
 
-            if (Simulated is null) SDL.UpdateGamepads();
-            foreach (SDL.GamepadButton b in Enum.GetValues<SDL.GamepadButton>())
-            {
-                if (b == SDL.GamepadButton.Invalid || b == SDL.GamepadButton.Count) continue;
-                if (Button(b)) return b;
-            }
+            _devices.Update();
+            for (int i = 0; i < FrontendPadCount; i++)
+                foreach (SDL.GamepadButton b in Enum.GetValues<SDL.GamepadButton>())
+                {
+                    if (b == SDL.GamepadButton.Invalid || b == SDL.GamepadButton.Count) continue;
+                    if (_pads[i].IsRawPressed(b)) return b;
+                }
             return null;
         }
 
-        public void Dispose()
+        private void CloseAll()
         {
-            if (_gamepad != IntPtr.Zero)
-            {
-                SDL.CloseGamepad(_gamepad);
-                _gamepad = IntPtr.Zero;
-            }
+            foreach (ConnectedPad pad in _pads) pad.Close();
+            _pads.Clear();
             // QuitSubSystem, not Quit - see EmuSen_Settings_Reference.md §4.10.
-            if (_sdlInitialized) SDL.QuitSubSystem(SDL.InitFlags.Gamepad);
+            if (_sdlInitialized) _devices.Quit();
+            _sdlInitialized = false;
         }
+
+        public void Dispose() => CloseAll();
     }
 }

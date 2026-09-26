@@ -2476,6 +2476,7 @@ none should.
   a sound interrupted by the next were not measured against ES-DE.
 - **The generic d-pad glyphs** are hard to tell apart at the 1280×800 help bar's size (§15.10).
 - **`GamepadManager` still opens one pad**, the first; a second pad connected beside it is not seen until the first goes.
+  *Closed 2026-09-26 by §24: every pad is opened, and every pad steers the interface.*
 
 
 ### 15.14 A closed window kept drawing (found at the merge, 2026-09-25)
@@ -4941,3 +4942,284 @@ were looked at:
 - **Q18, ScreenScraper's name.** ES-DE's editor scrape replaces the name with the scraper's; Mistress keeps the file's name
   unless the player types one (§17.6). Offer ScreenScraper's name in the editor's scrape?
 - **Q19, EmuSen's own library.** Should its Select open the same menu and editor, or stay the favourite?
+
+---
+
+## 24. Pass 2: controllers (2026-09-26)
+
+*Opened and closed on 2026-09-26, on branch `bigpicture-controllers`, while §22 and §23 were being built on theirs; §23
+was merged into it before the pass closed.* Pass 2 of §21.3 as the player accepted it (Q22 (a), §10.1): every connected pad
+steers the interface, pads come and go while Mistress runs, a notice says so, and Preferences gains ES-DE's controller
+type, an A/B swap and its first-controller switch. The settings reference's §4.61 is the player's account; this
+section is the record.
+
+### 24.1 Predictions, and the scope as built
+
+P103 (§21.6) is the pass's prediction: "Every pad rule of §15.3 holds from either of two pads, and the help bar follows
+the pad last pressed; ES-DE's device popup fades in and out over 0.4–0.6 s each and holds 2–5 s". Two predictions were
+added for Pass 1 to retire, because the headless harness cannot see what Steam does to a pad:
+
+- **P121.** In Game Mode, with the Legion Go S's built-in controls alone, SDL reports exactly one gamepad, and Mistress
+  announces nothing at start (§24.5); a Bluetooth pad connected during a session is announced within one second under the
+  name Steam gives its virtual pad, not the hardware's own.
+- **P122.** In Desktop Mode, where Steam Input is not in the path unless Steam is running, the same Bluetooth pad is
+  announced under its own name and its family is detected from SDL's type, as §15.5 found for a pad seen directly.
+
+**Scope.** As §21.3 wrote it, with two readings made explicit. A second pad does **not** become player 2 in a game: that
+is Q22 (b), recorded as separate input work in `EmuSen_Input.md` §6. The game reads the first pad opened, as it read the
+only pad before; `GamepadBindingMap` is untouched. And the swap trades A and B alone. ES-DE's switch is "Swap the A/B
+and X/Y buttons" (UG "Input device settings"), and the first build followed it; but on 2026-09-26 the decision was that
+in the themed gamelist North toggles the favourite and search moves into the options menu (§22's branch builds it), and
+the swap was then restricted, by instruction, to accept and back, so that it composes with whatever North and West come
+to mean. §24.5 records the departure.
+
+### 24.2 What was built
+
+**In Endymion.** `GamepadManager` opens every pad SDL lists, in the order it finds them, and keeps them in `Pads`; the first
+is `Primary`, player 1's. SDL is reached through a seam, `IPadDevices`, with two implementations: `SdlPadDevices`, the
+calls the manager made before, and `SimulatedPads`, a set of `SimulatedPad`s a test plugs in and pulls out, which counts
+the handles opened and closed. `ConnectedPad` is one open pad; once closed it reads as nothing held and keeps its name and
+type for the notice. `Poll` lets go of every pad SDL reports detached, then opens any new one when SDL has queued a
+`GamepadAdded` or `GamepadRemoved` event (consumed with `SDL_HasEvents` and `SDL_FlushEvents` over those two types alone,
+so the queue's other events are left as they were) or when the one-a-second rescan of §4.4 falls due; each change after
+`Start` raises `PadChanged`. The rescan fix of 2026-09-26 is kept: `_lastRescan` still starts at `-RescanInterval`, and
+since `RescanDue` is now asked at every poll rather than only with no pad, the fix is exercised on every tick. The
+single-pad members (`IsPressed`, `Axis`, `ControllerName`, `ControllerType`, `ButtonLabel`, `IsRawPressed`, `RawAxis`) read
+`Primary`, so a game and Hotaru see what they saw. `GetAnyPressedButton`, the rebind capture's, reads every pad the
+interface reads, since a binding names an SDL button and not a device. `Simulated` is kept for the tests that set it and
+now installs a one-pad `SimulatedPads`.
+
+**In Mistress.** `Views/MainWindow.Controllers.cs` holds the rest:
+- `PadHeld` asks every pad the interface reads (`FrontendPadCount`: all, or the first with the switch) and is true when
+  any holds the button. The press rules above it, `PadNavigator`'s and the themed view's, are unchanged.
+- `PadHeldOn` is §4.29's mapping per pad, with the swap: Accept on East and Back on South, and nothing else moved.
+- `TrackControllers`, at every poll, hands the first-controller switch to the manager, makes the pad that went from
+  nothing held to something held the help bar's pad, and redraws the text hints when the swap changes.
+- `HelpFamily` is the Controller Type setting, or with Automatic the family of the help bar's pad (§15.5's rules, from
+  that pad's type and name), falling back to the first pad.
+- `OnPadChanged` shows the notice and, when the first pad arrives or the last leaves, redraws the Mistress library's
+  hint, which names the pad's buttons or the keyboard's.
+
+`Input/PadHints.cs` swaps the letters in the text hints (the sheets' footer, the pad menu's, the library's, the on-screen
+keyboard's and the rewind reel's), which name face buttons by an Xbox pad's letters. `HelpPrompts.For` takes the swap and
+gives the two functions the button each moved to and the theme's icon for that button, so a theme's `button_a_XBOX`
+goes with the function now on A. `SceneData.SwapFaceButtons`, `SceneView.SetPadLayout` and `ThemedLibrary.SetPadLayout` carry the
+family and the swap together; as before, a change redraws only the help bar (a swap re-enters its entries).
+`ControllerPreferencesPane` is Preferences' new Controllers tab. `MainWindow.axaml` gains `PadNotice`, a `NoticeLayer` over
+everything at the top centre.
+
+**In LunaP** (branch `bigpicture-controllers`, `docs/LunaP.md` §170): `NoticeLayer.FadeTime`, so a notice fades over a
+fixed time rather than 15% of its duration; null keeps §88.5's curve.
+
+**Nothing learned is persisted, so nothing is in SQLite.** The four settings are the player's choices and live in
+`appsettings.json` with the rest, as `EmuSen_Stack.md` §4 places user settings. No pad is remembered between sessions:
+no GUID, name or family is written anywhere. A later pass that remembers pads (a per-pad family override, say) would keep
+them in Mistress's database, not a new JSON file.
+
+### 24.3 The rules, and their tests
+
+All headless, on `PadDriver`, which now plugs and pulls simulated pads (`Plug`, `Unplug`, `Replug`) through the window's
+own `GamepadManager`, so `Poll` runs as it would on a device.
+
+| Rule | Test |
+|---|---|
+| Every pad present at start is opened, in order, and none is announced | `GamepadManagerPadsTests.Every_pad_present_at_start_is_opened_in_order_and_none_is_announced` |
+| A pad plugged in is opened and announced; one pulled out is closed and announced with its name and type | `A_pad_plugged_in_is_opened_and_announced…` |
+| The game reads the first pad alone, and the next once the first goes | `The_game_reads_the_first_pad_alone…`; `ControllersTests.Unplugging_one_pad_leaves_the_other_steering_and_playing` |
+| The rebind capture hears any pad the interface reads | `The_rebind_capture_hears_any_pad_the_interface_reads` |
+| Two pads both steer the library, the menu and a sheet | `ControllersTests.Two_pads_both_steer_the_library_the_menu_and_a_sheet` |
+| Every rule of §15.3 holds from a second pad, Select's game options (§23) included | `ThemedControllersTests.Every_rule_of_the_pad_table_holds_from_a_second_pad`, `Two_pads_both_steer_the_themed_view` |
+| A pad pulled out and plugged back is picked up without an error, over 120 polls with no pad | `A_pad_pulled_out_and_plugged_back_is_picked_up_without_an_error`; `GamepadManagerPadsTests.A_pad_pulled_out_and_plugged_back_is_opened_again`; `GamepadRescanTests` |
+| The notice appears on connect and on disconnect, in a desktop and a big-screen session, and is gone after its duration | `A_notice_says_when_a_pad_connects_and_disconnects_and_then_goes_away` (2 cases; 4.5 s of real dispatcher time) |
+| With notifications off, none | `With_notifications_off_no_notice_is_shown` |
+| With the first controller only, the second pad steers nothing | `With_the_first_controller_only_the_second_pad_steers_nothing` |
+| The help bar follows the pad last pressed, and the first pad's family when that pad goes | `ThemedControllersTests.The_help_bar_follows_the_pad_last_pressed` |
+| The controller type changes the help bar's glyphs and no pixel outside it; the buttons do what they did | `The_controller_type_changes_the_help_bar_s_glyphs_and_nothing_else` |
+| The swap trades Accept and Back, and nothing else, in the library, the menu, a sheet and the keyboard, and the hints say so | `ControllersTests.The_swap_trades_accept_and_back_everywhere_in_the_interface` (X opens nothing, Y still searches) |
+| The swap trades the themed view's buttons, and the help bar names the new ones, with a theme's own icons | `ThemedControllersTests.The_swap_trades_the_view_s_buttons_and_the_help_bar_follows`, `The_swap_gives_each_function_the_theme_s_icon_for_its_new_button` |
+| The swap does not reach the game | `The_swap_does_not_reach_the_game` (South is still the SNES B) |
+| The settings persist | `The_controller_settings_persist` (set on the Preferences sheet, read back with `AppSettings.Load`; the defaults checked) |
+| Every handle is released when its pad goes and when the window closes | `Every_pad_s_handle_is_released_when_the_pad_goes_and_when_the_window_closes`; `GamepadManagerPadsTests.Every_handle_is_closed…` |
+
+Before the merge of §23, the existing pad, themed and Preferences tests ran beside these under one filter (276, all
+passing), among them §15.9's audit, which now walks the Controllers tab and reached every control on it. The merge
+changed one of this pass's tests: Select in the gamelist now opens §23's game options rather than marking a favourite, so
+the second-pad walk opens and closes them instead. One broad run closed the pass, after the merge and the A/B narrowing:
+every WiseMan test under `Mistress` and `Input` except `ShaderSettingsWindowTests`, `ShaderBrowseBench` and
+`SceneGpuBench`, 902 passed and 12 skipped of 914, no failure; and LunaP's `NoticeLayerTests`, documented defaults, API
+baseline and documentation tests, 33 of 33.
+
+### 24.4 ES-DE's popup, measured
+
+§14.7 left the device popup unmeasured, and §21.3 planned to record it with §14.7's rig. The rig had in fact recorded it
+once, on 2026-09-25: run `pop` under `~/.cache/emusen/bigpicture/motion/runs/` destroyed its uinput pad while ES-DE 3.4.1
+was recording, and `popup.py` wrote the ink of the region 440–860 × 5–58 px of the 1280×800 window, frame by frame
+(6.86 ms apart), to `popup_ink.csv`. The recording itself was deleted with the stage's scratch; the series was not, and
+this pass read it rather than run ES-DE again (the load rule of 2026-09-25). It is one disconnection popup: n = 1. No
+connection popup was recorded: the pad was created before ES-DE started, and the recording began about four seconds
+after ES-DE's log shows it adding the pad.
+
+| | ES-DE 3.4.1 (n = 1) | Mistress |
+|---|---|---|
+| First ink after the device was destroyed | 533 ms (ES-DE's detection included) | the next poll after SDL's event, ≤ 16 ms; at worst the 1 s rescan |
+| Place | top centre, within 5–58 px of an 800 px window | top centre, 8 px from the top |
+| Fade in | 497 ms to full; a power curve t^1.35 fits (rms 0.009; linear 0.026) | 500 ms, linear |
+| Held | 2,988 ms at full | 3,000 ms |
+| Fade out | about 500 ms, (1 − t)^1.40 (rms 0.009; linear 0.025) | 500 ms, linear |
+| First ink to last | 3,988 ms | 4,000 ms |
+
+Ink is linear in the popup's opacity wherever the popup is brighter than what it covers, so the curves above are its
+opacity up to scale. The durations are ES-DE's to within a frame; the shape is not, by at most about 0.1 of full opacity
+at mid-fade. A linear fade was kept because it is §88.5's and one recording does not establish a curve.
+
+**P103's second half holds:** each fade about 0.5 s, within 0.4–0.6 s, and a hold of about 3.0 s, within 2–5 s.
+
+### 24.5 Where the rules are Mistress's, not measured ES-DE behaviour
+
+- **Pads present at start are not announced.** ES-DE's log shows it adding the pad at start, but the recording began
+  after start, so whether ES-DE announces a pad present at launch was not observed. Mistress opens the pads after its
+  first frame (§4.42 of the settings reference), and a notice for the pad already in hand was judged noise.
+- **The words.** "Controller connected: *name*" and "Controller disconnected: *name*". ES-DE's wording was in the deleted
+  recording and was not read from anywhere else.
+- **Held is the union of every pad.** A button counts as held if any pad the interface reads holds it, so one pad holding
+  Down and another tapping Down gives no new press. ES-DE's handling of two pads pressing at once was not measured.
+- **The pad last pressed** is the one whose buttons went from none held to some held most recently. A held stick counts
+  as held.
+- **"The first controller"** is the first pad opened that is still attached. ES-DE's guide says "the first controller
+  detected during startup" and warns that reconnecting may change it; Mistress's rule changes it in the same case.
+- **Over a game,** any pad's guide button or Back and Start together open the pad menu, and the notice is drawn over the
+  picture. ES-DE is not on screen while a game runs, so it has no counterpart. The game itself hears the first pad only.
+- **The swap is A and B only.** ES-DE's setting swaps X and Y as well. The first build did too (Search on West), and
+  was narrowed the same day, before merging, to accept and back alone, after the decision on North (§24.1). The
+  departure costs a player with a Nintendo-printed pad the X/Y half of ES-DE's remedy; what it buys is that the swap
+  cannot disagree with whatever the collections branch assigns to North and West.
+- **The swap is the interface's only.** The keyboard is unaffected, as ES-DE's is; so is every game, whose bindings are
+  its own (`GamepadBindingMap`). The text hints' letters swap with it; ES-DE says its help system is "updated
+  accordingly".
+- **The controller type offers LunaP's four families**, not ES-DE's seven icon sets (Xbox, Xbox 360, PlayStation 1/2/3, 4
+  and 5, Switch Pro, SNES): §10.1's Q9 settled Mistress's own four drawings. It changes only the themed help bar's icons,
+  as ES-DE's changes only its help icons; the text hints keep an Xbox pad's letters.
+
+### 24.6 Closing what was opened
+
+§15.14's lesson, applied before the fact. Every `ConnectedPad` is closed when SDL reports it detached, and every pad and
+the gamepad subsystem when the window closes (the manager's `Dispose`, reached from `Closing`). `SimulatedPads` counts the
+handles, and tests fail without each cleanup: mutants C3, C4 and C29 below remove the close on a pad's going, the
+manager's disposal of its pads, and the window's disposal of the manager, one at a time.
+
+### 24.7 Pictures
+
+`ControllersPictureTool`, run with `EMUSEN_BIGPICTURE_PNG=1`, writes 1280×800 pictures into
+`~/.cache/emusen/bigpicture/png/controllers/`. They were looked at:
+- `notice-connected-desktop.png`: the notice over the desktop library, at the top centre over the toolbar, in the desktop's
+  15 px type. It covers the Library and Save States buttons for its four seconds; it is not hit-testable, so a click
+  reaches them. A first version drew it at the big screen's 20 px on the desktop too, where it covered the toolbar from
+  the view buttons to the slider; the desktop's size was reduced after the picture was seen.
+- `notice-disconnected-bigpicture.png`: over the synthetic theme's system view, 20 px type at 800 px.
+- `synthetic-help-*.png`, `artbooknext-help-*.png` and the two `-help-strip.png`: the gamelist's help bar under Automatic
+  (a DualSense in hand, so PlayStation), Xbox, PlayStation, Nintendo and Generic, then Xbox with the swap, where Launch is
+  on B and Back on A, and Search still on Y. On Art Book Next the bar's three entries (Options, since §23; Menu; Launch) change icons and
+  nothing else moves.
+- `preferences-controllers-sheet.png`: the Controllers tab on the Preferences sheet. The tab strip now wraps to a second
+  row at this width (Controllers and System Files below the other four).
+- **A flaw seen and left:** in the generic set, Launch, Back and Search are the same four dots with a different one
+  filled, which at the help bar's size are hard to tell apart; §15.10 recorded the same of the generic d-pad.
+
+### 24.8 Mutants
+
+`~/.cache/emusen/probe/bigpicture/mutate_controllers.py`, one mutant at a time under `nice -n 10` with two build nodes,
+each built and run against the controller tests, the manager's, the rescan's and `PadInputPathTests`, the source restored
+after each and the tree rebuilt at the end; C30 ran against LunaP's `NoticeLayerTests` in its worktree. Log:
+`mutants-controllers.txt` and `run-controllers.log`.
+
+**A round the machine ended.** The first round was cut off at 17:58 by a hardware reset of the desktop (an AMD fault,
+before the BIOS update of that evening), with C16's mutant in `HelpPrompts.cs`. It was found and restored from the commit
+before any build was trusted, `bin/` was rebuilt clean, and the runner now writes the file and its original text to a
+journal before each mutant and restores a leftover journal when it starts (checked with a planted journal). The eleven
+results the first round logged (C1–C11, `mutants-controllers-part1.txt`) agree with the second round's. The table is the
+second round's, on the tree after §23's merge, except for the swap's mutants (C11–C17 and C28), which were run again after
+the swap was narrowed to A and B, with C13 turned round to put back the X/Y half; and C30, whose first form did not
+compile (it left the pattern's variable unassigned) and was rewritten so that it does. `mutants-controllers-final.txt`
+holds the table's lines.
+
+| # | Mutant | Result |
+|---|---|---|
+| C1 | the manager opens only the first pad | caught by 10 |
+| C2 | a pad pulled out is never let go | caught by 9 |
+| C3 | a pad pulled out is dropped without closing its handle | caught by 4 |
+| C4 | the manager's disposal leaves the pads open | caught by 2 |
+| C5 | the old rescan: only with no pad, and not on SDL's events | caught by 10 |
+| C6 | the rescan clock starts at MinValue again | caught by 23 |
+| C7 | the pads present at start are announced | caught by 3 |
+| C8 | the interface reads the first pad alone | caught by 3 |
+| C9 | the first-controller setting never reaches the manager | caught |
+| C10 | the game reads every pad, not player 1's | caught |
+| C11 | the swap leaves Accept on South | caught by 3 |
+| C12 | the swap leaves Back on East | caught by 2 |
+| C13 | the swap moves Search to West as well (ES-DE's X/Y swap, not wanted here) | caught |
+| C14 | the swap reaches the game | caught |
+| C15 | the text hints are not swapped | caught |
+| C16 | the help bar ignores the swap | caught by 2 |
+| C17 | a swap changed on a shown view leaves its help bar's entries | caught |
+| C18 | the controller type is ignored | caught |
+| C19 | a new family rebuilds the view at the system view | caught by 2 |
+| C20 | the help bar never follows the pad last pressed | caught |
+| C21 | no notice when a pad connects | caught |
+| C22 | the notifications switch ignored | caught |
+| C23 | the notice fades by OpenEmu's fractions, not ES-DE's measured time | caught |
+| C24 | the notice held ten times as long | caught |
+| C25 | the library's hint not redrawn when the first pad arrives or the last leaves | caught |
+| C26 | the rebind capture hears only the first pad | caught |
+| C27 | Preferences' swap switch saves nothing | caught |
+| C28 | the swap moves a function's glyph but not the theme's icon | caught |
+| C29 | the window's close leaves the manager undisposed | caught |
+| C30 | LunaP: the keyframes ignore FadeTime | caught by 2 |
+
+**30 of 30 caught, none after a test was changed.** Two qualifications. C23 and C24 are caught by the notice test's
+assertion of the layer's `Duration` and `FadeTime`, a check of configuration rather than of drawn opacity; the drawn fade
+is held by LunaP's own tests (C30). And the tests were written after the rules, each with its rival in view, which is why
+a clean sweep here is weaker evidence than it would be against tests written first. §15.14's lesson, that a mutation of
+existing code cannot produce an absent line, is what C3, C4 and C29 answer: each removes a cleanup that exists.
+
+### 24.9 Predictions retired
+
+| # | Predicted | Measured | Verdict |
+|---|---|---|---|
+| P103 | every rule of §15.3 from either of two pads, the help bar following the pad last pressed; ES-DE's popup fading 0.4–0.6 s each way and held 2–5 s | every rule from the second pad with the first attached, and both pads in the library, menu and sheets; the help bar follows the pad last pressed; ES-DE's popup 497 ms in, 2,988 ms held, about 500 ms out (n = 1) | held |
+| P119 | the pass opened and closed in no more calendar days than the lower end of its estimate (2 days) | opened and closed on 2026-09-26 | held |
+| P121, P122 | (§24.1) | not measured; for Pass 1 | open |
+
+### 24.10 The handheld run
+
+For Pass 1's session with the player, on the Legion Go S (build from this branch):
+
+1. **Game Mode, built-in controls only.** Start Mistress: no notice at start (P121). Steer the library and the themed
+   view; Preferences ▸ Controllers shows Automatic and the help bar draws the family §15.5 gives Steam's virtual pad
+   (P100).
+2. **A second pad in Game Mode** (any Bluetooth or USB pad): the notice appears at the top centre within about a second,
+   with the name Steam reports (P121); both pads steer the library, the pad menu, a sheet and the game options; pressing
+   on either switches the help bar to that pad's family; pulling it shows "disconnected" and the built-in controls carry
+   on.
+3. **The same in Desktop Mode** (P122), and whether the name and family are the hardware's there.
+4. **A game with two pads:** only the first pad plays; the second's guide button opens the pad menu over the game.
+5. **Controller Type** set to each family: only the help bar's icons change, legibly at arm's length (the generic set's
+   face buttons especially, §24.7).
+6. **Swap A and B:** B chooses and A goes back in the library, menus, sheets and the on-screen keyboard; X and Y are
+   as before; the hints and the help bar say so; in a game, A and B are as bound.
+7. **First controller only:** the second pad steers nothing; games unaffected.
+8. **A pad that registers twice** (if one is at hand): two notices, and the switch in 7 as ES-DE's remedy.
+9. **Sleep and wake** with a pad connected: whether SDL reports it removed and added again, and what the notices say.
+
+### 24.11 Not done
+
+- **No real device.** SDL's own added and removed events, and how soon it delivers them, were not exercised; the tests
+  stand at `IPadDevices`, beneath which `SdlPadDevices` is a list of one-line SDL calls with no test. Everything in §24.10.
+- **Player 2 in games** (Q22 (b)): not built; `EmuSen_Input.md` §6.
+- **The notice has no pad glyph** beside its words (§21.3 thought one might be wanted); LunaP's `NoticeLayer` holds text only.
+- **The fade's shape** is linear where ES-DE's fits a power of about 1.35–1.4 (§24.4).
+- **ES-DE's connection popup** was not recorded, nor its words; the pass did not run ES-DE.
+- **The controller type does not reach the text hints**, which keep an Xbox pad's letters in every family, as before.
+- **Preferences does not list the pads connected**; the Controller Bindings window still names the first only
+  (`ControllerName`, §4.4 of the settings reference).
+- **Shared files.** `PadHeld` moved from `MainWindow.Pad.cs` to `MainWindow.Controllers.cs`; a branch that edits it in
+  the old place (§22's) will conflict there at its merge.

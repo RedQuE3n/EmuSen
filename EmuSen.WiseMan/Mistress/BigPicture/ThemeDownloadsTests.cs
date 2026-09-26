@@ -163,6 +163,28 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Empty(Strays());
         }
 
+        // P55's other half: a cancel while the archive is unpacked stops between entries and swaps nothing in.
+        [Fact]
+        public async Task A_download_cancelled_while_it_unpacks_leaves_the_old_theme()
+        {
+            using (var good = new HttpClient(GitHub(() => Archive("one"), () => Sha1))) await ThemeDownloads.FetchAsync(good, ThemeSource.ArtBookNext);
+            using var http = new HttpClient(GitHub(() => Archive("two"), () => Sha2));
+            using var cancel = new CancellationTokenSource();
+            var seen = new List<(int, int)>();
+            var unpacked = new Now<(int Done, int Total)>(p => { seen.Add(p); if (p.Done == 1) cancel.Cancel(); });
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ThemeDownloads.FetchAsync(http, ThemeSource.ArtBookNext, cancel: cancel.Token, unpacked: unpacked));
+            Assert.Equal(2, seen.Count);
+            Assert.True(seen[0].Item2 >= 4);
+            Assert.Equal("one", File.ReadAllText(Path.Combine(Installed, "marker.txt")));
+            Assert.Empty(Strays());
+        }
+
+        // A progress that reports on the reporting thread, so a test can act between two entries.
+        private sealed class Now<T>(Action<T> report) : IProgress<T>
+        {
+            public void Report(T value) => report(value);
+        }
+
         // A server whose archive sends a few bytes and then waits until the request is cancelled.
         public sealed class Stall
         {

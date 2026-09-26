@@ -238,7 +238,11 @@ namespace EmuSen.Mistress.Views
             {
                 using HttpClient http = _http();
                 http.Timeout = TimeSpan.FromMinutes(30);
-                Downloading = ThemeDownloads.FetchAsync(http, source, progress, cancel.Token);
+                var unpacking = new Progress<(int Done, int Total)>(p =>
+                {
+                    if (_download == cancel) _status.Text = $"Unpacking {source.Repository}: {p.Done} of {p.Total} files";
+                });
+                Downloading = ThemeDownloads.FetchAsync(http, source, progress, cancel.Token, unpacking);
                 ThemeStamp stamp = await Downloading;
                 _latest[directory] = stamp.Commit ?? "";
                 _status.Text = $"Installed {ThemeDownloads.NameOf(directory)}" + (stamp.Commit is null ? "." : $" at commit {Short(stamp.Commit)}.");

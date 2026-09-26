@@ -103,7 +103,8 @@ namespace EmuSen.Mistress.BigPicture
         }
 
         // Downloads the branch's archive and swaps it in only when it loads; the old theme and its theme-customizations survive any failure - see EmuSen_BigPicture.md §16.
-        public static async Task<ThemeStamp> FetchAsync(HttpClient http, ThemeSource source, IProgress<(long Read, long? Total)>? progress = null, CancellationToken cancel = default)
+        public static async Task<ThemeStamp> FetchAsync(HttpClient http, ThemeSource source, IProgress<(long Read, long? Total)>? progress = null, CancellationToken cancel = default,
+            IProgress<(int Done, int Total)>? unpacked = null)
         {
             string directory = DirectoryFor(source);
             Directory.CreateDirectory(Root);
@@ -133,7 +134,7 @@ namespace EmuSen.Mistress.BigPicture
                 }
 
                 if (Directory.Exists(staged)) Directory.Delete(staged, recursive: true);
-                await Task.Run(() => Extract(zip, staged, cancel), cancel);
+                await Task.Run(() => Extract(zip, staged, unpacked, cancel), cancel);
                 string root = ThemeRoot(staged) ?? throw new InvalidDataException("The download holds no capabilities.xml.");
                 if (Validate(root) is { } why) throw new InvalidDataException($"The download is not a theme that loads: {why}");
                 var stamp = new ThemeStamp(source.Owner, source.Repository, source.Branch, commit, DateTime.UtcNow);
@@ -154,14 +155,16 @@ namespace EmuSen.Mistress.BigPicture
         }
 
         // Every entry by hand, so a cancel stops between entries and an entry that would land outside the folder is refused.
-        private static void Extract(string zip, string staged, CancellationToken cancel)
+        private static void Extract(string zip, string staged, IProgress<(int Done, int Total)>? unpacked, CancellationToken cancel)
         {
             string top = Path.GetFullPath(staged) + Path.DirectorySeparatorChar;
             Directory.CreateDirectory(staged);
             using ZipArchive archive = ZipFile.OpenRead(zip);
+            int done = 0, total = archive.Entries.Count;
             foreach (ZipArchiveEntry entry in archive.Entries)
             {
                 cancel.ThrowIfCancellationRequested();
+                unpacked?.Report((done++, total));
                 string destination = Path.GetFullPath(Path.Combine(staged, entry.FullName));
                 if (!destination.StartsWith(top, StringComparison.Ordinal)) throw new InvalidDataException($"{entry.FullName} would land outside the theme folder.");
                 if (entry.FullName.EndsWith('/')) { Directory.CreateDirectory(destination); continue; }

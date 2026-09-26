@@ -153,6 +153,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         [Fact]
         public Task The_developer_file_appearing_asks_no_server() => OnUi(() =>
         {
+            // media.db already there, as after an earlier session: the store is open when the file appears.
+            using (MediaStore.Open(DataStore.Media)) { }
             MainWindow window = Open(developer: false);
             Pump();
             SetDeveloper(true);
@@ -264,6 +266,22 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Empty(_server.Asked.Where(u => u.Contains("screenscraper.fr")));
             Assert.Contains("ScreenScraper cannot be used: EmuSen's developer file is not on this computer", _asked.Single().Message);
             Assert.Contains("OpenEmu's sources are asked", _asked.Single().Message);
+        });
+
+        [Fact]
+        public Task A_run_without_screen_scraper_asks_the_failover_only_for_games_with_no_cover() => OnUi(() =>
+        {
+            string hand = Path.Combine(DataStore.Artwork, "SNES", "Other (USA).png");
+            Directory.CreateDirectory(Path.GetDirectoryName(hand)!);
+            File.WriteAllBytes(hand, new byte[200]);
+            File.WriteAllBytes(Path.Combine(_romDir, "Other (USA).sfc"), SyntheticRom.Build((0x100, [9])));
+            MainWindow window = Open(developer: false);
+            WaitFor(() => CoverShown(window, Path.Combine(_romDir, "Other (USA).sfc")) == hand, "the player's cover");
+            Scrape(window, new ScrapeScope());
+            RunEnds(window);
+            Pump();
+            Assert.Equal(2, window.Progress!.Total);
+            Assert.Equal(["F-Zero%20%28USA%29.png"], _server.OthersAsked.Select(u => u[(u.LastIndexOf('/') + 1)..]));
         });
 
         [Fact]

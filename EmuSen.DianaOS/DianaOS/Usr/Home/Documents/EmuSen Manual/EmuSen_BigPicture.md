@@ -2058,3 +2058,36 @@ the gamelist arriving from below, under a help bar that holds its place.
 - **The scene is not yet in Mistress's window.** No render loop drives `SceneStage.Advance` from frame times; that is
   stage (e), with the pad.
 - **Grid motion** (`rowTransitions` and the grid's `itemTransitions`) waits for the grid in stage (f).
+
+---
+
+## 15. Stage (e): the themed view as the big-screen library, driven by the pad
+
+*Opened 2026-09-25.* Stage (e) puts the scene of §13 and §14 into Mistress's one window as the library of a big-screen
+session, under §10.1's answers to Q8 and Q9: the existing big-screen library stays as the fallback and as a choice,
+the themed view is offered in big-screen sessions only, the help bar's icons follow the connected pad's family, and
+the theme's navigation sounds play through a small stream of their own, on by default. Everything over the view is
+drawn inside the window; no window is opened.
+
+### 15.1 Predictions, written before the host was built
+
+- **P39, a still view draws nothing.** Once a move has settled, the host requests no frame until something is due to
+  change. On Art Book Next's system view at rest it requests none at all. On its gamelist, where the selected name and
+  the description scroll by themselves after a delay, it requests none in the 2.9 s after a list step settles, and
+  resumes at the first scroll's delay (3 s for a name wider than its row, 6 s for the description).
+- **P40, the return is exact.** A game started from the themed gamelist and left through the pad menu's "Game Library"
+  comes back to the same system and the same game, and the first frame after the return equals, pixel for pixel, a
+  fresh static build of that selection.
+- **P41, the first build.** Loading Art Book Next for EmuSen's five systems and building the first system view in the
+  window costs under 300 ms headless on the desktop, of which the loader's share is under 10 ms (§12.5 measured
+  0.91 ms per system).
+- **P42, the pad's family.** SDL's own gamepad type decides the family for every pad SDL recognises: its two Xbox types,
+  its three PlayStation types and its four Nintendo types each give one family, and a Standard or Unknown type falls
+  back to the pad's name. A pad whose name carries "Legion Go" is taken for an Xbox layout, as the user reports it.
+- **P43, a family change touches only the help bar.** Changing the connected pad's family redraws the help bar and
+  changes no pixel outside its box.
+- **P44, the sounds.** Each of the seven navigation actions plays exactly the theme's file for it, once per step,
+  including the steps a held direction repeats; with the switch off nothing reaches the sound stream. Decoding the
+  seven WAV files of Art Book Next costs under 20 ms.
+- **P45, every control is reachable.** The themed session's pad menu and every sheet it opens, on the 1280×800 sheet
+  size, leave no control unreachable to `PadAudit`, as the Mistress library's did (§4.45.3 of the settings reference).

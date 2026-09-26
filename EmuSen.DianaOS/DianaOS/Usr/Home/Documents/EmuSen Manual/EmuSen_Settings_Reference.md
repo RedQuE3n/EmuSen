@@ -2448,3 +2448,107 @@ The bar also goes when both of its parts are off, so an empty strip is never lef
 for the frame rate alone, then for the whole bar and a switch for each part. `LibraryScreenTests.The_status_bar_and_its_parts_follow_preferences_at_once_and_are_remembered`
 walks the switches and a restart; mutants that drop the live hook or keep an empty bar are caught.
 
+### 4.52 Big picture: an ES-DE theme as the big-screen library (2026-09-25)
+
+`EmuSen_BigPicture.md` plans a big-picture mode that draws EmulationStation-DE themes. Its stages (a) to (c) built the
+theme loader and a scene drawn with LunaP's controls (§12–§14 there). This section is stage (e) as a player meets it:
+the theme's views shown in the library's place in a big-screen session, steered by the pad. The design record, the
+predictions and the measurements are §15 of that plan.
+
+**The settings.** Preferences ▸ Appearance holds four rows, stored in `appsettings.json`:
+
+| Row | Setting | Default | What it does |
+|---|---|---|---|
+| Library Style | `LibraryStyle` | `Theme` | `Mistress` keeps this library (§4.33) in a big-screen session; `Theme` shows the theme's views instead when one loads |
+| ES-DE Theme | `BigPictureTheme` | none | a theme folder holding `capabilities.xml`, read in place and never written |
+| ES-DE Media | `EsdeMediaDirectory` | none | an ES-DE `downloaded_media` folder, read in place; without one the theme shows the covers of §4.33 |
+| Navigation Sounds | `NavigationSounds` | on | the theme's seven navigation sounds |
+
+A change takes effect when the Preferences sheet closes, since closing it refreshes the library.
+
+**When the themed view is shown.** All four must hold: the session is big-screen (§4.29, §4.43); Library Style is
+`Theme`; a theme folder is set; and the theme reads without error and has a view for at least one system with games.
+Otherwise the library of §4.33 is shown, as before, and when a set theme could not be read the status line says why.
+The desktop keeps its sidebar library whatever the style says: the user decided on 2026-09-25 that the themed view is
+for big-screen sessions only. While the themed view is showing, the status bar is hidden, so the view has the whole
+window; it comes back with the game.
+
+**What is shown.** One system per library shelf that has games, in the shelves' release order, under ES-DE's system
+name for it (`nes`, `snes`, `n64`, `gb`, `gbc`, carried by `CoreCatalog.LibraryShelf.EsdeSystem`). A gamelist lists
+favourites first, then by title, as ES-DE does by default. Games carry Mistress's own records (§4.32): favourite, last
+played, play count and play time. Media come from the ES-DE folder when one is set, and a game's cover otherwise from
+the art folder of §4.33. The theme's clock is off, as ES-DE's `DisplayClock` is by default; there is no switch for it
+yet. The status bar reads the battery and radios from Linux's sysfs (`DeviceStatusReader`): the system's own battery,
+not a mouse's or a pad's (whose `scope` is `Device`); Wi-Fi as on when a wireless interface is up; Bluetooth as on when
+its radio switch is blocked neither by software nor by hardware. Nothing is shown that sysfs does not report.
+
+**The pad.** §4.29's grammar, as `EmuSen_BigPicture.md` §4.9 tables it:
+
+| Button | System view | Gamelist |
+|---|---|---|
+| Left, right | move the carousel; held, it repeats after 500 ms and then every 200 ms (180 and 80 ms with the theme's `fastScrolling`) | the next or previous system's gamelist, at the game last chosen there; once per press |
+| Up, down | (a vertical carousel moves on these instead) | move the list; held, 500 ms, then 114 ms, then from 1.7 s four at once and every 15.9 ms; a held list stops at its ends, a tap wraps |
+| South | the system's gamelist, at the game last chosen there | start the game |
+| East | back to a suspended game, if there is one | clear the search if there is one, else back to the system view |
+| L1, R1 | | a page: the rows the list shows at once |
+| L2, R2 | | the first and the last game |
+| North | | search, on the on-screen keyboard (§4.45.6) |
+| Select | | mark or unmark a favourite; the game stays selected where the list moves it |
+| Start, Guide | the pad menu (§4.29) | the same |
+
+The repeats are ES-DE's, measured in `EmuSen_BigPicture.md` §14.7, and run on the view's own clock, not on
+`PadNavigator`'s 400/80 ms: a held direction reaches the view as held and let go. Everything else reaches it through
+`PadNavigator` as before. The search narrows every gamelist to the titles that match until it is cleared, and the list
+moves under it as the library's search box lets it (§4.30). The pad menu, the settings sheets, the cheats and the
+resume question are the same as over the library of §4.33 and are drawn inside the window (§4.45.2); no window is
+opened.
+
+**Starting a game and coming back.** South runs `StartGameAsync`, the path every start takes (§4.31): the firmware
+prompt, then the resume question on a sheet. The menu over the game's "Game Library" (§4.18) brings the themed view back
+at the same system and game, in the same view, with the search still applied; "Close Game" does the same after writing
+the resume state. The selection is kept by the system's name and the game's file, not by position, so a list that
+changed underneath (a favourite marked, a file added) still finds it.
+
+**The help bar follows the pad.** Its entries are the theme's layout filled with the actions above, and its icons are
+drawn by LunaP (`PadGlyph`, `LunaP.md` §103) in the set for the connected pad's family: Xbox, PlayStation, Nintendo, or
+a generic set drawn by position when the family is not known. The family is SDL's own reading of the pad
+(`SDL_GetGamepadType`, from its vendor and product) when SDL knows it; when SDL answers Standard or Unknown, the pad's
+name decides, and a name holding "Legion Go", "Steam Deck" or "Xbox" is taken for an Xbox layout. The window asks at
+every pad poll, so a different pad changes the icons at once and nothing else moves. A theme's own `customButtonIcon`
+files are used when it sets them, under ES-DE's key for the family (`_XBOX`, `_PS`, `_switch`); a generic pad takes
+the Xbox keys, as ES-DE's own default controller type is Xbox. The drawings are Mistress's own through LunaP; none is
+copied from ES-DE or a vendor.
+
+*Limits of the detection.* A pad behind Steam Input reaches SDL as Steam's virtual pad and is classified as that pad
+is, not as the hardware in the player's hands. A generic pad whose name carries none of the words is drawn generic
+even when its printing is known to the player. `GamepadManager` still opens only the first pad; it now lets a pulled
+pad go (`SDL_GamepadConnected`), so its one-a-second rescan can open the next one.
+
+**Sounds.** The theme's seven sounds (`systembrowse`, `quicksysselect`, `select`, `back`, `scroll`, `favorite`,
+`launch`) play on `UiSoundPlayer` (Endymion), a second SDL audio stream opened on the default playback device beside
+the game's `AudioPlayer`. SDL mixes the two logical devices on the one physical device, so neither stream's clearing or
+gain touches the other. Each WAV is decoded once with `SDL_LoadWAV` and converted to 48 kHz stereo float; a new sound
+clears the stream first, so the steps of a held list replace one another rather than queue. The gain is 0.7, ES-DE's
+default navigation volume (its `SoundVolumeNavigation` of 70). The stream opens on the first sound, so a session that
+plays none never touches the device. With the switch off nothing reaches the stream.
+
+**Drawing only while something moves.** The view asks for a frame (`RequestAnimationFrame`) only while something moves
+on it: a carousel sliding, a list held, a fade. When a text is in its pause before scrolling (the selected name's three
+seconds, a description's start delay), the window sets a timer for the end of the pause and draws nothing until then;
+when everything is still for good it draws nothing at all. The answers come from LunaP's scroll queries (§103.3 there).
+
+**Tests.** `ThemedLibraryPadTests` (13 cases: each row of the table above, the conditions for showing the view, and the
+page by the list's own rows), `ThemedLibraryFlowTests` (3: the whole walk from system to game and back, the frame after
+the return, the resume question on a sheet), `ThemedLibraryHostTests` (16: the render loop's sleep, the pad families, the help entries,
+the help bar alone changing, the sounds and their switch and stream, sysfs, Preferences, the media scan, and every sheet
+reached by the pad) and `ThemedLibraryReferenceTests` (2 on Art Book Next, skipping visibly without it, and the PNG
+tool). They run on WiseMan's `PadDriver` with a clock the test moves. Mutants are in `EmuSen_BigPicture.md` §15.
+
+**What it does not cover.**
+
+- *No device was used.* The families of real pads, the Legion Go S's name and type under SDL and under Steam Input, and
+  whether the sound stream's latency is acceptable beside the game's 4,096-frame device buffer are for the device.
+- The first showing scans the media folder for each system on the UI thread: 224 ms for 3,508 games with an empty
+  media folder on the desktop (§15 of the plan). Later showings reuse the answer.
+- The search is Mistress's, not ES-DE's: ES-DE offers no search box in a gamelist.
+- The system order is the shelves' release order; ES-DE's own order was not established.

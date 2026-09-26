@@ -1,6 +1,6 @@
 # EmuSen_BigPicture — a plan for a big-picture mode in Mistress that renders ES-DE themes
 
-*Written 2026-09-24. Stage (a), the theme loader, was built the same day; its record is §12. Stage (b), the two views drawn statically with LunaP controls, followed on 2026-09-24 and 25; its record is §13. Stage (c), the GPU frame and motion, followed on 2026-09-25; its record is §14. Nothing else is built.* The user asked for a big-picture mode in Mistress like EmulationStation's,
+*Written 2026-09-24. Stage (a), the theme loader, was built the same day; its record is §12. Stage (b), the two views drawn statically with LunaP controls, followed on 2026-09-24 and 25; its record is §13. Stage (c), the GPU frame and motion, followed on 2026-09-25; its record is §14. Stage (e), the themed view as the big-screen library driven by the pad, followed the same day; its record is §15. Nothing else is built.* The user asked for a big-picture mode in Mistress like EmulationStation's,
 starting with the theme they like, Art Book Next. They made two choices. First, Mistress reads ES-DE themes, so that
 Art Book Next and other ES-DE themes load as their authors made them. A look-alike built from Mistress's own controls
 was not wanted. Second, game media comes from ScreenScraper. This page plans that work. It inventories the theme
@@ -1004,6 +1004,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 | P13–P18 | Stage (a)'s predictions: coverage, errors, skipped includes, load time, triggers, the default variant (§12.1) | Stage a (§12.5) |
 | P19–P23 | Stage (b)'s predictions: frame cost, SVG against `Svg.Skia` by file, properties mapped, geometry from the theme, the font size (§13.1) | Stage b (§13.10) |
 | P24–P38 | Stage (c)'s predictions: the GPU route, its frame, first frame and uploads, the handheld; the carousel step, repeat, the list, the name, containers, scrollFadeIn, the video delay, the slide, settled frames and the moving frame (§14.1, §14.5) | Stage c (§14.10); P28 open |
+| P39–P45 | Stage (e)'s predictions: a still view draws nothing, the return is exact, the first build, the pad's family, a family change touching only the help bar, the sounds, every sheet reachable (§15.1) | Stage e (§15.12); P41 failed cold |
 
 ---
 
@@ -2091,3 +2092,265 @@ drawn inside the window; no window is opened.
   seven WAV files of Art Book Next costs under 20 ms.
 - **P45, every control is reachable.** The themed session's pad menu and every sheet it opens, on the 1280×800 sheet
   size, leave no control unreachable to `PadAudit`, as the Mistress library's did (§4.45.3 of the settings reference).
+
+### 15.2 What was built
+
+**In LunaP** (branch `bigpicture-pad`, its `docs/LunaP.md` §103). Nothing there knows about ES-DE:
+- `PadGlyph`, with `PadFamily` (Generic, Xbox, PlayStation, Nintendo) and `PadGlyphButton` (the face buttons by
+  position, the d-pad whole and by axis, shoulders, triggers, the two middle buttons, the guide button): one button drawn
+  in one colour as the toolkit's own geometry;
+- `HintEntry.Button` and `HintBar.PadFamily`, so a hint names a button and the bar draws it in the pad's set;
+- `TextScroll.NextLoopChange` and `NextRunChange`, `FontText.NextScrollChange` and `TextRowList.NextMarqueeChange`:
+  the earliest time a self-scrolling text will look different, or none.
+
+**In Mistress:**
+- `BigPicture/ThemedLibrary.cs` holds the stage, the pad's rules, the sounds and the selection. The selection is kept by
+  the system's name and each system's game file, so a rebuild from new data (a favourite, a search, a refresh, a return
+  from a game) finds it again.
+- `Views/MainWindow.BigPicture.cs` puts it in the library's place, feeds it the library's shelves, records and covers,
+  routes the pad and runs the render loop.
+- `Input/PadFamilies.cs` gives a pad's family from SDL's type, then its name. `BigPicture/DeviceStatusReader.cs` reads
+  the battery and radios from sysfs.
+- The scene gained `SceneView.Jump`, `Stepped`, `SetFamily` and `NextChange`, `SceneStage.Replace` and a `Switch` that
+  takes new data, and `SceneData.Family` and `ShowClock`.
+- `HelpPrompts` maps each ES-DE help entry to its action and its `PadGlyphButton`. Stage (b) had mapped the entry `x` to
+  Search, but §4.9's search is North, the button ES-DE's help entries call `y`; it is `y` now.
+- Preferences ▸ Appearance: Library Style, ES-DE Theme, ES-DE Media and Navigation Sounds.
+
+**Elsewhere:** `CoreCatalog.LibraryShelf` carries ES-DE's system name for each shelf (§4.1). `GamepadManager` reports
+SDL's gamepad type and lets a pulled pad go. `UiSoundPlayer` (Endymion) is the navigation sounds' stream.
+
+The settings reference's §4.52 is the player's account of all this; this section is the record.
+
+### 15.3 The pad's rules, and their tests
+
+Every row of §4.9's table is a rule with a test in WiseMan, driven through `PadDriver` with a clock the test moves:
+
+| Rule | Test |
+|---|---|
+| The themed view is the library of a big-screen session with a theme, and Mistress's otherwise (style, no theme, desktop, a broken theme) | `ThemedLibraryPadTests.The_themed_view_is_the_library…`, `Mistress_library_is_kept…` (4 cases) |
+| Left and right move the system carousel, with `systembrowse`, repeating at 500 then 200 ms | `Left_and_right_move_the_system_carousel…` |
+| South enters the gamelist (`select`), East comes back (`back`) | `South_enters_the_system_s_gamelist…` |
+| Up and down move the list (`scroll`) at 500, 114 ms and stop at the end when held; left and right change the system at the game last chosen there (`quicksysselect`) | `Up_and_down_move_the_list…` |
+| L1 and R1 page by the rows the list shows; L2 and R2 go to the first and last | `Shoulders_page_by_the_rows…`, `Shoulders_page_a_list_longer_than_a_page…` |
+| North searches on the on-screen keyboard; East clears the search before it goes back | `North_searches_with_the_on_screen_keyboard…` |
+| Select marks a favourite, which moves first and stays selected | `Select_marks_a_favourite…` |
+| Start opens the pad menu over the view, and the view hears nothing under it | `Start_opens_the_pad_menu_over_the_view…` |
+| South starts the game; the menu's Game Library comes back to the same system and game; East in the system view resumes it; Close Game comes back too | `ThemedLibraryFlowTests.A_pad_walks_systems_searches_favourites_starts_a_game_and_comes_back…` |
+| The resume question is asked on a sheet over the view | `The_resume_question_is_asked_on_a_sheet…` |
+| The help bar's icons follow the pad's family | `ThemedLibraryHostTests.The_help_bar_follows_the_connected_pad_s_family…`, `SDL_s_pad_types_and_names_give_the_families` |
+| The sounds, their switch, and a new sound replacing the last | `With_the_switch_off…`, `A_new_sound_replaces…`, `A_navigation_sound_is_decoded…`, and the sounds asserted in every pad test |
+| Preferences' Library Style takes effect when the sheet closes | `Preferences_chooses_the_library_style…` |
+
+**Where the rules are Mistress's, not ES-DE's measured behaviour:**
+- **The pad menu is the in-window panel of §4.29, not a `SheetLayer` sheet** as §4.9's table wrote. A sheet presents a
+  window; the pad menu is a list the window draws over whatever screen shows, and §4.10 already said the pad menu is
+  shared by both library styles. What §4.9 wanted of it, that no window is opened, holds, and every window the menu opens
+  is a sheet. `Start_opens_the_pad_menu…` asserts no owned window exists.
+- **The shoulders page.** The scratch home ES-DE wrote in stage (b) carries `QuickSystemSelect` =
+  `leftrightshoulders`, which suggests ES-DE's default changes the system on the shoulders as well as on left and right.
+  §4.9 gave the shoulders to paging, after §4.29's grammar, and this stage kept §4.9. Which ES-DE does on a real pad was
+  not measured.
+- **Quick system select does not repeat when held.** ES-DE's behaviour was not measured.
+- **The search** has no ES-DE counterpart: ES-DE has no search box in a gamelist.
+- **The system order** is the shelves' release order; ES-DE's was not established.
+- **The clock is off**, as ES-DE's `DisplayClock` is by default (§13.8), with no switch yet.
+- **A new sound replaces the one playing.** ES-DE's behaviour under a fast-scrolling list was not measured; queuing would
+  make a held list's sounds trail seconds behind it.
+
+### 15.4 Launching and returning
+
+South in the gamelist plays `launch` and calls `StartGameAsync(file, name)`, the path every start takes (§4.31 of the
+settings reference): the firmware prompt, then the resume question on a sheet, then the load, which hides the library.
+The themed view is not torn down while the game runs; it keeps its selection, and the render loop stops because the
+library is hidden. The menu over the game's "Game Library" calls `ToggleLibrary`, which shows the library and refreshes
+it; the refresh shows the theme again at the kept system, game and view. "Close Game" goes through `ShowLibrary` and
+comes back the same way. East in the system view, with a game suspended, resumes it.
+
+- **P40 holds.** `The_first_frame_after_the_return_is_a_fresh_static_build_of_the_same_selection` starts Cobalt Harbor,
+  opens the menu, chooses Game Library, and compares the whole window with `SceneBuilder.Build` of the same data in a
+  window of its own: 0 pixels differ at 1280×800.
+
+### 15.5 The pad's family
+
+`PadFamilies.Of(type, name)` takes SDL's `SDL_GetGamepadType`, which SDL derives from the pad's vendor and product ids:
+its two Xbox types give Xbox, its three PlayStation types PlayStation, its Switch Pro and three Joy-Con types
+Nintendo (a GameCube type, which SDL 3.4's C# binding does not declare, would too). For Standard and Unknown the pad's name decides: "Xbox", "X-Box", "XInput", "Legion Go", "Steam Deck" and
+"Steam Virtual Gamepad" give Xbox; "PlayStation", "DualShock", "DualSense", "PS3/4/5" and "Sony" PlayStation;
+"Nintendo", "Switch", "Joy-Con", "Pro Controller" and "GameCube" Nintendo; anything else Generic. The window asks at
+every pad poll, and the view redraws only its help bar (`SceneView.SetFamily`).
+
+`SDL_s_pad_types_and_names_give_the_families` lists the family each of SDL's type names must give and fails on a type
+the binding declares that the list does not name, so a new SDL type has to be classified by a person.
+
+- **P42 holds** for every type SDL 3.4 names, and for the names tested. On the device it is unverified: under Steam's
+  Game Mode a pad reaches SDL as Steam's virtual pad, and what SDL reports for the Legion Go S there was not read.
+- **P43 holds.** With the family changed from generic to PlayStation, Nintendo and Xbox (the last by the name "Lenovo
+  Legion Go S" on a Standard type), 2,091, 2,430 and 2,493 pixels changed inside the help bar and none outside it.
+
+### 15.6 The sounds' stream
+
+`UiSoundPlayer` opens its own SDL audio stream on the default playback device (`SDL_OpenAudioDeviceStream`), 48 kHz
+stereo float, on the first sound played. The game's `AudioPlayer` has its own stream on the same device. **SDL mixes the
+two**: each opened stream is a logical device, and SDL sums the logical devices of one physical device, so the
+interface's stream is neither resampled by the game's rate control nor paused with the game, and clearing it touches
+nothing of the game's. Each WAV is decoded once with `SDL_LoadWAV` and converted with `SDL_ConvertAudioSamples`. A new
+sound clears the stream before it is queued (`A_new_sound_replaces…`: after a 2 s sound and a 0.5 s one, 192,000 bytes
+queued, the second alone). The gain is 0.7, ES-DE's navigation volume as its scratch settings record it.
+
+- **P44 holds.** Every pad test asserts the sound of each action, repeats included (a held carousel's four steps, four
+  `systembrowse`); with the switch off none reaches the stream; Art Book Next's seven WAVs decode in 4.8 ms.
+- **Not measured:** the stream's latency. The game's stream asks SDL for 4,096-frame device buffers (§4.10 of the
+  settings reference), and on a device both streams share that buffer; whether a navigation sound then trails the press
+  audibly is for the handheld.
+
+### 15.7 Drawing only while something moves: P39
+
+The window asks the view, after every pad poll and every frame, when it will next look different
+(`SceneView.NextChange`). The answer is now while a glide, a held direction, a fade or `scrollFadeIn` runs; the end of a
+text's pause, from LunaP's queries (§103.3), while a name or a container waits; and never when all is still. Now asks for
+the next frame (`RequestAnimationFrame`); a later time sets a timer; never does nothing. A text not yet laid out answers
+now, so its first layout is not missed.
+
+`A_still_view_draws_nothing…` models the window's loop, drawing only when asked:
+- the system view at rest: **0 frames in 5 s**;
+- a carousel step: 24 frames in 600 ms (400 ms of glide at 16 ms polls), then 0 in 3 s;
+- a gamelist whose selected name is too wide: **0 frames in the 2.9 s** after it was entered, frames from 3 s;
+- a short name: 0 frames in 8 s; a horizontal container: 0 frames until its start delay of 2 s.
+
+- **P39 holds** on the synthetic theme. On Art Book Next it holds trivially: with Mistress's data no game has a
+  description and every synthetic name fits, so the gamelist's next change is never, and the description's 6 s delay was
+  not exercised. It waits for stage (d)'s descriptions.
+
+### 15.8 The first build: P41
+
+`Art_Book_Next_s_first_build_for_five_systems` builds a fresh `ThemedLibrary` five times over EmuSen's five systems and
+the synthetic library's media, and shows its root in a new headless window. Desktop, Debug build:
+
+| Run | Theme read | Media scan | Stage | First frame (layout, decode, draw) |
+|---|---|---|---|---|
+| 1 (cold in the process) | 50.3 ms | 1.9 ms | 52.4 ms | 385 ms |
+| 2–5 | 9.4–49.0 ms | 1.2–1.4 ms | 0.3–0.8 ms | 49.8–51.3 ms |
+
+- **P41 fails cold and holds warm.** The first build and frame took about 490 ms against a bound of 300; later ones about
+  60 ms. The cold run is the process's first decode of the artwork, first SVG rasterising and first JIT of all of it, as
+  §13.4's first build was.
+- **The loader's share fails too:** 9–50 ms for five systems warm, against under 10. Each run reads `capabilities.xml`
+  afresh (31 schemes, 20 variants), which §12.5's 0.91 ms per system did not include. The window keeps the capabilities
+  and each resolved theme between showings, so a return to the library pays neither.
+- **A large library.** `A_large_library_is_scanned_for_media_once…`: 3,508 games and an ES-DE media folder holding none of
+  them took 224 ms to scan on the first showing, on the UI thread, and 0 ms on the next. That is the one cost here that
+  grows with the library.
+
+### 15.9 Every control reachable: P45
+
+`Every_control_of_each_sheet_opened_from_the_themed_view_is_reached_by_the_pad` opens Cheats, Graphics Settings,
+Shaders, Controller Bindings and Preferences from the pad menu over the themed view at 1280×800, walks every tab with
+`PadAudit`, and closes each with East. **P45 holds: nothing unreachable on any of the five**, Preferences' four new rows
+included; after East the view takes the pad again.
+
+### 15.10 Pictures
+
+`ThemedLibraryReferenceTests.Stage_e_pictures`, run with `EMUSEN_BIGPICTURE_PNG=1`, renders the whole window at 1280×800
+and 1920×1200 into `~/.cache/emusen/bigpicture/png/stage-e/`: the system view, the gamelist, the pad menu over the view,
+and the help bar cut out in each of the four families, one above the other, for the synthetic theme and for Art Book
+Next. They were looked at:
+- Art Book Next's system view shows the Super Nintendo slice centred between the NES and Game Boy slices, its logo, the
+  status bar with Bluetooth (the desktop's own, from sysfs), and the help bar's MENU, SELECT and SYSTEM in generic icons.
+- The gamelist shows the list with the favourite-first order, the synthetic cover and the metadata with ES-DE's words.
+- The pad menu is drawn over the dimmed view.
+- The family strip shows the four sets: dots and pills; A, B and the Xbox middle marks in rings; the four shapes; B and
+  A cut out of discs, plus and minus.
+- The synthetic theme's gamelist shows no cover: the test session has no art folder and no media folder, so the image
+  element draws nothing, which is what a theme with no `default` image does. Its help bar lists all eleven entries at
+  0.035 of the height and runs off the right edge at both sizes; that is the synthetic theme's layout, not a clip.
+- **A flaw seen and left:** at the 1280×800 help bar's size the generic d-pad's up-and-down and left-and-right glyphs
+  are hard to tell apart; the filled arms are narrow.
+
+### 15.11 Mutants
+
+The runners are `~/.cache/emusen/probe/bigpicture/mutate_stage_e.py` (32 mutants in Mistress, Endymion and the scene,
+against the themed library's tests and the scene's mapping and motion tests) and `mutate_padglyph_lunap.py` (LunaP's
+§103.5, ten, all caught). Logs are `mutants-stage-e.txt`, `mutants-stage-e-rerun.txt` and `run-stage-e.log`. Each
+mutant was built and run alone and the source restored; the tree was rebuilt clean at the end.
+
+| # | Mutant | Result |
+|---|---|---|
+| E1 | quick system select forgets each system's game | caught by 5 |
+| E2 | a held direction steps once and does not repeat | caught by 2 |
+| E3 | left and right in a gamelist do not change the system | caught |
+| E4 | entering a gamelist ignores the game last chosen there | **survived**; caught after the test was changed |
+| E5 | a page is always ten games | caught |
+| E6 | a page wraps past the end of the list | caught |
+| E7 | the first-game trigger moves one game | caught by 2 |
+| E8 | East with a search goes back instead of clearing it | caught |
+| E9 | a favourite is not listed first | caught |
+| E10 | Start does not open the pad menu | caught by 3 |
+| E11 | the library comes back at the system view, not where it was | caught by 4 |
+| E12 | the render loop never sleeps | caught by 3 |
+| E13 | a text's pause is not waited for, so the loop sleeps for good | caught |
+| E14 | a family change leaves the help bar as it was | not built at first (the mutant left an empty statement); caught once rewritten |
+| E15 | a view built after a family change draws the help bar generic | **survived**; caught after the test was changed |
+| E16 | SDL's type ignored, the name alone decides | caught |
+| E17 | the Legion Go S taken for a generic pad | caught by 2 |
+| E18 | a held direction's repeats make no sound | caught by 3 |
+| E19 | the sounds switch ignored | caught |
+| E20 | quick system select plays the carousel's sound | caught |
+| E21 | the status bar stays over the themed view | caught by 2 |
+| E22 | Library Style ignored | caught by 2 |
+| E23 | the view hears the directions under the pad menu | caught by 2 |
+| E24 | the view hears the directions under the on-screen keyboard | caught by 2 |
+| E25 | the view hears the directions under a sheet | caught by 2 |
+| E26 | a direction also reaches the view as the navigator's press | **survived, equivalent** |
+| E27 | the clock drawn although ES-DE's is off | caught |
+| E28 | the search on the theme's `x` entry again | **survived twice**; caught after the test was changed |
+| E29 | a peripheral's battery taken for the machine's | **survived**; caught after the test was changed |
+| E30 | a new sound queues behind the last | caught |
+| E31 | South in the system view enters no gamelist | caught by 13 |
+| E32 | the launch plays no sound | caught |
+
+**31 of 32 caught; the one survivor is equivalent.** E26 hands each direction the navigator also reports to
+`ThemedLibrary.Command`, which has no case for a direction and so does nothing with it; no test can tell it apart, and
+none should.
+
+**The four survivors were weak tests, as in stages (b) and (c):**
+- E4: every test that entered a gamelist from the system view entered the system the view had been built at, whose game
+  the view's data already held. `South_enters…` now leaves one system at its fourth game, enters another never entered
+  (its first game) and comes back (the fourth again).
+- E15: the family test changed the family and looked only at the help bar already on screen; a new view's was never
+  looked at. It now goes back to the system view and in again under the new family.
+- E28: no test named the help entries at all. The first version of the new test listed both `y` and `x`, so `x` standing
+  in for `y` gave the same list and E28 survived again; the test now lists `y` alone and requires `x` to name nothing.
+- E29: the sysfs case named the machine's battery `BAT0` and the mouse's `hidpp_battery_0`, and the reader, which
+  takes the first battery in name order, reached `BAT0` first whether or not it skipped the mouse. The mouse's folder
+  now sorts first.
+
+### 15.12 Predictions retired
+
+| # | Predicted | Measured | Verdict |
+|---|---|---|---|
+| P39 | no frame when still; none in the 2.9 s after a list step on Art Book Next's gamelist; frames again at the pause's end | 0 frames in 5 s at rest; 0 in the 2.9 s before a wide name scrolls, frames from 3 s; 0 before a container's 2 s delay; on Art Book Next with Mistress's data nothing scrolls, so no frame at all | held; the description's 6 s untested until stage (d) |
+| P40 | the return comes back to the same system and game, its frame equal to a fresh build | same system, game and view in every flow; 0 pixels differ at 1280×800 | held |
+| P41 | first build under 300 ms, the loader under 10 ms | cold ≈490 ms (Show 105 ms, first frame 385 ms); warm ≈60 ms; the loader 9–50 ms for five systems warm | failed cold, held warm; the loader's share failed |
+| P42 | SDL's type decides every recognised pad; the name otherwise; Legion Go as Xbox | every type the binding declares classified as listed; names as listed | held headlessly; unverified on a device |
+| P43 | a family change touches only the help bar | 2,091–2,493 pixels changed in the help bar, 0 outside | held |
+| P44 | each action's sound, once per step, repeats included; none with the switch off; seven WAVs under 20 ms | as predicted; 4.8 ms | held |
+| P45 | nothing unreachable on the themed session's sheets | 0 on all five | held |
+
+### 15.13 Not done in stage (e)
+
+- **Nothing ran on the handheld.** P8, P28, the pad families of real pads (and of Steam Input's virtual pad), the sound
+  stream's latency beside the game's 4,096-frame buffer, and whether the help icons read at arm's length are the
+  device's.
+- **The first showing's media scan is on the UI thread**: 224 ms for 3,508 games with an empty media folder on the
+  desktop. It could move to a worker; it was left measured.
+- **Badges a theme names no icon for** draw nothing, as before; ES-DE draws its own there. Art Book Next names its own,
+  so nothing is lost for it. The folder-link overlay and the controller badge stay deferred (§3.8).
+- **Settings the scene needs and does not have:** `DisplayClock` (off), the variant, colour scheme, font size and aspect
+  ratio (the theme's defaults and Automatic; stage f), and ES-DE's automatic collections (off, as ES-DE's own default,
+  `CollectionSystemsAuto` empty, has them).
+- **ES-DE's behaviour where this stage chose:** the shoulders (§15.3), a held quick system select, the system order and
+  a sound interrupted by the next were not measured against ES-DE.
+- **The generic d-pad glyphs** are hard to tell apart at the 1280×800 help bar's size (§15.10).
+- **`GamepadManager` still opens one pad**, the first; a second pad connected beside it is not seen until the first goes.
+

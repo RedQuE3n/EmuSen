@@ -75,7 +75,7 @@ namespace EmuSen.Mistress.BigPicture
         public IEnumerable<string> SoundFiles => _systems.SelectMany(s => s.Theme.Sounds.Values).Where(p => p.Exists).Select(p => p.Absolute).Distinct();
 
         // Reads the theme when its folder changed, then builds the stage at the kept selection; false, with Error, when there is nothing to show.
-        public bool Show(string themeDirectory, Size screen, IReadOnlyList<ThemedShelf> shelves, ISceneMedia? media, string? mediaKey = null)
+        public bool Show(string themeDirectory, Size screen, IReadOnlyList<ThemedShelf> shelves, ISceneMedia? media, string? mediaKey = null, ThemeChoices? chosen = null)
         {
             if (screen.Width < 1 || screen.Height < 1) return Stage is not null;
             var clock = Stopwatch.StartNew();
@@ -95,7 +95,8 @@ namespace EmuSen.Mistress.BigPicture
             _shelves = shelves;
             _media = media;
             _screen = screen;
-            var choices = new ThemeChoices { ScreenWidth = (int)Math.Round(screen.Width), ScreenHeight = (int)Math.Round(screen.Height) };
+            ThemeChoices choices = (chosen ?? new ThemeChoices()) with { ScreenWidth = (int)Math.Round(screen.Width), ScreenHeight = (int)Math.Round(screen.Height) };
+            Choices = choices;
             var systems = new List<SceneSystem>();
             var scan = new Stopwatch();
             foreach (ThemedShelf shelf in shelves.Where(s => s.Games.Count > 0))
@@ -103,7 +104,7 @@ namespace EmuSen.Mistress.BigPicture
                 scan.Start();
                 MediaPresence presence = Presence(shelf);
                 scan.Stop();
-                string key = $"{shelf.System.Name}|{choices.ScreenWidth}x{choices.ScreenHeight}|{string.Join(",", presence.Types.Order(StringComparer.Ordinal))}";
+                string key = $"{shelf.System.Name}|{choices}|{string.Join(",", presence.Types.Order(StringComparer.Ordinal))}";
                 if (!_themes.TryGetValue(key, out ResolvedTheme? theme)) _themes[key] = theme = ThemeLoader.Load(_capabilities, shelf.System, choices, presence);
                 if (theme.IsThemed) systems.Add(new SceneSystem(shelf.System, theme, shelf.Games));
             }
@@ -117,6 +118,16 @@ namespace EmuSen.Mistress.BigPicture
             Build(_view);
             BuildTime = clock.Elapsed;
             return true;
+        }
+
+        // The choices the last Show loaded the theme with, the screen's size included.
+        public ThemeChoices Choices { get; private set; } = new();
+
+        // The theme folder was replaced on disk, by an update: the next Show reads it afresh.
+        public void Forget()
+        {
+            _capabilities = null;
+            _themes.Clear();
         }
 
         private bool Fail(string why)

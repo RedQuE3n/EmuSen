@@ -34,6 +34,9 @@ namespace EmuSen.Galaxia.Library
         // Shader packs downloaded on the player's request, never shipped with EmuSen - see EmuSen_Settings_Reference.md §4.41.
         public static string Shaders => Path.Combine(UsrHome, "Shaders");
 
+        // ES-DE themes downloaded on the player's request, never shipped with EmuSen - see EmuSen_Settings_Reference.md §4.53.
+        public static string Themes => Path.Combine(UsrHome, "Themes");
+
         // The user's own .cht tree, never shipped with EmuSen - see `man cheat`.
         public static string Cheats => Path.Combine(UsrHome, "Cheats");
 

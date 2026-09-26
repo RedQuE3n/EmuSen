@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>EmuSen (16 to 32 pixels)</title>
+  <rect x="0" y="0" width="256" height="256" rx="52" fill="#231E52"/>
+  <path d="M28.5 94.0 A108 108 0 1 0 227.5 94.0 A100 100 0 1 1 28.5 94.0Z" fill="#F4C542"/>
+  <rect x="80" y="32" width="32" height="128" fill="#FBF3E4"/>
+  <rect x="80" y="32" width="96" height="32" fill="#FBF3E4"/>
+  <rect x="80" y="80" width="80" height="32" fill="#FBF3E4"/>
+  <rect x="80" y="128" width="96" height="32" fill="#FBF3E4"/>
+</svg>

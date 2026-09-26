@@ -2659,6 +2659,54 @@ moving, the units, and Art Book Next's grid against ES-DE's still) and `ThemedGr
   in place, and cannot be removed from the sheet.
 
 
+### 4.55 The application icon (2026-09-26)
+
+**What it is.** A gold crescent, horns up, holding a cream letter E, on a deep indigo rounded square: concept A of
+four drawn on 2026-09-26, chosen by the user. It nods to the crescent of *Sailor Moon*, after which EmuSen is named
+(§"The names" in the README), without taking anything from it: the crescent is two plain circles subtracted, the E is
+four straight bars, and no lettering, emblem or palette of the series is used. The colours are `#231E52` (ground),
+`#F4C542` (moon) and `#FBF3E4` (letter).
+
+**Two drawings, not one.** `EmuSen.Mistress/Assets/Icon/emusen.svg` draws 48 px and up. At 16–32 px its 22-unit bars
+become 1.4 px and blur, so `emusen-small.svg` redraws the same mark on a 16-unit grid (every edge a multiple of 16,
+so at 16 px each lands on a whole pixel): a heavier E, a thicker crescent and a full-bleed square. The first render
+went through ImageMagick's default Lanczos resize and smeared that grid back into grey; `build_icons.py` now draws at
+256 px or more and area-averages down (`-filter Box`), which keeps the 16 px E's edges on pixel boundaries. At 24 px
+the grid falls on half pixels, and the E's spine shows a soft column there; that is accepted.
+
+**Outputs**, all made by `python3 EmuSen.Mistress/Assets/Icon/build_icons.py` (ImageMagick 7 with librsvg) and
+committed beside the sources:
+
+| File | Used by |
+| --- | --- |
+| `png/emusen-{16,24,32,48,64,128,256,512,1024}.png` | the window icon (256), the Linux hicolor theme, the others |
+| `emusen.ico` (16–256, seven sizes) | Windows: `ApplicationIcon`, the `.exe` in Explorer and on the taskbar |
+| `emusen.icns` (eleven PNG entries, 16–1024 with the @2x types) | macOS, for an app bundle; none is built yet |
+
+**Where it shows.**
+- **Every Mistress window's frame and taskbar entry.** `App.ShowIconOnEveryWindow` registers one class handler on
+  `Window.WindowOpenedEvent` that gives any window without an icon of its own the 256 px resource, so LunaP windows
+  Mistress opens (Preferences, the settings sheets when they are windows) carry it too, and a window that sets its own
+  keeps it. The window manager scales it to the size it needs.
+- **The Windows executable**, through `<ApplicationIcon>`.
+- **The Linux application menu and desktop.** A Linux publish ships `share/icons/hicolor/<size>/apps/emusen-mistress.png`
+  (and the scalable SVG) and `bin/install-desktop-entry.sh`. Run once from the unpacked build, it copies the icons into
+  `~/.local/share/icons/hicolor` and writes `~/.local/share/applications/emusen-mistress.desktop`, which points at
+  that build's own `bin/EmuSen.Mistress`; `--desktop` adds a desktop shortcut, `--remove` takes everything away. It
+  installs for the current user only and needs no root. `StartupWMClass=EmuSen.Mistress` is Avalonia's X11 default
+  (the entry assembly's name), which LunaP does not change, so the running window groups under the entry. The entry
+  records the build's path, so moving the folder means running the script again.
+
+**Tests.** `AppIconTests`: the resource is a 256 × 256 image of Mistress's; a window opened after the hook shows it,
+and one that set its own icon keeps its own. With the hook's handler removed the second test fails. The installer
+was run against a scratch `XDG_DATA_HOME`: eight sizes and the SVG installed, a desktop entry with the quoted path
+(the development tree's path has a space), a desktop shortcut, and `--remove` cleaning up.
+
+**Not done.** Steam's own artwork for a non-Steam game (the Game Mode library's capsule, hero and logo images) is
+set in Steam, not by Mistress. No macOS app bundle exists to carry the `.icns`. Hotaru and Pegasus keep Avalonia's
+default icon. Whether KDE shows the frame icon from `_NET_WM_ICON` or the desktop entry's `Icon=` depends on the
+entry being installed, and was not checked on a real session.
+
 ### 4.60 ScreenScraper: covers, screenshots, marquees and game text, with OpenEmu's sources as the failover (2026-09-26)
 
 Stage (d) of `EmuSen_BigPicture.md` (its §17 is the record: predictions, the live run, mutants). ScreenScraper

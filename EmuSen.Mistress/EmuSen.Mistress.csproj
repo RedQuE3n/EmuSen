@@ -13,7 +13,25 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- Precompiled at publish for a start ~360 ms sooner; the JIT still re-tiers hot code - see EmuSen_Settings_Reference.md §4.42. -->
     <PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
+    <!-- The crescent-and-E icon; its sources and build script are in Assets/Icon - see EmuSen_Settings_Reference.md §4.55. -->
+    <ApplicationIcon>Assets\Icon\emusen.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\Icon\png\emusen-256.png" />
+  </ItemGroup>
+
+  <!-- Linux: the hicolor icons and a script that installs a desktop entry pointing at this build - see §4.55. -->
+  <Target Name="MistressPublishDesktopIcons" AfterTargets="Publish" Condition="$(RuntimeIdentifier.StartsWith('linux'))">
+    <ItemGroup>
+      <_MistressIconSize Include="16;24;32;48;64;128;256;512" />
+    </ItemGroup>
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)Assets/Icon/png/emusen-%(_MistressIconSize.Identity).png"
+          DestinationFiles="$(PublishDir)share/icons/hicolor/%(_MistressIconSize.Identity)x%(_MistressIconSize.Identity)/apps/emusen-mistress.png" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)Assets/Icon/emusen.svg" DestinationFiles="$(PublishDir)share/icons/hicolor/scalable/apps/emusen-mistress.svg" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)Assets/Icon/install-desktop-entry.sh" DestinationFolder="$(PublishDir)bin" SkipUnchangedFiles="true" />
+    <Exec Command="chmod +x &quot;$(PublishDir)bin/install-desktop-entry.sh&quot;" Condition="'$(OS)' != 'Windows_NT'" />
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.0" />

@@ -2384,3 +2384,37 @@ so it could not tell the two builds apart.
 
 **Why the mutants missed it.** §15.11's 32 mutants alter the view's rules while a window is open. None removed a
 cleanup, because the defect was an absent line, and a mutation of existing code cannot produce an absence.
+
+
+## 17. Stage (d): ScreenScraper, the quota, the queue and the media store
+
+*Opened 2026-09-26, after the developer credentials arrived (§10.1).* Stage (d) builds §5: the client for
+`jeuInfos.php` and the media it names, the quota rules of §5.5, a queue that resumes, the media store of §5.6 and its
+`media.db`, the region and language rules of §5.4, and the settings. §10.1's answers bind it: builds carry no developer
+credentials (Q5), and the miximage is ScreenScraper's `mixrbv2` (Q7). Stage (f) was being built on another branch at
+the same time, so this stage's predictions are numbered from P60, leaving P46–P59 to it.
+
+### 17.1 Predictions, written before the client was built
+
+P9 and P10 (§9) are this stage's. The rest were added before a line of the client existed.
+
+- **P60, N64 byte order.** ScreenScraper's `rommd5` for an N64 game is the big-endian (`.z64`) order's, so step (1) of
+  §5.2 finds this library's `.z64` files and step (2), whose transform gives the halfword-swapped order, finds none of
+  them. OpenVGDB wanted the swapped order (§4.39 of the settings reference); ScreenScraper, whose ROM lists come from
+  No-Intro's DATs, is predicted not to.
+- **P61, media do not count against the quota.** `requeststoday` rises by one for each `jeuInfos` and by nothing for a
+  media download, which `mediaJeu.php` serves from another host. §5.5 left this open and priced both cases.
+- **P62, the quota fields come without a member account.** A `jeuInfos` response made with the developer credentials
+  alone still carries an `ssuser` block with `maxthreads`, `maxrequestspermin`, `maxrequestsperday` and
+  `maxrequestskoperday`, as §5.5 cites for every response, and its `maxthreads` is 1.
+- **P63, the time a game costs on one thread.** A found `jeuInfos` takes 1.0–2.0 s and an unknown one 0.4–1.0 s (the
+  site's own figures were 1.52–1.63 s and 0.51–0.76 s, §5.1). A found game with its default media (cover, screenshot,
+  marquee and miximage) costs 3–14 s in all.
+- **P64, the system IDs.** `systemesListe.php` gives NES 3, SNES 4, Game Boy 9, Game Boy Color 10 and Nintendo 64 14,
+  as §5.3 cites from ES-DE's table.
+- **P65, the pacing never binds on one thread.** With the quota's `maxrequestspermin` at 50 or more less §5.5's 10%, one
+  thread whose requests each take a second or more never waits for the pacer on the live run.
+- **P66, the region rule.** Of the found games whose file name carries a USA, Europe or Japan tag, at least 80% get a
+  cover of that region; the others take the fallback order's first region with one.
+- **P67, nothing leaks.** After the live run, the literal values of the developer credentials appear in no file the run
+  wrote: not the media folder, not `media.db`, not the saved responses, not the log.

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using EmuSen.Galaxia.Library;
 using Microsoft.Data.Sqlite;
 
@@ -319,6 +320,20 @@ namespace EmuSen.Mistress.Scraping
             return all;
         }
 
+        // One file's found game, read now rather than from a snapshot, for an editor waiting on its own scrape.
+        public ScrapedRecord? FoundFor(string path)
+        {
+            lock (_gate)
+            {
+                if (_closed) return null;
+                using SqliteCommand command = _db.CreateCommand();
+                command.CommandText = "SELECT g.md5, g.bytes, g.status, g.game_id, g.rom_id, g.system_id, g.name, g.description, g.developer, g.publisher, g.genre, g.players, g.rating, g.release_date, g.region, g.language, g.matched_by, g.offered, g.detail, g.fetched_at FROM scrape_file f JOIN scrape_game g ON g.md5 = f.md5 AND g.bytes = f.bytes WHERE g.status = 'Found' AND f.path = $path";
+                command.Parameters.AddWithValue("$path", path);
+                using SqliteDataReader row = command.ExecuteReader();
+                return row.Read() ? ReadGame(row) : null;
+            }
+        }
+
         // Every answered file by path: whether ScreenScraper knew it, and whether a cover was kept; the failover reads this to know where ScreenScraper had nothing.
         public IReadOnlyDictionary<string, (ScrapeState State, bool HasCover)> OutcomesByPath()
         {
@@ -355,6 +370,60 @@ namespace EmuSen.Mistress.Scraping
                 while (row.Read()) all.Add(new StoredMedia(row.GetString(0), row.GetString(1), row.IsDBNull(2) ? null : row.GetString(2), row.IsDBNull(3) ? null : row.GetString(3)));
             }
             return all;
+        }
+
+        // ES-DE's Clear for one game: its answer and its pictures go, from media.db and from this store's folders only; the ROM, the player's covers and an ES-DE folder are never touched - see EmuSen_Settings_Reference.md §4.59.
+        public IReadOnlyList<string> Forget(string path, string? system)
+        {
+            var files = new List<string>();
+            lock (_gate)
+            {
+                if (_closed) return files;
+                using (SqliteCommand find = _db.CreateCommand())
+                {
+                    find.CommandText = "SELECT m.path FROM scrape_file f JOIN scrape_media m ON m.md5 = f.md5 AND m.bytes = f.bytes WHERE f.path = $path";
+                    find.Parameters.AddWithValue("$path", path);
+                    using SqliteDataReader row = find.ExecuteReader();
+                    while (row.Read()) files.Add(System.IO.Path.Combine(Root, row.GetString(0)));
+                }
+                using SqliteTransaction step = _db.BeginTransaction();
+                foreach (string table in new[] { "scrape_media", "scrape_game" })
+                {
+                    using SqliteCommand drop = _db.CreateCommand();
+                    drop.Transaction = step;
+                    drop.CommandText = $"DELETE FROM {table} WHERE EXISTS (SELECT 1 FROM scrape_file f WHERE f.path = $path AND f.md5 = {table}.md5 AND f.bytes = {table}.bytes)";
+                    drop.Parameters.AddWithValue("$path", path);
+                    drop.ExecuteNonQuery();
+                }
+                using (SqliteCommand queue = _db.CreateCommand())
+                {
+                    queue.Transaction = step;
+                    queue.CommandText = "DELETE FROM scrape_queue WHERE path = $path";
+                    queue.Parameters.AddWithValue("$path", path);
+                    queue.ExecuteNonQuery();
+                }
+                step.Commit();
+            }
+
+            if (!string.IsNullOrEmpty(system))
+            {
+                string stem = System.IO.Path.GetFileNameWithoutExtension(path);
+                foreach (string folder in BigPicture.Scene.EsdeMediaFolder.Folders.Values)
+                {
+                    string dir = System.IO.Path.Combine(Root, system, folder);
+                    if (Directory.Exists(dir)) files.AddRange(Directory.EnumerateFiles(dir, stem + ".*").Where(f => System.IO.Path.GetFileNameWithoutExtension(f) == stem));
+                }
+            }
+
+            string root = System.IO.Path.GetFullPath(Root).TrimEnd(System.IO.Path.DirectorySeparatorChar) + System.IO.Path.DirectorySeparatorChar;
+            var deleted = new List<string>();
+            foreach (string file in files.Select(System.IO.Path.GetFullPath).Distinct(StringComparer.Ordinal))
+            {
+                if (!file.StartsWith(root, StringComparison.Ordinal) || !File.Exists(file)) continue;
+                File.Delete(file);
+                deleted.Add(file);
+            }
+            return deleted;
         }
 
         // --- the quota's day ---

@@ -29,7 +29,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             new("a", "Launch", PadGlyphButton.South, "button_a_{0}"),
             new("b", "Back", PadGlyphButton.East, "button_b_{0}"),
             new("y", "Search", PadGlyphButton.North, "button_y_{0}"),
-            new("back", "Favorite", PadGlyphButton.Select, "button_back_{1}"),
+            new("back", "Options", PadGlyphButton.Select, "button_back_{1}"),
             new("start", "Menu", PadGlyphButton.Start, "button_start_{1}"),
         ];
 

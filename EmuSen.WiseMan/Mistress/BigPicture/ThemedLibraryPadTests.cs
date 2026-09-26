@@ -236,19 +236,19 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         });
 
         [Fact]
-        public Task Select_marks_a_favourite_which_moves_it_first_and_keeps_it_selected() => Run(s =>
+        public Task Select_opens_the_game_options_whose_favourite_entry_moves_the_game_first_and_keeps_it_selected() => Run(s =>
         {
             Enter(s, "snes");
             s.Pad.Down(3);
             string chosen = ThemedSession.SnesGames[3];
             s.Sounds.Clear();
-            s.Pad.Select();
+            ThemedGameOptionsTests.Choose(s, "Add to Favourites");
             Assert.Equal(new[] { "favorite" }, s.Sounds);
             Assert.Equal(chosen, s.Game);
             Assert.True(s.Themed.SelectedGame!.Favorite);
             Assert.Equal(chosen, s.Themed.Stage!.Current.Data.System.Games[0].Name);
             Assert.Equal(0, s.Themed.Stage.Current.Index);
-            s.Pad.Select();
+            ThemedGameOptionsTests.Choose(s, "Remove from Favourites");
             Assert.False(s.Themed.SelectedGame!.Favorite);
             Assert.Equal(chosen, s.Game);
             Assert.Equal(3, s.Themed.Stage.Current.Index);

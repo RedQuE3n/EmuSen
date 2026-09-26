@@ -2525,7 +2525,7 @@ its radio switch is blocked neither by software nor by hardware. Nothing is show
 | L1, R1 | | a page: the rows the list shows at once |
 | L2, R2 | | the first and the last game |
 | North | | search, on the on-screen keyboard (§4.45.6) |
-| Select | | mark or unmark a favourite; the game stays selected where the list moves it |
+| Select | | the game options menu (§4.59); *until 2026-09-26 it marked or unmarked a favourite, now the menu's first entry* |
 | Start, Guide | the pad menu (§4.29) | the same |
 
 The repeats are ES-DE's, measured in `EmuSen_BigPicture.md` §14.7, and run on the view's own clock, not on
@@ -3056,6 +3056,90 @@ them (`PadAudit`, §4.45.3); B closes the sheet as Hide does. The pad menu's ent
 - There is no speed or byte count shown; the download-speed limit is shown as the limit, not as what is being used.
 - OpenEmu's failover is not paused, and its lookups are not counted in "requests sent", which are ScreenScraper's.
 - The recent list keeps 200 games and forgets older ones; the counts are the whole run's.
+- Nothing ran on the handheld.
+
+### 4.59 Big picture: a game's options, and editing its metadata (2026-09-26)
+
+The user, 2026-09-26, as the third item of what big picture lacked against ES-DE: the per-game options menu, and a
+metadata editor for a game's name, description, rating, release date, developer, publisher, genre, players, favourite
+and ES-DE's other documented fields, with deleting a game offered only in a guarded form. This is how a player meets it;
+`EmuSen_BigPicture.md` §23 is the record (ES-DE's documented behaviour set against what was built, the predictions, the
+tests, the mutants and the pictures).
+
+**Where it is.** In the themed view of a big-screen session (Game Mode, or Big Picture on the desktop, §4.54), on a game
+in a gamelist. EmuSen's own built-in library (§4.56) is unchanged: there Select still marks a favourite.
+
+**Opening the menu.** **Select** on a game opens the game options as a sheet over the view, as ES-DE opens its gamelist
+options menu with its Back button. **Select** again, or **B**, puts it away. In the system view Select does nothing, as
+in ES-DE. The menu's entries:
+
+| Entry | What it does |
+|---|---|
+| Add to Favourites / Remove from Favourites | the favourite of §4.32, with the theme's `favorite` sound; the game moves to the top of the list and stays selected. Until 2026-09-26 this was Select's own action |
+| Edit This Game's Metadata | opens the editor, below |
+| Scrape This Game... | stage (d)'s single-game scrape (§4.60): the confirm step, then the run and its status sheet (§4.57). Not offered while a run is going |
+| Close | puts the menu away |
+
+ES-DE's own menu also has *Jump to..*, *Sort games by*, *Filter gamelist* and the custom collections' entries; those are
+the collections work's (§4.58), which adds them to this menu above *Edit This Game's Metadata*.
+
+**The editor.** A sheet with one row per field, each saying where its value comes from: *From the file name*, *From
+ScreenScraper*, *Your edit*, *Your edit, shown in place of ScreenScraper's*, or, after the editor's own scrape, *From this
+scrape; Save keeps it*.
+
+| Field | How it is set | Where it shows |
+|---|---|---|
+| Name | text, on the on-screen keyboard (A on the box; B erases, Start is done, §4.45.6) | the themed view; the library's list, grid and search |
+| Sort name | text | the gamelist is ordered by it where it is set, the name shown |
+| Description | text over several lines | the theme's description |
+| Rating | stars: Left and Right step half a star | the theme's rating |
+| Release date | Left and Right change the year; A moves to the month, then the day; the year stepped below 1950 leaves no date | the theme's release date |
+| Developer, Publisher, Genre, Players | text | the theme's fields |
+| Completed, Kid game, Broken / not working | switches | the theme's badges and fields; Mistress has no kid mode |
+| Hidden | switch | the game leaves every library view (below) |
+| Exclude from game counter | switch | not counted in the system view's game and favourite counts |
+| Exclude from multi-scraper | switch | left out of **Scrape Games...** and every run but **Scrape This Game...** |
+| Favourite | switch | as the menu's entry |
+| Times played, Play time | numbers (play time in seconds, as ES-DE keeps it) | Mistress's own counters, which count on from what is typed |
+
+A field that differs from what it would show with no edit has a **Reset** beside it, which returns it to ScreenScraper's
+value or the default (for the name, the file's name).
+
+The buttons, as ES-DE documents its editor's:
+- **Scrape**, or **Y**: stage (d)'s *Scrape This Game*, confirmed first. When the run ends, ScreenScraper's answer is put
+  into every field it has a value for, not yet saved. B puts the status sheet away and returns to the editor.
+- **Save** keeps the changes. **Cancel** discards them. **B** discards nothing silently: with changes it asks *Save* or
+  *Discard*, without any it closes.
+- **Clear...**, after a confirm: removes the player's edits, ScreenScraper's text for the game and its pictures in
+  Mistress's media store (`home/Media`). The game's file, its favourite, its play counters, the player's own covers, an
+  ES-DE media folder and the OpenEmu failover's cover are all kept.
+- **Hide from Library...**, after a confirm, in the place of ES-DE's *Delete*. ES-DE's Delete removes the game's file;
+  **EmuSen never deletes or moves a game's file**, and the confirm says so. The game is hidden instead.
+
+**Hidden games.** A hidden game is left out of the themed gamelists, the library's list and grid, the sidebar's counts
+and the search. Preferences ▸ Appearance ▸ **Hidden Games** (`ShowHiddenGames` in `appsettings.json`, off) lists them
+again; the editor's *Hidden* switch, or its Reset, unhides one. ES-DE shows hidden games, dimmed, unless told not to;
+Mistress hides them, because *Hide from Library* stands where ES-DE's Delete stands. Hiding and unhiding change nothing
+on disk but `games.db`.
+
+**Where the edits are kept, and why they win.** In `games.db` (§4.32), table `game_edit`, one row per edited field,
+beside the favourite and the play records; its fifth migration. What a field shows is the player's edit if there is one,
+else ScreenScraper's value from `media.db` (§4.60), else the default. A scrape writes `media.db` only, so no scrape,
+however often it runs, changes an edit. An edit goes when the player resets that field, clears the game, or saves the
+editor after its own Scrape has filled the field with ScreenScraper's value. A value saved equal to what the field would
+show anyway is stored as no edit, so a later scrape still reaches it. A file renamed or moved keeps its edits (§4.37).
+
+**Buttons that changed.** Select in the themed gamelist: from the favourite to the options menu (the favourite is the
+menu's first entry). Left and Right on a rating or a date: they change it rather than moving the focus. The help bar's
+entry for Select reads *Options*. §4.52's table is amended accordingly.
+
+**What it does not do.**
+- ES-DE's editor fields *Hide metadata fields*, *Controller* and *Alternative emulator* are not built, and *Custom
+  collections sortname* is the collections work's. *Enter folder* does not apply: Mistress has no folders.
+- A hidden game listed again is not dimmed, as ES-DE dims it.
+- The on-screen keyboard has no line break, so a description is typed as one paragraph.
+- ScreenScraper's own name for a game is not offered by the editor's Scrape; the name stays the file's unless the player
+  types one.
 - Nothing ran on the handheld.
 
 ### 4.60 ScreenScraper: covers, screenshots, marquees and game text, with OpenEmu's sources as the failover (2026-09-26)

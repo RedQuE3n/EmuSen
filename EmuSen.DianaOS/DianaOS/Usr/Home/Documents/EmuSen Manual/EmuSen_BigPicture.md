@@ -606,7 +606,7 @@ themed view:
 | East | | back to the system view (`back`) |
 | L1, R1 / L2, R2 | | page / first and last |
 | North | | the on-screen keyboard's search (§4.45.6) |
-| Select | | mark favourite (`favorite`), as the grid does today (§4.33) |
+| Select | | mark favourite (`favorite`), as the grid does today (§4.33). *Since 2026-09-26 the game options menu, as ES-DE's Back button opens it; the favourite is its first entry (§23.4)* |
 | Start | the pad menu, as a `SheetLayer` sheet | the same |
 | Guide, or Back and Start together, during a game | the menu over the game (§4.29). "Game Library" returns to the themed view at the same system and game. | |
 
@@ -1011,6 +1011,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 | P39–P45 | Stage (e)'s predictions: a still view draws nothing, the return is exact, the first build, the pad's family, a family change touching only the help bar, the sounds, every sheet reachable (§15.1) | Stage e (§15.12); P41 failed cold |
 | P46–P55 | Stage (f)'s predictions: a choice applied at once, choices per theme, the sheet's rows, every control reachable, the grid at rest and moving, the video extensions, the media scan, the downloads, a closed sheet's download (§16.1) | Stage f (§16.7); P50 failed by a pixel, P51's duration and interval refuted |
 | P60–P67 | Stage (d)'s predictions: N64 byte order, media against the quota, quota fields without a member, time per game, system IDs, the pacer, the region rule, no leak (§17.1) | Stage d (§17.10); P61 and P66 failed, P60 not measured, P63 partly |
+| P84–P91 | The game options menu and the metadata editor: every control reachable, an edit surviving a re-scrape, the editor's own scrape, no ROM touched, a click on the rating, the mutants, the broad runs (§23.1) | §23.1: all held but P88 (failed, then fixed) and P90 (one unattributed failure) |
 | P100–P120 | The remaining passes' predictions: the handheld, controllers, the theme survey, badges and switches, localisation, folders, the modes, scraping extras, manuals, the screensaver, the launch screen, video, TheGamesDB, the passes' pace (§21.6) | Each in its pass |
 
 ---
@@ -1048,6 +1049,8 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   track the ES-DE release measured. The release is recorded with every capture.
 - **Risk: the theme changes upstream.** Updating is the player's choice (§6). A new theme version that uses an element
   outside §3.8 is refused visibly, element by element, not rendered in part.
+
+- **Q15–Q19**, the game options menu and the metadata editor's open questions: §23.12.
 
 ---
 
@@ -4168,3 +4171,324 @@ Written before any pass is built, to be retired in each pass's record.
 - **The licences of FFmpeg, Poppler, PDFium and MuPDF** are stated as those projects commonly publish them, not re-read
   for this section; each pass that takes one reads it first. TheGamesDB's data terms were not found.
 - **The costs are estimates** at §7's scale, and §7's scale has run long (P119).
+
+## 23. The game options menu and the metadata editor (2026-09-26)
+
+*Opened 2026-09-26, on the third item of the user's list of what big picture lacks against ES-DE:* the per-game options
+menu, and a metadata editor for a game's name, description, rating, release date, developer, publisher, genre, players,
+favourite and ES-DE's other documented fields, with ES-DE's deletion of a game offered only in a guarded form. Items 1
+and 2 of the same list (collections, filters, sorting, jumping to a letter, a random game) were built at the same time on
+another branch (§22); this section leaves named hooks for them (§23.4). Predictions are numbered P84–P99 and questions
+Q15–Q19, the ranges this work was given. The player's account is §4.59 of the settings reference; this is the record.
+
+**The source of ES-DE's behaviour.** ES-DE's user guide (`USERGUIDE.md`, the copy fetched on 2026-09-25 for stage (c),
+kept at `~/.cache/emusen/bigpicture/motion/docs/`), its sections "Gamelist options menu", "Metadata editor" and
+"General navigation". ES-DE's source was not read. Two defaults the guide does not state were read from the settings file
+ES-DE 3.4.1 wrote into the scratch home of stage (b) (`~/.cache/emusen/bigpicture/esde/home/ES-DE/settings/es_settings.xml`):
+`ShowHiddenGames` is `true` and `FavoritesAddButton` is `true`. ES-DE was not run for this section.
+
+### 23.1 Expectations and predictions
+
+P84–P88 were written by the same hand as the design, during the build, as §18.1 and §20.1 were, and are weaker evidence
+than a stage's predictions written before a line of code. P89–P91 were written before the mutants and the runs they
+concern were started.
+
+| # | Expected | Found | Verdict |
+|---|---|---|---|
+| P84 | Every control of the options menu and of the editor is reached by the pad at 1280×800, the editor's fifteen Reset buttons included once each is shown | measured: the options menu's 4 controls and the editor's 38, all fifteen Resets shown, all reached (`Every_control_of_the_options_and_the_editor_is_reached_by_the_pad`) | held |
+| P85 | An edit survives any number of re-scrapes by construction: edits are rows of `games.db`, and a scrape writes only `media.db` | an edit kept through a scrape from the menu and another from the pad menu; G6, which clears the edits when a result arrives, is caught | held |
+| P86 | The editor's own scrape fills its fields unsaved: Cancel leaves the stored edit, Save replaces it | Cancel after the editor's scrape kept *mine*; Save took *Scraped description.* and left no edit; G10 and G11 caught | held |
+| P87 | Hide from Library, Clear and unhiding change no file under the ROM folder: not its size, its write time or its SHA-256 | the ROM folder's fingerprint (size, write time, SHA-256 of every file) equal before and after Hide, unhide and Clear; G15 and G19 caught | held |
+| P88 | A click anywhere on the rating row sets the rating, a pad being the first input but not the only one | **refuted by the first click test**: a click in the gap beside a star reached nothing, because the row drew only its stars. Fixed with a transparent fill (`LunaP.md` §160.4); three points now pass, P5 is the mutant | failed, then fixed |
+| P89 | Of the mutants of §23.9, at least nine in ten are caught on their first run, and every survivor is a weak test rather than an equivalent mutant | 49 of 49 caught, every one on its first run, none equivalent (§23.9) | held; weak evidence, §23.9 says why |
+| P90 | The broad Mistress run passes with only this section's tests added, none of the earlier ones failing | 823 passed, 9 skipped, **1 failed**: `SceneMotionTests.Moving_only_the_list_while_the_metadata_is_faded_out…`, with Avalonia's "The calling thread cannot access this object". That class passed 12 of 12 alone, twice, and the BigPicture namespace passed 294 of 294 in one run | **failed by one test, not attributed**; see below |
+| P91 | LunaP's whole suite passes with §160's two controls and nothing else of its behaviour changed | 1343 of 1343 | held |
+
+**P90's one failure.** The failing test belongs to stage (c) and draws scenes built from `SceneGame`. This work added
+three properties to `SceneGame` and changed which games the system view counts, but it touches no thread. The exception
+is the class of failure §17.14 recorded once for stage (c)'s `SceneMotionTool`: a UI object used from a thread other than
+the one that made it, in a broad run and never alone. Before this work the same class passed in the broad run of §20.3.
+Whether this change caused the failure cannot be shown either way. The test-load rule of 2026-09-25, made stricter after
+that day's resets, ruled out repeating the broad run until the failure came back, and the unmodified build was not run
+broadly for comparison.
+
+### 23.2 What ES-DE documents, and what Mistress builds of it
+
+**The menu.** ES-DE opens its gamelist options menu with the Back button (Select on a pad), from the gamelist only, and
+closes it with Back again or B. Its entries, as the guide lists them: *Jump to..*, *Sort games by*, *Filter gamelist*,
+*Add/remove games to this collection* and *Finish editing* (custom collections only), *Edit this game's metadata*, and
+*Enter folder* (folders with a folder link only), then Apply and Cancel buttons for the jump and the sort.
+
+| ES-DE's entry | In Mistress |
+|---|---|
+| Jump to.., Sort games by, Filter gamelist | the collections work's (§22); the hook `AddGamelistOptions` (§23.4) |
+| Add/remove games to this collection, Finish editing | the collections work's; the hook `AddCollectionOptions` |
+| Edit this game's metadata | **built**: *Edit This Game's Metadata* |
+| Enter folder (override folder link) | not offered: Mistress's library has no folders and no folder links |
+| Apply, Cancel | not offered: every entry built here acts when chosen; they belong with the jump and the sort. A *Close* button stands for Cancel |
+| *(not in ES-DE's menu)* | **built**: *Add to Favourites* / *Remove from Favourites*, and *Scrape This Game...* |
+
+The two entries ES-DE's menu does not have are there for a reason each. ES-DE toggles a favourite with Y (its option
+*Enable toggle favorites button*, on in the scratch home), but Y, North on the pad, is the search in §4.9's grammar, which
+the user's decisions of §10.1 made and which ES-DE has no counterpart for. Select was the favourite until now; this work
+gives Select to the menu, as ES-DE does, and the favourite had to go somewhere one press from the list. *Scrape This
+Game...* is the pad menu's entry of §17.14 again, with the same confirm step and the same run. ES-DE starts a single-game
+scrape only from inside the editor, which Mistress also does (below); the brief asked for it in the menu as well. Both are
+places the player starts a run, so §17.14's rule 1 holds.
+
+**The editor.** ES-DE's guide lists the editor's fields in this order and says what each does. Mistress builds those
+whose features it has:
+
+| ES-DE's field | In Mistress | Where it shows |
+|---|---|---|
+| Name | text | the themed view, the library's list and grid, the search |
+| Sortname | text | the themed gamelist's order |
+| Custom collections sortname | not built: ES-DE shows it only inside a custom collection, which is §22's | |
+| Description, Developer, Publisher, Genre, Players | text (the description over several lines) | the themed view |
+| Rating | LunaP's `RatingPicker`, half stars | the themed view's rating |
+| Release date | LunaP's `DateStepper`, `yyyy-MM-dd` | the themed view |
+| Favorite | switch; Mistress's own favourite (§4.32 of the settings reference) | everywhere a favourite shows |
+| Completed, Kidgame, Broken/not working | switches | the theme's badges and metadata texts; Mistress has no kid mode |
+| Hidden | switch | a hidden game is left out of every library view (§23.5) |
+| Exclude from game counter | switch | left out of the system view's game and favourite counts |
+| Exclude from multi-scraper | switch | left out of every run but *Scrape This Game* |
+| Hide metadata fields | **not built** | the scene decides which elements to build once per view, not per game (§23.11) |
+| Times played, Play time | numbers; Mistress's own counters (§4.32) | the theme's play count and play time |
+| Controller | **not built**: Mistress draws no controller badge (§3.8) | |
+| Alternative emulator | **not built**: Mistress has one core per console | |
+| Folder link | not applicable: no folders | |
+
+**The editor's buttons.** ES-DE documents five: *Scrape*, *Save*, *Cancel*, *Clear* and *Delete*.
+- *Scrape* opens ES-DE's single-game scraper, and Y is its shortcut. Mistress's runs stage (d)'s *Scrape This Game*
+  (the confirm step, then the run and its status sheet) and, when the run ends, puts ScreenScraper's answer into every
+  field the answer has a value for, unsaved, and marks each such field "From this scrape". The guide says ES-DE colours a
+  value the scraper changed red and asks whether to save when the editor is left; these fields are the red values. Y
+  (North) is the shortcut here too.
+- *Save* and *Cancel* as documented. B with unsaved changes asks *Save* or *Discard*, as the guide says ES-DE asks when
+  the editor is left; B with none closes at once.
+- *Clear*, in ES-DE, "will remove any media files for the file or folder and also remove its entry from the gamelist.xml
+  file, effectively deleting all metadata. The actual game file or folder will however not be deleted." Mistress's removes
+  the player's edits, ScreenScraper's answer for the game in `media.db`, and the pictures of that game in Mistress's own
+  media store, after a confirm. It keeps the favourite and the play counters, which in ES-DE live in the same gamelist
+  entry and go with it, and it touches neither the player's own covers nor an ES-DE media folder, which Mistress only
+  reads (§4.52 of the settings reference), nor the OpenEmu failover's cover.
+- *Delete*, in ES-DE, "will remove the actual game file, its gamelist.xml entry, its entry in any custom collections and
+  its media files". Mistress never deletes or moves a file in the player's ROM folder (a project rule), so the button is
+  **Hide from Library** in Delete's place, with a confirm that says so and why.
+
+**Where Mistress's editor is its own.** Each field has a *Reset*, shown only while the field differs from what it would
+show with no edit, which returns it to ScreenScraper's value or the default. ES-DE has no per-field reset, only *Clear*
+for the whole entry; the brief asked that a field can be returned on its own. Each field says where its value comes from
+("From the file name", "From ScreenScraper", "Your edit", "Your edit, shown in place of ScreenScraper's", "From this
+scrape") in words where ES-DE uses gray, blue and red.
+
+### 23.3 Where an edit is kept, and why it wins
+
+**In `games.db`**, its fifth migration: `game_edit (path, field, value, edited)`, one row per edited field. A field with
+no row shows what it would anyway; a row, even an empty one, is the player's value. The table sits beside Mistress's
+other records of the player's own (favourite, play counts, collections, §4.32), because an edit is the player's statement
+about a game and not a cache of a server's answer. Three alternatives were considered:
+- *Columns on `media.db`'s `scrape_game`.* A scrape writes that row with `INSERT OR REPLACE` (§17.5), so keeping an edit
+  would depend on every writer carrying it across, and the row is keyed by the file's MD5, so two copies of one game
+  would share one edit. The rule that a re-scrape never overwrites an edit would then be a property of code paths rather
+  than of where the data lives.
+- *Columns on `games.db`'s `game`.* Fifteen nullable columns, each later ES-DE field a migration of its own; one row per
+  field needs none.
+- *JSON beside the library.* Ruled out by the brief: Mistress's data is in SQLite.
+
+**The order**, in `GameMetadata.Resolve`: the edit, else ScreenScraper's value, else the default (the file's name for the
+name, "no" for a flag, nothing otherwise). ScreenScraper's name is kept and not used, as §17.6 decided, so the name's
+default is the file's even where a scrape found another.
+
+**What a re-scrape does.** Nothing to an edit: the scraper writes `media.db` only, and no code that writes `game_edit`
+runs during a run. The player asks for an edit to go by *Reset* on that field, by *Clear* on the game, or by saving the
+editor after its own *Scrape* has put ScreenScraper's value in the field.
+
+**A value equal to its baseline is no edit.** Saving a field whose value equals what it would show anyway removes the edit
+rather than storing a copy, so a later scrape that improves the text reaches the field. This is Mistress's choice; ES-DE's
+guide says only that a name equal to the file's is treated as unset.
+
+**A renamed file keeps its edits**: `GameRecords.Move`, which §4.37's rename detection calls, moves `game_edit` rows with
+the favourite and the collections.
+
+**A merge note.** §22's work may add a `games.db` migration too. The array is append-only (§4.32), so whichever branch is
+merged second renumbers its entry after the other's; neither has been run against the player's own `games.db`.
+
+### 23.4 Buttons, and the hooks left for §22
+
+| Button | Before | Now |
+|---|---|---|
+| Select, in the themed gamelist | mark or unmark a favourite | open the game options menu, as ES-DE's Back button does |
+| Select, over the options menu | | close it, as ES-DE's Back does on its menu; B closes it too |
+| Select, in the themed system view | nothing | nothing: ES-DE's menu "can't be accessed from the system view" |
+| North (Y), in the editor | | *Scrape*, ES-DE's documented shortcut |
+| B, in the editor | | leave; asks *Save* or *Discard* when something changed |
+| Left, Right, on a rating or a date | move the focus | change the value (`ISidewaysAdjustable`, §23.6) |
+| Select, in EmuSen's own library (built in) | favourite | unchanged: that library is Mistress's own look, not ES-DE's |
+
+West is not used: §21's Q32 proposes it for ES-DE's media viewer. The help bar's `back` entry now reads *Options*.
+
+**The hooks.** `MainWindow.GameOptions.cs` declares two partial methods: `AddGamelistOptions(SceneGame, List<GameOption>)`
+for ES-DE's *Jump to..*, *Sort games by* and *Filter gamelist*, and `AddCollectionOptions(SceneGame, List<GameOption>)`
+for adding the game to, or removing it from, the custom collection being edited. They are called in ES-DE's order, before
+*Edit This Game's Metadata*. A partial method with no body compiles to nothing, so this branch builds without §22, and §22
+fills them in a file of its own without editing this one. A `GameOption` is a label, an action, and whether choosing it
+puts the menu away first. The editor has no collection field; ES-DE's *Custom collections sortname* is left to §22.
+
+### 23.5 Hiding, and the rule that no ROM is touched
+
+A hidden game is left out of the themed gamelists, the library's list and grid, the sidebar's counts and the search.
+Preferences ▸ Appearance ▸ **Hidden Games** lists them again, and the editor's *Hidden* switch, or *Reset* on it, unhides
+one. ES-DE's default is the reverse (hidden games shown, dimmed; `ShowHiddenGames` true): Mistress hides by default
+because *Hide from Library* stands where ES-DE's *Delete* stands, and a player who chose it expects the game to go. That
+difference is Q16. A hidden game listed again is not dimmed; ES-DE dims it.
+
+Nothing but `games.db` changes when a game is hidden or unhidden. *Clear* deletes files, and only these: the paths
+`media.db` records for the game, and the files named after the game's stem in the store's type folders, each deleted only
+when its full path lies inside the store's own folder (`home/Media`). A `media.db` row naming a path outside it, which no
+build writes but a damaged or hand-edited file could hold, deletes nothing. Two files of one system with the same stem in
+different folders share their pictures in the store (§17.5's layout), so *Clear* on one takes the other's pictures too.
+
+### 23.6 Drawn with LunaP
+
+Every visible part is a LunaP control. The menu and the editor are `ToolWindow`s shown by `SheetLayer`, so in a big-screen
+session they are sheets inside the one window and no window is opened (the tests assert none is owned); the rows are
+`FieldRow`s, the flags `LunaSwitch`es, the buttons a `ButtonBar`, and the text boxes take the on-screen keyboard of
+§4.45.6. LunaP had nothing a pad could set a rating or a date with, so two controls were added there (`docs/LunaP.md` §160,
+branch `bigpicture-game-options`): `RatingPicker`, a star row stepped in half stars by Left and Right, and `DateStepper`, a
+date whose year, month and day are changed one at a time by Left and Right, with Enter moving between them. Both carry a
+new marker, `ISidewaysAdjustable`, which Mistress's pad router and WiseMan's `PadAudit` now honour as they honour a
+`Slider`: Left and Right go to the control rather than moving the focus.
+
+### 23.7 Closing what is opened (§15.14's lesson)
+
+The menu and the editor are sheets, and a sheet is not an owned window, so nothing closes one when Mistress closes
+(§20.4's W22). `CloseGameSheets`, called from `CloseThemedLibrary` in the window's `Closing`, closes both. The editor is
+the one thing here that holds a subscription beyond its own controls: it listens to the window's `ScrapeChanged` while it
+waits for its own scrape, and lets go of it when it closes. Neither has a timer.
+`Closing_mistress_closes_the_editor_and_its_subscription_to_scraping` opens the editor, closes Mistress, and requires the
+sheet gone, the window's reference to it cleared and the editor unsubscribed; G29 and G30 (§23.9) remove the two halves.
+
+### 23.8 Tests
+
+Headless through WiseMan, on `ThemedSession`, `PadDriver`, the synthetic theme and ROMs and, for the scraping, stage (d)'s
+fake ScreenScraper; never the network. Every step a player takes is a pad press: the menu is opened with Select, entries
+and fields are reached with `PadAudit.Reach`, text is typed on the on-screen keyboard key by key, and every confirm is
+answered on its own sheet.
+
+- `ThemedGameOptionsTests` (10): Select opens the menu as a sheet and not in the system view, the view hears nothing
+  under it, Select and B put it away; every control of the menu and of the editor reached by the pad, all fifteen Resets
+  shown; every kind of field set by the pad and shown in the view and in the library's list; the sort name; Cancel, and B
+  with Discard, with Save, and with nothing changed; Reset on a text field and on a flag; *Exclude from multi-scraper*
+  against the plan of a whole-library run, a console run and *Scrape This Game*; *Exclude from game counter* in the
+  system view's count; Hide from Library taking the game out of every view with the ROM folder's fingerprint (each file's
+  size, write time and SHA-256) unchanged, then listed again and unhidden, the fingerprint still unchanged; and Mistress
+  closing the editor.
+- `ThemedMetadataScrapeTests` (3): an edit surviving a scrape from the menu and another from the pad menu, then Reset
+  giving ScreenScraper's text back; the editor's own scrape (Y) filling its fields, Cancel keeping the edit and Save taking
+  the answer; Clear removing the edits, the answer and the store's pictures and keeping the favourite, with the ROM
+  folder's fingerprint unchanged.
+- `GameMetadataTests` (7): the order edit, scraped, default; the draft's changes, including an emptied box over nothing
+  and a value equal to its baseline; the editor's scrape against the draft; edits in `games.db` following a renamed file
+  and cleared without the favourite and counters; **a schema-4 `games.db` migrated in place** to schema 5, its favourite
+  and play rows kept and an edit written with its time (the user's requirement, relayed 2026-09-26, that everything the
+  program writes and reads back is in SQLite, versioned and migrated); a scrape recorded twice leaving an edit; and
+  `MediaStore.Forget` deleting the store's pictures, including a second copy's, and nothing outside the store even when
+  `media.db` names it.
+- Changed: `ThemedLibraryPadTests`' Select test now goes through the menu's entry; `ThemedLibraryHostTests`' help test
+  reads *Options* and its sounds test marks the favourite through the menu; `ThemedLibraryFlowTests`' walk does the same.
+- LunaP: `PickerTests` (12), `docs/LunaP.md` §160.4.
+
+Nothing here is kept in JSON. The edits, the hidden flag among them, and each edit's time are rows of `games.db`;
+`appsettings.json` gains only the player's setting *Hidden Games* (`ShowHiddenGames`), which is configuration, as
+`EmuSen_Stack.md` §4 divides them.
+
+### 23.9 Mutants
+
+The runner is `~/.cache/emusen/probe/bigpicture/mutate_game_options.py`, adapted from §20.4's, with its list
+`mutants-game-options.json` written by `game-options/mutants_game_options_make.py`, which checks that each edit's text
+occurs exactly once. The log is `run-game-options.log`, and every verdict is appended to `mutants-game-options.txt`.
+Each mutant was built with `-m:2` and run alone under `nice -n 10`. The Mistress mutants (G) ran against
+`ThemedGameOptionsTests`, `ThemedMetadataScrapeTests`, `GameMetadataTests`, `ThemedLibraryPadTests`,
+`ThemedLibraryFlowTests`, `GameRecordsTests` and the help-entry test. LunaP's (P) ran against `PickerTests`. After each
+mutant the file was restored from its copy, stamped with the present time and compared byte for byte. Both trees were
+rebuilt at the end of the round.
+
+**An interrupted round.** The machine reset at 17:58, a hardware fault under load (see the project's notes on the
+desktop's resets). The reset came during G19, and it left G19's mutant in `MediaStore.cs` with its backup beside it. The
+coordinator restored the file, which was byte-identical to the commit, and deleted the backup. The tree was then rebuilt
+before any further test ran. The runner now restores any backup it finds when it starts, and the round was resumed from
+G19 (`--from`). G36 was added before the resumption, for the migration test written in the meantime (§23.8).
+
+| Rule | Mutants | Result |
+|---|---|---|
+| Where an edit lives and how it wins | G1 ScreenScraper's text over the edit; G2 a field reset keeps its old edit; G3 every field saved as an edit; G4 Reset does nothing; G5 an emptied box over nothing kept as an edit; G6 a scrape's result clears the edits; G7 a renamed file loses its edits; G36 the fifth migration empty | all caught; G1 by 4 tests, G3 by 7, G36 by 32, the migration test among them |
+| The editor | G8 Cancel saves; G9 B saves without asking; G10 its own scrape saves at once; G11 its own scrape fills nothing; G12 a refilled box read as a change; G13 Y does not scrape; G14 Hide without its confirm | caught |
+| Hiding, and no file touched | G15 Hide touches the ROM's write time; G16 a hidden game stays in the library; G17 it stays in the themed gamelist; G18 Hidden Games ignored; G19 Clear deletes a path outside the store; G20 Clear leaves the store's pictures; G21 Clear leaves the edits | caught |
+| The menu and the buttons | G22 Select marks a favourite again; G23 Select opens the menu in the system view; G24 Select over the menu does not close it; G25 the favourite entry always reads Add; G26 no Scrape This Game in the menu; G27 the help bar reads Favorite; G28 the router moves the focus off a rating or a date | caught; G22 by 14 |
+| Closing what is opened | G29 Mistress closing leaves the editor open; G30 the editor stays subscribed | caught |
+| Where the fields show | G31 the library shows the file's name; G32 the sort name ignored; G33 a game out of the counter counted; G34 Exclude from multi-scraper ignored; G35 the view shows ScreenScraper's rating over the player's | caught |
+| LunaP §160 | P1 a rating between steps stepped unsnapped; P2 the rating wraps; P3 no Chose for a key; P4 a click takes the step to the left; P5 the row hit only where a star is drawn; P6 the filled stars cut at nothing; P7 the day not kept in its month; P8 a month step carries into the year; P9 Enter does not move on; P10 the first year clamps instead of leaving no date; P11 no date ignores StartDate; P12 the accent always under the year; P13 a click always chooses the year | caught |
+
+**49 of 49 were caught, each on its first run and each by a test written for its rule.** That is weaker evidence than it
+sounds, as §104.6 of `LunaP.md` argued for a round with the same result. Every mutant was written after its test, by the
+same hand, and against a rule that hand had already chosen to test, so a rule without a test could not get a mutant.
+Two mutants were never written, for that reason:
+- one that drops the transparent fill of the rating row, before the click test existed. §160.4 of `LunaP.md` records the
+  defect this missing fill caused; P5 is that mutant, written afterwards;
+- one that saves an edit to `media.db`. The storage decision (§23.3) rules this out by construction rather than by a
+  test.
+
+The tests that failed for G22 (14) and G36 (32) show how far those two rules reach: nearly every flow starts at Select,
+and every edit needs the table.
+
+### 23.10 Pictures
+
+At 1280×800, written by `GameOptionsPictureTool` with `EMUSEN_BIGPICTURE_PNG=1` to
+`~/.cache/emusen/bigpicture/png/game-options/`, for the synthetic theme (`synthetic-*`) and for Art Book Next with the
+synthetic media folder (`artbooknext-*`): the gamelist before; the options menu; the editor as opened; the on-screen
+keyboard typing into the name; the editor with a name, a description, a developer, a genre, four and a half stars and a
+date set, each row saying "Your edit" beside its Reset; the Hide from Library question; and the gamelist after Save. They
+were looked at:
+- Art Book Next's gamelist after Save shows the new name in the list, the typed description, four and a half stars and
+  1993-01-01 in the metadata panel, and its help bar reads *Options* beside the Select glyph. The same panel before the
+  edit showed empty stars and "Unknown".
+- The menu lists its three entries and Close over the dimmed view, the first focused. Like every sheet (`LunaP.md` §90) it
+  takes the window's full height, which leaves most of a three-entry menu's sheet empty.
+- The keyboard covers the lower half of the editor and previews the name with its caret, as §4.45.6 draws it.
+- **A flaw seen and corrected:** the first pictures showed the release date as bare grey text, "No date", under its label,
+  which read as a caption rather than a field. `DateStepper` now draws itself on the input surface inside a border
+  (`LunaP.md` §160.3).
+- **Seen and left:** each confirm focuses its accepting button first (LunaP's `DialogWindow`), so a second A on *Clear...*
+  clears. *Hide* is reversible; *Clear* is not, since it deletes the scraped pictures, which a new scrape fetches again.
+
+### 23.11 Not done
+
+- **ES-DE was not run.** Everything here is from its user guide and the two settings its scratch home recorded. Where the
+  guide is silent, Mistress chose: whether the editor closes after *Clear*; which button its confirms focus first; whether
+  B in the editor with nothing changed asks anything.
+- ES-DE's fields *Hide metadata fields*, *Controller* and *Alternative emulator* are not built (§23.2). *Hide metadata
+  fields* would need the scene to build or skip the theme's `metadataElement` elements per game, where §13's builder
+  decides once per view.
+- A hidden game listed again is not dimmed.
+- The on-screen keyboard has no line break, so a description is one paragraph.
+- The editor's scrape shows stage (d)'s status sheet over the editor, as every run does; B returns to the editor.
+- ScreenScraper's own name is not offered by the editor's scrape (§17.6 keeps it unused).
+- *Clear* on a game takes the store's pictures of any other file of the same system with the same stem (§23.5).
+- The two hooks of §23.4 are empty on this branch; the collections entries are §22's.
+- EmuSen's own built-in library keeps Select as the favourite and has no editor.
+- Nothing ran on the handheld.
+
+### 23.12 Questions for the user
+
+- **Q15, the favourite's button.** ES-DE toggles a favourite with Y; Mistress's Y is the search (§4.9). The favourite is
+  now the first entry of the options menu, two presses from the list. Keep it there, or give Y to the favourite and move
+  the search?
+- **Q16, hidden games.** ES-DE lists hidden games, dimmed, by default; Mistress leaves them out unless Preferences ▸ Hidden
+  Games is on, because Hide from Library replaces ES-DE's Delete. Keep that default?
+- **Q17, what Clear removes.** It removes ScreenScraper's pictures in Mistress's store, but not the cover OpenEmu's
+  failover fetched, nor the favourite and play counters, which ES-DE's Clear takes with the gamelist entry. Should it take
+  more?
+- **Q18, ScreenScraper's name.** ES-DE's editor scrape replaces the name with the scraper's; Mistress keeps the file's name
+  unless the player types one (§17.6). Offer ScreenScraper's name in the editor's scrape?
+- **Q19, EmuSen's own library.** Should its Select open the same menu and editor, or stay the favourite?

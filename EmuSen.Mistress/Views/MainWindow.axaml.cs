@@ -742,7 +742,6 @@ namespace EmuSen.Mistress.Views
             Gesture(_fullscreen, HotkeyAction.ToggleFullscreen);
             Gesture(_closeGame, HotkeyAction.ExitToLibrary);
             Gesture(_bigPictureMenu, HotkeyAction.ToggleBigPicture);
-            if (_bigPictureAction is not null) _bigPictureAction.Shortcut = _bigPictureMenu.Shortcut;
         }
 
         private void Gesture(LunaAction action, HotkeyAction bound)

@@ -17,8 +17,8 @@ namespace EmuSen.Mistress.Views
         // A Game Mode session is full screen and big picture for its whole life, so nothing offers to leave it.
         private bool _bigScreenForced;
 
+        // The View menu's entry below Fullscreen, which is full screen and big picture at once.
         private readonly LunaAction _bigPictureMenu;
-        private LunaAction? _bigPictureAction, _fullscreenAction;
 
         // The window's state when big picture was entered, full screen included, given back when it is left.
         private WindowState _stateBeforeBigPicture = WindowState.Normal;
@@ -42,17 +42,9 @@ namespace EmuSen.Mistress.Views
         private void SetUpBigPictureSwitch()
         {
             _bigScreenForced = InGameModeSession(Environment.GetEnvironmentVariable);
-            _fullscreenAction = new LunaAction("Fullscreen", ToggleFullScreen) { Shortcut = _fullscreen.Shortcut, HelpText = "The window full screen, with its sidebar and library as they are" };
-            _bigPictureAction = new LunaAction("Big Picture", () => SetBigPicture(!_bigScreen)) { Shortcut = _bigPictureMenu.Shortcut };
-            BigPictureButtons.ItemsSource = new Control[]
-            {
-                new ActionButton(_fullscreenAction) { Name = "FullscreenButton" },
-                new ActionButton(_bigPictureAction) { Name = "BigPictureButton" },
-            };
             // Leaving full screen by any route leaves big picture too, keeping the state that route chose.
             FullScreenChanged += on =>
             {
-                _fullscreenAction.Text = on ? "Exit Fullscreen" : "Fullscreen";
                 if (!on) SetBigPicture(false, restoreWindow: false);
             };
             Opened += (_, _) => { if (_bigScreen) IsFullScreen = true; };
@@ -73,14 +65,6 @@ namespace EmuSen.Mistress.Views
             // One window on screen in a big-screen session, so the others are drawn inside this one - see EmuSen_Settings_Reference.md §4.45.2.
             Sheets.PresentsWindows = on;
             EmbeddedPopups.SetIsEnabled(this, on);
-
-            BigPictureButtons.IsVisible = !_bigScreenForced;
-            BigPictureButtons.ItemsSource!.OfType<Control>().First(c => c.Name == "FullscreenButton").IsVisible = !on;
-            _bigPictureAction!.Text = on ? "Exit Big Picture" : "Big Picture";
-            _bigPictureAction.HelpText = on
-                ? "Back to the desktop library, and the window as it was"
-                : "Big picture mode: full screen, with the library for a pad or a television. Esc or the same key comes back.";
-            _bigPictureMenu.Text = on ? "Exit _Big Picture" : "_Big Picture";
 
             if (on && _themed is null) SetUpThemedLibrary();
         }

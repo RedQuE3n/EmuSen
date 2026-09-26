@@ -50,24 +50,22 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         internal static bool On(MainWindow w) => (bool)Get(w, "BigPictureOn")!;
         private static LunaList<RomEntry> List(MainWindow w) => (LunaList<RomEntry>)w.GetControl<ListBox>("LibraryList");
-        internal static ActionButton Button(MainWindow w, string name = "BigPictureButton") =>
-            w.GetControl<ItemsControl>("BigPictureButtons").ItemsSource!.OfType<ActionButton>().Single(b => b.Name == name);
-
-        internal static ActionButton FullscreenButton(MainWindow w) => Button(w, "FullscreenButton");
         private static SheetLayer Sheets(MainWindow w) => w.GetControl<SheetLayer>("Sheets");
         private static string SelectedCore() => AppSettings.Load().SelectedCore;
 
         private static string[] MenuLines(MainWindow w) =>
             w.GetControl<ListBox>("PadMenuList").ItemsSource!.Cast<object>().Select(o => o.ToString()!).ToArray();
 
-        // A pointer's press and release on the button's middle, as a click is.
-        internal static void Click(MainWindow w, ActionButton button)
+        internal static IReadOnlyList<LunaAction> ViewMenu(MainWindow w) =>
+            w.GetControl<MenuBar>("MenuStrip").Menus.Single(m => m.Title == "_View").Items.ToList();
+
+        internal static LunaAction ViewItem(MainWindow w, string label) => MainWindowMenu.Find(w, "_View", label);
+
+        // The View menu's entry chosen, as a click on it runs it.
+        internal static void Choose(ThemedSession s, string label)
         {
-            Assert.True(button.IsEffectivelyVisible);
-            Point middle = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), w)!.Value;
-            w.MouseDown(middle, MouseButton.Left);
-            w.MouseUp(middle, MouseButton.Left);
-            Dispatcher.UIThread.RunJobs();
+            ViewItem(s.Window, label).Invoke();
+            s.Settle();
         }
 
         internal static void Press(ThemedSession s, Key key)
@@ -112,8 +110,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             MainWindow w = s.Window;
             Assert.False(On(w));
             Assert.Equal(fullScreen, w.IsFullScreen);
-            Assert.True(FullscreenButton(w).IsEffectivelyVisible);
-            Assert.Equal(fullScreen ? "Exit Fullscreen" : "Fullscreen", FullscreenButton(w).Content);
+            Assert.Equal(fullScreen, ViewItem(w, "_Fullscreen").IsChecked);
             Assert.True(w.GetControl<Control>("MenuStrip").IsVisible);
             Assert.True(w.GetControl<Control>("LibrarySidebarPane").IsVisible);
             Assert.False(w.GetControl<FilterBar>("LibraryFilter").ShowFacet);
@@ -122,8 +119,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.False(Sheets(w).PresentsWindows);
             Assert.DoesNotContain(EmbeddedPopups.StyleClass, w.Classes);
             Assert.Equal(look, LookOf(w));
-            Assert.Equal("Big Picture", Button(w).Content);
-            Assert.True(Button(w).IsEffectivelyVisible);
             Assert.Equal(game, List(w).Selected?.Title);
             Assert.Equal("", w.GetControl<FilterBar>("LibraryFilter").SearchText);
             Assert.Equal(console, SelectedCore());
@@ -143,7 +138,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(Sheets(w).PresentsWindows);
             Assert.Contains(EmbeddedPopups.StyleClass, w.Classes);
             Assert.Equal(24, List(w).FontSize);
-            Assert.False(FullscreenButton(w).IsVisible);
             Assert.False(AppSettings.Load().BigScreen);
         }
 
@@ -189,9 +183,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             object padTimer = Field(w, "_padTimer")!;
             const string game = "Cobalt Harbor (Synthetic)";
             AssertDesktop(s, look, game, console);
-            Assert.Contains("Big picture mode", ToolTip.GetTip(Button(w)) as string ?? "");
-            Assert.Contains("(F10)", ToolTip.GetTip(Button(w)) as string ?? "");
-            Assert.Contains("(F11)", ToolTip.GetTip(FullscreenButton(w)) as string ?? "");
+            // The View menu holds Fullscreen and, directly below it, Big Picture, each showing its key.
+            IReadOnlyList<LunaAction> view = ViewMenu(w);
+            int full = view.ToList().FindIndex(a => a.Text == "_Fullscreen");
+            Assert.True(full >= 0);
+            Assert.Equal("_Big Picture", view[full + 1].Text);
+            Assert.Equal(Key.F11, view[full].Shortcut!.Key);
+            Assert.Equal(Key.F10, view[full + 1].Shortcut!.Key);
+            Assert.False(view[full + 1].IsCheckable);
             Assert.Null(Field(w, "_themed"));
 
             // The pad menu offers both on the desktop, and only the way out in big picture.
@@ -208,29 +207,25 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             AssertDesktop(s, look, game, console);
             Assert.Equal(WindowState.Maximized, w.WindowState);
 
-            // Plain full screen, by the button, F11, the View menu and the window manager: never big picture.
-            Click(w, FullscreenButton(w));
+            // Plain full screen, by the View menu, F11 and the window manager: never big picture.
+            Choose(s, "_Fullscreen");
             AssertDesktop(s, look, game, console, fullScreen: true);
             Press(s, Key.F11);
             AssertDesktop(s, look, game, console);
             Assert.Equal(WindowState.Maximized, w.WindowState);
             Press(s, Key.F11);
             AssertDesktop(s, look, game, console, fullScreen: true);
-            Click(w, FullscreenButton(w));
+            Choose(s, "_Fullscreen");
             Assert.Equal(WindowState.Maximized, w.WindowState);
-            ((LunaAction)Field(w, "_fullscreen")!).Invoke();
-            s.Settle();
-            AssertDesktop(s, look, game, console, fullScreen: true);
-            w.WindowState = WindowState.Maximized;
+            AssertDesktop(s, look, game, console);
             w.WindowState = WindowState.FullScreen;
             s.Settle();
             AssertDesktop(s, look, game, console, fullScreen: true);
             Press(s, Key.F11);
             Assert.Equal(WindowState.Maximized, w.WindowState);
 
-            // Big picture by its button, out by the pad menu's entry.
-            Click(w, Button(w));
-            s.Settle();
+            // Big picture by the View menu, out by the pad menu's entry.
+            Choose(s, "_Big Picture");
             AssertBigPicture(s, theme);
             object? themed = Field(w, "_themed");
             Assert.NotNull(themed);
@@ -247,26 +242,20 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             AssertDesktop(s, look, game, console);
             Assert.Equal(WindowState.Maximized, w.WindowState);
 
-            // In by the View menu, out by its key.
-            ((LunaAction)Field(w, "_bigPictureMenu")!).Invoke();
-            s.Settle();
+            // In by the View menu again, out by its key.
+            Choose(s, "_Big Picture");
             AssertBigPicture(s, theme);
             PadWorks(s, theme);
             Press(s, Key.F10);
             AssertDesktop(s, look, game, console);
             Assert.Equal(WindowState.Maximized, w.WindowState);
 
-            // In from plain full screen; out by the button where Mistress's own big-screen library shows it, else the pad menu, back to plain full screen.
+            // In from plain full screen; out by the pad menu, back to plain full screen.
             Press(s, Key.F11);
-            Click(w, Button(w));
-            s.Settle();
+            Choose(s, "_Big Picture");
             AssertBigPicture(s, theme);
             PadWorks(s, theme);
-            Assert.Equal("Exit Big Picture", Button(w).Content);
-            Assert.Equal(!theme, Button(w).IsEffectivelyVisible);
-            if (theme) ChooseFromPadMenu(s, "Exit Big Picture");
-            else Click(w, Button(w));
-            s.Settle();
+            ChooseFromPadMenu(s, "Exit Big Picture");
             AssertDesktop(s, look, game, console, fullScreen: true);
 
             // Leaving full screen in big picture leaves both, to the state that route chose: F11, then the window manager.
@@ -441,7 +430,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 MainWindow w = s.Window;
                 Assert.True(On(w));
                 Assert.True((bool)Get(w, "BigPictureForced")!);
-                Assert.False(w.GetControl<Control>("BigPictureButtons").IsVisible);
+                Assert.False(w.GetControl<Control>("MenuStrip").IsVisible);
 
                 s.Pad.Start();
                 Assert.DoesNotContain(MenuLines(w), l => l.Contains("Big Picture") || l.Contains("Full Screen"));

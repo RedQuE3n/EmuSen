@@ -1,11 +1,13 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.VisualTree;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.WiseMan.Fixtures;
@@ -22,7 +24,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
     }
 
-    // The desktop window with its Fullscreen and Big Picture buttons, plain full screen, big picture, and the desktop after leaving, at 1280 by 800; written outside the repository.
+    // The desktop window, its View menu open on Fullscreen and Big Picture, plain full screen, big picture, and the desktop after leaving, at 1280 by 800; outside the repository.
     [Collection(TestCollections.ProcessGlobals)]
     public class DesktopButtonPictureTool
     {
@@ -65,23 +67,17 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 if (style == "synthetic")
                 {
                     Save(s.Capture(), "desktop-1280x800");
-                    ActionButton button = BigPictureSwitchTests.Button(s.Window);
-                    ToolTip.SetIsOpen(button, true);
+                    MenuItem view = s.Window.GetControl<MenuBar>("MenuStrip").GetVisualDescendants().OfType<MenuItem>().Single(i => (i.Header as string) == "_View");
+                    view.Open();
                     s.Settle();
-                    Save(s.Capture(), "desktop-tooltip-1280x800");
-                    ToolTip.SetIsOpen(button, false);
-                    ActionButton fullscreen = BigPictureSwitchTests.FullscreenButton(s.Window);
-                    ToolTip.SetIsOpen(fullscreen, true);
-                    s.Settle();
-                    Save(s.Capture(), "desktop-fullscreen-tooltip-1280x800");
-                    ToolTip.SetIsOpen(fullscreen, false);
-                    BigPictureSwitchTests.Click(s.Window, fullscreen);
-                    s.Settle();
+                    Save(s.Capture(), "desktop-view-menu-1280x800");
+                    view.Close();
+                    BigPictureSwitchTests.Choose(s, "_Fullscreen");
                     Save(s.Capture(), "desktop-plain-fullscreen-1280x800");
                     BigPictureSwitchTests.Press(s, Key.F11);
                 }
 
-                BigPictureSwitchTests.Click(s.Window, BigPictureSwitchTests.Button(s.Window));
+                BigPictureSwitchTests.Choose(s, "_Big Picture");
                 s.Run(500);
                 Save(s.Capture(), $"{style}-bigpicture-1280x800");
                 s.Pad.Start();

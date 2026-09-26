@@ -136,6 +136,25 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(new[] { "en_US", "de_DE" }, Items(sheet, "LanguageDropdown"));
         }, default);
 
+        // P48 on Art Book Next, read in place: 20 variants in declared order, 31 schemes, 4 sizes, Automatic and 12 ratios, its two profiles, no language row.
+        [ArtBookNextFact]
+        public Task Art_Book_Next_s_sheet_lists_what_its_capabilities_declare() => Session.Dispatch(() =>
+        {
+            using var s = new ThemedSession(themeDirectory: ArtBookNextFactAttribute.Folder);
+            ThemeSettingsWindow sheet = Open(s);
+            var caps = EmuSen.Mistress.BigPicture.Theme.ThemeCapabilitiesReader.Read(ArtBookNextFactAttribute.Folder);
+            string[] variants = Items(sheet, "VariantDropdown");
+            Assert.Equal(20, variants.Length);
+            Assert.Equal(caps.Variants.Select(v => v.Labels["en_US"]), variants);
+            Assert.Equal("List: Metadata & Boxart", Named<Dropdown>(sheet, "VariantDropdown").SelectedItem);
+            Assert.Equal(31, Items(sheet, "ColorSchemeDropdown").Length);
+            Assert.Equal(new[] { "Medium", "Large", "Small", "Extra Large" }, Items(sheet, "FontSizeDropdown"));
+            Assert.Equal(13, Items(sheet, "AspectRatioDropdown").Length);
+            Assert.Equal(new[] { "Automatic", "Instant", "Slide" }, Items(sheet, "TransitionsDropdown"));
+            Assert.Empty(RootOf(sheet).GetLogicalDescendants().OfType<Dropdown>().Where(d => d.Name == "LanguageDropdown"));
+            _out.WriteLine(string.Join(" | ", variants));
+        }, default);
+
         // P46: a choice redraws the view beneath the open sheet, and once the sheet is gone the frame equals a fresh static build under the new choice.
         [Fact]
         public Task A_choice_applies_at_once_beneath_the_sheet() => Session.Dispatch(() =>

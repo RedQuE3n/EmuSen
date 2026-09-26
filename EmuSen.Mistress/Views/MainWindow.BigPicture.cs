@@ -257,7 +257,7 @@ namespace EmuSen.Mistress.Views
 
         private PreferencesWindow? _preferencesSheet;
 
-        // Preferences' Big Picture Theme row and the sheet's Themes list write one setting, and each shows the other's choice (§4.53).
+        // Preferences' Big Picture Theme row and the sheet's Themes list write one setting, and each shows the other's choice (§4.56).
         private void WatchPreferences(PreferencesWindow window)
         {
             _preferencesSheet = window;

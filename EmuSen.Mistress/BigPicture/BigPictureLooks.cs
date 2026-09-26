@@ -4,7 +4,7 @@ using EmuSen.Galaxia.Models;
 
 namespace EmuSen.Mistress.BigPicture
 {
-    // One entry of big picture's theme list: EmuSen's own library (no folder) or an ES-DE theme folder - see EmuSen_Settings_Reference.md §4.53.
+    // One entry of big picture's theme list: EmuSen's own library (no folder) or an ES-DE theme folder - see EmuSen_Settings_Reference.md §4.56.
     public sealed record BigPictureLook(string Name, InstalledTheme? Theme)
     {
         public bool BuiltIn => Theme is null;

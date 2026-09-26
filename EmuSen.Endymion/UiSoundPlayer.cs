@@ -28,6 +28,9 @@ namespace EmuSen.Endymion
 
         public bool IsOpen => _stream != IntPtr.Zero;
 
+        // Bytes waiting in the stream, for a test to see a sound replaced rather than queued.
+        public int Queued => _stream == IntPtr.Zero ? 0 : Math.Max(0, SDL.GetAudioStreamQueued(_stream));
+
         // A WAV file converted once to the stream's format; null when SDL cannot read it.
         public static byte[]? Decode(string path)
         {

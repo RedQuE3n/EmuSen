@@ -184,6 +184,63 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             File.Delete(wav);
         }
 
+        // The second stream on whatever device SDL opens: a new sound replaces the one still queued rather than waiting behind it.
+        [Fact]
+        public void A_new_sound_replaces_the_one_still_playing_on_the_interface_s_stream()
+        {
+            string folder = Path.Combine(Path.GetTempPath(), "EmuSenUiStream", Guid.NewGuid().ToString("N"));
+            string longer = Path.Combine(folder, "long.wav"), shorter = Path.Combine(folder, "short.wav");
+            ThemedSession.Wav(longer, 330, seconds: 2);
+            ThemedSession.Wav(shorter, 660, seconds: 0.5);
+            // Silent, so a test run plays nothing on the machine's speakers; the gain is applied after the queue.
+            using var player = new UiSoundPlayer { Volume = 0 };
+            player.Play(longer);
+            if (!player.IsOpen)
+            {
+                _out.WriteLine("SDL opened no playback device here; nothing to measure.");
+                return;
+            }
+
+            int second = UiSoundPlayer.Decode(shorter)!.Length, whole = UiSoundPlayer.Decode(longer)!.Length;
+            Assert.InRange(player.Queued, whole / 2, whole);
+            player.Play(shorter);
+            _out.WriteLine($"queued after the second sound: {player.Queued} bytes; the second alone is {second}, the first {whole}");
+            Assert.InRange(player.Queued, second / 2, second);
+            Directory.Delete(folder, true);
+        }
+
+        // The machine's own battery, not a mouse's; Wi-Fi by a wireless interface's state; Bluetooth by its radio switch.
+        [Fact]
+        public void The_device_status_is_read_from_sysfs_and_nothing_is_invented()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "EmuSenSysfs", Guid.NewGuid().ToString("N"));
+            void Put(string relative, string text)
+            {
+                string path = Path.Combine(root, relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllText(path, text + "\n");
+            }
+
+            Assert.Equal(new DeviceStatus(), EmuSen.Mistress.BigPicture.DeviceStatusReader.Read(root));
+            Put("power_supply/hidpp_battery_0/type", "Battery");
+            Put("power_supply/hidpp_battery_0/scope", "Device");
+            Put("power_supply/hidpp_battery_0/capacity", "15");
+            Put("power_supply/BAT0/type", "Battery");
+            Put("power_supply/BAT0/capacity", "64");
+            Put("power_supply/BAT0/status", "Charging");
+            Put("net/wlan0/operstate", "up");
+            Directory.CreateDirectory(Path.Combine(root, "net/wlan0/wireless"));
+            Put("net/eth0/operstate", "up");
+            Put("rfkill/rfkill0/type", "bluetooth");
+            Put("rfkill/rfkill0/soft", "1");
+            Put("rfkill/rfkill0/hard", "0");
+            Assert.Equal(new DeviceStatus(Bluetooth: false, Wifi: true, BatteryPercent: 64, Charging: true), EmuSen.Mistress.BigPicture.DeviceStatusReader.Read(root));
+            Put("net/wlan0/operstate", "down");
+            Put("rfkill/rfkill0/soft", "0");
+            Assert.Equal(new DeviceStatus(Bluetooth: true, Wifi: false, BatteryPercent: 64, Charging: true), EmuSen.Mistress.BigPicture.DeviceStatusReader.Read(root));
+            Directory.Delete(root, true);
+        }
+
         [Fact]
         public Task Preferences_chooses_the_library_style_and_the_session_follows_it_when_the_sheet_closes() => Session.Dispatch(() =>
         {

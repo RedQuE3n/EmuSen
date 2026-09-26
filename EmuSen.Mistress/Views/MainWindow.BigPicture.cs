@@ -26,6 +26,7 @@ namespace EmuSen.Mistress.Views
         private UiSoundPlayer? _uiSounds;
         private DispatcherTimer? _themedWake;
         private bool _themedFrameAsked;
+        private bool _themedClosed;
         private UiButton? _themedHeld;
 
         private static readonly UiButton[] Directions = [UiButton.Up, UiButton.Down, UiButton.Left, UiButton.Right];
@@ -203,7 +204,7 @@ namespace EmuSen.Mistress.Views
         private void ScheduleThemedFrame()
         {
             _themedWake?.Stop();
-            if (_themed?.Stage is null || !ThemedLibraryShown || !LibraryView.IsVisible)
+            if (_themedClosed || _themed?.Stage is null || !ThemedLibraryShown || !LibraryView.IsVisible)
             {
                 ThemedWakeAt = null;
                 return;
@@ -237,11 +238,22 @@ namespace EmuSen.Mistress.Views
         // One frame of the render loop: the view's clock stepped to now, then the next frame asked for or not.
         internal void ThemedFrame()
         {
-            if (_themed?.Stage is null || !ThemedLibraryShown) return;
+            if (_themedClosed || _themed?.Stage is null || !ThemedLibraryShown) return;
             ThemedFramesDrawn++;
             _themed.Advance(UiClock());
             ShowThemedSearchBar();
             ScheduleThemedFrame();
+        }
+
+
+        // A closed window's wake timer and sound stream end with it, so it never draws or plays into what runs next - see EmuSen_BigPicture.md §15.14.
+        private void CloseThemedLibrary()
+        {
+            _themedClosed = true;
+            _themedWake?.Stop();
+            ThemedWakeAt = null;
+            _uiSounds?.Dispose();
+            _uiSounds = null;
         }
     }
 }

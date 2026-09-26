@@ -2354,3 +2354,28 @@ none should.
 - **The generic d-pad glyphs** are hard to tell apart at the 1280×800 help bar's size (§15.10).
 - **`GamepadManager` still opens one pad**, the first; a second pad connected beside it is not seen until the first goes.
 
+
+### 15.14 A closed window kept drawing (found at the merge, 2026-09-25)
+
+**What was seen.** After stage (e) was merged into WiseMan, the Mistress test filter (about 690 tests) failed in two
+of four runs, each time on a different test outside stage (e): the Shaders window's live-slider test once, the status
+bar's Preferences test once. Each passed alone and in small groups. The build before the merge (`eda6c55f`, 648 tests)
+passed three runs of three. An intermittent failure that lands on a different, unrelated test each time is the mark
+of work done on the shared UI thread by something the failing test did not create.
+
+**The defect, demonstrated.** `MainWindow`'s `Closing` handler stopped the pad timer but not the themed view's wake
+timer, and did not release the UI sound stream. Once a scrolling text had armed the wake, a closed window went on
+waking and drawing. `A_closed_themed_window_draws_nothing_after_its_theme_is_gone` closes a themed window, deletes its
+theme as `ThemedSession.Dispose` does, and lets 2.6 s of real dispatcher time pass: without the fix the closed window
+drew **41 more frames**; with it, none. The fix is `CloseThemedLibrary`, called from `Closing`: it marks the view
+closed, stops the wake, and disposes `UiSoundPlayer`. `ScheduleThemedFrame` and `ThemedFrame` refuse to run after it.
+
+**What is not shown.** That this leak caused the two failures above is argued, not proven: they were too rare to
+reproduce on demand, and repeating the broad run until they reappear was ruled out after the desktop froze twice
+during such runs on 2026-09-25; the freezes left nothing in the kernel log and are not attributed here. After the fix, one broad run without the GPU tests passed 676 of 676, and the Shaders window's ten
+tests passed; one pass each is weak evidence against a failure seen at one run in two. A first test written for this,
+asserting the wake timer disabled after closing, was dropped: on the unfixed code it passed or failed with timing,
+so it could not tell the two builds apart.
+
+**Why the mutants missed it.** §15.11's 32 mutants alter the view's rules while a window is open. None removed a
+cleanup, because the defect was an absent line, and a mutation of existing code cannot produce an absence.

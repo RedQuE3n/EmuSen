@@ -196,6 +196,7 @@ namespace EmuSen.Mistress.Views
                 _fileDrop?.Dispose();
                 _timer?.Stop();
                 _padTimer?.Stop();
+                CloseThemedLibrary();
                 StopEmulationThread();
                 _session?.SaveSram();
                 WriteResumeState();

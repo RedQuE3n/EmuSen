@@ -61,6 +61,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             if (e.Bool("metadataElement") == true && Data.HideMetadata) return "metadata elements hidden";
             if (e.String("scope") is "none" or "menu") return $"scope {e.String("scope")}";
             if (e.Float("opacity") is 0) return "opacity is 0";
+            if (e.Type == "clock" && !Data.ShowClock) return "the clock is turned off";
             return null;
         }
 

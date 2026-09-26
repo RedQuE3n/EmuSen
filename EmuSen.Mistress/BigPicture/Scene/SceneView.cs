@@ -49,8 +49,6 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public double Target => _position.To;
 
         private bool IsSystemView => ViewName == "system";
-        private int Count => IsSystemView ? Data.Systems.Count : Data.System.Games.Count;
-        private int Index => IsSystemView ? Data.SystemIndex : Data.GameIndex;
         private ResolvedElement? Primary => View.Primary;
 
         // Whether the primary element slides between items; ES-DE's itemTransitions, and only its carousel and grid have one.
@@ -58,6 +56,43 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         // One step of the selection, as a tap gives it: a carousel and a list both wrap at their ends.
         public void Step(int delta, TimeSpan now) => Move(delta, now, held: false);
+
+        // A move by several items that stops at a list's ends, as a page or a jump to the first or last does; false when nothing moved.
+        public bool Jump(int delta, TimeSpan now) => Move(delta, now, held: true);
+
+        // Raised for every move of the selection, the repeats of a held direction included, with its signed size and whether it was held.
+        public event Action<int, bool>? Stepped;
+
+        // How many items the view lists, and which is selected.
+        public int Count => IsSystemView ? Data.Systems.Count : Data.System.Games.Count;
+        public int Index => IsSystemView ? Data.SystemIndex : Data.GameIndex;
+
+        // Redraws the help bar for another pad without rebuilding the view, so nothing else changes (§15).
+        public void SetFamily(PadFamily family)
+        {
+            Data = Data with { Family = family };
+            foreach (SceneEntry e in Scene.Entries)
+                if (e.Control is HintBar bar) bar.PadFamily = family;
+        }
+
+        // When the view next looks different from now: now while anything moves, a later time for a text still in its pause, null when it is still for good (§15).
+        public TimeSpan? NextChange(TimeSpan now)
+        {
+            if (!_position.IsSettledAt(now) || _repeat.Held || !_metadata.IsSettledAt(now)) return now;
+            if (_changed && now < _selectedAt + Motion.ScrollFadeIn && Scene.Entries.Any(e => e.Control is not null && FadesIn(e.Element))) return now;
+            TimeSpan? next = null;
+            foreach (SceneEntry e in Scene.Entries)
+            {
+                TimeSpan? at = e.Control switch
+                {
+                    FontText { ScrollDirection: not TextScrollDirection.None, IsEffectivelyVisible: true } t => t.IsMeasureValid ? t.NextScrollChange(now - _selectedAt) : now - _selectedAt,
+                    TextRowList { Marquee.Speed: > 0, IsEffectivelyVisible: true } l => l.IsMeasureValid && l.Bounds.Width > 0 ? l.NextMarqueeChange(now - _selectedAt) : now - _selectedAt,
+                    _ => null,
+                };
+                if (at is { } due && (next is null || _selectedAt + due < next)) next = _selectedAt + due;
+            }
+            return next;
+        }
 
         // A move of the selection; a held list stops at its end, where a carousel wraps; false when nothing moved.
         private bool Move(int delta, TimeSpan now, bool held)
@@ -87,6 +122,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             }
 
             Apply();
+            Stepped?.Invoke(delta, held);
             return true;
         }
 

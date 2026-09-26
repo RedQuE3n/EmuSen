@@ -74,6 +74,14 @@ namespace EmuSen.Endymion.Input
         {
             if (Simulated is not null || !_sdlInitialized) return;
 
+            // A pad pulled out is let go, so the rescan below can open whichever pad is plugged in next.
+            if (_available && !SDL.GamepadConnected(_gamepad))
+            {
+                SDL.CloseGamepad(_gamepad);
+                _gamepad = IntPtr.Zero;
+                _available = false;
+            }
+
             if (!_available)
             {
                 TimeSpan now = _rescanClock.Elapsed;
@@ -103,6 +111,10 @@ namespace EmuSen.Endymion.Input
                 return string.IsNullOrEmpty(name) ? "Unknown controller" : name;
             }
         }
+
+        // SDL's own reading of what the pad is (Xbox, PlayStation, Nintendo, or not known), from its vendor and product - see EmuSen_Settings_Reference.md §4.52.
+        public SDL.GamepadType ControllerType =>
+            !IsConnected ? SDL.GamepadType.Unknown : Simulated is { } pad ? pad.Type : SDL.GetGamepadType(_gamepad);
 
         // The connected pad's own printed label for a button, falling back to
         // its position - see EmuSen_Settings_Reference.md §4.6.

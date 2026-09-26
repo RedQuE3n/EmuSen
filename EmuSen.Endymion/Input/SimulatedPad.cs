@@ -12,6 +12,9 @@ namespace EmuSen.Endymion.Input
 
         public string Name { get; set; } = "Simulated pad";
 
+        // What SDL would say the pad is, from which the interface picks its button drawings - see EmuSen_Settings_Reference.md §4.52.
+        public SDL.GamepadType Type { get; set; } = SDL.GamepadType.Unknown;
+
         public void Press(SDL.GamepadButton button) => _held.Add(button);
 
         public void Release(SDL.GamepadButton button) => _held.Remove(button);

@@ -213,6 +213,7 @@ namespace EmuSen.Mistress.BigPicture
         public bool Moves(UiButton direction)
         {
             ResolvedElement? primary = Stage?.Current.View.Primary;
+            if (primary is { Type: "grid" }) return true;
             bool across = primary is { Type: "carousel" } p && !(p.String("type") ?? "horizontal").StartsWith("vertical", StringComparison.Ordinal);
             return across ? direction is UiButton.Left or UiButton.Right : direction is UiButton.Up or UiButton.Down;
         }
@@ -223,7 +224,7 @@ namespace EmuSen.Mistress.BigPicture
         public void PressDirection(UiButton direction, TimeSpan now)
         {
             if (Stage is null) return;
-            if (Moves(direction)) Stage.Current.Press(Sign(direction), now);
+            if (Moves(direction)) Stage.Current.Press(Sign(direction), now, vertical: direction is UiButton.Up or UiButton.Down);
             else if (ViewName == "gamelist" && direction is UiButton.Left or UiButton.Right) ChangeSystem(Sign(direction), now);
             Advance(now);
         }
@@ -304,7 +305,7 @@ namespace EmuSen.Mistress.BigPicture
         }
 
         // A page is the rows the list shows at once, as its own height and pitch give them; ten when the primary element is not a list.
-        public static int PageSize(SceneView view) =>
+        public static int PageSize(SceneView view) => view.Grid() is { } grid ? grid.WholeRows * grid.Columns :
             view.Scene.Entries.Select(e => e.Control).OfType<TextRowList>().FirstOrDefault() is { RowPitch: > 0 } list && list.Bounds.Height > 0
                 ? Math.Max(1, (int)Math.Floor(list.Bounds.Height / list.RowPitch + 1e-6))
                 : 10;

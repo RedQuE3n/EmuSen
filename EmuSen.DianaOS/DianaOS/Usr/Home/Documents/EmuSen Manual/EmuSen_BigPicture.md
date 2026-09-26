@@ -610,6 +610,13 @@ themed view:
 | Start | the pad menu, as a `SheetLayer` sheet | the same |
 | Guide, or Back and Start together, during a game | the menu over the game (§4.29). "Game Library" returns to the themed view at the same system and game. | |
 
+*Amended 2026-09-26, for collections and the gamelist options (§22.5):* North, while a custom collection is being
+edited, adds the selected game to it or removes it, as ES-DE's Y does, and searches otherwise; either thumbstick pressed
+in picks a random game (in the system view a random system, when the setting allows it), as ES-DE's thumbstick click
+does; South on an entry of the grouped Collections system opens it and East inside it comes back to the list. ES-DE's
+gamelist options menu, which ES-DE opens with Back, is reached from Start's pad menu, because Select belongs to the
+game options of §23; merging the two menus under Select is left to that merge.
+
 The help system's entries are the theme's layout filled with these actions. Its icons are Mistress's own (§3.6).
 
 **Sounds.** The theme's seven WAV files need a UI sound player. Endymion's `AudioPlayer` carries the game's stream, so
@@ -1011,6 +1018,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 | P39–P45 | Stage (e)'s predictions: a still view draws nothing, the return is exact, the first build, the pad's family, a family change touching only the help bar, the sounds, every sheet reachable (§15.1) | Stage e (§15.12); P41 failed cold |
 | P46–P55 | Stage (f)'s predictions: a choice applied at once, choices per theme, the sheet's rows, every control reachable, the grid at rest and moving, the video extensions, the media scan, the downloads, a closed sheet's download (§16.1) | Stage f (§16.7); P50 failed by a pixel, P51's duration and interval refuted |
 | P60–P67 | Stage (d)'s predictions: N64 byte order, media against the quota, quota fields without a member, time per game, system IDs, the pacer, the region rule, no leak (§17.1) | Stage d (§17.10); P61 and P66 failed, P60 not measured, P63 partly |
+| P68–P71 | Collections and gamelist options: the broad run, a large library's Show with the collections, a step in all games, the options sheet's cost (§22.1) | §22.10 |
 
 ---
 
@@ -1038,6 +1046,9 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   controller family, such as Xbox, PlayStation, or the Legion's own labels?
 - **Q10, SVG.** Our own subset renderer (recommended), or `Svg.Skia` 5.1.1 with its MS-PL dependency and SkiaSharp
   pin (§4.5)?
+- **Q11–Q14, collections and the gamelist options** (§22.12): the automatic collections off by default as ES-DE's are,
+  or on; one menu under Select for the gamelist options and the game options; custom collections shown until switched
+  off, or enabled one by one as ES-DE does; and the shoulders' page, which ES-DE was measured to make ten games.
 - **Risk: ScreenScraper's API is in beta** and may change without notice (§5.1). The client keeps the response
   parsing in one place, and its tests are written against the documented shape.
 - **Risk: the undocumented behaviours** of §4.4 (the 'S' size) and §4.6 (durations) are measured from ES-DE, so they
@@ -3601,3 +3612,36 @@ defects came from that (§20.2).
 - **The estimate is a mean** over the games answered, so a run of found games (five requests each) after a run of
   unknown ones (one each) is estimated short.
 - **OpenEmu's failover is not paused** and not counted in the requests sent.
+
+---
+
+## 22. Collections, and a game list's sort, filters, jump and random game (2026-09-26)
+
+*Opened 2026-09-26, on the request of that day* to build what big picture lacked against ES-DE: "item 1,
+collections: ES-DE's automatic collections (All Games, Favorites, Last Played) and custom collections"; "item 2: a game
+list's filters … and sorting …, plus jump-to-letter and random game". Item 3, the per-game options and a metadata
+editor, is §23's, built at the same time on another branch. The player's account is §4.58 of the settings reference;
+this is the record.
+
+**Sources.** ES-DE's behaviour is taken from its `USERGUIDE.md` (the sections *General navigation*, *Game collection
+settings*, *UI settings*, *Gamelist options menu* and *Game collections*) and `THEMES.md` (*System variables*, the
+`textlist`, `helpsystem` and `metadataElement` entries), the copies fetched at master for stage (c) under
+`~/.cache/emusen/bigpicture/motion/docs/`. Where they are silent, ES-DE 3.4.1 was run (§22.2). Its source was not read.
+Art Book Next's files were read, as in every stage, only to learn which names it asks for (`auto-allgames` and the
+others); nothing of it or of ES-DE entered either repository.
+
+### 22.1 Predictions
+
+Written after the code and its pad tests, and before the broad run and the cost measurements below, which they are
+about. They are therefore narrower than a stage's.
+
+- **P68, the broad run.** The Mistress filter without `ShaderSettingsWindowTests`, `ShaderBrowseBench` and
+  `SceneGpuBench` passes with no failure that this branch causes.
+- **P69, a large library.** With 3,508 games over the five systems and the three automatic collections on, a warm
+  `ThemedLibrary.Show` on the desktop costs under 1.5 times the same Show without them (median of five). The
+  collections' shelves are built from lists the window already holds, and their media presence is asked once per source
+  system.
+- **P70, a step in all games.** A step in the 3,508-game all games list costs within 1.5 times a step in a system's
+  list: the listed games are kept per list, so a step does not sort again.
+- **P71, the options sheet.** Opening Gamelist Options over the 3,508-game all games list, its letters and its filter
+  values computed from the list, takes under 100 ms on the desktop.

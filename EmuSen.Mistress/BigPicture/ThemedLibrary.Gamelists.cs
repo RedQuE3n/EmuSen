@@ -116,9 +116,9 @@ namespace EmuSen.Mistress.BigPicture
 
         private void LeaveFolder(TimeSpan now)
         {
-            if (_system is null || OpenFolder(_system) is not { } folder) return;
+            // The top list's cursor still names the collection left, since each list keeps its own (§22.8, C13).
+            if (_system is null || OpenFolder(_system) is null) return;
             _openFolder.Remove(_system);
-            _cursor[_system] = CollectionShelves.FolderPrefix + folder.System.Name;
             Refresh(now);
             Sound("back");
         }

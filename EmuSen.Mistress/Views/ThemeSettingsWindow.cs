@@ -42,6 +42,7 @@ namespace EmuSen.Mistress.Views
             var tabs = new Tabs { Name = "ThemeSettingsTabs" };
             tabs.Add("Options", Pane(_options));
             tabs.Add("Themes", Pane(Ui.Stack(12, _themes, _status)));
+            if (BigPictureLooks.BuiltInCurrent(settings)) tabs.SelectedIndex = 1;
             Control buttons = Ui.Buttons(Ui.Button("Close", Close)).Margin(0, 12, 0, 0);
             DockPanel.SetDock(buttons, Dock.Bottom);
             Content = new DockPanel { LastChildFill = true, Children = { buttons, tabs } }.Margin(16);
@@ -76,9 +77,20 @@ namespace EmuSen.Mistress.Views
         private void FillOptions()
         {
             _options.Children.Clear();
+            if (BigPictureLooks.BuiltInCurrent(_settings))
+            {
+                _options.Children.Add(new EmptyState
+                {
+                    Name = "BuiltInOptionsNote",
+                    Message = "EmuSen's own look has no options here",
+                    Detail = "These options belong to an ES-DE theme. Choose one on the Themes tab to set its variant, colours and font size.",
+                });
+                return;
+            }
+
             if (Current is not { } dir || !Directory.Exists(dir))
             {
-                _options.Children.Add(new EmptyState { Message = "No theme chosen", Detail = "Download Art Book Next on the Themes tab, or choose an ES-DE theme folder in Preferences." });
+                _options.Children.Add(new EmptyState { Message = "The theme's folder is missing", Detail = "Choose another theme on the Themes tab, download Art Book Next there, or choose an ES-DE theme folder in Preferences." });
                 return;
             }
 
@@ -142,9 +154,10 @@ namespace EmuSen.Mistress.Views
         private void FillThemes()
         {
             _themes.Children.Clear();
+            _themes.Children.Add(BuiltInRow());
             IReadOnlyList<InstalledTheme> installed = ThemeDownloads.Installed(Current);
             if (installed.Count == 0)
-                _themes.Children.Add(new EmptyState { Message = "No themes", Detail = "Download one below. Mistress ships no theme." });
+                _themes.Children.Add(new EmptyState { Message = "No ES-DE themes", Detail = "Download one below. Mistress ships no ES-DE theme." });
             foreach (InstalledTheme theme in installed) _themes.Children.Add(ThemeRow(theme));
 
             ThemeSource artBook = ThemeSource.ArtBookNext;
@@ -162,15 +175,31 @@ namespace EmuSen.Mistress.Views
             }
         }
 
+        // EmuSen's own library, first and built in: a Use button and nothing that downloads or removes it.
+        private Control BuiltInRow()
+        {
+            bool inUse = BigPictureLooks.IsCurrent(_settings, BigPictureLooks.BuiltIn);
+            Button use = Ui.Button(inUse ? "In Use" : "Use", () => Use(BigPictureLooks.BuiltIn));
+            use.Name = "ThemeUseBuiltIn";
+            use.IsEnabled = !inUse;
+            return new FieldRow
+            {
+                Name = "ThemeRowBuiltIn",
+                Label = $"{BigPictureLooks.BuiltInName} (built in)",
+                Hint = "EmuSen's own big-screen library: covers in a grid or a list, drawn by Mistress. It is part of EmuSen, so it is never downloaded or removed, and it has no options on the Options tab.",
+                Content = Ui.Row(8, use),
+            };
+        }
+
         private Control ThemeRow(InstalledTheme theme)
         {
-            bool inUse = Current is { } c && ThemeDownloads.SamePath(c, theme.Directory);
+            bool inUse = BigPictureLooks.IsCurrent(_settings, new BigPictureLook(theme.Name, theme));
             string where = theme.Stamp is { } s
                 ? $"Downloaded {s.Downloaded:yyyy-MM-dd} from {s.Source.Url.Replace("https://", "")}" + (s.Commit is { Length: >= 7 } commit ? $", commit {commit[..7]}" : "")
                 : $"Read in place from {theme.Directory}";
             var buttons = new List<Button>();
             string id = Path.GetFileName(theme.Directory);
-            Button use = Ui.Button(inUse ? "In Use" : "Use", () => Use(theme.Directory));
+            Button use = Ui.Button(inUse ? "In Use" : "Use", () => Use(new BigPictureLook(theme.Name, theme)));
             use.Name = $"ThemeUse.{id}";
             use.IsEnabled = !inUse;
             buttons.Add(use);
@@ -192,12 +221,10 @@ namespace EmuSen.Mistress.Views
             return new FieldRow { Label = theme.Name, Hint = where, Content = Ui.Row(8, buttons.ToArray()) };
         }
 
-        private void Use(string directory)
+        private void Use(BigPictureLook look)
         {
-            _settings.BigPictureTheme = directory;
-            if (_settings.LibraryStyle != AppSettings.LibraryStyleTheme) _settings.LibraryStyle = AppSettings.LibraryStyleTheme;
-            _settings.Save();
-            _applied(true);
+            BigPictureLooks.Choose(_settings, look);
+            _applied(!look.BuiltIn);
             Fill();
         }
 

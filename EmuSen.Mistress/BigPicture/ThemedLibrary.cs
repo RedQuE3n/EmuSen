@@ -63,8 +63,9 @@ namespace EmuSen.Mistress.BigPicture
 
         public SceneGame? SelectedGame => Stage is { Current.ViewName: "gamelist" } s ? s.Current.Data.Game : null;
 
-        // What the last Show spent reading the theme and building the stage, for the first-build prediction (§15).
+        // What the last Show spent reading the theme, looking for media and building the stage, for the first-build prediction (§15).
         public TimeSpan LoadTime { get; private set; }
+        public TimeSpan MediaTime { get; private set; }
         public TimeSpan BuildTime { get; private set; }
 
         // Every sound file the theme names, so the player can decode them before the first is wanted.
@@ -89,13 +90,18 @@ namespace EmuSen.Mistress.BigPicture
             _screen = screen;
             var choices = new ThemeChoices { ScreenWidth = (int)Math.Round(screen.Width), ScreenHeight = (int)Math.Round(screen.Height) };
             var systems = new List<SceneSystem>();
+            var scan = new Stopwatch();
             foreach (ThemedShelf shelf in shelves.Where(s => s.Games.Count > 0))
             {
-                ResolvedTheme theme = ThemeLoader.Load(_capabilities, shelf.System, choices, Presence(shelf));
+                scan.Start();
+                MediaPresence? presence = Presence(shelf);
+                scan.Stop();
+                ResolvedTheme theme = ThemeLoader.Load(_capabilities, shelf.System, choices, presence);
                 if (theme.IsThemed) systems.Add(new SceneSystem(shelf.System, theme, shelf.Games));
             }
             _systems = systems;
-            LoadTime = clock.Elapsed;
+            MediaTime = scan.Elapsed;
+            LoadTime = clock.Elapsed - scan.Elapsed;
             if (systems.Count == 0) return Fail(shelves.Any(s => s.Games.Count > 0) ? "The theme has no view for any system in the library." : "The library has no games.");
 
             clock.Restart();

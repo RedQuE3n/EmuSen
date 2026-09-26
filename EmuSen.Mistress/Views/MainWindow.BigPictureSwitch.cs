@@ -32,7 +32,7 @@ namespace EmuSen.Mistress.Views
         internal bool UiSoundsHeld => _uiSounds is not null;
 
         // A platform option read once, so only a session that is big-screen for its whole life embeds every popup; a switch embeds the window's own (§4.54).
-        internal static bool EmbedsPopupsAtStart(string[] args, Func<string, string?> environment) =>
+        public static bool EmbedsPopupsAtStart(string[] args, Func<string, string?> environment) =>
             args.Contains("--bigscreen") || InGameModeSession(environment);
 
         private void SetUpBigPictureSwitch()
@@ -92,7 +92,7 @@ namespace EmuSen.Mistress.Views
 
             if (!on && _desktopPlace is { } place) ReturnTo(place);
             else ShowLibraryEntries();
-            _desktopPlace = null;
+            if (!on) _desktopPlace = null;
 
             _appSettings.BigScreen = on;
             _appSettings.Save();

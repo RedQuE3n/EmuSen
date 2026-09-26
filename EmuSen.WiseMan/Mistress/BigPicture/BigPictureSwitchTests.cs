@@ -194,6 +194,20 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Contains("(F11)", ToolTip.GetTip(FullscreenButton(w)) as string ?? "");
             Assert.Null(Field(w, "_themed"));
 
+            // The pad menu offers both on the desktop, and only the way out in big picture.
+            s.Pad.Start();
+            Assert.Contains("Full Screen", MenuLines(w));
+            Assert.Contains("Big Picture", MenuLines(w));
+            s.Pad.B();
+            ChooseFromPadMenu(s, "Big Picture");
+            AssertBigPicture(s, theme);
+            s.Pad.Start();
+            Assert.DoesNotContain(MenuLines(w), l => l.Contains("Full Screen"));
+            s.Pad.B();
+            Press(s, Key.Escape);
+            AssertDesktop(s, look, game, console);
+            Assert.Equal(WindowState.Maximized, w.WindowState);
+
             // Plain full screen, by the button, F11, the View menu and the window manager: never big picture.
             Click(w, FullscreenButton(w));
             AssertDesktop(s, look, game, console, fullScreen: true);
@@ -213,7 +227,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             AssertDesktop(s, look, game, console, fullScreen: true);
             Press(s, Key.F11);
             Assert.Equal(WindowState.Maximized, w.WindowState);
-            Assert.Null(Field(w, "_themed"));
 
             // Big picture by its button, out by the pad menu's entry.
             Click(w, Button(w));
@@ -431,7 +444,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Assert.False(w.GetControl<Control>("BigPictureButtons").IsVisible);
 
                 s.Pad.Start();
-                Assert.DoesNotContain(MenuLines(w), l => l.Contains("Big Picture"));
+                Assert.DoesNotContain(MenuLines(w), l => l.Contains("Big Picture") || l.Contains("Full Screen"));
                 s.Pad.B();
 
                 Press(s, Key.F11);

@@ -156,8 +156,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             string elements = List() + "<text name=\"dev\"><pos>0.5 0</pos><size>0.5 0.2</size><metadata>developer</metadata><color>FFFFFF</color></text>"
                 + "<image name=\"art\"><pos>0.5 0.3</pos><size>0.4 0.5</size><imageType>cover</imageType></image>";
-            var lever = new SceneView(Data("", elements, Round, game: 0), "gamelist", Ms(0));
-            var every = new SceneView(Data("", elements, Round, game: 0), "gamelist", Ms(0)) { RebuildEveryStep = true };
+            var lever = new SceneView(Data("", elements, Round with { MetadataFadeOut = Ms(250) }, game: 0), "gamelist", Ms(0));
+            var every = new SceneView(Data("", elements, Round with { MetadataFadeOut = Ms(250) }, game: 0), "gamelist", Ms(0)) { RebuildEveryStep = true };
             using var a = new SceneMotionHost(lever);
             using var b = new SceneMotionHost(every);
             lever.Press(1, Ms(0));
@@ -166,8 +166,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             SceneBuilder? held = null;
             foreach (double t in new double[] { 450, 520, 600, 700, 800, 900, 1000, 1030, 1060, 1090 })
             {
-                if (t == 600) held = lever.Scene;
-                if (t > 600) Assert.Same(held, lever.Scene);
+                if (t == 700) held = lever.Scene;
+                if (t > 700) Assert.Same(held, lever.Scene);
                 Assert.Equal(0, SceneAssets.Differing(a.At(Ms(t)), b.At(Ms(t))));
                 Assert.Equal(every.Data.GameIndex, lever.Data.GameIndex);
                 compared++;

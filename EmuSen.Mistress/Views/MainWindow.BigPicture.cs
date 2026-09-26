@@ -201,7 +201,6 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
-            ScrapeSelectedThemedGame();
             TimeSpan now = UiClock();
             TimeSpan? next = _themed.NextChange(now);
             ThemedWakeAt = next;

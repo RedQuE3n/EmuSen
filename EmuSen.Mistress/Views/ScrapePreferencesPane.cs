@@ -9,14 +9,19 @@ using EmuSen.Mistress.Scraping;
 
 namespace EmuSen.Mistress.Views
 {
-    // What Preferences asks of the window that scrapes: whether it can, how the quota stands, and the whole-library pass.
+    // What Preferences asks of the window that scrapes: whether it can, the quota, and a run started, resumed or cancelled by the player.
     public interface IScrapeHost
     {
         bool HasDeveloperCredentials { get; }
         string Status { get; }
         QuotaSnapshot? Quota { get; }
         event Action? ScrapeChanged;
-        void ScrapeWholeLibrary();
+        bool ScrapeRunning { get; }
+        ScrapeProgress? Progress { get; }
+        int Interrupted { get; }
+        System.Threading.Tasks.Task<bool> ConfirmAndScrapeAsync(ScrapeScope scope);
+        bool ResumeScrape();
+        void CancelScrape();
     }
 
     // Preferences' Scraping tab: ScreenScraper, the member account, what to fetch, region and language, the quota, and OpenEmu's failover - see EmuSen_Settings_Reference.md §4.60.
@@ -42,6 +47,20 @@ namespace EmuSen.Mistress.Views
         private readonly TextBox _password = new() { Name = "ScreenScraperPasswordBox", PasswordChar = '•', Watermark = "(none)", HorizontalAlignment = HorizontalAlignment.Stretch };
         private MemberAccount _account = new("", "");
 
+        private readonly Dropdown _scopeShelf = new() { Name = "ScrapeShelfDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
+        private readonly LunaSwitch _missingOnly = new() { Name = "ScrapeMissingArtSwitch", Label = "Only games with no cover", IsChecked = true };
+        private readonly Button _start = Ui.Button("Scrape...", () => { });
+        private readonly Button _resume = Ui.Button("Resume", () => { });
+        private readonly Button _cancel = Ui.Button("Cancel Scraping", () => { });
+        private readonly ProgressBar _progress = new() { Name = "ScrapeProgressBar", Minimum = 0, Maximum = 1, HorizontalAlignment = HorizontalAlignment.Stretch };
+
+        // The shelves a scope can name, Game Boy Color as its own; the first entry is the whole library.
+        public const string AllShelves = "Every console";
+
+        public static string[] ShelfChoices => [AllShelves, .. EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder.Select(s => s.Name)];
+
+        public ScrapeScope ChosenScope() => new(Shelf: _scopeShelf.SelectedItem is string s && s != AllShelves ? s : null, MissingArtOnly: _missingOnly.IsChecked == true);
+
         public ScrapePreferencesPane(AppSettings settings, IScrapeHost? host)
         {
             _settings = settings;
@@ -57,9 +76,13 @@ namespace EmuSen.Mistress.Views
             user.LostFocus += (_, _) => SaveAccount();
             password.LostFocus += (_, _) => SaveAccount();
 
-            var wholeLibrary = Ui.Button("Scrape Whole Library", () => _host?.ScrapeWholeLibrary());
-            wholeLibrary.Name = "ScrapeWholeLibraryButton";
-            wholeLibrary.IsEnabled = _host?.HasDeveloperCredentials == true && _settings.Scraping;
+            _scopeShelf.Fill(ShelfChoices, AllShelves);
+            _start.Name = "ScrapeStartButton";
+            _start.Click += async (_, _) => { if (_host is not null) await _host.ConfirmAndScrapeAsync(ChosenScope()); Show(); };
+            _resume.Name = "ScrapeResumeButton";
+            _resume.Click += (_, _) => { _host?.ResumeScrape(); Show(); };
+            _cancel.Name = "ScrapeCancelButton";
+            _cancel.Click += (_, _) => { _host?.CancelScrape(); Show(); };
 
             bool developer = _host?.HasDeveloperCredentials == true;
             return
@@ -106,9 +129,17 @@ namespace EmuSen.Mistress.Views
                 },
                 new FieldRow
                 {
+                    Label = "Scrape",
+                    Hint = "Nothing is sent to ScreenScraper or OpenEmu's sources until you start it here, from a game's menu (Scrape This Game), or from the pad menu. "
+                        + "Choose a console or every console, and whether only games with no cover; the count and the requests it will cost are shown before it starts. "
+                        + "A run that is cancelled or stopped by the quota can be resumed; it never resumes by itself.",
+                    Content = Ui.Stack(6, _scopeShelf, _missingOnly, Ui.Row(8, _start, _resume, _cancel), _progress),
+                },
+                new FieldRow
+                {
                     Label = "Today",
                     Hint = "ScreenScraper's own count, from its last answer. Mistress stops two percent short of the day's limit and resumes the next day where it stopped.",
-                    Content = Ui.Stack(6, _quota, _status, wholeLibrary),
+                    Content = Ui.Stack(6, _quota, _status),
                 },
                 new FieldRow
                 {
@@ -143,6 +174,13 @@ namespace EmuSen.Mistress.Views
         private void Show()
         {
             _status.Text = _host?.Status ?? "";
+            bool running = _host?.ScrapeRunning == true;
+            _start.IsEnabled = _host is not null && !running;
+            _resume.IsEnabled = !running && (_host?.Interrupted ?? 0) > 0;
+            _cancel.IsEnabled = running;
+            ScrapeProgress? p = _host?.Progress;
+            _progress.IsVisible = p is not null;
+            if (p is not null) _progress.Value = p.Total == 0 ? 0 : (double)p.Done / p.Total;
             QuotaSnapshot? q = _host?.Quota;
             _quota.IsVisible = q is not null;
             if (q is null) return;

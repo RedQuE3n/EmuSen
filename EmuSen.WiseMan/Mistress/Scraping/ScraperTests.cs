@@ -49,6 +49,13 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             return scraper;
         }
 
+        // A game queued and the run started, as the player's Scrape does; Start is a no-op while a run is live.
+        private static void Queue(Scraper scraper, string path, string system, ScrapePriority priority)
+        {
+            scraper.Enqueue(path, system, priority);
+            scraper.Start();
+        }
+
         private string Rom(string name, byte[] bytes)
         {
             string path = Path.Combine(Roms, name);
@@ -85,7 +92,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             _server.Games.Add(new FakeGame(77, "F-Zero", h.Md5));
             Scraper scraper = Start();
 
-            scraper.Enqueue(rom, "snes", ScrapePriority.Shown);
+            Queue(scraper, rom, "snes", ScrapePriority.Shown);
             ScrapeResult result = Next();
 
             Assert.Equal(ScrapeOutcome.Found, result.Outcome);
@@ -111,6 +118,61 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         }
 
         [Fact]
+        public void A_queue_left_by_an_earlier_run_asks_nothing_until_a_run_is_started_and_the_run_ends_when_it_is_empty()
+        {
+            string a = Rom("A (USA).sfc", Filled(1024, 80));
+            string b = Rom("B (USA).sfc", Filled(1024, 81));
+            _store.Enqueue(a, "snes", ScrapePriority.Library);
+            _store.Enqueue(b, "snes", ScrapePriority.Library);
+            Scraper scraper = Start(start: false);
+            var ends = new BlockingCollection<ScrapeRunEnd>();
+            scraper.Finished += ends.Add;
+            Thread.Sleep(300);
+            Assert.Empty(_server.Asked);
+            Assert.False(scraper.IsRunning);
+
+            scraper.Start();
+            Next();
+            Next();
+            Assert.True(ends.TryTake(out ScrapeRunEnd end, TimeSpan.FromSeconds(10)));
+            Assert.Equal(ScrapeRunEnd.Done, end);
+            Assert.False(scraper.IsRunning);
+            int asked = _server.Asked.Count;
+
+            // A game queued after the run ended waits for the next run.
+            scraper.Enqueue(Rom("C (USA).sfc", Filled(1024, 82)), "snes", ScrapePriority.Shown);
+            Thread.Sleep(300);
+            Assert.Equal(asked, _server.Asked.Count);
+        }
+
+        [Fact]
+        public void A_run_the_quota_stops_ends_as_stopped_and_cancelling_ends_it_as_cancelled()
+        {
+            _server.ForcedStatus = 430;
+            Scraper scraper = Start(start: false);
+            var ends = new BlockingCollection<ScrapeRunEnd>();
+            scraper.Finished += ends.Add;
+            Queue(scraper, Rom("A (USA).sfc", Filled(1024, 83)), "snes", ScrapePriority.Shown);
+            Assert.True(ends.TryTake(out ScrapeRunEnd end, TimeSpan.FromSeconds(10)));
+            Assert.Equal(ScrapeRunEnd.Stopped, end);
+
+            _server.ForcedStatus = 0;
+            _store.Dispose();
+            _store = MediaStore.Open(Path.Combine(_root, "Other"));
+            _quota = new ScrapeQuotaManager(_store, _clock);
+            _server.Gate = new SemaphoreSlim(0);
+            Scraper second = Start(start: false);
+            second.Finished += ends.Add;
+            Queue(second, Rom("B (USA).sfc", Filled(1024, 84)), "snes", ScrapePriority.Shown);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (!_server.JeuInfos.Any() && clock.ElapsedMilliseconds < 10_000) Thread.Sleep(5);
+            second.Dispose();
+            Assert.True(ends.TryTake(out end, TimeSpan.FromSeconds(10)));
+            Assert.Equal(ScrapeRunEnd.Cancelled, end);
+            Assert.Equal(1, _store.QueueLength);
+        }
+
+        [Fact]
         public void The_headerless_hash_is_asked_only_after_a_404_and_only_when_the_core_s_transform_changes_the_bytes()
         {
             byte[] body = Filled(0x4000, 2);
@@ -120,14 +182,14 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             _server.Games.Add(new FakeGame(5, "Metroid", RomHashes.Of(body).Md5) { SystemId = 3 });
             Scraper scraper = Start();
 
-            scraper.Enqueue(nes, "nes", ScrapePriority.Shown);
+            Queue(scraper, nes, "nes", ScrapePriority.Shown);
             ScrapeResult found = Next();
             Assert.Equal((ScrapeOutcome.Found, "transformed"), (found.Outcome, found.MatchedBy));
             Assert.Equal([RomHashes.Of(ines).Md5, RomHashes.Of(body).Md5], _server.JeuInfos.Select(u => FakeScreenScraper.Param(u, "md5")));
             Assert.Equal(body.Length.ToString(), FakeScreenScraper.Param(_server.JeuInfos.Last(), "romtaille"));
 
             int before = _server.JeuInfos.Count();
-            scraper.Enqueue(gb, "gb", ScrapePriority.Shown);
+            Queue(scraper, gb, "gb", ScrapePriority.Shown);
             Assert.Equal(ScrapeOutcome.Unknown, Next().Outcome);
             Assert.Equal(before + 1, _server.JeuInfos.Count());
             Assert.DoesNotContain(_server.Asked, u => u.Contains("jeuRecherche"));
@@ -142,7 +204,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             File.WriteAllBytes(Stored("snes", "screenshots", "F-Zero (USA).png"), [7, 7, 7]);
             Scraper scraper = Start(handCover: (system, path) => path.EndsWith("F-Zero (USA).sfc"));
 
-            scraper.Enqueue(rom, "snes", ScrapePriority.Shown);
+            Queue(scraper, rom, "snes", ScrapePriority.Shown);
             ScrapeResult result = Next();
 
             Assert.DoesNotContain(_server.MediaAsked, u => u.Contains("box-2D"));
@@ -159,14 +221,14 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             string hack = Rom("My Hack.sfc", Filled(2048, 6));
             _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5));
             Scraper scraper = Start();
-            scraper.Enqueue(rom, "snes", ScrapePriority.Shown);
-            scraper.Enqueue(hack, "snes", ScrapePriority.Shown);
+            Queue(scraper, rom, "snes", ScrapePriority.Shown);
+            Queue(scraper, hack, "snes", ScrapePriority.Shown);
             Next();
             Next();
             int asked = _server.Asked.Count;
 
-            scraper.Enqueue(rom, "snes", ScrapePriority.Shown);
-            scraper.Enqueue(hack, "snes", ScrapePriority.Shown);
+            Queue(scraper, rom, "snes", ScrapePriority.Shown);
+            Queue(scraper, hack, "snes", ScrapePriority.Shown);
             Assert.Equal([ScrapeOutcome.Found, ScrapeOutcome.Unknown], new[] { Next(), Next() }.OrderBy(r => r.Outcome).Select(r => r.Outcome));
             Assert.Equal(asked, _server.Asked.Count);
         }
@@ -177,12 +239,12 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             string rom = Rom("F-Zero (USA).sfc", Filled(2048, 7));
             _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5));
             Scraper scraper = Start();
-            scraper.Enqueue(rom, "snes", ScrapePriority.Shown);
+            Queue(scraper, rom, "snes", ScrapePriority.Shown);
             Next();
             scraper.Dispose();
 
             Scraper titles = Start(new ScrapeChoices { TitleScreens = true });
-            titles.Enqueue(rom, "snes", ScrapePriority.Shown);
+            Queue(titles, rom, "snes", ScrapePriority.Shown);
             Next();
             Assert.Equal(2, _server.JeuInfos.Count());
             Assert.True(File.Exists(Stored("snes", "titlescreens", "F-Zero (USA).png")));
@@ -194,12 +256,12 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             string rom = Rom("F-Zero (USA).sfc", Filled(2048, 70));
             _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5) { Media = [("box-2D", "us", "png"), ("ss", "wor", "png")] });
             Scraper scraper = Start();
-            scraper.Enqueue(rom, "snes", ScrapePriority.Shown);
+            Queue(scraper, rom, "snes", ScrapePriority.Shown);
             Next();
             scraper.Dispose();
 
             Scraper titles = Start(new ScrapeChoices { TitleScreens = true });
-            titles.Enqueue(rom, "snes", ScrapePriority.Shown);
+            Queue(titles, rom, "snes", ScrapePriority.Shown);
             Assert.Equal(ScrapeOutcome.Found, Next().Outcome);
             Assert.Single(_server.JeuInfos);
         }
@@ -211,19 +273,19 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             string rom = Rom("F-Zero (USA).sfc", bytes);
             _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5));
             Scraper scraper = Start();
-            scraper.Enqueue(rom, "snes", ScrapePriority.Shown);
+            Queue(scraper, rom, "snes", ScrapePriority.Shown);
             Next();
             int asked = _server.Asked.Count;
 
             string renamed = Path.Combine(Roms, "F-Zero.sfc");
             File.Move(rom, renamed);
-            scraper.Enqueue(renamed, "snes", ScrapePriority.Shown);
+            Queue(scraper, renamed, "snes", ScrapePriority.Shown);
             Assert.Equal(ScrapeOutcome.Found, Next().Outcome);
             Assert.True(File.Exists(Stored("snes", "covers", "F-Zero.png")));
             Assert.False(File.Exists(Stored("snes", "covers", "F-Zero (USA).png")));
 
             string copy = Rom("F-Zero (copy).sfc", bytes);
-            scraper.Enqueue(copy, "snes", ScrapePriority.Shown);
+            Queue(scraper, copy, "snes", ScrapePriority.Shown);
             Assert.Equal(ScrapeOutcome.Found, Next().Outcome);
             Assert.True(File.Exists(Stored("snes", "covers", "F-Zero (copy).png")));
             Assert.True(File.Exists(Stored("snes", "covers", "F-Zero.png")));
@@ -240,9 +302,9 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 Media = [("box-2D", "us", "png"), ("box-2D", "eu", "jpg"), ("box-2D", "jp", "png")],
             });
             Scraper scraper = Start(new ScrapeChoices { Screenshots = false, Marquees = false, Miximages = false });
-            scraper.Enqueue(eu, "snes", ScrapePriority.Shown);
+            Queue(scraper, eu, "snes", ScrapePriority.Shown);
             Next();
-            scraper.Enqueue(kr, "snes", ScrapePriority.Shown);
+            Queue(scraper, kr, "snes", ScrapePriority.Shown);
             Next();
 
             Assert.Equal(["box-2D(eu)", "box-2D(us)"], _server.MediaAsked.Select(u => FakeScreenScraper.Param(u, "media")));
@@ -262,8 +324,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             string b = Rom("B (USA).sfc", Filled(1024, 12));
             _server.ForcedStatus = code;
             Scraper scraper = Start();
-            scraper.Enqueue(a, "snes", ScrapePriority.Shown);
-            scraper.Enqueue(b, "snes", ScrapePriority.Shown);
+            Queue(scraper, a, "snes", ScrapePriority.Shown);
+            Queue(scraper, b, "snes", ScrapePriority.Shown);
 
             ScrapeResult result = Next();
             Assert.Equal(ScrapeOutcome.Stopped, result.Outcome);
@@ -283,8 +345,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             _server.Games.Add(new FakeGame(2, "B", RomHashes.Of(b).Md5));
             _server.ForcedStatus = 430;
             Scraper scraper = Start();
-            scraper.Enqueue(a, "snes", ScrapePriority.Shown);
-            scraper.Enqueue(b, "snes", ScrapePriority.Library);
+            Queue(scraper, a, "snes", ScrapePriority.Shown);
+            Queue(scraper, b, "snes", ScrapePriority.Library);
             Assert.Equal(ScrapeOutcome.Stopped, Next().Outcome);
             scraper.Dispose();
             _store.Dispose();
@@ -308,6 +370,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             _server.Gate = new SemaphoreSlim(0);
             Scraper scraper = Start(new ScrapeChoices { Screenshots = false, Marquees = false, Miximages = false });
             foreach (string rom in roms) scraper.Enqueue(rom, "snes", ScrapePriority.Library);
+            scraper.Start();
             _server.Gate.Release(2);
             Assert.Equal(roms[0], Next().Path);
             scraper.Dispose();
@@ -332,6 +395,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             _server.Gate = new SemaphoreSlim(0);
             Scraper scraper = Start(new ScrapeChoices { Threads = wanted });
             foreach (string rom in roms) scraper.Enqueue(rom, "snes", ScrapePriority.Library);
+            scraper.Start();
             Thread.Sleep(300);
             _server.Gate.Release(100);
             for (int i = 0; i < roms.Count; i++) Next();
@@ -345,7 +409,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             string a = Rom("A (USA).sfc", Filled(1024, 62));
             _server.Games.Add(new FakeGame(1, "A", RomHashes.Of(a).Md5) { Media = [("box-2D", "us", "png")] });
             Scraper scraper = Start();
-            scraper.Enqueue(a, "snes", ScrapePriority.Shown);
+            Queue(scraper, a, "snes", ScrapePriority.Shown);
             Next();
             Assert.Contains(_clock.Delays, d => Math.Abs(d.TotalSeconds - 400 / 1024.0) < 0.05);
         }
@@ -358,8 +422,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             string b = Rom("B (USA).sfc", Filled(1024, 61));
             _server.Games.Add(new FakeGame(1, "A", RomHashes.Of(a).Md5) { Media = [("box-2D", "us", "png")] });
             Scraper scraper = Start();
-            scraper.Enqueue(a, "snes", ScrapePriority.Shown);
-            scraper.Enqueue(b, "snes", ScrapePriority.Shown);
+            Queue(scraper, a, "snes", ScrapePriority.Shown);
+            Queue(scraper, b, "snes", ScrapePriority.Shown);
             Next();
             Next();
 

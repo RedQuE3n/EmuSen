@@ -2,16 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Threading;
-using EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen;
 using EmuSen.Galaxia.Library;
+using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.BigPicture.Scene;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Scraping;
 
 namespace EmuSen.Mistress.Views
 {
-    // ScreenScraper as the library's first source of covers, media and game text, with OpenEmu's as the failover - see EmuSen_Settings_Reference.md §4.60 and EmuSen_BigPicture.md §17.
+    // ScreenScraper first and OpenEmu's sources as the failover, both only inside a run the player started - see EmuSen_Settings_Reference.md §4.60 and EmuSen_BigPicture.md §17.14.
     public partial class MainWindow : IScrapeHost
     {
         // Replaced by tests; nothing under the harness reads the developer's real file.
@@ -19,63 +20,63 @@ namespace EmuSen.Mistress.Views
 
         internal static IScrapeClock ScrapeClock = SystemScrapeClock.Instance;
 
+        // The confirm step before a run; a test answers it instead of a person.
+        internal static Func<MainWindow, string, string, Task<bool>> ConfirmScrape =
+            (owner, title, message) => Dialogs.ConfirmAsync(owner, title, message, "Scrape", "Cancel");
+
         private MediaStore? _mediaStore;
         private ScrapeQuotaManager? _scrapeQuota;
         private Scraper? _scraper;
+        private ScrapeProgress? _scrapeRun;
         private ScrapeChoices _scrapeChoices = new();
         private bool _developerPresent;
         private bool _scrapeClosed;
         private bool _scrapeRefreshPosted;
         private int _scrapeGeneration;
-        private string? _scrapeStopShown;
-        private string? _lastThemedScrape;
         private DispatcherTimer? _scrapeThemedRefresh;
         private IReadOnlyDictionary<string, (ScrapeState State, bool HasCover)> _scrapeOutcomes = new Dictionary<string, (ScrapeState, bool)>();
         private IReadOnlyDictionary<string, ScrapedRecord> _scrapedText = new Dictionary<string, ScrapedRecord>();
 
         public event Action? ScrapeChanged;
 
-        internal Scraper? ScrapeWorker => _scraper;
-        internal MediaStore? ScrapeStore => _mediaStore;
+        public Scraper? ScrapeWorker => _scraper;
+        public MediaStore? ScrapeStore => _mediaStore;
         internal ScrapeQuotaManager? ScrapeQuota => _scrapeQuota;
         internal bool ScrapeRefreshTimerRunning => _scrapeThemedRefresh?.IsEnabled == true;
 
         private string ScrapeMediaKey => $"{_scrapeGeneration}|{_appSettings.OpenEmuFallback}";
 
-        // Called at start and whenever Preferences closes: the worker is rebuilt with the settings and the member account as they now are.
+        // At start and when Preferences closes: the settings, whether the developer file is here, and media.db opened to read. It starts nothing.
         private void ApplyScraping()
         {
             if (_scrapeClosed) return;
-            StopScraper();
             _scrapeChoices = new ScrapeChoices
             {
                 Covers = _appSettings.ScrapeCovers, Screenshots = _appSettings.ScrapeScreenshots, Marquees = _appSettings.ScrapeMarquees,
                 TitleScreens = _appSettings.ScrapeTitleScreens, Miximages = _appSettings.ScrapeMiximages, Region = _appSettings.ScrapeRegion,
                 Language = _appSettings.ScrapeLanguage, RegionFallback = _appSettings.ScrapeRegionFallback, Threads = Math.Max(1, _appSettings.ScrapeThreads),
             };
-            DeveloperCredentials? developer = DeveloperSource();
-            _developerPresent = developer is not null;
-            if (_mediaStore is null && (_appSettings.Scraping && developer is not null || File.Exists(Path.Combine(MediaStore.DefaultRoot, MediaStore.FileName))))
-            {
-                try { _mediaStore = MediaStore.Open(MediaStore.DefaultRoot); }
-                catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or Microsoft.Data.Sqlite.SqliteException)
-                {
-                    StatusText.Text = $"The media store could not be opened: {ScrapeRedactor.Redact(ex.Message)}";
-                }
-            }
-
-            if (_appSettings.Scraping && developer is not null && _mediaStore is not null)
-            {
-                _http ??= HttpFactory();
-                _scrapeQuota = new ScrapeQuotaManager(_mediaStore, ScrapeClock);
-                _scrapeQuota.Changed += OnScrapeQuotaChanged;
-                var client = new ScreenScraperClient(_http, developer, MemberAccount.Load());
-                _scraper = new Scraper(client, _mediaStore, _scrapeQuota, () => _scrapeChoices, HasHandCover, TransformFor,
-                    result => Dispatcher.UIThread.Post(() => ScrapeArrived(result)), ScrapeClock);
-                _scraper.Start();
-            }
+            _developerPresent = DeveloperSource() is not null;
+            if (_mediaStore is null && File.Exists(Path.Combine(MediaStore.DefaultRoot, MediaStore.FileName))) OpenMediaStore();
             ReadScrapeSnapshot();
             ScrapeChanged?.Invoke();
+        }
+
+        private bool OpenMediaStore()
+        {
+            if (_mediaStore is not null) return true;
+            try
+            {
+                _mediaStore = MediaStore.Open(MediaStore.DefaultRoot);
+                _scrapeQuota = new ScrapeQuotaManager(_mediaStore, ScrapeClock);
+                _scrapeQuota.Changed += OnScrapeQuotaChanged;
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or Microsoft.Data.Sqlite.SqliteException)
+            {
+                StatusText.Text = $"The media store could not be opened: {ScrapeRedactor.Redact(ex.Message)}";
+                return false;
+            }
         }
 
         private void OnScrapeQuotaChanged() => Dispatcher.UIThread.Post(() => { if (!_scrapeClosed) ScrapeChanged?.Invoke(); });
@@ -99,54 +100,190 @@ namespace EmuSen.Mistress.Views
             (console, title) => _artwork.Find(console, title), MediaStore.DefaultRoot, _appSettings.EsdeMediaDirectory,
             _appSettings.OpenEmuFallback ? OpenEmuCoverDirectory : null);
 
-        // ScreenScraper takes covers while it can be used and wants them; OpenEmu's failover takes them otherwise.
-        private bool ScreenScraperCovers => _scraper is not null && _scrapeChoices.Covers && _scrapeQuota?.Usable == true;
-
-        // A tile with no cover: queued for ScreenScraper when it has not answered, else handed to the failover.
-        private void CoverWanted(RomEntry entry, CoreDescriptor? core)
+        // Why ScreenScraper cannot answer a run now, or null when it can.
+        private string? ScreenScraperUnusable()
         {
-            if (ScreenScraperCovers && !_scrapeOutcomes.ContainsKey(entry.FullPath)
-                && EmuSen.Cores.CoreCatalog.ShelfByName(entry.Shelf)?.EsdeSystem is { Length: > 0 } system)
-            {
-                _scraper!.Enqueue(entry.FullPath, system, ScrapePriority.Shown);
-                return;
-            }
-            AskForCover(entry, core);
+            if (!_appSettings.Scraping) return "it is switched off";
+            if (!_developerPresent) return "EmuSen's developer file is not on this computer";
+            if (_scrapeQuota?.Check(out DateTimeOffset? until, out string? why) == QuotaGate.Stopped)
+                return why + (until is { } u ? $", until {u.ToLocalTime():ddd HH:mm}" : "");
+            return null;
         }
 
-        // The themed gamelist's selected game goes to the front of the queue as it is shown.
-        private void ScrapeSelectedThemedGame()
+        private static string? SystemOf(RomEntry entry) => EmuSen.Cores.CoreCatalog.ShelfByName(entry.Shelf)?.EsdeSystem is { Length: > 0 } s ? s : null;
+
+        // The games a scope names, from the library as last scanned.
+        private List<RomEntry> ScopeGames(ScrapeScope scope)
         {
-            if (_scraper is null || _themed?.SelectedGame is not { } game || game.File == _lastThemedScrape) return;
-            _lastThemedScrape = game.File;
-            if (_scrapeOutcomes.ContainsKey(game.File) || _themed.SelectedSystem is not { } system) return;
-            _scraper.Enqueue(game.File, system.System.Name, ScrapePriority.Shown);
+            IEnumerable<RomEntry> games = scope.Game is string one
+                ? _allScan.Entries.Where(e => e.FullPath == one).DefaultIfEmpty(new RomEntry(one))
+                : _allScan.Entries.Where(e => scope.Shelf is null || e.Shelf == scope.Shelf);
+            games = games.Where(e => SystemOf(e) is not null && File.Exists(e.FullPath));
+            if (scope.MissingArtOnly && scope.Game is null) games = games.Where(e => CoverPathFor(e) is null);
+            return games.ToList();
         }
 
-        // The console in view first, then the rest; one explicit action, since a whole library is days of quota (§5.5).
-        public void ScrapeWholeLibrary()
+        public ScrapePlan Plan(ScrapeScope scope)
         {
-            if (_scraper is null) return;
-            string? current = _themed?.SelectedSystem?.System.Name ?? EmuSen.Cores.CoreCatalog.ShelfByName(_appSettings.SelectedCore)?.EsdeSystem;
-            int queued = 0;
-            foreach (RomEntry entry in _allScan.Entries.OrderBy(e => EmuSen.Cores.CoreCatalog.ShelfByName(e.Shelf)?.EsdeSystem == current ? 0 : 1))
+            List<RomEntry> games = ScopeGames(scope);
+            string? why = ScreenScraperUnusable();
+            int notAsked = scope.Game is not null ? games.Count : games.Count(g => !_scrapeOutcomes.ContainsKey(g.FullPath));
+            QuotaSnapshot? q = _scrapeQuota?.Snapshot();
+            int? left = q?.MaxPerDay is int max ? Math.Max(0, max - q.RequestsToday) : null;
+            return new ScrapePlan(games.Count, notAsked, notAsked * (1 + _scrapeChoices.Kinds().Count()), left,
+                ScrapePlan.PerGame * notAsked, why is null, why, _appSettings.OpenEmuFallback);
+        }
+
+        public bool ScrapeRunning => _scrapeRun is { State: ScrapeRunState.Running };
+
+        public ScrapeProgress? Progress => _scrapeRun;
+
+        // Games an interrupted run left queued; offered as Resume, never resumed by itself.
+        public int Interrupted => ScrapeRunning ? 0 : _mediaStore?.QueueLength ?? 0;
+
+        // Asks the player with the count and the cost, then starts; false when they said no or there is nothing to do.
+        public async Task<bool> ConfirmAndScrapeAsync(ScrapeScope scope)
+        {
+            if (ScrapeRunning || _scrapeClosed) return false;
+            ScrapePlan plan = Plan(scope);
+            if (plan.Games == 0)
             {
-                if (_scrapeOutcomes.ContainsKey(entry.FullPath) || EmuSen.Cores.CoreCatalog.ShelfByName(entry.Shelf)?.EsdeSystem is not { Length: > 0 } system) continue;
-                if (_scraper.Enqueue(entry.FullPath, system, system == current ? ScrapePriority.Console : ScrapePriority.Library)) queued++;
+                StatusText.Text = plan.Describe();
+                return false;
             }
-            StatusText.Text = $"{queued} games queued for ScreenScraper.";
+            string title = scope.Game is not null ? "Scrape This Game" : "Scrape Games";
+            if (!await ConfirmScrape(this, title, plan.Describe())) return false;
+            return StartScrape(scope);
+        }
+
+        // One run over a scope: the queue is replaced by it, ScreenScraper asked where it can be, OpenEmu's sources where it has nothing.
+        public bool StartScrape(ScrapeScope scope, bool resume = false)
+        {
+            if (ScrapeRunning || _scrapeClosed || !OpenMediaStore()) return false;
+            MediaStore store = _mediaStore!;
+            if (!resume)
+            {
+                store.ClearQueue();
+                foreach (RomEntry game in ScopeGames(scope))
+                {
+                    if (scope.Game is not null)
+                    {
+                        store.ForgetUnfound(game.FullPath);
+                        _records.ForgetCoverLookup(game.FullPath);
+                        _fetcher?.Forget(game.FullPath);
+                    }
+                    store.Enqueue(game.FullPath, SystemOf(game)!, scope.Game is not null ? ScrapePriority.Shown : scope.Shelf is not null ? ScrapePriority.Console : ScrapePriority.Library);
+                }
+            }
+            IReadOnlyList<QueuedGame> queued = store.Queue();
+            if (queued.Count == 0) return false;
+            _scrapeRun = new ScrapeProgress(queued.Count);
+            ReadScrapeSnapshot();
+
+            if (ScreenScraperUnusable() is string why)
+            {
+                _scrapeRun.Why = why;
+                FailoverFor(queued.Select(q => q.Path));
+                if (_scrapeRun.FailoverPending.Count == 0) EndRun(ScrapeRunEnd.Stopped);
+                ScrapeChanged?.Invoke();
+                return true;
+            }
+
+            _http ??= HttpFactory();
+            var client = new ScreenScraperClient(_http, DeveloperSource()!, MemberAccount.Load());
+            _scraper = new Scraper(client, store, _scrapeQuota!, () => _scrapeChoices, HasHandCover, TransformFor,
+                result => Dispatcher.UIThread.Post(() => ScrapeArrived(result)), ScrapeClock);
+            Scraper mine = _scraper;
+            _scraper.Finished += end => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(_scraper, mine)) ScraperFinished(end); });
+            _scraper.Start();
+            StatusText.Text = _scrapeRun.Describe();
             ScrapeChanged?.Invoke();
+            return true;
+        }
+
+        public bool ResumeScrape() => StartScrape(new ScrapeScope(), resume: true);
+
+        public void CancelScrape()
+        {
+            if (!ScrapeRunning) return;
+            Scraper? scraper = _scraper;
+            _scraper = null;
+            scraper?.Dispose();
+            _fetcher?.Dispose();
+            _fetcher = null;
+            EndRun(ScrapeRunEnd.Cancelled);
+        }
+
+        // The failover, for games of this run ScreenScraper had no cover for or could not be asked about; never outside a run.
+        private void FailoverFor(IEnumerable<string> paths)
+        {
+            if (_scrapeRun is not { State: ScrapeRunState.Running } run || !_appSettings.OpenEmuFallback) return;
+            foreach (string path in paths)
+            {
+                var entry = new RomEntry(path);
+                if (CoverPathFor(entry) is not null || run.FailoverPending.Contains(path)) continue;
+                if (AskForCover(entry, EmuSen.Cores.CoreCatalog.ByDisplayName(entry.CoreDisplayName)))
+                {
+                    run.FailoverPending.Add(path);
+                    run.FailoverAsked++;
+                }
+            }
         }
 
         private void ScrapeArrived(ScrapeResult result)
         {
-            if (_scrapeClosed) return;
-            if (result.Outcome == ScrapeOutcome.Stopped && result.Detail != _scrapeStopShown)
+            if (_scrapeClosed || _scrapeRun is not { } run) return;
+            if (result.Outcome is ScrapeOutcome.Found or ScrapeOutcome.Unknown or ScrapeOutcome.Error or ScrapeOutcome.Missing)
             {
-                _scrapeStopShown = result.Detail;
-                StatusText.Text = ScrapeRedactor.Redact($"ScreenScraper stopped: {result.Detail}." + (_appSettings.OpenEmuFallback ? " OpenEmu's sources fill in covers meanwhile." : ""));
+                run.Done++;
+                if (result.Outcome == ScrapeOutcome.Found) run.Found++;
+                if (result.Outcome == ScrapeOutcome.Unknown) run.Unknown++;
+                if (!result.HasCover && result.Outcome != ScrapeOutcome.Missing) FailoverFor([result.Path]);
             }
-            if (_scrapeRefreshPosted) return;
+            if (result.Outcome == ScrapeOutcome.Stopped) run.Why = result.Detail;
+            if (run.State == ScrapeRunState.Running) StatusText.Text = run.Describe();
+            PostCoverRefresh();
+        }
+
+        // What the failover said about a game of this run.
+        private void FailoverArrived(CoverResult result)
+        {
+            if (_scrapeRun is not { } run || !run.FailoverPending.Remove(result.RomPath)) return;
+            if (result.Saved is not null) run.FailoverFound++;
+            if (run.FailoverPending.Count == 0 && _scraper is null && run.State == ScrapeRunState.Running) EndRun(run.Why is null ? ScrapeRunEnd.Done : ScrapeRunEnd.Stopped);
+            else ScrapeChanged?.Invoke();
+        }
+
+        // ScreenScraper's part is over: a stop hands what is left to the failover, and the run ends when the failover has answered too.
+        private void ScraperFinished(ScrapeRunEnd end)
+        {
+            Scraper? scraper = _scraper;
+            _scraper = null;
+            scraper?.Dispose();
+            if (_scrapeRun is not { State: ScrapeRunState.Running } run) return;
+            if (end == ScrapeRunEnd.Stopped)
+            {
+                string? why = null;
+                _scrapeQuota?.Check(out _, out why);
+                run.Why = why ?? run.Why;
+                FailoverFor(_mediaStore?.Queue().Select(q => q.Path) ?? []);
+            }
+            if (run.FailoverPending.Count == 0) EndRun(end);
+            else ScrapeChanged?.Invoke();
+        }
+
+        private void EndRun(ScrapeRunEnd end)
+        {
+            if (_scrapeRun is not { } run) return;
+            run.State = end switch { ScrapeRunEnd.Done => ScrapeRunState.Done, ScrapeRunEnd.Stopped => ScrapeRunState.Stopped, _ => ScrapeRunState.Cancelled };
+            if (!_scrapeClosed) StatusText.Text = ScrapeRedactor.Redact(run.Describe());
+            PostCoverRefresh();
+            ScrapeChanged?.Invoke();
+        }
+
+        private void PostCoverRefresh()
+        {
+            if (_scrapeRefreshPosted || _scrapeClosed) return;
             _scrapeRefreshPosted = true;
             Dispatcher.UIThread.Post(() =>
             {
@@ -191,6 +328,9 @@ namespace EmuSen.Mistress.Views
             }
             : game;
 
+        // The game a pad's "Scrape This Game" means: the themed gamelist's selection, else the library's.
+        private string? GameToScrape => ThemedLibraryShown && LibraryView.IsVisible ? _themed?.SelectedGame?.File : SelectedLibraryEntry?.FullPath;
+
         bool IScrapeHost.HasDeveloperCredentials => _developerPresent;
 
         QuotaSnapshot? IScrapeHost.Quota => _scrapeQuota?.Snapshot();
@@ -199,30 +339,23 @@ namespace EmuSen.Mistress.Views
         {
             get
             {
-                if (!_appSettings.Scraping) return "Off.";
-                if (!_developerPresent) return "EmuSen's developer file is not on this computer, so ScreenScraper cannot be used here.";
-                if (_scraper is null || _scrapeQuota is null) return "Not running.";
-                if (_scrapeQuota.Check(out DateTimeOffset? until, out string? why) == QuotaGate.Stopped)
-                    return ScrapeRedactor.Redact($"Stopped: {why}" + (until is { } u ? $", until {u.ToLocalTime():ddd HH:mm}." : "."));
-                int queued = _scraper.Pending;
-                return queued == 0 ? "Running; nothing queued." : $"Running; {queued} games queued.";
+                if (_scrapeRun is { State: ScrapeRunState.Running } running) return running.Describe();
+                string idle = ScreenScraperUnusable() is string why ? $"ScreenScraper cannot be used: {why}." : "Nothing is scraped until you start it.";
+                if (Interrupted > 0) idle += $" {Interrupted:N0} games are left from a run that did not finish; Resume goes on with them.";
+                if (_scrapeRun is { } last) idle = last.Describe() + " " + idle;
+                return ScrapeRedactor.Redact(idle);
             }
         }
 
-        private void StopScraper()
-        {
-            if (_scrapeQuota is not null) _scrapeQuota.Changed -= OnScrapeQuotaChanged;
-            _scraper?.Dispose();
-            _scraper = null;
-            _scrapeQuota = null;
-        }
-
-        // The worker, its timer and media.db end with the window, before the HTTP client they use - see EmuSen_BigPicture.md §17.
+        // The worker, its timer and media.db end with the window, before the HTTP client they use - see EmuSen_BigPicture.md §17.8.
         private void StopScraping()
         {
             _scrapeClosed = true;
             _scrapeThemedRefresh?.Stop();
-            StopScraper();
+            Scraper? scraper = _scraper;
+            _scraper = null;
+            scraper?.Dispose();
+            if (_scrapeQuota is not null) _scrapeQuota.Changed -= OnScrapeQuotaChanged;
             _mediaStore?.Dispose();
             _mediaStore = null;
             ScrapeChanged = null;

@@ -1986,11 +1986,20 @@ their first run:
 - a horizontal text drawing no second copy;
 - the marquee scrolling every row.
 
-In each case the test had not looked at the pixels that decide, and each test was then strengthened. The lever's
-three mutants were caught by the lockstep tests:
+In each case the test had not looked at the pixels that decide, and each test was then strengthened.
+
+The lever has three mutants:
 - moving nothing;
 - never rebuilding;
 - engaging before the fade-out had finished.
+
+The first two were caught by both lockstep tests. The third was at first caught only by Art Book Next's lockstep run:
+the synthetic test's fade-out was shorter than a repeat interval, so no step fell inside it. That test now fades over
+250 ms against 100 ms repeats, and catches the third as well.
+
+**A defect found on the way.** The lever's first version looked up the list with `FirstOrDefault(…).Control`, which
+throws in a gamelist whose primary element is a carousel. `SceneMappingTests`' held `fastScrolling` case, a carousel
+in the gamelist, found it. The lookup is now null-safe (`0ee9f2e4`).
 
 The recording comparison caught the step's easing and its duration (300 ms against 400) as well as the synthetic
 tests did.

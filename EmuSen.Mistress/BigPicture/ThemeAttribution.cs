@@ -24,7 +24,7 @@ namespace EmuSen.Mistress.BigPicture
                 licence = File.ReadLines(file).Select(Plain).Where(l => l.Length > 0).Take(12).ToList();
             if (licence.Count == 0) licence = ["The theme states no licence in a README or LICENSE file."];
 
-            string author = stamp is not null ? $"{stamp.Owner}, the owner of its repository on GitHub" : "not stated; the folder was not downloaded by Mistress";
+            string author = stamp is not null ? $"{stamp.Owner}, the owner of its repository on {stamp.Host}" : "not stated; the folder was not downloaded by Mistress";
             string source = stamp is not null ? $"{stamp.Source.Url}, branch {stamp.Branch}" : $"read in place from {directory}";
             string statement = stamp is not null
                 ? $"Downloaded at your request on {stamp.Downloaded:yyyy-MM-dd}. It is not part of EmuSen, and EmuSen distributes none of it."

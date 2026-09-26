@@ -143,6 +143,15 @@ The two maps police **each other** on rebind, not just themselves: one key doing
   the stick it comes from and its pad buttons are disabled, because the direction comes from the pad's own stick and
   there is no pad button to bind it to (`EmuSen_Input.md` §7.3).
 
+**A pad lost before any rescan overflowed the clock (fixed 2026-09-26).** `GamepadManager` started its last-rescan
+time at `TimeSpan.MinValue`, and `Poll` computed `now - _lastRescan`. That subtraction overflows for any `now` of zero
+or more, so it threw on the first poll that found no pad. Before stage (e) of big picture the path was rarely reached,
+because the pad opened at `Start` stayed "available" for good. Stage (e) made `Poll` let go of a pad that had
+disconnected, and from then on a Bluetooth pad dropping out threw on every 16 ms pad tick. Mistress's crash log
+recorded it three times on 2026-09-26 (`OverflowException` in `TimeSpan.op_Subtraction`, from `GamepadManager.Poll`
+through `MainWindow.PadTick`). The start value is now `-RescanInterval`, so the first rescan is due at once and the
+subtraction cannot overflow. `GamepadRescanTests` failed on the old value with the same exception, and passes on the new one.
+
 ### 4.5 Conflict reporting
 
 `Rebind` guarantees one owner per key going forward, but a hand-edited or older config can still contain duplicates. The window recomputes conflicts after every change, colours the offending rows, and names them in a status line along the bottom rather than leaving the user to work out why one key does two things.

@@ -18,7 +18,7 @@ namespace EmuSen.Endymion.Input
         // Rate-limits the hot-plug rescan in Poll() - see EmuSen_Settings_Reference.md §4.4.
         private static readonly TimeSpan RescanInterval = TimeSpan.FromSeconds(1);
         private readonly Stopwatch _rescanClock = Stopwatch.StartNew();
-        private TimeSpan _lastRescan = TimeSpan.MinValue;
+        private TimeSpan _lastRescan = -RescanInterval;
 
         // start: false leaves SDL untouched until Start, which a window calls once it is shown - see EmuSen_Settings_Reference.md §4.42.
         public GamepadManager(GamepadBindingMap bindings, bool start = true)
@@ -68,6 +68,9 @@ namespace EmuSen.Endymion.Input
             _available = false;
         }
 
+        // Whether a rescan is due; the subtraction is where a MinValue start overflowed - see EmuSen_Settings_Reference.md §4.4.
+        internal static bool RescanDue(TimeSpan now, TimeSpan last) => now - last >= RescanInterval;
+
         // Call once per frame tick; rescans for a hot-plugged pad at most
         // once per RescanInterval - see EmuSen_Settings_Reference.md §4.4.
         public void Poll()
@@ -85,7 +88,7 @@ namespace EmuSen.Endymion.Input
             if (!_available)
             {
                 TimeSpan now = _rescanClock.Elapsed;
-                if (now - _lastRescan >= RescanInterval)
+                if (RescanDue(now, _lastRescan))
                 {
                     _lastRescan = now;
                     TryOpenFirstController();

@@ -191,14 +191,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             using var own = new SyntheticTheme();
             ThemedSession.Write(own);
             string downloaded = "";
-            using var s = new ThemedSession(themeDirectory: own.Root, settings: a =>
-            {
-                downloaded = Path.Combine(DataStore.Themes, "synthetic-book");
-                Copy(own.Root, downloaded);
-                File.WriteAllText(Path.Combine(downloaded, ThemeDownloads.StampFile),
-                    JsonSerializer.Serialize(new ThemeStamp("someone", "synthetic-book", "main", ThemeDownloadsTests.Sha1, new DateTime(2026, 9, 26))));
-                a.BigPictureTheme = downloaded;
-            });
+            using var s = new ThemedSession(themeDirectory: own.Root, settings: a => a.BigPictureTheme = downloaded = Install(own.Root));
             Assert.True(s.Shown);
             OpenThemes(s);
 
@@ -228,19 +221,25 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [Fact]
         public Task Preferences_and_the_themes_list_agree() => Session.Dispatch(() =>
         {
-            using var s = new ThemedSession();
-            string themeName = BigPictureLooks.All(AppSettings.Load())[1].Name;
+            using var own = new SyntheticTheme();
+            ThemedSession.Write(own);
+            own.Capabilities("<themeName>Synthetic Book</themeName>");
+            string downloaded = "";
+            using var s = new ThemedSession(themeDirectory: own.Root, settings: _ => downloaded = Install(own.Root));
+            const string name = "Synthetic Book";
+            string downloadedText = $"{name} (synthetic-book)", ownText = $"{name} ({Path.GetFileName(own.Root)})";
             ThemedLibraryFlowTests.Choose(s, "Preferences");
             Assert.IsType<PreferencesWindow>(Sheets(s).Current);
             TabControl tabs = TabsOf(s);
             for (int i = 0; i < 6 && (tabs.SelectedItem as TabItem)?.Header as string != "Appearance"; i++) s.Pad.R1();
             s.Window.UpdateLayout();
             Dropdown row = Named<Dropdown>(s, "BigPictureThemeDropdown");
-            Assert.Equal(new[] { "EmuSen (built in)", themeName }, ((System.Collections.IEnumerable)row.ItemsSource!).Cast<string>());
-            Assert.Equal(themeName, row.SelectedItem);
+            Assert.Equal(new[] { "EmuSen (built in)", downloadedText, ownText }, ((System.Collections.IEnumerable)row.ItemsSource!).Cast<string>());
+            Assert.Equal(ownText, row.SelectedItem);
             Assert.False(Has(s, "LibraryStyleDropdown"));
 
             PadAudit.Reach(SheetRoot(s), s.Pad, e => e is Dropdown { Name: "BigPictureThemeDropdown" });
+            s.Pad.Left();
             s.Pad.Left();
             s.Settle();
             Assert.Equal("EmuSen (built in)", row.SelectedItem);
@@ -252,20 +251,33 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.IsType<ThemeSettingsWindow>(Sheets(s).Current);
             Assert.Equal("Themes", (TabsOf(s).SelectedItem as TabItem)?.Header);
             Assert.Equal("In Use", Named<Button>(s, "ThemeUseBuiltIn").Content);
-            Click(Named<Button>(s, $"ThemeUse.{OwnFolder(s)}"));
+            Click(Named<Button>(s, "ThemeUse.synthetic-book"));
             s.Settle();
             Assert.True(s.Shown);
 
             s.Pad.B();
             s.Settle();
             Assert.IsType<PreferencesWindow>(Sheets(s).Current);
-            Assert.Equal(themeName, Named<Dropdown>(s, "BigPictureThemeDropdown").SelectedItem);
-            Assert.True(ThemeDownloads.SamePath(s.Theme.Root, Named<PathPickerRow>(s, "BigPictureThemeBox").Path));
+            row = Named<Dropdown>(s, "BigPictureThemeDropdown");
+            Assert.Equal(new[] { "EmuSen (built in)", name }, ((System.Collections.IEnumerable)row.ItemsSource!).Cast<string>());
+            Assert.Equal(name, row.SelectedItem);
+            Assert.True(ThemeDownloads.SamePath(downloaded, Named<PathPickerRow>(s, "BigPictureThemeBox").Path));
             s.Pad.B();
             s.Settle();
             Assert.False(Sheets(s).IsPresenting);
             Assert.True(s.Shown);
+            Assert.True(ThemeDownloads.SamePath(downloaded, AppSettings.Load().BigPictureTheme!));
         }, default);
+
+        // A copy of a theme under home/Themes with a stamp, as the sheet's download leaves one.
+        private static string Install(string from)
+        {
+            string to = Path.Combine(DataStore.Themes, "synthetic-book");
+            Copy(from, to);
+            File.WriteAllText(Path.Combine(to, ThemeDownloads.StampFile),
+                JsonSerializer.Serialize(new ThemeStamp("someone", "synthetic-book", "main", ThemeDownloadsTests.Sha1, new DateTime(2026, 9, 26))));
+            return to;
+        }
 
         private static void Copy(string from, string to)
         {

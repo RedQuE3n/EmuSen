@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Animation.Easings;
+using Avalonia.Controls;
 using Avalonia.Media;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Motion;
@@ -172,6 +173,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             TextRowList list() => Assert.IsType<TextRowList>(view.Scene.Entries.Single(e => e.Element.Type == "textlist").Control);
             view.Advance(Ms(900));
             Assert.Equal(0, list().MarqueeOffset);
+            Assert.Equal(1 * 1.5 * 2 * 0.08 * H, list().Marquee.Gap, 4);
             view.Advance(Ms(1500));
             Assert.Equal(Ms(1500), list().MarqueeTime);
             Assert.Equal(0.5 * 2 * 0.08 * H, list().MarqueeOffset, 6);
@@ -248,7 +250,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public Task A_slide_moves_both_views_across_and_settles_on_the_gamelist_alone() => UiTest.Run(() =>
         {
             string capabilities = "<transitions name=\"slide\"><systemToGamelist>slide</systemToGamelist><gamelistToSystem>slide</gamelistToSystem></transitions>";
-            SceneData data = Data(Carousel(), List(), Round, capabilities);
+            string help = "<helpsystem name=\"h\"><pos>0 0.9</pos><textColor>FFFFFF</textColor></helpsystem>";
+            SceneData data = Data(Carousel() + help, List() + help, Round, capabilities);
             var stage = new SceneStage(data, "system", Ms(0));
             using var window = new SceneMotionHost(stage.Root, W, H);
             stage.Switch(Ms(1000));
@@ -259,6 +262,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(-H * new CubicEaseInOut().Ease(0.5), leaving.Y, 6);
             Assert.Equal(H * (1 - new CubicEaseInOut().Ease(0.5)), coming.Y, 6);
             Assert.Equal(0, leaving.X);
+            Control bar = stage.Current.Scene.Entries.Single(e => e.Element.Type == "helpsystem").Control!;
+            Assert.Equal(-coming.Y, Assert.IsType<TranslateTransform>(bar.RenderTransform).Y, 6);
             stage.Advance(Ms(1400));
             Assert.Single(stage.Root.Children);
             Assert.Equal(0, SceneAssets.Differing(Static(data, "gamelist"), window.Frame()));

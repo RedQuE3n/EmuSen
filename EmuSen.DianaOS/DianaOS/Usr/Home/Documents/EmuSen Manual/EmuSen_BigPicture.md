@@ -1065,6 +1065,11 @@ sends and to whom. The API's own condition (free, distributed software) is met.
     graphics are Mistress's own drawings.
   - **Sounds:** the theme's navigation sounds play through a small UI sound stream, **on by default** with a switch in
     Preferences.
+- **Q7, miximages (the user, 2026-09-26, during stage d):** ScreenScraper's ready-made mix, `mixrbv2`, is fetched as the
+  miximage. It looks different from ES-DE's own composed miximages; building our own composite is not wanted now.
+- **Q5, the developer credentials, as received (2026-09-26):** issued to the user as EmuSen's developer, kept only in
+  `~/.config/EmuSen/screenscraper-developer.json` (mode 0600) with `softname` `EmuSen-Mistress`, verified against
+  `ssinfraInfos.php` the same day. No build carries them.
 - **Drawn with LunaP (the user, 2026-09-24): "make sure we are drawing this with LunaP and if something is missing
   from LunaP, add it".** This supersedes §4's one Skia-drawn control in Mistress. Every visible part is a LunaP
   control, and what LunaP lacks is added to LunaP under its own conventions (a `docs/LunaP.md` section, tests, the API

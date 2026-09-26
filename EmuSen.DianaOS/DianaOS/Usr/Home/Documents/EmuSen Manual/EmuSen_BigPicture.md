@@ -625,8 +625,8 @@ It stays. It is the fallback when no theme is installed, and remains a choice af
 gains **Library style: Mistress / ES-DE theme**. The pad menu, sheets, resume question and pausing rules are shared by
 both, so the themed view changes only what is drawn in the library's place. Q8 asks whether the themed view should also
 be offered in a desktop session, where §4.43 keeps the menu bar and sidebar. *Answered twice: in big-screen sessions
-only (2026-09-25), then, on the user's request of 2026-09-26, also in the desktop's full screen, which became big
-picture (§10.1, §17).*
+only (2026-09-25), then, on the user's request of 2026-09-26, also on the desktop, behind a Big Picture entry
+below the plain Fullscreen one in the View menu (§10.1, §17).*
 
 ---
 
@@ -1064,12 +1064,16 @@ sends and to whom. The API's own condition (free, distributed software) is met.
     after one is (Preferences, "Library style"). The themed view is offered **in big-screen sessions only**; the
     desktop keeps its sidebar library.
   - **Q8, amended by the user (2026-09-26):** "There needs to be a button to enter big picture mode on desktop as
-    well", made exact the same day: "i want a button to enter fullscreen mode, where fullscreen mode enters emusens big
-    picture mode". The desktop still keeps its sidebar library by default; **full screen on the desktop is big
-    picture**, entered by a Fullscreen button, the View menu, F11 or the window manager, and left by any of them, the
-    pad menu or Esc. The themed view is therefore offered wherever big picture runs, the desktop's full screen
-    included, under §4.52's four conditions. A Game Mode session stays big picture throughout. §17 is the record;
-    §4.54 of the settings reference is the player's account.
+    well", and, correcting a first build that made the desktop's full screen and big picture one state: "i did not
+    want the fullscreen button to trigger big picture on desktop automatically, i wanted a separate button that
+    triggers big picture mode separate from the fullscreen button. Clicking the button would make emusen fullscreen,
+    but also put it into big picture mode. i want the user to have the option between both in desktop", and then
+    placed it: "The big picture button for desktop mode should be placed under the view menu, below fullscreen". The
+    desktop therefore has **two options**, adjacent in the **View** menu: a plain **Fullscreen** (F11, and the window
+    manager's own), which keeps the sidebar library, and directly below it **Big Picture** (its own key, F10), which
+    makes the window full screen and enters big picture. The desktop keeps its sidebar library by default, and the
+    themed view is offered wherever big picture runs, under §4.52's four conditions. A Game Mode session stays big
+    picture throughout. §17 is the record; §4.54 of the settings reference is the player's account.
   - **Q9:** the help bar's button icons **follow the connected pad**: Mistress detects the controller family and draws
     its own set for it (Xbox, PlayStation, Nintendo, and a generic set when unknown). The favourite, folder and badge
     graphics are Mistress's own drawings.

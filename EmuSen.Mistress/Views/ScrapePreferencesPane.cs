@@ -261,7 +261,9 @@ namespace EmuSen.Mistress.Views
             _quota.Percent = q.MaxPerDay is int max && max > 0 ? Math.Min(100, 100.0 * q.RequestsToday / max) : 0;
             string perDay = q.MaxPerDay is int m ? $"{q.RequestsToday:N0} of {m:N0}" : $"{q.RequestsToday:N0}";
             string ko = q.MaxKoPerDay is int mk ? $"{q.KoToday:N0} of {mk:N0}" : $"{q.KoToday:N0}";
-            _quota.ValueText = $"{perDay} · unrecognised {ko} · {q.Threads} thread{(q.Threads == 1 ? "" : "s")}";
+            // The meter's value column is a percentage's width; the counts go on the status line below it.
+            _quota.ValueText = $"{_quota.Percent:0}%";
+            _status.Text = $"{perDay} requests today · unrecognised {ko} · {q.Threads} thread{(q.Threads == 1 ? "" : "s")}. " + _status.Text;
         }
 
         private LunaSwitch Switch(string name, string label, bool value, Action<bool> set)

@@ -178,6 +178,9 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Click(Named<Button>(Sheets(window).Current!, "ScreenScraperLogOutButton"));
             Pump(300);
             Save(UiTest.Capture(window), "signed-out-sheet-bigscreen-1280x800");
+            Named<Control>(Sheets(window).Current!, "ScrapeQuotaMeter").BringIntoView();
+            Pump(300);
+            Save(UiTest.Capture(window), "preferences-today-bigscreen-1280x800");
         });
     }
 }

@@ -468,14 +468,18 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.DoesNotContain(ScrapeChangedHandlers(window)?.GetInvocationList() ?? [], d => d.Target is ScrapeStatusWindow);
         });
 
-        [Fact]
-        public Task Closing_Mistress_closes_the_status_window_and_its_timer() => OnUi(() =>
+        // Owned desktop windows close with their owner anyway; a sheet is closed by nothing but StopScraping, so both are tested.
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public Task Closing_Mistress_closes_the_status_window_and_its_timer(bool bigScreen) => OnUi(() =>
         {
             ThreeGames();
             Server.Gate = new SemaphoreSlim(0);
-            MainWindow window = Open(settings: a => a.OpenEmuFallback = false);
+            MainWindow window = Open(settings: a => a.OpenEmuFallback = false, bigScreen: bigScreen);
             Scrape(window, new ScrapeScope());
             ScrapeStatusWindow status = window.ScrapeStatusShown!;
+            Assert.Equal(bigScreen, SheetLayer.PresenterOf(status) is not null);
             window.Close();
             int drawn = status.Refreshes;
             Server.Gate.Release(100);

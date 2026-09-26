@@ -1,6 +1,6 @@
 # EmuSen
 
-EmuSen is a multi-console emulator built as a project. The goal was to create an emulator framework that is handheld friendly, user friendly, feature-rich, multi-platform, and saves the user the need to install multiple applications to accomplish a beautiful library. The cores are written from published hardware documentation rather than ported from another emulator. The project started in C#, and the cores are now being rewritten in Rust one at a time. Each C# core stays behind as the reference its Rust port is checked against, frame by frame.
+EmuSen is a multi-console emulator built as a personal project. The goal was to create an emulator framework that is handheld friendly, user friendly, feature-rich, multi-platform, and saves the user the need to install multiple applications to accomplish a beautiful library. The cores are written from published hardware documentation rather than ported from another emulator. The project started in C#, and the cores are now being rewritten in Rust one at a time. Each C# core stays behind as the reference its Rust port is checked against, frame by frame.
 
 Around the cores there is a frontend, a debugging shell built into the emulator, and a headless harness that most of the testing runs through.
 

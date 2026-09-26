@@ -17,7 +17,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // The window asks for covers only when the player turned it on, and shows what arrives - see EmuSen_Settings_Reference.md §4.39.
+    // With no developer file the failover is the only source: it asks only when ticked, and shows what arrives - see EmuSen_Settings_Reference.md §4.39 and §4.60.
     [Collection(TestCollections.ProcessGlobals)]
     public class OnlineCoverWindowTests : IDisposable
     {
@@ -52,7 +52,7 @@ namespace EmuSen.WiseMan.Mistress
 
         private MainWindow Open(bool online)
         {
-            new AppSettings { RomDirectory = _romDir, OnlineCovers = online }.Save();
+            new AppSettings { RomDirectory = _romDir, OpenEmuFallback = online }.Save();
             var window = new MainWindow { Width = 1024, Height = 768 };
             window.Show();
             return window;
@@ -70,10 +70,10 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         [Fact]
-        public Task With_it_on_a_cover_shown_without_art_is_fetched_into_the_art_folder_and_its_outcome_kept() => Session.Dispatch(() =>
+        public Task With_it_on_a_cover_shown_without_art_is_fetched_into_its_own_folder_and_its_outcome_kept() => Session.Dispatch(() =>
         {
             MainWindow window = Open(online: true);
-            string cover = Path.Combine(DataStore.Artwork, "SNES", "F-Zero (USA).png");
+            string cover = Path.Combine(DataStore.Media, "openemu", "SNES", "F-Zero (USA).png");
             WaitFor(() => File.Exists(cover));
             WaitFor(() => Records(window).CoverLookup(Path.Combine(_romDir, "F-Zero (USA).sfc")) == nameof(CoverOutcome.Found));
 

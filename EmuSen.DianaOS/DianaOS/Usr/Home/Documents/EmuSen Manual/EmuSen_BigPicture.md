@@ -2720,83 +2720,111 @@ grid mutants, `Art_Book_Next_s_grid_matches_ES_DE_s_still` appears only for G10 
 
 ---
 
-## 17. Big picture from the desktop: full screen is big picture (2026-09-26)
+## 17. Big picture from the desktop: Big Picture below Fullscreen in the View menu (2026-09-26)
 
 *Opened 2026-09-26, on the user's request (§10.1, Q8 amended):* "There needs to be a button to enter big picture mode
-on desktop as well", then "i want a button to enter fullscreen mode, where fullscreen mode enters emusens big picture
-mode". Until this section, big screen was a decision the window took once, when it was made (settings reference §4.29,
-§4.43), and §15 built the themed view on that premise. This section makes the decision switchable while the window
-runs, and ties it on the desktop to the window's full screen. The settings reference's §4.54 is the player's account;
-this is the record.
+on desktop as well". Until this section, big screen was a decision the window took once, when it was made (settings
+reference §4.29, §4.43), and §15 built the themed view on that premise. This section makes the decision switchable while
+the window runs. It was built three times in one day, because the request was relayed wrong once and then placed:
+
+| Build | What it was | Why it changed |
+|---|---|---|
+| 1 (`7e9befdd`–`bff37489`) | the desktop's full screen *was* big picture: a toolbar Fullscreen button, F11, the View menu and the window manager all entered it | a relay of the user's second message ("fullscreen mode enters emusens big picture mode") was taken as the design. The user: "i did not want the fullscreen button to trigger big picture on desktop automatically, i wanted a separate button … i want the user to have the option between both in desktop" |
+| 2 (`83ff0243`, `d48cce2e`) | two toolbar buttons, a plain Fullscreen and a Big Picture, with a View menu entry and a key for each | the user: "The big picture button for desktop mode should be placed under the view menu, below fullscreen" |
+| 3 (`d79dbdf1`) | the View menu holds Fullscreen (F11) and directly below it Big Picture (F10); no toolbar buttons | — |
+
+The settings reference's §4.54 is the player's account of the third build; this is the record of all three. What
+survived from build 1 into build 3 is the switch itself (`ApplyBigScreen`, `SetBigPicture`), the cleanup, the popup
+handling, the desktop's place given back, and the F11 fix.
 
 ### 17.1 Expectations, and what the tests said of them
 
-No predictions were written before this was built: the request came in the middle of the day's work and the build went
+No predictions were written before build 1: the request came in the middle of the day's work and the build went
 straight to it. What was expected before the tests first ran is recorded instead, with what they showed. It is weaker
 evidence than §15's predictions, since the expectations and the design were written by the same hand in the same hour.
 
 | # | Expected | Found | Verdict |
 |---|---|---|---|
-| X1 | the themed view's round trip needs no restoring of the desktop's place, since the themed view never moves the desktop's list | the themed case passed while the place was being thrown away at the moment it was taken (the defect of §17.4); only the case without a theme, whose pad moves the shared list, caught it | held, and showed that the themed case alone proves nothing about the restore |
+| X1 | the themed view's round trip needs no restoring of the desktop's place, since the themed view never moves the desktop's list | the themed case passed while the place was being thrown away at the moment it was taken (§17.4); only the case without a theme, whose pad moves the shared list, caught it | held, and showed that the themed case alone proves nothing about the restore |
 | X2 | the headless platform refuses a full-screen `WindowState`, so the window manager's route cannot be tested headlessly | the headless window took every state set on it, and LunaP's `FullScreenChanged` was raised for each | refuted; the route is tested, a real window manager still is not (§17.6) |
-| X3 | raising `Button.ClickEvent` on the button is a click | it runs the event's listeners and not the button's command; nothing happened | refuted; the test now presses and releases a pointer on the button's middle |
-| X4 | the Game Mode check in the full-screen handler is needed beside the one in `SetBigPicture` | mutant D2 removed it and survived: `SetBigPicture` refuses to leave in Game Mode and does nothing when asked for the mode it is in | refuted; the copy was removed, and with it the same copy in Esc's rule |
-| X5 | a hidden button reads as not effectively visible | a control never attached to the visual tree, as the button of a bar hidden from the start is, reads `IsEffectivelyVisible` true | refuted; the Game Mode test reads the bar's own visibility |
+| X3 | raising `Button.ClickEvent` on a toolbar button is a click (build 1) | it runs the event's listeners and not the button's command; nothing happened | refuted; build 1's test pressed and released a pointer instead. Build 3 has no button, and its tests invoke the menu's actions |
+| X4 | the Game Mode check in the full-screen handler is needed beside the one in `SetBigPicture` (build 1) | mutant D2 of build 1 removed it and survived | refuted; the copy was removed, and with it the same copy in Esc's rule |
+| X5 | a hidden button reads as not effectively visible (build 1) | a control never attached to the visual tree reads `IsEffectivelyVisible` true | refuted; moot in build 3 |
+| X6 | decoupling (build 2) would need the event handler to tell "leaving by the switch" from "leaving by F11", or restoring the window would re-enter `SetBigPicture` | `SetBigPicture` clears its flag before it restores the window, so the event the restore raises finds nothing to do; one `restoreWindow` argument, false only from the event, was enough | held, as expected |
 
-### 17.2 What was built
+### 17.2 What build 3 is
 
 - `Views/MainWindow.BigPictureSwitch.cs`: `ApplyBigScreen(bool)` holds every change big screen makes to the window and
-  is run at start and by every switch; `SetBigPicture(bool)` is the switch, and the one guard, both against Game Mode and
-  against the full-screen event its own request raises; the desktop's place (console, search, game) is taken on
-  entering and given back on leaving; the UI sound stream is released on leaving.
-- `StartPadNavigation` now wires the sheets, the pad timer and the switch once, and calls `ApplyBigScreen` for the
-  start's answer.
-- The library's toolbar gained a `ButtonBar` holding one LunaP `ActionButton`, **Fullscreen**, which reads **Exit Big
-  Picture** in big picture; its action carries the Fullscreen hotkey as its shortcut, so the tooltip names the key the
-  player bound.
-- The View menu's entry reads **Fullscreen (Big Picture)**. The pad menu's Full Screen entry became **Big Picture** or
-  **Exit Big Picture**, absent in Game Mode; that is the one line of `MainWindow.Pad.cs`'s menu this changes, to keep the
-  merge with the scraping branch small.
+  is run at start and by every switch. `SetBigPicture(bool on, bool restoreWindow = true)` is the switch and the one
+  guard for Game Mode. Entering records `WindowState` and the desktop's place (console, search, game), then asks for full
+  screen. Leaving releases the UI sound stream, gives the place back, and, unless the leaving came from the window's own
+  full-screen change, sets `WindowState` back. The only use of `FullScreenChanged` is that leaving full screen leaves big
+  picture, keeping the state that route chose.
+- The View menu: `_Fullscreen` (checkable, F11) and directly below it `_Big Picture` (a command, F10). A new hotkey
+  action, `ToggleBigPicture`, appended to `HotkeyAction` with F10 by default. `HotkeyBindingMap.Load` gives it to an older
+  bindings file on a free key, as it does for every added action.
+- The pad menu shows Full Screen outside big picture, and Big Picture or Exit Big Picture outside Game Mode. Those are
+  the two lines of `MainWindow.Pad.cs`'s menu this changes, to keep the merge with the scraping branch small.
 - F11 goes through `ToolWindow.ToggleFullScreen`. It had set `WindowState` itself, to `Normal` on the way out, so a
-  maximised window left full screen as a normal one; mutant D24 is that old line, and the cycle test's fifth round
-  fails on it. The existing `Leaving_fullscreen_returns_a_maximized_window_to_maximized` did not see it, because it
-  goes through the menu, which was always right.
+  maximised window left full screen as a normal one; mutant D24 is that old line. The existing
+  `Leaving_fullscreen_returns_a_maximized_window_to_maximized` did not see it, because it goes through the menu, which
+  was always right.
 - `Program.BuildAvaloniaApp` asks `EmbedsPopupsAtStart`: `--bigscreen` or a Game Mode session. The setting no longer
-  takes part, because it now records the last mode used, and a platform option read once cannot follow a switch. The
-  window embeds its own popups with LunaP's `EmbeddedPopups` while in big picture instead. Nothing was added to LunaP.
+  takes part, because a start it puts in big picture can now be left, and a platform option read once cannot follow a
+  switch. The window embeds its own popups with LunaP's `EmbeddedPopups` while in big picture instead. Nothing was added
+  to LunaP.
+- The toolbar is as it was on WiseMan.
+
+**Persistence, decided twice.** Build 1 wrote `BigScreen` on every switch, so the next start used the mode last used.
+With one control that was both full screen and big picture, that was the obvious reading. Builds 2 and 3 write nothing,
+and Preferences' "Start in big screen mode" alone decides, as Steam's own start-in-Big-Picture setting does. With two
+controls, the last-mode rule would make one press of Big Picture decide every later start, and it would turn a setting
+the player sets into a record the program keeps. Mutant D21 is build 1's rule.
 
 ### 17.3 The decisions that were taken once
 
 Found by reading `StartPadNavigation`, `Program.BuildAvaloniaApp`, and every reader of `_bigScreen`
-(`ThemedStyleWanted`, the pad menu's Theme Settings entry): the flag; the menu bar, sidebar, facet and text sizes; the
-full screen at `Opened`; `SheetLayer.PresentsWindows`; process-wide popup embedding; the themed library's setup; and,
-checked and found not to be big screen's, the pad timer, which serves the desktop too. Each, and what it is now, is
-tabled in the settings reference's §4.54 with the test that holds it. `SheetLayer` reads `PresentsWindows` when a window
-is shown, so a switch changes where the next window goes and moves no window already shown.
+(`ThemedStyleWanted`, the pad menu's Theme Settings entry):
+- switchable now: the flag; the menu bar, sidebar, facet and text sizes; the full screen at `Opened`;
+  `SheetLayer.PresentsWindows`; process-wide popup embedding; the themed library's setup;
+- checked and found not to be big screen's: the pad timer, which serves the desktop too.
+
+Each, and what it is now, is tabled in the settings reference's §4.54 with the test that holds it. `SheetLayer` reads
+`PresentsWindows` when a window is shown, so a switch changes where the next window goes and moves no window already
+shown.
 
 ### 17.4 A defect the cycle test found
 
-The first build forgot the desktop's place in the same call that took it: `SetBigPicture` cleared the field at its end
-whichever way it switched, so leaving had nothing to give back. The case without a theme failed at its first exit, on
-the selected game (Dune Relay, where the pad had moved it, instead of Cobalt Harbor); the themed case passed (X1). It is
-mutant D13 now.
+Build 1 forgot the desktop's place in the same call that took it: `SetBigPicture` cleared the field at its end whichever
+way it switched, so leaving had nothing to give back. The case without a theme failed at its first exit, on the selected
+game (Dune Relay, where the pad had moved it, instead of Cobalt Harbor); the themed case passed (X1). It is mutant D13.
 
 ### 17.5 Mutants
 
-The runner is `~/.cache/emusen/probe/bigpicture/mutate_desktop_button.py`; logs are `mutants-desktop-button.txt`,
-`mutants-desktop-button-rerun.txt` and `run-desktop-button.log`. Each mutant was built and run alone at `nice -n 10`
-against `BigPictureSwitchTests` and the four big-screen cases of `LibraryScreenTests`, and the source was restored; the
-tree was rebuilt clean at the end.
+The runner is `~/.cache/emusen/probe/bigpicture/mutate_desktop_button.py`, and each build's run is kept:
+- build 1: `mutate_desktop_button_v1.py`, `mutants-desktop-button-v1.txt`, `mutants-desktop-button-v1-rerun.txt`;
+- build 2: `mutants-desktop-button-v2-buttons.txt`;
+- build 3: `mutants-desktop-button.txt` and `run-desktop-button.log`.
 
-| # | Mutant | Result |
+Each mutant was built and run alone at `nice -n 10` against `BigPictureSwitchTests` and the four big-screen cases of
+`LibraryScreenTests`, and the source was restored; the tree was rebuilt clean after each run.
+
+**Build 1:** 28 mutants, 27 caught. The survivor, D2 (a second Game Mode check in the full-screen handler), was
+equivalent, and the redundant code was removed (X4).
+
+**Build 2:** 36 mutants, all caught. It retired build 1's D1 and D2, which assumed the coupling, and added D29–D36 for
+the decoupling.
+
+**Build 3:** 35 mutants, all caught. D5, D6, D31 and D33 went with the toolbar buttons they mutated; D37–D39 are the
+menu's.
+
+| # | Mutant (build 3) | Result |
 |---|---|---|
-| D1 | the window's full screen is not followed (F11, the View menu, the window manager) | caught by 6 |
-| D2 | a Game Mode session leaves big picture when the window leaves full screen (the handler's check removed) | **survived, equivalent** (X4); the check was then removed |
-| D3 | a Game Mode session can be switched out of big picture (`SetBigPicture`'s check removed) | caught; caught again after D2's removal |
+| D1 | leaving full screen (F11, the window manager) does not leave big picture | caught by 2 |
+| D2 | full screen enters big picture again (the coupling the user rejected) | caught |
+| D3 | a Game Mode session can be switched out of big picture | caught |
 | D4 | the pad menu offers Exit Big Picture in Game Mode | caught |
-| D5 | the button shown in Game Mode | caught |
-| D6 | the button does nothing | caught |
-| D7 | entering does not make the window full screen | caught |
+| D7 | entering does not make the window full screen | caught by 2 |
 | D8 | a big-screen start is not made full screen when the window opens | caught |
 | D9 | leaving does not return to the desktop's place | caught |
 | D10 | the desktop's console not given back | caught |
@@ -2810,36 +2838,55 @@ tree was rebuilt clean at the end.
 | D18 | the library's text stays large on the desktop | caught |
 | D19 | the themed library not set up by a switch | caught by 3 |
 | D20 | the themed library set up again on every entry | caught by 2 |
-| D21 | the setting not written, so the next start forgets the mode | caught by 3 |
+| D21 | a switch writes the setting (build 1's persistence) | caught by 3 |
 | D22 | Esc leaves with a game suspended behind the library | caught |
 | D23 | Esc never leaves | caught |
 | D24 | F11 back to the old line: out of full screen always to Normal | caught |
 | D25 | process-wide popups ignore the Game Mode session | caught |
-| D26 | process-wide popups follow the saved mode again | caught |
+| D26 | process-wide popups follow the saved setting again | caught |
 | D27 | the menu bar stays hidden after leaving | caught by 2 |
 | D28 | the sidebar stays hidden after leaving | caught |
+| D29 | leaving goes to Normal, not to the state big picture was entered from | caught |
+| D30 | leaving by F11 or the window manager puts back the entry state (plain full screen again) | caught |
+| D32 | the Big Picture key does nothing | caught by 5 |
+| D34 | the entry state not taken | caught |
+| D35 | the View menu's Big Picture does nothing | caught |
+| D36 | the pad menu's Full Screen offered in big picture | caught by 2 |
+| D37 | Big Picture above Fullscreen, not below it | caught |
+| D38 | the View menu's Big Picture shows no key | caught |
+| D39 | Big Picture a checkable entry that flips on each choice | caught |
 
-**27 of 28 caught; the survivor was equivalent, and the redundant code it exposed was removed.** "Caught by n" counts
-test methods; the cycle test's two cases, with a theme and without, count once.
+"Caught by n" counts test methods; the cycle test's two cases, with a theme and without, count once.
 
 **The cleanups, proved by tests that fail without them.** D14 removes the sound stream's release, and
 `Leaving_big_picture_lets_go_of_the_interface_s_sound_stream…` fails. D15 removes the showing that hides the themed view,
-and `Leaving_big_picture_stops_the_themed_view_s_wake…`, which lets 2.6 s of real dispatcher time pass after leaving
-with a text in its pause, fails with frames drawn by the hidden view. This is §15.14's defect in the switch's form, and
-unlike §15.14's first attempt the test tells the two builds apart. The held direction's release was written and then
-removed, not mutated: the pad's poll already lets go of it on every tick outside the themed view, so the line could
-not have been told apart from its absence.
+and `Leaving_big_picture_stops_the_themed_view_s_wake…` fails, with frames drawn by the hidden view. That test lets
+2.6 s of real dispatcher time pass after leaving with a text in its pause. This is §15.14's defect in the switch's form,
+and unlike §15.14's first attempt the test tells the two builds apart. The held direction's release was written and then
+removed, not mutated: the pad's poll already lets go of it on every tick outside the themed view, so the line could not
+have been told apart from its absence.
 
-**The one broad run.** The Mistress filter without `ShaderSettingsWindowTests`, `ShaderBrowseBench` and `SceneGpuBench`,
-after the last code change: 632 tests, 628 passed, 4 skipped (the four picture tools, which need `EMUSEN_BIGPICTURE_PNG=1`), none
-failed. One pass is weak evidence against §15.14's and §16.8's intermittent failures, which appeared at about one run in
-two; it was not repeated, under the load rule of 2026-09-25.
+**The broad runs.** One for build 1 and one for build 3, each the Mistress filter without `ShaderSettingsWindowTests`,
+`ShaderBrowseBench` and `SceneGpuBench`, under the load rule of 2026-09-25:
+- **Build 1:** 632 tests; 628 passed, 4 skipped (the picture tools, which need `EMUSEN_BIGPICTURE_PNG=1`), none failed.
+- **Build 3:** 632 tests; 627 passed, 4 skipped, and one failed: `SceneMotionTool.List_held_strip`. It failed before its
+  own code ran. Inside `HeadlessUnitTestSession.EnsureIsolatedApplication`, Avalonia's headless platform set-up threw
+  "The calling thread cannot access this object because a different thread owns it" from `DefaultRenderLoop.Add`. The
+  class, run alone with `SceneMotionTests` beside it, passed 17 of 17.
+
+This change does not reach that class: it builds its scene without a `MainWindow`. The failure is a start-up race in the
+test session, of the family §15.14 and §16.8 recorded (unrelated tests, only in the broad run). It is recorded, not
+attributed, and the broad run was not repeated.
 
 ### 17.6 Not done
 
 - **No real window manager was used.** KDE's and GNOME's own full-screen commands, on X11 and on Wayland, reaching
   Avalonia as `WindowState.FullScreen`, and a normal window getting its size back, are assumed from Avalonia and LunaP
   (§75.2 there), not observed. The headless platform takes every state it is given (X2).
+- **F10 was chosen, not surveyed.** GTK applications open their menu bar on F10; a desktop binding it globally would take
+  it before Mistress. It can be rebound.
+- **No pointer way out of big picture.** The menu bar is hidden there; a mouse-only player leaves by the window manager's
+  full-screen command. Build 2's toolbar button was such a way, and it went with the user's placement.
 - **Nothing ran on the handheld.** Game Mode's refusal to leave is tested with `XDG_CURRENT_DESKTOP=gamescope` set around
   the window's construction, as §4.43's tests are.
 - **Windows open at a switch stay what they were**: a desktop window stays a window over big picture, and a sheet open

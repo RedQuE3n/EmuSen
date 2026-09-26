@@ -51,6 +51,26 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             _out.WriteLine(path);
         }
 
+        // Art Book Next's three grid variants, at rest on the SNES gamelist and after two rows down, and the synthetic grid mid-step.
+        [StageFPngFact]
+        public Task Grid_variants() => Session.Dispatch(() =>
+        {
+            foreach (string variant in new[] { "gamelist-grid-cover", "gamelist-grid-cover-steamgriddb", "gamelist-grid-screenshot" })
+            {
+                using ThemedSession s = ArtBookNext(a => a.BigPicture[EmuSen.Mistress.Views.ThemeSettingsWindow.Key(ArtBookNextFactAttribute.Folder)] = new EmuSen.Galaxia.Models.BigPictureChoices { Variant = variant });
+                foreach (EmuSen.Mistress.BigPicture.Scene.SceneGame g in SyntheticLibrary.Games(SyntheticTheme.Snes, ".sfc"))
+                    if (!File.Exists(Path.Combine(s.RomDirectory, g.File))) File.WriteAllBytes(Path.Combine(s.RomDirectory, g.File), SyntheticRom.BuildBlank());
+                typeof(EmuSen.Mistress.Views.MainWindow).GetMethod("RefreshLibrary", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(s.Window, null);
+                s.Settle();
+                ThemedLibraryPadTests.Enter(s, "snes");
+                s.Run(500);
+                Save(s.Capture(), $"{variant}-1280x800");
+                s.Pad.Down(2);
+                s.Run(600);
+                Save(s.Capture(), $"{variant}-down2-1280x800");
+            }
+        }, default);
+
         [StageFPngFact]
         public Task Settings_and_about_sheets() => Session.Dispatch(() =>
         {

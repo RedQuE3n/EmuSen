@@ -149,7 +149,8 @@ namespace EmuSen.Mistress.Views
 
         private void Changed(string field, string value)
         {
-            if (_filling || Draft is null) return;
+            // A box raises TextChanged after Fill has ended, so a value equal to the draft's is a refill, not a change.
+            if (_filling || Draft is null || value == (Draft.Value(field) ?? "")) return;
             Draft.Set(field, value);
             Describe(field);
         }

@@ -167,7 +167,7 @@ namespace EmuSen.Mistress.Views
                 new FieldRow
                 {
                     Label = "Theme Settings",
-                    Hint = "The theme's variant, colours, font size and aspect ratio, and the themes Mistress downloads for you.",
+                    Hint = "The list of big picture themes, EmuSen's own first, the themes Mistress downloads for you, and an ES-DE theme's variant, colours, font size and aspect ratio.",
                     Content = ThemeSettingsButton(),
                 },
                 new FieldRow

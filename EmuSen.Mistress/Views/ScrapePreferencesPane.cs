@@ -22,6 +22,22 @@ namespace EmuSen.Mistress.Views
         System.Threading.Tasks.Task<bool> ConfirmAndScrapeAsync(ScrapeScope scope);
         bool ResumeScrape();
         void CancelScrape();
+
+        // The status window's - see EmuSen_Settings_Reference.md §4.57.
+        void ShowScrapeStatus();
+        bool ScrapePaused { get; }
+        bool CanPauseScrape { get; }
+        void SetScrapePaused(bool paused);
+        System.Threading.Tasks.Task<bool> ConfirmCancelAsync(Window owner);
+        DateTimeOffset ScrapeNow { get; }
+        ScrapeQuota? ScrapeLimits { get; }
+
+        // The member account's sign-in - see EmuSen_Settings_Reference.md §4.60.
+        MemberAccount Member { get; }
+        ScrapeMember? MemberChecked { get; }
+        System.Threading.Tasks.Task<SignInAnswer> SignInAsync(string user, string password);
+        System.Threading.Tasks.Task<SignInAnswer> CheckMemberAsync();
+        string SignOut();
     }
 
     // Preferences' Scraping tab: ScreenScraper, the member account, what to fetch, region and language, the quota, and OpenEmu's failover - see EmuSen_Settings_Reference.md §4.60.
@@ -45,7 +61,12 @@ namespace EmuSen.Mistress.Views
 
         private readonly TextBox _user = new() { Name = "ScreenScraperUserBox", Watermark = "(none)", HorizontalAlignment = HorizontalAlignment.Stretch };
         private readonly TextBox _password = new() { Name = "ScreenScraperPasswordBox", PasswordChar = '•', Watermark = "(none)", HorizontalAlignment = HorizontalAlignment.Stretch };
-        private MemberAccount _account = new("", "");
+        private readonly TextBlock _memberText = new() { Name = "ScreenScraperMemberText", TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+        private readonly HintText _signInMessage = new() { Name = "ScreenScraperSignInMessage" };
+        private readonly Button _signIn = Ui.Button("Log In", () => { });
+        private readonly Button _check = Ui.Button("Check", () => { });
+        private readonly Button _signOut = Ui.Button("Log Out", () => { });
+        private readonly Button _statusButton = Ui.Button("Status...", () => { });
 
         private readonly Dropdown _scopeShelf = new() { Name = "ScrapeShelfDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
         private readonly LunaSwitch _missingOnly = new() { Name = "ScrapeMissingArtSwitch", Label = "Only games with no cover", IsChecked = true };
@@ -69,12 +90,14 @@ namespace EmuSen.Mistress.Views
 
         public Control[] Rows()
         {
-            _account = MemberAccount.Load();
-            TextBox user = _user, password = _password;
-            user.Text = _account.User;
-            password.Text = _account.Password;
-            user.LostFocus += (_, _) => SaveAccount();
-            password.LostFocus += (_, _) => SaveAccount();
+            _signIn.Name = "ScreenScraperLogInButton";
+            _signIn.Click += async (_, _) => await SignInAsync(check: false);
+            _check.Name = "ScreenScraperCheckButton";
+            _check.Click += async (_, _) => await SignInAsync(check: true);
+            _signOut.Name = "ScreenScraperLogOutButton";
+            _signOut.Click += (_, _) => SignOut();
+            _statusButton.Name = "ScrapeStatusButton";
+            _statusButton.Click += (_, _) => _host?.ShowScrapeStatus();
 
             _scopeShelf.Fill(ShelfChoices, AllShelves);
             _start.Name = "ScrapeStartButton";
@@ -99,8 +122,10 @@ namespace EmuSen.Mistress.Views
                 new FieldRow
                 {
                     Label = "Member Account",
-                    Hint = "Optional. A free account at screenscraper.fr; contributing or donating there raises its daily requests and threads. Kept in its own file readable only by you, never in appsettings.json.",
-                    Content = Ui.Stack(6, user, password),
+                    Hint = "Optional. Your own free account at screenscraper.fr; contributing or donating there raises its daily requests and threads. "
+                        + "Log In checks it with one request to ScreenScraper and keeps it only if accepted, in its own file readable only by you, never in appsettings.json. Log Out deletes that file. "
+                        + "The developer credentials are always EmuSen's: ScreenScraper issues those to software authors, not to players, so your own cannot be used.",
+                    Content = Ui.Stack(6, _memberText, _user, _password, Ui.Row(8, _signIn, _check, _signOut), _signInMessage),
                 },
                 new FieldRow
                 {
@@ -133,7 +158,7 @@ namespace EmuSen.Mistress.Views
                     Hint = "Nothing is sent to ScreenScraper or OpenEmu's sources until you start it here, from a game's menu (Scrape This Game), or from the pad menu. "
                         + "Choose a console or every console, and whether only games with no cover; the count and the requests it will cost are shown before it starts. "
                         + "A run that is cancelled or stopped by the quota can be resumed; it never resumes by itself.",
-                    Content = Ui.Stack(6, _scopeShelf, _missingOnly, Ui.Row(8, _start, _resume, _cancel), _progress),
+                    Content = Ui.Stack(6, _scopeShelf, _missingOnly, Ui.Row(8, _start, _resume, _cancel, _statusButton), _progress),
                 },
                 new FieldRow
                 {
@@ -155,24 +180,67 @@ namespace EmuSen.Mistress.Views
         // The quota and status from the host, again whenever it says something changed; unsubscribed when the sheet closes.
         public void Attach(Window window)
         {
-            window.Closed += (_, _) => SaveAccount();
             Show();
             if (_host is null) return;
             _host.ScrapeChanged += Show;
             window.Closed += (_, _) => _host.ScrapeChanged -= Show;
         }
 
-        // Written when a box is left and when the sheet closes, and only when it changed, so no half-typed password is ever kept.
-        public void SaveAccount()
+        // Log In sends what was typed and keeps it only when ScreenScraper accepts it; Check asks about the stored account - see EmuSen_Settings_Reference.md §4.60.
+        private async System.Threading.Tasks.Task SignInAsync(bool check)
         {
-            string user = _user.Text ?? "", password = _password.Text ?? "";
-            if (user == _account.User && password == _account.Password) return;
-            _account = new MemberAccount(user, password);
-            _account.Save();
+            if (_host is null) return;
+            _signIn.IsEnabled = _check.IsEnabled = false;
+            _signInMessage.Text = "Asking ScreenScraper...";
+            SignInAnswer answer = check ? await _host.CheckMemberAsync() : await _host.SignInAsync(_user.Text ?? "", _password.Text ?? "");
+            _signIn.IsEnabled = _check.IsEnabled = true;
+            _signInMessage.Text = answer.Message + (check && !answer.SignedIn && _host.Member.IsSet ? " The account is kept until you Log Out." : "");
+            if (answer.SignedIn) _password.Text = "";
+            Show();
+        }
+
+        private void SignOut()
+        {
+            _signInMessage.Text = _host?.SignOut() ?? (MemberAccount.Delete() ? "Signed out: screenscraper.json was deleted." : "Signed out.");
+            _user.Text = "";
+            _password.Text = "";
+            Show();
+        }
+
+        // Signed in, from this session's check or the file's date; an old file from the two boxes shows as not checked, with Check.
+        private void ShowMember()
+        {
+            MemberAccount member = _host?.Member ?? MemberAccount.Load();
+            ScrapeMember? seen = _host?.MemberChecked;
+            bool signedIn = member.IsSet;
+            _user.IsVisible = _password.IsVisible = _signIn.IsVisible = !signedIn;
+            _signIn.IsEnabled = _host is not null;
+            _signOut.IsVisible = signedIn;
+            _check.IsVisible = signedIn && member.Verified is null && seen is null;
+            if (!signedIn)
+            {
+                _memberText.Text = "Not signed in: runs use EmuSen's developer credentials alone.";
+                return;
+            }
+            string text = $"Signed in as {member.User}";
+            if (seen is not null)
+            {
+                if (seen.Level is { Length: > 0 } level) text += $" · level {level}";
+                if (seen.Quota is { } q)
+                {
+                    if (q.MaxRequestsPerDay is int day) text += $" · {q.RequestsToday ?? 0:N0} of {day:N0} requests today";
+                    if (q.MaxThreads is int threads) text += $" · {threads} thread{(threads == 1 ? "" : "s")}";
+                    if (q.MaxDownloadKBps is int kb) text += $" · {kb:N0} KB/s";
+                }
+            }
+            else if (member.Verified is DateTime at) text += $" · checked {at.ToLocalTime():d MMM yyyy}";
+            else text += " · not checked: this account was typed before Log In checked accounts. Check asks ScreenScraper once.";
+            _memberText.Text = text;
         }
 
         private void Show()
         {
+            ShowMember();
             _status.Text = _host?.Status ?? "";
             bool running = _host?.ScrapeRunning == true;
             _start.IsEnabled = _host is not null && !running;

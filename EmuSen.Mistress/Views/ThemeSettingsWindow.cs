@@ -150,7 +150,7 @@ namespace EmuSen.Mistress.Views
             ThemeSource artBook = ThemeSource.ArtBookNext;
             if (!ThemeDownloads.IsDownloaded(ThemeDownloads.DirectoryFor(artBook)))
             {
-                Button download = Ui.Button("Download Art Book Next", () => _ = DownloadAsync(artBook));
+                Button download = Ui.Button("Download", () => _ = DownloadAsync(artBook));
                 download.Name = "DownloadArtBookNext";
                 download.IsEnabled = _download is null;
                 _themes.Children.Add(new FieldRow

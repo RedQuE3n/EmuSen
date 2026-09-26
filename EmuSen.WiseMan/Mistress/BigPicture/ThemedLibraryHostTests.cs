@@ -73,6 +73,24 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(0, s.Loop(8000));
         }, default);
 
+        // A text container waits its start delay before it moves, and the loop sleeps through the wait; ES-DE's clock is off by default, whatever the theme says (§13.8).
+        [Fact]
+        public Task A_text_container_wakes_the_loop_at_its_delay_and_the_clock_stays_off() => Session.Dispatch(() =>
+        {
+            const string extra = "<text name=\"ticker\"><pos>0.55 0.85</pos><size>0.2 0.05</size><fontSize>0.04</fontSize>" +
+                                 "<text>A literal line much too long for the small box it has been given in this theme</text>" +
+                                 "<container>true</container><containerType>horizontal</containerType><containerStartDelay>2</containerStartDelay></text>" +
+                                 "<clock name=\"clock\"><pos>0.9 0.02</pos><fontSize>0.04</fontSize></clock>";
+            using var s = new ThemedSession(extraGamelist: extra);
+            ThemedLibraryPadTests.Enter(s, "snes");
+            s.Settle();
+            Assert.DoesNotContain(s.Themed.Stage!.Current.Scene.Entries, e => e.Control is ClockLabel);
+            Assert.Contains(s.Themed.Stage.Current.Scene.Entries, e => e.Element.Type == "clock" && e.Skipped is not null);
+            Assert.Equal(s.Now + TimeSpan.FromSeconds(2), s.WakeAt);
+            Assert.Equal(0, s.Loop(1950));
+            Assert.InRange(s.Loop(200), 5, 15);
+        }, default);
+
         // A library of thousands, with a media folder that has none of them: the media scan is paid once, not on every return to the library.
         [Fact]
         public Task A_large_library_is_scanned_for_media_once_and_not_on_every_showing() => Session.Dispatch(() =>

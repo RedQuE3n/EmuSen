@@ -1106,7 +1106,8 @@ OpenEmu's sidebar has a Collections group beneath the consoles, and so does this
 
 *Revised 2026-09-26 by §4.60, and kept as the record of how it was built.* OpenEmu's sources are now the **failover**
 behind ScreenScraper: the switch is Preferences ▸ Scraping ▸ **OpenEmu Failover** (`OpenEmuFallback`), **on** by default,
-and it asks only for a game ScreenScraper has no cover for, or while ScreenScraper cannot be used. What it fetches goes to
+and it asks only inside a scrape the player started, for a game ScreenScraper has no cover for or while ScreenScraper
+cannot be used; a tile drawn without a cover no longer asks anything. What it fetches goes to
 `home/Media/openemu/<console>/`, no longer into the cover art folder, so that a picture the player placed there can be
 told apart and win. The old `OnlineCovers` key is read once and dropped (§4.60). What follows describes the switch as it
 was on 2026-09-21; the identification, the libretro names, the size check and the "never replace" rule are unchanged.
@@ -2679,21 +2680,44 @@ this order:
 The file should be mode 0600. Where neither place has it, ScreenScraper cannot be used; the Scraping tab says so, and
 OpenEmu's failover does the covers alone.
 
-**On by default where it can work.** Preferences ▸ **Scraping** ▸ **ScreenScraper** (`Scraping`) is on. On a machine
-without the developer file this changes nothing, since nothing can be sent; on one with it, games are looked up as they
-are shown. This departs from §5.8 of the plan, which had it off until one explicit action: the user made ScreenScraper
-the main source on 2026-09-26, and the file exists only on the user's own machines.
+**Nothing is asked until the player starts it.** The user's rule, 2026-09-26: "I do not want to spam the screenscraper
+api". No server, ScreenScraper or OpenEmu's, is asked anything when Mistress starts, when the library is shown or
+refreshed, when a game is selected or shown in the themed view, when a game is added, when the developer file appears,
+or because a run was left unfinished. What is already in `home/Media` and `media.db` is shown with no request. The
+ScreenScraper switch (`Scraping`, on) only says ScreenScraper may be used when a run is started; it starts nothing.
 
-**From the pad.** In a big-screen session (Game Mode), Start or Guide opens the pad menu; **Preferences** opens the sheet;
-the shoulders move to the **Scraping** tab. Every row is reached by the d-pad and changed with A. The member account's
-two boxes open the on-screen keyboard of §4.45.6; the password's preview above the keys shows its mask, not the text
-(LunaP §110).
+**Starting a run.** A run is one of these, chosen by the player:
+
+| Scope | Where |
+|---|---|
+| **this game** | the library's context menu, **Scrape This Game...**; the pad menu, **Scrape This Game...**, for the library's selected game or the themed gamelist's |
+| **a console**, Game Boy Color its own shelf | Preferences ▸ Scraping ▸ **Scrape**: the console list, then **Scrape...** |
+| **games with no cover**, in one console or all | the same, with **Only games with no cover** on (the default) |
+| **every game** | the same, with **Every console** and **Only games with no cover** off |
+
+The pad menu's **Scrape Games...** opens Preferences on the Scraping tab. Before a run starts, a confirm sheet gives the
+count of games, how many ScreenScraper has not been asked about, the most requests it can cost against what is left
+today (one lookup and one per picture kind a game), the time at about 13 seconds a game (plan §17.9), and whether
+OpenEmu's sources will be asked. Declining asks nothing. While it runs, the status line and the Scraping tab show "n of
+m", a bar follows it, the pad menu's entry reads "Scraping (n of m)...", and **Cancel Scraping** stops it with a request
+in flight cancelled.
+
+**Resuming.** A run that was cancelled, stopped by the quota, or cut off by closing Mistress leaves its games queued in
+`media.db`. The Scraping tab says how many and offers **Resume**; nothing resumes by itself. Starting a new run replaces
+that queue instead of adding to it. **Scrape This Game** asks ScreenScraper again even about a game it once did not
+know, and asks the failover again too; a wider run does not re-ask what has been answered.
+
+**From the pad.** In a big-screen session (Game Mode), Start or Guide opens the pad menu; **Scrape This Game...** and
+**Scrape Games...** are there outside a game; the shoulders move between Preferences' tabs. Every row, the console
+list, the switch and the Scrape, Resume and Cancel buttons are reached by the d-pad (`PadAudit`, §4.45.3) and pressed
+with A. The member account's two boxes open the on-screen keyboard of §4.45.6; the password's preview above the keys
+shows its mask, not the text (LunaP §110).
 
 **The settings,** stored in `appsettings.json` except the member account:
 
 | Row | Setting | Default | What it does |
 |---|---|---|---|
-| ScreenScraper | `Scraping` | on | look games up at ScreenScraper when the developer file is present |
+| ScreenScraper | `Scraping` | on | a run the player starts may use ScreenScraper when the developer file is present; it starts nothing |
 | Member Account | `screenscraper.json` (`ssid`, `sspassword`) | none | optional; a free account at screenscraper.fr, whose contributions or donation raise the day's requests and threads. Its own file in the config directory, mode 0600, written when a box is left or the sheet closes; never in `appsettings.json` |
 | Fetch: Covers | `ScrapeCovers` | on | ScreenScraper's `box-2D` |
 | Fetch: Screenshots | `ScrapeScreenshots` | on | `ss` |
@@ -2714,14 +2738,11 @@ credentials and the member account when there is one. ScreenScraper therefore se
 back is written by its contributors, and the art is its publishers'; Mistress keeps it for the player and shares none of
 it.
 
-**When a game is looked up.** When its tile is drawn without a cover, in the grid or the list; when it is the selected
-game of the themed gamelist; and, for the whole library, by **Scrape Whole Library** on the Scraping tab, which queues the
-console in view first and then the rest. A whole library is days of a free account's quota (plan §5.5), so it is never
-started without being asked. Only the file's own hashes are asked first; if ScreenScraper does not know them and the
+**How a game is looked up**, inside a run. Only the file's own hashes are asked first; if ScreenScraper does not know them and the
 console's core declares another form of the bytes (the NES without its iNES header, the SNES without a copier header, the
 N64 halfword-swapped: `CoreDescriptor.OpenVgdbBytes`), those hashes are asked once more. There is no search by name. A
 game answered once is not asked again: a renamed file takes its pictures to its new name, and a copy of it gets copies,
-with no request. The queue is kept in `media.db`, so a closed Mistress, a stopped day or a crash resumes where it was.
+with no request. A whole library is days of a free account's quota (plan §17.10).
 
 **Where things are kept.** `home/Media/`, laid out as ES-DE's `downloaded_media`: `<system>/covers`, `screenshots`,
 `marquees`, `miximages`, `titlescreens`, each file named after the ROM's own file name. Beside them `media.db` holds each
@@ -2741,17 +2762,19 @@ ROM folder. Deleting `home/Media` loses what was fetched and nothing else.
 Screenshots, marquees and the rest take 2 then 3; only covers have a player's folder and a failover. A cover the player
 already has is not fetched from ScreenScraper.
 
-**OpenEmu's failover** (`OpenEmuFallback`, on, the coordinator's choice on 2026-09-26, which the user may reverse) asks
-OpenVGDB and libretro's thumbnails (§4.39) for a cover in exactly these cases:
+**OpenEmu's failover** (`OpenEmuFallback`, on, the coordinator's choice on 2026-09-26, which the user may reverse) is
+asked only inside a run the player started, never for a tile being drawn as §4.39's switch once did. It asks OpenVGDB and
+libretro's thumbnails (§4.39) for a cover in exactly these cases:
 
 - ScreenScraper answered, and had no cover: the game is unknown to it, it has no `box-2D`, or the lookup failed for good;
 - ScreenScraper cannot be used: no developer file, the ScreenScraper switch or its Covers switch off, the day's quota used
   up (its limit less 2%, or a 430 or 431 answer), the service closed (423), the developer credentials refused (403), or
   this build blocked (426).
 
-While ScreenScraper has a game queued and can answer, the failover waits. Its hint says what it sends and to whom:
-OpenVGDB's 9 MB database from GitHub the first time, then the game's name to thumbnails.libretro.com and, last, to the
-address OpenVGDB gives. Its own starts are silent in the status line; an explicit **Look Up Cover Online** still reports.
+A game ScreenScraper has queued in the run waits for its answer first; when a run stops on the quota, the games it did
+not reach go to the failover. Its hint says what it sends and to whom: OpenVGDB's 9 MB database from GitHub the first
+time, then the game's name to thumbnails.libretro.com and, last, to the address OpenVGDB gives. §4.39's **Look Up Cover
+Online** is now **Scrape This Game...**.
 
 *The old setting.* `OnlineCovers`, the §4.39 switch, is read from an older `appsettings.json` and dropped at the next save.
 The failover is on after the upgrade whatever it held: a stored false was the default every save wrote, and cannot be

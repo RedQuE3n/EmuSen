@@ -2696,7 +2696,7 @@ through the coordinator, and are recorded here because they reverse parts of §5
   became an opt-in failover, **on by default by the coordinator's choice**, which the user may reverse. It fills a cover
   only where ScreenScraper found none or cannot be used.
 - **Ship-ready by default.** Where the developer file exists, scraping works with no action, and it is reachable from the
-  pad in Game Mode. `Scraping` is therefore on by default. §5.8's "off by default, one explicit action" is kept in the one
+  pad in Game Mode. *Reversed the same day by the user's rule of 17.14: nothing is asked until the player starts a run.* `Scraping` is therefore on by default. §5.8's "off by default, one explicit action" is kept in the one
   place it still protects someone: a build without the developer file sends nothing to ScreenScraper, and there the
   failover is what runs, with its hint saying what it sends. That the failover itself is now on by default is a change
   from §4.39's "off unless the player turns it on", and is the coordinator's decision, not an argument made here.
@@ -2722,9 +2722,9 @@ that order is reversed here.
 - `RomHashes`: MD5, CRC-32 and SHA-1 from one read; the MD5 equals `RomHash.Md5` of the same file.
 - `ScreenScraperCredentials` (`DeveloperCredentials`, `MemberAccount`) and `ScrapeRedactor` (17.7).
 
-**In the window:** `MainWindow.Scrape.cs` starts the workers when the setting is on and the developer file is found, and
-again whenever Preferences closes; routes a tile without a cover to ScreenScraper or the failover; queues the themed
-gamelist's selected game; feeds the themed view's `SceneGame` metadata from `media.db`; and refreshes the grid and the
+**In the window** (as first built; 17.14 replaced the automatic parts): `MainWindow.Scrape.cs` starts the workers when the
+setting is on and the developer file is found, and again whenever Preferences closes; routes a tile without a cover to
+ScreenScraper or the failover; queues the themed gamelist's selected game; feeds the themed view's `SceneGame` metadata from `media.db`; and refreshes the grid and the
 view when media arrive, the view only when it is still (`SceneView.NextChange` is null), so a glide is never cut. The
 failover (`MainWindow.Covers.cs`) now starts on the first cover wanted from it, writes to `home/Media/openemu/`, and is
 silent in the status line unless the player asked. Preferences gained a **Scraping** tab (`ScrapePreferencesPane`).
@@ -2961,3 +2961,56 @@ sandbox's cheats and saves; the recipe is not a committed script, so this is a r
 - **ScreenScraper's name is not shown.** The file's name is, as before.
 - **No refresh**, no search by name, no video (Q4), no back cover, fan art or 3D box.
 - **§5.7's publish exclusions** are a rule written here and in §4.60 of the settings reference, not a script.
+
+### 17.14 Scraping only when the player starts it, and the scope the player chooses
+
+**The user's two rules (2026-09-26, after 17.1–17.13 were built),** which override what 17.2 and 17.3 describe:
+
+1. *Every run is initiated by the user.* "I do not want to spam the screenscraper api." Nothing may reach ScreenScraper
+   at start, when the library is shown or refreshed, when a game is selected or shown in the themed view, when a game is
+   added, when the developer file appears, or from a queue a previous session left. An interrupted run may be offered as
+   Resume but never resumes by itself. OpenEmu's failover is bound the same way: only inside a run the player started, and
+   only for games ScreenScraper had nothing for. What is kept already is shown offline.
+2. *The player chooses the scope:* this game (from the game's menu or the pad menu, in the library and the themed view), a
+   console (Game Boy Color its own shelf), games missing their art (in the library or a console), or all games as a
+   deliberate choice; with the count and a quota estimate shown and confirmed first, progress shown, and a cancel.
+
+**What changed, and why the first build broke rule 1.** 17.3's window started workers whenever the developer file was
+found, queued every tile drawn without a cover and the themed gamelist's selection, and resumed any queue left in
+`media.db`; §4.39's failover started on the first tile drawn without art. §5.5's reasoning was that a queue fed by
+display is paced and within quota, so it is safe. The user's rule is not about the quota but about the service's load
+and about the player's consent to each run, and a paced request is still a request the player did not ask for. That
+argument was not made in §5 and should have been.
+
+**As built now:**
+- `Scraper` runs one run over what is queued and ends when its queue is empty, when the quota stops it (what is left stays
+  queued), or when cancelled (`ScrapeRunEnd`). A worker no longer idles waiting for work, so nothing queued later is
+  asked until the next run is started.
+- The window starts a run only through `ConfirmAndScrapeAsync` (the confirm sheet, then `StartScrape`) or `ResumeScrape`.
+  `ApplyScraping`, at start and when Preferences closes, reads the settings, whether the developer file is there, and
+  opens `media.db` to read; it starts nothing.
+- A new run replaces the queue; Resume runs what is there. "Scrape this game" forgets an Unknown or Error answer and the
+  failover's recorded outcome for that game, so it is asked again; wider runs do not re-ask what has been answered.
+- The failover is asked by the run for a game whose ScreenScraper answer left it without a cover, for every game of the
+  run when ScreenScraper cannot be used at all, and, when the quota stops a run, for the games it did not reach. The run
+  ends when both have answered. `BindCover` asks nothing.
+- The plan shown before a run: games; games ScreenScraper has not been asked about; at most one lookup and one request
+  per picture kind for each (17.9 measured that each picture is a request); what is left today; 13 s a game.
+- Preferences ▸ Scraping has the console list (Every console, then each shelf), **Only games with no cover**, **Scrape...**,
+  **Resume**, **Cancel Scraping** and a progress bar. The pad menu has **Scrape This Game...** (the library's or the
+  themed gamelist's selected game) and **Scrape Games...** (Preferences on that tab), which reads "Scraping (n of m)..."
+  during a run.
+
+**Tests.** The fake server counts every request. Each path of rule 1 has a test that requires zero requests:
+`Starting_showing_and_refreshing_the_library_asks_no_server`, `A_game_added_to_the_library_asks_no_server`,
+`The_developer_file_appearing_asks_no_server`, `A_queue_left_by_an_earlier_session_is_offered_as_resume_and_never_resumed_by_itself`,
+`What_is_already_kept_is_shown_with_no_request`, `Declining_the_confirm_step_asks_no_server`, and in the themed view
+`Moving_through_the_gamelist_asks_nothing_and_scrape_this_game_fills_its_text_and_pictures`; `OnlineCoverWindowTests`
+requires a tile drawn without art to ask nothing. Rule 2's scopes, the confirm step, the plan's numbers, progress,
+cancel and Resume, and a new run replacing an old queue each have their own test in `ScrapeWindowTests`, and `Scraper`'s
+run ends are tested in `ScraperTests`. The pad reaches every new control: stage (e)'s
+`Every_control_of_each_sheet_opened_from_the_themed_view_is_reached_by_the_pad` and `PadSettingsWindowTests` walk
+Preferences with the Scraping tab in it, and pass.
+
+**The live run of 17.9 was made before this change**, by a tool that drives `Scraper` directly and is itself a deliberate,
+one-off run started by a person; its numbers stand.

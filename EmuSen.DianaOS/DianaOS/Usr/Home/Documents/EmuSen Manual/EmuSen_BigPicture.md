@@ -1,6 +1,6 @@
 # EmuSen_BigPicture — a plan for a big-picture mode in Mistress that renders ES-DE themes
 
-*Written 2026-09-24. Stage (a), the theme loader, was built the same day; its record is §12. Stage (b), the two views drawn statically with LunaP controls, followed on 2026-09-24 and 25; its record is §13. Nothing else is built.* The user asked for a big-picture mode in Mistress like EmulationStation's,
+*Written 2026-09-24. Stage (a), the theme loader, was built the same day; its record is §12. Stage (b), the two views drawn statically with LunaP controls, followed on 2026-09-24 and 25; its record is §13. Stage (c), the GPU frame and motion, followed on 2026-09-25; its record is §14. Nothing else is built.* The user asked for a big-picture mode in Mistress like EmulationStation's,
 starting with the theme they like, Art Book Next. They made two choices. First, Mistress reads ES-DE themes, so that
 Art Book Next and other ES-DE themes load as their authors made them. A look-alike built from Mistress's own controls
 was not wanted. Second, game media comes from ScreenScraper. This page plans that work. It inventories the theme
@@ -992,17 +992,18 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 | P1 | Text boxes match ES-DE's height to within 2 px at 1280×800 | Stage b: held (§13.10) |
 | P2 | Our SVG renderer and `Svg.Skia` agree to an IoU of at least 0.98 on §3.5's 36 files | Stage b: held (§13.7) |
 | P3 | Our SVG renderer and LunaSVG (from ES-DE captures) agree to at least 0.97 | Stage b: failed (§13.8) |
-| P4 | A carousel step settles in 150–400 ms, positions equal to ES-DE's to 1 px | Stage c; settled positions held in stage b (§13.8) |
+| P4 | A carousel step settles in 150–400 ms, positions equal to ES-DE's to 1 px | Stage c: held, 396–404 ms (§14.10); settled positions held in stage b (§13.8) |
 | P5 | One `video-normalized` clip decodes in under 5% of a Legion Go S core | Stage g |
 | P6 | The theme loads for nine systems in under 150 ms (desktop) and 400 ms (Legion Go S) | Stage b |
 | P7 | A steady frame costs under 3 ms (desktop) and 8 ms (Legion Go S, 1280×800), and under 12 ms at 1920×1200 | Stage b, handheld in e |
-| P8 | Carousel steps hold 60 fps on the handheld with fast scrolling | Stage c |
+| P8 | Carousel steps hold 60 fps on the handheld with fast scrolling | Stage c: open until the handheld runs deck-gpu (§14.10) |
 | P9 | Hash lookup identifies 75–95% of 40 random files; headerless hashes add at most 5 points | Stage d |
 | P10 | A new account scrapes the whole library, without videos, over two to three sessions in two days | Stage d, first full run |
 | P11 | Art Book Next's archive is 205–230 MB | Stage f |
 | P12 | With no videos scraped, the video element's render is identical to ES-DE's (§4.7) | Stage b: failed as identical (§13.8) |
 | P13–P18 | Stage (a)'s predictions: coverage, errors, skipped includes, load time, triggers, the default variant (§12.1) | Stage a (§12.5) |
 | P19–P23 | Stage (b)'s predictions: frame cost, SVG against `Svg.Skia` by file, properties mapped, geometry from the theme, the font size (§13.1) | Stage b (§13.10) |
+| P24–P38 | Stage (c)'s predictions: the GPU route, its frame, first frame and uploads, the handheld; the carousel step, repeat, the list, the name, containers, scrollFadeIn, the video delay, the slide, settled frames and the moving frame (§14.1, §14.5) | Stage c (§14.10); P28 open |
 
 ---
 
@@ -1778,13 +1779,16 @@ The device ends processes an ssh session leaves behind, so the README starts the
 It needs no window and no display server: EGL's device platform opens the render node, so it runs the same in Game
 Mode, where gamescope's compositing shares the GPU with it.
 
+The bench was republished at the end of the stage with the moving cases of §14.8 (the carousel held, the list held
+with and without its lever), so one run answers P8 and P28 together.
+
 **P28 is not retired.** It waits for the handheld's results. Until then, §14.3 is the design's evidence. A handheld
 twenty times slower than the RX 6800 on both the CPU and GPU shares would still draw the system view in about 7 ms.
 
 ### 14.5 Predictions for motion, written before ES-DE was recorded
 
 `THEMES.md` gives none of the durations, speeds or curves below. These were written from memory of using ES-DE and
-from the property defaults, before any recording, and are retired in §14.7.
+from the property defaults, before any recording, and are retired in §14.10.
 
 - **P29, the carousel step.** One step settles in 150–400 ms (P4's range), decelerating (an ease-out), and takes the
   same time whatever the distance still to go. The unfocused opacity and the scale follow the same curve as the slide.
@@ -1843,3 +1847,196 @@ opacities. §14.8 measures what a rebuild costs while a direction is held.
 **The motion state is the scene's, not the controls'.** The rebuild makes new controls, so any state a control kept
 would be lost at each step. The carousel's glide, the time of the selection and the metadata fade therefore live in
 `SceneView`, and are applied to whichever controls exist.
+
+### 14.7 ES-DE 3.4.1 measured moving, and the rules taken from it
+
+**Method.** A subagent recorded ES-DE from its behaviour alone; ES-DE's source was not read, and its only text read
+was `THEMES.md` and `USERGUIDE.md`. The recordings, scripts and per-run CSVs are under
+`~/.cache/emusen/bigpicture/motion/` and are not committed.
+
+- **Recording.** ES-DE ran as an XWayland client (`SDL_VIDEODRIVER=x11`) at 1280×800 in the scratch home, and ffmpeg's
+  `x11grab` recorded its window losslessly at 165 fps, with wall-clock timestamps 6.06 ms apart.
+  - A still frame of the recording equals a spectacle capture of the same state on every flat area. The edges differ by
+    a sub-pixel shift (mean 0.39 levels), because spectacle's copy goes through the compositor.
+- **Input.** A uinput gamepad (`pad.py`, vendor 0x1209, product 0x5E5D, named "EmuSen Motion Probe Pad"), with an
+  explicit `SDL_GAMECONTROLLERCONFIG` and `SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1`.
+  - The ids are ones Steam does not recognise, so Steam ignored the pad, and focus did not matter.
+  - Every event's time was logged on the same clock as the frames. The first changed frame follows a press by 7–16 ms.
+  - The device was destroyed after each run. Nothing was installed, and no keyboard was simulated.
+- **Inputs.** Art Book Next on the shared synthetic library, and a synthetic theme written for the purpose
+  (`theme/motion-probe`). It has flat squares, `itemScale` 1.5 and `unfocusedItemOpacity` 0.3, so that scale and fade
+  can be read, and six variants that change the font size, speeds, gaps and sizes.
+- **Fits.** Durations are taken within a recording. Twenty candidate curves are fitted to normalised progress, with
+  the start time and the duration both free. "rms" is the residual in progress.
+
+**What was measured, and what the scene now does** (n is the number of repetitions; `SceneMotion.Esde` holds the values):
+
+| Motion | ES-DE 3.4.1 | Mistress |
+|---|---|---|
+| Carousel step: slide, scale and opacity | one quadratic ease-out; Art Book Next's slide 396 ms (387–407, n=10, rms 0.003; sine-out next at 0.009); the synthetic theme's slide, scale and fade 400–404 ms each (n=10, rms 0.003–0.005) | `Glide` over 400 ms, `QuadraticEaseOut`; opacity and scale by distance (LunaP §102.2) |
+| A step while one is moving | a fresh 400 ms from the carousel's current position | `Glide.Toward` |
+| Logo and system name on a step | change at the press, not animated | the view is rebuilt at the press |
+| Carousel held, `fastScrolling` true | step at the press, the next at 497 ms, six at 179.8 ms, then 80 ms from about 1.59 s; no further tier in 3 s (n=3; Art Book Next agrees: 25 steps in 3 s) | 500 ms, 180 ms, then 80 ms from 1.58 s |
+| Carousel held, `fastScrolling` false | 497 ms, then a constant 200 ms (n=4) | 500 ms, then 200 ms |
+| Text list, one step | no animation: the cursor and the rows jump in one frame (n=15) | none |
+| Text list held | 497 ms, then 11 steps at about 114 ms (n=50), then at about 1.716 s a jump of **four entries** in one frame (5 of 5 holds), then one entry every 15.9 ms | 500 ms, 114 ms, a four-entry step at 1.703 s, then 15.9 ms |
+| Text list ends | a held direction stops at the end; a tap wraps | the same |
+| Metadata and media while scrolling | a linear fade-out of 149 ms (148.3–149.4, n=5) from the **first repeat**; a linear fade-in of 150 ms (n=4) when scrolling stops, on release or at the end of the list | the same; the elements are those `THEMES.md`'s `metadataElement` entry lists |
+| Selected name (`textHorizontalScrolling`) | still for the delay (3.0 s; 1.0 s when the theme sets 1), then constant speed; one full loop (text width plus gap), a frame bit-identical to the start, the delay again | LunaP's loop (§102.3) with the delay before each pass |
+| Its speed | proportional to the font size and independent of the text's length and the list's width; 3.08 font sizes a second with ES-DE's own font (24, 32, 40 px: 74.1, 98.8, 122.8 px/s), twice that at speed 2; **131.5 px/s for Art Book Next's 30 px Mulish**, 4.38 font sizes a second | 131.5 / 30 font sizes a second, times `textHorizontalScrollSpeed` |
+| Its gap | the gap factor times the distance travelled in one second at speed 1: 113, 150, 186 px at 24, 32, 40 px for 1.5; 298 px for 3; 201 px in Art Book Next | the factor times one second of travel |
+| Vertical container | still for `containerStartDelay` (6.03 s for 6); constant speed in whole-pixel steps to the end; still for `containerResetDelay` (6.995 s for 7, 1.497 s for 1.5); back at the top at opacity 0, a **linear fade-in of about 298 ms** (295–303, n=7); the start delay again | LunaP's column rule with `WholePixels` |
+| Its speed | depends on the font size only, not the container or the text's length, and doubles at speed 2; 20.0, 60.6 and 74.6 px/s at 24, 36 and 48 px; **37.03 px/s for Art Book Next's 30 px Mulish** | 37.03 / 30 font sizes a second |
+| Horizontal container | the name's rule: about 3.09 font sizes a second at speed 1 with ES-DE's font (148.3 px/s at speed 2, 24 px); gap 223 px at 3 | the name's rule |
+| `scrollFadeIn` | on every change of game, the image appears at **about half opacity** and rises linearly to full over **326 ms** (321–328, n=5, rms 0.005) | from 0.5 over 326 ms |
+| Video element without a video (Art Book Next's `game-art`, delay 3) | the cover appears in the selection's frame, with no fade; nothing changes at the delay or in the 4.4 s after (n=5) | nothing: `delay` stays unmapped |
+| View transition, `instant` | no intermediate frame (n=5 each way) | instant |
+| View transition, `slide` | a **vertical camera pan** of 800 px, cubic ease-out, 402 ms (397–411, n=5; back 403.5 ms); the gamelist comes up from below; the help bar changes at the press and the status stays still | the same pan; the new view's help bar, clock and status held still, the old view's hidden |
+
+**Checked against a recording.** `EsdeMotionCompareTool` replays ES-DE's recorded carousel taps (10, both ways, in
+the synthetic theme) on Mistress's scene and compares every fully visible item in every one of about 2,000 recorded
+frames, 10,301 item boxes in all. Allowing ES-DE 5 ms of input latency, the best of 0, 5, 10 and 15 ms:
+
+| | Median | p95 | Worst |
+|---|---|---|---|
+| Centre while moving (px) | 0.50 | 2.20 | 6.22 |
+| Centre when settled (px) | 0.50 | 0.50 | 0.50 |
+| Drawn width (px) | 0.60 | 0.62 | 2.48 |
+| Opacity | 0.00 | 0.00 | 0.02 |
+
+The test asserts the settled centres within 1 px, the moving ones within 3 px at p95, and opacity within 0.05. The
+worst moving error, 6 px, falls in the first frames of a step, where ES-DE's speed is highest and a millisecond of
+latency is worth several pixels.
+
+**Where Mistress's rules are narrower than ES-DE's behaviour.**
+- **Neither speed is a law, only calibrations.** The name's speed is proportional to the font size, but the constant
+  differs between fonts: 3.08 font sizes a second with ES-DE's font, 4.38 with Mulish. A font's own metrics
+  presumably decide it, but which metric was not established. The vertical container's speed fits no simple law of the
+  font size at all: its figures per font size are 0.83, 1.68 and 1.55 at 24, 36 and 48 px. Both constants in
+  `SceneMotion.Esde` are Art Book Next's own, measured on its font. For another theme's font they are an estimate,
+  and are recorded as such.
+- **The carousel's selected tint, dimming and saturation change hands half-way** (LunaP §102.2). Art Book Next sets
+  the same colour for both, so nothing shows. ES-DE was not measured with different values.
+- **Unmeasured:** the fast tiers at 60 Hz, where ES-DE's 15.9 ms interval may be bounded by the frame rate; the
+  device-notification popup (it fades in and out over about 0.5 s each); one unexplained 300 ms fade of a description,
+  seen once in the synthetic theme on a change from a game without a description, and not reproduced.
+
+### 14.8 The moving frame's cost, and a lever for the held list
+
+`SceneGpuBench.RunMotions` times moving frames on the scene's own clock at 60 Hz: 600 frames each, the view stepped,
+laid out and drawn on the RX 6800. The cases:
+- `carousel held`: a step started as each one settles;
+- `list held`: a direction held through ES-DE's repeat tiers down a list of 120 games and back up.
+
+Each frame is split into the clock step and layout, the GPU recording, and the whole frame. The runs below are from
+the self-contained Release host (`deck-gpu`); the test host's Debug build is noisier but agrees.
+
+| 1280×800 | Frame median | p95 | Worst | Allocated a frame | Collections (gen0/1/2) |
+|---|---|---|---|---|---|
+| Carousel held | 0.33–0.52 ms | 0.56–1.23 | 6.9–10.0 | 52 KiB | 1/0/0 |
+| List held, rebuilt on every step | 0.80–1.91 ms | 1.22–2.95 | 15.8–16.8 | 199 KiB | 11/11/3 |
+| List held, with the lever below | 0.40–0.67 ms | 0.56–0.93 | 10.3–11.9 | 75 KiB | 3/3/0 |
+
+**The median frame is well under a millisecond, and the worst frames are collections.** In the slowest runs the
+frames over 8 ms fell on no step in particular. Their cost moved between the clock step and the recording, and the
+collection count and the summed pauses accounted for them. A list scrolling at 62 entries a second rebuilt its view 62 times a second, allocated 199 KiB a frame, and paused
+for 70–80 ms in 600 frames. On the desktop the worst of those frames reached 16.8 ms, the edge of a 60 Hz frame. On
+a slower handheld it would cross it.
+
+**The lever: move only the list while the metadata is faded out.** ES-DE fades the game's metadata and media out from
+the first repeat of a held direction (§14.7). Once that fade has finished, everything in the view that follows the
+selected game is at opacity 0, and only the list shows the selection. `SceneView` then changes the existing list's
+`SelectedIndex` instead of rebuilding the view, and rebuilds the rest when the fade-in starts.
+- **It is pixel-identical by construction, and proved so.** `SceneView.RebuildEveryStep` turns the lever off. Two views
+  were run in lockstep with the lever on and off: 150 frames of Art Book Next at 60 Hz through a hold and its release
+  (`Held_list_lever_is_pixel_identical_on_Art_Book_Next`), and a synthetic test with its own frames. Not one pixel
+  differed.
+- **Measured at 1280×800:** allocation 199 → 75 KiB a frame, collections 11/11/3 → 3/3/0, the median frame
+  1.16 → 0.67 ms and the worst 15.4 → 10.3 ms in the test host; 0.80 → 0.40 ms and 15.8 → 11.9 ms in the Release host.
+- **Not done:** the remaining 50–75 KiB a frame. It comes from the draw path's per-frame objects: new transforms in
+  arrange and apply, and text shaped on every render. The worst frames are still collections. Pooling those objects would be the next
+  lever, and it is also pixel-identical by construction. It is not needed on the desktop and waits for the handheld's
+  numbers.
+
+**Negative result, recorded so it is not repeated.** The first version of the bench reused one held-list script for
+both sizes. Its direction leaked from the first size into the second, so the second size's list never moved and
+measured 0.01 ms. The cases are now made fresh for each size.
+
+### 14.9 Tests and mutants
+
+**Tests.**
+
+| Class | Tests | What it holds |
+|---|---|---|
+| `SceneMotionTests` | 12 | ES-DE's values pinned; a step easing and settling on the static picture pixel for pixel; wrapping and `itemTransitions instant`; key repeat and the fast tier; the list's jump, wrap and stop; fast scrolling only when the theme asks; the name's scroll and its restart; a container's rule; `scrollFadeIn`; the metadata fade; the lever against a rebuild on every step; the slide |
+| `SceneMappingTests` | 247 cases | 13 new time-governed pairs, each rendered at a time on the scene's clock with two values and required to differ |
+| `EsdeMotionCompareTool` | 1 | the recording comparison above; it skips when the recording is absent |
+| `SceneMotionTool` | 5 | the PNG strips below, and the lever on Art Book Next |
+| LunaP `MotionTests` | 10 | LunaP §102.5 |
+
+**The mapping.** Of the 172 pairs Art Book Next sets, the scene now reads **140**. The four new ones are the
+carousel's `itemTransitions` and `fastScrolling`, and the text's `containerStartDelay` and `containerVerticalSnap`.
+The video's `delay` stays unmapped on ES-DE's evidence: without a video file it changes nothing.
+
+**Mutants.** The runners are `~/.cache/emusen/probe/bigpicture/mutate_motion_scene.py` (27 mutants) and
+`mutate_motion_lunap.py` (13 mutants), and the logs are `mutants-motion-*.txt`. **All 40 were caught.** Four survived
+their first run:
+- the marquee's gap measured in font sizes rather than seconds of travel;
+- the help bar panning with the view;
+- a horizontal text drawing no second copy;
+- the marquee scrolling every row.
+
+In each case the test had not looked at the pixels that decide, and each test was then strengthened. The lever's
+three mutants were caught by the lockstep tests:
+- moving nothing;
+- never rebuilding;
+- engaging before the fade-out had finished.
+
+The recording comparison caught the step's easing and its duration (300 ms against 400) as well as the synthetic
+tests did.
+
+**PNG strips** (under `~/.cache/emusen/bigpicture/motion-png/`, not committed):
+- `carousel-step-1280x800.png`, with the mid-slide frame at 100 ms in `carousel-step-1280x800-frame.png`;
+- `list-held-1280x800.png`, showing the metadata fading out at the first repeat and the list alone while held, and
+  `list-released-1280x800.png`, showing it fading back;
+- `description-1280x800.png`;
+- `slide-1280x800.png`, with its middle frame in `slide-1280x800-frame.png`.
+
+They were looked at. The carousel's middle frame shows two slices half-focused. The held strip shows the cover,
+badges and description gone while the list runs. The slide's middle frame shows the system view leaving upward and
+the gamelist arriving from below, under a help bar that holds its place.
+
+### 14.10 Predictions retired
+
+| # | Predicted | Measured | Verdict |
+|---|---|---|---|
+| P4 | a step settles in 150–400 ms | 396–404 ms | held, at the edge of its range |
+| P8 | carousel steps hold 60 fps on the handheld with fast scrolling | desktop: worst 6.9–10 ms, median 0.33–0.52 ms; handheld not run | open (handheld) |
+| P24 | the GPU route's picture within 8 levels on 99% of pixels | failed against the compositor on text; 99.93% against the CPU route | failed as written (§14.3) |
+| P25 | a GPU full redraw under 3 ms on the desktop | 0.33–0.71 ms | held |
+| P26 | the first GPU frame under 50 ms | 3–22 ms | held |
+| P27 | immutable bitmaps change the GPU frame under 5% | same pixels, same time | held |
+| P28 | the handheld's full redraw under 8 ms | not yet run | open |
+| P29 | a step of 150–400 ms, ease-out, scale and opacity on the same curve, whatever the distance | 400 ms quadratic ease-out for all three; a new step restarts 400 ms from where the row is | held |
+| P30 | repeats after 400–500 ms, then every 60–150 ms, a faster tier after 1–2 s | 497 ms for all; the list every 114 ms, the carousel every 180 or 200 ms (outside the range); tiers at 1.58 s and 1.70 s, at 80 and 15.9 ms | held for the delay and the tiers; the carousel's interval refuted |
+| P31 | a list step does not animate | none, in 15 of 15 | held |
+| P32 | the name scrolls after 3 s at 50–150 px/s, repeating with a gap | 3.0 s, 131.5 px/s, a gap, and the delay again before each loop | held |
+| P33 | the container starts after its delay at 20–40 px/s, stops, waits `containerResetDelay`, fades back at the top | 6.03 s; 37.03 px/s; 6.995 s; a 298 ms linear fade-in | held |
+| P34 | `scrollFadeIn` over 150–300 ms | 326 ms, and from half opacity, not from none | refuted |
+| P35 | the video element's image with no delay and no fade | none, in 5 of 5 | held |
+| P36 | the slide takes 200–500 ms, decelerating | 402 ms, cubic ease-out; vertical, which was not predicted, and which the first build had horizontal | held for timing |
+| P37 | settled frames equal the static render pixel for pixel, and ES-DE's positions to 1 px | pixel-equal in every test; ES-DE's settled centres within 0.5 px | held |
+| P38 | a moving frame costs no more than a full redraw at rest, under 1 ms on the desktop | carousel median 0.33–0.52 ms; held list 0.80–1.91 ms median rebuilding on every step, 0.40–0.67 ms with the lever; worst frames up to 16.8 ms, from collections | held for the carousel and for the list with the lever; refuted for worst frames and for a list rebuilt on every step |
+
+### 14.11 Not done in stage (c)
+
+- **Nothing was measured on the handheld.** P8 and P28 wait for `deck-gpu` (§14.4), which now also runs the moving
+  cases.
+- **The draw path's remaining allocation** (50–75 KiB a frame) is not pooled (§14.8).
+- **The vertical container's speed law and the name's per-font constant** are calibrations on Art Book Next's font
+  (§14.7).
+- **The carousel's selected tint changes at half-way** rather than blending (LunaP §102.2); unmeasured in ES-DE.
+- **The popup** that ES-DE shows when an input device goes was not built. Mistress has its own notices.
+- **The scene is not yet in Mistress's window.** No render loop drives `SceneStage.Advance` from frame times; that is
+  stage (e), with the pad.
+- **Grid motion** (`rowTransitions` and the grid's `itemTransitions`) waits for the grid in stage (f).

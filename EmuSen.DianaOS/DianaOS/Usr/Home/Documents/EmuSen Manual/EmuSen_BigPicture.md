@@ -1011,6 +1011,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 | P39–P45 | Stage (e)'s predictions: a still view draws nothing, the return is exact, the first build, the pad's family, a family change touching only the help bar, the sounds, every sheet reachable (§15.1) | Stage e (§15.12); P41 failed cold |
 | P46–P55 | Stage (f)'s predictions: a choice applied at once, choices per theme, the sheet's rows, every control reachable, the grid at rest and moving, the video extensions, the media scan, the downloads, a closed sheet's download (§16.1) | Stage f (§16.7); P50 failed by a pixel, P51's duration and interval refuted |
 | P60–P67 | Stage (d)'s predictions: N64 byte order, media against the quota, quota fields without a member, time per game, system IDs, the pacer, the region rule, no leak (§17.1) | Stage d (§17.10); P61 and P66 failed, P60 not measured, P63 partly |
+| P100–P120 | The remaining passes' predictions: the handheld, controllers, the theme survey, badges and switches, localisation, folders, the modes, scraping extras, manuals, the screensaver, the launch screen, video, TheGamesDB, the passes' pace (§21.6) | Each in its pass |
 
 ---
 
@@ -1038,6 +1039,9 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   controller family, such as Xbox, PlayStation, or the Legion's own labels?
 - **Q10, SVG.** Our own subset renderer (recommended), or `Svg.Skia` 5.1.1 with its MS-PL dependency and SkiaSharp
   pin (§4.5)?
+- **Q20–Q35**, the decisions the remaining passes to ES-DE parity wait on (video again, as Q4's revisit; codecs;
+  controllers; folders; the modes; languages; the theme list; TheGamesDB; buttons; the launch screen; the screensaver;
+  the hardware session), are asked in §21.5.
 - **Risk: ScreenScraper's API is in beta** and may change without notice (§5.1). The client keeps the response
   parsing in one place, and its tests are written against the documented shape.
 - **Risk: the undocumented behaviours** of §4.4 (the 'S' size) and §4.6 (durations) are measured from ES-DE, so they
@@ -3601,3 +3605,559 @@ defects came from that (§20.2).
 - **The estimate is a mean** over the games answered, so a run of found games (five requests each) after a run of
   unknown ones (one each) is estimated short.
 - **OpenEmu's failover is not paused** and not counted in the requests sent.
+
+---
+
+## 21. The remaining passes to ES-DE parity (a plan, 2026-09-26)
+
+*Written 2026-09-26, while §22 (collections, filters, sorting, jump to a letter and a random game) and §23 (the game
+options menu and the metadata editor) were being built on other branches.* Stages (a) to (f) and §18–§20 built what
+§7 planned, except stage (g). This section inventories what ES-DE offers a player that big picture still lacks, groups
+the gaps into passes an agent can build and test in one go, orders them, and states what only the user can decide. It
+is a plan: nothing in it has been built, and every cost in it is an estimate.
+
+**Sources, and what was not read.**
+- ES-DE's `USERGUIDE.md` (5,074 lines) and `THEMES.md` (3,812 lines), master branch, in the copies stage (c) fetched on
+  2026-09-25 to `~/.cache/emusen/bigpicture/motion/docs/`. Sections are cited by their headings. ES-DE's source was not
+  read, and ES-DE was not run for this section. `INSTALL.md` and `FAQ.md`, which the guide refers to for command-line
+  options, event scripts and controller profiles, were not read.
+- ES-DE 3.4.1's own defaults, from the `es_settings.xml` it wrote into the stage (b) scratch home
+  (`~/.cache/emusen/bigpicture/esde/home/ES-DE/settings/`). §13.8 lists the settings the stages changed there (the
+  directories, theme, variant, scheme, aspect ratio, startup system and view, and `DisplayClock`); none of the values
+  cited below is among them.
+- TheGamesDB's API description, `api.thegamesdb.net/spec.yaml` (Swagger 2.0, 2,338 lines), and its key page, fetched
+  2026-09-26.
+- The 43 redacted answers of §17.9's live run, for what ScreenScraper offers beyond the kinds Mistress fetches.
+- EmuSen's code at `5dc543aa`, and the ROM library at `AppSettings.RomDirectory`, listed read-only.
+
+**Numbering.** §22 and §23 were being written at the same time and will number their own predictions and questions.
+To keep the three apart, as §17 did for stage (f), this section's predictions start at **P100** and its questions at
+**Q20**, leaving P68–P99 and Q11–Q19 to them.
+
+### 21.1 What was measured for this section
+
+- **The library's folders** (read-only listing, 2026-09-26). `NES/` holds 16 folders (`USA`, `Europe`, `World`,
+  `Hacks`, `Translated`, `Unlicensed`, `Pirate`, `PD`, `PC10`, `Versus` and six more) and no ROM at its top level;
+  `GB/` holds 28 (`0-9`, `A` to `Z`, `[BIOS]`) and none at its top; `N64/` and `SNES/` hold none. No folder is nested a
+  second level. No `.m3u`, `.cue` or `.fds` file exists anywhere in the library, and no ROM stem repeats between two
+  folders of one console (5,524 files counted by the scratch script's extension list; the library's own count, §5.5, is
+  5,520, and the difference was not traced).
+- **What ScreenScraper offered beyond Mistress's kinds**, in §17.9's 39 found answers:
+
+  | Kind (API name) | Games offering it | Files offered | Format | Median size | Largest |
+  |---|---|---|---|---|---|
+  | `video-normalized` | 32 of 39 | 32 | mp4 | 1.38 MB | 2.72 MB |
+  | `video` | 32 | 32 | mp4 | 3.36 MB | 9.90 MB |
+  | `manuel` (manual) | 27 | 47 (several regions) | pdf | 1.71 MB | 18.2 MB |
+  | `box-2D-back` | 33 | 109 | png | 0.53 MB | 5.71 MB |
+  | `box-3D` | 33 | 113 | png | 0.30 MB | 0.58 MB |
+  | `support-2D` (physical media) | 33 | 77 | png | 0.41 MB | 0.66 MB |
+  | `fanart` | 25 | 25 | jpg | 0.27 MB | 0.99 MB |
+
+  The sizes are ScreenScraper's `size` fields; nothing was downloaded. The video codec is not in the answer and was not
+  measured.
+- **The desktop's decoders.** `/usr/bin/ffmpeg` is package `ffmpeg-8.1.2-3.fc44` and lists the `h264`, `hevc`, `av1`
+  and `libdav1d` decoders; `openh264` and `poppler-utils` 26.01 are installed. What SteamOS on the Legion Go S provides
+  was not checked.
+- **ES-DE 3.4.1's defaults** that bear on the passes: `ScreensaverTimer` 300,000 ms and `ScreensaverType` `video`
+  (the guide: with no videos it falls back to Dim); `ScreensaverSwapImageTimeout` 10,000 ms; `LaunchScreenDuration`
+  `normal`; `InputOnlyFirstController` false and `InputDeviceNotifications` true; `InputControllerType` `xbox`;
+  `QuickSystemSelect` `leftrightshoulders`; `RandomEntryButton` `games`; `ScrapeVideos` and `ScrapeManuals` true;
+  `ViewsVideoAudio`, `MediaViewerVideoAudio` and `ScreensaverVideoAudio` true; `SoundVolumeVideos` 80;
+  `FoldersOnTop` true; `ShowHiddenGames` true; `ListScrollOverlay` false; `SystemStatusBatteryPercentage` true;
+  `MaxPlayTimeTracking` 8 (hours); `UIMode` `full` with `UIMode_passkey` `uuddlrlrba`; `ApplicationLanguage`
+  `automatic`; `MenuColorScheme` `dark`.
+- **TheGamesDB.** Every call carries an `apikey`. Answers carry `remaining_monthly_allowance`, `extra_allowance` and
+  `allowance_refresh_timer` (the spec's example is 2,592,000 s, thirty days), and `/v1/API/Limit` reads them without
+  counting against them. Besides name and ID searches there is `/v1/Games/ByGameHash`, taking an MD5 or a CRC and an
+  optional platform. `/v1/Games/Images` serves `fanart`, `banner`, `boxart` (with a `side`, front or back), `screenshot`,
+  `clearlogo` and `titlescreen`, and `/v1/Games/Videos` exists. The key page answers "You must be logged in to the site
+  to view your api key", so a key belongs to a site account. The spec's `license` field names GPL-3.0 and points at the
+  server's own repository; terms for the data were found on neither page.
+- **EmuSen's code.** `SceneMapping.Drawn` omits `animation`, `gamelistinfo` and `gameselector`, which are therefore
+  loaded and not drawn. `ThemeCatalog` marks 12 video properties `VideoDeferred`. `GamepadManager` opens the first pad
+  only. `RomLibrary` lists every file below the ROM folder, so a folder never shows: the library is what ES-DE calls
+  folder flattening ("Folder flattening"), which ES-DE discourages. `EsdeMediaFolder.Find` looks only at
+  `<system>/<type>/<stem>.<ext>`, and its type table has no `manuals` or `custom`. Mistress has no string resources: no
+  `.resx` file exists and visible text is written in the code. DianaOS's `FrameRecorder` already runs `ffmpeg` as a child
+  process to encode recordings, a precedent for the process route of §4.7.
+
+### 21.2 Inventory
+
+"ES-DE" cites `USERGUIDE.md` (UG) or `THEMES.md` (TH) by section. "Mistress" cites this plan, the settings reference
+(SR) or code. Features §22 and §23 are building are listed at the end for completeness, marked, and not planned here.
+
+| # | Feature | ES-DE | Mistress today | Gap |
+|---|---|---|---|---|
+| 1 | Game video in the theme | `video` element: delay, fade-in from black or transparency, iterations, `onIterationsDone`, audio, pillarboxes, scanlines (TH "video"); video volume and three audio switches (UG "Sound settings") | the static image only; 12 properties deferred (§4.7, §10.1 Q4, `ThemeCatalog`) | playback, its audio stream, its settings |
+| 2 | Videos scraped | `ScrapeVideos` on by default (UG "Content settings") | not fetched (SR §4.60 "What it does not cover") | the kind, and its quota cost (§21.1: 32 of 39 games, 1.38 MB median) |
+| 3 | Screensaver | Dim, Black, Slideshow, Video; after 5 min by default; controls (random, launch, jump); slideshow of favourites or a custom folder; game-info overlay (UG "Screensaver", "Screensaver settings") | none | all of it; Video waits on 1 |
+| 4 | Media viewer | full screen: video, cover, back cover, title screen, screenshot, fan art, miximage, `custom`; left and right, triggers to the ends; settings (UG "Game media viewer", "Media viewer settings") | none in big picture; the desktop library's Screenshots view shows the player's own captures only | the viewer; the `custom` type |
+| 5 | PDF manuals | scraped (`ScrapeManuals` on); viewed with pages, zoom and pan; `manual` badge (UG "Game media viewer", TH "badges") | none | scraping, a renderer, the viewer mode, the badge |
+| 6 | Kid and Kiosk modes | Kiosk: menu reduced to volume, no metadata editor, collections or favourite toggling; Kid: kidgame games only, no options menu; unlock sequence (UG "UI modes") | none | the modes; kidgame is §23's field |
+| 7 | Folders | shown as entries, entered with A; sorted on top; folder badge; folder link; `defaultFolderImage`; `gamelistinfo`'s folder icon (UG "Multiple game files installation", "Metadata editor", TH "grid", "gamelistinfo") | flattened (`RomLibrary`); the user's NES and GB are all folders (§21.1) | folder entries, entering and leaving, sorting, the badge |
+| 8 | Media of games in folders | `downloaded_media/<system>/<type>/<folder>/<stem>` (UG "Manually copying game media files") | `EsdeMediaFolder` and `MediaStore` use `<system>/<type>/<stem>` | an ES-DE tree for this library would not be read (predicted defect, P108) |
+| 9 | Directories as files, `.m3u` | a folder named like a file launches the file of its name; `.m3u` for multi-disc (UG "Directories interpreted as files") | none | no consumer: every core is a cartridge core and the library holds no `.m3u` (§21.1) |
+| 10 | Launch screen | shown on launch: Normal, Brief, Long, Popup or Disabled; follows the menu colour scheme and opening animation (UG "UI settings") | the resume question on a sheet, then the game (SR §4.52) | the screen; its content is not documented and must be measured |
+| 11 | Built-in badge icons | ES-DE draws its own when a theme names none: nine slots, a folder-link overlay, 36 controller icons (TH "badges") | nothing drawn (§15.13); Q9 decided Mistress's own drawings | the drawings |
+| 12 | Clock switch | `DisplayClock`, off by default (UG "UI settings"; §13.8) | off, no switch (§15.3, SR §4.52) | the switch |
+| 13 | Several controllers | every pad drives the frontend; "Only accept input from first controller" off by default (UG "Input device settings") | the first pad only (`GamepadManager`, §15.13) | every pad; cores model two ports and a Player 2 mirror exists (`EmuSen_Input.md` §5.1, §6) |
+| 14 | Controller popup | "Input device notifications", on by default | none (§14.11); LunaP has `NoticeLayer` (§88.5) | the notice |
+| 15 | Controller type and button swap | seven icon sets chosen by hand; swap A/B and X/Y (UG "Input device settings") | automatic family from SDL (§15.5), no override, no swap | an override and a swap |
+| 16 | Localisation | 21 locales, automatic from the OS (which the guide says fails in the Steam Deck's Game Mode), theme language (UG "UI settings", TH "Languages") | English only; no string resources; the loader reads theme languages (§12.4 item 7) | resources, a setting, translations |
+| 17 | The theme list | the official list with screenshots, counts of variants and schemes, update, delete, "LOCAL CHANGES" detection (UG "Theme downloader") | one button, Art Book Next (SR §4.53, §16.8) | the list, other hosts, change detection |
+| 18 | Other themes' elements | `animation` (GIF, Lottie), `gameselector`, `gamelistinfo`, vertical and wheel carousels, reflections, rotation, fade transitions, `stationary` (TH) | loaded, not drawn (`SceneMapping.Drawn`; §3.8 "Later") | as a survey of the list finds them used |
+| 19 | TheGamesDB | a second source; no hash search in ES-DE's use (UG "Scraping") | none | a client; the API now has `ByGameHash` (§21.1) |
+| 20 | Interactive match and search | "Interactive mode", "Refine search", auto-accept single matches (UG "Scraping process", "Other settings") | no name search at all (§5.2, SR §4.60) | an explicit search and a chooser |
+| 21 | Refresh | "Overwrite files and data" (UG "Other settings") | never refetched (SR §4.60) | a refresh, cheap by checksum (§5.1) |
+| 22 | More media kinds | back covers, 3D boxes, physical media, fan art, manuals (UG "Content settings") | folders exist, nothing fills them (SR §4.60) | the kinds (§21.1: 25–33 of 39 games offer each) |
+| 23 | Scraped names | "Game names" scraped and shown | kept in `media.db`, not shown (§17.13) | a choice |
+| 24 | Scrape criteria | All, Favourites, No metadata, No game image, No game video, Folders only (UG "Scraper") | a console and "Only games with no cover" (SR §4.60) | the other criteria |
+| 25 | Quick system select | six choices; default left/right or shoulders (UG "UI settings") | left and right only (§15.3) | the choice |
+| 26 | Shoulders in a list | "jumps 10 games in the gamelists" (UG "General navigation") | a page of the rows shown (§15.3) | a documented behaviour not followed |
+| 27 | Startup and order | "System on startup", "Startup view", "Systems sorting" (UG "UI settings") | the first shelf, system view, release order (§15.3) | three settings |
+| 28 | Quick-scroll overlay | two letters over a held list, off by default (UG "UI settings") | none | the overlay |
+| 29 | System status toggles | Bluetooth, Wi-Fi, battery, battery percentage (UG "System status settings") | always shown when sysfs reports them (SR §4.52) | four switches |
+| 30 | Help switch | "Display on-screen help" (UG "UI settings") | always shown | a switch |
+| 31 | Navigation sounds | a volume; built-in sounds when a theme has none (UG "Sound settings") | gain fixed at 0.7; nothing when the theme has none (§15.6) | the volume and a fallback set |
+| 32 | Per-game engine | "Alternative emulators", per system and per game; `altemulator` badge and filter (UG "Other settings", "Metadata editor") | per console only (Graphics Settings' Engine row, SR §4.44) | per game, the badge; the field belongs in §23's editor |
+| 33 | Play-time cap | "Max play time tracking", 8 h (UG "Other settings") | play time recorded uncapped (SR §4.32) | a cap |
+| 34 | Orphaned media | "Orphaned data cleanup" (UG "Removing orphaned data") | `games.db`'s orphan pass (SR §4.37); `media.db` follows renames (§17.4) | media of deleted games |
+| 35 | Real-hardware checks | — | sign-in, Steam Input's family and Game Mode's compositing unmeasured (§15.13, §20.6, §14.10a) | a session on the device |
+| — | Collections, filters, sorting, jump to letter, random game | UG "Game collections", "Gamelist options menu" | **§22, being built** | — |
+| — | Options menu, metadata editor, hidden and kidgame flags | UG "Gamelist options menu", "Metadata editor" | **§23, being built** | — |
+
+**Considered and not planned.** The quit menu's reboot, power-off and suspend (Steam owns power in Game Mode, and the
+desktop's session does outside it); custom event scripts (no consumer, and a script runner is a security surface);
+screen rotation, VRAM limit, MSAA, display index, application update checks, the game importer and the Android and
+Windows settings (not applicable); menu colour schemes and the blur behind menus (LunaP's themes own the look, §10.1);
+the miximage generator (Q7 declined it); the GPU statistics and debug overlays (ES-DE's own diagnostics).
+
+### 21.3 The passes
+
+Each pass is a unit an agent can build, test and record in one go, as a stage was. Costs are in §7's unit, working days,
+at §7's scale. The record since then is shorter than §7 estimated: each of stages (a) to (f) was opened and closed within
+one or two calendar days, against §7's 2–7 working days. P119 tests whether that holds. Every pass keeps the rules the
+stages kept: every visible part is a LunaP control, nothing from ES-DE or a theme enters either repository, ES-DE is an
+oracle run only from the scratch copy with its own `--home`, and a request to any server is made only in a run the
+player started (§17.14). Tests run headless in WiseMan, blast radius only, and never as repeated broad or GPU runs
+(the load rule of 2026-09-25).
+
+**Pass 1. The hardware session.**
+- *Scope.* On the Legion Go S, in Game Mode and in Desktop Mode: what SDL reports for the built-in pad under Steam
+  Input, and the family `PadFamilies` gives it (P42's open half); the themed view's frame in a real window under
+  gamescope against Desktop Mode (P28 was measured surfaceless, §14.10a); the navigation sounds' latency beside the game
+  stream (§15.6); the help icons at arm's length. Then, with the user's hands on the device: one member sign-in against
+  the live service (§20.6), and, if Q35 allows, the four-file N64 run that settles P60 (about 20 requests).
+- *Depends on.* The user's time, and Q35. No code dependency.
+- *Oracle and tests.* The device itself; a frame log in Mistress's themed render loop, written under an environment
+  variable, read after the run. Long runs go under `systemd-run --user`, because the device ends processes an ssh
+  session leaves.
+- *LunaP.* None.
+- *Risks.* The user's password must be typed by the user into Mistress; the agent never sees or relays it. The sign-in
+  and the N64 run are live requests, each started by the user.
+- *Cost.* 1 day, and one session of the user's.
+- *What the user sees.* No new feature: a record of what the device does, the Game Mode frame §14.10a left unmeasured,
+  and the open predictions P42 and P60 retired.
+
+**Pass 2. Controllers: every pad, a popup, an override.**
+- *Scope.* `GamepadManager` opens every connected pad and routes each to the frontend (inventory 13); a notice when a pad
+  connects or goes, through LunaP's `NoticeLayer` (14); Preferences gains "Controller type" (Automatic, then the four
+  LunaP families) and "Swap A/B and X/Y" (15), and "Only accept input from the first controller" (off, ES-DE's default).
+  The help bar follows the pad last pressed. Whether a second pad also becomes player 2 in a game is Q22.
+- *Depends on.* Q22. Nothing of §22 or §23: the code is Endymion's input and the window's pad poll.
+- *Oracle and tests.* `SimulatedPad` extended to several pads; SDL's own added and removed events. ES-DE's popup, whose
+  fades §14.7 saw but did not time, is recorded once with §14.7's uinput rig (P103).
+- *LunaP.* A notice's content may want a `PadGlyph` beside its words (§103); nothing else.
+- *Risks.* The blast radius leaves big picture: `GamepadManager` feeds every game's input (`EmuSen_Input.md` §4), so the
+  input tests run too. Some wireless pads register twice (UG "Input device settings"); the first-controller switch is
+  ES-DE's answer and is kept.
+- *Cost.* 2–3 days.
+- *What the user sees.* Any pad steers big picture; "Controller connected" and "disconnected" notices; icons that can
+  be forced to a family.
+
+**Pass 3. The theme list, and a survey of its themes.**
+- *Scope.* The Themes tab lists ES-DE's official list (`themes-list/themes.json`, read at run time, never mirrored; 66
+  themes on 2026-09-24, §6), with each entry's variant, scheme and ratio counts and its screenshots, fetched only when the
+  picker is open. Any listed theme downloads from GitHub or GitLab through §16.4's checked swap; GitLab's archive URL is
+  added. The stamp records every file's hash, so a theme edited in place reads "Local changes" and an update asks before
+  replacing them (UG "Theme downloader"). Then a survey: the loader run over every listed theme's XML for EmuSen's five
+  systems, counting errors, unknown properties, and the elements and properties used that the scene does not draw. The
+  survey decides Pass 14's scope.
+- *Depends on.* Q27 and Q28. Nothing of §22 or §23.
+- *Oracle and tests.* A fake GitHub and GitLab, as §16.4's; the survey's own counts, recorded here; ES-DE captures of
+  two or three surveyed themes on the synthetic library, only if Pass 14 is chosen for them.
+- *LunaP.* None; the picker is `LunaList` and `FittedImage`.
+- *Risks.* **Licences.** Most listed themes carry their authors' licences, many non-commercial and share-alike, some
+  none. Nothing is redistributed: the list is read, a theme is fetched at the player's request, and its About sheet
+  (§16.4) reads its licence at display time. The picker shows the licence line, or "states no licence", before the
+  download button (Q27). **Load.** Downloading whole archives for a survey would fetch gigabytes (Art Book Next alone is
+  220 MB, §16.7); the recommended survey fetches only XML files through the hosts' tree listings, under GitHub's 60
+  unauthenticated calls an hour, into `~/.cache/emusen/bigpicture/survey/`, never the repository (Q28).
+- *Cost.* 2–3 days.
+- *What the user sees.* Every official ES-DE theme in the Themes tab, with pictures and licences, downloadable and
+  updatable; a table here of which ones Mistress draws fully.
+
+**Pass 4. Switches, and what the engine draws itself.**
+- *Scope.* Built-in badge icons for a theme that names none (inventory 11): the nine slots, the folder-link overlay, and
+  controller icons for the controller types EmuSen's consoles use plus generic and unknown, drawn as Mistress's own (Q9).
+  The switches of rows 12 and 25–31: clock, help, the four status indicators, quick system select, the shoulders (Q32),
+  startup system and view, systems order, the quick-scroll overlay, navigation volume, and a fallback navigation set
+  drawn from Mistress's own sounds. Optionally row 32, the per-game engine with its `altemulator` badge, and row 33, the
+  play-time cap.
+- *Depends on.* §23 for the completed, kidgame, broken and controller fields the badges show, and for the per-game
+  engine field; §22 for the collection badge. It edits the Theme Settings sheet and Preferences, which §22 and §23 also
+  edit, so it starts after both are merged. Q32.
+- *Oracle and tests.* UG's settings text for each switch's meaning; `THEMES.md`'s badge properties for layout; the
+  quick-scroll overlay's timing recorded once from ES-DE. Each switch gets a pixel test in §15's style: the change lands
+  inside its element's box and nowhere else (P105, P106).
+- *LunaP.* A `BadgeGlyph` set beside `PadGlyph` (§103), drawn as LunaP's own geometry; a letter overlay for a held list.
+- *Risks.* Small. A fallback navigation sound must be Mistress's own recording or synthesis, not ES-DE's samples.
+- *Cost.* 2–3 days; the per-game engine 1 more.
+- *What the user sees.* A clock on request, badges on any theme, the ES-DE settings a player expects in Theme Settings
+  and Preferences.
+
+**Pass 5. Localisation's plumbing.**
+- *Scope.* Every string Mistress shows in a big-screen session goes through one lookup, with a language setting
+  (Automatic from the OS, then the chosen ones; ES-DE's guide notes that automatic detection does not work in Steam's
+  Game Mode, so the setting is needed there). LunaP's own strings (the keyboard's keys, the sheets' buttons) get a
+  provider a consumer can fill, because LunaP is a separate MIT package used by Pegasus too. The theme's language follows
+  the application's (TH "Languages"). No translation is written in this pass: a pseudo-locale (every string bracketed
+  and lengthened) is the test language.
+- *Depends on.* Q26 for the languages, not for the plumbing. It follows Pass 4 and §22 and §23, so that their strings
+  exist when the lookup is introduced, and it precedes the passes that follow, whose new strings are then held by its test.
+- *Oracle and tests.* The pseudo-locale test: every sheet reachable in a big-screen session is walked with `PadAudit`
+  and fails on any visible string that did not come through the lookup (P107). Widths: every sheet is rendered in the
+  pseudo-locale at 1280×800 and checked for clipping, which §20.5 showed is the defect such text finds.
+- *LunaP.* A string provider, with a `docs/LunaP.md` section and its API baseline.
+- *Risks.* Churn: the pass touches most files that show text, so it is merged quickly and alone. Translations may not be
+  copied from ES-DE (its locale files are MIT, but the project copies nothing of ES-DE).
+- *Cost.* 3–4 days.
+- *What the user sees.* Nothing changes in English: a language setting that offers English alone until Pass 15, and a
+  pseudo-locale, for tests, that proves every string can change.
+
+**Pass 6. Folders.**
+- *Scope.* In the themed view, a console's games are shown as ES-DE shows them, with folders as entries that South
+  enters and East leaves, folders on top (ES-DE's default), the folder badge and `defaultFolderImage`, and
+  `gamelistinfo`'s folder icon once Pass 14 draws it; or flattened, per Q23. The media path rule of inventory 8: media of
+  a game in a folder are looked for under the same folder, in an ES-DE tree and in Mistress's store, which is migrated
+  once. Directories named like files and `.m3u` playlists wait for a disc core (Q24).
+- *Depends on.* Q23 and Q24; §22 (sorting and filters within folders, and the jump index's folder entry); §23 (folder
+  metadata and the folder link).
+- *Oracle and tests.* UG's folder rules; ES-DE captures of a synthetic library with folders; a test that shows P108's
+  defect on the unchanged reader before it is fixed, as §16.2 did for P52.
+- *LunaP.* A folder indicator in `TextRowList` beside its favourite star (LunaP §101.8), if it lacks one; the grid's
+  `defaultFolderImage` is mapped already (§16.5).
+- *Risks.* The selection, the quick system select's memory and the return from a game are keyed by file today (§15.2);
+  a folder adds a level to each key. The desktop library is not changed.
+- *Cost.* 2–3 days; 1 more for directories as files and `.m3u` if Q24 asks for them now.
+- *What the user sees.* NES opening on its 16 folders and GB on its letters, as ES-DE would show them, or the flat list
+  kept by choice.
+
+**Pass 7. Kid and Kiosk.**
+- *Scope.* A UI mode setting, Full, Kiosk or Kid (UG "UI modes"). Kiosk reduces the menus to a volume setting, as
+  ES-DE's does, and removes Theme Settings, the rest of Preferences, scraping, the metadata editor, collection editing
+  and favourite marking; Kid shows only kidgame games and removes the options menu too. The unlock sequence, ES-DE's documented default (Up, Up, Down, Down, Left, Right, Left,
+  Right, B, A), entered on the pad outside a menu, returns to Full. The in-game pad menu keeps what a player needs to
+  leave a game.
+- *Depends on.* §23's kidgame field and its editor, §22's filters and collections, Q25.
+- *Oracle and tests.* UG's list of what each mode removes; for each mode, `PadAudit` over every sheet of §15.9 reaches no
+  removed control (P110); a mutant per restriction.
+- *LunaP.* None.
+- *Risks.* This is a convenience, not a lock: anyone with a keyboard or the settings file leaves it. The section of the
+  settings reference must say so.
+- *Cost.* 1.5–2 days.
+- *What the user sees.* A mode a child can be handed.
+
+**Pass 8. ScreenScraper's extras.**
+- *Scope.* The kinds of inventory 22 as switches, off by default (ES-DE turns videos and manuals on; §21.1's sizes and a
+  10,000-a-day account argue against that here): back covers (`box-2D-back`), 3D boxes (`box-3D`), physical media
+  (`support-2D`), fan art (`fanart`), manuals (`manuel`), and videos (`video-normalized`) only if Q20 says yes.
+  Refresh (21): a kept file is asked again with its checksum, so an unchanged one costs a request and no bytes (§5.1's
+  `MD5OK`). Search by name and a chooser (20), started only from
+  "Find by name…" or a run the player sets to ask, never as an automatic fallback (§5.2). Scraped names (23, Q30). The
+  criteria of 24 that Mistress can answer. Deleted games' media (34).
+- *Depends on.* Q20 (videos), Q30; §23 for "exclude from scraper" and a folder's scraping. §17.14's rules bind all of it.
+- *Oracle and tests.* The fake ScreenScraper of §17 and §20, extended to `jeuRecherche`, the checksum answers and the new
+  kinds; the confirm step's plan gains each kind's cost from §21.1's offer rates (P112). One live run of about ten games,
+  started by the user, measures what the fake cannot: the checksum answer's cost (P111).
+- *LunaP.* None expected; the chooser is a `LunaList` of names with a thumbnail.
+- *Risks.* **Quota and load.** Every kind is a request (P61), and the four picture kinds add about 3.2 requests and
+  1.2 MB to a found game by §21.1's rates, nearly doubling a whole-library run; manuals add 0.7 requests and 1.2 MB, with
+  a largest file of 18 MB. The defaults stay those of §4.60 and each new kind is the player's choice. **Terms.** A name
+  search counts against the day's unrecognised allowance when it finds nothing (§5.2).
+- *Cost.* 3–4 days.
+- *What the user sees.* More kinds in the Scraping tab, a Refresh, and a "Find by name…" for the games hashes miss.
+
+**Pass 9. The media viewer and manuals.**
+- *Scope.* A full-screen viewer over the themed gamelist (inventory 4), opened by the button Q32 settles (ES-DE's X,
+  which is West, unused in §4.9's grammar): the game's pictures in ES-DE's order, then `custom`, left and right one at a
+  time, the triggers to the ends, any other button to close; the manual mode (5) on Up with pages, zoom on the
+  shoulders and pan while zoomed; the `manual` badge. Video enters the viewer in Pass 12.
+- *Depends on.* Pass 8 for real back covers, fan art and manuals (the pass itself runs on synthetic media); Q31 for the
+  PDF renderer; Q32 for the button.
+- *Oracle and tests.* UG "Game media viewer"; ES-DE captures of the viewer on the synthetic library; synthetic PDFs of
+  known page count and page sizes written by a WiseMan tool; P113 for a page's cost.
+- *LunaP.* A pager of pictures, and a page view with zoom and pan that takes pages as bitmaps; the PDF renderer stays in
+  Mistress, because LunaP takes no dependency beyond Avalonia (§13.2).
+- *Risks.* **Licence of the renderer (Q31).** Poppler is GPL-2.0-or-later and PDFium BSD-style, both usable from a GPL-3.0
+  program; MuPDF is AGPL-3.0, which would bring its network clause to the combination. These licences are stated from
+  the projects' own statements as commonly published and are to be read again at the pass's start. Poppler's
+  `pdftoppm` run as a process, as `FrameRecorder` runs `ffmpeg`, ships nothing. **Load.** A manual of 18 MB rendered at
+  1920×1200 is memory: pages are rendered one at a time and kept only near the current one.
+- *Cost.* 3–4 days; video in the viewer 0.5–1 more in Pass 12.
+- *What the user sees.* West on a game shows its pictures full screen, and its manual.
+
+**Pass 10. The screensaver.**
+- *Scope.* Dim (dim and desaturate the view), Black, and Slideshow (the library's pictures, or favourites only, or a
+  folder; the game-info overlay), after an idle time, 5 minutes by ES-DE's default; the controls (random game, launch,
+  jump to the game), and the setting "Start screensaver after" with 0 for never. Video waits for Pass 12, and falls back
+  to Dim meanwhile, as ES-DE does with no videos.
+- *Depends on.* Q34. Pass 8 only for richer pictures.
+- *Oracle and tests.* UG "Screensaver"; ES-DE recordings of Dim's level and the slideshow's swap and transition with
+  §14.7's rig; the idle clock is the scene's own, so tests step it.
+- *LunaP.* A dim layer and a cross-fading picture over `FittedImage`; the idle timer is the consumer's.
+- *Risks.* Steam dims and sleeps the screen itself in Game Mode, so two savers could stack (Q34). A screensaver must draw
+  nothing between swaps, as P39 required of a still view, or it costs the battery it exists to save (P114).
+- *Cost.* 1.5–2 days; the video saver 0.5 more in Pass 12.
+- *What the user sees.* The view dims, or a slideshow of the library, after five idle minutes.
+
+**Pass 11. The launch screen.**
+- *Scope.* ES-DE's launch screen and its five durations (inventory 10), after the resume question has been answered and
+  before the game's first frame (Q33), in both big-screen and desktop big picture.
+- *Depends on.* Q33. Nothing else.
+- *Oracle and tests.* `USERGUIDE.md` gives the durations' names and says nothing of the screen's content, so the pass
+  opens by capturing and recording ES-DE's launch screen at each duration on the synthetic library (P115). Tests step the
+  scene's clock through each duration and require the game to start at its end.
+- *LunaP.* Possibly a full-screen card with a scale-up entrance, built from existing controls and a `Glide`.
+- *Risks.* The launch path is `StartGameAsync` (§15.4), shared by every start; a screen that delays the start must not
+  delay a resume from the pad menu.
+- *Cost.* 1–1.5 days.
+- *What the user sees.* The game's art and name for a moment before the game, as in ES-DE.
+
+**Pass 12. Video (§7's stage g), waiting on Q20 and Q21.**
+- *Scope.* A decoder behind one interface; the `video` element's deferred properties (delay, fade-in, iterations,
+  `onIterationsDone`, `audio`, pillarboxes and their threshold, scanlines, video corner radius, `path` and `default`);
+  the video's audio on a stream of its own beside `UiSoundPlayer`'s, SDL mixing both (§15.6); video volume and the three
+  audio switches; then video in the viewer (Pass 9) and the Video screensaver (Pass 10).
+- *Depends on.* Q20 and Q21; Pass 8 for scraped clips (the pass runs on synthetic clips); Pass 1 for Game Mode's frame
+  budget.
+- *Oracle and tests.* Synthetic clips written by `ffmpeg` in WiseMan's tools: a frame counter and a tone, at known sizes
+  and frame rates, so a frame's number can be read back from the picture. ES-DE recordings with §14.7's rig for the
+  delay, the fade and the iterations (P117). Decode cost measured on the handheld (P116, which carries P5).
+- *LunaP.* A video surface that shows frames a consumer hands it (as `RgbaImageView` does), with the fade, pillarboxes and
+  corner radius; the decoder stays in Mistress.
+- *Risks.* **Codecs and licences (Q21).** ScreenScraper's clips are MP4 (32 of 32, §21.1); their codec was not measured,
+  and H.264 is the usual one. FFmpeg is LGPL-2.1-or-later unless built with GPL parts; H.264 is covered by patents
+  licensed through a pool in some countries. Running the system's own `ffmpeg` as a process ships no codec, and is what
+  the desktop can do today (§21.1). Bundling FFmpeg for SteamOS would make EmuSen a distributor of a patented decoder,
+  which is a legal judgement, not a technical one, and is not recommended. **Load.** A decoder process per clip on a
+  handheld, and ES-DE recordings at 165 fps on the desktop: one run at a time, short, under `nice`. **Quota.** P120.
+- *Cost.* 4–6 days, and 1–1.5 for the viewer and the screensaver.
+- *What the user sees.* After three seconds on a game, its clip plays in Art Book Next's frame, once, with sound; clips
+  in the viewer and the screensaver.
+
+**Pass 13. TheGamesDB, waiting on Q29.**
+- *Scope.* A second client, used only inside a run the player started, and only for games ScreenScraper left without
+  something TheGamesDB has: its `ByGameHash` by MD5 and then CRC with the platform, then an explicit name search from the
+  chooser of Pass 8; its images (front and back box, screenshot, title screen, clear logo, fan art); its allowance read
+  from every answer and from `/v1/API/Limit`, which costs nothing.
+- *Depends on.* Q29; Pass 8's chooser.
+- *Oracle and tests.* A fake TheGamesDB built from the spec's documented answers; one live run of about ten games,
+  started by the user, with their key.
+- *LunaP.* None.
+- *Risks.* **The key.** A key belongs to a logged-in site account (§21.1), so it is handled as the ScreenScraper developer
+  file is: in a file outside the repository, mode 0600, passed through the redactor, never in a build (Q29). **Terms.**
+  The data's terms of use were not found; the pass reads them first, and stops if they forbid the use. **Quota.** A
+  monthly allowance, not a daily one, so a whole-library run is not an option on it.
+- *Cost.* 2–3 days, plus the time to obtain a key.
+- *What the user sees.* Games ScreenScraper misses, filled from a second source.
+
+**Pass 14. The elements other themes use.**
+- *Scope.* What Pass 3's survey finds used and undrawn, in order of the number of themes that use it: expected among them
+  `gamelistinfo` (with §22's filter counts), `gameselector` (the system view's game pictures), `animation` (GIF, and
+  Lottie), the vertical and wheel carousels with reflections, rotation, the fade transition and `stationary`.
+- *Depends on.* Pass 3; §22 for `gamelistinfo`'s filtered counts.
+- *Oracle and tests.* ES-DE captures and recordings of the surveyed themes that use each element, on the synthetic
+  library, as §13.8 and §16.5 did for Art Book Next; `SceneMappingTests` extended to each new pair.
+- *LunaP.* The carousel's other types, a frame-sequence image for GIF frames decoded in Mistress; Lottie needs Skottie,
+  a SkiaSharp dependency LunaP may not take, so it would go to a sibling package or to Mistress, by `PLAN-icons.md`
+  §1.1's rule.
+- *Risks.* Scope that grows with each theme. The survey's counts bound it, and an element no chosen theme uses is not
+  built.
+- *Cost.* 3–8 days, as the survey decides.
+- *What the user sees.* The themes the user picks from the list drawn as ES-DE draws them.
+
+**Pass 15. Translations.**
+- *Scope.* The languages Q26 names, one at a time, on Pass 5's plumbing.
+- *Depends on.* Pass 5; Q26; last, so that the strings have settled.
+- *Oracle and tests.* A speaker's review; the pseudo-locale test stays the guard; a clipping check per language at
+  1280×800.
+- *LunaP.* Its own strings, in the same languages.
+- *Risks.* Quality, and provenance: a translation's source is recorded; none is copied from ES-DE.
+- *Cost.* 1–2 days a language, plus review.
+- *What the user sees.* Mistress in the chosen languages.
+
+### 21.4 The recommended order, and why
+
+| # | Pass | Cost (days) | Waits on |
+|---|---|---|---|
+| 1 | The hardware session | 1 | the user's time, Q35 |
+| 2 | Controllers | 2–3 | Q22 |
+| 3 | The theme list and the survey | 2–3 | Q27, Q28 |
+| — | *§22 and §23 merged* | | |
+| 4 | Switches and engine-drawn badges | 2–3 (+1) | §22, §23, Q32 |
+| 5 | Localisation's plumbing | 3–4 | — |
+| 6 | Folders | 2–3 (+1) | §22, §23, Q23, Q24 |
+| 7 | Kid and Kiosk | 1.5–2 | §22, §23, Q25 |
+| 8 | ScreenScraper's extras | 3–4 | Q20, Q30, §23 |
+| 9 | The media viewer and manuals | 3–4 | Pass 8, Q31, Q32 |
+| 10 | The screensaver | 1.5–2 | Q34 |
+| 11 | The launch screen | 1–1.5 | Q33 |
+| 12 | Video | 4–6 (+1–1.5) | **Q20**, **Q21**, Pass 1 |
+| 13 | TheGamesDB | 2–3 | **Q29**, Pass 8 |
+| 14 | Other themes' elements | 3–8 | Pass 3, §22 |
+| 15 | Translations | 1–2 a language | Q26, Pass 5 |
+
+The fourteen passes before translations come to **31–48 working days** at §7's scale, or 34–51 with the per-game engine,
+directories as files, and video in the viewer and the screensaver; §7 estimated 17–27 for stages (a) to (g).
+
+The reasoning, in the order of the table:
+- **Passes 1 to 3 touch nothing §22 and §23 touch.** The hardware session writes no product code; controllers live in
+  Endymion and the pad poll; the list and survey in `ThemeDownloads` and the loader. They can run while §22 and §23 are
+  being built and merged, and each retires open items (the Game Mode frame, P42, P60) or produces the numbers later
+  passes need: Pass 1's Game Mode frame for Pass 12's budget, Pass 3's survey for Pass 14's scope.
+- **Pass 4 first after the merge** because it is cheap, shows at once, and its badges need §23's fields.
+- **Pass 5 before the passes that add text.** Introduced last, it would retrofit the strings of ten passes; introduced
+  here, its pseudo-locale test holds every later pass's strings as they are written. It comes after Pass 4 and the merge
+  so that the lookup is laid over settled sheets.
+- **Folders and Kid and Kiosk next,** since they change what the list is (a level of folders, a filtered set) and every
+  later pass draws over the list.
+- **Pass 8 before Pass 9,** because the viewer's only real inputs are the kinds Pass 8 fetches.
+- **The viewer, the screensaver and the launch screen before video,** for two reasons. Video is the most expensive pass,
+  the one with the legal question and the one waiting on the user (Q20, Q21). And when it is built, two of its three
+  consumers already exist, so the decoder is designed once against the element, the viewer and the saver together,
+  rather than for the element and then bent.
+- **TheGamesDB late,** because ScreenScraper found 39 of 40 by hash (§17.10), so a second source fills little, and it
+  waits on a key.
+- **Pass 14 late but movable:** if the user picks a theme from Pass 3's list that needs an element, that element's part
+  of Pass 14 moves up to follow Pass 3.
+- **Translations last,** when the strings have stopped moving.
+
+### 21.5 The decisions only the user can make
+
+- **Q20, video: Q4 revisited.** Q4 was "not now" (§10.1). What has changed since: ScreenScraper offers a clip for 32 of 39
+  found games (§21.1), the handheld draws a full frame in under 2 ms at 1920×1200 (§14.10b), and three consumers now wait
+  on a decoder (the theme's element, the viewer, the screensaver). Options:
+  (a) keep it deferred, and Passes 9 and 10 ship without video;
+  (b) theme video only, with scraping of `video-normalized`;
+  (c) all three consumers.
+  **Recommendation: (c), built as Pass 12 after Passes 9 and 10**, with clips off in the scraper by default because each
+  adds about 0.8 requests and 1.1 MB to a found game (P120), and video audio on, as ES-DE's defaults have it
+  (`ViewsVideoAudio` true), with the volume switch beside it. Pass 8's video kind, the video parts of Passes 9 and 10,
+  and Pass 12 wait on this answer.
+- **Q21, the decoder and its codecs** (only if Q20 is (b) or (c)). Options:
+  (a) the system's own `ffmpeg`, run as a process (as `FrameRecorder` does), shipping nothing;
+  (b) FFmpeg bundled, as an LGPL build;
+  (c) bindings (`FFmpeg.AutoGen`, `Sdcb.FFmpeg`, §4.7) to the system's libraries.
+  **Recommendation: (a).** No codec is distributed, so the patent and licence questions of a bundled H.264 decoder do not
+  arise for EmuSen. Where no `ffmpeg` exists, the element shows its image, as today. Whether SteamOS provides one is
+  measured in Pass 1; if it does not, bundling is asked again then, with that fact.
+- **Q22, what "multiple controllers" means.** Options:
+  (a) every pad drives the frontend (ES-DE's sense);
+  (b) (a), and a second pad becomes player 2 in a game.
+  **Recommendation: (a) in Pass 2; (b) as its own piece of input work,** recorded in `EmuSen_Input.md`, because cores
+  model two ports and a Player 2 mirror already exists (§5.1 and §6 there), and port assignment reaches every game, not
+  big picture alone.
+- **Q23, folders.** The user's NES games are all in 16 region and category folders and the GB games in 28 letter folders
+  (§21.1). Options:
+  (a) show folders, as ES-DE does;
+  (b) keep the flat list, which is ES-DE's discouraged folder flattening;
+  (c) show folders, with a per-console "flatten" switch.
+  **Recommendation: (c), folders shown by default.** It is ES-DE's behaviour, and the switch serves the letter folders,
+  which only repeat what jump-to-letter (§22) does.
+- **Q24, directories as files and `.m3u`.** **Recommendation: wait for a disc-based core.** No core and no file in the
+  library would use them (§21.1), so tests would be all that exercised them.
+- **Q25, Kid and Kiosk.** Options: both; Kid only; neither. **Recommendation: both**, since they cost 1.5–2 days once §23
+  exists, and a frontend handed to a child is what they are for. If no one in the house needs them, neither.
+- **Q26, languages and translators.** Options:
+  (a) the plumbing only (Pass 5), English only;
+  (b) the plumbing, then languages the user names, drafted and reviewed by a speaker;
+  (c) the plumbing, and a file format a community could translate.
+  **Recommendation: (a) now, (b) for any language the user names.** No translation is taken from ES-DE.
+- **Q27, which themes the list offers.** Options: every theme of ES-DE's list; only those that state a licence; only
+  those Mistress draws fully after Pass 14. **Recommendation: every theme**, with its licence line or "states no licence"
+  shown before the download, since the download is the player's, from the author's own repository, as it is in ES-DE.
+- **Q28, the survey's download.** Options: every theme's archive (gigabytes); XML files only, through the hosts' tree
+  listings; a sample the user picks. **Recommendation: XML only** (P104 predicts under 50 MB), kept under
+  `~/.cache/emusen/bigpicture/survey/`.
+- **Q29, TheGamesDB.** Options:
+  (a) not at all;
+  (b) the user's own key, in a file outside the repository, used only on the user's machines, as Q5's answer did for
+  ScreenScraper;
+  (c) (b), and a box where a player enters a key of their own.
+  **Recommendation: (c) if the terms read in Pass 13 allow it, else (b)**, since a key comes from any site account
+  (§21.1), unlike ScreenScraper's developer credentials. Pass 13 waits on this answer.
+- **Q30, scraped names.** ES-DE shows scraped names. Options: show them; keep the file's name; a switch. **Recommendation:
+  a switch, off**: the library's names are No-Intro's, already exact, and their tags tell two copies of a game apart,
+  which ScreenScraper's names do not.
+- **Q31, the PDF renderer.** Options: Poppler's `pdftoppm` as a process; PDFium bundled; MuPDF (AGPL-3.0). **Recommendation:
+  Poppler as a process**, shipping nothing, with PDFium as the fallback if SteamOS lacks Poppler. MuPDF is not
+  recommended, for its licence's network clause.
+- **Q32, two buttons.** ES-DE opens its media viewer with X (West), which Mistress's grammar leaves free (§4.9); and its
+  guide says the shoulders "jump 10 games in the gamelists", where Mistress pages by the rows shown (§15.3). Options for
+  the second: keep the page; ten games, as documented. **Recommendation: West for the viewer, and ten games** (with
+  quick system select on left and right, ES-DE's default for a list). If §22 or §23 have claimed West by then, this is
+  asked again.
+- **Q33, the launch screen.** Options: ES-DE's default, Normal; Brief; Popup; off. And its place: after the resume
+  question, or before it. **Recommendation: Normal, after the resume question**, so the question is not hidden behind a
+  timed screen.
+- **Q34, the screensaver in Game Mode.** Steam dims and sleeps the handheld itself. Options: on after 5 minutes, as ES-DE's
+  default, everywhere; on for the desktop and off in Game Mode; off. **Recommendation: on everywhere, type Dim until
+  videos exist, and off in Game Mode if Pass 1 finds the two stacking.** Whether Steam's own dimming starts over an
+  application that draws nothing, as a still themed view does (P39), is not known; Pass 1 looks.
+- **Q35, the hardware session.** When can the user run it, and may it include one sign-in with the user's own member
+  account, typed by the user, and the four-file N64 run of about 20 requests that settles P60? **Recommendation: yes to
+  both, in one sitting.**
+
+### 21.6 Predictions
+
+Written before any pass is built, to be retired in each pass's record.
+
+| # | Pass | Prediction | Retired when |
+|---|---|---|---|
+| P100 | 1 | In Game Mode, SDL reports the Legion Go S's pad as Steam's virtual pad (its name or an Xbox type), and `PadFamilies` gives Xbox with no change to §15.5's rules | Pass 1 |
+| P101 | 1 | Game Mode's compositing adds under 1 ms to the median frame of the held carousel at 1920×1200 against Desktop Mode, and no frame in 1,800 exceeds 16.7 ms | Pass 1 |
+| P102 | 1 | A navigation sound starts within 100 ms of its press while a game is suspended behind the library, the 4,096-frame device buffer of §15.6 included, as SDL's queue and buffer sizes report it | Pass 1 |
+| P103 | 2 | Every pad rule of §15.3 holds from either of two pads, and the help bar follows the pad last pressed; ES-DE's device popup fades in and out over 0.4–0.6 s each and holds 2–5 s | Pass 2 |
+| P104 | 3 | Of ES-DE's listed themes, at least 90% load for EmuSen's five systems with no loader error, and at least half use an element or carousel type Mistress does not draw; the XML-only survey fetches under 50 MB | Pass 3 |
+| P105 | 4 | Built-in badges change no pixel of Art Book Next's gamelist, which names its own icons; on a synthetic theme that names none, each of the nine slots draws | Pass 4 |
+| P106 | 4 | Turning the clock on changes only pixels inside the clock's box, as P43 found for the help bar | Pass 4 |
+| P107 | 5 | At the pass's start, the pseudo-locale walk finds 300–900 distinct visible strings outside the lookup in a big-screen session's sheets; at its end, none | Pass 5 |
+| P108 | 6 | `EsdeMediaFolder` finds none of the media of a game in a subfolder of an ES-DE-written tree (a defect predicted from the code and UG's path rule), shown by a test on the unchanged reader before the fix | Pass 6 |
+| P109 | 6 | Shown as folders, NES opens on 16 entries and GB on 28; the return from a game in a folder comes back to that folder and game, its first frame equal to a fresh build (P40's test); the first showing costs within 10% of the flat one | Pass 6 |
+| P110 | 7 | Kid mode lists exactly the kidgame games, and in Kiosk and Kid `PadAudit` reaches no removed control on any sheet of §15.9 | Pass 7 |
+| P111 | 8 | Refreshing a found game whose files are unchanged costs one request per kind and under 1 KB received per kind, each request counted in `requeststoday` (P61) | Pass 8 |
+| P112 | 8 | Back covers, 3D boxes, physical media and fan art together raise a found game from 4.7 to 7.5–8.5 requests and add 0.9–1.5 MB, taking a found game from about 13 s to 20–28 s at 128 KB/s | Pass 8 |
+| P113 | 9 | One page of a median ScreenScraper manual (1.7 MB) renders at 1920×1200 in under 300 ms on the desktop and under 1 s on the handheld | Pass 9 |
+| P114 | 10 | Dim and Black draw at most one frame after they start, and the slideshow draws only at its swaps and their transitions (every 10 s by ES-DE's default) | Pass 10 |
+| P115 | 11 | ES-DE's launch screen at Normal lasts 1.5–3 s; Brief is 0.4–0.6 of that and Long 1.5–2.5 times it | Pass 11 |
+| P116 | 12 | ScreenScraper's `video-normalized` clips are H.264 in MP4, no larger than 640×480, and one decodes in under 5% of a Legion Go S core (P5, carried) | Pass 12 |
+| P117 | 12 | ES-DE starts a clip at the element's `delay` to within one frame at 60 Hz and fades it from black linearly over `fadeInTime` (1 s by default) to within 5% | Pass 12 |
+| P118 | 13 | TheGamesDB's `ByGameHash` by MD5 identifies fewer than half of a 40-file sample, where ScreenScraper found 39 (§17.10) | Pass 13 |
+| P119 | all | Each pass is opened and closed in no more calendar days than the lower end of its estimate, as stages (a) to (f) were against §7 | each pass |
+| P120 | 8, 12 | Fetching `video-normalized` adds 0.7–0.9 requests and 0.9–1.3 MB to a found game on average (§21.1's offer rate and median), about 9 s more a game at 128 KB/s | Pass 12's first live run |
+
+### 21.7 What this section did not do
+
+- **ES-DE was not run,** and its source was not read. Two behaviours the passes need are undocumented and are the passes'
+  first measurements, not this plan's: the launch screen's content (Pass 11) and the device popup's timing (Pass 2).
+- **`INSTALL.md` and `FAQ.md` were not read,** so the command-line options, event scripts and controller profiles they
+  document were judged only from the guide's mentions of them.
+- **The theme list was not re-read.** Its size, 66, is §6's count of 2026-09-24.
+- **Nothing was downloaded from ScreenScraper or TheGamesDB.** §21.1's media sizes are the servers' declarations; the
+  video codec is unknown.
+- **The handheld was not touched.** Whether SteamOS carries `ffmpeg` or Poppler, on which Q21 and Q31 lean, is Pass 1's.
+- **The licences of FFmpeg, Poppler, PDFium and MuPDF** are stated as those projects commonly publish them, not re-read
+  for this section; each pass that takes one reads it first. TheGamesDB's data terms were not found.
+- **The costs are estimates** at §7's scale, and §7's scale has run long (P119).

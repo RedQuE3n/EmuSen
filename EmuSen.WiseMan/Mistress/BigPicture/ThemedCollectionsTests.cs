@@ -128,9 +128,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(ThemeSystemKind.CustomCollection, d.Systems.Single(x => x.System.Name == "collections").System.Kind);
         }, default);
 
+        private static readonly string MediaRoot = Path.Combine(Path.GetTempPath(), "EmuSenCollectionsTestMedia");
+
         [Fact]
-        public Task All_games_favorites_and_last_played_come_from_Mistress_s_records_and_their_games_keep_their_own_system() => Run(s =>
+        public Task All_games_favorites_and_last_played_come_from_Mistress_s_records_and_their_games_keep_their_own_system() => Session.Dispatch(() =>
         {
+            SyntheticLibrary.WriteMedia(MediaRoot);
+            using var s = new ThemedSession(settings: a => { AllAuto(a); a.EsdeMediaDirectory = MediaRoot; });
             GameRecords records = Records(s);
             records.ToggleFavourite(Rom(s, ThemedSession.SnesGames[3]));
             records.ToggleFavourite(Rom(s, ThemedSession.NesGames[1]));
@@ -147,6 +151,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(s.Themed.Stage!.Current.Data.System.Stars);
             // A game of a collection is looked up, and suffixed, under the system it belongs to.
             Assert.Equal("gb", s.Themed.Stage.Current.Data.System.Games.Single(g => g.Name == ThemedSession.GbGames[0]).SourceIn(s.Themed.Stage.Current.Data.System).Name);
+            s.Pad.Down(Array.IndexOf(all, ThemedSession.GbGames[0]));
+            Assert.Equal(ThemedSession.GbGames[0], s.Game);
+            SceneBuilder scene = s.Themed.Stage.Current.Scene;
+            string? cover = (scene.Find("image", "cover")!.Control as FittedImage)?.Source;
+            Assert.Equal(Path.Combine(MediaRoot, "gb", "covers", ThemedSession.GbGames[0] + ".png"), cover);
+            TextRowList rows = scene.Entries.Select(e => e.Control).OfType<TextRowList>().Single();
+            Assert.Equal(ThemedSession.GbGames[0] + " [GB]", rows.Items![Array.IndexOf(all, ThemedSession.GbGames[0])].Text);
+            s.Pad.L2();
 
             s.Pad.Right();
             Assert.Equal("favorites", s.System);
@@ -158,7 +170,50 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.Right();
             Assert.Equal("recent", s.System);
             Assert.Equal([ThemedSession.GbGames[0], ThemedSession.NesGames[0], ThemedSession.SnesGames[0]], Listed(s));
-        }, AllAuto);
+        }, default);
+
+        [Fact]
+        public Task The_collection_settings_sheet_applies_each_switch_and_choice_beneath_it_at_once_and_saves_them() => Run(s =>
+        {
+            GameRecords records = Records(s);
+            records.ToggleFavourite(Rom(s, ThemedSession.SnesGames[0]));
+            long id = records.CreateCollection("Platform", DateTime.Now)!.Value;
+            records.AddToCollection(id, Rom(s, ThemedSession.SnesGames[0]));
+            Refresh(s);
+            Choose(s, "Game Collection Settings");
+            var settings = (AppSettings)typeof(MainWindow).GetField("_appSettings", Hidden)!.GetValue(s.Window)!;
+
+            Reach(s, e => e is LunaSwitch { Name: "Autoall" });
+            s.Pad.A();
+            Assert.Equal(["nes", "gb", "snes", "collections", "all"], Systems(s));
+            Reach(s, e => e is LunaSwitch sw && sw.Name == $"Custom{id}");
+            s.Pad.A();
+            Assert.Equal(["nes", "gb", "snes", "all"], Systems(s));
+            Assert.Equal([id], settings.BigPictureCollections.HiddenCustomCollections);
+            s.Pad.A();
+            Reach(s, e => e is Dropdown { Name: "CollectionGrouping" });
+            s.Pad.Right(2);
+            Assert.Equal(["nes", "gb", "snes", "Platform", "all"], Systems(s));
+            Reach(s, e => e is LunaSwitch { Name: "FavoritesFirst" });
+            s.Pad.A();
+            Reach(s, e => e is Dropdown { Name: "DefaultSortOrder" });
+            s.Pad.Right();
+            Reach(s, e => e is Dropdown { Name: "RandomEntryButton" });
+            s.Pad.Right(2);
+            s.Pad.B();
+            Assert.False(Sheets(s).IsPresenting);
+
+            BigPictureCollections saved = AppSettings.Load().BigPictureCollections;
+            Assert.Equal((BigPictureCollections.GroupNever, BigPictureCollections.RandomDisabled, "name, descending", false),
+                (saved.GroupCustomCollections, saved.RandomEntryButton, saved.DefaultSortOrder, saved.FavoritesFirst));
+            Assert.Equal([BigPictureCollections.AllGames], saved.AutoCollections);
+            Assert.Empty(saved.HiddenCustomCollections);
+            Enter(s, "snes");
+            Assert.Equal(ThemedSession.SnesGames.Reverse(), Listed(s));
+            string before = s.Game!;
+            s.Pad.L3();
+            Assert.Equal(before, s.Game);
+        });
 
         [Fact]
         public Task The_grouped_collections_system_lists_each_collection_as_a_folder_that_A_enters_and_B_leaves() => Run(s =>

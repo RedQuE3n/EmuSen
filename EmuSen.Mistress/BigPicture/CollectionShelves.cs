@@ -43,7 +43,7 @@ namespace EmuSen.Mistress.BigPicture
         public static IReadOnlyList<ThemedShelf> Build(IReadOnlyList<ThemedShelf> systems, IReadOnlyList<CustomCollection> custom, BigPictureCollections settings, Func<string, bool> themedByTheme)
         {
             var all = systems.SelectMany(s => s.Games.Select(g => g.Source is null ? g with { Source = s.System } : g)).ToList();
-            var shelves = new List<ThemedShelf>(systems);
+            var shelves = systems.Select(s => s with { FavoritesFirst = settings.FavoritesFirst }).ToList();
 
             var byFile = all.GroupBy(g => g.File, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
             var shown = custom.Where(c => !settings.HiddenCustomCollections.Contains(c.Id)).OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();

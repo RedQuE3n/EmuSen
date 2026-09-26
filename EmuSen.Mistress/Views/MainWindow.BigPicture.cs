@@ -134,6 +134,15 @@ namespace EmuSen.Mistress.Views
         {
             public string? Find(ThemeSystem system, SceneGame game, string mediaType) =>
                 esde?.Find(system, game, mediaType) ?? (mediaType == "cover" ? cover(game.File) : null);
+
+            public IReadOnlySet<string> Present(ThemeSystem system, IReadOnlyList<SceneGame> games)
+            {
+                var found = new HashSet<string>(esde?.Present(system, games) ?? new HashSet<string>(), StringComparer.Ordinal);
+                if (!found.Contains("cover") && games.Any(g => cover(g.File) is not null)) found.Add("cover");
+                return found;
+            }
+
+            public string? Stamp(ThemeSystem system) => esde?.Stamp(system);
         }
 
         // Whether the themed view is what the pad is steering now: nothing over it, no game on screen.

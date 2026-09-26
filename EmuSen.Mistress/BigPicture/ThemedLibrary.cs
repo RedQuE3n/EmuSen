@@ -131,12 +131,9 @@ namespace EmuSen.Mistress.BigPicture
         private MediaPresence Presence(ThemedShelf shelf)
         {
             if (_media is null) return MediaPresence.None;
-            string key = $"{shelf.System.Name}|{shelf.Games.Count}|{(shelf.Games.Count == 0 ? "" : shelf.Games[0].File + shelf.Games[^1].File)}";
+            string key = $"{shelf.System.Name}|{shelf.Games.Count}|{(shelf.Games.Count == 0 ? "" : shelf.Games[0].File + shelf.Games[^1].File)}|{_media.Stamp(shelf.System)}";
             if (_presence.TryGetValue(key, out MediaPresence? kept)) return kept;
-            var found = new HashSet<string>(StringComparer.Ordinal);
-            foreach (string type in ThemeCapabilities.MediaTypes)
-                if (shelf.Games.Any(g => _media.Find(shelf.System, g, type) is not null)) found.Add(type);
-            return _presence[key] = new MediaPresence(found);
+            return _presence[key] = new MediaPresence(_media.Present(shelf.System, shelf.Games));
         }
 
         // The data the kept selection gives: the system by name, its games narrowed by the search, the game by file.

@@ -87,7 +87,7 @@ namespace EmuSen.Mistress.Views
                 _themed.Status = DeviceStatusReader.Read();
                 _themed.PlaySound = _appSettings.NavigationSounds ? PlayUiSound : null;
                 _themed.SetFamily(PadFamilies.Of(_gamepad.ControllerType, _gamepad.ControllerName));
-                string mediaKey = $"{_appSettings.EsdeMediaDirectory}|{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(_artwork)}";
+                string mediaKey = $"{_appSettings.EsdeMediaDirectory}|{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(_artwork)}|{ScrapeMediaKey}";
                 shown = _themed.Show(_appSettings.BigPictureTheme!, LibraryView.Bounds.Size, ThemedShelves(), ThemedMedia(), mediaKey);
                 if (!shown && _themed.Error is { } why && LibraryView.Bounds.Width > 0) StatusText.Text = why;
                 if (shown && _themed.PlaySound is not null && UiSoundSink is null) (_uiSounds ??= new UiSoundPlayer()).Preload(_themed.SoundFiles);
@@ -115,26 +115,15 @@ namespace EmuSen.Mistress.Views
         private SceneGame ThemedGame(RomEntry entry)
         {
             GameRecord? r = _recordSnapshot.GetValueOrDefault(entry.FullPath);
-            return new SceneGame(entry.Title, entry.FullPath)
+            return WithScrapedText(new SceneGame(entry.Title, entry.FullPath)
             {
                 Favorite = r?.Favourite == true, LastPlayed = r?.LastPlayed, PlayCount = r?.PlayCount ?? 0,
                 PlayTime = r is { PlaySeconds: > 0 } ? TimeSpan.FromSeconds(r.PlaySeconds) : null,
-            };
+            });
         }
 
-        // An ES-DE downloaded_media folder when one is set, and the library's own covers for the cover type.
-        private ISceneMedia ThemedMedia()
-        {
-            EsdeMediaFolder? esde = string.IsNullOrWhiteSpace(_appSettings.EsdeMediaDirectory) ? null : new EsdeMediaFolder(_appSettings.EsdeMediaDirectory);
-            var entries = _allScan.Entries.ToDictionary(e => e.FullPath, StringComparer.Ordinal);
-            return new LibraryMedia(esde, file => entries.TryGetValue(file, out RomEntry? e) ? CoverPathFor(e) : null);
-        }
-
-        private sealed class LibraryMedia(EsdeMediaFolder? esde, Func<string, string?> cover) : ISceneMedia
-        {
-            public string? Find(ThemeSystem system, SceneGame game, string mediaType) =>
-                esde?.Find(system, game, mediaType) ?? (mediaType == "cover" ? cover(game.File) : null);
-        }
+        // The same order as the library's covers (§4.60 of the settings reference): the player's own, ScreenScraper's, an ES-DE folder's, OpenEmu's.
+        private ISceneMedia ThemedMedia() => MediaSourcesNow();
 
         // Whether the themed view is what the pad is steering now: nothing over it, no game on screen.
         private bool ThemedTakesThePad =>
@@ -210,6 +199,7 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
+            ScrapeSelectedThemedGame();
             TimeSpan now = UiClock();
             TimeSpan? next = _themed.NextChange(now);
             ThemedWakeAt = next;

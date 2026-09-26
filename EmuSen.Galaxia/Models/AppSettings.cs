@@ -68,8 +68,24 @@ namespace EmuSen.Galaxia.Models
         public double Volume { get; set; } = 1.0;
         public bool PauseInBackground { get; set; } = true;
 
-        // Off unless the player turns it on: missing covers looked up in OpenVGDB and fetched - see EmuSen_Settings_Reference.md §4.39.
-        public bool OnlineCovers { get; set; } = false;
+        // Read only from a file written before 2026-09-26, then dropped: OpenEmu's covers became the failover below - see EmuSen_Settings_Reference.md §4.60.
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public bool? OnlineCovers { get; set; }
+
+        // OpenVGDB and libretro's thumbnails, asked only where ScreenScraper has nothing or cannot be used - see EmuSen_Settings_Reference.md §4.39 and §4.60.
+        public bool OpenEmuFallback { get; set; } = true;
+
+        // ScreenScraper as the library's source of media and game text, where EmuSen's developer file exists - see EmuSen_Settings_Reference.md §4.60.
+        public bool Scraping { get; set; } = true;
+        public bool ScrapeCovers { get; set; } = true;
+        public bool ScrapeScreenshots { get; set; } = true;
+        public bool ScrapeMarquees { get; set; } = true;
+        public bool ScrapeTitleScreens { get; set; } = false;
+        public bool ScrapeMiximages { get; set; } = true;
+        public string ScrapeRegion { get; set; } = "auto";
+        public string ScrapeLanguage { get; set; } = "en";
+        public bool ScrapeRegionFallback { get; set; } = true;
+        public int ScrapeThreads { get; set; } = 1;
 
         // Box art the library shows, read and never written except by Add Cover Art - see EmuSen_Settings_Reference.md §4.33.
         public string? ArtworkDirectory { get; set; }
@@ -97,6 +113,8 @@ namespace EmuSen.Galaxia.Models
         {
             if (!settings.SelectedCoreUpgraded && settings.SelectedCore == LegacySelectedCoreDefault) settings.SelectedCore = AllConsoles;
             settings.SelectedCoreUpgraded = true;
+            // A stored false was the old default every save wrote, so it is no choice; the failover keeps its new default either way and the old key goes - see §4.60.
+            settings.OnlineCovers = null;
             return settings;
         }
     }

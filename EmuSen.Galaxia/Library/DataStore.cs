@@ -28,6 +28,9 @@ namespace EmuSen.Galaxia.Library
         // Box art the user supplies, read and never fetched - see EmuSen_Settings_Reference.md §4.33.
         public static string Artwork => Path.Combine(UsrHome, "Artwork");
 
+        // Game media and metadata fetched from ScreenScraper, laid out as ES-DE's downloaded_media, with media.db - see EmuSen_BigPicture.md §5.6.
+        public static string Media => Path.Combine(UsrHome, "Media");
+
         // Coprocessor firmware dumps the user supplies - see EmuSen_Firmware.md §2.
         public static string Firmware => Path.Combine(UsrHome, "Firmware");
 

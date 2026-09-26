@@ -2053,6 +2053,35 @@ the gamelist arriving from below, under a help bar that holds its place.
 | P37 | settled frames equal the static render pixel for pixel, and ES-DE's positions to 1 px | pixel-equal in every test; ES-DE's settled centres within 0.5 px | held |
 | P38 | a moving frame costs no more than a full redraw at rest, under 1 ms on the desktop | carousel median 0.33–0.52 ms; held list 0.80–1.91 ms median rebuilding on every step, 0.40–0.67 ms with the lever; worst frames up to 16.8 ms, from collections | held for the carousel and for the list with the lever; refuted for worst frames and for a list rebuilt on every step |
 
+### 14.10a The handheld's run: P8 and P28 retired (2026-09-26)
+
+`deck-gpu` was run on the Legion Go S under `systemd-run --user` (13:49–13:52): three rounds, 120 frames a case, on
+the charger (`ACAD online 1`), platform profile `custom`, Desktop Mode (no gamescope), the Z1 Extreme's radeonsi
+driver through surfaceless EGL. Medians over the three rounds; the raw file is
+`~/.cache/emusen/probe/bigpicture/deck-gpu/handheld/results/20260926-134911.txt`.
+
+| Case | Full redraw on the GPU (wall to `glFinish`) | CPU raster, for scale |
+| --- | --- | --- |
+| System view, 1280×800 | 0.65 ms (p95 0.76–0.86) | 49.3–49.8 ms |
+| Gamelist, 1280×800 | 0.72–0.74 ms (p95 0.85–1.36) | 22.4 ms |
+| System view, 1920×1200 | 1.83–1.95 ms (p95 2.08–2.37) | 94.2–94.5 ms |
+| Gamelist, 1920×1200 | 0.95–1.00 ms (p95 1.04–1.59) | 40.8–41.3 ms |
+
+| Motion, whole frame | 1280×800: median / worst | 1920×1200: median / worst |
+| --- | --- | --- |
+| Carousel held | 0.66 / 9.44 ms | 2.09 / 13.55 ms |
+| List held (the §14.8 lever) | 0.63 / 8.59 ms | 0.90 / 8.97 ms |
+| List held, rebuilt every step (no lever) | 0.99 / 13.58 ms | 1.12 / 15.94 ms |
+
+- **P28 held.** A full redraw fits 16.7 ms with a factor of 25 to spare at 1280×800, and of 8 at the panel's
+  1920×1200.
+- **P8 held.** The carousel held at 1280×800 never exceeded 9.44 ms, so it keeps 60 Hz. The worst frames, as on the
+  desktop, are single outliers, not the median; the lever of §14.8 keeps the held list's worst under 9 ms at both
+  sizes, where the rebuild-every-step path reached 15.94 ms at 1920×1200, within 0.8 ms of a missed frame.
+- **Handing Skia immutable bitmaps** changed neither pixels (0.00 % against the first variant) nor time, as on the desktop.
+- **The first GPU frame** costs 21–33 ms (5.7–8.5 ms with immutable bitmaps), paid once when the view is built.
+- **Not measured:** Game Mode's gamescope compositing on top of this, and the frame as Mistress's real window presents it.
+
 ### 14.11 Not done in stage (c)
 
 - **Nothing was measured on the handheld.** P8 and P28 wait for `deck-gpu` (§14.4), which now also runs the moving

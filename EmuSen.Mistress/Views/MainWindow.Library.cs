@@ -48,7 +48,7 @@ namespace EmuSen.Mistress.Views
             LibraryViewButtons.ItemsSource = new Control[] { new ActionToggle(_asGrid), new ActionToggle(_asList) };
 
             LibraryGrid.Key = e => e.FullPath;
-            LibraryGrid.Label = e => e.Title;
+            LibraryGrid.Label = DisplayTitle;
             LibraryGrid.CreateTile = () => new CoverTile();
             LibraryGrid.BindTile = BindCover;
             LibraryGrid.Chose += entry => LibraryList.Select(entry);
@@ -139,7 +139,7 @@ namespace EmuSen.Mistress.Views
             var descriptor = EmuSen.Cores.CoreCatalog.ByDisplayName(entry.CoreDisplayName);
             string console = descriptor?.Console ?? "";
             string? cover = CoverPathFor(entry);
-            string title = ArtworkIndex.Untagged(entry.Title);
+            string title = DisplayTitle(entry) is var shown && shown != entry.Title ? shown : ArtworkIndex.Untagged(entry.Title);
             string tags = entry.Title.Length > title.Length ? entry.Title[title.Length..].Trim() : "";
             string subtitle = MixedConsoles ? (tags.Length > 0 ? $"{console}  ·  {FirstTag(tags)}" : console) : FirstTag(tags);
             ((CoverTile)tile).Show(title, subtitle, console, descriptor?.CoverAspect ?? 1.365,
@@ -178,16 +178,16 @@ namespace EmuSen.Mistress.Views
 
         private void FillSidebar()
         {
-            int favourites = _allScan.Entries.Count(e => _recordSnapshot.TryGetValue(e.FullPath, out GameRecord? r) && r.Favourite);
-            int recent = Math.Min(RecentLimit, _allScan.Entries.Count(e => _recordSnapshot.TryGetValue(e.FullPath, out GameRecord? r) && r.LastPlayed is not null));
+            int favourites = _allScan.Entries.Where(Listed).Count(e => _recordSnapshot.TryGetValue(e.FullPath, out GameRecord? r) && r.Favourite);
+            int recent = Math.Min(RecentLimit, _allScan.Entries.Where(Listed).Count(e => _recordSnapshot.TryGetValue(e.FullPath, out GameRecord? r) && r.LastPlayed is not null));
             var library = new SourceListGroup("Library", new[]
             {
-                new SourceListItem(AllGamesKey, "All Games", _allScan.Entries.Count.ToString()),
+                new SourceListItem(AllGamesKey, "All Games", _allScan.Entries.Count(Listed).ToString()),
                 new SourceListItem(FavouritesKey, "Favourites", favourites.ToString()),
                 new SourceListItem(RecentKey, "Recently Played", recent.ToString()),
             });
             var consoles = new SourceListGroup("Consoles", EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder
-                .Select(s => new SourceListItem(ConsoleKeyPrefix + s.Name, s.Label, _allScan.Entries.Count(e => e.Shelf == s.Name).ToString()))
+                .Select(s => new SourceListItem(ConsoleKeyPrefix + s.Name, s.Label, _allScan.Entries.Count(e => e.Shelf == s.Name && Listed(e)).ToString()))
                 .ToArray());
             LibrarySidebar.Fill(new[] { library, consoles, CollectionsGroup() }, SidebarKey);
         }

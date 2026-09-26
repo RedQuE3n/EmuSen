@@ -82,7 +82,7 @@ namespace EmuSen.Mistress.Input
                     int by = button == UiButton.Right ? 1 : -1;
                     if (open is not null) return;
                     if (focused is ComboBox combo) { Step(combo, by); return; }
-                    if (focused is Slider slider) { Key(slider, by > 0 ? Avalonia.Input.Key.Right : Avalonia.Input.Key.Left); return; }
+                    if (focused is Slider or ISidewaysAdjustable) { Key(focused, by > 0 ? Avalonia.Input.Key.Right : Avalonia.Input.Key.Left); return; }
                     if (focused is TabItem tab && tab.FindAncestorOfType<TabControl>() is { } strip) { StepTab(strip, by, focusHeader: true); return; }
                     Move(root, focused, by > 0 ? NavigationDirection.Right : NavigationDirection.Left);
                     return;

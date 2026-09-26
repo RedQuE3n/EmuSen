@@ -189,6 +189,22 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         }
 
         [Fact]
+        public void A_kind_turned_on_later_that_the_game_never_offered_costs_no_request()
+        {
+            string rom = Rom("F-Zero (USA).sfc", Filled(2048, 70));
+            _server.Games.Add(new FakeGame(77, "F-Zero", RomHashes.Of(rom).Md5) { Media = [("box-2D", "us", "png"), ("ss", "wor", "png")] });
+            Scraper scraper = Start();
+            scraper.Enqueue(rom, "snes", ScrapePriority.Shown);
+            Next();
+            scraper.Dispose();
+
+            Scraper titles = Start(new ScrapeChoices { TitleScreens = true });
+            titles.Enqueue(rom, "snes", ScrapePriority.Shown);
+            Assert.Equal(ScrapeOutcome.Found, Next().Outcome);
+            Assert.Single(_server.JeuInfos);
+        }
+
+        [Fact]
         public void A_renamed_file_takes_its_media_with_it_and_a_second_copy_gets_its_own_with_no_request()
         {
             byte[] bytes = Filled(2048, 8);

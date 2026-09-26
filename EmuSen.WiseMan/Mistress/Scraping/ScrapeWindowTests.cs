@@ -109,6 +109,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             MainWindow window = Open();
             WaitFor(() => CoverShown(window, _rom) == ScrapedCover, "ScreenScraper's cover");
 
+            // Past the failover's quarter-second spacing, so a request it would make has been made.
+            Pump(800);
             Assert.Single(_server.JeuInfos);
             Assert.Empty(_server.OthersAsked);
             Assert.False(File.Exists(OpenEmuCover));

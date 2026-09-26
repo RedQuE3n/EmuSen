@@ -1092,6 +1092,13 @@ sends and to whom. The API's own condition (free, distributed software) is met.
     graphics are Mistress's own drawings.
   - **Sounds:** the theme's navigation sounds play through a small UI sound stream, **on by default** with a switch in
     Preferences.
+- **Q20–Q35, answered by the user on 2026-09-26 after §21 was written:**
+  - **Q20 and Q21, video:** all three uses (the theme's clips, the media viewer and the screensaver), built late as §21's
+    pass 12, through the system's own `ffmpeg` run as a separate process, so EmuSen ships no codec. Video scraping is
+    off by default. This supersedes Q4's "not now".
+  - **Q22–Q35:** every recommendation §21 made is accepted as written. Where a pass finds that a recommendation cannot
+    hold, the user is asked again.
+  - **The first pass to build:** pass 2, controllers.
 - **Q7, miximages (the user, 2026-09-26, during stage d):** ScreenScraper's ready-made mix, `mixrbv2`, is fetched as the
   miximage. It looks different from ES-DE's own composed miximages; building our own composite is not wanted now.
 - **Q5, the developer credentials, as received (2026-09-26):** issued to the user as EmuSen's developer, kept only in

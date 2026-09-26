@@ -33,5 +33,18 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Contains("inner", text);
             Assert.Contains(nameof(A_fault_is_written_with_its_kind_its_context_and_its_whole_trace), text);
         }
+
+        // A ScreenScraper address in a fault reaches the file with its credentials blanked - see EmuSen_BigPicture.md §17.
+        [Fact]
+        public void A_screen_scraper_address_in_a_fault_is_written_without_its_credentials()
+        {
+            var fault = new InvalidOperationException("GET https://api.screenscraper.fr/api2/jeuInfos.php?devid=FAKECRASHID&devpassword=FAKECRASHPW&softname=EmuSen&ssid=FAKECRASHM&sspassword=FAKECRASHMPW&md5=00");
+
+            string text = File.ReadAllText(CrashLog.Write("scrape", fault, "context devpassword=FAKECRASHPW")!);
+
+            Assert.Contains("devpassword=***", text);
+            Assert.Contains("md5=00", text);
+            foreach (string secret in new[] { "FAKECRASHID", "FAKECRASHPW", "FAKECRASHM", "FAKECRASHMPW" }) Assert.DoesNotContain(secret, text);
+        }
     }
 }

@@ -56,20 +56,25 @@ namespace EmuSen.Mistress.Library
             return null;
         }
 
+        // Locked, since the scraper's worker asks whether a game has the player's own cover while the window may be adding one.
         public void Add(string? console, string stem, string file)
         {
-            Count++;
-            _byName[(console, Key(stem))] = file;
-            _byName.TryAdd((console, Key(Untagged(stem))), file);
+            lock (_byName)
+            {
+                Count++;
+                _byName[(console, Key(stem))] = file;
+                _byName.TryAdd((console, Key(Untagged(stem))), file);
+            }
         }
 
         // The exact name first, then the name without its region and revision tags; a console's own folder before a shared one.
         public string? Find(string? console, string romStem)
         {
             string?[] scopes = console is null ? new string?[] { null } : new string?[] { console, null };
-            foreach (string key in new[] { Key(romStem), Key(Untagged(romStem)) })
-                foreach (string? scope in scopes)
-                    if (_byName.TryGetValue((scope, key), out string? file)) return file;
+            lock (_byName)
+                foreach (string key in new[] { Key(romStem), Key(Untagged(romStem)) })
+                    foreach (string? scope in scopes)
+                        if (_byName.TryGetValue((scope, key), out string? file)) return file;
             return null;
         }
 

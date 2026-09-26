@@ -302,7 +302,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
 
         [Fact]
-        public Task Preferences_chooses_the_library_style_and_the_session_follows_it_when_the_sheet_closes() => Session.Dispatch(() =>
+        public Task Preferences_chooses_the_big_picture_theme_and_the_session_follows_it_at_once() => Session.Dispatch(() =>
         {
             using var s = new ThemedSession();
             ThemedLibraryFlowTests.Choose(s, "Preferences");
@@ -316,10 +316,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             PadAudit.Reach(sheet, s.Pad, e => e is LunaSwitch { Name: "NavigationSoundsSwitch" });
             s.Pad.A();
             Assert.False(AppSettings.Load().NavigationSounds);
-            PadAudit.Reach(sheet, s.Pad, e => e is Dropdown { Name: "LibraryStyleDropdown" });
+            PadAudit.Reach(sheet, s.Pad, e => e is Dropdown { Name: "BigPictureThemeDropdown" });
             s.Pad.Left();
             Assert.Equal(AppSettings.LibraryStyleMistress, AppSettings.Load().LibraryStyle);
-            Assert.True(s.Shown);
+            Assert.False(s.Shown);
 
             s.Pad.B();
             Assert.False(sheets.IsPresenting);

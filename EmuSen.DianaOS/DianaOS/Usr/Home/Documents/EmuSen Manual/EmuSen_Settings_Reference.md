@@ -2671,7 +2671,7 @@ moving, the units, and Art Book Next's grid against ES-DE's still) and `ThemedGr
 3. The user then placed it: "The big picture button for desktop mode should be placed under the view menu, below
    fullscreen". The toolbar buttons were removed.
 
-This section describes the third build. The first two are kept in `EmuSen_BigPicture.md` §17, with what each got wrong.
+This section describes the third build. The first two are kept in `EmuSen_BigPicture.md` §18, with what each got wrong.
 Until any of them, big screen was decided once, when the window was made (§4.29, §4.43), and the themed view was offered
 in big-screen sessions only (§4.52; the plan's §10.1, Q8).
 

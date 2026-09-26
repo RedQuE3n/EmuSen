@@ -626,7 +626,7 @@ gains **Library style: Mistress / ES-DE theme**. The pad menu, sheets, resume qu
 both, so the themed view changes only what is drawn in the library's place. Q8 asks whether the themed view should also
 be offered in a desktop session, where §4.43 keeps the menu bar and sidebar. *Answered twice: in big-screen sessions
 only (2026-09-25), then, on the user's request of 2026-09-26, also on the desktop, behind a Big Picture entry
-below the plain Fullscreen one in the View menu (§10.1, §17).*
+below the plain Fullscreen one in the View menu (§10.1, §18).*
 
 ---
 
@@ -1073,7 +1073,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
     manager's own), which keeps the sidebar library, and directly below it **Big Picture** (its own key, F10), which
     makes the window full screen and enters big picture. The desktop keeps its sidebar library by default, and the
     themed view is offered wherever big picture runs, under §4.52's four conditions. A Game Mode session stays big
-    picture throughout. §17 is the record; §4.54 of the settings reference is the player's account.
+    picture throughout. §18 is the record; §4.54 of the settings reference is the player's account.
   - **Q9:** the help bar's button icons **follow the connected pad**: Mistress detects the controller family and draws
     its own set for it (Xbox, PlayStation, Nintendo, and a generic set when unknown). The favourite, folder and badge
     graphics are Mistress's own drawings.
@@ -2720,7 +2720,7 @@ grid mutants, `Art_Book_Next_s_grid_matches_ES_DE_s_still` appears only for G10 
 
 ---
 
-## 17. Big picture from the desktop: Big Picture below Fullscreen in the View menu (2026-09-26)
+## 18. Big picture from the desktop: Big Picture below Fullscreen in the View menu (2026-09-26)
 
 *Opened 2026-09-26, on the user's request (§10.1, Q8 amended):* "There needs to be a button to enter big picture mode
 on desktop as well". Until this section, big screen was a decision the window took once, when it was made (settings
@@ -2737,7 +2737,7 @@ The settings reference's §4.54 is the player's account of the third build; this
 survived from build 1 into build 3 is the switch itself (`ApplyBigScreen`, `SetBigPicture`), the cleanup, the popup
 handling, the desktop's place given back, and the F11 fix.
 
-### 17.1 Expectations, and what the tests said of them
+### 18.1 Expectations, and what the tests said of them
 
 No predictions were written before build 1: the request came in the middle of the day's work and the build went
 straight to it. What was expected before the tests first ran is recorded instead, with what they showed. It is weaker
@@ -2745,14 +2745,14 @@ evidence than §15's predictions, since the expectations and the design were wri
 
 | # | Expected | Found | Verdict |
 |---|---|---|---|
-| X1 | the themed view's round trip needs no restoring of the desktop's place, since the themed view never moves the desktop's list | the themed case passed while the place was being thrown away at the moment it was taken (§17.4); only the case without a theme, whose pad moves the shared list, caught it | held, and showed that the themed case alone proves nothing about the restore |
-| X2 | the headless platform refuses a full-screen `WindowState`, so the window manager's route cannot be tested headlessly | the headless window took every state set on it, and LunaP's `FullScreenChanged` was raised for each | refuted; the route is tested, a real window manager still is not (§17.6) |
+| X1 | the themed view's round trip needs no restoring of the desktop's place, since the themed view never moves the desktop's list | the themed case passed while the place was being thrown away at the moment it was taken (§18.4); only the case without a theme, whose pad moves the shared list, caught it | held, and showed that the themed case alone proves nothing about the restore |
+| X2 | the headless platform refuses a full-screen `WindowState`, so the window manager's route cannot be tested headlessly | the headless window took every state set on it, and LunaP's `FullScreenChanged` was raised for each | refuted; the route is tested, a real window manager still is not (§18.6) |
 | X3 | raising `Button.ClickEvent` on a toolbar button is a click (build 1) | it runs the event's listeners and not the button's command; nothing happened | refuted; build 1's test pressed and released a pointer instead. Build 3 has no button, and its tests invoke the menu's actions |
 | X4 | the Game Mode check in the full-screen handler is needed beside the one in `SetBigPicture` (build 1) | mutant D2 of build 1 removed it and survived | refuted; the copy was removed, and with it the same copy in Esc's rule |
 | X5 | a hidden button reads as not effectively visible (build 1) | a control never attached to the visual tree reads `IsEffectivelyVisible` true | refuted; moot in build 3 |
 | X6 | decoupling (build 2) would need the event handler to tell "leaving by the switch" from "leaving by F11", or restoring the window would re-enter `SetBigPicture` | `SetBigPicture` clears its flag before it restores the window, so the event the restore raises finds nothing to do; one `restoreWindow` argument, false only from the event, was enough | held, as expected |
 
-### 17.2 What build 3 is
+### 18.2 What build 3 is
 
 - `Views/MainWindow.BigPictureSwitch.cs`: `ApplyBigScreen(bool)` holds every change big screen makes to the window and
   is run at start and by every switch. `SetBigPicture(bool on, bool restoreWindow = true)` is the switch and the one
@@ -2781,7 +2781,7 @@ and Preferences' "Start in big screen mode" alone decides, as Steam's own start-
 controls, the last-mode rule would make one press of Big Picture decide every later start, and it would turn a setting
 the player sets into a record the program keeps. Mutant D21 is build 1's rule.
 
-### 17.3 The decisions that were taken once
+### 18.3 The decisions that were taken once
 
 Found by reading `StartPadNavigation`, `Program.BuildAvaloniaApp`, and every reader of `_bigScreen`
 (`ThemedStyleWanted`, the pad menu's Theme Settings entry):
@@ -2793,13 +2793,13 @@ Each, and what it is now, is tabled in the settings reference's §4.54 with the 
 `PresentsWindows` when a window is shown, so a switch changes where the next window goes and moves no window already
 shown.
 
-### 17.4 A defect the cycle test found
+### 18.4 A defect the cycle test found
 
 Build 1 forgot the desktop's place in the same call that took it: `SetBigPicture` cleared the field at its end whichever
 way it switched, so leaving had nothing to give back. The case without a theme failed at its first exit, on the selected
 game (Dune Relay, where the pad had moved it, instead of Cobalt Harbor); the themed case passed (X1). It is mutant D13.
 
-### 17.5 Mutants
+### 18.5 Mutants
 
 The runner is `~/.cache/emusen/probe/bigpicture/mutate_desktop_button.py`, and each build's run is kept:
 - build 1: `mutate_desktop_button_v1.py`, `mutants-desktop-button-v1.txt`, `mutants-desktop-button-v1-rerun.txt`;
@@ -2830,7 +2830,7 @@ menu's.
 | D10 | the desktop's console not given back | caught |
 | D11 | the desktop's search not given back | caught |
 | D12 | the desktop's game not selected again | caught |
-| D13 | the place forgotten as soon as it is taken (§17.4) | caught |
+| D13 | the place forgotten as soon as it is taken (§18.4) | caught |
 | D14 | leaving keeps the interface's sound stream | caught |
 | D15 | leaving leaves the themed view up, its wake running | caught by 2 |
 | D16 | sheets fixed at the start's answer | caught by 2 |
@@ -2878,7 +2878,7 @@ This change does not reach that class: it builds its scene without a `MainWindow
 test session, of the family §15.14 and §16.8 recorded (unrelated tests, only in the broad run). It is recorded, not
 attributed, and the broad run was not repeated.
 
-### 17.6 Not done
+### 18.6 Not done
 
 - **No real window manager was used.** KDE's and GNOME's own full-screen commands, on X11 and on Wayland, reaching
   Avalonia as `WindowState.FullScreen`, and a normal window getting its size back, are assumed from Avalonia and LunaP

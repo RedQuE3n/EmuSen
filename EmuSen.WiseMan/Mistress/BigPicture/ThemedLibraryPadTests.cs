@@ -117,6 +117,19 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal("system", s.View);
             Assert.Equal("snes", s.System);
             Assert.Equal(new[] { "select", "back" }, s.Sounds);
+
+            // Each system's gamelist opens at the game last chosen there, and a system never entered at its first game.
+            s.Pad.A();
+            s.Pad.Down(3);
+            s.Pad.B();
+            s.Pad.Left(2);
+            Assert.Equal("nes", s.System);
+            s.Pad.A();
+            Assert.Equal(ThemedSession.NesGames[0], s.Game);
+            s.Pad.B();
+            s.Pad.Right(2);
+            s.Pad.A();
+            Assert.Equal(ThemedSession.SnesGames[3], s.Game);
         });
 
         [Fact]

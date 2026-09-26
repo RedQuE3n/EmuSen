@@ -33,6 +33,11 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public double VerticalContainerSpeedPerEm { get; init; }
         public TimeSpan VerticalContainerFadeIn { get; init; }
 
+        // The grid: a step's scale and fade and a row's slide on one curve and duration, and a held direction's repeats, with no faster tier (§16).
+        public TimeSpan GridStep { get; init; }
+        public Easing? GridEasing { get; init; }
+        public SceneRepeatRule GridRepeat { get; init; } = new(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(200));
+
         // The camera pan between the system and gamelist views, a screen height, the gamelist below.
         public TimeSpan ViewSlide { get; init; }
         public Easing? ViewSlideEasing { get; init; }
@@ -51,6 +56,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             HorizontalContainerSpeedPerEm = 131.5 / 30, HorizontalContainerGapSeconds = 1,
             VerticalContainerSpeedPerEm = 37.03 / 30, VerticalContainerFadeIn = Ms(298),
             ViewSlide = Ms(402), ViewSlideEasing = new CubicEaseOut(),
+            GridStep = Ms(250), GridEasing = new QuadraticEaseOut(), GridRepeat = new(Ms(500), Ms(200)),
         };
     }
 }

@@ -9,6 +9,7 @@ using Avalonia.Threading;
 using EmuSen.Endymion;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
+using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.BigPicture;
 using EmuSen.Mistress.BigPicture.Scene;
 using EmuSen.Mistress.BigPicture.Theme;
@@ -88,7 +89,8 @@ namespace EmuSen.Mistress.Views
                 _themed.PlaySound = _appSettings.NavigationSounds ? PlayUiSound : null;
                 _themed.SetFamily(PadFamilies.Of(_gamepad.ControllerType, _gamepad.ControllerName));
                 string mediaKey = $"{_appSettings.EsdeMediaDirectory}|{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(_artwork)}|{ScrapeMediaKey}";
-                shown = _themed.Show(_appSettings.BigPictureTheme!, LibraryView.Bounds.Size, ThemedShelves(), ThemedMedia(), mediaKey);
+                shown = _themed.Show(_appSettings.BigPictureTheme!, LibraryView.Bounds.Size, ThemedShelves(), ThemedMedia(), mediaKey,
+                    ThemeSettingsWindow.ChoicesFor(_appSettings, _appSettings.BigPictureTheme));
                 if (!shown && _themed.Error is { } why && LibraryView.Bounds.Width > 0) StatusText.Text = why;
                 if (shown && _themed.PlaySound is not null && UiSoundSink is null) (_uiSounds ??= new UiSoundPlayer()).Preload(_themed.SoundFiles);
             }
@@ -236,6 +238,23 @@ namespace EmuSen.Mistress.Views
         }
 
 
+        private ThemeSettingsWindow? _themeSettings;
+
+        // The theme's settings and the themes downloaded on request, as a sheet over whatever shows (§4.53).
+        private void ShowThemeSettings()
+        {
+            var window = _themeSettings = new ThemeSettingsWindow(_appSettings, HttpFactory, ThemeChanged);
+            window.Closed += (_, _) => { if (_themeSettings == window) _themeSettings = null; };
+            _ = SheetLayer.Show(window, this);
+        }
+
+        // A choice applies at once beneath the sheet; a replaced or removed folder is read afresh.
+        private void ThemeChanged(bool replaced)
+        {
+            if (replaced) _themed?.Forget();
+            if (LibraryView.IsVisible) ShowThemedLibrary();
+        }
+
         // A closed window's wake timer and sound stream end with it, so it never draws or plays into what runs next - see EmuSen_BigPicture.md §15.14.
         private void CloseThemedLibrary()
         {
@@ -244,6 +263,7 @@ namespace EmuSen.Mistress.Views
             ThemedWakeAt = null;
             _uiSounds?.Dispose();
             _uiSounds = null;
+            _themeSettings?.StopDownload();
         }
     }
 }

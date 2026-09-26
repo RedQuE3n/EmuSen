@@ -75,7 +75,7 @@ namespace EmuSen.Mistress.BigPicture
         public IEnumerable<string> SoundFiles => _systems.SelectMany(s => s.Theme.Sounds.Values).Where(p => p.Exists).Select(p => p.Absolute).Distinct();
 
         // Reads the theme when its folder changed, then builds the stage at the kept selection; false, with Error, when there is nothing to show.
-        public bool Show(string themeDirectory, Size screen, IReadOnlyList<ThemedShelf> shelves, ISceneMedia? media, string? mediaKey = null)
+        public bool Show(string themeDirectory, Size screen, IReadOnlyList<ThemedShelf> shelves, ISceneMedia? media, string? mediaKey = null, ThemeChoices? chosen = null)
         {
             if (screen.Width < 1 || screen.Height < 1) return Stage is not null;
             var clock = Stopwatch.StartNew();
@@ -95,7 +95,8 @@ namespace EmuSen.Mistress.BigPicture
             _shelves = shelves;
             _media = media;
             _screen = screen;
-            var choices = new ThemeChoices { ScreenWidth = (int)Math.Round(screen.Width), ScreenHeight = (int)Math.Round(screen.Height) };
+            ThemeChoices choices = (chosen ?? new ThemeChoices()) with { ScreenWidth = (int)Math.Round(screen.Width), ScreenHeight = (int)Math.Round(screen.Height) };
+            Choices = choices;
             var systems = new List<SceneSystem>();
             var scan = new Stopwatch();
             foreach (ThemedShelf shelf in shelves.Where(s => s.Games.Count > 0))
@@ -103,7 +104,7 @@ namespace EmuSen.Mistress.BigPicture
                 scan.Start();
                 MediaPresence presence = Presence(shelf);
                 scan.Stop();
-                string key = $"{shelf.System.Name}|{choices.ScreenWidth}x{choices.ScreenHeight}|{string.Join(",", presence.Types.Order(StringComparer.Ordinal))}";
+                string key = $"{shelf.System.Name}|{choices}|{string.Join(",", presence.Types.Order(StringComparer.Ordinal))}";
                 if (!_themes.TryGetValue(key, out ResolvedTheme? theme)) _themes[key] = theme = ThemeLoader.Load(_capabilities, shelf.System, choices, presence);
                 if (theme.IsThemed) systems.Add(new SceneSystem(shelf.System, theme, shelf.Games));
             }
@@ -119,6 +120,16 @@ namespace EmuSen.Mistress.BigPicture
             return true;
         }
 
+        // The choices the last Show loaded the theme with, the screen's size included.
+        public ThemeChoices Choices { get; private set; } = new();
+
+        // The theme folder was replaced on disk, by an update: the next Show reads it afresh.
+        public void Forget()
+        {
+            _capabilities = null;
+            _themes.Clear();
+        }
+
         private bool Fail(string why)
         {
             Error = why;
@@ -131,12 +142,9 @@ namespace EmuSen.Mistress.BigPicture
         private MediaPresence Presence(ThemedShelf shelf)
         {
             if (_media is null) return MediaPresence.None;
-            string key = $"{shelf.System.Name}|{shelf.Games.Count}|{(shelf.Games.Count == 0 ? "" : shelf.Games[0].File + shelf.Games[^1].File)}";
+            string key = $"{shelf.System.Name}|{shelf.Games.Count}|{(shelf.Games.Count == 0 ? "" : shelf.Games[0].File + shelf.Games[^1].File)}|{_media.Stamp(shelf.System)}";
             if (_presence.TryGetValue(key, out MediaPresence? kept)) return kept;
-            var found = new HashSet<string>(StringComparer.Ordinal);
-            foreach (string type in ThemeCapabilities.MediaTypes)
-                if (shelf.Games.Any(g => _media.Find(shelf.System, g, type) is not null)) found.Add(type);
-            return _presence[key] = new MediaPresence(found);
+            return _presence[key] = new MediaPresence(_media.Present(shelf.System, shelf.Games));
         }
 
         // The data the kept selection gives: the system by name, its games narrowed by the search, the game by file.
@@ -205,6 +213,7 @@ namespace EmuSen.Mistress.BigPicture
         public bool Moves(UiButton direction)
         {
             ResolvedElement? primary = Stage?.Current.View.Primary;
+            if (primary is { Type: "grid" }) return true;
             bool across = primary is { Type: "carousel" } p && !(p.String("type") ?? "horizontal").StartsWith("vertical", StringComparison.Ordinal);
             return across ? direction is UiButton.Left or UiButton.Right : direction is UiButton.Up or UiButton.Down;
         }
@@ -215,7 +224,7 @@ namespace EmuSen.Mistress.BigPicture
         public void PressDirection(UiButton direction, TimeSpan now)
         {
             if (Stage is null) return;
-            if (Moves(direction)) Stage.Current.Press(Sign(direction), now);
+            if (Moves(direction)) Stage.Current.Press(Sign(direction), now, vertical: direction is UiButton.Up or UiButton.Down);
             else if (ViewName == "gamelist" && direction is UiButton.Left or UiButton.Right) ChangeSystem(Sign(direction), now);
             Advance(now);
         }
@@ -296,7 +305,7 @@ namespace EmuSen.Mistress.BigPicture
         }
 
         // A page is the rows the list shows at once, as its own height and pitch give them; ten when the primary element is not a list.
-        public static int PageSize(SceneView view) =>
+        public static int PageSize(SceneView view) => view.Grid() is { } grid ? grid.WholeRows * grid.Columns :
             view.Scene.Entries.Select(e => e.Control).OfType<TextRowList>().FirstOrDefault() is { RowPitch: > 0 } list && list.Bounds.Height > 0
                 ? Math.Max(1, (int)Math.Floor(list.Bounds.Height / list.RowPitch + 1e-6))
                 : 10;

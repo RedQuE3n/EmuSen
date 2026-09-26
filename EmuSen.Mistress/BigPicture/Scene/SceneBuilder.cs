@@ -76,6 +76,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
                 "datetime" => TextElements.DateTime(this, e),
                 "carousel" => PrimaryElements.Carousel(this, e),
                 "textlist" => PrimaryElements.TextList(this, e),
+                "grid" => GridElements.Grid(this, e),
                 "rating" => IndicatorElements.Rating(this, e),
                 "badges" => IndicatorElements.Badges(this, e),
                 "helpsystem" => IndicatorElements.Help(this, e),

@@ -259,6 +259,7 @@ namespace EmuSen.Mistress.Views
             _padMenuEntries.Add(new PadMenuEntry(() => "Shaders", ShowShaderSettings));
             _padMenuEntries.Add(new PadMenuEntry(() => "Controller Bindings", ShowControllerBindings));
             _padMenuEntries.Add(new PadMenuEntry(() => "Preferences", ShowPreferences));
+            if (_bigScreen && !inGame) _padMenuEntries.Add(new PadMenuEntry(() => "Theme Settings", ShowThemeSettings));
             _padMenuEntries.Add(new PadMenuEntry(() => IsFullScreen ? "Leave Full Screen" : "Full Screen", ToggleFullScreen));
 
             if (inGame)

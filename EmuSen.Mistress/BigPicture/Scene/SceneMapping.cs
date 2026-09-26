@@ -31,6 +31,12 @@ namespace EmuSen.Mistress.BigPicture.Scene
                 "selectedBackgroundColor", "selectedBackgroundMargins", "selectedBackgroundCornerRadius", "fontPath", "fontSize", "horizontalAlignment", "horizontalMargin",
                 "letterCase", "lineSpacing", "systemNameSuffix", "letterCaseSystemNameSuffix", "indicators", "textHorizontalScrolling", "textHorizontalScrollSpeed",
                 "textHorizontalScrollDelay", "textHorizontalScrollGap"),
+            ["grid"] = Set("staticImage", "imageType", "defaultImage", "defaultFolderImage", "itemSize", "itemScale", "itemSpacing", "scaleInwards", "fractionalRows",
+                "itemTransitions", "rowTransitions", "unfocusedItemOpacity", "unfocusedItemSaturation", "unfocusedItemDimming", "imageFit", "imageCropPos", "imageInterpolation",
+                "imageRelativeScale", "imageCornerRadius", "imageColor", "imageColorEnd", "imageGradientType", "imageSelectedColor", "imageSaturation", "backgroundImage",
+                "backgroundRelativeScale", "backgroundCornerRadius", "backgroundColor", "selectorImage", "selectorRelativeScale", "selectorLayer", "selectorCornerRadius",
+                "selectorColor", "text", "textRelativeScale", "textBackgroundCornerRadius", "textColor", "textBackgroundColor", "textSelectedColor", "textSelectedBackgroundColor",
+                "fontPath", "fontSize", "letterCase", "lineSpacing", "systemNameSuffix", "letterCaseSystemNameSuffix"),
             ["rating"] = Set("hideIfZero", "color", "filledPath", "unfilledPath", "overlay"),
             ["badges"] = Set("horizontalAlignment", "direction", "lines", "itemsPerLine", "itemMargin", "slots", "customBadgeIcon", "badgeIconColor"),
             ["helpsystem"] = Set("textColor", "iconColor", "fontPath", "fontSize", "entries", "entryRelativeScale", "entrySpacing", "iconTextSpacing", "letterCase",
@@ -41,7 +47,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
                 "backgroundCornerRadius", "entries", "entrySpacing", "customIcon"),
         };
 
-        // Element types the scene draws; the others (grid, animation, gamelistinfo, gameselector, sound) are later stages.
+        // Element types the scene draws; the others (animation, gamelistinfo, gameselector, sound) are not drawn.
         public static readonly IReadOnlySet<string> Drawn = new HashSet<string>(Specific.Keys, StringComparer.Ordinal);
 
         private static IReadOnlySet<string> Set(params string[] names) => new HashSet<string>(names, StringComparer.Ordinal);

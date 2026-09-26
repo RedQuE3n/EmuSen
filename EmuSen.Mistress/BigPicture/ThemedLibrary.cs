@@ -14,7 +14,7 @@ namespace EmuSen.Mistress.BigPicture
     // One of the library's systems as the themed view lists it: ES-DE's names for it and its games.
     public sealed record ThemedShelf(ThemeSystem System, IReadOnlyList<SceneGame> Games);
 
-    public enum ThemedAction { None, Launch, Favourite, Search, ClearSearch, Menu, Leave }
+    public enum ThemedAction { None, Launch, Favourite, Search, ClearSearch, Menu, Leave, Options }
 
     // What a button asked of the window, beyond what the view does by itself.
     public readonly record struct ThemedCommand(ThemedAction Action, SceneGame? Game = null);
@@ -187,7 +187,7 @@ namespace EmuSen.Mistress.BigPicture
             Remember();
         }
 
-        private void Sound(string name)
+        public void Sound(string name)
         {
             if (PlaySound is null || Stage is null) return;
             if (Stage.Current.Data.System.Theme.Sounds.GetValueOrDefault(name) is { Exists: true } path) PlaySound(path.Absolute);
@@ -291,9 +291,9 @@ namespace EmuSen.Mistress.BigPicture
                 case UiButton.Search when gamelist:
                     result = new ThemedCommand(ThemedAction.Search);
                     break;
+                // ES-DE's Back button opens its gamelist options menu; the favourite is an entry there (§4.59 of the settings reference).
                 case UiButton.Options when gamelist && view.Data.Game is { } game:
-                    Sound("favorite");
-                    result = new ThemedCommand(ThemedAction.Favourite, game);
+                    result = new ThemedCommand(ThemedAction.Options, game);
                     break;
                 case UiButton.Menu:
                     result = new ThemedCommand(ThemedAction.Menu);

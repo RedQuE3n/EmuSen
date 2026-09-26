@@ -40,6 +40,7 @@ namespace EmuSen.Mistress.Views
         private readonly HintText _failure = new() { Name = "ScrapeStatusFailure" };
         private readonly TextBlock _member = new() { Name = "ScrapeStatusMember", TextWrapping = TextWrapping.Wrap };
         private readonly MeterRow _quota = new() { Name = "ScrapeStatusQuota", Label = "Requests today" };
+        private readonly TextBlock _requests = new() { Name = "ScrapeStatusRequests", TextWrapping = TextWrapping.Wrap };
         private readonly HintText _limits = new() { Name = "ScrapeStatusLimits" };
         private readonly TextBlock _why = new() { Name = "ScrapeStatusWhy", TextWrapping = TextWrapping.Wrap, FontWeight = FontWeight.SemiBold };
         private readonly TextBlock _summary = new() { Name = "ScrapeStatusSummary", TextWrapping = TextWrapping.Wrap };
@@ -75,12 +76,13 @@ namespace EmuSen.Mistress.Views
 
             _current = Ui.Cols("Auto,*", _picture, Ui.Stack(4, _game, _console, _step).Margin(12, 0, 0, 0));
             _tallySection = Ui.Section("Results", Ui.Stack(4, _tallies, _failure));
-            _recentSection = Ui.Section("Recent games", _recent);
+            // A grid row, not a stacked section, so the list is bounded and scrolls rather than running under the buttons.
+            _recentSection = Ui.Rows("Auto,*", Ui.Header("Recent games"), _recent);
             Content = Ui.Rows("Auto,Auto,Auto,Auto,*,Auto",
                 Ui.Stack(6, _heading, _bar, _timing),
                 _current,
                 _tallySection,
-                Ui.Section("Quota", Ui.Stack(4, _member, _quota, _limits, _why, _summary)),
+                Ui.Section("Quota", Ui.Stack(4, _member, _quota, _requests, _limits, _why, _summary)),
                 _recentSection,
                 new ButtonBar { ItemsSource = new[] { _pause, _cancel, _hide }, HorizontalAlignment = HorizontalAlignment.Right }).Margin(16);
             if (Content is Grid grid) grid.RowSpacing = 12;
@@ -223,11 +225,15 @@ namespace EmuSen.Mistress.Views
                 : "No member account: EmuSen's developer credentials alone, with their limits.";
 
             QuotaSnapshot? q = _host.Quota;
-            _quota.IsVisible = q is not null;
+            _quota.IsVisible = q?.MaxPerDay is > 0;
+            _requests.IsVisible = q is not null;
             if (q is not null)
             {
                 _quota.Percent = q.MaxPerDay is int max && max > 0 ? Math.Min(100, 100.0 * q.RequestsToday / max) : 0;
-                _quota.ValueText = q.MaxPerDay is int m ? $"{q.RequestsToday:N0} of {m:N0} · {Math.Max(0, m - q.RequestsToday):N0} left" : $"{q.RequestsToday:N0}, limit not known yet";
+                _quota.ValueText = $"{_quota.Percent:0}%";
+                _requests.Text = q.MaxPerDay is int m
+                    ? $"{q.RequestsToday:N0} of {m:N0} requests used today · {Math.Max(0, m - q.RequestsToday):N0} left"
+                    : $"{q.RequestsToday:N0} requests used today; the day's limit is not known yet";
             }
             ScrapeQuota? limits = _host.ScrapeLimits;
             _limits.Text = limits is null

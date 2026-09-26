@@ -164,6 +164,13 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             }
         }
 
+        // Holds every request from now until released, counting from what was asked before.
+        protected SemaphoreSlim Hold()
+        {
+            _released = Server.Asked.Count;
+            return Server.Gate = new SemaphoreSlim(0);
+        }
+
         protected static void Scrape(MainWindow w, ScrapeScope scope) => Assert.True(w.ConfirmAndScrapeAsync(scope).GetAwaiter().GetResult());
 
         protected static void RunEnds(MainWindow w) => WaitFor(() => w.Progress is { State: not ScrapeRunState.Running }, "the run to end");
@@ -246,7 +253,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.StartsWith("Last failure: BadRequest", TextOf(status, "ScrapeStatusFailure"));
             Assert.Equal("No member account: EmuSen's developer credentials alone, with their limits.", TextOf(status, "ScrapeStatusMember"));
             QuotaSnapshot q = ((IScrapeHost)window).Quota!;
-            Assert.Equal($"{q.RequestsToday:N0} of 20,000 · {20000 - q.RequestsToday:N0} left", Named<MeterRow>(status, "ScrapeStatusQuota").ValueText);
+            Assert.Equal($"{q.RequestsToday:N0} of 20,000 requests used today · {20000 - q.RequestsToday:N0} left", TextOf(status, "ScrapeStatusRequests"));
+            Assert.Equal("0%", Named<MeterRow>(status, "ScrapeStatusQuota").ValueText);
             Assert.Equal("1 thread · download limit 128 KB/s · 20,000 requests a day · 60 a minute", TextOf(status, "ScrapeStatusLimits"));
             Assert.Equal(3, Named<LunaList<ScrapeRecent>>(status, "ScrapeStatusRecent").Models.Count);
         });

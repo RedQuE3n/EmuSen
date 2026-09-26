@@ -59,8 +59,8 @@ namespace EmuSen.Mistress.Views
         private readonly MeterRow _quota = new() { Name = "ScrapeQuotaMeter", Label = "Requests today" };
         private readonly TextBlock _status = new() { Name = "ScrapeStatusText", TextWrapping = Avalonia.Media.TextWrapping.Wrap };
 
-        private readonly TextBox _user = new() { Name = "ScreenScraperUserBox", Watermark = "(none)", HorizontalAlignment = HorizontalAlignment.Stretch };
-        private readonly TextBox _password = new() { Name = "ScreenScraperPasswordBox", PasswordChar = '•', Watermark = "(none)", HorizontalAlignment = HorizontalAlignment.Stretch };
+        private readonly TextBox _user = new() { Name = "ScreenScraperUserBox", Watermark = "ScreenScraper name", HorizontalAlignment = HorizontalAlignment.Stretch };
+        private readonly TextBox _password = new() { Name = "ScreenScraperPasswordBox", PasswordChar = '•', Watermark = "Password", HorizontalAlignment = HorizontalAlignment.Stretch };
         private readonly TextBlock _memberText = new() { Name = "ScreenScraperMemberText", TextWrapping = Avalonia.Media.TextWrapping.Wrap };
         private readonly HintText _signInMessage = new() { Name = "ScreenScraperSignInMessage" };
         private readonly Button _signIn = Ui.Button("Log In", () => { });

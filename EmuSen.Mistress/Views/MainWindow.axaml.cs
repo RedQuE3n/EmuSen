@@ -459,9 +459,9 @@ namespace EmuSen.Mistress.Views
             }
         }
 
-        private void ShowPreferences() => ShowPreferences(null);
+        private void ShowPreferences() => ShowPreferencesAt(null);
 
-        private void ShowPreferences(string? tab)
+        private void ShowPreferencesAt(string? tab)
         {
             // Non-modal, so re-scan on close rather than leaving a stale library behind it.
             var window = new PreferencesWindow(_appSettings, this) { OpenThemeSettings = ShowThemeSettings };

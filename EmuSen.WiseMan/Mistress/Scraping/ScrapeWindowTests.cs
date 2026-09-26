@@ -181,6 +181,19 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         });
 
         [Fact]
+        public Task A_new_run_replaces_what_an_interrupted_one_left_rather_than_adding_to_it() => OnUi(() =>
+        {
+            string other = Path.Combine(_romDir, "Other (USA).sfc");
+            File.WriteAllBytes(other, SyntheticRom.Build((0x100, [9])));
+            using (MediaStore store = MediaStore.Open(DataStore.Media)) store.Enqueue(other, "snes", ScrapePriority.Library);
+            MainWindow window = Open(settings: a => a.OpenEmuFallback = false);
+            Scrape(window, ScrapeScope.ThisGame(_rom));
+            RunEnds(window);
+            Assert.Equal([Md5], _server.JeuInfos.Select(u => FakeScreenScraper.Param(u, "md5")));
+            Assert.Equal(1, window.Progress!.Total);
+        });
+
+        [Fact]
         public Task What_is_already_kept_is_shown_with_no_request() => OnUi(() =>
         {
             Directory.CreateDirectory(Path.GetDirectoryName(ScrapedCover)!);

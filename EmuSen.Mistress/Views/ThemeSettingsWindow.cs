@@ -27,6 +27,7 @@ namespace EmuSen.Mistress.Views
         private readonly TextBlock _status = new() { Name = "ThemeStatus", TextWrapping = Avalonia.Media.TextWrapping.Wrap };
         private readonly Dictionary<string, string> _latest = new(StringComparer.Ordinal);
         private CancellationTokenSource? _download;
+        private bool _closed;
 
         // Called with true when a theme folder was replaced or removed, so the view reads it afresh.
         public ThemeSettingsWindow(AppSettings settings, Func<HttpClient> http, Action<bool> applied)
@@ -44,7 +45,7 @@ namespace EmuSen.Mistress.Views
             Control buttons = Ui.Buttons(Ui.Button("Close", Close)).Margin(0, 12, 0, 0);
             DockPanel.SetDock(buttons, Dock.Bottom);
             Content = new DockPanel { LastChildFill = true, Children = { buttons, tabs } }.Margin(16);
-            Closed += (_, _) => StopDownload();
+            Closed += (_, _) => { _closed = true; StopDownload(); };
             Fill();
         }
 
@@ -168,7 +169,9 @@ namespace EmuSen.Mistress.Views
                 ? $"Downloaded {s.Downloaded:yyyy-MM-dd} from {s.Source.Url.Replace("https://", "")}" + (s.Commit is { Length: >= 7 } commit ? $", commit {commit[..7]}" : "")
                 : $"Read in place from {theme.Directory}";
             var buttons = new List<Button>();
+            string id = Path.GetFileName(theme.Directory);
             Button use = Ui.Button(inUse ? "In Use" : "Use", () => Use(theme.Directory));
+            use.Name = $"ThemeUse.{id}";
             use.IsEnabled = !inUse;
             buttons.Add(use);
             if (theme.Stamp is { } stamp)
@@ -176,13 +179,16 @@ namespace EmuSen.Mistress.Views
                 bool newer = _latest.TryGetValue(theme.Directory, out string? latest) && latest != stamp.Commit;
                 Button update = Ui.Button(newer ? "Update" : "Check for Update", () => _ = newer ? DownloadAsync(stamp.Source) : CheckAsync(theme.Directory, stamp));
                 update.IsEnabled = _download is null;
+                update.Name = $"ThemeUpdate.{id}";
                 buttons.Add(update);
                 Button remove = Ui.Button("Remove", () => _ = RemoveAsync(theme));
                 remove.IsEnabled = _download is null;
+                remove.Name = $"ThemeRemove.{id}";
                 buttons.Add(remove);
             }
-            buttons.Add(Ui.Button("About", () => ShowAbout(theme.Directory)));
-            for (int i = 0; i < buttons.Count; i++) buttons[i].Name = $"Theme{i}.{Path.GetFileName(theme.Directory)}";
+            Button about = Ui.Button("About", () => ShowAbout(theme.Directory));
+            about.Name = $"ThemeAbout.{id}";
+            buttons.Add(about);
             return new FieldRow { Label = theme.Name, Hint = where, Content = Ui.Row(8, buttons.ToArray()) };
         }
 
@@ -239,7 +245,7 @@ namespace EmuSen.Mistress.Views
                 if (Current is null) _settings.BigPictureTheme = directory;
                 _settings.Save();
                 _applied(true);
-                if (first && IsVisible) ShowAbout(directory);
+                if (first && !_closed) ShowAbout(directory);
             }
             catch (OperationCanceledException)
             {

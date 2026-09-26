@@ -3012,5 +3012,38 @@ run ends are tested in `ScraperTests`. The pad reaches every new control: stage 
 `Every_control_of_each_sheet_opened_from_the_themed_view_is_reached_by_the_pad` and `PadSettingsWindowTests` walk
 Preferences with the Scraping tab in it, and pass.
 
+**Mutants** (`mutants-stage-d-userstarted.json`, the same runner, corrected as 17.11 describes; log `run-stage-d-u.log`):
+
+| # | Mutant | Result |
+|---|---|---|
+| U1 | a run starts by itself at start and whenever Preferences closes | caught |
+| U2 | a queue an earlier session left is resumed by itself | caught |
+| U3 | the developer file appearing starts a run | **survived**; caught after the test opened with `media.db` already there |
+| U4 | a tile drawn without a cover asks the failover, as `OnlineCovers` did | caught by 17 |
+| U5 | showing or refreshing the library scrapes what has no cover | not built at first (the mutant named a type without its namespace); caught by 24 once rewritten |
+| U6 | the themed view's selection is scraped as it is shown | caught |
+| U7 | no confirm step | caught by 6 |
+| U8 | cancel leaves the worker running | caught |
+| U9 | a new run adds to an interrupted run's queue | caught |
+| U10 | Scrape This Game does not ask again what ScreenScraper did not know | caught |
+| U11 | a console scope takes every shelf | caught |
+| U12 | "only games with no cover" ignored | caught |
+| U13 | the failover asked for a game that already has a cover | **survived**; caught after a test was added |
+| U14 | what a quota stop leaves is not handed to the failover | caught by 5 |
+| U15 | the plan counts one request a game | caught |
+| U16 | the pad menu offers no Scrape This Game | caught by 2 |
+| U17 | a run idles on an empty queue instead of ending | caught by 12 |
+
+**17 of 17 caught, two after their tests were strengthened.** U3's test had opened without `media.db`, and the mutant
+only fired with the store open, which is the ordinary case after a first session. U13's only route to the failover
+without ScreenScraper had one game with no cover, so skipping the "has a cover" check changed nothing; the new test has a
+second game with the player's own cover and requires the failover to be asked about the first alone.
+
+**An intermittent failure, recorded and not attributed.** In the blast-radius run after this change (502 tests), stage
+(c)'s `SceneMotionTool.List_held_strip` failed once with Avalonia's "the calling thread cannot access this object". It
+passed alone (5 of 5 in its class) and in a rerun of the BigPicture and Scraping tests together (394 of 394); the broad
+run before this change had passed it. Nothing in this stage touches that tool, but a single failure beside new window
+tests is not evidence either way, and repeating broad runs to catch it again was ruled out by the test-load rule.
+
 **The live run of 17.9 was made before this change**, by a tool that drives `Scraper` directly and is itself a deliberate,
 one-off run started by a person; its numbers stand.

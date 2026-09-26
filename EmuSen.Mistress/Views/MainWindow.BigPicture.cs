@@ -86,7 +86,8 @@ namespace EmuSen.Mistress.Views
                 _themed.Status = DeviceStatusReader.Read();
                 _themed.PlaySound = _appSettings.NavigationSounds ? PlayUiSound : null;
                 _themed.SetFamily(PadFamilies.Of(_gamepad.ControllerType, _gamepad.ControllerName));
-                shown = _themed.Show(_appSettings.BigPictureTheme!, LibraryView.Bounds.Size, ThemedShelves(), ThemedMedia());
+                string mediaKey = $"{_appSettings.EsdeMediaDirectory}|{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(_artwork)}";
+                shown = _themed.Show(_appSettings.BigPictureTheme!, LibraryView.Bounds.Size, ThemedShelves(), ThemedMedia(), mediaKey);
                 if (!shown && _themed.Error is { } why && LibraryView.Bounds.Width > 0) StatusText.Text = why;
                 if (shown && _themed.PlaySound is not null && UiSoundSink is null) (_uiSounds ??= new UiSoundPlayer()).Preload(_themed.SoundFiles);
             }

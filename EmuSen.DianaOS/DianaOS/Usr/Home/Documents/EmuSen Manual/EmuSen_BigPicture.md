@@ -2684,3 +2684,159 @@ P9 and P10 (§9) are this stage's. The rest were added before a line of the clie
   cover of that region; the others take the fallback order's first region with one.
 - **P67, nothing leaks.** After the live run, the literal values of the developer credentials appear in no file the run
   wrote: not the media folder, not `media.db`, not the saved responses, not the log.
+
+### 17.2 The scope, as it changed during the stage
+
+The brief was §7's row: scraped media as one more source for the themed view. Two decisions came during the build,
+through the coordinator, and are recorded here because they reverse parts of §5:
+
+- **ScreenScraper became Mistress's main source of cover art and game text everywhere**, the library's grid and list as
+  well as the themed view, whenever the developer file is present. OpenEmu's sources (§4.39 of the settings reference)
+  became an opt-in failover, **on by default by the coordinator's choice**, which the user may reverse. It fills a cover
+  only where ScreenScraper found none or cannot be used.
+- **Ship-ready by default.** Where the developer file exists, scraping works with no action, and it is reachable from the
+  pad in Game Mode. `Scraping` is therefore on by default. §5.8's "off by default, one explicit action" is kept in the one
+  place it still protects someone: a build without the developer file sends nothing to ScreenScraper, and there the
+  failover is what runs, with its hint saying what it sends. That the failover itself is now on by default is a change
+  from §4.39's "off unless the player turns it on", and is the coordinator's decision, not an argument made here.
+
+The order of sources was given with the second decision: what the player placed, then ScreenScraper, then an ES-DE
+media folder, then the failover, then the placeholder. Stage (e) had drawn the ES-DE folder before the player's covers;
+that order is reversed here.
+
+### 17.3 What was built
+
+**In Mistress, `Scraping/`**, with no Avalonia type:
+- `ScreenScraperClient`: the URLs (credentials, `output=json`, `romtype=rom`, `systemeid`, `crc`, `md5`, `sha1`,
+  `romtaille`, `romnom` as the bare file name), `jeuInfos`, `ssuserInfos`, `systemesListe`, and the media download with
+  §5.6's rules (an image of 80 bytes or more, written beside its name and moved, never over a file). `StatusOf` gives every
+  code of §5.1's table its own meaning. `ScreenScraperJson` is every reading of the answers in one place, because the API
+  is a beta (§10's risk); it takes numbers written as strings or as numbers.
+- `ScrapeQuotaManager`: §5.5's rules (17.4).
+- `MediaStore`: `media.db` (17.5).
+- `Scraper`: the queue's workers (17.4).
+- `ScrapeRules`: region, language, genre, rating and date (17.6).
+- `MediaSources`: the order of sources, which also answers stage (f)'s presence and stamp questions for the variant
+  triggers (§16.2).
+- `RomHashes`: MD5, CRC-32 and SHA-1 from one read; the MD5 equals `RomHash.Md5` of the same file.
+- `ScreenScraperCredentials` (`DeveloperCredentials`, `MemberAccount`) and `ScrapeRedactor` (17.7).
+
+**In the window:** `MainWindow.Scrape.cs` starts the workers when the setting is on and the developer file is found, and
+again whenever Preferences closes; routes a tile without a cover to ScreenScraper or the failover; queues the themed
+gamelist's selected game; feeds the themed view's `SceneGame` metadata from `media.db`; and refreshes the grid and the
+view when media arrive, the view only when it is still (`SceneView.NextChange` is null), so a glide is never cut. The
+failover (`MainWindow.Covers.cs`) now starts on the first cover wanted from it, writes to `home/Media/openemu/`, and is
+silent in the status line unless the player asked. Preferences gained a **Scraping** tab (`ScrapePreferencesPane`).
+
+**In LunaP** (branch `bigpicture-scrape`, `docs/LunaP.md` §110): the on-screen keyboard draws a password box's preview
+in the box's mask.
+
+**Elsewhere:** `DataStore.Media`; `CrashLog` writes through the redactor; `ArtworkIndex` locks its dictionary, since the
+worker asks it whether the player has a cover while the window may be adding one; `.gitignore` names `media.db` and both
+credential files.
+
+### 17.4 The client, the queue and the quota rules
+
+**Identity** is §5.2's, stopping at the first hit: the file's own three hashes with its size, name and system; then, only
+after a 404 and only when the core's `OpenVgdbBytes` changes the bytes, the transformed bytes' hashes with their own size.
+The Game Boy's transform is the identity, so a Game Boy file is never asked twice. There is no name search.
+
+**The queue** lives in `media.db` (`scrape_queue`), ordered by priority (Shown, Console, Library) and then arrival; a game
+shown moves up, never down. A worker holds a game while it asks, so two workers never take the same one. Outcomes:
+
+| Answer | What happens to the game |
+|---|---|
+| found | its text and each wanted kind kept; off the queue |
+| 404 at both steps | recorded Unknown; off the queue; never asked again |
+| 400, or a malformed answer or a network failure five times | recorded Error; off the queue |
+| a malformed answer or a network failure before the fifth | stays, retried after 2, 4, 8… minutes, at most an hour |
+| 429, 401 | stays, retried after the wait below, the attempt not counted |
+| 430, 431, 403, 423, 426 | stays, untouched, for the day or the next start |
+
+A game answered before costs no request: an Unknown one is not asked again, and a found one is asked again only for a
+kind the player has since turned on **and** the game offered (`scrape_game.offered` lists the kinds its answer had, never
+their addresses, which carry the credentials). A renamed file is recognised by its MD5 and its media are moved to the new
+stem; a second copy beside the first gets copies. §4.37's orphan pass over `games.db` is not extended: the scraper's own
+path cache (`scrape_file`) is what finds a renamed file, at the cost of hashing it once.
+
+**The quota rules**, all from §5.5:
+- the limits and counts are read from every answer that carries them, and a server's count replaces Mistress's own;
+- workers: never more than `maxthreads`, one until an answer says; a worker whose number is no longer allowed idles;
+- pace: `maxrequestspermin` less 10%, media downloads included, 30 a minute until an answer says (under the 50 per
+  thread the secondary sources report);
+- `maxdownloadspeed`: after a file that came faster, the difference is waited;
+- the day stops at `maxrequestsperday` less 2%, or `maxrequestskoperday` less 2%, or on 430 or 431, until midnight in
+  Paris; the stop is written to `quota_day` and survives a restart;
+- 429 halves the pace and waits 60 s; 401 waits five minutes; 403, 423 and 426 stop until the next start or change in
+  Preferences, which is when the worker is rebuilt.
+
+*Where this is Mistress's choice, not ScreenScraper's documented rule:* the day's boundary (Paris time; when
+ScreenScraper resets was not measured); the 2% applied to the unrecognised allowance as well as to requests; pacing the
+media downloads with the requests (whether they count against the quota is P61, measured below); the assumed 30 a
+minute; five attempts; and a 403 stopping only the session, since a corrected developer file should work without waiting
+a day.
+
+### 17.5 The media store and `media.db`
+
+The files are §5.6's layout, `home/Media/<system>/<folder>/<rom stem>.<ext>`, so the store is read by stage (f)'s
+`EsdeMediaFolder` unchanged: whatever that reader accepts (png, jpg, webp, and its video types) the store's folders are
+read with. `media.db` has one migration so far, with `PRAGMA user_version` and a newer file refused:
+
+| Table | Key | Holds |
+|---|---|---|
+| `scrape_game` | MD5, size | status (Found, Unknown, Error); ScreenScraper's game, ROM and system ids; name; description; developer; publisher; genre; players; rating; release date; the region and language used; which step matched; the kinds offered; the detail of an error; `fetched_at` |
+| `scrape_media` | MD5, size, kind | the file relative to the store; its region; its SHA-1; `fetched_at` |
+| `scrape_file` | path | size, write time and MD5: a file is hashed again only when it changes |
+| `scrape_queue` | path | system, priority, arrival, attempts, `next_try` |
+| `quota_day` | day | requests, unrecognised, the day's limits, `stopped_until` and why |
+
+§5.6 listed four tables; `scrape_file` is the fifth, because §5.6 left open how a path finds its MD5 without reading the
+file at every showing.
+
+### 17.6 Region, language and text
+
+- **Region.** The preferred region is the player's choice, or the file name's first tag whose every name is a country
+  (`(USA, Europe)` is `us`; `(En,Fr,De)` is not a region), or `wor` when there is none. With the fallback on, then
+  ES-DE's order, `wor`, `us`, `eu`, `jp`, `ss`, then any region; with it off, the preferred region only. A file with no
+  region is taken when no region in the order has one. For marquees `wheel-hd` is tried whole before `wheel`.
+- **Language**, for the synopsis and the genre: the preferred, then `en`.
+- **Name**: by the region order, then ScreenScraper's own (`ss`). Kept, not shown: the library and the themed view show
+  the file's name, as they did.
+- **Genre**: the main one (`principale`), else the first, in the language order.
+- **Rating**: `note / 20` to the nearest tenth, as §5.4 says, clamped to 0–1.
+- **Release date**: by the region order; a full date, a year and month, or a year.
+
+### 17.7 Credentials, as §5.7 asked
+
+- **Where the developer file is read.** `ConfigStore.Directory` first, then `ConfigStore.LegacyDirectory`
+  (`~/.config/EmuSen`, where the file was put). A test that moved the config directory without moving the legacy one
+  never reaches the real file, the same guard `ConfigFile` uses (§1.4 of the config reference). For a published tree the
+  first place is `<tree>/home/etc/EmuSen/screenscraper-developer.json` (`out/linux-x64/Mistress/home/etc/EmuSen/`, or
+  `~/Apps/Mistress/home/etc/EmuSen/` for an installed copy); the second serves every tree on the machine.
+- **Q5 as decided.** Builds carry nothing; the embedded-resource option was not built.
+- **The member account** is `screenscraper.json` in the config directory, created with mode 0600 (`UnixCreateMode`) and
+  set to it again before it is moved into place. It is written when a box is left or the sheet closes, and only when it
+  changed, so no half-typed password is ever written or registered with the redactor.
+- **The redactor.** One function blanks `devid`, `devpassword`, `ssid` and `sspassword` in any text (§5.7 named three;
+  `devid` was added because the developer credentials as a whole were to stay out of logs), and blanks each credential's
+  value wherever it appears once the credential object has been made. Everything that reaches the status line, a detail,
+  an exception message or `CrashLog` passes through it. The media addresses in every `jeuInfos` answer carry the
+  credentials in their query, so no answer is ever logged unredacted; the live tool saves only redacted bodies.
+- **Never in git.** `.gitignore` names both files. `ScrapeCredentialTests` fails if `git ls-files` lists either, or if a
+  tracked file holds a `devpassword=` value that does not start `FAKE` (the tests' spelling), or holds the real password
+  when the developer's file is on the machine. The test found its own first draft: the redactor's cases had used a
+  made-up password that did not start `FAKE`. It fired a second time on this section, whose first draft quoted that
+  case literally.
+- `DeveloperCredentials` and `MemberAccount` print as a description, never their values.
+
+### 17.8 Closing what was opened (§15.14's lesson)
+
+The workers, `media.db`, the view's refresh timer and the window's handler in Preferences are the things this stage
+opens. `StopScraping`, called from the window's `Closing` before the HTTP client is disposed, marks the window closed,
+stops the timer, cancels and joins the workers (a request in flight is cancelled with them), and closes `media.db`.
+`A_closed_window_asks_nothing_more_and_closes_its_worker_and_its_store` holds a request open at the fake server, closes the
+window, releases the server and waits 0.8 s: no request follows, the worker reports not running and the store closed.
+With `StopScraping` removed from `Closing` (mutant D40, 17.10) the test fails. Preferences removes its handler from the
+window when it closes (D41), and saves the member account then (D42). The suite's windows start with a handler that
+refuses every request and with no developer file (`NoNetwork`, a module initialiser), so no window in any other test can
+reach a server or read the developer's file.

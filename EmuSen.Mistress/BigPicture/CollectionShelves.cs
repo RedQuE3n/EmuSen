@@ -98,7 +98,7 @@ namespace EmuSen.Mistress.BigPicture
             };
             return new SceneGame(collection.System.Name, FolderPrefix + collection.System.Name)
             {
-                Folder = true,
+                Folder = true, IsCollection = true, HideMetadata = true,
                 Description = $"This collection contains {games.Count} {(games.Count == 1 ? "game" : "games")}{list}",
                 Face = games.FirstOrDefault(),
             };

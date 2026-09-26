@@ -56,7 +56,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             SceneGame[] games = [G("A", genre: "Racing", rating: 0.8f), G("B", genre: "puzzle", rating: 0.8f), G("C", genre: "Racing"), G("D", fav: true)];
             Assert.Equal(["puzzle", "Racing", GamelistOptions.Unknown], GamelistOptions.Values(games, FilterField.Genre));
-            Assert.Equal([GamelistOptions.Unknown, "4 stars"], GamelistOptions.Values(games, FilterField.Rating));
+            Assert.Equal(["4 stars", GamelistOptions.Unknown], GamelistOptions.Values(games, FilterField.Rating));
             Assert.Equal(["No", "Yes"], GamelistOptions.Values(games, FilterField.Favorite));
             Assert.Empty(GamelistOptions.Values(games, FilterField.Publisher));
             Assert.Empty(GamelistOptions.Values(games, FilterField.Completed));

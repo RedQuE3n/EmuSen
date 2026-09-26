@@ -35,6 +35,12 @@ namespace EmuSen.Mistress.BigPicture.Scene
         // For a folder, the game whose media it shows, as ES-DE's grouped collections show a member (§22).
         public SceneGame? Face { get; init; }
 
+        // A custom collection listed in the grouped system: opened like a folder, drawn without the folder mark, as ES-DE 3.4.1 draws it (§22).
+        public bool IsCollection { get; init; }
+
+        // ES-DE's "Hide metadata fields" for this entry: its text fields but the description, its dates, rating, badges and metadata elements are not drawn (§22).
+        public bool HideMetadata { get; init; }
+
         // The game whose media is looked up, and the system it is looked up under.
         public SceneGame Shown => Face ?? this;
 
@@ -46,6 +52,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
     {
         // Whether a textlist marks favourites with a star here; ES-DE's favorites collection and custom collections do not by default (§22).
         public bool Stars { get; init; } = true;
+
+        // What a game's systemName and systemFullname read here instead of the system's: blank at the grouped collections' top, a collection's name inside it (§22).
+        public string? Heading { get; init; }
     }
 
     // Where a game's scraped images are, by ES-DE's media type name; null when there is none.

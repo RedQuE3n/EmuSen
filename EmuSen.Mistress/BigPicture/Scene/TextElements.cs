@@ -37,6 +37,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         {
             if (e.String("metadata") is not { } field) return null;
             SceneSystem system = b.Data.System;
+            if (field is "systemName" or "systemFullname" && b.View.Name == "gamelist" && system.Heading is { } heading) return heading.Length == 0 ? null : heading;
             if (field is "systemName") return system.System.Name;
             if (field is "systemFullname") return system.System.FullName;
             if (field is "sourceSystemName") return (b.Data.Game?.SourceIn(system) ?? system.System).Name;

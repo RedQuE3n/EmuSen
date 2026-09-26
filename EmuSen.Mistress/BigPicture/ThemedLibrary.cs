@@ -165,7 +165,7 @@ namespace EmuSen.Mistress.BigPicture
         // The data the kept selection gives: the system by name, its games as the options list them (§22), the game by file.
         private SceneData Data()
         {
-            IReadOnlyList<SceneSystem> systems = _systems.Select(s => s with { Games = Listed(s.System.Name), Stars = StarsIn(s.System.Name) }).ToList();
+            IReadOnlyList<SceneSystem> systems = _systems.Select(s => s with { Games = Listed(s.System.Name), Stars = StarsIn(s.System.Name), Heading = HeadingIn(s.System.Name) }).ToList();
             int system = Math.Max(0, systems.ToList().FindIndex(s => s.System.Name == _system));
             SceneSystem chosen = systems[system];
             int game = _cursor.TryGetValue(ListKey(chosen.System.Name), out string? file) ? Math.Max(0, chosen.Games.ToList().FindIndex(g => g.File == file)) : 0;

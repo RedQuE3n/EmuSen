@@ -66,7 +66,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         // ES-DE marks favourites and folders before the name unless indicators is none; the marks are LunaP's own drawings (§3.6).
         private static TextRowMarker Marker(ResolvedElement e, SceneGame g, bool stars) =>
             g.InCollection && e.String("collectionIndicators") != "ascii" ? TextRowMarker.Tick
-            : e.String("indicators") == "none" ? TextRowMarker.None : g.Folder ? TextRowMarker.Folder : g.Favorite && stars ? TextRowMarker.Star : TextRowMarker.None;
+            : e.String("indicators") == "none" || g.IsCollection ? TextRowMarker.None : g.Folder ? TextRowMarker.Folder : g.Favorite && stars ? TextRowMarker.Star : TextRowMarker.None;
 
         // While a collection is edited its members carry a tick, which the theme cannot turn off; its ascii form is a "!" (THEMES.md, collectionIndicators).
         private static string Marked(ResolvedElement e, SceneGame g, string text) =>

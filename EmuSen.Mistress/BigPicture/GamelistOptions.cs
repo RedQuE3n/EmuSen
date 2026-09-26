@@ -153,7 +153,7 @@ namespace EmuSen.Mistress.BigPicture
             var values = known.Select(v => v ?? Unknown).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             if (values.Count < 2) return [];
             return field == FilterField.Rating
-                ? values.OrderBy(v => v == Unknown ? -1 : double.Parse(v.Split(' ')[0], CultureInfo.InvariantCulture)).ToList()
+                ? values.OrderBy(v => v == Unknown ? double.MaxValue : double.Parse(v.Split(' ')[0], CultureInfo.InvariantCulture)).ToList()
                 : values.OrderBy(v => v == Unknown ? 1 : 0).ThenBy(v => v, StringComparer.OrdinalIgnoreCase).ToList();
         }
 

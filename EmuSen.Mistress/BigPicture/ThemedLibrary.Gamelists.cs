@@ -65,6 +65,9 @@ namespace EmuSen.Mistress.BigPicture
 
         private bool StarsIn(string system) => OpenFolder(system)?.Stars ?? ShelfOf(system)?.Stars ?? true;
 
+        // THEMES.md: a blank system name at the grouped collections' top, which a theme's defaultValue fills; inside, the collection's own.
+        private string? HeadingIn(string system) => ShelfOf(system)?.Folders is null ? null : OpenFolder(system)?.System.Name ?? "";
+
         public GameSort CurrentSort => SortOf(_system);
 
         private GameSort SortOf(string? system) => _sorts.TryGetValue(ListKey(system), out GameSort chosen) ? chosen : Source(system).Sort ?? DefaultSort;

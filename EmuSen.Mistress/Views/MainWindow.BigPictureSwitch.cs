@@ -40,7 +40,7 @@ namespace EmuSen.Mistress.Views
             _bigScreenForced = InGameModeSession(Environment.GetEnvironmentVariable);
             _bigPictureAction = new LunaAction("Fullscreen", () => SetBigPicture(!_bigScreen)) { Shortcut = _fullscreen.Shortcut };
             BigPictureButtons.ItemsSource = new Control[] { new ActionButton(_bigPictureAction) { Name = "BigPictureButton" } };
-            FullScreenChanged += on => { if (!_bigScreenForced) SetBigPicture(on); };
+            FullScreenChanged += SetBigPicture;
             Opened += (_, _) => { if (_bigScreen) IsFullScreen = true; };
         }
 
@@ -75,7 +75,7 @@ namespace EmuSen.Mistress.Views
             else control.ClearValue(size);
         }
 
-        // Enters or leaves big picture: the layout, the library, the popups and sheets, the window's full screen, and the setting the next start reads.
+        // Enters or leaves big picture, the one guard for Game Mode and for the event its own full screen raises: the layout, library, popups, sheets, full screen and setting.
         internal void SetBigPicture(bool on)
         {
             if (on == _bigScreen || (!on && _bigScreenForced)) return;
@@ -99,7 +99,7 @@ namespace EmuSen.Mistress.Views
 
         // Esc leaves only where it has nothing else to do: the library showing, no game behind it, nothing over it.
         private bool EscapeLeavesBigPicture =>
-            _bigScreen && !_bigScreenForced && LibraryView.IsVisible && _session is not { IsRomLoaded: true } && !_padMenuOpen && !Sheets.IsPresenting
+            _bigScreen && LibraryView.IsVisible && _session is not { IsRomLoaded: true } && !_padMenuOpen && !Sheets.IsPresenting
             && OnScreenKeyboard.OpenOver(this) is null;
 
         private DesktopPlace DesktopPlaceNow() =>

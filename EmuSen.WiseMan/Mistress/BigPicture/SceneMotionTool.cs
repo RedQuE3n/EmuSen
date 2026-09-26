@@ -55,6 +55,29 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Strip(host, "list-released-1280x800", [1800, 1875, 1950, 2400]);
         });
 
+        // §14.8's lever on the real theme: a held list moved alone while its metadata is faded out, against a rebuild on every step, every frame at 60 Hz.
+        [ArtBookNextFact]
+        public System.Threading.Tasks.Task Held_list_lever_is_pixel_identical_on_Art_Book_Next() => UiTest.Run(() =>
+        {
+            SceneView lever = View("gamelist");
+            SceneView every = new(lever.Data, "gamelist", TimeSpan.Zero) { RebuildEveryStep = true };
+            using var a = new SceneMotionHost(lever);
+            using var b = new SceneMotionHost(every);
+            lever.Press(1, Ms(0));
+            every.Press(1, Ms(0));
+            int frames = 0, differing = 0;
+            for (int i = 0; i < 150; i++)
+            {
+                var t = TimeSpan.FromTicks(i * TimeSpan.TicksPerSecond / 60);
+                if (i == 120) { lever.Release(t); every.Release(t); }
+                differing += SceneAssets.Differing(a.At(t), b.At(t));
+                frames++;
+            }
+
+            _output.WriteLine($"{frames} frames compared, {differing} pixels differ in all");
+            Assert.Equal(0, differing);
+        });
+
         [ArtBookNextFact]
         public System.Threading.Tasks.Task Scrolling_texts_strip() => UiTest.Run(() =>
         {

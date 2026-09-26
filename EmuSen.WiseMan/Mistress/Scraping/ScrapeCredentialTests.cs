@@ -30,9 +30,9 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         }
 
         [Theory]
-        [InlineData("https://api.screenscraper.fr/api2/jeuInfos.php?devid=abcd&devpassword=p%40ss&softname=EmuSen&ssid=member&sspassword=hunter22&md5=00",
+        [InlineData("https://api.screenscraper.fr/api2/jeuInfos.php?devid=abcd&devpassword=FAKEp%40ss&softname=EmuSen&ssid=member&sspassword=hunter22&md5=00",
                     "https://api.screenscraper.fr/api2/jeuInfos.php?devid=***&devpassword=***&softname=EmuSen&ssid=***&sspassword=***&md5=00")]
-        [InlineData("{\"url\":\"https://neoclone.screenscraper.fr/api2/mediaJeu.php?DEVID=abcd&DevPassword=zz9\",\"x\":1}",
+        [InlineData("{\"url\":\"https://neoclone.screenscraper.fr/api2/mediaJeu.php?DEVID=abcd&DevPassword=FAKEzz9\",\"x\":1}",
                     "{\"url\":\"https://neoclone.screenscraper.fr/api2/mediaJeu.php?DEVID=***&DevPassword=***\",\"x\":1}")]
         [InlineData("GET mediaJeu.php?ssid=bob sspassword=secret1 then", "GET mediaJeu.php?ssid=*** sspassword=*** then")]
         [InlineData("nothing to hide: md5=00 romnom=a.sfc", "nothing to hide: md5=00 romnom=a.sfc")]

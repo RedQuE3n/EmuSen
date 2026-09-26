@@ -38,6 +38,17 @@ namespace EmuSen.Mistress.Views
             (AppSettings.LibraryStyleTheme, "ES-DE theme"),
         };
 
+        // Opens the theme's settings sheet; set by the main window, which owns the themed view.
+        public Action? OpenThemeSettings { get; set; }
+
+        private Button ThemeSettingsButton()
+        {
+            Button button = Ui.Button("Theme Settings…", () => OpenThemeSettings?.Invoke());
+            button.Name = "ThemeSettingsButton";
+            button.HorizontalAlignment = HorizontalAlignment.Left;
+            return button;
+        }
+
         // Raised when a status-bar switch moves, so the main window applies it at once.
         public event Action? StatusBarChanged;
         private readonly Dropdown _theme = new() { Name = "ThemeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -144,6 +155,12 @@ namespace EmuSen.Mistress.Views
                     Label = "ES-DE Theme",
                     Hint = "A theme folder for ES-DE (one holding capabilities.xml), such as Art Book Next. It is only ever read, and nothing of it is copied.",
                     Content = Picker("BigPictureThemeBox", "(none)", "Choose ES-DE Theme Folder", _settings.BigPictureTheme, p => _settings.BigPictureTheme = p),
+                },
+                new FieldRow
+                {
+                    Label = "Theme Settings",
+                    Hint = "The theme's variant, colours, font size and aspect ratio, and the themes Mistress downloads for you.",
+                    Content = ThemeSettingsButton(),
                 },
                 new FieldRow
                 {

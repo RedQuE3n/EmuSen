@@ -2932,6 +2932,123 @@ leave a state the list cannot show: `Theme` style with no folder. The stored set
   the only record of it, so it must be chosen again in Preferences to come back.
 - Nothing ran on the handheld.
 
+### 4.57 Scraping status: a window, or a sheet in a big-screen session, that follows a run (2026-09-26)
+
+The user, 2026-09-26: "We need to add a status window for when you are scraping roms". Until then a run of §4.60 showed
+three things: "n of m" on the status line, a bar in Preferences ▸ Scraping, and **Cancel Scraping**. The window adds
+the rest of what a run knows. `EmuSen_BigPicture.md` §20 is the record: the tests, the mutants and the pictures.
+
+**Where it opens.**
+- **When a run starts**, from **Scrape This Game...**, **Scrape Games...**, the Scraping tab's **Scrape...** or
+  **Resume**, once the confirm step has been answered. Declining asks nothing and opens nothing.
+- **During a run**, from the pad menu, whose entry reads "Scraping (n of m)..." and now opens this window rather than
+  Preferences. Outside a run the entry is still **Scrape Games...** and still opens the Scraping tab.
+- **At any time**, from Preferences ▸ Scraping ▸ **Status...**.
+- **By clicking the status line** while it shows the run's own text.
+
+There is one window: opening it again brings it forward and redraws it. On the desktop it is a LunaP window owned by
+Mistress's. In a big-screen session (Game Mode, or big picture on the desktop, §4.54) it is a sheet, like Preferences,
+and the pad drives it.
+
+**What it shows.**
+
+| Part | While the run goes | After it ends |
+|---|---|---|
+| Heading and bar | "Scraping 12 of 40 games", or "Paused at 12 of 40 games" | "Finished", "Stopped after" or "Cancelled after" n of m games |
+| Time | the time elapsed, and the time left at this run's own pace (below) | "Took" the whole run |
+| The current game | its name and console; what it is doing now, "Looking it up" or "Downloading its cover" (screenshot, marquee, title screen, mix image); a thumbnail of the last picture that arrived | not shown |
+| Results | found, not found, failed, skipped, and covers filled by OpenEmu's failover (§4.60); games waiting for a retry; the last failure's reason | the same |
+| Quota | the member (below); the day's requests against the limit, as a meter and in words, with what is left; the threads, the download-speed limit and the limits per day and per minute | the same, and why the run stopped |
+| Summary | not shown | the counts; the requests this run sent and ScreenScraper's count for the day; how many games are left queued, and that Resume, in Preferences ▸ Scraping, goes on with them |
+| Recent games | the last 200 games, newest first: outcome and the pictures that arrived, or the reason for a failure, or "cover from OpenEmu's sources" | the same |
+
+*Skipped* is a game that cost no request: already found (its pictures follow a renamed file), already known to be
+unknown, or a file that has gone. *Failed* is a game ScreenScraper refused for good (a 400, or a fifth failure); a game
+that will be retried later in the run is counted apart, since it is not over.
+
+**The estimate** is the run's own pace, not a constant. It is the time worked (elapsed, less any pause) divided by the
+games ScreenScraper has answered, times the games left. Skipped games cost no time, so they are not counted in the pace;
+until the first game has been answered nothing is estimated. The plan measured (§17.9) that half of a run's time on a
+free account is the download-speed limit, 128 KB/s, and not the requests; the estimate does not model the limit, it
+measures it, as it measures everything else a game costs. The confirm step before a run still uses the fixed 13 s a game
+of §17.9, because nothing has been measured yet at that point.
+
+**Requests sent** counts the run's lookups and pictures, each a request as §17.9 found. It is counted by the run itself,
+not taken from the difference in ScreenScraper's count for the day, because that count is only known after the first
+answer and includes what was used before the run.
+
+**The member**, as §4.60's sign-in leaves it: "Member: *name*", with "(not checked; Check in Preferences ▸ Scraping)" for
+an account from before the sign-in existed, or "No member account: EmuSen's developer credentials alone, with their
+limits". The limits shown are the ones the last answer gave, which are the member's when there is one.
+
+**Why a run stopped**, in the window's own words:
+
+| Cause | "Why it stopped: …" |
+|---|---|
+| the day's requests, at the limit less 2% | today's requests are nearly used up (9800 of 10000) |
+| the day's unrecognised games, likewise | today's allowance of unrecognised games is nearly used up (…) |
+| 430, 431 | today's requests are used up (430); today's allowance of unrecognised games is used up (431) |
+| 403 | ScreenScraper refused EmuSen's developer credentials (403) |
+| 423 | ScreenScraper's API is closed (423) |
+| 426 | ScreenScraper has blocked this version of the software (426); a newer build is needed |
+| no developer file | EmuSen's developer file is not on this computer |
+| the player | you cancelled it |
+
+**The controls.**
+- **Pause** holds the run and becomes **Resume**. Each of ScreenScraper's workers waits before its next request, whether
+  that is the next game or the next picture of the game it holds; a request already sent finishes. Nothing else changes:
+  the quota's pace and stops, the queue in `media.db`, and Cancel all work while paused. Pausing is offered only while
+  ScreenScraper's workers run: once they have finished and a run is waiting only for OpenEmu's failover, there is nothing
+  of ScreenScraper's to hold, and the failover's few lookups are not paused. Closing Mistress while paused leaves the
+  queue as closing it mid-run does, for Resume.
+- **Cancel...** asks first ("Stop this run? What it has not reached stays queued…"), then stops the run as the Scraping
+  tab's Cancel Scraping does: a request in flight is cancelled, and what was not reached stays queued for Resume.
+- **Hide** closes the window and the run goes on; the status line keeps its "n of m". After the run it reads **Close**.
+  Escape does the same on the desktop, B on the pad.
+
+**It asks nothing.** The window never starts a run, never resumes one, and sends nothing to any server. Opened with no
+run in this session it says "No scraping in progress." and where a run starts; opened after a run it shows that run's
+summary. A queue left by an earlier session is still only offered as Resume in the Scraping tab (§4.60).
+
+**Credentials.** Every text the window shows passes the redactor of §4.60, the rows of the recent list and the failure
+reasons included, so neither the developer credentials nor the member's password can appear. The one exception is the
+member's own name in the Quota part, which is shown on purpose: it is the player's, on the player's screen. The redactor
+still blanks it in logs, crash reports and error text.
+
+**How the run reaches the window.** A worker records what it is doing in the run itself, under a lock, and calls nothing
+on the UI thread; a game's result reaches the UI thread as before, through a posted job. The window draws on its own
+timer, every 250 ms at most: when the run or Mistress said something changed, and on every tick while a run goes, for its
+clock. A run whose games finish faster than that is drawn four times a second, not once per event. The thumbnail is
+decoded at 192 px wide, once per picture that arrives.
+
+**Close what you open.** Closing the window unsubscribes it from Mistress's `ScrapeChanged` and stops its timer. Closing
+Mistress closes the window first (`StopScraping`, §17.8 of the plan). A test holds a run open, closes the window, lets the
+run finish and waits 0.8 s of real dispatcher time: the window draws nothing more, its timer is stopped, and Mistress
+holds no handler of it. Removing the cleanup fails that test (plan §20.4).
+
+**From the pad.** On the sheet, the d-pad reaches Pause, Cancel, Hide and the rows of the recent list, and A presses
+them (`PadAudit`, §4.45.3); B closes the sheet as Hide does. The pad menu's entry reopens it during the run.
+
+**Tests,** on the fake ScreenScraper of §4.60, headless:
+- `ScrapeStatusWindowTests`, 21 cases: the window opening with a run and following it request by request (the current
+  game, its step, the progress, the estimate appearing, the recent row and its pictures, the tallies, the quota); a cover
+  filled by the failover; each stop's reason (the 2% rule, 430, 423, 426, 403, and no developer file); Hide; Cancel,
+  declined and then confirmed; Pause holding every request until Resume; the summary staying after the end and the
+  status line reopening it; no request and no resume when opened with no run; a closed window letting go; closing
+  Mistress, with the window on the desktop and as a sheet; a fast run drawn at the timer's pace; one window only; the pad menu and the Scraping tab reopening it; the
+  sheet in a big-screen session, walked and pressed by the pad; nothing shown holding a credential.
+- `ScrapeProgressTests`, 6 cases: the estimate's arithmetic, pauses and skipped games left out of it, each tally and the
+  failure's reason, the recent list's cap, the requests counted, redaction.
+- `ScrapeStatusPictureTool` writes the pictures with `EMUSEN_BIGPICTURE_PNG=1`.
+
+**What it does not cover.**
+- The estimate does not know that one game may cost 1 request (not found) and another 5 (found with four pictures): it
+  is a mean over what has been answered, so a run of found games after a run of unknown ones is estimated short.
+- There is no speed or byte count shown; the download-speed limit is shown as the limit, not as what is being used.
+- OpenEmu's failover is not paused, and its lookups are not counted in "requests sent", which are ScreenScraper's.
+- The recent list keeps 200 games and forgets older ones; the counts are the whole run's.
+- Nothing ran on the handheld.
+
 ### 4.60 ScreenScraper: covers, screenshots, marquees and game text, with OpenEmu's sources as the failover (2026-09-26)
 
 Stage (d) of `EmuSen_BigPicture.md` (its §17 is the record: predictions, the live run, mutants). ScreenScraper
@@ -2983,15 +3100,17 @@ know, and asks the failover again too; a wider run does not re-ask what has been
 **From the pad.** In a big-screen session (Game Mode), Start or Guide opens the pad menu; **Scrape This Game...** and
 **Scrape Games...** are there outside a game; the shoulders move between Preferences' tabs. Every row, the console
 list, the switch and the Scrape, Resume and Cancel buttons are reached by the d-pad (`PadAudit`, §4.45.3) and pressed
-with A. The member account's two boxes open the on-screen keyboard of §4.45.6; the password's preview above the keys
-shows its mask, not the text (LunaP §110).
+with A, and so are the member account's **Log In**, **Check** and **Log Out** (below). The name and password boxes open
+the on-screen keyboard of §4.45.6; the password's box and its preview above the keys show its mask, not the text (LunaP
+§110). When Log In succeeds its button is hidden, and the focus is handed to Log Out rather than lost; after Log Out it
+goes back to the name box. **Status...**, and the pad menu's entry during a run, open the status window of §4.57.
 
 **The settings,** stored in `appsettings.json` except the member account:
 
 | Row | Setting | Default | What it does |
 |---|---|---|---|
 | ScreenScraper | `Scraping` | on | a run the player starts may use ScreenScraper when the developer file is present; it starts nothing |
-| Member Account | `screenscraper.json` (`ssid`, `sspassword`) | none | optional; a free account at screenscraper.fr, whose contributions or donation raise the day's requests and threads. Its own file in the config directory, mode 0600, written when a box is left or the sheet closes; never in `appsettings.json` |
+| Member Account | `screenscraper.json` (`ssid`, `sspassword`, `verified`) | none | optional; a free account at screenscraper.fr, whose contributions or donation raise the day's requests and threads. Signed in with **Log In** (below); its own file in the config directory, mode 0600, written only when ScreenScraper has accepted the account; never in `appsettings.json` |
 | Fetch: Covers | `ScrapeCovers` | on | ScreenScraper's `box-2D` |
 | Fetch: Screenshots | `ScrapeScreenshots` | on | `ss` |
 | Fetch: Marquees | `ScrapeMarquees` | on | `wheel-hd`, else `wheel` |
@@ -3003,7 +3122,39 @@ shows its mask, not the text (LunaP §110).
 | (no row) | `ScrapeThreads` | 1 | the workers wanted; never more than the member's `maxthreads` |
 | OpenEmu Failover | `OpenEmuFallback` | on | below |
 
-A change takes effect when the sheet closes.
+A change takes effect when the sheet closes; a sign-in takes effect at once.
+
+**Signing in with a member account** (2026-09-26, the user: "we also need to add the ability for the user to log into
+screenscraper with their own account credentials if they prefer"). Until then the Member Account row was two boxes
+saved as they were left, and nothing said whether ScreenScraper accepted what was in them.
+- **Log In** sends one request, `ssuserInfos.php` with EmuSen's developer credentials and the name and password typed,
+  and nothing else. It is the only request the Scraping tab ever makes, and only when pressed; typing and closing
+  Preferences send nothing and keep nothing.
+- **Accepted:** the row reads "Signed in as *name*", with ScreenScraper's level for the account (`niveau`), the day's
+  requests against its limit, its threads and its download speed, all from that answer; the account is written to
+  `screenscraper.json` with the time it was checked (`verified`), and the answer's limits become the quota's (§4.60's
+  quota rules take them from every answer). The boxes are replaced by **Log Out**.
+- **Refused:** a sentence says why and nothing is written. A wrong name or password ("ScreenScraper did not accept that
+  name and password."; ScreenScraper answers 403 "Erreur de login : Vérifier les identifiants utilisateurs !", measured
+  in plan §17.9); EmuSen's developer credentials refused (a 403 whose text names the developer); ScreenScraper busy (401)
+  or closed (423); this build blocked (426); refusing more requests (429–431); an answer that could not be read or did
+  not come. Without the developer file on this computer nothing is sent and the row says that signing in can't be
+  checked or used here.
+- **Log Out** deletes `screenscraper.json` (it is deleted, not emptied, and the message says so). From that moment no
+  request carries `ssid` or `sspassword`: a run in progress stops sending them from its next request, the lookups and the
+  pictures alike (a picture's address, which ScreenScraper writes with the account in it, has the two taken out), and a
+  later run starts without them.
+- **An account from before the sign-in.** A `screenscraper.json` written by the old two boxes has no `verified`. It is
+  not dropped: the row reads "Signed in as *name* · not checked", runs go on sending it as before, and **Check** asks
+  ScreenScraper once, as Log In does. Accepted, the file gains `verified`; refused, the reason is shown and the account is
+  kept until Log Out, since it was the player's own choice to save it.
+- **Only EmuSen's developer credentials are supported.** ScreenScraper issues developer credentials to software authors,
+  not to players, so a player cannot bring their own; the row's hint says so.
+- **Not measured:** no member account has been signed in against the live service. The fields `id` (the name) and
+  `niveau` (the level) are read as ScreenScraper's API page lists `ssuserInfos`'s answer; a missing level is not shown.
+  The developer-refused text is told apart from a wrong member by the word "développeur", which is the API page's
+  wording and was not seen live; a 403 naming neither is read as a wrong name or password. Whether `ssuserInfos` counts
+  against the day's requests is not known; it is one request, only when pressed.
 
 **What is sent, and to whom.** For each game: the file's name (without its folder), its size, its MD5, CRC32 and SHA-1,
 and ScreenScraper's system number (NES 3, SNES 4, Game Boy 9, Game Boy Color 10, Nintendo 64 14), with the developer
@@ -3065,7 +3216,8 @@ today's counts; Mistress reads them from every answer and:
 - on a 429 halves its pace and waits a minute; on a 401 waits five minutes;
 - on a 403, 423 or 426 stops until the next start or the next change in Preferences, and says why in the status line.
 
-The Scraping tab's **Today** row shows the day's requests against the limit, the unrecognised ones, the threads, and
+The Scraping tab's **Today** row shows the day's requests against the limit as a meter's percentage and, in the text
+beneath it, the requests, the unrecognised ones, the threads, and
 whether it is running, how many games are queued, or why it stopped and until when. It fills from the first answer of a
 session; until then it shows no bar.
 
@@ -3089,8 +3241,17 @@ when it closes.
 no network and no developer file unless a test installs its own): `ScrapeRulesTests`, `ScreenScraperClientTests`,
 `ScrapeQuotaTests`, `MediaStoreTests` (with the order of sources), `ScraperTests`, `ScrapeCredentialTests` (the
 redactor, the two places, the member file's mode, never in git), `CrashLogTests`, `ScrapeWindowTests` (each failover
-case, the window closing, Preferences, the old setting) and `ThemedScrapeTests`; `OnlineCoverTests` and
+case, the window closing, Preferences, the old setting), `ScrapeSignInTests` (below) and `ThemedScrapeTests`; `OnlineCoverTests` and
 `OnlineCoverWindowTests` keep §4.39's rules. Mutants and the live run are in the plan's §17.
+
+`ScrapeSignInTests` (2026-09-26): nothing sent before Log In, then exactly one `ssuserInfos` request carrying the member
+and the developer id, and the account kept at mode 0600 with its check time; each refusal (wrong password, developer
+refused, 401, 423, an unreadable answer holding credentials) in its sentence, with nothing kept and no credential in the
+words; no developer file, no request; typing and closing keeps nothing; Log Out during a gated run, after which no
+request (lookups and pictures) carries `ssid` or `sspassword`; an old file shown not checked, sent by a run, and checked
+by Check; a Check refused keeps the old file; on the sheet by pad, the two boxes typed on the on-screen keyboard and Log
+In and Log Out reached, pressed and followed by the focus; and the answer's sentences never holding a credential. Its
+mutants are in the plan's §20.
 
 **What it does not cover.**
 - No video (Q4), no back cover, fan art, 3D box or physical media: ES-DE's folders for them exist, nothing fills them.

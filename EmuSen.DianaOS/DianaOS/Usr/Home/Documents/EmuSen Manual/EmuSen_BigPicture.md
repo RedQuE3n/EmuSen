@@ -3428,3 +3428,176 @@ the test was changed before any mutant ran. Doing so is what turned up T3.
 - **Nothing ran on the handheld.**
 - **The pad menu's entry is still called "Theme Settings".** With EmuSen chosen, "Themes" might read better. It was left
   alone to keep the merge with §18's pad-menu lines small.
+
+## 20. The scraping status window, and signing in with a member account (2026-09-26)
+
+*Opened 2026-09-26, on two requests of the user's.* The first: "We need to add a status window for when you are scraping
+roms". The second, relayed during the build: "we also need to add the ability for the user to log into screenscraper
+with their own account credentials if they prefer". Both belong to stage (d)'s Scraping tab and to §17.14's rules, which
+bind them: a run is started only by the player, and nothing is asked of a server outside one. The player's account is
+the settings reference's §4.57 (the window) and §4.60's "Signing in"; this is the record.
+
+### 20.1 Expectations, and what the build found
+
+As in §18.1 and §19.1, these were written by the same hand as the design, during it, so they are weaker evidence than a
+stage's predictions. Two were refuted, both about the test harness rather than the product, and both would have left a
+test that passes on a broken build.
+
+| # | Expected | Found | Verdict |
+|---|---|---|---|
+| S1 | Pause fits the run as built, with no new state in `media.db`: every request already waits for the quota's turn in one place, so a gate there holds a run cleanly | held. `Scraper.TurnAsync` is that place: it awaits a pause (a `TaskCompletionSource` swapped in and out) and then `TakeTurnAsync`; the worker's loop awaits it too before taking a game. A request in flight finishes; cancelling or disposing while paused releases the wait. W12 and W13 (§20.4) are the two ways of breaking it, and both are caught | held |
+| S2 | the estimate needs no model of the download-speed limit, which §17.9 found to be half a run's time: measuring the run's pace includes it | held by construction: the estimate is time worked over games answered. It has not met a live run; §17.9's is the only one, and it came before the window | held, not measured live |
+| S3 | the window's timer ticks under the harness as the scraping tests pump the dispatcher (`RunJobs` in a loop) | **refuted.** Under the headless platform a `DispatcherTimer` fires only while the dispatcher runs a frame; `RunJobs` runs posted jobs and no timer. The first close test failed on the unmutated build ("drawn 1 times in 0.6 s"). Had it been written the other way round (asserting that a closed window draws nothing) it would have passed with the cleanup removed. The fixture now pushes a dispatcher frame for real time, as §15.14's test does | refuted; the fixture changed |
+| S4 | releasing held requests one at a time stops a run after a chosen game | **refuted** at first: the test released a request before running the job its worker had just posted, so two games' results landed in one `RunJobs` and "exactly one game done" was never seen. A game's result is posted before its worker's next request, so running the posted jobs before each release makes the stop exact | refuted; the fixture changed |
+| S5 | a wrong member at `ssuserInfos` is a 403 whose text says "utilisateurs" | measured only without an account, in §17.9's live run: "Erreur de login : Vérifier les identifiants utilisateurs !". The fake server answers a wrong member that way. A wrong password against the live service was not tried | held as far as measured |
+| S6 | the sign-in needs no change to the pad's routing | held for the routing; a defect was found beside it. Log In hides itself once signed in, and the focus went with it, so the pad's next press only found the sheet's first control again. The pane now hands the focus to Log Out, and back to the name box after Log Out. `Log_In_and_Log_Out_are_reached_and_used_by_the_pad_on_the_sheet` found it, and L13 is its mutant | held, with a defect found |
+
+### 20.2 What was built
+
+**The run, in `Scraping/` (no Avalonia type):**
+- `ScrapeProgress` (in `ScrapeRun.cs`) became the window's model:
+  - its start and end;
+  - the tallies: found, not found, failed with the last reason, skipped, to be retried, filled by the failover;
+  - what a worker is doing now and the last picture that arrived, set from the worker's thread under a lock;
+  - the recent list, 200 games newest first;
+  - the time paused;
+  - the requests sent;
+  - a version number that every change bumps.
+- `Scraper` reports each step through `Activity` (looking up, downloading a kind, a picture arrived). It marks a result
+  that cost no request as `Skipped`. It gained `Pause` and `Resume` (S1).
+- `ScreenScraperClient.Member` is read at every request, so it can change during a run, and `MediaUrl` takes `ssid` and
+  `sspassword` out of a picture's address when there is no member. `SignInAsync` is the one `ssuserInfos` request.
+- `ScrapeSignIn.cs`: `SignInAnswer.From` turns a status and a body into a result and a sentence, each passed through
+  the redactor. `ScreenScraperJson.Member` reads `id` and `niveau`. `MemberAccount` gained `Verified` and `Delete`.
+
+**The window**, `Views/ScrapeStatusWindow.cs`, is a LunaP `ToolWindow` of LunaP parts: `Ui` rows and sections,
+`HintText`, `MeterRow`, `ButtonBar`, and a `LunaList` for the recent games (a `ListBox`, so its rows are built only in
+view). `SheetLayer.Show` makes it a sheet wherever Mistress presents windows as sheets, so there is no second code path
+for big-screen sessions. `MainWindow.Scrape.cs` opens it (`ShowScrapeStatus`), pauses and cancels through it, and
+closes it in `StopScraping`. The pad menu's entry changed its action and nothing else. `SetUpScraping` wires the status
+line's click.
+
+**Four choices, and why.**
+- *Polling, not posting.* A worker never calls the UI: it writes the run's current step under a lock, and the window
+  reads the run on its own 250 ms timer, drawing only when the version moved, when Mistress raised `ScrapeChanged`, or
+  while the run goes, for its clock. Posting each step would put a job on the UI thread for every lookup and picture, so
+  a fast run (a queue of games already answered costs no request) would queue as many jobs as it has steps. A timer
+  bounds the drawing at four a second whatever the run does, which `A_fast_run_is_drawn_at_the_timer_s_pace_not_once_an_event`
+  measures and W18 breaks. Games' results still reach the UI thread as §17.14 built them, one posted job each, because
+  they change the library and the queue.
+- *Requests sent is counted by the run.* The day's count from ScreenScraper is known only after the first answer, and
+  it includes what was used before the run, so its difference is not what this run cost.
+- *Hide is Close.* The window holds nothing the run needs, so hiding it is closing it, and reopening builds it again from
+  the run. That also means there is no hidden window with a live timer.
+- *The sign-in keeps only what ScreenScraper accepted.* The two boxes of §17.7 saved whatever was in them when a box was
+  left. An account now exists only after one request has accepted it, and the file records when (`verified`), so an
+  older file can be told apart and offered **Check** rather than dropped. Log Out deletes the file rather than emptying
+  it, so no file remains that looks like an account.
+
+**The member's name is shown unredacted in two places**, the Scraping tab's row and the window's Quota part. The
+redactor of §17.7 blanks it, as a credential, everywhere else. Showing the player their own login on their own screen is
+the purpose of those two rows; the password and the developer credentials are never shown anywhere.
+
+**Found by looking at the pictures** (§20.5): the recent list, inside a stacked section, was given unbounded height and
+ran under the Close button once a run had more than a few games; it is now a grid row and scrolls. The meter's value
+column, 55 px wide in LunaP's template, clipped "12 of 20,000 · 19,988 left", so the meter now shows a percentage and
+the counts have their own line. Preferences' Today row (stage (d)'s) had the same clipped meter, "180 of 10,000 ·
+unrecognised …" in 55 px, and was changed the same way, its counts moving to the status text beneath it. The sign-in's
+two boxes both read "(none)"; they now say what they are for.
+
+Nothing was needed in LunaP.
+
+### 20.3 Tests
+
+On stage (d)'s fake ScreenScraper, headless, never the network. The fake gained a status per MD5, one member account
+that `ssuserInfos` accepts (any other is the 403 of S5), and media addresses that carry the account the lookup was made
+with, as ScreenScraper's do.
+- `ScrapeStatusWindowTests`, 21 cases, and `ScrapeProgressTests`, 6: listed in §4.57 of the settings reference.
+- `ScrapeSignInTests`, 14 cases: listed in §4.60.
+- `ScrapeWindowTests`: `Preferences_keeps_the_member_account_in_its_own_file` was removed, since typing no longer keeps
+  an account; its three assertions (the file, its mode, nothing in `appsettings.json`) moved into the sign-in's first
+  test, and `Typing_an_account_without_Log_In_keeps_nothing` asserts the reverse of the old rule. The Scraping tab's
+  button test now asks that Preferences' own handler is gone, since the status window, open during that run, is a second
+  subscriber.
+
+**Runs.** The blast radius, run when the tests first passed (the Scraping namespace, `OnlineCover*`,
+`PadSettingsWindowTests`, `CrashLogTests`, `PadNavigationTests`): 221 tests, one failure, the button test above, which
+was fixed. After the last change the same filter with `ThemedLibraryHostTests` passed 238, with 2 picture and live tools
+skipped. The broad run, once, at the end, under the load rule of 2026-09-25: the Mistress filter without
+`ShaderSettingsWindowTests`, `ShaderBrowseBench` and `SceneGpuBench`, 811 tests, 804 passed, 7 skipped (the picture tools
+and the live scrape tool, which need their variables), none failed, in 3 min 49 s. No GPU test was run.
+
+### 20.4 Mutants
+
+The runner is `~/.cache/emusen/probe/bigpicture/mutate_scrape_status.py`. Its list, `mutants-scrape-status.json`, is
+written by `mutants_scrape_status_make.py`, which checks that every edit's text occurs exactly once. The log is
+`run-scrape-status.log` and every verdict is appended to `mutants-scrape-status.txt`. Each mutant was built and run alone
+under `nice -n 10`, against `ScrapeStatusWindowTests`, `ScrapeSignInTests`, `ScrapeProgressTests`, `ScrapeWindowTests`,
+`ScreenScraperClientTests`, `ScraperTests` and `ScrapeCredentialTests`. The runner is stage (d)'s, corrected as §17.11
+says: each restored file is stamped with the present time and compared byte for byte, and the tree is rebuilt at the end
+of a round. It also takes several edits per mutant, so one rule spread over two lines can be broken as one mutant (L12).
+
+**40 mutants: 39 caught by the tests written for their rule, one (W22) caught at first only by an unrelated test, and
+caught by its own after that test was strengthened.**
+
+| Rule | Mutants | Result |
+|---|---|---|
+| The window opens with a run | W1 | caught |
+| Tallies, estimate, current step, thumbnail | W2 a failure not tallied, W3 a skipped game counted as found, W4 the estimate the plan's 13 s constant, W5 paused time counted as work, W6 the lookup step not reported, W7 the arrived picture not kept | caught |
+| Why it stopped | W8 every stop put down to the quota | caught by 7 |
+| Hide, Cancel, Pause | W9 Hide cancels, W10 Cancel without its confirm, W11 Cancel forgets the queue, W12 Pause not reaching the workers, W13 the pause only between games | caught |
+| The summary; no request without a run | W14 no Resume note, W15 opening the window resumes a queue | caught |
+| Redaction | W16 a row, W17 the last failure | caught by `ScrapeProgressTests` |
+| Throttling | W18 a redraw on every change | caught by the fast-run test |
+| Close what you open | W19 no cleanup at all, W20 the timer not stopped, W21 still subscribed | caught by the close test; W19 and W20 also by closing Mistress |
+| | W22 closing Mistress leaves the window open | **caught only by an unrelated test at first**; caught by its own once it ran as a sheet |
+| Where it opens | W23 the pad menu's entry, W24 the status line, W25 a window instead of a sheet, W26 the Status button | caught |
+| Log In | L1 kept without asking, L2 kept when refused, L3 a wrong password read as the developer refused, L4 asking with no developer file | caught |
+| Log Out | L5 the file kept, L6 a run in progress not told, L7 a picture's address keeping the account | caught |
+| The old file | L8 dropped, L9 shown as checked with no Check | caught |
+| Keeping it safe | L10 the file readable by others, L11 typing saved without Log In, L12 a sign-in message not redacted | caught |
+| From the pad | L13 the focus lost when Log In hides, L14 the password box unmasked | caught |
+
+**W22, and what it showed.** On the desktop, Avalonia closes a window's owned windows when it closes, so removing the
+status window's close from `StopScraping` changed nothing there, and `Closing_Mistress_closes_the_status_window_and_its_timer`,
+which ran only on the desktop, passed. A sheet is not an owned window: nothing but `StopScraping` closes it. Under the
+mutant, the big-screen test's sheet stayed presented on a closed window with its timer running, and the next test that
+pushed a dispatcher frame for real time failed. That is §15.14's defect class, reproduced on purpose. The test now runs
+as a window and as a sheet, and W22 was run again: caught by the sheet case alone.
+
+**Failures beside the catches.** In four rounds of the list (W3, W12, W13, W22), a test unrelated to the mutant failed as
+well as the one that caught it: `Opening_the_window_with_no_run_sends_nothing_and_resumes_nothing`,
+`A_closed_status_window_lets_go_of_the_run_and_stops_its_timer`, or stage (d)'s pad-menu test. Each time another test had
+already failed under the mutant. W22 shows how such a failure travels: a test that fails midway leaves work on the shared
+UI thread, and the next test to run the dispatcher in real time meets it. The three window classes were then run four
+times on the unmutated build, 63 of 63 each time. So these are attributed to the mutants' earlier failures and not to
+flakiness in the tests, but the attribution is argued from W22's mechanism and not shown for each of the other three.
+
+### 20.5 Pictures
+
+At 1280×800, written by `ScrapeStatusPictureTool` with `EMUSEN_BIGPICTURE_PNG=1` to
+`~/.cache/emusen/bigpicture/png/scrape-status/`. The fake server's media are replaced there by real pictures, a coloured
+box per kind, so the thumbnail has something to show.
+- `mid-run`: the desktop window over the library, the third game downloading its screenshot, the second's cover as the
+  thumbnail, a failure's reason.
+- `finished`: the summary.
+- `quota-stop`: the day's limit less 2% reached after one game, "Why it stopped: today's requests are nearly used up
+  (9800 of 10000)", and six games left queued for Resume.
+- `sheet-bigscreen` and `sheet-bigscreen-finished`: the sheet in a big-screen session, during and after a run.
+- `signin-sheet-bigscreen` and `signed-out-sheet-bigscreen`: the Scraping tab's member row signed in, then after Log Out.
+- `preferences-today-bigscreen`: the Scrape row with **Status...**, and the Today meter as a percentage.
+
+The desktop pictures are composed: the window is captured on its own and drawn centred over the main window's capture
+with a one-pixel edge, since the headless platform captures one window at a time. They were looked at, and three
+defects came from that (§20.2).
+
+### 20.6 Not done
+
+- **Nothing ran on the handheld**, and no member account was signed in against the live service (S5). The
+  developer-refused text and the `niveau` field are read as the API page gives them, unmeasured.
+- **A player's own developer credentials** are not supported, and the hint says so. ScreenScraper issues them to
+  software authors; a player who had some could only use them by writing `screenscraper-developer.json` by hand. Offering
+  that in Preferences is a possible follow-up, not built.
+- **The estimate is a mean** over the games answered, so a run of found games (five requests each) after a run of
+  unknown ones (one each) is estimated short.
+- **OpenEmu's failover is not paused** and not counted in the requests sent.

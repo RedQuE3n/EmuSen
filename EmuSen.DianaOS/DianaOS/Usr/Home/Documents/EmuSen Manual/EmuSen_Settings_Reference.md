@@ -2770,7 +2770,13 @@ today's counts; Mistress reads them from every answer and:
 - on a 403, 423 or 426 stops until the next start or the next change in Preferences, and says why in the status line.
 
 The Scraping tab's **Today** row shows the day's requests against the limit, the unrecognised ones, the threads, and
-whether it is running, how many games are queued, or why it stopped and until when.
+whether it is running, how many games are queued, or why it stopped and until when. It fills from the first answer of a
+session; until then it shows no bar.
+
+*Measured on 2026-09-26 without a member account* (plan §17.9): 1 thread, 128 KB/s, 10,000 requests a day and 1,000
+unrecognised. **Every picture is a request**, as the game's lookup is; with the default kinds a found game costs about
+4.7 requests and 13 seconds, half of it the 128 KB/s allowance, so a 5,520-file library takes three days of that quota.
+Turning **Mix images** off saves the largest of the files; a member account raises all of it.
 
 **The credentials never leave.** Neither credential file is ever committed: `.gitignore` names both, and a WiseMan test
 fails if either is tracked or if any tracked file holds a `devpassword=` value that is not a placeholder, or the

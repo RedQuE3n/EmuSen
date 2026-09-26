@@ -1,6 +1,6 @@
 # EmuSen_BigPicture — a plan for a big-picture mode in Mistress that renders ES-DE themes
 
-*Written 2026-09-24. Stage (a), the theme loader, was built the same day; its record is §12. Stage (b), the two views drawn statically with LunaP controls, followed on 2026-09-24 and 25; its record is §13. Stage (c), the GPU frame and motion, followed on 2026-09-25; its record is §14. Stage (e), the themed view as the big-screen library driven by the pad, followed the same day; its record is §15. Stage (f), variants and settings, the grid, the triggers against Mistress's media, and themes downloaded on request, followed on 2026-09-25 and 26; its record is §16. Nothing else is built.* The user asked for a big-picture mode in Mistress like EmulationStation's,
+*Written 2026-09-24. Stage (a), the theme loader, was built the same day; its record is §12. Stage (b), the two views drawn statically with LunaP controls, followed on 2026-09-24 and 25; its record is §13. Stage (c), the GPU frame and motion, followed on 2026-09-25; its record is §14. Stage (e), the themed view as the big-screen library driven by the pad, followed the same day; its record is §15. Stage (f), variants and settings, the grid, the triggers against Mistress's media, and themes downloaded on request, followed on 2026-09-25 and 26; its record is §16. Stage (d), ScreenScraper, followed on 2026-09-26; its record is §17. Stage (g) is not built.* The user asked for a big-picture mode in Mistress like EmulationStation's,
 starting with the theme they like, Art Book Next. They made two choices. First, Mistress reads ES-DE themes, so that
 Art Book Next and other ES-DE themes load as their authors made them. A look-alike built from Mistress's own controls
 was not wanted. Second, game media comes from ScreenScraper. This page plans that work. It inventories the theme
@@ -997,8 +997,8 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 | P6 | The theme loads for nine systems in under 150 ms (desktop) and 400 ms (Legion Go S) | Stage b |
 | P7 | A steady frame costs under 3 ms (desktop) and 8 ms (Legion Go S, 1280×800), and under 12 ms at 1920×1200 | Stage b, handheld in e |
 | P8 | Carousel steps hold 60 fps on the handheld with fast scrolling | Stage c: open until the handheld runs deck-gpu (§14.10) |
-| P9 | Hash lookup identifies 75–95% of 40 random files; headerless hashes add at most 5 points | Stage d |
-| P10 | A new account scrapes the whole library, without videos, over two to three sessions in two days | Stage d, first full run |
+| P9 | Hash lookup identifies 75–95% of 40 random files; headerless hashes add at most 5 points | Stage d: failed high, 39 of 40 by the file's own hashes; step 2 added none (§17.10) |
+| P10 | A new account scrapes the whole library, without videos, over two to three sessions in two days | Stage d: refuted by projection from the 40-file run, not by a full run: the day's 10,000 requests make it three days (§17.10) |
 | P11 | Art Book Next's archive is 205–230 MB | Stage f: held, 220.2 MB (§16.7) |
 | P12 | With no videos scraped, the video element's render is identical to ES-DE's (§4.7) | Stage b: failed as identical (§13.8) |
 | P13–P18 | Stage (a)'s predictions: coverage, errors, skipped includes, load time, triggers, the default variant (§12.1) | Stage a (§12.5) |
@@ -1006,6 +1006,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 | P24–P38 | Stage (c)'s predictions: the GPU route, its frame, first frame and uploads, the handheld; the carousel step, repeat, the list, the name, containers, scrollFadeIn, the video delay, the slide, settled frames and the moving frame (§14.1, §14.5) | Stage c (§14.10); P28 open |
 | P39–P45 | Stage (e)'s predictions: a still view draws nothing, the return is exact, the first build, the pad's family, a family change touching only the help bar, the sounds, every sheet reachable (§15.1) | Stage e (§15.12); P41 failed cold |
 | P46–P55 | Stage (f)'s predictions: a choice applied at once, choices per theme, the sheet's rows, every control reachable, the grid at rest and moving, the video extensions, the media scan, the downloads, a closed sheet's download (§16.1) | Stage f (§16.7); P50 failed by a pixel, P51's duration and interval refuted |
+| P60–P67 | Stage (d)'s predictions: N64 byte order, media against the quota, quota fields without a member, time per game, system IDs, the pacer, the region rule, no leak (§17.1) | Stage d (§17.10); P61 and P66 failed, P60 not measured, P63 partly |
 
 ---
 
@@ -2836,7 +2837,127 @@ opens. `StopScraping`, called from the window's `Closing` before the HTTP client
 stops the timer, cancels and joins the workers (a request in flight is cancelled with them), and closes `media.db`.
 `A_closed_window_asks_nothing_more_and_closes_its_worker_and_its_store` holds a request open at the fake server, closes the
 window, releases the server and waits 0.8 s: no request follows, the worker reports not running and the store closed.
-With `StopScraping` removed from `Closing` (mutant D40, 17.10) the test fails. Preferences removes its handler from the
+With `StopScraping` removed from `Closing` (mutant D40, 17.11) the test fails. Preferences removes its handler from the
 window when it closes (D41), and saves the member account then (D42). The suite's windows start with a handler that
 refuses every request and with no developer file (`NoNetwork`, a module initialiser), so no window in any other test can
 reach a server or read the developer's file.
+
+### 17.9 The live run (2026-09-26, 13:48, desktop)
+
+`ScrapeLiveTool.Forty_random_files` (run with `EMUSEN_SCRAPE_LIVE=1`) chose 40 files at random (seed 20260926) from the
+library's 5,520, read in place and never written; ran the real client, one thread, no member account, the default kinds
+(cover, screenshot, marquee, miximage); and wrote the media, `media.db`, every answer (redacted) and its log to
+`~/.cache/emusen/bigpicture/scrape-live/20260926-134821/`, outside both repositories. Beforehand it asked
+`systemesListe.php` and `ssuserInfos.php`.
+
+**The draw.** 23 NES and 17 Game Boy files; no SNES, N64 or Game Boy Color file was drawn, since the library is 64% NES.
+Many were hacks, translations and multicarts ("SMB1 Hack", "[T-Eng]", "68-in-1").
+
+**Identification.** 39 of 40 found, every one by the file's own hashes; step (2) was asked once (the one unknown NES
+file) and found nothing. By shelf: NES 22 of 23, Game Boy 17 of 17. The unknown file is a dump with no name
+(`ZZZ_UNK_…`). ScreenScraper knew the hacks and translations that OpenVGDB had missed in §4.39's measurement.
+
+**Media.** 144 files, 47.4 MB: 33 covers (631 KB on average), 36 screenshots (5 KB), 36 marquees (88 KB) and 39
+miximages (567 KB). Six found games had no `box-2D`: four SMB1 hacks, two multicarts and a Minolta program cartridge.
+Those are the games the OpenEmu failover is for.
+
+**Time.** 599 s in all. A found `jeuInfos` took a median 1.17 s (0.70–12.47 s); a 404 a median 1.04 s (0.89–1.04). A
+found game cost a median 13.3 s (2.6–18.7), an unknown one 3.3 s. Two `jeuInfos` requests, both for multicarts, timed out
+at the tool's 60 s and were retried by the queue two minutes later, when they answered.
+
+**Waiting.** The clock recorded 129 waits totalling 294 s. They were the download-speed rule, not the per-minute pacer:
+the answers gave `maxrequestspermin` 3,072, so the pacer's interval was 0.02 s after the first answer, while
+`maxdownloadspeed` was 128 KB/s, at which 47.4 MB takes 362 s. Half of the run's time was the bandwidth the account is
+allowed.
+
+**The quota.** Every JSON answer (39 of 43; the others were two 404s' text and two timeouts) carried `ssuser`, with no
+member account: 1 thread, 128 KB/s, 3,072 a minute, **10,000 requests a day and 1,000 unrecognised**. `requeststoday`
+went from 0, in the first found answer, to 180 in the last, over 43 `jeuInfos` and 144 media: **media downloads count
+against the day's requests.** The 404s did not move `requestskotoday`, which stayed 0. `ssuserInfos.php` answered
+"Erreur de login" without a member account, before and after, so it cannot be the source of the quota for a player
+without one. The `jeuInfos` answers are, and that is how the Scraping tab's meter reads it.
+
+**The system IDs.** `systemesListe` names 3 NES, 4 Super Nintendo, 9 Game Boy, 10 Game Boy Color and 14 Nintendo 64.
+
+**Nothing leaked.** No file in the run's folder, the test's log, either worktree, the scratch folder or the mutant
+runner's folder holds the developer's password or `devid=` followed by the id (4,038 files scanned by value, the values
+never printed).
+
+### 17.10 Predictions retired
+
+| # | Predicted | Measured | Verdict |
+|---|---|---|---|
+| P9 | 75–95% by step 1; step 2 at most 5 points | 39 of 40 (97.5%) by step 1; step 2 none | **failed high**: ScreenScraper lists the hacks, translations and multicarts that this library is full of |
+| P10 | the whole library, no videos, in two or three sessions over two days | not run whole. Projected from the run: 4.7 requests a game (43 + 144 over 40) makes 5,520 files about 25,900 requests, against 9,800 a day (10,000 less 2%), so **three days**; about 19 h on one thread at 12.5 s a game, most of it the 128 KB/s allowance | **refuted by projection**. §5.5 assumed 20,000 a day; a developer-only account has 10,000. Covers alone (2 requests a game) would take two days |
+| P60 | N64's `rommd5` is the `.z64` order's | no N64 file was drawn | **not measured**; four `.z64` files, about 20 requests, would settle it |
+| P61 | media do not count against the quota | `requeststoday` 0 → 180 over 43 `jeuInfos` and 144 media | **failed**: each media file is a request |
+| P62 | quota fields without a member account; `maxthreads` 1 | in every JSON answer; `maxthreads` 1 | **held** |
+| P63 | found `jeuInfos` 1.0–2.0 s; unknown 0.4–1.0 s; 3–14 s a found game | median 1.17 s (outliers to 12.5 s); median 1.04 s; median 13.3 s, 17 of 39 over 14 s | **partly held**: the found median held; the unknown's median missed the band by 0.04 s; the per-game bound failed, because the pictures are 2–6 times §5.5's 100–500 KB and the account's bandwidth is 128 KB/s |
+| P64 | 3, 4, 9, 10, 14 | as predicted | **held** |
+| P65 | the pacer never binds on one thread | its interval was 0.02 s and never bound; the download-speed rule waited 294 s of 599 | **held** as stated; the rule it did not name is the one that binds |
+| P66 | ≥80% of tagged games get their region's cover | 12 of 16; the four others had no box in their region and took the fallback order's first (Europe → China twice for two Sachen carts, USA → Europe, Europe → USA) | **failed** on the share, held on the fallback |
+| P67 | no credential in any file written | none | **held** |
+
+### 17.11 Mutants
+
+The runner is `~/.cache/emusen/probe/bigpicture/mutate_stage_d.py` with its list `mutants-stage-d.json`. The logs are
+`mutants-stage-d.txt` (every result, appended) and `run-stage-d.log`. Each mutant was built and run alone under
+`nice -n 10` against the scraping, crash-log and cover tests; LunaP's against its keyboard tests. The source was
+restored and checked byte for byte after each.
+
+| # | Mutant | Result |
+|---|---|---|
+| D1–D3 | the redactor misses `sspassword`; ignores a credential's own value; `CrashLog` bypasses it | caught |
+| D4–D10 | `romnom` with its folder; a half-set member account sent; 430 read as a network failure; 426 as too many requests; a page that is not an image kept; no smallest size; a file already there asked for again | caught |
+| D11–D19 | the pace without its 10%; threads above `maxthreads`; the day stopped at its limit, not 2% short; the unrecognised allowance ignored; 429 not halving the pace; 401 waiting one minute; 430 forgotten at a restart; 403 not stopping; the day ending at UTC midnight | caught |
+| D20–D27 | step 2 asked when the transform changes nothing; step 2 never asked; the player's cover not sparing the fetch; an unknown game asked again; a stop dequeuing the game; a renamed file's media copied; media downloads not paced; a 404 not counted as unrecognised | caught |
+| D28 | a kind the game never offered asked for again | **survived**; caught after a test was added |
+| D29–D33 | the file's region tag ignored; `wheel` before `wheel-hd`; any region without the fallback; the note out of 10; English before the chosen language | caught |
+| D34–D37, D39 | the player's cover not winning; OpenEmu's covers shown with the failover off; the ES-DE folder before ScreenScraper; covers never asked of ScreenScraper; a stopped ScreenScraper still taking the covers | caught |
+| D38 | the failover asked while ScreenScraper is pending | **survived**; caught after the test was changed |
+| D40–D45 | the window not stopping scraping on close; Preferences keeping its handler; the member account not saved on close; its file readable by others; the legacy developer file first; a test's moved config reaching the real legacy file | caught |
+| D46–D51 | the old `OnlineCovers` key kept; the themed view without the scraped text; the queue not promoting a game shown; a retry due at once; a newer `media.db` opened; no wait for the download speed | caught (re-run; see below) |
+| D52 | LunaP: the password preview drawn in the clear | caught |
+
+**52 of 52 caught, two only after their tests were strengthened.**
+- D28: the only test of a kind turned on later used a kind the game offered. `A_kind_turned_on_later_that_the_game_never_offered_costs_no_request` now turns on title screens for a game with none and requires no second request.
+- D38: the window's test looked for other servers as soon as ScreenScraper's cover appeared, before the failover's
+  quarter-second spacing had passed. It now waits 0.8 s first.
+
+**A defect in the runner, found and corrected.** From D47 on, every mutant also failed the old-setting test. The runner
+restored each file by moving its backup back, which keeps the backup's older write time. A mutant in another project
+(D46 in Galaxia) therefore left its build newer than the restored source: every later build skipped Galaxia, and the
+bin still carried D46. The round's own clean rebuild at the end skipped it too, and so did the last mutant's project in
+Mistress (D51) and in LunaP (D52). Running the old-setting test on that build failed, which demonstrated it. The runner
+now stamps every restored file with the present time. Every mutated file was touched and the tree rebuilt, and D28,
+D38 and D46–D52 were run again on the corrected runner: each was caught by its own test alone, and the scraping tests
+passed on the rebuilt tree. The results of D1–D45 were unaffected: each mutant before D46 was followed by one in the
+same project, whose own write made the build recompile it. A mutant round can leave its mutant behind in two places:
+in the source when it is interrupted, and, as here, in `bin/` when the restore makes the source look older than its build.
+
+### 17.12 Where the developer file goes, for a published build and the handheld
+
+A published tree reads `<tree>/home/etc/EmuSen/screenscraper-developer.json` first, then
+`~/.config/EmuSen/screenscraper-developer.json`:
+- `out/linux-x64/Mistress/` (the folder holding `.dianaosroot`) reads `out/linux-x64/Mistress/home/etc/EmuSen/screenscraper-developer.json`;
+- a copy installed at `~/Apps/Mistress/` reads `~/Apps/Mistress/home/etc/EmuSen/screenscraper-developer.json`;
+- both then fall back to `~/.config/EmuSen/screenscraper-developer.json`, so on the handheld one file there, mode 0600,
+  serves every build.
+
+The publish recipe's zip must leave out `home/etc/EmuSen/screenscraper*.json` and `home/Media/`, as it leaves out the
+sandbox's cheats and saves; the recipe is not a committed script, so this is a rule for whoever zips.
+
+### 17.13 Not done in stage (d)
+
+- **P60, N64's byte order,** was not measured: no N64 file was drawn, and a second run for it was not made. Until it
+  is, an N64 file ScreenScraper lists only in the other order costs two requests, one of them unrecognised.
+- **Nothing ran on the handheld.** Headlessly, P45's test (§15.9) opens Preferences from the pad menu over the themed
+  view and walks every tab with `PadAudit`, the Scraping tab included, and it passed with the tab in place. How the member
+  account's keyboard reads at arm's length on the Legion Go S is the device's to say.
+- **The whole library was not scraped.** P10's three days are a projection.
+- **The default kinds cost 4.7 requests a game.** Miximages and covers are the large files; a player on the 10,000-a-day
+  account who wants the library in two days should turn miximages off. No setting orders the kinds by cost.
+- **§5.6's orphan pass over `games.db`** was not extended; renames are followed by the scraper's own path cache.
+- **ScreenScraper's name is not shown.** The file's name is, as before.
+- **No refresh**, no search by name, no video (Q4), no back cover, fan art or 3D box.
+- **§5.7's publish exclusions** are a rule written here and in §4.60 of the settings reference, not a script.

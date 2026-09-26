@@ -76,14 +76,17 @@ namespace EmuSen.Mistress.Views
 
             _current = Ui.Cols("Auto,*", _picture, Ui.Stack(4, _game, _console, _step).Margin(12, 0, 0, 0));
             _tallySection = Ui.Section("Results", Ui.Stack(4, _tallies, _failure));
-            // A grid row, not a stacked section, so the list is bounded and scrolls rather than running under the buttons.
+            // A fixed height, and everything above the buttons scrolls, so a short sheet can never lay the list over its heading - see EmuSen_Settings_Reference.md §4.57.
             _recentSection = Ui.Rows("Auto,*", Ui.Header("Recent games"), _recent);
-            Content = Ui.Rows("Auto,Auto,Auto,Auto,*,Auto",
+            _recentSection.Height = RecentHeight;
+            var body = Ui.Stack(12,
                 Ui.Stack(6, _heading, _bar, _timing),
                 _current,
                 _tallySection,
                 Ui.Section("Quota", Ui.Stack(4, _member, _quota, _requests, _limits, _why, _summary)),
-                _recentSection,
+                _recentSection);
+            Content = Ui.Rows("*,Auto",
+                new ScrollViewer { Content = body, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled },
                 new ButtonBar { ItemsSource = new[] { _pause, _cancel, _hide }, HorizontalAlignment = HorizontalAlignment.Right }).Margin(16);
             if (Content is Grid grid) grid.RowSpacing = 12;
 
@@ -95,6 +98,8 @@ namespace EmuSen.Mistress.Views
             _timer.Start();
             Refresh();
         }
+
+        private const double RecentHeight = 200;
 
         // How many times the window has drawn the run; a test counts it.
         public int Refreshes { get; private set; }

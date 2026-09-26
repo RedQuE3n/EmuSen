@@ -178,6 +178,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         [Fact]
         public Task With_the_failover_off_a_game_screen_scraper_does_not_know_asks_no_other_server() => OnUi(() =>
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(OpenEmuCover)!);
+            File.WriteAllBytes(OpenEmuCover, new byte[200]);
             MainWindow window = Open(settings: a => a.OpenEmuFallback = false);
             WaitFor(() => _server.JeuInfos.Any(), "ScreenScraper's answer");
             Pump();

@@ -323,6 +323,18 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         }
 
         [Fact]
+        public void A_picture_that_came_faster_than_maxdownloadspeed_is_followed_by_a_wait_for_the_difference()
+        {
+            _server.User!["maxdownloadspeed"] = "1";
+            string a = Rom("A (USA).sfc", Filled(1024, 62));
+            _server.Games.Add(new FakeGame(1, "A", RomHashes.Of(a).Md5) { Media = [("box-2D", "us", "png")] });
+            Scraper scraper = Start();
+            scraper.Enqueue(a, "snes", ScrapePriority.Shown);
+            Next();
+            Assert.Contains(_clock.Delays, d => Math.Abs(d.TotalSeconds - 400 / 1024.0) < 0.05);
+        }
+
+        [Fact]
         public void Every_request_waits_its_turn_at_the_pace_and_an_unknown_game_counts_against_the_ko_allowance()
         {
             _server.User = null;

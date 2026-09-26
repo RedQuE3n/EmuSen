@@ -240,7 +240,8 @@ namespace EmuSen.Mistress.Views
         private string Summary(ScrapeProgress run)
         {
             string text = $"{run.Found:N0} found, {run.Unknown:N0} not found, {run.Failed:N0} failed, {run.Skipped:N0} skipped, {run.FailoverFound:N0} covers from OpenEmu's sources.";
-            if (_host.Quota is { } q && run.RequestsAtStart is int start && run.DayAtStart == q.Day) text += $" {Plural(Math.Max(0, q.RequestsToday - start), "request")} used.";
+            text += $" {Plural(run.Requests, "request")} sent to ScreenScraper";
+            text += _host.Quota is { MaxPerDay: int max } q ? $"; it counts {q.RequestsToday:N0} of {max:N0} today." : ".";
             int left = _host.Interrupted;
             if (left > 0) text += $" {Plural(left, "game")} left queued: Resume, in Preferences ▸ Scraping, goes on with them. Nothing resumes by itself.";
             return text;

@@ -499,31 +499,10 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
             prefs.Close();
             Pump(100);
-            Assert.Null(ScrapeChangedHandlers(window));
+            Assert.DoesNotContain(ScrapeChangedHandlers(window)?.GetInvocationList() ?? [], d => d.Target is ScrapePreferencesPane);
         });
 
-        [Fact]
-        public Task Preferences_keeps_the_member_account_in_its_own_file() => OnUi(() =>
-        {
-            MainWindow window = Open();
-            var prefs = new PreferencesWindow(new AppSettings { RomDirectory = _romDir }, window);
-            _windows.Add(prefs);
-            prefs.Show();
-            prefs.ShowTab(PreferencesWindow.ScrapingTab);
-            Pump(100);
-            prefs.UpdateLayout();
-
-            prefs.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "ScreenScraperUserBox").Text = "FAKEMEMBERUSER";
-            prefs.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "ScreenScraperPasswordBox").Text = "FAKEMEMBERSECRET";
-            Assert.False(File.Exists(MemberAccount.PathOf));
-            prefs.Close();
-            Pump(100);
-
-            Assert.Equal(("FAKEMEMBERUSER", "FAKEMEMBERSECRET"), (MemberAccount.Load().User, MemberAccount.Load().Password));
-            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(MemberAccount.PathOf));
-            Assert.DoesNotContain("FAKEMEMBER", File.ReadAllText(ConfigStore.For("appsettings.json")));
-            Assert.Empty(_server.Asked);
-        });
+        // The member account is kept only through Log In: ScrapeSignInTests.
 
         private static Delegate? ScrapeChangedHandlers(MainWindow w) =>
             (Delegate?)typeof(MainWindow).GetField("ScrapeChanged", Hidden)!.GetValue(w);

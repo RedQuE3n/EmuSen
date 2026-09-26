@@ -76,8 +76,11 @@ namespace EmuSen.Mistress.Scraping
 
         public DateTimeOffset Started { get; }
         public DateTimeOffset? Ended { get; set; }
-        public int? RequestsAtStart { get; set; }
-        public string? DayAtStart { get; set; }
+
+        // Requests this run sent to ScreenScraper: each lookup and each picture, as plan §17.9 measured they are counted.
+        public int Requests => Volatile.Read(ref _requests);
+
+        private int _requests;
 
         private readonly List<ScrapeRecent> _recent = new();
         private readonly object _gate = new();
@@ -95,6 +98,7 @@ namespace EmuSen.Mistress.Scraping
         // From a worker's thread: what it is doing now, and the last picture that arrived.
         public void Note(ScrapeActivity activity)
         {
+            if (activity.Step is ScrapeStep.LookingUp or ScrapeStep.Downloading) Interlocked.Increment(ref _requests);
             lock (_gate)
             {
                 _current = activity;

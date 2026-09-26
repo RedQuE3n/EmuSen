@@ -190,21 +190,27 @@ namespace EmuSen.Mistress.Views
         private async System.Threading.Tasks.Task SignInAsync(bool check)
         {
             if (_host is null) return;
-            _signIn.IsEnabled = _check.IsEnabled = false;
+            Button pressed = check ? _check : _signIn;
+            bool hadFocus = pressed.IsFocused;
+            pressed.IsEnabled = false;
             _signInMessage.Text = "Asking ScreenScraper...";
             SignInAnswer answer = check ? await _host.CheckMemberAsync() : await _host.SignInAsync(_user.Text ?? "", _password.Text ?? "");
-            _signIn.IsEnabled = _check.IsEnabled = true;
+            pressed.IsEnabled = true;
             _signInMessage.Text = answer.Message + (check && !answer.SignedIn && _host.Member.IsSet ? " The account is kept until you Log Out." : "");
             if (answer.SignedIn) _password.Text = "";
             Show();
+            // The pressed button hides or is disabled meanwhile; the focus is put back, so a pad is never left with nothing focused.
+            if (hadFocus) (answer.SignedIn ? _signOut : pressed).Focus(Avalonia.Input.NavigationMethod.Directional);
         }
 
         private void SignOut()
         {
+            bool hadFocus = _signOut.IsFocused;
             _signInMessage.Text = _host?.SignOut() ?? (MemberAccount.Delete() ? "Signed out: screenscraper.json was deleted." : "Signed out.");
             _user.Text = "";
             _password.Text = "";
             Show();
+            if (hadFocus) _user.Focus(Avalonia.Input.NavigationMethod.Directional);
         }
 
         // Signed in, from this session's check or the file's date; an old file from the two boxes shows as not checked, with Check.

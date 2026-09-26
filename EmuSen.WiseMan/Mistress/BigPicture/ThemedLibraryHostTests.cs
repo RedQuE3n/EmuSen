@@ -1,4 +1,5 @@
 using System;
+using Avalonia.Threading;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -89,6 +90,27 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(s.Now + TimeSpan.FromSeconds(2), s.WakeAt);
             Assert.Equal(0, s.Loop(1950));
             Assert.InRange(s.Loop(200), 5, 15);
+        }, default);
+
+        // A closed window whose theme is then deleted, as the fixture does, stays silent through its old wake time: nothing drawn, nothing thrown into the test that runs next (§15.14).
+        [Fact]
+        public Task A_closed_themed_window_draws_nothing_after_its_theme_is_gone() => Session.Dispatch(() =>
+        {
+            const string extra = "<text name=\"ticker\"><pos>0.55 0.85</pos><size>0.2 0.05</size><fontSize>0.04</fontSize>" +
+                                 "<text>A literal line much too long for the small box it has been given in this theme</text>" +
+                                 "<container>true</container><containerType>horizontal</containerType><containerStartDelay>2</containerStartDelay></text>";
+            using var s = new ThemedSession(extraGamelist: extra);
+            ThemedLibraryPadTests.Enter(s, "snes");
+            s.Settle();
+            s.Now += TimeSpan.FromSeconds(1.9);
+            var drawn = typeof(MainWindow).GetProperty("ThemedFramesDrawn", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            s.Window.Close();
+            s.Theme.Dispose();
+            int before = (int)drawn.GetValue(s.Window)!;
+            var frame = new DispatcherFrame();
+            DispatcherTimer.RunOnce(() => frame.Continue = false, TimeSpan.FromMilliseconds(2600));
+            Dispatcher.UIThread.PushFrame(frame);
+            Assert.Equal(before, (int)drawn.GetValue(s.Window)!);
         }, default);
 
         // A library of thousands, with a media folder that has none of them: the media scan is paid once, not on every return to the library.

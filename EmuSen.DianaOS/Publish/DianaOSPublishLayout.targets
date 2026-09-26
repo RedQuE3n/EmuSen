@@ -126,4 +126,18 @@
           Condition="'$(OS)' != 'Windows_NT'" />
   </Target>
 
+  <!-- Every published build carries the GPL, the third-party notices and the licence texts at its root - see THIRD_PARTY_NOTICES.md. -->
+  <Target Name="DianaOSPublishNotices" AfterTargets="Publish">
+    <PropertyGroup>
+      <_DianaOSRepoRoot>$(MSBuildThisFileDirectory)../../</_DianaOSRepoRoot>
+    </PropertyGroup>
+    <ItemGroup>
+      <_DianaOSNotice Include="$(_DianaOSRepoRoot)LICENSE;$(_DianaOSRepoRoot)THIRD_PARTY_NOTICES.md" />
+      <_DianaOSLicenceText Include="$(_DianaOSRepoRoot)licenses/*" />
+    </ItemGroup>
+    <Error Condition="!Exists('$(_DianaOSRepoRoot)THIRD_PARTY_NOTICES.md')" Text="THIRD_PARTY_NOTICES.md is missing; a build may not ship without it." />
+    <Copy SourceFiles="@(_DianaOSNotice)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_DianaOSLicenceText)" DestinationFolder="$(PublishDir)licenses" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

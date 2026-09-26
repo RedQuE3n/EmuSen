@@ -1011,7 +1011,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 | P39–P45 | Stage (e)'s predictions: a still view draws nothing, the return is exact, the first build, the pad's family, a family change touching only the help bar, the sounds, every sheet reachable (§15.1) | Stage e (§15.12); P41 failed cold |
 | P46–P55 | Stage (f)'s predictions: a choice applied at once, choices per theme, the sheet's rows, every control reachable, the grid at rest and moving, the video extensions, the media scan, the downloads, a closed sheet's download (§16.1) | Stage f (§16.7); P50 failed by a pixel, P51's duration and interval refuted |
 | P60–P67 | Stage (d)'s predictions: N64 byte order, media against the quota, quota fields without a member, time per game, system IDs, the pacer, the region rule, no leak (§17.1) | Stage d (§17.10); P61 and P66 failed, P60 not measured, P63 partly |
-| P84–P91 | The game options menu and the metadata editor: every control reachable, an edit surviving a re-scrape, the editor's own scrape, no ROM touched, a click on the rating, the mutants, the broad runs (§23.1) | §23.1 |
+| P84–P91 | The game options menu and the metadata editor: every control reachable, an edit surviving a re-scrape, the editor's own scrape, no ROM touched, a click on the rating, the mutants, the broad runs (§23.1) | §23.1: all held but P88 (failed, then fixed) and P90 (one unattributed failure) |
 
 ---
 
@@ -3630,14 +3630,22 @@ concern were started.
 
 | # | Expected | Found | Verdict |
 |---|---|---|---|
-| P84 | Every control of the options menu and of the editor is reached by the pad at 1280×800, the editor's fifteen Reset buttons included once each is shown | *pending* | |
-| P85 | An edit survives any number of re-scrapes by construction: edits are rows of `games.db`, and a scrape writes only `media.db` | *pending* | |
-| P86 | The editor's own scrape fills its fields unsaved: Cancel leaves the stored edit, Save replaces it | *pending* | |
-| P87 | Hide from Library, Clear and unhiding change no file under the ROM folder: not its size, its write time or its SHA-256 | *pending* | |
-| P88 | A click anywhere on the rating row sets the rating, a pad being the first input but not the only one | *pending* | |
-| P89 | Of the mutants of §23.9, at least nine in ten are caught on their first run, and every survivor is a weak test rather than an equivalent mutant | *pending* | |
-| P90 | The broad Mistress run passes with only this section's tests added, none of the earlier ones failing | *pending* | |
-| P91 | LunaP's whole suite passes with §160's two controls and nothing else of its behaviour changed | *pending* | |
+| P84 | Every control of the options menu and of the editor is reached by the pad at 1280×800, the editor's fifteen Reset buttons included once each is shown | measured: the options menu's 4 controls and the editor's 38, all fifteen Resets shown, all reached (`Every_control_of_the_options_and_the_editor_is_reached_by_the_pad`) | held |
+| P85 | An edit survives any number of re-scrapes by construction: edits are rows of `games.db`, and a scrape writes only `media.db` | an edit kept through a scrape from the menu and another from the pad menu; G6, which clears the edits when a result arrives, is caught | held |
+| P86 | The editor's own scrape fills its fields unsaved: Cancel leaves the stored edit, Save replaces it | Cancel after the editor's scrape kept *mine*; Save took *Scraped description.* and left no edit; G10 and G11 caught | held |
+| P87 | Hide from Library, Clear and unhiding change no file under the ROM folder: not its size, its write time or its SHA-256 | the ROM folder's fingerprint (size, write time, SHA-256 of every file) equal before and after Hide, unhide and Clear; G15 and G19 caught | held |
+| P88 | A click anywhere on the rating row sets the rating, a pad being the first input but not the only one | **refuted by the first click test**: a click in the gap beside a star reached nothing, because the row drew only its stars. Fixed with a transparent fill (`LunaP.md` §160.4); three points now pass, P5 is the mutant | failed, then fixed |
+| P89 | Of the mutants of §23.9, at least nine in ten are caught on their first run, and every survivor is a weak test rather than an equivalent mutant | 49 of 49 caught, every one on its first run, none equivalent (§23.9) | held; weak evidence, §23.9 says why |
+| P90 | The broad Mistress run passes with only this section's tests added, none of the earlier ones failing | 823 passed, 9 skipped, **1 failed**: `SceneMotionTests.Moving_only_the_list_while_the_metadata_is_faded_out…`, with Avalonia's "The calling thread cannot access this object". That class passed 12 of 12 alone, twice, and the BigPicture namespace passed 294 of 294 in one run | **failed by one test, not attributed**; see below |
+| P91 | LunaP's whole suite passes with §160's two controls and nothing else of its behaviour changed | 1343 of 1343 | held |
+
+**P90's one failure.** The failing test belongs to stage (c) and draws scenes built from `SceneGame`. This work added
+three properties to `SceneGame` and changed which games the system view counts, but it touches no thread. The exception
+is the class of failure §17.14 recorded once for stage (c)'s `SceneMotionTool`: a UI object used from a thread other than
+the one that made it, in a broad run and never alone. Before this work the same class passed in the broad run of §20.3.
+Whether this change caused the failure cannot be shown either way. The test-load rule of 2026-09-25, made stricter after
+that day's resets, ruled out repeating the broad run until the failure came back, and the unmodified build was not run
+broadly for comparison.
 
 ### 23.2 What ES-DE documents, and what Mistress builds of it
 
@@ -3829,6 +3837,45 @@ answered on its own sheet.
 Nothing here is kept in JSON. The edits, the hidden flag among them, and each edit's time are rows of `games.db`;
 `appsettings.json` gains only the player's setting *Hidden Games* (`ShowHiddenGames`), which is configuration, as
 `EmuSen_Stack.md` §4 divides them.
+
+### 23.9 Mutants
+
+The runner is `~/.cache/emusen/probe/bigpicture/mutate_game_options.py`, adapted from §20.4's, with its list
+`mutants-game-options.json` written by `game-options/mutants_game_options_make.py`, which checks that each edit's text
+occurs exactly once. The log is `run-game-options.log`, and every verdict is appended to `mutants-game-options.txt`.
+Each mutant was built with `-m:2` and run alone under `nice -n 10`. The Mistress mutants (G) ran against
+`ThemedGameOptionsTests`, `ThemedMetadataScrapeTests`, `GameMetadataTests`, `ThemedLibraryPadTests`,
+`ThemedLibraryFlowTests`, `GameRecordsTests` and the help-entry test. LunaP's (P) ran against `PickerTests`. After each
+mutant the file was restored from its copy, stamped with the present time and compared byte for byte. Both trees were
+rebuilt at the end of the round.
+
+**An interrupted round.** The machine reset at 17:58, a hardware fault under load (see the project's notes on the
+desktop's resets). The reset came during G19, and it left G19's mutant in `MediaStore.cs` with its backup beside it. The
+coordinator restored the file, which was byte-identical to the commit, and deleted the backup. The tree was then rebuilt
+before any further test ran. The runner now restores any backup it finds when it starts, and the round was resumed from
+G19 (`--from`). G36 was added before the resumption, for the migration test written in the meantime (§23.8).
+
+| Rule | Mutants | Result |
+|---|---|---|
+| Where an edit lives and how it wins | G1 ScreenScraper's text over the edit; G2 a field reset keeps its old edit; G3 every field saved as an edit; G4 Reset does nothing; G5 an emptied box over nothing kept as an edit; G6 a scrape's result clears the edits; G7 a renamed file loses its edits; G36 the fifth migration empty | all caught; G1 by 4 tests, G3 by 7, G36 by 32, the migration test among them |
+| The editor | G8 Cancel saves; G9 B saves without asking; G10 its own scrape saves at once; G11 its own scrape fills nothing; G12 a refilled box read as a change; G13 Y does not scrape; G14 Hide without its confirm | caught |
+| Hiding, and no file touched | G15 Hide touches the ROM's write time; G16 a hidden game stays in the library; G17 it stays in the themed gamelist; G18 Hidden Games ignored; G19 Clear deletes a path outside the store; G20 Clear leaves the store's pictures; G21 Clear leaves the edits | caught |
+| The menu and the buttons | G22 Select marks a favourite again; G23 Select opens the menu in the system view; G24 Select over the menu does not close it; G25 the favourite entry always reads Add; G26 no Scrape This Game in the menu; G27 the help bar reads Favorite; G28 the router moves the focus off a rating or a date | caught; G22 by 14 |
+| Closing what is opened | G29 Mistress closing leaves the editor open; G30 the editor stays subscribed | caught |
+| Where the fields show | G31 the library shows the file's name; G32 the sort name ignored; G33 a game out of the counter counted; G34 Exclude from multi-scraper ignored; G35 the view shows ScreenScraper's rating over the player's | caught |
+| LunaP §160 | P1 a rating between steps stepped unsnapped; P2 the rating wraps; P3 no Chose for a key; P4 a click takes the step to the left; P5 the row hit only where a star is drawn; P6 the filled stars cut at nothing; P7 the day not kept in its month; P8 a month step carries into the year; P9 Enter does not move on; P10 the first year clamps instead of leaving no date; P11 no date ignores StartDate; P12 the accent always under the year; P13 a click always chooses the year | caught |
+
+**49 of 49 were caught, each on its first run and each by a test written for its rule.** That is weaker evidence than it
+sounds, as §104.6 of `LunaP.md` argued for a round with the same result. Every mutant was written after its test, by the
+same hand, and against a rule that hand had already chosen to test, so a rule without a test could not get a mutant.
+Two mutants were never written, for that reason:
+- one that drops the transparent fill of the rating row, before the click test existed. §160.4 of `LunaP.md` records the
+  defect this missing fill caused; P5 is that mutant, written afterwards;
+- one that saves an edit to `media.db`. The storage decision (§23.3) rules this out by construction rather than by a
+  test.
+
+The tests that failed for G22 (14) and G36 (32) show how far those two rules reach: nearly every flow starts at Select,
+and every edit needs the table.
 
 ### 23.10 Pictures
 

@@ -279,55 +279,46 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             }
         }
 
-        // The themes tab downloads Art Book Next from a fake GitHub, uses it when no theme was set, and opens its about sheet once, after the first download only.
+        // The Themes tab's own update: Check for Update asks the theme's host, Update replaces the theme, and the sheet stays; the first download is the browser's (ThemeBrowserSheetTests).
         [Fact]
-        public Task The_themes_tab_downloads_a_theme_uses_it_and_shows_its_about_sheet_once() => Session.Dispatch(() =>
+        public Task The_themes_tab_checks_for_and_applies_an_update() => Session.Dispatch(() =>
         {
-            string sha = ThemeDownloadsTests.Sha1;
-            string themeXml = "<theme><view name=\"system\"><carousel name=\"c\"><pos>0 0.2</pos><size>1 0.5</size></carousel></view>" +
-                              "<view name=\"gamelist\"><textlist name=\"l\"><pos>0.05 0.1</pos><size>0.5 0.8</size></textlist></view></theme>";
-            var server = ThemeDownloadsTests.GitHub(() => ThemeDownloadsTests.Archive("one", themeXml: themeXml), () => sha);
-            Factory.SetValue(null, (Func<HttpClient>)(() => new HttpClient(server)));
+            var hosts = FakeThemeHosts.Standard();
+            FakeTheme wheel = hosts["Lab Wheel"];
+            ThemeBrowserSheetTests.Serve(hosts);
             using var s = new ThemedSession(settings: a => a.BigPictureTheme = null);
-            Assert.False(s.Shown);
+            hosts.Install(wheel.Source);
+            string installed = ThemeDownloads.DirectoryFor(wheel.Source);
+            wheel.Sha = ThemeDownloadsTests.Sha2;
             ThemeSettingsWindow sheet = Open(s);
-            Assert.NotNull(RootOf(sheet).GetLogicalDescendants().OfType<EmptyState>().FirstOrDefault());
-            Click(Named<Button>(sheet, "DownloadArtBookNext"));
-            Assert.True(Pump(() => sheet.Downloading is { IsCompleted: true } && Sheets(s).Current is ThemeAboutWindow), Named<TextBlock>(sheet, "ThemeStatus").Text);
-            var about = (ThemeAboutWindow)Sheets(s).Current!;
-            Assert.Equal("Synthetic Book", about.Attribution.Name);
-            Assert.Equal(sha, about.Attribution.Commit);
-            string installed = ThemeDownloads.DirectoryFor(ThemeSource.ArtBookNext);
-            Assert.True(ThemeDownloads.SamePath(installed, AppSettings.Load().BigPictureTheme!));
-            s.Pad.B();
-            Assert.Same(sheet, Sheets(s).Current);
-            s.Pad.B();
-            s.Settle();
-            Assert.True(s.Shown);
-
-            sha = ThemeDownloadsTests.Sha2;
-            sheet = Open(s);
-            Click(Named<Button>(sheet, "ThemeUpdate.art-book-next-es-de"));
+            Assert.Equal(1, hosts.AskedFor(wheel.Source.CommitAddress));
+            Click(Named<Button>(sheet, "ThemeUpdate.lab-wheel-es-de"));
             Assert.True(Pump(() => Named<TextBlock>(sheet, "ThemeStatus").Text?.StartsWith("Update available") == true), Named<TextBlock>(sheet, "ThemeStatus").Text);
-            Click(Named<Button>(sheet, "ThemeUpdate.art-book-next-es-de"));
-            Assert.True(Pump(() => sheet.Downloading is { IsCompleted: true } && Named<TextBlock>(sheet, "ThemeStatus").Text?.StartsWith("Installed") == true));
+            Click(Named<Button>(sheet, "ThemeUpdate.lab-wheel-es-de"));
+            Assert.True(Pump(() => sheet.Downloading is { IsCompleted: true } && Named<TextBlock>(sheet, "ThemeStatus").Text?.StartsWith("Installed") == true), Named<TextBlock>(sheet, "ThemeStatus").Text);
             Assert.Same(sheet, Sheets(s).Current);
             Assert.Equal(ThemeDownloadsTests.Sha2, ThemeDownloads.Stamp(installed)!.Commit);
+            Assert.Equal(ThemeHost.GitLab, ThemeDownloads.Stamp(installed)!.Host);
         }, default);
 
-        // P55: closing the sheet during a download cancels it; without the sheet's cleanup the request would wait for ever.
+        // P55: closing the sheet, or its window, during the Themes tab's update cancels it; the old theme stays and no partial file is left.
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
         public Task Closing_the_sheet_or_its_window_stops_the_download(bool closeWindow) => Session.Dispatch(() =>
         {
-            var stall = new ThemeDownloadsTests.Stall();
-            Factory.SetValue(null, (Func<HttpClient>)(() => new HttpClient(stall.Server)));
+            var hosts = FakeThemeHosts.Standard();
+            FakeTheme book = hosts["Synthetic Book"];
+            ThemeBrowserSheetTests.Serve(hosts);
             using var s = new ThemedSession(settings: a => a.BigPictureTheme = null);
+            hosts.Install(book.Source);
+            string installed = ThemeDownloads.DirectoryFor(book.Source);
+            (book.Sha, hosts.StallArchiveOf) = (ThemeDownloadsTests.Sha2, book.Name);
             ThemeSettingsWindow sheet = Open(s);
-            Click(Named<Button>(sheet, "DownloadArtBookNext"));
-            Assert.True(Pump(() => stall.Started.Task.IsCompleted), "the archive's body began");
-            string installed = ThemeDownloads.DirectoryFor(ThemeSource.ArtBookNext);
+            Click(Named<Button>(sheet, "ThemeUpdate.synthetic-book-es-de"));
+            Assert.True(Pump(() => Named<TextBlock>(sheet, "ThemeStatus").Text?.StartsWith("Update available") == true));
+            Click(Named<Button>(sheet, "ThemeUpdate.synthetic-book-es-de"));
+            Assert.True(Pump(() => hosts.Stalled.Task.IsCompleted), "the archive's body began");
             Assert.True(File.Exists(installed + ".zip.part"));
 
             if (closeWindow) s.Window.Close();
@@ -336,7 +327,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(sheet.Downloading!.IsCanceled || sheet.Downloading.Exception?.InnerException is OperationCanceledException);
             Assert.False(File.Exists(installed + ".zip.part"));
             Assert.False(Directory.Exists(installed + ".part"));
-            Assert.False(Directory.Exists(installed));
+            Assert.Equal("one", File.ReadAllText(Path.Combine(installed, "marker.txt")));
+            Assert.Equal(ThemeDownloadsTests.Sha1, ThemeDownloads.Stamp(installed)!.Commit);
         }, default);
     }
 }

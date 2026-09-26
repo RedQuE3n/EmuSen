@@ -83,6 +83,13 @@ namespace EmuSen.WiseMan.Fixtures
 
         public HttpClient Client() => new(Server);
 
+        // A download made before a UI test, off the dispatcher so its awaits cannot wait on the thread that blocks for them.
+        public ThemeStamp Install(ThemeSource source) => Task.Run(async () =>
+        {
+            using HttpClient http = Client();
+            return await ThemeDownloads.FetchAsync(http, source);
+        }).GetAwaiter().GetResult();
+
         // Two GitHub themes and one on GitLab, each stating a different licence, or none.
         public static FakeThemeHosts Standard()
         {

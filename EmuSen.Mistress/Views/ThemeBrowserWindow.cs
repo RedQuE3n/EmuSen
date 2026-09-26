@@ -45,7 +45,7 @@ namespace EmuSen.Mistress.Views
             _list.Key = e => e.Theme.Url;
             _list.Chose += e => Preview(e);
             _list.DoubleTapped += (_, _) => OpenDetail();
-            _list.KeyDown += (_, e) => { if (e.Key == Key.Enter) { OpenDetail(); e.Handled = true; } };
+            _list.AddHandler(KeyDownEvent, (_, e) => { if (e.Key == Key.Enter) { e.Handled = true; OpenDetail(); } }, handledEventsToo: true);
             _refresh = Ui.Button("Refresh", () => _ = LoadAsync(refresh: true));
             _refresh.Name = "ThemeBrowserRefresh";
             _details = Ui.Button("Details…", OpenDetail);

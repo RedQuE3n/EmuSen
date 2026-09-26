@@ -24,7 +24,8 @@ namespace EmuSen.Mistress
                 string root = DirectoryOverride ?? LogRoot();
                 Directory.CreateDirectory(root);
                 string path = Path.Combine(root, $"crash_{DateTime.Now:yyyyMMdd_HHmmss_fff}.txt");
-                File.WriteAllText(path, $"{kind} at {DateTime.Now:O}\n{context}\n\n{fault}\n");
+                // Through the scraper's redactor, so a ScreenScraper URL in a fault's message or stack never carries a credential to disk (EmuSen_BigPicture.md §17).
+                File.WriteAllText(path, Scraping.ScrapeRedactor.Redact($"{kind} at {DateTime.Now:O}\n{context}\n\n{fault}\n"));
                 return path;
             }
             catch

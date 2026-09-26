@@ -606,7 +606,7 @@ themed view:
 | East | | back to the system view (`back`) |
 | L1, R1 / L2, R2 | | page / first and last |
 | North | | the on-screen keyboard's search (§4.45.6) |
-| Select | | mark favourite (`favorite`), as the grid does today (§4.33) |
+| Select | | mark favourite (`favorite`), as the grid does today (§4.33). *Since 2026-09-26 the game options menu, as ES-DE's Back button opens it; the favourite is its first entry (§23.4)* |
 | Start | the pad menu, as a `SheetLayer` sheet | the same |
 | Guide, or Back and Start together, during a game | the menu over the game (§4.29). "Game Library" returns to the themed view at the same system and game. | |
 

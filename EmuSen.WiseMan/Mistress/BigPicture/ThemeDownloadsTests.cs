@@ -71,7 +71,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         // Everything under home/Themes but the theme folder itself: a stray .part, .old or .zip.part is a failure.
         private static string[] Strays() => Directory.Exists(ThemeDownloads.Root)
-            ? Directory.GetFileSystemEntries(ThemeDownloads.Root).Where(p => p != Installed).Select(Path.GetFileName).OfType<string>().ToArray()
+            ? Directory.GetFileSystemEntries(ThemeDownloads.Root).Where(p => p != Installed).Select(Path.GetFileName).OfType<string>().Where(n => n != ThemeRecords.FileName).ToArray()
             : [];
 
         [Fact]

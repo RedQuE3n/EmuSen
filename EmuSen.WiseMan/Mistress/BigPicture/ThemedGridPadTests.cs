@@ -6,7 +6,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress.BigPicture
 {
-    // The pad in a gamelist whose primary element is a grid: all four directions move it, the shoulders page by its rows - see EmuSen_BigPicture.md §16.
+    // The pad in a gamelist whose primary element is a grid: all four directions move it, the shoulders page by its whole rows, even after an up or down - see EmuSen_BigPicture.md §16.
     [Collection(TestCollections.ProcessGlobals)]
     public class ThemedGridPadTests
     {
@@ -20,7 +20,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ThemedSession.Write(theme);
             string xml = File.ReadAllText(theme.PathOf("theme.xml"));
             int a = xml.IndexOf("<textlist name=\"gamelist\">"), b = xml.IndexOf("</textlist>") + "</textlist>".Length;
-            xml = xml[..a] + "<grid name=\"gamelist\"><pos>0.05 0.08</pos><size>0.45 0.5</size><itemSize>0.2 0.4</itemSize><itemSpacing>0.01 0.01</itemSpacing>" +
+            xml = xml[..a] + "<grid name=\"gamelist\"><pos>0.05 0.08</pos><size>0.45 0.9</size><itemSize>0.2 0.4</itemSize><itemSpacing>0.01 0.01</itemSpacing>" +
                   "<itemScale>1</itemScale><imageType>cover</imageType><textColor>FFFFFF</textColor></grid>" + xml[b..];
             File.WriteAllText(theme.PathOf("theme.xml"), xml);
             return theme;
@@ -34,7 +34,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ThemedLibraryPadTests.Enter(s, "snes");
             Assert.Equal(0, s.Themed.Stage!.Current.Index);
             Assert.Equal(2, s.Themed.Stage.Current.Grid()!.Value.Columns);
-            Assert.Equal(1, s.Themed.Stage.Current.Grid()!.Value.WholeRows);
+            Assert.Equal(2, s.Themed.Stage.Current.Grid()!.Value.WholeRows);
 
             s.Pad.Right();
             s.Run(300);
@@ -52,7 +52,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
             s.Pad.R1();
             s.Run(300);
-            Assert.Equal(2, s.Themed.Stage.Current.Index);
+            Assert.Equal(4, s.Themed.Stage.Current.Index);
             Assert.Contains("scroll", s.Sounds);
         }, default);
     }

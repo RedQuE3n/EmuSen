@@ -71,6 +71,7 @@ namespace EmuSen.Mistress.Views
             UiButton.First => _gamepad.RawAxis(SDL.GamepadAxis.LeftTrigger) > 0.5,
             UiButton.Last => _gamepad.RawAxis(SDL.GamepadAxis.RightTrigger) > 0.5,
             UiButton.Search => _gamepad.IsRawPressed(SDL.GamepadButton.North),
+            UiButton.Random => _gamepad.IsRawPressed(SDL.GamepadButton.LeftStick) || _gamepad.IsRawPressed(SDL.GamepadButton.RightStick),
             _ => _gamepad.IsRawPressed(SDL.GamepadButton.Guide),
         };
 
@@ -248,6 +249,7 @@ namespace EmuSen.Mistress.Views
                 _padMenuEntries.Add(new PadMenuEntry(() => "Scrape This Game...", () => _ = ConfirmAndScrapeAsync(Scraping.ScrapeScope.ThisGame(game))));
             if (!inGame) _padMenuEntries.Add(new PadMenuEntry(() => ScrapeRunning ? $"Scraping ({_scrapeRun!.Done} of {_scrapeRun.Total})..." : "Scrape Games...", () => { if (ScrapeRunning) ShowScrapeStatus(); else ShowPreferencesAt(PreferencesWindow.ScrapingTab); }));
             if (_bigScreen && !inGame) _padMenuEntries.Add(new PadMenuEntry(() => "Theme Settings", ShowThemeSettings));
+            if (!inGame) AddCollectionMenuEntries(_padMenuEntries);
             if (!_bigScreen) _padMenuEntries.Add(new PadMenuEntry(() => IsFullScreen ? "Leave Full Screen" : "Full Screen", ToggleFullScreen));
             if (!_bigScreenForced) _padMenuEntries.Add(new PadMenuEntry(() => _bigScreen ? "Exit Big Picture" : "Big Picture", () => SetBigPicture(!_bigScreen)));
 

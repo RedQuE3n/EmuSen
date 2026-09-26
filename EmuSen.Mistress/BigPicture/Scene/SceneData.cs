@@ -28,10 +28,25 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public bool AltEmulator { get; init; }
         public bool InCollection { get; init; }
         public string? Emulator { get; init; }
+
+        // The system the game belongs to, which a collection lists it beside others (§22).
+        public ThemeSystem? Source { get; init; }
+
+        // For a folder, the game whose media it shows, as ES-DE's grouped collections show a member (§22).
+        public SceneGame? Face { get; init; }
+
+        // The game whose media is looked up, and the system it is looked up under.
+        public SceneGame Shown => Face ?? this;
+
+        public ThemeSystem SourceIn(SceneSystem listed) => Shown.Source ?? listed.System;
     }
 
     // A system with the theme resolved for it and its games; the carousel reads each system's own resolved view.
-    public sealed record SceneSystem(ThemeSystem System, ResolvedTheme Theme, IReadOnlyList<SceneGame> Games);
+    public sealed record SceneSystem(ThemeSystem System, ResolvedTheme Theme, IReadOnlyList<SceneGame> Games)
+    {
+        // Whether a textlist marks favourites with a star here; ES-DE's favorites collection and custom collections do not by default (§22).
+        public bool Stars { get; init; } = true;
+    }
 
     // Where a game's scraped images are, by ES-DE's media type name; null when there is none.
     public interface ISceneMedia
@@ -62,6 +77,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         // ES-DE's DisplayClock setting, off in ES-DE by default whatever the theme sets (§13.8); the tests of stage (b) draw it.
         public bool ShowClock { get; init; } = true;
+
+        // What the help bar's entries depend on beyond the view (§22).
+        public HelpContext Help { get; init; } = new();
 
         public SceneSystem System => Systems[Math.Clamp(SystemIndex, 0, Systems.Count - 1)];
 

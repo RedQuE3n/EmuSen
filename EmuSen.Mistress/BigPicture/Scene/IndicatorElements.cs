@@ -62,7 +62,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         {
             IReadOnlyList<string> entries = e.List("entries") is { Count: > 0 } l ? l : ["all"];
             IReadOnlyDictionary<string, ThemePath> icons = e.Keyed("customButtonIcon");
-            IReadOnlyList<HintEntry> hints = HelpPrompts.For(b.View.Name, entries, icons, b.Data.Family);
+            IReadOnlyList<HintEntry> hints = HelpPrompts.For(b.View.Name, entries, icons, b.Data.Family, b.Data.Help);
             if (hints.Count == 0) return null;
             return Outward(new HintBar
             {

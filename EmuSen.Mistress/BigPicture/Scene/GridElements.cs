@@ -88,8 +88,8 @@ namespace EmuSen.Mistress.BigPicture.Scene
             bool suffix = e.Bool("systemNameSuffix") != false && system.System.Kind != ThemeSystemKind.Regular;
             string suffixCase = e.String("letterCaseSystemNameSuffix") ?? "uppercase";
             return system.Games.Select(g => new CarouselItem(
-                types.Select(t => b.Data.Media?.Find(system.System, g, t)).FirstOrDefault(p => p is not null) ?? (g.Folder ? folder : fallback),
-                suffix ? $"{g.Name} [{SceneUnits.Cased(system.System.Name, suffixCase)}]" : g.Name)).ToList();
+                types.Select(t => b.Data.Media?.Find(g.SourceIn(system), g.Shown, t)).FirstOrDefault(p => p is not null) ?? (g.Folder ? folder : fallback),
+                suffix && !g.Folder ? $"{g.Name} [{SceneUnits.Cased(g.SourceIn(system).Name, suffixCase)}]" : g.Name)).ToList();
         }
     }
 }

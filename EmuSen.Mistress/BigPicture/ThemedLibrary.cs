@@ -11,16 +11,26 @@ using EmuSen.Mistress.Input;
 
 namespace EmuSen.Mistress.BigPicture
 {
-    // One of the library's systems as the themed view lists it: ES-DE's names for it and its games.
-    public sealed record ThemedShelf(ThemeSystem System, IReadOnlyList<SceneGame> Games);
+    // One of the library's systems as the themed view lists it: ES-DE's names for it and its games; a collection's rules, and a grouped system's folders (§22).
+    public sealed record ThemedShelf(ThemeSystem System, IReadOnlyList<SceneGame> Games)
+    {
+        public IReadOnlyList<ThemedShelf>? Folders { get; init; }
+        public bool FavoritesFirst { get; init; } = true;
+        public bool Stars { get; init; } = true;
+        public GameSort? DefaultSort { get; init; }
+        public long? CollectionId { get; init; }
+    }
 
-    public enum ThemedAction { None, Launch, Favourite, Search, ClearSearch, Menu, Leave }
+    // The custom collection being edited, and the files in it (§22).
+    public sealed record EditedCollection(long Id, string Name, IReadOnlySet<string> Members);
+
+    public enum ThemedAction { None, Launch, Favourite, Search, ClearSearch, Menu, Leave, ToggleCollection }
 
     // What a button asked of the window, beyond what the view does by itself.
     public readonly record struct ThemedCommand(ThemedAction Action, SceneGame? Game = null);
 
     // The ES-DE theme's two views as a big-screen session's library: the stage, the pad's rules, the sounds, the selection kept across rebuilds - see EmuSen_BigPicture.md §15.
-    public sealed class ThemedLibrary
+    public sealed partial class ThemedLibrary
     {
         private readonly Func<TimeSpan> _clock;
         private readonly Dictionary<string, string> _cursor = new(StringComparer.Ordinal);
@@ -93,6 +103,7 @@ namespace EmuSen.Mistress.BigPicture
                 return Fail($"The theme could not be read: {broken.Message}");
 
             _shelves = shelves;
+            _listed.Clear();
             _media = media;
             _screen = screen;
             ThemeChoices choices = (chosen ?? new ThemeChoices()) with { ScreenWidth = (int)Math.Round(screen.Width), ScreenHeight = (int)Math.Round(screen.Height) };
@@ -142,22 +153,26 @@ namespace EmuSen.Mistress.BigPicture
         private MediaPresence Presence(ThemedShelf shelf)
         {
             if (_media is null) return MediaPresence.None;
-            string key = $"{shelf.System.Name}|{shelf.Games.Count}|{(shelf.Games.Count == 0 ? "" : shelf.Games[0].File + shelf.Games[^1].File)}|{_media.Stamp(shelf.System)}";
+            var sources = shelf.Games.GroupBy(g => g.Source ?? shelf.System).ToList();
+            string stamps = string.Join(",", sources.Select(s => _media.Stamp(s.Key)));
+            string key = $"{shelf.System.Name}|{shelf.Games.Count}|{(shelf.Games.Count == 0 ? "" : shelf.Games[0].File + shelf.Games[^1].File)}|{stamps}";
             if (_presence.TryGetValue(key, out MediaPresence? kept)) return kept;
-            return _presence[key] = new MediaPresence(_media.Present(shelf.System, shelf.Games));
+            var types = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var source in sources) types.UnionWith(_media.Present(source.Key, source.ToList()));
+            return _presence[key] = new MediaPresence(types);
         }
 
-        // The data the kept selection gives: the system by name, its games narrowed by the search, the game by file.
+        // The data the kept selection gives: the system by name, its games as the options list them (§22), the game by file.
         private SceneData Data()
         {
-            IReadOnlyList<SceneSystem> systems = _filter.Length == 0 ? _systems
-                : _systems.Select(s => s with { Games = s.Games.Where(g => FilterBar.Matches(_filter, g.Name)).ToList() }).ToList();
+            IReadOnlyList<SceneSystem> systems = _systems.Select(s => s with { Games = Listed(s.System.Name), Stars = StarsIn(s.System.Name) }).ToList();
             int system = Math.Max(0, systems.ToList().FindIndex(s => s.System.Name == _system));
             SceneSystem chosen = systems[system];
-            int game = _cursor.TryGetValue(chosen.System.Name, out string? file) ? Math.Max(0, chosen.Games.ToList().FindIndex(g => g.File == file)) : 0;
+            int game = _cursor.TryGetValue(ListKey(chosen.System.Name), out string? file) ? Math.Max(0, chosen.Games.ToList().FindIndex(g => g.File == file)) : 0;
             return new SceneData(systems, _screen)
             {
                 SystemIndex = system, GameIndex = game, Media = _media, Motion = Motion, Family = Family, Status = Status, Now = Now(), ShowClock = false,
+                Help = HelpContext,
             };
         }
 
@@ -178,7 +193,7 @@ namespace EmuSen.Mistress.BigPicture
             SceneData d = Stage.Current.Data;
             _view = Stage.Current.ViewName;
             _system = d.System.System.Name;
-            if (_view == "gamelist" && d.Game is { } game) _cursor[_system] = game.File;
+            if (_view == "gamelist" && d.Game is { } game) _cursor[ListKey(_system)] = game.File;
         }
 
         private void OnStepped(int delta, bool held)
@@ -261,6 +276,9 @@ namespace EmuSen.Mistress.BigPicture
                     Stage.Switch(now, Data());
                     Sound("select");
                     break;
+                case UiButton.Accept when view.Data.Game is { Folder: true } folder:
+                    EnterFolder(folder, now);
+                    break;
                 case UiButton.Accept when view.Data.Game is { } game:
                     Sound("launch");
                     result = new ThemedCommand(ThemedAction.Launch, game);
@@ -268,6 +286,9 @@ namespace EmuSen.Mistress.BigPicture
                 case UiButton.Back when gamelist && _filter.Length > 0:
                     Sound("back");
                     result = new ThemedCommand(ThemedAction.ClearSearch);
+                    break;
+                case UiButton.Back when gamelist && InFolder:
+                    LeaveFolder(now);
                     break;
                 case UiButton.Back when gamelist:
                     Stage.Switch(now);
@@ -288,8 +309,14 @@ namespace EmuSen.Mistress.BigPicture
                 case UiButton.Last when gamelist:
                     view.Jump(view.Count - 1 - view.Index, now);
                     break;
+                case UiButton.Search when gamelist && Editing is not null && view.Data.Game is { Folder: false } member:
+                    result = new ThemedCommand(ThemedAction.ToggleCollection, member);
+                    break;
                 case UiButton.Search when gamelist:
                     result = new ThemedCommand(ThemedAction.Search);
+                    break;
+                case UiButton.Random:
+                    RandomEntry(now);
                     break;
                 case UiButton.Options when gamelist && view.Data.Game is { } game:
                     Sound("favorite");
@@ -316,6 +343,7 @@ namespace EmuSen.Mistress.BigPicture
             text = text.Trim();
             if (text == _filter || Stage is null) return;
             _filter = text;
+            _listed.Clear();
             Stage.Replace(Data(), now);
             Remember();
         }

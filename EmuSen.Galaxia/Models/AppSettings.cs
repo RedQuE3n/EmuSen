@@ -105,6 +105,9 @@ namespace EmuSen.Galaxia.Models
         // The theme settings sheet's choices, keyed by the theme folder's full path so each theme keeps its own - see EmuSen_Settings_Reference.md §4.53.
         public System.Collections.Generic.Dictionary<string, BigPictureChoices> BigPicture { get; set; } = new();
 
+        // Big picture's collections and gamelist options - see EmuSen_Settings_Reference.md §4.58.
+        public BigPictureCollections BigPictureCollections { get; set; } = new();
+
         private static readonly ConfigFile<AppSettings> File = new("appsettings.json");
 
         public void Save() => File.Save(this);

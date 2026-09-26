@@ -5,6 +5,9 @@ using EmuSen.Mistress.BigPicture.Theme;
 
 namespace EmuSen.Mistress.BigPicture.Scene
 {
+    // What changes the help entries: a collection being edited, and the random entry button's setting (§22).
+    public sealed record HelpContext(bool Editing = false, bool RandomGames = false, bool RandomSystems = false);
+
     // Mistress's own help entries per view, in its words, drawn with LunaP's button set for the pad's family (§3.6, §4.9, §15).
     public static class HelpPrompts
     {
@@ -49,10 +52,15 @@ namespace EmuSen.Mistress.BigPicture.Scene
             return p.IconKey;
         }
 
+        private static readonly Prompt Random = new("thumbstickclick", "Random", PadGlyphButton.ThumbstickClick, "thumbstick_click");
+
         // The entries a theme lists, in its order, that Mistress has an action for in this view; "all" is every one.
-        public static IReadOnlyList<HintEntry> For(string view, IReadOnlyList<string> entries, IReadOnlyDictionary<string, ThemePath> icons, PadFamily family = PadFamily.Generic)
+        public static IReadOnlyList<HintEntry> For(string view, IReadOnlyList<string> entries, IReadOnlyDictionary<string, ThemePath> icons, PadFamily family = PadFamily.Generic, HelpContext? context = null)
         {
+            HelpContext c = context ?? new HelpContext();
             Prompt[] known = view == "system" ? System : Gamelist;
+            if (view == "gamelist" && c.Editing) known = known.Select(p => p.Entry == "y" ? p with { Label = "Collection" } : p).ToArray();
+            if (view == "system" ? c.RandomSystems : c.RandomGames) known = [.. known.Take(known.Length - 1), Random, known[^1]];
             IEnumerable<Prompt> chosen = entries.Contains("all") ? known : entries.Select(n => known.FirstOrDefault(p => p.Entry == n)).OfType<Prompt>();
             return chosen.Select(p => new HintEntry(p.Label, IconKey(p, family) is { } key && icons.GetValueOrDefault(key) is { Exists: true } icon ? icon.Absolute : null)
             {

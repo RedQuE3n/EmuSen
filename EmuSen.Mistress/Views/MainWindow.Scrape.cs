@@ -133,6 +133,7 @@ namespace EmuSen.Mistress.Views
                 : _allScan.Entries.Where(e => scope.Shelf is null || e.Shelf == scope.Shelf);
             games = games.Where(e => SystemOf(e) is not null && File.Exists(e.FullPath));
             if (scope.MissingArtOnly && scope.Game is null) games = games.Where(e => CoverPathFor(e) is null);
+            if (scope.Game is null) games = games.Where(e => !ExcludedFromMultiScrape(e.FullPath));
             return games.ToList();
         }
 
@@ -451,15 +452,6 @@ namespace EmuSen.Mistress.Views
             _scrapeThemedRefresh?.Stop();
             ShowThemedLibrary();
         }
-
-        // ScreenScraper's text for the themed view's metadata; the name stays the file's, as the library shows it.
-        private SceneGame WithScrapedText(SceneGame game) => _scrapedText.TryGetValue(game.File, out ScrapedRecord? r)
-            ? game with
-            {
-                Description = r.Description, Developer = r.Developer, Publisher = r.Publisher, Genre = r.Genre, Players = r.Players,
-                ReleaseDate = r.ReleaseDate, Rating = r.Rating,
-            }
-            : game;
 
         // The game a pad's "Scrape This Game" means: the themed gamelist's selection, else the library's.
         private string? GameToScrape => ThemedLibraryShown && LibraryView.IsVisible ? _themed?.SelectedGame?.File : SelectedLibraryEntry?.FullPath;

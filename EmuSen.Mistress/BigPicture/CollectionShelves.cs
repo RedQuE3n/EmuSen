@@ -42,7 +42,8 @@ namespace EmuSen.Mistress.BigPicture
         // As ES-DE 3.4.1 was measured to order them (§22.2): the regular systems, the grouped custom collections, then all games, favorites and last played; discrete custom collections sit beside the grouped one.
         public static IReadOnlyList<ThemedShelf> Build(IReadOnlyList<ThemedShelf> systems, IReadOnlyList<CustomCollection> custom, BigPictureCollections settings, Func<string, bool> themedByTheme)
         {
-            var all = systems.SelectMany(s => s.Games.Select(g => g.Source is null ? g with { Source = s.System } : g)).ToList();
+            // USERGUIDE: a game excluded from the game counter is left out of every automatic and custom collection.
+            var all = systems.SelectMany(s => s.Games.Where(g => !g.NotCounted).Select(g => g.Source is null ? g with { Source = s.System } : g)).ToList();
             var shelves = systems.Select(s => s with { FavoritesFirst = settings.FavoritesFirst }).ToList();
 
             var byFile = all.GroupBy(g => g.File, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);

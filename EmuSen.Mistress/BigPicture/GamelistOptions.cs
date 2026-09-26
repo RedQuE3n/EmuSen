@@ -76,14 +76,17 @@ namespace EmuSen.Mistress.BigPicture
             var list = games.ToList();
             var byKey = Comparer<SceneGame>.Create((a, b) => Compare(a, b, order));
             IOrderedEnumerable<SceneGame> sorted = favoritesFirst ? list.OrderByDescending(g => g.Favorite).ThenBy(g => g, byKey) : list.OrderBy(g => g, byKey);
-            return sorted.ThenBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            return sorted.ThenBy(SortKey, StringComparer.OrdinalIgnoreCase).ToList();
         }
+
+        // ES-DE's sortname where the player set one (§4.59), else the name; the quick selector indexes by it too (USERGUIDE, "sortname").
+        public static string SortKey(SceneGame g) => string.IsNullOrWhiteSpace(g.SortName) ? g.Name : g.SortName;
 
         private static int Compare(SceneGame a, SceneGame b, GameSort order)
         {
             if (order.Key == GameSortKey.Name)
             {
-                int byName = StringComparer.OrdinalIgnoreCase.Compare(a.Name, b.Name);
+                int byName = StringComparer.OrdinalIgnoreCase.Compare(SortKey(a), SortKey(b));
                 return order.Descending ? -byName : byName;
             }
 
@@ -179,7 +182,7 @@ namespace EmuSen.Mistress.BigPicture
             for (int i = 0; i < games.Count; i++)
             {
                 if (star && games[i].Favorite) continue;
-                string first = FirstLetter(games[i].Name);
+                string first = FirstLetter(SortKey(games[i]));
                 if (!entries.Any(e => e.Item1 == first)) entries.Add((first, i));
             }
             return entries;

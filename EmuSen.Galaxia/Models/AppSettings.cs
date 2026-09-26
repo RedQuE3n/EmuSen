@@ -102,6 +102,9 @@ namespace EmuSen.Galaxia.Models
         // The theme's navigation sounds, on a stream beside the game's - see §4.52.
         public bool NavigationSounds { get; set; } = true;
 
+        // Games the player hid from the library, with Hide from Library or the Hidden field, are listed again - see EmuSen_Settings_Reference.md §4.59.
+        public bool ShowHiddenGames { get; set; }
+
         // The theme settings sheet's choices, keyed by the theme folder's full path so each theme keeps its own - see EmuSen_Settings_Reference.md §4.53.
         public System.Collections.Generic.Dictionary<string, BigPictureChoices> BigPicture { get; set; } = new();
 

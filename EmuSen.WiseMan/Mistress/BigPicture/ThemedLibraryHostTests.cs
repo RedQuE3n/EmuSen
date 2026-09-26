@@ -139,7 +139,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             var none = new Dictionary<string, EmuSen.Mistress.BigPicture.Theme.ThemePath>();
             var gamelist = EmuSen.Mistress.BigPicture.Scene.HelpPrompts.For("gamelist", ["y", "a", "b", "back", "start", "l", "rt"], none);
-            Assert.Equal(new[] { "Search", "Launch", "Back", "Favorite", "Menu", "Page", "Last" }, gamelist.Select(e => e.Label));
+            Assert.Equal(new[] { "Search", "Launch", "Back", "Options", "Menu", "Page", "Last" }, gamelist.Select(e => e.Label));
             Assert.Equal(new PadGlyphButton?[] { PadGlyphButton.North, PadGlyphButton.South, PadGlyphButton.East, PadGlyphButton.Select, PadGlyphButton.Start, PadGlyphButton.LeftShoulder, PadGlyphButton.RightTrigger },
                 gamelist.Select(e => e.Button));
             Assert.Empty(EmuSen.Mistress.BigPicture.Scene.HelpPrompts.For("gamelist", ["x"], none));
@@ -225,6 +225,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.A();
             s.Pad.Down();
             s.Pad.Select();
+            s.Pad.A();
+            Assert.True(s.Themed.SelectedGame!.Favorite);
             s.Pad.B();
             Assert.Equal("system", s.View);
             Assert.Empty(s.Sounds);

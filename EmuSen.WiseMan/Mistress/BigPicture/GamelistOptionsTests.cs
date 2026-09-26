@@ -52,6 +52,23 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
 
         [Fact]
+        public void A_sort_name_orders_the_name_sort_and_indexes_the_quick_selector_and_an_uncounted_game_joins_no_collection()
+        {
+            SceneGame punisher = G("The Punisher") with { SortName = "Punisher, The" };
+            SceneGame[] games = [punisher, G("Alpha"), G("Quest")];
+            IReadOnlyList<SceneGame> sorted = GamelistOptions.Sort(games, GameSort.Default, false);
+            Assert.Equal(["Alpha", "The Punisher", "Quest"], Names(sorted));
+            Assert.Equal([("A", 0), ("P", 1), ("Q", 2)], GamelistOptions.Letters(sorted, favoritesOnTop: false));
+
+            var shelf = new ThemedShelf(Snes, [G("Counted") with { File = "/s/a.sfc", Favorite = true }, G("Setup") with { File = "/s/b.sfc", Favorite = true, NotCounted = true }]);
+            var settings = new BigPictureCollections { AutoCollections = [BigPictureCollections.AllGames, BigPictureCollections.Favorites] };
+            var custom = new[] { new CustomCollection(1, "Mine", new HashSet<string> { "/s/a.sfc", "/s/b.sfc" }) };
+            IReadOnlyList<ThemedShelf> shelves = CollectionShelves.Build([shelf], custom, settings, _ => true);
+            Assert.All(shelves.Skip(1), s => Assert.Equal(["Counted"], s.Games.Select(g => g.Name)));
+            Assert.Equal(2, shelves[0].Games.Count);
+        }
+
+        [Fact]
         public void Filter_values_come_from_the_list_and_a_field_with_nothing_to_tell_apart_offers_none()
         {
             SceneGame[] games = [G("A", genre: "Racing", rating: 0.8f), G("B", genre: "puzzle", rating: 0.8f), G("C", genre: "Racing"), G("D", fav: true)];

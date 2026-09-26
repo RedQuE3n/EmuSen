@@ -102,6 +102,24 @@ namespace EmuSen.WiseMan.Fixtures
             }
         }
 
+        // The window's own loop, modelled: the pad polled every 16 ms and a frame drawn only when the view asked for one by then; returns the frames drawn.
+        public int Loop(double ms, double step = 16)
+        {
+            int frames = 0;
+            TimeSpan end = Now + TimeSpan.FromMilliseconds(ms);
+            while (Now < end)
+            {
+                Now += TimeSpan.FromMilliseconds(Math.Min(step, (end - Now).TotalMilliseconds));
+                Pad.Tick();
+                if (WakeAt is { } due && due <= Now)
+                {
+                    Frame();
+                    frames++;
+                }
+            }
+            return frames;
+        }
+
         // A button held for a while, polled as the window polls it, then let go.
         public void Hold(SDL.GamepadButton button, double ms)
         {

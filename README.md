@@ -1,6 +1,6 @@
 # EmuSen
 
-EmuSen is a multi-console emulator built as a research project. The cores are written from published hardware documentation rather than ported from another emulator. The project started in C#, and the cores are now being rewritten in Rust one at a time. Each C# core stays behind as the reference its Rust port is checked against, frame by frame.
+EmuSen is a multi-console emulator built as a personal project. The goal was to create an emulator framework that is handheld friendly, user friendly, feature-rich, multi-platform, and saves the user the need to install multiple applications to accomplish a beautiful library. The cores are written from published hardware documentation rather than ported from another emulator. The project started in C#, and the cores are now being rewritten in Rust one at a time. Each C# core stays behind as the reference its Rust port is checked against, frame by frame.
 
 Around the cores there is a frontend, a debugging shell built into the emulator, and a headless harness that most of the testing runs through.
 
@@ -114,6 +114,85 @@ EmuSen is **Emu**lator **Sen**shi, after *Sailor Moon*. Each core is named for a
 
 No ROMs are included, and none will be. Games have to come from legally obtained dumps.
 
-## Credits
+## Credits and references
 
-The main hardware references are the [SNESdev wiki](https://snes.nesdev.org/), the NESdev wiki, Pan Docs and the n64brew wiki. [MesenCE](https://github.com/nesdev-org/MesenCE) is consulted as an architecture reference, and the code here is written rather than transcribed. EmuSen is GPL-3.0, so anything built on it stays open.
+EmuSen's code is written for EmuSen. The projects below were read, run or measured against while writing it, and
+are credited here whether or not their licence asks for it. Where one was used as a reference, no code was copied
+from it: each console's docs say which reference settled which question.
+
+**Libraries shipped in EmuSen's builds** (Avalonia, SkiaSharp, SDL 3, SQLite, Silk.NET, Cranelift and the rest) are
+listed with their copyright holders and licences in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), with the
+licence texts in [`licenses/`](licenses/). Every published build carries both.
+
+### Hardware documentation
+
+- [SNESdev wiki](https://snes.nesdev.org/), Martin Korth's fullsnes, and anomie's SNES documents
+- [NESdev wiki](https://www.nesdev.org/wiki/)
+- [Pan Docs](https://gbdev.io/pandocs/) and the gbdev community
+- [n64brew wiki](https://n64brew.dev/)
+
+### Reference emulators
+
+Kept outside the repository, and read or run for comparison:
+
+- [Mesen 2](https://github.com/SourMesen/Mesen2) and [MesenCE](https://github.com/nesdev-org/MesenCE) (GPL-3.0): the
+  SNES and NES references, and an architecture reference. EmuSen's probe dumps Mesen's state to diff against.
+- [Mupen64Plus](https://github.com/mupen64plus/mupen64plus-core) (GPL-2.0), [parallel-n64](https://github.com/libretro/parallel-n64)
+  (GPL-2.0), [Project64](https://github.com/project64/project64) (GPL-2.0) and [RetroArch](https://github.com/libretro/RetroArch)
+  (GPL-3.0): N64 references; the probe runs libretro cores.
+- [angrylion-rdp-plus](https://github.com/ata4/angrylion-rdp-plus) (MAME licence), in
+  [Themaister's fork](https://github.com/Themaister/parallel-rdp), and [parallel-rdp](https://github.com/Themaister/parallel-rdp)
+  (MIT): the N64's display processor is graded against them.
+- ares, bsnes, Snes9x, SameBoy, Gambatte, mGBA and CEN64, cited in the docs where they settle a question.
+- [MiSTer-devel](https://github.com/mister-devel) FPGA cores, as referees where emulators disagree: [SNES_MiSTer](https://github.com/MiSTer-devel/SNES_MiSTer),
+  [N64_MiSTer](https://github.com/MiSTer-devel/N64_MiSTer) and [Gameboy_MiSTer](https://github.com/MiSTer-devel/Gameboy_MiSTer) (GPL).
+
+### Test suites
+
+None is included in this repository; the tests read them from a local copy when one is configured.
+
+- blargg's test ROMs (Shay Green)
+- [mooneye-test-suite](https://github.com/Gekkio/mooneye-test-suite) (Joonas Javanainen)
+- the [nes-test-roms](https://github.com/christopherpow/nes-test-roms) collection
+- [SingleStepTests ProcessorTests](https://github.com/SingleStepTests/ProcessorTests) (Tom Harte and contributors)
+- [n64-systemtest](https://github.com/lemmy-64/n64-systemtest) by lemmy-64 (MIT). Mars's RSP reciprocal tables are
+  generated from the formulas its test file documents, which it ported from ares.
+- PeterLemon's SNES test ROMs
+
+### Screen filters
+
+The built-in filters are EmuSen's own shaders; the values they use came from these:
+
+- CRT: Timothy Lottes' crt-lottes, public domain, via libretro's slang-shaders
+- Game Boy: palettes measured by [SameBoy](https://github.com/LIJI32/SameBoy) (Lior Halphon, MIT), the panel response of
+  Harlequin's dot-matrix shader (Harlequin and Matt Akins, GPL-3.0), and SameBoy's MonoLCD shadow
+- Game Boy Color and Advance: colour matrices measured by Pokefan531 (public domain), stripes after fishku's
+  authentic_gbc (CC0), and the stripe layout of [mGBA](https://github.com/mgba-emu/mgba)'s agb001 (MPL-2.0)
+
+### Design
+
+- [OpenEmu](https://openemu.org/): Mistress's library is modelled on its layout
+- [EmulationStation](https://github.com/Aloshi/EmulationStation) and [ES-DE](https://es-de.org/) (MIT): Mistress's pad
+  controls follow their button layout, and big-picture mode reads ES-DE's documented theme format. ES-DE's own
+  behaviour was measured to match its timing; its code was not read.
+
+### Downloaded only when the user asks
+
+None of these is included in the repository or a build:
+
+- game information and media from [ScreenScraper](https://www.screenscraper.fr/)
+- the [Art Book Next](https://github.com/anthonycaccese/art-book-next-es-de) theme by Anthony Caccese (CC BY-NC-SA 2.0)
+- RetroArch's [slang shaders](https://github.com/libretro/slang-shaders) and the
+  [libretro-database](https://github.com/libretro/libretro-database) cheat codes
+- [OpenVGDB](https://github.com/OpenVGDB/OpenVGDB) and [libretro-thumbnails](https://thumbnails.libretro.com/) box art
+
+Each keeps its own licence and terms; see section 2 of [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+### Trademarks
+
+Nintendo, Super Nintendo Entertainment System, Nintendo Entertainment System, Game Boy, Game Boy Color and
+Nintendo 64 are trademarks of Nintendo. Sailor Moon and its characters are the creation of Naoko Takeuchi. Steam and
+SteamOS are trademarks of Valve, and Legion Go is a trademark of Lenovo. EmuSen is not affiliated with or endorsed by
+any of them.
+
+EmuSen is licensed under the GPL-3.0 ([`LICENSE`](LICENSE)), so anything built on it stays open.

@@ -1107,6 +1107,14 @@ OpenEmu's sidebar has a Collections group beneath the consoles, and so does this
 
 ### 4.39 Covers from OpenEmu's source, if the player asks (2026-09-21)
 
+*Revised 2026-09-26 by §4.60, and kept as the record of how it was built.* OpenEmu's sources are now the **failover**
+behind ScreenScraper: the switch is Preferences ▸ Scraping ▸ **OpenEmu Failover** (`OpenEmuFallback`), **on** by default,
+and it asks only inside a scrape the player started, for a game ScreenScraper has no cover for or while ScreenScraper
+cannot be used; a tile drawn without a cover no longer asks anything. What it fetches goes to
+`home/Media/openemu/<console>/`, no longer into the cover art folder, so that a picture the player placed there can be
+told apart and win. The old `OnlineCovers` key is read once and dropped (§4.60). What follows describes the switch as it
+was on 2026-09-21; the identification, the libretro names, the size check and the "never replace" rule are unchanged.
+
 **Off by default.** Preferences, Library, **Online Covers**. The switch's hint says what it does, what it sends and where, and that the database states no licence and the covers are other people's scans; the library plan's §4 had asked that a fetch be "off by default, one explicit action, clear about what it sends, and preceded by a decision about the licence", and the user made that decision on 2026-09-21 by asking for it.
 
 **What OpenEmu does, and why it could not be copied whole.** OpenEmu identifies a game in OpenVGDB, a SQLite file it downloads from GitHub, and downloads the cover from the address the matching row gives (`EmuSen_Mistress_LibraryPlan.md` §4). Both halves were measured against this library before anything was built:
@@ -2488,7 +2496,9 @@ window; it comes back with the game.
 name for it (`nes`, `snes`, `n64`, `gb`, `gbc`, carried by `CoreCatalog.LibraryShelf.EsdeSystem`). A gamelist lists
 favourites first, then by title, as ES-DE does by default. Games carry Mistress's own records (§4.32): favourite, last
 played, play count and play time. Media come from the ES-DE folder when one is set, and a game's cover otherwise from
-the art folder of §4.33. The theme's clock is off, as ES-DE's `DisplayClock` is by default; there is no switch for it
+the art folder of §4.33. *Since 2026-09-26 (§4.60) the order is the player's own cover, then ScreenScraper's media
+store, then the ES-DE folder, then OpenEmu's failover, and the gamelist's description, developer, publisher, genre,
+players, rating and release date come from ScreenScraper.* The theme's clock is off, as ES-DE's `DisplayClock` is by default; there is no switch for it
 yet. The status bar reads the battery and radios from Linux's sysfs (`DeviceStatusReader`): the system's own battery,
 not a mouse's or a pad's (whose `scope` is `Device`); Wi-Fi as on when a wireless interface is up; Bluetooth as on when
 its radio switch is blocked neither by software nor by hardware. Nothing is shown that sysfs does not report.
@@ -2799,3 +2809,221 @@ library), and the desktop after leaving, at 1280×800, to `~/.cache/emusen/bigpi
   toolbar button of the second build was a pointer's way out, and it went with the user's placement.
 - *The popup embedding by the window* reaches the popups under the window. A tooltip or context menu that Avalonia
   parents elsewhere may still open as a window of its own on the desktop, where a window manager draws it at its size.
+
+### 4.55 The application icon (2026-09-26)
+
+**What it is.** A gold crescent, horns up, holding a cream letter E, on a deep indigo rounded square: concept A of
+four drawn on 2026-09-26, chosen by the user. It nods to the crescent of *Sailor Moon*, after which EmuSen is named
+(§"The names" in the README), without taking anything from it: the crescent is two plain circles subtracted, the E is
+four straight bars, and no lettering, emblem or palette of the series is used. The colours are `#231E52` (ground),
+`#F4C542` (moon) and `#FBF3E4` (letter).
+
+**Two drawings, not one.** `EmuSen.Mistress/Assets/Icon/emusen.svg` draws 48 px and up. At 16–32 px its 22-unit bars
+become 1.4 px and blur, so `emusen-small.svg` redraws the same mark on a 16-unit grid (every edge a multiple of 16,
+so at 16 px each lands on a whole pixel): a heavier E, a thicker crescent and a full-bleed square. The first render
+went through ImageMagick's default Lanczos resize and smeared that grid back into grey; `build_icons.py` now draws at
+256 px or more and area-averages down (`-filter Box`), which keeps the 16 px E's edges on pixel boundaries. At 24 px
+the grid falls on half pixels, and the E's spine shows a soft column there; that is accepted.
+
+**Outputs**, all made by `python3 EmuSen.Mistress/Assets/Icon/build_icons.py` (ImageMagick 7 with librsvg) and
+committed beside the sources:
+
+| File | Used by |
+| --- | --- |
+| `png/emusen-{16,24,32,48,64,128,256,512,1024}.png` | the window icon (256), the Linux hicolor theme, the others |
+| `emusen.ico` (16–256, seven sizes) | Windows: `ApplicationIcon`, the `.exe` in Explorer and on the taskbar |
+| `emusen.icns` (eleven PNG entries, 16–1024 with the @2x types) | macOS, for an app bundle; none is built yet |
+
+**Where it shows.**
+- **Every Mistress window's frame and taskbar entry.** `App.ShowIconOnEveryWindow` registers one class handler on
+  `Window.WindowOpenedEvent` that gives any window without an icon of its own the 256 px resource, so LunaP windows
+  Mistress opens (Preferences, the settings sheets when they are windows) carry it too, and a window that sets its own
+  keeps it. The window manager scales it to the size it needs.
+- **The Windows executable**, through `<ApplicationIcon>`.
+- **The Linux application menu and desktop.** A Linux publish ships `share/icons/hicolor/<size>/apps/emusen-mistress.png`
+  (and the scalable SVG) and `bin/install-desktop-entry.sh`. Run once from the unpacked build, it copies the icons into
+  `~/.local/share/icons/hicolor` and writes `~/.local/share/applications/emusen-mistress.desktop`, which points at
+  that build's own `bin/EmuSen.Mistress`; `--desktop` adds a desktop shortcut, `--remove` takes everything away. It
+  installs for the current user only and needs no root. `StartupWMClass=EmuSen.Mistress` is Avalonia's X11 default
+  (the entry assembly's name), which LunaP does not change, so the running window groups under the entry. The entry
+  records the build's path, so moving the folder means running the script again.
+
+**Tests.** `AppIconTests`: the resource is a 256 × 256 image of Mistress's; a window opened after the hook shows it,
+and one that set its own icon keeps its own. With the hook's handler removed the second test fails. The installer
+was run against a scratch `XDG_DATA_HOME`: eight sizes and the SVG installed, a desktop entry with the quoted path
+(the development tree's path has a space), a desktop shortcut, and `--remove` cleaning up.
+
+**Not done.** Steam's own artwork for a non-Steam game (the Game Mode library's capsule, hero and logo images) is
+set in Steam, not by Mistress. No macOS app bundle exists to carry the `.icns`. Hotaru and Pegasus keep Avalonia's
+default icon. Whether KDE shows the frame icon from `_NET_WM_ICON` or the desktop entry's `Icon=` depends on the
+entry being installed, and was not checked on a real session.
+
+### 4.60 ScreenScraper: covers, screenshots, marquees and game text, with OpenEmu's sources as the failover (2026-09-26)
+
+Stage (d) of `EmuSen_BigPicture.md` (its §17 is the record: predictions, the live run, mutants). ScreenScraper
+(`screenscraper.fr`) is Mistress's first source of cover art and game information: the library's covers in the grid and
+the list, and the themed view's pictures and metadata. OpenEmu's sources (§4.39) fill in behind it. The section is
+numbered 4.60 because stage (f) was writing §4.53 at the same time.
+
+**Where it works, and where it cannot.** Every request carries EmuSen's developer credentials, which ScreenScraper issued
+to the project's author and which no build carries (the user's decision, Q5 of the plan). Mistress reads them from a file
+called `screenscraper-developer.json`, holding `devid`, `devpassword` and `softname`, and looks for it in two places, in
+this order:
+
+1. the config directory, `<root>/home/etc/EmuSen/screenscraper-developer.json`, where `<root>` is the folder holding the
+   `.dianaosroot` marker: for a build published to `out/linux-x64/Mistress/`, that folder; for a copy installed at
+   `~/Apps/Mistress/`, that one; running from source, the checkout;
+2. then `~/.config/EmuSen/screenscraper-developer.json` (the config directory from before Galaxia moved it, §1.4 of the
+   config reference).
+
+The file should be mode 0600. Where neither place has it, ScreenScraper cannot be used; the Scraping tab says so, and
+OpenEmu's failover does the covers alone.
+
+**Nothing is asked until the player starts it.** The user's rule, 2026-09-26: "I do not want to spam the screenscraper
+api". No server, ScreenScraper or OpenEmu's, is asked anything when Mistress starts, when the library is shown or
+refreshed, when a game is selected or shown in the themed view, when a game is added, when the developer file appears,
+or because a run was left unfinished. What is already in `home/Media` and `media.db` is shown with no request. The
+ScreenScraper switch (`Scraping`, on) only says ScreenScraper may be used when a run is started; it starts nothing.
+
+**Starting a run.** A run is one of these, chosen by the player:
+
+| Scope | Where |
+|---|---|
+| **this game** | the library's context menu, **Scrape This Game...**; the pad menu, **Scrape This Game...**, for the library's selected game or the themed gamelist's |
+| **a console**, Game Boy Color its own shelf | Preferences ▸ Scraping ▸ **Scrape**: the console list, then **Scrape...** |
+| **games with no cover**, in one console or all | the same, with **Only games with no cover** on (the default) |
+| **every game** | the same, with **Every console** and **Only games with no cover** off |
+
+The pad menu's **Scrape Games...** opens Preferences on the Scraping tab. Before a run starts, a confirm sheet gives the
+count of games, how many ScreenScraper has not been asked about, the most requests it can cost against what is left
+today (one lookup and one per picture kind a game), the time at about 13 seconds a game (plan §17.9), and whether
+OpenEmu's sources will be asked. Declining asks nothing. While it runs, the status line and the Scraping tab show "n of
+m", a bar follows it, the pad menu's entry reads "Scraping (n of m)...", and **Cancel Scraping** stops it with a request
+in flight cancelled.
+
+**Resuming.** A run that was cancelled, stopped by the quota, or cut off by closing Mistress leaves its games queued in
+`media.db`. The Scraping tab says how many and offers **Resume**; nothing resumes by itself. Starting a new run replaces
+that queue instead of adding to it. **Scrape This Game** asks ScreenScraper again even about a game it once did not
+know, and asks the failover again too; a wider run does not re-ask what has been answered.
+
+**From the pad.** In a big-screen session (Game Mode), Start or Guide opens the pad menu; **Scrape This Game...** and
+**Scrape Games...** are there outside a game; the shoulders move between Preferences' tabs. Every row, the console
+list, the switch and the Scrape, Resume and Cancel buttons are reached by the d-pad (`PadAudit`, §4.45.3) and pressed
+with A. The member account's two boxes open the on-screen keyboard of §4.45.6; the password's preview above the keys
+shows its mask, not the text (LunaP §110).
+
+**The settings,** stored in `appsettings.json` except the member account:
+
+| Row | Setting | Default | What it does |
+|---|---|---|---|
+| ScreenScraper | `Scraping` | on | a run the player starts may use ScreenScraper when the developer file is present; it starts nothing |
+| Member Account | `screenscraper.json` (`ssid`, `sspassword`) | none | optional; a free account at screenscraper.fr, whose contributions or donation raise the day's requests and threads. Its own file in the config directory, mode 0600, written when a box is left or the sheet closes; never in `appsettings.json` |
+| Fetch: Covers | `ScrapeCovers` | on | ScreenScraper's `box-2D` |
+| Fetch: Screenshots | `ScrapeScreenshots` | on | `ss` |
+| Fetch: Marquees | `ScrapeMarquees` | on | `wheel-hd`, else `wheel` |
+| Fetch: Mix images | `ScrapeMiximages` | on | `mixrbv2`, ScreenScraper's ready-made mix, as the theme's miximage (Q7) |
+| Fetch: Title screens | `ScrapeTitleScreens` | off | `sstitle` |
+| Region | `ScrapeRegion` | `auto` | whose box and name are preferred; Automatic reads the file's No-Intro tag, (USA) us, (Europe) eu, (Japan) jp, (World) wor, and the other country names ScreenScraper has a code for |
+| Else world, USA, Europe, Japan, then any | `ScrapeRegionFallback` | on | ES-DE's documented fallback order, then any region; off, only the preferred region (and a file with no region) is taken |
+| Language | `ScrapeLanguage` | `en` | the description's and genre's; English when there is none in it |
+| (no row) | `ScrapeThreads` | 1 | the workers wanted; never more than the member's `maxthreads` |
+| OpenEmu Failover | `OpenEmuFallback` | on | below |
+
+A change takes effect when the sheet closes.
+
+**What is sent, and to whom.** For each game: the file's name (without its folder), its size, its MD5, CRC32 and SHA-1,
+and ScreenScraper's system number (NES 3, SNES 4, Game Boy 9, Game Boy Color 10, Nintendo 64 14), with the developer
+credentials and the member account when there is one. ScreenScraper therefore sees which games the player has. What comes
+back is written by its contributors, and the art is its publishers'; Mistress keeps it for the player and shares none of
+it.
+
+**How a game is looked up**, inside a run. Only the file's own hashes are asked first; if ScreenScraper does not know them and the
+console's core declares another form of the bytes (the NES without its iNES header, the SNES without a copier header, the
+N64 halfword-swapped: `CoreDescriptor.OpenVgdbBytes`), those hashes are asked once more. There is no search by name. A
+game answered once is not asked again: a renamed file takes its pictures to its new name, and a copy of it gets copies,
+with no request. A whole library is days of a free account's quota (plan §17.10).
+
+**Where things are kept.** `home/Media/`, laid out as ES-DE's `downloaded_media`: `<system>/covers`, `screenshots`,
+`marquees`, `miximages`, `titlescreens`, each file named after the ROM's own file name. Beside them `media.db` holds each
+game's text by its MD5 and size, which file each picture is, the queue, and the day's counts (with `PRAGMA user_version`
+and a newer file refused, as `games.db` is). A picture is written beside its final name and moved into place, never over
+a file already there, and only when the server calls it an image of at least 80 bytes. Nothing is ever written in the
+ROM folder. Deleting `home/Media` loses what was fetched and nothing else.
+
+**The order a picture is looked for in**, the same in the library and the themed view:
+
+1. what the player placed: the cover art folder of §4.33, or **Add Cover Art from File…**;
+2. ScreenScraper's, in `home/Media/<system>/`;
+3. the ES-DE media folder of §4.52, when one is set;
+4. OpenEmu's failover's, in `home/Media/openemu/<console>/`, only while the failover is on;
+5. the placeholder of §4.33.
+
+Screenshots, marquees and the rest take 2 then 3; only covers have a player's folder and a failover. A cover the player
+already has is not fetched from ScreenScraper.
+
+**OpenEmu's failover** (`OpenEmuFallback`, on, the coordinator's choice on 2026-09-26, which the user may reverse) is
+asked only inside a run the player started, never for a tile being drawn as §4.39's switch once did. It asks OpenVGDB and
+libretro's thumbnails (§4.39) for a cover in exactly these cases:
+
+- ScreenScraper answered, and had no cover: the game is unknown to it, it has no `box-2D`, or the lookup failed for good;
+- ScreenScraper cannot be used: no developer file, the ScreenScraper switch or its Covers switch off, the day's quota used
+  up (its limit less 2%, or a 430 or 431 answer), the service closed (423), the developer credentials refused (403), or
+  this build blocked (426).
+
+A game ScreenScraper has queued in the run waits for its answer first; when a run stops on the quota, the games it did
+not reach go to the failover. Its hint says what it sends and to whom: OpenVGDB's 9 MB database from GitHub the first
+time, then the game's name to thumbnails.libretro.com and, last, to the address OpenVGDB gives. §4.39's **Look Up Cover
+Online** is now **Scrape This Game...**.
+
+*The old setting.* `OnlineCovers`, the §4.39 switch, is read from an older `appsettings.json` and dropped at the next save.
+The failover is on after the upgrade whatever it held: a stored false was the default every save wrote, and cannot be
+told from a choice. Covers the old switch fetched into the cover art folder stay there and now count as the player's own.
+
+**The quota**, which ScreenScraper requires software to manage itself. Every answer carries the member's limits and
+today's counts; Mistress reads them from every answer and:
+
+- never runs more workers than `maxthreads` (one until an answer says);
+- spaces requests, the media downloads included, at `maxrequestspermin` less 10% (30 a minute until an answer says);
+- waits after a download that came faster than `maxdownloadspeed`;
+- stops for the day at `maxrequestsperday` less 2%, or `maxrequestskoperday` less 2% for unrecognised games, or on a 430
+  or 431 answer, and resumes the next day (taken as Paris's, where the service runs) where it stopped; the stop is kept
+  in `media.db` and outlives a restart;
+- on a 429 halves its pace and waits a minute; on a 401 waits five minutes;
+- on a 403, 423 or 426 stops until the next start or the next change in Preferences, and says why in the status line.
+
+The Scraping tab's **Today** row shows the day's requests against the limit, the unrecognised ones, the threads, and
+whether it is running, how many games are queued, or why it stopped and until when. It fills from the first answer of a
+session; until then it shows no bar.
+
+*Measured on 2026-09-26 without a member account* (plan §17.9): 1 thread, 128 KB/s, 10,000 requests a day and 1,000
+unrecognised. **Every picture is a request**, as the game's lookup is; with the default kinds a found game costs about
+4.7 requests and 13 seconds, half of it the 128 KB/s allowance, so a 5,520-file library takes three days of that quota.
+Turning **Mix images** off saves the largest of the files; a member account raises all of it.
+
+**The credentials never leave.** Neither credential file is ever committed: `.gitignore` names both, and a WiseMan test
+fails if either is tracked or if any tracked file holds a `devpassword=` value that is not a placeholder, or the
+developer's real password when its file is on the machine. Every address or message that could reach the status line, a
+log, a crash report or an exception passes through one redactor that blanks `devid`, `devpassword`, `ssid` and
+`sspassword` (and the four values wherever they appear); `CrashLog` writes through it. A published build's zip must not
+carry `home/etc/EmuSen/screenscraper*.json` or `home/Media`, as it already leaves out the sandbox's cheats and saves.
+
+**Everything stops with the window.** Closing Mistress's window stops the workers (a request in flight is cancelled),
+closes `media.db` and the refresh timer, before the HTTP client they share is disposed; Preferences lets go of the window
+when it closes.
+
+**Tests,** all on a fake ScreenScraper written for them (no test reaches the network, and the suite's windows start with
+no network and no developer file unless a test installs its own): `ScrapeRulesTests`, `ScreenScraperClientTests`,
+`ScrapeQuotaTests`, `MediaStoreTests` (with the order of sources), `ScraperTests`, `ScrapeCredentialTests` (the
+redactor, the two places, the member file's mode, never in git), `CrashLogTests`, `ScrapeWindowTests` (each failover
+case, the window closing, Preferences, the old setting) and `ThemedScrapeTests`; `OnlineCoverTests` and
+`OnlineCoverWindowTests` keep §4.39's rules. Mutants and the live run are in the plan's §17.
+
+**What it does not cover.**
+- No video (Q4), no back cover, fan art, 3D box or physical media: ES-DE's folders for them exist, nothing fills them.
+- The game's name stays the file's; ScreenScraper's is kept in `media.db` but not shown.
+- A game found without a cover because the player had one, whose cover is later removed, goes to the failover rather
+  than back to ScreenScraper.
+- No "refresh": a picture already there is never fetched again, so a better one at ScreenScraper is not seen; delete the
+  file to have it fetched.
+- No search by name for a game the hashes miss.
+- Nothing ran on the handheld.

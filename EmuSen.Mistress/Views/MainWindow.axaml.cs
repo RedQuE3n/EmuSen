@@ -202,6 +202,7 @@ namespace EmuSen.Mistress.Views
                 _session?.SaveSram();
                 WriteResumeState();
                 RecordPlayTime();
+                StopScraping();
                 StopOnlineCovers();
                 CloseRecords();
                 _gamepad.Dispose();
@@ -459,12 +460,15 @@ namespace EmuSen.Mistress.Views
             }
         }
 
-        private void ShowPreferences()
+        private void ShowPreferences() => ShowPreferencesAt(null);
+
+        private void ShowPreferencesAt(string? tab)
         {
             // Non-modal, so re-scan on close rather than leaving a stale library behind it.
-            var window = new PreferencesWindow(_appSettings) { OpenThemeSettings = ShowThemeSettings };
+            var window = new PreferencesWindow(_appSettings, this) { OpenThemeSettings = ShowThemeSettings };
+            if (tab is not null) window.ShowTab(tab);
             window.StatusBarChanged += ApplyStatusBar;
-            window.Closed += (_, _) => { ScanArtwork(); ApplyOnlineCovers(); if (LibraryView.IsVisible) RefreshLibrary(); };
+            window.Closed += (_, _) => { ScanArtwork(); ApplyOnlineCovers(); ApplyScraping(); if (LibraryView.IsVisible) RefreshLibrary(); };
             _ = SheetLayer.Show(window, this);
         }
 

@@ -144,7 +144,7 @@ Kept outside the repository, and read or run for comparison:
   [Themaister's fork](https://github.com/Themaister/parallel-rdp), and [parallel-rdp](https://github.com/Themaister/parallel-rdp)
   (MIT): the N64's display processor is graded against them.
 - ares, bsnes, Snes9x, SameBoy, Gambatte, mGBA and CEN64, cited in the docs where they settle a question.
-- MiSTer FPGA cores, as referees where emulators disagree: [SNES_MiSTer](https://github.com/MiSTer-devel/SNES_MiSTer),
+- [MiSTer-devel](https://github.com/mister-devel) FPGA cores, as referees where emulators disagree: [SNES_MiSTer](https://github.com/MiSTer-devel/SNES_MiSTer),
   [N64_MiSTer](https://github.com/MiSTer-devel/N64_MiSTer) and [Gameboy_MiSTer](https://github.com/MiSTer-devel/Gameboy_MiSTer) (GPL).
 
 ### Test suites

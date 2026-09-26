@@ -1,6 +1,6 @@
 # EmuSen_BigPicture — a plan for a big-picture mode in Mistress that renders ES-DE themes
 
-*Written 2026-09-24. Stage (a), the theme loader, was built the same day; its record is §12. Stage (b), the two views drawn statically with LunaP controls, followed on 2026-09-24 and 25; its record is §13. Stage (c), the GPU frame and motion, followed on 2026-09-25; its record is §14. Stage (e), the themed view as the big-screen library driven by the pad, followed the same day; its record is §15. Nothing else is built.* The user asked for a big-picture mode in Mistress like EmulationStation's,
+*Written 2026-09-24. Stage (a), the theme loader, was built the same day; its record is §12. Stage (b), the two views drawn statically with LunaP controls, followed on 2026-09-24 and 25; its record is §13. Stage (c), the GPU frame and motion, followed on 2026-09-25; its record is §14. Stage (e), the themed view as the big-screen library driven by the pad, followed the same day; its record is §15. Stage (f), variants and settings, the grid, the triggers against Mistress's media, and themes downloaded on request, followed on 2026-09-25 and 26; its record is §16. Nothing else is built.* The user asked for a big-picture mode in Mistress like EmulationStation's,
 starting with the theme they like, Art Book Next. They made two choices. First, Mistress reads ES-DE themes, so that
 Art Book Next and other ES-DE themes load as their authors made them. A look-alike built from Mistress's own controls
 was not wanted. Second, game media comes from ScreenScraper. This page plans that work. It inventories the theme
@@ -999,12 +999,13 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 | P8 | Carousel steps hold 60 fps on the handheld with fast scrolling | Stage c: open until the handheld runs deck-gpu (§14.10) |
 | P9 | Hash lookup identifies 75–95% of 40 random files; headerless hashes add at most 5 points | Stage d |
 | P10 | A new account scrapes the whole library, without videos, over two to three sessions in two days | Stage d, first full run |
-| P11 | Art Book Next's archive is 205–230 MB | Stage f |
+| P11 | Art Book Next's archive is 205–230 MB | Stage f: held, 220.2 MB (§16.7) |
 | P12 | With no videos scraped, the video element's render is identical to ES-DE's (§4.7) | Stage b: failed as identical (§13.8) |
 | P13–P18 | Stage (a)'s predictions: coverage, errors, skipped includes, load time, triggers, the default variant (§12.1) | Stage a (§12.5) |
 | P19–P23 | Stage (b)'s predictions: frame cost, SVG against `Svg.Skia` by file, properties mapped, geometry from the theme, the font size (§13.1) | Stage b (§13.10) |
 | P24–P38 | Stage (c)'s predictions: the GPU route, its frame, first frame and uploads, the handheld; the carousel step, repeat, the list, the name, containers, scrollFadeIn, the video delay, the slide, settled frames and the moving frame (§14.1, §14.5) | Stage c (§14.10); P28 open |
 | P39–P45 | Stage (e)'s predictions: a still view draws nothing, the return is exact, the first build, the pad's family, a family change touching only the help bar, the sounds, every sheet reachable (§15.1) | Stage e (§15.12); P41 failed cold |
+| P46–P55 | Stage (f)'s predictions: a choice applied at once, choices per theme, the sheet's rows, every control reachable, the grid at rest and moving, the video extensions, the media scan, the downloads, a closed sheet's download (§16.1) | Stage f (§16.7); P50 failed by a pixel, P51's duration and interval refuted |
 
 ---
 
@@ -2513,3 +2514,128 @@ shadowed; it was renamed rather than the fixture.
   lines; else a sentence saying none is stated. For Art Book Next the licence line is its README's own, naming
   CC-BY-NC-SA 2.0 and its URL, and eight credits. The author of a downloaded theme is its repository's owner, since
   neither `capabilities.xml` nor THEMES.md has a field for one; a theme read in place states no author.
+
+### 16.5 The grid: ES-DE measured, then built
+
+**The measurement.** A subagent measured ES-DE 3.4.1's grid from its behaviour alone, with §14.7's rig (XWayland
+window, uinput pad, 165 fps lossless recording): 26 runs, one window at a time, each under 25 s and closed by PID, of a
+synthetic `grid-probe` theme with 16 variants that each change one property, on synthetic libraries of 40, 250 and 37
+games whose covers are flat single hues. ES-DE's source was not read; only `THEMES.md` and `USERGUIDE.md`. The report
+and every per-run CSV are `~/.cache/emusen/bigpicture/grid/results.md` and `results.json`, outside the repository.
+
+**What it found, as rules** (W×H the element box, w×h the item, sx×sy the spacing, k the scale):
+
+| Rule | Measured |
+|---|---|
+| Columns | `floor((W + sx − w(k−1)) / (w + sx))`, as many as fit with the selected item scaled; without the `w(k−1)` term under `scaleInwards`. Four variants built to reject the rival rules each drew what this rule predicts |
+| Placement | left-aligned, the first column at `w(k−1)/2` (0 inwards), everything left over on the right |
+| Rows | first at `h(k−1)/2`, whole rows `floor((H + sy − h(k−1)) / (h + sy))`; `THEMES.md`'s "snapped to the item height multiplied by itemScale" mispredicts the count once the spacing is large |
+| Omitted spacing | half the selected item's growth on each axis |
+| Scroll | `max(0, row − (V − 1))`: nothing until the selection passes the last row shown, then the selected row stays on the bottom row, both ways. The rule "scroll when it leaves the rows" was refuted by a six-row layout |
+| Inward anchors | outer edges fixed on the first and last columns and the first row, the bottom edge on a scrolled bottom row |
+| Unfocused | true alpha (0.2983 for 0.3, n=36); dimming 0.5 with saturation 0 gives half of **Rec. 601** luma |
+| Item and row motion | quadratic ease-out, 251.2 ms (n=10, rms 0.0014) and 249.8 ms (n=5); the same frame, whatever the distance; each step restarts from the current values, only two items moving |
+| Holds | 497 ms, then every 200 ms, on both axes, no faster tier in 8 s |
+| Ends | across a row's end to the next row; a tap wraps at the list's ends, a hold stops; up and down stop at the first and last rows; down into a short last row takes its last item |
+| Metadata | fades out over 150 ms from the first repeat and back in over 150 ms, as the text list's does (§14.7) |
+| No image | the text background fills the item, the name centred |
+
+**What was built.** LunaP's `ImageGrid` and `GridGeometry` (its §104) hold the layout and draw a state given by a
+scroll and a focus progress; the scene's `GridElements` maps 47 of the grid's properties to it; `SceneView` moves it by
+the rules above, with `SceneMotion.Esde` gaining `GridStep` (250 ms), `GridEasing` (quadratic ease-out) and
+`GridRepeat` (500, then 200 ms). In a grid all four directions move the selection, so a grid's gamelist has no quick
+system select on left and right; the shoulders page by the whole rows shown. That is this stage's choice, since ES-DE's
+own quick system select was never measured (§15.3).
+
+**One correction reached LunaP.** ES-DE's greys fit Rec. 601 weights; LunaP's `FittedImage` had used Rec. 709 since its
+§98.2. The weights are now Rec. 601 (LunaP §104.4), which changes every desaturated picture, the carousel's included:
+Art Book Next's schemes set `imageSaturation`, so its system view's pixels changed in the desaturated schemes. No
+EmuSen test compares them with ES-DE, so the change is argued from the grid's measurement, not measured on the carousel.
+
+**The mapping.** Of the 172 pairs Art Book Next sets, the scene now reads **164** (140 before). The grid's 24 are all
+read; §13.1's P21 had said 161 if the grid were built, and the difference is stage (c)'s four time-governed pairs. The
+eight left are those §13.3 and §14.9 named: the video's five playback and interpolation pairs, the sound's path, and the
+badges' `controllerSize` and `folderLinkSize`. Every grid pair, and the four common ones, has a differential case in
+`SceneMappingTests`: 297 cases now, from 247.
+
+**P50 fails, by a pixel.** `Art_Book_Next_s_grid_matches_ES_DE_s_still` renders `gamelist-grid-cover` at 1280×800 on
+the SNES games ordered as ES-DE orders them, and finds each synthetic cover's flat interior with the same ratio test the
+ES-DE still was read with. Ten of eleven covers lie within 1 px of ES-DE's; the selected cover and one edge of one
+unfocused cover lie 2 px off, at rest and after two rows down. ES-DE draws item edges on whole pixels, and Mistress at
+fractional ones (§13.8); a 1.2 scale of a fractional box is where the second pixel comes from, argued, not shown. The
+covered cover (Ivory Signal, under the selected one) is left out, as the subagent's table marks it.
+
+**A defect the comparison found, in LunaP.** The first run put the selected cover on the scrolled bottom row 22 px low:
+`GridGeometry.Anchor` compared two quantities equal by construction to a millionth, and float noise fell on the wrong
+side, so the cover scaled about its centre. LunaP §104.4a records it.
+
+### 16.6 Mutants
+
+The runners are `~/.cache/emusen/probe/bigpicture/mutate_stage_f.py` (Mistress, 47 mutants) and `mutate_grid_lunap.py`
+(LunaP, 16, on a copy); logs `run-stage-f.log`, `run-stage-f-grid.log`, `mutants-stage-f*.txt`. Each mutant was built and
+run alone, under `nice`, against the tests of its area only, and the source restored; the tree was rebuilt clean after
+each round.
+
+| Area | Mutants | Caught at once | Survived, then caught |
+|---|---|---|---|
+| Settings sheet (F1–F12) | 12 | 12 | — |
+| Downloads and attribution (F13–F21) | 9 | 8 | F21, a cancel while unpacking ignored |
+| Triggers (F22–F26) | 5 | 4 | F25, a changed media folder not seen |
+| Grid in the scene (G1–G21) | 21 | 14 | G2, G7, G14, G15, G18 |
+| LunaP grid (LG1–LG16) | 16 | 16 | — |
+
+**Every survivor was a weak test, and two exposed real defects.**
+- F21: no test cancelled during extraction. `A_download_cancelled_while_it_unpacks_leaves_the_old_theme` now does, through
+  an unpack progress the sheet also shows.
+- F25: the trigger test deleted whole media folders, which a folder's existence reveals without its write time. It now
+  empties them.
+- G2: the held test ran long enough for a wrapping hold to come round to the same item. It is shorter now.
+- G14: made the page ten items, and survived because the pad test's page happened to equal one row. Making the test
+  page by two rows exposed **a defect**: after an up or down, a page moved by one row, because `Jump` read the held
+  direction's axis. `Step` and `Jump` now always move across. G21 is that defect as a mutant, caught.
+- G7: nothing checked a step taken while the last still moved. The new test exposed **a defect**: the new item's
+  starting focus was computed from the old item's level after that level had been overwritten. Both levels are now
+  taken together; G20 is the defect as a mutant, caught.
+- G15 and G18: no test looked at a `-1` item axis or at the axis corner radii are measured on; one does now.
+
+As in stages (b) to (e), the reference test caught little on its own: among the failing tests the log lists for the 21
+grid mutants, `Art_Book_Next_s_grid_matches_ES_DE_s_still` appears only for G10 (a vertical press moving one item). A theme that renders is weak evidence that its mapping is right.
+
+### 16.7 Predictions retired
+
+| # | Predicted | Measured | Verdict |
+|---|---|---|---|
+| P11 | Art Book Next's archive is 205–230 MB | 220.2 MB, by `git archive` of the reading clone at `d772d07` | held (a local measurement of the same tree, not a download) |
+| P46 | a choice redraws the view beneath the sheet, equal to a fresh build | rebuilt at the same system and game with the sheet open; 0 pixels differ | held |
+| P47 | choices kept per theme; a stale one falls back without error | as predicted | held |
+| P48 | Art Book Next: 20 variants in order, 31 schemes, 4 sizes, Automatic and 12 ratios, no language row, two profiles | as predicted | held |
+| P49 | every control of the theme sheets reachable | 0 unreachable on both tabs and the About sheet | held |
+| P50 | the grid's first two rows within 1 px of ES-DE's still | 2 px worst: the selected cover and one unfocused edge; the rest within 1 | failed, by a pixel |
+| P51 | 400 ms quadratic ease-out for items and rows; 500 then 114 ms repeats with no jump | quadratic ease-out, as predicted, but 250 ms; 500 then 200 ms with no faster tier | the curve held; the duration and the interval refuted |
+| P52 | videos never found, so `noVideos` fires wrongly | shown by a test on the unchanged reader, then fixed | held (a defect) |
+| P53 | the 3,508-game scan under 20 ms by listing | 167.9 ms asked game by game, 0.8 ms listed, on a full folder; 189 to 3 ms on an empty one | held |
+| P54 | a download swapped in only when it loads; broken or cancelled ones leave the old theme; customizations kept; removal refused for folders not downloaded | as predicted, against a fake GitHub | held |
+| P55 | closing the sheet cancels a download, proved by a test that fails without the cleanup | held, and needed a second cleanup in the window, since a sheet is not closed when its window is | held |
+
+### 16.8 Not done in stage (f)
+
+- **Nothing ran on the handheld.** The grid's frame cost there, and whether 250 ms steps read well at arm's length, are
+  the device's.
+- **Only Art Book Next can be downloaded from the sheet.** Another GitHub or GitLab theme, and ES-DE's theme list as a
+  picker (§6), are not built. Nothing was downloaded from GitHub: every download test used a fake server.
+- **The grid's unmeasured parts.** `imageFit contain` and `cover`, selector and background images, corner radii and the
+  text's scale law were not measured in ES-DE; they follow `THEMES.md` and are proved only to change the pixels. The
+  horizontal clip, a held right that reaches the last item (inferred to stop, as the others do), 60 Hz timing, and the
+  unscrolled inward bottom row's centring were not measured either.
+- **The grid's own not-mapped properties:** `imageBrightness`, the background's and selector's gradients, the selected
+  image's gradient, `textHorizontalScrolling` and its three siblings, the collections' letter cases and
+  `fadeAbovePrimary`. Art Book Next sets none of them.
+- **Quick system select in a grid gamelist** does not exist: all four directions move the grid. What ES-DE does there
+  was not measured.
+- **Languages** are listed only when a theme declares them; no theme the user has declares any, so the row was tested
+  on a synthetic theme alone.
+- **The desaturation change to Rec. 601** was measured on the grid only; the carousel's desaturated schemes were not
+  compared with ES-DE.
+- **The carousel test flake.** One run of the scene's motion tests failed
+  `A_carousel_step_eases_to_the_next_item_and_settles_on_the_static_picture` in under a millisecond, and passed on the
+  next run with nothing changed in between. It was not reproduced and is not explained; it is recorded, not attributed.

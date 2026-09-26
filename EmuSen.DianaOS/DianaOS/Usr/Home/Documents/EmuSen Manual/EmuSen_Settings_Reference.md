@@ -2581,6 +2581,21 @@ scheme, Medium, Automatic.
   path, so switching themes and back restores each one's. A stored name the theme no longer declares (an update renamed
   a variant, say) is not an error: the loader falls back to its default for that row.
 
+**The grid variants.** A theme's game list can be a grid, as Art Book Next's three "Grid" variants are. Mistress draws
+it with LunaP's `ImageGrid` and moves it as ES-DE 3.4.1 was measured moving (`EmuSen_BigPicture.md` §16.5):
+
+| Button | In a grid game list |
+|---|---|
+| Left, right | the previous or next game, across the end of a row to the next; a tap wraps at the ends of the list, a hold stops there |
+| Up, down | the game a row above or below; they stop at the first and last rows, and down into a short last row takes its last game |
+| L1, R1 | a page: the whole rows shown |
+| Held | 500 ms, then a step every 200 ms, with no faster speed |
+
+Each step eases the selected cover up and the last one down over 250 ms; when the selection passes the last row shown,
+the rows slide over the same 250 ms and the selected row stays on the bottom row. The game's metadata fades out while a
+direction is held, as over the list. A grid game list takes all four directions, so left and right do not change the
+system there as they do over a list; East goes back to the system view, where they do.
+
 **Variant triggers use the media Mistress has.** A theme can switch a variant for the game lists when a system's games
 have no media of some kind (`noMedia`) or no videos (`noVideos`). Mistress answers from the ES-DE media folder when one
 is set (§4.52), and the cover type also from its own art folder (§4.33). A type counts when any game of the system has a
@@ -2622,8 +2637,9 @@ CC BY-NC-SA 2.0 licence, as the README states it on the day it is read.
 the open sheet and equal to a fresh build, choices per theme and a stale one, Preferences, every control reached by the
 pad, the download flow with its About sheet and an update, and the two closing cases), `ThemeDownloadsTests` (a fake
 GitHub: the download and its stamp, an update keeping `theme-customizations`, five broken downloads, a cancelled one,
-removal, the attribution) and `ThemedLibraryTriggerTests` (the extensions, presence by listing, the variant following the
-media). Every server is a fake written for the tests; no test reaches the network.
+removal, the attribution) `ThemedLibraryTriggerTests` (the extensions, presence by listing, the variant following the
+media), `GridSceneTests` (the measured layout, a step, a slide, the ends, the repeats, the metadata fade, a step while
+moving, the units, and Art Book Next's grid against ES-DE's still) and `ThemedGridPadTests` (the pad over a grid). Every server is a fake written for the tests; no test reaches the network.
 
 **What it does not cover.**
 - Only Art Book Next has a download button. Another GitHub theme, ES-DE's theme list and a GitLab theme are §6's plan and

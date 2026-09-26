@@ -75,10 +75,28 @@ namespace EmuSen.Mistress.BigPicture.Scene
             _position = Slides ? _position.Toward(to, now, Motion.CarouselStep, Motion.CarouselEasing) : Glide.At(to);
             _selectedAt = now;
             _changed = true;
-            Scene = Rebuild();
+            if (held && Hidden && Scene.Entries.FirstOrDefault(e => e.Control is TextRowList).Control is TextRowList list)
+            {
+                list.SelectedIndex = target;
+                _stale = true;
+            }
+            else
+            {
+                Scene = Rebuild();
+                _stale = false;
+            }
+
             Apply();
             return true;
         }
+
+        // While a held list has faded the game's metadata out, every element that follows the game is invisible, so a step moves the list alone and the rest is rebuilt when the fade-in starts (§14.8).
+        private bool Hidden => !RebuildEveryStep && !IsSystemView && _metadata.To <= 0 && _metadata.IsSettledAt(Now);
+
+        // Turns the lever above off, so a test or bench can compare it with a rebuild on every step.
+        public bool RebuildEveryStep { get; init; }
+
+        private bool _stale;
 
         // A direction held from a time on; the repeats it gives are stepped by Advance.
         public void Press(int direction, TimeSpan now)
@@ -97,6 +115,10 @@ namespace EmuSen.Mistress.BigPicture.Scene
         private void FadeMetadataIn(TimeSpan now)
         {
             if (_metadata.To < 1) _metadata = _metadata.Toward(1, now, Motion.MetadataFadeIn);
+            if (!_stale) return;
+            Now = now;
+            Scene = Rebuild();
+            _stale = false;
         }
 
         private SceneRepeatRule RepeatRule => Primary?.Type == "carousel" ? (Primary.Bool("fastScrolling") == true ? Motion.CarouselFastRepeat : Motion.CarouselRepeat) : Motion.ListRepeat;

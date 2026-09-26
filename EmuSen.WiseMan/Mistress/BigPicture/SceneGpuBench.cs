@@ -127,13 +127,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
 
         // One moving case: a view held moving by a script of presses, each frame's clock step, layout and GPU draw timed at 60 Hz of its own clock.
-        public sealed record Motion(string Name, string View, Action<SceneView, TimeSpan> Script);
+        public sealed record Motion(string Name, string View, Action<SceneView, TimeSpan> Script, bool RebuildEveryStep = false);
 
         // A carousel stepped again as each step ends, and a list held down: the two motions that redraw the most.
         public static IReadOnlyList<Motion> Motions =>
         [
             new("carousel held", "system", (v, now) => { if (!v.IsMoving || now == TimeSpan.Zero) v.Step(1, now); }),
             new("list held", "gamelist", HeldToAndFro()),
+            new("list held, rebuilt every step", "gamelist", HeldToAndFro(), RebuildEveryStep: true),
         ];
 
         // A direction held down the list, and back up from its end, so the list never rests at an end.
@@ -170,7 +171,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 {
                     ForgetPictures();
                     SceneData data = SyntheticLibrary.Data(systems, new Size(w, h), media, system: 1, game: 0);
-                    var view = new SceneView(data, motion.View, TimeSpan.Zero);
+                    var view = new SceneView(data, motion.View, TimeSpan.Zero) { RebuildEveryStep = motion.RebuildEveryStep };
                     var window = new Window { Width = w, Height = h, Content = view.Root, Background = Brushes.Black, SizeToContent = SizeToContent.Manual };
                     window.Show();
                     Dispatcher.UIThread.RunJobs();

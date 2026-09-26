@@ -2495,9 +2495,10 @@ shadowed; it was renamed rather than the fixture.
   folder read in place and a look-alike under `home/Themes` without a stamp.
 - **The order of the swap is the rule that keeps the player's files.** The new folder is moved in before the
   customizations are moved across from the old one, and the old one is deleted only after that; a swap cut short leaves
-  `.old`, which the next download restores or empties before anything else runs. A first draft moved the customizations
-  into the staged folder before the swap, where the `finally` that cleans the staged folder would have deleted them on
-  any failure in between; it was caught in review, before a test existed for it, and no test reproduces that window.
+  `.old`, which the next download restores or empties before anything else runs. The other order, moving the
+  customizations into the staged folder before the swap, is the obvious one and is unsafe: the `finally` that cleans the
+  staged folder would delete them on any failure in between. That is argued, not tested; no test reproduces a failure in
+  that window.
 - **P55 holds, and needed two cleanups.** The download's `CancellationTokenSource` is cancelled when the sheet closes.
   `Closing_the_sheet_or_its_window_stops_the_download` uses a server whose archive sends one byte and then waits until
   the request is cancelled. Closing the sheet with East: the download ends cancelled, and no `.zip.part` or `.part` is

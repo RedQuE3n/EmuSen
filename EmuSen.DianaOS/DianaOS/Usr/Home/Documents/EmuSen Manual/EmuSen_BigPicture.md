@@ -2639,3 +2639,9 @@ grid mutants, `Art_Book_Next_s_grid_matches_ES_DE_s_still` appears only for G10 
 - **The carousel test flake.** One run of the scene's motion tests failed
   `A_carousel_step_eases_to_the_next_item_and_settles_on_the_static_picture` in under a millisecond, and passed on the
   next run with nothing changed in between. It was not reproduced and is not explained; it is recorded, not attributed.
+- **The one broad run failed two unrelated tests.** The Mistress filter without the three GPU classes ran 622 tests:
+  617 passed, 3 skipped, and `InputSettingsWindowRenderTests.The_window_renders_its_rows(NES)` and
+  `FrameHandOffTests.Once_a_session_ends_the_picture_left_on_screen…` failed. Both classes passed alone (11 of 11), and
+  again beside every class this stage added (47 of 47). Unrelated tests failing only in the broad run is §15.14's
+  pattern; whether anything of stage (f) causes it was not established, because repeating the broad run until it
+  reappears is ruled out by the load rule of 2026-09-25. The failure messages were not captured.

@@ -75,7 +75,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             _position = Slides ? _position.Toward(to, now, Motion.CarouselStep, Motion.CarouselEasing) : Glide.At(to);
             _selectedAt = now;
             _changed = true;
-            if (held && Hidden && Scene.Entries.FirstOrDefault(e => e.Control is TextRowList).Control is TextRowList list)
+            if (held && Hidden && Scene.Entries.FirstOrDefault(e => e.Control is TextRowList)?.Control is TextRowList list)
             {
                 list.SelectedIndex = target;
                 _stale = true;

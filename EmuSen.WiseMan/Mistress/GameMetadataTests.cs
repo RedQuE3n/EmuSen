@@ -109,6 +109,40 @@ namespace EmuSen.WiseMan.Mistress
             }
         }
 
+        // A games.db of schema 4, as every build before this one left it, is migrated in place: its rows kept, game_edit added with each edit's time.
+        [Fact]
+        public void A_schema_4_games_db_is_migrated_in_place_and_keeps_its_rows()
+        {
+            string db = Path.Combine(_dir, "old.db");
+            using (GameRecords records = GameRecords.Open(db))
+            {
+                records.ToggleFavourite(Rom);
+                records.Started(Rom, new DateTime(2026, 9, 1));
+            }
+            using (var raw = new SqliteConnection($"Data Source={db};Pooling=False"))
+            {
+                raw.Open();
+                using SqliteCommand back = raw.CreateCommand();
+                back.CommandText = "DROP TABLE game_edit; PRAGMA user_version = 4;";
+                back.ExecuteNonQuery();
+            }
+            using (GameRecords records = GameRecords.Open(db))
+            {
+                GameRecord kept = records.Find(Rom)!;
+                Assert.Equal((true, 1), (kept.Favourite, kept.PlayCount));
+                records.SaveEdits(Rom, new Dictionary<string, string?> { [GameMetadata.Hidden] = GameMetadata.Yes }, new DateTime(2026, 9, 26, 12, 0, 0, DateTimeKind.Utc));
+                Assert.Equal(GameMetadata.Yes, records.Edits(Rom)[GameMetadata.Hidden]);
+            }
+            using var check = new SqliteConnection($"Data Source={db};Pooling=False");
+            check.Open();
+            using SqliteCommand read = check.CreateCommand();
+            read.CommandText = "SELECT (SELECT user_version FROM pragma_user_version), field, value, edited FROM game_edit";
+            using SqliteDataReader row = read.ExecuteReader();
+            Assert.True(row.Read());
+            Assert.Equal((5L, GameMetadata.Hidden, GameMetadata.Yes), (row.GetInt64(0), row.GetString(1), row.GetString(2)));
+            Assert.StartsWith("2026-09-26T12:00:00", row.GetString(3));
+        }
+
         // A scrape writes media.db only, so no answer, however often it is recorded, can reach an edit.
         [Fact]
         public void A_scrape_recorded_again_leaves_the_edits_as_they_were()

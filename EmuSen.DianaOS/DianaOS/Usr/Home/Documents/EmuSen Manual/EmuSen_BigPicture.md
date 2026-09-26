@@ -3786,3 +3786,97 @@ branch `bigpicture-game-options`): `RatingPicker`, a star row stepped in half st
 date whose year, month and day are changed one at a time by Left and Right, with Enter moving between them. Both carry a
 new marker, `ISidewaysAdjustable`, which Mistress's pad router and WiseMan's `PadAudit` now honour as they honour a
 `Slider`: Left and Right go to the control rather than moving the focus.
+
+### 23.7 Closing what is opened (§15.14's lesson)
+
+The menu and the editor are sheets, and a sheet is not an owned window, so nothing closes one when Mistress closes
+(§20.4's W22). `CloseGameSheets`, called from `CloseThemedLibrary` in the window's `Closing`, closes both. The editor is
+the one thing here that holds a subscription beyond its own controls: it listens to the window's `ScrapeChanged` while it
+waits for its own scrape, and lets go of it when it closes. Neither has a timer.
+`Closing_mistress_closes_the_editor_and_its_subscription_to_scraping` opens the editor, closes Mistress, and requires the
+sheet gone, the window's reference to it cleared and the editor unsubscribed; G29 and G30 (§23.9) remove the two halves.
+
+### 23.8 Tests
+
+Headless through WiseMan, on `ThemedSession`, `PadDriver`, the synthetic theme and ROMs and, for the scraping, stage (d)'s
+fake ScreenScraper; never the network. Every step a player takes is a pad press: the menu is opened with Select, entries
+and fields are reached with `PadAudit.Reach`, text is typed on the on-screen keyboard key by key, and every confirm is
+answered on its own sheet.
+
+- `ThemedGameOptionsTests` (10): Select opens the menu as a sheet and not in the system view, the view hears nothing
+  under it, Select and B put it away; every control of the menu and of the editor reached by the pad, all fifteen Resets
+  shown; every kind of field set by the pad and shown in the view and in the library's list; the sort name; Cancel, and B
+  with Discard, with Save, and with nothing changed; Reset on a text field and on a flag; *Exclude from multi-scraper*
+  against the plan of a whole-library run, a console run and *Scrape This Game*; *Exclude from game counter* in the
+  system view's count; Hide from Library taking the game out of every view with the ROM folder's fingerprint (each file's
+  size, write time and SHA-256) unchanged, then listed again and unhidden, the fingerprint still unchanged; and Mistress
+  closing the editor.
+- `ThemedMetadataScrapeTests` (3): an edit surviving a scrape from the menu and another from the pad menu, then Reset
+  giving ScreenScraper's text back; the editor's own scrape (Y) filling its fields, Cancel keeping the edit and Save taking
+  the answer; Clear removing the edits, the answer and the store's pictures and keeping the favourite, with the ROM
+  folder's fingerprint unchanged.
+- `GameMetadataTests` (7): the order edit, scraped, default; the draft's changes, including an emptied box over nothing
+  and a value equal to its baseline; the editor's scrape against the draft; edits in `games.db` following a renamed file
+  and cleared without the favourite and counters; **a schema-4 `games.db` migrated in place** to schema 5, its favourite
+  and play rows kept and an edit written with its time (the user's requirement, relayed 2026-09-26, that everything the
+  program writes and reads back is in SQLite, versioned and migrated); a scrape recorded twice leaving an edit; and
+  `MediaStore.Forget` deleting the store's pictures, including a second copy's, and nothing outside the store even when
+  `media.db` names it.
+- Changed: `ThemedLibraryPadTests`' Select test now goes through the menu's entry; `ThemedLibraryHostTests`' help test
+  reads *Options* and its sounds test marks the favourite through the menu; `ThemedLibraryFlowTests`' walk does the same.
+- LunaP: `PickerTests` (12), `docs/LunaP.md` §160.4.
+
+Nothing here is kept in JSON. The edits, the hidden flag among them, and each edit's time are rows of `games.db`;
+`appsettings.json` gains only the player's setting *Hidden Games* (`ShowHiddenGames`), which is configuration, as
+`EmuSen_Stack.md` §4 divides them.
+
+### 23.10 Pictures
+
+At 1280×800, written by `GameOptionsPictureTool` with `EMUSEN_BIGPICTURE_PNG=1` to
+`~/.cache/emusen/bigpicture/png/game-options/`, for the synthetic theme (`synthetic-*`) and for Art Book Next with the
+synthetic media folder (`artbooknext-*`): the gamelist before; the options menu; the editor as opened; the on-screen
+keyboard typing into the name; the editor with a name, a description, a developer, a genre, four and a half stars and a
+date set, each row saying "Your edit" beside its Reset; the Hide from Library question; and the gamelist after Save. They
+were looked at:
+- Art Book Next's gamelist after Save shows the new name in the list, the typed description, four and a half stars and
+  1993-01-01 in the metadata panel, and its help bar reads *Options* beside the Select glyph. The same panel before the
+  edit showed empty stars and "Unknown".
+- The menu lists its three entries and Close over the dimmed view, the first focused. Like every sheet (`LunaP.md` §90) it
+  takes the window's full height, which leaves most of a three-entry menu's sheet empty.
+- The keyboard covers the lower half of the editor and previews the name with its caret, as §4.45.6 draws it.
+- **A flaw seen and corrected:** the first pictures showed the release date as bare grey text, "No date", under its label,
+  which read as a caption rather than a field. `DateStepper` now draws itself on the input surface inside a border
+  (`LunaP.md` §160.3).
+- **Seen and left:** each confirm focuses its accepting button first (LunaP's `DialogWindow`), so a second A on *Clear...*
+  clears. *Hide* is reversible; *Clear* is not, since it deletes the scraped pictures, which a new scrape fetches again.
+
+### 23.11 Not done
+
+- **ES-DE was not run.** Everything here is from its user guide and the two settings its scratch home recorded. Where the
+  guide is silent, Mistress chose: whether the editor closes after *Clear*; which button its confirms focus first; whether
+  B in the editor with nothing changed asks anything.
+- ES-DE's fields *Hide metadata fields*, *Controller* and *Alternative emulator* are not built (§23.2). *Hide metadata
+  fields* would need the scene to build or skip the theme's `metadataElement` elements per game, where §13's builder
+  decides once per view.
+- A hidden game listed again is not dimmed.
+- The on-screen keyboard has no line break, so a description is one paragraph.
+- The editor's scrape shows stage (d)'s status sheet over the editor, as every run does; B returns to the editor.
+- ScreenScraper's own name is not offered by the editor's scrape (§17.6 keeps it unused).
+- *Clear* on a game takes the store's pictures of any other file of the same system with the same stem (§23.5).
+- The two hooks of §23.4 are empty on this branch; the collections entries are §22's.
+- EmuSen's own built-in library keeps Select as the favourite and has no editor.
+- Nothing ran on the handheld.
+
+### 23.12 Questions for the user
+
+- **Q15, the favourite's button.** ES-DE toggles a favourite with Y; Mistress's Y is the search (§4.9). The favourite is
+  now the first entry of the options menu, two presses from the list. Keep it there, or give Y to the favourite and move
+  the search?
+- **Q16, hidden games.** ES-DE lists hidden games, dimmed, by default; Mistress leaves them out unless Preferences ▸ Hidden
+  Games is on, because Hide from Library replaces ES-DE's Delete. Keep that default?
+- **Q17, what Clear removes.** It removes ScreenScraper's pictures in Mistress's store, but not the cover OpenEmu's
+  failover fetched, nor the favourite and play counters, which ES-DE's Clear takes with the gamelist entry. Should it take
+  more?
+- **Q18, ScreenScraper's name.** ES-DE's editor scrape replaces the name with the scraper's; Mistress keeps the file's name
+  unless the player types one (§17.6). Offer ScreenScraper's name in the editor's scrape?
+- **Q19, EmuSen's own library.** Should its Select open the same menu and editor, or stay the favourite?

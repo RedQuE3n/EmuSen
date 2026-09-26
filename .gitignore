@@ -79,6 +79,7 @@ dumps.db
 spirv-cache.db
 spirv-cache.db.damaged
 media.db
+themes.db
 
 # ScreenScraper's credentials: EmuSen's developer file and the player's member
 # account. Both live in the config directory with mode 0600, outside every

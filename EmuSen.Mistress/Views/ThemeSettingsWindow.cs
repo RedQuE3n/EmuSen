@@ -54,7 +54,11 @@ namespace EmuSen.Mistress.Views
         public Task<ThemeStamp>? Downloading { get; private set; }
 
         // A closed sheet leaves nothing running behind it (§16, P55).
-        public void StopDownload() => _download?.Cancel();
+        public void StopDownload()
+        {
+            _download?.Cancel();
+            Browser?.Stop();
+        }
 
         private static Control Pane(Control content) => new ScrollViewer { Content = content.Margin(4, 12, 4, 4), MaxHeight = 560 };
 
@@ -90,7 +94,7 @@ namespace EmuSen.Mistress.Views
 
             if (Current is not { } dir || !Directory.Exists(dir))
             {
-                _options.Children.Add(new EmptyState { Message = "The theme's folder is missing", Detail = "Choose another theme on the Themes tab, download Art Book Next there, or choose an ES-DE theme folder in Preferences." });
+                _options.Children.Add(new EmptyState { Message = "The theme's folder is missing", Detail = "Choose another theme on the Themes tab, download one from ES-DE's theme list there, or choose an ES-DE theme folder in Preferences." });
                 return;
             }
 
@@ -160,19 +164,50 @@ namespace EmuSen.Mistress.Views
                 _themes.Children.Add(new EmptyState { Message = "No ES-DE themes", Detail = "Download one below. Mistress ships no ES-DE theme." });
             foreach (InstalledTheme theme in installed) _themes.Children.Add(ThemeRow(theme));
 
-            ThemeSource artBook = ThemeSource.ArtBookNext;
-            if (!ThemeDownloads.IsDownloaded(ThemeDownloads.DirectoryFor(artBook)))
+            Button browse = Ui.Button("Browse Themes…", ShowBrowser);
+            browse.Name = "BrowseThemes";
+            _themes.Children.Add(new FieldRow
             {
-                Button download = Ui.Button("Download", () => _ = DownloadAsync(artBook));
-                download.Name = "DownloadArtBookNext";
-                download.IsEnabled = _download is null;
-                _themes.Children.Add(new FieldRow
-                {
-                    Label = "Download Art Book Next",
-                    Hint = $"The ES-DE edition, from {artBook.Url.Replace("https://", "")}, about 220 MB, into Mistress's own folder. It is someone else's work under its own licence, shown on its About sheet.",
-                    Content = download,
-                });
-            }
+                Label = "ES-DE's Theme List",
+                Hint = "Every theme of ES-DE's official list, with its screenshots, what it supports and its licence, to download, update or remove. The list is fetched when you open it, never before. Each theme is its author's work under its own licence.",
+                Content = browse,
+            });
+        }
+
+        // The browser, as a sheet over this one; it is given the same client factory, and stops with this sheet.
+        private void ShowBrowser()
+        {
+            if (_closed) return;
+            var browser = Browser = new ThemeBrowserWindow(this, _http);
+            browser.Closed += (_, _) =>
+            {
+                if (Browser == browser) Browser = null;
+                FillThemes();
+            };
+            _ = SheetLayer.Show(browser, this);
+            browser.Start();
+        }
+
+        public ThemeBrowserWindow? Browser { get; private set; }
+
+        internal bool IsInUse(string directory) =>
+            !BigPictureLooks.BuiltInCurrent(_settings) && Current is { } c && ThemeDownloads.SamePath(c, directory);
+
+        internal void UseDirectory(string directory)
+        {
+            if (ThemeDownloads.Installed(Current).FirstOrDefault(t => ThemeDownloads.SamePath(t.Directory, directory)) is { } theme)
+                Use(new BigPictureLook(theme.Name, theme));
+        }
+
+        // A browser download done: the first theme becomes the folder, the view reads it afresh, and its About sheet opens once after a first download.
+        internal void Installed(string directory, bool first, Window over)
+        {
+            _latest[directory] = ThemeDownloads.Stamp(directory)?.Commit ?? "";
+            if (Current is null) _settings.BigPictureTheme = directory;
+            _settings.Save();
+            _applied(true);
+            Fill();
+            if (first && !_closed) ShowAbout(directory, over);
         }
 
         // EmuSen's own library, first and built in: a Use button and nothing that downloads or removes it.
@@ -196,6 +231,7 @@ namespace EmuSen.Mistress.Views
             bool inUse = BigPictureLooks.IsCurrent(_settings, new BigPictureLook(theme.Name, theme));
             string where = theme.Stamp is { } s
                 ? $"Downloaded {s.Downloaded:yyyy-MM-dd} from {s.Source.Url.Replace("https://", "")}" + (s.Commit is { Length: >= 7 } commit ? $", commit {commit[..7]}" : "")
+                  + (ThemeDownloads.LocalChanges(theme.Directory) is { Any: true } changes ? $". Local changes to {changes.Modified.Count + changes.Missing.Count} files, which an update would replace." : "")
                 : $"Read in place from {theme.Directory}";
             var buttons = new List<Button>();
             string id = Path.GetFileName(theme.Directory);
@@ -230,12 +266,12 @@ namespace EmuSen.Mistress.Views
 
         private async Task CheckAsync(string directory, ThemeStamp stamp)
         {
-            _status.Text = "Asking GitHub for the newest commit…";
+            _status.Text = $"Asking {stamp.Host} for the newest commit…";
             try
             {
                 using HttpClient http = _http();
                 string? latest = await ThemeDownloads.LatestCommitAsync(http, stamp.Source);
-                if (latest is null) { _status.Text = "GitHub did not say which commit is newest."; return; }
+                if (latest is null) { _status.Text = $"{stamp.Host} did not say which commit is newest."; return; }
                 _latest[directory] = latest;
                 _status.Text = latest == stamp.Commit ? "Up to date." : $"Update available: {Short(stamp.Commit)} → {Short(latest)}.";
             }
@@ -252,9 +288,14 @@ namespace EmuSen.Mistress.Views
         private async Task DownloadAsync(ThemeSource source)
         {
             if (_download is not null) return;
-            var cancel = _download = new CancellationTokenSource();
             string directory = ThemeDownloads.DirectoryFor(source);
-            bool first = !ThemeDownloads.IsDownloaded(directory);
+            bool first = !ThemeDownloads.IsDownloaded(directory), replace = false;
+            if (!first && ThemeDownloads.LocalChanges(directory) is { Any: true } changes)
+            {
+                if (!await Dialogs.ConfirmAsync(this, "Local Changes", $"{ThemeDownloads.NameOf(directory)} has local changes to {changes.Modified.Count + changes.Missing.Count} files. The update replaces them with the theme's own. Files you added, and theme-customizations, are kept.", "Update Anyway", "Cancel")) return;
+                replace = true;
+            }
+            var cancel = _download = new CancellationTokenSource();
             FillThemes();
             _status.Text = $"Downloading {source.Repository}…";
             var progress = new Progress<(long Read, long? Total)>(p =>
@@ -269,7 +310,7 @@ namespace EmuSen.Mistress.Views
                 {
                     if (_download == cancel) _status.Text = $"Unpacking {source.Repository}: {p.Done} of {p.Total} files";
                 });
-                Downloading = ThemeDownloads.FetchAsync(http, source, progress, cancel.Token, unpacking);
+                Downloading = ThemeDownloads.FetchAsync(http, source, progress, cancel.Token, unpacking, replace);
                 ThemeStamp stamp = await Downloading;
                 _latest[directory] = stamp.Commit ?? "";
                 _status.Text = $"Installed {ThemeDownloads.NameOf(directory)}" + (stamp.Commit is null ? "." : $" at commit {Short(stamp.Commit)}.");
@@ -282,7 +323,7 @@ namespace EmuSen.Mistress.Views
             {
                 _status.Text = "The download was stopped; the theme there before is unchanged.";
             }
-            catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException)
             {
                 _status.Text = $"The download failed, and the theme there before is unchanged: {ex.Message}";
             }
@@ -294,25 +335,32 @@ namespace EmuSen.Mistress.Views
             Fill();
         }
 
-        private async Task RemoveAsync(InstalledTheme theme)
+        private Task RemoveAsync(InstalledTheme theme) => RemoveAsync(theme.Directory, this);
+
+        // Asks over the sheet that asked, then removes a folder Mistress downloaded; true when it is gone.
+        internal async Task<bool> RemoveAsync(string directory, Window over)
         {
-            if (!await Dialogs.ConfirmAsync(this, "Remove Theme", $"Remove {theme.Name}? Its folder is deleted, theme-customizations included.", "Remove", "Cancel")) return;
+            string name = ThemeDownloads.NameOf(directory);
+            if (!await Dialogs.ConfirmAsync(over, "Remove Theme", $"Remove {name}? Its folder is deleted, theme-customizations included.", "Remove", "Cancel")) return false;
+            bool removed = false;
             try
             {
-                ThemeDownloads.Remove(theme.Directory);
-                if (Current is { } c && ThemeDownloads.SamePath(c, theme.Directory)) _settings.BigPictureTheme = null;
-                _settings.BigPicture.Remove(Key(theme.Directory));
+                ThemeDownloads.Remove(directory);
+                if (Current is { } c && ThemeDownloads.SamePath(c, directory)) _settings.BigPictureTheme = null;
+                _settings.BigPicture.Remove(Key(directory));
                 _settings.Save();
-                _status.Text = $"Removed {theme.Name}.";
+                _status.Text = $"Removed {name}.";
                 _applied(true);
+                removed = true;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
-                _status.Text = $"Could not remove {theme.Name}: {ex.Message}";
+                _status.Text = $"Could not remove {name}: {ex.Message}";
             }
             Fill();
+            return removed;
         }
 
-        private void ShowAbout(string directory) => _ = SheetLayer.Show(new ThemeAboutWindow(ThemeAttribution.Read(directory)), this);
+        internal void ShowAbout(string directory, Window? over = null) => _ = SheetLayer.Show(new ThemeAboutWindow(ThemeAttribution.Read(directory)), over ?? this);
     }
 }

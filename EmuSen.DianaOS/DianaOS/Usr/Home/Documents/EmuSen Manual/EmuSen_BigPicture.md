@@ -4595,7 +4595,10 @@ own `GamepadManager`, so `Poll` runs as it would on a device.
 Before the merge of §23, the existing pad, themed and Preferences tests ran beside these under one filter (276, all
 passing), among them §15.9's audit, which now walks the Controllers tab and reached every control on it. The merge
 changed one of this pass's tests: Select in the gamelist now opens §23's game options rather than marking a favourite, so
-the second-pad walk opens and closes them instead.
+the second-pad walk opens and closes them instead. One broad run closed the pass, after the merge and the A/B narrowing:
+every WiseMan test under `Mistress` and `Input` except `ShaderSettingsWindowTests`, `ShaderBrowseBench` and
+`SceneGpuBench`, 902 passed and 12 skipped of 914, no failure; and LunaP's `NoticeLayerTests`, documented defaults, API
+baseline and documentation tests, 33 of 33.
 
 ### 24.4 ES-DE's popup, measured
 

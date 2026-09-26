@@ -2422,3 +2422,93 @@ of ES-DE enters either repository. ES-DE's grid is measured from its behaviour a
 - **P55, a closed sheet stops its download.** Closing the sheet during a download cancels the request within one pass of
   the dispatcher and leaves no partial file; a test that fails without that cleanup proves it.
 - **P11, the archive** (§6's, retired here): Art Book Next's archive is 205–230 MB.
+
+### 16.2 The variant triggers against Mistress's media: P52 and P53
+
+Stage (a) evaluated the triggers against a `MediaPresence` its caller supplied (§12.7), and stage (e)'s host built one
+by asking `ISceneMedia.Find` for every game, media type and extension in turn. Two things were wrong with that, one
+predicted and one measured.
+
+- **P52 holds: the defect was real.** `EsdeMediaFolder` looked for `.png`, `.jpg` and `.jpeg` whatever the type, so no
+  video was ever found. `The_gamelist_variant_follows_the_media_the_library_has` gives a synthetic theme a variant with
+  both triggers, and every SNES game a cover and an `.mp4`; on the unchanged reader the gamelist took `novideo`, the
+  `noVideos` override, where the chosen variant was due. The extensions are now `USERGUIDE.md`'s ("Manually copying game
+  media files"): `.png`, `.jpg` and `.webp` for pictures, six for videos. `.jpeg` is dropped, because ES-DE would not
+  read such a file and a trigger that found it would disagree with the oracle. The same test then takes the videos away
+  (`novideo`), the covers (`bare`, the `noMedia` override, which takes precedence) and adds one `.webp` cover back
+  (`novideo`), each at the next showing.
+- **The showing did not see a change.** The host kept each system's presence for as long as its games and the media key
+  (the folder's path and the art index's identity) were the same, so a file added to the media folder was not seen until
+  a restart. The key now carries each type folder's last write time, which changes when a file is added to it or taken
+  from it; a showing costs ten `stat` calls per system for that.
+- **P53 holds.** Presence is now one listing per type folder, stopping at the first file of a game in the list.
+  `A_full_media_folder_is_listed_once_rather_than_asked_game_by_game`: 3,508 games with a cover each and a screenshot
+  for every other one, 5,262 files, took **167.9 ms asked game by game and 0.8 ms listed**; the two answers are equal,
+  as `Presence_from_one_listing_equals_presence_asked_game_by_game` also requires on a folder holding strays (a file of
+  no game, an extension of neither list). §15.8's test, with an empty media folder, went from 189 ms (re-measured on the
+  unchanged build; §15.8 recorded 224) to 3 ms.
+- **The cover from the art folder** (§4.33 of the settings reference) still counts for the cover type, asked game by
+  game, because that index answers by title, not by file; the ask stops at the first game that has one.
+
+**What a trigger means here, and where it is Mistress's choice.** THEMES.md says a trigger fires when "no game media
+files are found for a system", so a type counts once any game of the system has it; the loader always read it that
+way. Videos count as present when their files are there, although Mistress draws a video element as its image (§10.1,
+Q4): that is what ES-DE does with the same files, and a theme's `noVideos` variant exists for a system without them, not
+for a player whose frontend does not play them.
+
+### 16.3 The settings sheet: P46–P49
+
+`ThemeSettingsWindow` is a `ToolWindow` of LunaP controls (`Tabs`, `FieldRow`, `Dropdown`, `EmptyState`, buttons),
+presented as a `SheetLayer` sheet; the pad menu offers it in big-screen sessions outside a game, and Preferences ▸
+Appearance has a button for it. Nothing new was needed in LunaP for it. The rows and their rules are §4.53 of the
+settings reference.
+
+- **The choices live in `appsettings.json` under `BigPicture`,** keyed by the theme folder's full path (§6 had said
+  "under `BigPicture`"; keying by folder is this stage's choice, since two copies of one theme in two folders are two
+  themes to the player). `ThemedLibrary.Show` takes them as a `ThemeChoices` and keys its cache of resolved themes by
+  the whole record, so a choice builds a new theme and the old one is kept for a return.
+- **P46 holds.** `A_choice_applies_at_once_beneath_the_sheet` enters the SNES gamelist at its third game, opens the
+  sheet, and chooses a scheme, a variant, a font size and an aspect ratio. After each choice, with the sheet still
+  presented, the stage beneath has been rebuilt with the new selection at the same system and game; after the sheet is
+  closed, the window's frame and a fresh `SceneBuilder.Build` of the same data differ in **0 pixels**.
+- **P47 holds.** Two synthetic themes keep their own choices in the file; a stored variant the theme does not declare
+  (`gone`) falls back to the first selectable one with the theme still themed and no error.
+- **P48 holds.** On Art Book Next the sheet lists the 20 variants in declared order under their `en_US` labels (the
+  first, "List: Metadata & Boxart", selected, as §12.5's default), 31 schemes, Medium, Large, Small and Extra Large,
+  Automatic and 12 ratios, Automatic with its two profiles "Instant" and "Slide" (it suppresses the three built-ins), and
+  no language row.
+- **P49 holds.** `PadAudit` reaches every control of both tabs and of the About sheet at 1280×800.
+
+### 16.4 Themes downloaded, updated and removed: P54, P55 and P11
+
+`ThemeDownloads` (`BigPicture/`, no Avalonia types) fetches GitHub's archive of a branch, `ThemeAttribution` reads a
+theme's README, and the sheet's Themes tab drives both. The rules are §4.53 of the settings reference; the record is
+here. The class was first named `ThemeStore`, which a WiseMan test fixture of that name in an enclosing namespace
+shadowed; it was renamed rather than the fixture.
+
+- **P54 holds** against a fake GitHub (`OnlineCoverTests.FakeServer`, answering the commits API and codeload by URL).
+  `ThemeDownloadsTests` downloads and stamps a synthetic theme zipped as GitHub zips (one folder named for the repository
+  and branch); updates it, with `theme-customizations/` holding two files of 5,000 bytes each that come through equal
+  byte for byte, while the archive's own `theme-customizations/upstream.txt` is discarded; and refuses five broken
+  downloads (a server error, no `capabilities.xml`, a malformed one, a `theme.xml` that does not load, an entry named
+  `../escaped.txt`), each leaving the old theme's marker and stamp and nothing beside the folder. Removal refuses a
+  folder read in place and a look-alike under `home/Themes` without a stamp.
+- **The order of the swap is the rule that keeps the player's files.** The new folder is moved in before the
+  customizations are moved across from the old one, and the old one is deleted only after that; a swap cut short leaves
+  `.old`, which the next download restores or empties before anything else runs. A first draft moved the customizations
+  into the staged folder before the swap, where the `finally` that cleans the staged folder would have deleted them on
+  any failure in between; it was caught in review, before a test existed for it, and no test reproduces that window.
+- **P55 holds, and needed two cleanups.** The download's `CancellationTokenSource` is cancelled when the sheet closes.
+  `Closing_the_sheet_or_its_window_stops_the_download` uses a server whose archive sends one byte and then waits until
+  the request is cancelled. Closing the sheet with East: the download ends cancelled, and no `.zip.part` or `.part` is
+  left. **Without the sheet's cleanup that case fails** ("the download was still running after its sheet closed", 3 s).
+  Closing the main window instead **also fails without a second cleanup in `CloseThemedLibrary`**, because a sheet is not
+  closed when the window presenting it is: its `Closed` never fires. The window now stops the sheet's download too.
+- **P11 holds.** `git archive --format=zip` of the reading clone at `d772d07`, the tree GitHub's codeload serves for that
+  commit, is **220,158,364 bytes (220.2 MB)**, inside 205–230 MB. That is a local measurement of the same tree, not of a
+  download: codeload's compression level was not observed, since nothing was downloaded without the user asking.
+- **The attribution** is read at display time from the theme's `README.md`: the section under the first heading whose
+  words contain "licen", and the one containing "credit", with Markdown's marks taken off; else a `LICENSE` file's first
+  lines; else a sentence saying none is stated. For Art Book Next the licence line is its README's own, naming
+  CC-BY-NC-SA 2.0 and its URL, and eight credits. The author of a downloaded theme is its repository's owner, since
+  neither `capabilities.xml` nor THEMES.md has a field for one; a theme read in place states no author.

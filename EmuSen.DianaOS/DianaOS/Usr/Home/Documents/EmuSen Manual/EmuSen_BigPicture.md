@@ -2379,3 +2379,46 @@ so it could not tell the two builds apart.
 
 **Why the mutants missed it.** §15.11's 32 mutants alter the view's rules while a window is open. None removed a
 cleanup, because the defect was an absent line, and a mutation of existing code cannot produce an absence.
+
+---
+
+## 16. Stage (f): variants and settings, the grid, triggers, and themes downloaded on request
+
+*Opened 2026-09-25.* Stage (f) is §7's row: the settings sheet built from `capabilities.xml`, the grid that six of Art
+Book Next's variants use, the variant triggers evaluated against the media Mistress actually has, and themes
+downloaded, updated and removed on the player's request, with a sheet that attributes each one. §10.1's rules hold:
+every visible part is a LunaP control, the themed view is for big-screen sessions only, and nothing of Art Book Next or
+of ES-DE enters either repository. ES-DE's grid is measured from its behaviour alone, as its motion was in §14.7.
+
+### 16.1 Predictions, written before any of it was built
+
+- **P46, a choice applies at once.** Choosing a variant, colour scheme, font size, aspect ratio or language on the
+  settings sheet redraws the view beneath the sheet before the sheet closes, and the frame after the choice equals, pixel
+  for pixel, a fresh static build of the same selection under the new choice.
+- **P47, remembered per theme.** Each theme folder keeps its own choices in `appsettings.json`; switching to another
+  theme and back restores them, and a stored choice the theme no longer declares falls back to §12.4's defaults without
+  an error.
+- **P48, the sheet lists what the theme declares.** For Art Book Next: its 20 variants in declared order under their
+  `en_US` labels, 31 colour schemes, 4 font sizes, Automatic and 12 aspect ratios, no language row (§3.2: it declares
+  none), and its two transition profiles after Automatic.
+- **P49, every control reachable.** The settings sheet, the theme list and the attribution sheet leave nothing
+  unreachable to `PadAudit` at 1280×800, as §15.9's sheets did.
+- **P50, the grid at rest.** Art Book Next's `gamelist-grid-cover` at 1280×800 lays out five columns, and every item box
+  of its first two rows lies within 1 px of ES-DE's still of the same state.
+- **P51, the grid moving.** A step within a row animates the selected item's scale and the unfocused opacity over the
+  carousel's 400 ms quadratic ease-out (§14.7), and a step onto a row that is not shown slides the rows over the same
+  400 ms. Held, a direction repeats after 500 ms and then every 114 ms, as the text list does, with no four-item jump.
+- **P52, the media Mistress has.** Reading `EsdeMediaFolder`, a `video` is never found: it looks only for `.png`,
+  `.jpg` and `.jpeg`, while `USERGUIDE.md` lists `.mp4`, `.mkv`, `.avi`, `.wmv`, `.mov` and `.webm` for videos and
+  `.webp` for images. Every `noVideos` trigger therefore fires for a system whose videos are all present. This is a
+  defect predicted from the code; a test must show it before it is fixed.
+- **P53, the media scan.** Listing each media folder once per system, instead of asking for every game, type and
+  extension in turn, takes §15.8's 3,508-game scan from 224 ms to under 20 ms, and gives the same presence for every
+  system.
+- **P54, download, update and removal.** A download is unpacked beside its final place and swapped in only once its
+  `capabilities.xml` reads without error and a `theme.xml` loads; a failed, empty, invalid or cancelled download leaves
+  the old theme as it was and no stray file. An update keeps `theme-customizations/` byte for byte. Removal refuses any
+  folder Mistress did not download.
+- **P55, a closed sheet stops its download.** Closing the sheet during a download cancels the request within one pass of
+  the dispatcher and leaves no partial file; a test that fails without that cleanup proves it.
+- **P11, the archive** (§6's, retired here): Art Book Next's archive is 205–230 MB.

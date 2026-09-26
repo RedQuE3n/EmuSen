@@ -9,6 +9,9 @@ namespace EmuSen.Mistress.Scraping
 {
     public enum ScrapeOutcome { Found, Unknown, Error, Retry, Stopped, Missing }
 
+    // How a run ended: its queue emptied, the quota stopped it (what is left stays queued for Resume), or the player cancelled.
+    public enum ScrapeRunEnd { Done, Stopped, Cancelled }
+
     // What one game's turn came to; HasCover says whether the store now holds its cover.
     public sealed record ScrapeResult(string Path, string System, ScrapeOutcome Outcome, bool HasCover, IReadOnlyList<string> Written, string Detail, string? MatchedBy = null);
 
@@ -53,34 +56,49 @@ namespace EmuSen.Mistress.Scraping
         // Called with every jeuInfos answer, for the live measurement; its Body carries credentials and must be redacted before it is kept.
         public Action<string, JeuInfosAnswer>? Answered { get; init; }
 
-        // How long an idle worker sleeps before looking again when nothing woke it.
-        public TimeSpan IdlePoll { get; init; } = TimeSpan.FromMilliseconds(500);
+        // How long a worker with nothing due waits for another worker's game or a retry before looking again.
+        public TimeSpan IdlePoll { get; init; } = TimeSpan.FromMilliseconds(100);
 
         public int Pending => _store.QueueLength;
 
-        public bool IsRunning => _workers.Count > 0 && !_stop.IsCancellationRequested;
+        // A run is under way: started by the player, not yet emptied, stopped or cancelled.
+        public bool IsRunning { get { lock (_workers) return _live > 0; } }
 
+        // Raised once when a run's last worker ends: the queue empty, the quota stopped, or cancelled.
+        public event Action<ScrapeRunEnd>? Finished;
+
+        private int _live;
+        private bool _stoppedByQuota;
+
+        // One run over what is queued now; nothing is ever asked outside a run, and a run never starts itself - see EmuSen_BigPicture.md §17.14.
         public void Start()
         {
-            if (_disposed || _workers.Count > 0) return;
-            EnsureWorkers();
+            lock (_workers)
+            {
+                if (_disposed || _live > 0) return;
+                _workers.Clear();
+                _stoppedByQuota = false;
+                EnsureWorkers();
+            }
         }
 
-        // Up to the quota's threads; a worker whose index is no longer allowed idles.
+        // Up to the quota's threads, and only while a run is live.
         private void EnsureWorkers()
         {
             lock (_workers)
             {
-                if (_stop.IsCancellationRequested) return;
+                if (_stop.IsCancellationRequested || (_workers.Count > 0 && _live == 0)) return;
                 int wanted = _quota.Threads(_choices().Threads);
                 while (_workers.Count < wanted)
                 {
                     int index = _workers.Count;
+                    _live++;
                     _workers.Add(Task.Run(() => WorkAsync(index)));
                 }
             }
         }
 
+        // Queues a game for the next run; it asks nothing by itself.
         public bool Enqueue(string path, string system, ScrapePriority priority)
         {
             if (_disposed || !SystemIds.ContainsKey(system)) return false;
@@ -97,21 +115,26 @@ namespace EmuSen.Mistress.Scraping
             {
                 while (!stop.IsCancellationRequested)
                 {
-                    if (index >= _quota.Threads(_choices().Threads) || _quota.Check(out _, out _) == QuotaGate.Stopped)
+                    if (_quota.Check(out _, out _) == QuotaGate.Stopped)
                     {
-                        await IdleAsync(stop);
-                        continue;
+                        _stoppedByQuota = true;
+                        break;
                     }
+                    if (index >= _quota.Threads(_choices().Threads)) break;
 
                     QueuedGame? item;
+                    bool othersBusy;
                     lock (_held)
                     {
                         item = _store.NextDue(_clock.Now, _held);
                         if (item is not null) _held.Add(item.Path);
+                        othersBusy = _held.Count > (item is null ? 0 : 1);
                     }
                     if (item is null)
                     {
-                        await IdleAsync(stop);
+                        if (_store.QueueLength == 0 && !othersBusy) break;
+                        if (!othersBusy && _store.EarliestRetry() is { } due && due > _clock.Now) await _clock.Delay(due - _clock.Now, stop);
+                        else await IdleAsync(stop);
                         continue;
                     }
 
@@ -137,6 +160,12 @@ namespace EmuSen.Mistress.Scraping
             }
             catch (ObjectDisposedException) when (stop.IsCancellationRequested)
             {
+            }
+            finally
+            {
+                bool last;
+                lock (_workers) last = --_live == 0;
+                if (last) Finished?.Invoke(stop.IsCancellationRequested ? ScrapeRunEnd.Cancelled : _stoppedByQuota ? ScrapeRunEnd.Stopped : ScrapeRunEnd.Done);
             }
         }
 

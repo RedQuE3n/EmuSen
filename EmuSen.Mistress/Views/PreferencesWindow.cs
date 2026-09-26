@@ -40,6 +40,16 @@ namespace EmuSen.Mistress.Views
         // Opens the theme's settings sheet; set by the main window, which owns the themed view.
         public Action? OpenThemeSettings { get; set; }
 
+        public const string ScrapingTab = "Scraping";
+
+        private readonly Tabs _tabs = new() { Name = "PreferenceTabs" };
+
+        // Opens on a named tab, as the pad menu's "Scrape Games..." opens on Scraping.
+        public void ShowTab(string header)
+        {
+            if (_tabs.Items.OfType<TabItem>().FirstOrDefault(t => (string?)t.Header == header) is { } tab) _tabs.SelectedItem = tab;
+        }
+
         private Button ThemeSettingsButton()
         {
             Button button = Ui.Button("Theme Settings…", () => OpenThemeSettings?.Invoke());
@@ -68,7 +78,7 @@ namespace EmuSen.Mistress.Views
             // Sized to its content rather than a fixed height: a fixed one put the Close button below the edge. See EmuSen_LunaP.md §11.1.
             SizeToContent = SizeToContent.Height;
 
-            var tabs = new Tabs { Name = "PreferenceTabs" };
+            var tabs = _tabs;
             tabs.Add("Library", Pane(
                 new FieldRow
                 {
@@ -94,7 +104,7 @@ namespace EmuSen.Mistress.Views
                     Hint = "Where per-session log files are written. Leave blank to disable file logging entirely.",
                     Content = Picker("LogDirectoryBox", "(not set)", "Choose Log Directory", _settings.LogDirectory, p => _settings.LogDirectory = p),
                 }));
-            tabs.Add("Scraping", Pane(scrape.Rows()));
+            tabs.Add(ScrapingTab, Pane(scrape.Rows()));
             tabs.Add("Gameplay", Pane(
                 new FieldRow
                 {

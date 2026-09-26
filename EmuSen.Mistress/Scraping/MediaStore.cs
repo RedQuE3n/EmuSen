@@ -215,6 +215,14 @@ namespace EmuSen.Mistress.Scraping
 
         public void Dequeue(string path) => Write("DELETE FROM scrape_queue WHERE path = $path", ("$path", path));
 
+        // A new run replaces what an interrupted one left; Resume is the only way to go on with that.
+        public void ClearQueue() => Write("DELETE FROM scrape_queue");
+
+        // "Scrape this game" asks again even where ScreenScraper once had nothing: an Unknown or Error answer is forgotten.
+        public void ForgetUnfound(string path) => Write(
+            "DELETE FROM scrape_game WHERE status <> 'Found' AND EXISTS (SELECT 1 FROM scrape_file f WHERE f.path = $path AND f.md5 = scrape_game.md5 AND f.bytes = scrape_game.bytes)",
+            ("$path", path));
+
         public int QueueLength => (int)(long)(ReadScalar("SELECT COUNT(*) FROM scrape_queue") ?? 0L);
 
         public IReadOnlyList<QueuedGame> Queue()

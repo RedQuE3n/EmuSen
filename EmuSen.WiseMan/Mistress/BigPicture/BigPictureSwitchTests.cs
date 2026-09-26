@@ -414,11 +414,23 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 _ => null,
             };
 
-            Assert.False(MainWindow.EmbedsPopupsAtStart([], Env("KDE")));
-            Assert.True(MainWindow.EmbedsPopupsAtStart([], Env("gamescope")));
-            Assert.True(MainWindow.EmbedsPopupsAtStart([], Env(null, "1")));
-            Assert.True(MainWindow.EmbedsPopupsAtStart(["--bigscreen"], Env("KDE")));
-            Assert.False(MainWindow.EmbedsPopupsAtStart(["--other"], Env("GNOME", "1")));
+            // The last mode used was big picture, and it must not decide.
+            string root = Path.Combine(Path.GetTempPath(), "EmuSenPopupsAtStart", Guid.NewGuid().ToString("N"));
+            EmuSen.Galaxia.ConfigStore.OverrideDirectory = root;
+            try
+            {
+                new AppSettings { BigScreen = true }.Save();
+                Assert.False(MainWindow.EmbedsPopupsAtStart([], Env("KDE")));
+                Assert.True(MainWindow.EmbedsPopupsAtStart([], Env("gamescope")));
+                Assert.True(MainWindow.EmbedsPopupsAtStart([], Env(null, "1")));
+                Assert.True(MainWindow.EmbedsPopupsAtStart(["--bigscreen"], Env("KDE")));
+                Assert.False(MainWindow.EmbedsPopupsAtStart(["--other"], Env("GNOME", "1")));
+            }
+            finally
+            {
+                EmuSen.Galaxia.ConfigStore.OverrideDirectory = null;
+                try { Directory.Delete(root, recursive: true); } catch { }
+            }
         }
     }
 }

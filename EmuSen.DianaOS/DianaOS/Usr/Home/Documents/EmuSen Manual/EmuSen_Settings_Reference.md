@@ -2522,10 +2522,10 @@ its radio switch is blocked neither by software nor by hardware. Nothing is show
 | Up, down | (a vertical carousel moves on these instead) | move the list; held, 500 ms, then 114 ms, then from 1.7 s four at once and every 15.9 ms; a held list stops at its ends, a tap wraps |
 | South | the system's gamelist, at the game last chosen there | start the game |
 | East | back to a suspended game, if there is one | clear the search if there is one, else back to the system view |
-| L1, R1 | | a page: the rows the list shows at once |
+| L1, R1 | | a page: the rows the list shows at once. *Since 2026-09-26, ten games, stopping at the ends (§4.58)* |
 | L2, R2 | | the first and the last game |
-| North | | search, on the on-screen keyboard (§4.45.6) |
-| Select | | the game options menu (§4.59); *until 2026-09-26 it marked or unmarked a favourite, now the menu's first entry* |
+| North | | search, on the on-screen keyboard (§4.45.6). *Since 2026-09-26, the favourite, and while a custom collection is edited, the game in or out of it; the search is in Select's menu (§4.58)* |
+| Select | | the game options menu (§4.59); *until 2026-09-26 it marked or unmarked a favourite, now the menu's first entry. Since the same day it also holds Jump To, Sort, Filter and Search (§4.58)* |
 | Start, Guide | the pad menu (§4.29) | the same |
 
 The repeats are ES-DE's, measured in `EmuSen_BigPicture.md` §14.7, and run on the view's own clock, not on
@@ -3067,11 +3067,13 @@ was measured to do where its documentation is silent, the tests, the mutants and
 the themed view of §4.52, in big-screen sessions and in big picture on the desktop (§4.54); EmuSen's own library
 (§4.33, §4.56) is unchanged.
 
-**Where to find it.** Two entries join the pad menu (Start) while the themed view is showing, after Theme Settings:
-- **Gamelist Options**, in a game list only: ES-DE's gamelist options menu, as a sheet. ES-DE opens this menu with its
-  Back button. Here the Back (Select) button belongs to the game options of §4.59, so the entry is in the pad menu until
-  the two are merged into one menu (§22.5 of the plan).
-- **Game Collection Settings**, in either view: ES-DE's main-menu entry of that name, as a sheet.
+**Where to find it.**
+- **Select** in a game list opens ES-DE's gamelist options menu, one sheet with this section's rows (Jump To, Sort Games
+  By, Filter Gamelist, Search) and the collection entries first, then §4.59's game entries. The choice was one menu on
+  2026-09-26 (Q12 of the plan); until then these rows were a second sheet in the pad menu.
+- **Game Collection Settings**, in the pad menu (Start) after Theme Settings, in either view: ES-DE's main-menu entry of
+  that name, as a sheet.
+- **North** is the favourite (§4.59), and while a custom collection is edited, that collection's add and remove.
 
 **The collections.** Each is a system of the carousel, after the library's own systems, in the order ES-DE 3.4.1 was
 measured to use: the grouped **Collections** system, then **all games**, **favorites** and **last played**. Each takes
@@ -3085,8 +3087,10 @@ the theme's art under ES-DE's names for it, so Art Book Next shows its own logo 
 | Collections | `collections` | `custom-collections` | one entry per custom collection, by name; A opens it, B comes back to the list, B again to the systems |
 | A custom collection a theme styles | its name | its name | its games, by name, with no star; its own system in the carousel, beside Collections |
 
-The automatic collections are **off until turned on**, in Game Collection Settings, as ES-DE's are (its settings file
-holds `CollectionSystemsAuto` empty). A system or collection with no games is not listed.
+The automatic collections are **on by default**, each with its switch in Game Collection Settings. That is the player's
+choice of 2026-09-26 and a deliberate difference from ES-DE, whose settings file holds `CollectionSystemsAuto` empty. A
+system or collection with no games is not listed, except Collections, which is listed while any custom collection
+exists, empty ones included.
 
 **Custom collections are Mistress's own**, the ones the library's sidebar lists (§4.38): one list in `games.db`, never a
 copy. A collection created in big picture appears in the sidebar, and one created there appears here. Every one is shown
@@ -3104,14 +3108,16 @@ collection's name.
    dropped, and a name already taken gets " (1)", " (2)" and so on.
 2. The sheet closes and the **edit mode** starts: in any game list, **North** adds the selected game to the collection,
    or takes it out if it is in. Every member carries a tick before its name (a `!` for a theme whose
-   `collectionIndicators` is `ascii`) and the theme's collection badge; the help bar names North **Collection**.
-3. **Finish Editing** ends it, from Game Collection Settings or from Gamelist Options in any list. In a custom
-   collection's own list, Gamelist Options offers **Add/Remove Games to This Collection**, which starts the edit mode on
-   it again.
+   `collectionIndicators` is `ascii`) and the theme's collection badge; the help bar names North **Collection**. While
+   the edit mode lasts North does not touch the favourite, as USERGUIDE says of ES-DE's Y.
+3. **Finish Editing** ends it, from Game Collection Settings or from Select's menu in any list. In a custom
+   collection's own list, and on its entry in Collections, Select's menu offers **Add/Remove Games to This Collection**,
+   which starts the edit mode on it again. On a Collections entry the menu has only the list's rows and these entries.
 **Delete Custom Collection** asks first, then removes the list, not the games, from `games.db`.
 
-**Gamelist Options.** Four rows, and **Apply** and **Cancel**. **B applies** what was changed and closes the sheet;
-**Back (Select) cancels**, as ES-DE's help bar puts it: "Close (Apply)", "Close (Cancel)".
+**Select's menu: the gamelist rows.** Its first entries, above §4.59's, with **Apply** and **Cancel** at its foot. **B
+applies** what was changed and closes the sheet, as choosing an entry does; **Select (ES-DE's Back) cancels**, as
+ES-DE's help bar puts it: "Close (Apply)", "Close (Cancel)".
 - **Jump To...**: the first characters the list holds, in the list's order, and a star for the favourites when they are
   sorted on top among other games. It starts at the selected game's. Choosing one moves the selection to the first game
   it begins.
@@ -3124,6 +3130,8 @@ collection's name.
   hold, and "Nothing to filter" when the games hold none or all hold the same one. A game without a value is
   **Unknown**, so the games not yet scraped can be chosen. Within one field any value chosen passes; across fields every
   field must pass. **Reset All Filters** clears them.
+- **Search...**: the search box and the on-screen keyboard, which narrow every list by name until East clears them.
+  ES-DE has no search; North opened it until North became the favourite.
 - **Add/Remove Games to This Collection** and **Finish Editing '…' Collection**, as above.
 
 The sort and the filters are kept **for each list** (each system, each collection) **until EmuSen closes**, as ES-DE
@@ -3137,7 +3145,7 @@ with the list's scroll sound. **Random Entry Button** decides where it works: *G
 
 | Row in Game Collection Settings | Key | Default | ES-DE's name for it |
 |---|---|---|---|
-| Automatic Game Collections: All Games, Favorites, Last Played | `AutoCollections` | none on | `CollectionSystemsAuto` |
+| Automatic Game Collections: All Games, Favorites, Last Played | `AutoCollections` | all three on | `CollectionSystemsAuto` |
 | Custom Game Collections: one switch per collection | `HiddenCustomCollections` (the ids switched off) | all shown | `CollectionSystemsCustom` (the ones switched on) |
 | Group Custom Collections | `GroupCustomCollections` | `unthemed` | `CollectionCustomGrouping` |
 | Sort favorites on top for custom collections | `FavoritesFirstCustom` | off | `FavFirstCustom` |
@@ -3146,8 +3154,9 @@ with the list's scroll sound. **Random Entry Button** decides where it works: *G
 | Sort favorite games above non-favorites | `FavoritesFirst` | on | `FavoritesFirst` |
 | Random Entry Button | `RandomEntryButton` | `games` | `RandomEntryButton` |
 
-The defaults are those ES-DE 3.4.1 wrote into its own settings file, except the custom collections' switches: ES-DE
-enables each one by hand, while Mistress's collections are the player's own and are shown until switched off.
+The defaults are those ES-DE 3.4.1 wrote into its own settings file, except two: the automatic collections, which the
+user asked to be on, and the custom collections' switches: ES-DE enables each one by hand, while Mistress's collections
+are the player's own and are shown until switched off (the player kept this, Q13).
 
 **Where the data comes from.** The program's records are in SQLite, the player's choices in the JSON settings:
 - favourites, last played, play count, play time, the custom collections and which games are in them: `games.db`
@@ -3162,12 +3171,16 @@ enables each one by hand, while Mistress's collections are the player's own and 
 
 | Button | Where | What it does now |
 |---|---|---|
-| North | a game list while a custom collection is edited | adds or removes the game (ES-DE's Y); otherwise the search, as before |
+| North | a game list | the favourite (ES-DE's Y); while a custom collection is edited, adds or removes the game instead. The help bar reads **Favorite** or **Collection** |
+| Select | a game list | the one options menu: the gamelist rows, Search, the collection entries, the game's entries |
+| L1, R1 | a game list | ten games back or forward, stopping at the ends, as USERGUIDE's shoulders; the help bar reads **Jump**. L2 and R2 stay the first and last game |
 | Left or right thumbstick, pressed in | a game list; the systems with *Games and systems* | a random game, or system (ES-DE's thumbstick click) |
 | South | an entry of the Collections list | opens the collection; the help bar says **Select** on it |
 | East | inside a collection of the Collections list | back to the list, at that collection |
-| Start | the themed view | the pad menu, now with Gamelist Options and Game Collection Settings |
-| B / Back | on the Gamelist Options sheet | apply and close / cancel and close |
+| Start | the themed view | the pad menu, now with Game Collection Settings |
+| B / Select | on Select's menu | apply and close / cancel and close |
+
+EmuSen's own library (§4.33) keeps North as its search and Select as its favourite.
 
 **Tests** (WiseMan, headless, the pad through `PadDriver`): `GamelistOptionsTests` (8: the sort keys, the filter values,
 the quick selector, the random entry, the names, the shelves' order and grouping, last played, a folder's description)
@@ -3214,6 +3227,12 @@ in ES-DE. The menu's entries:
 
 ES-DE's own menu also has *Jump to..*, *Sort games by*, *Filter gamelist* and the custom collections' entries; those are
 the collections work's (§4.58), which adds them to this menu above *Edit This Game's Metadata*.
+
+*Since the answers of 2026-09-26 (§4.58):* the menu begins with Jump To, Sort Games By, Filter Gamelist and
+Search..., then the collection entries, then the entries above. **Select** over the menu now cancels what its rows were
+set to, and **B**, **Apply** or an entry applies it; **Close** reads **Apply**, beside a **Cancel**. **North** in a
+themed gamelist toggles the favourite, as ES-DE's Y does, except while a custom collection is edited; the menu's
+favourite entry stays.
 
 **The editor.** A sheet with one row per field, each saying where its value comes from: *From the file name*, *From
 ScreenScraper*, *Your edit*, *Your edit, shown in place of ScreenScraper's*, or, after the editor's own scrape, *From this

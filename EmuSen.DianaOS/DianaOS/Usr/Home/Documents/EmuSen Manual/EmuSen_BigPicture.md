@@ -604,9 +604,9 @@ themed view:
 | Up, down | | move the list (`scroll`), with the repeat of `PadNavigator` |
 | South | enter the system's gamelist (`select`) | start the game (`launch`), through `StartGameAsync`: firmware prompt, then the resume question on a sheet (§4.31, §4.45.2) |
 | East | | back to the system view (`back`) |
-| L1, R1 / L2, R2 | | page / first and last |
-| North | | the on-screen keyboard's search (§4.45.6) |
-| Select | | mark favourite (`favorite`), as the grid does today (§4.33). *Since 2026-09-26 the game options menu, as ES-DE's Back button opens it; the favourite is its first entry (§23.4)* |
+| L1, R1 / L2, R2 | | page / first and last. *Since the answer of 2026-09-26 (Q14): ten games back or forward, stopping at the ends, as USERGUIDE's shoulders do; the triggers are unchanged, the first and the last game* |
+| North | | the on-screen keyboard's search (§4.45.6). *Since the answer of 2026-09-26 (Q15): the favourite (`favorite`), ES-DE's Y; while a custom collection is edited, adding the game to it or removing it, as ES-DE's Y does then; the search is an entry of Select's menu (§22.13)* |
+| Select | | mark favourite (`favorite`), as the grid does today (§4.33). *Since 2026-09-26 the game options menu, as ES-DE's Back button opens it; the favourite is its first entry (§23.4). Since the answer of the same day (Q12), one menu: Jump To, Sort Games By, Filter Gamelist and Search, the custom collection's entries, then the game's (§22.13)* |
 | Start | the pad menu, as a `SheetLayer` sheet | the same |
 | Guide, or Back and Start together, during a game | the menu over the game (§4.29). "Game Library" returns to the themed view at the same system and game. | |
 
@@ -615,7 +615,8 @@ edited, adds the selected game to it or removes it, as ES-DE's Y does, and searc
 in picks a random game (in the system view a random system, when the setting allows it), as ES-DE's thumbstick click
 does; South on an entry of the grouped Collections system opens it and East inside it comes back to the list. ES-DE's
 gamelist options menu, which ES-DE opens with Back, is reached from Start's pad menu, because Select belongs to the
-game options of §23; merging the two menus under Select is left to that merge.
+game options of §23; merging the two menus under Select is left to that merge. *Superseded the same day by the player's
+answers (§10.1, §22.13): the menus are one, under Select, and North is the favourite outside the collection editing.*
 
 The help system's entries are the theme's layout filled with these actions. Its icons are Mistress's own (§3.6).
 
@@ -1051,6 +1052,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 - **Q11–Q14, collections and the gamelist options** (§22.12): the automatic collections off by default as ES-DE's are,
   or on; one menu under Select for the gamelist options and the game options; custom collections shown until switched
   off, or enabled one by one as ES-DE does; and the shoulders' page, which ES-DE was measured to make ten games.
+  *All four answered on 2026-09-26, with Q15 (§10.1).*
 - **Q20–Q35**, the decisions the remaining passes to ES-DE parity wait on (video again, as Q4's revisit; codecs;
   controllers; folders; the modes; languages; the theme list; TheGamesDB; buttons; the launch screen; the screensaver;
   the hardware session), are asked in §21.5.
@@ -1127,6 +1129,20 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   loader (XML, variables, includes, variants, colour schemes, aspect ratios) is format-specific and stays in
   `EmuSen.Mistress/BigPicture/`, with no Avalonia types, producing a scene the Mistress layer builds from LunaP
   controls. Q10 (own SVG renderer or `Svg.Skia`) is therefore answered: our own, in LunaP.
+- **Q11–Q15, collections, the gamelist options and the favourite's button (2026-09-26, after §22 and §23 were
+  merged):**
+  - **Q12:** one menu on Select, as ES-DE has it: Jump To, Sort Games By and Filter Gamelist, the custom collection's
+    entries, then the game's entries (the favourite, Edit This Game's Metadata, Scrape This Game..., and Hide from
+    Library in the editor). Gamelist Options left the pad menu, where ES-DE's documentation keeps only *Game collection
+    settings*.
+  - **Q15:** North (ES-DE's Y) toggles the favourite; the search moves into Select's menu as an entry. While a custom
+    collection is being edited, North adds the game to it or removes it, as USERGUIDE describes ("The option does not
+    affect the use of the Y button to add or remove games when editing custom collections").
+  - **Q11:** the automatic collections are on by default, a deliberate difference from ES-DE, whose settings file holds
+    them empty.
+  - **Q14:** the shoulders jump ten games in a gamelist, as USERGUIDE documents; the triggers stay the first and last.
+  - **Q13:** custom collections stay shown until switched off, as §22 built them.
+  - §22.13 records what was built for these.
 
 ## 11. Sources
 
@@ -4536,6 +4552,67 @@ theme. They were looked at:
   off. Keep that?
 - **Q14.** ES-DE's shoulders move ten rows in a textlist (§22.2); §4.9 pages by the rows shown. Change to ES-DE's?
 
+*Answered by the player on 2026-09-26 (§10.1): Q11 on by default; Q12 one menu under Select; Q13 kept as built; Q14 ten
+games. Q15, from §23, was answered with them: North is the favourite. §22.13 is what was built.*
+
+### 22.13 The answers, built (2026-09-26)
+
+**One menu under Select (Q12).** §23's `GameOptionsWindow` is the one sheet. Its two hooks, left empty by §23, are
+filled from `MainWindow.BigPictureCollections.cs`: `AddGamelistOptions` gives the rows Jump To..., Sort Games By and
+Filter Gamelist (`GamelistOptionRows`, which replaced §22's `GamelistOptionsWindow`) and the entry Search...;
+`AddCollectionOptions` gives *Add/Remove Games to This Collection* in a custom collection's own list and *Finish Editing
+'…' Collection* while one is edited. §23's entries follow: the favourite, *Edit This Game's Metadata*, *Scrape This
+Game...*. On a grouped collection's entry, which is not a game, the game's entries are left out.
+
+To carry ES-DE's apply and cancel, `GameOption` gained a `Row` (a control in place of a button) and an `Apply`, and the
+window gained `Cancel`: B, the **Apply** button and choosing an entry apply the rows (sort, filter, jump); Select (ES-DE's
+Back) and **Cancel** drop them. When no entry carries an `Apply`, as in a menu with no rows, the window keeps §23's single
+Close. The pad menu keeps *Game Collection Settings*, the one entry ES-DE's documentation puts in its main menu for these
+features; *Gamelist Options* left it.
+
+**North (Q15).** In a themed gamelist North toggles the favourite (`ThemedAction.Favourite`, the sound `favorite`), and
+reads **Favorite** on the help bar. While a custom collection is edited it adds or removes the game instead, and reads
+**Collection**, as USERGUIDE says the Y button still does then. On a grouped collection's entry it does nothing. The
+search is the menu's *Search...*, which opens the same box and on-screen keyboard; East still clears a search first. The
+`ThemedAction.Search` that North produced is gone. EmuSen's own library keeps North as its search (§4.29), since Q15
+concerned the themed view.
+
+**Automatic collections on (Q11).** `BigPictureCollections.AutoCollections` defaults to all three, so a settings file
+written before this work, and a new one, show them. The difference from ES-DE is deliberate and recorded in §4.58.
+`ThemedSession` now sets the list empty for the tests that count the carousel's systems, and the collection tests turn
+them on themselves.
+
+**The shoulders (Q14).** `ThemedLibrary.ShoulderJump` is ten, and a jump stops at the list's ends, as a page did. The
+triggers are unchanged: the first and the last game. The help bar calls the shoulders **Jump**. `PageSize`, the rows a
+list shows, has no use left and was removed with its grid test. USERGUIDE also gives the shoulders to the quick system
+select where the primary element is a grid or a horizontal carousel, since left and right move those; that was not
+asked and is not built, so in a grid the shoulders jump ten items too.
+
+**Found while building it.** A custom collection emptied by North vanished from the carousel with the grouped system,
+because a system with no games is not listed. The grouped system is now listed while it has folders, empty ones included,
+as THEMES.md's image for "any custom collection that does not contain any games when browsing the grouped custom
+collections system" implies.
+
+**Tests.** Changed: `ThemedLibraryPadTests` (the shoulders' two tests now require ten, stopping at the end; Search from
+Select's menu; a new North-favourite test with its help label), `ThemedLibraryHostTests` (the help entries; the sounds'
+switch test marks the favourite with North), `ThemedLibraryFlowTests` (search from the menu, favourite with North),
+`ThemedGameOptionsTests` (the menu's buttons now begin with Search...), and `ThemedCollectionsTests`: automatic collections
+on for a fresh settings file and a JSON file with none; the menu's order under Select; the pad menu without Gamelist
+Options; North adding to the edited collection without touching the favourite, and the favourite after Finish Editing;
+Finish Editing from a collection's own entry, whose menu has no game entries; `PadAudit` over the combined sheet inside a
+custom collection.
+
+**Mutants.** `~/.cache/emusen/probe/bigpicture/mutate_answers.py`, on `mutate_collections.py`'s runner (one at a time,
+`nice -n 10`, builds at `-m:2`, a backup restored on start, a clean rebuild at the end), against the collections', the
+pad's, the game options', the host's and the flow's tests. The log is `run-answers.log`. **15 of 15 caught, all on the
+first run:** the menu without its rows (A1); Back applying (A2); B not applying (A3); no Search entry (A4); Gamelist
+Options kept in the pad menu (A5); a collection's entry offering a game's entries (A6); the collection entries missing
+(A7); North not the favourite (A8); North the favourite while editing (A9); the help bar calling North Search (A10); the
+shoulders moving five (A11); the automatic collections off by default (A12); an empty custom collection dropping
+Collections (A13); an uncounted game joining the collections (A14); and the sort name ignored (A15, the merge's
+amendment, §22.11). That none survived its first run is weaker evidence than a round with survivors strengthened: the
+tests were written or changed, in this round, with these rules in view.
+
 ## 23. The game options menu and the metadata editor (2026-09-26)
 
 *Opened 2026-09-26, on the third item of the player's list of what big picture lacks against ES-DE:* the per-game options
@@ -4699,6 +4776,13 @@ for adding the game to, or removing it from, the custom collection being edited.
 fills them in a file of its own without editing this one. A `GameOption` is a label, an action, and whether choosing it
 puts the menu away first. The editor has no collection field; ES-DE's *Custom collections sortname* is left to §22.
 
+*Amended at §22.13 (2026-09-26), after the answers to Q12 and Q15.* §22 filled both hooks: the menu now opens with
+Jump To..., Sort Games By, Filter Gamelist and Search..., then the collection entries, then the entries above. A
+`GameOption` may now be a row (`Row`) and carry an `Apply`; Select over the menu cancels the rows' choices, and B, Apply
+or choosing an entry applies them, where the table above has Select and B both closing. North in the themed gamelist is
+the favourite (ES-DE's Y) outside a collection's editing; the menu's favourite entry was kept. On a grouped collection's
+entry the menu has the list's rows and the collection entries only.
+
 ### 23.5 Hiding, and the rule that no ROM is touched
 
 A hidden game is left out of the themed gamelists, the library's list and grid, the sidebar's counts and the search.
@@ -4847,7 +4931,8 @@ were looked at:
 
 - **Q15, the favourite's button.** ES-DE toggles a favourite with Y; Mistress's Y is the search (§4.9). The favourite is
   now the first entry of the options menu, two presses from the list. Keep it there, or give Y to the favourite and move
-  the search?
+  the search? *Answered by the player on 2026-09-26 (§10.1): Y toggles the favourite and the search is an entry of the
+  menu; built in §22.13. The menu's favourite entry stays too.*
 - **Q16, hidden games.** ES-DE lists hidden games, dimmed, by default; Mistress leaves them out unless Preferences ▸ Hidden
   Games is on, because Hide from Library replaces ES-DE's Delete. Keep that default?
 - **Q17, what Clear removes.** It removes ScreenScraper's pictures in Mistress's store, but not the cover OpenEmu's

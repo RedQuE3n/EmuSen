@@ -22,7 +22,7 @@ namespace EmuSen.Mistress.Views
         // Where the desktop library stood when big picture was entered, given back when it is left.
         private DesktopPlace? _desktopPlace;
 
-        private sealed record DesktopPlace(string Console, string Collection, string Search, string? Game);
+        private sealed record DesktopPlace(string Console, string Search, string? Game);
 
         internal bool BigPictureOn => _bigScreen;
 
@@ -83,16 +83,14 @@ namespace EmuSen.Mistress.Views
             if (on) _desktopPlace = DesktopPlaceNow();
             ApplyBigScreen(on);
 
-            // Leaving stops the themed view: its host hides in ShowLibraryEntries, which stops the wake; the held direction and the sound stream go here.
-            if (!on)
+            // Leaving stops the themed view: ReturnTo's showing hides its host, which stops the wake, and the sound stream goes here.
+            if (on) ShowLibraryEntries();
+            else
             {
-                LetGoOfTheThemedDirection(UiClock());
                 ReleaseUiSounds();
+                ReturnTo(_desktopPlace ?? DesktopPlaceNow());
+                _desktopPlace = null;
             }
-
-            if (!on && _desktopPlace is { } place) ReturnTo(place);
-            else ShowLibraryEntries();
-            if (!on) _desktopPlace = null;
 
             _appSettings.BigScreen = on;
             _appSettings.Save();
@@ -105,11 +103,10 @@ namespace EmuSen.Mistress.Views
             && OnScreenKeyboard.OpenOver(this) is null;
 
         private DesktopPlace DesktopPlaceNow() =>
-            new(SelectedConsole, _appSettings.LibraryCollection, LibraryFilter.SearchText, LibraryList.Selected?.FullPath);
+            new(SelectedConsole, LibraryFilter.SearchText, LibraryList.Selected?.FullPath);
 
         private void ReturnTo(DesktopPlace place)
         {
-            _appSettings.LibraryCollection = place.Collection;
             LibraryFilter.SearchText = place.Search;
             if (place.Console != SelectedConsole)
             {

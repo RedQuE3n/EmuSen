@@ -120,6 +120,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal("Fullscreen", Button(w).Content);
             Assert.True(Button(w).IsEffectivelyVisible);
             Assert.Equal(game, List(w).Selected?.Title);
+            Assert.Equal("", w.GetControl<FilterBar>("LibraryFilter").SearchText);
             Assert.Equal(console, SelectedCore());
             Assert.False(AppSettings.Load().BigScreen);
         }
@@ -156,9 +157,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             string? game = List(s.Window).Selected?.Title;
             s.Pad.Down();
             Assert.NotEqual(game, List(s.Window).Selected?.Title);
-            string console = s.Window.GetControl<FilterBar>("LibraryFilter").Facet as string ?? "";
+            FilterBar filter = s.Window.GetControl<FilterBar>("LibraryFilter");
+            string console = filter.Facet as string ?? "";
             s.Pad.Right();
-            Assert.NotEqual(console, s.Window.GetControl<FilterBar>("LibraryFilter").Facet as string);
+            Assert.NotEqual(console, filter.Facet as string);
+
+            // A search typed in big picture's own box, which the desktop's shares.
+            filter.SearchText = "Relay";
+            Call(s.Window, "ShowLibraryEntries");
+            s.Settle();
         }
 
         // The whole cycle, four times over by every way in and out, with and without a theme: the desktop comes back as it was, window state and selection included.

@@ -25,7 +25,6 @@ namespace EmuSen.Mistress.Views
         private readonly AppSettings _settings;
         private readonly LunaSwitch _bigScreen = new() { Name = "BigScreenSwitch", Label = "Start in big screen mode" };
         private readonly LunaSwitch _pauseInBackground = new() { Name = "PauseInBackgroundSwitch", Label = "Pause the game when another window is in front" };
-        private readonly LunaSwitch _onlineCovers = new() { Name = "OnlineCoversSwitch", Label = "Look up missing covers online" };
         private readonly LunaSwitch _showStatusBar = new() { Name = "ShowStatusBarSwitch", Label = "Show the status bar" };
         private readonly LunaSwitch _showStatusText = new() { Name = "ShowStatusTextSwitch", Label = "Show messages" };
         private readonly LunaSwitch _showFpsBar = new() { Name = "ShowFpsBarSwitch", Label = "Show the frame rate" };
@@ -46,9 +45,10 @@ namespace EmuSen.Mistress.Views
         // Parameterless constructor exists only for tooling - real code always uses the one below.
         public PreferencesWindow() : this(new AppSettings()) { }
 
-        public PreferencesWindow(AppSettings settings)
+        public PreferencesWindow(AppSettings settings, IScrapeHost? scraping = null)
         {
             _settings = settings;
+            var scrape = new ScrapePreferencesPane(settings, scraping);
 
             Title = "Preferences";
             Width = 660;
@@ -73,12 +73,6 @@ namespace EmuSen.Mistress.Views
                 },
                 new FieldRow
                 {
-                    Label = "Online Covers",
-                    Hint = "Off unless you turn it on. Mistress then downloads OpenVGDB, the game database OpenEmu uses (about 9 MB, from GitHub), and for each game shown without a cover asks thumbnails.libretro.com for its box, then the address OpenVGDB gives (GameFAQs, which refused every request when this was built). Those servers see which games you have. OpenVGDB states no licence and the covers are other people's scans. They are saved in the cover art folder, never in the ROM folder.",
-                    Content = _onlineCovers,
-                },
-                new FieldRow
-                {
                     Label = "Save State Directory",
                     Hint = "Where save states, the state a game was left in, and their pictures go. Leave blank for home/Saves/Save States.",
                     Content = Picker("StateDirectoryBox", "(default)", "Choose Save State Directory", _settings.StateDirectory, p => _settings.StateDirectory = p),
@@ -89,6 +83,7 @@ namespace EmuSen.Mistress.Views
                     Hint = "Where per-session log files are written. Leave blank to disable file logging entirely.",
                     Content = Picker("LogDirectoryBox", "(not set)", "Choose Log Directory", _settings.LogDirectory, p => _settings.LogDirectory = p),
                 }));
+            tabs.Add("Scraping", Pane(scrape.Rows()));
             tabs.Add("Gameplay", Pane(
                 new FieldRow
                 {
@@ -164,8 +159,7 @@ namespace EmuSen.Mistress.Views
             DockPanel.SetDock(buttons, Dock.Bottom);
             Content = new DockPanel { LastChildFill = true, Children = { buttons, tabs } }.Margin(16);
 
-            _onlineCovers.IsChecked = _settings.OnlineCovers;
-            _onlineCovers.IsCheckedChanged += (_, _) => { _settings.OnlineCovers = _onlineCovers.IsChecked == true; _settings.Save(); };
+            scrape.Attach(this);
             _bigScreen.IsChecked = _settings.BigScreen;
             _bigScreen.IsCheckedChanged += (_, _) => { _settings.BigScreen = _bigScreen.IsChecked == true; _settings.Save(); };
             _showStatusBar.IsChecked = _settings.ShowStatusBar;

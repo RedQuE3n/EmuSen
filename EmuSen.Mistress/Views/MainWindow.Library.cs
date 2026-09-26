@@ -72,6 +72,7 @@ namespace EmuSen.Mistress.Views
             ApplyLibraryView();
             ScanArtwork();
             ApplyOnlineCovers();
+            ApplyScraping();
         }
 
         private void ShowLibraryAs(string view)
@@ -117,15 +118,18 @@ namespace EmuSen.Mistress.Views
                 if (!scan.IsCompletedSuccessfully) return;
                 Dispatcher.UIThread.Post(() =>
                 {
-                    // A cover fetched while the walk ran may have been written after the walk passed its folder.
-                    foreach ((string console, string stem, string file) in _fetchedCovers) scan.Result.Add(console, stem, file);
                     _artwork = scan.Result;
                     LibraryGrid.Refresh(_shownEntries);
                 });
             });
         }
 
+        // The cover the library shows, by the order of §4.60: the player's own, ScreenScraper's, an ES-DE folder's, OpenEmu's.
         private string? CoverPathFor(RomEntry entry) =>
+            EmuSen.Cores.CoreCatalog.ShelfByName(entry.Shelf)?.EsdeSystem is { Length: > 0 } system ? MediaSourcesNow().Cover(system, entry.FullPath) : HandCoverFor(entry);
+
+        // Only what the player placed in the art folder, or added with Add Cover Art.
+        private string? HandCoverFor(RomEntry entry) =>
             _artwork.Find(EmuSen.Cores.CoreCatalog.ByDisplayName(entry.CoreDisplayName)?.Console, entry.Title);
 
         private void BindCover(Control tile, RomEntry entry)
@@ -136,7 +140,7 @@ namespace EmuSen.Mistress.Views
             string title = ArtworkIndex.Untagged(entry.Title);
             string tags = entry.Title.Length > title.Length ? entry.Title[title.Length..].Trim() : "";
             string subtitle = MixedConsoles ? (tags.Length > 0 ? $"{console}  ·  {FirstTag(tags)}" : console) : FirstTag(tags);
-            if (cover is null) AskForCover(entry, descriptor);
+            if (cover is null) CoverWanted(entry, descriptor);
             ((CoverTile)tile).Show(title, subtitle, console, descriptor?.CoverAspect ?? 1.365,
                 cover is null ? null : _covers.Get(cover), _recordSnapshot.TryGetValue(entry.FullPath, out GameRecord? r) && r.Favourite);
         }
@@ -251,9 +255,9 @@ namespace EmuSen.Mistress.Views
                     actions.Add(leave);
                 }
                 actions.AddRange(new[] { LunaAction.Separator(), addArt, removeArt });
-                if (_appSettings.OnlineCovers)
+                if (_appSettings.OpenEmuFallback)
                 {
-                    lookUp.IsEnabled = entry is not null && _fetcher is not null && CoverPathFor(entry) is null;
+                    lookUp.IsEnabled = entry is not null && CoverPathFor(entry) is null;
                     actions.Add(lookUp);
                 }
                 menu.ItemsSource = Menus.Items(actions);
@@ -285,7 +289,7 @@ namespace EmuSen.Mistress.Views
         private string? OwnCoverPath(RomEntry entry)
         {
             string? console = EmuSen.Cores.CoreCatalog.ByDisplayName(entry.CoreDisplayName)?.Console;
-            if (console is null || CoverPathFor(entry) is not string shown) return null;
+            if (console is null || HandCoverFor(entry) is not string shown) return null;
             string folder = Path.GetFullPath(Path.Combine(ArtworkDirectory, console));
             return Path.GetFullPath(shown).StartsWith(folder + Path.DirectorySeparatorChar, StringComparison.Ordinal) ? shown : null;
         }

@@ -14,7 +14,7 @@ namespace EmuSen.Mistress.BigPicture
     // One of the library's systems as the themed view lists it: ES-DE's names for it and its games.
     public sealed record ThemedShelf(ThemeSystem System, IReadOnlyList<SceneGame> Games);
 
-    public enum ThemedAction { None, Launch, Favourite, Search, ClearSearch, Menu, Leave }
+    public enum ThemedAction { None, Launch, Favourite, Search, ClearSearch, Menu, Leave, Options }
 
     // What a button asked of the window, beyond what the view does by itself.
     public readonly record struct ThemedCommand(ThemedAction Action, SceneGame? Game = null);
@@ -48,6 +48,9 @@ namespace EmuSen.Mistress.BigPicture
         public Action<string>? PlaySound { get; set; }
 
         public PadFamily Family { get; private set; }
+
+        // The swap of the A and B functions, which the help bar follows (settings reference §4.61).
+        public bool SwapFaceButtons { get; private set; }
 
         public DeviceStatus Status { get; set; } = new();
 
@@ -157,7 +160,7 @@ namespace EmuSen.Mistress.BigPicture
             int game = _cursor.TryGetValue(chosen.System.Name, out string? file) ? Math.Max(0, chosen.Games.ToList().FindIndex(g => g.File == file)) : 0;
             return new SceneData(systems, _screen)
             {
-                SystemIndex = system, GameIndex = game, Media = _media, Motion = Motion, Family = Family, Status = Status, Now = Now(), ShowClock = false,
+                SystemIndex = system, GameIndex = game, Media = _media, Motion = Motion, Family = Family, SwapFaceButtons = SwapFaceButtons, Status = Status, Now = Now(), ShowClock = false,
             };
         }
 
@@ -187,7 +190,7 @@ namespace EmuSen.Mistress.BigPicture
             Remember();
         }
 
-        private void Sound(string name)
+        public void Sound(string name)
         {
             if (PlaySound is null || Stage is null) return;
             if (Stage.Current.Data.System.Theme.Sounds.GetValueOrDefault(name) is { Exists: true } path) PlaySound(path.Absolute);
@@ -202,11 +205,15 @@ namespace EmuSen.Mistress.BigPicture
         public TimeSpan? NextChange(TimeSpan now) => Stage?.NextChange(now);
 
         // The pad's family changed: only the help bar is redrawn (§15, P43).
-        public void SetFamily(PadFamily family)
+        public void SetFamily(PadFamily family) => SetPadLayout(family, SwapFaceButtons);
+
+        // The family and the swap together; only the help bar is redrawn (settings reference §4.61).
+        public void SetPadLayout(PadFamily family, bool swapped)
         {
-            if (family == Family) return;
+            if (family == Family && swapped == SwapFaceButtons) return;
             Family = family;
-            Stage?.Current.SetFamily(family);
+            SwapFaceButtons = swapped;
+            Stage?.Current.SetPadLayout(family, swapped);
         }
 
         // The direction the primary element moves along: a horizontal carousel's is left and right, a list's and a vertical carousel's up and down.
@@ -291,9 +298,9 @@ namespace EmuSen.Mistress.BigPicture
                 case UiButton.Search when gamelist:
                     result = new ThemedCommand(ThemedAction.Search);
                     break;
+                // ES-DE's Back button opens its gamelist options menu; the favourite is an entry there (§4.59 of the settings reference).
                 case UiButton.Options when gamelist && view.Data.Game is { } game:
-                    Sound("favorite");
-                    result = new ThemedCommand(ThemedAction.Favourite, game);
+                    result = new ThemedCommand(ThemedAction.Options, game);
                     break;
                 case UiButton.Menu:
                     result = new ThemedCommand(ThemedAction.Menu);

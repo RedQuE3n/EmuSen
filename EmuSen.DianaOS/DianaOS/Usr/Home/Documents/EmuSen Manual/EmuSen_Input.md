@@ -152,6 +152,11 @@ Consequences worth knowing:
 
 - **Multitap, and ports beyond two.** `SetButton`'s `port` is an `int` rather than a two-valued enum specifically so this can grow, but no core models more than two controllers and no frontend offers to configure one.
 - ~~**Analog axes.** `GamepadManager` converts a stick to a d-pad (`AnalogStickAsDpad`, with a deadzone) and there is no analog value anywhere in the contract. A console with a genuinely analog stick needs a real addition here, not a fudge through `PadButton`.~~ **Closed 2026-09-18 by §7**, which made that real addition — `PadAxis` and `ICore.SetAxis` — and kept the stick out of `PadButton`, as this bullet asked.
+- **A second pad as player 2.** Since 2026-09-26 `GamepadManager` opens every connected pad and the interface reads
+  them all (`EmuSen_Settings_Reference.md` §4.61), but a game reads only the first opened, player 1's, as it read the
+  only pad before. Routing a second pad to port 1 is the work `EmuSen_BigPicture.md` §21.5's Q22 (b) left here: it
+  reaches every game, and needs a rule for which pad is which player when pads come and go, which the frontend's
+  "first opened" rule does not have to settle. `MirrorPlayer1ToPlayer2` (§5.1) is unrelated and unchanged.
 - **Non-pad peripherals.** Light guns, mice, the SNES multitap's own protocol. All are console-specific hardware that would attach to the core, not to this interface.
 - **Per-core default bindings.** Defaults are one table shared by every core. An NES ROM gets the SNES-shaped defaults for the eight buttons it has, which happens to be right (Z/X = B/A), and is luck rather than design.
 

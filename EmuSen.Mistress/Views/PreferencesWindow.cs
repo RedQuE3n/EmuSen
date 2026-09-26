@@ -32,6 +32,7 @@ namespace EmuSen.Mistress.Views
         private readonly LunaSwitch _showStatusText = new() { Name = "ShowStatusTextSwitch", Label = "Show messages" };
         private readonly LunaSwitch _showFpsBar = new() { Name = "ShowFpsBarSwitch", Label = "Show the frame rate" };
         private readonly LunaSwitch _navigationSounds = new() { Name = "NavigationSoundsSwitch", Label = "Play the theme's navigation sounds" };
+        private readonly LunaSwitch _showHiddenGames = new() { Name = "ShowHiddenGamesSwitch", Label = "List the games hidden from the library" };
         private readonly Dropdown _bigPictureTheme = new() { Name = "BigPictureThemeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
         private IReadOnlyList<BigPictureLook> _looks = [];
         private string[] _lookTexts = [];
@@ -44,6 +45,7 @@ namespace EmuSen.Mistress.Views
         public Action? ThemeChosen { get; set; }
 
         public const string ScrapingTab = "Scraping";
+        public const string ControllersTab = "Controllers";
 
         private readonly Tabs _tabs = new() { Name = "PreferenceTabs" };
 
@@ -181,7 +183,14 @@ namespace EmuSen.Mistress.Views
                     Label = "Navigation Sounds",
                     Hint = "The theme's sounds for moving, choosing and going back, on a stream of their own beside the game's.",
                     Content = _navigationSounds,
+                },
+                new FieldRow
+                {
+                    Label = "Hidden Games",
+                    Hint = "Games hidden with Hide from Library or the metadata editor's Hidden field. Their files are never touched; turn this on to list them again and unhide them in the editor.",
+                    Content = _showHiddenGames,
                 }));
+            tabs.Add(ControllersTab, Pane(new ControllerPreferencesPane(settings).Rows()));
             tabs.Add("System Files", Pane(SystemFiles()));
 
             // A dock and scrolling panes, so a sheet shorter than the window still shows Close - see EmuSen_Settings_Reference.md §4.45.3.
@@ -200,6 +209,8 @@ namespace EmuSen.Mistress.Views
             _showFpsBar.IsCheckedChanged += (_, _) => { _settings.ShowFpsBar = _showFpsBar.IsChecked == true; _settings.Save(); StatusBarChanged?.Invoke(); };
             _navigationSounds.IsChecked = _settings.NavigationSounds;
             _navigationSounds.IsCheckedChanged += (_, _) => { _settings.NavigationSounds = _navigationSounds.IsChecked == true; _settings.Save(); };
+            _showHiddenGames.IsChecked = _settings.ShowHiddenGames;
+            _showHiddenGames.IsCheckedChanged += (_, _) => { _settings.ShowHiddenGames = _showHiddenGames.IsChecked == true; _settings.Save(); };
             ShowBigPictureTheme();
             _bigPictureTheme.Chose += chosen =>
             {

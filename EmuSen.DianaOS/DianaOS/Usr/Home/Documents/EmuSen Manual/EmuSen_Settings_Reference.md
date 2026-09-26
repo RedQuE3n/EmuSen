@@ -152,6 +152,10 @@ recorded it three times on 2026-09-26 (`OverflowException` in `TimeSpan.op_Subtr
 through `MainWindow.PadTick`). The start value is now `-RescanInterval`, so the first rescan is due at once and the
 subtraction cannot overflow. `GamepadRescanTests` failed on the old value with the same exception, and passes on the new one.
 
+*Since 2026-09-26 (§4.61)* the manager opens every pad, not the first alone, and asks whether a rescan is due at every
+poll rather than only with no pad; a pad plugged in is also opened at once on SDL's added event. The start value above
+is kept, and is now exercised on every tick. The game still reads one pad, the first opened.
+
 ### 4.5 Conflict reporting
 
 `Rebind` guarantees one owner per key going forward, but a hand-edited or older config can still contain duplicates. The window recomputes conflicts after every change, colours the offending rows, and names them in a status line along the bottom rather than leaving the player to work out why one key does two things.
@@ -2525,7 +2529,7 @@ its radio switch is blocked neither by software nor by hardware. Nothing is show
 | L1, R1 | | a page: the rows the list shows at once |
 | L2, R2 | | the first and the last game |
 | North | | search, on the on-screen keyboard (§4.45.6) |
-| Select | | mark or unmark a favourite; the game stays selected where the list moves it |
+| Select | | the game options menu (§4.59); *until 2026-09-26 it marked or unmarked a favourite, now the menu's first entry* |
 | Start, Guide | the pad menu (§4.29) | the same |
 
 The repeats are ES-DE's, measured in `EmuSen_BigPicture.md` §14.7, and run on the view's own clock, not on
@@ -2553,7 +2557,8 @@ copied from ES-DE or a vendor.
 
 *Limits of the detection.* A pad behind Steam Input reaches SDL as Steam's virtual pad and is classified as that pad
 is, not as the hardware in the player's hands. A generic pad whose name carries none of the words is drawn generic
-even when its printing is known to the player. `GamepadManager` still opens only the first pad; it now lets a pulled
+even when its printing is known to the player. `GamepadManager` still opens only the first pad (*since 2026-09-26 every pad,
+and the help bar follows the pad last pressed or the Controller Type setting: §4.61*); it now lets a pulled
 pad go (`SDL_GamepadConnected`), so its one-a-second rescan can open the next one.
 
 **Sounds.** The theme's seven sounds (`systembrowse`, `quicksysselect`, `select`, `back`, `scroll`, `favorite`,
@@ -3058,6 +3063,90 @@ them (`PadAudit`, §4.45.3); B closes the sheet as Hide does. The pad menu's ent
 - The recent list keeps 200 games and forgets older ones; the counts are the whole run's.
 - Nothing ran on the handheld.
 
+### 4.59 Big picture: a game's options, and editing its metadata (2026-09-26)
+
+The player, 2026-09-26, as the third item of what big picture lacked against ES-DE: the per-game options menu, and a
+metadata editor for a game's name, description, rating, release date, developer, publisher, genre, players, favourite
+and ES-DE's other documented fields, with deleting a game offered only in a guarded form. This is how a player meets it;
+`EmuSen_BigPicture.md` §23 is the record (ES-DE's documented behaviour set against what was built, the predictions, the
+tests, the mutants and the pictures).
+
+**Where it is.** In the themed view of a big-screen session (Game Mode, or Big Picture on the desktop, §4.54), on a game
+in a gamelist. EmuSen's own built-in library (§4.56) is unchanged: there Select still marks a favourite.
+
+**Opening the menu.** **Select** on a game opens the game options as a sheet over the view, as ES-DE opens its gamelist
+options menu with its Back button. **Select** again, or **B**, puts it away. In the system view Select does nothing, as
+in ES-DE. The menu's entries:
+
+| Entry | What it does |
+|---|---|
+| Add to Favourites / Remove from Favourites | the favourite of §4.32, with the theme's `favorite` sound; the game moves to the top of the list and stays selected. Until 2026-09-26 this was Select's own action |
+| Edit This Game's Metadata | opens the editor, below |
+| Scrape This Game... | stage (d)'s single-game scrape (§4.60): the confirm step, then the run and its status sheet (§4.57). Not offered while a run is going |
+| Close | puts the menu away |
+
+ES-DE's own menu also has *Jump to..*, *Sort games by*, *Filter gamelist* and the custom collections' entries; those are
+the collections work's (§4.58), which adds them to this menu above *Edit This Game's Metadata*.
+
+**The editor.** A sheet with one row per field, each saying where its value comes from: *From the file name*, *From
+ScreenScraper*, *Your edit*, *Your edit, shown in place of ScreenScraper's*, or, after the editor's own scrape, *From this
+scrape; Save keeps it*.
+
+| Field | How it is set | Where it shows |
+|---|---|---|
+| Name | text, on the on-screen keyboard (A on the box; B erases, Start is done, §4.45.6) | the themed view; the library's list, grid and search |
+| Sort name | text | the gamelist is ordered by it where it is set, the name shown |
+| Description | text over several lines | the theme's description |
+| Rating | stars: Left and Right step half a star | the theme's rating |
+| Release date | Left and Right change the year; A moves to the month, then the day; the year stepped below 1950 leaves no date | the theme's release date |
+| Developer, Publisher, Genre, Players | text | the theme's fields |
+| Completed, Kid game, Broken / not working | switches | the theme's badges and fields; Mistress has no kid mode |
+| Hidden | switch | the game leaves every library view (below) |
+| Exclude from game counter | switch | not counted in the system view's game and favourite counts |
+| Exclude from multi-scraper | switch | left out of **Scrape Games...** and every run but **Scrape This Game...** |
+| Favourite | switch | as the menu's entry |
+| Times played, Play time | numbers (play time in seconds, as ES-DE keeps it) | Mistress's own counters, which count on from what is typed |
+
+A field that differs from what it would show with no edit has a **Reset** beside it, which returns it to ScreenScraper's
+value or the default (for the name, the file's name).
+
+The buttons, as ES-DE documents its editor's:
+- **Scrape**, or **Y**: stage (d)'s *Scrape This Game*, confirmed first. When the run ends, ScreenScraper's answer is put
+  into every field it has a value for, not yet saved. B puts the status sheet away and returns to the editor.
+- **Save** keeps the changes. **Cancel** discards them. **B** discards nothing silently: with changes it asks *Save* or
+  *Discard*, without any it closes.
+- **Clear...**, after a confirm: removes the player's edits, ScreenScraper's text for the game and its pictures in
+  Mistress's media store (`home/Media`). The game's file, its favourite, its play counters, the player's own covers, an
+  ES-DE media folder and the OpenEmu failover's cover are all kept.
+- **Hide from Library...**, after a confirm, in the place of ES-DE's *Delete*. ES-DE's Delete removes the game's file;
+  **EmuSen never deletes or moves a game's file**, and the confirm says so. The game is hidden instead.
+
+**Hidden games.** A hidden game is left out of the themed gamelists, the library's list and grid, the sidebar's counts
+and the search. Preferences ▸ Appearance ▸ **Hidden Games** (`ShowHiddenGames` in `appsettings.json`, off) lists them
+again; the editor's *Hidden* switch, or its Reset, unhides one. ES-DE shows hidden games, dimmed, unless told not to;
+Mistress hides them, because *Hide from Library* stands where ES-DE's Delete stands. Hiding and unhiding change nothing
+on disk but `games.db`.
+
+**Where the edits are kept, and why they win.** In `games.db` (§4.32), table `game_edit`, one row per edited field,
+beside the favourite and the play records; its fifth migration. What a field shows is the player's edit if there is one,
+else ScreenScraper's value from `media.db` (§4.60), else the default. A scrape writes `media.db` only, so no scrape,
+however often it runs, changes an edit. An edit goes when the player resets that field, clears the game, or saves the
+editor after its own Scrape has filled the field with ScreenScraper's value. A value saved equal to what the field would
+show anyway is stored as no edit, so a later scrape still reaches it. A file renamed or moved keeps its edits (§4.37).
+
+**Buttons that changed.** Select in the themed gamelist: from the favourite to the options menu (the favourite is the
+menu's first entry). Left and Right on a rating or a date: they change it rather than moving the focus. The help bar's
+entry for Select reads *Options*. §4.52's table is amended accordingly.
+
+**What it does not do.**
+- ES-DE's editor fields *Hide metadata fields*, *Controller* and *Alternative emulator* are not built, and *Custom
+  collections sortname* is the collections work's. *Enter folder* does not apply: Mistress has no folders.
+- A hidden game listed again is not dimmed, as ES-DE dims it.
+- The on-screen keyboard has no line break, so a description is typed as one paragraph.
+- ScreenScraper's own name for a game is not offered by the editor's Scrape; the name stays the file's unless the player
+  types one.
+- Nothing ran on the handheld.
+
 ### 4.60 ScreenScraper: covers, screenshots, marquees and game text, with OpenEmu's sources as the failover (2026-09-26)
 
 Stage (d) of `EmuSen_BigPicture.md` (its §17 is the record: predictions, the live run, mutants). ScreenScraper
@@ -3271,3 +3360,56 @@ mutants are in the plan's §20.
   file to have it fetched.
 - No search by name for a game the hashes miss.
 - Nothing ran on the handheld.
+
+### 4.61 Controllers: every pad steers the interface, a notice when one comes or goes, and ES-DE's input settings (2026-09-26)
+
+Until this section Mistress opened one pad, the first SDL listed, and a second pad was not seen until the first went
+(§4.52). Pass 2 of `EmuSen_BigPicture.md` §21 changes that for the interface, as ES-DE's "Input device settings" describe
+it; the design record, the measurements and the mutants are §24 of that plan.
+
+**Every pad steers the interface.** `GamepadManager` (Endymion) opens every connected pad, in the order SDL lists them,
+and opens a pad plugged in later as soon as SDL queues its added event, or at the one-a-second rescan of §4.4 if the
+event is missed; a pad pulled out is let go at the next poll. Any pad then drives the library, the themed view of §4.52,
+the pad menu (§4.29), every sheet (§4.45), the game options of §4.59 and the on-screen keyboard: a button is held when any
+pad holds it. Over a running game any pad's guide button, or Back and Start together, opens the pad menu.
+
+**The game hears player 1 only.** The first pad opened is player 1's, as the only pad was before; when it goes, the next
+one opened takes its place, which is what the rescan did before with one pad. The game's bindings (`GamepadBindingMap`)
+are unchanged, and a second pad is not player 2: that is separate input work (`EmuSen_Input.md` §6).
+
+**Settings.** Preferences ▸ Controllers, stored in `appsettings.json`; each applies at once:
+
+| Row | Setting | Default | What it does |
+|---|---|---|---|
+| Controller Type | `ControllerType` | Automatic | The buttons the big picture help bar draws: Automatic follows the pad last pressed (its family by §4.52's rules), or Xbox, PlayStation, Nintendo or Generic always. Only the pictures change: not what a button does, and not the text hints, which name buttons by an Xbox pad's letters |
+| Button Swap | `SwapPadButtons` | off | A and B trade functions: Accept on East and Back on South, in the library, the themed view, the pad menu, every sheet and the on-screen keyboard. The help bar and the text hints name the swapped buttons. X and Y are not swapped, unlike ES-DE's setting (plan §24.5). The keyboard and every game are unaffected |
+| First Controller | `FirstControllerOnly` | off | Only the first pad opened steers the interface; ES-DE's remedy for a wireless pad that registers twice. The game is unaffected (it reads the first pad anyway) |
+| Notifications | `ControllerNotifications` | on | The notice below |
+
+**The notice.** "Controller connected: *name*" or "Controller disconnected: *name*", drawn with LunaP's `NoticeLayer`
+at the top centre over whatever is on screen (the library, the themed view, a sheet or a game), in a desktop or a
+big-screen session. It fades in over half a second, holds three and fades out over half a second, which is ES-DE 3.4.1's
+popup as recorded once (plan §24.4). The pads connected when Mistress starts are not announced.
+
+**The help bar follows the pad last pressed.** With Automatic, the themed help bar draws the family of the pad whose
+buttons most recently went from none held to some held; when that pad goes, the first pad's.
+
+**Nothing is remembered about a pad.** No name, identifier or family is written between sessions, so nothing of this
+section is in SQLite; the four settings above are the player's choices and stay in the JSON config (`EmuSen_Stack.md`
+§4). A later pass that remembers pads would keep them in Mistress's database.
+
+**Tests.** `GamepadManagerPadsTests` (6: opening, announcing and closing pads, player 1, the rebind capture, the handles),
+`ControllersTests` (10 methods, 11 cases: two pads in the library, the menu and a sheet; one unplugged; one pulled out and
+plugged back over 120 polls, the rescan fix included; the notice in each kind of session and its switch; the first
+controller; the swap in the interface and not in the game; the settings persisting; every handle let go), and
+`ThemedControllersTests` (6: two pads in the themed view, every rule from a second pad, the help bar following the pad
+last pressed, the controller type changing the help bar's pixels and none outside it, the swap in the view, its help bar
+and a theme's icons). They run on WiseMan's `PadDriver`, which plugs and pulls simulated pads beneath `GamepadManager`
+(`SimulatedPads`), so the manager's own polling runs as it does on a device.
+
+**What it does not cover.**
+- No real device was used. SDL's events and their timing, Steam Input's virtual pads, a pad that registers twice and
+  sleep and wake are for the handheld (plan §24.10).
+- A second pad as player 2 in a game.
+- The notice's fade is linear; ES-DE's fits a gentle power curve (plan §24.4). Its words are Mistress's own.
+- The Controller Bindings window still names the first pad alone.

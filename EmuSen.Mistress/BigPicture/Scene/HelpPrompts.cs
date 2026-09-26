@@ -29,7 +29,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             new("a", "Launch", PadGlyphButton.South, "button_a_{0}"),
             new("b", "Back", PadGlyphButton.East, "button_b_{0}"),
             new("y", "Search", PadGlyphButton.North, "button_y_{0}"),
-            new("back", "Favorite", PadGlyphButton.Select, "button_back_{1}"),
+            new("back", "Options", PadGlyphButton.Select, "button_back_{1}"),
             new("start", "Menu", PadGlyphButton.Start, "button_start_{1}"),
         ];
 
@@ -41,6 +41,14 @@ namespace EmuSen.Mistress.BigPicture.Scene
             _ => ("XBOX", "XBOX"),
         };
 
+        // With the swap on, a function's prompt names the face button it moved to, and that button's icon (settings reference §4.61).
+        private static Prompt Swapped(Prompt p) => p.Button switch
+        {
+            PadGlyphButton.South => p with { Button = PadGlyphButton.East, IconKey = p.IconKey.Replace("button_a_", "button_b_") },
+            PadGlyphButton.East => p with { Button = PadGlyphButton.South, IconKey = p.IconKey.Replace("button_b_", "button_a_") },
+            _ => p,
+        };
+
         private static string? IconKey(Prompt p, PadFamily family)
         {
             (string? face, string? middle) = Suffixes(family);
@@ -50,10 +58,11 @@ namespace EmuSen.Mistress.BigPicture.Scene
         }
 
         // The entries a theme lists, in its order, that Mistress has an action for in this view; "all" is every one.
-        public static IReadOnlyList<HintEntry> For(string view, IReadOnlyList<string> entries, IReadOnlyDictionary<string, ThemePath> icons, PadFamily family = PadFamily.Generic)
+        public static IReadOnlyList<HintEntry> For(string view, IReadOnlyList<string> entries, IReadOnlyDictionary<string, ThemePath> icons, PadFamily family = PadFamily.Generic, bool swapped = false)
         {
             Prompt[] known = view == "system" ? System : Gamelist;
             IEnumerable<Prompt> chosen = entries.Contains("all") ? known : entries.Select(n => known.FirstOrDefault(p => p.Entry == n)).OfType<Prompt>();
+            if (swapped) chosen = chosen.Select(Swapped);
             return chosen.Select(p => new HintEntry(p.Label, IconKey(p, family) is { } key && icons.GetValueOrDefault(key) is { Exists: true } icon ? icon.Absolute : null)
             {
                 Button = p.Button,

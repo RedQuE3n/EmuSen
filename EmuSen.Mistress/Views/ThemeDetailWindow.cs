@@ -26,7 +26,7 @@ namespace EmuSen.Mistress.Views
         private int _at;
         private CancellationTokenSource? _download, _shotCancel;
 
-        private readonly FittedImage _shot = new() { Name = "ThemeDetailScreenshot", Width = 640, Height = 360, Fit = ImageFit.Contain };
+        private readonly FittedImage _shot = new() { Name = "ThemeDetailScreenshot", Width = 496, Height = 279, Fit = ImageFit.Contain };
         private readonly TextBlock _caption = new() { Name = "ThemeDetailCaption", TextWrapping = TextWrapping.Wrap, Opacity = 0.8 };
         private readonly TextBlock _position = new() { Name = "ThemeDetailPosition", VerticalAlignment = VerticalAlignment.Center };
         private readonly TextBlock _updated = new() { Name = "ThemeDetailUpdated", TextWrapping = TextWrapping.Wrap };
@@ -58,27 +58,30 @@ namespace EmuSen.Mistress.Views
             _about = Named(Ui.Button("About", () => { if (_entry.Installed is { } i) _owner.ShowAbout(i.Directory, this); }), "ThemeDetailAbout");
             _cancel = Named(Ui.Button("Cancel Download", () => _download?.Cancel()), "ThemeDetailCancel");
 
-            var rows = Ui.Stack(10,
-                Ui.Header(t.Name),
+            var rows = Ui.Stack(8,
                 Words("ThemeDetailAuthor", $"by {t.Author}   ·   {t.Source?.Url.Replace("https://", "") ?? t.Url}"),
-                Ui.Stack(6, _shot, _caption, Ui.Row(12, _previous, _position, _next)),
+                new FieldRow { Label = "Last Updated", Content = _updated },
+                new FieldRow { Label = "Here", Content = _state },
                 Field("Variants", "ThemeDetailVariants", t.Variants),
                 Field("Colour Schemes", "ThemeDetailColorSchemes", t.ColorSchemes),
                 Field("Aspect Ratios", "ThemeDetailAspectRatios", t.AspectRatios));
             if (t.FontSizes.Count > 0) rows.Children.Add(Field("Font Sizes", "ThemeDetailFontSizes", t.FontSizes));
             if (t.Transitions.Count > 0) rows.Children.Add(Field("Transitions", "ThemeDetailTransitions", t.Transitions));
             if (t.Languages.Count > 0) rows.Children.Add(Field("Languages", "ThemeDetailLanguages", t.Languages));
-            rows.Children.Add(new FieldRow { Label = "Last Updated", Hint = "The newest commit on the repository's default branch, as its host reports it.", Content = _updated });
-            rows.Children.Add(new FieldRow { Label = "Here", Content = _state });
-            rows.Children.Add(new FieldRow { Name = "ThemeDetailLicenceRow", Label = "Licence", Hint = "From the theme's own README, else the licence file its host names. The theme is its author's work, under its own terms.", Content = _licence });
-            rows.Children.Add(Ui.Row(8, _download_, _update, _use, _remove, _about, _cancel));
-            rows.Children.Add(_bar);
-            rows.Children.Add(_status);
-
-            var scroll = new ScrollViewer { Content = rows.Margin(4, 4, 4, 4), MaxHeight = 640 };
+            // The licence row and the buttons sit below both columns, never scrolled away, so the licence is read before Download (Q27).
+            var top = new Grid { ColumnDefinitions = new ColumnDefinitions("520,20,*") };
+            Control shots = Ui.Stack(6, _shot, _caption, Ui.Row(12, _previous, _position, _next));
+            var facts = new ScrollViewer { Name = "ThemeDetailFacts", Content = rows.Margin(0, 0, 8, 0), MaxHeight = 380, Width = 520, Focusable = true };
+            Grid.SetColumn(facts, 2);
+            top.Children.Add(shots);
+            top.Children.Add(facts);
+            var bottom = Ui.Stack(8,
+                new FieldRow { Name = "ThemeDetailLicenceRow", Label = "Licence", Hint = "From the theme's own README, else the licence file its host names. The theme is its author's work, under its own terms.", Content = _licence },
+                Ui.Row(8, _download_, _update, _use, _remove, _about, _cancel), _bar, _status);
             Control buttons = Ui.Buttons(Ui.Button("Close", Close)).Margin(0, 12, 0, 0);
             DockPanel.SetDock(buttons, Dock.Bottom);
-            Content = new DockPanel { LastChildFill = true, Children = { buttons, scroll } }.Margin(16);
+            DockPanel.SetDock(bottom, Dock.Bottom);
+            Content = new DockPanel { LastChildFill = true, Children = { buttons, bottom.Margin(0, 12, 0, 0), top } }.Margin(16);
             Closed += (_, _) => { _shotCancel?.Cancel(); StopDownload(); };
             ShowShot(0);
             Refill();

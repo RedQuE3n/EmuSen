@@ -73,6 +73,7 @@ namespace EmuSen.WiseMan.Fixtures
         public readonly List<string> NotListed = new();
         public readonly TaskCompletionSource Stalled = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public string? StallArchiveOf { get; set; }
+        public double? StallFraction { get; set; }
         public bool ListFails { get; set; }
 
         public FakeThemeHosts() => Server = new OnlineCoverTests.FakeServer { Answer = Answer };
@@ -150,9 +151,14 @@ namespace EmuSen.WiseMan.Fixtures
                 if (url == s.ReadmeAddress)
                     return t.Readme is null ? new HttpResponseMessage(HttpStatusCode.NotFound) : Text(t.Readme);
                 if (url == s.ArchiveAddress)
-                    return StallArchiveOf == t.Name
-                        ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new StallingStream(Stalled)) }
-                        : Bytes(t.Zip(), "application/zip");
+                {
+                    if (StallArchiveOf != t.Name) return Bytes(t.Zip(), "application/zip");
+                    if (StallFraction is not { } f) return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new StallingStream(Stalled)) };
+                    byte[] zip = t.Zip();
+                    var content = new StreamContent(new StallingStream(Stalled, zip[..(int)(zip.Length * f)]));
+                    content.Headers.ContentLength = zip.Length;
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+                }
             }
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         }
@@ -183,10 +189,11 @@ namespace EmuSen.WiseMan.Fixtures
             return png.ToArray();
         }
 
-        // An archive whose body sends one byte and then waits until the request is cancelled.
-        private sealed class StallingStream(TaskCompletionSource started) : Stream
+        // An archive whose body sends a part (one byte by default) and then waits until the request is cancelled.
+        private sealed class StallingStream(TaskCompletionSource started, byte[]? part = null) : Stream
         {
             private bool _sent;
+            private int _at;
             public override bool CanRead => true;
             public override bool CanSeek => false;
             public override bool CanWrite => false;
@@ -200,7 +207,14 @@ namespace EmuSen.WiseMan.Fixtures
 
             public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancel = default)
             {
-                if (!_sent)
+                if (part is not null && _at < part.Length)
+                {
+                    int n = Math.Min(buffer.Length, part.Length - _at);
+                    part.AsSpan(_at, n).CopyTo(buffer.Span);
+                    _at += n;
+                    return n;
+                }
+                if (part is null && !_sent)
                 {
                     _sent = true;
                     buffer.Span[0] = (byte)'P';

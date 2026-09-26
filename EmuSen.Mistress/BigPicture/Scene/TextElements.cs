@@ -73,7 +73,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         {
             if (e.String("systemdata") is not { } field) return null;
             SceneSystem s = b.Data.System;
-            int games = s.Games.Count(g => !g.Folder), favorites = s.Games.Count(g => g.Favorite);
+            int games = s.Games.Count(g => !g.Folder && !g.NotCounted), favorites = s.Games.Count(g => g.Favorite && !g.NotCounted);
             return field switch
             {
                 "name" => s.System.Name,

@@ -28,6 +28,15 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public bool AltEmulator { get; init; }
         public bool InCollection { get; init; }
         public string? Emulator { get; init; }
+
+        // ES-DE's sortname: the list sorts by it where set, and shows the name (§4.59 of the settings reference).
+        public string? SortName { get; init; }
+
+        // ES-DE's "Exclude from game counter": left out of a system's game counts.
+        public bool NotCounted { get; init; }
+
+        // Listed only while the player shows hidden games.
+        public bool Hidden { get; init; }
     }
 
     // A system with the theme resolved for it and its games; the carousel reads each system's own resolved view.

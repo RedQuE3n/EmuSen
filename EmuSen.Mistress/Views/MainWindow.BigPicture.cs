@@ -89,7 +89,8 @@ namespace EmuSen.Mistress.Views
                 _themed.PlaySound = _appSettings.NavigationSounds ? PlayUiSound : null;
                 _themed.SetPadLayout(HelpFamily, _appSettings.SwapPadButtons);
                 string mediaKey = $"{_appSettings.EsdeMediaDirectory}|{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(_artwork)}|{ScrapeMediaKey}";
-                shown = _themed.Show(_appSettings.BigPictureTheme!, LibraryView.Bounds.Size, ThemedShelves(), ThemedMedia(), mediaKey,
+                ApplyCollectionSettings();
+                shown = _themed.Show(_appSettings.BigPictureTheme!, LibraryView.Bounds.Size, WithCollections(ThemedShelves()), ThemedMedia(), mediaKey,
                     ThemeSettingsWindow.ChoicesFor(_appSettings, _appSettings.BigPictureTheme));
                 if (!shown && _themed.Error is { } why && LibraryView.Bounds.Width > 0) StatusText.Text = why;
                 if (shown && _themed.PlaySound is not null && UiSoundSink is null) (_uiSounds ??= new UiSoundPlayer()).Preload(_themed.SoundFiles);
@@ -169,15 +170,14 @@ namespace EmuSen.Mistress.Views
                 case ThemedAction.Options when command.Game is { } game:
                     ShowGameOptions(game);
                     break;
-                case ThemedAction.Search when _themedSearch is not null:
-                    ShowThemedSearchBar(open: true);
-                    PadKeyboard.Open(_themedSearch);
-                    break;
                 case ThemedAction.ClearSearch when _themedSearch is not null:
                     _themedSearch.Text = "";
                     break;
                 case ThemedAction.Menu:
                     OpenPadMenu();
+                    break;
+                case ThemedAction.ToggleCollection when command.Game is { } member:
+                    ToggleEditedMembership(member);
                     break;
                 case ThemedAction.Leave when _session is { IsRomLoaded: true }:
                     ToggleLibrary();

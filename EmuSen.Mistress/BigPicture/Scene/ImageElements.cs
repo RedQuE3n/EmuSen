@@ -17,7 +17,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         {
             if (b.Data.Media is not { } media || b.Data.Game is not { } game) return null;
             IReadOnlyList<string> types = e.Bindings.FirstOrDefault(x => x.Kind == kind)?.Names ?? [];
-            return types.Select(t => media.Find(b.Data.System.System, game, t)).FirstOrDefault(p => p is not null);
+            return types.Select(t => media.Find(game.SourceIn(b.Data.System), game.Shown, t)).FirstOrDefault(p => p is not null);
         }
 
         internal static Control? Image(SceneBuilder b, ResolvedElement e)

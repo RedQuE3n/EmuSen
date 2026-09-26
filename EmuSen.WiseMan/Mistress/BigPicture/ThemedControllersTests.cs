@@ -120,10 +120,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             second.B();
             Assert.False(s.Window.GetControl<EmuSen.LunaP.Windowing.SheetLayer>("Sheets").IsPresenting);
 
+            // North is the favourite since the answer to Q15 (§22.13).
             second.Y();
-            Assert.NotNull(OnScreenKeyboard.OpenOver(s.Window));
-            second.Start();
-            Assert.Null(OnScreenKeyboard.OpenOver(s.Window));
+            Assert.True(s.Themed.SelectedGame!.Favorite);
+            second.Y();
+            Assert.False(s.Themed.SelectedGame!.Favorite);
 
             second.Start();
             Assert.True(s.Window.GetControl<Control>("PadMenuPanel").IsVisible);
@@ -203,7 +204,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var swapped = EmuSen.Mistress.BigPicture.Scene.HelpPrompts.For("gamelist", ["a", "b", "y"], icons, PadFamily.Xbox, swapped: true);
             Assert.Equal(new[] { "/theme/button_a_XBOX.svg", "/theme/button_b_XBOX.svg", "/theme/button_y_XBOX.svg" }, plain.Select(e => e.IconPath));
             Assert.Equal(new[] { "/theme/button_b_XBOX.svg", "/theme/button_a_XBOX.svg", "/theme/button_y_XBOX.svg" }, swapped.Select(e => e.IconPath));
-            Assert.Equal(new[] { "Launch", "Back", "Search" }, swapped.Select(e => e.Label));
+            Assert.Equal(new[] { "Launch", "Back", "Favorite" }, swapped.Select(e => e.Label));
         }
 
         // With the swap, East chooses and South goes back in the view, and the help bar names those buttons.
@@ -220,7 +221,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             IReadOnlyList<HintEntry> entries = Bar(s).Entries;
             Assert.Equal(PadGlyphButton.East, entries.Single(e => e.Label == "Launch").Button);
             Assert.Equal(PadGlyphButton.South, entries.Single(e => e.Label == "Back").Button);
-            Assert.Equal(PadGlyphButton.North, entries.Single(e => e.Label == "Search").Button);
+            Assert.Equal(PadGlyphButton.North, entries.Single(e => e.Label == "Favorite").Button);
             (int inside, int outside) = Changed(s, plain, s.Capture());
             _out.WriteLine($"swap: {inside} pixels changed in the help bar, {outside} outside it");
             Assert.Equal(0, outside);

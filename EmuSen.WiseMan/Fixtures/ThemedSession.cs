@@ -48,6 +48,8 @@ namespace EmuSen.WiseMan.Fixtures
                 RomDirectory = RomDirectory, BigScreen = true, BigPictureTheme = themeDirectory ?? Theme.Root, LibraryStyle = AppSettings.LibraryStyleTheme,
                 ResumeOnLaunch = AppSettings.ResumeNever, LibraryView = AppSettings.LibraryList,
             };
+            // The systems alone unless a test turns the automatic collections on, so a carousel test counts only what it means to.
+            app.BigPictureCollections.AutoCollections = [];
             settings?.Invoke(app);
             app.Save();
 

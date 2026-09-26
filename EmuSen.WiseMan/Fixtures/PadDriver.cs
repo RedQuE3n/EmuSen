@@ -113,6 +113,7 @@ namespace EmuSen.WiseMan.Fixtures
                 case EmuSen.Mistress.Input.UiButton.Options: Select(); break;
                 case EmuSen.Mistress.Input.UiButton.First: L2(); break;
                 case EmuSen.Mistress.Input.UiButton.Last: R2(); break;
+                case EmuSen.Mistress.Input.UiButton.Random: L3(); break;
                 default: throw new System.ArgumentOutOfRangeException(nameof(button), button, "No single pad button maps to it.");
             }
         }
@@ -132,5 +133,7 @@ namespace EmuSen.WiseMan.Fixtures
         public void L2() => Push(SDL.GamepadAxis.LeftTrigger, 1.0);
         public void R2() => Push(SDL.GamepadAxis.RightTrigger, 1.0);
         public void Guide() => Tap(SDL.GamepadButton.Guide);
+        public void L3() => Tap(SDL.GamepadButton.LeftStick);
+        public void R3() => Tap(SDL.GamepadButton.RightStick);
     }
 }

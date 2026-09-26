@@ -29,6 +29,22 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public bool InCollection { get; init; }
         public string? Emulator { get; init; }
 
+        // The system the game belongs to, which a collection lists it beside others (§22).
+        public ThemeSystem? Source { get; init; }
+
+        // For a folder, the game whose media it shows, as ES-DE's grouped collections show a member (§22).
+        public SceneGame? Face { get; init; }
+
+        // A custom collection listed in the grouped system: opened like a folder, drawn without the folder mark, as ES-DE 3.4.1 draws it (§22).
+        public bool IsCollection { get; init; }
+
+        // ES-DE's "Hide metadata fields" for this entry: its text fields but the description, its dates, rating, badges and metadata elements are not drawn (§22).
+        public bool HideMetadata { get; init; }
+
+        // The game whose media is looked up, and the system it is looked up under.
+        public SceneGame Shown => Face ?? this;
+
+        public ThemeSystem SourceIn(SceneSystem listed) => Shown.Source ?? listed.System;
         // ES-DE's sortname: the list sorts by it where set, and shows the name (§4.59 of the settings reference).
         public string? SortName { get; init; }
 
@@ -40,7 +56,14 @@ namespace EmuSen.Mistress.BigPicture.Scene
     }
 
     // A system with the theme resolved for it and its games; the carousel reads each system's own resolved view.
-    public sealed record SceneSystem(ThemeSystem System, ResolvedTheme Theme, IReadOnlyList<SceneGame> Games);
+    public sealed record SceneSystem(ThemeSystem System, ResolvedTheme Theme, IReadOnlyList<SceneGame> Games)
+    {
+        // Whether a textlist marks favourites with a star here; ES-DE's favorites collection and custom collections do not by default (§22).
+        public bool Stars { get; init; } = true;
+
+        // What a game's systemName and systemFullname read here instead of the system's: blank at the grouped collections' top, a collection's name inside it (§22).
+        public string? Heading { get; init; }
+    }
 
     // Where a game's scraped images are, by ES-DE's media type name; null when there is none.
     public interface ISceneMedia
@@ -74,6 +97,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         // ES-DE's DisplayClock setting, off in ES-DE by default whatever the theme sets (§13.8); the tests of stage (b) draw it.
         public bool ShowClock { get; init; } = true;
+
+        // What the help bar's entries depend on beyond the view (§22).
+        public HelpContext Help { get; init; } = new();
 
         public SceneSystem System => Systems[Math.Clamp(SystemIndex, 0, Systems.Count - 1)];
 

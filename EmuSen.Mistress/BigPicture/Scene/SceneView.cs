@@ -81,7 +81,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             {
                 if (e.Control is not HintBar bar) continue;
                 bar.PadFamily = family;
-                if (reentered) bar.Entries = IndicatorElements.HelpEntries(ViewName, e.Element, family, swapped);
+                if (reentered) bar.Entries = IndicatorElements.HelpEntries(ViewName, e.Element, family, swapped, Data.Help with { Folder = Data.Game?.Folder == true });
             }
         }
 

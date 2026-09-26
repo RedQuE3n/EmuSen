@@ -232,6 +232,7 @@ namespace EmuSen.Mistress.Views
                 _padMenuEntries.Add(new PadMenuEntry(() => "Scrape This Game...", () => _ = ConfirmAndScrapeAsync(Scraping.ScrapeScope.ThisGame(game))));
             if (!inGame) _padMenuEntries.Add(new PadMenuEntry(() => ScrapeRunning ? $"Scraping ({_scrapeRun!.Done} of {_scrapeRun.Total})..." : "Scrape Games...", () => { if (ScrapeRunning) ShowScrapeStatus(); else ShowPreferencesAt(PreferencesWindow.ScrapingTab); }));
             if (_bigScreen && !inGame) _padMenuEntries.Add(new PadMenuEntry(() => "Theme Settings", ShowThemeSettings));
+            if (!inGame) AddCollectionMenuEntries(_padMenuEntries);
             if (!_bigScreen) _padMenuEntries.Add(new PadMenuEntry(() => IsFullScreen ? "Leave Full Screen" : "Full Screen", ToggleFullScreen));
             if (!_bigScreenForced) _padMenuEntries.Add(new PadMenuEntry(() => _bigScreen ? "Exit Big Picture" : "Big Picture", () => SetBigPicture(!_bigScreen)));
 

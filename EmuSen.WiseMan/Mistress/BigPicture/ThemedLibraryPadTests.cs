@@ -169,13 +169,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         });
 
         [Fact]
-        public Task Shoulders_page_by_the_rows_the_list_shows_and_triggers_jump_to_the_first_and_last() => Run(s =>
+        public Task Shoulders_jump_ten_games_stopping_at_the_ends_and_triggers_jump_to_the_first_and_last() => Run(s =>
         {
             Enter(s, "snes");
-            int page = ThemedLibrary.PageSize(s.Themed.Stage!.Current);
-            Assert.InRange(page, 2, 30);
             s.Pad.R1();
-            Assert.Equal(ThemedSession.SnesGames[Math.Min(page, ThemedSession.SnesGames.Length - 1)], s.Game);
+            Assert.Equal(ThemedSession.SnesGames[^1], s.Game);
             s.Pad.L1();
             Assert.Equal(ThemedSession.SnesGames[0], s.Game);
             s.Sounds.Clear();
@@ -190,7 +188,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         });
 
         [Fact]
-        public Task Shoulders_page_a_list_longer_than_a_page_by_exactly_one_page() => Session.Dispatch(() =>
+        public Task Shoulders_move_a_long_list_by_exactly_ten_games_whatever_the_rows_it_shows() => Session.Dispatch(() =>
         {
             using var s = new ThemedSession();
             for (int i = 0; i < 40; i++) File.WriteAllBytes(Path.Combine(s.RomDirectory, $"Zeta {i:D2}.sfc"), SyntheticRom.BuildBlank());
@@ -198,21 +196,22 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Settle();
             Enter(s, "snes");
             var list = s.Themed.Stage!.Current.Scene.Entries.Select(e => e.Control).OfType<TextRowList>().Single();
-            int page = (int)Math.Floor(list.Bounds.Height / list.RowPitch + 1e-6);
-            Assert.Equal(page, ThemedLibrary.PageSize(s.Themed.Stage.Current));
+            Assert.NotEqual(10, (int)Math.Floor(list.Bounds.Height / list.RowPitch + 1e-6));
             s.Pad.R1();
-            Assert.Equal(page, s.Themed.Stage.Current.Index);
+            Assert.Equal(10, s.Themed.Stage.Current.Index);
             s.Pad.R1();
-            Assert.Equal(2 * page, s.Themed.Stage.Current.Index);
+            Assert.Equal(20, s.Themed.Stage.Current.Index);
             s.Pad.L1();
-            Assert.Equal(page, s.Themed.Stage.Current.Index);
+            Assert.Equal(10, s.Themed.Stage.Current.Index);
+            for (int i = 0; i < 4; i++) s.Pad.R1();
+            Assert.Equal(s.Themed.Stage.Current.Count - 1, s.Themed.Stage.Current.Index);
         }, default);
 
         [Fact]
-        public Task North_searches_with_the_on_screen_keyboard_and_east_clears_the_search_before_it_goes_back() => Run(s =>
+        public Task Select_s_Search_opens_the_on_screen_keyboard_and_east_clears_the_search_before_it_goes_back() => Run(s =>
         {
             Enter(s, "snes");
-            s.Pad.Y();
+            ThemedGameOptionsTests.Choose(s, "Search...");
             OnScreenKeyboard keyboard = OnScreenKeyboard.OpenOver(s.Window) ?? throw new InvalidOperationException("no keyboard");
             PadCheatsTests.TypeByPad(s.Pad, keyboard, "cob");
             s.Pad.Start();
@@ -233,6 +232,27 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.B();
             Assert.Equal("system", s.View);
             Assert.Equal(new[] { "back", "back" }, s.Sounds);
+        });
+
+        [Fact]
+        public Task North_toggles_the_favourite_as_ES_DE_s_Y_does_moving_the_game_first_and_keeping_it_selected() => Run(s =>
+        {
+            Enter(s, "snes");
+            s.Pad.Down(3);
+            string chosen = ThemedSession.SnesGames[3];
+            s.Sounds.Clear();
+            s.Pad.Y();
+            Assert.Null(OnScreenKeyboard.OpenOver(s.Window));
+            Assert.Equal(new[] { "favorite" }, s.Sounds);
+            Assert.Equal(chosen, s.Game);
+            Assert.True(s.Themed.SelectedGame!.Favorite);
+            Assert.Equal(0, s.Themed.Stage!.Current.Index);
+            HintBar help = s.Themed.Stage.Current.Scene.Entries.Select(e => e.Control).OfType<HintBar>().Single();
+            Assert.Contains(help.Entries!, h => h.Label == "Favorite" && h.Button == PadGlyphButton.North);
+            s.Pad.Y();
+            Assert.False(s.Themed.SelectedGame!.Favorite);
+            Assert.Equal(chosen, s.Game);
+            Assert.Equal(3, s.Themed.Stage.Current.Index);
         });
 
         [Fact]

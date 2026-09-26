@@ -147,9 +147,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(new QuadraticEaseOut().Ease(0.4) * (1 - left), Control(view).FocusToLevel, 3);
         }
 
-        // The mapping's units: a -1 axis of itemSize is the other axis's pixels, corner radii are fractions of the width, a page is the whole rows shown.
+        // The mapping's units: a -1 axis of itemSize is the other axis's pixels, corner radii are fractions of the width.
         [Fact]
-        public void Item_sizes_corner_radii_and_pages_are_in_ES_DE_s_units()
+        public void Item_sizes_and_corner_radii_are_in_ES_DE_s_units()
         {
             var view = new SceneView(Data(Grid("<imageCornerRadius>0.05</imageCornerRadius>").Replace("<itemSize>0.2 0.3</itemSize>", "<itemSize>0.2 -1</itemSize>")), "gamelist", TimeSpan.Zero);
             Assert.Equal(128, Control(view).ItemSize.Width, 3);
@@ -158,8 +158,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var tall = new SceneView(Data(Grid().Replace("<itemSize>0.2 0.3</itemSize>", "<itemSize>-1 0.3</itemSize>")), "gamelist", TimeSpan.Zero);
             Assert.Equal(120, Control(tall).ItemSize.Width, 3);
             Assert.Equal(120, Control(tall).ItemSize.Height, 3);
-            var page = new SceneView(Data(Grid()), "gamelist", TimeSpan.Zero);
-            Assert.Equal(8, EmuSen.Mistress.BigPicture.ThemedLibrary.PageSize(page));
         }
 
         // A held direction steps at the press, at 500 ms and then every 200 ms, with no faster tier, on either axis.

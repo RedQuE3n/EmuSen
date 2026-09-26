@@ -59,12 +59,12 @@ namespace EmuSen.Mistress.BigPicture.Scene
         }
 
         // The help element's entries for a view, in a family, with or without the A/B and X/Y swap.
-        internal static IReadOnlyList<HintEntry> HelpEntries(string view, ResolvedElement e, PadFamily family, bool swapped) =>
-            HelpPrompts.For(view, e.List("entries") is { Count: > 0 } l ? l : ["all"], e.Keyed("customButtonIcon"), family, swapped);
+        internal static IReadOnlyList<HintEntry> HelpEntries(string view, ResolvedElement e, PadFamily family, bool swapped, HelpContext? context = null) =>
+            HelpPrompts.For(view, e.List("entries") is { Count: > 0 } l ? l : ["all"], e.Keyed("customButtonIcon"), family, swapped, context);
 
         internal static Control? Help(SceneBuilder b, ResolvedElement e)
         {
-            IReadOnlyList<HintEntry> hints = HelpEntries(b.View.Name, e, b.Data.Family, b.Data.SwapFaceButtons);
+            IReadOnlyList<HintEntry> hints = HelpEntries(b.View.Name, e, b.Data.Family, b.Data.SwapFaceButtons, b.Data.Help with { Folder = b.Data.Game?.Folder == true });
             if (hints.Count == 0) return null;
             return Outward(new HintBar
             {

@@ -60,12 +60,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.A();
             Assert.Equal("gamelist", s.View);
 
-            s.Pad.Y();
+            ThemedGameOptionsTests.Choose(s, "Search...");
             PadCheatsTests.TypeByPad(s.Pad, OnScreenKeyboard.OpenOver(s.Window)!, "dune");
             s.Pad.Start();
             Assert.Equal("Dune Relay (Synthetic)", s.Game);
-            s.Pad.Select();
-            s.Pad.A();
+            s.Pad.Y();
             Assert.True(s.Themed.SelectedGame!.Favorite);
 
             s.Sounds.Clear();

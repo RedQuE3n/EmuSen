@@ -29,7 +29,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
                 "color", "colorEnd", "gradientType", "text", "textRelativeScale", "textColor", "textBackgroundColor", "fontPath", "fontSize", "letterCase", "itemTransitions", "fastScrolling"),
             ["textlist"] = Set("selectorHeight", "selectorVerticalOffset", "selectorColor", "primaryColor", "secondaryColor", "selectedColor", "selectedSecondaryColor",
                 "selectedBackgroundColor", "selectedBackgroundMargins", "selectedBackgroundCornerRadius", "fontPath", "fontSize", "horizontalAlignment", "horizontalMargin",
-                "letterCase", "lineSpacing", "systemNameSuffix", "letterCaseSystemNameSuffix", "indicators", "textHorizontalScrolling", "textHorizontalScrollSpeed",
+                "letterCase", "lineSpacing", "systemNameSuffix", "letterCaseSystemNameSuffix", "indicators", "collectionIndicators", "textHorizontalScrolling", "textHorizontalScrollSpeed",
                 "textHorizontalScrollDelay", "textHorizontalScrollGap"),
             ["grid"] = Set("staticImage", "imageType", "defaultImage", "defaultFolderImage", "itemSize", "itemScale", "itemSpacing", "scaleInwards", "fractionalRows",
                 "itemTransitions", "rowTransitions", "unfocusedItemOpacity", "unfocusedItemSaturation", "unfocusedItemDimming", "imageFit", "imageCropPos", "imageInterpolation",

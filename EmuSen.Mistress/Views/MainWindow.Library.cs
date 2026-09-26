@@ -239,6 +239,12 @@ namespace EmuSen.Mistress.Views
             var addArt = new LunaAction("Add _Cover Art from File...", () => { if (SelectedLibraryEntry is RomEntry e) _ = AddCoverArtAsync(e); });
             var removeArt = new LunaAction("_Remove Cover Art", () => { if (SelectedLibraryEntry is RomEntry e) RemoveCoverArt(e); });
             var lookUp = new LunaAction("_Scrape This Game...", () => { if (SelectedLibraryEntry is RomEntry e) _ = ConfirmAndScrapeAsync(ScrapeScope.ThisGame(e.FullPath)); });
+            // The same menu and editor big picture has - see EmuSen_Settings_Reference.md §4.62.
+            var options = new LunaAction("Game _Options...", () => { if (SelectedLibraryEntry is RomEntry e) ShowLibraryGameOptions(e); });
+            var edit = new LunaAction("_Edit Metadata...", () => { if (SelectedLibraryEntry is RomEntry e) EditLibraryGameMetadata(e); })
+            {
+                Shortcut = EditMetadataGesture,
+            };
 
             var leave = new LunaAction("Remove from This Collection", () =>
             {
@@ -255,12 +261,12 @@ namespace EmuSen.Mistress.Views
                     leave.Text = $"Remove from {shown.Name.Replace("_", "__")}";
                     actions.Add(leave);
                 }
-                actions.AddRange(new[] { LunaAction.Separator(), addArt, removeArt });
+                actions.AddRange(new[] { LunaAction.Separator(), options, edit, LunaAction.Separator(), addArt, removeArt });
                 lookUp.IsEnabled = entry is not null && !ScrapeRunning;
                 actions.Add(lookUp);
                 menu.ItemsSource = Menus.Items(actions);
                 bool any = entry is not null;
-                play.IsEnabled = favourite.IsEnabled = addArt.IsEnabled = any;
+                play.IsEnabled = favourite.IsEnabled = addArt.IsEnabled = options.IsEnabled = edit.IsEnabled = any;
                 restart.IsEnabled = any && File.Exists(ResumeStatePath(entry!.FullPath));
                 favourite.Text = any && _records.IsFavourite(entry!.FullPath) ? "Remove from _Favourites" : "Add to _Favourites";
                 removeArt.IsEnabled = any && OwnCoverPath(entry!) is not null;

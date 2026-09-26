@@ -227,6 +227,9 @@ namespace EmuSen.Mistress.Views
             _padMenuEntries.Add(new PadMenuEntry(() => "Shaders", ShowShaderSettings));
             _padMenuEntries.Add(new PadMenuEntry(() => "Controller Bindings", ShowControllerBindings));
             _padMenuEntries.Add(new PadMenuEntry(() => "Preferences", ShowPreferences));
+            // The sidebar library's game options; the themed gamelist has them on Select - see EmuSen_Settings_Reference.md §4.62.
+            if (!inGame && !ThemedLibraryShown && SelectedLibraryEntry is EmuSen.Mistress.Library.RomEntry chosen)
+                _padMenuEntries.Add(new PadMenuEntry(() => "Game Options...", () => ShowLibraryGameOptions(chosen)));
             // Scraping only ever starts here or in Preferences, by the player - see EmuSen_Settings_Reference.md §4.60.
             if (!inGame && GameToScrape is string game && !ScrapeRunning)
                 _padMenuEntries.Add(new PadMenuEntry(() => "Scrape This Game...", () => _ = ConfirmAndScrapeAsync(Scraping.ScrapeScope.ThisGame(game))));

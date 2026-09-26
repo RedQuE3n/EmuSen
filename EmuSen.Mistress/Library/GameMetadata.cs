@@ -73,7 +73,7 @@ namespace EmuSen.Mistress.Library
         public static MetadataValue Baseline(string path, ScrapedRecord? scraped, string field) =>
             Scraped(scraped, field) is { } s ? new MetadataValue(s, MetadataSource.Scraped) : new MetadataValue(Default(path, field), MetadataSource.Default);
 
-        // ScreenScraper's name is kept and never shown, as §17.6 of the plan decided, so the name's baseline is the file's.
+        // ScreenScraper's name is never a baseline, so the name's is the file's; the editor only offers it (Q18, §4.62).
         public static string? Scraped(ScrapedRecord? r, string field) => r is null ? null : field switch
         {
             Description => r.Description,

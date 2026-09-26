@@ -2082,6 +2082,31 @@ driver through surfaceless EGL. Medians over the three rounds; the raw file is
 - **The first GPU frame** costs 21–33 ms (5.7–8.5 ms with immutable bitmaps), paid once when the view is built.
 - **Not measured:** Game Mode's gamescope compositing on top of this, and the frame as Mistress's real window presents it.
 
+### 14.10b The handheld at 1920×1200, where the user plays (2026-09-26)
+
+The user runs the Legion Go S at its panel's full 1920×1200, not the 1280×800 §10.1's Q2 read from gamescope's
+arguments. A second run at that size only, five rounds, 240 still frames and 1,800 moving frames (30 s at 60 Hz) a
+case, on the charger, Desktop Mode (`results/20260926-135821.txt`):
+
+| Case | Median frame | p95 | Worst, per round |
+| --- | --- | --- | --- |
+| System view, full redraw | 1.66–1.95 ms | — | — |
+| Gamelist, full redraw | 0.92–0.98 ms | — | — |
+| Carousel held | 1.89–2.05 ms | 2.33–2.62 ms | 12.48, 13.62, 14.28, 15.14, 15.79 ms |
+| List held (the §14.8 lever) | 0.89–0.90 ms | 1.18–1.35 ms | 9.56–12.91 ms |
+| List held, rebuilt every step | 1.09–1.10 ms | 1.59–1.71 ms | 14.24–15.58 ms |
+
+- **P8 held at 1920×1200, narrowly for the worst frame.** No frame in 9,000 carousel frames missed 16.7 ms; the worst
+  was 15.79 ms, 0.9 ms inside. The median is 2 ms, so the worst frames are isolated spikes, not the steady cost:
+  one in 1,800 frames or fewer reached 12 ms. What they are was not measured here; on the desktop the list's were
+  garbage collections (§14.8).
+- **The carousel is the case to watch at this size.** Its GL time is 1.3–1.5 ms against the list's 0.31, the nine
+  full-height system images being sampled with mipmaps at full quality; its spikes rose with the round (12.5 → 15.8 ms),
+  which may be heat. A carousel spike under gamescope's own compositing, which this run does not include, may cross
+  the frame.
+- **The lever matters more here.** Without it the held list's worst reached 15.58 ms; with it, 12.91.
+- **Q2's reading is superseded for performance targets:** 1920×1200 is the size to measure first on the handheld.
+
 ### 14.11 Not done in stage (c)
 
 - **Nothing was measured on the handheld.** P8 and P28 wait for `deck-gpu` (§14.4), which now also runs the moving

@@ -85,7 +85,7 @@ namespace EmuSen.Mistress.Views
             _appliedSwap = _appSettings.SwapPadButtons;
             PadHints.Swapped = _appSettings.SwapPadButtons;
             Sheets.Hint = PadHints.Face(SheetHint);
-            if (LibraryView.IsVisible && !ThemedLibraryShown && LibraryHintText.IsVisible && _gamepad.IsConnected) LibraryHintText.Text = PadLibraryHint();
+            if (LibraryView.IsVisible && !ThemedLibraryShown && !MediaShown && LibraryHintText.IsVisible && _gamepad.IsConnected) LibraryHintText.Text = PadLibraryHint();
         }
 
         private const string SheetHint = "A  Choose      B  Back      L1 R1  Tab      Left Right  Change";
@@ -97,6 +97,8 @@ namespace EmuSen.Mistress.Views
                 _padActive.Remove(change.Pad.Id);
                 if (_lastPadId == change.Pad.Id) _lastPadId = null;
             }
+            // The library's hint names the pad's buttons or the keyboard's, so the first pad in and the last out redraw it.
+            if (_gamepad.Pads.Count == (change.Connected ? 1 : 0) && LibraryView.IsVisible && !ThemedLibraryShown) ShowLibraryEntries();
             if (_appSettings.ControllerNotifications) PadNotice.Show($"{(change.Connected ? "Controller connected" : "Controller disconnected")}: {change.Pad.Name}");
         }
     }

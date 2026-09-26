@@ -47,7 +47,7 @@ namespace EmuSen.Mistress.Views
             ApplyPadHints();
             Sheets.PresentedChanged += OnSheetsChanged;
             SizeChanged += (_, e) => Sheets.Scale = Math.Clamp(e.NewSize.Height / 720.0, 1.0, 2.0);
-            SizeChanged += (_, e) => PadNotice.FontSize = 18 * Math.Clamp(e.NewSize.Height / 720.0, 1.0, 2.0);
+            SizeChanged += (_, e) => PadNotice.FontSize = _bigScreen ? 18 * Math.Clamp(e.NewSize.Height / 720.0, 1.0, 2.0) : 15;
             SetUpBigPictureSwitch();
             ApplyBigScreen(WantsBigScreen());
 

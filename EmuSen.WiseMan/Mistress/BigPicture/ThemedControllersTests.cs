@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
@@ -66,6 +67,68 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             second.Down();
             Assert.Equal(2, s.Themed.Stage!.Current.Index);
             s.Pad.B();
+            Assert.Equal("system", s.View);
+        }, default);
+
+        // P103's first half: §15.3's rules, each from a second pad, with the first still plugged in.
+        [Fact]
+        public Task Every_rule_of_the_pad_table_holds_from_a_second_pad() => Session.Dispatch(() =>
+        {
+            using var s = new ThemedSession();
+            PadDriver second = s.Pad.Plug("Second Pad");
+            s.Pad.Tick();
+
+            second.Right();
+            Assert.Equal("gb", s.System);
+            second.Left();
+            Assert.Equal("nes", s.System);
+            Assert.Equal(new[] { "systembrowse", "systembrowse" }, s.Sounds);
+
+            // A held direction repeats on the view's own clock: the press, then 500 ms.
+            s.Sounds.Clear();
+            second.Pad.Press(SDL.GamepadButton.DPadRight);
+            second.Tick();
+            s.Run(520);
+            second.Pad.Release(SDL.GamepadButton.DPadRight);
+            second.Tick();
+            Assert.Equal(2, s.Sounds.Count);
+            Assert.Equal("snes", s.System);
+
+            second.A();
+            Assert.Equal("gamelist", s.View);
+            second.Down(2);
+            Assert.Equal(ThemedSession.SnesGames[2], s.Game);
+            second.Up();
+            Assert.Equal(ThemedSession.SnesGames[1], s.Game);
+            second.R2();
+            Assert.Equal(ThemedSession.SnesGames[^1], s.Game);
+            second.L2();
+            Assert.Equal(ThemedSession.SnesGames[0], s.Game);
+            second.R1();
+            Assert.NotEqual(ThemedSession.SnesGames[0], s.Game);
+            second.L1();
+            Assert.Equal(ThemedSession.SnesGames[0], s.Game);
+
+            second.Right();
+            Assert.Equal(("gamelist", "nes"), (s.View, s.System));
+            second.Left();
+            Assert.Equal(("gamelist", "snes"), (s.View, s.System));
+
+            s.Sounds.Clear();
+            second.Select();
+            Assert.Equal(new[] { "favorite" }, s.Sounds);
+
+            second.Y();
+            Assert.NotNull(OnScreenKeyboard.OpenOver(s.Window));
+            second.Start();
+            Assert.Null(OnScreenKeyboard.OpenOver(s.Window));
+
+            second.Start();
+            Assert.True(s.Window.GetControl<Control>("PadMenuPanel").IsVisible);
+            second.B();
+            Assert.False(s.Window.GetControl<Control>("PadMenuPanel").IsVisible);
+
+            second.B();
             Assert.Equal("system", s.View);
         }, default);
 

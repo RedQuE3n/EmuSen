@@ -151,10 +151,12 @@ namespace EmuSen.WiseMan.Mistress
             first.Unplug();
             for (int i = 0; i < 120; i++) first.Tick();
             Assert.False(first.Gamepad.IsConnected);
+            StringAssert(window.GetControl<TextBlock>("LibraryHintText").Text, "Double-click a title");
 
             first.Replug();
             first.Tick();
             Assert.True(first.Gamepad.IsConnected);
+            StringAssert(window.GetControl<TextBlock>("LibraryHintText").Text, "A  Play");
             first.Down();
             Assert.Equal(1, Selected(window));
             window.Close();
@@ -241,7 +243,7 @@ namespace EmuSen.WiseMan.Mistress
             first.Y();
             Assert.Null(OnScreenKeyboard.OpenOver(window));
             first.X();
-            Assert.NotNull(OnScreenKeyboard.OpenOver(window));
+            StringAssert(OnScreenKeyboard.OpenOver(window)!.Hint, "B  Type      A  Erase      X  Space");
             first.Start();
             Assert.Null(OnScreenKeyboard.OpenOver(window));
             first.A();

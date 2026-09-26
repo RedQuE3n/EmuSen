@@ -813,6 +813,9 @@ Deck's own session sets, starts the window full screen with the menu bar hidden 
 Everything the bar held that a player wants is in the pad's menu; the rest is a desktop session's business. It is
 read once, at start, because hiding and restoring the bar under a running game bought nothing worth the states it
 adds.
+*Retired 2026-09-26 (§4.54):* the user asked for a way into big picture from the desktop, and full screen on the
+desktop now is big picture, entered and left while the window runs. The argument above priced the states a switch
+adds against nothing bought; the request is what it buys, and §4.54 lists each state and the test that holds it.
 *Corrected 2026-09-22 (§4.43):* the premise that `SteamDeck=1` marks a Deck's own session was wrong. Steam sets it on
 a Deck in Desktop Mode as well, so a game started from Steam on the desktop lost its menu bar and sidebar. The
 environment trigger is now a gamescope session, and `SteamDeck=1` counts only where no desktop is named.
@@ -1379,7 +1382,8 @@ appear, so the change is not a workaround for a window that never shows; it is c
 cost the reading lists: no letterboxed enlargement of a desk-sized window, no rescaling while a dropdown is open, no
 dependence on the window switcher's pin, the game still visible around the sheet, and one focus model for the pad to
 drive. Desktop Mode, and any session that is not big-screen, keeps real windows, where a pointer and a window
-manager make them the better choice.
+manager make them the better choice. *Since 2026-09-26 (§4.54) the answer follows the mode as it switches: a window
+opened in big picture on the desktop is a sheet, and one opened after leaving is a window again.*
 
 **The mechanism.** `MainWindow.axaml` places a `SheetLayer` named `Sheets` over everything, and `StartPadNavigation`
 sets its `PresentsWindows` to the big-screen flag, its hint to the pad's buttons, and its scale to the window's
@@ -1610,6 +1614,11 @@ Avalonia's `X11PlatformOptions.OverlayPopups`, which draws a popup in the window
 window. The decision is made before the first window exists, from `AppSettings.Load()` and the environment, because
 platform options are read once at startup: turning the big-screen setting on or off takes effect at the next launch.
 Desktop Mode is unchanged.
+*Amended 2026-09-26 (§4.54):* the setting no longer takes part. It now records the mode last used on the desktop, and a
+process-wide option cannot follow a mode the window switches, so `MainWindow.EmbedsPopupsAtStart` asks only
+`--bigscreen` and a Game Mode session, the two answers that hold for the process's whole life. Big picture entered on
+the desktop embeds the window's own popups instead, with LunaP's `EmbeddedPopups` on the window (§92.5 there), which a
+switch turns on and off.
 
 **What it gives up.** An embedded list cannot reach past the window's edge, which in a full-screen session has
 nothing beyond it.
@@ -2470,7 +2479,8 @@ A change takes effect when the Preferences sheet closes, since closing it refres
 `Theme`; a theme folder is set; and the theme reads without error and has a view for at least one system with games.
 Otherwise the library of §4.33 is shown, as before, and when a set theme could not be read the status line says why.
 The desktop keeps its sidebar library whatever the style says: the user decided on 2026-09-25 that the themed view is
-for big-screen sessions only. While the themed view is showing, the status bar is hidden, so the view has the whole
+for big-screen sessions only. *Amended by the user on 2026-09-26 (§4.54): the desktop keeps its sidebar library, and
+its full screen is big picture, where the themed view is shown under the same four conditions.* While the themed view is showing, the status bar is hidden, so the view has the whole
 window; it comes back with the game.
 
 **What is shown.** One system per library shelf that has games, in the shelves' release order, under ES-DE's system
@@ -2647,3 +2657,113 @@ moving, the units, and Art Book Next's grid against ES-DE's still) and `ThemedGr
 - The download is not resumable: a stopped download starts again from the beginning.
 - The stamp is the only record of where a theme came from; a downloaded folder whose stamp is deleted is treated as read
   in place, and cannot be removed from the sheet.
+
+### 4.54 Big picture from the desktop: full screen is big picture (2026-09-26)
+
+**The request.** The user, 2026-09-26: "There needs to be a button to enter big picture mode on desktop as well", and,
+the same day, more exactly: "i want a button to enter fullscreen mode, where fullscreen mode enters emusens big picture
+mode". Until then big screen was decided once, when the window was made (§4.29, §4.43), and the themed view was offered
+in big-screen sessions only (§4.52; `EmuSen_BigPicture.md` §10.1, Q8). The record, with the mutants, is §17 of that plan.
+
+**What the player meets.**
+
+- The library's toolbar carries a **Fullscreen** button at its right end, after the search box. Its tooltip names the
+  key and says what it does: "Fullscreen (F11) / Opens big picture mode: the library full screen, for a pad or a
+  television. Esc or the same key comes back." The View menu's entry is **Fullscreen (Big Picture)**.
+- **Every way into full screen enters big picture:** the button, the View menu, F11 (the Fullscreen hotkey, which can be
+  rebound; the tooltip follows it), the in-game bar's full-screen button, the pad menu's **Big Picture**, and the window
+  manager's own full screen. Big picture is then what a big-screen session is (§4.29, §4.45.2, §4.52): the window full
+  screen, no menu bar and no sidebar, the console choice back in the filter bar, the library's text at 24 points, and the
+  library itself the theme's view when Library Style is Theme and a theme loads, else Mistress's own big-screen library.
+  Every window opened from there is a sheet, and the pad menu, the resume question and the pausing rules are the
+  session's.
+- **Every way out of full screen leaves it:** the pad menu's **Exit Big Picture**, the same key, the toolbar button (which
+  reads **Exit Big Picture** where Mistress's own big-screen library shows it; the themed view covers the toolbar), the
+  window manager, and **Esc** where it has nothing else to do: the library showing, no game suspended behind it, and
+  nothing over it (no sheet, no pad menu, no on-screen keyboard). With a game suspended, Esc keeps its meaning (§4.18) and
+  goes back to the game.
+- **Leaving gives the desktop back as it was:** the window returns to the state it entered full screen from (maximised
+  stays maximised; a normal window has its size back from the platform), the menu bar and sidebar return, the text is
+  its own size again, and the desktop library is at the console, search and game it stood at when big picture was
+  entered, whatever the pad did in Mistress's big-screen library meanwhile, which shares those controls.
+- **Game Mode is always big picture.** In a gamescope session (§4.43) there is no button, no pad-menu entry, and neither
+  F11, Esc nor a change of window state leaves. Exit is not offered, rather than offered and argued safe: gamescope shows
+  the window full screen whatever it asks for, and the desktop layout there would have a menu bar with no pointer and no
+  window manager to drive it (§4.24, §4.29).
+
+**The window's full screen is the switch, not the button.** Big picture follows `ToolWindow.FullScreenChanged`, which
+LunaP raises on every change of `WindowState` into or out of full screen, whatever made it (LunaP §75.2), so a key, a
+menu, the window manager and the button cannot disagree about the mode. `SetBigPicture` returns at once when asked for
+the mode it is in, and sets its own flag before it asks the window for full screen, so the event that request raises
+finds nothing to do: entering does not enter twice. Maximised is not full screen and does not switch.
+
+A consequence the request accepts: on the desktop there is no longer a full-screen desktop layout. A game made full
+screen fills the screen as before; the library, when it is shown, is the big-screen one.
+
+**What was decided once, and what it is now.** Every decision the window took at start for big screen, found by
+reading `StartPadNavigation`, `Program.BuildAvaloniaApp` and every reader of the flag:
+
+| Decision | Before | Now |
+|---|---|---|
+| the flag itself (`_bigScreen`) | set once in `StartPadNavigation` | `ApplyBigScreen(bool)`, run at start and by every switch |
+| menu bar, sidebar, filter facet, the library's text sizes | set only for a big-screen start | set for either answer; the text sizes are cleared back to the inherited ones, not set to a copy |
+| full screen at start | an `Opened` handler added for a big-screen start | one `Opened` handler that reads the flag |
+| `SheetLayer.PresentsWindows` | set once | set by every switch. LunaP reads it when a window is shown, so windows opened after a switch follow the new answer |
+| process-wide popup embedding (`LunaApp.EmbedPopups`) | the setting, `--bigscreen` or Game Mode | `--bigscreen` or Game Mode only: a platform option cannot be switched, and the setting now records the last mode (below), so a desktop that last ended in big picture would otherwise draw every desktop popup inside the window for the whole session |
+| the window's own popups | not embedded | `EmbeddedPopups` on the window (LunaP §92.5), switched with the mode, so the facet's list stays in the window in big picture |
+| the themed library's setup (`SetUpThemedLibrary`) | at start, for a big-screen start only | on the first entry, once for the window's life; its handlers do nothing on the desktop, since they ask `ThemedStyleWanted`, which reads the flag |
+| the pad's 16 ms timer | started at construction | unchanged: it serves the desktop too (§4.29); the tests hold that it is one timer after five switches |
+| the pad menu | Full Screen or Leave Full Screen; Theme Settings in a big-screen session | Big Picture or Exit Big Picture, not in Game Mode; Theme Settings reads the flag when the menu opens |
+| F11 | set `WindowState` to Normal or FullScreen | `ToggleFullScreen`, so leaving returns to the state full screen was entered from; a maximised window came back normal before |
+
+**What leaving stops, and what it keeps.** Leaving shows the library again through `ShowLibraryEntries`, which hides
+the themed view's host; `ScheduleThemedFrame` then stops the wake timer and clears the next wake, and a frame already
+asked for finds the host hidden and draws nothing. The interface's sound stream (`UiSoundPlayer`, §4.52) is disposed,
+so a desktop session holds no second stream on the device; the next showing decodes the sounds again and the next
+sound opens the stream again. A direction held at the moment of leaving is let go by the pad's own poll, which lets go
+of it on every tick that the themed view is not taking the pad. The `ThemedLibrary` itself is kept, with its stage,
+its capabilities and its selection, so coming back finds the same system, game and view without paying the cold first
+build again (P41 in the plan). A Theme Settings sheet open at the switch stays open, and a download in it runs until the
+sheet or the window is closed (§4.53).
+
+**Which mode the next start takes.** Every switch writes `BigScreen`, Preferences' "Start in big screen mode", and saves
+it, so the next start is in the mode last used on the desktop. It is the one setting, not a second one beside it:
+Preferences shows what the last switch wrote, and turning it on there does not switch the running window (it says
+"Start in"). Game Mode never switches and never writes it. A start with `--bigscreen` writes nothing until the player
+switches. A desktop Preferences window already open when the player presses F11 keeps showing the value it opened with.
+
+**Tests.** `BigPictureSwitchTests`, nine cases on WiseMan's `PadDriver` with headless keys and a pointer:
+- the whole cycle, with a theme and without: desktop; in by the button (a pointer's click), F11, the View menu, the
+  window manager, and F11 again from a maximised window; the pad steering the carousel with its sound, or the list, its
+  console and a search; out by the pad menu, Esc, the window manager, the button and F11; after each, the desktop with
+  the same game, console and empty search, the menu bar, sidebar, text sizes and window state as before, `BigScreen`
+  as written, one pad timer and one themed library throughout;
+- the wake: leaving with a text in its pause, then 2.6 s of real dispatcher time, draws nothing; entering again comes
+  back to the same gamelist and draws;
+- the sound stream held in big picture, let go on the desktop, taken again;
+- windows and popups: in big picture Preferences opens on a sheet, no window is owned, its "Start in big screen mode"
+  is on, and the facet's popup is in the window; after leaving, Preferences is a window with the switch off and the
+  popup is the platform's;
+- in a game, Esc goes to the library and back without leaving, and F11 leaves with the game on screen and running;
+- the next start: a window made after entering starts in big picture and full screen, one made after leaving on the
+  desktop;
+- Game Mode: no button, no entry, and F11, Esc, a window-state change and a direct call all leave it in big picture;
+- process-wide popups: only `--bigscreen` and Game Mode ask for them, with a saved big-picture mode on disk.
+
+`DesktopButtonPictureTool`, run with `EMUSEN_BIGPICTURE_PNG=1`, writes the desktop window with its button and tooltip,
+big picture and its pad menu (synthetic theme, Art Book Next when cloned, and Mistress's own library), and the desktop
+after leaving, at 1280×800, to `~/.cache/emusen/bigpicture/png/desktop-button/`.
+
+**What it does not cover.**
+
+- *Windows already open at a switch stay what they were.* A desktop Preferences window stays a window over big
+  picture, and a sheet open when leaving stays a sheet until it is closed. Neither is lost; neither is moved.
+- *No real window manager was used.* The headless platform takes every `WindowState` it is given. Whether KDE and GNOME
+  report their own full-screen command through Avalonia's `WindowState` on X11 and on Wayland, and whether a normal
+  window gets its exact size back, was not observed.
+- *The library's own view settings are shared, not given back:* grid or list, cover size, and the Library, Save States
+  and Screenshots choice follow whatever was last chosen in either mode, as they are stored settings.
+- *Steam's own Big Picture on the desktop* (`SteamTenfoot`, `SteamGamepadUI`) is still not read (§4.43), so a game
+  started from it opens on the desktop layout until the player presses the button.
+- *The popup embedding by the window* reaches the popups under the window; a tooltip or context menu Avalonia parents
+  elsewhere may still open as a window of its own on the desktop, where a window manager draws it at its size.

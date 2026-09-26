@@ -1055,6 +1055,15 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 - **Q5, developer credentials:** **the user's own machines only.** Published builds do not carry them; a build
   without the local file cannot scrape.
 - Q6–Q10 remain open; each is asked when its stage reaches it.
+- **Q8 and Q9, and navigation sounds (the user, 2026-09-25, before stage e):**
+  - **Q8:** the existing big-screen library **stays**, as the fallback when no theme is installed and as a choice
+    after one is (Preferences, "Library style"). The themed view is offered **in big-screen sessions only**; the
+    desktop keeps its sidebar library.
+  - **Q9:** the help bar's button icons **follow the connected pad**: Mistress detects the controller family and draws
+    its own set for it (Xbox, PlayStation, Nintendo, and a generic set when unknown). The favourite, folder and badge
+    graphics are Mistress's own drawings.
+  - **Sounds:** the theme's navigation sounds play through a small UI sound stream, **on by default** with a switch in
+    Preferences.
 - **Drawn with LunaP (the user, 2026-09-24): "make sure we are drawing this with LunaP and if something is missing
   from LunaP, add it".** This supersedes §4's one Skia-drawn control in Mistress. Every visible part is a LunaP
   control, and what LunaP lacks is added to LunaP under its own conventions (a `docs/LunaP.md` section, tests, the API

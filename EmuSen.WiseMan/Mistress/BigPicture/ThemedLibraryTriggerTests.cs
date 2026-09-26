@@ -141,7 +141,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Settle();
         }
 
-        // P52: a system whose covers and videos are all in the ES-DE folder keeps the chosen variant; taking them away fires noVideos, then noMedia, at the next showing.
+        // P52: a system whose covers and videos are all in the ES-DE folder keeps the chosen variant; emptying the folders fires noVideos, then noMedia, at the next showing.
         [Fact]
         public Task The_gamelist_variant_follows_the_media_the_library_has() => Session.Dispatch(() =>
         {
@@ -158,11 +158,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal("gamelist", s.View);
             Assert.Equal("full", GamelistVariant(s));
 
-            Directory.Delete(Path.Combine(media, "snes", "videos"), true);
+            foreach (string f in Directory.GetFiles(Path.Combine(media, "snes", "videos"))) File.Delete(f);
             Refresh(s);
             Assert.Equal("novideo", GamelistVariant(s));
 
-            Directory.Delete(Path.Combine(media, "snes", "covers"), true);
+            foreach (string f in Directory.GetFiles(Path.Combine(media, "snes", "covers"))) File.Delete(f);
             Refresh(s);
             Assert.Equal("bare", GamelistVariant(s));
 

@@ -152,6 +152,10 @@ recorded it three times on 2026-09-26 (`OverflowException` in `TimeSpan.op_Subtr
 through `MainWindow.PadTick`). The start value is now `-RescanInterval`, so the first rescan is due at once and the
 subtraction cannot overflow. `GamepadRescanTests` failed on the old value with the same exception, and passes on the new one.
 
+*Since 2026-09-26 (§4.61)* the manager opens every pad, not the first alone, and asks whether a rescan is due at every
+poll rather than only with no pad; a pad plugged in is also opened at once on SDL's added event. The start value above
+is kept, and is now exercised on every tick. The game still reads one pad, the first opened.
+
 ### 4.5 Conflict reporting
 
 `Rebind` guarantees one owner per key going forward, but a hand-edited or older config can still contain duplicates. The window recomputes conflicts after every change, colours the offending rows, and names them in a status line along the bottom rather than leaving the player to work out why one key does two things.
@@ -2553,7 +2557,8 @@ copied from ES-DE or a vendor.
 
 *Limits of the detection.* A pad behind Steam Input reaches SDL as Steam's virtual pad and is classified as that pad
 is, not as the hardware in the player's hands. A generic pad whose name carries none of the words is drawn generic
-even when its printing is known to the player. `GamepadManager` still opens only the first pad; it now lets a pulled
+even when its printing is known to the player. `GamepadManager` still opens only the first pad (*since 2026-09-26 every pad,
+and the help bar follows the pad last pressed or the Controller Type setting: §4.61*); it now lets a pulled
 pad go (`SDL_GamepadConnected`), so its one-a-second rescan can open the next one.
 
 **Sounds.** The theme's seven sounds (`systembrowse`, `quicksysselect`, `select`, `back`, `scroll`, `favorite`,
@@ -3355,3 +3360,56 @@ mutants are in the plan's §20.
   file to have it fetched.
 - No search by name for a game the hashes miss.
 - Nothing ran on the handheld.
+
+### 4.61 Controllers: every pad steers the interface, a notice when one comes or goes, and ES-DE's input settings (2026-09-26)
+
+Until this section Mistress opened one pad, the first SDL listed, and a second pad was not seen until the first went
+(§4.52). Pass 2 of `EmuSen_BigPicture.md` §21 changes that for the interface, as ES-DE's "Input device settings" describe
+it; the design record, the measurements and the mutants are §24 of that plan.
+
+**Every pad steers the interface.** `GamepadManager` (Endymion) opens every connected pad, in the order SDL lists them,
+and opens a pad plugged in later as soon as SDL queues its added event, or at the one-a-second rescan of §4.4 if the
+event is missed; a pad pulled out is let go at the next poll. Any pad then drives the library, the themed view of §4.52,
+the pad menu (§4.29), every sheet (§4.45), the game options of §4.59 and the on-screen keyboard: a button is held when any
+pad holds it. Over a running game any pad's guide button, or Back and Start together, opens the pad menu.
+
+**The game hears player 1 only.** The first pad opened is player 1's, as the only pad was before; when it goes, the next
+one opened takes its place, which is what the rescan did before with one pad. The game's bindings (`GamepadBindingMap`)
+are unchanged, and a second pad is not player 2: that is separate input work (`EmuSen_Input.md` §6).
+
+**Settings.** Preferences ▸ Controllers, stored in `appsettings.json`; each applies at once:
+
+| Row | Setting | Default | What it does |
+|---|---|---|---|
+| Controller Type | `ControllerType` | Automatic | The buttons the big picture help bar draws: Automatic follows the pad last pressed (its family by §4.52's rules), or Xbox, PlayStation, Nintendo or Generic always. Only the pictures change: not what a button does, and not the text hints, which name buttons by an Xbox pad's letters |
+| Button Swap | `SwapPadButtons` | off | A and B trade functions: Accept on East and Back on South, in the library, the themed view, the pad menu, every sheet and the on-screen keyboard. The help bar and the text hints name the swapped buttons. X and Y are not swapped, unlike ES-DE's setting (plan §24.5). The keyboard and every game are unaffected |
+| First Controller | `FirstControllerOnly` | off | Only the first pad opened steers the interface; ES-DE's remedy for a wireless pad that registers twice. The game is unaffected (it reads the first pad anyway) |
+| Notifications | `ControllerNotifications` | on | The notice below |
+
+**The notice.** "Controller connected: *name*" or "Controller disconnected: *name*", drawn with LunaP's `NoticeLayer`
+at the top centre over whatever is on screen (the library, the themed view, a sheet or a game), in a desktop or a
+big-screen session. It fades in over half a second, holds three and fades out over half a second, which is ES-DE 3.4.1's
+popup as recorded once (plan §24.4). The pads connected when Mistress starts are not announced.
+
+**The help bar follows the pad last pressed.** With Automatic, the themed help bar draws the family of the pad whose
+buttons most recently went from none held to some held; when that pad goes, the first pad's.
+
+**Nothing is remembered about a pad.** No name, identifier or family is written between sessions, so nothing of this
+section is in SQLite; the four settings above are the player's choices and stay in the JSON config (`EmuSen_Stack.md`
+§4). A later pass that remembers pads would keep them in Mistress's database.
+
+**Tests.** `GamepadManagerPadsTests` (6: opening, announcing and closing pads, player 1, the rebind capture, the handles),
+`ControllersTests` (10 methods, 11 cases: two pads in the library, the menu and a sheet; one unplugged; one pulled out and
+plugged back over 120 polls, the rescan fix included; the notice in each kind of session and its switch; the first
+controller; the swap in the interface and not in the game; the settings persisting; every handle let go), and
+`ThemedControllersTests` (6: two pads in the themed view, every rule from a second pad, the help bar following the pad
+last pressed, the controller type changing the help bar's pixels and none outside it, the swap in the view, its help bar
+and a theme's icons). They run on WiseMan's `PadDriver`, which plugs and pulls simulated pads beneath `GamepadManager`
+(`SimulatedPads`), so the manager's own polling runs as it does on a device.
+
+**What it does not cover.**
+- No real device was used. SDL's events and their timing, Steam Input's virtual pads, a pad that registers twice and
+  sleep and wake are for the handheld (plan §24.10).
+- A second pad as player 2 in a game.
+- The notice's fade is linear; ES-DE's fits a gentle power curve (plan §24.4). Its words are Mistress's own.
+- The Controller Bindings window still names the first pad alone.

@@ -165,7 +165,7 @@ namespace EmuSen.Mistress.Views
             _loadState = new LunaAction("_Load State", LoadState);
             _speedMenu = new LunaAction("Spee_d", () => { });
             _slotMenu = new LunaAction("State Sl_ot", () => { });
-            _fullscreen = new LunaAction("_Fullscreen", a => IsFullScreen = a.IsChecked) { IsCheckable = true };
+            _fullscreen = new LunaAction("_Fullscreen (Big Picture)", a => IsFullScreen = a.IsChecked) { IsCheckable = true };
             _hardwareDashboard = new LunaAction("_Hardware Dashboard...", () => OpenCoretopWindow(_debugTarget));
             _rewindReel = new LunaAction("Re_wind...", () => OpenRewindReel(resumeAfter: false));
             InitializeComponent();
@@ -264,13 +264,12 @@ namespace EmuSen.Mistress.Views
             {
                 case HotkeyAction.SaveState: SaveState(); break;
                 case HotkeyAction.LoadState: LoadState(); break;
-                case HotkeyAction.ExitToLibrary: ToggleLibrary(); break;
+                case HotkeyAction.ExitToLibrary: if (EscapeLeavesBigPicture) SetBigPicture(false); else ToggleLibrary(); break;
                 case HotkeyAction.Screenshot: TakeScreenshot(); break;
                 // Nothing to pause while the library is up: it is already suspended - see §4.18.
                 case HotkeyAction.TogglePause: if (!LibraryView.IsVisible) TogglePause(); break;
-                case HotkeyAction.ToggleFullscreen:
-                    WindowState = WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
-                    break;
+                // Through ToolWindow, so leaving goes back to the state full screen was entered from, a maximised window included.
+                case HotkeyAction.ToggleFullscreen: ToggleFullScreen(); break;
             }
             e.Handled = true;
         }
@@ -740,6 +739,7 @@ namespace EmuSen.Mistress.Views
             Gesture(_loadState, HotkeyAction.LoadState);
             Gesture(_fullscreen, HotkeyAction.ToggleFullscreen);
             Gesture(_closeGame, HotkeyAction.ExitToLibrary);
+            if (_bigPictureAction is not null) _bigPictureAction.Shortcut = _fullscreen.Shortcut;
         }
 
         private void Gesture(LunaAction action, HotkeyAction bound)

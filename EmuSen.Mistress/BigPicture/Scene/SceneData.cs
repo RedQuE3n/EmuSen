@@ -49,6 +49,12 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public bool HideMetadata { get; init; }
         public SceneMotion Motion { get; init; } = SceneMotion.Esde;
 
+        // The connected pad's printing, which the help bar's buttons are drawn in (§15).
+        public PadFamily Family { get; init; }
+
+        // ES-DE's DisplayClock setting, off in ES-DE by default whatever the theme sets (§13.8); the tests of stage (b) draw it.
+        public bool ShowClock { get; init; } = true;
+
         public SceneSystem System => Systems[Math.Clamp(SystemIndex, 0, Systems.Count - 1)];
 
         public SceneGame? Game => System.Games.Count == 0 ? null : System.Games[Math.Clamp(GameIndex, 0, System.Games.Count - 1)];

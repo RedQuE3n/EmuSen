@@ -16,8 +16,30 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public SceneStage(SceneData data, string view, TimeSpan now)
         {
             Current = new SceneView(data, view, now, data.Motion);
+            Current.Stepped += OnStepped;
             Root = new Panel { Width = data.Screen.Width, Height = data.Screen.Height, ClipToBounds = true };
             Root.Children.Add(Current.Root);
+        }
+
+        // Every move of the current view's selection, repeats included, for the host's sounds.
+        public event Action<int, bool>? Stepped;
+
+        private void OnStepped(int delta, bool held) => Stepped?.Invoke(delta, held);
+
+        // When the stage next looks different: now while a slide runs, else the current view's answer.
+        public TimeSpan? NextChange(TimeSpan now) => _leaving is not null ? now : Current.NextChange(now);
+
+        // The same view drawn from new data at once, with no transition, as a change of system, a filter or a favourite asks.
+        public void Replace(SceneData data, TimeSpan now)
+        {
+            Finish();
+            var next = new SceneView(data, Current.ViewName, now, data.Motion);
+            Root.Children.Remove(Current.Root);
+            Current.Stepped -= OnStepped;
+            Current = next;
+            Current.Stepped += OnStepped;
+            Root.Children.Add(Current.Root);
+            Advance(now);
         }
 
         public Panel Root { get; }
@@ -27,9 +49,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public bool IsMoving => Current.IsMoving || _leaving is not null;
 
         // Opens the other view with the current selection: the gamelist from the system view, or back.
-        public void Switch(TimeSpan now)
+        public void Switch(TimeSpan now, SceneData? with = null)
         {
-            SceneData data = Current.Data;
+            SceneData data = with ?? Current.Data;
             bool toGamelist = Current.ViewName == "system";
             TransitionProfile profile = data.System.Theme.Transitions;
             TransitionAnimation animation = toGamelist ? profile.SystemToGamelist : profile.GamelistToSystem;
@@ -44,7 +66,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
             }
             else Root.Children.Remove(Current.Root);
 
+            Current.Stepped -= OnStepped;
             Current = next;
+            Current.Stepped += OnStepped;
             Advance(now);
         }
 

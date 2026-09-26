@@ -74,6 +74,18 @@ namespace EmuSen.Galaxia.Models
         // Box art the library shows, read and never written except by Add Cover Art - see EmuSen_Settings_Reference.md §4.33.
         public string? ArtworkDirectory { get; set; }
 
+        // A big-screen session's library: Mistress's own, or an ES-DE theme's view when one is found - see EmuSen_Settings_Reference.md §4.52.
+        public string LibraryStyle { get; set; } = LibraryStyleTheme;
+        public const string LibraryStyleMistress = "Mistress";
+        public const string LibraryStyleTheme = "Theme";
+
+        // The ES-DE theme folder, read in place; and an ES-DE downloaded_media folder, also only read - see §4.52.
+        public string? BigPictureTheme { get; set; }
+        public string? EsdeMediaDirectory { get; set; }
+
+        // The theme's navigation sounds, on a stream beside the game's - see §4.52.
+        public bool NavigationSounds { get; set; } = true;
+
         private static readonly ConfigFile<AppSettings> File = new("appsettings.json");
 
         public void Save() => File.Save(this);

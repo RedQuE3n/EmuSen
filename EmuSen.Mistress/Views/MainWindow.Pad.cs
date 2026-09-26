@@ -64,6 +64,8 @@ namespace EmuSen.Mistress.Views
             Sheets.PresentedChanged += OnSheetsChanged;
             SizeChanged += (_, e) => Sheets.Scale = Math.Clamp(e.NewSize.Height / 720.0, 1.0, 2.0);
 
+            if (_bigScreen) SetUpThemedLibrary();
+
             PadMenuList.Label = entry => entry.Text();
             _padTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
             _padTimer.Tick += (_, _) => PadTick();
@@ -103,7 +105,21 @@ namespace EmuSen.Mistress.Views
             }
 
             _padNavigator.MenuChord(PadHeld);
-            foreach (UiButton press in _padNavigator.Feed(PadHeld, _padClock.Elapsed).ToArray()) OnPadCommand(press);
+            TimeSpan now = UiClock();
+
+            // The themed view takes the directions as held and let go, for its own repeats - see EmuSen_Settings_Reference.md §4.52.
+            bool themed = ThemedTakesThePad;
+            if (ThemedLibraryShown) _themed!.SetFamily(PadFamilies.Of(_gamepad.ControllerType, _gamepad.ControllerName));
+            if (themed) ThemedDirections(now);
+            else LetGoOfTheThemedDirection(now);
+
+            foreach (UiButton press in _padNavigator.Feed(PadHeld, now).ToArray())
+            {
+                if (themed && Directions.Contains(press)) continue;
+                OnPadCommand(press);
+            }
+
+            if (ThemedLibraryShown) ScheduleThemedFrame();
         }
 
         // True while the game must not hear the pad: a menu is over it, or the button that closed one is still down.
@@ -148,6 +164,7 @@ namespace EmuSen.Mistress.Views
             if (OtherWindow() is { } other) PadWindowRouter.Send(other, button);
             else if (EmuSen.LunaP.Controls.OnScreenKeyboard.OpenOver(this) is { } keyboard) PadKeyboard.Send(keyboard, button);
             else if (_padMenuOpen) PadMenuCommand(button);
+            else if (LibraryView.IsVisible && ThemedLibraryShown) ThemedPadCommand(button);
             else if (LibraryView.IsVisible) LibraryPadCommand(button);
         }
 

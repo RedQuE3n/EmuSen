@@ -471,7 +471,7 @@ namespace EmuSen.Mistress.Views
         {
             StatusText.IsVisible = _appSettings.ShowStatusText;
             FpsText.IsVisible = _appSettings.ShowFpsBar;
-            StatusBar.IsVisible = _appSettings.ShowStatusBar && (_appSettings.ShowStatusText || _appSettings.ShowFpsBar);
+            StatusBar.IsVisible = _appSettings.ShowStatusBar && (_appSettings.ShowStatusText || _appSettings.ShowFpsBar) && !(ThemedLibraryShown && LibraryView.IsVisible);
         }
 
         private void ShowDebugLogging()
@@ -1052,6 +1052,7 @@ namespace EmuSen.Mistress.Views
             string search = LibraryFilter.SearchText;
             _recordSnapshot = _records.All();
             _collections = _records.Collections();
+            ShowThemedLibrary();
             RomEntry? keptSelection = LibraryList.Selected;
             bool sameSearch = search == _lastLibrarySearch;
             _lastLibrarySearch = search;

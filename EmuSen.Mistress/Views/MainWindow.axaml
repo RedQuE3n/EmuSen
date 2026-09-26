@@ -93,7 +93,8 @@
                         BorderBrush="{DynamicResource LunaBorder}" BorderThickness="0,0,1,0">
                     <lunac:SourceList x:Name="LibrarySidebar" AutomationProperties.Name="Collections and consoles" Margin="0,10,0,0" />
                 </Border>
-                <DockPanel Margin="12">
+                <Grid>
+                <DockPanel x:Name="LibraryContent" Margin="12">
                     <Grid DockPanel.Dock="Top" x:Name="LibraryToolbar" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,8">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
                             <lunac:ButtonBar x:Name="LibraryViewButtons" VerticalAlignment="Center" />
@@ -134,6 +135,9 @@
                                         KeyDown="OnLibraryKeyDown" />
                     </Grid>
                 </DockPanel>
+                <!-- An ES-DE theme's views in a big-screen session, in the library's place - see EmuSen_Settings_Reference.md §4.52. -->
+                <Panel x:Name="ThemedLibraryHost" IsVisible="False" Background="Black" ClipToBounds="True" />
+                </Grid>
             </DockPanel>
             <serenity:GameFrameControl x:Name="GameFrame" IsVisible="False" />
 

@@ -29,6 +29,14 @@ namespace EmuSen.Mistress.Views
         private readonly LunaSwitch _showStatusBar = new() { Name = "ShowStatusBarSwitch", Label = "Show the status bar" };
         private readonly LunaSwitch _showStatusText = new() { Name = "ShowStatusTextSwitch", Label = "Show messages" };
         private readonly LunaSwitch _showFpsBar = new() { Name = "ShowFpsBarSwitch", Label = "Show the frame rate" };
+        private readonly LunaSwitch _navigationSounds = new() { Name = "NavigationSoundsSwitch", Label = "Play the theme's navigation sounds" };
+        private readonly Dropdown _libraryStyle = new() { Name = "LibraryStyleDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
+
+        private static readonly (string Value, string Text)[] LibraryStyles =
+        {
+            (AppSettings.LibraryStyleMistress, "Mistress"),
+            (AppSettings.LibraryStyleTheme, "ES-DE theme"),
+        };
 
         // Raised when a status-bar switch moves, so the main window applies it at once.
         public event Action? StatusBarChanged;
@@ -124,6 +132,30 @@ namespace EmuSen.Mistress.Views
                     Label = "Frame Rate",
                     Hint = "The frames-per-second readout at the bottom right while a game runs.",
                     Content = _showFpsBar,
+                },
+                new FieldRow
+                {
+                    Label = "Library Style",
+                    Hint = "In big screen mode, the library as Mistress draws it, or as an ES-DE theme draws it. The theme is used only when the folder below holds one that loads; otherwise Mistress's library is shown.",
+                    Content = _libraryStyle,
+                },
+                new FieldRow
+                {
+                    Label = "ES-DE Theme",
+                    Hint = "A theme folder for ES-DE (one holding capabilities.xml), such as Art Book Next. It is only ever read, and nothing of it is copied.",
+                    Content = Picker("BigPictureThemeBox", "(none)", "Choose ES-DE Theme Folder", _settings.BigPictureTheme, p => _settings.BigPictureTheme = p),
+                },
+                new FieldRow
+                {
+                    Label = "ES-DE Media",
+                    Hint = "An ES-DE downloaded_media folder, whose covers, screenshots and marquees the theme shows. It is only ever read. Without one the theme shows Mistress's own covers.",
+                    Content = Picker("EsdeMediaBox", "(none)", "Choose ES-DE Media Folder", _settings.EsdeMediaDirectory, p => _settings.EsdeMediaDirectory = p),
+                },
+                new FieldRow
+                {
+                    Label = "Navigation Sounds",
+                    Hint = "The theme's sounds for moving, choosing and going back, on a stream of their own beside the game's.",
+                    Content = _navigationSounds,
                 }));
             tabs.Add("System Files", Pane(SystemFiles()));
 
@@ -142,6 +174,16 @@ namespace EmuSen.Mistress.Views
             _showStatusText.IsCheckedChanged += (_, _) => { _settings.ShowStatusText = _showStatusText.IsChecked == true; _settings.Save(); StatusBarChanged?.Invoke(); };
             _showFpsBar.IsChecked = _settings.ShowFpsBar;
             _showFpsBar.IsCheckedChanged += (_, _) => { _settings.ShowFpsBar = _showFpsBar.IsChecked == true; _settings.Save(); StatusBarChanged?.Invoke(); };
+            _navigationSounds.IsChecked = _settings.NavigationSounds;
+            _navigationSounds.IsCheckedChanged += (_, _) => { _settings.NavigationSounds = _navigationSounds.IsChecked == true; _settings.Save(); };
+            string[] styleTexts = LibraryStyles.Select(c => c.Text).ToArray();
+            _libraryStyle.Fill(styleTexts, LibraryStyles.FirstOrDefault(c => c.Value == _settings.LibraryStyle).Text ?? styleTexts[1]);
+            _libraryStyle.Chose += chosen =>
+            {
+                if (LibraryStyles.FirstOrDefault(c => c.Text == chosen as string).Value is not string value) return;
+                _settings.LibraryStyle = value;
+                _settings.Save();
+            };
             _pauseInBackground.IsChecked = _settings.PauseInBackground;
             _pauseInBackground.IsCheckedChanged += (_, _) => { _settings.PauseInBackground = _pauseInBackground.IsChecked == true; _settings.Save(); };
 

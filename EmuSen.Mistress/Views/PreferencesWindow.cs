@@ -44,6 +44,7 @@ namespace EmuSen.Mistress.Views
         public Action? ThemeChosen { get; set; }
 
         public const string ScrapingTab = "Scraping";
+        public const string ControllersTab = "Controllers";
 
         private readonly Tabs _tabs = new() { Name = "PreferenceTabs" };
 
@@ -182,6 +183,7 @@ namespace EmuSen.Mistress.Views
                     Hint = "The theme's sounds for moving, choosing and going back, on a stream of their own beside the game's.",
                     Content = _navigationSounds,
                 }));
+            tabs.Add(ControllersTab, Pane(new ControllerPreferencesPane(settings).Rows()));
             tabs.Add("System Files", Pane(SystemFiles()));
 
             // A dock and scrolling panes, so a sheet shorter than the window still shows Close - see EmuSen_Settings_Reference.md §4.45.3.

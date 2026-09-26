@@ -49,6 +49,9 @@ namespace EmuSen.Mistress.BigPicture
 
         public PadFamily Family { get; private set; }
 
+        // The swap of the A/B and X/Y functions, which the help bar follows (settings reference §4.61).
+        public bool SwapFaceButtons { get; private set; }
+
         public DeviceStatus Status { get; set; } = new();
 
         public Func<DateTime> Now { get; set; } = () => DateTime.Now;
@@ -157,7 +160,7 @@ namespace EmuSen.Mistress.BigPicture
             int game = _cursor.TryGetValue(chosen.System.Name, out string? file) ? Math.Max(0, chosen.Games.ToList().FindIndex(g => g.File == file)) : 0;
             return new SceneData(systems, _screen)
             {
-                SystemIndex = system, GameIndex = game, Media = _media, Motion = Motion, Family = Family, Status = Status, Now = Now(), ShowClock = false,
+                SystemIndex = system, GameIndex = game, Media = _media, Motion = Motion, Family = Family, SwapFaceButtons = SwapFaceButtons, Status = Status, Now = Now(), ShowClock = false,
             };
         }
 
@@ -202,11 +205,15 @@ namespace EmuSen.Mistress.BigPicture
         public TimeSpan? NextChange(TimeSpan now) => Stage?.NextChange(now);
 
         // The pad's family changed: only the help bar is redrawn (§15, P43).
-        public void SetFamily(PadFamily family)
+        public void SetFamily(PadFamily family) => SetPadLayout(family, SwapFaceButtons);
+
+        // The family and the swap together; only the help bar is redrawn (settings reference §4.61).
+        public void SetPadLayout(PadFamily family, bool swapped)
         {
-            if (family == Family) return;
+            if (family == Family && swapped == SwapFaceButtons) return;
             Family = family;
-            Stage?.Current.SetFamily(family);
+            SwapFaceButtons = swapped;
+            Stage?.Current.SetPadLayout(family, swapped);
         }
 
         // The direction the primary element moves along: a horizontal carousel's is left and right, a list's and a vertical carousel's up and down.

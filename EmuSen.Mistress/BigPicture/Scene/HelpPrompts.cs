@@ -41,6 +41,16 @@ namespace EmuSen.Mistress.BigPicture.Scene
             _ => ("XBOX", "XBOX"),
         };
 
+        // With the swap on, a function's prompt names the face button it moved to, and that button's icon (settings reference §4.61).
+        private static Prompt Swapped(Prompt p) => p.Button switch
+        {
+            PadGlyphButton.South => p with { Button = PadGlyphButton.East, IconKey = p.IconKey.Replace("button_a_", "button_b_") },
+            PadGlyphButton.East => p with { Button = PadGlyphButton.South, IconKey = p.IconKey.Replace("button_b_", "button_a_") },
+            PadGlyphButton.West => p with { Button = PadGlyphButton.North, IconKey = p.IconKey.Replace("button_x_", "button_y_") },
+            PadGlyphButton.North => p with { Button = PadGlyphButton.West, IconKey = p.IconKey.Replace("button_y_", "button_x_") },
+            _ => p,
+        };
+
         private static string? IconKey(Prompt p, PadFamily family)
         {
             (string? face, string? middle) = Suffixes(family);
@@ -50,10 +60,11 @@ namespace EmuSen.Mistress.BigPicture.Scene
         }
 
         // The entries a theme lists, in its order, that Mistress has an action for in this view; "all" is every one.
-        public static IReadOnlyList<HintEntry> For(string view, IReadOnlyList<string> entries, IReadOnlyDictionary<string, ThemePath> icons, PadFamily family = PadFamily.Generic)
+        public static IReadOnlyList<HintEntry> For(string view, IReadOnlyList<string> entries, IReadOnlyDictionary<string, ThemePath> icons, PadFamily family = PadFamily.Generic, bool swapped = false)
         {
             Prompt[] known = view == "system" ? System : Gamelist;
             IEnumerable<Prompt> chosen = entries.Contains("all") ? known : entries.Select(n => known.FirstOrDefault(p => p.Entry == n)).OfType<Prompt>();
+            if (swapped) chosen = chosen.Select(Swapped);
             return chosen.Select(p => new HintEntry(p.Label, IconKey(p, family) is { } key && icons.GetValueOrDefault(key) is { Exists: true } icon ? icon.Absolute : null)
             {
                 Button = p.Button,

@@ -15,7 +15,7 @@ namespace EmuSen.WiseMan.Fixtures
         // What a player would want to reach: something that does a thing, not the panel around it.
         public static bool IsOperable(InputElement e) =>
             e.Focusable && e.IsEffectivelyEnabled && e.IsEffectivelyVisible
-            && (e is Button or ToggleButton or ComboBox or Slider or TextBox or ListBoxItem || e is TabItem { IsSelected: true })
+            && (e is Button or ToggleButton or ComboBox or Slider or TextBox or ListBoxItem or EmuSen.LunaP.Controls.ISidewaysAdjustable || e is TabItem { IsSelected: true })
             && !(e is ToggleButton && (e as Visual)!.FindAncestorOfType<ListBoxItem>() is not null);
 
         public static List<InputElement> Operable(Control root) =>
@@ -111,7 +111,7 @@ namespace EmuSen.WiseMan.Fixtures
             {
                 object key = queue.Dequeue();
                 if (At(key) is not { } from) { failed.Add(key); continue; }
-                bool takesSideways = from is ComboBox or Slider or TabItem;
+                bool takesSideways = from is ComboBox or Slider or TabItem or EmuSen.LunaP.Controls.ISidewaysAdjustable;
                 foreach (int direction in takesSideways ? new[] { 0, 1 } : new[] { 0, 1, 2, 3 })
                 {
                     if (At(key) is null) { failed.Add(key); break; }

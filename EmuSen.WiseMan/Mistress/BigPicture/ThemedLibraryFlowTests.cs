@@ -65,6 +65,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.Start();
             Assert.Equal("Dune Relay (Synthetic)", s.Game);
             s.Pad.Select();
+            s.Pad.A();
             Assert.True(s.Themed.SelectedGame!.Favorite);
 
             s.Sounds.Clear();

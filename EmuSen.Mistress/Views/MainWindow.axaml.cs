@@ -1059,21 +1059,22 @@ namespace EmuSen.Mistress.Views
         {
             string search = LibraryFilter.SearchText;
             _recordSnapshot = _records.All();
+            _editSnapshot = _records.AllEdits();
             _collections = _records.Collections();
             ShowThemedLibrary();
             RomEntry? keptSelection = LibraryList.Selected;
             bool sameSearch = search == _lastLibrarySearch;
             _lastLibrarySearch = search;
-            IReadOnlyList<RomEntry> pool = InCollection(_libraryScan.Entries);
+            IReadOnlyList<RomEntry> pool = InCollection(Listed(_libraryScan.Entries));
 
             IReadOnlyList<RomEntry> shownEntries = string.IsNullOrWhiteSpace(search)
                 ? pool
-                : pool.Where(e => FilterBar.Matches(search, e.Title)).ToList();
+                : pool.Where(e => FilterBar.Matches(search, DisplayTitle(e))).ToList();
 
             // Off the whole scan, not the search subset, so the tag cannot flicker while typing.
             bool mixed = _libraryScan.Entries.Select(e => e.Shelf).Distinct().Count() > 1;
             MixedConsoles = mixed;
-            LibraryList.Label = e => mixed ? $"{e.Title}   —   {e.Shelf}" : e.Title;
+            LibraryList.Label = e => mixed ? $"{DisplayTitle(e)}   —   {e.Shelf}" : DisplayTitle(e);
             LibraryList.Refresh(shownEntries);
             _shownEntries = shownEntries;
             LibraryGrid.Refresh(shownEntries);

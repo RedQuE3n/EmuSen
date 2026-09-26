@@ -22,7 +22,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
     }
 
-    // The desktop window with its Fullscreen button, big picture after it, and the desktop after leaving, at 1280 by 800; written outside the repository.
+    // The desktop window with its Fullscreen and Big Picture buttons, plain full screen, big picture, and the desktop after leaving, at 1280 by 800; written outside the repository.
     [Collection(TestCollections.ProcessGlobals)]
     public class DesktopButtonPictureTool
     {
@@ -70,6 +70,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     s.Settle();
                     Save(s.Capture(), "desktop-tooltip-1280x800");
                     ToolTip.SetIsOpen(button, false);
+                    ActionButton fullscreen = BigPictureSwitchTests.FullscreenButton(s.Window);
+                    ToolTip.SetIsOpen(fullscreen, true);
+                    s.Settle();
+                    Save(s.Capture(), "desktop-fullscreen-tooltip-1280x800");
+                    ToolTip.SetIsOpen(fullscreen, false);
+                    BigPictureSwitchTests.Click(s.Window, fullscreen);
+                    s.Settle();
+                    Save(s.Capture(), "desktop-plain-fullscreen-1280x800");
+                    BigPictureSwitchTests.Press(s, Key.F11);
                 }
 
                 BigPictureSwitchTests.Click(s.Window, BigPictureSwitchTests.Button(s.Window));
@@ -79,7 +88,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Save(s.Capture(), $"{style}-padmenu-1280x800");
                 s.Pad.B();
 
-                BigPictureSwitchTests.Press(s, Key.F11);
+                BigPictureSwitchTests.Press(s, Key.F10);
                 Save(s.Capture(), $"{style}-desktop-after-1280x800");
             }
         }, default);

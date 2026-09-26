@@ -199,6 +199,38 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal("collections", s.System);
         });
 
+        private const string MetadataElements =
+            "<rating name=\"r\"><pos>0.55 0.8</pos><size>0 0.05</size></rating>" +
+            "<text name=\"sys\"><pos>0.55 0.85</pos><size>0.4 0.05</size><metadata>systemFullname</metadata><color>FFFFFF</color></text>" +
+            "<text name=\"desc\"><pos>0.55 0.9</pos><size>0.4 0.05</size><metadata>description</metadata><color>FFFFFF</color></text>" +
+            "<text name=\"dev\"><pos>0.55 0.95</pos><size>0.4 0.05</size><metadata>developer</metadata><defaultValue>unknown</defaultValue><color>FFFFFF</color></text>";
+
+        [Fact]
+        public Task A_collection_s_entry_is_drawn_as_ES_DE_draws_it_no_folder_mark_its_metadata_hidden_and_a_blank_system_name() => Session.Dispatch(() =>
+        {
+            using var s = new ThemedSession(extraGamelist: MetadataElements);
+            long platform = Records(s).CreateCollection("Platform", DateTime.Now)!.Value;
+            Records(s).AddToCollection(platform, Rom(s, ThemedSession.SnesGames[0]));
+            Refresh(s);
+            Enter(s, "collections");
+            SceneBuilder scene = s.Themed.Stage!.Current.Scene;
+            Assert.True(s.Themed.SelectedGame!.IsCollection);
+            Assert.Equal(TextRowMarker.None, scene.Entries.Select(e => e.Control).OfType<TextRowList>().Single().Items![0].Marker);
+            Assert.Equal("the entry hides its metadata", scene.Find("rating", "r")!.Skipped);
+            Assert.Equal("the entry hides its metadata", scene.Find("text", "dev")!.Skipped);
+            Assert.NotNull(scene.Find("text", "desc")!.Control);
+            Assert.Null(scene.Find("text", "sys")!.Control);
+            Assert.Contains(scene.Entries.Select(e => e.Control).OfType<HintBar>().Single().Entries!, h => h.Label == "Select");
+
+            // Inside, a game again: its metadata drawn, and the system name is the collection's.
+            s.Pad.A();
+            scene = s.Themed.Stage!.Current.Scene;
+            Assert.NotEqual("the entry hides its metadata", scene.Find("rating", "r")!.Skipped);
+            Assert.Equal("unknown", ((FontText)scene.Find("text", "dev")!.Control!).Text);
+            Assert.Equal("Platform", ((FontText)scene.Find("text", "sys")!.Control!).Text);
+            Assert.Contains(scene.Entries.Select(e => e.Control).OfType<HintBar>().Single().Entries!, h => h.Label == "Launch");
+        }, default);
+
         [Fact]
         public Task A_collection_the_theme_has_a_folder_for_is_a_system_of_its_own_and_the_setting_can_group_it_or_part_all() => Run(s =>
         {

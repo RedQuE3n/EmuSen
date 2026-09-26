@@ -155,8 +155,8 @@ namespace EmuSen.Mistress.Views
                 download.IsEnabled = _download is null;
                 _themes.Children.Add(new FieldRow
                 {
-                    Label = "Art Book Next",
-                    Hint = $"Downloads the theme from {artBook.Url.Replace("https://", "")}, about 220 MB, into Mistress's own folder. It is someone else's work under its own licence, shown on its About sheet.",
+                    Label = "Download Art Book Next",
+                    Hint = $"The ES-DE edition, from {artBook.Url.Replace("https://", "")}, about 220 MB, into Mistress's own folder. It is someone else's work under its own licence, shown on its About sheet.",
                     Content = download,
                 });
             }

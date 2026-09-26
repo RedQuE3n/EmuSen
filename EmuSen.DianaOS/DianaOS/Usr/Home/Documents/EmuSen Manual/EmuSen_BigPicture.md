@@ -3645,3 +3645,221 @@ about. They are therefore narrower than a stage's.
   list: the listed games are kept per list, so a step does not sort again.
 - **P71, the options sheet.** Opening Gamelist Options over the 3,508-game all games list, its letters and its filter
   values computed from the list, takes under 100 ms on the desktop.
+
+### 22.2 ES-DE 3.4.1, measured where its documentation is silent
+
+The documentation names the collections and describes their settings, but not the system names a theme sees for them,
+their place in the carousel, what the grouped system's entries show, or the order inside the automatic collections. A
+separate run ran the local AppImage for these, in the scratch `--home` only, one window at a time, eight runs of 15–25 s,
+each closed by PID, with the scratch settings, gamelists and collections restored afterwards and compared with
+`diff -r`. The runner, timelines, fixture and every capture are under `~/.cache/emusen/bigpicture/collections-probe/`.
+The fixture was synthetic: scratch ROM files of stage (b)'s names, three favourites, four games with a `lastplayed` and
+one with a play count and no date, and two custom collections (`custom-Platform.cfg`, three SNES games; `custom-Beat.cfg`,
+one NES and one SNES game), enabled with `CollectionSystemsAuto=all,favorites,recent` and
+`CollectionSystemsCustom=Platform,Beat`. The captures quoted below were looked at by this section's author too.
+
+**A defect of the harness, found and fixed.** The player's own Xbox controller was connected, and ES-DE, started with
+`SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1` as stage (c)'s `record.sh` starts it, acted on that controller's input during
+the first two runs: extra carousel steps, and a jump from one gamelist to another. Those runs were discarded. From the
+third, the runner sets `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT` to the virtual pad's vendor and product, and the log
+shows only that pad. Stage (c)'s and stage (f)'s recordings (§14.7, §16.5) were made with the same script and without
+that variable; whether a real controller was sending input during any of them is not known, and is recorded here as a
+hazard to those measurements, not as a finding against them.
+
+**What was found.**
+- *Names.* The tokens `all`, `favorites` and `recent` enable the three automatic collections, and the log populates
+  systems of those names and `collections` for the grouped custom collections. Art Book Next drew each with its
+  `${system.theme}` art: `auto-allgames`, `auto-favorites`, `auto-lastplayed` and `custom-collections` (the last also
+  parsed from the theme's own `custom-collections/theme.xml`). The menu names them All Games, Favorites and Last Played.
+- *Order.* In the system view, from SNES rightwards: COLLECTIONS, ALL GAMES, FAVORITES, LAST PLAYED, Nintendo 64, NES,
+  Game Boy, Game Boy Color, SNES. The regular systems come first, sorted by full name, then the grouped system, then the
+  three automatic collections in that order (`runs/r3/sheet.png`).
+- *The grouped system.* One entry per collection, named as its file without `custom-`, sorted by name although the
+  setting listed them the other way round. The selected entry shows one game's cover and the description "This
+  collection contains 3 games: 'Hollow Comet [SNES]', 'Ember Circuit [SNES]' and 'Aurora Drift [SNES]'", the names in
+  an order that changed between two visits, the first of them the game pictured. No folder mark, no rating, date,
+  players or badge is drawn for an entry (`runs/r2b/g03`, `g05`). A opens the collection, whose games are listed by
+  name with no star and no suffix; B returns to the list at that collection; B again to the system view.
+- *Last played.* The most recent first, across systems; the game with a play count and no date was listed last; games
+  never played were not listed (`runs/r5/f01`).
+- *All games and Favorites.* All games lists the favourites first, each with its star, then every other game by name;
+  games of the same name follow the systems' full-name order, which cannot here be told from the order the systems were
+  loaded in. Favorites lists its games by name with no star before them (`runs/r4/a00`, `runs/r5/f00`).
+- *The gamelist options.* The Back button opens GAMELIST OPTIONS: JUMP TO… with the selected game's letter (a star for
+  a favourite on top) changed by left and right, SORT GAMES BY (NAME, ASCENDING), FILTER GAMELIST, EDIT THIS GAME'S
+  METADATA, then APPLY and CANCEL. The help bar reads "Close (Cancel)" on Back and "Close (Apply)" on B (`runs/r5/f04`).
+  JUMP TO's list holds only the characters present: with Kestrel Run the only K game and a favourite, K was absent
+  (`runs/r6/j01`, `j02`).
+- *Random.* The left thumbstick click moved the selection to another game at each press (`runs/r6/j05`–`j07`).
+- *Beside the question.* With `QuickSystemSelect=leftrightshoulders` and a textlist, left and right changed the system
+  and the shoulders moved ten rows (`runs/r4`), which is what USERGUIDE's *General navigation* says. §4.9 gives the
+  shoulders a page of the rows shown (§15.3); that difference is not this section's to change, and is Q14.
+
+### 22.3 What was built
+
+**The data, with no Avalonia type** (`EmuSen.Mistress/BigPicture/`):
+- `CollectionShelves` builds the collections from the library's shelves and Mistress's custom collections: all games,
+  favorites and last played (the 50 most recent, a counted game with no date last) as automatic-collection systems;
+  each custom collection as a system of its own when the theme has a folder of its name holding `theme.xml` or grouping
+  is *Never*, else as a folder of the one `collections` system; the order of §22.2; ES-DE's name rules (`Clean`,
+  `Unique`); and a grouped entry's description and pictured game (`Folder`).
+- `GamelistOptions`: the eleven sort keys, each way, ES-DE's stored spellings (`GameSort.Stored` is `name, ascending`);
+  the filter fields Mistress has data for, their values from a list's games, and `Passes`; the quick selector's
+  `Letters`; `RandomIndex`.
+- `ThemedLibrary.Gamelists.cs`, a new part of `ThemedLibrary`: per-list sorts and filters for the session, the folder
+  open in the grouped system, the collection being edited, the random entry, `Letters`, `ApplyOptions`, and the listed
+  games kept per list until something changes.
+- `SceneGame` gained `Source` (the system a game belongs to), `Face` (the game a grouped entry pictures), `IsCollection`
+  and `HideMetadata`; `SceneSystem` gained `Stars` and `Heading`. Media, the name suffix and `sourceSystemName` now read
+  the game's own system (`SourceIn`); before, a collection's games would have been looked up under the collection.
+- `ThemedLibrary.cs` changed in four places: `ThemedShelf` gained the collection's rules; `Data` lists each system
+  through `Listed`; the cursor is kept per list; and `Command` gained the folder, North-while-editing and random cases.
+
+**The window** (`Views/MainWindow.BigPictureCollections.cs`) builds the collections from `games.db` for each showing,
+applies the settings, answers North while editing, adds the two pad-menu entries, and implements
+`ICollectionSettingsHost`, through which the settings sheet creates, deletes and finishes editing. It changes the shared
+files by one line each: `ShowThemedLibrary` passes `WithCollections(ThemedShelves())` and applies the settings first;
+`ThemedPadCommand` gains the collection case; `OpenPadMenu` calls `AddCollectionMenuEntries`; `PadHeld` maps the two
+thumbstick buttons to the new `UiButton.Random`.
+
+**Three sheets**, LunaP `ToolWindow`s of LunaP parts (`FieldRow`, `Dropdown`, `LunaSwitch`, `HintText`, `Ui` rows and
+buttons), presented by `SheetLayer.Show` as every sheet is: `GamelistOptionsWindow` (an `IPadDriven` window, so that the
+Back button cancels as ES-DE's does), `GamelistFilterWindow` (a sheet over the options sheet, as ES-DE's filter screen is
+a screen of its own), and `CollectionSettingsWindow`.
+
+**In LunaP** (branch `bigpicture-collections`, its `docs/LunaP.md` §150 and §151): `TextRowMarker.Tick`, a stroked
+check mark in the room the star and the folder use, and `PadGlyphButton.ThumbstickClick`, a disc in a thin ring, both
+appended so no value moves, with a test each and the API baseline updated.
+
+**Nothing holds a timer or a stream.** The sheets poll nothing and open nothing, and the random entry is a
+`System.Random`, so §15.14's rule has no new subject here; no close test was written, since one that cannot fail
+without a cleanup proves nothing.
+
+### 22.4 Where the data comes from, and where it is kept
+
+The request was, during the work, that the program's data be kept in SQLite where it can be, as `EmuSen_Stack.md` §4
+settles: what the program writes and reads back in SQLite, the player's settings in `appsettings.json`.
+- **Already in SQLite, and read from there:** favourites, last played, play count, play time, the custom collections and
+  their games are `games.db`'s `game`, `collection` and `collection_game` tables (`GameRecords`). Nothing of them was in
+  a JSON file before this work, and none is now. A collection made or edited in big picture writes those rows, so the
+  library's sidebar shows the same collection.
+- **ScreenScraper's text** (genre, players, rating, release date, developer, publisher) is `media.db`'s, read through the
+  window's `WithScrapedText` as stage (d) built it.
+- **The player's choices** are the eight keys of `BigPictureCollections` in `appsettings.json` (§4.58 of the settings
+  reference). `HiddenCustomCollections` names `games.db` ids; a collection deleted from the library's sidebar leaves its
+  id there, which matches nothing and is dropped by nothing. That is harmless and was left.
+- **A list's sort and filters** are kept in memory for the session and never written, as ES-DE keeps them. Nothing is
+  cached on disk: the sorted and filtered lists are recomputed from the records at each showing.
+
+**A game without ScreenScraper's text** has no genre, players, rating, release date, developer or publisher. In a
+filter it is **Unknown**, a value of its own, so the unscraped games can be chosen or left out; ES-DE's documentation
+says only that the values are assembled from the gamelist. By any of those sort keys it goes after every game that has
+the value, in either direction, and among such games the name decides. Completed, kidgame and broken are not recorded by
+Mistress, so each filter says "Nothing to filter"; hidden, controller and alternative emulator are not offered.
+
+### 22.5 The buttons
+
+§4.9's table was kept and amended (§4.9). The changes, each taken from what ES-DE's documentation assigns:
+
+| Button | ES-DE (USERGUIDE) | Here |
+|---|---|---|
+| Y / North | toggles a favourite; adds or removes a game while a collection is edited | adds or removes while a collection is edited; otherwise the search, as before (§4.9 has no favourite on North) |
+| Thumbstick clicks | a random game, or system, per *Random entry button* | the same, through `UiButton.Random` |
+| A on a grouped collection | enters it | the same; the help bar reads Select |
+| B inside it | back to the list | the same, at that collection |
+| Back | opens the gamelist options | **not taken**: Back is §23's game options. The options are in Start's pad menu. |
+| B / Back in the options | apply / cancel | the same |
+
+**The Back button, and the merge with §23.** In ES-DE the gamelist options menu is one menu, opened with Back, holding
+the jump, the sort, the filter, the collection entries and *Edit this game's metadata*. The plan gave Back to §23's game
+options, which will hold the favourite toggle and the metadata editor. The two are therefore one menu in ES-DE and two
+here until the branches meet. `GamelistOptionsWindow` takes its rows from a model the window fills
+(`ShowGamelistOptions`), so the merge can open one sheet under Back with both sets of rows, or keep two; Q12 asks which.
+
+### 22.6 Where the documentation is silent and nothing was measured: the choices made
+
+- **The automatic collections are off by default**, as ES-DE's settings file has them; the custom ones are shown until
+  switched off, unlike ES-DE's, because they are the player's own library's (Q11, Q13).
+- **A discrete custom collection's place** is after the grouped system and before the automatic ones. Only the grouped
+  system's place was measured.
+- **"Themed" means a folder of the collection's name holding `theme.xml`**, THEMES.md's per-system folder. Whether ES-DE
+  also counts a root `theme.xml` that styles every system by `${system.theme}` was not measured; if it did, every
+  collection would be discrete under Art Book Next, which the grouped list in §22.2 contradicts for `Platform`.
+- **Missing values sort last** in both directions, and **Unknown is a filter value**, as §22.4 says.
+- **Within a field any chosen value passes, across fields all must**, the reading USERGUIDE's list of filters allows.
+- **The quick selector's characters** are the first character of each name, upper-cased, digits included; ES-DE's
+  treatment of digits and symbols was not measured.
+- **The random entry never picks the game already selected**, and plays the list's scroll sound. Neither was measured.
+- **A grouped entry's pictured game** is chosen each time the list is built, not at each step as ES-DE's apparently is,
+  and Y does not jump to it.
+- **A grouped entry hides** its rating, dates, badges and text fields other than the description, as §22.2 saw; the rule
+  is THEMES.md's *Hide metadata fields*, applied to these entries only.
+- **At the grouped system's top, `systemName` and `systemFullname` are blank**, which THEMES.md implies when it says a
+  theme's `defaultValue` fills them "at the root of the custom collections system"; inside a collection they are its
+  name. Art Book Next's second "COLLECTIONS" line under the logo disappeared with this (§22.9).
+- **The help bar's A reads Select on a folder.** ES-DE's reads Select on every entry, games included (`runs/r4/a00`),
+  where §15's table says Launch; that older difference is not this section's.
+
+### 22.7 Tests
+
+Headless in WiseMan, the pad through `PadDriver` over a `ThemedSession` on the synthetic theme, with `games.db` written
+through the window's own `GameRecords` and ScreenScraper's text put where `WithScrapedText` reads it.
+
+| Rule | Test |
+|---|---|
+| The sort keys, each way; missing values last; the name after; favourites on top; System by the source system; ES-DE's spellings | `GamelistOptionsTests.Every_documented_sort_key_orders_with_missing_values_last_and_the_name_ascending_after` |
+| Filter values from the list, Unknown, Nothing to filter, stars; any value within a field, every field; the name in any case; a folder always passes | `…Filter_values_come_from_the_list_and_a_field_with_nothing_to_tell_apart_offers_none` |
+| The quick selector: only the characters present, the star, a list of favourites alone | `…The_quick_selector_offers_only_the_letters_present_and_a_star_for_favourites_on_top` |
+| The random entry never the selected game | `…The_random_entry_never_picks_the_game_already_selected_when_there_is_another` |
+| ES-DE's name rules | `…Collection_names_lose_ES_DE_s_forbidden_characters_and_a_taken_name_is_numbered` |
+| The shelves' order, grouping by theme folder, Always and Never, hidden collections, favorites' members and stars | `…Collection_shelves_follow_ES_DE_s_measured_order_and_group_what_the_theme_does_not_style` |
+| Last played: newest first, fifty, a counted game with no date last | `…Last_played_is_newest_first_across_systems_fifty_at_most_with_a_counted_game_without_a_date_last` |
+| A grouped entry's description and pictured game | `…A_grouped_collection_s_folder_names_its_games_in_a_random_order_and_shows_the_first` |
+| Off until turned on; then ES-DE's order, names and theme folders | `ThemedCollectionsTests.Automatic_collections_are_off_until_turned_on_then_follow_the_systems_in_ES_DE_s_measured_order` |
+| All games, favorites and last played from `games.db`; a game's picture and suffix under its own system | `…All_games_favorites_and_last_played_come_from_Mistress_s_records_and_their_games_keep_their_own_system` |
+| The Collections list: folders by name, A in with its sound, B out to the same folder, B to the systems | `…The_grouped_collections_system_lists_each_collection_as_a_folder_that_A_enters_and_B_leaves` |
+| An entry: no folder mark, metadata hidden but the description, a blank system name, Select | `…A_collection_s_entry_is_drawn_as_ES_DE_draws_it_no_folder_mark_its_metadata_hidden_and_a_blank_system_name` |
+| A theme folder makes a system; Always, Never, a hidden collection | `…A_collection_the_theme_has_a_folder_for_is_a_system_of_its_own_and_the_setting_can_group_it_or_part_all` |
+| Created on the sheet by the pad, cleaned, the sidebar's own; North adds and removes with the tick and the help's word; Finish Editing; North searches again | `…A_collection_created_in_big_picture_is_the_library_s_own_and_North_edits_it_until_its_editing_is_finished` |
+| The options sheet: Back cancels, B applies; name and rating sorts from ScreenScraper's text; a filter; each list its own; reset; the jump; nothing saved | `…The_options_sheet_sorts_filters_and_jumps_B_applying_and_Back_cancelling_and_each_list_keeps_its_own` |
+| Either stick; the help's Random; Disabled; Games and systems | `…Either_stick_pressed_in_jumps_to_another_game_and_the_setting_decides_where_it_works` |
+| The settings sheet's switches and choices applied at once and saved | `…The_collection_settings_sheet_applies_each_switch_and_choice_beneath_it_at_once_and_saves_them` |
+| Every control of the three sheets reached by the pad (`PadAudit`), no window opened | `…Every_control_of_the_collection_sheets_is_reached_by_the_pad` (3 cases) |
+| `collectionIndicators`, symbols against ascii, changes the pixels | `SceneMappingTests.Every_mapped_property_changes_the_rendered_pixels`, a new case over a new custom-collection system |
+
+In LunaP: `ThemedListTests.A_tick_marks_a_row_in_the_star_s_room_with_its_own_shape` and
+`PadGlyphTests.The_thumbstick_click_is_a_disc_in_a_ring_unlike_the_guide_and_is_named_for_both_sticks`.
+
+**Every one passed at its first run** except two, both fixed in the test: a tuple of arrays compared by reference, and a
+sort stepped from the wrong starting row. That so few failed first is weak evidence of the tests' strength; the mutants
+(§22.8) are the stronger.
+
+<!-- 22.8 to 22.10 follow the mutants and the measurements. -->
+
+### 22.11 Not done
+
+- **The Back button.** ES-DE's gamelist options open on Back; here they are in Start's menu until §23's game options and
+  these are one menu (§22.5, Q12).
+- **Create New Custom Collection from Theme**, and the UI modes (Kiosk, Kid) that restrict these menus.
+- **The filters for hidden games, controllers and alternative emulators**, and real values for completed, kidgame and
+  broken: Mistress records none of them. §23's metadata editor may add some; the filter screen offers whatever field
+  holds more than one value, so a field that gains data needs one line in `GamelistOptions.ValueOf`.
+- **The game counter** that reads "filtered / total" while a filter is on: ES-DE's `gamelistinfo` element, which the
+  scene has never drawn (§13.3) and Art Book Next does not use.
+- **Sort names**, ES-DE's `sortname` and *custom collections sortname*, which the quick selector would index by.
+- **The Collections list's random game at each step, and Y to jump to it.**
+- **A long filter screen.** Each value is a switch, so a real library's developers and publishers, possibly hundreds,
+  make a long sheet. It scrolls and every switch is reached (§22.7), but no library of that size was tried on it.
+- **The handheld.** Nothing ran there, as for every stage since (e).
+- **ES-DE's shoulders**, measured to move ten rows (§22.2), are left as §4.9 has them (Q14).
+
+### 22.12 Questions for the player
+
+- **Q11.** The automatic collections are off until turned on, as ES-DE's are. Should they be on by default here, as
+  All Games, Favourites and Recently Played always are in EmuSen's own library?
+- **Q12.** ES-DE has one gamelist options menu, on Back, holding the jump, the sort, the filter, the collection entries
+  and the metadata editor. Should the merge with §23 make it one menu under Select, or keep the game options on Select
+  and these in the pad menu?
+- **Q13.** ES-DE enables each custom collection by hand; here every collection of the library is shown until switched
+  off. Keep that?
+- **Q14.** ES-DE's shoulders move ten rows in a textlist (§22.2); §4.9 pages by the rows shown. Change to ES-DE's?

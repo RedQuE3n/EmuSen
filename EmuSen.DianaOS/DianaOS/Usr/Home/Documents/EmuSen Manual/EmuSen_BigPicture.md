@@ -626,7 +626,9 @@ gains **Library style: Mistress / ES-DE theme**. The pad menu, sheets, resume qu
 both, so the themed view changes only what is drawn in the library's place. Q8 asks whether the themed view should also
 be offered in a desktop session, where §4.43 keeps the menu bar and sidebar. *Answered twice: in big-screen sessions
 only (2026-09-25), then, on the user's request of 2026-09-26, also on the desktop, behind a Big Picture entry
-below the plain Fullscreen one in the View menu (§10.1, §18).*
+below the plain Fullscreen one in the View menu (§10.1, §18).* *The Library style row is gone since 2026-09-26: on the
+user's request, EmuSen's own library is the first, built-in entry of the Theme Settings sheet's Themes list, and
+Preferences' row became **Big Picture Theme**, listing the same entries (§10.1, §19).*
 
 ---
 
@@ -1075,6 +1077,12 @@ sends and to whom. The API's own condition (free, distributed software) is met.
     makes the window full screen and enters big picture. The desktop keeps its sidebar library by default, and the
     themed view is offered wherever big picture runs, under §4.52's four conditions. A Game Mode session stays big
     picture throughout. §18 is the record; §4.54 of the settings reference is the player's account.
+  - **Q8, amended again (the user, 2026-09-26):** "EmuSens normal big picture theme should be an option in the themes
+    list". The existing big-screen library is no longer a separate "Library style" beside the theme: it is the first
+    entry of the Theme Settings sheet's Themes list, **EmuSen (built in)**, never downloaded or removed, and choosing it
+    or an ES-DE theme there applies at once. Preferences' "Library style" row became **Big Picture Theme**, a dropdown
+    of the same entries over the same two settings (`LibraryStyle`, `BigPictureTheme`). §19 is the record; §4.56 of the
+    settings reference is the player's account.
   - **Q9:** the help bar's button icons **follow the connected pad**: Mistress detects the controller family and draws
     its own set for it (Xbox, PlayStation, Nintendo, and a generic set when unknown). The favourite, folder and badge
     graphics are Mistress's own drawings.
@@ -3293,3 +3301,130 @@ attributed, and the broad run was not repeated.
 - **Steam's Big Picture on the desktop** is still not read (§4.43 of the settings reference).
 - **Popups Avalonia parents outside the window's tree** (some tooltips and context menus) are not reached by the
   window's embedding; on the desktop a window manager draws them at their size, which is what they were before.
+
+
+## 19. EmuSen's own look in the theme list (2026-09-26)
+
+*Opened 2026-09-26, on the user's request (§10.1, Q8 amended again):* "EmuSens normal big picture theme should be an option
+in the themes list". §4.10 had kept the existing big-screen library as a separate choice, Preferences' "Library style"
+(Mistress / ES-DE theme), beside the theme folder. Stage (f)'s Themes tab (§16.4) listed only ES-DE themes. This section
+makes the two one list. The player's account is §4.56 of the settings reference; this is the record.
+
+### 19.1 Expectations, written before the tests ran
+
+As in §18.1, these were written by the same hand as the design, in the same hour, so they are weaker evidence than a
+stage's predictions.
+
+| # | Expected | Found | Verdict |
+|---|---|---|---|
+| T1 | the pad menu already offers Theme Settings over EmuSen's own library, since its entry's condition (`_bigScreen && !inGame`) never read the style | it does; `The_sheet_is_reached_by_the_pad_from_both_looks` passed on the first build with no change to `MainWindow.Pad.cs`. Mutant L15 (the entry offered only over the themed view) is caught by four tests | held. The pad menu was not edited, which also kept this branch's merge with §18's small |
+| T2 | no new storage is needed: `LibraryStyle` and `BigPictureTheme` already express every entry | held, with one case the list must decide: `Theme` style with no folder. It is shown as EmuSen's row, because that is what the session draws (§4.52's fallback). Mutant L11 is the other reading, and it is caught | held |
+| T3 | choosing a theme from the sheet leaves a folder read in place in the list | refuted, and not by this change. `ThemeDownloads.Installed` lists the in-place folder only while it is `BigPictureTheme`, as §16.4 built it, so choosing a downloaded theme drops it. Found while strengthening the Preferences test, and recorded in §19.5 | refuted (a limit of §16's list, kept) |
+
+### 19.2 What was built
+
+- `BigPicture/BigPictureLooks.cs` (no Avalonia types) holds the list: a `BigPictureLook` is a name and an optional
+  `InstalledTheme`, with none for EmuSen's own look. `All` gives EmuSen first, then `ThemeDownloads.Installed`.
+  `BuiltInCurrent`, `IsCurrent` and `Current` read the two settings. `Choose` writes them and saves. The sheet and
+  Preferences both use it, so they cannot list or store differently.
+- `ThemeSettingsWindow`:
+  - The Themes tab's first row is `ThemeRowBuiltIn`, "EmuSen (built in)", with one button, `ThemeUseBuiltIn`.
+  - `Use` takes a look and calls `_applied`, so the view beneath swaps before the sheet closes. It passes `replaced`
+    only for a theme, as before.
+  - With EmuSen chosen, the Options tab holds an `EmptyState` (`BuiltInOptionsNote`), and the sheet opens on Themes.
+  - The old "No theme chosen" state now occurs only for a set folder that is missing, and says so.
+- `PreferencesWindow`: the Library Style dropdown is replaced by `BigPictureThemeDropdown`, filled from
+  `BigPictureLooks.All`. The picker row became "ES-DE Theme Folder". A choice in either calls `ThemeChosen`, set by
+  the window, and applies at once. `ShowBigPictureTheme` refills the row and the picker from the settings, and does
+  nothing when they are already shown, so it is safe to call from the row's own choice.
+- `MainWindow`:
+  - `WatchPreferences` is one line in `ShowPreferencesAt`.
+  - `ThemeChanged` also refreshes the open Preferences sheet, so a choice on the Theme Settings sheet stacked over it
+    shows there when that sheet closes.
+  - Nothing holds a timer or a stream. The one reference kept, to the open Preferences sheet, is dropped on its `Closed`.
+
+Nothing was needed in LunaP.
+
+**Preferences: replace or sync, and why replace.** The request allowed either. Syncing would have kept two controls for
+one decision. One of them would name the choice by a style ("Mistress", "ES-DE theme") and not by the list's own names.
+It would also carry a state the list cannot show (`Theme` with no folder), and it would take a second path to keep the
+two in step. Replacing leaves one list, built by one function, shown in two places. The stored names were kept, so no
+settings file changes meaning:
+- `LibraryStyle` `Mistress` is EmuSen's row.
+- `Theme` with a folder is that folder's row.
+- `Theme` without one is EmuSen's row, as the session already drew it.
+
+This does not generalise to Preferences' other rows. It holds here because the sheet and the row show the same
+decision, and the sheet is where the list is managed.
+
+**Choosing EmuSen keeps the folder.** Clearing `BigPictureTheme` on choosing EmuSen would be the tidy reading of "EmuSen
+has no folder". But the list would then drop a folder read in place, and the player could not choose it again without
+Preferences' picker. Mutant L8 is that reading, and it is caught.
+
+### 19.3 Tests
+
+`BigPictureThemeListTests` has 7 cases, on `ThemedSession` and `PadDriver`, headless:
+- `EmuSen_is_the_first_entry_of_the_themes_list_and_the_current_one_is_marked`
+- `Choosing_EmuSen_swaps_the_view_at_once_and_is_remembered`: by pad; the sheet still presented, the themed view gone,
+  the Options note, the folder kept; a second `MainWindow` on the same settings starts on EmuSen's library.
+- `From_EmuSen_s_look_the_pad_reaches_the_sheet_and_an_ES_DE_theme_swaps_back`: the sheet opens on Themes; after the
+  swap, A enters a gamelist.
+- `The_sheet_is_reached_by_the_pad_from_both_looks`: every control of both tabs is reached by `PadAudit`, over each look.
+- `The_built_in_entry_cannot_be_removed_and_is_what_a_removed_theme_falls_back_to`: a stamped theme under
+  `home/Themes`, removed through the sheet's confirm.
+- `Preferences_and_the_themes_list_agree`: two themes of one name, one downloaded and one read in place.
+
+`ThemedLibraryHostTests`' Preferences case now chooses on the new row, and asserts the view changed before Preferences
+closed. Before, it asserted the change waited for the close.
+
+**Runs.**
+- The blast radius: `ThemeSettingsSheetTests`, `ThemedLibraryHostTests`, `ThemedLibraryPadTests`,
+  `ThemedLibraryFlowTests`, `BigPictureSwitchTests`, and the classes that open Preferences (`PreferencesThemeTests`,
+  `PadNavigationTests`, `LibraryScreenTests`, `ScrapeWindowTests`, LunaP's `AccessibilityTests` and
+  `HandRolledControlTests`). 51 and 85 tests passed.
+- The broad run is §19.4's.
+
+**Pictures**, at 1280×800, written by `ThemeListPictureTool` with `EMUSEN_BIGPICTURE_PNG=1` to
+`~/.cache/emusen/bigpicture/png/theme-list/`:
+- `themes-artbooknext-chosen` and `themes-emusen-chosen`: the Themes tab over Art Book Next, before and after choosing
+  EmuSen. EmuSen's list library shows beneath the second.
+- `options-emusen-chosen`: the note.
+- `preferences-appearance-emusen-chosen`: the row.
+
+They were looked at. The sheet is narrower on the Options tab than on Themes, as it was in §16's pictures: its width
+follows its content.
+
+### 19.4 Mutants
+
+The runner is `~/.cache/emusen/probe/bigpicture/mutate_theme_list.py`, with its log in `run-theme-list.log` and its
+verdicts in `mutants-theme-list.txt`. Each mutant was built and run alone under `nice -n 10`. Each ran against
+`BigPictureThemeListTests`, `ThemeSettingsSheetTests` and the Preferences case of `ThemedLibraryHostTests`. The source
+was restored after each, and the tree was rebuilt clean at the end.
+
+**23 mutants, 23 caught at once, none survived:**
+
+| Rule | Mutants |
+|---|---|
+| The list | L1 no EmuSen row, L2 EmuSen last, L3 a Remove button on it, L4 never marked In Use |
+| Choosing | L5 and L6 the style not written, L7 not saved, L8 the folder cleared, L9 and L10 not applied beneath the sheet |
+| Which row is current | L11 no folder not counted as EmuSen, L12 the folder marked under EmuSen too |
+| The sheet | L13 Options rows under EmuSen, L14 opening on Options, L15 the pad-menu entry only over the themed view |
+| Removal | L16 removing the theme in use keeps it chosen |
+| Preferences | L17 no EmuSen entry, L18 not written, L19 not applied at once, L20 not following the sheet, L21 two themes of one name not told apart, L22 the folder picker not following, L23 the first entry shown whatever is current |
+
+L21 and L22 were caught only because the Preferences test had been strengthened first. Its first version used
+one theme, whose folder never changed, so it could not see either rule. That was noticed while writing the runner, and
+the test was changed before any mutant ran. Doing so is what turned up T3.
+
+**The broad run.** It used the Mistress filter without `ShaderSettingsWindowTests`, `ShaderBrowseBench` and
+`SceneGpuBench`, once, at the end, under the load rule of 2026-09-25. 770 tests: 764 passed, 6 skipped (the picture tools, which need `EMUSEN_BIGPICTURE_PNG=1`, and the live scrape tool, which needs `EMUSEN_SCRAPE_LIVE=1`), none failed, in 3 min 9 s.
+
+### 19.5 Not done
+
+- **A folder read in place leaves the list** once another theme is chosen (T3). `BigPictureTheme` is its only record,
+  as it was in §16. Keeping a list of folders read in place would need a new setting, and it was not asked for.
+- **The download's first use.** A theme downloaded while EmuSen is the explicit choice becomes the folder but not the
+  choice. That is argued in §4.56 and not tested.
+- **Nothing ran on the handheld.**
+- **The pad menu's entry is still called "Theme Settings".** With EmuSen chosen, "Themes" might read better. It was left
+  alone to keep the merge with §18's pad-menu lines small.

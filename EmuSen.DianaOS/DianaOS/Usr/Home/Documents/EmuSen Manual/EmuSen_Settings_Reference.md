@@ -2476,15 +2476,17 @@ predictions and the measurements are §15 of that plan.
 
 | Row | Setting | Default | What it does |
 |---|---|---|---|
-| Library Style | `LibraryStyle` | `Theme` | `Mistress` keeps this library (§4.33) in a big-screen session; `Theme` shows the theme's views instead when one loads |
-| ES-DE Theme | `BigPictureTheme` | none | a theme folder holding `capabilities.xml`, read in place and never written |
+| Big Picture Theme | `LibraryStyle` and `BigPictureTheme` | the theme, when one is set | EmuSen's own library (§4.33), stored as `LibraryStyle` `Mistress`, or an ES-DE theme, stored as `LibraryStyle` `Theme` and the theme's folder. Until 2026-09-26 this row was **Library Style** (Mistress / ES-DE theme); §4.56 |
+| ES-DE Theme Folder | `BigPictureTheme` | none | a theme folder holding `capabilities.xml` to read in place, which then joins the Big Picture Theme list; read in place and never written |
 | ES-DE Media | `EsdeMediaDirectory` | none | an ES-DE `downloaded_media` folder, read in place; without one the theme shows the covers of §4.33 |
 | Navigation Sounds | `NavigationSounds` | on | the theme's seven navigation sounds |
 
-A change takes effect when the Preferences sheet closes, since closing it refreshes the library.
+A change takes effect when the Preferences sheet closes, since closing it refreshes the library. *Since 2026-09-26 the
+Big Picture Theme row and the folder apply at once, beneath the open sheet, as the Theme Settings sheet's choices do
+(§4.56).*
 
 **When the themed view is shown.** All four must hold: the session is big-screen (§4.29, §4.43); Library Style is
-`Theme`; a theme folder is set; and the theme reads without error and has a view for at least one system with games.
+`Theme` (since 2026-09-26: an ES-DE theme, not EmuSen, is the Big Picture Theme, §4.56); a theme folder is set; and the theme reads without error and has a view for at least one system with games.
 Otherwise the library of §4.33 is shown, as before, and when a set theme could not be read the status line says why.
 The desktop keeps its sidebar library whatever the style says: the user decided on 2026-09-25 that the themed view is
 for big-screen sessions only. *Amended by the user on 2026-09-26 (§4.54): the desktop keeps its sidebar library, in a
@@ -2580,7 +2582,7 @@ Stage (f) of `EmuSen_BigPicture.md` (its §16 is the record: predictions, measur
 player meets.
 
 **Theme Settings.** A sheet over the view, opened from the pad menu's **Theme Settings** (big-screen sessions, outside a
-game) or from Preferences ▸ Appearance ▸ **Theme Settings…**. Its **Options** tab is built from the theme's
+game, over EmuSen's own library as over a theme's) or from Preferences ▸ Appearance ▸ **Theme Settings…**. Its **Options** tab is built from the theme's
 `capabilities.xml`, so it offers exactly what the theme declares:
 
 | Row | What it lists | Stored as |
@@ -2626,7 +2628,9 @@ never found, so `noVideos` fired on every system; a `.jpeg` file, which ES-DE do
 Each type folder is listed once per system, and read again at the next showing when it has changed.
 
 **Themes.** The **Themes** tab lists the themes Mistress downloaded, then the folder set in Preferences when it is
-another one, with where each came from:
+another one, with where each came from. *Since 2026-09-26 the list begins with **EmuSen (built in)**, EmuSen's own
+big-screen library, which is never downloaded or removed; with it chosen the Options tab holds only a note, and the sheet
+opens on the Themes tab. §4.56 is that change.*
 
 - **Download Art Book Next** fetches GitHub's archive of the theme's `main` branch
   (`codeload.github.com/anthonycaccese/art-book-next-es-de/zip/refs/heads/main`, about 220 MB) into
@@ -2643,7 +2647,8 @@ another one, with where each came from:
   logos.
 - **Remove** asks first, then deletes the folder. It is offered only for a folder Mistress downloaded (directly under
   `home/Themes`, with its stamp); a folder read in place is never written, let alone removed.
-- **Use** makes a listed theme the big-screen library's theme and sets Library Style to the theme.
+- **Use** makes a listed theme the big-screen library's theme and sets Library Style to the theme. The one in use reads
+  **In Use**. Since 2026-09-26 the same button on EmuSen's own row sets Library Style back to `Mistress` (§4.56).
 - **Closing the sheet stops a download in flight**, as does closing the window under it; nothing keeps fetching behind a
   closed sheet (a sheet is not closed when its window is, so both are handled).
 
@@ -2857,6 +2862,75 @@ was run against a scratch `XDG_DATA_HOME`: eight sizes and the SVG installed, a 
 set in Steam, not by Mistress. No macOS app bundle exists to carry the `.icns`. Hotaru and Pegasus keep Avalonia's
 default icon. Whether KDE shows the frame icon from `_NET_WM_ICON` or the desktop entry's `Icon=` depends on the
 entry being installed, and was not checked on a real session.
+
+### 4.56 Big picture: EmuSen's own look in the theme list (2026-09-26)
+
+The user, 2026-09-26: "EmuSens normal big picture theme should be an option in the themes list". Until then the choice
+between EmuSen's own big-screen library (§4.33) and an ES-DE theme's view (§4.52) was two settings in two places:
+Preferences' **Library Style** (Mistress / ES-DE theme) and the theme folder, while the Theme Settings sheet's Themes
+tab (§4.53) listed only ES-DE themes. It is now one list. `EmuSen_BigPicture.md` §19 is the record: the tests, the
+mutants and the pictures.
+
+**The Themes tab.** Its first row is **EmuSen (built in)**, with a line saying it is EmuSen's own library, part of
+EmuSen, never downloaded or removed, and without options. It has one button, **Use**, which reads **In Use** while it is
+the choice. The ES-DE themes follow, as §4.53 lists them, then the Download row. Exactly one row reads In Use.
+
+| Chosen | `LibraryStyle` | `BigPictureTheme` | What a big-screen session shows |
+|---|---|---|---|
+| EmuSen (built in) | `Mistress` | kept as it was | EmuSen's own library |
+| an ES-DE theme | `Theme` | that theme's folder | the theme's view, under §4.52's conditions |
+
+- **Which row is current.** EmuSen's, when `LibraryStyle` is `Mistress` or when no theme folder is set. Otherwise the
+  theme whose folder is `BigPictureTheme`. A folder that is set but no longer loads still reads In Use: it is the
+  choice, and §4.52's fallback shows EmuSen's library meanwhile, with the reason on the status line.
+- **Choosing EmuSen keeps the theme folder.** Choosing the theme again finds it, a folder read in place stays in the
+  list, and its options (§4.53, kept per folder) are unchanged.
+- **A choice applies at once**, beneath the open sheet, as the Options tab's choices do. The view is swapped before the
+  sheet closes, and the choice is saved, so a new window starts with it.
+- **Removing the theme in use** clears `BigPictureTheme`, so EmuSen's row becomes In Use and its library is shown.
+- **A first download.** When no theme folder was set, the downloaded theme becomes the folder, as before. It becomes the
+  choice only when `LibraryStyle` is `Theme`, which is the default. A player who chose EmuSen before downloading keeps
+  EmuSen until they press Use on the new row.
+
+**The Options tab** belongs to an ES-DE theme. With EmuSen chosen it holds only a note ("EmuSen's own look has no options
+here"), and the sheet opens on the Themes tab. With a theme chosen it opens on Options, as before.
+
+**Where the sheet opens from.** The pad menu's **Theme Settings** is offered in every big-screen session outside a game,
+over EmuSen's library as over a theme's view. It always was: the entry's condition never read the style. That is now
+tested for both looks, so the player can always get back to a theme. Preferences ▸ Appearance ▸ **Theme Settings…**
+opens it too, in either mode.
+
+**Preferences: the row was replaced, not synced.** Preferences ▸ Appearance's **Library Style** row became **Big Picture
+Theme**. It is a dropdown of the same entries, built by the same code (`BigPictureLooks`), and it reads and writes the
+same two settings:
+- EmuSen appears as "EmuSen (built in)".
+- A theme appears under its name. Two themes of one name are told apart by their folder, "Synthetic Book
+  (synthetic-book)".
+- A choice there applies at once, like the sheet's, rather than when Preferences closes.
+- The folder row is now **ES-DE Theme Folder**. Choosing a folder there adds it to the list, and it becomes the look
+  shown only when an ES-DE theme is the choice.
+- When the sheet is opened over Preferences and a choice is made on it, Preferences' row and folder show that choice
+  when the sheet closes.
+
+Keeping the old row and syncing it was the other option, and it was rejected. It would leave two controls for one
+decision, one of them naming the choice "Mistress" and "ES-DE theme" and not by the list's own names. It would also
+leave a state the list cannot show: `Theme` style with no folder. The stored settings keep their names and values, so an
+`appsettings.json` from before reads the same: `Mistress` is EmuSen's row, and `Theme` with a folder is that theme's row.
+
+**Tests.** `BigPictureThemeListTests` has 7 cases on WiseMan's `ThemedSession` and `PadDriver`:
+- the list's order and its mark;
+- EmuSen chosen by pad, applied beneath the open sheet, the Options note, and a new window starting with it;
+- from EmuSen's library, the pad menu reaching the sheet on its Themes tab, and an ES-DE theme swapping back;
+- every control of both tabs reached by the pad, over both looks;
+- the built-in row offering only Use, and taking over when the theme in use is removed;
+- Preferences and the list agreeing both ways, over two themes of one name.
+
+`ThemedLibraryHostTests`' Preferences case now chooses on the new row and sees the view change at once.
+
+**What it does not cover.**
+- A folder read in place leaves the list once another theme is chosen, as §4.53's list already did. `BigPictureTheme` is
+  the only record of it, so it must be chosen again in Preferences to come back.
+- Nothing ran on the handheld.
 
 ### 4.60 ScreenScraper: covers, screenshots, marquees and game text, with OpenEmu's sources as the failover (2026-09-26)
 

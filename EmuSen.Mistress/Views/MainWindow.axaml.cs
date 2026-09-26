@@ -166,6 +166,7 @@ namespace EmuSen.Mistress.Views
             _speedMenu = new LunaAction("Spee_d", () => { });
             _slotMenu = new LunaAction("State Sl_ot", () => { });
             _fullscreen = new LunaAction("_Fullscreen", a => IsFullScreen = a.IsChecked) { IsCheckable = true };
+            _bigPictureMenu = new LunaAction("_Big Picture", () => SetBigPicture(!_bigScreen)) { HelpText = "Full screen, in big picture mode" };
             _hardwareDashboard = new LunaAction("_Hardware Dashboard...", () => OpenCoretopWindow(_debugTarget));
             _rewindReel = new LunaAction("Re_wind...", () => OpenRewindReel(resumeAfter: false));
             InitializeComponent();
@@ -265,13 +266,13 @@ namespace EmuSen.Mistress.Views
             {
                 case HotkeyAction.SaveState: SaveState(); break;
                 case HotkeyAction.LoadState: LoadState(); break;
-                case HotkeyAction.ExitToLibrary: ToggleLibrary(); break;
+                case HotkeyAction.ExitToLibrary: if (EscapeLeavesBigPicture) SetBigPicture(false); else ToggleLibrary(); break;
                 case HotkeyAction.Screenshot: TakeScreenshot(); break;
                 // Nothing to pause while the library is up: it is already suspended - see §4.18.
                 case HotkeyAction.TogglePause: if (!LibraryView.IsVisible) TogglePause(); break;
-                case HotkeyAction.ToggleFullscreen:
-                    WindowState = WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
-                    break;
+                // Through ToolWindow, so leaving goes back to the state full screen was entered from, a maximised window included.
+                case HotkeyAction.ToggleFullscreen: ToggleFullScreen(); break;
+                case HotkeyAction.ToggleBigPicture: SetBigPicture(!_bigScreen); break;
             }
             e.Handled = true;
         }
@@ -719,7 +720,7 @@ namespace EmuSen.Mistress.Views
                 new LunaMenu("_View", _asGrid!, _asList!,
                     new LunaAction("_Larger Covers", () => TileScale.Value = Math.Min(MaximumTileScale, TileScale.Value + 0.25)),
                     new LunaAction("S_maller Covers", () => TileScale.Value = Math.Max(MinimumTileScale, TileScale.Value - 0.25)),
-                    LunaAction.Separator(), _fullscreen),
+                    LunaAction.Separator(), _fullscreen, _bigPictureMenu),
                 new LunaMenu("_Settings",
                     new LunaAction("_Controller Bindings...", ShowControllerBindings),
                     new LunaAction("_Graphics Settings...", ShowGraphicsSettings),
@@ -745,6 +746,7 @@ namespace EmuSen.Mistress.Views
             Gesture(_loadState, HotkeyAction.LoadState);
             Gesture(_fullscreen, HotkeyAction.ToggleFullscreen);
             Gesture(_closeGame, HotkeyAction.ExitToLibrary);
+            Gesture(_bigPictureMenu, HotkeyAction.ToggleBigPicture);
         }
 
         private void Gesture(LunaAction action, HotkeyAction bound)

@@ -24,8 +24,6 @@ namespace EmuSen.Mistress.Views
         // Set when a menu closes, until every button is let go, so the press that closed it is not the game's.
         private bool _padQuiet;
 
-        private bool _bigScreen;
-
         private const double PadStickThreshold = 0.55;
 
         private bool GameOnScreen => GameFrame.IsVisible && _session is { IsRomLoaded: true };
@@ -45,26 +43,12 @@ namespace EmuSen.Mistress.Views
 
         private void StartPadNavigation()
         {
-            _bigScreen = WantsBigScreen();
-            if (_bigScreen)
-            {
-                MenuStrip.IsVisible = false;
-                // A desktop sidebar costs a handheld its width, so the console choice goes back in the filter bar - see EmuSen_Settings_Reference.md §4.33.
-                LibrarySidebarPane.IsVisible = false;
-                LibraryFilter.ShowFacet = true;
-                LibraryList.FontSize = 24;
-                LibraryHeaderText.FontSize = 17;
-                LibraryHintText.FontSize = 17;
-                Opened += (_, _) => IsFullScreen = true;
-            }
-
-            // One window on screen in a big-screen session, so the others are drawn inside this one - see EmuSen_Settings_Reference.md §4.45.2.
-            Sheets.PresentsWindows = _bigScreen;
+            // Wired once; what big screen changes is ApplyBigScreen's, which a switch runs again - see EmuSen_Settings_Reference.md §4.54.
             Sheets.Hint = "A  Choose      B  Back      L1 R1  Tab      Left Right  Change";
             Sheets.PresentedChanged += OnSheetsChanged;
             SizeChanged += (_, e) => Sheets.Scale = Math.Clamp(e.NewSize.Height / 720.0, 1.0, 2.0);
-
-            if (_bigScreen) SetUpThemedLibrary();
+            SetUpBigPictureSwitch();
+            ApplyBigScreen(WantsBigScreen());
 
             PadMenuList.Label = entry => entry.Text();
             _padTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
@@ -264,7 +248,8 @@ namespace EmuSen.Mistress.Views
                 _padMenuEntries.Add(new PadMenuEntry(() => "Scrape This Game...", () => _ = ConfirmAndScrapeAsync(Scraping.ScrapeScope.ThisGame(game))));
             if (!inGame) _padMenuEntries.Add(new PadMenuEntry(() => ScrapeRunning ? $"Scraping ({_scrapeRun!.Done} of {_scrapeRun.Total})..." : "Scrape Games...", () => ShowPreferencesAt(PreferencesWindow.ScrapingTab)));
             if (_bigScreen && !inGame) _padMenuEntries.Add(new PadMenuEntry(() => "Theme Settings", ShowThemeSettings));
-            _padMenuEntries.Add(new PadMenuEntry(() => IsFullScreen ? "Leave Full Screen" : "Full Screen", ToggleFullScreen));
+            if (!_bigScreen) _padMenuEntries.Add(new PadMenuEntry(() => IsFullScreen ? "Leave Full Screen" : "Full Screen", ToggleFullScreen));
+            if (!_bigScreenForced) _padMenuEntries.Add(new PadMenuEntry(() => _bigScreen ? "Exit Big Picture" : "Big Picture", () => SetBigPicture(!_bigScreen)));
 
             if (inGame)
             {

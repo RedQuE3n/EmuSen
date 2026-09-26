@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Controls;
 using Avalonia.Threading;
 using EmuSen.Galaxia.Library;
 using EmuSen.LunaP.Windowing;
@@ -36,8 +37,19 @@ namespace EmuSen.Mistress.Views
         private DispatcherTimer? _scrapeThemedRefresh;
         private IReadOnlyDictionary<string, (ScrapeState State, bool HasCover)> _scrapeOutcomes = new Dictionary<string, (ScrapeState, bool)>();
         private IReadOnlyDictionary<string, ScrapedRecord> _scrapedText = new Dictionary<string, ScrapedRecord>();
+        private ScreenScraperClient? _scrapeClient;
+        private ScrapeStatusWindow? _scrapeStatus;
+        private MemberAccount _member = new("", "");
+        private ScrapeMember? _memberChecked;
+        private string? _scrapeStatusLine;
+
+        // The status window's cancel confirm; a test answers it instead of a person.
+        internal static Func<Window, Task<bool>> ConfirmCancelScrape =
+            owner => Dialogs.ConfirmAsync(owner, "Cancel Scraping", "Stop this run? What it has not reached stays queued, and Resume in Preferences ▸ Scraping goes on from there.", "Cancel Scraping", "Keep Going");
 
         public event Action? ScrapeChanged;
+
+        internal ScrapeStatusWindow? ScrapeStatusShown => _scrapeStatus;
 
         public Scraper? ScrapeWorker => _scraper;
         public MediaStore? ScrapeStore => _mediaStore;
@@ -57,6 +69,7 @@ namespace EmuSen.Mistress.Views
                 Language = _appSettings.ScrapeLanguage, RegionFallback = _appSettings.ScrapeRegionFallback, Threads = Math.Max(1, _appSettings.ScrapeThreads),
             };
             _developerPresent = DeveloperSource() is not null;
+            _member = MemberAccount.Load();
             if (_mediaStore is null && File.Exists(Path.Combine(MediaStore.DefaultRoot, MediaStore.FileName))) OpenMediaStore();
             ReadScrapeSnapshot();
             ScrapeChanged?.Invoke();
@@ -177,28 +190,143 @@ namespace EmuSen.Mistress.Views
             }
             IReadOnlyList<QueuedGame> queued = store.Queue();
             if (queued.Count == 0) return false;
-            _scrapeRun = new ScrapeProgress(queued.Count);
+            QuotaSnapshot? before = _scrapeQuota?.Snapshot();
+            var run = new ScrapeProgress(queued.Count, ScrapeClock.Now) { RequestsAtStart = before?.RequestsToday, DayAtStart = before?.Day };
+            _scrapeRun = run;
             ReadScrapeSnapshot();
 
             if (ScreenScraperUnusable() is string why)
             {
-                _scrapeRun.Why = why;
+                run.Why = why;
                 FailoverFor(queued.Select(q => q.Path));
-                if (_scrapeRun.FailoverPending.Count == 0) EndRun(ScrapeRunEnd.Stopped);
+                if (run.FailoverPending.Count == 0) EndRun(ScrapeRunEnd.Stopped);
                 ScrapeChanged?.Invoke();
+                ShowScrapeStatus();
                 return true;
             }
 
             _http ??= HttpFactory();
-            var client = new ScreenScraperClient(_http, DeveloperSource()!, MemberAccount.Load());
+            _member = MemberAccount.Load();
+            var client = new ScreenScraperClient(_http, DeveloperSource()!, _member);
+            _scrapeClient = client;
             _scraper = new Scraper(client, store, _scrapeQuota!, () => _scrapeChoices, HasHandCover, TransformFor,
-                result => Dispatcher.UIThread.Post(() => ScrapeArrived(result)), ScrapeClock);
+                result => Dispatcher.UIThread.Post(() => ScrapeArrived(result)), ScrapeClock) { Activity = run.Note };
             Scraper mine = _scraper;
             _scraper.Finished += end => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(_scraper, mine)) ScraperFinished(end); });
             _scraper.Start();
-            StatusText.Text = _scrapeRun.Describe();
+            ScrapeLine(run.Describe());
             ScrapeChanged?.Invoke();
+            ShowScrapeStatus();
             return true;
+        }
+
+        // The status line as a run writes it; clicking it while it shows the run opens the status window.
+        private void ScrapeLine(string text)
+        {
+            _scrapeStatusLine = ScrapeRedactor.Redact(text);
+            StatusText.Text = _scrapeStatusLine;
+        }
+
+        private void SetUpScraping() => StatusText.PointerPressed += (_, _) =>
+        {
+            if (_scrapeRun is not null && StatusText.Text == _scrapeStatusLine) ShowScrapeStatus();
+        };
+
+        // Opens the status window, or brings it forward; it reads the run and asks no server - see EmuSen_Settings_Reference.md §4.57.
+        public void ShowScrapeStatus()
+        {
+            if (_scrapeClosed) return;
+            if (_scrapeStatus is { } open)
+            {
+                SheetLayer.Activate(open);
+                return;
+            }
+            var window = new ScrapeStatusWindow(this);
+            _scrapeStatus = window;
+            window.Closed += (_, _) => { if (ReferenceEquals(_scrapeStatus, window)) _scrapeStatus = null; };
+            _ = SheetLayer.Show(window, this);
+        }
+
+        public bool ScrapePaused => _scrapeRun is { State: ScrapeRunState.Running, IsPaused: true };
+
+        // Pause is offered only while ScreenScraper's workers run; the failover's lookups are not paused.
+        public bool CanPauseScrape => ScrapeRunning && _scraper is not null;
+
+        public void SetScrapePaused(bool paused)
+        {
+            if (!CanPauseScrape || _scrapeRun is not { } run || run.IsPaused == paused) return;
+            if (paused) _scraper!.Pause();
+            else _scraper!.Resume();
+            run.SetPaused(paused, ScrapeClock.Now);
+            ScrapeLine(run.Describe());
+            ScrapeChanged?.Invoke();
+        }
+
+        public async Task<bool> ConfirmCancelAsync(Window owner)
+        {
+            if (!ScrapeRunning || !await ConfirmCancelScrape(owner)) return false;
+            CancelScrape();
+            return true;
+        }
+
+        public DateTimeOffset ScrapeNow => ScrapeClock.Now;
+
+        public ScrapeQuota? ScrapeLimits => _scrapeQuota?.Limits;
+
+        public MemberAccount Member => _member;
+
+        public ScrapeMember? MemberChecked => _memberChecked;
+
+        // Log In: one ssuserInfos request with what was typed; the account is kept only when ScreenScraper accepts it.
+        public async Task<SignInAnswer> SignInAsync(string user, string password)
+        {
+            var account = new MemberAccount(user.Trim(), password);
+            SignInAnswer answer = await CheckMemberAsync(account);
+            if (answer.SignedIn) UseMember(new MemberAccount(account.User, account.Password) { Verified = DateTime.UtcNow }, answer.Member);
+            return answer;
+        }
+
+        // Check: the stored account, as an old file from the two boxes has never been; kept whatever the answer.
+        public async Task<SignInAnswer> CheckMemberAsync()
+        {
+            MemberAccount stored = MemberAccount.Load();
+            SignInAnswer answer = await CheckMemberAsync(stored);
+            if (answer.SignedIn) UseMember(new MemberAccount(stored.User, stored.Password) { Verified = DateTime.UtcNow }, answer.Member);
+            return answer;
+        }
+
+        private async Task<SignInAnswer> CheckMemberAsync(MemberAccount account)
+        {
+            if (!account.IsSet) return new SignInAnswer(SignInResult.Incomplete, null, "Type your ScreenScraper name and password first.");
+            if (_scrapeClosed || DeveloperSource() is not { } developer) return SignInAnswer.NoDeveloper();
+            _http ??= HttpFactory();
+            SignInAnswer answer;
+            try { answer = await new ScreenScraperClient(_http, developer, account).SignInAsync(default); }
+            catch (ObjectDisposedException) { return new SignInAnswer(SignInResult.Unreachable, null, "Mistress is closing."); }
+            if (answer.Member?.Quota is { } quota && !_scrapeClosed) _scrapeQuota?.Observe(quota);
+            return answer;
+        }
+
+        private void UseMember(MemberAccount account, ScrapeMember? checkedAs)
+        {
+            account.Save();
+            _member = account;
+            _memberChecked = checkedAs;
+            if (_scrapeClient is { } client) client.Member = account;
+            ScrapeChanged?.Invoke();
+        }
+
+        // Log Out: the file is deleted, and a run in progress sends no ssid or sspassword from its next request.
+        public string SignOut()
+        {
+            bool had = MemberAccount.Delete();
+            _member = new MemberAccount("", "");
+            _memberChecked = null;
+            if (_scrapeClient is { } client) client.Member = null;
+            ScrapeChanged?.Invoke();
+            return had
+                ? "Signed out: screenscraper.json was deleted. Runs now use EmuSen's developer credentials alone."
+                : "Signed out. There was no account file to delete.";
         }
 
         public bool ResumeScrape() => StartScrape(new ScrapeScope(), resume: true);
@@ -208,6 +336,7 @@ namespace EmuSen.Mistress.Views
             if (!ScrapeRunning) return;
             Scraper? scraper = _scraper;
             _scraper = null;
+            _scrapeClient = null;
             scraper?.Dispose();
             _fetcher?.Dispose();
             _fetcher = null;
@@ -233,15 +362,10 @@ namespace EmuSen.Mistress.Views
         private void ScrapeArrived(ScrapeResult result)
         {
             if (_scrapeClosed || _scrapeRun is not { } run) return;
-            if (result.Outcome is ScrapeOutcome.Found or ScrapeOutcome.Unknown or ScrapeOutcome.Error or ScrapeOutcome.Missing)
-            {
-                run.Done++;
-                if (result.Outcome == ScrapeOutcome.Found) run.Found++;
-                if (result.Outcome == ScrapeOutcome.Unknown) run.Unknown++;
-                if (!result.HasCover && result.Outcome != ScrapeOutcome.Missing) FailoverFor([result.Path]);
-            }
+            run.Count(result);
+            if (result.Outcome is ScrapeOutcome.Found or ScrapeOutcome.Unknown or ScrapeOutcome.Error && !result.HasCover) FailoverFor([result.Path]);
             if (result.Outcome == ScrapeOutcome.Stopped) run.Why = result.Detail;
-            if (run.State == ScrapeRunState.Running) StatusText.Text = run.Describe();
+            if (run.State == ScrapeRunState.Running) ScrapeLine(run.Describe());
             PostCoverRefresh();
         }
 
@@ -249,7 +373,11 @@ namespace EmuSen.Mistress.Views
         private void FailoverArrived(CoverResult result)
         {
             if (_scrapeRun is not { } run || !run.FailoverPending.Remove(result.RomPath)) return;
-            if (result.Saved is not null) run.FailoverFound++;
+            if (result.Saved is not null)
+            {
+                run.FailoverFound++;
+                run.FilledByFailover(result.RomPath);
+            }
             if (run.FailoverPending.Count == 0 && _scraper is null && run.State == ScrapeRunState.Running) EndRun(run.Why is null ? ScrapeRunEnd.Done : ScrapeRunEnd.Stopped);
             else ScrapeChanged?.Invoke();
         }
@@ -259,8 +387,10 @@ namespace EmuSen.Mistress.Views
         {
             Scraper? scraper = _scraper;
             _scraper = null;
+            _scrapeClient = null;
             scraper?.Dispose();
             if (_scrapeRun is not { State: ScrapeRunState.Running } run) return;
+            run.SetPaused(false, ScrapeClock.Now);
             if (end == ScrapeRunEnd.Stopped)
             {
                 string? why = null;
@@ -275,8 +405,11 @@ namespace EmuSen.Mistress.Views
         private void EndRun(ScrapeRunEnd end)
         {
             if (_scrapeRun is not { } run) return;
+            run.SetPaused(false, ScrapeClock.Now);
+            run.Ended = ScrapeClock.Now;
             run.State = end switch { ScrapeRunEnd.Done => ScrapeRunState.Done, ScrapeRunEnd.Stopped => ScrapeRunState.Stopped, _ => ScrapeRunState.Cancelled };
-            if (!_scrapeClosed) StatusText.Text = ScrapeRedactor.Redact(run.Describe());
+            run.Touch();
+            if (!_scrapeClosed) ScrapeLine(run.Describe());
             PostCoverRefresh();
             ScrapeChanged?.Invoke();
         }
@@ -352,8 +485,11 @@ namespace EmuSen.Mistress.Views
         {
             _scrapeClosed = true;
             _scrapeThemedRefresh?.Stop();
+            _scrapeStatus?.Close();
+            _scrapeStatus = null;
             Scraper? scraper = _scraper;
             _scraper = null;
+            _scrapeClient = null;
             scraper?.Dispose();
             if (_scrapeQuota is not null) _scrapeQuota.Changed -= OnScrapeQuotaChanged;
             _mediaStore?.Dispose();

@@ -246,7 +246,7 @@ namespace EmuSen.Mistress.Views
             // Scraping only ever starts here or in Preferences, by the player - see EmuSen_Settings_Reference.md §4.60.
             if (!inGame && GameToScrape is string game && !ScrapeRunning)
                 _padMenuEntries.Add(new PadMenuEntry(() => "Scrape This Game...", () => _ = ConfirmAndScrapeAsync(Scraping.ScrapeScope.ThisGame(game))));
-            if (!inGame) _padMenuEntries.Add(new PadMenuEntry(() => ScrapeRunning ? $"Scraping ({_scrapeRun!.Done} of {_scrapeRun.Total})..." : "Scrape Games...", () => ShowPreferencesAt(PreferencesWindow.ScrapingTab)));
+            if (!inGame) _padMenuEntries.Add(new PadMenuEntry(() => ScrapeRunning ? $"Scraping ({_scrapeRun!.Done} of {_scrapeRun.Total})..." : "Scrape Games...", () => { if (ScrapeRunning) ShowScrapeStatus(); else ShowPreferencesAt(PreferencesWindow.ScrapingTab); }));
             if (_bigScreen && !inGame) _padMenuEntries.Add(new PadMenuEntry(() => "Theme Settings", ShowThemeSettings));
             if (!_bigScreen) _padMenuEntries.Add(new PadMenuEntry(() => IsFullScreen ? "Leave Full Screen" : "Full Screen", ToggleFullScreen));
             if (!_bigScreenForced) _padMenuEntries.Add(new PadMenuEntry(() => _bigScreen ? "Exit Big Picture" : "Big Picture", () => SetBigPicture(!_bigScreen)));

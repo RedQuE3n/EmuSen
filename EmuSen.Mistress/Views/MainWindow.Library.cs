@@ -73,6 +73,7 @@ namespace EmuSen.Mistress.Views
             ApplyLibraryView();
             ScanArtwork();
             ApplyOnlineCovers();
+            SetUpScraping();
             ApplyScraping();
         }
 

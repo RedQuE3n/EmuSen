@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -46,13 +47,20 @@ namespace EmuSen.Mistress.Scraping
 
         private readonly HttpClient _http;
         private readonly DeveloperCredentials _developer;
-        private readonly MemberAccount? _member;
+        private volatile MemberAccount? _member;
 
         public ScreenScraperClient(HttpClient http, DeveloperCredentials developer, MemberAccount? member)
         {
             _http = http;
             _developer = developer;
-            _member = member is { IsSet: true } ? member : null;
+            Member = member;
+        }
+
+        // Read at every request, so signing out mid-run stops ssid and sspassword from the next one - see EmuSen_Settings_Reference.md §4.60.
+        public MemberAccount? Member
+        {
+            get => _member;
+            set => _member = value is { IsSet: true } ? value : null;
         }
 
         public bool HasMember => _member is not null;
@@ -88,10 +96,10 @@ namespace EmuSen.Mistress.Scraping
             Append(url, "devpassword", _developer.DevPassword);
             Append(url, "softname", _developer.SoftName);
             Append(url, "output", "json");
-            if (_member is not null)
+            if (_member is { } member)
             {
-                Append(url, "ssid", _member.User);
-                Append(url, "sspassword", _member.Password);
+                Append(url, "ssid", member.User);
+                Append(url, "sspassword", member.Password);
             }
             foreach ((string name, string value) in query) Append(url, name, value);
             return url.ToString(0, url.Length - 1);
@@ -117,6 +125,24 @@ namespace EmuSen.Mistress.Scraping
             }
         }
 
+        // A media address carries the account its lookup was made with; with no member now, ssid and sspassword are taken out of it.
+        public string MediaUrl(string url)
+        {
+            if (_member is not null) return url;
+            int query = url.IndexOf('?');
+            if (query < 0) return url;
+            string[] kept = url[(query + 1)..].Split('&').Where(p => !(p.StartsWith("ssid=", StringComparison.OrdinalIgnoreCase) || p.StartsWith("sspassword=", StringComparison.OrdinalIgnoreCase))).ToArray();
+            return url[..(query + 1)] + string.Join('&', kept);
+        }
+
+        // One ssuserInfos request with the member and the developer credentials, only when the player presses Log In or Check - see EmuSen_Settings_Reference.md §4.60.
+        public async Task<SignInAnswer> SignInAsync(CancellationToken stop)
+        {
+            if (_member is null) return new SignInAnswer(SignInResult.Incomplete, null, "Type your ScreenScraper name and password first.");
+            (ScrapeStatus status, string body, _) = await GetTextAsync(Url("ssuserInfos.php"), stop);
+            return SignInAnswer.From(status, body);
+        }
+
         public async Task<(ScrapeStatus Status, ScrapeQuota? Quota, string Detail)> UserInfosAsync(CancellationToken stop)
         {
             (ScrapeStatus status, string body, _) = await GetTextAsync(Url("ssuserInfos.php"), stop);
@@ -138,6 +164,7 @@ namespace EmuSen.Mistress.Scraping
         {
             var clock = Stopwatch.StartNew();
             if (File.Exists(target)) return new MediaAnswer(MediaOutcome.AlreadyThere, target, new FileInfo(target).Length, null, "", clock.Elapsed);
+            url = MediaUrl(url);
             try
             {
                 using HttpResponseMessage response = await _http.GetAsync(url, HttpCompletionOption.ResponseContentRead, stop);

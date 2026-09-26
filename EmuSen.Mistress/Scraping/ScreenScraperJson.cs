@@ -69,6 +69,15 @@ namespace EmuSen.Mistress.Scraping
             return doc.RootElement.GetProperty("response").TryGetProperty("ssuser", out JsonElement user) ? Quota(user) : null;
         }
 
+        // ssuserInfos as a sign-in: the login name (id), the level (niveau) and the quota; null when the answer names no member.
+        public static ScrapeMember? Member(string json)
+        {
+            using JsonDocument doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.GetProperty("response").TryGetProperty("ssuser", out JsonElement user) || user.ValueKind != JsonValueKind.Object) return null;
+            string? name = Text(Prop(user, "id"));
+            return string.IsNullOrWhiteSpace(name) ? null : new ScrapeMember(name, Text(Prop(user, "niveau")), Quota(user));
+        }
+
         // systemesListe: each system's id and its name.
         public static IReadOnlyDictionary<int, string> Systems(string json)
         {

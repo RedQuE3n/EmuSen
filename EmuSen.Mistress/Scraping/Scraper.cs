@@ -13,7 +13,12 @@ namespace EmuSen.Mistress.Scraping
     public enum ScrapeRunEnd { Done, Stopped, Cancelled }
 
     // What one game's turn came to; HasCover says whether the store now holds its cover.
-    public sealed record ScrapeResult(string Path, string System, ScrapeOutcome Outcome, bool HasCover, IReadOnlyList<string> Written, string Detail, string? MatchedBy = null);
+    public sealed record ScrapeResult(string Path, string System, ScrapeOutcome Outcome, bool HasCover, IReadOnlyList<string> Written, string Detail, string? MatchedBy = null, bool Skipped = false);
+
+    public enum ScrapeStep { LookingUp, Downloading, Arrived }
+
+    // What a worker is doing now, for the status window; Kind is the picture's ES-DE type, Saved the file that has just arrived.
+    public sealed record ScrapeActivity(string Path, string System, ScrapeStep Step, string? Kind = null, string? Saved = null);
 
     // The queue's workers: each takes the next due game, identifies it as §5.2 orders, keeps its text and media, and leaves it queued when stopped - see EmuSen_BigPicture.md §17.
     public sealed class Scraper : IDisposable
@@ -55,6 +60,31 @@ namespace EmuSen.Mistress.Scraping
 
         // Called with every jeuInfos answer, for the live measurement; its Body carries credentials and must be redacted before it is kept.
         public Action<string, JeuInfosAnswer>? Answered { get; init; }
+
+        // Called on a worker's thread at each step of a game; it must not block - see EmuSen_Settings_Reference.md §4.57.
+        public Action<ScrapeActivity>? Activity { get; init; }
+
+        private volatile TaskCompletionSource? _paused;
+
+        public bool IsPaused => _paused is not null;
+
+        // Nothing new is asked while paused: a request in flight finishes, and each worker waits before its next - see EmuSen_Settings_Reference.md §4.57.
+        public void Pause()
+        {
+            if (_disposed) return;
+            Interlocked.CompareExchange(ref _paused, new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously), null);
+        }
+
+        public void Resume() => Interlocked.Exchange(ref _paused, null)?.TrySetResult();
+
+        private Task WhilePausedAsync(CancellationToken stop) => _paused is { } paused ? paused.Task.WaitAsync(stop) : Task.CompletedTask;
+
+        // Every request waits out a pause first, then the quota's turn.
+        private async Task<bool> TurnAsync(CancellationToken stop)
+        {
+            await WhilePausedAsync(stop);
+            return await _quota.TakeTurnAsync(stop);
+        }
 
         // How long a worker with nothing due waits for another worker's game or a retry before looking again.
         public TimeSpan IdlePoll { get; init; } = TimeSpan.FromMilliseconds(100);
@@ -115,6 +145,7 @@ namespace EmuSen.Mistress.Scraping
             {
                 while (!stop.IsCancellationRequested)
                 {
+                    await WhilePausedAsync(stop);
                     if (_quota.Check(out _, out _) == QuotaGate.Stopped)
                     {
                         _stoppedByQuota = true;
@@ -179,7 +210,7 @@ namespace EmuSen.Mistress.Scraping
             if (!File.Exists(path))
             {
                 _store.Dequeue(path);
-                return new ScrapeResult(path, item.System, ScrapeOutcome.Missing, false, [], "the file is gone");
+                return new ScrapeResult(path, item.System, ScrapeOutcome.Missing, false, [], "the file is gone", Skipped: true);
             }
 
             int systemId = SystemIds[item.System];
@@ -205,7 +236,7 @@ namespace EmuSen.Mistress.Scraping
                 if (known.State == ScrapeState.Unknown)
                 {
                     _store.Dequeue(path);
-                    return new ScrapeResult(path, item.System, ScrapeOutcome.Unknown, false, [], "known to be unknown");
+                    return new ScrapeResult(path, item.System, ScrapeOutcome.Unknown, false, [], "known to be unknown", Skipped: true);
                 }
                 List<string> kept = FollowRename(md5, info.Length, item.System, path);
                 string[] offered = (known.Offered ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries);
@@ -213,12 +244,13 @@ namespace EmuSen.Mistress.Scraping
                 if (!kinds.Any(k => offered.Contains(k.EsdeType) && !stored.Any(s => s.Type == k.EsdeType)))
                 {
                     _store.Dequeue(path);
-                    return new ScrapeResult(path, item.System, ScrapeOutcome.Found, HasCover(md5, info.Length, item.System, path), kept, "already scraped", known.MatchedBy);
+                    return new ScrapeResult(path, item.System, ScrapeOutcome.Found, HasCover(md5, info.Length, item.System, path), kept, "already scraped", known.MatchedBy, Skipped: true);
                 }
             }
 
-            if (!await _quota.TakeTurnAsync(stop)) return Stopped(item);
+            if (!await TurnAsync(stop)) return Stopped(item);
             hashes ??= RomHashes.Of(path);
+            Activity?.Invoke(new ScrapeActivity(path, item.System, ScrapeStep.LookingUp));
             string fileName = Path.GetFileName(path);
             JeuInfosAnswer answer = await AskAsync(path, systemId, hashes, fileName, stop);
             string matchedBy = "file";
@@ -230,7 +262,7 @@ namespace EmuSen.Mistress.Scraping
                 byte[] changed = transform(bytes);
                 if (!changed.AsSpan().SequenceEqual(bytes))
                 {
-                    if (!await _quota.TakeTurnAsync(stop)) return Stopped(item);
+                    if (!await TurnAsync(stop)) return Stopped(item);
                     JeuInfosAnswer second = await AskAsync(path, systemId, RomHashes.Of(changed), fileName, stop);
                     if (second.Status != ScrapeStatus.NotFound) answer = second;
                     if (second.Status == ScrapeStatus.Found) matchedBy = "transformed";
@@ -309,10 +341,12 @@ namespace EmuSen.Mistress.Scraping
                 if (stored.Any(s => s.Type == kind.EsdeType && File.Exists(Path.Combine(_store.Root, s.RelativePath)))) continue;
                 if (ScrapeRules.ChooseMedia(game.Media, kind, regions, choices.RegionFallback) is not { } media) continue;
                 string relative = Path.Combine(item.System, kind.Folder, stem + ScrapeRules.Extension(media));
-                if (!await _quota.TakeTurnAsync(stop)) break;
+                if (!await TurnAsync(stop)) break;
+                Activity?.Invoke(new ScrapeActivity(path, item.System, ScrapeStep.Downloading, kind.EsdeType));
                 MediaAnswer got = await _client.DownloadAsync(media.Url, Path.Combine(_store.Root, relative), stop);
                 await ThrottleAsync(got, stop);
                 if (got.Outcome is not (MediaOutcome.Saved or MediaOutcome.AlreadyThere)) continue;
+                Activity?.Invoke(new ScrapeActivity(path, item.System, ScrapeStep.Arrived, kind.EsdeType, got.Path));
                 _store.RecordMedia(md5, bytes, new StoredMedia(kind.EsdeType, relative, media.Region, got.Sha1), _clock.Now);
                 written.Add(relative);
             }
@@ -358,6 +392,7 @@ namespace EmuSen.Mistress.Scraping
             if (_disposed) return;
             _disposed = true;
             _stop.Cancel();
+            Resume();
             Task[] workers;
             lock (_workers) workers = _workers.ToArray();
             try { Task.WaitAll(workers, TimeSpan.FromSeconds(5)); }

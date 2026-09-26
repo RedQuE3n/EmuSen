@@ -79,6 +79,9 @@ namespace EmuSen.Mistress.Scraping
         public string User { get; }
         public string Password { get; }
 
+        // When ScreenScraper last accepted it through Log In or Check; null for a file the old two boxes wrote, shown as not checked.
+        public DateTime? Verified { get; init; }
+
         public bool IsSet => User.Length > 0 && Password.Length > 0;
 
         public override string ToString() => IsSet ? "a ScreenScraper member account" : "no ScreenScraper member account";
@@ -91,7 +94,9 @@ namespace EmuSen.Mistress.Scraping
             {
                 if (!File.Exists(PathOf)) return new MemberAccount("", "");
                 JsonNode? root = JsonNode.Parse(File.ReadAllText(PathOf));
-                return new MemberAccount(root?["ssid"]?.GetValue<string>() ?? "", root?["sspassword"]?.GetValue<string>() ?? "");
+                DateTime? verified = DateTime.TryParse(root?["verified"]?.GetValue<string>(), System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out DateTime at) ? at : null;
+                return new MemberAccount(root?["ssid"]?.GetValue<string>() ?? "", root?["sspassword"]?.GetValue<string>() ?? "") { Verified = verified };
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or FormatException)
             {
@@ -107,10 +112,21 @@ namespace EmuSen.Mistress.Scraping
             string temp = path + ".part";
             var options = new FileStreamOptions { Mode = FileMode.Create, Access = FileAccess.Write, Share = FileShare.None };
             if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+            var body = new JsonObject { ["ssid"] = User, ["sspassword"] = Password };
+            if (Verified is DateTime at) body["verified"] = at.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture);
             using (var stream = new FileStream(temp, options))
-                JsonSerializer.Serialize(stream, new JsonObject { ["ssid"] = User, ["sspassword"] = Password });
+                JsonSerializer.Serialize(stream, body);
             if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             File.Move(temp, path, overwrite: true);
+        }
+
+        // Log Out: the file is deleted, not emptied; true when there was one.
+        public static bool Delete()
+        {
+            string path = PathOf;
+            if (!File.Exists(path)) return false;
+            File.Delete(path);
+            return true;
         }
     }
 }

@@ -1063,7 +1063,10 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 - **Risk: the theme changes upstream.** Updating is the player's choice (§6). A new theme version that uses an element
   outside §3.8 is refused visibly, element by element, not rendered in part.
 
-- **Q15–Q19**, the game options menu and the metadata editor's open questions: §23.12.
+- **Q15–Q19**, the game options menu and the metadata editor's open questions: §23.12. Q15 was answered with Q11–Q14,
+  and Q18 and Q19 on 2026-09-26 (§10.1); Q16 and Q17 remain open.
+- **Q36–Q39** are left to §25, written on another branch at the same time. **Q40–Q45**, the retirement of OpenEmu's
+  sources, are asked in §26.9, and **Q46** in §27.9.
 
 ---
 
@@ -1143,6 +1146,17 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   - **Q14:** the shoulders jump ten games in a gamelist, as USERGUIDE documents; the triggers stay the first and last.
   - **Q13:** custom collections stay shown until switched off, as §22 built them.
   - §22.13 records what was built for these.
+- **Q18 and Q19, ScreenScraper's name and the options outside big picture (2026-09-26, after §23 was
+  merged):**
+  - **Q18:** "Offer Screen Scraper name, but don't force on user." The metadata editor shows ScreenScraper's name for
+    the game as an offer under the Name field, taken by one press (*Use This Name*) or put away (*Keep Current Name*).
+    The name changes only when the player takes it; the file's name, or the player's own edit, stays otherwise.
+  - **Q19:** "Yes, the option should be available for both." The game options menu and the metadata editor are also
+    reached from Mistress's sidebar library: the grid's and the list's context menu, the pad menu of that library on the
+    desktop and in its big screen, and Ctrl+I for the editor. The same windows are used, as sheets in a big-screen
+    session and as LunaP windows on the desktop.
+  - **A direction, not yet a decision to build:** "i would like to eventually retire sourcing game info from openemus
+    library and use screenscraper." §26 is the plan for it; §27 records what was built for Q18 and Q19.
 
 ## 11. Sources
 
@@ -4931,10 +4945,12 @@ were looked at:
 - A hidden game listed again is not dimmed.
 - The on-screen keyboard has no line break, so a description is one paragraph.
 - The editor's scrape shows stage (d)'s status sheet over the editor, as every run does; B returns to the editor.
-- ScreenScraper's own name is not offered by the editor's scrape (§17.6 keeps it unused).
+- ScreenScraper's own name is not offered by the editor's scrape (§17.6 keeps it unused). *Built in §27 (Q18): it is
+  offered, and taken only by the player.*
 - *Clear* on a game takes the store's pictures of any other file of the same system with the same stem (§23.5).
 - The two hooks of §23.4 are empty on this branch; the collections entries are §22's.
-- EmuSen's own built-in library keeps Select as the favourite and has no editor.
+- EmuSen's own built-in library keeps Select as the favourite and has no editor. *Amended by §27 (Q19): the sidebar
+  library, on the desktop and in its big screen, reaches the menu and the editor; Select there is still the favourite.*
 - Nothing ran on the handheld.
 
 ### 23.12 Questions for the player
@@ -4949,8 +4965,11 @@ were looked at:
   failover fetched, nor the favourite and play counters, which ES-DE's Clear takes with the gamelist entry. Should it take
   more?
 - **Q18, ScreenScraper's name.** ES-DE's editor scrape replaces the name with the scraper's; Mistress keeps the file's name
-  unless the player types one (§17.6). Offer ScreenScraper's name in the editor's scrape?
-- **Q19, EmuSen's own library.** Should its Select open the same menu and editor, or stay the favourite?
+  unless the player types one (§17.6). Offer ScreenScraper's name in the editor's scrape? *Answered by the player on
+  2026-09-26 (§10.1): offered, never forced; built in §27.*
+- **Q19, EmuSen's own library.** Should its Select open the same menu and editor, or stay the favourite? *Answered by the
+  user on 2026-09-26 (§10.1): the menu and the editor are available in both; built in §27, which leaves Select the
+  favourite in the sidebar library and asks Q46 about it.*
 
 ---
 
@@ -5232,3 +5251,280 @@ For Pass 1's session with the player, on the Legion Go S (build from this branch
   (`ControllerName`, §4.4 of the settings reference).
 - **Shared files.** `PadHeld` moved from `MainWindow.Pad.cs` to `MainWindow.Controllers.cs`; a branch that edits it in
   the old place (§22's) will conflict there at its merge.
+
+---
+
+## 26. Retiring OpenEmu's sources: a plan (2026-09-26)
+
+*A plan, written on branch `desktop-game-options` beside §27; nothing is removed by it.* The direction of
+2026-09-26 (§10.1): "i would like to eventually retire sourcing game info from openemus library and use screenscraper".
+"OpenEmu's library" is read here as §4.39's pair of sources, which §4.60 made the failover: **OpenVGDB**, OpenEmu's game
+database, which names a file, and **libretro-thumbnails** (`thumbnails.libretro.com`), which has the box under that
+name, with OpenVGDB's own cover address tried last. §25 is being written on another branch at the same time, so this
+section is numbered 26, its predictions start at P130 and its questions at Q40, leaving P123–P129 and Q36–Q39 to §25, as
+§17 once left a range to stage (f).
+
+The plan answers five questions: what the failover gives that ScreenScraper does not (26.2–26.3), what replaces it for
+the games ScreenScraper cannot help with (26.4), how what has been fetched already survives (26.5), what a machine
+without the developer credentials is left with (26.6), and in which order the removal is done and tested (26.7–26.8).
+The questions only the player can answer are in 26.9.
+
+### 26.1 The argument in brief
+
+ScreenScraper identifies more of this library than OpenVGDB does, by a wide margin, and on the one sample where both
+were asked about the same files, the failover would have added no cover that ScreenScraper had not already given. On a
+machine with the developer file the failover is therefore, as far as the evidence reaches, dead weight: a second
+database of 42 MB, a second server, and a code path that runs only when ScreenScraper has nothing. The failover's one
+indispensable property is not its coverage but that it needs no credentials: on a machine without the developer file,
+which Q5 makes every distributed build, it is the only online art Mistress has. The retirement is therefore argued in two
+halves with different evidence. Where ScreenScraper can be used, the failover can go now, subject to one live
+measurement (P130). Where it cannot, removing the failover removes online art altogether, and whether that is acceptable
+is the decision, not a technical finding (Q40).
+
+### 26.2 What was measured, and how
+
+**No network.** Every number here is from what the machine already held, read without writing:
+- `media.db` of §17.9's live run (`~/.cache/emusen/bigpicture/scrape-live/20260926-134821/Media/`): ScreenScraper's
+  answers for 40 files drawn at random (seed 20260926) from the library's 5,520, with the kinds each answer offered;
+- `games.db` of the published tree (`out/linux-x64/Mistress/home/Library/`), whose `cover_lookup` table holds the
+  failover's 1,113 recorded outcomes, made between 2026-09-21 and 2026-09-25 under §4.39's rule that a tile drawn
+  without a cover asked for one;
+- the same tree's cover art folder, `home/Artwork/<console>/`, where §4.39's switch wrote what it found;
+- OpenVGDB v29.0 (`openvgdb.sqlite`, 42 MB, the copy §4.39 downloaded into the same tree), queried as `OpenVgdb.cs`
+  queries it: by file name without extension, then by the MD5 of the bytes `CoreDescriptor.OpenVgdbBytes` gives (the
+  NES without its iNES header, the SNES without a copier header, the N64 halfword-swapped, the Game Boy as it is);
+- the library itself, `AppSettings.RomDirectory`, read to hash each file and never written.
+
+The databases were copied to the session's scratch folder before they were opened, so no journal or lock file was
+written beside the originals. The scripts are `retire/m40.py` (the 40 files) and `retire/whole.py` (the library) in
+that folder, with `retire/art.py` for the art folder; the whole-library pass took 3 min 53 s under `nice -n 10`.
+
+**What was not measured.** Whether libretro's server has a box for a game was not asked; it is known only for the 1,113
+games the failover asked about before 2026-09-26. ScreenScraper's answers are known only for the 40 files of §17.9. The
+cross-tabulation of 26.3 is therefore of 40 files, and the whole-library figures are OpenVGDB's identification alone.
+
+### 26.3 What the failover gives that ScreenScraper does not
+
+**Identification, on the same 40 files.**
+
+| | ScreenScraper (§17.9) | OpenVGDB (by name, then by MD5) |
+|---|---|---|
+| Games identified | 39 of 40 | 17 of 40 (9 by name, 8 by MD5) |
+| The 17 files named as released games | 17 of 17 | 17 of 17 |
+| Hacks, translations, pirate, unlicensed and multicart dumps, prototypes, betas, alternate dumps and the unnamed dump (23 of the 40) | 22 of 23 | 0 of 23 |
+| Identified by this source alone | 22 | 0 |
+
+Every file OpenVGDB identified, ScreenScraper also identified, and gave a cover for.
+
+**The games ScreenScraper left without a cover.** Seven of the 40: the one file it did not know (`ZZZ_UNK_GOLF_GRA`, a
+dump with no name), three it lists as non-games (`ZZZ(notgame)`: the Minolta program cartridge and two multicarts, each
+with a mix image and nothing else), and three SMB1 hacks it knows but has no box for. OpenVGDB knows **none of the
+seven**, so the failover, which asks libretro only for a name OpenVGDB gives, can find nothing for any of them. Of the
+seven, one (the 68-in-1 multicart) had been asked of the failover before, and its recorded outcome is Unknown.
+
+**The measured yield of the failover beside ScreenScraper is 0 of 40.** A sample of 40 bounds the true rate only
+loosely: by the rule of three, a rate above 7.5% would have shown at least one case in 40 with 95% probability, so the
+sample alone does not exclude a yield of up to about 400 covers over the library. A structural argument narrows it.
+OpenVGDB's ROM list is No-Intro's, and ScreenScraper's includes No-Intro's (§17.1, P60's premise), so a game OpenVGDB
+names and ScreenScraper does not know should be rare; the failover's yield can come only from games ScreenScraper knows
+without a `box-2D` for which libretro nonetheless has one. That case is possible, since the two collections of scans are
+independent, and it is what P130 measures.
+
+**OpenVGDB over the whole library** (5,520 files, read-only):
+
+| Console | Files | OpenVGDB identifies | by name | by MD5 | Release with a cover address | with a description |
+|---|---|---|---|---|---|---|
+| Game Boy (`.gb`) | 1,915 | 1,576 (82.3%) | 1,331 | 245 | 1,213 | 1,294 |
+| NES | 3,537 | 998 (28.2%) | 0 | 998 | 917 | 931 |
+| SNES | 48 | 44 | 0 | 44 | 43 | 43 |
+| Nintendo 64 | 20 | 20 | 20 | 0 | 18 | 19 |
+| **All** | **5,520** | **2,638 (47.8%)** | 1,351 | 1,287 | 2,191 | 2,287 |
+
+The NES shelf's names are GoodNES's (`(U)`, `[!]`, `[a1]`), not No-Intro's, so none matches by name and a little over a
+quarter matches by content; the rest are hacks, translations, pirate carts and multicarts, which No-Intro does not list.
+ScreenScraper identified 22 of the 23 NES files of the sample.
+
+**The failover's recorded outcomes** (`cover_lookup`, 1,113 games asked between 2026-09-21 and 2026-09-25): 670 Found
+(60.2%), 335 Unknown to OpenVGDB (30.1%), 108 known to OpenVGDB but with no box on libretro's server under any of the
+three names tried (9.7%). By console: Game Boy 554 found, 143 unknown, 104 without art; NES 56, 188, 0; SNES 43, 4, 1;
+N64 17, 0, 3. The 670 found covers are the published tree's art folder: each Found row has its file there under libretro's
+naming, and the folder holds no other file (checked file by file, `retire/art.py`). They were written there by §4.39's switch before §4.60 moved the failover's writes to
+`home/Media/openemu/`. No file exists under `home/Media/openemu/` on this machine: the failover as §4.60 built it has not
+run in the published tree.
+
+**What else the failover provides, beyond covers.**
+- **Text: nothing.** OpenVGDB holds a description for 2,287 of the 2,638 games it names, and developer, genre and date
+  for most, but Mistress never kept any of it (§4.39: "No description, rating or other metadata is kept"). The one datum
+  kept is the No-Intro name, in `cover_lookup.rom_name`, and no code reads it. ScreenScraper's text is what every view
+  shows (§17.6).
+- **OpenVGDB's own cover addresses: nothing.** All eight tried in §4.39 answered 403 from GameFAQs; the address is tried
+  last and has not been seen to answer.
+- **No credentials.** The failover is the only online art on a machine without the developer file (26.6).
+- **No daily quota**, as far as is known: libretro's server states none, and none was measured. ScreenScraper's is 10,000
+  requests a day without a member account (§17.9).
+- **Not OpenVGDB's to retire: the byte transforms.** `CoreDescriptor.OpenVgdbBytes` is console knowledge (a header to
+  drop, a byte order to swap) that ScreenScraper's step 2 uses too (`MainWindow.Scrape.cs`, `TransformFor`). It stays,
+  under a name that does not tie it to OpenVGDB.
+- **Not a network source: libretro's naming.** The cover art folder of §4.33 is read under libretro-thumbnails' names and
+  folders (`ArtworkIndex`, `CoreDescriptor.CheatSystemNames`). That is a convention for the player's own files and stays.
+
+### 26.4 What replaces it for games ScreenScraper cannot help with
+
+The seven games of 26.3 fall into three kinds, and each has a different remedy. None of them is the failover, which
+had nothing for any of the seven.
+
+| Kind (of the 40) | Example | Replacement |
+|---|---|---|
+| Unknown to ScreenScraper (1) | an unnamed dump | the player's own cover, or the placeholder; a name search finds nothing to search by |
+| Known, no box, a game derived from another (3) | an SMB1 hack | **ScreenScraper's search by name** (Pass 8's "Find by name…" chooser, `jeuRecherche`), where the player picks the base game's page; or **the base game's cover from the library** |
+| Known as a non-game (3) | a multicart, a program cartridge | the placeholder, or the player's own cover; ScreenScraper's mix image exists for these (Q43) |
+
+- **Search by name** is §21's Pass 8 as the player accepted it (Q22–Q35, §10.1): started only from "Find by name…" or a run
+  the player sets to ask, never as an automatic fallback, so §17.14's rule 1 holds. It costs a request per search and
+  one per picture, like any other lookup. It is the replacement with the widest reach, and the retirement should wait
+  for it (26.7).
+- **A manual pick** exists already: *Add Cover Art from File…* copies a picture into the art folder, where it wins over
+  every other source. A second pick is proposed: **Use Another Game's Cover…**, a chooser over the library that copies
+  the chosen game's cover (whatever its source) into the art folder under this game's name. It suits hacks and
+  translations, whose base game is usually in the same library, and it sends nothing anywhere.
+- **The placeholder** is §4.33's drawn tile, unchanged. It is the answer for what nothing can identify.
+
+### 26.5 How what has been fetched already carries over
+
+The rule is that nothing the player has is deleted, and nothing that is shown today stops being shown, by the removal
+itself.
+
+- **The 670 covers in the art folder** stay where they are and go on counting as the player's own, first in §4.60's
+  order, above ScreenScraper's. They were fetched, not placed, but since §4.60 they cannot be told from a placed cover by
+  where they are. They can be told apart by `cover_lookup`: each has a Found row naming its ROM, and the counts match
+  exactly (26.3). Whether to keep them first or to rank them below ScreenScraper's region-matched covers is Q41; the
+  default proposed is to keep them first, since that is what the player sees today.
+- **`home/Media/openemu/<console>/`**, the failover's folder since §4.60, is kept as a read-only source in its present
+  place in the order (after the ES-DE folder), read offline, never written again, shown whatever the retired switch
+  held. On this machine it is empty.
+- **`cover_lookup`** stays in `games.db`: its migrations are append-only (§4.32), and a table no code writes or reads
+  costs nothing. `GameRecords.Move` stops carrying its rows. A later migration may drop it; this plan does not.
+- **`openvgdb.sqlite`** (42 MB in `home/Library/`) is not the player's data but a download. It stays until the player
+  removes it; Q42 asks whether the removal build should offer that, delete it, or leave it.
+- **The settings.** `OpenEmuFallback` is read once and dropped at the next save, as `OnlineCovers` was (§4.60).
+
+### 26.6 A machine without the developer credentials
+
+**Today.** A run the player starts on such a machine asks only the failover (§4.60's second case). That is every
+distributed build: Q5 decided that no build carries the credentials, and ScreenScraper issues developer credentials to
+software authors, not players, so a player cannot bring their own (§4.60's sign-in section). The player's own machines,
+the handheld included, read `~/.config/EmuSen/screenscraper-developer.json` and are unaffected (§17.12).
+
+**After the removal, with nothing else changed,** such a machine has no online art at all: the art folder, *Add Cover Art
+from File…*, the proposed *Use Another Game's Cover…*, an ES-DE media folder the player points at (§4.52), and the
+placeholder. A scrape run there would have nothing to ask, and the Scraping tab would say so instead of offering a run.
+
+Four ways through, none of them chosen here:
+1. **Accept it.** Distributed builds have offline art only. Simple; a clear loss for a player of a published build.
+2. **Revisit Q5.** Embed the developer credentials at publish time from a file outside the repository, as ES-DE does
+   (the option §10 put to the player as Q5). Every build could then scrape; the credentials would be in every copy, obfuscated but
+   recoverable, and a leak would be charged against the project's account.
+3. **A second source that needs no project credentials.** TheGamesDB with the player's own key is Pass 13, and the player
+   accepted Q29's (c) (§10.1): a key is issued to any site account, unlike ScreenScraper's developer credentials. It is
+   a second source, not ScreenScraper, so it keeps a failover in a new form; the direction names ScreenScraper
+   alone.
+4. **Keep libretro's thumbnails without OpenVGDB**, asked by the file's own name, for files already named as No-Intro
+   names them. It needs no database and no credentials, but it is half of what is being retired, and on this library it
+   would reach the Game Boy shelf (whose names are No-Intro's) and almost none of the NES shelf (GoodNES names, 26.3).
+
+Q40 asks which. The steps of 26.7 are ordered so that the half the evidence supports can be done before Q40 is answered.
+
+### 26.7 The steps, in order
+
+1. **Measure the failover's yield where ScreenScraper is usable (P130).** A run the player starts, of the whole library
+   or a console, with the failover on, as §4.60 built it. The status window's tally *Filled by OpenEmu* (§4.57) is the
+   yield, and the run's log names each game. No code is needed; the run costs ScreenScraper's quota as any run does
+   (§17.10: three days for the whole library, or one shelf at a time). This is the evidence the removal rests on, and it
+   is the player's to start (§17.14).
+2. **Build the replacements:** Pass 8's search by name and its chooser (26.4), and *Use Another Game's Cover…*.
+3. **Stop asking the failover where ScreenScraper is usable.** The first behavioural change: a run with the developer
+   file never asks OpenVGDB or libretro, whatever the switch says; the switch's row says it applies only where
+   ScreenScraper cannot be used. This is reversible by one condition, and it can ship before Q40 is answered.
+4. **Answer Q40**, then either remove the failover altogether (5–7), or put the chosen replacement in its place for
+   machines without the developer file before removing it.
+5. **Remove the code:**
+   - `Library/OpenVgdb.cs`, `Library/OpenVgdbDownload.cs`, `Library/CoverFetcher.cs` (270 lines);
+   - `Views/MainWindow.Covers.cs` (106 lines) and its calls: `ApplyOnlineCovers`, `StopOnlineCovers`, `AskForCover`,
+     `CoverArrived`, and in `MainWindow.Scrape.cs` `FailoverFor`, `FailoverArrived` and the failover half of a run's end;
+   - `ScrapeRun`'s `FailoverAsked`, `FailoverFound`, `FailoverPending`, `FilledByFailover` and `FromFailover`;
+     `ScrapePlan.Failover`; the tallies and the sentence in `ScrapeStatusWindow`; the *OpenEmu Failover* row of
+     `ScrapePreferencesPane`;
+   - `AppSettings.OpenEmuFallback`, read once and dropped;
+   - `CoreDescriptor.OpenVgdbSystems`, and `OpenVgdbBytes` renamed (for instance `ScrapeBytes`), with every core's entry
+     in `CoreCatalog.cs` kept;
+   - `GameRecords`' `CoverLookup`, `RecordCoverLookup` and `ForgetCoverLookup`, and the `cover_lookup` lines of `Move`;
+     the table itself stays (26.5).
+   - `MediaSources` keeps its OpenEmu source, read-only, as 26.5 describes; its constructor no longer takes the switch.
+6. **Change the tests** (26.8).
+7. **Retire the documents,** not delete them: §4.39 of the settings reference is marked retired and kept as the record
+   of how the failover was built and measured, with a pointer to this section; §4.60 loses its failover paragraphs and
+   gains the replacements; the README's credits and `THIRD_PARTY_NOTICES.md` keep OpenVGDB and libretro-thumbnails for
+   as long as a build can read covers they supplied, then move them to a list of former sources.
+
+### 26.8 Tests and predictions
+
+**Tests.** All headless, on the fake ScreenScraper, never the network.
+- *Deleted:* `OnlineCoverTests` and `OnlineCoverWindowTests` (421 lines), whose rules go with the code; their fixtures
+  (a synthetic OpenVGDB, a fake thumbnail server) with them.
+- *Rewritten:* `ScrapeWindowTests`' six failover cases become their opposites: a game ScreenScraper does not know, or knows
+  without a box, asks **no other server** (`OthersAsked` empty), and the tile keeps the placeholder; a run without the
+  developer file sends nothing and the Scraping tab says why; a day's quota used up stops the run and hands nothing on.
+- *Kept, and made to guard the carry-over:* a test with a cover in the art folder, one in `home/Media/openemu/`, and one
+  from ScreenScraper, each shown from the same place before and after the removal (P133); `ScraperTests`' step-2 cases,
+  which now exercise the renamed byte transforms; `GameRecordsTests` with a `cover_lookup` row present and untouched.
+- *New, for the replacements:* the chooser (Pass 8's own tests) and *Use Another Game's Cover…* (a copy into the art
+  folder, no request, the ROM folder's fingerprint unchanged, as §23.8's Hide test measures it).
+- *Mutants,* one at a time, as every round since §17.11: the failover asked again when ScreenScraper has no box; the
+  OpenEmu folder dropped from the order; the art folder's fetched covers ranked below ScreenScraper against Q41's answer;
+  the byte transform lost in the rename; `OpenEmuFallback` kept after a save.
+
+**Predictions,** written before any of this is built:
+
+| # | Prediction |
+|---|---|
+| P130 | In a run the player starts with ScreenScraper usable and the failover on, the failover fills a cover for fewer than 1% of the games run (26.3 found 0 of 40). |
+| P131 | In the same run, OpenVGDB identifies fewer than 10% of the games ScreenScraper answers as unknown. |
+| P132 | Of the games ScreenScraper knows without a `box-2D` in that run, fewer than a quarter get a box from libretro. |
+| P133 | After step 5, every cover the synthetic library showed before is shown from the same file; no picture shown before the removal disappears. |
+| P134 | Step 5 removes between 1,000 and 1,500 lines, tests included, and adds fewer than 150. |
+| P135 | A whole-library run after step 3 costs the same ScreenScraper requests as one before it, to within 1%: the failover never cost ScreenScraper requests. |
+
+### 26.9 Questions for the player
+
+- **Q40, a machine without the developer credentials.** After the removal such a machine, every distributed build
+  included, has no online art. Which of 26.6's four: accept it; revisit Q5 and embed the credentials at publish; bring
+  TheGamesDB (Pass 13, the player's own key) forward as the credential-free source; or keep libretro's thumbnails asked
+  by file name, without OpenVGDB? **Recommendation: accept it for now and do Pass 13 when its terms have been read**,
+  since only (3) gives a player of a published build art without putting the project's credentials in every copy; (2)
+  is the stronger remedy if the player is content to carry that risk.
+- **Q41, the 670 covers in the art folder.** They were fetched by §4.39's switch, not placed by the player, and they rank
+  above ScreenScraper's. Keep them first, as today, or rank the ones `cover_lookup` records as fetched below
+  ScreenScraper's? **Recommendation: keep them first**, and offer the re-ranking as a Preferences action rather than a
+  silent change, so that a cover the player has grown used to never changes by itself.
+- **Q42, OpenVGDB's database.** 42 MB in `home/Library/`. Leave it, offer a *Remove* line in Preferences, or delete it in
+  the removal build? **Recommendation: offer the line**; it is a download, not the player's data, but deleting a file the
+  player may have copied deliberately is not the software's to decide.
+- **Q43, a mix image as the cover of last resort.** ScreenScraper gives a mix image even for the non-games it lists with no
+  box (26.3). Show it on the tile when there is no box, or keep the placeholder? **Recommendation: the placeholder**; a
+  mix image is a composite made for a theme's panel, and the grid would show one tile unlike the rest.
+- **Q44, the order.** Step 3 (no failover where ScreenScraper is usable) before Pass 8 is built, or only after it?
+  **Recommendation: after**, so that the player never has fewer remedies than today, even for a day.
+- **Q45, *Use Another Game's Cover…*.** Build it with the replacements, or leave the manual pick to *Add Cover Art from
+  File…*? **Recommendation: build it**; it is the remedy for the hacks and translations that fill this library, and it
+  sends nothing anywhere.
+
+### 26.10 What this section did not do
+
+- **No live call.** ScreenScraper, libretro and GitHub were not asked anything; P130–P132 wait on a run the player starts.
+- **ScreenScraper's side of the 1,113 recorded lookups is unknown**, so whether ScreenScraper has a box for the 670 games
+  the failover found, or for the 108 it found no box for, is not measured.
+- **P60 (N64 byte order) is still open.** It matters here only because the renamed transform must keep serving
+  ScreenScraper's step 2.
+- **libretro's server was not characterised:** its limits, its terms for software that asks it, and its coverage outside
+  the 1,113 games are unknown.
+- **Nothing was removed.** The failover is on by default and works as §4.60 describes.

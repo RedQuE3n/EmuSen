@@ -7845,6 +7845,7 @@ own, unchanged (§4.45.6); ES-DE's thirteen-key layout and its Clear and Cancel 
 | # | Predicted | Found | Verdict |
 |---|---|---|---|
 | P203 | *(written before the mutants of §34.18)* Of thirty-one mutants, at least nine in ten are caught on their first valid run | 31 of 31, each by the case written for it (§34.18) | held |
+| P204 | *(written before the broad run of §34.20)* The broad Mistress run, after merging WiseMan, fails on nothing this branch causes | 1,406 tests, none failed (§34.20) | held; one run is weak evidence against an intermittent failure |
 
 ### 34.18 Tests and mutants for the rest of stage 2
 
@@ -7903,6 +7904,38 @@ Four side-by-sides against the captures of §34.12, all at 1280 by 800: `side-by
 `side-by-side-ui-settings` and `side-by-side-list-screen`. Every picture was looked at. What they show that is not a
 defect: the synthetic session's theme folder is named by a random identifier, so its theme rows read as one; Art Book
 Next's view behind the menus is its gamelist of synthetic pictures, blurred.
+
+### 34.20 The broad run
+
+After merging WiseMan at `b272675c` (the scrape extras and a gridscene fix, which merged without a conflict) and
+`openemu-library` at `5a1e1a2` into LunaP, one run of the Mistress filter without `ShaderSettingsWindowTests`,
+`ShaderBrowseBench`, `SceneGpuBench` and any shader, GPU or Vulkan test, under `nice -n 10`, on the final build of
+both branches: **1,406 tests, 1,364 passed, 42 skipped (the picture, survey, bench and live tools), 0 failed, in
+4 min 10 s.** §34.8's intermittent failure of the headless setup did not recur in this order. LunaP's own suite ran
+in full on its branch: **1,414 tests, all passed**.
+
+### 34.21 Not done
+
+- **ES-DE's per-row help** (*Add Half Star* on the rating, *Toggle* on a switch, *Clear File* on Clear); the help bar
+  is the editor's and the menus' own, per screen (Q106).
+- **The scroll indicator** ES-DE draws at a menu title's right when its rows run past the panel (Q107).
+- **ES-DE's text popup's own layout**: thirteen keys a row with its symbols, and Clear and Cancel keys (Q109).
+- **The desktop's sheets**, deliberately: every change of this section is for a big-screen session.
+- **A message box's opening**: with Scale-up it grows as a menu does, which ES-DE's was not measured to do.
+- A real pad, a real keyboard, the handheld; ES-DE was run only in the scratch home, at 1280 by 800.
+
+### 34.22 Open questions
+
+- **Q105, the subtitle.** ES-DE's editor has one line under its title: the file and its system, *Aurora Drift
+  (Synthetic).sfc [SNES]*. Mistress's has two, the game's name and its file, as decided for §34. **Recommendation:**
+  ES-DE's one line, since the name is the first row.
+- **Q106, per-row help.** ES-DE's help bar changes with the focused row. **Recommendation:** build it for the editor's
+  rating, switches and Clear, where ES-DE's words differ from *Select*.
+- **Q107, the scroll indicator.** **Recommendation:** add it to LunaP's `MenuPanel`, drawn only when the rows scroll.
+- **Q108, leaving the editor.** ES-DE goes back to Gamelist Options when its editor closes; Mistress goes back to the
+  game list. **Recommendation:** keep Mistress's, one press shorter, unless the two should match everywhere.
+- **Q109, the popup's layout.** Mistress's popup keeps its own layouts (ten keys a row, Letters and Code) in ES-DE's
+  look. **Recommendation:** keep them: they are shared with the cheats window, whose codes need the Code layout.
 
 ## 35. Q70 and Q71: the other value types against ES-DE (2026-09-27)
 

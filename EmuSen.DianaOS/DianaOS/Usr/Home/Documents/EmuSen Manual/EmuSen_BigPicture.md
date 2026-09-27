@@ -1138,6 +1138,10 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   - **Q45** (*Use Another Game's Cover…*) is built as a replacement that stands on its own.
   - **Q44** no longer applies: the fallback is not switched off after pass 8.
   - **Q40,** the embedded credentials, is unaffected.
+- **Q100–Q104, Q120–Q122 and Q130–Q132, decided 2026-09-27; every recommendation accepted:**
+  - **Stage 2's metadata editor (§34):** the look is approved. **Q100:** an ES-DE text popup is built with the rest of stage 2, and the on-screen keyboard's Shift and Done keys are widened meanwhile. **Q101:** Reset moves to a pad button (X), shown in the help bar. **Q102:** ES-DE's keyboard keys drive the big-screen menus as pad buttons do. **Q103:** the desktop editor keeps the Hide metadata fields switch. **Q104:** ES-DE's own metadata editor is captured and the proportions checked against it. Also: the Hide from Library question no longer names ES-DE, and long controller names use a short form.
+  - **Pass 14 (§36):** items 1 and 2 are approved. "1 GAMES" becomes "1 GAME", and the Bluetooth indicator draws its symbol rather than the letter B. **Q120:** the carousel's `selectedItemMargins` and `lineSpacing` come next, then `gamelistinfo`, then `animation`. **Q121:** Mistress shows its own word where ES-DE writes "unknown", through Pass 5's text lookup. **Q122:** ES-DE's default help bar is measured and drawn for a theme that has none.
+  - **Pass 10 (§37):** **Q130:** the Game Mode switch stays on until the hardware session shows Steam's dimming stacking with it. **Q131:** the overlay keeps the shelf's system name, as the launch screen does. **Q132:** "Render scanlines" is built with Pass 12's video screensaver.
 - **Q110–Q111, decided 2026-09-27 (§35):**
   - **Q110:** a theme with no chosen variant draws its first selectable variant from the start, as Mistress already does. ES-DE draws the first declared variant until its settings are first opened; the two agree for all 66 listed themes.
   - **Q111:** a bare relative path (no `./`) resolves against the working directory, as ES-DE's does, as built in §35.

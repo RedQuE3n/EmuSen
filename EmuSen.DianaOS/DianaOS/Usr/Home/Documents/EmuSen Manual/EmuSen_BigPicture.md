@@ -1138,6 +1138,9 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   - **Q45** (*Use Another Game's Cover…*) is built as a replacement that stands on its own.
   - **Q44** no longer applies: the fallback is not switched off after pass 8.
   - **Q40,** the embedded credentials, is unaffected.
+- **Q110–Q111, decided 2026-09-27 (§35):**
+  - **Q110:** a theme with no chosen variant draws its first selectable variant from the start, as Mistress already does. ES-DE draws the first declared variant until its settings are first opened; the two agree for all 66 listed themes.
+  - **Q111:** a bare relative path (no `./`) resolves against the working directory, as ES-DE's does, as built in §35.
 - **Q70–Q72, answered 2026-09-27 (§31):**
   - **Q70:** yes. The other value types are probed against ES-DE as the six refusals were: colours, whole numbers (Canvas's and Iconic's `3.5`, P173), strings, paths, and `capabilities.xml`'s `selectable` (P172). The number with an exponent (P170) goes in the same run. The loader then matches ES-DE rule by rule.
   - **Q71:** yes. A variant that states no `<selectable>` is treated as ES-DE treats it: not offered for selection. This is confirmed in Q70's run before it is built, since only one ES-DE observation supports it ("NONE DEFINED" for a lone variant).

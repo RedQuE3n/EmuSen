@@ -487,7 +487,7 @@ namespace EmuSen.Mistress.Views
         private void ShowPreferencesAt(string? tab)
         {
             // Non-modal, so re-scan on close rather than leaving a stale library behind it.
-            var window = new PreferencesWindow(_appSettings, this) { OpenThemeSettings = ShowThemeSettings };
+            var window = new PreferencesWindow(_appSettings, this, _bigScreen ? HelpFamily : null) { OpenThemeSettings = ShowThemeSettings };
             WatchPreferences(window);
             if (tab is not null) window.ShowTab(tab);
             window.StatusBarChanged += ApplyStatusBar;

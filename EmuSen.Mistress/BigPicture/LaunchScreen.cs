@@ -93,8 +93,12 @@ namespace EmuSen.Mistress.BigPicture
 
         public double PopupOpacity => _pill.Opacity;
 
-        public void Open(string name, string system, string? art, bool popup, TimeSpan now, TimeSpan duration)
+        // Whether the card grows into place, ES-DE's Scale-up, or is drawn whole at once, its None (Q92).
+        public bool ScalesUp { get; private set; } = true;
+
+        public void Open(string name, string system, string? art, bool popup, TimeSpan now, TimeSpan duration, bool scaleUp = true)
         {
+            ScalesUp = scaleUp;
             IsOpen = true;
             Popup = popup;
             Opened = now;
@@ -121,7 +125,7 @@ namespace EmuSen.Mistress.BigPicture
         }
 
         // Whether the entrance is still moving; after it nothing changes until Due.
-        public bool Moving(TimeSpan now) => IsOpen && now < Opened + (Popup ? PopupFadeTime : ScaleUpTime);
+        public bool Moving(TimeSpan now) => IsOpen && now < Opened + (Popup ? PopupFadeTime : ScalesUp ? ScaleUpTime : BackdropTime);
 
         public void Advance(TimeSpan now)
         {
@@ -132,7 +136,7 @@ namespace EmuSen.Mistress.BigPicture
                 _pill.Opacity = Fraction(now, PopupFadeTime);
                 return;
             }
-            double s = ScaleFrom + (1 - ScaleFrom) * Fraction(now, ScaleUpTime);
+            double s = ScalesUp ? ScaleFrom + (1 - ScaleFrom) * Fraction(now, ScaleUpTime) : 1;
             _scale.ScaleX = _scale.ScaleY = s;
             double b = Fraction(now, BackdropTime);
             _backdrop.Shade = Color.FromArgb((byte)Math.Round(255 * Shade * b), 0, 0, 0);

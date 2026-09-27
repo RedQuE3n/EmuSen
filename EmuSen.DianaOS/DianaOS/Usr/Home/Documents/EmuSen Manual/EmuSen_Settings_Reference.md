@@ -4867,6 +4867,64 @@ what a player meets now.
   Its file stays where it is; turn on Hidden Games in Preferences to list it again."*
 - **The on-screen keyboard** has wider *Shift* and *Done* keys, so their names are no longer cut.
 
+#### 4.72.8 The settings sheets as ES-DE's menus (2026-09-27)
+
+In a big-screen session, **Theme Settings**, **Game Collection Settings** and **Preferences** open as ES-DE's menus
+rather than as sheets with tabs (plan §34.13). Each is a panel like the pad menu's: its name as the title, a row per
+setting, *Back* under the rows, and the help bar at the bottom of the screen.
+
+- **Theme Settings** lists the theme's own options first (variant, colour scheme, font size, aspect ratio, language,
+  transitions, as the theme declares them), then **Themes** and **Interface** as rows that open screens of their own.
+  In Themes, EmuSen's own look is a row with *Use* (or *In Use*) beside it, and each theme a row that opens its own
+  screen with Use, Check for Update or Update, Remove and About.
+- **Game Collection Settings** is one screen: the automatic collections and each custom collection as switches, Create
+  New Custom Collection, Group Custom Collections, the custom collections' switches, the default sort order, the
+  favourites and folders switches and the random button.
+- **Preferences** is a row for each of Library, Scraping, Gameplay, Appearance, Controllers and System Files, each
+  opening its screen.
+
+Rows show what the sheet showed: a **choice** between `<` and `>` (Left and Right step it, A opens its list, §4.72.9), a
+**switch** named in ES-DE's words (*Display clock*), a **text or folder** as a row that A opens on the keyboard
+(§4.72.11), a **slider** as a choice showing its value (*5 min*, *70*). The line at the foot of the panel says what the
+focused row does, as the sheet's hint under each field did. **B** or *Back* goes back a screen and closes the menu
+from its first; **L1** and **R1** turn to the previous or next screen, as they turned the tabs. On the desktop the
+sheets are as before.
+
+#### 4.72.9 An option row's list screen (2026-09-27)
+
+In any big-screen menu, **A** (or Enter) on a row with `<` `>` opens ES-DE's list screen for it (plan §34.15): the
+row's name as the title, a row for each choice, the current one highlighted, and *Back*. A on a choice sets it and
+goes back to the row; B or Back goes back leaving the row as it was. The menu the row is in is not drawn behind the
+list, as in ES-DE. Left and Right on the row still step it without the list. A click on the row with a mouse drops the
+ordinary list down.
+
+#### 4.72.10 Menu opening animation (2026-09-27)
+
+A row of Theme Settings ▸ Interface, ES-DE's *Menu opening effect* (plan §34.14):
+
+| Choice | What it does |
+|---|---|
+| Scale-up (default) | a menu, a menu screen opened from another, and the launch screen's card grow from half their size to their own over 117 ms, as ES-DE's do (measured) |
+| None | they appear whole at once |
+
+Stored as `MenuOpeningEffect` (`scale-up`, `none`) in the big picture interface settings.
+
+#### 4.72.11 The text popup (2026-09-27)
+
+A text row in a big-screen menu (a metadata field, a folder, a user name) opens the on-screen keyboard as ES-DE's text
+popup (plan §34.16): *Enter* and the row's name as its title, the text on a dark bar, the keys as tiles, over the menu
+shaded. The keys, the layouts and what each button does are those of §4.45.6: A types, B erases (and with nothing left,
+closes), Y is a space, Select shifts, L1 and R1 change the layout, Start is Done. Everywhere else (the cheats window,
+the desktop) the keyboard keeps its own look.
+
+#### 4.72.12 The editor's proportions, measured (2026-09-27)
+
+ES-DE's own editor was captured at 1280 by 800 and measured (plan §34.12). The editor's rows are now ES-DE's: 42
+pixels apart (the menus' are 54) with smaller type, stars 21 pixels each, the buttons' type larger than the rows', and
+*unknown* shown for an empty developer, publisher, genre, players and release date, as ES-DE shows it. The title band
+is laid out as ES-DE's. The two lines under the title stay the game's name and its file, as decided; ES-DE shows one
+line, the file and its system in brackets (Q105).
+
 ### 4.73 Big picture: colours, whole numbers, words, paths and variants, as ES-DE reads them (2026-09-27)
 
 Q70 and Q71 of `EmuSen_BigPicture.md`, answered on 2026-09-27: run ES-DE on the value types §4.68 left strict, and

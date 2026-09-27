@@ -100,6 +100,7 @@ namespace EmuSen.Mistress.Input
                 case UiButton.Accept:
                     if (open is not null) { Choose(open, focused); return; }
                     if (focused is TextBox box) { PadKeyboard.Open(box); return; }
+                    if (focused is ComboBox listed && Views.OptionListWindow.OpensFor(window, listed)) { Views.OptionListWindow.Show(window, listed); return; }
                     if (focused is ComboBox closed) { closed.IsDropDownOpen = true; return; }
                     if (focused is TabItem header) { header.IsSelected = true; return; }
                     if (focused is ToggleButton toggle) { toggle.IsChecked = toggle.IsChecked != true; return; }

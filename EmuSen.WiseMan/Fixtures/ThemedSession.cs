@@ -54,6 +54,8 @@ namespace EmuSen.WiseMan.Fixtures
             app.BigPictureCollections.AutoCollections = [];
             // Games start at once unless a test asks for the launch screen (§4.71), so a test that is not about it need not wait it out.
             app.BigPictureInterface.LaunchScreenDuration = BigPictureInterface.LaunchDisabled;
+            // The older pixel tests read a menu as it stands; the opening's own tests set Scale-up back (§4.72.10).
+            app.BigPictureInterface.MenuOpeningEffect = BigPictureInterface.OpeningNone;
             // Nor does the screensaver start by itself (§4.75), so a long run of the clock keeps the view in front.
             app.BigPictureInterface.ScreensaverTimer = 0;
             settings?.Invoke(app);

@@ -18,7 +18,7 @@ using EmuSen.Galaxia.Library;
 namespace EmuSen.Mistress.Views
 {
     // The ES-DE theme's options, built from its capabilities.xml, and the themes downloaded on request - see EmuSen_Settings_Reference.md §4.53.
-    public class ThemeSettingsWindow : ToolWindow
+    public class ThemeSettingsWindow : ToolWindow, EmuSen.Mistress.Input.IPadDriven
     {
         private readonly AppSettings _settings;
         private readonly Func<HttpClient> _http;
@@ -31,7 +31,7 @@ namespace EmuSen.Mistress.Views
         private bool _closed;
 
         // Called with true when a theme folder was replaced or removed, so the view reads it afresh.
-        public ThemeSettingsWindow(AppSettings settings, Func<HttpClient> http, Action<bool> applied)
+        public ThemeSettingsWindow(AppSettings settings, Func<HttpClient> http, Action<bool> applied, PadFamily? menu = null)
         {
             _settings = settings;
             _http = http;
@@ -41,16 +41,24 @@ namespace EmuSen.Mistress.Views
             CanResize = false;
             SizeToContent = SizeToContent.Height;
             var tabs = new Tabs { Name = "ThemeSettingsTabs" };
-            tabs.Add("Options", Pane(_options));
-            tabs.Add("Themes", Pane(Ui.Stack(12, _themes, _status)));
-            tabs.Add("Interface", Pane(Ui.Stack(12, new InterfaceSettingsPane(settings, () => { _settings.Save(); _applied(false); }).Rows())));
+            Control options = Pane(_options), themes = Pane(Ui.Stack(12, _themes, _status));
+            Control interfacePane = Pane(Ui.Stack(12, new InterfaceSettingsPane(settings, () => { _settings.Save(); _applied(false); }).Rows()));
+            tabs.Add("Options", options);
+            tabs.Add("Themes", themes);
+            tabs.Add("Interface", interfacePane);
             if (BigPictureLooks.BuiltInCurrent(settings)) tabs.SelectedIndex = 1;
             Control buttons = Ui.Buttons(Ui.Button("Close", Close)).Margin(0, 12, 0, 0);
             DockPanel.SetDock(buttons, Dock.Bottom);
             Content = new DockPanel { LastChildFill = true, Children = { buttons, tabs } }.Margin(16);
             Closed += (_, _) => { _closed = true; StopDownload(); };
             Fill();
+            // In a big-screen session, ES-DE's UI settings: the theme's options first, then Themes and Interface as submenus (§4.72.8).
+            if (menu is { } family) Form = new BigMenuForm(this, "Theme Settings", family, [("Options", options), ("Themes", themes), ("Interface", interfacePane)], tabs, firstInline: true);
         }
+
+        public BigMenuForm? Form { get; }
+
+        public bool OnPad(EmuSen.Mistress.Input.UiButton button) => Form is not null && button == EmuSen.Mistress.Input.UiButton.Back && Form.Back();
 
         // The download in flight, for a test to await; null when none runs.
         public Task<ThemeStamp>? Downloading { get; private set; }

@@ -34,6 +34,8 @@ namespace EmuSen.Mistress.Views
             (BigPictureInterface.LaunchDisabled, "Disabled"),
         ];
 
+        public static readonly (string Value, string Text)[] OpeningChoices = [(BigPictureInterface.OpeningScaleUp, "Scale-up"), (BigPictureInterface.OpeningNone, "None")];
+
         public static readonly (string Value, string Text)[] ScreensaverChoices =
         [
             (BigPictureInterface.SaverDim, "Dim"),
@@ -75,6 +77,8 @@ namespace EmuSen.Mistress.Views
             Ui.Header("On Screen"),
             Choice("LaunchScreenDuration", "Launch Screen Duration", "How long the game's name and marquee (else its cover) show before it starts: Normal 3 s, Brief 1.7 s, Long 4.5 s, as ES-DE measures; Popup, a notice at the top for 1.7 s; Disabled, at once.",
                 LaunchScreenChoices, S.LaunchScreenDuration, v => S.LaunchScreenDuration = v),
+            Choice("MenuOpeningEffect", "Menu Opening Animation", "Scale-up grows each menu, and the launch screen's card, from half its size over a ninth of a second, as ES-DE does; None shows them whole at once.",
+                OpeningChoices, S.MenuOpeningEffect, v => S.MenuOpeningEffect = v),
             new FieldRow
             {
                 Label = "Clock",

@@ -59,6 +59,9 @@ namespace EmuSen.Mistress.Views
         private bool _waitingForScrape;
         private bool _closed;
 
+        // Design sizes at 800 lines, from ES-DE's editor: a 42-pixel row with 19-pixel capitals, 26-pixel capitals on its buttons, and stars 20 pixels a piece (§34.12).
+        public const double RowPitch = 42, RowText = 27, ButtonText = 37, StarSize = 21;
+
         private const string PlayCountHint = "Mistress's own count; corrected here, it counts on from what is typed.", PlayTimeHint = "In seconds, as ES-DE keeps it.";
 
         // Parameterless constructor exists only for tooling - real code always uses the one below.
@@ -216,6 +219,11 @@ namespace EmuSen.Mistress.Views
         {
             SheetLayer.SetChromeless(this, true);
             var rows = new StackPanel { Name = "MetadataRows" };
+            // ES-DE's editor draws its rows smaller than its menus', measured on its own editor at 1280 by 800 (§34.12).
+            rows.Styles.Add(new Avalonia.Styling.Style(x => Avalonia.Styling.Selectors.OfType<MenuRow>(x))
+            {
+                Setters = { new Avalonia.Styling.Setter(MenuRow.RowHeightProperty, RowPitch), new Avalonia.Styling.Setter(MenuRow.TextSizeProperty, RowText) },
+            });
             foreach (MetadataField field in Shown)
             {
                 rows.Children.Add(Line(field));
@@ -233,12 +241,13 @@ namespace EmuSen.Mistress.Views
             rows.AddHandler(GotFocusEvent, (_, e) => { _focusedField = FieldOf(e.Source as Control); _statusFresh = false; ShowFooter(); }, handledEventsToo: true);
 
             var bar = new StackPanel { Name = "MetadataButtons", Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
-            foreach (Button b in buttons) bar.Children.Add(MenuRows.ApplyButton(b, 30));
+            foreach (Button b in buttons) bar.Children.Add(MenuRows.ApplyButton(b, ButtonText));
             // A button describes no field, so the footer lets go of the last one.
             bar.AddHandler(GotFocusEvent, (_, _) => { _focusedField = null; _statusFresh = false; ShowFooter(); }, handledEventsToo: true);
             Content = _menu = new MenuPanel
             {
                 Name = "MetadataMenu",
+                RowPitch = RowPitch,
                 Title = "Edit Metadata",
                 Subtitle = title + "\n" + Path.GetFileName(path),
                 FooterMaxLines = 2,
@@ -279,6 +288,8 @@ namespace EmuSen.Mistress.Views
                 _ => Hosted(field.Label, editor),
             };
             if (editor is TextBox text) MenuRows.SetValueLetterCase(text, LetterCase.None);
+            // ES-DE's editor shows "unknown" for these fields when they are empty, and nothing for the others (§34.12).
+            if (editor is TextBox unset && field.Key is GameMetadata.Developer or GameMetadata.Publisher or GameMetadata.Genre or GameMetadata.Players) unset.PlaceholderText = "unknown";
             if (!editor.IsEnabled) row.Opacity = 0.45;
             // Reset is West on the pad and Delete on the keyboard here, named in the help bar while the focused field holds an edit (Q101).
             _rows[field.Key] = (row, editor, reset);
@@ -298,14 +309,14 @@ namespace EmuSen.Mistress.Views
             switch (editor)
             {
                 case RatingPicker stars:
-                    stars.Bind(RatingPicker.StarSizeProperty, stars.GetObservable(MenuPanel.ScaleProperty, u => 30 * u));
+                    stars.Bind(RatingPicker.StarSizeProperty, stars.GetObservable(MenuPanel.ScaleProperty, u => StarSize * u));
                     stars.FilledColor ??= StarColor;
                     stars.UnfilledColor = EmptyStarColor;
                     break;
                 case DateStepper date:
                     date.IsFramed = false;
-                    date.NoDateText = "Unknown";
-                    date.Bind(DateStepper.FontSizeProperty, date.GetObservable(MenuPanel.ScaleProperty, u => 36 * u));
+                    date.NoDateText = "unknown";
+                    date.Bind(DateStepper.FontSizeProperty, date.GetObservable(MenuPanel.ScaleProperty, u => RowText * u));
                     date.Bind(DateStepper.FontPathProperty, date.GetObservable(MenuPanel.FontPathProperty));
                     date.ForegroundColor ??= StarColor;
                     break;

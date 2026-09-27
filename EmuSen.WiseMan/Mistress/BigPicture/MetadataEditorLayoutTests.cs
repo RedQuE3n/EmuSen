@@ -98,6 +98,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.IsType<RatingPicker>(editor.EditorOf(GameMetadata.Rating));
             Assert.IsType<MenuFieldRow>(editor.EditorOf(GameMetadata.Rating).Parent);
 
+            // ES-DE's editor's proportions, measured on its own editor at 1280 by 800 (Q104): 42-pixel rows, "unknown" where it shows it.
+            double u = height / 800.0;
+            Assert.Equal(42 * u, RowOf(editor.EditorOf(GameMetadata.SortName)).Bounds.Height, 1.0);
+            Assert.Equal(42 * u, RowOf(editor.EditorOf(GameMetadata.Completed)).Bounds.Height, 1.0);
+            Assert.Equal("unknown", RowOf(editor.EditorOf(GameMetadata.Developer)).Value);
+            Assert.True(string.IsNullOrEmpty(RowOf(editor.EditorOf(GameMetadata.SortName)).Value));
+            Assert.Equal("unknown", ((DateStepper)editor.EditorOf(GameMetadata.ReleaseDate)).NoDateText);
+            Assert.Equal(5 * MetadataEditorWindow.StarSize * u, editor.EditorOf(GameMetadata.Rating).Bounds.Width, 2.0);
+
             // The first row has the focus and the bar across the panel; the footer says where its value comes from.
             Assert.True(editor.EditorOf(GameMetadata.Name).IsFocused);
             MenuRow name = RowOf(editor.EditorOf(GameMetadata.Name));

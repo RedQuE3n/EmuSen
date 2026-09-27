@@ -128,7 +128,8 @@ namespace EmuSen.WiseMan.Mistress
 
             Assert.Empty(Unreachable(window, pad));
 
-            pad.B();
+            // B a screen at a time: Preferences, ES-DE's menus in Game Mode, goes back from its last submenu first (§4.72.8).
+            for (int guard = 0; guard < 3 && Sheets(window).IsPresenting; guard++) pad.B();
             Assert.False(Sheets(window).IsPresenting);
             Assert.False(IsPaused(window));
             Stop(window);
@@ -266,6 +267,9 @@ namespace EmuSen.WiseMan.Mistress
             Assert.NotEqual(resume, AppSettings.Load().ResumeOnLaunch);
             Picture(window, "preferences-gameplay");
 
+            // In Game Mode Preferences is ES-DE's menus: B leaves Gameplay for the first screen, and B again closes it (§4.72.8).
+            pad.B();
+            Assert.True(Sheets(window).IsPresenting);
             pad.B();
             Assert.False(Sheets(window).IsPresenting);
             Stop(window);

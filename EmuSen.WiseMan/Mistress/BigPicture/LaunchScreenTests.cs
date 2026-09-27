@@ -69,6 +69,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return new ThemedSession(width, height, settings: a =>
             {
                 a.BigPictureInterface.LaunchScreenDuration = duration;
+                // The launch screen's own tests keep ES-DE's default opening, Scale-up, which ThemedSession turns off for the rest (§4.72.10).
+                a.BigPictureInterface.MenuOpeningEffect = BigPictureInterface.OpeningScaleUp;
                 a.EsdeMediaDirectory = media;
                 more?.Invoke(a);
             }, roms: r => media = Media(Path.GetDirectoryName(r)!));

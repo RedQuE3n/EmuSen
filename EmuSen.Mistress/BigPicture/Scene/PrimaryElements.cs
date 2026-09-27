@@ -44,6 +44,13 @@ namespace EmuSen.Mistress.BigPicture.Scene
             Size item = SceneUnits.ToSize(e.Pair("itemSize"));
             carousel.ItemSize = new Size(SceneUnits.Px(item.Width, b.W), SceneUnits.Px(item.Height, b.H));
             carousel.ContentOffset = new Point(e.Float("horizontalOffset") ?? 0, e.Float("verticalOffset") ?? 0);
+            carousel.LineSpacing = e.Float("lineSpacing") ?? 1.5f;
+            if (!type.EndsWith("Wheel") && e.Pair("selectedItemMargins") is { } m)
+            {
+                double axis = type == "vertical" ? b.H : b.W; // by the screen's axis along the row, not the carousel's, as ES-DE was measured (§39)
+                carousel.SelectedItemMargins = new Point(m.X * axis, m.Y * axis);
+            }
+
             if (type.EndsWith("Wheel")) Wheel(e, carousel, type);
             else if (type == "horizontal" && e.Bool("reflections") == true)
             {

@@ -30,6 +30,33 @@ namespace EmuSen.Mistress.BigPicture.Scene
             return rating;
         }
 
+        // The list's counts as ES-DE 3.4.1 was measured to show them: games and favourites, or kept over all while filtered, and a folder once one is entered (§39).
+        internal static Control? GamelistInfo(SceneBuilder b, ResolvedElement e)
+        {
+            GamelistCounts c = b.Data.System.Counts;
+            var items = new List<InfoItem>();
+            if (c.Filtered) items.Add(new InfoItem(InfoIcon.Filter, $"{c.Shown} / {c.Games}"));
+            else
+            {
+                items.Add(new InfoItem(InfoIcon.Gamepad, c.Games.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                items.Add(new InfoItem(InfoIcon.Star, c.Favorites.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            }
+
+            if (c.InFolder) items.Add(new InfoItem(InfoIcon.Folder));
+            var line = new InfoLine
+            {
+                Items = items,
+                FontPath = ImageElements.Existing(e.Path("fontPath")),
+                FontSize = SceneUnits.Px(e.Float("fontSize") ?? 0.045f, b.H),
+                Foreground = SceneUnits.ToColor(e.Color("color"), Colors.Black),
+                BackgroundColor = SceneUnits.ToColor(e.Color("backgroundColor"), Colors.Transparent),
+                TextAlignment = SceneUnits.Horizontal(e.String("horizontalAlignment")),
+                LineVerticalAlignment = SceneUnits.Vertical(e.String("verticalAlignment")),
+            };
+            NormalizedCanvas.SetSize(line, SceneUnits.ToSize(e.Pair("size")));
+            return line;
+        }
+
         internal static Control? Badges(SceneBuilder b, ResolvedElement e)
         {
             if (b.Data.Game is not { } game) return null;

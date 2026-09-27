@@ -90,6 +90,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             Control? control = e.Type switch
             {
                 "image" => ImageElements.Image(this, e),
+                "animation" => ImageElements.Animation(this, e),
                 "video" => ImageElements.Video(this, e),
                 "text" => TextElements.Text(this, e),
                 "datetime" => TextElements.DateTime(this, e),
@@ -98,6 +99,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
                 "grid" => GridElements.Grid(this, e),
                 "rating" => IndicatorElements.Rating(this, e),
                 "badges" => IndicatorElements.Badges(this, e),
+                "gamelistinfo" => IndicatorElements.GamelistInfo(this, e),
                 "helpsystem" => IndicatorElements.Help(this, e),
                 "clock" => IndicatorElements.Clock(this, e),
                 "systemstatus" => IndicatorElements.Status(this, e),

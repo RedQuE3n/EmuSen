@@ -99,6 +99,16 @@ namespace EmuSen.Mistress.BigPicture
             return _listed[key] = Marked(folders ? shown.ToList() : GamelistOptions.Sort(shown, SortOf(system), favoritesFirst));
         }
 
+        // What a gamelistinfo counts here: the whole list's games over every folder, the ones search and filters keep, and whether a folder is open (§39).
+        private GamelistCounts CountsIn(string system)
+        {
+            IReadOnlyList<SceneGame> all = OpenFolder(system)?.Games ?? ShelfOf(system)?.Games ?? [];
+            if (all.Count == 0) all = Listed(system);
+            IReadOnlyList<SceneGame> kept = Foldered(system) ? Kept(system) : Listed(system);
+            bool filtered = _filter.Length > 0 || _gameFilters.GetValueOrDefault(ListKey(system), GameFilter.None).IsActive;
+            return GamelistCounts.Of(all, kept, filtered, OpenFolder(system) is not null || FolderIn(system).Length > 0);
+        }
+
         // The collection being edited ticks its members; a folder is never one.
         private IReadOnlyList<SceneGame> Marked(IReadOnlyList<SceneGame> sorted) =>
             _editing is { } editing ? sorted.Select(g => g.Folder ? g : g with { InCollection = editing.Members.Contains(g.File) }).ToList() : sorted;

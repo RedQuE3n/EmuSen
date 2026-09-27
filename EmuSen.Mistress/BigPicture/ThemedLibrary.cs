@@ -211,7 +211,7 @@ namespace EmuSen.Mistress.BigPicture
             IReadOnlyList<SceneSystem> systems = _systems.Select(s => s with
             {
                 Games = Listed(s.System.Name), Stars = StarsIn(s.System.Name), Heading = HeadingIn(s.System.Name), FavoritesOnTop = FavoritesFirstIn(s.System.Name),
-                Counted = CountedIn(s.System.Name),
+                Counted = CountedIn(s.System.Name), Info = s.System.Name == _system ? CountsIn(s.System.Name) : null,
             }).ToList();
             int system = Math.Max(0, systems.ToList().FindIndex(s => s.System.Name == _system));
             SceneSystem chosen = systems[system];

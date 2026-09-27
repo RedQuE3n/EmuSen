@@ -16,7 +16,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         internal static Control? Text(SceneBuilder b, ResolvedElement e)
         {
             string? value = e.String("text") ?? Metadata(b, e) ?? SystemData(b, e);
-            if (string.IsNullOrEmpty(value)) value = e.String("defaultValue");
+            if (string.IsNullOrEmpty(value)) value = e.String("defaultValue") ?? Missing(b, e);
             if (string.IsNullOrEmpty(value)) return null;
             return Set(b, e, value);
         }
@@ -29,10 +29,14 @@ namespace EmuSen.Mistress.BigPicture.Scene
             System.DateTime? date = game is { } g ? field switch { "releasedate" => g.ReleaseDate, "lastplayed" => g.LastPlayed, _ => null } : null;
             string? value = date is { } d
                 ? e.Bool("displayRelative") == true ? SceneUnits.Relative(d, b.Data.Now) : SceneUnits.Format(d, e.String("format") ?? "%Y-%m-%d")
-                : e.String("defaultValue");
+                : e.String("defaultValue") ?? (game is null ? null : field switch { "releasedate" => SceneWords.Unknown, "lastplayed" => SceneWords.Never, _ => null });
             if (string.IsNullOrEmpty(value)) return null;
             return Set(b, e, value);
         }
+
+        // What a game's empty field shows, where ES-DE 3.4.1 was measured to show a word: the fields THEMES.md names, and play time (§39).
+        private static string? Missing(SceneBuilder b, ResolvedElement e) =>
+            b.GameFor(e) is not null && e.String("metadata") is "developer" or "publisher" or "genre" or "players" or "playtime" ? SceneWords.Unknown : null;
 
         // A game's field as the text shows it; the words for flags and counts are Mistress's own (§3.6).
         private static string? Metadata(SceneBuilder b, ResolvedElement e)
@@ -46,7 +50,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             if (field is "sourceSystemName") return (game?.SourceIn(system) ?? system.System).Name;
             if (field is "sourceSystemFullname") return (game?.SourceIn(system) ?? system.System).FullName;
             if (game is not { } g) return null;
-            static string YesNo(bool v) => v ? "Yes" : "No";
+            static string YesNo(bool v) => v ? SceneWords.Yes : SceneWords.No;
             string? value = field switch
             {
                 "name" => g.Name,
@@ -83,10 +87,10 @@ namespace EmuSen.Mistress.BigPicture.Scene
             {
                 "name" => s.System.Name,
                 "fullname" => s.System.FullName,
-                "gamecount" => $"{games} games available" + (favorites > 0 ? $", {favorites} favorites" : ""),
-                "gamecountGames" => $"{games} games",
+                "gamecount" => SceneWords.Count(games, "game", "games") + " available" + (favorites > 0 ? ", " + SceneWords.Count(favorites, "favorite", "favorites") : ""),
+                "gamecountGames" => SceneWords.Count(games, "game", "games"),
                 "gamecountGamesNoText" => games.ToString(CultureInfo.InvariantCulture),
-                "gamecountFavorites" => $"{favorites} favorites",
+                "gamecountFavorites" => SceneWords.Count(favorites, "favorite", "favorites"),
                 "gamecountFavoritesNoText" => favorites.ToString(CultureInfo.InvariantCulture),
                 _ => null,
             };

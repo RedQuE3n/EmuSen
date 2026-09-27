@@ -172,7 +172,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var choices = new ThemeChoices { ScreenWidth = 320, ScreenHeight = 200 };
             var data = new SceneData([new SceneSystem(nes, theme.Load(choices, nes), entries) { Counted = all }], new Avalonia.Size(320, 200));
             SceneBuilder scene = SceneBuilder.Build(data.System.Theme.View("system"), data);
-            Assert.Equal("3 games available, 1 favorites", ((FontText)scene.Entries.Single(e => e.Element.Name == "x").Control!).Text);
+            Assert.Equal("3 games available, 1 favorite", ((FontText)scene.Entries.Single(e => e.Element.Name == "x").Control!).Text);
         });
 
         // USERGUIDE: "folders can't be part of collections", so all games lists the files inside folders, flat.

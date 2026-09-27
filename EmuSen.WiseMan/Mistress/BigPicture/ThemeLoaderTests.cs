@@ -238,13 +238,19 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal("[||custom-collections]", custom.SystemView.Find("text", "k")!.String("text"));
         }
 
+        // ES-DE 3.4.1, measured: A${nosuch}B drew "AB" with no log line, and ${nosuch} alone refused the system as a property with no value (§39).
         [Fact]
-        public void An_undefined_variable_in_a_property_unthemes_the_system()
+        public void An_undefined_variable_in_a_property_is_read_as_empty_and_a_property_left_empty_unthemes()
         {
-            _theme.Capabilities("").Theme("<view name=\"gamelist\"><text name=\"t\"><color>${nowhere}</color></text></view>");
+            _theme.Capabilities("").Theme("<view name=\"gamelist\"><text name=\"t\"><text>A${nowhere}B</text></text></view>");
             ResolvedTheme theme = _theme.Load();
-            Assert.False(theme.IsThemed);
-            Assert.Contains(theme.Errors, d => d.Code == ThemeDiagnosticCode.UndefinedVariable);
+            Assert.True(theme.IsThemed);
+            Assert.Equal("AB", theme.GamelistView.Find("text", "t")!.String("text"));
+            Assert.Contains(theme.Diagnostics, d => d.Code == ThemeDiagnosticCode.UndefinedVariable && d.Severity == ThemeSeverity.Warning);
+            _theme.Theme("<view name=\"gamelist\"><text name=\"t\"><color>${nowhere}</color></text></view>");
+            ResolvedTheme empty = _theme.Load();
+            Assert.False(empty.IsThemed);
+            Assert.Contains(empty.Errors, d => d.Code == ThemeDiagnosticCode.NoValue);
         }
 
         [Fact]

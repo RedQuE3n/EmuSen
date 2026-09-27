@@ -5248,3 +5248,36 @@ the fake counts every request, and no test reaches the network. `ScrapeExtrasPic
 - None of it has been run against the live service: what a refresh, a search that finds nothing, a manual and a clip
   cost there is predicted (P240–P243), not measured.
 - Nothing ran on the handheld.
+
+### 4.77 Big picture: game counts, animated pictures, the help bar a theme leaves out, and words for missing details (2026-09-27)
+
+The second half of pass 14 of `EmuSen_BigPicture.md`, whose §39 is the record. There is no setting: a theme that uses
+these elements is drawn as ES-DE draws it, in big-screen sessions and in big picture on the desktop (§4.54).
+
+**Game counts in the list.** A theme can show a line with a gamepad and the number of games, and a star and the number
+of favourites. While a search or a filter is on, it shows a funnel and how many games are kept out of all ("6 / 12").
+Inside a folder it adds an open folder, and the numbers stay the whole console's. Games marked *Exclude from game
+counter* (§4.59) and folders are not counted. Six listed themes show this line.
+
+**Animated pictures.** A theme's animated GIFs now play: backgrounds, frames, overlays. They start again when the view
+opens and whenever the console list moves, and a GIF plays at the pace of its first frame, as ES-DE plays it. Animations
+in the Lottie format are not shown.
+
+**A theme without a help bar or status icons** now gets them where ES-DE puts them: the help bar at the bottom left and
+the status icons at the top right. The Bluetooth, Wi-Fi, cellular and battery icons are now drawn as pictures, where
+Bluetooth used to show as a "B".
+
+**Words.** A console of one game says "1 game", and one favourite "1 favorite". Where a game has no developer,
+publisher, genre, number of players or play time, a theme's text now says "unknown", as ES-DE does, and a game never
+played says "never" for its last played date; before, the text was left out. Yes-or-no details read "yes" and "no".
+A theme's own `defaultValue` still replaces these words. They will be translated with the rest when Pass 5's
+translations exist.
+
+**Carousels.** Themes that set the selected item apart from its neighbours now show the gap (Aura's covers, for one),
+and a carousel of names spaces its lines as the theme asks. A theme variable that is used but never defined is now read
+as empty, as ES-DE reads it, which draws Aura's glass panel behind the game's name.
+
+**What it does not do.**
+- Lottie animations are not drawn (§39.5).
+- A narrow count line is not wrapped or cut.
+- Nothing ran on the handheld.

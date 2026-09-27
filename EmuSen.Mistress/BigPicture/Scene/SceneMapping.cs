@@ -28,7 +28,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
                 "imageSaturation", "itemHorizontalAlignment", "itemVerticalAlignment", "unfocusedItemOpacity", "unfocusedItemSaturation", "unfocusedItemDimming",
                 "color", "colorEnd", "gradientType", "text", "textRelativeScale", "textColor", "textBackgroundColor", "fontPath", "fontSize", "letterCase", "itemTransitions", "fastScrolling",
                 "itemRotation", "itemRotationOrigin", "itemsBeforeCenter", "itemsAfterCenter", "itemAxisHorizontal", "wheelHorizontalAlignment", "wheelVerticalAlignment",
-                "horizontalOffset", "verticalOffset", "reflections", "reflectionsOpacity", "reflectionsFalloff"),
+                "horizontalOffset", "verticalOffset", "reflections", "reflectionsOpacity", "reflectionsFalloff", "selectedItemMargins", "lineSpacing"),
             ["textlist"] = Set("selectorHeight", "selectorVerticalOffset", "selectorColor", "primaryColor", "secondaryColor", "selectedColor", "selectedSecondaryColor",
                 "selectedBackgroundColor", "selectedBackgroundMargins", "selectedBackgroundCornerRadius", "fontPath", "fontSize", "horizontalAlignment", "horizontalMargin",
                 "letterCase", "lineSpacing", "systemNameSuffix", "letterCaseSystemNameSuffix", "indicators", "collectionIndicators", "textHorizontalScrolling", "textHorizontalScrollSpeed",
@@ -47,11 +47,13 @@ namespace EmuSen.Mistress.BigPicture.Scene
             ["clock"] = Set("fontPath", "fontSize", "horizontalAlignment", "verticalAlignment", "color", "backgroundColor", "backgroundColorEnd", "backgroundGradientType",
                 "backgroundHorizontalPadding", "backgroundVerticalPadding", "backgroundCornerRadius", "format"),
             ["gameselector"] = Set("selection", "gameCount", "allowDuplicates"),
+            ["animation"] = Set("path", "maxSize", "speed", "direction", "iterationCount", "interpolation", "cornerRadius", "color", "colorEnd", "gradientType", "saturation"),
+            ["gamelistinfo"] = Set("fontPath", "fontSize", "horizontalAlignment", "verticalAlignment", "color", "backgroundColor"),
             ["systemstatus"] = Set("height", "fontPath", "textRelativeScale", "color", "backgroundColor", "backgroundHorizontalPadding", "backgroundVerticalPadding",
                 "backgroundCornerRadius", "entries", "entrySpacing", "customIcon"),
         };
 
-        // Element types the scene maps, gameselector drawing nothing itself; the others (animation, gamelistinfo, sound) are not drawn.
+        // Element types the scene maps, gameselector drawing nothing itself; sound is not drawn, and animation draws GIFs only.
         public static readonly IReadOnlySet<string> Drawn = new HashSet<string>(Specific.Keys, StringComparer.Ordinal);
 
         private static IReadOnlySet<string> Set(params string[] names) => new HashSet<string>(names, StringComparer.Ordinal);

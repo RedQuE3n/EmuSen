@@ -38,6 +38,50 @@ namespace EmuSen.WiseMan.Fixtures
             return path;
         }
 
+        // A GIF whose pixel (x, y) of frame f is pixel(f, x, y), in up to four colours, each frame shown for its delay in hundredths; its codes reset the table before each pixel, so it needs no compression.
+        public static string Gif(string name, int w, int h, int[] delays, Func<int, int, int, Color> pixel)
+        {
+            string path = Path.Combine(Folder, name + ".gif");
+            if (File.Exists(path)) return path;
+            Directory.CreateDirectory(Folder);
+            var palette = new List<Color>();
+            for (int f = 0; f < delays.Length; f++)
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                        if (!palette.Contains(pixel(f, x, y))) palette.Add(pixel(f, x, y));
+            if (palette.Count > 4) throw new ArgumentException("four colours at most");
+            while (palette.Count < 4) palette.Add(Colors.Black);
+            var b = new List<byte>();
+            b.AddRange("GIF89a"u8.ToArray());
+            b.AddRange([(byte)w, (byte)(w >> 8), (byte)h, (byte)(h >> 8), 0x81, 0, 0]);
+            foreach (Color c in palette) b.AddRange([c.R, c.G, c.B]);
+            b.AddRange([0x21, 0xFF, 11, .. "NETSCAPE2.0"u8.ToArray(), 3, 1, 0, 0, 0]);
+            for (int f = 0; f < delays.Length; f++)
+            {
+                b.AddRange([0x21, 0xF9, 4, 0, (byte)delays[f], (byte)(delays[f] >> 8), 0, 0]);
+                b.AddRange([0x2C, 0, 0, 0, 0, (byte)w, (byte)(w >> 8), (byte)h, (byte)(h >> 8), 0, 2]);
+                var bits = new List<byte>();
+                int acc = 0, n = 0;
+                void Put(int code) { acc |= code << n; n += 3; while (n >= 8) { bits.Add((byte)acc); acc >>= 8; n -= 8; } }
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++) { Put(4); Put(palette.IndexOf(pixel(f, x, y))); }
+                Put(5);
+                if (n > 0) bits.Add((byte)acc);
+                for (int i = 0; i < bits.Count; i += 255)
+                {
+                    int len = Math.Min(255, bits.Count - i);
+                    b.Add((byte)len);
+                    b.AddRange(bits.GetRange(i, len));
+                }
+
+                b.Add(0);
+            }
+
+            b.Add(0x3B);
+            File.WriteAllBytes(path, b.ToArray());
+            return path;
+        }
+
         public static string Svg(string name, string body)
         {
             Directory.CreateDirectory(Folder);

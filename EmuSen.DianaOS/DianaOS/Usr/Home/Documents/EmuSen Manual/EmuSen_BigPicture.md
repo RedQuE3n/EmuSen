@@ -6401,7 +6401,7 @@ gap it does find.
 | P144 | *(written during the build)* The layout step loses no picture in any of its cases, and a second run changes nothing | the SHA-256 comparison in every case of §30.4, and the rerun | held |
 | P145 | *(written during the build)* No file stem of the player's library repeats between two folders of one console, so the flat name second (Q61) never shows one game another's picture there | 0 on each console (§30.6), as §21.1 counted | held |
 | P146 | *(written before the round)* Of the round's mutants, at least nine in ten are caught on their first run | 49 of 50 (98%) | held |
-| P147 | *(written before the broad run)* The broad Mistress run passes with no failure this branch causes | BROAD-RESULT | BROAD-HELD |
+| P147 | *(written before the broad run)* The broad Mistress run passes with no failure this branch causes | once, after merging WiseMan at `964f07c2` and a rebuild: the Mistress filter without `ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` or any test named for the GPU or Vulkan, under `nice -n 10`: 998 tests, 971 passed, 27 skipped (the picture, bench, live and real-library tools, which need their variables), none failed, in 3 min 50 s | held; one pass is weak evidence against an intermittent failure, as §15.14 says |
 
 ### 30.9 Pictures
 

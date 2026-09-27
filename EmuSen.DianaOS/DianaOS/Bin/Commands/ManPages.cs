@@ -1391,6 +1391,13 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    /Games            your ROM library\n" +
                 "    /Saves            battery-backed cartridge SRAM ('.srm')\n" +
                 "    /Saves/Save States   'state save'/'state load' snapshots\n" +
+                "    /Library          Mistress's own databases, written and read by the\n" +
+                "                      program, not by hand: games.db (favourites, play\n" +
+                "                      time, collections, edits) and records.db (who wrote\n" +
+                "                      each save state, and the shader pack's build date).\n" +
+                "                      Save states no longer get a .json file beside them;\n" +
+                "                      old ones are read into records.db and left in place\n" +
+                "    /Shaders          shader packs downloaded on request\n" +
                 "    /Firmware         coprocessor dumps you supply\n" +
                 "    /Cheats           your own .cht tree - see 'man cheat'\n" +
                 "    /Logs             'dump'/'load'/screenshot/recording output\n" +

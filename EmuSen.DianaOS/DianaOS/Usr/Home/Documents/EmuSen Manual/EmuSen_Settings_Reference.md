@@ -1096,6 +1096,8 @@ The Preferences window is tabs: **Library** (the ROM, cover art, save state and 
 
 **What it does not cover.** A file edited in place (patched, or re-dumped) is a different file and keeps nothing. Two identical copies are matched to the first found. Save states are still named by the ROM's file name (`EmuSen_Galaxia.md` §5), so a renamed game's states stay under the old name: the Save States view finds them by the hash in their record, but the resume question and the slot menu, which look up by name, do not. Renaming the state files to follow would mean writing into the state folder on the player's behalf, which on this machine is the ROM folder, and was not done.
 
+*Revised 2026-09-26 by §4.64: the record below is now a row of `records.db`, not a file beside the state; sidecars already written are imported on first sight and left in place. The checks are unchanged.*
+
 **A state records who wrote it.** Every state written from the window (a slot, or the resume state) gets `StateRecord` beside it (`EmuSen_Galaxia.md` §5.3), naming the console, the core, the state version it wrote (`EmuSen_Save_States.md` §6), the build, and the ROM's name and hash. Before a state reaches a core:
 
 - **a state from another console is refused**, with both consoles named, rather than handed to a core that would read another machine's bytes as its own;
@@ -1169,7 +1171,7 @@ Each console's **Screen Filter** dropdown (§4.40) now ends with **RetroArch Pre
 **The pack.** The picker's **Download Pack** button fetches `shaders_slang.zip` from `buildbot.libretro.com/assets/frontend/`, the file RetroArch's own online updater fetches. Once a pack is there, the button reads **Update Pack**.
 
 - It is unpacked into `home/Shaders/RetroArch/` (`DataStore.Shaders`).
-- The server's `Last-Modified` is recorded in `.emusen-pack` beside the presets, and the picker shows it as the pack's build date.
+- The server's `Last-Modified` is recorded in `.emusen-pack` beside the presets, and the picker shows it as the pack's build date. *Since 2026-09-26 (§4.64) it is recorded in `records.db` instead; a stamp already there is imported on first sight and left.*
 - The zip is written beside its final place and unpacked into a sibling folder. **A failed download, or one holding no presets, leaves the old pack as it was.** A complete one is swapped in.
 - .NET's extractor refuses an entry that would land outside the folder.
 - The download has its own HTTP client with a thirty-minute timeout, because 54 MB outlasts the thirty seconds a cover lookup is given (§4.39).
@@ -3755,3 +3757,132 @@ themed list and the library list show; the offer declined over the player's own 
 **Not done.** Nothing ran on the handheld. The desktop's menu and editor were driven headlessly by clicks and keys, not
 by a real pointer on a real window manager. ScreenScraper's names as the library's names by default (§21's Q30, a switch,
 off) are not built; the offer is per game.
+
+### 4.64 records.db: save-state records and the shader pack's build move into SQLite (2026-09-26)
+
+The request was to store in SQLite whatever can be stored there. `EmuSen_Stack.md` §1 already assigned tabular program
+data to SQLite; this section records what that rule still left in files, what moved, what did not and why, and how the
+files a user already has are read.
+
+**What moved.** Two stores, both written by Mistress and read back only by Mistress:
+
+| Before | After |
+|---|---|
+| `<state>.json` beside every state Mistress wrote (`EmuSen_Galaxia.md` §5.3) | a row of `state_record` in `home/Library/records.db` |
+| `.emusen-pack` inside `home/Shaders/RetroArch/`, holding the pack's build date (§4.41) | a row of `shader_pack` in the same file |
+
+`FileRecords` (`EmuSen.Mistress/Library/FileRecords.cs`) owns the file. It follows `games.db` (§4.32) and `media.db`
+(`EmuSen_BigPicture.md` §5.6) in form: an append-only list of migrations, each run in one transaction with its
+`PRAGMA user_version` bump, and a file stamped newer than the build refused with `InvalidDataException` before anything
+is written to it. Like theirs, its schema is held in the C# list rather than in a committed `.sql` file, which departs
+from `EmuSen_Stack.md` §5; a migration list is the thing that has to be reviewed, and a single `.sql` file would describe
+only its end. It differs from both in its journal: the file is kept in WAL mode with `synchronous = FULL`, because this
+machine has been subject to hard resets (an AMD hardware fault, repeatedly between 2026-09-17 and 2026-09-26) and a
+state record is written the instant a state is, which is when a player would notice its loss. `FULL` costs one further
+`fsync` per record, and a record is written once per saved state.
+
+**Why a file of its own, and not a table in `games.db`.** Two branches were adding migrations to `games.db` at the same
+time as this one (collections, and the game options, which took schema 5). An append-only migration list merged from
+three branches is correct only if every database in existence was created in the merged order; a file opened by one
+branch's build at schema 5 or 6 would carry that branch's tables under a version number the merged build gives to
+different ones. A separate file removes the conflict rather than coordinating it. The cost is a second connection in
+`MainWindow`, which is negligible. The argument does not extend to data that must join the library's rows: a state
+record is keyed by the state file's path and never joins a game row (the Save States view finds a renamed game through
+the record's MD5 and `GameRecords.PathByHash`, which is a lookup, not a join).
+
+**A record knows which file it describes.** Each row carries the state file's size and last-write time (UTC ticks) as
+they were when the row was written, and `ReadState` returns the record only while the file still has both. A state
+rewritten without a record, whether by the DianaOS `state save` command, by another program, or by a crash between the
+state's write and the record's, is therefore treated as having no record, which is how states from before §4.37 have
+always been treated: loaded, unexamined. With sidecars the same three cases left the *old* sidecar describing the new
+state, so a state could be refused on the strength of a record that was not its own. The check is strictly stronger
+than what it replaces. What it costs: copying a states folder with a tool that does not keep modification times makes
+every record in it inapplicable (never wrong); and since rows are keyed by the full path, a folder moved elsewhere, or a
+changed `StateDirectory`, leaves its states without records where sidecars would have travelled with them. Both losses
+fail towards "no record", the behaviour the refusal checks were built on top of.
+
+**Existing files are migrated on first sight and left where they are.** When `ReadState` finds no row for a state and
+a sidecar beside it parses, the sidecar is inserted as a row (`source = 'sidecar'`, stamped with the state file's size
+and time at that moment) and its record returned; from then on the row is read and the sidecar is not. A `.emusen-pack`
+stamp is treated the same way (`source = 'stamp'`). If the database cannot take the row, the sidecar's record is still
+returned, so the old file is the fallback. Nothing is written beside a state any more, and a download no longer writes
+a stamp.
+
+**No migrated sidecar is deleted.** This was a decision, and its reasons are particular to this installation. The state
+folder is the player's to choose, and on the machine this was written on `StateDirectory` is the ROM library itself
+(`EmuSen_Galaxia.md` §3.3a), which the project reads and never writes; a program deleting files there, however
+carefully it matched them, would break that rule for some 300 bytes a file. A sidecar left in place is also what makes
+the import crash-safe without further argument: an import interrupted at any point loses nothing, because its source is
+untouched and is imported again on the next sight. A left sidecar cannot override a newer record, since a sidecar is
+consulted only when there is no row at all for its state; once a row exists, a stale or edited sidecar is ignored. The
+one deletion that remains is the one that preceded this change: **Delete Save State** in the Save States view deletes
+the state, its picture, its row and its sidecar if it has one, because the player asked for that state to be gone. An
+older build pointed at the same folder still reads whatever sidecars exist, and sees no record for states saved after
+this change. The pack's stamp is likewise left; a new download replaces the whole folder, stamp included, so a stamp
+cannot outlive the pack it describes.
+
+**What stayed JSON, and why.**
+- The six settings files and the ScreenScraper credentials, by the plan and by `EmuSen_Stack.md` §4.1.
+- **Save As and Load From in the Active Cheats window** (§4.15a) write and read a file the player names and places.
+  Their shape is unchanged, and is now pinned byte for byte by `CheatFileTests`. The pin records the format as it is,
+  including a quirk: a cheat's writes appear twice, as `Writes` and as the read-only `EffectiveWrites`, and `IsRomPatch`
+  is written too, because `System.Text.Json` serialises public getters. Reading ignores the extra names. Removing them
+  would be a format change and was not made here.
+- **Each game's saved cheat list** (`/etc/EmuSen/cheats/<name>.json`) was examined and left. It is not Mistress's own
+  store but the store of the DianaOS commands `cheat save`, `cheat load` and `cheat files`, which Mistress shares so that
+  a list saved in the window loads in the shell and the reverse (§4.15). `man cheat` documents the file as plain JSON
+  that "can be written or corrected by hand from this shell". Moving Mistress's half alone would split one store into
+  two that disagree, and `cheat load <game>` would no longer find what Mistress saved. Moving both halves requires
+  DianaOS to be handed a store through an interface, as the catalogue is (`EmuSen_Galaxia.md` §7.1), and would still end
+  the documented hand-editing. The plan said to stop and report in that case, and that is what was done;
+  `EmuSen_Stack.md` §4.3 carries the revised argument.
+- **`.emusen-theme`**, the theme download's stamp (`EmuSen.Mistress/BigPicture/ThemeDownloads.cs`), has the shape of the
+  pack's stamp and would move the same way. It was left because the big-picture code belonged to another branch at the
+  time, and it is the next candidate.
+- **LunaP's layout files** (`windows.json`, `tables.json`, `panes.json`, beside the settings) are program-written state
+  the toolkit reads back. They live in `EmuSen.LunaP`, a separate repository, behind its `ISettingsStore`; the clean
+  route is a SQLite `ISettingsStore` installed by each frontend's `Program.cs`, not an edit to the stores. One EmuSen
+  window (Hotaru's hotkey help) uses the first two, and nothing uses the third. `luna.json`, the chosen theme, is a
+  setting and stays.
+
+**Tests.** `FileRecordsTests` (16): a new file's schema and WAL mode; a newer file refused and left byte-identical; an
+older file (schema 0, holding a table of its own) migrated in place with that table kept; a record round-tripped
+through a reopened file with nothing written beside the state; no record for a missing state; a sidecar in the player's
+real format imported on first sight, both it and the state left byte-identical, and the row rather than an edited
+sidecar read after reopening; an unparsable sidecar neither imported nor removed; a written record replacing an
+imported one; a state rewritten at another size, or at the same size with a later time, not described by its old row; a
+forgotten state; a closed store that neither writes nor throws; **a crash part way through a write**, as the image a
+kill leaves on disk: the database and its log copied while open, the log cut half way through the second record's
+frames, and the copy opened, with the first record intact, no second record, and `integrity_check` returning `ok`; the
+Save States view reading records through the store and finding a renamed game by the record's hash; a pack stamp
+imported and left and a download's date recorded over it; no build for a folder that is not there.
+`IdentityAndCollectionsTests` gained a state saved from the window, the window closed and another opened, the record
+read back unchanged with `source = 'written'`, no sidecar on disk, and the state loaded; its three older state tests
+now write their altered records through the store. `ScreenFilterSettingTests`' download test asserts no stamp in the
+new pack and a `written` row. `CheatFileTests` pins the export and reads a hand-written file with a comment, trailing
+commas, lower-case names and the flat pre-multi-write fields. The DianaOS cheat tests (`EmuSen.WiseMan.DianaOS.Cheat*`,
+92, among them `CheatPersistenceCommandTests`, `CheatPruneCommandTests` and `CheatDatabaseTests`),
+`ActiveCheatsApplyAndSaveTests` (13) and `MainWindowCheatListTests` (9) pass unchanged.
+
+**Mutants.** Fifteen, each run alone with a WiseMan build and only the tests named for it, and all fifteen caught on
+the first run: a newer schema not refused; a rollback journal in place of WAL (caught by the crash test, which finds no
+log, and by the mode test); no check that a state is the file its row describes; a sidecar never read; an imported
+sidecar deleted; a sidecar read but not imported; a new record also written as a sidecar; the ROM's size not stored; a
+migration that does not bump `user_version`; the window writing no record; Load State reading none; a download that
+records no build; a download that still writes a stamp; a pack stamp not imported; and the cheat export written without
+indentation. The runner (`~/.cache/emusen/probe/sqlite-migration/mutants.py`) keeps the unmutated file beside itself
+while a mutant is applied, restores it on start if a run was interrupted, and rebuilds the restored source at the end.
+
+**The broad run** (WiseMan without the GPU, Vulkan, slang and bench tests and `ShaderSettingsWindowTests`, 2026-09-27):
+7,721 passed, 17 skipped, 2 failed. Both failures (`GameFrameReleaseTests`, `DianaOSShellWindowTests`) threw inside
+Avalonia's headless platform set-up (`AppBuilder.SetupUnsafe`, a dispatcher owned by another thread) before any test
+code ran, neither class touches `records.db` or a state record, and both classes pass when run alone (4 and 11). They
+were not re-run against the unmodified build, so "an ordering race in the shared headless session, independent of this
+change" is the likely reading and not a demonstrated one.
+
+**What this does not cover.** The crash test exercises SQLite's recovery of a torn log under this store's settings; it
+cannot distinguish `synchronous = FULL` from `NORMAL`, which differ only on power loss, and no test here removes power.
+The view's Delete Save State forgetting the row has no test of its own (the store's `ForgetState` has one); a missed
+forget leaves a row describing a file of a size and time that no later state is likely to share. States saved by the
+DianaOS `state save` command still get no record. No sidecar in the player's own folders was read by a test; the fixture
+reproduces their format from one of them, which was read and not changed.

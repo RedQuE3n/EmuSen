@@ -34,7 +34,7 @@ namespace EmuSen.Mistress.Views
         {
             string state = ResumeStatePath(romPath);
             if (!File.Exists(state)) return ResumeChoice.Restart;
-            StateRecord? record = StateRecord.Read(state);
+            StateRecord? record = _fileRecords.ReadState(state);
             if (Refusal(record, romPath, null) is string refused)
             {
                 StatusText.Text = $"{refused} Starting from the beginning.";
@@ -100,9 +100,9 @@ namespace EmuSen.Mistress.Views
         }
 
         // Null when the state loaded; otherwise why it did not, and the caller starts the game afresh.
-        private static string? TryResume(EmulatorSession session, string statePath, string romPath)
+        private string? TryResume(EmulatorSession session, string statePath, string romPath)
         {
-            StateRecord? record = StateRecord.Read(statePath);
+            StateRecord? record = _fileRecords.ReadState(statePath);
             if (Refusal(record, romPath, session) is string refused) return $"Could not resume, started from the beginning: {refused}";
             try
             {

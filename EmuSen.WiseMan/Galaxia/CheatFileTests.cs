@@ -164,5 +164,73 @@ namespace EmuSen.WiseMan.Galaxia
 
             Assert.Equal(new[] { "metroid", "zelda" }, CheatFile.ListNames());
         }
+
+        // Save As and Load From are the player's own file format; its bytes are pinned so a storage change cannot move them - see EmuSen_Settings_Reference.md §4.64.
+        [Fact]
+        public void The_exported_cheat_list_keeps_its_json_shape_and_a_hand_written_file_still_imports()
+        {
+            var file = new CheatFile();
+            file.Cheats.Add(new CheatFileEntry
+            {
+                Kind = "RamPoke",
+                Description = "99 lives",
+                Enabled = false,
+                Writes = { new CheatFileWrite { Space = "WRAM", Address = "0019", Value = "63", Width = 2, BitPosition = 3, BigEndian = true } },
+            });
+            string path = Path.Combine(_dir, "export", "mine.json");
+            Assert.True(CheatFile.SaveTo(path, file));
+            Assert.Equal(ExportedCheatList.ReplaceLineEndings(Environment.NewLine), File.ReadAllText(path));
+
+            File.WriteAllText(path, "{ \"cheats\": [ { \"kind\": \"rompatch\", \"address\": \"$00C05F\", \"value\": \"EA\", \"compare\": \"1F\", \"description\": \"no clip\", }, ], // by hand\n}");
+            var registry = new CheatRegistry();
+            (int loaded, int skipped) = registry.LoadFrom(CheatFile.LoadFrom(path)!);
+            Assert.Equal((1, 0), (loaded, skipped));
+            Assert.Equal("no clip", registry.GetCheats().Single().Description);
+        }
+
+        private const string ExportedCheatList = """
+            {
+              "Cheats": [
+                {
+                  "Kind": "RamPoke",
+                  "Writes": [
+                    {
+                      "Space": "WRAM",
+                      "Address": "0019",
+                      "Value": "63",
+                      "Width": 2,
+                      "Type": "Set",
+                      "BitPosition": 3,
+                      "BigEndian": true,
+                      "RepeatCount": 1,
+                      "RepeatAddAddress": "0",
+                      "RepeatAddValue": "0"
+                    }
+                  ],
+                  "Compare": null,
+                  "Description": "99 lives",
+                  "Enabled": false,
+                  "Space": null,
+                  "Address": null,
+                  "Value": null,
+                  "IsRomPatch": false,
+                  "EffectiveWrites": [
+                    {
+                      "Space": "WRAM",
+                      "Address": "0019",
+                      "Value": "63",
+                      "Width": 2,
+                      "Type": "Set",
+                      "BitPosition": 3,
+                      "BigEndian": true,
+                      "RepeatCount": 1,
+                      "RepeatAddAddress": "0",
+                      "RepeatAddValue": "0"
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
     }
 }

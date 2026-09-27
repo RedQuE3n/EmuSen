@@ -71,7 +71,7 @@ namespace EmuSen.Mistress.Views
         private void ShowMedia(IReadOnlyList<RomEntry> games, string search)
         {
             IReadOnlyList<MediaItem> all = _category == StatesCategory
-                ? MediaLibrary.SaveStates(StateDirectory, _allScan.Entries, _records.PathByHash)
+                ? MediaLibrary.SaveStates(StateDirectory, _allScan.Entries, _fileRecords.ReadState, _records.PathByHash)
                 : MediaLibrary.Screenshots(DataStore.Screenshots, _allScan.Entries);
             var inView = new HashSet<string>(games.Select(g => g.FullPath), StringComparer.Ordinal);
             bool everything = SelectedConsole == EmuSen.Cores.CoreCatalog.AllConsoles && CollectionKey == AllGamesKey;
@@ -132,7 +132,11 @@ namespace EmuSen.Mistress.Views
             {
                 File.Delete(item.Path);
                 if (item.Kind == MediaKind.SaveState && item.PicturePath is string picture) File.Delete(picture);
-                if (item.Kind == MediaKind.SaveState) File.Delete(StateRecord.PathFor(item.Path));
+                if (item.Kind == MediaKind.SaveState)
+                {
+                    _fileRecords.ForgetState(item.Path);
+                    File.Delete(StateRecord.SidecarPathFor(item.Path));
+                }
                 if (item.PicturePath is string shown) _covers.Forget(shown);
                 StatusText.Text = $"Deleted {what}";
             }

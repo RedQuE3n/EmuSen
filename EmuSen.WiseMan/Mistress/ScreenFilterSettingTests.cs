@@ -187,6 +187,8 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal("2026-09-23 02:00 UTC", built);
             Assert.Equal(new[] { "crt/crt-new.slangp" }, EmuSen.Mistress.Library.SlangPackDownload.Presets(pack));
             Assert.Equal(built, EmuSen.Mistress.Library.SlangPackDownload.Installed(pack));
+            Assert.False(File.Exists(Path.Combine(pack, EmuSen.Mistress.Library.SlangPackDownload.StampFile)));
+            using (var records = EmuSen.Mistress.Library.FileRecords.Load()) Assert.Equal("written", records.PackSource(pack));
             Assert.Equal(new[] { pack }, Directory.GetDirectories(Path.GetDirectoryName(pack)!));
             Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(pack)!));
         }

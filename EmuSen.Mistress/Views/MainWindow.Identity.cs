@@ -9,6 +9,7 @@ using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Galaxia.Library;
 using EmuSen.LunaP.Windowing;
+using EmuSen.Mistress.Library;
 
 namespace EmuSen.Mistress.Views
 {
@@ -117,11 +118,14 @@ namespace EmuSen.Mistress.Views
             });
         }
 
-        // On the emulation thread, beside the state it describes; the ROM's hash is whatever is known by then.
+        // Save states' records and the shader pack's build, in records.db - see EmuSen_Settings_Reference.md §4.64.
+        private readonly FileRecords _fileRecords = FileRecords.Load();
+
+        // On the emulation thread, after the state it describes is written; the ROM's hash is whatever is known by then.
         private void WriteStateRecord(EmulatorSession session, string statePath, string romPath)
         {
             if (session.Core is not IStateFormat format) return;
-            new StateRecord
+            _fileRecords.WriteState(statePath, new StateRecord
             {
                 Console = CoreCatalog.ConsoleForRom(romPath) ?? session.CoreName,
                 Core = session.CoreName,
@@ -131,7 +135,7 @@ namespace EmuSen.Mistress.Views
                 RomFile = Path.GetFileName(romPath),
                 RomMd5 = _currentRomMd5,
                 RomBytes = _currentRomBytes,
-            }.Write(statePath);
+            });
         }
 
         // Why a state must not reach this game's core, or null; a version older than the core's is the core's to judge.
@@ -166,6 +170,7 @@ namespace EmuSen.Mistress.Views
         {
             _recordsClosed = true;
             _records.Dispose();
+            _fileRecords.Dispose();
         }
     }
 }

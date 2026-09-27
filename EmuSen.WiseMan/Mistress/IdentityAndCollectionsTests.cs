@@ -110,7 +110,7 @@ namespace EmuSen.WiseMan.Mistress
 
             SaveSlot(window);
 
-            StateRecord record = StateRecord.Read(SaveLibrary.StatePathFor(rom, 1, _states))!;
+            StateRecord record = States(window).ReadState(SaveLibrary.StatePathFor(rom, 1, _states))!;
             Assert.Equal("N64", record.Console);
             Assert.Equal(Game(window).CoreName, record.Core);
             Assert.Equal(((EmuSen.Cores.IStateFormat)Game(window).Core!).StateVersion, record.StateVersion);
@@ -118,6 +118,33 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(new FileInfo(rom).Length, record.RomBytes);
             Assert.Equal("Counter.z64", record.RomFile);
             Assert.False(string.IsNullOrWhiteSpace(record.Build));
+            window.Close();
+        }, default);
+
+        // records.db, not a sidecar: the record outlives the window that wrote it, and the state loads under it - see EmuSen_Settings_Reference.md §4.64.
+        [Fact]
+        public Task A_state_saved_and_loaded_round_trips_its_record_through_the_database_and_writes_no_sidecar() => Session.Dispatch(() =>
+        {
+            string rom = Counter();
+            MainWindow window = Open();
+            Invoke(window, "LoadRom", rom, "Counter.z64");
+            WaitFor(() => Field(window, "_currentRomMd5") is string);
+            SaveSlot(window);
+            string state = SaveLibrary.StatePathFor(rom, 1, _states);
+            StateRecord written = States(window).ReadState(state)!;
+            window.Close();
+
+            Assert.False(File.Exists(StateRecord.SidecarPathFor(state)));
+            Assert.True(File.Exists(Path.Combine(DataStore.Library, FileRecords.FileName)));
+
+            window = Open();
+            Assert.Equal(written, States(window).ReadState(state));
+            Assert.Equal("written", States(window).StateSource(state));
+            Invoke(window, "LoadRom", rom, "Counter.z64");
+            WaitFor(() => Field(window, "_currentRomMd5") is string);
+            Status(window).Text = "";
+            Invoke(window, "LoadState");
+            WaitFor(() => Status(window).Text?.StartsWith("State loaded") == true);
             window.Close();
         }, default);
 
@@ -132,8 +159,8 @@ namespace EmuSen.WiseMan.Mistress
             WaitFor(() => Field(window, "_currentRomMd5") is string);
             SaveSlot(window);
             string state = SaveLibrary.StatePathFor(rom, 1, _states);
-            StateRecord saved = StateRecord.Read(state)!;
-            (saved with { Console = console ?? saved.Console, StateVersion = saved.StateVersion + newer }).Write(state);
+            StateRecord saved = States(window).ReadState(state)!;
+            Assert.True(States(window).WriteState(state, saved with { Console = console ?? saved.Console, StateVersion = saved.StateVersion + newer }));
 
             Status(window).Text = "";
             Invoke(window, "LoadState");
@@ -153,7 +180,7 @@ namespace EmuSen.WiseMan.Mistress
             WaitFor(() => Field(window, "_currentRomMd5") is string);
             SaveSlot(window);
             string state = SaveLibrary.StatePathFor(rom, 1, _states);
-            (StateRecord.Read(state)! with { RomMd5 = new string('0', 32), RomFile = "Counter (Beta).z64" }).Write(state);
+            Assert.True(States(window).WriteState(state, States(window).ReadState(state)! with { RomMd5 = new string('0', 32), RomFile = "Counter (Beta).z64" }));
 
             Status(window).Text = "";
             Invoke(window, "LoadState");
@@ -212,6 +239,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         private static GameRecords Records(MainWindow w) => (GameRecords)Field(w, "_records")!;
+        private static FileRecords States(MainWindow w) => (FileRecords)Field(w, "_fileRecords")!;
         private static EmulatorSession Game(MainWindow w) => (EmulatorSession)Field(w, "_session")!;
         private static TextBlock Status(MainWindow w) => w.GetControl<TextBlock>("StatusText");
         private static RomEntry Entry(MainWindow w, string name) => ((IReadOnlyList<RomEntry>)Field(w, "_shownEntries")!).Single(e => e.FileName == name);

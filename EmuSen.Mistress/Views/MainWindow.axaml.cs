@@ -235,7 +235,7 @@ namespace EmuSen.Mistress.Views
         private void SetButtonFromKey(Key key, bool pressed, KeyEventArgs e)
         {
             if (TypingIntoATextField(e)) return;
-            if (ThemedKey(key, pressed))
+            if (ThemedKey(key, e.KeyModifiers, pressed))
             {
                 e.Handled = true;
                 return;

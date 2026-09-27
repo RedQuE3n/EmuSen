@@ -5,7 +5,7 @@ using EmuSen.Mistress.Input;
 
 namespace EmuSen.Mistress.Views
 {
-    // ES-DE's default keyboard, less Escape, steering the themed view as held pad buttons - see EmuSen_Settings_Reference.md §4.52.
+    // ES-DE's default keyboard, with F4 for Escape's Start, steering the themed view as held pad buttons - see EmuSen_Settings_Reference.md §4.52.
     public partial class MainWindow
     {
         private readonly HashSet<UiButton> _themedKeys = new();
@@ -19,6 +19,7 @@ namespace EmuSen.Mistress.Views
             Key.Right => UiButton.Right,
             Key.Enter => UiButton.Accept,
             Key.Back => UiButton.Back,
+            Key.F4 => UiButton.Menu,
             Key.F1 => UiButton.Options,
             Key.Insert => UiButton.Search,
             Key.PageUp => UiButton.PageUp,
@@ -30,10 +31,11 @@ namespace EmuSen.Mistress.Views
         };
 
         // True when the key was the themed view's: pressed over it with nothing else taking keys, or let go after such a press.
-        private bool ThemedKey(Key key, bool pressed)
+        private bool ThemedKey(Key key, KeyModifiers modifiers, bool pressed)
         {
             if (ThemedKeyButton(key) is not { } button) return false;
             if (!pressed) return _themedKeys.Remove(button);
+            if ((modifiers & KeyModifiers.Alt) != 0) return false;
             if (!ThemedLibraryShown || !LibraryView.IsVisible || OtherWindow() is not null || OnScreenKeyboard.OpenOver(this) is not null) return false;
             _themedKeys.Add(button);
             _keyboardSteering = true;

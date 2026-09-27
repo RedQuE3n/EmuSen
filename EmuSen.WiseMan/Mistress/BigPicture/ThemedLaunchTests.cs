@@ -83,6 +83,24 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Window.KeyRelease(Avalonia.Input.Key.Enter, RawInputModifiers.None, PhysicalKey.None, null);
         }, default);
 
+        // F4 stands in for ES-DE's Escape (Start), which leaves big picture here (§4.54); Alt+F4 stays the window manager's.
+        [Fact]
+        public Task F4_opens_the_menu_over_the_themed_view_Backspace_closes_it_and_Alt_F4_is_not_taken() => Session.Dispatch(() =>
+        {
+            using var s = new ThemedSession();
+            Key(s, Avalonia.Input.Key.F4);
+            Assert.True(s.Window.GetControl<Control>("PadMenuPanel").IsVisible);
+            Key(s, Avalonia.Input.Key.Back);
+            Assert.False(s.Window.GetControl<Control>("PadMenuPanel").IsVisible);
+            Assert.Equal("system", s.View);
+
+            s.Window.KeyPress(Avalonia.Input.Key.F4, RawInputModifiers.Alt, PhysicalKey.None, null);
+            s.Run(40);
+            s.Window.KeyRelease(Avalonia.Input.Key.F4, RawInputModifiers.Alt, PhysicalKey.None, null);
+            s.Settle();
+            Assert.False(s.Window.GetControl<Control>("PadMenuPanel").IsVisible);
+        }, default);
+
         private static void Key(ThemedSession s, Key key)
         {
             s.Window.KeyPress(key, RawInputModifiers.None, PhysicalKey.None, null);

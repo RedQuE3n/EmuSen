@@ -2609,20 +2609,22 @@ artbook next". No crash log was written that day.
 
 **What was built.** While the themed view is shown, the library is visible, and nothing is over it (no sheet, no other
 active window, no on-screen keyboard), ES-DE's default keys (USERGUIDE.md, "Default keyboard mappings") are held pad
-buttons: the arrows, Enter for A, Backspace for B, F1 for Back, Insert for Y, Page Up and Page Down for the shoulders,
+buttons: the arrows, Enter for A, Backspace for B, F4 for Start (below), F1 for Back, Insert for Y, Page Up and Page Down for the shoulders,
 Home and End for the triggers, F2 and F3 for the stick clicks. `PadHeld` reads them beside every pad, so the navigator's
 repeats, the view's own held-direction repeats (§4.52) and the help bar behave as for a pad, and `PadTick` polls while
 a key is held and once after the last is let go, with or without a controller. A key let go is always released, even
 after the view it was pressed on has gone. Delete (ES-DE's X) is not mapped, because West is kept for the media viewer
 (Q32).
 
-**Escape is left out on purpose.** ES-DE's Escape is Start, its main menu. Mistress's Escape already leaves big picture
-for the desktop when nothing else is on screen and returns to a suspended game otherwise (§4.18, §4.54), and
-`BigPictureSwitchTests` failed the first time Escape was mapped. The earlier rule was kept. The consequence is that the
-pad menu (Start) has no key in the themed view; which key should open it is left to the player.
+**Escape is left out on purpose, and F4 stands in for it.** ES-DE's Escape is Start, its main menu. Mistress's Escape
+already leaves big picture for the desktop when nothing else is on screen, and returns to a suspended game otherwise
+(§4.18, §4.54). `BigPictureSwitchTests` failed the first time Escape was mapped, so the earlier rule was kept. The pad
+menu (Start) then had no key. The choice was F4 on 2026-09-27 (plan §10.1): it is free in the hotkey map, and it sits
+beside F1–F3. Alt+F4 is never taken, so the window manager's close still works.
 
-**Tests and mutants.** `ThemedLaunchTests`: four cases, the keyboard one with the pad unplugged. Before the change it
-failed at the first arrow. Two mutants were run by hand: removing the library-visible guard is caught (a key pressed on
+**Tests and mutants.** `ThemedLaunchTests` has five cases. The keyboard case runs with the pad unplugged; before the change it
+failed at the first arrow. The F4 case covers F4, Backspace and Alt+F4. Three mutants were run by hand. Removing the Alt guard
+is caught. Of the other two: removing the library-visible guard is caught (a key pressed on
 the view would start the game from under it). Removing a `GameOnScreen` guard was *not* caught and was shown to be
 redundant, since a game on screen hides the library, so the guard was deleted rather than tested.
 

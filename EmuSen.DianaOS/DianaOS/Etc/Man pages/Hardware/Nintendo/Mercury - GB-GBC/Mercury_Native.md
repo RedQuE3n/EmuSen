@@ -983,7 +983,7 @@ They were run first against the unmodified C# core. **13 of 26 failed there.** E
 - a watch went deaf after `LoadRom`, which builds a new bus that the target had not attached to.
 
 The machine was not at fault in any of them, and none is D1–D3. The five seams were added to C# Mercury in their own
-commit (0dcdf6d), each held by a claim, before MercuryRT was given the same claims. `Mercury_Debug.md` §7 records what was
+commit (50f86a6), each held by a claim, before MercuryRT was given the same claims. `Mercury_Debug.md` §7 records what was
 added and why an interrupt is a frame on this core when it is not on Mars. With them all 26 claims pass on C#.
 
 The stage asked for stepping on MercuryRT, `step over` included, under the C# target's claims, and the C# target had no
@@ -1202,7 +1202,7 @@ is too *narrow* misses a stop, and every M-mutant above is of that kind.
 
 #### 8.5.5 Speed
 
-**The first measurement refuted the prediction.** The `frames` example was built before the stage (4c64563) and after
+**The first measurement refuted the prediction.** The `frames` example was built before the stage (0301306) and after
 it. The two were interleaved under the bench lock, the order swapped each round, 3,000 frames each, with identical state
 hashes. Plain-frame p50 in ms:
 
@@ -1428,7 +1428,7 @@ reading and by lint alone.
 
 *Written 2026-09-24, on the decision recorded under Q3 (§5).* Each defect of §6.1 was fixed in C# Mercury and
 MercuryRT together. For each, a test was written first and committed while it failed on both engines, on the unmodified
-build (`f2c7f99`). The tests are `EmuSen.WiseMan/Cores/MercuryDefectTests.cs`, one case per engine through `ICore`
+build (`291a661`). The tests are `EmuSen.WiseMan/Cores/MercuryDefectTests.cs`, one case per engine through `ICore`
 alone, so neither engine's answer is read through the other's objects.
 
 ### 9.1 D1: the sample rate
@@ -1631,7 +1631,7 @@ fixed here, and each stays a candidate with no test, to be fixed in both engines
 
 ### 9.5 Mutants of the three fixes
 
-**Method.** Fourteen hand-made mutants were run in a copy of the tree at `716ddc2`, the D3 commit, so that no source in
+**Method.** Fourteen hand-made mutants were run in a copy of the tree at `a372058`, the D3 commit, so that no source in
 the working tree was touched. For each mutant:
 
 - one edit was applied;

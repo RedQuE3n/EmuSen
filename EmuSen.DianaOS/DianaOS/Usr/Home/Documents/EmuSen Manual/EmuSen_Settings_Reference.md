@@ -1117,7 +1117,7 @@ OpenEmu's sidebar has a Collections group beneath the consoles, and so does this
 
 **What it does not cover.** No drag and drop onto a collection, and no smart collections beyond the two fixed ones. A pad cannot yet add a game to a collection, only view one. A collection is shown across every console, as OpenEmu's are, so choosing one clears the console filter.
 
-**A flaky test, found here and older than this work.** During the blast-radius run for §4.37 and §4.38, `MainWindowLibraryTests` failed one test in some runs and none in others, on the same binary: `The_search_box_accepts_a_character_that_is_also_a_hotkey` (the typed "p" never reached the box), `Escape_does_nothing_with_no_game_loaded`, `Enter_in_the_search_box_starts_the_narrowed_selection`, and once `Browsing_the_library_cannot_reach_a_suspended_game`. Measured by running the class alone repeatedly: **1 failed run in 10 at c0f1a72, before any of the OpenEmu work**, 1 in 5 at 072fdbd, 2 in 10 with §4.37 and §4.38 in place. So the flake predates this work, and the difference between the rates is within what ten runs can distinguish. **One hypothesis was tested and refuted:** that a window left open by an earlier test in the class takes the next test's keys, since keyboard focus belongs to the process rather than to a window. Closing every window the class opened, in its `Dispose`, left the rate at 3 failed runs in 20. The cause is not known and is recorded here rather than guessed at.
+**A flaky test, found here and older than this work.** During the blast-radius run for §4.37 and §4.38, `MainWindowLibraryTests` failed one test in some runs and none in others, on the same binary: `The_search_box_accepts_a_character_that_is_also_a_hotkey` (the typed "p" never reached the box), `Escape_does_nothing_with_no_game_loaded`, `Enter_in_the_search_box_starts_the_narrowed_selection`, and once `Browsing_the_library_cannot_reach_a_suspended_game`. Measured by running the class alone repeatedly: **1 failed run in 10 at 0140564, before any of the OpenEmu work**, 1 in 5 at c478135, 2 in 10 with §4.37 and §4.38 in place. So the flake predates this work, and the difference between the rates is within what ten runs can distinguish. **One hypothesis was tested and refuted:** that a window left open by an earlier test in the class takes the next test's keys, since keyboard focus belongs to the process rather than to a window. Closing every window the class opened, in its `Dispose`, left the rate at 3 failed runs in 20. The cause is not known and is recorded here rather than guessed at.
 
 
 ### 4.39 Covers from OpenEmu's source, if the player asks (2026-09-21)
@@ -1615,7 +1615,7 @@ The pad menu resumes the game for the moment between closing itself and a sheet 
   reads through;
 - that Steam's own chord for its keyboard still types into a focused box, for a player who prefers it.
 
-**What the device confirmed (2026-09-24, Legion Go S, SteamOS 3.8.27, build 78bf8ea).** Mistress started from Game
+**What the device confirmed (2026-09-24, Legion Go S, SteamOS 3.8.27, build f4d37b6).** Mistress started from Game
 Mode carries `XDG_CURRENT_DESKTOP=gamescope` and `XDG_SESSION_DESKTOP=gamescope` (read from its `/proc` environment),
 so big-screen mode and the sheets are on; gamescope runs the session at 1280×800, a sheet scale of 800/720 ≈ 1.11. The
 player reported every control of the settings windows and the cheat flow reachable and usable by pad, which also
@@ -2059,7 +2059,7 @@ to key moves, below, removed the case.
 
 **Measured.** `ShaderBrowseBenchTests`, gated on `EMUSEN_SLANG_PACK` like
 `A_pack_preset_with_hundreds_of_parameters_is_shown_in_measured_time`, run from two Release builds, before (WiseMan
-2b9664e with only the bench added) and after, interleaved before/after three times, on the development desktop with
+dbde74a with only the bench added) and after, interleaved before/after three times, on the development desktop with
 the pack of 2026-09-24. **The time to a usable row is end to end**: from the act to the shown preset's sliders built,
 laid out and drawn (a render of the window). Each case opens a fresh window, so the parameter cache starts empty; the
 pack's files are in the OS's cache after the unmeasured warm-up. Medians of three, in ms (the runs are in
@@ -2194,7 +2194,7 @@ parameters are already in the cache is now built in the same step as the move ra
 at once; the held walk and its stop, unchanged at 80.5 ms a row and about 160 ms; a click and a selection set by
 code, unchanged.
 
-*Measured:* `ShaderBrowseBenchTests`, the build of §4.48.9 (dc321fc5, "before") against this one ("after"),
+*Measured:* `ShaderBrowseBenchTests`, the build of §4.48.9 (ef2a9b11, "before") against this one ("after"),
 interleaved three times, medians in ms, runs in `~/.cache/emusen/probe/shader-browse/runs/`:
 
 | Case | `crt-lottes` | `crt-royale` | `crt-guest-advanced` | `MBZ__0__SMOOTH-ADV` |
@@ -2206,7 +2206,7 @@ interleaved three times, medians in ms, runs in `~/.cache/emusen/probe/shader-br
 | held pad over 40 Mega Bezel rows, per row | 80.5 → **80.6** | | | |
 | from the last press of that walk to a usable row | 163 → **160** | | | |
 
-The single step landed inside its prediction on every preset, and against the build before any of this work (2b9664e:
+The single step landed inside its prediction on every preset, and against the build before any of this work (dbde74a:
 32, 80, 155 and 1,033 ms, §4.48.9) it is now as fast or faster on all four. Two steps without stopping came in
 **under** the prediction for `crt-royale` and Mega Bezel (−43 and −33 ms): the first step, now built at once, reads the
 rows beside it ahead, and the second step's row is one of them, so the settle that follows ends on a read already

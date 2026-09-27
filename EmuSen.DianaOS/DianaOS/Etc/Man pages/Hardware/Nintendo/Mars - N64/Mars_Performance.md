@@ -451,7 +451,7 @@ grades exactness; it no longer grades speed.
 
 **§9 and §10, measured again that way**, median of three (fps):
 
-| | before §9 (`2745f74`) | §9 (`81bc070`) | §10 (`a434c9c`) | §13 |
+| | before §9 (`10b1403`) | §9 (`72cd53c`) | §10 (`46acf29`) | §13 |
 | --- | --- | --- | --- | --- |
 | Ocarina of Time | 17.5 | 19.2 (+10%) | 19.9 (+4%) | 21.3 (+7%) |
 | Super Mario 64 | 20.5 | 23.8 (+16%) | 25.5 (+7%) | 27.3 (+7%) |
@@ -670,7 +670,7 @@ had none until this round.
 
 Three changes to the step, each exact, timed by §12's method (three rounds, medians, fps):
 
-| | before (`faedf85`) | store report gated (§16) | RDRAM direct (§17) | mode kept (§18) | together |
+| | before (`c1ac7cd`) | store report gated (§16) | RDRAM direct (§17) | mode kept (§18) | together |
 | --- | --- | --- | --- | --- | --- |
 | Ocarina of Time | 21.2 | 22.5 | 23.2 | 24.1 | +14% |
 | Super Mario 64 | 27.7 | 28.4 | 28.9 | 30.4 | +10% |
@@ -798,7 +798,7 @@ repeated many more times than nine. Replaced by the window before it was measure
 
 **And in the games**, §12's method, three rounds, medians (fps):
 
-| | before (`c953491`) | after | | of the console |
+| | before (`1df0876`) | after | | of the console |
 | --- | --- | --- | --- | --- |
 | Ocarina of Time | 24.0 | 30.5 | +27% | 61% |
 | Super Mario 64 | 30.4 | 36.2 | +19% | 72% |
@@ -910,7 +910,7 @@ verifier on and with it off:
 
 **And in the games**, §12's method, three rounds, medians (fps):
 
-| | before (`96beb4b`) | after | |
+| | before (`ac26792`) | after | |
 | --- | --- | --- | --- |
 | Ocarina of Time | 30.4 | 31.6 | +4%, every round |
 | Super Mario 64 | 36.4 | 36.1 | within the spread |
@@ -1120,7 +1120,7 @@ and writer of a marked page waits for the words that marked it. The argument's c
 processor itself, byte by byte, wherever verification is on.
 
 **Measured.** Four configurations interleaved, order rotated, three rounds of 600 frames from each of §26's states
-on a quiet machine, second halves; two builds, the commit before this one (`224b12a`) and this one
+on a quiet machine, second halves; two builds, the commit before this one (`cebce50`) and this one
 (`ab-builds.sh`, `play-states3/ab-builds.txt`):
 
 | from the state, second 300 frames | before, at once | before, scan-out deferred (§27) | now, deferred, list at once | now, both threads | of the console |
@@ -1349,7 +1349,7 @@ same finding from the other side.
 ### 32.1 Measured and not kept: padding the two counts apart, and the verifier's per-word write
 
 Two small changes were built on the strength of the profile, proven exact by the threaded, deferred and save-state
-tests, and timed interleaved against `c70a9ee`, three rounds of 600 frames from each of the four states.
+tests, and timed interleaved against `142e46c`, three rounds of 600 frames from each of the four states.
 
 *The counts.* `_issued` and `_completed` are declared adjacent, one written by each thread and read by the other,
 and `_completed` is written **once per command word** — seven thousand times a frame — while the emulation thread's
@@ -1357,7 +1357,7 @@ spin loop reads it. That is a textbook false-sharing hazard, so each was given a
 explicit-layout 128-byte struct. *The verifier's write.* The drain loop set `_runningWord` on every word, a value
 only the byte-level verifier reads, in every build.
 
-| second 300 frames, medians of three | `c70a9ee` | both changes |
+| second 300 frames, medians of three | `142e46c` | both changes |
 | --- | --- | --- |
 | Ocarina of Time | 52.1 fps | 51.8 |
 | Wave Race 64 | 60.7 | 60.4 |
@@ -1467,10 +1467,10 @@ under the signal processor's DMA transfer with the garbage-collection poll as th
 byte at a time through the bus — a 32-bit read with the page-mark test for each byte read, a read and a write for
 each byte written. That is the profile a byte loop would give. The loop was replaced by a bulk copy for rows inside
 RDRAM, exact by construction (the same bytes, and the write counter advanced by the same count so the blocks' exit
-is unchanged), and timed interleaved against `c70a9ee`: three rounds of 600 frames from each of the four states,
+is unchanged), and timed interleaved against `142e46c`: three rounds of 600 frames from each of the four states,
 second halves, medians.
 
-| | `c70a9ee` | bulk copy |
+| | `142e46c` | bulk copy |
 | --- | --- | --- |
 | Ocarina of Time | 52.1 | 52.7 |
 | Wave Race 64 | 60.0 | 60.0 |
@@ -1485,7 +1485,7 @@ into — for a wait inlined through four small methods, the caller of the wait. 
 wait on the marks, not its copy loop. §32's reading of the same leaf as spinning was right; its attribution to
 methods by name, at this depth, is not to be trusted, and the interface's own counters are what to read instead.
 
-**What the interface's counters say.** From the play harness on `c70a9ee`, 600 frames from each state:
+**What the interface's counters say.** From the play harness on `142e46c`, 600 frames from each state:
 
 | | waits | each | of the run |
 | --- | --- | --- | --- |

@@ -1036,7 +1036,7 @@ preset built this way had not been compared; they now are, for royale, guest-adv
 
 ### 9.6 What it measured
 
-**The frame.** These are §8.3's 22 cases, interleaved: for each case the production build (`57937b2`) and the lever's
+**The frame.** These are §8.3's 22 cases, interleaved: for each case the production build (`b959d2a`) and the lever's
 (`d564dd8`) ran back to back, in an order that rotated. There were three rounds under the bench lock. Each figure is
 the median over rounds of each run's median, render thread, in milliseconds. The raw results and scripts are in
 `~/.cache/emusen/probe/shaders/levers/` (`results-lever1.txt`, `matrix-ab.sh`, `ab.py`). The prototype's column is
@@ -1270,8 +1270,8 @@ no test writes to the player's `home/Shaders/`.
 
 ### 9.9 The handheld, after both levers (2026-09-24)
 
-Measured on the handheld after the merge (9269ec9): the research's production bench (`deck-out/base`,
-57937b2) against a bench built from WiseMan with both levers (`deck-out/after`), the same case lines, three rounds
+Measured on the handheld after the merge (7603cee): the research's production bench (`deck-out/base`,
+b959d2a) against a bench built from WiseMan with both levers (`deck-out/after`), the same case lines, three rounds
 with the order alternated, 300 frames each, the picture in the panel's 1920×1200. **On the charger this time**
 (`power_supply` online 1), where §8.4's run was on battery, so the base figures here are not §8.4's and each lever is
 read only against the base of this run. Render thread, median of the three rounds' medians:
@@ -1304,7 +1304,7 @@ that is mostly not the hazard. Scripts, logs and raw results are in `~/.cache/em
 The bench (§8.1) ran under `VK_LAYER_KHRONOS_validation` with synchronisation validation, the shader-access heuristic
 and no message limit, one process per case (`vbench.sh`). It covered seventeen cases: §8.3's thirteen slang cases,
 plus `crt-guest-advanced-ntsc`, `phosphor-persistence` (feedback), `mix_frames` (history) and `bob-deinterlacing`.
-Each run draws 26 frames. The unmodified build (`9269ec9`) reported **5,408 `SYNC-HAZARD-READ-AFTER-WRITE` at
+Each run draws 26 frames. The unmodified build (`7603cee`) reported **5,408 `SYNC-HAZARD-READ-AFTER-WRITE` at
 `vkCmdDraw` and 5 `VUID-RuntimeSpirv-OpEntryPoint-08743`**. These are the messages §9.7 counted over its six cases.
 
 To say which pass and which image each message is about, an uncommitted copy of the chain printed, for every pass,
@@ -1452,7 +1452,7 @@ nothing else does.
 
 **Pictures.** The bench hashes three frames per run after the measured ones.
 
-- Against `9269ec9`, interleaved, three rounds of all thirteen slang cases: **13 of 13 cases byte-identical, on
+- Against `7603cee`, interleaved, three rounds of all thirteen slang cases: **13 of 13 cases byte-identical, on
   every frame of every round** (`summary-time.md`).
 - The seventeen validation runs matched frame for frame before and after.
 - On the N64 frame the still bench (§10.6) gave the same sequence pattern for all 101 `crt/` presets before and
@@ -1465,7 +1465,7 @@ nothing else does.
 Bezel. The table gives the render thread's time in ms: the median of three rounds' medians, interleaved under the
 bench lock (`results-time.txt`).
 
-| Case | `9269ec9` | Fixed | Change |
+| Case | `7603cee` | Fixed | Change |
 |---|---|---|---|
 | SNES `crt-lottes` 1080p | 1.79 | 1.80 | +0.01 |
 | SNES `crt-guest-advanced` | 1.87 | 1.90 | +0.02 |

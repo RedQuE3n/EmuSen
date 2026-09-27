@@ -2155,7 +2155,7 @@ the synthetic test's fade-out was shorter than a repeat interval, so no step fel
 
 **A defect found on the way.** The lever's first version looked up the list with `FirstOrDefault(…).Control`, which
 throws in a gamelist whose primary element is a carousel. `SceneMappingTests`' held `fastScrolling` case, a carousel
-in the gamelist, found it. The lookup is now null-safe (`0ee9f2e4`).
+in the gamelist, found it. The lookup is now null-safe (`6e163696`).
 
 The recording comparison caught the step's easing and its duration (300 ms against 400) as well as the synthetic
 tests did.
@@ -2560,7 +2560,7 @@ none should.
 
 **What was seen.** After stage (e) was merged into WiseMan, the Mistress test filter (about 690 tests) failed in two
 of four runs, each time on a different test outside stage (e): the Shaders window's live-slider test once, the status
-bar's Preferences test once. Each passed alone and in small groups. The build before the merge (`eda6c55f`, 648 tests)
+bar's Preferences test once. Each passed alone and in small groups. The build before the merge (`ce5fa675`, 648 tests)
 passed three runs of three. An intermittent failure that lands on a different, unrelated test each time is the mark
 of work done on the shared UI thread by something the failing test did not create.
 
@@ -3254,9 +3254,9 @@ the window runs. It was built three times in one day, because the request was fi
 
 | Build | What it was | Why it changed |
 |---|---|---|
-| 1 (`7e9befdd`–`bff37489`) | the desktop's full screen *was* big picture: a toolbar Fullscreen button, F11, the View menu and the window manager all entered it | a restatement of the request (full screen enters EmuSen's big picture) was taken as the design. Corrected the same day: the fullscreen button must not trigger big picture on the desktop; a separate button must, so that the player has the choice between both |
-| 2 (`83ff0243`, `d48cce2e`) | two toolbar buttons, a plain Fullscreen and a Big Picture, with a View menu entry and a key for each | placed on request: the Big Picture entry goes under the View menu, below Fullscreen |
-| 3 (`d79dbdf1`) | the View menu holds Fullscreen (F11) and directly below it Big Picture (F10); no toolbar buttons | — |
+| 1 (`e649b8c1`–`07f66a9c`) | the desktop's full screen *was* big picture: a toolbar Fullscreen button, F11, the View menu and the window manager all entered it | a restatement of the request (full screen enters EmuSen's big picture) was taken as the design. Corrected the same day: the fullscreen button must not trigger big picture on the desktop; a separate button must, so that the player has the choice between both |
+| 2 (`50c571e4`, `138ffabd`) | two toolbar buttons, a plain Fullscreen and a Big Picture, with a View menu entry and a key for each | placed on request: the Big Picture entry goes under the View menu, below Fullscreen |
+| 3 (`df49d4de`) | the View menu holds Fullscreen (F11) and directly below it Big Picture (F10); no toolbar buttons | — |
 
 The settings reference's §4.54 is the player's account of the third build; this is the record of all three. What
 survived from build 1 into build 3 is the switch itself (`ApplyBigScreen`, `SetBigPicture`), the cleanup, the popup
@@ -3743,7 +3743,7 @@ is a plan: nothing in it has been built, and every cost in it is an estimate.
 - TheGamesDB's API description, `api.thegamesdb.net/spec.yaml` (Swagger 2.0, 2,338 lines), and its key page, fetched
   2026-09-26.
 - The 43 redacted answers of §17.9's live run, for what ScreenScraper offers beyond the kinds Mistress fetches.
-- EmuSen's code at `5dc543aa`, and the ROM library at `AppSettings.RomDirectory`, listed read-only.
+- EmuSen's code at `cf73bbb3`, and the ROM library at `AppSettings.RomDirectory`, listed read-only.
 
 **Numbering.** §22 and §23 were being written at the same time and will number their own predictions and questions.
 To keep the three apart, as §17 did for stage (f), this section's predictions start at **P100** and its questions at
@@ -4547,7 +4547,7 @@ a clean rebuild. No verdict below comes from a build that held another mutant.
 their tests were strengthened:
 - **C13.** Leaving a folder set the top list's cursor to the folder left. The top list's cursor already held it: it was
   remembered when A was pressed on that folder, and nothing inside the folder can change the top list's key. The
-  assignment was dead code and was removed (`1f943eaf`), which the tests pass without.
+  assignment was dead code and was removed (`1a920bf1`), which the tests pass without.
 - **C25.** The mutant sorted every system's list by the current list's sort. The test did look at another system after
   sorting, but only under a rating sort, and that system's games have no rating, so they fell back to the name order that
   is also the default. The test now looks at another system right after a name-descending sort, which exposes it.
@@ -6223,7 +6223,7 @@ theme-browser branch ran beside it on the same machine; nothing of its Themes ta
 
 ## 29. Pass 4 built: switches, and what the engine draws itself (2026-09-27)
 
-*Opened and closed on 2026-09-27, on branch `bigpicture-pass4-switches` (from WiseMan at `44fde5bb`), with LunaP's
+*Opened and closed on 2026-09-27, on branch `bigpicture-pass4-switches` (from WiseMan at `55f7c28c`), with LunaP's
 `pass4-badge-glyph` beside it.* §21.3's pass 4 under the answers of §10.1: every §21 recommendation accepted (Q22–Q35),
 Q9's "the favourite, folder and badge graphics are Mistress's own drawings", and Q32's buttons (West left free for the
 media viewer of pass 9; the shoulders jump ten games, built in §22.13; left and right give quick system select). The
@@ -6467,7 +6467,7 @@ Next's reference clone. Every one was looked at:
 
 ### 29.9 The broad run
 
-WiseMan was merged into the branch before it (`964f07c2`: ES-DE's default keys steering the themed view, and F4 for the
+WiseMan was merged into the branch before it (`b62a3d3e`: ES-DE's default keys steering the themed view, and F4 for the
 Start menu), cleanly. Then one clean rebuild and one broad run, under `nice -n 10` with builds at `-m:2`: every test
 under `EmuSen.WiseMan.Mistress` except `ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` and anything
 named for the GPU or Vulkan. **983 passed, 27 skipped (the picture, bench and live tools gated by their variables), none
@@ -6520,7 +6520,7 @@ passed 1,371 of 1,371 both times.
 
 ## 30. Pass 6 built: folders (2026-09-27)
 
-*Built on branch `bigpicture-pass6-folders`, from WiseMan at `44fde5bb`.* §21.3's Pass 6, under the answers of
+*Built on branch `bigpicture-pass6-folders`, from WiseMan at `55f7c28c`.* §21.3's Pass 6, under the answers of
 2026-09-26 (§10.1): Q23 (c), folders shown as ES-DE shows them by default with a per-console flatten switch, and Q24,
 directories named like files and `.m3u` playlists left until a disc-based core exists. The player's account is §4.67 of
 the settings reference; this is the record. §29 is another pass's.
@@ -6543,8 +6543,8 @@ test `ThemedFoldersTests.P108_media_of_a_game_in_a_folder_are_found_under_that_f
 was written first and run on the unchanged reader, through the window's own `MediaSourcesNow().Locate`: an ES-DE tree
 holding a cover, a screenshot, a marquee and a video of `NES/USA/Tidal Keep` under `nes/<type>/USA/`, and Mistress's
 store holding a cover and a screenshot of `NES/Europe/Quartz Mill` under `nes/<type>/Europe/`. **None of the six was
-found**; every `Locate` answered none. The test was committed skipped with that result as its reason (`5bf3f8d4`), as
-§16.2 recorded P52, and the fix (`e5d62e21`) removed the skip. **P108 held.**
+found**; every `Locate` answered none. The test was committed skipped with that result as its reason (`5175e909`), as
+§16.2 recorded P52, and the fix (`b8abd28f`) removed the skip. **P108 held.**
 
 The fix is in three places. `GameFolders.Of` gives a game's folder (§30.2). `SceneGame` carries it as `FolderPath`, and
 `EsdeMediaFolder` names a game's files `<folder>/<stem>` and then `<stem>` (Q61). `MediaSources`, which the library's
@@ -6712,7 +6712,7 @@ gap it does find.
 | P144 | *(written during the build)* The layout step loses no picture in any of its cases, and a second run changes nothing | the SHA-256 comparison in every case of §30.4, and the rerun | held |
 | P145 | *(written during the build)* No file stem of the player's library repeats between two folders of one console, so the flat name second (Q61) never shows one game another's picture there | 0 on each console (§30.6), as §21.1 counted | held |
 | P146 | *(written before the round)* Of the round's mutants, at least nine in ten are caught on their first run | 49 of 50 (98%) | held |
-| P147 | *(written before the broad run)* The broad Mistress run passes with no failure this branch causes | once, after merging WiseMan at `964f07c2` and a rebuild: the Mistress filter without `ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` or any test named for the GPU or Vulkan, under `nice -n 10`: 998 tests, 971 passed, 27 skipped (the picture, bench, live and real-library tools, which need their variables), none failed, in 3 min 50 s | held; one pass is weak evidence against an intermittent failure, as §15.14 says |
+| P147 | *(written before the broad run)* The broad Mistress run passes with no failure this branch causes | once, after merging WiseMan at `b62a3d3e` and a rebuild: the Mistress filter without `ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` or any test named for the GPU or Vulkan, under `nice -n 10`: 998 tests, 971 passed, 27 skipped (the picture, bench, live and real-library tools, which need their variables), none failed, in 3 min 50 s | held; one pass is weak evidence against an intermittent failure, as §15.14 says |
 
 ### 30.9 Pictures
 
@@ -7003,7 +7003,7 @@ failure is this branch's:
 
 ## 32. ES-DE's menu look, stage 1: the Start menu and a game's options (2026-09-27)
 
-*Built on branch `bigpicture-esde-menus`, from WiseMan at `7c6ce023`; LunaP on `esde-menus`, from `openemu-library` at
+*Built on branch `bigpicture-esde-menus`, from WiseMan at `9c8304a5`; LunaP on `esde-menus`, from `openemu-library` at
 `1bd782b`.* Requested 2026-09-27: make the big picture options menu look like ES-DE's.
 It is built in two stages, and the first stage's look is approved before the second begins. The player's account is
 §4.69 of the settings reference; LunaP's record of its pieces is its §181. §29–§31 are other passes'.
@@ -7200,7 +7200,7 @@ records. The questions are kept as they were asked.*
 
 ## 33. Pass 11 built: the launch screen (2026-09-27)
 
-*Built on branch `bigpicture-pass11-launch-screen`, from WiseMan at `7f7f7368`.* §21.3 planned Pass 11 as ES-DE's launch
+*Built on branch `bigpicture-pass11-launch-screen`, from WiseMan at `b6b85a69`.* §21.3 planned Pass 11 as ES-DE's launch
 screen and its five durations (inventory row 10), after the resume question and before the game's first frame. Q33 was
 decided on 2026-09-26 (§10.1): Normal by default, shown after the resume question. The request of 2026-09-27 described
 it as "a delay, with a popup window showing the game name and art for the game". The player's account is §4.71 of the

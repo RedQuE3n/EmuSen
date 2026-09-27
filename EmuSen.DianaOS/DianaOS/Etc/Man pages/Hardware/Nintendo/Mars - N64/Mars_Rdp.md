@@ -283,7 +283,7 @@ still ends with one range an image; the extent keeps its first word, which the v
 later than the word" test accepts for every draw it covers. After a state is read, the shadow takes the raw scissor
 and the other modes from the processor (`Rdp.Bounds`), as it takes the images.
 
-**Measured** (`pacebench`, flat out, 7d68f4d against this with and without the walk of `Mars_Video.md` §2.12,
+**Measured** (`pacebench`, flat out, ea303b1 against this with and without the walk of `Mars_Video.md` §2.12,
 interleaved, three rounds, medians, every state hash the same): the interface's waits went from 0.41 to 0.00 ms a
 frame in Wave Race, and from 2.03 to 1.54 in Ocarina; Wave Race at one ran at 263 per cent of full speed against
 240 with the walk alone, Ocarina at 223 against 217, and Mario unchanged. The verifier, in every Debug test and
@@ -335,7 +335,7 @@ frames of each of the three games found no write outside a box, and every state 
 Race 1.4 and 1.6 per cent slower, Wave Race having no waits to save. A box now keeps only the command's words, and
 its columns are worked out when a read or the verifier asks, which is rarely.
 
-**Measured** (`pacebench`, flat out, 9536644 against this, five rounds alternated, medians, every state hash the
+**Measured** (`pacebench`, flat out, 0edda05 against this, five rounds alternated, medians, every state hash the
 same): Ocarina at one 274 per cent of full speed against 258, Mario 356 against 350, Wave Race level at 280.
 
 **What this does not cover, and one suspicion.** The RSP's transfer into the page after the depth buffer (0.44 ms a
@@ -349,7 +349,7 @@ changed. A second finding corrects this section. The statement above, that "any 
 wait", does not hold for a read. `WaitForReadRange` narrows by the boxes that hold the range's first eight bytes. A
 capture whose first bytes no pending draw holds is therefore freed, even while draws still hold its later rows.
 `The_csharp_interface_lets_a_range_read_pass_the_draws_that_hold_all_but_its_first_bytes` shows it with the thread
-paused. The C# is unchanged. *Retired 2026-09-23 (7fbf4b1): only a read inside one aligned doubleword is narrowed now,
+paused. The C# is unchanged. *Retired 2026-09-23 (d25a8d1): only a read inside one aligned doubleword is narrowed now,
 and a range read keeps the page wait; §2.9.2.*
 
 ### 2.7 The thread held between two words
@@ -447,7 +447,7 @@ before that pixel reads it — which is the fact §10.2's inventory established 
 detail writes each processor's own last `_lodFraction` at every pixel, with its row's stamp. So a primitive drawn
 alone then assembles a stale value.
 `The_csharp_split_assembles_a_stale_level_of_detail_fraction_from_rows_that_computed_none` finds the state wrong in
-that field alone for 8 of 16 seeds. It never reaches a picture. *Fixed 2026-09-23 (51f3377): a one-cycle row stamps
+that field alone for 8 of 16 seeds. It never reaches a picture. *Fixed 2026-09-23 (0f87acc): a one-cycle row stamps
 the fraction only when it measures one; §2.9.3, which also records the same shape in the two-cycle path, not fixed.*
 
 **A snapshot with several processors** (§2.7) needs a point every processor stands at. The pause point is the furthest
@@ -464,7 +464,7 @@ not past the point but at it. If the others were short of the barrier when the r
 the waiter never gets through. MarsRT's port deadlocked this way on four workers.
 `The_csharp_workers_deadlock_when_a_pause_finds_some_at_a_barrier_and_the_rest_short_of_it`, run behind
 `EMUSEN_MARS_DEADLOCK_PROBE=1`, finds the C# pause unanswered too. This is a candidate cause of the Super Mario 64
-freeze described below, and it has not been shown to be that cause. *Fixed 2026-09-23 (a72533c): a waiter at a
+freeze described below, and it has not been shown to be that cause. *Fixed 2026-09-23 (5735332): a waiter at a
 barrier raises the pause point to its own word; §2.9.1. The freeze remains unexplained: the fix removes a cause that
 could produce it, and no run has shown that it was the one.*
 
@@ -502,7 +502,7 @@ unfixed code first and failed there, and each mutant is the unfixed line put bac
 of the source: its named test fails, and the rest of `MarsThreadedRdpTests` (32 tests then) or
 `MarsDeferredPresentationTests` (19) passes, so no other test in the class depends on the defect.
 
-#### 2.9.1 The pause barrier's deadlock (a72533c)
+#### 2.9.1 The pause barrier's deadlock (5735332)
 
 *The cause.* §2.8's pause point is the furthest word any processor has reached when it sees the request. A processor
 that has gathered word *k* + 1, a command whose step is a barrier, and is waiting there for the rest, is inside
@@ -560,7 +560,7 @@ since the Super Mario 64 freeze of §2.8 (`EmuSen_Settings_Reference.md` §4.21b
 player since then, and it is a candidate for that freeze, whose cause was never established. Whether rewind is turned
 back on is a decision for play; this section says only that the hang the headless tests could reach is gone.
 
-#### 2.9.2 A range read narrowed by its first bytes (7fbf4b1)
+#### 2.9.2 A range read narrowed by its first bytes (d25a8d1)
 
 *The cause.* §2.6.3 narrows a read by the boxes of the pending draws that hold its eight bytes, and `Wait` applied
 that to whatever range it was given, testing only the aligned eight bytes at the range's start. `WaitRange` calls it
@@ -583,7 +583,7 @@ so the bytes it compared, and copied, were changing under it. No picture was wro
 slack and the walk does not reach them, but the capture was reading bytes still being drawn at every scan, which is
 the defect's reach in play. The attribution to this fix alone is checked in §2.9.6.
 
-#### 2.9.3 The level-of-detail fraction stamped by rows that measured none (51f3377)
+#### 2.9.3 The level-of-detail fraction stamped by rows that measured none (0f87acc)
 
 *The cause.* `Rdp.OneCycle.cs` stamped `_lodFraction` with every row's stamp, and a row whose primitive measures no
 level writes the processor's own last fraction at every pixel. With the list shared, each processor's own value is the
@@ -607,7 +607,7 @@ case to write, and a fix would have to be made in both cores at once to keep the
 §5.6.7) meaningful. Like the one-cycle case, it cannot reach a picture: a combiner that reads the fraction turns
 level of detail on.
 
-#### 2.9.4 The scan deciding from the drain's progress whether the multiple drew (05d41e4)
+#### 2.9.4 The scan deciding from the drain's progress whether the multiple drew (2297ee1)
 
 *The cause.* `Vi.Prepare` chose the multiple's picture when `DpInterface.ScaledDrawn`, and on the drain that flag is
 set by the processors as they draw, before `Capture`'s wait; the first scan after a load or a change of the multiple
@@ -623,7 +623,7 @@ two: the multiple at two, the drain paused with a scene pending and released fro
 Unfixed, `Prepare` returns at once with the picture at one where the list run at once gives two; fixed, it waits for
 the release and gives two. The mutant that reads `ScaledDrawn` fails both.
 
-#### 2.9.5 A load before the image's first draw, run apart (4291e9e)
+#### 2.9.5 A load before the image's first draw, run apart (43fd3aa)
 
 *The cause.* §2.8's third rule joins a load when a draw since the image was set may have reached its bytes
 (`LoadReachesDrawn`, over the drawn-to extents). A load made before the image's first draw was therefore run by each
@@ -706,7 +706,7 @@ rule, which that comparison's unthreaded oracle does not use).
 *The method.* `pacebench` flat out from the three gameplay states, 900 frames after 120 of warm-up, at one with
 production's settings: compiled blocks, the display processor threaded, deferred presentation, repeats skipped, and
 four processors, the default on this sixteen-core desktop (one per three cores). Two harnesses were built apart, one
-over the code before this branch (f55bfc0) and one over the fixed code, and run in three rounds with the order
+over the code before this branch (1a7febe) and one over the fixed code, and run in three rounds with the order
 reversed each round; each run took the bench lock and began only with the one-minute load below 3, since other
 work was using the machine. The mean `RunFrame` is given, then the emulation thread's waits for the drain.
 

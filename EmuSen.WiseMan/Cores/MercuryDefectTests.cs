@@ -168,7 +168,7 @@ namespace EmuSen.WiseMan.Cores
             0x21, 0x00, 0xC0, 0x34, 0x7E, 0xEA, 0x00, 0xA0, 0xE0, 0x43, 0x18, 0xF4,
         };
 
-        // SHA-256 prefixes of the version-5 states the unmodified build (f2c7f99) wrote for Busy at frame 300, with its save path set to /mercury-v5/A.srm.
+        // SHA-256 prefixes of the version-5 states the unmodified build (291a661) wrote for Busy at frame 300, with its save path set to /mercury-v5/A.srm.
         public static TheoryData<byte, byte, byte, string> Version5Boards => new()
         {
             { 0x00, 0x00, 0x00, "A8F5A6AE499B01D8" }, { 0x08, 0x02, 0x00, "4CE8AB33C05B5A53" }, { 0x03, 0x02, 0x00, "C904450EE75DBBEC" },

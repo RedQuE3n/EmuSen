@@ -102,6 +102,7 @@ namespace EmuSen.Mistress.BigPicture.Theme
         private readonly List<string> _includeStack = [];
         private readonly HashSet<string> _warnedNames = new(StringComparer.Ordinal);
         private int _order;
+        private int _variantDepth;
 
         private ParseRun(ThemeCapabilities capabilities, ThemeSelection selection, string? variant, ThemeSystem system)
         {
@@ -136,10 +137,11 @@ namespace EmuSen.Mistress.BigPicture.Theme
                 return;
             }
 
-            XDocument document;
+            XElement root;
             try
             {
-                document = XDocument.Load(file, LoadOptions.SetLineInfo);
+                root = ThemeXml.Load(file, out string? leniency);
+                if (leniency is not null) Warn(ThemeDiagnosticCode.LenientXml, file, 0, $"not well-formed XML, read as ES-DE reads it: {leniency}");
             }
             catch (XmlException e)
             {
@@ -148,7 +150,6 @@ namespace EmuSen.Mistress.BigPicture.Theme
             }
             FilesRead.Add(file);
 
-            XElement root = document.Root!;
             if (root.Name.LocalName != "theme")
             {
                 Error(ThemeDiagnosticCode.WrongRoot, file, Line(root), $"root is <{root.Name.LocalName}>, not <theme>");
@@ -180,6 +181,12 @@ namespace EmuSen.Mistress.BigPicture.Theme
                     children.Add(child);
                     continue;
                 }
+                if (tag == "transitions" && kind == Block.Theme)
+                {
+                    if (_variantDepth > 0) { children.Add(child); continue; }
+                    Warn(ThemeDiagnosticCode.IgnoredTag, file, Line(child), "<transitions> outside any <variant> is ignored, as ES-DE ignores it");
+                    continue;
+                }
                 bool known = Allowed[Block.Theme].Contains(tag) || tag == "transitions";
                 Error(known ? ThemeDiagnosticCode.MisplacedTag : ThemeDiagnosticCode.UnknownTag, file, Line(child),
                     known ? $"<{tag}> is not allowed inside <{block.Name.LocalName}>" : $"<{tag}> is not a theme tag");
@@ -196,7 +203,12 @@ namespace EmuSen.Mistress.BigPicture.Theme
             foreach (XElement i in children.Where(c => c.Name.LocalName == "include")) Include(i, file);
             foreach (XElement v in children.Where(c => c.Name.LocalName == "view")) View(v, file);
             foreach (XElement v in children.Where(c => c.Name.LocalName == "variant"))
-                if (VariantApplies(v, file)) ProcessBlock(v, file, Block.Variant);
+                if (VariantApplies(v, file))
+                {
+                    _variantDepth++;
+                    ProcessBlock(v, file, Block.Variant);
+                    _variantDepth--;
+                }
             foreach (XElement a in children.Where(c => c.Name.LocalName == "aspectRatio"))
                 if (Selected(a, file, "aspect ratio", n => ThemeCapabilities.Ratio(n) is not null, _selection.AspectRatio)) ProcessBlock(a, file, Block.AspectRatio);
         }

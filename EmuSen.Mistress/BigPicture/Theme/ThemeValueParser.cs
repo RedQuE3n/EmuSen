@@ -34,6 +34,62 @@ namespace EmuSen.Mistress.BigPicture.Theme
             return true;
         }
 
+        // ES-DE's reading of a BOOLEAN: true when the first character is t, T, y, Y or 1, never an error - see EmuSen_BigPicture.md §31.2.
+        public static bool EsdeBool(string text, out bool exact)
+        {
+            exact = text.ToLowerInvariant() is "true" or "false" or "1" or "0";
+            return text.Length > 0 && text[0] is 't' or 'T' or 'y' or 'Y' or '1';
+        }
+
+        // ES-DE's reading of a FLOAT: the leading number after any whitespace, 0 when there is none - see EmuSen_BigPicture.md §31.2.
+        public static float EsdeFloat(string text, out bool exact)
+        {
+            int start = 0;
+            while (start < text.Length && char.IsWhiteSpace(text[start])) start++;
+            int end = NumberEnd(text, start);
+            exact = end > start && text[end..].Trim().Length == 0;
+            if (end == start || !TryParseFloat(text[start..end], out float value)) return 0f;
+            return value;
+        }
+
+        // ES-DE's reading of a NORMALIZED_PAIR: split at the first space, each side read as a FLOAT; false when there is no space - see §31.2.
+        public static bool EsdePair(string text, out NormalizedPair pair, out bool exact)
+        {
+            pair = default;
+            exact = false;
+            int space = text.IndexOf(' ');
+            if (space < 0) return false;
+            float x = EsdeFloat(text[..space], out bool xExact);
+            float y = EsdeFloat(text[(space + 1)..], out bool yExact);
+            pair = new NormalizedPair(x, y);
+            exact = xExact && yExact && TryParsePair(text, out _);
+            return true;
+        }
+
+        // The end of the longest decimal number at start: sign, digits, a point, digits, an exponent.
+        private static int NumberEnd(string text, int start)
+        {
+            int i = start;
+            if (i < text.Length && text[i] is '+' or '-') i++;
+            int digits = 0;
+            while (i < text.Length && char.IsAsciiDigit(text[i])) { i++; digits++; }
+            if (i < text.Length && text[i] == '.')
+            {
+                i++;
+                while (i < text.Length && char.IsAsciiDigit(text[i])) { i++; digits++; }
+            }
+            if (digits == 0) return start;
+            if (i < text.Length && text[i] is 'e' or 'E')
+            {
+                int j = i + 1;
+                if (j < text.Length && text[j] is '+' or '-') j++;
+                int k = j;
+                while (k < text.Length && char.IsAsciiDigit(text[k])) k++;
+                if (k > j) i = k;
+            }
+            return i;
+        }
+
         // ./ is the file's folder, ~ is home, and backslashes are separators - see EmuSen_BigPicture.md §12.2.
         public static string ResolvePath(string written, string file)
         {

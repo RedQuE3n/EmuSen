@@ -105,6 +105,19 @@ namespace EmuSen.Mistress.Scraping
                 stop_reason     TEXT
             );
             """,
+            """
+            CREATE TABLE store_move (
+                from_path  TEXT    NOT NULL,
+                to_path    TEXT    NOT NULL,
+                how        TEXT    NOT NULL CHECK (how IN ('moved', 'copied', 'found')),
+                at         TEXT    NOT NULL,
+                PRIMARY KEY (from_path, to_path)
+            );
+            CREATE TABLE store_step (
+                name     TEXT    PRIMARY KEY,
+                done_at  TEXT    NOT NULL
+            );
+            """,
         };
 
         public static int SchemaVersion => Migrations.Length;
@@ -121,7 +134,7 @@ namespace EmuSen.Mistress.Scraping
             Root = root;
         }
 
-        // The media folder: <root>/<es-de system>/<type folder>/<rom stem>.<ext>, and media.db in it.
+        // The media folder: <root>/<es-de system>/<type folder>/<game's folder>/<rom stem>.<ext>, and media.db in it (§30).
         public string Root { get; }
 
         public bool IsOpen => !_closed;
@@ -373,7 +386,7 @@ namespace EmuSen.Mistress.Scraping
         }
 
         // ES-DE's Clear for one game: its answer and its pictures go, from media.db and from this store's folders only; the ROM, the player's covers and an ES-DE folder are never touched - see EmuSen_Settings_Reference.md §4.59.
-        public IReadOnlyList<string> Forget(string path, string? system)
+        public IReadOnlyList<string> Forget(string path, string? system, string folder = "")
         {
             var files = new List<string>();
             lock (_gate)
@@ -408,9 +421,9 @@ namespace EmuSen.Mistress.Scraping
             if (!string.IsNullOrEmpty(system))
             {
                 string stem = System.IO.Path.GetFileNameWithoutExtension(path);
-                foreach (string folder in BigPicture.Scene.EsdeMediaFolder.Folders.Values)
+                foreach (string type in BigPicture.Scene.EsdeMediaFolder.Folders.Values)
                 {
-                    string dir = System.IO.Path.Combine(Root, system, folder);
+                    string dir = System.IO.Path.Combine(Root, system, type, folder.Replace('/', System.IO.Path.DirectorySeparatorChar));
                     if (Directory.Exists(dir)) files.AddRange(Directory.EnumerateFiles(dir, stem + ".*").Where(f => System.IO.Path.GetFileNameWithoutExtension(f) == stem));
                 }
             }
@@ -424,6 +437,120 @@ namespace EmuSen.Mistress.Scraping
                 deleted.Add(file);
             }
             return deleted;
+        }
+
+        // --- the store's layout (§30) ---
+
+        public const string FoldersStep = "folders";
+
+        public static string Relative(string system, string kindFolder, string folder, string fileName) =>
+            System.IO.Path.Combine(system, kindFolder, folder.Replace('/', System.IO.Path.DirectorySeparatorChar), fileName);
+
+        private static string[] Parts(string relative) => relative.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
+
+        public static string SystemOf(string relative) => Parts(relative) is { Length: > 0 } p ? p[0] : "";
+
+        public static string KindFolderOf(string relative) => Parts(relative) switch { { Length: >= 3 } p => p[1], { Length: 2 } p => p[0], _ => "" };
+
+        // The game's folder a stored file sits in, '/'-separated; "" for <system>/<type>/<file>.
+        public static string FolderOf(string relative) => Parts(relative) is { Length: > 3 } p ? string.Join('/', p[2..^1]) : "";
+
+        public bool Done(string step)
+        {
+            lock (_gate) return !_closed && Scalar(_db, null, $"SELECT 1 FROM store_step WHERE name = '{step}'") is not null;
+        }
+
+        // Once: a picture stored flat for a game in a folder goes to that folder, moved when no game at the top shares it, else copied; nothing is deleted and every step is logged - see EmuSen_BigPicture.md §30.
+        public int PutInFolders(Func<string, string> folderOf, DateTimeOffset now)
+        {
+            lock (_gate)
+            {
+                if (_closed || Scalar(_db, null, $"SELECT 1 FROM store_step WHERE name = '{FoldersStep}'") is not null) return 0;
+                var rows = new List<(string Md5, long Bytes, string Type, string Path)>();
+                using (SqliteCommand read = _db.CreateCommand())
+                {
+                    read.CommandText = "SELECT md5, bytes, type, path FROM scrape_media";
+                    using SqliteDataReader row = read.ExecuteReader();
+                    while (row.Read()) rows.Add((row.GetString(0), row.GetInt64(1), row.GetString(2), row.GetString(3)));
+                }
+                var roms = new Dictionary<(string, long), List<string>>();
+                using (SqliteCommand read = _db.CreateCommand())
+                {
+                    read.CommandText = "SELECT path, md5, bytes FROM scrape_file";
+                    using SqliteDataReader row = read.ExecuteReader();
+                    while (row.Read())
+                    {
+                        if (!roms.TryGetValue((row.GetString(1), row.GetInt64(2)), out List<string>? paths)) roms[(row.GetString(1), row.GetInt64(2))] = paths = new List<string>();
+                        paths.Add(row.GetString(0));
+                    }
+                }
+
+                var plan = new Dictionary<string, (List<(string Md5, long Bytes, string Type, string? Folder)> Rows, SortedSet<string> Folders, bool Top)>(StringComparer.Ordinal);
+                foreach ((string md5, long bytes, string type, string path) in rows)
+                {
+                    if (Parts(path).Length != 3) continue;
+                    string stem = System.IO.Path.GetFileNameWithoutExtension(path);
+                    var folders = roms.GetValueOrDefault((md5, bytes), []).Where(p => System.IO.Path.GetFileNameWithoutExtension(p) == stem).Select(folderOf).ToList();
+                    if (!plan.TryGetValue(path, out var entry)) plan[path] = entry = (new(), new SortedSet<string>(StringComparer.Ordinal), false);
+                    string? own = folders.Where(f => f.Length > 0).Order(StringComparer.Ordinal).FirstOrDefault();
+                    entry.Rows.Add((md5, bytes, type, folders.Contains("") ? null : own));
+                    entry.Folders.UnionWith(folders.Where(f => f.Length > 0));
+                    plan[path] = (entry.Rows, entry.Folders, entry.Top || folders.Contains(""));
+                }
+
+                int carried = 0;
+                foreach ((string flat, var entry) in plan)
+                {
+                    if (entry.Folders.Count == 0) continue;
+                    string source = System.IO.Path.Combine(Root, flat), system = SystemOf(flat), kind = KindFolderOf(flat), name = System.IO.Path.GetFileName(flat);
+                    List<string> targets = entry.Folders.Select(f => Relative(system, kind, f, name)).ToList();
+                    for (int i = 0; i < targets.Count; i++)
+                    {
+                        string full = System.IO.Path.Combine(Root, targets[i]);
+                        string how;
+                        if (File.Exists(full)) how = "found";
+                        else if (!File.Exists(source)) continue;
+                        else
+                        {
+                            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(full)!);
+                            bool move = i == targets.Count - 1 && !entry.Top;
+                            if (move) File.Move(source, full, overwrite: false);
+                            else File.Copy(source, full, overwrite: false);
+                            how = move ? "moved" : "copied";
+                            carried++;
+                        }
+                        Write("INSERT OR REPLACE INTO store_move (from_path, to_path, how, at) VALUES ($from, $to, $how, $at)",
+                            ("$from", flat), ("$to", targets[i]), ("$how", how), ("$at", Stamp(now)));
+                    }
+
+                    foreach ((string md5, long bytes, string type, string? folder) in entry.Rows)
+                    {
+                        if (folder is null) continue;
+                        string target = Relative(system, kind, folder, name);
+                        if (File.Exists(System.IO.Path.Combine(Root, target)))
+                            Write("UPDATE scrape_media SET path = $path WHERE md5 = $md5 AND bytes = $bytes AND type = $type",
+                                ("$path", target), ("$md5", md5), ("$bytes", bytes), ("$type", type));
+                    }
+                }
+
+                Write("INSERT INTO store_step (name, done_at) VALUES ($name, $at)", ("$name", FoldersStep), ("$at", Stamp(now)));
+                return carried;
+            }
+        }
+
+        // What the layout step did, file by file, oldest first.
+        public IReadOnlyList<(string From, string To, string How)> Moves()
+        {
+            var all = new List<(string, string, string)>();
+            lock (_gate)
+            {
+                if (_closed) return all;
+                using SqliteCommand command = _db.CreateCommand();
+                command.CommandText = "SELECT from_path, to_path, how FROM store_move ORDER BY at, from_path, to_path";
+                using SqliteDataReader row = command.ExecuteReader();
+                while (row.Read()) all.Add((row.GetString(0), row.GetString(1), row.GetString(2)));
+            }
+            return all;
         }
 
         // --- the quota's day ---

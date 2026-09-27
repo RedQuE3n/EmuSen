@@ -77,5 +77,26 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 try { Directory.Delete(esde, recursive: true); } catch { }
             }
         }, default);
+
+        // A store an earlier build wrote flat is put in folders when Mistress opens it, and the game shows its picture from there.
+        [Fact]
+        public Task Mistress_puts_its_own_store_in_folders_when_it_opens_it_and_the_picture_is_still_found() => Session.Dispatch(() =>
+        {
+            string flat = "";
+            using var s = new ThemedSession(roms: roms =>
+            {
+                RegionFolders(roms);
+                using MediaStore store = MediaStore.Open(MediaStore.DefaultRoot);
+                string rom = Path.Combine(roms, "NES", "USA", UsaGame + ".nes");
+                store.RememberFile(rom, 64, 1, "u");
+                store.Record(new ScrapedRecord("u", 64, ScrapeState.Found) { FetchedAt = DateTime.UtcNow });
+                store.RecordMedia("u", 64, new StoredMedia("cover", Path.Combine("nes", "covers", UsaGame + ".png"), "us", null), DateTimeOffset.UtcNow);
+                flat = Touch(Path.Combine(MediaStore.DefaultRoot, "nes", "covers", UsaGame + ".png"));
+            });
+            string foldered = Path.Combine(MediaStore.DefaultRoot, "nes", "covers", "USA", UsaGame + ".png");
+            Assert.True(File.Exists(foldered));
+            Assert.False(File.Exists(flat));
+            Assert.Equal(foldered, Sources(s).Cover("nes", Path.Combine(s.RomDirectory, "NES", "USA", UsaGame + ".nes")));
+        }, default);
     }
 }

@@ -38,12 +38,15 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             try { Directory.Delete(_root, recursive: true); } catch { }
         }
 
-        private Scraper Start(ScrapeChoices? choices = null, Func<string, string, bool>? handCover = null, bool start = true)
+        private Scraper Start(ScrapeChoices? choices = null, Func<string, string, bool>? handCover = null, bool start = true, Func<string, string>? folderOf = null)
         {
             var client = new ScreenScraperClient(new HttpClient(_server), FakeScreenScraper.Developer, null);
             ScrapeChoices chosen = choices ?? new ScrapeChoices();
             var scraper = new Scraper(client, _store, _quota, () => chosen, handCover ?? ((_, _) => false),
-                path => CoreCatalog.ByExtension(Path.GetExtension(path))?.OpenVgdbBytes, _results.Add, _clock) { IdlePoll = TimeSpan.FromMilliseconds(20) };
+                path => CoreCatalog.ByExtension(Path.GetExtension(path))?.OpenVgdbBytes, _results.Add, _clock)
+            {
+                IdlePoll = TimeSpan.FromMilliseconds(20), FolderOf = folderOf ?? (_ => ""),
+            };
             _open.Add(scraper);
             if (start) scraper.Start();
             return scraper;
@@ -289,6 +292,38 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Equal(ScrapeOutcome.Found, Next().Outcome);
             Assert.True(File.Exists(Stored("snes", "covers", "F-Zero (copy).png")));
             Assert.True(File.Exists(Stored("snes", "covers", "F-Zero.png")));
+            Assert.Equal(asked, _server.Asked.Count);
+        }
+
+        // ES-DE keeps a foldered game's media under its folder (USERGUIDE, "Manually copying game media files"); a file moved to another folder takes them there (§30).
+        [Fact]
+        public void A_game_in_a_folder_keeps_its_media_under_that_folder_and_moved_to_another_folder_takes_them_with_it()
+        {
+            Directory.CreateDirectory(Path.Combine(Roms, "SNES", "USA"));
+            Directory.CreateDirectory(Path.Combine(Roms, "SNES", "Racing"));
+            string rom = Rom(Path.Combine("SNES", "USA", "F-Zero (USA).sfc"), Filled(2048, 21));
+            RomHashes h = RomHashes.Of(rom);
+            _server.Games.Add(new FakeGame(77, "F-Zero", h.Md5));
+            Scraper scraper = Start(folderOf: p => EmuSen.Mistress.Library.GameFolders.Of(Roms, p));
+            Queue(scraper, rom, "snes", ScrapePriority.Shown);
+            ScrapeResult first = Next();
+
+            string[] kinds = ["covers", "screenshots", "marquees", "miximages"];
+            foreach (string folder in kinds) Assert.True(File.Exists(Stored("snes", folder, "USA", "F-Zero (USA).png")), folder);
+            Assert.False(File.Exists(Stored("snes", "covers", "F-Zero (USA).png")));
+            Assert.All(_store.Media(h.Md5, h.Size), m => Assert.Equal("USA", MediaStore.FolderOf(m.RelativePath)));
+            Assert.Equal(["cover", "marquee", "miximage", "screenshot"], first.Written.Select(ScrapeProgress.KindOf).Order());
+            int asked = _server.Asked.Count;
+
+            string moved = Path.Combine(Roms, "SNES", "Racing", "F-Zero (USA).sfc");
+            File.Move(rom, moved);
+            Queue(scraper, moved, "snes", ScrapePriority.Shown);
+            Assert.Equal(ScrapeOutcome.Found, Next().Outcome);
+            foreach (string folder in kinds)
+            {
+                Assert.True(File.Exists(Stored("snes", folder, "Racing", "F-Zero (USA).png")), folder);
+                Assert.False(File.Exists(Stored("snes", folder, "USA", "F-Zero (USA).png")), folder);
+            }
             Assert.Equal(asked, _server.Asked.Count);
         }
 

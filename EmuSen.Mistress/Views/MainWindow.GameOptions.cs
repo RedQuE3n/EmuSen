@@ -178,7 +178,7 @@ namespace EmuSen.Mistress.Views
         {
             _records.ClearEdits(path);
             string? system = EmuSen.Cores.CoreCatalog.ShelfByName(EmuSen.Cores.CoreCatalog.ShelfFor(path) ?? "")?.EsdeSystem;
-            IReadOnlyList<string> gone = _mediaStore is { IsOpen: true } store ? store.Forget(path, system) : [];
+            IReadOnlyList<string> gone = _mediaStore is { IsOpen: true } store ? store.Forget(path, system, GameFolders.Of(_appSettings.RomDirectory, path)) : [];
             _scrapeGeneration++;
             ReadScrapeSnapshot();
             StatusText.Text = $"Cleared the metadata of {Path.GetFileNameWithoutExtension(path)}" + (gone.Count > 0 ? $" and {gone.Count} scraped picture(s)" : "");

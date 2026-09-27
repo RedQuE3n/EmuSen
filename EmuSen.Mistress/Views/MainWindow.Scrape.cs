@@ -82,6 +82,7 @@ namespace EmuSen.Mistress.Views
             try
             {
                 _mediaStore = MediaStore.Open(MediaStore.DefaultRoot);
+                PutStoreInFolders(_mediaStore);
                 _scrapeQuota = new ScrapeQuotaManager(_mediaStore, ScrapeClock);
                 _scrapeQuota.Changed += OnScrapeQuotaChanged;
                 return true;
@@ -90,6 +91,24 @@ namespace EmuSen.Mistress.Views
             {
                 StatusText.Text = $"The media store could not be opened: {ScrapeRedactor.Redact(ex.Message)}";
                 return false;
+            }
+        }
+
+        // The store's one layout step (§30), taken when the ROM folder that names each game's folder is known.
+        private void PutStoreInFolders(MediaStore store)
+        {
+            if (_appSettings.RomDirectory is not { Length: > 0 } roms) return;
+            int carried = store.PutInFolders(p => GameFolders.Of(roms, p), DateTimeOffset.Now);
+            if (carried > 0) StatusText.Text = $"Moved {carried} scraped picture(s) into their games' folders";
+        }
+
+        // The folder a ROM sits in below its console's, for where its media are stored (§30).
+        private Func<string, string> FolderOfRom
+        {
+            get
+            {
+                string? roms = _appSettings.RomDirectory;
+                return p => GameFolders.Of(roms, p);
             }
         }
 
@@ -211,7 +230,7 @@ namespace EmuSen.Mistress.Views
             var client = new ScreenScraperClient(_http, DeveloperSource()!, _member);
             _scrapeClient = client;
             _scraper = new Scraper(client, store, _scrapeQuota!, () => _scrapeChoices, HasHandCover, TransformFor,
-                result => Dispatcher.UIThread.Post(() => ScrapeArrived(result)), ScrapeClock) { Activity = run.Note };
+                result => Dispatcher.UIThread.Post(() => ScrapeArrived(result)), ScrapeClock) { Activity = run.Note, FolderOf = FolderOfRom };
             Scraper mine = _scraper;
             _scraper.Finished += end => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(_scraper, mine)) ScraperFinished(end); });
             _scraper.Start();

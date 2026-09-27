@@ -58,6 +58,9 @@ namespace EmuSen.Mistress.Scraping
             _clock = clock ?? SystemScrapeClock.Instance;
         }
 
+        // The folder a ROM sits in below its console's, which its media are stored under as ES-DE stores them (§30); called on a worker's thread.
+        public Func<string, string> FolderOf { get; init; } = _ => "";
+
         // Called with every jeuInfos answer, for the live measurement; its Body carries credentials and must be redacted before it is kept.
         public Action<string, JeuInfosAnswer>? Answered { get; init; }
 
@@ -341,7 +344,7 @@ namespace EmuSen.Mistress.Scraping
             {
                 if (stored.Any(s => s.Type == kind.EsdeType && File.Exists(Path.Combine(_store.Root, s.RelativePath)))) continue;
                 if (ScrapeRules.ChooseMedia(game.Media, kind, regions, choices.RegionFallback) is not { } media) continue;
-                string relative = Path.Combine(item.System, kind.Folder, stem + ScrapeRules.Extension(media));
+                string relative = MediaStore.Relative(item.System, kind.Folder, FolderOf(path), stem + ScrapeRules.Extension(media));
                 if (!await TurnAsync(stop)) break;
                 Activity?.Invoke(new ScrapeActivity(path, item.System, ScrapeStep.Downloading, kind.EsdeType));
                 MediaAnswer got = await _client.DownloadAsync(media.Url, Path.Combine(_store.Root, relative), stop);
@@ -367,7 +370,7 @@ namespace EmuSen.Mistress.Scraping
         private bool HasCover(string md5, long bytes, string system, string path) =>
             _store.Media(md5, bytes).Any(m => m.Type == ScrapeRules.Cover.EsdeType && File.Exists(Path.Combine(_store.Root, m.RelativePath)));
 
-        // A renamed file takes its media to its new name; a copy of the same game beside the old one gets copies, so the old file keeps its own.
+        // A renamed or moved file takes its media to its new name and folder; a copy of the same game beside the old one gets copies, so the old file keeps its own.
         private List<string> FollowRename(string md5, long bytes, string system, string path)
         {
             var moved = new List<string>();
@@ -375,11 +378,13 @@ namespace EmuSen.Mistress.Scraping
             foreach (StoredMedia media in _store.Media(md5, bytes))
             {
                 string old = Path.Combine(_store.Root, media.RelativePath);
-                string relative = Path.Combine(Path.GetDirectoryName(media.RelativePath)!, stem + Path.GetExtension(media.RelativePath));
+                string relative = MediaStore.Relative(MediaStore.SystemOf(media.RelativePath), MediaStore.KindFolderOf(media.RelativePath), FolderOf(path),
+                    stem + Path.GetExtension(media.RelativePath));
                 string target = Path.Combine(_store.Root, relative);
                 if (relative == media.RelativePath || !File.Exists(old) || File.Exists(target)) continue;
-                string oldStem = Path.GetFileNameWithoutExtension(media.RelativePath);
-                bool oldStillThere = _store.PathsOf(md5, bytes).Any(p => p != path && Path.GetFileNameWithoutExtension(p) == oldStem && File.Exists(p));
+                string oldStem = Path.GetFileNameWithoutExtension(media.RelativePath), oldFolder = MediaStore.FolderOf(media.RelativePath);
+                bool oldStillThere = _store.PathsOf(md5, bytes).Any(p => p != path && Path.GetFileNameWithoutExtension(p) == oldStem && FolderOf(p) == oldFolder && File.Exists(p));
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                 if (oldStillThere) File.Copy(old, target, overwrite: false);
                 else File.Move(old, target, overwrite: false);
                 _store.RecordMedia(md5, bytes, media with { RelativePath = relative }, _clock.Now);

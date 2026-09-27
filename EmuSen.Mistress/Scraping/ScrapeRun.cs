@@ -149,10 +149,10 @@ namespace EmuSen.Mistress.Scraping
             Touch();
         }
 
-        // The ES-DE folder a written file sits in names its kind: snes/covers/x.png is a cover.
+        // The ES-DE type folder a written file sits in names its kind: snes/covers/x.png and nes/covers/USA/x.png are covers.
         public static string KindOf(string relative)
         {
-            string folder = System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(relative) ?? "");
+            string folder = MediaStore.KindFolderOf(relative);
             return ScrapeRules.AllKinds.FirstOrDefault(k => k.Folder == folder)?.EsdeType ?? folder;
         }
 

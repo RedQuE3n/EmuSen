@@ -17,7 +17,7 @@ using EmuSen.WiseMan.Fixtures;
 namespace EmuSen.WiseMan.Mistress
 {
     // One store for the whole class: LunaP reads the remembered choice through whichever store it first saw - see EmuSen_LunaP.md §8.2.
-    public sealed class ThemeStore : IDisposable
+    public sealed class ThemeStore : IAsyncLifetime
     {
         private readonly ISettingsStore? _previous = LunaSettings.Store;
 
@@ -31,9 +31,12 @@ namespace EmuSen.WiseMan.Mistress
 
         public string Root { get; }
 
-        public void Dispose()
+        public Task InitializeAsync() => Task.CompletedTask;
+
+        // On the session's dispatcher: off it there is no Application, and Apply does nothing - see EmuSen_Settings_Reference.md §4.77.3.
+        public async Task DisposeAsync()
         {
-            LunaTheme.Apply(LunaTheme.BuiltIn);
+            await UiTest.Run(() => LunaTheme.Apply(LunaTheme.BuiltIn));
             LunaSettings.Store = _previous;
             try { Directory.Delete(Root, recursive: true); } catch { }
         }
@@ -41,7 +44,7 @@ namespace EmuSen.WiseMan.Mistress
 
     // The theme picker `man theme` promises - see EmuSen_LunaP.md §8.2.
     [Collection(TestCollections.ProcessGlobals)]
-    public class PreferencesThemeTests : IClassFixture<ThemeStore>, IDisposable
+    public class PreferencesThemeTests : IClassFixture<ThemeStore>, IAsyncLifetime
     {
         private readonly string _root;
 
@@ -50,11 +53,12 @@ namespace EmuSen.WiseMan.Mistress
             _root = store.Root;
 
             foreach (string file in Directory.GetFiles(LunaTheme.Directory)) File.Delete(file);
-            LunaTheme.Apply(LunaTheme.BuiltIn);
         }
 
-        // The applied theme is process-global, so a test that left one on would tint every window after it.
-        public void Dispose() => LunaTheme.Apply(LunaTheme.BuiltIn);
+        // The applied theme is process-global, so a test that left one on would tint every window after it; reset on the dispatcher, where Apply has an Application to act on.
+        public Task InitializeAsync() => UiTest.Run(() => LunaTheme.Apply(LunaTheme.BuiltIn));
+
+        public Task DisposeAsync() => UiTest.Run(() => LunaTheme.Apply(LunaTheme.BuiltIn));
 
         private void WriteTheme(string name, string surface) =>
             File.WriteAllText(Path.Combine(LunaTheme.Directory, name + ".css"),

@@ -369,13 +369,15 @@ namespace EmuSen.Mistress.BigPicture.Theme
                     Error(ThemeDiagnosticCode.NoValue, file, Line(property), $"property \"{name}\" for element \"{spec.Type}\" has no value defined");
                     continue;
                 }
-                string text = Substitute(written, out IReadOnlyList<string> undefined);
+                string text = Substitute(written, out IReadOnlyList<string> undefined, blank: true);
                 if (undefined.Count > 0)
+                    Warn(ThemeDiagnosticCode.UndefinedVariable, file, Line(property), $"<{name}> uses undefined {string.Join(", ", undefined.Select(u => "${" + u + "}"))}, read as empty, as ES-DE reads it");
+                bool fromVariable = written.Contains("${", StringComparison.Ordinal);
+                if (text.Length == 0 && undefined.Count > 0)
                 {
-                    Error(ThemeDiagnosticCode.UndefinedVariable, file, Line(property), $"<{name}> uses undefined {string.Join(", ", undefined.Select(u => "${" + u + "}"))}");
+                    Error(ThemeDiagnosticCode.NoValue, file, Line(property), $"property \"{name}\" for element \"{spec.Type}\" has no value defined once its undefined variables are read as empty; ES-DE refuses it too");
                     continue;
                 }
-                bool fromVariable = written.Contains("${", StringComparison.Ordinal);
                 if (text.Trim().Length == 0)
                 {
                     Warn(ThemeDiagnosticCode.NoValue, file, Line(property), $"<{name}> is empty once its variables are substituted, and is ignored");
@@ -386,15 +388,15 @@ namespace EmuSen.Mistress.BigPicture.Theme
             return properties;
         }
 
-        // One pass: each reference becomes the variable's value, which was itself substituted when it was defined.
-        private string Substitute(string text, out IReadOnlyList<string> undefined)
+        // One pass: each reference becomes the variable's value, which was itself substituted when it was defined; an undefined one, in a property, nothing (§38).
+        private string Substitute(string text, out IReadOnlyList<string> undefined, bool blank = false)
         {
             var missing = new List<string>();
             string result = Reference.Replace(text, m =>
             {
                 if (_variables.TryGetValue(m.Groups[1].Value, out string? value)) return value;
                 missing.Add(m.Groups[1].Value);
-                return m.Value;
+                return blank ? "" : m.Value;
             });
             undefined = missing;
             return result;

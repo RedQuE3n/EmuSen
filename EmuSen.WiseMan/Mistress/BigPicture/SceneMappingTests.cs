@@ -190,6 +190,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             C("carousel", "reflections", "false", "true") with { Context = "itemSize=0.3 0.3" },
             C("carousel", "reflectionsOpacity", "0.5", "1") with { Context = "itemSize=0.3 0.3;reflections=true" },
             C("carousel", "reflectionsFalloff", "1", "3") with { Context = "itemSize=0.3 0.3;reflections=true" },
+            C("carousel", "selectedItemMargins", "0 0", "0.1 0.05") with { Context = "itemSize=0.2 0.3;itemScale=1" },
+            C("carousel", "lineSpacing", "1", "2.5") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF;fontSize=0.07;text=Several words that wrap" },
             C("carousel", "itemTransitions", "animate", "instant") with { Moves = "step", At = 100 },
             C("carousel", "fastScrolling", "false", "true") with { Moves = "hold", At = 2000 },
             C("textlist", "textHorizontalScrolling", "false", "true") with { Context = "size=0.3 1", At = 4000 },

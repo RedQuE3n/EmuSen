@@ -28,7 +28,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
                 "imageSaturation", "itemHorizontalAlignment", "itemVerticalAlignment", "unfocusedItemOpacity", "unfocusedItemSaturation", "unfocusedItemDimming",
                 "color", "colorEnd", "gradientType", "text", "textRelativeScale", "textColor", "textBackgroundColor", "fontPath", "fontSize", "letterCase", "itemTransitions", "fastScrolling",
                 "itemRotation", "itemRotationOrigin", "itemsBeforeCenter", "itemsAfterCenter", "itemAxisHorizontal", "wheelHorizontalAlignment", "wheelVerticalAlignment",
-                "horizontalOffset", "verticalOffset", "reflections", "reflectionsOpacity", "reflectionsFalloff"),
+                "horizontalOffset", "verticalOffset", "reflections", "reflectionsOpacity", "reflectionsFalloff", "selectedItemMargins", "lineSpacing"),
             ["textlist"] = Set("selectorHeight", "selectorVerticalOffset", "selectorColor", "primaryColor", "secondaryColor", "selectedColor", "selectedSecondaryColor",
                 "selectedBackgroundColor", "selectedBackgroundMargins", "selectedBackgroundCornerRadius", "fontPath", "fontSize", "horizontalAlignment", "horizontalMargin",
                 "letterCase", "lineSpacing", "systemNameSuffix", "letterCaseSystemNameSuffix", "indicators", "collectionIndicators", "textHorizontalScrolling", "textHorizontalScrollSpeed",

@@ -45,6 +45,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ["hClip"] = "<type>horizontal</type><pos>0 0.45</pos><size>1 0.1</size><itemSize>0.15 0.2</itemSize><maxItemCount>5</maxItemCount><color>202020FF</color>",
             ["hReflB"] = "<type>horizontal</type><pos>0 0.2</pos><size>1 0.5</size><itemSize>0.15 0.2</itemSize><maxItemCount>5</maxItemCount><reflections>true</reflections><reflectionsOpacity>1</reflectionsOpacity><reflectionsFalloff>2</reflectionsFalloff><verticalOffset>-0.2</verticalOffset><color>202020FF</color>",
             ["hScaleTop"] = "<type>horizontal</type><pos>0 0.3</pos><size>1 0.4</size><itemSize>0.15 0.2</itemSize><maxItemCount>5</maxItemCount><itemScale>1.5</itemScale><itemVerticalAlignment>top</itemVerticalAlignment><color>202020FF</color>",
+            ["mH"] = "<type>horizontal</type><pos>0 0.3</pos><size>1 0.4</size><itemSize>0.12 0.2</itemSize><maxItemCount>5</maxItemCount><selectedItemMargins>0.1 0.05</selectedItemMargins><color>202020FF</color>",
+            ["mHneg"] = "<type>horizontal</type><pos>0 0.3</pos><size>1 0.4</size><itemSize>0.12 0.2</itemSize><maxItemCount>5</maxItemCount><selectedItemMargins>-0.05 -0.02</selectedItemMargins><color>202020FF</color>",
+            ["mHscale"] = "<type>horizontal</type><pos>0 0.3</pos><size>1 0.4</size><itemSize>0.12 0.2</itemSize><maxItemCount>5</maxItemCount><selectedItemMargins>0.04 0.04</selectedItemMargins><itemScale>1.3</itemScale><color>202020FF</color>",
+            ["mHhalf"] = "<type>horizontal</type><pos>0.25 0.3</pos><size>0.5 0.4</size><itemSize>0.08 0.2</itemSize><maxItemCount>5</maxItemCount><selectedItemMargins>0.1 0.1</selectedItemMargins><color>202020FF</color>",
+            ["mV"] = "<type>vertical</type><pos>0.3 0</pos><size>0.4 1</size><itemSize>0.2 0.08</itemSize><maxItemCount>7</maxItemCount><selectedItemMargins>0.1 0.05</selectedItemMargins><color>202020FF</color>",
+            ["mVhalf"] = "<type>vertical</type><pos>0.3 0.25</pos><size>0.4 0.5</size><itemSize>0.2 0.06</itemSize><maxItemCount>5</maxItemCount><selectedItemMargins>0.05 0.05</selectedItemMargins><color>202020FF</color>",
             ["hRefl"] = "<type>horizontal</type><pos>0 0.2</pos><size>1 0.5</size><itemSize>0.15 0.2</itemSize><maxItemCount>5</maxItemCount><reflections>true</reflections><color>202020FF</color>",
             ["hReflScale"] = "<type>horizontal</type><pos>0 0.2</pos><size>1 0.5</size><itemSize>0.15 0.2</itemSize><maxItemCount>5</maxItemCount><reflections>true</reflections><itemScale>1.5</itemScale><unfocusedItemOpacity>0.5</unfocusedItemOpacity><color>202020FF</color>",
         };
@@ -69,6 +75,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ["hOff"] = [("gb", 194.4, 420.7), ("gba", 450.4, 420.7), ("gbc", 706.4, 420.7), ("snes", 962.4, 420.7), ("gamegear", 1202.4, 421.0)],
             ["hClip"] = [("gba", 129.9, 400.4), ("gbc", 385.9, 400.4), ("snes", 641.9, 400.4), ("gamegear", 897.9, 400.4), ("genesis", 1153.9, 400.4)],
             ["hReflB"] = [("gba", 129.6, 205.9), ("gbc", 385.6, 205.9), ("snes", 641.6, 205.9), ("gamegear", 897.6, 205.9), ("genesis", 1153.6, 205.9)],
+            ["mH"] = [("gbc", 258.1, 400.1), ("snes", 642.1, 400.1), ("gamegear", 962.1, 400.1)],
+            ["mHneg"] = [("gba", 194.1, 400.1), ("gbc", 450.1, 400.1), ("snes", 642.1, 400.1), ("gamegear", 873.0, 400.0), ("genesis", 1129.0, 400.0)],
+            ["mHscale"] = [("gba", 79.0, 400.5), ("gbc", 335.0, 400.5), ("snes", 642.6, 400.8), ("gamegear", 949.0, 400.5), ("genesis", 1205.0, 400.5)],
+            ["mHhalf"] = [("gbc", 385.2, 399.7), ("snes", 641.2, 399.7), ("gamegear", 897.2, 399.7)],
+            ["mV"] = [("gba", 641.7, 91.4), ("gbc", 641.5, 206.4), ("snes", 641.5, 400.4), ("gamegear", 641.5, 554.4), ("genesis", 641.5, 669.4)],
+            ["mVhalf"] = [("gbc", 641.1, 280.2), ("snes", 641.1, 400.2), ("gamegear", 641.1, 520.2)],
             ["hScaleTop"] = [("gba", 130.4, 288.7), ("gbc", 386.4, 288.7), ("snes", 644.0, 313.4), ("gamegear", 898.4, 288.7), ("genesis", 1154.4, 288.7)],
         };
 

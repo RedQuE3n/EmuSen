@@ -79,10 +79,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return media;
         }
 
-        internal static ThemedSession Open(Action<BigPictureInterface>? saver = null, double width = 1280, double height = 800, Action<AppSettings>? more = null)
+        internal static ThemedSession Open(Action<BigPictureInterface>? saver = null, double width = 1280, double height = 800, Action<AppSettings>? more = null, string? extraGamelist = null)
         {
             string? media = null;
-            var s = new ThemedSession(width, height, settings: a =>
+            var s = new ThemedSession(width, height, extraGamelist: extraGamelist, settings: a =>
             {
                 a.EsdeMediaDirectory = media;
                 a.BigPictureInterface.ScreensaverTimer = 300000;
@@ -604,6 +604,34 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(s.Shown);
             s.Run(61000, step: 1000);
             Assert.NotNull(Saver(s));
+            // The key that wakes it is only that, even F10, which would otherwise leave big picture.
+            BigPictureSwitchTests.Press(s, Key.F10);
+            Assert.Null(Saver(s));
+            Assert.True(s.Shown);
+        }, default);
+
+        // A theme whose text scrolls asks for frames; under the screensaver it asks for none and draws none, and once woken it asks again.
+        [Fact]
+        public Task The_view_beneath_asks_for_no_frame_while_it_shows() => Session.Dispatch(() =>
+        {
+            const string ticker = "<text name=\"ticker\"><pos>0.55 0.85</pos><size>0.2 0.05</size><fontSize>0.04</fontSize>" +
+                                  "<text>A literal line much too long for the small box it has been given in this theme</text>" +
+                                  "<container>true</container><containerType>horizontal</containerType><containerStartDelay>2</containerStartDelay></text>";
+            using var s = Open(i => i.ScreensaverTimer = 60000, extraGamelist: ticker);
+            ThemedLibraryPadTests.Enter(s, "snes");
+            s.Settle();
+            Assert.NotNull(s.WakeAt);
+            s.Run(59000, step: 1000);
+            while (Saver(s) is null) s.Run(16);
+            Assert.Null(s.WakeAt);
+            int themed = s.FramesDrawn;
+            Assert.Equal(0, s.Loop(30000));
+            Assert.Null(s.WakeAt);
+            Assert.Equal(themed, s.FramesDrawn);
+            s.Pad.B();
+            Assert.Null(Saver(s));
+            Assert.NotNull(s.WakeAt);
+            Assert.True(s.Loop(3000) > 0);
         }, default);
 
         // A window closed while it shows stops its timer, so nothing is drawn afterwards (§15.14's lesson).

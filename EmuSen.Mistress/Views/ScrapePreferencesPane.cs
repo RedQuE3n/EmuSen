@@ -42,8 +42,9 @@ namespace EmuSen.Mistress.Views
 
         // OpenVGDB's download and its Remove (Q42) - see EmuSen_Settings_Reference.md §4.65.
         long? OpenVgdbBytes => null;
-        bool CanRemoveOpenVgdb => false;
+        bool OpenVgdbBusy => true;
         System.Threading.Tasks.Task<string?> RemoveOpenVgdbAsync() => System.Threading.Tasks.Task.FromResult<string?>(null);
+        System.Threading.Tasks.Task<string> DownloadOpenVgdbAsync() => System.Threading.Tasks.Task.FromResult("");
     }
 
     // Preferences' Scraping tab: ScreenScraper, the member account, what to fetch, region and language, the quota, and OpenEmu's failover - see EmuSen_Settings_Reference.md §4.60.
@@ -82,6 +83,7 @@ namespace EmuSen.Mistress.Views
         private readonly ProgressBar _progress = new() { Name = "ScrapeProgressBar", Minimum = 0, Maximum = 1, HorizontalAlignment = HorizontalAlignment.Stretch };
         private readonly TextBlock _vgdbText = new() { Name = "OpenVgdbStatusText", TextWrapping = Avalonia.Media.TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
         private readonly Button _vgdbRemove = Ui.Button("Remove", () => { });
+        private readonly Button _vgdbDownload = Ui.Button("Download", () => { });
         private readonly HintText _vgdbMessage = new() { Name = "OpenVgdbRemoveMessage" };
         private LunaSwitch? _fallback;
 
@@ -118,6 +120,8 @@ namespace EmuSen.Mistress.Views
             _cancel.Click += (_, _) => { _host?.CancelScrape(); Show(); };
             _vgdbRemove.Name = "OpenVgdbRemoveButton";
             _vgdbRemove.Click += async (_, _) => await RemoveOpenVgdbAsync();
+            _vgdbDownload.Name = "OpenVgdbDownloadButton";
+            _vgdbDownload.Click += async (_, _) => await DownloadOpenVgdbAsync();
 
             string developer = _host?.DeveloperOrigin switch
             {
@@ -186,12 +190,13 @@ namespace EmuSen.Mistress.Views
                 new FieldRow
                 {
                     Label = "OpenEmu Failover",
-                    Hint = "Only for a game ScreenScraper has no cover for, or while ScreenScraper cannot be used (no developer file, today's quota used up, the service closed or refusing this build). "
-                        + "Mistress then downloads OpenVGDB, the game database OpenEmu uses (about 9 MB, from GitHub), and asks thumbnails.libretro.com for the game's box, then the address OpenVGDB gives (GameFAQs). "
-                        + "Those servers see which of those games you have. OpenVGDB states no licence and the covers are other people's scans. They are kept in home/Media/openemu.",
+                    Hint = "Only for a game ScreenScraper has no cover for, or while ScreenScraper cannot be used (no developer credentials, today's quota used up, the service closed or refusing this build). "
+                        + "Mistress then downloads OpenVGDB, the game database OpenEmu uses (about 9 MB from GitHub, 42 MB unpacked), and asks thumbnails.libretro.com for the game's box, then the address OpenVGDB gives (GameFAQs). "
+                        + "Those servers see which of those games you have. OpenVGDB states no licence and the covers are other people's scans. They are kept in home/Media/openemu. "
+                        + "Removing OpenVGDB is optional and only frees its space: the fallback is off until it is downloaded again, and nothing removes it on its own.",
                     Content = Ui.Stack(6,
                         _fallback = Switch("OpenEmuFallbackSwitch", "Use OpenEmu's sources (OpenVGDB and libretro thumbnails) when ScreenScraper has nothing", _settings.OpenEmuFallback, v => _settings.OpenEmuFallback = v),
-                        Ui.Row(8, _vgdbRemove, _vgdbText), _vgdbMessage),
+                        _vgdbText, Ui.Row(8, _vgdbRemove, _vgdbDownload), _vgdbMessage),
                 },
             ];
         }
@@ -263,15 +268,17 @@ namespace EmuSen.Mistress.Views
             _memberText.Text = text;
         }
 
-        // Q42: what is on disk, and Remove only while nothing is using it; nothing ever deletes it but this button.
+        // Q42: what is on disk, Remove while it is there and Download while it is not, neither while a run uses it; nothing ever deletes it but Remove.
         private void ShowOpenVgdb()
         {
             long? bytes = _host?.OpenVgdbBytes;
             _vgdbText.Text = bytes is long b
-                ? $"OpenVGDB is downloaded: {b / 1048576.0:0.#} MB in home/Library."
-                : "OpenVGDB is not downloaded. It is fetched from GitHub the first time a run you start needs the failover.";
+                ? $"OpenVGDB is downloaded: {b / 1048576.0:0.#} MB in home/Library. Remove it to free the space if you do not need the fallback."
+                : "OpenVGDB is not downloaded. Download fetches it from GitHub and turns the fallback on; a run you start with the fallback on also fetches it.";
+            bool busy = _host?.OpenVgdbBusy != false;
             _vgdbRemove.IsVisible = bytes is not null;
-            _vgdbRemove.IsEnabled = _host?.CanRemoveOpenVgdb == true;
+            _vgdbDownload.IsVisible = bytes is null;
+            _vgdbRemove.IsEnabled = _vgdbDownload.IsEnabled = !busy;
         }
 
         private async System.Threading.Tasks.Task RemoveOpenVgdbAsync()
@@ -279,9 +286,22 @@ namespace EmuSen.Mistress.Views
             if (_host is null) return;
             bool hadFocus = _vgdbRemove.IsFocused;
             if (await _host.RemoveOpenVgdbAsync() is string said) _vgdbMessage.Text = said;
+            if (_host.OpenVgdbBytes is null && _fallback is not null) _fallback.IsChecked = false;
             Show();
-            // The button hides once the file is gone; the focus goes to the switch above it, so a pad is never left with nothing focused.
-            if (hadFocus && !_vgdbRemove.IsVisible) _fallback?.Focus(Avalonia.Input.NavigationMethod.Directional);
+            // Remove hides once the file is gone and Download takes its place, so a pad is never left with nothing focused.
+            if (hadFocus && !_vgdbRemove.IsVisible) _vgdbDownload.Focus(Avalonia.Input.NavigationMethod.Directional);
+        }
+
+        private async System.Threading.Tasks.Task DownloadOpenVgdbAsync()
+        {
+            if (_host is null) return;
+            bool hadFocus = _vgdbDownload.IsFocused;
+            _vgdbDownload.IsEnabled = false;
+            _vgdbMessage.Text = "Downloading OpenVGDB from GitHub...";
+            _vgdbMessage.Text = await _host.DownloadOpenVgdbAsync();
+            if (_host.OpenVgdbBytes is not null && _fallback is not null) _fallback.IsChecked = true;
+            Show();
+            if (hadFocus) (_vgdbRemove.IsVisible ? _vgdbRemove : _vgdbDownload).Focus(Avalonia.Input.NavigationMethod.Directional);
         }
 
         private void Show()

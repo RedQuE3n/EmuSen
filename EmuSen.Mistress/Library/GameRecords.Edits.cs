@@ -59,7 +59,14 @@ namespace EmuSen.Mistress.Library
             step.Commit();
         }
 
-        public void ClearEdits(string path) => Write(path, "DELETE FROM game_edit WHERE path = $path");
+        // The editor's Clear; a cover borrowed from another game is the player's cover, not metadata, and stays (§4.65).
+        public void ClearEdits(string path) => Write(path, $"DELETE FROM game_edit WHERE path = $path AND field <> '{GameMetadata.CoverFrom}'");
+
+        // Q45: the game whose cover this one shows, or null to show its own again; nothing on disk but games.db changes.
+        public void SetCoverChoice(string path, string? from, DateTime now) =>
+            SaveEdits(path, new Dictionary<string, string?> { [GameMetadata.CoverFrom] = from == path ? null : from }, now);
+
+        public string? CoverChoice(string path) => Edits(path).TryGetValue(GameMetadata.CoverFrom, out string? from) && from.Length > 0 ? from : null;
 
         public void SetFavourite(string path, bool favourite) => Write(path,
             "INSERT INTO game (path, favourite) VALUES ($path, $value) ON CONFLICT(path) DO UPDATE SET favourite = excluded.favourite", favourite ? 1 : 0);

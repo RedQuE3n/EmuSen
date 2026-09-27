@@ -411,7 +411,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             // Back cancels: the sort is stepped, then the Back button closes the sheet with nothing applied.
             OpenMenu(s);
             // One menu under Select, in ES-DE's order: the list's rows, then the game's entries (Q12).
-            Assert.Equal(["Jump To...", "Sort Games By", "Filter Gamelist", "Search...", "Add to Favourites", "Edit This Game's Metadata", "Scrape This Game..."],
+            Assert.Equal(["Jump To...", "Sort Games By", "Filter Gamelist", "Search...", "Add to Favourites", "Edit This Game's Metadata", "Use Another Game's Cover...", "Scrape This Game..."],
                 ((GameOptionsWindow)Sheets(s).Current!).Options.Select(o => o.Label));
             Assert.Empty(s.Window.OwnedWindows);
             Reach(s, e => e is Dropdown { Name: "GamelistSortBy" });

@@ -7,9 +7,9 @@ using EmuSen.Mistress.BigPicture.Theme;
 
 namespace EmuSen.Mistress.Scraping
 {
-    public enum MediaSource { None, HandPlaced, ScreenScraper, EsdeFolder, OpenEmu }
+    public enum MediaSource { None, HandPlaced, ScreenScraper, EsdeFolder, OpenEmu, OtherGame }
 
-    // Where a game's picture is looked for, in order: what the player placed, ScreenScraper's, an ES-DE folder, OpenEmu's failover - see EmuSen_Settings_Reference.md §4.60.
+    // Where a game's picture is looked for, in order: another game's cover the player chose, what the player placed, ScreenScraper's, an ES-DE folder, OpenEmu's failover - see EmuSen_Settings_Reference.md §4.60 and §4.65.
     public sealed class MediaSources : ISceneMedia
     {
         private static readonly string[] Extensions = [".png", ".jpg", ".jpeg"];
@@ -18,14 +18,19 @@ namespace EmuSen.Mistress.Scraping
         private readonly EsdeMediaFolder _scraped;
         private readonly EsdeMediaFolder? _esde;
         private readonly string? _openEmu;
+        private readonly Func<string, string?>? _coverFrom;
+        private readonly string _choiceStamp;
 
-        // handPlaced takes a console and a ROM's title; openEmuRoot is null when the failover is not ticked, so what it fetched is not shown either.
-        public MediaSources(Func<string, string, string?> handPlaced, string scrapedRoot, string? esdeRoot, string? openEmuRoot)
+        // handPlaced takes a console and a ROM's title; openEmuRoot is null when the failover is not ticked; coverFrom names the game whose cover a ROM shows, with a stamp that changes when any choice does.
+        public MediaSources(Func<string, string, string?> handPlaced, string scrapedRoot, string? esdeRoot, string? openEmuRoot,
+            Func<string, string?>? coverFrom = null, string choiceStamp = "")
         {
             _handPlaced = handPlaced;
             _scraped = new EsdeMediaFolder(scrapedRoot);
             _esde = string.IsNullOrWhiteSpace(esdeRoot) ? null : new EsdeMediaFolder(esdeRoot);
             _openEmu = string.IsNullOrWhiteSpace(openEmuRoot) ? null : openEmuRoot;
+            _coverFrom = coverFrom;
+            _choiceStamp = choiceStamp;
         }
 
         public string? Find(ThemeSystem system, SceneGame game, string mediaType) => Locate(system.Name, game.File, mediaType).Path;
@@ -45,15 +50,22 @@ namespace EmuSen.Mistress.Scraping
             string openEmu = _openEmu is not null && Directory.Exists(_openEmu)
                 ? string.Join(",", Directory.EnumerateDirectories(_openEmu).Select(d => Directory.GetLastWriteTimeUtc(d).Ticks))
                 : "";
-            return $"{_scraped.Stamp(system)}|{_esde?.Stamp(system)}|{openEmu}";
+            return $"{_scraped.Stamp(system)}|{_esde?.Stamp(system)}|{openEmu}|{_choiceStamp}";
         }
 
         // The library's cover for a ROM on the shelf ES-DE calls esdeSystem.
         public string? Cover(string esdeSystem, string romPath) => Locate(esdeSystem, romPath, ScrapeRules.Cover.EsdeType).Path;
 
-        public (MediaSource Source, string? Path) Locate(string esdeSystem, string romPath, string mediaType)
+        public (MediaSource Source, string? Path) Locate(string esdeSystem, string romPath, string mediaType) => Locate(esdeSystem, romPath, mediaType, null);
+
+        // A chosen game's cover is whatever that game shows, its own choice followed too; a chain that comes back round stops at the game it reached twice.
+        private (MediaSource Source, string? Path) Locate(string esdeSystem, string romPath, string mediaType, HashSet<string>? seen)
         {
             bool cover = mediaType == ScrapeRules.Cover.EsdeType;
+            if (cover && _coverFrom?.Invoke(romPath) is { Length: > 0 } from && (seen ??= new HashSet<string>(StringComparer.Ordinal) { romPath }).Add(from)
+                && SystemOf(from) is { } fromSystem && Locate(fromSystem, from, mediaType, seen).Path is string borrowed)
+                return (MediaSource.OtherGame, borrowed);
+
             string title = Path.GetFileNameWithoutExtension(romPath);
             string? console = EmuSen.Cores.CoreCatalog.ByExtension(Path.GetExtension(romPath))?.Console;
             var system = new ThemeSystem(esdeSystem, esdeSystem, esdeSystem);
@@ -65,6 +77,9 @@ namespace EmuSen.Mistress.Scraping
             if (cover && console is not null && _openEmu is not null && OpenEmuCover(_openEmu, console, title) is string openEmu) return (MediaSource.OpenEmu, openEmu);
             return (MediaSource.None, null);
         }
+
+        private static string? SystemOf(string romPath) =>
+            EmuSen.Cores.CoreCatalog.ShelfByName(EmuSen.Cores.CoreCatalog.ShelfFor(romPath))?.EsdeSystem is { Length: > 0 } s ? s : null;
 
         // Where CoverFetcher writes: <root>/<console>/<libretro-safe stem>.<ext>.
         public static string? OpenEmuCover(string root, string console, string title)

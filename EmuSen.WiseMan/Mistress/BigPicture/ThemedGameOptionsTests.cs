@@ -102,7 +102,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             GameOptionsWindow options = OpenOptions(s);
             Assert.Empty(s.Window.OwnedWindows);
             Assert.Equal(ThemedSession.SnesGames[1], ((TextBlock)Sheet(s).GetVisualDescendants().OfType<Control>().Single(c => c.Name == "GameOptionsTitle")).Text);
-            Assert.Equal(new[] { "Search...", "Add to Favourites", "Edit This Game's Metadata", "Scrape This Game..." }, options.Entries.Select(b => b.Content as string));
+            Assert.Equal(new[] { "Search...", "Add to Favourites", "Edit This Game's Metadata", "Use Another Game's Cover...", "Scrape This Game..." }, options.Entries.Select(b => b.Content as string));
 
             // The view hears nothing under the sheet.
             s.Pad.Down();

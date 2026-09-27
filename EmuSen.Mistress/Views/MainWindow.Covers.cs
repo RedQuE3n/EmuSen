@@ -7,6 +7,7 @@ using EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen;
 using EmuSen.Galaxia.Library;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Library;
+using EmuSen.Mistress.Scraping;
 
 namespace EmuSen.Mistress.Views
 {
@@ -98,14 +99,14 @@ namespace EmuSen.Mistress.Views
             Dispatcher.UIThread.Post(() => { _coverRefreshPosted = false; if (!_recordsClosed) RefreshCovers(); }, DispatcherPriority.Background);
         }
 
-        // Q42: the player's Remove in Preferences, never automatic; a test answers the confirm instead of a person - see EmuSen_Settings_Reference.md §4.65.
+        // Q42: an optional Remove to free the space, never automatic; a test answers the confirm instead of a person - see EmuSen_Settings_Reference.md §4.65.
         internal static Func<MainWindow, Task<bool>> ConfirmRemoveOpenVgdb = owner => Dialogs.ConfirmAsync(owner, "Remove OpenVGDB",
-            "Delete OpenVGDB, the game database OpenEmu's failover uses, from home/Library? Covers it already found stay. It is downloaded again from GitHub the next time a run you start needs the failover.",
+            "Delete OpenVGDB, the game database OpenEmu's fallback uses, from home/Library to free the space? The fallback is switched off until it is downloaded again. Covers it already found stay.",
             "Remove", "Keep");
 
         long? IScrapeHost.OpenVgdbBytes => File.Exists(OpenVgdbPath) ? new FileInfo(OpenVgdbPath).Length : null;
 
-        bool IScrapeHost.CanRemoveOpenVgdb => !_downloadingDatabase && !ScrapeRunning && File.Exists(OpenVgdbPath);
+        bool IScrapeHost.OpenVgdbBusy => _downloadingDatabase || ScrapeRunning;
 
         async Task<string?> IScrapeHost.RemoveOpenVgdbAsync()
         {
@@ -113,7 +114,7 @@ namespace EmuSen.Mistress.Views
             if (_downloadingDatabase || ScrapeRunning) return "OpenVGDB is in use by a run; remove it when the run has finished.";
             if (!await ConfirmRemoveOpenVgdb(this)) return null;
             if (_downloadingDatabase || ScrapeRunning) return "OpenVGDB is in use by a run; remove it when the run has finished.";
-            // The failover's worker holds the database open; it is let go of first, and the next run starts a fresh one.
+            // The fallback's worker holds the database open; it is let go of first, and the fallback stays off until the database is back.
             _fetcher?.Dispose();
             _fetcher = null;
             try
@@ -121,13 +122,42 @@ namespace EmuSen.Mistress.Views
                 long bytes = new FileInfo(OpenVgdbPath).Length;
                 File.Delete(OpenVgdbPath);
                 if (File.Exists(OpenVgdbPath + ".part")) File.Delete(OpenVgdbPath + ".part");
+                _appSettings.OpenEmuFallback = false;
+                _appSettings.Save();
                 StatusText.Text = "OpenVGDB removed";
                 ScrapeChanged?.Invoke();
-                return $"OpenVGDB was removed ({bytes / 1048576.0:0.#} MB). It is downloaded again the next time a run you start needs OpenEmu's failover.";
+                return $"OpenVGDB was removed ({bytes / 1048576.0:0.#} MB freed). OpenEmu's fallback is off until it is downloaded again.";
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 return $"Could not remove OpenVGDB: {ex.Message}";
+            }
+        }
+
+        // The player's Download on the same row: one request to GitHub, then the fallback on again.
+        async Task<string> IScrapeHost.DownloadOpenVgdbAsync()
+        {
+            if (_downloadingDatabase || ScrapeRunning) return "A run is using OpenEmu's fallback; download when it has finished.";
+            _http ??= HttpFactory();
+            _downloadingDatabase = true;
+            ScrapeChanged?.Invoke();
+            try
+            {
+                string tag = await OpenVgdbDownload.FetchAsync(_http, OpenVgdbPath);
+                if (_recordsClosed) return "";
+                _appSettings.OpenEmuFallback = true;
+                _appSettings.Save();
+                StatusText.Text = $"OpenVGDB {tag} downloaded.";
+                return $"OpenVGDB {tag} was downloaded, and OpenEmu's fallback is on.";
+            }
+            catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or TaskCanceledException or System.Text.Json.JsonException)
+            {
+                return $"Could not download OpenVGDB: {ScrapeRedactor.Redact(ex.Message)}";
+            }
+            finally
+            {
+                _downloadingDatabase = false;
+                ScrapeChanged?.Invoke();
             }
         }
 

@@ -92,7 +92,7 @@ namespace EmuSen.Mistress.Views
         // Ctrl+I over either library opens the selected game's editor; true when it did, so the key goes no further.
         private bool EditMetadataFromTheKeyboard(Avalonia.Input.KeyEventArgs e)
         {
-            if (!EditMetadataGesture.Matches(e) || !LibraryView.IsVisible || Sheets.IsPresenting || _gameOptions is not null) return false;
+            if (!EditMetadataGesture.Matches(e) || !LibraryView.IsVisible || Sheets.IsPresenting || _gameOptions is not null || _coverPicker is not null) return false;
             if (ThemedLibraryShown)
             {
                 if (_themed?.SelectedGame is not { IsCollection: false } game) return false;
@@ -108,6 +108,7 @@ namespace EmuSen.Mistress.Views
         {
             options.Add(new GameOption(_records.IsFavourite(path) ? "Remove from Favourites" : "Add to Favourites", toggleFavourite));
             options.Add(new GameOption("Edit This Game's Metadata", () => ShowMetadataEditor(path, title)));
+            AddCoverEntries(options, path, title);
             // Scraping only ever starts where the player asks for it - see EmuSen_BigPicture.md §17.14.
             if (!ScrapeRunning) options.Add(new GameOption("Scrape This Game...", () => _ = ConfirmAndScrapeAsync(ScrapeScope.ThisGame(path))));
         }
@@ -144,6 +145,8 @@ namespace EmuSen.Mistress.Views
         // A sheet is not an owned window, so nothing else closes these with Mistress - see EmuSen_BigPicture.md §15.14 and §20.4.
         private void CloseGameSheets()
         {
+            _coverPicker?.Close();
+            _coverPicker = null;
             _metadataEditor?.Close();
             _metadataEditor = null;
             _gameOptions?.Close();

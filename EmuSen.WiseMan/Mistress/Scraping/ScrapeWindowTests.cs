@@ -538,8 +538,10 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
         private static T Named<T>(Window w, string name) where T : Control => w.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
 
+        private static AppSettings WindowSettings(MainWindow w) => (AppSettings)typeof(MainWindow).GetField("_appSettings", Hidden)!.GetValue(w)!;
+
         [Fact]
-        public Task OpenVgdb_goes_only_when_the_player_removes_it_and_the_next_run_that_needs_it_downloads_it_again() => OnUi(() =>
+        public Task OpenVgdb_goes_only_when_the_player_removes_it_which_turns_the_fallback_off_until_Download_brings_it_back() => OnUi(() =>
         {
             object realConfirm = ConfirmRemoveField.GetValue(null)!;
             bool remove = false;
@@ -576,20 +578,36 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 Assert.Equal(asked, _server.Asked.Count);
                 Assert.StartsWith("OpenVGDB is not downloaded", Named<TextBlock>(prefs, "OpenVgdbStatusText").Text);
                 Assert.False(button.IsEffectivelyVisible);
-                Assert.Contains("OpenVGDB was removed", Named<EmuSen.LunaP.Controls.HintText>(prefs, "OpenVgdbRemoveMessage").Text);
-                // The failover's own cover is the player's to keep; the database is not the covers.
+                Assert.Contains("OpenEmu's fallback is off until it is downloaded again", Named<EmuSen.LunaP.Controls.HintText>(prefs, "OpenVgdbRemoveMessage").Text);
+                // The fallback is off with its database gone, in the window and in the switch; the covers it found stay on disk.
+                Assert.False(WindowSettings(window).OpenEmuFallback);
+                Assert.False(Named<EmuSen.LunaP.Controls.LunaSwitch>(prefs, "OpenEmuFallbackSwitch").IsChecked);
                 Assert.True(File.Exists(OpenEmuCover));
-                prefs.Close();
+                Assert.False(AppSettings.Load().OpenEmuFallback);
 
-                // Scrape This Game asks the failover again: with no database it downloads one, not the removed file still held open.
+                // A run now asks no one: the removed file, still held open by the old worker, is not used, and nothing is downloaded behind the player's back.
                 File.Delete(OpenEmuCover);
                 Scrape(window, ScrapeScope.ThisGame(_rom));
                 RunEnds(window);
-                WaitFor(() => CoverShown(window, _rom) == OpenEmuCover, "the cover after a fresh download");
+                Pump();
+                Assert.Null(CoverShown(window, _rom));
+                Assert.Equal(asked, _server.Asked.Count);
+                Assert.False(File.Exists(OpenVgdb.DefaultPath));
+
+                // Download fetches it again and turns the fallback back on; the next run uses it.
+                Button download = Named<Button>(prefs, "OpenVgdbDownloadButton");
+                Assert.True(download.IsEffectivelyVisible && download.IsEffectivelyEnabled);
+                download.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                WaitFor(() => File.Exists(OpenVgdb.DefaultPath) && WindowSettings(window).OpenEmuFallback, "the download");
+                Pump(100);
                 Assert.Contains(OpenVgdbDownload.LatestRelease, _server.Asked);
-                Assert.True(File.Exists(OpenVgdb.DefaultPath));
-                prefs = ScrapingTab(window);
                 Assert.StartsWith("OpenVGDB is downloaded", Named<TextBlock>(prefs, "OpenVgdbStatusText").Text);
+                Assert.True(Named<EmuSen.LunaP.Controls.LunaSwitch>(prefs, "OpenEmuFallbackSwitch").IsChecked);
+                Assert.True(Named<Button>(prefs, "OpenVgdbRemoveButton").IsEffectivelyVisible);
+                prefs.Close();
+                Scrape(window, ScrapeScope.ThisGame(_rom));
+                RunEnds(window);
+                WaitFor(() => CoverShown(window, _rom) == OpenEmuCover, "the cover after the download");
             }
             finally
             {

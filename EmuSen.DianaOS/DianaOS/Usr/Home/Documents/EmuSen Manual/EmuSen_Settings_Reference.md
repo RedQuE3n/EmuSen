@@ -3670,7 +3670,7 @@ agree, so the copied folder is not Mistress's to delete. A stage (f) folder, who
 into `themes.db` the first time it is read, keeping its source and commit; its local changes cannot be told, since no
 file hashes were recorded then, and the detail says so.
 
-**Tests.** `ThemeBrowserModelTests` (13) and `ThemeBrowserSheetTests` (12), on WiseMan's `FakeThemeHosts`: a fake GitLab
+**Tests.** `ThemeBrowserModelTests` (14) and `ThemeBrowserSheetTests` (12), on WiseMan's `FakeThemeHosts`: a fake GitLab
 holding a synthetic `themes.json` and synthetic screenshots, and fake GitHub and GitLab repositories holding synthetic
 themes, every request counted. No test reaches the network. `ThemeDownloadsTests`, `ThemeSettingsSheetTests` and
 `BigPictureThemeListTests` run on the same code.

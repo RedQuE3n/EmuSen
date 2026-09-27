@@ -5358,7 +5358,7 @@ the stamp to the id form, and records no file hashes, so their local changes can
 
 ### 25.4 The rules, and their tests
 
-`ThemeBrowserModelTests` (13) test the model; `ThemeBrowserSheetTests` (12) test the sheets through `ThemedSession`;
+`ThemeBrowserModelTests` (14) test the model; `ThemeBrowserSheetTests` (12) test the sheets through `ThemedSession`;
 `ThemeDownloadsTests` (9) and two rewritten `ThemeSettingsSheetTests` cases keep stage (f)'s rules. Every server is
 `FakeThemeHosts`: a fake GitLab serving a synthetic `themes.json` of three themes (two on GitHub, one on GitLab in a
 group path; each with a different licence situation) and its screenshots, drawn by SkiaSharp in the fixture, and fake
@@ -5446,6 +5446,12 @@ run left behind (the machine had hard-reset once that day). The tree was rebuilt
   now does, and catches it.
 - **B27 did not build:** the mutant's text dropped the pattern variable's scope. Rewritten to trust the row whatever the
   stamp's id, it is caught by the removal test.
+
+**The runs.** Narrow runs of the theme classes after each change: at the end, the five theme classes gave 53 tests, 52
+passed and 1 skipped (the picture tool). One broad run at the very end, on the tree merged with WiseMan, of the Mistress
+filter without `ShaderSettingsWindowTests`, `ShaderBrowseBench` and `SceneGpuBench`, under `nice -n 10` and `-m:2`:
+**934 tests, 913 passed, 21 skipped (the picture, survey and live tools, which need their environment variables), none
+failed, in 3 min 43 s.**
 
 ### 25.8 The survey of the listed themes (Q28)
 

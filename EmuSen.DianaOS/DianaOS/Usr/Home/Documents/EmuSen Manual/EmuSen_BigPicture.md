@@ -1118,6 +1118,17 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   - **Q22–Q35:** every recommendation §21 made is accepted as written. Where a pass finds that a recommendation cannot
     hold, the player is asked again.
   - **The first pass to build:** pass 2, controllers.
+- **OpenVGDB is kept (2026-09-27): "Keep openvgdb as a fallback".** This retires §26's retirement plan. The
+  direction recorded on 2026-09-26 was to "eventually retire" OpenEmu's library as a source of game information. It is
+  withdrawn: OpenVGDB and libretro-thumbnails stay as the failover behind ScreenScraper, asked only inside a scrape
+  the player starts (§17.14), as they are today. §26's measurements stand as a record of what the fallback yields.
+  Its removal steps (§26.7) are not to be carried out. What survives of the decisions:
+  - **Q41 and Q43** still hold.
+  - **Q42's Remove button** stays as an optional way to free 42 MB. Removing the database disables the fallback until
+    it is downloaded again, and nothing removes it on its own.
+  - **Q45** (*Use Another Game's Cover…*) is built as a replacement that stands on its own.
+  - **Q44** no longer applies: the fallback is not switched off after pass 8.
+  - **Q40,** the embedded credentials, is unaffected.
 - **Q41–Q46, answered on 2026-09-26 (§26.9, §27.9):**
   - **Q41:** the 670 covers OpenVGDB already fetched keep their rank above ScreenScraper's.
   - **Q42:** OpenVGDB's 42 MB database gets a Remove button in Preferences; nothing deletes it on its own.
@@ -5267,6 +5278,9 @@ For Pass 1's session with the player, on the Legion Go S (build from this branch
 ---
 
 ## 26. Retiring OpenEmu's sources: a plan (2026-09-26)
+
+> **Retired 2026-09-27.** The choice was to keep OpenVGDB as a permanent fallback (§10.1). What follows remains
+> the record of what the fallback was measured to yield; its removal steps are not to be carried out.
 
 *A plan, written on branch `desktop-game-options` beside §27; nothing is removed by it.* The direction of
 2026-09-26 (§10.1): "i would like to eventually retire sourcing game info from openemus library and use screenscraper".

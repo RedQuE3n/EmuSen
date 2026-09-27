@@ -563,7 +563,6 @@ namespace EmuSen.Mistress.Scraping
             var orphans = new List<string>();
             foreach ((string system, IReadOnlySet<string> names) in namesBySystem)
             {
-                if (names.Count == 0) continue;
                 foreach (string folder in BigPicture.Scene.EsdeMediaFolder.Folders.Values.Distinct(StringComparer.Ordinal))
                 {
                     string dir = System.IO.Path.Combine(Root, system, folder);

@@ -138,6 +138,29 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             WaitFor(() => searching.IsCompleted, "the search");
             Assert.Empty(Server.Asked);
             Assert.Equal(0, window.NameSearches);
+            find.Close();
+            window.Close();
+
+            // ScreenScraper switched off is the same: the reason, and nothing sent.
+            window = Open(settings: s => s.Scraping = false);
+            ShowFindByName(window, rom);
+            find = window.FindByNameShown!;
+            Assert.Contains("switched off", find.StatusText);
+            Assert.Equal(ScrapeStatus.Failed, window.SearchByNameAsync(rom, "Nameless").GetAwaiter().GetResult().Status);
+            Assert.Empty(Server.Asked);
+        });
+
+        [Fact]
+        public Task Each_search_waits_its_turn_at_the_quota_s_pace() => OnUi(() =>
+        {
+            string rom = Game("Nameless", 9);
+            Server.User = FakeScreenScraper.Quota(maxThreads: 1, perMinute: 6, perDay: 20000, koPerDay: 2000, today: 10, koToday: 1);
+            MainWindow window = Open();
+            DateTimeOffset start = Clock.Now;
+            for (int i = 0; i < 3; i++) window.SearchByNameAsync(rom, "Nothing " + i).GetAwaiter().GetResult();
+            // The first answer sets 6 a minute less 10%; the third waits that interval after the second.
+            Assert.Equal(3, Server.Searches.Count());
+            Assert.True(Clock.Now - start >= TimeSpan.FromSeconds(60 / 5.4), $"{(Clock.Now - start).TotalSeconds} s");
         });
 
         [Fact]
@@ -222,6 +245,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public Task Each_criterion_chooses_the_games_a_wide_run_takes() => OnUi(() =>
         {
             string scraped = Game("Scraped (USA)", 1), favourite = Game("Favourite (USA)", 3), shot = Game("Shot Only (USA)", 5), clip = Game("Clip Only (USA)", 7), bare = Game("Bare (USA)", 9);
+            string described = Game("Described (USA)", 11);
             Server.Games.Add(new FakeGame(1, "Scraped", Md5(scraped)));
             MainWindow window = Open();
             Pump(200);
@@ -229,6 +253,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             RunEnds(window);
             Pump(200);
             RecordsOf(window).ToggleFavourite(favourite);
+            RecordsOf(window).SaveEdits(described, new Dictionary<string, string?> { [GameMetadata.Description] = "Typed by the player." }, DateTime.Now);
             Directory.CreateDirectory(Stored("snes", "screenshots"));
             File.WriteAllBytes(Stored("snes", "screenshots", "Shot Only (USA).png"), new byte[100]);
             Directory.CreateDirectory(Stored("snes", "videos"));
@@ -236,13 +261,13 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Refresh(window);
 
             int Count(ScrapeCriteria c) => window.Plan(new ScrapeScope { Criteria = c }).Games;
-            Assert.Equal(5, Count(ScrapeCriteria.All));
+            Assert.Equal(6, Count(ScrapeCriteria.All));
             Assert.Equal(1, Count(ScrapeCriteria.Favourites));
             Assert.Equal(4, Count(ScrapeCriteria.NoMetadata));
-            Assert.Equal(4, Count(ScrapeCriteria.NoCover));
-            Assert.Equal(3, Count(ScrapeCriteria.NoGameImage));
-            Assert.Equal(4, Count(ScrapeCriteria.NoGameVideo));
-            Assert.Equal(4, window.Plan(new ScrapeScope(MissingArtOnly: true)).Games);
+            Assert.Equal(5, Count(ScrapeCriteria.NoCover));
+            Assert.Equal(4, Count(ScrapeCriteria.NoGameImage));
+            Assert.Equal(5, Count(ScrapeCriteria.NoGameVideo));
+            Assert.Equal(5, window.Plan(new ScrapeScope(MissingArtOnly: true)).Games);
             // One game is still one game, whatever the criteria say.
             Assert.Equal(1, window.Plan(ScrapeScope.ThisGame(scraped) with { Criteria = ScrapeCriteria.NoCover }).Games);
             Assert.Equal(1, Server.JeuInfos.Count());
@@ -304,6 +329,39 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Empty(Server.Asked);
         });
 
+        [Fact]
+        public Task The_tab_s_criteria_choose_what_Scrape_takes_and_Refresh_reaches_Scrape_This_Game() => OnUi(() =>
+        {
+            string liked = Game("Liked (USA)", 1), other = Game("Other (USA)", 3);
+            Server.Games.Add(new FakeGame(1, "Liked", Md5(liked)));
+            Server.Games.Add(new FakeGame(2, "Other", Md5(other)));
+            MainWindow window = Open();
+            Pump(200);
+            RecordsOf(window).ToggleFavourite(liked);
+            var prefs = new PreferencesWindow(SettingsOf(window), window);
+            Windows.Add(prefs);
+            prefs.Show();
+            prefs.ShowTab(PreferencesWindow.ScrapingTab);
+            Pump(100);
+            Named<Dropdown>(prefs, "ScrapeCriteriaDropdown").SelectedItem = "Favourite games";
+            Click(Named<Button>(prefs, "ScrapeStartButton"));
+            RunEnds(window);
+            Assert.Equal(1, window.Progress!.Total);
+            Assert.Equal(Md5(liked), FakeScreenScraper.Param(Server.JeuInfos.Single(), "md5"));
+
+            // Scrape This Game follows "Refresh what is kept" too, as ES-DE's single-game scraper follows its overwrite setting.
+            int before = Server.JeuInfos.Count();
+            Scrape(window, ScrapeScope.ThisGame(liked));
+            RunEnds(window);
+            Assert.Equal(before, Server.JeuInfos.Count());
+            Named<LunaSwitch>(prefs, "ScrapeRefreshSwitch").IsChecked = true;
+            Scrape(window, ScrapeScope.ThisGame(liked));
+            RunEnds(window);
+            Assert.Equal(before + 1, Server.JeuInfos.Count());
+            Assert.Equal(4, window.Progress!.Unchanged);
+        });
+
+
         // --- ScreenScraper's names (Q30) ---
 
         [Fact]
@@ -353,26 +411,32 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             File.WriteAllBytes(Stored("nes", "covers", "Elsewhere.png"), new byte[100]);
             (string goneMd5, long goneBytes) = (Md5(gone), new FileInfo(gone).Length);
             Assert.NotEmpty(window.ScrapeStore!.Media(goneMd5, goneBytes));
+            Directory.CreateDirectory(Stored("snes", "manuals"));
+            File.WriteAllBytes(Stored("snes", "manuals", "Gone (USA).pdf"), System.Text.Encoding.ASCII.GetBytes("%PDF-1.4 a manual"));
             File.Delete(gone);
             Refresh(window);
             var roms = Fingerprint(RomDir);
             int requests = Server.Asked.Count;
 
             IReadOnlyList<string> orphans = window.OrphanedMedia();
-            Assert.Equal(4, orphans.Count);
+            Assert.Equal(5, orphans.Count);
             Assert.All(orphans, o => Assert.Contains("Gone (USA)", o));
 
             _cleanUpAnswer = false;
             Assert.Equal("Nothing was moved.", window.CleanUpOrphansAsync().GetAwaiter().GetResult());
-            Assert.StartsWith("4 scraped file(s)", Assert.Single(_cleanUpAsked));
+            Assert.StartsWith("5 scraped file(s)", Assert.Single(_cleanUpAsked));
             Assert.True(File.Exists(Stored("snes", "covers", "Gone (USA).png")));
 
             _cleanUpAnswer = true;
             string said = window.CleanUpOrphansAsync().GetAwaiter().GetResult();
-            Assert.StartsWith("Moved 4 file(s)", said);
+            Assert.StartsWith("Moved 5 file(s)", said);
             string backup = Assert.Single(Directory.GetDirectories(Stored(MediaStore.CleanupFolder)));
             Assert.True(File.Exists(Path.Combine(backup, "snes", "covers", "Gone (USA).png")));
             Assert.True(File.Exists(Path.Combine(backup, "cleanup.txt")));
+            // A folder the cleanup emptied goes, as ES-DE removes empty media folders; one still holding a kept game's file stays.
+            Assert.False(Directory.Exists(Stored("snes", "manuals")));
+            Assert.True(Directory.Exists(Stored("snes", "covers")));
+            Assert.True(File.Exists(Path.Combine(backup, "snes", "manuals", "Gone (USA).pdf")));
             Assert.False(File.Exists(Stored("snes", "covers", "Gone (USA).png")));
             Assert.True(File.Exists(Stored("snes", "covers", "Kept (USA).png")));
             Assert.True(File.Exists(Stored("nes", "covers", "Elsewhere.png")));
@@ -392,6 +456,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Scrape(window, ScrapeScope.ThisGame(kept));
             RunEnds(window);
             SettingsOf(window).RomDirectory = Path.Combine(Root, "Unplugged");
+            Assert.Empty(window.OrphanedMedia());
+            Refresh(window);
             Assert.Empty(window.OrphanedMedia());
             Assert.StartsWith("No orphaned media", window.CleanUpOrphansAsync().GetAwaiter().GetResult());
             Assert.Empty(_cleanUpAsked);

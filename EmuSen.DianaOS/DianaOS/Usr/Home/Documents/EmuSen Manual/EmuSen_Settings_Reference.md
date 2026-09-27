@@ -2592,6 +2592,45 @@ tool). They run on WiseMan's `PadDriver` with a clock the test moves. Mutants ar
 - The search is Mistress's, not ES-DE's: ES-DE offers no search box in a gamelist.
 - The system order is the shelves' release order; ES-DE's own order was not established.
 
+#### 4.52a The keyboard in the themed view (2026-09-27)
+
+**The report.** The player, testing Art Book Next in Mistress on the desktop, found that games "would not launch from in
+artbook next". No crash log was written that day.
+
+**What was measured before anything changed** (`ThemedLaunchTests`, headless, the player's own settings: `BigScreen` off,
+`LibraryStyle` Theme, Art Book Next, `ResumeOnLaunch` Ask):
+- The pad's South on a game starts it, in the synthetic theme, in Art Book Next with big screen set, and in Art Book Next
+  entered by F10 from a desktop window. The launch path itself was sound.
+- With the keyboard, nothing in the themed view responded, not even the arrows: `SetButtonFromKey` sent keys to the
+  game's bindings only while the library was hidden and otherwise to hotkeys, and `PadTick` returned at once with no pad
+  connected. The themed view took the pad alone, and ES-DE's theme view has no mouse input either. A desktop user
+  without a controller could reach big picture by F10 and then do nothing in it. This is the explanation offered for the
+  report; which input the player held was not asked, so it is the likely cause, not a proven one.
+
+**What was built.** While the themed view is shown, the library is visible, and nothing is over it (no sheet, no other
+active window, no on-screen keyboard), ES-DE's default keys (USERGUIDE.md, "Default keyboard mappings") are held pad
+buttons: the arrows, Enter for A, Backspace for B, F4 for Start (below), F1 for Back, Insert for Y, Page Up and Page Down for the shoulders,
+Home and End for the triggers, F2 and F3 for the stick clicks. `PadHeld` reads them beside every pad, so the navigator's
+repeats, the view's own held-direction repeats (§4.52) and the help bar behave as for a pad, and `PadTick` polls while
+a key is held and once after the last is let go, with or without a controller. A key let go is always released, even
+after the view it was pressed on has gone. Delete (ES-DE's X) is not mapped, because West is kept for the media viewer
+(Q32).
+
+**Escape is left out on purpose, and F4 stands in for it.** ES-DE's Escape is Start, its main menu. Mistress's Escape
+already leaves big picture for the desktop when nothing else is on screen, and returns to a suspended game otherwise
+(§4.18, §4.54). `BigPictureSwitchTests` failed the first time Escape was mapped, so the earlier rule was kept. The pad
+menu (Start) then had no key. The choice was F4 on 2026-09-27 (plan §10.1): it is free in the hotkey map, and it sits
+beside F1–F3. Alt+F4 is never taken, so the window manager's close still works.
+
+**Tests and mutants.** `ThemedLaunchTests` has five cases. The keyboard case runs with the pad unplugged; before the change it
+failed at the first arrow. The F4 case covers F4, Backspace and Alt+F4. Three mutants were run by hand. Removing the Alt guard
+is caught. Of the other two: removing the library-visible guard is caught (a key pressed on
+the view would start the game from under it). Removing a `GameOnScreen` guard was *not* caught and was shown to be
+redundant, since a game on screen hides the library, so the guard was deleted rather than tested.
+
+**Not covered.** No real keyboard or window manager was used. Keys rebound in the hotkey map are not consulted: a player
+who bound Enter or an arrow to a hotkey finds the themed view takes it first. The desktop list's keys are unchanged.
+
 ### 4.53 Big picture: the theme's settings, the grid, and themes downloaded on request (2026-09-26)
 
 Stage (f) of `EmuSen_BigPicture.md` (its §16 is the record: predictions, measurements, mutants). This section is what a

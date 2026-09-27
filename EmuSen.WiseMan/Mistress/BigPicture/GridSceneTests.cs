@@ -43,7 +43,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private static ImageGrid Control(SceneView view) => view.Scene.Entries.Select(e => e.Control).OfType<ImageGrid>().Single();
 
         [Fact]
-        public void The_layout_is_ES_DE_s_measured_one()
+        public Task The_layout_is_ES_DE_s_measured_one() => UiTest.Run(() =>
         {
             var view = new SceneView(Data(Grid()), "gamelist", TimeSpan.Zero);
             GridGeometry g = view.Grid()!.Value;
@@ -52,7 +52,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(12.8, g.CellRect(0, 0).X, 3);
             Assert.Equal(12, g.CellRect(0, 0).Y, 3);
             Assert.Equal(3, g.Rows);
-        }
+        });
 
         // A step within a row eases the focus on a 250 ms quadratic ease-out and settles on the static picture, pixel for pixel.
         [Fact]
@@ -96,7 +96,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         // ES-DE's ends: across a row's end, a tap wraps at the list's ends and a hold stops, up and down stop, down into a short last row takes its last item.
         [Fact]
-        public void The_ends_are_ES_DE_s()
+        public Task The_ends_are_ES_DE_s() => UiTest.Run(() =>
         {
             var view = new SceneView(Data(Grid()), "gamelist", TimeSpan.Zero);
             view.Step(-1, Ms(0));
@@ -126,11 +126,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             held.Press(1, Ms(0));
             held.Advance(Ms(2500));
             Assert.Equal(11, held.Index);
-        }
+        });
 
         // A step taken while the last still moves starts from where the two items are: the one left keeps its part-grown focus as its level.
         [Fact]
-        public void A_step_while_moving_starts_from_the_items_current_focus()
+        public Task A_step_while_moving_starts_from_the_items_current_focus() => UiTest.Run(() =>
         {
             var view = new SceneView(Data(Grid()), "gamelist", TimeSpan.Zero);
             view.Step(1, Ms(0));
@@ -145,11 +145,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             double left = new QuadraticEaseOut().Ease(0.2);
             Assert.Equal((2, 1), (Control(view).FocusFrom, Control(view).SelectedIndex));
             Assert.Equal(new QuadraticEaseOut().Ease(0.4) * (1 - left), Control(view).FocusToLevel, 3);
-        }
+        });
 
         // The mapping's units: a -1 axis of itemSize is the other axis's pixels, corner radii are fractions of the width.
         [Fact]
-        public void Item_sizes_and_corner_radii_are_in_ES_DE_s_units()
+        public Task Item_sizes_and_corner_radii_are_in_ES_DE_s_units() => UiTest.Run(() =>
         {
             var view = new SceneView(Data(Grid("<imageCornerRadius>0.05</imageCornerRadius>").Replace("<itemSize>0.2 0.3</itemSize>", "<itemSize>0.2 -1</itemSize>")), "gamelist", TimeSpan.Zero);
             Assert.Equal(128, Control(view).ItemSize.Width, 3);
@@ -158,11 +158,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var tall = new SceneView(Data(Grid().Replace("<itemSize>0.2 0.3</itemSize>", "<itemSize>-1 0.3</itemSize>")), "gamelist", TimeSpan.Zero);
             Assert.Equal(120, Control(tall).ItemSize.Width, 3);
             Assert.Equal(120, Control(tall).ItemSize.Height, 3);
-        }
+        });
 
         // A held direction steps at the press, at 500 ms and then every 200 ms, with no faster tier, on either axis.
         [Fact]
-        public void A_held_direction_repeats_at_500_then_200_ms_with_no_faster_tier()
+        public Task A_held_direction_repeats_at_500_then_200_ms_with_no_faster_tier() => UiTest.Run(() =>
         {
             var many = Data(Grid()) is var d ? d with { Systems = d.Systems.Select(s => s with { Games = Enumerable.Range(0, 200).Select(i => new SceneGame($"G{i}", $"/g/{i}.sfc")).ToList() }).ToList() } : d;
             foreach (bool vertical in new[] { false, true })
@@ -176,11 +176,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Assert.Equal(1 + 1 + (4000 - 500) / 200, steps.Count);
                 Assert.Equal(steps.Count, vertical ? view.Index / 4 : view.Index);
             }
-        }
+        });
 
         // ES-DE fades the game's metadata out from the first repeat of a held direction in the grid, as in the list, and back in at release.
         [Fact]
-        public void A_held_grid_fades_the_metadata_out_from_the_first_repeat()
+        public Task A_held_grid_fades_the_metadata_out_from_the_first_repeat() => UiTest.Run(() =>
         {
             var view = new SceneView(Data(Grid()), "gamelist", TimeSpan.Zero);
             view.Press(1, TimeSpan.Zero);
@@ -192,11 +192,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             view.Release(Ms(700));
             view.Advance(Ms(700 + 150));
             Assert.Equal(1, view.Scene.Entries.First(e => e.Element.Type == "text").Control!.Opacity, 2);
-        }
+        });
 
         // instant item transitions change the focus at once; instant row transitions jump the rows at once.
         [Fact]
-        public void Instant_transitions_do_not_animate()
+        public Task Instant_transitions_do_not_animate() => UiTest.Run(() =>
         {
             var view = new SceneView(Data(Grid("<itemTransitions>instant</itemTransitions><rowTransitions>instant</rowTransitions>"), game: 4), "gamelist", TimeSpan.Zero);
             view.Press(1, TimeSpan.Zero, vertical: true);
@@ -204,7 +204,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             view.Advance(Ms(1));
             Assert.Equal((1.0, 1.0), (Control(view).FocusProgress, Control(view).ScrollRow));
             Assert.Null(view.NextChange(Ms(1)));
-        }
+        });
 
         // P50: Art Book Next's gamelist-grid-cover at 1280x800 against ES-DE 3.4.1's still, each synthetic cover's flat interior found the same way in both.
         [ArtBookNextFact]

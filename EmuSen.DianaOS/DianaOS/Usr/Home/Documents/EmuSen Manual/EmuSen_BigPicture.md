@@ -9300,3 +9300,164 @@ none failed, in 4 min 20 s.** LunaP's whole suite: 1,425 tests, all passed.
 WiseMan then moved to b57f224e (menus stage 2, §34) and `openemu-library` to 691a54f (LunaP §182.8–§182.10); both were
 merged, the only conflict LunaP's README count, and both runs were repeated: **1,434 tests, 1,392 passed, 42 skipped,
 none failed, in 4 min 19 s**; LunaP 1,428, all passed.
+
+## 42. The controller bindings window: drawn controllers, rebinding from the drawing, and an input tester (2026-09-27)
+
+*Decided 2026-09-27 (§10.1):* the Controller Bindings window is overhauled. Each console's controller is drawn as vector
+art with the bindings mapped onto its buttons; a button pressed on the pad or the keyboard lights up on the drawing, so
+the window doubles as an input tester, as many emulators' do; the drawings are EmuSen's own, not copied from any
+emulator's, maker's or website's art. This section records the first stage: the drawing control, the Super NES and
+Nintendo 64 drawings, and the window with its tester, stopped there so the drawings can be looked at before the NES pad,
+the Game Boy and a modern pad are drawn in the same way. The player's account is §4.81 of the settings reference; the
+control is LunaP's §198. §40 and §41, and §4.79 and §4.80, are other work's.
+
+**Numbering.** Predictions here start at **P280** and questions at **Q180**.
+
+### 42.1 What was built
+
+- **LunaP's `ControllerDiagram` (§198).** A controller drawn from the toolkit's own geometry in a design space of its own,
+  fitted to the space between up to four bands of labels. Every button, each arm of a cross, each direction of a stick
+  and each trigger is a named region that can be lit, ringed as selected, hit by a click and moved to with a direction.
+  Each region has a label, a button that draws itself, showing the key and the pad button bound to it, joined to the
+  region by a line. The control takes plain data (a region's two strings, pressed or not, a stick's position) and knows
+  nothing of Mistress's controls.
+- **The drawings.** The Super NES pad (two round grips joined by a bar, the cross in a round well, two slanted pills, four
+  coloured buttons in a diamond on a rounded well, two shoulders) and the Nintendo 64 pad (a wide top on three grips, the
+  cross on the left grip, the stick in an octagonal gate on the middle one with Start above it, A, B and four C buttons,
+  L, R, and Z showing past the middle grip's edge). Every shape was placed by hand in code; nothing was traced, measured
+  from or compared with any picture of the pads. The face buttons carry the colours the pads were sold in, because colour
+  is much of what identifies them at a glance (Q183 asks which scheme for the Super NES).
+- **The window.** Each console's tab is its drawing, filling the height the page shows, with the list the window had
+  scrolled below it under "All Bindings". A region chosen by a click, by the pad's A or by Enter listens for a key and a
+  pad button at once. The cross and the arrow keys move between regions by where they are drawn. Test Buttons (Y, or the
+  button) makes every press only light up until B is held for a second or Escape is pressed. On a big-screen sheet the
+  footer is the window's own.
+- **The tester's input.** `GamepadManager.Poll` raises `Polled` at its end, and the window redraws from that poll; the
+  main window's 16 ms tick is the only poller, as before. Keys are tracked from the window's own key events.
+
+### 42.2 Decisions made on the way, and why
+
+- **A mode for testing.** The pad cannot steer the window and be tried on it at once. With the default bindings the
+  Super NES's A is the pad's East, which is Back, so trying it would close the window; and A would rebind whatever label
+  has the focus. The tester is live whenever nothing is captured, as decided, and Test Buttons is how the pad's own
+  navigation buttons are tried. Leaving it takes a one-second hold of B because a short press of B is a button being
+  tried. This is Q180.
+- **One capture for both.** The drawing has one place to choose a button, not a Rebind Key and a Rebind Pad, so a choice
+  listens for both and binds whichever comes first. §4.45.4's rules for the pad hold unchanged; when its five seconds run
+  out the key listener goes on, so a keyboard player who takes longer is not cancelled. This is Q182.
+- **Player 1's pad lights the drawing.** The game hears player 1 alone (§4.61's settings reference); a drawing lit by a
+  second pad would claim the game hears it. The capture still takes any pad the interface reads, as it did. This is Q181.
+- **Moving by the drawing, not the labels.** The labels stand in columns, so moving between them by position gives the
+  column's order, which is not the pad's: up from the Super NES's B went to A. Moving by where the buttons are drawn sends
+  B up to X, X left to Y, and so round the diamond. The score is LunaP's (§198.5): the router's own score (distance
+  along plus twice across) sent A up to the right shoulder, straight above and far, rather than X, above and to the left
+  and near.
+- **The list stays.** It is the only place a binding can be cleared, and a screen reader walks it more easily than a
+  drawing; every test that used it passes unchanged, and the pad reaches it past the drawing's edge.
+
+### 42.3 Defects found while building, each shown before its fix
+
+- **Keys typed with the focus on nothing were not heard.** The key handler was on the window's content, where §4.45.4 put
+  it so a sheet's keys reach it; a desktop window with nothing focused receives a key at the window alone. The tester's
+  key test failed on it; the window now also takes a key whose source is the window itself, and only those, so a key is
+  not handled twice.
+- **The labels did not grow with a sheet's text.** The first big-screen pictures showed labels at nine pixels beside
+  twenty-pixel text; the labels now never fall far below the text around them. A second defect hid behind the first: the
+  diagram did not measure again when that text changed size, so a window whose font changed kept its old labels.
+  `Labels_follow_the_size_of_the_text_around_them` failed on it (54 px high with 14 px text and with 26 px) and passes
+  with the fix (54 and 66).
+- **A column of labels spilled into the row below.** On a 1920 × 1200 sheet the Nintendo 64's left column overlapped the
+  bottom row's first label; a column taller than the space now shrinks every label.
+- **A label pressed by the router did nothing.** The router presses a focused button by raising its Click event, which
+  does not call the button's own `OnClick`; the label listened in `OnClick`. It now listens to the event. The window was
+  not affected, since it takes A itself, but any other host would have been.
+
+### 42.4 Pictures
+
+`ControllerBindingsPictureTool` (§4.81) wrote, for each drawn console, idle and lit, at 1280 × 800 and 1920 × 1200, the
+window on the desktop and on a big-screen sheet: sixteen pictures in `~/.cache/emusen/bigpicture/png/bindings/`, named
+`desktop-SNES-1280x800-idle.png` and so on. Lit is the pad's East, left shoulder and cross-up held, and on the Nintendo
+64 the stick pushed to (0.75, −0.45) and the right stick left; on the desktop the Enter key (Start's) is held too and
+the right shoulder selected, and on a sheet the window is in Test Buttons, so its footer shows. Every picture was looked at. What they show:
+
+- Both pads read as themselves at both sizes; every label is beside its button with its line, and no two labels overlap.
+- Lit buttons are the accent colour with a halo, the lit arm of a cross has the cross's rounded end, the stick's knob sits
+  off centre with a line from the middle, and a lit label's badge and line are the accent colour.
+- On a big-screen sheet at 1280 × 800 the drawing is small: the sheet's chrome takes a third of the height, and the
+  drawing, bounded by its height, leaves the sides empty (Q184).
+- A label's pad line names an unknown pad's button by SDL's position name spelled as words ("Left Shoulder",
+  "D-pad Up"); a pad whose printed labels SDL knows shows those.
+
+### 42.5 Tests
+
+LunaP's `ControllerDiagramTests` (33 cases, §198.6) and Mistress's `ControllerBindingsDiagramTests` (13 cases, §4.81). The
+window's existing tests (`InputSettingsWindowTests`, its layout and render tests, the pad tests of §4.45 including every
+control of the sheet reached by the pad) and LunaP's whole suite (1,462) pass. The blast-radius run of Mistress's tests
+(input settings, pad settings, controllers, the gamepad manager, accessibility and the off-dispatcher guard): 111 passed.
+
+### 42.6 Mutants
+
+`~/.cache/emusen/probe/bindings/mutate.py`, written in the manner of §40's runner: one exact snippet per mutant, a state
+file written before each and a leftover restored at the start, every restored file touched, builds at `-m:2` under
+`nice -n 10`, a hang counted as caught, both trees rebuilt at the end (both rebuilt cleanly). Twenty-five mutants of
+Mistress's and Endymion's code (B1–B25), run against `ControllerBindingsDiagramTests`, `InputSettingsWindowTests` and the
+Controller Bindings cases of `PadSettingsWindowTests`, and seventeen of LunaP's (L1–L17, listed in LunaP §198.7), run
+against `ControllerDiagramTests`. The predictions were written first (§42.7).
+
+**B1–B25, all caught on the first run:** the poll never announced; the N64's Z not mapped; a held key not recorded; a key
+let go still lit; lit while capturing; the stick never moved; a key for a direction not pushing the stick; the stick never
+standing in for the cross; a stick direction lit the wrong way; a choice listening for a key only; a key answering and
+leaving the pad listening, and the reverse; testing letting the pad steer; holding B never stopping testing; any B
+stopping it; testing letting keys act; A on a region not rebinding; the cross moving by the labels; Y not starting
+testing; a rebound key not shown on the drawing; no prompt while capturing; C up and C down swapped; a key with the focus
+on nothing not heard; the sheet's footer not set, and not given back.
+
+**L1–L17: thirteen caught on the first run, four survived.** L2 (a cross's arm hit in the square corner outside its
+rounded end), L15 (no ring for the selected region: the test counted the selected region's accent line as a ring) and
+L16 (a line meeting a button's middle: nothing looked at where a line ends) were caught on the second run, by a test
+clicking each arm's corner, a count on the half of a region away from its label, and a test of each line's two ends
+through the new `LeaderOf`. **L7, the labels centred without the drawing, still survives**: both drawn layouts have labels
+on all four sides, which leaves the composition centred before the pass moves it, so the pass moves both by less than
+the line test's two pixels at all six sizes tried. It will be measurable with the first drawing that leaves a side
+without labels.
+
+**Result: 38 of 42 caught on the first valid run, 41 of 42 after the tests were strengthened.**
+
+### 42.7 Predictions
+
+Written before the mutants ran (`probe/bindings/predictions.txt`).
+
+| # | Prediction | Outcome |
+|---|---|---|
+| P280 | Of 42 mutants, at least 36 are caught on their first valid run | **Held**: 38 |
+| P281 | L16, a leader line meeting a button's middle, survives: no test looks at where a line ends | **Held** |
+| P282 | L2, a cross's arm hit outside its rounded end, survives: every hit test lands in the middle of a region | **Held** |
+| P283 | L7, the labels centred without the drawing, is caught | **Wrong**: it survived, for the reason in §42.6; L15 also survived, which was not predicted |
+| P284 | On the handheld with a real pad, a button held lights within one 16 ms tick of the press, and the stick's knob follows without a visible lag | open until the window is run there |
+
+### 42.8 Open questions
+
+- **Q180, testing and steering.** The pad steers the window, and Test Buttons (Y, left by holding B) is how its own
+  navigation buttons are tried. Options: keep; make rebinding a hold of A so a short A is a test; keep the tester only in
+  Test Buttons. **Recommendation:** keep; it is one extra press, and the words above, below and in the footer say how.
+- **Q181, which pad lights the drawing.** Player 1's only, since the game hears player 1 alone; the capture takes any.
+  Options: player 1; any pad the interface reads; each pad in its own colour. **Recommendation:** player 1, with its name
+  on the line below the drawing, until a second pad is player 2 (§4.61).
+- **Q182, one capture or two.** A choice on the drawing listens for a key and a pad button at once. Options: keep; ask
+  which, as the list's two buttons do. **Recommendation:** keep.
+- **Q183, the Super NES's colours.** The drawing uses the red, yellow, green and blue buttons of the Super Famicom and
+  the PAL pad; the North American pad has two shades of purple. Options: keep; the North American ones; a setting.
+  **Recommendation:** keep; the four colours tell the four buttons apart at a glance, which is what the drawing is for.
+- **Q184, room on a big-screen sheet.** The drawing is bounded by its height and leaves the sides empty on a wide sheet.
+  Options: labels in two columns a side when there is width; the words above the tabs dropped on a sheet (done); wait
+  for the shared ES-DE style layer and decide with it. **Recommendation:** the last.
+- **Q185, the General tab.** The modern pad is to be drawn there as a tester of the pad itself, every button and both
+  sticks and triggers as SDL reads them, beside the stick deadzone it would show. **Recommendation:** yes, after the three
+  remaining drawings.
+
+### 42.9 Not done at this stage
+
+- The NES pad, the Game Boy and the modern pad; the NES and Game Boy tabs show their list alone until then.
+- ES-DE's look on a big-screen sheet, which waits for the shared style layer.
+- Clearing a binding from the drawing.
+- Nothing ran on the handheld or with a real pad.

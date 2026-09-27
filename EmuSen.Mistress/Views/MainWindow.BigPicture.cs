@@ -218,7 +218,8 @@ namespace EmuSen.Mistress.Views
         private void ScheduleThemedFrame()
         {
             _themedWake?.Stop();
-            if (_themedClosed || _themed?.Stage is null || !ThemedLibraryShown || !LibraryView.IsVisible)
+            // Under the screensaver the view is held as it is, so it draws nothing either (§4.75).
+            if (_themedClosed || _themed?.Stage is null || !ThemedLibraryShown || !LibraryView.IsVisible || ScreensaverOpen)
             {
                 ThemedWakeAt = null;
                 return;
@@ -252,7 +253,7 @@ namespace EmuSen.Mistress.Views
         // One frame of the render loop: the view's clock stepped to now, then the next frame asked for or not.
         internal void ThemedFrame()
         {
-            if (_themedClosed || _themed?.Stage is null || !ThemedLibraryShown) return;
+            if (_themedClosed || _themed?.Stage is null || !ThemedLibraryShown || ScreensaverOpen) return;
             ThemedFramesDrawn++;
             _themed.Advance(UiClock());
             ShowThemedSearchBar();
@@ -294,6 +295,7 @@ namespace EmuSen.Mistress.Views
             _themedClosed = true;
             _themedWake?.Stop();
             CloseLaunchScreen();
+            CloseScreensaver();
             ThemedWakeAt = null;
             _uiSounds?.Dispose();
             _uiSounds = null;

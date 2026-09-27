@@ -69,6 +69,8 @@ namespace EmuSen.Mistress.Views
                 return;
             }
             _gamepad.Poll();
+            // Before anything else reads the pad: the press that wakes the screensaver is its own (§4.75).
+            if (StepScreensaver()) return;
             if (!KeyboardSteers() && !_gamepad.IsConnected) return;
             TrackControllers();
 
@@ -138,6 +140,7 @@ namespace EmuSen.Mistress.Views
         internal void OnPadCommand(UiButton button)
         {
             if (button == UiButton.Guide) button = UiButton.Menu;
+            if (ScreensaverFromButton(button)) return;
 
             if (OtherWindow() is { } other) PadWindowRouter.Send(other, button);
             else if (EmuSen.LunaP.Controls.OnScreenKeyboard.OpenOver(this) is { } keyboard) PadKeyboard.Send(keyboard, button);

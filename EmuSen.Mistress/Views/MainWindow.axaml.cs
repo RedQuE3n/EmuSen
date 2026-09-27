@@ -226,6 +226,8 @@ namespace EmuSen.Mistress.Views
             // Tunnel, not bubbling, or focus navigation eats the arrows - see EmuSen_Settings_Reference.md §4.2.
             AddHandler(KeyDownEvent, (_, e) => SetButtonFromKey(e.Key, pressed: true, e), RoutingStrategies.Tunnel, handledEventsToo: true);
             AddHandler(KeyUpEvent, (_, e) => SetButtonFromKey(e.Key, pressed: false, e), RoutingStrategies.Tunnel, handledEventsToo: true);
+            AddHandler(PointerMovedEvent, (_, _) => ScreensaverPointer(pressed: false), RoutingStrategies.Tunnel, handledEventsToo: true);
+            AddHandler(PointerPressedEvent, (_, e) => { if (ScreensaverOpen) { ScreensaverPointer(pressed: true); e.Handled = true; } else ScreensaverPointer(pressed: false); }, RoutingStrategies.Tunnel, handledEventsToo: true);
         }
 
         // A focused text field owns the whole keyboard - see EmuSen_Settings_Reference.md §4.17.
@@ -234,6 +236,11 @@ namespace EmuSen.Mistress.Views
 
         private void SetButtonFromKey(Key key, bool pressed, KeyEventArgs e)
         {
+            if (ScreensaverKey(key, pressed))
+            {
+                e.Handled = true;
+                return;
+            }
             if (TypingIntoATextField(e)) return;
             if (ThemedKey(key, e.KeyModifiers, pressed))
             {

@@ -164,20 +164,22 @@ namespace EmuSen.Mistress.BigPicture
 
         private GlyphTypeface Typeface => (MenuPanel.GetFontPath(this) is { } path ? FontFiles.Load(path) : null) ?? FontFiles.Default;
 
+        private double SizeFor(double cap) => SizeFor(Typeface, cap);
+
+        private Rect LineBox(double x, double width, double capTop, double cap, FontText text) => LineBox(Typeface, x, width, capTop, cap, text);
+
         // The em size whose capitals are the given height.
-        private double SizeFor(double cap)
+        internal static double SizeFor(GlyphTypeface face, double cap)
         {
-            GlyphTypeface face = Typeface;
             double ratio = face.CharacterToGlyphMap.TryGetGlyph('H', out ushort glyph) && face.TryGetGlyphMetrics(glyph, out GlyphMetrics m) && m.Height != 0
                 ? Math.Abs(m.Height) / face.Metrics.DesignEmHeight : 0.7;
             return cap / ratio;
         }
 
         // A one-line box whose capitals start at capTop, for FontText's half-leading with a line spacing of 1.
-        private Rect LineBox(double x, double width, double capTop, double cap, FontText text)
+        internal static Rect LineBox(GlyphTypeface face, double x, double width, double capTop, double cap, FontText text)
         {
-            GlyphTypeface face = Typeface;
-            double size = SizeFor(cap);
+            double size = SizeFor(face, cap);
             text.FontSize = size;
             double em = face.Metrics.DesignEmHeight;
             double ascent = Math.Abs(face.Metrics.Ascent) * size / em, descent = Math.Abs(face.Metrics.Descent) * size / em;

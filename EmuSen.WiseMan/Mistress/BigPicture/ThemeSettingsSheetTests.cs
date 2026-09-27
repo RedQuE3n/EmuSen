@@ -39,8 +39,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public void Dispose() => Factory.SetValue(null, _realFactory);
 
         private const string Capabilities =
-            "<variant name=\"narrow\"><label>Narrow list</label></variant>" +
-            "<variant name=\"wide\"><label>Wide list</label></variant>" +
+            "<variant name=\"narrow\"><label>Narrow list</label><selectable>true</selectable></variant>" +
+            "<variant name=\"wide\"><label>Wide list</label><selectable>true</selectable></variant>" +
             "<variant name=\"hidden\"><label>Hidden</label><selectable>false</selectable></variant>" +
             "<colorScheme name=\"dark\"><label>Dark</label></colorScheme>" +
             "<colorScheme name=\"light\"><label language=\"de_DE\">Hell</label><label language=\"en_US\">Light</label></colorScheme>" +

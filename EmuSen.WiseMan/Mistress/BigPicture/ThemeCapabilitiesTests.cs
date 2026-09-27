@@ -146,7 +146,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [Fact]
         public void The_default_variant_is_the_first_selectable_and_a_chosen_one_must_be_declared()
         {
-            _theme.Capabilities("<variant name=\"hidden\"><selectable>false</selectable></variant><variant name=\"first\"/><variant name=\"second\"/>").Theme("");
+            _theme.Capabilities("<variant name=\"hidden\"><selectable>false</selectable></variant><variant name=\"first\"><selectable>true</selectable></variant>" +
+                "<variant name=\"second\"><selectable>true</selectable></variant>").Theme("");
             ThemeCapabilities caps = ThemeCapabilitiesReader.Read(_theme.Root);
             Assert.Equal("first", ThemeSelection.Resolve(caps, new ThemeChoices()).Variant);
             Assert.Equal("second", ThemeSelection.Resolve(caps, new ThemeChoices { Variant = "second" }).Variant);

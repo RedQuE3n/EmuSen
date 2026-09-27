@@ -322,7 +322,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(AppSettings.LibraryStyleMistress, AppSettings.Load().LibraryStyle);
             Assert.False(s.Shown);
 
-            s.Pad.B();
+            ThemedSwitchesTests.PutAway(s);
             Assert.False(sheets.IsPresenting);
             s.Settle();
             Assert.False(s.Shown);
@@ -357,7 +357,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             foreach (string m in missing) _out.WriteLine("unreachable: " + m);
             Assert.Empty(missing);
 
-            s.Pad.B();
+            ThemedSwitchesTests.PutAway(s);
             Assert.False(sheets.IsPresenting);
             s.Pad.Right();
             Assert.Equal("gb", s.System);

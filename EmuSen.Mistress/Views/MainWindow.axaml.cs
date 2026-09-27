@@ -241,8 +241,10 @@ namespace EmuSen.Mistress.Views
                 e.Handled = true;
                 return;
             }
-            if (TypingIntoATextField(e)) return;
-            if (ThemedKey(key, e.KeyModifiers, pressed))
+            // In a big-screen menu a text field is a row, which ES-DE's keys move past rather than type into; the pad router's own keys are never the keyboard's (Q102).
+            bool routed = PadWindowRouter.Raising;
+            if (TypingIntoATextField(e) && (routed || !(BigMenuOnScreen && EmuSen.LunaP.Controls.OnScreenKeyboard.OpenOver(this) is null))) return;
+            if (!routed && ThemedKey(key, e.KeyModifiers, pressed))
             {
                 e.Handled = true;
                 return;
@@ -485,7 +487,7 @@ namespace EmuSen.Mistress.Views
         private void ShowPreferencesAt(string? tab)
         {
             // Non-modal, so re-scan on close rather than leaving a stale library behind it.
-            var window = new PreferencesWindow(_appSettings, this) { OpenThemeSettings = ShowThemeSettings };
+            var window = new PreferencesWindow(_appSettings, this, _bigScreen ? HelpFamily : null) { OpenThemeSettings = ShowThemeSettings };
             WatchPreferences(window);
             if (tab is not null) window.ShowTab(tab);
             window.StatusBarChanged += ApplyStatusBar;

@@ -8,10 +8,14 @@ namespace EmuSen.Galaxia.Models
         public const string ViewSystem = "system", ViewGamelist = "gamelist";
         public const string SortRelease = "release", SortFullNames = "fullnames", SortReleaseYear = "releaseyear";
         public const string LaunchNormal = "normal", LaunchBrief = "brief", LaunchLong = "long", LaunchPopup = "popup", LaunchDisabled = "disabled";
+        public const string OpeningScaleUp = "scale-up", OpeningNone = "none";
         public const string SaverDim = "dim", SaverBlack = "black", SaverSlideshow = "slideshow", SaverVideo = "video";
 
         // ES-DE's LaunchScreenDuration - see EmuSen_Settings_Reference.md §4.71.
         public string LaunchScreenDuration { get; set; } = LaunchNormal;
+
+        // ES-DE's MenuOpeningEffect, for the menus and the launch screen alike (Q92) - see EmuSen_Settings_Reference.md §4.72.10.
+        public string MenuOpeningEffect { get; set; } = OpeningScaleUp;
 
         public bool DisplayClock { get; set; }
 

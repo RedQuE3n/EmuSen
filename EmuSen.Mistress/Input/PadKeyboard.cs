@@ -20,7 +20,10 @@ namespace EmuSen.Mistress.Input
         {
             box.Focus(NavigationMethod.Directional);
             box.CaretIndex = box.Text?.Length ?? 0;
-            return OnScreenKeyboard.Show(box, Chosen.TryGetValue(box, out KeyboardLayout[]? layouts) ? layouts : Words, PadHints.Face(Hint));
+            KeyboardLayout[] offered = Chosen.TryGetValue(box, out KeyboardLayout[]? layouts) ? layouts : Words;
+            // A box drawn as a big-screen menu's row opens ES-DE's text popup, titled with the row's name (Q100, §4.72.11).
+            if (MenuRows.GetLabel(box) is { Length: > 0 } label) return OnScreenKeyboard.ShowAsMenu(box, offered, PadHints.Face(Hint), "Enter " + label);
+            return OnScreenKeyboard.Show(box, offered, PadHints.Face(Hint));
         }
 
         // B erases, and with nothing left to erase puts the keyboard away, keeping the (empty) text.

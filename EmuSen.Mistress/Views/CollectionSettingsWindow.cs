@@ -26,7 +26,7 @@ namespace EmuSen.Mistress.Views
     }
 
     // ES-DE's Game Collection Settings, and the gamelist entries of its UI settings, over Mistress's own collections - see EmuSen_Settings_Reference.md §4.58.
-    public sealed class CollectionSettingsWindow : ToolWindow
+    public sealed class CollectionSettingsWindow : ToolWindow, EmuSen.Mistress.Input.IPadDriven
     {
         public static readonly (string Value, string Text)[] Grouping =
             [(BigPictureCollections.GroupUnthemed, "If unthemed"), (BigPictureCollections.GroupAlways, "Always"), (BigPictureCollections.GroupNever, "Never")];
@@ -40,7 +40,7 @@ namespace EmuSen.Mistress.Views
         private readonly ICollectionSettingsHost _host;
         private readonly StackPanel _page = Ui.Stack(12);
 
-        public CollectionSettingsWindow(ICollectionSettingsHost host)
+        public CollectionSettingsWindow(ICollectionSettingsHost host, PadFamily? menu = null)
         {
             _host = host;
             Title = "Game Collection Settings";
@@ -51,9 +51,16 @@ namespace EmuSen.Mistress.Views
             close.Name = "CollectionSettingsClose";
             Control buttons = Ui.Buttons(close).Margin(0, 12, 0, 0);
             DockPanel.SetDock(buttons, Dock.Bottom);
-            Content = new DockPanel { LastChildFill = true, Children = { buttons, new ScrollViewer { Content = _page.Margin(4, 4, 4, 4), MaxHeight = 560 } } }.Margin(16);
+            var page = new ScrollViewer { Content = _page.Margin(4, 4, 4, 4), MaxHeight = 560 };
+            Content = new DockPanel { LastChildFill = true, Children = { buttons, page } }.Margin(16);
             Fill();
+            // In a big-screen session, ES-DE's Game Collection Settings menu (§4.72.8).
+            if (menu is { } family) Form = new BigMenuForm(this, "Game Collection Settings", family, [("Game Collection Settings", page)]);
         }
+
+        public BigMenuForm? Form { get; }
+
+        public bool OnPad(EmuSen.Mistress.Input.UiButton button) => Form is not null && button == EmuSen.Mistress.Input.UiButton.Back && Form.Back();
 
         private BigPictureCollections S => _host.Settings;
 

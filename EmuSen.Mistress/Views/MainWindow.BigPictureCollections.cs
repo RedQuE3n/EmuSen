@@ -118,7 +118,7 @@ namespace EmuSen.Mistress.Views
         internal void ShowCollectionSettings()
         {
             if (_collectionSettings is not null) return;
-            var window = _collectionSettings = new CollectionSettingsWindow(this);
+            var window = _collectionSettings = new CollectionSettingsWindow(this, _bigScreen ? HelpFamily : null);
             window.Closed += (_, _) => { if (_collectionSettings == window) _collectionSettings = null; };
             _ = SheetLayer.Show(window, this);
         }

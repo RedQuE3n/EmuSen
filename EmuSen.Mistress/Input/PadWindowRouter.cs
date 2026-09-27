@@ -100,6 +100,7 @@ namespace EmuSen.Mistress.Input
                 case UiButton.Accept:
                     if (open is not null) { Choose(open, focused); return; }
                     if (focused is TextBox box) { PadKeyboard.Open(box); return; }
+                    if (focused is ComboBox listed && Views.OptionListWindow.OpensFor(window, listed)) { Views.OptionListWindow.Show(window, listed); return; }
                     if (focused is ComboBox closed) { closed.IsDropDownOpen = true; return; }
                     if (focused is TabItem header) { header.IsSelected = true; return; }
                     if (focused is ToggleButton toggle) { toggle.IsChecked = toggle.IsChecked != true; return; }
@@ -293,10 +294,18 @@ namespace EmuSen.Mistress.Input
             return true;
         }
 
+        // True while the router raises a key of its own, which the window must not take for the keyboard's (Q102).
+        [ThreadStatic] internal static bool Raising;
+
         private static void Key(InputElement target, Key key, KeyModifiers modifiers = KeyModifiers.None)
         {
-            target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key, KeyModifiers = modifiers, Source = target });
-            target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = key, KeyModifiers = modifiers, Source = target });
+            Raising = true;
+            try
+            {
+                target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key, KeyModifiers = modifiers, Source = target });
+                target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = key, KeyModifiers = modifiers, Source = target });
+            }
+            finally { Raising = false; }
         }
     }
 }

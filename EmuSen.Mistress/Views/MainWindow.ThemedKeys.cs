@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Avalonia.Input;
 using EmuSen.LunaP.Controls;
+using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Input;
 
 namespace EmuSen.Mistress.Views
@@ -37,12 +38,16 @@ namespace EmuSen.Mistress.Views
             if (ThemedKeyButton(key) is not { } button) return false;
             if (!pressed) return _themedKeys.Remove(button);
             if ((modifiers & KeyModifiers.Alt) != 0) return false;
-            if (!ThemedLibraryShown || !LibraryView.IsVisible || OtherWindow() is not null || OnScreenKeyboard.OpenOver(this) is not null) return false;
+            if (OnScreenKeyboard.OpenOver(this) is not null) return false;
+            if (!BigMenuOnScreen && (!ThemedLibraryShown || !LibraryView.IsVisible || OtherWindow() is not null)) return false;
             _themedKeys.Add(button);
             _keyboardSteering = true;
             PadTick();
             return true;
         }
+
+        // A big-screen menu on screen, the pad menu or a chromeless sheet, which ES-DE's keys drive as they drive the view (Q102, §4.72.7).
+        internal bool BigMenuOnScreen => _bigScreen && (_padMenuOpen || Sheets.Current is { } sheet && SheetLayer.GetChromeless(sheet));
 
         private bool KeyHeld(UiButton button) => _themedKeys.Contains(button);
 

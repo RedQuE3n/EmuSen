@@ -322,7 +322,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(File.Exists(installed + ".zip.part"));
 
             if (closeWindow) s.Window.Close();
-            else s.Pad.B();
+            else ThemedSwitchesTests.PutAway(s);
             Assert.True(Pump(() => sheet.Downloading!.IsCompleted, 3000), "the download was still running after its sheet closed");
             Assert.True(sheet.Downloading!.IsCanceled || sheet.Downloading.Exception?.InnerException is OperationCanceledException);
             Assert.False(File.Exists(installed + ".zip.part"));

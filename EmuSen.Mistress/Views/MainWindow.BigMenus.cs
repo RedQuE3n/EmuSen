@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Avalonia.Controls;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Windowing;
+using EmuSen.Mistress.BigPicture;
 using EmuSen.Mistress.Input;
 
 namespace EmuSen.Mistress.Views
@@ -131,7 +133,29 @@ namespace EmuSen.Mistress.Views
             bool sheetMenu = Sheets.Current is { } sheet && SheetLayer.GetChromeless(sheet);
             MenuBackdrop.IsVisible = _bigScreen && (_padMenuOpen || sheetMenu);
             HideThemedHelp(MenuBackdrop.IsVisible);
+            MenuPanel? shown = !MenuBackdrop.IsVisible ? null : Sheets.Current is { } top && SheetLayer.GetChromeless(top) ? MenuPanelOf(top) : _padMenuOpen ? PadMenuBig : null;
+            if (!ReferenceEquals(shown, _menuShown))
+            {
+                _menuShown = shown;
+                if (shown is not null) BeginMenuOpening(shown);
+            }
         }
+
+        private MenuPanel? _menuShown;
+        private readonly MenuOpening _menuOpening = new();
+
+        internal bool MenusScaleUp => _appSettings.BigPictureInterface.MenuOpeningEffect != Galaxia.Models.BigPictureInterface.OpeningNone;
+
+        // A menu that has just come on screen, or a menu page just turned to, grows into place (Q92).
+        internal void BeginMenuOpening(MenuPanel panel) => _menuOpening.Begin(panel, UiClock(), MenusScaleUp);
+
+        internal MenuOpening MenuOpeningNow => _menuOpening;
+
+        internal MenuPanel? MenuShownNow => _menuShown;
+
+        // A presented sheet's content lives in the layer, not the window, so its menu is found there.
+        private MenuPanel? MenuPanelOf(Window sheet) =>
+            (Sheets.SheetOf(sheet) as Avalonia.LogicalTree.ILogical ?? sheet.Content as Avalonia.LogicalTree.ILogical)?.GetSelfAndLogicalDescendants().OfType<MenuPanel>().FirstOrDefault();
 
         private readonly List<HintBar> _hiddenThemedHelp = new();
 

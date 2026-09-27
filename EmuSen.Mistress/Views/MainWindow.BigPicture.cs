@@ -266,7 +266,7 @@ namespace EmuSen.Mistress.Views
         // The theme's settings and the themes downloaded on request, as a sheet over whatever shows (§4.53).
         private void ShowThemeSettings()
         {
-            var window = _themeSettings = new ThemeSettingsWindow(_appSettings, HttpFactory, ThemeChanged);
+            var window = _themeSettings = new ThemeSettingsWindow(_appSettings, HttpFactory, ThemeChanged, _bigScreen ? HelpFamily : null);
             window.Closed += (_, _) => { if (_themeSettings == window) _themeSettings = null; };
             _ = SheetLayer.Show(window, this);
         }

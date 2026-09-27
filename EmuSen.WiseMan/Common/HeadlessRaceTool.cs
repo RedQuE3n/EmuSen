@@ -19,11 +19,11 @@ namespace EmuSen.WiseMan.Common
         public HeadlessRaceFactAttribute()
         {
             if (Environment.GetEnvironmentVariable("EMUSEN_HEADLESS_RACE") != "1")
-                Skip = "Provokes the headless session's start-up race on purpose, so it runs alone; set EMUSEN_HEADLESS_RACE=1 - see EmuSen_Settings_Reference.md §4.77.2";
+                Skip = "Provokes the headless session's start-up race on purpose, so it runs alone; set EMUSEN_HEADLESS_RACE=1 - see EmuSen_Settings_Reference.md §4.78.2";
         }
     }
 
-    // What Avalonia work off the session's dispatcher does to itself and to the tests beside it - see EmuSen_Settings_Reference.md §4.77.2.
+    // What Avalonia work off the session's dispatcher does to itself and to the tests beside it - see EmuSen_Settings_Reference.md §4.78.2.
     [Collection(TestCollections.ProcessGlobals)]
     public class HeadlessRaceTool(ITestOutputHelper output)
     {

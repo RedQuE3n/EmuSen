@@ -9,7 +9,7 @@ namespace EmuSen.WiseMan.Fixtures
     // A test that reaches Avalonia off the headless session's dispatcher, and the call chain that shows it.
     public sealed record OffDispatcherFinding(string Test, string Chain, string Site);
 
-    // Reads each test's IL for Avalonia work done outside a dispatch - see EmuSen_Settings_Reference.md §4.77.5.
+    // Reads each test's IL for Avalonia work done outside a dispatch - see EmuSen_Settings_Reference.md §4.78.5.
     public static class OffDispatcherScan
     {
         private static readonly Dictionary<short, OpCode> Codes = typeof(OpCodes)

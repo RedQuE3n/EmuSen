@@ -33,7 +33,7 @@ namespace EmuSen.WiseMan.Mistress
 
         public Task InitializeAsync() => Task.CompletedTask;
 
-        // On the session's dispatcher: off it there is no Application, and Apply does nothing - see EmuSen_Settings_Reference.md §4.77.3.
+        // On the session's dispatcher: off it there is no Application, and Apply does nothing - see EmuSen_Settings_Reference.md §4.78.3.
         public async Task DisposeAsync()
         {
             await UiTest.Run(() => LunaTheme.Apply(LunaTheme.BuiltIn));

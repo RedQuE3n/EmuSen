@@ -206,7 +206,7 @@ Three gotchas worth knowing before adding cases here:
 
 - **Match the row by its name cell (column 0) only.** A loose "any `TextBlock` in this row" match picks the wrong row: `Y`'s default keyboard binding is literally `A`, so searching for row "A" finds `Y`'s *value* column first.
 - **Redirect `ConfigStore.OverrideDirectory`** in the fixture. Rebinding saves immediately, so without it the suite overwrites the developer's real bindings.
-- **Build every control, window and picture inside a dispatch** (`UiTest.Run` or the class's `Session.Dispatch`), the class's constructor and disposal included. Work on the test's own thread borrows whichever test's application is running, and makes other tests' start-ups fail; `OffDispatcherTests` fails a test that does it. See §4.77.
+- **Build every control, window and picture inside a dispatch** (`UiTest.Run` or the class's `Session.Dispatch`), the class's constructor and disposal included. Work on the test's own thread borrows whichever test's application is running, and makes other tests' start-ups fail; `OffDispatcherTests` fails a test that does it. See §4.78.
 
 The arrow-key half of §4.2 does **not** reproduce headlessly — headless has no real focus-navigation pass — so it is reasoned from Avalonia's routing rather than measured, and the theory cases for `Up`/`Left` pass either way.
 
@@ -5250,7 +5250,7 @@ the fake counts every request, and no test reaches the network. `ScrapeExtrasPic
   cost there is predicted (P240–P243), not measured.
 - Nothing ran on the handheld.
 
-### 4.77 WiseMan's headless UI tests: Avalonia work off the session's dispatcher (2026-09-27)
+### 4.78 WiseMan's headless UI tests: Avalonia work off the session's dispatcher (2026-09-27)
 
 **What was seen.** From 2026-09-26 seven recorded runs of the Mistress tests (six broad, one of a stage's blast radius)
 each failed one test, the first two, on a different test each time, and every failing test passed alone. The
@@ -5266,7 +5266,7 @@ its class ran alone, with *"Unable to locate 'Avalonia.Platform.IPlatformRenderI
 class's seven plain `[Fact]`s onto the session's dispatcher. This section shows that the two are one defect seen from
 its two sides, finds the other tests that had it, and adds a guard.
 
-#### 4.77.1 What the session shares between threads
+#### 4.78.1 What the session shares between threads
 
 Every UI test dispatches onto one `HeadlessUnitTestSession`: all 85 files that start one, `Fixtures/UiTest.cs` among
 them, pass WiseMan's own assembly to `GetOrStartForAssembly`, so there is one session and one dispatch
@@ -5292,10 +5292,10 @@ was starting; the test at fault is one that passed. And a picture made off the d
 dispatch is inside its application, so a test that makes one passes in a busy run and fails alone.
 
 *A correction to `b272675c`'s message*, which says the seven facts "passed only when an earlier test had started
-Avalonia". Having started earlier is not enough: the scope is left when a dispatch ends, and §4.77.2's first case shows
+Avalonia". Having started earlier is not enough: the scope is left when a dispatch ends, and §4.78.2's first case shows
 the picture failing with the session long started. They passed when another test's dispatch was **running**.
 
-#### 4.77.2 The race, measured
+#### 4.78.2 The race, measured
 
 `Common/HeadlessRaceTool.cs` provokes both sides on purpose, so it is skipped unless `EMUSEN_HEADLESS_RACE=1` and is
 meant to run alone; it is in the `ProcessGlobals` collection, so even in a broad run nothing else dispatches beside it.
@@ -5319,7 +5319,7 @@ seven facts ran before `b272675c`. Run 2's two failures in the body, and one in 
 different kind: *"Stack empty"* from `Stack<T>.Pop` inside a dispatched body, so work off the dispatcher can also break
 a test after its start-up. Their origin was not traced.
 
-#### 4.77.3 Class by class
+#### 4.78.3 Class by class
 
 **Method.** Every test class under `EmuSen.WiseMan` whose file names Avalonia, LunaP, a scene type, a bitmap or
 `UiTest`: 94 classes, of which 91 hold tests, 892 tests in all. Each ran alone with
@@ -5332,7 +5332,7 @@ out under the load rule because they open a Vulkan device, directly or by settin
 `ThemedMetadataScrapeTests`). After WiseMan `b57f224e` was merged, the fifteen classes it or this work changed or added
 (`EsdeSettingsMenusTests` and the enlarged `MetadataEditorLayoutTests` among them, 185 tests) ran alone twice again, and
 all passed. Running a class alone is therefore not enough to find this defect: inside one class the
-cases run one after another, and a case can depend on the one before it. §4.77.5's scan named three classes, and runs of
+cases run one after another, and a case can depend on the one before it. §4.78.5's scan named three classes, and runs of
 single cases and of a probe confirm each:
 
 | Class | What ran off the dispatcher | Before | After |
@@ -5357,15 +5357,15 @@ six found it made and built only controls, which need no service, only a dispatc
 third case already was; `PreferencesThemeTests` resets in `InitializeAsync` and `DisposeAsync` through `UiTest.Run`, and
 `ThemeStore` in its `DisposeAsync`.
 
-#### 4.77.4 The broad-run failures
+#### 4.78.4 The broad-run failures
 
 **Attributed to `GridSceneTests`' seven facts, by mechanism and by timing; not reproduced one by one.**
 
-- *Mechanism.* §4.77.2 builds `GridSceneTests`' scene off the dispatcher and gets the recorded message, in the recorded
+- *Mechanism.* §4.78.2 builds `GridSceneTests`' scene off the dispatcher and gets the recorded message, in the recorded
   place, from about a third of the dispatches that start beside it, and none without it.
 - *Timing.* Every recorded failure of that message came after `a98068ef` (2026-09-26 02:16) added `GridSceneTests` with
   its seven plain facts, and before `b272675c` moved them.
-- *Nothing else the scan can see.* §4.77.5's scan of the WiseMan builds at `013fb764` (§16.8's run), `b0c6bf75` (§34.8's and
+- *Nothing else the scan can see.* §4.78.5's scan of the WiseMan builds at `013fb764` (§16.8's run), `b0c6bf75` (§34.8's and
   §35.12's) and `b272675c^` finds the same set each time: `GridSceneTests`' seven, `ThemedLibraryTriggerTests`' two,
   `PreferencesThemeTests`' reset, and `ShaderBenchTests`, which is not in the Mistress filter. Of these only
   `GridSceneTests` builds controls on its own thread while other classes dispatch. The trigger facts build brushes
@@ -5386,7 +5386,7 @@ third case already was; `PreferencesThemeTests` resets in `InitializeAsync` and 
 **Neither run of the unfixed build failed with the start-up message.** The plan recorded that message in six runs,
 one test each, and recorded runs without it too (§18's first build, §38.16), so two clean runs neither support
 nor weaken the attribution; a comparison of broad runs cannot decide it at this rate, and the attribution rests on
-§4.77.2 instead. The unfixed build's failures are not this defect. It ran from a copy outside the tree
+§4.78.2 instead. The unfixed build's failures are not this defect. It ran from a copy outside the tree
 (`~/.cache/emusen/headless-order/pre/`), so `ScreenScraperEmbedTests`' five and `ScrapeCredentialTests`' two, which run
 `git` against the tree the assembly sits in, failed on the location (git's exit code 128). Run 2's
 `ScrapeStatusWindowTests.A_closed_status_window_lets_go_of_the_run_and_stops_its_timer` failed its own assertion, inside
@@ -5402,7 +5402,7 @@ requests after Pause), is also in the body: a different fault, not investigated 
 - Runs of the named tests beside the unfixed `GridSceneTests` alone (42 tests, three runs) failed nothing. In a
   six-class run the seven facts overlap few start-ups; a broad run gives them hundreds.
 
-#### 4.77.5 The guard
+#### 4.78.5 The guard
 
 `Common/OffDispatcherTests.cs` with `Fixtures/OffDispatcherScan.cs`. It reads IL by reflection, about a second for the
 whole assembly, and runs in the ordinary suite.
@@ -5431,12 +5431,12 @@ methods (only constructors are counted), a delegate stored in one place and run 
 and a site reached only through a recursive cycle, which is memoised as clean. It is a tripwire for the common shape,
 a plain fact that builds a control or a picture, not a proof that no test works off the dispatcher.
 
-#### 4.77.6 Not done
+#### 4.78.6 Not done
 
 - `ShaderBenchTests` still builds its `GameFrameControl` off the dispatcher; it needs a Vulkan device, and the load rule
   kept GPU tests out of this work.
-- The seven Vulkan classes of §4.77.3 were not run alone.
+- The seven Vulkan classes of §4.78.3 were not run alone.
 - `AvaloniaTestIsolation(PerAssembly)` would keep one application for the whole run and remove the per-dispatch reset
   that the race needs. It was not tried: it changes what every UI test starts from, and it would hide the defect rather
   than remove it.
-- The *"Stack empty"* failure of §4.77.2 was seen in two runs of the tool and not traced.
+- The *"Stack empty"* failure of §4.78.2 was seen in two runs of the tool and not traced.

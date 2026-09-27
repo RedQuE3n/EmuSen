@@ -8,10 +8,10 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Common
 {
-    // No test builds Avalonia objects off the headless session's dispatcher - see EmuSen_Settings_Reference.md §4.77.5.
+    // No test builds Avalonia objects off the headless session's dispatcher - see EmuSen_Settings_Reference.md §4.78.5.
     public class OffDispatcherTests
     {
-        // The race tool does it on purpose; the shader bench needs a Vulkan device and was not run, so it is listed rather than changed - §4.77.5.
+        // The race tool does it on purpose; the shader bench needs a Vulkan device and was not run, so it is listed rather than changed - §4.78.5.
         private static readonly string[] NotRunHere =
         [
             "EmuSen.WiseMan.Common.HeadlessRaceTool.A_picture_off_the_dispatcher_borrows_whichever_application_is_running",

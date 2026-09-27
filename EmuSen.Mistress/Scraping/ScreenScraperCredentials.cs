@@ -7,13 +7,25 @@ using EmuSen.Galaxia;
 
 namespace EmuSen.Mistress.Scraping
 {
-    // EmuSen's own developer identity at ScreenScraper, read from a 0600 file outside every repository and never shipped - see EmuSen_BigPicture.md §5.7 and §17.
+    // Where the developer credentials in use came from; the embedded ones are never written anywhere or shown.
+    public enum DeveloperOrigin { TreeFile, UserFile, Embedded }
+
+    // EmuSen's own developer identity at ScreenScraper: a 0600 file outside every repository, else what a published build carries - see EmuSen_Settings_Reference.md §4.65.
     public sealed class DeveloperCredentials
     {
         public const string FileName = "screenscraper-developer.json";
 
-        public DeveloperCredentials(string devId, string devPassword, string softName)
+        // The manifest resource ScreenScraperDeveloper.targets embeds at publish; must match EmuSenScreenScraperResource there.
+        public const string ResourceName = "EmuSen.Mistress.Scraping.Developer";
+
+        public const string NoneHere = "this build carries no developer credentials and EmuSen's developer file is not on this computer";
+
+        // Replaced by tests with a fake blob; the default reads this assembly's own resource, which only a publish puts there.
+        internal static Func<Stream?> EmbeddedSource = () => typeof(DeveloperCredentials).Assembly.GetManifestResourceStream(ResourceName);
+
+        public DeveloperCredentials(string devId, string devPassword, string softName, DeveloperOrigin origin = DeveloperOrigin.TreeFile)
         {
+            Origin = origin;
             DevId = devId;
             DevPassword = devPassword;
             SoftName = softName;
@@ -25,6 +37,7 @@ namespace EmuSen.Mistress.Scraping
         public string DevId { get; }
         public string DevPassword { get; }
         public string SoftName { get; }
+        public DeveloperOrigin Origin { get; }
 
         // Never the id or password, so a log line or an exception holding this object says nothing it should not.
         public override string ToString() => $"ScreenScraper developer credentials for {SoftName}";
@@ -37,28 +50,71 @@ namespace EmuSen.Mistress.Scraping
             yield return Path.Combine(ConfigStore.LegacyDirectory, FileName);
         }
 
+        // The tree's own file, then ~/.config/EmuSen's, then the build's embedded credentials.
         public static DeveloperCredentials? Load()
         {
+            DeveloperOrigin origin = DeveloperOrigin.TreeFile;
             foreach (string path in Locations())
-                if (Read(path) is { } found) return found;
-            return null;
+            {
+                if (Read(path, origin) is { } found) return found;
+                origin = DeveloperOrigin.UserFile;
+            }
+            return Embedded();
         }
 
         // Null for a missing or unreadable file, or one without all three fields; the reason is never the file's contents.
-        public static DeveloperCredentials? Read(string path)
+        public static DeveloperCredentials? Read(string path, DeveloperOrigin origin = DeveloperOrigin.TreeFile)
         {
             try
             {
-                if (!File.Exists(path)) return null;
-                JsonNode? root = JsonNode.Parse(File.ReadAllText(path));
-                string? id = root?["devid"]?.GetValue<string>(), password = root?["devpassword"]?.GetValue<string>(), soft = root?["softname"]?.GetValue<string>();
-                if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(soft)) return null;
-                return new DeveloperCredentials(id, password, soft);
+                return File.Exists(path) ? Parse(File.ReadAllText(path), origin) : null;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or FormatException)
             {
                 return null;
             }
+        }
+
+        public static DeveloperCredentials? Embedded()
+        {
+            try
+            {
+                using Stream? stream = EmbeddedSource();
+                if (stream is null) return null;
+                using var memory = new MemoryStream();
+                stream.CopyTo(memory);
+                return Decode(memory.ToArray());
+            }
+            catch (IOException)
+            {
+                return null;
+            }
+        }
+
+        // What ScreenScraperDeveloper.targets writes: "ESSD", a version, the key's length, the key, then the JSON XORed with it; null for anything else.
+        public static DeveloperCredentials? Decode(byte[] blob)
+        {
+            try
+            {
+                int keyLength = blob.Length > 5 ? blob[5] : 0;
+                if (blob.Length <= 6 + keyLength || keyLength == 0 || blob[0] != 'E' || blob[1] != 'S' || blob[2] != 'S' || blob[3] != 'D' || blob[4] != 1) return null;
+                byte[] body = new byte[blob.Length - 6 - keyLength];
+                for (int i = 0; i < body.Length; i++) body[i] = (byte)(blob[6 + keyLength + i] ^ blob[6 + i % keyLength]);
+                try { return Parse(System.Text.Encoding.UTF8.GetString(body), DeveloperOrigin.Embedded); }
+                finally { Array.Clear(body); }
+            }
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException or ArgumentException)
+            {
+                return null;
+            }
+        }
+
+        private static DeveloperCredentials? Parse(string json, DeveloperOrigin origin)
+        {
+            JsonNode? root = JsonNode.Parse(json);
+            string? id = root?["devid"]?.GetValue<string>(), password = root?["devpassword"]?.GetValue<string>(), soft = root?["softname"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(soft)) return null;
+            return new DeveloperCredentials(id, password, soft, origin);
         }
     }
 

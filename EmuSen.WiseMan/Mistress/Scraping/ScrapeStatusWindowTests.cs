@@ -308,7 +308,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Scrape(window, ScrapeScope.ThisGame(game));
             ScrapeStatusWindow status = window.ScrapeStatusShown!;
             status.Refresh();
-            Assert.Equal("Why it stopped: EmuSen's developer file is not on this computer.", TextOf(status, "ScrapeStatusWhy"));
+            Assert.Equal("Why it stopped: this build carries no developer credentials and EmuSen's developer file is not on this computer.", TextOf(status, "ScrapeStatusWhy"));
             Assert.Empty(Server.Asked);
         });
 

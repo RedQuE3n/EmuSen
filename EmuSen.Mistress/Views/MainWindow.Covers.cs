@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen;
 using EmuSen.Galaxia.Library;
+using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Library;
 
 namespace EmuSen.Mistress.Views
@@ -48,6 +49,7 @@ namespace EmuSen.Mistress.Views
                 string tag = await OpenVgdbDownload.FetchAsync(_http!, OpenVgdbPath);
                 if (_recordsClosed) return;
                 StatusText.Text = $"OpenVGDB {tag} downloaded.";
+                ScrapeChanged?.Invoke();
                 if (_appSettings.OpenEmuFallback && ScrapeRunning) StartFetcher();
             }
             catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or TaskCanceledException or System.Text.Json.JsonException)
@@ -94,6 +96,39 @@ namespace EmuSen.Mistress.Views
             if (result.Saved is null || _coverRefreshPosted) return;
             _coverRefreshPosted = true;
             Dispatcher.UIThread.Post(() => { _coverRefreshPosted = false; if (!_recordsClosed) RefreshCovers(); }, DispatcherPriority.Background);
+        }
+
+        // Q42: the player's Remove in Preferences, never automatic; a test answers the confirm instead of a person - see EmuSen_Settings_Reference.md §4.65.
+        internal static Func<MainWindow, Task<bool>> ConfirmRemoveOpenVgdb = owner => Dialogs.ConfirmAsync(owner, "Remove OpenVGDB",
+            "Delete OpenVGDB, the game database OpenEmu's failover uses, from home/Library? Covers it already found stay. It is downloaded again from GitHub the next time a run you start needs the failover.",
+            "Remove", "Keep");
+
+        long? IScrapeHost.OpenVgdbBytes => File.Exists(OpenVgdbPath) ? new FileInfo(OpenVgdbPath).Length : null;
+
+        bool IScrapeHost.CanRemoveOpenVgdb => !_downloadingDatabase && !ScrapeRunning && File.Exists(OpenVgdbPath);
+
+        async Task<string?> IScrapeHost.RemoveOpenVgdbAsync()
+        {
+            if (!File.Exists(OpenVgdbPath)) return "OpenVGDB is not downloaded.";
+            if (_downloadingDatabase || ScrapeRunning) return "OpenVGDB is in use by a run; remove it when the run has finished.";
+            if (!await ConfirmRemoveOpenVgdb(this)) return null;
+            if (_downloadingDatabase || ScrapeRunning) return "OpenVGDB is in use by a run; remove it when the run has finished.";
+            // The failover's worker holds the database open; it is let go of first, and the next run starts a fresh one.
+            _fetcher?.Dispose();
+            _fetcher = null;
+            try
+            {
+                long bytes = new FileInfo(OpenVgdbPath).Length;
+                File.Delete(OpenVgdbPath);
+                if (File.Exists(OpenVgdbPath + ".part")) File.Delete(OpenVgdbPath + ".part");
+                StatusText.Text = "OpenVGDB removed";
+                ScrapeChanged?.Invoke();
+                return $"OpenVGDB was removed ({bytes / 1048576.0:0.#} MB). It is downloaded again the next time a run you start needs OpenEmu's failover.";
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return $"Could not remove OpenVGDB: {ex.Message}";
+            }
         }
 
         private void StopOnlineCovers()

@@ -22,8 +22,14 @@ namespace EmuSen.WiseMan.Mistress.Scraping
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenScrapeCredentialTests", Guid.NewGuid().ToString("N"));
 
+        private static readonly System.Reflection.FieldInfo EmbeddedSource =
+            typeof(DeveloperCredentials).GetField("EmbeddedSource", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+
+        private readonly object _realEmbedded = EmbeddedSource.GetValue(null)!;
+
         public void Dispose()
         {
+            EmbeddedSource.SetValue(null, _realEmbedded);
             ConfigStore.OverrideDirectory = null;
             ConfigStore.OverrideLegacyDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch { }
@@ -100,6 +106,109 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Null(DeveloperCredentials.Load());
         }
 
+        // --- Q40: the credentials a published build carries (§4.65) ---
+
+        // The layout ScreenScraperDeveloper.targets writes; ScreenScraperEmbedTests checks the target's own output against the same decoder.
+        internal static byte[] Scramble(string json, int keyLength = 32)
+        {
+            byte[] body = Encoding.UTF8.GetBytes(json), key = System.Security.Cryptography.RandomNumberGenerator.GetBytes(keyLength);
+            byte[] blob = new byte[6 + key.Length + body.Length];
+            "ESSD"u8.CopyTo(blob);
+            blob[4] = 1;
+            blob[5] = (byte)key.Length;
+            key.CopyTo(blob, 6);
+            for (int i = 0; i < body.Length; i++) blob[6 + key.Length + i] = (byte)(body[i] ^ key[i % key.Length]);
+            return blob;
+        }
+
+        private void Embed(byte[]? blob) => EmbeddedSource.SetValue(null, (Func<Stream?>)(() => blob is null ? null : new MemoryStream(blob)));
+
+        private static string DeveloperJson(string id, string password) => JsonSerializer.Serialize(new { devid = id, devpassword = password, softname = "EmuSen-Test" });
+
+        [Fact]
+        public void The_tree_s_file_comes_first_then_the_user_s_then_what_the_build_carries()
+        {
+            string config = Path.Combine(_root, "config"), legacy = Path.Combine(_root, "legacy");
+            ConfigStore.OverrideDirectory = config;
+            ConfigStore.OverrideLegacyDirectory = legacy;
+            Embed(null);
+            Assert.Null(DeveloperCredentials.Load());
+
+            Embed(Scramble(DeveloperJson("FAKEEMBEDID", "FAKEEMBEDPW")));
+            DeveloperCredentials embedded = DeveloperCredentials.Load()!;
+            Assert.Equal(("FAKEEMBEDID", "FAKEEMBEDPW", "EmuSen-Test", DeveloperOrigin.Embedded), (embedded.DevId, embedded.DevPassword, embedded.SoftName, embedded.Origin));
+
+            WriteDeveloper(legacy, "FAKELEGACY");
+            Assert.Equal(("FAKELEGACY", DeveloperOrigin.UserFile), (DeveloperCredentials.Load()!.DevId, DeveloperCredentials.Load()!.Origin));
+            WriteDeveloper(config, "FAKECONFIG");
+            Assert.Equal(("FAKECONFIG", DeveloperOrigin.TreeFile), (DeveloperCredentials.Load()!.DevId, DeveloperCredentials.Load()!.Origin));
+
+            // A broken file in the tree is passed over, not taken as the end of the search.
+            File.WriteAllText(Path.Combine(config, DeveloperCredentials.FileName), "{\"devid\":");
+            Assert.Equal("FAKELEGACY", DeveloperCredentials.Load()!.DevId);
+            File.Delete(Path.Combine(legacy, DeveloperCredentials.FileName));
+            Assert.Equal(DeveloperOrigin.Embedded, DeveloperCredentials.Load()!.Origin);
+        }
+
+        [Fact]
+        public void The_embedded_credentials_are_redacted_everywhere_never_printed_and_never_written()
+        {
+            string config = Path.Combine(_root, "config"), legacy = Path.Combine(_root, "legacy");
+            ConfigStore.OverrideDirectory = config;
+            ConfigStore.OverrideLegacyDirectory = legacy;
+            string id = "FAKEEMB" + Guid.NewGuid().ToString("N")[..8], password = "FAKEEMBPW&" + Guid.NewGuid().ToString("N")[..8];
+            Embed(Scramble(DeveloperJson(id, password)));
+
+            DeveloperCredentials developer = DeveloperCredentials.Load()!;
+            Assert.Equal(DeveloperOrigin.Embedded, developer.Origin);
+            Assert.Equal("a *** and *** and ***", ScrapeRedactor.Redact($"a {id} and {password} and {Uri.EscapeDataString(password)}"));
+            Assert.DoesNotContain(password, developer.ToString());
+            Assert.DoesNotContain(id, developer.ToString());
+            Assert.False(Directory.Exists(config) && Directory.EnumerateFileSystemEntries(config).Any());
+            Assert.False(Directory.Exists(legacy));
+
+            // Nothing a player saves carries them either.
+            new MemberAccount("FAKEMEMBERX", "FAKEMEMBERXPW").Save();
+            new EmuSen.Galaxia.Models.AppSettings().Save();
+            foreach (string file in Directory.EnumerateFiles(config, "*", SearchOption.AllDirectories))
+                Assert.DoesNotContain(password, File.ReadAllText(file));
+            Assert.False(File.Exists(Path.Combine(config, DeveloperCredentials.FileName)));
+        }
+
+        [Theory]
+        [InlineData("wrong magic")]
+        [InlineData("truncated")]
+        [InlineData("no key")]
+        [InlineData("not json")]
+        [InlineData("half")]
+        [InlineData("newer version")]
+        public void A_blob_that_is_not_what_the_target_writes_is_no_credentials(string kind)
+        {
+            byte[] blob = kind switch
+            {
+                "not json" => Scramble("devid=FAKEX devpassword=FAKEY"),
+                "half" => Scramble("{\"devid\":\"FAKEX\",\"softname\":\"x\"}"),
+                _ => Scramble(DeveloperJson("FAKEX", "FAKEY")),
+            };
+            if (kind == "wrong magic") blob[0] = (byte)'X';
+            if (kind == "truncated") blob = blob[..20];
+            if (kind == "no key") blob[5] = 0;
+            if (kind == "newer version") blob[4] = 2;
+            Assert.Null(DeveloperCredentials.Decode(blob));
+            Assert.NotNull(DeveloperCredentials.Decode(Scramble(DeveloperJson("FAKEX", "FAKEY"))));
+        }
+
+        [Fact]
+        public void The_scrambled_bytes_hold_no_credential_in_plain_text()
+        {
+            byte[] blob = Scramble(DeveloperJson("FAKEPLAINID", "FAKEPLAINPASSWORD"));
+            string asText = Encoding.UTF8.GetString(blob);
+            Assert.DoesNotContain("FAKEPLAINPASSWORD", asText);
+            Assert.DoesNotContain("FAKEPLAINID", asText);
+            Assert.DoesNotContain("devpassword", asText);
+            Assert.Equal("FAKEPLAINPASSWORD", DeveloperCredentials.Decode(blob)!.DevPassword);
+        }
+
         [Fact]
         public void The_member_account_is_its_own_file_readable_only_by_its_owner()
         {
@@ -150,7 +259,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         [Fact]
         public void No_tracked_file_holds_a_real_devpassword()
         {
-            string? real = RealDeveloperPassword();
+            string[] real = RealDeveloperValues();
             var offending = new List<string>();
             foreach (string file in TrackedFiles())
             {
@@ -159,23 +268,25 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 byte[] bytes = File.ReadAllBytes(path);
                 string text = Encoding.UTF8.GetString(bytes);
                 bool placeholderOnly = DevPasswordValue.Matches(text).All(m => m.Groups[1].Value.StartsWith("FAKE", StringComparison.OrdinalIgnoreCase));
-                bool holdsReal = real is not null && (text.Contains(real, StringComparison.Ordinal) || text.Contains(Uri.EscapeDataString(real), StringComparison.Ordinal));
+                bool holdsReal = real.Any(r => text.Contains(r, StringComparison.Ordinal) || text.Contains(Uri.EscapeDataString(r), StringComparison.Ordinal));
                 if (!placeholderOnly || holdsReal) offending.Add(file);
             }
             Assert.True(offending.Count == 0, "devpassword in: " + string.Join(", ", offending));
         }
 
-        private static string? RealDeveloperPassword()
+        // Read only to be looked for; never handed to anything that sends, embeds or prints it.
+        internal static string[] RealDeveloperValues()
         {
             string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EmuSen", DeveloperCredentials.FileName);
             try
             {
                 using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(path));
-                return doc.RootElement.TryGetProperty("devpassword", out JsonElement p) && p.GetString() is { Length: >= 4 } s ? s : null;
+                // The id is not secret and is an ordinary word in tracked files, so only the password is looked for (§4.65).
+                return doc.RootElement.TryGetProperty("devpassword", out JsonElement p) && p.GetString() is { Length: >= 4 } s ? [s] : [];
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             {
-                return null;
+                return [];
             }
         }
     }

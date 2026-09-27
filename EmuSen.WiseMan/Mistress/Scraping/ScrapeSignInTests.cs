@@ -120,7 +120,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             PreferencesWindow prefs = Prefs(window);
             Type(prefs, User, Secret);
             Press(prefs, "ScreenScraperLogInButton", () => Answered(prefs));
-            Assert.StartsWith("Signing in can't be checked or used on this computer: EmuSen's developer file is not here", Said(prefs));
+            Assert.StartsWith("Signing in can't be checked or used here: this build carries no developer credentials and EmuSen's developer file is not on this computer", Said(prefs));
             Assert.Empty(Server.Asked);
             Assert.False(File.Exists(MemberAccount.PathOf));
         });

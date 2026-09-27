@@ -13,6 +13,7 @@ namespace EmuSen.Mistress.Views
     public interface IScrapeHost
     {
         bool HasDeveloperCredentials { get; }
+        DeveloperOrigin? DeveloperOrigin => HasDeveloperCredentials ? Scraping.DeveloperOrigin.TreeFile : null;
         string Status { get; }
         QuotaSnapshot? Quota { get; }
         event Action? ScrapeChanged;
@@ -38,6 +39,11 @@ namespace EmuSen.Mistress.Views
         System.Threading.Tasks.Task<SignInAnswer> SignInAsync(string user, string password);
         System.Threading.Tasks.Task<SignInAnswer> CheckMemberAsync();
         string SignOut();
+
+        // OpenVGDB's download and its Remove (Q42) - see EmuSen_Settings_Reference.md §4.65.
+        long? OpenVgdbBytes => null;
+        bool CanRemoveOpenVgdb => false;
+        System.Threading.Tasks.Task<string?> RemoveOpenVgdbAsync() => System.Threading.Tasks.Task.FromResult<string?>(null);
     }
 
     // Preferences' Scraping tab: ScreenScraper, the member account, what to fetch, region and language, the quota, and OpenEmu's failover - see EmuSen_Settings_Reference.md §4.60.
@@ -74,6 +80,10 @@ namespace EmuSen.Mistress.Views
         private readonly Button _resume = Ui.Button("Resume", () => { });
         private readonly Button _cancel = Ui.Button("Cancel Scraping", () => { });
         private readonly ProgressBar _progress = new() { Name = "ScrapeProgressBar", Minimum = 0, Maximum = 1, HorizontalAlignment = HorizontalAlignment.Stretch };
+        private readonly TextBlock _vgdbText = new() { Name = "OpenVgdbStatusText", TextWrapping = Avalonia.Media.TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+        private readonly Button _vgdbRemove = Ui.Button("Remove", () => { });
+        private readonly HintText _vgdbMessage = new() { Name = "OpenVgdbRemoveMessage" };
+        private LunaSwitch? _fallback;
 
         // The shelves a scope can name, Game Boy Color as its own; the first entry is the whole library.
         public const string AllShelves = "Every console";
@@ -106,8 +116,15 @@ namespace EmuSen.Mistress.Views
             _resume.Click += (_, _) => { _host?.ResumeScrape(); Show(); };
             _cancel.Name = "ScrapeCancelButton";
             _cancel.Click += (_, _) => { _host?.CancelScrape(); Show(); };
+            _vgdbRemove.Name = "OpenVgdbRemoveButton";
+            _vgdbRemove.Click += async (_, _) => await RemoveOpenVgdbAsync();
 
-            bool developer = _host?.HasDeveloperCredentials == true;
+            string developer = _host?.DeveloperOrigin switch
+            {
+                Scraping.DeveloperOrigin.Embedded => "This build carries EmuSen's developer credentials, so ScreenScraper can be used without a file of your own; a member account below only raises your limits.",
+                null => $"ScreenScraper cannot be used here: {DeveloperCredentials.NoneHere}.",
+                _ => "EmuSen's developer file is on this computer.",
+            };
             return
             [
                 new FieldRow
@@ -116,7 +133,7 @@ namespace EmuSen.Mistress.Views
                     Hint = "Covers, screenshots, marquees, mix images and each game's description, developer, publisher, genre, players, rating and release date, from screenscraper.fr. "
                         + "For each game it sends the file's name, size and three hashes (MD5, CRC32, SHA-1), the console, EmuSen's developer credentials and your member account if one is below, so ScreenScraper sees which games you have. "
                         + "What comes back is written by ScreenScraper's contributors and the art belongs to its publishers; it is kept in home/Media and never shared. "
-                        + (developer ? "EmuSen's developer file is on this computer." : "EmuSen's developer file is not on this computer, so ScreenScraper cannot be used here; builds do not carry it."),
+                        + developer,
                     Content = Switch("ScrapingSwitch", "Use ScreenScraper", _settings.Scraping, v => _settings.Scraping = v),
                 },
                 new FieldRow
@@ -172,7 +189,9 @@ namespace EmuSen.Mistress.Views
                     Hint = "Only for a game ScreenScraper has no cover for, or while ScreenScraper cannot be used (no developer file, today's quota used up, the service closed or refusing this build). "
                         + "Mistress then downloads OpenVGDB, the game database OpenEmu uses (about 9 MB, from GitHub), and asks thumbnails.libretro.com for the game's box, then the address OpenVGDB gives (GameFAQs). "
                         + "Those servers see which of those games you have. OpenVGDB states no licence and the covers are other people's scans. They are kept in home/Media/openemu.",
-                    Content = Switch("OpenEmuFallbackSwitch", "Use OpenEmu's sources (OpenVGDB and libretro thumbnails) when ScreenScraper has nothing", _settings.OpenEmuFallback, v => _settings.OpenEmuFallback = v),
+                    Content = Ui.Stack(6,
+                        _fallback = Switch("OpenEmuFallbackSwitch", "Use OpenEmu's sources (OpenVGDB and libretro thumbnails) when ScreenScraper has nothing", _settings.OpenEmuFallback, v => _settings.OpenEmuFallback = v),
+                        Ui.Row(8, _vgdbRemove, _vgdbText), _vgdbMessage),
                 },
             ];
         }
@@ -244,9 +263,31 @@ namespace EmuSen.Mistress.Views
             _memberText.Text = text;
         }
 
+        // Q42: what is on disk, and Remove only while nothing is using it; nothing ever deletes it but this button.
+        private void ShowOpenVgdb()
+        {
+            long? bytes = _host?.OpenVgdbBytes;
+            _vgdbText.Text = bytes is long b
+                ? $"OpenVGDB is downloaded: {b / 1048576.0:0.#} MB in home/Library."
+                : "OpenVGDB is not downloaded. It is fetched from GitHub the first time a run you start needs the failover.";
+            _vgdbRemove.IsVisible = bytes is not null;
+            _vgdbRemove.IsEnabled = _host?.CanRemoveOpenVgdb == true;
+        }
+
+        private async System.Threading.Tasks.Task RemoveOpenVgdbAsync()
+        {
+            if (_host is null) return;
+            bool hadFocus = _vgdbRemove.IsFocused;
+            if (await _host.RemoveOpenVgdbAsync() is string said) _vgdbMessage.Text = said;
+            Show();
+            // The button hides once the file is gone; the focus goes to the switch above it, so a pad is never left with nothing focused.
+            if (hadFocus && !_vgdbRemove.IsVisible) _fallback?.Focus(Avalonia.Input.NavigationMethod.Directional);
+        }
+
         private void Show()
         {
             ShowMember();
+            ShowOpenVgdb();
             _status.Text = _host?.Status ?? "";
             bool running = _host?.ScrapeRunning == true;
             _start.IsEnabled = _host is not null && !running;

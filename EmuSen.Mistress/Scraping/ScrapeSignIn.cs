@@ -15,7 +15,7 @@ namespace EmuSen.Mistress.Scraping
         public bool SignedIn => Result == SignInResult.SignedIn;
 
         public static SignInAnswer NoDeveloper() => new(SignInResult.NoDeveloperFile, null,
-            "Signing in can't be checked or used on this computer: EmuSen's developer file is not here, so nothing can be sent to ScreenScraper.");
+            $"Signing in can't be checked or used here: {DeveloperCredentials.NoneHere}, so nothing can be sent to ScreenScraper.");
 
         // ScreenScraper answers a wrong member with 403 "Erreur de login : Vérifier les identifiants utilisateurs !" (measured, plan §17.9); a refused developer is 403 too, told apart by its text.
         public static SignInAnswer From(ScrapeStatus status, string body)

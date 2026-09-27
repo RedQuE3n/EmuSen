@@ -81,7 +81,7 @@ namespace EmuSen.Mistress.Views
                 Ui.Buttons(buttons)).Margin(16);
         }
 
-        // Rows under a large title in a panel of its own, over the screen: no Close button, since B and Select close it; Apply and Cancel where the rows apply.
+        // Rows under ES-DE's title in a panel of its own, over the screen: no Close button, since B and Select close it; Apply and Cancel where the rows apply.
         private void BuildMenu(string game, IReadOnlyList<GameOption> options, bool applies, PadFamily family)
         {
             SheetLayer.SetChromeless(this, true);
@@ -104,7 +104,7 @@ namespace EmuSen.Mistress.Views
             Content = new MenuPanel
             {
                 Name = "GameOptionsMenu",
-                Title = game,
+                Title = MainWindow.GameOptionsMenuTitle,
                 HintFamily = family,
                 Hints = MainWindow.GameOptionsHints(applies, adjustable),
                 Child = new ScrollViewer { Content = _entries, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden },

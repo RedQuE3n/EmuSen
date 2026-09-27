@@ -82,6 +82,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(menu.IsVisible);
             Assert.False(s.Window.GetControl<Control>("PadMenuDesk").IsVisible);
             Assert.Equal("Main Menu", menu.Title);
+            Assert.Equal("EmuSen 0.9.0", menu.Footer);
             Rect panel = InWindow(menu, menu.PanelBounds, s.Window);
             AssertCentred(panel, s.Window.GetControl<Control>("ScreenContent").Bounds.Size);
 
@@ -128,6 +129,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Window window = ThemedCollectionsTests.Sheets(s).Current!;
             Assert.True(SheetLayer.GetChromeless(window));
             MenuPanel menu = ThemedCollectionsTests.Named<MenuPanel>(s, "GameOptionsMenu");
+            Assert.Equal("Gamelist Options", menu.Title);
             Rect panel = InWindow(menu, menu.PanelBounds, s.Window);
             AssertCentred(panel, s.Window.GetControl<Control>("ScreenContent").Bounds.Size);
 
@@ -152,6 +154,23 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.Select();
             s.Settle();
             Assert.False(s.Window.GetControl<BlurBackdrop>("MenuBackdrop").IsVisible);
+        }, default);
+
+        // Over a running game the title is the game's name as the library shows it, with no extension (Q81).
+        [Fact]
+        public Task The_in_game_menu_is_titled_with_the_game_s_name_as_the_library_shows_it() => Session.Dispatch(() =>
+        {
+            using var s = new ThemedSession();
+            ThemedLibraryPadTests.Enter(s, "snes");
+            string game = s.Game!;
+            s.Pad.A();
+            s.Settle();
+            s.Pad.Chord(SDL3.SDL.GamepadButton.Back, SDL3.SDL.GamepadButton.Start);
+            s.Settle();
+            MenuPanel menu = s.Window.GetControl<MenuPanel>("PadMenuBig");
+            Assert.True(menu.IsEffectivelyVisible);
+            Assert.Equal(game, menu.Title);
+            Assert.DoesNotContain(".sfc", menu.Title!);
         }, default);
 
         // F4 and Backspace, the keyboard's Start and B in the themed view (settings reference §4.52a), open and close the new menu as they did the old.

@@ -4392,13 +4392,14 @@ are `EmuSen_BigPicture.md` §32; the toolkit's pieces are LunaP's §181.
 In a big-screen session, Start (or F4, §4.52a) and a game's Select now open a **wide panel in the middle of the screen**,
 over the screen blurred and darkened:
 
-- a large upper-case title: *Main Menu* over the library, the game's name over a running game and in a game's options;
+- a large upper-case title: *Main Menu* over the library, the game's name over a running game (as the library names it,
+  with no extension or folder), and *Gamelist Options* over a game's or a folder's options, as ES-DE titles them;
 - full-width upper-case rows separated by thin rules, the chosen row a dark bar across the whole panel;
 - a **chevron** on a row that opens another screen (Cheats, Graphics Settings, Preferences, Theme Settings, Game
   Collection Settings, Edit This Game's Metadata, Filter Gamelist and the others);
 - a value at the right of a row that has one (*Slot 1* beside Save State, the reason Rewind cannot run), and **arrows**
   around a value that Left and Right step (State Slot, Speed, Jump To…, Sort Games By);
-- a small footer line, *EmuSen* and its version, under the pad menu;
+- a small footer line, *EmuSen 0.9.0*, the program's version (§4.69.7), under the pad menu;
 - **no Close button**: B and Start close the pad menu, B applies and Select cancels a game's options, as before. A game's
   options that apply something (the themed gamelist's) keep an Apply and a Cancel button under the rows;
 - **one help bar** at the bottom centre, the pad's own buttons drawn with upper-case labels (*Close Menu*, *Select*,
@@ -4468,7 +4469,7 @@ are what they were; only the way they are drawn changed.
 - **A desktop session** keeps the bordered menu, no backdrop and the list's own rows.
 
 Two existing tests changed their expectations where the look changed and nowhere else.
-`ThemedGameOptionsTests.Select_opens_…` reads the game's name from the panel's title rather than a text block.
+`ThemedGameOptionsTests.Select_opens_…` reads the menu's title from the panel rather than a text block (since Q85, *Gamelist Options* rather than the game's name).
 `ThemedCollectionsTests.The_options_sheet_…` reads *1 filter set* from the Filter Gamelist row's value rather than a
 text block beside the button. Every other pad, menu and sheet test passed unchanged. Twelve mutants (six here, six in
 LunaP) were each caught (BigPicture §32.5).
@@ -4478,7 +4479,23 @@ LunaP) were each caught (BigPicture §32.5).
 - **The settings sheets**: Theme Settings (with pass 4's Interface tab), Game Collection Settings, Preferences in a
   big-screen session and the metadata editor keep their sheet look. That is the second stage.
 - **A dropdown opened from a row** (A on Sort Games By) drops down the stock list, not an ES-DE list screen.
-- **The in-game title** is the file's name with its extension, as the desktop's menu shows it.
 - **The pad menu on the desktop** (Guide over a desktop window) keeps its desktop look.
 - Nothing ran on the handheld or with a real pad; ES-DE was not run for this section. Its look was read from the
   captures of 2026-09-26.
+
+#### 4.69.7 The program's version: 0.9.0
+
+The player set EmuSen's version to 0.9.0 on 2026-09-27 (Q84). It is set once, in `Directory.Build.props` at the
+repository root, and every project that does not set its own carries it. EmuSen.Galaxia and EmuSen.Cauldron keep their
+own 0.1.0. Until then no project set one, and the SDK's default of 1.0.0 was what the program reported.
+
+The places that read it:
+- the big-screen menus' footer;
+- the User-Agent of the cover downloads (`EmuSen/0.9.0`);
+- the build name a new save state's record stores, with the commit after a `+`;
+- the file and product version of the published executables.
+
+ScreenScraper's `softname` does not come from it and is unchanged. A state recorded by an earlier build keeps the
+*1.0.0* its record says; whether a state loads is decided by its state version, never by this. BigPicture §32.11 has
+the survey.
+

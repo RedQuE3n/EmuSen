@@ -1208,6 +1208,16 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   - **A direction, not yet a decision to build:** "i would like to eventually retire sourcing game info from openemus
     library and use screenscraper." §26 is the plan for it; §27 records what was built for Q18 and Q19.
 
+- **Q80 to Q86, the big-screen menus' look (2026-09-27, approving §32's stage 1):**
+  - **Q80:** keep *Main Menu* as the Start menu's title over the library.
+  - **Q81:** over a running game the title is the game's name as the library shows it, with no extension or folder.
+  - **Q82:** keep the chosen row's text white on the bar.
+  - **Q83:** keep Barlow Condensed.
+  - **Q84:** "Do version 0.9.0": the footer reads *EmuSen 0.9.0*, from the product version at its source, not a string
+    in the footer (§32.11).
+  - **Q85:** match ES-DE: a game's options, and a folder's, are titled *Gamelist Options*.
+  - **Q86:** build ES-DE's list screen for an option row in stage 2.
+
 ## 11. Sources
 
 - ES-DE: `THEMES.md`, `USERGUIDE.md`, `LICENSE`, `es-app/src/scrapers/ScreenScraper.cpp` and `.h`, read at master on
@@ -6909,6 +6919,9 @@ guess from this stage's pace and not a measurement:
 
 ### 32.10 Questions for the player
 
+*All seven were answered on 2026-09-27, with stage 1's look approved; the answers are in §10.1 and were built as §32.11
+records. The questions are kept as they were asked.*
+
 - **Q80, the Start menu's title over the library.** *Main Menu*, as ES-DE, is what it shows now; the desktop's says
   *EmuSen*. Keep *Main Menu*?
 - **Q81, the in-game title.** The running game's file name with its extension (*Cobalt Harbor (Synthetic).sfc*), as the
@@ -6920,3 +6933,33 @@ guess from this stage's pace and not a measurement:
 - **Q85, a game's options' title.** The game's name, as before; ES-DE titles the same menu *Gamelist Options*. Which?
 - **Q86, A on an option row.** It drops down the stock list today. Build ES-DE's list screen in stage 2 (§32.8, item 3),
   or leave A to step as Right does?
+
+### 32.11 The answers built (2026-09-27)
+
+- **Q81.** Over a running game the Start menu's title is the name the library shows: the themed view's (the player's
+  edit over ScreenScraper's name over the file's name) when the library is a theme, else the sidebar's (the player's edit
+  over the file's name), with no extension or folder in either. `EsdeMenusTests` checks it against the name the themed
+  gamelist showed for the game it launched. The desktop's menu still shows the file's name; it was not asked about.
+- **Q85.** A game's options, and a folder's, are titled *Gamelist Options*. `ThemedGameOptionsTests` and `EsdeMenusTests`
+  read it; the game's name no longer appears in the menu.
+- **Q84, the version.** The 1.0.0 was nobody's decision: no project set a version, so the .NET SDK's default, 1.0.0, was
+  every assembly's, and `MainWindow.BuildName` reads `EmuSen.dll`'s informational version (`1.0.0+<commit>`). A new
+  `Directory.Build.props` at the repository root sets `Version` to 0.9.0. Every project that does not set its own now
+  carries 0.9.0: EmuSen, Mistress, Hotaru, Pharaoh, Serenity, Endymion, DianaOS, WiseMan.
+  - EmuSen.Galaxia and EmuSen.Cauldron keep their own 0.1.0.
+  - LunaP comes from its own repository and is not affected.
+  - The Rust cores' versions are Cargo's and are not affected.
+
+  What reads it, found by searching the tree for the version attributes, `GetName().Version`, `FileVersionInfo` and
+  the MSBuild version properties:
+  - the menus' footer, now *EmuSen 0.9.0*;
+  - the covers' HTTP User-Agent (`EmuSen/0.9.0`, was `EmuSen/1.0.0`);
+  - the *Build* a new save state's record stores (`0.9.0+<commit>`), shown in the media view and in the load-state
+    messages. Only the state version decides whether a state loads, so an older record that says 1.0.0 is shown as
+    it is and still loads.
+
+  Nothing in the publish layout reads the version. ScreenScraper's `softname` is unchanged. The file and product
+  version of the published executables now say 0.9.0.
+- `EsdeMenusTests` asserts the footer reads *EmuSen 0.9.0*. The affected pictures of §32.6 were rendered again and
+  looked at, and the two side-by-sides were composed again.
+

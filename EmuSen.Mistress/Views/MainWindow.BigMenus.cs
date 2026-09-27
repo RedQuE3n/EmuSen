@@ -40,6 +40,17 @@ namespace EmuSen.Mistress.Views
             MenuBackdrop.Radius = 14 * scale;
         }
 
+        // The running game as the library names it, with no extension or folder (Q81): the themed view's name, else the sidebar's.
+        private string RunningGameTitle()
+        {
+            if (_currentRomPath is not { } path) return PadMenuTitle.Text ?? "Game";
+            if (_appSettings.LibraryStyle == EmuSen.Galaxia.Models.AppSettings.LibraryStyleTheme) return MetadataFor(path).Title;
+            return DisplayTitle(new EmuSen.Mistress.Library.RomEntry(path));
+        }
+
+        // ES-DE's title for a game's options, whatever the entry (Q85).
+        internal const string GameOptionsMenuTitle = "Gamelist Options";
+
         // The pad menu's list moves into the big panel for a big-screen session and back into the desktop's box after.
         private void ApplyBigMenuLook(bool on)
         {

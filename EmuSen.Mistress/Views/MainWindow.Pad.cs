@@ -255,7 +255,7 @@ namespace EmuSen.Mistress.Views
 
             PadMenuTitle.Text = inGame ? _currentDisplayName ?? "Game" : "EmuSen";
             PadMenuHint.Text = PadHints.Face("A  Choose      B  Close      Left Right  Change");
-            if (_bigScreen) ShowBigPadMenu(inGame ? PadMenuTitle.Text : "Main Menu", _padMenuEntries.Any(e => e.Adjust is not null));
+            if (_bigScreen) ShowBigPadMenu(inGame ? RunningGameTitle() : "Main Menu", _padMenuEntries.Any(e => e.Adjust is not null));
             PadMenuList.Refresh(_padMenuEntries);
             PadMenuList.Select(_padMenuEntries[0]);
             PadMenuPanel.IsVisible = true;

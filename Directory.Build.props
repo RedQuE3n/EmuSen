@@ -1,0 +1,8 @@
+<Project>
+
+  <!-- EmuSen's product version, which every assembly without its own carries; the menus' footer and the covers' User-Agent read it - see EmuSen_Settings_Reference.md §4.69.7. -->
+  <PropertyGroup>
+    <Version>0.9.0</Version>
+  </PropertyGroup>
+
+</Project>

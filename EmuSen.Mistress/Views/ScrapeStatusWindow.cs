@@ -172,7 +172,7 @@ namespace EmuSen.Mistress.Views
 
             _tallySection.IsVisible = true;
             _tallies.Text = $"Found {run.Found:N0} · Not found {run.Unknown:N0} · Failed {run.Failed:N0} · Skipped {run.Skipped:N0} · Filled by OpenEmu {run.FailoverFound:N0}"
-                + (run.Retrying > 0 ? $" · {run.Retrying:N0} to retry later" : "");
+                + (run.Retrying > 0 ? $" · {run.Retrying:N0} to retry later" : "") + (run.Unchanged > 0 ? $" · {run.Unchanged:N0} kept unchanged" : "");
             _failure.IsVisible = run.LastFailure is not null;
             _failure.Text = ScrapeRedactor.Redact(run.LastFailure is { } f ? $"Last failure: {f}" : "");
 
@@ -281,6 +281,12 @@ namespace EmuSen.Mistress.Views
             "marquee" => "marquee",
             "titlescreen" => "title screen",
             "miximage" => "mix image",
+            "backcover" => "back cover",
+            "3dbox" => "3D box",
+            "physicalmedia" => "physical media",
+            "fanart" => "fan art",
+            "manual" => "manual",
+            "video" => "video",
             _ => kind ?? "picture",
         };
 

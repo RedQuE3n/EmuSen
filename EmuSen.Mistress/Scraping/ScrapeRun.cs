@@ -5,12 +5,52 @@ using System.Threading;
 
 namespace EmuSen.Mistress.Scraping
 {
-    // What the player chose to scrape: one game; one shelf or the whole library; optionally only the games with no cover - see EmuSen_Settings_Reference.md §4.60.
+    // ES-DE's "Scrape these games", as far as Mistress can answer it; NoCover is Mistress's own and its default - see EmuSen_BigPicture.md §38.
+    public enum ScrapeCriteria { All, Favourites, NoMetadata, NoGameImage, NoGameVideo, NoCover }
+
+    // What the player chose to scrape: one game; one shelf or the whole library; which of its games; and whether what is kept is asked again - see EmuSen_Settings_Reference.md §4.60 and §4.76.
     public sealed record ScrapeScope(string? Game = null, string? Shelf = null, bool MissingArtOnly = false)
     {
         public static ScrapeScope ThisGame(string path) => new(Game: path);
 
         public bool IsWholeLibrary => Game is null && Shelf is null;
+
+        public ScrapeCriteria Criteria { get; init; } = ScrapeCriteria.All;
+
+        // ES-DE's "Overwrite files and data", for this run only.
+        public bool Refresh { get; init; }
+
+        public ScrapeCriteria Effective => MissingArtOnly ? ScrapeCriteria.NoCover : Criteria;
+
+        public static readonly IReadOnlyList<(ScrapeCriteria Value, string Setting, string Text)> CriteriaChoices =
+        [
+            (ScrapeCriteria.NoCover, "nocover", "Games with no cover"), (ScrapeCriteria.All, "all", "All games"), (ScrapeCriteria.Favourites, "favorites", "Favourite games"),
+            (ScrapeCriteria.NoMetadata, "nometadata", "No metadata"), (ScrapeCriteria.NoGameImage, "nogameimage", "No game image"), (ScrapeCriteria.NoGameVideo, "nogamevideo", "No game video"),
+        ];
+
+        public static ScrapeCriteria CriteriaOf(string? setting) => CriteriaChoices.FirstOrDefault(c => c.Setting == setting) is { Setting: not null } c ? c.Value : ScrapeCriteria.NoCover;
+    }
+
+    // What each kind is expected to cost a found game: the share of §17.9's 39 found answers offering it, and the mean size of the file the region rule would take - see EmuSen_BigPicture.md §38.
+    public static class ScrapeCost
+    {
+        public static readonly IReadOnlyDictionary<string, (double Offered, double MeanKB)> Kinds = new Dictionary<string, (double, double)>(StringComparer.Ordinal)
+        {
+            ["cover"] = (33 / 39.0, 653), ["screenshot"] = (36 / 39.0, 5), ["marquee"] = (36 / 39.0, 90), ["titlescreen"] = (36 / 39.0, 6), ["miximage"] = (39 / 39.0, 565),
+            ["backcover"] = (33 / 39.0, 468), ["3dbox"] = (33 / 39.0, 351), ["physicalmedia"] = (33 / 39.0, 449), ["fanart"] = (25 / 39.0, 397),
+            ["manual"] = (27 / 39.0, 2254), ["video"] = (32 / 39.0, 1354),
+        };
+
+        // §17.9: a found game with the four default kinds took a median 13.3 s at 128 KB/s, of which about 9.4 s is their 1.2 MB; the rest is the requests' own time.
+        public static readonly TimeSpan RequestsPerGame = TimeSpan.FromSeconds(3.9);
+
+        public const int AssumedKBps = 128;
+
+        public static double Requests(IEnumerable<ScrapeMediaKind> kinds) => 1 + kinds.Sum(k => Kinds.TryGetValue(k.EsdeType, out var c) ? c.Offered : 1);
+
+        public static double KB(IEnumerable<ScrapeMediaKind> kinds) => kinds.Sum(k => Kinds.TryGetValue(k.EsdeType, out var c) ? c.Offered * c.MeanKB : 0);
+
+        public static TimeSpan Time(int games, double kb, int? kbps) => RequestsPerGame * games + TimeSpan.FromSeconds(kb / Math.Max(1, kbps ?? AssumedKBps));
     }
 
     // What a scope comes to before it is started: the count, what ScreenScraper has not been asked, and the cost - shown in the confirm step.
@@ -19,15 +59,26 @@ namespace EmuSen.Mistress.Scraping
         // Measured in the live run (plan §17.9): a found game with the default kinds took a median 13 s on one thread at 128 KB/s.
         public static readonly TimeSpan PerGame = TimeSpan.FromSeconds(13);
 
+        // Found games asked again: every one under a refresh, else those wanting a kind they may offer and lack.
+        public int AskedAgain { get; init; }
+
+        // The expected requests and megabytes by §38's offer rates, beside MaxRequests' bound.
+        public double ExpectedRequests { get; init; }
+        public double ExpectedMB { get; init; }
+        public bool Refresh { get; init; }
+
         public string Describe()
         {
             string games = Games == 1 ? "1 game" : $"{Games:N0} games";
             if (Games == 0) return "No game in this choice needs scraping.";
+            int asking = NotYetAsked + AskedAgain;
+            string again = AskedAgain == 0 ? "" : Refresh ? $", {AskedAgain:N0} found before and asked again to refresh them" : $", {AskedAgain:N0} found before and asked again for kinds they lack";
             string ask = ScreenScraperUsable
-                ? NotYetAsked == 0
+                ? asking == 0
                     ? $"{games}, all asked of ScreenScraper before: no request is made for what is already kept."
-                    : $"{games}, {NotYetAsked:N0} not yet asked of ScreenScraper: up to {MaxRequests:N0} requests"
+                    : $"{games}, {NotYetAsked:N0} not yet asked of ScreenScraper{again}: up to {MaxRequests:N0} requests"
                       + (RequestsLeftToday is int left ? $" of the {left:N0} left today" : "")
+                      + (ExpectedRequests > 0 ? $" (about {ExpectedRequests:N0} and {Megabytes(ExpectedMB)} expected)" : "")
                       + $", about {Duration(Time)} on one thread."
                 : $"{games}. ScreenScraper cannot be used: {WhyNot}.";
             string failover = Failover
@@ -35,6 +86,8 @@ namespace EmuSen.Mistress.Scraping
                 : "";
             return ask + failover;
         }
+
+        private static string Megabytes(double mb) => mb >= 1024 ? $"{mb / 1024:0.#} GB" : mb >= 10 ? $"{mb:N0} MB" : $"{mb:0.#} MB";
 
         private static string Duration(TimeSpan t) =>
             t.TotalMinutes < 1 ? $"{Math.Max(1, (int)t.TotalSeconds)} seconds" : t.TotalHours < 1 ? $"{(int)Math.Ceiling(t.TotalMinutes)} minutes" : $"{t.TotalHours:F1} hours";
@@ -67,6 +120,7 @@ namespace EmuSen.Mistress.Scraping
         public int Failed { get; set; }
         public int Skipped { get; set; }
         public int Retrying { get; set; }
+        public int Unchanged { get; set; }
         public string? LastFailure { get; set; }
         public int FailoverAsked { get; set; }
         public int FailoverFound { get; set; }
@@ -102,7 +156,7 @@ namespace EmuSen.Mistress.Scraping
             lock (_gate)
             {
                 _current = activity;
-                if (activity is { Step: ScrapeStep.Arrived, Saved: string saved }) _picture = saved;
+                if (activity is { Step: ScrapeStep.Arrived, Saved: string saved } && ScrapeRules.KindOf(activity.Kind ?? "")?.Payload is null or MediaPayload.Image) _picture = saved;
             }
             Touch();
         }
@@ -119,6 +173,7 @@ namespace EmuSen.Mistress.Scraping
             if (result.Outcome is ScrapeOutcome.Found or ScrapeOutcome.Unknown or ScrapeOutcome.Error or ScrapeOutcome.Missing)
             {
                 Done++;
+                Unchanged += result.Unchanged;
                 if (result.Skipped) Skipped++;
                 else if (result.Outcome == ScrapeOutcome.Found) Found++;
                 else if (result.Outcome == ScrapeOutcome.Unknown) Unknown++;

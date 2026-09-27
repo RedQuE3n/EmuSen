@@ -32,6 +32,18 @@ namespace EmuSen.Mistress.Scraping
         public string? Offered { get; init; }
         public string? Detail { get; init; }
         public DateTime FetchedAt { get; init; }
+
+        // The kinds Offered speaks for; an answer kept before Pass 8 knew only ScrapeRules.FirstKinds (§38).
+        public string? KindsKnown { get; init; }
+
+        // Whether this answer says the game has a kind, or cannot say because the kind came after it was kept.
+        public bool MayOffer(string esdeType)
+        {
+            string[] offered = (Offered ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries);
+            if (offered.Contains(esdeType)) return true;
+            string[] known = KindsKnown is { } k ? k.Split(',', StringSplitOptions.RemoveEmptyEntries) : ScrapeRules.FirstKinds.Select(f => f.EsdeType).ToArray();
+            return !known.Contains(esdeType);
+        }
     }
 
     public sealed record StoredMedia(string Type, string RelativePath, string? Region, string? Sha1);
@@ -117,6 +129,9 @@ namespace EmuSen.Mistress.Scraping
                 name     TEXT    PRIMARY KEY,
                 done_at  TEXT    NOT NULL
             );
+            """,
+            """
+            ALTER TABLE scrape_game ADD COLUMN kinds_known TEXT;
             """,
         };
 
@@ -294,15 +309,15 @@ namespace EmuSen.Mistress.Scraping
 
         public void Record(ScrapedRecord r) => Write("""
             INSERT OR REPLACE INTO scrape_game (md5, bytes, status, game_id, rom_id, system_id, name, description, developer, publisher, genre, players, rating,
-                release_date, region, language, matched_by, offered, detail, fetched_at)
+                release_date, region, language, matched_by, offered, detail, fetched_at, kinds_known)
             VALUES ($md5, $bytes, $status, $game, $rom, $system, $name, $description, $developer, $publisher, $genre, $players, $rating,
-                $release, $region, $language, $matched, $offered, $detail, $fetched)
+                $release, $region, $language, $matched, $offered, $detail, $fetched, $known)
             """,
             ("$md5", r.Md5), ("$bytes", r.Bytes), ("$status", r.State.ToString()), ("$game", r.GameId), ("$rom", r.RomId), ("$system", r.SystemId),
             ("$name", r.Name), ("$description", r.Description), ("$developer", r.Developer), ("$publisher", r.Publisher), ("$genre", r.Genre),
             ("$players", r.Players), ("$rating", r.Rating), ("$release", r.ReleaseDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
             ("$region", r.Region), ("$language", r.Language), ("$matched", r.MatchedBy), ("$offered", r.Offered), ("$detail", r.Detail),
-            ("$fetched", Stamp(r.FetchedAt)));
+            ("$fetched", Stamp(r.FetchedAt)), ("$known", r.KindsKnown));
 
         public ScrapedRecord? Game(string md5, long bytes)
         {
@@ -326,7 +341,7 @@ namespace EmuSen.Mistress.Scraping
             {
                 if (_closed) return all;
                 using SqliteCommand command = _db.CreateCommand();
-                command.CommandText = "SELECT f.path, g.md5, g.bytes, g.status, g.game_id, g.rom_id, g.system_id, g.name, g.description, g.developer, g.publisher, g.genre, g.players, g.rating, g.release_date, g.region, g.language, g.matched_by, g.offered, g.detail, g.fetched_at FROM scrape_file f JOIN scrape_game g ON g.md5 = f.md5 AND g.bytes = f.bytes WHERE g.status = 'Found'";
+                command.CommandText = "SELECT f.path, g.md5, g.bytes, g.status, g.game_id, g.rom_id, g.system_id, g.name, g.description, g.developer, g.publisher, g.genre, g.players, g.rating, g.release_date, g.region, g.language, g.matched_by, g.offered, g.detail, g.fetched_at, g.kinds_known FROM scrape_file f JOIN scrape_game g ON g.md5 = f.md5 AND g.bytes = f.bytes WHERE g.status = 'Found'";
                 using SqliteDataReader row = command.ExecuteReader();
                 while (row.Read()) all[row.GetString(0)] = ReadGame(row, 1);
             }
@@ -340,7 +355,7 @@ namespace EmuSen.Mistress.Scraping
             {
                 if (_closed) return null;
                 using SqliteCommand command = _db.CreateCommand();
-                command.CommandText = "SELECT g.md5, g.bytes, g.status, g.game_id, g.rom_id, g.system_id, g.name, g.description, g.developer, g.publisher, g.genre, g.players, g.rating, g.release_date, g.region, g.language, g.matched_by, g.offered, g.detail, g.fetched_at FROM scrape_file f JOIN scrape_game g ON g.md5 = f.md5 AND g.bytes = f.bytes WHERE g.status = 'Found' AND f.path = $path";
+                command.CommandText = "SELECT g.md5, g.bytes, g.status, g.game_id, g.rom_id, g.system_id, g.name, g.description, g.developer, g.publisher, g.genre, g.players, g.rating, g.release_date, g.region, g.language, g.matched_by, g.offered, g.detail, g.fetched_at, g.kinds_known FROM scrape_file f JOIN scrape_game g ON g.md5 = f.md5 AND g.bytes = f.bytes WHERE g.status = 'Found' AND f.path = $path";
                 command.Parameters.AddWithValue("$path", path);
                 using SqliteDataReader row = command.ExecuteReader();
                 return row.Read() ? ReadGame(row) : null;
@@ -538,6 +553,72 @@ namespace EmuSen.Mistress.Scraping
             }
         }
 
+        // --- orphaned media (§38) ---
+
+        public const string CleanupFolder = "CLEANUP";
+
+        // Files of the store's type folders whose game is gone: only under a system that still has games, as ES-DE cleans only enabled systems - see EmuSen_BigPicture.md §38.
+        public IReadOnlyList<string> Orphans(IReadOnlyDictionary<string, IReadOnlySet<string>> namesBySystem)
+        {
+            var orphans = new List<string>();
+            foreach ((string system, IReadOnlySet<string> names) in namesBySystem)
+            {
+                if (names.Count == 0) continue;
+                foreach (string folder in BigPicture.Scene.EsdeMediaFolder.Folders.Values.Distinct(StringComparer.Ordinal))
+                {
+                    string dir = System.IO.Path.Combine(Root, system, folder);
+                    if (!Directory.Exists(dir)) continue;
+                    foreach (string file in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+                    {
+                        string relative = System.IO.Path.GetRelativePath(dir, file);
+                        string name = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(relative) ?? "", System.IO.Path.GetFileNameWithoutExtension(relative)).Replace(System.IO.Path.DirectorySeparatorChar, '/');
+                        if (file.EndsWith(".part", StringComparison.Ordinal) || names.Contains(name)) continue;
+                        orphans.Add(System.IO.Path.GetRelativePath(Root, file));
+                    }
+                }
+            }
+            orphans.Sort(StringComparer.Ordinal);
+            return orphans;
+        }
+
+        // ES-DE's cleanup: each file moved, never deleted, to CLEANUP/<date_time>/ with its path kept, its media.db row dropped, and emptied folders removed.
+        public (int Moved, long Bytes, string Folder) CleanUp(IReadOnlyList<string> relatives, DateTimeOffset now)
+        {
+            string stamp = now.ToLocalTime().ToString("yyyy-MM-dd_HHmmss", CultureInfo.InvariantCulture);
+            string backup = System.IO.Path.Combine(Root, CleanupFolder, stamp);
+            string root = System.IO.Path.GetFullPath(Root).TrimEnd(System.IO.Path.DirectorySeparatorChar) + System.IO.Path.DirectorySeparatorChar;
+            int moved = 0;
+            long bytes = 0;
+            var log = new List<string>();
+            foreach (string relative in relatives)
+            {
+                string source = System.IO.Path.GetFullPath(System.IO.Path.Combine(Root, relative));
+                if (!source.StartsWith(root, StringComparison.Ordinal) || relative.StartsWith(CleanupFolder, StringComparison.Ordinal) || !File.Exists(source)) continue;
+                string target = System.IO.Path.Combine(backup, relative);
+                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(target)!);
+                long size = new FileInfo(source).Length;
+                File.Move(source, target, overwrite: false);
+                Write("DELETE FROM scrape_media WHERE path = $path", ("$path", relative));
+                moved++;
+                bytes += size;
+                log.Add(relative);
+                RemoveEmpty(System.IO.Path.GetDirectoryName(source)!, root);
+            }
+            if (moved > 0) File.WriteAllLines(System.IO.Path.Combine(backup, "cleanup.txt"), log.Prepend($"Moved here from {Root} on {now:yyyy-MM-dd HH:mm:ss zzz}"));
+            return (moved, bytes, backup);
+        }
+
+        // Up from a folder a file left, each folder removed while it is empty, stopping at a type folder's parent.
+        private static void RemoveEmpty(string dir, string root)
+        {
+            while (dir.Length > root.Length && System.IO.Path.GetRelativePath(root, dir).Split(System.IO.Path.DirectorySeparatorChar).Length > 1
+                   && Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any())
+            {
+                Directory.Delete(dir);
+                dir = System.IO.Path.GetDirectoryName(dir)!;
+            }
+        }
+
         // What the layout step did, file by file, oldest first.
         public IReadOnlyList<(string From, string To, string How)> Moves()
         {
@@ -580,7 +661,7 @@ namespace EmuSen.Mistress.Scraping
 
         // --- plumbing ---
 
-        private const string GameColumns = "SELECT md5, bytes, status, game_id, rom_id, system_id, name, description, developer, publisher, genre, players, rating, release_date, region, language, matched_by, offered, detail, fetched_at FROM scrape_game";
+        private const string GameColumns = "SELECT md5, bytes, status, game_id, rom_id, system_id, name, description, developer, publisher, genre, players, rating, release_date, region, language, matched_by, offered, detail, fetched_at, kinds_known FROM scrape_game";
 
         private static ScrapedRecord ReadGame(SqliteDataReader row, int o = 0) => new(row.GetString(o), row.GetInt64(o + 1), Enum.Parse<ScrapeState>(row.GetString(o + 2)))
         {
@@ -592,6 +673,7 @@ namespace EmuSen.Mistress.Scraping
             ReleaseDate = Text(row, o + 13) is string d ? DateTime.ParseExact(d, "yyyy-MM-dd", CultureInfo.InvariantCulture) : null,
             Region = Text(row, o + 14), Language = Text(row, o + 15), MatchedBy = Text(row, o + 16), Offered = Text(row, o + 17), Detail = Text(row, o + 18),
             FetchedAt = DateTime.Parse(row.GetString(o + 19), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+            KindsKnown = Text(row, o + 20),
         };
 
         private static string? Text(SqliteDataReader row, int i) => row.IsDBNull(i) ? null : row.GetString(i);

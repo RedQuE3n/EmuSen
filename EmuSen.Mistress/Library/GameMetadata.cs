@@ -91,24 +91,25 @@ namespace EmuSen.Mistress.Library
 
         public MetadataValue this[string field] => _values.TryGetValue(field, out MetadataValue v) ? v : default;
 
-        public static GameMetadata Resolve(string path, ScrapedRecord? scraped, IReadOnlyDictionary<string, string>? edits)
+        public static GameMetadata Resolve(string path, ScrapedRecord? scraped, IReadOnlyDictionary<string, string>? edits, bool scrapedNames = false)
         {
             var values = new Dictionary<string, MetadataValue>(StringComparer.Ordinal);
             foreach (MetadataField field in Fields)
             {
                 if (edits is not null && edits.TryGetValue(field.Key, out string? edited)) values[field.Key] = new MetadataValue(edited, MetadataSource.Edited);
-                else values[field.Key] = Baseline(path, scraped, field.Key);
+                else values[field.Key] = Baseline(path, scraped, field.Key, scrapedNames);
             }
             return new GameMetadata(path, values);
         }
 
         // What a field shows with no edit: ScreenScraper's text where it has some, else the default, which for the name is the file's.
-        public static MetadataValue Baseline(string path, ScrapedRecord? scraped, string field) =>
-            Scraped(scraped, field) is { } s ? new MetadataValue(s, MetadataSource.Scraped) : new MetadataValue(Default(path, field), MetadataSource.Default);
+        public static MetadataValue Baseline(string path, ScrapedRecord? scraped, string field, bool scrapedNames = false) =>
+            Scraped(scraped, field, scrapedNames) is { } s ? new MetadataValue(s, MetadataSource.Scraped) : new MetadataValue(Default(path, field), MetadataSource.Default);
 
-        // ScreenScraper's name is never a baseline, so the name's is the file's; the editor only offers it (Q18, §4.63).
-        public static string? Scraped(ScrapedRecord? r, string field) => r is null ? null : field switch
+        // ScreenScraper's name is a baseline only with "Game names" on (Q30, §4.76); otherwise the name's is the file's and the editor only offers it (Q18, §4.63).
+        public static string? Scraped(ScrapedRecord? r, string field, bool scrapedNames = false) => r is null ? null : field switch
         {
+            Name when scrapedNames => r.Name is { Length: > 0 } n ? n : null,
             Description => r.Description,
             Developer => r.Developer,
             Publisher => r.Publisher,

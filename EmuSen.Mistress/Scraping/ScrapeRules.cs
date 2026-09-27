@@ -6,8 +6,11 @@ using System.Text.RegularExpressions;
 
 namespace EmuSen.Mistress.Scraping
 {
+    // What a kind's file must be to be kept: a picture, a PDF manual or an MP4 clip - see EmuSen_BigPicture.md §38.
+    public enum MediaPayload { Image, Pdf, Video }
+
     // One kind of media Mistress fetches: ES-DE's media type and folder, and ScreenScraper's names for it in the order tried - see EmuSen_BigPicture.md §5.4.
-    public sealed record ScrapeMediaKind(string EsdeType, string Folder, IReadOnlyList<string> ScreenScraperTypes);
+    public sealed record ScrapeMediaKind(string EsdeType, string Folder, IReadOnlyList<string> ScreenScraperTypes, MediaPayload Payload = MediaPayload.Image);
 
     // What to fetch and in which region and language; the settings of Preferences, handed to the worker as one value.
     public sealed record ScrapeChoices
@@ -17,10 +20,19 @@ namespace EmuSen.Mistress.Scraping
         public bool Marquees { get; init; } = true;
         public bool TitleScreens { get; init; }
         public bool Miximages { get; init; } = true;
+        public bool BackCovers { get; init; }
+        public bool Boxes3D { get; init; }
+        public bool PhysicalMedia { get; init; }
+        public bool FanArt { get; init; }
+        public bool Manuals { get; init; }
+        public bool Videos { get; init; }
         public string Region { get; init; } = ScrapeRules.AutomaticRegion;
         public string Language { get; init; } = "en";
         public bool RegionFallback { get; init; } = true;
         public int Threads { get; init; } = 1;
+
+        // ES-DE's "Overwrite files and data" for one run: a found game is asked again, and a kept file whose checksum changed is fetched over it (§38).
+        public bool Refresh { get; init; }
 
         public IEnumerable<ScrapeMediaKind> Kinds()
         {
@@ -29,6 +41,12 @@ namespace EmuSen.Mistress.Scraping
             if (Marquees) yield return ScrapeRules.Marquee;
             if (TitleScreens) yield return ScrapeRules.TitleScreen;
             if (Miximages) yield return ScrapeRules.Miximage;
+            if (BackCovers) yield return ScrapeRules.BackCover;
+            if (Boxes3D) yield return ScrapeRules.Box3D;
+            if (PhysicalMedia) yield return ScrapeRules.PhysicalMedia;
+            if (FanArt) yield return ScrapeRules.FanArt;
+            if (Manuals) yield return ScrapeRules.Manual;
+            if (Videos) yield return ScrapeRules.Video;
         }
     }
 
@@ -43,7 +61,19 @@ namespace EmuSen.Mistress.Scraping
         public static readonly ScrapeMediaKind TitleScreen = new("titlescreen", "titlescreens", ["sstitle"]);
         public static readonly ScrapeMediaKind Miximage = new("miximage", "miximages", ["mixrbv2"]);
 
-        public static readonly IReadOnlyList<ScrapeMediaKind> AllKinds = [Cover, Screenshot, Marquee, TitleScreen, Miximage];
+        public static readonly ScrapeMediaKind BackCover = new("backcover", "backcovers", ["box-2D-back"]);
+        public static readonly ScrapeMediaKind Box3D = new("3dbox", "3dboxes", ["box-3D"]);
+        public static readonly ScrapeMediaKind PhysicalMedia = new("physicalmedia", "physicalmedia", ["support-2D"]);
+        public static readonly ScrapeMediaKind FanArt = new("fanart", "fanart", ["fanart"]);
+        public static readonly ScrapeMediaKind Manual = new("manual", "manuals", ["manuel"], MediaPayload.Pdf);
+        public static readonly ScrapeMediaKind Video = new("video", "videos", ["video-normalized"], MediaPayload.Video);
+
+        // The kinds before Pass 8: an answer recorded then listed only these as offered, so it says nothing of the others (§38).
+        public static readonly IReadOnlyList<ScrapeMediaKind> FirstKinds = [Cover, Screenshot, Marquee, TitleScreen, Miximage];
+
+        public static readonly IReadOnlyList<ScrapeMediaKind> AllKinds = [.. FirstKinds, BackCover, Box3D, PhysicalMedia, FanArt, Manual, Video];
+
+        public static ScrapeMediaKind? KindOf(string esdeType) => AllKinds.FirstOrDefault(k => k.EsdeType == esdeType);
 
         // ES-DE's documented fallback after the preferred region: world, USA, EU, Japan, then ScreenScraper's own ("custom").
         public static readonly IReadOnlyList<string> FallbackRegions = ["wor", "us", "eu", "jp", "ss"];
@@ -125,11 +155,30 @@ namespace EmuSen.Mistress.Scraping
             return null;
         }
 
-        // The extension a media file is written with: ScreenScraper's format when it is one of the kept images, else png.
-        public static string Extension(ScrapedMedia media) => media.Format?.ToLowerInvariant() switch
+        // The extension a media file is written with: a manual's is pdf and a clip's mp4; a picture's ScreenScraper's format when it is jpg, else png.
+        public static string Extension(ScrapedMedia media, MediaPayload payload = MediaPayload.Image) => payload switch
         {
-            "jpg" or "jpeg" => ".jpg",
-            _ => ".png",
+            MediaPayload.Pdf => ".pdf",
+            MediaPayload.Video => ".mp4",
+            _ => media.Format?.ToLowerInvariant() switch
+            {
+                "jpg" or "jpeg" => ".jpg",
+                _ => ".png",
+            },
         };
+
+        // ES-DE's search text from a file's name: the extension and every (...) and [...] taken out, underscores as spaces (USERGUIDE "Scraping process").
+        public static string SearchName(string fileName)
+        {
+            string stem = System.IO.Path.GetFileNameWithoutExtension(fileName);
+            string bare = Brackets().Replace(stem, " ").Replace('_', ' ');
+            return Spaces().Replace(bare, " ").Trim();
+        }
+
+        [GeneratedRegex(@"\([^()]*\)|\[[^\[\]]*\]")]
+        private static partial Regex Brackets();
+
+        [GeneratedRegex(@"\s+")]
+        private static partial Regex Spaces();
     }
 }

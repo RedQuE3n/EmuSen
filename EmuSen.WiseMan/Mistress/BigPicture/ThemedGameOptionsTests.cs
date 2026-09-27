@@ -103,7 +103,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Empty(s.Window.OwnedWindows);
             // In a big-screen session the menu carries ES-DE's title, not the game's name (§4.69, Q85).
             Assert.Equal("Gamelist Options", ((MenuPanel)Sheet(s).GetVisualDescendants().OfType<Control>().Single(c => c.Name == "GameOptionsMenu")).Title);
-            Assert.Equal(new[] { "Search...", "Add to Favourites", "Edit This Game's Metadata", "Use Another Game's Cover...", "Scrape This Game..." }, options.Entries.Select(b => b.Content as string));
+            Assert.Equal(new[] { "Search...", "Add to Favourites", "Edit This Game's Metadata", "Use Another Game's Cover...", "Scrape This Game...", "Find by Name..." }, options.Entries.Select(b => b.Content as string));
 
             // The view hears nothing under the sheet.
             s.Pad.Down();

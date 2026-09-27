@@ -69,7 +69,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.Controller);
             s.Pad.Right();
             Save(s, $"{prefix}-editor-choice");
-            ThemedGameOptionsTests.Reach(s, "MetaReset_" + GameMetadata.Completed);
+            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.Completed);
             Save(s, $"{prefix}-editor-reset");
             ThemedGameOptionsTests.Reach(s, "MetadataSave");
             Save(s, $"{prefix}-editor-buttons");

@@ -48,7 +48,7 @@ namespace EmuSen.Mistress.Views
             (string name, string system, string? art) = LaunchContent(game);
             _launchScreen.Backdrop = ThemedLibraryHost;
             LetGoOfTheThemedDirection(UiClock());
-            _launchScreen.Open(name, system, art, LaunchScreen.IsPopup(setting), UiClock(), duration);
+            _launchScreen.Open(name, system, art, LaunchScreen.IsPopup(setting), UiClock(), duration, MenusScaleUp);
             _launchWait = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             ScheduleLaunchScreen();
             return await _launchWait.Task;

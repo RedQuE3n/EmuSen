@@ -69,6 +69,7 @@ namespace EmuSen.Mistress.Views
                 return;
             }
             _gamepad.Poll();
+            _menuOpening.Advance(UiClock());
             // Before anything else reads the pad: the press that wakes the screensaver is its own (§4.75).
             if (StepScreensaver()) return;
             if (!KeyboardSteers() && !_gamepad.IsConnected) return;

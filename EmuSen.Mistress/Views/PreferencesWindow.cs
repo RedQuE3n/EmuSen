@@ -12,11 +12,12 @@ using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Theme;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.BigPicture;
+using EmuSen.Mistress.Input;
 
 namespace EmuSen.Mistress.Views
 {
     // OpenEmu's preference panes, as tabs: Library, Gameplay, Appearance, System Files - see EmuSen_Settings_Reference.md §4.36.
-    public class PreferencesWindow : ToolWindow
+    public class PreferencesWindow : ToolWindow, IPadDriven
     {
         private static readonly (string Value, string Text)[] ResumeChoices =
         {
@@ -74,7 +75,7 @@ namespace EmuSen.Mistress.Views
         // Parameterless constructor exists only for tooling - real code always uses the one below.
         public PreferencesWindow() : this(new AppSettings()) { }
 
-        public PreferencesWindow(AppSettings settings, IScrapeHost? scraping = null)
+        public PreferencesWindow(AppSettings settings, IScrapeHost? scraping = null, PadFamily? menu = null)
         {
             _settings = settings;
             var scrape = new ScrapePreferencesPane(settings, scraping);
@@ -266,7 +267,14 @@ namespace EmuSen.Mistress.Views
 
             _theme.Fill(LunaTheme.Available(), LunaTheme.Current);
             _theme.Chose += ChoseTheme;
+            // In a big-screen session, ES-DE's menus: a submenu for each tab (§4.72.8).
+            if (menu is { } family)
+                Form = new BigMenuForm(this, "Preferences", family, tabs.Items.OfType<TabItem>().Select(t => ((string)t.Header!, (Control)t.Content!)).ToList(), tabs);
         }
+
+        public BigMenuForm? Form { get; }
+
+        public bool OnPad(UiButton button) => Form is not null && button == UiButton.Back && Form.Back();
 
         // The list and its selection read again from the settings, as after a choice on the Theme Settings sheet.
         public void ShowBigPictureTheme()

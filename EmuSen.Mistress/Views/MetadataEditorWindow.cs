@@ -59,6 +59,9 @@ namespace EmuSen.Mistress.Views
         private bool _waitingForScrape;
         private bool _closed;
 
+        // Design sizes at 800 lines, from ES-DE's editor: a 42-pixel row with 19-pixel capitals, 26-pixel capitals on its buttons, and stars 20 pixels a piece (§34.12).
+        public const double RowPitch = 42, RowText = 27, ButtonText = 37, StarSize = 21;
+
         private const string PlayCountHint = "Mistress's own count; corrected here, it counts on from what is typed.", PlayTimeHint = "In seconds, as ES-DE keeps it.";
 
         // Parameterless constructor exists only for tooling - real code always uses the one below.
@@ -132,6 +135,17 @@ namespace EmuSen.Mistress.Views
 
         public MenuPanel? Menu => _menu;
 
+        // A choice field's values as this editor shows them: a big-screen row's short names, the desktop's full ones (§4.72).
+        public IReadOnlyList<(string Value, string Text)> ChoicesOf(string field)
+        {
+            MetadataField spec = GameMetadata.Fields.First(f => f.Key == field);
+            IReadOnlyList<(string Value, string Text)> choices = GameMetadata.ChoicesFor(spec, GamePath);
+            return _big ? choices.Select(c => (c.Value, GameMetadata.ShortText(spec, c))).ToList() : choices;
+        }
+
+        // Whether the field holds an edit that Reset (Reset's button, or West in a big-screen session) would remove.
+        public bool CanReset(string field) => _rows.TryGetValue(field, out var row) && row.Reset.IsVisible;
+
         private static Button Button(string text, string name, Action click)
         {
             Button b = Ui.Button(text, click);
@@ -168,7 +182,7 @@ namespace EmuSen.Mistress.Views
                 case Dropdown choice:
                     choice.Chose += chosen =>
                     {
-                        if (GameMetadata.ChoicesFor(field, GamePath).FirstOrDefault(c => c.Text == chosen as string) is { Text: not null } picked) Changed(field.Key, picked.Value);
+                        if (ChoicesOf(field.Key).FirstOrDefault(c => c.Text == chosen as string) is { Text: not null } picked) Changed(field.Key, picked.Value);
                     };
                     break;
             }
@@ -205,6 +219,11 @@ namespace EmuSen.Mistress.Views
         {
             SheetLayer.SetChromeless(this, true);
             var rows = new StackPanel { Name = "MetadataRows" };
+            // ES-DE's editor draws its rows smaller than its menus', measured on its own editor at 1280 by 800 (§34.12).
+            rows.Styles.Add(new Avalonia.Styling.Style(x => Avalonia.Styling.Selectors.OfType<MenuRow>(x))
+            {
+                Setters = { new Avalonia.Styling.Setter(MenuRow.RowHeightProperty, RowPitch), new Avalonia.Styling.Setter(MenuRow.TextSizeProperty, RowText) },
+            });
             foreach (MetadataField field in Shown)
             {
                 rows.Children.Add(Line(field));
@@ -222,18 +241,19 @@ namespace EmuSen.Mistress.Views
             rows.AddHandler(GotFocusEvent, (_, e) => { _focusedField = FieldOf(e.Source as Control); _statusFresh = false; ShowFooter(); }, handledEventsToo: true);
 
             var bar = new StackPanel { Name = "MetadataButtons", Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
-            foreach (Button b in buttons) bar.Children.Add(MenuRows.ApplyButton(b, 30));
+            foreach (Button b in buttons) bar.Children.Add(MenuRows.ApplyButton(b, ButtonText));
             // A button describes no field, so the footer lets go of the last one.
             bar.AddHandler(GotFocusEvent, (_, _) => { _focusedField = null; _statusFresh = false; ShowFooter(); }, handledEventsToo: true);
             Content = _menu = new MenuPanel
             {
                 Name = "MetadataMenu",
+                RowPitch = RowPitch,
                 Title = "Edit Metadata",
                 Subtitle = title + "\n" + Path.GetFileName(path),
                 FooterMaxLines = 2,
                 FooterSize = 22,
                 HintFamily = family,
-                Hints = Hints(),
+                Hints = Hints(reset: false),
                 Child = new ScrollViewer { Content = rows, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden },
                 Buttons = bar,
             };
@@ -246,16 +266,17 @@ namespace EmuSen.Mistress.Views
         }
 
         // ES-DE's help in the editor: Y scrapes, A chooses, B leaves, the pad moves and changes.
-        private static IReadOnlyList<HintEntry> Hints() =>
+        private static IReadOnlyList<HintEntry> Hints(bool reset) =>
         [
             new("Scrape") { Button = PadGlyphButton.North },
+            .. reset ? [new HintEntry("Reset") { Button = PadGlyphButton.West }] : Array.Empty<HintEntry>(),
             new("Select") { Button = PadHints.Swapped ? PadGlyphButton.East : PadGlyphButton.South },
             new("Back") { Button = PadHints.Swapped ? PadGlyphButton.South : PadGlyphButton.East },
             new("Change") { Button = PadGlyphButton.DPadLeftRight },
             new("Choose") { Button = PadGlyphButton.DPadUpDown },
         ];
 
-        // A field's row with its Reset beside it, shown only while the field holds an edit.
+        // A field's row; its Reset is the pad's West, not a button beside it.
         private Control Line(MetadataField field)
         {
             (Control _, Control editor, Button reset) = _rows[field.Key];
@@ -267,13 +288,12 @@ namespace EmuSen.Mistress.Views
                 _ => Hosted(field.Label, editor),
             };
             if (editor is TextBox text) MenuRows.SetValueLetterCase(text, LetterCase.None);
+            // ES-DE's editor shows "unknown" for these fields when they are empty, and nothing for the others (§34.12).
+            if (editor is TextBox unset && field.Key is GameMetadata.Developer or GameMetadata.Publisher or GameMetadata.Genre or GameMetadata.Players) unset.PlaceholderText = "unknown";
             if (!editor.IsEnabled) row.Opacity = 0.45;
-            MenuRows.ApplyButton(reset, 22);
-            reset.Margin = new Thickness(6, 0, 8, 0);
-            var line = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { row, reset } };
-            Grid.SetColumn(reset, 1);
-            _rows[field.Key] = (line, editor, reset);
-            return line;
+            // Reset is West on the pad and Delete on the keyboard here, named in the help bar while the focused field holds an edit (Q101).
+            _rows[field.Key] = (row, editor, reset);
+            return row;
         }
 
         // A text row's value as written, not upper-cased: a name or a count reads as typed.
@@ -289,14 +309,14 @@ namespace EmuSen.Mistress.Views
             switch (editor)
             {
                 case RatingPicker stars:
-                    stars.Bind(RatingPicker.StarSizeProperty, stars.GetObservable(MenuPanel.ScaleProperty, u => 30 * u));
+                    stars.Bind(RatingPicker.StarSizeProperty, stars.GetObservable(MenuPanel.ScaleProperty, u => StarSize * u));
                     stars.FilledColor ??= StarColor;
                     stars.UnfilledColor = EmptyStarColor;
                     break;
                 case DateStepper date:
                     date.IsFramed = false;
-                    date.NoDateText = "Unknown";
-                    date.Bind(DateStepper.FontSizeProperty, date.GetObservable(MenuPanel.ScaleProperty, u => 36 * u));
+                    date.NoDateText = "unknown";
+                    date.Bind(DateStepper.FontSizeProperty, date.GetObservable(MenuPanel.ScaleProperty, u => RowText * u));
                     date.Bind(DateStepper.FontPathProperty, date.GetObservable(MenuPanel.FontPathProperty));
                     date.ForegroundColor ??= StarColor;
                     break;
@@ -336,12 +356,16 @@ namespace EmuSen.Mistress.Views
             _menu.Footer = _statusFresh && Status is { Length: > 0 } status ? status
                 : _focusedField is { } field ? $"{LabelOf(field)}: {(HintOf(field) is { Length: > 0 } hint ? hint : "Not set.")}"
                 : null;
+            bool reset = _focusedField is { } focused && CanReset(focused);
+            if (reset != _resetHinted) _menu.Hints = Hints(_resetHinted = reset);
         }
+
+        private bool _resetHinted;
 
         // A choice with nothing to choose for this game is shown and not enabled, as ES-DE greys out its alternative emulator row.
         private Dropdown ChoiceBox(MetadataField field)
         {
-            IReadOnlyList<(string Value, string Text)> choices = GameMetadata.ChoicesFor(field, GamePath);
+            IReadOnlyList<(string Value, string Text)> choices = ChoicesOf(field.Key);
             var box = new Dropdown { MinWidth = _big ? 0 : 320, IsEnabled = choices.Count > 1 };
             box.Fill(choices.Select(c => c.Text).ToArray(), choices[0].Text);
             return box;
@@ -434,7 +458,7 @@ namespace EmuSen.Mistress.Views
                             break;
                         case LunaSwitch flag: flag.IsChecked = value == GameMetadata.Yes; break;
                         case Dropdown choice:
-                            IReadOnlyList<(string Value, string Text)> spec = GameMetadata.ChoicesFor(GameMetadata.Fields.First(f => f.Key == field), GamePath);
+                            IReadOnlyList<(string Value, string Text)> spec = ChoicesOf(field);
                             choice.Fill(spec.Select(c => c.Text).ToArray(), spec.FirstOrDefault(c => c.Value == (value ?? ""), spec[0]).Text);
                             break;
                     }
@@ -530,7 +554,7 @@ namespace EmuSen.Mistress.Views
         private async Task HideAsync()
         {
             if (!await AskAsync(HideText,
-                    "EmuSen never deletes or moves a game's file, so ES-DE's Delete is not offered. Hide this game from the library instead? Its file stays where it is; " +
+                    "EmuSen never deletes or moves a game's file. Hide this game from the library instead? Its file stays where it is; " +
                     "turn on Hidden Games in Preferences to list it again.",
                     "Hide", "Cancel") || _closed) return;
             _host.HideGame(GamePath);
@@ -544,6 +568,10 @@ namespace EmuSen.Mistress.Views
             {
                 case UiButton.Search:
                     _ = ScrapeAsync();
+                    return true;
+                // West (Delete on the keyboard) resets the focused field in a big-screen session (Q101).
+                case UiButton.Screensaver when _big:
+                    if (_focusedField is { } field && CanReset(field)) ResetField(field);
                     return true;
                 case UiButton.Back:
                     _ = LeaveAsync();

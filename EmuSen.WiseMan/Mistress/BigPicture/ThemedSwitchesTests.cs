@@ -62,16 +62,22 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ThemeSettingsWindow sheet = OpenInterface(s);
             PadAudit.Reach(Sheets(s).SheetOf(sheet)!, s.Pad, e => e is Control { Name: { } n } && n == name);
             s.Pad.A();
-            s.Pad.B();
+            PutAway(s);
             Assert.False(Sheets(s).IsPresenting);
             s.Settle();
+        }
+
+        // B back out of the Interface submenu and then out of the sheet, as ES-DE's menus go back a screen at a time (§4.72.8).
+        internal static void PutAway(ThemedSession s)
+        {
+            for (int guard = 0; guard < 4 && Sheets(s).IsPresenting; guard++) s.Pad.B();
         }
 
         internal static void Choose(ThemedSession s, string dropdown, string text)
         {
             ThemeSettingsWindow sheet = OpenInterface(s);
             Named<Dropdown>(sheet, dropdown).SelectedItem = text;
-            s.Pad.B();
+            PutAway(s);
             s.Settle();
         }
 
@@ -268,7 +274,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             string[] startup = ((System.Collections.IEnumerable)Named<Dropdown>(sheet, "StartupSystem").ItemsSource!).Cast<string>().ToArray();
             Assert.Equal(6, startup.Length);
             Assert.StartsWith("Default", startup[0]);
-            s.Pad.B();
+            PutAway(s);
         }, default);
 
         // ES-DE's quick scrolling overlay: off by default; on, a held list shows the passing game's first two letters over a shade once its repeats begin, a star over favourites kept on top, and nothing once let go.
@@ -359,7 +365,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(35, AppSettings.Load().BigPictureInterface.NavigationVolume);
             Assert.Equal(0.35f, Gain(), 3);
             slider.Value = 0;
-            s.Pad.B();
+            PutAway(s);
             s.Sounds.Clear();
             s.Pad.Right();
             s.Pad.A();
@@ -417,7 +423,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ThemedLibraryPadTests.Enter(s, "snes");
             Assert.Empty(Only<BadgeStrip>(s).Entries!);
             MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
-            ((Dropdown)editor.EditorOf(GameMetadata.Controller)).SelectedItem = "Super Nintendo";
+            ((Dropdown)editor.EditorOf(GameMetadata.Controller)).SelectedItem = "SNES";
             ThemedGameOptionsTests.Reach(s, "MetadataSave");
             s.Pad.A();
             s.Settle();

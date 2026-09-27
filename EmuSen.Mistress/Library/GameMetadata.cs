@@ -36,6 +36,16 @@ namespace EmuSen.Mistress.Library
             ("gamepad_nintendo_64", "Nintendo 64"), ("gamepad_generic", "Gamepad (generic)"), ("unknown", "Unknown"),
         ];
 
+        // A choice's short name for a big-screen row, where the controller types' full names do not fit (§4.72).
+        public static string ShortText(MetadataField field, (string Value, string Text) choice) => field.Key != Controller ? choice.Text : choice.Value switch
+        {
+            "gamepad_nintendo_nes" => "NES",
+            "gamepad_nintendo_snes" => "SNES",
+            "gamepad_nintendo_64" => "N64",
+            "gamepad_generic" => "Gamepad",
+            _ => choice.Text,
+        };
+
         // Q45: another game whose cover this one shows, the player's choice kept beside the edits but not a field of the editor - see EmuSen_Settings_Reference.md §4.65.
         public const string CoverFrom = "coverfrom";
 

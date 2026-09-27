@@ -219,6 +219,21 @@ namespace EmuSen.Mistress.BigPicture.Scene
             Advance(now);
             _repeat.Release();
             FadeMetadataIn(now);
+            ShowScrollLetters();
+        }
+
+        // ES-DE's quick scrolling overlay: over a held textlist once its repeats have faded the metadata out, until it is let go (§29).
+        public ScrollLetterOverlay ScrollLetters { get; } = new() { Foreground = Avalonia.Media.Colors.White };
+
+        private void ShowScrollLetters()
+        {
+            bool on = Data.ScrollOverlay && !IsSystemView && Primary?.Type == "textlist" && _repeat.Held && _metadata.To <= 0 && Data.Game is not null;
+            SceneGame? game = on ? Data.Game : null;
+            ScrollLetters.Width = Data.Screen.Width;
+            ScrollLetters.Height = Data.Screen.Height;
+            ScrollLetters.LetterSize = Data.Screen.Height * 0.15;
+            ScrollLetters.Star = game is { Favorite: true } && Data.System.FavoritesOnTop;
+            ScrollLetters.Letters = game is null ? null : new string(game.Name.Take(2).ToArray());
         }
 
         private void FadeMetadataIn(TimeSpan now)
@@ -259,6 +274,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             SceneBuilder scene = SceneBuilder.Build(View, Data);
             Root.Children.Clear();
             Root.Children.Add(scene.Canvas);
+            Root.Children.Add(ScrollLetters);
             _opacity.Clear();
             foreach (SceneEntry e in scene.Entries)
                 if (e.Control is { } c) _opacity[c] = c.Opacity;
@@ -282,6 +298,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         private void Apply()
         {
+            ShowScrollLetters();
             double fadeIn = Motion.ScrollFadeIn > TimeSpan.Zero && _changed ? new Glide(Motion.ScrollFadeInFrom, 1, _selectedAt, Motion.ScrollFadeIn).ValueAt(Now) : 1;
             double metadata = _metadata.ValueAt(Now);
             foreach (SceneEntry entry in Scene.Entries)

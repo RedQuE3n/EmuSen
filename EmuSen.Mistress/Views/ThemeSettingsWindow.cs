@@ -13,6 +13,7 @@ using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.BigPicture;
 using EmuSen.Mistress.BigPicture.Theme;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Mistress.Views
 {
@@ -42,6 +43,7 @@ namespace EmuSen.Mistress.Views
             var tabs = new Tabs { Name = "ThemeSettingsTabs" };
             tabs.Add("Options", Pane(_options));
             tabs.Add("Themes", Pane(Ui.Stack(12, _themes, _status)));
+            tabs.Add("Interface", Pane(Ui.Stack(12, new InterfaceSettingsPane(settings, () => { _settings.Save(); _applied(false); }).Rows())));
             if (BigPictureLooks.BuiltInCurrent(settings)) tabs.SelectedIndex = 1;
             Control buttons = Ui.Buttons(Ui.Button("Close", Close)).Margin(0, 12, 0, 0);
             DockPanel.SetDock(buttons, Dock.Bottom);
@@ -277,6 +279,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
             {
+                ErrorLog.Error("themes", "Could not check for a theme update", ex);
                 _status.Text = $"Could not check for an update: {ex.Message}";
             }
             FillThemes();
@@ -325,6 +328,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException)
             {
+                ErrorLog.Error("themes", "A theme update failed", ex);
                 _status.Text = $"The download failed, and the theme there before is unchanged: {ex.Message}";
             }
             finally
@@ -355,6 +359,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
+                ErrorLog.Error("themes", $"Could not remove {name}", ex);
                 _status.Text = $"Could not remove {name}: {ex.Message}";
             }
             Fill();

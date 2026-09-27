@@ -245,6 +245,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             C("badges", "slots", "favorite,completed", "favorite"),
             C("badges", "customBadgeIcon", "<customBadgeIcon badge=\"favorite\">{S1}</customBadgeIcon>", "<customBadgeIcon badge=\"favorite\">{S3}</customBadgeIcon>"),
             C("badges", "badgeIconColor", "FFFFFF", "FF0000"),
+            C("badges", "controllerPos", "0.5 0.5", "0.2 0.2") with { Context = "slots=controller", System = 8 },
+            C("badges", "controllerSize", "0.5", "1") with { Context = "slots=controller", System = 8 },
+            C("badges", "customControllerIcon", "<customControllerIcon controller=\"gamepad_nintendo_snes\">{S1}</customControllerIcon>",
+                "<customControllerIcon controller=\"gamepad_nintendo_snes\">{S3}</customControllerIcon>") with { Context = "slots=controller", System = 8 },
+            C("badges", "controllerIconColor", "FFFFFF", "FF0000") with { Context = "slots=controller", System = 8 },
+            C("badges", "folderLinkPos", "0.5 0.5", "0.2 0.2") with { Context = "slots=folder", System = 8, Game = 3 },
+            C("badges", "folderLinkSize", "0.5", "1") with { Context = "slots=folder", System = 8, Game = 3 },
+            C("badges", "customFolderLinkIcon", "{S1}", "{S3}") with { Context = "slots=folder", System = 8, Game = 3 },
+            C("badges", "folderLinkIconColor", "FFFFFF", "FF0000") with { Context = "slots=folder", System = 8, Game = 3 },
 
             C("helpsystem", "textColor", "FFFFFF", "FF0000"),
             C("helpsystem", "iconColor", "FFFFFF", "FF0000"),
@@ -344,6 +353,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             systems.Add((new ThemeSystem("all", "All Games", "auto-allgames", ThemeSystemKind.AutoCollection), SyntheticLibrary.Games(new ThemeSystem("all", "All Games", "all"), ".nes")));
             systems.Add((new ThemeSystem("snes", "Super Nintendo", "snes"), SyntheticLibrary.Games(SyntheticTheme.Snes, ".sfc").Select((g, i) => i == 5 ? g with { Folder = true } : g).ToList()));
             systems.Add((new ThemeSystem("mine", "mine", "mine", ThemeSystemKind.CustomCollection), SyntheticLibrary.Games(SyntheticTheme.Snes, ".sfc").Select((g, i) => g with { InCollection = i % 2 == 0 }).ToList()));
+            systems.Add((new ThemeSystem("pads", "Pads", "snes"), SyntheticLibrary.Games(SyntheticTheme.Snes, ".sfc")
+                .Select((g, i) => i == 3 ? g with { Folder = true, FolderLink = "Linked Game.sfc" } : g with { Controller = "gamepad_nintendo_snes" }).ToList()));
             return systems.Select(s => new SceneSystem(s.System, theme.Load(new ThemeChoices { ScreenWidth = W, ScreenHeight = H }, s.System), s.Games)).ToList();
         }
 

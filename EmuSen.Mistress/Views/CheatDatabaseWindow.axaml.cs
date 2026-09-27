@@ -10,6 +10,7 @@ using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Galaxia.Models;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Mistress.Views
 {
@@ -193,6 +194,7 @@ namespace EmuSen.Mistress.Views
             try { result = CheatImport.FromChtFile(registry, game.Path, _codec, replace: true); }
             catch (Exception ex)
             {
+                ErrorLog.Error("cheats", $"Couldn't read {game.Game}", ex);
                 StatusText.Text = $"Couldn't read {game.Game}: {ex.Message}";
                 return;
             }
@@ -294,6 +296,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex)
             {
+                ErrorLog.Error("cheats", "The cheat database download failed", ex);
                 StatusText.Text = $"Download failed: {ex.Message}";
             }
             finally

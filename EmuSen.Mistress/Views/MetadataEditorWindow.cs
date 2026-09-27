@@ -126,6 +126,7 @@ namespace EmuSen.Mistress.Views
                 MetadataKind.Rating => new RatingPicker { StarSize = 30 },
                 MetadataKind.Date => new DateStepper { FontSize = 18 },
                 MetadataKind.Flag => new LunaSwitch { Label = field.Label },
+                MetadataKind.Choice => ChoiceBox(field),
                 MetadataKind.LongText => new TextBox { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 110 },
                 _ => new TextBox(),
             };
@@ -145,8 +146,23 @@ namespace EmuSen.Mistress.Views
                 case RatingPicker rating: rating.Chose += v => Changed(field.Key, GameMetadata.FormatRating((float)v)); break;
                 case DateStepper date: date.Chose += d => Changed(field.Key, d is { } day ? GameMetadata.FormatDate(day) : ""); break;
                 case LunaSwitch flag: flag.IsCheckedChanged += (_, _) => Changed(field.Key, flag.IsChecked == true ? GameMetadata.Yes : GameMetadata.No); break;
+                case Dropdown choice:
+                    choice.Chose += chosen =>
+                    {
+                        if (GameMetadata.ChoicesFor(field, GamePath).FirstOrDefault(c => c.Text == chosen as string) is { Text: not null } picked) Changed(field.Key, picked.Value);
+                    };
+                    break;
             }
             return row;
+        }
+
+        // A choice with nothing to choose for this game is shown and not enabled, as ES-DE greys out its alternative emulator row.
+        private Dropdown ChoiceBox(MetadataField field)
+        {
+            IReadOnlyList<(string Value, string Text)> choices = GameMetadata.ChoicesFor(field, GamePath);
+            var box = new Dropdown { MinWidth = 320, IsEnabled = choices.Count > 1 };
+            box.Fill(choices.Select(c => c.Text).ToArray(), choices[0].Text);
+            return box;
         }
 
         // ScreenScraper's name as a suggestion under the Name box, taken only by a press - see EmuSen_Settings_Reference.md §4.63.
@@ -218,6 +234,10 @@ namespace EmuSen.Mistress.Views
                             date.StartDate = GameMetadata.ParseDate(Draft.Baseline(field).Value) ?? new DateTime(1990, 1, 1);
                             break;
                         case LunaSwitch flag: flag.IsChecked = value == GameMetadata.Yes; break;
+                        case Dropdown choice:
+                            IReadOnlyList<(string Value, string Text)> spec = GameMetadata.ChoicesFor(GameMetadata.Fields.First(f => f.Key == field), GamePath);
+                            choice.Fill(spec.Select(c => c.Text).ToArray(), spec.FirstOrDefault(c => c.Value == (value ?? ""), spec[0]).Text);
+                            break;
                     }
                     Describe(field);
                 }

@@ -89,6 +89,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or Microsoft.Data.Sqlite.SqliteException)
             {
+                ErrorLog.Error("scraping", "The media store could not be opened", ex);
                 StatusText.Text = $"The media store could not be opened: {ScrapeRedactor.Redact(ex.Message)}";
                 return false;
             }

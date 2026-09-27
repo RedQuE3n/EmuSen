@@ -747,7 +747,7 @@ fault was intermittent, and the frontend had kept no record of either occurrence
 whatever the core throws — including what the display processor's threads threw, which the core rethrows on the
 machine's thread — and showed only the message, as `[CPU HALT]` in the status bar; and nothing at all recorded a
 fault on any other thread, which ends the process. `CrashLog` now writes either to
-`crash_<date>_<time>.txt` in the log directory (§4.22's root): the kind, the console, the frame, the console's
+`crash_<date>_<time>.txt` in the log directory (§4.22's root; since 2026-09-27 `ErrorLog.Root()`, §4.70): the kind, the console, the frame, the console's
 settings as the window would show them, and the exception whole, inner exceptions and traces included.
 `Program.Main` installs it before anything else for unhandled exceptions and unobserved tasks, and the emulation
 loop calls it from its catch and names the file in the status bar. Writing is best effort, since a report that
@@ -2516,9 +2516,11 @@ played, play count and play time. Media come from the ES-DE folder when one is s
 the art folder of §4.33. *Since 2026-09-26 (§4.60) the order is the player's own cover, then ScreenScraper's media
 store, then the ES-DE folder, then OpenEmu's failover, and the gamelist's description, developer, publisher, genre,
 players, rating and release date come from ScreenScraper.* The theme's clock is off, as ES-DE's `DisplayClock` is by default; there is no switch for it
-yet. The status bar reads the battery and radios from Linux's sysfs (`DeviceStatusReader`): the system's own battery,
+yet. *Since 2026-09-27 the clock, the help and each status indicator have switches on Theme Settings' Interface
+tab (§4.66).* The status bar reads the battery and radios from Linux's sysfs (`DeviceStatusReader`): the system's own battery,
 not a mouse's or a pad's (whose `scope` is `Device`); Wi-Fi as on when a wireless interface is up; Bluetooth as on when
-its radio switch is blocked neither by software nor by hardware. Nothing is shown that sysfs does not report.
+its radio switch is blocked neither by software nor by hardware. Nothing is shown that sysfs does not report. *Since
+2026-09-27 each indicator can also be turned off (§4.66).*
 
 **The pad.** §4.29's grammar, as `EmuSen_BigPicture.md` §4.9 tables it:
 
@@ -2568,7 +2570,8 @@ pad go (`SDL_GamepadConnected`), so its one-a-second rescan can open the next on
 the game's `AudioPlayer`. SDL mixes the two logical devices on the one physical device, so neither stream's clearing or
 gain touches the other. Each WAV is decoded once with `SDL_LoadWAV` and converted to 48 kHz stereo float; a new sound
 clears the stream first, so the steps of a held list replace one another rather than queue. The gain is 0.7, ES-DE's
-default navigation volume (its `SoundVolumeNavigation` of 70). The stream opens on the first sound, so a session that
+default navigation volume (its `SoundVolumeNavigation` of 70). *Since 2026-09-27 it is Preferences' Navigation Sounds Volume, and a sound
+the theme lacks is Mistress's own (§4.66.2).* The stream opens on the first sound, so a session that
 plays none never touches the device. With the switch off nothing reaches the stream.
 
 **Drawing only while something moves.** The view asks for a frame (`RequestAnimationFrame`) only while something moves
@@ -4065,6 +4068,179 @@ code they exposed was removed.
 by a test; one publish of Mistress itself with a fake file was made by hand (§28.2). The picker has no thumbnail cache
 shared with the library's, and lists at most 60 games, so a game past the 60th nearest must be searched for.
 
+### 4.66 Big picture: the interface switches, Mistress's own badges, and its own navigation sounds (2026-09-27)
+
+Pass 4 of `EmuSen_BigPicture.md` §21 (its §29 is the record: predictions, measurements, mutants, pictures). This section
+is what a player meets. It retires two lines of §4.52: "The theme's clock is off … there is no switch for it yet", and
+the status bar showing every indicator sysfs reports with no way to turn one off.
+
+#### 4.66.1 The Interface tab of Theme Settings
+
+ES-DE keeps these in its *UI settings* menu beside the theme's own choices, and its *System status settings* submenu
+under it (`USERGUIDE.md`, "UI settings", "System status settings"). Mistress puts them in the same place: the **Theme
+Settings** sheet (§4.53) gains a third tab, **Interface**, after Options and Themes. Every row applies at once beneath
+the open sheet, as the Options tab's do, and is kept in `appsettings.json` under `BigPictureInterface`, spelled as
+ES-DE's `es_settings.xml` spells the values where it has them. Nothing here is program data, so nothing is in SQLite.
+
+| Row | Key | Default | What it does |
+|---|---|---|---|
+| Quick System Select | `QuickSystemSelect` | `leftrightshoulders` (Left/right or shoulders), ES-DE's | Which pair changes the system in a game list; below |
+| System on Startup | `StartupSystem` | empty: the first system of the order | the system big picture opens at, the first time it is shown in a session |
+| Startup View | `StartupView` | `system` | whether it opens on the carousel or inside that system's game list |
+| Systems Sorting | `SystemsSorting` | `release`: EmuSen's own order | the carousel's order of the systems; below |
+| Quick Scrolling Overlay | `ListScrollOverlay` | off, as ES-DE's `ListScrollOverlay` | the letters over a held list; below |
+| Clock | `DisplayClock` | off, as ES-DE's `DisplayClock` | the theme's `clock` elements drawn, showing the time |
+| On-Screen Help | `DisplayHelp` | on | the theme's `helpsystem` elements drawn |
+| System Status | `StatusBluetooth`, `StatusWifi`, `StatusBattery`, `StatusBatteryPercentage` | all on | each indicator of the theme's `systemstatus` elements |
+
+**Quick system select.** ES-DE's six choices, with its documented meanings (UG "UI settings"):
+- *Left/right or shoulders* and *Left/right or triggers*: left and right change the system in a game list whose primary
+  element is a text list or a vertical carousel; in a grid or a horizontal carousel, whose left and right move through
+  the games, the shoulders (or the triggers) change it instead.
+- *Shoulders*, *Triggers*, *Left/right*: that pair always, "consistent regardless of theme configuration but you'll
+  sacrifice the ability to use the selected buttons if the gamelist supports it". With *Left/right* a grid's left and
+  right change the system rather than move; with *Shoulders* a list's jump of ten games is gone, with *Triggers* the jump
+  to the first and last.
+- *Disabled*: nothing changes the system from inside a game list; East goes back to the carousel.
+
+The help bar says so: the pair that changes the system reads **System**, and the left/right entry is left out when left
+and right do not change it. **A change from before this pass:** a grid's shoulders, which paged ten games, now change
+the system under the default, as ES-DE documents; *Left/right* gives them back their jump (`EmuSen_BigPicture.md` §29,
+Q53).
+
+**Startup.** Applied once, at the first showing in a session: coming back from a game, or from a sheet, keeps where the
+player was. A startup system the library has no games for opens at the first system. The list offers *Default* and the
+five systems, in the order the carousel shows them; ES-DE's list also offers its collections, which this one does not.
+
+**Systems sorting.** Three orders, those Mistress can answer from its own data:
+- *Release order (EmuSen's)*, the default and the order before this pass: by manufacturer, then each core's first year,
+  the Game Boy Color beside the Game Boy (NES, Game Boy, Game Boy Color, SNES, Nintendo 64);
+- *Full names*: by the full name the theme shows (Game Boy, Game Boy Color, Nintendo 64, Nintendo Entertainment System,
+  Super Nintendo), ES-DE's own default, *Full names or custom*, without its custom file;
+- *Release year*: each system's first release (Famicom 1983, Game Boy 1989, Super Famicom 1990, Nintendo 64 1996,
+  Game Boy Color 1998).
+
+ES-DE's *Manufacturer, release year* would equal *Release year* for five Nintendo systems and is not offered; its two
+*HW type* orders rank hardware types in its bundled files, which were not read, so they are not offered either.
+Collections come after the systems whatever the order, as §4.58 places them.
+
+**The quick scrolling overlay.** With it on, a game list drawn as a text list, held down past its first repeat (half a
+second, when ES-DE's list starts repeating and fades the game's metadata out, §4.52), is shaded and shows in its middle
+the first two characters of the game passing, or a star while the list passes favourites kept on top. Let go, it is
+gone; a list that stops at its end fades it away with the metadata. ES-DE's user guide describes the overlay ("darken
+the background slightly and display the first two characters of the game names … a star symbol will be shown instead");
+its timing and its look were not measured, so both are Mistress's (§29, Q51). Holding a shoulder shows nothing.
+
+**The clock** follows the wall clock by itself (LunaP's `ClockLabel.Live`), so a still view still draws nothing between
+minutes (§4.52's drawing only while something moves). Art Book Next places its clock at the top left of the system view
+and sets its game lists' clock to `scope none`, so there the clock shows on the carousel only.
+
+**The status indicators.** Each switch removes its indicator from every `systemstatus` element; the percentage goes with
+the battery, since it is drawn beside it. As before, an indicator shows only when sysfs reports the device.
+
+#### 4.66.2 Navigation volume, and Mistress's own navigation sounds
+
+Preferences ▸ Appearance gains **Navigation Sounds Volume**, a slider from 0 to 100 in steps of 5, stored as
+`BigPictureInterface.NavigationVolume`, default 70 (ES-DE's `SoundVolumeNavigation`, which §4.52's fixed gain of 0.7
+was). It is the interface stream's gain and applies at the next sound; at 0 nothing is played at all. It does not touch
+the game's volume.
+
+**A theme without a sound.** THEMES.md: "If no navigation sounds are provided by the theme, then ES-DE will use the
+bundled navigation sounds as a fallback. This is done per sound file." Mistress does the same with sounds of its own,
+synthesised when first wanted (`NavigationSounds`): short sine tones with a quarter of their octave, a 3 ms rise and an
+exponential fall, 30 to 250 ms long, one design per action (a high tick to scroll, a rising glide to choose, a falling
+one to go back, a three-note figure for a favourite, a long rising sweep to launch). Nothing is read from a file and
+nothing of ES-DE's samples is used or copied; the synthesis is in the code and gives the same samples every time. The
+Navigation Sounds switch (§4.52) silences these too.
+
+#### 4.66.3 Badges Mistress draws itself
+
+A theme's `badges` element lists slots; for each slot the game has, ES-DE draws the theme's `customBadgeIcon`, or its
+own picture when the theme names none (THEMES.md, "badges"). Until this pass Mistress drew nothing in the second case.
+Now it draws LunaP's `BadgeGlyph` (`LunaP.md` §180): a rounded plate with a star, a check mark, a face, a crack, two
+arrows, two cards, a folder or a book, in the element's `badgeIconColor`. The decision of 2026-09-25 (Q9) was that these
+are Mistress's own drawings; none is ES-DE's.
+
+- **Controller.** The metadata editor (§4.59) gains ES-DE's **Controller** field, a choice of *None*, *Nintendo
+  Entertainment System*, *Super Nintendo*, *Nintendo 64*, *Gamepad (generic)* and *Unknown*, stored as an edit in
+  `games.db` like every field, under THEMES.md's type names (`gamepad_nintendo_nes` and so on). A game with one shows
+  the controller badge with that pad drawn over it, at `controllerPos` and `controllerSize`, or the theme's
+  `customControllerIcon` for that type when it names one. Any other gamepad type a hand-edited row might hold is drawn
+  as the generic pad, anything else as unknown. ScreenScraper's answers carry no controller, so nothing fills the field
+  but the player.
+- **Folder.** Drawn for any entry that says it is a folder, with a chain link over it when the folder has a link
+  (`folderLinkPos`, `folderLinkSize`, `customFolderLinkIcon`). Since pass 6 (§4.67) a console's folders are
+  entries, and they carry it, a linked folder with the link; a grouped collection's entry still hides its badges, as ES-DE
+  was seen to (§4.58).
+- **Manual** and **alternative emulator** are drawn when a game has them; Mistress fetches no manuals yet (pass 9).
+- A theme that names every slot's image, as Art Book Next does its five, looks exactly as before: the tests compare its
+  game list drawn both ways and find no pixel different.
+
+The slot `all` now keeps the slots a theme names first, in its order, then the rest in THEMES.md's, as documented;
+before, `all` discarded the theme's order.
+
+#### 4.66.4 Tests
+
+`ThemedSwitchesTests` (27, WiseMan, headless, every switch set on its sheet by the pad): the clock off by default and on
+changing only the pixels inside its box, on the synthetic theme and Art Book Next's carousel; the help bar gone and
+nothing else changed; each status switch removing its indicator and changing nothing outside the element; quick system
+select's six choices over a list, with the help bar's words; the startup system and view, a missing system, and a later
+showing; the three orders and the startup list; the overlay off, then on with letters and a star, and gone when let go;
+the volume as the gain, set by the slider, and 0 playing nothing; Mistress's sounds for a theme with none and for one
+missing sound; the synthesis (distinct, short, deterministic); the controller chosen in the editor drawn on its badge;
+and every control of the Interface tab reached by the pad. `BuiltInBadgesTests` (4): the nine slots drawn in order with
+nothing changing outside the element; a named image winning and a missing one falling back; `all`'s order and the
+controller shapes; Art Book Next unchanged. `ThemedGridPadTests` now asserts the grid's shoulders under the default and
+under *Left/right*, and `SceneMappingTests` proves the eight badge properties newly mapped change pixels.
+
+**What it does not cover.** ES-DE was not run: the overlay's timing and look, and whether its built-in badges sit where
+Mistress's do, were not measured. Nothing ran on the handheld. The overlay does not show for held shoulders.
+
+#### 4.66.5 A game's own engine: ES-DE's per-game alternative emulator (2026-09-27)
+
+ES-DE lets a player choose "alternative emulators to use per game system" and, in the metadata editor, per game, where
+the game's choice "will take precedence and override the system-wide emulator selection"; its `altemulator` badge shows
+the per-game choice alone (UG "Other settings", "Metadata editor"). In Mistress the system-wide choice already exists:
+Graphics Settings' **Engine** row for the consoles with two implementations (§4.44: Mars (C#) or MarsRT (Rust) for the
+N64, Mercury (C#) or MercuryRT (Rust) for the Game Boy and Game Boy Color). The metadata editor gains ES-DE's
+**Alternative emulator** field, after Controller:
+
+- For a game of a console with two engines it offers *None (the console's engine)* and the console's two engines; for
+  the NES and the SNES, which have one, it offers *None* and is not enabled, as ES-DE greys the row out.
+- The choice is an edit in `games.db` (`game_edit`, field `altemulator`, the engine's name as the Engine row stores it),
+  like every field. *Reset* and *Clear* remove it.
+- **At launch**, the game's engine runs it instead of the console's choice. A stored engine the console does not have
+  (a hand-edited row, or an engine removed in a later build) is ignored and the console's choice runs, as ES-DE launches
+  with the default emulator after an invalid choice. The engine's own fallbacks are unchanged: MarsRT's missing library
+  still falls back to Mars and says so (§4.44).
+- The theme's `altemulator` badge is drawn for a game with an engine of its own (§4.66.3).
+
+**Not built:** the gamelist filter for alternative emulators (§4.58's filters), and a notice on the row when the stored
+engine is invalid.
+
+#### 4.66.6 A cap on the play time one launch records: ES-DE's "Max play time tracking" (2026-09-27)
+
+Mistress counts the time a game runs into its play time (§4.32), the value the metadata editor and a theme's `playtime`
+show. ES-DE warns that a game left running while the device sleeps "would jump significantly to include the sleep
+time", and limits what one launch may add (UG "Other settings"). Preferences ▸ Gameplay gains **Max Play Time Tracking**,
+`AppSettings.MaxPlayTimeTracking`, in hours:
+
+| Value | Recorded for one launch |
+|---|---|
+| Disabled (0) | nothing: play time is not tracked; the play count still counts |
+| 1 to 23 hours | the launch's time, or **nothing at all** if it ran longer than the limit, as ES-DE's "whatever play time is measured will be ignored if it exceeds the selected value" |
+| No limit (24) | the launch's time, however long |
+
+The default is **8 hours**, ES-DE's `MaxPlayTimeTracking` (§21.1). It applies wherever Mistress records play time, the
+desktop library as well as big picture, since the counter is one. Time already recorded is not changed.
+
+**Tests** for both: `GameEngineAndPlayTimeTests` (9): a game's engine choices are its console's and one its console lacks
+is ignored; the editor offers a Game Boy game its engines and a Super Nintendo game none, and the choice shows the
+badge; a game's own engine runs a synthetic N64 system over the console's choice, the console's runs it with none, and an
+engine of another console is ignored; the cap's five cases; and at the window, a 45-minute launch recorded, a nine-hour
+one dropped under the default, and recorded once Preferences sets No limit. `ThemedGameOptionsTests`' reach test now
+requires the engine row disabled for a Super Nintendo game.
+
 ### 4.67 Big picture: a console's folders, the flatten switch, folder links, and the media of games in folders (2026-09-27)
 
 Pass 6 of `EmuSen_BigPicture.md`'s plan of ES-DE parity (§21.3 there; §30 is the record: the prediction P108 shown and
@@ -4248,3 +4424,92 @@ names its reason, and the browser shows it after "The download is not a theme th
 - **Nothing is shown to the player** about a theme's warnings; they are for theme authors, in the loader's diagnostics
   (§31 Q72).
 - Nothing ran on the handheld; the handheld's build that refused Artflix (Revisited) and CarAlt predates this.
+
+### 4.70 The error log: every error a frontend shows, kept whole (2026-09-27)
+
+**Why.** On the handheld, every theme the player tried to install from the theme browser (§4.62) failed. The only record
+was the detail sheet's status line, which word-wrap had broken. The player could not tell whether the value it quoted
+read `w0.02` or `w 0.02`, and nothing was on disk to settle it. The only log Mistress kept before this was §4.27's
+crash report. An error that was caught and shown left nothing behind once its line was gone. The request was for an
+error logger built into EmuSen in general.
+
+**What it is.** `ErrorLog`, in `EmuSen.Galaxia.Library`, so that both frontends and anything else that references
+Galaxia can write to it.
+- **Location:** one plain-text file a day, `emusen_<yyyyMMdd>.log`. It sits in the same folder as §4.22's per-game
+  logs and §4.27's crash reports: the `LogDirectory` setting (Preferences' *Log Directory*), else
+  `~/.config/EmuSen/Logs`. `CrashLog` now takes its folder from `ErrorLog.Root()`, so the two cannot diverge.
+- **The entry:** one line with the time to the millisecond, `ERROR` or `WARN`, an area in brackets (`themes`,
+  `states`, `launch`, `covers`, `scraping`, `cheats`, `library`, `media`, `screenshots`, `shaders`, `config`, `crash`,
+  `logging`, `unhandled`), and the message whole. A message's own line breaks are folded to ` ⏎ `, so one entry's
+  first line is always one line, which keeps `grep` useful. Then, indented, the context (the game, theme, file or
+  slot) and the exception whole, with its inner exceptions and traces.
+- **Credentials:** Mistress sets `ErrorLog.Redactor` to the scraper's redactor in `CrashLog.Install`, the first
+  thing `Program.Main` does. No ScreenScraper credential reaches the file, from the message, the context or the trace
+  (§17 of the plan).
+- **Size and pruning:** files older than 14 days are deleted on the first write of a run. Only `emusen_*.log` files
+  are ever deleted; crash reports and per-game logs are left alone. A day's file stops at 8 MB, with one last line
+  saying so.
+- **Safety:** writing is best effort and never throws. A log that cannot be written must not become a second fault.
+
+**Plain text, not SQLite.** The project keeps program-written data in SQLite where it can (§4.64). This is the
+exception, argued rather than assumed:
+- A log has to be read when something is broken, possibly the database layer or the app itself.
+- It has to be read over ssh on a handheld with `cat`, `tail` or `grep`, without a client.
+- Appending a line is the one write that stays readable after a crash mid-write.
+
+None of those holds for the stores §4.64 moved.
+
+**What writes to it.**
+- **Errors, with the exception:** every place Mistress shows an error it caught. In all, 29 sites across 17 files:
+  - launch;
+  - save state, load state and resume;
+  - screenshots;
+  - cover art added and removed;
+  - media deleted;
+  - OpenVGDB's download and removal;
+  - the cover failover's lookups;
+  - the media store's opening;
+  - a scrape request queued to retry;
+  - the cheat database's download and reading, and a code that would not decode;
+  - the shader pack's download;
+  - the theme list, a theme's screenshots, licence, download, update and removal;
+  - per-game logging that could not start.
+- **`CrashLog`:** each report adds one line pointing at its file.
+- **Warnings, without a trace:**
+  - a theme that has no view for a system, with every loader error it gave;
+  - a themed library that could not be shown, and why;
+  - each configuration problem `ConfigDiagnostics` reports, which until now reached only the console.
+- **Hotaru:** its unhandled faults and configuration problems.
+
+**A folder that cannot be made falls back.** The handheld's `appsettings.json` named `/home/red/Documents/Logs/` as
+its `LogDirectory`, a desktop path copied across with the settings. The deck user cannot create it, so crash reports
+and per-game logs there had been going nowhere, silently. `ErrorLog.Usable` now tries to create the configured folder.
+When that fails, `ErrorLog.Root()`, and through it `CrashLog` and §4.22's per-game logs, use `~/.config/EmuSen/Logs`.
+The setting itself is left as the player wrote it.
+
+**Pulling it from the handheld.** `ls ~/.config/EmuSen/Logs/`, or the folder Preferences names. Then, for example,
+`grep -A12 ERROR emusen_20260927.log`.
+
+**Tests.** `ErrorLogTests`, seven cases, the seventh being the fallback just described:
+- an entry written whole, with area, context and inner trace;
+- entries appended, with a message's line break folded;
+- the redactor over message, context and trace;
+- pruning that spares everything but old `emusen_*.log` files;
+- the 8 MB cap with its last notice;
+- an unwritable folder that returns null and throws nothing.
+
+`ThemeDownloadErrorLogTests` walks the real sheets: a download whose archive holds no `capabilities.xml` fails, and
+its status line and a log entry naming the theme, its address and the whole reason both appear. Removing that one
+`ErrorLog.Error` line from `ThemeDetailWindow` fails the test, so it is not decorative.
+
+The suite never writes to the player's folder. A module initializer, `ErrorLogIsolation`, points the log at a
+scratch folder per test process. The broad Mistress run afterwards (1,176 passed, 29 skipped) left no `emusen_*.log`
+in `~/.config/EmuSen/Logs` or in the configured folder.
+
+**Not covered.**
+- The other 27 of Mistress's 56 `catch (Exception …)` blocks write nothing. They are best-effort paths that report
+  nothing to the player either: a status bar that cannot be read, a picture that cannot be decoded for a preview.
+  They are left until one of them hides a real fault.
+- DianaOS commands and the cores do not write to it. The Rust cores' native crash files (`native_crash_*`,
+  `mercuryrt_crash_*`) stay under the data home's `Logs`, not this folder.
+- There is no viewer inside Mistress. The file is meant for `cat`, a text editor, or a bug report.

@@ -1076,6 +1076,8 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   and Q18 and Q19 on 2026-09-26 (§10.1); Q16 and Q17 remain open.
 - **Q36–Q39** are left to §25, written on another branch at the same time. **Q40–Q45**, the retirement of OpenEmu's
   sources, are asked in §26.9, and **Q46** in §27.9.
+- **Q50–Q54**, pass 4's (the systems' default order, the scroll overlay's timing, Art Book Next's unplaced badges, a
+  grid's shoulders and the controller types), are asked in §29.11.
 
 ---
 
@@ -3918,6 +3920,7 @@ player started (§17.14). Tests run headless in WiseMan, blast radius only, and 
 - *Cost.* 2–3 days; the per-game engine 1 more.
 - *What the player sees.* A clock on request, badges on any theme, the ES-DE settings a player expects in Theme Settings
   and Preferences.
+- *Built 2026-09-27, rows 32 and 33 with it: §29.*
 
 **Pass 5. Localisation's plumbing.**
 - *Scope.* Every string Mistress shows in a big-screen session goes through one lookup, with a language setting
@@ -6207,6 +6210,301 @@ theme-browser branch ran beside it on the same machine; nothing of its Themes ta
 - **Q42's buttons during a run** are disabled by the host's `OpenVgdbBusy`; no test holds a run open to press them.
 - **Q43, Q44 and Q46** needed no code; Q44 no longer applies since OpenVGDB is kept (§10.1).
 
+## 29. Pass 4 built: switches, and what the engine draws itself (2026-09-27)
+
+*Opened and closed on 2026-09-27, on branch `bigpicture-pass4-switches` (from WiseMan at `44fde5bb`), with LunaP's
+`pass4-badge-glyph` beside it.* §21.3's pass 4 under the answers of §10.1: every §21 recommendation accepted (Q22–Q35),
+Q9's "the favourite, folder and badge graphics are Mistress's own drawings", and Q32's buttons (West left free for the
+media viewer of pass 9; the shoulders jump ten games, built in §22.13; left and right give quick system select). The
+settings reference's §4.66 is the player's account; this section is the record.
+
+**Sources.** ES-DE's `USERGUIDE.md` ("UI settings", "System status settings", "Sound settings", "Other settings",
+"Metadata editor") and `THEMES.md` ("badges", "clock", "systemstatus", "Navigation sounds"), stage (c)'s copies in
+`~/.cache/emusen/bigpicture/motion/docs/`. ES-DE's source was not read and ES-DE was not run; nothing of ES-DE, its
+images or its sounds entered either repository. Art Book Next was read in its reference clone only to see which badge
+slots and images it names and where its clock is.
+
+**Numbering.** §21.6 gave this pass P105 and P106. The plan set new predictions to start at P130, but §26 had taken
+P130–P135 and another section P140–P143, so this section's are **P160–P163**; its questions start at **Q50**, as briefed.
+
+### 29.1 Predictions
+
+P105 and P106 were written in §21.6 before any of this was built. P160–P163 were written by the hand that wrote the
+code, after the code and its tests and before the mutants, the broad run and the pictures they concern, as §22.1's
+were, and are weaker evidence for it.
+
+| # | Predicted | Found | Verdict |
+|---|---|---|---|
+| P105 | Built-in badges change no pixel of Art Book Next's gamelist, which names its own icons; on a synthetic theme that names none, each of the nine slots draws | Art Book Next's list drawn through the new entries against its files drawn as before: **0 pixels** differ at 1280×800; its four shown slots all carry its own files. The synthetic theme: nine entries in THEMES.md's order, each cell over 150 pixels changed, 45,836 inside the element and **0** outside | held |
+| P106 | Turning the clock on changes only pixels inside the clock's box, as P43 found for the help bar | the synthetic theme's clock: 1,094 pixels inside its box, **0 outside**; turned off again, the frame equals the one before; Art Book Next's carousel clock 4,160 inside, 0 outside | held; on first run the test failed with 13,059 pixels outside, a defect of this pass's own code (§29.4) |
+| P160 | Each of the four status switches and the help switch changes no pixel outside its element's box | the help bar 42,228 pixels inside its box and 0 outside; Bluetooth 397, Wi-Fi 992, the percentage 3,604 and the battery 3,229 inside, 0 outside; but the battery switch first failed by 44 pixels, eight columns right of the box, a LunaP defect older than this pass (§29.4) | held after the fix |
+| P161 | Of the round's mutants, at least nine in ten are caught on their first run, none survives that is not equivalent | 60 of 63 caught on the first run (95%); the three survivors were weak tests, not equivalent mutants (§29.7) | **failed on its second clause** |
+| P162 | Mistress's seven synthesised navigation sounds are each under 300 ms and pairwise distinct | 30–250 ms; seven distinct SHA-256 digests; peaks 0.22–0.31 | held |
+| P163 | The broad Mistress run passes with no failure this branch causes | 983 passed, 27 skipped, none failed (§29.9) | held |
+| P119 | The pass is opened and closed in no more calendar days than the lower end of its estimate (2 days) | opened and closed on 2026-09-27 | held |
+
+### 29.2 What was built
+
+**In LunaP** (branch `pass4-badge-glyph`, `docs/LunaP.md` §180), nothing of which knows ES-DE:
+- `BadgeGlyph` with `BadgeKind` (favourite, completed, kids' game, broken, controller, alternative emulator,
+  collection, folder, manual, folder link) and `ControllerGlyph` with `ControllerShape` (unknown, gamepad, NES, SNES,
+  Nintendo 64): the toolkit's own geometry in one colour, every badge but the link on one plate;
+- `BadgeStrip.Entries` of `BadgeEntry` records, each a file or the drawing, with a controller or a folder link drawn over
+  it at a position and size of the badge, and a drawn link cut out of a drawn folder beneath it;
+- `ScrollLetterOverlay`: a shade and the letters (or a star) of a list scrolled fast;
+- a fix to `DeviceStatusBar`'s Wi-Fi fan, which drew past its box (§180.5 there; §29.4 here).
+
+**In Mistress:**
+- `Scene/SceneBadges.cs`: which slots a game shows, `all`'s documented order, each slot's entry (the theme's file,
+  else the drawing), the controller type's shape. `IndicatorElements.Badges` maps the eight overlay properties
+  (`controllerPos`, `controllerSize`, `customControllerIcon`, `controllerIconColor` and the four `folderLink…` ones),
+  and `SceneMapping` claims them, each proved by `SceneMappingTests`.
+- `SceneGame` gains `Controller`, `FolderLink` and `Manual`; `SceneData` gains `ShowHelp`, `StatusShown`, `ScrollOverlay`
+  and `LiveClock`; `SceneSystem` gains `FavoritesOnTop`.
+- `SceneView.ScrollLetters`, the overlay, placed over the view's canvas and shown from the held list's first repeat.
+- `ThemedLibrary.Interface` (the settings), `QuickSelect` (the pair of buttons in force), the startup applied once, the
+  status mask, the live clock, and `Sound`'s fallback to `NavigationSounds`.
+- `SystemsOrder` (three orders), `NavigationSounds` (the synthesis), `InterfaceSettingsPane` (the Theme Settings sheet's
+  Interface tab), Preferences' volume slider, and the metadata editor's **Controller** field, a new `Choice` kind of
+  field stored in `games.db`'s `game_edit` as every edit is (§23.3).
+- `Galaxia/Models/BigPictureInterface`: the settings, in `appsettings.json` (the player's configuration; nothing here is
+  program data, so nothing is in SQLite).
+
+**Elsewhere:** `UiSoundPlayer.Remember` takes samples already in the stream's format under a key, so the synthesised
+sounds play through the same path as a theme's files. **In WiseMan:** `ThemedSession` gains the window's settings object,
+a refresh, a fixed device status (`MainWindow.DeviceStatusSource`, which a test sets instead of reading this machine's
+sysfs), a theme with no sounds, and extra system-view elements.
+
+### 29.3 The rules, and where they are Mistress's
+
+**Taken from ES-DE's documentation:** the nine slots and their meanings; a theme's image first, a built-in one otherwise;
+the controller and folder-link overlays' properties and defaults; `all`'s order; the clock off by default; the help and
+four status switches; the percentage beside the battery; quick system select's six choices and their meaning for a list
+against a grid; startup system and view; the navigation volume's default of 70; sounds falling back per file; the overlay
+off by default, darkening the view and showing two characters, or a star over favourites sorted on top.
+
+**Mistress's own, because the documentation is silent and ES-DE was not run:**
+- **The drawings**, all of them (Q9).
+- **The overlay's timing**: from the held list's first repeat, when the list also fades the game's metadata out (ES-DE's
+  measured list, §14.7), to its release or its end. Its shade is black at 0x60 alpha; its letters are 0.15 of the
+  screen's height, in the default typeface, in the middle of the screen. §21.3 planned to record ES-DE's timing once;
+  it was not recorded (Q51).
+- **Startup applies once per session**, at the first showing. ES-DE's "on startup" is its own process start; Mistress's
+  big picture can be entered and left in one process (§18), and applying it at each entry would lose the player's place.
+- **The systems orders offered** are three (§4.66.1): ES-DE's two *HW type* orders rank hardware types in files it
+  bundles, which were not read, and *Manufacturer, release year* equals *Release year* for five Nintendo systems. The
+  default stays EmuSen's release order, not ES-DE's *Full names* (Q50).
+- **The controller types offered** are EmuSen's three pads, a generic pad and unknown, of THEMES.md's thirty-six (Q54).
+- **A volume of 0 plays nothing**, rather than a sound at no gain.
+
+**A change of behaviour.** ES-DE's default quick system select, *Left/right or shoulders*, gives a grid's (and a
+horizontal carousel's) shoulders the system, since their left and right move through the games. §22.13 had left a
+grid's shoulders jumping ten items, recording ES-DE's rule as not built; under the default they now change the system,
+and *Left/right* gives the grid its jump back (Q53). A text list, the case Q32 named, is unchanged: left and right change
+the system and the shoulders jump ten.
+
+### 29.4 Two defects the pixel tests found
+
+**The help bar computed for the view being left.** The first run of the clock test found 13,059 pixels changed
+outside the clock's box, all in the help bar. On entering a game list, `ThemedLibrary.Data()` is built before the view
+changes, while the kept view is still the system view, and the help context's quick-select pair was computed for that
+view: the system carousel moves left and right, so the game list's help bar was drawn as if it were a grid, with **Jump**
+relabelled **System** and no left/right entry, until anything rebuilt the view. This was a defect of this pass's code,
+not of earlier stages, and the switch tests caught it only because they compare a frame before a sheet with one after.
+The context is now always the game list's (the help context is a game list's only). Mutant Q6 puts the defect back.
+
+**The Wi-Fi fan drew past its box.** The battery switch's test failed by 44 pixels, eight to nine columns right of the
+status element's box. With the battery off, the Wi-Fi fan became the last indicator, and LunaP's built-in fan (stage b,
+`LunaP.md` §101.5) had arcs whose ends reached 0.66 of a height from the centre of a box one height wide. The defect was
+shown on the unmodified LunaP by a new test (ink seven columns past the bar at a 40 px icon, in the two cases where the
+fan is last) before it was fixed; `LunaP.md` §180.5 records it. It had been hidden because the fan had always had the
+battery after it. Mutant L9 puts it back.
+
+### 29.5 Tests
+
+Headless through WiseMan, on `ThemedSession` and `PadDriver`, the synthetic theme and ROMs, and Art Book Next's
+reference clone where the test is marked for it; never the network, never the GPU.
+
+| Rule | Test |
+|---|---|
+| P106: the clock off by default; on, only its box changes; off again, the frame before | `ThemedSwitchesTests.The_clock_is_off_by_default_and_turning_it_on_changes_only_its_own_box`, `Art_Book_Next_s_clock_turned_on_changes_only_its_own_box` |
+| A session's clock is live; a scene's is the time it is given | `A_session_s_clock_is_live_and_a_scene_s_clock_is_the_time_it_is_given` |
+| The help switch: no help bar, nothing else changed | `Turning_the_help_off_removes_the_help_bar_and_changes_nothing_else` |
+| P160: each status switch removes its indicator and changes nothing outside the element; the percentage goes with the battery | `Each_status_switch_takes_its_indicator_out_of_the_status_bar_alone` (4 cases) |
+| Quick system select's six choices over a list: the pair that changes the system, what the others do, the help bar's words | `Quick_system_select_takes_the_pair_ES_DE_documents_for_a_list` (6) |
+| The same over a grid, under the default and under *Left/right* | `ThemedGridPadTests.All_four_directions_move_the_grid_and_the_shoulders_change_the_system_or_page_by_the_quick_select` |
+| Startup system and view; a missing system; a later showing keeps the player's place | `The_first_showing_opens_at_the_startup_system_and_view` (4) |
+| The three orders, and the startup list follows them | `The_systems_follow_the_chosen_order_and_the_startup_list_with_them` (3) |
+| The overlay: off by default; on, from the first repeat, letters, then a star over favourites on top, letters again, gone when let go; the shade darkens the list and the letters light the middle | `The_quick_scrolling_overlay_shows_while_a_list_is_held_only_when_turned_on` |
+| The volume: the gain, the slider, saved, 0 plays nothing | `The_navigation_volume_is_the_stream_s_gain_and_zero_plays_nothing` |
+| Mistress's sound for each one a theme lacks, per sound | `A_theme_without_a_sound_gets_Mistress_s_own_for_it_and_keeps_the_ones_it_has` |
+| P162: the synthesis is short, distinct and the same every time | `The_fallback_sounds_are_synthesised_distinct_short_and_the_same_every_time` |
+| The editor's controller drawn on the controller badge in its pad's shape | `The_controller_chosen_in_the_editor_is_drawn_on_the_controller_badge` |
+| Every control of the Interface tab reached by the pad | `Every_control_of_the_interface_tab_is_reached_by_the_pad`; §16's `ThemeSettingsSheetTests` audit walks the new tab too |
+| P105: the nine slots drawn in order, nothing outside the element | `BuiltInBadgesTests.On_a_theme_that_names_no_image_each_of_the_nine_slots_draws_and_nothing_outside_the_badges_changes` |
+| A named image wins; a missing one falls back to the drawing | `A_theme_s_named_image_wins_and_a_missing_one_falls_back_to_the_drawing` |
+| `all`'s order; each controller type's shape | `All_keeps_the_named_slots_first_and_each_controller_type_has_its_shape` |
+| P105: Art Book Next unchanged | `Built_in_badges_change_no_pixel_of_Art_Book_Next_s_gamelist` |
+| The eight overlay properties change pixels | `SceneMappingTests.Every_mapped_property_changes_the_rendered_pixels` (eight new cases on a new system of controller and linked-folder games) |
+
+Changed: `SceneSemanticsTests.Badges_show_only_the_slots_the_game_has` reads the entries; `ThemedGameOptionsTests`'
+reach test sets the new choice field so its Reset shows. In LunaP: `BadgeGlyphTests` (7),
+`IndicatorControlTests.No_indicator_draws_past_the_bar_s_right_edge` (5), and the guards §180.4 lists; LunaP's whole
+suite, 1,371 of 1,371.
+
+The blast-radius run before the mutants, every test under `Mistress.BigPicture`, `GameMetadataTests`,
+`PreferencesThemeTests`, `ControllersTests`, `DesktopGameOptionsTests` and `PadNavigationTests`: 421 passed, 16 skipped
+(the picture, bench and live tools gated by their variables), none failed.
+
+### 29.6 Rows 32 and 33: a game's own engine, and the play-time cap
+
+The plan allowed these last, once everything else was built and tested; they were built after the first round of
+mutants had run.
+
+**Row 32, the per-game engine.** ES-DE's *Alternative emulators* choose an emulator per system in *Other settings* and
+per game in the metadata editor, the game's winning; the `altemulator` badge and filter follow the per-game value alone
+(UG "Other settings", "Metadata editor"). Mistress's per-system choice already existed as Graphics Settings' Engine row
+(§4.44 of the settings reference), for the two consoles with two implementations. The editor gains **Alternative
+emulator**, a `Choice` field whose values are the game's console's engines (`GameMetadata.ChoicesFor`), stored in
+`game_edit` as `altemulator`; for the NES and SNES it offers only *None* and is disabled, as ES-DE greys the row. At
+launch `MainWindow.GameEngine` reads the game's row from `games.db` itself, not from the library's snapshot, so a game
+started before a refresh still finds it, and passes it to `CoreCatalog.EngineChosen` ahead of the console's choice. A
+stored engine the console lacks is ignored (`GameMetadata.EngineFor`), as ES-DE launches with its default after an
+invalid choice. **The test runs the window's own launch** on WiseMan's synthetic N64 system with Graphics Settings on
+MarsRT and the game's row on Mars (C#), and reads the session's engine: Mars (C#); with no row, MarsRT; with a Game Boy
+engine in the row, MarsRT. The game's frames were not run: what is asserted is the choice the session was built with,
+since the engines' own tests (§4.44) cover what each then does.
+
+**Row 33, the cap.** ES-DE's *Max play time tracking*, "from 1 to 23 hours … whatever play time is measured will be
+ignored if it exceeds the selected value … 0 to disable play time tracking entirely and … 24 to have no limit". The
+reading taken: a launch over the limit adds **nothing**, not the limit; that is what "ignored" says, and a player who
+fell asleep with a game running has no better estimate to give. `PlayTime.Tracked` is the rule; `RecordPlayTime` applies
+it with `AppSettings.MaxPlayTimeTracking`, default 8 (ES-DE's, §21.1); Preferences ▸ Gameplay sets it. The window's test
+records a 45-minute launch, drops a nine-hour one, and records it after No limit is chosen, reading the clock through a
+test hook (`PlayClockReading`) since a test cannot wait nine hours. The play count still counts every launch.
+
+### 29.7 Mutants
+
+The runner is `~/.cache/emusen/probe/pass4/mutate_pass4.py`. Before each mutant it writes a state file,
+`mutant-in-progress.json`, holding the file's path and original text; it restores the file in a `finally` and removes the
+state file after; a run that finds a state file at its start restores that file and rebuilds both trees before anything
+else (checked with a planted state file, `check_restore.py`). Every mutant's text must occur exactly once. Each was built
+with `-m:2` and run alone under `nice -n 10` against its rule's tests only; LunaP's ran in its worktree against
+`BadgeGlyphTests` and `IndicatorControlTests`. Both trees were rebuilt clean after each round. The log is
+`run-pass4.log`, the verdicts `mutants-pass4.txt` and `mutants-pass4-rerun.txt`. No round was interrupted.
+
+| Rule | Mutants | Result |
+|---|---|---|
+| Badges | B1 a theme's image ignored; B2 no built-in badge (the old rule); B3 `all` ignoring the theme's order; B4 the SNES type drawn as the NES pad; B5 no controller over its badge; B6 no folder link; B7 no controller badge; B8 the theme's controller image ignored; B9 `controllerSize` ignored; B10 the editor's controller never reaching the view; B11 the editor's choice not stored | caught |
+| Clock, help, status | S1 the clock never drawn; S2 always drawn; S3 a session's clock fixed at its build; S4 the help switch ignored; S5 the status switches ignored; S6 the percentage kept with the battery off; S7 the Bluetooth switch ignored | caught |
+| Quick system select | Q1 the default giving a list's shoulders the system; Q2 the triggers never; Q3 Disabled keeping left and right; Q4 the help keeping Jump; Q5 the help keeping left/right; Q6 the help context of the view being left (§29.4's defect); Q7 a grid's shoulders jumping under the default | caught |
+| Startup, order | T1 startup ignored; T2 applied at every showing; T3 the view ignored; O1 full names ignored; O2 the Game Boy Color's year; O3 the setting never reaching the window | caught |
+| Overlay | V1 shown although off | **survived**; caught after the test was changed |
+| | V2 shown before the repeats; V3 no star; V4 left up after release | caught |
+| Sounds, volume, sheet | N1 no fallback; N2 the fallback over the theme's own; N3 0 still playing; N4 the gain over 70; N5 the slider saving nothing; N6 the synthesis silent; N7 two sounds alike; I1 a choice waiting for the next showing | caught |
+| LunaP §180 | L1 the link on a plate; L2 a controller over any badge; L3 the file not winning; L6 no knockout; L7 Icons counted first; L8 the overlay without its shade; L9 the Wi-Fi fan's old radius (§29.4); L10 the completed badge drawn as the favourite | caught |
+| | L4 the overlay's size ignored; L5 its position ignored | **survived**; caught after the test was changed |
+| Row 32 | R1 the game's engine never consulted at launch; R2 an engine of another console used; R3 no engines offered; R4 a one-engine console's row enabled; R5 no badge | caught |
+| Row 33 | P1 the cap not applied; P2 Disabled recording; P3 the window ignoring the rule; P4 Preferences saving nothing; P5 the default No limit | caught |
+
+**60 of 63 caught on the first run, 63 of 63 after two tests were strengthened.** The three survivors were weak tests,
+none an equivalent mutant, which fails P161's second clause:
+- **V1.** The overlay test held the list with the overlay off for 900 ms and looked then; by then the five-game list had
+  reached its end, which fades the metadata back and so hides the overlay whatever the setting. It now looks at 600 ms
+  too, while the list is still moving.
+- **L4, L5.** The overlay test moved the controller up and shrank it in one strip and asked only that ink leave the
+  middle and appear high up, which either change alone satisfies. Size and position are now asserted each on its own
+  against the default: at size 1 the pad reaches left of the half-size box, and at a fifth of the height it sits high
+  with the middle empty.
+
+The row 32 and 33 mutants were written after their tests and all caught on their first run, which, as §23.9 said of its
+own, shows the tests are not empty rather than that the rules are complete.
+
+### 29.8 Pictures
+
+At 1280×800, written by `Pass4PictureTool` with `EMUSEN_BIGPICTURE_PNG=1` to `~/.cache/emusen/bigpicture/png/pass4/`, on
+the synthetic theme with a fixed device (Bluetooth, Wi-Fi, 64% battery) and a clock frozen at 13:45, and on Art Book
+Next's reference clone. Every one was looked at:
+
+- `glyph-sheet`: the ten badges at 104 and 36 px on dark and at 48 px on light, the five controllers at 170 and 60 px, a
+  strip of six entries (a controller on its plate, a linked folder), and the overlay. **A flaw seen and corrected:** the
+  first sheet showed the folder link's white outline running into the folder's, so that neither read; the drawn folder
+  is now cut out under a drawn link (`LunaP.md` §180.2).
+- `synthetic-default-badges-clock-off`: a favourite marked completed, a kids' game, broken, and with the Super Nintendo
+  pad chosen, so the badge strip shows five badges, the last the SNES pad on its plate; no clock; the status bar B, the
+  fan (narrower since §29.4) and 64%.
+- `synthetic-clock-on`: 13:45 at the theme's clock, nothing else moved.
+- `synthetic-status-wifi-off`, `synthetic-status-wifi-and-percentage-off`: the fan gone, then the percentage; the bar
+  closes up to the right edge.
+- `synthetic-help-off`: no help bar.
+- `synthetic-quick-select-shoulders-help`: the help bar with both shoulders reading SYSTEM and no left/right entry.
+- `sheet-interface-tab`: the Interface tab, Quick System Select focused, its four dropdowns and the overlay switch in view,
+  the rest below the fold.
+- `sheet-preferences-volume`: the Appearance tab scrolled to the sounds, the switch and the volume slider at 70.
+- `synthetic-overlay-held`, `synthetic-overlay-star`: "Co" in the middle of the dimmed view while the list passes Cobalt
+  Harbor; then, with the first four games favourites, a star.
+- `artbooknext-overlay-held`, `artbooknext-overlay-star`: the same on Art Book Next's list variant, where the list is
+  centred, so the letters stand over the rows below the selection. **Seen and left:** the letters overlap the list in
+  a centred layout; where ES-DE draws its overlay was not measured (Q51). The shade darkens an already dark theme only a
+  little.
+- `artbooknext-badges`: Art Book Next's own favourite and completed images, unchanged by this pass (P105). **Seen and
+  left, and not this pass's:** in this variant, one of the list variants without a metadata panel, the theme gives its
+  `badges` element no position, so the badges sit at the top-left corner with their upper half off the screen; they did
+  the same before this pass, since the images are drawn as before (Q52).
+- `artbooknext-system-clock-off`, `artbooknext-system-clock-on`: the carousel, then its clock at the top left, 13:45 in a
+  rounded dark plate; its list variants set the game list's clock to `scope none`, so the game list shows none.
+
+### 29.9 The broad run
+
+WiseMan was merged into the branch before it (`964f07c2`: ES-DE's default keys steering the themed view, and F4 for the
+Start menu), cleanly. Then one clean rebuild and one broad run, under `nice -n 10` with builds at `-m:2`: every test
+under `EmuSen.WiseMan.Mistress` except `ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` and anything
+named for the GPU or Vulkan. **983 passed, 27 skipped (the picture, bench and live tools gated by their variables), none
+failed**, of 1,010, in 3 min 46 s. P163 **held**. Another run was building on the machine at the same time. One pass is
+weak evidence against an intermittent failure, as §15.14 says of its own. LunaP's whole suite, run twice during the pass,
+passed 1,371 of 1,371 both times.
+
+### 29.10 Not done
+
+- **ES-DE was not run.** The overlay's timing, look and place, which §21.3 planned to record once from ES-DE, were not
+  recorded: the plan took ES-DE's documents alone as the oracle, and the load rule of 2026-09-25 weighs against a
+  recording session. Whether ES-DE's built-in badges sit and scale as Mistress's do is likewise unmeasured.
+- **Nothing ran on the handheld**, and no real window: the navigation sounds were never heard, only their samples read.
+- **The overlay for held shoulders.** ES-DE's guide shows it for held Up, Down, L1 and R1; the shoulders reach the view
+  as repeated presses from `PadNavigator`, not as a held direction, so it shows for Up and Down only.
+- **Systems orders by hardware type**, and ES-DE's custom sorting file; the startup list's collections.
+- **The folder badge and link** are drawn for any entry that says so; nothing in Mistress marks a folder or a link yet
+  (pass 6). **The manual badge** has no data until pass 9. *Amended at the merge with pass 6 (§30), 2026-09-27: pass 6's folder
+  entries and folder links now carry the folder badge and its link; `ThemedSwitchesTests.Pass_6_s_folders_show_the_built_in_folder_badge_and_a_linked_folder_its_link`
+  shows both on the NES region folders, and mutant B6, rewritten for pass 6's `FolderLink` (a file name, not a flag), is
+  caught by it and two others. The merge's narrow run (big picture, folders, engine, metadata, Preferences): 462 passed,
+  22 skipped, none failed.*
+- **The controller field** offers EmuSen's three pads, a generic pad and unknown (Q54); ScreenScraper gives no controller.
+- **Filters** for controller and alternative emulator in Filter Gamelist (§22.11) are still not offered.
+- **The status bar's own drawings** besides the Wi-Fi fan were checked only by the tests that exercise them here.
+- **Row 32's filter and notice**: Filter Gamelist has no alternative-emulator field, and the editor shows no notice for
+  a stored engine its console lacks; the launch simply ignores it.
+
+### 29.11 Questions for the player
+
+- **Q50, the systems' default order.** The default stays EmuSen's release order (NES, Game Boy, Game Boy Color, SNES,
+  Nintendo 64). ES-DE's default is by full name, which §22.2 measured as Nintendo 64, NES, Game Boy, Game Boy Color, SNES
+  under ES-DE's own full names; Mistress's *Full names* sorts the names its themes show and gives Game Boy first. Keep
+  EmuSen's order as the default, or switch to *Full names*?
+- **Q51, the overlay's timing and look.** §21.3 planned to record ES-DE's quick-scrolling overlay once; it was not
+  recorded (§29.10). Should a short ES-DE session (in the scratch home, with the uinput rig of §14.7) measure when it
+  appears, how dark it is and where its letters sit, so that Mistress's can follow?
+- **Q52, Art Book Next's badges in its list variants without a metadata panel.** The theme gives the element no
+  position there, so its badges sit at the top-left corner, half off the screen, as they did before this pass. Is that
+  what ES-DE does with the same theme (to be checked in the same session as Q51), or should Mistress leave an element
+  without a position undrawn?
+- **Q53, a grid's shoulders.** Under ES-DE's default quick system select a grid's shoulders now change the system, as its
+  guide documents; before this pass they jumped ten games. Keep ES-DE's default, or default to *Left/right* so a grid
+  keeps its jump (and a list is unchanged either way)?
+- **Q54, the controller types offered.** The editor offers EmuSen's three pads, a generic pad and unknown. THEMES.md names
+  thirty-six types. Offer all of them (Mistress drawing any pad it has no shape for as the generic pad), or keep the list
+  to EmuSen's consoles?
+
 ---
 
 ## 30. Pass 6 built: folders (2026-09-27)
@@ -6661,9 +6959,10 @@ rebuilt clean at the end.
 - **Numbers written as `inf`, `nan` or in hexadecimal**, which a C reader might take, are 0 in the loader; not measured.
 - **The handheld**: nothing ran there (P171).
 - **The value the player quoted.** The handheld's message gave the value as `w0.02`; Artflix (Revisited) as downloaded on
-  2026-09-27 writes `w 0.02` in all three places. The message quoted is not this build's wording either, so the
-  handheld runs another build, and how the space went missing from the quotation is not known. A theme that does write
-  `w0.02` is refused by ES-DE and by the loader alike.
+  2026-09-27 writes `w 0.02` in all three places. The settings reference's §4.70, merged while this section was written,
+  records that the detail sheet's status line had been broken by word-wrap, so which spelling the handheld showed could
+  not be read from it; `w 0.02`, the downloaded spelling, is the one this section's install test and the survey load. A
+  theme that does write `w0.02` is refused by ES-DE and by the loader alike.
 
 ### 31.11 Questions for the player
 

@@ -36,7 +36,7 @@ namespace EmuSen.Mistress.BigPicture
         }
 
         private HelpContext HelpContext => new(Editing is not null, RandomEntryButton != BigPictureCollections.RandomDisabled,
-            RandomEntryButton == BigPictureCollections.RandomGamesAndSystems);
+            RandomEntryButton == BigPictureCollections.RandomGamesAndSystems, QuickSelect: QuickSelectFor("gamelist"));
 
         private ThemedShelf? ShelfOf(string? system) => _shelves.FirstOrDefault(s => s.System.Name == system);
 
@@ -62,6 +62,8 @@ namespace EmuSen.Mistress.BigPicture
             if (shelf.Folders is not null) return ([], false, null, true);
             return (shelf.Games, shelf.FavoritesFirst, shelf.DefaultSort, false);
         }
+
+        private bool FavoritesFirstIn(string system) => !Source(system).Folders && Source(system).FavoritesFirst;
 
         private bool StarsIn(string system) => OpenFolder(system)?.Stars ?? ShelfOf(system)?.Stars ?? true;
 

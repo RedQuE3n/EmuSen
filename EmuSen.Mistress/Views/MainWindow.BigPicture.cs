@@ -41,6 +41,9 @@ namespace EmuSen.Mistress.Views
             set => _uiClock = value;
         }
 
+        // Where the status bar's battery and radios are read; a test gives a fixed device instead of this machine's sysfs.
+        internal Func<DeviceStatus> DeviceStatusSource { get; set; } = () => DeviceStatusReader.Read();
+
         // Where a navigation sound goes; a test records them instead of opening the audio device.
         internal Action<string>? UiSoundSink { get; set; }
 
@@ -85,8 +88,9 @@ namespace EmuSen.Mistress.Views
             bool shown = false;
             if (_themed is not null && ThemedStyleWanted)
             {
-                _themed.Status = DeviceStatusReader.Read();
+                _themed.Status = DeviceStatusSource();
                 _themed.PlaySound = _appSettings.NavigationSounds ? PlayUiSound : null;
+                _themed.Interface = _appSettings.BigPictureInterface;
                 _themed.SetPadLayout(HelpFamily, _appSettings.SwapPadButtons);
                 string mediaKey = $"{_appSettings.EsdeMediaDirectory}|{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(_artwork)}|{ScrapeMediaKey}";
                 ApplyCollectionSettings();
@@ -102,17 +106,28 @@ namespace EmuSen.Mistress.Views
             ScheduleThemedFrame();
         }
 
+        // The navigation volume as the stream's gain; at 0 nothing is played at all (§4.66).
+        internal float UiSoundGain => Math.Clamp(_appSettings.BigPictureInterface.NavigationVolume, 0, 100) / 100f;
+
         private void PlayUiSound(string path)
         {
-            if (UiSoundSink is { } sink) sink(path);
-            else (_uiSounds ??= new UiSoundPlayer()).Play(path);
+            if (UiSoundGain <= 0) return;
+            if (UiSoundSink is { } sink)
+            {
+                sink(path);
+                return;
+            }
+            UiSoundPlayer player = _uiSounds ??= new UiSoundPlayer();
+            player.Volume = UiSoundGain;
+            if (NavigationSounds.IsBuiltIn(path)) player.Remember(path, NavigationSounds.Samples(path));
+            player.Play(path);
         }
 
         // Each shelf under ES-DE's name for it, favourites first and then by title, as ES-DE lists a gamelist by default (§13.8).
         private IReadOnlyList<ThemedShelf> ThemedShelves()
         {
             IReadOnlyDictionary<string, string> links = FolderLinks();
-            return EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder
+            return SystemsOrder.Sort(EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder, _appSettings.BigPictureInterface.SystemsSorting, s => s.EsdeSystem, s => s.EsdeFullName)
                 .Select(s => new ThemedShelf(new ThemeSystem(s.EsdeSystem, s.EsdeFullName, s.EsdeSystem),
                     _allScan.Entries.Where(e => e.Shelf == s.Name && Listed(e)).Select(ThemedGame)
                         .OrderByDescending(g => g.Favorite).ThenBy(g => g.SortName ?? g.Name, StringComparer.OrdinalIgnoreCase).ToList())

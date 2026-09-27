@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using EmuSen.Galaxia.Library;
+using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.BigPicture.Scene;
 using EmuSen.Mistress.BigPicture.Theme;
@@ -74,6 +76,14 @@ namespace EmuSen.Mistress.BigPicture
 
         public SceneMotion Motion { get; set; } = SceneMotion.Esde;
 
+        // The player's interface switches: clock, help, status, quick system select, startup and the scroll overlay (§29).
+        public BigPictureInterface Interface { get; set; } = new();
+
+        private bool _started;
+
+        // The clock follows the wall clock; a test that draws a fixed time turns this off.
+        public bool LiveClock { get; set; } = true;
+
         // Why the theme could not be shown, when it could not.
         public string? Error { get; private set; }
 
@@ -126,10 +136,15 @@ namespace EmuSen.Mistress.BigPicture
                 MediaPresence presence = Presence(shelf);
                 scan.Stop();
                 string key = $"{shelf.System.Name}|{choices}|{string.Join(",", presence.Types.Order(StringComparer.Ordinal))}";
-                if (!_themes.TryGetValue(key, out ResolvedTheme? theme)) _themes[key] = theme = ThemeLoader.Load(_capabilities, shelf.System, choices, presence);
+                if (!_themes.TryGetValue(key, out ResolvedTheme? theme))
+                {
+                    _themes[key] = theme = ThemeLoader.Load(_capabilities, shelf.System, choices, presence);
+                    if (!theme.IsThemed) ErrorLog.Warning("themes", $"{_capabilities.ThemeName} has no view for {shelf.System.Name}: {theme.Errors.First().Message}", string.Join(" | ", theme.Errors.Select(e => e.Message)));
+                }
                 if (theme.IsThemed) systems.Add(new SceneSystem(shelf.System, theme, shelf.Games));
             }
             _systems = systems;
+            StartAt(systems);
             MediaTime = scan.Elapsed;
             LoadTime = clock.Elapsed - scan.Elapsed;
             if (systems.Count == 0) return Fail(shelves.Any(s => s.Games.Count > 0) ? "The theme has no view for any system in the library." : "The library has no games.");
@@ -153,6 +168,7 @@ namespace EmuSen.Mistress.BigPicture
 
         private bool Fail(string why)
         {
+            ErrorLog.Warning("themes", why, _capabilities?.ThemeName);
             Error = why;
             Stage = null;
             Root.Children.Clear();
@@ -172,17 +188,36 @@ namespace EmuSen.Mistress.BigPicture
             return _presence[key] = new MediaPresence(types);
         }
 
+        // ES-DE's "System on startup" and "Startup view", applied at the first showing only; a system the library lacks falls back to the first (§29).
+        private void StartAt(IReadOnlyList<SceneSystem> systems)
+        {
+            if (_started || systems.Count == 0) return;
+            _started = true;
+            SceneSystem? chosen = systems.FirstOrDefault(s => s.System.Name == Interface.StartupSystem);
+            _system = (chosen ?? systems[0]).System.Name;
+            _view = Interface.StartupView == BigPictureInterface.ViewGamelist ? "gamelist" : "system";
+        }
+
+        // The status indicators the player keeps; the percentage goes with the battery, which it is drawn beside (§29).
+        private DeviceIndicators StatusShown =>
+            (Interface.StatusBluetooth ? DeviceIndicators.Bluetooth : 0) | (Interface.StatusWifi ? DeviceIndicators.Wifi : 0) | DeviceIndicators.Cellular
+            | (Interface.StatusBattery ? DeviceIndicators.Battery : 0) | (Interface.StatusBattery && Interface.StatusBatteryPercentage ? DeviceIndicators.BatteryPercentage : 0);
+
         // The data the kept selection gives: the system by name, its games as the options list them (§22), the game by file.
         private SceneData Data()
         {
-            IReadOnlyList<SceneSystem> systems = _systems.Select(s => s with { Games = Listed(s.System.Name), Stars = StarsIn(s.System.Name), Heading = HeadingIn(s.System.Name), Counted = CountedIn(s.System.Name) }).ToList();
+            IReadOnlyList<SceneSystem> systems = _systems.Select(s => s with
+            {
+                Games = Listed(s.System.Name), Stars = StarsIn(s.System.Name), Heading = HeadingIn(s.System.Name), FavoritesOnTop = FavoritesFirstIn(s.System.Name),
+                Counted = CountedIn(s.System.Name),
+            }).ToList();
             int system = Math.Max(0, systems.ToList().FindIndex(s => s.System.Name == _system));
             SceneSystem chosen = systems[system];
             int game = _cursor.TryGetValue(ViewKey(chosen.System.Name), out string? file) ? Math.Max(0, chosen.Games.ToList().FindIndex(g => g.File == file)) : 0;
             return new SceneData(systems, _screen)
             {
-                SystemIndex = system, GameIndex = game, Media = _media, Motion = Motion, Family = Family, SwapFaceButtons = SwapFaceButtons, Status = Status, Now = Now(), ShowClock = false,
-                Help = HelpContext,
+                SystemIndex = system, GameIndex = game, Media = _media, Motion = Motion, Family = Family, SwapFaceButtons = SwapFaceButtons, Status = Status, Now = Now(), ShowClock = Interface.DisplayClock, LiveClock = LiveClock,
+                ShowHelp = Interface.DisplayHelp, StatusShown = StatusShown, ScrollOverlay = Interface.ListScrollOverlay, Help = HelpContext,
             };
         }
 
@@ -216,6 +251,7 @@ namespace EmuSen.Mistress.BigPicture
         {
             if (PlaySound is null || Stage is null) return;
             if (Stage.Current.Data.System.Theme.Sounds.GetValueOrDefault(name) is { Exists: true } path) PlaySound(path.Absolute);
+            else PlaySound(NavigationSounds.Key(name)); // Mistress's own for each sound a theme lacks, as THEMES.md says ES-DE falls back (§29).
         }
 
         public void Advance(TimeSpan now)
@@ -238,6 +274,13 @@ namespace EmuSen.Mistress.BigPicture
             Stage?.Current.SetPadLayout(family, swapped);
         }
 
+        // Whether a gamelist's primary element takes left and right itself: a grid, or a horizontal carousel.
+        private bool SidewaysIn(string view)
+        {
+            ResolvedElement? primary = _systems.Count == 0 ? null : (_systems.FirstOrDefault(s => s.System.Name == _system) ?? _systems[0]).Theme.View(view).Primary;
+            return primary is { Type: "grid" } || primary is { Type: "carousel" } p && !(p.String("type") ?? "horizontal").StartsWith("vertical", StringComparison.Ordinal);
+        }
+
         // The direction the primary element moves along: a horizontal carousel's is left and right, a list's and a vertical carousel's up and down.
         public bool Moves(UiButton direction)
         {
@@ -249,13 +292,28 @@ namespace EmuSen.Mistress.BigPicture
 
         private static int Sign(UiButton direction) => direction is UiButton.Up or UiButton.Left ? -1 : 1;
 
-        // A direction going down: the primary element steps and repeats while it is held; in a gamelist, the other axis changes the system once.
+        // A direction going down: the primary element steps and repeats while it is held; in a gamelist, left and right change the system once when quick system select gives them that.
         public void PressDirection(UiButton direction, TimeSpan now)
         {
             if (Stage is null) return;
-            if (Moves(direction)) Stage.Current.Press(Sign(direction), now, vertical: direction is UiButton.Up or UiButton.Down);
-            else if (ViewName == "gamelist" && direction is UiButton.Left or UiButton.Right) ChangeSystem(Sign(direction), now);
+            if (ViewName == "gamelist" && direction is UiButton.Left or UiButton.Right && QuickSelect == BigPictureInterface.QuickSelectLeftRight) ChangeSystem(Sign(direction), now);
+            else if (Moves(direction)) Stage.Current.Press(Sign(direction), now, vertical: direction is UiButton.Up or UiButton.Down);
             Advance(now);
+        }
+
+        // Which pair of buttons changes the system in this gamelist: ES-DE's two "or" settings give left and right to a list and a vertical carousel, the shoulders or triggers to a grid and a horizontal carousel (UG "UI settings").
+        public string QuickSelect => QuickSelectFor(ViewName);
+
+        private string QuickSelectFor(string view)
+        {
+            bool sideways = SidewaysIn(view);
+            return Interface.QuickSystemSelect switch
+            {
+                BigPictureInterface.QuickSelectLeftRightOrShoulders => sideways ? BigPictureInterface.QuickSelectShoulders : BigPictureInterface.QuickSelectLeftRight,
+                BigPictureInterface.QuickSelectLeftRightOrTriggers => sideways ? BigPictureInterface.QuickSelectTriggers : BigPictureInterface.QuickSelectLeftRight,
+                BigPictureInterface.QuickSelectShoulders or BigPictureInterface.QuickSelectTriggers or BigPictureInterface.QuickSelectLeftRight => Interface.QuickSystemSelect,
+                _ => BigPictureInterface.QuickSelectDisabled,
+            };
         }
 
         public void ReleaseDirection(TimeSpan now)
@@ -314,6 +372,12 @@ namespace EmuSen.Mistress.BigPicture
                     break;
                 case UiButton.Back:
                     result = new ThemedCommand(ThemedAction.Leave);
+                    break;
+                case UiButton.PageUp or UiButton.PageDown when gamelist && QuickSelect == BigPictureInterface.QuickSelectShoulders:
+                    ChangeSystem(button == UiButton.PageUp ? -1 : 1, now);
+                    break;
+                case UiButton.First or UiButton.Last when gamelist && QuickSelect == BigPictureInterface.QuickSelectTriggers:
+                    ChangeSystem(button == UiButton.First ? -1 : 1, now);
                     break;
                 case UiButton.PageUp when gamelist:
                     view.Jump(-ShoulderJump, now);

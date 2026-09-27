@@ -27,7 +27,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
 
         [Fact]
-        public Task All_four_directions_move_the_grid_and_the_shoulders_page_by_its_rows() => Session.Dispatch(() =>
+        public Task All_four_directions_move_the_grid_and_the_shoulders_change_the_system_or_page_by_the_quick_select() => Session.Dispatch(() =>
         {
             using SyntheticTheme theme = GridTheme();
             using var s = new ThemedSession(themeDirectory: theme.Root);
@@ -50,9 +50,20 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(0, s.Themed.Stage.Current.Index);
             Assert.Equal("snes", s.System);
 
+            // ES-DE's default quick system select gives a grid's shoulders the system, since left and right move the grid (UG "UI settings", §29).
             s.Pad.R1();
             s.Run(300);
-            Assert.Equal(4, s.Themed.Stage.Current.Index);
+            Assert.NotEqual("snes", s.System);
+            Assert.Contains("quicksysselect", s.Sounds);
+            s.Pad.L1();
+            s.Run(300);
+            Assert.Equal("snes", s.System);
+
+            // With left and right chosen for it, the shoulders page again, ten games at most.
+            s.Themed.Interface = new EmuSen.Galaxia.Models.BigPictureInterface { QuickSystemSelect = EmuSen.Galaxia.Models.BigPictureInterface.QuickSelectLeftRight };
+            s.Pad.R1();
+            s.Run(300);
+            Assert.Equal(("snes", 4), (s.System, s.Themed.Stage.Current.Index));
             Assert.Contains("scroll", s.Sounds);
         }, default);
     }

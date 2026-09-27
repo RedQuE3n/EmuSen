@@ -637,6 +637,7 @@ namespace EmuSen.Mistress.Views
                 }
                 catch (Exception ex)
                 {
+                    ErrorLog.Error("states", $"Save State to slot {slot} failed", ex, path);
                     status = $"Save State failed: {ex.Message}";
                 }
 
@@ -684,6 +685,7 @@ namespace EmuSen.Mistress.Views
                 }
                 catch (Exception ex)
                 {
+                    ErrorLog.Error("states", $"Load State from slot {slot} failed", ex, path);
                     status = $"Load State failed: {ex.Message}{Provenance(record)}";
                 }
 
@@ -903,7 +905,7 @@ namespace EmuSen.Mistress.Views
                 // Off the path, not the session: no core exists yet to ask - see EmuSen_Multicore.md §12.
                 string console = EmuSen.Cores.CoreCatalog.ConsoleForRom(path) ?? "Unknown";
                 // The engine is chosen before the core exists, from the graphics window's row - see EmuSen_Settings_Reference.md §4.44.
-                _session = new EmulatorSession { Cheats = _cheats, Engine = EmuSen.Cores.CoreCatalog.EngineChosen(console, _graphics.Value(console, EmuSen.Cores.CoreCatalog.EngineKey)) };
+                _session = new EmulatorSession { Cheats = _cheats, Engine = EmuSen.Cores.CoreCatalog.EngineChosen(console, GameEngine(path) ?? _graphics.Value(console, EmuSen.Cores.CoreCatalog.EngineKey)) };
                 StartLogging(console);
                 _session.LoadRom(path);
                 if (_session.EngineNotice is { } engineNotice) Console.WriteLine("[core] " + engineNotice);
@@ -962,6 +964,7 @@ namespace EmuSen.Mistress.Views
                 _session = null;
                 // Back to the list rather than a black viewport with only a status line.
                 ShowLibrary();
+                ErrorLog.Error("launch", $"Failed to load {displayName}", ex);
                 StatusText.Text = $"Failed to load {displayName}: {ex.Message}";
             }
         }
@@ -1429,9 +1432,7 @@ namespace EmuSen.Mistress.Views
         {
             StopLogging(); // close the previous session's files first - see CategorizedLogWriter.Dispose's own comment
 
-            string logRoot = string.IsNullOrWhiteSpace(_appSettings.LogDirectory)
-                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EmuSen", "Logs")
-                : _appSettings.LogDirectory;
+            string logRoot = ErrorLog.Usable(_appSettings.LogDirectory) ? _appSettings.LogDirectory! : ErrorLog.DefaultRoot;
 
             try
             {
@@ -1443,6 +1444,7 @@ namespace EmuSen.Mistress.Views
             catch (Exception ex)
             {
                 // Best-effort: an unwritable directory must not block the load - see §4.22.
+                ErrorLog.Error("logging", "Per-game logging disabled", ex, logRoot);
                 StatusText.Text = $"Logging disabled: {ex.Message}";
             }
         }

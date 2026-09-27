@@ -109,6 +109,9 @@ namespace EmuSen.Galaxia.Models
         // The theme's navigation sounds, on a stream beside the game's - see §4.52.
         public bool NavigationSounds { get; set; } = true;
 
+        // ES-DE's "Max play time tracking" in hours: 0 records none, 24 has no limit, else a longer launch records nothing - see EmuSen_Settings_Reference.md §4.66.
+        public int MaxPlayTimeTracking { get; set; } = 8;
+
         // Games the player hid from the library, with Hide from Library or the Hidden field, are listed again - see EmuSen_Settings_Reference.md §4.59.
         public bool ShowHiddenGames { get; set; }
 
@@ -117,6 +120,9 @@ namespace EmuSen.Galaxia.Models
 
         // Big picture's collections and gamelist options - see EmuSen_Settings_Reference.md §4.58.
         public BigPictureCollections BigPictureCollections { get; set; } = new();
+
+        // Big picture's clock, help, status, quick system select, startup, order, scroll overlay and sound volume - see EmuSen_Settings_Reference.md §4.66.
+        public BigPictureInterface BigPictureInterface { get; set; } = new();
 
         private static readonly ConfigFile<AppSettings> File = new("appsettings.json");
 

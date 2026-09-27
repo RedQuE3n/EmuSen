@@ -6,7 +6,7 @@ using EmuSen.Mistress.BigPicture.Theme;
 namespace EmuSen.Mistress.BigPicture.Scene
 {
     // What changes the help entries: a collection being edited, and the random entry button's setting (§22).
-    public sealed record HelpContext(bool Editing = false, bool RandomGames = false, bool RandomSystems = false, bool Folder = false)
+    public sealed record HelpContext(bool Editing = false, bool RandomGames = false, bool RandomSystems = false, bool Folder = false, string QuickSelect = "leftright")
     {
         // A on this entry opens a list rather than a game: a folder with no link, or any folder while a collection is edited (§30).
         public static bool Enters(SceneGame? game, HelpContext help) => game is { Folder: true } g && (g.FolderLink is null || help.Editing);
@@ -64,6 +64,11 @@ namespace EmuSen.Mistress.BigPicture.Scene
             return p.IconKey;
         }
 
+        // The pair quick system select takes reads System; left and right name nothing when they do not change it (§29).
+        private static Prompt[] QuickSelected(Prompt[] known, string quick) => known
+            .Where(p => p.Entry != "left/right" || quick == "leftright")
+            .Select(p => (p.Entry, quick) is ("l" or "r", "shoulders") or ("lt" or "rt", "triggers") ? p with { Label = "System" } : p).ToArray();
+
         private static readonly Prompt Random = new("thumbstickclick", "Random", PadGlyphButton.ThumbstickClick, "thumbstick_click");
 
         // The entries a theme lists, in its order, that Mistress has an action for in this view; "all" is every one.
@@ -73,6 +78,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             Prompt[] known = view == "system" ? System : Gamelist;
             if (view == "gamelist" && c.Editing) known = known.Select(p => p.Entry == "y" ? p with { Label = "Collection" } : p).ToArray();
             if (view == "gamelist" && c.Folder) known = known.Select(p => p.Entry == "a" ? p with { Label = "Select" } : p).ToArray();
+            if (view == "gamelist") known = QuickSelected(known, c.QuickSelect);
             if (view == "system" ? c.RandomSystems : c.RandomGames) known = [.. known.Take(known.Length - 1), Random, known[^1]];
             IEnumerable<Prompt> chosen = entries.Contains("all") ? known : entries.Select(n => known.FirstOrDefault(p => p.Entry == n)).OfType<Prompt>();
             if (swapped) chosen = chosen.Select(Swapped);

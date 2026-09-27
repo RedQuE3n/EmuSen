@@ -7746,3 +7746,12 @@ F5 is §31.8's surviving M18, now caught: P170's measurement made the exponent a
 - **Q111, a relative path without `./`.** ES-DE resolves it against its working directory, which depends on how it was
   started; the loader now does the same with Mistress's. No listed theme writes one. **Recommendation:** keep matching
   ES-DE, since a theme that works by accident in one frontend and not the other is the case §25.10 wants avoided.
+
+### 35.12 The broad run
+
+WiseMan had not moved since the branch was made (b0c6bf75), so the merge before the run was empty. One run of the
+Mistress filter, without `ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` and any GPU or Vulkan test,
+under `nice -n 10`: **1,295 tests, 1,261 passed, 33 skipped (the picture, survey and live tools), 1 failed, in 3 min
+52 s.** The failure is §31.12's order-dependent one of the headless platform's initialisation ("The calling thread
+cannot access this object"), this time in `FrameHandOffTests`, whose eight tests passed when run alone; it is not this
+branch's.

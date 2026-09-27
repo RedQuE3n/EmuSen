@@ -48,6 +48,8 @@ namespace EmuSen.Mistress.BigPicture.Theme
         public string? KeyAttribute { get; init; }
         public ThemeViewScope OnlyIn { get; init; }
         public string? Deferred { get; init; }
+        // A range THEMES.md does not state, measured in ES-DE: outside it the default applies, with a warning - see EmuSen_BigPicture.md §35.2.
+        public (uint Min, uint Max)? ValidRange { get; init; }
     }
 
     // One documented element type and its properties.
@@ -381,8 +383,8 @@ namespace EmuSen.Mistress.BigPicture.Theme
                 Enum("stationary", "never", "withinView betweenViews always never"),
                 Enum("horizontalAlignment", null, "left center right"),
                 Enum("direction", "row", "row column"),
-                UInt("lines", "3"),
-                UInt("itemsPerLine", "4"),
+                UInt("lines", "3") with { ValidRange = (1, 10) },
+                UInt("itemsPerLine", "4") with { ValidRange = (1, 10) },
                 Pair("itemMargin", "0.01 0.01", 0f, 0.2f) with { Rule = PairRule.MinusOneMatchesOther },
                 List("slots", null, "collection folder favorite completed kidgame broken controller altemulator manual all", 0),
                 Pair("controllerPos", "0.5 0.5", -1f, 2f),

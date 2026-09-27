@@ -105,9 +105,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [Theory]
         [InlineData("<image name=\"i\"><pos>0.5</pos></image>")]
         [InlineData("<image name=\"i\"><color>FFF</color></image>")]
-        [InlineData("<image name=\"i\"><color>GGGGGG</color></image>")]
-        [InlineData("<badges name=\"b\"><lines>-1</lines></badges>")]
-        [InlineData("<badges name=\"b\"><lines>1.5</lines></badges>")]
+        [InlineData("<image name=\"i\"><color>#FF0000</color></image>")]
         public void A_value_in_the_wrong_format_unthemes_the_system(string element)
         {
             AssertUnthemed(LoadView(element), ThemeDiagnosticCode.BadFormat);
@@ -128,9 +126,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public void An_invalid_imageType_stops_the_element_rendering()
         {
             ResolvedTheme theme = LoadView("<video name=\"gamelistVideo\"><imageType>covr</imageType></video><image name=\"kept\"><imageType>cover</imageType></image>");
+            Assert.True(theme.IsThemed);
             Assert.Null(theme.GamelistView.Find("video", "gamelistVideo"));
             Assert.NotNull(theme.GamelistView.Find("image", "kept"));
-            Assert.Contains(theme.Diagnostics, d => d.Code == ThemeDiagnosticCode.InvalidImageType && d.Severity == ThemeSeverity.Error);
+            Assert.Contains(theme.Diagnostics, d => d.Code == ThemeDiagnosticCode.InvalidImageType && d.Severity == ThemeSeverity.Warning);
         }
 
         [Fact]

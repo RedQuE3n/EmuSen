@@ -240,8 +240,8 @@ namespace EmuSen.Mistress.BigPicture.Theme
 
         private static ThemeVariant ReadVariant(XElement element, string name, ThemeDiagnostics diagnostics, string file)
         {
-            // THEMES.md gives no default for a variant's selectable; true is this loader's - see EmuSen_BigPicture.md §12.4.
-            bool selectable = ReadBool(element.Element("selectable"), true, diagnostics, file);
+            // A variant without <selectable> is not offered, as in ES-DE - see EmuSen_BigPicture.md §35.3.
+            bool selectable = ReadSelectable(element.Element("selectable"), false, diagnostics, file);
             var overrides = new List<VariantOverride>();
             foreach (XElement o in element.Elements("override"))
             {
@@ -302,17 +302,21 @@ namespace EmuSen.Mistress.BigPicture.Theme
                 return null;
             }
             TransitionAnimation systemToSystem = s2s ?? TransitionAnimation.Instant, gamelistToGamelist = g2g ?? TransitionAnimation.Instant;
-            return new TransitionProfile(name, Labels(element), ReadBool(element.Element("selectable"), true, diagnostics, file),
+            return new TransitionProfile(name, Labels(element), ReadSelectable(element.Element("selectable"), true, diagnostics, file),
                 systemToSystem, s2g ?? TransitionAnimation.Instant, gamelistToGamelist, g2s ?? TransitionAnimation.Instant,
                 u2s ?? systemToSystem, u2g ?? gamelistToGamelist);
         }
 
-        private static bool ReadBool(XElement? element, bool fallback, ThemeDiagnostics diagnostics, string file)
+        // ES-DE's reading of selectable: false when the first character is 0, f, F, n or N, otherwise true, blank included - see EmuSen_BigPicture.md §35.3.
+        private static bool ReadSelectable(XElement? element, bool whenMissing, ThemeDiagnostics diagnostics, string file)
         {
-            if (element is null) return fallback;
-            if (ThemeValueParser.TryParseBool(element.Value.Trim(), out bool value)) return value;
-            diagnostics.Add(ThemeSeverity.Warning, ThemeDiagnosticCode.InvalidValue, file, Line(element), $"<{element.Name.LocalName}> \"{element.Value.Trim()}\" is not a boolean");
-            return fallback;
+            if (element is null) return whenMissing;
+            string text = element.Value;
+            bool value = text.Length == 0 || text[0] is not ('0' or 'f' or 'F' or 'n' or 'N');
+            if (!ThemeValueParser.TryParseBool(text, out _))
+                diagnostics.Add(ThemeSeverity.Warning, ThemeDiagnosticCode.LenientValue, file, Line(element),
+                    $"<{element.Name.LocalName}> \"{text}\" is not true or false; it is read as {(value ? "true" : "false")}, as ES-DE reads it");
+            return value;
         }
 
         internal static int Line(XObject node) => node is IXmlLineInfo info && info.HasLineInfo() ? info.LineNumber : 0;

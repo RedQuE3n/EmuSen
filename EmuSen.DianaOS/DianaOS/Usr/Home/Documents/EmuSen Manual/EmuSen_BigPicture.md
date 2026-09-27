@@ -1138,6 +1138,9 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   - **Q45** (*Use Another Game's Cover…*) is built as a replacement that stands on its own.
   - **Q44** no longer applies: the fallback is not switched off after pass 8.
   - **Q40,** the embedded credentials, is unaffected.
+- **Q110–Q111, decided 2026-09-27 (§35):**
+  - **Q110:** a theme with no chosen variant draws its first selectable variant from the start, as Mistress already does. ES-DE draws the first declared variant until its settings are first opened; the two agree for all 66 listed themes.
+  - **Q111:** a bare relative path (no `./`) resolves against the working directory, as ES-DE's does, as built in §35.
 - **Q70–Q72, answered 2026-09-27 (§31):**
   - **Q70:** yes. The other value types are probed against ES-DE as the six refusals were: colours, whole numbers (Canvas's and Iconic's `3.5`, P173), strings, paths, and `capabilities.xml`'s `selectable` (P172). The number with an exponent (P170) goes in the same run. The loader then matches ES-DE rule by rule.
   - **Q71:** yes. A variant that states no `<selectable>` is treated as ES-DE treats it: not offered for selection. This is confirmed in Q70's run before it is built, since only one ES-DE observation supports it ("NONE DEFINED" for a lone variant).
@@ -1363,13 +1366,13 @@ partially parsed views of an unthemed system readable for inspection, and `IsThe
 | `<variant>`, `<aspectRatio>` or `<include>` inside `<view>`; a variant in a variant | error | unthemed | cited |
 | A view other than `system`, `gamelist` or `all`; a missing `name` | error | unthemed | cited ("mandatory") |
 | A property with no value | error | unthemed | cited (the log line in `THEMES.md`) |
-| A value in the wrong format (a pair of one number, a five-digit colour, `yes` for a boolean) | error | unthemed | cited ("sanitization for valid data format"); **superseded by §31 (2026-09-27)**: ES-DE reads FLOATs, pairs with a space and BOOLEANs leniently (`yes` is true), and refuses only a pair with no space |
+| A value in the wrong format (a pair of one number, a five-digit colour, `yes` for a boolean) | error | unthemed | cited ("sanitization for valid data format"); **superseded by §31 (2026-09-27)**: ES-DE reads FLOATs, pairs with a space and BOOLEANs leniently (`yes` is true), and refuses only a pair with no space; **and by §35**: whole numbers are never refused, and a colour only when it is not 6 or 8 characters long |
 | An undefined variable in a property | error | unthemed | cited ("a missing variable") |
 | A missing include written out | error | unthemed | cited |
 | An include loop | error | unthemed | chosen; ES-DE hangs |
-| An `imageType` naming an unknown type | error | that element is not rendered | cited |
+| An `imageType` naming an unknown type | error | that element is not rendered | cited; **superseded by §35 (2026-09-27)**: a warning, the system themed, as in ES-DE |
 | An `imageType` repeating a type | warning | the property is ignored | cited |
-| An enum value not in its list | warning | default | cited |
+| An enum value not in its list | warning | default | cited; since §35, compared untrimmed and case-sensitively, as ES-DE compares it |
 | An element or property in a view it does not support | warning | ignored | chosen |
 | A second primary element | warning | ignored | chosen |
 | A property empty once its variables are substituted | warning | ignored | chosen |
@@ -1388,6 +1391,7 @@ has a test that fixes the choice, so that a correction shows up as a failing tes
    declared", and was refined while building to skip a non-selectable first variant. For Art Book Next the two rules
    give the same answer.
 2. **A variant's `selectable` defaults to true.** It is documented as defaulting to true only for transition profiles.
+   **Superseded by §35.3 (2026-09-27):** ES-DE does not offer a variant without one, and reads the value by its own rule.
 3. **A variable is substituted when it is defined, not when it is used.** `THEMES.md` documents nesting and the global
    namespace, but not whether `<b>${a}</b>` follows a later redefinition of `a`. Only a theme that redefines a variable
    another variable names can tell the difference. Art Book Next does not.
@@ -1405,7 +1409,8 @@ has a test that fixes the choice, so that a correction shows up as a failing tes
 9. **"Can only be used if …" conditions are not enforced.** For example, `verticalAlignment` "can only be used if
    `container` is `false`", and Art Book Next sets both. The loader keeps the typed value, and whether it takes effect
    is the renderer's business.
-10. **A path with neither `./` nor `~`** is resolved from the file's folder.
+10. **A path with neither `./` nor `~`** is resolved from the file's folder. **Superseded by §35.2 (2026-09-27):** ES-DE
+    resolves it against its working directory, and so does the loader now.
 
 `THEMES.md` also contradicts itself twice. The textlist's `textHorizontalScrolling` is typed BOOLEAN, but its entry
 lists "valid values are `vertical` or `horizontal`". The loader types it as a boolean. The language example declares
@@ -6958,6 +6963,8 @@ rebuilt clean at the end.
 | P172 | ES-DE reads `selectable` in `capabilities.xml` by §31.2's first-character rule (`yes` selectable, `flase` not), where the loader warns and keeps its default | ES-DE is run on it |
 | P173 | ES-DE draws Canvas's and Iconic's game-list carousels with `itemsBeforeCenter` of `3.5`, reading it as 3 | ES-DE is run on them (Q70) |
 
+P170, P172 and P173 were retired in §35.4: P170 and P173 held, and P172 failed as a rule.
+
 ### 31.10 Not done
 
 - **Only the SNES game list was captured** for the 15 real themes. Their logs cover all five systems and the
@@ -7500,3 +7507,254 @@ After merging WiseMan (§32 and the neutral rewording of the docs), one run of t
 **1,113 tests, 1,080 passed, 33 skipped (the picture, survey and live tools), 0 failed, in 3 min 47 s.** The two
 failures of §31.12 did not recur: the credential guard's was fixed on WiseMan, and the headless-initialisation one
 passed in this order.
+
+## 35. Q70 and Q71: the other value types against ES-DE (2026-09-27)
+
+*Opened on the answers to Q70 and Q71 of 2026-09-27 (§10.1).* §31 matched the loader to ES-DE for FLOAT, NORMALIZED_PAIR,
+BOOLEAN and the XML itself, and left COLOR, UNSIGNED_INTEGER, STRING, PATH and `capabilities.xml`'s `selectable` as
+`THEMES.md` types them (§31.4, §31.10). This section runs ES-DE on those, retires P170, P172 and P173, and matches the
+loader rule by rule. The principle is §25.10's, as in §31: a theme ES-DE draws should not be one Mistress refuses, and a
+theme ES-DE refuses should not be one Mistress draws. The player's account is §4.73 of the settings reference. Q72 was
+answered "no" (§10.1): the warnings below go to the loader's diagnostics only, as §31's do, and nothing about them is
+shown to the player.
+
+**Sources.** ES-DE 3.4.1's behaviour, measured by running it, and `THEMES.md` where it speaks; never its source. All
+probe themes are synthetic and were written under `~/.cache/emusen/probe/q70/probe-themes/`. For P173, the XML of Canvas
+and Iconic that §25.8's survey had fetched was copied there, with three fonts stood in by a system font (ES-DE shuts
+down when a theme's font file is missing), and deleted afterwards. No theme file, image or XML entered the repository;
+the tests write their own XML.
+
+**Numbering.** Predictions in this section start at **P210** and questions at **Q110**.
+
+### 35.1 The setup
+
+- **ES-DE.** The downloaded AppImage under `~/.cache/emusen/bigpicture/esde/`, with a home of its own, `home-q70/`, and
+  §31.1's arguments (`--resolution 1280 800 --fullscreen-padding off --no-update-check --no-splash --debug`),
+  windowed. Other work ran ES-DE on the same machine that day, so every run held the shared lock
+  `esde/esde.lock`, waited for any other ES-DE window to close, and closed only the process tree it had started.
+- **What it could reach.** `ApplicationUpdaterFrequency` was `never`, the ScreenScraper account fields were empty, and
+  nothing asked it to scrape. Its ROM folder, `esde/q70-roms/`, held empty synthetic files: four per system for five
+  systems, twelve for the SNES, and one for each of 60 more systems, so that a probe theme could give every value a
+  system of its own. The real library was never named. `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT` admitted only §22.2's
+  uinput pad.
+- **The runner** is `~/.cache/emusen/probe/q70/esde_run70.py` (settings, launch, a capture by `ffmpeg -f x11grab`, pad
+  timelines, the log copied), wrapped by `run_locked.sh`. Every `es_log.txt` is kept in `probe/q70/logs/`.
+- **Three kinds of run, in two rounds.** *Refusal themes* (`q70-values1`, `q70-values2`) give each of 129 probe values
+  its own system folder, so a value that unthemes one system cannot hide another; the log then says, per system,
+  whether it loaded. *Visual themes* draw each value where it can be read back from a capture: a colour's box half over
+  white and half over black, from which RGB and alpha are solved; a row of badges whose icon spacing gives the number
+  read; a box whose left edge is its x; images whose colour says which file was found. *Capabilities themes* declare
+  variants and transitions profiles with each `selectable` value, and a pad timeline steps through UI Settings. The
+  second round's predictions were written into `PREDICTIONS-b.txt` before it ran.
+
+### 35.2 What ES-DE does, type by type
+
+Only a `ThemeData::parseElement()` or `parseIncludes()` error unthemes a system. Every other message below is logged by
+the element's component while it is drawn (`ImageComponent`, `TextComponent`, `BadgeComponent`), and the system stays
+themed whether the line says `Warn` or `Error`.
+
+| Type | ES-DE 3.4.1, measured | The rule it follows, as far as measured |
+|---|---|---|
+| COLOR | `#FF0000`, ` FF0000`, `FF0000 `, `F00`, `FF000`, `red`, `0`, `FFFFFFFFFF` and the listed X20s's `4c94ff6` unthemed the system; `GG0000`, `FF00ZZ`, `0xFF0000`, `-0000001`, `FF00FF 0` loaded. Read back: `GG0000` black, `FF00ZZ` and `FF00G0` green, `ffff00zz`, `0x00FF00`, `+0FF0000` and ` 00FF000` fully transparent, `-0000001` white, `0x0000FF` black, `0xFFFFFF` cyan; in the second round `0xFF00` green, ` FF000` `0FF000FF`, `-00001` white, `0x00FF` blue, `0X0000` black | the value **as written** must be 6 or 8 characters long, or the system is unthemed. It is then read as C's `strtoul` reads base 16: leading whitespace, a sign, a `0x` prefix, hexadecimal digits up to the first other character, none being 0; a minus negates modulo 2³². Six characters are shifted left by 8 with alpha `FF`; eight are RGBA as they stand. All nine second-round predictions held |
+| UNSIGNED_INTEGER | never an error, for any of 57 values. `3.5`, `3.9`, ` 3`, `+3`, `3abc`, `0x3`, `3 4` and `3,5` drew as 3; `1e1` as 1; `2.9` as 2; `abc`, `.5`, `-0`, `0x`, `08` and `09` as 0; `010` as 8, `011` as 9, `012` as 10, `0xA` as 10; `4294967298` and `-4294967294` as 2 | C's `strtoul` with base 0: `0x` is hexadecimal, a leading `0` octal, else decimal; leading whitespace and a sign are read, and the number ends at the first character that is not a digit of its base. The result is kept to 32 bits: ES-DE's own warning prints `-1` as `4294967295`. The octal reading was predicted before round two and held on all eight octal values |
+| … the badges' ranges | `itemsPerLine` and `lines` of 0, 11 and `4294967295` logged `BadgeComponent: Invalid theme configuration` and drew as the defaults (4 per line, 3 lines); 1 to 10 drew as written | a range `THEMES.md` does not state, 1–10, outside which the default applies. Measured on these two properties only |
+| FLOAT | `1e-1` at 0.1 and `5E-2` at 0.05 (P170). Also `0x1p-2` and `0x0.4p0` at 0.25, `0x0.8` at 0.5, `0.1e` at 0.1, `0.3.4` at 0.3, `0x` at 0. As opacity, `inf`, `INF`, `infinity` and `1e999` drew fully opaque; `-inf` and `-1e999` not at all; `nan` and `NAN` not at all | C's `strtod`: §31.2's leading-number rule, extended to hexadecimal floats with a binary exponent, `inf`, `infinity` and `nan`; an infinity is then clamped to the property's range |
+| STRING, an enumeration | `horizontalAlignment` `right` and `center` applied; `RIGHT`, `Right`, ` right`, `right `, `middle`, `LEFT` and `Left` drew as `left`, the default, each with a `Warn:` line. `metadata` ` name`, `Name`, `name ` and `nosuchfield` left the text's own text shown (`Error:` lines, system themed). A carousel's `type` of ` horizontal` warned | the value must equal one of the documented words exactly: case matters and nothing is trimmed |
+| STRING, a list | `imageType` `cover screenshot`, `cover, screenshot`, ` cover` and `cover ` drew the cover; `Cover`, `boxart`, `cover;screenshot`, `screenshot,boxart` and `cover,cover` drew nothing, with an `ImageComponent` `Error:` line; the other elements of the view were drawn | split at commas and whitespace; one unknown or repeated type hides the element, and does not untheme the system |
+| STRING, text | `  PADDED  `, `PADDED  ` and `  PADDED` drew with their spaces | kept as written |
+| PATH | from `theme.xml`: `./img/c.png`, `.\img\c.png`, `./img/./c.png`, `./../<theme>/img/c.png` and the absolute path found the theme's file; `img/c.png` found the file of that name in **ES-DE's working directory**, and `../<theme>/img/c.png` nothing; ` ./img/c.png`, `./img/c.png ` and `./IMG/C.PNG` nothing (a `Warn:` line); `~/q70.png` found the file in **ES-DE's `--home`**; `./img` (a folder) nothing, with an `ImageComponent` `Error:` line. From an included `sub/inc.xml`, `./img/c.png` and `${imgdir}c.png` (with `imgdir` = `./img/` defined in `theme.xml`) both found `sub/img/c.png` | `./` is the folder of the file the property is written in, after variables are substituted; `\` is a separator; nothing is trimmed; `~` is the home; any other relative path is left to the operating system, so it is the working directory's |
+| … an include | `inc.xml`, ` ./inc.xml `, `./inc.xml` followed by a newline, `./INC.XML` and a missing file unthemed the system; `.\inc.xml` loaded | the same resolution; a missing include written out is an error, as §12.3 had it |
+
+```
+Error:  ThemeData::parseElement(): ".../q70-values1-es-de/gbc/theme.xml": Invalid color property "#FF0000" (must be 6 or 8 characters in length) (system "gbc", theme "gbc")
+Error:  ThemeData::parseIncludes(): ".../q70-values2-es-de/msx2/theme.xml" -> "inc.xml" not found (resolved to "inc.xml") (system "msx2", theme "msx2")
+Warn:   TextComponent: Invalid theme configuration, property "horizontalAlignment" for element "t" defined as " right"
+Error:  ImageComponent: Invalid theme configuration, property "imageType" for element "i" defined as "boxart"
+Warn:   BadgeComponent: Invalid theme configuration, property "itemsPerLine" for element "b19" defined as "4294967295"
+```
+
+**The argument, separated from the mechanism.** As in §31.2, the table states rules that fit every value tried and
+makes no claim about ES-DE's implementation. That the readings behave as C's `strtoul` and `strtod` would is a
+description: it predicted the second round's values, which is what it is used for, but whether ES-DE calls
+those functions was not, and under §25's rule could not be, looked at. The COLOR length is counted in characters here;
+a value with a non-ASCII character was not tried (P210).
+
+**Negative results on method.** A COLOR that ES-DE draws fully transparent says nothing about its other three
+channels, so for `0xFF0000`, `ffff00zz` and the like only the alpha was measured; the tests state the channels the rule
+gives. The first badge probe used four lines in a small box, where the icon size is set by the height and eight per
+line looks like four; the second used one line in a wide box, where every value from 5 to 10 spaces the icons
+differently. The `lines` probe (round two) could not show the number of lines, because with one badge per line ES-DE
+laid the four badges out in one row whatever `lines` said (except 10); its log lines are the evidence for that range,
+and the picture is not. Canvas's own carousel is a wheel that runs off the screen, so its `3.5`, `3` and `4` copies are
+pixel-identical and do not tell 3 from 4; a synthetic `verticalWheel` with `1`, `1.5`, `1.9` and `2` does. A first
+Canvas run shut ES-DE down on a missing font file, and a second probe of menu closing produced no capture; both were
+repeated.
+
+### 35.3 `selectable`, and Q71 confirmed
+
+| Written | Offered, as a variant and as a transitions profile |
+|---|---|
+| `true`, `TRUE`, `yes`, ` yes`, `1`, `t`, `Y`, `x`, `2`, `on`, ` true `, a newline then `true`, ` false`, ` no`, a tab then `false`, and an empty or blank value | yes |
+| `false`, `False`, `FALSE`, `F`, `f`, `flase`, `no`, `NO`, `N`, `0`, `0.0` | no |
+| no `<selectable>` at all | a variant **no**; a transitions profile **yes** |
+
+The rule that fits: **not selectable when the first character is `0`, `f`, `F`, `n` or `N`; selectable otherwise.** It is
+not §31.2's BOOLEAN rule, which is true only for a first `t`, `T`, `y`, `Y` or `1`: under that rule ` true `, `x`, `2`,
+`on` and a blank value would be false, and ES-DE offered all five.
+
+**Q71 is confirmed.** A variant without `<selectable>` was not offered beside one with `true` (`aNone` and `bTrue`: only
+`bTrue` listed), nor between a `false` and a `true` (`fNone`), nor in two other probes (`vNone`, `zNone`); two variants without one gave
+**NONE DEFINED**, as §31.11's lone variant had. A transitions profile without one was offered in both probes that
+declared one.
+
+**Which variant is drawn.** An explicit `ThemeVariant` naming a variant that is not selectable is drawn (`eFalse`,
+`fNone`). With the setting empty or naming no declared variant, ES-DE drew the **first declared** variant, selectable or
+not (`aNone`, `eFalse`, `cNone`). Merely opening UI Settings and leaving it then saved the **first selectable** one: the
+view redrew as `bTrue`, and `es_settings.xml` read `ThemeVariant="bTrue"` afterwards. The loader keeps §12.4's first
+selectable (Q110).
+
+### 35.4 P170, P172 and P173 retired
+
+| # | Predicted (§31.9) | Measured | Verdict |
+|---|---|---|---|
+| P170 | ES-DE reads a FLOAT written with an exponent (`1e-1`, `5E-2`) as its value | `1e-1` drawn at x = 0.1 and `5E-2` at 0.05, pixel for pixel with `0.1` and `0.05` | **held** |
+| P172 | ES-DE reads `selectable` by §31.2's first-character rule (`yes` selectable, `flase` not) | the two named values held, but the rule did not: ` true `, `x`, `2`, `on` and a blank value are selectable, `f`, `n` and `0` first make it not | **failed** as a rule; §35.3's rule replaces it |
+| P173 | ES-DE draws Canvas's and Iconic's game-list carousels with `itemsBeforeCenter` of `3.5`, reading it as 3 | both drawn at 16:10, medium font size, with no parse error; the synthetic wheel drew `1.5` and `1.9` pixel-identical to `1` and unlike `2`, and `itemsPerLine` `3.5` drew as 3 | **held** |
+
+P172 was written as the lenient reading ES-DE had shown for element properties. The measurement shows that
+`capabilities.xml`'s one boolean is read by a different test, one that asks whether the value says no rather than
+whether it says yes; that it differs from the BOOLEAN rule is why §31's rule does not generalise to it.
+
+### 35.5 What changed in the loader
+
+- **`ThemeValueParser`** gained `EsdeColor`, `EsdeUInt`, and a C reading of numbers behind `EsdeFloat` that adds
+  hexadecimal floats, `inf`, `infinity` and `nan`. `Finite` turns a value ES-DE could not draw at a property with no
+  range, a `nan` or an infinite position, into 0; a range clamps an infinity first, as ES-DE's opacity showed.
+  `ResolvePath` no longer trims, and resolves a relative path without `./` against the working directory. The 0 for an
+  unbounded infinity is a choice: ES-DE's drawing of an infinite position was not measured, and a renderer cannot place one.
+- **`ThemeViewBuilder`** applies them to the value as written. A COLOR of another length stays an **error**, whose
+  message now says why ("which is not 6 or 8 characters long; ES-DE refuses such a colour too"); any other colour, whole
+  number or number that is not written plainly carries a **warning**, `LenientValue`, saying what it was read as. An
+  enumerated STRING is compared untrimmed. An unknown `imageType` is now a **warning**: the element is still not drawn,
+  but the system stays themed, where before it was unthemed.
+- **`ThemeCatalog`** gained `ValidRange`, a range `THEMES.md` does not state, set to 1–10 on the badges' `lines` and
+  `itemsPerLine`: outside it the default applies with a warning. It is kept apart from `Min` and `Max`, which remain
+  `THEMES.md`'s and are clamped, so `ThemeCatalogTests` still checks the catalogue against the document.
+- **`ThemeLoader`** reads an `<include>` untrimmed.
+- **`ThemeCapabilities`** reads `selectable` by §35.3's rule, with a `LenientValue` warning for anything but `true`,
+  `false`, `1` and `0`. A variant without one is not selectable; a transitions profile without one is.
+- **What did not change.** The default variant stays the first selectable one, else the first (§12.4, Q110). `~` stays
+  the player's home. A path naming a folder still counts as present. `gameCount`, `iterationCount` and the carousel's
+  counts keep `THEMES.md`'s clamping, since their ranges were not probed.
+
+§12.3's rows on a value in the wrong format and on an unknown `imageType`, and §12.4's items 2 and 10, are superseded
+by this section; they are kept, with a pointer, as the record of what stage (a) took from the document.
+
+### 35.6 Tests
+
+`ThemeValueRulesTests`, 184 cases, on synthetic XML written by the tests:
+
+| Rule | Test |
+|---|---|
+| a colour of 6 or 8 characters read as hexadecimal the C way, warned when not plain (26 values, each measured) | `A_colour_of_six_or_eight_characters_is_read_as_hexadecimal_the_C_way` |
+| any other length unthemes, and says why (13) | `A_colour_of_any_other_length_unthemes_the_system_as_in_ES_DE` |
+| a whole number: base from its prefix, 32 bits (34; `99999999999` was drawn only as out of range, and one value beyond 2⁶⁴ was not run, P211) | `A_whole_number_is_read_the_C_way_with_its_base_from_its_prefix_and_kept_to_32_bits` |
+| the badges' 1–10 | `Badge_lines_and_items_per_line_keep_1_to_10_and_reset_the_rest_to_the_default_with_a_warning` |
+| P173 on a carousel | `A_carousel_count_written_as_a_fraction_keeps_its_whole_part_and_the_system_themed` |
+| exponents, hexadecimal, an unbounded infinity (16) and a bounded one (14) | `A_float_reads_exponents_and_hexadecimal_and_an_unbounded_infinity_is_0`, `An_infinite_float_is_clamped_to_the_range_and_nan_draws_nothing` |
+| enumerations exact and untrimmed; metadata; text kept | `An_enumerated_string_must_match_exactly_and_untrimmed_or_the_default_applies`, `A_metadata_name_that_is_not_exact_leaves_the_text_shown`, `Text_keeps_its_spaces` |
+| an unknown `imageType` keeps the system themed | `An_unknown_imageType_hides_the_element_and_keeps_the_system_themed` |
+| paths and includes | `A_path_is_the_theme_folder_only_after_dot_slash_and_is_not_trimmed`, `An_include_is_read_untrimmed_and_a_bare_name_is_not_the_theme_folder` |
+| `selectable` (28 values), Q71, and no variant offered | `Selectable_is_false_only_when_its_first_character_is_0_f_or_n`, `A_variant_without_selectable_is_not_offered_and_a_profile_without_one_is`, `With_no_variant_offered_the_first_declared_is_drawn` |
+| **install**: `3.5`, `boxart` and `GG0000` install through `FakeThemeHosts`; `#FF0000` is refused with its reason and leaves no folder | `A_download_installs_where_ES_DE_reads_the_value_and_is_refused_where_it_does_not` |
+
+**The tests against the unchanged loader.** Run on WiseMan's loader first, 101 of the class's then 170 cases failed.
+Thirteen of them were the colour-length refusals, which the old loader refused as well: they failed only on the new
+message. The other 88 are behaviour the old loader did not have.
+
+`ThemeErrorTests` lost two rows of its wrong-format theory (`GGGGGG` for a colour, `-1` and `1.5` for `lines`), which
+ES-DE reads, and gained `#FF0000`; its `imageType` test now expects a warning and a themed system.
+`ThemeCapabilitiesTests`' default-variant test and `ThemeSettingsSheetTests`' synthetic theme now state
+`<selectable>true</selectable>` on the variants they expect offered, as every listed theme does (§35.7). After the
+change the theme classes (370 tests) and the `Mistress.BigPicture` namespace (674: 649 passed, 25 skipped tools)
+passed.
+
+### 35.7 The survey again
+
+`EMUSEN_THEME_SURVEY=analyse` on §25.8's XML, first with WiseMan's loader and then with this one (`survey-before-q70.json`,
+`survey-after-q70.json`):
+
+| | before | after |
+|---|---|---|
+| themes themed for all five systems | 66 of 66 | 66 of 66 |
+| themes with no loader error | 63 | **65** |
+| errors, by code | `BadFormat` 2 (Canvas, Iconic), `UndefinedVariable` 1 (Aura) | `UndefinedVariable` 1 |
+
+Only two rows changed, Canvas's and Iconic's: 20 `BadFormat` errors each became 20 `LenientValue` warnings, and every
+other count of theirs, `PathMissing` included (3,110 and 2,225), is the same, so no include or path of theirs resolves
+differently. **Neither lost an element**: their undrawn-element lists are unchanged, and `itemsBeforeCenter` and
+`itemsAfterCenter` now reach the carousel (they join the survey's list of properties the renderer does not yet draw,
+§25.8). The other 64 themes' rows are identical, byte for byte. A scan of the same XML found no include or path written
+without `./` or a variable, none with surrounding whitespace, and every one of the 544 `selectable` values `true`,
+`True` or `false`, so Q71 and the path rules change nothing for a listed theme.
+
+### 35.8 Mutants
+
+The runner is `~/.cache/emusen/probe/q70/mutate_q70.py`, its log `run-q70.log` and its verdicts `mutants-q70.txt`. Each
+mutant was built with `-m:2` and tested alone under `nice -n 10` against `ThemeValueRulesTests`, `ThemeEsdeRulesTests`,
+`ThemeErrorTests`, `ThemeLoaderTests`, `ThemeCapabilitiesTests` and `ThemeCatalogTests`. Before changing a file the
+runner writes it to a state file, restores and touches it in a `finally`, and on starting restores any file a cut-short
+run left mutated; the tree was rebuilt clean at the end.
+
+**31 mutants: 31 caught, none survived, none failed to build.**
+
+| Area | Mutants |
+|---|---|
+| COLOR | C1 length after trimming; C2 a non-hexadecimal character refuses; C3 no `0x`; C4 six digits not shifted; C5 a minus ignored; C6 leading whitespace not skipped |
+| UNSIGNED_INTEGER | U1 a leading 0 decimal; U2 no `0x`; U3 saturated rather than kept to 32 bits; U4 a minus ignored; U5 overflow past 2⁶⁴ wraps; U6 a leading 0 counted plain; U7 the badges' range ignored |
+| FLOAT | F1 no hexadecimal; F2 no `inf`; F3 `nan` kept; F4 an infinite pair kept; F5 no exponent (§31.8's M18, which survived there); F6 the binary exponent ignored |
+| STRING | S1 an enumeration trimmed; S2 its case ignored; S3 an unknown `imageType` an error again |
+| PATH | P1 trimmed; P2 a bare relative path is the file's folder; P3 an include trimmed; P4 backslashes kept |
+| `selectable` | B1 a variant without one offered; B2 a profile without one not offered; B3 read by the BOOLEAN rule; B4 trimmed first; B5 a blank value false |
+
+F5 is §31.8's surviving M18, now caught: P170's measurement made the exponent a rule a test may pin.
+
+### 35.9 Predictions
+
+| # | Prediction | Retired when |
+|---|---|---|
+| P210 | ES-DE counts a COLOR's length in bytes, so a six-character value holding one non-ASCII letter is refused, where the loader, counting characters, reads it | ES-DE is run on one |
+| P211 | ES-DE reads a whole number beyond 2⁶⁴ (`99999999999999999999`) as 4294967295, as the loader does; only values below 2⁶⁴ were run | ES-DE is run on one |
+| P212 | Other enumerated properties (`verticalAlignment`, `direction`, `stationary`, `letterCase`) follow §35.2's exact, untrimmed match, measured on three | ES-DE is run on them |
+| P213 | An unknown `imageType` on a `video` element hides it as it hides an `image`; only images were run | ES-DE is run on one |
+
+### 35.10 Not done
+
+- **Nothing ran on the handheld**, and Mistress drew none of the probe values; the tests check the loader's typed
+  values, and the survey counts loads.
+- **The ranges of other whole numbers** (`gameCount`, `iterationCount`, `gameselectorEntry`, the carousel's counts)
+  were not probed; they keep `THEMES.md`'s clamping. Only the badges' two were.
+- **A path naming a folder** counts as present in the loader; ES-DE logged an error for an image and drew nothing. Both
+  keep the system themed, and no listed theme writes one; not changed.
+- **`~` as ES-DE's `--home`**: ES-DE resolved `~` to its `--home` folder, which is the home only when none is given.
+  Mistress has no such argument, and keeps the player's home.
+- **Languages and `<transitions>` inside `<aspectRatio>` or `<language>`**, left by §31.10, were not taken up.
+
+### 35.11 Open questions
+
+- **Q110, the default variant.** With no variant chosen, ES-DE draws the first declared one until UI Settings is
+  opened, and the first selectable one after (§35.3). Mistress draws the first selectable one from the start.
+  **Recommendation:** keep it. The first-declared state lasts only until the settings are opened, and in the 66 listed
+  themes every first variant is selectable, so the two agree wherever a player could see a difference.
+- **Q111, a relative path without `./`.** ES-DE resolves it against its working directory, which depends on how it was
+  started; the loader now does the same with Mistress's. No listed theme writes one. **Recommendation:** keep matching
+  ES-DE, since a theme that works by accident in one frontend and not the other is the case §25.10 wants avoided.
+
+### 35.12 The broad run
+
+WiseMan had not moved since the branch was made (b0c6bf75), so the merge before the run was empty. One run of the
+Mistress filter, without `ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` and any GPU or Vulkan test,
+under `nice -n 10`: **1,295 tests, 1,261 passed, 33 skipped (the picture, survey and live tools), 1 failed, in 3 min
+52 s.** The failure is §31.12's order-dependent one of the headless platform's initialisation ("The calling thread
+cannot access this object"), this time in `FrameHandOffTests`, whose eight tests passed when run alone; it is not this
+branch's.

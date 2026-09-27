@@ -4419,8 +4419,9 @@ names its reason, and the browser shows it after "The download is not a theme th
 **What it does not do.**
 - **Colours, whole numbers, words and paths** are read as strictly as before; ES-DE was not run on them (§31 Q70). Two
   listed themes (Canvas, Iconic) write `3.5` where a whole number belongs, and lose that one property's element in one
-  variant; both still load.
-- **`capabilities.xml`'s own true-or-false values** (`selectable`) are read as before.
+  variant; both still load. *Since §4.73 (2026-09-27), these are read as ES-DE reads them too.*
+- **`capabilities.xml`'s own true-or-false values** (`selectable`) are read as before. *Since §4.73, as ES-DE reads
+  them.*
 - **Nothing is shown to the player** about a theme's warnings; they are for theme authors, in the loader's diagnostics
   (§31 Q72).
 - Nothing ran on the handheld; the handheld's build that refused Artflix (Revisited) and CarAlt predates this.
@@ -4723,3 +4724,54 @@ Disabled, so the older themed tests start their games at once as they did. The m
 - **The clock and status indicators.** ES-DE keeps them sharp above the blur (with its Linear theme). Mistress blurs the
   whole view.
 - **Nothing ran on the handheld.**
+
+### 4.73 Big picture: colours, whole numbers, words, paths and variants, as ES-DE reads them (2026-09-27)
+
+Q70 and Q71 of `EmuSen_BigPicture.md`, answered on 2026-09-27: run ES-DE on the value types §4.68 left strict, and
+match what it does. §35 of that plan is the record (the runs of ES-DE 3.4.1, the rules, the tests, the mutants and the
+survey). This section continues §4.68 and amends two of its "What it does not do" items. The section is numbered 4.73
+because §4.72 is another pass's. There is no setting: as in §4.68, the change is in how a theme is read, which is the
+same in big-screen sessions, in big picture on the desktop (§4.54), in Theme Settings (§4.53) and in the theme browser
+(§4.62).
+
+**What a player meets.** Canvas and Iconic, which write `3.5` where a whole number belongs, now load for every console
+with no error, and that setting is read as 3 (big picture does not yet use a carousel's counts, §25.8 of the plan). Of the 66 themes on ES-DE's list, 65 now load with no
+error, against 63; the one left is Aura's undefined variable, as before. No listed theme loads differently otherwise.
+A theme that names an unknown picture kind for an image (`boxart`) no longer makes that console fall back to EmuSen's
+own look: the image is left out, as ES-DE leaves it out, and the rest of the view is drawn.
+
+**How a value is read**, as ES-DE 3.4.1 was measured to read it:
+
+| A theme writes | It means | Before |
+|---|---|---|
+| a colour of 6 or 8 characters that are not all hexadecimal digits, `GG0000`, `0xFF0000`, `FF00FF 0` | read as far as it is hexadecimal, as ES-DE reads it: `GG0000` is black, `FF00ZZ` green, `0x00FF00` transparent | refused |
+| a colour of any other length, `#FF0000`, `F00`, ` FF0000` with its space | **still refused**, as ES-DE refuses it: that console shows EmuSen's own look, and the browser will not install the theme | refused |
+| a whole number written otherwise, `3.5`, `+3`, `3abc`, `0x3`, `abc` | the number at its start: 3, 3, 3, 3 and 0; `0x` begins a hexadecimal one, and a leading `0` an octal one (`010` is 8), as in ES-DE | refused |
+| a negative whole number, `-1` | a very large one, 4294967295, as in ES-DE; where the property has a range it is then held to it | refused |
+| badges' `lines` or `itemsPerLine` of 0, or above 10 | the default (3 lines, 4 per line), as in ES-DE | refused, or used as written |
+| a number in hexadecimal, `0x1p-2`, or `inf`, `nan` | 0.25; `inf` held to the property's range (opacity 1); `nan`, and an infinite value where there is no range, 0 | 0 |
+| a word with a different case or a space, `Right`, ` right` | not that word: the default applies, as in ES-DE | ` right` was read as `right`; `Right` as now |
+| a picture kind ES-DE does not know, `boxart`, `Cover` | that image is not drawn; the console stays themed | the console unthemed |
+| a path with a space before or after it | not found, as in ES-DE | the space ignored |
+| a path without `./`, `img/c.png` | relative to the folder Mistress was started in, as ES-DE resolves it against its own; not the theme's folder | the theme's folder |
+| an include written either of those ways | not found, so the console is unthemed, as in ES-DE | found |
+
+**Variants and transitions.** A theme's variant or transitions profile is offered in Theme Settings unless its
+`<selectable>` starts with `0`, `f`, `F`, `n` or `N`: `false`, `no` and `0` hide it, and anything else, a blank value
+included, offers it. A **variant that says nothing** about `selectable` is **not offered**, as in ES-DE; a transitions
+profile that says nothing is. A theme whose variants are all hidden shows none, and draws its first. Every theme on
+ES-DE's list states `selectable` on each variant, so none of them changes.
+
+**What is written down.** Each reading of the kinds above adds a warning to the theme's diagnostics, naming the file,
+line and what the value was read as ("it is read as 3, as ES-DE reads it"); the badges' out-of-range values and the
+unknown picture kinds are warnings too. Decided 2026-09-27 (Q72): none of this is shown to the player; a console
+left unthemed still goes to the error log (§4.70), as before.
+
+**What it does not do.**
+- **Which variant is drawn when none was chosen** stays the first one offered. ES-DE draws the first one declared until
+  its settings menu is opened, and the first one offered after that; the two agree for every listed theme (§35, Q110).
+- **`~` is the player's home.** ES-DE takes it as its own home folder, which is the same unless ES-DE was started with
+  another.
+- **The ranges of other whole numbers** (a carousel's counts, a video's repeats) are held to `THEMES.md`'s as before;
+  ES-DE was run only on the badges'.
+- Nothing ran on the handheld.

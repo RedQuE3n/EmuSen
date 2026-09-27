@@ -270,10 +270,10 @@ namespace EmuSen.Mistress.BigPicture.Theme
             return names;
         }
 
-        // Explicit paths that are missing are errors; paths built from variables are skipped silently - see EmuSen_BigPicture.md §12.3.
+        // Explicit paths that are missing are errors, read untrimmed as ES-DE reads them; paths built from variables are skipped silently - see EmuSen_BigPicture.md §35.2.
         private void Include(XElement include, string file)
         {
-            string written = include.Value.Trim();
+            string written = include.Value;
             bool fromVariable = written.Contains("${", StringComparison.Ordinal);
             string text = Substitute(written, out IReadOnlyList<string> undefined);
             if (undefined.Count > 0)
@@ -281,7 +281,7 @@ namespace EmuSen.Mistress.BigPicture.Theme
                 Debug(ThemeDiagnosticCode.IncludeSkipped, file, Line(include), $"include \"{written}\" skipped: {string.Join(", ", undefined.Select(u => "${" + u + "}"))} undefined");
                 return;
             }
-            if (text.Length == 0)
+            if (text.Trim().Length == 0)
             {
                 if (fromVariable) Debug(ThemeDiagnosticCode.IncludeSkipped, file, Line(include), $"include \"{written}\" skipped: empty");
                 else Error(ThemeDiagnosticCode.NoValue, file, Line(include), "<include> has no path");

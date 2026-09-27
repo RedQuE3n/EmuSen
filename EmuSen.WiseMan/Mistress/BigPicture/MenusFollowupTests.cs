@@ -139,6 +139,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             // Escape was the popup's: the editor, and big picture, are still there.
             Assert.Same(editor, ThemedGameOptionsTests.Sheets(s).Current);
             Assert.True(s.Shown);
+
+            // Enter's release while the popup had the focus was taken as the key let go: Enter opens the popup again at once.
+            EsdeMenusTests.Press(s, Key.Enter);
+            Assert.NotNull(MenuTextPopup.OpenOver(s.Window));
+            EsdeMenusTests.Press(s, Key.Escape);
         });
 
         [Fact]

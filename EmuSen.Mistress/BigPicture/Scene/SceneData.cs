@@ -84,6 +84,24 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         // Every game the system view counts when the list shows folders, whose entries are not all its games (§30).
         public IReadOnlyList<SceneGame>? Counted { get; init; }
+
+        // What a gamelistinfo shows for the list as the host holds it; null counts the listed games, unfiltered and at the top (§38).
+        public GamelistCounts? Info { get; init; }
+
+        // The counts from the games alone: every counted game and favourite, none filtered out, no folder entered.
+        public GamelistCounts Counts => Info ?? GamelistCounts.Of(Counted ?? Games, Counted ?? Games, filtered: false, inFolder: false);
+    }
+
+    // A gamelist's games and favourites, how many its filters keep, and whether a folder is open, as gamelistinfo shows them (§38).
+    public sealed record GamelistCounts(int Games, int Favorites, int Shown, bool Filtered, bool InFolder)
+    {
+        // Folders are not games, and a game excluded from the game counter is not counted.
+        public static GamelistCounts Of(IEnumerable<SceneGame> all, IEnumerable<SceneGame> kept, bool filtered, bool inFolder)
+        {
+            static bool Counts(SceneGame g) => !g.Folder && !g.NotCounted;
+            List<SceneGame> games = all.Where(Counts).ToList();
+            return new GamelistCounts(games.Count, games.Count(g => g.Favorite), kept.Count(Counts), filtered, inFolder);
+        }
     }
 
     // Where a game's scraped images are, by ES-DE's media type name; null when there is none.

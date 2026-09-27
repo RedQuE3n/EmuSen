@@ -59,11 +59,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return SyntheticLibrary.Games(theme, g.Extension).OrderByDescending(x => x.Favorite).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
-        private void Render(string label, string themeDir, ThemeChoices choices, string system, string view = "system", int w = 1280, int h = 800, int shuffle = 0, EmuSen.LunaP.Controls.DeviceStatus? status = null)
+        private void Render(string label, string themeDir, ThemeChoices choices, string system, string view = "system", int w = 1280, int h = 800, int shuffle = 0, EmuSen.LunaP.Controls.DeviceStatus? status = null, Func<SceneSystem, SceneSystem>? adjust = null)
         {
             ThemeCapabilities caps = ThemeCapabilitiesReader.Read(themeDir);
             choices = choices with { ScreenWidth = w, ScreenHeight = h };
-            var systems = Order.Select(s => new ThemeSystem(s.Name, s.FullName, s.Name)).Select(t => new SceneSystem(t, ThemeLoader.Load(caps, t, choices, new MediaPresence(new HashSet<string> { "cover", "screenshot", "marquee", "fanart", "titlescreen", "miximage" })), Games(t.Name))).ToList();
+            var systems = Order.Select(s => new ThemeSystem(s.Name, s.FullName, s.Name)).Select(t => new SceneSystem(t, ThemeLoader.Load(caps, t, choices, new MediaPresence(new HashSet<string> { "cover", "screenshot", "marquee", "fanart", "titlescreen", "miximage" })), Games(t.Name)))
+                .Select(sys => sys.System.Name == system && adjust is not null ? adjust(sys) : sys).ToList();
             foreach (ThemeDiagnostic d in systems.SelectMany(s => s.Theme.Errors).Distinct()) _out.WriteLine($"{label}: {d.Message}");
             var data = new SceneData(systems, new Size(w, h))
             {
@@ -91,6 +92,21 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Render("d-all-sys", defaults, new ThemeChoices { Variant = "none" }, "snes", status: all);
             Render("d-all-sys", defaults, new ThemeChoices { Variant = "none" }, "snes", w: 1920, h: 1200, status: all);
             Render("d-all-own", defaults, new ThemeChoices { Variant = "own" }, "snes", status: all);
+            Render("a-info-default", defaults, new ThemeChoices { Variant = "infoDefault" }, "snes", "gamelist");
+            Render("a-still", defaults, new ThemeChoices { Variant = "anim" }, "snes");
+            Render("d-undef", defaults, new ThemeChoices { Variant = "undef" }, "snes");
+            foreach (string v in new[] { "mH", "mHneg", "mHscale", "mHhalf", "mV", "mVhalf", "lsA", "lsB", "lsDef" })
+                Render("w-" + v, Path.Combine(Probe, "p14-wheel-es-de"), new ThemeChoices { Variant = v }, "snes");
+            foreach ((int w, int h) in new[] { (1280, 800), (1920, 1200) }) Render("i-snes", defaults, new ThemeChoices { Variant = "info" }, "snes", "gamelist", w, h);
+            Render("i-ms", defaults, new ThemeChoices { Variant = "info" }, "mastersystem", "gamelist");
+            Render("i-gg", defaults, new ThemeChoices { Variant = "info" }, "gamegear", "gamelist");
+            var tower = new SceneGame("Tower Set", "Tower Set") { Folder = true, FolderPath = "Tower Set" };
+            var inTower = new[] { new SceneGame("Tower One", "Tower One (Synthetic).zip") { FolderPath = "Tower Set" }, new SceneGame("Tower Two", "Tower Two (Synthetic).zip") { FolderPath = "Tower Set" } };
+            var ngpAll = new[] { new SceneGame("Aurora Drift", "Aurora Drift (Synthetic).zip") }.Concat(inTower).ToList();
+            Render("i-ngp-top", defaults, new ThemeChoices { Variant = "info" }, "ngp", "gamelist", adjust: s => s with { Games = [tower, ngpAll[0]], Info = GamelistCounts.Of(ngpAll, ngpAll, false, false) });
+            Render("i-ngp-inside", defaults, new ThemeChoices { Variant = "info" }, "ngp", "gamelist", adjust: s => s with { Games = inTower, Info = GamelistCounts.Of(ngpAll, ngpAll, false, true) });
+            Render("i-filter", defaults, new ThemeChoices { Variant = "info" }, "snes", "gamelist",
+                adjust: s => s with { Games = s.Games.Where(g => !g.Favorite).ToList(), Info = GamelistCounts.Of(s.Games, s.Games.Where(g => !g.Favorite), true, false) });
             foreach ((string label, string variant, string system, string view) in new[] { ("d-helpgl-sys", "helpGamelistOnly", "snes", "system"), ("d-helphidden-sys", "helpHidden", "snes", "system"),
                 ("d-statushidden-sys", "statusHidden", "snes", "system"), ("d-own-sys", "own", "snes", "system"), ("d-texts-ms", "texts", "mastersystem", "system"),
                 ("d-texts-gg", "texts", "gamegear", "system"), ("d-texts-snes", "texts", "snes", "system"), ("d-texts-ms-gl", "texts", "mastersystem", "gamelist") })

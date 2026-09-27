@@ -36,6 +36,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ["clock"] = "pos=0 0;fontSize=0.1;color=FFFFFF",
             ["systemstatus"] = "pos=1 0;origin=1 0;height=0.15;entries=all",
             ["gameselector"] = "selection=lastplayed;gameCount=3",
+            ["animation"] = "pos=0.1 0.1;size=0.5 0.6;path={G}",
+            ["gamelistinfo"] = "pos=0.05 0.05;size=0.9 0.3;color=FFFFFF;fontSize=0.1;backgroundColor=203040",
         };
 
         private sealed record Case(string Type, string Property, string A, string B)
@@ -331,6 +333,25 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             C("rating", "gameselector", "a", "b") with { View = "system", Beside = TwoSelectors },
             C("rating", "gameselectorEntry", "0", "2") with { View = "system", Beside = TwoSelectors },
 
+            C("animation", "path", "{G}", "{G2}"),
+            C("animation", "maxSize", "0.5 0.6", "0.2 0.2") with { Remove = "size" },
+            C("animation", "speed", "1", "3") with { At = 150 },
+            C("animation", "direction", "normal", "reverse") with { At = 150 },
+            C("animation", "iterationCount", "0", "1") with { At = 900 },
+            C("animation", "interpolation", "nearest", "linear") with { Context = "path={G2}" },
+            C("animation", "cornerRadius", "0", "0.05"),
+            C("animation", "color", "FFFFFF", "00FFFF"),
+            C("animation", "colorEnd", "FFFFFF", "0000FF") with { Context = "color=FFFFFF" },
+            C("animation", "gradientType", "horizontal", "vertical") with { Context = "color=FF0000;colorEnd=0000FF" },
+            C("animation", "saturation", "1", "0"),
+
+            C("gamelistinfo", "fontPath", "{FT}", "{FB}"),
+            C("gamelistinfo", "fontSize", "0.1", "0.05"),
+            C("gamelistinfo", "horizontalAlignment", "left", "right"),
+            C("gamelistinfo", "verticalAlignment", "top", "bottom"),
+            C("gamelistinfo", "color", "FFFFFF", "FF0000"),
+            C("gamelistinfo", "backgroundColor", "00000000", "FF0000"),
+
             C("systemstatus", "customIcon", "<customIcon icon=\"icon_wifi\">{S1}</customIcon>", "<customIcon icon=\"icon_wifi\">{S3}</customIcon>"),
         ];
 
@@ -358,6 +379,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             .Replace("{A}", SceneAssets.Halves("theme-a", 60, 80, Colors.DarkOrange, Colors.Teal))
             .Replace("{B}", SceneAssets.Halves("theme-b", 80, 50, Colors.Purple, Colors.Gold))
             .Replace("{X}", "/nonexistent/emusen/scene/missing.png")
+            .Replace("{G2}", SceneAssets.Gif("anim-checker", 4, 4, [10, 10], (f, x, y) => (x + y + f) % 2 == 0 ? Colors.White : Colors.Teal))
+            .Replace("{G}", SceneAssets.Gif("anim-four", 8, 6, [10, 20, 30, 40], (f, x, y) => new[] { Colors.Red, Colors.Lime, Colors.Blue, Colors.Yellow }[f]))
             .Replace("{S1}", SceneAssets.Svg("icon-1", "<circle cx='10' cy='10' r='9' fill='#fff' fill-opacity='0.5'/>"))
             .Replace("{S2}", SceneAssets.Svg("icon-2", "<rect x='2' y='2' width='16' height='16' fill='#888'/>"))
             .Replace("{S3}", SceneAssets.Svg("icon-3", "<path d='M10 1L19 19H1Z' fill='#fff'/>"))

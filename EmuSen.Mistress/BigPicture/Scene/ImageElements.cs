@@ -40,6 +40,40 @@ namespace EmuSen.Mistress.BigPicture.Scene
             return image;
         }
 
+        // An animated GIF, played from the view's clock; a Lottie .json is not drawn, as LunaP draws no Lottie (§38).
+        internal static Control? Animation(SceneBuilder b, ResolvedElement e)
+        {
+            if (Existing(e.Path("path")) is not { } path || !path.EndsWith(".gif", System.StringComparison.OrdinalIgnoreCase)) return null;
+            ThemeColor color = e.Color("color") ?? new ThemeColor(0xFFFFFFFF);
+            ThemeColor end = e.Color("colorEnd") ?? color;
+            var animation = new FrameSequenceImage
+            {
+                Source = path,
+                Speed = e.Float("speed") ?? 1,
+                Direction = e.String("direction") switch { "reverse" => FrameDirection.Reverse, "alternate" => FrameDirection.Alternate, "alternateReverse" => FrameDirection.AlternateReverse, _ => FrameDirection.Normal },
+                IterationCount = (int)(e.UInt("iterationCount") ?? 0),
+                Tint = SceneUnits.ToColor(color),
+                TintEnd = end == color ? null : SceneUnits.ToColor(end),
+                TintDirection = SceneUnits.Gradient(e.String("gradientType")),
+                Saturation = e.Float("saturation") ?? 1,
+                CornerRadius = SceneUnits.Px(e.Float("cornerRadius") ?? 0, b.W),
+                Interpolation = e.String("interpolation") == "linear" ? Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality : Avalonia.Media.Imaging.BitmapInterpolationMode.None,
+            };
+            if (animation.FrameCount == 0) return null;
+            if (e.Pair("size") is { } s)
+            {
+                animation.Fit = ImageFit.Fill;
+                NormalizedCanvas.SetSize(animation, SceneUnits.ToSize(s));
+            }
+            else if (e.Pair("maxSize") is { } m)
+            {
+                NormalizedCanvas.SetMaxSize(animation, SceneUnits.ToSize(m));
+                NormalizedCanvas.SetSize(animation, new Size(0, 0));
+            }
+
+            return animation;
+        }
+
         // A video element with no video playing: its image, fitted by the image sizes, which default to the video's own.
         internal static Control? Video(SceneBuilder b, ResolvedElement e)
         {

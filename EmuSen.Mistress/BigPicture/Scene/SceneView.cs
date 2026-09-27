@@ -22,6 +22,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             Data = data with { Motion = Motion };
             Now = now;
             _selectedAt = now;
+            _animatedFrom = now;
             _changed = false;
             _position = Glide.At(Index);
             _repeat = new SceneRepeat();
@@ -97,6 +98,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
                 {
                     FontText { ScrollDirection: not TextScrollDirection.None, IsEffectivelyVisible: true } t => t.IsMeasureValid ? t.NextScrollChange(now - _selectedAt) : now - _selectedAt,
                     TextRowList { Marquee.Speed: > 0, IsEffectivelyVisible: true } l => l.IsMeasureValid && l.Bounds.Width > 0 ? l.NextMarqueeChange(now - _selectedAt) : now - _selectedAt,
+                    FrameSequenceImage { IsEffectivelyVisible: true } a => a.NextFrameChange(now - _animatedFrom) is { } frame ? frame + _animatedFrom - _selectedAt : null,
                     _ => null,
                 };
                 if (at is { } due && (next is null || _selectedAt + due < next)) next = _selectedAt + due;
@@ -118,6 +120,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             if (target == Index) return false;
             double to = _position.To + (wraps ? delta : target - Index);
             Data = IsSystemView ? Data with { SystemIndex = target, Shuffle = unchecked(Data.Shuffle + 1) } : Data with { GameIndex = target };
+            if (IsSystemView) _animatedFrom = now;
             _position = Slides ? _position.Toward(to, now, Motion.CarouselStep, Motion.CarouselEasing) : Glide.At(to);
             _selectedAt = now;
             _changed = true;
@@ -205,6 +208,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             double scroll = g.ScrollFor(target);
             _scroll = Primary.String("rowTransitions") == "instant" ? Glide.At(scroll) : _scroll.Toward(scroll, now, Motion.GridStep, Motion.GridEasing);
             Data = IsSystemView ? Data with { SystemIndex = target, Shuffle = unchecked(Data.Shuffle + 1) } : Data with { GameIndex = target };
+            if (IsSystemView) _animatedFrom = now;
             _selectedAt = now;
             _changed = true;
             Scene = Rebuild();
@@ -265,7 +269,11 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public bool IsMoving => !_position.IsSettledAt(Now) || !_scroll.IsSettledAt(Now) || !_focus.IsSettledAt(Now) || _repeat.Held || !_metadata.IsSettledAt(Now) || (Now < _selectedAt + Motion.ScrollFadeIn && Scene.Entries.Any(e => FadesIn(e.Element))) || Scrolls;
 
         // A text that may scroll keeps asking for frames: a conservative answer, since its loop never ends.
-        private bool Scrolls => Scene.Entries.Any(e => e.Control is FontText { ScrollDirection: not TextScrollDirection.None, Scroll.Speed: > 0 } or TextRowList { Marquee.Speed: > 0 });
+        private bool Scrolls => Scene.Entries.Any(e => e.Control is FontText { ScrollDirection: not TextScrollDirection.None, Scroll.Speed: > 0 } or TextRowList { Marquee.Speed: > 0 }
+            || (e.Control is FrameSequenceImage a && a.NextFrameChange(Now - _animatedFrom) is not null));
+
+        // When the animations were last reset: when the view opened, and at each move of the system view, as ES-DE 3.4.1 was measured to reset them (§38).
+        private TimeSpan _animatedFrom;
 
         private readonly System.Collections.Generic.Dictionary<Control, double> _opacity = new();
 
@@ -316,6 +324,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
                 }
                 else if (entry.Control is TextRowList list) list.MarqueeTime = Now - _selectedAt;
                 else if (entry.Control is FontText { ScrollDirection: not TextScrollDirection.None } text) text.ScrollTime = Now - _selectedAt;
+                else if (entry.Control is FrameSequenceImage animation) animation.Time = Now - _animatedFrom;
             }
         }
     }

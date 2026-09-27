@@ -144,7 +144,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Rect starsBox = EsdeMenusTests.InWindow(stars, new Rect(stars.Bounds.Size), s.Window);
             Assert.True(CountNear(before, ValueOf(nameBox, s.Window), MetadataEditorWindow.EditedColor) < 5);
             Assert.True(CountNear(before, starsBox, MetadataEditorWindow.EditedColor) < 5);
-            Assert.False(editor.ResetOf(GameMetadata.Name).IsVisible);
+            Assert.False(editor.CanReset(GameMetadata.Name));
 
             // Blue on the focused row as well as off it: the colour says where the value came from, the bar says where the focus is.
             ThemedGameOptionsTests.Type(s, "Meta_" + GameMetadata.Name, "zeta");
@@ -156,9 +156,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             RenderedFrame after = s.Capture();
             starsBox = EsdeMenusTests.InWindow(stars, new Rect(stars.Bounds.Size), s.Window);
             Assert.True(CountNear(after, starsBox, MetadataEditorWindow.EditedColor) > 40, "the changed stars are not blue");
-            Assert.True(editor.ResetOf(GameMetadata.Name).IsVisible);
-            Assert.True(editor.ResetOf(GameMetadata.Rating).IsVisible);
-            Assert.False(editor.ResetOf(GameMetadata.Developer).IsVisible);
+            Assert.True(editor.CanReset(GameMetadata.Name));
+            Assert.True(editor.CanReset(GameMetadata.Rating));
+            Assert.False(editor.CanReset(GameMetadata.Developer));
             Assert.True(CountNear(after, ValueOf(editor.EditorOf(GameMetadata.Description), s.Window), MetadataEditorWindow.EditedColor) < 5);
         });
 
@@ -268,26 +268,116 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(1, Menu(editor).HelpBar.Opacity);
         });
 
-        // The keyboard reaches the editor as it did before its new layout: Enter changes the focused switch row and presses the focused button.
+        // ES-DE's keys drive a big-screen menu as the pad does, with no pad (Q102): arrows move, Enter chooses, Delete resets, Backspace leaves.
         [Fact]
-        public Task Enter_changes_a_switch_row_and_presses_cancel_with_no_pad() => ThemedLibraryPadTests.Run(s =>
+        public Task ES_DE_s_keys_move_choose_reset_and_leave_in_the_editor_with_no_pad() => ThemedLibraryPadTests.Run(s =>
         {
             ThemedLibraryPadTests.Enter(s, "snes");
             MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
             s.Pad.Unplug();
             s.Pad.Tick();
+            Assert.True(editor.EditorOf(GameMetadata.Name).IsFocused);
+
+            // Down past a text row, which it does not type into, to Sort name.
+            EsdeMenusTests.Press(s, Key.Down);
+            Assert.True(editor.EditorOf(GameMetadata.SortName).IsFocused);
+            Assert.Equal("", ((TextBox)editor.EditorOf(GameMetadata.SortName)).Text);
             var kid = (LunaSwitch)editor.EditorOf(GameMetadata.KidGame);
-            kid.Focus(NavigationMethod.Directional);
-            s.Settle();
+            for (int guard = 0; guard < 20 && !kid.IsFocused; guard++) EsdeMenusTests.Press(s, Key.Down);
+            Assert.True(kid.IsFocused);
             EsdeMenusTests.Press(s, Key.Enter);
             Assert.True(kid.IsChecked);
-            Assert.True(RowOf(kid).IsOn);
-            Assert.Equal(GameMetadata.Yes, editor.Draft.Value(GameMetadata.KidGame));
-            ThemedCollectionsTests.Named<Button>(s, "MetadataCancel").Focus(NavigationMethod.Directional);
+            Assert.True(editor.CanReset(GameMetadata.KidGame));
+            EsdeMenusTests.Press(s, Key.Delete);
+            Assert.False(kid.IsChecked);
+            Assert.False(editor.CanReset(GameMetadata.KidGame));
+
+            // Backspace on an edited game asks, as B does; Enter takes the focused answer, Save.
+            EsdeMenusTests.Press(s, Key.Enter);
+            EsdeMenusTests.Press(s, Key.Back);
+            s.Settle();
+            Assert.Equal("DialogWindow", ThemedGameOptionsTests.Sheets(s).Current!.GetType().Name);
             EsdeMenusTests.Press(s, Key.Enter);
             s.Settle();
             Assert.False(ThemedGameOptionsTests.Sheets(s).IsPresenting);
-            Assert.Empty(ThemedGameOptionsTests.StoredEdits(s, ThemedSession.SnesGames[0] + ".sfc"));
+            Assert.Equal(GameMetadata.Yes, ThemedGameOptionsTests.StoredEdits(s, ThemedSession.SnesGames[0] + ".sfc")[GameMetadata.KidGame]);
+        });
+
+        // The same keys in stage 1's Gamelist Options, which Q102 also covers: Down moves off Jump To, Backspace applies and closes.
+        [Fact]
+        public Task ES_DE_s_keys_move_and_leave_in_the_gamelist_options_with_no_pad() => ThemedLibraryPadTests.Run(s =>
+        {
+            ThemedLibraryPadTests.Enter(s, "snes");
+            ThemedGameOptionsTests.OpenOptions(s);
+            s.Pad.Unplug();
+            s.Pad.Tick();
+            s.Settle();
+            Assert.True(ThemedCollectionsTests.Named<Dropdown>(s, "GamelistJumpTo").IsFocused);
+            EsdeMenusTests.Press(s, Key.Down);
+            Assert.False(ThemedCollectionsTests.Named<Dropdown>(s, "GamelistJumpTo").IsFocused);
+            EsdeMenusTests.Press(s, Key.Back);
+            s.Settle();
+            Assert.False(ThemedGameOptionsTests.Sheets(s).IsPresenting);
+        });
+
+        // Q101: no Reset button in a row; West resets the focused field, and the help bar names it only while that field holds an edit.
+        [Fact]
+        public Task West_resets_the_focused_field_and_the_help_bar_offers_it_only_on_an_edited_field() => ThemedLibraryPadTests.Run(s =>
+        {
+            ThemedLibraryPadTests.Enter(s, "snes");
+            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
+            MenuPanel menu = Menu(editor);
+            Assert.DoesNotContain(ThemedGameOptionsTests.Sheet(s).GetVisualDescendants().OfType<Button>(), b => b.Name?.StartsWith("MetaReset_", StringComparison.Ordinal) == true);
+            Assert.DoesNotContain(menu.Hints!, h => h.Label == "Reset");
+
+            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.Completed);
+            s.Pad.A();
+            Assert.Contains(menu.Hints!, h => h.Label == "Reset" && h.Button == PadGlyphButton.West);
+            // The edited row's bar now spans the panel, as every other row's does.
+            RenderedFrame f = s.Capture();
+            MenuRow row = RowOf(editor.EditorOf(GameMetadata.Completed));
+            EsdeMenusTests.AssertBarSpans(f, EsdeMenusTests.InWindow(row, row.Layout(row.Bounds.Size).Bar, s.Window), EsdeMenusTests.InWindow(menu, menu.PanelBounds, s.Window), row.BarColor);
+
+            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.KidGame);
+            Assert.DoesNotContain(menu.Hints!, h => h.Label == "Reset");
+            s.Pad.X();
+            Assert.False(((LunaSwitch)editor.EditorOf(GameMetadata.KidGame)).IsChecked);
+            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.Completed);
+            s.Pad.X();
+            Assert.False(((LunaSwitch)editor.EditorOf(GameMetadata.Completed)).IsChecked);
+            Assert.False(editor.CanReset(GameMetadata.Completed));
+            Assert.DoesNotContain(menu.Hints!, h => h.Label == "Reset");
+            Assert.True(editor.EditorOf(GameMetadata.Completed).IsFocused);
+        });
+
+        // A long controller name has a short form in a big-screen row; the desktop keeps the full one.
+        [Fact]
+        public Task A_controller_is_shown_by_its_short_name_in_a_big_screen_row() => ThemedLibraryPadTests.Run(s =>
+        {
+            ThemedLibraryPadTests.Enter(s, "snes");
+            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
+            Assert.Equal(["None", "NES", "SNES", "N64", "Gamepad", "Unknown"], editor.ChoicesOf(GameMetadata.Controller).Select(c => c.Text));
+            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.Controller);
+            s.Pad.Right(2);
+            Assert.Equal("SNES", RowOf(editor.EditorOf(GameMetadata.Controller)).Value);
+            Assert.Equal("gamepad_nintendo_snes", editor.Draft.Value(GameMetadata.Controller));
+            var desktop = new MetadataEditorWindow(null!, editor.GamePath, "x");
+            Assert.Equal("Super Nintendo", desktop.ChoicesOf(GameMetadata.Controller)[2].Text);
+        });
+
+        // The question no longer names another program.
+        [Fact]
+        public Task Hide_from_library_s_question_names_no_other_program() => ThemedLibraryPadTests.Run(s =>
+        {
+            ThemedLibraryPadTests.Enter(s, "snes");
+            ThemedGameOptionsTests.OpenEditor(s);
+            ThemedGameOptionsTests.Reach(s, "MetadataHide");
+            s.Pad.A();
+            s.Settle();
+            string question = ThemedGameOptionsTests.Sheets(s).Current!.Title!;
+            Assert.StartsWith("EmuSen never deletes or moves a game's file. Hide this game from the library instead?", question);
+            Assert.DoesNotContain("ES-DE", question);
+            ThemedGameOptionsTests.Answer(s, "Cancel");
         });
     }
 }

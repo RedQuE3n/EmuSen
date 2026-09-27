@@ -140,7 +140,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.Select();
             MetadataEditorWindow editor = OpenEditor(s);
 
-            // Every Reset shows once its field is edited, so the audit sees them all.
+            // Every field edited, so each would offer its Reset (West in a big-screen session, Q101).
             Reach(s, "Meta_" + GameMetadata.Rating);
             s.Pad.Right();
             foreach (MetadataField field in editor.Shown.Where(f => f.Kind is MetadataKind.Text or MetadataKind.LongText))
@@ -150,10 +150,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             // A choice with nothing to choose for this game (a Super Nintendo game's engine) is disabled and has no Reset to show.
             bool Choosable(MetadataField f) => f.Kind != MetadataKind.Choice || GameMetadata.ChoicesFor(f, editor.GamePath).Count > 1;
             foreach (MetadataField field in editor.Shown.Where(f => f.Kind == MetadataKind.Choice && Choosable(f)))
-                ((Dropdown)editor.EditorOf(field.Key)).SelectedItem = GameMetadata.ChoicesFor(field, editor.GamePath)[1].Text;
+                ((Dropdown)editor.EditorOf(field.Key)).SelectedItem = editor.ChoicesOf(field.Key)[1].Text;
             Reach(s, "Meta_" + GameMetadata.ReleaseDate);
             s.Pad.Right();
-            Assert.All(editor.Shown.Where(Choosable), f => Assert.True(editor.ResetOf(f.Key).IsVisible, f.Key));
+            Assert.All(editor.Shown.Where(Choosable), f => Assert.True(editor.CanReset(f.Key), f.Key));
             Assert.False(editor.EditorOf(GameMetadata.AltEmulator).IsEnabled);
             Audit("editor");
             foreach (string m in missing) _out.WriteLine("unreachable: " + m);
@@ -180,8 +180,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Reach(s, "Meta_favourite");
             s.Pad.A();
             Assert.Equal("Your edit.", editor.HintOf(GameMetadata.Name));
-            Assert.True(editor.ResetOf(GameMetadata.Name).IsVisible);
-            Assert.False(editor.ResetOf(GameMetadata.Publisher).IsVisible);
+            Assert.True(editor.CanReset(GameMetadata.Name));
+            Assert.False(editor.CanReset(GameMetadata.Publisher));
 
             Reach(s, "MetadataSave");
             s.Pad.A();
@@ -270,12 +270,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(s.Themed.SelectedGame!.Broken);
 
             MetadataEditorWindow editor = OpenEditor(s);
-            Reach(s, "MetaReset_" + GameMetadata.Name);
-            s.Pad.A();
+            Reach(s, "Meta_" + GameMetadata.Name);
+            s.Pad.X();
             Assert.Equal(ThemedSession.SnesGames[0], ((TextBox)editor.EditorOf(GameMetadata.Name)).Text);
-            Assert.False(editor.ResetOf(GameMetadata.Name).IsVisible);
-            Reach(s, "MetaReset_" + GameMetadata.Broken);
-            s.Pad.A();
+            Assert.False(editor.CanReset(GameMetadata.Name));
+            Reach(s, "Meta_" + GameMetadata.Broken);
+            s.Pad.X();
             Reach(s, "MetadataSave");
             s.Pad.A();
             s.Settle();

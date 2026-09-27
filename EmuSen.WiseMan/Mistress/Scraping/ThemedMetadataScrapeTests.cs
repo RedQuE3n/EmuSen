@@ -120,8 +120,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
             Assert.Equal("Your edit, shown in place of ScreenScraper's.", editor.HintOf(GameMetadata.Description));
             Assert.Equal("From ScreenScraper.", editor.HintOf(GameMetadata.Developer));
-            ThemedGameOptionsTests.Reach(s, "MetaReset_" + GameMetadata.Description);
-            s.Pad.A();
+            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.Description);
+            s.Pad.X();
             Assert.Equal(Scraped, ((TextBox)editor.EditorOf(GameMetadata.Description)).Text);
             ThemedGameOptionsTests.Reach(s, "MetadataSave");
             s.Pad.A();
@@ -233,7 +233,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Equal(ScrapedName, NameBox(editor));
             Assert.Equal("Your edit.", editor.HintOf(GameMetadata.Name));
             Assert.False(NameOffer(s).IsVisible);
-            Assert.True(editor.ResetOf(GameMetadata.Name).IsVisible);
+            Assert.True(editor.CanReset(GameMetadata.Name));
 
             ThemedGameOptionsTests.Reach(s, "MetadataSave");
             s.Pad.A();

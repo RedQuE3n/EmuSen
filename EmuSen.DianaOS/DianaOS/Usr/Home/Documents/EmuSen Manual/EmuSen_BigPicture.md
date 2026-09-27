@@ -7716,6 +7716,44 @@ code this branch changed, and not on a comparison.
   capture of ES-DE's own editor at 1280×800, taken by someone running ES-DE, would let the title band, the subtitle and
   the button row be measured rather than assumed. Worth taking before the look is approved?
 
+### 34.11 The decisions of 2026-09-27 built: the small fixes, Q101 and Q102
+
+§10.1 records the decisions: the editor's look approved, and each recommendation of §34.10 accepted. This subsection
+and the ones after it record what was built on them, in the order it was built. §34.1–§34.10 are kept as they were
+written.
+
+- **The Hide from Library question** no longer names another program: *"EmuSen never deletes or moves a game's file.
+  Hide this game from the library instead? Its file stays where it is; turn on Hidden Games in Preferences to list it
+  again."* The desktop's dialog asks the same words.
+- **Controller names** have a short form in a big-screen row: *NES*, *SNES*, *N64*, *Gamepad*; *None* and *Unknown*
+  were short already. `GameMetadata.ShortText` gives it and `MetadataEditorWindow.ChoicesOf` uses it only in a
+  big-screen session, so the desktop's dropdown keeps *Nintendo Entertainment System*. What is stored is the value
+  (`gamepad_nintendo_snes`), never the words, so nothing stored changed.
+- **The on-screen keyboard's word layout** (LunaP §182.8): *Shift* and *Done* are two keys wide, and *Space* two instead of
+  four, with *.* moved down beside *-*, so every row is still ten keys. Measured before the change, at 18 px the
+  labels need more than a key's 44 px less its padding, and were cut; LunaP's new case checks each label's own width
+  against the room inside its key.
+- **Q101, Reset.** The Reset buttons are gone from the big-screen rows, so every row's bar and rule reach the panel's
+  edge again. **West** (X on an Xbox pad; **Delete** on the keyboard, ES-DE's X) resets the focused field. The help bar
+  names it, *Reset* with the West glyph after *Scrape*, only while the focused field holds an edit, so the bar never
+  offers what would do nothing. The desktop keeps its Reset buttons.
+- **Q102, ES-DE's keys in a big-screen menu.** §4.52a's keys were the themed view's alone and stopped at any sheet. They
+  now drive the pad menu and every chromeless sheet of a big-screen session as held pad buttons, through the same
+  `PadHeld`, so a sheet sees exactly what a pad would send. The arrows move, Enter chooses, Backspace goes back, Delete is
+  West, Insert is North (*Scrape* in the editor), F1, F4, Page Up and Down, and Home and End as in §4.52a. A text row
+  is not typed into: the keys pass it as they pass any row. While the on-screen keyboard is open the keys are not taken,
+  as before.
+
+**A defect found on the way, and why it could not have shipped quietly.** The first build of Q102 stopped the stars and
+the date from stepping by pad, and `ThemedGameOptionsTests` caught it: two cases failed, one on the rating and the date
+being unset after Right. The pad router steps a control that takes Left and Right by raising a key on it, and the
+window's keyboard handler, which runs first, now took that key for the player's Right, marked it handled and held it.
+`PadWindowRouter.Raising` marks the router's own keys, and the window leaves them alone.
+
+**Keyboard in the harness.** §34.5 recorded that Tab and Down moved nothing in stage 1's Gamelist Options with no pad.
+Down now moves there and in the editor. Tab is still Avalonia's and still moves nothing in the harness; it is not one of
+ES-DE's keys.
+
 ## 35. Q70 and Q71: the other value types against ES-DE (2026-09-27)
 
 *Opened on the answers to Q70 and Q71 of 2026-09-27 (§10.1).* §31 matched the loader to ES-DE for FLOAT, NORMALIZED_PAIR,

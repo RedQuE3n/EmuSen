@@ -4850,6 +4850,23 @@ the pad routes included, passed unchanged.
   stage 2 (§32.8), not yet built.
 - Nothing ran on the handheld or with a real pad, and ES-DE was not run for this section.
 
+#### 4.72.7 Since the look was approved (2026-09-27)
+
+Decided 2026-09-27 (`EmuSen_BigPicture.md` §10.1, built as its §34.11 and after). Where this amends §4.72.1, this is
+what a player meets now.
+
+- **Reset is West.** The small Reset button beside a changed row is gone in a big-screen session. **West** on the pad
+  (X on an Xbox pad, Square on a PlayStation pad) or **Delete** on the keyboard resets the focused field; the help bar
+  shows *Reset* while the focused field holds an edit, and not otherwise. The desktop editor keeps its buttons.
+- **The keyboard.** With or without a pad, ES-DE's keys (§4.52a) drive the big-screen menus as the pad does: the pad
+  menu, a game's options, the editor and its questions. Up and Down move between rows, Left and Right change, Enter
+  chooses, Backspace goes back (and applies a game's options, as B does), Delete resets, and Insert scrapes. A text row
+  is opened with Enter, not typed into.
+- **Controllers** show by their short names in the row: *NES*, *SNES*, *N64*, *Gamepad*.
+- **Hide from Library** asks: *"EmuSen never deletes or moves a game's file. Hide this game from the library instead?
+  Its file stays where it is; turn on Hidden Games in Preferences to list it again."*
+- **The on-screen keyboard** has wider *Shift* and *Done* keys, so their names are no longer cut.
+
 ### 4.73 Big picture: colours, whole numbers, words, paths and variants, as ES-DE reads them (2026-09-27)
 
 Q70 and Q71 of `EmuSen_BigPicture.md`, answered on 2026-09-27: run ES-DE on the value types §4.68 left strict, and

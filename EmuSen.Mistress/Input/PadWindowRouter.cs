@@ -293,10 +293,18 @@ namespace EmuSen.Mistress.Input
             return true;
         }
 
+        // True while the router raises a key of its own, which the window must not take for the keyboard's (Q102).
+        [ThreadStatic] internal static bool Raising;
+
         private static void Key(InputElement target, Key key, KeyModifiers modifiers = KeyModifiers.None)
         {
-            target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key, KeyModifiers = modifiers, Source = target });
-            target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = key, KeyModifiers = modifiers, Source = target });
+            Raising = true;
+            try
+            {
+                target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key, KeyModifiers = modifiers, Source = target });
+                target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = key, KeyModifiers = modifiers, Source = target });
+            }
+            finally { Raising = false; }
         }
     }
 }

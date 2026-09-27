@@ -241,8 +241,10 @@ namespace EmuSen.Mistress.Views
                 e.Handled = true;
                 return;
             }
-            if (TypingIntoATextField(e)) return;
-            if (ThemedKey(key, e.KeyModifiers, pressed))
+            // In a big-screen menu a text field is a row, which ES-DE's keys move past rather than type into; the pad router's own keys are never the keyboard's (Q102).
+            bool routed = PadWindowRouter.Raising;
+            if (TypingIntoATextField(e) && (routed || !(BigMenuOnScreen && EmuSen.LunaP.Controls.OnScreenKeyboard.OpenOver(this) is null))) return;
+            if (!routed && ThemedKey(key, e.KeyModifiers, pressed))
             {
                 e.Handled = true;
                 return;

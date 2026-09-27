@@ -109,6 +109,9 @@ namespace EmuSen.Galaxia.Models
         // The theme's navigation sounds, on a stream beside the game's - see §4.52.
         public bool NavigationSounds { get; set; } = true;
 
+        // ES-DE's "Max play time tracking" in hours: 0 records none, 24 has no limit, else a longer launch records nothing - see EmuSen_Settings_Reference.md §4.66.
+        public int MaxPlayTimeTracking { get; set; } = 8;
+
         // Games the player hid from the library, with Hide from Library or the Hidden field, are listed again - see EmuSen_Settings_Reference.md §4.59.
         public bool ShowHiddenGames { get; set; }
 

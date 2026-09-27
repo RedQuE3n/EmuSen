@@ -69,6 +69,7 @@ namespace EmuSen.Mistress.Views
         public event Action? StatusBarChanged;
         private readonly Dropdown _theme = new() { Name = "ThemeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
         private readonly Dropdown _resume = new() { Name = "ResumeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
+        private readonly Dropdown _maxPlayTime = new() { Name = "MaxPlayTimeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
 
         // Parameterless constructor exists only for tooling - real code always uses the one below.
         public PreferencesWindow() : this(new AppSettings()) { }
@@ -118,6 +119,12 @@ namespace EmuSen.Mistress.Views
                     Label = "Continue Where You Left Off",
                     Hint = "Every game is saved when it is closed. This is what happens the next time it starts.",
                     Content = _resume,
+                },
+                new FieldRow
+                {
+                    Label = "Max Play Time Tracking",
+                    Hint = "A game left running while the device sleeps would count the whole night. A launch longer than this adds nothing to the game's play time; Disabled records none, No limit every minute. ES-DE's default is 8 hours.",
+                    Content = _maxPlayTime,
                 },
                 new FieldRow
                 {
@@ -244,6 +251,16 @@ namespace EmuSen.Mistress.Views
             {
                 if (ResumeChoices.FirstOrDefault(c => c.Text == chosen as string).Value is not string value) return;
                 _settings.ResumeOnLaunch = value;
+                _settings.Save();
+            };
+
+            string[] playTexts = EmuSen.Mistress.Library.PlayTime.Choices.Select(c => c.Text).ToArray();
+            _maxPlayTime.Fill(playTexts, EmuSen.Mistress.Library.PlayTime.Choices.FirstOrDefault(c => c.Hours == Math.Clamp(_settings.MaxPlayTimeTracking, 0, 24)).Text ?? playTexts[8]);
+            _maxPlayTime.Chose += chosen =>
+            {
+                int i = Array.IndexOf(playTexts, chosen as string);
+                if (i < 0) return;
+                _settings.MaxPlayTimeTracking = EmuSen.Mistress.Library.PlayTime.Choices[i].Hours;
                 _settings.Save();
             };
 

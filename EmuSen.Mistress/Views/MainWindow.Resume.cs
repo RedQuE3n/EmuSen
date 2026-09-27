@@ -124,11 +124,14 @@ namespace EmuSen.Mistress.Views
             _playClock.Restart();
         }
 
+        // What the play clock read, for a test that cannot wait hours; null reads the clock.
+        internal Func<TimeSpan>? PlayClockReading { get; set; }
+
         private void RecordPlayTime()
         {
             if (_currentRomPath is not string path || !_playClock.IsRunning && _playClock.Elapsed == TimeSpan.Zero) return;
             _playClock.Stop();
-            _records.Played(path, _playClock.Elapsed);
+            if (PlayTime.Tracked(PlayClockReading?.Invoke() ?? _playClock.Elapsed, _appSettings.MaxPlayTimeTracking) is { } tracked) _records.Played(path, tracked);
             _playClock.Reset();
         }
     }

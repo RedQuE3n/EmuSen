@@ -32,6 +32,9 @@ namespace EmuSen.Mistress.Views
         private GameMetadata MetadataFor(string path) =>
             GameMetadata.Resolve(path, _scrapedText.GetValueOrDefault(path), _editSnapshot.GetValueOrDefault(path));
 
+        // ES-DE's per-game alternative emulator: the game's engine over the console's, when its console has that engine (§4.66).
+        private string? GameEngine(string path) => GameMetadata.EngineFor(path, _records.Edits(path).GetValueOrDefault(GameMetadata.AltEmulator));
+
         // The player's name for a game where they gave one, else the file's, in every list Mistress draws.
         private string DisplayTitle(RomEntry entry) =>
             _editSnapshot.TryGetValue(entry.FullPath, out IReadOnlyDictionary<string, string>? edits) && edits.TryGetValue(GameMetadata.Name, out string? name) && name.Length > 0
@@ -58,7 +61,7 @@ namespace EmuSen.Mistress.Views
             {
                 Name = m.Title, SortName = m.Sort, Description = m.DescriptionText, Developer = m.DeveloperText, Publisher = m.PublisherText, Genre = m.GenreText,
                 Players = m.PlayersText, ReleaseDate = m.Released, Rating = m.RatingValue, Completed = m.IsCompleted, KidGame = m.IsKidGame, Broken = m.IsBroken,
-                NotCounted = m.IsNotCounted, Hidden = m.IsHidden, Controller = m.ControllerType,
+                NotCounted = m.IsNotCounted, Hidden = m.IsHidden, Controller = m.ControllerType, AltEmulator = m.AltEmulatorEngine is not null,
             };
         }
 

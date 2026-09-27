@@ -282,7 +282,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
             s.Pad.Pad.Press(SDL.GamepadButton.DPadDown);
             s.Pad.Tick();
-            s.Run(900);
+            s.Run(600);
+            Assert.False(Overlay().Showing);
+            s.Run(300);
             Assert.False(Overlay().Showing);
             s.Pad.Pad.Release(SDL.GamepadButton.DPadDown);
             s.Pad.Tick();

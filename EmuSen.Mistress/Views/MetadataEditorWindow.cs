@@ -149,17 +149,19 @@ namespace EmuSen.Mistress.Views
                 case Dropdown choice:
                     choice.Chose += chosen =>
                     {
-                        if (field.Choices.FirstOrDefault(c => c.Text == chosen as string) is { Text: not null } picked) Changed(field.Key, picked.Value);
+                        if (GameMetadata.ChoicesFor(field, GamePath).FirstOrDefault(c => c.Text == chosen as string) is { Text: not null } picked) Changed(field.Key, picked.Value);
                     };
                     break;
             }
             return row;
         }
 
-        private static Dropdown ChoiceBox(MetadataField field)
+        // A choice with nothing to choose for this game is shown and not enabled, as ES-DE greys out its alternative emulator row.
+        private Dropdown ChoiceBox(MetadataField field)
         {
-            var box = new Dropdown { MinWidth = 320 };
-            box.Fill(field.Choices.Select(c => c.Text).ToArray(), field.Choices[0].Text);
+            IReadOnlyList<(string Value, string Text)> choices = GameMetadata.ChoicesFor(field, GamePath);
+            var box = new Dropdown { MinWidth = 320, IsEnabled = choices.Count > 1 };
+            box.Fill(choices.Select(c => c.Text).ToArray(), choices[0].Text);
             return box;
         }
 
@@ -233,8 +235,8 @@ namespace EmuSen.Mistress.Views
                             break;
                         case LunaSwitch flag: flag.IsChecked = value == GameMetadata.Yes; break;
                         case Dropdown choice:
-                            MetadataField spec = GameMetadata.Fields.First(f => f.Key == field);
-                            choice.Fill(spec.Choices.Select(c => c.Text).ToArray(), spec.Choices.FirstOrDefault(c => c.Value == (value ?? ""), spec.Choices[0]).Text);
+                            IReadOnlyList<(string Value, string Text)> spec = GameMetadata.ChoicesFor(GameMetadata.Fields.First(f => f.Key == field), GamePath);
+                            choice.Fill(spec.Select(c => c.Text).ToArray(), spec.FirstOrDefault(c => c.Value == (value ?? ""), spec[0]).Text);
                             break;
                     }
                     Describe(field);

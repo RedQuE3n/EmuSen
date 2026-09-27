@@ -39,7 +39,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         // P52: USERGUIDE.md lists .jpg, .png and .webp for images and six extensions for videos; each is found, and a .jpeg is not.
         [Fact]
-        public void An_ES_DE_media_folder_finds_the_extensions_the_user_guide_lists()
+        public Task An_ES_DE_media_folder_finds_the_extensions_the_user_guide_lists() => Session.Dispatch(() =>
         {
             string media = NewMediaFolder();
             var folder = new EsdeMediaFolder(media);
@@ -56,7 +56,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             File.Delete(Path.Combine(media, "snes", "covers", "C.webp"));
             Assert.Null(folder.Find(snes, new SceneGame("C", "/roms/C.sfc"), "cover"));
             Directory.Delete(media, true);
-        }
+        }, default);
 
         // One video per extension, found alone, so every extension is shown to be looked for.
         private static string? Find(EsdeMediaFolder folder, string ext)
@@ -70,7 +70,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         // The presence a listing gives equals the presence asked game by game, for every type.
         [Fact]
-        public void Presence_from_one_listing_equals_presence_asked_game_by_game()
+        public Task Presence_from_one_listing_equals_presence_asked_game_by_game() => Session.Dispatch(() =>
         {
             string media = NewMediaFolder();
             var folder = new EsdeMediaFolder(media);
@@ -85,7 +85,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(asked.Order(), listed.Order());
             Assert.Equal(new[] { "cover", "screenshot", "video" }, listed.Order());
             Directory.Delete(media, true);
-        }
+        }, default);
 
         // P53 on a full folder: 3,508 games, a cover for each and a screenshot for every other one, asked game by game and listed once.
         [Fact]

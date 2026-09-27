@@ -2859,6 +2859,10 @@ grid mutants, `Art_Book_Next_s_grid_matches_ES_DE_s_still` appears only for G10 
   again beside every class this stage added (47 of 47). Unrelated tests failing only in the broad run is §15.14's
   pattern; whether anything of stage (f) causes it was not established, because repeating the broad run until it
   reappears is ruled out by the load rule of 2026-09-25. The failure messages were not captured.
+  *Attributed 2026-09-27 by `EmuSen_Settings_Reference.md` §4.78, by timing only, since no message was kept: the run
+  came after `a98068ef` added `GridSceneTests` with seven plain facts that built scenes off the headless session's
+  dispatcher, which makes other tests' start-ups fail (§4.78.2). `FrameHandOffTests.Once_a_session_ends…` also asserts
+  on a weak reference, which could fail for another reason; that was not ruled out.*
 
 
 ## 17. Stage (d): ScreenScraper, the quota, the queue and the media store
@@ -3253,6 +3257,10 @@ passed alone (5 of 5 in its class) and in a rerun of the BigPicture and Scraping
 run before this change had passed it. Nothing in this stage touches that tool, but a single failure beside new window
 tests is not evidence either way, and repeating broad runs to catch it again was ruled out by the test-load rule.
 
+*Attributed 2026-09-27 by `EmuSen_Settings_Reference.md` §4.78: `GridSceneTests`' seven plain facts built scenes off
+the headless session's dispatcher, and a control built on another thread while a dispatch starts makes that start-up
+fail with this message (§4.78.2 reproduces it from their own scene). Moved onto the dispatcher in `b272675c`.*
+
 **The live run of 17.9 was made before this change**, by a tool that drives `Scraper` directly and is itself a deliberate,
 one-off run started by a person; its numbers stand.
 
@@ -3415,6 +3423,10 @@ have been told apart from its absence.
 This change does not reach that class: it builds its scene without a `MainWindow`. The failure is a start-up race in the
 test session, of the family §15.14 and §16.8 recorded (unrelated tests, only in the broad run). It is recorded, not
 attributed, and the broad run was not repeated.
+
+*Attributed 2026-09-27 by `EmuSen_Settings_Reference.md` §4.78: the start-up race is real and was caused by
+`GridSceneTests`' seven plain facts building scenes off the dispatcher; §4.78.2 reproduces this message at
+`DefaultRenderLoop.Add` from their own scene. Fixed in `b272675c`, and a guard now fails a test of that shape (§4.78.5).*
 
 ### 18.6 Not done
 
@@ -4761,6 +4773,9 @@ the one that made it, in a broad run and never alone. Before this work the same 
 Whether this change caused the failure cannot be shown either way. The test-load rule of 2026-09-25, made stricter after
 that day's resets, ruled out repeating the broad run until the failure came back, and the unmodified build was not run
 broadly for comparison.
+
+*Attributed 2026-09-27 by `EmuSen_Settings_Reference.md` §4.78: not this work's. `GridSceneTests`' seven plain facts
+built scenes off the headless session's dispatcher, which fails other tests' start-ups (§4.78.2); fixed in `b272675c`.*
 
 ### 23.2 What ES-DE documents, and what Mistress builds of it
 
@@ -7022,6 +7037,10 @@ failure is this branch's:
 - `InputSettingsWindowRenderTests.The_window_renders_its_rows(NES)` threw from Avalonia's headless platform
   initialisation ("The calling thread cannot access this object"), and passed, all three cases, when run alone; it is
   recorded as an order-dependent failure of the headless setup, not investigated further here.
+  *Attributed 2026-09-27 by `EmuSen_Settings_Reference.md` §4.78: the headless setup failed because `GridSceneTests`'
+  seven plain facts built scenes off the session's dispatcher at the same moment (§4.78.2 reproduces the message from
+  their own scene); fixed in `b272675c`. Two more classes had the same fault without causing this and were fixed
+  (§4.78.3).*
 
 ## 32. ES-DE's menu look, stage 1: the Start menu and a game's options (2026-09-27)
 
@@ -7699,6 +7718,9 @@ another class, and it is recorded the same way: an order-dependent failure of th
 unmodified tree, so that it is not this branch's rests on where it threw, in the platform's start-up rather than in any
 code this branch changed, and not on a comparison.
 
+*Attributed 2026-09-27 by `EmuSen_Settings_Reference.md` §4.78, as §31.12's was: `GridSceneTests`' plain facts, fixed
+in `b272675c`.*
+
 ### 34.9 Not done
 
 - **The rest of stage 2**: the settings sheets as ES-DE menus, ES-DE's list screen for an option row, and the Menu
@@ -8192,6 +8214,10 @@ under `nice -n 10`: **1,295 tests, 1,261 passed, 33 skipped (the picture, survey
 52 s.** The failure is §31.12's order-dependent one of the headless platform's initialisation ("The calling thread
 cannot access this object"), this time in `FrameHandOffTests`, whose eight tests passed when run alone; it is not this
 branch's.
+
+*Attributed 2026-09-27 by `EmuSen_Settings_Reference.md` §4.78, as §31.12's was: `GridSceneTests`' plain facts, fixed
+in `b272675c`; the failure kept its message, so, unlike §16.8's in the same class, it is attributed by mechanism as
+well as timing.*
 
 ## 36. Pass 14, first half: `gameselector` and the wheel carousels (2026-09-27)
 

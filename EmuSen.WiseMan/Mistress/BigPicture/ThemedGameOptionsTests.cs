@@ -143,17 +143,17 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             // Every Reset shows once its field is edited, so the audit sees them all.
             Reach(s, "Meta_" + GameMetadata.Rating);
             s.Pad.Right();
-            foreach (MetadataField field in GameMetadata.Fields.Where(f => f.Kind is MetadataKind.Text or MetadataKind.LongText))
+            foreach (MetadataField field in editor.Shown.Where(f => f.Kind is MetadataKind.Text or MetadataKind.LongText))
                 ((TextBox)editor.EditorOf(field.Key)).Text = "x";
-            foreach (MetadataField field in GameMetadata.Fields.Where(f => f.Kind == MetadataKind.Flag))
+            foreach (MetadataField field in editor.Shown.Where(f => f.Kind == MetadataKind.Flag))
                 ((LunaSwitch)editor.EditorOf(field.Key)).IsChecked = true;
             // A choice with nothing to choose for this game (a Super Nintendo game's engine) is disabled and has no Reset to show.
             bool Choosable(MetadataField f) => f.Kind != MetadataKind.Choice || GameMetadata.ChoicesFor(f, editor.GamePath).Count > 1;
-            foreach (MetadataField field in GameMetadata.Fields.Where(f => f.Kind == MetadataKind.Choice && Choosable(f)))
+            foreach (MetadataField field in editor.Shown.Where(f => f.Kind == MetadataKind.Choice && Choosable(f)))
                 ((Dropdown)editor.EditorOf(field.Key)).SelectedItem = GameMetadata.ChoicesFor(field, editor.GamePath)[1].Text;
             Reach(s, "Meta_" + GameMetadata.ReleaseDate);
             s.Pad.Right();
-            Assert.All(GameMetadata.Fields.Where(Choosable), f => Assert.True(editor.ResetOf(f.Key).IsVisible, f.Key));
+            Assert.All(editor.Shown.Where(Choosable), f => Assert.True(editor.ResetOf(f.Key).IsVisible, f.Key));
             Assert.False(editor.EditorOf(GameMetadata.AltEmulator).IsEnabled);
             Audit("editor");
             foreach (string m in missing) _out.WriteLine("unreachable: " + m);
@@ -165,7 +165,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             ThemedLibraryPadTests.Enter(s, "snes");
             MetadataEditorWindow editor = OpenEditor(s);
-            Assert.Equal("From the file name.", editor.RowOf(GameMetadata.Name).Hint);
+            Assert.Equal("From the file name.", editor.HintOf(GameMetadata.Name));
 
             Type(s, "Meta_" + GameMetadata.Name, "zeta 2");
             Type(s, "Meta_" + GameMetadata.Developer, "my studio");
@@ -179,7 +179,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.A();
             Reach(s, "Meta_favourite");
             s.Pad.A();
-            Assert.Equal("Your edit.", editor.RowOf(GameMetadata.Name).Hint);
+            Assert.Equal("Your edit.", editor.HintOf(GameMetadata.Name));
             Assert.True(editor.ResetOf(GameMetadata.Name).IsVisible);
             Assert.False(editor.ResetOf(GameMetadata.Publisher).IsVisible);
 

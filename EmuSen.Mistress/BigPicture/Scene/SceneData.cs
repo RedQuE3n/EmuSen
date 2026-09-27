@@ -54,6 +54,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
         // ES-DE's sortname: the list sorts by it where set, and shows the name (§4.59 of the settings reference).
         public string? SortName { get; init; }
 
+        // ES-DE's custom collections sortname: in a custom collection it takes the sortname's place, and nowhere else (§4.72).
+        public string? CustomSortName { get; init; }
+
         // ES-DE's "Exclude from game counter": left out of a system's game counts.
         public bool NotCounted { get; init; }
 

@@ -24,16 +24,16 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         public static TheoryData<int, int> Sizes() => new() { { 1280, 800 }, { 1920, 1200 } };
 
-        private static Rect InWindow(Control c, Rect r, Window w) => new(c.TranslatePoint(r.Position, w)!.Value, r.Size);
+        internal static Rect InWindow(Control c, Rect r, Window w) => new(c.TranslatePoint(r.Position, w)!.Value, r.Size);
 
-        private static (byte R, byte G, byte B) At(RenderedFrame f, int x, int y)
+        internal static (byte R, byte G, byte B) At(RenderedFrame f, int x, int y)
         {
             int i = (y * f.Width + x) * 4;
             return (f.Rgba[i], f.Rgba[i + 1], f.Rgba[i + 2]);
         }
 
         // Pixels that differ between two frames inside the given boxes, and outside all of them.
-        private static (int Inside, int Outside) Changed(RenderedFrame a, RenderedFrame b, params Rect[] boxes)
+        internal static (int Inside, int Outside) Changed(RenderedFrame a, RenderedFrame b, params Rect[] boxes)
         {
             int inside = 0, outside = 0;
             for (int y = 0; y < a.Height; y++)
@@ -47,7 +47,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
 
         // The bar across the row's top few pixels, above the text: every one the bar's colour from the panel's left edge to its right.
-        private static void AssertBarSpans(RenderedFrame f, Rect bar, Rect panel, Color colour)
+        internal static void AssertBarSpans(RenderedFrame f, Rect bar, Rect panel, Color colour)
         {
             Assert.Equal(panel.Left, bar.Left, 0.5);
             Assert.Equal(panel.Width, bar.Width, 0.5);
@@ -61,7 +61,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(0, wrong);
         }
 
-        private static void AssertCentred(Rect panel, Size window)
+        internal static void AssertCentred(Rect panel, Size window)
         {
             Assert.Equal(window.Width / 2, panel.Center.X, 1.0);
             Assert.True(panel.Top > 0 && panel.Bottom < window.Height, $"panel {panel} leaves the window");
@@ -206,7 +206,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Null(s.Window.GetControl<Control>("ScreenContent").Effect);
         }, default);
 
-        private static void Press(ThemedSession s, Key key)
+        internal static void Press(ThemedSession s, Key key)
         {
             s.Window.KeyPress(key, RawInputModifiers.None, PhysicalKey.None, null);
             s.Window.KeyRelease(key, RawInputModifiers.None, PhysicalKey.None, null);

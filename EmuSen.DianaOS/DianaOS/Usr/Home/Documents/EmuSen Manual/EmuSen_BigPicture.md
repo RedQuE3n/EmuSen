@@ -7119,6 +7119,9 @@ Mistress tests without any test named for shaders, the GPU or Vulkan:
 
 ### 32.8 Stage 2, not started
 
+*Begun 2026-09-27, after stage 1's look was approved: item 1, the metadata editor, is built and recorded in §34;
+the others wait for its look to be approved. The heading is kept as it was written.*
+
 It waits for the approval of stage 1's look. In the order requested (2026-09-27):
 
 1. **The metadata editor first**, as ES-DE's editor:
@@ -7500,3 +7503,202 @@ After merging WiseMan (§32 and the neutral rewording of the docs), one run of t
 **1,113 tests, 1,080 passed, 33 skipped (the picture, survey and live tools), 0 failed, in 3 min 47 s.** The two
 failures of §31.12 did not recur: the credential guard's was fixed on WiseMan, and the headless-initialisation one
 passed in this order.
+
+## 34. ES-DE's menu look, stage 2, item 1: the metadata editor (2026-09-27)
+
+*Built on branch `bigpicture-esde-menus-stage2`, from WiseMan at `b0c6bf75`; LunaP on `esde-menus-2`, from
+`openemu-library` at `9872708`.* The first item of §32.8, begun once stage 1's look was approved (§32.11). The
+player's account is §4.72 of the settings reference; LunaP's record of its pieces is its §182. The stage stops here, so
+that the editor's look can be approved before the settings sheets, the list screen and the opening-animation switch.
+
+**Numbering.** Predictions from P200, questions from Q100; both ranges were free in the tree when this began.
+
+**Sources.** ES-DE's user guide, *Metadata editor* (the local copy
+`~/.cache/emusen/bigpicture/motion/docs/USERGUIDE.md`, lines 4595–4721): the fields and their order, the colours of a
+value (*"it will change color from gray to blue, and if the scraper has changed a value, it will change to red"*), the
+five buttons, Y as the scrape shortcut, and the question on leaving. There is no capture of ES-DE's editor on this
+machine; the guide's own picture is not in the local copy. The editor's proportions are therefore §32.1's, measured on
+ES-DE's main menu, and not measured on its editor (Q104). ES-DE was not run, and no file of ES-DE's was copied.
+
+### 34.1 What ES-DE's guide documents, set against what was built
+
+| ES-DE | Mistress |
+|---|---|
+| the editor's title, the game beneath | *EDIT METADATA*, and under it the game's name and its file name, one to a line, smaller |
+| the fields, in the guide's order | the same order; Favourite after Players, Times played and Play time after Hide metadata fields |
+| text fields edited in a popup | a row with a chevron and the value as written; A opens Mistress's on-screen keyboard (Q100) |
+| rating in half stars | five stars at the right of the row, Left and Right stepping half a star |
+| release date, ISO 8601 | `YYYY-MM-DD` or *Unknown*, drawn in the menu's typeface, its parts stepped as before |
+| flags | switch rows |
+| controller, alternative emulator | option rows between `<` and `>`; the alternative emulator faded where the console has one engine |
+| grey, blue once changed, red once scraped | the same, for text, stars and dates; the colours are Mistress's shades |
+| green stars for a rating rounded when read | not built |
+| Scrape, Save, Cancel, Clear, Delete | Scrape, Save, Cancel, Clear, **Hide from Library…**; no Delete (§23, §4.59) |
+| Y scrapes | North scrapes, from anywhere in the editor |
+| the question on leaving an edited game | the same, as an ES-DE message box over the editor |
+| *Hide metadata fields* | built (§34.3) |
+| *Custom collections sortname*, inside a custom collection only | built (§34.3) |
+| *Folder link*, folders only | not applicable: the editor opens on games |
+
+Two things are Mistress's own and stay. **Reset** beside a field that holds an edit (§4.59) is drawn as a small
+outlined button at the row's right (Q101). **ScreenScraper's offered name** (§4.63) is two rows under Name, *Use This
+Name* with the name in red, and *Keep Current Name*.
+
+### 34.2 What was built
+
+- **LunaP** (`esde-menus-2`, its §182):
+  - `MenuPanel` gains `Subtitle`, `Buttons` (a band under the rows that never scrolls), `FooterMaxLines` and
+    `ShowsTitleBand`;
+  - `MenuRow` gains `ValueColor` and `ValueLetterCase`;
+  - `MenuRows` draws a `TextBox` and a `ToggleSwitch` as rows, and push buttons at a given size;
+  - `MenuFieldRow` hosts a control (the stars, the date) at a row's right;
+  - `RatingPicker` and `DateStepper` take colours, and the date a font file and no frame;
+  - `Dialogs.MenuConfirmAsync` asks in a message box drawn as a small menu;
+  - `SheetLayer` leaves a chromeless sheet drawn beneath a chromeless sheet presented over it, and marks it covered.
+- **Mistress**:
+  - `MetadataEditorWindow` takes the pad family of a big-screen session and builds the layout of §4.72.1 from the same
+    field controls its desktop form uses. Where a field's value comes from, which the desktop's `FieldRow` says as a
+    hint, is the footer's line while the field has the focus. The editor's questions go through `MenuConfirmAsync` in a
+    big-screen session.
+  - `GameMetadata` gains `hidemetadata` and `collectionsortname`, stored in `game_edit` like every field.
+  - `SceneGame.HideMetadata`, until now a collection entry's, is set from the flag, so `SceneBuilder`'s existing rule
+    hides the game's metadata elements. `SceneGame.CustomSortName` is new, and `CollectionShelves` puts it in the
+    sortname's place for a custom collection's games, so the order and Jump To…'s letters follow it there and nowhere
+    else.
+  - `MainWindow` opens the editor with the custom collections sortname only when the themed view's system is a custom
+    collection.
+
+### 34.3 The two fields
+
+**Hide metadata fields.** The guide: *"This option will hide most metadata fields as well as any badges … The only
+fields shown with this option enabled are the game name and description. … Game images and videos will also still be
+displayed."* §22 already hid, for a collection's entry, what ES-DE 3.4.1 was measured to hide: rating, badges, date and
+time elements, text bound to any metadata but the name and description, and elements marked `metadataElement`. The
+flag reuses that rule unchanged, which is why nothing new was measured for it. Whether ES-DE hides the same set for a
+game with the flag as for a collection's entry is assumed from the guide's sentence, not measured.
+
+**Custom collections sortname.** The guide: it *"will only affect the sorting for custom collections, meaning the
+normal system gamelists and the automatic collections … will not be affected"*, it takes precedence over the sortname,
+it also sets the quick selector's letter, and *"it's not possible to set a different value per collection."* All four
+follow from substituting it for the sortname when a custom collection's shelf is built, since the order and the letter
+index both read the sortname. The editor shows it only from inside a custom collection, grouped or discrete.
+
+### 34.4 Predictions
+
+| # | Predicted | Found | Verdict |
+|---|---|---|---|
+| P200 | *(written while the layout test was being written, after the first pictures)* The editor draws nothing outside its panel and the help bar at 1280×800 and 1920×1200 | 0 differing pixels outside at both sizes | held |
+| P201 | *(written before the mutants)* Of twenty-seven mutants, at least nine in ten are caught on their first valid run | 26 of 27 (96%); L10 survived on a weak LunaP case, caught once the case was strengthened (§34.6) | held |
+| P202 | *(written before the broad run)* The broad Mistress run passes with no failure this branch causes | 1,112 tests, 1 failed, in Avalonia's headless initialisation, in a graphics-settings case this branch does not reach; it passed alone twice (§34.8) | held, with that reservation |
+
+### 34.5 Tests
+
+`MetadataEditorLayoutTests`, seven cases (the detail is in §4.72.5): the editor at both sizes; grey then blue; Hide
+metadata fields; the custom collections sortname; Hide from Library's message box; Enter with no pad.
+`ThemedMetadataScrapeTests` gains the scraped red. The pixel rule is §32.4's: the frame with the editor, against the
+same frame with its panel alone hidden, must differ nowhere outside the panel and the help bar. The colours are counted
+in the value's own rectangle, as `MenuRow.Layout` reports it, within 14 of each channel.
+
+LunaP's `MenuEditorTests` adds six cases (its §182.6).
+
+**Keyboard.** A first version of the last case sent Tab and Down to move between rows with no pad, and neither moved
+the focus in the harness. The same keys did not move it in stage 1's Gamelist Options either, checked in the same run,
+so this is not the editor's new layout. The case now checks what does work, Enter on a focused switch and on a focused
+button (Q102).
+
+### 34.6 Mutants
+
+Twenty-seven mutants, one at a time, by `~/.cache/emusen/probe/esde-menus-2/mutate_editor.py`. The runner writes a
+state file holding the original text before each mutant, restores any leftover one when it starts, and touches every
+restored file, so no build reuses a mutant's binary (§32.5's trap). Sixteen are in Mistress, run against
+`MetadataEditorLayoutTests`, `ThemedGameOptionsTests` and the scraped-red case; eleven are in LunaP, run against its
+`MenuEditorTests` (its §182.6).
+
+| # | Rule broken | Result |
+|---|---|---|
+| E1 | the title is not *Edit Metadata* | caught |
+| E2 | the file name left out under the title | caught |
+| E3 | the custom collections sortname shown everywhere | caught by 2 |
+| E4 | the editor never told it is inside a custom collection | caught |
+| E5 | the custom collections sortname not applied in a collection | caught |
+| E6 | the custom collections sortname ordering the console's list too | caught |
+| E7 | Hide metadata fields never reaching the view | caught |
+| E8 | Hide metadata fields with no default of off | caught |
+| E9 | a changed value not coloured | caught by 2 |
+| E10 | a scraped value in the edited blue | caught |
+| E11 | the footer keeping a field's words while a button has the focus | caught |
+| E12 | Save before Scrape | caught |
+| E13 | the questions asked as the desktop's dialog | caught |
+| E14 | Times played and Play time after Controller | caught |
+| E15 | the editor opening on its default button, not its first row | caught |
+| E16 | the stars not coloured | caught |
+| L1–L9, L11 | LunaP (its §182.6) | caught |
+| L10 | a row value's own casing ignored when drawn | survived; caught after the test was strengthened |
+
+**26 of 27 caught on the first valid run.** L10 survived because LunaP's text-row case read the `ValueLetterCase`
+property and never looked at the drawn value. The case now draws the row with the value as written and again with the
+row's casing, and requires the two to differ; rerun alone, L10 was caught by it. Each mutant was caught by the case
+written for it, and nothing else failed.
+
+### 34.7 Pictures
+
+In `~/.cache/emusen/bigpicture/png/esde-menus-2/`, from `MetadataEditorPictureTool` and one case of
+`ThemedMetadataScrapeTests` (`EMUSEN_BIGPICTURE_PNG=1`). For each of `synthetic` and `artbooknext`, at each of
+`1280x800` and `1920x1200`:
+
+- `-gamelist`, before;
+- `-editor`, as opened;
+- `-editor-keyboard`, the name being typed;
+- `-editor-rating`, `-editor-date`, `-editor-switch`, `-editor-choice`, each after a change;
+- `-editor-reset`, a Reset focused, and `-editor-buttons`, Save focused;
+- `-editor-hide-confirm`, the message box over the editor;
+- `-editor-custom-collection`, opened inside a custom collection;
+- `-gamelist-metadata-hidden`, after Hide metadata fields was saved.
+
+`synthetic-*-editor-after-scrape` shows the scraped red and the offered name. The synthetic theme draws no metadata
+elements, so its `-gamelist-metadata-hidden` differs from `-gamelist` only in the name typed earlier; Art Book Next's
+pair shows the stars, date, players and play time gone. Every picture was looked at. Three
+things seen in them are questions rather than fixes: the on-screen keyboard's own look, with *Shift* and *Done* cut at
+1280×800 (Q100); a Reset beside a row stopping that row's bar and rule short of the panel's edge (Q101); and a long
+controller name cut with an ellipsis (*NINTENDO ENTERTAINMENT…*).
+
+### 34.8 The broad run
+
+WiseMan had nothing new to merge: the branch was made from its head, `b0c6bf75`, and it had not moved. One run of the
+Mistress filter without `ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` and any shader, GPU or Vulkan
+test, under `nice -n 10`, on the final build of both branches (LunaP `05308ba`): **1,112 tests, 1,075 passed, 36 skipped (the picture,
+survey, bench and live tools, this section's two picture tools among them), 1 failed, in 3 min 44 s.**
+
+The failure was `GraphicsSettingsWindowLayoutTests.A_change_is_saved_at_once_and_the_console_reported`, which threw
+from Avalonia's headless platform initialisation (*"The calling thread cannot access this object because a different
+thread owns it"*, from `HeadlessUnitTestSession.EnsureIsolatedApplication`) before its own code ran. It passed, with
+its three neighbours, when run alone twice. It is the same failure as §31.12's in `InputSettingsWindowRenderTests`, in
+another class, and it is recorded the same way: an order-dependent failure of the headless setup. It was not run on the
+unmodified tree, so that it is not this branch's rests on where it threw, in the platform's start-up rather than in any
+code this branch changed, and not on a comparison.
+
+### 34.9 Not done
+
+- **The rest of stage 2**: the settings sheets as ES-DE menus, ES-DE's list screen for an option row, and the Menu
+  opening animation switch (§32.8, Q92).
+- **ES-DE's text popup** (Q100), and ES-DE's green stars for a rounded rating.
+- A real pad, the handheld, and a capture of ES-DE's own editor to compare against (Q104).
+
+### 34.10 Open questions
+
+- **Q100, the text popup.** A on a text row opens Mistress's on-screen keyboard, in its own font and look; at 1280×800
+  its *Shift* and *Done* keys are cut. ES-DE edits text in a popup drawn as its menus are. **Recommendation:** build an
+  ES-DE text popup with the rest of stage 2, the keyboard inside it, and widen those two keys meanwhile.
+- **Q101, Reset.** ES-DE has no per-field reset; Mistress's Reset sits at the right of a changed row, and the row's bar
+  and rule stop short of it. Keep the button, or move Reset to a pad button in the help bar (X, *Reset*) so every row
+  spans the panel? **Recommendation:** the pad button, with Reset kept reachable from the keyboard.
+- **Q102, the keyboard in a big-screen sheet.** With no pad, Enter works in the editor, but in the harness neither Tab
+  nor the arrows move between rows, and Backspace does not leave; stage 1's Gamelist Options behaves the same. ES-DE's
+  keyboard moves with the arrows and goes back with Backspace. Route §4.52a's keys to a big-screen sheet as the pad's
+  buttons? **Recommendation:** yes, checked on a real keyboard first, since the harness's key events may differ.
+- **Q103, Hide metadata fields on the desktop.** The desktop editor shows the switch, and the desktop library ignores
+  it, as ES-DE's flag concerns the themed view. Keep the switch there, or show it only in a big-screen session?
+  **Recommendation:** keep it, so the flag can be seen and cleared from either.
+- **Q104, a capture of ES-DE's editor.** The layout follows the guide and §32's measurements of ES-DE's main menu. A
+  capture of ES-DE's own editor at 1280×800, taken by someone running ES-DE, would let the title band, the subtitle and
+  the button row be measured rather than assumed. Worth taking before the look is approved?

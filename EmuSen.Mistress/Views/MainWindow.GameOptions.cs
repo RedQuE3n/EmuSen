@@ -62,6 +62,7 @@ namespace EmuSen.Mistress.Views
                 Name = m.Title, SortName = m.Sort, Description = m.DescriptionText, Developer = m.DeveloperText, Publisher = m.PublisherText, Genre = m.GenreText,
                 Players = m.PlayersText, ReleaseDate = m.Released, Rating = m.RatingValue, Completed = m.IsCompleted, KidGame = m.IsKidGame, Broken = m.IsBroken,
                 NotCounted = m.IsNotCounted, Hidden = m.IsHidden, Controller = m.ControllerType, AltEmulator = m.AltEmulatorEngine is not null,
+                CustomSortName = m.CustomSort, HideMetadata = m.IsMetadataHidden,
             };
         }
 
@@ -142,7 +143,9 @@ namespace EmuSen.Mistress.Views
                 SheetLayer.Activate(_metadataEditor);
                 return;
             }
-            var window = _metadataEditor = new MetadataEditorWindow(this, path, title);
+            // Inside a custom collection, ES-DE adds the custom collections sortname (§4.72).
+            bool inCustom = ThemedLibraryShown && _themed?.SelectedSystem?.System.Kind == EmuSen.Mistress.BigPicture.Theme.ThemeSystemKind.CustomCollection;
+            var window = _metadataEditor = new MetadataEditorWindow(this, path, title, _bigScreen ? HelpFamily : null, inCustom);
             window.Closed += (_, _) => { if (ReferenceEquals(_metadataEditor, window)) _metadataEditor = null; };
             _ = SheetLayer.Show(window, this);
         }

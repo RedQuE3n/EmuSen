@@ -26,5 +26,11 @@ namespace EmuSen.Galaxia.Models
         public string DefaultSortOrder { get; set; } = "name, ascending";
 
         public string RandomEntryButton { get; set; } = RandomGames;
+
+        // ES-DE's "Sort folders on top of gamelists", on as ES-DE has it (§4.67 of the settings reference).
+        public bool FoldersOnTop { get; set; } = true;
+
+        // The consoles, by ES-DE system name, whose games are one list with no folders: ES-DE's flatten.txt, as a switch (Q23).
+        public List<string> FlattenedSystems { get; set; } = new();
     }
 }

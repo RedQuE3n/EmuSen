@@ -109,11 +109,18 @@ namespace EmuSen.Mistress.Views
         }
 
         // Each shelf under ES-DE's name for it, favourites first and then by title, as ES-DE lists a gamelist by default (§13.8).
-        private IReadOnlyList<ThemedShelf> ThemedShelves() => EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder
-            .Select(s => new ThemedShelf(new ThemeSystem(s.EsdeSystem, s.EsdeFullName, s.EsdeSystem),
-                _allScan.Entries.Where(e => e.Shelf == s.Name && Listed(e)).Select(ThemedGame)
-                    .OrderByDescending(g => g.Favorite).ThenBy(g => g.SortName ?? g.Name, StringComparer.OrdinalIgnoreCase).ToList()))
-            .ToList();
+        private IReadOnlyList<ThemedShelf> ThemedShelves()
+        {
+            IReadOnlyDictionary<string, string> links = FolderLinks();
+            return EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder
+                .Select(s => new ThemedShelf(new ThemeSystem(s.EsdeSystem, s.EsdeFullName, s.EsdeSystem),
+                    _allScan.Entries.Where(e => e.Shelf == s.Name && Listed(e)).Select(ThemedGame)
+                        .OrderByDescending(g => g.Favorite).ThenBy(g => g.SortName ?? g.Name, StringComparer.OrdinalIgnoreCase).ToList())
+                {
+                    Flatten = _appSettings.BigPictureCollections.FlattenedSystems.Contains(s.EsdeSystem), FolderLinks = links,
+                })
+                .ToList();
+        }
 
         private SceneGame ThemedGame(RomEntry entry)
         {
@@ -122,6 +129,7 @@ namespace EmuSen.Mistress.Views
             {
                 Favorite = r?.Favourite == true, LastPlayed = r?.LastPlayed, PlayCount = r?.PlayCount ?? 0,
                 PlayTime = r is { PlaySeconds: > 0 } ? TimeSpan.FromSeconds(r.PlaySeconds) : null,
+                FolderPath = GameFolders.Of(_appSettings.RomDirectory, entry.FullPath),
             });
         }
 

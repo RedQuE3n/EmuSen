@@ -173,15 +173,22 @@ namespace EmuSen.Mistress.BigPicture
         public static IReadOnlyList<SceneGame> Apply(IEnumerable<SceneGame> games, GameFilter filter) =>
             filter.IsActive ? games.Where(g => Passes(g, filter)).ToList() : games.ToList();
 
-        // The quick selector's entries: a star for the favourites when they are sorted on top among other games, then each first character in list order.
-        public static IReadOnlyList<(string Label, int Index)> Letters(IReadOnlyList<SceneGame> games, bool favoritesOnTop)
+        // The quick selector's entry for the folders sorted on top, where ES-DE draws a folder icon (§30).
+        public const string FolderEntry = "Folders";
+
+        // The quick selector's entries: the folders and a star for the favourites when each is sorted on top among other entries, then each first character in list order.
+        public static IReadOnlyList<(string Label, int Index)> Letters(IReadOnlyList<SceneGame> games, bool favoritesOnTop, bool foldersOnTop = false)
         {
             var entries = new List<(string, int)>();
-            bool star = favoritesOnTop && games.Any(g => g.Favorite) && games.Any(g => !g.Favorite);
-            if (star) entries.Add((Star, 0));
+            bool folders = foldersOnTop && games.Any(g => g.Folder && !g.IsCollection) && games.Any(g => !g.Folder);
+            if (folders) entries.Add((FolderEntry, 0));
+            var files = games.Where(g => !g.Folder).ToList();
+            bool star = favoritesOnTop && files.Any(g => g.Favorite) && files.Any(g => !g.Favorite);
+            if (star) entries.Add((Star, games.ToList().FindIndex(g => !g.Folder)));
             for (int i = 0; i < games.Count; i++)
             {
-                if (star && games[i].Favorite) continue;
+                if (folders && games[i].Folder) continue;
+                if (star && games[i].Favorite && !games[i].Folder) continue;
                 string first = FirstLetter(SortKey(games[i]));
                 if (!entries.Any(e => e.Item1 == first)) entries.Add((first, i));
             }

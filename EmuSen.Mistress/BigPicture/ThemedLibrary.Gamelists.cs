@@ -31,7 +31,7 @@ namespace EmuSen.Mistress.BigPicture
             set
             {
                 _editing = value;
-                _listed.Clear();
+                ForgetListed();
             }
         }
 
@@ -49,7 +49,7 @@ namespace EmuSen.Mistress.BigPicture
 
         public string GamelistKey => ListKey(_system);
 
-        public bool InFolder => ViewName == "gamelist" && OpenFolder(_system) is not null;
+        public bool InFolder => ViewName == "gamelist" && (OpenFolder(_system) is not null || FolderIn(_system).Length > 0);
 
         // The games the gamelist shows before its filters: a grouped system's folders at its top, a folder's games inside it.
         public IReadOnlyList<SceneGame> Unfiltered => Source(_system).Folders ? Listed(_system ?? "") : Source(_system).Games;
@@ -85,42 +85,29 @@ namespace EmuSen.Mistress.BigPicture
         // A system's games as the gamelist lists them: searched, filtered, sorted, marked for the collection being edited; kept until something changes.
         private IReadOnlyList<SceneGame> Listed(string system)
         {
-            string key = ListKey(system);
+            if (Foldered(system)) WalkUp(system);
+            string key = ViewKey(system);
             if (_listed.TryGetValue(key, out IReadOnlyList<SceneGame>? kept)) return kept;
             (IReadOnlyList<SceneGame> games, bool favoritesFirst, _, bool folders) = Source(system);
+            if (Foldered(system)) return _listed[key] = Marked(FolderListing(system, favoritesFirst));
             if (folders)
                 games = ShelfOf(system)!.Folders!.OrderBy(f => f.System.Name, StringComparer.OrdinalIgnoreCase).Select(f => CollectionShelves.Folder(f, Random)).ToList();
             IEnumerable<SceneGame> shown = _filter.Length == 0 ? games : games.Where(g => g.Folder || FilterBar.Matches(_filter, g.Name));
             shown = GamelistOptions.Apply(shown, _gameFilters.GetValueOrDefault(key, GameFilter.None));
-            IReadOnlyList<SceneGame> sorted = folders ? shown.ToList() : GamelistOptions.Sort(shown, SortOf(system), favoritesFirst);
-            if (_editing is { } editing) sorted = sorted.Select(g => g.Folder ? g : g with { InCollection = editing.Members.Contains(g.File) }).ToList();
-            return _listed[key] = sorted;
+            return _listed[key] = Marked(folders ? shown.ToList() : GamelistOptions.Sort(shown, SortOf(system), favoritesFirst));
         }
+
+        // The collection being edited ticks its members; a folder is never one.
+        private IReadOnlyList<SceneGame> Marked(IReadOnlyList<SceneGame> sorted) =>
+            _editing is { } editing ? sorted.Select(g => g.Folder ? g : g with { InCollection = editing.Members.Contains(g.File) }).ToList() : sorted;
 
         // The view rebuilt from the kept selection after something it lists changed.
         public void Refresh(TimeSpan now)
         {
-            _listed.Clear();
+            ForgetListed();
             if (Stage is null) return;
             Stage.Replace(Data(), now);
             Remember();
-        }
-
-        private void EnterFolder(SceneGame folder, TimeSpan now)
-        {
-            if (_system is null || ShelfOf(_system)?.Folders is null) return;
-            _openFolder[_system] = folder.Name;
-            Refresh(now);
-            Sound("select");
-        }
-
-        private void LeaveFolder(TimeSpan now)
-        {
-            // The top list's cursor still names the collection left, since each list keeps its own (§22.8, C13).
-            if (_system is null || OpenFolder(_system) is null) return;
-            _openFolder.Remove(_system);
-            Refresh(now);
-            Sound("back");
         }
 
         // ES-DE's random entry button: another game of the gamelist, or with "games and systems" another system in the system view.
@@ -135,7 +122,7 @@ namespace EmuSen.Mistress.BigPicture
 
         // The quick selector's letters for the gamelist as it is listed now.
         public IReadOnlyList<(string Label, int Index)> Letters() =>
-            Stage is { Current.ViewName: "gamelist" } s ? GamelistOptions.Letters(s.Current.Data.System.Games, FavoritesOnTop) : [];
+            Stage is { Current.ViewName: "gamelist" } s ? GamelistOptions.Letters(s.Current.Data.System.Games, FavoritesOnTop, FoldersOnTop) : [];
 
         // The gamelist options sheet's choices, applied as ES-DE applies them on closing it: the sort and filters, then the jump.
         public void ApplyOptions(GameSort sort, GameFilter filter, string? letter, TimeSpan now)

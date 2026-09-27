@@ -121,8 +121,27 @@ namespace EmuSen.Mistress.Views
                 Label = "Favorites",
                 Content = Switch("FavoritesFirst", "Sort favorite games above non-favorites", S.FavoritesFirst, on => S.FavoritesFirst = on),
             });
+            _page.Children.Add(new FieldRow
+            {
+                Label = "Folders",
+                Hint = "A console's folders are shown as ES-DE shows them. Flattening one lists all its games together, as ES-DE's flatten.txt does.",
+                Content = FolderSwitches(),
+            });
             _page.Children.Add(Choice("RandomEntryButton", "Random Entry Button", "Either thumbstick pressed in jumps to a random game, or system.", RandomButton,
                 S.RandomEntryButton, v => S.RandomEntryButton = v));
+        }
+
+        // ES-DE's "Sort folders on top of gamelists", then a flatten switch for each console - see EmuSen_Settings_Reference.md §4.67.
+        private StackPanel FolderSwitches()
+        {
+            var switches = Ui.Stack(4, Switch("FoldersOnTop", "Sort folders on top of gamelists", S.FoldersOnTop, on => S.FoldersOnTop = on));
+            foreach (EmuSen.Cores.CoreCatalog.LibraryShelf shelf in EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder.Where(s => s.EsdeSystem.Length > 0))
+                switches.Children.Add(Switch($"Flatten_{shelf.EsdeSystem}", $"Flatten {shelf.EsdeFullName} folders", S.FlattenedSystems.Contains(shelf.EsdeSystem), on =>
+                {
+                    S.FlattenedSystems.Remove(shelf.EsdeSystem);
+                    if (on) S.FlattenedSystems.Add(shelf.EsdeSystem);
+                }));
+            return switches;
         }
 
         private LunaSwitch Switch(string name, string label, bool on, Action<bool> store)

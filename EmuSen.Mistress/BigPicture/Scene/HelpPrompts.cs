@@ -6,7 +6,11 @@ using EmuSen.Mistress.BigPicture.Theme;
 namespace EmuSen.Mistress.BigPicture.Scene
 {
     // What changes the help entries: a collection being edited, and the random entry button's setting (§22).
-    public sealed record HelpContext(bool Editing = false, bool RandomGames = false, bool RandomSystems = false, bool Folder = false);
+    public sealed record HelpContext(bool Editing = false, bool RandomGames = false, bool RandomSystems = false, bool Folder = false)
+    {
+        // A on this entry opens a list rather than a game: a folder with no link, or any folder while a collection is edited (§30).
+        public static bool Enters(SceneGame? game, HelpContext help) => game is { Folder: true } g && (g.FolderLink is null || help.Editing);
+    }
 
     // Mistress's own help entries per view, in its words, drawn with LunaP's button set for the pad's family (§3.6, §4.9, §15).
     public static class HelpPrompts

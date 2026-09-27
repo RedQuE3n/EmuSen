@@ -9264,3 +9264,7 @@ WiseMan (b272675c, with Pass 8's §38) and LunaP's `openemu-library` (5a1e1a2) w
 run. One run of the Mistress filter, without `ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` and any
 GPU or Vulkan test, under `nice -n 10`: **1,416 tests, 1,376 passed, 40 skipped (the picture, survey and live tools),
 none failed, in 4 min 20 s.** LunaP's whole suite: 1,425 tests, all passed.
+
+WiseMan then moved to b57f224e (menus stage 2, §34) and `openemu-library` to 691a54f (LunaP §182.8–§182.10); both were
+merged, the only conflict LunaP's README count, and both runs were repeated: **1,434 tests, 1,392 passed, 42 skipped,
+none failed, in 4 min 19 s**; LunaP 1,428, all passed.

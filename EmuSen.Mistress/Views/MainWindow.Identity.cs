@@ -118,7 +118,7 @@ namespace EmuSen.Mistress.Views
             });
         }
 
-        // Save states' records and the shader pack's build, in records.db - see EmuSen_Settings_Reference.md §4.61.
+        // Save states' records and the shader pack's build, in records.db - see EmuSen_Settings_Reference.md §4.64.
         private readonly FileRecords _fileRecords = FileRecords.Load();
 
         // On the emulation thread, after the state it describes is written; the ROM's hash is whatever is known by then.

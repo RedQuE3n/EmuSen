@@ -13,7 +13,7 @@ namespace EmuSen.Mistress.Library
     {
         public const string PackAddress = "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip";
 
-        // The stamp builds before 2026-09-26 wrote beside the presets; read once into records.db, never written - see EmuSen_Settings_Reference.md §4.61.
+        // The stamp builds before 2026-09-26 wrote beside the presets; read once into records.db, never written - see EmuSen_Settings_Reference.md §4.64.
         public const string StampFile = ".emusen-pack";
 
         public static string DefaultDirectory => Path.Combine(EmuSen.Galaxia.Library.DataStore.Shaders, "RetroArch");

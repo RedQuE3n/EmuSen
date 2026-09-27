@@ -6,7 +6,7 @@ using Microsoft.Data.Sqlite;
 
 namespace EmuSen.Mistress.Library
 {
-    // records.db: what Mistress knows about files it wrote or fetched, each save state's record and each shader pack's build - see EmuSen_Settings_Reference.md §4.61.
+    // records.db: what Mistress knows about files it wrote or fetched, each save state's record and each shader pack's build - see EmuSen_Settings_Reference.md §4.64.
     public sealed class FileRecords : IDisposable
     {
         // Each entry takes the file from the version before it; append, never edit.
@@ -69,7 +69,7 @@ namespace EmuSen.Mistress.Library
             return new FileRecords(db);
         }
 
-        // A file newer than this build is refused rather than written to, as games.db and media.db are - see §4.61.
+        // A file newer than this build is refused rather than written to, as games.db and media.db are - see §4.64.
         private static void Migrate(SqliteConnection db)
         {
             int version = Convert.ToInt32(Scalar(db, "PRAGMA user_version", null), CultureInfo.InvariantCulture);
@@ -85,7 +85,7 @@ namespace EmuSen.Mistress.Library
 
         // --- save states ---
 
-        // The record while the state is the file it was written for; a sidecar is imported on first sight and left where it is - see §4.61.
+        // The record while the state is the file it was written for; a sidecar is imported on first sight and left where it is - see §4.64.
         public StateRecord? ReadState(string statePath)
         {
             string key = Path.GetFullPath(statePath);
@@ -194,7 +194,7 @@ namespace EmuSen.Mistress.Library
 
         // --- downloaded shader packs ---
 
-        // The build date recorded for the pack in this folder, or null when no pack is there; a pre-database stamp is imported and left - see §4.61.
+        // The build date recorded for the pack in this folder, or null when no pack is there; a pre-database stamp is imported and left - see §4.64.
         public string? PackBuilt(string directory, string legacyStampFile)
         {
             string key = Path.GetFullPath(directory);

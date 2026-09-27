@@ -4437,10 +4437,16 @@ None of those holds for the stores §4.64 moved.
   - each configuration problem `ConfigDiagnostics` reports, which until now reached only the console.
 - **Hotaru:** its unhandled faults and configuration problems.
 
+**A folder that cannot be made falls back.** The handheld's `appsettings.json` named `/home/red/Documents/Logs/` as
+its `LogDirectory`, a desktop path copied across with the settings. The deck user cannot create it, so crash reports
+and per-game logs there had been going nowhere, silently. `ErrorLog.Usable` now tries to create the configured folder.
+When that fails, `ErrorLog.Root()`, and through it `CrashLog` and §4.22's per-game logs, use `~/.config/EmuSen/Logs`.
+The setting itself is left as the player wrote it.
+
 **Pulling it from the handheld.** `ls ~/.config/EmuSen/Logs/`, or the folder Preferences names. Then, for example,
 `grep -A12 ERROR emusen_20260927.log`.
 
-**Tests.** `ErrorLogTests`, six cases:
+**Tests.** `ErrorLogTests`, seven cases, the seventh being the fallback just described:
 - an entry written whole, with area, context and inner trace;
 - entries appended, with a message's line break folded;
 - the redactor over message, context and trace;

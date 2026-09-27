@@ -103,5 +103,19 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.Null(ErrorLog.Error("test", "nowhere to go"));
             File.Delete(_dir);
         }
+
+        // A LogDirectory copied from another machine (the handheld held /home/red/Documents/Logs/) falls back rather than logging nowhere.
+        [Fact]
+        public void A_log_directory_this_machine_cannot_make_falls_back_to_the_default()
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_dir)!);
+            string blocker = _dir + ".file";
+            File.WriteAllText(blocker, "x");
+            Assert.False(ErrorLog.Usable(Path.Combine(blocker, "Logs")));
+            Assert.False(ErrorLog.Usable(null));
+            Assert.True(ErrorLog.Usable(Path.Combine(_dir, "made")));
+            Assert.True(Directory.Exists(Path.Combine(_dir, "made")));
+            File.Delete(blocker);
+        }
     }
 }

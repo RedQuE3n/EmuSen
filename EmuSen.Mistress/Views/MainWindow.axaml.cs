@@ -1432,9 +1432,7 @@ namespace EmuSen.Mistress.Views
         {
             StopLogging(); // close the previous session's files first - see CategorizedLogWriter.Dispose's own comment
 
-            string logRoot = string.IsNullOrWhiteSpace(_appSettings.LogDirectory)
-                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EmuSen", "Logs")
-                : _appSettings.LogDirectory;
+            string logRoot = ErrorLog.Usable(_appSettings.LogDirectory) ? _appSettings.LogDirectory! : ErrorLog.DefaultRoot;
 
             try
             {

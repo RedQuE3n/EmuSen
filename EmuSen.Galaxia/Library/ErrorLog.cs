@@ -21,15 +21,30 @@ namespace EmuSen.Galaxia.Library
         // Set by a frontend at start, so nothing it writes carries a credential to disk.
         public static Func<string, string>? Redactor { get; set; }
 
-        // The folder the per-game logs and crash reports share: the LogDirectory setting, else ~/.config/EmuSen/Logs.
+        public static string DefaultRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EmuSen", "Logs");
+
+        // The folder the per-game logs and crash reports share: the LogDirectory setting when it can be made, else ~/.config/EmuSen/Logs.
         public static string Root()
         {
             if (DirectoryOverride is { } set) return set;
             string? configured = null;
             try { configured = AppSettings.Load().LogDirectory; } catch { }
-            return string.IsNullOrWhiteSpace(configured)
-                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EmuSen", "Logs")
-                : configured;
+            return Usable(configured) ? configured! : DefaultRoot;
+        }
+
+        // A settings file copied from another machine can name a folder this one cannot make.
+        public static bool Usable(string? directory)
+        {
+            if (string.IsNullOrWhiteSpace(directory)) return false;
+            try
+            {
+                Directory.CreateDirectory(directory);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public static string PathFor(DateTime day) => Path.Combine(Root(), $"{Prefix}{day:yyyyMMdd}.log");

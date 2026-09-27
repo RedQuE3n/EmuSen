@@ -6976,3 +6976,16 @@ rebuilt clean at the end.
 - **Q72, the warnings.** The lenient readings are warnings in the loader's log only, and ES-DE says nothing at all.
   Should Theme Settings' About sheet list a theme's warnings, for theme authors, or stay silent as ES-DE does?
   **Recommendation:** silent, as now.
+
+### 31.12 The broad run
+
+After merging WiseMan (pass 4 and the error log of settings §4.70), one run of the Mistress filter without
+`ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` and any GPU or Vulkan test, under `nice -n 10`:
+**1,083 tests, 1,051 passed, 30 skipped (the picture, survey and live tools), 2 failed, in 3 min 46 s.** Neither
+failure is this branch's:
+- `ScrapeCredentialTests.No_tracked_file_holds_a_real_devpassword` names `EmuSen.WiseMan/Galaxia/ErrorLogTests.cs`,
+  which WiseMan's error-log commit added with a literal `devpassword=` to test its redaction; this branch does not touch
+  the file. It fails on WiseMan's own tree for the same reason, by construction; that was not run separately.
+- `InputSettingsWindowRenderTests.The_window_renders_its_rows(NES)` threw from Avalonia's headless platform
+  initialisation ("The calling thread cannot access this object"), and passed, all three cases, when run alone; it is
+  recorded as an order-dependent failure of the headless setup, not investigated further here.

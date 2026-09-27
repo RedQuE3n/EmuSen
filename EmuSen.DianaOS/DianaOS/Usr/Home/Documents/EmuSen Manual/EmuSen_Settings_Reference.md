@@ -3756,6 +3756,13 @@ records no build; a download that still writes a stamp; a pack stamp not importe
 indentation. The runner (`~/.cache/emusen/probe/sqlite-migration/mutants.py`) keeps the unmutated file beside itself
 while a mutant is applied, restores it on start if a run was interrupted, and rebuilds the restored source at the end.
 
+**The broad run** (WiseMan without the GPU, Vulkan, slang and bench tests and `ShaderSettingsWindowTests`, 2026-09-27):
+7,721 passed, 17 skipped, 2 failed. Both failures (`GameFrameReleaseTests`, `DianaOSShellWindowTests`) threw inside
+Avalonia's headless platform set-up (`AppBuilder.SetupUnsafe`, a dispatcher owned by another thread) before any test
+code ran, neither class touches `records.db` or a state record, and both classes pass when run alone (4 and 11). They
+were not re-run against the unmodified build, so "an ordering race in the shared headless session, independent of this
+change" is the likely reading and not a demonstrated one.
+
 **What this does not cover.** The crash test exercises SQLite's recovery of a torn log under this store's settings; it
 cannot distinguish `synchronous = FULL` from `NORMAL`, which differ only on power loss, and no test here removes power.
 The view's Delete Save State forgetting the row has no test of its own (the store's `ForgetState` has one); a missed

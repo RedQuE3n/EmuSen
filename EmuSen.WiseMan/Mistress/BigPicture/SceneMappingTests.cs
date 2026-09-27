@@ -35,6 +35,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ["helpsystem"] = "pos=0 0;fontSize=0.1;textColor=FFFFFF;iconColor=FFFFFF",
             ["clock"] = "pos=0 0;fontSize=0.1;color=FFFFFF",
             ["systemstatus"] = "pos=1 0;origin=1 0;height=0.15;entries=all",
+            ["gameselector"] = "selection=lastplayed;gameCount=3",
         };
 
         private sealed record Case(string Type, string Property, string A, string B)
@@ -47,10 +48,19 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             public bool HideMetadata { get; init; }
             public double? At { get; init; }
             public string Moves { get; init; } = "";
+            public string Beside { get; init; } = "";
             public override string ToString() => $"{Type}.{Property}";
         }
 
         private static Case C(string type, string property, string a, string b) => new(type, property, a, b);
+
+        // Two gameselectors beside an element that names one, and a name text that shows a selector's pick (§36).
+        private const string TwoSelectors = "<gameselector name=\"a\"><selection>lastplayed</selection><gameCount>3</gameCount></gameselector><gameselector name=\"b\"><selection>mostplayed</selection><gameCount>3</gameCount></gameselector>";
+
+        // Ten picks asked of each, where the synthetic library has eight games with a last-played date and eleven with a play count, so entry 9 exists in b only.
+        private const string ShortAndLong = "<gameselector name=\"a\"><selection>lastplayed</selection><gameCount>10</gameCount></gameselector><gameselector name=\"b\"><selection>mostplayed</selection><gameCount>10</gameCount></gameselector>";
+
+        private static string Shown(int entry) => $"<text name=\"shown\"><pos>0.05 0.05</pos><size>0.9 0.6</size><metadata>name</metadata><gameselectorEntry>{entry}</gameselectorEntry><fontSize>0.1</fontSize><color>FFFFFF</color></text>";
 
         private const string LongText = "A long description that cannot fit in the small box it is given here";
 
@@ -168,6 +178,18 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             C("textlist", "lineSpacing", "1.5", "2.5"),
             C("textlist", "indicators", "none", "symbols"),
             C("textlist", "collectionIndicators", "symbols", "ascii") with { System = 7 },
+            C("carousel", "itemRotation", "7.5", "30") with { Context = "type=verticalWheel;itemSize=0.3 0.2" },
+            C("carousel", "itemRotationOrigin", "-3 0.5", "-1 0.5") with { Context = "type=verticalWheel;itemSize=0.3 0.2;itemRotation=20" },
+            C("carousel", "itemsBeforeCenter", "8", "0") with { Context = "type=verticalWheel;itemSize=0.3 0.2;itemRotation=20" },
+            C("carousel", "itemsAfterCenter", "8", "0") with { Context = "type=verticalWheel;itemSize=0.3 0.2;itemRotation=20" },
+            C("carousel", "itemAxisHorizontal", "false", "true") with { Context = "type=verticalWheel;itemSize=0.3 0.2;itemRotation=20" },
+            C("carousel", "wheelHorizontalAlignment", "center", "left") with { Context = "type=verticalWheel;itemSize=0.3 0.2" },
+            C("carousel", "wheelVerticalAlignment", "center", "top") with { Context = "type=horizontalWheel;itemSize=0.2 0.3" },
+            C("carousel", "horizontalOffset", "0", "0.2"),
+            C("carousel", "verticalOffset", "0", "0.2") with { Context = "itemSize=0.3 0.3" },
+            C("carousel", "reflections", "false", "true") with { Context = "itemSize=0.3 0.3" },
+            C("carousel", "reflectionsOpacity", "0.5", "1") with { Context = "itemSize=0.3 0.3;reflections=true" },
+            C("carousel", "reflectionsFalloff", "1", "3") with { Context = "itemSize=0.3 0.3;reflections=true" },
             C("carousel", "itemTransitions", "animate", "instant") with { Moves = "step", At = 100 },
             C("carousel", "fastScrolling", "false", "true") with { Moves = "hold", At = 2000 },
             C("textlist", "textHorizontalScrolling", "false", "true") with { Context = "size=0.3 1", At = 4000 },
@@ -293,6 +315,20 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             C("systemstatus", "backgroundCornerRadius", "0", "0.05") with { Context = "backgroundColor=FF0000;backgroundHorizontalPadding=0.03 0.03;backgroundVerticalPadding=0.03 0.03" },
             C("systemstatus", "entries", "all", "wifi"),
             C("systemstatus", "entrySpacing", "0", "0.04"),
+            C("gameselector", "selection", "lastplayed", "mostplayed") with { View = "system", Beside = Shown(0) },
+            C("gameselector", "gameCount", "1", "3") with { View = "system", Beside = Shown(2) },
+            C("gameselector", "allowDuplicates", "false", "true") with { View = "system", Context = "selection=random;gameCount=20", Beside = Shown(15) },
+            C("image", "gameselector", "a", "b") with { View = "system", Remove = "path", Context = "imageType=cover;gameselectorEntry=9", Beside = ShortAndLong },
+            C("image", "gameselectorEntry", "0", "9") with { View = "system", Remove = "path", Context = "imageType=cover;gameselector=a", Beside = ShortAndLong },
+            C("video", "gameselector", "a", "b") with { View = "system", Context = "gameselectorEntry=9", Beside = ShortAndLong },
+            C("video", "gameselectorEntry", "0", "9") with { View = "system", Context = "gameselector=a", Beside = ShortAndLong },
+            C("text", "gameselector", "a", "b") with { View = "system", Remove = "text", Context = "metadata=name", Beside = TwoSelectors },
+            C("text", "gameselectorEntry", "0", "1") with { View = "system", Remove = "text", Context = "metadata=name", Beside = TwoSelectors },
+            C("datetime", "gameselector", "a", "b") with { View = "system", Beside = TwoSelectors },
+            C("datetime", "gameselectorEntry", "0", "1") with { View = "system", Beside = TwoSelectors },
+            C("rating", "gameselector", "a", "b") with { View = "system", Beside = TwoSelectors },
+            C("rating", "gameselectorEntry", "0", "2") with { View = "system", Beside = TwoSelectors },
+
             C("systemstatus", "customIcon", "<customIcon icon=\"icon_wifi\">{S1}</customIcon>", "<customIcon icon=\"icon_wifi\">{S3}</customIcon>"),
         ];
 
@@ -343,7 +379,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             string body = string.Concat(props.Select(p => p.Value.StartsWith('<') ? p.Value : $"<{p.Key}>{p.Value}</{p.Key}>"));
             string cover = c.Context.Split(';').Contains("cover") ? "<image name=\"cover\"><pos>0 0</pos><size>1 1</size><path>{B}</path><zIndex>35</zIndex></image>" : "";
             string view = c.View ?? (ThemeCatalog.Find(c.Type)!.Find(c.Property)?.OnlyIn == ThemeViewScope.System ? "system" : "gamelist");
-            return Fill($"<view name=\"{view}\">{cover}<{c.Type} name=\"x\">{body}</{c.Type}></view>");
+            return Fill($"<view name=\"{view}\">{cover}<{c.Type} name=\"x\">{body}</{c.Type}>{c.Beside}</view>");
         }
 
         // Five regular systems, then a collection and a system whose sixth game is a folder.

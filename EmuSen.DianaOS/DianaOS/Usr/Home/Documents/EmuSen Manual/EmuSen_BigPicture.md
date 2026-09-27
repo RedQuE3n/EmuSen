@@ -4115,6 +4115,7 @@ player started (§17.14). Tests run headless in WiseMan, blast radius only, and 
   built.
 - *Cost.* 3–8 days, as the survey decides.
 - *What the player sees.* The themes the player picks from the list drawn as ES-DE draws them.
+- *First half built 2026-09-27, `gameselector` and the wheel carousels: §36.*
 
 **Pass 15. Translations.**
 - *Scope.* The languages Q26 names, one at a time, on Pass 5's plumbing.
@@ -8004,6 +8005,232 @@ under `nice -n 10`: **1,295 tests, 1,261 passed, 33 skipped (the picture, survey
 52 s.** The failure is §31.12's order-dependent one of the headless platform's initialisation ("The calling thread
 cannot access this object"), this time in `FrameHandOffTests`, whose eight tests passed when run alone; it is not this
 branch's.
+
+## 36. Pass 14, first half: `gameselector` and the wheel carousels (2026-09-27)
+
+*Opened on Q48's answer of 2026-09-27 (§10.1): pass 14 draws `gameselector` (20 of the 66 listed themes), then the
+wheel carousels (9), then `gamelistinfo` (6), then `animation` (4).* This section records the first two, built,
+tested and committed; the pass stops here for a review before the other two. The survey that sized it is §25.8, and
+the loader it builds on reads what ES-DE reads since §31 and §35. The player's account is §4.74 of the settings
+reference.
+
+**Sources.** ES-DE 3.4.1's behaviour, measured by running it, and `THEMES.md`'s gameselector and carousel entries;
+never its source. Two synthetic probe themes were written under `~/.cache/emusen/probe/pass14/probe-themes/`, and three
+listed themes were downloaded whole into `~/.cache/emusen/bigpicture/pass14-themes/` for captures: CodyWheel (a
+vertical wheel beside a gameselector's fan art), Aura (a horizontal wheel, and reflections under a game carousel) and
+Mania Menu (a gameselector's screenshot behind the system list). No theme file, image or XML entered the repository;
+the tests write their own themes and pictures.
+
+**Numbering.** §34 is another pass's. Predictions here start at **P220** and questions at **Q120**.
+
+### 36.1 The setup
+
+- **ES-DE.** The downloaded AppImage under `~/.cache/emusen/bigpicture/esde/`, with a fresh home, `home-pass14/`, and
+  §31.1's arguments at `--resolution 1280 800` and `1920 1200`, windowed. Other work ran ES-DE on the same machine that
+  day, so every run held the shared lock `esde/esde.lock`, then waited for any other ES-DE window to close, and closed
+  only the process tree it had started; the absence of any ES-DE process was checked after each.
+- **What it could reach.** `ApplicationUpdaterFrequency` was `never`, the ScreenScraper account fields were empty, and
+  nothing asked it to scrape. Its ROM folder, `esde/pass14-roms/`, held empty files: the synthetic library of §13.2
+  (five systems of twelve games, with the same gamelists) and seven more systems for the wheels. Two of those carry
+  metadata for the gameselector's rules: `gba` has one game played three times and two never played, and `genesis` has
+  its most recently and most often played game excluded from the game counter and another hidden. Their media are flat
+  labelled pictures drawn by the probe's own script. The player's library was never named.
+- **The runner** is `~/.cache/emusen/probe/pass14/esde_run14.py` (settings, launch, a capture by `ffmpeg -f x11grab`,
+  pad timelines by §22.2's uinput pad, the log copied), batched by `batch.sh`. 63 runs; every `es_log.txt` is kept in
+  `probe/pass14/logs/`, and none logged an error.
+- **The probe themes.** `p14-sel-es-de` draws, per gameselector and entry, the picked game's name as a text, so one
+  capture reads thirty values. `p14-wheel-es-de` gives every system a flat logo of its own colour, 200 by 100 pixels
+  with a white corner square, and one variant per property; `wheelfit.py` reads each logo's centre and angle from the
+  pixels of its colour, and `compare.py` sets ES-DE's capture beside Mistress's render and counts the pixels that
+  differ.
+
+### 36.2 `gameselector`: what ES-DE does
+
+On the synthetic SNES games (last played on 23, 22, 20, 19 and 17 September for the second, third, fifth, sixth and
+eighth, and played `i` times for the `i`th), the probe's rows read:
+
+| Asked | ES-DE 3.4.1 drew |
+|---|---|
+| `lastplayed`, `gameCount` 5, entries 0–4 | Brass Lantern, Cobalt Harbor, Ember Circuit, Fable of Tiles, Hollow Comet: newest first |
+| `mostplayed`, `gameCount` 5 | Lumen Garden, Kestrel Run, Juniper Vault, Ivory Signal, Hollow Comet: most first |
+| entry 5, and entry 9, of a `gameCount` of 5 | the fifth, Hollow Comet, both times: clamped to `gameCount − 1`, as `THEMES.md` says |
+| the `gba` probe: `lastplayed` and `mostplayed`, five each | only the game played; entries 1–4 **not drawn**. A never-played game is picked by neither |
+| `random`, six of three games | three different names, entries 3–5 not drawn |
+| `random` with `allowDuplicates`, six of three | six names, the first three different |
+| the `genesis` probe | the game excluded from the counter never picked, however recent or frequent; the hidden one neither |
+| a text naming no selector, among four | the selector whose **name sorts first**, not the first defined: in two probes with `zlast` and `amost` defined in both orders, `amost` both times |
+| a text naming a selector that does not exist | the same, the first name |
+| one selector, and a text naming another | that one selector (`THEMES.md`: "this property is ignored") |
+| no gameselector in the view | an image with `imageType`, a text with `metadata` and a rating **draw nothing**; a static text draws |
+| the carousel moved away and back | new random picks each time; `lastplayed` and `mostplayed` unchanged |
+| a date of the last played game | "3 days ago": relative, as a gamelist's `lastplayed` datetime is by default |
+
+`THEMES.md` says that with several selectors and no name "the first entry will be chosen". ES-DE's "first" is the first
+by name. The argument is separate from the mechanism: the probes show which selector is taken in both orders of
+definition; whether ES-DE keeps its selectors in a sorted map was not, and under §25's rule could not be, looked at.
+
+### 36.3 The wheels, reflections and offsets: what ES-DE does
+
+Every rule below fits every probe capture to within a pixel of the whole logos' centres (`wheelfit.py`), and is how
+LunaP's `ImageCarousel` now lays items out (its §190).
+
+- **The hub.** Every item of a wheel starts at one box, `itemSize` large, centred along the wheel's axis and placed
+  across it by `wheelHorizontalAlignment` (vertical wheel) or `wheelVerticalAlignment` (horizontal). The picture is
+  fitted inside that box and placed by `itemHorizontalAlignment` and `itemVerticalAlignment`.
+- **The turn.** The item `k` places from the selection is turned by `k × itemRotation` degrees, clockwise on screen,
+  about the origin. For a **vertical** wheel the origin is the box's top left plus `itemRotationOrigin` in multiples of
+  the item's width and height, as `THEMES.md` describes. For a **horizontal** wheel, which `THEMES.md` does not
+  describe, the same construction turned a quarter turn anticlockwise: the centre lies `(0.5 − X) × width` below the
+  box's centre and `(Y − 0.5) × height` to its right. With the default `-3 0.5`, a horizontal wheel's items ride an arch
+  whose centre is 3.5 item widths below the selection; with `0.5 4`, a column turning about a centre to the right.
+- **`itemAxisHorizontal`.** The items stay level and move by the travel the turn gives the point on the box's left edge
+  at the origin's height: `R(θ)·a − a` with `a = (−X × width, 0)` (horizontal wheel: `(0, X × width)`). The origin's Y
+  plays no part, which the probe showed: `-1 0.5` and `-1 3` drew identically.
+- **`itemsBeforeCenter`, `itemsAfterCenter`**: the items drawn; twelve systems on a default wheel of 8 and 8 repeat, as
+  a straight carousel's row does (§13.8).
+- **Growth.** A wheel's selected item grows about the box's centre. With `itemHorizontalAlignment` left or right, every
+  item of a vertical wheel is also moved by half the growth towards that side, `(itemScale − 1) × width / 2`: at
+  `itemScale` 1.5 the neighbours stood 72–74 px left of the plain rule's places. A straight carousel's selected item
+  grows about the edge its cross-axis alignment names: the top edge for `itemVerticalAlignment` top, the left for a
+  vertical carousel's `itemHorizontalAlignment` left, the centre for center.
+- **Clipping.** Every carousel, straight or turned, is clipped to its box.
+- **`horizontalOffset`, `verticalOffset`** move every item by fractions of the box's width and height.
+- **Reflections**, on a horizontal carousel only (a vertical one and the wheels ignore them): each picture mirrored
+  directly beneath itself (not beneath its item box), the same size. The row makes room for them: the unit placed by
+  `itemVerticalAlignment` is twice the item's height, the item in its upper half. The reflection's opacity is the
+  item's own times `reflectionsOpacity` at the picture's edge, falling linearly to nothing at `1 / reflectionsFalloff`
+  of the picture's height: 0.494 at the edge and 0.018 near the end of a 96-pixel reflection at the defaults, nothing at
+  48 pixels with falloff 2, and 0.25 at the end with falloff 0.5. It grows with its item.
+- **Moving.** A recording of one step of the vertical wheel at 30 frames a second turned every item continuously, the
+  selection reaching its new place in about eleven frames on an easing curve like the straight carousel's (§14.7). The
+  wheel's position is the same fractional item index, so the scene's existing clock drives it.
+
+**Mistress against ES-DE on the probe theme** (`compare.py`, the help bar's strip left out, since ES-DE draws a default
+help bar for a theme that has none and Mistress does not):
+
+| | 1280×800 | 1920×1200 |
+|---|---|---|
+| logo centres, 41 variants | within 0.8 px for every logo drawn whole; up to 5 px for logos more than half hidden by a neighbour or the screen's edge, whose visible part is a few antialiased pixels | within 0.7 px (4 variants), one logo under ES-DE's help bar 6 px |
+| logo angles | within 0.2° where the logo is whole | within 0.1° |
+| pixels differing by more than 8 grey levels | 0.00–0.34% per variant | 0.00–0.22% |
+| a reflection's column, grey level by level | within 1 level at the defaults; 3–4 levels (under a pixel of a steep fade) with falloff 2 | |
+
+### 36.4 What was built
+
+- **Mistress.** `GameSelectors` picks each gameselector's games from the system's counted games, without folders or
+  games excluded from the counter: `lastplayed` and `mostplayed` by §36.2's rules, `random` by a seed that
+  `SceneData.Shuffle` carries and that every move of the system view moves on. `SceneBuilder.GameFor` gives an element
+  its game: the list's selection in a gamelist, the chosen selector's entry in the system view, or none, in which case
+  images with `imageType`, metadata texts and dates, and ratings draw nothing. `PrimaryElements.Carousel` maps the
+  wheels, their properties, the offsets and the reflections onto `ImageCarousel`; `SceneMapping` claims 3
+  gameselector pairs, the `gameselector` and `gameselectorEntry` of five elements, and 12 carousel pairs.
+- **LunaP** (branch `pass14-elements`, its §190). `ImageCarousel` gained a wheel layout, `ContentOffset`, clipping,
+  reflections and the growth edge. Each item's placement is now one matrix transform about its top left.
+- **Lottie is left out.** `animation`'s Lottie files would need Skottie, a SkiaSharp library, which LunaP may not take
+  (it references Avalonia alone); it would go to a sibling package or to Mistress by `PLAN-icons.md` §1.1's rule. This
+  is recorded now because §21.3 raised it; `animation` itself is the pass's fourth item.
+
+**Where Mistress differs, and why.** The random picks are Mistress's own sequence, so a random selector shows other
+games than ES-DE's in the same state. A text of a metadata field a game lacks shows nothing, where ES-DE writes
+"unknown" (§3.6; the same holds in the gamelist). A `mostplayed` tie keeps the list's order, which was not measured.
+
+### 36.5 Predictions
+
+None was written before the runs: the rules were read off the first captures and each later probe was designed from
+the last. The following are written now, for what the runs did not measure:
+
+| # | Prediction | Retired when |
+|---|---|---|
+| P220 | A wheel's step, recorded frame by frame, follows §14.7's carousel curve (400 ms, quadratic ease-out) to within one frame at 30 frames a second | a recording is fitted |
+| P221 | A horizontal wheel with `itemVerticalAlignment` top and `itemScale` above 1 moves its items by half the growth, as a vertical wheel's side alignment does | ES-DE is run on it |
+| P222 | Two games tied on play count keep ES-DE's list order in a `mostplayed` selector | ES-DE is run on it |
+| P223 | CodyWheel, Aura, Mania Menu and the six other wheel themes draw their wheels within 1 px of ES-DE at 1280×800 once §36.9's other differences are removed | the next capture of each |
+
+### 36.6 Tests
+
+| Class | Tests | What it holds |
+|---|---|---|
+| `GameSelectorTests` | 10 | §36.2's rules, each on the games ES-DE was measured on: newest and most first, the unplayed left out, random with and without duplicates (20 seeds), the clamp, the excluded and folders, no selector, the first name, one selector, new picks on each move, the gamelist unaffected |
+| `WheelCarouselTests` | 21 cases | each logo's centre within 1.5 px of the centre read from ES-DE's capture, for 18 probe variants (vertical and horizontal wheels, rotation, origins, upright items, alignments, growth, clipping, offsets, reflections' room, the growth edge); and three reflections' fade by grey level |
+| `SceneMappingTests` | 2 (331 cases) | the 25 new pairs change the pixels; the case list equals the mapping's |
+| LunaP `CarouselWheelTests` | 6 | its §190.4 |
+
+A wheel logo that ES-DE's own help bar covers is left out of `WheelCarouselTests`, since Mistress draws no help bar a
+theme does not ask for. Two LunaP tests that read a `ScaleTransform` read the matrix now (its §190.2).
+
+### 36.7 Mutants
+
+The runner is `~/.cache/emusen/probe/pass14/mutate_pass14.py`, its log `run-pass14.log` and its verdicts
+`mutants-pass14.txt`. Each mutant was built with `-m:2` and tested alone under `nice -n 10`: Mistress's against
+`GameSelectorTests`, `WheelCarouselTests` and `SceneMappingTests`, LunaP's against its `CarouselWheelTests`,
+`ThemedListTests` and `MotionTests` and then the same Mistress tests. Before changing a file the runner writes it to a
+state file, restores it in a `finally` and touches it, and on starting restores any file a cut-short run left mutated;
+the tree was rebuilt clean at the end and both worktrees were left with no change.
+
+**30 mutants: 29 caught, 1 equivalent, none failed to build.**
+
+| Area | Mutants (caught unless marked) |
+|---|---|
+| gameselector | G1 `lastplayed` keeps unplayed games; G2 `mostplayed` keeps never-played ones; G3 oldest first; G4 no clamp to `gameCount`; G5 the name sorting last; G6 excluded games picked; G7 folders picked; G8 `allowDuplicates` ignored; G9 random picks not moved on by navigation; G10 a system view without a selector shows the list's game; G11 a rating drawn with no game; G12 one selector's picks for every name |
+| the scene's mapping | W1 `horizontalOffset` ignored; W2 `itemAxisHorizontal` ignored; W3 before and after swapped; **W4 reflections passed for a vertical carousel (equivalent)**; W5 `wheelVerticalAlignment` ignored |
+| LunaP's carousel | L1 a horizontal wheel's origin read as a vertical one's; L2 turned anticlockwise; L3 upright items' arm through the origin; L4 no side shift; L5 no room for reflections; L6 a reflection that never fades; L7 a reflection that ignores its item's opacity; L8 no clipping; L9 a row grown from its centre; L10 the vertical offset by the width; L11 a wheel drawing the row's reach; L12 a reflection not flipped; L13 the hub not aligned |
+
+- **W4 is equivalent.** LunaP draws reflections under a horizontal row only (its §190.3), so passing the property for a
+  vertical carousel changes nothing drawn; Mistress's own check is a second guard, not the only one.
+- **L7 was caught by one test alone**, `WheelCarouselTests`' reflection of an unselected item at half opacity, the
+  measurement that found the squared opacity of LunaP §190.3; LunaP's own reflection test uses full opacity.
+- **G12 was caught by `SceneMappingTests` alone**: `GameSelectorTests` names a selector only to show that an unknown
+  or ignored name falls back.
+
+### 36.8 Pictures
+
+In `~/.cache/emusen/bigpicture/png/pass14/`: `mistress-<label>-<size>.png` from `Pass14PictureTool`
+(`EMUSEN_BIGPICTURE_PNG=1`), and `side-<label>-<size>.png`, ES-DE's capture on the left and Mistress's render on the
+right, for all 41 probe variants and 6 selector states at 1280×800, 4 probe variants and one selector state at
+1920×1200, and the three downloaded themes in four states at both sizes. The captures themselves are in
+`~/.cache/emusen/probe/pass14/captures/<label>/final.png`.
+
+### 36.9 The downloaded themes
+
+The wheels and the selectors' pictures land where ES-DE puts them in all three themes; what differs belongs to other
+passes, and is listed so that P223 can be retired later:
+
+| Theme and state | Pixels > 8 levels, 1280 / 1920 | Pass 14's elements | The rest |
+|---|---|---|---|
+| CodyWheel, system view | 18.2% / 16.6% | the wheel of logos and the gameselector's fan art match | the description's vertical scroll is at another moment; the help bar's entries; the info card's height |
+| Aura, fullscreen system view | 2.5% / 0.4% | the horizontal wheel (a pager, `itemRotation` 0) matches | the help bar; "1 GAME" in ES-DE, "1 GAMES" in Mistress |
+| Aura, game carousel | 20.3% / 19.1% | the reflections match | the items stand apart by `selectedItemMargins`, which is not mapped (§25.8's widest carousel gap); a glass panel behind the name is missing |
+| Mania Menu, system view | 2.3% / 2.2% | the gameselector's screenshot matches | the list's names are placed at the start of each diagonal band in ES-DE and centred in Mistress |
+
+### 36.10 Not done
+
+- **`gamelistinfo` and `animation`**, the pass's third and fourth items, wait for the checkpoint's review.
+- **`selectedItemMargins`, `selectedItemOffset`, `itemStacking`, `itemDiagonalOffset`, `itemAxisRotation`,
+  `lineSpacing`, `imageCornerRadius`** and the carousel's other unmapped properties: not in Q48's four items (Q120).
+- **A horizontal wheel's growth with a vertical alignment** (P221), **ties** (P222), and the **step's curve** (P220)
+  were not measured.
+- **Text items** of a carousel get no reflection; ES-DE was not run on a carousel of names with reflections.
+- **Nothing ran on the handheld.**
+
+### 36.11 Open questions
+
+- **Q120, what follows.** The carousel's `selectedItemMargins` (32 themes) and `lineSpacing` (33) are wider gaps than
+  any element left. Options: (a) `gamelistinfo` and `animation` as Q48 ordered; (b) those two carousel properties
+  first, then (a). **Recommendation: (b).** Each is a small measured rule of the same control, and Aura's game carousel
+  shows the first missing on the screen.
+- **Q121, "unknown".** ES-DE writes "unknown" for a metadata field a game lacks, in a system view's selector as in a
+  gamelist. Mistress writes nothing. **Recommendation:** Mistress's own word, through Pass 5's lookup, when that pass
+  is built.
+- **Q122, a default help bar.** ES-DE draws a help bar for a theme that has no `helpsystem` element; Mistress draws none.
+  **Recommendation:** measure its place and draw Mistress's own, since a theme without one otherwise leaves the player
+  without the buttons.
+
+### 36.12 The broad run
+
+WiseMan (then at 38324489, §35) was merged into the branch before the run. One run of the Mistress filter, without
+`ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` and any GPU or Vulkan test, under `nice -n 10`:
+**1,328 tests, 1,293 passed, 35 skipped (the picture, survey and live tools, `Pass14PictureTool` among them), none
+failed, in 3 min 55 s.** LunaP's whole suite on its branch: 1,394 tests, all passed.
 
 ## 37. Pass 10 built: the screensaver (2026-09-27)
 

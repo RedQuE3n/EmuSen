@@ -53,7 +53,7 @@ namespace EmuSen.Mistress.Views
         // Nothing over the library and no game on screen; ES-DE starts none while a menu is open either.
         private bool ScreensaverMayStart =>
             _bigScreen && !_themedClosed && LibraryView.IsVisible && !GameOnScreen && !_padMenuOpen && !Sheets.IsPresenting && !LaunchScreenOpen
-            && OtherWindow() is null && OnScreenKeyboard.OpenOver(this) is null
+            && OtherWindow() is null && !TextEntryOpen
             && (SaverSettings.ScreensaverInGameMode || !InGameModeSession(ScreensaverEnvironment));
 
         // Each poll: any button held keeps the idle clock at now or wakes the screensaver; true when the poll is the screensaver's and goes no further.

@@ -201,7 +201,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                         if (box.Inflate(1).Contains(new Point(x + 0.5, y + 0.5))) inside++; else outside++;
                     }
                 _out.WriteLine($"{family}: {inside} pixels changed in the help bar, {outside} outside it");
-                Assert.True(inside > 50);
+                // An unknown pad is lettered as an Xbox pad, ES-DE's default type, so that change draws nothing new (§40.1).
+                if (family == PadFamily.Xbox) Assert.Equal(0, inside);
+                else Assert.True(inside > 50);
                 Assert.Equal(0, outside);
                 seen.Add((family, frame));
             }

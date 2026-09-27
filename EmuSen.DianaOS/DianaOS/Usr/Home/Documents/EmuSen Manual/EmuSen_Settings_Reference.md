@@ -5474,6 +5474,76 @@ a plain fact that builds a control or a picture, not a proof that no test works 
   than remove it.
 - The *"Stack empty"* failure of §4.78.2 was seen in two runs of the tool and not traced.
 
+### 4.79 Big picture: lettered help buttons, the editor's help and subtitle, the scroll indicator, and the On-Screen Keyboard setting (2026-09-27)
+
+`EmuSen_BigPicture.md` §40 is the record. Everything here is for big-screen sessions and big picture on the desktop
+(§4.54); the desktop's own windows are unchanged.
+
+#### 4.79.1 What the player sees
+
+**The help bar's buttons are lettered discs**, as ES-DE draws them: a solid disc with the button's letter (A, B, X, Y)
+or, on a PlayStation pad, its shape cut out of it; a solid plus for the d-pad, with small arrows on the arms that do
+something; solid pills for the shoulders and triggers with their names (LB, L1, L, and so on); the middle buttons with
+their marks. They follow Controller Type (§4.61): Automatic draws the family of the pad last pressed. **A pad Mistress
+does not recognise, or no pad at all, is drawn as an Xbox pad**, as ES-DE's default is; the old four-dot diagram is
+gone from big picture. With Button Swap on, the help names the button that now does the job, as before. This is every
+big-screen help bar: the themed view's (so also under the launch screen and the screensaver), the Start menu, Gamelist
+Options, the metadata editor, every settings screen, list screens and message boxes.
+
+**The metadata editor** (§4.72):
+
+- its subtitle is one line, the file and its system: *Aurora Drift (Synthetic).sfc [SNES]*;
+- its help bar says what A does on the focused row, in ES-DE's words: *Select* on a text row, a choice or ScreenScraper's
+  offered name; *Add Half Star* on the rating; *Edit Date* on the date; *Toggle* on a switch; and on the buttons *Scrape*,
+  *Save Metadata*, *Cancel Changes*, *Clear Metadata* and *Hide Game*. Then *Back* (B), *Scrape* (Y), *Reset* (X) while
+  the field holds an edit, *Change* where Left and Right step the row, and *Choose*, up and down on the rows, left and
+  right on the buttons;
+- **A on the rating adds half a star**, and after five stars goes back to none, as in ES-DE.
+
+**A menu whose rows run past its panel shows a pair of chevrons at its title's right**: pointing down while there is
+more below, up while there is more above, both while there is both.
+
+#### 4.79.2 On-Screen Keyboard
+
+*Preferences → Controllers → On-Screen Keyboard*, on the desktop and in big picture, kept in `appsettings.json` as
+`OnScreenKeyboard`. It decides what types into a big-screen text row (a name, a developer, a collection's name):
+
+| Setting | What happens when a text row is chosen |
+|---|---|
+| **Automatic** (the default) | Under Steam, the text popup with a real text field, and Steam's keyboard is asked for. Otherwise, chosen with Enter on a keyboard: the text popup's field, typed into directly. Otherwise, chosen with a controller: EmuSen's own keyboard. |
+| **Steam** | Always the text popup with Steam's keyboard asked for. |
+| **EmuSen's** | Always EmuSen's own keyboard, as before this setting existed. |
+
+"Under Steam" means any of: Steam's Game Mode, a program started by Steam (a non-Steam shortcut included), a Steam
+Deck, or the Steam client running on the desktop.
+
+**The text popup** is titled *Enter <row>*, with the row's text in a field ready to type into. **Enter** or **Start**
+keeps what was typed; **Escape** or **B** leaves the row as it was; **Y** asks for Steam's keyboard again after it has
+been put away. **A does nothing** there, so that a press on Steam's keyboard cannot close it by accident.
+
+**Steam's keyboard** is asked for by opening `steam://open/keyboard`, the way the system opens a link (`xdg-open`, or
+the `steam` command). It types into the window that has the focus, which is Mistress with the field focused. It needs
+the Steam client running; with it closed nothing appears, and the field can still be typed into from a keyboard.
+Steamworks' own text input is not used, because it needs a real Steam game's ID, which a non-Steam shortcut does not
+have.
+
+**EmuSen's own keyboard is unchanged** wherever it is used: the themed view's search, the cheats window, the desktop,
+and every text row when this setting is *EmuSen's*.
+
+#### 4.79.3 What has not been checked
+
+Steam's keyboard was not seen working: the handheld was offline, and the tests never launch anything. What is expected
+there, in Game Mode, is that the keyboard opens over Mistress at the bottom of the screen, that what is typed reaches
+the field, and that the controller goes back to Mistress when it closes (`EmuSen_BigPicture.md` §40.6, P262–P266).
+Until that is checked, *EmuSen's* is the choice that is known to work with a controller.
+
+#### 4.79.4 Tests
+
+`MenusFollowupTests` (§40.7), headless: the choice under every setting with and without Steam, Steam detected from the
+environment, the address asked for exactly and nothing launched, typed text kept on Enter and dropped on Escape or B,
+EmuSen's keyboard still opening with *EmuSen's*, the Preferences row, the subtitle, the help bar's words on every row,
+A on the stars, the scroll indicator's place and pixels, and the filled glyphs in the view and the editor.
+
 ### 4.80 Big picture: the other windows in ES-DE's look (2026-09-27)
 
 Decided 2026-09-27 (`EmuSen_BigPicture.md` §10.1):

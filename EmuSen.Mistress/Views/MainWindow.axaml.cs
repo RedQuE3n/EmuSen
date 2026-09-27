@@ -243,7 +243,13 @@ namespace EmuSen.Mistress.Views
             }
             // In a big-screen menu a text field is a row, which ES-DE's keys move past rather than type into; the pad router's own keys are never the keyboard's (Q102).
             bool routed = PadWindowRouter.Raising;
-            if (TypingIntoATextField(e) && (routed || !(BigMenuOnScreen && EmuSen.LunaP.Controls.OnScreenKeyboard.OpenOver(this) is null) || FramedTextBoxKeepsKey(key))) return;
+            // A key let go that was steering is released as a button whatever now has the focus, as the text popup takes it on Enter's press (§4.79).
+            if (!pressed && !routed && ThemedKeyButton(key) is { } held && _themedKeys.Remove(held))
+            {
+                e.Handled = true;
+                return;
+            }
+            if (TypingIntoATextField(e) && (routed || !(BigMenuOnScreen && !TextEntryOpen) || FramedTextBoxKeepsKey(key))) return;
             if (!routed && ThemedKey(key, e.KeyModifiers, pressed))
             {
                 e.Handled = true;

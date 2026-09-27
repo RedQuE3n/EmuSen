@@ -43,6 +43,11 @@ namespace EmuSen.Mistress.Input
                 PadKeyboard.Send(keyboard, button);
                 return;
             }
+            if (MenuTextPopup.OpenOver(root) is { } popup)
+            {
+                PadKeyboard.Send(popup, button);
+                return;
+            }
 
             if (window is IPadCapturing capturing && capturing.Capturing != PadCapture.None)
             {
@@ -318,7 +323,7 @@ namespace EmuSen.Mistress.Input
         // True while the router raises a key of its own, which the window must not take for the keyboard's (Q102).
         [ThreadStatic] internal static bool Raising;
 
-        private static void Key(InputElement target, Key key, KeyModifiers modifiers = KeyModifiers.None)
+        internal static void Key(InputElement target, Key key, KeyModifiers modifiers = KeyModifiers.None)
         {
             Raising = true;
             try

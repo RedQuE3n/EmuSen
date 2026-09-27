@@ -7,7 +7,7 @@ using EmuSen.Mistress.Input;
 namespace EmuSen.Mistress.Views
 {
     // ES-DE's default keyboard, with F4 for Escape's Start, steering the themed view as held pad buttons - see EmuSen_Settings_Reference.md §4.52.
-    public partial class MainWindow
+    public partial class MainWindow : IDeviceKeyboardHost
     {
         private readonly HashSet<UiButton> _themedKeys = new();
         private bool _keyboardSteering;
@@ -38,7 +38,7 @@ namespace EmuSen.Mistress.Views
             if (ThemedKeyButton(key) is not { } button) return false;
             if (!pressed) return _themedKeys.Remove(button);
             if ((modifiers & KeyModifiers.Alt) != 0) return false;
-            if (OnScreenKeyboard.OpenOver(this) is not null) return false;
+            if (TextEntryOpen) return false;
             if (!BigMenuOnScreen && (!ThemedLibraryShown || !LibraryView.IsVisible || OtherWindow() is not null)) return false;
             _themedKeys.Add(button);
             _keyboardSteering = true;
@@ -50,6 +50,12 @@ namespace EmuSen.Mistress.Views
         internal bool BigMenuOnScreen => _bigScreen && (_padMenuOpen || Sheets.Current is { } sheet && Sheets.DrawsMenu(sheet));
 
         private bool KeyHeld(UiButton button) => _themedKeys.Contains(button);
+
+        // Mistress's keyboard or the text popup is taking what is typed.
+        internal bool TextEntryOpen => OnScreenKeyboard.OpenOver(this) is not null || MenuTextPopup.OpenOver(this) is not null;
+
+        // A row chosen with Enter is being typed at from a keyboard; one chosen with a pad's button, from a pad (§4.79).
+        public KeyboardKind KeyboardFor(Avalonia.Controls.TextBox box) => DeviceKeyboard.ChooseNow(_appSettings.OnScreenKeyboard, padInUse: !KeyHeld(UiButton.Accept));
 
         // Polls once more after the last key is let go, so the navigator and the view see the release.
         private bool KeyboardSteers()

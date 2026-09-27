@@ -1138,6 +1138,13 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   - **Q45** (*Use Another Game's Cover…*) is built as a replacement that stands on its own.
   - **Q44** no longer applies: the fallback is not switched off after pass 8.
   - **Q40,** the embedded credentials, is unaffected.
+- **Q100–Q104, Q120–Q122 and Q130–Q132, decided 2026-09-27; every recommendation accepted:**
+  - **Stage 2's metadata editor (§34):** the look is approved. **Q100:** an ES-DE text popup is built with the rest of stage 2, and the on-screen keyboard's Shift and Done keys are widened meanwhile. **Q101:** Reset moves to a pad button (X), shown in the help bar. **Q102:** ES-DE's keyboard keys drive the big-screen menus as pad buttons do. **Q103:** the desktop editor keeps the Hide metadata fields switch. **Q104:** ES-DE's own metadata editor is captured and the proportions checked against it. Also: the Hide from Library question no longer names ES-DE, and long controller names use a short form.
+  - **Pass 14 (§36):** items 1 and 2 are approved. "1 GAMES" becomes "1 GAME", and the Bluetooth indicator draws its symbol rather than the letter B. **Q120:** the carousel's `selectedItemMargins` and `lineSpacing` come next, then `gamelistinfo`, then `animation`. **Q121:** Mistress shows its own word where ES-DE writes "unknown", through Pass 5's text lookup. **Q122:** ES-DE's default help bar is measured and drawn for a theme that has none.
+  - **Pass 10 (§37):** **Q130:** the Game Mode switch stays on until the hardware session shows Steam's dimming stacking with it. **Q131:** the overlay keeps the shelf's system name, as the launch screen does. **Q132:** "Render scanlines" is built with Pass 12's video screensaver.
+- **Q110–Q111, decided 2026-09-27 (§35):**
+  - **Q110:** a theme with no chosen variant draws its first selectable variant from the start, as Mistress already does. ES-DE draws the first declared variant until its settings are first opened; the two agree for all 66 listed themes.
+  - **Q111:** a bare relative path (no `./`) resolves against the working directory, as ES-DE's does, as built in §35.
 - **Q70–Q72, answered 2026-09-27 (§31):**
   - **Q70:** yes. The other value types are probed against ES-DE as the six refusals were: colours, whole numbers (Canvas's and Iconic's `3.5`, P173), strings, paths, and `capabilities.xml`'s `selectable` (P172). The number with an exponent (P170) goes in the same run. The loader then matches ES-DE rule by rule.
   - **Q71:** yes. A variant that states no `<selectable>` is treated as ES-DE treats it: not offered for selection. This is confirmed in Q70's run before it is built, since only one ES-DE observation supports it ("NONE DEFINED" for a lone variant).
@@ -1363,13 +1370,13 @@ partially parsed views of an unthemed system readable for inspection, and `IsThe
 | `<variant>`, `<aspectRatio>` or `<include>` inside `<view>`; a variant in a variant | error | unthemed | cited |
 | A view other than `system`, `gamelist` or `all`; a missing `name` | error | unthemed | cited ("mandatory") |
 | A property with no value | error | unthemed | cited (the log line in `THEMES.md`) |
-| A value in the wrong format (a pair of one number, a five-digit colour, `yes` for a boolean) | error | unthemed | cited ("sanitization for valid data format"); **superseded by §31 (2026-09-27)**: ES-DE reads FLOATs, pairs with a space and BOOLEANs leniently (`yes` is true), and refuses only a pair with no space |
+| A value in the wrong format (a pair of one number, a five-digit colour, `yes` for a boolean) | error | unthemed | cited ("sanitization for valid data format"); **superseded by §31 (2026-09-27)**: ES-DE reads FLOATs, pairs with a space and BOOLEANs leniently (`yes` is true), and refuses only a pair with no space; **and by §35**: whole numbers are never refused, and a colour only when it is not 6 or 8 characters long |
 | An undefined variable in a property | error | unthemed | cited ("a missing variable") |
 | A missing include written out | error | unthemed | cited |
 | An include loop | error | unthemed | chosen; ES-DE hangs |
-| An `imageType` naming an unknown type | error | that element is not rendered | cited |
+| An `imageType` naming an unknown type | error | that element is not rendered | cited; **superseded by §35 (2026-09-27)**: a warning, the system themed, as in ES-DE |
 | An `imageType` repeating a type | warning | the property is ignored | cited |
-| An enum value not in its list | warning | default | cited |
+| An enum value not in its list | warning | default | cited; since §35, compared untrimmed and case-sensitively, as ES-DE compares it |
 | An element or property in a view it does not support | warning | ignored | chosen |
 | A second primary element | warning | ignored | chosen |
 | A property empty once its variables are substituted | warning | ignored | chosen |
@@ -1388,6 +1395,7 @@ has a test that fixes the choice, so that a correction shows up as a failing tes
    declared", and was refined while building to skip a non-selectable first variant. For Art Book Next the two rules
    give the same answer.
 2. **A variant's `selectable` defaults to true.** It is documented as defaulting to true only for transition profiles.
+   **Superseded by §35.3 (2026-09-27):** ES-DE does not offer a variant without one, and reads the value by its own rule.
 3. **A variable is substituted when it is defined, not when it is used.** `THEMES.md` documents nesting and the global
    namespace, but not whether `<b>${a}</b>` follows a later redefinition of `a`. Only a theme that redefines a variable
    another variable names can tell the difference. Art Book Next does not.
@@ -1405,7 +1413,8 @@ has a test that fixes the choice, so that a correction shows up as a failing tes
 9. **"Can only be used if …" conditions are not enforced.** For example, `verticalAlignment` "can only be used if
    `container` is `false`", and Art Book Next sets both. The loader keeps the typed value, and whether it takes effect
    is the renderer's business.
-10. **A path with neither `./` nor `~`** is resolved from the file's folder.
+10. **A path with neither `./` nor `~`** is resolved from the file's folder. **Superseded by §35.2 (2026-09-27):** ES-DE
+    resolves it against its working directory, and so does the loader now.
 
 `THEMES.md` also contradicts itself twice. The textlist's `textHorizontalScrolling` is typed BOOLEAN, but its entry
 lists "valid values are `vertical` or `horizontal`". The loader types it as a boolean. The language example declares
@@ -4037,6 +4046,8 @@ player started (§17.14). Tests run headless in WiseMan, blast radius only, and 
   nothing between swaps, as P39 required of a still view, or it costs the battery it exists to save (P114).
 - *Cost.* 1.5–2 days; the video saver 0.5 more in Pass 12.
 - *What the player sees.* The view dims, or a slideshow of the library, after five idle minutes.
+- *Built 2026-09-27: §37. P114 failed on its first clause: ES-DE's own Dim and Black fade over about ten frames, so
+  Mistress draws their fades too, and nothing after; the slideshow draws only through its changes.*
 
 **Pass 11. The launch screen.**
 - *Scope.* ES-DE's launch screen and its five durations (inventory 10), after the resume question has been answered and
@@ -4257,7 +4268,7 @@ Written before any pass is built, to be retired in each pass's record.
 | P111 | 8 | Refreshing a found game whose files are unchanged costs one request per kind and under 1 KB received per kind, each request counted in `requeststoday` (P61) | Pass 8 |
 | P112 | 8 | Back covers, 3D boxes, physical media and fan art together raise a found game from 4.7 to 7.5–8.5 requests and add 0.9–1.5 MB, taking a found game from about 13 s to 20–28 s at 128 KB/s | Pass 8 |
 | P113 | 9 | One page of a median ScreenScraper manual (1.7 MB) renders at 1920×1200 in under 300 ms on the desktop and under 1 s on the handheld | Pass 9 |
-| P114 | 10 | Dim and Black draw at most one frame after they start, and the slideshow draws only at its swaps and their transitions (every 10 s by ES-DE's default) | Pass 10 |
+| P114 | 10 | Dim and Black draw at most one frame after they start, and the slideshow draws only at its swaps and their transitions (every 10 s by ES-DE's default) | Pass 10: failed on the first clause, held on the second (§37.3) |
 | P115 | 11 | ES-DE's launch screen at Normal lasts 1.5–3 s; Brief is 0.4–0.6 of that and Long 1.5–2.5 times it | Pass 11 |
 | P116 | 12 | ScreenScraper's `video-normalized` clips are H.264 in MP4, no larger than 640×480, and one decodes in under 5% of a Legion Go S core (P5, carried) | Pass 12 |
 | P117 | 12 | ES-DE starts a clip at the element's `delay` to within one frame at 60 Hz and fades it from black linearly over `fadeInTime` (1 s by default) to within 5% | Pass 12 |
@@ -6958,6 +6969,8 @@ rebuilt clean at the end.
 | P172 | ES-DE reads `selectable` in `capabilities.xml` by §31.2's first-character rule (`yes` selectable, `flase` not), where the loader warns and keeps its default | ES-DE is run on it |
 | P173 | ES-DE draws Canvas's and Iconic's game-list carousels with `itemsBeforeCenter` of `3.5`, reading it as 3 | ES-DE is run on them (Q70) |
 
+P170, P172 and P173 were retired in §35.4: P170 and P173 held, and P172 failed as a rule.
+
 ### 31.10 Not done
 
 - **Only the SNES game list was captured** for the 15 real themes. Their logs cover all five systems and the
@@ -7702,3 +7715,539 @@ code this branch changed, and not on a comparison.
 - **Q104, a capture of ES-DE's editor.** The layout follows the guide and §32's measurements of ES-DE's main menu. A
   capture of ES-DE's own editor at 1280×800, taken by someone running ES-DE, would let the title band, the subtitle and
   the button row be measured rather than assumed. Worth taking before the look is approved?
+
+## 35. Q70 and Q71: the other value types against ES-DE (2026-09-27)
+
+*Opened on the answers to Q70 and Q71 of 2026-09-27 (§10.1).* §31 matched the loader to ES-DE for FLOAT, NORMALIZED_PAIR,
+BOOLEAN and the XML itself, and left COLOR, UNSIGNED_INTEGER, STRING, PATH and `capabilities.xml`'s `selectable` as
+`THEMES.md` types them (§31.4, §31.10). This section runs ES-DE on those, retires P170, P172 and P173, and matches the
+loader rule by rule. The principle is §25.10's, as in §31: a theme ES-DE draws should not be one Mistress refuses, and a
+theme ES-DE refuses should not be one Mistress draws. The player's account is §4.73 of the settings reference. Q72 was
+answered "no" (§10.1): the warnings below go to the loader's diagnostics only, as §31's do, and nothing about them is
+shown to the player.
+
+**Sources.** ES-DE 3.4.1's behaviour, measured by running it, and `THEMES.md` where it speaks; never its source. All
+probe themes are synthetic and were written under `~/.cache/emusen/probe/q70/probe-themes/`. For P173, the XML of Canvas
+and Iconic that §25.8's survey had fetched was copied there, with three fonts stood in by a system font (ES-DE shuts
+down when a theme's font file is missing), and deleted afterwards. No theme file, image or XML entered the repository;
+the tests write their own XML.
+
+**Numbering.** Predictions in this section start at **P210** and questions at **Q110**.
+
+### 35.1 The setup
+
+- **ES-DE.** The downloaded AppImage under `~/.cache/emusen/bigpicture/esde/`, with a home of its own, `home-q70/`, and
+  §31.1's arguments (`--resolution 1280 800 --fullscreen-padding off --no-update-check --no-splash --debug`),
+  windowed. Other work ran ES-DE on the same machine that day, so every run held the shared lock
+  `esde/esde.lock`, waited for any other ES-DE window to close, and closed only the process tree it had started.
+- **What it could reach.** `ApplicationUpdaterFrequency` was `never`, the ScreenScraper account fields were empty, and
+  nothing asked it to scrape. Its ROM folder, `esde/q70-roms/`, held empty synthetic files: four per system for five
+  systems, twelve for the SNES, and one for each of 60 more systems, so that a probe theme could give every value a
+  system of its own. The real library was never named. `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT` admitted only §22.2's
+  uinput pad.
+- **The runner** is `~/.cache/emusen/probe/q70/esde_run70.py` (settings, launch, a capture by `ffmpeg -f x11grab`, pad
+  timelines, the log copied), wrapped by `run_locked.sh`. Every `es_log.txt` is kept in `probe/q70/logs/`.
+- **Three kinds of run, in two rounds.** *Refusal themes* (`q70-values1`, `q70-values2`) give each of 129 probe values
+  its own system folder, so a value that unthemes one system cannot hide another; the log then says, per system,
+  whether it loaded. *Visual themes* draw each value where it can be read back from a capture: a colour's box half over
+  white and half over black, from which RGB and alpha are solved; a row of badges whose icon spacing gives the number
+  read; a box whose left edge is its x; images whose colour says which file was found. *Capabilities themes* declare
+  variants and transitions profiles with each `selectable` value, and a pad timeline steps through UI Settings. The
+  second round's predictions were written into `PREDICTIONS-b.txt` before it ran.
+
+### 35.2 What ES-DE does, type by type
+
+Only a `ThemeData::parseElement()` or `parseIncludes()` error unthemes a system. Every other message below is logged by
+the element's component while it is drawn (`ImageComponent`, `TextComponent`, `BadgeComponent`), and the system stays
+themed whether the line says `Warn` or `Error`.
+
+| Type | ES-DE 3.4.1, measured | The rule it follows, as far as measured |
+|---|---|---|
+| COLOR | `#FF0000`, ` FF0000`, `FF0000 `, `F00`, `FF000`, `red`, `0`, `FFFFFFFFFF` and the listed X20s's `4c94ff6` unthemed the system; `GG0000`, `FF00ZZ`, `0xFF0000`, `-0000001`, `FF00FF 0` loaded. Read back: `GG0000` black, `FF00ZZ` and `FF00G0` green, `ffff00zz`, `0x00FF00`, `+0FF0000` and ` 00FF000` fully transparent, `-0000001` white, `0x0000FF` black, `0xFFFFFF` cyan; in the second round `0xFF00` green, ` FF000` `0FF000FF`, `-00001` white, `0x00FF` blue, `0X0000` black | the value **as written** must be 6 or 8 characters long, or the system is unthemed. It is then read as C's `strtoul` reads base 16: leading whitespace, a sign, a `0x` prefix, hexadecimal digits up to the first other character, none being 0; a minus negates modulo 2³². Six characters are shifted left by 8 with alpha `FF`; eight are RGBA as they stand. All nine second-round predictions held |
+| UNSIGNED_INTEGER | never an error, for any of 57 values. `3.5`, `3.9`, ` 3`, `+3`, `3abc`, `0x3`, `3 4` and `3,5` drew as 3; `1e1` as 1; `2.9` as 2; `abc`, `.5`, `-0`, `0x`, `08` and `09` as 0; `010` as 8, `011` as 9, `012` as 10, `0xA` as 10; `4294967298` and `-4294967294` as 2 | C's `strtoul` with base 0: `0x` is hexadecimal, a leading `0` octal, else decimal; leading whitespace and a sign are read, and the number ends at the first character that is not a digit of its base. The result is kept to 32 bits: ES-DE's own warning prints `-1` as `4294967295`. The octal reading was predicted before round two and held on all eight octal values |
+| … the badges' ranges | `itemsPerLine` and `lines` of 0, 11 and `4294967295` logged `BadgeComponent: Invalid theme configuration` and drew as the defaults (4 per line, 3 lines); 1 to 10 drew as written | a range `THEMES.md` does not state, 1–10, outside which the default applies. Measured on these two properties only |
+| FLOAT | `1e-1` at 0.1 and `5E-2` at 0.05 (P170). Also `0x1p-2` and `0x0.4p0` at 0.25, `0x0.8` at 0.5, `0.1e` at 0.1, `0.3.4` at 0.3, `0x` at 0. As opacity, `inf`, `INF`, `infinity` and `1e999` drew fully opaque; `-inf` and `-1e999` not at all; `nan` and `NAN` not at all | C's `strtod`: §31.2's leading-number rule, extended to hexadecimal floats with a binary exponent, `inf`, `infinity` and `nan`; an infinity is then clamped to the property's range |
+| STRING, an enumeration | `horizontalAlignment` `right` and `center` applied; `RIGHT`, `Right`, ` right`, `right `, `middle`, `LEFT` and `Left` drew as `left`, the default, each with a `Warn:` line. `metadata` ` name`, `Name`, `name ` and `nosuchfield` left the text's own text shown (`Error:` lines, system themed). A carousel's `type` of ` horizontal` warned | the value must equal one of the documented words exactly: case matters and nothing is trimmed |
+| STRING, a list | `imageType` `cover screenshot`, `cover, screenshot`, ` cover` and `cover ` drew the cover; `Cover`, `boxart`, `cover;screenshot`, `screenshot,boxart` and `cover,cover` drew nothing, with an `ImageComponent` `Error:` line; the other elements of the view were drawn | split at commas and whitespace; one unknown or repeated type hides the element, and does not untheme the system |
+| STRING, text | `  PADDED  `, `PADDED  ` and `  PADDED` drew with their spaces | kept as written |
+| PATH | from `theme.xml`: `./img/c.png`, `.\img\c.png`, `./img/./c.png`, `./../<theme>/img/c.png` and the absolute path found the theme's file; `img/c.png` found the file of that name in **ES-DE's working directory**, and `../<theme>/img/c.png` nothing; ` ./img/c.png`, `./img/c.png ` and `./IMG/C.PNG` nothing (a `Warn:` line); `~/q70.png` found the file in **ES-DE's `--home`**; `./img` (a folder) nothing, with an `ImageComponent` `Error:` line. From an included `sub/inc.xml`, `./img/c.png` and `${imgdir}c.png` (with `imgdir` = `./img/` defined in `theme.xml`) both found `sub/img/c.png` | `./` is the folder of the file the property is written in, after variables are substituted; `\` is a separator; nothing is trimmed; `~` is the home; any other relative path is left to the operating system, so it is the working directory's |
+| … an include | `inc.xml`, ` ./inc.xml `, `./inc.xml` followed by a newline, `./INC.XML` and a missing file unthemed the system; `.\inc.xml` loaded | the same resolution; a missing include written out is an error, as §12.3 had it |
+
+```
+Error:  ThemeData::parseElement(): ".../q70-values1-es-de/gbc/theme.xml": Invalid color property "#FF0000" (must be 6 or 8 characters in length) (system "gbc", theme "gbc")
+Error:  ThemeData::parseIncludes(): ".../q70-values2-es-de/msx2/theme.xml" -> "inc.xml" not found (resolved to "inc.xml") (system "msx2", theme "msx2")
+Warn:   TextComponent: Invalid theme configuration, property "horizontalAlignment" for element "t" defined as " right"
+Error:  ImageComponent: Invalid theme configuration, property "imageType" for element "i" defined as "boxart"
+Warn:   BadgeComponent: Invalid theme configuration, property "itemsPerLine" for element "b19" defined as "4294967295"
+```
+
+**The argument, separated from the mechanism.** As in §31.2, the table states rules that fit every value tried and
+makes no claim about ES-DE's implementation. That the readings behave as C's `strtoul` and `strtod` would is a
+description: it predicted the second round's values, which is what it is used for, but whether ES-DE calls
+those functions was not, and under §25's rule could not be, looked at. The COLOR length is counted in characters here;
+a value with a non-ASCII character was not tried (P210).
+
+**Negative results on method.** A COLOR that ES-DE draws fully transparent says nothing about its other three
+channels, so for `0xFF0000`, `ffff00zz` and the like only the alpha was measured; the tests state the channels the rule
+gives. The first badge probe used four lines in a small box, where the icon size is set by the height and eight per
+line looks like four; the second used one line in a wide box, where every value from 5 to 10 spaces the icons
+differently. The `lines` probe (round two) could not show the number of lines, because with one badge per line ES-DE
+laid the four badges out in one row whatever `lines` said (except 10); its log lines are the evidence for that range,
+and the picture is not. Canvas's own carousel is a wheel that runs off the screen, so its `3.5`, `3` and `4` copies are
+pixel-identical and do not tell 3 from 4; a synthetic `verticalWheel` with `1`, `1.5`, `1.9` and `2` does. A first
+Canvas run shut ES-DE down on a missing font file, and a second probe of menu closing produced no capture; both were
+repeated.
+
+### 35.3 `selectable`, and Q71 confirmed
+
+| Written | Offered, as a variant and as a transitions profile |
+|---|---|
+| `true`, `TRUE`, `yes`, ` yes`, `1`, `t`, `Y`, `x`, `2`, `on`, ` true `, a newline then `true`, ` false`, ` no`, a tab then `false`, and an empty or blank value | yes |
+| `false`, `False`, `FALSE`, `F`, `f`, `flase`, `no`, `NO`, `N`, `0`, `0.0` | no |
+| no `<selectable>` at all | a variant **no**; a transitions profile **yes** |
+
+The rule that fits: **not selectable when the first character is `0`, `f`, `F`, `n` or `N`; selectable otherwise.** It is
+not §31.2's BOOLEAN rule, which is true only for a first `t`, `T`, `y`, `Y` or `1`: under that rule ` true `, `x`, `2`,
+`on` and a blank value would be false, and ES-DE offered all five.
+
+**Q71 is confirmed.** A variant without `<selectable>` was not offered beside one with `true` (`aNone` and `bTrue`: only
+`bTrue` listed), nor between a `false` and a `true` (`fNone`), nor in two other probes (`vNone`, `zNone`); two variants without one gave
+**NONE DEFINED**, as §31.11's lone variant had. A transitions profile without one was offered in both probes that
+declared one.
+
+**Which variant is drawn.** An explicit `ThemeVariant` naming a variant that is not selectable is drawn (`eFalse`,
+`fNone`). With the setting empty or naming no declared variant, ES-DE drew the **first declared** variant, selectable or
+not (`aNone`, `eFalse`, `cNone`). Merely opening UI Settings and leaving it then saved the **first selectable** one: the
+view redrew as `bTrue`, and `es_settings.xml` read `ThemeVariant="bTrue"` afterwards. The loader keeps §12.4's first
+selectable (Q110).
+
+### 35.4 P170, P172 and P173 retired
+
+| # | Predicted (§31.9) | Measured | Verdict |
+|---|---|---|---|
+| P170 | ES-DE reads a FLOAT written with an exponent (`1e-1`, `5E-2`) as its value | `1e-1` drawn at x = 0.1 and `5E-2` at 0.05, pixel for pixel with `0.1` and `0.05` | **held** |
+| P172 | ES-DE reads `selectable` by §31.2's first-character rule (`yes` selectable, `flase` not) | the two named values held, but the rule did not: ` true `, `x`, `2`, `on` and a blank value are selectable, `f`, `n` and `0` first make it not | **failed** as a rule; §35.3's rule replaces it |
+| P173 | ES-DE draws Canvas's and Iconic's game-list carousels with `itemsBeforeCenter` of `3.5`, reading it as 3 | both drawn at 16:10, medium font size, with no parse error; the synthetic wheel drew `1.5` and `1.9` pixel-identical to `1` and unlike `2`, and `itemsPerLine` `3.5` drew as 3 | **held** |
+
+P172 was written as the lenient reading ES-DE had shown for element properties. The measurement shows that
+`capabilities.xml`'s one boolean is read by a different test, one that asks whether the value says no rather than
+whether it says yes; that it differs from the BOOLEAN rule is why §31's rule does not generalise to it.
+
+### 35.5 What changed in the loader
+
+- **`ThemeValueParser`** gained `EsdeColor`, `EsdeUInt`, and a C reading of numbers behind `EsdeFloat` that adds
+  hexadecimal floats, `inf`, `infinity` and `nan`. `Finite` turns a value ES-DE could not draw at a property with no
+  range, a `nan` or an infinite position, into 0; a range clamps an infinity first, as ES-DE's opacity showed.
+  `ResolvePath` no longer trims, and resolves a relative path without `./` against the working directory. The 0 for an
+  unbounded infinity is a choice: ES-DE's drawing of an infinite position was not measured, and a renderer cannot place one.
+- **`ThemeViewBuilder`** applies them to the value as written. A COLOR of another length stays an **error**, whose
+  message now says why ("which is not 6 or 8 characters long; ES-DE refuses such a colour too"); any other colour, whole
+  number or number that is not written plainly carries a **warning**, `LenientValue`, saying what it was read as. An
+  enumerated STRING is compared untrimmed. An unknown `imageType` is now a **warning**: the element is still not drawn,
+  but the system stays themed, where before it was unthemed.
+- **`ThemeCatalog`** gained `ValidRange`, a range `THEMES.md` does not state, set to 1–10 on the badges' `lines` and
+  `itemsPerLine`: outside it the default applies with a warning. It is kept apart from `Min` and `Max`, which remain
+  `THEMES.md`'s and are clamped, so `ThemeCatalogTests` still checks the catalogue against the document.
+- **`ThemeLoader`** reads an `<include>` untrimmed.
+- **`ThemeCapabilities`** reads `selectable` by §35.3's rule, with a `LenientValue` warning for anything but `true`,
+  `false`, `1` and `0`. A variant without one is not selectable; a transitions profile without one is.
+- **What did not change.** The default variant stays the first selectable one, else the first (§12.4, Q110). `~` stays
+  the player's home. A path naming a folder still counts as present. `gameCount`, `iterationCount` and the carousel's
+  counts keep `THEMES.md`'s clamping, since their ranges were not probed.
+
+§12.3's rows on a value in the wrong format and on an unknown `imageType`, and §12.4's items 2 and 10, are superseded
+by this section; they are kept, with a pointer, as the record of what stage (a) took from the document.
+
+### 35.6 Tests
+
+`ThemeValueRulesTests`, 184 cases, on synthetic XML written by the tests:
+
+| Rule | Test |
+|---|---|
+| a colour of 6 or 8 characters read as hexadecimal the C way, warned when not plain (26 values, each measured) | `A_colour_of_six_or_eight_characters_is_read_as_hexadecimal_the_C_way` |
+| any other length unthemes, and says why (13) | `A_colour_of_any_other_length_unthemes_the_system_as_in_ES_DE` |
+| a whole number: base from its prefix, 32 bits (34; `99999999999` was drawn only as out of range, and one value beyond 2⁶⁴ was not run, P211) | `A_whole_number_is_read_the_C_way_with_its_base_from_its_prefix_and_kept_to_32_bits` |
+| the badges' 1–10 | `Badge_lines_and_items_per_line_keep_1_to_10_and_reset_the_rest_to_the_default_with_a_warning` |
+| P173 on a carousel | `A_carousel_count_written_as_a_fraction_keeps_its_whole_part_and_the_system_themed` |
+| exponents, hexadecimal, an unbounded infinity (16) and a bounded one (14) | `A_float_reads_exponents_and_hexadecimal_and_an_unbounded_infinity_is_0`, `An_infinite_float_is_clamped_to_the_range_and_nan_draws_nothing` |
+| enumerations exact and untrimmed; metadata; text kept | `An_enumerated_string_must_match_exactly_and_untrimmed_or_the_default_applies`, `A_metadata_name_that_is_not_exact_leaves_the_text_shown`, `Text_keeps_its_spaces` |
+| an unknown `imageType` keeps the system themed | `An_unknown_imageType_hides_the_element_and_keeps_the_system_themed` |
+| paths and includes | `A_path_is_the_theme_folder_only_after_dot_slash_and_is_not_trimmed`, `An_include_is_read_untrimmed_and_a_bare_name_is_not_the_theme_folder` |
+| `selectable` (28 values), Q71, and no variant offered | `Selectable_is_false_only_when_its_first_character_is_0_f_or_n`, `A_variant_without_selectable_is_not_offered_and_a_profile_without_one_is`, `With_no_variant_offered_the_first_declared_is_drawn` |
+| **install**: `3.5`, `boxart` and `GG0000` install through `FakeThemeHosts`; `#FF0000` is refused with its reason and leaves no folder | `A_download_installs_where_ES_DE_reads_the_value_and_is_refused_where_it_does_not` |
+
+**The tests against the unchanged loader.** Run on WiseMan's loader first, 101 of the class's then 170 cases failed.
+Thirteen of them were the colour-length refusals, which the old loader refused as well: they failed only on the new
+message. The other 88 are behaviour the old loader did not have.
+
+`ThemeErrorTests` lost two rows of its wrong-format theory (`GGGGGG` for a colour, `-1` and `1.5` for `lines`), which
+ES-DE reads, and gained `#FF0000`; its `imageType` test now expects a warning and a themed system.
+`ThemeCapabilitiesTests`' default-variant test and `ThemeSettingsSheetTests`' synthetic theme now state
+`<selectable>true</selectable>` on the variants they expect offered, as every listed theme does (§35.7). After the
+change the theme classes (370 tests) and the `Mistress.BigPicture` namespace (674: 649 passed, 25 skipped tools)
+passed.
+
+### 35.7 The survey again
+
+`EMUSEN_THEME_SURVEY=analyse` on §25.8's XML, first with WiseMan's loader and then with this one (`survey-before-q70.json`,
+`survey-after-q70.json`):
+
+| | before | after |
+|---|---|---|
+| themes themed for all five systems | 66 of 66 | 66 of 66 |
+| themes with no loader error | 63 | **65** |
+| errors, by code | `BadFormat` 2 (Canvas, Iconic), `UndefinedVariable` 1 (Aura) | `UndefinedVariable` 1 |
+
+Only two rows changed, Canvas's and Iconic's: 20 `BadFormat` errors each became 20 `LenientValue` warnings, and every
+other count of theirs, `PathMissing` included (3,110 and 2,225), is the same, so no include or path of theirs resolves
+differently. **Neither lost an element**: their undrawn-element lists are unchanged, and `itemsBeforeCenter` and
+`itemsAfterCenter` now reach the carousel (they join the survey's list of properties the renderer does not yet draw,
+§25.8). The other 64 themes' rows are identical, byte for byte. A scan of the same XML found no include or path written
+without `./` or a variable, none with surrounding whitespace, and every one of the 544 `selectable` values `true`,
+`True` or `false`, so Q71 and the path rules change nothing for a listed theme.
+
+### 35.8 Mutants
+
+The runner is `~/.cache/emusen/probe/q70/mutate_q70.py`, its log `run-q70.log` and its verdicts `mutants-q70.txt`. Each
+mutant was built with `-m:2` and tested alone under `nice -n 10` against `ThemeValueRulesTests`, `ThemeEsdeRulesTests`,
+`ThemeErrorTests`, `ThemeLoaderTests`, `ThemeCapabilitiesTests` and `ThemeCatalogTests`. Before changing a file the
+runner writes it to a state file, restores and touches it in a `finally`, and on starting restores any file a cut-short
+run left mutated; the tree was rebuilt clean at the end.
+
+**31 mutants: 31 caught, none survived, none failed to build.**
+
+| Area | Mutants |
+|---|---|
+| COLOR | C1 length after trimming; C2 a non-hexadecimal character refuses; C3 no `0x`; C4 six digits not shifted; C5 a minus ignored; C6 leading whitespace not skipped |
+| UNSIGNED_INTEGER | U1 a leading 0 decimal; U2 no `0x`; U3 saturated rather than kept to 32 bits; U4 a minus ignored; U5 overflow past 2⁶⁴ wraps; U6 a leading 0 counted plain; U7 the badges' range ignored |
+| FLOAT | F1 no hexadecimal; F2 no `inf`; F3 `nan` kept; F4 an infinite pair kept; F5 no exponent (§31.8's M18, which survived there); F6 the binary exponent ignored |
+| STRING | S1 an enumeration trimmed; S2 its case ignored; S3 an unknown `imageType` an error again |
+| PATH | P1 trimmed; P2 a bare relative path is the file's folder; P3 an include trimmed; P4 backslashes kept |
+| `selectable` | B1 a variant without one offered; B2 a profile without one not offered; B3 read by the BOOLEAN rule; B4 trimmed first; B5 a blank value false |
+
+F5 is §31.8's surviving M18, now caught: P170's measurement made the exponent a rule a test may pin.
+
+### 35.9 Predictions
+
+| # | Prediction | Retired when |
+|---|---|---|
+| P210 | ES-DE counts a COLOR's length in bytes, so a six-character value holding one non-ASCII letter is refused, where the loader, counting characters, reads it | ES-DE is run on one |
+| P211 | ES-DE reads a whole number beyond 2⁶⁴ (`99999999999999999999`) as 4294967295, as the loader does; only values below 2⁶⁴ were run | ES-DE is run on one |
+| P212 | Other enumerated properties (`verticalAlignment`, `direction`, `stationary`, `letterCase`) follow §35.2's exact, untrimmed match, measured on three | ES-DE is run on them |
+| P213 | An unknown `imageType` on a `video` element hides it as it hides an `image`; only images were run | ES-DE is run on one |
+
+### 35.10 Not done
+
+- **Nothing ran on the handheld**, and Mistress drew none of the probe values; the tests check the loader's typed
+  values, and the survey counts loads.
+- **The ranges of other whole numbers** (`gameCount`, `iterationCount`, `gameselectorEntry`, the carousel's counts)
+  were not probed; they keep `THEMES.md`'s clamping. Only the badges' two were.
+- **A path naming a folder** counts as present in the loader; ES-DE logged an error for an image and drew nothing. Both
+  keep the system themed, and no listed theme writes one; not changed.
+- **`~` as ES-DE's `--home`**: ES-DE resolved `~` to its `--home` folder, which is the home only when none is given.
+  Mistress has no such argument, and keeps the player's home.
+- **Languages and `<transitions>` inside `<aspectRatio>` or `<language>`**, left by §31.10, were not taken up.
+
+### 35.11 Open questions
+
+- **Q110, the default variant.** With no variant chosen, ES-DE draws the first declared one until UI Settings is
+  opened, and the first selectable one after (§35.3). Mistress draws the first selectable one from the start.
+  **Recommendation:** keep it. The first-declared state lasts only until the settings are opened, and in the 66 listed
+  themes every first variant is selectable, so the two agree wherever a player could see a difference.
+- **Q111, a relative path without `./`.** ES-DE resolves it against its working directory, which depends on how it was
+  started; the loader now does the same with Mistress's. No listed theme writes one. **Recommendation:** keep matching
+  ES-DE, since a theme that works by accident in one frontend and not the other is the case §25.10 wants avoided.
+
+### 35.12 The broad run
+
+WiseMan had not moved since the branch was made (b0c6bf75), so the merge before the run was empty. One run of the
+Mistress filter, without `ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` and any GPU or Vulkan test,
+under `nice -n 10`: **1,295 tests, 1,261 passed, 33 skipped (the picture, survey and live tools), 1 failed, in 3 min
+52 s.** The failure is §31.12's order-dependent one of the headless platform's initialisation ("The calling thread
+cannot access this object"), this time in `FrameHandOffTests`, whose eight tests passed when run alone; it is not this
+branch's.
+
+## 37. Pass 10 built: the screensaver (2026-09-27)
+
+*Built on branch `bigpicture-pass10-screensaver`, from WiseMan at `b0c6bf75`, with LunaP's branch `pass10-screensaver`
+from `openemu-library` at `9872708`.* §21.3 planned Pass 10 as ES-DE's screensaver: Dim, Black and Slideshow, after an
+idle time, with its controls and "Start screensaver after", and Video left for Pass 12. Q34 was decided on 2026-09-26
+(§10.1): on everywhere, Dim until videos exist, and off in Game Mode if the hardware session finds Steam's dimming
+stacking with it. Decided 2026-09-27: that Game Mode switch is a setting, on by default, and the question stays open
+(Q130). P114 and P39 set the pass's rule: a screensaver draws nothing between its changes. The player's account is §4.75
+of the settings reference.
+
+**Sources.** ES-DE 3.4.1's behaviour, measured by running it, and its `USERGUIDE.md` ("Screensaver", "Screensaver
+settings", "Slideshow screensaver settings") where it speaks; never its source. The guide names the four types, the
+controls, the overlay's content, the fallback to Dim "if no game images are available", and the settings and their
+ranges. It gives no level, time, layout or image order; those are measured here. No file of ES-DE's entered the
+repository.
+
+**Numbering.** Predictions from **P230**, questions from **Q130**; both ranges were free on WiseMan when this began.
+
+### 37.1 The setup
+
+- **ES-DE.** The AppImage under `~/.cache/emusen/bigpicture/esde/`, with a home of its own, `home-screensaver/`. Each run:
+  - under the shared lock, `flock ~/.cache/emusen/bigpicture/esde/esde.lock`, so one ES-DE window exists at a time;
+  - `--home home-screensaver --resolution 1280 800 --fullscreen-padding off --no-update-check --no-splash --debug`,
+    windowed, and 1920×1200 for two runs;
+  - closed by the PIDs it started, and the run waits until they are gone before it gives the lock back.
+- **What it could reach.** `ApplicationUpdaterFrequency` `never`, the ScreenScraper fields empty, nothing scraped. The ROM
+  folder was `esde/screensaver-roms/`: ten empty `.sfc` files and three empty `.nes` files. The runner asserts that no
+  folder it names lies in the player's library. `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT` admitted only §22.2's uinput
+  pad.
+- **Media.** Pictures drawn for the probe (§33.1's `mkmedia.py`): each kind its own colour with its name on it, so a
+  capture shows which kind was chosen. One game had every kind, one every kind but miximages, and single games had only
+  a screenshot, a title screen, a cover, fan art, a marquee, a miximage or a 3D box; one had none. The NES games had
+  titlescreens and covers, covers and titlescreens, and covers, fan art, 3D boxes and marquees. Four games were
+  favourites (`gamelist.xml`). The custom folder `esde/screensaver-custom/` held four flat pictures of different
+  shapes (1600×400, 400×1200, 160×100, 1280×800) and one in a subfolder.
+- **The timer.** `ScreensaverTimer` 4000 ms for every run, written to `es_settings.xml` directly (the menu offers whole
+  minutes). One run set 0 and started the screensaver with X.
+- **Capture.** `ffmpeg -f x11grab` recordings of the window at 60 fps (fades) and 30 fps (slideshows, controls), and
+  single frames; the pad's presses are logged on the wall clock. Per-frame luma and change, and pixel reads of known
+  colours, are from `frames.py` and short scripts.
+- **The runner** is `~/.cache/emusen/probe/pass10/esde_run.py`, with `batch.py`, `pad2.py`, `mkmedia.py`, `flat.py`,
+  `frames.py` and `overlap.py`. Captures are under `probe/pass10/captures/`, logs under `probe/pass10/logs/`.
+- **The runs.** 24, in two batches after a first single run, and three repeats (below): 27 in all.
+- **A run that was not isolated, and the repeats.** The first two runs (`d01-dim`, `b01-black`) killed only the process
+  tree of the AppImage. After `b01` a process of ES-DE was still running while the lock had been given back: the next
+  ten starts found it and refused to run. The runner then learnt to record every ES-DE process present once its window
+  appears and to wait for all of them to end. `overlap.py` compares every run's log with the logs of the other
+  work using ES-DE that day: no other run started inside any of these. Dim, Black and the slideshow's change were then
+  recorded again (`d01r`, `b01r`, `s03r`) with the runner watching for any other ES-DE process during the run; there
+  was none, and the three repeats agree with the first recordings to within a frame.
+
+### 37.2 What ES-DE does
+
+**The timer.** The screensaver starts 4.0 s after the last press with the timer at 4000 ms, measured on seven runs
+(the first changed frame 4.0–4.1 s after the press, the recording's own start delay included). With a menu open it
+did not start in ten seconds. With the timer at 0 it did not start by itself in the 8.6 s after X had ended it.
+
+**Dim** (`d01`, `d01r`, `d03`, `d02` in the system view, `d05` at 1920×1200):
+- **The level.** Every pixel becomes the grey of its luminance at 0.4 of it: (40, 161, 61) became (45, 45, 45), where
+  0.4 × (0.299 R + 0.587 G + 0.114 B) = 45.4; (40, 80, 201) became (33, 33, 33); white 255 became 102 and 250 became
+  100; the background's 55 became 22. The whole window is dimmed, the help bar, the clock and the indicators included.
+- **The fade.** Both together: brightness and saturation fall along one ramp. The white text read 0.98, 0.94, 0.87,
+  0.81, 0.70, 0.64, 0.58, 0.48, 0.41 and 0.40 of itself frame by frame, a fall of 3.5–3.6 a second, so the fade takes
+  0.17 s (four recordings: 0.167–0.19 s). Halfway (brightness 0.71) the colours were halfway to grey.
+- **What is under it** holds still.
+
+**Black** (`b01`, `b01r`, `b02`): no desaturation, the picture darkened to black at 7.1–7.7 a second, 0.13–0.14 s.
+
+**Video with no videos** (`v01`): Dim, to the level. **A slideshow with no pictures** (`s16`, an empty media folder):
+Dim.
+
+**Waking.** Any button ends it in the next frame (60 fps recordings), with no fade out, and does nothing else: Down did
+not move the list, A in Dim did not start the game, Y did not toggle the favourite, right did not change the system,
+B did not leave the list (`d01`, `d04`, `s06`, `s17`). The next screensaver came 4 s after that press.
+
+**The slideshow** (`s01` at 10 s, `s02` at 2 s, `s03` and `s03r` at 4 s and 60 fps):
+- **The swaps** came exactly every 10.0 s (three swaps, 300 frames apart at 30 fps), and every 2 s and 4 s when set.
+- **Each change.** A cut to black in one frame, the old picture and overlay gone; the overlay then fades in and is
+  whole about 0.12 s after the cut; the picture is not drawn at all until 0.22–0.23 s after the cut, appears at about
+  half its brightness, and rises linearly to full at 0.45 s. Six changes read the same. Read as one ramp, the picture's
+  opacity is its time since the cut over 0.45 s, hidden for its first 0.22 s.
+- **The first showing** is the same: the view cuts to black, then the picture fades in.
+- **Which picture.** Over 20 changes at 2 s: the game with every kind showed its miximage; the one without miximages,
+  its screenshot; a game with a title screen and a cover, the title screen; a game with a cover, fan art, a 3D box and
+  a marquee, the cover. **Games with only fan art, only a marquee, only a 3D box, or nothing, never appeared.** The
+  order is miximage, screenshot, title screen, cover; the other kinds are not used.
+- **Which game.** Random, from both systems, and never the same game twice running in over 40 recorded changes (`s02`, `s04`,
+  `s10`, `s11`, `s12`).
+- **The fit.** Fitted whole and centred on black (a 4:3 picture at full height with bars at the sides); with *Stretch
+  images* on, stretched to the window (`s14`).
+- **The overlay** (`s01`, `s02`, `s14`, `s15`):
+  - a black box of alpha 0xAA (a picture's (200, 160, 30) under it read (67, 53, 10), white read 85), in the upper
+    left corner, at x 17 and y 16, 84 px high at 800 lines; at 1920×1200, 1.5 times each;
+  - two lines of white capitals: the game's name, then the system's `fullname` from `es_systems.xml`
+    (*NINTENDO SNES (SUPER NINTENDO)*); the capitals 19 px high, their tops 12 and 54 px below the box's top, the text
+    14 px in from the box's left;
+  - the box as wide as the longer line plus about 16 px;
+  - a filled white star after a favourite's name, about 25 px across, 13 px after the name, centred on the capitals;
+  - with *Only include favorite games* on, no star (`s10`), as the guide says;
+  - the face is the one ES-DE's menus use, which §32 matched with Barlow Condensed.
+- **Custom images** (`s11`, `s12`): the folder's pictures, at random and never twice running, with no overlay; the
+  subfolder's only with *recursive search* on; each fitted whole (the 160×100 picture scaled up to the window).
+- **The controls** (`s04`, `s05`, `s06`, on by default):
+  - right and left: an immediate change to another game, with the same cut and fade, and the next swap 10 s after;
+  - A: the gamelist behind moved to the game shown, and the game started through the launch screen, 3.017 s after the
+    press (§33's Normal);
+  - Y: the screensaver ended and the gamelist showed that game selected;
+  - B: the screensaver ended, nothing else;
+  - with the controls off (`s17`), right, A and Y only ended it.
+- **X in the system view** (`x01`, timer 0): the slideshow started at once; X while it showed ended it. The system view's
+  help bar names X *Screensaver*.
+
+### 37.3 P114 retired
+
+P114 predicted that Dim and Black draw at most one frame after they start, and that the slideshow draws only at its
+swaps and their transitions.
+- **The first clause failed, for ES-DE itself.** ES-DE fades Dim in over 0.17 s and Black over 0.14 s: ten and eight or
+  nine frames at 60 Hz. The prediction assumed a cut. Mistress follows ES-DE, so it draws those frames: **11 for Dim
+  and 9 for Black** in the harness's 16 ms polls, then **0 in the 610 s after**, and the themed view beneath 0 as well.
+- **The second clause held.** Each change draws through the overlay's fade (to 117 ms) and the picture's (217–450 ms),
+  with one wake at 217 ms between them: **23 or 24 frames a change, and 0 in the 9.54 s to the next**, over six changes.
+
+The rule the pass was meant to keep, nothing drawn while nothing changes, holds. What failed is the belief that the
+holding is all there is.
+
+### 37.4 What was built
+
+- **LunaP** (its §184), on its branch `pass10-screensaver`:
+  - `DimLayer`, which greys what is beneath it by the renderer's own saturation blend mode and darkens it with a black
+    fill, so nothing beneath is captured or resampled. In Avalonia 12.1 the blend mode reaches images and not fills, so
+    the grey it blends is a 2×2 constant image; a grey fill drew the grey itself. The luma is the blend mode's
+    (0.3, 0.59, 0.11), within one level of ES-DE's;
+  - `CrossFadeImage`, two `FittedImage`s at high-quality sampling, the new one faded in over the old or over nothing.
+- **`Screensaver`** (Mistress, `BigPicture/Screensaver.cs`), a panel of a `DimLayer`, a black fill, a `CrossFadeImage` and
+  the overlay (a box, two `FontText` lines in the menus' face, and a star). It holds §37.2's levels, times and
+  proportions, and answers when it next changes (`NextChange`): now while a fade runs, the picture's first showing
+  while only that is awaited, and never once it is still.
+- **`MainWindow.Screensaver.cs`**:
+  - **The idle clock** is the interface clock (`UiClock`), which tests move. Each pad poll (`PadTick`, every 16 ms)
+    reads every button; anything held, any key, any pointer movement or press, and any moment when it may not start,
+    moves the idle time to now. The poll runs whether or not a pad is connected.
+  - **It may start** in big picture (a big-screen session or F10's) with the library on screen and no game, pad menu,
+    sheet, on-screen keyboard, launch screen or other active window, and, with the Game Mode switch off, not in a
+    gamescope session.
+  - **Frames.** A frame is asked for only while it changes; otherwise one `DispatcherTimer` waits for the next change or
+    swap, and with nothing to come nothing is scheduled. The pad poll steps it too, so a test's clock reaches it. While
+    it shows, the themed view's own scheduling (§15.7) is off and its frame does nothing.
+  - **Input.** The press that wakes it is consumed, and the button stays consumed until it is let go (the pad
+    navigator's `Forget`, as the launch screen does). A key is consumed before anything else reads it.
+  - **The slideshow's pictures** come from the library's sources in §4.60's order (`MediaSources.Locate`), each game's
+    first of miximage, screenshot, titlescreen and cover. A game is looked up only when it is drawn at random, and one
+    with none of the four is dropped from that showing's list, so a large library costs one lookup per shown game.
+  - **The controls** call the themed view's new `ShowGame` (its system's gamelist, in the folder the game sits in, with
+    it selected) and the start path of §33 (`StartGameAsync` with the game, so the resume question and the launch
+    screen come first).
+- **X.** `UiButton` gains `Screensaver`, the pad's West button and the keyboard's Delete. The system view's help bar
+  gains ES-DE's *Screensaver* entry on X while the controls are on (`HelpContext.Screensaver`).
+- **The settings.** `BigPictureInterface` gains ES-DE's eleven screensaver and slideshow keys that this pass uses and
+  Mistress's `ScreensaverInGameMode`; the Interface tab gains a *Screensaver* group (§4.75).
+- **`ThemedSession`** sets the timer to 0, so the older themed tests are never interrupted.
+
+### 37.5 Where Mistress differs, on purpose or by necessity
+
+- **The default type** is Dim, not ES-DE's Video (Q34), which with no videos shows Dim anyway.
+- **The system name** in the overlay is the shelf's full name (*Super Nintendo*), as on the launch screen (§33.5), not
+  ES-DE's `fullname` (Q131).
+- **The star** is Mistress's own five-pointed path, of ES-DE's size and place.
+- **A pointer** moving or pressing counts as activity, and a press wakes it; ES-DE's pointer was not tried.
+- **Delete** is X on the keyboard, as ES-DE's default keyboard map gives it; ES-DE's keyboard was not tried.
+- **The timer's slider** offers whole minutes 0–30, as ES-DE's menu; a value set in milliseconds by hand is kept but
+  shows rounded down.
+- **Not offered:** *Render scanlines*, `%ESPATH%` in the custom folder, and every Video setting.
+- **The fades** follow ES-DE's measured lengths as straight ramps; ES-DE's first frame or two of a fade are a little
+  slower than the rest (0.98, 0.94 before steps of about 0.06), which Mistress does not copy.
+- **The picture's hidden 0.22 s** is copied as measured. Whether ES-DE hides it on purpose or is loading the picture
+  in that time is not known; it was the same for a 600×800 cover and a 1920×1080 picture, and on every change.
+
+### 37.6 Tests
+
+`ScreensaverTests`, 28 cases (with the theories' rows), headless on WiseMan's `PadDriver` with the clock the test moves
+(§4.75 lists them). **The frame counts:**
+- Dim: 11 frames through its 167 ms fade, then 0 in 610 s; Black 9, then 0; the themed view 0 throughout.
+- The slideshow: 23–24 frames through each of six changes, 0 in the 9.54 s after each, the themed view 0.
+- A theme with scrolling text: the view asks for frames before; while the screensaver shows it asks for none and draws
+  none in 30 s; once woken it asks again.
+
+**Pixel cases:** every sampled pixel of Dim within 1 level of 0.4 times its luma at 1280×800 (4,267 coloured samples)
+and 1920×1200 (9,095), Black all black; the overlay's box at 17, 16, 84 px high at 800 lines and 1.5 times each at 1200,
+its colour a third of the picture's, white text inside it and the picture's own colour just outside; a 4:3 picture's
+black bar and the stretch filling it.
+
+LunaP's `ScreensaverPieceTests`, six cases, are LunaP's §184.3.
+
+**Existing tests.** The broad run (§37.11) covers the pad's new button and the help entry. No existing test changed
+except the fixtures: `ThemedSession`'s timer and `PadDriver.Press` for the new button.
+
+### 37.7 Mutants
+
+The runner is `~/.cache/emusen/probe/pass10/mutate_pass10.py`, its verdicts `mutants-pass10.txt` and
+`mutants-pass10-rerun.txt`.
+- Each mutant was built with `-m:2` and tested alone under `nice -n 10`: WiseMan's against `ScreensaverTests`, LunaP's
+  against `ScreensaverPieceTests`.
+- Before changing a file the runner writes `mutant-state.json` (the file and a copy), restores it in a `finally` and
+  touches it, and on starting restores any file a cut-short run left mutated. Both trees were rebuilt clean at the end.
+
+**44 mutants: 40 caught on the first round, 4 survived, none failed to build.** Two survivors were weak tests, fixed and
+then caught; two are equivalent. Each mutant took about 15 s.
+
+| Area | Mutants (caught unless marked) |
+|---|---|
+| Timing and levels | T1 Dim's fade 300 ms; T2 Black's 300 ms; T3 Dim at 0.5; T4 the picture from the cut; T5 its fade 300 ms; T6 the overlay at once; L1 Dim not greying; L2 Black greying; L3 the box at 0x80; L4 the box 30 px in; L5 the stretch ignored |
+| Starting | I1 a poll late; I2 a held button not counted; I3 under the pad menu; **I4 under a sheet (survived: equivalent)**; I5 the Game Mode switch ignored; I6 a key not counted; I7 0 not never; **I8 under a game (survived: equivalent)** |
+| Waking | W1 the waking button acting once let go; **W2 the waking key passed on (survived, then caught)** |
+| Frames | F1 the slideshow always moving; F2 Dim asking for frames while it holds; **F3 the view scheduled under it (survived, then caught)**; F4 the view drawn under it |
+| The slideshow | C1 screenshots before miximages; C2 the same game twice; C3 favourites only ignored; C4 the star among favourites only; C5 the overlay switch ignored; C6 subfolders always; C7 Video as Black |
+| Controls | K1 the switch ignored; K2 right not changing; K3 Y not going to the game; K4 A without the launch screen; K5 X from a gamelist; K6 no help entry |
+| Other | X1 the window's close leaving its timer; S1 the timer stored in seconds |
+| LunaP | D1 the saturation as a fill; D2 the black at `Brightness`; D3 `Show` keeping the old picture; D4 `Progress` not clamped |
+
+- **W2 survived** because the only key the test woke it with was Down: passed on, it reached the themed view as a held
+  button, and the button-held-after-waking rule consumed it anyway. The test now wakes it with F10 as well, which passed
+  on would leave big picture; caught on the rerun.
+- **F3 survived** because the synthetic theme at rest has nothing to schedule, so a view still scheduled under the
+  screensaver asked for nothing either. The new case uses a theme with scrolling text; caught on the rerun.
+- **I4 and I8 are equivalent.** A presented sheet is also the window's `OtherWindow()`, and a game on screen hides the
+  library view, so each removed condition is implied by one that remains. Both are kept as the reader's statement of
+  where it may not start.
+
+### 37.8 Pictures
+
+`ScreensaverPictureTool` (with `EMUSEN_BIGPICTURE_PNG=1`) writes to `~/.cache/emusen/bigpicture/png/pass10/`, beside
+ES-DE's captures in `~/.cache/emusen/probe/pass10/captures/`. Every picture was looked at. At 1280×800 and 1920×1200:
+- the view before;
+- Dim at 0, 50, 100, 167 and 5,000 ms; Black at 0, 70 and 140 ms;
+- the slideshow at 0, 60, 117, 200, 217, 300, 450, 5,000, 10,000 and 10,500 ms (a favourite with its star at 10.5 s);
+- the slideshow without the overlay, and stretched;
+
+and the Interface tab's *Screensaver* rows at 1280×800, in two pictures.
+
+Set beside ES-DE's frames at the same sizes, the overlay's box, lines and star fall in the same places at the same
+sizes. The first letter's capitals start at x 32 and row 28 at 1280×800 (ES-DE: 31 and 28) and the second line ends
+on row 88 (ES-DE: 88); at 1920×1200, x 48, row 42 and row 133 (ES-DE: 47, 42, 135), and the box is 24 px down and
+126 high, ES-DE's own. The first round of pictures showed
+the names cut short with an ellipsis: the lines were measured with the width the previous layout had given them, so a
+longer name never widened its box. The lines now measure to their text, and the pictures were taken again.
+
+### 37.9 Predictions
+
+Written after ES-DE was measured and before any of this was run where it is not yet.
+
+| # | Prediction | Found, or retired when | Verdict |
+|---|---|---|---|
+| P230 | In Game Mode on the handheld, Steam's own dimming starts over a big-picture window that draws nothing, within its own idle time, and stacks with Dim (the screen darker than 0.4) | the hardware session | open |
+| P231 | On the desktop's real window, a held Dim draws no frame in 60 s by the compositor's own count, as the harness's count says | a real window with a frame counter | open |
+| P232 | ES-DE's picture is hidden for 0.22 s whatever its size, because the hiding is part of the fade and not its loading: a 4000×3000 picture shows the same timing | one more ES-DE run | open |
+
+### 37.10 Not done
+
+- **Nothing ran on the handheld**, in Game Mode or out of it (P230, Q130), and no real pad was used.
+- **Video** and its settings wait for Pass 12. *Render scanlines* is not built.
+- **ES-DE's pointer and keyboard** were not tried with its screensaver.
+- **The desktop's own library** outside big picture has none, as ES-DE's desktop has no such view.
+- **A real window's frame count** (P231): the counts above are the frames Mistress asks for, which in the headless
+  harness is what is drawn.
+
+### 37.11 Open questions
+
+- **Q130, the Game Mode switch.** Q34's condition, Steam's dimming stacking with Mistress's, is not yet measured.
+  **Recommendation:** keep *In Game Mode* on until the hardware session shows the two stacking (P230); then turn the
+  default off.
+- **Q131, the system's name in the overlay.** ES-DE writes its `es_systems.xml` full name (*Nintendo SNES (Super
+  Nintendo)*); Mistress the shelf's (*Super Nintendo*), as on its launch screen. **Recommendation:** keep the shelf's,
+  so the two screens agree.
+- **Q132, render scanlines.** ES-DE's slideshow can draw scanlines over its pictures (off by default). **Recommendation:**
+  build it with the screen filters' CRT scanline pass when Pass 12 builds the video screensaver's, which has the same
+  option on by default.
+
+### 37.12 The broad run
+
+After merging WiseMan (§35, the value types), one run of the Mistress filter, without `ShaderSettingsWindowTests`,
+`ShaderBrowseBench`, `SceneGpuBench` and any GPU or Vulkan test, under `nice -n 10`: **1,324 tests, 1,290 passed, 34
+skipped (the picture, survey and live tools), 0 failed, in 3 min 48 s.** §35.12's order-dependent failure of the
+headless platform's initialisation did not recur in this order. The big-picture tests alone (516, the GPU ones and the
+benches left out) had passed before the merge, with the pad's new button and the system view's new help entry.

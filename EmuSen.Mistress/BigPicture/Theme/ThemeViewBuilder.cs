@@ -137,6 +137,8 @@ namespace EmuSen.Mistress.BigPicture.Theme
         {
             ThemePropertyType.NormalizedPair => "pair of numbers",
             ThemePropertyType.Boolean => "true or false",
+            ThemePropertyType.UnsignedInteger => "whole number",
+            ThemePropertyType.Color => "hexadecimal colour",
             _ => "number",
         };
 
@@ -150,9 +152,6 @@ namespace EmuSen.Mistress.BigPicture.Theme
         private ThemeValue? Parse(ThemePropertySpec spec, RawProperty raw, ThemeDiagnostics diagnostics, ref bool render)
         {
             string text = raw.Text.Trim();
-            void BadFormat(string expected) => diagnostics.Add(ThemeSeverity.Error, ThemeDiagnosticCode.BadFormat, raw.File, raw.Line,
-                $"<{spec.Name}> of {Spec.Type} \"{Name}\" is \"{text}\", not {expected}");
-
             void ReadAs(string what) => diagnostics.Add(ThemeSeverity.Warning, ThemeDiagnosticCode.LenientValue, raw.File, raw.Line,
                 $"<{spec.Name}> of {Spec.Type} \"{Name}\" is \"{raw.Text}\", not a plain {LowerName(spec.Type)}; it is read as {what}, as ES-DE reads it");
 
@@ -166,7 +165,8 @@ namespace EmuSen.Mistress.BigPicture.Theme
                         return null;
                     }
                     if (!pairExact) ReadAs(FormattableString.Invariant($"{pair.X} {pair.Y}"));
-                    return new PairValue(ThemeValueParser.ClampPair(pair, spec));
+                    NormalizedPair clamped = ThemeValueParser.ClampPair(pair, spec);
+                    return new PairValue(new NormalizedPair(ThemeValueParser.Finite(clamped.X), ThemeValueParser.Finite(clamped.Y)));
                 case ThemePropertyType.Path:
                     return new PathValue(ResolvePath(raw, diagnostics));
                 case ThemePropertyType.Boolean:
@@ -174,23 +174,36 @@ namespace EmuSen.Mistress.BigPicture.Theme
                     if (!boolExact) ReadAs(b ? "true" : "false");
                     return new BoolValue(b);
                 case ThemePropertyType.Color:
-                    if (!ThemeColor.TryParse(text, out ThemeColor color)) { BadFormat("a 6 or 8 digit colour"); return null; }
+                    if (!ThemeValueParser.EsdeColor(raw.Text, out ThemeColor color, out bool colorExact))
+                    {
+                        diagnostics.Add(ThemeSeverity.Error, ThemeDiagnosticCode.BadFormat, raw.File, raw.Line,
+                            $"<{spec.Name}> of {Spec.Type} \"{Name}\" is \"{raw.Text}\", which is not 6 or 8 characters long; ES-DE refuses such a colour too");
+                        return null;
+                    }
+                    if (!colorExact) ReadAs(color.ToString());
                     return new ColorValue(color);
                 case ThemePropertyType.UnsignedInteger:
-                    if (!uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out uint u)) { BadFormat("an unsigned integer"); return null; }
-                    return new UIntValue((uint)ThemeValueParser.Clamp(u, spec.Min, spec.Max));
+                    uint u = ThemeValueParser.EsdeUInt(raw.Text, out bool uintExact);
+                    if (!uintExact) ReadAs(u.ToString(CultureInfo.InvariantCulture));
+                    if (spec.ValidRange is { } valid && (u < valid.Min || u > valid.Max))
+                    {
+                        diagnostics.Add(ThemeSeverity.Warning, ThemeDiagnosticCode.InvalidValue, raw.File, raw.Line,
+                            $"<{spec.Name}> of {Spec.Type} \"{Name}\" is {u}, outside {valid.Min}-{valid.Max}; the default applies, as in ES-DE");
+                        return null;
+                    }
+                    return new UIntValue(ThemeValueParser.ClampUInt(u, spec.Min, spec.Max));
                 case ThemePropertyType.Float:
                     float f = ThemeValueParser.EsdeFloat(raw.Text, out bool floatExact);
                     if (!floatExact) ReadAs(f.ToString(CultureInfo.InvariantCulture));
-                    return new FloatValue(ThemeValueParser.Clamp(f, spec.Min, spec.Max));
+                    return new FloatValue(ThemeValueParser.Finite(ThemeValueParser.Clamp(f, spec.Min, spec.Max)));
             }
 
             switch (spec.Shape)
             {
                 case ThemeValueShape.Enum:
-                    if (spec.Values.Contains(text)) return new StringValue(text);
+                    if (spec.Values.Contains(raw.Text)) return new StringValue(raw.Text);
                     diagnostics.Add(ThemeSeverity.Warning, ThemeDiagnosticCode.InvalidValue, raw.File, raw.Line,
-                        $"<{spec.Name}> of {Spec.Type} \"{Name}\" is \"{text}\", not one of {string.Join(", ", spec.Values)}; the default applies");
+                        $"<{spec.Name}> of {Spec.Type} \"{Name}\" is \"{raw.Text}\", not exactly one of {string.Join(", ", spec.Values)}; the default applies, as in ES-DE");
                     return null;
                 case ThemeValueShape.List:
                     return ParseList(spec, raw, text, diagnostics, ref render);
@@ -199,7 +212,7 @@ namespace EmuSen.Mistress.BigPicture.Theme
             }
         }
 
-        // imageType is strict: an unknown type stops the element rendering, a repeated one drops the property - see EmuSen_BigPicture.md §12.3.
+        // An unknown imageType stops the element rendering, with a warning, as in ES-DE; a repeated one drops the property - see EmuSen_BigPicture.md §35.2.
         private ThemeValue? ParseList(ThemePropertySpec spec, RawProperty raw, string text, ThemeDiagnostics diagnostics, ref bool render)
         {
             IReadOnlyList<string> items = ThemeLists.Split(text);
@@ -209,8 +222,8 @@ namespace EmuSen.Mistress.BigPicture.Theme
             {
                 if (imageType)
                 {
-                    diagnostics.Add(ThemeSeverity.Error, ThemeDiagnosticCode.InvalidImageType, raw.File, raw.Line,
-                        $"<imageType> of {Spec.Type} \"{Name}\" names {string.Join(", ", invalid)}; the element is not rendered");
+                    diagnostics.Add(ThemeSeverity.Warning, ThemeDiagnosticCode.InvalidImageType, raw.File, raw.Line,
+                        $"<imageType> of {Spec.Type} \"{Name}\" names {string.Join(", ", invalid)}; the element is not rendered, as in ES-DE, and the system stays themed");
                     render = false;
                     return null;
                 }
@@ -241,7 +254,7 @@ namespace EmuSen.Mistress.BigPicture.Theme
             bool exists = File.Exists(absolute) || Directory.Exists(absolute);
             if (!exists)
                 diagnostics.Add(raw.FromVariable ? ThemeSeverity.Debug : ThemeSeverity.Warning, ThemeDiagnosticCode.PathMissing, raw.File, raw.Line,
-                    $"\"{raw.Text.Trim()}\" not found (resolved to {absolute})");
+                    $"\"{raw.Text}\" not found (resolved to {absolute})");
             return new ThemePath(raw.Text.Trim(), absolute, raw.FromVariable, exists);
         }
 

@@ -2617,8 +2617,9 @@ buttons: the arrows, Enter for A, Backspace for B, F4 for Start (below), F1 for 
 Home and End for the triggers, F2 and F3 for the stick clicks. `PadHeld` reads them beside every pad, so the navigator's
 repeats, the view's own held-direction repeats (§4.52) and the help bar behave as for a pad, and `PadTick` polls while
 a key is held and once after the last is let go, with or without a controller. A key let go is always released, even
-after the view it was pressed on has gone. Delete (ES-DE's X) is not mapped, because West is kept for the media viewer
-(Q32).
+after the view it was pressed on has gone. Delete (ES-DE's X) was left unmapped at first, because West is kept for the
+media viewer (Q32). Since 2026-09-27 West and Delete start the screensaver from the system view, as ES-DE's X does there
+(§4.75); in a game list they still do nothing, and stay the media viewer's.
 
 **Escape is left out on purpose, and F4 stands in for it.** ES-DE's Escape is Start, its main menu. Mistress's Escape
 already leaves big picture for the desktop when nothing else is on screen, and returns to a suspended game otherwise
@@ -4092,6 +4093,7 @@ ES-DE's `es_settings.xml` spells the values where it has them. Nothing here is p
 | On-Screen Help | `DisplayHelp` | on | the theme's `helpsystem` elements drawn |
 | System Status | `StatusBluetooth`, `StatusWifi`, `StatusBattery`, `StatusBatteryPercentage` | all on | each indicator of the theme's `systemstatus` elements |
 | Launch Screen Duration | `LaunchScreenDuration` | `normal`, ES-DE's | *since 2026-09-27:* how long the launch screen shows before a game starts; §4.71 |
+| Screensaver (a group of eleven rows) | `ScreensaverTimer`, `ScreensaverType` and the rest | 5 minutes, Dim | *since 2026-09-27:* when the screensaver starts, which, its controls and its slideshow; §4.75 |
 
 **Quick system select.** ES-DE's six choices, with its documented meanings (UG "UI settings"):
 - *Left/right or shoulders* and *Left/right or triggers*: left and right change the system in a game list whose primary
@@ -4419,8 +4421,9 @@ names its reason, and the browser shows it after "The download is not a theme th
 **What it does not do.**
 - **Colours, whole numbers, words and paths** are read as strictly as before; ES-DE was not run on them (§31 Q70). Two
   listed themes (Canvas, Iconic) write `3.5` where a whole number belongs, and lose that one property's element in one
-  variant; both still load.
-- **`capabilities.xml`'s own true-or-false values** (`selectable`) are read as before.
+  variant; both still load. *Since §4.73 (2026-09-27), these are read as ES-DE reads them too.*
+- **`capabilities.xml`'s own true-or-false values** (`selectable`) are read as before. *Since §4.73, as ES-DE reads
+  them.*
 - **Nothing is shown to the player** about a theme's warnings; they are for theme authors, in the loader's diagnostics
   (§31 Q72).
 - Nothing ran on the handheld; the handheld's build that refused Artflix (Revisited) and CarAlt predates this.
@@ -4846,3 +4849,173 @@ the pad routes included, passed unchanged.
 - **The settings sheets, the list screen for an option row, and the Menu opening animation switch** are the rest of
   stage 2 (§32.8), not yet built.
 - Nothing ran on the handheld or with a real pad, and ES-DE was not run for this section.
+
+### 4.73 Big picture: colours, whole numbers, words, paths and variants, as ES-DE reads them (2026-09-27)
+
+Q70 and Q71 of `EmuSen_BigPicture.md`, answered on 2026-09-27: run ES-DE on the value types §4.68 left strict, and
+match what it does. §35 of that plan is the record (the runs of ES-DE 3.4.1, the rules, the tests, the mutants and the
+survey). This section continues §4.68 and amends two of its "What it does not do" items. The section is numbered 4.73
+because §4.72 is another pass's. There is no setting: as in §4.68, the change is in how a theme is read, which is the
+same in big-screen sessions, in big picture on the desktop (§4.54), in Theme Settings (§4.53) and in the theme browser
+(§4.62).
+
+**What a player meets.** Canvas and Iconic, which write `3.5` where a whole number belongs, now load for every console
+with no error, and that setting is read as 3 (big picture does not yet use a carousel's counts, §25.8 of the plan). Of the 66 themes on ES-DE's list, 65 now load with no
+error, against 63; the one left is Aura's undefined variable, as before. No listed theme loads differently otherwise.
+A theme that names an unknown picture kind for an image (`boxart`) no longer makes that console fall back to EmuSen's
+own look: the image is left out, as ES-DE leaves it out, and the rest of the view is drawn.
+
+**How a value is read**, as ES-DE 3.4.1 was measured to read it:
+
+| A theme writes | It means | Before |
+|---|---|---|
+| a colour of 6 or 8 characters that are not all hexadecimal digits, `GG0000`, `0xFF0000`, `FF00FF 0` | read as far as it is hexadecimal, as ES-DE reads it: `GG0000` is black, `FF00ZZ` green, `0x00FF00` transparent | refused |
+| a colour of any other length, `#FF0000`, `F00`, ` FF0000` with its space | **still refused**, as ES-DE refuses it: that console shows EmuSen's own look, and the browser will not install the theme | refused |
+| a whole number written otherwise, `3.5`, `+3`, `3abc`, `0x3`, `abc` | the number at its start: 3, 3, 3, 3 and 0; `0x` begins a hexadecimal one, and a leading `0` an octal one (`010` is 8), as in ES-DE | refused |
+| a negative whole number, `-1` | a very large one, 4294967295, as in ES-DE; where the property has a range it is then held to it | refused |
+| badges' `lines` or `itemsPerLine` of 0, or above 10 | the default (3 lines, 4 per line), as in ES-DE | refused, or used as written |
+| a number in hexadecimal, `0x1p-2`, or `inf`, `nan` | 0.25; `inf` held to the property's range (opacity 1); `nan`, and an infinite value where there is no range, 0 | 0 |
+| a word with a different case or a space, `Right`, ` right` | not that word: the default applies, as in ES-DE | ` right` was read as `right`; `Right` as now |
+| a picture kind ES-DE does not know, `boxart`, `Cover` | that image is not drawn; the console stays themed | the console unthemed |
+| a path with a space before or after it | not found, as in ES-DE | the space ignored |
+| a path without `./`, `img/c.png` | relative to the folder Mistress was started in, as ES-DE resolves it against its own; not the theme's folder | the theme's folder |
+| an include written either of those ways | not found, so the console is unthemed, as in ES-DE | found |
+
+**Variants and transitions.** A theme's variant or transitions profile is offered in Theme Settings unless its
+`<selectable>` starts with `0`, `f`, `F`, `n` or `N`: `false`, `no` and `0` hide it, and anything else, a blank value
+included, offers it. A **variant that says nothing** about `selectable` is **not offered**, as in ES-DE; a transitions
+profile that says nothing is. A theme whose variants are all hidden shows none, and draws its first. Every theme on
+ES-DE's list states `selectable` on each variant, so none of them changes.
+
+**What is written down.** Each reading of the kinds above adds a warning to the theme's diagnostics, naming the file,
+line and what the value was read as ("it is read as 3, as ES-DE reads it"); the badges' out-of-range values and the
+unknown picture kinds are warnings too. Decided 2026-09-27 (Q72): none of this is shown to the player; a console
+left unthemed still goes to the error log (§4.70), as before.
+
+**What it does not do.**
+- **Which variant is drawn when none was chosen** stays the first one offered. ES-DE draws the first one declared until
+  its settings menu is opened, and the first one offered after that; the two agree for every listed theme (§35, Q110).
+- **`~` is the player's home.** ES-DE takes it as its own home folder, which is the same unless ES-DE was started with
+  another.
+- **The ranges of other whole numbers** (a carousel's counts, a video's repeats) are held to `THEMES.md`'s as before;
+  ES-DE was run only on the badges'.
+- Nothing ran on the handheld.
+
+### 4.75 Big picture: the screensaver (2026-09-27)
+
+Pass 10 of `EmuSen_BigPicture.md` §21 (its §37 is the record: ES-DE measured, the predictions, the tests, the mutants
+and the pictures). This section is what a player meets.
+
+**What it is.** When the big-screen library has had no button, key or click for a while, ES-DE's screensaver starts, and
+Mistress now does the same. There are three looks, as in ES-DE:
+- **Dim** (the default) turns the whole view grey and dark: every pixel becomes the grey of its own brightness, at 0.4
+  of it. It fades in over 167 ms and then holds.
+- **Black** fades the screen to black over 140 ms.
+- **Slideshow** cuts to black and shows the library's pictures one game at a time, a new one every 10 seconds. Each
+  change is a cut to black; the game's name and system appear in the upper left corner within a tenth of a second, and
+  the picture fades in from about a fifth of a second to about half a second.
+- **Video**, ES-DE's fourth look, waits for video support (pass 12 of the plan) and shows Dim meanwhile, as ES-DE does
+  when it has no videos.
+
+The times and levels are ES-DE 3.4.1's, measured from recordings on 2026-09-27.
+
+**When it starts.** After *Start Screensaver After* minutes with nothing pressed, five by default; 0 is never. It
+starts only over the big-screen library: in a big-screen session or in desktop big picture (F10, §4.54). It never
+starts while a game is on screen, while the pad menu, a sheet, the on-screen keyboard or the launch screen (§4.71) is
+open, or while another window is active. The idle time counts from the last button, key, pointer movement or click, and
+from the moment the library became the screen again.
+
+**Waking it.** Any button, key or click wakes the screen at once, in one frame, as in ES-DE, and does nothing else: the
+list does not move, even while the button stays down, and the next press is an ordinary one. The one exception is the
+slideshow's controls below.
+
+**The controls** (*Screensaver Controls*, on by default, ES-DE's *Enable screensaver controls*):
+- **X in the system view** starts the screensaver at once, even with the timer at 0. The system view's help bar shows
+  *Screensaver* on X while the controls are on. On the keyboard it is Delete. X in a game list does nothing here.
+- **In a slideshow of the library's pictures:**
+  - **left and right** show another game at once, and the next change is ten seconds after that;
+  - **A** starts the game shown: its game list comes up with it selected, then the resume question and the launch
+    screen, as for any start from big picture;
+  - **Y** goes to the game shown, in its system's game list, in the folder it sits in, without starting it.
+- **Everything else**, in any look, only wakes the screen. With the controls off, every button only wakes it.
+
+**What the slideshow shows.**
+- **The picture:** each game's first of *miximage*, *screenshot*, *title screen* and *cover*, in that order, the order
+  ES-DE was measured to use. Each kind is looked for in the library's own order of sources (§4.60): the player's own
+  cover and another game's chosen cover first (for covers), then ScreenScraper's media store, an ES-DE media folder,
+  and OpenEmu's covers. A game with none of the four, even if it has a marquee, fan art or a 3D box, is left out, as in
+  ES-DE.
+- **The games:** every game the library lists (hidden games only when *Show Hidden Games* is on), from every system, in
+  random order, never the same game twice running. *Only include favorite games* keeps the favourites.
+- **The fit:** the picture fitted whole and centred on black; *Stretch images to screen resolution* fills the screen
+  instead, as ES-DE's does.
+- **The overlay** (*Display game info overlay*, on by default): a translucent black box in the upper left corner, 17 px
+  in and 16 px down at 800 lines, 84 px high, and as wide as its longer line, with the game's name (and a star for a
+  favourite) above its system, in white capitals. Its place and size follow the window's height. Among favourites only,
+  no star is drawn, as ES-DE's guide says.
+- **Custom images** (*Use custom images*): the pictures of a folder instead, JPG, PNG, WebP, SVG or GIF, with its
+  subfolders when *Custom image directory recursive search* is on. `~` stands for the home folder and `%ROMPATH%` for
+  the ROM folder. These pictures carry no overlay, and A and Y only wake the screen.
+- **Nothing to show** (no game with a picture, or an empty folder): Dim, as in ES-DE.
+
+**The settings.** Theme Settings ▸ Interface (§4.66.1) gains a **Screensaver** group, ES-DE's *Screensaver settings*
+and *Slideshow screensaver settings*, which ES-DE keeps under *UI settings* too. Each is kept in `appsettings.json` under
+`BigPictureInterface`, spelled as ES-DE's `es_settings.xml` spells it, times in milliseconds:
+
+| Row | Key | Default | Notes |
+|---|---|---|---|
+| Start Screensaver After | `ScreensaverTimer` | `300000` (5 min) | a slider of whole minutes, 0 (never) to 30, as ES-DE's |
+| Screensaver Type | `ScreensaverType` | `dim` | `dim`, `black`, `slideshow`, `video`; ES-DE's own default is `video`, which falls back to Dim |
+| Screensaver Controls | `ScreensaverControls` | on | above |
+| In Game Mode | `ScreensaverInGameMode` | on | Mistress's own; below |
+| Swap Images After | `ScreensaverSwapImageTimeout` | `10000` (10 s) | 2 to 120 s in steps of 2, as ES-DE's |
+| Only include favorite games | `ScreensaverSlideshowOnlyFavorites` | off | |
+| Stretch images to screen resolution | `ScreensaverStretchImages` | off | |
+| Display game info overlay | `ScreensaverSlideshowGameInfo` | on | |
+| Use custom images | `ScreensaverSlideshowCustomImages` | off | |
+| Custom image directory recursive search | `ScreensaverSlideshowRecurse` | off | |
+| Custom Image Directory | `ScreensaverSlideshowCustomDir` | empty | typed or browsed |
+
+Dim as the default, and the screensaver on everywhere, were decided on 2026-09-26 (Q34, §10.1 of the plan).
+
+**Game Mode.** Steam dims and sleeps the screen itself in its Game Mode, so two savers could stack. **In Game Mode**, on
+by default, lets Mistress's screensaver start in a gamescope session; turned off, it never starts there, and a desktop
+session is unchanged. Whether Steam's own dimming starts over an application that draws nothing, and whether the two
+stack, has not been measured on the handheld; the default is to be reconsidered then (Q130 in the plan).
+
+**Drawing only while it changes.** A screensaver exists to spare the screen and the battery, so it draws nothing
+between its changes, as the themed view draws nothing while still (§4.52):
+- Dim and Black draw through their fade, about ten frames, and then no frame at all however long they hold;
+- the slideshow draws through each change, about half a second, then no frame until the next change ten seconds later;
+- the themed view beneath draws nothing while the screensaver is up, the theme's clock included; when it wakes, the
+  view catches up in one frame.
+
+**Tests.** `ScreensaverTests` (WiseMan, headless, 28 cases) count the frames drawn and read the pixels:
+- the defaults and ES-DE's values; the start at five idle minutes to the poll; a press starting the idle time again,
+  and 0 never starting it;
+- Dim and Black drawing only their fade and no frame in the 610 s after, the view beneath none either; Dim's two levels
+  fading together; a theme's scrolling text asking for no frame while it shows, and again once it is woken;
+- the pixels: every sampled pixel of Dim within 2 levels of 0.4 times its luma, at 1280×800 and 1920×1200, and Black
+  black;
+- a press and a key waking it and doing nothing else;
+- the slideshow's kinds, order, system names, star, no repeats and ten-second swaps over 40 changes; its frames only
+  through each change, none between, over six changes; ES-DE's change timing;
+- favourites only, the overlay off, the stretch, the fit, custom folders and subfolders;
+- Video and an empty slideshow as Dim;
+- left, right, Y and A; the controls off and Dim waking only; X in the system view and its help entry;
+- never under the pad menu, a sheet or a game; the Game Mode switch; F10's big picture and not the desktop, and F10
+  waking it without leaving big picture;
+- a window closed while it shows; the Interface tab's rows;
+- the overlay's box, colour and text where ES-DE draws them, at 1280×800 and 1920×1200.
+
+`ScreensaverPictureTool` writes the pictures when `EMUSEN_BIGPICTURE_PNG=1`. `ThemedSession` sets the timer to 0, so the
+older themed tests are never interrupted by it. The mutants are in §37 of the plan.
+
+**What it does not cover.**
+- **Video** (pass 12), and ES-DE's *Video screensaver settings* with it.
+- **Render scanlines**, ES-DE's slideshow option, is not offered.
+- **The system's name** in the overlay is the shelf's full name (*Super Nintendo*), not ES-DE's longer `fullname`
+  (*Nintendo SNES (Super Nintendo)*), as on the launch screen (§4.71).
+- **`%ESPATH%`** in the custom folder is not expanded.
+- **The desktop's own library**, outside big picture, has no screensaver.
+- **Nothing ran on the handheld,** in Game Mode or out of it.

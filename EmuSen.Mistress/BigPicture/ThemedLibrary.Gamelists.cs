@@ -36,7 +36,7 @@ namespace EmuSen.Mistress.BigPicture
         }
 
         private HelpContext HelpContext => new(Editing is not null, RandomEntryButton != BigPictureCollections.RandomDisabled,
-            RandomEntryButton == BigPictureCollections.RandomGamesAndSystems, QuickSelect: QuickSelectFor("gamelist"));
+            RandomEntryButton == BigPictureCollections.RandomGamesAndSystems, QuickSelect: QuickSelectFor("gamelist"), Screensaver: Interface.ScreensaverControls);
 
         private ThemedShelf? ShelfOf(string? system) => _shelves.FirstOrDefault(s => s.System.Name == system);
 
@@ -120,6 +120,22 @@ namespace EmuSen.Mistress.BigPicture
             if (view.ViewName == "system" && RandomEntryButton != BigPictureCollections.RandomGamesAndSystems) return;
             int target = GamelistOptions.RandomIndex(view.Count, view.Index, Random);
             if (target != view.Index) view.Jump(target - view.Index, now);
+        }
+
+        // The screensaver's jump to a game: its system's gamelist, in the folder it sits in, with it selected; false when the view has no such game.
+        public bool ShowGame(string system, string file, TimeSpan now)
+        {
+            if (Stage is null || ShelfOf(system)?.Games.FirstOrDefault(g => g.File == file) is not { } game) return false;
+            ForgetListed();
+            _system = system;
+            _openFolder.Remove(system);
+            if (Foldered(system) && game.FolderPath.Length > 0) _path[system] = game.FolderPath;
+            else _path.Remove(system);
+            _cursor[ViewKey(system)] = file;
+            if (Stage.Current.ViewName == "gamelist") Stage.Replace(Data(), now);
+            else Stage.Switch(now, Data());
+            Remember();
+            return true;
         }
 
         // The quick selector's letters for the gamelist as it is listed now.

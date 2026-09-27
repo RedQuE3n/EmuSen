@@ -1138,6 +1138,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   - **Q45** (*Use Another Game's Cover…*) is built as a replacement that stands on its own.
   - **Q44** no longer applies: the fallback is not switched off after pass 8.
   - **Q40,** the embedded credentials, is unaffected.
+- **The look of every window, decided 2026-09-27:** the menus need not be converted one-for-one with ES-DE's. What is kept is ES-DE's look (its colours, the Barlow Condensed face, the rounded panels) and a controller-friendly layout wherever one can be had. Windows that need their own layout, such as the ScreenScraper windows, the cheats window and the controller bindings, keep it and take the look.
 - **Q105–Q109 and the help bar, decided 2026-09-27 (§34):**
   - **The help bar:** letter-labelled button glyphs, as ES-DE draws them, following the controller type in use, replacing the four-button diagram.
   - **Q105:** the editor's subtitle is ES-DE's one line, the file name and its system. **Q106:** the editor's help bar changes per row, as ES-DE's does. **Q107:** `MenuPanel` shows ES-DE's scroll indicator when its rows overflow. **Q108:** leaving the editor returns to the gamelist, as now.

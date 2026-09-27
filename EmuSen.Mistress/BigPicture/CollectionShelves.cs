@@ -52,7 +52,7 @@ namespace EmuSen.Mistress.BigPicture
             var discrete = new List<ThemedShelf>();
             foreach (CustomCollection c in shown)
             {
-                var shelf = new ThemedShelf(Custom(c.Name), c.Members.Where(byFile.ContainsKey).Select(f => byFile[f]).ToList())
+                var shelf = new ThemedShelf(Custom(c.Name), c.Members.Where(byFile.ContainsKey).Select(f => InCustom(byFile[f])).ToList())
                 {
                     FavoritesFirst = settings.FavoritesFirstCustom, Stars = settings.StarsCustom, CollectionId = c.Id,
                 };
@@ -85,6 +85,9 @@ namespace EmuSen.Mistress.BigPicture
 
             return shelves;
         }
+
+        // ES-DE's custom collections sortname wins over the sortname in every custom collection, its order and its quick selector alike (§4.72).
+        private static SceneGame InCustom(SceneGame g) => g.CustomSortName is { Length: > 0 } custom ? g with { SortName = custom } : g;
 
         // A grouped collection as a folder row: its name, and ES-DE's description naming its games in a random order, the first of them the one shown (§22.2).
         public static SceneGame Folder(ThemedShelf collection, Random random)

@@ -204,6 +204,8 @@ namespace EmuSen.Mistress.BigPicture
             | (Interface.StatusBattery ? DeviceIndicators.Battery : 0) | (Interface.StatusBattery && Interface.StatusBatteryPercentage ? DeviceIndicators.BatteryPercentage : 0);
 
         // The data the kept selection gives: the system by name, its games as the options list them (§22), the game by file.
+        private int _shuffle = Random.Shared.Next();
+
         private SceneData Data()
         {
             IReadOnlyList<SceneSystem> systems = _systems.Select(s => s with
@@ -218,6 +220,7 @@ namespace EmuSen.Mistress.BigPicture
             {
                 SystemIndex = system, GameIndex = game, Media = _media, Motion = Motion, Family = Family, SwapFaceButtons = SwapFaceButtons, Status = Status, Now = Now(), ShowClock = Interface.DisplayClock, LiveClock = LiveClock,
                 ShowHelp = Interface.DisplayHelp, StatusShown = StatusShown, ScrollOverlay = Interface.ListScrollOverlay, Help = HelpContext,
+                Shuffle = unchecked(_shuffle += 7919),
             };
         }
 

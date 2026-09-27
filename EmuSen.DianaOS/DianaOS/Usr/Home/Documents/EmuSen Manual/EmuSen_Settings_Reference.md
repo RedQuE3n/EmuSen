@@ -4731,6 +4731,129 @@ Disabled, so the older themed tests start their games at once as they did. The m
   whole view.
 - **Nothing ran on the handheld.**
 
+### 4.72 Big picture: the metadata editor in ES-DE's layout, and its two new fields (2026-09-27)
+
+The first item of the big-screen menus' second stage (`EmuSen_BigPicture.md` §32.8). §34 of that plan is the record:
+what ES-DE documents, what was built, the tests, the mutants and the pictures. LunaP's pieces are its §182. This section
+is what a player meets. It amends §4.59's editor, whose fields, buttons and behaviour are otherwise unchanged.
+
+#### 4.72.1 What the player sees
+
+In a big-screen session, **Edit This Game's Metadata** (from Gamelist Options, §4.69) opens the editor as the menus of
+§4.69 look, over the screen blurred:
+
+- an upper-case **EDIT METADATA** title, and beneath it, smaller, the game's name as the library shows it and its file
+  name, one to a line;
+- **one row per field**, its label at the left and its value at the right, in the order of ES-DE's user guide: Name,
+  Sort name, Custom collections sortname (only inside a custom collection, below), Description, Rating, Release date,
+  Developer, Publisher, Genre, Players, Favourite, Completed, Kid game, Hidden, Broken / not working, Exclude from game
+  counter, Exclude from multi-scraper, Hide metadata fields, Times played, Play time, Controller, Alternative emulator;
+- **text fields** (Name, the two sortnames, Description, Developer, Publisher, Genre, Players, Times played, Play time)
+  as rows with a chevron and their value as written, not upper-cased; **A** opens the on-screen keyboard over the field
+  (§4.52's), and **Start** on the keyboard puts it away. A description's line breaks show as spaces in its row;
+- **the rating as five stars** at the right of its row, stepped in half stars by Left and Right; **the release date**
+  as `YYYY-MM-DD` (or *Unknown*) in the menu's typeface, its year, month or day chosen by A and stepped by Left and
+  Right;
+- **flags as switches**, turned by A;
+- **choices** (Controller, Alternative emulator) **between `<` and `>`**, stepped by Left and Right. The alternative
+  emulator is drawn faded, and cannot be changed, where the console has one engine, as ES-DE greys it out;
+- **ES-DE's colours for a value**: grey as the editor opened it, **blue** once changed in this editing, **red** where
+  this editing's scrape put it. The stars and the date change colour with the text;
+- **the buttons in one row at the bottom**, always in view however the rows scroll: **Scrape**, **Save**, **Cancel**,
+  **Clear**, **Hide from Library…**. There is no Delete: EmuSen never deletes or moves a game's file, and Hide from
+  Library takes its place, as §4.59 has it;
+- a **footer** of up to two lines under the buttons. While a field has the focus it says where its value comes from
+  (*Name: From the file name.*, *Description: From ScreenScraper.*, *Rating: Your edit.*, *…: Not set.*). Just after
+  the editor does something (a scrape starting or answering) it says that instead, until the focus moves. While a button
+  has the focus it is empty;
+- the **help bar** at the bottom of the screen: *Scrape* (the North button, which starts the scrape from anywhere in
+  the editor, as ES-DE's Y does), *Select*, *Back*, *Change*, *Choose*.
+
+**Reset**, Mistress's own since §4.59, still appears beside a field that holds an edit, as a small outlined button at
+the right of its row. **ScreenScraper's name**, offered after a scrape (§4.63), shows as two rows under Name: *Use This
+Name*, with the offered name in red as its value, and *Keep Current Name*.
+
+**The questions** the editor asks (Clear's, Hide from Library's, and whether to keep the changes when B leaves an
+edited game) are **ES-DE's message box**: the question in upper case on a small rounded panel over the editor, which
+stays drawn beneath it, darkened, with the answers in a row under the question and the accepting one chosen first. The
+editor's help bar gives way to the box's own (*Select*, *Choose*) while it is up.
+
+On the desktop, the editor keeps its form of §4.59; it gains the Hide metadata fields switch, and nothing else.
+
+#### 4.72.2 Hide metadata fields
+
+ES-DE's flag of that name: *"This option will hide most metadata fields as well as any badges … The only fields shown
+with this option enabled are the game name and description."* It is stored in `games.db`'s `game_edit` under
+`hidemetadata`, as every other edit is (`1` when on; off is the default and stores nothing). In the themed view's
+gamelist, while such a game is selected, the theme's rating, its badges, its date and time elements, every text element
+bound to metadata other than the name and the description, and every element the theme marks as a metadata element are
+not drawn. Its covers, screenshots and videos are. This is the same rule a collection's entry already followed (§22 of
+the plan, `SceneBuilder`), now also applied to a game with the flag. The desktop library is unaffected: the flag is a
+themed view's matter in ES-DE too.
+
+#### 4.72.3 Custom collections sortname
+
+ES-DE's field of that name: it *"works exactly like sortname but will only affect the sorting for custom collections,"*
+and where both are set it wins there. In Mistress:
+
+- the editor shows it **only when it is opened from inside a custom collection** (a grouped collection's folder, or a
+  custom collection shown as a system of its own), directly under Sort name;
+- it is stored in `game_edit` under `collectionsortname`;
+- in **every custom collection** the game belongs to, it takes the sortname's place: the order, and what the Jump To…
+  letters index. The consoles' lists and the automatic collections (All Games, Favourites, Last Played and the others)
+  keep ordering by the sortname, or the name;
+- it cannot differ between custom collections, as in ES-DE.
+
+#### 4.72.4 How it is built
+
+- `MetadataEditorWindow` builds the layout above when given a pad family (a big-screen session), and §4.59's form
+  otherwise. The fields' controls, their wiring to the draft, Save, Cancel, Clear, Hide, Scrape and Reset are the same
+  objects in both; only where they are placed differs.
+- The rows are LunaP's (§182): a `TextBox` and a switch drawn as rows by `MenuRows.Apply`, the dropdowns as option rows,
+  and a `MenuFieldRow` hosting the `RatingPicker` or the `DateStepper`. The panel's subtitle, button band and two-line
+  footer are `MenuPanel`'s. The questions are `Dialogs.MenuConfirmAsync`.
+- `GameMetadata` gains the two fields, in ES-DE's order. `SceneGame` gains `CustomSortName`, and its `HideMetadata`,
+  until now set only for a collection's entry, is set from the flag. `CollectionShelves` puts the custom sortname in the
+  sortname's place for the games of a custom collection's shelf, and nowhere else.
+
+#### 4.72.5 Tests
+
+`MetadataEditorLayoutTests` (WiseMan, headless, in `EsdeMenusTests`' pixel style), seven cases:
+
+- **the editor at 1280×800 and 1920×1200**: centred; titled *Edit Metadata*, drawn in capitals, with the game's name and
+  file beneath; the rows' labels in ES-DE's order with no custom collections sortname; each kind of row as described;
+  the first row focused with the bar across the panel, every pixel of its top line the bar's colour; the footer naming
+  where the name comes from; the five buttons, Delete absent, on one line inside the button band, below the rows,
+  centred on the panel; the footer empty on a button; and no pixel changed outside the panel and the help bar;
+- **grey, then blue**: the name and the stars hold no pixel of the edited blue as opened, and more than forty each once
+  changed; an untouched field none;
+- **Hide metadata fields**: stored as `hidemetadata`, the rating and a developer text hidden and the description kept,
+  the next game unaffected; turned off, the edit removed and the rating back;
+- **the custom collections sortname**: absent from a console's list's editor, present inside a custom collection under
+  Sort name, stored as `collectionsortname`, ordering the collection and not the console's list;
+- **Hide from Library's question**: a chromeless message box, the editor drawn and not hit-testable beneath it, its help
+  bar hidden; Cancel returns to the editor whole;
+- **with no pad**: Enter turns a focused switch and presses a focused Cancel, which stores nothing.
+
+`ThemedMetadataScrapeTests` gains one: after the editor's scrape, the description is drawn in the scraped red, the
+name is not, and the offered name is.
+
+Two existing test files changed, only where the look did. `ThemedGameOptionsTests` and `ThemedMetadataScrapeTests` read
+a field's *where from* words through `HintOf` rather than a `FieldRow`'s hint, since the big-screen editor has no
+`FieldRow`, and the pad audit walks the fields the editor shows rather than every field. Every other expectation,
+the pad routes included, passed unchanged.
+
+#### 4.72.6 What it does not do
+
+- **ES-DE's text popup.** A opens Mistress's on-screen keyboard, in its own look, not ES-DE's text-editing popup in
+  the menu's (Q100).
+- **ES-DE's green stars** for a rating that was rounded to a half star when read are not drawn; Mistress keeps the
+  rating it reads.
+- **Folder link**, a folder's field in ES-DE, has no counterpart: the editor opens on games only.
+- **The settings sheets, the list screen for an option row, and the Menu opening animation switch** are the rest of
+  stage 2 (§32.8), not yet built.
+- Nothing ran on the handheld or with a real pad, and ES-DE was not run for this section.
+
 ### 4.73 Big picture: colours, whole numbers, words, paths and variants, as ES-DE reads them (2026-09-27)
 
 Q70 and Q71 of `EmuSen_BigPicture.md`, answered on 2026-09-27: run ES-DE on the value types §4.68 left strict, and
@@ -4780,6 +4903,41 @@ left unthemed still goes to the error log (§4.70), as before.
   another.
 - **The ranges of other whole numbers** (a carousel's counts, a video's repeats) are held to `THEMES.md`'s as before;
   ES-DE was run only on the badges'.
+- Nothing ran on the handheld.
+
+### 4.74 Big picture: games picked for the system view, and carousels that turn (2026-09-27)
+
+The first half of pass 14 of `EmuSen_BigPicture.md`, whose §36 is the record (the runs of ES-DE 3.4.1, the rules, the
+tests, the mutants and the pictures). There is no setting: a theme that uses these elements is now drawn as ES-DE draws
+it, in big-screen sessions and in big picture on the desktop (§4.54). The section
+is numbered 4.74 because §4.72 is another pass's.
+
+**Games in the system view.** A theme can pick games to show beside the console list: the most recently played, the
+most played, or games at random. Twenty of the 66 themes on ES-DE's list do, for a background picture, a box, a name or
+a rating. Mistress now draws them:
+- **Most recently played** lists only games that have been played, newest first; **most played** only games played at
+  least once, most first. A console with fewer such games than the theme asks for shows fewer; the rest of those
+  places stay empty, as in ES-DE.
+- **At random**, each game once, and new games each time the console list moves, back to the same console included. A
+  theme that allows repeats fills every place, the first ones different.
+- **Never picked:** a game marked *Exclude from game counter* (§4.59), a folder, and a hidden game while hidden games
+  are not shown.
+- **A theme with no such picker** shows no game pictures, names or ratings in the system view. Before, Mistress showed
+  the console's last selected game there, which ES-DE does not.
+- A random picker shows other games than ES-DE would in the same state; both are random.
+
+**Carousels that turn.** Nine listed themes lay their console or game carousel out as a **wheel**, vertical or
+horizontal; some mirror a row's pictures in a **reflection** beneath it. Mistress now draws both, placed within a pixel
+of ES-DE in every probe measured (§36.3), and moving between items as a straight carousel does. Every carousel is also
+now **clipped** to its box, as in ES-DE, and a selected item that grows does so from the edge the theme aligns it to.
+Canvas and Iconic, whose wheel counts are written `3.5` (§4.73), now draw 3 items each side.
+
+**What it does not do.**
+- A game's missing field (no developer, say) shows nothing in the system view, where ES-DE writes "unknown"; the
+  gamelist has always done the same (Q121 of the plan).
+- The carousel's `selectedItemMargins`, `lineSpacing` and the other properties §36.10 lists are not drawn yet, so Aura's
+  game carousel, for one, spaces its covers evenly where ES-DE sets the selected one apart (§36.9, Q120).
+- `gamelistinfo` and animated pictures are the pass's second half, not yet built.
 - Nothing ran on the handheld.
 
 ### 4.75 Big picture: the screensaver (2026-09-27)

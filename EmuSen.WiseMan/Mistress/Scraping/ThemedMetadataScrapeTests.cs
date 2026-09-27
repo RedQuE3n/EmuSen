@@ -118,8 +118,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Equal("mine", ThemedGameOptionsTests.StoredEdits(s, ThemedSession.SnesGames[0] + ".sfc")[GameMetadata.Description]);
 
             MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
-            Assert.Equal("Your edit, shown in place of ScreenScraper's.", editor.RowOf(GameMetadata.Description).Hint);
-            Assert.Equal("From ScreenScraper.", editor.RowOf(GameMetadata.Developer).Hint);
+            Assert.Equal("Your edit, shown in place of ScreenScraper's.", editor.HintOf(GameMetadata.Description));
+            Assert.Equal("From ScreenScraper.", editor.HintOf(GameMetadata.Developer));
             ThemedGameOptionsTests.Reach(s, "MetaReset_" + GameMetadata.Description);
             s.Pad.A();
             Assert.Equal(Scraped, ((TextBox)editor.EditorOf(GameMetadata.Description)).Text);
@@ -145,7 +145,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Same(editor, ThemedGameOptionsTests.Sheets(s).Current);
             Assert.Equal(Scraped, ((TextBox)editor.EditorOf(GameMetadata.Description)).Text);
             Assert.Equal("Synthetic Developer", ((TextBox)editor.EditorOf(GameMetadata.Developer)).Text);
-            Assert.Equal("From this scrape; Save keeps it.", editor.RowOf(GameMetadata.Description).Hint);
+            Assert.Equal("From this scrape; Save keeps it.", editor.HintOf(GameMetadata.Description));
             ThemedGameOptionsTests.Reach(s, "MetadataCancel");
             s.Pad.A();
             s.Settle();
@@ -190,7 +190,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
             ScrapeInTheEditor(s, editor);
             Assert.Equal(stem, NameBox(editor));
-            Assert.Equal("From the file name.", editor.RowOf(GameMetadata.Name).Hint);
+            Assert.Equal("From the file name.", editor.HintOf(GameMetadata.Name));
             Assert.Equal(Scraped, ((TextBox)editor.EditorOf(GameMetadata.Description)).Text);
             Assert.True(NameOffer(s).IsVisible);
             Assert.Equal(ScrapedName, editor.OfferedName);
@@ -231,7 +231,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             s.Pad.A();
             s.Settle();
             Assert.Equal(ScrapedName, NameBox(editor));
-            Assert.Equal("Your edit.", editor.RowOf(GameMetadata.Name).Hint);
+            Assert.Equal("Your edit.", editor.HintOf(GameMetadata.Name));
             Assert.False(NameOffer(s).IsVisible);
             Assert.True(editor.ResetOf(GameMetadata.Name).IsVisible);
 
@@ -304,6 +304,58 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Null(Shown(s).Description);
             Assert.True(Shown(s).Favorite);
             Assert.Equal(roms, ThemedGameOptionsTests.Fingerprint(s.RomDirectory));
+        }, default);
+
+        // ES-DE's red for a value its scrape put in, drawn only on the fields the scrape filled; the name stays grey, its offer red (§34).
+        [Fact]
+        public Task The_editor_draws_what_its_scrape_filled_in_red() => Session.Dispatch(() =>
+        {
+            using var s = new ThemedSession();
+            ThemedLibraryPadTests.Enter(s, "snes");
+            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
+            Avalonia.Rect Value(Control editorOf)
+            {
+                var row = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(editorOf).OfType<EmuSen.LunaP.Controls.MenuRow>().First();
+                return EsdeMenusTests.InWindow(row, row.Layout(row.Bounds.Size).Value, s.Window);
+            }
+            int Red(RenderedFrame f, Avalonia.Rect box)
+            {
+                int n = 0;
+                for (int y = (int)box.Top; y < (int)box.Bottom; y++)
+                    for (int x = (int)box.Left; x < (int)box.Right; x++)
+                    {
+                        (byte r, byte g, byte b) = EsdeMenusTests.At(f, x, y);
+                        Avalonia.Media.Color c = MetadataEditorWindow.ScrapedColor;
+                        if (Math.Abs(r - c.R) <= 14 && Math.Abs(g - c.G) <= 14 && Math.Abs(b - c.B) <= 14) n++;
+                    }
+                return n;
+            }
+            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.SortName);
+            Assert.True(Red(s.Capture(), Value(editor.EditorOf(GameMetadata.Description))) < 5);
+
+            ScrapeInTheEditor(s, editor);
+            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.SortName);
+            RenderedFrame after = s.Capture();
+            Assert.True(Red(after, Value(editor.EditorOf(GameMetadata.Description))) > 40, "the scraped description is not red");
+            Assert.True(Red(after, Value(editor.EditorOf(GameMetadata.Name))) < 5, "the name, which the scrape only offers, is red");
+            Assert.True(Red(after, Value(ThemedCollectionsTests.Named<Button>(s, "MetadataUseScrapedName"))) > 40, "the offered name is not red");
+        }, default);
+
+        // The big-screen editor after its own scrape: the values it filled in ES-DE's red and ScreenScraper's name offered under Name (§34); written outside the repository.
+        [EmuSen.WiseMan.Mistress.BigPicture.MetadataEditorPngFact]
+        public Task Pictures_of_the_editor_after_its_scrape() => Session.Dispatch(() =>
+        {
+            foreach ((int w, int h) in new[] { (1280, 800), (1920, 1200) })
+            {
+                using var s = new ThemedSession(w, h);
+                ThemedLibraryPadTests.Enter(s, "snes");
+                MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
+                ScrapeInTheEditor(s, editor);
+                ThemedGameOptionsTests.Reach(s, "MetadataUseScrapedName");
+                s.Settle();
+                Directory.CreateDirectory(EmuSen.WiseMan.Mistress.BigPicture.MetadataEditorPictureTool.PngFolder);
+                s.Capture().SavePng(Path.Combine(EmuSen.WiseMan.Mistress.BigPicture.MetadataEditorPictureTool.PngFolder, $"synthetic-{w}x{h}-editor-after-scrape.png"));
+            }
         }, default);
     }
 }

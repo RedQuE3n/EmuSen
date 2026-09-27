@@ -266,7 +266,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal("collections", s.System);
         });
 
-        private const string MetadataElements =
+        internal const string MetadataElements =
             "<rating name=\"r\"><pos>0.55 0.8</pos><size>0 0.05</size></rating>" +
             "<text name=\"sys\"><pos>0.55 0.85</pos><size>0.4 0.05</size><metadata>systemFullname</metadata><color>FFFFFF</color></text>" +
             "<text name=\"desc\"><pos>0.55 0.9</pos><size>0.4 0.05</size><metadata>description</metadata><color>FFFFFF</color></text>" +

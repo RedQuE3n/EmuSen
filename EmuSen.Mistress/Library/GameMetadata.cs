@@ -26,7 +26,8 @@ namespace EmuSen.Mistress.Library
     {
         public const string Name = "name", SortName = "sortname", Description = "description", Rating = "rating", ReleaseDate = "releasedate",
             Developer = "developer", Publisher = "publisher", Genre = "genre", Players = "players", Completed = "completed", KidGame = "kidgame",
-            Hidden = "hidden", Broken = "broken", NotCounted = "nogamecount", NoMultiScrape = "nomultiscrape", Controller = "controller", AltEmulator = "altemulator";
+            Hidden = "hidden", Broken = "broken", NotCounted = "nogamecount", NoMultiScrape = "nomultiscrape", Controller = "controller", AltEmulator = "altemulator",
+            CustomSortName = "collectionsortname", HideMetadata = "hidemetadata";
 
         // ES-DE's controller types for EmuSen's consoles, a generic pad and unknown, by THEMES.md's customControllerIcon names (§4.66).
         public static readonly IReadOnlyList<(string Value, string Text)> ControllerChoices =
@@ -46,6 +47,7 @@ namespace EmuSen.Mistress.Library
         [
             new(Name, "Name", MetadataKind.Text),
             new(SortName, "Sort name", MetadataKind.Text),
+            new(CustomSortName, "Custom collections sortname", MetadataKind.Text),
             new(Description, "Description", MetadataKind.LongText),
             new(Rating, "Rating", MetadataKind.Rating),
             new(ReleaseDate, "Release date", MetadataKind.Date),
@@ -59,6 +61,7 @@ namespace EmuSen.Mistress.Library
             new(Broken, "Broken / not working", MetadataKind.Flag),
             new(NotCounted, "Exclude from game counter", MetadataKind.Flag),
             new(NoMultiScrape, "Exclude from multi-scraper", MetadataKind.Flag),
+            new(HideMetadata, "Hide metadata fields", MetadataKind.Flag),
             new(Controller, "Controller", MetadataKind.Choice) { Choices = ControllerChoices },
             new(AltEmulator, "Alternative emulator", MetadataKind.Choice),
         ];
@@ -123,7 +126,7 @@ namespace EmuSen.Mistress.Library
         public static string? Default(string path, string field) => field switch
         {
             Name => System.IO.Path.GetFileNameWithoutExtension(path),
-            Completed or KidGame or Hidden or Broken or NotCounted or NoMultiScrape => No,
+            Completed or KidGame or Hidden or Broken or NotCounted or NoMultiScrape or HideMetadata => No,
             _ => null,
         };
 
@@ -143,6 +146,7 @@ namespace EmuSen.Mistress.Library
 
         public string Title => Text(Name) ?? System.IO.Path.GetFileNameWithoutExtension(Path);
         public string? Sort => Text(SortName);
+        public string? CustomSort => Text(CustomSortName);
         public string? DescriptionText => Text(Description);
         public string? DeveloperText => Text(Developer);
         public string? PublisherText => Text(Publisher);
@@ -156,6 +160,7 @@ namespace EmuSen.Mistress.Library
         public bool IsBroken => Flag(Broken);
         public bool IsNotCounted => Flag(NotCounted);
         public bool IsExcludedFromMultiScrape => Flag(NoMultiScrape);
+        public bool IsMetadataHidden => Flag(HideMetadata);
         public string? ControllerType => Text(Controller);
         public string? AltEmulatorEngine => Text(AltEmulator);
 

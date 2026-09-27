@@ -54,6 +54,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
         // ES-DE's sortname: the list sorts by it where set, and shows the name (§4.59 of the settings reference).
         public string? SortName { get; init; }
 
+        // ES-DE's custom collections sortname: in a custom collection it takes the sortname's place, and nowhere else (§4.72).
+        public string? CustomSortName { get; init; }
+
         // ES-DE's "Exclude from game counter": left out of a system's game counts.
         public bool NotCounted { get; init; }
 
@@ -130,6 +133,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         // What the help bar's entries depend on beyond the view (§22).
         public HelpContext Help { get; init; } = new();
+
+        // The seed of the system view's random gameselectors; a view moves it on at each navigation, so the picks change as ES-DE's do (§36).
+        public int Shuffle { get; init; }
 
         public SceneSystem System => Systems[Math.Clamp(SystemIndex, 0, Systems.Count - 1)];
 

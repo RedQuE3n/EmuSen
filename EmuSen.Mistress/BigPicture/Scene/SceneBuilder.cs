@@ -28,6 +28,14 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public NormalizedCanvas Canvas { get; }
         public IReadOnlyList<SceneEntry> Entries => _entries;
 
+        // The system view's gameselectors, picked once per build; none in the gamelist view (§36).
+        public GameSelectors Selectors => _selectors ??= View.Name == "system" ? GameSelectors.For(View, Data.System, Data.Shuffle) : GameSelectors.None;
+
+        private GameSelectors? _selectors;
+
+        // The game an element's media and metadata come from: the list's selection, or in the system view a gameselector's pick (§36).
+        public SceneGame? GameFor(ResolvedElement e) => View.Name == "system" ? Selectors.GameFor(e) : Data.Game;
+
         public double W => Data.Screen.Width;
         public double H => Data.Screen.Height;
 
@@ -57,6 +65,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         // The reasons an element draws nothing, before any control is made.
         private string? Skip(ResolvedElement e)
         {
+            if (e.Type == "gameselector") return "a gameselector picks games and draws nothing";
             if (e.Bool("visible") == false) return "visible is false";
             if (e.Bool("metadataElement") == true && Data.HideMetadata) return "metadata elements hidden";
             if (View.Name == "gamelist" && Data.Game is { HideMetadata: true } && HiddenWithMetadata(e)) return "the entry hides its metadata";

@@ -15,7 +15,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         // The first media type a game has, in the order the element lists them.
         internal static string? Media(SceneBuilder b, ResolvedElement e, string kind)
         {
-            if (b.Data.Media is not { } media || b.Data.Game is not { } game) return null;
+            if (b.Data.Media is not { } media || b.GameFor(e) is not { } game) return null;
             IReadOnlyList<string> types = e.Bindings.FirstOrDefault(x => x.Kind == kind)?.Names ?? [];
             return types.Select(t => media.Find(game.SourceIn(b.Data.System), game.Shown, t)).FirstOrDefault(p => p is not null);
         }

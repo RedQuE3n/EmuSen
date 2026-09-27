@@ -649,7 +649,7 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
-            StateRecord? record = StateRecord.Read(path);
+            StateRecord? record = _fileRecords.ReadState(path);
             if (Refusal(record, rom, _session) is string refused)
             {
                 StatusText.Text = $"Load State: {refused}";

@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace EmuSen.Galaxia.Library
 {
-    // Who wrote a save state, kept beside it, so a frontend can refuse or warn before a core reads it - see EmuSen_Galaxia.md §5.3.
+    // Who wrote a save state, so a frontend can refuse or warn before a core reads it; Mistress keeps these in records.db - see EmuSen_Galaxia.md §5.3.
     public sealed record StateRecord
     {
         public required string Console { get; init; }
@@ -16,14 +16,15 @@ namespace EmuSen.Galaxia.Library
         public string? RomMd5 { get; init; }
         public long RomBytes { get; init; }
 
-        public static string PathFor(string statePath) => Path.ChangeExtension(statePath, ".json");
+        // The JSON file builds before 2026-09-26 wrote beside each state; read for migration, never written - see EmuSen_Galaxia.md §5.3a.
+        public static string SidecarPathFor(string statePath) => Path.ChangeExtension(statePath, ".json");
 
-        // Null for a state with no record, or one that will not parse; either way the state itself is untouched.
-        public static StateRecord? Read(string statePath)
+        // Null for a state with no sidecar, or one that will not parse; either way the state itself is untouched.
+        public static StateRecord? ReadSidecar(string statePath)
         {
             try
             {
-                string path = PathFor(statePath);
+                string path = SidecarPathFor(statePath);
                 return File.Exists(path) ? JsonSerializer.Deserialize<StateRecord>(File.ReadAllText(path), ConfigJson.Options) : null;
             }
             catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
@@ -31,7 +32,5 @@ namespace EmuSen.Galaxia.Library
                 return null;
             }
         }
-
-        public bool Write(string statePath) => AtomicFile.Write(PathFor(statePath), System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(this, ConfigJson.Options)));
     }
 }

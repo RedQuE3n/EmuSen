@@ -5869,7 +5869,14 @@ tool does. They were looked at:
   sheet's `Opened` comes before its rows are laid out; A on the box opens the keyboard and the d-pad reaches the rows.
   The picker's thumbnails are square-fitted, as the rows are short.
 
-### 28.6 Not done
+### 28.6 The broad run
+
+One broad run at the end, under `nice -n 10`: every test under `EmuSen.WiseMan.Mistress` except
+`ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` and anything named for the GPU or Vulkan: **913
+passed, 21 skipped (the picture and bench tools gated by their variables), none failed**, of 934, in 3 min 31 s. The
+theme-browser branch ran beside it on the same machine; nothing of its Themes tab was touched here.
+
+### 28.7 Not done
 
 - **Nothing ran on the handheld**, and no real pointer or window manager drove the desktop windows.
 - **No real developer file was embedded** by any test, as the plan required; the only Mistress publish used a fake

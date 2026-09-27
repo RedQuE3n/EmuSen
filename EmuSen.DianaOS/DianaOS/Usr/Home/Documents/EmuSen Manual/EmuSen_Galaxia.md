@@ -50,6 +50,9 @@ The shell is rooted here: to DianaOS, this directory **is** `/`, and the install
   Logs/         dump/load/screenshot/recording output
   Saves/        battery-backed cartridge SRAM (.srm)
     Save States/  whole-machine snapshots (.state)
+  Library/      Mistress's kept databases              EmuSen_Settings_Reference.md §4.32, §4.64
+    games.db      the player's library: favourites, play time, collections, edits
+    records.db    each save state's record and the shader pack's build
   Firmware/     coprocessor dumps the player supplies    EmuSen_Firmware.md §2
   Cheats/       the player's own .cht tree               `man cheat`
   Shaders/      shader packs downloaded on request     EmuSen_Settings_Reference.md §4.41
@@ -147,6 +150,16 @@ string PicturePathFor(statePath)                       // the same name with .pn
 `StateRecord` is a JSON file beside each state Mistress writes, named by `StateRecord.PathFor` (the state's name with `.json`): the console, the core's name, the state version the core wrote (`EmuSen_Save_States.md` §6), the build (the assembly's informational version, which carries the commit when the SDK knows it), when it was written, and the ROM's file name, size and MD5. It is the half of OpenEmu's per-state plist that the plan's stage 2 wanted, and it is a sidecar for the same reason the picture is (§5.2): a state with no record loads exactly as before, a record that will not parse is treated as absent, and no core ever reads one.
 
 The record's ROM hash is whatever was known when the state was written; the hash is taken on a worker when a game starts, so a state saved in the first instant of a very large ROM's session can have none, and is then never questioned about which copy it came from.
+
+*Revised 2026-09-26 by §5.3a: the record is no longer a file beside the state. The paragraph above is kept as the design the record was first built to; the fields and the sidecar argument are unchanged, the place is not.*
+
+### 5.3a The record moves into records.db (2026-09-26)
+
+`StateRecord` is still Galaxia's type, and Galaxia still has no database driver (§7.1). What changed is who stores it: Mistress keeps each record as a row of `state_record` in `home/Library/records.db` (`EmuSen.Mistress/Library/FileRecords.cs`), keyed by the state's full path and stamped with the state file's size and modification time, and returns it only while the file still matches. `StateRecord.Write` was removed, so nothing writes a sidecar any more; `StateRecord.ReadSidecar` and `SidecarPathFor` remain, for the import.
+
+The sidecars users already have are **imported on first sight and never removed**: a state with no row whose sidecar parses gets a row from it, and the sidecar is left, both because the state folder on the author's machine is the ROM library, which this project never writes, and because a source left in place makes an interrupted import lose nothing. The argument, the staleness check and what each costs are in `EmuSen_Settings_Reference.md` §4.64.
+
+The sidecar argument of §5.3 survives the move in one respect and not in another. It survives in that a state with no record still loads exactly as before and no core ever reads one. It does not survive in that a record no longer travels with its state: a states folder moved or copied elsewhere arrives without records, and fails towards "no record" rather than towards a wrong one.
 
 ### 5.4 A ROM's identity (2026-09-21)
 

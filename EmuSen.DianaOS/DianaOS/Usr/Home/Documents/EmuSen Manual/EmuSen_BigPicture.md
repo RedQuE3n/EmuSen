@@ -6221,11 +6221,11 @@ images or its sounds entered either repository. Art Book Next was read in its re
 slots and images it names and where its clock is.
 
 **Numbering.** §21.6 gave this pass P105 and P106. The plan set new predictions to start at P130, but §26 had taken
-P130–P135 and another section P140–P143, so this section's are **P160–P164**; its questions start at **Q50**, as briefed.
+P130–P135 and another section P140–P143, so this section's are **P160–P163**; its questions start at **Q50**, as briefed.
 
 ### 29.1 Predictions
 
-P105 and P106 were written in §21.6 before any of this was built. P160–P164 were written by the hand that wrote the
+P105 and P106 were written in §21.6 before any of this was built. P160–P163 were written by the hand that wrote the
 code, after the code and its tests and before the mutants, the broad run and the pictures they concern, as §22.1's
 were, and are weaker evidence for it.
 
@@ -6236,7 +6236,7 @@ were, and are weaker evidence for it.
 | P160 | Each of the four status switches and the help switch changes no pixel outside its element's box | the help bar 42,228 pixels inside its box and 0 outside; Bluetooth 397, Wi-Fi 992, the percentage 3,604 and the battery 3,229 inside, 0 outside; but the battery switch first failed by 44 pixels, eight columns right of the box, a LunaP defect older than this pass (§29.4) | held after the fix |
 | P161 | Of the round's mutants, at least nine in ten are caught on their first run, none survives that is not equivalent | 60 of 63 caught on the first run (95%); the three survivors were weak tests, not equivalent mutants (§29.7) | **failed on its second clause** |
 | P162 | Mistress's seven synthesised navigation sounds are each under 300 ms and pairwise distinct | 30–250 ms; seven distinct SHA-256 digests; peaks 0.22–0.31 | held |
-| P163 | The broad Mistress run passes with no failure this branch causes | §29.9 | §29.9 |
+| P163 | The broad Mistress run passes with no failure this branch causes | 983 passed, 27 skipped, none failed (§29.9) | held |
 | P119 | The pass is opened and closed in no more calendar days than the lower end of its estimate (2 days) | opened and closed on 2026-09-27 | held |
 
 ### 29.2 What was built
@@ -6452,7 +6452,13 @@ Next's reference clone. Every one was looked at:
 
 ### 29.9 The broad run
 
-*Recorded after the merge of WiseMan into this branch; see the next commit.*
+WiseMan was merged into the branch before it (`964f07c2`: ES-DE's default keys steering the themed view, and F4 for the
+Start menu), cleanly. Then one clean rebuild and one broad run, under `nice -n 10` with builds at `-m:2`: every test
+under `EmuSen.WiseMan.Mistress` except `ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` and anything
+named for the GPU or Vulkan. **983 passed, 27 skipped (the picture, bench and live tools gated by their variables), none
+failed**, of 1,010, in 3 min 46 s. P163 **held**. Another run was building on the machine at the same time. One pass is
+weak evidence against an intermittent failure, as §15.14 says of its own. LunaP's whole suite, run twice during the pass,
+passed 1,371 of 1,371 both times.
 
 ### 29.10 Not done
 

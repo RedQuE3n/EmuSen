@@ -458,7 +458,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.B();
             s.Settle();
             Assert.IsType<GameOptionsWindow>(Sheets(s).Current);
-            Assert.Equal("1 filter set", Named<TextBlock>(s, "GamelistFilterState").Text);
+            // The row's value, where the desktop's sheet shows a line of text beside its button (§4.69).
+            Assert.Equal("1 filter set", MenuRows.GetValue(Named<Button>(s, "GamelistFilterButton")));
             s.Pad.B();
             Assert.Equal([ThemedSession.SnesGames[0], ThemedSession.SnesGames[2]], Listed(s));
 

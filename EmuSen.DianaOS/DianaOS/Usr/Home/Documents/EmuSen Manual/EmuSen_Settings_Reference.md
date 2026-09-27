@@ -4380,3 +4380,105 @@ set it.
 - **North** on a folder does nothing, and the help bar still names it *Favorite* there.
 - **The desktop's sidebar library** is unchanged: one list per console.
 - Nothing ran on the handheld.
+
+### 4.69 Big picture: the Start menu and a game's options in ES-DE's layout (2026-09-27)
+
+The request was (2026-09-27) whether the big-screen options menu could look like ES-DE's. This is the first stage: the
+two list menus of a big-screen session. The settings sheets are the second stage, not yet built. The plan and its record
+are `EmuSen_BigPicture.md` §32; the toolkit's pieces are LunaP's §181.
+
+#### 4.69.1 What the player sees
+
+In a big-screen session, Start (or F4, §4.52a) and a game's Select now open a **wide panel in the middle of the screen**,
+over the screen blurred and darkened:
+
+- a large upper-case title: *Main Menu* over the library, the game's name over a running game and in a game's options;
+- full-width upper-case rows separated by thin rules, the chosen row a dark bar across the whole panel;
+- a **chevron** on a row that opens another screen (Cheats, Graphics Settings, Preferences, Theme Settings, Game
+  Collection Settings, Edit This Game's Metadata, Filter Gamelist and the others);
+- a value at the right of a row that has one (*Slot 1* beside Save State, the reason Rewind cannot run), and **arrows**
+  around a value that Left and Right step (State Slot, Speed, Jump To…, Sort Games By);
+- a small footer line, *EmuSen* and its version, under the pad menu;
+- **no Close button**: B and Start close the pad menu, B applies and Select cancels a game's options, as before. A game's
+  options that apply something (the themed gamelist's) keep an Apply and a Cancel button under the rows;
+- **one help bar** at the bottom centre, the pad's own buttons drawn with upper-case labels (*Close Menu*, *Select*,
+  *Change*, *Choose*); the theme's help bar is put away while the menu is open and comes back when it closes.
+
+The rows are the same entries, in the same order, doing the same things. What changed is only how they are drawn. The
+desktop's pad menu, the desktop library and every desktop window are unchanged, and so are the settings sheets.
+
+#### 4.69.2 The typeface: Barlow Condensed
+
+The menus are drawn in **Barlow Condensed Regular** (version 1.408, © 2017 The Barlow Project Authors), under the SIL
+Open Font License 1.1, shipped as `Assets/Fonts/BarlowCondensed-Regular.ttf` beside the program and listed in
+`THIRD_PARTY_NOTICES.md` §1.5 with its licence in `licenses/BarlowCondensed-OFL-1.1.txt`, which every published build
+carries.
+
+Why this one. The look wants a condensed sans-serif whose capitals read at a distance, since every row is upper case.
+Barlow is a low-contrast grotesk with slightly rounded forms, drawn for legibility on screens and signs; its condensed
+width fits a long label (*Use Another Game's Cover…*) in a row at 1280×800 without an ellipsis. Its licence is OFL, which
+lets it ship inside a GPL program as long as it is not sold by itself. It is one file of 80 KB with Latin and Vietnamese
+coverage. Roboto Condensed and Fira Sans Condensed were the alternatives named. Neither was measured against it, so the
+choice rests on the reasons above and not on a comparison. It is not ES-DE's bundled font file: it was downloaded from
+Google Fonts, and no file of ES-DE's was opened. It is bundled in Mistress, not LunaP, because LunaP is MIT and keeps
+every dependency MIT (LunaP §181.2); LunaP's controls take any font file's path.
+
+#### 4.69.3 How it is built
+
+- **LunaP** (§181) provides `MenuPanel` (the panel, title, footer and help bar), `MenuRow` (one drawn row), `MenuRows`
+  (a `Button`, a dropdown or a list's rows drawn as rows, behaviour kept), `BlurBackdrop` and `SheetLayer.Chromeless`.
+- **The pad menu** keeps its `PadMenuList`. In a big-screen session the list moves from the desktop's bordered box into
+  a `MenuPanel` (`PadMenuBig`), and its rows are drawn by `MenuRows`. A `PadMenuEntry` may now carry a `Label`, a `Value`
+  and `Opens`, the parts its one line of text runs together, which the big rows show separately. `Text` is unchanged, so
+  the desktop's list and every test that reads the lines see the same strings.
+- **A game's options** are the same `GameOptionsWindow`. In a big-screen session it is built with a pad family. It then
+  presents itself chromeless on the sheet layer (no sheet title, hint line or surface), and puts its rows in a
+  `MenuPanel` with the game's name as the title. The desktop's shape (a title, buttons, rows with a field label, a Close
+  button) is kept for the desktop. A `GameOption` may carry a `MenuRow` of its own, as Jump To…, Sort Games By and
+  Filter Gamelist do (§4.58), and `Opens` for the chevron. Filter Gamelist's state (*No filter*, *1 filter set*) is the
+  row's value rather than a line of text beside a button.
+- **The backdrop**: the library, the game picture and the game's heads-up bar sit in one panel, `ScreenContent`.
+  `MenuBackdrop` blurs it while the pad menu or a chromeless sheet is open in a big-screen session, and shades the
+  screen. The blur is Avalonia's `BlurEffect`, which Skia draws as a Gaussian image filter at full resolution, with no
+  captured or pre-scaled bitmap and no low-quality sampling. Its radius is 14 pixels at 800 lines, scaled with the
+  window.
+- **Size**: everything is laid out for a screen 800 pixels high and scaled by the window's height over 800
+  (`MenuPanel.Scale`, set once on the window). The panel is 0.66 of the width, but no wider than 1.05 times the height.
+  The rows show whole: at 1280×800 the library's pad menu shows nine of its eleven rows and scrolls to the rest.
+
+#### 4.69.4 Pad and keyboard
+
+Nothing about input changed. The pad menu still takes Up, Down, Left, Right, A, B and Start through `PadMenuCommand`.
+The game options are still driven by `PadWindowRouter`, focus moving by position, a button clicked by A, a dropdown
+stepped by Left and Right and opened by A. F4 opens the menu and Backspace closes it (§4.52a), and Escape closes a game's
+options. The rows' highlight is the list's selection in the pad menu and the keyboard focus in a game's options. Both
+are what they were; only the way they are drawn changed.
+
+#### 4.69.5 Tests
+
+`EsdeMenusTests` (WiseMan, headless, §15's pixel style), six cases:
+
+- The **Start menu at 1280×800 and 1920×1200**: the panel is centred, and the selected row's bar is the panel's width,
+  every pixel of its top line the bar's colour. The screen is blurred and the theme's help bar hidden. The frame
+  differs from the same frame with the panel alone taken away in no pixel outside the panel and the help bar. The
+  backdrop changed more than a twentieth of the screen. Closing lifts the blur and gives the theme's help back.
+- **A game's options at both sizes**: the same checks, and Jump To… has the focus and the bar. Apply stays, and Edit
+  This Game's Metadata has a chevron.
+- **F4 and Backspace with no pad** open the big menu, move in it and close it.
+- **A desktop session** keeps the bordered menu, no backdrop and the list's own rows.
+
+Two existing tests changed their expectations where the look changed and nowhere else.
+`ThemedGameOptionsTests.Select_opens_…` reads the game's name from the panel's title rather than a text block.
+`ThemedCollectionsTests.The_options_sheet_…` reads *1 filter set* from the Filter Gamelist row's value rather than a
+text block beside the button. Every other pad, menu and sheet test passed unchanged. Twelve mutants (six here, six in
+LunaP) were each caught (BigPicture §32.5).
+
+#### 4.69.6 What it does not do
+
+- **The settings sheets**: Theme Settings (with pass 4's Interface tab), Game Collection Settings, Preferences in a
+  big-screen session and the metadata editor keep their sheet look. That is the second stage.
+- **A dropdown opened from a row** (A on Sort Games By) drops down the stock list, not an ES-DE list screen.
+- **The in-game title** is the file's name with its extension, as the desktop's menu shows it.
+- **The pad menu on the desktop** (Guide over a desktop window) keeps its desktop look.
+- Nothing ran on the handheld or with a real pad; ES-DE was not run for this section. Its look was read from the
+  captures of 2026-09-26.

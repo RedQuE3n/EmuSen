@@ -6755,3 +6755,168 @@ changed and the pictures redrawn.
   whether ES-DE does was not measured. Keep, or start at the top?
 - **Q67, the random entry.** It may pick a folder. Should it pick games only, as USERGUIDE's "jumps to a random game"
   reads?
+
+## 32. ES-DE's menu look, stage 1: the Start menu and a game's options (2026-09-27)
+
+*Built on branch `bigpicture-esde-menus`, from WiseMan at `7c6ce023`; LunaP on `esde-menus`, from `openemu-library` at
+`1bd782b`.* The request was on 2026-09-27: "are we able to also make the big picture options menu look similar to ESDE?"
+Yes, in two stages, with the player's approval of the first stage's look before the second begins. The player's account is
+§4.69 of the settings reference; LunaP's record of its pieces is its §181. §29–§31 are other passes'.
+
+**Numbering.** Predictions from P180, questions from Q80; both ranges were free in the tree when this began.
+
+**Sources.** ES-DE's look was read from the captures of 2026-09-26 under
+`~/.cache/emusen/bigpicture/collections-probe/runs/` (the main menu `r7/m00_mainmenu.png`, the gamelist options
+`r5/f04_options.png`, Game Collection Settings and a selection list `r7/m02`, `r7/m03`). ES-DE was not run for this
+section, and its source was not read. No file of ES-DE's was copied: no font, image, sound or colour table. The
+measurements below are of those pictures, to set proportions; the colours are Mistress's own, near ES-DE's greys but not
+sampled into the code.
+
+### 32.1 What ES-DE's menu measures, at 1280×800
+
+Read off `m00_mainmenu.png` with a pixel scan (not ES-DE's code):
+
+- the panel runs from x 220 to 1060 (840 wide, 0.656 of the width) and y 104 to 716, with corners of about 16 px;
+- the title band is 100 px, its capitals 49 px high;
+- rows are 54 px apart with a 1 px rule, their capitals 26 px high, text 7 px from the left edge;
+- the chosen row is a black bar between two rules, edge to edge;
+- the chevron is 15 by 26 px, 8 px from the right edge;
+- the footer band is about 78 px;
+- the help bar sits at the bottom centre on a dark fill, its icons 22 px and its capitals 18 px.
+
+Mistress lays its menu out in the same proportions, scaled from 800 lines. The panel is 0.66 of the width but no wider
+than 1.05 times the height, which gives 840 px at 1280×800. The title is 68 px Barlow Condensed and the rows 36 px
+(their capitals about 26 px). The rows are 54 px; the help text is 26 px. It differs on purpose in three places. The
+chosen row's text turns near white on the bar, where ES-DE keeps it grey (Q82). The theme's own help bar is hidden, so
+one help bar shows. The help bar's buttons are LunaP's pad glyphs (§29) in the pad's family, not ES-DE's icons.
+
+### 32.2 What was built
+
+- **LunaP** (`esde-menus`): `MenuPanel`, `MenuRow`, `MenuRowKind`, `MenuRowLayout`, `MenuRows`, `BlurBackdrop` and
+  `SheetLayer.Chromeless` (its §181). Nothing existing changed its behaviour.
+- **Mistress**: the pad menu's list moves into a `MenuPanel` in a big-screen session. `PadMenuEntry` gains `Label`,
+  `Value` and `Opens`. `GameOptionsWindow` builds an ES-DE panel when given a pad family, and `GameOption` gains
+  `MenuRow` and `Opens`. `GamelistOptionRows` gives Jump To…, Sort Games By and Filter Gamelist their row forms. The
+  screen is wrapped in `ScreenContent` and blurred by `MenuBackdrop`. The theme's help bar is hidden while a menu is open.
+  Barlow Condensed ships in `Assets/Fonts` (§4.69.2, `THIRD_PARTY_NOTICES.md` §1.5).
+
+The desktop is unchanged: `ApplyBigMenuLook(false)` puts the list back in its bordered box with its own rows, and a
+game's options on the desktop are built as before. A test checks both (§32.4).
+
+### 32.3 Predictions
+
+| # | Predicted | Found | Verdict |
+|---|---|---|---|
+| P180 | *(written after the first pictures, before the tests)* The Start menu and a game's options draw nothing outside the panel and the help bar but the backdrop, at 1280×800 and 1920×1200 | 0 differing pixels outside at both sizes, in both menus | held |
+| P181 | *(written during the build)* No existing test needs a behavioural expectation changed; only expectations about how something is drawn | two changed, both about the look (the title read from the panel; *1 filter set* read from the row's value); 92 pad and desktop tests and 167 themed tests passed unchanged | held |
+| P182 | *(written before the mutants)* Of twelve mutants, at least nine in ten are caught on their first valid run | 12 of 12 | held, but see §32.5: the first round was not valid |
+| P183 | *(written before the broad run)* The broad Mistress run passes with no failure this branch causes | 1,039 tests, 1,007 passed, 32 skipped, none failed (§32.7) | held; one pass is weak evidence against an intermittent failure, as §15.14 says |
+
+### 32.4 Tests
+
+`EsdeMenusTests`, six cases, with the detail in §4.69.5:
+
+- the Start menu at both sizes;
+- a game's options at both sizes;
+- F4 and Backspace with no pad;
+- the desktop kept.
+
+The centring and the bar are read from the controls' arranged rectangles and from the pixels. The pixel rule is §15's
+comparison between two frames: the menu open, and the same frame with the panel alone hidden. It counts differing
+pixels inside the panel and help bar and outside them, and the outside count must be zero. LunaP's `MenuTests` adds ten
+cases (its §181.6).
+
+### 32.5 Mutants, and a round that was not valid
+
+Six mutants of Mistress and LunaP ran against `EsdeMenusTests`:
+
+1. the panel placed at a third of the width;
+2. the bar 0.9 of the row;
+3. the title drawn 40 px above the panel;
+4. the theme's help bar left shown;
+5. the desktop given the big look;
+6. no blur.
+
+Six more of LunaP ran against its `MenuTests` (its §181.6).
+
+**The first round of the six was not valid**, and its results are not counted. The runner restored each file from a copy
+made with `shutil.copy`, which gives the copy the time it was made, earlier than the mutant's build. MSBuild therefore
+saw the restored file as older than the assembly and did not rebuild it. Every mutant after the first ran on the first
+mutant's binary: all reported "caught", and the "theme help left shown" mutant failed on the centring assertion, which
+it does not touch. That mismatch is what exposed the problem. It is the trap memory records for the mutation runner. The
+runner now touches each restored file and touches every file it mutated before the final rebuild. On the valid round,
+each of the twelve was caught by the assertion written for it, and nothing else failed.
+
+### 32.6 Pictures
+
+In `~/.cache/emusen/bigpicture/png/esde-menus/`, from `EsdeMenusPictureTool` (`EMUSEN_BIGPICTURE_PNG=1`). For each of
+`synthetic` and `artbooknext`, at each of `1280x800` and `1920x1200`, the pictures are:
+
+- `-start-menu` and `-start-menu-fourth-row`;
+- `-game-options`;
+- `-game-options-sort-stepped`;
+- `-in-game-menu`;
+- `-folder-options`.
+
+Two side-by-sides compare with ES-DE's captures: `side-by-side-main-menu.png` against `m00_mainmenu.png`, and
+`side-by-side-game-options.png` against `f04_options.png`, both Art Book Next at 1280×800. Every picture was looked at.
+
+### 32.7 The broad run
+
+Once, on the final build of both branches (LunaP `c07279a`), under `nice -n 10` and `-m:2`, headless. The filter was the
+Mistress tests without any test named for shaders, the GPU or Vulkan:
+`FullyQualifiedName~EmuSen.WiseMan.Mistress&FullyQualifiedName!~Shader&FullyQualifiedName!~Gpu&FullyQualifiedName!~Vulkan`.
+
+- **1,039 tests: 1,007 passed, 32 skipped, none failed**, in 3.6 minutes.
+- The skipped are the picture, bench, live and real-library tools, which need their variables; this section's two
+  picture tools are among them.
+- LunaP's own suite ran in full on its branch: 1,388 tests, 1,387 passed. The one failure was the README's stale count of tests (its §181.6); it was corrected and that test rerun, and passed.
+
+### 32.8 Stage 2, not started
+
+It waits for the player's approval of stage 1's look. In the order the request was for (2026-09-27):
+
+1. **The metadata editor first**, as ES-DE's editor:
+   - an upper-case *Edit Metadata* title with the game's name and file name beneath;
+   - one row per field, label left and value right;
+   - text fields opening an edit popup;
+   - the rating as stars, flags as switches, and choices with `<` `>`;
+   - the buttons in a row at the bottom.
+
+   The source is USERGUIDE.md's *Metadata editor* section (the local copy under `~/.cache/emusen/bigpicture/motion/docs/`).
+   Two fields it lacks today, each stored in `games.db`'s `game_edit` like the rest:
+   - *Hide metadata fields*, a flag that hides most fields and the badges in the themed view;
+   - *Custom collections sortname*, shown only when the editor is opened inside a custom collection, which sorts custom
+     collections only.
+
+   *Hide from Library…* stays in place of ES-DE's Delete, since Mistress never deletes a ROM.
+2. **The settings sheets as ES-DE menus**: Theme Settings with pass 4's Interface tab, Game Collection Settings, and
+   Preferences in a big-screen session. Each has label-and-value rows, `<` `>` option rows, switches, and chevrons into
+   submenus.
+3. **An option row's list screen**, in place of the stock dropdown.
+
+`MenuRow`'s `Switch` kind is drawn but not yet driven, and a text popup and a stars row are new. The estimate, which is a
+guess from this stage's pace and not a measurement:
+- the metadata editor with its two fields and their behaviour: about one working session;
+- the three settings sheets, which hold several dozen settings between them: one to two more;
+- the pictures, mutants and records: throughout.
+
+### 32.9 Not done
+
+- The settings sheets and the metadata editor (§32.8).
+- A real pad, the handheld, and ES-DE running beside Mistress for a live comparison.
+- The desktop's pad menu, deliberately.
+
+### 32.10 Questions for the player
+
+- **Q80, the Start menu's title over the library.** *Main Menu*, as ES-DE, is what it shows now; the desktop's says
+  *EmuSen*. Keep *Main Menu*?
+- **Q81, the in-game title.** The running game's file name with its extension (*Cobalt Harbor (Synthetic).sfc*), as the
+  desktop's menu shows it. Show the library's title instead?
+- **Q82, the chosen row's text.** Near white on the bar here; ES-DE keeps it grey. Keep the brighter text, or match?
+- **Q83, the typeface.** Barlow Condensed Regular (§4.69.2). Keep it, or try Roboto Condensed or Fira Sans Condensed
+  side by side first?
+- **Q84, the footer.** *EmuSen 1.0.0* under the pad menu, where ES-DE shows its version. Keep, or drop it?
+- **Q85, a game's options' title.** The game's name, as before; ES-DE titles the same menu *Gamelist Options*. Which?
+- **Q86, A on an option row.** It drops down the stock list today. Build ES-DE's list screen in stage 2 (§32.8, item 3),
+  or leave A to step as Right does?

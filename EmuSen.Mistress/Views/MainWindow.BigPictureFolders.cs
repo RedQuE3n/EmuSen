@@ -35,7 +35,7 @@ namespace EmuSen.Mistress.Views
         {
             if (folder.FolderLink is not null && _editedCollection is null)
                 options.Add(new GameOption("Enter Folder", () => { _themed?.EnterFolder(folder, UiClock()); ScheduleThemedFrame(); }));
-            options.Add(new GameOption("Edit This Folder's Metadata", () => ShowFolderEditor(folder)));
+            options.Add(new GameOption("Edit This Folder's Metadata", () => ShowFolderEditor(folder)) { Opens = true });
         }
 
         // The games below a folder, by their paths from it, as the folder link offers them.

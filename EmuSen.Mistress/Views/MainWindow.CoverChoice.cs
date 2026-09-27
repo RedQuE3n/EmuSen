@@ -88,7 +88,7 @@ namespace EmuSen.Mistress.Views
 
         private void AddCoverEntries(List<GameOption> options, string path, string title)
         {
-            options.Add(new GameOption("Use Another Game's Cover...", () => ShowCoverPicker(path, title)));
+            options.Add(new GameOption("Use Another Game's Cover...", () => ShowCoverPicker(path, title)) { Opens = true });
             if (CoverChoiceOf(path) is not null) options.Add(new GameOption("Use Its Own Cover", () => UseOwnCover(path)));
         }
     }

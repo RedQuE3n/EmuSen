@@ -112,16 +112,16 @@ namespace EmuSen.Mistress.Views
         private void AddGameEntries(List<GameOption> options, string path, string title, Action toggleFavourite)
         {
             options.Add(new GameOption(_records.IsFavourite(path) ? "Remove from Favourites" : "Add to Favourites", toggleFavourite));
-            options.Add(new GameOption("Edit This Game's Metadata", () => ShowMetadataEditor(path, title)));
+            options.Add(new GameOption("Edit This Game's Metadata", () => ShowMetadataEditor(path, title)) { Opens = true });
             AddCoverEntries(options, path, title);
             // Scraping only ever starts where the player asks for it - see EmuSen_BigPicture.md §17.14.
-            if (!ScrapeRunning) options.Add(new GameOption("Scrape This Game...", () => _ = ConfirmAndScrapeAsync(ScrapeScope.ThisGame(path))));
+            if (!ScrapeRunning) options.Add(new GameOption("Scrape This Game...", () => _ = ConfirmAndScrapeAsync(ScrapeScope.ThisGame(path))) { Opens = true });
         }
 
         // A sheet in a big-screen session, a LunaP window owned by Mistress's on the desktop: SheetLayer decides which.
         private void PresentGameOptions(string title, IReadOnlyList<GameOption> options)
         {
-            var window = _gameOptions = new GameOptionsWindow(title, options);
+            var window = _gameOptions = new GameOptionsWindow(title, options, _bigScreen ? HelpFamily : (EmuSen.LunaP.Controls.PadFamily?)null);
             window.Closed += (_, _) => { if (ReferenceEquals(_gameOptions, window)) _gameOptions = null; };
             _ = SheetLayer.Show(window, this);
         }

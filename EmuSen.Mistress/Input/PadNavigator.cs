@@ -83,5 +83,10 @@ namespace EmuSen.Mistress.Input
 
         // Whether accepting it puts the menu away first.
         public bool Closes { get; }
+
+        // The big-screen row's parts where the one line runs them together: its label, its value, and whether it opens another screen (§4.69).
+        public Func<string>? Label { get; init; }
+        public Func<string?>? Value { get; init; }
+        public bool Opens { get; init; }
     }
 }

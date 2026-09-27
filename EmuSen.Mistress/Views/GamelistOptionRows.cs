@@ -45,9 +45,18 @@ namespace EmuSen.Mistress.Views
         // The three rows, the first carrying the apply.
         public IEnumerable<GameOption> Options(Action<GamelistOptionsResult> apply)
         {
-            yield return new GameOption("Jump To...", () => { }) { Row = () => new FieldRow { Label = "Jump To...", Content = _jump }, Apply = () => apply(Result) };
-            yield return new GameOption("Sort Games By", () => { }) { Row = () => new FieldRow { Label = "Sort Games By", Content = _sort } };
-            yield return new GameOption("Filter Gamelist", () => { }) { Row = FilterRow };
+            yield return new GameOption("Jump To...", () => { }) { Row = () => new FieldRow { Label = "Jump To...", Content = _jump }, MenuRow = () => MenuRows.Apply(_jump, "Jump To..."), Apply = () => apply(Result) };
+            yield return new GameOption("Sort Games By", () => { }) { Row = () => new FieldRow { Label = "Sort Games By", Content = _sort }, MenuRow = () => MenuRows.Apply(_sort, "Sort Games By") };
+            yield return new GameOption("Filter Gamelist", () => { }) { Row = FilterRow, MenuRow = FilterMenuRow, Opens = true };
+        }
+
+        // ES-DE's row: the filter screen behind a chevron, how many filters are set as its value (§4.69).
+        private Control FilterMenuRow()
+        {
+            Button filter = MenuRows.Apply(Ui.Button("Filter Gamelist", () => _ = FilterAsync()), MenuRowKind.Submenu, _filterState.Text);
+            filter.Name = "GamelistFilterButton";
+            _filterState.PropertyChanged += (_, e) => { if (e.Property == TextBlock.TextProperty) MenuRows.SetValue(filter, _filterState.Text); };
+            return filter;
         }
 
         private Control FilterRow()

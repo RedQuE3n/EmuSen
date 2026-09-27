@@ -59,7 +59,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return SyntheticLibrary.Games(theme, g.Extension).OrderByDescending(x => x.Favorite).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
-        private void Render(string label, string themeDir, ThemeChoices choices, string system, string view = "system", int w = 1280, int h = 800, int shuffle = 0, EmuSen.LunaP.Controls.DeviceStatus? status = null, Func<SceneSystem, SceneSystem>? adjust = null)
+        private void Render(string label, string themeDir, ThemeChoices choices, string system, string view = "system", int w = 1280, int h = 800, int shuffle = 0, EmuSen.LunaP.Controls.DeviceStatus? status = null, Func<SceneSystem, SceneSystem>? adjust = null, double animationSeconds = 0)
         {
             ThemeCapabilities caps = ThemeCapabilitiesReader.Read(themeDir);
             choices = choices with { ScreenWidth = w, ScreenHeight = h };
@@ -72,6 +72,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Now = new DateTime(2026, 9, 27, 5, 0, 0), ShowClock = false, Status = status ?? new EmuSen.LunaP.Controls.DeviceStatus(Bluetooth: true),
             };
             SceneBuilder scene = SceneBuilder.Build(data.System.Theme.View(view), data);
+            foreach (var a in scene.Entries.Select(e => e.Control).OfType<EmuSen.LunaP.Controls.FrameSequenceImage>()) a.Time = TimeSpan.FromSeconds(animationSeconds);
             Directory.CreateDirectory(PngFolder);
             string path = Path.Combine(PngFolder, $"mistress-{label}-{w}x{h}.png");
             SceneAssets.Render(scene).SavePng(path);
@@ -124,6 +125,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Render("r-aura-sys", Path.Combine(Real, "aura-es-de"), new ThemeChoices { Variant = "fullscreen-carousel-boxart" }, "mastersystem", w: w, h: h);
                 Render("r-aura-gl", Path.Combine(Real, "aura-es-de"), new ThemeChoices { Variant = "fullscreen-carousel-boxart" }, "snes", "gamelist", w, h);
                 Render("r-mania", Path.Combine(Real, "mania-menu-es-de"), new ThemeChoices { Variant = "backgroundArtScreenshot" }, "mastersystem", w: w, h: h);
+                if (Directory.Exists(Path.Combine(Real, "cathode-es-de")))
+                    Render("r-cathode", Path.Combine(Real, "cathode-es-de"), new ThemeChoices { Variant = "list-list" }, "snes", "gamelist", w, h, animationSeconds: 10.5);
             }
 
             string wheel = Path.Combine(Probe, "p14-wheel-es-de");

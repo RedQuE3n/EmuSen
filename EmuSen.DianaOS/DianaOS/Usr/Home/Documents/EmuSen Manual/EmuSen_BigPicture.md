@@ -1140,6 +1140,10 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   - **Q45** (*Use Another Game's Cover…*) is built as a replacement that stands on its own.
   - **Q44** no longer applies: the fallback is not switched off after pass 8.
   - **Q40,** the embedded credentials, is unaffected.
+- **Q70–Q72, answered on 2026-09-27 (§31):**
+  - **Q70:** yes. The other value types are probed against ES-DE as the six refusals were: colours, whole numbers (Canvas's and Iconic's `3.5`, P173), strings, paths, and `capabilities.xml`'s `selectable` (P172). The number with an exponent (P170) goes in the same run. The loader then matches ES-DE rule by rule.
+  - **Q71:** yes. A variant that states no `<selectable>` is treated as ES-DE treats it: not offered for selection. This is confirmed in Q70's run before it is built, since only one ES-DE observation supports it ("NONE DEFINED" for a lone variant).
+  - **Q72:** no. Theme warnings are never shown to the player; they go to the error log only (settings §4.70), as they do now.
 - **Q47–Q49 and the keyboard's menu key, answered on 2026-09-27 ("use your recommendations"):**
   - **Q47:** (b). ES-DE is run on the refused themes first, and the loader matches what it does rule by rule (§25.10). Done in §31: ES-DE
     loads all 15, and 66 of 66 listed themes now load.

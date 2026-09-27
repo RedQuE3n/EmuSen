@@ -3838,7 +3838,8 @@ cannot outlive the pack it describes.
   `EmuSen_Stack.md` §4.3 carries the revised argument.
 - **`.emusen-theme`**, the theme download's stamp (`EmuSen.Mistress/BigPicture/ThemeDownloads.cs`), has the shape of the
   pack's stamp and would move the same way. It was left because the big-picture code belonged to another branch at the
-  time, and it is the next candidate.
+  time, and it is the next candidate. *Done on that branch (§4.62): the record moved into `home/Themes/themes.db`, and
+  the stamp keeps only the row's id, which removal checks against the row.*
 - **LunaP's layout files** (`windows.json`, `tables.json`, `panes.json`, beside the settings) are program-written state
   the toolkit reads back. They live in `EmuSen.LunaP`, a separate repository, behind its `ISettingsStore`; the clean
   route is a SQLite `ISettingsStore` installed by each frontend's `Program.cs`, not an edit to the stores. One EmuSen

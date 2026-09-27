@@ -65,13 +65,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         internal static ThemedSession Open(string duration, double width = 1280, double height = 800, Action<AppSettings>? more = null)
         {
-            string media = Path.Combine(Path.GetTempPath(), "EmuSenLaunchMedia", Guid.NewGuid().ToString("N"));
+            string? media = null;
             return new ThemedSession(width, height, settings: a =>
             {
                 a.BigPictureInterface.LaunchScreenDuration = duration;
-                a.EsdeMediaDirectory = Media(media);
+                a.EsdeMediaDirectory = media;
                 more?.Invoke(a);
-            });
+            }, roms: r => media = Media(Path.GetDirectoryName(r)!));
         }
 
         // Each duration holds the game back to within one 16 ms poll of its end, and not a poll longer.

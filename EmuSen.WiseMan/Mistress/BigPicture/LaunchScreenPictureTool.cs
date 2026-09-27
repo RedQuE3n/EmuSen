@@ -42,12 +42,19 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             _out.WriteLine(path);
         }
 
-        internal static ThemedSession Open(string duration, int w, int h, string? theme = null) =>
-            new(w, h, themeDirectory: theme, settings: a =>
+        internal static ThemedSession Open(string duration, int w, int h, string? theme = null)
+        {
+            string? media = null;
+            return new(w, h, themeDirectory: theme, settings: a =>
             {
                 a.BigPictureInterface.LaunchScreenDuration = duration;
-                a.EsdeMediaDirectory = LaunchScreenTests.Media(Path.Combine(Path.GetTempPath(), "EmuSenLaunchMedia", Guid.NewGuid().ToString("N")));
-            }, roms: r => File.WriteAllBytes(Path.Combine(r, LongName + ".sfc"), SyntheticRom.BuildBlank()));
+                a.EsdeMediaDirectory = media;
+            }, roms: r =>
+            {
+                File.WriteAllBytes(Path.Combine(r, LongName + ".sfc"), SyntheticRom.BuildBlank());
+                media = LaunchScreenTests.Media(Path.GetDirectoryName(r)!);
+            });
+        }
 
         // One launch of the game named, a picture at each moment asked for, then the game let go.
         private void Shoot(ThemedSession s, string game, string label, params int[] at)

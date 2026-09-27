@@ -1022,6 +1022,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 | P68–P71 | Collections and gamelist options: the broad run, a large library's Show with the collections, a step in all games, the options sheet's cost (§22.1) | §22.10 |
 | P84–P91 | The game options menu and the metadata editor: every control reachable, an edit surviving a re-scrape, the editor's own scrape, no ROM touched, a click on the rating, the mutants, the broad runs (§23.1) | §23.1: all held but P88 (failed, then fixed) and P90 (one unattributed failure) |
 | P100–P120 | The remaining passes' predictions: the handheld, controllers, the theme survey, badges and switches, localisation, folders, the modes, scraping extras, manuals, the screensaver, the launch screen, video, TheGamesDB, the passes' pace (§21.6) | Each in its pass |
+| P123–P129 | Pass 3's open questions of fact: ES-DE on the themes the loader refuses, a live download, a live opening, GitHub's allowance, the survey's missing assets, pass 14's first rules (§25.9) | Each when measured |
 
 ---
 
@@ -4206,7 +4207,7 @@ Written before any pass is built, to be retired in each pass's record.
 | P101 | 1 | Game Mode's compositing adds under 1 ms to the median frame of the held carousel at 1920×1200 against Desktop Mode, and no frame in 1,800 exceeds 16.7 ms | Pass 1 |
 | P102 | 1 | A navigation sound starts within 100 ms of its press while a game is suspended behind the library, the 4,096-frame device buffer of §15.6 included, as SDL's queue and buffer sizes report it | Pass 1 |
 | P103 | 2 | Every pad rule of §15.3 holds from either of two pads, and the help bar follows the pad last pressed; ES-DE's device popup fades in and out over 0.4–0.6 s each and holds 2–5 s | Pass 2 |
-| P104 | 3 | Of ES-DE's listed themes, at least 90% load for EmuSen's five systems with no loader error, and at least half use an element or carousel type Mistress does not draw; the XML-only survey fetches under 50 MB | Pass 3 |
+| P104 | 3 | Of ES-DE's listed themes, at least 90% load for EmuSen's five systems with no loader error, and at least half use an element or carousel type Mistress does not draw; the XML-only survey fetches under 50 MB | Pass 3: failed on all three clauses (§25.9) |
 | P105 | 4 | Built-in badges change no pixel of Art Book Next's gamelist, which names its own icons; on a synthetic theme that names none, each of the nine slots draws | Pass 4 |
 | P106 | 4 | Turning the clock on changes only pixels inside the clock's box, as P43 found for the help bar | Pass 4 |
 | P107 | 5 | At the pass's start, the pseudo-locale walk finds 300–900 distinct visible strings outside the lookup in a big-screen session's sheets; at its end, none | Pass 5 |
@@ -5291,8 +5292,9 @@ read from the list itself: `themes.json` was fetched once, at 2026-09-26 21:49 U
 survey used (§25.9); it was not fetched again. Nothing from the list, from any theme or from ES-DE entered either
 repository: every test runs on a synthetic list, synthetic screenshots drawn in WiseMan and synthetic themes.
 
-**Numbering.** §22 and §23 numbered their own predictions (to P91) and §24 took P121 and P122; this section continues at
-**P123**, and its questions start at **Q40**, as the plan asked, leaving Q36–Q39 unused.
+**Numbering.** §22 and §23 numbered their own predictions (to P91), §24 took P121 and P122, and §26 took P130–P135;
+this section uses **P123–P129**. The plan set its questions to start at Q40; §10.1 answered Q40–Q46 for other sections
+while this one was written, so its questions start at **Q47**.
 
 ### 25.1 What the list states, and what it does not (measured)
 
@@ -5444,6 +5446,134 @@ run left behind (the machine had hard-reset once that day). The tree was rebuilt
   now does, and catches it.
 - **B27 did not build:** the mutant's text dropped the pattern variable's scope. Rewritten to trust the row whatever the
   stamp's id, it is caught by the removal test.
+
+### 25.8 The survey of the listed themes (Q28)
+
+**Method.** `ThemeSurveyTool` in WiseMan, skipped unless `EMUSEN_THEME_SURVEY` names its phase, run from a copy of the
+build so the worktree could be rebuilt meanwhile. Everything it fetched is under `~/.cache/emusen/bigpicture/theme-survey/`
+(`xml/`, `trees/`, `fetch.log`, `survey.json`); nothing entered the repository.
+- **Fetch.** For each of the 66 themes, one listing of the default branch's tree (GitHub's `git/trees/HEAD?recursive=1`,
+  one API request; GitLab's paginated `repository/tree`), then every `.xml` file from the hosts' raw file addresses, one
+  at a time, 2 s after each listing and 0.2 s after each file, reading GitHub's remaining allowance from every answer and
+  waiting for its reset rather than exceeding it (it was never reached: 66 listings over three sessions). The run was cut
+  twice, once by a hard reset of the machine and once when a session ended; each restart skipped the listings and files
+  already held.
+- **A narrowing, made during the run.** After 17 themes the listings showed per-system files in bulk: of the 66 themes'
+  23,675 XML files (203.0 MB as GitHub declares them), most are named for one of ES-DE's 154 systems (`3do.xml`,
+  `amiga.xml`, …) or sit under a folder so named. The loader asked for EmuSen's five systems never reads those, so the
+  tool stopped fetching any file whose name or folder is one of the 149 other systems' short names (read from
+  `USERGUIDE.md`'s systems table). That leaves 8,480 files and 68.8 MB declared. The 17 themes fetched before the change
+  kept their other-system files, which the analysis never reads. **Fetched in all: 12,045 files, 97.0 MB**, in about
+  12,100 requests; 11,630 files (107.4 MB) were left unfetched as other systems'. GitLab declares no sizes, so Grimmlex's
+  are not in the declared totals.
+- **Analysis.** For every theme, `ThemeCapabilitiesReader` and then `ThemeLoader.Load` for each of the five systems and
+  each selectable variant (or once when it declares none), 1,990 loads in 3.2 s. A theme counts as loading when every
+  system comes out themed. Undrawn elements are those not in `SceneMapping.Drawn`; undrawn properties are the explicit
+  properties of drawn elements that `SceneMapping.IsMapped` does not map; wheel carousels (`verticalWheel`,
+  `horizontalWheel`) are counted as undrawn, since `PrimaryElements.Carousel` draws only straight rows and columns.
+
+**Caveat before any number.** Only XML was fetched, so every image, font and sound a theme names is missing, and the
+loader reports each as `PathMissing` (a warning, 63 themes). No such warning unthemes a system, so the counts below are
+the loader's verdict on the XML, not on a theme as downloaded.
+
+**Loading.**
+- **51 of 66 themes are themed for all five systems, and 46 of those with no loader error at all.** Five more (Aura,
+  Canvas, Cathode, DEcaffe, Iconic) are themed but log errors that drop an element or a variant.
+- **15 are unthemed for all five**, by six rules:
+
+  | Rule | Themes | What the theme writes |
+  |---|---|---|
+  | `folderLinkSize` of `badges` must be a number | CarAlt, CodyWheel, Diamond, ES-DE-Mini, Showcase, Slick (Remixed), TateGriddy | a pair, `0.85 0.9` |
+  | a malformed `capabilities.xml` | Razor, SimCar, SimpleMenu, X20s | an unescaped `&` in a label (`Game & Watch`) |
+  | `size` of `gamelistinfo` must be a pair | Artflix (Revisited), CoinOPS | `w 0.02` |
+  | `<transitions>` placed directly in `<theme>` | Grimmlex, X20s | a legacy-looking placement |
+  | `visible` must be a boolean | Retrofix (Revisited) | `no` |
+  | `metadataElement` must be a boolean | X20s | `flase` |
+
+  THEMES.md types `folderLinkSize` as FLOAT, so the loader follows the document. But these themes are on ES-DE's own
+  list, and THEMES.md says an error of this kind "will abort the theme loading"; either ES-DE parses these values
+  leniently (a float parser reading the first number, an XML parser accepting a bare `&`) or ES-DE refuses them too and the
+  list carries themes it cannot load. Which is not known: ES-DE was not run on them. P123 and P124 state the expectation,
+  and Q47 asks what to do.
+
+**What big picture does not draw.**
+- **No listed theme is drawn whole.** Every one of the 51 themed themes sets at least one property the scene does not
+  map; the median is 12. Four (Art Book Next, Colorful (Revisited), Colorful (Simplified), Game OS) miss only video
+  properties and `badges`' `controllerSize` and `folderLinkSize`.
+- **Elements not drawn**, by the number of themes that use them: `gameselector` 20, `gamelistinfo` 6, `animation` 4.
+  **Wheel carousels:** 9 themes (Artflix, Aura, Canvas, CarAlt, CodyWheel, CoinOPS, Iconic, Showcase, SimCar); across the
+  themed loads, carousel types were `horizontal` in 43 themes, `vertical` 18, `verticalWheel` 7 and `horizontalWheel` 1.
+  **28 of 66 themes** use an undrawn element or a wheel in the files present, **20 of the 51** that load.
+- **Properties not drawn**, 90 in all. By themes: `video.delay` 51, `video.pillarboxes` 45 and ten more video
+  properties (pass 12's); then `badges.controllerSize` 37, `carousel.lineSpacing` 32, `carousel.selectedItemMargins` 32,
+  `helpsystem`'s dimmed set (`textColorDimmed`, `iconColorDimmed` 24, `originDimmed`, `posDimmed` 22, `fontSizeDimmed`
+  19, `opacityDimmed` 14), `carousel.horizontalOffset` 23, `badges.folderLinkSize` 21, `badges.controllerPos` 18,
+  `image.stationary` 17, `carousel.imageInterpolation` 17, `image.brightness` 14, `badges.folderLinkPos` 13,
+  `carousel.imageCornerRadius` 12, `rating.interpolation` 12, `textlist.selectorImagePath` 11 and `image.gameselector` 10.
+  The full table, per theme, is `survey.json`.
+
+**What this sizes for pass 14.** The survey's order differs from §21.3's guess. `gameselector` leads the elements, as
+expected, but the widest gaps are properties of elements already drawn: the badges' controller and folder-link icons,
+the help system's dimmed state, and the carousel's margins, line spacing and offsets, each used by a fifth to a half of
+the list, and each small beside a new element. Wheels matter to 9 themes, `gamelistinfo` to 6 and `animation` to 4. The
+loader's six refusals come first of all, since they keep 15 themes from showing anything (Q47).
+
+### 25.9 Predictions
+
+**Retired.**
+
+| # | Predicted (§21.6) | Measured | Verdict |
+|---|---|---|---|
+| P104 | at least 90% of listed themes load for the five systems with no loader error; at least half use an element or carousel type not drawn; the XML-only survey fetches under 50 MB | 46 of 66 (70%) load with no error, 51 (77%) themed; 28 of 66 (42%) use an undrawn element or a wheel; all XML is 203 MB declared, the five systems' share 68.8 MB, and 97.0 MB was fetched | failed on all three clauses |
+
+The first clause failed on six rules of the loader's (§25.8), not on themes that are broken in any way known. The second
+was an underestimate of how much the list is built from elements already drawn: its gaps are properties more than
+elements. The third missed how many XML files a theme writes: most write one per system for ES-DE's 154, so a theme's
+XML averages 3.1 MB declared across the 65 GitHub themes, and even the five systems' share came to 68.8 MB.
+
+**No predictions were written before the build.** The plan listed P104 as the pass's only prediction, and the build's
+rules were stated as tests (§25.4) rather than as predictions. The following are written now, for what this pass could
+not measure:
+
+| # | Prediction | Retired when |
+|---|---|---|
+| P123 | ES-DE 3.4.1, run from the scratch copy, themes CarAlt for `snes` although its `badges` set `folderLinkSize` to a pair, drawing the icon at the pair's first number | ES-DE is run on it |
+| P124 | ES-DE 3.4.1 loads Razor, whose `capabilities.xml` carries a bare `&`, and lists its `Game & Watch` label | the same run |
+| P125 | Downloading Art Book Next from the browser on the desktop fetches an archive of 205–230 MB (P11, by download this time) and completes, unpacked and checked, within 3 minutes | the player's first live download |
+| P126 | A first live opening of the browser costs one list request, one screenshot and one commit request per installed listed theme, and a second opening that day costs nothing | the first live opening, from a request log |
+| P127 | A player opening 20 themes' details in an hour stays within GitHub's 60 unauthenticated requests (40 are counted) | a live session, from the rate headers |
+| P128 | Fetching the survey's missing assets for the 51 themed themes would clear every `PathMissing` warning and change no count in §25.8 | a later survey with assets, if asked |
+| P129 | Mapping `badges.controllerSize`, `folderLinkSize` and their positions, `helpsystem`'s dimmed set, and the carousel's `lineSpacing`, `selectedItemMargins` and offsets would leave at least 8 of the 51 themed themes with only video properties unmapped | pass 14's first step |
+
+### 25.10 Questions for the player
+
+- **Q47, the loader's six refusals.** Fifteen listed themes are refused whole by rules THEMES.md states (§25.8). Options:
+  (a) keep THEMES.md's strictness, and those themes show EmuSen's fallback;
+  (b) run ES-DE on them first (P123, P124) and match what it does, rule by rule;
+  (c) accept all six leniently now.
+  **Recommendation: (b).** The oracle for this format is ES-DE's behaviour where the document and the list disagree, as
+  it was for the grid (§16.5); a theme ES-DE draws should not be one Mistress refuses, and a theme ES-DE refuses should
+  not be one Mistress draws. It is one short run of the scratch ES-DE on two themes.
+- **Q48, pass 14's order.** The survey's order: the loader's refusals (Q47); the badges' and help system's missing
+  properties and the carousel's margins and offsets (widest, cheapest); `gameselector` (20 themes); wheel carousels (9);
+  `gamelistinfo` (6); `animation` (4). **Recommendation: that order,** with any theme the player chooses moving its own
+  elements to the front, as §21.4 already allows.
+- **Q49, ES-DE's full-screen screenshots.** ES-DE's downloader shows a theme's screenshots full screen on X; the detail
+  here shows them one at a time at a fixed size. Options: build it now; build it with pass 9's media viewer, which is the
+  same pager. **Recommendation: with pass 9.**
+
+### 25.11 Not done
+
+- **ES-DE was not run.** The six refusals of §25.8 are the loader's, not measured against ES-DE (P123, P124, Q47).
+- **Nothing was downloaded from a real theme host** except the survey's XML and the one fetch of `themes.json`; the
+  browser, its screenshots, host answers and downloads were exercised only against `FakeThemeHosts` (P125–P127).
+- **The survey fetched no assets,** so every image, font and sound path is missing, and nothing was rendered from a
+  surveyed theme (P128).
+- **Full-screen screenshots,** sorting and searching the list: not built (Q49).
+- **ES-DE's git transfer** fetches only what changed; Mistress fetches the whole archive on every update.
+- **Nothing ran on the handheld.**
+- **Undrawn properties are counted as set, not as seen.** A property set on an element that a variant then hides still
+  counts; the counts are an upper bound on what a player would notice.
 
 ---
 

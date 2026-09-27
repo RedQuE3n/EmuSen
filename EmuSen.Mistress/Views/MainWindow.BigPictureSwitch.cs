@@ -64,6 +64,8 @@ namespace EmuSen.Mistress.Views
 
             // One window on screen in a big-screen session, so the others are drawn inside this one - see EmuSen_Settings_Reference.md §4.45.2.
             Sheets.PresentsWindows = on;
+            // A sheet that draws no menu of its own is framed as one, its controls in ES-DE's look - see EmuSen_Settings_Reference.md §4.80.
+            Sheets.MenuLook = on;
             EmbeddedPopups.SetIsEnabled(this, on);
             ApplyBigMenuLook(on);
 

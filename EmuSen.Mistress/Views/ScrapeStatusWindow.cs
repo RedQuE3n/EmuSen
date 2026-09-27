@@ -85,10 +85,14 @@ namespace EmuSen.Mistress.Views
                 _tallySection,
                 Ui.Section("Quota", Ui.Stack(4, _member, _quota, _requests, _limits, _why, _summary)),
                 _recentSection);
+            var buttons = new ButtonBar { ItemsSource = new[] { _pause, _cancel, _hide }, HorizontalAlignment = HorizontalAlignment.Right };
             Content = Ui.Rows("*,Auto",
                 new ScrollViewer { Content = body, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled },
-                new ButtonBar { ItemsSource = new[] { _pause, _cancel, _hide }, HorizontalAlignment = HorizontalAlignment.Right }).Margin(16);
+                buttons).Margin(16);
             if (Content is Grid grid) grid.RowSpacing = 12;
+            // On a big-screen sheet, in ES-DE's look: the run at the left and the recent games at the right, so every row is in view and in the pad's reach - see EmuSen_Settings_Reference.md §4.80.
+            MenuLook.SetWidthFraction(this, 0.9);
+            if (Content is Grid look) MenuLook.WhenApplied(look, () => TwoColumns(look, body, buttons));
 
             _timer = new DispatcherTimer { Interval = RefreshEvery };
             _timer.Tick += OnTick;
@@ -100,6 +104,23 @@ namespace EmuSen.Mistress.Views
         }
 
         private const double RecentHeight = 200;
+
+        private void TwoColumns(Grid look, Control body, ButtonBar buttons)
+        {
+            look.Margin = new Thickness(0, 0, 0, 16);
+            _heading.FontSize = 30;
+            _game.FontSize = 28;
+            buttons.HorizontalAlignment = HorizontalAlignment.Center;
+            if (look.Children.OfType<ScrollViewer>().FirstOrDefault() is not { } scroll || body is not Panel stack) return;
+            stack.Children.Remove(_recentSection);
+            _recentSection.ClearValue(HeightProperty);
+            look.Children.Remove(scroll);
+            var columns = new Grid { ColumnDefinitions = new ColumnDefinitions("3*,32,2*") };
+            Grid.SetColumn(_recentSection, 2);
+            columns.Children.Add(scroll);
+            columns.Children.Add(_recentSection);
+            look.Children.Insert(0, columns);
+        }
 
         // How many times the window has drawn the run; a test counts it.
         public int Refreshes { get; private set; }

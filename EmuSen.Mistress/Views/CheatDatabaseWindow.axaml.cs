@@ -76,6 +76,8 @@ namespace EmuSen.Mistress.Views
             Func<IReadOnlyCollection<string>>? supportedSystems = null, string? console = null)
         {
             InitializeComponent();
+            if (Content is DockPanel body) EmuSen.LunaP.Controls.MenuLook.WhenApplied(body, () => InLook(body));
+            EmuSen.LunaP.Controls.MenuLook.SetWidthFraction(this, 0.8);
             SystemsList.Label = r => $"{r.System}  ({r.Count})";
             SystemsList.Key = r => r.System;
             _settings = settings;
@@ -108,6 +110,35 @@ namespace EmuSen.Mistress.Views
                 _settings.CheatSearch = GameFilter.SearchText;
                 _settings.Save();
             };
+        }
+
+        // On a big-screen sheet in ES-DE's look: the status over centred buttons, and the folder typed rather than browsed, as a pad cannot drive the file dialog (§4.80).
+        private void InLook(DockPanel dock)
+        {
+            {
+                dock.Margin = new Avalonia.Thickness(0, 0, 0, 16);
+                // The folder's label beside its box, as a menu row's is, and the two lists given equal room.
+                if (dock.Children.OfType<TextBlock>().FirstOrDefault(t => t.Text == "Cheat Folder") is { } label)
+                {
+                    int at = dock.Children.IndexOf(label);
+                    dock.Children.Remove(label);
+                    dock.Children.Remove(DirectoryPicker);
+                    label.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+                    label.Margin = new Avalonia.Thickness(0, 0, 16, 0);
+                    Grid.SetColumn(DirectoryPicker, 1);
+                    var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = DirectoryPicker.Margin, Children = { label, DirectoryPicker } };
+                    DirectoryPicker.Margin = default;
+                    DockPanel.SetDock(row, Dock.Top);
+                    dock.Children.Insert(at, row);
+                }
+                if (dock.Children.OfType<Grid>().LastOrDefault() is { ColumnDefinitions.Count: 3 } lists) lists.ColumnDefinitions = new ColumnDefinitions("*,16,*");
+            }
+            SheetLook.StatusOverButtons(StatusText);
+            // The licence's attribution stays in view as the panel's footer, leaving the lists the room.
+            if (AttributionText.Parent is Border attribution) attribution.IsVisible = false;
+            EmuSen.LunaP.Controls.MenuLook.SetFooter(this, CheatDatabaseInstaller.Attribution);
+            DirectoryPicker.TemplateApplied += (_, e) => { if (e.NameScope.Find<Control>("PART_Browse") is { } browse) browse.IsVisible = false; };
+            if (Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(DirectoryPicker).OfType<Control>().FirstOrDefault(c => c.Name == "PART_Browse") is { } shown) shown.IsVisible = false;
         }
 
         // AppSettings when set, the sandbox's own Cheats folder otherwise -

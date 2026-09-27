@@ -46,8 +46,8 @@ namespace EmuSen.Mistress.Views
             return true;
         }
 
-        // A big-screen menu on screen, the pad menu or a chromeless sheet, which ES-DE's keys drive as they drive the view (Q102, §4.72.7).
-        internal bool BigMenuOnScreen => _bigScreen && (_padMenuOpen || Sheets.Current is { } sheet && SheetLayer.GetChromeless(sheet));
+        // A big-screen menu on screen, the pad menu or a sheet drawn as a menu, which ES-DE's keys drive as they drive the view (Q102, §4.72.7, §4.80).
+        internal bool BigMenuOnScreen => _bigScreen && (_padMenuOpen || Sheets.Current is { } sheet && Sheets.DrawsMenu(sheet));
 
         private bool KeyHeld(UiButton button) => _themedKeys.Contains(button);
 

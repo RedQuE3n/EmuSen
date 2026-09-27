@@ -5543,3 +5543,121 @@ Until that is checked, *EmuSen's* is the choice that is known to work with a con
 environment, the address asked for exactly and nothing launched, typed text kept on Enter and dropped on Escape or B,
 EmuSen's keyboard still opening with *EmuSen's*, the Preferences row, the subtitle, the help bar's words on every row,
 A on the stars, the scroll indicator's place and pixels, and the filled glyphs in the view and the editor.
+
+### 4.80 Big picture: the other windows in ES-DE's look (2026-09-27)
+
+Decided 2026-09-27 (`EmuSen_BigPicture.md` §10.1):
+
+- the windows need not be converted one for one into ES-DE's menus;
+- what every window keeps is ES-DE's look: its colours, the Barlow Condensed face and the rounded panels;
+- each window gets a layout a controller can use, wherever one can be had;
+- windows that need their own layout keep it and take the look.
+
+This section is the player's account. The plan's record, its predictions, questions and pictures are
+`EmuSen_BigPicture.md` §41, and the toolkit's pieces are LunaP's §196.
+
+**Where it stands.** The look is built as one style layer. Three windows have been checked in it: the scraping status,
+Active Cheats and the Cheat Database. The rest keep the plain sheet until their look is approved (§4.80.6).
+
+#### 4.80.1 What the player sees
+
+In a big-screen session (Game Mode, `--bigscreen`, or Big Picture from the desktop's View menu), those three windows open
+as ES-DE's menus do:
+
+- a wide rounded panel in the middle of the screen, over the screen blurred and darkened;
+- the window's name as the large upper-case title, with a rule under it;
+- one help bar at the bottom with the pad's buttons: *Select*, *Back*, *Tab* where the window has tabs, *Change* where a
+  value steps sideways, and *Choose*.
+
+Inside the panel the controls are drawn in Barlow Condensed and ES-DE's greys:
+
+- **buttons** are outlined boxes with upper-case words, and the focused one is filled black with white words;
+- **a list's chosen row**, or a table's focused row, is the black bar across the list;
+- **text boxes** are dark fields with a white border while they are being typed in;
+- **tabs** are upper-case words, the chosen one underlined;
+- **headings** are upper case, in the title's grey.
+
+Each window keeps what it is for. Its layout changes only where a pad needs it to:
+
+- **Scraping.** The run is on the left and the recent games on the right, so every row can be seen and reached at
+  1280×800. The heading is larger and the buttons are centred.
+- **Active Cheats.** *Save As…* and *Load From…* are not offered, because they open a file dialog a pad cannot drive.
+  *Save* and *Load* use the game's own list and stay. The table's small words are larger. The status line sits above
+  the centred buttons.
+- **Cheat Database.** The panel is wider, 0.8 of the screen. The folder's label is beside its box, and the folder is typed
+  on the on-screen keyboard; *Browse…* is not offered. The two lists are the same width. The licence's attribution is
+  the panel's footer, so it stays in view. The status line sits above the centred buttons.
+
+The desktop's windows are unchanged.
+
+#### 4.80.2 Pad and keyboard
+
+- **B** closes the window, or goes back to the window it was opened from (the database goes back to the cheats).
+- **L1 and R1** turn the tabs, as before. Where a window has no tabs, they now move a list's selection a page at a time,
+  or scroll the area the focus is in. This works in any window the pad drives, not only a framed one.
+- **ES-DE's keys** (§4.52a: the arrows, Enter, Backspace, Page Up and Down, Home and End, F1, F4, Insert) drive a framed
+  window as the pad's buttons do, as they drive the menus (§4.72.7).
+- **Text boxes** are the exception. A focused box keeps the keys it types with: Backspace erases, Left and Right move the
+  caret, Enter is the box's own. Up and Down still move out of it. Typed text goes in as always, and A on a box opens the
+  on-screen keyboard.
+
+#### 4.80.3 How it is built
+
+- **LunaP** (§196) provides the pieces:
+  - `MenuLook`, the look's styles and palette for stock controls, scoped to one element;
+  - `SheetLayer.MenuLook`, which frames a sheet in a `MenuPanel` titled by its window;
+  - `MenuHintsFor`, `MenuFrameFor`, `MenuLook.Hints`, `MenuLook.Footer` and `MenuLook.WidthFraction`.
+- **Mistress** does the rest:
+  - It turns `Sheets.MenuLook` on with big screen. `MenuFrameFor` names the windows checked so far.
+  - `SheetMenuHints` builds the help bar from what the window holds.
+  - Barlow Condensed is also an Avalonia resource, so the stock controls can name it as a font family (resource key
+    `LunaMenuFontFamily`). The menus still draw the same file by its path.
+  - The blurred backdrop, and ES-DE's keys, count a framed sheet as a menu.
+- **What the styles cannot reach**, such as a size a window set on a control itself or a layout that needs a pad, each
+  window changes in `MenuLook.WhenApplied`, which runs once when the window is shown in the look. The desktop never
+  runs it.
+
+#### 4.80.4 A defect found on the way: a list's rows left unbuilt
+
+At 1920×1200 the framed Active Cheats showed one of its two cheats in a table with room for both. The cause was
+measured: the list's own viewport was worked out as 524 by 39 pixels, where the list was 774 by 85. It is Avalonia's,
+for a clipping control directly under a scaled one; LunaP §196.4 has the numbers and the fix. After the fix the viewport
+was 774 by 85 and both rows were built.
+
+**Not fixed:** the plain sheet has the same structure, so a list near the foot of a plain sheet above 1280×800
+may still leave rows unbuilt. That frame now belongs to the controller bindings' overhaul; Q175 asks.
+
+#### 4.80.5 Tests
+
+- **`SheetLookTests`** (WiseMan, headless), eight cases, and **`ScrapeStatusLookTests`**, two:
+  - each of the three windows at 1280×800 and 1920×1200 is framed: centred, titled by its window, blurred behind, its
+    help bar's words as §4.80.1 gives them;
+  - a frame differs from the same frame with the panel made transparent in no pixel outside the panel and the help
+    bar;
+  - every control the pad reaches is at least 40 pixels tall at 800 lines;
+  - a focused button is filled with the bar, and the focused row of the cheats' table is the bar from edge to edge;
+  - *Save As…*, *Load From…* and *Browse…* are gone and *Save* stays; the attribution is the footer; the database's
+    panel is its width share; its status is above its buttons; the recent games are right of the run and all built;
+  - every control of the cheats (each tab) and of the database is reached by the pad, and B backs out of each;
+  - R1 and L1 page a list of 300 games;
+  - ES-DE's keys: typing into the code box, Backspace erasing in it, Right staying in it, Down leaving it, Page Down
+    turning the tab, Backspace closing;
+  - the desktop keeps its own cheats window, with no look and *Save As…* shown, and the controller bindings keep the
+    plain sheet.
+- **LunaP's `MenuLookTests`**: six cases (§196.6).
+- **Mutants and the broad run:** `EmuSen_BigPicture.md` §41.
+
+#### 4.80.6 What it does not do yet
+
+- **The other windows**, until the look of these three is approved:
+  - Find by Name and Use Another Game's Cover;
+  - the gamelist filter and the folder editor;
+  - Graphics Settings and Shaders;
+  - the resume question, the rewind reel and a screenshot;
+  - the theme browser, a theme's detail and its About.
+
+  They keep the plain sheet.
+- **The controller bindings** keep the plain sheet until their own overhaul adopts the look.
+- **A desktop ES-DE look.** The style layer can be switched on for a desktop window with one call (LunaP §196.5); no
+  setting does it.
+- **Hardware.** No real pad, keyboard or handheld was used; everything here ran headless.

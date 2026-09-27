@@ -91,22 +91,38 @@ namespace EmuSen.Mistress.Views
             CheatsList.Column(new LunaColumn<CheatRow>("Code", r => Mono(r.Detail), r => r.Detail) { Width = "Auto" });
         }
 
-        private static Control Muted(string text) => new TextBlock
+        private Control Muted(string text) => SmallCell(new TextBlock
         {
             Text = text,
             Foreground = Brush("LunaMuted"),
-            FontSize = 11,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-        };
+        });
 
-        private static Control Mono(string text) => new TextBlock
+        private Control Mono(string text) => SmallCell(new TextBlock
         {
             Text = text,
             Foreground = Brush("LunaMuted"),
             FontFamily = new Avalonia.Media.FontFamily("monospace"),
-            FontSize = 11,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-        };
+        });
+
+        // A cell's small words: 11 on the desktop, larger on a big-screen sheet in ES-DE's look (§4.80).
+        private static readonly Avalonia.StyledProperty<double> CellFontSizeProperty = Avalonia.AvaloniaProperty.Register<ActiveCheatsWindow, double>("CellFontSize", 11);
+
+        private TextBlock SmallCell(TextBlock cell)
+        {
+            cell.Bind(TextBlock.FontSizeProperty, Avalonia.AvaloniaObjectExtensions.GetObservable(this, CellFontSizeProperty));
+            return cell;
+        }
+
+        // On a big-screen sheet: the cells' words larger, the status over centred buttons, and no Save As or Load From, whose file dialogs a pad cannot drive (§4.80).
+        private void InLook(DockPanel dock)
+        {
+            SetValue(CellFontSizeProperty, SheetLook.SmallText);
+            dock.Margin = new Avalonia.Thickness(0, 0, 0, 16);
+            SheetLook.StatusOverButtons(StatusText);
+            SaveAsButton.IsVisible = LoadFromButton.IsVisible = false;
+        }
 
         // DynamicResource in code: the theme can change under a live window - see EmuSen_LunaP.md §12.3.
         private static Avalonia.Media.IBrush? Brush(string key) =>
@@ -121,6 +137,7 @@ namespace EmuSen.Mistress.Views
             Func<bool>? applyNow = null, Func<string?>? saveName = null, string? console = null, Action? openDatabase = null)
         {
             InitializeComponent();
+            if (Content is DockPanel body) EmuSen.LunaP.Controls.MenuLook.WhenApplied(body, () => InLook(body));
             _openDatabase = openDatabase;
             DatabaseButton.IsEnabled = openDatabase is not null;
             BuildCheatColumns();

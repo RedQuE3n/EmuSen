@@ -27,6 +27,7 @@ namespace EmuSen.Mistress.Views
         {
             MenuBackdrop.Target = ScreenContent;
             MenuPanel.SetFontPath(this, BigMenuFont);
+            SetUpSheetLook();
             SizeChanged += (_, e) => ScaleBigMenus(e.NewSize.Height);
             ScaleBigMenus(Bounds.Height > 0 ? Bounds.Height : Height);
             PadMenuList.ContainerPrepared += (_, e) =>
@@ -130,10 +131,11 @@ namespace EmuSen.Mistress.Views
         // Blurred while a big-screen menu is over the screen: the pad menu, or a sheet that draws its own menu.
         private void UpdateMenuBackdrop()
         {
-            bool sheetMenu = Sheets.Current is { } sheet && SheetLayer.GetChromeless(sheet);
+            bool sheetMenu = Sheets.Current is { } sheet && Sheets.DrawsMenu(sheet);
+            Sheets.HintFamily = HelpFamily;
             MenuBackdrop.IsVisible = _bigScreen && (_padMenuOpen || sheetMenu);
             HideThemedHelp(MenuBackdrop.IsVisible);
-            MenuPanel? shown = !MenuBackdrop.IsVisible ? null : Sheets.Current is { } top && SheetLayer.GetChromeless(top) ? MenuPanelOf(top) : _padMenuOpen ? PadMenuBig : null;
+            MenuPanel? shown = !MenuBackdrop.IsVisible ? null : Sheets.Current is { } top && Sheets.DrawsMenu(top) ? MenuPanelOf(top) : _padMenuOpen ? PadMenuBig : null;
             if (!ReferenceEquals(shown, _menuShown))
             {
                 _menuShown = shown;

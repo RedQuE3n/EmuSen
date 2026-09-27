@@ -9603,3 +9603,258 @@ suite on its branch: **1,442 tests, all passed**.
 - **Q165, Automatic with a keyboard under Steam.** On a desktop with the Steam client running, Automatic asks for
   Steam's floating keyboard even when the row was chosen with Enter on a physical keyboard. **Recommendation:** under
   Steam, a row chosen from a keyboard gets the field alone, and Steam is asked only for a pad; checked with P266.
+
+## 41. Every window in ES-DE's look, first part: the style layer and three windows (2026-09-27)
+
+*Built on branch `bigpicture-window-look`, from WiseMan at `8539c7e6`; LunaP on `window-look`, from `openemu-library`
+at `18413c7`.* The decision is §10.1's *"The look of every window"* (2026-09-27): the windows are not converted one for
+one into ES-DE's menus. Each keeps what it is for and takes ES-DE's look: its colours, the Barlow Condensed face and the
+rounded panels. Each also gets a layout a controller can use, wherever one can be had.
+
+The work stops at a checkpoint: the style layer and three windows that stand for the rest, so that the look can be
+approved before the others are done. The three are:
+
+- the scraping status (a status page with a list);
+- Active Cheats (tabs, text boxes and a table);
+- the Cheat Database (a path, two lists and a row of buttons).
+
+The controller bindings were to be the third; decided the same day that their own overhaul, a drawn controller with the
+bindings on it, takes the look with it, so they keep the plain sheet here. The player's account is the settings
+reference §4.80; LunaP's record is its §196.
+
+**Numbering.** Predictions from P270, questions from Q170; both ranges were free in every tree on this machine when this
+began.
+
+**Sources.** No new capture of ES-DE was taken. The look's measurements are §32.1's and §34.12's, and its colours are
+`MenuPanel`'s and `MenuRow`'s defaults, which those sections set (LunaP §181). No file of ES-DE's was read or copied.
+
+### 41.1 Which windows a big-screen session shows, and which it does not
+
+A survey of `EmuSen.Mistress/Views/` found where each window is opened and whether that path is reachable in a
+big-screen session. In one, every window owned by the main window is a sheet on its `SheetLayer`.
+
+| Reachable, as a plain sheet until now | Not reachable in a big-screen session |
+|---|---|
+| Active Cheats, Cheat Database, the scraping status, Find by Name, Use Another Game's Cover, the gamelist filter, the folder editor, Graphics Settings, Shaders, the resume question, the rewind reel, a screenshot (a sidebar library only), the theme browser, a theme's detail, its About | the ROM browser (File ▸ Browse ROMs…), the runtime dashboard (`VstopWindow`, from Settings and the `vstop` command), Debug Logging, the DianaOS console: all four are opened from the menu strip, which a big-screen session hides |
+
+The option list screen (§34.15) is already an ES-DE menu, and the controller bindings are another task's (above). The
+four unreachable windows are left as they are, as §10.1 asked for the developer tools.
+
+### 41.2 One style layer
+
+Two mechanisms, both in LunaP (§196), so that nothing is written twice per window:
+
+- **The look** (`MenuLook`) is a `Styles` of the menus' palette and typeface for stock controls, added to one element's
+  own `Styles`. Buttons, lists, text boxes, dropdowns, tabs, switches, sliders, check boxes, scroll bars and progress
+  bars under it take:
+  - ES-DE's greys;
+  - Barlow Condensed, through the resource key `LunaMenuFontFamily`, which Mistress fills from a copy of its font
+    shipped as an Avalonia resource; LunaP ships no font;
+  - rounded corners;
+  - upper-case words on buttons, tabs and headings;
+  - the full-width bar on a list's chosen or focused row.
+- **The frame** (`SheetLayer.MenuLook`) presents a sheet in a `MenuPanel`:
+  - titled by its window;
+  - its content laid out under the menus' scale;
+  - its help bar the pad's buttons;
+  - no fill of its own, so the screen shows blurred behind it, as behind the menus.
+
+Mistress turns the frame on with big screen and names, in `MenuFrameFor`, the windows checked so far. It builds a
+window's help bar from what the window holds: *Select*, *Back*, *Tab* where there are tabs, *Change* where a value steps
+sideways, and *Choose*. The backdrop's blur and ES-DE's keys count a framed sheet as a menu.
+
+The desktop is unchanged. The look is one attached property, so a desktop window could take it with one call, which is
+how a later desktop setting would work; that setting is not built (§10.1).
+
+### 41.3 What each window changed, and why
+
+What the style could not reach, each window changes in `MenuLook.WhenApplied`, which runs once when the window is first
+shown in the look.
+
+- **Scraping.** The first version kept the one column, and its pad test failed. The recent games list lay below the
+  fold at 1280×800, and no press reached a row, since a row scrolled out below the viewport is geometrically below the
+  buttons. The window is now two columns, the run at the left and the recent games at the right (0.9 of the width).
+  Every row is in view and in reach. The heading is 30 design pixels and the game's name 28; the buttons are centred.
+- **Active Cheats.**
+  - *Save As…* and *Load From…* open the platform's file dialog, which a pad cannot drive in Game Mode, so they are
+    hidden on a sheet; *Save* and *Load*, the game's own list, stay.
+  - The table's *Kind* and *Code* words, set to 11 pixels in code, are bound to a size that is 20 in the look.
+  - The status line sits over the buttons, centred.
+- **Cheat Database.**
+  - 0.8 of the width.
+  - The folder's label beside its box, as a menu row's is, and the folder typed on the on-screen keyboard; *Browse…* is
+    hidden for the same reason as above.
+  - The two lists the same width.
+  - The status over the centred buttons.
+  - The licence's attribution, which must stay in view, as the panel's footer: `MenuLook.Footer`, three lines of 20
+    design pixels.
+
+  At 1280×800 the lists show three systems and two games; Q170 asks about the room.
+
+### 41.4 A defect found by the pictures: rows left unbuilt under a scaled frame
+
+At 1920×1200 the framed Active Cheats drew one of its two cheats, with room for both. It was measured before any fix,
+by a throwaway probe test on 2026-09-27:
+
+- the table's list was 774 by 85 pixels, and its scroll viewer's viewport the same;
+- its `VirtualizingStackPanel`'s own viewport was 524 by 39.3, and one container was built;
+- at 1280×800 both were built.
+
+39.3 is the frame's content host (464 high, clipping) divided by the scale 1.5 once more, less the list's top at 270. So
+Avalonia 12.1's effective viewport mis-scales the clip of a clipping control directly under a `LayoutTransformControl`.
+That is inferred from the numbers; Avalonia's code was not read.
+
+With the host no longer clipping (the scaler still does), the viewport was 774 by 85 and both rows were built. LunaP's
+`MenuLookTests` holds a list at the foot of a sheet scaled 1.5 and requires all three of its rows built; mutant L1
+below puts the clip back.
+
+The plain sheet frame has the same structure and was not changed. Whether its lists lose rows was not measured (Q175).
+
+### 41.5 Predictions
+
+| # | Predicted | Found | Verdict |
+|---|---|---|---|
+| P270 | *(written as the pixel case's assertion, before it first ran)* The three framed windows draw nothing outside the panel and the help bar at 1280×800 and 1920×1200 | 0 pixels at both sizes for all three, once the case made the panel transparent instead of hidden (below) | held |
+| P271 | *(written at this checkpoint, before the broad run that ends the work)* The broad Mistress run, after the other windows, fails on nothing this branch causes | not yet run | open |
+
+No prediction was written before the first narrow run or before the mutants; both are recorded as found, in §41.6
+and §41.7.
+
+P270's first case hid the panel to compare. With the panel hidden, the focus fell to a button of the window behind,
+and that button's focus ring was drawn in the blurred backdrop: 3,307 pixels in a strip across the top of the scraping
+status's screen. The strip was the case's own doing, not the frame's. The case now makes the panel transparent, which
+keeps the focus where it was.
+
+**The first narrow run, with every sheet framed.** Before `MenuFrameFor` existed, every plain sheet of a big-screen
+session was framed. Six of 679 tests failed:
+
+- one scraping-status pad case, the recent games below the fold (§41.3);
+- five Graphics Settings and Shaders cases, of pad reach and scroll positions, in windows not yet checked in the look.
+
+The frame then went to the checked windows only. The Graphics and Shaders cases wait for those windows' turn.
+
+### 41.6 Tests
+
+- **`SheetLookTests`** (eight cases) and **`ScrapeStatusLookTests`** (two), headless. The detail is in §4.80.5:
+  - the frame at both sizes;
+  - the §32.4 pixel rule;
+  - the targets at least 40 pixels tall at 800 lines;
+  - the focused button's fill and the focused row's bar;
+  - the file dialogs gone, the attribution the footer, the width shares, the two columns;
+  - every control reached by the pad, and B out of each;
+  - the shoulders paging a list of 300;
+  - ES-DE's keys with a text box keeping its typing;
+  - the desktop and the controller bindings unchanged.
+- **LunaP's `MenuLookTests`**, six cases (its §196.6).
+- **No existing test's expectation changed.** The pad router now pages a list with L1 and R1 where a window has no
+  tabs; no existing test pressed them there.
+- **A narrow run** of the Mistress tests in the blast radius: every pad, sheet, cheat, scrape, ES-DE menu, themed,
+  cover, rewind, resume and theme-browser test, without shaders, GPU, Vulkan or benches. **693 tests, 672 passed, 21
+  skipped** (the picture tools), none failed, in 3.1 minutes, on the final build after the mutants' clean rebuild.
+- **LunaP's whole suite**, on the same build: 1,434 tests, all passed, once the API baseline, the documented defaults, two parameter
+  descriptions and the README's count were brought up to date.
+- **After merging WiseMan at `813c8549`** (§40's follow-ups; one conflict, the text-box line of `SetButtonFromKey`,
+  which now keeps both §4.79's popup rule and §4.80's framed box) **and `openemu-library` at `b1fb12e` into LunaP**,
+  the same narrow run: **698 tests, 676 passed, 22 skipped, none failed**, and LunaP's whole suite, **1,448 tests, all
+  passed**.
+
+### 41.7 Mutants
+
+Twenty-six, one at a time, by `~/.cache/emusen/probe/window-look/mutate_look.py`. It writes a state file with the
+original text before each mutant, restores any leftover one when it starts, and touches every restored file (§32.5's
+trap). Fourteen are in Mistress, run against `SheetLookTests`, `ScrapeStatusLookTests` and the scraping status's pad
+case. Twelve are in LunaP, run against `MenuLookTests`.
+
+**All twenty-six were caught on their first valid run, each by the case written for it.** W7 and W13 were also caught by
+the shoulders' case, since a narrower panel or a status beside the buttons changes how many games a page holds.
+
+| # | Rule broken | Caught by |
+|---|---|---|
+| W1 | the layer never frames a sheet | four cases |
+| W2 | the help bar never names the tabs | the cheats' frame |
+| W3 | the cheat database left in the plain frame | the database's frame |
+| W4 | *Save As…* and *Load From…* offered on a sheet | the cheats' frame |
+| W5 | the attribution not in the footer | the database's frame |
+| W6 | *Browse…* left shown | the database's frame |
+| W7 | the database's status beside its buttons | the database's frame, and the shoulders' |
+| W8 | the scraping status in one column | its frame, and the existing pad case |
+| W9 | the shoulders do not page a list | the shoulders' |
+| W10 | a framed text box gives its keys to the menu | the keyboard's |
+| W11 | ES-DE's keys drive chromeless sheets only | the keyboard's |
+| W12 | a framed sheet not blurred behind | three frames |
+| W13 | the cheat database at a menu's width | the database's frame, and the shoulders' |
+| W14 | the controller bindings framed too | the desktop and bindings case |
+| L1 | the frame's host clips again (§41.4) | the list at the foot of a scaled sheet |
+| L2 | the look's styles left behind when it is taken away | the stock controls' |
+| L3 | a button's words not upper case | the stock controls' |
+| L4 | the typeface's key not used | the stock controls' |
+| L5 | the chosen row not the bar | the stock controls' |
+| L6 | a focused button not filled | the focused button's |
+| L7 | the host's choice of frame ignored | the framed sheet's |
+| L8 | the layer's help never asked for | the framed sheet's |
+| L9 | the footer kept to one line | the framed sheet's |
+| L10 | the content not scaled with the menus | the scale's |
+| L11 | a window's width share ignored | the framed sheet's |
+| L12 | `WhenApplied` runs outside the look | its own, and the stock controls' |
+
+Both trees were rebuilt clean at the end (`clean rebuild rc=0,0`).
+
+### 41.8 Pictures
+
+In `~/.cache/emusen/bigpicture/png/window-look/`, from `WindowLookPictureTool` and `WindowLookScrapePictureTool`
+(`EMUSEN_BIGPICTURE_PNG=1`, the folder named by `EMUSEN_WINDOW_LOOK_STAGE`):
+
+- `before/` was taken on the unmodified tree, and `after/` on the final build;
+- each at 1280×800 and 1920×1200;
+- the themed windows over the synthetic theme and over Art Book Next (read in place), the in-game ones over a running
+  synthetic game.
+
+The three windows of this part:
+
+- `scrape-status-*` and `scrape-status-finished-*`;
+- `active-cheats-*`, `active-cheats-console-*`, `active-cheats-row-focused-*` and `active-cheats-button-focused-*`;
+- `cheat-database-*`, `cheat-database-system-*` and `cheat-database-game-focused-*`.
+
+The other windows' pictures are the plain sheet in both folders. Where they differ, a pixel comparison places it in the
+running game's frame, a clock or a date, not in the window.
+
+Every picture was looked at. Three things seen in them are questions rather than fixes (§41.10):
+
+- the database's short lists at 1280×800;
+- the table's column headings, which stay as written, since the table draws them itself;
+- the empty 96-pixel slot the scraping status keeps for the current game's picture before it arrives.
+
+### 41.9 Not done
+
+- **The other twelve windows** of §41.1, until this part's look is approved.
+- **The plain frame's viewport** (§41.4).
+- **A desktop ES-DE look**, deliberately (§10.1).
+- **A real pad, keyboard or handheld.** Nothing here ran on hardware.
+- **The broad Mistress run**, which is for the end of the work, not the checkpoint.
+
+### 41.10 Open questions
+
+- **Q170, the Cheat Database's room.** At 1280×800 the two lists show three systems and two games. Two lines of
+  introduction sit above them, with the attribution in the footer. **Recommendation:** put the introduction into the
+  footer before the attribution, four lines, and give the lists two more rows.
+- **Q171, text size.** The body of a framed window is 24 design pixels, headings 28 and buttons 26. A menu's rows are
+  27, as measured on ES-DE's editor (§34.12). Keep the denser windows at 24, or bring everything to the rows' 27 at the
+  cost of more scrolling?
+- **Q172, upper case.** Buttons, tabs and headings are upper case, as ES-DE's are. Body text, list rows and a table's
+  column headings stay as written. Keep that split?
+- **Q173, file dialogs.** *Save As…*, *Load From…* and *Browse…* are hidden on a sheet, since a pad cannot drive the
+  platform's dialog. **Recommendation:** keep them hidden; a typed path on the on-screen keyboard covers *Browse…*, as
+  §4.72.8's path rows already do.
+- **Q174, the shoulders in the help bar.** L1 and R1 are drawn as two glyphs with one label, *Tab*. The help-bar work of
+  §10.1 (letter-labelled glyphs) may give one glyph for the pair; take it when it lands?
+- **Q175, the plain frame's viewport.** The controller bindings keep the plain sheet, which has §41.4's structure.
+  **Recommendation:** make the plain frame's host not clip as well, with the bindings' overhaul, which owns that frame
+  now.
+- **Q176, keys in a text box.** In a framed window a focused text box keeps Backspace, Left, Right and Enter for typing,
+  and Up and Down leave it. ES-DE edits text in a popup, where Backspace erases too. Keep?
+- **Q177, the scraping status's picture slot.** Before a game's picture arrives, the slot is empty space. Collapse it
+  until there is a picture?
+- **Q178, the database's Load button.** In `cheat-database-game-focused-*`, a game row has the pad's focus and the bar,
+  but *Load into Active Cheats* is still disabled. It follows the list's selection, and the picture suggests the focus
+  reached the row without selecting it. This was seen in the pictures, not measured. A on the row loads the game
+  either way (§4.45.5). Enable the button from the focused row as well, or select the row the focus reaches?

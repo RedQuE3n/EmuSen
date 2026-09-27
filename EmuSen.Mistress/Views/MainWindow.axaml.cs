@@ -249,7 +249,7 @@ namespace EmuSen.Mistress.Views
                 e.Handled = true;
                 return;
             }
-            if (TypingIntoATextField(e) && (routed || !(BigMenuOnScreen && !TextEntryOpen))) return;
+            if (TypingIntoATextField(e) && (routed || !(BigMenuOnScreen && !TextEntryOpen) || FramedTextBoxKeepsKey(key))) return;
             if (!routed && ThemedKey(key, e.KeyModifiers, pressed))
             {
                 e.Handled = true;

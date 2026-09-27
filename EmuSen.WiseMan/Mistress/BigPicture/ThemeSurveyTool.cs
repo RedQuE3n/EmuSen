@@ -149,7 +149,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var propertyThemes = new Dictionary<string, HashSet<string>>();
             var codeThemes = new Dictionary<string, HashSet<string>>();
             var carouselTypes = new Dictionary<string, HashSet<string>>();
-            int loaded = 0, fullyDrawn = 0;
+            int loaded = 0, fullyDrawn = 0, errorFree = 0;
             var clock = Stopwatch.StartNew();
             foreach (ThemeListEntry theme in list.Themes)
             {
@@ -162,9 +162,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 int themedSystems = 0, errors = 0, loads = 0;
                 var codes = new Dictionary<string, int>();
                 var undrawnElements = new HashSet<string>();
+                var samples = new HashSet<string>();
                 var undrawnProperties = new HashSet<string>();
                 foreach (ThemeDiagnostic d in caps.Diagnostics.Where(d => d.Severity >= ThemeSeverity.Warning))
-                    codes[d.Code.ToString()] = codes.GetValueOrDefault(d.Code.ToString()) + 1;
+                    codes[$"{d.Severity}:{d.Code}"] = codes.GetValueOrDefault($"{d.Severity}:{d.Code}") + 1;
                 foreach (string system in Systems)
                 {
                     bool any = false;
@@ -174,8 +175,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                         loads++;
                         any |= t.IsThemed;
                         errors += t.Errors.Count();
+                        foreach (ThemeDiagnostic x in t.Errors.Take(Math.Max(0, 4 - samples.Count))) samples.Add($"{x.Code} {Path.GetRelativePath(root, x.File)}:{x.Line}: {x.Message}");
                         foreach (ThemeDiagnostic d in t.Diagnostics.Where(d => d.Severity >= ThemeSeverity.Warning))
-                            codes[d.Code.ToString()] = codes.GetValueOrDefault(d.Code.ToString()) + 1;
+                            codes[$"{d.Severity}:{d.Code}"] = codes.GetValueOrDefault($"{d.Severity}:{d.Code}") + 1;
                         foreach (ResolvedElement e in t.SystemView.Elements.Concat(t.GamelistView.Elements))
                         {
                             if (!SceneMapping.Drawn.Contains(e.Type)) { undrawnElements.Add(e.Type); continue; }
@@ -187,8 +189,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     if (any) themedSystems++;
                 }
                 if (themedSystems == Systems.Length) loaded++;
+                if (themedSystems == Systems.Length && errors == 0) errorFree++;
                 bool whole = undrawnElements.Count == 0 && undrawnProperties.Count == 0
-                             && !carouselTypes.Any(c => c.Key.EndsWith("_wheel") && c.Value.Contains(theme.Name));
+                             && !carouselTypes.Any(c => c.Key.EndsWith("Wheel", StringComparison.OrdinalIgnoreCase) && c.Value.Contains(theme.Name));
                 if (whole && themedSystems == Systems.Length) fullyDrawn++;
                 foreach (string e in undrawnElements) Add(elementThemes, e, theme.Name);
                 foreach (string p in undrawnProperties) Add(propertyThemes, p, theme.Name);
@@ -196,14 +199,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 themeRows.Add(new
                 {
                     theme.Name, Variants = variants.Count, Loads = loads, ThemedSystems = themedSystems, Errors = errors, Codes = codes,
-                    UndrawnElements = undrawnElements.Order().ToList(), UndrawnProperties = undrawnProperties.Order().ToList(), FullyDrawn = whole,
+                    UndrawnElements = undrawnElements.Order().ToList(), UndrawnProperties = undrawnProperties.Order().ToList(), FullyDrawn = whole, ErrorSamples = samples.ToList(),
                     XmlFiles = Directory.GetFiles(dir, "*.xml", SearchOption.AllDirectories).Length,
                     XmlBytes = Directory.GetFiles(dir, "*.xml", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length),
                 });
             }
             var summary = new
             {
-                Themes = list.Themes.Count, LoadedForAllFive = loaded, FullyDrawn = fullyDrawn, Seconds = clock.Elapsed.TotalSeconds,
+                Themes = list.Themes.Count, LoadedForAllFive = loaded, LoadedWithNoError = errorFree, FullyDrawn = fullyDrawn, Seconds = clock.Elapsed.TotalSeconds,
                 XmlBytes = Directory.GetFiles(Path.Combine(Folder, "xml"), "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length),
                 XmlFiles = Directory.GetFiles(Path.Combine(Folder, "xml"), "*", SearchOption.AllDirectories).Length,
                 UndrawnElements = elementThemes.OrderByDescending(k => k.Value.Count).ToDictionary(k => k.Key, k => k.Value.Count),

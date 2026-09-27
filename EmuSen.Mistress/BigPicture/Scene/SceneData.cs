@@ -53,6 +53,12 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         // Listed only while the player shows hidden games.
         public bool Hidden { get; init; }
+
+        // The folders between the console folder and this file, or for a folder its own path there; '/'-separated, "" at the top (§30).
+        public string FolderPath { get; init; } = "";
+
+        // A folder's ES-DE folder link: the file A launches in place of entering it, which the badge's link overlay shows too (§30).
+        public string? FolderLink { get; init; }
     }
 
     // A system with the theme resolved for it and its games; the carousel reads each system's own resolved view.
@@ -63,6 +69,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         // What a game's systemName and systemFullname read here instead of the system's: blank at the grouped collections' top, a collection's name inside it (§22).
         public string? Heading { get; init; }
+
+        // Every game the system view counts when the list shows folders, whose entries are not all its games (§30).
+        public IReadOnlyList<SceneGame>? Counted { get; init; }
     }
 
     // Where a game's scraped images are, by ES-DE's media type name; null when there is none.

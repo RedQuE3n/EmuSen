@@ -23,7 +23,7 @@ namespace EmuSen.Mistress.Scraping
 
         // handPlaced takes a console and a ROM's title; openEmuRoot is null when the failover is not ticked; coverFrom names the game whose cover a ROM shows, with a stamp that changes when any choice does.
         public MediaSources(Func<string, string, string?> handPlaced, string scrapedRoot, string? esdeRoot, string? openEmuRoot,
-            Func<string, string?>? coverFrom = null, string choiceStamp = "")
+            Func<string, string?>? coverFrom = null, string choiceStamp = "", string? romDirectory = null)
         {
             _handPlaced = handPlaced;
             _scraped = new EsdeMediaFolder(scrapedRoot);
@@ -31,16 +31,22 @@ namespace EmuSen.Mistress.Scraping
             _openEmu = string.IsNullOrWhiteSpace(openEmuRoot) ? null : openEmuRoot;
             _coverFrom = coverFrom;
             _choiceStamp = choiceStamp;
+            _romDirectory = romDirectory;
         }
 
-        public string? Find(ThemeSystem system, SceneGame game, string mediaType) => Locate(system.Name, game.File, mediaType).Path;
+        private readonly string? _romDirectory;
+
+        public string? Find(ThemeSystem system, SceneGame game, string mediaType) => Locate(system.Name, game, mediaType, null).Path;
+
+        // A ROM as the media folders name it: its stem, below the folder it sits in under its console's (§30).
+        private SceneGame GameAt(string romPath) => new(Path.GetFileNameWithoutExtension(romPath), romPath) { FolderPath = Library.GameFolders.Of(_romDirectory, romPath) };
 
         // The folders' own listings for the variant triggers (§16), and a cover from the player's folder or OpenEmu's counts too.
         public IReadOnlySet<string> Present(ThemeSystem system, IReadOnlyList<SceneGame> games)
         {
             var found = new HashSet<string>(_scraped.Present(system, games), StringComparer.Ordinal);
             if (_esde is not null) found.UnionWith(_esde.Present(system, games));
-            if (!found.Contains(ScrapeRules.Cover.EsdeType) && games.Any(g => Cover(system.Name, g.File) is not null)) found.Add(ScrapeRules.Cover.EsdeType);
+            if (!found.Contains(ScrapeRules.Cover.EsdeType) && games.Any(g => Locate(system.Name, g, ScrapeRules.Cover.EsdeType, null).Path is not null)) found.Add(ScrapeRules.Cover.EsdeType);
             return found;
         }
 
@@ -56,20 +62,20 @@ namespace EmuSen.Mistress.Scraping
         // The library's cover for a ROM on the shelf ES-DE calls esdeSystem.
         public string? Cover(string esdeSystem, string romPath) => Locate(esdeSystem, romPath, ScrapeRules.Cover.EsdeType).Path;
 
-        public (MediaSource Source, string? Path) Locate(string esdeSystem, string romPath, string mediaType) => Locate(esdeSystem, romPath, mediaType, null);
+        public (MediaSource Source, string? Path) Locate(string esdeSystem, string romPath, string mediaType) => Locate(esdeSystem, GameAt(romPath), mediaType, null);
 
         // A chosen game's cover is whatever that game shows, its own choice followed too; a chain that comes back round stops at the game it reached twice.
-        private (MediaSource Source, string? Path) Locate(string esdeSystem, string romPath, string mediaType, HashSet<string>? seen)
+        private (MediaSource Source, string? Path) Locate(string esdeSystem, SceneGame game, string mediaType, HashSet<string>? seen)
         {
-            bool cover = mediaType == ScrapeRules.Cover.EsdeType;
-            if (cover && _coverFrom?.Invoke(romPath) is { Length: > 0 } from && (seen ??= new HashSet<string>(StringComparer.Ordinal) { romPath }).Add(from)
-                && SystemOf(from) is { } fromSystem && Locate(fromSystem, from, mediaType, seen).Path is string borrowed)
+            string romPath = game.File;
+            bool cover = mediaType == ScrapeRules.Cover.EsdeType, file = !game.Folder;
+            if (cover && file && _coverFrom?.Invoke(romPath) is { Length: > 0 } from && (seen ??= new HashSet<string>(StringComparer.Ordinal) { romPath }).Add(from)
+                && SystemOf(from) is { } fromSystem && Locate(fromSystem, GameAt(from), mediaType, seen).Path is string borrowed)
                 return (MediaSource.OtherGame, borrowed);
 
             string title = Path.GetFileNameWithoutExtension(romPath);
-            string? console = EmuSen.Cores.CoreCatalog.ByExtension(Path.GetExtension(romPath))?.Console;
+            string? console = file ? EmuSen.Cores.CoreCatalog.ByExtension(Path.GetExtension(romPath))?.Console : null;
             var system = new ThemeSystem(esdeSystem, esdeSystem, esdeSystem);
-            var game = new SceneGame(title, romPath);
 
             if (cover && console is not null && _handPlaced(console, title) is string hand) return (MediaSource.HandPlaced, hand);
             if (_scraped.Find(system, game, mediaType) is string scraped) return (MediaSource.ScreenScraper, scraped);

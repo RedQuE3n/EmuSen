@@ -112,7 +112,7 @@ namespace EmuSen.Mistress.Views
 
         internal MediaSources MediaSourcesNow() => new(
             (console, title) => _artwork.Find(console, title), MediaStore.DefaultRoot, _appSettings.EsdeMediaDirectory,
-            _appSettings.OpenEmuFallback ? OpenEmuCoverDirectory : null, CoverChoiceOf, CoverChoiceStamp);
+            _appSettings.OpenEmuFallback ? OpenEmuCoverDirectory : null, CoverChoiceOf, CoverChoiceStamp, _appSettings.RomDirectory);
 
         // Why ScreenScraper cannot answer a run now, or null when it can.
         private string? ScreenScraperUnusable()

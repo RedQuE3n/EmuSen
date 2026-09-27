@@ -46,7 +46,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
 
         // P108: USERGUIDE ("Manually copying game media files") keeps a foldered game's media at <system>/<type>/<folder>/<stem>; the reader looked only at <system>/<type>/<stem>.
-        [Fact(Skip = "P108 shown on the unchanged reader (2026-09-27): 0 of 6 found, every Locate answered none; the fix follows")]
+        // Shown first on the unchanged reader (5bf3f8d4): 0 of 6 found, every Locate answering none.
+        [Fact]
         public Task P108_media_of_a_game_in_a_folder_are_found_under_that_folder_in_an_ES_DE_tree_and_in_Mistress_s_store() => Session.Dispatch(() =>
         {
             string esde = Path.Combine(Path.GetTempPath(), "EmuSenP108", Guid.NewGuid().ToString("N"));

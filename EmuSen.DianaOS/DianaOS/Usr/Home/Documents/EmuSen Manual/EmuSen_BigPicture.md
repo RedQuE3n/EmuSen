@@ -5528,3 +5528,149 @@ Q40 asks which. The steps of 26.7 are ordered so that the half the evidence supp
 - **libretro's server was not characterised:** its limits, its terms for software that asks it, and its coverage outside
   the 1,113 games are unknown.
 - **Nothing was removed.** The failover is on by default and works as §4.60 describes.
+
+---
+
+## 27. ScreenScraper's name offered, and a game's options from the desktop library (2026-09-26)
+
+*Opened and closed on 2026-09-26, on branch `desktop-game-options`,* on the answers to Q18 and Q19 (§10.1). The
+player's account is §4.63 of the settings reference; this is the record. Predictions are numbered from P140, after
+§26's, and the one question is Q46.
+
+### 27.1 Predictions, and what was found
+
+Written during the build, by the hand that wrote the code, as §18.1 and §23.1 were, and weaker evidence for it.
+
+| # | Predicted | Found | Verdict |
+|---|---|---|---|
+| P140 | The desktop needs no window of its own: `SheetLayer.Show` already shows the same `GameOptionsWindow` and `MetadataEditorWindow` as owned windows where no layer presents them | the tests find both in `OwnedWindows` on the desktop and on `Sheets.Current` in the built-in big screen, from one `PresentGameOptions` | held |
+| P141 | Every control of the editor is reached by the pad with the offer's two buttons shown | measured on the themed editor after its own scrape: none unreached | held |
+| P142 | No test of §22 or §23 changes | the four classes of the mutant runner's filter passed unchanged before the round (28 of 28) | held |
+| P143 | Of the round's mutants, at least nine in ten are caught on their first run | 20 of 21; the survivor equivalent (27.5) | held |
+
+### 27.2 Q18: ScreenScraper's name, offered
+
+`MetadataDraft` gained `OfferedName` (ScreenScraper's name, while it differs from the Name field and has not been put
+away), `TakeOfferedName` and `DeclineOfferedName`; `MetadataEditorWindow` draws the offer under the Name box, a sentence
+and two buttons, *Use This Name* and *Keep Current Name*, shown only while there is an offer. `GameMetadata.Scraped` is
+unchanged: it still has no case for the name, so ScreenScraper's name is never a baseline and a scrape never puts it in
+the field. That is where "don't force on user" is enforced; the offer is only a way for the player to type it with one
+press.
+
+**Choices made where the answer is silent.**
+- *When the offer shows.* After the editor's own scrape, as the answer asked, and also when the editor opens on a game
+  ScreenScraper has already answered for, since the name is already in `media.db` and offering it costs nothing and
+  sends nothing.
+- *Declining is not remembered.* It lasts for the editing; the offer is there again at the next opening. A remembered
+  refusal would need a row of its own in `games.db` for a choice that changes nothing when it is not taken.
+- *Taking it is an edit, saved with Save.* The editor saves nothing until Save, as every field does (§23.2); the offer
+  follows the same rule rather than writing at once.
+- *Q30* (§21.5, a switch for scraped names, off, accepted) is not built. The offer is per game; the switch would be the
+  library-wide form of the same choice, and it waits for Pass 8.
+
+### 27.3 Q19: the menu and the editor from the sidebar library
+
+| Route | Code |
+|---|---|
+| the grid's and the list's context menu: **Game Options...**, **Edit Metadata...** (Ctrl+I shown) | `MainWindow.Library.cs`, `LibraryContextMenu` |
+| **Ctrl+I** over either library | `MainWindow.GameOptions.cs`, `EditMetadataFromTheKeyboard`, called from the window's key tunnel |
+| the pad menu over the sidebar library, **Game Options...** | `MainWindow.Pad.cs`, `OpenPadMenu` |
+
+`ShowGameOptions` was split: the game's own entries are built by `AddGameEntries` and shown by `PresentGameOptions`, which
+both the themed gamelist and the sidebar library call, so there is one menu and one way it is shown.
+
+**Decided, and why.** The themed gamelist's rows (Jump To, Sort Games By, Filter Gamelist, Search) and its collection
+entries are left out of the sidebar library's menu. They act on the themed gamelist's own sort, filter and letters,
+which are state of the themed view; the sidebar library has its own search box, console filter and collections, and a
+menu that changed the themed view's state from the desktop would change a list that is not on the screen. The desktop's
+context menu already has Add to Collection and Remove from the collection shown. Select in the sidebar library stays the
+favourite, as §23.4 left it; Q46 asks whether it should open the menu as in the themed gamelist. The themed view's pad
+menu has no *Game Options...*: Select is its route.
+
+### 27.4 Tests
+
+Headless through WiseMan; the scraping on stage (d)'s fake ScreenScraper, never the network.
+- `DesktopGameOptionsTests` (6), `EmuSen.WiseMan/Mistress/`: a real right-click on a cover (pointer down and up at its
+  centre) selects it and opens the grid's context menu, whose entries include Game Options... and Edit Metadata...;
+  Game Options... opens the menu as an owned window with exactly the three entries and no rows; its Edit This Game's
+  Metadata opens the editor as an owned window, and a saved name is the grid's and the list's label. A right-click on a
+  list row, Edit Metadata..., a name and a description saved, shown in the list, the grid and big picture's gamelist;
+  then a name typed on the on-screen keyboard in big picture's editor, shown on the desktop after F10. Ctrl+I opens the
+  editor for the selected game, I alone does not, and neither does Ctrl+I in the search box. The built-in big screen's
+  pad menu opens the menu and the editor as sheets, no window owned, the name typed on the on-screen keyboard. The
+  desktop's pad menu has Game Options... (a window there) and the themed gamelist's has not. Ctrl+I over big picture's
+  gamelist opens the selected game's editor as a sheet, and in the system view, after a game was chosen, nothing.
+- `ThemedMetadataScrapeTests` gained three for Q18: the name offered after the editor's scrape and never in the field,
+  every control reached by the pad with the offer shown, a Save storing no name, and the offer shown again on a later
+  opening; the offer taken, shown as the player's edit with its Reset, saved and shown in the themed list and the library
+  list; the offer declined over the player's own name, which stays in the box, in the draft's changes and in `games.db`.
+
+### 27.5 Mutants
+
+The runner is `~/.cache/emusen/probe/bigpicture/desktop-options/mutate_desktop_options.py`, adapted from §23.9's, with its
+list `mutants-desktop-options.json` written by `mutants_desktop_options_make.py`, which checks that each edit's text occurs
+exactly once. It restores any mutant a killed round left behind before it starts. Each mutant was built with `-m:2` and
+run alone under `nice -n 10` against `DesktopGameOptionsTests`, `ThemedMetadataScrapeTests`, `ThemedGameOptionsTests` and
+`GameMetadataTests`; after each, the file was restored from its copy, stamped with the present time and compared byte for
+byte, and the tree was rebuilt at the end. Every verdict is appended to `mutants-desktop-options.txt`; the log is
+`run-desktop-options.log`.
+
+| Rule | Mutants | Result |
+|---|---|---|
+| Q18: offered, never forced | N1 the editor's scrape puts ScreenScraper's name in the field; N2 the name never offered; N3 Use This Name does nothing; N4 Keep Current Name takes the name; N5 the offer stays once the name is ScreenScraper's; N6 the offer's row never shown; N7 ScreenScraper's name made the name's baseline, shown with no edit | all caught; N1 by 5 tests, N7 by 6 |
+| Q19: the routes | D1 no Game Options in the context menu; D2 no Edit Metadata in it; D3 the sidebar library's editor opens nothing; D9 no Game Options in the pad menu; D10 the themed view's pad menu offers it too | caught |
+| Q19: what the menu holds and how it is shown | D4 the themed gamelist's Search in the desktop's menu; D5 the menu always a window, never a sheet | caught; D5 by 17, since the themed menu shares `PresentGameOptions` |
+| Ctrl+I | D6 Ctrl+I opens nothing; D7 Ctrl+I taken from a text box being typed in; D8 I alone opens the editor; D13 Ctrl+I ignored over the themed gamelist | caught |
+| One edit, every view | D11 the list shows the file's name; D12 the grid shows the file's name | caught; D11 by 5 |
+| Ctrl+I in the system view | D14 the gamelist condition removed | **survived, and equivalent**: `ThemedLibrary.SelectedGame` is null outside a gamelist, so the condition could never decide anything. The condition was removed from the code rather than kept untested, and the test that returns to the system view and presses Ctrl+I was kept |
+
+**20 of 21 caught, each on its first run; the survivor is an equivalent mutant.** D13 and D14 were a second round
+(`mutants-desktop-options-2.json`), written after the Ctrl+I test over the themed gamelist was added. As §23.9 said of its
+own round, a mutant written after its test by the same hand shows that the test is not empty, not that the rule list is
+complete; P143 held (20 of 21, 95%).
+
+### 27.6 Pictures
+
+At 1280×800, written by `DesktopOptionsPictureTool` with `EMUSEN_BIGPICTURE_PNG=1` to
+`~/.cache/emusen/bigpicture/png/desktop-options/`. A desktop window is a separate top level, which the main window's
+capture does not include, so the tool draws the window's own frame over the main window's, centred where
+`CenterOwner` puts it; the context menu is drawn by the headless platform inside the window and needs no pasting. They
+were looked at:
+- `desktop-grid-context-menu`: the right-clicked cover ringed, and the menu beside it with Game Options... and Edit
+  Metadata... (its Ctrl+I drawn at the right) between the collection entries and the cover art entries.
+- `desktop-options-window`: the three entries and Close, the first focused, the grid behind.
+- `desktop-editor-window`, `-edited`: the editor as a window; after typing, the Name row reads "Your edit." with its Reset.
+- `desktop-grid-after-save`, then `bigpicture-shows-the-desktop-edit`: the new name on the placeholder and its title band, cut with an ellipsis, then in the
+  themed gamelist after Big Picture from the View menu, cut at the theme's text list width, as any long name is there.
+- `builtin-pad-menu`, `builtin-options-sheet`, `builtin-editor-sheet`: the pad menu over the built-in big-screen list,
+  then the menu and the editor as sheets.
+- `themed-editor-name-offered`: under the Name box, still the file's name and "From the file name.", the line
+  *ScreenScraper calls this game "Aurora Drift (US title)".* and its two buttons; the status line under the fields says
+  the name is offered and changes only if used. `themed-editor-name-taken`: the box holds the name, the row reads "Your
+  edit." with Reset, and the offer is gone. `themed-gamelist-name-taken`: the gamelist after Save.
+- **Seen and left:** on the desktop the options window, like the sheet, is titled by the game and holds three entries
+  in a window sized to them; the sheet in the big screen takes the full height as every sheet does (§23.10).
+
+### 27.7 Not done
+
+- **Nothing ran on the handheld,** and no real pointer or window manager drove the desktop windows.
+- **Ctrl+I cannot be rebound**; the hotkey map binds single keys (§4.3 of the settings reference).
+- **Select in the sidebar library** is still the favourite (Q46).
+- **Q30's switch** for scraped names library-wide is not built (27.2).
+- **The desktop's menu has no rows** for sorting or filtering the sidebar library, which has no sort of its own.
+
+### 27.8 The broad run
+
+One broad run at the end, as the test-load rule asks: every test under `EmuSen.WiseMan.Mistress` except
+`ShaderSettingsWindowTests`, `ShaderBrowseBench` and `SceneGpuBench`, under `nice -n 10`, no GPU test: **872 passed, 18
+skipped (the picture and bench tools gated by their variables), none failed**, of 890, in 3 min 19 s. Before it, the
+mutant runner's four classes passed 29 of 29 on the final code.
+
+### 27.9 Question for the player
+
+- **Q46, Select in the sidebar library.** In the themed gamelist Select opens the game options (§23.4, Q12) and North
+  is the favourite (Q15). In the sidebar library, on the desktop's pad and in the built-in big screen, Select is still
+  the favourite and the options are an entry of the pad menu. Make Select open the options there too, with the
+  favourite as the menu's first entry, or keep it? **Recommendation: keep it**, since the built-in library is Mistress's
+  own look (§23.4) and its help line already names Select as the favourite; the pad menu reaches the options in two
+  presses.

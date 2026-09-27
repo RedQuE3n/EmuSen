@@ -3624,13 +3624,14 @@ changes nothing until it is taken. The pad reaches both buttons (the plan's §27
 
 **Stored where.** Nothing new: the taken name is a `game_edit` row, as any edit is. No setting was added.
 
-**Tests.** `DesktopGameOptionsTests` (5): a right-click on a cover selects it and opens its context menu, whose Game
+**Tests.** `DesktopGameOptionsTests` (6): a right-click on a cover selects it and opens its context menu, whose Game
 Options... opens the menu as a window with the three entries and Edit This Game's Metadata opens the editor as a window;
 the list's context menu's Edit Metadata... saves a name and a description that the list, the grid and big picture show,
 and a name given in big picture's editor is then the desktop's; Ctrl+I opens the editor for the selected game, I alone
 does not, and neither does Ctrl+I in the search box; the pad menu of the built-in big-screen library opens the menu and
 the editor as sheets, the name typed on the on-screen keyboard; the desktop's pad menu has Game Options... and the themed
-gamelist's does not. `ThemedMetadataScrapeTests` gained three: the name offered and never put in the field, every control
+gamelist's does not; Ctrl+I over big picture's gamelist opens the editor as a sheet, and in its system view nothing.
+`ThemedMetadataScrapeTests` gained three: the name offered and never put in the field, every control
 reached by the pad with the offer shown, and a Save storing no name; the offer taken and stored as an edit that the
 themed list and the library list show; the offer declined over the player's own name, which stays.
 

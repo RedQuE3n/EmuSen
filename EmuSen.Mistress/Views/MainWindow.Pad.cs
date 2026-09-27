@@ -60,7 +60,7 @@ namespace EmuSen.Mistress.Views
         private void PadTick()
         {
             _gamepad.Poll();
-            if (!_gamepad.IsConnected) return;
+            if (!KeyboardSteers() && !_gamepad.IsConnected) return;
             TrackControllers();
 
             // A game on screen owns the pad; only the chord reaches the interface - see §4.29.

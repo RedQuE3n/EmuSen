@@ -1138,6 +1138,16 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   - **Q45** (*Use Another Game's Cover…*) is built as a replacement that stands on its own.
   - **Q44** no longer applies: the fallback is not switched off after pass 8.
   - **Q40,** the embedded credentials, is unaffected.
+- **Q47–Q49 and the keyboard's menu key, answered on 2026-09-27 ("use your recommendations"):**
+  - **Q47:** (b). ES-DE is run on the refused themes first, and the loader matches what it does rule by rule (§25.10).
+  - **Q48:** pass 14 draws `gameselector` (20 themes), then wheel carousels (9), then `gamelistinfo` (6), then
+    `animation` (4). The recommendation put to the player named those four in that order. §25.10's fuller order also
+    puts Q47's refusals and the cheap badge, help and carousel properties first. Q47 is answered separately, and
+    pass 4 covers most of the badge and help properties, so the two orders do not conflict.
+  - **Q49:** full-screen screenshots in the theme browser are built with pass 9's media viewer, not before.
+  - **The keyboard's menu key:** F4 opens the Start menu in the themed view. Escape keeps its role of leaving big
+    picture or returning to a suspended game (settings reference §4.52a). The alternative, Escape as ES-DE's Start
+    with F10 as the only way out, was not chosen.
 - **Q41–Q46, answered on 2026-09-26 (§26.9, §27.9):**
   - **Q41:** the 670 covers OpenVGDB already fetched keep their rank above ScreenScraper's.
   - **Q42:** OpenVGDB's 42 MB database gets a Remove button in Preferences; nothing deletes it on its own.

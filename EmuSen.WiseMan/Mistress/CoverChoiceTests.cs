@@ -12,6 +12,7 @@ using Avalonia.Media;
 using Avalonia.VisualTree;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
+using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.BigPicture.Scene;
 using EmuSen.Mistress.BigPicture.Theme;
@@ -158,6 +159,13 @@ namespace EmuSen.WiseMan.Mistress
             ((ISceneMedia)typeof(MainWindow).GetMethod("ThemedMedia", Hidden)!.Invoke(s.Window, null)!)
                 .Find(new ThemeSystem("snes", "Super Nintendo", "snes"), new SceneGame(ThemedSession.SnesGames[n], Rom(s, n)), "cover");
 
+        // The picture the themed gamelist's cover image is drawing now.
+        private static string? DrawnCover(ThemedSession s)
+        {
+            s.Settle();
+            return (s.Themed.Stage!.Current.Scene.Find("image", "cover")?.Control as FittedImage)?.Source;
+        }
+
         // Every file under the ROM folder and the art folder, with its bytes and time: what the choice must never change.
         private static Dictionary<string, (string, DateTime)> Fingerprint(ThemedSession s) =>
             new[] { s.RomDirectory, DataStore.Artwork }.Where(Directory.Exists)
@@ -287,11 +295,14 @@ namespace EmuSen.WiseMan.Mistress
             Assert.False(ThemedGameOptionsTests.Sheets(s).IsPresenting);
             Assert.Equal(fourth, ThemedCover(s, 2));
             Assert.Equal(fourth, CoverShown(s, 2));
+            Assert.Equal(ThemedSession.SnesGames[2], s.Game);
+            Assert.Equal(fourth, DrawnCover(s));
 
             // The options now offer the way back, and it works by pad too.
             ThemedGameOptionsTests.Choose(s, "Use Its Own Cover");
             Assert.Null(CoverShown(s, 2));
             Assert.Null(ThemedCover(s, 2));
+            Assert.Null(DrawnCover(s));
         });
 
         [Fact]

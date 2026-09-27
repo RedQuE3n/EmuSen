@@ -134,7 +134,9 @@ namespace EmuSen.Mistress.Views
             Button reset = Button("Reset", "MetaReset_" + field.Key, () => ResetField(field.Key));
             Avalonia.Automation.AutomationProperties.SetName(reset, $"Reset {field.Label}");
             reset.VerticalAlignment = VerticalAlignment.Top;
-            var row = new FieldRow { Label = field.Label, Content = Ui.Cols("*,Auto", editor, reset.Margin(8, 0, 0, 0)) };
+            Control content = Ui.Cols("*,Auto", editor, reset.Margin(8, 0, 0, 0));
+            if (field.Key == GameMetadata.Name) content = Ui.Stack(6, content, NameOffer());
+            var row = new FieldRow { Label = field.Label, Content = content };
             _rows[field.Key] = (row, editor, reset);
 
             switch (editor)
@@ -145,6 +147,42 @@ namespace EmuSen.Mistress.Views
                 case LunaSwitch flag: flag.IsCheckedChanged += (_, _) => Changed(field.Key, flag.IsChecked == true ? GameMetadata.Yes : GameMetadata.No); break;
             }
             return row;
+        }
+
+        // ScreenScraper's name as a suggestion under the Name box, taken only by a press - see EmuSen_Settings_Reference.md §4.63.
+        private Control NameOffer()
+        {
+            Button use = Button("Use This Name", "MetadataUseScrapedName", TakeOfferedName);
+            Button keep = Button("Keep Current Name", "MetadataKeepName", DeclineOfferedName);
+            _nameOffer.Children.Add(_offeredName);
+            _nameOffer.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { use, keep } });
+            return _nameOffer;
+        }
+
+        private readonly StackPanel _nameOffer = new() { Name = "MetadataNameOffer", Spacing = 6, IsVisible = false };
+        private readonly TextBlock _offeredName = new() { Name = "MetadataOfferedName", TextWrapping = TextWrapping.Wrap };
+
+        public string? OfferedName => _nameOffer.IsVisible ? Draft.OfferedName : null;
+
+        private void TakeOfferedName()
+        {
+            Draft.TakeOfferedName();
+            Fill();
+            (_rows[GameMetadata.Name].Editor as InputElement)?.Focus(NavigationMethod.Directional);
+        }
+
+        private void DeclineOfferedName()
+        {
+            Draft.DeclineOfferedName();
+            ShowNameOffer();
+            (_rows[GameMetadata.Name].Editor as InputElement)?.Focus(NavigationMethod.Directional);
+        }
+
+        private void ShowNameOffer()
+        {
+            string? offered = Draft?.OfferedName;
+            _nameOffer.IsVisible = offered is not null;
+            _offeredName.Text = offered is null ? "" : $"ScreenScraper calls this game “{offered}”.";
         }
 
         private void Changed(string field, string value)
@@ -202,6 +240,7 @@ namespace EmuSen.Mistress.Views
                 : field == GameMetadata.Name ? "From the file name."
                 : "";
             reset.IsVisible = edited;
+            if (field == GameMetadata.Name) ShowNameOffer();
         }
 
         private void Save()
@@ -239,7 +278,8 @@ namespace EmuSen.Mistress.Views
             }
             Draft.TakeScraped(found);
             Fill();
-            _status.Text = "ScreenScraper's answer is in the fields. Save keeps it; Cancel leaves the game as it was.";
+            _status.Text = "ScreenScraper's answer is in the fields. Save keeps it; Cancel leaves the game as it was."
+                + (Draft.OfferedName is null ? "" : " Its name for the game is offered under Name; the name changes only if you use it.");
         }
 
         private async Task ClearAsync()

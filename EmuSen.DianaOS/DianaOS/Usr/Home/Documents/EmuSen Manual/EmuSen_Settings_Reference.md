@@ -3220,7 +3220,8 @@ and ES-DE's other documented fields, with deleting a game offered only in a guar
 tests, the mutants and the pictures).
 
 **Where it is.** In the themed view of a big-screen session (Game Mode, or Big Picture on the desktop, §4.54), on a game
-in a gamelist. EmuSen's own built-in library (§4.56) is unchanged: there Select still marks a favourite.
+in a gamelist. EmuSen's own built-in library (§4.56) is unchanged: there Select still marks a favourite. *Amended by
+§4.63: the menu and the editor are reached from the sidebar library too, by its context menu, Ctrl+I and the pad menu.*
 
 **Opening the menu.** **Select** on a game opens the game options as a sheet over the view, as ES-DE opens its gamelist
 options menu with its Back button. **Select** again, or **B**, puts it away. In the system view Select does nothing, as
@@ -3507,7 +3508,8 @@ mutants are in the plan's §20.
 
 **What it does not cover.**
 - No video (Q4), no back cover, fan art, 3D box or physical media: ES-DE's folders for them exist, nothing fills them.
-- The game's name stays the file's; ScreenScraper's is kept in `media.db` but not shown.
+- The game's name stays the file's; ScreenScraper's is kept in `media.db` but not shown. *Amended by §4.63: the metadata
+  editor offers it, and it becomes the name only when the player takes it.*
 - A game found without a cover because the player had one, whose cover is later removed, goes to the failover rather
   than back to ScreenScraper.
 - No "refresh": a picture already there is never fetched again, so a better one at ScreenScraper is not seen; delete the
@@ -3681,3 +3683,75 @@ themes, every request counted. No test reaches the network. `ThemeDownloadsTests
 - Most listed themes use elements big picture does not draw yet (plan §25's survey). Such a theme installs and runs,
   and those parts are missing until §21's pass 14.
 - Nothing ran on the handheld.
+
+### 4.63 A game's options and its metadata from the desktop library, and ScreenScraper's name as an offer (2026-09-26)
+
+The answers to Q18 and Q19 of `EmuSen_BigPicture.md` (§10.1 there; §27 is the record: tests, mutants, pictures).
+§4.59 built the game options menu and the metadata editor for big picture's themed gamelist; this section makes both
+reachable from Mistress's own sidebar library, and changes one thing in the editor. The section is numbered 4.63 because
+§4.62 was being written on another branch at the same time.
+
+**Where the menu and the editor are reached.**
+
+| From | Opens | Shown as |
+|---|---|---|
+| a cover's or a row's context menu (right-click), **Game Options...** | the game options menu | a window over Mistress's on the desktop |
+| the same menu, **Edit Metadata...** (Ctrl+I) | the metadata editor | a window on the desktop |
+| **Ctrl+I** over the library, with a game selected | the metadata editor | a window on the desktop, a sheet in a big-screen session |
+| the pad menu (Start or Guide) over the sidebar library, **Game Options...** | the game options menu | a sheet in a big-screen session, a window on the desktop |
+| the themed gamelist, **Select** (§4.58, §4.59) | the game options menu | a sheet, unchanged |
+
+The windows are the same classes in every place, `GameOptionsWindow` and `MetadataEditorWindow`, shown through LunaP's
+`SheetLayer`: in a big-screen session (Game Mode, `--bigscreen`, or Big Picture from the View menu) they are sheets inside
+the one window, and on the desktop they are ordinary LunaP windows owned by Mistress's. Nothing about an edit depends on
+where it was made: it is a row of `games.db`'s `game_edit` (§4.59), and every view reads it. A name given on the desktop
+is the name in the themed gamelist, and one given in big picture is the name in the desktop's grid and list.
+
+**What the desktop's menu holds.** Add to (or Remove from) Favourites, Edit This Game's Metadata, and Scrape This Game...
+(while no run is going). The themed gamelist's other entries are left out on purpose:
+- *Jump To..., Sort Games By..., Filter Gamelist* and *Search...* act on the themed gamelist's own order, filters and
+  letters (§4.58), which the sidebar library does not have. The sidebar library's equivalents are its own: the search
+  box, the console list in the sidebar and in the filter bar, and the collections. Offering the themed rows there would
+  change a list that is not on the screen.
+- *Add/Remove Games to This Collection* and *Finish Editing* belong to big picture's collection editing (§4.58); on the
+  desktop the context menu's **Add to Collection** and **Remove from *name*** do the same work directly.
+
+**Select in the sidebar library** is still the favourite, as it was before; the options are one entry away in the pad
+menu. Whether Select should open the menu there too, as it does in the themed gamelist, is Q46 of the plan.
+
+**Ctrl+I** is the Get Info gesture of macOS's Finder, whose conventions OpenEmu follows. It works over the grid and the
+list and over the themed gamelist, and it is ignored while a text box has the focus (the search box keeps it), while a
+sheet is shown, and while the options menu is open. It is not in the hotkey map of §4.3, which binds single keys
+without modifiers; it cannot be rebound.
+
+**ScreenScraper's name, offered (Q18).** Since §17.6 the library and the themed view show the file's name, and
+ScreenScraper's is kept in `media.db` unused. The editor now offers it. When ScreenScraper has a name for the game that
+differs from what the Name field holds, a line under the field reads *ScreenScraper calls this game "…"*, with two
+buttons:
+- **Use This Name** puts it in the field. Like a typed name it is an edit from Save on, shown everywhere, and **Reset**
+  returns the field to the file's name.
+- **Keep Current Name** puts the offer away for this editing. The field keeps the file's name, or the name the player
+  gave it.
+
+The offer appears after the editor's own **Scrape** (Y), whose status line then says that the name is offered and changes
+only if the player uses it, and whenever the editor is opened on a game ScreenScraper has already answered for. The
+scrape itself never touches the Name field, although it fills the other fields as §4.59 describes; a Save without taking
+the offer stores no name. Declining is not remembered: the offer is there again the next time the editor opens, since it
+changes nothing until it is taken. The pad reaches both buttons (the plan's §27 measured it with the offer shown).
+
+**Stored where.** Nothing new: the taken name is a `game_edit` row, as any edit is. No setting was added.
+
+**Tests.** `DesktopGameOptionsTests` (6): a right-click on a cover selects it and opens its context menu, whose Game
+Options... opens the menu as a window with the three entries and Edit This Game's Metadata opens the editor as a window;
+the list's context menu's Edit Metadata... saves a name and a description that the list, the grid and big picture show,
+and a name given in big picture's editor is then the desktop's; Ctrl+I opens the editor for the selected game, I alone
+does not, and neither does Ctrl+I in the search box; the pad menu of the built-in big-screen library opens the menu and
+the editor as sheets, the name typed on the on-screen keyboard; the desktop's pad menu has Game Options... and the themed
+gamelist's does not; Ctrl+I over big picture's gamelist opens the editor as a sheet, and in its system view nothing.
+`ThemedMetadataScrapeTests` gained three: the name offered and never put in the field, every control
+reached by the pad with the offer shown, and a Save storing no name; the offer taken and stored as an edit that the
+themed list and the library list show; the offer declined over the player's own name, which stays.
+
+**Not done.** Nothing ran on the handheld. The desktop's menu and editor were driven headlessly by clicks and keys, not
+by a real pointer on a real window manager. ScreenScraper's names as the library's names by default (§21's Q30, a switch,
+off) are not built; the offer is per game.

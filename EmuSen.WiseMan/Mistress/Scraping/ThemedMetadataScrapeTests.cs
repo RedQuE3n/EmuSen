@@ -30,6 +30,9 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
         private const string Scraped = "Scraped description.";
 
+        // The fake's name for the file's region (us), which ScrapeRules takes before its own (ss).
+        private const string ScrapedName = "Aurora Drift (US title)";
+
         private readonly FakeScreenScraper _server = new();
         private readonly object _realConfirm = ConfirmField.GetValue(null)!;
 
@@ -158,6 +161,121 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             s.Settle();
             Assert.Equal(Scraped, Shown(s).Description);
             Assert.Empty(ThemedGameOptionsTests.StoredEdits(s, ThemedSession.SnesGames[0] + ".sfc"));
+        }, default);
+
+        // The editor's own scrape (Y), waited out and its status sheet put away, back on the editor.
+        private static void ScrapeInTheEditor(ThemedSession s, MetadataEditorWindow editor)
+        {
+            s.Pad.Y();
+            Until(s, () => editor.Status.StartsWith("ScreenScraper's answer", StringComparison.Ordinal), "the editor's scrape never answered");
+            PutAwayTheStatus(s);
+            Assert.Same(editor, ThemedGameOptionsTests.Sheets(s).Current);
+        }
+
+        private static string NameBox(MetadataEditorWindow editor) => ((TextBox)editor.EditorOf(GameMetadata.Name)).Text ?? "";
+
+        private static Control NameOffer(ThemedSession s) =>
+            Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(ThemedGameOptionsTests.Sheet(s)).OfType<Control>().Single(c => c.Name == "MetadataNameOffer");
+
+        // Q18: ScreenScraper's name is offered, never put in the field by the scrape, and a Save without taking it stores no name.
+        [Fact]
+        public Task The_editor_s_scrape_offers_screen_scraper_s_name_and_never_puts_it_in_the_field() => Session.Dispatch(() =>
+        {
+            using var s = new ThemedSession();
+            ThemedLibraryPadTests.Enter(s, "snes");
+            string stem = ThemedSession.SnesGames[0];
+            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
+            Assert.False(NameOffer(s).IsVisible);
+            Assert.Null(editor.OfferedName);
+
+            ScrapeInTheEditor(s, editor);
+            Assert.Equal(stem, NameBox(editor));
+            Assert.Equal("From the file name.", editor.RowOf(GameMetadata.Name).Hint);
+            Assert.Equal(Scraped, ((TextBox)editor.EditorOf(GameMetadata.Description)).Text);
+            Assert.True(NameOffer(s).IsVisible);
+            Assert.Equal(ScrapedName, editor.OfferedName);
+            Assert.Contains("offered under Name", editor.Status);
+
+            // Every control reached by the pad with the offer shown, its two buttons among them.
+            s.Window.UpdateLayout();
+            HashSet<Avalonia.Input.InputElement> reached = PadAudit.Reachable(ThemedGameOptionsTests.Sheet(s), s.Pad);
+            List<Avalonia.Input.InputElement> operable = PadAudit.Operable(ThemedGameOptionsTests.Sheet(s));
+            Assert.Contains(operable, c => c is Control { Name: "MetadataUseScrapedName" });
+            Assert.Contains(operable, c => c is Control { Name: "MetadataKeepName" });
+            Assert.Empty(operable.Where(c => !reached.Contains(c)).Select(PadAudit.Describe));
+
+            ThemedGameOptionsTests.Reach(s, "MetadataSave");
+            s.Pad.A();
+            s.Settle();
+            Assert.DoesNotContain(GameMetadata.Name, ThemedGameOptionsTests.StoredEdits(s, stem + ".sfc").Keys);
+            Assert.Equal(stem, Shown(s).Name);
+            Assert.Equal("Synthetic Developer", Shown(s).Developer);
+
+            // Opened again on a game already scraped, the editor offers the name again; the field is still the file's.
+            editor = ThemedGameOptionsTests.OpenEditor(s);
+            Assert.Equal(ScrapedName, editor.OfferedName);
+            Assert.Equal(stem, NameBox(editor));
+        }, default);
+
+        // Q18: one press takes the offer; Save stores it as the player's edit, and every view shows it.
+        [Fact]
+        public Task Taking_the_offered_name_stores_it_as_an_edit() => Session.Dispatch(() =>
+        {
+            using var s = new ThemedSession();
+            ThemedLibraryPadTests.Enter(s, "snes");
+            string stem = ThemedSession.SnesGames[0];
+            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
+            ScrapeInTheEditor(s, editor);
+
+            ThemedGameOptionsTests.Reach(s, "MetadataUseScrapedName");
+            s.Pad.A();
+            s.Settle();
+            Assert.Equal(ScrapedName, NameBox(editor));
+            Assert.Equal("Your edit.", editor.RowOf(GameMetadata.Name).Hint);
+            Assert.False(NameOffer(s).IsVisible);
+            Assert.True(editor.ResetOf(GameMetadata.Name).IsVisible);
+
+            ThemedGameOptionsTests.Reach(s, "MetadataSave");
+            s.Pad.A();
+            s.Settle();
+            Assert.Equal(ScrapedName, ThemedGameOptionsTests.StoredEdits(s, stem + ".sfc")[GameMetadata.Name]);
+            Assert.Equal(ScrapedName, Shown(s).Name);
+            var list = (EmuSen.LunaP.Controls.LunaList<RomEntry>)s.Window.GetControl<ListBox>("LibraryList");
+            Assert.Contains(list.Models.Select(list.Label), l => l.StartsWith(ScrapedName, StringComparison.Ordinal));
+        }, default);
+
+        // Q18: Keep Current Name puts the offer away and the player's own name stays, before and after Save.
+        [Fact]
+        public Task Declining_the_offered_name_leaves_the_name_unchanged() => Session.Dispatch(() =>
+        {
+            using var s = new ThemedSession();
+            ThemedLibraryPadTests.Enter(s, "snes");
+            string stem = ThemedSession.SnesGames[0];
+            ThemedGameOptionsTests.OpenEditor(s);
+            ThemedGameOptionsTests.Type(s, "Meta_" + GameMetadata.Name, "mine");
+            ThemedGameOptionsTests.Reach(s, "MetadataSave");
+            s.Pad.A();
+            s.Settle();
+            Assert.Equal("mine", Shown(s).Name);
+
+            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
+            ScrapeInTheEditor(s, editor);
+            Assert.Equal("mine", NameBox(editor));
+            Assert.Equal(ScrapedName, editor.OfferedName);
+
+            ThemedGameOptionsTests.Reach(s, "MetadataKeepName");
+            s.Pad.A();
+            s.Settle();
+            Assert.False(NameOffer(s).IsVisible);
+            Assert.Null(editor.OfferedName);
+            Assert.Equal("mine", NameBox(editor));
+            Assert.False(editor.Draft.Changes().ContainsKey(GameMetadata.Name));
+
+            ThemedGameOptionsTests.Reach(s, "MetadataSave");
+            s.Pad.A();
+            s.Settle();
+            Assert.Equal("mine", ThemedGameOptionsTests.StoredEdits(s, stem + ".sfc")[GameMetadata.Name]);
+            Assert.Equal("mine", Shown(s).Name);
         }, default);
 
         // ES-DE's Clear removes the metadata and media; here only Mistress's own store is touched, never the ROM.

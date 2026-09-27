@@ -248,6 +248,12 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
+            if (pressed && EditMetadataFromTheKeyboard(e))
+            {
+                e.Handled = true;
+                return;
+            }
+
             if (!_hotkeyBindings.TryGetAction(key, out HotkeyAction action)) return;
 
             // Held vs one-shot - see EmuSen_Rewind_And_FastForward.md §4, EmuSen_Settings_Reference.md §4.3.

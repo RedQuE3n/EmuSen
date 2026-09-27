@@ -59,6 +59,7 @@ namespace EmuSen.Mistress.Library
         public void TakeScraped(ScrapedRecord? fresh)
         {
             _scraped = fresh;
+            _nameDeclined = false;
             foreach (MetadataField field in GameMetadata.Fields)
             {
                 if (GameMetadata.Scraped(fresh, field.Key) is not { } value) continue;
@@ -66,6 +67,21 @@ namespace EmuSen.Mistress.Library
                 _fromScrape.Add(field.Key);
             }
         }
+
+        // ScreenScraper's name while it differs from the Name field and has not been declined; offered, never put in the field by itself (Q18).
+        public string? OfferedName =>
+            !_nameDeclined && _scraped?.Name is { Length: > 0 } name && name != Value(GameMetadata.Name) ? name : null;
+
+        // The offer taken: the name becomes the field's value, an edit from Save on, as a typed name would.
+        public void TakeOfferedName()
+        {
+            if (OfferedName is { } name) Set(GameMetadata.Name, name);
+        }
+
+        // The offer put away for this editing; the name stays as it was.
+        public void DeclineOfferedName() => _nameDeclined = true;
+
+        private bool _nameDeclined;
 
         // What Save writes to games.db: an edit for each field that now differs from its baseline, null for one that no longer does, and only where the stored state changes.
         public IReadOnlyDictionary<string, string?> Changes()

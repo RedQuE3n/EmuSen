@@ -13,17 +13,19 @@ namespace EmuSen.Mistress.BigPicture.Scene
         {
             ["miximage"] = "miximages", ["marquee"] = "marquees", ["screenshot"] = "screenshots", ["titlescreen"] = "titlescreens", ["cover"] = "covers",
             ["backcover"] = "backcovers", ["3dbox"] = "3dboxes", ["physicalmedia"] = "physicalmedia", ["fanart"] = "fanart", ["video"] = "videos",
+            ["manual"] = "manuals",
         };
 
         // The extensions USERGUIDE.md lists ("Manually copying game media files"), in the order they are tried.
         public static readonly IReadOnlyList<string> ImageExtensions = [".png", ".jpg", ".webp"];
         public static readonly IReadOnlyList<string> VideoExtensions = [".mp4", ".mkv", ".avi", ".wmv", ".mov", ".webm"];
+        public static readonly IReadOnlyList<string> ManualExtensions = [".pdf"];
 
         public EsdeMediaFolder(string root) => Root = root;
 
         public string Root { get; }
 
-        private static IReadOnlyList<string> ExtensionsOf(string mediaType) => mediaType == "video" ? VideoExtensions : ImageExtensions;
+        private static IReadOnlyList<string> ExtensionsOf(string mediaType) => mediaType switch { "video" => VideoExtensions, "manual" => ManualExtensions, _ => ImageExtensions };
 
         // Where below a type folder a game's files are named: its folder then its stem, and for a foldered game its stem alone after that (§30).
         public static IEnumerable<string> Names(SceneGame game)

@@ -19,6 +19,11 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             [("box-2D", "us", "png"), ("box-2D", "eu", "png"), ("box-2D", "jp", "png"), ("ss", "wor", "png"), ("wheel-hd", "wor", "png"), ("wheel", "wor", "png"), ("mixrbv2", "wor", "png"), ("sstitle", "wor", "png")];
         public string Synopsis { get; init; } = "A synthetic game written for the tests.";
         public int SystemId { get; init; } = 4;
+
+        // Every kind Pass 8 fetches as well as the first five, as §21.1's answers offered them (§38).
+        public static List<(string Type, string? Region, string Format)> AllMedia =>
+            [("box-2D", "us", "png"), ("ss", "wor", "png"), ("wheel-hd", "wor", "png"), ("mixrbv2", "wor", "png"), ("sstitle", "wor", "png"),
+             ("box-2D-back", "us", "png"), ("box-3D", "us", "png"), ("support-2D", "us", "png"), ("fanart", null, "jpg"), ("manuel", "us", "pdf"), ("video-normalized", null, "mp4")];
     }
 
     // ScreenScraper as its API page documents it, answered from responses the tests write; never the network - see EmuSen_BigPicture.md §17.
@@ -68,7 +73,18 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         };
 
         public IEnumerable<string> JeuInfos => Asked.Where(u => u.Contains("/jeuInfos.php"));
+        public IEnumerable<string> Searches => Asked.Where(u => u.Contains("/jeuRecherche.php"));
         public IEnumerable<string> MediaAsked => Asked.Where(u => u.Contains("/mediaJeu.php"));
+
+        // A media type's content revision: raising it changes the bytes served and the checksum the answer states, as an improved scan upstream would.
+        public readonly ConcurrentDictionary<string, int> MediaRevision = new(StringComparer.Ordinal);
+
+        // Whether a jeuInfos answer states each media's sha1; ScreenScraper's did for every file in §17.9's answers.
+        public bool StateChecksums = true;
+
+        // Media bytes sent, for the tests' byte counts.
+        private long _bytesSent;
+        public long BytesSent => Interlocked.Read(ref _bytesSent);
         public IEnumerable<string> OthersAsked => Asked.Where(u => !u.Contains("screenscraper.fr"));
 
         public static string Param(string url, string name) =>
@@ -86,6 +102,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 if (!url.Contains("screenscraper.fr")) return Other(url);
                 if (url.Contains("/mediaJeu.php")) return MediaAnswer(url);
                 if (url.Contains("/jeuInfos.php")) return JeuInfosAnswer(url);
+                if (url.Contains("/jeuRecherche.php")) return SearchAnswer(url);
                 if (url.Contains("/ssuserInfos.php")) return UserInfosAnswer(url);
                 return new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = new StringContent("Erreur") };
             }
@@ -117,13 +134,38 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             if (StatusByMd5.TryGetValue(md5, out var forced)) return new HttpResponseMessage((HttpStatusCode)forced.Code) { Content = new StringContent(forced.Body) };
             FakeGame? game;
             lock (Games) game = Games.FirstOrDefault(g => g.Md5s.Contains(md5, StringComparer.OrdinalIgnoreCase));
+            // A game asked by its id, as a pick from a name search is, when its hashes find nothing.
+            if (game is null && long.TryParse(Param(url, "gameid"), out long gameId)) lock (Games) game = Games.FirstOrDefault(g => g.Id == gameId);
             if (game is null) return new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("Erreur : Rom/Iso/Dossier non trouvée !  ") };
 
+            var response = new JsonObject { ["serveurs"] = new JsonObject(), ["jeu"] = Jeu(game, url) };
+            if (User is not null) response["ssuser"] = User.DeepClone();
+            return Json(new JsonObject { ["header"] = Header(), ["response"] = response });
+        }
+
+        // jeuRecherche: every game of the system whose name holds the text, as jeuInfos writes each; none is [{}], an entry with no id.
+        private HttpResponseMessage SearchAnswer(string url)
+        {
+            if (ForcedStatus != 0) return new HttpResponseMessage((HttpStatusCode)ForcedStatus) { Content = new StringContent("Erreur : forced by the test") };
+            string text = Param(url, "recherche");
+            int.TryParse(Param(url, "systemeid"), out int system);
+            List<FakeGame> hits;
+            lock (Games) hits = Games.Where(g => g.SystemId == system && g.Name.Contains(text, StringComparison.OrdinalIgnoreCase)).Take(30).ToList();
+            var jeux = hits.Count == 0 ? new JsonArray(new JsonObject()) : new JsonArray(hits.Select(g => (JsonNode)Jeu(g, url)).ToArray());
+            var response = new JsonObject { ["serveurs"] = new JsonObject(), ["jeux"] = jeux };
+            if (User is not null) response["ssuser"] = User.DeepClone();
+            return Json(new JsonObject { ["header"] = Header(), ["response"] = response });
+        }
+
+        private JsonObject Jeu(FakeGame game, string url)
+        {
             string credentials = $"devid={DevId}&devpassword={DevPassword}&softname={SoftName}&ssid={Uri.EscapeDataString(Param(url, "ssid"))}&sspassword={Uri.EscapeDataString(Param(url, "sspassword"))}";
             var medias = new JsonArray(game.Media.Select(m => (JsonNode)new JsonObject
             {
                 ["type"] = m.Type, ["parent"] = "jeu", ["region"] = m.Region, ["format"] = m.Format, ["crc"] = "00000000",
                 ["url"] = $"https://neoclone.screenscraper.fr/api2/mediaJeu.php?{credentials}&systemeid={game.SystemId}&jeuid={game.Id}&media={m.Type}({m.Region})",
+                ["sha1"] = StateChecksums ? Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(Bytes(m.Type + "(" + m.Region + ")", game.Id.ToString()))) : null,
+                ["size"] = Bytes(m.Type + "(" + m.Region + ")", game.Id.ToString()).Length.ToString(),
             }).ToArray());
             var jeu = new JsonObject
             {
@@ -141,21 +183,37 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                     new JsonObject { ["id"] = "11", ["principale"] = "1", ["noms"] = new JsonArray(new JsonObject { ["langue"] = "fr", ["text"] = "Course" }, new JsonObject { ["langue"] = "en", ["text"] = "Racing" }) }),
                 ["medias"] = medias,
             };
-            var response = new JsonObject { ["serveurs"] = new JsonObject(), ["jeu"] = jeu };
-            if (User is not null) response["ssuser"] = User.DeepClone();
-            return Json(new JsonObject { ["header"] = Header(), ["response"] = response });
+            return jeu;
         }
 
-        private static HttpResponseMessage MediaAnswer(string url)
+        // A media file's bytes: a picture for the picture kinds, a PDF for manuel and an MP4 for the videos, each marked with its type, game and revision.
+        private byte[] Bytes(string media, string game)
+        {
+            string type = media.Split('(')[0];
+            byte[] label = Encoding.ASCII.GetBytes($"{media}|{game}|r{MediaRevision.GetValueOrDefault(type)}");
+            byte[] bytes = new byte[400];
+            Array.Copy(label, 0, bytes, 16, Math.Min(label.Length, 300));
+            byte[] head = type switch
+            {
+                "manuel" => Encoding.ASCII.GetBytes("%PDF-1.4\n"),
+                "video-normalized" or "video" => [0, 0, 0, 0x18, (byte)'f', (byte)'t', (byte)'y', (byte)'p', (byte)'m', (byte)'p', (byte)'4', (byte)'2'],
+                _ => [0x89, (byte)'P', (byte)'N', (byte)'G'],
+            };
+            Array.Copy(head, bytes, head.Length);
+            return bytes;
+        }
+
+        private HttpResponseMessage MediaAnswer(string url)
         {
             if (url.Contains("NOMEDIA")) return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("NOMEDIA") };
             string media = Param(url, "media");
-            byte[] png = new byte[400];
-            byte[] label = Encoding.ASCII.GetBytes(media);
-            Array.Copy(label, 0, png, 8, Math.Min(label.Length, 300));
-            png[0] = 0x89;
-            var content = new ByteArrayContent(png);
-            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+            byte[] bytes = Bytes(media, Param(url, "jeuid"));
+            if (Param(url, "sha1") is { Length: > 0 } theirs && theirs == Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(bytes)))
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("SHA1OK") };
+            Interlocked.Add(ref _bytesSent, bytes.Length);
+            var content = new ByteArrayContent(bytes);
+            string type = media.Split('(')[0];
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(type == "manuel" ? "application/pdf" : type.StartsWith("video") ? "video/mp4" : "image/png");
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
         }
 

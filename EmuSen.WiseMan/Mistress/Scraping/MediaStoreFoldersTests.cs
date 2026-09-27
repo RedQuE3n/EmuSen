@@ -130,7 +130,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             {
                 db.Open();
                 using SqliteCommand c = db.CreateCommand();
-                c.CommandText = "DROP TABLE store_move; DROP TABLE store_step; PRAGMA user_version = 1;";
+                c.CommandText = "DROP TABLE store_move; DROP TABLE store_step; ALTER TABLE scrape_game DROP COLUMN kinds_known; PRAGMA user_version = 1;";
                 c.ExecuteNonQuery();
             }
             // The picture already moved and the row not yet written, as a crash between the two would leave it.
@@ -143,7 +143,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 db.Open();
                 using SqliteCommand c = db.CreateCommand();
                 c.CommandText = "PRAGMA user_version";
-                Assert.Equal(2L, c.ExecuteScalar());
+                Assert.Equal((long)MediaStore.SchemaVersion, c.ExecuteScalar());
             }
             Assert.False(reopened.Done(MediaStore.FoldersStep));
             Assert.Single(reopened.Media("g", 64));

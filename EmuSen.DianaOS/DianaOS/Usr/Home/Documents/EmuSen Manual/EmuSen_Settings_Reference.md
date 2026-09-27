@@ -2547,7 +2547,8 @@ opened.
 prompt, then the resume question on a sheet. The menu over the game's "Game Library" (§4.18) brings the themed view back
 at the same system and game, in the same view, with the search still applied; "Close Game" does the same after writing
 the resume state. The selection is kept by the system's name and the game's file, not by position, so a list that
-changed underneath (a favourite marked, a file added) still finds it.
+changed underneath (a favourite marked, a file added) still finds it. *Since 2026-09-27, between the resume question
+and the game, ES-DE's launch screen: §4.71.*
 
 **The help bar follows the pad.** Its entries are the theme's layout filled with the actions above, and its icons are
 drawn by LunaP (`PadGlyph`, `LunaP.md` §103) in the set for the connected pad's family: Xbox, PlayStation, Nintendo, or
@@ -4090,6 +4091,7 @@ ES-DE's `es_settings.xml` spells the values where it has them. Nothing here is p
 | Clock | `DisplayClock` | off, as ES-DE's `DisplayClock` | the theme's `clock` elements drawn, showing the time |
 | On-Screen Help | `DisplayHelp` | on | the theme's `helpsystem` elements drawn |
 | System Status | `StatusBluetooth`, `StatusWifi`, `StatusBattery`, `StatusBatteryPercentage` | all on | each indicator of the theme's `systemstatus` elements |
+| Launch Screen Duration | `LaunchScreenDuration` | `normal`, ES-DE's | *since 2026-09-27:* how long the launch screen shows before a game starts; §4.71 |
 
 **Quick system select.** ES-DE's six choices, with its documented meanings (UG "UI settings"):
 - *Left/right or shoulders* and *Left/right or triggers*: left and right change the system in a game list whose primary
@@ -4629,3 +4631,95 @@ The places that read it:
 ScreenScraper's `softname` does not come from it and is unchanged. A state recorded by an earlier build keeps the
 *1.0.0* its record says; whether a state loads is decided by its state version, never by this. BigPicture §32.11 has
 the survey.
+
+### 4.71 Big picture: the launch screen (2026-09-27)
+
+Pass 11 of `EmuSen_BigPicture.md` §21 (its §33 is the record: ES-DE measured, the predictions, the tests, the mutants
+and the pictures). This section is what a player meets. It amends §4.52's "Starting a game and coming back": between
+the resume question and the game there is now the launch screen.
+
+**What it is.** When big picture starts a game, ES-DE first shows a card in the middle of the screen for a moment: the
+words *Launching Game*, the game's marquee, the game's name and its system, all in capitals, over the view shaded and
+blurred. Mistress now does the same. The card scales up from half its size over the first 117 ms. The view behind it
+is shaded by a fifth and blurred over the first 67 ms. Then nothing moves until the game starts. The game starts when
+the time is up, and the card is gone with the game's first frame. While the card shows, the pad and the keyboard do
+nothing, as in ES-DE.
+
+**The setting.** Theme Settings ▸ Interface (§4.66.1) gains **Launch Screen Duration**, under *On Screen*. It is kept
+in `appsettings.json` as `BigPictureInterface.LaunchScreenDuration`, spelled as ES-DE's `es_settings.xml` spells it:
+
+| Choice | Value | What it does |
+|---|---|---|
+| Normal | `normal` (the default) | the card for 3.0 s |
+| Brief | `brief` | the card for 1.7 s |
+| Long | `long` | the card for 4.5 s |
+| Popup | `popup` | no card: a notice at the top centre, *Launching Game 'Name'*, fading in over 0.5 s; the game starts after 1.7 s |
+| Disabled | `disabled` | the game starts at once, as before this pass |
+
+The times are ES-DE 3.4.1's, measured from the press to the start (§33 of the plan). An unknown value reads as Normal.
+Normal as the default, shown after the resume question, was decided on 2026-09-26 (Q33, §10.1 of the plan).
+
+**When it shows.**
+- **Every start from the themed view:** a game list's South or Enter, a collection's game, the random entry followed by
+  South, and a folder link. These all end in the one launch the view reports.
+- **In a big-screen session and in desktop big picture (F10, §4.54) alike.**
+- **After the resume question** (§4.31), whatever the answer. A question closed without an answer shows nothing and
+  starts nothing.
+- **Never when there is nothing to wait for:**
+  - a game the desktop's own list or grid starts;
+  - Open ROM, a dropped file or the ROM browser;
+  - going back to a suspended game (East in the system view, the pad menu's *Back to …*, or its *Game Library* and back).
+
+  The last kind reloads nothing, so nothing delays it.
+
+**What it shows.**
+- **The name** is the one the game list shows, a name set in the metadata editor (§4.59) included.
+- **The system** is the shelf's full name (*Super Nintendo*, *Game Boy Color*).
+- **The picture:**
+  - the game's **marquee**, found by the library's own order of sources (§4.60): ScreenScraper's media store, then an
+    ES-DE media folder;
+  - failing that, the game's **cover**, by the same order, the player's own cover first;
+  - failing both, no picture, and the card is shorter.
+
+  ES-DE shows only the marquee and draws no picture without one. The cover is Mistress's own addition (Q90 in the
+  plan), since most games have a cover and no marquee.
+- **The layout:**
+  - It follows ES-DE's proportions, taken from the window's height.
+  - The card is 0.886 of the height wide and centred 0.445 of the way down.
+  - It widens for a name that needs more room, up to 0.865 of the window's width. Beyond that the name ends in an
+    ellipsis.
+  - The colours and the typeface are those of the big-screen menus (§4.69), which stand for ES-DE's menu colour scheme
+    here.
+
+**A game that fails to load.** The card stays for its time, as ES-DE's does. Then the load fails, the card goes and the
+game list stays. The reason shows in the notice at the top centre (§4.61's), because the status bar is hidden in big
+picture. It is written to the error log (§4.70) under `launch`, as every failed load is.
+
+**Tests.** `LaunchScreenTests` (WiseMan, headless, 20 cases):
+- each duration stepped on the interface clock, the game not started one poll before its end and started at it;
+- Disabled starting at once;
+- the default and the stored values;
+- the name, system, marquee, cover and no picture;
+- an edited name;
+- the pad ignored while the card shows;
+- a resume from the pad menu and by East not delayed;
+- the resume question answered and closed;
+- a failed load;
+- the collection, random and folder-link routes;
+- F10's big picture shown and the desktop list not;
+- the window closed while the card shows;
+- the Interface row;
+- three pixel cases: the card at 1280×800 and 1920×1200, the scale-up, and the popup.
+
+`LaunchScreenPictureTool` writes the pictures when `EMUSEN_BIGPICTURE_PNG=1`. `ThemedSession` sets the duration to
+Disabled, so the older themed tests start their games at once as they did. The mutants are in §33 of the plan.
+
+**What it does not cover.**
+- **The return.** ES-DE lifts a shade off its game list over about a third of a second when a game ends. Mistress comes
+  back through the pad menu and draws the list at once (Q91).
+- **Menu opening animation** (ES-DE's *Scale-up* or *None*) has no switch. The card always scales up (Q92).
+- **ES-DE's error popups.** A missing emulator shows *Couldn't find emulator* in ES-DE, and a game that exits with an
+  error shows nothing there. Mistress has neither case. It shows its own reason for any load that fails.
+- **The clock and status indicators.** ES-DE keeps them sharp above the blur (with its Linear theme). Mistress blurs the
+  whole view.
+- **Nothing ran on the handheld.**

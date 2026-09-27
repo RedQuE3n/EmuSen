@@ -391,8 +391,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             double hh = Host(s).Bounds.Height;
             Rect card = InWindow(s, screen.CardBounds);
             Assert.Equal(1.0, screen.CardScale);
-            // ES-DE at 1280x800: a card 437 px high centred 356 px down, scaled with the height (§33.2).
+            // ES-DE at 1280x800: a card 709 by 437 px centred 356 px down, scaled with the height (§33.2); the width holds in the menus' Barlow Condensed (P190).
             Assert.Equal(437.0 / 800 * hh, card.Height, 3);
+            Assert.InRange(card.Width, 709.0 / 800 * hh - 1.5, 709.0 / 800 * hh + 1.5);
             Assert.Equal(Host(s).Bounds.Width / 2, screen.CardBounds.Center.X, 3);
             Assert.Equal(356.0 / 800 * hh, screen.CardBounds.Center.Y, 3);
 

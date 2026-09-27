@@ -4050,6 +4050,7 @@ player started (§17.14). Tests run headless in WiseMan, blast radius only, and 
   delay a resume from the pad menu.
 - *Cost.* 1–1.5 days.
 - *What the player sees.* The game's art and name for a moment before the game, as in ES-DE.
+- *Built 2026-09-27: §33. P115 held, at the edges of its ranges; Normal is 3.0 s, Brief 1.7 s, Long 4.5 s.*
 
 **Pass 12. Video (§7's stage g), waiting on Q20 and Q21.**
 - *Scope.* A decoder behind one interface; the `video` element's deferred properties (delay, fade-in, iterations,
@@ -7196,3 +7197,306 @@ records. The questions are kept as they were asked.*
   version of the published executables now say 0.9.0.
 - `EsdeMenusTests` asserts the footer reads *EmuSen 0.9.0*. The affected pictures of §32.6 were rendered again and
   looked at, and the two side-by-sides were composed again.
+
+## 33. Pass 11 built: the launch screen (2026-09-27)
+
+*Built on branch `bigpicture-pass11-launch-screen`, from WiseMan at `7f7f7368`.* §21.3 planned Pass 11 as ES-DE's launch
+screen and its five durations (inventory row 10), after the resume question and before the game's first frame. Q33 was
+decided on 2026-09-26 (§10.1): Normal by default, shown after the resume question. The request of 2026-09-27 described
+it as "a delay, with a popup window showing the game name and art for the game". The player's account is §4.71 of the
+settings reference.
+
+**Sources.** ES-DE 3.4.1's behaviour, measured by running it, and its `USERGUIDE.md` ("UI settings") where it speaks;
+never its source. `USERGUIDE.md` names the five durations and says that the menu colour scheme and the menu opening
+animation apply to the launch screen. It says nothing of what the screen shows or how long each duration lasts.
+Popup is "a simple notification popup", and Disabled makes "game launching … instantaneous". No file of ES-DE's entered
+the repository: no image, font, colour table or XML. The code's proportions are fractions read off captures, as §32.1's
+were. Its colours and typeface are the big-screen menus' (§32).
+
+**Numbering.** Predictions from **P190**, questions from **Q90**; both ranges were free on WiseMan and on §32's branch
+when this began.
+
+### 33.1 The setup
+
+- **ES-DE.** The AppImage under `~/.cache/emusen/bigpicture/esde/`, with a home of its own, `home-launch/`. The earlier
+  homes were not touched. Each run:
+  - `--home home-launch --resolution 1280 800 --fullscreen-padding off --no-update-check --no-splash --debug`,
+    windowed;
+  - one window at a time, closed by PID;
+  - afterwards, a check that no ES-DE process remained (`ps` with an anchored pattern).
+- **What it could reach.**
+  - `ApplicationUpdaterFrequency` was `never`, and the ScreenScraper account fields were empty. Nothing scraped.
+  - The ROM folder was `esde/launch-roms/`: ten empty `.sfc` files and seven empty `.nes` files. The player's library
+    was never named, and the runner asserts that its ROM folder is not the library.
+  - `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT` admitted only §22.2's uinput pad.
+- **Something to launch.** `custom_systems/es_systems.xml` gave `snes` and `nes` one command each: a stand-in script
+  (`probe/pass11/standin.sh`). The script writes the wall-clock time it starts and ends, sleeps for 1–4 s and exits 0.
+  A variant exits 1 after 0.2 s, and a third names a program that does not exist.
+- **Media.** `downloaded_media/<system>/<kind>/` held pictures drawn for the probe (`mkmedia.py`). Each kind had its
+  own colour and its name written on it, so a capture shows which kind ES-DE chose. The kinds were covers, miximages,
+  screenshots, title screens, marquees, fan art, 3D boxes, back covers and physical media. The SNES games carried
+  every kind, all but one, one kind alone, or none. The NES games carried marquees of five shapes (800×300, 400×400,
+  1600×160, 200×600, 100×40), and one game had a cover and a screenshot but no marquee.
+- **Theme.** ES-DE's bundled Linear for most runs. Art Book Next was used for two runs, to see whether the theme
+  matters.
+- **Capture.** Recordings of the ES-DE window by `ffmpeg -f x11grab`, as §22.2 did:
+  - 30 fps for 8–17 s around the press, and 60 fps for 6 s for the entrance;
+  - single frames by the same tool where only a picture was wanted.
+
+  The press time is from the uinput pad's log, the start of the "game" from the stand-in's log, both on the wall
+  clock.
+- **The runner** is `~/.cache/emusen/probe/pass11/esde_run.py`, with `pad2.py`, `frames.py` (per-frame change and
+  luma), `card.py`, `cardfiles.py`, `bands.py`, `corner.py`, `px.py` and `delays.py` (press to start, every run).
+  There were 27 runs of ES-DE and 37 launches, 36 of them timed (`delays.txt`); captures are under `probe/pass11/captures/`, logs under `probe/pass11/logs/`, and a summary in
+  `probe/pass11/RESULTS.txt`.
+
+### 33.2 What ES-DE does
+
+**Durations.** From the press of A to the start of the command:
+
+| Setting | Press to command | Launches | The card on screen |
+|---|---|---|---|
+| Normal | 3.011–3.016 s | 29 | 90 frames at 30 fps, 3.00 s |
+| Brief | 1.718 s | 1 | 51 frames, 1.70 s |
+| Long | 4.517 s | 1 | 135 frames, 4.50 s |
+| Popup | 1.712–1.718 s | 4 | the notice, 1.7 s |
+| Disabled | 0.016 s | 1 | nothing |
+
+The 11–18 ms beyond the round figures is the pad's event reaching ES-DE. Normal does not depend on any of the
+following, which the 29 launches varied:
+- the game's media;
+- the theme (Linear and Art Book Next);
+- the menu colour scheme (dark, dark red, light);
+- the opening animation (scale-up, none);
+- the blur (on, off);
+- the resolution (1280×800, 1280×720, 1920×1200);
+- whether the command then succeeds.
+
+**What the card shows** (captures `m01-each`, `m02-nes`):
+- **The heading and text.** *LAUNCHING GAME*, then the marquee, then the game's name and the system's full name
+  (`es_systems.xml`'s `fullname`), all in capitals and centred.
+- **Only the marquee.** A game with every kind of picture showed its marquee. A game with a cover, a screenshot or any
+  other kind but no marquee showed **no picture**, and the card is shorter, 256 px rather than 437 at 1280×800. A game
+  with no media at all showed the same short card.
+- **The marquee's box.** It is fitted whole into a box 356×154 px at 800 lines (0.445 × 0.1925 of the height),
+  centred. A small marquee is scaled up (100×40 was drawn 356×142).
+- **Size and place.** The card is 709 px wide (0.886 of the height) with corners of about 16 px, and centred 356 px
+  down (0.445 of the height), not in the middle.
+  - At 1280×720 it is 638×394 and centred 319.5 px down: the card scales with the height, not the width.
+  - At 1920×1200 it is 1065×655.
+- **A long name** widens the card to 1107 px (0.865 of the width at 1280×800). The name then ends in an ellipsis
+  (*GRANITE CHOIR AND THE VERY LONG TITLE THAT…*).
+- **The lines.** At 1280×800, from the card's top: the heading's capitals start at 50 px and are 34 px high; the name's
+  at 302 px, 43 px high; the system's at 364 px, 26 px high. On the short card: 48, 126 and 185 px.
+- **Colours.**
+  - Dark scheme: card `#121212`, text `#909090`. Its main menu's panel is `#191919` with the same text colour.
+  - Light scheme: card `#DFDFDF`, text `#555555`.
+  - Dark with red: the card is identical to dark. The scheme's red shows only in the menus' selected row.
+
+**The entrance** (`l02-normal60`, 60 fps):
+- **The card.** It appears within a frame of the press at 0.58 of its size, then 0.64, 0.70, 0.78, 0.86, 0.945,
+  0.995 and 1.0, about its centre. A linear scale from 0.5 over seven frames (117 ms) fits within 0.015.
+- **The view behind.** It is shaded over four frames (67 ms) to 0.8 of its brightness (55 → 44) and blurred as it
+  darkens.
+- **With the blur off** (`MenuBlurBackground` false) the view is shaded the same and not blurred.
+- **With the opening animation None**, the card and the shade are whole in the first frame.
+- **The clock and the Bluetooth indicator** of the Linear theme stay sharp above the blur.
+
+**While it shows.**
+- Nothing moves after the entrance.
+- B pressed twice (at 0.8 s and 1.1 s) changed nothing, and the command started at 3.016 s as always: **the screen
+  takes no input.**
+- There is no exit animation.
+
+**The game.** At the command, ES-DE's window turns black in one frame and stays black until the command ends.
+
+**The return.**
+- The game list comes back without the card, shaded, and the shade lifts over about 0.33 s (mean luma 61.2 → 67.1 over
+  ten frames at 30 fps).
+- After Popup and Disabled, one unshaded frame comes first.
+
+**The popup** (`l01-popup`, `c06-light-popup`):
+- **Shape and place.** A rounded pill at the top centre, 16 px from the top and 51 px high (0.064 of the height),
+  about 444 px wide for *LAUNCHING GAME 'AURORA DRIFT (SYNTHETIC)'*.
+- **Colours.** Text `#BBBBBB` on `#181818` (dark), `#444444` on `#EFEFEF` (light).
+- **Timing.** It fades in over 15 frames (0.5 s) and holds until the command.
+- **The view.** It is not shaded or blurred.
+- **The theme.** Art Book Next draws the same card and popup as Linear.
+
+**Failures** (`x02-fail`, `x03-notfound`).
+- **A command that exits 1 after 0.2 s:** the full screen, the black, then the game list, with nothing shown and
+  nothing in the log.
+- **A program that does not exist:**
+  - the full 3 s screen;
+  - then the game list without the black, its shade lifting;
+  - and a popup, *ERROR: COULDN'T FIND EMULATOR, HAS IT BEEN PROPERLY INSTALLED?*, in the launch popup's style. It
+    was still showing 5.5 s after the press, when the recording ended.
+
+  The log has `Error: Couldn't launch game, emulator not found`.
+
+### 33.3 P115 retired
+
+P115 predicted that Normal lasts 1.5–3 s, Brief 0.4–0.6 of it and Long 1.5–2.5 times it.
+- **Normal:** 3.00 s, measured as the card's 90 frames and as 3.011–3.016 s press to command.
+- **Brief:** 1.70 s, 0.567 of Normal.
+- **Long:** 4.50 s, 1.50 times Normal.
+
+**P115 held**, but two of its three parts only at the edge of their ranges: Normal at the top of 1.5–3 and Long at
+the bottom of 1.5–2.5. The prediction guessed a shorter Normal and a longer Long than ES-DE uses. The ranges were wide
+enough to hold, not placed well.
+
+### 33.4 What was built
+
+- **`LaunchScreen`** (Mistress, `BigPicture/LaunchScreen.cs`). A panel built from LunaP's pieces:
+  - `BlurBackdrop` (§32) over the themed view;
+  - a card (`Border`) carrying three `FontText` lines and a `FittedImage` at high-quality sampling;
+  - a `FontText` pill for Popup.
+
+  It holds §33.2's timings and proportions as named fractions of the height. The colours and the font path are the
+  big-screen menus' (`MenuPanel`'s defaults and its inherited `FontPath`, Barlow Condensed since §32). Its motion is
+  a function of the interface clock (`UiClock`), which tests move. No bitmap is captured or scaled beforehand. The
+  blur is Avalonia's Gaussian `BlurEffect` at full resolution, 14 px at 800 lines, §32's radius.
+- **`MainWindow.LaunchScreen.cs`** opens it, steps it and closes it:
+  - an animation frame is asked for only while the entrance moves;
+  - after that, one `DispatcherTimer` waits for the end;
+  - the pad poll steps it too, so a test's clock reaches it.
+- **The start sequence.** `StartGameAsync` gains an optional game from the themed view: the firmware prompt, the
+  resume question, then, for that game only, the launch screen, then `LoadGame`, then the screen closed. A failed
+  load's reason goes to the notice. The themed view's one launch path passes its game, so every route through it shows
+  the screen (§4.71). Nothing else passes one.
+- **Input.** `PadTick` steps the screen and returns while it is open, forgetting what is held. The themed view's pad
+  guard also refuses while it is open. The keyboard reaches the view only through `PadTick`.
+- **Closing the window** ends the screen without starting the game (§15.14's lesson).
+- **The setting.** `BigPictureInterface.LaunchScreenDuration` and its row on the Interface tab.
+
+### 33.5 Where Mistress differs, on purpose or by necessity
+
+- **The picture.** Marquee first, as ES-DE; then the cover, which ES-DE never shows (Q90).
+- **The font.** Barlow Condensed, the menus' face (§32), not ES-DE's. A name wider than the card at 0.886 of the
+  height widens it, as in ES-DE. Since the faces differ, the same name need not widen both cards alike (P190).
+- **The colours.** The menus' `#1B1B1E` card and `#B4B4B8` text, not ES-DE's `#121212` and `#909090`. There is no
+  colour scheme to follow; §21.2 left the look to LunaP and §32 set the menus' greys.
+- **The system name.** The shelf's full name (*Super Nintendo*), not ES-DE's `fullname`.
+- **The blur** covers the whole view, the theme's clock and indicators included.
+- **No black interval.** The game draws in the same window, so the card gives way to its first frame.
+- **The return shade** is not drawn (Q91). **The opening animation** is always the scale-up (Q92).
+- **A failed load.** The notice gives the reason for any load that fails, where ES-DE shows its popup only for a
+  missing emulator. The error log records it (§4.70).
+
+### 33.6 Tests
+
+`LaunchScreenTests`, 20 cases, headless on WiseMan's `PadDriver` with the clock the test moves (§4.71 lists them).
+
+**Durations.** Each of Normal, Brief, Long and Popup is stepped in 16 ms polls. The game is not running at its end
+less one poll, and is running, on screen, with the card gone, at its end.
+
+**Pixel cases, in §15's style:**
+- **The card at 1280×800 and 1920×1200.**
+  - The card's place and size are the fractions of §33.2.
+  - Its four inner corners are exactly the menus' panel colour, and three points just outside it are not.
+  - The marquee's two halves are its own colours, so it is drawn unfiltered by the card.
+  - Outside the card, at least 98% of the pixels that were not black before are changed by the shade and blur.
+- **The scale-up.** At the press the card is half its size about its centre: the panel colour inside the half-size
+  box and not beyond it. At 117 ms it is whole.
+- **The popup.** Opacity 0 at the press, 0.45–0.55 at 250 ms and 1 at 550 ms. The pill sits 0.02 of the height from
+  the top, centred. **Outside the pill, the frame is the view's own: 0 pixels differ.**
+
+**Existing tests.** `ThemedSession` now sets Disabled, so the older themed tests start at once as they did. The
+resume tests call `StartGameAsync` by reflection, and pass the new argument as null. No other test changed.
+
+### 33.7 Mutants
+
+The runner is `~/.cache/emusen/probe/pass11/mutate_pass11.py`, its verdicts `mutants-pass11.txt`.
+- Each mutant was built with `-m:2` and tested alone under `nice -n 10` against `LaunchScreenTests`.
+- Before changing a file the runner writes it to a state file, restores it in a `finally`, and on starting restores
+  any file a cut-short run left mutated.
+- The tree was rebuilt clean at the end.
+
+**26 mutants: 24 caught on the first round, 2 survived, none failed to build.** One survivor was a weak test, which
+was then fixed. The other is equivalent. After the fix, 25 of 26 are caught. Each mutant took about 12 s to build and
+test.
+
+| Area | Mutants (caught unless marked) |
+|---|---|
+| Durations | D1 Normal 2 s; D2 Brief as Normal; D3 Long as Normal; D4 Disabled waits; D5 Popup drawn as the card; D6 Disabled the default |
+| Look | L1 no scale-up; L2 no shade; **L3 the card centred at 0.5 (survived, then caught)**; L4 no picture; L5 no fade for the popup; L6 the card in the text colour; L7 Close leaves it on view; L8 the popup mid-screen |
+| Picture and text | A1 the cover before the marquee; A2 no cover when there is no marquee; A3 the shelf's short name |
+| Timing | T1 the game a poll late; T2 the card's clock offset from the interface's |
+| Resume and load | R1 the card before the resume question; R2 no reason shown for a failed load; R3 the card left up; R4 the window's close not ending it |
+| Input and routes | P1 the pad reaching the view; **P2 the view's own guard without the card (survived: equivalent)**; B1 the themed view starting without it |
+
+- **L3 survived** because the pixel test compared the card's centre with `LaunchScreen.CardCentre` times the height.
+  That is the code's own constant, so moving the constant moved the expectation with it. The test now states ES-DE's
+  measurement in pixels (437 high, 356 down, 709 wide at 800 lines). The mutant was caught on its rerun
+  (`mutants-pass11-rerun.txt`). The marquee test's two heights were rewritten the same way.
+- **P2 is equivalent.** `PadTick` returns before the themed view's guard is read while the card shows, so the guard's
+  extra condition cannot change what happens. It is kept, in case a later caller reads `ThemedTakesThePad` outside
+  `PadTick`.
+
+### 33.8 Pictures
+
+`LaunchScreenPictureTool` (with `EMUSEN_BIGPICTURE_PNG=1`) writes to `~/.cache/emusen/bigpicture/png/pass11/`, beside
+ES-DE's captures in `~/.cache/emusen/probe/pass11/captures/`. Every picture was looked at. At 1280×800 and 1920×1200:
+- the view before;
+- the Normal card with a marquee at 0, 17, 33, 50, 67, 83, 100, 117 and 1,500 ms;
+- the card with a cover, with no picture, and with a long name;
+- the popup at 0, 250, 500 and 1,500 ms;
+- a failed load's notice;
+- the card over Art Book Next.
+
+There is also the Interface tab's row at 1280×800.
+
+The pictures were rendered twice: before WiseMan was merged, in the default face (Noto Sans), and after, in §32's
+Barlow Condensed.
+- **In Noto Sans** the card for *Aurora Drift (Synthetic)* was 882 px wide. The name did not fit the narrowest card,
+  so the card widened.
+- **In Barlow Condensed** the card for the same name is 709×437 at 1280×800 (ES-DE: 709×437) and 1064×656 at
+  1920×1200 (ES-DE: 1065×655). With no picture it is 709×256 (ES-DE: 709×256), and with the long name 1108 wide
+  (ES-DE: 1107). The long name is cut after the same word, *THAT…*.
+- **The lines.** The heading's capitals span rows 188–221 and the marquee 462–817 × 264–396, both ES-DE's to the
+  pixel. The name and system lines are within 1 px of ES-DE's.
+- **The popup.** Its text is 352 px wide where ES-DE's is 405, at the same cap height, because Barlow is the narrower
+  face.
+- **Art Book Next.** The card over it is the same card.
+
+### 33.9 Predictions
+
+| # | Prediction | Found, or retired when | Verdict |
+|---|---|---|---|
+| P190 | *(written before WiseMan's merge brought §32's face)* In Barlow Condensed, the card for *Aurora Drift (Synthetic)* at 1280×800 is ES-DE's 709 px wide, because the name then fits the narrowest card | 709 px; the long name's card 1108 against ES-DE's 1107 | held; the pixel test now checks it |
+| P191 | On the handheld at 1920×1200 in Game Mode, the game's first frame follows the end of Normal within 50 ms by the wall clock, the timer's lateness and the load together | a run on the device, with a recording | open |
+| P192 | ES-DE's *Couldn't find emulator* popup lasts about 4 s, as its device popup does (§24.4) | ES-DE recorded past 6 s | open |
+| P193 | Brief and Long vary from run to run as Normal does, within 5 ms of 1.71 s and 4.51 s press to command | five more runs of each | open |
+
+### 33.10 Not done
+
+- **Nothing ran on the handheld** (P191), and no real pad was used; the pad was §22.2's uinput device.
+- **Brief, Long and Disabled were measured once each**, and Popup four times (P193).
+- **ES-DE's return shade and the opening-animation switch** were not built (Q91, Q92). The **clock and indicators**
+  stay blurred.
+- **The error popup's length** was not measured (P192), and **a game that exits with an error** has no Mistress
+  counterpart: an in-window core either loads or throws.
+- **Videos**, which ES-DE's launch screen does not show in 3.4.1 with these settings, were not tried: no video was
+  given to any game.
+- **Themes other than Linear and Art Book Next**, and ES-DE's other bundled themes, were not tried, though the screen
+  is ES-DE's own and not the theme's.
+- **The desktop's pad menu route** to a game (none exists: the menu resumes, it does not start) needed nothing.
+
+### 33.11 Open questions
+
+- **Q90, the cover when there is no marquee.** ES-DE shows no picture without a marquee. Mistress shows the cover,
+  because the library's covers come from four sources and marquees from two (§4.60), and a request of 2026-09-27 asked
+  for "art for the game". **Recommendation:** keep the cover.
+- **Q91, the return shade.** ES-DE lifts a shade off its game list over about 0.33 s when a game ends. Mistress
+  returns through the pad menu, and P40's test (§15.4) compares the first frame after the return with a fresh build.
+  **Recommendation:** no, unless a return straight from a game is built.
+- **Q92, the opening animation.** ES-DE's *Menu opening animation* (Scale-up, None) sets the launch screen's entrance
+  and its menus'. **Recommendation:** add it to the Interface tab with §32's stage 2, so that one switch covers both.
+
+### 33.12 The broad run
+
+After merging WiseMan (§32 and the neutral rewording of the docs), one run of the Mistress filter, without
+`ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` and any GPU or Vulkan test, under `nice -n 10`:
+**1,113 tests, 1,080 passed, 33 skipped (the picture, survey and live tools), 0 failed, in 3 min 47 s.** The two
+failures of §31.12 did not recur: the credential guard's was fixed on WiseMan, and the headless-initialisation one
+passed in this order.

@@ -4901,6 +4901,41 @@ left unthemed still goes to the error log (§4.70), as before.
   ES-DE was run only on the badges'.
 - Nothing ran on the handheld.
 
+### 4.74 Big picture: games picked for the system view, and carousels that turn (2026-09-27)
+
+The first half of pass 14 of `EmuSen_BigPicture.md`, whose §36 is the record (the runs of ES-DE 3.4.1, the rules, the
+tests, the mutants and the pictures). There is no setting: a theme that uses these elements is now drawn as ES-DE draws
+it, in big-screen sessions and in big picture on the desktop (§4.54). The section
+is numbered 4.74 because §4.72 is another pass's.
+
+**Games in the system view.** A theme can pick games to show beside the console list: the most recently played, the
+most played, or games at random. Twenty of the 66 themes on ES-DE's list do, for a background picture, a box, a name or
+a rating. Mistress now draws them:
+- **Most recently played** lists only games that have been played, newest first; **most played** only games played at
+  least once, most first. A console with fewer such games than the theme asks for shows fewer; the rest of those
+  places stay empty, as in ES-DE.
+- **At random**, each game once, and new games each time the console list moves, back to the same console included. A
+  theme that allows repeats fills every place, the first ones different.
+- **Never picked:** a game marked *Exclude from game counter* (§4.59), a folder, and a hidden game while hidden games
+  are not shown.
+- **A theme with no such picker** shows no game pictures, names or ratings in the system view. Before, Mistress showed
+  the console's last selected game there, which ES-DE does not.
+- A random picker shows other games than ES-DE would in the same state; both are random.
+
+**Carousels that turn.** Nine listed themes lay their console or game carousel out as a **wheel**, vertical or
+horizontal; some mirror a row's pictures in a **reflection** beneath it. Mistress now draws both, placed within a pixel
+of ES-DE in every probe measured (§36.3), and moving between items as a straight carousel does. Every carousel is also
+now **clipped** to its box, as in ES-DE, and a selected item that grows does so from the edge the theme aligns it to.
+Canvas and Iconic, whose wheel counts are written `3.5` (§4.73), now draw 3 items each side.
+
+**What it does not do.**
+- A game's missing field (no developer, say) shows nothing in the system view, where ES-DE writes "unknown"; the
+  gamelist has always done the same (Q121 of the plan).
+- The carousel's `selectedItemMargins`, `lineSpacing` and the other properties §36.10 lists are not drawn yet, so Aura's
+  game carousel, for one, spaces its covers evenly where ES-DE sets the selected one apart (§36.9, Q120).
+- `gamelistinfo` and animated pictures are the pass's second half, not yet built.
+- Nothing ran on the handheld.
+
 ### 4.75 Big picture: the screensaver (2026-09-27)
 
 Pass 10 of `EmuSen_BigPicture.md` §21 (its §37 is the record: ES-DE measured, the predictions, the tests, the mutants

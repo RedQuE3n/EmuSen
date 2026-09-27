@@ -24,7 +24,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
         internal static Control? DateTime(SceneBuilder b, ResolvedElement e)
         {
             string? field = e.String("metadata");
-            System.DateTime? date = b.Data.Game is { } g ? field switch { "releasedate" => g.ReleaseDate, "lastplayed" => g.LastPlayed, _ => null } : null;
+            SceneGame? game = b.GameFor(e);
+            if (game is null && b.View.Name == "system" && field is "releasedate" or "lastplayed") return null;
+            System.DateTime? date = game is { } g ? field switch { "releasedate" => g.ReleaseDate, "lastplayed" => g.LastPlayed, _ => null } : null;
             string? value = date is { } d
                 ? e.Bool("displayRelative") == true ? SceneUnits.Relative(d, b.Data.Now) : SceneUnits.Format(d, e.String("format") ?? "%Y-%m-%d")
                 : e.String("defaultValue");
@@ -40,9 +42,10 @@ namespace EmuSen.Mistress.BigPicture.Scene
             if (field is "systemName" or "systemFullname" && b.View.Name == "gamelist" && system.Heading is { } heading) return heading.Length == 0 ? null : heading;
             if (field is "systemName") return system.System.Name;
             if (field is "systemFullname") return system.System.FullName;
-            if (field is "sourceSystemName") return (b.Data.Game?.SourceIn(system) ?? system.System).Name;
-            if (field is "sourceSystemFullname") return (b.Data.Game?.SourceIn(system) ?? system.System).FullName;
-            if (b.Data.Game is not { } g) return null;
+            SceneGame? game = b.GameFor(e);
+            if (field is "sourceSystemName") return (game?.SourceIn(system) ?? system.System).Name;
+            if (field is "sourceSystemFullname") return (game?.SourceIn(system) ?? system.System).FullName;
+            if (game is not { } g) return null;
             static string YesNo(bool v) => v ? "Yes" : "No";
             string? value = field switch
             {

@@ -117,7 +117,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             else target = Math.Clamp(target, 0, count - 1);
             if (target == Index) return false;
             double to = _position.To + (wraps ? delta : target - Index);
-            Data = IsSystemView ? Data with { SystemIndex = target } : Data with { GameIndex = target };
+            Data = IsSystemView ? Data with { SystemIndex = target, Shuffle = unchecked(Data.Shuffle + 1) } : Data with { GameIndex = target };
             _position = Slides ? _position.Toward(to, now, Motion.CarouselStep, Motion.CarouselEasing) : Glide.At(to);
             _selectedAt = now;
             _changed = true;
@@ -204,7 +204,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             _focus = Primary!.String("itemTransitions") == "instant" ? Glide.At(1) : new Glide(0, 1, now, Motion.GridStep, Motion.GridEasing);
             double scroll = g.ScrollFor(target);
             _scroll = Primary.String("rowTransitions") == "instant" ? Glide.At(scroll) : _scroll.Toward(scroll, now, Motion.GridStep, Motion.GridEasing);
-            Data = IsSystemView ? Data with { SystemIndex = target } : Data with { GameIndex = target };
+            Data = IsSystemView ? Data with { SystemIndex = target, Shuffle = unchecked(Data.Shuffle + 1) } : Data with { GameIndex = target };
             _selectedAt = now;
             _changed = true;
             Scene = Rebuild();

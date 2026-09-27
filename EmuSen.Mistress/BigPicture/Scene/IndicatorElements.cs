@@ -14,7 +14,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
     {
         internal static Control? Rating(SceneBuilder b, ResolvedElement e)
         {
-            float value = b.Data.Game?.Rating ?? 0;
+            SceneGame? game = b.GameFor(e);
+            if (game is null && b.View.Name == "system") return null;
+            float value = game?.Rating ?? 0;
             if (value <= 0 && e.Bool("hideIfZero") == true) return null;
             var rating = new StarRating
             {

@@ -510,7 +510,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         private void ServeOpenVgdbRelease()
         {
             string built = Path.Combine(_root, "built", OpenVgdb.FileName);
-            OnlineCoverTests.BuildOpenVgdb(built, ("SNES", "F-Zero (USA)", "00", null));
+            OnlineCoverTests.BuildOpenVgdb(built, ("SNES", "F-Zero (USA)", "00", null), ("SNES", "Zeta (USA)", "02", null));
             byte[] zip;
             using (var memory = new MemoryStream())
             {
@@ -550,6 +550,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             try
             {
                 ServeOpenVgdbRelease();
+                string zeta = Path.Combine(_romDir, "Zeta (USA).sfc");
+                File.WriteAllBytes(zeta, SyntheticRom.Build((0x100, [7, 7])));
                 MainWindow window = Open(developer: false);
 
                 // A run with the database present uses it and leaves it; the failover's worker now holds it open.
@@ -608,6 +610,11 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 Scrape(window, ScrapeScope.ThisGame(_rom));
                 RunEnds(window);
                 WaitFor(() => CoverShown(window, _rom) == OpenEmuCover, "the cover after the download");
+
+                // A game only the downloaded database knows is found, so the lookup reads the new file and not the removed one a stale worker could still hold open.
+                Scrape(window, ScrapeScope.ThisGame(zeta));
+                RunEnds(window);
+                WaitFor(() => CoverShown(window, zeta) == Path.Combine(DataStore.Media, "openemu", "SNES", "Zeta (USA).png"), "the new database's game");
             }
             finally
             {

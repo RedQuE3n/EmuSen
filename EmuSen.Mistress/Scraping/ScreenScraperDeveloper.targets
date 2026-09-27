@@ -70,7 +70,6 @@
     <ItemGroup Condition="Exists('$(EmuSenScreenScraperDeveloper)') AND '$(_EmuSenDeveloperProblem)' == ''">
       <EmbeddedResource Include="$(_EmuSenDeveloperBlob)" LogicalName="$(EmuSenScreenScraperResource)" WithCulture="false" Type="Non-Resx" />
       <_EmuSenDeveloperEmbedded Include="$(_EmuSenDeveloperBlob)" />
-      <CoreCompileCache Include="EmuSenScreenScraperDeveloperEmbedded" />
     </ItemGroup>
   </Target>
 

@@ -4042,6 +4042,8 @@ player started (§17.14). Tests run headless in WiseMan, blast radius only, and 
   nothing between swaps, as P39 required of a still view, or it costs the battery it exists to save (P114).
 - *Cost.* 1.5–2 days; the video saver 0.5 more in Pass 12.
 - *What the player sees.* The view dims, or a slideshow of the library, after five idle minutes.
+- *Built 2026-09-27: §37. P114 failed on its first clause: ES-DE's own Dim and Black fade over about ten frames, so
+  Mistress draws their fades too, and nothing after; the slideshow draws only through its changes.*
 
 **Pass 11. The launch screen.**
 - *Scope.* ES-DE's launch screen and its five durations (inventory 10), after the resume question has been answered and
@@ -4262,7 +4264,7 @@ Written before any pass is built, to be retired in each pass's record.
 | P111 | 8 | Refreshing a found game whose files are unchanged costs one request per kind and under 1 KB received per kind, each request counted in `requeststoday` (P61) | Pass 8 |
 | P112 | 8 | Back covers, 3D boxes, physical media and fan art together raise a found game from 4.7 to 7.5–8.5 requests and add 0.9–1.5 MB, taking a found game from about 13 s to 20–28 s at 128 KB/s | Pass 8 |
 | P113 | 9 | One page of a median ScreenScraper manual (1.7 MB) renders at 1920×1200 in under 300 ms on the desktop and under 1 s on the handheld | Pass 9 |
-| P114 | 10 | Dim and Black draw at most one frame after they start, and the slideshow draws only at its swaps and their transitions (every 10 s by ES-DE's default) | Pass 10 |
+| P114 | 10 | Dim and Black draw at most one frame after they start, and the slideshow draws only at its swaps and their transitions (every 10 s by ES-DE's default) | Pass 10: failed on the first clause, held on the second (§37.3) |
 | P115 | 11 | ES-DE's launch screen at Normal lasts 1.5–3 s; Brief is 0.4–0.6 of that and Long 1.5–2.5 times it | Pass 11 |
 | P116 | 12 | ScreenScraper's `video-normalized` clips are H.264 in MP4, no larger than 640×480, and one decodes in under 5% of a Legion Go S core (P5, carried) | Pass 12 |
 | P117 | 12 | ES-DE starts a clip at the element's `delay` to within one frame at 60 Hz and fades it from black linearly over `fadeInTime` (1 s by default) to within 5% | Pass 12 |
@@ -7758,3 +7760,288 @@ under `nice -n 10`: **1,295 tests, 1,261 passed, 33 skipped (the picture, survey
 52 s.** The failure is §31.12's order-dependent one of the headless platform's initialisation ("The calling thread
 cannot access this object"), this time in `FrameHandOffTests`, whose eight tests passed when run alone; it is not this
 branch's.
+
+## 37. Pass 10 built: the screensaver (2026-09-27)
+
+*Built on branch `bigpicture-pass10-screensaver`, from WiseMan at `b0c6bf75`, with LunaP's branch `pass10-screensaver`
+from `openemu-library` at `9872708`.* §21.3 planned Pass 10 as ES-DE's screensaver: Dim, Black and Slideshow, after an
+idle time, with its controls and "Start screensaver after", and Video left for Pass 12. Q34 was decided on 2026-09-26
+(§10.1): on everywhere, Dim until videos exist, and off in Game Mode if the hardware session finds Steam's dimming
+stacking with it. Decided 2026-09-27: that Game Mode switch is a setting, on by default, and the question stays open
+(Q130). P114 and P39 set the pass's rule: a screensaver draws nothing between its changes. The player's account is §4.75
+of the settings reference.
+
+**Sources.** ES-DE 3.4.1's behaviour, measured by running it, and its `USERGUIDE.md` ("Screensaver", "Screensaver
+settings", "Slideshow screensaver settings") where it speaks; never its source. The guide names the four types, the
+controls, the overlay's content, the fallback to Dim "if no game images are available", and the settings and their
+ranges. It gives no level, time, layout or image order; those are measured here. No file of ES-DE's entered the
+repository.
+
+**Numbering.** Predictions from **P230**, questions from **Q130**; both ranges were free on WiseMan when this began.
+
+### 37.1 The setup
+
+- **ES-DE.** The AppImage under `~/.cache/emusen/bigpicture/esde/`, with a home of its own, `home-screensaver/`. Each run:
+  - under the shared lock, `flock ~/.cache/emusen/bigpicture/esde/esde.lock`, so one ES-DE window exists at a time;
+  - `--home home-screensaver --resolution 1280 800 --fullscreen-padding off --no-update-check --no-splash --debug`,
+    windowed, and 1920×1200 for two runs;
+  - closed by the PIDs it started, and the run waits until they are gone before it gives the lock back.
+- **What it could reach.** `ApplicationUpdaterFrequency` `never`, the ScreenScraper fields empty, nothing scraped. The ROM
+  folder was `esde/screensaver-roms/`: ten empty `.sfc` files and three empty `.nes` files. The runner asserts that no
+  folder it names lies in the player's library. `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT` admitted only §22.2's uinput
+  pad.
+- **Media.** Pictures drawn for the probe (§33.1's `mkmedia.py`): each kind its own colour with its name on it, so a
+  capture shows which kind was chosen. One game had every kind, one every kind but miximages, and single games had only
+  a screenshot, a title screen, a cover, fan art, a marquee, a miximage or a 3D box; one had none. The NES games had
+  titlescreens and covers, covers and titlescreens, and covers, fan art, 3D boxes and marquees. Four games were
+  favourites (`gamelist.xml`). The custom folder `esde/screensaver-custom/` held four flat pictures of different
+  shapes (1600×400, 400×1200, 160×100, 1280×800) and one in a subfolder.
+- **The timer.** `ScreensaverTimer` 4000 ms for every run, written to `es_settings.xml` directly (the menu offers whole
+  minutes). One run set 0 and started the screensaver with X.
+- **Capture.** `ffmpeg -f x11grab` recordings of the window at 60 fps (fades) and 30 fps (slideshows, controls), and
+  single frames; the pad's presses are logged on the wall clock. Per-frame luma and change, and pixel reads of known
+  colours, are from `frames.py` and short scripts.
+- **The runner** is `~/.cache/emusen/probe/pass10/esde_run.py`, with `batch.py`, `pad2.py`, `mkmedia.py`, `flat.py`,
+  `frames.py` and `overlap.py`. Captures are under `probe/pass10/captures/`, logs under `probe/pass10/logs/`.
+- **The runs.** 24, in two batches after a first single run, and three repeats (below): 27 in all.
+- **A run that was not isolated, and the repeats.** The first two runs (`d01-dim`, `b01-black`) killed only the process
+  tree of the AppImage. After `b01` a process of ES-DE was still running while the lock had been given back: the next
+  ten starts found it and refused to run. The runner then learnt to record every ES-DE process present once its window
+  appears and to wait for all of them to end. `overlap.py` compares every run's log with the logs of the other
+  work using ES-DE that day: no other run started inside any of these. Dim, Black and the slideshow's change were then
+  recorded again (`d01r`, `b01r`, `s03r`) with the runner watching for any other ES-DE process during the run; there
+  was none, and the three repeats agree with the first recordings to within a frame.
+
+### 37.2 What ES-DE does
+
+**The timer.** The screensaver starts 4.0 s after the last press with the timer at 4000 ms, measured on seven runs
+(the first changed frame 4.0–4.1 s after the press, the recording's own start delay included). With a menu open it
+did not start in ten seconds. With the timer at 0 it did not start by itself in the 8.6 s after X had ended it.
+
+**Dim** (`d01`, `d01r`, `d03`, `d02` in the system view, `d05` at 1920×1200):
+- **The level.** Every pixel becomes the grey of its luminance at 0.4 of it: (40, 161, 61) became (45, 45, 45), where
+  0.4 × (0.299 R + 0.587 G + 0.114 B) = 45.4; (40, 80, 201) became (33, 33, 33); white 255 became 102 and 250 became
+  100; the background's 55 became 22. The whole window is dimmed, the help bar, the clock and the indicators included.
+- **The fade.** Both together: brightness and saturation fall along one ramp. The white text read 0.98, 0.94, 0.87,
+  0.81, 0.70, 0.64, 0.58, 0.48, 0.41 and 0.40 of itself frame by frame, a fall of 3.5–3.6 a second, so the fade takes
+  0.17 s (four recordings: 0.167–0.19 s). Halfway (brightness 0.71) the colours were halfway to grey.
+- **What is under it** holds still.
+
+**Black** (`b01`, `b01r`, `b02`): no desaturation, the picture darkened to black at 7.1–7.7 a second, 0.13–0.14 s.
+
+**Video with no videos** (`v01`): Dim, to the level. **A slideshow with no pictures** (`s16`, an empty media folder):
+Dim.
+
+**Waking.** Any button ends it in the next frame (60 fps recordings), with no fade out, and does nothing else: Down did
+not move the list, A in Dim did not start the game, Y did not toggle the favourite, right did not change the system,
+B did not leave the list (`d01`, `d04`, `s06`, `s17`). The next screensaver came 4 s after that press.
+
+**The slideshow** (`s01` at 10 s, `s02` at 2 s, `s03` and `s03r` at 4 s and 60 fps):
+- **The swaps** came exactly every 10.0 s (three swaps, 300 frames apart at 30 fps), and every 2 s and 4 s when set.
+- **Each change.** A cut to black in one frame, the old picture and overlay gone; the overlay then fades in and is
+  whole about 0.12 s after the cut; the picture is not drawn at all until 0.22–0.23 s after the cut, appears at about
+  half its brightness, and rises linearly to full at 0.45 s. Six changes read the same. Read as one ramp, the picture's
+  opacity is its time since the cut over 0.45 s, hidden for its first 0.22 s.
+- **The first showing** is the same: the view cuts to black, then the picture fades in.
+- **Which picture.** Over 20 changes at 2 s: the game with every kind showed its miximage; the one without miximages,
+  its screenshot; a game with a title screen and a cover, the title screen; a game with a cover, fan art, a 3D box and
+  a marquee, the cover. **Games with only fan art, only a marquee, only a 3D box, or nothing, never appeared.** The
+  order is miximage, screenshot, title screen, cover; the other kinds are not used.
+- **Which game.** Random, from both systems, and never the same game twice running in over 40 recorded changes (`s02`, `s04`,
+  `s10`, `s11`, `s12`).
+- **The fit.** Fitted whole and centred on black (a 4:3 picture at full height with bars at the sides); with *Stretch
+  images* on, stretched to the window (`s14`).
+- **The overlay** (`s01`, `s02`, `s14`, `s15`):
+  - a black box of alpha 0xAA (a picture's (200, 160, 30) under it read (67, 53, 10), white read 85), in the upper
+    left corner, at x 17 and y 16, 84 px high at 800 lines; at 1920×1200, 1.5 times each;
+  - two lines of white capitals: the game's name, then the system's `fullname` from `es_systems.xml`
+    (*NINTENDO SNES (SUPER NINTENDO)*); the capitals 19 px high, their tops 12 and 54 px below the box's top, the text
+    14 px in from the box's left;
+  - the box as wide as the longer line plus about 16 px;
+  - a filled white star after a favourite's name, about 25 px across, 13 px after the name, centred on the capitals;
+  - with *Only include favorite games* on, no star (`s10`), as the guide says;
+  - the face is the one ES-DE's menus use, which §32 matched with Barlow Condensed.
+- **Custom images** (`s11`, `s12`): the folder's pictures, at random and never twice running, with no overlay; the
+  subfolder's only with *recursive search* on; each fitted whole (the 160×100 picture scaled up to the window).
+- **The controls** (`s04`, `s05`, `s06`, on by default):
+  - right and left: an immediate change to another game, with the same cut and fade, and the next swap 10 s after;
+  - A: the gamelist behind moved to the game shown, and the game started through the launch screen, 3.017 s after the
+    press (§33's Normal);
+  - Y: the screensaver ended and the gamelist showed that game selected;
+  - B: the screensaver ended, nothing else;
+  - with the controls off (`s17`), right, A and Y only ended it.
+- **X in the system view** (`x01`, timer 0): the slideshow started at once; X while it showed ended it. The system view's
+  help bar names X *Screensaver*.
+
+### 37.3 P114 retired
+
+P114 predicted that Dim and Black draw at most one frame after they start, and that the slideshow draws only at its
+swaps and their transitions.
+- **The first clause failed, for ES-DE itself.** ES-DE fades Dim in over 0.17 s and Black over 0.14 s: ten and eight or
+  nine frames at 60 Hz. The prediction assumed a cut. Mistress follows ES-DE, so it draws those frames: **11 for Dim
+  and 9 for Black** in the harness's 16 ms polls, then **0 in the 610 s after**, and the themed view beneath 0 as well.
+- **The second clause held.** Each change draws through the overlay's fade (to 117 ms) and the picture's (217–450 ms),
+  with one wake at 217 ms between them: **23 or 24 frames a change, and 0 in the 9.54 s to the next**, over six changes.
+
+The rule the pass was meant to keep, nothing drawn while nothing changes, holds. What failed is the belief that the
+holding is all there is.
+
+### 37.4 What was built
+
+- **LunaP** (its §184), on its branch `pass10-screensaver`:
+  - `DimLayer`, which greys what is beneath it by the renderer's own saturation blend mode and darkens it with a black
+    fill, so nothing beneath is captured or resampled. In Avalonia 12.1 the blend mode reaches images and not fills, so
+    the grey it blends is a 2×2 constant image; a grey fill drew the grey itself. The luma is the blend mode's
+    (0.3, 0.59, 0.11), within one level of ES-DE's;
+  - `CrossFadeImage`, two `FittedImage`s at high-quality sampling, the new one faded in over the old or over nothing.
+- **`Screensaver`** (Mistress, `BigPicture/Screensaver.cs`), a panel of a `DimLayer`, a black fill, a `CrossFadeImage` and
+  the overlay (a box, two `FontText` lines in the menus' face, and a star). It holds §37.2's levels, times and
+  proportions, and answers when it next changes (`NextChange`): now while a fade runs, the picture's first showing
+  while only that is awaited, and never once it is still.
+- **`MainWindow.Screensaver.cs`**:
+  - **The idle clock** is the interface clock (`UiClock`), which tests move. Each pad poll (`PadTick`, every 16 ms)
+    reads every button; anything held, any key, any pointer movement or press, and any moment when it may not start,
+    moves the idle time to now. The poll runs whether or not a pad is connected.
+  - **It may start** in big picture (a big-screen session or F10's) with the library on screen and no game, pad menu,
+    sheet, on-screen keyboard, launch screen or other active window, and, with the Game Mode switch off, not in a
+    gamescope session.
+  - **Frames.** A frame is asked for only while it changes; otherwise one `DispatcherTimer` waits for the next change or
+    swap, and with nothing to come nothing is scheduled. The pad poll steps it too, so a test's clock reaches it. While
+    it shows, the themed view's own scheduling (§15.7) is off and its frame does nothing.
+  - **Input.** The press that wakes it is consumed, and the button stays consumed until it is let go (the pad
+    navigator's `Forget`, as the launch screen does). A key is consumed before anything else reads it.
+  - **The slideshow's pictures** come from the library's sources in §4.60's order (`MediaSources.Locate`), each game's
+    first of miximage, screenshot, titlescreen and cover. A game is looked up only when it is drawn at random, and one
+    with none of the four is dropped from that showing's list, so a large library costs one lookup per shown game.
+  - **The controls** call the themed view's new `ShowGame` (its system's gamelist, in the folder the game sits in, with
+    it selected) and the start path of §33 (`StartGameAsync` with the game, so the resume question and the launch
+    screen come first).
+- **X.** `UiButton` gains `Screensaver`, the pad's West button and the keyboard's Delete. The system view's help bar
+  gains ES-DE's *Screensaver* entry on X while the controls are on (`HelpContext.Screensaver`).
+- **The settings.** `BigPictureInterface` gains ES-DE's eleven screensaver and slideshow keys that this pass uses and
+  Mistress's `ScreensaverInGameMode`; the Interface tab gains a *Screensaver* group (§4.75).
+- **`ThemedSession`** sets the timer to 0, so the older themed tests are never interrupted.
+
+### 37.5 Where Mistress differs, on purpose or by necessity
+
+- **The default type** is Dim, not ES-DE's Video (Q34), which with no videos shows Dim anyway.
+- **The system name** in the overlay is the shelf's full name (*Super Nintendo*), as on the launch screen (§33.5), not
+  ES-DE's `fullname` (Q131).
+- **The star** is Mistress's own five-pointed path, of ES-DE's size and place.
+- **A pointer** moving or pressing counts as activity, and a press wakes it; ES-DE's pointer was not tried.
+- **Delete** is X on the keyboard, as ES-DE's default keyboard map gives it; ES-DE's keyboard was not tried.
+- **The timer's slider** offers whole minutes 0–30, as ES-DE's menu; a value set in milliseconds by hand is kept but
+  shows rounded down.
+- **Not offered:** *Render scanlines*, `%ESPATH%` in the custom folder, and every Video setting.
+- **The fades** follow ES-DE's measured lengths as straight ramps; ES-DE's first frame or two of a fade are a little
+  slower than the rest (0.98, 0.94 before steps of about 0.06), which Mistress does not copy.
+- **The picture's hidden 0.22 s** is copied as measured. Whether ES-DE hides it on purpose or is loading the picture
+  in that time is not known; it was the same for a 600×800 cover and a 1920×1080 picture, and on every change.
+
+### 37.6 Tests
+
+`ScreensaverTests`, 28 cases (with the theories' rows), headless on WiseMan's `PadDriver` with the clock the test moves
+(§4.75 lists them). **The frame counts:**
+- Dim: 11 frames through its 167 ms fade, then 0 in 610 s; Black 9, then 0; the themed view 0 throughout.
+- The slideshow: 23–24 frames through each of six changes, 0 in the 9.54 s after each, the themed view 0.
+- A theme with scrolling text: the view asks for frames before; while the screensaver shows it asks for none and draws
+  none in 30 s; once woken it asks again.
+
+**Pixel cases:** every sampled pixel of Dim within 1 level of 0.4 times its luma at 1280×800 (4,267 coloured samples)
+and 1920×1200 (9,095), Black all black; the overlay's box at 17, 16, 84 px high at 800 lines and 1.5 times each at 1200,
+its colour a third of the picture's, white text inside it and the picture's own colour just outside; a 4:3 picture's
+black bar and the stretch filling it.
+
+LunaP's `ScreensaverPieceTests`, six cases, are LunaP's §184.3.
+
+**Existing tests.** The broad run (§37.11) covers the pad's new button and the help entry. No existing test changed
+except the fixtures: `ThemedSession`'s timer and `PadDriver.Press` for the new button.
+
+### 37.7 Mutants
+
+The runner is `~/.cache/emusen/probe/pass10/mutate_pass10.py`, its verdicts `mutants-pass10.txt` and
+`mutants-pass10-rerun.txt`.
+- Each mutant was built with `-m:2` and tested alone under `nice -n 10`: WiseMan's against `ScreensaverTests`, LunaP's
+  against `ScreensaverPieceTests`.
+- Before changing a file the runner writes `mutant-state.json` (the file and a copy), restores it in a `finally` and
+  touches it, and on starting restores any file a cut-short run left mutated. Both trees were rebuilt clean at the end.
+
+**44 mutants: 40 caught on the first round, 4 survived, none failed to build.** Two survivors were weak tests, fixed and
+then caught; two are equivalent. Each mutant took about 15 s.
+
+| Area | Mutants (caught unless marked) |
+|---|---|
+| Timing and levels | T1 Dim's fade 300 ms; T2 Black's 300 ms; T3 Dim at 0.5; T4 the picture from the cut; T5 its fade 300 ms; T6 the overlay at once; L1 Dim not greying; L2 Black greying; L3 the box at 0x80; L4 the box 30 px in; L5 the stretch ignored |
+| Starting | I1 a poll late; I2 a held button not counted; I3 under the pad menu; **I4 under a sheet (survived: equivalent)**; I5 the Game Mode switch ignored; I6 a key not counted; I7 0 not never; **I8 under a game (survived: equivalent)** |
+| Waking | W1 the waking button acting once let go; **W2 the waking key passed on (survived, then caught)** |
+| Frames | F1 the slideshow always moving; F2 Dim asking for frames while it holds; **F3 the view scheduled under it (survived, then caught)**; F4 the view drawn under it |
+| The slideshow | C1 screenshots before miximages; C2 the same game twice; C3 favourites only ignored; C4 the star among favourites only; C5 the overlay switch ignored; C6 subfolders always; C7 Video as Black |
+| Controls | K1 the switch ignored; K2 right not changing; K3 Y not going to the game; K4 A without the launch screen; K5 X from a gamelist; K6 no help entry |
+| Other | X1 the window's close leaving its timer; S1 the timer stored in seconds |
+| LunaP | D1 the saturation as a fill; D2 the black at `Brightness`; D3 `Show` keeping the old picture; D4 `Progress` not clamped |
+
+- **W2 survived** because the only key the test woke it with was Down: passed on, it reached the themed view as a held
+  button, and the button-held-after-waking rule consumed it anyway. The test now wakes it with F10 as well, which passed
+  on would leave big picture; caught on the rerun.
+- **F3 survived** because the synthetic theme at rest has nothing to schedule, so a view still scheduled under the
+  screensaver asked for nothing either. The new case uses a theme with scrolling text; caught on the rerun.
+- **I4 and I8 are equivalent.** A presented sheet is also the window's `OtherWindow()`, and a game on screen hides the
+  library view, so each removed condition is implied by one that remains. Both are kept as the reader's statement of
+  where it may not start.
+
+### 37.8 Pictures
+
+`ScreensaverPictureTool` (with `EMUSEN_BIGPICTURE_PNG=1`) writes to `~/.cache/emusen/bigpicture/png/pass10/`, beside
+ES-DE's captures in `~/.cache/emusen/probe/pass10/captures/`. Every picture was looked at. At 1280×800 and 1920×1200:
+- the view before;
+- Dim at 0, 50, 100, 167 and 5,000 ms; Black at 0, 70 and 140 ms;
+- the slideshow at 0, 60, 117, 200, 217, 300, 450, 5,000, 10,000 and 10,500 ms (a favourite with its star at 10.5 s);
+- the slideshow without the overlay, and stretched;
+
+and the Interface tab's *Screensaver* rows at 1280×800, in two pictures.
+
+Set beside ES-DE's frames at the same sizes, the overlay's box, lines and star fall in the same places at the same
+sizes. The first letter's capitals start at x 32 and row 28 at 1280×800 (ES-DE: 31 and 28) and the second line ends
+on row 88 (ES-DE: 88); at 1920×1200, x 48, row 42 and row 133 (ES-DE: 47, 42, 135), and the box is 24 px down and
+126 high, ES-DE's own. The first round of pictures showed
+the names cut short with an ellipsis: the lines were measured with the width the previous layout had given them, so a
+longer name never widened its box. The lines now measure to their text, and the pictures were taken again.
+
+### 37.9 Predictions
+
+Written after ES-DE was measured and before any of this was run where it is not yet.
+
+| # | Prediction | Found, or retired when | Verdict |
+|---|---|---|---|
+| P230 | In Game Mode on the handheld, Steam's own dimming starts over a big-picture window that draws nothing, within its own idle time, and stacks with Dim (the screen darker than 0.4) | the hardware session | open |
+| P231 | On the desktop's real window, a held Dim draws no frame in 60 s by the compositor's own count, as the harness's count says | a real window with a frame counter | open |
+| P232 | ES-DE's picture is hidden for 0.22 s whatever its size, because the hiding is part of the fade and not its loading: a 4000×3000 picture shows the same timing | one more ES-DE run | open |
+
+### 37.10 Not done
+
+- **Nothing ran on the handheld**, in Game Mode or out of it (P230, Q130), and no real pad was used.
+- **Video** and its settings wait for Pass 12. *Render scanlines* is not built.
+- **ES-DE's pointer and keyboard** were not tried with its screensaver.
+- **The desktop's own library** outside big picture has none, as ES-DE's desktop has no such view.
+- **A real window's frame count** (P231): the counts above are the frames Mistress asks for, which in the headless
+  harness is what is drawn.
+
+### 37.11 Open questions
+
+- **Q130, the Game Mode switch.** Q34's condition, Steam's dimming stacking with Mistress's, is not yet measured.
+  **Recommendation:** keep *In Game Mode* on until the hardware session shows the two stacking (P230); then turn the
+  default off.
+- **Q131, the system's name in the overlay.** ES-DE writes its `es_systems.xml` full name (*Nintendo SNES (Super
+  Nintendo)*); Mistress the shelf's (*Super Nintendo*), as on its launch screen. **Recommendation:** keep the shelf's,
+  so the two screens agree.
+- **Q132, render scanlines.** ES-DE's slideshow can draw scanlines over its pictures (off by default). **Recommendation:**
+  build it with the screen filters' CRT scanline pass when Pass 12 builds the video screensaver's, which has the same
+  option on by default.
+
+### 37.12 The broad run
+
+After merging WiseMan (§35, the value types), one run of the Mistress filter, without `ShaderSettingsWindowTests`,
+`ShaderBrowseBench`, `SceneGpuBench` and any GPU or Vulkan test, under `nice -n 10`: **1,324 tests, 1,290 passed, 34
+skipped (the picture, survey and live tools), 0 failed, in 3 min 48 s.** §35.12's order-dependent failure of the
+headless platform's initialisation did not recur in this order. The big-picture tests alone (516, the GPU ones and the
+benches left out) had passed before the merge, with the pad's new button and the system view's new help entry.

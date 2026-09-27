@@ -43,7 +43,31 @@ namespace EmuSen.Mistress.BigPicture.Scene
             };
             Size item = SceneUnits.ToSize(e.Pair("itemSize"));
             carousel.ItemSize = new Size(SceneUnits.Px(item.Width, b.W), SceneUnits.Px(item.Height, b.H));
+            carousel.ContentOffset = new Point(e.Float("horizontalOffset") ?? 0, e.Float("verticalOffset") ?? 0);
+            if (type.EndsWith("Wheel")) Wheel(e, carousel, type);
+            else if (type == "horizontal" && e.Bool("reflections") == true)
+            {
+                carousel.Reflections = true;
+                carousel.ReflectionOpacity = e.Float("reflectionsOpacity") ?? 0.5f;
+                carousel.ReflectionFalloff = e.Float("reflectionsFalloff") ?? 1;
+            }
+
             return carousel;
+        }
+
+        // The wheel types, laid out by the rules measured from ES-DE 3.4.1 (§36.3); itemHorizontalAlignment is the vertical wheel's alone.
+        private static void Wheel(ResolvedElement e, ImageCarousel carousel, string type)
+        {
+            NormalizedPair origin = e.Pair("itemRotationOrigin") ?? new NormalizedPair(-3, 0.5f);
+            carousel.Layout = CarouselLayout.Wheel;
+            carousel.WheelRotation = e.Float("itemRotation") ?? 7.5f;
+            carousel.WheelOrigin = new Point(origin.X, origin.Y);
+            carousel.ItemsBefore = (int)(e.UInt("itemsBeforeCenter") ?? 8);
+            carousel.ItemsAfter = (int)(e.UInt("itemsAfterCenter") ?? 8);
+            carousel.ItemsUpright = e.Bool("itemAxisHorizontal") == true;
+            carousel.WheelHorizontalAlignment = SceneUnits.HorizontalLayout(e.String("wheelHorizontalAlignment") ?? "center");
+            carousel.WheelVerticalAlignment = SceneUnits.Vertical(e.String("wheelVerticalAlignment"));
+            if (type == "horizontalWheel") carousel.ItemHorizontalAlignment = HorizontalAlignment.Center;
         }
 
         // One item per system, each drawn with the artwork its own resolved theme names.

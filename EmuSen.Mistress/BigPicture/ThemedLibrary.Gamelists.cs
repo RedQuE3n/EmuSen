@@ -99,7 +99,7 @@ namespace EmuSen.Mistress.BigPicture
             return _listed[key] = Marked(folders ? shown.ToList() : GamelistOptions.Sort(shown, SortOf(system), favoritesFirst));
         }
 
-        // What a gamelistinfo counts here: the whole list's games over every folder, the ones search and filters keep, and whether a folder is open (§38).
+        // What a gamelistinfo counts here: the whole list's games over every folder, the ones search and filters keep, and whether a folder is open (§39).
         private GamelistCounts CountsIn(string system)
         {
             IReadOnlyList<SceneGame> all = OpenFolder(system)?.Games ?? ShelfOf(system)?.Games ?? [];

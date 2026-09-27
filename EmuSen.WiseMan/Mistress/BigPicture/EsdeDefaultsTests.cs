@@ -10,7 +10,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress.BigPicture
 {
-    // What ES-DE 3.4.1 draws that a theme did not ask for, and the words it shows for what a game lacks, as measured - see EmuSen_BigPicture.md §38.
+    // What ES-DE 3.4.1 draws that a theme did not ask for, and the words it shows for what a game lacks, as measured - see EmuSen_BigPicture.md §39.
     public class EsdeDefaultsTests
     {
         private const int W = 1280, H = 800;

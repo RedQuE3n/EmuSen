@@ -11,7 +11,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress.BigPicture
 {
-    // gamelistinfo and animation against what ES-DE 3.4.1 was measured to show and to play - see EmuSen_BigPicture.md §38.
+    // gamelistinfo and animation against what ES-DE 3.4.1 was measured to show and to play - see EmuSen_BigPicture.md §39.
     public class InfoAndAnimationTests
     {
         private const int W = 1280, H = 800;
@@ -53,7 +53,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private static string Four => SceneAssets.Gif("es-de-four", 8, 6, [10, 20, 30, 40], (f, x, y) => new[] { Colors.Red, Colors.Lime, Colors.Blue, Colors.Yellow }[f]);
 
-        // Measured at 30 frames a second after a move of the system view (a1, a3, a5 and a10 of §38): the first frame for two frame times, then the order; the resets on each move.
+        // Measured at 30 frames a second after a move of the system view (a1, a3, a5 and a10 of §39): the first frame for two frame times, then the order; the resets on each move.
         [Fact]
         public Task Animations_play_by_the_first_delay_and_restart_when_the_system_view_moves() => UiTest.Run(() =>
         {
@@ -81,7 +81,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(view.IsMoving);
         });
 
-        // A Lottie file is not drawn: LunaP draws no Lottie (§38).
+        // A Lottie file is not drawn: LunaP draws no Lottie (§39).
         [Fact]
         public Task A_lottie_file_draws_nothing() => UiTest.Run(() =>
         {

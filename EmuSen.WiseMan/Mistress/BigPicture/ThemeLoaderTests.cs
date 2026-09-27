@@ -238,7 +238,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal("[||custom-collections]", custom.SystemView.Find("text", "k")!.String("text"));
         }
 
-        // ES-DE 3.4.1, measured: A${nosuch}B drew "AB" with no log line, and ${nosuch} alone refused the system as a property with no value (§38).
+        // ES-DE 3.4.1, measured: A${nosuch}B drew "AB" with no log line, and ${nosuch} alone refused the system as a property with no value (§39).
         [Fact]
         public void An_undefined_variable_in_a_property_is_read_as_empty_and_a_property_left_empty_unthemes()
         {

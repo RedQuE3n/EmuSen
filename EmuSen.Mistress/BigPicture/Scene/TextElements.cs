@@ -34,7 +34,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             return Set(b, e, value);
         }
 
-        // What a game's empty field shows, where ES-DE 3.4.1 was measured to show a word: the fields THEMES.md names, and play time (§38).
+        // What a game's empty field shows, where ES-DE 3.4.1 was measured to show a word: the fields THEMES.md names, and play time (§39).
         private static string? Missing(SceneBuilder b, ResolvedElement e) =>
             b.GameFor(e) is not null && e.String("metadata") is "developer" or "publisher" or "genre" or "players" or "playtime" ? SceneWords.Unknown : null;
 

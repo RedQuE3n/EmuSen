@@ -40,7 +40,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             return image;
         }
 
-        // An animated GIF, played from the view's clock; a Lottie .json is not drawn, as LunaP draws no Lottie (§38).
+        // An animated GIF, played from the view's clock; a Lottie .json is not drawn, as LunaP draws no Lottie (§39).
         internal static Control? Animation(SceneBuilder b, ResolvedElement e)
         {
             if (Existing(e.Path("path")) is not { } path || !path.EndsWith(".gif", System.StringComparison.OrdinalIgnoreCase)) return null;

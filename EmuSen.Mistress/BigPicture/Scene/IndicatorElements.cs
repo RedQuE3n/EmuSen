@@ -30,7 +30,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             return rating;
         }
 
-        // The list's counts as ES-DE 3.4.1 was measured to show them: games and favourites, or kept over all while filtered, and a folder once one is entered (§38).
+        // The list's counts as ES-DE 3.4.1 was measured to show them: games and favourites, or kept over all while filtered, and a folder once one is entered (§39).
         internal static Control? GamelistInfo(SceneBuilder b, ResolvedElement e)
         {
             GamelistCounts c = b.Data.System.Counts;

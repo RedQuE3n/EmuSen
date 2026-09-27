@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace EmuSen.Mistress.BigPicture.Scene
 {
-    // Mistress's own words for what a theme's texts show but a game lacks, in one place for Pass 5's lookup to take over - see EmuSen_BigPicture.md §38.
+    // Mistress's own words for what a theme's texts show but a game lacks, in one place for Pass 5's lookup to take over - see EmuSen_BigPicture.md §39.
     public static class SceneWords
     {
         public const string Unknown = "unknown";

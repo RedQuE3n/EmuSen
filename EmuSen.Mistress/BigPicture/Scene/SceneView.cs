@@ -272,7 +272,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         private bool Scrolls => Scene.Entries.Any(e => e.Control is FontText { ScrollDirection: not TextScrollDirection.None, Scroll.Speed: > 0 } or TextRowList { Marquee.Speed: > 0 }
             || (e.Control is FrameSequenceImage a && a.NextFrameChange(Now - _animatedFrom) is not null));
 
-        // When the animations were last reset: when the view opened, and at each move of the system view, as ES-DE 3.4.1 was measured to reset them (§38).
+        // When the animations were last reset: when the view opened, and at each move of the system view, as ES-DE 3.4.1 was measured to reset them (§39).
         private TimeSpan _animatedFrom;
 
         private readonly System.Collections.Generic.Dictionary<Control, double> _opacity = new();

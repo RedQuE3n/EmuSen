@@ -4119,6 +4119,7 @@ player started (§17.14). Tests run headless in WiseMan, blast radius only, and 
 - *Cost.* 3–8 days, as the survey decides.
 - *What the player sees.* The themes the player picks from the list drawn as ES-DE draws them.
 - *First half built 2026-09-27, `gameselector` and the wheel carousels: §36.*
+- *Second half built 2026-09-27, `gamelistinfo`, `animation` (GIF), Q120–Q122 and two defects: §39.*
 
 **Pass 15. Translations.**
 - *Scope.* The languages Q26 names, one at a time, on Pass 5's plumbing.
@@ -8805,3 +8806,244 @@ merge the blast radius (the scraping tests, the metadata, options, collections, 
 themed-library tests; 376) had passed but for one: `GridSceneTests.Item_sizes_and_corner_radii_are_in_ES_DE_s_units`,
 run in that filter's order, found no render interface, the headless platform's initialisation failure §35.12
 recorded as order-dependent. It draws no media of this pass's and passed in the broad run.
+
+## 39. Pass 14, second half: two defects, the carousel's margins, `gamelistinfo`, `animation`, and what ES-DE draws unasked (2026-09-27)
+
+*Opened on the review of §36, 2026-09-27 (§10.1): items 1 and 2 accepted, and every recommendation of Q120–Q122 taken.*
+This section records, in the order they were decided: two defects seen in §36's side-by-side pictures; Q120, the
+carousel's `selectedItemMargins` and `lineSpacing`; `gamelistinfo`; `animation`; Q122, the help bar and status
+indicators ES-DE draws for a theme that defines none; and Q121, Mistress's word where ES-DE writes "unknown". One more
+defect, an undefined theme variable, was found on the way (§39.4). The player's account is §4.77 of the settings
+reference. §37 and §4.75 are Pass 10's, and §38 and §4.76 Pass 8's.
+
+**Sources.** ES-DE 3.4.1's behaviour, measured by running it, and `THEMES.md`; never its source. The setup is §36.1's:
+the scratch home `esde/home-pass14/`, the shared lock, the synthetic library, no scraping, no updater. The probe themes
+gained a third, `p14-defaults-es-de` (help and status, the words, `gamelistinfo`, GIFs made by the probe's own script),
+and the wheel probe gained nine variants. Two more listed themes were downloaded into `pass14-themes/`: Cathode (it uses
+both `gamelistinfo` and `animation`) and Adroit (whose animated colour scheme names a GIF its repository does not hold,
+so ES-DE logs "Couldn't open GIF animation file" and draws nothing there; it was not used further). 58 more runs; the
+logs are in `probe/pass14/logs/`.
+
+**Numbering.** Predictions here start at **P250** and questions at **Q150**; P230–P232 and Q130–Q132 are Pass 10's, and
+P240–P244 and Q140–Q145 Pass 8's.
+
+### 39.1 Two defects from §36's pictures
+
+- **"1 GAMES".** Aura writes `gamecountGames` upper-cased; Mistress said "1 games". Measured in ES-DE on systems of one,
+  three and twelve games and none, one and six favourites: `gamecountGames` is "1 game" and "12 games", and
+  `gamecountFavorites` "1 favorite" and "0 favorites". Mistress's counts are now singular for one (its own wording for
+  `gamecount`, "12 games available, 6 favorites", stays, §3.6). Flags read "yes" and "no" in lower case, as ES-DE wrote
+  them; Mistress had "Yes" and "No".
+- **Bluetooth as a "B".** LunaP's `DeviceStatusBar` drew Bluetooth and cellular as letters of the typeface. ES-DE was run
+  with `SystemStatusDisplayAll` (`THEMES.md`: force every indicator on), and each icon's ink box read at both sizes. All
+  four built-in icons are now LunaP geometry in a square box (LunaP §191): the Bluetooth rune, a Wi-Fi fan with its dot,
+  four cellular bars, an upright battery with a bar per quarter; and the percentage follows the battery with no spacing.
+  Every icon's ink is within 2 px of ES-DE's in width and height and the gaps between icons within 1 px; alone, as on
+  the desktop, the Bluetooth icon's ink box lies within 1 px of ES-DE's at 1280×800 and 2 px at 1920×1200, and the rune's coverage IoU is 0.79
+  at 1280×800 and 0.74 at 1920×1200, thin strokes as §13.8's icons were. ES-DE's percentage is set in its own narrower
+  typeface, so Mistress's row stands about 20 px further left.
+
+### 39.2 Q120: `selectedItemMargins` and `lineSpacing`
+
+Six probe variants, straight carousels of both orientations, halves of the screen, negative margins and a scaled
+selection:
+
+- **The margins are fractions of the screen along the row** (its width for a horizontal carousel, its height for a
+  vertical one), not of the carousel: a half-width carousel with `0.1 0.1` moved its neighbours 128 px at 1280 wide.
+- **Every item on a side moves**, not only the neighbour: the second item before the selection moved as far as the first.
+- **`itemScale` plays no part**, and a negative margin brings the items closer.
+- **While the row moves**, an item between the selection and its neighbour's slot moves by its fraction of the way: a
+  30-frame-a-second recording of one step, read frame by frame, followed that linear rule within a pixel at every frame.
+- **`lineSpacing`** is the pitch of a text item's lines as a multiple of `fontSize`: 40, 60 and 80 px at a 40 px font for
+  1, the default 1.5, and 2.
+
+LunaP's `ImageCarousel` gained `SelectedItemMargins` and `LineSpacing` (its §192). Mistress's logos land within 0.8 px of
+ES-DE's in all six variants, with 0.00–0.29% of pixels differing by more than 8 levels. Aura's game carousel, §36.9's
+worst, went from 20.3% to 3.9% at 1280×800 and from 19.1% to 1.5% at 1920×1200, once §39.4's variable was also read.
+
+**Where Mistress differs.** With `lineSpacing` 2, ES-DE set "(Super Nintendo)" on one line wider than its item box,
+where Mistress wraps it; the rule behind that was not isolated. The text items are otherwise in Mistress's own font, as
+everywhere (§13.8).
+
+### 39.3 `gamelistinfo`
+
+Seven `gamelistinfo` elements of different sizes and alignments, on systems of one to twelve games, inside a folder, and
+with a favourites filter set through ES-DE's own menus by the probe pad:
+
+| State | ES-DE 3.4.1 drew |
+|---|---|
+| a list | a gamepad and the game count, a star and the favourite count: "🎮 12 ★ 6" |
+| inside a folder | the same counts, which are the system's over every folder (3 for the `ngp` probe, whose folder holds two of its three games), and an open folder after them |
+| a right-aligned line in a folder | the folder first, at the left |
+| a favourites filter | a funnel and "kept / all": "6 / 12"; no favourites count |
+| no `color` | black |
+| `size` `0 0` | a box as wide as the line and 1.5 `fontSize` tall; `w 0` the same height; `w h` the line centred down the box by default |
+
+Mistress draws it with LunaP's new `InfoLine` (its §193): the four pictures are LunaP's own drawings, in proportions of
+the em read from the captures, since ES-DE draws them from an icon font it ships. The counts come from a
+`GamelistCounts` the library fills for the shown system: every game over every folder, without folders or games
+excluded from the counter, the ones search and filters keep, and whether a folder is open. On the probe the line's
+pictures fall within 2 px of ES-DE's; the numbers are in Mistress's font. Cathode's `gamelistinfo`, right-aligned in its
+list header, lands where ES-DE puts it.
+
+### 39.4 A theme variable nothing defines
+
+Aura's game carousel lacked the glass panel behind the name. Its path is written with `${glass-size}`, which Aura defines
+only for its largest font size. The loader refused the property as an error, which dropped the element (§31.7 counted it
+as Aura's one remaining error). ES-DE was run on a probe: `A${nosuch}B` drew "AB" with no log line, and `${nosuch}`
+alone refused the system with "Property "text" for element "text" has no value defined". An undefined variable in a
+property is now read as empty, with a warning (`UndefinedVariable`, no longer an error), and a property left with no
+value by it is an error, as there. Aura's panel is drawn. Undefined variables in an include path are skipped as before;
+ES-DE was not run on that.
+
+### 39.5 `animation`
+
+Ten animation elements on GIFs made by the probe's own script (four flat frames of different colours with delays of 100,
+200, 300 and 400 ms; others of 300/100/100/100 and 100/100/100/700; a GIF with a loop count of 2; a 4×4 checker), recorded
+for six seconds at 30 frames a second with a move of the system carousel half way:
+
+- **Every frame is shown for the first frame's delay**: the three GIFs played at 100, 300 and 100 ms a frame.
+- **The GIF's own loop count is ignored**; `iterationCount` counts passes, and for `alternate` a pass is a round trip:
+  `alternate` with 2 played 0 1 2 3 2 1 0 1 2 3 2 1 0 and held the first frame; `normal` with 1 played 0 1 2 3 and held.
+- **`reverse`** went 0 3 2 1 0; **`alternateReverse`** 0 3 2 1 0 1 2 3 2.
+- **A move of the system view reset every animation**, and after the reset `normal` and `alternate` held the first frame
+  for two frame times, the others for one: the first frame, then the direction's sequence from its start.
+- **`speed`** 2 gave 50 ms frames and 0.5 gave 200 ms; **`color`** `FFFFFF80` halved the opacity; **`interpolation`**
+  defaults to nearest.
+
+Mistress draws GIFs with LunaP's new `FrameSequenceImage` and a GIF decoder of its own (LunaP §194), since Avalonia reads
+a GIF's first frame only. The view's clock drives it: the time restarts when the view opens and at each move of the
+system view. Whether a step of the gamelist resets an animation was not measured, and it does not here (P252).
+**Lottie is not drawn**: it would need Skottie, a SkiaSharp library, which LunaP may not take (it references Avalonia
+alone); by `PLAN-icons.md` §1.1's rule it would go to a sibling package or to Mistress. None of the four listed themes
+that use `animation` was found to need it.
+
+Cathode's 600×338 GIF of 338 frames at 30 ms, its camcorder overlay, is drawn over the screenshot as in ES-DE. It showed
+why the first decoder, which composited every frame when the file was read, would not do: 274 MB of pixels. LunaP now
+composites on demand from every sixteenth frame's canvas.
+
+**Where Mistress differs.** With `interpolation` `linear`, ES-DE's scaled 4×4 checker shows a blur whose edges wrap
+round the image; Mistress's high-quality filter does not wrap. A first frame delay of 0 is taken as 100 ms (not
+measured, P251).
+
+### 39.6 Q122: the help bar and status ES-DE draws unasked
+
+On `p14-defaults-es-de`, whose views define neither, ES-DE drew a help bar at the bottom left and the status indicators
+at the top right in both views. The help bar's ink started at x 16 and y 762 at 1280×800, where `THEMES.md`'s default
+`pos` of `0.012 0.9515` and `fontSize` 0.035 put it, and at x 25 and y 1143 at 1920×1200; the Bluetooth icon sat where `systemstatus`'s default `pos`
+`0.982 0.016`, `origin` `1 0` and `height` 0.035 put it. A help bar defined only in the gamelist left the system view
+with the default; a help bar or status element at `opacity` 0 left no default at all.
+
+So a view with no `helpsystem`, and one with no `systemstatus`, now gets one at the documented defaults (named
+`(default)` in the resolved view). Mistress's help bar keeps its own words and pictures (§3.6): its ink starts at the
+same place (x 16, y 764; x 24, y 1147 at 1920×1200) and is 6 px taller, set in Mistress's font. `visible` is not a property of either element in
+ES-DE: a probe writing it refused the system, as `THEMES.md` lists no such property and the loader agrees.
+
+### 39.7 Q121: Mistress's word for a missing field
+
+Measured on a game with no metadata, in the system view through a gameselector and in the gamelist: `developer`,
+`publisher`, `genre`, `players` and `playtime` read "unknown"; `releasedate` "unknown" and `lastplayed` "never";
+`description` and `altemulator` nothing; `rating` "0"; the flags "no". A theme's `defaultValue` replaces the word, as
+`THEMES.md` says.
+
+Mistress now shows "unknown" and "never" in those places. **Pass 5's text lookup does not exist yet**, so the words are
+constants in one place, `SceneWords` in `BigPicture/Scene/`, which that pass will route through its lookup; the plan's
+Pass 5 finds them there. The words are ordinary English, not taken from ES-DE's resources.
+
+### 39.8 Tests
+
+| Class | Tests | What it holds |
+|---|---|---|
+| `EsdeDefaultsTests` | 6 | a default help bar and status in each view at the documented `pos`; per view, and not beside an invisible one; the words; `defaultValue` first; "yes"/"no"; singular counts |
+| `InfoAndAnimationTests` | 4 | the counts and the default colour; filtered and in a folder; an animation's frames against §39.5's measured sequences, reset by a system move; no Lottie |
+| `WheelCarouselTests` | 6 more cases | the six margin variants, logo centres within 1.5 px of ES-DE's |
+| `ThemeLoaderTests` | 1 changed | an undefined variable read as empty, and a property left empty unthemes |
+| `SceneMappingTests` | 2 (367 cases) | `selectedItemMargins`, `lineSpacing`, `gamelistinfo`'s 6 and 8 common pairs, `animation`'s 11 and its common pairs |
+| LunaP | 12 | `CarouselWheelTests` (margins), `IndicatorControlTests` (the rune), `InfoLineTests` (2), `FrameSequenceTests` (8 cases: its own GIFs and two of forty frames out of order); LunaP §191–§194 |
+
+`ThemedFoldersTests` expected "1 favorites" and `ThemeErrorTests` an empty system view where a default status now
+stands; both were corrected with the rules.
+
+### 39.9 Mutants
+
+The runner is `~/.cache/emusen/probe/pass14/mutate_pass14b.py`, its log `run-pass14b.log` and its verdicts
+`mutants-pass14b.txt`, with §36.7's protocol (a state file before each mutant, restored on start and in a `finally`, the
+file touched after restoring, `-m:2`, `nice -n 10`, a clean rebuild at the end). Mistress's mutants ran against
+`GameSelectorTests`, `WheelCarouselTests`, `SceneMappingTests`, `EsdeDefaultsTests`, `InfoAndAnimationTests` and
+`ThemeLoaderTests`; LunaP's against its carousel, indicator, `InfoLine` and `FrameSequence` tests and then the same.
+
+**29 mutants: 22 caught at once, 7 survived the first run, all 29 caught after the tests were strengthened.**
+
+| Area | Mutants (caught unless marked) |
+|---|---|
+| defaults (Q122) | D1 no default help bar; D2 a default beside an invisible element; D3 defaults in the system view only |
+| words (Q121, §39.1) | U1 no "unknown" for a missing developer; U2 a missing last played reads "unknown"; U3 the word before `defaultValue`; U4 plural for one |
+| variables (§39.4) | V1 an undefined variable still unthemes; V2 a property left empty kept |
+| margins (Q120) | M1 margins by half the screen; M2 before and after swapped; M3 `lineSpacing` ignored |
+| `gamelistinfo` | I1 a filtered list shows the plain counts; I2 no folder picture; **I3 games excluded from the counter counted**; I4 white by default |
+| `animation` | A1 not reset by the system view; **A2 a Lottie file read as a GIF** |
+| LunaP | L14–L24 (its §194.1), **L17, L18, L19, L20 and L24 survived first** |
+
+- **I3** survived because no test's list held an excluded game; `The_counts_are_the_games_and_favourites` now excludes
+  three.
+- **A2** survived because the Lottie test's `.json` held no GIF, so the decoder refused it either way; the test's `.json`
+  is now a real GIF under that name.
+- **L17–L20 and L24**: LunaP §194.1.
+
+### 39.10 Pictures
+
+In `~/.cache/emusen/bigpicture/png/pass14/`, ES-DE on the left and Mistress on the right: `side-d-*` (defaults, words,
+the forced status row `d-all-sys`), `side-i-*` (`gamelistinfo`: `i-snes` at both sizes, `i-ms`, `i-gg`, `i-ngp-top`,
+`i-ngp-inside`, `i-filter`), `side-a-still` and `side-a-info-default`, `side-w-m*` and `side-w-ls*` (margins and line
+spacing), and the real themes again: `side-r-aura-gl`, `side-r-aura-sys`, `side-r-codywheel`, `side-r-mania` and
+`side-r-cathode`, each at 1280×800 and 1920×1200.
+
+| Downloaded theme and state | Pixels > 8 levels, 1280 / 1920, §36.9 → now |
+|---|---|
+| Aura, game carousel | 20.3% / 19.1% → 3.9% / 1.5% |
+| Aura, system view | 2.5% / 0.4% → 2.3% / 0.4% |
+| Cathode, list | new: 24.0% / 23.4% |
+
+Cathode's remaining difference is not this pass's: its list stands a row lower in Mistress, and its description text
+shows the system's description where ES-DE shows the game's (Q151).
+
+**The survey again** (`EMUSEN_THEME_SURVEY=analyse` on §25.8's XML, the earlier file kept as
+`survey-before-pass14b.json`): all 66 listed themes load for all five systems with **no loader error** (63 at §31.7, 65
+at §35; Aura's undefined variable was the last), and **no element any of them uses is left undrawn**. The widest
+unmapped properties are now the video's (Pass 12), the help system's dimmed set, and `image.stationary`.
+
+### 39.11 Predictions
+
+| # | Prediction | Retired when |
+|---|---|---|
+| P250 | On the handheld, whose Wi-Fi and battery are real, Mistress's status row matches ES-DE's icon for icon within 2 px | both are run there |
+| P251 | ES-DE plays a GIF whose first delay is 0 at 100 ms a frame | ES-DE is run on one |
+| P252 | A step of the gamelist does not reset an animation in ES-DE | a recording of the gamelist |
+| P253 | Cathode's list stands where ES-DE puts it once Q151's causes are found; no pass 14 element differs there | Q151 |
+
+### 39.12 Not done
+
+- **Lottie**, by the rule above; its files draw nothing.
+- **`stationary`** of `gamelistinfo` and `animation`, and `animation`'s `brightness`: not mapped, as `image`'s are not.
+- **`gamelistinfo` does not wrap or cut its line** for a narrow box; ES-DE was not seen to.
+- **The other metadata fields'** words where ES-DE writes something other than nothing were matched only for those
+  §39.7 lists; `rating` as text is still Mistress's "x/5".
+- **Nothing ran on the handheld.**
+
+### 39.13 Open questions
+
+- **Q150, Adroit's missing GIF.** Adroit's "Animated" colour scheme names a GIF its repository does not hold; ES-DE logs
+  an error and draws the background without it, and so does Mistress (the file is missing). Options: nothing; tell the
+  theme's author. **Recommendation:** nothing here; it is the theme's.
+- **Q151, Cathode's list and description.** Mistress places Cathode's list about a row lower and shows the system's
+  description in the gamelist. **Recommendation:** a short measured pass on Cathode's `list.xml`, since it is the first
+  listed theme to show either.
+- **Q152, `rating` as text.** ES-DE writes a missing rating as "0" and, by §39.7's probe, a present one as a number;
+  Mistress writes "x/5". **Recommendation:** measure the present case and match it, with Pass 5's words.
+
+### 39.14 The broad run
+
+WiseMan (b272675c, with Pass 8's §38) and LunaP's `openemu-library` (5a1e1a2) were merged into the branches before the
+run. One run of the Mistress filter, without `ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` and any
+GPU or Vulkan test, under `nice -n 10`: **1,416 tests, 1,376 passed, 40 skipped (the picture, survey and live tools),
+none failed, in 4 min 20 s.** LunaP's whole suite: 1,425 tests, all passed.

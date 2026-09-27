@@ -388,7 +388,7 @@ namespace EmuSen.Mistress.BigPicture.Theme
             return properties;
         }
 
-        // One pass: each reference becomes the variable's value, which was itself substituted when it was defined; an undefined one, in a property, nothing (§38).
+        // One pass: each reference becomes the variable's value, which was itself substituted when it was defined; an undefined one, in a property, nothing (§39).
         private string Substitute(string text, out IReadOnlyList<string> undefined, bool blank = false)
         {
             var missing = new List<string>();

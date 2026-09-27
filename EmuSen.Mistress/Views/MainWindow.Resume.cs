@@ -73,6 +73,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex)
             {
+                ErrorLog.Error("states", "Could not save where you left off", ex);
                 StatusText.Text = $"Could not save where you left off: {ex.Message}";
             }
         }
@@ -111,6 +112,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex)
             {
+                ErrorLog.Error("states", "Could not resume", ex, statePath);
                 return $"Could not resume, started from the beginning: {ex.Message}{Provenance(record)}";
             }
         }

@@ -20,6 +20,7 @@ using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Library;
 using EmuSen.Serenity.Shaders;
 using EmuSen.Serenity.Slang;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Mistress.Views
 {
@@ -202,6 +203,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or TaskCanceledException or UnauthorizedAccessException)
             {
+                ErrorLog.Error("shaders", "Could not download the shader pack", ex);
                 failure = $"Could not download the pack: {ex.Message}";
             }
             LoadPack();

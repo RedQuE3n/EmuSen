@@ -32,7 +32,11 @@ namespace EmuSen.Hotaru
         {
             // A config file that won't parse falls back to defaults either way;
             // this is what stops it doing so silently - see §6.2.
-            EmuSen.Galaxia.ConfigDiagnostics.Sink = m => Console.WriteLine("[config] " + m);
+            EmuSen.Galaxia.ConfigDiagnostics.Sink = m =>
+            {
+                Console.WriteLine("[config] " + m);
+                EmuSen.Galaxia.Library.ErrorLog.Warning("config", m);
+            };
 
             // LunaP keeps windows.json and luna.json where Galaxia keeps everything else, and reports through the same sink - see EmuSen_LunaP.md §19.2.
             EmuSen.LunaP.Settings.LunaSettings.Store = new EmuSen.LunaP.Settings.JsonSettingsStore(EmuSen.Galaxia.ConfigStore.Directory);
@@ -90,6 +94,7 @@ namespace EmuSen.Hotaru
             // other than this one. Cannot catch a hard `kill -9`/SIGKILL -
             // nothing in userspace can intercept that signal at all.
             AppDomain.CurrentDomain.ProcessExit += (_, _) => FlushAndDispose();
+            AppDomain.CurrentDomain.UnhandledException += (_, e) => EmuSen.Galaxia.Library.ErrorLog.Error("unhandled", (e.ExceptionObject as Exception)?.Message ?? "unhandled fault", e.ExceptionObject as Exception);
             AppDomain.CurrentDomain.UnhandledException += (_, _) => FlushAndDispose();
             using PosixSignalRegistration sigTerm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, ctx =>
             {

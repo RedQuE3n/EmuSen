@@ -12,6 +12,7 @@ using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.BigPicture;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Mistress.Views
 {
@@ -148,6 +149,7 @@ namespace EmuSen.Mistress.Views
             catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException) { }
             catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException)
             {
+                ErrorLog.Error("themes", "A theme screenshot could not be fetched", ex, _entry.Theme.Name);
                 if (!cancel.IsCancellationRequested) _caption.Text = $"The screenshot could not be fetched: {ex.Message}";
             }
         }
@@ -257,6 +259,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException)
             {
+                ErrorLog.Error("themes", "A theme download failed", ex, $"{_entry.Theme.Name} ({_entry.Theme.Url})");
                 _status.Text = $"The download failed, and the theme there before is unchanged: {ex.Message}";
             }
             finally

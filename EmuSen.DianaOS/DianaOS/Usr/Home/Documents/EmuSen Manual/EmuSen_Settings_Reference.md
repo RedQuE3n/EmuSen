@@ -747,7 +747,7 @@ fault was intermittent, and the frontend had kept no record of either occurrence
 whatever the core throws — including what the display processor's threads threw, which the core rethrows on the
 machine's thread — and showed only the message, as `[CPU HALT]` in the status bar; and nothing at all recorded a
 fault on any other thread, which ends the process. `CrashLog` now writes either to
-`crash_<date>_<time>.txt` in the log directory (§4.22's root): the kind, the console, the frame, the console's
+`crash_<date>_<time>.txt` in the log directory (§4.22's root; since 2026-09-27 `ErrorLog.Root()`, §4.70): the kind, the console, the frame, the console's
 settings as the window would show them, and the exception whole, inner exceptions and traces included.
 `Program.Main` installs it before anything else for unhandled exceptions and unobserved tasks, and the emulation
 loop calls it from its catch and names the file in the status bar. Writing is best effort, since a report that
@@ -4381,6 +4381,139 @@ set it.
 - **The desktop's sidebar library** is unchanged: one list per console.
 - Nothing ran on the handheld.
 
+### 4.68 Big picture: themes that ES-DE draws load and install, as ES-DE reads them (2026-09-27)
+
+The player answered Q47 of `EmuSen_BigPicture.md` on 2026-09-27 with (b): run ES-DE on the listed themes Mistress refused,
+and match what it does. §31 of that plan is the record (the runs of ES-DE 3.4.1, the rules measured, the tests, the
+mutants and the survey). The section is numbered 4.68 because §4.66 is another pass's. There is no setting: the change
+is in how a theme is read, which is the same in big-screen sessions, in big picture on the desktop (§4.54), in Theme
+Settings (§4.53) and in the theme browser (§4.62).
+
+**What a player meets.** Fifteen themes of ES-DE's list that the browser used to refuse with "The download is not a
+theme that loads" now install and are drawn, as ES-DE draws them: CarAlt, CodyWheel, Diamond, ES-DE-Mini, Showcase,
+Slick (Remixed), TateGriddy, Razor, SimCar, SimpleMenu, X20s, Artflix (Revisited), CoinOPS, Grimmlex and Retrofix
+(Revisited). A theme copied into `home/Themes` by hand is read the same way. Of the 66 themes on ES-DE's list, all 66
+now load for the five systems EmuSen emulates, against 51 before; what big picture does not yet draw of them is
+§25.8's list, unchanged.
+
+**How a value is read**, as ES-DE 3.4.1 was measured to read it:
+
+| A theme writes | It means | Before |
+|---|---|---|
+| a number followed by more, `0.85 0.9` or `0.9abc` | its leading number, 0.85 or 0.9; no number at all is 0, then held to the property's range | refused |
+| a pair with more or less than two plain numbers, `w 0.02`, `0.75 0.3 0.9` | the text is split at its first space and each side read as a number: `0 0.02`, `0.75 0.3` | refused |
+| a pair with no space at all, `w0.02`, `0.6`, or numbers separated only by a tab | **still refused**, as ES-DE refuses it: that console shows EmuSen's own look, and the browser will not install it | refused |
+| a true-or-false value | true when it starts with `t`, `T`, `y`, `Y` or `1` (`true`, `yes`, `1`), false otherwise (`false`, `no`, `flase`, `0`) | only `true`, `false`, `1` and `0` were accepted |
+| an `&` that is not part of `&amp;` or another complete reference, as in `Game & Watch` | the `&` itself, shown as written | refused |
+| text before or after the file's outermost element | ignored | refused |
+| `<transitions>` directly in a theme file | ignored, unless the file is included from inside a `<variant>`, where it chooses that variant's transitions (§4.53's Automatic) | refused |
+
+A space before a value counts, because ES-DE counts it: ` true` is false, and ` 0.5 0.5` reads as `0 0.5`. Tags that do
+not match (`<text>…</view>`) still make a file unreadable, and the console unthemed, in ES-DE and in Mistress alike.
+
+**What is written down.** Each reading of the kinds above adds a warning to the theme's diagnostics, naming the file,
+line and what the value was read as ("it is read as 0.85, as ES-DE reads it"); ES-DE itself writes nothing. A refusal
+names its reason, and the browser shows it after "The download is not a theme that loads:", for example "…is
+"w0.02", which has no space between two values; ES-DE refuses such a pair too".
+
+**What it does not do.**
+- **Colours, whole numbers, words and paths** are read as strictly as before; ES-DE was not run on them (§31 Q70). Two
+  listed themes (Canvas, Iconic) write `3.5` where a whole number belongs, and lose that one property's element in one
+  variant; both still load.
+- **`capabilities.xml`'s own true-or-false values** (`selectable`) are read as before.
+- **Nothing is shown to the player** about a theme's warnings; they are for theme authors, in the loader's diagnostics
+  (§31 Q72).
+- Nothing ran on the handheld; the handheld's build that refused Artflix (Revisited) and CarAlt predates this.
+
+### 4.70 The error log: every error a frontend shows, kept whole (2026-09-27)
+
+**Why.** On the handheld, every theme the player tried to install from the theme browser (§4.62) failed. The only record
+was the detail sheet's status line, which word-wrap had broken. The player could not tell whether the value it quoted
+read `w0.02` or `w 0.02`, and nothing was on disk to settle it. The only log Mistress kept before this was §4.27's
+crash report. An error that was caught and shown left nothing behind once its line was gone. The request was for an
+error logger built into EmuSen in general.
+
+**What it is.** `ErrorLog`, in `EmuSen.Galaxia.Library`, so that both frontends and anything else that references
+Galaxia can write to it.
+- **Location:** one plain-text file a day, `emusen_<yyyyMMdd>.log`. It sits in the same folder as §4.22's per-game
+  logs and §4.27's crash reports: the `LogDirectory` setting (Preferences' *Log Directory*), else
+  `~/.config/EmuSen/Logs`. `CrashLog` now takes its folder from `ErrorLog.Root()`, so the two cannot diverge.
+- **The entry:** one line with the time to the millisecond, `ERROR` or `WARN`, an area in brackets (`themes`,
+  `states`, `launch`, `covers`, `scraping`, `cheats`, `library`, `media`, `screenshots`, `shaders`, `config`, `crash`,
+  `logging`, `unhandled`), and the message whole. A message's own line breaks are folded to ` ⏎ `, so one entry's
+  first line is always one line, which keeps `grep` useful. Then, indented, the context (the game, theme, file or
+  slot) and the exception whole, with its inner exceptions and traces.
+- **Credentials:** Mistress sets `ErrorLog.Redactor` to the scraper's redactor in `CrashLog.Install`, the first
+  thing `Program.Main` does. No ScreenScraper credential reaches the file, from the message, the context or the trace
+  (§17 of the plan).
+- **Size and pruning:** files older than 14 days are deleted on the first write of a run. Only `emusen_*.log` files
+  are ever deleted; crash reports and per-game logs are left alone. A day's file stops at 8 MB, with one last line
+  saying so.
+- **Safety:** writing is best effort and never throws. A log that cannot be written must not become a second fault.
+
+**Plain text, not SQLite.** The project keeps program-written data in SQLite where it can (§4.64). This is the
+exception, argued rather than assumed:
+- A log has to be read when something is broken, possibly the database layer or the app itself.
+- It has to be read over ssh on a handheld with `cat`, `tail` or `grep`, without a client.
+- Appending a line is the one write that stays readable after a crash mid-write.
+
+None of those holds for the stores §4.64 moved.
+
+**What writes to it.**
+- **Errors, with the exception:** every place Mistress shows an error it caught. In all, 29 sites across 17 files:
+  - launch;
+  - save state, load state and resume;
+  - screenshots;
+  - cover art added and removed;
+  - media deleted;
+  - OpenVGDB's download and removal;
+  - the cover failover's lookups;
+  - the media store's opening;
+  - a scrape request queued to retry;
+  - the cheat database's download and reading, and a code that would not decode;
+  - the shader pack's download;
+  - the theme list, a theme's screenshots, licence, download, update and removal;
+  - per-game logging that could not start.
+- **`CrashLog`:** each report adds one line pointing at its file.
+- **Warnings, without a trace:**
+  - a theme that has no view for a system, with every loader error it gave;
+  - a themed library that could not be shown, and why;
+  - each configuration problem `ConfigDiagnostics` reports, which until now reached only the console.
+- **Hotaru:** its unhandled faults and configuration problems.
+
+**A folder that cannot be made falls back.** The handheld's `appsettings.json` named `/home/red/Documents/Logs/` as
+its `LogDirectory`, a desktop path copied across with the settings. The deck user cannot create it, so crash reports
+and per-game logs there had been going nowhere, silently. `ErrorLog.Usable` now tries to create the configured folder.
+When that fails, `ErrorLog.Root()`, and through it `CrashLog` and §4.22's per-game logs, use `~/.config/EmuSen/Logs`.
+The setting itself is left as the player wrote it.
+
+**Pulling it from the handheld.** `ls ~/.config/EmuSen/Logs/`, or the folder Preferences names. Then, for example,
+`grep -A12 ERROR emusen_20260927.log`.
+
+**Tests.** `ErrorLogTests`, seven cases, the seventh being the fallback just described:
+- an entry written whole, with area, context and inner trace;
+- entries appended, with a message's line break folded;
+- the redactor over message, context and trace;
+- pruning that spares everything but old `emusen_*.log` files;
+- the 8 MB cap with its last notice;
+- an unwritable folder that returns null and throws nothing.
+
+`ThemeDownloadErrorLogTests` walks the real sheets: a download whose archive holds no `capabilities.xml` fails, and
+its status line and a log entry naming the theme, its address and the whole reason both appear. Removing that one
+`ErrorLog.Error` line from `ThemeDetailWindow` fails the test, so it is not decorative.
+
+The suite never writes to the player's folder. A module initializer, `ErrorLogIsolation`, points the log at a
+scratch folder per test process. The broad Mistress run afterwards (1,176 passed, 29 skipped) left no `emusen_*.log`
+in `~/.config/EmuSen/Logs` or in the configured folder.
+
+**Not covered.**
+- The other 27 of Mistress's 56 `catch (Exception …)` blocks write nothing. They are best-effort paths that report
+  nothing to the player either: a status bar that cannot be read, a picture that cannot be decoded for a preview.
+  They are left until one of them hides a real fault.
+- DianaOS commands and the cores do not write to it. The Rust cores' native crash files (`native_crash_*`,
+  `mercuryrt_crash_*`) stay under the data home's `Logs`, not this folder.
+- There is no viewer inside Mistress. The file is meant for `cat`, a text editor, or a bug report.
+
 ### 4.69 Big picture: the Start menu and a game's options in ES-DE's layout (2026-09-27)
 
 The request was (2026-09-27) whether the big-screen options menu could look like ES-DE's. This is the first stage: the
@@ -4498,4 +4631,3 @@ The places that read it:
 ScreenScraper's `softname` does not come from it and is unchanged. A state recorded by an earlier build keeps the
 *1.0.0* its record says; whether a state loads is decided by its state version, never by this. BigPicture §32.11 has
 the survey.
-

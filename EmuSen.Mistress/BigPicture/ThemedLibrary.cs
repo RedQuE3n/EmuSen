@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.BigPicture.Scene;
@@ -135,7 +136,11 @@ namespace EmuSen.Mistress.BigPicture
                 MediaPresence presence = Presence(shelf);
                 scan.Stop();
                 string key = $"{shelf.System.Name}|{choices}|{string.Join(",", presence.Types.Order(StringComparer.Ordinal))}";
-                if (!_themes.TryGetValue(key, out ResolvedTheme? theme)) _themes[key] = theme = ThemeLoader.Load(_capabilities, shelf.System, choices, presence);
+                if (!_themes.TryGetValue(key, out ResolvedTheme? theme))
+                {
+                    _themes[key] = theme = ThemeLoader.Load(_capabilities, shelf.System, choices, presence);
+                    if (!theme.IsThemed) ErrorLog.Warning("themes", $"{_capabilities.ThemeName} has no view for {shelf.System.Name}: {theme.Errors.First().Message}", string.Join(" | ", theme.Errors.Select(e => e.Message)));
+                }
                 if (theme.IsThemed) systems.Add(new SceneSystem(shelf.System, theme, shelf.Games));
             }
             _systems = systems;
@@ -163,6 +168,7 @@ namespace EmuSen.Mistress.BigPicture
 
         private bool Fail(string why)
         {
+            ErrorLog.Warning("themes", why, _capabilities?.ThemeName);
             Error = why;
             Stage = null;
             Root.Children.Clear();

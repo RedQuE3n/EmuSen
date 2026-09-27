@@ -99,10 +99,12 @@ namespace EmuSen.Mistress.BigPicture.Theme
             if (Regex.Replace(text, @"<!--.*?-->|<\?xml.*?\?>", "", RegexOptions.Singleline).Trim().Length == 0)
                 return Empty(themeDirectory, fallbackName, diagnostics);
 
-            XDocument document;
+            XElement root;
             try
             {
-                document = XDocument.Parse(text, LoadOptions.SetLineInfo);
+                root = ThemeXml.Parse(text, out string? leniency);
+                if (leniency is not null)
+                    diagnostics.Add(ThemeSeverity.Warning, ThemeDiagnosticCode.LenientXml, file, 0, $"not well-formed XML, read as ES-DE reads it: {leniency}");
             }
             catch (XmlException e)
             {
@@ -110,7 +112,6 @@ namespace EmuSen.Mistress.BigPicture.Theme
                 return Empty(themeDirectory, fallbackName, diagnostics);
             }
 
-            XElement root = document.Root!;
             if (root.Name.LocalName != "themeCapabilities")
                 diagnostics.Add(ThemeSeverity.Warning, ThemeDiagnosticCode.WrongRoot, file, Line(root), $"root is <{root.Name.LocalName}>, not <themeCapabilities>");
 

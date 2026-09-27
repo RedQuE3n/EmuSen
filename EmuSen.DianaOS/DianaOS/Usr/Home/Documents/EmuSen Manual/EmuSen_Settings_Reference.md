@@ -4381,6 +4381,50 @@ set it.
 - **The desktop's sidebar library** is unchanged: one list per console.
 - Nothing ran on the handheld.
 
+### 4.68 Big picture: themes that ES-DE draws load and install, as ES-DE reads them (2026-09-27)
+
+The player answered Q47 of `EmuSen_BigPicture.md` on 2026-09-27 with (b): run ES-DE on the listed themes Mistress refused,
+and match what it does. §31 of that plan is the record (the runs of ES-DE 3.4.1, the rules measured, the tests, the
+mutants and the survey). The section is numbered 4.68 because §4.66 is another pass's. There is no setting: the change
+is in how a theme is read, which is the same in big-screen sessions, in big picture on the desktop (§4.54), in Theme
+Settings (§4.53) and in the theme browser (§4.62).
+
+**What a player meets.** Fifteen themes of ES-DE's list that the browser used to refuse with "The download is not a
+theme that loads" now install and are drawn, as ES-DE draws them: CarAlt, CodyWheel, Diamond, ES-DE-Mini, Showcase,
+Slick (Remixed), TateGriddy, Razor, SimCar, SimpleMenu, X20s, Artflix (Revisited), CoinOPS, Grimmlex and Retrofix
+(Revisited). A theme copied into `home/Themes` by hand is read the same way. Of the 66 themes on ES-DE's list, all 66
+now load for the five systems EmuSen emulates, against 51 before; what big picture does not yet draw of them is
+§25.8's list, unchanged.
+
+**How a value is read**, as ES-DE 3.4.1 was measured to read it:
+
+| A theme writes | It means | Before |
+|---|---|---|
+| a number followed by more, `0.85 0.9` or `0.9abc` | its leading number, 0.85 or 0.9; no number at all is 0, then held to the property's range | refused |
+| a pair with more or less than two plain numbers, `w 0.02`, `0.75 0.3 0.9` | the text is split at its first space and each side read as a number: `0 0.02`, `0.75 0.3` | refused |
+| a pair with no space at all, `w0.02`, `0.6`, or numbers separated only by a tab | **still refused**, as ES-DE refuses it: that console shows EmuSen's own look, and the browser will not install it | refused |
+| a true-or-false value | true when it starts with `t`, `T`, `y`, `Y` or `1` (`true`, `yes`, `1`), false otherwise (`false`, `no`, `flase`, `0`) | only `true`, `false`, `1` and `0` were accepted |
+| an `&` that is not part of `&amp;` or another complete reference, as in `Game & Watch` | the `&` itself, shown as written | refused |
+| text before or after the file's outermost element | ignored | refused |
+| `<transitions>` directly in a theme file | ignored, unless the file is included from inside a `<variant>`, where it chooses that variant's transitions (§4.53's Automatic) | refused |
+
+A space before a value counts, because ES-DE counts it: ` true` is false, and ` 0.5 0.5` reads as `0 0.5`. Tags that do
+not match (`<text>…</view>`) still make a file unreadable, and the console unthemed, in ES-DE and in Mistress alike.
+
+**What is written down.** Each reading of the kinds above adds a warning to the theme's diagnostics, naming the file,
+line and what the value was read as ("it is read as 0.85, as ES-DE reads it"); ES-DE itself writes nothing. A refusal
+names its reason, and the browser shows it after "The download is not a theme that loads:", for example "…is
+"w0.02", which has no space between two values; ES-DE refuses such a pair too".
+
+**What it does not do.**
+- **Colours, whole numbers, words and paths** are read as strictly as before; ES-DE was not run on them (§31 Q70). Two
+  listed themes (Canvas, Iconic) write `3.5` where a whole number belongs, and lose that one property's element in one
+  variant; both still load.
+- **`capabilities.xml`'s own true-or-false values** (`selectable`) are read as before.
+- **Nothing is shown to the player** about a theme's warnings; they are for theme authors, in the loader's diagnostics
+  (§31 Q72).
+- Nothing ran on the handheld; the handheld's build that refused Artflix (Revisited) and CarAlt predates this.
+
 ### 4.70 The error log: every error a frontend shows, kept whole (2026-09-27)
 
 **Why.** On the handheld, every theme the player tried to install from the theme browser (§4.62) failed. The only record

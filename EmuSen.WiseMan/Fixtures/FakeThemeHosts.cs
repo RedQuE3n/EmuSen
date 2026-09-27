@@ -34,6 +34,8 @@ namespace EmuSen.WiseMan.Fixtures
         public int Screenshots { get; init; } = 3;
         public Dictionary<string, string> Extra { get; } = new();
         public Func<byte[]>? Archive { get; set; }
+        public string? CapabilitiesText { get; set; }
+        public string? ThemeText { get; set; }
 
         public string Top => $"{Source.Repository}-{Source.Branch}/";
         public string Url => Source.Url + ".git";
@@ -53,8 +55,8 @@ namespace EmuSen.WiseMan.Fixtures
                 }
 
                 zip.CreateEntry(Top);
-                Put("capabilities.xml", $"<themeCapabilities><themeName>{Name}</themeName>{string.Concat(Variants.Select(v => $"<variant name=\"{v.ToLowerInvariant()}\"><label>{v}</label></variant>"))}</themeCapabilities>");
-                Put("theme.xml", "<theme><view name=\"system\"><carousel name=\"c\"><pos>0 0.2</pos><size>1 0.5</size></carousel></view>" +
+                Put("capabilities.xml", CapabilitiesText ?? $"<themeCapabilities><themeName>{Name}</themeName>{string.Concat(Variants.Select(v => $"<variant name=\"{v.ToLowerInvariant()}\"><label>{v}</label></variant>"))}</themeCapabilities>");
+                Put("theme.xml", ThemeText ?? "<theme><view name=\"system\"><carousel name=\"c\"><pos>0 0.2</pos><size>1 0.5</size></carousel></view>" +
                                  "<view name=\"gamelist\"><textlist name=\"l\"><pos>0.05 0.1</pos><size>0.5 0.8</size></textlist></view></theme>");
                 Put("marker.txt", Marker);
                 Put("colors.xml", "<theme><variables><bg>101010</bg></variables></theme>");

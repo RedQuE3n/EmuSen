@@ -1141,7 +1141,8 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   - **Q44** no longer applies: the fallback is not switched off after pass 8.
   - **Q40,** the embedded credentials, is unaffected.
 - **Q47–Q49 and the keyboard's menu key, answered on 2026-09-27 ("use your recommendations"):**
-  - **Q47:** (b). ES-DE is run on the refused themes first, and the loader matches what it does rule by rule (§25.10).
+  - **Q47:** (b). ES-DE is run on the refused themes first, and the loader matches what it does rule by rule (§25.10). Done in §31: ES-DE
+    loads all 15, and 66 of 66 listed themes now load.
   - **Q48:** pass 14 draws `gameselector` (20 themes), then wheel carousels (9), then `gamelistinfo` (6), then
     `animation` (4). The recommendation put to the player named those four in that order. §25.10's fuller order also
     puts Q47's refusals and the cheap badge, help and carousel properties first. Q47 is answered separately, and
@@ -1342,15 +1343,15 @@ partially parsed views of an unthemed system readable for inspection, and `IsThe
 
 | Condition | Severity | Effect | Source |
 |---|---|---|---|
-| `capabilities.xml` missing or malformed | error | theme not loaded | cited |
+| `capabilities.xml` missing or malformed | error | theme not loaded | cited; since §31, a bare `&` and text outside the root are read as ES-DE reads them, with a warning |
 | No `theme.xml` for the system | error | unthemed | cited |
-| Malformed XML in any file read; a root other than `<theme>` | error | unthemed | cited |
+| Malformed XML in any file read; a root other than `<theme>` | error | unthemed | cited; since §31, only what ES-DE also refuses (mismatched tags), not a bare `&` or text outside the root |
 | An unknown tag, element or property | error | unthemed | cited as "enforced more strictly"; the unknown-property case is inferred |
 | The legacy `extra` attribute | error | unthemed | cited |
 | `<variant>`, `<aspectRatio>` or `<include>` inside `<view>`; a variant in a variant | error | unthemed | cited |
 | A view other than `system`, `gamelist` or `all`; a missing `name` | error | unthemed | cited ("mandatory") |
 | A property with no value | error | unthemed | cited (the log line in `THEMES.md`) |
-| A value in the wrong format (a pair of one number, a five-digit colour, `yes` for a boolean) | error | unthemed | cited ("sanitization for valid data format") |
+| A value in the wrong format (a pair of one number, a five-digit colour, `yes` for a boolean) | error | unthemed | cited ("sanitization for valid data format"); **superseded by §31 (2026-09-27)**: ES-DE reads FLOATs, pairs with a space and BOOLEANs leniently (`yes` is true), and refuses only a pair with no space |
 | An undefined variable in a property | error | unthemed | cited ("a missing variable") |
 | A missing include written out | error | unthemed | cited |
 | An include loop | error | unthemed | chosen; ES-DE hangs |
@@ -5527,7 +5528,8 @@ the loader's verdict on the XML, not on a theme as downloaded.
   list, and THEMES.md says an error of this kind "will abort the theme loading"; either ES-DE parses these values
   leniently (a float parser reading the first number, an XML parser accepting a bare `&`) or ES-DE refuses them too and the
   list carries themes it cannot load. Which is not known: ES-DE was not run on them. P123 and P124 state the expectation,
-  and Q47 asks what to do.
+  and Q47 asks what to do. *(§31, 2026-09-27: ES-DE loads all 15, and X20s's malformed file is its `variant_02.xml`,
+  not its `capabilities.xml`; §31.5.)*
 
 **What big picture does not draw.**
 - **No listed theme is drawn whole.** Every one of the 51 themed themes sets at least one property the scene does not
@@ -6755,3 +6757,235 @@ changed and the pictures redrawn.
   whether ES-DE does was not measured. Keep, or start at the top?
 - **Q67, the random entry.** It may pick a folder. Should it pick games only, as USERGUIDE's "jumps to a random game"
   reads?
+
+---
+
+## 31. Q47: the loader against ES-DE (2026-09-27)
+
+*Opened 2026-09-27, on the answer to Q47 of that day, (b) (§10.1): run ES-DE on the themes the loader refuses
+(P123, P124), then match what it does, rule by rule.* The principle is §25.10's: a theme ES-DE draws should not be one
+Mistress refuses, and a theme ES-DE refuses should not be one Mistress draws. While the work ran, the player met Q47 on
+the handheld: the theme browser refused to install Artflix (Revisited) and CarAlt, because the install gate
+(`ThemeDownloads.Validate`) is the loader. The player's account is §4.68 of the settings reference.
+
+**Sources.** ES-DE 3.4.1's behaviour, measured by running it, and its `THEMES.md` where it speaks; never its source.
+Every real theme was downloaded whole into `~/.cache/emusen/bigpicture/q47-themes/` and deleted afterwards; the
+synthetic probe themes were written under `~/.cache/emusen/probe/q47/probe-themes/`. No theme file, image or XML
+entered the repository; the tests write their own XML.
+
+**Numbering.** Pass 4 took P160–P163, so this section's predictions start at **P170**; its questions start at **Q70**.
+
+### 31.1 The setup
+
+- **ES-DE.** The copy of the player's AppImage under `~/.cache/emusen/bigpicture/esde/`, with a home of its own,
+  `home-q47/`, beside the earlier stages' home, which was not touched. Each run: `--home home-q47 --resolution 1280 800
+  --fullscreen-padding off --no-update-check --no-splash --debug`, windowed, one window at a time, 8–15 s, closed by
+  PID, and the absence of any ES-DE process checked after each (`ps` with an anchored pattern, never `pgrep -f`).
+- **What it could reach.** `ApplicationUpdaterFrequency` was `never` and the ScreenScraper account fields were empty;
+  nothing asked it to scrape. Its ROM folder was `esde/q47-roms/`: four empty files per system for `nes`, `snes`, `gb`,
+  `gbc` and `n64`, and an SNES folder *Tower Set* with a folder link (for the folder-link icon), with one game marked
+  *hide metadata* (for `metadataElement`). The player's library was never named. `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT`
+  admitted only §22.2's uinput pad, so a real controller could send nothing.
+- **The runner** is `~/.cache/emusen/probe/q47/esde_run.py` (settings, launch, window captures by `ffmpeg -f x11grab`,
+  pad timelines, log copy, close). 36 runs in all; every `es_log.txt` is kept in `probe/q47/logs/`.
+- **Three kinds of run.** Each of the 15 refused themes as downloaded (its log, and a capture of the SNES game list);
+  X20s's second variant, at 16:10 and 4:3; and synthetic probe themes, one property per text or badge, each labelled
+  with the value it carries, so one capture reads many values at once. A value that might refuse the whole system went
+  into a variant of its own (`q47-risky-es-de`), one run per variant, so a refusal could not hide the others.
+
+### 31.2 What ES-DE does, rule by rule
+
+**All 15 themes load in ES-DE.** Every run logged `Finished loading theme` with no `Error:` line, and every capture
+shows the SNES game list themed. The six rules, and what ES-DE was measured to do beyond each theme's own value:
+
+| # | §25.8's rule (themes) | ES-DE 3.4.1, measured | The rule it follows, as far as measured |
+|---|---|---|---|
+| 1 | `folderLinkSize` a pair, `0.85 0.9` (7) | loads, no log line; the link icon is pixel-identical to `0.85`'s and smaller than `0.9`'s | a FLOAT is its leading number, after any leading whitespace: `0.9abc` is 0.9, `abc` is 0 and then clamped (the icon at its minimum). Also measured on `fontSize` (`0.05 0.01` and `0.05abc` drawn as `0.05`), so it is the type's rule, not the property's |
+| 2 | an unescaped `&` in `capabilities.xml` (4, but see §31.5) | loads; Razor's colour scheme reads **GAME & WATCH** in UI Settings | a `&` that does not begin a complete reference is text: `A & B`, `C&D`, `E &foo; F` and `L &amp M` are shown as written; `&amp;` and `&#74;` are decoded (`G & H`, `I J K`). The same holds in a theme file (`Q & A` drawn) |
+| 3 | `gamelistinfo` `size` `w 0.02` (2) | loads, no log line; the box is laid out as `0 0.02`'s | a NORMALIZED_PAIR is split at its **first space** and each side read as a FLOAT: `w 0.5` is `0 0.5`, `0.5 w` is `0.5 0`, `0.75 0.3 0.9` is `0.75 0.3`, `0.6  0.5` is `0.6 0.5`, and a leading space shifts it, ` 0.02 0.62` being `0 0.02` (pixel positions in `p03`, `p14`). With **no space** the system is unthemed: `w0.02`, `0.6`, `0.75,0.6`, and a pair separated only by a tab or a newline |
+| 4 | `<transitions>` directly in `<theme>` (Grimmlex, X20s) | loads, no log line; directly in `theme.xml` it is **ignored** (the first declared profile plays, a slide); at the top of a file **included from a `<variant>`** it applies to that variant (a fade, as when written in the variant) | recordings at 30 fps of one game-list-to-game-list step on four probe themes (`p17-*`) |
+| 5 | `visible` `no` (1) | loads, no log line; the element is hidden | a BOOLEAN is true when its **first character** is `t`, `T`, `y`, `Y` or `1`, false otherwise, and never an error: shown for `true`, `TRUE`, `True`, `t`, `tru`, `truex`, `yes`, `Yes`, `YES`, `y`, `yup`, `yes please`, `1`, `1.0`, `true `; hidden for `false`, `False`, `flase`, `no`, `0`, `2`, `-1`, `on`, ` true `, ` 1`. A value of only whitespace unthemes the system, as an empty one does |
+| 6 | `metadataElement` `flase` (1) | loads, no log line; the text stays shown on a game marked *hide metadata*, as with `false` | the same BOOLEAN rule: `true`, `yes`, `TRUE` and `1` hide it there; `flase`, `false` and `no` do not |
+
+**And a form §25.8 had not named.** X20s's `variant_02.xml` begins with a stray `f` before its first comment. ES-DE
+reads the file: at 4:3 the second variant draws its own logo geometry (0.32 and 0.13×0.14, against the first variant's
+0.29 and 0.1×0.13). Probe files with text before the root, and after it, were both read. **Mismatched tags still refuse
+the file**, and with it the system:
+
+```
+Error:  ThemeData::parseIncludes(): ".../q47-risky-es-de/theme.xml" -> "./broken.xml": Error parsing file: Start-end tags mismatch (system "snes", theme "snes")
+Error:  ThemeData::parseElement(): ".../q47-risky-es-de/theme.xml": Invalid normalized pair value "w0.02" for property "size" (system "snes", theme "snes")
+Error:  ThemeData::parseElement(): ".../q47-risky-es-de/theme.xml": Property "visible" for element "text" has no value defined (system "snes", theme "snes")
+```
+
+These refusals were the only lines ES-DE logged about the six rules; every lenient reading was silent. `THEMES.md` says
+as much for numbers ("commonly just clamped to the allowable range without notifying the theme author"). Its
+"sanitization for valid data format" (§12.3) turns out to mean a pair with no space, not a pair, float or boolean that
+reads oddly.
+
+**The argument, separated from the mechanism.** The table states rules that fit every value tried; it makes no claim
+about ES-DE's implementation. The FLOAT rule behaves like C's `atof` on each value, and the pair rule like a split at
+the first space followed by two such reads, but whether ES-DE calls those functions was not, and under §25's rule could
+not be, looked at. Where the loader extrapolates beyond the values tried, §31.9 says so (P170, P172).
+
+**Negative results on method.** A risky-variant probe with two spaces in a pair drew nothing, which first read as a
+refusal. A second probe drew the same pair where the rule puts it, and a third showed the first probe's text lacked a
+`fontSize`: ES-DE drew no text without one, whatever its position (`p15`). A first capture of X20s's two variants at
+16:10 was pixel-identical, since the variants differ only at 4:3 and in media the scratch folder does not hold; it said
+nothing about whether the stray `f` was read, and the 4:3 pair was needed.
+
+### 31.3 P123 and P124 retired
+
+| # | Predicted (§25.9) | Measured | Verdict |
+|---|---|---|---|
+| P123 | ES-DE themes CarAlt for `snes` although its `badges` set `folderLinkSize` to a pair, drawing the icon at the pair's first number | CarAlt themed with no error; in the probe, `0.85 0.9` draws a link icon pixel-identical to `0.85`'s, and `0.9`'s differs | **held** |
+| P124 | ES-DE loads Razor, whose `capabilities.xml` carries a bare `&`, and lists its `Game & Watch` label | Razor loaded; UI Settings shows the colour scheme **GAME & WATCH** | **held** |
+
+Both were written as the lenient reading. The alternative §25.8 left open, that the list carries themes ES-DE cannot
+load, is the one that failed, for all 15.
+
+### 31.4 What changed in the loader
+
+- **`ThemeXml`** (new) reads every theme file and `capabilities.xml`: strictly first, and only if that fails, again,
+  with each `&` that does not begin one of XML's five named references or a numeric one written as text, any XML
+  declaration blanked, and the document read as a fragment whose first element is the root, so text before and after it
+  is ignored. What a strict reader refuses inside the root, such as mismatched tags, is refused as before. A file read
+  the second way carries a **warning**, `LenientXml`, naming what was tolerated.
+- **`ThemeValueParser`** gained `EsdeFloat`, `EsdePair` and `EsdeBool`, the three rules of §31.2. `ThemeViewBuilder`
+  applies them to the property's text **as written** (after variable substitution, untrimmed, since ES-DE does not trim:
+  ` true ` is false). A value read otherwise than as a plain value carries a **warning**, `LenientValue`, saying what it
+  was read as: "`<folderLinkSize>` of badges "b" is "0.85 0.9", not a plain number; it is read as 0.85, as ES-DE reads
+  it". A pair with no space stays an **error**, and its message now says why ("which has no space between two values;
+  ES-DE refuses such a pair too").
+- **`<transitions>` directly in `<theme>`** is ignored with a **warning** (`IgnoredTag`) in a file not reached through a
+  variant, and applied, as if written in the variant, at the top of a file included from one (a depth counter in
+  `ParseRun`). Everywhere else it is refused as before.
+- **The install gate** follows without a change of its own: `Validate` asks the loader, and every leniency is a warning,
+  so a download ES-DE draws now installs. §31.6's install test goes through `FakeThemeHosts`, as the browser does.
+- **What did not change.** COLOR and UNSIGNED_INTEGER stay strict (not measured; Q70). `capabilities.xml`'s own booleans
+  (`selectable`) keep their strict reading, with a warning and a fallback (not measured; P172).
+
+§12.3's rows on malformed XML and on "a value in the wrong format" are superseded by this section for the forms above.
+They are kept, with a pointer, as the record of what stage (a) took from the document.
+
+### 31.5 A correction to §25.8
+
+§25.8 counted X20s among the four themes with "a malformed `capabilities.xml`" (an unescaped `&`). X20s's
+`capabilities.xml` is well formed; its malformed file is `variant_02.xml`, whose stray leading `f` is what the survey's
+sample line reports ("Data at the root level is invalid. Line 1, position 1"). The row should have read "a malformed
+XML file", three themes for the `&` and one for text before the root. §31.2 covers both; no count changes.
+
+### 31.6 Tests
+
+`ThemeEsdeRulesTests`, 42 cases, all on synthetic XML written by the tests:
+
+| Rule | Test |
+|---|---|
+| a FLOAT is its leading number, with a warning when read otherwise | `A_float_is_its_leading_number` (5 values, `folderLinkSize`) |
+| a pair split at its first space, each side a FLOAT | `A_pair_is_split_at_its_first_space_and_each_side_read_as_a_float` (7) |
+| no space unthemes, and says why | `A_pair_with_no_space_unthemes_the_system_as_in_ES_DE` (`w0.02`, `0.6`, tab, newline, comma) |
+| BOOLEAN by its first character, for `visible` and `metadataElement` alike | `A_boolean_is_true_when_its_first_character_is_t_y_or_1` (19 values, each measured in §31.2) |
+| a bare `&` kept and references decoded, in capabilities and theme files | `A_bare_ampersand_is_kept_as_text_and_references_are_decoded` |
+| text before and after the root ignored | `Text_outside_the_root_element_is_ignored` |
+| mismatched tags still refuse | `Mismatched_tags_still_untheme_the_system` |
+| `<transitions>` in `<theme>` ignored; from a variant's include, applied | `Transitions_directly_in_theme_are_ignored_with_a_warning`, `Transitions_at_the_top_of_a_file_included_from_a_variant_apply_to_that_variant` |
+| **install**: each of the six forms, and X20s's stray text with a variant's included transitions, installs through `FakeThemeHosts`; `w0.02` and mismatched tags are refused with the reason, and leave no folder | `A_download_installs_where_ES_DE_draws_the_theme_and_is_refused_where_it_does_not` |
+
+`ThemeErrorTests` lost three rows of its wrong-format theory (`0.5 0.5 0.5`, `yes` for a boolean, `ninety` for a
+rotation), which ES-DE reads; its malformed-XML case, which used `a && b`, now uses mismatched tags. `FakeTheme` gained
+`CapabilitiesText` and `ThemeText`, so a fake download can carry any theme. After the change the theme classes (147
+tests) and the whole `Mistress.BigPicture` namespace (423: 404 passed, 19 skipped tools) passed.
+
+### 31.7 The survey again
+
+`EMUSEN_THEME_SURVEY=analyse`, on the XML §25.8 fetched (the earlier `survey.json` kept as `survey-before-q47.json`):
+
+| | §25.8 | now |
+|---|---|---|
+| themes themed for all five systems | 51 of 66 | **66 of 66** |
+| themes with no loader error | 46 | **63** |
+| errors, by code | `BadFormat` 15, `MalformedXml` 4, `MisplacedTag` 2, `UndefinedVariable` 1 | `BadFormat` 2, `UndefinedVariable` 1 |
+| new warnings | | `LenientValue` 15, `LenientXml` 4, `IgnoredTag` 1 |
+
+The three themes still logging an error are themed but lose a variant's element: Aura (an undefined `${glass-size}`),
+and Canvas and Iconic (`itemsBeforeCenter` and `itemsAfterCenter` of `3.5`, an UNSIGNED_INTEGER; Q70, P173). Cathode
+and DEcaffe, which §25.8 listed among the five themed with errors, now have none: their errors were among the six forms.
+The analysis took 3.7 s for 1,990 loads, against 3.2 s; the strict parse is tried first, so only the files that need
+the second reading pay for it.
+
+### 31.8 Mutants
+
+The runner is `~/.cache/emusen/probe/q47/mutate_q47.py`, its log `run-q47.log` and its verdicts `mutants-q47.txt`.
+Each mutant was built with `-m:2` and tested alone under `nice -n 10`, against `ThemeEsdeRulesTests`,
+`ThemeErrorTests`, `ThemeLoaderTests` and `ThemeCapabilitiesTests`. Before changing a file the runner writes it to a
+state file, restores it in a `finally`, and on starting restores any file a cut-short run left mutated; the tree was
+rebuilt clean at the end.
+
+**19 mutants: 18 caught, 1 survived, none failed to build.**
+
+| Area | Mutants (caught unless marked) |
+|---|---|
+| BOOLEAN | M1 `y`/`Y` not true; M2 the text trimmed first |
+| FLOAT | M3 trailing text makes it 0; M4 leading whitespace not skipped; **M18 no exponent (survived)** |
+| NORMALIZED_PAIR | M5 split at the last space; M6 any whitespace separates; M7 trimmed before the split; M8 a pair with no space only warned |
+| Severity | M9 a lenient value an error |
+| XML | M10 a bare `&` not escaped; M11 any named reference kept as a reference; M12 text outside the root refused; M13 a malformed root read as empty; M17 `capabilities.xml` read strictly; M19 theme files read strictly |
+| `<transitions>` | M14 applied wherever it stands; M15 the variant depth never counted; M16 ignored placement an error |
+
+- **M18 survived** because no test writes an exponent, and none was written deliberately: whether ES-DE reads `1e-1`
+  as 0.1 was not measured (P170), and a test would pin an assumption as if it were a measurement. The loader keeps the
+  exponent, as a C reader of a number would; if P170 fails, the fix is one line and M18 becomes the test's mutant.
+- **The install test** caught M10, M12, M16, M17 and M19 alongside the rule tests, so the install path is held by its
+  own test for the XML and placement rules, not only through the loader's.
+
+### 31.9 Predictions
+
+| # | Prediction | Retired when |
+|---|---|---|
+| P170 | ES-DE reads a FLOAT written with an exponent (`1e-1`, `5E-2`) as its value, as the loader does; no listed theme was seen to write one | ES-DE is run on it |
+| P171 | Installing Artflix (Revisited) and CarAlt from the theme browser on the handheld with this build succeeds, and big picture draws both | the player's next install there |
+| P172 | ES-DE reads `selectable` in `capabilities.xml` by §31.2's first-character rule (`yes` selectable, `flase` not), where the loader warns and keeps its default | ES-DE is run on it |
+| P173 | ES-DE draws Canvas's and Iconic's game-list carousels with `itemsBeforeCenter` of `3.5`, reading it as 3 | ES-DE is run on them (Q70) |
+
+### 31.10 Not done
+
+- **Only the SNES game list was captured** for the 15 real themes. Their logs cover all five systems and the
+  collections, and none logged an error, but the other systems' views and every system view went unseen.
+- **No surveyed theme was rendered by Mistress** after the change; the survey counts loads, as §25.8 did.
+- **COLOR, UNSIGNED_INTEGER, STRING and PATH** values were not probed (Q70), nor `capabilities.xml`'s own values
+  (P172), languages, or `<transitions>` inside `<aspectRatio>` or `<language>`.
+- **Malformed text after the root** (an unclosed tag after `</theme>`) is tolerated by the loader; ES-DE was shown only
+  plain text there. **A second root element** after the first is ignored by the loader; not measured.
+- **Numbers written as `inf`, `nan` or in hexadecimal**, which a C reader might take, are 0 in the loader; not measured.
+- **The handheld**: nothing ran there (P171).
+- **The value the player quoted.** The handheld's message gave the value as `w0.02`; Artflix (Revisited) as downloaded on
+  2026-09-27 writes `w 0.02` in all three places. The settings reference's §4.70, merged while this section was written,
+  records that the detail sheet's status line had been broken by word-wrap, so which spelling the handheld showed could
+  not be read from it; `w 0.02`, the downloaded spelling, is the one this section's install test and the survey load. A
+  theme that does write `w0.02` is refused by ES-DE and by the loader alike.
+
+### 31.11 Questions for the player
+
+- **Q70, the other value types.** COLOR, UNSIGNED_INTEGER (Canvas and Iconic write `3.5`), STRING and PATH were left
+  strict, as THEMES.md types them. One probe run per type would settle each as §31.2 settled three. **Recommendation:**
+  with pass 14, since two themes are affected and both still load.
+- **Q71, a variant's `selectable` default.** In the ampersand probe, ES-DE showed **NONE DEFINED** for Theme Variant,
+  although the probe declared one variant with no `<selectable>`. Either ES-DE's default is false, or it lists nothing
+  for a lone variant; §12.4 chose true, since THEMES.md is silent. **Recommendation:** measure it (two variants, one
+  without `<selectable>`) before changing anything.
+- **Q72, the warnings.** The lenient readings are warnings in the loader's log only, and ES-DE says nothing at all.
+  Should Theme Settings' About sheet list a theme's warnings, for theme authors, or stay silent as ES-DE does?
+  **Recommendation:** silent, as now.
+
+### 31.12 The broad run
+
+After merging WiseMan (pass 4 and the error log of settings §4.70), one run of the Mistress filter without
+`ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` and any GPU or Vulkan test, under `nice -n 10`:
+**1,083 tests, 1,051 passed, 30 skipped (the picture, survey and live tools), 2 failed, in 3 min 46 s.** Neither
+failure is this branch's:
+- `ScrapeCredentialTests.No_tracked_file_holds_a_real_devpassword` names `EmuSen.WiseMan/Galaxia/ErrorLogTests.cs`,
+  which WiseMan's error-log commit added with a literal `devpassword=` to test its redaction; this branch does not touch
+  the file. It fails on WiseMan's own tree for the same reason, by construction; that was not run separately.
+- `InputSettingsWindowRenderTests.The_window_renders_its_rows(NES)` threw from Avalonia's headless platform
+  initialisation ("The calling thread cannot access this object"), and passed, all three cases, when run alone; it is
+  recorded as an order-dependent failure of the headless setup, not investigated further here.

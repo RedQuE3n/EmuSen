@@ -27,7 +27,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [Fact]
         public void Malformed_XML_unthemes_the_system()
         {
-            _theme.Capabilities("").Theme("<view name=\"gamelist\"><text name=\"t\"><text>a && b</text></text></view>");
+            _theme.Capabilities("").Theme("<view name=\"gamelist\"><text name=\"t\"><text>a</view></text>");
             AssertUnthemed(_theme.Load(), ThemeDiagnosticCode.MalformedXml);
         }
 
@@ -104,11 +104,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         [Theory]
         [InlineData("<image name=\"i\"><pos>0.5</pos></image>")]
-        [InlineData("<image name=\"i\"><pos>0.5 0.5 0.5</pos></image>")]
         [InlineData("<image name=\"i\"><color>FFF</color></image>")]
         [InlineData("<image name=\"i\"><color>GGGGGG</color></image>")]
-        [InlineData("<image name=\"i\"><tile>yes</tile></image>")]
-        [InlineData("<image name=\"i\"><rotation>ninety</rotation></image>")]
         [InlineData("<badges name=\"b\"><lines>-1</lines></badges>")]
         [InlineData("<badges name=\"b\"><lines>1.5</lines></badges>")]
         public void A_value_in_the_wrong_format_unthemes_the_system(string element)

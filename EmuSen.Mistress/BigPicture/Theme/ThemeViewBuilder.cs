@@ -133,6 +133,13 @@ namespace EmuSen.Mistress.BigPicture.Theme
             return new ResolvedElement(Spec, Name, Order, zIndex, explicitValues, effective, Bindings(view, effective));
         }
 
+        private static string LowerName(ThemePropertyType type) => type switch
+        {
+            ThemePropertyType.NormalizedPair => "pair of numbers",
+            ThemePropertyType.Boolean => "true or false",
+            _ => "number",
+        };
+
         private static bool InView(ThemePropertySpec spec, string view) => spec.OnlyIn switch
         {
             ThemeViewScope.System => view == "system",
@@ -146,15 +153,25 @@ namespace EmuSen.Mistress.BigPicture.Theme
             void BadFormat(string expected) => diagnostics.Add(ThemeSeverity.Error, ThemeDiagnosticCode.BadFormat, raw.File, raw.Line,
                 $"<{spec.Name}> of {Spec.Type} \"{Name}\" is \"{text}\", not {expected}");
 
+            void ReadAs(string what) => diagnostics.Add(ThemeSeverity.Warning, ThemeDiagnosticCode.LenientValue, raw.File, raw.Line,
+                $"<{spec.Name}> of {Spec.Type} \"{Name}\" is \"{raw.Text}\", not a plain {LowerName(spec.Type)}; it is read as {what}, as ES-DE reads it");
+
             switch (spec.Type)
             {
                 case ThemePropertyType.NormalizedPair:
-                    if (!ThemeValueParser.TryParsePair(text, out NormalizedPair pair)) { BadFormat("a normalised pair"); return null; }
+                    if (!ThemeValueParser.EsdePair(raw.Text, out NormalizedPair pair, out bool pairExact))
+                    {
+                        diagnostics.Add(ThemeSeverity.Error, ThemeDiagnosticCode.BadFormat, raw.File, raw.Line,
+                            $"<{spec.Name}> of {Spec.Type} \"{Name}\" is \"{text}\", which has no space between two values; ES-DE refuses such a pair too");
+                        return null;
+                    }
+                    if (!pairExact) ReadAs(FormattableString.Invariant($"{pair.X} {pair.Y}"));
                     return new PairValue(ThemeValueParser.ClampPair(pair, spec));
                 case ThemePropertyType.Path:
                     return new PathValue(ResolvePath(raw, diagnostics));
                 case ThemePropertyType.Boolean:
-                    if (!ThemeValueParser.TryParseBool(text, out bool b)) { BadFormat("a boolean"); return null; }
+                    bool b = ThemeValueParser.EsdeBool(raw.Text, out bool boolExact);
+                    if (!boolExact) ReadAs(b ? "true" : "false");
                     return new BoolValue(b);
                 case ThemePropertyType.Color:
                     if (!ThemeColor.TryParse(text, out ThemeColor color)) { BadFormat("a 6 or 8 digit colour"); return null; }
@@ -163,7 +180,8 @@ namespace EmuSen.Mistress.BigPicture.Theme
                     if (!uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out uint u)) { BadFormat("an unsigned integer"); return null; }
                     return new UIntValue((uint)ThemeValueParser.Clamp(u, spec.Min, spec.Max));
                 case ThemePropertyType.Float:
-                    if (!ThemeValueParser.TryParseFloat(text, out float f)) { BadFormat("a number"); return null; }
+                    float f = ThemeValueParser.EsdeFloat(raw.Text, out bool floatExact);
+                    if (!floatExact) ReadAs(f.ToString(CultureInfo.InvariantCulture));
                     return new FloatValue(ThemeValueParser.Clamp(f, spec.Min, spec.Max));
             }
 

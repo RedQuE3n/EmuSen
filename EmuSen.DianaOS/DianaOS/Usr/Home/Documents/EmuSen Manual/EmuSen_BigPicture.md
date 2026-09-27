@@ -818,6 +818,8 @@ The whole-library pass is one explicit action that the player starts.
   - the naming rule is someone else's documented one, not a new invention;
   - Mistress writes only inside `home/Media`, never beside a ROM. The ROM library is read, never written
     (`EmuSen_Galaxia.md` §3.3a).
+  - *Amended 2026-09-27 (§30):* the same guide section keeps a foldered game's media under its folder,
+    `<system>/<type>/<folder>/<rom stem>.<ext>`, which this bullet's layout left out; the store follows it now.
 
   Writes follow §4.39's rule: to a temporary name beside the final one, moved into place, never replacing an
   existing file. Only a response that says it is an image, or an MP4, and is at least 80 bytes is kept.
@@ -4726,7 +4728,7 @@ closes it with Back again or B. Its entries, as the guide lists them: *Jump to..
 | Jump to.., Sort games by, Filter gamelist | the collections work's (§22); the hook `AddGamelistOptions` (§23.4) |
 | Add/remove games to this collection, Finish editing | the collections work's; the hook `AddCollectionOptions` |
 | Edit this game's metadata | **built**: *Edit This Game's Metadata* |
-| Enter folder (override folder link) | not offered: Mistress's library has no folders and no folder links |
+| Enter folder (override folder link) | not offered: Mistress's library has no folders and no folder links. *Built in §30.* |
 | Apply, Cancel | not offered: every entry built here acts when chosen; they belong with the jump and the sort. A *Close* button stands for Cancel |
 | *(not in ES-DE's menu)* | **built**: *Add to Favourites* / *Remove from Favourites*, and *Scrape This Game...* |
 
@@ -4758,7 +4760,7 @@ whose features it has:
 | Times played, Play time | numbers; Mistress's own counters (§4.32) | the theme's play count and play time |
 | Controller | **not built**: Mistress draws no controller badge (§3.8) | |
 | Alternative emulator | **not built**: Mistress has one core per console | |
-| Folder link | not applicable: no folders | |
+| Folder link | not applicable: no folders. *Built in §30, in a folder's own sheet.* | |
 
 **The editor's buttons.** ES-DE documents five: *Scrape*, *Save*, *Cancel*, *Clear* and *Delete*.
 - *Scrape* opens ES-DE's single-game scraper, and Y is its shortcut. Mistress's runs stage (d)'s *Scrape This Game*
@@ -6192,3 +6194,256 @@ theme-browser branch ran beside it on the same machine; nothing of its Themes ta
   library that has not been timed.
 - **Q42's buttons during a run** are disabled by the host's `OpenVgdbBusy`; no test holds a run open to press them.
 - **Q43, Q44 and Q46** needed no code; Q44 no longer applies since OpenVGDB is kept (§10.1).
+
+---
+
+## 30. Pass 6 built: folders (2026-09-27)
+
+*Built on branch `bigpicture-pass6-folders`, from WiseMan at `44fde5bb`.* §21.3's Pass 6, under the answers of
+2026-09-26 (§10.1): Q23 (c), folders shown as ES-DE shows them by default with a per-console flatten switch, and Q24,
+directories named like files and `.m3u` playlists left until a disc-based core exists. The player's account is §4.67 of
+the settings reference; this is the record. §29 is another pass's.
+
+**Numbering.** The plan numbered this section's predictions from P140, but §27 had taken P140–P143 and §28 P150–P154.
+They are therefore **P144–P149**, and the questions **Q60–Q67**.
+
+**Sources.** ES-DE's `USERGUIDE.md` (*Multiple game files installation*, *Directories interpreted as files*, *Folder
+flattening*, *Manually copying game media files*, *General navigation*, *UI settings*, *Gamelist options menu*,
+*Metadata editor*) and `THEMES.md` (`grid` and `carousel`'s `defaultFolderImage`, `textlist`'s `indicators` and
+`secondaryColor`, `badges`' `folder` slot and folder-link overlay, `gamelistinfo`), the copies of §21 under
+`~/.cache/emusen/bigpicture/motion/docs/`. ES-DE's source was not read and ES-DE was not run for this section; where the
+guide is silent, §30.3 says what Mistress chose. The ROM library at `AppSettings.RomDirectory` was listed, never opened
+or written (§30.6).
+
+### 30.1 P108: the defect shown, then fixed
+
+P108 predicted that `EsdeMediaFolder` finds none of the media of a game in a subfolder of an ES-DE-written tree. The
+test `ThemedFoldersTests.P108_media_of_a_game_in_a_folder_are_found_under_that_folder_in_an_ES_DE_tree_and_in_Mistress_s_store`
+was written first and run on the unchanged reader, through the window's own `MediaSourcesNow().Locate`: an ES-DE tree
+holding a cover, a screenshot, a marquee and a video of `NES/USA/Tidal Keep` under `nes/<type>/USA/`, and Mistress's
+store holding a cover and a screenshot of `NES/Europe/Quartz Mill` under `nes/<type>/Europe/`. **None of the six was
+found**; every `Locate` answered none. The test was committed skipped with that result as its reason (`5bf3f8d4`), as
+§16.2 recorded P52, and the fix (`e5d62e21`) removed the skip. **P108 held.**
+
+The fix is in three places. `GameFolders.Of` gives a game's folder (§30.2). `SceneGame` carries it as `FolderPath`, and
+`EsdeMediaFolder` names a game's files `<folder>/<stem>` and then `<stem>` (Q61). `MediaSources`, which the library's
+covers call with a bare ROM path, derives the folder from the ROM folder it is now given. The presence listing of §16.2,
+which tells the variant triggers which media a system has, lists a type folder's own folders when a game has one, and
+the stamp that tells a showing that media changed now includes those folders' write times, since a file added to
+`covers/USA/` changes `covers/USA`'s time and not `covers`'.
+
+### 30.2 A game's folder, and the rule that was rejected
+
+ES-DE's folders are relative to `ROMs/<system>/`. Mistress has no system folder: a game's console is its extension
+(§4.46 of the settings reference), and the player's console folders are named `NES`, `GB`, `N64`, `SNES`, not ES-DE's
+`nes` and the rest. Two rules were considered:
+
+- **Per shelf:** the longest directory all of a console's games share, capped at one level below the ROM folder. It
+  adapts to a ROM folder pointed at one console's folder, but a game's folder then depends on every other game: one ROM
+  dropped at the top of the ROM folder would move the whole NES library's folders from `USA` to `NES/USA`, and with them
+  every stored picture's path.
+- **Per file (built):** the first level below the ROM folder is the console's folder, whatever its name, and what lies
+  between it and the file is the game's folder. It reads one path, so no file changes another's folder, and it is what
+  ES-DE's own layout means when that first level is `nes`.
+
+The rule's one misreading: a ROM folder set to `Roms/NES` makes `USA` the console folder and shows the NES games flat.
+It was judged the lesser fault, since ES-DE itself would not recognise `USA` as a system there. A game directly in the
+ROM folder, or outside it, has no folder.
+
+### 30.3 What was built, and where the guide is silent
+
+**The view** (`ThemedLibrary.Folders.cs`, a new part of `ThemedLibrary`): a regular system shows folders unless the
+player flattened it and once any of its games has a folder. The list at a folder is built from the games the system
+keeps (searched and filtered over the whole system, as USERGUIDE's filter section requires) as the child folders that
+hold a kept game and the games directly there; folders on top in the list's sort, then games with favourites first.
+`_path` holds each system's folder; the selection is keyed by system and folder (`ViewKey`), while sorts and filters
+stay keyed by system (`ListKey`), since USERGUIDE says the sort "can be set individually per game system". South
+enters a folder, or launches its linked game; East climbs one level. `SceneSystem.Counted` gives the system view every
+game to count. The grouped collections of §22 keep their own one-level folder, `_openFolder`, beside this.
+
+**The window** (`MainWindow.BigPictureFolders.cs`): each game's `FolderPath`, each console's `Flatten`, the folder links
+from `games.db`, a folder's two menu entries and its sheet, `FolderEditorWindow`. **Settings**: `FoldersOnTop` and
+`FlattenedSystems` in `BigPictureCollections`, with their rows in Game Collection Settings (§4.67.3 of the settings
+reference says why there). **LunaP**: nothing. `TextRowList` already had `TextRowMarker.Folder` (LunaP §101.8), which
+the scene has drawn for grouped collections since stage (b), so no LunaP branch was made.
+
+**The store** (§30.4) and the scraper, which writes `<system>/<type>/<folder>/<stem>` and follows a file moved to
+another folder the way it followed a rename.
+
+**Choices where the documentation is silent**, none measured against ES-DE:
+- **Folders above favourites.** With both sorted on top, folders come first, then favourite games, then the others.
+- **The folder's sort.** Folders are sorted by the list's sort key among themselves; having no metadata, they fall to
+  the name under every key but the name's.
+- **Each system remembers its folder** across quick system select and across a visit to the system view (Q66).
+- **A search that empties the folder shown** moves the list to the nearest folder above that still holds a match,
+  rather than leaving an empty list.
+- **An empty folder**, or one holding only files no core reads, is not listed: the scan knows only game files.
+- **The random entry** picks any entry, folders included (Q67).
+- **Jump To…'s folder entry** is the word *Folders* (Q62).
+- **The help bar's A** reads *Select* on a folder and *Launch* on a linked folder; USERGUIDE does not say.
+- **A folder's picture** is `<system>/<type>/<parent folders>/<folder name>.<ext>`, the name whole, dots included;
+  THEMES.md says `physicalName` strips a folder's last dot, and whether media names do was not established.
+
+### 30.4 The store's one layout step
+
+`media.db`'s second migration adds `store_move (from_path, to_path, how, at)` and `store_step (name, done_at)`.
+`MediaStore.PutInFolders` runs when Mistress opens the store and knows the ROM folder, and never again once
+`store_step` holds `folders`. For each `scrape_media` row naming a flat file, it finds the files `scrape_file` last
+hashed to that game with the same stem, and their folders:
+
+| Case | What happens |
+|---|---|
+| one game, in one folder | the file is **moved** into the folder, and the row follows |
+| copies in several folders | **copied** into each, the last folder (in ordinal order) taking the move; the row names the first |
+| a copy at the top as well | **copied** into each folder, the flat file kept for the one at the top; the row stays flat |
+| a file already at the target | **left** as it is, logged `found`; the row names the file the game now shows |
+| a game at the top only, a file with no row | not touched |
+
+Moving was chosen over copying everything because the store is ES-DE's layout by design (§5.6, §17.5): a player can
+point ES-DE at it, and in a foldered layout the flat copy would be a second file no reader asks for first. The plan's
+rule, that the player's media are never deleted, is held by the test's comparison of every file's SHA-256 before and
+after (`Flat_pictures_of_foldered_games_go_into_their_folders_once_and_no_picture_is_lost`), which also runs the step a
+second time and on a reopened file and requires nothing to change. A step cut off after a move and before its row is
+finished at the next opening (`A_file_of_the_first_schema_is_migrated_in_place…`, which also migrates a schema-1 file
+in place with its rows kept). Mistress's own opening of a flat store, and Clear inside a folder afterwards, are
+`Mistress_puts_its_own_store_in_folders_when_it_opens_it_and_the_picture_is_still_found`.
+
+The player's own store was not migrated by this work: no test or tool opened `~/.local/share` or wherever the running
+Mistress keeps `home/Media`. It will be migrated the first time the merged build opens it.
+
+### 30.5 Tests
+
+Headless in WiseMan; the synthetic library of folders is written by `ThemedFoldersTests.Library` into the session's
+temporary ROM folder beside its own top-level games (`ThemedSession` gained a `roms` hook for it).
+
+| Rule | Test |
+|---|---|
+| P108: an ES-DE tree's and the store's foldered media found | `ThemedFoldersTests.P108_…` |
+| NES opens on its folders on top, marked, with Select; South in, East out one level, each level's place kept, two levels deep | `…NES_opens_on_its_folders_on_top_South_enters_East_leaves_and_each_level_keeps_its_place` |
+| GB's letter folders; the system view's `Counted` | `…GB_shows_its_letter_folders_and_the_system_view_counts_every_game_inside_them` |
+| The count text from `Counted` | `…The_system_view_counts_the_games_inside_folders_not_the_entries` |
+| All games flat | `…All_games_lists_the_games_inside_folders_flat` |
+| P109's return, with P40's frame comparison | `…A_game_started_inside_a_folder_comes_back_to_that_folder_and_game` |
+| Quick system select keeps each system's folder and game | `…Quick_system_select_keeps_each_system_s_folder_and_game` |
+| Jump To's folder entry and letters; filter values from every file; one sort for all folders; the selection following its entry; a favourites filter hiding folders; a search walking up | `…Sorting_filters_the_search_and_the_jump_behave_within_folders_as_USERGUIDE_describes` |
+| Folders not on top; a flattened console | `…Folders_are_not_on_top_when_the_setting_is_off_and_a_flattened_console_lists_all_its_games` |
+| The sheet's switches applied at once and saved | `…The_settings_sheet_flattens_a_console_at_once_and_keeps_it_in_appsettings` |
+| The folder menu's entries; the folder sheet reached by the pad; a link saved to `games.db`, launching, Enter Folder, disabled while editing | `…A_folder_link_set_in_the_folder_s_editor_launches_its_game_and_Enter_Folder_still_opens_it` |
+| A link to a file the library no longer lists is no link | `…A_folder_link_to_a_file_that_has_gone_is_ignored` |
+| A folder's own picture; the flat name second; presence from one listing equal to presence asked game by game; the stamp | `…A_folder_s_picture_is_named_after_it_and_presence_from_one_listing_equals_presence_asked_game_by_game` |
+| The store's step, the migration, the store's first opening, Clear | `MediaStoreFoldersTests` (3 facts, 2 theories), `ThemedFoldersTests.Mistress_puts_its_own_store_in_folders…` |
+| The scraper writes under the folder; a moved file's media follow; a written file's kind | `ScraperTests.A_game_in_a_folder_keeps_its_media_under_that_folder_and_moved_to_another_folder_takes_them_with_it` |
+
+Ten of the eleven first view tests passed at their first run. The one that failed was the test's error: it assumed the
+selection moved to the first row after a sort, where the view keeps it on its entry, which the test now asserts.
+
+### 30.6 P109 on the player's library, read-only
+
+`FoldersLibraryTool` (`EMUSEN_BIGPICTURE_REALLIB=1`) scans `AppSettings.RomDirectory` with `RomLibrary.Scan`, which
+lists files and opens none, builds the shelves as the window does, and shows them in a `ThemedLibrary` on the synthetic
+theme with no media. Before and after the run the library's file count (5,615) and byte total (1,910,413,892) were
+equal and `find -newer` listed nothing. The output is `~/.cache/emusen/probe/pass6/real-library.txt`.
+
+| Console | Games | Opens on | Deepest folder | File stems in two folders |
+|---|---|---|---|---|
+| NES | 3,537 | 16 folders (Australia, Canada, Country_Unk, Europe, Hacks, PC10, PD, Pirate, Sweden, Trained Hacks, Translated, Unclassified, Unlicensed, USA, Versus, World) | 1 | 0 |
+| GB | 1,898 | 27 folders (0-9, A–Z) | 1 | 0 |
+| GBC | 17 | 4 folders (A, G, P, S: its games sit in GB's letter folders) | 1 | 0 |
+| SNES | 48 | 48 games | 0 | 0 |
+| N64 | 20 | 20 games | 0 | 0 |
+
+The first Show of a new view, median of five: **1.6 ms foldered, 3.2 ms flattened** (ratio 0.49); a Show of a shown view
+0.6 against 2.0 ms. Debug build, headless, no window: the scene is built, not laid out or drawn.
+
+### 30.7 Mutants
+
+The runner is `~/.cache/emusen/probe/pass6/mutate_pass6.py`. Before each mutant it writes a state file
+(`mutant-state.json`: the mutant, the file, the original's SHA-256) and keeps the original beside it; on start, a state
+file left by an interrupted round has its original put back, after its hash is checked, before anything else is built.
+Each mutant was built at `-m:2` and its tests run alone under `nice -n 10`, against `ThemedFoldersTests`,
+`MediaStoreFoldersTests`, `ScraperTests`, `MediaStoreTests`, `GamelistOptionsTests`, `ThemedCollectionsTests`,
+`ThemedLibraryPadTests`, `ThemedLibraryTriggerTests` and `ThemedGameOptionsTests`; the tree was rebuilt clean after each
+round, and `git status` showed no source file changed. The log is `run-pass6.log`, the verdicts
+`mutants-pass6.txt` and `mutants-pass6-rerun.txt`. No round was interrupted.
+
+| Rule | Mutants | Result |
+|---|---|---|
+| P108 and the reader | F1 a foldered game looked up by its stem alone; F2 no flat name after the folder's; F3 a folder looked up as a file; F5 the stamp without a type folder's own folders; F6 the desktop's lookup gives a ROM no folder; F7 the window passes no ROM folder | caught; F1 by three tests, the P108 test among them |
+| Presence | F4 presence lists only a type folder's top | **survived the first round**: the test's every present type also had a file at the top. The test now adds a type found only under `screenshots/USA/`; caught in the second round |
+| A game's folder | F8 the console folder kept in it; F9 a child found by a bare prefix (`USA2` under `USA`); F10 a nested folder's path on disk one level too deep | caught; F8 by 13 |
+| The store | S1 a scrape writes flat; S2 a moved file leaves its media; S3 a file's kind read from its parent folder; S4 the step at every opening; S5 a flat picture a top-level game shares moved away; S6 a picture at the target overwritten; S7 rows left flat; S8 a row a top copy shares pointed into a folder; S9 the step not recorded; S10 Mistress never runs it; S11 Clear in the flat type folder; S12 the window's Clear given no folder | caught; S6 by the exception `File.Move` raises rather than by an assertion |
+| The view | V1 no folders; V2 the flatten switch ignored; V3 collections with folders; V4 folders never on top; V5 folders by name whatever the sort; V6 a folder with no kept game shown; V7 an emptied folder not left; V8 one place for every level; V9 the selection per system; V10 quick system select forgets the folders; V11 East in a folder goes to the systems; V12 East leaves every level; V13 no sound on entering | caught |
+| Folder links | V14 never launches; V15 launches while a collection is edited; V16 no Enter Folder; V17 links not given to the view; V18 saved as none; V19 a folder's menu offers a game's entries; V20 the help bar's Select on a linked folder; L1 a link to a gone file kept | caught; L1 was written in the second round with its test, after reading §4.67.4's sentence against the code showed the help bar would say *Launch* over a link that no longer launches |
+| Jump To and the count | V21 no folder entry; V22 folders indexed beside it; V23 the system view counts the entries; V24 no count given | caught |
+| Settings | V25 the flatten switch stores nothing; V26 the window ignores it; V27 Sort folders on top ignored; V28 off by default | caught |
+
+**49 of 50 caught on the first run; 51 of 51 after the second round** (F4 with its stronger test, and L1). No mutant
+failed to build, and none was equivalent. As §28.4 said of its own round, every mutant was written after its test by the
+same hand, so this shows the tests are not empty rather than that the rules are complete; F4's survival is the kind of
+gap it does find.
+
+### 30.8 Predictions retired
+
+| # | Predicted | Found | Verdict |
+|---|---|---|---|
+| P108 | `EsdeMediaFolder` finds none of a foldered game's media in an ES-DE tree, shown on the unchanged reader | 0 of 6 found on the unchanged reader; 6 of 6 after the fix | **held**, then fixed |
+| P109 | Shown as folders, NES opens on 16 entries and GB on 28; the return from a game in a folder comes back to that folder and game, its first frame equal to a fresh build; the first showing costs within 10% of the flat one | NES 16; **GB 27**: `GB/[BIOS]` holds four `.7z` archives, which no core reads, so the scan lists nothing there and the folder does not show; the return held, 0 pixels differing at 1280×800; the first showing **half** the flat one's cost, 1.6 against 3.2 ms, since the text list builds a row per entry, 16 rather than 3,537 | **failed** on two clauses: the count, because §21.1 counted folders and not the files in them; the cost, which was predicted as a ceiling and came out far under it |
+| P144 | *(written during the build)* The layout step loses no picture in any of its cases, and a second run changes nothing | the SHA-256 comparison in every case of §30.4, and the rerun | held |
+| P145 | *(written during the build)* No file stem of the player's library repeats between two folders of one console, so the flat name second (Q61) never shows one game another's picture there | 0 on each console (§30.6), as §21.1 counted | held |
+| P146 | *(written before the round)* Of the round's mutants, at least nine in ten are caught on their first run | 49 of 50 (98%) | held |
+| P147 | *(written before the broad run)* The broad Mistress run passes with no failure this branch causes | BROAD-RESULT | BROAD-HELD |
+
+### 30.9 Pictures
+
+At 1280×800, written by `FoldersPictureTool` with `EMUSEN_BIGPICTURE_PNG=1` to `~/.cache/emusen/bigpicture/png/pass6/`,
+on Art Book Next with synthetic covers stored under their folders, and one on the synthetic theme. The library is the
+user's shapes in small: eight NES folders by region and category, eight GB letter folders, two games in each. They were
+looked at:
+- `nes-opening-on-its-folders`: seven folder rows with Art Book Next's own folder icon before each, *Europe* selected,
+  the theme's folder badge in the badge row, no cover (the folder has none and Art Book Next's image has no default),
+  and the help bar's *Select*.
+- `nes-inside-Europe`: the folder's two games, the first's cover from `nes/covers/Europe/`, *Launch* on the help bar.
+- `gb-letter-folders`: `0-9`, then A to F, *B* selected.
+- `nes-flattened`: every NES game in one list after the switch, the cover still found under its folder.
+- `settings-sheet-nes-flattened`: the Game Lists section with *Sort folders on top of gamelists* on and *Flatten
+  Nintendo Entertainment System folders* switched on by the pad, the focus on it.
+- `folder-options-menu`: Jump To reading *Folders*, the sort, the filter, Search and *Edit This Folder's Metadata*.
+- `folder-editor-with-a-link`: the folder's name, its path from the ROM folder, and the link chosen.
+- `synthetic-nes-folders-marked`: LunaP's folder marks in the textlist's secondary colour, then the two top-level games.
+
+**Seen and left:** the synthetic theme's help bar names North *Favorite* on a folder, where North does nothing (§30.10).
+The first pictures' GB games were named from their letters and read oddly ("Blpha Beacon"); the fixture's names were
+changed and the pictures redrawn.
+
+### 30.10 Not done
+
+- **Directories as files and `.m3u`** (Q24): not built.
+- **A folder's other metadata**, scraping a folder, and hiding one (Q63).
+- **A folder-link mark in the text list**: LunaP has none, and this pass was not to add LunaP controls beyond a folder
+  mark, which existed (Q60).
+- **`gamelistinfo`'s folder icon**: the element is not drawn (Pass 14).
+- **ES-DE was not run**, so every choice of §30.3 is unmeasured; Q61, Q65, Q66 and Q67 ask for its behaviour.
+- **The player's own `media.db`** was not migrated here (§30.4).
+- **North and the help bar on a folder** (Q65).
+- **The handheld**: nothing ran there.
+- **The flat name second** also applies to Mistress's store after its migration, where only hand-placed pictures and
+  what the step could not move stay flat.
+
+### 30.11 Questions for the player
+
+- **Q60, the folder-link mark.** ES-DE marks a linked folder in a text list with its own symbol (`>` in *ascii*). Add a
+  `TextRowMarker.FolderLink` to LunaP, or keep the folder mark and leave the link to the badge?
+- **Q61, the flat name second.** A foldered game's picture is looked for under its folder, then at the flat name, for an
+  ES-DE folder written from a flattened system. Where ES-DE writes media for a system with `flatten.txt` is not in its
+  guide; a capture from ES-DE would settle it. Keep the fallback, or look under the folder only?
+- **Q62, Jump To's folder entry.** The word *Folders*, or a LunaP glyph like ES-DE's icon?
+- **Q63, a folder's metadata.** ES-DE lets a folder have a name, description, rating, hidden flag and the rest, and be
+  scraped. Build them, or keep the link alone?
+- **Q64, where the switches are.** The plan named Theme Settings or Preferences; they were put in Game Collection
+  Settings' Game Lists, beside the other ES-DE game-list settings §22 put there (§4.67.3). Move them?
+- **Q65, North on a folder.** USERGUIDE says folders can be marked as favourites. Mistress does nothing on North there
+  and its help bar still says *Favorite*. Should North favourite a folder, or the help bar hide the entry?
+- **Q66, the folder kept across a visit to the system view.** Mistress re-enters a system at the folder it was left in;
+  whether ES-DE does was not measured. Keep, or start at the top?
+- **Q67, the random entry.** It may pick a folder. Should it pick games only, as USERGUIDE's "jumps to a random game"
+  reads?

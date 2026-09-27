@@ -168,7 +168,7 @@ value (§8.3).
 **Both are now set for every cartridge**, because IPL2 does not know which chip is fitted when it
 jumps. mupen64plus does the same; Project64 sets `t3` for every chip and gives PAL consoles
 `ra = 0xA4001554`. That disagreement is recorded rather than resolved: the referee boots a real
-PIF ROM the player supplies, so its source has no value for either register, and *Ocarina of Time*
+PIF ROM its owner supplies, so its source has no value for either register, and *Ocarina of Time*
 boots identically with both (§8.2).
 
 ### 6.4 Instruction memory: the key

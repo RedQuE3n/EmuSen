@@ -242,7 +242,7 @@ dotnet publish <app>/<app>.csproj -c Release -r <rid> --self-contained true \
 
 **Verifying a build launches.** Running it with no `DISPLAY` is *not* a launch test: Avalonia dies at X11 initialisation before `MainWindow`'s constructor runs, so everything SDL-related is never reached and a broken build looks fine. Launch it on a real display and check it is still alive several seconds later.
 
-**macOS cannot be finished from Linux.** Apple Silicon refuses to execute an unsigned arm64 binary outright, so clearing quarantine is not enough; the player must ad-hoc sign (`codesign --force --deep --sign - <name>.app`). There is no signing tool on the Linux build machine.
+**macOS cannot be finished from Linux.** Apple Silicon refuses to execute an unsigned arm64 binary outright, so clearing quarantine is not enough; whoever installs it must ad-hoc sign (`codesign --force --deep --sign - <name>.app`). There is no signing tool on the Linux build machine.
 
 ### 4.10 The SDL3 layer (`EmuSen.Endymion`, formerly `EmuSen.Nehellania`)
 
@@ -328,7 +328,7 @@ The general form is worth stating because the next list will meet it: **`Chose` 
 
 **The one site that could not be migrated.** `CheatDatabaseWindow.GamesList` still holds `_games` and indexes it. `LunaList<T>` is declared `where T : class`, and `CheatDatabaseEntry` is a `readonly struct` in `EmuSen.DianaOS/DianaOS/Var/CheatDatabase.cs`. Making it a reference type would reach `CheatCommand`, `CheatDatabasePruner` and their tests — four call sites outside this frontend — and a struct-to-class change carries allocation and equality consequences that have nothing to do with a list widget. **The parallel array stays there on purpose**, and the constraint is recorded in the XAML beside it so the next person does not rediscover it by compiler error, as this was. The plan claimed four migratable sites; there were three.
 
-**Cost.** Measured against the *unmodified* tree on the same machine rather than against an earlier recorded number, which is what caught it: the suite reads 1m5s before the change and 1m5s after, with the thirteen new tests costing about 700ms in total. An earlier session had recorded ~53s for the same suite, and comparing against that number would have produced a twelve-second "regression" that does not exist.
+**Cost.** Measured against the *unmodified* tree on the same machine rather than against an earlier recorded number, which is what caught it: the suite reads 1m5s before the change and 1m5s after, with the thirteen new tests costing about 700ms in total. An earlier run had recorded ~53s for the same suite, and comparing against that number would have produced a twelve-second "regression" that does not exist.
 
 ### 4.12 The Emulation menu (`Views/MainWindow.axaml`)
 
@@ -426,7 +426,7 @@ This was a threading-model violation, not an accident of one window. `DianaOSInt
 
 This was chosen over routing GUI edits through a scheduler queue because the registry is a small data structure whose readers only ever need a stable snapshot, and because a queue would have made every window action asynchronous — the Active Cheats window could no longer refresh itself synchronously after an edit. It also fixes the same race for any future frontend without each of them having to know about it. `SetEnabled` is the one mutation that writes in place rather than publishing a new array: a reader seeing the old or the new flag is equally correct and a `bool` write cannot tear, so a snapshot swap would buy nothing.
 
-**Apply Cheats.** Ticking a box already takes effect on the next frame, so this button is not an arm/commit step, and it would have been a placebo if it were. It does two things that are not otherwise reachable. It forces one immediate application through the new `SnesDebugTarget.ApplyCheats()` — extracted from the body of `OnFrame`, which now just calls it — which matters while paused, because a paused game has no next frame coming. And it reports how many cheats it applied, which is the confirmation the player was actually looking for when they asked for the button.
+**Apply Cheats.** Ticking a box already takes effect on the next frame, so this button is not an arm/commit step, and it would have been a placebo if it were. It does two things that are not otherwise reachable. It forces one immediate application through the new `SnesDebugTarget.ApplyCheats()` — extracted from the body of `OnFrame`, which now just calls it — which matters while paused, because a paused game has no next frame coming. And it reports how many cheats it applied, which is the confirmation the button was asked for in the first place.
 
 It turns the master switch back on if it is off, because "Applied 12 cheat(s)" is a lie for as long as the switch would swallow all twelve. With no game running it says the cheats are armed rather than claiming to have poked anything.
 
@@ -826,7 +826,7 @@ Deck's own session sets, starts the window full screen with the menu bar hidden 
 Everything the bar held that a player wants is in the pad's menu; the rest is a desktop session's business. It is
 read once, at start, because hiding and restoring the bar under a running game bought nothing worth the states it
 adds.
-*Retired 2026-09-26 (§4.54):* the request was for a way into big picture from the desktop, and a Big Picture entry
+*Retired 2026-09-26 (§4.54):* a way into big picture from the desktop was requested, and a Big Picture entry
 below the plain Fullscreen one in the View menu now enters it while the window runs. The argument above priced the states a
 switch adds against nothing bought; the request is what it buys, and §4.54 lists each state and the test that holds it.
 *Corrected 2026-09-22 (§4.43):* the premise that `SteamDeck=1` marks a Deck's own session was wrong. Steam sets it on
@@ -1130,7 +1130,7 @@ cannot be used; a tile drawn without a cover no longer asks anything. What it fe
 told apart and win. The old `OnlineCovers` key is read once and dropped (§4.60). What follows describes the switch as it
 was on 2026-09-21; the identification, the libretro names, the size check and the "never replace" rule are unchanged.
 
-**Off by default.** Preferences, Library, **Online Covers**. The switch's hint says what it does, what it sends and where, and that the database states no licence and the covers are other people's scans; the library plan's §4 had asked that a fetch be "off by default, one explicit action, clear about what it sends, and preceded by a decision about the licence", and the player made that decision on 2026-09-21 by asking for it.
+**Off by default.** Preferences, Library, **Online Covers**. The switch's hint says what it does, what it sends and where, and that the database states no licence and the covers are other people's scans; the library plan's §4 had asked that a fetch be "off by default, one explicit action, clear about what it sends, and preceded by a decision about the licence", and that decision was made on 2026-09-21, when the feature was requested.
 
 **What OpenEmu does, and why it could not be copied whole.** OpenEmu identifies a game in OpenVGDB, a SQLite file it downloads from GitHub, and downloads the cover from the address the matching row gives (`EmuSen_Mistress_LibraryPlan.md` §4). Both halves were measured against this library before anything was built:
 
@@ -1680,7 +1680,7 @@ too, since the headless platform does not move the page, so the test does not sh
 **What changed.** The library's console filter (the facet in big-screen mode, the sidebar's Consoles group on the
 desktop) listed one entry per core, so every Game Boy and Game Boy Color game shared *Game Boy (Mercury)*. There is
 now a second entry directly after it, *Game Boy Color (Mercury)*, labelled **GBC** in the sidebar, with its own count.
-The player asked for it on 2026-09-24.
+Requested 2026-09-24.
 
 **What decides the shelf.** A `.gbc` file, or a `.gb` file whose header byte at `0x143` is `0x80` (Color-enhanced) or
 `0xC0` (Color only), is a Game Boy Color game; every other Game Boy file is a Game Boy game. These are the two values
@@ -1695,8 +1695,8 @@ Game Boy game.
 on both shelves, so artwork, covers, the database lookup and the core that loads are unchanged; its `Shelf` is what
 the filter, the sidebar's counts and the list's console tag use. The stored filter (`appsettings.json`'s
 `SelectedCore`) may now name the Color shelf; the two cheat windows, which know cores, are handed Mercury for it.
-The Color shelf sits after the Game Boy rather than in release order (1998, after the N64), because the player asked
-for the two together.
+The Color shelf sits after the Game Boy rather than in release order (1998, after the N64), because the request
+was for the two together.
 
 **Tests.** `RomLibraryTests.Game_Boy_Color_games_sit_on_their_own_shelf_by_extension_or_header` (both header values,
 the extension, a plain `.gb`, a header-less file, the core name unchanged, narrowing by scan and by filter) and
@@ -1759,9 +1759,9 @@ The machine-level behaviour of each choice is `Mercury_Model.md` §6.
 
 ### 4.48 Shaders: a window of their own, tabbed by console (2026-09-24)
 
-**What was asked.** The player wanted a settings entry for shaders alone, tabbed by console as Graphics Settings is,
-where a shader could be chosen and configured, and said that RetroArch's names could not be read whole and the list
-could not be filtered. Before this, a console's shader was the last row of Graphics Settings' tab (§4.40), and
+**What was asked.** A settings entry for shaders alone, tabbed by console as Graphics Settings is, where a shader
+could be chosen and configured; the request added that RetroArch's names could not be read whole and the list could
+not be filtered. Before this, a console's shader was the last row of Graphics Settings' tab (§4.40), and
 RetroArch's presets were a picker of 2,658 relative paths (§4.41), cut at the window's edge, searched as one
 substring, with no way to change a parameter.
 
@@ -2178,7 +2178,7 @@ LunaP's own six mutants are in `LunaP.md` §97.5.
 
 #### 4.48.10 A step after a pause reads at once, the parameters can be searched, and the cache is bounded (2026-09-24)
 
-§4.48.9 left five things undone, and the player asked for them in turn: the ~100 ms a single pad step onto a small
+§4.48.9 left five things undone, and they were requested in turn: the ~100 ms a single pad step onto a small
 preset had lost to the settle, the focus a tab change put on a row out of view, a search of the parameters, a bound on
 the parameter cache, and settle tests that depended on the speed of the machine.
 
@@ -2323,12 +2323,12 @@ checkout lacked 9e8d201, which the after build needs, and the script stopped as 
 - Eight entries is a chosen number; the cache's memory was not measured.
 - `FocusFirst`, the rule for a sheet's first control, still counts a control out of view.
 - How the audit's replay left the focus on a hidden control is not known.
-- The handheld numbers are the coordinator's to take.
+- The handheld numbers are still to be taken.
 
 ### 4.49 Rewind as a reel of pictures (2026-09-24)
 
-**What the player asked for.** "When you're in game and select the rewind button from the quick menu, I want it to
-pull up a reel you can go back through and select where you want to rewind to." Holding Backspace already walked the
+**What was asked for.** In a game, choosing Rewind from the quick menu should pull up a reel to go back through and
+select the point to rewind to. Holding Backspace already walked the
 history back a snapshot at a time (§4.21b, `EmuSen_Rewind_And_FastForward.md` §4); there was no way to see the
 history, and nothing on the pad reached it.
 
@@ -2503,8 +2503,8 @@ Big Picture Theme row and the folder apply at once, beneath the open sheet, as t
 **When the themed view is shown.** All four must hold: the session is big-screen (§4.29, §4.43); Library Style is
 `Theme` (since 2026-09-26: an ES-DE theme, not EmuSen, is the Big Picture Theme, §4.56); a theme folder is set; and the theme reads without error and has a view for at least one system with games.
 Otherwise the library of §4.33 is shown, as before, and when a set theme could not be read the status line says why.
-The desktop keeps its sidebar library whatever the style says: the decision was on 2026-09-25 that the themed view is
-for big-screen sessions only. *Amended by the player on 2026-09-26 (§4.54): the desktop keeps its sidebar library, in a
+The desktop keeps its sidebar library whatever the style says: it was decided on 2026-09-25 that the themed view is
+for big-screen sessions only. *Amended 2026-09-26 (§4.54): the desktop keeps its sidebar library, in a
 window or plain full screen, and gains Big Picture in the View menu, below Fullscreen, behind which the themed view is shown
 under the same four conditions.* While the themed view is showing, the status bar is hidden, so the view has the whole
 window; it comes back with the game.
@@ -2597,18 +2597,18 @@ tool). They run on WiseMan's `PadDriver` with a clock the test moves. Mutants ar
 
 #### 4.52a The keyboard in the themed view (2026-09-27)
 
-**The report.** The player, testing Art Book Next in Mistress on the desktop, found that games "would not launch from in
-artbook next". No crash log was written that day.
+**The report.** Reported from play, testing Art Book Next in Mistress on the desktop: games would not launch from inside
+Art Book Next. No crash log was written that day.
 
-**What was measured before anything changed** (`ThemedLaunchTests`, headless, the player's own settings: `BigScreen` off,
+**What was measured before anything changed** (`ThemedLaunchTests`, headless, the settings in use at the report: `BigScreen` off,
 `LibraryStyle` Theme, Art Book Next, `ResumeOnLaunch` Ask):
 - The pad's South on a game starts it, in the synthetic theme, in Art Book Next with big screen set, and in Art Book Next
   entered by F10 from a desktop window. The launch path itself was sound.
 - With the keyboard, nothing in the themed view responded, not even the arrows: `SetButtonFromKey` sent keys to the
   game's bindings only while the library was hidden and otherwise to hotkeys, and `PadTick` returned at once with no pad
-  connected. The themed view took the pad alone, and ES-DE's theme view has no mouse input either. A desktop user
+  connected. The themed view took the pad alone, and ES-DE's theme view has no mouse input either. A player at the desktop
   without a controller could reach big picture by F10 and then do nothing in it. This is the explanation offered for the
-  report; which input the player held was not asked, so it is the likely cause, not a proven one.
+  report; which input was held at the time was not established, so it is the likely cause, not a proven one.
 
 **What was built.** While the themed view is shown, the library is visible, and nothing is over it (no sheet, no other
 active window, no on-screen keyboard), ES-DE's default keys (USERGUIDE.md, "Default keyboard mappings") are held pad
@@ -2622,7 +2622,7 @@ after the view it was pressed on has gone. Delete (ES-DE's X) is not mapped, bec
 **Escape is left out on purpose, and F4 stands in for it.** ES-DE's Escape is Start, its main menu. Mistress's Escape
 already leaves big picture for the desktop when nothing else is on screen, and returns to a suspended game otherwise
 (§4.18, §4.54). `BigPictureSwitchTests` failed the first time Escape was mapped, so the earlier rule was kept. The pad
-menu (Start) then had no key. The choice was F4 on 2026-09-27 (plan §10.1): it is free in the hotkey map, and it sits
+menu (Start) then had no key. Decided 2026-09-27 (plan §10.1): F4 opens it. It is free in the hotkey map, and it sits
 beside F1–F3. Alt+F4 is never taken, so the window manager's close still works.
 
 **Tests and mutants.** `ThemedLaunchTests` has five cases. The keyboard case runs with the pad unplugged; before the change it
@@ -2737,15 +2737,13 @@ moving, the units, and Art Book Next's grid against ES-DE's still) and `ThemedGr
 
 ### 4.54 Big picture from the desktop: Big Picture below Fullscreen in the View menu (2026-09-26)
 
-**The request.** The player, 2026-09-26, in three messages:
-1. "There needs to be a button to enter big picture mode on desktop as well". A relay of a second message read it as
-   "fullscreen enters big picture", and the first build made the desktop's full screen and big picture one state.
-2. The player corrected that: "i did not want the fullscreen button to trigger big picture on desktop automatically, i
-   wanted a separate button that triggers big picture mode separate from the fullscreen button. Clicking the button
-   would make emusen fullscreen, but also put it into big picture mode. i want the player to have the option between both
-   in desktop". The second build put a Fullscreen and a Big Picture button in the library's toolbar.
-3. The player then placed it: "The big picture button for desktop mode should be placed under the view menu, below
-   fullscreen". The toolbar buttons were removed.
+**The request**, 2026-09-26, in three steps:
+1. A button to enter big picture mode on the desktop as well. A later clarification was first read as "fullscreen enters
+   big picture", and the first build made the desktop's full screen and big picture one state.
+2. That reading was corrected: the Fullscreen button is not to trigger big picture on the desktop. A separate button
+   makes EmuSen full screen and also puts it into big picture, so that a player on the desktop has the choice of both.
+   The second build put a Fullscreen and a Big Picture button in the library's toolbar.
+3. The button was then placed: under the View menu, below Fullscreen. The toolbar buttons were removed.
 
 This section describes the third build. The first two are kept in `EmuSen_BigPicture.md` §18, with what each got wrong.
 Until any of them, big screen was decided once, when the window was made (§4.29, §4.43), and the themed view was offered
@@ -2872,14 +2870,14 @@ library), and the desktop after leaving, at 1280×800, to `~/.cache/emusen/bigpi
   started from it opens on the desktop layout until the player chooses Big Picture.
 - *No pointer way out.* In big picture the menu bar is hidden, so a player with only a mouse leaves by the window
   manager's own full-screen command, which leaves big picture too. The pad menu, Esc and the key are the other ways. The
-  toolbar button of the second build was a pointer's way out, and it went with the player's placement.
+  toolbar button of the second build was a pointer's way out, and it went with the placement of step 3.
 - *The popup embedding by the window* reaches the popups under the window. A tooltip or context menu that Avalonia
   parents elsewhere may still open as a window of its own on the desktop, where a window manager draws it at its size.
 
 ### 4.55 The application icon (2026-09-26)
 
 **What it is.** A gold crescent, horns up, holding a cream letter E, on a deep indigo rounded square: concept A of
-four drawn on 2026-09-26, chosen. It nods to the crescent of *Sailor Moon*, after which EmuSen is named
+four drawn and chosen on 2026-09-26. It nods to the crescent of *Sailor Moon*, after which EmuSen is named
 (§"The names" in the README), without taking anything from it: the crescent is two plain circles subtracted, the E is
 four straight bars, and no lettering, emblem or palette of the series is used. The colours are `#231E52` (ground),
 `#F4C542` (moon) and `#FBF3E4` (letter).
@@ -2926,7 +2924,7 @@ entry being installed, and was not checked on a real session.
 
 ### 4.56 Big picture: EmuSen's own look in the theme list (2026-09-26)
 
-The player, 2026-09-26: "EmuSens normal big picture theme should be an option in the themes list". Until then the choice
+Requested 2026-09-26: EmuSen's own big-picture look as an option in the themes list. Until then the choice
 between EmuSen's own big-screen library (§4.33) and an ES-DE theme's view (§4.52) was two settings in two places:
 Preferences' **Library Style** (Mistress / ES-DE theme) and the theme folder, while the Theme Settings sheet's Themes
 tab (§4.53) listed only ES-DE themes. It is now one list. `EmuSen_BigPicture.md` §19 is the record: the tests, the
@@ -2995,7 +2993,7 @@ leave a state the list cannot show: `Theme` style with no folder. The stored set
 
 ### 4.57 Scraping status: a window, or a sheet in a big-screen session, that follows a run (2026-09-26)
 
-The player, 2026-09-26: "We need to add a status window for when you are scraping roms". Until then a run of §4.60 showed
+Requested 2026-09-26: a status window for a scraping run. Until then a run of §4.60 showed
 three things: "n of m" on the status line, a bar in Preferences ▸ Scraping, and **Cancel Scraping**. The window adds
 the rest of what a run knows. `EmuSen_BigPicture.md` §20 is the record: the tests, the mutants and the pictures.
 
@@ -3112,7 +3110,7 @@ them (`PadAudit`, §4.45.3); B closes the sheet as Hide does. The pad menu's ent
 
 ### 4.58 Big picture: collections, and a game list's sort, filters, jump and random game (2026-09-26)
 
-The player, 2026-09-26, asked big picture to gain what it lacked against ES-DE: its automatic collections (All Games,
+Requested 2026-09-26: that big picture gain what it lacked against ES-DE: its automatic collections (All Games,
 Favorites, Last Played) and custom collections; and, in a game list, ES-DE's filters and sort orders, its jump to a
 letter and its random game. This section is what a player meets. `EmuSen_BigPicture.md` §22 is the record: what ES-DE
 was measured to do where its documentation is silent, the tests, the mutants and the pictures. Everything here is in
@@ -3121,7 +3119,7 @@ the themed view of §4.52, in big-screen sessions and in big picture on the desk
 
 **Where to find it.**
 - **Select** in a game list opens ES-DE's gamelist options menu, one sheet with this section's rows (Jump To, Sort Games
-  By, Filter Gamelist, Search) and the collection entries first, then §4.59's game entries. The choice was one menu on
+  By, Filter Gamelist, Search) and the collection entries first, then §4.59's game entries. One menu was chosen on
   2026-09-26 (Q12 of the plan); until then these rows were a second sheet in the pad menu.
 - **Game Collection Settings**, in the pad menu (Start) after Theme Settings, in either view: ES-DE's main-menu entry of
   that name, as a sheet.
@@ -3139,8 +3137,8 @@ the theme's art under ES-DE's names for it, so Art Book Next shows its own logo 
 | Collections | `collections` | `custom-collections` | one entry per custom collection, by name; A opens it, B comes back to the list, B again to the systems |
 | A custom collection a theme styles | its name | its name | its games, by name, with no star; its own system in the carousel, beside Collections |
 
-The automatic collections are **on by default**, each with its switch in Game Collection Settings. That is the player's
-choice of 2026-09-26 and a deliberate difference from ES-DE, whose settings file holds `CollectionSystemsAuto` empty. A
+The automatic collections are **on by default**, each with its switch in Game Collection Settings. That is a decision
+of 2026-09-26 and a deliberate difference from ES-DE, whose settings file holds `CollectionSystemsAuto` empty. A
 system or collection with no games is not listed, except Collections, which is listed while any custom collection
 exists, empty ones included.
 
@@ -3206,9 +3204,9 @@ with the list's scroll sound. **Random Entry Button** decides where it works: *G
 | Sort favorite games above non-favorites | `FavoritesFirst` | on | `FavoritesFirst` |
 | Random Entry Button | `RandomEntryButton` | `games` | `RandomEntryButton` |
 
-The defaults are those ES-DE 3.4.1 wrote into its own settings file, except two: the automatic collections, which the
-user asked to be on, and the custom collections' switches: ES-DE enables each one by hand, while Mistress's collections
-are the player's own and are shown until switched off (the player kept this, Q13).
+The defaults are those ES-DE 3.4.1 wrote into its own settings file, except two: the automatic collections, which were
+requested to be on, and the custom collections' switches: ES-DE enables each one by hand, while Mistress's collections
+are the player's own and are shown until switched off (kept by decision, Q13).
 
 **Where the data comes from.** The program's records are in SQLite, the player's choices in the JSON settings:
 - favourites, last played, play count, play time, the custom collections and which games are in them: `games.db`
@@ -3257,7 +3255,7 @@ glyph (its `docs/LunaP.md` §150 and §151).
 
 ### 4.59 Big picture: a game's options, and editing its metadata (2026-09-26)
 
-The player, 2026-09-26, as the third item of what big picture lacked against ES-DE: the per-game options menu, and a
+Requested 2026-09-26, as the third item of what big picture lacked against ES-DE: the per-game options menu, and a
 metadata editor for a game's name, description, rating, release date, developer, publisher, genre, players, favourite
 and ES-DE's other documented fields, with deleting a game offered only in a guarded form. This is how a player meets it;
 `EmuSen_BigPicture.md` §23 is the record (ES-DE's documented behaviour set against what was built, the predictions, the
@@ -3355,7 +3353,7 @@ the list, and the themed view's pictures and metadata. OpenEmu's sources (§4.39
 numbered 4.60 because stage (f) was writing §4.53 at the same time.
 
 **Where it works, and where it cannot.** Every request carries EmuSen's developer credentials, which ScreenScraper issued
-to the project's author and which no build carries (the decision, Q5 of the plan). Mistress reads them from a file
+to the project's author and which no build carries (decided under Q5 of the plan). Mistress reads them from a file
 called `screenscraper-developer.json`, holding `devid`, `devpassword` and `softname`, and looks for it in two places, in
 this order:
 
@@ -3372,8 +3370,8 @@ OpenEmu's failover does the covers alone.
 and uses them as a third place after the two files. The sentence above now holds only for a build that carries none,
 which every plain `dotnet build` is.
 
-**Nothing is asked until the player starts it.** The rule, 2026-09-26: "I do not want to spam the screenscraper
-api". No server, ScreenScraper or OpenEmu's, is asked anything when Mistress starts, when the library is shown or
+**Nothing is asked until the player starts it.** Decided 2026-09-26: Mistress must not spam the
+ScreenScraper API. No server, ScreenScraper or OpenEmu's, is asked anything when Mistress starts, when the library is shown or
 refreshed, when a game is selected or shown in the themed view, when a game is added, when the developer file appears,
 or because a run was left unfinished. What is already in `home/Media` and `media.db` is shown with no request. The
 ScreenScraper switch (`Scraping`, on) only says ScreenScraper may be used when a run is started; it starts nothing.
@@ -3426,8 +3424,8 @@ goes back to the name box. **Status...**, and the pad menu's entry during a run,
 
 A change takes effect when the sheet closes; a sign-in takes effect at once.
 
-**Signing in with a member account** (2026-09-26, the player: "we also need to add the ability for the player to log into
-screenscraper with their own account credentials if they prefer"). Until then the Member Account row was two boxes
+**Signing in with a member account** (requested 2026-09-26: a player may log into ScreenScraper with their
+own account credentials if they prefer). Until then the Member Account row was two boxes
 saved as they were left, and nothing said whether ScreenScraper accepted what was in them.
 - **Log In** sends one request, `ssuserInfos.php` with EmuSen's developer credentials and the name and password typed,
   and nothing else. It is the only request the Scraping tab ever makes, and only when pressed; typing and closing
@@ -3493,7 +3491,7 @@ already has is not fetched from ScreenScraper.
 *Amended by §4.65 (Q45, 2026-09-27):* before step 1 comes another game's cover, when the player has chosen one with
 **Use Another Game's Cover…**.
 
-**OpenEmu's failover** (`OpenEmuFallback`, on, the coordinator's choice on 2026-09-26, which the player may reverse) is
+**OpenEmu's failover** (`OpenEmuFallback`, on, a provisional choice of 2026-09-26, open to reversal) is
 asked only inside a run the player started, never for a tile being drawn as §4.39's switch once did. It asks OpenVGDB and
 libretro's thumbnails (§4.39) for a cover in exactly these cases:
 
@@ -3626,8 +3624,8 @@ and a theme's icons). They run on WiseMan's `PadDriver`, which plugs and pulls s
 
 ### 4.62 Big picture: ES-DE's theme list, browsed and installed from the Themes tab (2026-09-26)
 
-The player, 2026-09-26: "Lets add a theme browser an installer, similar to what esde has". Pass 3 of `EmuSen_BigPicture.md`
-§21 builds it, under Q27 and Q28 as the player accepted them; §25 of that plan is the record (predictions, tests,
+Requested 2026-09-26: a theme browser and installer, similar to ES-DE's. Pass 3 of `EmuSen_BigPicture.md`
+§21 builds it, under Q27 and Q28 as accepted; §25 of that plan is the record (predictions, tests,
 mutants, pictures and the survey of the listed themes). ES-DE's behaviour was taken from its `USERGUIDE.md` ("Theme
 downloader"), never from its source. This section is what a player meets.
 
@@ -3700,7 +3698,7 @@ sibling folder, checked (a `capabilities.xml` that reads, a `theme.xml` that loa
 stop a download in flight, remove its partial files, and leave no file open under `home/Themes`; closing the browser
 also stops its list and screenshot requests.
 
-**What is kept where.** The player's standing rule (2026-09-26, "make sure we are storing in sqlite where we can") is
+**What is kept where.** The project's standing rule (2026-09-26: store in SQLite wherever possible) is
 SQLite for what the program writes and reads back, and JSON for the choices a person makes (`EmuSen_Stack.md` §4.1):
 
 | What | Where | Why there |
@@ -3874,7 +3872,7 @@ this change. The pack's stamp is likewise left; a new download replaces the whol
 cannot outlive the pack it describes.
 
 **What stayed JSON, and why.**
-- The six settings files and the ScreenScraper credentials, by the plan and by `EmuSen_Stack.md` §4.1.
+- The six settings files and the ScreenScraper credentials, by the change's scope and by `EmuSen_Stack.md` §4.1.
 - **Save As and Load From in the Active Cheats window** (§4.15a) write and read a file the player names and places.
   Their shape is unchanged, and is now pinned byte for byte by `CheatFileTests`. The pin records the format as it is,
   including a quirk: a cheat's writes appear twice, as `Writes` and as the read-only `EffectiveWrites`, and `IsRomPatch`
@@ -3886,7 +3884,7 @@ cannot outlive the pack it describes.
   that "can be written or corrected by hand from this shell". Moving Mistress's half alone would split one store into
   two that disagree, and `cheat load <game>` would no longer find what Mistress saved. Moving both halves requires
   DianaOS to be handed a store through an interface, as the catalogue is (`EmuSen_Galaxia.md` §7.1), and would still end
-  the documented hand-editing. The plan said to stop and report in that case, and that is what was done;
+  the documented hand-editing. The change's scope said to stop and record the case instead, and that is what was done;
   `EmuSen_Stack.md` §4.3 carries the revised argument.
 - **`.emusen-theme`**, the theme download's stamp (`EmuSen.Mistress/BigPicture/ThemeDownloads.cs`), has the shape of the
   pack's stamp and would move the same way. It was left because the big-picture code belonged to another branch at the
@@ -3900,7 +3898,7 @@ cannot outlive the pack it describes.
 
 **Tests.** `FileRecordsTests` (16): a new file's schema and WAL mode; a newer file refused and left byte-identical; an
 older file (schema 0, holding a table of its own) migrated in place with that table kept; a record round-tripped
-through a reopened file with nothing written beside the state; no record for a missing state; a sidecar in the player's
+through a reopened file with nothing written beside the state; no record for a missing state; a sidecar in the
 real format imported on first sight, both it and the state left byte-identical, and the row rather than an edited
 sidecar read after reopening; an unparsable sidecar neither imported nor removed; a written record replacing an
 imported one; a state rewritten at another size, or at the same size with a later time, not described by its old row; a
@@ -3937,7 +3935,7 @@ change" is the likely reading and not a demonstrated one.
 cannot distinguish `synchronous = FULL` from `NORMAL`, which differ only on power loss, and no test here removes power.
 The view's Delete Save State forgetting the row has no test of its own (the store's `ForgetState` has one); a missed
 forget leaves a row describing a file of a size and time that no later state is likely to share. States saved by the
-DianaOS `state save` command still get no record. No sidecar in the player's own folders was read by a test; the fixture
+DianaOS `state save` command still get no record. No sidecar in a player's own folders was read by a test; the fixture
 reproduces their format from one of them, which was read and not changed.
 
 ### 4.65 ScreenScraper in published builds, OpenVGDB's Remove, and another game's cover (2026-09-27)
@@ -3948,7 +3946,7 @@ measured, the tests, the mutants and the pictures). The section is numbered 4.65
 
 #### 4.65.1 Q40: the developer credentials a published build carries
 
-The answer to Q40, after asking how ES-DE does it, was "Do what ES-DE does". A published Mistress therefore
+The answer to Q40, once ES-DE's own approach had been looked at, was to do what ES-DE does. A published Mistress therefore
 carries EmuSen's ScreenScraper developer credentials, so that any player can scrape; a player's own member account
 (§4.60) only raises the day's requests and threads. This reverses Q5, under which no build carried them.
 
@@ -3968,7 +3966,7 @@ on this computer.
 Mistress's project, runs before the compile of a `dotnet publish` and of nothing else:
 
 - it reads the file named by the MSBuild property `EmuSenScreenScraperDeveloper`, by default
-  `~/.config/EmuSen/screenscraper-developer.json` (the player's config directory, `$XDG_CONFIG_HOME` where set);
+  `~/.config/EmuSen/screenscraper-developer.json` (the builder's config directory, `$XDG_CONFIG_HOME` where set);
   `-p:EmuSenScreenScraperDeveloper=<path>` names another;
 - it takes the three values, re-encodes them as a three-field JSON object, XORs that with 32 random bytes drawn for this
   build, and writes `"ESSD"`, a version byte, the key's length, the key and the scrambled bytes to
@@ -3995,7 +3993,7 @@ as the data, so anyone with the published `EmuSen.Mistress.dll` and this section
 lines. What it does prevent is their appearing *as text*: `strings` or `grep` over the binary, a search of an unpacked
 archive, and the automated secret scanners that look for literal credentials in files do not find them, and a per-build
 key means two builds do not share scrambled bytes that could themselves be searched for. It does nothing against a
-reader who decides to extract them. The accepted consequence, as the player accepted it for ES-DE's model, is that the
+reader who decides to extract them. The accepted consequence, as it was accepted for ES-DE's model, is that the
 credentials can be recovered from any copy, and that abuse under them could get the `EmuSen-Mistress` software name
 blocked (ScreenScraper's 426, which the scraper reports).
 
@@ -4007,8 +4005,8 @@ The decoded bytes are cleared after parsing; the strings themselves live as long
 
 #### 4.65.2 Q42: removing OpenVGDB is optional
 
-OpenVGDB, the 42 MB game database OpenEmu's fallback reads (§4.39, §4.60), stays the fallback behind ScreenScraper:
-the decision was on 2026-09-27 to keep it ("Keep openvgdb as a fallback"). Its row in Preferences ▸ Scraping ▸
+OpenVGDB, the 42 MB game database OpenEmu's fallback reads (§4.39, §4.60), stays the fallback behind ScreenScraper,
+by a decision of 2026-09-27 to keep it. Its row in Preferences ▸ Scraping ▸
 **OpenEmu Failover** now says whether it is downloaded and how large it is, and offers:
 
 - **Remove**, while it is downloaded: after a confirm, it deletes `home/Library/openvgdb.sqlite` to free the space and
@@ -4244,8 +4242,8 @@ requires the engine row disabled for a Super Nintendo game.
 ### 4.67 Big picture: a console's folders, the flatten switch, folder links, and the media of games in folders (2026-09-27)
 
 Pass 6 of `EmuSen_BigPicture.md`'s plan of ES-DE parity (§21.3 there; §30 is the record: the prediction P108 shown and
-fixed, P109 on the player's own library, the tests, the mutants and the pictures). The player accepted §21's
-recommendations on 2026-09-26 (§10.1): **Q23 (c)**, folders shown as ES-DE shows them, by default, with a per-console
+fixed, P109 on the player's own library, the tests, the mutants and the pictures). §21's recommendations
+were accepted on 2026-09-26 (§10.1): **Q23 (c)**, folders shown as ES-DE shows them, by default, with a per-console
 switch that gives the flat list of before; and **Q24**, directories named like files and `.m3u` playlists wait for a
 disc-based core, so neither is here. The section is numbered 4.67 because §4.66 is another pass's. Everything here is in
 the themed view of §4.52, in big-screen sessions and in big picture on the desktop (§4.54); EmuSen's own library
@@ -4383,7 +4381,7 @@ set it.
 
 ### 4.68 Big picture: themes that ES-DE draws load and install, as ES-DE reads them (2026-09-27)
 
-The player answered Q47 of `EmuSen_BigPicture.md` on 2026-09-27 with (b): run ES-DE on the listed themes Mistress refused,
+Q47 of `EmuSen_BigPicture.md` was answered on 2026-09-27 with (b): run ES-DE on the listed themes Mistress refused,
 and match what it does. §31 of that plan is the record (the runs of ES-DE 3.4.1, the rules measured, the tests, the
 mutants and the survey). The section is numbered 4.68 because §4.66 is another pass's. There is no setting: the change
 is in how a theme is read, which is the same in big-screen sessions, in big picture on the desktop (§4.54), in Theme
@@ -4427,11 +4425,11 @@ names its reason, and the browser shows it after "The download is not a theme th
 
 ### 4.70 The error log: every error a frontend shows, kept whole (2026-09-27)
 
-**Why.** On the handheld, every theme the player tried to install from the theme browser (§4.62) failed. The only record
-was the detail sheet's status line, which word-wrap had broken. The player could not tell whether the value it quoted
+**Why.** On the handheld, every theme a player tried to install from the theme browser (§4.62) failed. The only record
+was the detail sheet's status line, which word-wrap had broken. Nobody could tell whether the value it quoted
 read `w0.02` or `w 0.02`, and nothing was on disk to settle it. The only log Mistress kept before this was §4.27's
-crash report. An error that was caught and shown left nothing behind once its line was gone. The request was for an
-error logger built into EmuSen in general.
+crash report. An error that was caught and shown left nothing behind once its line was gone. An error logger built
+into EmuSen in general was requested.
 
 **What it is.** `ErrorLog`, in `EmuSen.Galaxia.Library`, so that both frontends and anything else that references
 Galaxia can write to it.
@@ -4516,7 +4514,7 @@ in `~/.config/EmuSen/Logs` or in the configured folder.
 
 ### 4.69 Big picture: the Start menu and a game's options in ES-DE's layout (2026-09-27)
 
-The request was (2026-09-27) whether the big-screen options menu could look like ES-DE's. This is the first stage: the
+Requested 2026-09-27: a big-screen options menu that looks like ES-DE's. This is the first stage: the
 two list menus of a big-screen session. The settings sheets are the second stage, not yet built. The plan and its record
 are `EmuSen_BigPicture.md` §32; the toolkit's pieces are LunaP's §181.
 
@@ -4618,7 +4616,7 @@ LunaP) were each caught (BigPicture §32.5).
 
 #### 4.69.7 The program's version: 0.9.0
 
-The player set EmuSen's version to 0.9.0 on 2026-09-27 (Q84). It is set once, in `Directory.Build.props` at the
+EmuSen's version was set to 0.9.0 on 2026-09-27 (Q84). It is set once, in `Directory.Build.props` at the
 repository root, and every project that does not set its own carries it. EmuSen.Galaxia and EmuSen.Cauldron keep their
 own 0.1.0. Until then no project set one, and the SDK's default of 1.0.0 was what the program reported.
 

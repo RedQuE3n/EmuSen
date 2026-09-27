@@ -441,7 +441,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x42, running.Bus!.Rdram[0x100]);
         }
 
-        // An explicit Apply is the instruction and is not held back - see Mars_Cheats.md §5.1.
+        // An explicit Apply is the player's own instruction and is not held back - see Mars_Cheats.md §5.1.
         [Fact]
         public void An_explicit_apply_does_not_wait_for_interrupts()
         {

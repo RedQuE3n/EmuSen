@@ -59,7 +59,7 @@ namespace EmuSen.WiseMan.Galaxia
                 SaveLibrary.StatePathFor("ALTTP.smc", 3, custom));
         }
 
-        // Preferences leaves the field blank when the player has not chosen one.
+        // Preferences leaves the field blank when none has been chosen.
         [Theory]
         [InlineData(null)]
         [InlineData("")]

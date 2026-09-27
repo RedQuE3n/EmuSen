@@ -162,7 +162,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return t;
         }
 
-        // The player's report of 2026-09-27: the browser refused Artflix (Revisited) and CarAlt; the install gate is the loader, so it follows the rules above.
+        // Reported 2026-09-27: the browser refused Artflix (Revisited) and CarAlt; the install gate is the loader, so it follows the rules above.
         [Fact]
         public void A_download_installs_where_ES_DE_draws_the_theme_and_is_refused_where_it_does_not()
         {

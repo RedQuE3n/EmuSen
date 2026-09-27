@@ -135,7 +135,7 @@ The file is unmodified, as Google Fonts distributes it; its copyright notice and
 [`licenses/BarlowCondensed-OFL-1.1.txt`](licenses/BarlowCondensed-OFL-1.1.txt). The font is shipped as a separate file
 beside the program and is not sold by itself, as the licence requires.
 
-## 2. Downloaded only at the request, never shipped
+## 2. Downloaded only at the player's request, never shipped
 
 Mistress can fetch the following when the player asks it to. None of it is in this repository or in a build, and each
 keeps its own licence and terms, which apply to the downloaded copy.

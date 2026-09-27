@@ -329,7 +329,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return all;
         }
 
-        // The rule: a ROM file is never deleted or moved; ES-DE's Delete becomes Hide from Library.
+        // The project's rule: a ROM file is never deleted or moved; ES-DE's Delete becomes Hide from Library.
         [Fact]
         public Task Hide_from_library_takes_the_game_out_of_every_view_and_touches_no_file() => ThemedLibraryPadTests.Run(s =>
         {

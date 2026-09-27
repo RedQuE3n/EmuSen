@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Named WiseMan, not EmuSen.Tests - see the working notes' own naming note.
+  <!-- Named WiseMan, not EmuSen.Tests: WiseMan is the project's codename for its test harness.
        A committed, permanent home for verification that used to be
-       reinvented as throwaway scratch code every session: shell/debug-
+       reinvented as throwaway scratch code every investigation: shell/debug-
        toolchain dispatch, the core-agnostic IDebugTarget hooks
        (ClassifyStaticReference, DecodeTilePixels), the ICore audio drain
        path, and AudioPlayer's actual SDL3 calls (against SDL's dummy

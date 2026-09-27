@@ -8,7 +8,7 @@ three corrections and two landmines, and the landmines are the reason this is a
 page rather than a line struck out of the plan.*
 
 *Provenance is marked throughout: **[read]** means the claim was checked against the
-corpus's own source in this session, **[reported]** means it comes from the research
+corpus's own source for this page, **[reported]** means it comes from the research
 pass and was not independently confirmed here.*
 
 ---

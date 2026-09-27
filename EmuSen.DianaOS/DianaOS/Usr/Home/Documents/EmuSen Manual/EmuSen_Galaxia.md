@@ -53,8 +53,8 @@ The shell is rooted here: to DianaOS, this directory **is** `/`, and the install
   Library/      Mistress's kept databases              EmuSen_Settings_Reference.md §4.32, §4.64
     games.db      the player's library: favourites, play time, collections, edits
     records.db    each save state's record and the shader pack's build
-  Firmware/     coprocessor dumps the player supplies    EmuSen_Firmware.md §2
-  Cheats/       the player's own .cht tree               `man cheat`
+  Firmware/     coprocessor dumps the player supplies  EmuSen_Firmware.md §2
+  Cheats/       the player's own .cht tree             `man cheat`
   Shaders/      shader packs downloaded on request     EmuSen_Settings_Reference.md §4.41
     spirv-cache.db  their compiled SPIR-V; a deletable cache   EmuSen_Serenity.md §9.4
 ```
@@ -143,7 +143,7 @@ string PicturePathFor(statePath)                       // the same name with .pn
 
 **Every state Mistress writes gets a picture beside it**: the frame on screen when it was written, as a PNG named by `PicturePathFor`. The picture is taken on the emulation thread in the same request as the state, so it shows the instant the state holds rather than a later frame; a core that sends each scanline once (`EmuSen_Multicore.md` §15) has its rows repeated back to the displayed height before writing. The picture is a sidecar and never read by a core: a state without one loads exactly as before, and deleting one loses nothing but the thumbnail.
 
-**What this does not cover.** The state still carries no record of which core version wrote it; OpenEmu's per-state plist does, and that remains stage 2's second half in `EmuSen_Mistress_LibraryPlan.md`. States written by the DianaOS `state save` command get no picture. And the resume state goes wherever `StateDirectory` points, which on this machine is the ROM folder itself; that is the player's setting and not changed here, but it means leaving a game now writes two files there.
+**What this does not cover.** The state still carries no record of which core version wrote it; OpenEmu's per-state plist does, and that remains stage 2's second half in `EmuSen_Mistress_LibraryPlan.md`. States written by the DianaOS `state save` command get no picture. And the resume state goes wherever `StateDirectory` points, which on this machine is the ROM folder itself; that is a local setting and not changed here, but it means leaving a game now writes two files there.
 
 ### 5.3 A state's record (2026-09-21)
 

@@ -620,8 +620,8 @@ rather than raw samples.
 > databases do. No corpus group covers any of it; the FPGA core is the source, and all fifty-one breakages are caught,
 > four of them by cases the round showed were missing.
 
-> **Progress, 2026-09-18: Ocarina of Time boots, and Phase E is finished.** A separate build traced the 6105 title's
-> stop to its IPL3's third instruction, which reads a register IPL2 leaves and the handoff did not (`Mars_Boot.md`
+> **Progress, 2026-09-18: Ocarina of Time boots, and Phase E is finished.** The 6105 title's stop was traced
+> to its IPL3's third instruction, which reads a register IPL2 leaves and the handoff did not (`Mars_Boot.md`
 > §6–§8), and it now reaches its title screen and names its SRAM by use. The controller check that closes the phase
 > found the joybus running when PIF RAM was written rather than read, which had frozen every button a game polled
 > after boot; with that fixed, Start reaches two games (`Mars_Serial.md` §2, `Mars_GameProbe.md` §5). Nothing the
@@ -661,7 +661,7 @@ folder name.
 Registration is last because a descriptor is a promise to five consumers at once
 (`EmuSen_Multicore.md` §3), and the cheat wiring fixed on 2026-09-15 is the
 cautionary case: a core reachable from the frontends before its seams are tested is
-a core whose seams get tested in play.
+a core whose seams get tested by its players.
 
 **Done when** `.z64` opens in both frontends, `emusen` and `disasm cpu` work against
 Mars in DianaOS, and the cheat-wiring tests cover Mars the way they now cover the

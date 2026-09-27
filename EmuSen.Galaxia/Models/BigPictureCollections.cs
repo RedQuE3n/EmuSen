@@ -9,7 +9,7 @@ namespace EmuSen.Galaxia.Models
         public const string GroupUnthemed = "unthemed", GroupAlways = "always", GroupNever = "never";
         public const string RandomGames = "games", RandomGamesAndSystems = "gamessystems", RandomDisabled = "disabled";
 
-        // All three on, by the choice of 2026-09-26 (Q11), where ES-DE 3.4.1 writes CollectionSystemsAuto empty.
+        // All three on, as decided 2026-09-26 (Q11), where ES-DE 3.4.1 writes CollectionSystemsAuto empty.
         public List<string> AutoCollections { get; set; } = new() { AllGames, Favorites, LastPlayed };
 
         // Mistress's own collections left out of big picture, by games.db id; every other one is shown.

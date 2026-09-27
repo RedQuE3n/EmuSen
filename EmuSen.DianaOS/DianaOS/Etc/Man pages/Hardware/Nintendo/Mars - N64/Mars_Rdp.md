@@ -549,7 +549,7 @@ another has proved less than its name. The tests now make the case, rather than 
   free on its even rounds, where timing chooses the moment as before. Every one of the 160 held pauses and snapshots
   must raise the point; the free rounds keep their watchdog and their exactness, and claim no coverage.
 
-Fixed, the two tests passed 8 runs of 8 while the machine's load stood between 7.6 and 41.8 (other runs' builds). With
+Fixed, the two tests passed 8 runs of 8 while the machine's load stood between 7.6 and 41.8 (other builds on the machine). With
 the waiter's raise removed, every one of the six cases hung in both of two runs, the pause test at attempt 0 at every
 count; the two-processor stress once got through its free first round and hung at the first held one, which is the
 difference the hold makes. The switch costs the workers a load and a test per word while it is off; interleaved against the build without it, three rounds at four processors, Super Mario 64 ran 6.24, 6.19, 6.36 ms against 6.34, 6.13, 6.11 and Ocarina of Time 7.17, 7.27, 7.25 against 7.25, 7.18, 7.17, overlapping in both, with the same state hashes.
@@ -632,7 +632,7 @@ the load's source first. Raster order has the load read first. MarsRT's port fou
 Ocarina of Time (`Mars_Native.md` §5.6.6) and changed its rule; the C# was left, since a race that timing hides cannot be
 shown by an equality test, and nothing had shown it.
 
-*It was shown in play here.* The game comparison of §2.9.6, run while other runs' builds and tests kept the
+*It was shown in play here.* The game comparison of §2.9.6, run while other builds and tests kept the
 machine's load at 10 to 20, parted the C# core with four processors from itself unthreaded, from Ocarina of Time's
 state, in 10 of 16 runs across three modes: the state compared every frame (1 of 4), every sixtieth frame (3 of 4)
 and a snapshot every frame (6 of 8). The first difference was in the CPU's registers (and once RDRAM) at frames 9, 78,
@@ -708,7 +708,7 @@ production's settings: compiled blocks, the display processor threaded, deferred
 four processors, the default on this sixteen-core desktop (one per three cores). Two harnesses were built apart, one
 over the code before this branch (f55bfc0) and one over the fixed code, and run in three rounds with the order
 reversed each round; each run took the bench lock and began only with the one-minute load below 3, since other
-agents were using the machine. The mean `RunFrame` is given, then the emulation thread's waits for the drain.
+work was using the machine. The mean `RunFrame` is given, then the emulation thread's waits for the drain.
 
 | ms a frame, four processors | before | after |
 | --- | --- | --- |
@@ -1184,7 +1184,7 @@ its corners are on quarter pixels.
 
 **What the first test measured was the test.** The closeness test's first form reported the drawing at two touching
 13,500 more of the console's pixels than the console's drawing, mostly darker, and this was recorded as a rasteriser
-defect and pursued for a session. A harness drawing each triangle alone at both resolutions found every triangle
+defect and pursued for some time. A harness drawing each triangle alone at both resolutions found every triangle
 grown, and its dump found two defects in the scene. The corners were computed in unsigned arithmetic (`uint % int`
 with a constant divisor is unsigned), so "twenty pixels off the left" was a column of four billion, which the
 saturating conversion turned into a degenerate edge at column zero with the steepest slope — which the console's
@@ -1248,7 +1248,7 @@ loaded machine; only the interleaved difference is the measurement, as the harne
 drawn wrong, on the processor's threads and on the device alike. In Mario's HUD each glyph — the head, the cross, the
 digits, the star, the camera — appeared as four copies side by side, each a quarter of the glyph's width, at two, three
 and four; Kirby's status bar was squeezed into the left quarter of its width, and the remaining three quarters showed
-the texture memory beyond the image the game had loaded. From the player's two states (made in Mistress with
+the texture memory beyond the image the game had loaded. From two states saved in play (made in Mistress with
 `RenderScale` 2, the device on), each run ten frames and the multiple sampled at the centre of every console pixel of
 the HUD, the mean largest-channel difference from the picture at one was 35.9 (Mario, 21,150 pixels) and 96.1 (Kirby,
 65,400 pixels) at two; after the fix it is 8.1 and 6.2, what is left being the scene behind and around the HUD, which

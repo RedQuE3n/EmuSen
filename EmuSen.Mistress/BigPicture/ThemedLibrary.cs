@@ -414,7 +414,7 @@ namespace EmuSen.Mistress.BigPicture
             return result;
         }
 
-        // USERGUIDE: the shoulders "jump 10 games in the gamelists", stopping at the ends; the choice was this over a page on 2026-09-26 (Q14).
+        // USERGUIDE: the shoulders "jump 10 games in the gamelists", stopping at the ends; chosen over a page on 2026-09-26 (Q14).
         public const int ShoulderJump = 10;
 
         // The search box's text narrows every gamelist; the selection stays on its game while that game still matches.

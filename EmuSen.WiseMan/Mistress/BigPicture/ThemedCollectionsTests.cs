@@ -114,7 +114,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [Fact]
         public Task Automatic_collections_are_on_for_a_fresh_settings_file_and_follow_the_systems_in_ES_DE_s_measured_order() => Session.Dispatch(() =>
         {
-            // The choice (Q11): a settings file written before this work, or none, gives all three.
+            // Decided in Q11: a settings file written before this work, or none, gives all three.
             Assert.Equal([BigPictureCollections.AllGames, BigPictureCollections.Favorites, BigPictureCollections.LastPlayed], new AppSettings().BigPictureCollections.AutoCollections);
             Assert.Equal(3, System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{}")!.BigPictureCollections.AutoCollections.Count);
             using (var fresh = new ThemedSession(settings: a => a.BigPictureCollections = new BigPictureCollections()))

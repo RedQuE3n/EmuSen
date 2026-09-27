@@ -1,7 +1,7 @@
 # Mercury_Model — which console a Game Boy game runs on
 
-*Written 2026-09-24.* The request was for "a dropdown to Mistress that lets you cycle between gameboy and gameboy color".
-This page records what was built for that request. That is a core setting both engines honour, and it brings a mode
+*Written 2026-09-24.* Requested the same day: a dropdown in Mistress that switches between the Game Boy and the Game Boy
+Color. This page records what was built for that request. That is a core setting both engines honour, and it brings a mode
 Mercury never had: a Game Boy Color running a cartridge made for the Game Boy.
 
 The page also records:

@@ -11,8 +11,8 @@ that core's answer beside Mercury's and Mesen 2's. MercuryRT is an exact port of
 its DMA engines and its interrupt logic are its authors' own, and were tuned against named test ROMs. Its CPU is the
 OpenCores Z80 with the Game Boy timing padded on. Its sound quirks are SameBoy's, transcribed on purpose. Its boot ROM
 is SameBoy's, and Mesen 2, the tie-break, embeds the same boot ROM. **So the worth of each agreement is decided row by
-row in §0's table, and §2 is ordered by that worth.** §4, the DMG-compatibility mode, is written for the run that
-is building the Game Boy / Game Boy Color model choice.*
+row in §0's table, and §2 is ordered by that worth.** §4, the DMG-compatibility mode, is written as input to the
+Game Boy / Game Boy Color model choice (`Mercury_Model.md`).*
 
 ---
 
@@ -454,7 +454,7 @@ These findings are weaker: one implementation against two.
 
 ## 4. The DMG-compatibility mode on a CGB, as the referee builds it
 
-This section is written for the run building Mercury's model choice. Every line cited in it was re-opened for this
+This section is written as input to Mercury's model choice. Every line cited in it was re-opened for this
 page **[V]**, except where marked.
 
 ### 4.1 How a cartridge gets a model

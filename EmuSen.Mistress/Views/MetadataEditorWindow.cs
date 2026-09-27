@@ -149,7 +149,7 @@ namespace EmuSen.Mistress.Views
             return row;
         }
 
-        // ScreenScraper's name as a suggestion under the Name box, taken only by a press - see EmuSen_Settings_Reference.md §4.62.
+        // ScreenScraper's name as a suggestion under the Name box, taken only by a press - see EmuSen_Settings_Reference.md §4.63.
         private Control NameOffer()
         {
             Button use = Button("Use This Name", "MetadataUseScrapedName", TakeOfferedName);

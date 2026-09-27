@@ -239,7 +239,7 @@ namespace EmuSen.Mistress.Views
             var addArt = new LunaAction("Add _Cover Art from File...", () => { if (SelectedLibraryEntry is RomEntry e) _ = AddCoverArtAsync(e); });
             var removeArt = new LunaAction("_Remove Cover Art", () => { if (SelectedLibraryEntry is RomEntry e) RemoveCoverArt(e); });
             var lookUp = new LunaAction("_Scrape This Game...", () => { if (SelectedLibraryEntry is RomEntry e) _ = ConfirmAndScrapeAsync(ScrapeScope.ThisGame(e.FullPath)); });
-            // The same menu and editor big picture has - see EmuSen_Settings_Reference.md §4.62.
+            // The same menu and editor big picture has - see EmuSen_Settings_Reference.md §4.63.
             var options = new LunaAction("Game _Options...", () => { if (SelectedLibraryEntry is RomEntry e) ShowLibraryGameOptions(e); });
             var edit = new LunaAction("_Edit Metadata...", () => { if (SelectedLibraryEntry is RomEntry e) EditLibraryGameMetadata(e); })
             {

@@ -22,7 +22,7 @@ using EmuSen.WiseMan.Mistress.BigPicture;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // Q19: the game options menu and the metadata editor from Mistress's sidebar library, on the desktop and in its big screen - see EmuSen_Settings_Reference.md §4.62.
+    // Q19: the game options menu and the metadata editor from Mistress's sidebar library, on the desktop and in its big screen - see EmuSen_Settings_Reference.md §4.63.
     [Collection(TestCollections.ProcessGlobals)]
     public class DesktopGameOptionsTests
     {
@@ -133,7 +133,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Contains("_Edit Metadata...", labels);
             GameOptionsWindow options = OwnedOptions(s);
             Assert.Equal(ThemedSession.SnesGames[2], Named<TextBlock>(options, "GameOptionsTitle").Text);
-            // The themed gamelist's jump, sort, filter and search rows are big picture's; the desktop has its own (§4.62).
+            // The themed gamelist's jump, sort, filter and search rows are big picture's; the desktop has its own (§4.63).
             Assert.Equal(GameEntries, options.Entries.Select(b => b.Content as string));
             Assert.DoesNotContain(options.Options, o => o.Row is not null || o.Apply is not null);
 
@@ -211,6 +211,36 @@ namespace EmuSen.WiseMan.Mistress
             s.Window.KeyPress(Key.I, RawInputModifiers.Control, PhysicalKey.I, null);
             s.Window.KeyRelease(Key.I, RawInputModifiers.Control, PhysicalKey.I, null);
             s.Settle();
+            Assert.Null(s.Window.MetadataEditorShown);
+        }, default);
+
+        // Ctrl+I over big picture's gamelist opens the selected game's editor as a sheet, and not in the system view.
+        [Fact]
+        public Task Ctrl_I_over_the_themed_gamelist_opens_the_editor_as_a_sheet() => Session.Dispatch(() =>
+        {
+            using var s = new ThemedSession();
+            void CtrlI()
+            {
+                s.Window.KeyPress(Key.I, RawInputModifiers.Control, PhysicalKey.I, null);
+                s.Window.KeyRelease(Key.I, RawInputModifiers.Control, PhysicalKey.I, null);
+                s.Settle();
+            }
+            CtrlI();
+            Assert.Null(s.Window.MetadataEditorShown);
+            ThemedLibraryPadTests.Enter(s, "snes");
+            s.Pad.Down();
+            CtrlI();
+            MetadataEditorWindow editor = Assert.IsType<MetadataEditorWindow>(Sheets(s.Window).Current);
+            Assert.Equal(SnesPath(s, 1), editor.GamePath);
+            Assert.Empty(s.Window.OwnedWindows);
+
+            // Back in the system view, with a game chosen before, Ctrl+I opens nothing: ES-DE's menu is a gamelist's.
+            s.Pad.B();
+            s.Settle();
+            Assert.False(Sheets(s.Window).IsPresenting);
+            s.Pad.B();
+            Assert.Equal("system", s.View);
+            CtrlI();
             Assert.Null(s.Window.MetadataEditorShown);
         }, default);
 

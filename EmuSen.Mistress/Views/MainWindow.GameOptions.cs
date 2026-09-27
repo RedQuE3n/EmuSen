@@ -10,7 +10,7 @@ using EmuSen.Mistress.Scraping;
 
 namespace EmuSen.Mistress.Views
 {
-    // A game's options and metadata editor, in the themed gamelist and the sidebar library, and the edits as every view shows them - see EmuSen_Settings_Reference.md §4.59 and §4.62.
+    // A game's options and metadata editor, in the themed gamelist and the sidebar library, and the edits as every view shows them - see EmuSen_Settings_Reference.md §4.59 and §4.63.
     public partial class MainWindow : IGameEditorHost
     {
         private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> NoEdits = new Dictionary<string, IReadOnlyDictionary<string, string>>();
@@ -74,7 +74,7 @@ namespace EmuSen.Mistress.Views
             PresentGameOptions(game.Name, options);
         }
 
-        // The sidebar library's menu, on the desktop or its big screen: the game's entries only; the themed gamelist's rows are left out - see §4.62.
+        // The sidebar library's menu, on the desktop or its big screen: the game's entries only; the themed gamelist's rows are left out - see §4.63.
         private void ShowLibraryGameOptions(RomEntry entry)
         {
             if (_gameOptions is not null || _metadataEditor is not null) return;
@@ -95,7 +95,7 @@ namespace EmuSen.Mistress.Views
             if (!EditMetadataGesture.Matches(e) || !LibraryView.IsVisible || Sheets.IsPresenting || _gameOptions is not null) return false;
             if (ThemedLibraryShown)
             {
-                if (_themed?.SelectedGame is not { IsCollection: false } game || _themed.ViewName != "gamelist") return false;
+                if (_themed?.SelectedGame is not { IsCollection: false } game) return false;
                 ShowMetadataEditor(game.File, game.Name);
                 return true;
             }

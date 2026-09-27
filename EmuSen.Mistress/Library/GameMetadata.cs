@@ -24,6 +24,9 @@ namespace EmuSen.Mistress.Library
             Developer = "developer", Publisher = "publisher", Genre = "genre", Players = "players", Completed = "completed", KidGame = "kidgame",
             Hidden = "hidden", Broken = "broken", NotCounted = "nogamecount", NoMultiScrape = "nomultiscrape";
 
+        // Q45: another game whose cover this one shows, the player's choice kept beside the edits but not a field of the editor - see EmuSen_Settings_Reference.md §4.65.
+        public const string CoverFrom = "coverfrom";
+
         // The editable fields in the order ES-DE's user guide lists them (its "Metadata entries").
         public static readonly IReadOnlyList<MetadataField> Fields =
         [

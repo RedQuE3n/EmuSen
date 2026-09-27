@@ -235,6 +235,8 @@ namespace EmuSen.Mistress.Library
             Execute(_db, step, "DELETE FROM collection_game WHERE path = $from", ("$from", from));
             Execute(_db, step, "UPDATE OR IGNORE game_edit SET path = $to WHERE path = $from", ("$from", from), ("$to", to));
             Execute(_db, step, "DELETE FROM game_edit WHERE path = $from", ("$from", from));
+            // A game whose cover others show keeps being theirs under its new name (§4.65).
+            Execute(_db, step, $"UPDATE game_edit SET value = $to WHERE field = '{GameMetadata.CoverFrom}' AND value = $from", ("$from", from), ("$to", to));
             Execute(_db, step, "UPDATE OR IGNORE cover_lookup SET path = $to WHERE path = $from", ("$from", from), ("$to", to));
             Execute(_db, step, "DELETE FROM cover_lookup WHERE path = $from", ("$from", from));
             Execute(_db, step, "DELETE FROM game WHERE path = $from", ("$from", from));

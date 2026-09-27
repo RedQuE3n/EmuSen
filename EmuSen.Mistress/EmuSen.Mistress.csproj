@@ -89,6 +89,8 @@
        app dir moves to /lib/EmuSen, /bin gets a launcher. See `man hier`. -->
   <Import Project="..\EmuSen.DianaOS\Publish\DianaOSPublishLayout.targets" />
   <Import Project="..\EmuSen\Cores\RustCoresPublish.targets" />
+  <!-- Q40: EmuSen's ScreenScraper developer credentials, scrambled, embedded at publish only - see EmuSen_Settings_Reference.md §4.65. -->
+  <Import Project="Scraping\ScreenScraperDeveloper.targets" />
 
   <Import Project="..\LunaP.props" />
 

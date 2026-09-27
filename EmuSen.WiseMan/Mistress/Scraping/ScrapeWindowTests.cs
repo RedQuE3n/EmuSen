@@ -264,7 +264,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             RunEnds(window);
             Assert.Equal(OpenEmuCover, CoverShown(window, _rom));
             Assert.Empty(_server.Asked.Where(u => u.Contains("screenscraper.fr")));
-            Assert.Contains("ScreenScraper cannot be used: EmuSen's developer file is not on this computer", _asked.Single().Message);
+            Assert.Contains("ScreenScraper cannot be used: this build carries no developer credentials and EmuSen's developer file is not on this computer", _asked.Single().Message);
             Assert.Contains("OpenEmu's sources are asked", _asked.Single().Message);
         });
 
@@ -500,6 +500,144 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             prefs.Close();
             Pump(100);
             Assert.DoesNotContain(ScrapeChangedHandlers(window)?.GetInvocationList() ?? [], d => d.Target is ScrapePreferencesPane);
+        });
+
+        // --- Q42: OpenVGDB's Remove (§4.65) ---
+
+        private static readonly FieldInfo ConfirmRemoveField = typeof(MainWindow).GetField("ConfirmRemoveOpenVgdb", BindingFlags.Static | BindingFlags.NonPublic)!;
+
+        // GitHub's release and its zip, served by the fake, so the failover can download OpenVGDB again.
+        private void ServeOpenVgdbRelease()
+        {
+            string built = Path.Combine(_root, "built", OpenVgdb.FileName);
+            OnlineCoverTests.BuildOpenVgdb(built, ("SNES", "F-Zero (USA)", "00", null), ("SNES", "Zeta (USA)", "02", null));
+            byte[] zip;
+            using (var memory = new MemoryStream())
+            {
+                using (var archive = new System.IO.Compression.ZipArchive(memory, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+                    System.IO.Compression.ZipFileExtensions.CreateEntryFromFile(archive, built, OpenVgdb.FileName);
+                zip = memory.ToArray();
+            }
+            const string release = """{"tag_name":"v29.0","assets":[{"name":"openvgdb.zip","browser_download_url":"https://github.example/openvgdb.zip"}]}""";
+            _server.Other = url =>
+                url == OpenVgdbDownload.LatestRelease ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(release) }
+                : url == "https://github.example/openvgdb.zip" ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(zip) }
+                : url.Contains("thumbnails.libretro.com") ? OnlineCoverTests.FakeServer.Png()
+                : new HttpResponseMessage(HttpStatusCode.NotFound);
+        }
+
+        private PreferencesWindow ScrapingTab(MainWindow window)
+        {
+            var prefs = new PreferencesWindow(new AppSettings { RomDirectory = _romDir }, window);
+            _windows.Add(prefs);
+            prefs.Show();
+            prefs.ShowTab(PreferencesWindow.ScrapingTab);
+            Pump(100);
+            return prefs;
+        }
+
+        private static T Named<T>(Window w, string name) where T : Control => w.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
+
+        private static AppSettings WindowSettings(MainWindow w) => (AppSettings)typeof(MainWindow).GetField("_appSettings", Hidden)!.GetValue(w)!;
+
+        [Fact]
+        public Task OpenVgdb_goes_only_when_the_player_removes_it_which_turns_the_fallback_off_until_Download_brings_it_back() => OnUi(() =>
+        {
+            object realConfirm = ConfirmRemoveField.GetValue(null)!;
+            bool remove = false;
+            int confirms = 0;
+            ConfirmRemoveField.SetValue(null, (Func<MainWindow, Task<bool>>)(_ => { confirms++; return Task.FromResult(remove); }));
+            try
+            {
+                ServeOpenVgdbRelease();
+                string zeta = Path.Combine(_romDir, "Zeta (USA).sfc");
+                File.WriteAllBytes(zeta, SyntheticRom.Build((0x100, [7, 7])));
+                MainWindow window = Open(developer: false);
+
+                // A run with the database present uses it and leaves it; the failover's worker now holds it open.
+                Scrape(window, ScrapeScope.ThisGame(_rom));
+                RunEnds(window);
+                WaitFor(() => CoverShown(window, _rom) == OpenEmuCover, "the failover's cover");
+                Assert.DoesNotContain(OpenVgdbDownload.LatestRelease, _server.Asked);
+                Assert.True(File.Exists(OpenVgdb.DefaultPath));
+
+                PreferencesWindow prefs = ScrapingTab(window);
+                Assert.StartsWith("OpenVGDB is downloaded", Named<TextBlock>(prefs, "OpenVgdbStatusText").Text);
+                Button button = Named<Button>(prefs, "OpenVgdbRemoveButton");
+                Assert.True(button.IsEffectivelyVisible && button.IsEffectivelyEnabled);
+
+                // Declined, nothing goes.
+                button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Pump(100);
+                Assert.Equal(1, confirms);
+                Assert.True(File.Exists(OpenVgdb.DefaultPath));
+
+                remove = true;
+                int asked = _server.Asked.Count;
+                button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Pump(100);
+                Assert.False(File.Exists(OpenVgdb.DefaultPath));
+                Assert.Equal(asked, _server.Asked.Count);
+                Assert.StartsWith("OpenVGDB is not downloaded", Named<TextBlock>(prefs, "OpenVgdbStatusText").Text);
+                Assert.False(button.IsEffectivelyVisible);
+                Assert.Contains("OpenEmu's fallback is off until it is downloaded again", Named<EmuSen.LunaP.Controls.HintText>(prefs, "OpenVgdbRemoveMessage").Text);
+                // The fallback is off with its database gone, in the window and in the switch; the covers it found stay on disk.
+                Assert.False(WindowSettings(window).OpenEmuFallback);
+                Assert.False(Named<EmuSen.LunaP.Controls.LunaSwitch>(prefs, "OpenEmuFallbackSwitch").IsChecked);
+                Assert.True(File.Exists(OpenEmuCover));
+                Assert.False(AppSettings.Load().OpenEmuFallback);
+
+                // A run now asks no one: the removed file, still held open by the old worker, is not used, and nothing is downloaded behind the player's back.
+                File.Delete(OpenEmuCover);
+                Scrape(window, ScrapeScope.ThisGame(_rom));
+                RunEnds(window);
+                Pump();
+                Assert.Null(CoverShown(window, _rom));
+                Assert.Equal(asked, _server.Asked.Count);
+                Assert.False(File.Exists(OpenVgdb.DefaultPath));
+
+                // Download fetches it again and turns the fallback back on; the next run uses it.
+                Button download = Named<Button>(prefs, "OpenVgdbDownloadButton");
+                Assert.True(download.IsEffectivelyVisible && download.IsEffectivelyEnabled);
+                download.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                WaitFor(() => File.Exists(OpenVgdb.DefaultPath) && WindowSettings(window).OpenEmuFallback, "the download");
+                Pump(100);
+                Assert.Contains(OpenVgdbDownload.LatestRelease, _server.Asked);
+                Assert.StartsWith("OpenVGDB is downloaded", Named<TextBlock>(prefs, "OpenVgdbStatusText").Text);
+                Assert.True(Named<EmuSen.LunaP.Controls.LunaSwitch>(prefs, "OpenEmuFallbackSwitch").IsChecked);
+                Assert.True(Named<Button>(prefs, "OpenVgdbRemoveButton").IsEffectivelyVisible);
+                prefs.Close();
+                Scrape(window, ScrapeScope.ThisGame(_rom));
+                RunEnds(window);
+                WaitFor(() => CoverShown(window, _rom) == OpenEmuCover, "the cover after the download");
+
+                // A game only the downloaded database knows is found, so the lookup reads the new file and not the removed one a stale worker could still hold open.
+                Scrape(window, ScrapeScope.ThisGame(zeta));
+                RunEnds(window);
+                WaitFor(() => CoverShown(window, zeta) == Path.Combine(DataStore.Media, "openemu", "SNES", "Zeta (USA).png"), "the new database's game");
+            }
+            finally
+            {
+                ConfirmRemoveField.SetValue(null, realConfirm);
+            }
+        });
+
+        [Fact]
+        public Task Nothing_but_the_button_removes_OpenVgdb() => OnUi(() =>
+        {
+            byte[] before = File.ReadAllBytes(OpenVgdb.DefaultPath);
+            MainWindow window = Open(developer: false, settings: a => a.OpenEmuFallback = false);
+            Scrape(window, new ScrapeScope());
+            RunEnds(window);
+            PreferencesWindow prefs = ScrapingTab(window);
+            prefs.Close();
+            window.Close();
+            window = Open(developer: true);
+            Scrape(window, new ScrapeScope());
+            RunEnds(window);
+            window.Close();
+            Pump(100);
+            Assert.Equal(before, File.ReadAllBytes(OpenVgdb.DefaultPath));
         });
 
         // The member account is kept only through Log In: ScrapeSignInTests.

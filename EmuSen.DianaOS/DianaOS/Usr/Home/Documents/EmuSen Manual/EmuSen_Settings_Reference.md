@@ -3325,6 +3325,10 @@ this order:
 The file should be mode 0600. Where neither place has it, ScreenScraper cannot be used; the Scraping tab says so, and
 OpenEmu's failover does the covers alone.
 
+*Amended by §4.65 (Q40, 2026-09-27):* a published build may carry EmuSen's developer credentials itself, scrambled,
+and uses them as a third place after the two files. The sentence above now holds only for a build that carries none,
+which every plain `dotnet build` is.
+
 **Nothing is asked until the player starts it.** The rule, 2026-09-26: "I do not want to spam the screenscraper
 api". No server, ScreenScraper or OpenEmu's, is asked anything when Mistress starts, when the library is shown or
 refreshed, when a game is selected or shown in the themed view, when a game is added, when the developer file appears,
@@ -3404,7 +3408,8 @@ saved as they were left, and nothing said whether ScreenScraper accepted what wa
   ScreenScraper once, as Log In does. Accepted, the file gains `verified`; refused, the reason is shown and the account is
   kept until Log Out, since it was the player's own choice to save it.
 - **Only EmuSen's developer credentials are supported.** ScreenScraper issues developer credentials to software authors,
-  not to players, so a player cannot bring their own; the row's hint says so.
+  not to players, so a player cannot bring their own; the row's hint says so. Since §4.65 a published build carries
+  EmuSen's, so a player's member account only raises the limits.
 - **Not measured:** no member account has been signed in against the live service. The fields `id` (the name) and
   `niveau` (the level) are read as ScreenScraper's API page lists `ssuserInfos`'s answer; a missing level is not shown.
   The developer-refused text is told apart from a wrong member by the word "développeur", which is the API page's
@@ -3440,6 +3445,9 @@ ROM folder. Deleting `home/Media` loses what was fetched and nothing else.
 
 Screenshots, marquees and the rest take 2 then 3; only covers have a player's folder and a failover. A cover the player
 already has is not fetched from ScreenScraper.
+
+*Amended by §4.65 (Q45, 2026-09-27):* before step 1 comes another game's cover, when the player has chosen one with
+**Use Another Game's Cover…**.
 
 **OpenEmu's failover** (`OpenEmuFallback`, on, the coordinator's choice on 2026-09-26, which the player may reverse) is
 asked only inside a run the player started, never for a tile being drawn as §4.39's switch once did. It asks OpenVGDB and
@@ -3887,3 +3895,131 @@ The view's Delete Save State forgetting the row has no test of its own (the stor
 forget leaves a row describing a file of a size and time that no later state is likely to share. States saved by the
 DianaOS `state save` command still get no record. No sidecar in the player's own folders was read by a test; the fixture
 reproduces their format from one of them, which was read and not changed.
+
+### 4.65 ScreenScraper in published builds, OpenVGDB's Remove, and another game's cover (2026-09-27)
+
+The answers to Q40, Q42 and Q45 of `EmuSen_BigPicture.md` (§10.1 there; §28 is the record: the publish
+measured, the tests, the mutants and the pictures). The section is numbered 4.65 because §4.64 was taken by
+`records.db`, and §4.62 by another branch.
+
+#### 4.65.1 Q40: the developer credentials a published build carries
+
+The answer to Q40, after asking how ES-DE does it, was "Do what ES-DE does". A published Mistress therefore
+carries EmuSen's ScreenScraper developer credentials, so that any player can scrape; a player's own member account
+(§4.60) only raises the day's requests and threads. This reverses Q5, under which no build carried them.
+
+**Where the credentials are looked for,** in this order, the first complete one winning:
+
+1. the tree's own developer file, `<root>/home/etc/EmuSen/screenscraper-developer.json` (§4.60's first place);
+2. `~/.config/EmuSen/screenscraper-developer.json` (§4.60's second place);
+3. what the build carries.
+
+A file that is present but unreadable or missing a field is passed over, not taken as the end of the search. The
+Scraping tab's first hint says which applies: "EmuSen's developer file is on this computer", "This build carries
+EmuSen's developer credentials…", or that neither is the case, in which event ScreenScraper cannot be used and the
+status line, the status window and Log In all say that this build carries no developer credentials and the file is not
+on this computer.
+
+**How a build comes to carry them.** `EmuSen.Mistress/Scraping/ScreenScraperDeveloper.targets`, imported by
+Mistress's project, runs before the compile of a `dotnet publish` and of nothing else:
+
+- it reads the file named by the MSBuild property `EmuSenScreenScraperDeveloper`, by default
+  `~/.config/EmuSen/screenscraper-developer.json` (the player's config directory, `$XDG_CONFIG_HOME` where set);
+  `-p:EmuSenScreenScraperDeveloper=<path>` names another;
+- it takes the three values, re-encodes them as a three-field JSON object, XORs that with 32 random bytes drawn for this
+  build, and writes `"ESSD"`, a version byte, the key's length, the key and the scrambled bytes to
+  `obj/<configuration>/<framework>[/<rid>]/screenscraper-developer.bin`;
+- that file becomes the manifest resource `EmuSen.Mistress.Scraping.Developer` of `EmuSen.Mistress.dll`, and is
+  deleted as soon as the compile has read it, so it lives in `obj/` (which git ignores) only for the length of one
+  compile.
+
+A publish without the file **succeeds**, warns once (`EMUSEN0040`, naming the path looked at) and produces a build that
+carries nothing; a file missing a field is refused the same way, the warning naming the missing field and never a
+value. `dotnet publish --no-build` warns (`EMUSEN0041`) that the assembly is whatever the last build made.
+
+**Why only a publish.** A plain `dotnet build` is what a developer, a test run, the mutant runner and any contributor
+does many times a day; none of them needs the credentials, and every one of them would otherwise write a copy of them
+into a `bin/` folder that tools, archives and bug reports sweep up. A publish is the one step whose output is meant to
+leave the machine, and it is the step after which Mistress must work for someone who has no file. Keeping the embedding
+to it keeps the number of places the credentials exist, scrambled or not, to the published trees. The WiseMan suite
+runs against a plain build, so no test ever loads real embedded credentials; the tests that exercise the embedding
+publish a scratch project with a fake file (§28.3).
+
+**What the scrambling protects against, and what it does not.** It is obfuscation, not secrecy, exactly as ES-DE's is
+(its developer credentials are XORed with a key held beside them in `ScreenScraper.h`). The key is in the same resource
+as the data, so anyone with the published `EmuSen.Mistress.dll` and this section can recover the credentials in a few
+lines. What it does prevent is their appearing *as text*: `strings` or `grep` over the binary, a search of an unpacked
+archive, and the automated secret scanners that look for literal credentials in files do not find them, and a per-build
+key means two builds do not share scrambled bytes that could themselves be searched for. It does nothing against a
+reader who decides to extract them. The accepted consequence, as the player accepted it for ES-DE's model, is that the
+credentials can be recovered from any copy, and that abuse under them could get the `EmuSen-Mistress` software name
+blocked (ScreenScraper's 426, which the scraper reports).
+
+**What never happens to them.** They are never written to disk by Mistress (no code path saves a
+`DeveloperCredentials`), never shown (the object prints as "ScreenScraper developer credentials for *softname*"), and
+never logged: decoding them registers the id and the password, raw and URL-escaped, with the same redactor as the
+files' credentials and the member account (§4.60), so a URL, an exception or `CrashLog` holding them has them blanked.
+The decoded bytes are cleared after parsing; the strings themselves live as long as the process, as the files' do.
+
+#### 4.65.2 Q42: removing OpenVGDB is optional
+
+OpenVGDB, the 42 MB game database OpenEmu's fallback reads (§4.39, §4.60), stays the fallback behind ScreenScraper:
+the decision was on 2026-09-27 to keep it ("Keep openvgdb as a fallback"). Its row in Preferences ▸ Scraping ▸
+**OpenEmu Failover** now says whether it is downloaded and how large it is, and offers:
+
+- **Remove**, while it is downloaded: after a confirm, it deletes `home/Library/openvgdb.sqlite` to free the space and
+  switches the fallback off (`OpenEmuFallback` false), because the fallback cannot work without it and would otherwise
+  download it again at the next run the player starts. The covers it already found stay in `home/Media/openemu/`, shown
+  again once the fallback is back on. The fallback's worker, which holds the database open, is stopped first.
+- **Download**, while it is not: one request to GitHub for the newest release, the database checked to open as an
+  OpenVGDB before it replaces anything (§4.39), and the fallback switched back on.
+
+Neither is offered while a run or a download is using the database. Nothing else ever deletes it; turning the fallback
+off with its switch leaves the file where it is. From the pad, both buttons are reached like the rest of the tab, and
+when Remove hides the focus moves to Download.
+
+#### 4.65.3 Q45: Use Another Game's Cover…
+
+For a game with no box of its own, most often a hack or translation whose base game is in the same library, the
+player can have it show another game's cover.
+
+**Where it is.** The game options menu, wherever it opens (the themed gamelist's Select, the sidebar library's pad menu
+on the desktop and in its big screen, **Game Options...** in the context menu), has **Use Another Game's Cover...**, and
+**Use Its Own Cover** while a choice is in force. The grid's and the list's context menu has the same two entries,
+beside Add Cover Art from File… and Remove Cover Art.
+
+**The picker.** A LunaP window on the desktop and a sheet in a big-screen session, titled with the game. It lists the
+library's games that have a cover to give (their cover as the library would show it now, of any console), never the game
+itself and never a game whose cover already comes from this one, so a choice can never make a loop. The games whose
+names begin with the most of this game's words come first ("Super Mario Bros. (Hack)" lists "Super Mario Bros.
+(World)" first), then by name; at most 60 are shown, and the search box narrows them as the library's own search does.
+Each row has a small picture of the cover. From a pad every control is reached by the d-pad, the search box opens the
+on-screen keyboard, A chooses, and B or Select puts the picker away.
+
+**What a choice is.** A row of `games.db`'s `game_edit` table (§4.59), field `coverfrom`, whose value is the chosen
+game's ROM path. No file is copied, written or deleted: not in the ROM folder, not in the cover art folder, not in
+`home/Media`. The choice is the first place a cover is looked for, before the player's own cover art folder (§4.60's
+order gains a step 0), in the library's grid and list and in the themed view alike. It is followed through: if the
+chosen game itself shows a third game's cover, this game shows that too; a chain that comes back round stops at the
+game it reached twice, which shows its own. If the chosen game has no cover at all, the game falls back to its own order.
+
+**Undoing it.** Use Its Own Cover, from the options, the context menu or the picker, deletes the row. The metadata
+editor's **Clear** does not: it clears metadata, and a borrowed cover is the player's cover, as a placed picture is
+(§4.59 already leaves those). A renamed chosen game keeps being chosen under its new name, as `GameRecords.Move` updates
+the rows that name it; a renamed choosing game carries its row with it, as every edit does.
+
+**Why a row and not a copy** is argued in the plan's §26 note: a copy would overwrite whatever the player had placed,
+go stale when the other game's cover changes, and be undone only by deleting a file.
+
+#### 4.65.4 Tests, mutants and what is not done
+
+Tests (all headless through WiseMan, never the network): `ScreenScraperEmbedTests` (5), `ScrapeCredentialTests` (+9),
+`ScrapeWindowTests` (+2 for Q42), `CoverChoiceTests` (8), and the options menus' expected entries in
+`DesktopGameOptionsTests`, `ThemedGameOptionsTests` and `ThemedCollectionsTests`. The plan's §28.3 lists what each
+asserts. Thirty-four mutants were run one at a time (§28.4): 30 caught on the first run, 32 after a second round that
+sharpened one test and rewrote one mutant that did not compile; the two survivors were equivalent, and the redundant
+code they exposed was removed.
+
+**Not done.** Nothing ran on the handheld or through a real window manager. No real developer file was ever embedded
+by a test; one publish of Mistress itself with a fake file was made by hand (§28.2). The picker has no thumbnail cache
+shared with the library's, and lists at most 60 games, so a game past the 60th nearest must be searched for.

@@ -30,7 +30,8 @@ namespace EmuSen.Mistress.Views
         private Scraper? _scraper;
         private ScrapeProgress? _scrapeRun;
         private ScrapeChoices _scrapeChoices = new();
-        private bool _developerPresent;
+        private DeveloperOrigin? _developerOrigin;
+        private bool _developerPresent => _developerOrigin is not null;
         private bool _scrapeClosed;
         private bool _scrapeRefreshPosted;
         private int _scrapeGeneration;
@@ -68,7 +69,7 @@ namespace EmuSen.Mistress.Views
                 TitleScreens = _appSettings.ScrapeTitleScreens, Miximages = _appSettings.ScrapeMiximages, Region = _appSettings.ScrapeRegion,
                 Language = _appSettings.ScrapeLanguage, RegionFallback = _appSettings.ScrapeRegionFallback, Threads = Math.Max(1, _appSettings.ScrapeThreads),
             };
-            _developerPresent = DeveloperSource() is not null;
+            _developerOrigin = DeveloperSource()?.Origin;
             _member = MemberAccount.Load();
             if (_mediaStore is null && File.Exists(Path.Combine(MediaStore.DefaultRoot, MediaStore.FileName))) OpenMediaStore();
             ReadScrapeSnapshot();
@@ -111,13 +112,13 @@ namespace EmuSen.Mistress.Views
 
         internal MediaSources MediaSourcesNow() => new(
             (console, title) => _artwork.Find(console, title), MediaStore.DefaultRoot, _appSettings.EsdeMediaDirectory,
-            _appSettings.OpenEmuFallback ? OpenEmuCoverDirectory : null);
+            _appSettings.OpenEmuFallback ? OpenEmuCoverDirectory : null, CoverChoiceOf, CoverChoiceStamp);
 
         // Why ScreenScraper cannot answer a run now, or null when it can.
         private string? ScreenScraperUnusable()
         {
             if (!_appSettings.Scraping) return "it is switched off";
-            if (!_developerPresent) return "EmuSen's developer file is not on this computer";
+            if (!_developerPresent) return DeveloperCredentials.NoneHere;
             if (_scrapeQuota?.Check(out DateTimeOffset? until, out string? why) == QuotaGate.Stopped)
                 return why + (until is { } u ? $", until {u.ToLocalTime():ddd HH:mm}" : "");
             return null;
@@ -457,6 +458,7 @@ namespace EmuSen.Mistress.Views
         private string? GameToScrape => ThemedLibraryShown && LibraryView.IsVisible ? _themed?.SelectedGame?.File : SelectedLibraryEntry?.FullPath;
 
         bool IScrapeHost.HasDeveloperCredentials => _developerPresent;
+        DeveloperOrigin? IScrapeHost.DeveloperOrigin => _developerOrigin;
 
         QuotaSnapshot? IScrapeHost.Quota => _scrapeQuota?.Snapshot();
 

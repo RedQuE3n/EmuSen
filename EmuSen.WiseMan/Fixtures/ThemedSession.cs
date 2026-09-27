@@ -52,6 +52,8 @@ namespace EmuSen.WiseMan.Fixtures
             };
             // The systems alone unless a test turns the automatic collections on, so a carousel test counts only what it means to.
             app.BigPictureCollections.AutoCollections = [];
+            // Games start at once unless a test asks for the launch screen (§4.71), so a test that is not about it need not wait it out.
+            app.BigPictureInterface.LaunchScreenDuration = BigPictureInterface.LaunchDisabled;
             settings?.Invoke(app);
             app.Save();
 

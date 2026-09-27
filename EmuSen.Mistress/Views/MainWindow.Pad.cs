@@ -59,6 +59,14 @@ namespace EmuSen.Mistress.Views
 
         private void PadTick()
         {
+            // The launch screen takes no input, as ES-DE's does not (§4.71).
+            if (LaunchScreenOpen)
+            {
+                _gamepad.Poll();
+                AdvanceLaunchScreen();
+                if (LaunchScreenOpen) _padNavigator.Forget(PadHeld);
+                return;
+            }
             _gamepad.Poll();
             if (!KeyboardSteers() && !_gamepad.IsConnected) return;
             TrackControllers();

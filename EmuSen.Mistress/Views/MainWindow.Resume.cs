@@ -19,12 +19,17 @@ namespace EmuSen.Mistress.Views
         // Runs while a game is on screen, stopped for the library and for pauses - see §4.32.
         private readonly Stopwatch _playClock = new();
 
-        // Every way a game is started from outside it: firmware, then the resume question, then the load.
-        private async Task StartGameAsync(string path, string displayName)
+        // Every way a game is started from outside it: firmware, then the resume question, then from big picture the launch screen (§4.71), then the load.
+        private async Task StartGameAsync(string path, string displayName, BigPicture.Scene.SceneGame? bigPicture = null)
         {
             await PromptForMissingFirmwareAsync(path);
             if (await ChooseResumeAsync(path) is not { } choice) return;
+            if (bigPicture is not null && !await ShowLaunchScreenAsync(bigPicture)) return;
             LoadGame(path, displayName, choice == ResumeChoice.Resume ? ResumeStatePath(path) : null, reset: false);
+            if (bigPicture is null) return;
+            bool failed = _currentRomPath != path;
+            CloseLaunchScreen();
+            if (failed) PadNotice.Show(StatusText.Text ?? $"Failed to load {displayName}");
         }
 
         private string ResumeStatePath(string romPath) => SaveLibrary.ResumeStatePathFor(romPath, _appSettings.StateDirectory);

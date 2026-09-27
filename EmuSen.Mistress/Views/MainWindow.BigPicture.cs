@@ -153,7 +153,7 @@ namespace EmuSen.Mistress.Views
 
         // Whether the themed view is what the pad is steering now: nothing over it, no game on screen.
         private bool ThemedTakesThePad =>
-            ThemedLibraryShown && LibraryView.IsVisible && !_padMenuOpen && OtherWindow() is null && OnScreenKeyboard.OpenOver(this) is null;
+            ThemedLibraryShown && LibraryView.IsVisible && !_padMenuOpen && !LaunchScreenOpen && OtherWindow() is null && OnScreenKeyboard.OpenOver(this) is null;
 
         // Directions go to the view as held and let go, so its own repeats (§14.7) run rather than the navigator's.
         private void ThemedDirections(TimeSpan now)
@@ -185,7 +185,7 @@ namespace EmuSen.Mistress.Views
             switch (command.Action)
             {
                 case ThemedAction.Launch when command.Game is { } game:
-                    await StartGameAsync(game.File, Path.GetFileName(game.File));
+                    await StartGameAsync(game.File, Path.GetFileName(game.File), game);
                     break;
                 case ThemedAction.Favourite when command.Game is { } game:
                     ToggleThemedFavourite(game);
@@ -293,6 +293,7 @@ namespace EmuSen.Mistress.Views
         {
             _themedClosed = true;
             _themedWake?.Stop();
+            CloseLaunchScreen();
             ThemedWakeAt = null;
             _uiSounds?.Dispose();
             _uiSounds = null;

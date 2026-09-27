@@ -25,6 +25,15 @@ namespace EmuSen.Mistress.Views
 
         public static readonly (string Value, string Text)[] ViewChoices = [(BigPictureInterface.ViewSystem, "System view"), (BigPictureInterface.ViewGamelist, "Gamelist view")];
 
+        public static readonly (string Value, string Text)[] LaunchScreenChoices =
+        [
+            (BigPictureInterface.LaunchNormal, "Normal"),
+            (BigPictureInterface.LaunchBrief, "Brief"),
+            (BigPictureInterface.LaunchLong, "Long"),
+            (BigPictureInterface.LaunchPopup, "Popup"),
+            (BigPictureInterface.LaunchDisabled, "Disabled"),
+        ];
+
         private readonly AppSettings _settings;
         private readonly Action _changed;
 
@@ -56,6 +65,8 @@ namespace EmuSen.Mistress.Views
                 Content = Switch("ListScrollOverlay", "Enable quick scrolling overlay", S.ListScrollOverlay, on => S.ListScrollOverlay = on),
             },
             Ui.Header("On Screen"),
+            Choice("LaunchScreenDuration", "Launch Screen Duration", "How long the game's name and marquee (else its cover) show before it starts: Normal 3 s, Brief 1.7 s, Long 4.5 s, as ES-DE measures; Popup, a notice at the top for 1.7 s; Disabled, at once.",
+                LaunchScreenChoices, S.LaunchScreenDuration, v => S.LaunchScreenDuration = v),
             new FieldRow
             {
                 Label = "Clock",

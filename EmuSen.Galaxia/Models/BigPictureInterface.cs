@@ -7,6 +7,10 @@ namespace EmuSen.Galaxia.Models
             QuickSelectShoulders = "shoulders", QuickSelectTriggers = "triggers", QuickSelectLeftRight = "leftright", QuickSelectDisabled = "disabled";
         public const string ViewSystem = "system", ViewGamelist = "gamelist";
         public const string SortRelease = "release", SortFullNames = "fullnames", SortReleaseYear = "releaseyear";
+        public const string LaunchNormal = "normal", LaunchBrief = "brief", LaunchLong = "long", LaunchPopup = "popup", LaunchDisabled = "disabled";
+
+        // ES-DE's LaunchScreenDuration - see EmuSen_Settings_Reference.md §4.71.
+        public string LaunchScreenDuration { get; set; } = LaunchNormal;
 
         public bool DisplayClock { get; set; }
 

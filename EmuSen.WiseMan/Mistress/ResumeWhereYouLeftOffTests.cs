@@ -219,7 +219,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         private Task Starting(MainWindow window) =>
-            (Task)typeof(MainWindow).GetMethod("StartGameAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { _romPath, "Counter.z64" })!;
+            (Task)typeof(MainWindow).GetMethod("StartGameAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object?[] { _romPath, "Counter.z64", null })!;
 
         private MarsCore Saved()
         {

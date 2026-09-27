@@ -43,6 +43,11 @@ namespace EmuSen.Mistress.Input
                 PadKeyboard.Send(keyboard, button);
                 return;
             }
+            if (MenuTextPopup.OpenOver(root) is { } popup)
+            {
+                PadKeyboard.Send(popup, button);
+                return;
+            }
 
             if (window is IPadCapturing capturing && capturing.Capturing != PadCapture.None)
             {
@@ -93,7 +98,8 @@ namespace EmuSen.Mistress.Input
                 {
                     TabControl? tabs = (focused as Visual)?.FindAncestorOfType<TabControl>(includeSelf: true)
                         ?? root.GetVisualDescendants().OfType<TabControl>().FirstOrDefault();
-                    if (open is null && tabs is not null) StepTab(tabs, button == UiButton.PageDown ? 1 : -1, focusHeader: false);
+                    if (open is null && tabs is not null) { StepTab(tabs, button == UiButton.PageDown ? 1 : -1, focusHeader: false); return; }
+                    if (open is null) Page(focused, button == UiButton.PageDown);
                     return;
                 }
 
@@ -231,6 +237,26 @@ namespace EmuSen.Mistress.Input
             return next;
         }
 
+        // L1 and R1 with no tabs: a list's selection a page at a time, else the scrolling area the focus is in by its height - see EmuSen_Settings_Reference.md §4.80.
+        private static void Page(InputElement? focused, bool down)
+        {
+            if (focused is ListBoxItem row && row.FindAncestorOfType<ListBox>() is { ItemCount: > 0 } list && list.IndexFromContainer(row) is >= 0 and var at)
+            {
+                double pitch = System.Math.Max(1, row.Bounds.Height);
+                double view = list.FindDescendantOfType<ScrollViewer>()?.Viewport.Height is > 0 and var v ? v : list.Bounds.Height;
+                int by = System.Math.Max(1, (int)System.Math.Round(view / pitch));
+                int next = System.Math.Clamp(at + (down ? by : -by), 0, list.ItemCount - 1);
+                list.SelectedIndex = next;
+                list.ScrollIntoView(next);
+                TopLevel.GetTopLevel(list)?.UpdateLayout();
+                (list.ContainerFromIndex(next) as InputElement)?.Focus(NavigationMethod.Directional);
+                return;
+            }
+            ScrollViewer? area = focused as ScrollViewer ?? (focused as Visual)?.FindAncestorOfType<ScrollViewer>();
+            if (area is null) return;
+            if (down) area.PageDown(); else area.PageUp();
+        }
+
         // A dropdown moved by one without being opened, which also commits it, as the arrow keys do on a closed one.
         private static void Step(ComboBox combo, int by)
         {
@@ -297,7 +323,7 @@ namespace EmuSen.Mistress.Input
         // True while the router raises a key of its own, which the window must not take for the keyboard's (Q102).
         [ThreadStatic] internal static bool Raising;
 
-        private static void Key(InputElement target, Key key, KeyModifiers modifiers = KeyModifiers.None)
+        internal static void Key(InputElement target, Key key, KeyModifiers modifiers = KeyModifiers.None)
         {
             Raising = true;
             try

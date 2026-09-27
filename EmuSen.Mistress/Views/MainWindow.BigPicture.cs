@@ -153,7 +153,7 @@ namespace EmuSen.Mistress.Views
 
         // Whether the themed view is what the pad is steering now: nothing over it, no game on screen.
         private bool ThemedTakesThePad =>
-            ThemedLibraryShown && LibraryView.IsVisible && !_padMenuOpen && !LaunchScreenOpen && OtherWindow() is null && OnScreenKeyboard.OpenOver(this) is null;
+            ThemedLibraryShown && LibraryView.IsVisible && !_padMenuOpen && !LaunchScreenOpen && OtherWindow() is null && !TextEntryOpen;
 
         // Directions go to the view as held and let go, so its own repeats (§14.7) run rather than the navigator's.
         private void ThemedDirections(TimeSpan now)

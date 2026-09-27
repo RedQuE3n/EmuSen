@@ -5474,6 +5474,193 @@ a plain fact that builds a control or a picture, not a proof that no test works 
   than remove it.
 - The *"Stack empty"* failure of §4.78.2 was seen in two runs of the tool and not traced.
 
+### 4.79 Big picture: lettered help buttons, the editor's help and subtitle, the scroll indicator, and the On-Screen Keyboard setting (2026-09-27)
+
+`EmuSen_BigPicture.md` §40 is the record. Everything here is for big-screen sessions and big picture on the desktop
+(§4.54); the desktop's own windows are unchanged.
+
+#### 4.79.1 What the player sees
+
+**The help bar's buttons are lettered discs**, as ES-DE draws them: a solid disc with the button's letter (A, B, X, Y)
+or, on a PlayStation pad, its shape cut out of it; a solid plus for the d-pad, with small arrows on the arms that do
+something; solid pills for the shoulders and triggers with their names (LB, L1, L, and so on); the middle buttons with
+their marks. They follow Controller Type (§4.61): Automatic draws the family of the pad last pressed. **A pad Mistress
+does not recognise, or no pad at all, is drawn as an Xbox pad**, as ES-DE's default is; the old four-dot diagram is
+gone from big picture. With Button Swap on, the help names the button that now does the job, as before. This is every
+big-screen help bar: the themed view's (so also under the launch screen and the screensaver), the Start menu, Gamelist
+Options, the metadata editor, every settings screen, list screens and message boxes.
+
+**The metadata editor** (§4.72):
+
+- its subtitle is one line, the file and its system: *Aurora Drift (Synthetic).sfc [SNES]*;
+- its help bar says what A does on the focused row, in ES-DE's words: *Select* on a text row, a choice or ScreenScraper's
+  offered name; *Add Half Star* on the rating; *Edit Date* on the date; *Toggle* on a switch; and on the buttons *Scrape*,
+  *Save Metadata*, *Cancel Changes*, *Clear Metadata* and *Hide Game*. Then *Back* (B), *Scrape* (Y), *Reset* (X) while
+  the field holds an edit, *Change* where Left and Right step the row, and *Choose*, up and down on the rows, left and
+  right on the buttons;
+- **A on the rating adds half a star**, and after five stars goes back to none, as in ES-DE.
+
+**A menu whose rows run past its panel shows a pair of chevrons at its title's right**: pointing down while there is
+more below, up while there is more above, both while there is both.
+
+#### 4.79.2 On-Screen Keyboard
+
+*Preferences → Controllers → On-Screen Keyboard*, on the desktop and in big picture, kept in `appsettings.json` as
+`OnScreenKeyboard`. It decides what types into a big-screen text row (a name, a developer, a collection's name):
+
+| Setting | What happens when a text row is chosen |
+|---|---|
+| **Automatic** (the default) | Under Steam, the text popup with a real text field, and Steam's keyboard is asked for. Otherwise, chosen with Enter on a keyboard: the text popup's field, typed into directly. Otherwise, chosen with a controller: EmuSen's own keyboard. |
+| **Steam** | Always the text popup with Steam's keyboard asked for. |
+| **EmuSen's** | Always EmuSen's own keyboard, as before this setting existed. |
+
+"Under Steam" means any of: Steam's Game Mode, a program started by Steam (a non-Steam shortcut included), a Steam
+Deck, or the Steam client running on the desktop.
+
+**The text popup** is titled *Enter <row>*, with the row's text in a field ready to type into. **Enter** or **Start**
+keeps what was typed; **Escape** or **B** leaves the row as it was; **Y** asks for Steam's keyboard again after it has
+been put away. **A does nothing** there, so that a press on Steam's keyboard cannot close it by accident.
+
+**Steam's keyboard** is asked for by opening `steam://open/keyboard`, the way the system opens a link (`xdg-open`, or
+the `steam` command). It types into the window that has the focus, which is Mistress with the field focused. It needs
+the Steam client running; with it closed nothing appears, and the field can still be typed into from a keyboard.
+Steamworks' own text input is not used, because it needs a real Steam game's ID, which a non-Steam shortcut does not
+have.
+
+**EmuSen's own keyboard is unchanged** wherever it is used: the themed view's search, the cheats window, the desktop,
+and every text row when this setting is *EmuSen's*.
+
+#### 4.79.3 What has not been checked
+
+Steam's keyboard was not seen working: the handheld was offline, and the tests never launch anything. What is expected
+there, in Game Mode, is that the keyboard opens over Mistress at the bottom of the screen, that what is typed reaches
+the field, and that the controller goes back to Mistress when it closes (`EmuSen_BigPicture.md` §40.6, P262–P266).
+Until that is checked, *EmuSen's* is the choice that is known to work with a controller.
+
+#### 4.79.4 Tests
+
+`MenusFollowupTests` (§40.7), headless: the choice under every setting with and without Steam, Steam detected from the
+environment, the address asked for exactly and nothing launched, typed text kept on Enter and dropped on Escape or B,
+EmuSen's keyboard still opening with *EmuSen's*, the Preferences row, the subtitle, the help bar's words on every row,
+A on the stars, the scroll indicator's place and pixels, and the filled glyphs in the view and the editor.
+
+### 4.80 Big picture: the other windows in ES-DE's look (2026-09-27)
+
+Decided 2026-09-27 (`EmuSen_BigPicture.md` §10.1):
+
+- the windows need not be converted one for one into ES-DE's menus;
+- what every window keeps is ES-DE's look: its colours, the Barlow Condensed face and the rounded panels;
+- each window gets a layout a controller can use, wherever one can be had;
+- windows that need their own layout keep it and take the look.
+
+This section is the player's account. The plan's record, its predictions, questions and pictures are
+`EmuSen_BigPicture.md` §41, and the toolkit's pieces are LunaP's §196.
+
+**Where it stands.** The look is built as one style layer. Three windows have been checked in it: the scraping status,
+Active Cheats and the Cheat Database. The rest keep the plain sheet until their look is approved (§4.80.6).
+
+#### 4.80.1 What the player sees
+
+In a big-screen session (Game Mode, `--bigscreen`, or Big Picture from the desktop's View menu), those three windows open
+as ES-DE's menus do:
+
+- a wide rounded panel in the middle of the screen, over the screen blurred and darkened;
+- the window's name as the large upper-case title, with a rule under it;
+- one help bar at the bottom with the pad's buttons: *Select*, *Back*, *Tab* where the window has tabs, *Change* where a
+  value steps sideways, and *Choose*.
+
+Inside the panel the controls are drawn in Barlow Condensed and ES-DE's greys:
+
+- **buttons** are outlined boxes with upper-case words, and the focused one is filled black with white words;
+- **a list's chosen row**, or a table's focused row, is the black bar across the list;
+- **text boxes** are dark fields with a white border while they are being typed in;
+- **tabs** are upper-case words, the chosen one underlined;
+- **headings** are upper case, in the title's grey.
+
+Each window keeps what it is for. Its layout changes only where a pad needs it to:
+
+- **Scraping.** The run is on the left and the recent games on the right, so every row can be seen and reached at
+  1280×800. The heading is larger and the buttons are centred.
+- **Active Cheats.** *Save As…* and *Load From…* are not offered, because they open a file dialog a pad cannot drive.
+  *Save* and *Load* use the game's own list and stay. The table's small words are larger. The status line sits above
+  the centred buttons.
+- **Cheat Database.** The panel is wider, 0.8 of the screen. The folder's label is beside its box, and the folder is typed
+  on the on-screen keyboard; *Browse…* is not offered. The two lists are the same width. The licence's attribution is
+  the panel's footer, so it stays in view. The status line sits above the centred buttons.
+
+The desktop's windows are unchanged.
+
+#### 4.80.2 Pad and keyboard
+
+- **B** closes the window, or goes back to the window it was opened from (the database goes back to the cheats).
+- **L1 and R1** turn the tabs, as before. Where a window has no tabs, they now move a list's selection a page at a time,
+  or scroll the area the focus is in. This works in any window the pad drives, not only a framed one.
+- **ES-DE's keys** (§4.52a: the arrows, Enter, Backspace, Page Up and Down, Home and End, F1, F4, Insert) drive a framed
+  window as the pad's buttons do, as they drive the menus (§4.72.7).
+- **Text boxes** are the exception. A focused box keeps the keys it types with: Backspace erases, Left and Right move the
+  caret, Enter is the box's own. Up and Down still move out of it. Typed text goes in as always, and A on a box opens the
+  on-screen keyboard.
+
+#### 4.80.3 How it is built
+
+- **LunaP** (§196) provides the pieces:
+  - `MenuLook`, the look's styles and palette for stock controls, scoped to one element;
+  - `SheetLayer.MenuLook`, which frames a sheet in a `MenuPanel` titled by its window;
+  - `MenuHintsFor`, `MenuFrameFor`, `MenuLook.Hints`, `MenuLook.Footer` and `MenuLook.WidthFraction`.
+- **Mistress** does the rest:
+  - It turns `Sheets.MenuLook` on with big screen. `MenuFrameFor` names the windows checked so far.
+  - `SheetMenuHints` builds the help bar from what the window holds.
+  - Barlow Condensed is also an Avalonia resource, so the stock controls can name it as a font family (resource key
+    `LunaMenuFontFamily`). The menus still draw the same file by its path.
+  - The blurred backdrop, and ES-DE's keys, count a framed sheet as a menu.
+- **What the styles cannot reach**, such as a size a window set on a control itself or a layout that needs a pad, each
+  window changes in `MenuLook.WhenApplied`, which runs once when the window is shown in the look. The desktop never
+  runs it.
+
+#### 4.80.4 A defect found on the way: a list's rows left unbuilt
+
+At 1920×1200 the framed Active Cheats showed one of its two cheats in a table with room for both. The cause was
+measured: the list's own viewport was worked out as 524 by 39 pixels, where the list was 774 by 85. It is Avalonia's,
+for a clipping control directly under a scaled one; LunaP §196.4 has the numbers and the fix. After the fix the viewport
+was 774 by 85 and both rows were built.
+
+**Not fixed:** the plain sheet has the same structure, so a list near the foot of a plain sheet above 1280×800
+may still leave rows unbuilt. That frame now belongs to the controller bindings' overhaul; Q175 asks.
+
+#### 4.80.5 Tests
+
+- **`SheetLookTests`** (WiseMan, headless), eight cases, and **`ScrapeStatusLookTests`**, two:
+  - each of the three windows at 1280×800 and 1920×1200 is framed: centred, titled by its window, blurred behind, its
+    help bar's words as §4.80.1 gives them;
+  - a frame differs from the same frame with the panel made transparent in no pixel outside the panel and the help
+    bar;
+  - every control the pad reaches is at least 40 pixels tall at 800 lines;
+  - a focused button is filled with the bar, and the focused row of the cheats' table is the bar from edge to edge;
+  - *Save As…*, *Load From…* and *Browse…* are gone and *Save* stays; the attribution is the footer; the database's
+    panel is its width share; its status is above its buttons; the recent games are right of the run and all built;
+  - every control of the cheats (each tab) and of the database is reached by the pad, and B backs out of each;
+  - R1 and L1 page a list of 300 games;
+  - ES-DE's keys: typing into the code box, Backspace erasing in it, Right staying in it, Down leaving it, Page Down
+    turning the tab, Backspace closing;
+  - the desktop keeps its own cheats window, with no look and *Save As…* shown, and the controller bindings keep the
+    plain sheet.
+- **LunaP's `MenuLookTests`**: six cases (§196.6).
+- **Mutants and the broad run:** `EmuSen_BigPicture.md` §41.
+
+#### 4.80.6 What it does not do yet
+
+- **The other windows**, until the look of these three is approved:
+  - Find by Name and Use Another Game's Cover;
+  - the gamelist filter and the folder editor;
+  - Graphics Settings and Shaders;
+  - the resume question, the rewind reel and a screenshot;
+  - the theme browser, a theme's detail and its About.
+
+  They keep the plain sheet.
+- **The controller bindings** keep the plain sheet until their own overhaul adopts the look.
+- **A desktop ES-DE look.** The style layer can be switched on for a desktop window with one call (LunaP §196.5); no
+  setting does it.
+- **Hardware.** No real pad, keyboard or handheld was used; everything here ran headless.
 ### 4.81 Controller Bindings: each console's pad drawn, rebound from the drawing, and an input tester (2026-09-27)
 
 Decided 2026-09-27 (`EmuSen_BigPicture.md` §10.1): the Controller Bindings window draws each console's controller as

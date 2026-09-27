@@ -55,6 +55,7 @@ namespace EmuSen.Mistress.Views
         private readonly Button _scrape;
         private MenuPanel? _menu;
         private string? _focusedField;
+        private Control? _focusedControl;
         private bool _filling;
         private bool _waitingForScrape;
         private bool _closed;
@@ -238,22 +239,23 @@ namespace EmuSen.Mistress.Views
             _hints["favourite"] = "";
             _hints["playcount"] = PlayCountHint;
             _hints["playtime"] = PlayTimeHint;
-            rows.AddHandler(GotFocusEvent, (_, e) => { _focusedField = FieldOf(e.Source as Control); _statusFresh = false; ShowFooter(); }, handledEventsToo: true);
+            rows.AddHandler(GotFocusEvent, (_, e) => { _focusedControl = e.Source as Control; _focusedField = FieldOf(_focusedControl); _statusFresh = false; ShowFooter(); }, handledEventsToo: true);
 
             var bar = new StackPanel { Name = "MetadataButtons", Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
             foreach (Button b in buttons) bar.Children.Add(MenuRows.ApplyButton(b, ButtonText));
             // A button describes no field, so the footer lets go of the last one.
-            bar.AddHandler(GotFocusEvent, (_, _) => { _focusedField = null; _statusFresh = false; ShowFooter(); }, handledEventsToo: true);
+            bar.AddHandler(GotFocusEvent, (_, e) => { _focusedControl = e.Source as Control; _focusedField = null; _statusFresh = false; ShowFooter(); }, handledEventsToo: true);
             Content = _menu = new MenuPanel
             {
                 Name = "MetadataMenu",
                 RowPitch = RowPitch,
                 Title = "Edit Metadata",
-                Subtitle = title + "\n" + Path.GetFileName(path),
+                Subtitle = SubtitleOf(path),
+                SubtitleLetterCase = LetterCase.None,
                 FooterMaxLines = 2,
                 FooterSize = 22,
                 HintFamily = family,
-                Hints = Hints(reset: false),
+                Hints = Hints(_hinted = new RowHelp("Select", Sideways: false, Reset: false, OnButtons: false)),
                 Child = new ScrollViewer { Content = rows, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden },
                 Buttons = bar,
             };
@@ -265,16 +267,49 @@ namespace EmuSen.Mistress.Views
             };
         }
 
-        // ES-DE's help in the editor: Y scrapes, A chooses, B leaves, the pad moves and changes.
-        private static IReadOnlyList<HintEntry> Hints(bool reset) =>
+        // ES-DE's one line under the editor's title: the file's name and its system in brackets (Q105).
+        public static string SubtitleOf(string path) =>
+            EmuSen.Cores.CoreCatalog.ShelfByName(new EmuSen.Mistress.Library.RomEntry(path).Shelf)?.EsdeSystem is { Length: > 0 } system
+                ? $"{Path.GetFileName(path)} [{system.ToUpperInvariant()}]"
+                : Path.GetFileName(path);
+
+        // What the help bar says for the focused row: A's word, whether Left and Right change it, whether West resets it, and whether the focus is on the buttons.
+        private sealed record RowHelp(string Accept, bool Sideways, bool Reset, bool OnButtons);
+
+        private RowHelp? _hinted;
+
+        // ES-DE's help in the editor, in its order, A's word following the focused row as ES-DE's does (Q106, §4.79).
+        private static IReadOnlyList<HintEntry> Hints(RowHelp help) =>
         [
-            new("Scrape") { Button = PadGlyphButton.North },
-            .. reset ? [new HintEntry("Reset") { Button = PadGlyphButton.West }] : Array.Empty<HintEntry>(),
-            new("Select") { Button = PadHints.Swapped ? PadGlyphButton.East : PadGlyphButton.South },
+            new(help.Accept) { Button = PadHints.Swapped ? PadGlyphButton.East : PadGlyphButton.South },
             new("Back") { Button = PadHints.Swapped ? PadGlyphButton.South : PadGlyphButton.East },
-            new("Change") { Button = PadGlyphButton.DPadLeftRight },
-            new("Choose") { Button = PadGlyphButton.DPadUpDown },
+            new("Scrape") { Button = PadGlyphButton.North },
+            .. help.Reset ? [new HintEntry("Reset") { Button = PadGlyphButton.West }] : Array.Empty<HintEntry>(),
+            .. help.Sideways ? [new HintEntry("Change") { Button = PadGlyphButton.DPadLeftRight }] : Array.Empty<HintEntry>(),
+            new("Choose") { Button = help.OnButtons ? PadGlyphButton.DPadLeftRight : PadGlyphButton.DPadUpDown },
         ];
+
+        // A's word for a control, in ES-DE's words where Mistress's action is ES-DE's, measured on its editor (§40.3).
+        internal static string AcceptWord(Control? focused) => focused switch
+        {
+            RatingPicker => "Add Half Star",
+            DateStepper => "Edit Date",
+            ToggleSwitch => "Toggle",
+            Button { Name: "MetadataScrape" } => "Scrape",
+            Button { Name: "MetadataSave" } => "Save Metadata",
+            Button { Name: "MetadataCancel" } => "Cancel Changes",
+            Button { Name: "MetadataClear" } => "Clear Metadata",
+            Button { Name: "MetadataHide" } => "Hide Game",
+            _ => "Select",
+        };
+
+        // The help the focused control asks for now.
+        private RowHelp HelpNow()
+        {
+            bool onButtons = _focusedControl is Button b && b.Parent is StackPanel { Name: "MetadataButtons" };
+            bool reset = _focusedField is { } focused && CanReset(focused);
+            return new RowHelp(AcceptWord(_focusedControl), _focusedControl is RatingPicker or DateStepper or ComboBox, reset, onButtons);
+        }
 
         // A field's row; its Reset is the pad's West, not a button beside it.
         private Control Line(MetadataField field)
@@ -356,11 +391,9 @@ namespace EmuSen.Mistress.Views
             _menu.Footer = _statusFresh && Status is { Length: > 0 } status ? status
                 : _focusedField is { } field ? $"{LabelOf(field)}: {(HintOf(field) is { Length: > 0 } hint ? hint : "Not set.")}"
                 : null;
-            bool reset = _focusedField is { } focused && CanReset(focused);
-            if (reset != _resetHinted) _menu.Hints = Hints(_resetHinted = reset);
+            RowHelp help = HelpNow();
+            if (help != _hinted) _menu.Hints = Hints(_hinted = help);
         }
-
-        private bool _resetHinted;
 
         // A choice with nothing to choose for this game is shown and not enabled, as ES-DE greys out its alternative emulator row.
         private Dropdown ChoiceBox(MetadataField field)
@@ -575,6 +608,10 @@ namespace EmuSen.Mistress.Views
                     return true;
                 case UiButton.Back:
                     _ = LeaveAsync();
+                    return true;
+                // A on the stars adds half a star, and past five starts again from none, as ES-DE's Add Half Star (§40.3).
+                case UiButton.Accept when _big && _focusedControl is RatingPicker { IsFocused: true } stars:
+                    PadWindowRouter.Key(stars, stars.Value >= 0.999 ? Avalonia.Input.Key.Home : Avalonia.Input.Key.Right);
                     return true;
                 default:
                     return false;

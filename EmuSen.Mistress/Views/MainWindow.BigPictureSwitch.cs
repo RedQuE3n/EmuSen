@@ -64,6 +64,8 @@ namespace EmuSen.Mistress.Views
 
             // One window on screen in a big-screen session, so the others are drawn inside this one - see EmuSen_Settings_Reference.md §4.45.2.
             Sheets.PresentsWindows = on;
+            // A sheet that draws no menu of its own is framed as one, its controls in ES-DE's look - see EmuSen_Settings_Reference.md §4.80.
+            Sheets.MenuLook = on;
             EmbeddedPopups.SetIsEnabled(this, on);
             ApplyBigMenuLook(on);
 
@@ -105,7 +107,7 @@ namespace EmuSen.Mistress.Views
         // Esc leaves only where it has nothing else to do: the library showing, no game behind it, nothing over it.
         private bool EscapeLeavesBigPicture =>
             _bigScreen && LibraryView.IsVisible && _session is not { IsRomLoaded: true } && !_padMenuOpen && !Sheets.IsPresenting
-            && OnScreenKeyboard.OpenOver(this) is null;
+            && !TextEntryOpen;
 
         private DesktopPlace DesktopPlaceNow() =>
             new(SelectedConsole, LibraryFilter.SearchText, LibraryList.Selected?.FullPath);

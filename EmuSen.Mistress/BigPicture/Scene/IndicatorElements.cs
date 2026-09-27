@@ -95,6 +95,8 @@ namespace EmuSen.Mistress.BigPicture.Scene
             {
                 Entries = hints,
                 PadFamily = b.Data.Family,
+                // Letter-labelled discs, as ES-DE draws its help, not the outlined set (§40.1).
+                GlyphStyle = PadGlyphStyle.Filled,
                 FontPath = ImageElements.Existing(e.Path("fontPath")),
                 FontSize = SceneUnits.Px(e.Float("fontSize") ?? 0.035f, b.H),
                 EntryScale = e.Float("entryRelativeScale") ?? 1,

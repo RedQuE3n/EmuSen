@@ -86,7 +86,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             MenuPanel menu = Menu(editor);
             Assert.Equal("Edit Metadata", menu.Title);
             Assert.Equal(EmuSen.LunaP.Media.LetterCase.Upper, menu.LetterCase);
-            Assert.Equal(ThemedSession.SnesGames[0] + "\n" + ThemedSession.SnesGames[0] + ".sfc", menu.Subtitle);
+            // ES-DE's one line under the title: the file and its system (Q105).
+            Assert.Equal(ThemedSession.SnesGames[0] + ".sfc [SNES]", menu.Subtitle);
+            Assert.Equal(EmuSen.LunaP.Media.LetterCase.None, menu.SubtitleLetterCase);
             Rect panel = EsdeMenusTests.InWindow(menu, menu.PanelBounds, s.Window);
             EsdeMenusTests.AssertCentred(panel, s.Window.GetControl<Control>("ScreenContent").Bounds.Size);
 

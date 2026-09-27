@@ -1138,12 +1138,17 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   - **Q45** (*Use Another Game's Cover…*) is built as a replacement that stands on its own.
   - **Q44** no longer applies: the fallback is not switched off after pass 8.
   - **Q40,** the embedded credentials, is unaffected.
+- **Q160–Q165, Q170–Q178 and Q180–Q185, decided 2026-09-27; every recommendation accepted:**
+  - **§40:** **Q160:** the swap setting trades X/Y as well as A/B, as ES-DE's does. **Q161:** the Nintendo family keeps lettering by position. **Q162:** "Clear Metadata" and "Hide Game" stay. **Q163:** text rows say "Select". **Q164:** the themed search follows the On-Screen Keyboard setting. **Q165:** a text row chosen with Enter on a physical keyboard gets the field alone, without Steam's keyboard.
+  - **§41 (the window look), approved with its checkpoint:** **Q170:** the Cheat Database's introduction moves into the footer. **Q171:** body text stays at 24 design pixels. **Q172:** capitals for buttons, tabs and headings only. **Q173:** file-dialog buttons stay hidden on sheets. **Q174:** one glyph for the L1/R1 pair. **Q175:** the plain frame's viewport is fixed too. **Q176:** a focused text box keeps Backspace and the arrows. **Q177:** the scraping status collapses its empty picture slot. **Q178:** focusing a Cheat Database row selects it. Also: lines cut at the panel's edge, such as the scraping status's recent games, end in an ellipsis.
+  - **§42 (the bindings window), approved with its checkpoint:** leader lines no longer cross the drawing (each label sits on its button's side), and the N64's Z gets a default pad button, the left trigger. **Q180:** Test Buttons stays. **Q181:** only player 1's pad lights the drawing. **Q182:** one capture takes a key or a pad button. **Q183:** the SNES face buttons keep the Super Famicom colours. **Q184:** big-screen space is decided once the window look lands. **Q185:** the General tab gains the generic pad as a raw tester beside the deadzone slider.
 - **The controller bindings window, decided 2026-09-27:** it is overhauled. Each console's controller is drawn as vector art, with the bindings mapped onto its buttons, and a button pressed on the pad or keyboard lights up on the drawing, so the window doubles as an input tester. The drawings are EmuSen's own, not copied from any emulator or maker.
 - **The look of every window, decided 2026-09-27:** the menus need not be converted one-for-one with ES-DE's. What is kept is ES-DE's look (its colours, the Barlow Condensed face, the rounded panels) and a controller-friendly layout wherever one can be had. Windows that need their own layout, such as the ScreenScraper windows, the cheats window and the controller bindings, keep it and take the look.
 - **Q105–Q109 and the help bar, decided 2026-09-27 (§34):**
   - **The help bar:** letter-labelled button glyphs, as ES-DE draws them, following the controller type in use, replacing the four-button diagram.
   - **Q105:** the editor's subtitle is ES-DE's one line, the file name and its system. **Q106:** the editor's help bar changes per row, as ES-DE's does. **Q107:** `MenuPanel` shows ES-DE's scroll indicator when its rows overflow. **Q108:** leaving the editor returns to the gamelist, as now.
   - **Q109, changed:** text entry uses the device's own on-screen keyboard. Under Steam (SteamOS Game Mode, or Desktop Mode with Steam running) Mistress focuses a real text field and asks Steam for its keyboard through `steam://open/keyboard`. Steamworks' `ShowFloatingGamepadTextInput` needs a real Steam app ID, which a non-Steam shortcut does not have. Mistress's own keyboard stays as a fallback, chosen in Preferences (Automatic, Steam, EmuSen's).
+  - *Built on 2026-09-27 (§40; settings reference §4.79). Steam's keyboard is not yet checked on the handheld (P262–P266); Q160–Q165 are §40.12's.*
 - **Q100–Q104, Q120–Q122 and Q130–Q132, decided 2026-09-27; every recommendation accepted:**
   - **Stage 2's metadata editor (§34):** the look is approved. **Q100:** an ES-DE text popup is built with the rest of stage 2, and the on-screen keyboard's Shift and Done keys are widened meanwhile. **Q101:** Reset moves to a pad button (X), shown in the help bar. **Q102:** ES-DE's keyboard keys drive the big-screen menus as pad buttons do. **Q103:** the desktop editor keeps the Hide metadata fields switch. **Q104:** ES-DE's own metadata editor is captured and the proportions checked against it. Also: the Hide from Library question no longer names ES-DE, and long controller names use a short form.
   - **Pass 14 (§36):** items 1 and 2 are approved. "1 GAMES" becomes "1 GAME", and the Bluetooth indicator draws its symbol rather than the letter B. **Q120:** the carousel's `selectedItemMargins` and `lineSpacing` come next, then `gamelistinfo`, then `animation`. **Q121:** Mistress shows its own word where ES-DE writes "unknown", through Pass 5's text lookup. **Q122:** ES-DE's default help bar is measured and drawn for a theme that has none.
@@ -9301,6 +9306,558 @@ WiseMan then moved to b57f224e (menus stage 2, §34) and `openemu-library` to 69
 merged, the only conflict LunaP's README count, and both runs were repeated: **1,434 tests, 1,392 passed, 42 skipped,
 none failed, in 4 min 19 s**; LunaP 1,428, all passed.
 
+## 40. The menus' follow-ups: lettered help glyphs, Q105 to Q107, and the device's own keyboard (Q109) (2026-09-27)
+
+*Built on branch `bigpicture-menus-followups`, from WiseMan at `758e81bb`; LunaP on `menus-followups`, from
+`openemu-library` at `18413c7`.* §10.1 records the decisions of 2026-09-27 on §34.22's questions: letter-labelled help
+glyphs as ES-DE draws them, following the controller type in use; the editor's one-line subtitle (Q105); per-row help
+(Q106); the scroll indicator (Q107); leaving the editor for the gamelist, unchanged (Q108); and the device's own
+on-screen keyboard, Mistress's staying as a fallback (Q109). The player's account is §4.79 of the settings reference;
+LunaP's record of its pieces is its §195.
+
+**Direction, clarified 2026-09-27.** The menus are not converted one-for-one with ES-DE. What is kept is ES-DE's look
+(its colours, Barlow Condensed, the rounded panels) and controller-friendliness. Where one of these items would force
+ES-DE's structure on a window that needs its own layout, the window keeps its layout and takes the look only; the
+complex windows (scraping, cheats, controller bindings) are restyled separately. None of this section's items needed a
+window's layout changed.
+
+**Numbering.** Predictions from P260, questions from Q160; both ranges were free in the tree when this began.
+
+**Sources.** ES-DE 3.4.1 was run on 2026-09-27 in a scratch home of its own (`~/.cache/emusen/bigpicture/esde/home-followups`)
+on empty synthetic ROM files, driven by §22.2's uinput pad from a timeline, every run under the shared lock
+`~/.cache/emusen/bigpicture/esde/esde.lock` and its whole process tree killed after. The runner and its timelines are
+`~/.cache/emusen/probe/menus-followups/esde/`, the captures under its `captures/`: `editor-rows` (every row of the
+editor and every button, 29 pictures), `family-<type>` for each of ES-DE's seven controller types (`xbox`, `xbox360`,
+`ps123`, `ps4`, `ps5`, `switchpro`, `snes`) and two with its swap on, and `rating-wrap`. §34.12's captures were
+measured again for the scroll indicator. The measurements are pixel scans of those pictures. No image, font or colour
+table of ES-DE's was copied or traced into the tree.
+
+### 40.1 The help glyphs, measured
+
+| Measured at 1280×800 | ES-DE |
+|---|---|
+| a face button | a solid disc 22 px across with its letter or shape cut out, centred on the label's capitals |
+| a label's capitals | 18 px |
+| glyph to its label | 7 px |
+| a label to the next glyph | 12 px |
+| the d-pad | a solid plus, small arrows at the tips of the arms the entry moves along |
+| shoulders and triggers | solid pills lettered LB, RB, LT, RT (L1, R1, L2, R2 on the PlayStation types) |
+| Start and Select | per type: Xbox a disc with three lines and one with two squares; Xbox 360 discs with arrows; PlayStation 1/2/3 and SNES the words SELECT and START over small shapes; PlayStation 4 SHARE and OPTIONS; PlayStation 5 a burst and three lines; Switch Pro a minus and a plus |
+| a thumbstick click (Random) | a ring with a dot and four small arrows, not filled |
+
+Two findings the design turned on:
+
+- **The letters follow the type, and one type letters by function.** SNES letters by position: its Select is B, its
+  Back A. **Switch Pro letters as Xbox does**: its Select is A, although a Switch Pro's A is its right-hand button.
+  Mistress's Nintendo family letters by position, as SDL 3 reports the buttons and as Mistress's pad routing reads
+  them, which is the SNES type's rule (Q161).
+- **ES-DE's swap trades both pairs.** With `InputSwapButtons` on, Xbox's Select shows B, Back A, View Media Y and
+  Favorites X. Mistress's swap (§4.61) trades A and B only, and its help follows what it swaps (Q160).
+
+**What was built.** LunaP's `PadGlyphStyle.Filled` (its §195.1): each button a solid disc, pill, plus or shoulder with
+its letter, symbol or mark cut out, the disc 0.425 of the glyph's square, so 22 px beside a menu's 26-pixel help text.
+The families stay Mistress's four (Xbox, PlayStation, Nintendo, and Generic for an unknown pad), with their own
+geometry for Start and Select; ES-DE's seven types were measured to decide what tells the families apart, not to copy
+their marks. **An unknown pad is lettered as an Xbox pad**, ES-DE's default type: the four-dot diagram was the one set
+ES-DE never shows. The filled set is drawn in every big-screen help bar: `MenuPanel`'s by default (the Start menu,
+Gamelist Options, the editor, every settings screen, the list screen, a message box), and the themed view's help
+element (`IndicatorElements.Help`), which is also the help bar under the launch screen and the screensaver. The desktop
+is unchanged. `HelpFamily` and `SwapPadButtons` still choose the family and which button is named.
+
+### 40.2 Q105: the subtitle
+
+ES-DE's editor has one line under its title, the file's name and its system in brackets, in its own case
+(`editor-rows/e00.png`: *Aurora Drift (Synthetic).sfc [SNES]*). `MetadataEditorWindow.SubtitleOf` gives the same from the
+shelf's ES-DE system name, upper-cased; a file of no known shelf shows its name alone. The subtitle is no longer
+upper-cased. With one line the title band is 139 design pixels, §34.12's measure.
+
+### 40.3 Q106: the help bar per row, in ES-DE's words
+
+Read off `editor-rows`, one picture per focused row and per button:
+
+| Focused | ES-DE's A | Mistress's A | Also shown |
+|---|---|---|---|
+| a text row (Name, Sortname, Description, Developer, Publisher, Genre, Players, Times played, Play time) | Select | Select | |
+| Rating | Add Half Star | Add Half Star | Change (Left and Right step it) |
+| Release date | Edit Date | Edit Date | Change |
+| a switch (Favorite to Hide metadata fields) | Toggle | Toggle | |
+| Controller, Alternative emulator | Select | Select | Change |
+| Scrape | Scrape | Scrape | |
+| Save | Save Metadata | Save Metadata | |
+| Cancel | Cancel Changes | Cancel Changes | |
+| Clear | Clear File | **Clear Metadata** | |
+| Delete / Hide from Library… | Delete Game | **Hide Game** | |
+
+B is *Back* and Y *Scrape* throughout, in that order after A; the d-pad's *Choose* is up and down on the rows and left
+and right on the buttons. Mistress adds *Reset* on West after *Scrape* while the focused field holds an edit (Q101), and
+*Change* on the rows Left and Right step, since those rows answer them; ES-DE shows neither.
+
+Two words differ on purpose. *Clear File* would say that a file is touched, and Mistress never touches a game's file:
+its Clear removes edits and scraped text, and its own question is titled *Clear Metadata*. *Delete Game* names what
+Mistress does not do; its button is *Hide from Library…*, so its A is *Hide Game* (Q162). The request's example for a
+text row was *Edit*; ES-DE was measured to say *Select*, and Mistress follows the measurement (Q163).
+
+**A on the stars.** *Add Half Star* named an action Mistress's A did not have: the stars stepped with Left and Right
+only. ES-DE was measured pressing A eleven times on an empty rating (`rating-wrap/r00`–`r11`): half a star each press,
+five stars at the tenth, none at the eleventh. Mistress's A now does the same, through the router's own key, so the
+window's keyboard handler does not take it for the player's Right (§34.11's defect).
+
+### 40.4 Q107: the scroll indicator
+
+Measured on `editor-1280/g02`, `g06` and `g08` and `menus-1280/m01` (§34.12's captures):
+
+- two chevrons in a square 25 px on a side, a round-capped stroke about 3.4 px, the arms about 42° from level;
+- the lower square when rows are below, the upper when rows are above, both when both;
+- the squares' right edge 11 px inside the panel's (x 1048 against 1059), the two 7 px apart;
+- the pair centred on the title's capitals: 126.5 against 128 in the editor, 154.5 against 154.5 in UI Settings;
+- the grey of the menu's secondary text (112 of 255 on ES-DE's dark panel).
+
+LunaP's `MenuPanel` draws it (its §195.2) from those numbers scaled from 800 lines, in its own grey (#747478). It
+watches a `ScrollViewer` child, or the scroller a list's template holds, so every big-screen menu gets it with no change
+to the menu: the editor, Gamelist Options, every settings screen, the list screen, and the Start menu, whose entries
+run past the panel at 800 lines.
+
+### 40.5 Q109: the device's own keyboard
+
+**What was found about `steam://open/keyboard`, 2026-09-27.** There is no public documentation of the address. What
+was established:
+
+- Valve's issue tracker uses it as a plain command, `steam steam://open/keyboard`, with no parameters
+  (ValveSoftware/steam-for-linux issue 11404), and reports that repeated requests while Steam's own menus are open take
+  the pad's focus from them.
+- The Steam client installed on the desktop (its `steamui` script, read on 2026-09-27) shows how a keyboard request is
+  handled: a request carries an app id, a flag for Enter closing the keyboard, and a text field's rectangle. A request
+  with app id 0 passes the check that it belongs to the running game. Unless it came from the Steam+X chord, a window
+  shows the keyboard only while its route is the running game's, so in Game Mode it should open only while Mistress is
+  the game in front. Under gamescope the keyboard is Game Mode's own screen; on a desktop it is a floating window.
+- No parameter for position or size was found: the client's strings name none for the address, and the rectangle is
+  filled from Steamworks' own call. **The address is used with no parameters.**
+- It types into whichever window has the focus. Mistress therefore focuses the field first, then asks.
+- Steamworks' `ShowFloatingGamepadTextInput` was not used: it needs a real Steam app ID, which a non-Steam shortcut
+  does not have, and no borrowed ID is used.
+
+**What was built.**
+
+- A big-screen text row chosen (A on a pad, Enter on a keyboard) opens **`MenuTextPopup`** (LunaP §195.3): the text
+  popup of §34.16 whose bar is a real, focused `TextBox`, titled *Enter <row>*. Enter keeps the text and Escape drops it,
+  as before; on a pad Start keeps it, B drops it, and Y asks Steam again for a keyboard put away. A is not taken, since
+  with Steam's keyboard on screen an A may be the keyboard's own press.
+- **Which keyboard** is `DeviceKeyboard.Choose`: the setting, whether Steam is there, and whether a pad chose the row.
+  Automatic gives Steam's keyboard under Steam; else the field alone when the row was chosen from a keyboard; else
+  Mistress's keyboard. *Steam* always asks Steam; *EmuSen's* is always Mistress's keyboard.
+- **Under Steam** is `DeviceKeyboard.UnderSteam`: Game Mode's session (`InGameModeSession`, reused), a process Steam
+  launched (`SteamGameId`, `SteamAppId`, `STEAM_COMPAT_APP_ID`, `STEAM_COMPAT_DATA_PATH`,
+  `STEAM_COMPAT_CLIENT_INSTALL_PATH`), `SteamDeck=1`, or a Steam client running, checked with `pgrep -x steam`.
+- **Asking** is `PlatformUrlLauncher`: `xdg-open steam://open/keyboard`, and `steam steam://open/keyboard` if `xdg-open`
+  is missing or fails quickly; the shell elsewhere. It runs off the interface's thread.
+- **Which device chose the row**: a row chosen while the keyboard's Enter is held was chosen from the keyboard; any
+  other from a pad.
+- **The keys**: while the popup is open the window's keyboard handler leaves typed keys to the field (the rule of
+  §4.17), and a steering key let go is released whatever has the focus, since the popup takes the focus on Enter's press.
+- **Mistress's keyboard is unchanged** where it is used: every text box that is not a big-screen row (the themed search,
+  the cheats window, the desktop), and every row with *EmuSen's*, or with Automatic and a pad off Steam (Q164).
+
+**The harness never launches anything.** A module initialiser in WiseMan (`NoSteam`, beside §17's `NoNetwork`) gives
+every window an empty environment, no running Steam, and a launcher that records the address and opens nothing. The
+desktop these tests run on has Steam running, so without it Automatic would have chosen Steam in every test.
+
+### 40.6 Predictions
+
+| # | Predicted | Found | Verdict |
+|---|---|---|---|
+| P260 | *(written before the mutants)* Of 40 mutants, at least nine in ten are caught on their first valid run | 37 of 40 (92.5%) (§40.8) | held |
+| P261 | *(written before the mutants)* The likeliest survivors are L11 (no redraw on scrolling, since the harness redraws every frame it captures) and L12 (the lower pair pointing up, since the pixel counts do not look at direction) | both survived; F20, not named, survived too (§40.8) | held for the two it named |
+| P262 | *(for the handheld)* In Game Mode, with Mistress launched as a non-Steam shortcut, `steam://open/keyboard` opens Game Mode's keyboard over Mistress | not checked | owed |
+| P263 | *(for the handheld)* It takes the lower part of the screen, and the popup's field, centred at about 380 of 800 lines, stays above it | not checked | owed |
+| P264 | *(for the handheld)* What is typed on it arrives in the focused field, and its Enter closes the popup with the text kept | not checked | owed |
+| P265 | *(for the handheld)* While it is open the pad drives Steam's keyboard and not Mistress; once it closes, Mistress has the pad again | not checked | owed |
+| P266 | *(for the handheld)* In Desktop Mode with Steam running, the same address opens a floating keyboard that types into Mistress's focused window | not checked | owed |
+| P267 | *(written before the broad run)* The broad Mistress run, after merging WiseMan, fails on nothing this branch causes | 1,449 tests, none failed (§40.10) | held; one run is weak evidence against an intermittent failure |
+
+The handheld was offline, and nothing here ran on it. P262–P266 are what to look at there, in that order; each is a
+prediction, not a result.
+
+### 40.7 Tests
+
+`MenusFollowupTests`, 26 cases, all headless:
+
+- the choice of keyboard for every setting, Steam or not, pad or keyboard (ten rows), and Steam detected from Game
+  Mode's desktop name, `SteamDeck=1`, `SteamGameId`, `SteamAppId`, the Proton variables and a running client, and not
+  from a desktop without them or from an empty variable;
+- the harness sees no Steam and launches nothing;
+- Enter on a text row with no pad opens the popup with its field focused; typed keys reach the field (Backspace erases
+  rather than leaving); Enter keeps the text in the row and the draft; nothing is asked of Steam; the next Down moves
+  at once;
+- Escape drops what was typed and leaves the editor and big picture where they were;
+- with *Steam*, A asks for exactly `steam://open/keyboard`, typed text arrives, A is not taken, Y asks again, Start
+  keeps, B drops;
+- *EmuSen's* opens Mistress's keyboard from a pad and from Enter, and asks nothing; Automatic with a pad and no Steam
+  opens Mistress's keyboard;
+- Preferences' Controllers screen has the row, as an option row with its three choices, and stores each;
+- the subtitle for SNES, NES, a Game Boy file and an unknown file;
+- the help bar's words, order and buttons on every kind of row and every button, and Reset added after Scrape;
+- A on the stars: half a star, five at the tenth press, none at the eleventh;
+- the scroll indicator in the editor at both sizes: down at the top, both in the middle, up at the end, placed as
+  measured, and every pixel it changes inside its squares;
+- the indicator on Theme Settings' Interface screen, none on Preferences' first, and the Start menu's through its list;
+- the help bars filled in the themed view and the editor at both sizes: the A glyph's square at least 30% ink and more
+  than twice what the outlined set drew.
+
+Existing tests changed: `MetadataEditorLayoutTests` reads the one-line subtitle; `ThemedLibraryHostTests`' family case
+expects no change of pixels from Generic to Xbox, which are now the same drawing. LunaP's `MenuFollowupTests` adds
+eleven cases (its §195.4).
+
+### 40.8 Mutants
+
+Forty mutants, one at a time, by `~/.cache/emusen/probe/menus-followups/mutate.py`: the state file before each mutant,
+the leftover restored at start, every restored file touched (§32.5's trap). Twenty-five are in Mistress, run against
+`MenusFollowupTests`, `MetadataEditorLayoutTests`, `ThemedLibraryHostTests`, `ThemedGameOptionsTests` and
+`EsdeSettingsMenusTests`; fifteen in LunaP, against its `MenuFollowupTests`, `PadGlyphTests` and `MenuTests`.
+
+| # | Rule broken | Result |
+|---|---|---|
+| F1 | the themed view's help outlined | caught by 2 |
+| F2, F3 | the subtitle's system in lower case; the subtitle upper-cased | caught |
+| F4–F9 | the stars' A called *Select*; a switch's called *Select*; Save's called *Save*; *Choose* up and down on the buttons; *Change* never offered; the help bar changed only for Reset | caught, each by the words case |
+| F10, F11 | A on the stars does nothing; the stars not starting again past five | caught |
+| F12, F13 | Steam never asked; another address | caught |
+| F14–F18 | Automatic ignoring the pad; ignoring Steam; `SteamGameId` not read; a running client not counted; every row taken as chosen by a pad | caught; F14 by ten |
+| F19 | the popup's keys taken by the menu | caught by 2 |
+| F20 | a steering key's release lost under the popup | **survived**; caught once the case was strengthened |
+| F21–F23 | the router passing the popup by; B not cancelling; Y not asking again | caught |
+| F24, F25 | the *EmuSen's* setting ignored; the setting not stored | caught |
+| L1–L10, L13–L15 | LunaP (its §195.4) | caught |
+| L11, L12 | no redraw on scrolling; the lower pair pointing up | **survived**; caught once the cases were added |
+
+**37 of 40 caught on the first valid run (92.5%)**, so P260 held. P261 named L11 and L12 as the likeliest survivors, and
+both survived, for the reasons given; it did not name F20, which also survived. F20 left Enter held in the window's
+steering keys when it was let go under the popup; the next press of Enter, after the popup closed, let it go again, so
+every case still passed. The Escape case now presses Enter a second time after Escape and requires the popup to open;
+with F20 it does not. L11 and L12 are LunaP's (its §195.4). Rerun alone after the changes, all three were caught, each
+by the case written for it.
+
+### 40.9 Pictures
+
+In `~/.cache/emusen/bigpicture/png/menus-followups/`, from `MenusFollowupPictureTool` (`EMUSEN_BIGPICTURE_PNG=1`). For
+each of `synthetic` and `artbooknext`, at each of `1280x800` and `1920x1200`:
+
+- `-gamelist`, and `-gamelist-xbox`, `-playstation`, `-nintendo`, `-generic` and `-xbox-swapped`, the help bar in each
+  family by the Controller Type setting;
+- `-start-menu`, its lower chevrons, and `-start-menu-last`, the last entry and the upper ones;
+- `-editor`, the one-line subtitle and *Select*; `-editor-rating` after three presses of A (*Add Half Star*, *Reset*,
+  *Change*); `-editor-switch` (*Toggle*); `-editor-scrolled` and `-editor-lower` with both pairs; `-editor-bottom`
+  scrolled to the end, the upper pair alone; `-editor-buttons` (*Save Metadata*, Choose left and right);
+- `-editor-field`, the text popup with *Halcyon Works* typed from the keyboard; `-editor-steam`, the popup as Steam's
+  keyboard would type into it, with its line of pad buttons;
+- `-interface`, Theme Settings' Interface screen and its chevrons.
+
+`glyph-sheet.png` is every button of every family, filled and outlined, at 44 px. Three side-by-sides against ES-DE at
+1280 by 800: `side-by-side-help-bar.png` (the editor's help on three rows, the gamelist's in four types and swapped),
+`side-by-side-scroll-indicator.png` (the title's right, three times, at the editor's top, middle and end and on UI
+Settings against Interface), and `side-by-side-editor.png`. Every picture was looked at. What they show that is not a
+defect:
+
+- Art Book Next's own help element lists three entries (Options, Menu, Launch), so its gamelist pictures show those
+  alone.
+- At 22 px the d-pad's up-and-down and left-and-right glyphs differ only at the arms' tips, as ES-DE's do.
+- The popup's field is drawn in the application's typeface, not Barlow Condensed (LunaP §195.3).
+- ES-DE's *Choose* on the editor's buttons is a left-and-right d-pad, and so is Mistress's.
+
+### 40.10 The broad run
+
+WiseMan was merged at `2a317145` before the run (it brought §4.78's headless-test guard, `OffDispatcherTests`, which
+passes with this branch's tests); LunaP's `openemu-library` had not moved from `18413c7`. One run of the Mistress
+filter without any shader, GPU, Vulkan or bench test, under `nice -n 10`, on the final build of both branches:
+**1,449 tests, 1,405 passed, 44 skipped (the picture, survey, bench and live tools, this section's picture tool among
+them), none failed, in 4 min 22 s.** P267 held; one run is weak evidence against an intermittent failure. LunaP's whole
+suite on its branch: **1,442 tests, all passed**.
+
+### 40.11 Not done
+
+- **Anything on the handheld.** Steam's keyboard was never seen: P262–P266 are owed, and until they are checked
+  *EmuSen's* is the choice known to work with a pad.
+- The themed view's search box and the cheats window keep Mistress's keyboard in every mode (Q164).
+- The popup's field is drawn in the application's typeface (LunaP §195.3).
+- ES-DE's X/Y swap (Q160) and its Switch Pro lettering (Q161) are recorded, not followed.
+- ES-DE's own text popup's help (*Apply*, *Backspace* on L, *Space* on R, *First* and *Last* on the triggers, *Move
+  Cursor*; `rating-wrap/p00_popup.png`) belongs to its keyboard, which Mistress's popup has none of; the popup's line
+  names the keys it does take.
+
+### 40.12 Open questions
+
+- **Q160, the swap.** ES-DE's swap trades X and Y as well as A and B; Mistress's trades A and B only, so under the swap
+  its help names Y for Favourite where ES-DE's names X. **Recommendation:** match ES-DE, both pairs, since the swap
+  exists for a Nintendo layout, whose X and Y are also reversed; the help follows by itself.
+- **Q161, Nintendo's letters.** ES-DE letters a Switch Pro as SDL 2 reports its printed labels (Select on A) and a SNES
+  pad by position (Select on B). Mistress's Nintendo family letters by position, which is what the button under the
+  player's thumb is called on every Nintendo pad Mistress routes. **Recommendation:** keep it; the swap is what makes A
+  the right-hand button's job.
+- **Q162, the words for Clear and Hide.** *Clear Metadata* and *Hide Game* where ES-DE says *Clear File* and *Delete
+  Game*. **Recommendation:** keep, since ES-DE's words would say that a file is touched or deleted.
+- **Q163, a text row's word.** The request's example was *Edit*; ES-DE says *Select*, and Mistress says *Select*.
+  **Recommendation:** keep ES-DE's.
+- **Q164, the other text boxes.** The themed search and the cheats window keep Mistress's keyboard, since neither is a
+  big-screen row; the cheats window's codes need its Code layout, and its look is being redone separately. Should the
+  search follow the On-Screen Keyboard setting too? **Recommendation:** yes, after P262–P266 are checked, with the
+  cheats window left to its restyling.
+- **Q165, Automatic with a keyboard under Steam.** On a desktop with the Steam client running, Automatic asks for
+  Steam's floating keyboard even when the row was chosen with Enter on a physical keyboard. **Recommendation:** under
+  Steam, a row chosen from a keyboard gets the field alone, and Steam is asked only for a pad; checked with P266.
+
+## 41. Every window in ES-DE's look, first part: the style layer and three windows (2026-09-27)
+
+*Built on branch `bigpicture-window-look`, from WiseMan at `8539c7e6`; LunaP on `window-look`, from `openemu-library`
+at `18413c7`.* The decision is §10.1's *"The look of every window"* (2026-09-27): the windows are not converted one for
+one into ES-DE's menus. Each keeps what it is for and takes ES-DE's look: its colours, the Barlow Condensed face and the
+rounded panels. Each also gets a layout a controller can use, wherever one can be had.
+
+The work stops at a checkpoint: the style layer and three windows that stand for the rest, so that the look can be
+approved before the others are done. The three are:
+
+- the scraping status (a status page with a list);
+- Active Cheats (tabs, text boxes and a table);
+- the Cheat Database (a path, two lists and a row of buttons).
+
+The controller bindings were to be the third; decided the same day that their own overhaul, a drawn controller with the
+bindings on it, takes the look with it, so they keep the plain sheet here. The player's account is the settings
+reference §4.80; LunaP's record is its §196.
+
+**Numbering.** Predictions from P270, questions from Q170; both ranges were free in every tree on this machine when this
+began.
+
+**Sources.** No new capture of ES-DE was taken. The look's measurements are §32.1's and §34.12's, and its colours are
+`MenuPanel`'s and `MenuRow`'s defaults, which those sections set (LunaP §181). No file of ES-DE's was read or copied.
+
+### 41.1 Which windows a big-screen session shows, and which it does not
+
+A survey of `EmuSen.Mistress/Views/` found where each window is opened and whether that path is reachable in a
+big-screen session. In one, every window owned by the main window is a sheet on its `SheetLayer`.
+
+| Reachable, as a plain sheet until now | Not reachable in a big-screen session |
+|---|---|
+| Active Cheats, Cheat Database, the scraping status, Find by Name, Use Another Game's Cover, the gamelist filter, the folder editor, Graphics Settings, Shaders, the resume question, the rewind reel, a screenshot (a sidebar library only), the theme browser, a theme's detail, its About | the ROM browser (File ▸ Browse ROMs…), the runtime dashboard (`VstopWindow`, from Settings and the `vstop` command), Debug Logging, the DianaOS console: all four are opened from the menu strip, which a big-screen session hides |
+
+The option list screen (§34.15) is already an ES-DE menu, and the controller bindings are another task's (above). The
+four unreachable windows are left as they are, as §10.1 asked for the developer tools.
+
+### 41.2 One style layer
+
+Two mechanisms, both in LunaP (§196), so that nothing is written twice per window:
+
+- **The look** (`MenuLook`) is a `Styles` of the menus' palette and typeface for stock controls, added to one element's
+  own `Styles`. Buttons, lists, text boxes, dropdowns, tabs, switches, sliders, check boxes, scroll bars and progress
+  bars under it take:
+  - ES-DE's greys;
+  - Barlow Condensed, through the resource key `LunaMenuFontFamily`, which Mistress fills from a copy of its font
+    shipped as an Avalonia resource; LunaP ships no font;
+  - rounded corners;
+  - upper-case words on buttons, tabs and headings;
+  - the full-width bar on a list's chosen or focused row.
+- **The frame** (`SheetLayer.MenuLook`) presents a sheet in a `MenuPanel`:
+  - titled by its window;
+  - its content laid out under the menus' scale;
+  - its help bar the pad's buttons;
+  - no fill of its own, so the screen shows blurred behind it, as behind the menus.
+
+Mistress turns the frame on with big screen and names, in `MenuFrameFor`, the windows checked so far. It builds a
+window's help bar from what the window holds: *Select*, *Back*, *Tab* where there are tabs, *Change* where a value steps
+sideways, and *Choose*. The backdrop's blur and ES-DE's keys count a framed sheet as a menu.
+
+The desktop is unchanged. The look is one attached property, so a desktop window could take it with one call, which is
+how a later desktop setting would work; that setting is not built (§10.1).
+
+### 41.3 What each window changed, and why
+
+What the style could not reach, each window changes in `MenuLook.WhenApplied`, which runs once when the window is first
+shown in the look.
+
+- **Scraping.** The first version kept the one column, and its pad test failed. The recent games list lay below the
+  fold at 1280×800, and no press reached a row, since a row scrolled out below the viewport is geometrically below the
+  buttons. The window is now two columns, the run at the left and the recent games at the right (0.9 of the width).
+  Every row is in view and in reach. The heading is 30 design pixels and the game's name 28; the buttons are centred.
+- **Active Cheats.**
+  - *Save As…* and *Load From…* open the platform's file dialog, which a pad cannot drive in Game Mode, so they are
+    hidden on a sheet; *Save* and *Load*, the game's own list, stay.
+  - The table's *Kind* and *Code* words, set to 11 pixels in code, are bound to a size that is 20 in the look.
+  - The status line sits over the buttons, centred.
+- **Cheat Database.**
+  - 0.8 of the width.
+  - The folder's label beside its box, as a menu row's is, and the folder typed on the on-screen keyboard; *Browse…* is
+    hidden for the same reason as above.
+  - The two lists the same width.
+  - The status over the centred buttons.
+  - The licence's attribution, which must stay in view, as the panel's footer: `MenuLook.Footer`, three lines of 20
+    design pixels.
+
+  At 1280×800 the lists show three systems and two games; Q170 asks about the room.
+
+### 41.4 A defect found by the pictures: rows left unbuilt under a scaled frame
+
+At 1920×1200 the framed Active Cheats drew one of its two cheats, with room for both. It was measured before any fix,
+by a throwaway probe test on 2026-09-27:
+
+- the table's list was 774 by 85 pixels, and its scroll viewer's viewport the same;
+- its `VirtualizingStackPanel`'s own viewport was 524 by 39.3, and one container was built;
+- at 1280×800 both were built.
+
+39.3 is the frame's content host (464 high, clipping) divided by the scale 1.5 once more, less the list's top at 270. So
+Avalonia 12.1's effective viewport mis-scales the clip of a clipping control directly under a `LayoutTransformControl`.
+That is inferred from the numbers; Avalonia's code was not read.
+
+With the host no longer clipping (the scaler still does), the viewport was 774 by 85 and both rows were built. LunaP's
+`MenuLookTests` holds a list at the foot of a sheet scaled 1.5 and requires all three of its rows built; mutant L1
+below puts the clip back.
+
+The plain sheet frame has the same structure and was not changed. Whether its lists lose rows was not measured (Q175).
+
+### 41.5 Predictions
+
+| # | Predicted | Found | Verdict |
+|---|---|---|---|
+| P270 | *(written as the pixel case's assertion, before it first ran)* The three framed windows draw nothing outside the panel and the help bar at 1280×800 and 1920×1200 | 0 pixels at both sizes for all three, once the case made the panel transparent instead of hidden (below) | held |
+| P271 | *(written at this checkpoint, before the broad run that ends the work)* The broad Mistress run, after the other windows, fails on nothing this branch causes | not yet run | open |
+
+No prediction was written before the first narrow run or before the mutants; both are recorded as found, in §41.6
+and §41.7.
+
+P270's first case hid the panel to compare. With the panel hidden, the focus fell to a button of the window behind,
+and that button's focus ring was drawn in the blurred backdrop: 3,307 pixels in a strip across the top of the scraping
+status's screen. The strip was the case's own doing, not the frame's. The case now makes the panel transparent, which
+keeps the focus where it was.
+
+**The first narrow run, with every sheet framed.** Before `MenuFrameFor` existed, every plain sheet of a big-screen
+session was framed. Six of 679 tests failed:
+
+- one scraping-status pad case, the recent games below the fold (§41.3);
+- five Graphics Settings and Shaders cases, of pad reach and scroll positions, in windows not yet checked in the look.
+
+The frame then went to the checked windows only. The Graphics and Shaders cases wait for those windows' turn.
+
+### 41.6 Tests
+
+- **`SheetLookTests`** (eight cases) and **`ScrapeStatusLookTests`** (two), headless. The detail is in §4.80.5:
+  - the frame at both sizes;
+  - the §32.4 pixel rule;
+  - the targets at least 40 pixels tall at 800 lines;
+  - the focused button's fill and the focused row's bar;
+  - the file dialogs gone, the attribution the footer, the width shares, the two columns;
+  - every control reached by the pad, and B out of each;
+  - the shoulders paging a list of 300;
+  - ES-DE's keys with a text box keeping its typing;
+  - the desktop and the controller bindings unchanged.
+- **LunaP's `MenuLookTests`**, six cases (its §196.6).
+- **No existing test's expectation changed.** The pad router now pages a list with L1 and R1 where a window has no
+  tabs; no existing test pressed them there.
+- **A narrow run** of the Mistress tests in the blast radius: every pad, sheet, cheat, scrape, ES-DE menu, themed,
+  cover, rewind, resume and theme-browser test, without shaders, GPU, Vulkan or benches. **693 tests, 672 passed, 21
+  skipped** (the picture tools), none failed, in 3.1 minutes, on the final build after the mutants' clean rebuild.
+- **LunaP's whole suite**, on the same build: 1,434 tests, all passed, once the API baseline, the documented defaults, two parameter
+  descriptions and the README's count were brought up to date.
+- **After merging WiseMan at `813c8549`** (§40's follow-ups; one conflict, the text-box line of `SetButtonFromKey`,
+  which now keeps both §4.79's popup rule and §4.80's framed box) **and `openemu-library` at `b1fb12e` into LunaP**,
+  the same narrow run: **698 tests, 676 passed, 22 skipped, none failed**, and LunaP's whole suite, **1,448 tests, all
+  passed**.
+
+### 41.7 Mutants
+
+Twenty-six, one at a time, by `~/.cache/emusen/probe/window-look/mutate_look.py`. It writes a state file with the
+original text before each mutant, restores any leftover one when it starts, and touches every restored file (§32.5's
+trap). Fourteen are in Mistress, run against `SheetLookTests`, `ScrapeStatusLookTests` and the scraping status's pad
+case. Twelve are in LunaP, run against `MenuLookTests`.
+
+**All twenty-six were caught on their first valid run, each by the case written for it.** W7 and W13 were also caught by
+the shoulders' case, since a narrower panel or a status beside the buttons changes how many games a page holds.
+
+| # | Rule broken | Caught by |
+|---|---|---|
+| W1 | the layer never frames a sheet | four cases |
+| W2 | the help bar never names the tabs | the cheats' frame |
+| W3 | the cheat database left in the plain frame | the database's frame |
+| W4 | *Save As…* and *Load From…* offered on a sheet | the cheats' frame |
+| W5 | the attribution not in the footer | the database's frame |
+| W6 | *Browse…* left shown | the database's frame |
+| W7 | the database's status beside its buttons | the database's frame, and the shoulders' |
+| W8 | the scraping status in one column | its frame, and the existing pad case |
+| W9 | the shoulders do not page a list | the shoulders' |
+| W10 | a framed text box gives its keys to the menu | the keyboard's |
+| W11 | ES-DE's keys drive chromeless sheets only | the keyboard's |
+| W12 | a framed sheet not blurred behind | three frames |
+| W13 | the cheat database at a menu's width | the database's frame, and the shoulders' |
+| W14 | the controller bindings framed too | the desktop and bindings case |
+| L1 | the frame's host clips again (§41.4) | the list at the foot of a scaled sheet |
+| L2 | the look's styles left behind when it is taken away | the stock controls' |
+| L3 | a button's words not upper case | the stock controls' |
+| L4 | the typeface's key not used | the stock controls' |
+| L5 | the chosen row not the bar | the stock controls' |
+| L6 | a focused button not filled | the focused button's |
+| L7 | the host's choice of frame ignored | the framed sheet's |
+| L8 | the layer's help never asked for | the framed sheet's |
+| L9 | the footer kept to one line | the framed sheet's |
+| L10 | the content not scaled with the menus | the scale's |
+| L11 | a window's width share ignored | the framed sheet's |
+| L12 | `WhenApplied` runs outside the look | its own, and the stock controls' |
+
+Both trees were rebuilt clean at the end (`clean rebuild rc=0,0`).
+
+### 41.8 Pictures
+
+In `~/.cache/emusen/bigpicture/png/window-look/`, from `WindowLookPictureTool` and `WindowLookScrapePictureTool`
+(`EMUSEN_BIGPICTURE_PNG=1`, the folder named by `EMUSEN_WINDOW_LOOK_STAGE`):
+
+- `before/` was taken on the unmodified tree, and `after/` on the final build;
+- each at 1280×800 and 1920×1200;
+- the themed windows over the synthetic theme and over Art Book Next (read in place), the in-game ones over a running
+  synthetic game.
+
+The three windows of this part:
+
+- `scrape-status-*` and `scrape-status-finished-*`;
+- `active-cheats-*`, `active-cheats-console-*`, `active-cheats-row-focused-*` and `active-cheats-button-focused-*`;
+- `cheat-database-*`, `cheat-database-system-*` and `cheat-database-game-focused-*`.
+
+The other windows' pictures are the plain sheet in both folders. Where they differ, a pixel comparison places it in the
+running game's frame, a clock or a date, not in the window.
+
+Every picture was looked at. Three things seen in them are questions rather than fixes (§41.10):
+
+- the database's short lists at 1280×800;
+- the table's column headings, which stay as written, since the table draws them itself;
+- the empty 96-pixel slot the scraping status keeps for the current game's picture before it arrives.
+
+### 41.9 Not done
+
+- **The other twelve windows** of §41.1, until this part's look is approved.
+- **The plain frame's viewport** (§41.4).
+- **A desktop ES-DE look**, deliberately (§10.1).
+- **A real pad, keyboard or handheld.** Nothing here ran on hardware.
+- **The broad Mistress run**, which is for the end of the work, not the checkpoint.
+
+### 41.10 Open questions
+
+- **Q170, the Cheat Database's room.** At 1280×800 the two lists show three systems and two games. Two lines of
+  introduction sit above them, with the attribution in the footer. **Recommendation:** put the introduction into the
+  footer before the attribution, four lines, and give the lists two more rows.
+- **Q171, text size.** The body of a framed window is 24 design pixels, headings 28 and buttons 26. A menu's rows are
+  27, as measured on ES-DE's editor (§34.12). Keep the denser windows at 24, or bring everything to the rows' 27 at the
+  cost of more scrolling?
+- **Q172, upper case.** Buttons, tabs and headings are upper case, as ES-DE's are. Body text, list rows and a table's
+  column headings stay as written. Keep that split?
+- **Q173, file dialogs.** *Save As…*, *Load From…* and *Browse…* are hidden on a sheet, since a pad cannot drive the
+  platform's dialog. **Recommendation:** keep them hidden; a typed path on the on-screen keyboard covers *Browse…*, as
+  §4.72.8's path rows already do.
+- **Q174, the shoulders in the help bar.** L1 and R1 are drawn as two glyphs with one label, *Tab*. The help-bar work of
+  §10.1 (letter-labelled glyphs) may give one glyph for the pair; take it when it lands?
+- **Q175, the plain frame's viewport.** The controller bindings keep the plain sheet, which has §41.4's structure.
+  **Recommendation:** make the plain frame's host not clip as well, with the bindings' overhaul, which owns that frame
+  now.
+- **Q176, keys in a text box.** In a framed window a focused text box keeps Backspace, Left, Right and Enter for typing,
+  and Up and Down leave it. ES-DE edits text in a popup, where Backspace erases too. Keep?
+- **Q177, the scraping status's picture slot.** Before a game's picture arrives, the slot is empty space. Collapse it
+  until there is a picture?
+- **Q178, the database's Load button.** In `cheat-database-game-focused-*`, a game row has the pad's focus and the bar,
+  but *Load into Active Cheats* is still disabled. It follows the list's selection, and the picture suggests the focus
+  reached the row without selecting it. This was seen in the pictures, not measured. A on the row loads the game
+  either way (§4.45.5). Enable the button from the focused row as well, or select the row the focus reaches?
 ## 42. The controller bindings window: drawn controllers, rebinding from the drawing, and an input tester (2026-09-27)
 
 *Decided 2026-09-27 (§10.1):* the Controller Bindings window is overhauled. Each console's controller is drawn as vector

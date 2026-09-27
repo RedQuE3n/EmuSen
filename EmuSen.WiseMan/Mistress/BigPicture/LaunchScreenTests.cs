@@ -153,7 +153,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Assert.Equal("Super Nintendo", screen.SystemName);
                 Assert.Equal(art, screen.ArtPath);
                 double h = 800;
-                Assert.Equal((art is null ? LaunchScreen.PlainCardHeight : LaunchScreen.ArtCardHeight) * h, screen.CardBounds.Height, 3);
+                Assert.Equal(art is null ? 256.0 : 437.0, screen.CardBounds.Height, 3);
                 s.Run(3000);
                 Assert.Equal(Rom(s, game), Running(s.Window));
                 ThemedLibraryFlowTests.Choose(s, "Close Game");
@@ -391,9 +391,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             double hh = Host(s).Bounds.Height;
             Rect card = InWindow(s, screen.CardBounds);
             Assert.Equal(1.0, screen.CardScale);
-            Assert.Equal(LaunchScreen.ArtCardHeight * hh, card.Height, 3);
+            // ES-DE at 1280x800: a card 437 px high centred 356 px down, scaled with the height (§33.2).
+            Assert.Equal(437.0 / 800 * hh, card.Height, 3);
             Assert.Equal(Host(s).Bounds.Width / 2, screen.CardBounds.Center.X, 3);
-            Assert.Equal(LaunchScreen.CardCentre * hh, screen.CardBounds.Center.Y, 3);
+            Assert.Equal(356.0 / 800 * hh, screen.CardBounds.Center.Y, 3);
 
             double inset = LaunchScreen.CornerRadius * hh + 2;
             foreach (Point p in new[] { card.TopLeft + new Vector(inset, 3), card.TopRight + new Vector(-inset, 3), card.BottomLeft + new Vector(inset, -3), card.BottomRight + new Vector(-inset, -3) })
@@ -455,13 +456,29 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(1, screen.PopupOpacity);
             RenderedFrame during = s.Capture();
             Rect pill = InWindow(s, screen.PopupBounds);
-            Assert.Equal(LaunchScreen.PopupTop * 800, pill.Y, 3);
+            Assert.Equal(16, pill.Y, 3);
             Assert.InRange(pill.Center.X, 639.5, 640.5);
             Assert.Equal(Rgb(Panel), At(during, pill.X + pill.Width * 0.5, pill.Y + 2));
             Assert.Equal(0, DifferingOutside(during, before, pill));
             Assert.True(DifferingOutside(during, before, default) > 500);
             s.Run(1200);
             Stop(s.Window);
+        }, default);
+
+        // A window closed while the screen shows starts nothing afterwards, when its timer would have come due (§15.14's lesson).
+        [Fact]
+        public Task Closing_the_window_while_the_screen_shows_starts_nothing() => Session.Dispatch(() =>
+        {
+            using var s = Open(BigPictureInterface.LaunchNormal);
+            ThemedLibraryPadTests.Enter(s, "snes");
+            s.Pad.A();
+            Assert.NotNull(Screen(s));
+            s.Window.Close();
+            s.Now += TimeSpan.FromSeconds(4);
+            typeof(MainWindow).GetMethod("AdvanceLaunchScreen", Hidden)!.Invoke(s.Window, null);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Null(Screen(s));
+            Assert.Null(Running(s.Window));
         }, default);
 
         // Desktop big picture (F10) shows it; the desktop's own list starts a game at once, as it did.

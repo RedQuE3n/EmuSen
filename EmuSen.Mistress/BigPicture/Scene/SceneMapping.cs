@@ -15,14 +15,14 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         public static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> Specific = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
         {
-            ["image"] = Set("path", "default", "imageType", "maxSize", "cropSize", "cropPos", "tile", "tileSize", "tileHorizontalAlignment", "tileVerticalAlignment",
+            ["image"] = Set("path", "default", "imageType", "gameselector", "gameselectorEntry", "maxSize", "cropSize", "cropPos", "tile", "tileSize", "tileHorizontalAlignment", "tileVerticalAlignment",
                 "color", "colorEnd", "gradientType", "saturation", "cornerRadius", "interpolation", "scrollFadeIn"),
-            ["video"] = Set("imageType", "defaultImage", "imageSize", "imageMaxSize", "imageCropSize", "imageCropPos", "imageCornerRadius", "maxSize", "cropSize",
+            ["video"] = Set("imageType", "defaultImage", "gameselector", "gameselectorEntry", "imageSize", "imageMaxSize", "imageCropSize", "imageCropPos", "imageCornerRadius", "maxSize", "cropSize",
                 "color", "colorEnd", "gradientType", "saturation", "scrollFadeIn"),
-            ["text"] = Set("text", "metadata", "systemdata", "defaultValue", "systemNameSuffix", "letterCaseSystemNameSuffix", "container", "containerType", "fontPath",
+            ["text"] = Set("text", "metadata", "systemdata", "gameselector", "gameselectorEntry", "defaultValue", "systemNameSuffix", "letterCaseSystemNameSuffix", "container", "containerType", "fontPath",
                 "fontSize", "horizontalAlignment", "verticalAlignment", "color", "backgroundColor", "backgroundMargins", "backgroundCornerRadius", "letterCase", "lineSpacing",
                 "containerStartDelay", "containerScrollSpeed", "containerResetDelay", "containerScrollGap", "containerVerticalSnap"),
-            ["datetime"] = Set("metadata", "defaultValue", "fontPath", "fontSize", "horizontalAlignment", "verticalAlignment", "color", "backgroundColor",
+            ["datetime"] = Set("metadata", "defaultValue", "gameselector", "gameselectorEntry", "fontPath", "fontSize", "horizontalAlignment", "verticalAlignment", "color", "backgroundColor",
                 "backgroundMargins", "backgroundCornerRadius", "letterCase", "lineSpacing", "format", "displayRelative"),
             ["carousel"] = Set("type", "staticImage", "defaultImage", "imageType", "maxItemCount", "itemSize", "itemScale", "imageFit", "imageColor", "imageSelectedColor",
                 "imageSaturation", "itemHorizontalAlignment", "itemVerticalAlignment", "unfocusedItemOpacity", "unfocusedItemSaturation", "unfocusedItemDimming",
@@ -37,18 +37,19 @@ namespace EmuSen.Mistress.BigPicture.Scene
                 "backgroundRelativeScale", "backgroundCornerRadius", "backgroundColor", "selectorImage", "selectorRelativeScale", "selectorLayer", "selectorCornerRadius",
                 "selectorColor", "text", "textRelativeScale", "textBackgroundCornerRadius", "textColor", "textBackgroundColor", "textSelectedColor", "textSelectedBackgroundColor",
                 "fontPath", "fontSize", "letterCase", "lineSpacing", "systemNameSuffix", "letterCaseSystemNameSuffix"),
-            ["rating"] = Set("hideIfZero", "color", "filledPath", "unfilledPath", "overlay"),
+            ["rating"] = Set("gameselector", "gameselectorEntry", "hideIfZero", "color", "filledPath", "unfilledPath", "overlay"),
             ["badges"] = Set("horizontalAlignment", "direction", "lines", "itemsPerLine", "itemMargin", "slots", "customBadgeIcon", "badgeIconColor",
                 "controllerPos", "controllerSize", "customControllerIcon", "controllerIconColor", "folderLinkPos", "folderLinkSize", "customFolderLinkIcon", "folderLinkIconColor"),
             ["helpsystem"] = Set("textColor", "iconColor", "fontPath", "fontSize", "entries", "entryRelativeScale", "entrySpacing", "iconTextSpacing", "letterCase",
                 "backgroundColor", "backgroundHorizontalPadding", "backgroundVerticalPadding", "backgroundCornerRadius", "customButtonIcon"),
             ["clock"] = Set("fontPath", "fontSize", "horizontalAlignment", "verticalAlignment", "color", "backgroundColor", "backgroundColorEnd", "backgroundGradientType",
                 "backgroundHorizontalPadding", "backgroundVerticalPadding", "backgroundCornerRadius", "format"),
+            ["gameselector"] = Set("selection", "gameCount", "allowDuplicates"),
             ["systemstatus"] = Set("height", "fontPath", "textRelativeScale", "color", "backgroundColor", "backgroundHorizontalPadding", "backgroundVerticalPadding",
                 "backgroundCornerRadius", "entries", "entrySpacing", "customIcon"),
         };
 
-        // Element types the scene draws; the others (animation, gamelistinfo, gameselector, sound) are not drawn.
+        // Element types the scene maps, gameselector drawing nothing itself; the others (animation, gamelistinfo, sound) are not drawn.
         public static readonly IReadOnlySet<string> Drawn = new HashSet<string>(Specific.Keys, StringComparer.Ordinal);
 
         private static IReadOnlySet<string> Set(params string[] names) => new HashSet<string>(names, StringComparer.Ordinal);

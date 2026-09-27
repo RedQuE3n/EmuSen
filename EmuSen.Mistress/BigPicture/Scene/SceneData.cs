@@ -131,6 +131,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
         // What the help bar's entries depend on beyond the view (§22).
         public HelpContext Help { get; init; } = new();
 
+        // The seed of the system view's random gameselectors; a view moves it on at each navigation, so the picks change as ES-DE's do (§36).
+        public int Shuffle { get; init; }
+
         public SceneSystem System => Systems[Math.Clamp(SystemIndex, 0, Systems.Count - 1)];
 
         public SceneGame? Game => System.Games.Count == 0 ? null : System.Games[Math.Clamp(GameIndex, 0, System.Games.Count - 1)];

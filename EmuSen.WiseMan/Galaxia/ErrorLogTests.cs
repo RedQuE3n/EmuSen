@@ -58,10 +58,10 @@ namespace EmuSen.WiseMan.Galaxia
         [Fact]
         public void The_redactor_runs_over_message_context_and_trace()
         {
-            ErrorLog.Redactor = t => t.Replace("SECRETPW", "***");
-            ErrorLog.Error("scraping", "GET ...&devpassword=SECRETPW", new InvalidOperationException("devpassword=SECRETPW"), "ctx SECRETPW");
+            ErrorLog.Redactor = t => t.Replace("FAKEERRORLOGPW", "***");
+            ErrorLog.Error("scraping", "GET ...&devpassword=FAKEERRORLOGPW", new InvalidOperationException("devpassword=FAKEERRORLOGPW"), "ctx FAKEERRORLOGPW");
             string text = File.ReadAllText(ErrorLog.PathFor(DateTime.Now));
-            Assert.DoesNotContain("SECRETPW", text);
+            Assert.DoesNotContain("FAKEERRORLOGPW", text);
             Assert.Equal(3, text.Split("***").Length - 1);
         }
 

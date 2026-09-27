@@ -53,7 +53,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
             http.DefaultRequestHeaders.UserAgent.ParseAdd("EmuSen-theme-survey/1 (a one-time research survey of ES-DE's theme list)");
             long total = Directory.Exists(Path.Combine(Folder, "xml")) ? Directory.EnumerateFiles(Path.Combine(Folder, "xml"), "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length) : 0;
-            int requests = 0;
+            int requests = 0, skipped = 0;
+            long skippedBytes = 0;
             foreach (ThemeListEntry theme in list.Themes)
             {
                 ThemeSource s = theme.Source!;
@@ -73,6 +74,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 {
                     string target = Path.Combine(Folder, "xml", s.Repository, path);
                     if (File.Exists(target)) continue;
+                    if (OtherSystem(path)) { skipped++; skippedBytes += size; continue; }
                     if (total + size > Ceiling) throw new InvalidOperationException($"the survey would pass {Ceiling >> 20} MB; stopped before {theme.Name}/{path}");
                     string address = s.Host == ThemeHost.GitHub
                         ? $"https://raw.githubusercontent.com/{s.Owner}/{s.Repository}/HEAD/{string.Join('/', path.Split('/').Select(Uri.EscapeDataString))}"
@@ -87,8 +89,20 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     await Task.Delay(FileGap);
                 }
             }
-            Log($"done: {requests} requests this run, {total / 1e6:F2} MB of XML held");
+            Log($"done: {requests} requests this run, {total / 1e6:F2} MB of XML held; {skipped} files ({skippedBytes / 1e6:F2} MB) left as other systems'");
         }
+
+        // ES-DE's system short names, from the supported-systems table of stage (c)'s USERGUIDE.md copy; EmuSen's five are kept.
+        private static readonly HashSet<string> OtherSystems = File.Exists(Guide)
+            ? File.ReadLines(Guide).Select(l => System.Text.RegularExpressions.Regex.Match(l, @"^\| ([a-z0-9_\-]+) +\| [^|]*\| [^|]*\| [^|]*\| (Yes|No) +\|"))
+                .Where(m => m.Success).Select(m => m.Groups[1].Value).Where(n => !Systems.Contains(n)).ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : [];
+
+        private static string Guide => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache", "emusen", "bigpicture", "motion", "docs", "USERGUIDE.md");
+
+        // A file named for another system, or under a folder named for one, is never read for EmuSen's five and is not fetched.
+        public static bool OtherSystem(string path) =>
+            path.Split('/').Select(p => p.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ? p[..^4] : p).Any(OtherSystems.Contains);
 
         private sealed record Blob(string Path, long Size);
 

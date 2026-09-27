@@ -1118,6 +1118,18 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   - **Q22–Q35:** every recommendation §21 made is accepted as written. Where a pass finds that a recommendation cannot
     hold, the player is asked again.
   - **The first pass to build:** pass 2, controllers.
+- **Q41–Q46, answered on 2026-09-26 (§26.9, §27.9):**
+  - **Q41:** the 670 covers OpenVGDB already fetched keep their rank above ScreenScraper's.
+  - **Q42:** OpenVGDB's 42 MB database gets a Remove button in Preferences; nothing deletes it on its own.
+  - **Q43–Q46:** every recommendation is accepted. The mix image is not used as a last-resort cover (the placeholder is).
+    The fallback stops being asked only after pass 8's search by name exists. *Use Another Game's Cover…* is built.
+    Select stays Favourite in the sidebar library.
+  - **Q40, answered the same day after asking how ES-DE does it:** "Do what ES-DE does". Published builds carry
+    EmuSen's ScreenScraper developer credentials, scrambled, and generated into `obj/` at publish from the developer
+    file named by a publish property, so they never enter the repository (§5.7's first option). Every player can then
+    scrape; a member login only raises their limits. **This reverses Q5** ("builds carry no developer credentials").
+    The risks are accepted as ES-DE accepts them: the credentials can be extracted, and abuse could get the
+    `EmuSen-Mistress` software name blocked (426), which the scraper already reports.
 - **Q7, miximages (2026-09-26, during stage d):** ScreenScraper's ready-made mix, `mixrbv2`, is fetched as the
   miximage. It looks different from ES-DE's own composed miximages; building our own composite is not wanted now.
 - **Q5, the developer credentials, as received (2026-09-26):** issued to the player as EmuSen's developer, kept only in

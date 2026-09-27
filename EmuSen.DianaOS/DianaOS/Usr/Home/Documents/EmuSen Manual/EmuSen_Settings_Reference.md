@@ -2646,7 +2646,9 @@ another one, with where each came from. *Since 2026-09-26 the list begins with *
 big-screen library, which is never downloaded or removed; with it chosen the Options tab holds only a note, and the sheet
 opens on the Themes tab. §4.56 is that change.*
 
-- **Download Art Book Next** fetches GitHub's archive of the theme's `main` branch
+- *Retired 2026-09-26 by §4.62: the button below was replaced by ES-DE's theme list, from which Art Book Next and every
+  other listed theme are downloaded; the checks and the swap it describes still apply. Kept as stage (f)'s record.*
+  **Download Art Book Next** fetches GitHub's archive of the theme's `main` branch
   (`codeload.github.com/anthonycaccese/art-book-next-es-de/zip/refs/heads/main`, about 220 MB) into
   `home/Themes/art-book-next-es-de/` (`DataStore.Themes`). Nothing is fetched until the player presses it; EmuSen ships no
   theme. The newest commit is asked of GitHub's API first and recorded, with the date, in `.emusen-theme` beside the
@@ -2682,11 +2684,12 @@ media), `GridSceneTests` (the measured layout, a step, a slide, the ends, the re
 moving, the units, and Art Book Next's grid against ES-DE's still) and `ThemedGridPadTests` (the pad over a grid). Every server is a fake written for the tests; no test reaches the network.
 
 **What it does not cover.**
-- Only Art Book Next has a download button. Another GitHub theme, ES-DE's theme list and a GitLab theme are §6's plan and
-  are not built; a theme folder can still be chosen in Preferences and read in place.
+- *Retired 2026-09-26 by §4.62:* only Art Book Next has a download button. Another GitHub theme, ES-DE's theme list and
+  a GitLab theme are §6's plan and are not built; a theme folder can still be chosen in Preferences and read in place.
 - The download is not resumable: a stopped download starts again from the beginning.
-- The stamp is the only record of where a theme came from; a downloaded folder whose stamp is deleted is treated as read
-  in place, and cannot be removed from the sheet.
+- *Superseded 2026-09-26 by §4.62, where the record moved into `themes.db`:* the stamp is the only record of where a
+  theme came from; a downloaded folder whose stamp is deleted is treated as read in place, and cannot be removed from the
+  sheet.
 
 ### 4.54 Big picture from the desktop: Big Picture below Fullscreen in the View menu (2026-09-26)
 
@@ -3564,3 +3567,117 @@ and a theme's icons). They run on WiseMan's `PadDriver`, which plugs and pulls s
 - A second pad as player 2 in a game.
 - The notice's fade is linear; ES-DE's fits a gentle power curve (plan §24.4). Its words are Mistress's own.
 - The Controller Bindings window still names the first pad alone.
+
+### 4.62 Big picture: ES-DE's theme list, browsed and installed from the Themes tab (2026-09-26)
+
+The player, 2026-09-26: "Lets add a theme browser an installer, similar to what esde has". Pass 3 of `EmuSen_BigPicture.md`
+§21 builds it, under Q27 and Q28 as the player accepted them; §25 of that plan is the record (predictions, tests,
+mutants, pictures and the survey of the listed themes). ES-DE's behaviour was taken from its `USERGUIDE.md` ("Theme
+downloader"), never from its source. This section is what a player meets.
+
+**Where it is.** Theme Settings ▸ **Themes** (§4.53, §4.56) ends with **ES-DE's Theme List** and a **Browse Themes…**
+button, in place of stage (f)'s single "Download Art Book Next". It opens the browser as a sheet over the Themes tab, in
+a big-screen session as on the desktop; B (East) closes each sheet in turn.
+
+**The browser** is laid out as ES-DE's downloader is: the list on the left, the selected theme on the right.
+- **The list** names every theme of ES-DE's official list (`themes.json` in `gitlab.com/es-de/themes/themes-list`,
+  66 themes on 2026-09-26), in the list's own order, each marked **Installed**, **update available** or **local
+  changes** once installed, and **New** where the list marks it new. Above it, a line says how many themes the list
+  holds and when it was fetched, beside a **Refresh** button. The list's `themesAndroid` entries, for ES-DE's Android
+  build, are not shown; an entry whose repository is on neither GitHub nor GitLab is left out and counted on that line.
+- **The preview** shows the selected theme's first screenshot and caption, its name, author and repository, what it
+  supports as the list states it ("4 variants · 3 colour schemes · 6 aspect ratios", or "no colour schemes stated"),
+  and its state, with the last update when it is known. **Details…** (or A on a row, or a double click) opens the theme.
+
+**A theme's detail.**
+- Every screenshot the list gives, one at a time, with its caption and **Previous** and **Next**.
+- **Last Updated:** the date of the newest commit on the repository's default branch, with the commit and the branch, as
+  the host reports it.
+- **Here:** not installed; or installed, where, when and at which commit, with "An update is available" and "Local
+  changes to N files (…)" when they hold.
+- What the theme supports, each as the list states it: **Variants**, **Colour Schemes** and **Aspect Ratios** always
+  (with "The list states none"), **Font Sizes**, **Transitions** and **Languages** when the list names them.
+- **Licence**, then the buttons, below both columns and never scrolled out of sight. The licence line is the licence
+  section of the theme's own `README.md`, read from its repository; else the licence the host names from the
+  repository's licence file ("MIT License, as GitHub reads the repository's licence file"); else "The theme states no
+  licence in its README, and GitHub finds no licence file". **Download** waits until the line has been read. The About
+  sheet (§4.53) reads the README again from the installed copy, at display time.
+- **Download** (not installed); **Update** (installed, enabled when the host's newest commit differs from the installed
+  one); **Use** (reading In Use for the theme in use); **Remove**; **About**; and, while a download runs, **Cancel
+  Download**, a progress bar and a line with the megabytes received, then the files unpacked.
+
+**Installing, updating and removing.** Every listed theme downloads the way stage (f)'s Art Book Next did (§4.53): the
+host's archive of the default branch (`codeload.github.com/<owner>/<repo>/zip/refs/heads/<branch>`, or
+`gitlab.com/<group>/<repo>/-/archive/<branch>/<repo>-<branch>.zip`), written beside its final place, unpacked into a
+sibling folder, checked (a `capabilities.xml` that reads, a `theme.xml` that loads), and only then swapped in, into
+`home/Themes/<repository>/`. A failed, stopped or broken download leaves what was there, and nothing beside it.
+- **The first theme** downloaded when no theme folder is set becomes the folder, and its About sheet opens once, as
+  before. It then appears on the Themes tab with **Use**, beside **EmuSen (built in)** (§4.56).
+- **An update keeps** the player's `theme-customizations/` byte for byte, as before, and now also **every file the
+  player added** that the old download did not contain, as ES-DE's guide describes ("these will not interfere"). If
+  the update adds a file at the same path, the update's copy wins, which is the guide's "special (although unlikely)
+  situation".
+- **Local changes.** When a file the download wrote has been edited or deleted, the theme reads **local changes**, and
+  **Update** first asks: "Synthetic Book has local changes to 1 files (colors.xml). The update replaces them with the
+  theme's own. Files you added, and theme-customizations, are kept." **Cancel** downloads nothing. Files the player
+  added and anything under `theme-customizations/` never count as changes, since an update keeps them. A file whose
+  date changed but whose bytes did not is not a change either: it is hashed to be sure.
+- **Removal** is refused for anything Mistress did not download: a folder read in place, a folder under `home/Themes`
+  without a record, and a folder copied in by hand to the path of one Mistress downloaded (its stamp's id does not match
+  the record). A download never replaces any of them either.
+- The Themes tab's own **Check for Update** and **Update** (§4.53) now ask the theme's own host, GitHub or GitLab, and
+  ask before replacing local changes in the same words.
+
+**When Mistress goes to the network.** Only on the player's action, never at start or in the background:
+- **Opening the browser** uses the list kept in `themes.db` while it is less than a day old, and fetches it otherwise;
+  **Refresh** always fetches it. Opening also asks, for each installed listed theme, its host's newest commit (one
+  request each), for the Update mark.
+- **A screenshot** is fetched when it is shown: the preview's once a theme has stayed selected for a quarter of a
+  second, so a held list does not fetch every row; the detail's as Previous and Next show them. Each is kept a month.
+- **Opening a theme's detail** asks its host three things (the repository's record, the newest commit on its default
+  branch, and the README), at most once a day. On GitHub two of them count against the 60 requests an hour GitHub allows
+  a computer without an account; when that allowance is spent, the line says so and when it resets.
+- **Download** asks for the newest commit and the archive.
+- Opening Theme Settings and its Themes tab asks nothing.
+
+**Stopping.** **Cancel Download**, closing the theme's detail, closing the browser, and closing the window beneath each
+stop a download in flight, remove its partial files, and leave no file open under `home/Themes`; closing the browser
+also stops its list and screenshot requests.
+
+**What is kept where.** The player's standing rule (2026-09-26, "make sure we are storing in sqlite where we can") is
+SQLite for what the program writes and reads back, and JSON for the choices a person makes (`EmuSen_Stack.md` §4.1):
+
+| What | Where | Why there |
+|---|---|---|
+| The fetched list, with every field the browser shows | `home/Themes/themes.db`: `list_fetch`, `list_theme`, `list_screenshot` | the program writes it and reads it back |
+| The screenshot index | `themes.db`: `screenshot_file` | the same; the pictures are files under `home/Themes/.list/screenshots/`, named by a hash of the list's path |
+| What each host said: default branch, newest commit and its date, the licence line and its source, any error | `themes.db`: `theme_remote` | the same, with its time, for the day's expiry |
+| Each installed theme: host, owner, repository, branch, commit and its date, installed and updated | `themes.db`: `theme_installed` | the same; it was stage (f)'s `.emusen-theme` file |
+| Each downloaded file's path, size, time and SHA-256, for local changes | `themes.db`: `theme_file` | the same |
+| Which theme is used, and its options | `appsettings.json`: `BigPictureTheme`, `LibraryStyle`, `BigPicture` | the player's choices, unchanged from §4.53 and §4.56 |
+
+`themes.db` carries its schema version (`PRAGMA user_version`, now 1); a file from a newer build is refused rather than
+written, as `media.db` is. It is not in the repository (`.gitignore`).
+
+**The one file left in a theme folder.** `.emusen-theme` now holds only an id, the key of the folder's row in
+`themes.db`. It is kept for one reason: a row names a path, and a path can be refilled by hand, by deleting a downloaded
+folder and copying another in under the same name. Removal and replacement require the row and the folder's id to
+agree, so the copied folder is not Mistress's to delete. A stage (f) folder, whose stamp held the whole record, is moved
+into `themes.db` the first time it is read, keeping its source and commit; its local changes cannot be told, since no
+file hashes were recorded then, and the detail says so.
+
+**Tests.** `ThemeBrowserModelTests` (13) and `ThemeBrowserSheetTests` (12), on WiseMan's `FakeThemeHosts`: a fake GitLab
+holding a synthetic `themes.json` and synthetic screenshots, and fake GitHub and GitLab repositories holding synthetic
+themes, every request counted. No test reaches the network. `ThemeDownloadsTests`, `ThemeSettingsSheetTests` and
+`BigPictureThemeListTests` run on the same code.
+
+**What it does not cover.**
+- ES-DE's full-screen screenshot view (its X button) is not built; the detail shows one screenshot at a time.
+- The list keeps the list's order; there is no sort, filter or search.
+- A download is not resumable, and a large theme (Art Book Next is about 220 MB, §4.53) takes its time: ES-DE's git
+  transfer fetches only what changed, while Mistress fetches the whole archive again.
+- A README that names its licence under a heading without "licen" in it shows the host's licence or none; the About
+  sheet, reading the installed copy, also reads `LICENSE` files.
+- Most listed themes use elements big picture does not draw yet (plan §25's survey). Such a theme installs and runs,
+  and those parts are missing until §21's pass 14.
+- Nothing ran on the handheld.

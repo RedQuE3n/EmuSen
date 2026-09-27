@@ -2745,7 +2745,8 @@ grid mutants, `Art_Book_Next_s_grid_matches_ES_DE_s_still` appears only for G10 
 - **Nothing ran on the handheld.** The grid's frame cost there, and whether 250 ms steps read well at arm's length, are
   the device's.
 - **Only Art Book Next can be downloaded from the sheet.** Another GitHub or GitLab theme, and ES-DE's theme list as a
-  picker (§6), are not built. Nothing was downloaded from GitHub: every download test used a fake server.
+  picker (§6), are not built. Nothing was downloaded from GitHub: every download test used a fake server. *Retired
+  2026-09-26 by §25, which built the list as a browser and generalised the download to every listed theme.*
 - **The grid's unmeasured parts.** `imageFit contain` and `cover`, selector and background images, corner radii and the
   text's scale law were not measured in ES-DE; they follow `THEMES.md` and are proved only to change the pixels. The
   horizontal clip, a held right that reaches the last item (inferred to stop, as the others do), 60 Hz timing, and the

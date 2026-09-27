@@ -279,6 +279,22 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Empty(db.Installed());
         }
 
+        // Two repositories of one name share a folder name; a download of the second never replaces the first.
+        [Fact]
+        public async Task A_same_named_repository_of_another_owner_does_not_replace_a_theme()
+        {
+            var hosts = FakeThemeHosts.Standard();
+            FakeTheme book = hosts["Synthetic Book"];
+            await Install(hosts, book);
+            var twin = new FakeTheme { Name = "Twin Book", Source = new ThemeSource("someone-else", book.Source.Repository, "main"), Marker = "twin" };
+            hosts.Themes.Add(twin);
+            var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => Install(hosts, twin));
+            Assert.Contains("github.com/ada/synthetic-book-es-de", refused.Message);
+            Assert.Equal("one", File.ReadAllText(Path.Combine(Dir(book), "marker.txt")));
+            Assert.Equal("ada", ThemeDownloads.Stamp(Dir(book))!.Owner);
+            Assert.DoesNotContain(twin.Source.ArchiveAddress, hosts.Asked);
+        }
+
         // A theme downloaded by stage (f), whose stamp held the whole record, is moved into themes.db once, its source and commit kept.
         [Fact]
         public void A_stage_f_stamp_is_imported_into_themes_db()

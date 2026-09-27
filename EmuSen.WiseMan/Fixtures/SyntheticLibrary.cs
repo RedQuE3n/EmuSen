@@ -88,7 +88,7 @@ namespace EmuSen.WiseMan.Fixtures
             }
         }
 
-        private static void Label(string path, int w, int h, Color colour, string text)
+        internal static void Label(string path, int w, int h, Color colour, string text)
         {
             using var target = new RenderTargetBitmap(new PixelSize(w, h));
             using (DrawingContext dc = target.CreateDrawingContext())

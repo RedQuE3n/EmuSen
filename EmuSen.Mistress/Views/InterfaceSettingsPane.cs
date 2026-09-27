@@ -34,6 +34,14 @@ namespace EmuSen.Mistress.Views
             (BigPictureInterface.LaunchDisabled, "Disabled"),
         ];
 
+        public static readonly (string Value, string Text)[] ScreensaverChoices =
+        [
+            (BigPictureInterface.SaverDim, "Dim"),
+            (BigPictureInterface.SaverBlack, "Black"),
+            (BigPictureInterface.SaverSlideshow, "Slideshow"),
+            (BigPictureInterface.SaverVideo, "Video"),
+        ];
+
         private readonly AppSettings _settings;
         private readonly Action _changed;
 
@@ -89,7 +97,86 @@ namespace EmuSen.Mistress.Views
                     Switch("StatusBattery", "Display battery status indicator", S.StatusBattery, on => S.StatusBattery = on),
                     Switch("StatusBatteryPercentage", "Display battery charge percentage", S.StatusBatteryPercentage, on => S.StatusBatteryPercentage = on)),
             },
+            // ES-DE's "Screensaver settings" and "Slideshow screensaver settings", under UI settings as there - see EmuSen_Settings_Reference.md §4.75.
+            Ui.Header("Screensaver"),
+            new FieldRow
+            {
+                Label = "Start Screensaver After",
+                Hint = "Minutes with no button or key pressed in the library before the screensaver starts; 0 is never. ES-DE's default is 5.",
+                Content = Steps("ScreensaverTimer", 0, 30, 1, S.ScreensaverTimer / 60000, m => m == 0 ? "Never" : $"{m} min", m => S.ScreensaverTimer = m * 60000),
+            },
+            Choice("ScreensaverType", "Screensaver Type", "Dim greys and darkens the view, Black blanks it, Slideshow shows the library's pictures. Video shows Dim until videos are supported.",
+                ScreensaverChoices, S.ScreensaverType, v => S.ScreensaverType = v),
+            new FieldRow
+            {
+                Label = "Screensaver Controls",
+                Hint = "X in the system view starts it; in a slideshow left and right show another game, A starts the game shown and Y goes to it. Off, any button only wakes the screen.",
+                Content = Switch("ScreensaverControls", "Enable screensaver controls", S.ScreensaverControls, on => S.ScreensaverControls = on),
+            },
+            new FieldRow
+            {
+                Label = "In Game Mode",
+                Hint = "Whether it starts in a Steam Game Mode session, where Steam dims and sleeps the screen itself.",
+                Content = Switch("ScreensaverInGameMode", "Start the screensaver in Game Mode", S.ScreensaverInGameMode, on => S.ScreensaverInGameMode = on),
+            },
+            new FieldRow
+            {
+                Label = "Swap Images After",
+                Hint = "How long the slideshow shows each picture, 2 to 120 seconds.",
+                Content = Steps("ScreensaverSwapImageTimeout", 2, 120, 2, S.ScreensaverSwapImageTimeout / 1000, s => $"{s} s", s => S.ScreensaverSwapImageTimeout = s * 1000),
+            },
+            new FieldRow
+            {
+                Label = "Slideshow",
+                Hint = "Which games it shows, how, and whether their name and system show in the upper left corner. Custom images replace the library's pictures.",
+                Content = Ui.Stack(4,
+                    Switch("ScreensaverSlideshowOnlyFavorites", "Only include favorite games", S.ScreensaverSlideshowOnlyFavorites, on => S.ScreensaverSlideshowOnlyFavorites = on),
+                    Switch("ScreensaverStretchImages", "Stretch images to screen resolution", S.ScreensaverStretchImages, on => S.ScreensaverStretchImages = on),
+                    Switch("ScreensaverSlideshowGameInfo", "Display game info overlay", S.ScreensaverSlideshowGameInfo, on => S.ScreensaverSlideshowGameInfo = on),
+                    Switch("ScreensaverSlideshowCustomImages", "Use custom images", S.ScreensaverSlideshowCustomImages, on => S.ScreensaverSlideshowCustomImages = on),
+                    Switch("ScreensaverSlideshowRecurse", "Custom image directory recursive search", S.ScreensaverSlideshowRecurse, on => S.ScreensaverSlideshowRecurse = on)),
+            },
+            new FieldRow
+            {
+                Label = "Custom Image Directory",
+                Hint = "JPG, PNG, WebP, SVG and GIF pictures. ~ is the home folder and %ROMPATH% the ROM folder.",
+                Content = CustomFolder(),
+            },
         ];
+
+        private PathPickerRow CustomFolder()
+        {
+            var picker = new PathPickerRow
+            {
+                Name = "ScreensaverSlideshowCustomDir", Placeholder = "No folder chosen", BrowseTitle = "Custom image directory", Mode = PathPickerMode.Folder,
+                Path = S.ScreensaverSlideshowCustomDir, IsEditable = true,
+            };
+            picker.PathPicked += picked =>
+            {
+                S.ScreensaverSlideshowCustomDir = picked;
+                _changed();
+            };
+            return picker;
+        }
+
+        // A slider of whole steps with its value beside it, as the navigation volume's in Preferences.
+        private Control Steps(string name, int min, int max, int step, int current, Func<int, string> text, Action<int> store)
+        {
+            var slider = new Slider
+            {
+                Name = name, Minimum = min, Maximum = max, SmallChange = step, LargeChange = step, TickFrequency = step, IsSnapToTickEnabled = true, MinWidth = 240,
+                Value = Math.Clamp(current, min, max),
+            };
+            var label = new TextBlock { Name = name + "Text", VerticalAlignment = VerticalAlignment.Center, MinWidth = 60, Text = text((int)slider.Value) };
+            slider.ValueChanged += (_, _) =>
+            {
+                int value = (int)Math.Round(slider.Value);
+                label.Text = text(value);
+                store(value);
+                _changed();
+            };
+            return Ui.Row(12, slider, label);
+        }
 
         private LunaSwitch Switch(string name, string label, bool on, Action<bool> store)
         {

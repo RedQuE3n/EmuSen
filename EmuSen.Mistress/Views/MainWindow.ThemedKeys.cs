@@ -27,6 +27,7 @@ namespace EmuSen.Mistress.Views
             Key.Home => UiButton.First,
             Key.End => UiButton.Last,
             Key.F2 or Key.F3 => UiButton.Random,
+            Key.Delete => UiButton.Screensaver,
             _ => null,
         };
 

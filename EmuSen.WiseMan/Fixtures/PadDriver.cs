@@ -114,6 +114,7 @@ namespace EmuSen.WiseMan.Fixtures
                 case EmuSen.Mistress.Input.UiButton.First: L2(); break;
                 case EmuSen.Mistress.Input.UiButton.Last: R2(); break;
                 case EmuSen.Mistress.Input.UiButton.Random: L3(); break;
+                case EmuSen.Mistress.Input.UiButton.Screensaver: X(); break;
                 default: throw new System.ArgumentOutOfRangeException(nameof(button), button, "No single pad button maps to it.");
             }
         }

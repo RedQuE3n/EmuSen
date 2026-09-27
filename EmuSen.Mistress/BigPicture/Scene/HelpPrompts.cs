@@ -6,7 +6,7 @@ using EmuSen.Mistress.BigPicture.Theme;
 namespace EmuSen.Mistress.BigPicture.Scene
 {
     // What changes the help entries: a collection being edited, and the random entry button's setting (§22).
-    public sealed record HelpContext(bool Editing = false, bool RandomGames = false, bool RandomSystems = false, bool Folder = false, string QuickSelect = "leftright")
+    public sealed record HelpContext(bool Editing = false, bool RandomGames = false, bool RandomSystems = false, bool Folder = false, string QuickSelect = "leftright", bool Screensaver = false)
     {
         // A on this entry opens a list rather than a game: a folder with no link, or any folder while a collection is edited (§30).
         public static bool Enters(SceneGame? game, HelpContext help) => game is { Folder: true } g && (g.FolderLink is null || help.Editing);
@@ -71,6 +71,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         private static readonly Prompt Random = new("thumbstickclick", "Random", PadGlyphButton.ThumbstickClick, "thumbstick_click");
 
+        // ES-DE's system view names X "Screensaver" while its screensaver controls are on (§37).
+        private static readonly Prompt Saver = new("x", "Screensaver", PadGlyphButton.West, "button_x_{0}");
+
         // The entries a theme lists, in its order, that Mistress has an action for in this view; "all" is every one.
         public static IReadOnlyList<HintEntry> For(string view, IReadOnlyList<string> entries, IReadOnlyDictionary<string, ThemePath> icons, PadFamily family = PadFamily.Generic, bool swapped = false, HelpContext? context = null)
         {
@@ -80,6 +83,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             if (view == "gamelist" && c.Folder) known = known.Select(p => p.Entry == "a" ? p with { Label = "Select" } : p).ToArray();
             if (view == "gamelist") known = QuickSelected(known, c.QuickSelect);
             if (view == "system" ? c.RandomSystems : c.RandomGames) known = [.. known.Take(known.Length - 1), Random, known[^1]];
+            if (view == "system" && c.Screensaver) known = [.. known.Take(known.Length - 1), Saver, known[^1]];
             IEnumerable<Prompt> chosen = entries.Contains("all") ? known : entries.Select(n => known.FirstOrDefault(p => p.Entry == n)).OfType<Prompt>();
             if (swapped) chosen = chosen.Select(Swapped);
             return chosen.Select(p => new HintEntry(p.Label, IconKey(p, family) is { } key && icons.GetValueOrDefault(key) is { Exists: true } icon ? icon.Absolute : null)

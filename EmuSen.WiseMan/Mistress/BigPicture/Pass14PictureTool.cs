@@ -51,6 +51,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 "gba" => (".zip", [new("Aurora Drift", "Aurora Drift (Synthetic).zip"), new("Brass Lantern", "Brass Lantern (Synthetic).zip") { PlayCount = 3, LastPlayed = Played }, new("Cobalt Harbor", "Cobalt Harbor (Synthetic).zip")]),
                 "genesis" => (".zip", [new("Aurora Drift", "Aurora Drift (Synthetic).zip") { PlayCount = 9, LastPlayed = Played.AddDays(3), NotCounted = true },
                     new("Brass Lantern", "Brass Lantern (Synthetic).zip") { PlayCount = 2, LastPlayed = Played.AddDays(1) }, new("Dune Relay", "Dune Relay (Synthetic).zip") { PlayCount = 1, LastPlayed = Played.AddDays(-1) }]),
+                "gamegear" => (".zip", [new("Aurora Drift", "Aurora Drift (Synthetic).zip") { Favorite = true }]),
                 _ => (".zip", [new("Aurora Drift", "Aurora Drift (Synthetic).zip")]),
             };
             if (g.Own is { } own) return own;
@@ -58,7 +59,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return SyntheticLibrary.Games(theme, g.Extension).OrderByDescending(x => x.Favorite).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
-        private void Render(string label, string themeDir, ThemeChoices choices, string system, string view = "system", int w = 1280, int h = 800, int shuffle = 0)
+        private void Render(string label, string themeDir, ThemeChoices choices, string system, string view = "system", int w = 1280, int h = 800, int shuffle = 0, EmuSen.LunaP.Controls.DeviceStatus? status = null)
         {
             ThemeCapabilities caps = ThemeCapabilitiesReader.Read(themeDir);
             choices = choices with { ScreenWidth = w, ScreenHeight = h };
@@ -67,7 +68,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var data = new SceneData(systems, new Size(w, h))
             {
                 SystemIndex = systems.FindIndex(s => s.System.Name == system), GameIndex = 0, Media = new EsdeMediaFolder(Media), Shuffle = shuffle,
-                Now = new DateTime(2026, 9, 27, 5, 0, 0), ShowClock = false, Status = new EmuSen.LunaP.Controls.DeviceStatus(Bluetooth: true),
+                Now = new DateTime(2026, 9, 27, 5, 0, 0), ShowClock = false, Status = status ?? new EmuSen.LunaP.Controls.DeviceStatus(Bluetooth: true),
             };
             SceneBuilder scene = SceneBuilder.Build(data.System.Theme.View(view), data);
             Directory.CreateDirectory(PngFolder);
@@ -82,6 +83,18 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             string wheel = Path.Combine(Probe, "p14-wheel-es-de"), sel = Path.Combine(Probe, "p14-sel-es-de");
             foreach (string variant in ThemeCapabilitiesReader.Read(wheel).Variants.Select(v => v.Name))
                 Render("w-" + variant, wheel, new ThemeChoices { Variant = variant }, "snes");
+            string defaults = Path.Combine(Probe, "p14-defaults-es-de");
+            foreach ((int w, int h) in new[] { (1280, 800), (1920, 1200) })
+                foreach (string view in new[] { "system", "gamelist" })
+                    Render(view == "system" ? "d-none-sys" : "d-none-gl", defaults, new ThemeChoices { Variant = "none" }, "snes", view, w, h);
+            var all = new EmuSen.LunaP.Controls.DeviceStatus(Bluetooth: true, Wifi: true, Cellular: true, BatteryPercent: 100);
+            Render("d-all-sys", defaults, new ThemeChoices { Variant = "none" }, "snes", status: all);
+            Render("d-all-sys", defaults, new ThemeChoices { Variant = "none" }, "snes", w: 1920, h: 1200, status: all);
+            Render("d-all-own", defaults, new ThemeChoices { Variant = "own" }, "snes", status: all);
+            foreach ((string label, string variant, string system, string view) in new[] { ("d-helpgl-sys", "helpGamelistOnly", "snes", "system"), ("d-helphidden-sys", "helpHidden", "snes", "system"),
+                ("d-statushidden-sys", "statusHidden", "snes", "system"), ("d-own-sys", "own", "snes", "system"), ("d-texts-ms", "texts", "mastersystem", "system"),
+                ("d-texts-gg", "texts", "gamegear", "system"), ("d-texts-snes", "texts", "snes", "system"), ("d-texts-ms-gl", "texts", "mastersystem", "gamelist") })
+                Render(label, defaults, new ThemeChoices { Variant = variant }, system, view);
             foreach ((string label, string variant, string system) in new[] { ("s-multi", "multi", "snes"), ("s-multi-gba", "multi", "gba"), ("s-multi-genesis", "multi", "genesis"), ("s-none", "none", "snes"), ("s-single", "single", "snes"), ("s-order1", "order1", "snes") })
                 Render(label, sel, new ThemeChoices { Variant = variant }, system);
         });

@@ -152,7 +152,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             ResolvedTheme theme = LoadView("<badges name=\"b\"><pos>0 0</pos></badges><gamelistinfo name=\"g\"><pos>0 0</pos></gamelistinfo>", "system");
             Assert.True(theme.IsThemed);
-            Assert.Empty(theme.SystemView.Elements);
+            Assert.Empty(theme.SystemView.Elements.Where(e => e.Name != ResolvedView.DefaultName));
             Assert.Equal(2, theme.Diagnostics.Count(d => d.Code == ThemeDiagnosticCode.ViewRestricted));
         }
 

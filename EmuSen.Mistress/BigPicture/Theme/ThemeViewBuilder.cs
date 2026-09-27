@@ -14,6 +14,7 @@ namespace EmuSen.Mistress.BigPicture.Theme
 
         public ViewBuilder(string name) => Name = name;
 
+
         public string Name { get; }
 
         public void Merge(ThemeElementSpec spec, string name, ref int order, List<(string Name, RawProperty Value, string? Key)> properties)
@@ -62,6 +63,14 @@ namespace EmuSen.Mistress.BigPicture.Theme
                 }
                 resolved.Add(r);
             }
+            if (Name is "system" or "gamelist")
+            {
+                int order = _elements.Count;
+                foreach (string type in new[] { "helpsystem", "systemstatus" })
+                    if (!_elements.Any(e => e.Spec.Type == type) && new ElementBuilder(ThemeCatalog.Find(type)!, ResolvedView.DefaultName, order++).Resolve(Name, run, diagnostics) is { } d)
+                        resolved.Add(d);
+            }
+
             List<ResolvedElement> ordered = resolved
                 .OrderBy(e => e.ZIndex ?? float.PositiveInfinity)
                 .ThenBy(e => e.Order)

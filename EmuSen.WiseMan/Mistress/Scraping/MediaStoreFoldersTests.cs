@@ -153,6 +153,29 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.True(reopened.Done(MediaStore.FoldersStep));
         }
 
+        // Clear on a foldered game: its folder's pictures go; a game of the same stem in another folder, or at the top, keeps its own.
+        [Fact]
+        public void Forgetting_a_foldered_game_deletes_only_the_pictures_in_its_own_folder()
+        {
+            using MediaStore store = MediaStore.Open(Media);
+            string mine = Put("nes/covers/USA/Kid.png", 11), theirs = Put("nes/covers/Europe/Kid.png", 12), top = Put("nes/covers/Kid.png", 13);
+            IReadOnlyList<string> gone = store.Forget(Rom("NES/USA/Kid.nes"), "nes", "USA");
+            Assert.Equal([Path.GetFullPath(mine)], gone);
+            Assert.True(File.Exists(theirs));
+            Assert.True(File.Exists(top));
+        }
+
+        [Theory]
+        [InlineData("USA", "USA", "")]
+        [InlineData("USA2", "USA", null)]
+        [InlineData("USA2/Sub", "USA", null)]
+        [InlineData("Hacks/Mario", "Hacks", "Mario")]
+        [InlineData("Hacks/Mario/Deep", "", "Hacks")]
+        [InlineData("", "", "")]
+        [InlineData("", "USA", null)]
+        public void A_folder_s_child_is_found_only_below_it(string gameFolder, string folder, string? child) =>
+            Assert.Equal(child, GameFolders.ChildWithin(gameFolder, folder));
+
         [Theory]
         [InlineData("NES/USA/Game.nes", "USA")]
         [InlineData("NES/Hacks/Mario/Game.nes", "Hacks/Mario")]

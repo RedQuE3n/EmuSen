@@ -94,6 +94,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal([true, true, true, false, false], Entries(s).Select(g => g.Folder));
             Assert.Equal(["Europe", "Hacks", "USA", "", ""], Entries(s).Select(g => g.FolderPath));
             Assert.Equal(Path.Combine(s.RomDirectory, "NES", "USA"), Entries(s)[2].File);
+            Assert.Equal(Path.Combine(s.RomDirectory, "NES", "Hacks"), Entries(s)[1].File);
             TextRowList rows = s.Themed.Stage!.Current.Scene.Entries.Select(e => e.Control).OfType<TextRowList>().Single();
             Assert.Equal([TextRowMarker.Folder, TextRowMarker.Folder, TextRowMarker.Folder, TextRowMarker.None, TextRowMarker.None], rows.Items!.Select(r => r.Marker));
             Assert.True(rows.Items![0].Secondary);
@@ -158,6 +159,33 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.A();
             Assert.Equal([BirchEcho], Listed(s));
         });
+
+        // The system view's counter counts every game of a foldered system, not the entries its list opens on.
+        [Fact]
+        public Task The_system_view_counts_the_games_inside_folders_not_the_entries() => UiTest.Run(() =>
+        {
+            using var theme = new SyntheticTheme();
+            theme.Capabilities("").Theme("<view name=\"system\"><text name=\"x\"><systemdata>gamecount</systemdata></text></view>");
+            var nes = new ThemeSystem("nes", "Nintendo Entertainment System", "nes");
+            var entries = new[] { new SceneGame("USA", "/r/NES/USA") { Folder = true, FolderPath = "USA" }, new SceneGame("Top", "/r/NES/Top.nes") };
+            var all = new[] { new SceneGame("A", "/r/NES/USA/A.nes") { FolderPath = "USA", Favorite = true }, new SceneGame("B", "/r/NES/USA/B.nes") { FolderPath = "USA" }, entries[1] };
+            var choices = new ThemeChoices { ScreenWidth = 320, ScreenHeight = 200 };
+            var data = new SceneData([new SceneSystem(nes, theme.Load(choices, nes), entries) { Counted = all }], new Avalonia.Size(320, 200));
+            SceneBuilder scene = SceneBuilder.Build(data.System.Theme.View("system"), data);
+            Assert.Equal("3 games available, 1 favorites", ((FontText)scene.Entries.Single(e => e.Element.Name == "x").Control!).Text);
+        });
+
+        // USERGUIDE: "folders can't be part of collections", so all games lists the files inside folders, flat.
+        [Fact]
+        public Task All_games_lists_the_games_inside_folders_flat() => Run(s =>
+        {
+            for (int guard = 0; guard < 12 && s.System != "all"; guard++) s.Pad.Right();
+            s.Pad.A();
+            Assert.Equal(16, Listed(s).Length);
+            Assert.Contains(DeepHack, Listed(s));
+            Assert.All(Entries(s), g => Assert.False(g.Folder));
+            Assert.False(s.Themed.InFolder);
+        }, ThemedCollectionsTests.AllAuto);
 
         // P109's return: a game started inside a folder comes back to that folder and game, its first frame a fresh build of that selection (P40's test).
         [Fact]
@@ -442,6 +470,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(File.Exists(foldered));
             Assert.False(File.Exists(flat));
             Assert.Equal(foldered, Sources(s).Cover("nes", Path.Combine(s.RomDirectory, "NES", "USA", UsaGame + ".nes")));
+
+            // Clear takes the game's pictures from its own folder, a file media.db does not name among them, and nothing of another folder's game.
+            string named = Touch(Path.Combine(MediaStore.DefaultRoot, "nes", "screenshots", "USA", UsaGame + ".png"));
+            string other = Touch(Path.Combine(MediaStore.DefaultRoot, "nes", "covers", "Europe", EuropeGame + ".png"));
+            s.Window.ClearMetadata(Path.Combine(s.RomDirectory, "NES", "USA", UsaGame + ".nes"));
+            Assert.False(File.Exists(foldered));
+            Assert.False(File.Exists(named));
+            Assert.True(File.Exists(other));
         }, default);
     }
 }

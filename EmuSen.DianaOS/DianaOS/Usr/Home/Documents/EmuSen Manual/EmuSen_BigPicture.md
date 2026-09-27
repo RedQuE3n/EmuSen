@@ -881,6 +881,12 @@ The whole-library pass is one explicit action that the player starts.
   - The alternative: builds carry no developer credentials, and scraping works only where the developer file exists.
     That means only on the player's machines, since players cannot obtain developer credentials themselves (step 2).
   - The recommendation is the first, with Q5 confirming it.
+  - *Implemented 2026-09-27 (Q40, which reversed Q5's answer; §28 is the record, §4.65 of the settings reference the
+    player's account).* The first option was built as written: `EmuSen.Mistress/Scraping/ScreenScraperDeveloper.targets`
+    embeds, at `dotnet publish` only, the file named by `EmuSenScreenScraperDeveloper` (default
+    `~/.config/EmuSen/screenscraper-developer.json`), XORed with a 32-byte key generated for that build and stored in the
+    same resource. It is obfuscation in exactly ES-DE's sense and no more: it defeats a search of the binary for the
+    password and the secret scanners that work that way, and nothing else.
 
 ### 5.8 What is sent, and the licence posture
 
@@ -1083,7 +1089,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 - **Q4, videos:** **not now.** Stage (g) is deferred; the video element renders its fallback image, as ES-DE does
   when no video file exists.
 - **Q5, developer credentials:** **the player's own machines only.** Published builds do not carry them; a build
-  without the local file cannot scrape.
+  without the local file cannot scrape. *Reversed by Q40 on 2026-09-26 and built on 2026-09-27 (§28).*
 - Q6–Q10 remain open; each is asked when its stage reaches it.
 - **Q8 and Q9, and navigation sounds (2026-09-25, before stage e):**
   - **Q8:** the existing big-screen library **stays**, as the fallback when no theme is installed and as a choice
@@ -1141,11 +1147,17 @@ sends and to whom. The API's own condition (free, distributed software) is met.
     scrape; a member login only raises their limits. **This reverses Q5** ("builds carry no developer credentials").
     The risks are accepted as ES-DE accepts them: the credentials can be extracted, and abuse could get the
     `EmuSen-Mistress` software name blocked (426), which the scraper already reports.
+    **Implemented 2026-09-27** (§28): the publish step, the resolution order (the tree's file, `~/.config/EmuSen`, then
+    what the build carries), and the redactor over the embedded values.
+  - **Q42 and Q45, built 2026-09-27** (§28): OpenVGDB's Remove in Preferences, worded, after the player kept OpenVGDB
+    (below), as an optional way to free its space that switches the fallback off until the database is downloaded again,
+    with a Download beside it; and *Use Another Game's Cover…*, kept as a row of `games.db` rather than a copied file.
 - **Q7, miximages (2026-09-26, during stage d):** ScreenScraper's ready-made mix, `mixrbv2`, is fetched as the
   miximage. It looks different from ES-DE's own composed miximages; building our own composite is not wanted now.
 - **Q5, the developer credentials, as received (2026-09-26):** issued to the player as EmuSen's developer, kept only in
   `~/.config/EmuSen/screenscraper-developer.json` (mode 0600) with `softname` `EmuSen-Mistress`, verified against
-  `ssinfraInfos.php` the same day. No build carries them.
+  `ssinfraInfos.php` the same day. No build carries them. *Since Q40 (§28), a publish run on that machine embeds them
+  from that file; a plain build still carries none.*
 - **Drawn with LunaP (2026-09-24): "make sure we are drawing this with LunaP and if something is missing
   from LunaP, add it".** This supersedes §4's one Skia-drawn control in Mistress. Every visible part is a LunaP
   control, and what LunaP lacks is added to LunaP under its own conventions (a `docs/LunaP.md` section, tests, the API
@@ -5281,6 +5293,14 @@ For Pass 1's session with the player, on the Legion Go S (build from this branch
 
 > **Retired 2026-09-27.** The choice was to keep OpenVGDB as a permanent fallback (§10.1). What follows remains
 > the record of what the fallback was measured to yield; its removal steps are not to be carried out.
+>
+> **Built from it, 2026-09-27 (§28):** Q42's Remove and Q45's *Use Another Game's Cover…*. One departure from 26.4 is
+> deliberate: the chooser was proposed to *copy* the chosen cover into the art folder under this game's name; it was
+> built as a row of `games.db` naming the other game, resolved when the cover is looked up. A copy would overwrite a
+> picture the player may already have placed there, would go stale when the chosen game's cover later improves, and
+> could be undone only by deleting a file; the row overwrites nothing, follows the other game's cover as it changes, and
+> is undone by deleting the row. 26.8's test for it ("a copy into the art folder") is therefore replaced by its
+> opposite: the art folder and the ROM folder are byte- and time-identical before and after.
 
 *A plan, written on branch `desktop-game-options` beside §27; nothing is removed by it.* The direction of
 2026-09-26 (§10.1): "i would like to eventually retire sourcing game info from openemus library and use screenscraper".
@@ -5700,3 +5720,162 @@ mutant runner's four classes passed 29 of 29 on the final code.
   favourite as the menu's first entry, or keep it? **Recommendation: keep it**, since the built-in library is Mistress's
   own look (§23.4) and its help line already names Select as the favourite; the pad menu reaches the options in two
   presses.
+
+---
+
+## 28. Q40, Q42 and Q45 built: the developer credentials in published builds, OpenVGDB's Remove, and another game's cover (2026-09-27)
+
+*Built on branch `scrape-embed-and-covers`.* The answers of 2026-09-26 (§10.1): Q40 ("Do what ES-DE does"),
+Q42 and Q45 from §26.9. The retirement §26 planned was withdrawn during the work ("Keep openvgdb as a
+fallback", 2026-09-27), which changed Q42's wording and nothing else. The player's account is §4.65 of the settings
+reference; this is the record.
+
+### 28.1 Predictions, and what was found
+
+Written during the build, by the hand that wrote the code, and weaker evidence for it (as §27.1 said of its own).
+
+| # | Predicted | Found | Verdict |
+|---|---|---|---|
+| P150 | `_IsPublishing`, which `dotnet publish` sets, is enough to tell a publish from a build before the compile | a plain `dotnet build` of the same project with the same property embeds nothing (test, and mutant E5) | held |
+| P151 | A plain build after a publish in the same `obj/` would keep the resource unless the compile's input hash is told about it, so the target must add to `CoreCompileCache` | **wrong**: the SDK already hashes `@(_CoreCompileResourceInputs)` (`Microsoft.Common.CurrentVersion.targets`), so the resource's disappearance recompiles by itself. Mutant E8 removed the line and survived; the line was then removed from the target as redundant | retired |
+| P152 | ReadyToRun at publish keeps a manifest resource unchanged | the published `lib/EmuSen/EmuSen.Mistress.dll` (3.4 MB, ReadyToRun, linux-x64, self-contained) carries the 120-byte resource and it decodes to the fake file's values | held |
+| P153 | The picker's candidates can be the library's games whose `CoverPathFor` is non-null, with no new index | held in the tests; not measured on a 5,520-game library (§28.6) | held, untested at scale |
+| P154 | Of the round's mutants, at least nine in ten are caught on their first run | 30 of 34 (88%); 28.4 | failed |
+
+### 28.2 Q40: the embedding, measured
+
+The target is `EmuSen.Mistress/Scraping/ScreenScraperDeveloper.targets`; the runtime side is
+`DeveloperCredentials.Load`, `Embedded` and `Decode` in `ScreenScraperCredentials.cs`. §4.65.1 describes both.
+
+**Choices made where the answer was silent.**
+- *The key and the data in one resource.* ES-DE keeps its key in the same header as the scrambled strings; two
+  resources would be no harder to read, and one keeps the format in one place.
+- *A key per build, not a fixed one.* A fixed key would let the scrambled bytes themselves be searched for across
+  builds; a fresh key costs nothing, since a publish recompiles anyway.
+- *The file re-encoded, not embedded as it is.* Only the three fields are embedded, so a note or an extra field a
+  developer keeps in the file never ships. The target reads the values with a regular expression rather than a JSON
+  parser, because an inline task compiled by `RoslynCodeTaskFactory` has no guaranteed reference to `System.Text.Json`;
+  the values are copied with their JSON escapes intact and parsed properly at run time.
+- *The scrambled file deleted after the compile,* so the scrambled credentials exist on disk only inside the published
+  assembly and, for the seconds of one compile, in `obj/`.
+- *A warning, not an error, for a missing file*, as the plan asked: a publish on a machine without the file (a
+  contributor's, CI's) must succeed and produce a build that simply cannot scrape without a file of its own.
+
+**The one publish of Mistress itself** (by hand, not a test; `~/.cache/emusen/probe/q40/publish-fake.sh`), with the
+README's recipe for linux-x64 into scratch, a fake developer file whose password was random for the run, and
+`XDG_CONFIG_HOME` pointed at an empty scratch folder so the real file could not be read: the publish succeeded; the
+resource was present (120 bytes) and decoded to the fake values; the fake password was found nowhere in the published
+tree, nor in the build log; no `screenscraper-developer.bin` was left under `obj/`. A first attempt without
+`-p:ErrorOnDuplicatePublishOutputFiles=false` failed with NETSDK1152 on DianaOS's apphost, the known reason the recipe
+carries that switch, and unrelated to this target.
+
+### 28.3 Tests
+
+Headless through WiseMan, never the network, and never the real developer file: every child process in
+`ScreenScraperEmbedTests` runs with `XDG_CONFIG_HOME` in the test's scratch folder, and one test asserts that the
+property's default resolves there before it publishes with no property at all.
+
+- `ScreenScraperEmbedTests` (5) publishes a scratch project that imports the target, with a fake file whose id and
+  password are random per run (the password holds a quote, an ampersand and a `<`): the resource is present and decodes to
+  the file's values; neither value, nor its JSON- or URL-escaped spelling, appears in the assembly (searched as UTF-8 and
+  UTF-16), in the build's output, or in any file the build left in `obj/` or `bin/`; a second publish uses a different key;
+  a plain build never embeds, including a plain build after a publish in the same `obj/`; a publish naming a missing file
+  succeeds with exactly one `EMUSEN0040`; with no property, the default is the (moved) user config directory, a publish
+  there warns once and then, with a file placed there, embeds it; a file missing its password is not embedded and the
+  warning names the field and not the id; the scrambled file's place under `obj/` is ignored by git.
+- `ScrapeCredentialTests` (+9): the order (none; embedded; the player file over it; the tree file over both; a broken tree
+  file passed over); the embedded values redacted raw and URL-escaped, never printed, and never written by loading them,
+  saving a member account or saving `appsettings.json`; six malformed blobs refused; the scrambled bytes holding neither
+  value nor the word `devpassword`. `No_tracked_file_holds_a_real_devpassword` still reads the real file only to look
+  for its password in tracked files; widening it to the id was tried and withdrawn, since the id is not a secret and
+  is an ordinary word that tracked files contain.
+- `ScrapeWindowTests` (+2, Q42): Remove declined deletes nothing; Remove accepted deletes the database with no request,
+  turns the fallback off in the window, the switch and `appsettings.json`, keeps the fallback's covers, shows Download;
+  a run then asks no server and downloads nothing; Download fetches it, turns the fallback on, and the next run finds the
+  cover through the new database. A separate test runs Preferences and runs with the fallback off and on, and finds the
+  database byte-identical afterwards.
+- `CoverChoiceTests` (8, Q45): the order (the choice before the player's own art, covers only, the stamp changes); a
+  chosen game on another console, a chain, a loop, a chosen game with no cover; the `games.db` row through Clear, Move
+  of either game, removal and a choice of itself; the picker's ranking and search; the desktop's context menu to the
+  picker as an owned window, the candidates, the grid, list and themed lookups, a second window reading the choice back,
+  and the ROM and art folders' bytes and times unchanged; Use Its Own Cover from the context menu and from the picker;
+  big picture by pad (the options' entry, the picker as a sheet, every control reached, the search typed on the
+  on-screen keyboard, the drawn cover image of the themed gamelist following the choice and its undo); the built-in big
+  screen's options by pad.
+- The options menus' expected entries gained *Use Another Game's Cover...* in `DesktopGameOptionsTests`,
+  `ThemedGameOptionsTests` and `ThemedCollectionsTests`, and three sentences about the missing developer file in
+  `ScrapeWindowTests`, `ScrapeStatusWindowTests` and `ScrapeSignInTests` now name the build as well.
+
+### 28.4 Mutants
+
+The runner is `~/.cache/emusen/probe/q40/mutants.py`, its list `mutants-q40.json` written by `mutants_make.py`, which
+checks that each edit's text occurs exactly once. It keeps the unmutated file beside itself while a mutant is applied,
+restores it on start if a round was interrupted, compares it byte for byte after each mutant, and rebuilds the tree at
+the end. Each `.cs` mutant was built with `-m:2`; each ran alone under `nice -n 10` against only its rule's tests.
+Mutants of the `.targets` file need no rebuild, since the tests publish their scratch project against the file as it
+is on disk. Verdicts are in `mutants.txt`, the run's log in `run-q40.log`.
+
+| Rule | Mutants | Result |
+|---|---|---|
+| Q40: the order | E1 the embedded credentials never consulted; E2 ranked before the files | caught |
+| Q40: never shown or logged | E3 the embedded password not registered with the redactor | caught |
+| Q40: only what the target writes | E4 a blob of another version accepted | caught |
+| Q40: only at publish | E5 a plain build embeds too | caught |
+| Q40: scrambled | E6 the JSON embedded as it is | caught (the plain-text search, and the decoder) |
+| Q40: nothing left behind | E7 the scrambled file left in `obj/` | caught |
+| Q40: a plain build after a publish | E8 the target's `CoreCompileCache` item removed | **survived, and equivalent**: the SDK hashes `@(_CoreCompileResourceInputs)` itself (P151). The line was removed from the target rather than kept untested |
+| Q40: a publish without the file | E9 no warning for a missing default file; E10 a file missing a field embedded anyway | caught |
+| Q42: Remove is the player's, and switches the fallback off | R1 the window's setting left on; R3 no confirm; R5 the switch left showing on; R7 Remove offered with nothing to remove | caught |
+| Q42: the old file let go of | R2 the fallback's worker kept, holding the removed file open | **survived the first round**: the served database was identical to the removed one, so a stale worker gave the same answers. The test now serves a database that knows one more game and asserts that game is found after Download; caught in the second round |
+| Q42: Download | R4 the fallback left off after Download | caught |
+| Q42: nothing else removes it | R6 the database deleted when the fallback is switched off | caught |
+| Q45: first in the order, covers only | C1 the choice never looked up; C2 the player's own art ranked above it; C3 screenshots borrowed too | caught |
+| Q45: chains and loops | C4 the loop guard dropped; C5 the chosen game looked up under this game's system | caught |
+| Q45: kept, and moved | C6 Clear removes the choice; C7 a renamed chosen game loses its borrowers; C8 a game borrowing its own cover | caught |
+| Q45: the picker | C9 the game itself offered; C10 a game borrowing from this one offered; C11 a game with no cover offered; C17 the nearest-by-name order dropped | caught; C17's first form (the ordering line deleted) did not compile and was rewritten as a constant key for the second round |
+| Q45: undo and routes | C12 Use Its Own Cover does nothing; C13 the options never offer it; C15 no entry in the context menu | caught |
+| Q45: the themed view | C14 the choice's stamp left out of the themed view's media key | **survived, and equivalent**: that key only clears the presence cache, whose own key already carries `MediaSources.Stamp`, which carries the choice; the drawn cover is looked up afresh on every showing (the test reads the drawn image). The stamp was removed from the key |
+| Q45: no file touched | C16 a choice also copies the picture into the art folder | caught (the folders' fingerprint) |
+
+**30 of 34 caught on the first run**, since C17's first form did not compile: the runner records a failed build as
+caught, but it is no evidence and is not counted. **32 of 34 after the second round** (R2 with its sharper test, C17
+rewritten), and the two survivors are equivalent mutants whose code was then removed. P154 **failed**: 30 of 34 is 88%,
+under the nine in ten predicted; one of the four misses was a test too weak to tell two databases apart, one a mutant
+that did not compile, and two were code that did nothing. As §27.5 said of its
+own, a mutant written after its test by the same hand shows that the test is not empty, not that the list of rules is
+complete.
+
+### 28.5 Pictures
+
+At 1280×800, written by `CoverChoicePictureTool` with `EMUSEN_BIGPICTURE_PNG=1` to
+`~/.cache/emusen/bigpicture/png/q40-q45/`; a desktop window is drawn over the main window where it opens, as §27.6's
+tool does. They were looked at:
+
+- `q42-openvgdb-row-downloaded`: the Scraping tab scrolled to its end; under the failover's hint, which now ends with
+  "Removing OpenVGDB is optional and only frees its space", the switch on, "OpenVGDB is downloaded: … in home/Library",
+  and Remove focused.
+- `q42-openvgdb-row-removed`: after Remove, the switch off, "OpenVGDB is not downloaded. Download fetches it…", Download
+  in Remove's place, and the message that the fallback is off until it is downloaded again. The synthetic database is
+  20 KB, which is why the row reads in KB.
+- `q45-desktop-context-menu`, `q45-desktop-picker`: the grid's context menu over the third game, then the picker as a
+  window: the game's name, the sentence that nothing is copied or sent, the search box, and the four games with a cover,
+  each with its picture; the first focused.
+- `q45-desktop-grid-after`: the third game's tile shows the fourth game's cover, the status line says so, and no other
+  tile changed.
+- `q45-sheet-picker`, `q45-sheet-picker-searched`, `q45-themed-gamelist-after`: in big picture, the picker as a sheet
+  with the pad's help line; after "dune" typed on the on-screen keyboard, one row; after A, the themed gamelist's cover
+  image shows the fourth game's cover beside the third game's name.
+- **Seen and left:** as a sheet the picker opens with the search box focused rather than the first game, because a
+  sheet's `Opened` comes before its rows are laid out; A on the box opens the keyboard and the d-pad reaches the rows.
+  The picker's thumbnails are square-fitted, as the rows are short.
+
+### 28.6 Not done
+
+- **Nothing ran on the handheld**, and no real pointer or window manager drove the desktop windows.
+- **No real developer file was embedded** by any test, as the plan required; the only Mistress publish used a fake
+  one. Whether ScreenScraper accepts the embedded credentials from a published build is therefore not measured, only
+  that they decode to what the file held.
+- **The picker at scale.** It walks the library's games and asks each for its cover when it opens; on the 5,520-game
+  library that has not been timed.
+- **Q42's buttons during a run** are disabled by the host's `OpenVgdbBusy`; no test holds a run open to press them.
+- **Q43, Q44 and Q46** needed no code; Q44 no longer applies since OpenVGDB is kept (§10.1).

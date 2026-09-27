@@ -35,6 +35,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             InfoLine line = Info();
             Assert.Equal([new InfoItem(InfoIcon.Gamepad, "12"), new InfoItem(InfoIcon.Star, "6")], line.Items);
             Assert.Equal(Colors.Black, line.Foreground);
+            InfoLine excluding = Info(s => s with { Games = s.Games.Select((g, i) => i < 3 ? g with { NotCounted = true } : g).ToList() });
+            Assert.Equal([new InfoItem(InfoIcon.Gamepad, "9"), new InfoItem(InfoIcon.Star, "4")], excluding.Items);
         });
 
         // Measured: a favourites filter showed a funnel and "6 / 12", no favourites count; inside a folder, the system's totals and an open folder.
@@ -84,7 +86,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public Task A_lottie_file_draws_nothing() => UiTest.Run(() =>
         {
             using var theme = new SyntheticTheme();
-            theme.Capabilities("").Asset("a.json").Theme("<view name=\"system\"><animation name=\"l\"><size>0.1 0.1</size><path>./a.json</path></animation></view>");
+            theme.Capabilities("").Theme("<view name=\"system\"><animation name=\"l\"><size>0.1 0.1</size><path>./a.json</path></animation></view>");
+            System.IO.File.Copy(Four, theme.PathOf("a.json"));
             var data = new SceneData(Systems(theme), new Size(W, H)) { SystemIndex = 1 };
             Assert.Null(SceneBuilder.Build(data.System.Theme.SystemView, data).Find("animation", "l")!.Control);
         });

@@ -1,7 +1,7 @@
 # EmuSen_BigPicture — a plan for a big-picture mode in Mistress that renders ES-DE themes
 
-*Written 2026-09-24. Stage (a), the theme loader, was built the same day; its record is §12. Stage (b), the two views drawn statically with LunaP controls, followed on 2026-09-24 and 25; its record is §13. Stage (c), the GPU frame and motion, followed on 2026-09-25; its record is §14. Stage (e), the themed view as the big-screen library driven by the pad, followed the same day; its record is §15. Stage (f), variants and settings, the grid, the triggers against Mistress's media, and themes downloaded on request, followed on 2026-09-25 and 26; its record is §16. Stage (d), ScreenScraper, followed on 2026-09-26; its record is §17. Stage (g) is not built.* The request was for a big-picture mode in Mistress like EmulationStation's,
-starting with the theme they like, Art Book Next. They made two choices. First, Mistress reads ES-DE themes, so that
+*Written 2026-09-24. Stage (a), the theme loader, was built the same day; its record is §12. Stage (b), the two views drawn statically with LunaP controls, followed on 2026-09-24 and 25; its record is §13. Stage (c), the GPU frame and motion, followed on 2026-09-25; its record is §14. Stage (e), the themed view as the big-screen library driven by the pad, followed the same day; its record is §15. Stage (f), variants and settings, the grid, the triggers against Mistress's media, and themes downloaded on request, followed on 2026-09-25 and 26; its record is §16. Stage (d), ScreenScraper, followed on 2026-09-26; its record is §17. Stage (g) is not built.* A big-picture mode in Mistress like EmulationStation's was requested,
+starting with Art Book Next as its theme. Two choices were made at the outset. First, Mistress reads ES-DE themes, so that
 Art Book Next and other ES-DE themes load as their authors made them. A look-alike built from Mistress's own controls
 was not wanted. Second, game media comes from ScreenScraper. This page plans that work. It inventories the theme
 format and what Art Book Next uses of it, designs the renderer, the ScreenScraper client and theme management, and
@@ -19,7 +19,7 @@ Predictions are numbered P1–P12 so that they can be retired later (§9).
 credits. EmuSen is GPL-3.0. Nothing from the theme enters the EmuSen repository or its releases: no file, no XML, no
 artwork, no rendered picture of it, and no golden derived from it. The theme is downloaded when the player asks for it
 (§6), in the same way the RetroArch shader pack is (`EmuSen_Settings_Reference.md` §4.41). ES-DE's own code is
-MIT-licensed (§2.1), which would permit reuse with a notice. By the decision the plan copies none of it anyway,
+MIT-licensed (§2.1), which would permit reuse with a notice. By decision the plan copies none of it anyway,
 and implements only the format that ES-DE's `THEMES.md` documents. For reading, both theme repositories were cloned
 outside the EmuSen tree: `~/Projects/art-book-next-reference` (Batocera edition) and
 `~/Projects/art-book-next-es-de-reference` (ES-DE edition). Nothing was copied from either.
@@ -28,7 +28,7 @@ outside the EmuSen tree: `~/Projects/art-book-next-reference` (Batocera edition)
 
 ## 0. Summary
 
-- **The repository the player linked is not an ES-DE theme.** `anthonycaccese/art-book-next-es` is the edition for the
+- **The repository first linked is not an ES-DE theme.** `anthonycaccese/art-book-next-es` is the edition for the
   Batocera fork of EmulationStation, and uses that fork's format (§1.1). ES-DE cannot load it: ES-DE 2.2.0 and later
   refuse every theme in the legacy format. The same author publishes an ES-DE edition,
   `anthonycaccese/art-book-next-es-de`, and the plan targets that edition (Q1).
@@ -54,7 +54,7 @@ outside the EmuSen tree: `~/Projects/art-book-next-reference` (Batocera edition)
   element's place (§4.7).
 - **ScreenScraper (cited, §5).** API v2 `jeuInfos.php` is asked by MD5, CRC32 and SHA-1, file size, file name and
   system ID (NES 3, SNES 4, Game Boy 9, Game Boy Color 10, N64 14). Every call carries a **developer** ID and password
-  issued to the software through the ScreenScraper forum, and optionally the player's own account. The player must
+  issued to the software through the ScreenScraper forum, and optionally the player's own account. EmuSen's author must
   request the developer credentials (§5.7). Those credentials live in a file outside the repository, and neither they
   nor the player's password is ever committed or logged.
 - **Stages (§7).** Seven stages, (a) to (g), about 17–27 working days in all, plus waiting time for the developer
@@ -63,11 +63,11 @@ outside the EmuSen tree: `~/Projects/art-book-next-reference` (Batocera edition)
 
 ---
 
-## 1. What was asked, and what the plan had to be corrected on
+## 1. What was asked, and what the request had to be corrected on
 
 ### 1.1 Two editions of Art Book Next, and which one ES-DE can load (measured and cited)
 
-The link in the plan is `github.com/anthonycaccese/art-book-next-es` (cloned at `9a50ef3`, 2026-03-11). Its README
+The link in the request is `github.com/anthonycaccese/art-book-next-es` (cloned at `9a50ef3`, 2026-03-11). Its README
 says it targets "this fork of EmulationStation", meaning Batocera's, and names Batocera v40+, Knulli, RockNIX and
 RetroBat. Its XML shows the Batocera format:
 
@@ -88,7 +88,7 @@ the file is not well-formed XML at all.
 
 The same author publishes `github.com/anthonycaccese/art-book-next-es-de`, cloned at `d772d07`, 2026-02-06. It is
 the entry named "Art Book Next" in ES-DE's official theme list (`themes-list/themes.json`, whose `latestStableRelease`
-is 51). **The option set the plan listed belongs to the Batocera edition:**
+is 51). **The option set the request listed belongs to the Batocera edition:**
 
 | Option | Batocera edition (the link) | ES-DE edition |
 |---|---|---|
@@ -99,15 +99,15 @@ is 51). **The option set the plan listed belongs to the Batocera edition:**
 | Fonts | Roboto, ChangaOne | Mulish, ChangaOne |
 | Metadata icons credited to | FontAwesome | Phosphor Icons |
 
-The ES-DE edition's credits add the Outline artwork set (Joppa Fallston) and artwork by theUnBurn to those the plan
+The ES-DE edition's credits add the Outline artwork set (Joppa Fallston) and artwork by theUnBurn to those the request
 listed. Its licence line is the same: CC BY-NC-SA 2.0.
 
-Q1 (§10) asks the player to confirm the ES-DE edition. The recommendation is yes. It is the same author's same design,
-it is in the format the choice was, and ES-DE's own documentation describes that format.
+Q1 (§10) asks for the ES-DE edition to be confirmed. The recommendation is yes. It is the same author's same design,
+it is in the format chosen above, and ES-DE's own documentation describes that format.
 
 ### 1.2 The handheld's resolution (cited, and in conflict)
 
-The plan says the Legion Go S runs at 1280×800. `EmuSen_Settings_Reference.md` §4.45.2 describes "a Legion Go S's
+The request says the Legion Go S runs at 1280×800. `EmuSen_Settings_Reference.md` §4.45.2 describes "a Legion Go S's
 8-inch 1920 by 1200 panel". Both are 16:10, so the aspect-ratio choice is the same either way. The performance budget
 is not: 1920×1200 has 2.25 times the pixels. §4.8 prices both, and Q2 asks which the player actually runs, because
 gamescope can render at 1280×800 and scale up to the panel.
@@ -216,7 +216,7 @@ belong to other parties, such as ScreenScraper's system IDs and media type names
 ## 3. What Art Book Next (ES-DE edition) uses (measured)
 
 The inventory below was produced by walking every XML file of the ES-DE clone with a throwaway script
-(`inventory.py`, in the session's scratch space, not committed). The script counts element types and the properties
+(`inventory.py`, in a scratch folder, not committed). The script counts element types and the properties
 set on them. The 213 per-system files in `_inc/systems/_metadata-global/` are counted separately: they define only
 variables.
 
@@ -375,7 +375,7 @@ Batocera's scraper names.
 | `helpsystem`, `clock`, `systemstatus` | **yes** | | |
 | `video` shown as its static image | **yes** | playback: stage (g) | |
 | `sound` | stage (e) | | |
-| `animation` (GIF, Lottie), `gameselector`, `gamelistinfo` | | when a theme the player wants uses them | |
+| `animation` (GIF, Lottie), `gameselector`, `gamelistinfo` | | when a theme a player wants uses them | |
 | Transitions | instant | slide, fade, `stationary` | |
 | Languages | en_US values | the others | |
 | SVG `text`, `filter` | | | refused visibly, as LunaSVG does for `text` |
@@ -418,7 +418,7 @@ shelves (§4.46 of the settings reference), so the mapping is per shelf.
 > **Retired 2026-09-24, before any of it was built.** The single Skia-drawn control argued below was superseded by the
 > user's decision of §10.1: "make sure we are drawing this with LunaP and if something is missing from LunaP, add it".
 > The argument is kept because its premises were not wrong, only outweighed. It judged the view by what one frontend
-> needed, and a single drawn control is the cheaper shape for one frontend. The player judged it by what the toolkit
+> needed, and a single drawn control is the cheaper shape for one frontend. The decision judged it by what the toolkit
 > should be able to do: every part a theme draws (an image fitted and tinted, text in a font from a file, an SVG, a
 > list, a carousel, a rating) is a thing another LunaP consumer can also want, and a drawn control in Mistress would
 > have kept all of it out of reach. Whether the three reasons below held up once the controls were written, and the
@@ -536,7 +536,7 @@ Cost: 2–3 days inside stage (b).
   documented, and they are the only layout rules the grid variants rely on.
 - **What THEMES.md does not give: durations and easing.** The slide time of the carousel and grid, the speed of
   container scrolling, and the fade on fast scrolling are not documented. They will be measured from ES-DE, in a
-  screen recording at 60 fps of the same inputs, not read from ES-DE's source. That keeps to the rule, and a
+  screen recording at 60 fps of the same inputs, not read from ES-DE's source. That keeps to the project's rule, and a
   measured curve is what the test needs anyway.
   - **P4.** A carousel step settles in 150–400 ms, and our settled positions equal ES-DE's to 1 px.
 
@@ -549,7 +549,7 @@ again when there is no video file ("If `imageType` is not defined, then the defa
 no video file found"; with `imageType` set, the image is what fills the delay and follows `onIterationsDone image`).
 
 **So if no videos are scraped, Mistress's render and ES-DE's are the same render for the same media.** That makes
-deferring playback a scope decision, not a fidelity loss. Q4 asks the player whether videos are wanted at all. They
+deferring playback a scope decision, not a fidelity loss. Q4 asks whether videos are wanted at all. They
 cost the most quota and bandwidth (§5.5), and ES-DE plays their sound by default, because `audio` defaults to true
 and Art Book Next does not change it.
 
@@ -562,7 +562,7 @@ Options for when playback is wanted:
 | FFmpeg as a child process piping raw RGBA frames | the same | No bindings. Needs an `ffmpeg` binary on the machine or bundled. The simplest to build, and the one Serenity's frame path already fits (`UpdateFrame(rgba, w, h)`). |
 | Defer | nothing | Exact for the media Mistress fetches (above). |
 
-**Recommendation.** Defer to stage (g). If the player wants videos, use FFmpeg, bindings or process, chosen by a
+**Recommendation.** Defer to stage (g). If videos are wanted, use FFmpeg, bindings or process, chosen by a
 measurement on the Legion Go S. ScreenScraper's `video-normalized` files are small and low resolution (ES-DE's header
 describes them as "smaller file sizes with lower audio quality"), so software decoding is cheap.
 
@@ -615,7 +615,7 @@ edited, adds the selected game to it or removes it, as ES-DE's Y does, and searc
 in picks a random game (in the system view a random system, when the setting allows it), as ES-DE's thumbstick click
 does; South on an entry of the grouped Collections system opens it and East inside it comes back to the list. ES-DE's
 gamelist options menu, which ES-DE opens with Back, is reached from Start's pad menu, because Select belongs to the
-game options of §23; merging the two menus under Select is left to that merge. *Superseded the same day by the player's
+game options of §23; merging the two menus under Select is left to that merge. *Superseded the same day by the
 answers (§10.1, §22.13): the menus are one, under Select, and North is the favourite outside the collection editing.*
 
 The help system's entries are the theme's layout filled with these actions. Its icons are Mistress's own (§3.6).
@@ -633,7 +633,7 @@ It stays. It is the fallback when no theme is installed, and remains a choice af
 gains **Library style: Mistress / ES-DE theme**. The pad menu, sheets, resume question and pausing rules are shared by
 both, so the themed view changes only what is drawn in the library's place. Q8 asks whether the themed view should also
 be offered in a desktop session, where §4.43 keeps the menu bar and sidebar. *Answered twice: in big-screen sessions
-only (2026-09-25), then, on the request of 2026-09-26, also on the desktop, behind a Big Picture entry
+only (2026-09-25), then, as requested on 2026-09-26, also on the desktop, behind a Big Picture entry
 below the plain Fullscreen one in the View menu (§10.1, §18).* *The Library style row is gone since 2026-09-26: on the
 user's request, EmuSen's own library is the first, built-in entry of the Theme Settings sheet's Themes list, and
 Preferences' row became **Big Picture Theme**, listing the same entries (§10.1, §19).*
@@ -842,9 +842,9 @@ The whole-library pass is one explicit action that the player starts.
 - **Local media first.** A cover already found by `ArtworkIndex` in `home/Artwork` (§4.33, §4.39) satisfies the
   `cover` media type with no request.
 
-### 5.7 Credentials: what the player must do, and how they are kept
+### 5.7 Credentials: what the author must do, and how they are kept
 
-**What the player must do.**
+**What the author must do.**
 
 1. **Create a ScreenScraper member account** at `screenscraper.fr`. That gives an `ssid` (user name) and `sspassword`.
    The member account carries the quota and threads of §5.5, and contributing to the database or donating raises
@@ -852,7 +852,7 @@ The whole-library pass is one explicit action that the player starts.
 2. **Request developer credentials for EmuSen.** The API page says developers should "contactez-nous via le forum pour
    présenter votre logiciel", that is, introduce the software on the ScreenScraper forum. The team then issues an
    identifier and password for the software. Reports say the team does not issue developer credentials to users, only
-   to software authors, so the request must come from the player as EmuSen's author. The post should give:
+   to software authors, so the request must come from EmuSen's author. The post should give:
    - the software's name as it will be sent in `softname`. This is fixed forever, because blacklisting (426) is by
      name. Suggested: `EmuSen-Mistress`.
    - that EmuSen is free, GPL-3.0 and distributed, with the repository's link;
@@ -881,7 +881,7 @@ The whole-library pass is one explicit action that the player starts.
   - The option that keeps them out of the repository: at publish time, MSBuild reads the developer file named by an
     `EmuSenScreenScraperDeveloper` property and generates an embedded resource into `obj/`, which is gitignored.
   - The alternative: builds carry no developer credentials, and scraping works only where the developer file exists.
-    That means only on the player's machines, since players cannot obtain developer credentials themselves (step 2).
+    That means only on the author's machines, since players cannot obtain developer credentials themselves (step 2).
   - The recommendation is the first, with Q5 confirming it.
   - *Implemented 2026-09-27 (Q40, which reversed Q5's answer; §28 is the record, §4.65 of the settings reference the
     player's account).* The first option was built as written: `EmuSen.Mistress/Scraping/ScreenScraperDeveloper.targets`
@@ -994,11 +994,11 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 
 ## 8. What was considered and not recommended
 
-- **A native look-alike built from LunaP controls.** Refused by the player. It would also have to be redesigned for
+- **A native look-alike built from LunaP controls.** Refused at the outset. It would also have to be redesigned for
   every theme.
 - **Supporting the Batocera format.** It is a different format (§1.1), undocumented beyond its fork, and ES-DE itself
   gave up reading legacy themes. It is not recommended unless a theme exists only in that form (Q1).
-- **Bundling a theme.** Refused by the licence (NC and SA against GPL-3.0), and by the plan.
+- **Bundling a theme.** Refused by the licence (NC and SA against GPL-3.0), and by the original request.
 - **An automatic name search.** Refused (§5.2).
 - **Generating miximages as ES-DE does.** Deferred (Q7). It is a compositing tool of its own, and ScreenScraper's
   `mixrbv2` is the cheaper substitute.
@@ -1034,21 +1034,21 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 
 ---
 
-## 10. Risks and open questions for the player
+## 10. Risks and open questions
 
 - **Q1, which theme.** Confirm the ES-DE edition (`art-book-next-es-de`). The linked Batocera edition cannot be read by
   ES-DE, and its options differ (§1.1).
 - **Q2, the handheld's resolution.** 1280×800 or 1920×1200? Is the Legion Go S's panel driven at its native
   resolution in Game Mode, or does gamescope scale up from 1280×800? §4.8 prices both.
-- **Q3, how much of the format.** The recommendation is §3.8's first column, then more only when a theme the player
+- **Q3, how much of the format.** The recommendation is §3.8's first column, then more only when a theme a player
   wants needs it. The loader is complete from the start, because a partial grammar breaks whole themes.
 - **Q4, video.** Scrape and play videos (stage g, FFmpeg, 3–5 days, more quota and bandwidth, sound on by default in
   the theme), or not? Without them the render is exact and the cost is nil (§4.7).
 - **Q5, the developer credentials in published builds.** Embed them at publish time from a file outside the
-  repository, as ES-DE does, or ship builds that scrape only on the player's own machines? Either way they are never
+  repository, as ES-DE does, or ship builds that scrape only on the author's own machines? Either way they are never
   committed (§5.7).
 - **Q6, the member account.** Contributing to ScreenScraper, or a one-off €10, raises threads and quota and cuts §5.5's
-  two days to hours. That is the choice, not the software's.
+  two days to hours. That is the player's choice, not the software's.
 - **Q7, miximages.** One variant needs them. Use ScreenScraper's `mixrbv2` (the nearest, and a different look), build
   a miximage generator (a later stage), or hide that variant?
 - **Q8, the existing big-screen library.** Keep it as the fallback and a choice, as recommended (§4.10)? Offer the
@@ -1061,7 +1061,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 - **Q11–Q14, collections and the gamelist options** (§22.12): the automatic collections off by default as ES-DE's are,
   or on; one menu under Select for the gamelist options and the game options; custom collections shown until switched
   off, or enabled one by one as ES-DE does; and the shoulders' page, which ES-DE was measured to make ten games.
-  *All four answered on 2026-09-26, with Q15 (§10.1).*
+  *All four answered 2026-09-26, with Q15 (§10.1).*
 - **Q20–Q35**, the decisions the remaining passes to ES-DE parity wait on (video again, as Q4's revisit; codecs;
   controllers; folders; the modes; languages; the theme list; TheGamesDB; buttons; the launch screen; the screensaver;
   the hardware session), are asked in §21.5.
@@ -1081,7 +1081,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 
 ---
 
-### 10.1 Decided by the player (2026-09-24)
+### 10.1 Decided (2026-09-24 onward)
 
 - **Q1, the theme:** the **ES-DE edition**, `art-book-next-es-de`.
 - **Q2, the resolution:** answered from the device, not asked. Game Mode's gamescope session is started with
@@ -1093,26 +1093,24 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   accordingly, and stage (a)'s golden tests must cover every element type and property ES-DE documents.
 - **Q4, videos:** **not now.** Stage (g) is deferred; the video element renders its fallback image, as ES-DE does
   when no video file exists.
-- **Q5, developer credentials:** **the player's own machines only.** Published builds do not carry them; a build
+- **Q5, developer credentials:** **the author's own machines only.** Published builds do not carry them; a build
   without the local file cannot scrape. *Reversed by Q40 on 2026-09-26 and built on 2026-09-27 (§28).*
 - Q6–Q10 remain open; each is asked when its stage reaches it.
-- **Q8 and Q9, and navigation sounds (2026-09-25, before stage e):**
+- **Q8 and Q9, and navigation sounds (decided 2026-09-25, before stage e):**
   - **Q8:** the existing big-screen library **stays**, as the fallback when no theme is installed and as a choice
     after one is (Preferences, "Library style"). The themed view is offered **in big-screen sessions only**; the
     desktop keeps its sidebar library.
-  - **Q8, amended (2026-09-26):** "There needs to be a button to enter big picture mode on desktop as
-    well", and, correcting a first build that made the desktop's full screen and big picture one state: "i did not
-    want the fullscreen button to trigger big picture on desktop automatically, i wanted a separate button that
-    triggers big picture mode separate from the fullscreen button. Clicking the button would make emusen fullscreen,
-    but also put it into big picture mode. i want the player to have the option between both in desktop", and then
-    placed it: "The big picture button for desktop mode should be placed under the view menu, below fullscreen". The
-    desktop therefore has **two options**, adjacent in the **View** menu: a plain **Fullscreen** (F11, and the window
-    manager's own), which keeps the sidebar library, and directly below it **Big Picture** (its own key, F10), which
+  - **Q8, amended 2026-09-26:** the desktop needs a button to enter big picture mode as well. A first build made the
+    desktop's full screen and big picture one state; that was corrected the same day: the fullscreen button must not
+    trigger big picture on the desktop, and a separate button makes the window full screen and also enters big
+    picture, so that the player has the choice between both on the desktop. Its place: under the View menu, below
+    Fullscreen. The desktop therefore has **two options**, adjacent in the **View** menu: a plain **Fullscreen** (F11,
+    and the window manager's own), which keeps the sidebar library, and directly below it **Big Picture** (its own key, F10), which
     makes the window full screen and enters big picture. The desktop keeps its sidebar library by default, and the
     themed view is offered wherever big picture runs, under §4.52's four conditions. A Game Mode session stays big
     picture throughout. §18 is the record; §4.54 of the settings reference is the player's account.
-  - **Q8, amended again (2026-09-26):** "EmuSens normal big picture theme should be an option in the themes
-    list". The existing big-screen library is no longer a separate "Library style" beside the theme: it is the first
+  - **Q8, amended again (2026-09-26):** EmuSen's normal big-picture theme is to be an option in the themes list.
+    The existing big-screen library is no longer a separate "Library style" beside the theme: it is the first
     entry of the Theme Settings sheet's Themes list, **EmuSen (built in)**, never downloaded or removed, and choosing it
     or an ES-DE theme there applies at once. Preferences' "Library style" row became **Big Picture Theme**, a dropdown
     of the same entries over the same two settings (`LibraryStyle`, `BigPictureTheme`). §19 is the record; §4.56 of the
@@ -1122,14 +1120,14 @@ sends and to whom. The API's own condition (free, distributed software) is met.
     graphics are Mistress's own drawings.
   - **Sounds:** the theme's navigation sounds play through a small UI sound stream, **on by default** with a switch in
     Preferences.
-- **Q20–Q35, answered on 2026-09-26 after §21 was written:**
+- **Q20–Q35, answered 2026-09-26 after §21 was written:**
   - **Q20 and Q21, video:** all three uses (the theme's clips, the media viewer and the screensaver), built late as §21's
     pass 12, through the system's own `ffmpeg` run as a separate process, so EmuSen ships no codec. Video scraping is
     off by default. This supersedes Q4's "not now".
   - **Q22–Q35:** every recommendation §21 made is accepted as written. Where a pass finds that a recommendation cannot
-    hold, the player is asked again.
+    hold, the question is reopened.
   - **The first pass to build:** pass 2, controllers.
-- **OpenVGDB is kept (2026-09-27): "Keep openvgdb as a fallback".** This retires §26's retirement plan. The
+- **OpenVGDB is kept as a fallback (decided 2026-09-27).** This retires §26's retirement plan. The
   direction recorded on 2026-09-26 was to "eventually retire" OpenEmu's library as a source of game information. It is
   withdrawn: OpenVGDB and libretro-thumbnails stay as the failover behind ScreenScraper, asked only inside a scrape
   the player starts (§17.14), as they are today. §26's measurements stand as a record of what the fallback yields.
@@ -1140,24 +1138,28 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   - **Q45** (*Use Another Game's Cover…*) is built as a replacement that stands on its own.
   - **Q44** no longer applies: the fallback is not switched off after pass 8.
   - **Q40,** the embedded credentials, is unaffected.
-- **Q47–Q49 and the keyboard's menu key, answered on 2026-09-27 ("use your recommendations"):**
+- **Q70–Q72, answered 2026-09-27 (§31):**
+  - **Q70:** yes. The other value types are probed against ES-DE as the six refusals were: colours, whole numbers (Canvas's and Iconic's `3.5`, P173), strings, paths, and `capabilities.xml`'s `selectable` (P172). The number with an exponent (P170) goes in the same run. The loader then matches ES-DE rule by rule.
+  - **Q71:** yes. A variant that states no `<selectable>` is treated as ES-DE treats it: not offered for selection. This is confirmed in Q70's run before it is built, since only one ES-DE observation supports it ("NONE DEFINED" for a lone variant).
+  - **Q72:** no. Theme warnings are never shown to the player; they go to the error log only (settings §4.70), as they do now.
+- **Q47–Q49 and the keyboard's menu key, answered 2026-09-27 by accepting the recommendations:**
   - **Q47:** (b). ES-DE is run on the refused themes first, and the loader matches what it does rule by rule (§25.10). Done in §31: ES-DE
     loads all 15, and 66 of 66 listed themes now load.
   - **Q48:** pass 14 draws `gameselector` (20 themes), then wheel carousels (9), then `gamelistinfo` (6), then
-    `animation` (4). The recommendation put to the player named those four in that order. §25.10's fuller order also
+    `animation` (4). The recommendation named those four in that order. §25.10's fuller order also
     puts Q47's refusals and the cheap badge, help and carousel properties first. Q47 is answered separately, and
     pass 4 covers most of the badge and help properties, so the two orders do not conflict.
   - **Q49:** full-screen screenshots in the theme browser are built with pass 9's media viewer, not before.
   - **The keyboard's menu key:** F4 opens the Start menu in the themed view. Escape keeps its role of leaving big
     picture or returning to a suspended game (settings reference §4.52a). The alternative, Escape as ES-DE's Start
     with F10 as the only way out, was not chosen.
-- **Q41–Q46, answered on 2026-09-26 (§26.9, §27.9):**
+- **Q41–Q46, answered 2026-09-26 (§26.9, §27.9):**
   - **Q41:** the 670 covers OpenVGDB already fetched keep their rank above ScreenScraper's.
   - **Q42:** OpenVGDB's 42 MB database gets a Remove button in Preferences; nothing deletes it on its own.
   - **Q43–Q46:** every recommendation is accepted. The mix image is not used as a last-resort cover (the placeholder is).
     The fallback stops being asked only after pass 8's search by name exists. *Use Another Game's Cover…* is built.
     Select stays Favourite in the sidebar library.
-  - **Q40, answered the same day after asking how ES-DE does it:** "Do what ES-DE does". Published builds carry
+  - **Q40, answered the same day once ES-DE's practice was known:** do what ES-DE does. Published builds carry
     EmuSen's ScreenScraper developer credentials, scrambled, and generated into `obj/` at publish from the developer
     file named by a publish property, so they never enter the repository (§5.7's first option). Every player can then
     scrape; a member login only raises their limits. **This reverses Q5** ("builds carry no developer credentials").
@@ -1165,17 +1167,17 @@ sends and to whom. The API's own condition (free, distributed software) is met.
     `EmuSen-Mistress` software name blocked (426), which the scraper already reports.
     **Implemented 2026-09-27** (§28): the publish step, the resolution order (the tree's file, `~/.config/EmuSen`, then
     what the build carries), and the redactor over the embedded values.
-  - **Q42 and Q45, built 2026-09-27** (§28): OpenVGDB's Remove in Preferences, worded, after the player kept OpenVGDB
-    (below), as an optional way to free its space that switches the fallback off until the database is downloaded again,
+  - **Q42 and Q45, built 2026-09-27** (§28): OpenVGDB's Remove in Preferences, worded, after OpenVGDB was kept
+    (above), as an optional way to free its space that switches the fallback off until the database is downloaded again,
     with a Download beside it; and *Use Another Game's Cover…*, kept as a row of `games.db` rather than a copied file.
-- **Q7, miximages (2026-09-26, during stage d):** ScreenScraper's ready-made mix, `mixrbv2`, is fetched as the
+- **Q7, miximages (decided 2026-09-26, during stage d):** ScreenScraper's ready-made mix, `mixrbv2`, is fetched as the
   miximage. It looks different from ES-DE's own composed miximages; building our own composite is not wanted now.
-- **Q5, the developer credentials, as received (2026-09-26):** issued to the player as EmuSen's developer, kept only in
+- **Q5, the developer credentials, as received (2026-09-26):** issued to EmuSen's developer, kept only in
   `~/.config/EmuSen/screenscraper-developer.json` (mode 0600) with `softname` `EmuSen-Mistress`, verified against
   `ssinfraInfos.php` the same day. No build carries them. *Since Q40 (§28), a publish run on that machine embeds them
   from that file; a plain build still carries none.*
-- **Drawn with LunaP (2026-09-24): "make sure we are drawing this with LunaP and if something is missing
-  from LunaP, add it".** This supersedes §4's one Skia-drawn control in Mistress. Every visible part is a LunaP
+- **Drawn with LunaP (decided 2026-09-24): the view is drawn with LunaP, and whatever LunaP is missing is added to
+  it.** This supersedes §4's one Skia-drawn control in Mistress. Every visible part is a LunaP
   control, and what LunaP lacks is added to LunaP under its own conventions (a `docs/LunaP.md` section, tests, the API
   baseline, palette-only colours where a theme does not set one): an SVG image (the renderer §4 argued for, now in
   LunaP), the carousel, the grid and text list as themed, text in a theme's own fonts, rating, badges, the help bar,
@@ -1183,7 +1185,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   loader (XML, variables, includes, variants, colour schemes, aspect ratios) is format-specific and stays in
   `EmuSen.Mistress/BigPicture/`, with no Avalonia types, producing a scene the Mistress layer builds from LunaP
   controls. Q10 (own SVG renderer or `Svg.Skia`) is therefore answered: our own, in LunaP.
-- **Q11–Q15, collections, the gamelist options and the favourite's button (2026-09-26, after §22 and §23 were
+- **Q11–Q15, collections, the gamelist options and the favourite's button (decided 2026-09-26, after §22 and §23 were
   merged):**
   - **Q12:** one menu on Select, as ES-DE has it: Jump To, Sort Games By and Filter Gamelist, the custom collection's
     entries, then the game's entries (the favourite, Edit This Game's Metadata, Scrape This Game..., and Hide from
@@ -1197,17 +1199,27 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   - **Q14:** the shoulders jump ten games in a gamelist, as USERGUIDE documents; the triggers stay the first and last.
   - **Q13:** custom collections stay shown until switched off, as §22 built them.
   - §22.13 records what was built for these.
-- **Q18 and Q19, ScreenScraper's name and the options outside big picture (2026-09-26, after §23 was
+- **Q18 and Q19, ScreenScraper's name and the options outside big picture (decided 2026-09-26, after §23 was
   merged):**
-  - **Q18:** "Offer Screen Scraper name, but don't force on user." The metadata editor shows ScreenScraper's name for
+  - **Q18:** offer ScreenScraper's name, but never force it. The metadata editor shows ScreenScraper's name for
     the game as an offer under the Name field, taken by one press (*Use This Name*) or put away (*Keep Current Name*).
     The name changes only when the player takes it; the file's name, or the player's own edit, stays otherwise.
-  - **Q19:** "Yes, the option should be available for both." The game options menu and the metadata editor are also
+  - **Q19:** yes, the options are available in both. The game options menu and the metadata editor are also
     reached from Mistress's sidebar library: the grid's and the list's context menu, the pad menu of that library on the
     desktop and in its big screen, and Ctrl+I for the editor. The same windows are used, as sheets in a big-screen
     session and as LunaP windows on the desktop.
-  - **A direction, not yet a decision to build:** "i would like to eventually retire sourcing game info from openemus
-    library and use screenscraper." §26 is the plan for it; §27 records what was built for Q18 and Q19.
+  - **A direction, not yet a decision to build:** eventually retire sourcing game information from OpenEmu's library
+    and use ScreenScraper. §26 is the plan for it; §27 records what was built for Q18 and Q19.
+
+- **Q80 to Q86, the big-screen menus' look (decided 2026-09-27, approving §32's stage 1):**
+  - **Q80:** keep *Main Menu* as the Start menu's title over the library.
+  - **Q81:** over a running game the title is the game's name as the library shows it, with no extension or folder.
+  - **Q82:** keep the chosen row's text white on the bar.
+  - **Q83:** keep Barlow Condensed.
+  - **Q84:** version 0.9.0: the footer reads *EmuSen 0.9.0*, from the product version at its source, not a string
+    in the footer (§32.11).
+  - **Q85:** match ES-DE: a game's options, and a folder's, are titled *Gamelist Options*.
+  - **Q86:** build ES-DE's list screen for an option row in stage 2.
 
 ## 11. Sources
 
@@ -1520,8 +1532,8 @@ added to LunaP (its `docs/LunaP.md` §98 onwards). The mapping from ES-DE proper
 Mistress, in `EmuSen.Mistress/BigPicture/Scene/`, and is a pure function of the view and the data. Nothing moves;
 time is stage (c).
 
-ES-DE was not available when the stage opened. It became available part way through (the player downloaded the
-AppImage), and is run only from a copy under `~/.cache/emusen/bigpicture/esde/`, with its own `--home` there.
+ES-DE was not available when the stage opened. It became available part way through (the AppImage was
+downloaded by hand), and is run only from a copy under `~/.cache/emusen/bigpicture/esde/`, with its own `--home` there.
 
 ### 13.1 Predictions, written before the controls were built
 
@@ -1623,7 +1635,7 @@ also counts the pixels that differ from a full HighQuality redraw.
     mipmapped there;
   - LowQuality takes 10.0 ms;
   - invalidating only the carousel costs as much as invalidating everything.
-- **The choice was full quality (2026-09-25)**, so only levers whose pixels equal a HighQuality redraw were eligible.
+- **Full quality was chosen (2026-09-25)**, so only levers whose pixels equal a HighQuality redraw were eligible.
   None helped:
 
   | Lever | Result |
@@ -1634,7 +1646,7 @@ also counts the pixels that differ from a full HighQuality redraw.
   | Not redrawing an unchanged view | already what the compositor does |
 
   One rejected change is recorded so it is not proposed again. Drawing bitmaps prepared at display size 1:1 on whole
-  pixels took the system view to ~10 ms, but it resamples once at a different quality. The player rejected it.
+  pixels took the system view to ~10 ms, but it resamples once at a different quality. It was rejected.
 - **The gamelist rose from 7.8 to 15.2 ms at 1280×800 during the stage.** That is the cost of drawing the video's
   static image linearly, as ES-DE does (§13.8), where the theme's `nearest` had been cheap.
 - **What was not measured.** Headless Skia renders on the CPU; the application renders on the GPU, where this sampling
@@ -1686,7 +1698,7 @@ Art Book Next's `aspect-ratio-16-10.xml` writes 38 of its values beside a commen
 ### 13.8 Against ES-DE 3.4.1: P1, P3, P4, P12 and P23
 
 **The setup.**
-- ES-DE 3.4.1 (r51) ran from a copy of the player's AppImage, with checksum 3c61a44d…3581, under
+- ES-DE 3.4.1 (r51) ran from a copy of the downloaded AppImage, with checksum 3c61a44d…3581, under
   `~/.cache/emusen/bigpicture/esde/`.
 - Every run used `--home` in that folder, at `--resolution 1280 800` and `1920 1200` with `--fullscreen-padding off`.
 - Settings were written into the scratch home's `es_settings.xml`:
@@ -1756,7 +1768,7 @@ Art Book Next's `aspect-ratio-16-10.xml` writes 38 of its values beside a commen
 - **The system view's remaining difference is image softness.** ES-DE's pixel-art slices are visibly softer, as if
   resampled twice. Mistress's are sharper in all four of Avalonia's sampling modes (within 0.4 points of each other).
   The best alignment between the two images is a zero shift, so the geometry agrees. Matching the softness would mean
-  blurring deliberately, which the player's full-quality rule excludes.
+  blurring deliberately, which the full-quality rule excludes.
 - **The help bar's words and icons are ES-DE's own** ("MENU, SELECT, SCREENSAVER, CHOOSE"), so they differ by design
   (§3.6).
 
@@ -1903,7 +1915,7 @@ The ranges span the two variants and the runs.
   once and reuses its texture while the bitmap is unchanged.
 
 **What this settles for stage (c).** On the desktop a frame in which everything moves costs under a millisecond,
-about 1/25 of a 60 Hz frame, so motion can be built on plain full redraws. No lever of §14's brief (static layers
+about 1/25 of a 60 Hz frame, so motion can be built on plain full redraws. No lever planned for §14 (static layers
 composed once, finished carousel items cached, mip levels kept on the GPU) has anything to save here: the last
 already happens, and the first two would save part of a fraction of a millisecond.
 
@@ -1994,7 +2006,7 @@ would be lost at each step. The carousel's glide, the time of the selection and 
 
 ### 14.7 ES-DE 3.4.1 measured moving, and the rules taken from it
 
-**Method.** A separate run recorded ES-DE from its behaviour alone; ES-DE's source was not read, and its only text read
+**Method.** ES-DE was recorded from its behaviour alone; ES-DE's source was not read, and its only text read
 was `THEMES.md` and `USERGUIDE.md`. The recordings, scripts and per-run CSVs are under
 `~/.cache/emusen/bigpicture/motion/` and are not committed.
 
@@ -2210,9 +2222,9 @@ driver through surfaceless EGL. Medians over the three rounds; the raw file is
 - **The first GPU frame** costs 21–33 ms (5.7–8.5 ms with immutable bitmaps), paid once when the view is built.
 - **Not measured:** Game Mode's gamescope compositing on top of this, and the frame as Mistress's real window presents it.
 
-### 14.10b The handheld at 1920×1200, where the player plays (2026-09-26)
+### 14.10b The handheld at 1920×1200, where it is played (2026-09-26)
 
-The player runs the Legion Go S at its panel's full 1920×1200, not the 1280×800 §10.1's Q2 read from gamescope's
+The Legion Go S is played at its panel's full 1920×1200, not the 1280×800 §10.1's Q2 read from gamescope's
 arguments. A second run at that size only, five rounds, 240 still frames and 1,800 moving frames (30 s at 60 Hz) a
 case, on the charger, Desktop Mode (`results/20260926-135821.txt`):
 
@@ -2272,7 +2284,7 @@ drawn inside the window; no window is opened.
   0.91 ms per system).
 - **P42, the pad's family.** SDL's own gamepad type decides the family for every pad SDL recognises: its two Xbox types,
   its three PlayStation types and its four Nintendo types each give one family, and a Standard or Unknown type falls
-  back to the pad's name. A pad whose name carries "Legion Go" is taken for an Xbox layout, as the player reports it.
+  back to the pad's name. A pad whose name carries "Legion Go" is taken for an Xbox layout, as reported from the device.
 - **P43, a family change touches only the help bar.** Changing the connected pad's family redraws the help bar and
   changes no pixel outside its box.
 - **P44, the sounds.** Each of the seven navigation actions plays exactly the theme's file for it, once per step,
@@ -2696,7 +2708,7 @@ shadowed; it was renamed rather than the fixture.
   closed when the window presenting it is: its `Closed` never fires. The window now stops the sheet's download too.
 - **P11 holds.** `git archive --format=zip` of the reading clone at `d772d07`, the tree GitHub's codeload serves for that
   commit, is **220,158,364 bytes (220.2 MB)**, inside 205–230 MB. That is a local measurement of the same tree, not of a
-  download: codeload's compression level was not observed, since nothing was downloaded without the player asking.
+  download: codeload's compression level was not observed, since nothing was downloaded without a player asking.
 - **The attribution** is read at display time from the theme's `README.md`: the section under the first heading whose
   words contain "licen", and the one containing "credit", with Markdown's marks taken off; else a `LICENSE` file's first
   lines; else a sentence saying none is stated. For Art Book Next the licence line is its README's own, naming
@@ -2705,7 +2717,7 @@ shadowed; it was renamed rather than the fixture.
 
 ### 16.5 The grid: ES-DE measured, then built
 
-**The measurement.** A separate run measured ES-DE 3.4.1's grid from its behaviour alone, with §14.7's rig (XWayland
+**The measurement.** ES-DE 3.4.1's grid was measured from its behaviour alone, with §14.7's rig (XWayland
 window, uinput pad, 165 fps lossless recording): 26 runs, one window at a time, each under 25 s and closed by PID, of a
 synthetic `grid-probe` theme with 16 variants that each change one property, on synthetic libraries of 40, 250 and 37
 games whose covers are flat single hues. ES-DE's source was not read; only `THEMES.md` and `USERGUIDE.md`. The report
@@ -2751,7 +2763,7 @@ the SNES games ordered as ES-DE orders them, and finds each synthetic cover's fl
 ES-DE still was read with. Ten of eleven covers lie within 1 px of ES-DE's; the selected cover and one edge of one
 unfocused cover lie 2 px off, at rest and after two rows down. ES-DE draws item edges on whole pixels, and Mistress at
 fractional ones (§13.8); a 1.2 scale of a fractional box is where the second pixel comes from, argued, not shown. The
-covered cover (Ivory Signal, under the selected one) is left out, as the separate run's table marks it.
+covered cover (Ivory Signal, under the selected one) is left out, as the measurement's table marks it.
 
 **A defect the comparison found, in LunaP.** The first run put the selected cover on the scrolled bottom row 22 px low:
 `GridGeometry.Anchor` compared two quantities equal by construction to a millionth, and float noise fell on the wrong
@@ -2821,7 +2833,7 @@ grid mutants, `Art_Book_Next_s_grid_matches_ES_DE_s_still` appears only for G10 
   `fadeAbovePrimary`. Art Book Next sets none of them.
 - **Quick system select in a grid gamelist** does not exist: all four directions move the grid. What ES-DE does there
   was not measured.
-- **Languages** are listed only when a theme declares them; no theme the player has declares any, so the row was tested
+- **Languages** are listed only when a theme declares them; no theme installed here declares any, so the row was tested
   on a synthetic theme alone.
 - **The desaturation change to Rec. 601** was measured on the grid only; the carousel's desaturated schemes were not
   compared with ES-DE.
@@ -2872,17 +2884,17 @@ P9 and P10 (§9) are this stage's. The rest were added before a line of the clie
 ### 17.2 The scope, as it changed during the stage
 
 The plan was §7's row: scraped media as one more source for the themed view. Two decisions came during the build,
-through the coordinator, and are recorded here because they reverse parts of §5:
+and are recorded here because they reverse parts of §5:
 
 - **ScreenScraper became Mistress's main source of cover art and game text everywhere**, the library's grid and list as
   well as the themed view, whenever the developer file is present. OpenEmu's sources (§4.39 of the settings reference)
-  became an opt-in failover, **on by default by the coordinator's choice**, which the player may reverse. It fills a cover
+  became an opt-in failover, **on by default by decision**, which the player may reverse. It fills a cover
   only where ScreenScraper found none or cannot be used.
 - **Ship-ready by default.** Where the developer file exists, scraping works with no action, and it is reachable from the
   pad in Game Mode. *Reversed the same day by the rule of 17.14: nothing is asked until the player starts a run.* `Scraping` is therefore on by default. §5.8's "off by default, one explicit action" is kept in the one
   place it still protects someone: a build without the developer file sends nothing to ScreenScraper, and there the
   failover is what runs, with its hint saying what it sends. That the failover itself is now on by default is a change
-  from §4.39's "off unless the player turns it on", and is the coordinator's decision, not an argument made here.
+  from §4.39's "off unless the player turns it on", and is a decision taken during the build, not an argument made here.
 
 The order of sources was given with the second decision: what the player placed, then ScreenScraper, then an ES-DE
 media folder, then the failover, then the placeholder. Stage (e) had drawn the ES-DE folder before the player's covers;
@@ -3062,7 +3074,7 @@ without one. The `jeuInfos` answers are, and that is how the Scraping tab's mete
 
 **The system IDs.** `systemesListe` names 3 NES, 4 Super Nintendo, 9 Game Boy, 10 Game Boy Color and 14 Nintendo 64.
 
-**Nothing leaked.** No file in the run's folder, the test's log, either worktree, the scratch folder or the mutant
+**Nothing leaked.** No file in the run's folder, the test's log, either working tree, the scratch folder or the mutant
 runner's folder holds the developer's password or `devid=` followed by the id (4,038 files scanned by value, the values
 never printed).
 
@@ -3147,9 +3159,9 @@ sandbox's cheats and saves; the recipe is not a committed script, so this is a r
 
 ### 17.14 Scraping only when the player starts it, and the scope the player chooses
 
-**The player's two rules (2026-09-26, after 17.1–17.13 were built),** which override what 17.2 and 17.3 describe:
+**Two rules, decided 2026-09-26 after 17.1–17.13 were built,** which override what 17.2 and 17.3 describe:
 
-1. *Every run is initiated by the player.* "I do not want to spam the screenscraper api." Nothing may reach ScreenScraper
+1. *Every run is started by the player,* so that the ScreenScraper API is never spammed. Nothing may reach ScreenScraper
    at start, when the library is shown or refreshed, when a game is selected or shown in the themed view, when a game is
    added, when the developer file appears, or from a queue a previous session left. An interrupted run may be offered as
    Resume but never resumes by itself. OpenEmu's failover is bound the same way: only inside a run the player started, and
@@ -3235,15 +3247,15 @@ one-off run started by a person; its numbers stand.
 
 ## 18. Big picture from the desktop: Big Picture below Fullscreen in the View menu (2026-09-26)
 
-*Opened 2026-09-26, on the request (§10.1, Q8 amended):* "There needs to be a button to enter big picture mode
-on desktop as well". Until this section, big screen was a decision the window took once, when it was made (settings
+*Opened 2026-09-26, on request (§10.1, Q8 amended): the desktop needs a button to enter big picture mode as well.*
+Until this section, big screen was a decision the window took once, when it was made (settings
 reference §4.29, §4.43), and §15 built the themed view on that premise. This section makes the decision switchable while
-the window runs. It was built three times in one day, because the request was relayed wrong once and then placed:
+the window runs. It was built three times in one day, because the request was first misread and then placed:
 
 | Build | What it was | Why it changed |
 |---|---|---|
-| 1 (`7e9befdd`–`bff37489`) | the desktop's full screen *was* big picture: a toolbar Fullscreen button, F11, the View menu and the window manager all entered it | a relay of the player's second message ("fullscreen mode enters emusens big picture mode") was taken as the design. The player: "i did not want the fullscreen button to trigger big picture on desktop automatically, i wanted a separate button … i want the player to have the option between both in desktop" |
-| 2 (`83ff0243`, `d48cce2e`) | two toolbar buttons, a plain Fullscreen and a Big Picture, with a View menu entry and a key for each | the player: "The big picture button for desktop mode should be placed under the view menu, below fullscreen" |
+| 1 (`7e9befdd`–`bff37489`) | the desktop's full screen *was* big picture: a toolbar Fullscreen button, F11, the View menu and the window manager all entered it | a restatement of the request (full screen enters EmuSen's big picture) was taken as the design. Corrected the same day: the fullscreen button must not trigger big picture on the desktop; a separate button must, so that the player has the choice between both |
+| 2 (`83ff0243`, `d48cce2e`) | two toolbar buttons, a plain Fullscreen and a Big Picture, with a View menu entry and a key for each | placed on request: the Big Picture entry goes under the View menu, below Fullscreen |
 | 3 (`d79dbdf1`) | the View menu holds Fullscreen (F11) and directly below it Big Picture (F10); no toolbar buttons | — |
 
 The settings reference's §4.54 is the player's account of the third build; this is the record of all three. What
@@ -3334,7 +3346,7 @@ menu's.
 | # | Mutant (build 3) | Result |
 |---|---|---|
 | D1 | leaving full screen (F11, the window manager) does not leave big picture | caught by 2 |
-| D2 | full screen enters big picture again (the coupling the player rejected) | caught |
+| D2 | full screen enters big picture again (the coupling that was rejected) | caught |
 | D3 | a Game Mode session can be switched out of big picture | caught |
 | D4 | the pad menu offers Exit Big Picture in Game Mode | caught |
 | D7 | entering does not make the window full screen | caught by 2 |
@@ -3399,7 +3411,7 @@ attributed, and the broad run was not repeated.
 - **F10 was chosen, not surveyed.** GTK applications open their menu bar on F10; a desktop binding it globally would take
   it before Mistress. It can be rebound.
 - **No pointer way out of big picture.** The menu bar is hidden there; a mouse-only player leaves by the window manager's
-  full-screen command. Build 2's toolbar button was such a way, and it went with the player's placement.
+  full-screen command. Build 2's toolbar button was such a way, and it went with the requested placement.
 - **Nothing ran on the handheld.** Game Mode's refusal to leave is tested with `XDG_CURRENT_DESKTOP=gamescope` set around
   the window's construction, as §4.43's tests are.
 - **Windows open at a switch stay what they were**: a desktop window stays a window over big picture, and a sheet open
@@ -3413,8 +3425,8 @@ attributed, and the broad run was not repeated.
 
 ## 19. EmuSen's own look in the theme list (2026-09-26)
 
-*Opened 2026-09-26, on the request (§10.1, Q8 amended again):* "EmuSens normal big picture theme should be an option
-in the themes list". §4.10 had kept the existing big-screen library as a separate choice, Preferences' "Library style"
+*Opened 2026-09-26, on request (§10.1, Q8 amended again): EmuSen's normal big-picture theme is to be an option in the
+themes list.* §4.10 had kept the existing big-screen library as a separate choice, Preferences' "Library style"
 (Mistress / ES-DE theme), beside the theme folder. Stage (f)'s Themes tab (§16.4) listed only ES-DE themes. This section
 makes the two one list. The player's account is §4.56 of the settings reference; this is the record.
 
@@ -3539,10 +3551,9 @@ the test was changed before any mutant ran. Doing so is what turned up T3.
 
 ## 20. The scraping status window, and signing in with a member account (2026-09-26)
 
-*Opened 2026-09-26, on two requests of the player's.* The first: "We need to add a status window for when you are scraping
-roms". The second, relayed during the build: "we also need to add the ability for the player to log into screenscraper
-with their own account credentials if they prefer". Both belong to stage (d)'s Scraping tab and to §17.14's rules, which
-bind them: a run is started only by the player, and nothing is asked of a server outside one. The player's account is
+*Opened 2026-09-26, on two requests.* The first: a status window while ROMs are being scraped. The second, made
+during the build: a player can sign in to ScreenScraper with their own account credentials if they prefer. Both
+belong to stage (d)'s Scraping tab and to §17.14's rules, which bind them: a run is started only by the player, and nothing is asked of a server outside one. The player's account is
 the settings reference's §4.57 (the window) and §4.60's "Signing in"; this is the record.
 
 ### 20.1 Expectations, and what the build found
@@ -3717,7 +3728,7 @@ defects came from that (§20.2).
 *Written 2026-09-26, while §22 (collections, filters, sorting, jump to a letter and a random game) and §23 (the game
 options menu and the metadata editor) were being built on other branches.* Stages (a) to (f) and §18–§20 built what
 §7 planned, except stage (g). This section inventories what ES-DE offers a player that big picture still lacks, groups
-the gaps into passes a run can build and test in one go, orders them, and states what only the player can decide. It
+the gaps into passes that can each be built and tested in one go, orders them, and states what is still to be decided. It
 is a plan: nothing in it has been built, and every cost in it is an estimate.
 
 **Sources, and what was not read.**
@@ -3799,7 +3810,7 @@ To keep the three apart, as §17 did for stage (f), this section's predictions s
 | 4 | Media viewer | full screen: video, cover, back cover, title screen, screenshot, fan art, miximage, `custom`; left and right, triggers to the ends; settings (UG "Game media viewer", "Media viewer settings") | none in big picture; the desktop library's Screenshots view shows the player's own captures only | the viewer; the `custom` type |
 | 5 | PDF manuals | scraped (`ScrapeManuals` on); viewed with pages, zoom and pan; `manual` badge (UG "Game media viewer", TH "badges") | none | scraping, a renderer, the viewer mode, the badge |
 | 6 | Kid and Kiosk modes | Kiosk: menu reduced to volume, no metadata editor, collections or favourite toggling; Kid: kidgame games only, no options menu; unlock sequence (UG "UI modes") | none | the modes; kidgame is §23's field |
-| 7 | Folders | shown as entries, entered with A; sorted on top; folder badge; folder link; `defaultFolderImage`; `gamelistinfo`'s folder icon (UG "Multiple game files installation", "Metadata editor", TH "grid", "gamelistinfo") | flattened (`RomLibrary`); the player's NES and GB are all folders (§21.1) | folder entries, entering and leaving, sorting, the badge |
+| 7 | Folders | shown as entries, entered with A; sorted on top; folder badge; folder link; `defaultFolderImage`; `gamelistinfo`'s folder icon (UG "Multiple game files installation", "Metadata editor", TH "grid", "gamelistinfo") | flattened (`RomLibrary`); the test library's NES and GB are all folders (§21.1) | folder entries, entering and leaving, sorting, the badge |
 | 8 | Media of games in folders | `downloaded_media/<system>/<type>/<folder>/<stem>` (UG "Manually copying game media files") | `EsdeMediaFolder` and `MediaStore` use `<system>/<type>/<stem>` | an ES-DE tree for this library would not be read (predicted defect, P108) |
 | 9 | Directories as files, `.m3u` | a folder named like a file launches the file of its name; `.m3u` for multi-disc (UG "Directories interpreted as files") | none | no consumer: every core is a cartridge core and the library holds no `.m3u` (§21.1) |
 | 10 | Launch screen | shown on launch: Normal, Brief, Long, Popup or Disabled; follows the menu colour scheme and opening animation (UG "UI settings") | the resume question on a sheet, then the game (SR §4.52) | the screen; its content is not documented and must be measured |
@@ -3839,7 +3850,7 @@ the miximage generator (Q7 declined it); the GPU statistics and debug overlays (
 
 ### 21.3 The passes
 
-Each pass is a unit a run can build, test and record in one go, as a stage was. Costs are in §7's unit, working days,
+Each pass is a unit that can be built, tested and recorded in one go, as a stage was. Costs are in §7's unit, working days,
 at §7's scale. The record since then is shorter than §7 estimated: each of stages (a) to (f) was opened and closed within
 one or two calendar days, against §7's 2–7 working days. P119 tests whether that holds. Every pass keeps the rules the
 stages kept: every visible part is a LunaP control, nothing from ES-DE or a theme enters either repository, ES-DE is an
@@ -3851,16 +3862,16 @@ player started (§17.14). Tests run headless in WiseMan, blast radius only, and 
 - *Scope.* On the Legion Go S, in Game Mode and in Desktop Mode: what SDL reports for the built-in pad under Steam
   Input, and the family `PadFamilies` gives it (P42's open half); the themed view's frame in a real window under
   gamescope against Desktop Mode (P28 was measured surfaceless, §14.10a); the navigation sounds' latency beside the game
-  stream (§15.6); the help icons at arm's length. Then, with the player's hands on the device: one member sign-in against
+  stream (§15.6); the help icons at arm's length. Then, by hand on the device: one member sign-in against
   the live service (§20.6), and, if Q35 allows, the four-file N64 run that settles P60 (about 20 requests).
-- *Depends on.* The player's time, and Q35. No code dependency.
+- *Depends on.* Time with the device, and Q35. No code dependency.
 - *Oracle and tests.* The device itself; a frame log in Mistress's themed render loop, written under an environment
   variable, read after the run. Long runs go under `systemd-run --user`, because the device ends processes an ssh
   session leaves.
 - *LunaP.* None.
-- *Risks.* The player's password must be typed by the player into Mistress; the run never sees or relays it. The sign-in
-  and the N64 run are live requests, each started by the player.
-- *Cost.* 1 day, and one session of the player's.
+- *Risks.* The member password must be typed into Mistress by its owner; it is never written down or passed on. The
+  sign-in and the N64 run are live requests, each started by hand.
+- *Cost.* 1 day, and one session on the device.
 - *What the player sees.* No new feature: a record of what the device does, the Game Mode frame §14.10a left unmeasured,
   and the open predictions P42 and P60 retired.
 
@@ -3985,7 +3996,7 @@ player started (§17.14). Tests run headless in WiseMan, blast radius only, and 
 - *Depends on.* Q20 (videos), Q30; §23 for "exclude from scraper" and a folder's scraping. §17.14's rules bind all of it.
 - *Oracle and tests.* The fake ScreenScraper of §17 and §20, extended to `jeuRecherche`, the checksum answers and the new
   kinds; the confirm step's plan gains each kind's cost from §21.1's offer rates (P112). One live run of about ten games,
-  started by the player, measures what the fake cannot: the checksum answer's cost (P111).
+  started by hand, measures what the fake cannot: the checksum answer's cost (P111).
 - *LunaP.* None expected; the chooser is a `LunaList` of names with a thumbnail.
 - *Risks.* **Quota and load.** Every kind is a request (P61), and the four picture kinds add about 3.2 requests and
   1.2 MB to a found game by §21.1's rates, nearly doubling a whole-library run; manuals add 0.7 requests and 1.2 MB, with
@@ -4069,7 +4080,7 @@ player started (§17.14). Tests run headless in WiseMan, blast radius only, and 
   from every answer and from `/v1/API/Limit`, which costs nothing.
 - *Depends on.* Q29; Pass 8's chooser.
 - *Oracle and tests.* A fake TheGamesDB built from the spec's documented answers; one live run of about ten games,
-  started by the player, with their key.
+  started by hand, with a key.
 - *LunaP.* None.
 - *Risks.* **The key.** A key belongs to a logged-in site account (§21.1), so it is handled as the ScreenScraper developer
   file is: in a file outside the repository, mode 0600, passed through the redactor, never in a build (Q29). **Terms.**
@@ -4107,7 +4118,7 @@ player started (§17.14). Tests run headless in WiseMan, blast radius only, and 
 
 | # | Pass | Cost (days) | Waits on |
 |---|---|---|---|
-| 1 | The hardware session | 1 | the player's time, Q35 |
+| 1 | The hardware session | 1 | time with the device, Q35 |
 | 2 | Controllers | 2–3 | Q22 |
 | 3 | The theme list and the survey | 2–3 | Q27, Q28 |
 | — | *§22 and §23 merged* | | |
@@ -4140,16 +4151,16 @@ The reasoning, in the order of the table:
   later pass draws over the list.
 - **Pass 8 before Pass 9,** because the viewer's only real inputs are the kinds Pass 8 fetches.
 - **The viewer, the screensaver and the launch screen before video,** for two reasons. Video is the most expensive pass,
-  the one with the legal question and the one waiting on the player (Q20, Q21). And when it is built, two of its three
+  the one with the legal question and the one waiting on a decision (Q20, Q21). And when it is built, two of its three
   consumers already exist, so the decoder is designed once against the element, the viewer and the saver together,
   rather than for the element and then bent.
 - **TheGamesDB late,** because ScreenScraper found 39 of 40 by hash (§17.10), so a second source fills little, and it
   waits on a key.
-- **Pass 14 late but movable:** if the player picks a theme from Pass 3's list that needs an element, that element's part
+- **Pass 14 late but movable:** if a theme picked from Pass 3's list needs an element, that element's part
   of Pass 14 moves up to follow Pass 3.
 - **Translations last,** when the strings have stopped moving.
 
-### 21.5 The decisions only the player can make
+### 21.5 The decisions still to be made
 
 - **Q20, video: Q4 revisited.** Q4 was "not now" (§10.1). What has changed since: ScreenScraper offers a clip for 32 of 39
   found games (§21.1), the handheld draws a full frame in under 2 ms at 1920×1200 (§14.10b), and three consumers now wait
@@ -4174,7 +4185,7 @@ The reasoning, in the order of the table:
   **Recommendation: (a) in Pass 2; (b) as its own piece of input work,** recorded in `EmuSen_Input.md`, because cores
   model two ports and a Player 2 mirror already exists (§5.1 and §6 there), and port assignment reaches every game, not
   big picture alone.
-- **Q23, folders.** The player's NES games are all in 16 region and category folders and the GB games in 28 letter folders
+- **Q23, folders.** The test library's NES games are all in 16 region and category folders and the GB games in 28 letter folders
   (§21.1). Options:
   (a) show folders, as ES-DE does;
   (b) keep the flat list, which is ES-DE's discouraged folder flattening;
@@ -4187,18 +4198,18 @@ The reasoning, in the order of the table:
   exists, and a frontend handed to a child is what they are for. If no one in the house needs them, neither.
 - **Q26, languages and translators.** Options:
   (a) the plumbing only (Pass 5), English only;
-  (b) the plumbing, then languages the player names, drafted and reviewed by a speaker;
+  (b) the plumbing, then languages named later, drafted and reviewed by a speaker;
   (c) the plumbing, and a file format a community could translate.
-  **Recommendation: (a) now, (b) for any language the player names.** No translation is taken from ES-DE.
+  **Recommendation: (a) now, (b) for any language named later.** No translation is taken from ES-DE.
 - **Q27, which themes the list offers.** Options: every theme of ES-DE's list; only those that state a licence; only
   those Mistress draws fully after Pass 14. **Recommendation: every theme**, with its licence line or "states no licence"
   shown before the download, since the download is the player's, from the author's own repository, as it is in ES-DE.
 - **Q28, the survey's download.** Options: every theme's archive (gigabytes); XML files only, through the hosts' tree
-  listings; a sample the player picks. **Recommendation: XML only** (P104 predicts under 50 MB), kept under
+  listings; a hand-picked sample. **Recommendation: XML only** (P104 predicts under 50 MB), kept under
   `~/.cache/emusen/bigpicture/survey/`.
 - **Q29, TheGamesDB.** Options:
   (a) not at all;
-  (b) the player's own key, in a file outside the repository, used only on the player's machines, as Q5's answer did for
+  (b) the author's own key, in a file outside the repository, used only on the author's machines, as Q5's answer did for
   ScreenScraper;
   (c) (b), and a box where a player enters a key of their own.
   **Recommendation: (c) if the terms read in Pass 13 allow it, else (b)**, since a key comes from any site account
@@ -4221,8 +4232,8 @@ The reasoning, in the order of the table:
   default, everywhere; on for the desktop and off in Game Mode; off. **Recommendation: on everywhere, type Dim until
   videos exist, and off in Game Mode if Pass 1 finds the two stacking.** Whether Steam's own dimming starts over an
   application that draws nothing, as a still themed view does (P39), is not known; Pass 1 looks.
-- **Q35, the hardware session.** When can the player run it, and may it include one sign-in with the player's own member
-  account, typed by the player, and the four-file N64 run of about 20 requests that settles P60? **Recommendation: yes to
+- **Q35, the hardware session.** When can it be run, and may it include one sign-in with the author's own member
+  account, typed by hand, and the four-file N64 run of about 20 requests that settles P60? **Recommendation: yes to
   both, in one sitting.**
 
 ### 21.6 Predictions
@@ -4269,9 +4280,9 @@ Written before any pass is built, to be retired in each pass's record.
 
 ## 22. Collections, and a game list's sort, filters, jump and random game (2026-09-26)
 
-*Opened 2026-09-26, on the request of that day* to build what big picture lacked against ES-DE: "item 1,
-collections: ES-DE's automatic collections (All Games, Favorites, Last Played) and custom collections"; "item 2: a game
-list's filters … and sorting …, plus jump-to-letter and random game". Item 3, the per-game options and a metadata
+*Opened 2026-09-26, on request that day* to build what big picture lacked against ES-DE: item 1,
+collections, ES-DE's automatic collections (All Games, Favorites, Last Played) and custom collections; item 2, a game
+list's filters and sorting, plus jump-to-letter and random game. Item 3, the per-game options and a metadata
 editor, is §23's, built at the same time on another branch. The player's account is §4.58 of the settings reference;
 this is the record.
 
@@ -4301,8 +4312,8 @@ about. They are therefore narrower than a stage's.
 ### 22.2 ES-DE 3.4.1, measured where its documentation is silent
 
 The documentation names the collections and describes their settings, but not the system names a theme sees for them,
-their place in the carousel, what the grouped system's entries show, or the order inside the automatic collections. A
-separate run ran the local AppImage for these, in the scratch `--home` only, one window at a time, eight runs of 15–25 s,
+their place in the carousel, what the grouped system's entries show, or the order inside the automatic collections. The
+local AppImage was run for these, in the scratch `--home` only, one window at a time, eight runs of 15–25 s,
 each closed by PID, with the scratch settings, gamelists and collections restored afterwards and compared with
 `diff -r`. The runner, timelines, fixture and every capture are under `~/.cache/emusen/bigpicture/collections-probe/`.
 The fixture was synthetic: scratch ROM files of stage (b)'s names, three favourites, four games with a `lastplayed` and
@@ -4310,7 +4321,7 @@ one with a play count and no date, and two custom collections (`custom-Platform.
 one NES and one SNES game), enabled with `CollectionSystemsAuto=all,favorites,recent` and
 `CollectionSystemsCustom=Platform,Beat`. The captures quoted below were looked at by this section's author too.
 
-**A defect of the harness, found and fixed.** The player's own Xbox controller was connected, and ES-DE, started with
+**A defect of the harness, found and fixed.** The desktop's own Xbox controller was connected, and ES-DE, started with
 `SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1` as stage (c)'s `record.sh` starts it, acted on that controller's input during
 the first two runs: extra carousel steps, and a jump from one gamelist to another. Those runs were discarded. From the
 third, the runner sets `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT` to the virtual pad's vendor and product, and the log
@@ -4389,7 +4400,7 @@ without a cleanup proves nothing.
 
 ### 22.4 Where the data comes from, and where it is kept
 
-The request was, during the work, that the program's data be kept in SQLite where it can be, as `EmuSen_Stack.md` §4
+It was decided during the work that the program's data be kept in SQLite where it can be, as `EmuSen_Stack.md` §4
 settles: what the program writes and reads back in SQLite, the player's settings in `appsettings.json`.
 - **Already in SQLite, and read from there:** favourites, last played, play count, play time, the custom collections and
   their games are `games.db`'s `game`, `collection` and `collection_game` tables (`GameRecords`). Nothing of them was in
@@ -4609,7 +4620,7 @@ theme. They were looked at:
 - **The handheld.** Nothing ran there, as for every stage since (e).
 - **ES-DE's shoulders**, measured to move ten rows (§22.2), are left as §4.9 has them (Q14).
 
-### 22.12 Questions for the player
+### 22.12 Open questions
 
 - **Q11.** The automatic collections are off until turned on, as ES-DE's are. Should they be on by default here, as
   All Games, Favourites and Recently Played always are in EmuSen's own library?
@@ -4620,7 +4631,7 @@ theme. They were looked at:
   off. Keep that?
 - **Q14.** ES-DE's shoulders move ten rows in a textlist (§22.2); §4.9 pages by the rows shown. Change to ES-DE's?
 
-*Answered by the player on 2026-09-26 (§10.1): Q11 on by default; Q12 one menu under Select; Q13 kept as built; Q14 ten
+*Answered 2026-09-26 (§10.1): Q11 on by default; Q12 one menu under Select; Q13 kept as built; Q14 ten
 games. Q15, from §23, was answered with them: North is the favourite. §22.13 is what was built.*
 
 ### 22.13 The answers, built (2026-09-26)
@@ -4692,7 +4703,7 @@ its merge: 1,350 of 1,350.
 
 ## 23. The game options menu and the metadata editor (2026-09-26)
 
-*Opened 2026-09-26, on the third item of the player's list of what big picture lacks against ES-DE:* the per-game options
+*Opened 2026-09-26, on the third item of the list of what big picture lacks against ES-DE:* the per-game options
 menu, and a metadata editor for a game's name, description, rating, release date, developer, publisher, genre, players,
 favourite and ES-DE's other documented fields, with ES-DE's deletion of a game offered only in a guarded form. Items 1
 and 2 of the same list (collections, filters, sorting, jumping to a letter, a random game) were built at the same time on
@@ -4748,10 +4759,10 @@ closes it with Back again or B. Its entries, as the guide lists them: *Jump to..
 
 The two entries ES-DE's menu does not have are there for a reason each. ES-DE toggles a favourite with Y (its option
 *Enable toggle favorites button*, on in the scratch home), but Y, North on the pad, is the search in §4.9's grammar, which
-the player's decisions of §10.1 made and which ES-DE has no counterpart for. Select was the favourite until now; this work
+the decisions of §10.1 made and which ES-DE has no counterpart for. Select was the favourite until now; this work
 gives Select to the menu, as ES-DE does, and the favourite had to go somewhere one press from the list. *Scrape This
 Game...* is the pad menu's entry of §17.14 again, with the same confirm step and the same run. ES-DE starts a single-game
-scrape only from inside the editor, which Mistress also does (below); the plan asked for it in the menu as well. Both are
+scrape only from inside the editor, which Mistress also does (below); it was requested in the menu as well. Both are
 places the player starts a run, so §17.14's rule 1 holds.
 
 **The editor.** ES-DE's guide lists the editor's fields in this order and says what each does. Mistress builds those
@@ -4796,7 +4807,7 @@ whose features it has:
 
 **Where Mistress's editor is its own.** Each field has a *Reset*, shown only while the field differs from what it would
 show with no edit, which returns it to ScreenScraper's value or the default. ES-DE has no per-field reset, only *Clear*
-for the whole entry; the plan asked that a field can be returned on its own. Each field says where its value comes from
+for the whole entry; it was requested that a field can be returned on its own. Each field says where its value comes from
 ("From the file name", "From ScreenScraper", "Your edit", "Your edit, shown in place of ScreenScraper's", "From this
 scrape") in words where ES-DE uses gray, blue and red.
 
@@ -4812,7 +4823,7 @@ about a game and not a cache of a server's answer. Three alternatives were consi
   than of where the data lives.
 - *Columns on `games.db`'s `game`.* Fifteen nullable columns, each later ES-DE field a migration of its own; one row per
   field needs none.
-- *JSON beside the library.* Ruled out by the plan: Mistress's data is in SQLite.
+- *JSON beside the library.* Ruled out from the start: Mistress's data is in SQLite.
 
 **The order**, in `GameMetadata.Resolve`: the edit, else ScreenScraper's value, else the default (the file's name for the
 name, "no" for a flag, nothing otherwise). ScreenScraper's name is kept and not used, as §17.6 decided, so the name's
@@ -4916,7 +4927,7 @@ answered on its own sheet.
 - `GameMetadataTests` (7): the order edit, scraped, default; the draft's changes, including an emptied box over nothing
   and a value equal to its baseline; the editor's scrape against the draft; edits in `games.db` following a renamed file
   and cleared without the favourite and counters; **a schema-4 `games.db` migrated in place** to schema 5, its favourite
-  and play rows kept and an edit written with its time (the player's requirement, relayed 2026-09-26, that everything the
+  and play rows kept and an edit written with its time (the requirement, set 2026-09-26, that everything the
   program writes and reads back is in SQLite, versioned and migrated); a scrape recorded twice leaving an edit; and
   `MediaStore.Forget` deleting the store's pictures, including a second copy's, and nothing outside the store even when
   `media.db` names it.
@@ -4941,7 +4952,7 @@ rebuilt at the end of the round.
 
 **An interrupted round.** The machine reset at 17:58, a hardware fault under load (see the project's notes on the
 desktop's resets). The reset came during G19, and it left G19's mutant in `MediaStore.cs` with its backup beside it. The
-coordinator restored the file, which was byte-identical to the commit, and deleted the backup. The tree was then rebuilt
+file was restored, byte-identical to the commit, and deleted the backup. The tree was then rebuilt
 before any further test ran. The runner now restores any backup it finds when it starts, and the round was resumed from
 G19 (`--from`). G36 was added before the resumption, for the migration test written in the meantime (§23.8).
 
@@ -5006,11 +5017,11 @@ were looked at:
   library, on the desktop and in its big screen, reaches the menu and the editor; Select there is still the favourite.*
 - Nothing ran on the handheld.
 
-### 23.12 Questions for the player
+### 23.12 Open questions
 
 - **Q15, the favourite's button.** ES-DE toggles a favourite with Y; Mistress's Y is the search (§4.9). The favourite is
   now the first entry of the options menu, two presses from the list. Keep it there, or give Y to the favourite and move
-  the search? *Answered by the player on 2026-09-26 (§10.1): Y toggles the favourite and the search is an entry of the
+  the search? *Answered 2026-09-26 (§10.1): Y toggles the favourite and the search is an entry of the
   menu; built in §22.13. The menu's favourite entry stays too.*
 - **Q16, hidden games.** ES-DE lists hidden games, dimmed, by default; Mistress leaves them out unless Preferences ▸ Hidden
   Games is on, because Hide from Library replaces ES-DE's Delete. Keep that default?
@@ -5018,7 +5029,7 @@ were looked at:
   failover fetched, nor the favourite and play counters, which ES-DE's Clear takes with the gamelist entry. Should it take
   more?
 - **Q18, ScreenScraper's name.** ES-DE's editor scrape replaces the name with the scraper's; Mistress keeps the file's name
-  unless the player types one (§17.6). Offer ScreenScraper's name in the editor's scrape? *Answered by the player on
+  unless the player types one (§17.6). Offer ScreenScraper's name in the editor's scrape? *Answered
   2026-09-26 (§10.1): offered, never forced; built in §27.*
 - **Q19, EmuSen's own library.** Should its Select open the same menu and editor, or stay the favourite? *Answered by the
   user on 2026-09-26 (§10.1): the menu and the editor are available in both; built in §27, which leaves Select the
@@ -5029,7 +5040,7 @@ were looked at:
 ## 24. Pass 2: controllers (2026-09-26)
 
 *Opened and closed on 2026-09-26, on branch `bigpicture-controllers`, while §22 and §23 were being built on theirs; §23
-was merged into it before the pass closed.* Pass 2 of §21.3 as the player accepted it (Q22 (a), §10.1): every connected pad
+was merged into it before the pass closed.* Pass 2 of §21.3 as accepted (Q22 (a), §10.1): every connected pad
 steers the interface, pads come and go while Mistress runs, a notice says so, and Preferences gains ES-DE's controller
 type, an A/B swap and its first-controller switch. The settings reference's §4.61 is the player's account; this
 section is the record.
@@ -5049,7 +5060,7 @@ added for Pass 1 to retire, because the headless harness cannot see what Steam d
 **Scope.** As §21.3 wrote it, with two readings made explicit. A second pad does **not** become player 2 in a game: that
 is Q22 (b), recorded as separate input work in `EmuSen_Input.md` §6. The game reads the first pad opened, as it read the
 only pad before; `GamepadBindingMap` is untouched. And the swap trades A and B alone. ES-DE's switch is "Swap the A/B
-and X/Y buttons" (UG "Input device settings"), and the first build followed it; but on 2026-09-26 the decision was that
+and X/Y buttons" (UG "Input device settings"), and the first build followed it; but on 2026-09-26 it was decided that
 in the themed gamelist North toggles the favourite and search moves into the options menu (§22's branch builds it), and
 the swap was then restricted, by instruction, to accept and back, so that it composes with whatever North and West come
 to mean. §24.5 records the departure.
@@ -5210,7 +5221,7 @@ manager's disposal of its pads, and the window's disposal of the manager, one at
 
 `~/.cache/emusen/probe/bigpicture/mutate_controllers.py`, one mutant at a time under `nice -n 10` with two build nodes,
 each built and run against the controller tests, the manager's, the rescan's and `PadInputPathTests`, the source restored
-after each and the tree rebuilt at the end; C30 ran against LunaP's `NoticeLayerTests` in its worktree. Log:
+after each and the tree rebuilt at the end; C30 ran against LunaP's `NoticeLayerTests` in its own checkout. Log:
 `mutants-controllers.txt` and `run-controllers.log`.
 
 **A round the machine ended.** The first round was cut off at 17:58 by a hardware reset of the desktop (an AMD fault,
@@ -5272,7 +5283,7 @@ existing code cannot produce an absent line, is what C3, C4 and C29 answer: each
 
 ### 24.10 The handheld run
 
-For Pass 1's session with the player, on the Legion Go S (build from this branch):
+For Pass 1's hardware session, on the Legion Go S (build from this branch):
 
 1. **Game Mode, built-in controls only.** Start Mistress: no notice at start (P121). Steer the library and the themed
    view; Preferences ▸ Controllers shows Automatic and the help bar draws the family §15.5 gives Steam's virtual pad
@@ -5307,10 +5318,9 @@ For Pass 1's session with the player, on the Legion Go S (build from this branch
 
 ## 25. Pass 3: ES-DE's theme list as a browser and installer, and a survey of the listed themes (2026-09-26)
 
-*Opened 2026-09-26, on the request of that day:* "Lets add a theme browser an installer, similar to what esde
-has". It is §21.3's pass 3, under Q27 (every listed theme, its licence line shown before the download) and Q28 (the
-survey fetches XML files only), both accepted in §10.1. While it was being built the player added a standing requirement:
-"make sure we are storing in sqlite where we can". The player's account is §4.62 of the settings reference; this is the
+*Opened 2026-09-26, on request that day:* a theme browser and installer, similar to ES-DE's. It is §21.3's pass 3, under Q27 (every listed theme, its licence line shown before the download) and Q28 (the
+survey fetches XML files only), both accepted in §10.1. While it was being built a standing requirement was added:
+store in SQLite wherever possible. The player's account is §4.62 of the settings reference; this is the
 record.
 
 **Sources.** ES-DE's behaviour is taken from `USERGUIDE.md`'s "Theme downloader" section, in stage (c)'s copy
@@ -5333,7 +5343,7 @@ repository and one (Grimmlex) a GitLab one, in a subgroup (`gitlab.com/thraeg-gr
 `screenshots` (268 in all, each an `image` path inside the list's own repository and a `caption`); `aspectRatios` is
 given for 63, `variants` 61, `colorSchemes` 55, `fontSizes` 45, `transitions` 27 and `languages` 23.
 
-Three things the plan asked the browser to show are **not in the list**, and each had to come from somewhere else:
+Three things the browser was asked to show are **not in the list**, and each had to come from somewhere else:
 - **No licence.** The licence line is read from the theme's repository when the player opens the theme: its README's
   licence section, else the licence its host names, else a statement that it states none (§25.4).
 - **No branch.** The list gives a clone URL, which in git means the default branch. The host is asked for it (GitHub's
@@ -5367,7 +5377,7 @@ Themes tab gained the Browse row in place of the Art Book Next button. Nothing w
 
 ### 25.3 Storage: what moved into SQLite, and the one file that stayed
 
-Stage (f) wrote each downloaded theme's record into the theme's own folder (`.emusen-theme`, JSON). Under the player's
+Stage (f) wrote each downloaded theme's record into the theme's own folder (`.emusen-theme`, JSON). Under that
 requirement it moved into `themes.db`, together with everything else the browser writes and reads back; the player's
 choices stay in `appsettings.json` (§4.62 has the table). The argument for SQLite here is the one `EmuSen_Stack.md`
 makes for program-written data, and none of §4.1's reasons for keeping configuration in JSON applies: nobody edits these
@@ -5484,7 +5494,7 @@ failed, in 3 min 43 s.**
 ### 25.8 The survey of the listed themes (Q28)
 
 **Method.** `ThemeSurveyTool` in WiseMan, skipped unless `EMUSEN_THEME_SURVEY` names its phase, run from a copy of the
-build so the worktree could be rebuilt meanwhile. Everything it fetched is under `~/.cache/emusen/bigpicture/theme-survey/`
+build so the working tree could be rebuilt meanwhile. Everything it fetched is under `~/.cache/emusen/bigpicture/theme-survey/`
 (`xml/`, `trees/`, `fetch.log`, `survey.json`); nothing entered the repository.
 - **Fetch.** For each of the 66 themes, one listing of the default branch's tree (GitHub's `git/trees/HEAD?recursive=1`,
   one API request; GitLab's paginated `repository/tree`), then every `.xml` file from the hosts' raw file addresses, one
@@ -5580,7 +5590,7 @@ not measure:
 | P128 | Fetching the survey's missing assets for the 51 themed themes would clear every `PathMissing` warning and change no count in §25.8 | a later survey with assets, if asked |
 | P129 | Mapping `badges.controllerSize`, `folderLinkSize` and their positions, `helpsystem`'s dimmed set, and the carousel's `lineSpacing`, `selectedItemMargins` and offsets would leave at least 8 of the 51 themed themes with only video properties unmapped | pass 14's first step |
 
-### 25.10 Questions for the player
+### 25.10 Open questions
 
 - **Q47, the loader's six refusals.** Fifteen listed themes are refused whole by rules THEMES.md states (§25.8). Options:
   (a) keep THEMES.md's strictness, and those themes show EmuSen's fallback;
@@ -5591,7 +5601,7 @@ not measure:
   not be one Mistress draws. It is one short run of the scratch ES-DE on two themes.
 - **Q48, pass 14's order.** The survey's order: the loader's refusals (Q47); the badges' and help system's missing
   properties and the carousel's margins and offsets (widest, cheapest); `gameselector` (20 themes); wheel carousels (9);
-  `gamelistinfo` (6); `animation` (4). **Recommendation: that order,** with any theme the player chooses moving its own
+  `gamelistinfo` (6); `animation` (4). **Recommendation: that order,** with any theme a player chooses moving its own
   elements to the front, as §21.4 already allows.
 - **Q49, ES-DE's full-screen screenshots.** ES-DE's downloader shows a theme's screenshots full screen on X; the detail
   here shows them one at a time at a fixed size. Options: build it now; build it with pass 9's media viewer, which is the
@@ -5614,7 +5624,7 @@ not measure:
 
 ## 26. Retiring OpenEmu's sources: a plan (2026-09-26)
 
-> **Retired 2026-09-27.** The choice was to keep OpenVGDB as a permanent fallback (§10.1). What follows remains
+> **Retired 2026-09-27.** OpenVGDB is kept as a permanent fallback (§10.1). What follows remains
 > the record of what the fallback was measured to yield; its removal steps are not to be carried out.
 >
 > **Built from it, 2026-09-27 (§28):** Q42's Remove and Q45's *Use Another Game's Cover…*. One departure from 26.4 is
@@ -5626,7 +5636,7 @@ not measure:
 > opposite: the art folder and the ROM folder are byte- and time-identical before and after.
 
 *A plan, written on branch `desktop-game-options` beside §27; nothing is removed by it.* The direction of
-2026-09-26 (§10.1): "i would like to eventually retire sourcing game info from openemus library and use screenscraper".
+2026-09-26 (§10.1): eventually retire sourcing game information from OpenEmu's library and use ScreenScraper.
 "OpenEmu's library" is read here as §4.39's pair of sources, which §4.60 made the failover: **OpenVGDB**, OpenEmu's game
 database, which names a file, and **libretro-thumbnails** (`thumbnails.libretro.com`), which has the box under that
 name, with OpenVGDB's own cover address tried last. §25 is being written on another branch at the same time, so this
@@ -5636,7 +5646,7 @@ section is numbered 26, its predictions start at P130 and its questions at Q40, 
 The plan answers five questions: what the failover gives that ScreenScraper does not (26.2–26.3), what replaces it for
 the games ScreenScraper cannot help with (26.4), how what has been fetched already survives (26.5), what a machine
 without the developer credentials is left with (26.6), and in which order the removal is done and tested (26.7–26.8).
-The questions only the player can answer are in 26.9.
+The questions still to be decided are in 26.9.
 
 ### 26.1 The argument in brief
 
@@ -5648,7 +5658,7 @@ indispensable property is not its coverage but that it needs no credentials: on 
 which Q5 makes every distributed build, it is the only online art Mistress has. The retirement is therefore argued in two
 halves with different evidence. Where ScreenScraper can be used, the failover can go now, subject to one live
 measurement (P130). Where it cannot, removing the failover removes online art altogether, and whether that is acceptable
-is the decision, not a technical finding (Q40).
+is a decision to make, not a technical finding (Q40).
 
 ### 26.2 What was measured, and how
 
@@ -5664,7 +5674,7 @@ is the decision, not a technical finding (Q40).
   NES without its iNES header, the SNES without a copier header, the N64 halfword-swapped, the Game Boy as it is);
 - the library itself, `AppSettings.RomDirectory`, read to hash each file and never written.
 
-The databases were copied to the session's scratch folder before they were opened, so no journal or lock file was
+The databases were copied to a scratch folder before they were opened, so no journal or lock file was
 written beside the originals. The scripts are `retire/m40.py` (the 40 files) and `retire/whole.py` (the library) in
 that folder, with `retire/art.py` for the art folder; the whole-library pass took 3 min 53 s under `nice -n 10`.
 
@@ -5748,7 +5758,7 @@ had nothing for any of the seven.
 | Known, no box, a game derived from another (3) | an SMB1 hack | **ScreenScraper's search by name** (Pass 8's "Find by name…" chooser, `jeuRecherche`), where the player picks the base game's page; or **the base game's cover from the library** |
 | Known as a non-game (3) | a multicart, a program cartridge | the placeholder, or the player's own cover; ScreenScraper's mix image exists for these (Q43) |
 
-- **Search by name** is §21's Pass 8 as the player accepted it (Q22–Q35, §10.1): started only from "Find by name…" or a run
+- **Search by name** is §21's Pass 8 as accepted (Q22–Q35, §10.1): started only from "Find by name…" or a run
   the player sets to ask, never as an automatic fallback, so §17.14's rule 1 holds. It costs a request per search and
   one per picture, like any other lookup. It is the replacement with the widest reach, and the retirement should wait
   for it (26.7).
@@ -5781,7 +5791,7 @@ itself.
 
 **Today.** A run the player starts on such a machine asks only the failover (§4.60's second case). That is every
 distributed build: Q5 decided that no build carries the credentials, and ScreenScraper issues developer credentials to
-software authors, not players, so a player cannot bring their own (§4.60's sign-in section). The player's own machines,
+software authors, not players, so a player cannot bring their own (§4.60's sign-in section). The author's own machines,
 the handheld included, read `~/.config/EmuSen/screenscraper-developer.json` and are unaffected (§17.12).
 
 **After the removal, with nothing else changed,** such a machine has no online art at all: the art folder, *Add Cover Art
@@ -5791,11 +5801,11 @@ placeholder. A scrape run there would have nothing to ask, and the Scraping tab 
 Four ways through, none of them chosen here:
 1. **Accept it.** Distributed builds have offline art only. Simple; a clear loss for a player of a published build.
 2. **Revisit Q5.** Embed the developer credentials at publish time from a file outside the repository, as ES-DE does
-   (the option §10 put to the player as Q5). Every build could then scrape; the credentials would be in every copy, obfuscated but
+   (the option §10 put as Q5). Every build could then scrape; the credentials would be in every copy, obfuscated but
    recoverable, and a leak would be charged against the project's account.
-3. **A second source that needs no project credentials.** TheGamesDB with the player's own key is Pass 13, and the player
-   accepted Q29's (c) (§10.1): a key is issued to any site account, unlike ScreenScraper's developer credentials. It is
-   a second source, not ScreenScraper, so it keeps a failover in a new form; the direction names ScreenScraper
+3. **A second source that needs no project credentials.** TheGamesDB with the player's own key is Pass 13, and Q29's (c)
+   was accepted (§10.1): a key is issued to any site account, unlike ScreenScraper's developer credentials. It is
+   a second source, not ScreenScraper, so it keeps a failover in a new form; the direction of §10.1 names ScreenScraper
    alone.
 4. **Keep libretro's thumbnails without OpenVGDB**, asked by the file's own name, for files already named as No-Intro
    names them. It needs no database and no credentials, but it is half of what is being retired, and on this library it
@@ -5809,7 +5819,7 @@ Q40 asks which. The steps of 26.7 are ordered so that the half the evidence supp
    or a console, with the failover on, as §4.60 built it. The status window's tally *Filled by OpenEmu* (§4.57) is the
    yield, and the run's log names each game. No code is needed; the run costs ScreenScraper's quota as any run does
    (§17.10: three days for the whole library, or one shelf at a time). This is the evidence the removal rests on, and it
-   is the player's to start (§17.14).
+   is started only by hand (§17.14).
 2. **Build the replacements:** Pass 8's search by name and its chooser (26.4), and *Use Another Game's Cover…*.
 3. **Stop asking the failover where ScreenScraper is usable.** The first behavioural change: a run with the developer
    file never asks OpenVGDB or libretro, whatever the switch says; the switch's row says it applies only where
@@ -5863,14 +5873,14 @@ Q40 asks which. The steps of 26.7 are ordered so that the half the evidence supp
 | P134 | Step 5 removes between 1,000 and 1,500 lines, tests included, and adds fewer than 150. |
 | P135 | A whole-library run after step 3 costs the same ScreenScraper requests as one before it, to within 1%: the failover never cost ScreenScraper requests. |
 
-### 26.9 Questions for the player
+### 26.9 Open questions
 
 - **Q40, a machine without the developer credentials.** After the removal such a machine, every distributed build
   included, has no online art. Which of 26.6's four: accept it; revisit Q5 and embed the credentials at publish; bring
   TheGamesDB (Pass 13, the player's own key) forward as the credential-free source; or keep libretro's thumbnails asked
   by file name, without OpenVGDB? **Recommendation: accept it for now and do Pass 13 when its terms have been read**,
   since only (3) gives a player of a published build art without putting the project's credentials in every copy; (2)
-  is the stronger remedy if the player is content to carry that risk.
+  is the stronger remedy if the project is content to carry that risk.
 - **Q41, the 670 covers in the art folder.** They were fetched by §4.39's switch, not placed by the player, and they rank
   above ScreenScraper's. Keep them first, as today, or rank the ones `cover_lookup` records as fetched below
   ScreenScraper's? **Recommendation: keep them first**, and offer the re-ranking as a Preferences action rather than a
@@ -6035,7 +6045,7 @@ One broad run at the end, as the test-load rule asks: every test under `EmuSen.W
 skipped (the picture and bench tools gated by their variables), none failed**, of 890, in 3 min 19 s. Before it, the
 mutant runner's four classes passed 29 of 29 on the final code.
 
-### 27.9 Question for the player
+### 27.9 Open question
 
 - **Q46, Select in the sidebar library.** In the themed gamelist Select opens the game options (§23.4, Q12) and North
   is the favourite (Q15). In the sidebar library, on the desktop's pad and in the built-in big screen, Select is still
@@ -6048,9 +6058,9 @@ mutant runner's four classes passed 29 of 29 on the final code.
 
 ## 28. Q40, Q42 and Q45 built: the developer credentials in published builds, OpenVGDB's Remove, and another game's cover (2026-09-27)
 
-*Built on branch `scrape-embed-and-covers`.* The answers of 2026-09-26 (§10.1): Q40 ("Do what ES-DE does"),
-Q42 and Q45 from §26.9. The retirement §26 planned was withdrawn during the work ("Keep openvgdb as a
-fallback", 2026-09-27), which changed Q42's wording and nothing else. The player's account is §4.65 of the settings
+*Built on branch `scrape-embed-and-covers`.* The answers of 2026-09-26 (§10.1): Q40 (do what ES-DE does),
+Q42 and Q45 from §26.9. The retirement §26 planned was withdrawn during the work (OpenVGDB kept as a
+fallback, 2026-09-27), which changed Q42's wording and nothing else. The player's account is §4.65 of the settings
 reference; this is the record.
 
 ### 28.1 Predictions, and what was found
@@ -6081,7 +6091,7 @@ The target is `EmuSen.Mistress/Scraping/ScreenScraperDeveloper.targets`; the run
   the values are copied with their JSON escapes intact and parsed properly at run time.
 - *The scrambled file deleted after the compile,* so the scrambled credentials exist on disk only inside the published
   assembly and, for the seconds of one compile, in `obj/`.
-- *A warning, not an error, for a missing file*, as the plan asked: a publish on a machine without the file (a
+- *A warning, not an error, for a missing file*, as the plan required: a publish on a machine without the file (a
   contributor's, CI's) must succeed and produce a build that simply cannot scrape without a file of its own.
 
 **The one publish of Mistress itself** (by hand, not a test; `~/.cache/emusen/probe/q40/publish-fake.sh`), with the
@@ -6106,7 +6116,7 @@ property's default resolves there before it publishes with no property at all.
   succeeds with exactly one `EMUSEN0040`; with no property, the default is the (moved) user config directory, a publish
   there warns once and then, with a file placed there, embeds it; a file missing its password is not embedded and the
   warning names the field and not the id; the scrambled file's place under `obj/` is ignored by git.
-- `ScrapeCredentialTests` (+9): the order (none; embedded; the player file over it; the tree file over both; a broken tree
+- `ScrapeCredentialTests` (+9): the order (none; embedded; the per-user config file over it; the tree file over both; a broken tree
   file passed over); the embedded values redacted raw and URL-escaped, never printed, and never written by loading them,
   saving a member account or saving `appsettings.json`; six malformed blobs refused; the scrambled bytes holding neither
   value nor the word `devpassword`. `No_tracked_file_holds_a_real_devpassword` still reads the real file only to look
@@ -6225,7 +6235,7 @@ images or its sounds entered either repository. Art Book Next was read in its re
 slots and images it names and where its clock is.
 
 **Numbering.** §21.6 gave this pass P105 and P106. The plan set new predictions to start at P130, but §26 had taken
-P130–P135 and another section P140–P143, so this section's are **P160–P163**; its questions start at **Q50**, as briefed.
+P130–P135 and another section P140–P143, so this section's are **P160–P163**; its questions start at **Q50**, as planned.
 
 ### 29.1 Predictions
 
@@ -6389,7 +6399,7 @@ The runner is `~/.cache/emusen/probe/pass4/mutate_pass4.py`. Before each mutant 
 `mutant-in-progress.json`, holding the file's path and original text; it restores the file in a `finally` and removes the
 state file after; a run that finds a state file at its start restores that file and rebuilds both trees before anything
 else (checked with a planted state file, `check_restore.py`). Every mutant's text must occur exactly once. Each was built
-with `-m:2` and run alone under `nice -n 10` against its rule's tests only; LunaP's ran in its worktree against
+with `-m:2` and run alone under `nice -n 10` against its rule's tests only; LunaP's ran in its own checkout against
 `BadgeGlyphTests` and `IndicatorControlTests`. Both trees were rebuilt clean after each round. The log is
 `run-pass4.log`, the verdicts `mutants-pass4.txt` and `mutants-pass4-rerun.txt`. No round was interrupted.
 
@@ -6460,7 +6470,7 @@ WiseMan was merged into the branch before it (`964f07c2`: ES-DE's default keys s
 Start menu), cleanly. Then one clean rebuild and one broad run, under `nice -n 10` with builds at `-m:2`: every test
 under `EmuSen.WiseMan.Mistress` except `ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` and anything
 named for the GPU or Vulkan. **983 passed, 27 skipped (the picture, bench and live tools gated by their variables), none
-failed**, of 1,010, in 3 min 46 s. P163 **held**. Another run was building on the machine at the same time. One pass is
+failed**, of 1,010, in 3 min 46 s. P163 **held**. Another build was running on the machine at the same time. One pass is
 weak evidence against an intermittent failure, as §15.14 says of its own. LunaP's whole suite, run twice during the pass,
 passed 1,371 of 1,371 both times.
 
@@ -6485,7 +6495,7 @@ passed 1,371 of 1,371 both times.
 - **Row 32's filter and notice**: Filter Gamelist has no alternative-emulator field, and the editor shows no notice for
   a stored engine its console lacks; the launch simply ignores it.
 
-### 29.11 Questions for the player
+### 29.11 Open questions
 
 - **Q50, the systems' default order.** The default stays EmuSen's release order (NES, Game Boy, Game Boy Color, SNES,
   Nintendo 64). ES-DE's default is by full name, which §22.2 measured as Nintendo 64, NES, Game Boy, Game Boy Color, SNES
@@ -6739,7 +6749,7 @@ changed and the pictures redrawn.
 - **The flat name second** also applies to Mistress's store after its migration, where only hand-placed pictures and
   what the step could not move stay flat.
 
-### 30.11 Questions for the player
+### 30.11 Open questions
 
 - **Q60, the folder-link mark.** ES-DE marks a linked folder in a text list with its own symbol (`>` in *ascii*). Add a
   `TextRowMarker.FolderLink` to LunaP, or keep the folder mark and leave the link to the badge?
@@ -6764,7 +6774,7 @@ changed and the pictures redrawn.
 
 *Opened 2026-09-27, on the answer to Q47 of that day, (b) (§10.1): run ES-DE on the themes the loader refuses
 (P123, P124), then match what it does, rule by rule.* The principle is §25.10's: a theme ES-DE draws should not be one
-Mistress refuses, and a theme ES-DE refuses should not be one Mistress draws. While the work ran, the player met Q47 on
+Mistress refuses, and a theme ES-DE refuses should not be one Mistress draws. While the work ran, Q47 turned up in play on
 the handheld: the theme browser refused to install Artflix (Revisited) and CarAlt, because the install gate
 (`ThemeDownloads.Validate`) is the loader. The player's account is §4.68 of the settings reference.
 
@@ -6777,14 +6787,14 @@ entered the repository; the tests write their own XML.
 
 ### 31.1 The setup
 
-- **ES-DE.** The copy of the player's AppImage under `~/.cache/emusen/bigpicture/esde/`, with a home of its own,
+- **ES-DE.** The copy of the downloaded AppImage under `~/.cache/emusen/bigpicture/esde/`, with a home of its own,
   `home-q47/`, beside the earlier stages' home, which was not touched. Each run: `--home home-q47 --resolution 1280 800
   --fullscreen-padding off --no-update-check --no-splash --debug`, windowed, one window at a time, 8–15 s, closed by
   PID, and the absence of any ES-DE process checked after each (`ps` with an anchored pattern, never `pgrep -f`).
 - **What it could reach.** `ApplicationUpdaterFrequency` was `never` and the ScreenScraper account fields were empty;
   nothing asked it to scrape. Its ROM folder was `esde/q47-roms/`: four empty files per system for `nes`, `snes`, `gb`,
   `gbc` and `n64`, and an SNES folder *Tower Set* with a folder link (for the folder-link icon), with one game marked
-  *hide metadata* (for `metadataElement`). The player's library was never named. `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT`
+  *hide metadata* (for `metadataElement`). The real library was never named. `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT`
   admitted only §22.2's uinput pad, so a real controller could send nothing.
 - **The runner** is `~/.cache/emusen/probe/q47/esde_run.py` (settings, launch, window captures by `ffmpeg -f x11grab`,
   pad timelines, log copy, close). 36 runs in all; every `es_log.txt` is kept in `probe/q47/logs/`.
@@ -6943,7 +6953,7 @@ rebuilt clean at the end.
 | # | Prediction | Retired when |
 |---|---|---|
 | P170 | ES-DE reads a FLOAT written with an exponent (`1e-1`, `5E-2`) as its value, as the loader does; no listed theme was seen to write one | ES-DE is run on it |
-| P171 | Installing Artflix (Revisited) and CarAlt from the theme browser on the handheld with this build succeeds, and big picture draws both | the player's next install there |
+| P171 | Installing Artflix (Revisited) and CarAlt from the theme browser on the handheld with this build succeeds, and big picture draws both | the next install there |
 | P172 | ES-DE reads `selectable` in `capabilities.xml` by §31.2's first-character rule (`yes` selectable, `flase` not), where the loader warns and keeps its default | ES-DE is run on it |
 | P173 | ES-DE draws Canvas's and Iconic's game-list carousels with `itemsBeforeCenter` of `3.5`, reading it as 3 | ES-DE is run on them (Q70) |
 
@@ -6958,13 +6968,13 @@ rebuilt clean at the end.
   plain text there. **A second root element** after the first is ignored by the loader; not measured.
 - **Numbers written as `inf`, `nan` or in hexadecimal**, which a C reader might take, are 0 in the loader; not measured.
 - **The handheld**: nothing ran there (P171).
-- **The value the player quoted.** The handheld's message gave the value as `w0.02`; Artflix (Revisited) as downloaded on
+- **The value as reported.** The handheld's message gave the value as `w0.02`; Artflix (Revisited) as downloaded on
   2026-09-27 writes `w 0.02` in all three places. The settings reference's §4.70, merged while this section was written,
   records that the detail sheet's status line had been broken by word-wrap, so which spelling the handheld showed could
   not be read from it; `w 0.02`, the downloaded spelling, is the one this section's install test and the survey load. A
   theme that does write `w0.02` is refused by ES-DE and by the loader alike.
 
-### 31.11 Questions for the player
+### 31.11 Open questions
 
 - **Q70, the other value types.** COLOR, UNSIGNED_INTEGER (Canvas and Iconic write `3.5`), STRING and PATH were left
   strict, as THEMES.md types them. One probe run per type would settle each as §31.2 settled three. **Recommendation:**
@@ -6989,3 +6999,200 @@ failure is this branch's:
 - `InputSettingsWindowRenderTests.The_window_renders_its_rows(NES)` threw from Avalonia's headless platform
   initialisation ("The calling thread cannot access this object"), and passed, all three cases, when run alone; it is
   recorded as an order-dependent failure of the headless setup, not investigated further here.
+
+## 32. ES-DE's menu look, stage 1: the Start menu and a game's options (2026-09-27)
+
+*Built on branch `bigpicture-esde-menus`, from WiseMan at `7c6ce023`; LunaP on `esde-menus`, from `openemu-library` at
+`1bd782b`.* Requested 2026-09-27: make the big picture options menu look like ES-DE's.
+It is built in two stages, and the first stage's look is approved before the second begins. The player's account is
+§4.69 of the settings reference; LunaP's record of its pieces is its §181. §29–§31 are other passes'.
+
+**Numbering.** Predictions from P180, questions from Q80; both ranges were free in the tree when this began.
+
+**Sources.** ES-DE's look was read from the captures of 2026-09-26 under
+`~/.cache/emusen/bigpicture/collections-probe/runs/` (the main menu `r7/m00_mainmenu.png`, the gamelist options
+`r5/f04_options.png`, Game Collection Settings and a selection list `r7/m02`, `r7/m03`). ES-DE was not run for this
+section, and its source was not read. No file of ES-DE's was copied: no font, image, sound or colour table. The
+measurements below are of those pictures, to set proportions; the colours are Mistress's own, near ES-DE's greys but not
+sampled into the code.
+
+### 32.1 What ES-DE's menu measures, at 1280×800
+
+Read off `m00_mainmenu.png` with a pixel scan (not ES-DE's code):
+
+- the panel runs from x 220 to 1060 (840 wide, 0.656 of the width) and y 104 to 716, with corners of about 16 px;
+- the title band is 100 px, its capitals 49 px high;
+- rows are 54 px apart with a 1 px rule, their capitals 26 px high, text 7 px from the left edge;
+- the chosen row is a black bar between two rules, edge to edge;
+- the chevron is 15 by 26 px, 8 px from the right edge;
+- the footer band is about 78 px;
+- the help bar sits at the bottom centre on a dark fill, its icons 22 px and its capitals 18 px.
+
+Mistress lays its menu out in the same proportions, scaled from 800 lines. The panel is 0.66 of the width but no wider
+than 1.05 times the height, which gives 840 px at 1280×800. The title is 68 px Barlow Condensed and the rows 36 px
+(their capitals about 26 px). The rows are 54 px; the help text is 26 px. It differs on purpose in three places. The
+chosen row's text turns near white on the bar, where ES-DE keeps it grey (Q82). The theme's own help bar is hidden, so
+one help bar shows. The help bar's buttons are LunaP's pad glyphs (§29) in the pad's family, not ES-DE's icons.
+
+### 32.2 What was built
+
+- **LunaP** (`esde-menus`): `MenuPanel`, `MenuRow`, `MenuRowKind`, `MenuRowLayout`, `MenuRows`, `BlurBackdrop` and
+  `SheetLayer.Chromeless` (its §181). Nothing existing changed its behaviour.
+- **Mistress**: the pad menu's list moves into a `MenuPanel` in a big-screen session. `PadMenuEntry` gains `Label`,
+  `Value` and `Opens`. `GameOptionsWindow` builds an ES-DE panel when given a pad family, and `GameOption` gains
+  `MenuRow` and `Opens`. `GamelistOptionRows` gives Jump To…, Sort Games By and Filter Gamelist their row forms. The
+  screen is wrapped in `ScreenContent` and blurred by `MenuBackdrop`. The theme's help bar is hidden while a menu is open.
+  Barlow Condensed ships in `Assets/Fonts` (§4.69.2, `THIRD_PARTY_NOTICES.md` §1.5).
+
+The desktop is unchanged: `ApplyBigMenuLook(false)` puts the list back in its bordered box with its own rows, and a
+game's options on the desktop are built as before. A test checks both (§32.4).
+
+### 32.3 Predictions
+
+| # | Predicted | Found | Verdict |
+|---|---|---|---|
+| P180 | *(written after the first pictures, before the tests)* The Start menu and a game's options draw nothing outside the panel and the help bar but the backdrop, at 1280×800 and 1920×1200 | 0 differing pixels outside at both sizes, in both menus | held |
+| P181 | *(written during the build)* No existing test needs a behavioural expectation changed; only expectations about how something is drawn | two changed, both about the look (the title read from the panel; *1 filter set* read from the row's value); 92 pad and desktop tests and 167 themed tests passed unchanged | held |
+| P182 | *(written before the mutants)* Of twelve mutants, at least nine in ten are caught on their first valid run | 12 of 12 | held, but see §32.5: the first round was not valid |
+| P183 | *(written before the broad run)* The broad Mistress run passes with no failure this branch causes | 1,039 tests, 1,007 passed, 32 skipped, none failed (§32.7) | held; one pass is weak evidence against an intermittent failure, as §15.14 says |
+
+### 32.4 Tests
+
+`EsdeMenusTests`, six cases, with the detail in §4.69.5:
+
+- the Start menu at both sizes;
+- a game's options at both sizes;
+- F4 and Backspace with no pad;
+- the desktop kept.
+
+The centring and the bar are read from the controls' arranged rectangles and from the pixels. The pixel rule is §15's
+comparison between two frames: the menu open, and the same frame with the panel alone hidden. It counts differing
+pixels inside the panel and help bar and outside them, and the outside count must be zero. LunaP's `MenuTests` adds ten
+cases (its §181.6).
+
+### 32.5 Mutants, and a round that was not valid
+
+Six mutants of Mistress and LunaP ran against `EsdeMenusTests`:
+
+1. the panel placed at a third of the width;
+2. the bar 0.9 of the row;
+3. the title drawn 40 px above the panel;
+4. the theme's help bar left shown;
+5. the desktop given the big look;
+6. no blur.
+
+Six more of LunaP ran against its `MenuTests` (its §181.6).
+
+**The first round of the six was not valid**, and its results are not counted. The runner restored each file from a copy
+made with `shutil.copy`, which gives the copy the time it was made, earlier than the mutant's build. MSBuild therefore
+saw the restored file as older than the assembly and did not rebuild it. Every mutant after the first ran on the first
+mutant's binary: all reported "caught", and the "theme help left shown" mutant failed on the centring assertion, which
+it does not touch. That mismatch is what exposed the problem. It is the trap memory records for the mutation runner. The
+runner now touches each restored file and touches every file it mutated before the final rebuild. On the valid round,
+each of the twelve was caught by the assertion written for it, and nothing else failed.
+
+### 32.6 Pictures
+
+In `~/.cache/emusen/bigpicture/png/esde-menus/`, from `EsdeMenusPictureTool` (`EMUSEN_BIGPICTURE_PNG=1`). For each of
+`synthetic` and `artbooknext`, at each of `1280x800` and `1920x1200`, the pictures are:
+
+- `-start-menu` and `-start-menu-fourth-row`;
+- `-game-options`;
+- `-game-options-sort-stepped`;
+- `-in-game-menu`;
+- `-folder-options`.
+
+Two side-by-sides compare with ES-DE's captures: `side-by-side-main-menu.png` against `m00_mainmenu.png`, and
+`side-by-side-game-options.png` against `f04_options.png`, both Art Book Next at 1280×800. Every picture was looked at.
+
+### 32.7 The broad run
+
+Once, on the final build of both branches (LunaP `c07279a`), under `nice -n 10` and `-m:2`, headless. The filter was the
+Mistress tests without any test named for shaders, the GPU or Vulkan:
+`FullyQualifiedName~EmuSen.WiseMan.Mistress&FullyQualifiedName!~Shader&FullyQualifiedName!~Gpu&FullyQualifiedName!~Vulkan`.
+
+- **1,039 tests: 1,007 passed, 32 skipped, none failed**, in 3.6 minutes.
+- The skipped are the picture, bench, live and real-library tools, which need their variables; this section's two
+  picture tools are among them.
+- LunaP's own suite ran in full on its branch: 1,388 tests, 1,387 passed. The one failure was the README's stale count of tests (its §181.6); it was corrected and that test rerun, and passed.
+
+### 32.8 Stage 2, not started
+
+It waits for the approval of stage 1's look. In the order requested (2026-09-27):
+
+1. **The metadata editor first**, as ES-DE's editor:
+   - an upper-case *Edit Metadata* title with the game's name and file name beneath;
+   - one row per field, label left and value right;
+   - text fields opening an edit popup;
+   - the rating as stars, flags as switches, and choices with `<` `>`;
+   - the buttons in a row at the bottom.
+
+   The source is USERGUIDE.md's *Metadata editor* section (the local copy under `~/.cache/emusen/bigpicture/motion/docs/`).
+   Two fields it lacks today, each stored in `games.db`'s `game_edit` like the rest:
+   - *Hide metadata fields*, a flag that hides most fields and the badges in the themed view;
+   - *Custom collections sortname*, shown only when the editor is opened inside a custom collection, which sorts custom
+     collections only.
+
+   *Hide from Library…* stays in place of ES-DE's Delete, since Mistress never deletes a ROM.
+2. **The settings sheets as ES-DE menus**: Theme Settings with pass 4's Interface tab, Game Collection Settings, and
+   Preferences in a big-screen session. Each has label-and-value rows, `<` `>` option rows, switches, and chevrons into
+   submenus.
+3. **An option row's list screen**, in place of the stock dropdown.
+
+`MenuRow`'s `Switch` kind is drawn but not yet driven, and a text popup and a stars row are new. The estimate, which is a
+guess from this stage's pace and not a measurement:
+- the metadata editor with its two fields and their behaviour: about one working session;
+- the three settings sheets, which hold several dozen settings between them: one to two more;
+- the pictures, mutants and records: throughout.
+
+### 32.9 Not done
+
+- The settings sheets and the metadata editor (§32.8).
+- A real pad, the handheld, and ES-DE running beside Mistress for a live comparison.
+- The desktop's pad menu, deliberately.
+
+### 32.10 Open questions
+
+*All seven were answered on 2026-09-27, with stage 1's look approved; the answers are in §10.1 and were built as §32.11
+records. The questions are kept as they were asked.*
+
+- **Q80, the Start menu's title over the library.** *Main Menu*, as ES-DE, is what it shows now; the desktop's says
+  *EmuSen*. Keep *Main Menu*?
+- **Q81, the in-game title.** The running game's file name with its extension (*Cobalt Harbor (Synthetic).sfc*), as the
+  desktop's menu shows it. Show the library's title instead?
+- **Q82, the chosen row's text.** Near white on the bar here; ES-DE keeps it grey. Keep the brighter text, or match?
+- **Q83, the typeface.** Barlow Condensed Regular (§4.69.2). Keep it, or try Roboto Condensed or Fira Sans Condensed
+  side by side first?
+- **Q84, the footer.** *EmuSen 1.0.0* under the pad menu, where ES-DE shows its version. Keep, or drop it?
+- **Q85, a game's options' title.** The game's name, as before; ES-DE titles the same menu *Gamelist Options*. Which?
+- **Q86, A on an option row.** It drops down the stock list today. Build ES-DE's list screen in stage 2 (§32.8, item 3),
+  or leave A to step as Right does?
+
+### 32.11 The answers built (2026-09-27)
+
+- **Q81.** Over a running game the Start menu's title is the name the library shows: the themed view's (the player's
+  edit over ScreenScraper's name over the file's name) when the library is a theme, else the sidebar's (the player's edit
+  over the file's name), with no extension or folder in either. `EsdeMenusTests` checks it against the name the themed
+  gamelist showed for the game it launched. The desktop's menu still shows the file's name; it was not asked about.
+- **Q85.** A game's options, and a folder's, are titled *Gamelist Options*. `ThemedGameOptionsTests` and `EsdeMenusTests`
+  read it; the game's name no longer appears in the menu.
+- **Q84, the version.** The 1.0.0 was nobody's decision: no project set a version, so the .NET SDK's default, 1.0.0, was
+  every assembly's, and `MainWindow.BuildName` reads `EmuSen.dll`'s informational version (`1.0.0+<commit>`). A new
+  `Directory.Build.props` at the repository root sets `Version` to 0.9.0. Every project that does not set its own now
+  carries 0.9.0: EmuSen, Mistress, Hotaru, Pharaoh, Serenity, Endymion, DianaOS, WiseMan.
+  - EmuSen.Galaxia and EmuSen.Cauldron keep their own 0.1.0.
+  - LunaP comes from its own repository and is not affected.
+  - The Rust cores' versions are Cargo's and are not affected.
+
+  What reads it, found by searching the tree for the version attributes, `GetName().Version`, `FileVersionInfo` and
+  the MSBuild version properties:
+  - the menus' footer, now *EmuSen 0.9.0*;
+  - the covers' HTTP User-Agent (`EmuSen/0.9.0`, was `EmuSen/1.0.0`);
+  - the *Build* a new save state's record stores (`0.9.0+<commit>`), shown in the media view and in the load-state
+    messages. Only the state version decides whether a state loads, so an older record that says 1.0.0 is shown as
+    it is and still loads.
+
+  Nothing in the publish layout reads the version. ScreenScraper's `softname` is unchanged. The file and product
+  version of the published executables now say 0.9.0.
+- `EsdeMenusTests` asserts the footer reads *EmuSen 0.9.0*. The affected pictures of §32.6 were rendered again and
+  looked at, and the two side-by-sides were composed again.

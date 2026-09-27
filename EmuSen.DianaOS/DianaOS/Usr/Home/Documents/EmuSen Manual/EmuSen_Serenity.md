@@ -606,7 +606,7 @@ processors), SteamOS on kernel 6.18.50-valve1, glibc 2.41, platform profile `cus
 The benches are the self-contained linux-x64 publishes in `~/.cache/emusen/probe/shaders/deck-out/{base,proto}`
 (natives asking for glibc 2.27 at most), run by `deck-run.sh 3` from `~/emusen-bench/shaders/` with the case lists
 in `~/.cache/emusen/probe/shaders/deck/`: the same protocol as §8.1, three interleaved rounds under a lock of the
-device's own, the picture letterboxed into the panel's 1920×1200. The run was started by the parent session. For the
+device's own, the picture letterboxed into the panel's 1920×1200. The run was started separately, over SSH. For the
 record: a first attempt in the background died with the SSH session that started it, and the run was repeated in the
 foreground; only the repeat's results exist, so this touches no number. Raw results, copied back:
 `~/.cache/emusen/probe/shaders/handheld/`.
@@ -867,7 +867,7 @@ Read from RetroArch's source at commit `ce5544fd` (`~/Projects/retroarch-referen
   (`shader_vulkan.cpp:4150-4160`), as §7.1 reads them.
 
 Every cited line above was re-read at that line. The uncited statements (the glcore driver, the one command buffer,
-the linear upload texture) are from a separate run's reading of the drivers and were not re-derived line by line.
+the linear upload texture) are from a separate reading of the drivers and were not re-derived line by line.
 
 ### 8.8 The ranking, and the order of work
 
@@ -1246,7 +1246,7 @@ no test writes to the player's `home/Shaders/`.
 
 ### 9.8 What is not done
 
-- **Neither lever has run on the handheld.** The parent session measures it there. The desktop figures match the
+- **Neither lever has run on the handheld.** It is measured there separately. The desktop figures match the
   prototype's, which the handheld did measure (§8.4).
 - **Nothing ran in a real window.** As in §8.9, the bench stands in for Mistress's render thread. §9.1's
   measurement of what Skia does with a raster image was on the bench's EGL context (the same radeonsi driver), not in
@@ -1270,7 +1270,7 @@ no test writes to the player's `home/Shaders/`.
 
 ### 9.9 The handheld, after both levers (2026-09-24)
 
-Measured by the parent session after the merge (9269ec9): the research's production bench (`deck-out/base`,
+Measured on the handheld after the merge (9269ec9): the research's production bench (`deck-out/base`,
 57937b2) against a bench built from WiseMan with both levers (`deck-out/after`), the same case lines, three rounds
 with the order alternated, 300 frames each, the picture in the panel's 1920×1200. **On the charger this time**
 (`power_supply` online 1), where §8.4's run was on battery, so the base figures here are not §8.4's and each lever is
@@ -1293,8 +1293,8 @@ load times on the device after lever 2, and a run on battery.
 
 ## 10. The chain's synchronisation, and the flicker under CRT presets (2026-09-24)
 
-§9.7 recorded a synchronisation hazard in `SlangChain` and argued its cause. The request was whether it explained a
-flicker they had seen under the CRT presets. This section reproduces the hazard, classifies it, demonstrates its
+§9.7 recorded a synchronisation hazard in `SlangChain` and argued its cause. The question that followed was whether it
+explained a flicker seen in play under the CRT presets. This section reproduces the hazard, classifies it, demonstrates its
 cause and fixes it. It then takes up the separate question of what makes a preset flicker here, and the answer to
 that is mostly not the hazard. Scripts, logs and raw results are in `~/.cache/emusen/probe/shaders/sync/`. Its
 `PREDICTIONS.md` holds the predictions, each written before the measurement it predicts.
@@ -1486,7 +1486,7 @@ bench lock (`results-time.txt`).
   Lottes is a one-pass preset, so that fall cannot come from a dependency between passes, and it is read as noise.
 - The fix costs nothing measurable here, which fits §10.2's argument that RADV already did the waiting.
 
-**Mutants.** Each mutant was applied alone to the worktree, built, and run against `SlangSyncTests`, `SlangChainTests`
+**Mutants.** Each mutant was applied alone to the working tree, built, and run against `SlangSyncTests`, `SlangChainTests`
 and `SlangReadbackTests` with the pack (`mutants.py`, `mutants.log`). "The four validation tests" below are those for
 the test preset, royale, guest-advanced and POTATO.
 
@@ -1506,7 +1506,7 @@ Both crashes count as caught, as §9.7's did, but they were caught by a crash, n
 
 ### 10.6 What makes a preset flicker here
 
-The hazard changes no picture on this machine (§10.5), so it cannot be what the player saw on it. The player's machines
+The hazard changes no picture on this machine (§10.5), so it cannot be what was seen on it. The machines it was seen on
 are this desktop's RX 6800 and a Legion Go S, both on RADV, and §10.2's argument covers both. The question therefore
 became what else could make a preset's picture unstable from frame to frame. The candidates were:
 
@@ -1638,7 +1638,7 @@ repeat is this frontend's way of filling a progressive display, not part of the 
     picture holds still where RetroArch's keeps animating.
   - For a genuinely interlaced (480i) N64 picture, the field alternation still follows the game's frame rate.
   - A fix needs the frontend to pass a console frame number with each offer. Whether a paused picture should keep
-    animating is the choice.
+    animating is a choice for the player.
 - **RetroArch defines `_HAS_ORIGINALASPECT_UNIFORMS`, `_HAS_FRAMETIME_UNIFORMS` and `_HAS_SENSOR_UNIFORMS`** in every
   stage it compiles (`glslang_util.c`). EmuSen passes Shaderc no defines (§9.4), so a shader written for them takes its
   fallback. For instance, `crt-yah`'s frame-rate compensation assumes 60 fps instead of reading `FrameTimeDelta`.
@@ -1649,11 +1649,11 @@ repeat is this frontend's way of filling a progressive display, not part of the 
   - History and feedback start cleared.
   - The lent readback is never written while an image holds it (§9.1's tests).
 
-### 10.7 Does this explain the player's flicker?
+### 10.7 Does this explain the flicker seen in play?
 
-**The synchronisation hazard does not, on the player's hardware.** It is real and it is fixed. It broke the API's rules
+**The synchronisation hazard does not, on the hardware it was seen on.** It is real and it is fixed. It broke the API's rules
 and could have shown on another driver. But on RADV its fix changes no picture, in any bench case or in any of the 101
-CRT presets. A defect whose fix changes no picture cannot be what the player saw.
+CRT presets. A defect whose fix changes no picture cannot be what was seen.
 
 **The interlace emulation on N64 frames very probably does, if the flicker was on an N64 game** under royale,
 guest-advanced or any of the other presets listed in §10.6:
@@ -1665,7 +1665,7 @@ guest-advanced or any of the other presets listed in §10.6:
 Under a SNES or Game Boy game none of this applies. What still changes from frame to frame there is presets
 animating on purpose (grain, noise, NTSC phase) and one pack shader's border sparkle (`gizmo-slotmask-crt`).
 
-Which game and preset the player saw the flicker under was not established. If the flicker persists, that is the
+Which game and preset the flicker was seen under was not established. If the flicker persists, that is the
 question to ask.
 
 ### 10.8 What this does not cover
@@ -1674,7 +1674,7 @@ question to ask.
   the claim that it could show elsewhere is untested. The fix is what the specification requires either way.
 - **Nothing ran in a real window**, as in §9.8. The flicker findings are the chain's and the runner's pictures,
   hashed. The frame control's own redraw pacing was not observed in Mistress.
-- **The handheld was not run.** The parent session runs it.
+- **The handheld was not run.** It is run there separately.
 - **`FrameCount`'s rate** (§10.6) is not fixed. Nor is RetroArch's behaviour of running the chain again on a
   duplicated or paused frame.
 - **`gizmo-slotmask-crt`'s border sparkle and the undefined alphas** belong to the pack and are not worked around.

@@ -207,7 +207,7 @@ letter above `$7F`; the exact match is the reason this never became a bug.
 
 ### 6.2 The scan is a test now
 
-*Added 2026-09-06, after a session that re-derived §6.1 from scratch.* The header
+*Added 2026-09-06, after work that re-derived §6.1 from scratch.* The header
 scan above was run once, by hand, and written down. A written-down measurement
 answers the question it was taken for and nothing later; when "why is Zelda DX in
 black and white" was asked again, the answer was re-measured with a throwaway probe

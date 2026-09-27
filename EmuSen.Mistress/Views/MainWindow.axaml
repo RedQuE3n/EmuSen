@@ -86,6 +86,8 @@
              (Skia/Ganesh) presentation surface, the same control Hotaru's
              GameWindow uses. -->
         <Grid Background="{DynamicResource LunaVoid}">
+            <!-- What a big-screen menu blurs while it is open - see EmuSen_Settings_Reference.md §4.69. -->
+            <Panel x:Name="ScreenContent">
             <!-- OpenEmu's library window: a sidebar of collections and consoles, and the covers or the list - see EmuSen_Settings_Reference.md §4.33. -->
             <DockPanel x:Name="LibraryView">
                 <Border DockPanel.Dock="Left" x:Name="LibrarySidebarPane" Width="200"
@@ -150,23 +152,30 @@
             <lunac:NoticeLayer x:Name="GameNotice"
                                IsVisible="{Binding #GameFrame.IsVisible}"
                                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,16,16,0" />
+            </Panel>
 
-            <!-- The pad's menu, over whichever screen is showing - see EmuSen_Settings_Reference.md §4.29. -->
+            <!-- The screen blurred and shaded under a big-screen menu - see EmuSen_Settings_Reference.md §4.69. -->
+            <lunac:BlurBackdrop x:Name="MenuBackdrop" IsVisible="False" />
+
+            <!-- The pad's menu, over whichever screen is showing - see EmuSen_Settings_Reference.md §4.29; in a big-screen session ES-DE's look, §4.69. -->
             <Border x:Name="PadMenuPanel" IsVisible="False" Background="#D0000000">
-                <Border HorizontalAlignment="Center" VerticalAlignment="Center"
-                        Padding="28,22" CornerRadius="10" MinWidth="460"
-                        Background="{DynamicResource LunaVoid}"
-                        BorderBrush="{DynamicResource LunaMuted}" BorderThickness="1">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" x:Name="PadMenuTitle" FontSize="24" Margin="0,0,0,12" />
-                        <TextBlock DockPanel.Dock="Bottom" x:Name="PadMenuHint"
-                                   Foreground="{DynamicResource LunaMuted}" Margin="0,12,0,0" />
-                        <lunac:LunaList x:TypeArguments="input:PadMenuEntry"
-                                        x:Name="PadMenuList"
-                                        AutomationProperties.Name="Menu"
-                                        FontSize="20" Background="Transparent" MaxHeight="520" />
-                    </DockPanel>
-                </Border>
+                <Panel>
+                    <Border x:Name="PadMenuDesk" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Padding="28,22" CornerRadius="10" MinWidth="460"
+                            Background="{DynamicResource LunaVoid}"
+                            BorderBrush="{DynamicResource LunaMuted}" BorderThickness="1">
+                        <DockPanel x:Name="PadMenuDock">
+                            <TextBlock DockPanel.Dock="Top" x:Name="PadMenuTitle" FontSize="24" Margin="0,0,0,12" />
+                            <TextBlock DockPanel.Dock="Bottom" x:Name="PadMenuHint"
+                                       Foreground="{DynamicResource LunaMuted}" Margin="0,12,0,0" />
+                            <lunac:LunaList x:TypeArguments="input:PadMenuEntry"
+                                            x:Name="PadMenuList"
+                                            AutomationProperties.Name="Menu"
+                                            FontSize="20" Background="Transparent" MaxHeight="520" />
+                        </DockPanel>
+                    </Border>
+                    <lunac:MenuPanel x:Name="PadMenuBig" IsVisible="False" />
+                </Panel>
             </Border>
 
             <!-- Game Mode's settings and cheats, drawn here rather than as windows of their own - see EmuSen_Settings_Reference.md §4.45.2. -->

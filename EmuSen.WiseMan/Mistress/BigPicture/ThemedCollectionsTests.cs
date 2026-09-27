@@ -114,7 +114,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [Fact]
         public Task Automatic_collections_are_on_for_a_fresh_settings_file_and_follow_the_systems_in_ES_DE_s_measured_order() => Session.Dispatch(() =>
         {
-            // The choice (Q11): a settings file written before this work, or none, gives all three.
+            // Decided in Q11: a settings file written before this work, or none, gives all three.
             Assert.Equal([BigPictureCollections.AllGames, BigPictureCollections.Favorites, BigPictureCollections.LastPlayed], new AppSettings().BigPictureCollections.AutoCollections);
             Assert.Equal(3, System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{}")!.BigPictureCollections.AutoCollections.Count);
             using (var fresh = new ThemedSession(settings: a => a.BigPictureCollections = new BigPictureCollections()))
@@ -458,7 +458,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.B();
             s.Settle();
             Assert.IsType<GameOptionsWindow>(Sheets(s).Current);
-            Assert.Equal("1 filter set", Named<TextBlock>(s, "GamelistFilterState").Text);
+            // The row's value, where the desktop's sheet shows a line of text beside its button (§4.69).
+            Assert.Equal("1 filter set", MenuRows.GetValue(Named<Button>(s, "GamelistFilterButton")));
             s.Pad.B();
             Assert.Equal([ThemedSession.SnesGames[0], ThemedSession.SnesGames[2]], Listed(s));
 

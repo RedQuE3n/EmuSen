@@ -67,7 +67,7 @@ namespace EmuSen.Mistress.Views
         private void AddCollectionMenuEntries(List<Input.PadMenuEntry> entries)
         {
             if (!ThemedLibraryShown || !LibraryView.IsVisible || _themed is null) return;
-            entries.Add(new Input.PadMenuEntry(() => "Game Collection Settings", ShowCollectionSettings));
+            entries.Add(new Input.PadMenuEntry(() => "Game Collection Settings", ShowCollectionSettings) { Opens = true });
         }
 
         // Jump To, Sort Games By and Filter Gamelist first in Select's menu, then Search, which ES-DE has not (§4.58).

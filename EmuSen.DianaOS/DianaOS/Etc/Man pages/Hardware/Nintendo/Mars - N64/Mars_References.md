@@ -170,7 +170,7 @@ tooling's output is evidence about our tooling.
 
 ## 5. What they got wrong, which is the valuable half
 
-The instruction was to learn from the mistakes too. These are not criticisms of
+The aim was to learn from the mistakes too. These are not criticisms of
 projects that solved a harder problem earlier with less; they are the hardware
 telling us where it bites, recorded in the only form it survives in.
 

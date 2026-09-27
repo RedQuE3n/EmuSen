@@ -31,7 +31,7 @@ in fact the single list `CoreCatalog`'s own header says it is.
 
 The seven the core already names, unchanged: `ROM`, `VRAM`, `CARTRAM`, `WRAM`,
 `OAM`, `HRAM`, `CPUBUS`. `MercuryCore.Spaces.cs` had supplied
-`ReadSpace`/`WriteSpace`/`SpaceSize` since the first session, so this half of the
+`ReadSpace`/`WriteSpace`/`SpaceSize` from the start, so this half of the
 target is a thin wrapper and nothing more.
 
 Two properties are worth stating because they are decisions rather than

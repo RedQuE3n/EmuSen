@@ -1,7 +1,7 @@
 # Mars — performance: the profile, and what each change bought
 
 *Phase G, opened 2026-09-18. The probe is `EmuSen.WiseMan/Cores/MarsPerformanceProbeTests.cs`; the profile was taken
-with `dotnet-trace` against a scratch harness outside the repository. The phase's brief is `Mars_Gameplan.md` §4.7:
+with `dotnet-trace` against a scratch harness outside the repository. The phase's remit is `Mars_Gameplan.md` §4.7:
 "opens with a profile, not a plan".*
 
 ---
@@ -1194,7 +1194,7 @@ pending reaches the bytes it wants. A waiter that finds none is a **bystander**;
 mark, which still speaks for the range's own bytes.
 
 **Measured.** Two builds interleaved, order rotated, three rounds of 600 frames from each state, second halves;
-the commit before this one against this one, and a fourth state the player saved outside the castle:
+the commit before this one against this one, and a fourth state saved in play outside the castle:
 
 | from the state, second 300 frames | §28's build | with the split marks | of the console |
 | --- | --- | --- | --- |
@@ -1247,7 +1247,7 @@ That is from 29.0, 29.6 and 34.7 fps at the start of the day to 49.5, 60.1 and 7
 every frame of every run identical to the frame the single-threaded, element-by-element build produces. The machine
 is a sixteen-thread desktop part and three of its cores are in use.
 
-**A fourth state, and a negative result.** The player saved a fourth state outside the castle during this work, and
+**A fourth state, and a negative result.** A fourth state was saved in play outside the castle during this work, and
 §30's change is worth **nothing** there: 54.5 fps with the loops and 54.8 with the vectors, three rounds each whose
 spreads overlap entirely. The reason is in the interface's counters rather than in the vector unit. That scene hands
 the display processor 8,058 words a frame and the drainer runs them at 1.88 µs each, 15.1 ms of a 20 ms frame, so

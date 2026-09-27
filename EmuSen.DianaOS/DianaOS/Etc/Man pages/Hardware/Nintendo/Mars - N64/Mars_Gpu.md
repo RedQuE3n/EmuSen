@@ -69,7 +69,7 @@ element. A machine with no device reports that and passes, since that machine is
 
 **Which device the tests use.** The table above was taken with every test run as a theory over all three devices.
 Since the same day they run on the machine's first choice only, here the RX 6800, because the suite's time is the
-user's and llvmpipe at four is slow; `EMUSEN_MARS_GPU_TEST_DEVICES=all` brings the other two back for an occasional
+developer's and llvmpipe at four is slow; `EMUSEN_MARS_GPU_TEST_DEVICES=all` brings the other two back for an occasional
 cross-check, which is worth doing when a phase of the shader port lands and is recorded where it was done. This
 retires the plan's §4 sentence that tests run on lavapipe: they can, and by default they do not. The integrated
 adapter has a second use. With two RDNA2 compute units against a Steam Deck's eight it is the machine's stand-in for

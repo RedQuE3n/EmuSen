@@ -27,7 +27,7 @@ namespace EmuSen.WiseMan.Mistress
             RomBytes = 16_777_216,
         };
 
-        // A pre-database sidecar exactly as StateRecord.Write produced it, in the shape the player's own files have.
+        // A pre-database sidecar exactly as StateRecord.Write produced it, in the shape existing files on disk have.
         private const string Sidecar = """
             {
               "Console": "NES",

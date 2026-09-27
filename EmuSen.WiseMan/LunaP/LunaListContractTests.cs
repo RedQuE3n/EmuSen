@@ -58,7 +58,7 @@ namespace EmuSen.WiseMan.LunaP
             window.Close();
         });
 
-        // The seam a default selection goes through, without claiming the player did it.
+        // The seam a default selection goes through, without claiming a person did it.
         [Fact]
         public Task Select_sets_the_selection_without_raising_Chose() => UiTest.Run(() =>
         {

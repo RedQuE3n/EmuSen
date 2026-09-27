@@ -21,6 +21,11 @@
     <AvaloniaResource Include="Assets\Icon\png\emusen-256.png" />
   </ItemGroup>
 
+  <!-- The big-screen menus' typeface, Barlow Condensed (OFL 1.1), beside the program - see EmuSen_Settings_Reference.md §4.69 and THIRD_PARTY_NOTICES.md. -->
+  <ItemGroup>
+    <None Include="Assets\Fonts\BarlowCondensed-Regular.ttf" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- Linux: the hicolor icons and a script that installs a desktop entry pointing at this build - see §4.55. -->
   <Target Name="MistressPublishDesktopIcons" AfterTargets="Publish" Condition="$(RuntimeIdentifier.StartsWith('linux'))">
     <ItemGroup>

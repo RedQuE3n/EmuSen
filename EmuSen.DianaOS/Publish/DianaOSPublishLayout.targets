@@ -42,7 +42,7 @@
   </Target>
 
   <!-- EmuSen ships NO cheat data, ever. The libretro database is CC BY-SA
-       content the player downloads themselves and then prunes to whatever
+       content a player downloads themselves and then prunes to whatever
        cores they have (see `man cheat`), and a developer's own downloaded
        copy lives in the same sandbox tree the publish reads its docs out
        of - one over-broad glob away from being redistributed by accident.

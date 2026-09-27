@@ -125,7 +125,17 @@ uses no other crate. MarsRT uses these, for its Cranelift recompiler and its Vul
 
 Where a crate offers a choice of licences ("MIT OR Apache-2.0"), EmuSen uses it under the MIT licence.
 
-## 2. Downloaded only at the request, never shipped
+### 1.5 Fonts
+
+| Font | Version | Licence | Copyright |
+|---|---|---|---|
+| [Barlow Condensed](https://github.com/jpt/barlow), Regular (`EmuSen.Mistress/Assets/Fonts/BarlowCondensed-Regular.ttf`), the big-screen menus' typeface | 1.408 | SIL Open Font License 1.1 | Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow) |
+
+The file is unmodified, as Google Fonts distributes it; its copyright notice and the licence are in
+[`licenses/BarlowCondensed-OFL-1.1.txt`](licenses/BarlowCondensed-OFL-1.1.txt). The font is shipped as a separate file
+beside the program and is not sold by itself, as the licence requires.
+
+## 2. Downloaded only at the player's request, never shipped
 
 Mistress can fetch the following when the player asks it to. None of it is in this repository or in a build, and each
 keeps its own licence and terms, which apply to the downloaded copy.

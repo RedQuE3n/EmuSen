@@ -47,7 +47,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             return path;
         }
 
-        // The player's config directory is moved into scratch for every child, so a default path can never reach the real file.
+        // The real config directory is moved into scratch for every child, so a default path can never reach the real file.
         private (int Exit, string Output) Dotnet(params string[] arguments)
         {
             var start = new ProcessStartInfo("dotnet") { WorkingDirectory = _project, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };

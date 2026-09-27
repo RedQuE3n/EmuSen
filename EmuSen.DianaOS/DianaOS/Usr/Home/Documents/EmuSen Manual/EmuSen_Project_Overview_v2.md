@@ -525,15 +525,15 @@ Not shown: DianaOS's own `var/`/`home/`/`etc/`/`tmp/` (Unix-shaped runtime tree 
 
 ### APU (SPC700 + S-DSP)
 - Full 256/256 SPC700 opcode table.
-- Real S-DSP audio synthesis: BRR decoding, real 4-tap Gaussian pitch resampling (confirmed byte-for-byte identical to the MesenCE reference's table/formula at the time — see `Venus_APU.md` §2.9/§4.1), full ADSR/GAIN envelopes, 8-voice mixing.
+- Real S-DSP audio synthesis: BRR decoding, real 4-tap Gaussian pitch resampling (confirmed byte-for-byte identical to the MesenCE reference's table/formula at the time of writing — see `Venus_APU.md` §2.9/§4.1), full ADSR/GAIN envelopes, 8-voice mixing.
 - **Known gap:** synthesized samples are never sent to an actual audio output device. The DSP is "correct but silent."
-- **Fixed this session:** a real, reproducible ~7.5-8.7% SPC700 audio-sample-generation-rate undershoot. Root cause: seven branch/CBNE/DBNZ opcode handlers charged their "+2 cycles if taken" penalty directly against `CycleBudget`, bypassing `Dsp.Tick()`/`TickTimers()` entirely — a real sound driver's polling/dispatch loops take enough conditional branches for this to compound into a measurable, continuous loss every frame. Found via direct cumulative-cycle instrumentation (comparing budget added vs. cycles actually reaching the DSP) after a from-scratch rewrite of the 65816-side cycle accounting ruled that side out entirely. SMW's measured rate went from ~980-985 samples/frame to ~1072/frame (expected ~1065.36) — within ~0.7% of real NTSC timing. See `Venus_APU.md` §2.9.
+- **Recently fixed:** a real, reproducible ~7.5-8.7% SPC700 audio-sample-generation-rate undershoot. Root cause: seven branch/CBNE/DBNZ opcode handlers charged their "+2 cycles if taken" penalty directly against `CycleBudget`, bypassing `Dsp.Tick()`/`TickTimers()` entirely — a real sound driver's polling/dispatch loops take enough conditional branches for this to compound into a measurable, continuous loss every frame. Found via direct cumulative-cycle instrumentation (comparing budget added vs. cycles actually reaching the DSP) after a from-scratch rewrite of the 65816-side cycle accounting ruled that side out entirely. SMW's measured rate went from ~980-985 samples/frame to ~1072/frame (expected ~1065.36) — within ~0.7% of real NTSC timing. See `Venus_APU.md` §2.9.
 
 ### PPU — background rendering
-- **All 7 BG modes implemented**, including correct per-mode bit depth (2/4/8bpp as appropriate) and per-mode compositing/priority order — verified at the time against the SNESdev wiki's Backgrounds page priority table for every mode (0 through 6; Mode 7 has its own separate compositing path). Two real bugs found and fixed in this pass: Mode 0's BG4 was missing its priority-bit split entirely, and Modes 2-5 were incorrectly reusing Mode 0/1's compositing order instead of their own (genuinely different) interleave pattern.
+- **All 7 BG modes implemented**, including correct per-mode bit depth (2/4/8bpp as appropriate) and per-mode compositing/priority order — verified against the SNESdev wiki's Backgrounds page priority table for every mode (0 through 6; Mode 7 has its own separate compositing path). Two real bugs found and fixed in this pass: Mode 0's BG4 was missing its priority-bit split entirely, and Modes 2-5 were incorrectly reusing Mode 0/1's compositing order instead of their own (genuinely different) interleave pattern.
 - 16x16 tile mode (BGMODE bits 4-7), tilemap 32x32/64x32/32x64/64x64 wraparound (including the tricky 64x64 case), tile bitplane format — all independently verified against the wiki.
 - Mosaic, including a real starting-scanline latch (anchors to whichever scanline `$2106` was last written on, matching documented hardware behavior — not just always scanline 0).
-- Mode 7: full affine transform (matrix formula verified against two independent sources), plus **EXTBG** (Mode 7's second layer via SETINI bit 6) — implemented at the time, not yet tested against a ROM that actually uses it.
+- Mode 7: full affine transform (matrix formula verified against two independent sources), plus **EXTBG** (Mode 7's second layer via SETINI bit 6) — implemented recently, not yet tested against a ROM that actually uses it.
 - Offset-per-tile (Modes 2/4/6): implemented as a best-effort reproduction of the commonly-documented behavior — the exact sub-tile column-alignment edge cases are something even experienced SNES homebrew developers describe as ambiguous in official documentation, so this is a solid approximation, not a verified-exact implementation.
 - Direct Color mode (Modes 3/4's 8bpp BG1).
 - Hi-res:
@@ -546,7 +546,7 @@ Not shown: DianaOS's own `var/`/`home/`/`etc/`/`tmp/` (Unix-shaped runtime tree 
 - Full OAM decode (size-select, high-table, priority rotation), correct multi-tile VRAM addressing (16-tile-wide grid, 512-byte row stride).
 - Real per-scanline evaluation matching hardware's 32-sprite/34-sliver limits, including the reverse-index-order sliver-culling detail.
 - OBJ color math restriction (only palettes 4-7 participate).
-- **Real bug fixed at the time:** sprite Y was being culled too aggressively (`Y >= 224`), discarding sprites that should wrap in from the top of the screen (Y = 240-255, signed -16..-1) instead of rendering their visible portion.
+- **Real bug fixed recently:** sprite Y was being culled too aggressively (`Y >= 224`), discarding sprites that should wrap in from the top of the screen (Y = 240-255, signed -16..-1) instead of rendering their visible portion.
 
 ### PPU — other
 - Full open-bus emulation (`$4210`/`$4211`/`$4212`'s undriven bits now reflect the last bus value instead of being hardcoded to 0), plus the general "last value on the bus" model for genuinely-unmapped register reads.

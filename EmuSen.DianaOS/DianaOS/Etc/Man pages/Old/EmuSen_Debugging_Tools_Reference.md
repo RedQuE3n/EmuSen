@@ -133,7 +133,7 @@ Generic, byte-array-level helpers — reusable for any console's data since none
 
 ## 6. A worked example: how these fit together in practice
 
-This is roughly how the toolchain got used across the coin/Yoshi rendering investigations at the time, as a template for future ones:
+This is roughly how the toolchain got used across the coin/Yoshi rendering investigations, as a template for future ones:
 
 1. **Form a hypothesis** about what's failing (data upload vs. rendering vs. game logic) using SMWCentral/wiki research on how the feature actually works on real hardware.
 2. **Turn on the relevant `DebugSettings` flags** (usually already on by default) and play through the scenario.

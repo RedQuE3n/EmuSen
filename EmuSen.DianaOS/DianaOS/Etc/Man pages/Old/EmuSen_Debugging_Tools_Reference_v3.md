@@ -148,7 +148,7 @@ Wall-clock: 2026-07-22 07:28:14.203
 
 All three (filename, companion file, log line) are sourced from the same `debugTarget.FrameCount`/`CoreName` — so they can't drift out of sync with each other the way a hand-drawn on-screen frame counter and a separately-incremented save filename could. This is what `IDebugTarget.FrameCount` (§3.1) is for: a single, reliable, core-agnostic way to answer "what moment was this" that a screenshot, a log line, and eventually a GUI's own display can all agree on.
 
-**Deliberately not done:** burning the timestamp into the image's pixels (a visual overlay baked into the PNG itself, closer to a security-camera timestamp). That would need Raylib's `LoadImageFromScreen`/`ImageDrawText`/`ExportImage` functions, and given a couple of build-error round trips at the time already came from guessing at exact API shapes, the companion-file approach was chosen deliberately as the zero-new-API-surface, guaranteed-to-build option. Worth revisiting if the visual version is still wanted later.
+**Deliberately not done:** burning the timestamp into the image's pixels (a visual overlay baked into the PNG itself, closer to a security-camera timestamp). That would need Raylib's `LoadImageFromScreen`/`ImageDrawText`/`ExportImage` functions, and given a couple of build-error round trips had already come from guessing at exact API shapes, the companion-file approach was chosen deliberately as the zero-new-API-surface, guaranteed-to-build option. Worth revisiting if the visual version is still wanted later.
 
 ---
 
@@ -183,7 +183,7 @@ Generic, byte-array-level helpers — reusable for any console's data since none
 
 ## 6. A worked example: how these fit together in practice
 
-This is roughly how the toolchain got used across the coin/Yoshi rendering investigations at the time, as a template for future ones:
+This is roughly how the toolchain got used across the coin/Yoshi rendering investigations, as a template for future ones:
 
 1. **Form a hypothesis** about what's failing (data upload vs. rendering vs. game logic) using SMWCentral/wiki research on how the feature actually works on real hardware.
 2. **Turn on the relevant `DebugSettings` flags** (usually already on by default) and play through the scenario.

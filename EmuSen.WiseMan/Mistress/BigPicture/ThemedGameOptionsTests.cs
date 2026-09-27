@@ -101,7 +101,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.Down();
             GameOptionsWindow options = OpenOptions(s);
             Assert.Empty(s.Window.OwnedWindows);
-            Assert.Equal(ThemedSession.SnesGames[1], ((TextBlock)Sheet(s).GetVisualDescendants().OfType<Control>().Single(c => c.Name == "GameOptionsTitle")).Text);
+            // In a big-screen session the menu carries ES-DE's title, not the game's name (§4.69, Q85).
+            Assert.Equal("Gamelist Options", ((MenuPanel)Sheet(s).GetVisualDescendants().OfType<Control>().Single(c => c.Name == "GameOptionsMenu")).Title);
             Assert.Equal(new[] { "Search...", "Add to Favourites", "Edit This Game's Metadata", "Use Another Game's Cover...", "Scrape This Game..." }, options.Entries.Select(b => b.Content as string));
 
             // The view hears nothing under the sheet.
@@ -328,7 +329,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return all;
         }
 
-        // The rule: a ROM file is never deleted or moved; ES-DE's Delete becomes Hide from Library.
+        // The project's rule: a ROM file is never deleted or moved; ES-DE's Delete becomes Hide from Library.
         [Fact]
         public Task Hide_from_library_takes_the_game_out_of_every_view_and_touches_no_file() => ThemedLibraryPadTests.Run(s =>
         {

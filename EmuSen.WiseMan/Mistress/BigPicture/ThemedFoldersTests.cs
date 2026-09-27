@@ -34,7 +34,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         internal const string UsaGame = "Tidal Keep (Synthetic)", EuropeGame = "Quartz Mill (Synthetic)";
 
-        // The player's NES shape (§21.1): a console folder, then region folders, and no ROM at the console folder's top.
+        // The NES shape decided in §21.1: a console folder, then region folders, and no ROM at the console folder's top.
         internal static void RegionFolders(string roms)
         {
             Directory.CreateDirectory(Path.Combine(roms, "NES", "USA"));

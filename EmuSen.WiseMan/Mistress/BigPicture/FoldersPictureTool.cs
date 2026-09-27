@@ -51,7 +51,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             _out.WriteLine(path);
         }
 
-        // The player's shapes (§21.1) in small: NES by region and category, GB by letter, each folder with two games and their covers under the folder.
+        // The shapes decided in §21.1, in small: NES by region and category, GB by letter, each folder with two games and their covers under the folder.
         private static void Library(string roms, string media)
         {
             void Game(string console, string system, string folder, string name, string ext, int n)

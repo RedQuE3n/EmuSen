@@ -144,7 +144,7 @@ namespace EmuSen.Galaxia.Models
         public static ConfigFile<CheatFile> For(string name) =>
             new(CategoryDirName, name + ".json");
 
-        // Any path the choice was, outside the auto-loaded set - see EmuSen_Settings_Reference.md §4.15.
+        // Any path the player picked, outside the auto-loaded set - see EmuSen_Settings_Reference.md §4.15.
         public static bool SaveTo(string path, CheatFile file)
         {
             try

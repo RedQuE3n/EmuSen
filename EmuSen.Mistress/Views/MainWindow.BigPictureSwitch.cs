@@ -65,6 +65,7 @@ namespace EmuSen.Mistress.Views
             // One window on screen in a big-screen session, so the others are drawn inside this one - see EmuSen_Settings_Reference.md §4.45.2.
             Sheets.PresentsWindows = on;
             EmbeddedPopups.SetIsEnabled(this, on);
+            ApplyBigMenuLook(on);
 
             if (on && _themed is null) SetUpThemedLibrary();
         }

@@ -127,8 +127,8 @@ namespace EmuSen.Hotaru
             // DianaOS is the ONLY thing shown at launch, whether or not a
             // ROM path was given on the command line - RunStandaloneShell
             // runs as plain console I/O, entirely before Avalonia (or any
-            // window at all) ever starts. Returns null only if the player
-            // actually asked to shut down (or hit EOF) with no ROM ever
+            // window at all) ever starts. Returns null only if shutdown
+            // was actually asked for (or EOF was hit) with no ROM ever
             // resolved, in which case there's nothing left to do.
             string? romPathFromShell = RunStandaloneShell(initialRomPath);
             if (romPathFromShell is null) return;
@@ -261,8 +261,8 @@ namespace EmuSen.Hotaru
         // reports why and falls through into the same interactive loop a
         // bare launch gets.
         //
-        // Returns the ROM path to actually launch, or null if the player
-        // asked to shut down instead (or hit EOF).
+        // Returns the ROM path to actually launch, or null if shutdown
+        // was asked for instead (or EOF was hit).
         private static string? RunStandaloneShell(string? initialRomPath)
         {
             DianaOSInterpreter shell = DianaOSInterpreter.CreateDefault(null,

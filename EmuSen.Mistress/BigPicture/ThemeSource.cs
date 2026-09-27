@@ -8,7 +8,7 @@ namespace EmuSen.Mistress.BigPicture
     // A theme's repository on GitHub or GitLab and the branch fetched: every address Mistress asks is built here - see EmuSen_BigPicture.md §6 and §25.
     public sealed record ThemeSource(string Owner, string Repository, string Branch, ThemeHost Host = ThemeHost.GitHub)
     {
-        // The ES-DE edition the choice was (§10.1, Q1); fetched only when the player asks, never bundled.
+        // The ES-DE edition chosen in §10.1 (Q1); fetched only when the player asks, never bundled.
         public static ThemeSource ArtBookNext { get; } = new("anthonycaccese", "art-book-next-es-de", "main");
 
         private string Path => $"{Owner}/{Repository}";

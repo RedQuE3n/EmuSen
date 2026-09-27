@@ -273,13 +273,15 @@ namespace EmuSen.Mistress.Views
         {
             long? bytes = _host?.OpenVgdbBytes;
             _vgdbText.Text = bytes is long b
-                ? $"OpenVGDB is downloaded: {b / 1048576.0:0.#} MB in home/Library. Remove it to free the space if you do not need the fallback."
+                ? $"OpenVGDB is downloaded: {Size(b)} in home/Library. Remove it to free the space if you do not need the fallback."
                 : "OpenVGDB is not downloaded. Download fetches it from GitHub and turns the fallback on; a run you start with the fallback on also fetches it.";
             bool busy = _host?.OpenVgdbBusy != false;
             _vgdbRemove.IsVisible = bytes is not null;
             _vgdbDownload.IsVisible = bytes is null;
             _vgdbRemove.IsEnabled = _vgdbDownload.IsEnabled = !busy;
         }
+
+        public static string Size(long bytes) => bytes >= 1 << 20 ? $"{bytes / 1048576.0:0.#} MB" : $"{Math.Max(1, bytes / 1024)} KB";
 
         private async System.Threading.Tasks.Task RemoveOpenVgdbAsync()
         {

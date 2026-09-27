@@ -63,12 +63,13 @@ namespace EmuSen.WiseMan.Mistress
             return UiTest.Capture(bitmap);
         }
 
+        // A child taller than the window is drawn by its bottom, where the rows these pictures are about are.
         private static RenderedFrame Centred(ThemedSession s, Window child)
         {
             RenderedFrame main = s.Capture();
             RenderedFrame over = Frame(child);
             byte[] pixels = (byte[])main.Rgba.Clone();
-            int left = (main.Width - over.Width) / 2, top = (main.Height - over.Height) / 2;
+            int left = (main.Width - over.Width) / 2, top = over.Height > main.Height ? main.Height - over.Height : (main.Height - over.Height) / 2;
             for (int y = 0; y < over.Height; y++)
                 for (int x = 0; x < over.Width; x++)
                 {
@@ -116,13 +117,13 @@ namespace EmuSen.WiseMan.Mistress
                 prefs.ShowTab(PreferencesWindow.ScrapingTab);
                 Wait(s);
                 Button remove = prefs.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "OpenVgdbRemoveButton");
-                remove.BringIntoView();
+                foreach (ScrollViewer sv in remove.GetVisualAncestors().OfType<ScrollViewer>()) sv.ScrollToEnd();
                 remove.Focus(NavigationMethod.Directional);
                 Wait(s);
                 Save(Centred(s, prefs), "q42-openvgdb-row-downloaded");
                 remove.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                 Wait(s);
-                prefs.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "OpenVgdbDownloadButton").BringIntoView();
+                foreach (ScrollViewer sv in prefs.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "OpenVgdbDownloadButton").GetVisualAncestors().OfType<ScrollViewer>()) sv.ScrollToEnd();
                 Wait(s);
                 Save(Centred(s, prefs), "q42-openvgdb-row-removed");
                 prefs.Close();

@@ -126,7 +126,7 @@ namespace EmuSen.Mistress.Views
                 _appSettings.Save();
                 StatusText.Text = "OpenVGDB removed";
                 ScrapeChanged?.Invoke();
-                return $"OpenVGDB was removed ({bytes / 1048576.0:0.#} MB freed). OpenEmu's fallback is off until it is downloaded again.";
+                return $"OpenVGDB was removed ({ScrapePreferencesPane.Size(bytes)} freed). OpenEmu's fallback is off until it is downloaded again.";
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

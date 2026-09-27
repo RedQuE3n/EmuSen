@@ -59,11 +59,20 @@ namespace EmuSen.Mistress.BigPicture.Scene
         {
             if (e.Bool("visible") == false) return "visible is false";
             if (e.Bool("metadataElement") == true && Data.HideMetadata) return "metadata elements hidden";
+            if (View.Name == "gamelist" && Data.Game is { HideMetadata: true } && HiddenWithMetadata(e)) return "the entry hides its metadata";
             if (e.String("scope") is "none" or "menu") return $"scope {e.String("scope")}";
             if (e.Float("opacity") is 0) return "opacity is 0";
             if (e.Type == "clock" && !Data.ShowClock) return "the clock is turned off";
             return null;
         }
+
+        // THEMES.md's metadataElement: text metadata fields, ratings and badges, and elements the theme marks; the description stays, as ES-DE 3.4.1 was seen to keep it (§22).
+        private static bool HiddenWithMetadata(ResolvedElement e) => e.Bool("metadataElement") == true || e.Type switch
+        {
+            "rating" or "badges" or "datetime" => true,
+            "text" => e.String("metadata") is { } m && m is not ("description" or "name" or "systemName" or "systemFullname" or "sourceSystemName" or "sourceSystemFullname"),
+            _ => false,
+        };
 
         private Control? Create(ResolvedElement e, out string? skip)
         {

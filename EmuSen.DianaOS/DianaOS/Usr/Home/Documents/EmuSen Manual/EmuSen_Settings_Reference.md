@@ -152,6 +152,10 @@ recorded it three times on 2026-09-26 (`OverflowException` in `TimeSpan.op_Subtr
 through `MainWindow.PadTick`). The start value is now `-RescanInterval`, so the first rescan is due at once and the
 subtraction cannot overflow. `GamepadRescanTests` failed on the old value with the same exception, and passes on the new one.
 
+*Since 2026-09-26 (§4.61)* the manager opens every pad, not the first alone, and asks whether a rescan is due at every
+poll rather than only with no pad; a pad plugged in is also opened at once on SDL's added event. The start value above
+is kept, and is now exercised on every tick. The game still reads one pad, the first opened.
+
 ### 4.5 Conflict reporting
 
 `Rebind` guarantees one owner per key going forward, but a hand-edited or older config can still contain duplicates. The window recomputes conflicts after every change, colours the offending rows, and names them in a status line along the bottom rather than leaving the player to work out why one key does two things.
@@ -2522,10 +2526,10 @@ its radio switch is blocked neither by software nor by hardware. Nothing is show
 | Up, down | (a vertical carousel moves on these instead) | move the list; held, 500 ms, then 114 ms, then from 1.7 s four at once and every 15.9 ms; a held list stops at its ends, a tap wraps |
 | South | the system's gamelist, at the game last chosen there | start the game |
 | East | back to a suspended game, if there is one | clear the search if there is one, else back to the system view |
-| L1, R1 | | a page: the rows the list shows at once |
+| L1, R1 | | a page: the rows the list shows at once. *Since 2026-09-26, ten games, stopping at the ends (§4.58)* |
 | L2, R2 | | the first and the last game |
-| North | | search, on the on-screen keyboard (§4.45.6) |
-| Select | | mark or unmark a favourite; the game stays selected where the list moves it |
+| North | | search, on the on-screen keyboard (§4.45.6). *Since 2026-09-26, the favourite, and while a custom collection is edited, the game in or out of it; the search is in Select's menu (§4.58)* |
+| Select | | the game options menu (§4.59); *until 2026-09-26 it marked or unmarked a favourite, now the menu's first entry. Since the same day it also holds Jump To, Sort, Filter and Search (§4.58)* |
 | Start, Guide | the pad menu (§4.29) | the same |
 
 The repeats are ES-DE's, measured in `EmuSen_BigPicture.md` §14.7, and run on the view's own clock, not on
@@ -2553,7 +2557,8 @@ copied from ES-DE or a vendor.
 
 *Limits of the detection.* A pad behind Steam Input reaches SDL as Steam's virtual pad and is classified as that pad
 is, not as the hardware in the player's hands. A generic pad whose name carries none of the words is drawn generic
-even when its printing is known to the player. `GamepadManager` still opens only the first pad; it now lets a pulled
+even when its printing is known to the player. `GamepadManager` still opens only the first pad (*since 2026-09-26 every pad,
+and the help bar follows the pad last pressed or the Controller Type setting: §4.61*); it now lets a pulled
 pad go (`SDL_GamepadConnected`), so its one-a-second rescan can open the next one.
 
 **Sounds.** The theme's seven sounds (`systembrowse`, `quicksysselect`, `select`, `back`, `scroll`, `favorite`,
@@ -3058,6 +3063,242 @@ them (`PadAudit`, §4.45.3); B closes the sheet as Hide does. The pad menu's ent
 - The recent list keeps 200 games and forgets older ones; the counts are the whole run's.
 - Nothing ran on the handheld.
 
+### 4.58 Big picture: collections, and a game list's sort, filters, jump and random game (2026-09-26)
+
+The player, 2026-09-26, asked big picture to gain what it lacked against ES-DE: its automatic collections (All Games,
+Favorites, Last Played) and custom collections; and, in a game list, ES-DE's filters and sort orders, its jump to a
+letter and its random game. This section is what a player meets. `EmuSen_BigPicture.md` §22 is the record: what ES-DE
+was measured to do where its documentation is silent, the tests, the mutants and the pictures. Everything here is in
+the themed view of §4.52, in big-screen sessions and in big picture on the desktop (§4.54); EmuSen's own library
+(§4.33, §4.56) is unchanged.
+
+**Where to find it.**
+- **Select** in a game list opens ES-DE's gamelist options menu, one sheet with this section's rows (Jump To, Sort Games
+  By, Filter Gamelist, Search) and the collection entries first, then §4.59's game entries. The choice was one menu on
+  2026-09-26 (Q12 of the plan); until then these rows were a second sheet in the pad menu.
+- **Game Collection Settings**, in the pad menu (Start) after Theme Settings, in either view: ES-DE's main-menu entry of
+  that name, as a sheet.
+- **North** is the favourite (§4.59), and while a custom collection is edited, that collection's add and remove.
+
+**The collections.** Each is a system of the carousel, after the library's own systems, in the order ES-DE 3.4.1 was
+measured to use: the grouped **Collections** system, then **all games**, **favorites** and **last played**. Each takes
+the theme's art under ES-DE's names for it, so Art Book Next shows its own logo and artwork for each:
+
+| Collection | ES-DE system name | Theme folder (`system.theme`) | What it holds |
+|---|---|---|---|
+| All games | `all` | `auto-allgames` | every game of the library, favourites first when **Sort favorite games above non-favorites** is on, then by name |
+| Favorites | `favorites` | `auto-favorites` | the games marked as favourites, by name, with no star before the names (as ES-DE draws it) |
+| Last played | `recent` | `auto-lastplayed` | the 50 games started last, the most recent first; a game counted as played with no date goes last |
+| Collections | `collections` | `custom-collections` | one entry per custom collection, by name; A opens it, B comes back to the list, B again to the systems |
+| A custom collection a theme styles | its name | its name | its games, by name, with no star; its own system in the carousel, beside Collections |
+
+The automatic collections are **on by default**, each with its switch in Game Collection Settings. That is the player's
+choice of 2026-09-26 and a deliberate difference from ES-DE, whose settings file holds `CollectionSystemsAuto` empty. A
+system or collection with no games is not listed, except Collections, which is listed while any custom collection
+exists, empty ones included.
+
+**Custom collections are Mistress's own**, the ones the library's sidebar lists (§4.38): one list in `games.db`, never a
+copy. A collection created in big picture appears in the sidebar, and one created there appears here. Every one is shown
+unless its switch in Game Collection Settings is turned off. A collection is shown inside **Collections** unless the
+theme has a folder of its name holding a `theme.xml`, as ES-DE's per-system theme folders are; **Group Custom
+Collections** changes that: *If unthemed* (the default, as ES-DE's), *Always*, *Never*. In the Collections list, each
+entry shows one of its games' pictures and a description naming its games, "This collection contains 3 games: 'Aurora
+Drift [SNES]', …", in a random order whose first game is the one pictured, as ES-DE's does; the entry's other fields
+(rating, dates, players) are not drawn. A game inside any collection keeps its own system: its pictures are found under
+that system, and a theme that asks for the system after the name (`systemNameSuffix`) gets "[SNES]" and not the
+collection's name.
+
+**Making and editing a custom collection**, as ES-DE does it:
+1. Game Collection Settings ▸ **Create New Custom Collection...**, and a name. ES-DE's characters `*",./:;<>\|` are
+   dropped, and a name already taken gets " (1)", " (2)" and so on.
+2. The sheet closes and the **edit mode** starts: in any game list, **North** adds the selected game to the collection,
+   or takes it out if it is in. Every member carries a tick before its name (a `!` for a theme whose
+   `collectionIndicators` is `ascii`) and the theme's collection badge; the help bar names North **Collection**. While
+   the edit mode lasts North does not touch the favourite, as USERGUIDE says of ES-DE's Y.
+3. **Finish Editing** ends it, from Game Collection Settings or from Select's menu in any list. In a custom
+   collection's own list, and on its entry in Collections, Select's menu offers **Add/Remove Games to This Collection**,
+   which starts the edit mode on it again. On a Collections entry the menu has only the list's rows and these entries.
+**Delete Custom Collection** asks first, then removes the list, not the games, from `games.db`.
+
+**Select's menu: the gamelist rows.** Its first entries, above §4.59's, with **Apply** and **Cancel** at its foot. **B
+applies** what was changed and closes the sheet, as choosing an entry does; **Select (ES-DE's Back) cancels**, as
+ES-DE's help bar puts it: "Close (Apply)", "Close (Cancel)".
+- **Jump To...**: the first characters the list holds, in the list's order, and a star for the favourites when they are
+  sorted on top among other games. It starts at the selected game's. Choosing one moves the selection to the first game
+  it begins.
+- **Sort Games By**: ES-DE's eleven keys, each ascending or descending: name, rating, release date, developer,
+  publisher, genre, players, last played, times played, play time, and system (in collections only). After the key, the
+  name ascending. A game without the key's value goes last in either direction. Players sorts by the highest count its
+  text names ("1-4" is four).
+- **Filter Gamelist...**: a second sheet. The game name (any part, any case), then each of rating, developer,
+  publisher, genre, players, favorite, completed, kidgame and broken, as switches for the values the list's own games
+  hold, and "Nothing to filter" when the games hold none or all hold the same one. A game without a value is
+  **Unknown**, so the games not yet scraped can be chosen. Within one field any value chosen passes; across fields every
+  field must pass. **Reset All Filters** clears them.
+- **Search...**: the search box and the on-screen keyboard, which narrow every list by name until East clears them.
+  ES-DE has no search; North opened it until North became the favourite.
+- **Add/Remove Games to This Collection** and **Finish Editing '…' Collection**, as above.
+
+The sort and the filters are kept **for each list** (each system, each collection) **until EmuSen closes**, as ES-DE
+keeps them for the session; they are not saved. The default order for every list is a setting (below).
+
+**Random game.** Either **thumbstick pressed in** jumps to another game of the list, never the one already selected,
+with the list's scroll sound. **Random Entry Button** decides where it works: *Games only* (the default, as ES-DE's),
+*Games and systems* (in the system view too), *Disabled*. The help bar names it **Random** when a theme lists that entry.
+
+**The settings**, in `appsettings.json` under `BigPictureCollections`, each applied at once beneath the open sheet:
+
+| Row in Game Collection Settings | Key | Default | ES-DE's name for it |
+|---|---|---|---|
+| Automatic Game Collections: All Games, Favorites, Last Played | `AutoCollections` | all three on | `CollectionSystemsAuto` |
+| Custom Game Collections: one switch per collection | `HiddenCustomCollections` (the ids switched off) | all shown | `CollectionSystemsCustom` (the ones switched on) |
+| Group Custom Collections | `GroupCustomCollections` | `unthemed` | `CollectionCustomGrouping` |
+| Sort favorites on top for custom collections | `FavoritesFirstCustom` | off | `FavFirstCustom` |
+| Display star markings for custom collections | `StarsCustom` | off | (its menu entry) |
+| Game Default Sort Order | `DefaultSortOrder` | `name, ascending` | `DefaultSortOrder` |
+| Sort favorite games above non-favorites | `FavoritesFirst` | on | `FavoritesFirst` |
+| Random Entry Button | `RandomEntryButton` | `games` | `RandomEntryButton` |
+
+The defaults are those ES-DE 3.4.1 wrote into its own settings file, except two: the automatic collections, which the
+user asked to be on, and the custom collections' switches: ES-DE enables each one by hand, while Mistress's collections
+are the player's own and are shown until switched off (the player kept this, Q13).
+
+**Where the data comes from.** The program's records are in SQLite, the player's choices in the JSON settings:
+- favourites, last played, play count, play time, the custom collections and which games are in them: `games.db`
+  (`GameRecords`, §4.32 and §4.38), the same rows the library shows;
+- genre, players, rating, release date, developer and publisher: ScreenScraper's text in `media.db` (§4.60), for the
+  games that have been scraped. A game with none of it reads **Unknown** in every filter and sorts last by every such key;
+  completed, kidgame and broken are not recorded by Mistress, so those filters say "Nothing to filter";
+- the settings above: `appsettings.json`;
+- a list's sort and filters: memory only, for the session. Nothing new is written anywhere, and nothing is cached.
+
+**The pad**, changed from §4.52's table:
+
+| Button | Where | What it does now |
+|---|---|---|
+| North | a game list | the favourite (ES-DE's Y); while a custom collection is edited, adds or removes the game instead. The help bar reads **Favorite** or **Collection** |
+| Select | a game list | the one options menu: the gamelist rows, Search, the collection entries, the game's entries |
+| L1, R1 | a game list | ten games back or forward, stopping at the ends, as USERGUIDE's shoulders; the help bar reads **Jump**. L2 and R2 stay the first and last game |
+| Left or right thumbstick, pressed in | a game list; the systems with *Games and systems* | a random game, or system (ES-DE's thumbstick click) |
+| South | an entry of the Collections list | opens the collection; the help bar says **Select** on it |
+| East | inside a collection of the Collections list | back to the list, at that collection |
+| Start | the themed view | the pad menu, now with Game Collection Settings |
+| B / Select | on Select's menu | apply and close / cancel and close |
+
+EmuSen's own library (§4.33) keeps North as its search and Select as its favourite.
+
+**Tests** (WiseMan, headless, the pad through `PadDriver`): `GamelistOptionsTests` (8: the sort keys, the filter values,
+the quick selector, the random entry, the names, the shelves' order and grouping, last played, a folder's description)
+and `ThemedCollectionsTests` (12: the collections in the carousel; the automatic collections from the records, their
+pictures and suffix under the game's own system; the Collections list's folders; how an entry of it is drawn; a theme's
+folder; a collection made on the settings sheet and edited with North; the options sheet sorting, filtering and jumping
+with B and Back; either stick; the settings sheet's switches; every control of the three sheets reached by the pad).
+`CollectionsPictureTool` writes the pictures with `EMUSEN_BIGPICTURE_PNG=1`, and `CollectionsBenchTool` the costs of
+§22.9 with `EMUSEN_BIGPICTURE_BENCH=1`. The mutants are in §22.8 of the plan. LunaP gained the tick and the thumbstick
+glyph (its `docs/LunaP.md` §150 and §151).
+
+**What it does not cover.**
+- *Create New Custom Collection from Theme*, the UI modes (Kiosk, Kid), and the filters for hidden games, controllers
+  and alternative emulators, which need data Mistress does not keep.
+- The game counter that becomes "filtered / total" when a filter is on, which is ES-DE's `gamelistinfo` element; the
+  scene does not draw that element (Art Book Next does not use it).
+- ES-DE's *custom collections sortname*. A game's own sort name (§4.59) does order the name sort and the Jump To
+  letters, and a game excluded from the game counter (§4.59) is in no collection, as USERGUIDE says.
+- In the Collections list, ES-DE shows another random game at each step and lets Y jump to it; here the game is chosen
+  each time the list is built, and there is no jump.
+- Nothing ran on the handheld.
+
+### 4.59 Big picture: a game's options, and editing its metadata (2026-09-26)
+
+The player, 2026-09-26, as the third item of what big picture lacked against ES-DE: the per-game options menu, and a
+metadata editor for a game's name, description, rating, release date, developer, publisher, genre, players, favourite
+and ES-DE's other documented fields, with deleting a game offered only in a guarded form. This is how a player meets it;
+`EmuSen_BigPicture.md` §23 is the record (ES-DE's documented behaviour set against what was built, the predictions, the
+tests, the mutants and the pictures).
+
+**Where it is.** In the themed view of a big-screen session (Game Mode, or Big Picture on the desktop, §4.54), on a game
+in a gamelist. EmuSen's own built-in library (§4.56) is unchanged: there Select still marks a favourite. *Amended by
+§4.63: the menu and the editor are reached from the sidebar library too, by its context menu, Ctrl+I and the pad menu.*
+
+**Opening the menu.** **Select** on a game opens the game options as a sheet over the view, as ES-DE opens its gamelist
+options menu with its Back button. **Select** again, or **B**, puts it away. In the system view Select does nothing, as
+in ES-DE. The menu's entries:
+
+| Entry | What it does |
+|---|---|
+| Add to Favourites / Remove from Favourites | the favourite of §4.32, with the theme's `favorite` sound; the game moves to the top of the list and stays selected. Until 2026-09-26 this was Select's own action |
+| Edit This Game's Metadata | opens the editor, below |
+| Scrape This Game... | stage (d)'s single-game scrape (§4.60): the confirm step, then the run and its status sheet (§4.57). Not offered while a run is going |
+| Close | puts the menu away |
+
+ES-DE's own menu also has *Jump to..*, *Sort games by*, *Filter gamelist* and the custom collections' entries; those are
+the collections work's (§4.58), which adds them to this menu above *Edit This Game's Metadata*.
+
+*Since the answers of 2026-09-26 (§4.58):* the menu begins with Jump To, Sort Games By, Filter Gamelist and
+Search..., then the collection entries, then the entries above. **Select** over the menu now cancels what its rows were
+set to, and **B**, **Apply** or an entry applies it; **Close** reads **Apply**, beside a **Cancel**. **North** in a
+themed gamelist toggles the favourite, as ES-DE's Y does, except while a custom collection is edited; the menu's
+favourite entry stays.
+
+**The editor.** A sheet with one row per field, each saying where its value comes from: *From the file name*, *From
+ScreenScraper*, *Your edit*, *Your edit, shown in place of ScreenScraper's*, or, after the editor's own scrape, *From this
+scrape; Save keeps it*.
+
+| Field | How it is set | Where it shows |
+|---|---|---|
+| Name | text, on the on-screen keyboard (A on the box; B erases, Start is done, §4.45.6) | the themed view; the library's list, grid and search |
+| Sort name | text | the gamelist is ordered by it where it is set, the name shown |
+| Description | text over several lines | the theme's description |
+| Rating | stars: Left and Right step half a star | the theme's rating |
+| Release date | Left and Right change the year; A moves to the month, then the day; the year stepped below 1950 leaves no date | the theme's release date |
+| Developer, Publisher, Genre, Players | text | the theme's fields |
+| Completed, Kid game, Broken / not working | switches | the theme's badges and fields; Mistress has no kid mode |
+| Hidden | switch | the game leaves every library view (below) |
+| Exclude from game counter | switch | not counted in the system view's game and favourite counts |
+| Exclude from multi-scraper | switch | left out of **Scrape Games...** and every run but **Scrape This Game...** |
+| Favourite | switch | as the menu's entry |
+| Times played, Play time | numbers (play time in seconds, as ES-DE keeps it) | Mistress's own counters, which count on from what is typed |
+
+A field that differs from what it would show with no edit has a **Reset** beside it, which returns it to ScreenScraper's
+value or the default (for the name, the file's name).
+
+The buttons, as ES-DE documents its editor's:
+- **Scrape**, or **Y**: stage (d)'s *Scrape This Game*, confirmed first. When the run ends, ScreenScraper's answer is put
+  into every field it has a value for, not yet saved. B puts the status sheet away and returns to the editor.
+- **Save** keeps the changes. **Cancel** discards them. **B** discards nothing silently: with changes it asks *Save* or
+  *Discard*, without any it closes.
+- **Clear...**, after a confirm: removes the player's edits, ScreenScraper's text for the game and its pictures in
+  Mistress's media store (`home/Media`). The game's file, its favourite, its play counters, the player's own covers, an
+  ES-DE media folder and the OpenEmu failover's cover are all kept.
+- **Hide from Library...**, after a confirm, in the place of ES-DE's *Delete*. ES-DE's Delete removes the game's file;
+  **EmuSen never deletes or moves a game's file**, and the confirm says so. The game is hidden instead.
+
+**Hidden games.** A hidden game is left out of the themed gamelists, the library's list and grid, the sidebar's counts
+and the search. Preferences ▸ Appearance ▸ **Hidden Games** (`ShowHiddenGames` in `appsettings.json`, off) lists them
+again; the editor's *Hidden* switch, or its Reset, unhides one. ES-DE shows hidden games, dimmed, unless told not to;
+Mistress hides them, because *Hide from Library* stands where ES-DE's Delete stands. Hiding and unhiding change nothing
+on disk but `games.db`.
+
+**Where the edits are kept, and why they win.** In `games.db` (§4.32), table `game_edit`, one row per edited field,
+beside the favourite and the play records; its fifth migration. What a field shows is the player's edit if there is one,
+else ScreenScraper's value from `media.db` (§4.60), else the default. A scrape writes `media.db` only, so no scrape,
+however often it runs, changes an edit. An edit goes when the player resets that field, clears the game, or saves the
+editor after its own Scrape has filled the field with ScreenScraper's value. A value saved equal to what the field would
+show anyway is stored as no edit, so a later scrape still reaches it. A file renamed or moved keeps its edits (§4.37).
+
+**Buttons that changed.** Select in the themed gamelist: from the favourite to the options menu (the favourite is the
+menu's first entry). Left and Right on a rating or a date: they change it rather than moving the focus. The help bar's
+entry for Select reads *Options*. §4.52's table is amended accordingly.
+
+**What it does not do.**
+- ES-DE's editor fields *Hide metadata fields*, *Controller* and *Alternative emulator* are not built, and *Custom
+  collections sortname* is the collections work's. *Enter folder* does not apply: Mistress has no folders.
+- A hidden game listed again is not dimmed, as ES-DE dims it.
+- The on-screen keyboard has no line break, so a description is typed as one paragraph.
+- ScreenScraper's own name for a game is not offered by the editor's Scrape; the name stays the file's unless the player
+  types one.
+- Nothing ran on the handheld.
+
 ### 4.60 ScreenScraper: covers, screenshots, marquees and game text, with OpenEmu's sources as the failover (2026-09-26)
 
 Stage (d) of `EmuSen_BigPicture.md` (its §17 is the record: predictions, the live run, mutants). ScreenScraper
@@ -3264,10 +3505,136 @@ mutants are in the plan's §20.
 
 **What it does not cover.**
 - No video (Q4), no back cover, fan art, 3D box or physical media: ES-DE's folders for them exist, nothing fills them.
-- The game's name stays the file's; ScreenScraper's is kept in `media.db` but not shown.
+- The game's name stays the file's; ScreenScraper's is kept in `media.db` but not shown. *Amended by §4.63: the metadata
+  editor offers it, and it becomes the name only when the player takes it.*
 - A game found without a cover because the player had one, whose cover is later removed, goes to the failover rather
   than back to ScreenScraper.
 - No "refresh": a picture already there is never fetched again, so a better one at ScreenScraper is not seen; delete the
   file to have it fetched.
 - No search by name for a game the hashes miss.
 - Nothing ran on the handheld.
+
+### 4.61 Controllers: every pad steers the interface, a notice when one comes or goes, and ES-DE's input settings (2026-09-26)
+
+Until this section Mistress opened one pad, the first SDL listed, and a second pad was not seen until the first went
+(§4.52). Pass 2 of `EmuSen_BigPicture.md` §21 changes that for the interface, as ES-DE's "Input device settings" describe
+it; the design record, the measurements and the mutants are §24 of that plan.
+
+**Every pad steers the interface.** `GamepadManager` (Endymion) opens every connected pad, in the order SDL lists them,
+and opens a pad plugged in later as soon as SDL queues its added event, or at the one-a-second rescan of §4.4 if the
+event is missed; a pad pulled out is let go at the next poll. Any pad then drives the library, the themed view of §4.52,
+the pad menu (§4.29), every sheet (§4.45), the game options of §4.59 and the on-screen keyboard: a button is held when any
+pad holds it. Over a running game any pad's guide button, or Back and Start together, opens the pad menu.
+
+**The game hears player 1 only.** The first pad opened is player 1's, as the only pad was before; when it goes, the next
+one opened takes its place, which is what the rescan did before with one pad. The game's bindings (`GamepadBindingMap`)
+are unchanged, and a second pad is not player 2: that is separate input work (`EmuSen_Input.md` §6).
+
+**Settings.** Preferences ▸ Controllers, stored in `appsettings.json`; each applies at once:
+
+| Row | Setting | Default | What it does |
+|---|---|---|---|
+| Controller Type | `ControllerType` | Automatic | The buttons the big picture help bar draws: Automatic follows the pad last pressed (its family by §4.52's rules), or Xbox, PlayStation, Nintendo or Generic always. Only the pictures change: not what a button does, and not the text hints, which name buttons by an Xbox pad's letters |
+| Button Swap | `SwapPadButtons` | off | A and B trade functions: Accept on East and Back on South, in the library, the themed view, the pad menu, every sheet and the on-screen keyboard. The help bar and the text hints name the swapped buttons. X and Y are not swapped, unlike ES-DE's setting (plan §24.5). The keyboard and every game are unaffected |
+| First Controller | `FirstControllerOnly` | off | Only the first pad opened steers the interface; ES-DE's remedy for a wireless pad that registers twice. The game is unaffected (it reads the first pad anyway) |
+| Notifications | `ControllerNotifications` | on | The notice below |
+
+**The notice.** "Controller connected: *name*" or "Controller disconnected: *name*", drawn with LunaP's `NoticeLayer`
+at the top centre over whatever is on screen (the library, the themed view, a sheet or a game), in a desktop or a
+big-screen session. It fades in over half a second, holds three and fades out over half a second, which is ES-DE 3.4.1's
+popup as recorded once (plan §24.4). The pads connected when Mistress starts are not announced.
+
+**The help bar follows the pad last pressed.** With Automatic, the themed help bar draws the family of the pad whose
+buttons most recently went from none held to some held; when that pad goes, the first pad's.
+
+**Nothing is remembered about a pad.** No name, identifier or family is written between sessions, so nothing of this
+section is in SQLite; the four settings above are the player's choices and stay in the JSON config (`EmuSen_Stack.md`
+§4). A later pass that remembers pads would keep them in Mistress's database.
+
+**Tests.** `GamepadManagerPadsTests` (6: opening, announcing and closing pads, player 1, the rebind capture, the handles),
+`ControllersTests` (10 methods, 11 cases: two pads in the library, the menu and a sheet; one unplugged; one pulled out and
+plugged back over 120 polls, the rescan fix included; the notice in each kind of session and its switch; the first
+controller; the swap in the interface and not in the game; the settings persisting; every handle let go), and
+`ThemedControllersTests` (6: two pads in the themed view, every rule from a second pad, the help bar following the pad
+last pressed, the controller type changing the help bar's pixels and none outside it, the swap in the view, its help bar
+and a theme's icons). They run on WiseMan's `PadDriver`, which plugs and pulls simulated pads beneath `GamepadManager`
+(`SimulatedPads`), so the manager's own polling runs as it does on a device.
+
+**What it does not cover.**
+- No real device was used. SDL's events and their timing, Steam Input's virtual pads, a pad that registers twice and
+  sleep and wake are for the handheld (plan §24.10).
+- A second pad as player 2 in a game.
+- The notice's fade is linear; ES-DE's fits a gentle power curve (plan §24.4). Its words are Mistress's own.
+- The Controller Bindings window still names the first pad alone.
+
+### 4.63 A game's options and its metadata from the desktop library, and ScreenScraper's name as an offer (2026-09-26)
+
+The answers to Q18 and Q19 of `EmuSen_BigPicture.md` (§10.1 there; §27 is the record: tests, mutants, pictures).
+§4.59 built the game options menu and the metadata editor for big picture's themed gamelist; this section makes both
+reachable from Mistress's own sidebar library, and changes one thing in the editor. The section is numbered 4.63 because
+§4.62 was being written on another branch at the same time.
+
+**Where the menu and the editor are reached.**
+
+| From | Opens | Shown as |
+|---|---|---|
+| a cover's or a row's context menu (right-click), **Game Options...** | the game options menu | a window over Mistress's on the desktop |
+| the same menu, **Edit Metadata...** (Ctrl+I) | the metadata editor | a window on the desktop |
+| **Ctrl+I** over the library, with a game selected | the metadata editor | a window on the desktop, a sheet in a big-screen session |
+| the pad menu (Start or Guide) over the sidebar library, **Game Options...** | the game options menu | a sheet in a big-screen session, a window on the desktop |
+| the themed gamelist, **Select** (§4.58, §4.59) | the game options menu | a sheet, unchanged |
+
+The windows are the same classes in every place, `GameOptionsWindow` and `MetadataEditorWindow`, shown through LunaP's
+`SheetLayer`: in a big-screen session (Game Mode, `--bigscreen`, or Big Picture from the View menu) they are sheets inside
+the one window, and on the desktop they are ordinary LunaP windows owned by Mistress's. Nothing about an edit depends on
+where it was made: it is a row of `games.db`'s `game_edit` (§4.59), and every view reads it. A name given on the desktop
+is the name in the themed gamelist, and one given in big picture is the name in the desktop's grid and list.
+
+**What the desktop's menu holds.** Add to (or Remove from) Favourites, Edit This Game's Metadata, and Scrape This Game...
+(while no run is going). The themed gamelist's other entries are left out on purpose:
+- *Jump To..., Sort Games By..., Filter Gamelist* and *Search...* act on the themed gamelist's own order, filters and
+  letters (§4.58), which the sidebar library does not have. The sidebar library's equivalents are its own: the search
+  box, the console list in the sidebar and in the filter bar, and the collections. Offering the themed rows there would
+  change a list that is not on the screen.
+- *Add/Remove Games to This Collection* and *Finish Editing* belong to big picture's collection editing (§4.58); on the
+  desktop the context menu's **Add to Collection** and **Remove from *name*** do the same work directly.
+
+**Select in the sidebar library** is still the favourite, as it was before; the options are one entry away in the pad
+menu. Whether Select should open the menu there too, as it does in the themed gamelist, is Q46 of the plan.
+
+**Ctrl+I** is the Get Info gesture of macOS's Finder, whose conventions OpenEmu follows. It works over the grid and the
+list and over the themed gamelist, and it is ignored while a text box has the focus (the search box keeps it), while a
+sheet is shown, and while the options menu is open. It is not in the hotkey map of §4.3, which binds single keys
+without modifiers; it cannot be rebound.
+
+**ScreenScraper's name, offered (Q18).** Since §17.6 the library and the themed view show the file's name, and
+ScreenScraper's is kept in `media.db` unused. The editor now offers it. When ScreenScraper has a name for the game that
+differs from what the Name field holds, a line under the field reads *ScreenScraper calls this game "…"*, with two
+buttons:
+- **Use This Name** puts it in the field. Like a typed name it is an edit from Save on, shown everywhere, and **Reset**
+  returns the field to the file's name.
+- **Keep Current Name** puts the offer away for this editing. The field keeps the file's name, or the name the player
+  gave it.
+
+The offer appears after the editor's own **Scrape** (Y), whose status line then says that the name is offered and changes
+only if the player uses it, and whenever the editor is opened on a game ScreenScraper has already answered for. The
+scrape itself never touches the Name field, although it fills the other fields as §4.59 describes; a Save without taking
+the offer stores no name. Declining is not remembered: the offer is there again the next time the editor opens, since it
+changes nothing until it is taken. The pad reaches both buttons (the plan's §27 measured it with the offer shown).
+
+**Stored where.** Nothing new: the taken name is a `game_edit` row, as any edit is. No setting was added.
+
+**Tests.** `DesktopGameOptionsTests` (6): a right-click on a cover selects it and opens its context menu, whose Game
+Options... opens the menu as a window with the three entries and Edit This Game's Metadata opens the editor as a window;
+the list's context menu's Edit Metadata... saves a name and a description that the list, the grid and big picture show,
+and a name given in big picture's editor is then the desktop's; Ctrl+I opens the editor for the selected game, I alone
+does not, and neither does Ctrl+I in the search box; the pad menu of the built-in big-screen library opens the menu and
+the editor as sheets, the name typed on the on-screen keyboard; the desktop's pad menu has Game Options... and the themed
+gamelist's does not; Ctrl+I over big picture's gamelist opens the editor as a sheet, and in its system view nothing.
+`ThemedMetadataScrapeTests` gained three: the name offered and never put in the field, every control
+reached by the pad with the offer shown, and a Save storing no name; the offer taken and stored as an edit that the
+themed list and the library list show; the offer declined over the player's own name, which stays.
+
+**Not done.** Nothing ran on the handheld. The desktop's menu and editor were driven headlessly by clicks and keys, not
+by a real pointer on a real window manager. ScreenScraper's names as the library's names by default (§21's Q30, a switch,
+off) are not built; the offer is per game.

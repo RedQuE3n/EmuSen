@@ -82,7 +82,7 @@ namespace EmuSen.Mistress.Views
 
             // On a sheet the footer names the reel's buttons, not the ones every other sheet has.
             string? footer = Sheets.Hint;
-            Sheets.Hint = RewindReelWindow.PadHint;
+            Sheets.Hint = EmuSen.Mistress.Input.PadHints.Face(RewindReelWindow.PadHint);
             ReelMoment? chosen;
             try
             {

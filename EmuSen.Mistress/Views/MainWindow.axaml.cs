@@ -177,6 +177,7 @@ namespace EmuSen.Mistress.Views
             FullScreenChanged += on => _fullscreen.IsChecked = on;
             // SDL's device scan takes ~150 ms, so it waits for the window's first frame - see EmuSen_Settings_Reference.md §4.42.
             _gamepad = new GamepadManager(_gamepadBindings.For(_activeConsole), start: false);
+            _gamepad.PadChanged += OnPadChanged;
             Opened += (_, _) => RequestAnimationFrame(_ => Dispatcher.UIThread.Post(_gamepad.Start, DispatcherPriority.Background));
             // Endymion is a leaf and reads no globals, so the settings come from here - see EmuSen_Audio_Sync.md §7.1.
             _audioPlayer = new AudioPlayer(
@@ -206,6 +207,7 @@ namespace EmuSen.Mistress.Views
                 StopOnlineCovers();
                 CloseRecords();
                 _gamepad.Dispose();
+                PadHints.Swapped = false;
                 _audioPlayer.Dispose();
                 StopLogging();
 
@@ -242,6 +244,12 @@ namespace EmuSen.Mistress.Views
                 if (PadControls.IsButton(control, out PadButton button)) ApplyButtonState(button);
                 ApplyAxes();
                 // Or the menu bar, the only focusable control here, also gets the key - see EmuSen_Settings_Reference.md §4.24.
+                e.Handled = true;
+                return;
+            }
+
+            if (pressed && EditMetadataFromTheKeyboard(e))
+            {
                 e.Handled = true;
                 return;
             }
@@ -1059,21 +1067,22 @@ namespace EmuSen.Mistress.Views
         {
             string search = LibraryFilter.SearchText;
             _recordSnapshot = _records.All();
+            _editSnapshot = _records.AllEdits();
             _collections = _records.Collections();
             ShowThemedLibrary();
             RomEntry? keptSelection = LibraryList.Selected;
             bool sameSearch = search == _lastLibrarySearch;
             _lastLibrarySearch = search;
-            IReadOnlyList<RomEntry> pool = InCollection(_libraryScan.Entries);
+            IReadOnlyList<RomEntry> pool = InCollection(Listed(_libraryScan.Entries));
 
             IReadOnlyList<RomEntry> shownEntries = string.IsNullOrWhiteSpace(search)
                 ? pool
-                : pool.Where(e => FilterBar.Matches(search, e.Title)).ToList();
+                : pool.Where(e => FilterBar.Matches(search, DisplayTitle(e))).ToList();
 
             // Off the whole scan, not the search subset, so the tag cannot flicker while typing.
             bool mixed = _libraryScan.Entries.Select(e => e.Shelf).Distinct().Count() > 1;
             MixedConsoles = mixed;
-            LibraryList.Label = e => mixed ? $"{e.Title}   —   {e.Shelf}" : e.Title;
+            LibraryList.Label = e => mixed ? $"{DisplayTitle(e)}   —   {e.Shelf}" : DisplayTitle(e);
             LibraryList.Refresh(shownEntries);
             _shownEntries = shownEntries;
             LibraryGrid.Refresh(shownEntries);

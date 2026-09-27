@@ -60,12 +60,17 @@ namespace EmuSen.Mistress.BigPicture.Scene
             IReadOnlyList<string> types = e.Bindings.FirstOrDefault(x => x.Kind == "media")?.Names ?? [];
             string? fallback = ImageElements.Existing(e.Path("defaultImage"));
             return system.Games.Select(g => new CarouselItem(
-                types.Select(t => b.Data.Media?.Find(system.System, g, t)).FirstOrDefault(p => p is not null) ?? fallback, g.Name)).ToList();
+                types.Select(t => b.Data.Media?.Find(g.SourceIn(system), g.Shown, t)).FirstOrDefault(p => p is not null) ?? fallback, g.Name)).ToList();
         }
 
         // ES-DE marks favourites and folders before the name unless indicators is none; the marks are LunaP's own drawings (§3.6).
-        private static TextRowMarker Marker(ResolvedElement e, SceneGame g) =>
-            e.String("indicators") == "none" ? TextRowMarker.None : g.Folder ? TextRowMarker.Folder : g.Favorite ? TextRowMarker.Star : TextRowMarker.None;
+        private static TextRowMarker Marker(ResolvedElement e, SceneGame g, bool stars) =>
+            g.InCollection && e.String("collectionIndicators") != "ascii" ? TextRowMarker.Tick
+            : e.String("indicators") == "none" || g.IsCollection ? TextRowMarker.None : g.Folder ? TextRowMarker.Folder : g.Favorite && stars ? TextRowMarker.Star : TextRowMarker.None;
+
+        // While a collection is edited its members carry a tick, which the theme cannot turn off; its ascii form is a "!" (THEMES.md, collectionIndicators).
+        private static string Marked(ResolvedElement e, SceneGame g, string text) =>
+            g.InCollection && e.String("collectionIndicators") == "ascii" ? "!" + text : text;
 
         internal static Control? TextList(SceneBuilder b, ResolvedElement e)
         {
@@ -74,7 +79,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
             string suffixCase = e.String("letterCaseSystemNameSuffix") ?? "uppercase";
             IReadOnlyList<TextRow> rows = b.View.Name == "system"
                 ? b.Data.Systems.Select(s => new TextRow(s.System.FullName)).ToList()
-                : system.Games.Select(g => new TextRow(suffix ? $"{g.Name} [{SceneUnits.Cased(system.System.Name, suffixCase)}]" : g.Name, g.Folder, Marker(e, g))).ToList();
+                : system.Games.Select(g => new TextRow(Marked(e, g, suffix && !g.Folder ? $"{g.Name} [{SceneUnits.Cased(g.SourceIn(system).Name, suffixCase)}]" : g.Name), g.Folder, Marker(e, g, system.Stars))).ToList();
             float fontSize = e.Float("fontSize") ?? 0.045f;
             Size margins = SceneUnits.ToSize(e.Pair("selectedBackgroundMargins"));
             return new TextRowList

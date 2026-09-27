@@ -70,11 +70,19 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public int Index => IsSystemView ? Data.SystemIndex : Data.GameIndex;
 
         // Redraws the help bar for another pad without rebuilding the view, so nothing else changes (§15).
-        public void SetFamily(PadFamily family)
+        public void SetFamily(PadFamily family) => SetPadLayout(family, Data.SwapFaceButtons);
+
+        // The family and the A/B swap: the help bar's icons, and with a changed swap its entries (settings reference §4.61).
+        public void SetPadLayout(PadFamily family, bool swapped)
         {
-            Data = Data with { Family = family };
+            bool reentered = swapped != Data.SwapFaceButtons;
+            Data = Data with { Family = family, SwapFaceButtons = swapped };
             foreach (SceneEntry e in Scene.Entries)
-                if (e.Control is HintBar bar) bar.PadFamily = family;
+            {
+                if (e.Control is not HintBar bar) continue;
+                bar.PadFamily = family;
+                if (reentered) bar.Entries = IndicatorElements.HelpEntries(ViewName, e.Element, family, swapped, Data.Help with { Folder = Data.Game?.Folder == true });
+            }
         }
 
         // When the view next looks different from now: now while anything moves, a later time for a text still in its pause, null when it is still for good (§15).

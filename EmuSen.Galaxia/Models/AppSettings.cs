@@ -43,6 +43,13 @@ namespace EmuSen.Galaxia.Models
         public bool AnalogStickAsDpad { get; set; } = true;
         public double StickDeadzone { get; set; } = 0.5;
 
+        // Controllers in the interface, as ES-DE's input device settings: the help bar's button set, the swap, the first pad alone, the notices - see EmuSen_Settings_Reference.md §4.61.
+        public string ControllerType { get; set; } = ControllerTypeAutomatic;
+        public const string ControllerTypeAutomatic = "Automatic";
+        public bool SwapPadButtons { get; set; } = false;
+        public bool FirstControllerOnly { get; set; } = false;
+        public bool ControllerNotifications { get; set; } = true;
+
         // Full screen, no menu bar and larger type, for a handheld or a television; a Steam Deck's session asks for it by itself - see EmuSen_Settings_Reference.md §4.29.
         public bool BigScreen { get; set; } = false;
 
@@ -102,8 +109,14 @@ namespace EmuSen.Galaxia.Models
         // The theme's navigation sounds, on a stream beside the game's - see §4.52.
         public bool NavigationSounds { get; set; } = true;
 
+        // Games the player hid from the library, with Hide from Library or the Hidden field, are listed again - see EmuSen_Settings_Reference.md §4.59.
+        public bool ShowHiddenGames { get; set; }
+
         // The theme settings sheet's choices, keyed by the theme folder's full path so each theme keeps its own - see EmuSen_Settings_Reference.md §4.53.
         public System.Collections.Generic.Dictionary<string, BigPictureChoices> BigPicture { get; set; } = new();
+
+        // Big picture's collections and gamelist options - see EmuSen_Settings_Reference.md §4.58.
+        public BigPictureCollections BigPictureCollections { get; set; } = new();
 
         private static readonly ConfigFile<AppSettings> File = new("appsettings.json");
 

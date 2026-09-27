@@ -604,11 +604,19 @@ themed view:
 | Up, down | | move the list (`scroll`), with the repeat of `PadNavigator` |
 | South | enter the system's gamelist (`select`) | start the game (`launch`), through `StartGameAsync`: firmware prompt, then the resume question on a sheet (§4.31, §4.45.2) |
 | East | | back to the system view (`back`) |
-| L1, R1 / L2, R2 | | page / first and last |
-| North | | the on-screen keyboard's search (§4.45.6) |
-| Select | | mark favourite (`favorite`), as the grid does today (§4.33) |
+| L1, R1 / L2, R2 | | page / first and last. *Since the answer of 2026-09-26 (Q14): ten games back or forward, stopping at the ends, as USERGUIDE's shoulders do; the triggers are unchanged, the first and the last game* |
+| North | | the on-screen keyboard's search (§4.45.6). *Since the answer of 2026-09-26 (Q15): the favourite (`favorite`), ES-DE's Y; while a custom collection is edited, adding the game to it or removing it, as ES-DE's Y does then; the search is an entry of Select's menu (§22.13)* |
+| Select | | mark favourite (`favorite`), as the grid does today (§4.33). *Since 2026-09-26 the game options menu, as ES-DE's Back button opens it; the favourite is its first entry (§23.4). Since the answer of the same day (Q12), one menu: Jump To, Sort Games By, Filter Gamelist and Search, the custom collection's entries, then the game's (§22.13)* |
 | Start | the pad menu, as a `SheetLayer` sheet | the same |
 | Guide, or Back and Start together, during a game | the menu over the game (§4.29). "Game Library" returns to the themed view at the same system and game. | |
+
+*Amended 2026-09-26, for collections and the gamelist options (§22.5):* North, while a custom collection is being
+edited, adds the selected game to it or removes it, as ES-DE's Y does, and searches otherwise; either thumbstick pressed
+in picks a random game (in the system view a random system, when the setting allows it), as ES-DE's thumbstick click
+does; South on an entry of the grouped Collections system opens it and East inside it comes back to the list. ES-DE's
+gamelist options menu, which ES-DE opens with Back, is reached from Start's pad menu, because Select belongs to the
+game options of §23; merging the two menus under Select is left to that merge. *Superseded the same day by the player's
+answers (§10.1, §22.13): the menus are one, under Select, and North is the favourite outside the collection editing.*
 
 The help system's entries are the theme's layout filled with these actions. Its icons are Mistress's own (§3.6).
 
@@ -1011,6 +1019,8 @@ sends and to whom. The API's own condition (free, distributed software) is met.
 | P39–P45 | Stage (e)'s predictions: a still view draws nothing, the return is exact, the first build, the pad's family, a family change touching only the help bar, the sounds, every sheet reachable (§15.1) | Stage e (§15.12); P41 failed cold |
 | P46–P55 | Stage (f)'s predictions: a choice applied at once, choices per theme, the sheet's rows, every control reachable, the grid at rest and moving, the video extensions, the media scan, the downloads, a closed sheet's download (§16.1) | Stage f (§16.7); P50 failed by a pixel, P51's duration and interval refuted |
 | P60–P67 | Stage (d)'s predictions: N64 byte order, media against the quota, quota fields without a member, time per game, system IDs, the pacer, the region rule, no leak (§17.1) | Stage d (§17.10); P61 and P66 failed, P60 not measured, P63 partly |
+| P68–P71 | Collections and gamelist options: the broad run, a large library's Show with the collections, a step in all games, the options sheet's cost (§22.1) | §22.10 |
+| P84–P91 | The game options menu and the metadata editor: every control reachable, an edit surviving a re-scrape, the editor's own scrape, no ROM touched, a click on the rating, the mutants, the broad runs (§23.1) | §23.1: all held but P88 (failed, then fixed) and P90 (one unattributed failure) |
 | P100–P120 | The remaining passes' predictions: the handheld, controllers, the theme survey, badges and switches, localisation, folders, the modes, scraping extras, manuals, the screensaver, the launch screen, video, TheGamesDB, the passes' pace (§21.6) | Each in its pass |
 
 ---
@@ -1039,6 +1049,10 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   controller family, such as Xbox, PlayStation, or the Legion's own labels?
 - **Q10, SVG.** Our own subset renderer (recommended), or `Svg.Skia` 5.1.1 with its MS-PL dependency and SkiaSharp
   pin (§4.5)?
+- **Q11–Q14, collections and the gamelist options** (§22.12): the automatic collections off by default as ES-DE's are,
+  or on; one menu under Select for the gamelist options and the game options; custom collections shown until switched
+  off, or enabled one by one as ES-DE does; and the shoulders' page, which ES-DE was measured to make ten games.
+  *All four answered on 2026-09-26, with Q15 (§10.1).*
 - **Q20–Q35**, the decisions the remaining passes to ES-DE parity wait on (video again, as Q4's revisit; codecs;
   controllers; folders; the modes; languages; the theme list; TheGamesDB; buttons; the launch screen; the screensaver;
   the hardware session), are asked in §21.5.
@@ -1048,6 +1062,11 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   track the ES-DE release measured. The release is recorded with every capture.
 - **Risk: the theme changes upstream.** Updating is the player's choice (§6). A new theme version that uses an element
   outside §3.8 is refused visibly, element by element, not rendered in part.
+
+- **Q15–Q19**, the game options menu and the metadata editor's open questions: §23.12. Q15 was answered with Q11–Q14,
+  and Q18 and Q19 on 2026-09-26 (§10.1); Q16 and Q17 remain open.
+- **Q36–Q39** are left to §25, written on another branch at the same time. **Q40–Q45**, the retirement of OpenEmu's
+  sources, are asked in §26.9, and **Q46** in §27.9.
 
 ---
 
@@ -1113,6 +1132,31 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   loader (XML, variables, includes, variants, colour schemes, aspect ratios) is format-specific and stays in
   `EmuSen.Mistress/BigPicture/`, with no Avalonia types, producing a scene the Mistress layer builds from LunaP
   controls. Q10 (own SVG renderer or `Svg.Skia`) is therefore answered: our own, in LunaP.
+- **Q11–Q15, collections, the gamelist options and the favourite's button (2026-09-26, after §22 and §23 were
+  merged):**
+  - **Q12:** one menu on Select, as ES-DE has it: Jump To, Sort Games By and Filter Gamelist, the custom collection's
+    entries, then the game's entries (the favourite, Edit This Game's Metadata, Scrape This Game..., and Hide from
+    Library in the editor). Gamelist Options left the pad menu, where ES-DE's documentation keeps only *Game collection
+    settings*.
+  - **Q15:** North (ES-DE's Y) toggles the favourite; the search moves into Select's menu as an entry. While a custom
+    collection is being edited, North adds the game to it or removes it, as USERGUIDE describes ("The option does not
+    affect the use of the Y button to add or remove games when editing custom collections").
+  - **Q11:** the automatic collections are on by default, a deliberate difference from ES-DE, whose settings file holds
+    them empty.
+  - **Q14:** the shoulders jump ten games in a gamelist, as USERGUIDE documents; the triggers stay the first and last.
+  - **Q13:** custom collections stay shown until switched off, as §22 built them.
+  - §22.13 records what was built for these.
+- **Q18 and Q19, ScreenScraper's name and the options outside big picture (2026-09-26, after §23 was
+  merged):**
+  - **Q18:** "Offer Screen Scraper name, but don't force on user." The metadata editor shows ScreenScraper's name for
+    the game as an offer under the Name field, taken by one press (*Use This Name*) or put away (*Keep Current Name*).
+    The name changes only when the player takes it; the file's name, or the player's own edit, stays otherwise.
+  - **Q19:** "Yes, the option should be available for both." The game options menu and the metadata editor are also
+    reached from Mistress's sidebar library: the grid's and the list's context menu, the pad menu of that library on the
+    desktop and in its big screen, and Ctrl+I for the editor. The same windows are used, as sheets in a big-screen
+    session and as LunaP windows on the desktop.
+  - **A direction, not yet a decision to build:** "i would like to eventually retire sourcing game info from openemus
+    library and use screenscraper." §26 is the plan for it; §27 records what was built for Q18 and Q19.
 
 ## 11. Sources
 
@@ -2446,6 +2490,7 @@ none should.
   a sound interrupted by the next were not measured against ES-DE.
 - **The generic d-pad glyphs** are hard to tell apart at the 1280×800 help bar's size (§15.10).
 - **`GamepadManager` still opens one pad**, the first; a second pad connected beside it is not seen until the first goes.
+  *Closed 2026-09-26 by §24: every pad is opened, and every pad steers the interface.*
 
 
 ### 15.14 A closed window kept drawing (found at the merge, 2026-09-25)
@@ -4168,3 +4213,1464 @@ Written before any pass is built, to be retired in each pass's record.
 - **The licences of FFmpeg, Poppler, PDFium and MuPDF** are stated as those projects commonly publish them, not re-read
   for this section; each pass that takes one reads it first. TheGamesDB's data terms were not found.
 - **The costs are estimates** at §7's scale, and §7's scale has run long (P119).
+
+## 22. Collections, and a game list's sort, filters, jump and random game (2026-09-26)
+
+*Opened 2026-09-26, on the request of that day* to build what big picture lacked against ES-DE: "item 1,
+collections: ES-DE's automatic collections (All Games, Favorites, Last Played) and custom collections"; "item 2: a game
+list's filters … and sorting …, plus jump-to-letter and random game". Item 3, the per-game options and a metadata
+editor, is §23's, built at the same time on another branch. The player's account is §4.58 of the settings reference;
+this is the record.
+
+**Sources.** ES-DE's behaviour is taken from its `USERGUIDE.md` (the sections *General navigation*, *Game collection
+settings*, *UI settings*, *Gamelist options menu* and *Game collections*) and `THEMES.md` (*System variables*, the
+`textlist`, `helpsystem` and `metadataElement` entries), the copies fetched at master for stage (c) under
+`~/.cache/emusen/bigpicture/motion/docs/`. Where they are silent, ES-DE 3.4.1 was run (§22.2). Its source was not read.
+Art Book Next's files were read, as in every stage, only to learn which names it asks for (`auto-allgames` and the
+others); nothing of it or of ES-DE entered either repository.
+
+### 22.1 Predictions
+
+Written after the code and its pad tests, and before the broad run and the cost measurements below, which they are
+about. They are therefore narrower than a stage's.
+
+- **P68, the broad run.** The Mistress filter without `ShaderSettingsWindowTests`, `ShaderBrowseBench` and
+  `SceneGpuBench` passes with no failure that this branch causes.
+- **P69, a large library.** With 3,508 games over the five systems and the three automatic collections on, a warm
+  `ThemedLibrary.Show` on the desktop costs under 1.5 times the same Show without them (median of five). The
+  collections' shelves are built from lists the window already holds, and their media presence is asked once per source
+  system.
+- **P70, a step in all games.** A step in the 3,508-game all games list costs within 1.5 times a step in a system's
+  list: the listed games are kept per list, so a step does not sort again.
+- **P71, the options sheet.** Opening Gamelist Options over the 3,508-game all games list, its letters and its filter
+  values computed from the list, takes under 100 ms on the desktop.
+
+### 22.2 ES-DE 3.4.1, measured where its documentation is silent
+
+The documentation names the collections and describes their settings, but not the system names a theme sees for them,
+their place in the carousel, what the grouped system's entries show, or the order inside the automatic collections. A
+separate run ran the local AppImage for these, in the scratch `--home` only, one window at a time, eight runs of 15–25 s,
+each closed by PID, with the scratch settings, gamelists and collections restored afterwards and compared with
+`diff -r`. The runner, timelines, fixture and every capture are under `~/.cache/emusen/bigpicture/collections-probe/`.
+The fixture was synthetic: scratch ROM files of stage (b)'s names, three favourites, four games with a `lastplayed` and
+one with a play count and no date, and two custom collections (`custom-Platform.cfg`, three SNES games; `custom-Beat.cfg`,
+one NES and one SNES game), enabled with `CollectionSystemsAuto=all,favorites,recent` and
+`CollectionSystemsCustom=Platform,Beat`. The captures quoted below were looked at by this section's author too.
+
+**A defect of the harness, found and fixed.** The player's own Xbox controller was connected, and ES-DE, started with
+`SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1` as stage (c)'s `record.sh` starts it, acted on that controller's input during
+the first two runs: extra carousel steps, and a jump from one gamelist to another. Those runs were discarded. From the
+third, the runner sets `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT` to the virtual pad's vendor and product, and the log
+shows only that pad. Stage (c)'s and stage (f)'s recordings (§14.7, §16.5) were made with the same script and without
+that variable; whether a real controller was sending input during any of them is not known, and is recorded here as a
+hazard to those measurements, not as a finding against them.
+
+**What was found.**
+- *Names.* The tokens `all`, `favorites` and `recent` enable the three automatic collections, and the log populates
+  systems of those names and `collections` for the grouped custom collections. Art Book Next drew each with its
+  `${system.theme}` art: `auto-allgames`, `auto-favorites`, `auto-lastplayed` and `custom-collections` (the last also
+  parsed from the theme's own `custom-collections/theme.xml`). The menu names them All Games, Favorites and Last Played.
+- *Order.* In the system view, from SNES rightwards: COLLECTIONS, ALL GAMES, FAVORITES, LAST PLAYED, Nintendo 64, NES,
+  Game Boy, Game Boy Color, SNES. The regular systems come first, sorted by full name, then the grouped system, then the
+  three automatic collections in that order (`runs/r3/sheet.png`).
+- *The grouped system.* One entry per collection, named as its file without `custom-`, sorted by name although the
+  setting listed them the other way round. The selected entry shows one game's cover and the description "This
+  collection contains 3 games: 'Hollow Comet [SNES]', 'Ember Circuit [SNES]' and 'Aurora Drift [SNES]'", the names in
+  an order that changed between two visits, the first of them the game pictured. No folder mark, no rating, date,
+  players or badge is drawn for an entry (`runs/r2b/g03`, `g05`). A opens the collection, whose games are listed by
+  name with no star and no suffix; B returns to the list at that collection; B again to the system view.
+- *Last played.* The most recent first, across systems; the game with a play count and no date was listed last; games
+  never played were not listed (`runs/r5/f01`).
+- *All games and Favorites.* All games lists the favourites first, each with its star, then every other game by name;
+  games of the same name follow the systems' full-name order, which cannot here be told from the order the systems were
+  loaded in. Favorites lists its games by name with no star before them (`runs/r4/a00`, `runs/r5/f00`).
+- *The gamelist options.* The Back button opens GAMELIST OPTIONS: JUMP TO… with the selected game's letter (a star for
+  a favourite on top) changed by left and right, SORT GAMES BY (NAME, ASCENDING), FILTER GAMELIST, EDIT THIS GAME'S
+  METADATA, then APPLY and CANCEL. The help bar reads "Close (Cancel)" on Back and "Close (Apply)" on B (`runs/r5/f04`).
+  JUMP TO's list holds only the characters present: with Kestrel Run the only K game and a favourite, K was absent
+  (`runs/r6/j01`, `j02`).
+- *Random.* The left thumbstick click moved the selection to another game at each press (`runs/r6/j05`–`j07`).
+- *Beside the question.* With `QuickSystemSelect=leftrightshoulders` and a textlist, left and right changed the system
+  and the shoulders moved ten rows (`runs/r4`), which is what USERGUIDE's *General navigation* says. §4.9 gives the
+  shoulders a page of the rows shown (§15.3); that difference is not this section's to change, and is Q14.
+
+### 22.3 What was built
+
+**The data, with no Avalonia type** (`EmuSen.Mistress/BigPicture/`):
+- `CollectionShelves` builds the collections from the library's shelves and Mistress's custom collections: all games,
+  favorites and last played (the 50 most recent, a counted game with no date last) as automatic-collection systems;
+  each custom collection as a system of its own when the theme has a folder of its name holding `theme.xml` or grouping
+  is *Never*, else as a folder of the one `collections` system; the order of §22.2; ES-DE's name rules (`Clean`,
+  `Unique`); and a grouped entry's description and pictured game (`Folder`).
+- `GamelistOptions`: the eleven sort keys, each way, ES-DE's stored spellings (`GameSort.Stored` is `name, ascending`);
+  the filter fields Mistress has data for, their values from a list's games, and `Passes`; the quick selector's
+  `Letters`; `RandomIndex`.
+- `ThemedLibrary.Gamelists.cs`, a new part of `ThemedLibrary`: per-list sorts and filters for the session, the folder
+  open in the grouped system, the collection being edited, the random entry, `Letters`, `ApplyOptions`, and the listed
+  games kept per list until something changes.
+- `SceneGame` gained `Source` (the system a game belongs to), `Face` (the game a grouped entry pictures), `IsCollection`
+  and `HideMetadata`; `SceneSystem` gained `Stars` and `Heading`. Media, the name suffix and `sourceSystemName` now read
+  the game's own system (`SourceIn`); before, a collection's games would have been looked up under the collection.
+- `ThemedLibrary.cs` changed in four places: `ThemedShelf` gained the collection's rules; `Data` lists each system
+  through `Listed`; the cursor is kept per list; and `Command` gained the folder, North-while-editing and random cases.
+
+**The window** (`Views/MainWindow.BigPictureCollections.cs`) builds the collections from `games.db` for each showing,
+applies the settings, answers North while editing, adds the two pad-menu entries, and implements
+`ICollectionSettingsHost`, through which the settings sheet creates, deletes and finishes editing. It changes the shared
+files by one line each: `ShowThemedLibrary` passes `WithCollections(ThemedShelves())` and applies the settings first;
+`ThemedPadCommand` gains the collection case; `OpenPadMenu` calls `AddCollectionMenuEntries`; `PadHeld` maps the two
+thumbstick buttons to the new `UiButton.Random`.
+
+**Three sheets**, LunaP `ToolWindow`s of LunaP parts (`FieldRow`, `Dropdown`, `LunaSwitch`, `HintText`, `Ui` rows and
+buttons), presented by `SheetLayer.Show` as every sheet is: `GamelistOptionsWindow` (an `IPadDriven` window, so that the
+Back button cancels as ES-DE's does), `GamelistFilterWindow` (a sheet over the options sheet, as ES-DE's filter screen is
+a screen of its own), and `CollectionSettingsWindow`.
+
+**In LunaP** (branch `bigpicture-collections`, its `docs/LunaP.md` §150 and §151): `TextRowMarker.Tick`, a stroked
+check mark in the room the star and the folder use, and `PadGlyphButton.ThumbstickClick`, a disc in a thin ring, both
+appended so no value moves, with a test each and the API baseline updated.
+
+**Nothing holds a timer or a stream.** The sheets poll nothing and open nothing, and the random entry is a
+`System.Random`, so §15.14's rule has no new subject here; no close test was written, since one that cannot fail
+without a cleanup proves nothing.
+
+### 22.4 Where the data comes from, and where it is kept
+
+The request was, during the work, that the program's data be kept in SQLite where it can be, as `EmuSen_Stack.md` §4
+settles: what the program writes and reads back in SQLite, the player's settings in `appsettings.json`.
+- **Already in SQLite, and read from there:** favourites, last played, play count, play time, the custom collections and
+  their games are `games.db`'s `game`, `collection` and `collection_game` tables (`GameRecords`). Nothing of them was in
+  a JSON file before this work, and none is now. A collection made or edited in big picture writes those rows, so the
+  library's sidebar shows the same collection.
+- **ScreenScraper's text** (genre, players, rating, release date, developer, publisher) is `media.db`'s, read through the
+  window's `WithScrapedText` as stage (d) built it.
+- **The player's choices** are the eight keys of `BigPictureCollections` in `appsettings.json` (§4.58 of the settings
+  reference). `HiddenCustomCollections` names `games.db` ids; a collection deleted from the library's sidebar leaves its
+  id there, which matches nothing and is dropped by nothing. That is harmless and was left.
+- **A list's sort and filters** are kept in memory for the session and never written, as ES-DE keeps them. Nothing is
+  cached on disk: the sorted and filtered lists are recomputed from the records at each showing.
+
+**A game without ScreenScraper's text** has no genre, players, rating, release date, developer or publisher. In a
+filter it is **Unknown**, a value of its own, so the unscraped games can be chosen or left out; ES-DE's documentation
+says only that the values are assembled from the gamelist. By any of those sort keys it goes after every game that has
+the value, in either direction, and among such games the name decides. Completed, kidgame and broken are not recorded by
+Mistress, so each filter says "Nothing to filter"; hidden, controller and alternative emulator are not offered.
+
+### 22.5 The buttons
+
+§4.9's table was kept and amended (§4.9). The changes, each taken from what ES-DE's documentation assigns:
+
+| Button | ES-DE (USERGUIDE) | Here |
+|---|---|---|
+| Y / North | toggles a favourite; adds or removes a game while a collection is edited | adds or removes while a collection is edited; otherwise the search, as before (§4.9 has no favourite on North) |
+| Thumbstick clicks | a random game, or system, per *Random entry button* | the same, through `UiButton.Random` |
+| A on a grouped collection | enters it | the same; the help bar reads Select |
+| B inside it | back to the list | the same, at that collection |
+| Back | opens the gamelist options | **not taken**: Back is §23's game options. The options are in Start's pad menu. |
+| B / Back in the options | apply / cancel | the same |
+
+**The Back button, and the merge with §23.** In ES-DE the gamelist options menu is one menu, opened with Back, holding
+the jump, the sort, the filter, the collection entries and *Edit this game's metadata*. The plan gave Back to §23's game
+options, which will hold the favourite toggle and the metadata editor. The two are therefore one menu in ES-DE and two
+here until the branches meet. `GamelistOptionsWindow` takes its rows from a model the window fills
+(`ShowGamelistOptions`), so the merge can open one sheet under Back with both sets of rows, or keep two; Q12 asks which.
+
+### 22.6 Where the documentation is silent and nothing was measured: the choices made
+
+- **The automatic collections are off by default**, as ES-DE's settings file has them; the custom ones are shown until
+  switched off, unlike ES-DE's, because they are the player's own library's (Q11, Q13).
+- **A discrete custom collection's place** is after the grouped system and before the automatic ones. Only the grouped
+  system's place was measured.
+- **"Themed" means a folder of the collection's name holding `theme.xml`**, THEMES.md's per-system folder. Whether ES-DE
+  also counts a root `theme.xml` that styles every system by `${system.theme}` was not measured; if it did, every
+  collection would be discrete under Art Book Next, which the grouped list in §22.2 contradicts for `Platform`.
+- **Missing values sort last** in both directions, and **Unknown is a filter value**, as §22.4 says.
+- **Within a field any chosen value passes, across fields all must**, the reading USERGUIDE's list of filters allows.
+- **The quick selector's characters** are the first character of each name, upper-cased, digits included; ES-DE's
+  treatment of digits and symbols was not measured.
+- **The random entry never picks the game already selected**, and plays the list's scroll sound. Neither was measured.
+- **A grouped entry's pictured game** is chosen each time the list is built, not at each step as ES-DE's apparently is,
+  and Y does not jump to it.
+- **A grouped entry hides** its rating, dates, badges and text fields other than the description, as §22.2 saw; the rule
+  is THEMES.md's *Hide metadata fields*, applied to these entries only.
+- **At the grouped system's top, `systemName` and `systemFullname` are blank**, which THEMES.md implies when it says a
+  theme's `defaultValue` fills them "at the root of the custom collections system"; inside a collection they are its
+  name. Art Book Next's second "COLLECTIONS" line under the logo disappeared with this (§22.9).
+- **The help bar's A reads Select on a folder.** ES-DE's reads Select on every entry, games included (`runs/r4/a00`),
+  where §15's table says Launch; that older difference is not this section's.
+
+### 22.7 Tests
+
+Headless in WiseMan, the pad through `PadDriver` over a `ThemedSession` on the synthetic theme, with `games.db` written
+through the window's own `GameRecords` and ScreenScraper's text put where `WithScrapedText` reads it.
+
+| Rule | Test |
+|---|---|
+| The sort keys, each way; missing values last; the name after; favourites on top; System by the source system; ES-DE's spellings | `GamelistOptionsTests.Every_documented_sort_key_orders_with_missing_values_last_and_the_name_ascending_after` |
+| Filter values from the list, Unknown, Nothing to filter, stars; any value within a field, every field; the name in any case; a folder always passes | `…Filter_values_come_from_the_list_and_a_field_with_nothing_to_tell_apart_offers_none` |
+| The quick selector: only the characters present, the star, a list of favourites alone | `…The_quick_selector_offers_only_the_letters_present_and_a_star_for_favourites_on_top` |
+| The random entry never the selected game | `…The_random_entry_never_picks_the_game_already_selected_when_there_is_another` |
+| ES-DE's name rules | `…Collection_names_lose_ES_DE_s_forbidden_characters_and_a_taken_name_is_numbered` |
+| The shelves' order, grouping by theme folder, Always and Never, hidden collections, favorites' members and stars | `…Collection_shelves_follow_ES_DE_s_measured_order_and_group_what_the_theme_does_not_style` |
+| Last played: newest first, fifty, a counted game with no date last | `…Last_played_is_newest_first_across_systems_fifty_at_most_with_a_counted_game_without_a_date_last` |
+| A grouped entry's description and pictured game | `…A_grouped_collection_s_folder_names_its_games_in_a_random_order_and_shows_the_first` |
+| Off until turned on; then ES-DE's order, names and theme folders | `ThemedCollectionsTests.Automatic_collections_are_off_until_turned_on_then_follow_the_systems_in_ES_DE_s_measured_order` |
+| All games, favorites and last played from `games.db`; a game's picture and suffix under its own system | `…All_games_favorites_and_last_played_come_from_Mistress_s_records_and_their_games_keep_their_own_system` |
+| The Collections list: folders by name, A in with its sound, B out to the same folder, B to the systems | `…The_grouped_collections_system_lists_each_collection_as_a_folder_that_A_enters_and_B_leaves` |
+| An entry: no folder mark, metadata hidden but the description, a blank system name, Select | `…A_collection_s_entry_is_drawn_as_ES_DE_draws_it_no_folder_mark_its_metadata_hidden_and_a_blank_system_name` |
+| A theme folder makes a system; Always, Never, a hidden collection | `…A_collection_the_theme_has_a_folder_for_is_a_system_of_its_own_and_the_setting_can_group_it_or_part_all` |
+| Created on the sheet by the pad, cleaned, the sidebar's own; North adds and removes with the tick and the help's word; Finish Editing; North searches again | `…A_collection_created_in_big_picture_is_the_library_s_own_and_North_edits_it_until_its_editing_is_finished` |
+| The options sheet: Back cancels, B applies; name and rating sorts from ScreenScraper's text; a filter; each list its own; reset; the jump; nothing saved | `…The_options_sheet_sorts_filters_and_jumps_B_applying_and_Back_cancelling_and_each_list_keeps_its_own` |
+| Either stick; the help's Random; Disabled; Games and systems | `…Either_stick_pressed_in_jumps_to_another_game_and_the_setting_decides_where_it_works` |
+| The settings sheet's switches and choices applied at once and saved | `…The_collection_settings_sheet_applies_each_switch_and_choice_beneath_it_at_once_and_saves_them` |
+| Every control of the three sheets reached by the pad (`PadAudit`), no window opened | `…Every_control_of_the_collection_sheets_is_reached_by_the_pad` (3 cases) |
+| `collectionIndicators`, symbols against ascii, changes the pixels | `SceneMappingTests.Every_mapped_property_changes_the_rendered_pixels`, a new case over a new custom-collection system |
+
+In LunaP: `ThemedListTests.A_tick_marks_a_row_in_the_star_s_room_with_its_own_shape` and
+`PadGlyphTests.The_thumbstick_click_is_a_disc_in_a_ring_unlike_the_guide_and_is_named_for_both_sticks`.
+
+**Every one passed at its first run** except two, both fixed in the test: a tuple of arrays compared by reference, and a
+sort stepped from the wrong starting row. That so few failed first is weak evidence of the tests' strength; the mutants
+(§22.8) are the stronger.
+
+*Amended after the mutants:* two tests were strengthened when their mutants survived (C25, C50 in §22.8), and a line of
+code was removed as redundant (C13).
+
+### 22.8 Mutants
+
+The runners are `~/.cache/emusen/probe/bigpicture/mutate_collections.py` (56 mutants in Mistress and Galaxia, against
+`ThemedCollectionsTests`, `GamelistOptionsTests`, `ThemedLibraryPadTests` and `SceneMappingTests`) and
+`mutate_collections_lunap.py` (8 in LunaP, against `PadGlyphTests` and `ThemedListTests`). Each mutant was built and run
+alone under `nice -n 10`, with builds at `-m:2`, and its file restored; the tree was rebuilt clean after each round. The
+logs are `run-collections-part1-C1-C19.log`, `run-collections-part2.log`, `run-collections-part3.log`,
+`run-collections-rerun.log`, `run-collections-rerun2.log`, `mutants-collections-lunap-first.txt` and
+`mutants-collections-lunap.txt`.
+
+**Two interruptions, and what they left.** The first round was cut off at 17:58 by a hardware reset of the desktop,
+an AMD fault that heavy load triggers, as the freezes of §15.14 were; the machine's own log was not read for this
+section. The mutant in flight, C21,
+was left in `IndicatorElements.cs`; it was found and restored before anything else was built, the tree was rebuilt
+clean, and the round was resumed from C20, whose result had not been written. The runner was then changed to keep the
+original of the file it mutates beside it and to put it back on its next start. The second interruption was a pause
+for a firmware update, taken during C49; the runner's own backup restored that file, and the round resumed from C49 after
+a clean rebuild. No verdict below comes from a build that held another mutant.
+
+| # | Rule broken | Result |
+|---|---|---|
+| C1 | the automatic collections on by default | caught by 6 |
+| C2 | custom collections after the automatic ones | caught by 3 |
+| C3, C4 | favorites holds every game; favorites draws its stars | caught |
+| C5–C7 | last played oldest first; no limit; a counted game with no date left out | caught |
+| C8–C10 | a themed collection grouped; Always ignored; a hidden collection shown | caught |
+| C11, C12 | the folders in reverse; B inside a collection goes to the systems | caught |
+| C13 | leaving a collection does not set the top list's cursor | **survived: equivalent**; the line was removed |
+| C14–C16 | A launches a collection; a folder pictures another game than the first named; the description names no source system | caught |
+| C17–C21 | a grouped entry: its folder mark kept; its metadata shown; the description hidden too; its system name kept; A reads Launch | caught |
+| C22, C23 | a collection's game looked up, or suffixed, under the collection | caught |
+| C24 | the sort not applied | caught by 3 |
+| C25 | every list takes the current list's sort | **survived**; caught after the test was strengthened |
+| C26–C35 | the filter not applied; missing values first; no name after the key; favourites not on top; all of a field's values required; the name filter minding case; a field with one value offered; no Unknown; favourites' letters beside the star; no star | caught |
+| C36–C38 | the jump not made; Back not cancelling; B not applying | caught |
+| C39–C42 | the random entry staying put; ignoring Disabled; moving systems with Games only; the right stick unmapped | caught |
+| C43–C49 | North searching while editing; never taking a game out; no tick; members unmarked; a name keeping the forbidden characters; a new collection not edited; Finish Editing ignored | caught |
+| C50 | the help bar's North keeps Search while editing | **survived**; caught after the test was strengthened |
+| C51–C56 | no Random in the help bar; a settings change waiting for the next showing; a switch storing nothing; Sort favorites ignored for the systems; the default sort ignored; the heading ignored inside a collection | caught |
+| T1–T4 | LunaP's tick drawn as the star, as the folder, keeping no room, its lowest point raised | caught (T3 was written ambiguously first, matching two lines, and rewritten) |
+| G1–G4 | the thumbstick drawn as the guide; no ring; the disc filling the ring; named as the guide | caught |
+
+**63 of 64 caught; the one survivor was equivalent, and the code it mutated is gone.** Two were caught only after
+their tests were strengthened:
+- **C13.** Leaving a folder set the top list's cursor to the folder left. The top list's cursor already held it: it was
+  remembered when A was pressed on that folder, and nothing inside the folder can change the top list's key. The
+  assignment was dead code and was removed (`1f943eaf`), which the tests pass without.
+- **C25.** The mutant sorted every system's list by the current list's sort. The test did look at another system after
+  sorting, but only under a rating sort, and that system's games have no rating, so they fell back to the name order that
+  is also the default. The test now looks at another system right after a name-descending sort, which exposes it.
+- **C50.** The test asserted the help context's flag, not what the help bar shows. It now requires the entry on North
+  to read Collection while editing and Search after.
+
+### 22.9 Measurements
+
+`CollectionsBenchTool`, run with `EMUSEN_BIGPICTURE_BENCH=1`, on the desktop, Debug build, headless with no window, so
+the scene is built and not laid out or drawn. The library is synthetic: 3,508 games over the five systems, one favourite
+in seventeen, one game in five played, three custom collections of 200 games, and the three automatic collections on.
+The output is `~/.cache/emusen/probe/bigpicture/collections/bench.txt`.
+
+| Measure | Result |
+|---|---|
+| `Show` without the collections | median 1.2 ms of five warm |
+| `Show` with them, building the shelves included | median 3.9 ms; building the shelves alone 1.15 ms; ratio 3.29 |
+| A list step in snes (1,100 games) | median 0.10 ms |
+| A list step in all games (3,508) | median 0.46 ms; ratio 4.5 |
+| Gamelist Options' model over all games: 27 quick-selector entries, 20 filter values | 6.3 ms the first time, then a median of 2.4 ms |
+
+### 22.10 Predictions retired, and the broad run
+
+| # | Predicted | Measured | Verdict |
+|---|---|---|---|
+| P68 | the broad run passes with no failure this branch causes | 824 passed, 10 skipped, none failed | held |
+| P69 | a warm Show with the collections under 1.5 times one without | 3.29 times (3.9 against 1.2 ms) | **failed.** The collections add nine lists to sort at each Show, the all-games one of 3,508; the ratio is large because the Show without them is small on the synthetic theme. The added 2.7 ms is not the cost that matters on a real theme, where §15.8 measured the first frame at about 50 ms warm; that frame was not measured here |
+| P70 | a step in all games within 1.5 times a step in a system | 4.5 times (0.46 against 0.10 ms) | **failed, and the cause is not the sort.** The listed games are kept per list, so a step does not sort again; but each step rebuilds the scene, and the text list's rows are built for every game of the list, so a step's cost grows with the list's length (3,508 against 1,100 games, 3.2 times; the rest is not attributed). That is stage (c)'s design (§14.8, whose lever skips the rebuild while a list is held), and it applies to any long system as much as to a collection |
+| P71 | Gamelist Options opened over all games in under 100 ms | its model in 6.3 ms, then 2.4 ms | **held for the model only**; the sheet's layout and first drawing were not measured |
+
+**The broad run**, once, at the end, after a clean rebuild: the Mistress filter without `ShaderSettingsWindowTests`,
+`ShaderBrowseBench` and `SceneGpuBench`, under `nice -n 10`, 834 tests, 824 passed and 10 skipped (the picture, bench
+and live tools, which need their variables), none failed, in 3 min 15 s. No GPU test was run. One pass is weak
+evidence against an intermittent failure, as §15.14 says of its own.
+
+**Pictures.** `CollectionsPictureTool`, with `EMUSEN_BIGPICTURE_PNG=1`, writes nine at 1280×800 to
+`~/.cache/emusen/bigpicture/png/collections/`, on Art Book Next with the synthetic media, and one on the synthetic
+theme. They were looked at:
+- `carousel-collections` and `carousel-all-games`: Art Book Next's own tag and database logos and artwork for the two
+  systems, as ES-DE drew them in §22.2 (`runs/r3/sheet.png`).
+- `grouped-collections-folders`: Beat and Platform with no folder mark, one game's cover, the description naming three
+  games with "[SNES]", and no rating or dates. The first build showed a folder mark, the rating, dates and players, and a
+  second "COLLECTIONS" line under the logo; each was changed to what `runs/r2b/g03` shows (§22.6).
+- `gamelist-options-sheet`, `filter-sheet`: the sheets over the dimmed view; the filter sheet with Racing chosen, the
+  ratings in half-star values and Unknown last (Unknown was first until the picture showed it, and was moved), and
+  "Nothing to filter" for publisher, players and completed.
+- `filtered-list-racing-by-rating`: two games left, the higher rated first.
+- `jump-to-letter-open` and `-after`: the list of characters, star first, and Ember Circuit selected after E.
+- `editing-platform-ticks-synthetic`: the ticks before two members, the favourite's star on a third, and COLLECTION on
+  the help bar's North.
+
+### 22.11 Not done
+
+- **The Back button.** ES-DE's gamelist options open on Back; here they are in Start's menu until §23's game options and
+  these are one menu (§22.5, Q12).
+- **Create New Custom Collection from Theme**, and the UI modes (Kiosk, Kid) that restrict these menus.
+- **The filters for hidden games, controllers and alternative emulators**, and real values for completed, kidgame and
+  broken: Mistress records none of them. §23's metadata editor may add some; the filter screen offers whatever field
+  holds more than one value, so a field that gains data needs one line in `GamelistOptions.ValueOf`.
+- **The game counter** that reads "filtered / total" while a filter is on: ES-DE's `gamelistinfo` element, which the
+  scene has never drawn (§13.3) and Art Book Next does not use.
+- **ES-DE's *custom collections sortname*.** *Amended at the merge with §23 (2026-09-26):* the plain `sortname` that
+  §23's editor stores now orders the name sort and indexes the quick selector (`GamelistOptions.SortKey`), as USERGUIDE
+  says of it, and a game marked *Exclude from game counter* is left out of every automatic and custom collection, as
+  USERGUIDE says; `GamelistOptionsTests.A_sort_name_orders_the_name_sort_and_indexes_the_quick_selector_and_an_uncounted_game_joins_no_collection`
+  covers both. Without the amendment the merge would have lost §23's sort names, since this section's sort replaced the
+  order §23 had given each list.
+- **The Collections list's random game at each step, and Y to jump to it.**
+- **A long filter screen.** Each value is a switch, so a real library's developers and publishers, possibly hundreds,
+  make a long sheet. It scrolls and every switch is reached (§22.7), but no library of that size was tried on it.
+- **The handheld.** Nothing ran there, as for every stage since (e).
+- **ES-DE's shoulders**, measured to move ten rows (§22.2), are left as §4.9 has them (Q14).
+
+### 22.12 Questions for the player
+
+- **Q11.** The automatic collections are off until turned on, as ES-DE's are. Should they be on by default here, as
+  All Games, Favourites and Recently Played always are in EmuSen's own library?
+- **Q12.** ES-DE has one gamelist options menu, on Back, holding the jump, the sort, the filter, the collection entries
+  and the metadata editor. Should the merge with §23 make it one menu under Select, or keep the game options on Select
+  and these in the pad menu?
+- **Q13.** ES-DE enables each custom collection by hand; here every collection of the library is shown until switched
+  off. Keep that?
+- **Q14.** ES-DE's shoulders move ten rows in a textlist (§22.2); §4.9 pages by the rows shown. Change to ES-DE's?
+
+*Answered by the player on 2026-09-26 (§10.1): Q11 on by default; Q12 one menu under Select; Q13 kept as built; Q14 ten
+games. Q15, from §23, was answered with them: North is the favourite. §22.13 is what was built.*
+
+### 22.13 The answers, built (2026-09-26)
+
+**One menu under Select (Q12).** §23's `GameOptionsWindow` is the one sheet. Its two hooks, left empty by §23, are
+filled from `MainWindow.BigPictureCollections.cs`: `AddGamelistOptions` gives the rows Jump To..., Sort Games By and
+Filter Gamelist (`GamelistOptionRows`, which replaced §22's `GamelistOptionsWindow`) and the entry Search...;
+`AddCollectionOptions` gives *Add/Remove Games to This Collection* in a custom collection's own list and *Finish Editing
+'…' Collection* while one is edited. §23's entries follow: the favourite, *Edit This Game's Metadata*, *Scrape This
+Game...*. On a grouped collection's entry, which is not a game, the game's entries are left out.
+
+To carry ES-DE's apply and cancel, `GameOption` gained a `Row` (a control in place of a button) and an `Apply`, and the
+window gained `Cancel`: B, the **Apply** button and choosing an entry apply the rows (sort, filter, jump); Select (ES-DE's
+Back) and **Cancel** drop them. When no entry carries an `Apply`, as in a menu with no rows, the window keeps §23's single
+Close. The pad menu keeps *Game Collection Settings*, the one entry ES-DE's documentation puts in its main menu for these
+features; *Gamelist Options* left it.
+
+**North (Q15).** In a themed gamelist North toggles the favourite (`ThemedAction.Favourite`, the sound `favorite`), and
+reads **Favorite** on the help bar. While a custom collection is edited it adds or removes the game instead, and reads
+**Collection**, as USERGUIDE says the Y button still does then. On a grouped collection's entry it does nothing. The
+search is the menu's *Search...*, which opens the same box and on-screen keyboard; East still clears a search first. The
+`ThemedAction.Search` that North produced is gone. EmuSen's own library keeps North as its search (§4.29), since Q15
+concerned the themed view.
+
+**Automatic collections on (Q11).** `BigPictureCollections.AutoCollections` defaults to all three, so a settings file
+written before this work, and a new one, show them. The difference from ES-DE is deliberate and recorded in §4.58.
+`ThemedSession` now sets the list empty for the tests that count the carousel's systems, and the collection tests turn
+them on themselves.
+
+**The shoulders (Q14).** `ThemedLibrary.ShoulderJump` is ten, and a jump stops at the list's ends, as a page did. The
+triggers are unchanged: the first and the last game. The help bar calls the shoulders **Jump**. `PageSize`, the rows a
+list shows, has no use left and was removed with its grid test. USERGUIDE also gives the shoulders to the quick system
+select where the primary element is a grid or a horizontal carousel, since left and right move those; that was not
+asked and is not built, so in a grid the shoulders jump ten items too.
+
+**Found while building it.** A custom collection emptied by North vanished from the carousel with the grouped system,
+because a system with no games is not listed. The grouped system is now listed while it has folders, empty ones included,
+as THEMES.md's image for "any custom collection that does not contain any games when browsing the grouped custom
+collections system" implies.
+
+**Tests.** Changed: `ThemedLibraryPadTests` (the shoulders' two tests now require ten, stopping at the end; Search from
+Select's menu; a new North-favourite test with its help label), `ThemedLibraryHostTests` (the help entries; the sounds'
+switch test marks the favourite with North), `ThemedLibraryFlowTests` (search from the menu, favourite with North),
+`ThemedGameOptionsTests` (the menu's buttons now begin with Search...), and `ThemedCollectionsTests`: automatic collections
+on for a fresh settings file and a JSON file with none; the menu's order under Select; the pad menu without Gamelist
+Options; North adding to the edited collection without touching the favourite, and the favourite after Finish Editing;
+Finish Editing from a collection's own entry, whose menu has no game entries; `PadAudit` over the combined sheet inside a
+custom collection.
+
+**Mutants.** `~/.cache/emusen/probe/bigpicture/mutate_answers.py`, on `mutate_collections.py`'s runner (one at a time,
+`nice -n 10`, builds at `-m:2`, a backup restored on start, a clean rebuild at the end), against the collections', the
+pad's, the game options', the host's and the flow's tests. The log is `run-answers.log`. **15 of 15 caught, all on the
+first run:** the menu without its rows (A1); Back applying (A2); B not applying (A3); no Search entry (A4); Gamelist
+Options kept in the pad menu (A5); a collection's entry offering a game's entries (A6); the collection entries missing
+(A7); North not the favourite (A8); North the favourite while editing (A9); the help bar calling North Search (A10); the
+shoulders moving five (A11); the automatic collections off by default (A12); an empty custom collection dropping
+Collections (A13); an uncounted game joining the collections (A14); and the sort name ignored (A15, the merge's
+amendment, §22.11). That none survived its first run is weaker evidence than a round with survivors strengthened: the
+tests were written or changed, in this round, with these rules in view.
+
+**The merges, and the last broad run.** WiseMan was merged twice into this branch: with §21 and §23 (game options), and
+then with §24 (controllers). At the second, `PadHeld` had moved to `MainWindow.Controllers.cs`, so the thumbstick clicks
+were added there, and the help entries now take both the A/B swap of §24 and this section's context. One controllers
+test pressed North to search and was changed to the favourite. After it, a clean rebuild, the narrow run (BigPicture,
+game metadata and options, scraping, the library screen, Preferences, pad settings, pad devices, controllers and pad
+navigation: 566 passed, 15 skipped, none failed) and the one broad Mistress run (without `ShaderSettingsWindowTests`,
+`ShaderBrowseBench` and `SceneGpuBench`: 878 tests, 863 passed, 15 skipped, none failed, 3 min 16 s). LunaP's suite after
+its merge: 1,350 of 1,350.
+
+## 23. The game options menu and the metadata editor (2026-09-26)
+
+*Opened 2026-09-26, on the third item of the player's list of what big picture lacks against ES-DE:* the per-game options
+menu, and a metadata editor for a game's name, description, rating, release date, developer, publisher, genre, players,
+favourite and ES-DE's other documented fields, with ES-DE's deletion of a game offered only in a guarded form. Items 1
+and 2 of the same list (collections, filters, sorting, jumping to a letter, a random game) were built at the same time on
+another branch (§22); this section leaves named hooks for them (§23.4). Predictions are numbered P84–P99 and questions
+Q15–Q19, the ranges this work was given. The player's account is §4.59 of the settings reference; this is the record.
+
+**The source of ES-DE's behaviour.** ES-DE's user guide (`USERGUIDE.md`, the copy fetched on 2026-09-25 for stage (c),
+kept at `~/.cache/emusen/bigpicture/motion/docs/`), its sections "Gamelist options menu", "Metadata editor" and
+"General navigation". ES-DE's source was not read. Two defaults the guide does not state were read from the settings file
+ES-DE 3.4.1 wrote into the scratch home of stage (b) (`~/.cache/emusen/bigpicture/esde/home/ES-DE/settings/es_settings.xml`):
+`ShowHiddenGames` is `true` and `FavoritesAddButton` is `true`. ES-DE was not run for this section.
+
+### 23.1 Expectations and predictions
+
+P84–P88 were written by the same hand as the design, during the build, as §18.1 and §20.1 were, and are weaker evidence
+than a stage's predictions written before a line of code. P89–P91 were written before the mutants and the runs they
+concern were started.
+
+| # | Expected | Found | Verdict |
+|---|---|---|---|
+| P84 | Every control of the options menu and of the editor is reached by the pad at 1280×800, the editor's fifteen Reset buttons included once each is shown | measured: the options menu's 4 controls and the editor's 38, all fifteen Resets shown, all reached (`Every_control_of_the_options_and_the_editor_is_reached_by_the_pad`) | held |
+| P85 | An edit survives any number of re-scrapes by construction: edits are rows of `games.db`, and a scrape writes only `media.db` | an edit kept through a scrape from the menu and another from the pad menu; G6, which clears the edits when a result arrives, is caught | held |
+| P86 | The editor's own scrape fills its fields unsaved: Cancel leaves the stored edit, Save replaces it | Cancel after the editor's scrape kept *mine*; Save took *Scraped description.* and left no edit; G10 and G11 caught | held |
+| P87 | Hide from Library, Clear and unhiding change no file under the ROM folder: not its size, its write time or its SHA-256 | the ROM folder's fingerprint (size, write time, SHA-256 of every file) equal before and after Hide, unhide and Clear; G15 and G19 caught | held |
+| P88 | A click anywhere on the rating row sets the rating, a pad being the first input but not the only one | **refuted by the first click test**: a click in the gap beside a star reached nothing, because the row drew only its stars. Fixed with a transparent fill (`LunaP.md` §160.4); three points now pass, P5 is the mutant | failed, then fixed |
+| P89 | Of the mutants of §23.9, at least nine in ten are caught on their first run, and every survivor is a weak test rather than an equivalent mutant | 49 of 49 caught, every one on its first run, none equivalent (§23.9) | held; weak evidence, §23.9 says why |
+| P90 | The broad Mistress run passes with only this section's tests added, none of the earlier ones failing | 823 passed, 9 skipped, **1 failed**: `SceneMotionTests.Moving_only_the_list_while_the_metadata_is_faded_out…`, with Avalonia's "The calling thread cannot access this object". That class passed 12 of 12 alone, twice, and the BigPicture namespace passed 294 of 294 in one run | **failed by one test, not attributed**; see below |
+| P91 | LunaP's whole suite passes with §160's two controls and nothing else of its behaviour changed | 1343 of 1343 | held |
+
+**P90's one failure.** The failing test belongs to stage (c) and draws scenes built from `SceneGame`. This work added
+three properties to `SceneGame` and changed which games the system view counts, but it touches no thread. The exception
+is the class of failure §17.14 recorded once for stage (c)'s `SceneMotionTool`: a UI object used from a thread other than
+the one that made it, in a broad run and never alone. Before this work the same class passed in the broad run of §20.3.
+Whether this change caused the failure cannot be shown either way. The test-load rule of 2026-09-25, made stricter after
+that day's resets, ruled out repeating the broad run until the failure came back, and the unmodified build was not run
+broadly for comparison.
+
+### 23.2 What ES-DE documents, and what Mistress builds of it
+
+**The menu.** ES-DE opens its gamelist options menu with the Back button (Select on a pad), from the gamelist only, and
+closes it with Back again or B. Its entries, as the guide lists them: *Jump to..*, *Sort games by*, *Filter gamelist*,
+*Add/remove games to this collection* and *Finish editing* (custom collections only), *Edit this game's metadata*, and
+*Enter folder* (folders with a folder link only), then Apply and Cancel buttons for the jump and the sort.
+
+| ES-DE's entry | In Mistress |
+|---|---|
+| Jump to.., Sort games by, Filter gamelist | the collections work's (§22); the hook `AddGamelistOptions` (§23.4) |
+| Add/remove games to this collection, Finish editing | the collections work's; the hook `AddCollectionOptions` |
+| Edit this game's metadata | **built**: *Edit This Game's Metadata* |
+| Enter folder (override folder link) | not offered: Mistress's library has no folders and no folder links |
+| Apply, Cancel | not offered: every entry built here acts when chosen; they belong with the jump and the sort. A *Close* button stands for Cancel |
+| *(not in ES-DE's menu)* | **built**: *Add to Favourites* / *Remove from Favourites*, and *Scrape This Game...* |
+
+The two entries ES-DE's menu does not have are there for a reason each. ES-DE toggles a favourite with Y (its option
+*Enable toggle favorites button*, on in the scratch home), but Y, North on the pad, is the search in §4.9's grammar, which
+the player's decisions of §10.1 made and which ES-DE has no counterpart for. Select was the favourite until now; this work
+gives Select to the menu, as ES-DE does, and the favourite had to go somewhere one press from the list. *Scrape This
+Game...* is the pad menu's entry of §17.14 again, with the same confirm step and the same run. ES-DE starts a single-game
+scrape only from inside the editor, which Mistress also does (below); the plan asked for it in the menu as well. Both are
+places the player starts a run, so §17.14's rule 1 holds.
+
+**The editor.** ES-DE's guide lists the editor's fields in this order and says what each does. Mistress builds those
+whose features it has:
+
+| ES-DE's field | In Mistress | Where it shows |
+|---|---|---|
+| Name | text | the themed view, the library's list and grid, the search |
+| Sortname | text | the themed gamelist's order |
+| Custom collections sortname | not built: ES-DE shows it only inside a custom collection, which is §22's | |
+| Description, Developer, Publisher, Genre, Players | text (the description over several lines) | the themed view |
+| Rating | LunaP's `RatingPicker`, half stars | the themed view's rating |
+| Release date | LunaP's `DateStepper`, `yyyy-MM-dd` | the themed view |
+| Favorite | switch; Mistress's own favourite (§4.32 of the settings reference) | everywhere a favourite shows |
+| Completed, Kidgame, Broken/not working | switches | the theme's badges and metadata texts; Mistress has no kid mode |
+| Hidden | switch | a hidden game is left out of every library view (§23.5) |
+| Exclude from game counter | switch | left out of the system view's game and favourite counts |
+| Exclude from multi-scraper | switch | left out of every run but *Scrape This Game* |
+| Hide metadata fields | **not built** | the scene decides which elements to build once per view, not per game (§23.11) |
+| Times played, Play time | numbers; Mistress's own counters (§4.32) | the theme's play count and play time |
+| Controller | **not built**: Mistress draws no controller badge (§3.8) | |
+| Alternative emulator | **not built**: Mistress has one core per console | |
+| Folder link | not applicable: no folders | |
+
+**The editor's buttons.** ES-DE documents five: *Scrape*, *Save*, *Cancel*, *Clear* and *Delete*.
+- *Scrape* opens ES-DE's single-game scraper, and Y is its shortcut. Mistress's runs stage (d)'s *Scrape This Game*
+  (the confirm step, then the run and its status sheet) and, when the run ends, puts ScreenScraper's answer into every
+  field the answer has a value for, unsaved, and marks each such field "From this scrape". The guide says ES-DE colours a
+  value the scraper changed red and asks whether to save when the editor is left; these fields are the red values. Y
+  (North) is the shortcut here too.
+- *Save* and *Cancel* as documented. B with unsaved changes asks *Save* or *Discard*, as the guide says ES-DE asks when
+  the editor is left; B with none closes at once.
+- *Clear*, in ES-DE, "will remove any media files for the file or folder and also remove its entry from the gamelist.xml
+  file, effectively deleting all metadata. The actual game file or folder will however not be deleted." Mistress's removes
+  the player's edits, ScreenScraper's answer for the game in `media.db`, and the pictures of that game in Mistress's own
+  media store, after a confirm. It keeps the favourite and the play counters, which in ES-DE live in the same gamelist
+  entry and go with it, and it touches neither the player's own covers nor an ES-DE media folder, which Mistress only
+  reads (§4.52 of the settings reference), nor the OpenEmu failover's cover.
+- *Delete*, in ES-DE, "will remove the actual game file, its gamelist.xml entry, its entry in any custom collections and
+  its media files". Mistress never deletes or moves a file in the player's ROM folder (a project rule), so the button is
+  **Hide from Library** in Delete's place, with a confirm that says so and why.
+
+**Where Mistress's editor is its own.** Each field has a *Reset*, shown only while the field differs from what it would
+show with no edit, which returns it to ScreenScraper's value or the default. ES-DE has no per-field reset, only *Clear*
+for the whole entry; the plan asked that a field can be returned on its own. Each field says where its value comes from
+("From the file name", "From ScreenScraper", "Your edit", "Your edit, shown in place of ScreenScraper's", "From this
+scrape") in words where ES-DE uses gray, blue and red.
+
+### 23.3 Where an edit is kept, and why it wins
+
+**In `games.db`**, its fifth migration: `game_edit (path, field, value, edited)`, one row per edited field. A field with
+no row shows what it would anyway; a row, even an empty one, is the player's value. The table sits beside Mistress's
+other records of the player's own (favourite, play counts, collections, §4.32), because an edit is the player's statement
+about a game and not a cache of a server's answer. Three alternatives were considered:
+- *Columns on `media.db`'s `scrape_game`.* A scrape writes that row with `INSERT OR REPLACE` (§17.5), so keeping an edit
+  would depend on every writer carrying it across, and the row is keyed by the file's MD5, so two copies of one game
+  would share one edit. The rule that a re-scrape never overwrites an edit would then be a property of code paths rather
+  than of where the data lives.
+- *Columns on `games.db`'s `game`.* Fifteen nullable columns, each later ES-DE field a migration of its own; one row per
+  field needs none.
+- *JSON beside the library.* Ruled out by the plan: Mistress's data is in SQLite.
+
+**The order**, in `GameMetadata.Resolve`: the edit, else ScreenScraper's value, else the default (the file's name for the
+name, "no" for a flag, nothing otherwise). ScreenScraper's name is kept and not used, as §17.6 decided, so the name's
+default is the file's even where a scrape found another.
+
+**What a re-scrape does.** Nothing to an edit: the scraper writes `media.db` only, and no code that writes `game_edit`
+runs during a run. The player asks for an edit to go by *Reset* on that field, by *Clear* on the game, or by saving the
+editor after its own *Scrape* has put ScreenScraper's value in the field.
+
+**A value equal to its baseline is no edit.** Saving a field whose value equals what it would show anyway removes the edit
+rather than storing a copy, so a later scrape that improves the text reaches the field. This is Mistress's choice; ES-DE's
+guide says only that a name equal to the file's is treated as unset.
+
+**A renamed file keeps its edits**: `GameRecords.Move`, which §4.37's rename detection calls, moves `game_edit` rows with
+the favourite and the collections.
+
+**A merge note.** §22's work may add a `games.db` migration too. The array is append-only (§4.32), so whichever branch is
+merged second renumbers its entry after the other's; neither has been run against the player's own `games.db`.
+
+### 23.4 Buttons, and the hooks left for §22
+
+| Button | Before | Now |
+|---|---|---|
+| Select, in the themed gamelist | mark or unmark a favourite | open the game options menu, as ES-DE's Back button does |
+| Select, over the options menu | | close it, as ES-DE's Back does on its menu; B closes it too |
+| Select, in the themed system view | nothing | nothing: ES-DE's menu "can't be accessed from the system view" |
+| North (Y), in the editor | | *Scrape*, ES-DE's documented shortcut |
+| B, in the editor | | leave; asks *Save* or *Discard* when something changed |
+| Left, Right, on a rating or a date | move the focus | change the value (`ISidewaysAdjustable`, §23.6) |
+| Select, in EmuSen's own library (built in) | favourite | unchanged: that library is Mistress's own look, not ES-DE's |
+
+West is not used: §21's Q32 proposes it for ES-DE's media viewer. The help bar's `back` entry now reads *Options*.
+
+**The hooks.** `MainWindow.GameOptions.cs` declares two partial methods: `AddGamelistOptions(SceneGame, List<GameOption>)`
+for ES-DE's *Jump to..*, *Sort games by* and *Filter gamelist*, and `AddCollectionOptions(SceneGame, List<GameOption>)`
+for adding the game to, or removing it from, the custom collection being edited. They are called in ES-DE's order, before
+*Edit This Game's Metadata*. A partial method with no body compiles to nothing, so this branch builds without §22, and §22
+fills them in a file of its own without editing this one. A `GameOption` is a label, an action, and whether choosing it
+puts the menu away first. The editor has no collection field; ES-DE's *Custom collections sortname* is left to §22.
+
+*Amended at §22.13 (2026-09-26), after the answers to Q12 and Q15.* §22 filled both hooks: the menu now opens with
+Jump To..., Sort Games By, Filter Gamelist and Search..., then the collection entries, then the entries above. A
+`GameOption` may now be a row (`Row`) and carry an `Apply`; Select over the menu cancels the rows' choices, and B, Apply
+or choosing an entry applies them, where the table above has Select and B both closing. North in the themed gamelist is
+the favourite (ES-DE's Y) outside a collection's editing; the menu's favourite entry was kept. On a grouped collection's
+entry the menu has the list's rows and the collection entries only.
+
+### 23.5 Hiding, and the rule that no ROM is touched
+
+A hidden game is left out of the themed gamelists, the library's list and grid, the sidebar's counts and the search.
+Preferences ▸ Appearance ▸ **Hidden Games** lists them again, and the editor's *Hidden* switch, or *Reset* on it, unhides
+one. ES-DE's default is the reverse (hidden games shown, dimmed; `ShowHiddenGames` true): Mistress hides by default
+because *Hide from Library* stands where ES-DE's *Delete* stands, and a player who chose it expects the game to go. That
+difference is Q16. A hidden game listed again is not dimmed; ES-DE dims it.
+
+Nothing but `games.db` changes when a game is hidden or unhidden. *Clear* deletes files, and only these: the paths
+`media.db` records for the game, and the files named after the game's stem in the store's type folders, each deleted only
+when its full path lies inside the store's own folder (`home/Media`). A `media.db` row naming a path outside it, which no
+build writes but a damaged or hand-edited file could hold, deletes nothing. Two files of one system with the same stem in
+different folders share their pictures in the store (§17.5's layout), so *Clear* on one takes the other's pictures too.
+
+### 23.6 Drawn with LunaP
+
+Every visible part is a LunaP control. The menu and the editor are `ToolWindow`s shown by `SheetLayer`, so in a big-screen
+session they are sheets inside the one window and no window is opened (the tests assert none is owned); the rows are
+`FieldRow`s, the flags `LunaSwitch`es, the buttons a `ButtonBar`, and the text boxes take the on-screen keyboard of
+§4.45.6. LunaP had nothing a pad could set a rating or a date with, so two controls were added there (`docs/LunaP.md` §160,
+branch `bigpicture-game-options`): `RatingPicker`, a star row stepped in half stars by Left and Right, and `DateStepper`, a
+date whose year, month and day are changed one at a time by Left and Right, with Enter moving between them. Both carry a
+new marker, `ISidewaysAdjustable`, which Mistress's pad router and WiseMan's `PadAudit` now honour as they honour a
+`Slider`: Left and Right go to the control rather than moving the focus.
+
+### 23.7 Closing what is opened (§15.14's lesson)
+
+The menu and the editor are sheets, and a sheet is not an owned window, so nothing closes one when Mistress closes
+(§20.4's W22). `CloseGameSheets`, called from `CloseThemedLibrary` in the window's `Closing`, closes both. The editor is
+the one thing here that holds a subscription beyond its own controls: it listens to the window's `ScrapeChanged` while it
+waits for its own scrape, and lets go of it when it closes. Neither has a timer.
+`Closing_mistress_closes_the_editor_and_its_subscription_to_scraping` opens the editor, closes Mistress, and requires the
+sheet gone, the window's reference to it cleared and the editor unsubscribed; G29 and G30 (§23.9) remove the two halves.
+
+### 23.8 Tests
+
+Headless through WiseMan, on `ThemedSession`, `PadDriver`, the synthetic theme and ROMs and, for the scraping, stage (d)'s
+fake ScreenScraper; never the network. Every step a player takes is a pad press: the menu is opened with Select, entries
+and fields are reached with `PadAudit.Reach`, text is typed on the on-screen keyboard key by key, and every confirm is
+answered on its own sheet.
+
+- `ThemedGameOptionsTests` (10): Select opens the menu as a sheet and not in the system view, the view hears nothing
+  under it, Select and B put it away; every control of the menu and of the editor reached by the pad, all fifteen Resets
+  shown; every kind of field set by the pad and shown in the view and in the library's list; the sort name; Cancel, and B
+  with Discard, with Save, and with nothing changed; Reset on a text field and on a flag; *Exclude from multi-scraper*
+  against the plan of a whole-library run, a console run and *Scrape This Game*; *Exclude from game counter* in the
+  system view's count; Hide from Library taking the game out of every view with the ROM folder's fingerprint (each file's
+  size, write time and SHA-256) unchanged, then listed again and unhidden, the fingerprint still unchanged; and Mistress
+  closing the editor.
+- `ThemedMetadataScrapeTests` (3): an edit surviving a scrape from the menu and another from the pad menu, then Reset
+  giving ScreenScraper's text back; the editor's own scrape (Y) filling its fields, Cancel keeping the edit and Save taking
+  the answer; Clear removing the edits, the answer and the store's pictures and keeping the favourite, with the ROM
+  folder's fingerprint unchanged.
+- `GameMetadataTests` (7): the order edit, scraped, default; the draft's changes, including an emptied box over nothing
+  and a value equal to its baseline; the editor's scrape against the draft; edits in `games.db` following a renamed file
+  and cleared without the favourite and counters; **a schema-4 `games.db` migrated in place** to schema 5, its favourite
+  and play rows kept and an edit written with its time (the player's requirement, relayed 2026-09-26, that everything the
+  program writes and reads back is in SQLite, versioned and migrated); a scrape recorded twice leaving an edit; and
+  `MediaStore.Forget` deleting the store's pictures, including a second copy's, and nothing outside the store even when
+  `media.db` names it.
+- Changed: `ThemedLibraryPadTests`' Select test now goes through the menu's entry; `ThemedLibraryHostTests`' help test
+  reads *Options* and its sounds test marks the favourite through the menu; `ThemedLibraryFlowTests`' walk does the same.
+- LunaP: `PickerTests` (12), `docs/LunaP.md` §160.4.
+
+Nothing here is kept in JSON. The edits, the hidden flag among them, and each edit's time are rows of `games.db`;
+`appsettings.json` gains only the player's setting *Hidden Games* (`ShowHiddenGames`), which is configuration, as
+`EmuSen_Stack.md` §4 divides them.
+
+### 23.9 Mutants
+
+The runner is `~/.cache/emusen/probe/bigpicture/mutate_game_options.py`, adapted from §20.4's, with its list
+`mutants-game-options.json` written by `game-options/mutants_game_options_make.py`, which checks that each edit's text
+occurs exactly once. The log is `run-game-options.log`, and every verdict is appended to `mutants-game-options.txt`.
+Each mutant was built with `-m:2` and run alone under `nice -n 10`. The Mistress mutants (G) ran against
+`ThemedGameOptionsTests`, `ThemedMetadataScrapeTests`, `GameMetadataTests`, `ThemedLibraryPadTests`,
+`ThemedLibraryFlowTests`, `GameRecordsTests` and the help-entry test. LunaP's (P) ran against `PickerTests`. After each
+mutant the file was restored from its copy, stamped with the present time and compared byte for byte. Both trees were
+rebuilt at the end of the round.
+
+**An interrupted round.** The machine reset at 17:58, a hardware fault under load (see the project's notes on the
+desktop's resets). The reset came during G19, and it left G19's mutant in `MediaStore.cs` with its backup beside it. The
+coordinator restored the file, which was byte-identical to the commit, and deleted the backup. The tree was then rebuilt
+before any further test ran. The runner now restores any backup it finds when it starts, and the round was resumed from
+G19 (`--from`). G36 was added before the resumption, for the migration test written in the meantime (§23.8).
+
+| Rule | Mutants | Result |
+|---|---|---|
+| Where an edit lives and how it wins | G1 ScreenScraper's text over the edit; G2 a field reset keeps its old edit; G3 every field saved as an edit; G4 Reset does nothing; G5 an emptied box over nothing kept as an edit; G6 a scrape's result clears the edits; G7 a renamed file loses its edits; G36 the fifth migration empty | all caught; G1 by 4 tests, G3 by 7, G36 by 32, the migration test among them |
+| The editor | G8 Cancel saves; G9 B saves without asking; G10 its own scrape saves at once; G11 its own scrape fills nothing; G12 a refilled box read as a change; G13 Y does not scrape; G14 Hide without its confirm | caught |
+| Hiding, and no file touched | G15 Hide touches the ROM's write time; G16 a hidden game stays in the library; G17 it stays in the themed gamelist; G18 Hidden Games ignored; G19 Clear deletes a path outside the store; G20 Clear leaves the store's pictures; G21 Clear leaves the edits | caught |
+| The menu and the buttons | G22 Select marks a favourite again; G23 Select opens the menu in the system view; G24 Select over the menu does not close it; G25 the favourite entry always reads Add; G26 no Scrape This Game in the menu; G27 the help bar reads Favorite; G28 the router moves the focus off a rating or a date | caught; G22 by 14 |
+| Closing what is opened | G29 Mistress closing leaves the editor open; G30 the editor stays subscribed | caught |
+| Where the fields show | G31 the library shows the file's name; G32 the sort name ignored; G33 a game out of the counter counted; G34 Exclude from multi-scraper ignored; G35 the view shows ScreenScraper's rating over the player's | caught |
+| LunaP §160 | P1 a rating between steps stepped unsnapped; P2 the rating wraps; P3 no Chose for a key; P4 a click takes the step to the left; P5 the row hit only where a star is drawn; P6 the filled stars cut at nothing; P7 the day not kept in its month; P8 a month step carries into the year; P9 Enter does not move on; P10 the first year clamps instead of leaving no date; P11 no date ignores StartDate; P12 the accent always under the year; P13 a click always chooses the year | caught |
+
+**49 of 49 were caught, each on its first run and each by a test written for its rule.** That is weaker evidence than it
+sounds, as §104.6 of `LunaP.md` argued for a round with the same result. Every mutant was written after its test, by the
+same hand, and against a rule that hand had already chosen to test, so a rule without a test could not get a mutant.
+Two mutants were never written, for that reason:
+- one that drops the transparent fill of the rating row, before the click test existed. §160.4 of `LunaP.md` records the
+  defect this missing fill caused; P5 is that mutant, written afterwards;
+- one that saves an edit to `media.db`. The storage decision (§23.3) rules this out by construction rather than by a
+  test.
+
+The tests that failed for G22 (14) and G36 (32) show how far those two rules reach: nearly every flow starts at Select,
+and every edit needs the table.
+
+### 23.10 Pictures
+
+At 1280×800, written by `GameOptionsPictureTool` with `EMUSEN_BIGPICTURE_PNG=1` to
+`~/.cache/emusen/bigpicture/png/game-options/`, for the synthetic theme (`synthetic-*`) and for Art Book Next with the
+synthetic media folder (`artbooknext-*`): the gamelist before; the options menu; the editor as opened; the on-screen
+keyboard typing into the name; the editor with a name, a description, a developer, a genre, four and a half stars and a
+date set, each row saying "Your edit" beside its Reset; the Hide from Library question; and the gamelist after Save. They
+were looked at:
+- Art Book Next's gamelist after Save shows the new name in the list, the typed description, four and a half stars and
+  1993-01-01 in the metadata panel, and its help bar reads *Options* beside the Select glyph. The same panel before the
+  edit showed empty stars and "Unknown".
+- The menu lists its three entries and Close over the dimmed view, the first focused. Like every sheet (`LunaP.md` §90) it
+  takes the window's full height, which leaves most of a three-entry menu's sheet empty.
+- The keyboard covers the lower half of the editor and previews the name with its caret, as §4.45.6 draws it.
+- **A flaw seen and corrected:** the first pictures showed the release date as bare grey text, "No date", under its label,
+  which read as a caption rather than a field. `DateStepper` now draws itself on the input surface inside a border
+  (`LunaP.md` §160.3).
+- **Seen and left:** each confirm focuses its accepting button first (LunaP's `DialogWindow`), so a second A on *Clear...*
+  clears. *Hide* is reversible; *Clear* is not, since it deletes the scraped pictures, which a new scrape fetches again.
+
+### 23.11 Not done
+
+- **ES-DE was not run.** Everything here is from its user guide and the two settings its scratch home recorded. Where the
+  guide is silent, Mistress chose: whether the editor closes after *Clear*; which button its confirms focus first; whether
+  B in the editor with nothing changed asks anything.
+- ES-DE's fields *Hide metadata fields*, *Controller* and *Alternative emulator* are not built (§23.2). *Hide metadata
+  fields* would need the scene to build or skip the theme's `metadataElement` elements per game, where §13's builder
+  decides once per view.
+- A hidden game listed again is not dimmed.
+- The on-screen keyboard has no line break, so a description is one paragraph.
+- The editor's scrape shows stage (d)'s status sheet over the editor, as every run does; B returns to the editor.
+- ScreenScraper's own name is not offered by the editor's scrape (§17.6 keeps it unused). *Built in §27 (Q18): it is
+  offered, and taken only by the player.*
+- *Clear* on a game takes the store's pictures of any other file of the same system with the same stem (§23.5).
+- The two hooks of §23.4 are empty on this branch; the collections entries are §22's.
+- EmuSen's own built-in library keeps Select as the favourite and has no editor. *Amended by §27 (Q19): the sidebar
+  library, on the desktop and in its big screen, reaches the menu and the editor; Select there is still the favourite.*
+- Nothing ran on the handheld.
+
+### 23.12 Questions for the player
+
+- **Q15, the favourite's button.** ES-DE toggles a favourite with Y; Mistress's Y is the search (§4.9). The favourite is
+  now the first entry of the options menu, two presses from the list. Keep it there, or give Y to the favourite and move
+  the search? *Answered by the player on 2026-09-26 (§10.1): Y toggles the favourite and the search is an entry of the
+  menu; built in §22.13. The menu's favourite entry stays too.*
+- **Q16, hidden games.** ES-DE lists hidden games, dimmed, by default; Mistress leaves them out unless Preferences ▸ Hidden
+  Games is on, because Hide from Library replaces ES-DE's Delete. Keep that default?
+- **Q17, what Clear removes.** It removes ScreenScraper's pictures in Mistress's store, but not the cover OpenEmu's
+  failover fetched, nor the favourite and play counters, which ES-DE's Clear takes with the gamelist entry. Should it take
+  more?
+- **Q18, ScreenScraper's name.** ES-DE's editor scrape replaces the name with the scraper's; Mistress keeps the file's name
+  unless the player types one (§17.6). Offer ScreenScraper's name in the editor's scrape? *Answered by the player on
+  2026-09-26 (§10.1): offered, never forced; built in §27.*
+- **Q19, EmuSen's own library.** Should its Select open the same menu and editor, or stay the favourite? *Answered by the
+  user on 2026-09-26 (§10.1): the menu and the editor are available in both; built in §27, which leaves Select the
+  favourite in the sidebar library and asks Q46 about it.*
+
+---
+
+## 24. Pass 2: controllers (2026-09-26)
+
+*Opened and closed on 2026-09-26, on branch `bigpicture-controllers`, while §22 and §23 were being built on theirs; §23
+was merged into it before the pass closed.* Pass 2 of §21.3 as the player accepted it (Q22 (a), §10.1): every connected pad
+steers the interface, pads come and go while Mistress runs, a notice says so, and Preferences gains ES-DE's controller
+type, an A/B swap and its first-controller switch. The settings reference's §4.61 is the player's account; this
+section is the record.
+
+### 24.1 Predictions, and the scope as built
+
+P103 (§21.6) is the pass's prediction: "Every pad rule of §15.3 holds from either of two pads, and the help bar follows
+the pad last pressed; ES-DE's device popup fades in and out over 0.4–0.6 s each and holds 2–5 s". Two predictions were
+added for Pass 1 to retire, because the headless harness cannot see what Steam does to a pad:
+
+- **P121.** In Game Mode, with the Legion Go S's built-in controls alone, SDL reports exactly one gamepad, and Mistress
+  announces nothing at start (§24.5); a Bluetooth pad connected during a session is announced within one second under the
+  name Steam gives its virtual pad, not the hardware's own.
+- **P122.** In Desktop Mode, where Steam Input is not in the path unless Steam is running, the same Bluetooth pad is
+  announced under its own name and its family is detected from SDL's type, as §15.5 found for a pad seen directly.
+
+**Scope.** As §21.3 wrote it, with two readings made explicit. A second pad does **not** become player 2 in a game: that
+is Q22 (b), recorded as separate input work in `EmuSen_Input.md` §6. The game reads the first pad opened, as it read the
+only pad before; `GamepadBindingMap` is untouched. And the swap trades A and B alone. ES-DE's switch is "Swap the A/B
+and X/Y buttons" (UG "Input device settings"), and the first build followed it; but on 2026-09-26 the decision was that
+in the themed gamelist North toggles the favourite and search moves into the options menu (§22's branch builds it), and
+the swap was then restricted, by instruction, to accept and back, so that it composes with whatever North and West come
+to mean. §24.5 records the departure.
+
+### 24.2 What was built
+
+**In Endymion.** `GamepadManager` opens every pad SDL lists, in the order it finds them, and keeps them in `Pads`; the first
+is `Primary`, player 1's. SDL is reached through a seam, `IPadDevices`, with two implementations: `SdlPadDevices`, the
+calls the manager made before, and `SimulatedPads`, a set of `SimulatedPad`s a test plugs in and pulls out, which counts
+the handles opened and closed. `ConnectedPad` is one open pad; once closed it reads as nothing held and keeps its name and
+type for the notice. `Poll` lets go of every pad SDL reports detached, then opens any new one when SDL has queued a
+`GamepadAdded` or `GamepadRemoved` event (consumed with `SDL_HasEvents` and `SDL_FlushEvents` over those two types alone,
+so the queue's other events are left as they were) or when the one-a-second rescan of §4.4 falls due; each change after
+`Start` raises `PadChanged`. The rescan fix of 2026-09-26 is kept: `_lastRescan` still starts at `-RescanInterval`, and
+since `RescanDue` is now asked at every poll rather than only with no pad, the fix is exercised on every tick. The
+single-pad members (`IsPressed`, `Axis`, `ControllerName`, `ControllerType`, `ButtonLabel`, `IsRawPressed`, `RawAxis`) read
+`Primary`, so a game and Hotaru see what they saw. `GetAnyPressedButton`, the rebind capture's, reads every pad the
+interface reads, since a binding names an SDL button and not a device. `Simulated` is kept for the tests that set it and
+now installs a one-pad `SimulatedPads`.
+
+**In Mistress.** `Views/MainWindow.Controllers.cs` holds the rest:
+- `PadHeld` asks every pad the interface reads (`FrontendPadCount`: all, or the first with the switch) and is true when
+  any holds the button. The press rules above it, `PadNavigator`'s and the themed view's, are unchanged.
+- `PadHeldOn` is §4.29's mapping per pad, with the swap: Accept on East and Back on South, and nothing else moved.
+- `TrackControllers`, at every poll, hands the first-controller switch to the manager, makes the pad that went from
+  nothing held to something held the help bar's pad, and redraws the text hints when the swap changes.
+- `HelpFamily` is the Controller Type setting, or with Automatic the family of the help bar's pad (§15.5's rules, from
+  that pad's type and name), falling back to the first pad.
+- `OnPadChanged` shows the notice and, when the first pad arrives or the last leaves, redraws the Mistress library's
+  hint, which names the pad's buttons or the keyboard's.
+
+`Input/PadHints.cs` swaps the letters in the text hints (the sheets' footer, the pad menu's, the library's, the on-screen
+keyboard's and the rewind reel's), which name face buttons by an Xbox pad's letters. `HelpPrompts.For` takes the swap and
+gives the two functions the button each moved to and the theme's icon for that button, so a theme's `button_a_XBOX`
+goes with the function now on A. `SceneData.SwapFaceButtons`, `SceneView.SetPadLayout` and `ThemedLibrary.SetPadLayout` carry the
+family and the swap together; as before, a change redraws only the help bar (a swap re-enters its entries).
+`ControllerPreferencesPane` is Preferences' new Controllers tab. `MainWindow.axaml` gains `PadNotice`, a `NoticeLayer` over
+everything at the top centre.
+
+**In LunaP** (branch `bigpicture-controllers`, `docs/LunaP.md` §170): `NoticeLayer.FadeTime`, so a notice fades over a
+fixed time rather than 15% of its duration; null keeps §88.5's curve.
+
+**Nothing learned is persisted, so nothing is in SQLite.** The four settings are the player's choices and live in
+`appsettings.json` with the rest, as `EmuSen_Stack.md` §4 places user settings. No pad is remembered between sessions:
+no GUID, name or family is written anywhere. A later pass that remembers pads (a per-pad family override, say) would keep
+them in Mistress's database, not a new JSON file.
+
+### 24.3 The rules, and their tests
+
+All headless, on `PadDriver`, which now plugs and pulls simulated pads (`Plug`, `Unplug`, `Replug`) through the window's
+own `GamepadManager`, so `Poll` runs as it would on a device.
+
+| Rule | Test |
+|---|---|
+| Every pad present at start is opened, in order, and none is announced | `GamepadManagerPadsTests.Every_pad_present_at_start_is_opened_in_order_and_none_is_announced` |
+| A pad plugged in is opened and announced; one pulled out is closed and announced with its name and type | `A_pad_plugged_in_is_opened_and_announced…` |
+| The game reads the first pad alone, and the next once the first goes | `The_game_reads_the_first_pad_alone…`; `ControllersTests.Unplugging_one_pad_leaves_the_other_steering_and_playing` |
+| The rebind capture hears any pad the interface reads | `The_rebind_capture_hears_any_pad_the_interface_reads` |
+| Two pads both steer the library, the menu and a sheet | `ControllersTests.Two_pads_both_steer_the_library_the_menu_and_a_sheet` |
+| Every rule of §15.3 holds from a second pad, Select's game options (§23) included | `ThemedControllersTests.Every_rule_of_the_pad_table_holds_from_a_second_pad`, `Two_pads_both_steer_the_themed_view` |
+| A pad pulled out and plugged back is picked up without an error, over 120 polls with no pad | `A_pad_pulled_out_and_plugged_back_is_picked_up_without_an_error`; `GamepadManagerPadsTests.A_pad_pulled_out_and_plugged_back_is_opened_again`; `GamepadRescanTests` |
+| The notice appears on connect and on disconnect, in a desktop and a big-screen session, and is gone after its duration | `A_notice_says_when_a_pad_connects_and_disconnects_and_then_goes_away` (2 cases; 4.5 s of real dispatcher time) |
+| With notifications off, none | `With_notifications_off_no_notice_is_shown` |
+| With the first controller only, the second pad steers nothing | `With_the_first_controller_only_the_second_pad_steers_nothing` |
+| The help bar follows the pad last pressed, and the first pad's family when that pad goes | `ThemedControllersTests.The_help_bar_follows_the_pad_last_pressed` |
+| The controller type changes the help bar's glyphs and no pixel outside it; the buttons do what they did | `The_controller_type_changes_the_help_bar_s_glyphs_and_nothing_else` |
+| The swap trades Accept and Back, and nothing else, in the library, the menu, a sheet and the keyboard, and the hints say so | `ControllersTests.The_swap_trades_accept_and_back_everywhere_in_the_interface` (X opens nothing, Y still searches) |
+| The swap trades the themed view's buttons, and the help bar names the new ones, with a theme's own icons | `ThemedControllersTests.The_swap_trades_the_view_s_buttons_and_the_help_bar_follows`, `The_swap_gives_each_function_the_theme_s_icon_for_its_new_button` |
+| The swap does not reach the game | `The_swap_does_not_reach_the_game` (South is still the SNES B) |
+| The settings persist | `The_controller_settings_persist` (set on the Preferences sheet, read back with `AppSettings.Load`; the defaults checked) |
+| Every handle is released when its pad goes and when the window closes | `Every_pad_s_handle_is_released_when_the_pad_goes_and_when_the_window_closes`; `GamepadManagerPadsTests.Every_handle_is_closed…` |
+
+Before the merge of §23, the existing pad, themed and Preferences tests ran beside these under one filter (276, all
+passing), among them §15.9's audit, which now walks the Controllers tab and reached every control on it. The merge
+changed one of this pass's tests: Select in the gamelist now opens §23's game options rather than marking a favourite, so
+the second-pad walk opens and closes them instead. One broad run closed the pass, after the merge and the A/B narrowing:
+every WiseMan test under `Mistress` and `Input` except `ShaderSettingsWindowTests`, `ShaderBrowseBench` and
+`SceneGpuBench`, 902 passed and 12 skipped of 914, no failure; and LunaP's `NoticeLayerTests`, documented defaults, API
+baseline and documentation tests, 33 of 33.
+
+### 24.4 ES-DE's popup, measured
+
+§14.7 left the device popup unmeasured, and §21.3 planned to record it with §14.7's rig. The rig had in fact recorded it
+once, on 2026-09-25: run `pop` under `~/.cache/emusen/bigpicture/motion/runs/` destroyed its uinput pad while ES-DE 3.4.1
+was recording, and `popup.py` wrote the ink of the region 440–860 × 5–58 px of the 1280×800 window, frame by frame
+(6.86 ms apart), to `popup_ink.csv`. The recording itself was deleted with the stage's scratch; the series was not, and
+this pass read it rather than run ES-DE again (the load rule of 2026-09-25). It is one disconnection popup: n = 1. No
+connection popup was recorded: the pad was created before ES-DE started, and the recording began about four seconds
+after ES-DE's log shows it adding the pad.
+
+| | ES-DE 3.4.1 (n = 1) | Mistress |
+|---|---|---|
+| First ink after the device was destroyed | 533 ms (ES-DE's detection included) | the next poll after SDL's event, ≤ 16 ms; at worst the 1 s rescan |
+| Place | top centre, within 5–58 px of an 800 px window | top centre, 8 px from the top |
+| Fade in | 497 ms to full; a power curve t^1.35 fits (rms 0.009; linear 0.026) | 500 ms, linear |
+| Held | 2,988 ms at full | 3,000 ms |
+| Fade out | about 500 ms, (1 − t)^1.40 (rms 0.009; linear 0.025) | 500 ms, linear |
+| First ink to last | 3,988 ms | 4,000 ms |
+
+Ink is linear in the popup's opacity wherever the popup is brighter than what it covers, so the curves above are its
+opacity up to scale. The durations are ES-DE's to within a frame; the shape is not, by at most about 0.1 of full opacity
+at mid-fade. A linear fade was kept because it is §88.5's and one recording does not establish a curve.
+
+**P103's second half holds:** each fade about 0.5 s, within 0.4–0.6 s, and a hold of about 3.0 s, within 2–5 s.
+
+### 24.5 Where the rules are Mistress's, not measured ES-DE behaviour
+
+- **Pads present at start are not announced.** ES-DE's log shows it adding the pad at start, but the recording began
+  after start, so whether ES-DE announces a pad present at launch was not observed. Mistress opens the pads after its
+  first frame (§4.42 of the settings reference), and a notice for the pad already in hand was judged noise.
+- **The words.** "Controller connected: *name*" and "Controller disconnected: *name*". ES-DE's wording was in the deleted
+  recording and was not read from anywhere else.
+- **Held is the union of every pad.** A button counts as held if any pad the interface reads holds it, so one pad holding
+  Down and another tapping Down gives no new press. ES-DE's handling of two pads pressing at once was not measured.
+- **The pad last pressed** is the one whose buttons went from none held to some held most recently. A held stick counts
+  as held.
+- **"The first controller"** is the first pad opened that is still attached. ES-DE's guide says "the first controller
+  detected during startup" and warns that reconnecting may change it; Mistress's rule changes it in the same case.
+- **Over a game,** any pad's guide button or Back and Start together open the pad menu, and the notice is drawn over the
+  picture. ES-DE is not on screen while a game runs, so it has no counterpart. The game itself hears the first pad only.
+- **The swap is A and B only.** ES-DE's setting swaps X and Y as well. The first build did too (Search on West), and
+  was narrowed the same day, before merging, to accept and back alone, after the decision on North (§24.1). The
+  departure costs a player with a Nintendo-printed pad the X/Y half of ES-DE's remedy; what it buys is that the swap
+  cannot disagree with whatever the collections branch assigns to North and West.
+- **The swap is the interface's only.** The keyboard is unaffected, as ES-DE's is; so is every game, whose bindings are
+  its own (`GamepadBindingMap`). The text hints' letters swap with it; ES-DE says its help system is "updated
+  accordingly".
+- **The controller type offers LunaP's four families**, not ES-DE's seven icon sets (Xbox, Xbox 360, PlayStation 1/2/3, 4
+  and 5, Switch Pro, SNES): §10.1's Q9 settled Mistress's own four drawings. It changes only the themed help bar's icons,
+  as ES-DE's changes only its help icons; the text hints keep an Xbox pad's letters.
+
+### 24.6 Closing what was opened
+
+§15.14's lesson, applied before the fact. Every `ConnectedPad` is closed when SDL reports it detached, and every pad and
+the gamepad subsystem when the window closes (the manager's `Dispose`, reached from `Closing`). `SimulatedPads` counts the
+handles, and tests fail without each cleanup: mutants C3, C4 and C29 below remove the close on a pad's going, the
+manager's disposal of its pads, and the window's disposal of the manager, one at a time.
+
+### 24.7 Pictures
+
+`ControllersPictureTool`, run with `EMUSEN_BIGPICTURE_PNG=1`, writes 1280×800 pictures into
+`~/.cache/emusen/bigpicture/png/controllers/`. They were looked at:
+- `notice-connected-desktop.png`: the notice over the desktop library, at the top centre over the toolbar, in the desktop's
+  15 px type. It covers the Library and Save States buttons for its four seconds; it is not hit-testable, so a click
+  reaches them. A first version drew it at the big screen's 20 px on the desktop too, where it covered the toolbar from
+  the view buttons to the slider; the desktop's size was reduced after the picture was seen.
+- `notice-disconnected-bigpicture.png`: over the synthetic theme's system view, 20 px type at 800 px.
+- `synthetic-help-*.png`, `artbooknext-help-*.png` and the two `-help-strip.png`: the gamelist's help bar under Automatic
+  (a DualSense in hand, so PlayStation), Xbox, PlayStation, Nintendo and Generic, then Xbox with the swap, where Launch is
+  on B and Back on A, and Search still on Y. On Art Book Next the bar's three entries (Options, since §23; Menu; Launch) change icons and
+  nothing else moves.
+- `preferences-controllers-sheet.png`: the Controllers tab on the Preferences sheet. The tab strip now wraps to a second
+  row at this width (Controllers and System Files below the other four).
+- **A flaw seen and left:** in the generic set, Launch, Back and Search are the same four dots with a different one
+  filled, which at the help bar's size are hard to tell apart; §15.10 recorded the same of the generic d-pad.
+
+### 24.8 Mutants
+
+`~/.cache/emusen/probe/bigpicture/mutate_controllers.py`, one mutant at a time under `nice -n 10` with two build nodes,
+each built and run against the controller tests, the manager's, the rescan's and `PadInputPathTests`, the source restored
+after each and the tree rebuilt at the end; C30 ran against LunaP's `NoticeLayerTests` in its worktree. Log:
+`mutants-controllers.txt` and `run-controllers.log`.
+
+**A round the machine ended.** The first round was cut off at 17:58 by a hardware reset of the desktop (an AMD fault,
+before the BIOS update of that evening), with C16's mutant in `HelpPrompts.cs`. It was found and restored from the commit
+before any build was trusted, `bin/` was rebuilt clean, and the runner now writes the file and its original text to a
+journal before each mutant and restores a leftover journal when it starts (checked with a planted journal). The eleven
+results the first round logged (C1–C11, `mutants-controllers-part1.txt`) agree with the second round's. The table is the
+second round's, on the tree after §23's merge, except for the swap's mutants (C11–C17 and C28), which were run again after
+the swap was narrowed to A and B, with C13 turned round to put back the X/Y half; and C30, whose first form did not
+compile (it left the pattern's variable unassigned) and was rewritten so that it does. `mutants-controllers-final.txt`
+holds the table's lines.
+
+| # | Mutant | Result |
+|---|---|---|
+| C1 | the manager opens only the first pad | caught by 10 |
+| C2 | a pad pulled out is never let go | caught by 9 |
+| C3 | a pad pulled out is dropped without closing its handle | caught by 4 |
+| C4 | the manager's disposal leaves the pads open | caught by 2 |
+| C5 | the old rescan: only with no pad, and not on SDL's events | caught by 10 |
+| C6 | the rescan clock starts at MinValue again | caught by 23 |
+| C7 | the pads present at start are announced | caught by 3 |
+| C8 | the interface reads the first pad alone | caught by 3 |
+| C9 | the first-controller setting never reaches the manager | caught |
+| C10 | the game reads every pad, not player 1's | caught |
+| C11 | the swap leaves Accept on South | caught by 3 |
+| C12 | the swap leaves Back on East | caught by 2 |
+| C13 | the swap moves Search to West as well (ES-DE's X/Y swap, not wanted here) | caught |
+| C14 | the swap reaches the game | caught |
+| C15 | the text hints are not swapped | caught |
+| C16 | the help bar ignores the swap | caught by 2 |
+| C17 | a swap changed on a shown view leaves its help bar's entries | caught |
+| C18 | the controller type is ignored | caught |
+| C19 | a new family rebuilds the view at the system view | caught by 2 |
+| C20 | the help bar never follows the pad last pressed | caught |
+| C21 | no notice when a pad connects | caught |
+| C22 | the notifications switch ignored | caught |
+| C23 | the notice fades by OpenEmu's fractions, not ES-DE's measured time | caught |
+| C24 | the notice held ten times as long | caught |
+| C25 | the library's hint not redrawn when the first pad arrives or the last leaves | caught |
+| C26 | the rebind capture hears only the first pad | caught |
+| C27 | Preferences' swap switch saves nothing | caught |
+| C28 | the swap moves a function's glyph but not the theme's icon | caught |
+| C29 | the window's close leaves the manager undisposed | caught |
+| C30 | LunaP: the keyframes ignore FadeTime | caught by 2 |
+
+**30 of 30 caught, none after a test was changed.** Two qualifications. C23 and C24 are caught by the notice test's
+assertion of the layer's `Duration` and `FadeTime`, a check of configuration rather than of drawn opacity; the drawn fade
+is held by LunaP's own tests (C30). And the tests were written after the rules, each with its rival in view, which is why
+a clean sweep here is weaker evidence than it would be against tests written first. §15.14's lesson, that a mutation of
+existing code cannot produce an absent line, is what C3, C4 and C29 answer: each removes a cleanup that exists.
+
+### 24.9 Predictions retired
+
+| # | Predicted | Measured | Verdict |
+|---|---|---|---|
+| P103 | every rule of §15.3 from either of two pads, the help bar following the pad last pressed; ES-DE's popup fading 0.4–0.6 s each way and held 2–5 s | every rule from the second pad with the first attached, and both pads in the library, menu and sheets; the help bar follows the pad last pressed; ES-DE's popup 497 ms in, 2,988 ms held, about 500 ms out (n = 1) | held |
+| P119 | the pass opened and closed in no more calendar days than the lower end of its estimate (2 days) | opened and closed on 2026-09-26 | held |
+| P121, P122 | (§24.1) | not measured; for Pass 1 | open |
+
+### 24.10 The handheld run
+
+For Pass 1's session with the player, on the Legion Go S (build from this branch):
+
+1. **Game Mode, built-in controls only.** Start Mistress: no notice at start (P121). Steer the library and the themed
+   view; Preferences ▸ Controllers shows Automatic and the help bar draws the family §15.5 gives Steam's virtual pad
+   (P100).
+2. **A second pad in Game Mode** (any Bluetooth or USB pad): the notice appears at the top centre within about a second,
+   with the name Steam reports (P121); both pads steer the library, the pad menu, a sheet and the game options; pressing
+   on either switches the help bar to that pad's family; pulling it shows "disconnected" and the built-in controls carry
+   on.
+3. **The same in Desktop Mode** (P122), and whether the name and family are the hardware's there.
+4. **A game with two pads:** only the first pad plays; the second's guide button opens the pad menu over the game.
+5. **Controller Type** set to each family: only the help bar's icons change, legibly at arm's length (the generic set's
+   face buttons especially, §24.7).
+6. **Swap A and B:** B chooses and A goes back in the library, menus, sheets and the on-screen keyboard; X and Y are
+   as before; the hints and the help bar say so; in a game, A and B are as bound.
+7. **First controller only:** the second pad steers nothing; games unaffected.
+8. **A pad that registers twice** (if one is at hand): two notices, and the switch in 7 as ES-DE's remedy.
+9. **Sleep and wake** with a pad connected: whether SDL reports it removed and added again, and what the notices say.
+
+### 24.11 Not done
+
+- **No real device.** SDL's own added and removed events, and how soon it delivers them, were not exercised; the tests
+  stand at `IPadDevices`, beneath which `SdlPadDevices` is a list of one-line SDL calls with no test. Everything in §24.10.
+- **Player 2 in games** (Q22 (b)): not built; `EmuSen_Input.md` §6.
+- **The notice has no pad glyph** beside its words (§21.3 thought one might be wanted); LunaP's `NoticeLayer` holds text only.
+- **The fade's shape** is linear where ES-DE's fits a power of about 1.35–1.4 (§24.4).
+- **ES-DE's connection popup** was not recorded, nor its words; the pass did not run ES-DE.
+- **The controller type does not reach the text hints**, which keep an Xbox pad's letters in every family, as before.
+- **Preferences does not list the pads connected**; the Controller Bindings window still names the first only
+  (`ControllerName`, §4.4 of the settings reference).
+- **Shared files.** `PadHeld` moved from `MainWindow.Pad.cs` to `MainWindow.Controllers.cs`; a branch that edits it in
+  the old place (§22's) will conflict there at its merge.
+
+---
+
+## 26. Retiring OpenEmu's sources: a plan (2026-09-26)
+
+*A plan, written on branch `desktop-game-options` beside §27; nothing is removed by it.* The direction of
+2026-09-26 (§10.1): "i would like to eventually retire sourcing game info from openemus library and use screenscraper".
+"OpenEmu's library" is read here as §4.39's pair of sources, which §4.60 made the failover: **OpenVGDB**, OpenEmu's game
+database, which names a file, and **libretro-thumbnails** (`thumbnails.libretro.com`), which has the box under that
+name, with OpenVGDB's own cover address tried last. §25 is being written on another branch at the same time, so this
+section is numbered 26, its predictions start at P130 and its questions at Q40, leaving P123–P129 and Q36–Q39 to §25, as
+§17 once left a range to stage (f).
+
+The plan answers five questions: what the failover gives that ScreenScraper does not (26.2–26.3), what replaces it for
+the games ScreenScraper cannot help with (26.4), how what has been fetched already survives (26.5), what a machine
+without the developer credentials is left with (26.6), and in which order the removal is done and tested (26.7–26.8).
+The questions only the player can answer are in 26.9.
+
+### 26.1 The argument in brief
+
+ScreenScraper identifies more of this library than OpenVGDB does, by a wide margin, and on the one sample where both
+were asked about the same files, the failover would have added no cover that ScreenScraper had not already given. On a
+machine with the developer file the failover is therefore, as far as the evidence reaches, dead weight: a second
+database of 42 MB, a second server, and a code path that runs only when ScreenScraper has nothing. The failover's one
+indispensable property is not its coverage but that it needs no credentials: on a machine without the developer file,
+which Q5 makes every distributed build, it is the only online art Mistress has. The retirement is therefore argued in two
+halves with different evidence. Where ScreenScraper can be used, the failover can go now, subject to one live
+measurement (P130). Where it cannot, removing the failover removes online art altogether, and whether that is acceptable
+is the decision, not a technical finding (Q40).
+
+### 26.2 What was measured, and how
+
+**No network.** Every number here is from what the machine already held, read without writing:
+- `media.db` of §17.9's live run (`~/.cache/emusen/bigpicture/scrape-live/20260926-134821/Media/`): ScreenScraper's
+  answers for 40 files drawn at random (seed 20260926) from the library's 5,520, with the kinds each answer offered;
+- `games.db` of the published tree (`out/linux-x64/Mistress/home/Library/`), whose `cover_lookup` table holds the
+  failover's 1,113 recorded outcomes, made between 2026-09-21 and 2026-09-25 under §4.39's rule that a tile drawn
+  without a cover asked for one;
+- the same tree's cover art folder, `home/Artwork/<console>/`, where §4.39's switch wrote what it found;
+- OpenVGDB v29.0 (`openvgdb.sqlite`, 42 MB, the copy §4.39 downloaded into the same tree), queried as `OpenVgdb.cs`
+  queries it: by file name without extension, then by the MD5 of the bytes `CoreDescriptor.OpenVgdbBytes` gives (the
+  NES without its iNES header, the SNES without a copier header, the N64 halfword-swapped, the Game Boy as it is);
+- the library itself, `AppSettings.RomDirectory`, read to hash each file and never written.
+
+The databases were copied to the session's scratch folder before they were opened, so no journal or lock file was
+written beside the originals. The scripts are `retire/m40.py` (the 40 files) and `retire/whole.py` (the library) in
+that folder, with `retire/art.py` for the art folder; the whole-library pass took 3 min 53 s under `nice -n 10`.
+
+**What was not measured.** Whether libretro's server has a box for a game was not asked; it is known only for the 1,113
+games the failover asked about before 2026-09-26. ScreenScraper's answers are known only for the 40 files of §17.9. The
+cross-tabulation of 26.3 is therefore of 40 files, and the whole-library figures are OpenVGDB's identification alone.
+
+### 26.3 What the failover gives that ScreenScraper does not
+
+**Identification, on the same 40 files.**
+
+| | ScreenScraper (§17.9) | OpenVGDB (by name, then by MD5) |
+|---|---|---|
+| Games identified | 39 of 40 | 17 of 40 (9 by name, 8 by MD5) |
+| The 17 files named as released games | 17 of 17 | 17 of 17 |
+| Hacks, translations, pirate, unlicensed and multicart dumps, prototypes, betas, alternate dumps and the unnamed dump (23 of the 40) | 22 of 23 | 0 of 23 |
+| Identified by this source alone | 22 | 0 |
+
+Every file OpenVGDB identified, ScreenScraper also identified, and gave a cover for.
+
+**The games ScreenScraper left without a cover.** Seven of the 40: the one file it did not know (`ZZZ_UNK_GOLF_GRA`, a
+dump with no name), three it lists as non-games (`ZZZ(notgame)`: the Minolta program cartridge and two multicarts, each
+with a mix image and nothing else), and three SMB1 hacks it knows but has no box for. OpenVGDB knows **none of the
+seven**, so the failover, which asks libretro only for a name OpenVGDB gives, can find nothing for any of them. Of the
+seven, one (the 68-in-1 multicart) had been asked of the failover before, and its recorded outcome is Unknown.
+
+**The measured yield of the failover beside ScreenScraper is 0 of 40.** A sample of 40 bounds the true rate only
+loosely: by the rule of three, a rate above 7.5% would have shown at least one case in 40 with 95% probability, so the
+sample alone does not exclude a yield of up to about 400 covers over the library. A structural argument narrows it.
+OpenVGDB's ROM list is No-Intro's, and ScreenScraper's includes No-Intro's (§17.1, P60's premise), so a game OpenVGDB
+names and ScreenScraper does not know should be rare; the failover's yield can come only from games ScreenScraper knows
+without a `box-2D` for which libretro nonetheless has one. That case is possible, since the two collections of scans are
+independent, and it is what P130 measures.
+
+**OpenVGDB over the whole library** (5,520 files, read-only):
+
+| Console | Files | OpenVGDB identifies | by name | by MD5 | Release with a cover address | with a description |
+|---|---|---|---|---|---|---|
+| Game Boy (`.gb`) | 1,915 | 1,576 (82.3%) | 1,331 | 245 | 1,213 | 1,294 |
+| NES | 3,537 | 998 (28.2%) | 0 | 998 | 917 | 931 |
+| SNES | 48 | 44 | 0 | 44 | 43 | 43 |
+| Nintendo 64 | 20 | 20 | 20 | 0 | 18 | 19 |
+| **All** | **5,520** | **2,638 (47.8%)** | 1,351 | 1,287 | 2,191 | 2,287 |
+
+The NES shelf's names are GoodNES's (`(U)`, `[!]`, `[a1]`), not No-Intro's, so none matches by name and a little over a
+quarter matches by content; the rest are hacks, translations, pirate carts and multicarts, which No-Intro does not list.
+ScreenScraper identified 22 of the 23 NES files of the sample.
+
+**The failover's recorded outcomes** (`cover_lookup`, 1,113 games asked between 2026-09-21 and 2026-09-25): 670 Found
+(60.2%), 335 Unknown to OpenVGDB (30.1%), 108 known to OpenVGDB but with no box on libretro's server under any of the
+three names tried (9.7%). By console: Game Boy 554 found, 143 unknown, 104 without art; NES 56, 188, 0; SNES 43, 4, 1;
+N64 17, 0, 3. The 670 found covers are the published tree's art folder: each Found row has its file there under libretro's
+naming, and the folder holds no other file (checked file by file, `retire/art.py`). They were written there by §4.39's switch before §4.60 moved the failover's writes to
+`home/Media/openemu/`. No file exists under `home/Media/openemu/` on this machine: the failover as §4.60 built it has not
+run in the published tree.
+
+**What else the failover provides, beyond covers.**
+- **Text: nothing.** OpenVGDB holds a description for 2,287 of the 2,638 games it names, and developer, genre and date
+  for most, but Mistress never kept any of it (§4.39: "No description, rating or other metadata is kept"). The one datum
+  kept is the No-Intro name, in `cover_lookup.rom_name`, and no code reads it. ScreenScraper's text is what every view
+  shows (§17.6).
+- **OpenVGDB's own cover addresses: nothing.** All eight tried in §4.39 answered 403 from GameFAQs; the address is tried
+  last and has not been seen to answer.
+- **No credentials.** The failover is the only online art on a machine without the developer file (26.6).
+- **No daily quota**, as far as is known: libretro's server states none, and none was measured. ScreenScraper's is 10,000
+  requests a day without a member account (§17.9).
+- **Not OpenVGDB's to retire: the byte transforms.** `CoreDescriptor.OpenVgdbBytes` is console knowledge (a header to
+  drop, a byte order to swap) that ScreenScraper's step 2 uses too (`MainWindow.Scrape.cs`, `TransformFor`). It stays,
+  under a name that does not tie it to OpenVGDB.
+- **Not a network source: libretro's naming.** The cover art folder of §4.33 is read under libretro-thumbnails' names and
+  folders (`ArtworkIndex`, `CoreDescriptor.CheatSystemNames`). That is a convention for the player's own files and stays.
+
+### 26.4 What replaces it for games ScreenScraper cannot help with
+
+The seven games of 26.3 fall into three kinds, and each has a different remedy. None of them is the failover, which
+had nothing for any of the seven.
+
+| Kind (of the 40) | Example | Replacement |
+|---|---|---|
+| Unknown to ScreenScraper (1) | an unnamed dump | the player's own cover, or the placeholder; a name search finds nothing to search by |
+| Known, no box, a game derived from another (3) | an SMB1 hack | **ScreenScraper's search by name** (Pass 8's "Find by name…" chooser, `jeuRecherche`), where the player picks the base game's page; or **the base game's cover from the library** |
+| Known as a non-game (3) | a multicart, a program cartridge | the placeholder, or the player's own cover; ScreenScraper's mix image exists for these (Q43) |
+
+- **Search by name** is §21's Pass 8 as the player accepted it (Q22–Q35, §10.1): started only from "Find by name…" or a run
+  the player sets to ask, never as an automatic fallback, so §17.14's rule 1 holds. It costs a request per search and
+  one per picture, like any other lookup. It is the replacement with the widest reach, and the retirement should wait
+  for it (26.7).
+- **A manual pick** exists already: *Add Cover Art from File…* copies a picture into the art folder, where it wins over
+  every other source. A second pick is proposed: **Use Another Game's Cover…**, a chooser over the library that copies
+  the chosen game's cover (whatever its source) into the art folder under this game's name. It suits hacks and
+  translations, whose base game is usually in the same library, and it sends nothing anywhere.
+- **The placeholder** is §4.33's drawn tile, unchanged. It is the answer for what nothing can identify.
+
+### 26.5 How what has been fetched already carries over
+
+The rule is that nothing the player has is deleted, and nothing that is shown today stops being shown, by the removal
+itself.
+
+- **The 670 covers in the art folder** stay where they are and go on counting as the player's own, first in §4.60's
+  order, above ScreenScraper's. They were fetched, not placed, but since §4.60 they cannot be told from a placed cover by
+  where they are. They can be told apart by `cover_lookup`: each has a Found row naming its ROM, and the counts match
+  exactly (26.3). Whether to keep them first or to rank them below ScreenScraper's region-matched covers is Q41; the
+  default proposed is to keep them first, since that is what the player sees today.
+- **`home/Media/openemu/<console>/`**, the failover's folder since §4.60, is kept as a read-only source in its present
+  place in the order (after the ES-DE folder), read offline, never written again, shown whatever the retired switch
+  held. On this machine it is empty.
+- **`cover_lookup`** stays in `games.db`: its migrations are append-only (§4.32), and a table no code writes or reads
+  costs nothing. `GameRecords.Move` stops carrying its rows. A later migration may drop it; this plan does not.
+- **`openvgdb.sqlite`** (42 MB in `home/Library/`) is not the player's data but a download. It stays until the player
+  removes it; Q42 asks whether the removal build should offer that, delete it, or leave it.
+- **The settings.** `OpenEmuFallback` is read once and dropped at the next save, as `OnlineCovers` was (§4.60).
+
+### 26.6 A machine without the developer credentials
+
+**Today.** A run the player starts on such a machine asks only the failover (§4.60's second case). That is every
+distributed build: Q5 decided that no build carries the credentials, and ScreenScraper issues developer credentials to
+software authors, not players, so a player cannot bring their own (§4.60's sign-in section). The player's own machines,
+the handheld included, read `~/.config/EmuSen/screenscraper-developer.json` and are unaffected (§17.12).
+
+**After the removal, with nothing else changed,** such a machine has no online art at all: the art folder, *Add Cover Art
+from File…*, the proposed *Use Another Game's Cover…*, an ES-DE media folder the player points at (§4.52), and the
+placeholder. A scrape run there would have nothing to ask, and the Scraping tab would say so instead of offering a run.
+
+Four ways through, none of them chosen here:
+1. **Accept it.** Distributed builds have offline art only. Simple; a clear loss for a player of a published build.
+2. **Revisit Q5.** Embed the developer credentials at publish time from a file outside the repository, as ES-DE does
+   (the option §10 put to the player as Q5). Every build could then scrape; the credentials would be in every copy, obfuscated but
+   recoverable, and a leak would be charged against the project's account.
+3. **A second source that needs no project credentials.** TheGamesDB with the player's own key is Pass 13, and the player
+   accepted Q29's (c) (§10.1): a key is issued to any site account, unlike ScreenScraper's developer credentials. It is
+   a second source, not ScreenScraper, so it keeps a failover in a new form; the direction names ScreenScraper
+   alone.
+4. **Keep libretro's thumbnails without OpenVGDB**, asked by the file's own name, for files already named as No-Intro
+   names them. It needs no database and no credentials, but it is half of what is being retired, and on this library it
+   would reach the Game Boy shelf (whose names are No-Intro's) and almost none of the NES shelf (GoodNES names, 26.3).
+
+Q40 asks which. The steps of 26.7 are ordered so that the half the evidence supports can be done before Q40 is answered.
+
+### 26.7 The steps, in order
+
+1. **Measure the failover's yield where ScreenScraper is usable (P130).** A run the player starts, of the whole library
+   or a console, with the failover on, as §4.60 built it. The status window's tally *Filled by OpenEmu* (§4.57) is the
+   yield, and the run's log names each game. No code is needed; the run costs ScreenScraper's quota as any run does
+   (§17.10: three days for the whole library, or one shelf at a time). This is the evidence the removal rests on, and it
+   is the player's to start (§17.14).
+2. **Build the replacements:** Pass 8's search by name and its chooser (26.4), and *Use Another Game's Cover…*.
+3. **Stop asking the failover where ScreenScraper is usable.** The first behavioural change: a run with the developer
+   file never asks OpenVGDB or libretro, whatever the switch says; the switch's row says it applies only where
+   ScreenScraper cannot be used. This is reversible by one condition, and it can ship before Q40 is answered.
+4. **Answer Q40**, then either remove the failover altogether (5–7), or put the chosen replacement in its place for
+   machines without the developer file before removing it.
+5. **Remove the code:**
+   - `Library/OpenVgdb.cs`, `Library/OpenVgdbDownload.cs`, `Library/CoverFetcher.cs` (270 lines);
+   - `Views/MainWindow.Covers.cs` (106 lines) and its calls: `ApplyOnlineCovers`, `StopOnlineCovers`, `AskForCover`,
+     `CoverArrived`, and in `MainWindow.Scrape.cs` `FailoverFor`, `FailoverArrived` and the failover half of a run's end;
+   - `ScrapeRun`'s `FailoverAsked`, `FailoverFound`, `FailoverPending`, `FilledByFailover` and `FromFailover`;
+     `ScrapePlan.Failover`; the tallies and the sentence in `ScrapeStatusWindow`; the *OpenEmu Failover* row of
+     `ScrapePreferencesPane`;
+   - `AppSettings.OpenEmuFallback`, read once and dropped;
+   - `CoreDescriptor.OpenVgdbSystems`, and `OpenVgdbBytes` renamed (for instance `ScrapeBytes`), with every core's entry
+     in `CoreCatalog.cs` kept;
+   - `GameRecords`' `CoverLookup`, `RecordCoverLookup` and `ForgetCoverLookup`, and the `cover_lookup` lines of `Move`;
+     the table itself stays (26.5).
+   - `MediaSources` keeps its OpenEmu source, read-only, as 26.5 describes; its constructor no longer takes the switch.
+6. **Change the tests** (26.8).
+7. **Retire the documents,** not delete them: §4.39 of the settings reference is marked retired and kept as the record
+   of how the failover was built and measured, with a pointer to this section; §4.60 loses its failover paragraphs and
+   gains the replacements; the README's credits and `THIRD_PARTY_NOTICES.md` keep OpenVGDB and libretro-thumbnails for
+   as long as a build can read covers they supplied, then move them to a list of former sources.
+
+### 26.8 Tests and predictions
+
+**Tests.** All headless, on the fake ScreenScraper, never the network.
+- *Deleted:* `OnlineCoverTests` and `OnlineCoverWindowTests` (421 lines), whose rules go with the code; their fixtures
+  (a synthetic OpenVGDB, a fake thumbnail server) with them.
+- *Rewritten:* `ScrapeWindowTests`' six failover cases become their opposites: a game ScreenScraper does not know, or knows
+  without a box, asks **no other server** (`OthersAsked` empty), and the tile keeps the placeholder; a run without the
+  developer file sends nothing and the Scraping tab says why; a day's quota used up stops the run and hands nothing on.
+- *Kept, and made to guard the carry-over:* a test with a cover in the art folder, one in `home/Media/openemu/`, and one
+  from ScreenScraper, each shown from the same place before and after the removal (P133); `ScraperTests`' step-2 cases,
+  which now exercise the renamed byte transforms; `GameRecordsTests` with a `cover_lookup` row present and untouched.
+- *New, for the replacements:* the chooser (Pass 8's own tests) and *Use Another Game's Cover…* (a copy into the art
+  folder, no request, the ROM folder's fingerprint unchanged, as §23.8's Hide test measures it).
+- *Mutants,* one at a time, as every round since §17.11: the failover asked again when ScreenScraper has no box; the
+  OpenEmu folder dropped from the order; the art folder's fetched covers ranked below ScreenScraper against Q41's answer;
+  the byte transform lost in the rename; `OpenEmuFallback` kept after a save.
+
+**Predictions,** written before any of this is built:
+
+| # | Prediction |
+|---|---|
+| P130 | In a run the player starts with ScreenScraper usable and the failover on, the failover fills a cover for fewer than 1% of the games run (26.3 found 0 of 40). |
+| P131 | In the same run, OpenVGDB identifies fewer than 10% of the games ScreenScraper answers as unknown. |
+| P132 | Of the games ScreenScraper knows without a `box-2D` in that run, fewer than a quarter get a box from libretro. |
+| P133 | After step 5, every cover the synthetic library showed before is shown from the same file; no picture shown before the removal disappears. |
+| P134 | Step 5 removes between 1,000 and 1,500 lines, tests included, and adds fewer than 150. |
+| P135 | A whole-library run after step 3 costs the same ScreenScraper requests as one before it, to within 1%: the failover never cost ScreenScraper requests. |
+
+### 26.9 Questions for the player
+
+- **Q40, a machine without the developer credentials.** After the removal such a machine, every distributed build
+  included, has no online art. Which of 26.6's four: accept it; revisit Q5 and embed the credentials at publish; bring
+  TheGamesDB (Pass 13, the player's own key) forward as the credential-free source; or keep libretro's thumbnails asked
+  by file name, without OpenVGDB? **Recommendation: accept it for now and do Pass 13 when its terms have been read**,
+  since only (3) gives a player of a published build art without putting the project's credentials in every copy; (2)
+  is the stronger remedy if the player is content to carry that risk.
+- **Q41, the 670 covers in the art folder.** They were fetched by §4.39's switch, not placed by the player, and they rank
+  above ScreenScraper's. Keep them first, as today, or rank the ones `cover_lookup` records as fetched below
+  ScreenScraper's? **Recommendation: keep them first**, and offer the re-ranking as a Preferences action rather than a
+  silent change, so that a cover the player has grown used to never changes by itself.
+- **Q42, OpenVGDB's database.** 42 MB in `home/Library/`. Leave it, offer a *Remove* line in Preferences, or delete it in
+  the removal build? **Recommendation: offer the line**; it is a download, not the player's data, but deleting a file the
+  player may have copied deliberately is not the software's to decide.
+- **Q43, a mix image as the cover of last resort.** ScreenScraper gives a mix image even for the non-games it lists with no
+  box (26.3). Show it on the tile when there is no box, or keep the placeholder? **Recommendation: the placeholder**; a
+  mix image is a composite made for a theme's panel, and the grid would show one tile unlike the rest.
+- **Q44, the order.** Step 3 (no failover where ScreenScraper is usable) before Pass 8 is built, or only after it?
+  **Recommendation: after**, so that the player never has fewer remedies than today, even for a day.
+- **Q45, *Use Another Game's Cover…*.** Build it with the replacements, or leave the manual pick to *Add Cover Art from
+  File…*? **Recommendation: build it**; it is the remedy for the hacks and translations that fill this library, and it
+  sends nothing anywhere.
+
+### 26.10 What this section did not do
+
+- **No live call.** ScreenScraper, libretro and GitHub were not asked anything; P130–P132 wait on a run the player starts.
+- **ScreenScraper's side of the 1,113 recorded lookups is unknown**, so whether ScreenScraper has a box for the 670 games
+  the failover found, or for the 108 it found no box for, is not measured.
+- **P60 (N64 byte order) is still open.** It matters here only because the renamed transform must keep serving
+  ScreenScraper's step 2.
+- **libretro's server was not characterised:** its limits, its terms for software that asks it, and its coverage outside
+  the 1,113 games are unknown.
+- **Nothing was removed.** The failover is on by default and works as §4.60 describes.
+
+---
+
+## 27. ScreenScraper's name offered, and a game's options from the desktop library (2026-09-26)
+
+*Opened and closed on 2026-09-26, on branch `desktop-game-options`,* on the answers to Q18 and Q19 (§10.1). The
+player's account is §4.63 of the settings reference; this is the record. Predictions are numbered from P140, after
+§26's, and the one question is Q46.
+
+### 27.1 Predictions, and what was found
+
+Written during the build, by the hand that wrote the code, as §18.1 and §23.1 were, and weaker evidence for it.
+
+| # | Predicted | Found | Verdict |
+|---|---|---|---|
+| P140 | The desktop needs no window of its own: `SheetLayer.Show` already shows the same `GameOptionsWindow` and `MetadataEditorWindow` as owned windows where no layer presents them | the tests find both in `OwnedWindows` on the desktop and on `Sheets.Current` in the built-in big screen, from one `PresentGameOptions` | held |
+| P141 | Every control of the editor is reached by the pad with the offer's two buttons shown | measured on the themed editor after its own scrape: none unreached | held |
+| P142 | No test of §22 or §23 changes | the four classes of the mutant runner's filter passed unchanged before the round (28 of 28) | held |
+| P143 | Of the round's mutants, at least nine in ten are caught on their first run | 20 of 21; the survivor equivalent (27.5) | held |
+
+### 27.2 Q18: ScreenScraper's name, offered
+
+`MetadataDraft` gained `OfferedName` (ScreenScraper's name, while it differs from the Name field and has not been put
+away), `TakeOfferedName` and `DeclineOfferedName`; `MetadataEditorWindow` draws the offer under the Name box, a sentence
+and two buttons, *Use This Name* and *Keep Current Name*, shown only while there is an offer. `GameMetadata.Scraped` is
+unchanged: it still has no case for the name, so ScreenScraper's name is never a baseline and a scrape never puts it in
+the field. That is where "don't force on user" is enforced; the offer is only a way for the player to type it with one
+press.
+
+**Choices made where the answer is silent.**
+- *When the offer shows.* After the editor's own scrape, as the answer asked, and also when the editor opens on a game
+  ScreenScraper has already answered for, since the name is already in `media.db` and offering it costs nothing and
+  sends nothing.
+- *Declining is not remembered.* It lasts for the editing; the offer is there again at the next opening. A remembered
+  refusal would need a row of its own in `games.db` for a choice that changes nothing when it is not taken.
+- *Taking it is an edit, saved with Save.* The editor saves nothing until Save, as every field does (§23.2); the offer
+  follows the same rule rather than writing at once.
+- *Q30* (§21.5, a switch for scraped names, off, accepted) is not built. The offer is per game; the switch would be the
+  library-wide form of the same choice, and it waits for Pass 8.
+
+### 27.3 Q19: the menu and the editor from the sidebar library
+
+| Route | Code |
+|---|---|
+| the grid's and the list's context menu: **Game Options...**, **Edit Metadata...** (Ctrl+I shown) | `MainWindow.Library.cs`, `LibraryContextMenu` |
+| **Ctrl+I** over either library | `MainWindow.GameOptions.cs`, `EditMetadataFromTheKeyboard`, called from the window's key tunnel |
+| the pad menu over the sidebar library, **Game Options...** | `MainWindow.Pad.cs`, `OpenPadMenu` |
+
+`ShowGameOptions` was split: the game's own entries are built by `AddGameEntries` and shown by `PresentGameOptions`, which
+both the themed gamelist and the sidebar library call, so there is one menu and one way it is shown.
+
+**Decided, and why.** The themed gamelist's rows (Jump To, Sort Games By, Filter Gamelist, Search) and its collection
+entries are left out of the sidebar library's menu. They act on the themed gamelist's own sort, filter and letters,
+which are state of the themed view; the sidebar library has its own search box, console filter and collections, and a
+menu that changed the themed view's state from the desktop would change a list that is not on the screen. The desktop's
+context menu already has Add to Collection and Remove from the collection shown. Select in the sidebar library stays the
+favourite, as §23.4 left it; Q46 asks whether it should open the menu as in the themed gamelist. The themed view's pad
+menu has no *Game Options...*: Select is its route.
+
+### 27.4 Tests
+
+Headless through WiseMan; the scraping on stage (d)'s fake ScreenScraper, never the network.
+- `DesktopGameOptionsTests` (6), `EmuSen.WiseMan/Mistress/`: a real right-click on a cover (pointer down and up at its
+  centre) selects it and opens the grid's context menu, whose entries include Game Options... and Edit Metadata...;
+  Game Options... opens the menu as an owned window with exactly the three entries and no rows; its Edit This Game's
+  Metadata opens the editor as an owned window, and a saved name is the grid's and the list's label. A right-click on a
+  list row, Edit Metadata..., a name and a description saved, shown in the list, the grid and big picture's gamelist;
+  then a name typed on the on-screen keyboard in big picture's editor, shown on the desktop after F10. Ctrl+I opens the
+  editor for the selected game, I alone does not, and neither does Ctrl+I in the search box. The built-in big screen's
+  pad menu opens the menu and the editor as sheets, no window owned, the name typed on the on-screen keyboard. The
+  desktop's pad menu has Game Options... (a window there) and the themed gamelist's has not. Ctrl+I over big picture's
+  gamelist opens the selected game's editor as a sheet, and in the system view, after a game was chosen, nothing.
+- `ThemedMetadataScrapeTests` gained three for Q18: the name offered after the editor's scrape and never in the field,
+  every control reached by the pad with the offer shown, a Save storing no name, and the offer shown again on a later
+  opening; the offer taken, shown as the player's edit with its Reset, saved and shown in the themed list and the library
+  list; the offer declined over the player's own name, which stays in the box, in the draft's changes and in `games.db`.
+
+### 27.5 Mutants
+
+The runner is `~/.cache/emusen/probe/bigpicture/desktop-options/mutate_desktop_options.py`, adapted from §23.9's, with its
+list `mutants-desktop-options.json` written by `mutants_desktop_options_make.py`, which checks that each edit's text occurs
+exactly once. It restores any mutant a killed round left behind before it starts. Each mutant was built with `-m:2` and
+run alone under `nice -n 10` against `DesktopGameOptionsTests`, `ThemedMetadataScrapeTests`, `ThemedGameOptionsTests` and
+`GameMetadataTests`; after each, the file was restored from its copy, stamped with the present time and compared byte for
+byte, and the tree was rebuilt at the end. Every verdict is appended to `mutants-desktop-options.txt`; the log is
+`run-desktop-options.log`.
+
+| Rule | Mutants | Result |
+|---|---|---|
+| Q18: offered, never forced | N1 the editor's scrape puts ScreenScraper's name in the field; N2 the name never offered; N3 Use This Name does nothing; N4 Keep Current Name takes the name; N5 the offer stays once the name is ScreenScraper's; N6 the offer's row never shown; N7 ScreenScraper's name made the name's baseline, shown with no edit | all caught; N1 by 5 tests, N7 by 6 |
+| Q19: the routes | D1 no Game Options in the context menu; D2 no Edit Metadata in it; D3 the sidebar library's editor opens nothing; D9 no Game Options in the pad menu; D10 the themed view's pad menu offers it too | caught |
+| Q19: what the menu holds and how it is shown | D4 the themed gamelist's Search in the desktop's menu; D5 the menu always a window, never a sheet | caught; D5 by 17, since the themed menu shares `PresentGameOptions` |
+| Ctrl+I | D6 Ctrl+I opens nothing; D7 Ctrl+I taken from a text box being typed in; D8 I alone opens the editor; D13 Ctrl+I ignored over the themed gamelist | caught |
+| One edit, every view | D11 the list shows the file's name; D12 the grid shows the file's name | caught; D11 by 5 |
+| Ctrl+I in the system view | D14 the gamelist condition removed | **survived, and equivalent**: `ThemedLibrary.SelectedGame` is null outside a gamelist, so the condition could never decide anything. The condition was removed from the code rather than kept untested, and the test that returns to the system view and presses Ctrl+I was kept |
+
+**20 of 21 caught, each on its first run; the survivor is an equivalent mutant.** D13 and D14 were a second round
+(`mutants-desktop-options-2.json`), written after the Ctrl+I test over the themed gamelist was added. As §23.9 said of its
+own round, a mutant written after its test by the same hand shows that the test is not empty, not that the rule list is
+complete; P143 held (20 of 21, 95%).
+
+### 27.6 Pictures
+
+At 1280×800, written by `DesktopOptionsPictureTool` with `EMUSEN_BIGPICTURE_PNG=1` to
+`~/.cache/emusen/bigpicture/png/desktop-options/`. A desktop window is a separate top level, which the main window's
+capture does not include, so the tool draws the window's own frame over the main window's, centred where
+`CenterOwner` puts it; the context menu is drawn by the headless platform inside the window and needs no pasting. They
+were looked at:
+- `desktop-grid-context-menu`: the right-clicked cover ringed, and the menu beside it with Game Options... and Edit
+  Metadata... (its Ctrl+I drawn at the right) between the collection entries and the cover art entries.
+- `desktop-options-window`: the three entries and Close, the first focused, the grid behind.
+- `desktop-editor-window`, `-edited`: the editor as a window; after typing, the Name row reads "Your edit." with its Reset.
+- `desktop-grid-after-save`, then `bigpicture-shows-the-desktop-edit`: the new name on the placeholder and its title band, cut with an ellipsis, then in the
+  themed gamelist after Big Picture from the View menu, cut at the theme's text list width, as any long name is there.
+- `builtin-pad-menu`, `builtin-options-sheet`, `builtin-editor-sheet`: the pad menu over the built-in big-screen list,
+  then the menu and the editor as sheets.
+- `themed-editor-name-offered`: under the Name box, still the file's name and "From the file name.", the line
+  *ScreenScraper calls this game "Aurora Drift (US title)".* and its two buttons; the status line under the fields says
+  the name is offered and changes only if used. `themed-editor-name-taken`: the box holds the name, the row reads "Your
+  edit." with Reset, and the offer is gone. `themed-gamelist-name-taken`: the gamelist after Save.
+- **Seen and left:** on the desktop the options window, like the sheet, is titled by the game and holds three entries
+  in a window sized to them; the sheet in the big screen takes the full height as every sheet does (§23.10).
+
+### 27.7 Not done
+
+- **Nothing ran on the handheld,** and no real pointer or window manager drove the desktop windows.
+- **Ctrl+I cannot be rebound**; the hotkey map binds single keys (§4.3 of the settings reference).
+- **Select in the sidebar library** is still the favourite (Q46).
+- **Q30's switch** for scraped names library-wide is not built (27.2).
+- **The desktop's menu has no rows** for sorting or filtering the sidebar library, which has no sort of its own.
+
+### 27.8 The broad run
+
+One broad run at the end, as the test-load rule asks: every test under `EmuSen.WiseMan.Mistress` except
+`ShaderSettingsWindowTests`, `ShaderBrowseBench` and `SceneGpuBench`, under `nice -n 10`, no GPU test: **872 passed, 18
+skipped (the picture and bench tools gated by their variables), none failed**, of 890, in 3 min 19 s. Before it, the
+mutant runner's four classes passed 29 of 29 on the final code.
+
+### 27.9 Question for the player
+
+- **Q46, Select in the sidebar library.** In the themed gamelist Select opens the game options (§23.4, Q12) and North
+  is the favourite (Q15). In the sidebar library, on the desktop's pad and in the built-in big screen, Select is still
+  the favourite and the options are an entry of the pad menu. Make Select open the options there too, with the
+  favourite as the menu's first entry, or keep it? **Recommendation: keep it**, since the built-in library is Mistress's
+  own look (§23.4) and its help line already names Select as the favourite; the pad menu reaches the options in two
+  presses.

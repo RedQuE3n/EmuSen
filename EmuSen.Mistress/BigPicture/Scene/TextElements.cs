@@ -37,10 +37,11 @@ namespace EmuSen.Mistress.BigPicture.Scene
         {
             if (e.String("metadata") is not { } field) return null;
             SceneSystem system = b.Data.System;
+            if (field is "systemName" or "systemFullname" && b.View.Name == "gamelist" && system.Heading is { } heading) return heading.Length == 0 ? null : heading;
             if (field is "systemName") return system.System.Name;
             if (field is "systemFullname") return system.System.FullName;
-            if (field is "sourceSystemName") return system.System.Name;
-            if (field is "sourceSystemFullname") return system.System.FullName;
+            if (field is "sourceSystemName") return (b.Data.Game?.SourceIn(system) ?? system.System).Name;
+            if (field is "sourceSystemFullname") return (b.Data.Game?.SourceIn(system) ?? system.System).FullName;
             if (b.Data.Game is not { } g) return null;
             static string YesNo(bool v) => v ? "Yes" : "No";
             string? value = field switch
@@ -63,8 +64,8 @@ namespace EmuSen.Mistress.BigPicture.Scene
                 "physicalNameExtension" => Path.GetFileName(g.File),
                 _ => null,
             };
-            if (field == "name" && value is not null && e.Bool("systemNameSuffix") == true && system.System.Kind != ThemeSystemKind.Regular)
-                value += " [" + SceneUnits.Cased(system.System.Name, e.String("letterCaseSystemNameSuffix") ?? "uppercase") + "]";
+            if (field == "name" && value is not null && !g.Folder && e.Bool("systemNameSuffix") == true && system.System.Kind != ThemeSystemKind.Regular)
+                value += " [" + SceneUnits.Cased(g.SourceIn(system).Name, e.String("letterCaseSystemNameSuffix") ?? "uppercase") + "]";
             return value;
         }
 
@@ -73,7 +74,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         {
             if (e.String("systemdata") is not { } field) return null;
             SceneSystem s = b.Data.System;
-            int games = s.Games.Count(g => !g.Folder), favorites = s.Games.Count(g => g.Favorite);
+            int games = s.Games.Count(g => !g.Folder && !g.NotCounted), favorites = s.Games.Count(g => g.Favorite && !g.NotCounted);
             return field switch
             {
                 "name" => s.System.Name,

@@ -21,7 +21,7 @@ namespace EmuSen.Mistress.Library
     public sealed record GameCollection(long Id, string Name, int Count);
 
     // The player's own library in SQLite: kept, unlike the catalogue cache, so it migrates rather than rebuilds - see EmuSen_Settings_Reference.md §4.32.
-    public sealed class GameRecords : IDisposable
+    public sealed partial class GameRecords : IDisposable
     {
         // Each entry takes the file from the version before it; append, never edit - see §4.32.
         private static readonly string[] Migrations =
@@ -67,6 +67,15 @@ namespace EmuSen.Mistress.Library
                 outcome   TEXT NOT NULL CHECK (outcome IN ('Found', 'Unknown', 'NoArt')),
                 rom_name  TEXT,
                 checked   TEXT NOT NULL
+            );
+            """,
+            """
+            CREATE TABLE game_edit (
+                path    TEXT NOT NULL,
+                field   TEXT NOT NULL,
+                value   TEXT NOT NULL,
+                edited  TEXT NOT NULL,
+                PRIMARY KEY (path, field)
             );
             """,
         };
@@ -224,6 +233,8 @@ namespace EmuSen.Mistress.Library
             Execute(_db, step, "UPDATE game SET last_played = NULL WHERE path = $to AND last_played = ''", ("$to", to));
             Execute(_db, step, "UPDATE OR IGNORE collection_game SET path = $to WHERE path = $from", ("$from", from), ("$to", to));
             Execute(_db, step, "DELETE FROM collection_game WHERE path = $from", ("$from", from));
+            Execute(_db, step, "UPDATE OR IGNORE game_edit SET path = $to WHERE path = $from", ("$from", from), ("$to", to));
+            Execute(_db, step, "DELETE FROM game_edit WHERE path = $from", ("$from", from));
             Execute(_db, step, "UPDATE OR IGNORE cover_lookup SET path = $to WHERE path = $from", ("$from", from), ("$to", to));
             Execute(_db, step, "DELETE FROM cover_lookup WHERE path = $from", ("$from", from));
             Execute(_db, step, "DELETE FROM game WHERE path = $from", ("$from", from));

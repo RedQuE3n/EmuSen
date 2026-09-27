@@ -20,7 +20,7 @@ namespace EmuSen.Mistress.Input
         {
             box.Focus(NavigationMethod.Directional);
             box.CaretIndex = box.Text?.Length ?? 0;
-            return OnScreenKeyboard.Show(box, Chosen.TryGetValue(box, out KeyboardLayout[]? layouts) ? layouts : Words, Hint);
+            return OnScreenKeyboard.Show(box, Chosen.TryGetValue(box, out KeyboardLayout[]? layouts) ? layouts : Words, PadHints.Face(Hint));
         }
 
         // B erases, and with nothing left to erase puts the keyboard away, keeping the (empty) text.

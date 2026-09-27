@@ -65,7 +65,7 @@ namespace EmuSen.Mistress.Views
 
         private readonly IReadOnlyList<ReelMoment> _moments;
         private readonly RgbaImageView _preview = new() { Name = "ReelPreview", Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center };
-        private readonly HintText _hint = Ui.Hint(PadHint);
+        private readonly HintText _hint = Ui.Hint(EmuSen.Mistress.Input.PadHints.Face(PadHint));
         private readonly TextBlock _caption = new() { Name = "ReelCaption", FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center };
 
         public TileStrip<ReelMoment> Strip { get; } = new() { Name = "ReelStrip", TileWidth = 150, TileHeight = 136, Spacing = 12, Height = 176 };

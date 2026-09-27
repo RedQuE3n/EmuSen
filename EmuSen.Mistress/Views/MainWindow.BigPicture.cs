@@ -87,9 +87,10 @@ namespace EmuSen.Mistress.Views
             {
                 _themed.Status = DeviceStatusReader.Read();
                 _themed.PlaySound = _appSettings.NavigationSounds ? PlayUiSound : null;
-                _themed.SetFamily(PadFamilies.Of(_gamepad.ControllerType, _gamepad.ControllerName));
+                _themed.SetPadLayout(HelpFamily, _appSettings.SwapPadButtons);
                 string mediaKey = $"{_appSettings.EsdeMediaDirectory}|{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(_artwork)}|{ScrapeMediaKey}";
-                shown = _themed.Show(_appSettings.BigPictureTheme!, LibraryView.Bounds.Size, ThemedShelves(), ThemedMedia(), mediaKey,
+                ApplyCollectionSettings();
+                shown = _themed.Show(_appSettings.BigPictureTheme!, LibraryView.Bounds.Size, WithCollections(ThemedShelves()), ThemedMedia(), mediaKey,
                     ThemeSettingsWindow.ChoicesFor(_appSettings, _appSettings.BigPictureTheme));
                 if (!shown && _themed.Error is { } why && LibraryView.Bounds.Width > 0) StatusText.Text = why;
                 if (shown && _themed.PlaySound is not null && UiSoundSink is null) (_uiSounds ??= new UiSoundPlayer()).Preload(_themed.SoundFiles);
@@ -110,14 +111,14 @@ namespace EmuSen.Mistress.Views
         // Each shelf under ES-DE's name for it, favourites first and then by title, as ES-DE lists a gamelist by default (§13.8).
         private IReadOnlyList<ThemedShelf> ThemedShelves() => EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder
             .Select(s => new ThemedShelf(new ThemeSystem(s.EsdeSystem, s.EsdeFullName, s.EsdeSystem),
-                _allScan.Entries.Where(e => e.Shelf == s.Name).Select(ThemedGame)
-                    .OrderByDescending(g => g.Favorite).ThenBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList()))
+                _allScan.Entries.Where(e => e.Shelf == s.Name && Listed(e)).Select(ThemedGame)
+                    .OrderByDescending(g => g.Favorite).ThenBy(g => g.SortName ?? g.Name, StringComparer.OrdinalIgnoreCase).ToList()))
             .ToList();
 
         private SceneGame ThemedGame(RomEntry entry)
         {
             GameRecord? r = _recordSnapshot.GetValueOrDefault(entry.FullPath);
-            return WithScrapedText(new SceneGame(entry.Title, entry.FullPath)
+            return WithMetadata(new SceneGame(entry.Title, entry.FullPath)
             {
                 Favorite = r?.Favourite == true, LastPlayed = r?.LastPlayed, PlayCount = r?.PlayCount ?? 0,
                 PlayTime = r is { PlaySeconds: > 0 } ? TimeSpan.FromSeconds(r.PlaySeconds) : null,
@@ -164,20 +165,19 @@ namespace EmuSen.Mistress.Views
                     await StartGameAsync(game.File, Path.GetFileName(game.File));
                     break;
                 case ThemedAction.Favourite when command.Game is { } game:
-                    _records.ToggleFavourite(game.File);
-                    IdentifyLater(game.File);
-                    StatusText.Text = _records.IsFavourite(game.File) ? $"Added {game.Name} to Favourites" : $"Removed {game.Name} from Favourites";
-                    ShowLibraryEntries();
+                    ToggleThemedFavourite(game);
                     break;
-                case ThemedAction.Search when _themedSearch is not null:
-                    ShowThemedSearchBar(open: true);
-                    PadKeyboard.Open(_themedSearch);
+                case ThemedAction.Options when command.Game is { } game:
+                    ShowGameOptions(game);
                     break;
                 case ThemedAction.ClearSearch when _themedSearch is not null:
                     _themedSearch.Text = "";
                     break;
                 case ThemedAction.Menu:
                     OpenPadMenu();
+                    break;
+                case ThemedAction.ToggleCollection when command.Game is { } member:
+                    ToggleEditedMembership(member);
                     break;
                 case ThemedAction.Leave when _session is { IsRomLoaded: true }:
                     ToggleLibrary();
@@ -274,6 +274,7 @@ namespace EmuSen.Mistress.Views
             _uiSounds?.Dispose();
             _uiSounds = null;
             _themeSettings?.StopDownload();
+            CloseGameSheets();
         }
     }
 }

@@ -167,6 +167,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             C("textlist", "letterCase", "none", "uppercase"),
             C("textlist", "lineSpacing", "1.5", "2.5"),
             C("textlist", "indicators", "none", "symbols"),
+            C("textlist", "collectionIndicators", "symbols", "ascii") with { System = 7 },
             C("carousel", "itemTransitions", "animate", "instant") with { Moves = "step", At = 100 },
             C("carousel", "fastScrolling", "false", "true") with { Moves = "hold", At = 2000 },
             C("textlist", "textHorizontalScrolling", "false", "true") with { Context = "size=0.3 1", At = 4000 },
@@ -342,6 +343,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var systems = SyntheticLibrary.Systems.Select(s => (s.System, Games: SyntheticLibrary.Games(s.System, s.Extension))).ToList();
             systems.Add((new ThemeSystem("all", "All Games", "auto-allgames", ThemeSystemKind.AutoCollection), SyntheticLibrary.Games(new ThemeSystem("all", "All Games", "all"), ".nes")));
             systems.Add((new ThemeSystem("snes", "Super Nintendo", "snes"), SyntheticLibrary.Games(SyntheticTheme.Snes, ".sfc").Select((g, i) => i == 5 ? g with { Folder = true } : g).ToList()));
+            systems.Add((new ThemeSystem("mine", "mine", "mine", ThemeSystemKind.CustomCollection), SyntheticLibrary.Games(SyntheticTheme.Snes, ".sfc").Select((g, i) => g with { InCollection = i % 2 == 0 }).ToList()));
             return systems.Select(s => new SceneSystem(s.System, theme.Load(new ThemeChoices { ScreenWidth = W, ScreenHeight = H }, s.System), s.Games)).ToList();
         }
 

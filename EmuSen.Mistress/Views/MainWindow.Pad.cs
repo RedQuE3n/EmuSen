@@ -44,9 +44,10 @@ namespace EmuSen.Mistress.Views
         private void StartPadNavigation()
         {
             // Wired once; what big screen changes is ApplyBigScreen's, which a switch runs again - see EmuSen_Settings_Reference.md §4.54.
-            Sheets.Hint = "A  Choose      B  Back      L1 R1  Tab      Left Right  Change";
+            ApplyPadHints();
             Sheets.PresentedChanged += OnSheetsChanged;
             SizeChanged += (_, e) => Sheets.Scale = Math.Clamp(e.NewSize.Height / 720.0, 1.0, 2.0);
+            SizeChanged += (_, e) => PadNotice.FontSize = _bigScreen ? 18 * Math.Clamp(e.NewSize.Height / 720.0, 1.0, 2.0) : 15;
             SetUpBigPictureSwitch();
             ApplyBigScreen(WantsBigScreen());
 
@@ -56,28 +57,11 @@ namespace EmuSen.Mistress.Views
             _padTimer.Start();
         }
 
-        private bool PadHeld(UiButton button) => button switch
-        {
-            UiButton.Up => _gamepad.IsRawPressed(SDL.GamepadButton.DPadUp) || _gamepad.RawAxis(SDL.GamepadAxis.LeftY) < -PadStickThreshold,
-            UiButton.Down => _gamepad.IsRawPressed(SDL.GamepadButton.DPadDown) || _gamepad.RawAxis(SDL.GamepadAxis.LeftY) > PadStickThreshold,
-            UiButton.Left => _gamepad.IsRawPressed(SDL.GamepadButton.DPadLeft) || _gamepad.RawAxis(SDL.GamepadAxis.LeftX) < -PadStickThreshold,
-            UiButton.Right => _gamepad.IsRawPressed(SDL.GamepadButton.DPadRight) || _gamepad.RawAxis(SDL.GamepadAxis.LeftX) > PadStickThreshold,
-            UiButton.Accept => _gamepad.IsRawPressed(SDL.GamepadButton.South),
-            UiButton.Back => _gamepad.IsRawPressed(SDL.GamepadButton.East),
-            UiButton.Menu => _gamepad.IsRawPressed(SDL.GamepadButton.Start),
-            UiButton.Options => _gamepad.IsRawPressed(SDL.GamepadButton.Back),
-            UiButton.PageUp => _gamepad.IsRawPressed(SDL.GamepadButton.LeftShoulder),
-            UiButton.PageDown => _gamepad.IsRawPressed(SDL.GamepadButton.RightShoulder),
-            UiButton.First => _gamepad.RawAxis(SDL.GamepadAxis.LeftTrigger) > 0.5,
-            UiButton.Last => _gamepad.RawAxis(SDL.GamepadAxis.RightTrigger) > 0.5,
-            UiButton.Search => _gamepad.IsRawPressed(SDL.GamepadButton.North),
-            _ => _gamepad.IsRawPressed(SDL.GamepadButton.Guide),
-        };
-
         private void PadTick()
         {
             _gamepad.Poll();
             if (!_gamepad.IsConnected) return;
+            TrackControllers();
 
             // A game on screen owns the pad; only the chord reaches the interface - see §4.29.
             if (GameOnScreen && !_padMenuOpen && OtherWindow() is null)
@@ -93,7 +77,7 @@ namespace EmuSen.Mistress.Views
 
             // The themed view takes the directions as held and let go, for its own repeats - see EmuSen_Settings_Reference.md §4.52.
             bool themed = ThemedTakesThePad;
-            if (ThemedLibraryShown) _themed!.SetFamily(PadFamilies.Of(_gamepad.ControllerType, _gamepad.ControllerName));
+            if (ThemedLibraryShown) _themed!.SetPadLayout(HelpFamily, _appSettings.SwapPadButtons);
             if (themed) ThemedDirections(now);
             else LetGoOfTheThemedDirection(now);
 
@@ -215,7 +199,7 @@ namespace EmuSen.Mistress.Views
         {
             string back = _session is { IsRomLoaded: true } ? $"B  Back to {_currentDisplayName}      " : "";
             string moves = GridShown ? "L1 R1  Console      L2 R2  Top, End" : "L1 R1  Page      L2 R2  Top, End      Left Right  Console";
-            return $"A  Play      {back}Y  Search      Select  Favourite      {moves}      Start  Menu";
+            return PadHints.Face($"A  Play      {back}Y  Search      Select  Favourite      {moves}      Start  Menu");
         }
 
         private void OpenPadMenu()
@@ -243,11 +227,15 @@ namespace EmuSen.Mistress.Views
             _padMenuEntries.Add(new PadMenuEntry(() => "Shaders", ShowShaderSettings));
             _padMenuEntries.Add(new PadMenuEntry(() => "Controller Bindings", ShowControllerBindings));
             _padMenuEntries.Add(new PadMenuEntry(() => "Preferences", ShowPreferences));
+            // The sidebar library's game options; the themed gamelist has them on Select - see EmuSen_Settings_Reference.md §4.63.
+            if (!inGame && !ThemedLibraryShown && SelectedLibraryEntry is EmuSen.Mistress.Library.RomEntry chosen)
+                _padMenuEntries.Add(new PadMenuEntry(() => "Game Options...", () => ShowLibraryGameOptions(chosen)));
             // Scraping only ever starts here or in Preferences, by the player - see EmuSen_Settings_Reference.md §4.60.
             if (!inGame && GameToScrape is string game && !ScrapeRunning)
                 _padMenuEntries.Add(new PadMenuEntry(() => "Scrape This Game...", () => _ = ConfirmAndScrapeAsync(Scraping.ScrapeScope.ThisGame(game))));
             if (!inGame) _padMenuEntries.Add(new PadMenuEntry(() => ScrapeRunning ? $"Scraping ({_scrapeRun!.Done} of {_scrapeRun.Total})..." : "Scrape Games...", () => { if (ScrapeRunning) ShowScrapeStatus(); else ShowPreferencesAt(PreferencesWindow.ScrapingTab); }));
             if (_bigScreen && !inGame) _padMenuEntries.Add(new PadMenuEntry(() => "Theme Settings", ShowThemeSettings));
+            if (!inGame) AddCollectionMenuEntries(_padMenuEntries);
             if (!_bigScreen) _padMenuEntries.Add(new PadMenuEntry(() => IsFullScreen ? "Leave Full Screen" : "Full Screen", ToggleFullScreen));
             if (!_bigScreenForced) _padMenuEntries.Add(new PadMenuEntry(() => _bigScreen ? "Exit Big Picture" : "Big Picture", () => SetBigPicture(!_bigScreen)));
 
@@ -264,7 +252,7 @@ namespace EmuSen.Mistress.Views
             if (_padMenuPaused) PauseEmulation();
 
             PadMenuTitle.Text = inGame ? _currentDisplayName ?? "Game" : "EmuSen";
-            PadMenuHint.Text = "A  Choose      B  Close      Left Right  Change";
+            PadMenuHint.Text = PadHints.Face("A  Choose      B  Close      Left Right  Change");
             PadMenuList.Refresh(_padMenuEntries);
             PadMenuList.Select(_padMenuEntries[0]);
             PadMenuPanel.IsVisible = true;

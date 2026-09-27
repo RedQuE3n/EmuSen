@@ -3387,6 +3387,8 @@ ScreenScraper switch (`Scraping`, on) only says ScreenScraper may be used when a
 | **games with no cover**, in one console or all | the same, with **Only games with no cover** on (the default) |
 | **every game** | the same, with **Every console** and **Only games with no cover** off |
 
+*Amended by §4.76:* the switch became a dropdown of ES-DE's criteria, *Games with no cover* still the default.
+
 The pad menu's **Scrape Games...** opens Preferences on the Scraping tab. Before a run starts, a confirm sheet gives the
 count of games, how many ScreenScraper has not been asked about, the most requests it can cost against what is left
 today (one lookup and one per picture kind a game), the time at about 13 seconds a game (plan §17.9), and whether
@@ -3467,7 +3469,8 @@ it.
 
 **How a game is looked up**, inside a run. Only the file's own hashes are asked first; if ScreenScraper does not know them and the
 console's core declares another form of the bytes (the NES without its iNES header, the SNES without a copier header, the
-N64 halfword-swapped: `CoreDescriptor.OpenVgdbBytes`), those hashes are asked once more. There is no search by name. A
+N64 halfword-swapped: `CoreDescriptor.OpenVgdbBytes`), those hashes are asked once more. There is no search by name
+inside a run (*Amended by §4.76:* the player's **Find by Name...** is one, for one game, and only when pressed). A
 game answered once is not asked again: a renamed file takes its pictures to its new name, and a copy of it gets copies,
 with no request. A whole library is days of a free account's quota (plan §17.10).
 
@@ -3562,13 +3565,14 @@ mutants are in the plan's §20.
 
 **What it does not cover.**
 - No video (Q4), no back cover, fan art, 3D box or physical media: ES-DE's folders for them exist, nothing fills them.
+  *Amended by §4.76:* each is now a switch, off by default, and manuals too.
 - The game's name stays the file's; ScreenScraper's is kept in `media.db` but not shown. *Amended by §4.63: the metadata
   editor offers it, and it becomes the name only when the player takes it.*
 - A game found without a cover because the player had one, whose cover is later removed, goes to the failover rather
   than back to ScreenScraper.
 - No "refresh": a picture already there is never fetched again, so a better one at ScreenScraper is not seen; delete the
-  file to have it fetched.
-- No search by name for a game the hashes miss.
+  file to have it fetched. *Amended by §4.76:* **Refresh what is kept** does it, by checksum.
+- No search by name for a game the hashes miss. *Amended by §4.76:* **Find by Name...**.
 - Nothing ran on the handheld.
 
 ### 4.61 Controllers: every pad steers the interface, a notice when one comes or goes, and ES-DE's input settings (2026-09-26)
@@ -5129,3 +5133,118 @@ older themed tests are never interrupted by it. The mutants are in §37 of the p
 - **`%ESPATH%`** in the custom folder is not expanded.
 - **The desktop's own library**, outside big picture, has no screensaver.
 - **Nothing ran on the handheld,** in Game Mode or out of it.
+
+### 4.76 ScreenScraper's extras: more kinds, Refresh, Find by Name, which games, ScreenScraper's names, and orphaned media (2026-09-27)
+
+Pass 8 of `EmuSen_BigPicture.md` §21 (its §38 is the record: the offer rates, the request counts, the tests, the mutants
+and the pictures). This section is what a player meets. Everything in §4.60 still holds: **nothing is sent to
+ScreenScraper, or anywhere, until the player starts it**, and every request is paced and counted against the day's
+quota as §4.60 describes.
+
+#### 4.76.1 More kinds (Preferences ▸ Scraping ▸ Fetch More)
+
+Six more of what ES-DE's scraper fetches, each **off** until turned on:
+
+| Switch | Setting | ScreenScraper's | Kept in `home/Media/<system>/` | On average, for a game that has one |
+|---|---|---|---|---|
+| Back covers | `ScrapeBackCovers` | `box-2D-back` | `backcovers/`, png or jpg | 0.47 MB; 33 of 39 found games have one |
+| 3D boxes | `Scrape3DBoxes` | `box-3D` | `3dboxes/` | 0.35 MB; 33 of 39 |
+| Physical media (the cartridge) | `ScrapePhysicalMedia` | `support-2D` | `physicalmedia/` | 0.45 MB; 33 of 39 |
+| Fan art | `ScrapeFanArt` | `fanart` | `fanart/` | 0.40 MB; 25 of 39 |
+| Manuals (PDF) | `ScrapeManuals` | `manuel` | `manuals/`, pdf | 2.3 MB, the largest seen 18 MB; 27 of 39 |
+| Videos | `ScrapeVideos` | `video-normalized` | `videos/`, mp4 | 1.4 MB; 32 of 39 |
+
+The averages are ScreenScraper's own sizes in the answers of the plan's live run (§17.9, §38.1). Each is **one more
+request** for every game that has one, and a free account has 10,000 a day: with the four pictures on, a found game
+costs about 7.9 requests instead of 4.7, and this 5,520-game library about four and a half days instead of three.
+
+A file is kept only when it is what its kind should be: a picture for the pictures, a PDF (it starts `%PDF-`) for a
+manual, an MP4 for a clip; anything else, such as an error page, is dropped. Files up to 128 MB are kept, and a large
+one is given time in proportion to its size. **Manuals and videos are only stored for now**: the media viewer that shows
+manuals and the video playback come later (passes 9 and 12). A theme that asks for back covers, 3D boxes, physical media
+or fan art (ES-DE's `backcover`, `3dbox`, `physicalmedia`, `fanart`) now finds them.
+
+**Turning a kind on later.** A run asks a game already found again only if it may have that kind: a game whose answer,
+kept since this version, said it has no fan art is not asked for fan art. A game found before this version was kept
+without word of the new kinds, so it is asked once.
+
+#### 4.76.2 Game Names
+
+**Show ScreenScraper's names** (`ScrapeGameNames`, off). Off, every list shows the file's name, which in a No-Intro
+library already tells two copies of a game apart (decided under Q30 of the plan); the metadata editor still offers
+ScreenScraper's name to take for one game (§4.63). On, the library's grid and list, big picture's lists and the
+editor's Name field show ScreenScraper's name wherever a run has kept one. A name the player gave a game wins either way,
+and the file is never renamed.
+
+#### 4.76.3 Which games a run takes, and Refresh
+
+The **Scrape** row's second dropdown (`ScrapeCriteria`) is ES-DE's *Scrape these games*:
+
+| Choice | Value | A game is taken when |
+|---|---|---|
+| Games with no cover (the default) | `nocover` | it shows no cover, from any source (§4.60's order) |
+| All games | `all` | always |
+| Favourite games | `favorites` | it is a favourite |
+| No metadata | `nometadata` | it has no description, the player's or ScreenScraper's |
+| No game image | `nogameimage` | it has none of a mix image, screenshot, title screen or cover |
+| No game video | `nogamevideo` | it has no video |
+
+ES-DE's *Folders only* is not offered: it scrapes folders as games, and a library's folders here are regions and letters.
+A game marked *Exclude from multi-scraper* (§4.59) is still left out of a wide run, and **Scrape This Game** always takes
+its one game.
+
+**Refresh what is kept** (`ScrapeRefresh`, off; ES-DE's *Overwrite files and data*, on in ES-DE). On, a run asks again
+about games already found, *Scrape This Game* included:
+- each found game costs one request, and its text is replaced by ScreenScraper's current text; the player's own edits
+  (§4.59) still win;
+- a kept picture, manual or clip is compared with the checksum ScreenScraper states for it: the same, it is kept and
+  costs nothing; changed, the new file replaces the old once it has passed the checks above. Where an answer states no
+  checksum, the file's own is sent and ScreenScraper answers "unchanged" without sending the file, which costs a request
+  and no download;
+- a game ScreenScraper no longer lists keeps what it had.
+
+The status window counts the files kept unchanged. **The confirm step** before a run now gives, beside the most the run
+can cost, the requests and megabytes it is expected to cost by how often ScreenScraper has each kind (§38.6 of the plan),
+how many games found before are asked again and why, and the time at the account's download speed.
+
+#### 4.76.4 Find by Name…
+
+For a game whose file ScreenScraper does not know by its hashes (a hack, a translation, an unnamed dump), a game's
+options and the library's right-click menu offer **Find by Name...**. It opens a small window (a sheet in a big-screen
+session, driven by the pad):
+- the box holds the file's name without its tags, as ES-DE strips it: *SMW Hack (USA) [Hack].sfc* becomes *SMW Hack*;
+  change it as needed;
+- **nothing is sent until Search**. Each search is one request to ScreenScraper for that name on the game's console, and
+  one that finds nothing also counts against the day's allowance of unrecognised games;
+- the answers, up to thirty, most likely first, each with its year and publisher, and another platform in brackets when
+  ScreenScraper returned one. There are no pictures in the list, since each would be another request;
+- choosing one keeps that game's description and other text for this file and fetches its pictures (the kinds turned
+  on, each a request), exactly as a run does, and shows them. The file is not renamed. A later run asks about it by that
+  game, and a file matched this way never falls back to "not in ScreenScraper".
+
+It is never used by itself: no run, no missing game and no failover searches by name.
+
+#### 4.76.5 Orphaned media (Preferences ▸ Scraping ▸ Orphaned Media)
+
+**Clean Up...** finds the pictures, manuals and clips Mistress scraped for games no longer in the library, asks first
+with their count and size, and then **moves** them to `home/Media/CLEANUP/<date_time>/`, keeping their folders, with a
+`cleanup.txt` listing them, as ES-DE's *Orphaned data cleanup* does. Nothing is deleted; delete that folder when sure.
+Only Mistress's own `home/Media` is cleaned: never the ROM folder, an ES-DE media folder, the cover art folder or
+OpenEmu's folder. Only consoles that still have games in the library are looked at, and nothing at all when the ROM
+folder cannot be found, so an unplugged drive never looks like every game deleted. It sends nothing.
+
+#### 4.76.6 Tests and what it does not cover
+
+**Tests** (the plan's §38.10): `ScrapeExtrasTests` and `ScrapeExtrasWindowTests`, on the fake ScreenScraper, headless;
+the fake counts every request, and no test reaches the network. `ScrapeExtrasPictureTool` writes the pictures with
+`EMUSEN_BIGPICTURE_PNG=1`.
+
+**Not covered.**
+- Manuals are not viewable and videos do not play yet.
+- ES-DE's interactive scraping, *Auto-accept single game matches*, *Ratings* and *Other metadata* switches, *Folders
+  only* and *Scrape actual folders*.
+- OpenEmu's failover still finds covers only.
+- The cleanup leaves `games.db`'s rows of games gone; §4.37's orphan pass decides those.
+- None of it has been run against the live service: what a refresh, a search that finds nothing, a manual and a clip
+  cost there is predicted (P240–P243), not measured.
+- Nothing ran on the handheld.

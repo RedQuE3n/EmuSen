@@ -68,6 +68,8 @@ namespace EmuSen.Mistress.Views
                 Covers = _appSettings.ScrapeCovers, Screenshots = _appSettings.ScrapeScreenshots, Marquees = _appSettings.ScrapeMarquees,
                 TitleScreens = _appSettings.ScrapeTitleScreens, Miximages = _appSettings.ScrapeMiximages, Region = _appSettings.ScrapeRegion,
                 Language = _appSettings.ScrapeLanguage, RegionFallback = _appSettings.ScrapeRegionFallback, Threads = Math.Max(1, _appSettings.ScrapeThreads),
+                BackCovers = _appSettings.ScrapeBackCovers, Boxes3D = _appSettings.Scrape3DBoxes, PhysicalMedia = _appSettings.ScrapePhysicalMedia,
+                FanArt = _appSettings.ScrapeFanArt, Manuals = _appSettings.ScrapeManuals, Videos = _appSettings.ScrapeVideos,
             };
             _developerOrigin = DeveloperSource()?.Origin;
             _member = MemberAccount.Load();
@@ -146,27 +148,64 @@ namespace EmuSen.Mistress.Views
 
         private static string? SystemOf(RomEntry entry) => EmuSen.Cores.CoreCatalog.ShelfByName(entry.Shelf)?.EsdeSystem is { Length: > 0 } s ? s : null;
 
-        // The games a scope names, from the library as last scanned.
+        // The games a scope names, from the library as last scanned; a wide run keeps those its criteria name (§38).
         private List<RomEntry> ScopeGames(ScrapeScope scope)
         {
             IEnumerable<RomEntry> games = scope.Game is string one
                 ? _allScan.Entries.Where(e => e.FullPath == one).DefaultIfEmpty(new RomEntry(one))
                 : _allScan.Entries.Where(e => scope.Shelf is null || e.Shelf == scope.Shelf);
             games = games.Where(e => SystemOf(e) is not null && File.Exists(e.FullPath));
-            if (scope.MissingArtOnly && scope.Game is null) games = games.Where(e => CoverPathFor(e) is null);
-            if (scope.Game is null) games = games.Where(e => !ExcludedFromMultiScrape(e.FullPath));
+            if (scope.Game is null) games = games.Where(e => !ExcludedFromMultiScrape(e.FullPath)).Where(Meets(scope.Effective));
             return games.ToList();
         }
 
+        // ES-DE's "Scrape these games": no metadata is no description; no game image is none of miximage, screenshot, title screen and cover (USERGUIDE "Scraper").
+        private Func<RomEntry, bool> Meets(ScrapeCriteria criteria)
+        {
+            MediaSources? sources = criteria is ScrapeCriteria.NoGameImage or ScrapeCriteria.NoGameVideo ? MediaSourcesNow() : null;
+            bool Has(RomEntry e, string type) => SystemOf(e) is string system && sources!.Locate(system, e.FullPath, type).Path is not null;
+            return criteria switch
+            {
+                ScrapeCriteria.Favourites => e => _records.IsFavourite(e.FullPath),
+                ScrapeCriteria.NoMetadata => e => MetadataFor(e.FullPath).DescriptionText is null,
+                ScrapeCriteria.NoGameImage => e => CoverPathFor(e) is null && !Has(e, "miximage") && !Has(e, "screenshot") && !Has(e, "titlescreen"),
+                ScrapeCriteria.NoGameVideo => e => !Has(e, "video"),
+                ScrapeCriteria.NoCover => e => CoverPathFor(e) is null,
+                _ => _ => true,
+            };
+        }
+
+        // The confirm step's numbers: a bound of one lookup and one request a kind, and what §38's offer rates expect of the kinds turned on.
         public ScrapePlan Plan(ScrapeScope scope)
         {
             List<RomEntry> games = ScopeGames(scope);
             string? why = ScreenScraperUnusable();
             int notAsked = scope.Game is not null ? games.Count : games.Count(g => !_scrapeOutcomes.ContainsKey(g.FullPath));
+            var kinds = _scrapeChoices.Kinds().ToList();
+            int again = 0;
+            double againKB = 0, againRequests = 0;
+            if (scope.Game is null)
+                foreach (RomEntry g in games)
+                {
+                    if (!_scrapedText.TryGetValue(g.FullPath, out ScrapedRecord? found)) continue;
+                    IReadOnlyList<StoredMedia> stored = _mediaStore is { IsOpen: true } store ? store.Media(found.Md5, found.Bytes) : [];
+                    var lacking = kinds.Where(k => found.MayOffer(k.EsdeType) && !stored.Any(s => s.Type == k.EsdeType)).ToList();
+                    if (!scope.Refresh && lacking.Count == 0) continue;
+                    again++;
+                    againKB += ScrapeCost.KB(lacking);
+                    againRequests += ScrapeCost.Requests(lacking);
+                }
             QuotaSnapshot? q = _scrapeQuota?.Snapshot();
             int? left = q?.MaxPerDay is int max ? Math.Max(0, max - q.RequestsToday) : null;
-            return new ScrapePlan(games.Count, notAsked, notAsked * (1 + _scrapeChoices.Kinds().Count()), left,
-                ScrapePlan.PerGame * notAsked, why is null, why, _appSettings.OpenEmuFallback);
+            double kb = notAsked * ScrapeCost.KB(kinds) + againKB;
+            int? kbps = _scrapeQuota?.Limits?.MaxDownloadKBps;
+            return new ScrapePlan(games.Count, notAsked, (notAsked + again) * (1 + kinds.Count), left,
+                ScrapeCost.Time(notAsked + again, kb, kbps), why is null, why, _appSettings.OpenEmuFallback)
+            {
+                AskedAgain = again, Refresh = scope.Refresh,
+                ExpectedRequests = notAsked * ScrapeCost.Requests(kinds) + againRequests,
+                ExpectedMB = kb / 1024,
+            };
         }
 
         public bool ScrapeRunning => _scrapeRun is { State: ScrapeRunState.Running };
@@ -180,6 +219,8 @@ namespace EmuSen.Mistress.Views
         public async Task<bool> ConfirmAndScrapeAsync(ScrapeScope scope)
         {
             if (ScrapeRunning || _scrapeClosed) return false;
+            // ES-DE's single-game scraper follows "Overwrite files and data" too; a wide run's scope carries its own choice.
+            if (scope.Game is not null && _appSettings.ScrapeRefresh) scope = scope with { Refresh = true };
             ScrapePlan plan = Plan(scope);
             if (plan.Games == 0)
             {
@@ -192,7 +233,11 @@ namespace EmuSen.Mistress.Views
         }
 
         // One run over a scope: the queue is replaced by it, ScreenScraper asked where it can be, OpenEmu's sources where it has nothing.
-        public bool StartScrape(ScrapeScope scope, bool resume = false)
+        public bool StartScrape(ScrapeScope scope, bool resume = false) => StartScrape(scope, resume, null);
+
+        private bool _runRefresh;
+
+        private bool StartScrape(ScrapeScope scope, bool resume, ScrapedGame? chosen)
         {
             if (ScrapeRunning || _scrapeClosed || !OpenMediaStore()) return false;
             MediaStore store = _mediaStore!;
@@ -230,8 +275,10 @@ namespace EmuSen.Mistress.Views
             _member = MemberAccount.Load();
             var client = new ScreenScraperClient(_http, DeveloperSource()!, _member);
             _scrapeClient = client;
-            _scraper = new Scraper(client, store, _scrapeQuota!, () => _scrapeChoices, HasHandCover, TransformFor,
+            _runRefresh = scope.Refresh && !resume;
+            _scraper = new Scraper(client, store, _scrapeQuota!, () => _runRefresh ? _scrapeChoices with { Refresh = true } : _scrapeChoices, HasHandCover, TransformFor,
                 result => Dispatcher.UIThread.Post(() => ScrapeArrived(result)), ScrapeClock) { Activity = run.Note, FolderOf = FolderOfRom };
+            if (chosen is not null && scope.Game is string picked && queued.FirstOrDefault(q => q.Path == picked) is { } item) _scraper.Choose(picked, item.System, chosen);
             Scraper mine = _scraper;
             _scraper.Finished += end => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(_scraper, mine)) ScraperFinished(end); });
             _scraper.Start();

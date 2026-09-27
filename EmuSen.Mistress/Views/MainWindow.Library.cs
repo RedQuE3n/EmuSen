@@ -242,6 +242,7 @@ namespace EmuSen.Mistress.Views
             var otherArt = new LunaAction("Use Another _Game's Cover...", () => { if (SelectedLibraryEntry is RomEntry e) ShowCoverPicker(e.FullPath, DisplayTitle(e)); });
             var ownArt = new LunaAction("Use Its O_wn Cover", () => { if (SelectedLibraryEntry is RomEntry e) UseOwnCover(e.FullPath); });
             var lookUp = new LunaAction("_Scrape This Game...", () => { if (SelectedLibraryEntry is RomEntry e) _ = ConfirmAndScrapeAsync(ScrapeScope.ThisGame(e.FullPath)); });
+            var findByName = new LunaAction("_Find by Name...", () => { if (SelectedLibraryEntry is RomEntry e) ShowFindByName(e.FullPath, DisplayTitle(e)); });
             // The same menu and editor big picture has - see EmuSen_Settings_Reference.md §4.63.
             var options = new LunaAction("Game _Options...", () => { if (SelectedLibraryEntry is RomEntry e) ShowLibraryGameOptions(e); });
             var edit = new LunaAction("_Edit Metadata...", () => { if (SelectedLibraryEntry is RomEntry e) EditLibraryGameMetadata(e); })
@@ -266,8 +267,9 @@ namespace EmuSen.Mistress.Views
                 }
                 actions.AddRange(new[] { LunaAction.Separator(), options, edit, LunaAction.Separator(), addArt, removeArt, otherArt });
                 if (entry is not null && CoverChoiceOf(entry.FullPath) is not null) actions.Add(ownArt);
-                lookUp.IsEnabled = entry is not null && !ScrapeRunning;
+                lookUp.IsEnabled = findByName.IsEnabled = entry is not null && !ScrapeRunning;
                 actions.Add(lookUp);
+                actions.Add(findByName);
                 menu.ItemsSource = Menus.Items(actions);
                 bool any = entry is not null;
                 play.IsEnabled = favourite.IsEnabled = addArt.IsEnabled = options.IsEnabled = edit.IsEnabled = otherArt.IsEnabled = any;

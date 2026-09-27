@@ -14,7 +14,11 @@ namespace EmuSen.Mistress.Scraping
     public enum ScrapeRunEnd { Done, Stopped, Cancelled }
 
     // What one game's turn came to; HasCover says whether the store now holds its cover.
-    public sealed record ScrapeResult(string Path, string System, ScrapeOutcome Outcome, bool HasCover, IReadOnlyList<string> Written, string Detail, string? MatchedBy = null, bool Skipped = false);
+    public sealed record ScrapeResult(string Path, string System, ScrapeOutcome Outcome, bool HasCover, IReadOnlyList<string> Written, string Detail, string? MatchedBy = null, bool Skipped = false)
+    {
+        // Kept files a refresh found unchanged by the answer's checksum, which cost no request (§38).
+        public int Unchanged { get; init; }
+    }
 
     public enum ScrapeStep { LookingUp, Downloading, Arrived }
 
@@ -43,6 +47,7 @@ namespace EmuSen.Mistress.Scraping
         private readonly CancellationTokenSource _stop = new();
         private readonly SemaphoreSlim _signal = new(0);
         private readonly HashSet<string> _held = new(StringComparer.Ordinal);
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ScrapedGame> _chosen = new(StringComparer.Ordinal);
         private readonly List<Task> _workers = new();
         private bool _disposed;
 
@@ -130,6 +135,14 @@ namespace EmuSen.Mistress.Scraping
                     _workers.Add(Task.Run(() => WorkAsync(index)));
                 }
             }
+        }
+
+        // The game the player picked from a name search, kept for its file's next turn in place of a lookup - see EmuSen_BigPicture.md §38.
+        public bool Choose(string path, string system, ScrapedGame game)
+        {
+            if (_disposed || !SystemIds.ContainsKey(system)) return false;
+            _chosen[path] = game;
+            return Enqueue(path, system, ScrapePriority.Shown);
         }
 
         // Queues a game for the next run; it asks nothing by itself.
@@ -235,8 +248,13 @@ namespace EmuSen.Mistress.Scraping
             bool handCover = _handCover(item.System, path);
             var kinds = choices.Kinds().Where(k => !(handCover && k == ScrapeRules.Cover)).ToList();
 
-            // A game answered before costs no request: its media follow the file's name, and only a kind it offered and we lack is asked again.
-            if (_store.Game(md5, info.Length) is { } known && known.State != ScrapeState.Error)
+            // The player's pick from a name search stands in for the lookup: it cost its own request, and the game it names is this file's (§38).
+            if (_chosen.TryRemove(path, out ScrapedGame? picked))
+                return await KeepAsync(item, md5, info.Length, picked, choices, kinds, "name", stop, refresh: true);
+
+            // A game answered before costs no request: its media follow the file's name, and only a kind it may offer and we lack is asked again.
+            ScrapedRecord? known = _store.Game(md5, info.Length);
+            if (known is not null && known.State != ScrapeState.Error)
             {
                 if (known.State == ScrapeState.Unknown)
                 {
@@ -244,21 +262,21 @@ namespace EmuSen.Mistress.Scraping
                     return new ScrapeResult(path, item.System, ScrapeOutcome.Unknown, false, [], "known to be unknown", Skipped: true);
                 }
                 List<string> kept = FollowRename(md5, info.Length, item.System, path);
-                string[] offered = (known.Offered ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries);
                 IReadOnlyList<StoredMedia> stored = _store.Media(md5, info.Length);
-                if (!kinds.Any(k => offered.Contains(k.EsdeType) && !stored.Any(s => s.Type == k.EsdeType)))
+                if (!choices.Refresh && !kinds.Any(k => known.MayOffer(k.EsdeType) && !stored.Any(s => s.Type == k.EsdeType)))
                 {
                     _store.Dequeue(path);
                     return new ScrapeResult(path, item.System, ScrapeOutcome.Found, HasCover(md5, info.Length, item.System, path), kept, "already scraped", known.MatchedBy, Skipped: true);
                 }
             }
+            bool byName = known is { State: ScrapeState.Found, MatchedBy: "name", GameId: not null };
 
             if (!await TurnAsync(stop)) return Stopped(item);
             hashes ??= RomHashes.Of(path);
             Activity?.Invoke(new ScrapeActivity(path, item.System, ScrapeStep.LookingUp));
             string fileName = Path.GetFileName(path);
-            JeuInfosAnswer answer = await AskAsync(path, systemId, hashes, fileName, stop);
-            string matchedBy = "file";
+            JeuInfosAnswer answer = await AskAsync(path, systemId, hashes, fileName, stop, byName ? known!.GameId : null);
+            string matchedBy = byName ? "name" : "file";
 
             // Step (2) of §5.2: only after a 404, and only when the core's transform changes the bytes.
             if (answer.Status == ScrapeStatus.NotFound && _transform(path) is { } transform)
@@ -278,7 +296,12 @@ namespace EmuSen.Mistress.Scraping
             switch (answer.Status)
             {
                 case ScrapeStatus.Found:
-                    return await KeepAsync(item, md5, info.Length, answer.Game!, choices, kinds, matchedBy, stop);
+                    return await KeepAsync(item, md5, info.Length, answer.Game!, choices, kinds, matchedBy, stop, choices.Refresh);
+                // A game found before, by its hashes or named by the player, is not made Unknown by a later 404; what was kept stays (§38).
+                case ScrapeStatus.NotFound when known is { State: ScrapeState.Found }:
+                    _store.Dequeue(path);
+                    return new ScrapeResult(path, item.System, ScrapeOutcome.Found, HasCover(md5, info.Length, item.System, path), [],
+                        byName ? "found by name; Find by Name asks again" : "kept; ScreenScraper no longer lists this file", known.MatchedBy, Skipped: true);
                 case ScrapeStatus.NotFound:
                     return Final(item, ScrapeState.Unknown, "not in ScreenScraper", md5, info.Length);
                 case ScrapeStatus.TooManyRequests or ScrapeStatus.ServerBusy:
@@ -294,9 +317,9 @@ namespace EmuSen.Mistress.Scraping
             }
         }
 
-        private async Task<JeuInfosAnswer> AskAsync(string path, int systemId, RomHashes hashes, string fileName, CancellationToken stop)
+        private async Task<JeuInfosAnswer> AskAsync(string path, int systemId, RomHashes hashes, string fileName, CancellationToken stop, long? gameId = null)
         {
-            JeuInfosAnswer answer = await _client.JeuInfosAsync(systemId, hashes, fileName, stop);
+            JeuInfosAnswer answer = await _client.JeuInfosAsync(systemId, hashes, fileName, stop, gameId);
             _quota.Observe(answer.Quota);
             if (answer.Status is ScrapeStatus.Found or ScrapeStatus.NotFound or ScrapeStatus.Malformed or ScrapeStatus.BadRequest)
                 _quota.Counted(answer.Status == ScrapeStatus.NotFound);
@@ -321,7 +344,7 @@ namespace EmuSen.Mistress.Scraping
 
         // The text of §3.7's variants and the media of each wanted kind, by the region and language rules of §5.4.
         private async Task<ScrapeResult> KeepAsync(QueuedGame item, string md5, long bytes, ScrapedGame game, ScrapeChoices choices,
-            IReadOnlyList<ScrapeMediaKind> kinds, string matchedBy, CancellationToken stop)
+            IReadOnlyList<ScrapeMediaKind> kinds, string matchedBy, CancellationToken stop, bool refresh = false)
         {
             string path = item.Path;
             string stem = Path.GetFileNameWithoutExtension(path);
@@ -338,27 +361,46 @@ namespace EmuSen.Mistress.Scraping
                 Developer = game.Developer, Publisher = game.Publisher, Genre = ScrapeRules.Genre(game.Genres, languages), Players = game.Players,
                 Rating = ScrapeRules.Rating(game.Note), ReleaseDate = ScrapeRules.Date(ScrapeRules.ChooseText(game.Dates, regions, fallback: true)?.Text),
                 Region = regions[0], Language = languages[0], MatchedBy = matchedBy, Offered = offered, FetchedAt = now.UtcDateTime,
+                KindsKnown = string.Join(",", ScrapeRules.AllKinds.Select(k => k.EsdeType)),
             });
 
             var written = new List<string>();
+            int unchanged = 0;
             IReadOnlyList<StoredMedia> stored = _store.Media(md5, bytes);
             foreach (ScrapeMediaKind kind in kinds)
             {
-                if (stored.Any(s => s.Type == kind.EsdeType && File.Exists(Path.Combine(_store.Root, s.RelativePath)))) continue;
+                StoredMedia? kept = stored.FirstOrDefault(s => s.Type == kind.EsdeType && File.Exists(Path.Combine(_store.Root, s.RelativePath)));
+                if (kept is not null && !refresh) continue;
                 if (ScrapeRules.ChooseMedia(game.Media, kind, regions, choices.RegionFallback) is not { } media) continue;
-                string relative = MediaStore.Relative(item.System, kind.Folder, FolderOf(path), stem + ScrapeRules.Extension(media));
+                string relative = MediaStore.Relative(item.System, kind.Folder, FolderOf(path), stem + ScrapeRules.Extension(media, kind.Payload));
+                string? localSha1 = null;
+                if (kept is not null)
+                {
+                    // A refresh compares the kept file with the answer's checksum first, so an unchanged file costs nothing (§38).
+                    localSha1 = Sha1Of(Path.Combine(_store.Root, kept.RelativePath));
+                    if (media.Sha1 is { Length: > 0 } theirs && theirs == localSha1) { unchanged++; continue; }
+                }
                 if (!await TurnAsync(stop)) break;
                 Activity?.Invoke(new ScrapeActivity(path, item.System, ScrapeStep.Downloading, kind.EsdeType));
-                MediaAnswer got = await _client.DownloadAsync(media.Url, Path.Combine(_store.Root, relative), stop);
+                bool replace = kept is not null && kept.RelativePath == relative;
+                MediaAnswer got = await _client.DownloadAsync(media.Url, Path.Combine(_store.Root, relative), stop, kind.Payload, localSha1, replace, media.Size);
                 await ThrottleAsync(got, stop);
+                if (got.Outcome == MediaOutcome.Unchanged) { unchanged++; continue; }
                 if (got.Outcome is not (MediaOutcome.Saved or MediaOutcome.AlreadyThere)) continue;
+                if (kept is not null && !replace) File.Delete(Path.Combine(_store.Root, kept.RelativePath));
                 Activity?.Invoke(new ScrapeActivity(path, item.System, ScrapeStep.Arrived, kind.EsdeType, got.Path));
                 _store.RecordMedia(md5, bytes, new StoredMedia(kind.EsdeType, relative, media.Region, got.Sha1), _clock.Now);
                 written.Add(relative);
             }
 
             _store.Dequeue(path);
-            return new ScrapeResult(path, item.System, ScrapeOutcome.Found, HasCover(md5, bytes, item.System, path), written, "", matchedBy);
+            return new ScrapeResult(path, item.System, ScrapeOutcome.Found, HasCover(md5, bytes, item.System, path), written, "", matchedBy) { Unchanged = unchanged };
+        }
+
+        private static string Sha1Of(string file)
+        {
+            using FileStream stream = File.OpenRead(file);
+            return Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(stream));
         }
 
         // The member's maxdownloadspeed, in KB/s, held by waiting after a file that came faster.

@@ -3163,7 +3163,7 @@ sandbox's cheats and saves; the recipe is not a committed script, so this is a r
   account who wants the library in two days should turn miximages off. No setting orders the kinds by cost.
 - **§5.6's orphan pass over `games.db`** was not extended; renames are followed by the scraper's own path cache.
 - **ScreenScraper's name is not shown.** The file's name is, as before.
-- **No refresh**, no search by name, no video (Q4), no back cover, fan art or 3D box.
+- **No refresh**, no search by name, no video (Q4), no back cover, fan art or 3D box. *All built in Pass 8, §38.*
 - **§5.7's publish exclusions** are a rule written here and in §4.60 of the settings reference, not a script.
 
 ### 17.14 Scraping only when the player starts it, and the scope the player chooses
@@ -4013,6 +4013,9 @@ player started (§17.14). Tests run headless in WiseMan, blast radius only, and 
   search counts against the day's unrecognised allowance when it finds nothing (§5.2).
 - *Cost.* 3–4 days.
 - *What the player sees.* More kinds in the Scraping tab, a Refresh, and a "Find by name…" for the games hashes miss.
+- *Built 2026-09-27: §38. Videos are among the kinds (Q20), off; a refresh costs one request a found game, because every
+  answer states each file's SHA-1; the live run of about ten games was not made, since no request reaches ScreenScraper
+  while a pass is built.*
 
 **Pass 9. The media viewer and manuals.**
 - *Scope.* A full-screen viewer over the themed gamelist (inventory 4), opened by the button Q32 settles (ES-DE's X,
@@ -4266,8 +4269,8 @@ Written before any pass is built, to be retired in each pass's record.
 | P108 | 6 | `EsdeMediaFolder` finds none of the media of a game in a subfolder of an ES-DE-written tree (a defect predicted from the code and UG's path rule), shown by a test on the unchanged reader before the fix | Pass 6 |
 | P109 | 6 | Shown as folders, NES opens on 16 entries and GB on 28; the return from a game in a folder comes back to that folder and game, its first frame equal to a fresh build (P40's test); the first showing costs within 10% of the flat one | Pass 6 |
 | P110 | 7 | Kid mode lists exactly the kidgame games, and in Kiosk and Kid `PadAudit` reaches no removed control on any sheet of §15.9 | Pass 7 |
-| P111 | 8 | Refreshing a found game whose files are unchanged costs one request per kind and under 1 KB received per kind, each request counted in `requeststoday` (P61) | Pass 8 |
-| P112 | 8 | Back covers, 3D boxes, physical media and fan art together raise a found game from 4.7 to 7.5–8.5 requests and add 0.9–1.5 MB, taking a found game from about 13 s to 20–28 s at 128 KB/s | Pass 8 |
+| P111 | 8 | Refreshing a found game whose files are unchanged costs one request per kind and under 1 KB received per kind, each request counted in `requeststoday` (P61) | Pass 8: retired by design, one request a game (§38.13) |
+| P112 | 8 | Back covers, 3D boxes, physical media and fan art together raise a found game from 4.7 to 7.5–8.5 requests and add 0.9–1.5 MB, taking a found game from about 13 s to 20–28 s at 128 KB/s | Pass 8: held by arithmetic on §17.9's answers, not run (§38.13) |
 | P113 | 9 | One page of a median ScreenScraper manual (1.7 MB) renders at 1920×1200 in under 300 ms on the desktop and under 1 s on the handheld | Pass 9 |
 | P114 | 10 | Dim and Black draw at most one frame after they start, and the slideshow draws only at its swaps and their transitions (every 10 s by ES-DE's default) | Pass 10: failed on the first clause, held on the second (§37.3) |
 | P115 | 11 | ES-DE's launch screen at Normal lasts 1.5–3 s; Brief is 0.4–0.6 of that and Long 1.5–2.5 times it | Pass 11 |
@@ -8662,3 +8665,327 @@ After merging WiseMan (§35, the value types), one run of the Mistress filter, w
 skipped (the picture, survey and live tools), 0 failed, in 3 min 48 s.** §35.12's order-dependent failure of the
 headless platform's initialisation did not recur in this order. The big-picture tests alone (516, the GPU ones and the
 benches left out) had passed before the merge, with the pad's new button and the system view's new help entry.
+
+## 38. Pass 8 built: ScreenScraper's extras (2026-09-27)
+
+*Built on branch `bigpicture-pass8-scraper-extras`, from WiseMan at `7ba6fef0`.* §21.3 planned Pass 8 as the rest of
+what ES-DE's scraper offers and Mistress lacked: the kinds of inventory row 22 as switches, off by default, with video
+only if Q20 allowed it; a Refresh that asks a kept file again by its checksum (row 21); a search by name and a chooser,
+started only from *Find by name…* (row 20); ScreenScraper's names behind a switch (row 23, Q30); the criteria of row 24
+that Mistress can answer; and the media of deleted games (row 34). The answers that bind it are in §10.1: every §21
+recommendation accepted, and Q20 answered "all three, late", so clips are scraped here, off by default, and played in
+Pass 12. §17.14's two rules bind all of it: nothing is asked of any server until the player starts it, and the player
+chooses the scope. The player's account is §4.76 of the settings reference.
+
+**Sources.** ES-DE's `USERGUIDE.md` ("Scraping", "Scraping process", "Manually copying game media files", "Scraper" and
+its "Content settings" and "Other settings", "Removing orphaned data"), in the copy of §21; ES-DE 3.4.1's own
+`es_settings.xml` defaults, read from the stage (b) scratch home; ScreenScraper's API page as §5.1 cites it; and the 43
+redacted answers of §17.9's live run, read again for the new kinds' offer rates and sizes and for the checksums each
+media entry carries. ES-DE was not run for this pass, and nothing was asked of ScreenScraper or any other server.
+
+**Numbering.** Predictions from **P240**, questions from **Q140**; both ranges were free on WiseMan when this began.
+
+### 38.1 What the answers already said (measured 2026-09-27, read-only)
+
+`~/.cache/emusen/probe/pass8/rates.py` reads §17.9's 39 found answers (the files under
+`~/.cache/emusen/bigpicture/scrape-live/20260926-134821/answers/`, redacted when they were written) and, for each kind,
+counts the games that offer it and takes the size ScreenScraper states for the file the region rule would choose (the
+US, then world, EU, Japan and `ss` file, else one with no region, else the first):
+
+| Kind (ES-DE type, ScreenScraper name) | Games offering it | Mean size | Median size |
+|---|---|---|---|
+| cover (`box-2D`) | 33 of 39 | 653 KB | 594 KB |
+| screenshot (`ss`) | 36 | 5 KB | 3 KB |
+| marquee (`wheel-hd`, `wheel`) | 36 | 90 KB | 77 KB |
+| title screen (`sstitle`) | 36 | 6 KB | 3 KB |
+| miximage (`mixrbv2`) | 39 | 565 KB | 597 KB |
+| back cover (`box-2D-back`) | 33 | 468 KB | 397 KB |
+| 3D box (`box-3D`) | 33 | 351 KB | 295 KB |
+| physical media (`support-2D`) | 33 | 449 KB | 427 KB |
+| fan art (`fanart`) | 25 | 397 KB | 267 KB |
+| manual (`manuel`) | 27 | 2,254 KB | 1,209 KB |
+| video (`video-normalized`) | 32 | 1,354 KB | 1,343 KB |
+
+§21.1's table counted every file of a kind, several regions each; this one counts the one file a run would fetch, which
+is what a run costs. **Every media entry carries its checksums:** of the 2,062 entries in the 39 answers, 2,062 have
+`crc`, `md5` and `sha1`, and 2,032 a `size`. That decided the design of the refresh (38.3).
+
+### 38.2 What was built
+
+- **Six kinds** (`ScrapeRules`): back covers, 3D boxes, physical media, fan art, manuals and videos, filed in ES-DE's
+  folders (`backcovers`, `3dboxes`, `physicalmedia`, `fanart`, `manuals`, `videos`) under §30's foldered layout. Each
+  kind says what its file must be (`MediaPayload`): a picture by its content type, as before; a manual by the `%PDF-`
+  it starts with; a clip by MP4's `ftyp` box or a video content type, since what ScreenScraper sends for either was
+  never seen. A manual is written `.pdf`, a clip `.mp4`. Downloads now stream to the `.part` file rather than through
+  memory, capped at 128 MB, with ES-DE's transfer timeout (`ScraperTransferTimeout`, 120 s) plus a second for every
+  64 KB the answer declares, since the largest manual seen was 18 MB and the account's rate is 128 KB/s.
+  `EsdeMediaFolder` learnt `manuals` (`.pdf`), so an ES-DE folder's manuals and the store's are found alike.
+- **What an older answer knows** (`media.db` migration 3, `kinds_known`). §17.4 asked a found game again only for a
+  kind "the player has since turned on and the game offered". An answer kept before this pass listed only the first
+  five kinds, so it says nothing of fan art; read as "not offered", no game scraped before today would ever get it.
+  `ScrapedRecord.MayOffer` reads a kind outside an answer's `kinds_known` (the first five for an old row) as possibly
+  offered, so such a game is asked once, and an answer kept now records every kind and costs nothing for a kind it
+  lacks.
+- **Refresh** (38.3).
+- **Find by Name…** and its chooser (38.4).
+- **The criteria** (38.5) and **the plan's prices** (38.6).
+- **Game Names** (Q30): off by default; on, the library's lists, the themed view and the editor's baseline take
+  ScreenScraper's name wherever it has one (`GameMetadata.Scraped` gains the name case only with the switch on). A name
+  the player gave still wins, and with the switch off the editor's offer of §27.2 is unchanged.
+- **Orphaned media** (38.7).
+- **Settings:** a *Fetch More* row of six switches and a *Game Names* row in Preferences ▸ Scraping; the *Only games
+  with no cover* switch became a dropdown of criteria; *Refresh what is kept*; an *Orphaned Media* row. All stored in
+  `appsettings.json` (`ScrapeBackCovers`, `Scrape3DBoxes`, `ScrapePhysicalMedia`, `ScrapeFanArt`, `ScrapeManuals`,
+  `ScrapeVideos`, `ScrapeGameNames`, `ScrapeCriteria`, `ScrapeRefresh`); nothing new in `games.db`.
+- **The status window** names the new kinds and counts files kept unchanged.
+
+### 38.3 Refresh: the checksum in the answer, then the checksum in the request
+
+ES-DE's *Overwrite files and data* (on in its defaults) re-scrapes and replaces. §21.3 planned Mistress's as a request
+per kept file carrying its checksum, which ScreenScraper answers `SHA1OK` without the bytes (§5.1). Since every entry
+of every answer already states the file's `sha1` (38.1), the built rule is cheaper:
+
+1. A found game is asked again: one `jeuInfos`, whose text replaces the kept text in `media.db`. A player's edit lives
+   in `games.db` and still wins (§23.3).
+2. For each kept file, its SHA-1 is computed from the file itself and compared with the answer's. Equal: kept, **no
+   request**. The store's own SHA-1 column is not trusted for this, because a file found already there was recorded
+   without one.
+3. Different, or no checksum in the answer: the file is asked for with `sha1=<the kept file's>` added, so an unchanged
+   file comes back as `SHA1OK` (also `MD5OK` or `CRCOK`) and costs a request and no bytes. A changed one is streamed
+   beside the kept file and moved over it only once it has passed the kind's checks; a kind whose extension changed (a
+   PNG become a JPG) is written under its new name and the old file removed.
+4. A game that answers 404 on a refresh keeps what it had, text and files. §17.4's 404 rule, "recorded Unknown", now
+   applies only to a game never found: a later 404 no longer turns a found game Unknown, whether the run was a refresh or
+   was asking for a kind turned on since.
+
+The refresh is off by default, a switch beside the criteria (`ScrapeRefresh`), and applies to *Scrape This Game* too,
+as ES-DE's single-game scraper follows its overwrite setting. Decided 2026-09-27: off, where ES-DE's default is on,
+because §17.14 makes every run the player's and a refresh re-asks every found game of the scope; each is one request.
+
+### 38.4 Find by Name…
+
+- **Where.** A game's options (the themed gamelist's Select, the sidebar library's *Game Options...*) and the library's
+  context menu, beside *Scrape This Game...*; neither offers it while a run goes. It opens as a LunaP window on the
+  desktop and a sheet in a big-screen session, like the cover picker (§28).
+- **What it sends.** Nothing when it opens. The box holds the file's name as ES-DE strips it ("Scraping process": the
+  extension and every `(...)` and `[...]` removed; underscores become spaces, ES-DE's `ScraperConvertUnderscores`, on
+  in its defaults). **Search** sends one `jeuRecherche.php` with the credentials, the console's `systemeid` and the
+  text, paced by the quota manager like any request and counted in the day's requests; a search that finds nothing is
+  counted as unrecognised as well, as §21.3 assumed (P242). The answer is read as `jeuInfos`' game, up to 30 of them;
+  an entry with no id is no game (P241).
+- **The chooser.** A list of names in the region order (§17.6), each with its year and publisher, and the platform in
+  brackets when ScreenScraper returned another, as ES-DE's list does. **No thumbnails**: each picture would be a
+  request (§17.9), thirty for one search (Q140).
+- **A pick** starts a one-game run in which the pick stands in for the lookup: no `jeuInfos`, the game's text kept for
+  this file with `matched_by` `name` and its id, and each wanted kind fetched through the same worker, pacing and quota
+  as any run, with the kept files replaced as a refresh would. The file is never renamed and nothing is written beside
+  it. A name-matched game asked again later is asked with `gameid` as well as its hashes (a documented input of
+  `jeuInfos`, §5.1), and a 404 leaves it as it is.
+- **Never automatic.** Nothing falls back to a name search: not a run, not a 404, not the failover (§5.2, §17.14).
+  ES-DE's interactive runs, which stop on each unmatched game to ask, are not built (Q141).
+
+### 38.5 The criteria
+
+USERGUIDE's *Scrape these games*: All games, Favorite games, No metadata ("checks if the game has a description"), No
+game image ("checks for a miximage, then screenshot, then title screen and last box cover"), No game video, and Folders
+only. Mistress answers the first five from what every view shows: the favourite in `games.db`; the description as
+§4.59 resolves it (an edit, else ScreenScraper's); the four pictures and the video by the order of sources of §4.60, so
+a player's cover, another game's chosen cover, an ES-DE folder's and OpenEmu's all count. *Games with no cover*, §17.14's
+switch, stays as a sixth choice and the default. **Folders only** is not offered: it means scraping folders themselves
+(ES-DE's *Scrape actual folders*), and this library's folders are regions and letters, not games (§30; Q143). A single
+game is one game whatever the criteria say, and *Exclude from multi-scraper* (§23) still leaves a game out of a wide run.
+
+### 38.6 The plan's prices
+
+The confirm step keeps its bound, one lookup and one request per kind for each game asked, and now adds what 38.1's
+offer rates expect: the requests (one lookup plus each wanted kind's offer rate), the megabytes (each kind's rate times
+its mean size), and a time of 3.9 s of requests a game plus the bytes at the account's `maxdownloadspeed` (128 KB/s
+until an answer says). The 3.9 s is §17.9's median found game, 13.3 s, less its 9.4 s of bytes at 128 KB/s; with the
+default kinds the model gives 13.3 s back. A found game wanting a kind it may offer and lacks is counted as asked
+again, and under a refresh every found game of the scope is. By the model, for this library of 5,520 files at 9,800
+requests a day (10,000 less §17.4's 2%):
+
+| Kinds | Requests a found game | MB | Time at 128 KB/s | The library |
+|---|---|---|---|---|
+| the defaults (cover, screenshot, marquee, miximage) | 4.69 | 1.18 | 13.3 s | 25,900 requests, 2.6 days |
+| and the four new pictures | 7.87 | 2.47 | 23.7 s | 43,500, 4.4 days |
+| and manuals | 8.56 | 4.00 | 35.9 s | 47,300, 4.8 days |
+| and videos | 8.69 | 3.56 | 32.4 s | 48,000, 4.9 days |
+| all eleven, title screens too | 10.31 | 5.09 | 44.6 s | 56,900, 5.8 days |
+
+§17.9 measured 4.7 requests a found game with the defaults; the model's 4.69 agrees, as it should, since both are
+counts of the same answers. A refresh of a library whose files are unchanged costs one request a game.
+
+### 38.7 Orphaned media
+
+ES-DE's *Orphaned data cleanup* ("Removing orphaned data") moves the media of games no longer present to
+`downloaded_media/CLEANUP/<date_time>/`, keeping each file's path, and removes media folders it leaves empty; it processes
+only the systems that are enabled. Mistress's *Clean Up...* (Preferences ▸ Scraping ▸ *Orphaned Media*) does the same to
+its own store and nothing else:
+- a file of the store's type folders is orphaned when no game of the last library scan has its name there (its stem,
+  under its folder since §30); a console with no game in the scan is not looked at, so an unplugged drive or an empty
+  ROM folder never reads as every game gone, and nothing is looked at when the ROM folder is missing;
+- the count and the size are asked first; declined, nothing moves;
+- each file is moved to `home/Media/CLEANUP/<yyyy-MM-dd_HHmmss>/<its path>`, never deleted, with a `cleanup.txt` listing
+  them; its `media.db` row goes; a folder the move leaves empty goes too;
+- the ROM folder, an ES-DE media folder the player chose, the cover art folder and OpenEmu's folder are never touched,
+  and no request is made. Deleting `CLEANUP` is the player's.
+
+### 38.8 Where Mistress differs, on purpose or by necessity
+
+- New kinds, videos, Game Names and Refresh are **off**; ES-DE's defaults have all on (`es_settings.xml`). The kinds and
+  names were decided in §21.5 (Q20, Q30); Refresh here (38.3).
+- **No Ratings and Other metadata switches** (ES-DE's content settings): the text comes in the same answer as the
+  lookup, so leaving it out saves nothing, and the editor already overrides any field (Q142).
+- **No interactive mode, no auto-accept, no Folders only, no Scrape actual folders** (Q141, Q143).
+- **The manual and the clip are stored, not shown.** The media viewer is Pass 9 and video Pass 12.
+- **The cleanup covers media only.** ES-DE's also removes gamelist and collection entries; Mistress's `games.db` keeps
+  its rows of games gone, as §4.37's orphan pass decides.
+
+### 38.9 Request counts, from the tests
+
+Every count is the fake server's own (`FakeScreenScraper.Asked`), never the network. The fake now answers
+`jeuRecherche`, states each media file's SHA-1 and size as the live answers do, answers `SHA1OK` for a matching
+checksum, serves a PDF for `manuel` and an MP4 for the videos, and can change a kind's bytes (`MediaRevision`) or stop
+stating checksums (`StateChecksums`).
+
+| Case | Requests |
+|---|---|
+| a found game, the defaults | 5 (1 lookup, 4 pictures) |
+| a found game, all eleven kinds | 12 |
+| a found game refreshed, nothing changed | 1, no media bytes |
+| the same, where the answer states no checksum | 5, each picture answered `SHA1OK`, no media bytes |
+| refreshed with the cover changed upstream | 2; only the cover replaced |
+| found without refresh, the cover changed upstream | 0 |
+| fan art turned on later: a game that may have it / one whose answer says it has none / one kept before this pass | 2 / 0 / 2 |
+| Find by Name: the search / the pick, the default kinds | 1 / 4 more, no lookup |
+| the pick asked again later for back covers | 2, the lookup carrying `gameid` |
+| three searches at 6 a minute | 3, at least 11.1 s apart after the first answer set the pace |
+| twelve requests of all eleven kinds at 6 a minute | 12, spanning at least 111 s of the scrape clock |
+| a cleanup, declined and then accepted | 0 |
+
+### 38.10 Tests
+
+Headless through WiseMan, on the fake ScreenScraper; no window of a real platform, no GPU.
+- `ScrapeExtrasTests` (18, one a theory of four file names): each new kind into its folder and file type, one request each; the defaults costing what they
+  did and the offer recorded for every kind; a kind turned on later asking only a game that may have it (offered, not
+  offered, kept before this pass); a `media.db` of schema 2 opening with its rows and `MayOffer` reading the old row;
+  the payload checks (PDF, MP4, a page that is neither); Refresh unchanged, changed, without the answer's checksums,
+  and on a 404; a pick with no lookup, then asked by `gameid` and never made Unknown; the search's URL, 30 of 36, and
+  `[{}]` as none; the search text of four file names; the pacing of twelve requests.
+- `ScrapeExtrasWindowTests` (13): Find by Name sending nothing until Search, one request, the pick's run with no lookup
+  and the file untouched; a search finding nothing counted as unrecognised; no developer file and ScreenScraper
+  switched off sending nothing; the searches paced; the entry in the options and the context menu and not during a run;
+  the sheet walked by the pad (`PadAudit`), every control and every result reached, a result chosen with A; each
+  criterion's count on a six-game library; the plan's bound, expected requests and megabytes, and a refresh priced and
+  run; the Scraping tab's new switches off, saved, and the criteria driving *Scrape...*; Refresh reaching *Scrape This
+  Game*; Game Names in the list and the editor, the player's name winning, the offer back when off; the cleanup asked,
+  declined, then moving five files and leaving the kept game's, another console's and the ROM folder alone; a missing
+  ROM folder cleaning nothing.
+- Changed: the three options menus' expected entries gained *Find by Name...*; `MediaStoreFoldersTests`' schema-1 file
+  drops the new column too, and asserts the current schema rather than 2.
+- `ScrapeExtrasPictureTool` writes 38.12's pictures with `EMUSEN_BIGPICTURE_PNG=1`.
+
+### 38.11 Mutants
+
+The runner is `~/.cache/emusen/probe/pass8/mutate_pass8.py`, its verdicts `mutants-pass8.txt`, its log `run-pass8.log`.
+Each mutant replaces one exact piece of one file, checked to occur once; it was built with `-m:2` and tested alone
+under `nice -n 10` against its rule's tests (`ScrapeExtrasTests`, `ScrapeExtrasWindowTests`, and for the names also
+`GameMetadataTests` and `ThemedMetadataScrapeTests`). Before changing a file the runner writes `mutant-state.json` (the
+file and a copy), restores it in a `finally` and touches it, restores any file a cut-short round left mutated when it
+starts, and rebuilds the tree at the end. Each mutant took 8–34 s.
+
+**48 mutants, 48 caught on their first run, none failed to build.**
+
+| Rule | Mutants |
+|---|---|
+| The kinds | K1 back covers never fetched; K2 a manual written `.png`; K3 the full `video`, not `video-normalized`; K4 fan art on by default; K5 `kinds_known` not recorded; K6 a kind an old answer knew nothing of read as not offered; K7 `kinds_known` ignored |
+| What a file must be | Y1 any file kept as a manual; Y2 a clip judged by its content type alone; Y3 every kind judged as a picture |
+| Refresh | R1 ignored for a found game; R2 the answer's checksum not compared; R3 the kept file's checksum not sent; R4 `SHA1OK` not understood; R5 a changed file never replaced; R6 a later 404 making a found game Unknown; R7 *Scrape This Game* ignoring Refresh; R8 a run's refresh not handed to the worker |
+| Find by Name | N1 a search sent on opening; N2 a pick looked up by hash anyway; N3 a pick recorded as matched by the file; N4 a picked game never asked by its id; N5 a search not paced; N6 a search finding nothing not counted as unrecognised; N7 a search sent with ScreenScraper switched off; N8 offered during a run; N9 missing from the context menu; N10 the search text keeping its tags; N11 an empty entry read as a game; N12 the search without its system |
+| Criteria and prices | C1 favourites ignored; C2 no metadata read as no cover; C3 no game image ignoring screenshots; C4 no game video always true; C5 the criteria applied to one game; C6 the tab's criteria not used; C7 all games by default; P1 a kind priced as always offered; P2 a refresh priced as nothing asked again; T1 manuals and clips not waiting their turn |
+| Game Names | Q1 the list ignoring it; Q2 the editor ignoring it; Q3 ScreenScraper's name always the baseline |
+| Orphaned media | O1 deleted, not moved; O2 an emptied folder kept; O3 the moved file's row kept; O4 no confirm; O5 a kept game's foldered media called orphans |
+
+**What the clean round does and does not show.** The list was written with the tests in view, by the same hand, and
+reading it against the first tests showed six mutants that would have survived: C2 (the only described game also had a
+cover), C6 and R7 (no test pressed *Scrape...* on the tab, or scraped one game with Refresh on), N5 and N7 (no test
+paced two searches, or searched with the switch off) and O2 (no folder was emptied). The tests were strengthened before
+the round ran (commit `36d6ada4`), and the missing-ROM-folder test gained the rescan that follows an unplugged drive. The ROM-folder guard itself was not made a mutant:
+a scan of a missing folder has no games, and a console with no games is never looked at, so the guard is implied by that
+rule and a mutant of it would be equivalent; it is kept as defence in depth. A redundant `names.Count == 0` test in
+`MediaStore.Orphans`, equivalent for the same reason, was removed rather than kept untested. As §27.5 said of its own
+round, a mutant written after its test shows the test is not empty, not that the list of rules is complete.
+
+### 38.12 Pictures
+
+`ScrapeExtrasPictureTool` writes to `~/.cache/emusen/bigpicture/png/pass8/`, at 1280×800 and 1920×1200 each; every one
+was looked at:
+- `desktop-fetch-more-and-game-names`, `desktop-scrape-criteria`, `desktop-orphaned-media`: Preferences as a window over
+  the desktop library, scrolled to the six *Fetch More* switches (all off) and *Game Names*, to *Scrape* with its two
+  dropdowns (*Every console*, *Games with no cover*), *Refresh what is kept* and the four buttons, and to *Orphaned Media*
+  with *Clean Up...*.
+- `desktop-find-by-name`, `desktop-find-by-name-results`: the chooser over the library with "SMW Hack" in its box and
+  Search focused; then three results, the first focused, each with its year and publisher.
+- `sheet-fetch-more`, `sheet-game-names`, `sheet-scrape-criteria`, `sheet-orphaned-media`, `sheet-find-by-name-results`:
+  the same rows on the Preferences sheet of a big-screen session, with the pad's help line, and the chooser as a sheet.
+- **Seen and left:** the criteria dropdown has no label of its own, as the console dropdown above it has none; the row's
+  hint names both. The OpenEmu switch's long label is cut at the right edge at 1280×800, as it was before this pass.
+
+### 38.13 Predictions
+
+Written during the build, by the hand that wrote the code, as §27.1 and §28.1 were, and weaker evidence for it.
+
+| # | Prediction | Found, or retired when | Verdict |
+|---|---|---|---|
+| P111 | Refreshing an unchanged found game costs one request per kind and under 1 KB per kind | every media entry of §17.9's answers states its SHA-1, so an unchanged file is known from the lookup: **one request a game** in all, on the fake server, and `SHA1OK` per kind only where an answer states no checksum | retired by design; the live cost of a `SHA1OK` is not measured |
+| P112 | The four picture kinds raise a found game from 4.7 to 7.5–8.5 requests, add 0.9–1.5 MB, 20–28 s at 128 KB/s | 7.87 requests, 1.30 MB, 23.7 s by 38.6's model on §17.9's answers | **held by arithmetic** on the answers; no run fetched them |
+| P120 | `video-normalized` adds 0.7–0.9 requests and 0.9–1.3 MB a found game | 0.82 and 1.11 MB by the same arithmetic | held by arithmetic; Pass 12's first live run retires it |
+| P240 | In a live refresh of about ten found games with nothing changed, every media entry states a `sha1` equal to the kept file's, so the run costs one request a game and downloads nothing | the first live refresh | open |
+| P241 | `jeuRecherche` answers a name with no match either with `jeux` holding one empty object or with a 404, never a game of id 0 | a live search for a name that does not exist | open |
+| P242 | A search that finds nothing raises `requestskotoday` by one, and one that finds games does not | the same live search, reading the counts before and after | open |
+| P243 | `mediaJeu.php` sends a manual starting `%PDF-` and a clip with an MP4 `ftyp` box, whatever content type it declares | the first live run with manuals and videos on | open |
+| P244 | Of the round's mutants, at least nine in ten are caught on their first run | 48 of 48 (38.11), after six tests were strengthened before the round | held, and weak evidence for the reason 38.11 gives |
+
+### 38.14 Not done
+
+- **No live run.** §21.3 planned one run of about ten games, started by hand, to measure what the fake cannot: the cost
+  of a refresh (P111, P240), a search that finds nothing (P241, P242) and what the manual and clip downloads look like
+  (P243). No request reached ScreenScraper or any other server while this pass was built or tested; the run is for the
+  player to start.
+- **Viewing** a manual (Pass 9) or playing a clip (Pass 12). They are stored and found; nothing shows them.
+- **Interactive runs and auto-accept** (Q141), **thumbnails in the chooser** (Q140), **Ratings and Other metadata
+  switches** (Q142), **Folders only** and scraping folders (Q143).
+- **TheGamesDB** (Pass 13).
+- **OpenEmu's failover** still fills covers only; it knows none of the new kinds.
+- **The cleanup** covers Mistress's media store only: not `games.db`, not OpenEmu's folder, not an ES-DE folder, and
+  it never empties `CLEANUP`.
+- **Nothing ran on the handheld**, and no real pad or window manager drove the chooser.
+- **The chooser at scale:** thirty results is ScreenScraper's cap and the tests' largest list.
+
+### 38.15 Open questions
+
+- **Q140, thumbnails in the chooser.** Each result's picture is a request. Options: none (built); the highlighted
+  result's cover after it has stayed highlighted for a second; every result's. **Recommendation: none**, with the year,
+  publisher and platform as the tie-breakers, since a search of 30 results would cost 31 requests with thumbnails.
+- **Q141, interactive runs.** ES-DE's multi-scraper can stop on each game its hashes miss and show the chooser. Options:
+  not built; built, off by default. **Recommendation: not built.** ScreenScraper found 39 of 40 by hash (§17.10), so a
+  run would stop about once in forty games, and *Find by Name…* already reaches each of those.
+- **Q142, Ratings and Other metadata switches.** **Recommendation: not built**, since the text costs no request and the
+  metadata editor overrides any field.
+- **Q143, Folders only.** **Recommendation: wait**, with directories as files (Q24), for a library whose folders are
+  games.
+- **Q144, Refresh's default.** ES-DE's `ScraperOverwriteData` is on. **Recommendation: keep it off** (38.3).
+- **Q145, the cleanup folder.** ES-DE leaves `CLEANUP` for the player to delete. **Recommendation: the same**; its size
+  is in the message that moved the files.
+
+
+### 38.16 The broad run
+
+After merging WiseMan at `c1ef5c6d` (§36, Pass 14's first half), one run of the Mistress filter, without
+`ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` and any GPU or Vulkan test, under `nice -n 10`:
+**1,400 tests, 1,360 passed, 40 skipped (the picture, survey and live tools), 0 failed, in 4 min 12 s.** Before the
+merge the blast radius (the scraping tests, the metadata, options, collections, cover-choice, OpenEmu, pad-settings and
+themed-library tests; 376) had passed but for one: `GridSceneTests.Item_sizes_and_corner_radii_are_in_ES_DE_s_units`,
+run in that filter's order, found no render interface, the headless platform's initialisation failure §35.12
+recorded as order-dependent. It draws no media of this pass's and passed in the broad run.

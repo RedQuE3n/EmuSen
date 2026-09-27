@@ -94,6 +94,17 @@ namespace EmuSen.Galaxia.Models
         public bool ScrapeRegionFallback { get; set; } = true;
         public int ScrapeThreads { get; set; } = 1;
 
+        // Pass 8's kinds, each off until the player turns it on, and ScreenScraper's names shown (Q30) - see EmuSen_Settings_Reference.md §4.76.
+        public bool ScrapeBackCovers { get; set; }
+        public bool Scrape3DBoxes { get; set; }
+        public bool ScrapePhysicalMedia { get; set; }
+        public bool ScrapeFanArt { get; set; }
+        public bool ScrapeManuals { get; set; }
+        public bool ScrapeVideos { get; set; }
+        public bool ScrapeGameNames { get; set; }
+        public string ScrapeCriteria { get; set; } = "nocover";
+        public bool ScrapeRefresh { get; set; }
+
         // Box art the library shows, read and never written except by Add Cover Art - see EmuSen_Settings_Reference.md §4.33.
         public string? ArtworkDirectory { get; set; }
 

@@ -29,7 +29,7 @@ namespace EmuSen.WiseMan.Mistress
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(DesktopGameOptionsTests).GetTypeInfo().Assembly);
 
-        private static readonly string[] GameEntries = ["Add to Favourites", "Edit This Game's Metadata", "Use Another Game's Cover...", "Scrape This Game..."];
+        private static readonly string[] GameEntries = ["Add to Favourites", "Edit This Game's Metadata", "Use Another Game's Cover...", "Scrape This Game...", "Find by Name..."];
 
         internal static ThemedSession Desktop(string view = AppSettings.LibraryList) =>
             new(settings: a => { a.BigScreen = false; a.LibraryView = view; });

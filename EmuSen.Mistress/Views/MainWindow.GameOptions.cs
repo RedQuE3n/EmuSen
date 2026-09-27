@@ -30,15 +30,16 @@ namespace EmuSen.Mistress.Views
         partial void AddCollectionOptions(SceneGame game, List<GameOption> options);
 
         private GameMetadata MetadataFor(string path) =>
-            GameMetadata.Resolve(path, _scrapedText.GetValueOrDefault(path), _editSnapshot.GetValueOrDefault(path));
+            GameMetadata.Resolve(path, _scrapedText.GetValueOrDefault(path), _editSnapshot.GetValueOrDefault(path), _appSettings.ScrapeGameNames);
 
         // ES-DE's per-game alternative emulator: the game's engine over the console's, when its console has that engine (§4.66).
         private string? GameEngine(string path) => GameMetadata.EngineFor(path, _records.Edits(path).GetValueOrDefault(GameMetadata.AltEmulator));
 
-        // The player's name for a game where they gave one, else the file's, in every list Mistress draws.
+        // The player's name for a game where they gave one, else ScreenScraper's with "Game names" on (Q30), else the file's, in every list Mistress draws.
         private string DisplayTitle(RomEntry entry) =>
             _editSnapshot.TryGetValue(entry.FullPath, out IReadOnlyDictionary<string, string>? edits) && edits.TryGetValue(GameMetadata.Name, out string? name) && name.Length > 0
-                ? name : entry.Title;
+                ? name
+                : _appSettings.ScrapeGameNames && _scrapedText.TryGetValue(entry.FullPath, out ScrapedRecord? scraped) && scraped.Name is { Length: > 0 } theirs ? theirs : entry.Title;
 
         private bool IsHiddenGame(string path) =>
             _editSnapshot.TryGetValue(path, out IReadOnlyDictionary<string, string>? edits) && edits.GetValueOrDefault(GameMetadata.Hidden) == GameMetadata.Yes;
@@ -117,6 +118,8 @@ namespace EmuSen.Mistress.Views
             AddCoverEntries(options, path, title);
             // Scraping only ever starts where the player asks for it - see EmuSen_BigPicture.md §17.14.
             if (!ScrapeRunning) options.Add(new GameOption("Scrape This Game...", () => _ = ConfirmAndScrapeAsync(ScrapeScope.ThisGame(path))) { Opens = true });
+            // ES-DE's search by name, only from here and only when the player presses Search in it - see EmuSen_BigPicture.md §38.
+            if (!ScrapeRunning) options.Add(new GameOption("Find by Name...", () => ShowFindByName(path, title)) { Opens = true });
         }
 
         // A sheet in a big-screen session, a LunaP window owned by Mistress's on the desktop: SheetLayer decides which.
@@ -164,7 +167,7 @@ namespace EmuSen.Mistress.Views
         }
 
         MetadataDraft IGameEditorHost.DraftFor(string path) =>
-            new(path, ScrapedNow(path) ?? _scrapedText.GetValueOrDefault(path), _records.Edits(path), _records.Find(path));
+            new(path, ScrapedNow(path) ?? _scrapedText.GetValueOrDefault(path), _records.Edits(path), _records.Find(path), _appSettings.ScrapeGameNames);
 
         public ScrapedRecord? ScrapedNow(string path) => _mediaStore is { IsOpen: true } store ? store.FoundFor(path) : _scrapedText.GetValueOrDefault(path);
 

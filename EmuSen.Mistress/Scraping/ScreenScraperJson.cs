@@ -12,7 +12,12 @@ namespace EmuSen.Mistress.Scraping
     public sealed record ScrapedGenre(IReadOnlyList<Localised> Names, bool Main);
 
     // One media file the game has, with the address ScreenScraper serves it from; the address carries the credentials and is redacted before it is shown.
-    public sealed record ScrapedMedia(string Type, string? Region, string Url, string? Format);
+    public sealed record ScrapedMedia(string Type, string? Region, string Url, string? Format)
+    {
+        // The file's own checksum and size as the answer states them, so a kept file can be compared with no request (§38).
+        public string? Sha1 { get; init; }
+        public long? Size { get; init; }
+    }
 
     // The member's limits and today's counts, as every response carries them; null where a field was absent.
     public sealed record ScrapeQuota(int? MaxThreads, int? MaxDownloadKBps, int? RequestsToday, int? RequestsKoToday,
@@ -41,10 +46,24 @@ namespace EmuSen.Mistress.Scraping
             JsonElement response = doc.RootElement.GetProperty("response");
             ScrapeQuota? quota = response.TryGetProperty("ssuser", out JsonElement user) ? Quota(user) : null;
             if (!response.TryGetProperty("jeu", out JsonElement jeu) || jeu.ValueKind != JsonValueKind.Object) return (null, quota);
+            return (Game(jeu) ?? throw new FormatException("a game without an id"), quota);
+        }
 
-            long id = Long(Prop(jeu, "id")) ?? throw new FormatException("a game without an id");
+        // jeuRecherche: up to 30 games ranked by likelihood, each as jeuInfos writes one; an entry with no id (the answer when nothing matched) is left out.
+        public static (IReadOnlyList<ScrapedGame> Games, ScrapeQuota? Quota) JeuRecherche(string json)
+        {
+            using JsonDocument doc = JsonDocument.Parse(json);
+            JsonElement response = doc.RootElement.GetProperty("response");
+            ScrapeQuota? quota = response.TryGetProperty("ssuser", out JsonElement user) ? Quota(user) : null;
+            var games = Array(Prop(response, "jeux")).Where(j => j.ValueKind == JsonValueKind.Object).Select(Game).OfType<ScrapedGame>().ToList();
+            return (games, quota);
+        }
+
+        private static ScrapedGame? Game(JsonElement jeu)
+        {
+            if (Long(Prop(jeu, "id")) is not long id) return null;
             long? romId = Long(Prop(jeu, "romid")) ?? Long(Prop(Prop(jeu, "rom"), "id"));
-            var game = new ScrapedGame(id, romId, Int(Prop(Prop(jeu, "systeme"), "id")))
+            return new ScrapedGame(id, romId, Int(Prop(Prop(jeu, "systeme"), "id")))
             {
                 Names = List(Prop(jeu, "noms"), "region"),
                 Synopses = List(Prop(jeu, "synopsis"), "langue"),
@@ -56,10 +75,12 @@ namespace EmuSen.Mistress.Scraping
                 Note = Double(Prop(Prop(jeu, "note"), "text")),
                 Media = Array(Prop(jeu, "medias"))
                     .Where(m => Text(Prop(m, "type")) is not null && Text(Prop(m, "url")) is not null)
-                    .Select(m => new ScrapedMedia(Text(Prop(m, "type"))!, Text(Prop(m, "region")), Text(Prop(m, "url"))!, Text(Prop(m, "format"))))
+                    .Select(m => new ScrapedMedia(Text(Prop(m, "type"))!, Text(Prop(m, "region")), Text(Prop(m, "url"))!, Text(Prop(m, "format")))
+                    {
+                        Sha1 = Text(Prop(m, "sha1"))?.ToLowerInvariant(), Size = Long(Prop(m, "size")),
+                    })
                     .ToList(),
             };
-            return (game, quota);
         }
 
         // ssuserInfos: only the quota.

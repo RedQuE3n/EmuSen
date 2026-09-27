@@ -33,7 +33,10 @@ namespace EmuSen.Mistress.Scraping
 
     public sealed record JeuInfosAnswer(ScrapeStatus Status, ScrapedGame? Game, ScrapeQuota? Quota, string Detail, TimeSpan Took, string? Body = null);
 
-    public enum MediaOutcome { Saved, AlreadyThere, NoMedia, NotAnImage, TooSmall, Failed }
+    public enum MediaOutcome { Saved, AlreadyThere, NoMedia, NotAnImage, TooSmall, Failed, Unchanged, TooLarge }
+
+    // A name search's answer: the games in ScreenScraper's order, and the quota it carried.
+    public sealed record SearchAnswer(ScrapeStatus Status, IReadOnlyList<ScrapedGame> Games, ScrapeQuota? Quota, string Detail, TimeSpan Took);
 
     public sealed record MediaAnswer(MediaOutcome Outcome, string? Path, long Bytes, string? Sha1, string Detail, TimeSpan Took);
 
@@ -83,11 +86,18 @@ namespace EmuSen.Mistress.Scraping
         };
 
         // The credentials first, as every call carries them; output=json; romtype rom; the three hashes, the size, the file's own name and the system.
-        public string JeuInfosUrl(int systemId, RomHashes hashes, string fileName) =>
-            Url("jeuInfos.php",
+        public string JeuInfosUrl(int systemId, RomHashes hashes, string fileName, long? gameId = null)
+        {
+            var query = new List<(string, string)>
+            {
                 ("romtype", "rom"), ("systemeid", systemId.ToString(CultureInfo.InvariantCulture)),
                 ("crc", hashes.Crc32), ("md5", hashes.Md5), ("sha1", hashes.Sha1),
-                ("romtaille", hashes.Size.ToString(CultureInfo.InvariantCulture)), ("romnom", Path.GetFileName(fileName)));
+                ("romtaille", hashes.Size.ToString(CultureInfo.InvariantCulture)), ("romnom", Path.GetFileName(fileName)),
+            };
+            // A game the player chose by name is asked by its id as well, which jeuInfos documents as an input (§5.1).
+            if (gameId is long id) query.Add(("gameid", id.ToString(CultureInfo.InvariantCulture)));
+            return Url("jeuInfos.php", [.. query]);
+        }
 
         public string Url(string endpoint, params (string Name, string Value)[] query)
         {
@@ -108,9 +118,9 @@ namespace EmuSen.Mistress.Scraping
         private static void Append(StringBuilder url, string name, string value) =>
             url.Append(name).Append('=').Append(Uri.EscapeDataString(value)).Append('&');
 
-        public async Task<JeuInfosAnswer> JeuInfosAsync(int systemId, RomHashes hashes, string fileName, CancellationToken stop)
+        public async Task<JeuInfosAnswer> JeuInfosAsync(int systemId, RomHashes hashes, string fileName, CancellationToken stop, long? gameId = null)
         {
-            (ScrapeStatus status, string body, TimeSpan took) = await GetTextAsync(JeuInfosUrl(systemId, hashes, fileName), stop);
+            (ScrapeStatus status, string body, TimeSpan took) = await GetTextAsync(JeuInfosUrl(systemId, hashes, fileName, gameId), stop);
             if (status != ScrapeStatus.Found) return new JeuInfosAnswer(status, null, null, Snippet(body), took, body);
             try
             {
@@ -159,39 +169,123 @@ namespace EmuSen.Mistress.Scraping
             catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException) { return (ScrapeStatus.Malformed, new Dictionary<int, string>(), ScrapeRedactor.Redact(ex.Message)); }
         }
 
-        // A media file written beside its final name and moved into place, never over one already there; only an image of at least 80 bytes is kept.
-        public async Task<MediaAnswer> DownloadAsync(string url, string target, CancellationToken stop)
+        // The largest file kept; ScreenScraper's largest manual in §21.1's sample was 18.2 MB.
+        public const long LargestFile = 128L << 20;
+
+        // ES-DE's ScraperTransferTimeout, 120 s, plus a second for every 64 KB a large file declares.
+        public static TimeSpan TransferTimeout(long? declared) => TimeSpan.FromSeconds(120 + Math.Max(0, declared ?? 0) / 65536);
+
+        // A media file streamed beside its final name and moved into place; a picture of at least 80 bytes, a PDF or an MP4, as the kind asks - see EmuSen_BigPicture.md §38.
+        public async Task<MediaAnswer> DownloadAsync(string url, string target, CancellationToken stop, MediaPayload payload = MediaPayload.Image,
+            string? localSha1 = null, bool replace = false, long? declared = null)
         {
             var clock = Stopwatch.StartNew();
-            if (File.Exists(target)) return new MediaAnswer(MediaOutcome.AlreadyThere, target, new FileInfo(target).Length, null, "", clock.Elapsed);
+            if (!replace && File.Exists(target)) return new MediaAnswer(MediaOutcome.AlreadyThere, target, new FileInfo(target).Length, null, "", clock.Elapsed);
             url = MediaUrl(url);
+            // A kept file's own checksum lets the server answer SHA1OK instead of sending it again (§5.1).
+            if (localSha1 is { Length: > 0 }) url += (url.Contains('?') ? "&" : "?") + "sha1=" + Uri.EscapeDataString(localSha1);
+            string temp = target + ".part";
             try
             {
-                using HttpResponseMessage response = await _http.GetAsync(url, HttpCompletionOption.ResponseContentRead, stop);
-                byte[] bytes = await response.Content.ReadAsByteArrayAsync(stop);
+                using var transfer = CancellationTokenSource.CreateLinkedTokenSource(stop);
+                transfer.CancelAfter(TransferTimeout(declared));
+                using HttpResponseMessage response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, transfer.Token);
                 if (response.StatusCode != HttpStatusCode.OK)
                     return new MediaAnswer(MediaOutcome.Failed, null, 0, null, $"HTTP {(int)response.StatusCode}", clock.Elapsed);
-                string text = bytes.Length < 64 ? Encoding.ASCII.GetString(bytes).Trim() : "";
-                if (text is "NOMEDIA") return new MediaAnswer(MediaOutcome.NoMedia, null, 0, null, "NOMEDIA", clock.Elapsed);
-                string? type = response.Content.Headers.ContentType?.MediaType;
-                if (type is null || !type.StartsWith("image/", StringComparison.Ordinal))
-                    return new MediaAnswer(MediaOutcome.NotAnImage, null, bytes.Length, null, ScrapeRedactor.Redact(text.Length > 0 ? text : type ?? "no type"), clock.Elapsed);
-                if (bytes.Length < SmallestImage) return new MediaAnswer(MediaOutcome.TooSmall, null, bytes.Length, null, $"{bytes.Length} bytes", clock.Elapsed);
 
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                string temp = target + ".part";
-                await File.WriteAllBytesAsync(temp, bytes, stop);
-                try { File.Move(temp, target, overwrite: false); }
-                catch (IOException) when (File.Exists(target))
+                byte[] head = new byte[64];
+                int headLength = 0;
+                long length = 0;
+                using var sha1 = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+                await using (Stream body = await response.Content.ReadAsStreamAsync(transfer.Token))
+                await using (var file = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
+                {
+                    byte[] buffer = new byte[81920];
+                    int read;
+                    while ((read = await body.ReadAsync(buffer, transfer.Token)) > 0)
+                    {
+                        if (headLength < head.Length)
+                        {
+                            int take = Math.Min(read, head.Length - headLength);
+                            Array.Copy(buffer, 0, head, headLength, take);
+                            headLength += take;
+                        }
+                        length += read;
+                        if (length > LargestFile) break;
+                        sha1.AppendData(buffer, 0, read);
+                        await file.WriteAsync(buffer.AsMemory(0, read), transfer.Token);
+                    }
+                }
+
+                string text = length < 64 ? Encoding.ASCII.GetString(head, 0, headLength).Trim() : "";
+                string? type = response.Content.Headers.ContentType?.MediaType;
+                MediaOutcome? refused = text switch
+                {
+                    "NOMEDIA" => MediaOutcome.NoMedia,
+                    "SHA1OK" or "MD5OK" or "CRCOK" => MediaOutcome.Unchanged,
+                    _ when length > LargestFile => MediaOutcome.TooLarge,
+                    _ when !IsPayload(payload, type, head.AsSpan(0, headLength)) => MediaOutcome.NotAnImage,
+                    _ when length < SmallestImage => MediaOutcome.TooSmall,
+                    _ => null,
+                };
+                if (refused is MediaOutcome no)
+                {
+                    File.Delete(temp);
+                    string detail = no switch
+                    {
+                        MediaOutcome.NotAnImage => ScrapeRedactor.Redact(text.Length > 0 ? text : type ?? "no type"),
+                        MediaOutcome.TooSmall or MediaOutcome.TooLarge => $"{length} bytes",
+                        _ => text,
+                    };
+                    return new MediaAnswer(no, no == MediaOutcome.Unchanged && File.Exists(target) ? target : null, no == MediaOutcome.NotAnImage ? length : 0, null, detail, clock.Elapsed);
+                }
+
+                try { File.Move(temp, target, overwrite: replace); }
+                catch (IOException) when (!replace && File.Exists(target))
                 {
                     File.Delete(temp);
                     return new MediaAnswer(MediaOutcome.AlreadyThere, target, new FileInfo(target).Length, null, "", clock.Elapsed);
                 }
-                return new MediaAnswer(MediaOutcome.Saved, target, bytes.Length, Convert.ToHexStringLower(SHA1.HashData(bytes)), "", clock.Elapsed);
+                return new MediaAnswer(MediaOutcome.Saved, target, length, Convert.ToHexStringLower(sha1.GetHashAndReset()), "", clock.Elapsed);
             }
-            catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException || (ex is TaskCanceledException && !stop.IsCancellationRequested))
+            catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException || (ex is OperationCanceledException && !stop.IsCancellationRequested))
             {
+                try { File.Delete(temp); } catch (IOException) { }
                 return new MediaAnswer(MediaOutcome.Failed, null, 0, null, ScrapeRedactor.Redact(ex.Message), clock.Elapsed);
+            }
+            catch (OperationCanceledException)
+            {
+                try { File.Delete(temp); } catch (IOException) { }
+                throw;
+            }
+        }
+
+        // A picture by its content type; a manual by the "%PDF-" it starts with; a clip by MP4's "ftyp" box or a video type - see EmuSen_BigPicture.md §38.
+        public static bool IsPayload(MediaPayload payload, string? contentType, ReadOnlySpan<byte> head) => payload switch
+        {
+            MediaPayload.Pdf => head.StartsWith("%PDF-"u8),
+            MediaPayload.Video => (head.Length >= 8 && head.Slice(4, 4).SequenceEqual("ftyp"u8)) || contentType?.StartsWith("video/", StringComparison.Ordinal) == true,
+            _ => contentType?.StartsWith("image/", StringComparison.Ordinal) == true,
+        };
+
+        // ES-DE's "Find by name": one jeuRecherche for a name on one system, up to 30 games ranked by likelihood; the player's action alone asks it - see EmuSen_BigPicture.md §38.
+        public string JeuRechercheUrl(int systemId, string name) =>
+            Url("jeuRecherche.php", ("systemeid", systemId.ToString(CultureInfo.InvariantCulture)), ("recherche", name));
+
+        public async Task<SearchAnswer> JeuRechercheAsync(int systemId, string name, CancellationToken stop)
+        {
+            (ScrapeStatus status, string body, TimeSpan took) = await GetTextAsync(JeuRechercheUrl(systemId, name), stop);
+            if (status == ScrapeStatus.NotFound) return new SearchAnswer(ScrapeStatus.NotFound, [], null, Snippet(body), took);
+            if (status != ScrapeStatus.Found) return new SearchAnswer(status, [], null, Snippet(body), took);
+            try
+            {
+                (IReadOnlyList<ScrapedGame> games, ScrapeQuota? quota) = ScreenScraperJson.JeuRecherche(body);
+                return new SearchAnswer(games.Count == 0 ? ScrapeStatus.NotFound : ScrapeStatus.Found, games, quota, "", took);
+            }
+            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or FormatException or InvalidOperationException)
+            {
+                return new SearchAnswer(ScrapeStatus.Malformed, [], null, ScrapeRedactor.Redact(ex.Message), took);
             }
         }
 

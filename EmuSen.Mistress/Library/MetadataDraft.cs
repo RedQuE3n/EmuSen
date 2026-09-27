@@ -13,9 +13,10 @@ namespace EmuSen.Mistress.Library
         private readonly HashSet<string> _fromScrape = new(StringComparer.Ordinal);
         private ScrapedRecord? _scraped;
 
-        public MetadataDraft(string path, ScrapedRecord? scraped, IReadOnlyDictionary<string, string>? edits, GameRecord? record)
+        public MetadataDraft(string path, ScrapedRecord? scraped, IReadOnlyDictionary<string, string>? edits, GameRecord? record, bool scrapedNames = false)
         {
             Path = path;
+            ScrapedNames = scrapedNames;
             _scraped = scraped;
             _stored = new Dictionary<string, string>(edits ?? new Dictionary<string, string>(), StringComparer.Ordinal);
             foreach (MetadataField field in GameMetadata.Fields)
@@ -27,6 +28,9 @@ namespace EmuSen.Mistress.Library
 
         public string Path { get; }
 
+        // "Game names" (Q30): ScreenScraper's name is the name's baseline rather than an offer.
+        public bool ScrapedNames { get; }
+
         public bool Favourite { get; set; }
         public int PlayCount { get; set; }
         public double PlaySeconds { get; set; }
@@ -34,7 +38,7 @@ namespace EmuSen.Mistress.Library
         public int StoredPlayCount { get; }
         public double StoredPlaySeconds { get; }
 
-        public MetadataValue Baseline(string field) => GameMetadata.Baseline(Path, _scraped, field);
+        public MetadataValue Baseline(string field) => GameMetadata.Baseline(Path, _scraped, field, ScrapedNames);
 
         public string? Value(string field) => _values.GetValueOrDefault(field);
 
@@ -62,7 +66,7 @@ namespace EmuSen.Mistress.Library
             _nameDeclined = false;
             foreach (MetadataField field in GameMetadata.Fields)
             {
-                if (GameMetadata.Scraped(fresh, field.Key) is not { } value) continue;
+                if (GameMetadata.Scraped(fresh, field.Key, ScrapedNames) is not { } value) continue;
                 _values[field.Key] = value;
                 _fromScrape.Add(field.Key);
             }

@@ -45,6 +45,9 @@ namespace EmuSen.Mistress.Views
         bool OpenVgdbBusy => true;
         System.Threading.Tasks.Task<string?> RemoveOpenVgdbAsync() => System.Threading.Tasks.Task.FromResult<string?>(null);
         System.Threading.Tasks.Task<string> DownloadOpenVgdbAsync() => System.Threading.Tasks.Task.FromResult("");
+
+        // Pass 8's cleanup of media whose game is gone - see EmuSen_Settings_Reference.md §4.76.
+        System.Threading.Tasks.Task<string> CleanUpOrphansAsync() => System.Threading.Tasks.Task.FromResult("");
     }
 
     // Preferences' Scraping tab: ScreenScraper, the member account, what to fetch, region and language, the quota, and OpenEmu's failover - see EmuSen_Settings_Reference.md §4.60.
@@ -76,7 +79,9 @@ namespace EmuSen.Mistress.Views
         private readonly Button _statusButton = Ui.Button("Status...", () => { });
 
         private readonly Dropdown _scopeShelf = new() { Name = "ScrapeShelfDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
-        private readonly LunaSwitch _missingOnly = new() { Name = "ScrapeMissingArtSwitch", Label = "Only games with no cover", IsChecked = true };
+        private readonly Dropdown _criteria = new() { Name = "ScrapeCriteriaDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
+        private readonly Button _cleanUp = Ui.Button("Clean Up...", () => { });
+        private readonly HintText _cleanUpMessage = new() { Name = "ScrapeCleanUpMessage" };
         private readonly Button _start = Ui.Button("Scrape...", () => { });
         private readonly Button _resume = Ui.Button("Resume", () => { });
         private readonly Button _cancel = Ui.Button("Cancel Scraping", () => { });
@@ -92,7 +97,10 @@ namespace EmuSen.Mistress.Views
 
         public static string[] ShelfChoices => [AllShelves, .. EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder.Select(s => s.Name)];
 
-        public ScrapeScope ChosenScope() => new(Shelf: _scopeShelf.SelectedItem is string s && s != AllShelves ? s : null, MissingArtOnly: _missingOnly.IsChecked == true);
+        public ScrapeScope ChosenScope() => new(Shelf: _scopeShelf.SelectedItem is string s && s != AllShelves ? s : null)
+        {
+            Criteria = ScrapeScope.CriteriaOf(_settings.ScrapeCriteria), Refresh = _settings.ScrapeRefresh,
+        };
 
         public ScrapePreferencesPane(AppSettings settings, IScrapeHost? host)
         {
@@ -122,6 +130,16 @@ namespace EmuSen.Mistress.Views
             _vgdbRemove.Click += async (_, _) => await RemoveOpenVgdbAsync();
             _vgdbDownload.Name = "OpenVgdbDownloadButton";
             _vgdbDownload.Click += async (_, _) => await DownloadOpenVgdbAsync();
+            _cleanUp.Name = "ScrapeCleanUpButton";
+            _cleanUp.Click += async (_, _) => await CleanUpAsync();
+            string[] criteria = ScrapeScope.CriteriaChoices.Select(c => c.Text).ToArray();
+            _criteria.Fill(criteria, ScrapeScope.CriteriaChoices.First(c => c.Value == ScrapeScope.CriteriaOf(_settings.ScrapeCriteria)).Text);
+            _criteria.Chose += chosen =>
+            {
+                if (ScrapeScope.CriteriaChoices.FirstOrDefault(c => c.Text == chosen as string) is not { Setting: not null } c) return;
+                _settings.ScrapeCriteria = c.Setting;
+                _settings.Save();
+            };
 
             string developer = _host?.DeveloperOrigin switch
             {
@@ -161,6 +179,26 @@ namespace EmuSen.Mistress.Views
                 },
                 new FieldRow
                 {
+                    Label = "Fetch More",
+                    Hint = "Off until you turn them on, because each is one more request for most games ScreenScraper finds and the day's requests are few: "
+                        + "a back cover, a 3D box or the cartridge adds about 0.4 MB, fan art about 0.4 MB, a PDF manual about 2 MB (the largest seen was 18 MB) and a video clip about 1.4 MB. "
+                        + "Manuals are kept for the media viewer and clips for the theme's video; turning one on later asks again only the games that may have it.",
+                    Content = Ui.Stack(6,
+                        Switch("ScrapeBackCoversSwitch", "Back covers", _settings.ScrapeBackCovers, v => _settings.ScrapeBackCovers = v),
+                        Switch("Scrape3DBoxesSwitch", "3D boxes", _settings.Scrape3DBoxes, v => _settings.Scrape3DBoxes = v),
+                        Switch("ScrapePhysicalMediaSwitch", "Physical media (the cartridge)", _settings.ScrapePhysicalMedia, v => _settings.ScrapePhysicalMedia = v),
+                        Switch("ScrapeFanArtSwitch", "Fan art", _settings.ScrapeFanArt, v => _settings.ScrapeFanArt = v),
+                        Switch("ScrapeManualsSwitch", "Manuals (PDF)", _settings.ScrapeManuals, v => _settings.ScrapeManuals = v),
+                        Switch("ScrapeVideosSwitch", "Videos", _settings.ScrapeVideos, v => _settings.ScrapeVideos = v)),
+                },
+                new FieldRow
+                {
+                    Label = "Game Names",
+                    Hint = "Off: every view shows the file's name, which for a No-Intro library already tells two copies of a game apart. On: ScreenScraper's name is shown instead wherever it has one. A name you give a game in its metadata editor wins either way.",
+                    Content = Switch("ScrapeGameNamesSwitch", "Show ScreenScraper's names", _settings.ScrapeGameNames, v => _settings.ScrapeGameNames = v),
+                },
+                new FieldRow
+                {
                     Label = "Region",
                     Hint = "Whose box and name are preferred. Automatic reads the file's own tag: (USA), (Europe), (Japan), (World).",
                     Content = Ui.Stack(6,
@@ -177,9 +215,12 @@ namespace EmuSen.Mistress.Views
                 {
                     Label = "Scrape",
                     Hint = "Nothing is sent to ScreenScraper or OpenEmu's sources until you start it here, from a game's menu (Scrape This Game), or from the pad menu. "
-                        + "Choose a console or every console, and whether only games with no cover; the count and the requests it will cost are shown before it starts. "
-                        + "A run that is cancelled or stopped by the quota can be resumed; it never resumes by itself.",
-                    Content = Ui.Stack(6, _scopeShelf, _missingOnly, Ui.Row(8, _start, _resume, _cancel, _statusButton), _progress),
+                        + "Choose a console or every console, and which of its games: all, favourites, those with no description (no metadata), with none of a mix image, screenshot, title screen or cover (no game image), with no video, or with no cover. "
+                        + "The count and the requests it will cost are shown before it starts. A run that is cancelled or stopped by the quota can be resumed; it never resumes by itself. "
+                        + "Refresh what is kept asks again about games already found: each costs a request, and a picture is fetched again only when ScreenScraper's copy has changed.",
+                    Content = Ui.Stack(6, _scopeShelf, _criteria,
+                        Switch("ScrapeRefreshSwitch", "Refresh what is kept", _settings.ScrapeRefresh, v => _settings.ScrapeRefresh = v),
+                        Ui.Row(8, _start, _resume, _cancel, _statusButton), _progress),
                 },
                 new FieldRow
                 {
@@ -197,6 +238,13 @@ namespace EmuSen.Mistress.Views
                     Content = Ui.Stack(6,
                         _fallback = Switch("OpenEmuFallbackSwitch", "Use OpenEmu's sources (OpenVGDB and libretro thumbnails) when ScreenScraper has nothing", _settings.OpenEmuFallback, v => _settings.OpenEmuFallback = v),
                         _vgdbText, Ui.Row(8, _vgdbRemove, _vgdbDownload), _vgdbMessage),
+                },
+                new FieldRow
+                {
+                    Label = "Orphaned Media",
+                    Hint = "Pictures, manuals and clips scraped for games no longer in the library. Clean Up counts them and asks first, then moves them to home/Media/CLEANUP, as ES-DE does; nothing is deleted and nothing is sent. "
+                        + "Only consoles that still have games are looked at, so an unplugged drive never reads as every game gone.",
+                    Content = Ui.Stack(6, _cleanUp, _cleanUpMessage),
                 },
             ];
         }
@@ -294,6 +342,14 @@ namespace EmuSen.Mistress.Views
             if (hadFocus && !_vgdbRemove.IsVisible) _vgdbDownload.Focus(Avalonia.Input.NavigationMethod.Directional);
         }
 
+        private async System.Threading.Tasks.Task CleanUpAsync()
+        {
+            if (_host is null) return;
+            _cleanUp.IsEnabled = false;
+            _cleanUpMessage.Text = await _host.CleanUpOrphansAsync();
+            _cleanUp.IsEnabled = true;
+        }
+
         private async System.Threading.Tasks.Task DownloadOpenVgdbAsync()
         {
             if (_host is null) return;
@@ -315,6 +371,7 @@ namespace EmuSen.Mistress.Views
             _start.IsEnabled = _host is not null && !running;
             _resume.IsEnabled = !running && (_host?.Interrupted ?? 0) > 0;
             _cancel.IsEnabled = running;
+            _cleanUp.IsEnabled = _host is not null && !running;
             ScrapeProgress? p = _host?.Progress;
             _progress.IsVisible = p is not null;
             if (p is not null) _progress.Value = p.Total == 0 ? 0 : (double)p.Done / p.Total;

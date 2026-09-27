@@ -8795,3 +8795,13 @@ Written during the build, by the hand that wrote the code, as §27.1 and §28.1 
 - **Q145, the cleanup folder.** ES-DE leaves `CLEANUP` for the player to delete. **Recommendation: the same**; its size
   is in the message that moved the files.
 
+
+### 38.16 The broad run
+
+After merging WiseMan at `c1ef5c6d` (§36, Pass 14's first half), one run of the Mistress filter, without
+`ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` and any GPU or Vulkan test, under `nice -n 10`:
+**1,400 tests, 1,360 passed, 40 skipped (the picture, survey and live tools), 0 failed, in 4 min 12 s.** Before the
+merge the blast radius (the scraping tests, the metadata, options, collections, cover-choice, OpenEmu, pad-settings and
+themed-library tests; 376) had passed but for one: `GridSceneTests.Item_sizes_and_corner_radii_are_in_ES_DE_s_units`,
+run in that filter's order, found no render interface, the headless platform's initialisation failure §35.12
+recorded as order-dependent. It draws no media of this pass's and passed in the broad run.

@@ -15,13 +15,18 @@ namespace EmuSen.Mistress.Views
 
         internal FolderEditorWindow? FolderEditorShown => _folderEditor;
 
-        // Every folder link the player set, by the folder's path on disk, to the file's full path.
+        // Every folder link the player set whose file the library still lists, by the folder's path on disk, to the file's full path.
         private IReadOnlyDictionary<string, string> FolderLinks()
         {
             var links = new Dictionary<string, string>(StringComparer.Ordinal);
+            HashSet<string>? listed = null;
             foreach ((string folder, IReadOnlyDictionary<string, string> edits) in _editSnapshot)
-                if (edits.TryGetValue(GameMetadata.FolderLink, out string? link) && link.Length > 0)
-                    links[folder] = Path.GetFullPath(Path.Combine(folder, link.Replace('/', Path.DirectorySeparatorChar)));
+            {
+                if (!edits.TryGetValue(GameMetadata.FolderLink, out string? link) || link.Length == 0) continue;
+                listed ??= _allScan.Entries.Select(e => e.FullPath).ToHashSet(StringComparer.Ordinal);
+                string file = Path.GetFullPath(Path.Combine(folder, link.Replace('/', Path.DirectorySeparatorChar)));
+                if (listed.Contains(file)) links[folder] = file;
+            }
             return links;
         }
 

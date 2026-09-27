@@ -362,6 +362,22 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Stop(s.Window);
         }, default);
 
+        // A link to a file that has gone is no link: A enters the folder and the help bar says so.
+        [Fact]
+        public Task A_folder_link_to_a_file_that_has_gone_is_ignored() => Run(s =>
+        {
+            string usa = Path.Combine(s.RomDirectory, "NES", "USA");
+            ThemedCollectionsTests.Records(s).SaveEdits(usa, new Dictionary<string, string?> { [EmuSen.Mistress.Library.GameMetadata.FolderLink] = "Gone (Synthetic).nes" }, DateTime.Now);
+            ThemedCollectionsTests.Refresh(s);
+            ThemedLibraryPadTests.Enter(s, "nes");
+            s.Pad.Down(2);
+            Assert.Equal("USA", s.Game);
+            Assert.Null(s.Themed.SelectedGame!.FolderLink);
+            Assert.Equal("Select", HelpLabel(s, "a"));
+            s.Pad.A();
+            Assert.Equal("USA", s.Themed.CurrentFolder);
+        });
+
         // THEMES.md "defaultFolderImage" and USERGUIDE's media path: a folder's own picture is <system>/<type>/<parent folders>/<folder name>.
         [Fact]
         public void A_folder_s_picture_is_named_after_it_and_presence_from_one_listing_equals_presence_asked_game_by_game()
@@ -395,6 +411,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 var asked = ThemeCapabilities.MediaTypes.Where(t => games.Any(g => media.Find(nes, g, t) is not null)).ToHashSet();
                 Assert.Equal(asked.Order(), listed.Order());
                 Assert.Equal(["cover", "marquee"], listed.Order());
+
+                // A type whose only file is in a type folder's own folder counts too.
+                Touch(Path.Combine(root, "nes", "screenshots", "USA", "Game.png"));
+                Assert.Equal(["cover", "marquee", "screenshot"], media.Present(nes, games).Order());
 
                 // A file added to a type folder's own folder changes the stamp.
                 string before = media.Stamp(nes)!;

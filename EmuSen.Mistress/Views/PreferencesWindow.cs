@@ -32,6 +32,8 @@ namespace EmuSen.Mistress.Views
         private readonly LunaSwitch _showStatusText = new() { Name = "ShowStatusTextSwitch", Label = "Show messages" };
         private readonly LunaSwitch _showFpsBar = new() { Name = "ShowFpsBarSwitch", Label = "Show the frame rate" };
         private readonly LunaSwitch _navigationSounds = new() { Name = "NavigationSoundsSwitch", Label = "Play the theme's navigation sounds" };
+        private readonly Slider _navigationVolume = new() { Name = "NavigationVolumeSlider", Minimum = 0, Maximum = 100, SmallChange = 5, LargeChange = 10, TickFrequency = 5, IsSnapToTickEnabled = true, MinWidth = 240 };
+        private readonly TextBlock _navigationVolumeText = new() { Name = "NavigationVolumeText", VerticalAlignment = VerticalAlignment.Center, MinWidth = 40 };
         private readonly LunaSwitch _showHiddenGames = new() { Name = "ShowHiddenGamesSwitch", Label = "List the games hidden from the library" };
         private readonly Dropdown _bigPictureTheme = new() { Name = "BigPictureThemeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
         private IReadOnlyList<BigPictureLook> _looks = [];
@@ -181,8 +183,14 @@ namespace EmuSen.Mistress.Views
                 new FieldRow
                 {
                     Label = "Navigation Sounds",
-                    Hint = "The theme's sounds for moving, choosing and going back, on a stream of their own beside the game's.",
+                    Hint = "The theme's sounds for moving, choosing and going back, on a stream of their own beside the game's. A theme without one of them plays EmuSen's own in its place.",
                     Content = _navigationSounds,
+                },
+                new FieldRow
+                {
+                    Label = "Navigation Sounds Volume",
+                    Hint = "How loud the navigation sounds are, beside the game's own volume. ES-DE's default is 70.",
+                    Content = Ui.Row(12, _navigationVolume, _navigationVolumeText),
                 },
                 new FieldRow
                 {
@@ -209,6 +217,14 @@ namespace EmuSen.Mistress.Views
             _showFpsBar.IsCheckedChanged += (_, _) => { _settings.ShowFpsBar = _showFpsBar.IsChecked == true; _settings.Save(); StatusBarChanged?.Invoke(); };
             _navigationSounds.IsChecked = _settings.NavigationSounds;
             _navigationSounds.IsCheckedChanged += (_, _) => { _settings.NavigationSounds = _navigationSounds.IsChecked == true; _settings.Save(); };
+            _navigationVolume.Value = Math.Clamp(_settings.BigPictureInterface.NavigationVolume, 0, 100);
+            _navigationVolumeText.Text = $"{(int)_navigationVolume.Value}";
+            _navigationVolume.ValueChanged += (_, _) =>
+            {
+                _settings.BigPictureInterface.NavigationVolume = (int)Math.Round(_navigationVolume.Value);
+                _navigationVolumeText.Text = $"{_settings.BigPictureInterface.NavigationVolume}";
+                _settings.Save();
+            };
             _showHiddenGames.IsChecked = _settings.ShowHiddenGames;
             _showHiddenGames.IsCheckedChanged += (_, _) => { _settings.ShowHiddenGames = _showHiddenGames.IsChecked == true; _settings.Save(); };
             ShowBigPictureTheme();

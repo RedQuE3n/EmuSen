@@ -29,6 +29,15 @@ namespace EmuSen.Mistress.BigPicture.Scene
         public bool InCollection { get; init; }
         public string? Emulator { get; init; }
 
+        // ES-DE's controller metadata, one of THEMES.md's customControllerIcon names; null when none is set (§29).
+        public string? Controller { get; init; }
+
+        // A folder that opens one of its games directly, which the folder badge marks with a link (§29).
+        public bool FolderLink { get; init; }
+
+        // A PDF manual exists for the game, which the manual badge marks (§29).
+        public bool Manual { get; init; }
+
         // The system the game belongs to, which a collection lists it beside others (§22).
         public ThemeSystem? Source { get; init; }
 
@@ -63,6 +72,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         // What a game's systemName and systemFullname read here instead of the system's: blank at the grouped collections' top, a collection's name inside it (§22).
         public string? Heading { get; init; }
+
+        // Whether favourites are listed first here, so the scroll overlay shows a star over them (§29).
+        public bool FavoritesOnTop { get; init; } = true;
     }
 
     // Where a game's scraped images are, by ES-DE's media type name; null when there is none.
@@ -97,6 +109,18 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         // ES-DE's DisplayClock setting, off in ES-DE by default whatever the theme sets (§13.8); the tests of stage (b) draw it.
         public bool ShowClock { get; init; } = true;
+
+        // A shown clock follows the wall clock by itself rather than showing Now, as a session's does (§29).
+        public bool LiveClock { get; init; }
+
+        // ES-DE's "Display on-screen help"; off leaves every helpsystem element undrawn (§29).
+        public bool ShowHelp { get; init; } = true;
+
+        // The system status indicators the player keeps, ANDed with each systemstatus element's entries (§29).
+        public DeviceIndicators StatusShown { get; init; } = DeviceIndicators.All;
+
+        // ES-DE's "Enable textlist quick scrolling overlay" (§29).
+        public bool ScrollOverlay { get; init; }
 
         // What the help bar's entries depend on beyond the view (§22).
         public HelpContext Help { get; init; } = new();

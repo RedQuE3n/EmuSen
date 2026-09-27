@@ -9,10 +9,14 @@ namespace EmuSen.Mistress.Library
 {
     public enum MetadataSource { Default, Scraped, Edited }
 
-    public enum MetadataKind { Text, LongText, Rating, Date, Flag }
+    public enum MetadataKind { Text, LongText, Rating, Date, Flag, Choice }
 
     // One field of ES-DE's metadata editor that Mistress keeps as an edit: its key in games.db, its label and its kind.
-    public sealed record MetadataField(string Key, string Label, MetadataKind Kind);
+    public sealed record MetadataField(string Key, string Label, MetadataKind Kind)
+    {
+        // A Choice field's values and their words; the empty value is "None".
+        public IReadOnlyList<(string Value, string Text)> Choices { get; init; } = [];
+    }
 
     // A field's value as it is shown, and where it came from.
     public readonly record struct MetadataValue(string? Value, MetadataSource Source);
@@ -22,7 +26,14 @@ namespace EmuSen.Mistress.Library
     {
         public const string Name = "name", SortName = "sortname", Description = "description", Rating = "rating", ReleaseDate = "releasedate",
             Developer = "developer", Publisher = "publisher", Genre = "genre", Players = "players", Completed = "completed", KidGame = "kidgame",
-            Hidden = "hidden", Broken = "broken", NotCounted = "nogamecount", NoMultiScrape = "nomultiscrape";
+            Hidden = "hidden", Broken = "broken", NotCounted = "nogamecount", NoMultiScrape = "nomultiscrape", Controller = "controller";
+
+        // ES-DE's controller types for EmuSen's consoles, a generic pad and unknown, by THEMES.md's customControllerIcon names (§4.66).
+        public static readonly IReadOnlyList<(string Value, string Text)> ControllerChoices =
+        [
+            ("", "None"), ("gamepad_nintendo_nes", "Nintendo Entertainment System"), ("gamepad_nintendo_snes", "Super Nintendo"),
+            ("gamepad_nintendo_64", "Nintendo 64"), ("gamepad_generic", "Gamepad (generic)"), ("unknown", "Unknown"),
+        ];
 
         // Q45: another game whose cover this one shows, the player's choice kept beside the edits but not a field of the editor - see EmuSen_Settings_Reference.md §4.65.
         public const string CoverFrom = "coverfrom";
@@ -45,6 +56,7 @@ namespace EmuSen.Mistress.Library
             new(Broken, "Broken / not working", MetadataKind.Flag),
             new(NotCounted, "Exclude from game counter", MetadataKind.Flag),
             new(NoMultiScrape, "Exclude from multi-scraper", MetadataKind.Flag),
+            new(Controller, "Controller", MetadataKind.Choice) { Choices = ControllerChoices },
         ];
 
         public const string Yes = "1", No = "0";
@@ -125,6 +137,7 @@ namespace EmuSen.Mistress.Library
         public bool IsBroken => Flag(Broken);
         public bool IsNotCounted => Flag(NotCounted);
         public bool IsExcludedFromMultiScrape => Flag(NoMultiScrape);
+        public string? ControllerType => Text(Controller);
 
         public bool HasEdits => _values.Values.Any(v => v.Source == MetadataSource.Edited);
     }

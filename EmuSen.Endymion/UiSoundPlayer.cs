@@ -60,6 +60,9 @@ namespace EmuSen.Endymion
             return samples;
         }
 
+        // Samples already in the stream's format, kept under a name Play then takes as it takes a file's path.
+        public void Remember(string key, byte[] samples) => _decoded[key] = samples;
+
         // A new sound replaces the one still playing, so a held list's steps never queue up behind each other.
         public void Play(string path)
         {

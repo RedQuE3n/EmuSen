@@ -126,6 +126,7 @@ namespace EmuSen.Mistress.Views
                 MetadataKind.Rating => new RatingPicker { StarSize = 30 },
                 MetadataKind.Date => new DateStepper { FontSize = 18 },
                 MetadataKind.Flag => new LunaSwitch { Label = field.Label },
+                MetadataKind.Choice => ChoiceBox(field),
                 MetadataKind.LongText => new TextBox { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 110 },
                 _ => new TextBox(),
             };
@@ -145,8 +146,21 @@ namespace EmuSen.Mistress.Views
                 case RatingPicker rating: rating.Chose += v => Changed(field.Key, GameMetadata.FormatRating((float)v)); break;
                 case DateStepper date: date.Chose += d => Changed(field.Key, d is { } day ? GameMetadata.FormatDate(day) : ""); break;
                 case LunaSwitch flag: flag.IsCheckedChanged += (_, _) => Changed(field.Key, flag.IsChecked == true ? GameMetadata.Yes : GameMetadata.No); break;
+                case Dropdown choice:
+                    choice.Chose += chosen =>
+                    {
+                        if (field.Choices.FirstOrDefault(c => c.Text == chosen as string) is { Text: not null } picked) Changed(field.Key, picked.Value);
+                    };
+                    break;
             }
             return row;
+        }
+
+        private static Dropdown ChoiceBox(MetadataField field)
+        {
+            var box = new Dropdown { MinWidth = 320 };
+            box.Fill(field.Choices.Select(c => c.Text).ToArray(), field.Choices[0].Text);
+            return box;
         }
 
         // ScreenScraper's name as a suggestion under the Name box, taken only by a press - see EmuSen_Settings_Reference.md §4.63.
@@ -218,6 +232,10 @@ namespace EmuSen.Mistress.Views
                             date.StartDate = GameMetadata.ParseDate(Draft.Baseline(field).Value) ?? new DateTime(1990, 1, 1);
                             break;
                         case LunaSwitch flag: flag.IsChecked = value == GameMetadata.Yes; break;
+                        case Dropdown choice:
+                            MetadataField spec = GameMetadata.Fields.First(f => f.Key == field);
+                            choice.Fill(spec.Choices.Select(c => c.Text).ToArray(), spec.Choices.FirstOrDefault(c => c.Value == (value ?? ""), spec.Choices[0]).Text);
+                            break;
                     }
                     Describe(field);
                 }

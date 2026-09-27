@@ -30,7 +30,8 @@ namespace EmuSen.WiseMan.Fixtures
 
         private static readonly BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
-        public ThemedSession(double width = 1280, double height = 800, Action<AppSettings>? settings = null, string? themeDirectory = null, string? extraGamelist = null)
+        public ThemedSession(double width = 1280, double height = 800, Action<AppSettings>? settings = null, string? themeDirectory = null, string? extraGamelist = null,
+            EmuSen.LunaP.Controls.DeviceStatus? status = null, string? extraSystem = null, bool sounds = true)
         {
             Root = Path.Combine(Path.GetTempPath(), "EmuSenThemedSession", Guid.NewGuid().ToString("N"));
             RomDirectory = Path.Combine(Root, "Roms");
@@ -42,7 +43,7 @@ namespace EmuSen.WiseMan.Fixtures
             foreach (string g in GbGames) File.WriteAllBytes(Path.Combine(RomDirectory, g + ".gb"), new byte[0x200]);
 
             Theme = new SyntheticTheme();
-            if (themeDirectory is null) Write(Theme, extraGamelist);
+            if (themeDirectory is null) Write(Theme, extraGamelist, extraSystem, sounds);
             var app = new AppSettings
             {
                 RomDirectory = RomDirectory, BigScreen = true, BigPictureTheme = themeDirectory ?? Theme.Root, LibraryStyle = AppSettings.LibraryStyleTheme,
@@ -56,6 +57,7 @@ namespace EmuSen.WiseMan.Fixtures
             Window = new MainWindow { Width = width, Height = height };
             Set("UiClock", (Func<TimeSpan>)(() => Now));
             Set("UiSoundSink", (Action<string>)(path => Sounds.Add(Path.GetFileNameWithoutExtension(path))));
+            if (status is { } fixedStatus) Set("DeviceStatusSource", (Func<EmuSen.LunaP.Controls.DeviceStatus>)(() => fixedStatus));
             Window.Show();
             Pad = new PadDriver(Window);
             Settle();
@@ -70,6 +72,15 @@ namespace EmuSen.WiseMan.Fixtures
         public List<string> Sounds { get; } = new();
 
         public ThemedLibrary Themed => (ThemedLibrary)Get("Themed")!;
+
+        // The window's own settings object, which its sheets change; Refresh shows the library again from it.
+        public AppSettings Settings => (AppSettings)typeof(MainWindow).GetField("_appSettings", Hidden)!.GetValue(Window)!;
+
+        public void Refresh()
+        {
+            typeof(MainWindow).GetMethod("RefreshLibrary", Hidden)!.Invoke(Window, null);
+            Settle();
+        }
         public bool Shown => (bool)Get("ThemedLibraryShown")!;
         public TimeSpan? WakeAt => (TimeSpan?)Get("ThemedWakeAt");
         public int FramesDrawn => (int)Get("ThemedFramesDrawn")!;
@@ -143,7 +154,7 @@ namespace EmuSen.WiseMan.Fixtures
         }
 
         // A theme written for these tests: a carousel of one picture per system, a list, a cover, a help bar in each view, and all seven sounds.
-        public static void Write(SyntheticTheme theme, string? extraGamelist = null)
+        public static void Write(SyntheticTheme theme, string? extraGamelist = null, string? extraSystem = null, bool sounds = true)
         {
             var art = new (string System, Color Left, Color Right)[] { ("nes", Colors.Firebrick, Colors.Gold), ("gb", Colors.SeaGreen, Colors.Khaki), ("snes", Colors.SlateBlue, Colors.Orchid) };
             foreach ((string system, Color left, Color right) in art)
@@ -153,21 +164,21 @@ namespace EmuSen.WiseMan.Fixtures
                 File.Copy(SceneAssets.Halves($"session-{system}", 120, 240, left, right), path, overwrite: true);
             }
 
-            foreach (string name in SoundNames) Wav(theme.PathOf($"sounds/{name}.wav"), 220 + 110 * Array.IndexOf(SoundNames, name));
+            if (sounds) foreach (string name in SoundNames) Wav(theme.PathOf($"sounds/{name}.wav"), 220 + 110 * Array.IndexOf(SoundNames, name));
 
             const string help = "<helpsystem name=\"help\"><pos>0.03 0.95</pos><origin>0 1</origin><entries>all</entries><fontSize>0.035</fontSize>" +
                                 "<textColor>FFFFFF</textColor><iconColor>FFFFFF</iconColor><backgroundColor>202020FF</backgroundColor></helpsystem>";
-            string sounds = string.Concat(SoundNames.Select(n => $"<sound name=\"{n}\"><path>./sounds/{n}.wav</path></sound>"));
+            string soundElements = sounds ? string.Concat(SoundNames.Select(n => $"<sound name=\"{n}\"><path>./sounds/{n}.wav</path></sound>")) : "";
             theme.Capabilities("").Theme(
                 "<view name=\"system\">" +
                 "<carousel name=\"systemcarousel\"><pos>0 0.15</pos><size>1 0.6</size><maxItemCount>3</maxItemCount><itemScale>1.2</itemScale>" +
-                "<staticImage>./art/${system.theme}.png</staticImage></carousel>" + help + "</view>" +
+                "<staticImage>./art/${system.theme}.png</staticImage></carousel>" + (extraSystem ?? "") + help + "</view>" +
                 "<view name=\"gamelist\">" +
                 "<textlist name=\"gamelist\"><pos>0.05 0.08</pos><size>0.45 0.8</size><fontSize>0.045</fontSize><primaryColor>FFFFFF</primaryColor>" +
                 "<selectedColor>FFFF00</selectedColor><selectedBackgroundColor>3050A0FF</selectedBackgroundColor></textlist>" +
                 "<image name=\"cover\"><pos>0.55 0.08</pos><maxSize>0.4 0.7</maxSize><imageType>cover</imageType></image>" +
                 (extraGamelist ?? "") + help + "</view>" +
-                "<view name=\"all\">" + sounds + "</view>");
+                "<view name=\"all\">" + soundElements + "</view>");
         }
 
         // A short tone as 16-bit mono PCM, so SDL has a real file to decode.

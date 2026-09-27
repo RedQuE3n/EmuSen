@@ -58,7 +58,7 @@ namespace EmuSen.Mistress.Views
             {
                 Name = m.Title, SortName = m.Sort, Description = m.DescriptionText, Developer = m.DeveloperText, Publisher = m.PublisherText, Genre = m.GenreText,
                 Players = m.PlayersText, ReleaseDate = m.Released, Rating = m.RatingValue, Completed = m.IsCompleted, KidGame = m.IsKidGame, Broken = m.IsBroken,
-                NotCounted = m.IsNotCounted, Hidden = m.IsHidden,
+                NotCounted = m.IsNotCounted, Hidden = m.IsHidden, Controller = m.ControllerType,
             };
         }
 

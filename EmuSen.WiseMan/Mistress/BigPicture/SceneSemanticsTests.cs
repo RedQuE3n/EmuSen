@@ -104,7 +104,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             string icon = SceneAssets.Svg("sem-badge", "<rect width='20' height='20' fill='#fff'/>");
             var badges = Control<BadgeStrip>(Scene("gamelist", $"<badges name=\"x\"><slots>favorite,completed,broken</slots><customBadgeIcon badge=\"favorite\">{icon}</customBadgeIcon><customBadgeIcon badge=\"completed\">{icon}</customBadgeIcon><customBadgeIcon badge=\"broken\">{icon}</customBadgeIcon></badges>", game: 0), "badges");
-            Assert.Single(badges.Icons!);
+            BadgeEntry only = Assert.Single(badges.Entries!);
+            Assert.Equal(BadgeKind.Favorite, only.Kind);
+            Assert.Equal(icon, only.IconPath);
         });
 
         [Theory]

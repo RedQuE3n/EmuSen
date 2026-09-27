@@ -146,6 +146,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 ((TextBox)editor.EditorOf(field.Key)).Text = "x";
             foreach (MetadataField field in GameMetadata.Fields.Where(f => f.Kind == MetadataKind.Flag))
                 ((LunaSwitch)editor.EditorOf(field.Key)).IsChecked = true;
+            foreach (MetadataField field in GameMetadata.Fields.Where(f => f.Kind == MetadataKind.Choice))
+                ((Dropdown)editor.EditorOf(field.Key)).SelectedItem = field.Choices[1].Text;
             Reach(s, "Meta_" + GameMetadata.ReleaseDate);
             s.Pad.Right();
             Assert.All(GameMetadata.Fields, f => Assert.True(editor.ResetOf(f.Key).IsVisible, f.Key));

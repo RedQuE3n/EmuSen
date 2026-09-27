@@ -118,6 +118,9 @@ namespace EmuSen.Galaxia.Models
         // Big picture's collections and gamelist options - see EmuSen_Settings_Reference.md §4.58.
         public BigPictureCollections BigPictureCollections { get; set; } = new();
 
+        // Big picture's clock, help, status, quick system select, startup, order, scroll overlay and sound volume - see EmuSen_Settings_Reference.md §4.66.
+        public BigPictureInterface BigPictureInterface { get; set; } = new();
+
         private static readonly ConfigFile<AppSettings> File = new("appsettings.json");
 
         public void Save() => File.Save(this);

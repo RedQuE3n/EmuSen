@@ -12,8 +12,6 @@ namespace EmuSen.Mistress.BigPicture.Scene
     // rating, badges, helpsystem, clock and systemstatus as LunaP's indicators - see EmuSen_BigPicture.md §13.2.
     internal static class IndicatorElements
     {
-        internal static readonly string[] BadgeSlots = ["collection", "folder", "favorite", "completed", "kidgame", "broken", "controller", "altemulator", "manual"];
-
         internal static Control? Rating(SceneBuilder b, ResolvedElement e)
         {
             float value = b.Data.Game?.Rating ?? 0;
@@ -30,29 +28,27 @@ namespace EmuSen.Mistress.BigPicture.Scene
             return rating;
         }
 
-        internal static bool Has(SceneGame game, string slot) => slot switch
-        {
-            "collection" => game.InCollection, "folder" => game.Folder, "favorite" => game.Favorite, "completed" => game.Completed,
-            "kidgame" => game.KidGame, "broken" => game.Broken, "altemulator" => game.AltEmulator, _ => false,
-        };
-
         internal static Control? Badges(SceneBuilder b, ResolvedElement e)
         {
             if (b.Data.Game is not { } game) return null;
-            IReadOnlyList<string> slots = e.List("slots") is { Count: > 0 } s ? (s.Contains("all") ? BadgeSlots : s) : [];
-            IReadOnlyDictionary<string, ThemePath> icons = e.Keyed("customBadgeIcon");
-            string[] shown = slots.Where(slot => Has(game, slot) && icons.GetValueOrDefault(slot) is { Exists: true }).Select(slot => icons[slot].Absolute).ToArray();
             NormalizedPair margin = e.Pair("itemMargin") ?? new NormalizedPair(0.01f, 0.01f);
             double mx = margin.X < 0 ? SceneUnits.Px(margin.Y, b.H) : SceneUnits.Px(margin.X, b.W), my = margin.Y < 0 ? mx : SceneUnits.Px(margin.Y, b.H);
+            NormalizedPair controllerPos = e.Pair("controllerPos") ?? new NormalizedPair(0.5f, 0.5f), linkPos = e.Pair("folderLinkPos") ?? new NormalizedPair(0.5f, 0.5f);
             var badges = new BadgeStrip
             {
-                Icons = shown,
+                Entries = SceneBadges.Entries(game, e),
                 Direction = e.String("direction") == "column" ? Avalonia.Layout.Orientation.Vertical : Avalonia.Layout.Orientation.Horizontal,
                 Lines = (int)(e.UInt("lines") ?? 3),
                 ItemsPerLine = (int)(e.UInt("itemsPerLine") ?? 4),
                 ItemMargin = new Size(mx, my),
                 ContentHorizontalAlignment = SceneUnits.HorizontalLayout(e.String("horizontalAlignment")),
                 Tint = SceneUnits.ToColor(e.Color("badgeIconColor"), Colors.White),
+                ControllerPosition = new Point(controllerPos.X, controllerPos.Y),
+                ControllerSize = e.Float("controllerSize") ?? 0.5f,
+                ControllerTint = SceneUnits.ToColor(e.Color("controllerIconColor"), Colors.White),
+                FolderLinkPosition = new Point(linkPos.X, linkPos.Y),
+                FolderLinkSize = e.Float("folderLinkSize") ?? 0.5f,
+                FolderLinkTint = SceneUnits.ToColor(e.Color("folderLinkIconColor"), Colors.White),
             };
             NormalizedCanvas.SetSize(badges, SceneUnits.ToSize(e.Pair("size") ?? new NormalizedPair(0.15f, 0.2f)));
             return badges;
@@ -88,7 +84,8 @@ namespace EmuSen.Mistress.BigPicture.Scene
         {
             var clock = new ClockLabel
             {
-                Time = b.Data.Now,
+                Time = b.Data.LiveClock ? null : b.Data.Now,
+                Live = b.Data.LiveClock,
                 Format = SceneUnits.DotNetFormat(e.String("format") ?? "%H:%M"),
                 FontPath = ImageElements.Existing(e.Path("fontPath")),
                 FontSize = SceneUnits.Px(e.Float("fontSize") ?? 0.035f, b.H),
@@ -120,6 +117,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
                     _ => DeviceIndicators.None,
                 };
             }
+            on &= b.Data.StatusShown;
 
             var icons = e.Keyed("customIcon").Where(p => p.Value.Exists).ToDictionary(p => p.Key.StartsWith("icon_", StringComparison.Ordinal) ? p.Key[5..] : p.Key, p => p.Value.Absolute);
             return Outward(new DeviceStatusBar

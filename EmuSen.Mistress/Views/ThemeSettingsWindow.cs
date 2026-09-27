@@ -42,6 +42,7 @@ namespace EmuSen.Mistress.Views
             var tabs = new Tabs { Name = "ThemeSettingsTabs" };
             tabs.Add("Options", Pane(_options));
             tabs.Add("Themes", Pane(Ui.Stack(12, _themes, _status)));
+            tabs.Add("Interface", Pane(Ui.Stack(12, new InterfaceSettingsPane(settings, () => { _settings.Save(); _applied(false); }).Rows())));
             if (BigPictureLooks.BuiltInCurrent(settings)) tabs.SelectedIndex = 1;
             Control buttons = Ui.Buttons(Ui.Button("Close", Close)).Margin(0, 12, 0, 0);
             DockPanel.SetDock(buttons, Dock.Bottom);

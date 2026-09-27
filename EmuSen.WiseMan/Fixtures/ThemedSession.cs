@@ -30,7 +30,8 @@ namespace EmuSen.WiseMan.Fixtures
 
         private static readonly BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
-        public ThemedSession(double width = 1280, double height = 800, Action<AppSettings>? settings = null, string? themeDirectory = null, string? extraGamelist = null)
+        public ThemedSession(double width = 1280, double height = 800, Action<AppSettings>? settings = null, string? themeDirectory = null, string? extraGamelist = null,
+            Action<string>? roms = null)
         {
             Root = Path.Combine(Path.GetTempPath(), "EmuSenThemedSession", Guid.NewGuid().ToString("N"));
             RomDirectory = Path.Combine(Root, "Roms");
@@ -40,6 +41,7 @@ namespace EmuSen.WiseMan.Fixtures
             foreach (string g in SnesGames) File.WriteAllBytes(Path.Combine(RomDirectory, g + ".sfc"), SyntheticRom.BuildBlank());
             foreach (string g in NesGames) File.WriteAllBytes(Path.Combine(RomDirectory, g + ".nes"), new byte[64]);
             foreach (string g in GbGames) File.WriteAllBytes(Path.Combine(RomDirectory, g + ".gb"), new byte[0x200]);
+            roms?.Invoke(RomDirectory);
 
             Theme = new SyntheticTheme();
             if (themeDirectory is null) Write(Theme, extraGamelist);

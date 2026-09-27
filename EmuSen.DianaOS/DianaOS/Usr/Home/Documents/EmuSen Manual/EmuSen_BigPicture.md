@@ -5233,3 +5233,173 @@ For Pass 1's session with the player, on the Legion Go S (build from this branch
   (`ControllerName`, §4.4 of the settings reference).
 - **Shared files.** `PadHeld` moved from `MainWindow.Pad.cs` to `MainWindow.Controllers.cs`; a branch that edits it in
   the old place (§22's) will conflict there at its merge.
+
+## 25. Pass 3: ES-DE's theme list as a browser and installer, and a survey of the listed themes (2026-09-26)
+
+*Opened 2026-09-26, on the request of that day:* "Lets add a theme browser an installer, similar to what esde
+has". It is §21.3's pass 3, under Q27 (every listed theme, its licence line shown before the download) and Q28 (the
+survey fetches XML files only), both accepted in §10.1. While it was being built the player added a standing requirement:
+"make sure we are storing in sqlite where we can". The player's account is §4.62 of the settings reference; this is the
+record.
+
+**Sources.** ES-DE's behaviour is taken from `USERGUIDE.md`'s "Theme downloader" section, in stage (c)'s copy
+(`~/.cache/emusen/bigpicture/motion/docs/`); ES-DE's source was not read and ES-DE was not run. The list's format was
+read from the list itself: `themes.json` was fetched once, at 2026-09-26 21:49 UTC, into
+`~/.cache/emusen/bigpicture/theme-survey/`, to learn its fields before the parser was written. That copy is the one the
+survey used (§25.9); it was not fetched again. Nothing from the list, from any theme or from ES-DE entered either
+repository: every test runs on a synthetic list, synthetic screenshots drawn in WiseMan and synthetic themes.
+
+**Numbering.** §22 and §23 numbered their own predictions (to P91) and §24 took P121 and P122; this section continues at
+**P123**, and its questions start at **Q40**, as the plan asked, leaving Q36–Q39 unused.
+
+### 25.1 What the list states, and what it does not (measured)
+
+The fetched `themes.json` holds `comment`, `website`, `latestStableRelease` ("51"), `themes` (66 entries) and
+`themesAndroid` (for ES-DE's Android build, which Mistress does not show). Of the 66 desktop entries, 65 name a GitHub
+repository and one (Grimmlex) a GitLab one, in a subgroup (`gitlab.com/thraeg-group/grimmlex-es-de`); every URL is a
+`.git` clone address. Every entry has `name`, `reponame`, `url`, `author`, `newEntry` (false for all 66 on that day) and
+`screenshots` (268 in all, each an `image` path inside the list's own repository and a `caption`); `aspectRatios` is
+given for 63, `variants` 61, `colorSchemes` 55, `fontSizes` 45, `transitions` 27 and `languages` 23.
+
+Three things the plan asked the browser to show are **not in the list**, and each had to come from somewhere else:
+- **No licence.** The licence line is read from the theme's repository when the player opens the theme: its README's
+  licence section, else the licence its host names, else a statement that it states none (§25.4).
+- **No branch.** The list gives a clone URL, which in git means the default branch. The host is asked for it (GitHub's
+  `repos/<owner>/<repo>`, GitLab's `projects/<path>`), because branches differ: the synthetic fakes use `main`, `master`
+  and `trunk` to keep the code honest about it.
+- **No date.** "Last updated" is the date of the newest commit on the default branch, from the host's commits API, asked
+  when a theme is opened. Asking it for all 66 themes when the list opens would spend 66 of GitHub's 60 unauthenticated
+  requests an hour, so the list shows a date only for themes already asked about.
+
+### 25.2 What was built
+
+In `EmuSen.Mistress/BigPicture/` (no Avalonia types):
+- `ThemeSource.cs`: a repository on GitHub or GitLab (a GitLab owner may be a group path), with every address Mistress
+  asks: archive, newest commit, repository record, README. `FromUrl` reads the list's clone URL and refuses other hosts,
+  plain `http`, and paths with `.`, `..`, `\` or `:`.
+- `ThemeList.cs`: `themes.json` parsed into `ThemeListEntry` records. A screenshot's path is resolved against the list's
+  repository (`gitlab.com/es-de/themes/themes-list/-/raw/master/`) and refused if it climbs out of it.
+- `ThemeRecords.cs`: `themes.db`, schema 1, versioned by `PRAGMA user_version` and refusing a newer file as `media.db`
+  does (§17.5). Tables: the list (`list_fetch`, `list_theme`, `list_screenshot`), the screenshot index
+  (`screenshot_file`), what hosts said (`theme_remote`), installed themes (`theme_installed`) and every downloaded file's
+  size, time and SHA-256 (`theme_file`).
+- `ThemeBrowser.cs`: the list, its expiry, screenshots, host answers and downloads for one open browser, all cancelled
+  and the client released on `Dispose`.
+- `ThemeDownloads.cs`, generalised from stage (f): any host; the record moved into `themes.db`; refusals of folders it
+  did not write; local changes; files the player added kept across an update.
+
+In `EmuSen.Mistress/Views/`: `ThemeBrowserWindow` (the list and a preview) and `ThemeDetailWindow` (a theme), both
+`ToolWindow`s of LunaP controls (`LunaList`, `FittedImage`, `FieldRow`) presented as sheets; `ThemeSettingsWindow`'s
+Themes tab gained the Browse row in place of the Art Book Next button. Nothing was needed in LunaP. In WiseMan:
+`FakeThemeHosts`, `ThemeBrowserModelTests`, `ThemeBrowserSheetTests`, `ThemeBrowserPictureTool` and `ThemeSurveyTool`.
+
+### 25.3 Storage: what moved into SQLite, and the one file that stayed
+
+Stage (f) wrote each downloaded theme's record into the theme's own folder (`.emusen-theme`, JSON). Under the player's
+requirement it moved into `themes.db`, together with everything else the browser writes and reads back; the player's
+choices stay in `appsettings.json` (§4.62 has the table). The argument for SQLite here is the one `EmuSen_Stack.md`
+makes for program-written data, and none of §4.1's reasons for keeping configuration in JSON applies: nobody edits these
+records by hand, and nothing reads them at type initialisation.
+
+**Why a stamp file remains.** A row in `themes.db` names a folder by its path. If the player deletes a downloaded folder
+and copies another in under the same name, the row still names that path, and a removal trusting the row alone would
+delete a folder Mistress never wrote. The stamp now holds only an id, the row's key; removal and replacement need both to
+agree. `Removal_and_replacement_refuse_every_folder_Mistress_did_not_write` builds exactly that case, and mutant B27
+(the row alone) is caught by it. This reason is specific to deletion: nothing else reads the stamp, and a store that
+never deletes would not need one.
+
+**Stage (f)'s folders** carry the old stamp. The first read moves it into `themes.db` (source, commit, date), rewrites
+the stamp to the id form, and records no file hashes, so their local changes cannot be told and the detail says so.
+`BigPictureThemeListTests`, which writes old stamps, passes unchanged.
+
+### 25.4 The rules, and their tests
+
+`ThemeBrowserModelTests` (13) test the model; `ThemeBrowserSheetTests` (12) test the sheets through `ThemedSession`;
+`ThemeDownloadsTests` (9) and two rewritten `ThemeSettingsSheetTests` cases keep stage (f)'s rules. Every server is
+`FakeThemeHosts`: a fake GitLab serving a synthetic `themes.json` of three themes (two on GitHub, one on GitLab in a
+group path; each with a different licence situation) and its screenshots, drawn by SkiaSharp in the fixture, and fake
+repositories answering the repository record, the commits API, the README and the archive, with a counter of every
+request.
+
+| Rule | Test |
+|---|---|
+| Every field the browser shows is parsed; `themesAndroid` and entries on other hosts are left out | `The_list_parses_every_field_the_browser_shows`, `Each_host_s_addresses_are_built_from_the_list_s_url` |
+| The list is kept in `themes.db`, read back equal, asked again only after a day or on Refresh | `The_list_is_kept_in_themes_db_and_asked_again_only_after_a_day_or_on_refresh` |
+| No request until the browser opens; the first opening asks for the list and one screenshot; a second opening that day asks nothing; Refresh asks for the list | `Nothing_is_asked_until_the_browser_opens_or_refreshes` |
+| A screenshot is fetched once and kept a month | `A_screenshot_is_fetched_once_and_kept_for_a_month` |
+| The licence line: README, then host, then none; Download waits for it and sits below it | `The_licence_line_comes_from_the_readme_then_the_host_then_says_none`, `Download_waits_for_the_licence_line`, `A_theme_s_detail_shows_its_screenshots_supports_update_and_licence_before_download` |
+| Installed, update available and local changes are told apart; a re-timed but unchanged file, an added file and theme-customizations are not changes | `Installed_update_and_local_changes_are_told_apart` |
+| An update over local changes asks, and Cancel fetches nothing; agreed, it keeps theme-customizations and added files, and an added file loses to the update's own | `An_update_asks_before_replacing_local_changes_and_keeps_the_player_s_files`, `An_update_over_local_changes_asks_first` |
+| GitLab's archive, commit and group path | `A_GitLab_theme_downloads_from_GitLab_s_archive`, `The_themes_tab_checks_for_and_applies_an_update` |
+| No folder Mistress did not write is removed or replaced, including a hand-copied folder at a downloaded one's path and a same-named repository of another owner | `Removal_and_replacement_refuse_every_folder_Mistress_did_not_write`, `A_same_named_repository_of_another_owner_does_not_replace_a_theme` |
+| Stage (f)'s stamps are imported; `themes.db` is versioned and a newer one refused | `A_stage_f_stamp_is_imported_into_themes_db`, `Themes_db_is_versioned_and_a_newer_one_is_refused` |
+| A download stopped by Cancel, by closing the detail, the browser or the window leaves no partial file, no row, and no file open under `home/Themes` (read from `/proc/self/fd`) | `A_stopped_download_leaves_nothing_half_written` (4 cases), `A_closed_browser_stops_its_download_and_releases_its_files` |
+| Install from the detail: the first theme becomes the folder, its About sheet opens once, and the Themes tab lists it with Use beside EmuSen's own row | `A_theme_downloads_from_its_detail_and_appears_in_the_themes_tab` |
+| Every control of the browser and the detail is reached by the pad, and A on a row opens it | `Every_control_of_the_browser_and_the_detail_is_reached_by_the_pad` |
+
+**A defect the pad test found.** On its first run, A on a list row did nothing. The router sends Enter to a focused row
+(§4.45.3 of the settings reference), and the browser listened for it with an ordinary `KeyDown` handler on the list,
+which never ran. Registered with `handledEventsToo`, as the shader browser's and the cheat database's handlers are, it
+runs, and mutant B36 (the handler removed) is caught. That the list box handles Enter on its way up is the inference that
+fits both observations; it was not traced in Avalonia. A mouse's double click had worked throughout, so only a pad would
+have met the defect.
+
+**A trap in the tests, not the product.** The first sheet tests hung: they installed a theme with
+`FetchAsync(...).GetAwaiter().GetResult()` on the dispatcher, whose awaits then waited for the thread that blocked on
+them. `FakeThemeHosts.Install` runs the download on the thread pool. The same tests installed before `ThemedSession`
+set `DataStore.OverrideDirectory`, so the first install landed in a previous test's temporary home; nothing reached the
+user's own `home/`, which was checked, and the order was corrected.
+
+### 25.5 When Mistress goes to the network
+
+| The player | Requests |
+|---|---|
+| opens Theme Settings or its Themes tab | none |
+| opens the browser | the list, if the kept one is a day old or more; one commit request per installed listed theme; the selected theme's first screenshot after a quarter of a second |
+| selects another theme | its first screenshot, after a quarter of a second, if not kept |
+| opens a theme | the repository record, the newest commit and the README, once a day at most (two are GitHub API requests) |
+| presses Previous or Next | that screenshot, if not kept |
+| presses Refresh | the list, and the installed themes' commits |
+| presses Download or Update | the newest commit, then the archive |
+
+Nothing runs at start, in the background or on a timer. GitHub's hourly allowance is read from its answer: when it is
+spent, the line says so and names the time it resets, rather than reporting the theme as broken.
+
+### 25.6 Pictures
+
+Written by `ThemeBrowserPictureTool` (`EMUSEN_BIGPICTURE_PNG=1`) at 1280×800 to
+`~/.cache/emusen/bigpicture/png/theme-browser/`, on the synthetic list and fake hosts: `browser-list`,
+`detail-screenshots-licence`, `detail-downloading` (a synthetic archive of 2.5 MB held at 42%) and
+`themes-tab-after-install`. They were looked at. The first detail picture put the licence below the fold: at 1280×800
+the screenshot, at 640×360, pushed it out of the sheet's scrolling area, so a pad player would have met Download before
+the licence. The detail was rebuilt in two columns, with the licence and the buttons below both and outside any
+scrolling area, and `A_theme_s_detail_…` now requires the licence row to end above the Download button; mutant B14
+(the button above the licence) is caught by it.
+
+### 25.7 Mutants
+
+The runner is `~/.cache/emusen/probe/bigpicture/mutate_theme_browser.py`, with its log in `run-theme-browser.log` and its
+verdicts in `mutants-theme-browser.txt` (`-rerun.txt` for the second round). Each mutant was built with `-m:2` and run
+alone under `nice -n 10`, against the tests of its area only, and the source was restored in a `finally`. Before
+changing a file the runner records it in a state file, and a runner that starts finds and restores any mutant a cut-short
+run left behind (the machine had hard-reset once that day). The tree was rebuilt clean after each round.
+
+**38 mutants: 36 caught at once, one survived and one did not build; both then caught.**
+
+| Area | Mutants |
+|---|---|
+| The list and the hosts | B1 an entry on another host listed, B2 languages not read, B3 a screenshot path climbing out, B4 GitLab's archive address, B5 GitLab's subgroups dropped |
+| Network only on the player's action | B6 the Themes tab fetching the list, B7 the list fetched on every opening, B8 the list never expiring, B9 a kept screenshot fetched again, B10 the host asked at every opening |
+| The licence line | B11 the README ignored, B12 the host's licence ignored, B13 Download before the line is read, B14 the line below Download |
+| States | B15 no update mark, B16 a same-size edit unseen, B17 a re-timed file counted, B18 theme-customizations counted, B19 a deleted file not counted |
+| Install and update | B20 local changes replaced without asking, B21 customizations dropped, B22 added files dropped, B23 an added file beating the update's, B24 a download that does not load swapped in, B25 a folder not Mistress's replaced, B26 another owner's same-named repository replaced |
+| Removal and the record | B27 the row alone trusted, B28 the row kept after removal, B29 stage (f)'s stamp not imported, B30 a newer `themes.db` written |
+| Stopping | B31 disposing cancels nothing, B32 closing the browser stops nothing, B33 closing the detail, B34 the theme sheet's stop not reaching the browser, B35 Cancel Download doing nothing |
+| The pad and the Themes tab | B36 A on a row, B37 a first download not becoming the theme, B38 no About sheet after a first download |
+
+- **B26 survived:** no test downloaded a second repository of the same name from another owner, which ES-DE's list
+  could hold, since folders are named by repository alone. `A_same_named_repository_of_another_owner_does_not_replace_a_theme`
+  now does, and catches it.
+- **B27 did not build:** the mutant's text dropped the pattern variable's scope. Rewritten to trust the row whatever the
+  stamp's id, it is caught by the removal test.
+

@@ -9850,3 +9850,7 @@ Every picture was looked at. Three things seen in them are questions rather than
   and Up and Down leave it. ES-DE edits text in a popup, where Backspace erases too. Keep?
 - **Q177, the scraping status's picture slot.** Before a game's picture arrives, the slot is empty space. Collapse it
   until there is a picture?
+- **Q178, the database's Load button.** In `cheat-database-game-focused-*`, a game row has the pad's focus and the bar,
+  but *Load into Active Cheats* is still disabled. It follows the list's selection, and the picture suggests the focus
+  reached the row without selecting it. This was seen in the pictures, not measured. A on the row loads the game
+  either way (§4.45.5). Enable the button from the focused row as well, or select the row the focus reaches?

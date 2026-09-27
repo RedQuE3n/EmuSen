@@ -21,6 +21,7 @@ namespace EmuSen.Mistress.Views
         private readonly LunaSwitch _swap = new() { Name = "SwapPadButtonsSwitch", Label = "Swap the A and B buttons" };
         private readonly LunaSwitch _firstOnly = new() { Name = "FirstControllerOnlySwitch", Label = "Only the first controller" };
         private readonly LunaSwitch _notices = new() { Name = "ControllerNotificationsSwitch", Label = "Show a notice" };
+        private readonly Dropdown _keyboard = new() { Name = "OnScreenKeyboardDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
 
         public ControllerPreferencesPane(AppSettings settings)
         {
@@ -31,6 +32,14 @@ namespace EmuSen.Mistress.Views
             {
                 if (Types.FirstOrDefault(t => t.Text == chosen as string).Value is not string value) return;
                 _settings.ControllerType = value;
+                _settings.Save();
+            };
+            string[] keyboards = Input.DeviceKeyboard.Choices.Select(c => c.Text).ToArray();
+            _keyboard.Fill(keyboards, Input.DeviceKeyboard.Choices.FirstOrDefault(c => c.Value == settings.OnScreenKeyboard).Text ?? keyboards[0]);
+            _keyboard.Chose += chosen =>
+            {
+                if (Input.DeviceKeyboard.Choices.FirstOrDefault(c => c.Text == chosen as string).Value is not string value) return;
+                _settings.OnScreenKeyboard = value;
                 _settings.Save();
             };
             Bind(_swap, settings.SwapPadButtons, on => settings.SwapPadButtons = on);
@@ -63,6 +72,12 @@ namespace EmuSen.Mistress.Views
                 Label = "First Controller",
                 Hint = "Only the first controller connected steers the library and the menus, as when a wireless pad registers twice. Games are not affected.",
                 Content = _firstOnly,
+            },
+            new FieldRow
+            {
+                Label = "On-Screen Keyboard",
+                Hint = "What types into a big picture text row. Automatic uses Steam's keyboard under Steam, the field alone with a keyboard, and EmuSen's keyboard with a controller. EmuSen's is always its own.",
+                Content = _keyboard,
             },
             new FieldRow
             {

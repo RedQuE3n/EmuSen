@@ -50,6 +50,10 @@ namespace EmuSen.Galaxia.Models
         public bool FirstControllerOnly { get; set; } = false;
         public bool ControllerNotifications { get; set; } = true;
 
+        // What types into a big-screen text row: Automatic, Steam's keyboard, or Mistress's own - see EmuSen_Settings_Reference.md §4.79.
+        public string OnScreenKeyboard { get; set; } = OnScreenKeyboardAutomatic;
+        public const string OnScreenKeyboardAutomatic = "Automatic", OnScreenKeyboardSteam = "Steam", OnScreenKeyboardEmuSen = "EmuSen";
+
         // Full screen, no menu bar and larger type, for a handheld or a television; a Steam Deck's session asks for it by itself - see EmuSen_Settings_Reference.md §4.29.
         public bool BigScreen { get; set; } = false;
 

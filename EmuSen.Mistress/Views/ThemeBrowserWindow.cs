@@ -12,6 +12,7 @@ using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.BigPicture;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Mistress.Views
 {
@@ -144,6 +145,7 @@ namespace EmuSen.Mistress.Views
             catch (ObjectDisposedException) when (Browser.Closed) { }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or System.IO.IOException)
             {
+                ErrorLog.Error("themes", "ES-DE's theme list could not be fetched", ex);
                 _status.Text = $"ES-DE's theme list could not be fetched: {ex.Message}" + (ThemeBrowser.Cached() is not null ? " The copy shown is the last one fetched." : "");
             }
             finally
@@ -185,6 +187,7 @@ namespace EmuSen.Mistress.Views
             catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException) { }
             catch (Exception ex) when (ex is HttpRequestException or System.IO.IOException or System.IO.InvalidDataException)
             {
+                ErrorLog.Error("themes", "A theme screenshot could not be fetched", ex, shot.Image);
                 if (!cancel.IsCancellationRequested) _caption.Text = $"The screenshot could not be fetched: {ex.Message}";
             }
         }

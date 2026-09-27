@@ -326,6 +326,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
+                ErrorLog.Error("library", "Could not add cover art", ex, entry.Title);
                 StatusText.Text = $"Could not add cover art: {ex.Message}";
             }
         }
@@ -342,6 +343,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
+                ErrorLog.Error("library", "Could not remove cover art", ex, entry.Title);
                 StatusText.Text = $"Could not remove cover art: {ex.Message}";
             }
         }

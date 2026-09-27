@@ -4,6 +4,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Windowing;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Mistress.Views
 {
@@ -26,6 +27,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex)
             {
+                ErrorLog.Error("screenshots", "A screenshot could not be opened", ex);
                 Content = new EmptyState { Message = "This screenshot could not be opened.", Detail = ex.Message };
             }
         }

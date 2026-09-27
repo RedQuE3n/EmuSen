@@ -637,6 +637,7 @@ namespace EmuSen.Mistress.Views
                 }
                 catch (Exception ex)
                 {
+                    ErrorLog.Error("states", $"Save State to slot {slot} failed", ex, path);
                     status = $"Save State failed: {ex.Message}";
                 }
 
@@ -684,6 +685,7 @@ namespace EmuSen.Mistress.Views
                 }
                 catch (Exception ex)
                 {
+                    ErrorLog.Error("states", $"Load State from slot {slot} failed", ex, path);
                     status = $"Load State failed: {ex.Message}{Provenance(record)}";
                 }
 
@@ -962,6 +964,7 @@ namespace EmuSen.Mistress.Views
                 _session = null;
                 // Back to the list rather than a black viewport with only a status line.
                 ShowLibrary();
+                ErrorLog.Error("launch", $"Failed to load {displayName}", ex);
                 StatusText.Text = $"Failed to load {displayName}: {ex.Message}";
             }
         }
@@ -1443,6 +1446,7 @@ namespace EmuSen.Mistress.Views
             catch (Exception ex)
             {
                 // Best-effort: an unwritable directory must not block the load - see §4.22.
+                ErrorLog.Error("logging", "Per-game logging disabled", ex, logRoot);
                 StatusText.Text = $"Logging disabled: {ex.Message}";
             }
         }

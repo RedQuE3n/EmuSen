@@ -13,6 +13,7 @@ using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Mistress.Views
 {
@@ -472,6 +473,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex)
             {
+                ErrorLog.Error("cheats", $"Couldn't decode '{code}' as {codec.Name}", ex);
                 StatusText.Text = $"Couldn't decode '{code}' as {codec.Name}: {ex.Message}";
                 return;
             }

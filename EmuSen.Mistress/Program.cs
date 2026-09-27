@@ -19,7 +19,11 @@ namespace EmuSen.Mistress
 
             // A config file that won't parse falls back to defaults either way;
             // this is what stops it doing so silently - see §6.2.
-            EmuSen.Galaxia.ConfigDiagnostics.Sink = m => Console.WriteLine("[config] " + m);
+            EmuSen.Galaxia.ConfigDiagnostics.Sink = m =>
+            {
+                Console.WriteLine("[config] " + m);
+                EmuSen.Galaxia.Library.ErrorLog.Warning("config", m);
+            };
 
             // LunaP keeps windows.json and luna.json where Galaxia keeps everything else, and reports through the same sink - see EmuSen_LunaP.md §19.2.
             EmuSen.LunaP.Settings.LunaSettings.Store = new EmuSen.LunaP.Settings.JsonSettingsStore(EmuSen.Galaxia.ConfigStore.Directory);

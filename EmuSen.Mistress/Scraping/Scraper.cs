@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Mistress.Scraping
 {
@@ -180,6 +181,7 @@ namespace EmuSen.Mistress.Scraping
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                     {
                         _store.Retry(item.Path, _clock.Now + Backoff(item.Attempts), countAttempt: true);
+                        ErrorLog.Error("scraping", "A scrape request failed and is queued to retry", ex, item.Path);
                         _done(new ScrapeResult(item.Path, item.System, ScrapeOutcome.Retry, false, [], ScrapeRedactor.Redact(ex.Message)));
                     }
                     finally

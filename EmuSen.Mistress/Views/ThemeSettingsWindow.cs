@@ -13,6 +13,7 @@ using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.BigPicture;
 using EmuSen.Mistress.BigPicture.Theme;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Mistress.Views
 {
@@ -278,6 +279,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
             {
+                ErrorLog.Error("themes", "Could not check for a theme update", ex);
                 _status.Text = $"Could not check for an update: {ex.Message}";
             }
             FillThemes();
@@ -326,6 +328,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException)
             {
+                ErrorLog.Error("themes", "A theme update failed", ex);
                 _status.Text = $"The download failed, and the theme there before is unchanged: {ex.Message}";
             }
             finally
@@ -356,6 +359,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
+                ErrorLog.Error("themes", $"Could not remove {name}", ex);
                 _status.Text = $"Could not remove {name}: {ex.Message}";
             }
             Fill();

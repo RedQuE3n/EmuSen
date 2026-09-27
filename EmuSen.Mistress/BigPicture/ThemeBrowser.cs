@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Mistress.BigPicture
 {
@@ -175,6 +176,7 @@ namespace EmuSen.Mistress.BigPicture
             }
             catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidDataException)
             {
+                ErrorLog.Error("themes", "A theme's licence could not be read", ex, theme.Url);
                 remote = new ThemeRemote(theme.Url, null, null, null, [$"The licence could not be read: {ex.Message}"], "unknown", _clock(), ex.Message);
             }
             using (ThemeRecords db = ThemeRecords.Open()) db.RememberRemote(remote);

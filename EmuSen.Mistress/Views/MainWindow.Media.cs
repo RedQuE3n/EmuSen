@@ -142,6 +142,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
+                ErrorLog.Error("media", "Could not delete", ex, item.Path);
                 StatusText.Text = $"Could not delete: {ex.Message}";
             }
             ShowLibraryEntries();

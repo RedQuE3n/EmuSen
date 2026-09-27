@@ -747,7 +747,7 @@ fault was intermittent, and the frontend had kept no record of either occurrence
 whatever the core throws — including what the display processor's threads threw, which the core rethrows on the
 machine's thread — and showed only the message, as `[CPU HALT]` in the status bar; and nothing at all recorded a
 fault on any other thread, which ends the process. `CrashLog` now writes either to
-`crash_<date>_<time>.txt` in the log directory (§4.22's root): the kind, the console, the frame, the console's
+`crash_<date>_<time>.txt` in the log directory (§4.22's root; since 2026-09-27 `ErrorLog.Root()`, §4.70): the kind, the console, the frame, the console's
 settings as the window would show them, and the exception whole, inner exceptions and traces included.
 `Program.Main` installs it before anything else for unhandled exceptions and unobserved tasks, and the emulation
 loop calls it from its catch and names the file in the status bar. Writing is best effort, since a report that
@@ -4380,3 +4380,86 @@ set it.
 - **North** on a folder does nothing, and the help bar still names it *Favorite* there.
 - **The desktop's sidebar library** is unchanged: one list per console.
 - Nothing ran on the handheld.
+
+### 4.70 The error log: every error a frontend shows, kept whole (2026-09-27)
+
+**Why.** On the handheld, every theme the player tried to install from the theme browser (§4.62) failed. The only record
+was the detail sheet's status line, which word-wrap had broken. The player could not tell whether the value it quoted
+read `w0.02` or `w 0.02`, and nothing was on disk to settle it. The only log Mistress kept before this was §4.27's
+crash report. An error that was caught and shown left nothing behind once its line was gone. The request was for an
+error logger built into EmuSen in general.
+
+**What it is.** `ErrorLog`, in `EmuSen.Galaxia.Library`, so that both frontends and anything else that references
+Galaxia can write to it.
+- **Location:** one plain-text file a day, `emusen_<yyyyMMdd>.log`. It sits in the same folder as §4.22's per-game
+  logs and §4.27's crash reports: the `LogDirectory` setting (Preferences' *Log Directory*), else
+  `~/.config/EmuSen/Logs`. `CrashLog` now takes its folder from `ErrorLog.Root()`, so the two cannot diverge.
+- **The entry:** one line with the time to the millisecond, `ERROR` or `WARN`, an area in brackets (`themes`,
+  `states`, `launch`, `covers`, `scraping`, `cheats`, `library`, `media`, `screenshots`, `shaders`, `config`, `crash`,
+  `logging`, `unhandled`), and the message whole. A message's own line breaks are folded to ` ⏎ `, so one entry's
+  first line is always one line, which keeps `grep` useful. Then, indented, the context (the game, theme, file or
+  slot) and the exception whole, with its inner exceptions and traces.
+- **Credentials:** Mistress sets `ErrorLog.Redactor` to the scraper's redactor in `CrashLog.Install`, the first
+  thing `Program.Main` does. No ScreenScraper credential reaches the file, from the message, the context or the trace
+  (§17 of the plan).
+- **Size and pruning:** files older than 14 days are deleted on the first write of a run. Only `emusen_*.log` files
+  are ever deleted; crash reports and per-game logs are left alone. A day's file stops at 8 MB, with one last line
+  saying so.
+- **Safety:** writing is best effort and never throws. A log that cannot be written must not become a second fault.
+
+**Plain text, not SQLite.** The project keeps program-written data in SQLite where it can (§4.64). This is the
+exception, argued rather than assumed:
+- A log has to be read when something is broken, possibly the database layer or the app itself.
+- It has to be read over ssh on a handheld with `cat`, `tail` or `grep`, without a client.
+- Appending a line is the one write that stays readable after a crash mid-write.
+
+None of those holds for the stores §4.64 moved.
+
+**What writes to it.**
+- **Errors, with the exception:** every place Mistress shows an error it caught. In all, 29 sites across 17 files:
+  - launch;
+  - save state, load state and resume;
+  - screenshots;
+  - cover art added and removed;
+  - media deleted;
+  - OpenVGDB's download and removal;
+  - the cover failover's lookups;
+  - the media store's opening;
+  - a scrape request queued to retry;
+  - the cheat database's download and reading, and a code that would not decode;
+  - the shader pack's download;
+  - the theme list, a theme's screenshots, licence, download, update and removal;
+  - per-game logging that could not start.
+- **`CrashLog`:** each report adds one line pointing at its file.
+- **Warnings, without a trace:**
+  - a theme that has no view for a system, with every loader error it gave;
+  - a themed library that could not be shown, and why;
+  - each configuration problem `ConfigDiagnostics` reports, which until now reached only the console.
+- **Hotaru:** its unhandled faults and configuration problems.
+
+**Pulling it from the handheld.** `ls ~/.config/EmuSen/Logs/`, or the folder Preferences names. Then, for example,
+`grep -A12 ERROR emusen_20260927.log`.
+
+**Tests.** `ErrorLogTests`, six cases:
+- an entry written whole, with area, context and inner trace;
+- entries appended, with a message's line break folded;
+- the redactor over message, context and trace;
+- pruning that spares everything but old `emusen_*.log` files;
+- the 8 MB cap with its last notice;
+- an unwritable folder that returns null and throws nothing.
+
+`ThemeDownloadErrorLogTests` walks the real sheets: a download whose archive holds no `capabilities.xml` fails, and
+its status line and a log entry naming the theme, its address and the whole reason both appear. Removing that one
+`ErrorLog.Error` line from `ThemeDetailWindow` fails the test, so it is not decorative.
+
+The suite never writes to the player's folder. A module initializer, `ErrorLogIsolation`, points the log at a
+scratch folder per test process. The broad Mistress run afterwards (1,176 passed, 29 skipped) left no `emusen_*.log`
+in `~/.config/EmuSen/Logs` or in the configured folder.
+
+**Not covered.**
+- The other 27 of Mistress's 56 `catch (Exception …)` blocks write nothing. They are best-effort paths that report
+  nothing to the player either: a status bar that cannot be read, a picture that cannot be decoded for a preview.
+  They are left until one of them hides a real fault.
+- DianaOS commands and the cores do not write to it. The Rust cores' native crash files (`native_crash_*`,
+  `mercuryrt_crash_*`) stay under the data home's `Logs`, not this folder.
+- There is no viewer inside Mistress. The file is meant for `cat`, a text editor, or a bug report.

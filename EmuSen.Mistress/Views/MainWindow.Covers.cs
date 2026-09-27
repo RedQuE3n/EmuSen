@@ -56,6 +56,7 @@ namespace EmuSen.Mistress.Views
             catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or TaskCanceledException or System.Text.Json.JsonException)
             {
                 if (_recordsClosed) return;
+                ErrorLog.Error("covers", "Could not download OpenVGDB", ex);
                 StatusText.Text = $"Could not download OpenVGDB: {ex.Message}";
                 foreach ((RomEntry entry, _) in _waitingForDatabase) FailoverArrived(new CoverResult(entry.FullPath, "", CoverOutcome.Failed, null, null, ex.Message));
                 _waitingForDatabase.Clear();
@@ -130,6 +131,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
+                ErrorLog.Error("covers", "Could not remove OpenVGDB", ex);
                 return $"Could not remove OpenVGDB: {ex.Message}";
             }
         }
@@ -152,6 +154,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or TaskCanceledException or System.Text.Json.JsonException)
             {
+                ErrorLog.Error("covers", "Could not download OpenVGDB", ex);
                 return $"Could not download OpenVGDB: {ScrapeRedactor.Redact(ex.Message)}";
             }
             finally

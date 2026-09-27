@@ -40,6 +40,7 @@ namespace EmuSen.Mistress.Views
             BigPictureCollections s = _appSettings.BigPictureCollections;
             _themed.DefaultSort = GameSort.Parse(s.DefaultSortOrder);
             _themed.RandomEntryButton = s.RandomEntryButton;
+            _themed.FoldersOnTop = s.FoldersOnTop;
             if (_editedCollection is { } e && _collections.All(c => c.Id != e.Id)) _editedCollection = null;
             _themed.Editing = _editedCollection is { } edited ? new EditedCollection(edited.Id, edited.Name, _records.Members(edited.Id)) : null;
         }
@@ -74,7 +75,8 @@ namespace EmuSen.Mistress.Views
         {
             if (_themed is not { ViewName: "gamelist" } themed) return;
             IReadOnlyList<(string Label, int Index)> letters = themed.Letters();
-            string letter = themed.FavoritesOnTop && game.Favorite && letters.Any(l => l.Label == GamelistOptions.Star)
+            string letter = game.Folder && letters.Any(l => l.Label == GamelistOptions.FolderEntry) ? GamelistOptions.FolderEntry
+                : themed.FavoritesOnTop && game.Favorite && letters.Any(l => l.Label == GamelistOptions.Star)
                 ? GamelistOptions.Star : GamelistOptions.FirstLetter(GamelistOptions.SortKey(game));
             var model = new GamelistOptionsModel(letters, letter, GameSort.All(themed.IsCollection), themed.CurrentSort, themed.CurrentFilter, themed.Unfiltered);
             options.AddRange(new GamelistOptionRows(model, this).Options(ApplyGamelistOptions));

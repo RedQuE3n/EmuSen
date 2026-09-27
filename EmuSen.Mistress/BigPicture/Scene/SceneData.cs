@@ -32,9 +32,6 @@ namespace EmuSen.Mistress.BigPicture.Scene
         // ES-DE's controller metadata, one of THEMES.md's customControllerIcon names; null when none is set (§29).
         public string? Controller { get; init; }
 
-        // A folder that opens one of its games directly, which the folder badge marks with a link (§29).
-        public bool FolderLink { get; init; }
-
         // A PDF manual exists for the game, which the manual badge marks (§29).
         public bool Manual { get; init; }
 
@@ -62,6 +59,12 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         // Listed only while the player shows hidden games.
         public bool Hidden { get; init; }
+
+        // The folders between the console folder and this file, or for a folder its own path there; '/'-separated, "" at the top (§30).
+        public string FolderPath { get; init; } = "";
+
+        // A folder's ES-DE folder link: the file A launches in place of entering it, which the badge's link overlay shows too (§30).
+        public string? FolderLink { get; init; }
     }
 
     // A system with the theme resolved for it and its games; the carousel reads each system's own resolved view.
@@ -75,6 +78,9 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         // Whether favourites are listed first here, so the scroll overlay shows a star over them (§29).
         public bool FavoritesOnTop { get; init; } = true;
+
+        // Every game the system view counts when the list shows folders, whose entries are not all its games (§30).
+        public IReadOnlyList<SceneGame>? Counted { get; init; }
     }
 
     // Where a game's scraped images are, by ES-DE's media type name; null when there is none.

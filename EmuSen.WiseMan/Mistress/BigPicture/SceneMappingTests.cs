@@ -354,7 +354,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             systems.Add((new ThemeSystem("snes", "Super Nintendo", "snes"), SyntheticLibrary.Games(SyntheticTheme.Snes, ".sfc").Select((g, i) => i == 5 ? g with { Folder = true } : g).ToList()));
             systems.Add((new ThemeSystem("mine", "mine", "mine", ThemeSystemKind.CustomCollection), SyntheticLibrary.Games(SyntheticTheme.Snes, ".sfc").Select((g, i) => g with { InCollection = i % 2 == 0 }).ToList()));
             systems.Add((new ThemeSystem("pads", "Pads", "snes"), SyntheticLibrary.Games(SyntheticTheme.Snes, ".sfc")
-                .Select((g, i) => i == 3 ? g with { Folder = true, FolderLink = true } : g with { Controller = "gamepad_nintendo_snes" }).ToList()));
+                .Select((g, i) => i == 3 ? g with { Folder = true, FolderLink = "Linked Game.sfc" } : g with { Controller = "gamepad_nintendo_snes" }).ToList()));
             return systems.Select(s => new SceneSystem(s.System, theme.Load(new ThemeChoices { ScreenWidth = W, ScreenHeight = H }, s.System), s.Games)).ToList();
         }
 

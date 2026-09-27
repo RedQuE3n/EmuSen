@@ -25,7 +25,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private static SceneGame Flagged(SceneGame g) => g with
         {
-            InCollection = true, Folder = true, FolderLink = true, Favorite = true, Completed = true, KidGame = true, Broken = true,
+            InCollection = true, Folder = true, FolderLink = "Linked Game.sfc", Favorite = true, Completed = true, KidGame = true, Broken = true,
             Controller = "gamepad_nintendo_64", AltEmulator = true, Manual = true,
         };
 
@@ -107,7 +107,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             SceneBuilder Build()
             {
                 IReadOnlyList<SceneSystem> systems = SyntheticLibrary.Load(ArtBookNextFactAttribute.Folder, new ThemeChoices { ScreenWidth = W, ScreenHeight = H });
-                var flagged = systems.Select(s => s with { Games = s.Games.Select((g, i) => i == 0 ? Flagged(g) with { Folder = false, FolderLink = false } : g).ToList() }).ToList();
+                var flagged = systems.Select(s => s with { Games = s.Games.Select((g, i) => i == 0 ? Flagged(g) with { Folder = false, FolderLink = null } : g).ToList() }).ToList();
                 var data = new SceneData(flagged, new Size(W, H)) { SystemIndex = 1, GameIndex = 0, Media = new SceneAssets.Media() };
                 return SceneBuilder.Build(data.System.Theme.View("gamelist"), data);
             }

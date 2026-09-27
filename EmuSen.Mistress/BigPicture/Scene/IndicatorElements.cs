@@ -60,7 +60,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
 
         internal static Control? Help(SceneBuilder b, ResolvedElement e)
         {
-            IReadOnlyList<HintEntry> hints = HelpEntries(b.View.Name, e, b.Data.Family, b.Data.SwapFaceButtons, b.Data.Help with { Folder = b.Data.Game?.Folder == true });
+            IReadOnlyList<HintEntry> hints = HelpEntries(b.View.Name, e, b.Data.Family, b.Data.SwapFaceButtons, b.Data.Help with { Folder = HelpContext.Enters(b.Data.Game, b.Data.Help) });
             if (hints.Count == 0) return null;
             return Outward(new HintBar
             {

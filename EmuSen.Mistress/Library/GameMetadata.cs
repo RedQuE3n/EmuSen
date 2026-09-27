@@ -38,6 +38,9 @@ namespace EmuSen.Mistress.Library
         // Q45: another game whose cover this one shows, the player's choice kept beside the edits but not a field of the editor - see EmuSen_Settings_Reference.md §4.65.
         public const string CoverFrom = "coverfrom";
 
+        // ES-DE's folder link, kept on the folder's own path as the file's path below it - see EmuSen_Settings_Reference.md §4.67.
+        public const string FolderLink = "folderlink";
+
         // The editable fields in the order ES-DE's user guide lists them (its "Metadata entries").
         public static readonly IReadOnlyList<MetadataField> Fields =
         [

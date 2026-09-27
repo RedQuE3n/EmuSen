@@ -68,12 +68,13 @@ namespace EmuSen.Mistress.Views
         // ES-DE's gamelist options menu, as a sheet over the view; its entries are those Mistress has the features for.
         private void ShowGameOptions(SceneGame game)
         {
-            if (_gameOptions is not null || _metadataEditor is not null) return;
+            if (_gameOptions is not null || _metadataEditor is not null || _folderEditor is not null) return;
             var options = new List<GameOption>();
             AddGamelistOptions(game, options);
             AddCollectionOptions(game, options);
             // A grouped collection's entry is no game: it has the list's rows and nothing of a game's (§4.58).
-            if (!game.IsCollection) AddGameEntries(options, game.File, game.Name, () => ToggleThemedFavourite(game));
+            if (game is { Folder: true, IsCollection: false }) AddFolderEntries(game, options);
+            else if (!game.IsCollection) AddGameEntries(options, game.File, game.Name, () => ToggleThemedFavourite(game));
             PresentGameOptions(game.Name, options);
         }
 
@@ -99,7 +100,8 @@ namespace EmuSen.Mistress.Views
             if (ThemedLibraryShown)
             {
                 if (_themed?.SelectedGame is not { IsCollection: false } game) return false;
-                ShowMetadataEditor(game.File, game.Name);
+                if (game.Folder) ShowFolderEditor(game);
+                else ShowMetadataEditor(game.File, game.Name);
                 return true;
             }
             if (SelectedLibraryEntry is not RomEntry entry) return false;
@@ -152,6 +154,8 @@ namespace EmuSen.Mistress.Views
             _coverPicker = null;
             _metadataEditor?.Close();
             _metadataEditor = null;
+            _folderEditor?.Close();
+            _folderEditor = null;
             _gameOptions?.Close();
             _gameOptions = null;
         }
@@ -181,7 +185,7 @@ namespace EmuSen.Mistress.Views
         {
             _records.ClearEdits(path);
             string? system = EmuSen.Cores.CoreCatalog.ShelfByName(EmuSen.Cores.CoreCatalog.ShelfFor(path) ?? "")?.EsdeSystem;
-            IReadOnlyList<string> gone = _mediaStore is { IsOpen: true } store ? store.Forget(path, system) : [];
+            IReadOnlyList<string> gone = _mediaStore is { IsOpen: true } store ? store.Forget(path, system, GameFolders.Of(_appSettings.RomDirectory, path)) : [];
             _scrapeGeneration++;
             ReadScrapeSnapshot();
             StatusText.Text = $"Cleared the metadata of {Path.GetFileNameWithoutExtension(path)}" + (gone.Count > 0 ? $" and {gone.Count} scraped picture(s)" : "");

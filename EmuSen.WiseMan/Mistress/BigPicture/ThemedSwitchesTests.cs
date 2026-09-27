@@ -426,6 +426,32 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal((BadgeKind.Controller, ControllerShape.Snes), (entry.Kind, entry.Controller));
         }, default);
 
+        // Pass 6's folder entries carry Mistress's own folder badge, with the link drawn over it for a linked folder, and a game carries none (§29, §30).
+        [Fact]
+        public Task Pass_6_s_folders_show_the_built_in_folder_badge_and_a_linked_folder_its_link() => Session.Dispatch(() =>
+        {
+            const string badges = "<badges name=\"badges\"><pos>0.55 0.8</pos><size>0.3 0.1</size><slots>folder,favorite</slots><lines>1</lines><itemsPerLine>4</itemsPerLine></badges>";
+            using var s = new ThemedSession(extraGamelist: badges, status: Device, roms: ThemedFoldersTests.Library);
+            string usa = Path.Combine(s.RomDirectory, "NES", "USA");
+            ThemedCollectionsTests.Records(s).SaveEdits(usa, new Dictionary<string, string?> { [GameMetadata.FolderLink] = ThemedFoldersTests.UsaGame + ".nes" }, DateTime.Now);
+            ThemedCollectionsTests.Refresh(s);
+            ThemedLibraryPadTests.Enter(s, "nes");
+            BadgeEntry? Only() => s.Themed.Stage!.Current.Scene.Entries.Select(e => e.Control).OfType<BadgeStrip>().Single().Entries!.SingleOrDefault();
+
+            Assert.Equal("Europe", s.Game);
+            Assert.Equal((BadgeKind.Folder, false, (string?)null), (Only()!.Kind, Only()!.Linked, Only()!.IconPath));
+            RenderedFrame plain = s.Capture();
+            s.Pad.Down(2);
+            Assert.Equal("USA", s.Game);
+            Assert.NotNull(s.Themed.SelectedGame!.FolderLink);
+            Assert.Equal((BadgeKind.Folder, true), (Only()!.Kind, Only()!.Linked));
+            BadgeStrip strip = s.Themed.Stage!.Current.Scene.Entries.Select(e => e.Control).OfType<BadgeStrip>().Single();
+            Assert.True(BuiltInBadgesTests.Split(plain, s.Capture(), BoxOf(s, strip)).Inside > 50, "the link drew nothing over the folder");
+            s.Pad.Down();
+            Assert.False(s.Themed.SelectedGame!.Folder);
+            Assert.Null(Only());
+        }, default);
+
         // Every control of the Interface tab is reached by the pad, and the tab is on the sheet whatever the theme.
         [Fact]
         public Task Every_control_of_the_interface_tab_is_reached_by_the_pad() => Session.Dispatch(() =>

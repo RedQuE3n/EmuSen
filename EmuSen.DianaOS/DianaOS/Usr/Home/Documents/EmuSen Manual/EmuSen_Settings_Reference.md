@@ -3339,7 +3339,8 @@ entry for Select reads *Options*. §4.52's table is amended accordingly.
 
 **What it does not do.**
 - ES-DE's editor fields *Hide metadata fields*, *Controller* and *Alternative emulator* are not built, and *Custom
-  collections sortname* is the collections work's. *Enter folder* does not apply: Mistress has no folders.
+  collections sortname* is the collections work's. *Enter folder* does not apply: Mistress has no folders. *Amended
+  2026-09-27: the themed view shows folders now, and Enter Folder and a folder's link are §4.67's.*
 - A hidden game listed again is not dimmed, as ES-DE dims it.
 - The on-screen keyboard has no line break, so a description is typed as one paragraph.
 - ScreenScraper's own name for a game is not offered by the editor's Scrape; the name stays the file's unless the player
@@ -3471,7 +3472,8 @@ game answered once is not asked again: a renamed file takes its pictures to its 
 with no request. A whole library is days of a free account's quota (plan §17.10).
 
 **Where things are kept.** `home/Media/`, laid out as ES-DE's `downloaded_media`: `<system>/covers`, `screenshots`,
-`marquees`, `miximages`, `titlescreens`, each file named after the ROM's own file name. Beside them `media.db` holds each
+`marquees`, `miximages`, `titlescreens`, each file named after the ROM's own file name (and, since §4.67, under the
+game's folder, as ES-DE stores a foldered game's media). Beside them `media.db` holds each
 game's text by its MD5 and size, which file each picture is, the queue, and the day's counts (with `PRAGMA user_version`
 and a newer file refused, as `games.db` is). A picture is written beside its final name and moved into place, never over
 a file already there, and only when the server calls it an image of at least 80 bytes. Nothing is ever written in the
@@ -4167,8 +4169,9 @@ are Mistress's own drawings; none is ES-DE's.
   as the generic pad, anything else as unknown. ScreenScraper's answers carry no controller, so nothing fills the field
   but the player.
 - **Folder.** Drawn for any entry that says it is a folder, with a chain link over it when the folder has a link
-  (`folderLinkPos`, `folderLinkSize`, `customFolderLinkIcon`). The library shows no folders yet (the plan's pass 6), and
-  a grouped collection's entry hides its badges as ES-DE was seen to (§4.58), so this shows once folders exist.
+  (`folderLinkPos`, `folderLinkSize`, `customFolderLinkIcon`). Since pass 6 (§4.67) a console's folders are
+  entries, and they carry it, a linked folder with the link; a grouped collection's entry still hides its badges, as ES-DE
+  was seen to (§4.58).
 - **Manual** and **alternative emulator** are drawn when a game has them; Mistress fetches no manuals yet (pass 9).
 - A theme that names every slot's image, as Art Book Next does its five, looks exactly as before: the tests compare its
   game list drawn both ways and find no pixel different.
@@ -4237,3 +4240,143 @@ badge; a game's own engine runs a synthetic N64 system over the console's choice
 engine of another console is ignored; the cap's five cases; and at the window, a 45-minute launch recorded, a nine-hour
 one dropped under the default, and recorded once Preferences sets No limit. `ThemedGameOptionsTests`' reach test now
 requires the engine row disabled for a Super Nintendo game.
+
+### 4.67 Big picture: a console's folders, the flatten switch, folder links, and the media of games in folders (2026-09-27)
+
+Pass 6 of `EmuSen_BigPicture.md`'s plan of ES-DE parity (§21.3 there; §30 is the record: the prediction P108 shown and
+fixed, P109 on the player's own library, the tests, the mutants and the pictures). The player accepted §21's
+recommendations on 2026-09-26 (§10.1): **Q23 (c)**, folders shown as ES-DE shows them, by default, with a per-console
+switch that gives the flat list of before; and **Q24**, directories named like files and `.m3u` playlists wait for a
+disc-based core, so neither is here. The section is numbered 4.67 because §4.66 is another pass's. Everything here is in
+the themed view of §4.52, in big-screen sessions and in big picture on the desktop (§4.54); EmuSen's own library
+(§4.33, §4.56) and the desktop's sidebar library are unchanged and still list every game of a console in one list.
+
+#### 4.67.1 What a game's folder is
+
+ES-DE keeps a system's games under `ROMs/<system>/`, and what lies between that folder and a file is the game's folder
+(USERGUIDE, "Multiple game files installation"). Mistress decides a game's console by its extension, not by where the
+file sits (§4.46), so the rule has to be restated: **the first level below the ROM folder of §4.11 is the console's
+folder, whatever its name, and every folder between it and the file is the game's folder.** With the player's library,
+`Roms/NES/USA/Game.nes` is in `USA`, `Roms/NES/Hacks/Mario/Game.nes` in `Hacks/Mario`, and `Roms/SNES/Game.sfc` and a
+file directly in the ROM folder in none. The rule reads one file's path and nothing else, so adding a game elsewhere
+never changes another game's folder; the plan's §30.2 gives the alternative that was rejected for that reason, and the
+one case the rule reads unlike a person would (a ROM folder pointed at one console's folder).
+
+#### 4.67.2 Folders in a game list
+
+A console whose games sit in folders opens on its folders, as ES-DE's does:
+
+- **South** on a folder enters it (the `select` sound); **East** comes back up one level (`back`), to the folder left;
+  East at the top goes back to the systems. Folders can hold folders, to any depth.
+- **Folders sort on top** (ES-DE's *Sort folders on top of gamelists*, on by default), in the list's own sort order,
+  then the games, favourites first when *Sort favorite games above non-favorites* is on. Turned off, folders and games
+  share one order.
+- A folder is listed while it holds a game the list keeps. The scan lists only the files a core reads (§4.11), so a
+  folder holding nothing else, such as the player's `GB/[BIOS]` of `.7z` archives, does not appear.
+- **Each folder keeps its own selection**, and **each system the folder it is in**: quick system select (left and right)
+  comes back to the same folder and game, and so does the return from a game started inside a folder, by **Game
+  Library** or **Close Game** in the pad menu.
+- **Sort and filters are the system's**, set in Select's menu from any folder and applied over every folder, because
+  USERGUIDE says the filters "are always applied for the complete game system, including all folder content": a folder
+  that holds a favourite shows under a favourites filter, one that does not is hidden, and the filter's values come
+  from every game of the console. The search box of §4.58 narrows the same way. A search or a filter that empties the
+  folder shown moves the list up to the nearest folder that still holds a game.
+- **Jump To…** offers **Folders**, which goes to the first folder, when folders are on top beside games; the letters
+  then index the games only. A list of folders alone is indexed by their first letters, as USERGUIDE says. ES-DE draws a
+  folder icon where Mistress writes *Folders* (§4.67.6).
+- The **system view's count** counts every game of the console, those inside folders included, not the entries its list
+  opens on.
+- **The random entry** (the thumbsticks, §4.58) picks any entry of the list shown, a folder included.
+- **Collections hold no folders**: all games, favorites, last played and the custom collections list the games inside
+  folders as games, since USERGUIDE says "folders can't be part of collections".
+
+**How a folder is drawn.** Each folder entry says it is a folder, for the three things a theme draws from that: a
+`textlist` marks it with LunaP's folder mark (`indicators` *symbols*, LunaP §101.8) in its secondary colour; a `grid` or
+carousel shows the theme's `defaultFolderImage` where the folder has no picture of its own; and a `badges` element's
+`folder` slot is filled, with the folder-link overlay when a link is set (the built-in drawings of those slots are
+another pass's, §21.3 Pass 4). A folder's own picture is looked for as ES-DE names it,
+`<system>/<type>/<parent folders>/<folder name>.<ext>`. The help bar's A reads *Select* on a folder and *Launch* on a
+linked one.
+
+#### 4.67.3 The flatten switch, and Sort folders on top
+
+Both are in **Game Collection Settings** (the pad menu, Start), under **Game Lists** ▸ **Folders**, beside *Sort
+favorite games above non-favorites*. That is where ES-DE's user guide keeps the nearest equivalent, its *Sort folders on
+top of gamelists* in *UI settings*, and where §4.58 put ES-DE's other game-list settings. ES-DE has no menu entry for
+flattening: a file named `flatten.txt` in a system's folder does it ("Folder flattening"), and the guide discourages it.
+Mistress makes it a switch per console because the player's letter folders only repeat what Jump To… does.
+
+| Row | Setting (`appsettings.json`, in `BigPictureCollections`) | Default | Effect |
+|---|---|---|---|
+| Sort folders on top of gamelists | `FoldersOnTop` | on | folders first in every foldered list |
+| Flatten *console* folders, one per console | `FlattenedSystems`, the ES-DE names of the consoles flattened | none | that console's games in one list, as before folders were shown |
+
+Each applies at once beneath the sheet and is saved with the other settings. Flattening changes only the list: a
+flattened console's games keep their folders for where their pictures are looked for (§4.67.5), unlike ES-DE's
+flattening, whose guide warns that "metadata from the wrong game may get used" for files of the same name.
+
+#### 4.67.4 Folder links
+
+ES-DE's *Folder link* (USERGUIDE, "Metadata editor") names a file inside a folder that A launches in place of entering
+the folder. **Select** on a folder opens the options menu with the list's rows and **Edit This Folder's Metadata**; its
+sheet has one field, **Folder link**, a list of the games below the folder by their paths from it, and *(none)*. Save
+keeps the choice; Cancel or B leaves it. While a link is set:
+
+- A on the folder launches the linked game, with the `launch` sound, and that game is what last played and the play
+  counters record;
+- the menu gains **Enter Folder**, ES-DE's *Enter folder (override folder link)*, which opens the folder anyway;
+- while a custom collection is being edited (§4.58), A enters the folder as if it had no link, as USERGUIDE says.
+
+The link is a row of `games.db`'s `game_edit` table (§4.59) on the folder's own path, field `folderlink`, holding the
+file's path from the folder. Nothing on disk but `games.db` changes. A link to a file that has since gone is ignored, and
+A enters the folder. The folder's other ES-DE fields (name, description, rating, hidden and the rest) are not kept.
+
+#### 4.67.5 The media of a game in a folder
+
+USERGUIDE ("Manually copying game media files") keeps a foldered game's pictures under the same folder,
+`downloaded_media/<system>/<type>/<folder>/<file name>.<ext>`. Before this pass Mistress looked only at
+`<system>/<type>/<file name>`, so an ES-DE media folder (§4.52) written for this library would have shown nothing for
+any game in a folder: the plan's prediction P108, shown on the unchanged reader (none of six pictures found) and then
+fixed.
+
+**The order a picture is looked for in** is §4.60's, and in each of Mistress's store and the ES-DE media folder the
+game's folder is tried first, then the flat name. The flat name is kept second for an ES-DE folder written from a
+flattened system, and for pictures placed by hand in the store for an earlier build; a game whose own file is in its
+folder is never shown another's from the flat name. This holds in the themed view, the library's covers, and the variant
+triggers' count of which media a system has.
+
+**Mistress's own store** (`home/Media`, §4.60) now writes a scraped picture of a game in a folder under that folder,
+`home/Media/<system>/<type>/<folder>/<file name>.<ext>`, as ES-DE would; a file renamed or moved to another folder takes
+its pictures along at its next scrape, with no request. Clear (§4.59) deletes the pictures in the game's own folder, so
+two games of the same file name in different folders no longer share them.
+
+**The store is put in folders once.** `media.db`'s second migration adds two tables: `store_step`, which records that
+the step has run, and `store_move`, a log of every file it touched (`from_path`, `to_path`, `how`, `at`). The first time
+Mistress opens the store with a ROM folder set, each picture stored flat for a game in a folder is:
+
+- **moved** into that folder, when one game in one folder names it;
+- **copied** into each folder, when copies of the game sit in several folders or one also sits at the top; the flat file
+  is kept for the one at the top, and with no game at the top the last folder takes the move;
+- **left**, when a file is already at the target: nothing is overwritten, and the log records it as `found`.
+
+`media.db`'s row for each picture then names the file its game shows. **No picture is deleted**: a move keeps the bytes
+under a new name, and the tests compare every file's SHA-256 before and after. A step cut off between a move and its row
+is finished at the next opening, which finds the file already in place. Once `store_step` holds its row the step never
+runs again; the scraper writes folders from now on, and anything else left flat is read through the flat name. The step
+runs only when the ROM folder is set, since that is what names the folders; a player without one is migrated when they
+set it.
+
+#### 4.67.6 What it does not do
+
+- **Directories named like files and `.m3u` playlists** (USERGUIDE, "Directories interpreted as files"): not built, by
+  Q24, until a disc-based core exists. A folder named `Game.cue` is an ordinary folder.
+- **A folder's metadata** other than its link: its name, description, rating, hidden flag, *Hide metadata fields* and
+  the rest of ES-DE's folder fields are not kept, and a folder is not scraped.
+- **A folder-link mark in a `textlist`**: ES-DE marks a linked folder with its own symbol (`>` in *ascii*); LunaP's
+  `TextRowList` has a folder mark and no link mark, so a linked folder is marked as a folder. The badge slot carries the
+  link.
+- **`gamelistinfo`'s folder icon**, which waits for the element to be drawn at all (§21.3 Pass 14).
+- **Jump To…'s folder entry** is the word *Folders*, not ES-DE's icon.
+- **North** on a folder does nothing, and the help bar still names it *Favorite* there.
+- **The desktop's sidebar library** is unchanged: one list per console.
+- Nothing ran on the handheld.

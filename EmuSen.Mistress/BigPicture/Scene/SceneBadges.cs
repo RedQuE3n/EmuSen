@@ -49,7 +49,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
                 IconPath = icons.GetValueOrDefault(slot) is { Exists: true } icon ? icon.Absolute : null,
                 Controller = slot == "controller" ? ShapeOf(game.Controller) : null,
                 ControllerIconPath = slot == "controller" && game.Controller is { } c && controllers.GetValueOrDefault(c) is { Exists: true } own ? own.Absolute : null,
-                Linked = slot == "folder" && game.FolderLink,
+                Linked = slot == "folder" && game.FolderLink is not null,
                 LinkIconPath = link,
             }).ToList();
         }

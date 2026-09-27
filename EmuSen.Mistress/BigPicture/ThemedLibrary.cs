@@ -20,6 +20,12 @@ namespace EmuSen.Mistress.BigPicture
         public bool Stars { get; init; } = true;
         public GameSort? DefaultSort { get; init; }
         public long? CollectionId { get; init; }
+
+        // The player's flatten switch for this console: its games in one list, as before folders were shown (§30).
+        public bool Flatten { get; init; }
+
+        // Each folder's ES-DE folder link, by the folder's path on disk: the file A launches in its place (§30).
+        public IReadOnlyDictionary<string, string>? FolderLinks { get; init; }
     }
 
     // The custom collection being edited, and the files in it (§22).
@@ -115,7 +121,8 @@ namespace EmuSen.Mistress.BigPicture
                 return Fail($"The theme could not be read: {broken.Message}");
 
             _shelves = shelves;
-            _listed.Clear();
+            FindFoldered(shelves);
+            ForgetListed();
             _media = media;
             _screen = screen;
             ThemeChoices choices = (chosen ?? new ThemeChoices()) with { ScreenWidth = (int)Math.Round(screen.Width), ScreenHeight = (int)Math.Round(screen.Height) };
@@ -196,10 +203,11 @@ namespace EmuSen.Mistress.BigPicture
             IReadOnlyList<SceneSystem> systems = _systems.Select(s => s with
             {
                 Games = Listed(s.System.Name), Stars = StarsIn(s.System.Name), Heading = HeadingIn(s.System.Name), FavoritesOnTop = FavoritesFirstIn(s.System.Name),
+                Counted = CountedIn(s.System.Name),
             }).ToList();
             int system = Math.Max(0, systems.ToList().FindIndex(s => s.System.Name == _system));
             SceneSystem chosen = systems[system];
-            int game = _cursor.TryGetValue(ListKey(chosen.System.Name), out string? file) ? Math.Max(0, chosen.Games.ToList().FindIndex(g => g.File == file)) : 0;
+            int game = _cursor.TryGetValue(ViewKey(chosen.System.Name), out string? file) ? Math.Max(0, chosen.Games.ToList().FindIndex(g => g.File == file)) : 0;
             return new SceneData(systems, _screen)
             {
                 SystemIndex = system, GameIndex = game, Media = _media, Motion = Motion, Family = Family, SwapFaceButtons = SwapFaceButtons, Status = Status, Now = Now(), ShowClock = Interface.DisplayClock, LiveClock = LiveClock,
@@ -224,7 +232,7 @@ namespace EmuSen.Mistress.BigPicture
             SceneData d = Stage.Current.Data;
             _view = Stage.Current.ViewName;
             _system = d.System.System.Name;
-            if (_view == "gamelist" && d.Game is { } game) _cursor[ListKey(_system)] = game.File;
+            if (_view == "gamelist" && d.Game is { } game) _cursor[ViewKey(_system)] = game.File;
         }
 
         private void OnStepped(int delta, bool held)
@@ -334,6 +342,10 @@ namespace EmuSen.Mistress.BigPicture
                     Stage.Switch(now, Data());
                     Sound("select");
                     break;
+                case UiButton.Accept when view.Data.Game is { Folder: true } folder && LinkedGame(folder) is { } linked:
+                    Sound("launch");
+                    result = new ThemedCommand(ThemedAction.Launch, linked);
+                    break;
                 case UiButton.Accept when view.Data.Game is { Folder: true } folder:
                     EnterFolder(folder, now);
                     break;
@@ -405,7 +417,7 @@ namespace EmuSen.Mistress.BigPicture
             text = text.Trim();
             if (text == _filter || Stage is null) return;
             _filter = text;
-            _listed.Clear();
+            ForgetListed();
             Stage.Replace(Data(), now);
             Remember();
         }

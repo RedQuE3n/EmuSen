@@ -17,6 +17,7 @@ namespace EmuSen.Mistress.Views
         // Whether any pad the interface reads holds what the button stands for.
         private bool PadHeld(UiButton button)
         {
+            if (KeyHeld(button)) return true;
             IReadOnlyList<ConnectedPad> pads = _gamepad.Pads;
             for (int i = 0; i < _gamepad.FrontendPadCount; i++)
                 if (PadHeldOn(pads[i], button)) return true;

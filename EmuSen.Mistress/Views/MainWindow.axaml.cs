@@ -235,6 +235,11 @@ namespace EmuSen.Mistress.Views
         private void SetButtonFromKey(Key key, bool pressed, KeyEventArgs e)
         {
             if (TypingIntoATextField(e)) return;
+            if (ThemedKey(key, pressed))
+            {
+                e.Handled = true;
+                return;
+            }
 
             // A suspended game must not collect the keys used to browse the library - see EmuSen_Settings_Reference.md §4.18.
             // A sheet over the game takes its keys; they are not the game's - see EmuSen_Settings_Reference.md §4.45.2.

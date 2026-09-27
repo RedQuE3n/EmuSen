@@ -19,11 +19,11 @@ Every other console is an empty, reserved folder. Per-game results are in [the g
 
 ### The Rust ports
 
-MarsRT was the first port and is the most finished. It produces the same machine state, picture and sound as the C# core after every frame, and it has everything the C# core has: the threaded display processor, the resolution multiple, antialiasing, the GPU path, debugger hooks and rewind, plus a Cranelift recompiler. It became the default N64 engine after it was played on a Lenovo Legion Go S running SteamOS, where Donkey Kong 64 plays at full speed at 3× internal resolution. The C# core still runs wherever the Rust library is missing. The full story is in [`Mars_Native.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Nintendo/Mars%20-%20N64/Mars_Native.md).
+The Rust ports came about after reaching a performance wall with C# and cycle-accuracy with the N64. While the original Mars (N64) core ran fine on a desktop setup, it struggled on the Legion Go S, which is one of the development targets. This resulted in MarsRT coming to be. It produces the same machine state, picture and sound as the C# core after every frame, and it has everything the C# core has: the threaded display processor, the resolution multiple, antialiasing, the GPU path, debugger hooks and rewind, plus a Cranelift recompiler.
 
-MercuryRT, the Game Boy port, has the whole machine, the debugger and builds for every platform, and CI checks that its sound, picture and save states come out bit for bit the same on Linux, Windows and macOS. It can be selected in the Game Boy's graphics settings and becomes the default after a session of play on the handheld. Porting it turned up three bugs in the C# Mercury, which are now fixed in both engines. Unlike MarsRT it isn't much faster than the C# core, because the cost is in the cycle-by-cycle design rather than the language. Still ahead: running the rest of the Game Boy tests through both engines, recording reference traces, and moving the C# core to a legacy branch. See [`Mercury_Native.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Nintendo/Mercury%20-%20GB-GBC/Mercury_Native.md).
+MercuryRT, the Game Boy port, has the whole machine, the debugger and builds for every platform, and CI checks that its sound, picture and save states come out bit for bit the same on Linux, Windows and macOS. It can be selected in the Game Boy's graphics settings and becomes the default after a session of play on the handheld. Porting it turned up three bugs in the C# Mercury, which are now fixed in both engines. Unlike MarsRT it isn't much faster than the C# core, because the cost is in the cycle-by-cycle design rather than the language. Still ahead: running the rest of the Game Boy tests through both engines, recording reference traces, and moving the C# core to a legacy branch. 
 
-MoonRT, the NES port, is planned and paused ([`Moon_Native.md`](EmuSen.DianaOS/DianaOS/Etc/Man%20pages/Hardware/Nintendo/Moon%20-%20NES/Moon_Native.md)), and Venus will follow. The reasoning for moving the cores to Rust, and for keeping everything else in C#, is in [`EmuSen_Stack.md`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Stack.md).
+MoonRT, the NES port, as well as VenusRT, the SNES port are paused for now.
 
 ### Checking the cores against other emulators and hardware
 
@@ -96,7 +96,7 @@ codesign --force --deep --sign - Mistress.app
 
 ### Platforms
 
-Linux is where EmuSen is developed and played, on a desktop and on a Legion Go S. Whenever the Rust cores change, GitHub Actions builds the Rust libraries for Linux, Windows and macOS (Intel and Apple Silicon), and runs the tests that compare the Rust cores with the C# ones on Linux, Windows and Apple Silicon. Nobody has played on a Windows or macOS build yet.
+EmuSen is primarly developed and tested on Linux. Builds exist for Windows and MacOS, but the testing is limited. Eventually, I will get around to installing Windows on a separate partition for testing, as well as breaking out my Mac M1 Mini for MacOS testing.
 
 ## Documentation
 

@@ -6043,6 +6043,11 @@ Nothing in this section ran on a Mac. What has to be confirmed there:
 - the `osx-x64` bundle on an Intel Mac, or under Rosetta;
 - a bundle published on Linux, zipped, unzipped on the Mac and signed there by hand.
 
+**Checked on the Mac mini, 2026-09-28** (Apple M1, macOS 26.6.2). EmuSen.app, built there and installed in `/Applications`,
+opened cleanly from `/Applications`. Its data home was created under `~/Library/Application Support/EmuSen`, and the ROM
+folder chosen in Preferences was saved there (`home/etc/EmuSen/appsettings.json`). The icon, the menu's name and a
+controller were not yet reported.
+
 ### 4.83 Big picture: every window in ES-DE's look, and nothing cut off (2026-09-27)
 
 Decided 2026-09-27, for every window a big-screen session frames as a menu: nothing may be cut off, run past its panel

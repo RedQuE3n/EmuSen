@@ -9785,6 +9785,9 @@ the branch's code commit, measured on 2026-09-27: **1,486 tests, 1,436 passed, 5
 and live tools, this section's picture tool among them), none failed, in 4 min 1 s.** No prediction was written for
 it; one run is weak evidence against an intermittent failure.
 
+**Checked on the handheld, 2026-09-28.** With Steam's keyboard up in Game Mode, the four-line popup at 5% of the
+height sits wholly clear of the keyboard. P268 held.
+
 ## 41. Every window in ES-DE's look, first part: the style layer and three windows (2026-09-27)
 
 *Built on branch `bigpicture-window-look`, from WiseMan at `8539c7e6`; LunaP on `window-look`, from `openemu-library`

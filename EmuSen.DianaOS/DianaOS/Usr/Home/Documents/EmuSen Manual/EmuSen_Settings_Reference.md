@@ -6443,7 +6443,7 @@ build uses it only when both match (`Mars_Native.md` §6.17.1, §6.17.4):
 | `dotnet build` or `dotnet publish -r linux-x64` on this desktop (Fedora's rustc 1.98.1) | yes |
 | CI's `linux-x64` library (Rust 1.98.1, pinned by the profile's manifest) | yes |
 | the handheld, which runs the `linux-x64` publish | yes, the same library |
-| `osx-arm64`, `osx-x64`, `win-x64`, in CI or on those machines | no: there is no profile for their targets yet |
+| `osx-arm64`, `osx-x64`, `win-x64`, in CI or on those machines | no: there is no profile for their targets; the Mac's was trained and made every game slower, so it was not committed (`Mars_Native.md` §6.17.11) |
 | a foreign RID published from here (`-p:EmuSenNativePrebuilt=<dir>`) | whatever the named library is |
 | any other compiler, such as a Fedora update to rustc | no, until the profile is retrained |
 
@@ -6459,4 +6459,5 @@ every measurement, and the way out if a profile ever misbehaves.
 **Refreshing it.** Training runs commercial games and so is done on this desktop, never in CI:
 `bash pgo/train.sh` in the crate, with the toolchains and the inputs named in `Mars_Native.md` §6.17.8; about an hour.
 It is due after a toolchain update, and after a change to the hot paths §6.17.6 lists; otherwise a stale profile keeps
-most of its gain. A Mac trains its own with the same script (§6.17.9).
+most of its gain. A Mac trains its own with the same script (§6.17.9); the one trained on 2026-09-28 was 2 to 9 per
+cent slower on every game measured, and was not kept.

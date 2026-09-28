@@ -6304,8 +6304,41 @@ suggests a smaller gain there; it is a suggestion, not a measurement, and should
   processor only (§6.17.4); what the device path spends on the host is not measured guided.
 - **Why the shim gains less than the example** (§6.17.5): the configuration difference behind the two hashes is
   unidentified.
-- **The Mac** (§6.17.9) and **Windows**: no profile, both build unguided.
+- **The Mac** was trained and measured, and its profile made every game slower (§6.17.11), so it builds unguided;
+  why is not known. **Windows**: no profile, and it builds unguided.
 - **The profile's decay over real edits.** §6.17.6 measured one synthetic edit in a cold function and one in the
   hottest loop. How a month of ordinary commits ages the profile is not measured; the next retraining should time the
   stale profile beside the fresh one before replacing it.
 - **Mario's `stale` reading** (−4.0 per cent, rounds overlapping both builds) was not re-run.
+
+##### 6.17.11 The Mac, measured (2026-09-28): slower, and not committed
+
+§6.17.9's recipe was run on the Mac mini (Apple M1, four performance and four efficiency cores, macOS 26.6.2), with
+rustup's Rust 1.98.1, whose LLVM is the same 22.1.8 as Fedora's. `train.sh` ran unchanged: the three flavours trained
+twelve runs each and matched the desktop's source digest (`36a5237755f1c652`), and every input's SHA-256 prefix in the
+Mac's manifest equals the desktop's. The driver was published twice with `-r osx-arm64`, `none` and `matched` by the
+build's own verdict, and timed in six rounds on an otherwise idle machine, the order rotated each round, without a
+quiet gate.
+
+| game | unguided (ms, range) | guided (ms, range) | change |
+| --- | --- | --- | --- |
+| Super Mario 64 (graded) | 6.629 (6.605–6.699) | 7.196 (7.189–7.214) | **+8.5%** |
+| Ocarina of Time (graded) | 7.699 (7.650–7.968) | 8.135 (8.127–8.154) | **+5.7%** |
+| The Dam | 19.602 (19.581–19.650) | 21.193 (21.140–21.296) | +8.1% |
+| Donkey Kong 64's title | 17.402 (17.380–17.410) | 17.764 (17.739–17.783) | +2.1% |
+
+The ranges do not overlap on any game, in the wrong direction: on this machine the profile makes every frame longer.
+By §6.17.9's rule the two files are not committed, and `osx-arm64` stays unguided. They are kept outside the repository
+with the results, so a later attempt can be compared with this one.
+
+**The platforms agree.** Every run of both builds ended on the desktop's hash for its game (`8553FCCA132C724A`,
+`D1382AB72E567556`, `03348EC3AB46361C`, `52AB776E24D5A170`): the first check beside the WiseMan job's that MarsRT's
+aarch64 build, with the signal processor's portable fallback in place of its SSE paths, computes what the x86-64 one
+does.
+
+**Why it is slower is not known**, and the following are candidates, not findings: the M1 has four fast cores, the
+same number as the shim's default workers, so the emulation thread shares them, and a layout tuned from counters taken
+under that contention may not suit the uncontended path; LLVM's aarch64 block placement and inlining thresholds
+respond to a profile differently from x86-64's; and the portable vector fallback, which the desktop never trains, is a
+large share of this target's hot code. Distinguishing these would take the unguided and guided libraries' disassembly
+of the rasteriser and the vector units, and a run with fewer workers; neither was done.

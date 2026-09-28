@@ -1322,3 +1322,107 @@ fn bench_shading_at_a_multiple_on_the_processor_and_on_the_device() {
         }
     }
 }
+
+/// Lists recorded for the device one after another, each ended by a flush or by a scan as the case asks, then read back whole.
+fn recorded_in_turn(gpu: &mut GpuRasteriser, lists: &[Vec<u64>], scale: usize, scan_every: usize) -> ((Vec<u8>, Vec<u8>), usize) {
+    let mut rdram = vec![0u8; RDRAM_SIZE];
+    seed_texture_source(&mut rdram);
+    let (mut frame, mut hidden) = (vec![0u8; RDRAM_SIZE * scale * scale], vec![0u8; RDRAM_SIZE / 2 * scale * scale]);
+    let mut processor = Rdp::new_scaled(&Rdp::default(), scale as i32);
+    processor.shade_on_device(true);
+    let mut returned_early = 0;
+    for (i, list) in lists.iter().enumerate() {
+        {
+            let mut memory = RdpMemory::scaled(&mut frame, &mut hidden, &rdram).with_gpu(gpu as *mut GpuRasteriser);
+            for &word in list {
+                processor.accept(word, &mut memory);
+            }
+        }
+        if scan_every > 0 && i % scan_every == scan_every - 1 {
+            gpu.scan_out(&whole_picture(scale as u32));
+        } else {
+            gpu.flush();
+            returned_early += !gpu.last_flush_finished() as usize;
+        }
+    }
+    gpu.read(0, frame.len(), &mut frame, &mut hidden);
+    gpu.pictures().scanned(|_| {});
+    ((frame, hidden), returned_early)
+}
+
+/// A flush returns while the device shades its batch: of twelve heavy batches at four at least one is still out when its flush returns,
+/// and the picture is the processor's byte for byte (Mars_Performance.md §42).
+#[test]
+fn a_flush_returns_while_the_device_shades_and_the_picture_is_the_processor_s() {
+    for name in devices() {
+        let scale = 4;
+        let Some(mut gpu) = rasteriser(&name, scale) else { continue };
+        let lists: Vec<Vec<u64>> = (0..12u32).map(|i| if i % 3 == 2 { textured(0x7100 + i, 1, false) } else { shaded(0x6100 + i, 2, false, i % 2 == 1) }).collect();
+        let (device, returned_early) = recorded_in_turn(&mut gpu, &lists, scale, 0);
+        assert!(returned_early > 0, "on {name} every flush had finished when it returned, so the flush waited for the device");
+        assert_identical(&on_the_cpu(&lists.concat(), scale), &device, &format!("twelve batches ahead at {scale}x on {name}"));
+        eprintln!("{name}: {returned_early} of 12 flushes returned before the device had shaded them");
+    }
+}
+
+/// How a step's list ends: a flush, a scan out, or a scan into the raster the device averages.
+#[derive(Clone, Copy, Debug)]
+enum End {
+    Flush,
+    Scan,
+    Raster,
+}
+
+/// Lists recorded one after another, each ended as its step says, then read back whole once the scans have finished.
+fn recorded_in_steps(gpu: &mut GpuRasteriser, steps: &[(Vec<u64>, End)], scale: usize) -> (Vec<u8>, Vec<u8>) {
+    let mut rdram = vec![0u8; RDRAM_SIZE];
+    seed_texture_source(&mut rdram);
+    let (mut frame, mut hidden) = (vec![0u8; RDRAM_SIZE * scale * scale], vec![0u8; RDRAM_SIZE / 2 * scale * scale]);
+    let mut processor = Rdp::new_scaled(&Rdp::default(), scale as i32);
+    processor.shade_on_device(true);
+    for (list, end) in steps {
+        {
+            let mut memory = RdpMemory::scaled(&mut frame, &mut hidden, &rdram).with_gpu(gpu as *mut GpuRasteriser);
+            for &word in list {
+                processor.accept(word, &mut memory);
+            }
+        }
+        match end {
+            End::Flush => gpu.flush(),
+            End::Scan => gpu.scan_out(&whole_picture(scale as u32)),
+            End::Raster => {
+                let (width, height) = (640 * scale, 480 * scale);
+                let mut picture = whole_picture(scale as u32);
+                (picture.stride, picture.first_column, picture.last_column) = (width as u32, 0, picture.columns as i32);
+                gpu.scan_into_raster(width, height, 2, &[], false, &[], true, &picture);
+            }
+        }
+    }
+    gpu.read(0, frame.len(), &mut frame, &mut hidden);
+    gpu.pictures().scanned(|_| {});
+    gpu.pictures().averaged(|_| {});
+    (frame, hidden)
+}
+
+/// A slot is staged again only once every submission that read it, flushed or sent with a scan, has finished: a heavy list then two small
+/// ones, so the slot comes round while the heavy batch is likely still out, which the rasteriser's check fails (Mars_Performance.md §42).
+#[test]
+fn a_slot_is_staged_again_only_once_the_submissions_that_read_it_have_finished() {
+    for name in devices() {
+        for scale in [2usize, 4] {
+            let Some(mut gpu) = rasteriser(&name, scale) else { continue };
+            for (case, ends) in [[End::Scan, End::Flush, End::Flush], [End::Flush, End::Scan, End::Flush], [End::Raster, End::Flush, End::Flush], [End::Flush, End::Raster, End::Flush]].iter().enumerate() {
+                gpu.clear();
+                let steps: Vec<(Vec<u64>, End)> = (0..4u32)
+                    .flat_map(|round| {
+                        let seed = 0x8100 + case as u32 * 16 + round;
+                        [(shaded(seed, 2, round % 2 == 0, false), ends[0]), (small(seed, 2)[9..].to_vec(), ends[1]), (small(seed + 8, 2)[9..].to_vec(), ends[2])]
+                    })
+                    .collect();
+                let lists: Vec<u64> = steps.iter().flat_map(|(l, _)| l.iter().copied()).collect();
+                let device = recorded_in_steps(&mut gpu, &steps, scale);
+                assert_identical(&on_the_cpu(&lists, scale), &device, &format!("{ends:?} at {scale}x on {name}"));
+            }
+        }
+    }
+}

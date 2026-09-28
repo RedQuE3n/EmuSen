@@ -937,6 +937,9 @@ Three things make that sound, each for a different hazard:
   descriptor set belong to the pending submission until it finishes, so `Stage` waits for it before rewriting
   either. In a game this wait falls on the leading drawing worker in the next frame, by when the device has long
   finished.
+  *Since 2026-09-28 this holds per slot:* a flush no longer waits for its batch, each of two slots has its own staging
+  buffers and descriptor set, and a slot waits only for the submission that last read it, the pending one included
+  (`Mars_Performance.md` §42.8).
 - **A presentation join before any rebuild.** The walk's thread reads memory the device owns, so the device must
   outlive it: `MarsCore.ApplyMultiple` joins the deferred walk before changing the multiple or the device. The
   hazard this closes (a settings change disposing the buffer under a walk still reading it) is closed by

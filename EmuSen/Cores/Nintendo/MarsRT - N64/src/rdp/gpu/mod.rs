@@ -9,7 +9,9 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering::{Acquire, Release};
 use std::sync::{Arc, Condvar, Mutex};
 
-pub use device::{GpuDevice, Pending};
+pub use device::{AHEAD, GpuDevice, Pending};
+#[cfg(test)]
+use device::Submission;
 use device::{Commands, GpuBuffer, GpuProgram, Where};
 
 /// The C# path's compiled shaders, the same files, so the differential between the two cores' device paths has no shader in it.
@@ -121,6 +123,15 @@ pub struct Counters {
 struct Staged {
     host: Option<GpuBuffer>,
     device: Option<GpuBuffer>,
+}
+
+/// What last read a staging slot's inputs and its descriptor set of the shading program, and so must finish before the slot is staged again.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum Held {
+    #[default]
+    Free,
+    Ahead,
+    Pending,
 }
 
 /// A picture the device wrote into a host buffer, read by the presenter's thread once the pending submission is done.
@@ -253,7 +264,13 @@ pub struct GpuRasteriser {
     max_x: i32,
     max_y: i32,
 
-    inputs: [Staged; 6],
+    /// The six inputs of a batch, one set to each of the `AHEAD` slots, staged in turn (Mars_Performance.md §42).
+    inputs: [[Staged; 6]; AHEAD],
+    held: [Held; AHEAD],
+    slot: usize,
+    /// The submission each slot was last recorded into, as the recording says, for the tests' check that a slot is never staged while it is read.
+    #[cfg(test)]
+    readers: Mutex<[Submission; AHEAD]>,
     readback: Option<GpuBuffer>,
     scan_device: Option<GpuBuffer>,
     raster: Option<GpuBuffer>,
@@ -312,7 +329,7 @@ impl GpuRasteriser {
     #[allow(clippy::type_complexity)]
     fn new(device: &GpuDevice, memory_words: u32) -> Result<Box<dyn FnOnce(GpuDevice) -> GpuRasteriser>, String> {
         let memory = device.create_buffer(memory_words as u64 * 4, Where::Device)?;
-        let shade = device.create_program(shaders::SHADE, 8, 36)?;
+        let shade = device.create_program_with_sets(shaders::SHADE, 8, 36, AHEAD)?;
         let scan = device.create_program(shaders::SCAN, 2, 68)?;
         let clear = device.create_program(shaders::CLEAR, 2, 8)?;
         let average = device.create_program(shaders::AVERAGE, 2, 16)?;
@@ -355,6 +372,10 @@ impl GpuRasteriser {
                 max_x: i32::MIN,
                 max_y: i32::MIN,
                 inputs: Default::default(),
+                held: [Held::Free; AHEAD],
+                slot: 0,
+                #[cfg(test)]
+                readers: Mutex::new([Submission::Now; AHEAD]),
                 readback: None,
                 scan_device: None,
                 raster: None,
@@ -547,9 +568,9 @@ impl GpuRasteriser {
         total
     }
 
-    fn upload(&mut self, which: usize, count: usize) {
+    fn upload(&mut self, slot: usize, which: usize, count: usize) {
         let bytes = count.max(1) as u64 * 4;
-        let staged = &mut self.inputs[which];
+        let staged = &mut self.inputs[slot][which];
         if staged.host.as_ref().is_none_or(|h| h.bytes < bytes) {
             if let Some(h) = staged.host.take() {
                 self.device.destroy_buffer(h);
@@ -572,11 +593,37 @@ impl GpuRasteriser {
         staged.host.as_ref().expect("staged").slice_mut::<u32>()[..count].copy_from_slice(&source[..count]);
     }
 
-    /// `Flush`: everything recorded is shaded, and nothing of it is in flight when this returns.
+    /// `Flush`: everything recorded is submitted to be shaded, without waiting for it; the queue's order puts it before whatever is submitted next (Mars_Performance.md §42).
     pub fn flush(&mut self) {
         if let Some(shade) = self.stage() {
             let (device, this) = (&self.device, &*self);
-            device.submit(|c| this.record_shading(c, &shade));
+            device.submit_ahead(shade.slot, |c| this.record_shading(c, &shade));
+            self.held[shade.slot] = Held::Ahead;
+        }
+    }
+
+    /// The slot's inputs and descriptor set free to be written: its last submission, flushed or pending, has finished.
+    fn free(&mut self, slot: usize) {
+        match self.held[slot] {
+            Held::Ahead => self.device.wait_ahead(slot),
+            Held::Pending => self.device.wait_for_pending(),
+            Held::Free => {}
+        }
+        self.held[slot] = Held::Free;
+    }
+
+    /// Whether the last flush's submission has finished; the tests' look, which waits for nothing.
+    #[cfg(test)]
+    pub fn last_flush_finished(&self) -> bool {
+        self.device.finished(Submission::Ahead((self.slot + AHEAD - 1) % AHEAD))
+    }
+
+    /// The pending submission has finished, so no slot is held by it any longer.
+    fn pending_finished(&mut self) {
+        for held in &mut self.held {
+            if *held == Held::Pending {
+                *held = Held::Free;
+            }
         }
     }
 
@@ -586,8 +633,15 @@ impl GpuRasteriser {
             self.reset_batch();
             return None;
         }
-        // The staging buffers and the program's set belong to the pending submission until it finishes (Mars_Gpu.md §14).
-        self.device.wait_for_pending();
+        // A slot's staging buffers and its set of the program belong to the submission that last read them until it finishes (Mars_Gpu.md §14).
+        let slot = self.slot;
+        self.slot = (slot + 1) % AHEAD;
+        self.free(slot);
+        #[cfg(test)]
+        {
+            let reader = self.readers.lock().unwrap_or_else(|e| e.into_inner())[slot];
+            assert!(self.device.finished(reader), "slot {slot} staged while {reader:?}, which reads it, is still out");
+        }
 
         let (tile_x0, tile_y0) = (self.min_x / TILE_WIDTH as i32, self.min_y / TILE_HEIGHT as i32);
         let (tiles_wide, tiles_high) = (self.max_x / TILE_WIDTH as i32 - tile_x0 + 1, self.max_y / TILE_HEIGHT as i32 - tile_y0 + 1);
@@ -601,7 +655,7 @@ impl GpuRasteriser {
             self.tile_count * TILE_WORDS,
         ];
         for (i, &count) in counts.iter().enumerate() {
-            self.upload(i, count);
+            self.upload(slot, i, count);
         }
         let push = Push {
             image_word: self.image_word,
@@ -617,17 +671,22 @@ impl GpuRasteriser {
         self.counters.flushes += 1;
         self.counters.rows_shaded += self.row_count as i64;
         self.reset_batch();
-        Some(Shading { counts, push })
+        Some(Shading { counts, push, slot })
     }
 
     /// The staged batch's commands: six copies, then one dispatch over its tiles.
     fn record_shading(&self, c: &mut Commands, shading: &Shading) {
+        #[cfg(test)]
+        {
+            self.readers.lock().unwrap_or_else(|e| e.into_inner())[shading.slot] = c.submission();
+        }
+        let inputs = &self.inputs[shading.slot];
         for (i, &count) in shading.counts.iter().enumerate() {
-            let staged = &self.inputs[i];
+            let staged = &inputs[i];
             c.copy(staged.host.as_ref().expect("staged"), staged.device.as_ref().expect("staged"), count.max(1) as u64 * 4, 0, 0);
         }
-        let d = |i: usize| self.inputs[i].device.as_ref().expect("staged");
-        c.dispatch(&self.shade, &[&self.memory, d(0), d(1), d(2), d(3), d(4), d(5), &self.divide], &shading.push, shading.push.tiles_wide, shading.push.tiles_high, 1);
+        let d = |i: usize| inputs[i].device.as_ref().expect("staged");
+        c.dispatch_in(&self.shade, shading.slot, &[&self.memory, d(0), d(1), d(2), d(3), d(4), d(5), &self.divide], &shading.push, shading.push.tiles_wide, shading.push.tiles_high, 1);
     }
 
     /// `Read`: the device's words from one byte address for so many bytes, laid into the shadow's two arrays as the CPU path would have left them.
@@ -659,6 +718,7 @@ impl GpuRasteriser {
     pub fn scan_out(&mut self, scan: &ScanParameters) {
         let shade = self.stage();
         self.device.wait_for_pending();
+        self.pending_finished();
 
         let pixels = (scan.rows as usize) * (scan.columns as usize);
         let bytes = pixels.max(1) as u64 * 4;
@@ -690,6 +750,9 @@ impl GpuRasteriser {
                 c.copy(device, host, bytes, 0, 0);
             });
         }
+        if let Some(shade) = &shade {
+            self.held[shade.slot] = Held::Pending;
+        }
         self.counters.scans += 1;
     }
 
@@ -703,6 +766,7 @@ impl GpuRasteriser {
         assert!(spans.len() <= MAX_SPANS * 2, "at most {MAX_SPANS} spans a submission");
         let shade = if walk { self.stage() } else { None };
         self.device.wait_for_pending();
+        self.pending_finished();
 
         let pixels = width * height;
         let (columns, rows) = (width / side, height / side);
@@ -775,6 +839,9 @@ impl GpuRasteriser {
             c.copy(averaged, host, (columns * rows) as u64 * 4, 0, 0);
         });
         drop(averaged_host);
+        if let Some(shade) = &shade {
+            self.held[shade.slot] = Held::Pending;
+        }
 
         // The seed's host copy is read by the submission, so it goes when that has finished.
         if let Some(seeded) = seeded {
@@ -787,19 +854,23 @@ impl GpuRasteriser {
     }
 }
 
-/// A staged batch: what its commands copy and dispatch.
+/// A staged batch: what its commands copy and dispatch, and the slot it was staged in.
 struct Shading {
     counts: [usize; 6],
     push: Push,
+    slot: usize,
 }
 
 impl Drop for GpuRasteriser {
     fn drop(&mut self) {
         self.device.wait_for_pending();
+        for slot in 0..AHEAD {
+            self.device.wait_ahead(slot);
+        }
         for buffer in [self.raster.take(), self.averaged.take(), self.spans.take(), self.scan_device.take(), self.readback.take()].into_iter().flatten() {
             self.device.destroy_buffer(buffer);
         }
-        for staged in &mut self.inputs {
+        for staged in self.inputs.iter_mut().flatten() {
             for buffer in [staged.host.take(), staged.device.take()].into_iter().flatten() {
                 self.device.destroy_buffer(buffer);
             }

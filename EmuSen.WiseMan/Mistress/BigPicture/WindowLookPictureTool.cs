@@ -204,6 +204,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Save(window, $"graphics-settings-{p}", _out);
                     CloseAll(window);
 
+                    WindowFitAuditTests.ShowN64WithNote(window);
+                    Save(window, $"graphics-settings-n64-aa-{p}", _out);
+                    CloseAll(window);
+
                     Call(window, "ShowShaderSettings");
                     Save(window, $"shader-settings-{p}", _out);
                     CloseAll(window);

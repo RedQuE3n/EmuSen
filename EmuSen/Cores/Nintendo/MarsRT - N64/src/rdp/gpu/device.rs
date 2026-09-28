@@ -4,9 +4,12 @@
 use std::ffi::CStr;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering::{Acquire, Release};
+use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
 use ash::vk;
+
+/// How many shading submissions may be in flight while the host records the next (Mars_Performance.md §42).
+pub const AHEAD: usize = 2;
 
 /// Names a device by a part of its name, for tests and for a machine with more than one.
 pub const DEVICE_VARIABLE: &str = "EMUSEN_MARS_GPU_DEVICE";
@@ -57,7 +60,8 @@ pub struct GpuProgram {
     layout: vk::PipelineLayout,
     set_layout: vk::DescriptorSetLayout,
     pool: vk::DescriptorPool,
-    set: vk::DescriptorSet,
+    /// Plain handles, as the rasteriser's `Drop` copies the program out; the ones past `create_program_with_sets`' count are null.
+    sets: [vk::DescriptorSet; AHEAD],
     pub buffers: usize,
     pub push_bytes: usize,
 }
@@ -93,6 +97,7 @@ pub struct GpuDevice {
     pending_commands: vk::CommandBuffer,
     fence: vk::Fence,
     pending: Arc<Pending>,
+    ahead: Vec<Ahead>,
     memory: vk::PhysicalDeviceMemoryProperties,
     pub name: String,
     pub software: bool,
@@ -107,6 +112,22 @@ struct Candidate {
     family: u32,
     api: u32,
     rank: i32,
+}
+
+/// Which submission a recording goes into: one waited for at once, the pending one, or one of the slots ahead.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Submission {
+    #[default]
+    Now,
+    Pending,
+    Ahead(usize),
+}
+
+/// One submission slot that is not waited for when it is made: its commands, its fence, and whether it is still out.
+struct Ahead {
+    commands: vk::CommandBuffer,
+    fence: vk::Fence,
+    out: AtomicBool,
 }
 
 /// The instance and what it found; it owns the instance until a device takes it over.
@@ -220,10 +241,15 @@ impl GpuDevice {
 
         let pool_info = vk::CommandPoolCreateInfo::default().queue_family_index(pick.family).flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
         let pool = unsafe { device.create_command_pool(&pool_info, None) }.map_err(|e| format!("vkCreateCommandPool returned {e}"))?;
-        let allocate = vk::CommandBufferAllocateInfo::default().command_pool(pool).level(vk::CommandBufferLevel::PRIMARY).command_buffer_count(2);
+        let allocate = vk::CommandBufferAllocateInfo::default().command_pool(pool).level(vk::CommandBufferLevel::PRIMARY).command_buffer_count(2 + AHEAD as u32);
         let buffers = unsafe { device.allocate_command_buffers(&allocate) }.map_err(|e| format!("vkAllocateCommandBuffers returned {e}"))?;
         let fence = unsafe { device.create_fence(&vk::FenceCreateInfo::default(), None) }.map_err(|e| format!("vkCreateFence returned {e}"))?;
         let pending_fence = unsafe { device.create_fence(&vk::FenceCreateInfo::default(), None) }.map_err(|e| format!("vkCreateFence returned {e}"))?;
+        let mut ahead = Vec::with_capacity(AHEAD);
+        for slot in 0..AHEAD {
+            let fence = unsafe { device.create_fence(&vk::FenceCreateInfo::default(), None) }.map_err(|e| format!("vkCreateFence returned {e}"))?;
+            ahead.push(Ahead { commands: buffers[2 + slot], fence, out: AtomicBool::new(false) });
+        }
         let memory = unsafe { instance.get_physical_device_memory_properties(pick.physical) };
         let properties = unsafe { instance.get_physical_device_properties(pick.physical) };
 
@@ -238,6 +264,7 @@ impl GpuDevice {
             pending_commands: buffers[1],
             fence,
             pending: Arc::new(Pending { device, fence: pending_fence, pending: AtomicBool::new(false), gone: AtomicBool::new(false) }),
+            ahead,
             memory,
             name: pick.name.clone(),
             software: pick.software,
@@ -310,6 +337,11 @@ impl GpuDevice {
 
     /// A compute shader with its storage buffers at bindings 0..buffers-1 of set 0 and one block of push constants.
     pub fn create_program(&self, spirv: &[u8], buffers: usize, push_bytes: usize) -> Result<GpuProgram, String> {
+        self.create_program_with_sets(spirv, buffers, push_bytes, 1)
+    }
+
+    /// As `create_program`, with `sets` descriptor sets (at most `AHEAD`), one for each submission that may be out with it at once.
+    pub fn create_program_with_sets(&self, spirv: &[u8], buffers: usize, push_bytes: usize, sets: usize) -> Result<GpuProgram, String> {
         if spirv.is_empty() || !spirv.len().is_multiple_of(4) {
             return Err("SPIR-V is a whole number of words".into());
         }
@@ -337,10 +369,14 @@ impl GpuDevice {
             Err((_, e)) => return Err(format!("vkCreateComputePipelines returned {e}")),
         };
 
-        let sizes = [vk::DescriptorPoolSize::default().ty(vk::DescriptorType::STORAGE_BUFFER).descriptor_count(buffers.max(1) as u32)];
-        let pool = unsafe { self.device.create_descriptor_pool(&vk::DescriptorPoolCreateInfo::default().max_sets(1).pool_sizes(&sizes), None) }.map_err(|e| format!("vkCreateDescriptorPool returned {e}"))?;
-        let sets = unsafe { self.device.allocate_descriptor_sets(&vk::DescriptorSetAllocateInfo::default().descriptor_pool(pool).set_layouts(&set_layouts)) }.map_err(|e| format!("vkAllocateDescriptorSets returned {e}"))?;
-        Ok(GpuProgram { pipeline, layout, set_layout, pool, set: sets[0], buffers, push_bytes })
+        let count = sets.clamp(1, AHEAD);
+        let sizes = [vk::DescriptorPoolSize::default().ty(vk::DescriptorType::STORAGE_BUFFER).descriptor_count((buffers.max(1) * count) as u32)];
+        let pool = unsafe { self.device.create_descriptor_pool(&vk::DescriptorPoolCreateInfo::default().max_sets(count as u32).pool_sizes(&sizes), None) }.map_err(|e| format!("vkCreateDescriptorPool returned {e}"))?;
+        let layouts = vec![set_layout; count];
+        let allocated = unsafe { self.device.allocate_descriptor_sets(&vk::DescriptorSetAllocateInfo::default().descriptor_pool(pool).set_layouts(&layouts)) }.map_err(|e| format!("vkAllocateDescriptorSets returned {e}"))?;
+        let mut sets = [vk::DescriptorSet::null(); AHEAD];
+        sets[..count].copy_from_slice(&allocated);
+        Ok(GpuProgram { pipeline, layout, set_layout, pool, sets, buffers, push_bytes })
     }
 
     pub fn destroy_program(&self, program: GpuProgram) {
@@ -369,13 +405,49 @@ impl GpuDevice {
         self.pending.pending.store(true, Release);
     }
 
+    /// `SubmitAhead`: records and submits into one of the `AHEAD` slots without waiting, once that slot's last submission has finished (Mars_Performance.md §42).
+    pub fn submit_ahead(&self, slot: usize, record: impl FnOnce(&mut Commands)) {
+        self.wait_ahead(slot);
+        let ahead = &self.ahead[slot];
+        self.record(ahead.commands, ahead.fence, record);
+        ahead.out.store(true, Relaxed);
+    }
+
+    /// Returns once the slot's last submission, if one is out, has finished; the device's thread's alone.
+    pub fn wait_ahead(&self, slot: usize) {
+        let ahead = &self.ahead[slot];
+        if ahead.out.load(Relaxed) {
+            unsafe {
+                self.device.wait_for_fences(&[ahead.fence], true, u64::MAX).expect("vkWaitForFences");
+                self.device.reset_fences(&[ahead.fence]).expect("vkResetFences");
+            }
+            ahead.out.store(false, Relaxed);
+        }
+    }
+
+    /// True once the submission has finished, or when it was never made or already waited for; the tests' look, which waits for nothing.
+    #[cfg(test)]
+    pub fn finished(&self, submission: Submission) -> bool {
+        let done = |fence| unsafe { self.device.get_fence_status(fence) }.unwrap_or(true);
+        match submission {
+            Submission::Now => true,
+            Submission::Pending => !self.pending.pending.load(Acquire) || done(self.pending.fence),
+            Submission::Ahead(slot) => !self.ahead[slot].out.load(Relaxed) || done(self.ahead[slot].fence),
+        }
+    }
+
     /// Every command already ends in a barrier that orders the submissions after it; this adds only the host's (Mars_Gpu.md §14).
     fn record(&self, buffer: vk::CommandBuffer, fence: vk::Fence, record: impl FnOnce(&mut Commands)) {
         unsafe {
             self.device.reset_command_buffer(buffer, vk::CommandBufferResetFlags::empty()).expect("vkResetCommandBuffer");
             self.device.begin_command_buffer(buffer, &vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)).expect("vkBeginCommandBuffer");
         }
-        let mut commands = Commands { device: &self.device, commands: buffer };
+        let submission = match self.ahead.iter().position(|a| a.commands == buffer) {
+            Some(slot) => Submission::Ahead(slot),
+            None if buffer == self.pending_commands => Submission::Pending,
+            None => Submission::Now,
+        };
+        let mut commands = Commands { device: &self.device, commands: buffer, submission };
         record(&mut commands);
         commands.barrier_to_host();
         unsafe {
@@ -393,6 +465,9 @@ impl Drop for GpuDevice {
             self.pending.gone.store(true, Release);
             self.device.destroy_fence(self.fence, None);
             self.device.destroy_fence(self.pending.fence, None);
+            for ahead in &self.ahead {
+                self.device.destroy_fence(ahead.fence, None);
+            }
             self.device.destroy_command_pool(self.pool, None);
             self.device.destroy_device(None);
             self.instance.destroy_instance(None);
@@ -404,9 +479,14 @@ impl Drop for GpuDevice {
 pub struct Commands<'a> {
     device: &'a ash::Device,
     commands: vk::CommandBuffer,
+    submission: Submission,
 }
 
 impl Commands<'_> {
+    pub fn submission(&self) -> Submission {
+        self.submission
+    }
+
     pub fn fill(&mut self, buffer: &GpuBuffer, word: u32) {
         unsafe { self.device.cmd_fill_buffer(self.commands, buffer.handle, 0, vk::WHOLE_SIZE, word) };
         self.barrier();
@@ -419,22 +499,27 @@ impl Commands<'_> {
         self.barrier();
     }
 
-    /// The descriptor set is written here, at record time, which is sound only because every record first waits for the pending submission.
     pub fn dispatch<T: Copy>(&mut self, program: &GpuProgram, buffers: &[&GpuBuffer], push: &T, x: u32, y: u32, z: u32) {
+        self.dispatch_in(program, 0, buffers, push, x, y, z);
+    }
+
+    /// The descriptor set is written here, at record time, which is sound only because the last submission to use that set has finished.
+    #[allow(clippy::too_many_arguments)]
+    pub fn dispatch_in<T: Copy>(&mut self, program: &GpuProgram, set: usize, buffers: &[&GpuBuffer], push: &T, x: u32, y: u32, z: u32) {
         assert!(buffers.len() == program.buffers, "the program binds {} buffers, not {}", program.buffers, buffers.len());
         assert!(size_of::<T>() == program.push_bytes, "the program takes {} bytes of push constants, not {}", program.push_bytes, size_of::<T>());
         let infos: Vec<[vk::DescriptorBufferInfo; 1]> = buffers.iter().map(|b| [vk::DescriptorBufferInfo::default().buffer(b.handle).offset(0).range(vk::WHOLE_SIZE)]).collect();
         let writes: Vec<vk::WriteDescriptorSet> = infos
             .iter()
             .enumerate()
-            .map(|(i, info)| vk::WriteDescriptorSet::default().dst_set(program.set).dst_binding(i as u32).descriptor_type(vk::DescriptorType::STORAGE_BUFFER).buffer_info(info))
+            .map(|(i, info)| vk::WriteDescriptorSet::default().dst_set(program.sets[set]).dst_binding(i as u32).descriptor_type(vk::DescriptorType::STORAGE_BUFFER).buffer_info(info))
             .collect();
         // SAFETY: the push value is plain data of the program's size, read as bytes.
         let bytes = unsafe { std::slice::from_raw_parts((push as *const T).cast::<u8>(), size_of::<T>()) };
         unsafe {
             self.device.update_descriptor_sets(&writes, &[]);
             self.device.cmd_bind_pipeline(self.commands, vk::PipelineBindPoint::COMPUTE, program.pipeline);
-            self.device.cmd_bind_descriptor_sets(self.commands, vk::PipelineBindPoint::COMPUTE, program.layout, 0, &[program.set], &[]);
+            self.device.cmd_bind_descriptor_sets(self.commands, vk::PipelineBindPoint::COMPUTE, program.layout, 0, &[program.sets[set]], &[]);
             if !bytes.is_empty() {
                 self.device.cmd_push_constants(self.commands, program.layout, vk::ShaderStageFlags::COMPUTE, 0, bytes);
             }

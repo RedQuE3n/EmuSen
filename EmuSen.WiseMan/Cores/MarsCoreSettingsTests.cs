@@ -19,6 +19,23 @@ namespace EmuSen.WiseMan.Cores
             Assert.Empty(CoreCatalog.SettingsFor("SNES"));
         }
 
+        // The Antialiasing row's note is the cores' own rule: silent exactly where the level chosen is the level drawn, and on MarsRT's row too - see Mars_Performance.md §42.5.
+        [Fact]
+        public void The_antialiasing_note_speaks_exactly_where_the_core_draws_less_than_was_chosen()
+        {
+            var core = new MarsCore();
+            foreach (string scale in new[] { "1", "2", "3", "4" })
+                foreach (string level in new[] { "Off", "2x", "3x", "4x" })
+                {
+                    ((ICoreSettings)core).Set("RenderScale", scale);
+                    ((ICoreSettings)core).Set("Antialiasing", level);
+                    string? note = MarsCore.AntialiasingNote(key => key == "RenderScale" ? scale : level);
+                    Assert.Equal(core.EffectiveAntialiasing < core.Antialiasing, note is not null);
+                    if (note is not null) Assert.StartsWith(core.EffectiveAntialiasing == 1 ? $"Off at {scale}x" : $"{core.EffectiveAntialiasing}x at {scale}x", note);
+                }
+            Assert.NotNull(EmuSen.Cores.Nintendo.MarsRT.MarsRtCore.VideoSettings.Single(s => s.Key == "Antialiasing").Note);
+        }
+
         [Fact]
         public void A_setting_set_is_the_setting_read_back_and_the_property_it_names()
         {

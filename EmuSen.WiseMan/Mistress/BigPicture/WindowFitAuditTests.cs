@@ -36,7 +36,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
         // The windows a player reaches in a game, and those reached from the themed library.
-        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "ShaderSettings", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
+        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "ShaderSettings", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
             "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ScreenshotLongTitle", "ResumeLongTitle", "ControllerBindingsLongNames"];
         public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "FindByName", "CoverPicker", "CoverPickerCovers", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
             "FindByNameLongTitle", "CoverPickerLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName"];
@@ -45,7 +45,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         internal static readonly Dictionary<string, Type> Opens = new()
         {
             ["ActiveCheats"] = typeof(ActiveCheatsWindow), ["ActiveCheatsGeneral"] = typeof(ActiveCheatsWindow), ["CheatDatabase"] = typeof(CheatDatabaseWindow),
-            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
+            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
             ["Screenshot"] = typeof(ScreenshotWindow), ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow), ["ControllerBindings"] = typeof(InputSettingsWindow),
             ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["FindByName"] = typeof(FindByNameWindow), ["CoverPicker"] = typeof(CoverPickerWindow),
             ["CoverPickerCovers"] = typeof(CoverPickerWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow), ["FolderEditor"] = typeof(FolderEditorWindow),
@@ -183,6 +183,25 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private static object Field(MainWindow w, string name) => typeof(MainWindow).GetField(name, Hidden)!.GetValue(w)!;
 
+        // The N64 tab at 3x resolution with 3x antialiasing, where the Antialiasing row carries its note (Mars_Performance.md §42.5).
+        internal static void ShowN64WithNote(MainWindow window)
+        {
+            var graphics = (GraphicsConfig)typeof(MainWindow).GetField("_graphics", Hidden)!.GetValue(window)!;
+            graphics.SetValue("N64", "RenderScale", "3");
+            graphics.SetValue("N64", "Antialiasing", "3x");
+            Call(window, "ShowGraphicsSettings");
+            Settle(window);
+            var tabs = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<EmuSen.LunaP.Controls.Tabs>().First(t => t.Name == "ConsoleTabs");
+            tabs.SelectedIndex = EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToList().IndexOf("N64");
+            Settle(window);
+            HintText note = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<HintText>().Single(t => t.Name == "N64.Antialiasing.Note");
+            Assert.True(note.IsEffectivelyVisible, "the note is not shown");
+            ScrollViewer scroll = note.FindAncestorOfType<ScrollViewer>()!;
+            Point at = note.TranslatePoint(default, (Visual)scroll.Content!) ?? default;
+            scroll.Offset = new Vector(0, Math.Max(0, at.Y + note.Bounds.Height - scroll.Viewport.Height * 0.8));
+            Settle(window);
+        }
+
         private void OpenInGame(MainWindow window, PadDriver pad, string which)
         {
             var cheats = (CheatRegistry)Field(window, "_cheats");
@@ -204,6 +223,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     break;
                 case "GraphicsSettings":
                     Call(window, "ShowGraphicsSettings");
+                    break;
+                case "GraphicsSettingsN64Note":
+                    ShowN64WithNote(window);
                     break;
                 case "ControllerBindings":
                     Call(window, "ShowControllerBindings");

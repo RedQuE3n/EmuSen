@@ -10558,7 +10558,8 @@ tools), none failed, in 5 min 31 s.** LunaP's whole suite: 1,521, all passed.
   are free. **Built** (§43.11): 17.1 at both sizes.
 - **Q189, the floor's measure.** The audit measures words by font size, so a condensed face counts the same as a wide
   one. Barlow Condensed at 16 pixels has a smaller x-height than the desktop's face at 16. Keep font size, or measure
-  the drawn capitals' height? **Open**, waiting on a decision; the audit still measures font size (§43.11).
+  the drawn capitals' height? **Open**, waiting on a decision; the audit still measures font size (§43.11). **Decided
+  and built** (§43.12): the drawn capitals.
 - **Q190, the audit's reach.** It audits the states the tests open. **Recommendation:** add long-name cases (a theme,
   a cheat, a parameter, a game) to `WindowFitAuditTests`, since those are where a cut would first appear. **Built**
   (§43.11), with a long binding name as well; five of the new states failed and were fixed.
@@ -10574,7 +10575,7 @@ tools), none failed, in 5 min 31 s.** LunaP's whole suite: 1,521, all passed.
 numbered from P290 and questions from Q192; P289 and Q191 were the highest in every tree on this machine when this was
 written.
 
-**Q189 is open.** It waits on a decision, and nothing here changes how the audit measures words: by font size.
+**Q189 is open.** It waits on a decision, and nothing here changes how the audit measures words: by font size. *Built on 2026-09-28 (§43.12).*
 
 #### The status line (Q191)
 
@@ -10767,9 +10768,188 @@ passing once the README's count was brought up to date.
 - **Q192, the pad walk's replay.** `PadAudit`'s breadth-first walk failed to find a slider the pad reaches in eight
   presses, under a sheet 7 pixels shorter. **Recommendation:** make its replay independent of the sheet's height, for
   example by recording the scroll offset each step leaves and checking it on replay, and run the two cases at several
-  heights.
+  heights. **Built** (§43.12): the walk replays from its start, and two faults the heights found in the window are
+  fixed.
 - **Q193, a larger margin.** Every drawing stops at 17.1, one design pixel over the floor, by its caps. **Recommendation:**
   keep them unless the pictures on a handheld say the labels are small; the measured cost of raising them is above.
 - A cheat list of a hundred rows, a title too long for two lines, and a big-screen message long enough to take a
   quarter of the screen are not opened.
 - Nothing ran on hardware.
+
+### 43.12 Q189 and Q192 built: words measured by their capitals, and the pad walk at any height (2026-09-28)
+
+*Built on branch `audit-followups` from WiseMan `7b7bda3b`, with LunaP's `audit-followups` from `openemu-library` at
+`7ccc205`.* The player's account is the settings reference §4.83.7; LunaP's is its §97.9. Predictions are numbered
+from P295 and questions from Q194; P294 and Q193 were the highest in every tree on this machine when this was written.
+
+#### Q189: the floor measures drawn capitals
+
+`FitAudit` measures how tall a face draws its capitals, from the outline of an *H* drawn at a thousand pixels, since
+this Avalonia's glyph metrics report no ink height (every glyph measured came back 0 high). Words are measured in the
+face they were drawn in, after any fallback, and a controller drawing's labels in the drawing's own face.
+
+**The calibration.** The floor stays defined by the desktop's face at 16 design pixels; Inter's capitals are 0.7273 of
+its size, so the floor is 11.64 design pixels of capitals, and the slack of 0.05 of a pixel becomes 0.036 of capitals.
+Inter at 16 passes and at 15.9 fails, as it did by size. The measured shares, beside the fonts' own `OS/2` cap heights
+where those were read:
+
+| Face | Measured | `OS/2` | Size at the floor |
+|---|---|---|---|
+| Inter | 0.72729 | not read | 16.00 |
+| Barlow Condensed | 0.69995 | 0.700 | 16.63 (16.57 with the slack) |
+| Noto Sans, the headless tests' default | 0.71411 | 0.714 | 16.30 |
+
+**What failed: nothing.** Every state the audit opens passed at both sizes (the settings reference has each window's
+shortest capitals). No window needed changing, and no size grew. The nearest is the Nintendo 64 drawing with long key
+names, 16.62 pixels, 11.63 of capitals: a hundredth under the exact floor, inside the slack. By size it had kept 0.6
+over. Mutant A5, the floor without its slack, fails it at both sizes, which is the measurement's proof that it sits
+there. Q195 asks.
+
+#### Q192: the pad walk, and what it found in the window
+
+**The failure, reproduced.** The status bar is made taller in the tests (`TallerBar`), so the sheet above it is
+shorter by as many pixels. The first big-screen status line was rebuilt as §43.11 describes it, its words at their
+natural line and the bar's old padding: at 1280 × 800 it made the bar 8 pixels taller, not 7. The shaders case failed at
+that height, and both cases at +7, with §43.11's *No pad path to the control asked for*.
+
+**Straight walks, to tell the harness from the window.** A walk that presses Down one press at a time from the first
+slider of *CRT (Lottes)*, with no search, was run beside the audited walk at every height from 0 to 16 pixels shorter.
+It separated the two: where the straight walk passed and the audited one failed, the harness was at fault; where both
+failed, the window was. Four causes, in the order found:
+
+1. **The found path pressed from the wrong state (harness).** `TryReach` pressed the path the walk found without
+   putting back the scrolling and lists that every replay inside the walk puts back, so it started from wherever the
+   last replay had left the sheet. The walk now ends with that replay itself. This is §43.11's failure: at +8 the
+   straight walk reached *Mask dark* on the eighth press from the first slider, and the audited walk, after this fix,
+   did too.
+2. **A preset's rows not there yet (harness).** A replay that passed over other presets left the parameter list empty
+   for the shader list's 120 ms settle while the walk refocused its starting slider. The walk now waits for its start's
+   rows before putting the scroll back, and a start it cannot focus fails the replay.
+3. **`ScrollIntoView` on a built row (harness).** Refocusing a slider always asked the list to bring it into view. With
+   that, the list was later found with no row built and its extent its own height, and the shaders case failed at
+   every height from 10 to 16. The call is now made only for a row that is not built.
+4. **Rows below the view not built (window).** The straight walk itself stopped at every height from 0 to 7, before the
+   fifth slider or the eighth. Avalonia's `VirtualizingStackPanel` rebuilds its half-view buffer only when the view
+   leaves the range last built for, and a view brought flush under the focused row can end exactly on that range's edge
+   (read in its source; the rows built bear it out, as LunaP §97.9 records). The pad router now, when it finds nothing
+   inside a scrolling area that can scroll further that way, scrolls the area a page and back and searches again. At +3
+   the list could also be left arranged at its own height, not scrolling at all; LunaP's `SliderList` arranges it again.
+
+Two things were ruled out on the way: the XY-focus manifolds Avalonia keeps between moves were read at every replay
+and were always reset, and a wait for every shader panel to settle at each replay, instead of for the start's rows
+alone, broke the long preset's case on the Nintendo 64, NES and Game Boy tabs and was taken out.
+
+**Each fix alone.** Switching one fix off at a time over the two cases at 18 heights (0 to 16 and the rebuilt status
+line; 36 cases):
+
+| Switched off | Failed |
+|---|---|
+| none | 0 |
+| (1) the replay from the start | 14 |
+| (2) the wait for the start's rows | 18 |
+| (3) `ScrollIntoView` only when needed | 7 |
+| (2b) a failed refocus failing the replay | 0 |
+| (4) the page's nudge in the router | 16 |
+| (4b) `SliderList`'s arranging again | 0; the straight walk at +3 fails without it |
+
+**Before and after.** The cases kept: the two at seven heights (0, 3, 5, 7, 8, 10 and 13) and the straight walk at
+seventeen. On the unmodified trees, **19 of 31 failed**; with every fix, all 31 pass, with the rest of
+`PadSettingsWindowTests` (51 cases in all).
+
+**Found on the way: a preset row focused but not chosen.** With the walk honest about its start, the parameter search
+case reached the *huge* row sideways from the search box, and the list still showed the preset before it. The case
+steps off the row and back. The list choosing every row that takes the focus (Q178's `SelectOnFocus`) was tried for
+Shaders; it left the focus on nothing after *Use This Shader* and failed the two cases at every height, and was taken
+out. Q194 asks.
+
+#### Tests
+
+- **`FitAuditTests`**: 14 cases, three new: the floor is Inter's measured capitals; a condensed face must reach them
+  (Barlow Condensed fails at 16 and 16.5, passes at 16.6; Inter passes at 16, fails at 15.9); and a Nintendo 64
+  drawing in Barlow Condensed, its labels between 16.1 and 16.45 pixels, fails, which it would pass measured in Inter.
+  The third was added after mutant A4 survived.
+- **`PadSettingsWindowTests`**: the shaders and long-preset cases at seven heights, and
+  `Down_from_a_preset_s_first_slider_reaches_every_slider_at_any_sheet_height` at seventeen.
+- **`WindowFitAuditTests`** writes each window's shortest capitals (`EMUSEN_WINDOW_FIT_CAPS=<file>`), and each drawing's
+  capitals beside its size.
+
+#### Predictions and mutants
+
+The predictions were written to `~/.cache/emusen/probe/audit-followups/predictions.txt` before the first run.
+
+| # | Predicted | Found | Verdict |
+|---|---|---|---|
+| P295 | A1 (every face measured as the desktop's) is caught by the condensed-face case | caught by it and by the calibration case | **right** |
+| P296 | A3 (a text block's face taken from its typeface, not its drawn run) survives: no audited words fall back | survived | **right** |
+| P297 | A4 (a drawing's labels measured in the desktop face) survives: no case holds a drawing's labels between the two floors | survived | **right**; a case was added, and catches it |
+| P298 | G4 (a failed refocus of the start not a failed replay) survives, as when switched off alone | survived | **right** |
+| P299 | R3 (the page's nudge not undone) survives: the cases check where the focus goes, not how far the view moves | survived | **right**; the straight walk now holds the view to a row a press, and catches it |
+| P300 | Of 15 mutants, 11 are caught on the first run and 4 survive (A3, A4, G4, R3) | 11 caught, the same 4 survived | **right** |
+
+Fifteen mutants, one at a time, by `~/.cache/emusen/probe/audit-followups/mutate_audit.py`, with §41.7's protocol: a
+state file before each mutant, a leftover restored and rebuilt at the start, every restored file touched, and the tree
+rebuilt at the end. Each names the tests that should catch it. **Eleven were caught on the first run and four
+survived; after two cases were strengthened, thirteen are caught and two survive.**
+
+| # | Rule broken | First run | After |
+|---|---|---|---|
+| A1 | every face measured as the desktop's | caught (2) | — |
+| A2 | the floor calibrated to the condensed face | caught (2) | — |
+| A3 | a text block's face taken from its typeface, not its drawn run | **survived** | survives; see below |
+| A4 | a drawing's labels measured in the desktop face | **survived** | caught by `A_drawing_s_condensed_labels_are_held_to_the_desktop_face_s_capitals` |
+| A5 | the floor without its slack | caught (4), among them the Nintendo 64 with long names at both sizes | — |
+| A6 | words measured by size again | caught (1) | — |
+| G1 | the found path pressed from the state the last replay left (§43.11's harness) | caught (5) | — |
+| G2 | the start's rows not waited for | caught (7) | — |
+| G3 | a built row asked into view again | caught (2), the shaders case at 10 and 13 | — |
+| G4 | a failed refocus of the start not a failed replay | **survived** | survives; see below |
+| R1 | no row built past the view's edge | caught (15) | — |
+| R2 | the router's nudge a pixel, not a page | caught (12) | — |
+| R3 | the page's nudge not undone | **survived** | caught (8), once the straight walk held the view to a row a press |
+| L1 | a list left arranged at its own height (LunaP) | caught (1), the straight walk at 3 pixels shorter | — |
+| S1 | a preset focused sideways taken as chosen | caught (1), the search case | — |
+
+**A3 and G4 survive, and are recorded rather than excused.** A3 needs words drawn in a face other than the one they
+asked for; no audited window has any, and a case would depend on which fallback faces the machine has installed.
+G4 guards a replay from pressing on after its start could not be focused; switched off alone over the 36 cases of the
+toggle table it changed nothing, and it stays because pressing on from the wrong control can end on the right one by
+chance and record a path that does not replay.
+
+#### Pictures
+
+In `~/.cache/emusen/bigpicture/png/audit-followups/`, as the audit saw each state at 1280 × 800 and 1920 × 1200:
+
+- `before/`, with LunaP's `SliderList` as it was (the only change here that draws anything);
+- `after/`, from the final build.
+
+Only one window changed, Shaders, and only in its list's arranging, so the pictures are its three states: a built-in
+filter, the 944-parameter preset with its sliders, and the preset with long parameter names; twelve in all. Q189 changed
+no window. Every picture was looked at. Before and after are the same picture in every state; the only difference, in
+four of the six pairs, is the test's temporary folder named in the footer, which is a new name each run. The list's
+fault shows only under a sheet 3 pixels shorter, which is not an audited size; the straight walk is its evidence.
+
+No trial renders were made.
+
+#### The narrow run and the broad run
+
+**The narrow run**, the blast radius, covered every user of `PadAudit` (the pad's settings sheets, cheats, rewind, the
+themed library's sheets and switches, scraping, covers, the bindings and the shader browser), the audit with its
+self-tests, and the router, under `nice -n 10` and without benches, GPU or Vulkan cases: **412 tests, 411 passed, 1
+skipped, none failed, in 4 min 25 s.** The first narrow run, before Q194's step, failed one: the parameter search case,
+as above. LunaP's whole suite: 1,533 tests, all passing.
+
+**The broad run** was one run of the Mistress filter and the audit's self-tests, without `ShaderSettingsWindowTests`,
+the shader browser, the benches or any GPU, Vulkan or slang case, under `nice -n 10`, on the final build. WiseMan
+`7b7bda3b` and LunaP `openemu-library` `7ccc205` were merged in (both already contained, since neither had moved):
+**1,625 tests, 1,575 passed, 50 skipped (the picture, survey and live tools), none failed, in 7 min 11 s.**
+
+#### Open questions
+
+- **Q194, a preset row focused sideways.** Reached sideways from the search box, a shader preset's row takes the focus
+  and not the choice, so the sliders beside it are another preset's. **Recommendation:** have the shader list choose
+  only a row the pad enters it on from outside, and look again at why choosing every focused row lost the focus after
+  *Use This Shader*, before choosing every row as the other five lists do.
+- **Q195, the Nintendo 64 with long names at the floor.** Its labels are 16.62 pixels, a hundredth of a pixel of
+  capitals under the exact floor, bound by the width of its top row of six. **Recommendation:** leave it while the
+  slack holds; if a longer binding is ever audited, let the top row split into two staggered rows as a tall column
+  does (§43.11, Q188), not raise the cap Q193 keeps.

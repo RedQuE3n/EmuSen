@@ -6122,7 +6122,8 @@ opacity, and anything clipped away entirely. It reports:
   an area, or at a side of one that scrolls only sideways (Q186);
 - **cut with an ellipsis**, **runs past its box** and **cut at the foot**, for words;
 - **too small to read**: words under `FitAudit.SmallestText`, 16 design pixels (a screen pixel at 1280×800, four
-  fifths of the look's small text), and a controller drawing's label lines by the size the drawing reports;
+  fifths of the look's small text), and a controller drawing's label lines by the size the drawing reports. *Since
+  2026-09-28 by the height of their drawn capitals, held to what Inter draws at 16 (§4.83.7).*
 - **title cut** and **footer cut**, from the panel.
 
 The slack is a pixel, or a pixel and a half at a menu's scale above one, where layout rounds in the scaled content's own
@@ -6197,7 +6198,8 @@ With the fade switched off, the audit reports the reel at both sizes.
 - **Only the states the tests open.** A window in a state no case puts it in is not audited. Examples are a theme with
   a very long name, a cheat list of a hundred rows, or a shader preset whose parameter names are long.
 - **Only geometry.** The audit does not judge contrast, colour or whether a layout reads well; the pictures are for
-  that. It measures words by their font size, so a condensed face and a wide one of the same size count the same.
+  that. It measures words by their font size, so a condensed face and a wide one of the same size count the same. *It
+  measures their capitals since 2026-09-28 (§4.83.7).*
 - **Words it cannot see.** It sees `TextBlock`s, the panel's title and footer through the panel's own reports, and a
   controller drawing's labels through `LabelTextSize`. Other words a control draws itself are not measured. That includes
   the help bar and the words printed on a drawn controller (*START*, *Z*), which stay at the drawing's scale.
@@ -6213,7 +6215,7 @@ hundred rows is still not.
 
 Three of the plan's open questions (§43.10 there) were built, and the audit was widened to hold them. The fourth, Q189,
 whether words should be measured by their drawn capitals rather than their font size, waits on a decision; the audit
-still measures font size.
+still measures font size. *Built on 2026-09-28 (§4.83.7).*
 
 **The status line (Q191).** While a game ran unpaused, the line along the window's foot carried the performance
 counters: the frame rate, the frame's cost, every phase, the presentation's numbers and the time outside the frame,
@@ -6310,3 +6312,109 @@ under `~/.cache/emusen/probe/window-look/trials/`.
 which the audit would report; the Nintendo 64 with long names in its top row, whose labels keep 0.6 of a pixel over the
 floor; a status message in a big-screen session long enough to take a quarter of the screen. The pad walk's sensitivity
 to a sheet's height is in the harness, not in any window, and is not fixed.
+
+*Two sentences above were answered on 2026-09-28 (§4.83.7):* the pad walk's sensitivity to a sheet's height was in the
+harness and, it turned out, in the window as well, and both are fixed; the Nintendo 64 with long names keeps no margin
+once words are measured by their capitals.
+
+#### 4.83.7 Words measured by their capitals, and the pad walk at any height (2026-09-28)
+
+Two decisions of 2026-09-27 (`EmuSen_BigPicture.md` §10.1, Q189 and Q192) are built here. The plan's record, with
+its predictions, mutants and pictures, is its §43.12; LunaP's side is its §97.9.
+
+**The floor is the height of the drawn capitals (Q189).** Until now the audit held words to a font size of 16 design
+pixels. A condensed face at 16 pixels draws smaller letters than a wide one, so the size let the look's face through
+where the eye would not. The audit now measures how tall each face draws its capitals, from the outline of its *H*
+drawn at a thousand pixels, and holds words to the capitals the desktop's face, Inter, draws at 16 pixels.
+
+| Face | Capitals as a share of the size | Cross-check: the font file's `OS/2` cap height | At 16 px | Size that reaches the floor |
+|---|---|---|---|---|
+| Inter (the desktop's) | 0.7273 | not read | 11.64 | 16.0 |
+| Barlow Condensed (the look's) | 0.6999 | 700 of 1,000 | 11.20 | 16.63, or 16.57 with the audit's slack |
+| Noto Sans (the headless tests' default face) | 0.7141 | 714 of 1,000 | 11.43 | 16.30 |
+
+- **The calibration.** `FitAudit.DesktopCaps` is 0.7273, Inter's measured share. The floor is 16 × 0.7273 = **11.64
+  design pixels of capitals**. The audit's slack, 0.05 of a pixel of the desktop face, becomes 0.036 of a pixel of
+  capitals, so Inter at 16 passes and at 15.9 fails exactly as it did by size. A test holds the constant to Inter's
+  measured *H*. This Avalonia reports no ink height for a single glyph (every glyph's metrics came back 0 high), which is
+  why the outline is drawn.
+- **What the words are measured in.** A text block's face is the one its words were drawn in, after any fallback; a
+  controller drawing's labels are measured in the drawing's own face.
+- **Not the desktop face everywhere in the tests.** The headless tests do not load Inter, so a desktop window's words
+  in a test are drawn in Noto Sans. Framed sheets draw theirs in Barlow Condensed and are measured in it. The status
+  line on the desktop is still held to no floor (§4.83.6).
+
+**What it found: no window fails.** Every state the audit opens, at 1280 × 800 and 1920 × 1200, passes with the floor
+measured this way. The shortest capitals in each (the record, with `EMUSEN_WINDOW_FIT_CAPS=<file>`):
+
+| Window state | Shortest words | Size | Capitals | Over the floor's 11.64 |
+|---|---|---|---|---|
+| Controller Bindings, Nintendo 64 with long key names | the drawing's labels | 16.62 | 11.63 | −0.01, inside the slack |
+| Controller Bindings, every other drawing and console | the drawing's labels | 17.10 | 11.97 | +0.33 |
+| Shaders, all three states | the preset's path, `MonoText` | 18 | 12.85 | +1.21 |
+| Active Cheats, Graphics, Resume, the gamelist filter, scraping, a theme's detail and About, the bindings' General tab | the hint lines | 20 | 14.00 | +2.36 |
+| Find by Name, Use Another Game's Cover, the folder editor | a game's or folder's name | 20 | 14.00 | +2.36 |
+| the Cheat Database, the rewind reel, the theme browser | a field's or a list's words | 24 | 16.80 | +5.16 |
+
+So nothing had to grow and no layout changed for Q189. The one state at the floor is the Nintendo 64 drawing with the
+long names the audit gives its A and Start keys. Measured by size it kept 0.6 of a pixel over the floor; by its
+capitals it is a hundredth of a pixel under the exact floor, and passes only by the slack. Its labels are bound by the
+width of its top row of six, not by the drawing's cap of 17.1 (Q193 keeps the cap), and the plan's Q195 asks whether to
+rework that row.
+
+The drawings' own margin check (§4.83.6) still asks the labels, with the bindings a console starts with, to stand at
+17.0 pixels or more. That is the layout reaching the drawing's cap, stated in size; the floor itself is capitals, and
+the record now writes both.
+
+**The pad walk at any height (Q192).** Two cases of `PadSettingsWindowTests` had failed when the big-screen status bar
+grew by 7 pixels (§4.83.6). They now run with the sheet made shorter by 0, 3, 5, 7, 8, 10 and 13 pixels (the status bar
+given that much more height), and a new case presses Down, one press at a time and with no search, from the first
+slider of *CRT (Lottes)* to its last, at every height from 0 to 16. On the unmodified code, 19 of those 31 cases
+failed. Four causes were found, two in the harness and two in the window:
+
+- **The harness pressed the path it found from the wrong state.** `PadAudit`'s walk explores by replaying each path
+  from the state it began in, with lists and scrolling put back. Having found the control, it then pressed the path
+  once more without putting them back, from wherever its last replay had left the sheet. Under a sheet a few pixels
+  shorter, the parameter list was still scrolled a page down from that last replay, so Down from the search box entered
+  it half way and the path ended on another slider. The walk now ends by replaying the path from the state it began
+  in, as every other replay does. This was the failure §4.83.6 met.
+- **The harness refocused rows that were not there yet.** When a replay passed over other presets, the shader list's
+  settle (120 ms) left the parameter list empty while the walk tried to put the focus back on its starting slider. The
+  walk now waits, up to two seconds, for the rows its start is among before putting the scroll back, and a replay whose
+  start cannot be focused counts as failed rather than pressing on from wherever the focus is.
+- **The harness asked a built row into view.** Putting the focus back on a slider called the list's `ScrollIntoView`
+  every time. With that call made every time, the parameter list was later found with no row built, and the shaders
+  case failed at every height from 10 to 16 pixels shorter. It is now asked only for a row that is not built.
+- **The window: a pad could not pass a row at eight heights.** The straight walk stopped, and pressing Down did nothing,
+  at every height from 0 to 7 pixels shorter: before the fifth slider from 3 to 7, before the eighth from 0 to 2. The
+  list builds rows half a view past each edge, but rebuilds them only once its view leaves the range it last built for;
+  a view brought flush under the focused row could end exactly on that range's edge, with the next row unbuilt, and the
+  pad's search found nothing below. The pad router now, finding nothing inside a scrolling area that could scroll on
+  that way, scrolls it a page and back, which makes the list build the rows around the view, and searches again; when
+  that finds nothing, the view is exactly where it was. At 3 pixels shorter the list could also be left with its view
+  arranged at its own height, so it did not scroll at all, not by pad and not by wheel; LunaP's `SliderList` now
+  arranges it again (LunaP §97.9).
+
+With all four, the 31 cases pass, and so does the rest of `PadSettingsWindowTests`. The first big-screen status line
+was reconstructed for this (its words' natural line and the bar's old padding): at 1280 × 800 it makes the bar 8
+pixels taller, not 7; both heights are among the cases.
+
+**A behaviour of Shaders, recorded, not changed.** With the walk replaying from its true start, the parameter search
+case reached its preset's row sideways from the search box. The row took the focus but not the choice: the list still
+showed the previous preset's sliders. The case now steps off the row and back, as a player would. Making the list
+choose any row that takes the focus, as Q178 and §4.83.6 did for five other lists, was tried: it lost the focus after *Use This
+Shader* in the shaders case, failed both cases at every height, and was taken out. The plan's Q194 asks.
+
+**Tests.**
+
+- `FitAuditTests`: three new cases: the floor is Inter's measured capitals at 16 pixels; Barlow Condensed fails at 16
+  and 16.5 pixels and passes at 16.6 while Inter passes at 16 and fails at 15.9; and a drawing whose labels are set in
+  Barlow Condensed between the two floors fails. The small-words case now gives its passing words Inter, the face the
+  floor is set by.
+- `PadSettingsWindowTests`: the two cases at seven heights each, and the straight walk at seventeen, which also holds
+  the view to at most a row's movement a press.
+- **Mutants**: `EmuSen_BigPicture.md` §43.12.
+
+**Not covered.** Words the audit cannot see (§4.83.5) are still not measured, by size or by capitals: the panel's
+footer and help bar and the words printed on a drawing. The heights are the sheet made shorter by the status bar, at
+1280 × 800 only.

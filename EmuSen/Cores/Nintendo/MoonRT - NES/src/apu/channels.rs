@@ -64,6 +64,7 @@ impl Envelope {
 }
 
 impl State for Envelope {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.bool("ConstantVolume", self.constant_volume);
         w.bool("Loop", self.r#loop);
@@ -175,6 +176,7 @@ impl PulseChannel {
 }
 
 impl State for PulseChannel {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.i32("Duty", self.duty);
         w.class("Envelope", &self.envelope);
@@ -272,6 +274,7 @@ impl TriangleChannel {
 }
 
 impl State for TriangleChannel {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.bool("ControlFlag", self.control_flag);
         w.i32("LengthCounter", self.length_counter);
@@ -350,6 +353,7 @@ impl NoiseChannel {
 }
 
 impl State for NoiseChannel {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.class("Envelope", &self.envelope);
         w.i32("LengthCounter", self.length_counter);
@@ -494,6 +498,7 @@ impl DmcChannel {
 }
 
 impl State for DmcChannel {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.bool("IrqEnabled", self.irq_enabled);
         w.bool("IrqPending", self.irq_pending);

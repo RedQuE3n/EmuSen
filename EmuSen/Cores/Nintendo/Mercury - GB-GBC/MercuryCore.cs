@@ -18,17 +18,17 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public const int CyclesPerFrame = 70224;
 
         // "MERC" little-endian, then the format version - see EmuSen_Save_States.md §3.
-        private const uint StateMagic = 0x4352454D;
+        public const uint StateMagic = 0x4352454D;
 
         // 2 PPU, 3 colour banks and HDMA, 4 APU, 5 serial, 6 no save path or cartridge copies, 7 the console - see EmuSen_Save_States.md §7.
-        private const int StateVersion = 7;
+        public const int StateVersion = 7;
 
         // Version 6 dropped the save path and the cartridge copies; version 7 names the console before the walks - see Mercury_Model.md §5.
         private const int RetiredCartCopies = 6;
         private const int ConsoleInHeader = 7;
 
         // The oldest version LoadState still reads, its retired fields walked and dropped - see Mercury_Native.md §9.3.
-        private const int OldestReadableVersion = 5;
+        public const int OldestReadableVersion = 5;
         int global::EmuSen.Cores.IStateFormat.StateVersion => StateVersion;
 
         private const int SaveEveryNFrames = 300;

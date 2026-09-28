@@ -9,6 +9,7 @@ mod fpu;
 mod games;
 mod gpu;
 mod multiple;
+mod pgo_digest;
 mod rom;
 mod rom_patches;
 mod rsp;

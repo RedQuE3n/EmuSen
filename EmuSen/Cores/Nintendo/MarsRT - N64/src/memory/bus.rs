@@ -184,6 +184,7 @@ impl MemoryBus {
 }
 
 impl State for MemoryBus {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.class("Ai", &self.ai);
         w.i64("Cycles", self.cycles);

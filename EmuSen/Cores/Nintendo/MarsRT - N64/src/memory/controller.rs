@@ -13,6 +13,7 @@ pub struct Controller {
 }
 
 impl State for Controller {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.u16("Buttons", self.buttons);
         w.bool("Present", self.present);
@@ -45,6 +46,7 @@ impl Default for ControllerPak {
 }
 
 impl State for ControllerPak {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.bytes("Data", &self.data[..]);
         w.bool("Dirty", self.dirty);

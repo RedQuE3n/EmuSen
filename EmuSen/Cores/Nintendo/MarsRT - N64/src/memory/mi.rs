@@ -15,6 +15,7 @@ pub struct MiInterface {
 }
 
 impl State for MiInterface {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.bool("Ebus", self.ebus);
         w.i32("Mask", self.mask);

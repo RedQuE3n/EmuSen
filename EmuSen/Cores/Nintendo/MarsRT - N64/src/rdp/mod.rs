@@ -114,6 +114,7 @@ pub struct Color {
 }
 
 impl State for Color {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.i32("A", self.a);
         w.i32("B", self.b);
@@ -152,6 +153,7 @@ pub struct TextureTile {
 }
 
 impl State for TextureTile {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.bool("ClampS", self.clamp_s);
         w.bool("ClampT", self.clamp_t);
@@ -367,6 +369,7 @@ impl Default for Rdp {
 }
 
 impl State for Rdp {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.bytes("<TextureMemory>k__BackingField", &self.texture_memory[..]);
         w.i32s("_attributeDe", &self.attribute_de[..]);

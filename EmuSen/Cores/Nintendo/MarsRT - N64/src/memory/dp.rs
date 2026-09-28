@@ -193,6 +193,7 @@ impl std::fmt::Debug for DpInterface {
 }
 
 impl State for DpInterface {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.class("Processor", &*self.processor);
         w.u32("_current", self.current);
@@ -236,7 +237,8 @@ impl DpInterface {
         }
         self.pending = vec![0; count as usize];
         r.u64s(&mut self.pending)?;
-        r.skip((SNAPSHOT_WORDS - count as usize) * 8)
+        r.skip((SNAPSHOT_WORDS - count as usize) * 8)?;
+        Ok(())
     }
 
     /// The words a snapshot carries: a load's words not yet replayed, then the ring's words not yet run.

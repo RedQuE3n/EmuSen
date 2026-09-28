@@ -269,6 +269,23 @@ impl Machine {
     }
 }
 
+
+impl emusen_native::ffi::StateMachine for Machine {
+    type Error = StateError;
+    fn load_state(&mut self, data: &[u8]) -> StateResult {
+        Machine::load_state(self, data)
+    }
+    fn state_size(&self) -> usize {
+        Machine::state_size(self)
+    }
+    fn save_state(&self, out: &mut [u8]) -> StateResult<usize> {
+        Machine::save_state(self, out)
+    }
+    fn layout(&self) -> String {
+        Machine::layout(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

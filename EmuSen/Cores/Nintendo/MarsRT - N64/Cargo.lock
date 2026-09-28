@@ -221,6 +221,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16e5ba65f5a4d86ffe4a65fc8f263935b1cd8710922e3ad690bff83e72a20100"
 
 [[package]]
+name = "emusen-native"
+version = "0.1.0"
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -328,6 +332,7 @@ dependencies = [
  "cranelift-jit",
  "cranelift-module",
  "cranelift-native",
+ "emusen-native",
 ]
 
 [[package]]

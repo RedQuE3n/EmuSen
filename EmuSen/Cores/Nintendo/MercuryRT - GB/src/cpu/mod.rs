@@ -236,6 +236,7 @@ fn lowest_set_bit(value: u8) -> i32 {
 }
 
 impl State for Cpu {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.i64("<Cycles>k__BackingField", self.cycles);
         w.u16("<LastInstructionPC>k__BackingField", self.last_instruction_pc);

@@ -10,6 +10,7 @@ name = "marsrt"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+emusen-native = { path = "../../Shared/emusen-native" }
 # The device path's Vulkan bindings, the loader found at run time; MIT OR Apache-2.0, and libloading ISC, both compatible with the GPL-3.0. See Mars_Native.md §6.4.
 ash = "0.38"
 # The recompiler's code generator; Apache-2.0 WITH LLVM-exception, compatible with the GPL-3.0. See Mars_Native.md §5.8.

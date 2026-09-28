@@ -10,6 +10,7 @@ name = "moonrt"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+emusen-native = { path = "../../Shared/emusen-native" }
 
 [profile.release]
 panic = "abort"

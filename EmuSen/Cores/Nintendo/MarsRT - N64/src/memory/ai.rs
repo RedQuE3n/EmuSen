@@ -30,6 +30,7 @@ pub struct AiInterface {
 }
 
 impl State for AiInterface {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.i64("<SamplesPlayed>k__BackingField", self.samples_played);
         w.u32("_address", self.address);

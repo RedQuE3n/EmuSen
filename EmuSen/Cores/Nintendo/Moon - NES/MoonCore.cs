@@ -25,9 +25,9 @@ namespace EmuSen.Cores.Nintendo.Moon
         private const int SaveEveryNFrames = 300;
 
         // "MOON" little-endian, then the format version - see EmuSen_Save_States.md §3.
-        private const uint StateMagic = 0x4E4F4F4D;
+        public const uint StateMagic = 0x4E4F4F4D;
         // Bumped when the timeline folded into the core, replacing Crystal's span - see Moon_Core.md §5.
-        private const int StateVersion = 3;
+        public const int StateVersion = 3;
         int global::EmuSen.Cores.IStateFormat.StateVersion => StateVersion;
 
         public Cartridge? Cart { get; private set; }

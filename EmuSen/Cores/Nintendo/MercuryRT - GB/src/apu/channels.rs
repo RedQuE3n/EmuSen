@@ -303,6 +303,7 @@ impl NoiseChannel {
 }
 
 impl State for Envelope {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.bool("Finished", self.finished);
         w.bool("Increasing", self.increasing);
@@ -324,6 +325,7 @@ impl State for Envelope {
 }
 
 impl State for LengthCounter {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.i32("Counter", self.counter);
         w.bool("Enabled", self.enabled);
@@ -339,6 +341,7 @@ impl State for LengthCounter {
 }
 
 impl State for PulseChannel {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.bool("DacEnabled", self.dac_enabled);
         w.i32("Duty", self.duty);
@@ -378,6 +381,7 @@ impl State for PulseChannel {
 }
 
 impl State for WaveChannel {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.bool("DacEnabled", self.dac_enabled);
         w.bool("Enabled", self.enabled);
@@ -403,6 +407,7 @@ impl State for WaveChannel {
 }
 
 impl State for NoiseChannel {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.i32("ClockShift", self.clock_shift);
         w.bool("DacEnabled", self.dac_enabled);

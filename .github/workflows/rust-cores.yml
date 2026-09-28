@@ -8,6 +8,7 @@ on:
       - 'EmuSen/Cores/Nintendo/MarsRT - N64/**'
       - 'EmuSen/Cores/Nintendo/MercuryRT - GB/**'
       - 'EmuSen/Cores/Nintendo/MoonRT - NES/**'
+      - 'EmuSen/Cores/Shared/**'
       - 'EmuSen/Cores/RustCores.props'
       - 'EmuSen/Cores/RustCoresPublish.targets'
       - 'EmuSen/EmuSen.csproj'
@@ -18,6 +19,24 @@ on:
       - '.github/workflows/rust-cores.yml'
 
 jobs:
+  # The crates every core builds with (EmuSen/Cores/Shared/), tested on their own; no library of theirs ships.
+  shared:
+    name: Shared crates ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test
+        shell: bash
+        run: |
+          for crate in EmuSen/Cores/Shared/*/; do
+            (cd "$crate" && cargo test --release)
+          done
+
   library:
     name: ${{ matrix.crate.name }} ${{ matrix.platform.rid }}
     runs-on: ${{ matrix.platform.os }}

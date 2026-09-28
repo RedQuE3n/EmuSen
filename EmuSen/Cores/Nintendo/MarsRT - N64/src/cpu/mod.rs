@@ -116,6 +116,7 @@ pub struct Cpu {
 }
 
 impl State for Cpu {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.u64s("Cop0", &self.cop0[..]);
         w.u64("Cop2Latch", self.cop2_latch);

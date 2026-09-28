@@ -11,6 +11,7 @@ pub struct TlbEntry {
 }
 
 impl State for TlbEntry {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.u64("EntryHi", self.entry_hi);
         w.u64("EntryLo0", self.entry_lo0);
@@ -33,6 +34,7 @@ pub struct Tlb {
 }
 
 impl State for Tlb {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.structures("Entries", &self.entries);
     }

@@ -1,0 +1,24 @@
+# MarsRT's PGO training set, read by pgo/train.sh - see Mars_Native.md §6.17. Paths are relative to GAMES
+# (default ~/.cache/emusen/pgo/games), which holds copies: the library is only read. No ROM here is one of the four
+# measured (Super Mario 64, Ocarina of Time, GoldenEye 007, Donkey Kong 64). The copies were made from the library as:
+#   wr      Wave Race 64 (USA) (Rev A), and a state in a race (§26 of Mars_Performance.md, "waverace-ingame")
+#   bk      Banjo-Kazooie (Europe) (En,Fr,De), and its resume state
+#   kb      Kirby 64 - The Crystal Shards (Europe), and its resume state
+#   mm      Legend of Zelda, The - Majora's Mask (Europe) (En,Fr,De,Es) (Rev A), and its resume state
+#   rocket  Rocket - Robot on Wheels (USA), and its resume state
+#   pd      Perfect Dark (Europe) (En,Fr,De,Es,It)       dkr     Diddy Kong Racing (USA) (En,Fr) (Rev A)
+#   mk64    Mario Kart 64 (Europe) (Rev A)
+# A resume state is copied as it was on 2026-09-24; the library's own changes as it is played. The manifest records each file's SHA-256, so a run elsewhere can check it trained on the same.
+# Production's shape (four workers, deferred, the recompiler at tier 2) unless a setting says otherwise.
+train/wr.z64 train/wr.state 1200
+train/bk.z64 train/bk.state 1200
+train/kb.z64 train/kb.state 1200
+train/mm.z64 train/mm.state 1200
+train/rocket.z64 train/rocket.state 1200
+train/pd.z64 - 2400
+train/dkr.z64 - 1800
+train/mk64.z64 - 1800
+train/wr.z64 train/wr.state 300 ThreadedRdp=false
+train/mm.z64 train/mm.state 300 ThreadedRdp=false
+train/bk.z64 train/bk.state 600 rewind=1
+train/wr.z64 train/wr.state 600 RenderScale=2

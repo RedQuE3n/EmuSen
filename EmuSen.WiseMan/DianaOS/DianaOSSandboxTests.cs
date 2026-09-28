@@ -6,6 +6,7 @@ using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.Galaxia;
 
 namespace EmuSen.WiseMan.DianaOS
 {
@@ -190,6 +191,107 @@ namespace EmuSen.WiseMan.DianaOS
                 string expected = Path.Combine(temp, DianaOSSandbox.PublishedRootDirName);
 
                 Assert.Equal(expected, DianaOSSandbox.ComputeRootFor(temp));
+            }
+            finally { Directory.Delete(temp, true); }
+        }
+
+        // macOS: EmuSen.app keeps the player's tree in Application Support, never inside itself - see EmuSen_Galaxia.md §3.4.
+        private static string Bundle(string under) => Directory.CreateDirectory(Path.Combine(under, "Applications", "EmuSen.app", "Contents", "MacOS")).FullName;
+
+        private static string AppSupport(string home) => Path.Combine(home, "Library", "Application Support", "EmuSen");
+
+        [Fact]
+        public void An_app_bundle_on_macOS_roots_in_Application_Support()
+        {
+            string temp = NewTempDir();
+            try
+            {
+                string home = Path.Combine(temp, "Users", "player");
+
+                Assert.Equal(AppSupport(home), ConfigRoot.ComputeFor(Bundle(temp), macOS: true, home));
+                Assert.Equal(AppSupport(home), ConfigRoot.ComputeFor(Bundle(temp) + Path.DirectorySeparatorChar, macOS: true, home));
+            }
+            finally { Directory.Delete(temp, true); }
+        }
+
+        // A bundle published into a checkout's out/ must not climb to EmuSen.sln and write into the bundle's surroundings.
+        [Fact]
+        public void An_app_bundle_inside_a_checkout_still_roots_in_Application_Support()
+        {
+            string temp = NewTempDir();
+            try
+            {
+                File.WriteAllText(Path.Combine(temp, "EmuSen.sln"), "");
+                File.WriteAllText(Path.Combine(temp, DianaOSSandbox.RootMarkerFileName), "");
+                string home = Path.Combine(temp, "Users", "player");
+
+                Assert.Equal(AppSupport(home), ConfigRoot.ComputeFor(Bundle(Path.Combine(temp, "out", "osx-arm64")), macOS: true, home));
+            }
+            finally { Directory.Delete(temp, true); }
+        }
+
+        [Fact]
+        public void On_macOS_a_checkout_and_a_marked_tree_still_win()
+        {
+            string temp = NewTempDir();
+            try
+            {
+                string home = Path.Combine(temp, "Users", "player");
+                string checkout = Directory.CreateDirectory(Path.Combine(temp, "checkout")).FullName;
+                File.WriteAllText(Path.Combine(checkout, "EmuSen.sln"), "");
+                string built = Directory.CreateDirectory(Path.Combine(checkout, "EmuSen.Mistress", "bin", "Debug", "net10.0")).FullName;
+                string tree = Directory.CreateDirectory(Path.Combine(temp, "tree")).FullName;
+                File.WriteAllText(Path.Combine(tree, DianaOSSandbox.RootMarkerFileName), "");
+                string app = Directory.CreateDirectory(Path.Combine(tree, "lib", "EmuSen")).FullName;
+
+                Assert.Equal(checkout, ConfigRoot.ComputeFor(built, macOS: true, home));
+                Assert.Equal(tree, ConfigRoot.ComputeFor(app, macOS: true, home));
+            }
+            finally { Directory.Delete(temp, true); }
+        }
+
+        [Fact]
+        public void On_macOS_an_unmarked_app_directory_roots_in_Application_Support_too()
+        {
+            string temp = NewTempDir();
+            try
+            {
+                string home = Path.Combine(temp, "Users", "player");
+
+                Assert.Equal(AppSupport(home), ConfigRoot.ComputeFor(temp, macOS: true, home));
+            }
+            finally { Directory.Delete(temp, true); }
+        }
+
+        // Linux and Windows never take the Mac branch, whatever the path looks like.
+        [Fact]
+        public void Off_macOS_a_bundle_shaped_path_keeps_the_old_fallback()
+        {
+            string temp = NewTempDir();
+            try
+            {
+                string bundle = Bundle(temp);
+
+                Assert.Equal(Path.Combine(bundle, DianaOSSandbox.PublishedRootDirName), ConfigRoot.ComputeFor(bundle, macOS: false, Path.Combine(temp, "home")));
+                Assert.Equal(ConfigRoot.ComputeFor(bundle, macOS: false, "unused"), DianaOSSandbox.ComputeRootFor(bundle));
+            }
+            finally { Directory.Delete(temp, true); }
+        }
+
+        [Fact]
+        public void Only_a_bundle_on_macOS_has_a_seed_directory()
+        {
+            string temp = NewTempDir();
+            try
+            {
+                string bundle = Bundle(temp);
+                string contents = Path.GetDirectoryName(bundle)!;
+
+                Assert.Equal(contents, ConfigRoot.BundleContentsFor(bundle));
+                Assert.Equal(Path.Combine(contents, "Resources", "home"), ConfigRoot.SeedDirectoryFor(bundle, macOS: true));
+                Assert.Null(ConfigRoot.SeedDirectoryFor(bundle, macOS: false));
+                Assert.Null(ConfigRoot.SeedDirectoryFor(Directory.CreateDirectory(Path.Combine(temp, "Other.bundle", "Contents", "MacOS")).FullName, macOS: true));
+                Assert.Null(ConfigRoot.SeedDirectoryFor(contents, macOS: true));
             }
             finally { Directory.Delete(temp, true); }
         }

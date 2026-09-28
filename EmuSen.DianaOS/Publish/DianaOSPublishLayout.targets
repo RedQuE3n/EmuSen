@@ -77,6 +77,30 @@
     <_DianaOSLauncherDir>$(MSBuildThisFileDirectory)</_DianaOSLauncherDir>
   </PropertyGroup>
 
+  <!-- A Mac app bundle instead of the tree above, for a project that names one
+       (DianaOSMacAppName) and a publish for osx-*. Decided 2026-09-27: macOS
+       installs EmuSen as EmuSen.app in /Applications, the platform's own
+       standard, where Linux has none and gets the self-contained tree. The
+       bundle stays read-only: the program's data lives in
+       ~/Library/Application Support/EmuSen (ConfigRoot), so there is no
+       .dianaosroot and no bin/ launcher. The .NET app directory moves whole
+       into Contents/MacOS, the staged doc trees into Contents/Resources/home
+       (copied into the data home on start), and the notices and icon into
+       Contents/Resources. See EmuSen_Settings_Reference.md §4.82 and
+       EmuSen_Galaxia.md §3.4. -p:DianaOSMacAppBundle=false publishes the Linux
+       tree for osx-* instead. -->
+  <PropertyGroup>
+    <DianaOSMacAppBundle Condition="'$(DianaOSMacAppBundle)' == '' And '$(DianaOSPublishLayout)' == 'true' And '$(DianaOSMacAppName)' != '' And $(RuntimeIdentifier.StartsWith('osx'))">true</DianaOSMacAppBundle>
+    <_DianaOSMacContents>$(DianaOSMacAppName).app/Contents</_DianaOSMacContents>
+    <!-- The highest LC_BUILD_VERSION minos among the shipped Mach-O files: the .NET 10 runtime, its apphost and SDL3 all say 12.0; Avalonia, Skia and HarfBuzz say 11.0. -->
+    <DianaOSMacMinimumSystemVersion Condition="'$(DianaOSMacMinimumSystemVersion)' == ''">12.0</DianaOSMacMinimumSystemVersion>
+    <DianaOSMacCodesign Condition="'$(DianaOSMacCodesign)' == ''">true</DianaOSMacCodesign>
+    <_DianaOSAppDest>$(DianaOSAppDirName)</_DianaOSAppDest>
+    <_DianaOSAppDest Condition="'$(DianaOSMacAppBundle)' == 'true'">$(_DianaOSMacContents)/MacOS</_DianaOSAppDest>
+    <_DianaOSStagedDest></_DianaOSStagedDest>
+    <_DianaOSStagedDest Condition="'$(DianaOSMacAppBundle)' == 'true'">$(_DianaOSMacContents)/Resources/</_DianaOSStagedDest>
+  </PropertyGroup>
+
   <!-- Rewrites each publish item's destination before anything is copied, so
        files land in their final home directly - no post-publish move, and no
        empty runtimes/*/native husks left behind by one. The staged doc trees
@@ -95,8 +119,8 @@
           Condition="'$(DianaOSPublishLayout)' == 'true'">
     <ItemGroup>
       <ResolvedFileToPublish>
-        <_DianaOSPath Condition="$([System.String]::Copy('%(RelativePath)').StartsWith('$(DianaOSStagedRootDirName)'))">$([System.String]::Copy('%(RelativePath)').Substring($(_DianaOSStagedPrefixLength)))</_DianaOSPath>
-        <_DianaOSPath Condition="!$([System.String]::Copy('%(RelativePath)').StartsWith('$(DianaOSStagedRootDirName)'))">$(DianaOSAppDirName)/%(RelativePath)</_DianaOSPath>
+        <_DianaOSPath Condition="$([System.String]::Copy('%(RelativePath)').StartsWith('$(DianaOSStagedRootDirName)'))">$(_DianaOSStagedDest)$([System.String]::Copy('%(RelativePath)').Substring($(_DianaOSStagedPrefixLength)))</_DianaOSPath>
+        <_DianaOSPath Condition="!$([System.String]::Copy('%(RelativePath)').StartsWith('$(DianaOSStagedRootDirName)'))">$(_DianaOSAppDest)/%(RelativePath)</_DianaOSPath>
       </ResolvedFileToPublish>
       <ResolvedFileToPublish>
         <RelativePath>%(_DianaOSPath)</RelativePath>
@@ -110,7 +134,7 @@
        frontend - see launcher.sh. -->
   <Target Name="DianaOSWritePublishRoot"
           AfterTargets="Publish"
-          Condition="'$(DianaOSPublishLayout)' == 'true'">
+          Condition="'$(DianaOSPublishLayout)' == 'true' And '$(DianaOSMacAppBundle)' != 'true'">
     <PropertyGroup>
       <_DianaOSRoot>$([MSBuild]::EnsureTrailingSlash('$(PublishDir)'))</_DianaOSRoot>
     </PropertyGroup>
@@ -126,18 +150,66 @@
           Condition="'$(OS)' != 'Windows_NT'" />
   </Target>
 
-  <!-- Every published build carries the GPL, the third-party notices and the licence texts at its root - see THIRD_PARTY_NOTICES.md. -->
+  <!-- Every published build carries the GPL, the third-party notices and the licence texts at its root, or in a Mac bundle's Contents/Resources - see THIRD_PARTY_NOTICES.md. -->
   <Target Name="DianaOSPublishNotices" AfterTargets="Publish">
     <PropertyGroup>
       <_DianaOSRepoRoot>$(MSBuildThisFileDirectory)../../</_DianaOSRepoRoot>
+      <_DianaOSNoticeDir>$([MSBuild]::EnsureTrailingSlash('$(PublishDir)'))</_DianaOSNoticeDir>
+      <_DianaOSNoticeDir Condition="'$(DianaOSMacAppBundle)' == 'true'">$(_DianaOSNoticeDir)$(_DianaOSMacContents)/Resources/</_DianaOSNoticeDir>
     </PropertyGroup>
     <ItemGroup>
       <_DianaOSNotice Include="$(_DianaOSRepoRoot)LICENSE;$(_DianaOSRepoRoot)THIRD_PARTY_NOTICES.md" />
       <_DianaOSLicenceText Include="$(_DianaOSRepoRoot)licenses/*" />
     </ItemGroup>
     <Error Condition="!Exists('$(_DianaOSRepoRoot)THIRD_PARTY_NOTICES.md')" Text="THIRD_PARTY_NOTICES.md is missing; a build may not ship without it." />
-    <Copy SourceFiles="@(_DianaOSNotice)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(_DianaOSLicenceText)" DestinationFolder="$(PublishDir)licenses" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_DianaOSNotice)" DestinationFolder="$(_DianaOSNoticeDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_DianaOSLicenceText)" DestinationFolder="$(_DianaOSNoticeDir)licenses" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- The bundle's Info.plist, from Info.plist.in beside this file, and its
+       icon. CFBundleExecutable is the apphost, which already sits in
+       Contents/MacOS; CFBundleIconFile names the .icns without its extension,
+       as macOS looks it up in Contents/Resources. -->
+  <Target Name="DianaOSWriteMacAppBundle"
+          AfterTargets="Publish"
+          Condition="'$(DianaOSMacAppBundle)' == 'true'">
+    <PropertyGroup>
+      <_DianaOSMacBundleDir>$([MSBuild]::EnsureTrailingSlash('$(PublishDir)'))$(_DianaOSMacContents)/</_DianaOSMacBundleDir>
+      <_DianaOSMacIconName>$([System.IO.Path]::GetFileNameWithoutExtension('$(DianaOSMacAppIcon)'))</_DianaOSMacIconName>
+      <_DianaOSMacDisplayName Condition="'$(DianaOSMacDisplayName)' == ''">$(DianaOSMacAppName)</_DianaOSMacDisplayName>
+      <_DianaOSMacDisplayName Condition="'$(DianaOSMacDisplayName)' != ''">$(DianaOSMacDisplayName)</_DianaOSMacDisplayName>
+      <_DianaOSMacInfoPlist>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)Info.plist.in'))</_DianaOSMacInfoPlist>
+      <_DianaOSMacInfoPlist>$(_DianaOSMacInfoPlist.Replace('@NAME@', '$(DianaOSMacAppName)').Replace('@DISPLAYNAME@', '$(_DianaOSMacDisplayName)'))</_DianaOSMacInfoPlist>
+      <_DianaOSMacInfoPlist>$(_DianaOSMacInfoPlist.Replace('@IDENTIFIER@', '$(DianaOSMacBundleIdentifier)').Replace('@EXECUTABLE@', '$(AssemblyName)'))</_DianaOSMacInfoPlist>
+      <_DianaOSMacInfoPlist>$(_DianaOSMacInfoPlist.Replace('@ICON@', '$(_DianaOSMacIconName)').Replace('@VERSION@', '$(Version)'))</_DianaOSMacInfoPlist>
+      <_DianaOSMacInfoPlist>$(_DianaOSMacInfoPlist.Replace('@MINIMUMSYSTEMVERSION@', '$(DianaOSMacMinimumSystemVersion)').Replace('@CATEGORY@', '$(DianaOSMacCategory)'))</_DianaOSMacInfoPlist>
+    </PropertyGroup>
+    <Error Condition="'$(DianaOSMacBundleIdentifier)' == ''" Text="A Mac app bundle needs DianaOSMacBundleIdentifier, its reverse-DNS id." />
+    <Error Condition="'$(DianaOSMacAppIcon)' == '' Or !Exists('$(DianaOSMacAppIcon)')" Text="A Mac app bundle needs DianaOSMacAppIcon, an existing .icns file; '$(DianaOSMacAppIcon)' is not one." />
+    <WriteLinesToFile File="$(_DianaOSMacBundleDir)Info.plist" Lines="$(_DianaOSMacInfoPlist)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <Copy SourceFiles="$(DianaOSMacAppIcon)" DestinationFiles="$(_DianaOSMacBundleDir)Resources/$(_DianaOSMacIconName).icns" SkipUnchangedFiles="true" />
+    <!-- Copy does not carry the source's mode bits across, and a bundle zipped on Linux keeps what it has here. -->
+    <Exec Command="chmod +x &quot;$(_DianaOSMacBundleDir)MacOS/$(AssemblyName)&quot;"
+          Condition="'$(OS)' != 'Windows_NT'" />
+  </Target>
+
+  <!-- Ad hoc signing, last, so the seal covers the notices and Info.plist
+       too; arm64 macOS will not start unsigned code at all. Only a Mac has
+       codesign. A bundle published elsewhere is left unsigned and says so.
+       Signing with a Developer ID, the hardened runtime and notarization are
+       not done yet - see EmuSen_Settings_Reference.md §4.82. -->
+  <Target Name="DianaOSSignMacAppBundle"
+          AfterTargets="Publish"
+          DependsOnTargets="DianaOSPublishNotices;DianaOSWriteMacAppBundle"
+          Condition="'$(DianaOSMacAppBundle)' == 'true'">
+    <PropertyGroup>
+      <_DianaOSMacAppDir>$([MSBuild]::EnsureTrailingSlash('$(PublishDir)'))$(DianaOSMacAppName).app</_DianaOSMacAppDir>
+    </PropertyGroup>
+    <Exec Command="codesign --force --deep -s - &quot;$(_DianaOSMacAppDir)&quot;"
+          Condition="'$(DianaOSMacCodesign)' == 'true' And $([MSBuild]::IsOSPlatform('OSX'))" />
+    <Message Importance="high"
+             Condition="'$(DianaOSMacCodesign)' != 'true' Or !$([MSBuild]::IsOSPlatform('OSX'))"
+             Text="$(DianaOSMacAppName).app is not signed. On a Mac, run: codesign --force --deep -s - &quot;$(DianaOSMacAppName).app&quot;" />
   </Target>
 
 </Project>

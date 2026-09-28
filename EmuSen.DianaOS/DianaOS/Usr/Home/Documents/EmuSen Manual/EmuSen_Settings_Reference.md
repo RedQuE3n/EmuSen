@@ -281,6 +281,14 @@ The queue's depth is not ours alone. It is `produced − consumed`, and *consume
 
 What the test wants to know is whether rate control is *acting* to drain the queue, and that is observable directly: `DynamicRateControl.TotalInputFrames`/`TotalOutputFrames` (`EmuSen_Audio_Sync.md` §3.3) count frames in against frames handed on, so their difference over the recovery window is exactly the audio the control law withheld — no device clock involved. The test samples both counters at the stall and again at the end, and asserts the withheld fraction is at least half the configured maximum deviation. With the queue sitting well above target the law should be pinned near full authority, and it is: `produced=96375, emitted=95893, 0.500 % withheld`, identical on every run. The queue reading is still checked, but only as the loose bound it can actually support — that it has not climbed to the shedding entry point. The window went back to three seconds.
 
+
+**The test suite never plays through the speakers (2026-09-27).** Only `AudioPlayerTests` and `AudioLatencyDriftTests`
+set SDL's `dummy` audio driver, in their static constructors. Any other test that started a game through Mistress's
+window, such as the launch, screensaver or pad tests, opened the machine's real playback device and played what the
+synthetic ROMs produce, which came out as a screech; whether it did depended on which class ran first. `SilentAudio`, a
+module initializer in EmuSen.WiseMan, now sets `SDL_AUDIODRIVER=dummy` and the matching hint before any test runs.
+`SilentAudioTests` opens an `AudioPlayer` and requires `SDL.GetCurrentAudioDriver()` to be `dummy`. With the initializer
+emptied it read `pipewire`, measured on 2026-09-27.
 ### 4.11 The game library (`Library/RomLibrary.cs`, `Views/MainWindow.axaml`)
 
 `MainWindow`'s viewport is two screens sharing one `Grid`: `LibraryView` (a list of every ROM in `AppSettings.RomDirectory`) and `GameFrame` (the live emulator output). Exactly one is visible; the library is what you get whenever no game is running. Visibility is toggled in code-behind rather than bound, matching how the rest of this window is written.

@@ -1063,32 +1063,29 @@ P6 and P7 are estimates from the duplication of §1.3 and §1.4, not derivations
 
 ---
 
-## 9. Open questions
+## 9. Questions, decided 2026-09-28
 
-1. **Q1, the crate's name.** The interface goes into the state crate (§3.17). Should that crate be renamed
-   `emusen-native` when it is extended, or keep `emusen-state`?
-2. **Q2, MercuryRT while paused.** Move it at step 4 regardless, or when the port resumes? Until then it keeps its own
-   ABI.
-3. **Q3, exact version matching.** Proposed exact on both halves (§3.2). A compatible range would buy nothing while the
-   libraries ship beside their host.
-4. **Q4, where a settings list lives.** In C# today, because the catalogue answers before any library is loaded. A Rust
-   core with no C# twin, once the C# cores retire (`EmuSen_Stack.md` §2.1, decided 2026-09-23), will need the library
-   to describe its settings. Add a `settings_schema` export then, or now?
-5. **Q5, retiring `EmuSen_Multicore.md` §2's position** on `Bundle`'s switch (§5.3). Confirm.
-6. **Q6, MarsRT's crash log's file name**, `native_crash_<pid>` to `marsrt_crash_<pid>` (§4.1). Anything that reads
-   the old name by hand would need to know.
-7. **Q7, one place for the first instruction's breakpoint check** (§4.4): C#, as MarsRT does it, or Rust, as MercuryRT
-   does.
-8. **Q8, one trait for this interface and a libretro build** (§6.3). Committing now shapes `NativeCore`, since a
-   libretro adapter wants `reset`, a region and a constant state size for the session. Not committing leaves two traits.
-9. **Q9, the handheld.** Is step 5b owed a round on the Legion Go S as well, on charger power (`Mars_Performance.md`
-   §42), or is the desktop's enough for a change that moves no hot code?
-10. **Q10, sound at a rate change.** Samples buffered before MarsRT's DAC rate changes are drained under the new rate,
-    today and after (§3.7). Is this worth a per-drain rate report, or left?
-11. **Q11, the 8-bit cores' lazy patch refresh** (§3.12). Should the host also refresh before a host read of `CPUBUS`,
-    so that a debugger read matches the C# core? That is a behaviour change on the Rust engines, and needs its own
-    oracle.
-12. **Q12, MarsRT's stack push-down** (§3.14). A candidate fix for "the stack in a plain frame", outside this migration.
+Each question as it was put, and its decision.
+
+1. **Q1, the crate's name.** Decided: the state crate is named `emusen-native` from the start, not renamed later, since
+   it will hold the interface (§3.17).
+2. **Q2, MercuryRT while paused.** Decided: it moves at step 4 regardless. It is the Game Boy engine in use, and moving
+   it is framework work, not a resumption of its port.
+3. **Q3, exact version matching.** Decided: exact on both halves (§3.2).
+4. **Q4, where a settings list lives.** Decided: in C# until the C# cores retire; the `settings_schema` export is added
+   then, so there is never a second source for the same list.
+5. **Q5, `EmuSen_Multicore.md` §2's position on `Bundle`'s switch.** Decided: retired (§5.3).
+6. **Q6, MarsRT's crash log's file name.** Decided: `native_crash_<pid>` becomes `marsrt_crash_<pid>` (§4.1).
+7. **Q7, the first instruction's breakpoint check.** Decided: in Rust, in every core, as MercuryRT does it (§4.4).
+8. **Q8, one trait for this interface and a libretro build.** Decided: one trait, so `NativeCore` is shaped now for
+   `reset`, a region and a session's constant state size (§6.3).
+9. **Q9, the handheld.** Decided: step 5b is also timed on the Legion Go S, on charger power (`Mars_Performance.md`
+   §42), beside the desktop's rounds.
+10. **Q10, sound at a rate change.** Decided: fixed. The drain reports the rate its samples were made at (§3.7), with
+    a test at a rate change.
+11. **Q11, the 8-bit cores' lazy patch refresh.** Decided: the host refreshes before a host read of `CPUBUS`, so a
+    debugger read matches the C# core; the change carries its own oracle (§3.12).
+12. **Q12, MarsRT's stack push-down.** Decided: fixed as a separate change, outside this migration (§3.14).
 
 ---
 

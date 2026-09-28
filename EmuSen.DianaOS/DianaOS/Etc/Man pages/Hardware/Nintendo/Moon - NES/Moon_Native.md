@@ -381,6 +381,141 @@ SingleStepTests' `nes6502/v1`, 2.56 million cases with per-cycle bus traces, whi
 directly, after the move as before it. The vectors are third-party, not committed, and not currently on this machine,
 so this is proposed, not planned into a stage.
 
+### 3.7 The MiSTer core as auditor
+
+**Decided 2026-09-28: each component is audited against NES_MiSTer before it is ported.** The reason is that Moon's
+accuracy was never finished: 45 of the corpus's 63 verdict ROMs pass (§3.4), and a line-for-line port copies every
+defect into Rust along with every rule. The C# core stays the byte-exact oracle of §3.2–§3.3. The audit's job is to
+decide what that oracle should say before it is copied. As on the other consoles, the FPGA core is a referee and not a
+grader (`Venus_Referee.md` §0, `Mercury_Referee.md`).
+
+*Nothing below has been audited yet.* §3.7.1 is the provenance read of 2026-09-28. §3.7.2 and §3.7.3 are the rule and
+the method. §3.7.4 is a first look at §6's defects, not their audit. §3.7.5 is where the audit starts. The RTL line
+numbers are at head `26e2efb`, and each is to be re-read when its rule is audited.
+
+#### 3.7.1 The checkout, and where each part came from
+
+The checkout is `github.com/MiSTer-devel/NES_MiSTer`, cloned with full history to `~/Projects/nes-mister-reference`:
+644 commits from 2017-06-14 to 2026-09-16, head `26e2efb`. It is based on Ludvig Strigeus's fpganes (`README.md:3`),
+and his 2012–2013 copyright header survives on `rtl/nes.v`, `ppu.sv`, `video.sv`, `dsp.v` and `compat.v`. His *code*
+mostly does not. Measured by `git blame -M -C` against the initial commit `7f2b42f`, 42 of `ppu.sv`'s 2,366 lines
+survive, 21 of `nes.v`'s 1,178, 18 of `apu.sv`'s 1,290 and 7 of `MMC3.sv`'s 1,262. What survives is structure and
+module names.
+
+| Part | Lineage | What agreement is worth |
+|---|---|---|
+| CPU (`rtl/t65/`) | FPGAARCADE's general-purpose T65(b), "Ver 315 SzGy April 2020" (`T65.vhd:1-12`), validated against the Lorenz and VICE suites on a C64 core. It replaced fpganes's CPU in `9deb6cd` (2018-11-09). The NES edits are few: undocumented-opcode operands (`12d8d52`), the reset `S` (`b61cea7`), `KIL` (`3490cf5`) and the cold reset. Its RDY halts reads only (`T65.vhd:284`), which is the generic 6502 rule. | **Weak**, as with the Game Boy core's borrowed T80 (`Mercury_Referee.md`): its rules are the 6510's, graded on another machine |
+| The CPU's wrapper, DMA and the bus (`nes.v`) | fpganes's `DmaController` skeleton and its comment (`nes.v:4-19`). The logic was rewritten in `06a733f` (2019) and `5e480a7` (2025). The internal/external bus split and the DMC's bus conflicts came in `39ab619` (2026-09-15), and each commit of that series names the AccuracyCoin sub-test it fixes | **Real support**; the grader behind it is a ROM Moon's corpus lacks (§3.7.5) |
+| PPU (`ppu.sv`) | fpganes's module structure (`ClockGen`, `SpriteSet`, `BgPainter`, `PixelMuxer`). About 2,050 of its lines are by one author, Kitrinx. Visual 2C02 is cited for two timings (`ppu.sv:243`, `:249`). The OAMDATA comment at `:841-845` reads as nesdev's text. The 2026-09 fixes (`21d9bd3`, `b36e519`, `4e00172`) are graded by AccuracyCoin | **Real support**, except where it follows Visual 2C02 or nesdev and Moon followed the same source |
+| APU (`apu.sv`) | Rewritten in 2020 (`7b2422d`). The noise tables are "read directly from the netlist" (`apu.sv:441`), and the frame counter is the 2A03's LFSR (`:785`; the PAL numbers are "educated guesses") | **Real support**: where it follows the netlist, that is the chip's own evidence rather than another emulator's |
+| Boards (`rtl/mappers/`) | Split out of fpganes's `mmu.v` in `4d54c68` (2019). MMC1 and MMC2 descend from fpganes. MMC3 does too, heavily reworked, and its clone boards cite Nintendulator (`MMC3.sv:154`, `:377`). The rest are by several contributors, from nesdev | **Weak** where both implement the nesdev wiki's description of a board; **real** where the RTL's shape is visibly the hardware's (the A12 filter counters) |
+| Composite encoder (`26e2efb`, "Netlist accurate composite encoder for the PPU") | Video output only: sync and burst windows, and a DAC and phase model. It names no netlist node and touches no emulation logic | **None** for Moon, which emits palette RGB |
+
+**A negative result.** A grep of `rtl/` for Mesen's, Nestopia's, puNES's and Visual 6502's identifiers found none. So,
+unlike `N64_MiSTer`'s rasteriser (`Mars_RdpReferee.md`), this core's agreement is not cheapened by borrowed names,
+except in the CPU and where a comment names its source. The weighting is closer to the SNES core's than to the N64
+core's.
+
+#### 3.7.2 The reading rule
+
+1. **Provenance first.** A rule is weighted by where the RTL got it (§3.7.1), and it is read only after that is
+   established.
+2. **Shared names mean a shared algorithm.** Where the RTL and Moon carry the same identifiers, or the same source's
+   wording, agreement is weak and disagreement is the informative direction. The T65 CPU is the standing case.
+3. **"Not implemented" is a real answer.** Three examples from the provenance read:
+   - MMC1's WRAM-disable bit is not honoured (`MMC1.sv:195`).
+   - FME-7's 5B envelope is absent (`Sunsoft.sv:380`, "not used in any games").
+   - The triangle's ultrasonic output is held at its last sample on purpose (`e4b944b`, 2019, "Fix HDMI audio
+     artifacts"; `apu.sv:299`). That one is a deliberate departure, so it is no referee point at all.
+4. **A referee, never a grader.** The RTL is read for the one rule in dispute. Nothing simulates it, and no test
+   compares against it.
+5. **Only a hardware test ROM settles anything.** The corpus (§3.4) is the stronger oracle wherever it covers the rule.
+   An RTL answer with no ROM behind it leaves a defect *candidate*.
+6. **The RTL's save state is not the console.** What its states carry says nothing about hardware (D2 and D3 below).
+
+#### 3.7.3 The method, component by component, from stage 2
+
+1. Before a component is ported (the CPU, the bus and DMA, the PPU, the APU, each board), list the rules where the C#
+   core and the RTL could differ, and read both.
+2. Record each disagreement in a referee table in the style of `Venus_Referee.md` §2. Each row gives:
+   - the rule;
+   - Moon's lines and the RTL's lines;
+   - the lineage weight from §3.7.1;
+   - what the corpus covers;
+   - the verdict.
+3. **Demonstrated** means a test fails on the unmodified build. A disagreement demonstrated to be a C# defect is fixed in
+   the C# core first, with that test, and then ported. The C# core stays the byte-exact oracle, and the fix lands in both
+   engines.
+4. An **argued** disagreement is recorded as a defect candidate, with no fix.
+5. §6's defects enter the same table, with the RTL's answer beside them (§3.7.4).
+
+**P7, stated before the audit:** most disagreements will be in the PPU and in the DMA and bus, where the RTL changed in
+2025–2026 against AccuracyCoin. Few will be in the CPU, where both engines implement the same public 6502 rules and
+Moon's passes SingleStepTests (§3.6).
+
+#### 3.7.4 §6's defects, with the RTL's answer (a first look, 2026-09-28)
+
+| Defect | The RTL | What that is worth |
+|---|---|---|
+| D1, DMA steps the APU and not the PPU | DMA halts the CPU through RDY alone (`nes.v:435-436`, `pause_cpu` at `:65`). The APU's enable is the CPU's, ungated (`apu_ce = cpu_ce`, `:213`, `:511`). The PPU runs off its own divider, which `pause_cpu` never enters (`:240`, `:298`, `:625`). So **both advance through every DMA cycle**: the RTL agrees with Moon's APU and disagrees with Moon's PPU | Strong in kind: one master clock is how the console is built, not an algorithm anyone borrowed. It corroborates §6.1's reading that the missing cycles are the PPU's, the half `Moon_Memory.md` §4.8 records as compensating for the boards clocked on the CPU. So the fix is in the frame loop, as Q3 says, and it is not made here |
+| D2, a mid-frame state lacks the evaluated sprites | The RTL's state carries the evaluation's pointers and counters (`regs_savestates.sv:14`, `ppu.sv:586-609`). It does not carry secondary OAM, which is reset to `$FF` on load (`:622-623`), or the sprite shifters | Not a hardware question (rule 6). The RTL's own mid-frame states have the same class of omission |
+| D3, the pads' shift registers are not state | Not saved either: `joy_out` and `joy_latch` (`nes.v:583-590`) are outside the top-level state words | Not a hardware question |
+| D4, an image with no PRG throws | The loader refuses only a missing magic or a trainer (`NES.sv:1577`). A zero-PRG image loads with a zero PRG mask (`:1466-1467`) | No answer: the RTL does not handle the case |
+
+#### 3.7.5 The first rules to audit
+
+All sixteen of Moon's boards exist in the RTL (`cart.sv`), so no board is without a referee. The corpus has no
+AccuracyCoin, which is the ROM the RTL's 2025–2026 fixes were graded by (Q7).
+
+- **CPU** (weak evidence):
+  - interrupt sampling delayed by a taken branch without a page cross (`T65.vhd:577-582`);
+  - IRQ sampled while RDY is low (`:576-578`);
+  - `SHA`, `SHX`, `SHY` and `SHS` under RDY and across a page (`:5-6`, `:411-415`);
+  - `KIL` (`T65_MCode.vhd:579-591`).
+- **DMA and the bus:**
+  - the halted CPU re-drives its read address, so a DMC fetch repeats a `$2007` read or clocks a pad (`nes.v:465`,
+    `:634`, `NES.sv:654-658`);
+  - a DMC fetch's read of `$4016`/`$4017` drives D0–D4 only (`nes.v:466-468`);
+  - `$4015` bit 5 comes from the internal bus (`:428`);
+  - OAM DMA's get/put alignment, and a DMC fetch inside OAM DMA (`:54-61`);
+  - the internal and external open-bus latches (`:832-869`).
+- **PPU:**
+  - the `$2002` read that lands on vblank's set (`ppu.sv:1896-1897`, `:1998`);
+  - the odd-frame skip decided on the pre-render line (`:329`);
+  - sprite 0 hit at x = 255 and in the left clip (`:1673-1681`);
+  - sprite overflow's diagonal increment (`:752-756`);
+  - `$2004` during rendering, and the attribute byte's `$E3` mask (`:730`, `:846-850`);
+  - OAM row corruption when rendering starts (`:663-675`);
+  - a `$2007` access during rendering incrementing coarse X and Y (`:88`, `:98`);
+  - palette writes while rendering (`:1824`);
+  - open-bus decay (`:2003-2060`);
+  - register writes ignored before the first pre-render line (`:1402`).
+- **APU:**
+  - the `$4017` write's delay and its immediate clock (`apu.sv:800-802`, `:816-819`);
+  - a length-counter halt written on a clock (`:44-51`);
+  - the sweep's mute (`:167`, `:225`);
+  - the DMC enable's pipeline to its first fetch (`:556`, `:595-597`);
+  - `$4011` against the output clock (`:639-641`).
+- **MMC1:**
+  - the second of two consecutive writes ignored (`MMC1.sv:107-125`);
+  - the reset write ORing `$0C` (`:108-110`);
+  - SUROM's A18 from the CHR register (`:163`).
+- **MMC3:**
+  - the counter's reload (`MMC3.sv:425`), and new against old behaviour (`:382`, `:409`, `:672`);
+  - the A12 filter, about three M2 cycles low (`:668`, `:682-683`), which is Moon's own three
+    (`Mmc3.A12MinimumLowDots`);
+  - `$C001` and `$E000` (`:522-523`).
+- **The other boards:**
+  - bus conflicts only on CNROM and a few others (`nes.v:689`, `generic.sv:1317`), none on UxROM, AxROM, Color
+    Dreams or GxROM;
+  - MMC2's latch triggers: exact on `$0FD8`/`$0FE8`, and a range on `$1FD8`–`$1FDF` (`MMC2.sv:145-146`);
+  - RAMBO-1's A12 filter, which the RTL counts in 16 M2 cycles (`MMC3.sv:79-91`). Moon's is 30 dots, ten CPU cycles
+    (`Rambo1.A12MinimumLowDots`), the first visible difference. RAMBO-1's CPU mode, the reload of `latch | 1` and the
+    IRQ a cycle late follow at `:151-180`;
+  - FME-7's IRQ, cleared only when its trigger bit is written 0 (`Sunsoft.sv:108`);
+  - Irem H3001's counter (`misc.sv:1175-1181`);
+  - NINA-003/006's decode (`generic.sv:893`).
+
 ## 4. Stages
 
 MercuryRT's stages 1–5 were done in one day; Moon's machine is about 5,200 lines of C#: the folder's 6,609, less the
@@ -398,6 +533,8 @@ validation adapters (330) and the README.
 | 6 | CI: the crate in the workflow's matrix and the publish targets | Crate tests on four platforms | hours |
 | 7 | Parity: the rest of WiseMan’s Moon tests (134 test methods) through a rig; mutants for every stage | §3.5, the mutant table | a day |
 | 8 | Goldens (§3.6) | Every golden reproduced by MoonRT | half a day |
+
+*Decided 2026-09-28:* from stage 2 on, each component is audited against NES_MiSTer before it is ported (§3.7).
 
 **Finished** means `Mars_Native.md` §6's three criteria: a player gets MoonRT without choosing it; nothing the C# core
 does is lost, or the loss is written down; the C# core's role is decided.
@@ -420,6 +557,9 @@ does is lost, or the loss is written down; the C# core's role is decided.
 - **Q5, the C# Moon's future**, and when the Engine row's default flips. As for Mercury.
 - **Q6, the design levers of §1.2.** Each is exact by argument and could be built in both engines while C# is the
   oracle, or in MoonRT alone afterwards with the corpus and the goldens as its oracle. That choice is left open.
+- **Q7, AccuracyCoin.** The RTL's 2025–2026 fixes to its bus, DMA and PPU were each graded by an AccuracyCoin
+  sub-test (§3.7.1). The corpus at `/home/red/nes-test-roms` does not hold it. With it, the audit's disagreements in
+  those parts could be settled by a ROM instead of left as candidates. It is third-party and would not be committed.
 - **Risk: P1 is wide, and centred low on purpose.** If stage 2's like-for-like number comes in under 1.1×, the port is
   still worth finishing on ground 1 of §1.2, and the levers become the next question.
 - **Risk: bit-exact sound across platforms.** Argued in §3.3, untested on Windows and macOS until stage 6.
@@ -503,12 +643,13 @@ does is lost, or the loss is written down; the C# core's role is decided.
 | P4 | Nothing observable changes on the desktop or at 33%; SMB3 at 10% goes from 78% to 80–113%, central 94% | Stage 4 |
 | P5 | The once-a-frame boundary costs under 3% of MoonRT's frame | Stage 4 |
 | P6 | No recompiler and no threads are needed for MoonRT to beat C# everywhere measured | Stage 4 |
+| P7 | The audit's disagreements fall mostly in the PPU and in the DMA and bus, and few in the CPU (§3.7.3) | When stage 2's components have been audited |
 
 ## 8. The work, stage by stage
 
 Each stage is recorded here as it is proven, as `Mercury_Native.md` §8 records MercuryRT's.
 
-### 8.1 Stage 1: the state, byte for byte (done 2026-09-24)
+### 8.1 Stage 1: the state, byte for byte (done 2026-09-24; mutants 2026-09-28)
 
 **How the field list was established.** Not by reading the classes. A throwaway reflection walk (`layoutdump`, in the
 probe cache) printed every field the serializer walks, with its type and array length, for a synthetic image of each of
@@ -526,10 +667,16 @@ interface-typed field that is not `[SkipInState]`, so the `Cpu` walk carries a p
 - `naming.rs`, MarsRT's rule over eight modules, taught to read Rust's raw identifier `r#loop` as C#'s `Loop`;
 - a C ABI (`moon_machine_new`, `_free`, `_load_state`, `_save_state_size`, `_save_state`, `_state_layout`);
 - on the C# side, `Shim/MoonNative.cs` (the loader, `EMUSEN_MOON_NATIVE=0` to turn it off) and `Shim/MoonMachine.cs`
-  (the handle). `EmuSen.csproj` builds the crate beside MarsRT's and MercuryRT's into `obj/moonrt`.
+  (the handle).
+- The build. The crate is a row of `EmuSen/Cores/RustCores.props`, beside MarsRT's and MercuryRT's, and `EmuSen.csproj`
+  builds it into `obj/moonrt`. It has no `pgo/` profile, so it builds unguided (`Mars_Native.md` §6.17). The row also
+  puts it in the foreign-platform publish (`RustCoresPublish.targets`). The Rust cores workflow builds and tests it on
+  four platforms and runs `MoonRtStateTests` against each library. That is stage 6's wiring, not its proof: nothing
+  has yet run on a platform other than Linux x64. The first version of the stage had its own cargo target. It became
+  the row when WiseMan's generic Rust-core build was merged, on 2026-09-28.
 
-*Order.* The machine's behaviour was written in the same pass (§8.2 proves it), because the structs are the same
-structs. This stage's claim is the state alone: that MoonRT holds a C# state and gives it back, byte for byte.
+*Order.* The machine's behaviour was written in the same pass, because the structs are the same structs.
+`MoonRtMachineTests` is its oracle, and its proof is stage 2's. This stage's claim is the state alone: that MoonRT holds a C# state and gives it back, byte for byte.
 
 **A C# exception is a fault, not a panic.** D4's images (§6.2) make C# throw from inside the machine: an index outside
 an array, a division by zero, a clock running backwards. Under `panic = "abort"` the same arithmetic in Rust would kill
@@ -537,7 +684,7 @@ the frontend. MoonRT does each such access through a helper that records the fir
 zero; the frame, the load or the step then returns a status, and the shim throws C#'s exception type. The machine is
 left where Rust left it, not where C#'s exception left it, which is a divergence only in a machine already broken.
 
-**The oracles, all identical** (`EmuSen.WiseMan/Cores/MoonRtStateTests.cs`, 70 cases; crate tests, 9):
+**The oracles, all identical** (`EmuSen.WiseMan/Cores/MoonRtStateTests.cs`, 71 cases; crate tests, 10):
 
 - **Running machines.** All sixteen boards, each with 8 CHR ROM banks and with CHR RAM, ran a program that turns
   rendering and a pulse note on, counts in RAM, copies the count to PRG RAM and scrolls by it, for 300 frames. The C#
@@ -547,11 +694,68 @@ left where Rust left it, not where C#'s exception left it, which is a divergence
   distinct noise.
 - **Bytes no C# writer makes.** Four bools and three class flags of 2 read as C#'s reader reads them, and the re-save
   equals the C# core's own.
-- **Refusals.** A truncated state, a foreign magic and a wrong version change nothing; an image with no magic and an
-  MMC5 image are refused with C#'s exception types.
+- **Class flags of zero.** The flags of `Cpu._bus` and `Apu.Dmc` set to 0 make C#'s reader leave both objects as they
+  were and read on. Rust does the same, so the re-save matches C#'s.
+- **Refusals.** A truncated state, a foreign magic and a wrong version change nothing. The truncated state is also one
+  ten frames later than the machine's, so a partial read cannot go unseen. An image with no magic, whether 3 bytes
+  or full length, and an MMC5 image are refused with C#'s exception types.
 - **D4.** An image with no PRG is refused on NROM, MMC1 and MMC3 with the exception type the C# core throws from
   `LoadRom`: `IndexOutOfRangeException` on NROM, `DivideByZeroException` on the others.
 - **Real games.** Super Mario Bros., Zelda, Super Mario Bros. 3 and Punch-Out!! are identical at frames 0, 300, 600 and
   900 with the bench's input, from `EMUSEN_MOONRT_ROMS`, a directory of scratch copies; absent, the case passes unrun.
 
-MOON_STAGE1_MUTANTS
+**Mutants: 24; 22 caught, 2 equivalent** (measured 2026-09-24 and 2026-09-28). The runner (`mutants.py`, in the
+scratch directory `~/.cache/emusen/probe/moonrt/`) applies one edit to the crate. It then runs `cargo test`, builds the
+library, runs WiseMan's `MoonRtState` filter against it with the four games, and restores the file. S1–S11 are the
+first round's. S12 was being run when that round stopped, on 2026-09-24, and the source was left mutated: the stage-1
+commit carried S12's exchanged clocks. The next commit restores them, and every mutant was run again on the merged tree.
+Five survived the first full round. Three of them (S7, R1 and C1) were caught after one new test each, and the other
+two are argued equivalent below.
+
+| Mutant | Caught by |
+|---|---|
+| S1 the CPU's `A` and `X` exchanged in the writer | crate naming rule; WiseMan running machines, noise, odd bytes, games |
+| S2 the bus inside `Cpu._bus` read and thrown away | **survived** (equivalent, below) |
+| S3 MMC3's `_mirroring` and `_prgMode` exchanged under the right labels | crate naming rule; WiseMan noise only |
+| S4 the envelope's `Loop` and `ConstantVolume` in declaration order in both reader and writer | WiseMan running machines, noise, games; the crate's round trip cannot see it |
+| S5 a bool read as `== 1` | WiseMan odd bytes only |
+| S6 `Apu._cycleCount` written as an `i32` | crate round trip and bus test; WiseMan every case that compares bytes |
+| S7 a failed load keeps its partial read | crate and WiseMan refusal cases, **after** the truncated state was made one ten frames on; before, the partial read wrote back what was already there |
+| S8 CHR not written | crate round trip and bus test; WiseMan every byte comparison |
+| S9 RAMBO-1's A12 watcher moved after `_bankSelect` | crate round trip; WiseMan running machines, noise |
+| S10 the pulse's `_onesComplement` not read back | WiseMan noise only; it never changes in a running machine |
+| S11 the PPU's `V` and `T` exchanged in the reader | crate naming rule; WiseMan running machines, noise, odd bytes, games |
+| S12 the header's `_cpuBudget` and `_masterClock` exchanged in the writer | crate naming rule and round trip; WiseMan running machines, noise, odd bytes, games |
+| F1 the fault helper keeps the last fault, not the first | crate D4 test; WiseMan D4 |
+| F2 an out-of-range byte read gives 0 without a fault | crate D4 test; WiseMan D4 |
+| F3 a remainder by zero gives 0 without a fault | crate D4 test; WiseMan D4 |
+| F4 the fault statuses count up from −30 | WiseMan D4 only: the shim maps −31 and −32 to the exception types |
+| N1 the naming rule keeps C#'s leading underscore | crate naming rule (both tests) |
+| N2 the naming rule puts no underscore after a digit | **survived** the round (equivalent over this state, below); now caught by the crate's rule test |
+| N3 the naming rule splits every capital of an acronym | crate naming rule (both tests) |
+| R1 an image of 16 bytes or more not checked for its magic | crate and WiseMan, **after** a full-length image without the magic was added; before, only a 3-byte one was refused |
+| R2 MMC5 accepted as NROM | WiseMan refusal case only |
+| R3 the state's version not checked | crate and WiseMan refusal cases |
+| R4 a header claiming exactly the file's PRG refused as truncated | WiseMan running machines, noise, games, refusals (every CHR-RAM image ends at its PRG) |
+| C1 a class read whatever its present flag | WiseMan's class-flag case only, **after** it was written; no C# writer makes a flag of 0 |
+
+**The two survivors, argued:**
+
+- **S2 is equivalent through every reader.** `Cpu._bus` carries the whole `MemoryBus`: `OpenBus`, `PendingDmaCycles`,
+  `Ram` and `StolenCycles`. The `Bus` walk that follows reads every one of those fields again, so the first copy never
+  stands. The crate's `the_bus_is_written_twice_and_the_last_copy_stands` pins the half that matters, that the second
+  copy wins. No test can tell the mutant apart, and none is owed: if C# ever stops rereading the bus, the layout
+  listing changes and every byte comparison fails.
+- **N2 is equivalent over this state's names, and is now pinned.** Of the 154 distinct names in the layout listing,
+  five carry a digit (`_a12`, `_chrBank0`, `_chrBank1`, `Pulse1`, `Pulse2`) and none has a capital after the digit. So
+  the rule's digit branch is never taken. One assertion, `snake("_bank0Mode") == "bank0_mode"`, was added to the rule's
+  own test, and the mutant fails it. A future field such as MMC5's `_chrBank0Upper` would otherwise pass unseen.
+
+**Which oracle carries which class.** The naming rule alone catches a value written under the wrong label
+(S3, S11). Only WiseMan catches a reorder made in both reader and writer (S4), because the Rust round trip is
+self-consistent. The noise case alone catches a field a running machine never changes (S3, S10), and the odd-bytes case
+alone catches the reader's rule for bytes C# never writes (S5). Without any one of the four, a mutant here survives.
+
+**What stage 1 does not establish.** It establishes that MoonRT holds a C# state and gives it back. It says nothing
+about running one. The `Skip<T>` fields exist in Rust but no stage-1 test reads them. The fault helper is exercised
+only through D4's load, not inside a running frame.

@@ -295,9 +295,9 @@ namespace EmuSen.WiseMan.Cores
             }
             foreach (int vectors in new[] { 0x3FFA, 0x7FFA, 0x1FFFA })
             {
-                rom[prg + vectors] = (byte)Nmi; rom[prg + vectors + 1] = Nmi >> 8;
+                rom[prg + vectors] = (byte)(Nmi & 0xFF); rom[prg + vectors + 1] = Nmi >> 8;
                 rom[prg + vectors + 2] = 0x00; rom[prg + vectors + 3] = 0xC0;
-                rom[prg + vectors + 4] = (byte)Irq; rom[prg + vectors + 5] = Irq >> 8;
+                rom[prg + vectors + 4] = (byte)(Irq & 0xFF); rom[prg + vectors + 5] = Irq >> 8;
             }
             return rom;
         }

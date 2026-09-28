@@ -37,7 +37,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         [Theory]
         [InlineData(AppSettings.OnScreenKeyboardAutomatic, true, true, KeyboardKind.Steam)]
-        [InlineData(AppSettings.OnScreenKeyboardAutomatic, true, false, KeyboardKind.Steam)]
+        [InlineData(AppSettings.OnScreenKeyboardAutomatic, true, false, KeyboardKind.Field)]
         [InlineData(AppSettings.OnScreenKeyboardAutomatic, false, true, KeyboardKind.EmuSen)]
         [InlineData(AppSettings.OnScreenKeyboardAutomatic, false, false, KeyboardKind.Field)]
         [InlineData(AppSettings.OnScreenKeyboardSteam, false, true, KeyboardKind.Steam)]
@@ -45,7 +45,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [InlineData(AppSettings.OnScreenKeyboardEmuSen, true, true, KeyboardKind.EmuSen)]
         [InlineData(AppSettings.OnScreenKeyboardEmuSen, true, false, KeyboardKind.EmuSen)]
         [InlineData(null, false, false, KeyboardKind.Field)]
-        [InlineData("something unknown", true, false, KeyboardKind.Steam)]
+        [InlineData("something unknown", true, true, KeyboardKind.Steam)]
+        [InlineData("something unknown", true, false, KeyboardKind.Field)]
         public void The_setting_Steam_and_the_device_in_use_choose_the_keyboard(string? setting, bool underSteam, bool padInUse, KeyboardKind expected) =>
             Assert.Equal(expected, DeviceKeyboard.Choose(setting, underSteam, padInUse));
 

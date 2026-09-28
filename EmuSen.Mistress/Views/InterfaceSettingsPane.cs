@@ -45,6 +45,8 @@ namespace EmuSen.Mistress.Views
         ];
 
         private readonly AppSettings _settings;
+
+        private static string L(string letter) => EmuSen.Mistress.Input.PadHints.Letter(letter);
         private readonly Action _changed;
 
         public InterfaceSettingsPane(AppSettings settings, Action changed)
@@ -114,7 +116,7 @@ namespace EmuSen.Mistress.Views
             new FieldRow
             {
                 Label = "Screensaver Controls",
-                Hint = "X in the system view starts it; in a slideshow left and right show another game, A starts the game shown and Y goes to it. Off, any button only wakes the screen.",
+                Hint = $"{L("X")} in the system view starts it; in a slideshow left and right show another game, {L("A")} starts the game shown and {L("Y")} goes to it. Off, any button only wakes the screen.",
                 Content = Switch("ScreensaverControls", "Enable screensaver controls", S.ScreensaverControls, on => S.ScreensaverControls = on),
             },
             new FieldRow

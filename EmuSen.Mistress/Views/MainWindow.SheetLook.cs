@@ -23,7 +23,7 @@ namespace EmuSen.Mistress.Views
             Sheets.MenuFrameFor = FramedAsMenu;
         }
 
-        // The windows that pass the fit audit at both sizes framed as menus; the controller bindings keep the plain sheet for their own overhaul (§4.80, §4.81).
+        // The windows that pass the fit audit at both sizes framed as menus, and the controller bindings, framed by their own overhaul (§4.80, §4.81, §42).
         internal static bool FramedAsMenu(Window window) => FramedWindows.Contains(window.GetType());
 
         public static readonly IReadOnlyList<System.Type> FramedWindows =
@@ -31,6 +31,7 @@ namespace EmuSen.Mistress.Views
             typeof(ScrapeStatusWindow), typeof(ActiveCheatsWindow), typeof(CheatDatabaseWindow), typeof(FindByNameWindow), typeof(CoverPickerWindow),
             typeof(GamelistFilterWindow), typeof(FolderEditorWindow), typeof(GraphicsSettingsWindow), typeof(ShaderSettingsWindow), typeof(ResumeWindow),
             typeof(RewindReelWindow), typeof(ScreenshotWindow), typeof(ThemeBrowserWindow), typeof(ThemeDetailWindow), typeof(ThemeAboutWindow),
+            typeof(InputSettingsWindow),
         ];
 
         // A framed sheet's help bar, from what its window holds: choose and back always, tabs and sideways values where there are any.

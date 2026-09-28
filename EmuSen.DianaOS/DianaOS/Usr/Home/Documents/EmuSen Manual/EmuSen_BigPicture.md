@@ -1149,6 +1149,7 @@ sends and to whom. The API's own condition (free, distributed software) is met.
   - **Q105:** the editor's subtitle is ES-DE's one line, the file name and its system. **Q106:** the editor's help bar changes per row, as ES-DE's does. **Q107:** `MenuPanel` shows ES-DE's scroll indicator when its rows overflow. **Q108:** leaving the editor returns to the gamelist, as now.
   - **Q109, changed:** text entry uses the device's own on-screen keyboard. Under Steam (SteamOS Game Mode, or Desktop Mode with Steam running) Mistress focuses a real text field and asks Steam for its keyboard through `steam://open/keyboard`. Steamworks' `ShowFloatingGamepadTextInput` needs a real Steam app ID, which a non-Steam shortcut does not have. Mistress's own keyboard stays as a fallback, chosen in Preferences (Automatic, Steam, EmuSen's).
   - *Built on 2026-09-27 (§40; settings reference §4.79). Steam's keyboard is not yet checked on the handheld (P262–P266); Q160–Q165 are §40.12's.*
+  - *Q160, Q164 and Q165 built on 2026-09-27 (§40.13–§40.15; settings reference §4.79.5–§4.79.7). Steam's keyboard measured on the handheld the same day; the popup moved above it (§40.16, §4.79.8).*
 - **Q100–Q104, Q120–Q122 and Q130–Q132, decided 2026-09-27; every recommendation accepted:**
   - **Stage 2's metadata editor (§34):** the look is approved. **Q100:** an ES-DE text popup is built with the rest of stage 2, and the on-screen keyboard's Shift and Done keys are widened meanwhile. **Q101:** Reset moves to a pad button (X), shown in the help bar. **Q102:** ES-DE's keyboard keys drive the big-screen menus as pad buttons do. **Q103:** the desktop editor keeps the Hide metadata fields switch. **Q104:** ES-DE's own metadata editor is captured and the proportions checked against it. Also: the Hide from Library question no longer names ES-DE, and long controller names use a short form.
   - **Pass 14 (§36):** items 1 and 2 are approved. "1 GAMES" becomes "1 GAME", and the Bluetooth indicator draws its symbol rather than the letter B. **Q120:** the carousel's `selectedItemMargins` and `lineSpacing` come next, then `gamelistinfo`, then `animation`. **Q121:** Mistress shows its own word where ES-DE writes "unknown", through Pass 5's text lookup. **Q122:** ES-DE's default help bar is measured and drawn for a theme that has none.
@@ -5228,6 +5229,8 @@ at mid-fade. A linear fade was kept because it is §88.5's and one recording doe
   was narrowed the same day, before merging, to accept and back alone, after the decision on North (§24.1). The
   departure costs a player with a Nintendo-printed pad the X/Y half of ES-DE's remedy; what it buys is that the swap
   cannot disagree with whatever the collections branch assigns to North and West.
+  *Retired 2026-09-27 (Q160, §40.13): the swap trades X and Y as well. The concern it answered did not arise, because
+  North and West kept one function each and the swap moves the function with its button, whatever the function is.*
 - **The swap is the interface's only.** The keyboard is unaffected, as ES-DE's is; so is every game, whose bindings are
   its own (`GamepadBindingMap`). The text hints' letters swap with it; ES-DE says its help system is "updated
   accordingly".
@@ -9467,15 +9470,16 @@ desktop these tests run on has Steam running, so without it Automatic would have
 |---|---|---|---|
 | P260 | *(written before the mutants)* Of 40 mutants, at least nine in ten are caught on their first valid run | 37 of 40 (92.5%) (§40.8) | held |
 | P261 | *(written before the mutants)* The likeliest survivors are L11 (no redraw on scrolling, since the harness redraws every frame it captures) and L12 (the lower pair pointing up, since the pixel counts do not look at direction) | both survived; F20, not named, survived too (§40.8) | held for the two it named |
-| P262 | *(for the handheld)* In Game Mode, with Mistress launched as a non-Steam shortcut, `steam://open/keyboard` opens Game Mode's keyboard over Mistress | not checked | owed |
-| P263 | *(for the handheld)* It takes the lower part of the screen, and the popup's field, centred at about 380 of 800 lines, stays above it | not checked | owed |
-| P264 | *(for the handheld)* What is typed on it arrives in the focused field, and its Enter closes the popup with the text kept | not checked | owed |
-| P265 | *(for the handheld)* While it is open the pad drives Steam's keyboard and not Mistress; once it closes, Mistress has the pad again | not checked | owed |
-| P266 | *(for the handheld)* In Desktop Mode with Steam running, the same address opens a floating keyboard that types into Mistress's focused window | not checked | owed |
+| P262 | *(for the handheld)* In Game Mode, with Mistress launched as a non-Steam shortcut, `steam://open/keyboard` opens Game Mode's keyboard over Mistress | it does, measured on the handheld on 2026-09-27 (§40.16) | held |
+| P263 | *(for the handheld)* It takes the lower part of the screen, and the popup's field, centred at about 380 of 800 lines, stays above it | it takes roughly the lower half, and about half of the centred popup was behind it (§40.16) | held for the keyboard's place, failed for the popup's; the popup was moved |
+| P264 | *(for the handheld)* What is typed on it arrives in the focused field, and its Enter closes the popup with the text kept | the text arrives in the field (§40.16); its Enter was not reported | first half held; second owed |
+| P265 | *(for the handheld)* While it is open the pad drives Steam's keyboard and not Mistress; once it closes, Mistress has the pad again | not reported | owed |
+| P266 | *(for the handheld)* In Desktop Mode with Steam running, the same address opens a floating keyboard that types into Mistress's focused window | not reported | owed |
 | P267 | *(written before the broad run)* The broad Mistress run, after merging WiseMan, fails on nothing this branch causes | 1,449 tests, none failed (§40.10) | held; one run is weak evidence against an intermittent failure |
 
 The handheld was offline, and nothing here ran on it. P262–P266 are what to look at there, in that order; each is a
-prediction, not a result.
+prediction, not a result. *Amended 2026-09-27: Game Mode was measured on the handheld later that day; the rows above
+record what was reported, and §40.16 what was changed because of it.*
 
 ### 40.7 Tests
 
@@ -9575,10 +9579,13 @@ suite on its branch: **1,442 tests, all passed**.
 ### 40.11 Not done
 
 - **Anything on the handheld.** Steam's keyboard was never seen: P262–P266 are owed, and until they are checked
-  *EmuSen's* is the choice known to work with a pad.
-- The themed view's search box and the cheats window keep Mistress's keyboard in every mode (Q164).
+  *EmuSen's* is the choice known to work with a pad. *Partly closed 2026-09-27: P262 and the keyboard's half of P263
+  were measured there (§40.16); P264's Enter, P265 and P266 are still owed.*
+- The themed view's search box and the cheats window keep Mistress's keyboard in every mode (Q164). *The search follows
+  the setting since 2026-09-27 (§40.14); the cheats window still keeps Mistress's keyboard.*
 - The popup's field is drawn in the application's typeface (LunaP §195.3).
-- ES-DE's X/Y swap (Q160) and its Switch Pro lettering (Q161) are recorded, not followed.
+- ES-DE's X/Y swap (Q160) and its Switch Pro lettering (Q161) are recorded, not followed. *The X/Y swap is followed
+  since 2026-09-27 (§40.13); the lettering stays Mistress's, as Q161 decided.*
 - ES-DE's own text popup's help (*Apply*, *Backspace* on L, *Space* on R, *First* and *Last* on the triggers, *Move
   Cursor*; `rating-wrap/p00_popup.png`) belongs to its keyboard, which Mistress's popup has none of; the popup's line
   names the keys it does take.
@@ -9587,7 +9594,8 @@ suite on its branch: **1,442 tests, all passed**.
 
 - **Q160, the swap.** ES-DE's swap trades X and Y as well as A and B; Mistress's trades A and B only, so under the swap
   its help names Y for Favourite where ES-DE's names X. **Recommendation:** match ES-DE, both pairs, since the swap
-  exists for a Nintendo layout, whose X and Y are also reversed; the help follows by itself.
+  exists for a Nintendo layout, whose X and Y are also reversed; the help follows by itself. *Decided 2026-09-27 as
+  recommended; built in §40.13.*
 - **Q161, Nintendo's letters.** ES-DE letters a Switch Pro as SDL 2 reports its printed labels (Select on A) and a SNES
   pad by position (Select on B). Mistress's Nintendo family letters by position, which is what the button under the
   player's thumb is called on every Nintendo pad Mistress routes. **Recommendation:** keep it; the swap is what makes A
@@ -9599,10 +9607,182 @@ suite on its branch: **1,442 tests, all passed**.
 - **Q164, the other text boxes.** The themed search and the cheats window keep Mistress's keyboard, since neither is a
   big-screen row; the cheats window's codes need its Code layout, and its look is being redone separately. Should the
   search follow the On-Screen Keyboard setting too? **Recommendation:** yes, after P262–P266 are checked, with the
-  cheats window left to its restyling.
+  cheats window left to its restyling. *Decided 2026-09-27 as recommended; built in §40.14, once P262 had been
+  measured.*
 - **Q165, Automatic with a keyboard under Steam.** On a desktop with the Steam client running, Automatic asks for
   Steam's floating keyboard even when the row was chosen with Enter on a physical keyboard. **Recommendation:** under
   Steam, a row chosen from a keyboard gets the field alone, and Steam is asked only for a pad; checked with P266.
+  *Decided 2026-09-27 as recommended; built in §40.15. P266 is still owed.*
+
+### 40.13 Q160: the swap trades X and Y as well
+
+*Built on branch `bigpicture-q160-q165`, from WiseMan at `4e45c49d`; LunaP unchanged at `openemu-library`'s `c20856f`.*
+Decided 2026-09-27 (§10.1): *Swap the A/B and X/Y buttons* trades both pairs, as ES-DE's `InputSwapButtons` was
+measured to (§40.1). Under the swap East chooses, South goes back, West does what North did and North what West did.
+
+**What the pad reads.** `PadHeldOn` is where a face button becomes an interface function, and nothing else reads the
+face buttons for the interface. With the swap on it now reads Search (the favourite in the themed gamelist, §4.58; the
+collection toggle while one is edited; *go to* on the slideshow; *Scrape* in the editor; *Space* on Mistress's
+keyboard; *Keyboard* on the text popup) from West, and the X function (the screensaver's start in the system view, §37;
+*Reset* in the editor, Q101) from North. Every place listed follows from that one mapping, which is why none of them
+changed. The pad menu uses A and B alone. The keyboard is unaffected, as ES-DE's is (Insert and Delete stay Search and
+the X function), and so is every game, whose bindings are its own.
+
+**What the help draws.** A help entry names the positional button (`PadGlyphButton.South` … `West`) and LunaP's
+filled set letters it for the family, so the swap is Mistress's to apply before LunaP sees the entry; LunaP did not
+change. `PadHints.Of` and `PadHints.Glyph` give the button a function is on under the swap, both pairs, and every
+big-screen entry that names a face button goes through them: the editor's *Select*, *Back*, *Scrape* and *Reset*, the
+pad menu's and Gamelist Options' *Select* and *Back*, an option list's and a menu message box's. The themed view's
+`HelpPrompts` moved North and West as it already moved South and East, and a theme's own icon moves with its function,
+`button_y_` to `button_x_`, as `button_a_` already went to `button_b_`. So with the swap on and an Xbox pad the gamelist
+shows *B Launch*, *A Back*, *X Favorite*, the system view *Y Screensaver*, and the editor *X Scrape*, *Y Reset*: the
+letter drawn is always the button that acts.
+
+**The text hints** trade X and Y as well as A and B (`PadHints.Face`): Mistress's keyboard reads *B Type, A Erase,
+X Space*, and the Steam popup's line *A Cancel, X Keyboard*. Two sentences name buttons in prose and follow through
+`PadHints.Letter` and `Glyph`: Interface Settings' *Screensaver Controls* (*Y in the system view starts it … B starts
+the game shown and X goes to it*), and the collection line, which names West under the swap.
+
+§24.5's reason for narrowing the swap was that it must not disagree with whatever North and West came to mean. It is
+retired, not refuted: the swap moves a function with its button, so it composes with any assignment that gives each
+button one function, and that is the assignment Mistress has.
+
+### 40.14 Q164: the themed search follows the On-Screen Keyboard setting
+
+Decided 2026-09-27 (§10.1), once P262 had been measured. `PadKeyboard.FollowSetting` marks a text box that is not a
+big-screen row but takes the setting, with its popup's title; the themed search box is the one box so marked, titled
+*Search*. When it opens, the window chooses exactly as for a row (`KeyboardFor`: the setting, whether Steam is there,
+and whether Enter chose it):
+
+- **Steam's keyboard or the field alone:** `MenuTextPopup` over the search box. What is typed filters the list when it
+  is kept (Enter, or Start from a pad) and not before; Escape or B leaves the filter as it was.
+- **Mistress's keyboard:** as before, filtering the list at every key.
+
+The difference is deliberate, not a limitation found: the popup edits a copy and writes it back on Enter (LunaP
+§195.3), and a live filter under a popup the list is shaded behind would show nothing the player can read. The search
+bar stays up while either is open. The cheats window's boxes are not marked and keep Mistress's keyboard in every mode:
+its codes need the Code layout, which a system keyboard does not have, and its look is §41's to settle.
+
+### 40.15 Q165: a keyboard's Enter never asks Steam
+
+Decided 2026-09-27 (§10.1). In Automatic, `DeviceKeyboard.Choose` now asks first which device chose the row and only
+then whether Steam is there:
+
+| Automatic | Off Steam | Under Steam |
+|---|---|---|
+| chosen with Enter | the field alone | the field alone (was Steam's keyboard) |
+| chosen with a pad's A | Mistress's keyboard | Steam's keyboard |
+
+*Steam* and *EmuSen's* are unchanged, so *Steam* still asks Steam for an Enter: the setting is the player's explicit
+choice. The reasoning is §40.12's: a player at a physical keyboard has one, and a floating keyboard over the field can
+only hide it; on the handheld, Steam's hides half the screen (§40.16). P266, which concerns this case on a desktop with
+Steam running, was not reported and is still owed; the change does not depend on it.
+
+### 40.16 Steam's keyboard on the handheld, and the popup above it
+
+**Measured on the handheld on 2026-09-27**, in Game Mode with Mistress started as a non-Steam shortcut:
+`steam://open/keyboard` opens Game Mode's keyboard over Mistress, and what is typed on it reaches the popup's field.
+The keyboard covers roughly the lower half of the screen, and about half of the popup, which §40.5 centred, was behind
+it. P262 held; P263 held for the keyboard and failed for the popup; P264's first half held (§40.6). The handheld runs
+1920×1200.
+
+**What was built.** When Steam's keyboard is asked for, `PadKeyboard` puts the popup at the top of the window, its top a
+tenth of the height down (`SteamPopupTop`), centred across as before. Measured headless on the final build:
+
+| Window | Popup, Steam's keyboard asked for | Popup otherwise |
+|---|---|---|
+| 1280×800 | top 80 (10.0%), bottom 278 (34.7%) | centred, 301 to 499 |
+| 1920×1200 | top 120 (10.0%), bottom 417 (34.7%) | centred, 452 to 749 |
+
+Both are clear of a keyboard that covers the lower half with room to spare, and nothing in the popup is cut or
+overlapped. Only the Steam case moves: from a physical keyboard (under Steam too, §40.15) and with Mistress's keyboard
+the popup is where it was. The place is not taken from the keyboard's real height, which Steam does not give a program
+it did not start as a Steam game (§40.5); a keyboard taller than about 65% of the screen would reach the popup again.
+Whether the handheld's keyboard leaves the moved popup whole is P268 below, owed.
+
+### 40.17 Tests
+
+`SwapAndKeyboardTests`, 18 cases, headless, with Steam simulated for a case by a running client or `SteamGameId`, put
+back to the harness's `NoSteam` after:
+
+- **Q160:** both pairs traded in `PadHints.Of`, `Glyph`, `Face` and `Letter`, and nothing else moved; in the gamelist
+  under the swap X toggles the favourite and Y does nothing, the help names B Launch, A Back, X Favorite, and the glyph
+  drawn for Favorite changes only inside its square when drawn as Y instead; in the system view Y starts the
+  screensaver and X does not, and the help names Y; in the editor the help reads *X Scrape*, *Y Reset*, and Y resets
+  an edited switch;
+- **Q164:** the themed search under every setting, from a pad and from Enter, under Steam and not (eight rows): which
+  keyboard, the popup's title, hint and focus, and what was asked of Steam; Enter's search types into the field,
+  filters on Enter and keeps the filter on a second search's Escape; with *Steam*, the pad's search asks Steam twice
+  (A, then Y) and Start keeps the text;
+- **Q165:** under Steam, by a running client and by `SteamGameId`, Enter on the editor's Name gets the field and asks
+  nothing, and a pad's A on it asks Steam once;
+- **the popup's place:** at 1280×800 and 1920×1200, with Steam's keyboard asked for its top between 8% and 12% and its
+  bottom above 45%, centred across; from a keyboard, off Steam and under it, centred as before and the same size; in
+  both, the popup inside the window and its title, field and line inside it, whole and not over one another.
+
+`PadCheatsTests` gained one case in two rows: the cheats window's code and description boxes open Mistress's keyboard
+with *Steam* and with Automatic under Steam, and nothing is asked of Steam. Existing cases changed: `ControllersTests`'
+swap case now expects X to search and the keyboard's hint to read *X Space*; `ThemedControllersTests` expects a
+theme's `button_x_` icon and West for Favorite under the swap; `MenusFollowupTests`' table expects the field for Enter
+under Steam in Automatic.
+
+### 40.18 Mutants
+
+Twenty-three mutants, one at a time, by `~/.cache/emusen/probe/q160/mutate.py` (§40.8's runner, trimmed to one tree),
+against `SwapAndKeyboardTests`, `MenusFollowupTests`, `ControllersTests`, `ThemedControllersTests` and the cheats case.
+Twelve break the swap (S1–S12), five the search (K1–K5), two Q165 (E1, E2) and four the popup's place (P1–P4).
+
+| # | Predicted | Found | Verdict |
+|---|---|---|---|
+| P268 | *(for the handheld)* With the popup moved, Game Mode's keyboard leaves all of it, title, field and line, in view at 1920×1200 | not checked | owed |
+| P269 | *(written after the run was started and before any of its results were read)* Of 23 mutants, at least 21 are caught on their first valid run; the likeliest survivor is K3 (the search bar hidden under the popup), whose only witness is one visibility assertion made after the view has drawn | 23 of 23 caught on the first run; K3 was caught, by two cases | held for the count; the survivor it named did not survive |
+
+| # | Rule broken | Result |
+|---|---|---|
+| S1, S2 | the pad's Search, or its X function, read from the unswapped button | caught by 3; by 2 |
+| S3, S4 | North, or West, not traded in `PadHints.Of` | caught, each by 2 |
+| S5, S6 | the hints' X and Y left alone by the pattern; the letters not traded | caught, each by 2 |
+| S7, S8 | the themed help's North, or West, not moved | caught by 3; by 1 |
+| S9 | a theme's `button_y_` icon kept for a function moved to West | caught |
+| S10, S11 | the editor's *Scrape*, or *Reset*, glyph unswapped | caught |
+| S12 | `Glyph` ignoring the swap | caught by 2 |
+| K1, K2 | the search not marked; marked boxes ignored when a keyboard opens | caught, each by 3 |
+| K3 | the search bar hidden while the popup is open | caught by 2 |
+| K4 | the search's popup titled *Enter Search* | caught |
+| K5 | every text box following the setting, the cheats window's too | caught, by the cheats case |
+| E1 | Automatic asking Steam for an Enter under Steam (the old rule) | caught by 4 |
+| E2 | Automatic never asking Steam for a pad | caught by 3 |
+| P1–P4 | the Steam popup centred; every popup moved up; its top at 30%; its top at the window's edge | caught, each by the placement case |
+
+**23 of 23 caught on the first valid run.** P269 held for the count. The survivor it named was caught: the search's
+Enter case asserts the bar is visible while the popup is open, before anything else draws, which is the moment K3
+breaks. The runner restored every file, touched each, and rebuilt clean; `--check` found every snippet once afterwards.
+A clean record is weak evidence of its own: the mutants were written by the same hand as the cases, after them.
+
+### 40.19 Pictures
+
+In `~/.cache/emusen/bigpicture/png/q160/`, from `Q160PictureTool` (`EMUSEN_BIGPICTURE_PNG=1`), at 1280×800 and
+1920×1200. `EMUSEN_Q160_TAG` names the build: `before-` is WiseMan at `4e45c49d` with the tool copied in, built in a
+throwaway worktree since removed; `after-` is this branch. With the swap on and the Xbox family: `-system-swapped`,
+`-gamelist-swapped`, `-editor-swapped` (an edited switch, so *Reset* shows) and `-controllers-swapped` (the switch's new
+words). Then `-editor-steam` (the popup with Steam's keyboard asked for), `-editor-field` (from a keyboard),
+`-search-field` and `-search-filtered`. `side-by-side-help-<size>.png` stacks each help bar before over after. Every
+picture was looked at:
+
+- Before, the swap names *Y Favorite*, *X Screensaver* and *Y Scrape*, *X Reset*; after, *X Favorite*, *Y Screensaver*,
+  *X Scrape*, *Y Reset*. A and B are the same in both.
+- The Steam popup sits in the upper third over the shaded editor, whose title shows above it; the field-alone popup
+  and the search's are centred, as before.
+- The synthetic theme's gamelist help runs past the right edge at 1280×800 in both builds. It is that test theme's
+  element, sized by its `theme.xml`; Art Book Next lists three entries there (§40.9), and nothing here changed it.
+
+### 40.20 The broad run
+
+WiseMan had not moved from `4e45c49d` when the run began, nor LunaP's `openemu-library` from `c20856f`, so there was
+nothing to merge. One run of the Mistress filter without any shader, GPU, Vulkan or bench test, under `nice -n 10`, on
+the branch's code commit, measured on 2026-09-27: **1,486 tests, 1,436 passed, 50 skipped (the picture, survey, bench
+and live tools, this section's picture tool among them), none failed, in 4 min 1 s.** No prediction was written for
+it; one run is weak evidence against an intermittent failure.
 
 ## 41. Every window in ES-DE's look, first part: the style layer and three windows (2026-09-27)
 
@@ -9858,3 +10038,298 @@ Every picture was looked at. Three things seen in them are questions rather than
   but *Load into Active Cheats* is still disabled. It follows the list's selection, and the picture suggests the focus
   reached the row without selecting it. This was seen in the pictures, not measured. A on the row loads the game
   either way (§4.45.5). Enable the button from the focused row as well, or select the row the focus reaches?
+## 42. The controller bindings window: drawn controllers, rebinding from the drawing, and an input tester (2026-09-27)
+
+*Decided 2026-09-27 (§10.1):* the Controller Bindings window is overhauled. Each console's controller is drawn as vector
+art with the bindings mapped onto its buttons; a button pressed on the pad or the keyboard lights up on the drawing, so
+the window doubles as an input tester, as many emulators' do; the drawings are EmuSen's own, not copied from any
+emulator's, maker's or website's art. This section records the first stage: the drawing control, the Super NES and
+Nintendo 64 drawings, and the window with its tester, stopped there so the drawings can be looked at before the NES pad,
+the Game Boy and a modern pad are drawn in the same way. The player's account is §4.81 of the settings reference; the
+control is LunaP's §198. §40 and §41, and §4.79 and §4.80, are other work's.
+
+**Numbering.** Predictions here start at **P280** and questions at **Q180**.
+
+### 42.1 What was built
+
+- **LunaP's `ControllerDiagram` (§198).** A controller drawn from the toolkit's own geometry in a design space of its own,
+  fitted to the space between up to four bands of labels. Every button, each arm of a cross, each direction of a stick
+  and each trigger is a named region that can be lit, ringed as selected, hit by a click and moved to with a direction.
+  Each region has a label, a button that draws itself, showing the key and the pad button bound to it, joined to the
+  region by a line. The control takes plain data (a region's two strings, pressed or not, a stick's position) and knows
+  nothing of Mistress's controls.
+- **The drawings.** The Super NES pad (two round grips joined by a bar, the cross in a round well, two slanted pills, four
+  coloured buttons in a diamond on a rounded well, two shoulders) and the Nintendo 64 pad (a wide top on three grips, the
+  cross on the left grip, the stick in an octagonal gate on the middle one with Start above it, A, B and four C buttons,
+  L, R, and Z showing past the middle grip's edge). Every shape was placed by hand in code; nothing was traced, measured
+  from or compared with any picture of the pads. The face buttons carry the colours the pads were sold in, because colour
+  is much of what identifies them at a glance (Q183 asks which scheme for the Super NES).
+- **The window.** Each console's tab is its drawing, filling the height the page shows, with the list the window had
+  scrolled below it under "All Bindings". A region chosen by a click, by the pad's A or by Enter listens for a key and a
+  pad button at once. The cross and the arrow keys move between regions by where they are drawn. Test Buttons (Y, or the
+  button) makes every press only light up until B is held for a second or Escape is pressed. On a big-screen sheet the
+  footer is the window's own.
+- **The tester's input.** `GamepadManager.Poll` raises `Polled` at its end, and the window redraws from that poll; the
+  main window's 16 ms tick is the only poller, as before. Keys are tracked from the window's own key events.
+
+### 42.2 Decisions made on the way, and why
+
+- **A mode for testing.** The pad cannot steer the window and be tried on it at once. With the default bindings the
+  Super NES's A is the pad's East, which is Back, so trying it would close the window; and A would rebind whatever label
+  has the focus. The tester is live whenever nothing is captured, as decided, and Test Buttons is how the pad's own
+  navigation buttons are tried. Leaving it takes a one-second hold of B because a short press of B is a button being
+  tried. This is Q180.
+- **One capture for both.** The drawing has one place to choose a button, not a Rebind Key and a Rebind Pad, so a choice
+  listens for both and binds whichever comes first. §4.45.4's rules for the pad hold unchanged; when its five seconds run
+  out the key listener goes on, so a keyboard player who takes longer is not cancelled. This is Q182.
+- **Player 1's pad lights the drawing.** The game hears player 1 alone (§4.61's settings reference); a drawing lit by a
+  second pad would claim the game hears it. The capture still takes any pad the interface reads, as it did. This is Q181.
+- **Moving by the drawing, not the labels.** The labels stand in columns, so moving between them by position gives the
+  column's order, which is not the pad's: up from the Super NES's B went to A. Moving by where the buttons are drawn sends
+  B up to X, X left to Y, and so round the diamond. The score is LunaP's (§198.5): the router's own score (distance
+  along plus twice across) sent A up to the right shoulder, straight above and far, rather than X, above and to the left
+  and near.
+- **The list stays.** It is the only place a binding can be cleared, and a screen reader walks it more easily than a
+  drawing; every test that used it passes unchanged, and the pad reaches it past the drawing's edge.
+
+### 42.3 Defects found while building, each shown before its fix
+
+- **Keys typed with the focus on nothing were not heard.** The key handler was on the window's content, where §4.45.4 put
+  it so a sheet's keys reach it; a desktop window with nothing focused receives a key at the window alone. The tester's
+  key test failed on it; the window now also takes a key whose source is the window itself, and only those, so a key is
+  not handled twice.
+- **The labels did not grow with a sheet's text.** The first big-screen pictures showed labels at nine pixels beside
+  twenty-pixel text; the labels now never fall far below the text around them. A second defect hid behind the first: the
+  diagram did not measure again when that text changed size, so a window whose font changed kept its old labels.
+  `Labels_follow_the_size_of_the_text_around_them` failed on it (54 px high with 14 px text and with 26 px) and passes
+  with the fix (54 and 66).
+- **A column of labels spilled into the row below.** On a 1920 × 1200 sheet the Nintendo 64's left column overlapped the
+  bottom row's first label; a column taller than the space now shrinks every label.
+- **A label pressed by the router did nothing.** The router presses a focused button by raising its Click event, which
+  does not call the button's own `OnClick`; the label listened in `OnClick`. It now listens to the event. The window was
+  not affected, since it takes A itself, but any other host would have been.
+
+### 42.4 Pictures
+
+`ControllerBindingsPictureTool` (§4.81) wrote, for each drawn console, idle and lit, at 1280 × 800 and 1920 × 1200, the
+window on the desktop and on a big-screen sheet: sixteen pictures in `~/.cache/emusen/bigpicture/png/bindings/`, named
+`desktop-SNES-1280x800-idle.png` and so on. Lit is the pad's East, left shoulder and cross-up held, and on the Nintendo
+64 the stick pushed to (0.75, −0.45) and the right stick left; on the desktop the Enter key (Start's) is held too and
+the right shoulder selected, and on a sheet the window is in Test Buttons, so its footer shows. Every picture was looked at. What they show:
+
+- Both pads read as themselves at both sizes; every label is beside its button with its line, and no two labels overlap.
+- Lit buttons are the accent colour with a halo, the lit arm of a cross has the cross's rounded end, the stick's knob sits
+  off centre with a line from the middle, and a lit label's badge and line are the accent colour.
+- On a big-screen sheet at 1280 × 800 the drawing is small: the sheet's chrome takes a third of the height, and the
+  drawing, bounded by its height, leaves the sides empty (Q184).
+- A label's pad line names an unknown pad's button by SDL's position name spelled as words ("Left Shoulder",
+  "D-pad Up"); a pad whose printed labels SDL knows shows those.
+
+### 42.5 Tests
+
+LunaP's `ControllerDiagramTests` (33 cases, §198.6) and Mistress's `ControllerBindingsDiagramTests` (13 cases, §4.81). The
+window's existing tests (`InputSettingsWindowTests`, its layout and render tests, the pad tests of §4.45 including every
+control of the sheet reached by the pad) and LunaP's whole suite (1,462) pass. The blast-radius run of Mistress's tests
+(input settings, pad settings, controllers, the gamepad manager, accessibility and the off-dispatcher guard): 111 passed.
+
+### 42.6 Mutants
+
+`~/.cache/emusen/probe/bindings/mutate.py`, written in the manner of §40's runner: one exact snippet per mutant, a state
+file written before each and a leftover restored at the start, every restored file touched, builds at `-m:2` under
+`nice -n 10`, a hang counted as caught, both trees rebuilt at the end (both rebuilt cleanly). Twenty-five mutants of
+Mistress's and Endymion's code (B1–B25), run against `ControllerBindingsDiagramTests`, `InputSettingsWindowTests` and the
+Controller Bindings cases of `PadSettingsWindowTests`, and seventeen of LunaP's (L1–L17, listed in LunaP §198.7), run
+against `ControllerDiagramTests`. The predictions were written first (§42.7).
+
+**B1–B25, all caught on the first run:** the poll never announced; the N64's Z not mapped; a held key not recorded; a key
+let go still lit; lit while capturing; the stick never moved; a key for a direction not pushing the stick; the stick never
+standing in for the cross; a stick direction lit the wrong way; a choice listening for a key only; a key answering and
+leaving the pad listening, and the reverse; testing letting the pad steer; holding B never stopping testing; any B
+stopping it; testing letting keys act; A on a region not rebinding; the cross moving by the labels; Y not starting
+testing; a rebound key not shown on the drawing; no prompt while capturing; C up and C down swapped; a key with the focus
+on nothing not heard; the sheet's footer not set, and not given back.
+
+**L1–L17: thirteen caught on the first run, four survived.** L2 (a cross's arm hit in the square corner outside its
+rounded end), L15 (no ring for the selected region: the test counted the selected region's accent line as a ring) and
+L16 (a line meeting a button's middle: nothing looked at where a line ends) were caught on the second run, by a test
+clicking each arm's corner, a count on the half of a region away from its label, and a test of each line's two ends
+through the new `LeaderOf`. **L7, the labels centred without the drawing, still survives**: both drawn layouts have labels
+on all four sides, which leaves the composition centred before the pass moves it, so the pass moves both by less than
+the line test's two pixels at all six sizes tried. It will be measurable with the first drawing that leaves a side
+without labels.
+
+**Result: 38 of 42 caught on the first valid run, 41 of 42 after the tests were strengthened.**
+
+### 42.7 Predictions
+
+Written before the mutants ran (`probe/bindings/predictions.txt`).
+
+| # | Prediction | Outcome |
+|---|---|---|
+| P280 | Of 42 mutants, at least 36 are caught on their first valid run | **Held**: 38 |
+| P281 | L16, a leader line meeting a button's middle, survives: no test looks at where a line ends | **Held** |
+| P282 | L2, a cross's arm hit outside its rounded end, survives: every hit test lands in the middle of a region | **Held** |
+| P283 | L7, the labels centred without the drawing, is caught | **Wrong**: it survived, for the reason in §42.6; L15 also survived, which was not predicted |
+| P284 | On the handheld with a real pad, a button held lights within one 16 ms tick of the press, and the stick's knob follows without a visible lag | open until the window is run there |
+
+### 42.8 Open questions
+
+- **Q180, testing and steering.** The pad steers the window, and Test Buttons (Y, left by holding B) is how its own
+  navigation buttons are tried. Options: keep; make rebinding a hold of A so a short A is a test; keep the tester only in
+  Test Buttons. **Recommendation:** keep; it is one extra press, and the words above, below and in the footer say how.
+- **Q181, which pad lights the drawing.** Player 1's only, since the game hears player 1 alone; the capture takes any.
+  Options: player 1; any pad the interface reads; each pad in its own colour. **Recommendation:** player 1, with its name
+  on the line below the drawing, until a second pad is player 2 (§4.61).
+- **Q182, one capture or two.** A choice on the drawing listens for a key and a pad button at once. Options: keep; ask
+  which, as the list's two buttons do. **Recommendation:** keep.
+- **Q183, the Super NES's colours.** The drawing uses the red, yellow, green and blue buttons of the Super Famicom and
+  the PAL pad; the North American pad has two shades of purple. Options: keep; the North American ones; a setting.
+  **Recommendation:** keep; the four colours tell the four buttons apart at a glance, which is what the drawing is for.
+- **Q184, room on a big-screen sheet.** The drawing is bounded by its height and leaves the sides empty on a wide sheet.
+  Options: labels in two columns a side when there is width; the words above the tabs dropped on a sheet (done); wait
+  for the shared ES-DE style layer and decide with it. **Recommendation:** the last.
+- **Q185, the General tab.** The modern pad is to be drawn there as a tester of the pad itself, every button and both
+  sticks and triggers as SDL reads them, beside the stick deadzone it would show. **Recommendation:** yes, after the three
+  remaining drawings.
+
+### 42.9 Not done at this stage
+
+- The NES pad, the Game Boy and the modern pad; the NES and Game Boy tabs show their list alone until then.
+- ES-DE's look on a big-screen sheet, which waits for the shared style layer.
+- Clearing a binding from the drawing.
+- Nothing ran on the handheld or with a real pad.
+
+### 42.10 The second stage (2026-09-27)
+
+*Opened on the review of the checkpoint, 2026-09-27 (§10.1):* the drawings were approved and every recommendation of
+Q180–Q185 taken, with two more decisions: leader lines no longer cross the drawing, and the N64's Z gets a default pad
+button, the left trigger. *Decided 2026-09-27 as well, for every window:* nothing may be cut off, overflow its panel, or
+overlap other content at 1280 × 800 or 1920 × 1200; what does not fit is shrunk or reworked. WiseMan (4e45c49d, with
+§40 and §41) and LunaP's `openemu-library` (c20856f, with its §195 and §196) were merged in first, and WiseMan again at
+a8abe77d (Q160's swap of X and Y, and the tests' silent audio) and `openemu-library` at 4c48ba5 during the stage.
+
+- **Lines out of the drawing.** Each label's side, and its line's path, are now worked out from the drawing itself
+  (LunaP §198.2): the line leaves its button by the shortest way out of the drawing that crosses no other button, and
+  goes on to its label from the drawing's edge. The first stage's hand-chosen sides are gone. Before, the N64's cross
+  right arm, Stick Up and Stick Left, and the SNES's cross right arm, ran across much of the shell; now the longest part
+  of any line over a drawing is the Game Boy's cross right arm, down across its lower face, because every way to the
+  right crosses A or B. A LunaP test holds every line of every drawing to at most 0.35 of the drawing's larger side.
+- **The NES pad, the Game Boy and a modern pad** are drawn (LunaP §198.1), in the same way and under the same rule as
+  the first two: the toolkit's own geometry, nothing traced. Every console's tab now shows its drawing.
+- **Z is the left trigger.** SDL has no trigger button, so a trigger past half its travel has always been read as L2 or
+  R2, the N64's Z among them, on every console and whatever a binding file holds (`EmuSen_Input.md` §7.3). The binding
+  was right; the window said "unbound" for it. It now shows "Left Trigger" for L2 and "Right Trigger" for R2, and
+  "*button* or Left Trigger" when a button is bound beside it. Pulling the trigger while rebinding Z takes the button off
+  again, leaving the trigger alone. **No binding file needs to gain anything**: the trigger is not an entry in the file,
+  so an old file and a new one read it the same. The "free keys" rule of §7.4 is for keys and stick clicks, which are
+  entries.
+- **Q185, the pad itself on the General tab.** The Gamepad section now comes first, and beside its switch and its
+  deadzone slider stands the modern pad, drawn without labels, lit by player 1's own buttons as SDL reads them whatever
+  any console's bindings say; its triggers fill as they are pulled, its sticks move, and a dashed ring on each stick is
+  the deadzone, which follows the slider. A connected pad's own letters, where SDL knows them, are printed on its face
+  buttons. The stale hint that neither console reads an analog axis now says what the switch does.
+- **ES-DE's look (the shared layer of §41).** On a big-screen sheet the window is framed as ES-DE's menus are
+  (`MenuFrameFor` names it): Barlow Condensed, ES-DE's greys, the rounded panel at 0.94 of the screen's width, the title
+  band, and a help bar of its own: *Rebind*, *Test buttons*, *Back*, and L1/R1 *Console*, or while testing *Hold to stop
+  testing*; its Y glyph follows the A–B swap, which since Q160 trades X and Y as well. The desktop keeps LunaP's normal
+  theme.
+
+### 42.11 Q184, decided: the room on a big-screen sheet
+
+In the frame the drawing has about 370 pixels of height at 1280 × 800: the panel's title band, the tab strip and the
+help bar take the rest. What was done with it:
+
+- the words above the tabs, the line under the drawing, and the Close and Test Buttons buttons are not shown in the
+  look: the help bar does their work, and a label says "Press a key" and "Press a button" itself while it listens;
+- Reset to Defaults, which resets every console at once, moves to the end of the General tab, and the footer row under
+  the tabs is shown only when there is a conflict to report, so the row no longer takes height from every drawing;
+- the panel is 0.94 of the screen's width, the widest the frame allows, so a wide drawing is not bounded by width as
+  well;
+- the labels' size may now rise to `height / 420` of the space rather than `height / 520` (LunaP §198.2). Measured on
+  the pictures of the N64 tab framed at 1280 × 800: the labels were 34 pixels tall, with their binding text at about
+  eight pixels, before these changes, and are 44 pixels tall, with the text at about eleven, after them; the drawing is
+  smaller and still reads as its pad.
+
+Two columns of labels a side, the other option recorded at Q184, was not needed.
+
+### 42.12 Nothing cut off: what was found and fixed
+
+The first pictures of the framed window broke the new rule in two places, both on the General tab, which the first
+stage had not pictured on a sheet:
+
+- **The hotkey buttons were cut.** The rows have fixed column widths, chosen on the desktop (§4.6); in the look's larger
+  upper-case face, "REBIND KEY" showed as "REBIND K" and "CLEAR" as "CL", and "Pause / Resume" ran into its key. In the
+  look every table's columns now take their widest cell, shared by the table's rows (`SharedSizeGroup`), with a gap
+  between them; the desktop keeps its fixed columns.
+- **The NES's B line was struck through the "B" printed under the button**, since words on a shell were not in the
+  routing; they are now (roughly boxed) things a line may not cross, and the SNES's Select and Start lines moved above
+  their printed names for the same reason.
+- **The Gamepad section's first picture showed the pad's labels at six pixels**, the drawing being bounded by a 300-pixel
+  height with nineteen labels around it. The tester of the pad itself needs no labels (it shows the pad, not bindings),
+  so LunaP gained `ShowsLabels` and the drawing fills its box.
+
+`In_the_look_the_window_is_a_menu_whose_help_bar_is_its_own_and_no_word_is_cut` walks every tab at both sizes and fails
+for any single-line text narrower than its words. It also caught Reset to Defaults vanishing altogether on its first
+version of the move above (the button bar is an items control, not a panel, so the button was never moved, and the row it
+was in was hidden). Its first run reported the deadzone row's "Stick deadzone" and "50%";
+both were false alarms, the measurement counting the text's margin as width, and the test now subtracts it. It is not
+the window-look work's audit, which was not in WiseMan at this merge; the window will be run under that audit when it
+lands.
+
+**Pictures** (§42.4's tool, now every console and General, idle and lit, both sizes, desktop and sheet: forty in
+`~/.cache/emusen/bigpicture/png/bindings/`). The tool now waits for a sheet to finish its opening animation before the
+idle picture: the first set caught some panels part-way open. Every one was looked at for anything cut, overflowing or overlapping. Two
+things are left, and neither is this window's alone:
+
+- a scrolling area shows part of a row at its lower edge when its content does not end there (the General tab's
+  hotkey table under the fold, on the desktop and on the sheet), which is what scrolling is; whether the audit counts it
+  is Q186;
+- on a framed sheet, the look's focus box around the "Use the left stick as a d-pad" switch is drawn through the foot of
+  its words at both sizes; that is the look's switch style (LunaP §196), and is Q187. Giving the switch more height in
+  this window did not move the box, so it was left to the style.
+
+### 42.13 Tests
+
+LunaP's `ControllerDiagramTests`: 51 cases, every drawing test now over all five layouts, and the line test above. LunaP
+§198.9 also measured the plain sheet's rows that Q175 asked about: none is lost, and the plain frame was left as it is.
+Mistress's `ControllerBindingsDiagramTests`: 21 cases, new ones for Z and the left trigger, the General tab's pad, and the
+look at both sizes; the click and pad-reach cases now run on all four consoles. `SheetLookTests`' desktop case now holds
+that the bindings are framed in the look.
+
+**The broad run**, on 16b8c444 with WiseMan a8abe77d and LunaP 8480521 merged: one run of the Mistress filter without
+`ShaderSettingsWindowTests`, the shader browser, the benches and any GPU, Vulkan or slang test, under `nice -n 10`:
+**1,504 tests, 1,454 passed, 50 skipped (the picture, survey and live tools), none failed, in 5 min 3 s.** LunaP's whole
+suite: 1,514, all passed.
+
+### 42.14 Mutants of the second stage
+
+Fifteen more, run by §42.6's runner (`probe/bindings/mutate.py`, its C and R series), the predictions written first
+(§42.15). **C1–C8, Mistress's, all caught on the first run:** the L2 label ignoring its trigger; a trigger pulled while
+capturing ignored; the pad tester never updated; the deadzone ring not following the slider; the window not framed in
+the look; the look's help bar not the window's; the look's columns kept at the desktop's widths; Close kept in the look.
+**R1–R7, LunaP's: four caught on the first run and three survived** (LunaP §198.10 has each): R1, a line's way out
+ignoring the drawing it crosses, was caught only by a label-size test, by accident; R2, a way out through another
+button, and R3, a band's room ignored, were not caught. After tests comparing each line with the straight ways out,
+checking that no line crosses another button, and counting each band's labels, all three were caught. The first of
+those tests also found a real fault before it was run against a mutant: the modern pad's cross had no way out that
+crossed no other button, and its up arm's line crossed the left bumper; the bumpers were shortened.
+
+**Result: 27 of 30 caught on the first run over both stages' new mutants (C and R), 30 of 30 after.** Mutants of the
+first stage whose code this stage rewrote (L2, L3, L8, L9 and L16 no longer match their snippets; B12 matches twice) were
+not rerun.
+
+### 42.15 Predictions
+
+| # | Prediction | Outcome |
+|---|---|---|
+| P285 | Of 15 mutants (C1–C8, R1–R7), at least 13 are caught on their first run | **Wrong**: 12 |
+| P286 | R3, a band's room ignored, is caught by the label overlap and edge checks on the modern pad | **Wrong**: it survived; the row shrink of LunaP §198.2 made an over-full row fit |
+| P287 | R6, the stick ring never drawn, is caught only by the pixel hash in the host test | **Held** |
+
+### 42.16 Open questions
+
+- **Q186, a scrolling area's last row.** A scroll viewer shows part of a row at its lower edge. Options: count it as cut
+  and snap scrolling to whole rows, as ES-DE's menus do; count it as scrolling. **Recommendation:** the latter for
+  windows that are not menus, decided once with the window-look audit rather than here.
+- **Q187, the look's switch focus box.** It crosses the foot of a switch's words at both sizes. **Recommendation:** fix it
+  in LunaP §196's style, with the window-look work, which owns it.

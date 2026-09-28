@@ -3605,7 +3605,7 @@ are unchanged, and a second pad is not player 2: that is separate input work (`E
 | Row | Setting | Default | What it does |
 |---|---|---|---|
 | Controller Type | `ControllerType` | Automatic | The buttons the big picture help bar draws: Automatic follows the pad last pressed (its family by §4.52's rules), or Xbox, PlayStation, Nintendo or Generic always. Only the pictures change: not what a button does, and not the text hints, which name buttons by an Xbox pad's letters |
-| Button Swap | `SwapPadButtons` | off | A and B trade functions: Accept on East and Back on South, in the library, the themed view, the pad menu, every sheet and the on-screen keyboard. The help bar and the text hints name the swapped buttons. X and Y are not swapped, unlike ES-DE's setting (plan §24.5). The keyboard and every game are unaffected |
+| Button Swap | `SwapPadButtons` | off | A and B trade functions: Accept on East and Back on South, in the library, the themed view, the pad menu, every sheet and the on-screen keyboard. The help bar and the text hints name the swapped buttons. X and Y are not swapped, unlike ES-DE's setting (plan §24.5). The keyboard and every game are unaffected. *Since 2026-09-27 X and Y trade as well, as ES-DE's do (§4.79.5)* |
 | First Controller | `FirstControllerOnly` | off | Only the first pad opened steers the interface; ES-DE's remedy for a wireless pad that registers twice. The game is unaffected (it reads the first pad anyway) |
 | Notifications | `ControllerNotifications` | on | The notice below |
 
@@ -5518,7 +5518,7 @@ more below, up while there is more above, both while there is both.
 
 | Setting | What happens when a text row is chosen |
 |---|---|
-| **Automatic** (the default) | Under Steam, the text popup with a real text field, and Steam's keyboard is asked for. Otherwise, chosen with Enter on a keyboard: the text popup's field, typed into directly. Otherwise, chosen with a controller: EmuSen's own keyboard. |
+| **Automatic** (the default) | Under Steam, the text popup with a real text field, and Steam's keyboard is asked for. Otherwise, chosen with Enter on a keyboard: the text popup's field, typed into directly. Otherwise, chosen with a controller: EmuSen's own keyboard. *Since 2026-09-27 a row chosen with Enter gets the field alone under Steam too (§4.79.7).* |
 | **Steam** | Always the text popup with Steam's keyboard asked for. |
 | **EmuSen's** | Always EmuSen's own keyboard, as before this setting existed. |
 
@@ -5536,7 +5536,8 @@ Steamworks' own text input is not used, because it needs a real Steam game's ID,
 have.
 
 **EmuSen's own keyboard is unchanged** wherever it is used: the themed view's search, the cheats window, the desktop,
-and every text row when this setting is *EmuSen's*.
+and every text row when this setting is *EmuSen's*. *Since 2026-09-27 the themed view's search follows this setting
+(§4.79.6); the cheats window and the desktop keep EmuSen's keyboard.*
 
 #### 4.79.3 What has not been checked
 
@@ -5544,6 +5545,9 @@ Steam's keyboard was not seen working: the handheld was offline, and the tests n
 there, in Game Mode, is that the keyboard opens over Mistress at the bottom of the screen, that what is typed reaches
 the field, and that the controller goes back to Mistress when it closes (`EmuSen_BigPicture.md` §40.6, P262–P266).
 Until that is checked, *EmuSen's* is the choice that is known to work with a controller.
+*Partly checked 2026-09-27: in Game Mode the keyboard opens and the text reaches the field; it covered half the popup,
+which now moves above it (§4.79.8). Whether the controller comes back to Mistress, and the Desktop Mode case, are still
+unchecked.*
 
 #### 4.79.4 Tests
 
@@ -5551,6 +5555,65 @@ Until that is checked, *EmuSen's* is the choice that is known to work with a con
 environment, the address asked for exactly and nothing launched, typed text kept on Enter and dropped on Escape or B,
 EmuSen's keyboard still opening with *EmuSen's*, the Preferences row, the subtitle, the help bar's words on every row,
 A on the stars, the scroll indicator's place and pixels, and the filled glyphs in the view and the editor.
+
+#### 4.79.5 Button Swap trades X and Y as well (2026-09-27)
+
+Decided 2026-09-27 (`EmuSen_BigPicture.md` §10.1, Q160; the record is §40.13). *Preferences → Controllers → Swap the
+A/B and X/Y buttons* now trades both pairs, as ES-DE's does. With it on:
+
+| Button | Does | Was, before 2026-09-27 |
+|---|---|---|
+| B (East) | choose, launch, select | the same |
+| A (South) | back, close, cancel | the same |
+| X (West) | favourite in a gamelist; add or remove while a collection is edited; *go to* on the slideshow; *Scrape* in the metadata editor; *Space* on EmuSen's keyboard; *Keyboard* on the text popup | the screensaver and *Reset* |
+| Y (North) | start the screensaver from the system view; *Reset* in the metadata editor | the favourite and the rest of X's row |
+
+The help bars and the text hints follow, so the letter drawn is always the button that acts: with an Xbox pad the
+gamelist reads *B Launch, A Back, X Favorite*, the system view *Y Screensaver*, the editor *X Scrape, Y Reset*, and
+EmuSen's keyboard *B Type, A Erase, X Space*. A theme's own button icons move with their function. The keyboard's keys
+(Insert, Delete) and every game's bindings are unaffected.
+
+#### 4.79.6 The themed search follows On-Screen Keyboard (2026-09-27)
+
+Decided 2026-09-27 (Q164; §40.14). *Search…* in the themed gamelist's options now opens what §4.79.2 would open for a
+text row: the text popup titled *Search*, with Steam's keyboard asked for or typed into from a keyboard, or EmuSen's
+keyboard. With the popup, the list is filtered when the text is kept (Enter, or Start on a controller); Escape or B
+leaves the search as it was. With EmuSen's keyboard it filters as each letter is typed, as before. The cheats window
+keeps EmuSen's keyboard whatever the setting, since its codes need the keyboard's Code layout.
+
+#### 4.79.7 Enter on a keyboard never asks Steam (2026-09-27)
+
+Decided 2026-09-27 (Q165; §40.15). With *Automatic*, a text row or the search chosen with **Enter on a physical
+keyboard** always gets the popup's field alone, even under Steam; Steam's keyboard is asked for only when a
+**controller's A** chose it. *Steam* still asks Steam every time, and *EmuSen's* is unchanged.
+
+| Automatic | Not under Steam | Under Steam |
+|---|---|---|
+| chosen with Enter | the field alone | the field alone |
+| chosen with a controller | EmuSen's keyboard | Steam's keyboard |
+
+#### 4.79.8 The text popup above Steam's keyboard (2026-09-27)
+
+Measured on the handheld on 2026-09-27 (§40.16): in Game Mode Steam's keyboard opens over Mistress and types into the
+field, but it covers about the lower half of the screen and hid half of the popup. **Whenever Steam's keyboard is asked
+for, the popup now sits at the top of the screen**, its top a tenth of the way down and its bottom about a third of the
+way (34.7% at 1280×800 and at 1920×1200), clear of the keyboard. With a physical keyboard, or with EmuSen's keyboard,
+it stays centred as before.
+
+
+**Four lines, and higher still (2026-09-27, from the handheld).** With Steam's keyboard up, the one-line field showed too
+little of what was typed. The popup's field is now four wrapping lines (LunaP `MenuTextPopup.Lines`, §195). The taller
+popup would have ended at 47.7% of the height from the old top at 10%, past the 45% the keyboard leaves clear, so
+`PadKeyboard.SteamPopupTop` is now 5%: 40–342 at 1280×800 and 60–513 at 1920×1200, bottom 42.7% at both. The test
+checks the top, the bottom and that the field is four lines tall.
+#### 4.79.9 Tests (2026-09-27)
+
+`SwapAndKeyboardTests` (§40.17), headless, with Steam simulated and nothing launched: both pairs traded in what the
+controller does and what the help draws, in the gamelist, the system view and the editor; the search under every
+setting, from a controller and from Enter, under Steam and not; Enter under Steam getting the field alone while a
+controller's A asks Steam; and the popup's place at both sizes, above 45% of the height with Steam's keyboard and
+centred otherwise, with nothing in it cut off or overlapped. `PadCheatsTests` checks the cheats window keeps EmuSen's
+keyboard. Twenty-three mutants, all caught (§40.18).
 
 ### 4.80 Big picture: the other windows in ES-DE's look (2026-09-27)
 
@@ -5669,3 +5732,116 @@ may still leave rows unbuilt. That frame now belongs to the controller bindings'
 - **A desktop ES-DE look.** The style layer can be switched on for a desktop window with one call (LunaP §196.5); no
   setting does it.
 - **Hardware.** No real pad, keyboard or handheld was used; everything here ran headless.
+### 4.81 Controller Bindings: each console's pad drawn, rebound from the drawing, and an input tester (2026-09-27)
+
+Decided 2026-09-27 (`EmuSen_BigPicture.md` §10.1): the Controller Bindings window draws each console's controller as
+vector art with the bindings mapped onto its buttons, and a button pressed on the pad or the keyboard lights up on the
+drawing, so the window doubles as an input tester. The design record, the measurements and the mutants are §42 of that
+plan; the drawing itself is LunaP's `ControllerDiagram` (`LunaP.md` §198). Every console's pad is drawn: the NES pad,
+the Game Boy, the Super NES pad and the Nintendo 64 pad (§4.81.1 has what the second stage changed).
+
+**What the window shows.** The tabs are unchanged (General, then one per console, oldest first; L1 and R1 step them).
+A console's tab is now its controller, filling the height the page shows, with a label beside every button, each arm of
+the cross, each direction of a stick and each trigger. A label names the button and shows the key bound to it and the
+pad button bound to it, or a dash for none; a line joins it to the button. Below the drawing a line of words says what
+the window is doing. Scrolled below that is the list the window always had, under "All Bindings": the same bindings with
+their Rebind Key, Clear, Rebind Pad and Clear Pad buttons, kept as a second view for a screen reader and for clearing a
+binding, which the drawing does not do.
+
+**Rebinding from the drawing.** Choosing a button (a click on it or on its label, the pad's A on its label, or Enter on
+its label from the keyboard) listens for **a key and a pad button at once**: whichever comes first is bound, and the
+other listener stops. The label asks for them ("Press a key", "Press a button") and the line below names the button.
+Escape cancels both. The pad listener keeps §4.45.4's rules: the press that chose the button is not the binding, the
+bound button must be let go before the pad is the window's again, and the pad gives up after five seconds, since every
+button it could be cancelled with is one it could bind; the key listener goes on after that, and B then cancels it. A
+stick direction has no pad button (`EmuSen_Input.md` §7.3), so choosing one listens for a key alone. The rules of a key
+binding are unchanged: a key does one thing on a console, and a key taken from a hotkey is cleared there.
+
+**Moving on the drawing with the pad or the keyboard.** The focus is on a label; the pad's cross (or the left stick) and
+the arrow keys move it to the button drawn nearest that way on the controller, not to the label that happens to stand
+there: on the Super NES, up from B is X and left from X is Y, where the labels in their column would give A. Past the
+drawing's edge the pad's move goes on to the window's other controls, as §4.45.3 moves them.
+
+**The tester.** While the window is open and nothing is being captured, every key held that is bound on the shown
+console lights its button, and so does every button held on **player 1's pad**, read through that console's own
+bindings: the SNES tab lights A for whatever pad button is bound to the SNES's A. The drawn stick's knob follows the
+pad's left stick (with the analog deadzone of §7.3), and is pushed all the way by a key held for a direction; a stick
+direction lights past half its travel, which is where Mars reads a C button (`MarsCore.CButtonThreshold`). On a console
+that reads no stick, the left stick lights the cross when "Use the left stick as a d-pad" is on, past the stick deadzone,
+exactly when the game would take it as the cross. L2 and R2 light at half a trigger's travel, as `GamepadManager` reads
+them. Nothing lights while a binding is being captured, so a capture's own press is not shown as a test. The line below
+the drawing names the pad being read. The tester reads the pad on the **one poll that already exists**: the main
+window's 16 ms tick calls `GamepadManager.Poll`, which now raises `Polled` at its end, and the window redraws from what
+that poll read; it starts no timer of its own. The pad capture's own 50 ms poll is §4.45.4's and is unchanged.
+
+**Test Buttons.** The pad cannot both steer the window and be tried on it: A would rebind whatever label has the focus,
+and B, which is the Super NES's A under the default bindings, would close the window. So the window has a mode for
+trying buttons, Test Buttons, entered with the pad's Y, the Test Buttons button, or its keyboard focus and Enter. In it
+every pad button and every key lights and does nothing else. It is left by holding B for one second (a short press of B
+is a button being tried), by Escape, or by the button again. The words above the drawing, the line below it and, on a
+sheet, the footer all say how.
+
+**On a big-screen sheet** the footer names this window's buttons, "A Rebind  Y Test buttons  B Back  L1 R1 Console",
+and "Every press lights up  Hold B Stop testing" while testing, swapped for the A–B swap of §4.61 as every hint is; the
+footer the sheet had is given back when the window closes. The words above the tabs are hidden on a sheet, where the
+footer and the line below the drawing say the same. The labels grow with the sheet's scaled text (`LunaP.md` §198.2).
+ES-DE's look for this window (Barlow Condensed, ES-DE's colours, rounded panels) is to come from the shared style layer
+another piece of work is building; the drawing takes its colours from the theme's accent, text and surface resources,
+so it follows whatever that layer sets.
+
+**Which region is which control.** The drawing's regions are LunaP's names; `ControllerDiagrams` (Mistress) maps the
+console's controls onto them. On every console but the N64 a region is named for the control (`A`, `Up`, `Select`). On
+the N64: L2 is `Z`, the right stick's four directions are `CUp`, `CDown`, `CLeft` and `CRight`, and the left stick's are
+`StickUp`, `StickDown`, `StickLeft` and `StickRight`, as Mars reads them (`Mars_Core.md` §5). Every control a console
+reads has a region and every region a control; a test holds both directions.
+
+**Tests.** `ControllerBindingsDiagramTests` (13 cases at the first stage, 21 now; §4.81.1): every control of each drawn console has a region and every region
+a control; a click on each region of both drawings chooses it and starts its capture, and Escape ends it; each SNES
+button pressed on a simulated pad lights its region alone and letting go clears it, and the stick lights the cross; a
+bound key lights its region while held and an unbound one lights nothing; the N64 stick moves its knob, lights its
+direction and goes home, the right stick lights the C buttons, and a key pushes the knob all the way; rebinding from
+the drawing by key and by pad updates the binding, the drawing's label and the list; the pad alone reaches every
+region of both drawings through the router; the cross moves by the drawing and A rebinds; Test Buttons takes every press
+until B is held for a second, and takes Enter from the keyboard until Escape; nothing lights during a capture; on a sheet
+the footer is the window's and is given back. `ControllerBindingsPictureTool` writes the pictures of §42 when
+`EMUSEN_BINDINGS_PNG` names a folder, and does nothing otherwise. The window's older tests (`InputSettingsWindowTests`,
+its layout and render tests, and the pad tests of §4.45) pass unchanged.
+
+**What it does not cover.**
+- No real pad was used; every press here is a simulated pad's.
+- The drawing cannot clear a binding; the list below it can.
+- A second pad lights nothing, since the game hears player 1 alone (§4.61); the capture still takes any pad the
+  interface reads.
+- ES-DE's look on a big-screen sheet (done in §4.81.1).
+
+#### 4.81.1 The second stage: every console drawn, lines off the drawing, Z, the pad itself, and ES-DE's look (2026-09-27)
+
+The plan's record is `EmuSen_BigPicture.md` §42.10 to §42.16.
+
+- **Every console's tab is its drawing.** The NES pad and the Game Boy are drawn as the first two were.
+- **No line runs across the drawing.** Each label now stands on the side its button can be left by the shortest way
+  that crosses no other button, and its line runs that way (LunaP §198.2). The labels have moved from where the first
+  stage put them.
+- **Z is the left trigger.** A trigger pulled past half its travel has always pressed L2 and R2, which on the N64 is Z,
+  whatever the binding file holds (`EmuSen_Input.md` §7.3); the window showed Z as unbound. Its pad column and label now
+  say "Left Trigger" (R2 "Right Trigger"), and "*button* or Left Trigger" when a button is bound beside it. Pulling the
+  trigger while rebinding Z takes such a button off again. Nothing is added to `gamepadbindings.json`: a trigger is not
+  an entry in it, so old and new files read it alike.
+- **The pad itself, on General.** The Gamepad section is now the first thing on General, and beside its switch and
+  deadzone slider is a modern pad drawn without labels, lit by player 1's own buttons whatever any console's bindings
+  say, with its triggers filling, its sticks moving, and a dashed ring on each stick at the deadzone, which follows the
+  slider. A pad's own letters are printed on its face buttons where SDL knows them. It shows while General is the tab.
+- **ES-DE's look on a big-screen sheet**, through the shared layer of §4.80: framed as a menu, its own help bar (*Rebind*,
+  *Test buttons*, *Back*, L1/R1 *Console*; *Hold to stop testing* while testing), the words above the tabs, the line
+  under the drawing and the Close and Test Buttons buttons not shown, **Reset to Defaults moved to the end of General**,
+  and the footer row shown only when there is a conflict. Every table's columns take their widest cell in the look, where
+  the desktop's fixed widths cut "REBIND KEY" to "REBIND K". The desktop is unchanged.
+
+**Tests** added: Z and the left trigger; the General tab's pad, its buttons, trigger, stick and ring; the look at
+1280 × 800 and 1920 × 1200 (framed, its help bar, no Close or Test Buttons, Reset on General, the footer hidden, and no
+single-line text on any tab narrower than its words); the click and pad-reach cases over all four consoles; and
+`SheetLookTests`' desktop case now holds that the bindings take the look.
+
+**What it does not cover.** No real pad. The look's switch draws its focus box through its words (`EmuSen_BigPicture.md`
+Q187), and a scrolling area shows part of a row at its edge (Q186); both belong with the window-look audit, which was not
+in WiseMan when this was built.

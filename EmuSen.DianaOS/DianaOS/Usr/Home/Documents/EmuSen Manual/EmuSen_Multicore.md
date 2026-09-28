@@ -332,6 +332,18 @@ between frames.** Mars's setters join threads; a frontend calls them where its o
 
 Only Mars offers any today (`Mars_Core.md` §10). A console with none gets an empty list and a page that says so.
 
+### 13.1 A setting's note (2026-09-28)
+
+A `CoreSetting` may carry a `Note`: a function the frontend gives the console's current values by key, which returns a
+sentence to show beside the row when the core will not use the row's value as chosen, and null otherwise. It lives in
+the setting rather than in the frontend so that the rule it states is the core's own and is written once: the N64's
+*Antialiasing* row carries `MarsCore.AntialiasingNote`, which reads `MarsCore.EffectiveAntialiasingOf`, the same
+function both N64 cores' `EffectiveAntialiasing` calls. (MarsRT's library applies the rule a third time, in Rust, at
+`Core::set_multiple`; `MarsRtThreadsTests` compares the two cores' pictures at levels that apply and at 4x antialiasing
+at 4x resolution, which is held back, and that comparison is what keeps the three in step.) A note is text for a person, never parsed; a frontend that does not show notes loses nothing but the sentence.
+It was added because the player's settings for Perfect Dark on the handheld held antialiasing 3x at resolution three,
+where it draws nothing (`Mars_Performance.md` §42.5), and the window said so only inside the hint's last clause.
+
 ## 14. A picture that has not changed (2026-09-21)
 
 `IFrameSerial` is a core's promise about its own frame: `FrameSerial` changes whenever `GetFrameBufferRgba` may return

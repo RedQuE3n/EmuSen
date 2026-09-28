@@ -190,7 +190,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             set { _antialiasing = Math.Clamp(value, 1, 4); ApplyOptions(); }
         }
 
-        public int EffectiveAntialiasing => Math.Max(1, Math.Min(_antialiasing, 4 / _renderScale));
+        public int EffectiveAntialiasing => MarsCore.EffectiveAntialiasingOf(_renderScale, _antialiasing);
 
         // Mars's Gpu: asked of the library, which reports what it got - see Mars_Native.md §6.4.
         public bool Gpu

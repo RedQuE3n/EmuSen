@@ -731,6 +731,12 @@ edges and texture shimmer without making the frame larger (`Mars_Video.md` §2.1
 resolution would, and the two multiply, so together they are held to four: at 2x resolution the most antialiasing
 is 2x, and at 3x or 4x resolution it does nothing. The game is unchanged by it, as by the resolution.
 
+**Addendum, 2026-09-28: the row says when it does nothing.** Under the Antialiasing dropdown a line appears whenever
+the resolution holds the chosen level back: "Off at 3x resolution: the two together are held to four, so 3x has no
+effect", or at 2x resolution with 4x chosen, "2x at 2x resolution". It is the core's note (`EmuSen_Multicore.md`
+§13.1), redrawn whenever a value on the tab changes, and absent where the level applies. The window's fit audit
+opens the N64 tab with the note showing at both sizes (`GraphicsSettingsN64Note`).
+
 **Fixed, 2026-09-20: the tab could not scroll.** Each tab has been a `ScrollViewer` since the window was written,
 and with four settings nothing showed it did not work. With seven the N64's tab ran off the bottom of the window and
 no scroll bar came. The window's content was a `Ui.Stack`, and a stack panel measures its children with unbounded

@@ -18,6 +18,7 @@ namespace EmuSen.Mistress.Views
         private readonly Action<string>? _changed;
         private readonly Tabs _tabs = new() { Name = "ConsoleTabs" };
         private readonly List<(string Console, Action Refresh)> _panels = new();
+        private readonly List<(string Console, Action Show)> _notes = new();
         private bool _filling;
 
         // Parameterless constructor exists only for tooling - real code always uses the one below.
@@ -117,6 +118,12 @@ namespace EmuSen.Mistress.Views
             {
                 (Control control, Action refresh) = BuildControl(console, setting);
                 refreshers.Add(refresh);
+                if (setting.Note is { } note)
+                {
+                    (Control noted, Action show) = WithNote(console, setting, note, control, settings);
+                    control = noted;
+                    refreshers.Add(show);
+                }
                 panel.Children.Add(new FieldRow { Label = setting.Label, Hint = setting.Hint, Content = control });
             }
 
@@ -149,6 +156,26 @@ namespace EmuSen.Mistress.Views
             return (dropdown, Fill);
         }
 
+        // The core's sentence under its control when the value chosen is not the one it will use, shown again whenever the console's values change - see §4.26 and EmuSen_Multicore.md §13.1.
+        private (Control, Action) WithNote(string console, CoreSetting setting, Func<Func<string, string>, string?> note, Control control, IReadOnlyList<CoreSetting> settings)
+        {
+            var text = Ui.Hint("");
+            text.Name = $"{console}.{setting.Key}.Note";
+            string Value(string key) => _config.Value(console, key) ?? settings.FirstOrDefault(s => s.Key == key)?.Default ?? "";
+            void Show()
+            {
+                string? said = note(Value);
+                text.Text = said ?? "";
+                text.IsVisible = said is not null;
+            }
+            Show();
+            _notes.Add((console, Show));
+            var stack = new StackPanel { Spacing = 4 };
+            stack.Children.Add(control);
+            stack.Children.Add(text);
+            return (stack, Show);
+        }
+
         // On a sheet over this one, on the same console; the row's label follows it when it closes.
         private void OpenShaders(string console)
         {
@@ -162,6 +189,7 @@ namespace EmuSen.Mistress.Views
         {
             _config.SetValue(console, key, value);
             _config.Save();
+            foreach ((string noted, Action show) in _notes) if (noted == console) show();
             _changed?.Invoke(console);
         }
 

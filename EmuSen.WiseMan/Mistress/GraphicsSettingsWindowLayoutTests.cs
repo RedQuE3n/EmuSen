@@ -97,5 +97,50 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(new[] { "N64", "N64" }, reported);
             Assert.Equal("5", GraphicsConfig.Load().Value("N64", "RdpWorkers"));
         }, default);
+
+        // The Antialiasing row says what the chosen level becomes when the resolution holds it back, and says nothing where it applies - see Mars_Performance.md §42.5.
+        [Theory]
+        [InlineData("1", "4x", null)]
+        [InlineData("2", "2x", null)]
+        [InlineData("1", "Off", null)]
+        [InlineData("2", "4x", "2x at 2x resolution")]
+        [InlineData("3", "2x", "Off at 3x resolution")]
+        [InlineData("3", "3x", "Off at 3x resolution")]
+        [InlineData("4", "2x", "Off at 4x resolution")]
+        [InlineData("4", "4x", "Off at 4x resolution")]
+        [InlineData("3", "Off", null)]
+        public Task The_antialiasing_row_says_when_the_resolution_holds_it_back(string scale, string level, string? said) => Session.Dispatch(() =>
+        {
+            var config = new GraphicsConfig();
+            config.SetValue("N64", "RenderScale", scale);
+            config.SetValue("N64", "Antialiasing", level);
+            var window = new GraphicsSettingsWindow(config, null, "N64");
+            window.Show();
+            window.CaptureRenderedFrame();
+
+            var note = ByName<HintText>(window, "N64.Antialiasing.Note");
+            Assert.Equal(said is not null, note.IsVisible);
+            if (said is not null) Assert.StartsWith(said, note.Text);
+        }, default);
+
+        // The note follows the resolution as it is changed in the window, with nothing else touched.
+        [Fact]
+        public Task The_antialiasing_note_follows_the_resolution_as_it_changes() => Session.Dispatch(() =>
+        {
+            var config = new GraphicsConfig();
+            config.SetValue("N64", "Antialiasing", "3x");
+            var window = new GraphicsSettingsWindow(config, null, "N64");
+            window.Show();
+            window.CaptureRenderedFrame();
+            var note = ByName<HintText>(window, "N64.Antialiasing.Note");
+            Assert.False(note.IsVisible);
+
+            ByName<Dropdown>(window, "N64.RenderScale").SelectedItem = "3";
+            Assert.True(note.IsVisible);
+            Assert.StartsWith("Off at 3x resolution", note.Text);
+
+            ByName<Dropdown>(window, "N64.RenderScale").SelectedItem = "1";
+            Assert.False(note.IsVisible);
+        }, default);
     }
 }

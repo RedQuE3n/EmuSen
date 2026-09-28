@@ -62,7 +62,36 @@ namespace EmuSen.Mistress.Views
             Control buttons = Ui.Buttons(Ui.Button("Close", Close)).Margin(0, 12, 0, 0);
             DockPanel.SetDock(top, Dock.Top);
             DockPanel.SetDock(buttons, Dock.Bottom);
-            Content = new DockPanel { LastChildFill = true, Children = { top, buttons, body.Margin(0, 12, 0, 0) } }.Margin(16);
+            var dock = new DockPanel { LastChildFill = true, Children = { top, buttons, body.Margin(0, 12, 0, 0) } }.Margin(16);
+            Content = dock;
+            // On a big-screen sheet: the list and the preview as two columns, the screenshot fitted in its column with its words under it, Details and Close in a row of their own (§4.81).
+            MenuLook.SetWidthFraction(this, 0.85);
+            MenuLook.WhenApplied(dock, () =>
+            {
+                dock.Margin = new Avalonia.Thickness(0, 0, 0, 12);
+                body.ColumnDefinitions = new ColumnDefinitions("2*,24,3*");
+                _list.Width = double.NaN;
+                _list.Height = double.NaN;
+                _list.VerticalAlignment = VerticalAlignment.Stretch;
+                _shot.Width = double.NaN;
+                _shot.Height = 190;
+                _shot.HorizontalAlignment = HorizontalAlignment.Stretch;
+                _name.FontSize = 28;
+                body.Children.Remove(preview);
+                var words = new ScrollViewer { Name = "ThemeBrowserPreview", Content = preview, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+                Grid.SetColumn(words, 2);
+                body.Children.Add(words);
+                if (preview is StackPanel stack && stack.Children[^1] is StackPanel row)
+                {
+                    stack.Children.Remove(row);
+                    row.Children.Add(Ui.Button("Close", Close));
+                    row.HorizontalAlignment = HorizontalAlignment.Center;
+                    row.Margin = new Avalonia.Thickness(0, 12, 0, 0);
+                    DockPanel.SetDock(row, Dock.Bottom);
+                    dock.Children.Insert(dock.Children.IndexOf(buttons), row);
+                }
+                buttons.IsVisible = false;
+            });
             Closed += (_, _) => Stop();
             ShowCached();
         }

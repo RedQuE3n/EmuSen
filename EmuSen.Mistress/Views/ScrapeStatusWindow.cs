@@ -120,7 +120,29 @@ namespace EmuSen.Mistress.Views
             columns.Children.Add(scroll);
             columns.Children.Add(_recentSection);
             look.Children.Insert(0, columns);
+            // With no run the recent games are hidden, and the run's column takes the width.
+            void Columns() => columns.ColumnDefinitions = new ColumnDefinitions(_recentSection.IsVisible ? "3*,32,2*" : "*,0,0");
+            Columns();
+            _recentSection.PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) Columns(); };
+
+            // A recent game's line is cut with an ellipsis at the column's edge and is whole in the footer while its row is chosen (§4.81).
+            _recent.Styles.Add(new Avalonia.Styling.Style(x => Avalonia.Styling.Selectors.OfType<Avalonia.Controls.Presenters.ContentPresenter>(Avalonia.Styling.Selectors.Template(Avalonia.Styling.Selectors.OfType<ListBoxItem>(x))))
+            {
+                Setters =
+                {
+                    new Avalonia.Styling.Setter(Avalonia.Controls.Presenters.ContentPresenter.TextWrappingProperty, TextWrapping.NoWrap),
+                    new Avalonia.Styling.Setter(Avalonia.Controls.Presenters.ContentPresenter.TextTrimmingProperty, TextTrimming.CharacterEllipsis),
+                },
+            });
+            _recent.Chose += r => MenuLook.SetFooter(this, r is null ? null : ScrapeRedactor.Redact(Describe(r)));
+            SheetLook.SelectOnFocus(_recent);
+
+            // No empty square where the game's picture goes before one arrives (Q177).
+            _inLook = true;
+            _picture.IsVisible = _picture.Source is not null;
         }
+
+        private bool _inLook;
 
         // How many times the window has drawn the run; a test counts it.
         public int Refreshes { get; private set; }
@@ -224,6 +246,7 @@ namespace EmuSen.Mistress.Views
             if (picture == _pictureShown) return;
             _pictureShown = picture;
             _picture.Source = Thumbnail(picture);
+            if (_inLook) _picture.IsVisible = _picture.Source is not null;
         }
 
         // Decoded small, once per picture that arrives.

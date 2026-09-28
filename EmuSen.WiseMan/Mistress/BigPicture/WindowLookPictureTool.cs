@@ -44,8 +44,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
-        public static string Folder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache", "emusen", "bigpicture", "png", "window-look",
-            Environment.GetEnvironmentVariable("EMUSEN_WINDOW_LOOK_STAGE") is { Length: > 0 } stage ? stage : "after");
+        // The before and after pictures beside the other big-picture pictures; any other stage is a trial, kept apart with the probes.
+        public static string Folder => Stage is "before" or "after"
+            ? Path.Combine(Home, ".cache", "emusen", "bigpicture", "png", "window-look", Stage)
+            : Path.Combine(Home, ".cache", "emusen", "probe", "window-look", "trials", Stage);
+
+        private static string Stage => Environment.GetEnvironmentVariable("EMUSEN_WINDOW_LOOK_STAGE") is { Length: > 0 } stage ? stage : "after";
+
+        private static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
         internal static readonly (int W, int H)[] Sizes = [(1280, 800), (1920, 1200)];
 

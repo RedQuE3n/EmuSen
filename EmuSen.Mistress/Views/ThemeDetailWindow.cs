@@ -71,7 +71,7 @@ namespace EmuSen.Mistress.Views
             if (t.Languages.Count > 0) rows.Children.Add(Field("Languages", "ThemeDetailLanguages", t.Languages));
             // The licence row and the buttons sit below both columns, never scrolled away, so the licence is read before Download (Q27).
             var top = new Grid { ColumnDefinitions = new ColumnDefinitions("520,20,*") };
-            Control shots = Ui.Stack(6, _shot, _caption, Ui.Row(12, _previous, _position, _next));
+            StackPanel shots = Ui.Stack(6, _shot, _caption, Ui.Row(12, _previous, _position, _next));
             var facts = new ScrollViewer { Name = "ThemeDetailFacts", Content = rows.Margin(0, 0, 8, 0), MaxHeight = 380, Width = 520, Focusable = true };
             Grid.SetColumn(facts, 2);
             top.Children.Add(shots);
@@ -82,12 +82,49 @@ namespace EmuSen.Mistress.Views
             Control buttons = Ui.Buttons(Ui.Button("Close", Close)).Margin(0, 12, 0, 0);
             DockPanel.SetDock(buttons, Dock.Bottom);
             DockPanel.SetDock(bottom, Dock.Bottom);
-            Content = new DockPanel { LastChildFill = true, Children = { buttons, bottom.Margin(0, 12, 0, 0), top } }.Margin(16);
+            var dock = new DockPanel { LastChildFill = true, Children = { buttons, bottom.Margin(0, 12, 0, 0), top } }.Margin(16);
+            Content = dock;
+            // On a big-screen sheet: the screenshot and its caption at the left, the facts beside them in a column of their own, the licence and every button in rows below, nothing over anything else (§4.81).
+            MenuLook.SetWidthFraction(this, 0.8);
+            MenuLook.WhenApplied(dock, () => InLook(dock, shots, facts, bottom, buttons));
             Closed += (_, _) => { _shotCancel?.Cancel(); StopDownload(); };
             ShowShot(0);
             Refill();
             DetailsLoading = LoadRemoteAsync();
         }
+
+        private void InLook(DockPanel dock, StackPanel shots, ScrollViewer facts, StackPanel bottom, Control buttons)
+        {
+            dock.Children.Clear();
+            dock.Margin = new Avalonia.Thickness(0, 0, 0, 12);
+            if (shots.Parent is Panel oldTop) oldTop.Children.Clear();
+
+            _shot.Width = double.NaN;
+            _shot.Height = ShotHeightInLook;
+            _shot.HorizontalAlignment = HorizontalAlignment.Stretch;
+            facts.Width = double.NaN;
+            facts.MaxHeight = ShotHeightInLook + 90;
+            facts.VerticalAlignment = VerticalAlignment.Top;
+            var top = new Grid { ColumnDefinitions = new ColumnDefinitions("5*,24,4*"), Children = { shots, facts } };
+            Grid.SetColumn(facts, 2);
+
+            // Every action and Close in one row that wraps, so none is ever pushed past the panel.
+            if (bottom.Children.OfType<StackPanel>().FirstOrDefault(p => p.Children.Contains(_use)) is { } actions)
+            {
+                var wrap = new WrapPanel { ItemSpacing = 8, LineSpacing = 8 };
+                foreach (Control b in actions.Children.ToList()) { actions.Children.Remove(b); wrap.Children.Add(b); }
+                wrap.Children.Add(Named(Ui.Button("Close", Close), "ThemeDetailClose"));
+                bottom.Children[bottom.Children.IndexOf(actions)] = wrap;
+            }
+            buttons.IsVisible = false;
+            DockPanel.SetDock(top, Dock.Top);
+            dock.Children.Add(top);
+            dock.Children.Add(bottom);
+            dock.Children.Add(buttons);
+        }
+
+        // The screenshot's height on a big-screen sheet, in the menu's design pixels.
+        private const double ShotHeightInLook = 210;
 
         // The host's answer being fetched as the sheet opens, for a test to await.
         public Task DetailsLoading { get; }

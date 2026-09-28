@@ -122,6 +122,26 @@ namespace EmuSen.Mistress.Views
             dock.Margin = new Avalonia.Thickness(0, 0, 0, 16);
             SheetLook.StatusOverButtons(StatusText);
             SaveAsButton.IsVisible = LoadFromButton.IsVisible = false;
+
+            // The General page's two parts side by side, so the table under it keeps room for its rows (§4.81).
+            if (Tabs.Items.OfType<TabItem>().FirstOrDefault()?.Content is StackPanel { Children.Count: 2 } general)
+            {
+                Control master = general.Children[0], saved = general.Children[1];
+                general.Children.Clear();
+                Grid.SetColumn(saved, 2);
+                var sides = new Grid { ColumnDefinitions = new ColumnDefinitions("*,24,*"), Margin = general.Margin, Children = { master, saved } };
+                ((TabItem)Tabs.Items[0]!).Content = sides;
+            }
+
+            // The table fits the panel and never scrolls sideways, which a pad cannot; a cut description is whole in the footer while its row is chosen (§4.81).
+            void NoSideways(ListBox rows)
+            {
+                rows.SetValue(Avalonia.Controls.ScrollViewer.HorizontalScrollBarVisibilityProperty, Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled);
+                SheetLook.SelectOnFocus(rows);
+            }
+            CheatsList.TemplateApplied += (_, e) => { if (e.NameScope.Find<ListBox>("PART_Rows") is { } rows) NoSideways(rows); };
+            foreach (ListBox rows in Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(CheatsList).OfType<ListBox>()) NoSideways(rows);
+            CheatsList.Chose += row => EmuSen.LunaP.Controls.MenuLook.SetFooter(this, row is null ? null : $"{row.Description}  ·  {row.Detail}");
         }
 
         // DynamicResource in code: the theme can change under a live window - see EmuSen_LunaP.md §12.3.

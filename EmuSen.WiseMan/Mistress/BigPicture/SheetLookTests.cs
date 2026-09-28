@@ -215,7 +215,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             AssertFramed(window, "Cheat Database", "Select", "Back", "Choose");
             MenuPanel frame = Frame(window);
             Assert.Equal(PanelWidth(window, 0.8), frame.PanelBounds.Width, 1.0);
-            Assert.Equal(CheatDatabaseInstaller.Attribution.ReplaceLineEndings(" "), frame.Footer);
+            // The introduction and then the attribution (Q170).
+            Assert.StartsWith("EmuSen ships no cheat data.", frame.Footer);
+            Assert.EndsWith(CheatDatabaseInstaller.Attribution.ReplaceLineEndings(" "), frame.Footer);
+            Assert.False(frame.IsFooterCut);
             Assert.False(Named<TextBlock>(window, "AttributionText").IsEffectivelyVisible);
             Assert.DoesNotContain(Sheet(window).GetVisualDescendants().OfType<Control>(), c => c.Name == "PART_Browse" && c.IsEffectivelyVisible);
             TextBlock status = Named<TextBlock>(window, "StatusText");
@@ -279,6 +282,29 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Same(games.ContainerFromIndex(after), window.FocusManager!.GetFocusedElement());
             pad.L1();
             Assert.Equal(before, games.SelectedIndex);
+            Stop(window);
+            window.Close();
+        }, default);
+
+        // Q178: a game row the pad reaches is the chosen game, so Load follows it.
+        [Fact]
+        public Task A_game_row_the_pad_reaches_is_chosen_and_Load_follows_it() => Session.Dispatch(() =>
+        {
+            Database(games: 3);
+            (MainWindow window, PadDriver pad) = InGame();
+            typeof(MainWindow).GetMethod("ShowCheatDatabase", Hidden)!.Invoke(window, null);
+            Settled(window);
+            ListBox systems = Named<ListBox>(window, "SystemsList");
+            systems.SelectedIndex = 0;
+            Settled(window);
+            ListBox games = Named<ListBox>(window, "GamesList");
+            games.SelectedIndex = -1;
+            Settled(window);
+            Button load = Named<Button>(window, "LoadGameButton");
+            Assert.False(load.IsEffectivelyEnabled);
+            PadAudit.Reach(Sheet(window), pad, e => e is ListBoxItem item && item.FindAncestorOfType<ListBox>() == games && games.IndexFromContainer(item) == 1);
+            Assert.Equal(1, games.SelectedIndex);
+            Assert.True(load.IsEffectivelyEnabled);
             Stop(window);
             window.Close();
         }, default);

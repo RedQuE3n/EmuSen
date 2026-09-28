@@ -23,8 +23,15 @@ namespace EmuSen.Mistress.Views
             Sheets.MenuFrameFor = FramedAsMenu;
         }
 
-        // The windows checked in ES-DE's look so far; the others keep the plain sheet until theirs is (§4.80).
-        internal static bool FramedAsMenu(Window window) => window is ScrapeStatusWindow or ActiveCheatsWindow or CheatDatabaseWindow;
+        // The windows that pass the fit audit at both sizes framed as menus; the controller bindings keep the plain sheet for their own overhaul (§4.80, §4.81).
+        internal static bool FramedAsMenu(Window window) => FramedWindows.Contains(window.GetType());
+
+        public static readonly IReadOnlyList<System.Type> FramedWindows =
+        [
+            typeof(ScrapeStatusWindow), typeof(ActiveCheatsWindow), typeof(CheatDatabaseWindow), typeof(FindByNameWindow), typeof(CoverPickerWindow),
+            typeof(GamelistFilterWindow), typeof(FolderEditorWindow), typeof(GraphicsSettingsWindow), typeof(ShaderSettingsWindow), typeof(ResumeWindow),
+            typeof(RewindReelWindow), typeof(ScreenshotWindow), typeof(ThemeBrowserWindow), typeof(ThemeDetailWindow), typeof(ThemeAboutWindow),
+        ];
 
         // A framed sheet's help bar, from what its window holds: choose and back always, tabs and sideways values where there are any.
         internal static IReadOnlyList<HintEntry> SheetMenuHints(Window window)
@@ -39,11 +46,7 @@ namespace EmuSen.Mistress.Views
                 new("Select") { Button = AcceptGlyph },
                 new("Back") { Button = BackGlyph },
             };
-            if (tabs)
-            {
-                hints.Add(new HintEntry("") { Button = PadGlyphButton.LeftShoulder });
-                hints.Add(new HintEntry("Tab") { Button = PadGlyphButton.RightShoulder });
-            }
+            if (tabs) hints.Add(new HintEntry("Tab") { Button = PadGlyphButton.Shoulders });
             if (sideways) hints.Add(new HintEntry("Change") { Button = PadGlyphButton.DPadLeftRight });
             hints.Add(new HintEntry("Choose") { Button = PadGlyphButton.DPadUpDown });
             return hints;

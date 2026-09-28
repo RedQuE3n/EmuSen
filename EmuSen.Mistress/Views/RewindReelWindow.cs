@@ -107,6 +107,22 @@ namespace EmuSen.Mistress.Views
                 _hint,
                 new ButtonBar { ItemsSource = new[] { rewind, cancel }, HorizontalAlignment = HorizontalAlignment.Right });
             Content = body.Margin(16);
+            // On a big-screen sheet: a shorter preview so the strip and the buttons fit the panel, and the reel's own buttons in the help bar (§4.81).
+            MenuLook.WhenApplied(body, () =>
+            {
+                body.Margin = new Thickness(0, 0, 0, 12);
+                stage.Height = 200;
+                if (body.Children[^1] is ButtonBar bar) bar.HorizontalAlignment = HorizontalAlignment.Center;
+                MenuLook.SetHints(this,
+                [
+                    new HintEntry("Step") { Button = PadGlyphButton.DPadLeftRight },
+                    new HintEntry("Five Seconds") { Button = PadGlyphButton.Shoulders },
+                    new HintEntry("Oldest") { Button = PadGlyphButton.LeftTrigger },
+                    new HintEntry("Now") { Button = PadGlyphButton.RightTrigger },
+                    new HintEntry("Rewind Here") { Button = EmuSen.Mistress.Input.PadHints.Swapped ? PadGlyphButton.East : PadGlyphButton.South },
+                    new HintEntry("Cancel") { Button = EmuSen.Mistress.Input.PadHints.Swapped ? PadGlyphButton.South : PadGlyphButton.East },
+                ]);
+            });
 
             if (Strip.Selected is { } first) Show(first);
             Opened += (_, _) => Strip.Focus();

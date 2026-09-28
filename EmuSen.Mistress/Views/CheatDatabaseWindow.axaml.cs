@@ -134,12 +134,36 @@ namespace EmuSen.Mistress.Views
                 if (dock.Children.OfType<Grid>().LastOrDefault() is { ColumnDefinitions.Count: 3 } lists) lists.ColumnDefinitions = new ColumnDefinitions("*,16,*");
             }
             SheetLook.StatusOverButtons(StatusText);
-            // The licence's attribution stays in view as the panel's footer, leaving the lists the room.
+            // The introduction and the licence's attribution stay in view as the panel's footer, leaving the lists the room (Q170).
             if (AttributionText.Parent is Border attribution) attribution.IsVisible = false;
-            EmuSen.LunaP.Controls.MenuLook.SetFooter(this, CheatDatabaseInstaller.Attribution);
+            string intro = dock.Children.OfType<TextBlock>().FirstOrDefault(t => t.Text?.StartsWith("EmuSen ships no cheat data", StringComparison.Ordinal) == true) is { } first ? first.Text! : "";
+            if (dock.Children.OfType<TextBlock>().FirstOrDefault(t => t.Text == intro) is { } shownIntro) shownIntro.IsVisible = false;
+            EmuSen.LunaP.Controls.MenuLook.SetFooterLines(this, 4);
+            EmuSen.LunaP.Controls.MenuLook.SetFooter(this, (intro + " " + CheatDatabaseInstaller.Attribution).Trim());
+            GamesHeaderText.TextWrapping = Avalonia.Media.TextWrapping.Wrap;
+            _inLook = true;
+            ShowGames();
+            SheetLook.SelectOnFocus(GamesList);
+            SheetLook.SelectOnFocus(SystemsList);
+            // The filter and Load side by side above the games, so the list keeps the room (§4.81).
+            if (GameFilter.Parent is DockPanel games)
+            {
+                Avalonia.Thickness filterMargin = GameFilter.Margin;
+                games.Children.Remove(GameFilter);
+                games.Children.Remove(LoadGameButton);
+                GameFilter.Margin = default;
+                LoadGameButton.Margin = default;
+                LoadGameButton.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+                Grid.SetColumn(LoadGameButton, 2);
+                var tools = new Grid { ColumnDefinitions = new ColumnDefinitions("*,8,Auto"), Margin = filterMargin, Children = { GameFilter, LoadGameButton } };
+                DockPanel.SetDock(tools, Dock.Top);
+                games.Children.Insert(games.Children.IndexOf(GamesHeaderText) + 1, tools);
+            }
             DirectoryPicker.TemplateApplied += (_, e) => { if (e.NameScope.Find<Control>("PART_Browse") is { } browse) browse.IsVisible = false; };
             if (Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(DirectoryPicker).OfType<Control>().FirstOrDefault(c => c.Name == "PART_Browse") is { } shown) shown.IsVisible = false;
         }
+
+        private bool _inLook;
 
         // AppSettings when set, the sandbox's own Cheats folder otherwise -
         // the same resolution `cheat db` uses.
@@ -190,9 +214,10 @@ namespace EmuSen.Mistress.Views
 
             GamesList.ItemsSource = _games.Select(g => g.Game).ToList();
 
+            // On a big-screen sheet the chosen system is the row beside it, so the heading need not name it again (§4.81).
             GamesHeaderText.Text = _selectedSystem is null
                 ? "Games"
-                : $"Games in {_selectedSystem}  ({_games.Count:N0})";
+                : _inLook ? $"Games  ({_games.Count:N0})" : $"Games in {_selectedSystem}  ({_games.Count:N0})";
 
             UpdateLoadButton();
         }

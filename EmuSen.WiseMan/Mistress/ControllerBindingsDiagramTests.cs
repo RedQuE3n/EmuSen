@@ -350,6 +350,16 @@ namespace EmuSen.WiseMan.Mistress
             }
             Assert.Empty(cut);
 
+            // Reset to Defaults stands at the end of General, and the footer row is gone while there is no conflict.
+            tabs.SelectedIndex = 0;
+            main.UpdateLayout();
+            UiTest.Capture(main);
+            Button? reset = sheet.GetVisualDescendants().OfType<Button>().FirstOrDefault(b => b.Content is "Reset to Defaults");
+            Assert.True(reset is not null, string.Join(", ", sheet.GetVisualDescendants().OfType<Button>().Select(b => b.Content?.ToString())));
+            Assert.True(reset.IsEffectivelyVisible);
+            Assert.Same(tabs, reset.FindAncestorOfType<TabControl>());
+            Assert.False(sheet.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "FooterBar").IsVisible);
+
             bindings.SetTesting(true);
             Assert.Equal(new[] { "Hold to stop testing" }, EmuSen.LunaP.Controls.MenuLook.GetHints(bindings)!.Select(e => e.Label));
             bindings.Close();

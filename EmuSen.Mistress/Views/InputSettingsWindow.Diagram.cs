@@ -96,6 +96,22 @@ namespace EmuSen.Mistress.Views
             TestToggle.IsVisible = false;
             foreach (TextBlock status in _diagramStatus.Values) status.IsVisible = false;
             SizeColumnsToText();
+            MoveResetToGeneral();
+        }
+
+        // The footer row takes height from the drawing on a sheet, so Reset to Defaults, which resets every console, goes to the end of General, and the row shows only for a conflict (Q184).
+        private void MoveResetToGeneral()
+        {
+            if (ResetButton.Parent is ItemsControl bar && MirrorPlayer1ToPlayer2CheckBox.Parent is Panel general)
+            {
+                bar.Items.Remove(ResetButton);
+                ResetButton.HorizontalAlignment = HorizontalAlignment.Left;
+                ResetButton.Margin = new Thickness(0, 18, 0, 0);
+                general.Children.Add(ResetButton);
+            }
+            void Footer() => FooterBar.IsVisible = !string.IsNullOrEmpty(ConflictText.Text);
+            ConflictText.PropertyChanged += (_, e) => { if (e.Property == TextBlock.TextProperty) Footer(); };
+            Footer();
         }
 
         // The look's larger capitals do not fit the desktop's fixed columns, so each table's columns take their widest cell, shared by its rows (§4.81).

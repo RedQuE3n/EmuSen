@@ -17,7 +17,7 @@
                    TextWrapping="Wrap"
                    Margin="0,0,0,10" />
 
-        <Border DockPanel.Dock="Bottom" Margin="0,12,0,0">
+        <Border x:Name="FooterBar" DockPanel.Dock="Bottom" Margin="0,12,0,0">
             <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Grid.Column="0"
                            x:Name="ConflictText"
@@ -27,7 +27,7 @@
                 <lunac:ButtonBar Grid.Column="1">
                     <ToggleButton x:Name="TestToggle" Content="Test Buttons" Click="OnTestToggleClick"
                                   AutomationProperties.HelpText="While on, every press lights up on the drawing and nothing else happens" />
-                    <Button Content="Reset to Defaults" Click="OnResetClick" />
+                    <Button x:Name="ResetButton" Content="Reset to Defaults" Click="OnResetClick" />
                     <Button x:Name="CloseButton" Content="Close" Click="OnCloseClick" IsCancel="False" />
                 </lunac:ButtonBar>
             </Grid>

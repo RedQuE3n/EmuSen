@@ -68,6 +68,7 @@ namespace EmuSen.Mistress.Views
             Sheets.MenuLook = on;
             EmbeddedPopups.SetIsEnabled(this, on);
             ApplyBigMenuLook(on);
+            ApplyBigStatusLine(on);
 
             if (on && _themed is null) SetUpThemedLibrary();
         }

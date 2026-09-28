@@ -10520,7 +10520,8 @@ Every picture was looked at. Three things were seen:
   scroll only sideways (LunaP §196.10), and the audit now checks the sides of such an area whatever its allowances.
   The audit, with the sideways fade switched off, reported the reel at both sizes; with it on, nothing.
 - **The main window's status line**, under the sheet, shows the performance counters while a game runs unpaused, and is
-  cut at the window's right edge. It is not a framed window and is outside this rule's scope; Q191 asks.
+  cut at the window's right edge. It is not a framed window and is outside this rule's scope; Q191 asks. *Answered
+  in §43.11.*
 - **The Cheat Database's lists at 1280×800** show three systems and two games, with room to spare now that the
   introduction is in the footer (Q170).
 
@@ -10541,8 +10542,9 @@ tools), none failed, in 5 min 31 s.** LunaP's whole suite: 1,521, all passed.
 
 ### 43.9 Not done
 
-- **States no case opens** (§4.83.5): long theme names, a hundred cheats, long parameter names.
-- **The Nintendo 64's margin.** The labels meet the floor with none (Q188).
+- **States no case opens** (§4.83.5): long theme names, a hundred cheats, long parameter names. *Long names were added
+  on 2026-09-27 (§43.11); a hundred cheats is still not opened.*
+- **The Nintendo 64's margin.** The labels meet the floor with none (Q188). *Built on 2026-09-27 (§43.11).*
 - **A desktop ES-DE look**, deliberately (§10.1).
 - **A real pad, keyboard or handheld.** Nothing here ran on hardware, and nothing from this part goes to the handheld
   until it has been looked at.
@@ -10552,12 +10554,221 @@ tools), none failed, in 5 min 31 s.** LunaP's whole suite: 1,521, all passed.
 - **Q188, the Nintendo 64 drawing's margin.** Its labels are at 16.0 pixels at 1280×800, the audit's floor exactly. A
   longer binding name would fail the audit. **Recommendation:** when a drawing is bound by height, let a side column
   with more than four labels take a second column in the width the drawing leaves free. At 1280×800 about 300 pixels
-  are free.
+  are free. **Built** (§43.11): 17.1 at both sizes.
 - **Q189, the floor's measure.** The audit measures words by font size, so a condensed face counts the same as a wide
   one. Barlow Condensed at 16 pixels has a smaller x-height than the desktop's face at 16. Keep font size, or measure
-  the drawn capitals' height?
+  the drawn capitals' height? **Open**, waiting on a decision; the audit still measures font size (§43.11).
 - **Q190, the audit's reach.** It audits the states the tests open. **Recommendation:** add long-name cases (a theme,
-  a cheat, a parameter, a game) to `WindowFitAuditTests`, since those are where a cut would first appear.
+  a cheat, a parameter, a game) to `WindowFitAuditTests`, since those are where a cut would first appear. **Built**
+  (§43.11), with a long binding name as well; five of the new states failed and were fixed.
 - **Q191, the main window's status line.** While a game runs unpaused, the status line under a sheet shows the
   performance counters and is cut at the window's right edge. It is not a framed window. **Recommendation:** in a
-  big-screen session hide the counters there, or end the line in an ellipsis. Leave it to the HUD's own work.
+  big-screen session hide the counters there, or end the line in an ellipsis. Leave it to the HUD's own work. **Built**
+  (§43.11): both, and the line is audited.
+
+### 43.11 The follow-ups: Q188, Q190 and Q191 built, Q189 open (2026-09-27)
+
+*Built on branch `fit-followups` from WiseMan `dd28948b`, with LunaP's `fit-followups` from `openemu-library` at
+`2af6a77`.* The player's account is the settings reference §4.83.6; LunaP's is its §196.11 and §198.11. Predictions are
+numbered from P290 and questions from Q192; P289 and Q191 were the highest in every tree on this machine when this was
+written.
+
+**Q189 is open.** It waits on a decision, and nothing here changes how the audit measures words: by font size.
+
+#### The status line (Q191)
+
+The defect was measured before it was fixed. The new case, the status line under a game with a 102-character title at
+both sizes, in a big-screen session and on the desktop, run on the unmodified window, reported the counters' line 2,268
+pixels wide at 1280×800 and 2,276 at 1920×1200, past the bar's edge in all four cases, and in the big-screen cases also
+too small to read (14 pixels, 9.3 design pixels at 1920×1200). The messages beside it got no width at all. The first
+picture of each is in `png/fit-followups/before/`.
+
+The change, in the order it was decided:
+
+- In a big-screen session the counters are hidden (`ApplyStatusBar`), and the messages take the look's small text at
+  the menus' scale and wrap, since a pad has no tooltip.
+- On the desktop the counters are a short line, at most half the bar, with the whole line as the tooltip; the messages
+  end in an ellipsis with their whole text as the tooltip. The audit accepts a trimmed status word only while its
+  tooltip holds it (`WholeInItsTip`), and checks it against the window's own edge besides, which no allowance excuses.
+- `FitAudit.Check` gained the smallest size as a parameter. The desktop's line is held to every rule except the big
+  screen's floor, since the desktop's words are the desktop's size (§4.83.2).
+
+**The bar's height, and a harness fault it exposed.** The first version let the big screen's 20-pixel words take their
+natural line, which made the bar 7 pixels taller at 1280×800. The narrow run then failed two cases of
+`PadSettingsWindowTests`, `The_shaders_window_from_the_pad_menu_adjusts_a_built_in_filter_and_resets_it_all` and
+`A_long_preset_s_sliders_on_the_sheet_are_reached_and_walked_by_pad`, both at the walk to a slider: *No pad path to the
+control asked for.* They are the two §43.3 met. The cause was isolated in three steps:
+
+1. With the status line's size put back to the desktop's, and nothing else changed, both passed.
+2. With the larger line, a picture at the failing step showed the slider in view (the 944-parameter preset's first
+   slider, whole, under its heading).
+3. From the first slider of *CRT (Lottes)*, pressing Down reached every slider in turn, *Mask dark* on the eighth
+   press. The window lets the pad reach the control; `PadAudit`'s walk, which replays each path from the start with
+   the scroll offsets put back, did not find it under a sheet 7 pixels shorter.
+
+The fault is in the harness, not the window. It was not fixed here: the bar now keeps the height it had at 800 pixels
+(a line of 26 design pixels, no padding), which leaves the sheets' geometry at 1280×800 exactly as it was, and both
+cases pass. Q192 asks for the walk to be made to replay the same way at any height.
+
+#### The Nintendo 64's margin (Q188)
+
+Built as recommended, in LunaP's `ControllerDiagram` (§198.11 there): a side column of more than four labels takes a
+second, staggered column when its labels were shrunk by its height, the drawing is bound by its height, and the width
+the second column takes was free. The outer labels' lines run level between the inner labels and turn toward their
+buttons only beside the drawing, so the rules of §198.2 hold.
+
+The audit's bindings case now writes each drawing's label size and holds it to a margin of one design pixel over the
+floor with the bindings a console starts with, and to the floor with long names:
+
+| Drawing | 1280×800 | 1920×1200 | Over the floor | Long key names on A and Start |
+|---|---|---|---|---|
+| Nintendo 64 | 17.1, right column split | 17.1, right column split | +1.1 | 16.6 (+0.6) |
+| Super NES, NES, Game Boy | 17.1 | 17.1 | +1.1 | 17.1 |
+
+17.1 is where every drawing stops, by the caps of §198.2 (the text around it times 0.85, and its width over 900), not by
+its space. Raising the caps for compact labels was measured before deciding (0.95 and the width over 820): the Game Boy
+and NES went to 18.2, the Super NES to 17.7 and the Nintendo 64 to 17.2, where its top row of six labels binds. It
+would change every drawing to move the Nintendo 64 by a tenth of a pixel, and was not made. Q193 asks whether a larger
+margin is wanted, since that is what it would cost.
+
+**Found on the way.** LunaP's new test that no line passes through a label other than its own failed on the unmodified
+layout: a row's lines ran down through a column's first label, which could start above the drawing's top. It is visible
+in §43.7's `controller-bindings-n64-1280x800.png`, where the R line runs under C Up's label. Columns now stand beside
+the drawing, between its top and its foot, when they fit there (LunaP §198.11).
+
+#### The audit's reach (Q190)
+
+Ten window states were added at both sizes (§4.83.6 lists them), and the status line. Run on the unmodified windows,
+five failed (the three long titles, the long cheat and the theme browser); each was fixed and passes now:
+
+| State | Before | Fix |
+|---|---|---|
+| A screenshot with a 117-character title; a theme's detail and About with a 77-character name | *title cut*, at both sizes | a framed sheet's title wraps onto a second line (LunaP §196.11) |
+| Active Cheats with a long cheat chosen | the code's column took the code's whole width and pushed the table sideways: *cut at a scrolling edge with no fade: the right*, at both sizes | the code's column is at most 300 design pixels and ends in an ellipsis |
+| the same, once that was fixed | the description wrapped to three lines, and the table, 78 design pixels high under an empty status line, scrolled in less than two rows: *scrolls in too little room*. The case was then given a third cheat, so the table scrolls whatever its rows | a table's cell is one line (LunaP §196.11); the status is said in the footer and its line is gone, giving the table about 110 |
+| the theme browser with the long theme reached by the pad | the preview stayed on the first theme: the pad's row was not chosen (a Q178 defect, not a cut) | the list chooses the row the pad reaches |
+
+The Resume, Find by Name, cover picker and shader cases passed on the unmodified windows. A case that opened the rewind
+reel with a long title was written and dropped, since the reel does not show the title.
+
+#### Tests
+
+- **`WindowFitAuditTests`**: 63 cases, all passing: 29 window states at two sizes, the framed-windows case, and four
+  status-line cases. **`WindowFitScrapeAuditTests`**: 6, as before.
+- **LunaP**: `ControllerDiagramTests` 72 (10 new), `MenuLookTests` two new (the wrapped title, and a table's cell on one
+  line).
+- The bindings case asserts the margin, so a Nintendo 64 back at 16.0 fails it (D1M below).
+
+#### Predictions and mutants
+
+| # | Predicted | Found | Verdict |
+|---|---|---|---|
+| P290 | S1–S7, the status line's seven rules, are all caught by the status-line case; S3 only by its narrowest-window step | all seven caught; S3 by the two desktop cases, where only the narrowest step can fail it (the short counters line is 586 pixels wide) | **right** |
+| P291 | D4, two columns keeping one column's spacing, survives: the line still clears the inner labels by about 3.5 pixels | survived | **right**; the split case then gained a clearance assertion, and D4 is caught |
+| P292 | T3, a wrapped title kept to the one-line minimum, survives, since the long titles fit two lines at that size | caught by the 117-character screenshot title at both sizes, which needs the smaller size | **wrong** |
+| P293 | C2, a table's cell wrapping again, is caught by the long cheat's case | survived: once the status moved to the footer the table has room for a wrapped row, and a wrapped cell is whole, which the audit does not count as a fault | **wrong**; LunaP's own case was added (C2L), and catches it |
+| P294 | Of 21 mutants, 19 are caught on the first run and 2 survive (D4, T3) | 18 caught, 3 survived (C2, D3, D4) | **wrong** |
+
+The predictions were written to `~/.cache/emusen/probe/fit-followups/predictions.txt` before the first run.
+
+Twenty-one mutants, one at a time, by `~/.cache/emusen/probe/fit-followups/mutate_followups.py`, with §41.7's protocol: a
+state file before each mutant, a leftover restored and rebuilt at the start, every restored file touched, and both trees
+rebuilt at the end. Each names the tests that should catch it. A twenty-second, C2L, was added after the first run.
+
+**Eighteen were caught on the first run and three survived.** Four of the eighteen verdicts (C1, C3, T1, T3) also
+counted a failure that happened without any mutant: after the bar's height was changed, the long cheat's case failed at
+1920×1200 on its own (below), and the run did not know it. Those four were run again once it was fixed, and each was
+caught by the cases meant to catch it.
+
+| # | Rule broken | First run | After |
+|---|---|---|---|
+| S1 | a big screen shows the counters in its status line | caught | — |
+| S2 | the desktop's line is not trimmed | caught | — |
+| S3 | the counters are not held to their share | caught | — |
+| S4 | the counters' tooltip is the short line | caught | — |
+| S5 | the line's tooltip does not follow its text | caught | — |
+| S6 | a big screen's line does not wrap | caught | — |
+| S7 | a big screen's line at the desktop's size | caught | — |
+| C1 | the cheats' code column grows without bound | caught | caught on the rerun |
+| C2 | a table's cell wraps in the look, against the window audit | **survived** | survives: a wrapped cell is whole and the table then has room, so it is not a fit fault; the one-line rule is the table's own, held by C2L |
+| C2L | the same, against LunaP's case for it | — | caught |
+| C3 | the cheats' status above the buttons, not in the footer | caught | caught on the rerun |
+| C4 | the theme browser's preview does not follow the pad | caught | — |
+| T1 | a framed sheet's title keeps to one line | caught | caught on the rerun, by the three long titles at both sizes |
+| T2 | a wrapped title's band does not grow | caught | — |
+| T3 | a wrapped title may not shrink below the one-line minimum | caught | caught on the rerun, by the screenshot's title |
+| D1 | a tall column never takes a second | caught | — |
+| D1M | the same, against the window audit's margin | caught | — |
+| D2 | an outer label's line runs straight across the inner column | caught | — |
+| D3 | a second column kept where it takes the drawing's width | **survived** | survives; see below |
+| D4 | two columns keep one column's spacing | **survived** | caught, once the split case asserted the clearance |
+| D5 | a column starts above the drawing, where a row's lines run | caught | — |
+| D6 | the split measured against one column's height | caught | — |
+
+**D3 survives, and is recorded rather than excused.** It removes the check that the drawing is still bound by its height
+after a column is split. The Nintendo 64 was laid out in the look at 1,846 sizes (400 to 1100 wide, 200 to 450 high, in
+steps of 10) with short bindings, and at 40 more (700 to 1400 wide, 250 to 450 high) with long ones, with and without
+the check: the layouts were the same at every one. Wherever splitting let the labels grow, the width it took was free.
+The check stays, since it states when a split is allowed, and the fine grid is kept beside the runner
+(`d3-grid-*.txt`). No layout measured reaches it.
+
+**The failure without a mutant, and a unit in the audit.** After the bar kept its 800-pixel height, the long cheat's
+case failed at 1920×1200 with the third row *past its ScrollContentPresenter*, 3 pixels below the table's foot. The
+table's rows ran 2 design pixels past its view, so the list scrolled by 2 and the row could be brought into view. The
+audit decided whether a list scrolls by comparing that overflow in the list's own design units against its slack in
+screen pixels: 2 against 2, so it counted the list as not scrolling and the row as cut. It now converts the overflow to
+screen pixels first (3 against 2), for this rule and for *scrolls in too little room*, and the case passes. The eleven
+`FitAuditTests` pass, and the whole audit reports nothing new.
+
+#### Pictures
+
+In `~/.cache/emusen/bigpicture/png/fit-followups/`:
+
+- `before/`, rendered from the unmodified trees (WiseMan `dd28948b`, LunaP `2af6a77`) with the new cases added, as the
+  audit saw each new state at 1280×800 and 1920×1200;
+- `after/`, from the final build, the same states, every one passing the audit.
+
+`before/` has 40 pictures and `after/` 50. Two states have no *before* picture, because their case failed before
+the audit ran: the theme browser with the long theme (the preview never reached it) and the long cheat with its status
+(the row's state, just before it, failed first; its picture is there). `after/` adds the status line's longest message
+and, on the desktop, the window at its narrowest.
+
+Every picture was looked at, side by side at both sizes (contact sheets in `~/.cache/emusen/probe/fit-followups/sheets/`).
+What they show agrees with the audit, and three things are worth saying:
+
+- **The status line before**, in a big-screen session at 1920×1200, is 14-pixel words across the whole screen, running
+  off its right edge; after, *Paused* or *Running: …* in 30-pixel words, and a failure wrapped to three lines.
+- **The Nintendo 64 before and after**: five labels in one column, then three and two, the two outer ones' lines passing
+  level between the inner three. With the long names the top row spans the panel and the labels are a little smaller,
+  as the table says.
+- **The desktop's status line at 1920×1200** is the desktop's own size, as the desktop's words are everywhere; nothing
+  in it is cut.
+
+Trial renders went to `~/.cache/emusen/probe/window-look/trials/` and were deleted at the end.
+
+#### The narrow run and the broad run
+
+**The narrow run**, the blast radius, covered Active Cheats, the sheets' look, the theme browser, the library screen,
+the main window, the bindings, input settings, the Cheat Database, the big-picture switch, screenshots, resume, the
+pad's settings sheets, the themed library's pad, rewind and the audit's self-tests, without benches, GPU or Vulkan
+cases, under `nice -n 10`. Its first pass, with the bar's natural height, was **371 tests: 367 passed, 2 skipped, 2
+failed**, the two `PadSettingsWindowTests` cases above. With the bar at its 800-pixel height they and the status-line
+cases passed (26 tests), and the whole audit with its self-tests passed after the unit fix (80 tests).
+
+**The broad run** was one run of the Mistress filter and the audit's self-tests, without `ShaderSettingsWindowTests`,
+the shader browser, the benches or any GPU, Vulkan or slang case, under `nice -n 10`, on the final build with WiseMan
+`dd28948b` and LunaP `openemu-library` `2af6a77` merged in (both already contained): **1,593 tests, 1,543 passed, 50
+skipped (the picture, survey and live tools), none failed, in 5 min 57 s.** LunaP's whole suite: 1,533 tests, all
+passing once the README's count was brought up to date.
+
+#### Not done, and open questions
+
+- **Q192, the pad walk's replay.** `PadAudit`'s breadth-first walk failed to find a slider the pad reaches in eight
+  presses, under a sheet 7 pixels shorter. **Recommendation:** make its replay independent of the sheet's height, for
+  example by recording the scroll offset each step leaves and checking it on replay, and run the two cases at several
+  heights.
+- **Q193, a larger margin.** Every drawing stops at 17.1, one design pixel over the floor, by its caps. **Recommendation:**
+  keep them unless the pictures on a handheld say the labels are small; the measured cost of raising them is above.
+- A cheat list of a hundred rows, a title too long for two lines, and a big-screen message long enough to take a
+  quarter of the screen are not opened.
+- Nothing ran on hardware.

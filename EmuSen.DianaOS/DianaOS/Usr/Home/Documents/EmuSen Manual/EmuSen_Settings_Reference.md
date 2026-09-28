@@ -2489,6 +2489,11 @@ The bar also goes when both of its parts are off, so an empty strip is never lef
 for the frame rate alone, then for the whole bar and a switch for each part. `LibraryScreenTests.The_status_bar_and_its_parts_follow_preferences_at_once_and_are_remembered`
 walks the switches and a restart; mutants that drop the live hook or keep an empty bar are caught.
 
+*Changed on 2026-09-27* (§4.83.6): the readout at the right is a short line (the frame rate, the frame's cost and its
+top phases), the whole measurement is its tooltip, and neither part of the bar is ever cut at the window's edge. In a
+big-screen session the readout is not in the bar at all, whatever **Frame Rate** says, and the messages are larger and
+wrap.
+
 ### 4.52 Big picture: an ES-DE theme as the big-screen library (2026-09-25)
 
 `EmuSen_BigPicture.md` plans a big-picture mode that draws EmulationStation-DE themes. Its stages (a) to (c) built the
@@ -6198,5 +6203,110 @@ With the fade switched off, the audit reports the reel at both sizes.
   the help bar and the words printed on a drawn controller (*START*, *Z*), which stay at the drawing's scale.
 - **The Nintendo 64 labels meet the floor with no margin.** A longer binding name widens the drawing's top row, and the
   labels then shrink below 16 pixels. The audit would fail, since it measures the drawing as it is shown, but only for
-  the bindings the case uses.
+  the bindings the case uses. *Answered on 2026-09-27* (§4.83.6): the labels are 17.1, with the long names 16.6.
 - **Hardware.** No real pad, keyboard or handheld was used; everything here ran headless.
+
+*The first bullet was narrowed on 2026-09-27:* long names of each kind are now opened (§4.83.6). A cheat list of a
+hundred rows is still not.
+
+#### 4.83.6 The follow-ups: the status line, the Nintendo 64's margin, and long names (2026-09-27)
+
+Three of the plan's open questions (§43.10 there) were built, and the audit was widened to hold them. The fourth, Q189,
+whether words should be measured by their drawn capitals rather than their font size, waits on a decision; the audit
+still measures font size.
+
+**The status line (Q191).** While a game ran unpaused, the line along the window's foot carried the performance
+counters: the frame rate, the frame's cost, every phase, the presentation's numbers and the time outside the frame,
+about 2,270 pixels of words. The counters' column took all of it, so the messages beside them got no width, and the
+counters ran past the window's right edge, at 1280 × 800 and 1920 × 1200, on the desktop and in a big-screen session
+alike. Now:
+
+- **In a big-screen session the counters are not in the status line**, whatever Preferences' **Frame Rate** says (§4.51).
+  The HUD is the place for performance. The messages are in the look's small text at the menus' scale (20 design
+  pixels) and wrap onto more lines rather than being cut, since a pad has no tooltip to show the rest. The bar is 26
+  pixels high at 800, as the desktop's is, and grows with the scale.
+- **On the desktop the line is never cut.** The counters show a short line (the frame rate, the frame's cost and its top
+  phases, such as *60.8 fps (run 4.80ms / total 16.44ms) [cpu+spc700 3.97ms / ppu 0.81ms / hdma 0.01ms]*), take at most
+  half the bar, end in an ellipsis if even that is too long, and carry the whole measurement as their tooltip. The
+  messages take the rest, end in an ellipsis when they are longer, and carry their whole text as their tooltip. The
+  console still gets the whole line as `[fps]`.
+
+Every message the line can show goes through the same one line, so each is held the same way: the longest the audit
+opens is a failure to load a game with a long title from a long path, 330 characters. It wraps to three lines in a
+big-screen session and is trimmed on the desktop.
+
+A first version kept the bar's padding and let its line take the 20-pixel words' natural height, which made the bar 7
+pixels taller at 1280 × 800. Two cases of `PadSettingsWindowTests`, the same two §43.3 there met, then failed to find a
+slider on Shaders by their pad walk, though pressing Down from the first slider reached every one of them in turn. The
+fault was the walk's replay under a shorter sheet, not the window. The bar now keeps the height it had at 800 pixels,
+and both cases pass. The walk's sensitivity is recorded as not fixed (§43.11 there).
+
+**The Nintendo 64's margin (Q188).** In a framed Controller Bindings window, the Nintendo 64's labels were 16.0 design
+pixels, the floor, because its right column holds five labels and the drawing is bound by its height. A side column of
+more than four labels now takes a second column in the width the drawing leaves free, where that lets its labels grow
+without shrinking the drawing (LunaP §198.11). The outer column's lines run level between the inner labels, and no line
+crosses a button, a stick or printed words. Measured in the audit at 1280 × 800 and 1920 × 1200:
+
+| Drawing | Before | Now | Over the floor | With long key names on A and Start |
+|---|---|---|---|---|
+| Nintendo 64 | 16.0 | 17.1 (right column split) | +1.1 | 16.6 (+0.6): its top row binds |
+| Super NES, NES, Game Boy | 17.1 | 17.1 | +1.1 | 17.1 |
+
+17.1 is every drawing's cap, set by the text around the labels and the drawing's width, not by its space. The audit's
+case holds the drawings with the bindings a console starts with to 17.0, a margin of one design pixel, and the case with
+long names to the floor.
+
+**Long names (Q190).** The audit opens ten more window states, each at both sizes, and the status line:
+
+- a theme whose name, author, licence and variants are long: the theme browser with it chosen, its detail and its About;
+- a cheat with a long description and a long code, chosen, then with the longest status Active Cheats says;
+- a shader preset whose parameters have long names;
+- a game with a 102-character title: its screenshot, the resume question, Find by Name and Use Another Game's Cover;
+- Controller Bindings with long key names on A and Start (*MediaPreviousTrack*, *LaunchApplication1*), every tab;
+- the status line, above.
+
+Five of them failed before they were fixed: the three with a long title, the long cheat and the theme browser. What the
+audit reported, and what was found behind it:
+
+- **A long title was cut.** A screenshot's, a theme's detail and its About: *title cut*, at both sizes. A framed sheet's
+  title that does not fit one line at its smallest size now takes a second line, shrinking a little more if it must,
+  and the band under it grows (LunaP §196.11). Past two lines it is still cut, and the audit still says so.
+- **A long cheat code pushed the table sideways.** The code's column took the code's whole width, the description's
+  column went off the right, and the table cut at a side that does not fade. The code's column now takes at most 300
+  design pixels and ends in an ellipsis; the whole code is in the footer while the row is chosen, as the description is.
+- **A long cheat description wrapped.** The look wraps a row's words (LunaP §196.9), and a table's cells are rows, so
+  the row grew to three lines and the table scrolled in less than two rows. A table's cell is now one line (LunaP
+  §196.11).
+- **Active Cheats' table had too little room with three cheats.** The line above the buttons kept a status line's height
+  even when it said nothing, and the table had 78 design pixels, under the audit's two rows. In the look the status is
+  now said in the panel's footer, as a chosen row is, and the line is gone: the last thing to happen is what the footer
+  says. The table has about 110 design pixels at 1280 × 800.
+
+One defect of another kind was found by the theme browser's case: **the pad's row was not the previewed one.** Moving
+the focus down the list by the pad left the preview on the first theme. The browser's list now chooses the row the pad
+reaches, as Q178 did for the cheats' lists, and the preview follows it.
+
+**Tests.**
+
+- `WindowFitAuditTests`: 58 window cases (29 states at two sizes), the framed-windows case, and four status-line cases
+  (a big screen and the desktop at both sizes), each audited running and with the longest message, and the desktop's
+  again at its narrowest width. The audit writes each drawing's label size, its margin and the columns split; the
+  bindings cases fail under the margin. `FitAudit.Check` takes the smallest words' size as a parameter, so the desktop's
+  status line is held to every rule but the big screen's floor, and the allowance for it, *the status line's words are
+  whole in its tooltip*, applies only while the tooltip holds them.
+- `FitAudit` decides whether a list scrolls by its overflow in screen pixels, as its slack is. It had compared the
+  overflow in the list's own design units, so a table 2 design pixels too short at 1920×1200 (3 screen pixels) counted
+  as not scrolling, and its last row as cut past the table (§43.11 there).
+- `WindowFitScrapeAuditTests`: 6 cases, as before.
+- LunaP: the second column, the columns clear of the rows' lines, no line through another label, and the wrapped title
+  (LunaP §196.11, §198.11).
+- **Mutants**: `EmuSen_BigPicture.md` §43.11.
+
+With `EMUSEN_WINDOW_FIT_PNG=before` or `after` and `EMUSEN_WINDOW_FIT_SET=<name>`, the audit saves what it looked at into
+`~/.cache/emusen/bigpicture/png/<name>/<stage>/`, beside the other big-picture pictures; any other value is a trial, kept
+under `~/.cache/emusen/probe/window-look/trials/`.
+
+**Not covered.** A cheat list of a hundred rows; a theme's name or a game's title too long for two lines of a title,
+which the audit would report; the Nintendo 64 with long names in its top row, whose labels keep 0.6 of a pixel over the
+floor; a status message in a big-screen session long enough to take a quarter of the screen. The pad walk's sensitivity
+to a sheet's height is in the harness, not in any window, and is not fixed.

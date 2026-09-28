@@ -88,8 +88,11 @@ namespace EmuSen.Mistress.Views
             });
             CheatsList.Column(new LunaColumn<CheatRow>("Kind", r => Muted(r.Kind), r => r.Kind) { Width = "44" });
             CheatsList.Column(new LunaColumn<CheatRow>("Cheat", r => r.Description) { Width = "*" });
-            CheatsList.Column(new LunaColumn<CheatRow>("Code", r => Mono(r.Detail), r => r.Detail) { Width = "Auto" });
+            // A code longer than the column ends in an ellipsis, whole in the footer while its row is chosen, so the table never scrolls sideways (§4.83.6).
+            CheatsList.Column(new LunaColumn<CheatRow>("Code", r => Mono(r.Detail), r => r.Detail) { Width = "Auto", MaxWidth = CodeColumnMaxWidth });
         }
+
+        internal const double CodeColumnMaxWidth = 300;
 
         private Control Muted(string text) => SmallCell(new TextBlock
         {
@@ -104,6 +107,8 @@ namespace EmuSen.Mistress.Views
             Foreground = Brush("LunaMuted"),
             FontFamily = new Avalonia.Media.FontFamily("monospace"),
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis,
+            TextWrapping = Avalonia.Media.TextWrapping.NoWrap,
         });
 
         // A cell's small words: 11 on the desktop, larger on a big-screen sheet in ES-DE's look (§4.80).
@@ -115,12 +120,12 @@ namespace EmuSen.Mistress.Views
             return cell;
         }
 
-        // On a big-screen sheet: the cells' words larger, the status over centred buttons, and no Save As or Load From, whose file dialogs a pad cannot drive (§4.80).
+        // On a big-screen sheet: the cells' words larger, the status in the footer, and no Save As or Load From, whose file dialogs a pad cannot drive (§4.80, §4.83.6).
         private void InLook(DockPanel dock)
         {
             SetValue(CellFontSizeProperty, SheetLook.SmallText);
             dock.Margin = new Avalonia.Thickness(0, 0, 0, 16);
-            SheetLook.StatusOverButtons(StatusText);
+            SheetLook.StatusInFooter(this, StatusText);
             SaveAsButton.IsVisible = LoadFromButton.IsVisible = false;
 
             // The General page's two parts side by side, so the table under it keeps room for its rows (§4.83).

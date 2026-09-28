@@ -170,6 +170,7 @@ namespace EmuSen.Mistress.Views
             _hardwareDashboard = new LunaAction("_Hardware Dashboard...", () => OpenCoretopWindow(_debugTarget));
             _rewindReel = new LunaAction("Re_wind...", () => OpenRewindReel(resumeAfter: false));
             InitializeComponent();
+            SetUpStatusLine();
             ApplyStatusBar();
             SetUpLibraryScreen();
             BuildMenus();
@@ -501,12 +502,13 @@ namespace EmuSen.Mistress.Views
             _ = SheetLayer.Show(window, this);
         }
 
-        // The bar goes when it is switched off or when both its parts are - see EmuSen_Settings_Reference.md §4.51.
+        // The bar goes when it is switched off or when both its parts are; a big screen's counters are its HUD's, not the bar's - see EmuSen_Settings_Reference.md §4.51 and §4.83.6.
         private void ApplyStatusBar()
         {
+            bool counters = _appSettings.ShowFpsBar && !_bigScreen;
             StatusText.IsVisible = _appSettings.ShowStatusText;
-            FpsText.IsVisible = _appSettings.ShowFpsBar;
-            StatusBar.IsVisible = _appSettings.ShowStatusBar && (_appSettings.ShowStatusText || _appSettings.ShowFpsBar) && !(ThemedLibraryShown && LibraryView.IsVisible);
+            FpsText.IsVisible = counters;
+            StatusBar.IsVisible = _appSettings.ShowStatusBar && (_appSettings.ShowStatusText || counters) && !(ThemedLibraryShown && LibraryView.IsVisible);
         }
 
         private void ShowDebugLogging()
@@ -1386,10 +1388,13 @@ namespace EmuSen.Mistress.Views
                             : $" | offered {offeredInWindow / seconds:F1}, shown {shown.Frames / seconds:F1} fps ({shown.Copies / seconds:F1} copied), copy {shown.CopyMilliseconds / Math.Max(shown.Copies, 1):F2} draw {shown.DrawMilliseconds / shown.Frames:F2}ms, {(shown.Gpu ? "GPU" : "software")} {shown.Width}x{shown.Height}";
                         double Ms(long ticks) => ticks * 1000.0 / Stopwatch.Frequency / framesInWindow;
                         string outside = $" | outside: requests {Ms(requestsTicks):F2} audio {Ms(audioTicks):F2} hand-off {Ms(handOffTicks):F2} sleep+rest {Ms(restTicks):F2}ms";
-                        string line = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms){breakdown}{presentation}{outside}";
+                        string counters = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms)";
+                        string line = $"{counters}{breakdown}{presentation}{outside}";
                         Console.WriteLine($"[fps] {line}");
 
-                        if (_appSettings.ShowFpsBar) Dispatcher.UIThread.Post(() => FpsText.Text = line);
+                        // The bar shows the frame rate, the frame's cost and its top phases; the whole line is its tooltip (§4.83.6).
+                        string barLine = top.Length == 0 ? counters : $"{counters} [{top}]";
+                        if (_appSettings.ShowFpsBar) Dispatcher.UIThread.Post(() => ShowCounters(barLine, line));
                         framesInWindow = 0;
                         offeredInWindow = 0;
                         Array.Clear(phaseMsInWindow);

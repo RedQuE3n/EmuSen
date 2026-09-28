@@ -73,6 +73,8 @@ namespace EmuSen.Mistress.Views
                 _list.Width = double.NaN;
                 _list.Height = double.NaN;
                 _list.VerticalAlignment = VerticalAlignment.Stretch;
+                // The row the pad reaches is the one previewed (Q178, §4.83.6).
+                SheetLook.SelectOnFocus(_list);
                 _shot.Width = double.NaN;
                 _shot.Height = 190;
                 _shot.HorizontalAlignment = HorizontalAlignment.Stretch;

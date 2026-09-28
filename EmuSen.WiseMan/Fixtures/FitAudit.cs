@@ -29,7 +29,7 @@ namespace EmuSen.WiseMan.Fixtures
         [System.ThreadStatic] private static double _slack;
         private static double Slack => _slack > 0 ? _slack : 1.0;
 
-        public static List<string> Check(Control root, IReadOnlyList<Allowance>? allow = null)
+        public static List<string> Check(Control root, IReadOnlyList<Allowance>? allow = null, double smallest = SmallestText)
         {
             allow ??= [];
             var faults = new List<string>();
@@ -47,7 +47,7 @@ namespace EmuSen.WiseMan.Fixtures
                 if (Allowed(c, allow) || c.TemplatedParent is not null && c is not (TextBlock or Image)) continue;
                 (Rect limit, Visual? by) = Limit(c, root, frame);
                 if (Contains(limit, r)) continue;
-                if (by is ScrollContentPresenter presenter && Scrolls(presenter, r, limit)) continue;
+                if (by is ScrollContentPresenter presenter && Scrolls(presenter, r, limit, root)) continue;
                 faults.Add($"past its {(by is null ? "panel" : Describe(by))}: {Describe(c)} at {Show(r)} outside {Show(limit)}");
             }
 
@@ -78,7 +78,7 @@ namespace EmuSen.WiseMan.Fixtures
             double unit = MenuPanel.GetScale(root) is > 0 and var u ? u : 1;
             foreach ((Control c, Rect r, _) in shown)
             {
-                if (c is not ScrollViewer viewer || c.TemplatedParent is TextBox || viewer.Extent.Height <= viewer.Viewport.Height + Slack) continue;
+                if (c is not ScrollViewer viewer || c.TemplatedParent is TextBox || Overflow(viewer, root) <= Slack) continue;
                 if (r.Height < 2 * 42 * unit - Slack) faults.Add($"scrolls in too little room: {Describe(c)} {r.Height:F0} high");
                 // Something sliced by a scrolling edge reads as cut unless the edge fades (Q186).
                 if (viewer.VerticalScrollBarVisibility == ScrollBarVisibility.Disabled || viewer.Presenter is not Visual presenter) continue;
@@ -115,7 +115,7 @@ namespace EmuSen.WiseMan.Fixtures
                 double size = c switch { TextBlock { Text.Length: > 0 } t => t.FontSize, ControllerDiagram d => d.LabelTextSize, _ => 0 };
                 if (size <= 0 || Allowed(c, allow)) continue;
                 double shownAt = size * (c.TransformToVisual(root)?.M11 ?? 1);
-                if (shownAt < SmallestText * unit - 0.05) faults.Add($"too small to read: {Describe(c)} at {shownAt / unit:F1} design px");
+                if (shownAt < smallest * unit - 0.05) faults.Add($"too small to read: {Describe(c)} at {shownAt / unit:F1} design px");
             }
             return faults;
         }
@@ -162,16 +162,19 @@ namespace EmuSen.WiseMan.Fixtures
         }
 
         // A scrolling area that can bring the overflow into view along the axis it overflows.
-        private static bool Scrolls(ScrollContentPresenter presenter, Rect r, Rect limit)
+        private static bool Scrolls(ScrollContentPresenter presenter, Rect r, Rect limit, Visual root)
         {
             if (presenter.FindAncestorOfType<ScrollViewer>() is not { } viewer) return false;
             bool across = r.Left < limit.Left - Slack || r.Right > limit.Right + Slack;
             bool along = r.Top < limit.Top - Slack || r.Bottom > limit.Bottom + Slack;
             // The pad scrolls up and down, by moving the focus or a page at a time, and never sideways: text past a scroller's side is cut.
             bool canAcross = false;
-            bool canAlong = viewer.VerticalScrollBarVisibility != ScrollBarVisibility.Disabled && viewer.Extent.Height > viewer.Viewport.Height + Slack;
+            bool canAlong = viewer.VerticalScrollBarVisibility != ScrollBarVisibility.Disabled && Overflow(viewer, root) > Slack;
             return (!across || canAcross) && (!along || canAlong);
         }
+
+        // How far a scroller's content runs past its view, in the root's pixels as the slack is, not the scroller's own scaled units (§4.83.6).
+        private static double Overflow(ScrollViewer viewer, Visual root) => (viewer.Extent.Height - viewer.Viewport.Height) * (viewer.TransformToVisual(root)?.M22 ?? 1);
 
         private static bool Contains(Rect outer, Rect inner) =>
             inner.Left >= outer.Left - Slack && inner.Top >= outer.Top - Slack && inner.Right <= outer.Right + Slack && inner.Bottom <= outer.Bottom + Slack;

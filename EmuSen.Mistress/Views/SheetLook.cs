@@ -24,6 +24,19 @@ namespace EmuSen.Mistress.Views
             buttons.HorizontalAlignment = HorizontalAlignment.Center;
         }
 
+        // The status said in the panel's footer, as a chosen row is, the line it took above the buttons given to the rows: the last thing to happen is what the footer says (§4.83.6).
+        public static void StatusInFooter(Avalonia.Controls.Window window, TextBlock status)
+        {
+            StatusOverButtons(status);
+            status.IsVisible = false;
+            if (status.Parent is Grid grid) grid.RowSpacing = 0;
+            if (status.Text is { Length: > 0 } now) MenuLook.SetFooter(window, now);
+            status.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == TextBlock.TextProperty && status.Text is { Length: > 0 } said) MenuLook.SetFooter(window, said);
+            };
+        }
+
         // A row that takes the focus is the list's chosen row too, so what follows the selection (a button, the footer) follows the row in view (Q178, §4.83).
         public static void SelectOnFocus(ListBox list) =>
             list.AddHandler(Avalonia.Input.InputElement.GotFocusEvent, (_, e) =>

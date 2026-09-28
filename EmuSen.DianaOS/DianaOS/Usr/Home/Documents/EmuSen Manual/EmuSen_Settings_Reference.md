@@ -241,6 +241,8 @@ dotnet publish <app>/<app>.csproj -c Release -r <rid> --self-contained true \
 
 `ErrorOnDuplicatePublishOutputFiles=false` is needed because the `EmuSen.DianaOS` executable project reference gets built twice (§ its own csproj comment), emitting `EmuSen.DianaOS.runtimeconfig.json` from both the target RID and the host.
 
+A `linux-x64` publish made on this desktop builds the N64 core's Rust library profile-guided from a profile checked in beside it; nothing in the recipe changes, and `-p:EmuSenPgo=false` turns it off (§4.84).
+
 **Verifying a build launches.** Running it with no `DISPLAY` is *not* a launch test: Avalonia dies at X11 initialisation before `MainWindow`'s constructor runs, so everything SDL-related is never reached and a broken build looks fine. Launch it on a real display and check it is still alive several seconds later.
 
 **macOS cannot be finished from Linux.** Apple Silicon refuses to execute an unsigned arm64 binary outright, so clearing quarantine is not enough; whoever installs it must ad-hoc sign (`codesign --force --deep --sign - <name>.app`). There is no signing tool on the Linux build machine.
@@ -6423,3 +6425,38 @@ Shader* in the shaders case, failed both cases at every height, and was taken ou
 **Not covered.** Words the audit cannot see (§4.83.5) are still not measured, by size or by capitals: the panel's
 footer and help bar and the words printed on a drawing. The heights are the sheet made shorter by the status bar, at
 1280 × 800 only.
+
+### 4.84 Publishing MarsRT profile-guided (2026-09-28)
+
+A build of the tree on this desktop, and so every `linux-x64` publish made here, compiles `libmarsrt.so` with LLVM's
+profile-guided optimisation, from a profile checked in beside the crate:
+`EmuSen/Cores/Nintendo/MarsRT - N64/pgo/marsrt.x86_64-unknown-linux-gnu.profdata`. Measured through Mistress's own
+loop it makes a frame 7 to 9 per cent shorter on Super Mario 64 and Ocarina of Time and about 4 per cent shorter on
+the Dam and Donkey Kong 64's title, and every guided run ends on the unguided build's state hash (`Mars_Native.md`
+§6.17.5). Nothing is set for it; the publish recipe of §4.9 is unchanged.
+
+**Which builds are guided.** The profile belongs to one Rust target and to the compilers it was trained with, and a
+build uses it only when both match (`Mars_Native.md` §6.17.1, §6.17.4):
+
+| build | guided |
+| --- | --- |
+| `dotnet build` or `dotnet publish -r linux-x64` on this desktop (Fedora's rustc 1.98.1) | yes |
+| CI's `linux-x64` library (Rust 1.98.1, pinned by the profile's manifest) | yes |
+| the handheld, which runs the `linux-x64` publish | yes, the same library |
+| `osx-arm64`, `osx-x64`, `win-x64`, in CI or on those machines | no: there is no profile for their targets yet |
+| a foreign RID published from here (`-p:EmuSenNativePrebuilt=<dir>`) | whatever the named library is |
+| any other compiler, such as a Fedora update to rustc | no, until the profile is retrained |
+
+An unguided build is correct and only slower, and it says nothing: no warning, no failure. `dotnet build -v n` shows a
+line when a profile exists and the compiler is not one it was trained with. After a build the verdict is in
+`EmuSen/obj/marsrt/<release|dist>/marsrt-pgo.txt`: `matched`; `stale`, when the crate's source changed since training
+and its changed functions are unguided; or `none`, when no profile was given. (`untrained` appears only when a profile
+is passed to cargo by hand for a compiler it was not trained with, as CI would if its pin were wrong.)
+
+**Building without it.** `-p:EmuSenPgo=false` on any `dotnet build` or `dotnet publish`. That is the comparison build of
+every measurement, and the way out if a profile ever misbehaves.
+
+**Refreshing it.** Training runs commercial games and so is done on this desktop, never in CI:
+`bash pgo/train.sh` in the crate, with the toolchains and the inputs named in `Mars_Native.md` §6.17.8; about an hour.
+It is due after a toolchain update, and after a change to the hot paths §6.17.6 lists; otherwise a stale profile keeps
+most of its gain. A Mac trains its own with the same script (§6.17.9).

@@ -63,7 +63,7 @@ licence it has not chosen, and the fact that a reader could not tell is exactly 
 the rule has to be procedural rather than a matter of good intentions.~~
 
 > **Corrected 2026-09-23: the premise was false, and the rule stands on other grounds.** EmuSen has been
-> licensed GPL-3.0 since 2026-07-26 (`c482bd0`), seven weeks before this page was written, so "EmuSen is not"
+> licensed GPL-3.0 since 2026-07-26 (`b06a96c`), seven weeks before this page was written, so "EmuSen is not"
 > was wrong on the day it was written, and the argument built on it — that copying would put the project under a
 > licence it had not chosen — does not hold. What the licences actually permit, read from the checkouts' own
 > files on the day of the correction:
@@ -170,7 +170,7 @@ tooling's output is evidence about our tooling.
 
 ## 5. What they got wrong, which is the valuable half
 
-The instruction was to learn from the mistakes too. These are not criticisms of
+The aim was to learn from the mistakes too. These are not criticisms of
 projects that solved a harder problem earlier with less; they are the hardware
 telling us where it bites, recorded in the only form it survives in.
 

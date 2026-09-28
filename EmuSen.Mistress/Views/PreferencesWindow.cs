@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Avalonia.Controls;
@@ -9,11 +11,13 @@ using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Theme;
 using EmuSen.LunaP.Windowing;
+using EmuSen.Mistress.BigPicture;
+using EmuSen.Mistress.Input;
 
 namespace EmuSen.Mistress.Views
 {
     // OpenEmu's preference panes, as tabs: Library, Gameplay, Appearance, System Files - see EmuSen_Settings_Reference.md §4.36.
-    public class PreferencesWindow : ToolWindow
+    public class PreferencesWindow : ToolWindow, IPadDriven
     {
         private static readonly (string Value, string Text)[] ResumeChoices =
         {
@@ -25,22 +29,56 @@ namespace EmuSen.Mistress.Views
         private readonly AppSettings _settings;
         private readonly LunaSwitch _bigScreen = new() { Name = "BigScreenSwitch", Label = "Start in big screen mode" };
         private readonly LunaSwitch _pauseInBackground = new() { Name = "PauseInBackgroundSwitch", Label = "Pause the game when another window is in front" };
-        private readonly LunaSwitch _onlineCovers = new() { Name = "OnlineCoversSwitch", Label = "Look up missing covers online" };
         private readonly LunaSwitch _showStatusBar = new() { Name = "ShowStatusBarSwitch", Label = "Show the status bar" };
         private readonly LunaSwitch _showStatusText = new() { Name = "ShowStatusTextSwitch", Label = "Show messages" };
         private readonly LunaSwitch _showFpsBar = new() { Name = "ShowFpsBarSwitch", Label = "Show the frame rate" };
+        private readonly LunaSwitch _navigationSounds = new() { Name = "NavigationSoundsSwitch", Label = "Play the theme's navigation sounds" };
+        private readonly Slider _navigationVolume = new() { Name = "NavigationVolumeSlider", Minimum = 0, Maximum = 100, SmallChange = 5, LargeChange = 10, TickFrequency = 5, IsSnapToTickEnabled = true, MinWidth = 240 };
+        private readonly TextBlock _navigationVolumeText = new() { Name = "NavigationVolumeText", VerticalAlignment = VerticalAlignment.Center, MinWidth = 40 };
+        private readonly LunaSwitch _showHiddenGames = new() { Name = "ShowHiddenGamesSwitch", Label = "List the games hidden from the library" };
+        private readonly Dropdown _bigPictureTheme = new() { Name = "BigPictureThemeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
+        private IReadOnlyList<BigPictureLook> _looks = [];
+        private string[] _lookTexts = [];
+        private PathPickerRow? _themeFolder;
+
+        // Opens the theme's settings sheet; set by the main window, which owns the themed view.
+        public Action? OpenThemeSettings { get; set; }
+
+        // Called when the big picture theme is chosen here, so the view beneath applies it at once.
+        public Action? ThemeChosen { get; set; }
+
+        public const string ScrapingTab = "Scraping";
+        public const string ControllersTab = "Controllers";
+
+        private readonly Tabs _tabs = new() { Name = "PreferenceTabs" };
+
+        // Opens on a named tab, as the pad menu's "Scrape Games..." opens on Scraping.
+        public void ShowTab(string header)
+        {
+            if (_tabs.Items.OfType<TabItem>().FirstOrDefault(t => (string?)t.Header == header) is { } tab) _tabs.SelectedItem = tab;
+        }
+
+        private Button ThemeSettingsButton()
+        {
+            Button button = Ui.Button("Theme Settings…", () => OpenThemeSettings?.Invoke());
+            button.Name = "ThemeSettingsButton";
+            button.HorizontalAlignment = HorizontalAlignment.Left;
+            return button;
+        }
 
         // Raised when a status-bar switch moves, so the main window applies it at once.
         public event Action? StatusBarChanged;
         private readonly Dropdown _theme = new() { Name = "ThemeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
         private readonly Dropdown _resume = new() { Name = "ResumeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
+        private readonly Dropdown _maxPlayTime = new() { Name = "MaxPlayTimeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
 
         // Parameterless constructor exists only for tooling - real code always uses the one below.
         public PreferencesWindow() : this(new AppSettings()) { }
 
-        public PreferencesWindow(AppSettings settings)
+        public PreferencesWindow(AppSettings settings, IScrapeHost? scraping = null, PadFamily? menu = null)
         {
             _settings = settings;
+            var scrape = new ScrapePreferencesPane(settings, scraping);
 
             Title = "Preferences";
             Width = 660;
@@ -49,7 +87,7 @@ namespace EmuSen.Mistress.Views
             // Sized to its content rather than a fixed height: a fixed one put the Close button below the edge. See EmuSen_LunaP.md §11.1.
             SizeToContent = SizeToContent.Height;
 
-            var tabs = new Tabs { Name = "PreferenceTabs" };
+            var tabs = _tabs;
             tabs.Add("Library", Pane(
                 new FieldRow
                 {
@@ -65,12 +103,6 @@ namespace EmuSen.Mistress.Views
                 },
                 new FieldRow
                 {
-                    Label = "Online Covers",
-                    Hint = "Off unless you turn it on. Mistress then downloads OpenVGDB, the game database OpenEmu uses (about 9 MB, from GitHub), and for each game shown without a cover asks thumbnails.libretro.com for its box, then the address OpenVGDB gives (GameFAQs, which refused every request when this was built). Those servers see which games you have. OpenVGDB states no licence and the covers are other people's scans. They are saved in the cover art folder, never in the ROM folder.",
-                    Content = _onlineCovers,
-                },
-                new FieldRow
-                {
                     Label = "Save State Directory",
                     Hint = "Where save states, the state a game was left in, and their pictures go. Leave blank for home/Saves/Save States.",
                     Content = Picker("StateDirectoryBox", "(default)", "Choose Save State Directory", _settings.StateDirectory, p => _settings.StateDirectory = p),
@@ -81,12 +113,19 @@ namespace EmuSen.Mistress.Views
                     Hint = "Where per-session log files are written. Leave blank to disable file logging entirely.",
                     Content = Picker("LogDirectoryBox", "(not set)", "Choose Log Directory", _settings.LogDirectory, p => _settings.LogDirectory = p),
                 }));
+            tabs.Add(ScrapingTab, Pane(scrape.Rows()));
             tabs.Add("Gameplay", Pane(
                 new FieldRow
                 {
                     Label = "Continue Where You Left Off",
                     Hint = "Every game is saved when it is closed. This is what happens the next time it starts.",
                     Content = _resume,
+                },
+                new FieldRow
+                {
+                    Label = "Max Play Time Tracking",
+                    Hint = "A game left running while the device sleeps would count the whole night. A launch longer than this adds nothing to the game's play time; Disabled records none, No limit every minute. ES-DE's default is 8 hours.",
+                    Content = _maxPlayTime,
                 },
                 new FieldRow
                 {
@@ -124,7 +163,50 @@ namespace EmuSen.Mistress.Views
                     Label = "Frame Rate",
                     Hint = "The frames-per-second readout at the bottom right while a game runs.",
                     Content = _showFpsBar,
+                },
+                new FieldRow
+                {
+                    Label = "Big Picture Theme",
+                    Hint = "In big screen mode, EmuSen's own library, or an ES-DE theme's. The same list as Theme Settings, Themes tab. A theme is shown only when it loads; otherwise EmuSen's own library is.",
+                    Content = _bigPictureTheme,
+                },
+                new FieldRow
+                {
+                    Label = "ES-DE Theme Folder",
+                    Hint = "A theme folder for ES-DE (one holding capabilities.xml) to read in place, which then joins the list above. It is only ever read, and nothing of it is copied.",
+                    Content = _themeFolder = Picker("BigPictureThemeBox", "(none)", "Choose ES-DE Theme Folder", _settings.BigPictureTheme, p => { _settings.BigPictureTheme = p; ShowBigPictureTheme(); ThemeChosen?.Invoke(); }),
+                },
+                new FieldRow
+                {
+                    Label = "Theme Settings",
+                    Hint = "The list of big picture themes, EmuSen's own first, the themes Mistress downloads for you, and an ES-DE theme's variant, colours, font size and aspect ratio.",
+                    Content = ThemeSettingsButton(),
+                },
+                new FieldRow
+                {
+                    Label = "ES-DE Media",
+                    Hint = "An ES-DE downloaded_media folder, whose covers, screenshots and marquees the theme shows. It is only ever read. Without one the theme shows Mistress's own covers.",
+                    Content = Picker("EsdeMediaBox", "(none)", "Choose ES-DE Media Folder", _settings.EsdeMediaDirectory, p => _settings.EsdeMediaDirectory = p),
+                },
+                new FieldRow
+                {
+                    Label = "Navigation Sounds",
+                    Hint = "The theme's sounds for moving, choosing and going back, on a stream of their own beside the game's. A theme without one of them plays EmuSen's own in its place.",
+                    Content = _navigationSounds,
+                },
+                new FieldRow
+                {
+                    Label = "Navigation Sounds Volume",
+                    Hint = "How loud the navigation sounds are, beside the game's own volume. ES-DE's default is 70.",
+                    Content = Ui.Row(12, _navigationVolume, _navigationVolumeText),
+                },
+                new FieldRow
+                {
+                    Label = "Hidden Games",
+                    Hint = "Games hidden with Hide from Library or the metadata editor's Hidden field. Their files are never touched; turn this on to list them again and unhide them in the editor.",
+                    Content = _showHiddenGames,
                 }));
+            tabs.Add(ControllersTab, Pane(new ControllerPreferencesPane(settings).Rows()));
             tabs.Add("System Files", Pane(SystemFiles()));
 
             // A dock and scrolling panes, so a sheet shorter than the window still shows Close - see EmuSen_Settings_Reference.md §4.45.3.
@@ -132,8 +214,7 @@ namespace EmuSen.Mistress.Views
             DockPanel.SetDock(buttons, Dock.Bottom);
             Content = new DockPanel { LastChildFill = true, Children = { buttons, tabs } }.Margin(16);
 
-            _onlineCovers.IsChecked = _settings.OnlineCovers;
-            _onlineCovers.IsCheckedChanged += (_, _) => { _settings.OnlineCovers = _onlineCovers.IsChecked == true; _settings.Save(); };
+            scrape.Attach(this);
             _bigScreen.IsChecked = _settings.BigScreen;
             _bigScreen.IsCheckedChanged += (_, _) => { _settings.BigScreen = _bigScreen.IsChecked == true; _settings.Save(); };
             _showStatusBar.IsChecked = _settings.ShowStatusBar;
@@ -142,6 +223,26 @@ namespace EmuSen.Mistress.Views
             _showStatusText.IsCheckedChanged += (_, _) => { _settings.ShowStatusText = _showStatusText.IsChecked == true; _settings.Save(); StatusBarChanged?.Invoke(); };
             _showFpsBar.IsChecked = _settings.ShowFpsBar;
             _showFpsBar.IsCheckedChanged += (_, _) => { _settings.ShowFpsBar = _showFpsBar.IsChecked == true; _settings.Save(); StatusBarChanged?.Invoke(); };
+            _navigationSounds.IsChecked = _settings.NavigationSounds;
+            _navigationSounds.IsCheckedChanged += (_, _) => { _settings.NavigationSounds = _navigationSounds.IsChecked == true; _settings.Save(); };
+            _navigationVolume.Value = Math.Clamp(_settings.BigPictureInterface.NavigationVolume, 0, 100);
+            _navigationVolumeText.Text = $"{(int)_navigationVolume.Value}";
+            _navigationVolume.ValueChanged += (_, _) =>
+            {
+                _settings.BigPictureInterface.NavigationVolume = (int)Math.Round(_navigationVolume.Value);
+                _navigationVolumeText.Text = $"{_settings.BigPictureInterface.NavigationVolume}";
+                _settings.Save();
+            };
+            _showHiddenGames.IsChecked = _settings.ShowHiddenGames;
+            _showHiddenGames.IsCheckedChanged += (_, _) => { _settings.ShowHiddenGames = _showHiddenGames.IsChecked == true; _settings.Save(); };
+            ShowBigPictureTheme();
+            _bigPictureTheme.Chose += chosen =>
+            {
+                int i = Array.IndexOf(_lookTexts, chosen as string);
+                if (i < 0) return;
+                BigPictureLooks.Choose(_settings, _looks[i]);
+                ThemeChosen?.Invoke();
+            };
             _pauseInBackground.IsChecked = _settings.PauseInBackground;
             _pauseInBackground.IsCheckedChanged += (_, _) => { _settings.PauseInBackground = _pauseInBackground.IsChecked == true; _settings.Save(); };
 
@@ -154,8 +255,38 @@ namespace EmuSen.Mistress.Views
                 _settings.Save();
             };
 
+            string[] playTexts = EmuSen.Mistress.Library.PlayTime.Choices.Select(c => c.Text).ToArray();
+            _maxPlayTime.Fill(playTexts, EmuSen.Mistress.Library.PlayTime.Choices.FirstOrDefault(c => c.Hours == Math.Clamp(_settings.MaxPlayTimeTracking, 0, 24)).Text ?? playTexts[8]);
+            _maxPlayTime.Chose += chosen =>
+            {
+                int i = Array.IndexOf(playTexts, chosen as string);
+                if (i < 0) return;
+                _settings.MaxPlayTimeTracking = EmuSen.Mistress.Library.PlayTime.Choices[i].Hours;
+                _settings.Save();
+            };
+
             _theme.Fill(LunaTheme.Available(), LunaTheme.Current);
             _theme.Chose += ChoseTheme;
+            // In a big-screen session, ES-DE's menus: a submenu for each tab (§4.72.8).
+            if (menu is { } family)
+                Form = new BigMenuForm(this, "Preferences", family, tabs.Items.OfType<TabItem>().Select(t => ((string)t.Header!, (Control)t.Content!)).ToList(), tabs);
+        }
+
+        public BigMenuForm? Form { get; }
+
+        public bool OnPad(UiButton button) => Form is not null && button == UiButton.Back && Form.Back();
+
+        // The list and its selection read again from the settings, as after a choice on the Theme Settings sheet.
+        public void ShowBigPictureTheme()
+        {
+            List<BigPictureLook> looks = BigPictureLooks.All(_settings).ToList();
+            string[] texts = looks.Select(l => l.BuiltIn ? $"{l.Name} (built in)" : looks.Count(o => o.Name == l.Name) > 1 ? $"{l.Name} ({Path.GetFileName(l.Theme!.Directory)})" : l.Name).ToArray();
+            string selected = texts[Math.Max(0, looks.FindIndex(l => BigPictureLooks.IsCurrent(_settings, l)))];
+            if (_themeFolder is not null) _themeFolder.Path = _settings.BigPictureTheme ?? "";
+            if (texts.SequenceEqual(_lookTexts) && Equals(_bigPictureTheme.SelectedItem, selected)) return;
+            _looks = looks;
+            _lookTexts = texts;
+            _bigPictureTheme.Fill(texts, selected);
         }
 
         private static Control Pane(params Control[] rows) => new ScrollViewer { Content = Ui.Stack(12, rows).Margin(4, 12, 4, 4) };

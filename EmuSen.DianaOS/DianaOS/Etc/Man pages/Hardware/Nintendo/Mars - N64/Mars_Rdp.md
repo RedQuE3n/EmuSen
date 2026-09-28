@@ -283,7 +283,7 @@ still ends with one range an image; the extent keeps its first word, which the v
 later than the word" test accepts for every draw it covers. After a state is read, the shadow takes the raw scissor
 and the other modes from the processor (`Rdp.Bounds`), as it takes the images.
 
-**Measured** (`pacebench`, flat out, 7d68f4d against this with and without the walk of `Mars_Video.md` §2.12,
+**Measured** (`pacebench`, flat out, ea303b1 against this with and without the walk of `Mars_Video.md` §2.12,
 interleaved, three rounds, medians, every state hash the same): the interface's waits went from 0.41 to 0.00 ms a
 frame in Wave Race, and from 2.03 to 1.54 in Ocarina; Wave Race at one ran at 263 per cent of full speed against
 240 with the walk alone, Ocarina at 223 against 217, and Mario unchanged. The verifier, in every Debug test and
@@ -335,7 +335,7 @@ frames of each of the three games found no write outside a box, and every state 
 Race 1.4 and 1.6 per cent slower, Wave Race having no waits to save. A box now keeps only the command's words, and
 its columns are worked out when a read or the verifier asks, which is rarely.
 
-**Measured** (`pacebench`, flat out, 9536644 against this, five rounds alternated, medians, every state hash the
+**Measured** (`pacebench`, flat out, 0edda05 against this, five rounds alternated, medians, every state hash the
 same): Ocarina at one 274 per cent of full speed against 258, Mario 356 against 350, Wave Race level at 280.
 
 **What this does not cover, and one suspicion.** The RSP's transfer into the page after the depth buffer (0.44 ms a
@@ -349,7 +349,7 @@ changed. A second finding corrects this section. The statement above, that "any 
 wait", does not hold for a read. `WaitForReadRange` narrows by the boxes that hold the range's first eight bytes. A
 capture whose first bytes no pending draw holds is therefore freed, even while draws still hold its later rows.
 `The_csharp_interface_lets_a_range_read_pass_the_draws_that_hold_all_but_its_first_bytes` shows it with the thread
-paused. The C# is unchanged. *Retired 2026-09-23 (7fbf4b1): only a read inside one aligned doubleword is narrowed now,
+paused. The C# is unchanged. *Retired 2026-09-23 (d25a8d1): only a read inside one aligned doubleword is narrowed now,
 and a range read keeps the page wait; §2.9.2.*
 
 ### 2.7 The thread held between two words
@@ -447,7 +447,7 @@ before that pixel reads it — which is the fact §10.2's inventory established 
 detail writes each processor's own last `_lodFraction` at every pixel, with its row's stamp. So a primitive drawn
 alone then assembles a stale value.
 `The_csharp_split_assembles_a_stale_level_of_detail_fraction_from_rows_that_computed_none` finds the state wrong in
-that field alone for 8 of 16 seeds. It never reaches a picture. *Fixed 2026-09-23 (51f3377): a one-cycle row stamps
+that field alone for 8 of 16 seeds. It never reaches a picture. *Fixed 2026-09-23 (0f87acc): a one-cycle row stamps
 the fraction only when it measures one; §2.9.3, which also records the same shape in the two-cycle path, not fixed.*
 
 **A snapshot with several processors** (§2.7) needs a point every processor stands at. The pause point is the furthest
@@ -464,7 +464,7 @@ not past the point but at it. If the others were short of the barrier when the r
 the waiter never gets through. MarsRT's port deadlocked this way on four workers.
 `The_csharp_workers_deadlock_when_a_pause_finds_some_at_a_barrier_and_the_rest_short_of_it`, run behind
 `EMUSEN_MARS_DEADLOCK_PROBE=1`, finds the C# pause unanswered too. This is a candidate cause of the Super Mario 64
-freeze described below, and it has not been shown to be that cause. *Fixed 2026-09-23 (a72533c): a waiter at a
+freeze described below, and it has not been shown to be that cause. *Fixed 2026-09-23 (5735332): a waiter at a
 barrier raises the pause point to its own word; §2.9.1. The freeze remains unexplained: the fix removes a cause that
 could produce it, and no run has shown that it was the one.*
 
@@ -502,7 +502,7 @@ unfixed code first and failed there, and each mutant is the unfixed line put bac
 of the source: its named test fails, and the rest of `MarsThreadedRdpTests` (32 tests then) or
 `MarsDeferredPresentationTests` (19) passes, so no other test in the class depends on the defect.
 
-#### 2.9.1 The pause barrier's deadlock (a72533c)
+#### 2.9.1 The pause barrier's deadlock (5735332)
 
 *The cause.* §2.8's pause point is the furthest word any processor has reached when it sees the request. A processor
 that has gathered word *k* + 1, a command whose step is a barrier, and is waiting there for the rest, is inside
@@ -549,7 +549,7 @@ another has proved less than its name. The tests now make the case, rather than 
   free on its even rounds, where timing chooses the moment as before. Every one of the 160 held pauses and snapshots
   must raise the point; the free rounds keep their watchdog and their exactness, and claim no coverage.
 
-Fixed, the two tests passed 8 runs of 8 while the machine's load stood between 7.6 and 41.8 (other runs' builds). With
+Fixed, the two tests passed 8 runs of 8 while the machine's load stood between 7.6 and 41.8 (other builds on the machine). With
 the waiter's raise removed, every one of the six cases hung in both of two runs, the pause test at attempt 0 at every
 count; the two-processor stress once got through its free first round and hung at the first held one, which is the
 difference the hold makes. The switch costs the workers a load and a test per word while it is off; interleaved against the build without it, three rounds at four processors, Super Mario 64 ran 6.24, 6.19, 6.36 ms against 6.34, 6.13, 6.11 and Ocarina of Time 7.17, 7.27, 7.25 against 7.25, 7.18, 7.17, overlapping in both, with the same state hashes.
@@ -560,7 +560,7 @@ since the Super Mario 64 freeze of §2.8 (`EmuSen_Settings_Reference.md` §4.21b
 player since then, and it is a candidate for that freeze, whose cause was never established. Whether rewind is turned
 back on is a decision for play; this section says only that the hang the headless tests could reach is gone.
 
-#### 2.9.2 A range read narrowed by its first bytes (7fbf4b1)
+#### 2.9.2 A range read narrowed by its first bytes (d25a8d1)
 
 *The cause.* §2.6.3 narrows a read by the boxes of the pending draws that hold its eight bytes, and `Wait` applied
 that to whatever range it was given, testing only the aligned eight bytes at the range's start. `WaitRange` calls it
@@ -583,7 +583,7 @@ so the bytes it compared, and copied, were changing under it. No picture was wro
 slack and the walk does not reach them, but the capture was reading bytes still being drawn at every scan, which is
 the defect's reach in play. The attribution to this fix alone is checked in §2.9.6.
 
-#### 2.9.3 The level-of-detail fraction stamped by rows that measured none (51f3377)
+#### 2.9.3 The level-of-detail fraction stamped by rows that measured none (0f87acc)
 
 *The cause.* `Rdp.OneCycle.cs` stamped `_lodFraction` with every row's stamp, and a row whose primitive measures no
 level writes the processor's own last fraction at every pixel. With the list shared, each processor's own value is the
@@ -607,7 +607,7 @@ case to write, and a fix would have to be made in both cores at once to keep the
 §5.6.7) meaningful. Like the one-cycle case, it cannot reach a picture: a combiner that reads the fraction turns
 level of detail on.
 
-#### 2.9.4 The scan deciding from the drain's progress whether the multiple drew (05d41e4)
+#### 2.9.4 The scan deciding from the drain's progress whether the multiple drew (2297ee1)
 
 *The cause.* `Vi.Prepare` chose the multiple's picture when `DpInterface.ScaledDrawn`, and on the drain that flag is
 set by the processors as they draw, before `Capture`'s wait; the first scan after a load or a change of the multiple
@@ -623,7 +623,7 @@ two: the multiple at two, the drain paused with a scene pending and released fro
 Unfixed, `Prepare` returns at once with the picture at one where the list run at once gives two; fixed, it waits for
 the release and gives two. The mutant that reads `ScaledDrawn` fails both.
 
-#### 2.9.5 A load before the image's first draw, run apart (4291e9e)
+#### 2.9.5 A load before the image's first draw, run apart (43fd3aa)
 
 *The cause.* §2.8's third rule joins a load when a draw since the image was set may have reached its bytes
 (`LoadReachesDrawn`, over the drawn-to extents). A load made before the image's first draw was therefore run by each
@@ -632,7 +632,7 @@ the load's source first. Raster order has the load read first. MarsRT's port fou
 Ocarina of Time (`Mars_Native.md` §5.6.6) and changed its rule; the C# was left, since a race that timing hides cannot be
 shown by an equality test, and nothing had shown it.
 
-*It was shown in play here.* The game comparison of §2.9.6, run while other runs' builds and tests kept the
+*It was shown in play here.* The game comparison of §2.9.6, run while other builds and tests kept the
 machine's load at 10 to 20, parted the C# core with four processors from itself unthreaded, from Ocarina of Time's
 state, in 10 of 16 runs across three modes: the state compared every frame (1 of 4), every sixtieth frame (3 of 4)
 and a snapshot every frame (6 of 8). The first difference was in the CPU's registers (and once RDRAM) at frames 9, 78,
@@ -706,9 +706,9 @@ rule, which that comparison's unthreaded oracle does not use).
 *The method.* `pacebench` flat out from the three gameplay states, 900 frames after 120 of warm-up, at one with
 production's settings: compiled blocks, the display processor threaded, deferred presentation, repeats skipped, and
 four processors, the default on this sixteen-core desktop (one per three cores). Two harnesses were built apart, one
-over the code before this branch (f55bfc0) and one over the fixed code, and run in three rounds with the order
+over the code before this branch (1a7febe) and one over the fixed code, and run in three rounds with the order
 reversed each round; each run took the bench lock and began only with the one-minute load below 3, since other
-agents were using the machine. The mean `RunFrame` is given, then the emulation thread's waits for the drain.
+work was using the machine. The mean `RunFrame` is given, then the emulation thread's waits for the drain.
 
 | ms a frame, four processors | before | after |
 | --- | --- | --- |
@@ -1184,7 +1184,7 @@ its corners are on quarter pixels.
 
 **What the first test measured was the test.** The closeness test's first form reported the drawing at two touching
 13,500 more of the console's pixels than the console's drawing, mostly darker, and this was recorded as a rasteriser
-defect and pursued for a session. A harness drawing each triangle alone at both resolutions found every triangle
+defect and pursued for some time. A harness drawing each triangle alone at both resolutions found every triangle
 grown, and its dump found two defects in the scene. The corners were computed in unsigned arithmetic (`uint % int`
 with a constant divisor is unsigned), so "twenty pixels off the left" was a column of four billion, which the
 saturating conversion turned into a degenerate edge at column zero with the steepest slope — which the console's
@@ -1248,7 +1248,7 @@ loaded machine; only the interleaved difference is the measurement, as the harne
 drawn wrong, on the processor's threads and on the device alike. In Mario's HUD each glyph — the head, the cross, the
 digits, the star, the camera — appeared as four copies side by side, each a quarter of the glyph's width, at two, three
 and four; Kirby's status bar was squeezed into the left quarter of its width, and the remaining three quarters showed
-the texture memory beyond the image the game had loaded. From the player's two states (made in Mistress with
+the texture memory beyond the image the game had loaded. From two states saved in play (made in Mistress with
 `RenderScale` 2, the device on), each run ten frames and the multiple sampled at the centre of every console pixel of
 the HUD, the mean largest-channel difference from the picture at one was 35.9 (Mario, 21,150 pixels) and 96.1 (Kirby,
 65,400 pixels) at two; after the fix it is 8.1 and 6.2, what is left being the scene behind and around the HUD, which

@@ -1,6 +1,6 @@
 # Mercury_Native — a plan to port Mercury to Rust
 
-*Written 2026-09-23, before any code.* On 2026-09-23 the decision was that every EmuSen core will be ported to Rust once
+*Written 2026-09-23, before any code.* On 2026-09-23 it was decided that every EmuSen core will be ported to Rust once
 Mars is finished (`EmuSen_Stack.md` §2.1), and Mercury is the one to plan now. This page is the plan. It follows the
 method `Mars_Native.md` §5 used for MarsRT, and it does what §2.1 asks of every 2D port: it states its own speed
 prediction before the work begins, because the 2D cores' remaining costs were never traced to the language.
@@ -14,14 +14,14 @@ numbered (P1–P6) so that it can be retired later, as `Mars_Native.md` retired 
 ### 1.1 The baseline (measured)
 
 **How it was measured.** The harness has no Mercury bench, so a throwaway console app was built against the
-worktree's `EmuSen.csproj`, in Release on .NET 10.0.111, on the Ryzen 7 7700X. It does the following:
+checkout's `EmuSen.csproj`, in Release on .NET 10.0.111, on the Ryzen 7 7700X. It does the following:
 
 1. It loads a scratch copy of the ROM with the battery disabled.
 2. It boots through 900 frames, pressing Start and A alternately every 45 frames.
 3. It times 3,000 frames flat out, one `RunFrame` each, draining the audio and taking the picture after every frame.
 
 Every run is its own process. Games are interleaved within a round, and there are three rounds. The machine was shared
-with another run's work, and round 3 was noisier than rounds 1–2 (Link's Awakening's p99 was 1.89 ms). So the
+with other work, and round 3 was noisier than rounds 1–2 (Link's Awakening's p99 was 1.89 ms). So the
 table gives medians alongside means. Each game's state hash was identical in every round, so the runs were
 deterministic.
 
@@ -107,7 +107,7 @@ one core.
 
 **So the port is not for speed a player could notice.** It is for three things, in order:
 
-1. **Consistency with the stack.** The decision is that every core is Rust, and Mercury is the smallest core
+1. **Consistency with the stack.** The project's decision is that every core is Rust, and Mercury is the smallest core
    and the first 2D one. That makes it the cheapest test of whether `Mars_Native.md` §5's method transfers to a
    cycle-granular 2D machine. This is its main value to the research: it is the method's second instance, at about
    one-tenth of Mars's size.
@@ -209,7 +209,7 @@ The four in-frame seams become MarsRT's §6.5 mechanisms, because Rust never cal
 
 ### 2.2 Name and place (decided 2026-09-23)
 
-**The name is MercuryRT, and the folder is `EmuSen/Cores/Nintendo/MercuryRT - GB/`.** The decision was both. The
+**The name is MercuryRT, and the folder is `EmuSen/Cores/Nintendo/MercuryRT - GB/`.** Both were decided then. The
 pattern for every Rust core is `<Name>RT - <console>`, as `MarsRT - N64/` sits beside `Mars - N64/`.
 
 The crate is `mercuryrt`, a `cdylib` + `rlib` with MarsRT's `[profile.release]` and `[profile.dist]`, and no
@@ -468,7 +468,7 @@ a byte round trip and be caught only by `naming.rs`.
 
 ### 3.7 When the C# core leaves the main branch
 
-*Decided by the player on 2026-09-23:* every C# core will eventually move to its own legacy branch. The comparisons of
+*Decided 2026-09-23:* every C# core will eventually move to its own legacy branch. The comparisons of
 §3.2 to §3.5 need both engines, so they have to be kept in a form that survives the C# core leaving `main`. The
 proposal has three layers, each covering what the one before it cannot.
 
@@ -518,7 +518,7 @@ the tool for when a golden trace disagrees and the question is "which engine mov
 ## 4. Stages
 
 The costs are in `Mars_Native.md` §6's units and are held loosely. For scale, MarsRT's stages 1a to 5 were all dated
-2026-09-22, with agents working in parallel, on a crate now about 35,000 lines. Mercury's machine is about 3,550 lines of
+2026-09-22, with several lines of work in parallel, on a crate now about 35,000 lines. Mercury's machine is about 3,550 lines of
 C#: the 4,620 in its folder, less the debug target (637), the disassembler (194), the cheat codecs (124) and the
 memory-space naming (110).
 
@@ -545,37 +545,37 @@ memory-space naming (110).
 Criterion 2's written list would begin with whatever §6.5 of that page lists for MarsRT that Mercury also has, such as
 rewind. Mercury has no `ISnapshotCore`, so rewind uses the full state on both engines.
 
-## 5. Risks and open questions for the player
+## 5. Risks and open questions
 
-- **Q1, naming.** *Decided by the player on 2026-09-23:* MercuryRT, in `MercuryRT - GB/` (§2.2).
+- **Q1, naming.** *Decided 2026-09-23:* MercuryRT, in `MercuryRT - GB/` (§2.2).
 - **Q2, one native library or two.** A second `cdylib` means a second file shipped and a second interface version. It
   also means either a copy of MarsRT's 410-line `state.rs`, which needs a string primitive MarsRT lacks, or a small
-  shared crate both depend on. The shared crate touches MarsRT, which another run is working in. The recommendation is
-  a separate crate now and the extraction once both are stable, but the decision is the player's.
+  shared crate both depend on. The shared crate touches MarsRT, where other work is in progress. The recommendation is
+  a separate crate now and the extraction once both are stable, but the decision is still open.
 - **Q3, whether to fix §6.1's C# defects before the port.** The recommendation is yes, each proven by a test before and
   after, because after the port every fix costs two implementations in lock-step:
   - D1 (sample rate) changes the sound but not the state;
   - D2 (the clock in double speed) changes how state evolves, but not the format;
   - D3 (the host path in the state) and the triple cartridge copy are one format change, to state version 6. That
     shrinks Yellow's state by 64 KB and removes `_savePath` and the string primitive the port would otherwise need.
-  *Decided by the player on 2026-09-24: fix all three now, in both engines in lock-step, each shown by a test before and
+  *Decided 2026-09-24: fix all three now, in both engines in lock-step, each shown by a test before and
   after; D3 is state version 6, and version-5 states still load.*
 - **Q4, whether the port carries Mercury's known simplifications.** The simplifications include the per-line renderer,
   mode 3 not lengthening for sprites, internal cycles at the end of an instruction, instant GP-HDMA, and the 79
   non-passing corpus ROMs of §3.4. The recommendation is to port them exactly and improve afterwards, because an
   improvement made during the port has no oracle. After the port, improvements are made either in both engines, while C#
-  is the oracle, or in Rust alone with the corpus as the oracle, once C# is frozen. That second choice is the player's.
-  *Decided by the player on 2026-09-24: improvements after the port land in both engines in lock-step, with C# the
+  is the oracle, or in Rust alone with the corpus as the oracle, once C# is frozen. That second choice was left open.
+  *Decided 2026-09-24: improvements after the port land in both engines in lock-step, with C# the
   oracle, until the C# core moves to its legacy branch.*
-- **Q5, the C# Mercury's future.** *Partly decided on 2026-09-23:* every C# core will eventually move to a
+- **Q5, the C# Mercury's future.** *Partly decided 2026-09-23:* every C# core will eventually move to a
   legacy branch. §3.7 says how the oracle survives the move. Two questions stay open: when the Engine row's default
   flips to MercuryRT, and whether C# is still offered to players until the move.
-  *Decided by the player on 2026-09-24: the Engine row's default flips to MercuryRT after stages 6 and 7 and a session of
+  *Decided 2026-09-24: the Engine row's default flips to MercuryRT after stages 6 and 7 and a session of
   play on the handheld, the condition MarsRT's flip had (`Mars_Native.md` §6.2).*
 - **Q6, the corpus's place.** Is the corpus kept gitignored under `TestRoms/hardware/`, as `Mercury_HardwareTests.md`
   §3 intends? Is WiseMan's theory changed from "passes" to "matches the recorded baseline"? That changes a committed
   test's meaning, which is why it is asked rather than done.
-  *Decided by the player on 2026-09-24: the corpus stays gitignored under `TestRoms/hardware/`, and the committed theory
+  *Decided 2026-09-24: the corpus stays gitignored under `TestRoms/hardware/`, and the committed theory
   becomes "matches the recorded baseline", so a verdict that changes in either direction fails until the baseline is
   re-recorded.*
 - **Risk: P1 is wide by design.** No component like Mercury's tick loop was measured in Mars. If stage 2's number comes
@@ -700,8 +700,8 @@ and it was not sampled, so that third of P3 is open. P4 and P6 are still open.
 
 ### 8.1 Stage 1: the state, byte for byte (done 2026-09-23)
 
-*Order.* Stage 1 was done before stage 0. The state reader needs no corpus, and stage 0's two decisions (Q3, Q6) are
-the player's to make.
+*Order.* Stage 1 was done before stage 0. The state reader needs no corpus, and stage 0's two decisions (Q3, Q6) were
+still open.
 
 **What was built.** The crate is `EmuSen/Cores/Nintendo/MercuryRT - GB/`. It holds Rust structs for every serialised
 type, and a `State` impl for each class C# walks. `Mapper` is an enum of the five boards, where C# has an interface.
@@ -844,7 +844,7 @@ step of every device per T-cycle), not the language. The lever named in §1.2 (c
 renderer written for the compiler rather than line for line, are the next questions. Each needs its own prediction.
 
 **The debugging trap met on the way, and an intermittent failure it explains.** The first mutant run stopped with
-every command's output failing. `/tmp` is a 16 GB tmpfs, shared with other sessions' scratch space, and it had filled.
+every command's output failing. `/tmp` is a 16 GB tmpfs, shared with other processes' scratch space, and it had filled.
 The crate's build output now lives under `~/.cache/emusen/probe/mercuryrt/`, as the project keeps probe binaries.
 
 In the main checkout, the first run after the merge failed five random-program cases: one after 7 s, then four in
@@ -983,7 +983,7 @@ They were run first against the unmodified C# core. **13 of 26 failed there.** E
 - a watch went deaf after `LoadRom`, which builds a new bus that the target had not attached to.
 
 The machine was not at fault in any of them, and none is D1–D3. The five seams were added to C# Mercury in their own
-commit (0dcdf6d), each held by a claim, before MercuryRT was given the same claims. `Mercury_Debug.md` §7 records what was
+commit (50f86a6), each held by a claim, before MercuryRT was given the same claims. `Mercury_Debug.md` §7 records what was
 added and why an interrupt is a frame on this core when it is not on Mars. With them all 26 claims pass on C#.
 
 The stage asked for stepping on MercuryRT, `step over` included, under the C# target's claims, and the C# target had no
@@ -1202,7 +1202,7 @@ is too *narrow* misses a stop, and every M-mutant above is of that kind.
 
 #### 8.5.5 Speed
 
-**The first measurement refuted the prediction.** The `frames` example was built before the stage (4c64563) and after
+**The first measurement refuted the prediction.** The `frames` example was built before the stage (0301306) and after
 it. The two were interleaved under the bench lock, the order swapped each round, 3,000 frames each, with identical state
 hashes. Plain-frame p50 in ms:
 
@@ -1428,7 +1428,7 @@ reading and by lint alone.
 
 *Written 2026-09-24, on the decision recorded under Q3 (§5).* Each defect of §6.1 was fixed in C# Mercury and
 MercuryRT together. For each, a test was written first and committed while it failed on both engines, on the unmodified
-build (`f2c7f99`). The tests are `EmuSen.WiseMan/Cores/MercuryDefectTests.cs`, one case per engine through `ICore`
+build (`291a661`). The tests are `EmuSen.WiseMan/Cores/MercuryDefectTests.cs`, one case per engine through `ICore`
 alone, so neither engine's answer is read through the other's objects.
 
 ### 9.1 D1: the sample rate
@@ -1631,7 +1631,7 @@ fixed here, and each stays a candidate with no test, to be fixed in both engines
 
 ### 9.5 Mutants of the three fixes
 
-**Method.** Fourteen hand-made mutants were run in a copy of the tree at `716ddc2`, the D3 commit, so that no source in
+**Method.** Fourteen hand-made mutants were run in a copy of the tree at `a372058`, the D3 commit, so that no source in
 the working tree was touched. For each mutant:
 
 - one edit was applied;

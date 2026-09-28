@@ -30,7 +30,7 @@ library is absent, refused or off.**
 
 **A failed cargo step fails the build (2026-09-23).** The cargo `Exec` used to carry `ContinueOnError`, so that a
 machine without Rust would still build; it also meant a machine *with* Rust whose cargo step failed built anyway, kept
-the previous library, and said so only in an MSB3073 warning. That happened for real: with `/tmp` full, a run's
+the previous library, and said so only in an MSB3073 warning. That happened for real: with `/tmp` full, a series of
 mutant rounds ran against a library the build had silently not rebuilt, and read as survivors. The two cases are now
 told apart. A `FindCargo` target runs `cargo --version` first; without cargo the build warns once — *"cargo was not
 found: MarsRT and MercuryRT are not built, and their consoles run on the C# cores alone"* — and goes on, and with
@@ -296,7 +296,7 @@ throwaway reflection walk over a live `MarsCore`, using the serializer's own que
 sort, `[SkipInState]` and alias fields dropped), printed every serialized field with its type and array length. A
 throwaway script generated the modules from that listing, and they were then edited by hand. It found 210 fields in 21
 types, among them 19 in `Cpu`, 15 in `MemoryBus`, 13 in `Rsp`, 17 in `TextureTile` and **74 in `Rdp`**. The plan this
-stage was planned from said 78; the count here is the serializer's. The listing is not trusted as final either,
+stage was drawn from said 78; the count here is the serializer's. The listing is not trusted as final either,
 because the tests below make the same query at test time: a field added to a C# class later fails them.
 
 **Three properties, each checked separately.** A byte round trip alone cannot see a consistent mistake. If the
@@ -726,7 +726,7 @@ and its raster with it.
 
 **Left out.**
 
-- **The CPU's compiled blocks,** by the stage's brief. The oracle runs without them as well. The idle loop's skip,
+- **The CPU's compiled blocks,** by the stage's plan. The oracle runs without them as well. The idle loop's skip,
   which C# reaches only through them, is kept.
 - **The threaded RDP, its page marks and every `WaitFor*`.** MarsRT runs the RDP inline on the emulation thread, as
   C# does with `ThreadedRdp` off, and the marks exist only to make the threaded path wait.
@@ -1389,7 +1389,7 @@ machine in the library still boots with them off.* The interface version is 5, w
 | the wait sites | a line or two each in `bus_access`, `interp`, `idle`, `si`, `ai`, `sp` and `ffi` | — |
 | `tests/threads.rs`, `tests/sites.rs`, `tests/games.rs` | `MarsThreadedRdpTests`, and more (§5.6.7) | 751, 260, 190 |
 
-The crate's diff against 7ea79b1 is 35 files, 4,447 lines in and 167 out.
+The crate's diff against 030256c is 35 files, 4,447 lines in and 167 out.
 
 #### 5.6.1 Shared memory under Rust's rules
 
@@ -1453,7 +1453,7 @@ MarsRT departs from C# in the following places.
   - *Why the games miss it:* every VI capture, every SP DMA into the RSP and every SI transfer to the PIF is a range
     read of more than eight bytes, so the defect sits on the C# core's most-used wait. No game comparison has caught
     it, because the drain has usually finished before the capture reads.
-  - *Fixed in C# on 2026-09-23, commit 7fbf4b1, the test turned round:* the C# now narrows only a read inside one
+  - *Fixed in C# on 2026-09-23, commit d25a8d1, the test turned round:* the C# now narrows only a read inside one
     aligned doubleword, and `MarsThreadedRdpTests.A_range_read_whose_first_bytes_no_draw_holds_still_waits_for_the_draws_that_hold_the_rest`
     holds the read waiting (`Mars_Rdp.md` §2.9.2).
 - **The workers are threads of MarsRT's own.** C# queues a single drain on the pool and gives several workers threads
@@ -1533,7 +1533,7 @@ the bytes it waited for, so the walk cannot read a byte the drain is still writi
   picture of the frame before.
 - *In MarsRT:* the scan-out notes whether a border or a blank has changed the raster since the last walk, and walks a
   repeat when one has. `a_deferred_scan_repeating_after_a_held_line_expired_shows_the_darkened_picture` holds this.
-- *Fixed in C# on 2026-09-23, commit 419583a, the test turned round:* the C# follows MarsRT's rule, a darkening counted
+- *Fixed in C# on 2026-09-23, commit 025573e, the test turned round:* the C# follows MarsRT's rule, a darkening counted
   only where it changed a byte, and `MarsDeferredPresentationTests.A_deferred_repeat_after_a_held_line_expired_shows_the_darkened_picture`
   finds no stale picture (`Mars_Video.md` §2.8).
 
@@ -1563,7 +1563,7 @@ Each failure was found by a test.
     hang leaves threads spinning.
   - *A candidate, not a proof.* `Mars_Rdp.md` §2.8 records a freeze met in Super Mario 64 whose cause was inferred and
     not proven. This deadlock could cause it, and it has not been shown to.
-  - *Fixed in C# on 2026-09-23, commit a72533c, the test turned round:* MarsRT's rule, a waiter raising the point to its
+  - *Fixed in C# on 2026-09-23, commit 5735332, the test turned round:* MarsRT's rule, a waiter raising the point to its
     own word, now in `DpInterface`; `MarsThreadedRdpTests.A_pause_that_finds_some_processors_at_a_barrier_and_the_rest_short_of_it_is_answered`
     and a stress of pauses and snapshots under a watchdog hang on the unfixed code and pass on the fixed (`Mars_Rdp.md`
     §2.9.1). The freeze is still not proven to have been this.
@@ -1577,7 +1577,7 @@ Each failure was found by a test.
     state wrong in `_lodFraction` alone, for 8 of 16 seeds, with the memory right. Against MarsRT's split, the C#
     split parts at frame 6 of the Dam, again in `_lodFraction` alone.
   - *In MarsRT:* the fraction is stamped only on rows that compute it.
-  - *Fixed in C# on 2026-09-23, commit 51f3377, the test turned round:* the C# stamps it the same way;
+  - *Fixed in C# on 2026-09-23, commit 0f87acc, the test turned round:* the C# stamps it the same way;
     `MarsThreadedRdpTests.A_primitive_drawn_alone_after_rows_that_measured_no_level_assembles_the_raster_orders_fraction`
     is exact for all sixteen seeds, and the Dam no longer parts from MarsRT's split (§5.6.7). The two-cycle path of
     both cores stamps the fraction the old way when level of detail is off; that is argued and not shown, and left
@@ -1594,7 +1594,7 @@ Each failure was found by a test.
     holds this.
   - *In C#:* the rule is unchanged. Its race is argued from the code and not shown in C#, because a race that timing
     hides cannot be shown by a test without a race detector.
-  - *Shown and fixed in C# on 2026-09-23, commit 4291e9e:* the C# game comparison with four processors from Ocarina's
+  - *Shown and fixed in C# on 2026-09-23, commit 43fd3aa:* the C# game comparison with four processors from Ocarina's
     state, under a loaded machine, parted from the C# core unthreaded in 10 of 16 runs; with MarsRT's rule ported,
     in 0 of 18 (`Mars_Rdp.md` §2.9.5).
 
@@ -1650,7 +1650,7 @@ the Dam.
 | two and four workers against one thread | 300 | identical |
 | MarsRT threaded against the C# core threaded, blocks off, at once | 600 | identical |
 | the same, both deferred | 600 | identical |
-| MarsRT's four workers against the C# core's four | 300 | identical in five; the Dam parts at frame 6, in `_lodFraction` (§5.6.6). *Since the C# fix of 2026-09-23 (51f3377), identical in all six.* |
+| MarsRT's four workers against the C# core's four | 300 | identical in five; the Dam parts at frame 6, in `_lodFraction` (§5.6.6). *Since the C# fix of 2026-09-23 (0f87acc), identical in all six.* |
 
 **The C# failures.** Each is shown by a WiseMan test that asserts the C# behaviour: the range read, the deferred
 repeat, the fraction and the deadlock. Fixing the C# therefore fails the test, and the test is then to be turned
@@ -1754,7 +1754,7 @@ are the emulation thread's own cost: 6.0, 7.1 and 17.0 ms a frame.
   to the design. §5.7's 32.2 ms is the mean of 1,500 frames, while these 300 frames cost 28.3 ms on one thread.
 
 **The one-thread path's cost,** checked because it is still the default. `examples/frames … scan` was run on the
-branch's base (7ea79b1) and on this branch, interleaved, three rounds, with the same state hashes:
+branch's base (030256c) and on this branch, interleaved, three rounds, with the same state hashes:
 
 | ms a frame | before | after |
 | --- | --- | --- |
@@ -1765,7 +1765,7 @@ branch's base (7ea79b1) and on this branch, interleaved, three rounds, with the 
 The unthreaded path is 1.5 to 3.5 per cent slower on Super Mario 64 and 2.5 to 3 per cent slower on Ocarina of Time,
 and unchanged on GoldenEye. The candidates are the marks' tests, which the unthreaded path makes too, and `Ram`'s
 accessors, which check each access's bounds. Neither has been measured apart, and the cost is recorded here as a
-regression that has been found and not yet explained. *Explained by §6.14.1 (2026-09-23): the step is 1cad784, the first buildable commit
+regression that has been found and not yet explained. *Explained by §6.14.1 (2026-09-23): the step is c630261, the first buildable commit
 of the branch, and it is the price per access of three tests that answer "nothing to do" without a drain — the page
 marks, the RDP memory's verifier branch and bounds checks, and `Ram`'s bounds checks; without all three the unthreaded
 path runs in the base's time. On the current tree the RDP's checks still cost Super Mario 64 1.5 to 2 per cent.*
@@ -2726,7 +2726,7 @@ Each was found by an oracle, shown failing, fixed, and is now held by the test t
   first while nothing has drawn, which costs a join once per load or change, and the answer is the words handed over.
   **The C# core has the same race** (`Vi.Prepare` reads `DpInterface.ScaledDrawn`, which on the drain is the workers'
   `Drew`, before `Capture`'s wait), so the C# comparison's oracle is the C# core unthreaded, which is deterministic;
-  documented here and not fixed, as the plan asks of C# findings. *Fixed in C# on 2026-09-23, commit 05d41e4:
+  documented here and not fixed, as the stage's plan asks of C# findings. *Fixed in C# on 2026-09-23, commit 2297ee1:
   `Prepare` asks `ScaledDrawnHandedOver`, which joins first while nothing has drawn, as MarsRT does; the test that shows
   the race and its fix is `Mars_Rdp.md` §2.9.4's. The comparison at the multiple keeps its unthreaded oracle, which
   still suffices.*
@@ -2748,7 +2748,7 @@ is the only comparison either has at the multiple on the device. It touches only
 
 #### 6.4.5 Mutants
 
-Eleven, each put in by hand or by a runner in the scratchpad that restores the source after each, against the crate's
+Eleven, each put in by hand or by a runner in a scratch directory that restores the source after each, against the crate's
 device and multiple tests and, for the one that survived them, the C# comparison:
 
 | Mutant | Tests | Reading |
@@ -2774,7 +2774,7 @@ the device's and this function is not called.
 
 #### 6.4.6 Speed
 
-**The prediction, stated before the measurement** (the plan's reading of `Mars_Gpu.md`): on this machine's RX 6800 the
+**The prediction, stated before the measurement** (the reading of `Mars_Gpu.md` at the time): on this machine's RX 6800 the
 device at 4× runs at 150 to 192 per cent, and 4× antialiasing shown at one at 174 to 248 per cent. Those are
 `pacebench`'s figures for the C# device path in §14.6 and §15.4, and their unit is not the processor path's rate but a
 game's frame rate on the console: 192 per cent is 10.38 ms, so 100 per cent is 19.9 ms, the figure every pair in those
@@ -2785,11 +2785,11 @@ built in Release: from each play state, 600 frames flat out with the picture on,
 default workers, the recompiler at tier 2 on MarsRT and the blocks on C#, four configurations interleaved and the
 order reversed in the middle round, three rounds, medians. Each run's report named the card or said "off". The 1×
 frame was measured apart, with `examples/threads` (`split 4 blocks`) against the same example built from a clean
-extract of 83dca1d, interleaved and alternated the same way.
+extract of 4510a7e, interleaved and alternated the same way.
 
-**1×, against 83dca1d**, ms a frame, medians of three, the joined state's hash identical in all eighteen runs:
+**1×, against 4510a7e**, ms a frame, medians of three, the joined state's hash identical in all eighteen runs:
 
-| Game | 83dca1d | now |
+| Game | 4510a7e | now |
 |---|---|---|
 | Super Mario 64 | 5.76 | 5.77 |
 | Ocarina of Time | 6.80 | 6.79 |
@@ -2813,7 +2813,7 @@ Level, as it should be: at one the machine carries an empty `ScaledDrawing` and 
 
 **The prediction's fate: exceeded, and retired.** In `pacebench`'s unit MarsRT's device at 4× runs Mario at 198 per
 cent and Ocarina at 208, above the range's top of 192; with 4× antialiasing shown at one, Mario at 311 and Ocarina at
-280, above 248. GoldenEye, outside the range's games, is at 103 and 128. Read the other way the plan read it, as a
+280, above 248. GoldenEye, outside the range's games, is at 103 and 128. Read the other way the prediction read it, as a
 ratio to the processor path at the same multiple, the device is 4.2, 4.6 and 2.7 times MarsRT's processor at 4×, and
 6.5, 6.3 and 3.4 times with 4× antialiasing: the prediction's 1.5 to 2.5 was far short. Why the device gains more on
 MarsRT than on C#: the device's own work is the same shaders, and the host's share, walking and binning rows and the
@@ -2843,7 +2843,7 @@ at the same settings in the same process, is interleaved.
 - **The device's report in the window.** The shim exposes `GpuReport` as `MarsCore` does, and no frontend shows either.
 - **The bands and the walk at a multiple on the processor split across threads** are C#'s and not ported; MarsRT's
   walk is one band, at the multiple as at one.
-- **Mistress.** No play session at a multiple on MarsRT; headless only, by standing instruction.
+- **Mistress.** No play session at a multiple on MarsRT; headless only, by the project's testing rule.
 - **The transition off the device** deviates for up to two frames as C#'s does (`Mars_Gpu.md` §15.2), and no test holds
   it on either core.
 
@@ -2866,7 +2866,7 @@ the loop behind its schedule, where the pacer (`FramePacer.Settle`) cannot sleep
 was the `SkipRendering` assignment. On this desktop, the same probe with and without that assignment before every
 frame measured **no difference** (16.6 and 17.7 against 16.7 and 16.7 ms a frame): the desktop's presenter finishes
 within the frame, so the join never waited. *The desktop's negative is recorded because it would have closed the
-question wrongly;* on the handheld, three rounds of 600 frames from the player's state:
+question wrongly;* on the handheld, three rounds of 600 frames from a state saved in play:
 
 | ms a frame, loop | `SkipRendering` never set | set before every frame (Mistress) |
 | --- | --- | --- |
@@ -2969,7 +2969,7 @@ a pointer. Both were decided by measurement, §6.5.5, and the second is the one 
   are seen one at a time either way, and the difference is the frame's speed while the recorder is armed, not what it
   records.
 
-**The four decisions the plan asked for**, then:
+**The four decisions the stage's plan called for**, then:
 
 1. *The recompiler's blocks.* An armed CPU table runs the interpreter for the frame — C#'s rule, and exact by
    construction, since §5.8 proves the blocks against the interpreter and this stage proves the observed loop against
@@ -3172,7 +3172,7 @@ neither is what a player runs. Nothing was done about it.
 
 ### 6.6 Stage F: parity leftovers
 
-Each is small, has its own oracle, and can be given to a run beside larger work.
+Each is small, has its own oracle, and can be taken up beside larger work.
 
 - **ROM-patch cheats** (§5.5.4): the patch list held beside the cartridge reads in `memory/bus_access.rs`, pushed at
   the frame's end as the codes are. No N64 code format produces one, so this closes a hole a hand-made patch would
@@ -3182,19 +3182,19 @@ Each is small, has its own oracle, and can be given to a run beside larger work.
   a game (`EmuSen_Settings_Reference.md` §4.21b, §4.44). MarsRT's snapshot is proven headlessly in every frame of six
   games (§5.6.4) and its pause point is a barrier the C# core lacks. Turning it on for MarsRT alone is a play decision
   of the same kind as stage B's, and the C# core's stays off until its failure is fixed. *The failure the tests could
-  reach, the pause barrier's deadlock, was fixed in C# on 2026-09-23 (a72533c, `Mars_Rdp.md` §2.9.1); the freeze itself
+  reach, the pause barrier's deadlock, was fixed in C# on 2026-09-23 (5735332, `Mars_Rdp.md` §2.9.1); the freeze itself
   was never reproduced, so turning rewind back on is still a play decision.*
 - ~~**The C# core's four failures** (§5.6.2, §5.6.5, §5.6.6): each has a WiseMan test that shows it and is marked as the
   C# core's; the work is to fix each in C# and turn its test around. The pause barrier's is the one that may be a
-  game's freeze, and comes first.~~ *Done 2026-09-23: a72533c (the pause barrier), 7fbf4b1 (the range read), 419583a
-  (the deferred repeat), 51f3377 (the fraction), and 05d41e4 for §6.4.4's race; `Mars_Rdp.md` §2.9.*
+  game's freeze, and comes first.~~ *Done 2026-09-23: 5735332 (the pause barrier), d25a8d1 (the range read), 025573e
+  (the deferred repeat), 0f87acc (the fraction), and 2297ee1 for §6.4.4's race; `Mars_Rdp.md` §2.9.*
 - **MarsRT's single-thread regression** of 1.5 to 3.5 per cent (§5.6.8), found and not explained: a bisection with the
   interleaved bench between the RDP merge and the threads' merge, about two hours, and either a cause or a recorded
-  negative. *Done in §6.14.1: the three tests of 1cad784 together, and a residual of the RDP's checks on the current tree,
+  negative. *Done in §6.14.1: the three tests of c630261 together, and a residual of the RDP's checks on the current tree,
   priced and not built.*
 
 *Done 2026-09-23, the first three items, in §6.6.1 to §6.6.3; §6.6.4 says what they leave. The C# core's four failures
-and the single-thread regression are another run's and are not touched here.* The native interface is 9 since
+and the single-thread regression belong to separate work and are not touched here.* The native interface is 9 since
 §6.6.1.
 
 #### 6.6.1 ROM patches beside the cartridge (2026-09-23)
@@ -3246,7 +3246,7 @@ change it from the UI thread at an arbitrary instruction, so neither core's timi
   replaced, cleared and kept across a state load).
 - The blast radius: the cheat, registry, cheat-wiring and MarsRT frontend classes, 139 tests, passed.
 
-**Mutants.** Ten, each alone (`mutants.py` in the session's scratchpad).
+**Mutants.** Ten, each alone (`mutants.py` in a scratch directory).
 
 | Mutant | Caught by |
 | --- | --- |
@@ -3272,7 +3272,7 @@ picks the later one where enumeration meets the earlier first; only the randomis
 **What the C# core exposes.** Nothing, for the phases: `MarsCore` implements no `IFrameProfiler`, and
 `EmuSen_Multicore.md` §5 lists only Venus and Moon. Mistress's fps line and Pharaoh's profile read whatever a core
 publishes, by capability. So "the same shape on both engines" cannot hold for the phases, and the C# core, being
-another run's, was not given any; MarsRT's are new, and their tests hold them to the frame, not to C#. For the
+under separate work, was not given any; MarsRT's are new, and their tests hold them to the frame, not to C#. For the
 audio peek C# has one: `MarsDebugTarget.GetAudioSamples` returns `Ai.Peek()`, a copy of the samples the frontend has
 not drained, which Pharaoh's `audiodump` reads. MarsRT's target returned an empty array.
 
@@ -3467,7 +3467,7 @@ is likely to cost a few milliseconds one frame in four. Mistress has no switch t
 
 #### 6.6.4 What is not done
 
-- **The C# core's rewind** stays off; its pause is the other agent's to fix (§5.6.6), and its snapshot was not run
+- **The C# core's rewind** stays off; its pause is left to separate work (§5.6.6), and its snapshot was not run
   through these tests.
 - **A MarsRT snapshot loaded into the C# core**, which §5.6.4 left untested, is still untested; rewind never does it.
 - **A registry changed mid-frame** reaches MarsRT's cartridge at the next frame and the C# core's at once (§6.6.1).
@@ -3535,7 +3535,7 @@ percent is therefore twenty-five to seventy samples, and the standard error of t
 the Dam and a point on Super Mario 64; the two runs of each game agree to within that, and both are printed so that
 the reader can see it rather than take it. The milliseconds are the shares multiplied by an unsampled run's frame,
 taken in the same batch: 14.501, 6.778 and 5.801 ms threaded, 22.659, 10.661 and 10.396 on one thread. The six were
-run twice more after the samples, on 2026-09-23 as another run's test suite was finishing on the machine: 14.47 and
+run twice more after the samples, on 2026-09-23 as another test suite was finishing on the machine: 14.47 and
 14.74, 6.84 and 7.84, 5.79 and 5.80 threaded; 22.32 and 22.94, 10.61 and 10.82, 10.40 and 10.41 on one thread. All but
 Ocarina of Time's higher threaded run, taken first while the load was still falling, are within two per cent of the
 batch's, and the batch's are the ones used.
@@ -3851,8 +3851,8 @@ runs within a point and a half; the presenter walked (`Walker::sample`, `walk`, 
 cent of the frame, 1.4 ms, and was parked for the other 76; the workers were as the Dam's, parked or spinning for
 most of it.
 
-**The prediction for the processor's share, and its fate.** The run that built the sampler and took these runs
-was stopped before writing them up, and no prediction of its survives in the results directory; this write-up
+**The prediction for the processor's share, and its fate.** The work that built the sampler and took these runs
+stopped before they were written up, and no prediction from it survives in the results directory; this write-up
 cannot reproduce one it did not see, and a prediction stated after the tables are read is not a prediction. What
 the record allowed one to expect before the sample is nonetheless worth stating, because the sample tests it:
 §3.4 priced MarsRT's processor at 7.9 to 15 ns a step and the C# blocks at 3, and `Mars_Rsp.md` §13 and
@@ -4077,7 +4077,7 @@ fallback for such windows is test 3's case.
 ##### 6.10.3 Speed, and the prediction's fate
 
 Three interleaved rounds of 600 frames from the gameplay states, on an otherwise idle desktop (load 1.3 at the
-start), each round running the build before this section (WiseMan 8d5e2c7), this section's build, and this section's
+start), each round running the build before this section (WiseMan 6e5d5fb), this section's build, and this section's
 build with `EMUSEN_MARSRT_RSP_SIMD=0` — the element-by-element unit on the new layout — in turn. Production's shape,
 `examples/threads <rom> <state> 600 split 4 blocks`:
 
@@ -4354,9 +4354,9 @@ was built: four bands cut each walk by about C#'s own ratio, 2.5 (§5.4.4, 4.55 
 Dam from 11.67 to about 10.9, its whole 0.8 ms of join.
 
 *The measurement.* Three interleaved rounds of 600 frames, `examples/threads <rom> <state> 600 split 4 blocks`, each
-round running the build before this section (WiseMan 2d85f17, built from a clean checkout), this section's build, and
+round running the build before this section (WiseMan 89bb0ae, built from a clean checkout), this section's build, and
 this section's build with `EMUSEN_MARSRT_SCAN_BANDS=1` in turn, every run under the shared lock with ten seconds'
-pause before each game. The load average at the start of the runs was 1.4 to 5.1: another run's runs were interleaved
+pause before each game. The load average at the start of the runs was 1.4 to 5.1: other runs were interleaved
 with these under the same lock, and a run's own four spinning workers raise the next run's reading, so the number was
 recorded and the rounds were compared with each other rather than rejected. The state hashes are
 `4DEACE55468AA765`, `6881AF7D3E8BF471` and `18279384D87951D7` in all 27 runs, as in §6.10.
@@ -4623,7 +4623,7 @@ two. *Revised after the microbenchmark:* its third of a nanosecond in whole runs
 **about 0.3 ms at the Dam**.
 
 Three interleaved rounds of 600 frames from the gameplay states, the build before this section (a clean checkout of
-2d85f17), this section's build, and this section's build with `EMUSEN_MARSRT_RSP_BLOCKS=0`; production's shape,
+89bb0ae), this section's build, and this section's build with `EMUSEN_MARSRT_RSP_BLOCKS=0`; production's shape,
 `examples/threads <rom> <state> 600 split 4 blocks`, at a load of 1.4 at the start:
 
 | ms a frame | before | the table | the interpreter, this build |
@@ -4718,7 +4718,7 @@ built**; the number to beat, should it be taken up, is the Dam at 10.44 ms.
 
 #### 6.13 The picture lent, not given (2026-09-23)
 
-The handheld's `[fps]` line, read by the parent session on the Legion Go S, showed the loop's time outside `RunFrame`
+The handheld's `[fps]` line, read on the Legion Go S, showed the loop's time outside `RunFrame`
 (`total − run`) at about 1 ms at one multiple, **6 to 7 ms at two and 12 to 13 at four**, with `RunFrame` itself 16 to
 24 ms against 11 to 12 in a bench of the same scene: consistent with full collections stopping every thread. A probe
 on this desktop (`~/.cache/emusen/probe/mars-speed/fpsprobe/`, Donkey Kong 64's title) found the source: 1.2 MB
@@ -4857,7 +4857,7 @@ two rounds). At one and two, where the emulation thread is the bound, the loop g
 
 *What the desktop cannot show.* The handheld's excess was 6 to 13 ms and not 0.3 to 4: its collections are far dearer
 than this machine's one millisecond each, and §6.1 found it bound on the emulation thread. The prediction for it,
-stated here before the parent session measures it: `total − run` at two and four falls to the copy there, 1 ms or a
+stated here before it is measured there: `total − run` at two and four falls to the copy there, 1 ms or a
 little more at four, `RunFrame` returns toward the bench's 11 to 12 ms where it was inflated by collections, and the
 gen-2 count in Mistress's own log is zero.
 
@@ -4874,7 +4874,7 @@ gen-2 count in Mistress's own log is zero.
   few hundred bytes. None was removed.
 - **A lease.** A caller that returns the same array twice across a re-lend is not detectable by array (`EmuSen_Multicore.md`
   §16); Mistress returns once by construction.
-- **The handheld.** Not measured here, by instruction; the prediction for it is stated above.
+- **The handheld.** Not measured here, by plan; the prediction for it is stated above.
 - **A real window.** Every test is headless; Avalonia's live compositor, its order of rendering and disposing draw
   operations, and the GPU backend's copy were not instrumented. The rules of `EmuSen_Serenity.md` §2.8 do not depend
   on that order.
@@ -4883,7 +4883,7 @@ gen-2 count in Mistress's own log is zero.
 
 Two questions were left open by earlier sections, and this one answers both. §5.6.8 found MarsRT's unthreaded path 1.5 to
 3.5 per cent slower after the threads' merge and "recorded [it] as a regression that has been found and not yet
-explained"; §6.6 priced its bisection at two hours. And Donkey Kong 64's title, the player's state, ran 13.4 to 14.4 ms a
+explained"; §6.6 priced its bisection at two hours. And Donkey Kong 64's title, a state saved in play, ran 13.4 to 14.4 ms a
 frame on the handheld and 11.6 on this desktop, with `examples/threads … split 4 blocks` reporting the emulation thread
 waiting about 3 ms a frame at wait site 8 while the first worker was busy about 3 ms; the three control games wait
 0.02 ms there. The first question gets a bisection and, as far as the builds allow, an attribution (§6.14.1). The second
@@ -4893,28 +4893,28 @@ capture kept whole on the processor, both diagnosed and priced and neither built
 
 ##### 6.14.1 The one-thread regression, bisected
 
-*The builds.* Between the RDP's merge and 709e2ce the threads' branch has eleven commits. The first two — b6a613c, the
-drain, and c8601c4, its merge of WiseMan — do not compile: each fails with twelve errors, halves of modules that 1cad784
-completes. So the smallest buildable step is from the branch's base to 1cad784, the drain and the wait sites together.
-The base is 7ea79b1, as in §5.6.8, and 0877875, WiseMan as the branch first took it, which is 7ea79b1 without four
+*The builds.* Between the RDP's merge and bed5e9d the threads' branch has eleven commits. The first two — 7c57764, the
+drain, and 8af9219, its merge of WiseMan — do not compile: each fails with twelve errors, halves of modules that c630261
+completes. So the smallest buildable step is from the branch's base to c630261, the drain and the wait sites together.
+The base is 030256c, as in §5.6.8, and 2558a6e, WiseMan as the branch first took it, which is 030256c without four
 frontend files (739 lines, none on the machine's path). Every run is `examples/frames <rom> <state> 600 scan` on one
 thread, §5.6.8's command, under the lock, in rounds with the order rotated; every build of a game gave the same state
 hash.
 
-*The reproduction and the bisection* (made by a helper agent; three rounds; ms a frame):
+*The reproduction and the bisection* (three rounds; ms a frame):
 
-| | 7ea79b1 | 1cad784 | 876d1e1 | ac10631 | 709e2ce |
+| | 030256c | c630261 | d242f1e | c828e8c | bed5e9d |
 | --- | --- | --- | --- | --- | --- |
 | Super Mario 64 | 13.06–13.30 | 13.47–13.77 | 13.47–13.78 | 13.38–13.59 | 13.47–13.78 |
 | Ocarina of Time | 15.11–15.42 | 15.44–15.66 | 15.31–15.59 | 15.37–15.40 | 15.39–15.46 |
 | GoldenEye, the Dam | 27.95–27.99 | 28.12–28.27 | 27.96–27.97 | 27.97–28.12 | 27.92–27.99 |
 
-The step is at 1cad784, and nothing after it moves the time again. §5.6.8's numbers are reproduced: two per cent on
-Super Mario 64 and one and a half on Ocarina of Time. On GoldenEye 1cad784 alone is 0.1 to 0.3 ms slower and the
+The step is at c630261, and nothing after it moves the time again. §5.6.8's numbers are reproduced: two per cent on
+Super Mario 64 and one and a half on Ocarina of Time. On GoldenEye c630261 alone is 0.1 to 0.3 ms slower and the
 commits after it are not, so there is no step there that lasts.
 
-*The attribution.* §5.6.8 named two candidates. 1cad784 adds three things to every access the unthreaded path makes,
-each a test that answers the same way whenever no drain runs, and a variant of 1cad784 was built without each, and
+*The attribution.* §5.6.8 named two candidates. c630261 adds three things to every access the unthreaded path makes,
+each a test that answers the same way whenever no drain runs, and a variant of c630261 was built without each, and
 without all three:
 
 - *the marks*: `read_marked` and `write_marked`, an atomic load of the page's mark and a branch, at every CPU load, store
@@ -4925,20 +4925,20 @@ without all three:
 
 Three rounds, seven builds, the order rotated (ms a frame):
 
-| | 0877875 | 7ea79b1 | 1cad784 | without the marks | without the RDP's checks | without `Ram`'s assertions | without all three |
+| | 2558a6e | 030256c | c630261 | without the marks | without the RDP's checks | without `Ram`'s assertions | without all three |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Super Mario 64 | 13.04–13.16 | 13.07–13.34 | 13.41–13.56 | 13.26–13.40 | 13.24–13.38 | 13.39–13.43 | 13.11–13.24 |
-| Ocarina of Time | 15.08–15.38 | 15.13–15.17 | 15.33–15.63 | 15.20–15.30 | 15.16–15.35 | 15.35 (and two runs of 16.6 and 26.2 under another run's load) | 15.02–15.09 |
+| Ocarina of Time | 15.08–15.38 | 15.13–15.17 | 15.33–15.63 | 15.20–15.30 | 15.16–15.35 | 15.35 (and two runs of 16.6 and 26.2 under a concurrent build's load) | 15.02–15.09 |
 
-*The verdict.* The regression is real, and it is the three tests together: without all three, 1cad784 runs in 7ea79b1's
-time on both games (13.11–13.24 against 13.07–13.34; 15.02–15.09 against 15.13–15.17), and 1cad784 itself lies outside
+*The verdict.* The regression is real, and it is the three tests together: without all three, c630261 runs in 030256c's
+time on both games (13.11–13.24 against 13.07–13.34; 15.02–15.09 against 15.13–15.17), and c630261 itself lies outside
 both ranges. Of the three, the marks and the RDP's checks each recover two thirds to three quarters of it alone, by the
 medians, and `Ram`'s assertions a fifth or less; but the parts overlap each other, their sum exceeds the whole, and
 each is within about twice the spread of a build's three runs, so no finer split is claimed than that. It is not a
 single cause but a price per access, paid on a path where every one of the tests answers "nothing to do".
 
-*On the current tree.* The three tests are still there, and the same three variants were built from WiseMan at f55bfc0
-(its crate is 88cef31's) and measured against it unmodified, three rounds each way, with the same hashes (ms a frame):
+*On the current tree.* The three tests are still there, and the same three variants were built from WiseMan at 1a7febe
+(its crate is 97e89ab's) and measured against it unmodified, three rounds each way, with the same hashes (ms a frame):
 
 | | unmodified | without the marks | without the RDP's checks | without `Ram`'s assertions |
 | --- | --- | --- | --- | --- |
@@ -5107,7 +5107,7 @@ title's frame at production's shape falls by 0.5 to 1 ms, the 3.1 ms a frame tha
 about 2 ms of it reappearing at sites 2 and 3; the other four states stay within their spread, since their waits are
 small and none of them met the capture's slack as the title does.
 
-*The measurement.* `examples/threads <rom> <state> 600 split 4 blocks`, the base (f55bfc0's crate) and the change
+*The measurement.* `examples/threads <rom> <state> 600 split 4 blocks`, the base (1a7febe's crate) and the change
 interleaved, three rounds under the lock with the order rotated, every pair of builds on a game with the same state
 hash:
 
@@ -5128,7 +5128,7 @@ boxes that meet the lines the walk reads; it was not examined further.
 
 ##### 6.14.8 The multiple: a join at every scan on the device, and the capture kept whole
 
-The parent session measured the title through the shim at 2× with the device on and four workers: `RunFrame` at a mean
+The title was measured through the shim at 2× with the device on and four workers: `RunFrame` at a mean
 of 16.5 ms on this desktop (p50 17.4, p90 22.0), alternating about 19 and 13 ms, against 11.6 ms at one. The per-frame
 trace, now with a column for the drain's joins (`examples/threads … trace=`; `Threads::join` has counted them since
 §5.6, and the example now prints them), says where the difference goes. One run each under the lock, 600 frames, the
@@ -5160,7 +5160,7 @@ that drew the same lines at one. C#'s slack at one is what covers the shadow's o
 that a 1× box bounds every byte the same draw writes at the multiple is not checked by anything: the verifier checks
 RDRAM at one. With the narrowed wait, a pending draw whose 1× box misses the lines read could still be writing the
 shadow's slack while the capture copies it, which is a data race in Rust whatever the value. The multiple-guard commit
-(093d7dd) restores the base's behaviour there, and the game comparisons at the multiple pass either way.
+(741a630) restores the base's behaviour there, and the game comparisons at the multiple pass either way.
 
 *Priced, not built.* Two levers, each a design change rather than a narrower wait. On the device: the scan-out ordered
 into the leading worker's stream, as a command the ring carries, so that the machine's thread waits only for the bytes
@@ -5185,7 +5185,7 @@ fell by 1.46 ms a frame, its site-8 wait and join to nothing.*
   apply there at one, and C#'s narrowing of a range by its first eight bytes stays a defect (§5.6.2).
 - **The shim's comparisons.** The WiseMan suites that compare MarsRT with the C# core through the shim
   (`MarsRtThreadsTests`) were not rerun; the crate's own comparisons are against MarsRT unthreaded, the oracle of §5.6.
-- **The handheld.** Not measured here, by instruction. What to measure there, with the prediction for each:
+- **The handheld.** Not measured here, by plan. What to measure there, with the prediction for each:
   `examples/threads` on the title at one, `split <n> blocks` with the handheld's worker count, before and after: site 8
   goes to nothing and site 2 appears, and the frame falls by what site 8 waited less what site 2 then waits, predicted
   a little under a millisecond as here, and more if the handheld's drain is slower beside its emulation thread than
@@ -5199,7 +5199,7 @@ fell by 1.46 ms a frame, its site-8 wait and join to nothing.*
 list before the scan-out, and priced the lever that would remove the wait: the scan-out ordered into the leading
 worker's stream. This section builds it. The wait had two faces. With the capture narrowed at the multiple it was a
 join (`DpInterface::scan_out`, `scan_into_raster` and `read_back_scaled` each joined the drain before touching the
-device): 7.45 ms at the median of a light field on this desktop. With the capture kept whole, as 093d7dd left it, the
+device): 7.45 ms at the median of a light field on this desktop. With the capture kept whole, as 741a630 left it, the
 same wait appeared at site 8 instead, and that is the form the handheld showed (`examples/threads … split 4 blocks
 scale=2 gpu`, 15.62 to 15.79 ms a frame, 4.27 to 4.32 ms a frame waited, nearly all at site 8, joins 0.006 ms). A fix
 has to remove the wait in whichever form it takes, so both counters are reported below.
@@ -5333,18 +5333,18 @@ core and the machine's thread in `Threads::end`, joining them: a core disposed w
 `Threads::drop` ends the drain without waiting for the words, and a worker that sees the stop at the top of its loop
 leaves, while those already waiting at a barrier (`Step::Leader`, `All`, `AllJoined`, §5.6.6) wait for it for good.
 `a_machine_dropped_while_its_workers_wait_at_barriers_ends` (forty drops of a split machine part way through 3,000
-image changes, under a deadline) fails the same way on a39a73d, unmodified, so the defect is older than this work; the
+image changes, under a deadline) fails the same way on 991f9d1, unmodified, so the defect is older than this work; the
 change only made it likelier, since the drain's end now runs the device work first and so keeps the workers moving
 through barriers when the stop comes. A barrier now sends its waiters home at a stop, and they run nothing more, which
 is all a dropped machine needs. A stop that is not a drop waits for every word first and never meets the case.
 
 ##### 6.15.5 Speed, and the prediction's fate
 
-*The prediction, stated before the rounds* (the plan's, and §6.14.8's ceiling): Donkey Kong 64's title at two on the
+*The prediction, stated before the rounds* (the stage plan's, and §6.14.8's ceiling): Donkey Kong 64's title at two on the
 device falls by 1.5 to 2 ms a frame, the join or site-8 wait going to nearly nothing and about 2 ms reappearing at the
 processor's depth reads (site 2), as at one; the other six states, and every state at one, stay within their spreads.
 
-*The measurement.* `examples/threads <rom> <state> 600 split 4 blocks [scale=2 gpu]`, a39a73d's crate against this
+*The measurement.* `examples/threads <rom> <state> 600 split 4 blocks [scale=2 gpu]`, 991f9d1's crate against this
 section's, three rounds interleaved with the order rotated, under the bench lock at a load below three; every pair of
 builds gave the same state hash (ms a frame, range and median; the waits per frame):
 
@@ -5366,7 +5366,7 @@ builds gave the same state hash (ms a frame, range and median; the waits per fra
 | GoldenEye from power-on, 1× | 2.61–2.71 (2.61) | 2.60–2.73 (2.68) | none | none |
 
 On the desktop the base now shows the handheld's form, the wait at site 8 (3.8 ms a frame) and not the join, since
-093d7dd restored C#'s capture at the multiple after §6.14.8's join was measured. One traced run each (600 frames, the
+741a630 restored C#'s capture at the multiple after §6.14.8's join was measured. One traced run each (600 frames, the
 first twenty left out) says where the frame went: the light fields' present fell from 8.45 ms at the median (7.77 of it
 at site 8) to 0.38, and the heavy fields' emulation rose from 17.6 to 22.6 ms, since the list now runs beside the heavy
 field and the processor's depth reads there wait for the draws that hold them (site 2), which is §6.14.4's necessary
@@ -5382,13 +5382,13 @@ join at the next present (Super Mario 64 at two: 0.76 to 1.49 ms a frame; the Da
 now waits for the leader's submission, and the frame is unmoved: those games' lists end well within the next field.
 Donkey Kong 64's does not wait there (0.05 ms), since its heavy field is longer than its list.
 
-##### 6.15.6 The handheld (measured 2026-09-24, after the merge 1e650ea)
+##### 6.15.6 The handheld (measured 2026-09-24, after the merge 2625358)
 
-The Legion Go S, SteamOS 3.8.27, power profile "custom", Mistress closed; the run's `threads` builds of a39a73d and
+The Legion Go S, SteamOS 3.8.27, power profile "custom", Mistress closed; the `threads` builds of 991f9d1 and
 of the branch, copied over (both need glibc 2.34 at most), three rounds interleaved with the order reversed each
 round, DK64's title state, 600 frames, `split 4 blocks`:
 
-| DK64 title | a39a73d, ms a frame | branch, ms a frame |
+| DK64 title | 991f9d1, ms a frame | branch, ms a frame |
 |---|---|---|
 | 2x on the device | 16.59, 16.79, 16.83 | 14.92, 14.70, 14.81 |
 | 1x | 14.44, 14.68, 14.72 | 14.91, 14.58, 14.58 |
@@ -5412,8 +5412,8 @@ At the multiple the median falls 1.98 ms (16.79 to 14.81), under the 16.7 ms tar
 
 ##### 6.15.7 What is not done
 
-- **The handheld.** Not measured by the branch, by instruction; measured after the merge, §6.15.6. What to measure, with the prediction for each:
-  `examples/threads dk64-us.v64 dk64-us-title.state 600 split 4 blocks scale=2 gpu` before (a39a73d) and after, three
+- **The handheld.** Not measured by the branch, by plan; measured after the merge, §6.15.6. What to measure, with the prediction for each:
+  `examples/threads dk64-us.v64 dk64-us-title.state 600 split 4 blocks scale=2 gpu` before (991f9d1) and after, three
   rounds interleaved: the site-8 wait of 4.27 to 4.32 ms a frame goes to about 0.2, the joins stay near nothing, and
   site 2 appears at 2.5 to 3 ms a frame (more than here, the handheld's drain being slower beside its emulation thread);
   the frame falls by 1.3 to 1.8 ms, from 15.62–15.79 to about 14.0–14.4, under the 16.7 ms target. The `trace=` column
@@ -5450,7 +5450,7 @@ exact machine say the undo it needs would almost never run.
 
 ##### 6.16.1 The method, and what it cannot see
 
-*The builds.* The base is WiseMan 2b9664e, whose crate is 2e4d8c3's, built as the examples are (`release`: fat LTO,
+*The builds.* The base is WiseMan dbde74a, whose crate is c185890's, built as the examples are (`release`: fat LTO,
 one codegen unit, `panic = "abort"`, line tables). Every variant is built from the same source into its own target
 directory under `~/.cache/emusen/probe/mars-speed/research-target/`, the source copied to
 `research/crates/<name>/` where a prototype changes it.
@@ -5458,7 +5458,7 @@ directory under `~/.cache/emusen/probe/mars-speed/research-target/`, the source 
 *The timing.* `examples/threads <rom> <state> 600 split 4 blocks`, production's shape, for the Dam (`ge.z64`), Ocarina
 of Time, Super Mario 64 and Donkey Kong 64's title (`dk64-us.v64`), all builds of a round run one after another with
 the order rotated between rounds, each run under the shared bench lock (`research/bench.sh`). The machine was shared
-with another run's .NET builds and a running Mistress through most of the evening, so every run first waits until
+with other .NET builds and a running Mistress through most of the evening, so every run first waits until
 the rest of the machine has been under 1.2 busy processors for a second (logged as `busy=` beside each run); a build
 that starts mid-run is not caught by that gate, and the three or four outliers of 11 to 14 ms in the tables below are
 that. Medians of three rounds are quoted, all runs are printed in `research/results-r*.tsv`, and a difference is called
@@ -5474,7 +5474,7 @@ light frame gives fewer samples a second.
 thread, user mode, over whole 600-frame runs, so a count divided by 600 is a frame's (the state's load included).
 
 *What it cannot see.* The same four as §6.9: no input is pressed; nothing inside a compiled block; no caller for a
-shared handler; and the device, where only the parent session can run (§6.16.8). And one new: under PGO the
+shared handler; and the device, whose runs are left to §6.16.8. And one new: under PGO the
 compiler inlines `decoded::run` and `Blocks::step` into `Machine::run_frame` without inline records that
 `eu-addr2line` can read for all of it, so a PGO build's samples cannot be grouped as the base's are; the PGO build is
 measured by time and counters only.
@@ -5708,7 +5708,7 @@ Four workers are needed on three games of four: with two, the emulation thread w
 the loads. The shorter spin costs DK64 8 per cent — its site-2 wait is a worker woken from the futex rather than
 caught spinning — and buys nothing measurable elsewhere. On this desktop, where power is not the bound, **neither is
 a lever**. The handheld is another question — the four workers are on-CPU the whole frame, and there they share a
-package budget with the thread that is the bound — and the parent session's run is what answers it (§6.16.8).
+package budget with the thread that is the bound — and the run there is what answers it (§6.16.8).
 *P7a* held for the Dam and DK64 and did not foresee the lighter games' loss with two workers; its spin clause was
 refuted by DK64.
 
@@ -5741,8 +5741,8 @@ the join's own row. Nothing here is a lever.
 
 ##### 6.16.8 The handheld
 
-The Legion Go S could not be reached from this session. The binaries and a script are staged for the parent session
-in `~/.cache/emusen/probe/mars-speed/deck-levers/` (`README.txt` says what each is): the base, PGO, PGO with BOLT, the
+The Legion Go S could not be reached when this section was written. The binaries and a script are staged for a later
+run in `~/.cache/emusen/probe/mars-speed/deck-levers/` (`README.txt` says what each is): the base, PGO, PGO with BOLT, the
 `znver4` and `rspv4` bounds, the spin setting and the lag bound, each needing glibc 2.34 at most, run on DK64's title
 and the Dam, three rounds interleaved and rotated, with the main thread's core clock sampled from `scaling_cur_freq`
 beside each run, plus two, three and four workers, the main thread pinned alone on a core with its SMT sibling kept
@@ -5758,7 +5758,7 @@ similar share of the emulation thread at 2× on the device; the lag bound takes 
 clock within 100 MHz of the base's in each — the prediction being that the device is not power-bound on the charger;
 `znver4` and `rspv4` within ±3 per cent.
 
-*The run* (2026-09-24, 23:14–23:33, the parent session; the device on its charger at 100 per cent, Mistress closed,
+*The run* (2026-09-24, 23:14–23:33; the device on its charger at 100 per cent, Mistress closed,
 the script started under `systemd-run --user`). A first attempt at 22:29 was started with `nohup` from ssh and died
 after five results: the device sets `KillUserProcesses=True` (`/etc/systemd/logind.conf.d/`), with linger off, so a
 job an ssh session starts dies with that session's scope. Its five rows (`results-partial-2229.txt`) agree with the
@@ -5772,8 +5772,8 @@ ms slower than the same configuration in the other rounds, with unchanged clocks
 leaves each configuration's fastest run as the better estimate, so both games are given by the minimum of three.
 The medians disagree only where a disturbed run is a median: the Dam's base median (11.67) is itself disturbed, which
 is why `summ.py`'s median column shows the Dam's `znver4`, `rspv4`, `split2` and `spin40` 4–5 per cent ahead. The
-cause of the disturbance was not found: the parent session's own ssh polls ran once a minute throughout both
-games, a second session collected the first attempt's file once at 23:16, and nothing else was run on the device.
+cause of the disturbance was not found: the run's own ssh polls ran once a minute throughout both
+games, a second ssh connection collected the first attempt's file once at 23:16, and nothing else was run on the device.
 
 | configuration | DK64 title, ms (vs base) | the Dam, ms (vs base) | prediction |
 | --- | --- | --- | --- |

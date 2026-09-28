@@ -32,7 +32,11 @@ namespace EmuSen.Hotaru
         {
             // A config file that won't parse falls back to defaults either way;
             // this is what stops it doing so silently - see §6.2.
-            EmuSen.Galaxia.ConfigDiagnostics.Sink = m => Console.WriteLine("[config] " + m);
+            EmuSen.Galaxia.ConfigDiagnostics.Sink = m =>
+            {
+                Console.WriteLine("[config] " + m);
+                EmuSen.Galaxia.Library.ErrorLog.Warning("config", m);
+            };
 
             // LunaP keeps windows.json and luna.json where Galaxia keeps everything else, and reports through the same sink - see EmuSen_LunaP.md §19.2.
             EmuSen.LunaP.Settings.LunaSettings.Store = new EmuSen.LunaP.Settings.JsonSettingsStore(EmuSen.Galaxia.ConfigStore.Directory);
@@ -90,6 +94,7 @@ namespace EmuSen.Hotaru
             // other than this one. Cannot catch a hard `kill -9`/SIGKILL -
             // nothing in userspace can intercept that signal at all.
             AppDomain.CurrentDomain.ProcessExit += (_, _) => FlushAndDispose();
+            AppDomain.CurrentDomain.UnhandledException += (_, e) => EmuSen.Galaxia.Library.ErrorLog.Error("unhandled", (e.ExceptionObject as Exception)?.Message ?? "unhandled fault", e.ExceptionObject as Exception);
             AppDomain.CurrentDomain.UnhandledException += (_, _) => FlushAndDispose();
             using PosixSignalRegistration sigTerm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, ctx =>
             {
@@ -122,8 +127,8 @@ namespace EmuSen.Hotaru
             // DianaOS is the ONLY thing shown at launch, whether or not a
             // ROM path was given on the command line - RunStandaloneShell
             // runs as plain console I/O, entirely before Avalonia (or any
-            // window at all) ever starts. Returns null only if the player
-            // actually asked to shut down (or hit EOF) with no ROM ever
+            // window at all) ever starts. Returns null only if shutdown
+            // was actually asked for (or EOF was hit) with no ROM ever
             // resolved, in which case there's nothing left to do.
             string? romPathFromShell = RunStandaloneShell(initialRomPath);
             if (romPathFromShell is null) return;
@@ -256,8 +261,8 @@ namespace EmuSen.Hotaru
         // reports why and falls through into the same interactive loop a
         // bare launch gets.
         //
-        // Returns the ROM path to actually launch, or null if the player
-        // asked to shut down instead (or hit EOF).
+        // Returns the ROM path to actually launch, or null if shutdown
+        // was asked for instead (or EOF was hit).
         private static string? RunStandaloneShell(string? initialRomPath)
         {
             DianaOSInterpreter shell = DianaOSInterpreter.CreateDefault(null,

@@ -1,0 +1,379 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using EmuSen.Galaxia.Models;
+using EmuSen.LunaP.Controls;
+using EmuSen.LunaP.Fluent;
+using EmuSen.LunaP.Windowing;
+using EmuSen.Mistress.BigPicture;
+using EmuSen.Mistress.BigPicture.Theme;
+using EmuSen.Galaxia.Library;
+
+namespace EmuSen.Mistress.Views
+{
+    // The ES-DE theme's options, built from its capabilities.xml, and the themes downloaded on request - see EmuSen_Settings_Reference.md §4.53.
+    public class ThemeSettingsWindow : ToolWindow, EmuSen.Mistress.Input.IPadDriven
+    {
+        private readonly AppSettings _settings;
+        private readonly Func<HttpClient> _http;
+        private readonly Action<bool> _applied;
+        private readonly StackPanel _options = Ui.Stack(12);
+        private readonly StackPanel _themes = Ui.Stack(12);
+        private readonly TextBlock _status = new() { Name = "ThemeStatus", TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+        private readonly Dictionary<string, string> _latest = new(StringComparer.Ordinal);
+        private CancellationTokenSource? _download;
+        private bool _closed;
+
+        // Called with true when a theme folder was replaced or removed, so the view reads it afresh.
+        public ThemeSettingsWindow(AppSettings settings, Func<HttpClient> http, Action<bool> applied, PadFamily? menu = null)
+        {
+            _settings = settings;
+            _http = http;
+            _applied = applied;
+            Title = "Theme Settings";
+            Width = 720;
+            CanResize = false;
+            SizeToContent = SizeToContent.Height;
+            var tabs = new Tabs { Name = "ThemeSettingsTabs" };
+            Control options = Pane(_options), themes = Pane(Ui.Stack(12, _themes, _status));
+            Control interfacePane = Pane(Ui.Stack(12, new InterfaceSettingsPane(settings, () => { _settings.Save(); _applied(false); }).Rows()));
+            tabs.Add("Options", options);
+            tabs.Add("Themes", themes);
+            tabs.Add("Interface", interfacePane);
+            if (BigPictureLooks.BuiltInCurrent(settings)) tabs.SelectedIndex = 1;
+            Control buttons = Ui.Buttons(Ui.Button("Close", Close)).Margin(0, 12, 0, 0);
+            DockPanel.SetDock(buttons, Dock.Bottom);
+            Content = new DockPanel { LastChildFill = true, Children = { buttons, tabs } }.Margin(16);
+            Closed += (_, _) => { _closed = true; StopDownload(); };
+            Fill();
+            // In a big-screen session, ES-DE's UI settings: the theme's options first, then Themes and Interface as submenus (§4.72.8).
+            if (menu is { } family) Form = new BigMenuForm(this, "Theme Settings", family, [("Options", options), ("Themes", themes), ("Interface", interfacePane)], tabs, firstInline: true);
+        }
+
+        public BigMenuForm? Form { get; }
+
+        public bool OnPad(EmuSen.Mistress.Input.UiButton button) => Form is not null && button == EmuSen.Mistress.Input.UiButton.Back && Form.Back();
+
+        // The download in flight, for a test to await; null when none runs.
+        public Task<ThemeStamp>? Downloading { get; private set; }
+
+        // A closed sheet leaves nothing running behind it (§16, P55).
+        public void StopDownload()
+        {
+            _download?.Cancel();
+            Browser?.Stop();
+        }
+
+        private static Control Pane(Control content) => new ScrollViewer { Content = content.Margin(4, 12, 4, 4), MaxHeight = 560 };
+
+        private string? Current => string.IsNullOrWhiteSpace(_settings.BigPictureTheme) ? null : _settings.BigPictureTheme;
+
+        public static string Key(string themeDirectory) => Path.GetFullPath(themeDirectory).TrimEnd(Path.DirectorySeparatorChar);
+
+        // The stored choices for a theme folder, as the loader takes them.
+        public static ThemeChoices ChoicesFor(AppSettings settings, string? themeDirectory) =>
+            themeDirectory is not null && settings.BigPicture.TryGetValue(Key(themeDirectory), out BigPictureChoices? c)
+                ? new ThemeChoices { Variant = c.Variant, ColorScheme = c.ColorScheme, FontSize = c.FontSize, AspectRatio = c.AspectRatio, Language = c.Language, Transitions = c.Transitions }
+                : new ThemeChoices();
+
+        private void Fill()
+        {
+            FillOptions();
+            FillThemes();
+        }
+
+        private void FillOptions()
+        {
+            _options.Children.Clear();
+            if (BigPictureLooks.BuiltInCurrent(_settings))
+            {
+                _options.Children.Add(new EmptyState
+                {
+                    Name = "BuiltInOptionsNote",
+                    Message = "EmuSen's own look has no options here",
+                    Detail = "These options belong to an ES-DE theme. Choose one on the Themes tab to set its variant, colours and font size.",
+                });
+                return;
+            }
+
+            if (Current is not { } dir || !Directory.Exists(dir))
+            {
+                _options.Children.Add(new EmptyState { Message = "The theme's folder is missing", Detail = "Choose another theme on the Themes tab, download one from ES-DE's theme list there, or choose an ES-DE theme folder in Preferences." });
+                return;
+            }
+
+            ThemeCapabilities caps = ThemeCapabilitiesReader.Read(dir);
+            ThemeChoices chosen = ChoicesFor(_settings, dir);
+            ThemeSelection now = ThemeSelection.Resolve(caps, chosen with { ScreenWidth = 1280, ScreenHeight = 800 });
+            _options.Children.Add(Ui.Header(caps.ThemeName));
+
+            Row("Variant", "VariantDropdown", "The layout of the game lists. A theme may switch to another when your games have no media it needs.",
+                caps.Variants.Where(v => v.Selectable).Select(v => (v.Name, Label(v.Labels, v.Name))), chosen.Variant ?? now.Variant, (c, v) => c.Variant = v);
+            Row("Colour Scheme", "ColorSchemeDropdown", "The theme's colours and artwork.",
+                caps.ColorSchemes.Select(s => (s.Name, Label(s.Labels, s.Name))), chosen.ColorScheme ?? now.ColorScheme, (c, v) => c.ColorScheme = v);
+            Row("Font Size", "FontSizeDropdown", "The size of the theme's text.",
+                caps.FontSizes.Select(f => (f, FontSizeLabel(f))), chosen.FontSize ?? now.FontSize, (c, v) => c.FontSize = v);
+            Row("Aspect Ratio", "AspectRatioDropdown", "Automatic takes the ratio nearest the screen's.",
+                caps.AspectRatios.Count == 0 ? [] : caps.AspectRatios.Select(a => (a, a.Replace("_vertical", " vertical"))).Prepend(("automatic", "Automatic")),
+                chosen.AspectRatio ?? "automatic", (c, v) => c.AspectRatio = v == "automatic" ? null : v);
+            Row("Language", "LanguageDropdown", "The language of the theme's own words.",
+                caps.Languages.Select(l => (l, l)), chosen.Language ?? now.Language, (c, v) => c.Language = v);
+            IEnumerable<(string, string)> transitions = caps.Transitions.Where(t => t.Selectable).Select(t => (t.Name, Label(t.Labels, t.Name)))
+                .Concat(ThemeCapabilities.BuiltInTransitions.Where(b => !caps.SuppressedTransitions.Contains(b)).Select(b => (b, BuiltInLabel(b))));
+            List<(string, string)> transitionList = transitions.ToList();
+            Row("Transitions", "TransitionsDropdown", "How the view changes between the systems and a game list.",
+                transitionList.Count == 0 ? [] : transitionList.Prepend(("automatic", "Automatic")), chosen.Transitions ?? "automatic", (c, v) => c.Transitions = v == "automatic" ? null : v);
+        }
+
+        // One dropdown row, left out when the theme declares nothing for it; a choice is stored for this theme and applied at once.
+        private void Row(string label, string name, string hint, IEnumerable<(string Value, string Text)> entries, string? selected, Action<BigPictureChoices, string> store)
+        {
+            var list = entries.ToList();
+            if (list.Count == 0) return;
+            var dropdown = new Dropdown { Name = name, HorizontalAlignment = HorizontalAlignment.Stretch };
+            string[] texts = list.Select(e => list.Count(o => o.Text == e.Text) > 1 ? $"{e.Text} ({e.Value})" : e.Text).ToArray();
+            int at = list.FindIndex(e => e.Value == selected);
+            dropdown.Fill(texts, at >= 0 ? texts[at] : texts[0]);
+            dropdown.Chose += chosen =>
+            {
+                int i = Array.IndexOf(texts, chosen as string);
+                if (i < 0 || Current is not { } dir) return;
+                string key = Key(dir);
+                if (!_settings.BigPicture.TryGetValue(key, out BigPictureChoices? choices)) _settings.BigPicture[key] = choices = new BigPictureChoices();
+                store(choices, list[i].Value);
+                _settings.Save();
+                _applied(false);
+            };
+            _options.Children.Add(new FieldRow { Label = label, Hint = hint, Content = dropdown });
+        }
+
+        private static string Label(IReadOnlyDictionary<string, string> labels, string name) => labels.GetValueOrDefault("en_US") ?? labels.Values.FirstOrDefault() ?? name;
+
+        private static string FontSizeLabel(string size) => size switch
+        {
+            "x-small" => "Extra Small", "small" => "Small", "medium" => "Medium", "large" => "Large", "x-large" => "Extra Large", _ => size,
+        };
+
+        private static string BuiltInLabel(string name) => name switch
+        {
+            "builtin-instant" => "Instant (built in)", "builtin-slide" => "Slide (built in)", "builtin-fade" => "Fade (built in)", _ => name,
+        };
+
+        private void FillThemes()
+        {
+            _themes.Children.Clear();
+            _themes.Children.Add(BuiltInRow());
+            IReadOnlyList<InstalledTheme> installed = ThemeDownloads.Installed(Current);
+            if (installed.Count == 0)
+                _themes.Children.Add(new EmptyState { Message = "No ES-DE themes", Detail = "Download one below. Mistress ships no ES-DE theme." });
+            foreach (InstalledTheme theme in installed) _themes.Children.Add(ThemeRow(theme));
+
+            Button browse = Ui.Button("Browse Themes…", ShowBrowser);
+            browse.Name = "BrowseThemes";
+            _themes.Children.Add(new FieldRow
+            {
+                Label = "ES-DE's Theme List",
+                Hint = "Every theme of ES-DE's official list, with its screenshots, what it supports and its licence, to download, update or remove. The list is fetched when you open it, never before. Each theme is its author's work under its own licence.",
+                Content = browse,
+            });
+        }
+
+        // The browser, as a sheet over this one; it is given the same client factory, and stops with this sheet.
+        private void ShowBrowser()
+        {
+            if (_closed) return;
+            var browser = Browser = new ThemeBrowserWindow(this, _http);
+            browser.Closed += (_, _) =>
+            {
+                if (Browser == browser) Browser = null;
+                FillThemes();
+            };
+            _ = SheetLayer.Show(browser, this);
+            browser.Start();
+        }
+
+        public ThemeBrowserWindow? Browser { get; private set; }
+
+        internal bool IsInUse(string directory) =>
+            !BigPictureLooks.BuiltInCurrent(_settings) && Current is { } c && ThemeDownloads.SamePath(c, directory);
+
+        internal void UseDirectory(string directory)
+        {
+            if (ThemeDownloads.Installed(Current).FirstOrDefault(t => ThemeDownloads.SamePath(t.Directory, directory)) is { } theme)
+                Use(new BigPictureLook(theme.Name, theme));
+        }
+
+        // A browser download done: the first theme becomes the folder, the view reads it afresh, and its About sheet opens once after a first download.
+        internal void Installed(string directory, bool first, Window over)
+        {
+            _latest[directory] = ThemeDownloads.Stamp(directory)?.Commit ?? "";
+            if (Current is null) _settings.BigPictureTheme = directory;
+            _settings.Save();
+            _applied(true);
+            Fill();
+            if (first && !_closed) ShowAbout(directory, over);
+        }
+
+        // EmuSen's own library, first and built in: a Use button and nothing that downloads or removes it.
+        private Control BuiltInRow()
+        {
+            bool inUse = BigPictureLooks.IsCurrent(_settings, BigPictureLooks.BuiltIn);
+            Button use = Ui.Button(inUse ? "In Use" : "Use", () => Use(BigPictureLooks.BuiltIn));
+            use.Name = "ThemeUseBuiltIn";
+            use.IsEnabled = !inUse;
+            return new FieldRow
+            {
+                Name = "ThemeRowBuiltIn",
+                Label = $"{BigPictureLooks.BuiltInName} (built in)",
+                Hint = "EmuSen's own big-screen library: covers in a grid or a list, drawn by Mistress. It is part of EmuSen, so it is never downloaded or removed, and it has no options on the Options tab.",
+                Content = Ui.Row(8, use),
+            };
+        }
+
+        private Control ThemeRow(InstalledTheme theme)
+        {
+            bool inUse = BigPictureLooks.IsCurrent(_settings, new BigPictureLook(theme.Name, theme));
+            string where = theme.Stamp is { } s
+                ? $"Downloaded {s.Downloaded:yyyy-MM-dd} from {s.Source.Url.Replace("https://", "")}" + (s.Commit is { Length: >= 7 } commit ? $", commit {commit[..7]}" : "")
+                  + (ThemeDownloads.LocalChanges(theme.Directory) is { Any: true } changes ? $". Local changes to {changes.Modified.Count + changes.Missing.Count} files, which an update would replace." : "")
+                : $"Read in place from {theme.Directory}";
+            var buttons = new List<Button>();
+            string id = Path.GetFileName(theme.Directory);
+            Button use = Ui.Button(inUse ? "In Use" : "Use", () => Use(new BigPictureLook(theme.Name, theme)));
+            use.Name = $"ThemeUse.{id}";
+            use.IsEnabled = !inUse;
+            buttons.Add(use);
+            if (theme.Stamp is { } stamp)
+            {
+                bool newer = _latest.TryGetValue(theme.Directory, out string? latest) && latest != stamp.Commit;
+                Button update = Ui.Button(newer ? "Update" : "Check for Update", () => _ = newer ? DownloadAsync(stamp.Source) : CheckAsync(theme.Directory, stamp));
+                update.IsEnabled = _download is null;
+                update.Name = $"ThemeUpdate.{id}";
+                buttons.Add(update);
+                Button remove = Ui.Button("Remove", () => _ = RemoveAsync(theme));
+                remove.IsEnabled = _download is null;
+                remove.Name = $"ThemeRemove.{id}";
+                buttons.Add(remove);
+            }
+            Button about = Ui.Button("About", () => ShowAbout(theme.Directory));
+            about.Name = $"ThemeAbout.{id}";
+            buttons.Add(about);
+            return new FieldRow { Label = theme.Name, Hint = where, Content = Ui.Row(8, buttons.ToArray()) };
+        }
+
+        private void Use(BigPictureLook look)
+        {
+            BigPictureLooks.Choose(_settings, look);
+            _applied(!look.BuiltIn);
+            Fill();
+        }
+
+        private async Task CheckAsync(string directory, ThemeStamp stamp)
+        {
+            _status.Text = $"Asking {stamp.Host} for the newest commit…";
+            try
+            {
+                using HttpClient http = _http();
+                string? latest = await ThemeDownloads.LatestCommitAsync(http, stamp.Source);
+                if (latest is null) { _status.Text = $"{stamp.Host} did not say which commit is newest."; return; }
+                _latest[directory] = latest;
+                _status.Text = latest == stamp.Commit ? "Up to date." : $"Update available: {Short(stamp.Commit)} → {Short(latest)}.";
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+            {
+                ErrorLog.Error("themes", "Could not check for a theme update", ex);
+                _status.Text = $"Could not check for an update: {ex.Message}";
+            }
+            FillThemes();
+        }
+
+        private static string Short(string? commit) => commit is { Length: >= 7 } ? commit[..7] : commit ?? "unknown";
+
+        // A download, or an update keeping theme-customizations; the About sheet opens once after a theme's first download.
+        private async Task DownloadAsync(ThemeSource source)
+        {
+            if (_download is not null) return;
+            string directory = ThemeDownloads.DirectoryFor(source);
+            bool first = !ThemeDownloads.IsDownloaded(directory), replace = false;
+            if (!first && ThemeDownloads.LocalChanges(directory) is { Any: true } changes)
+            {
+                if (!await Dialogs.ConfirmAsync(this, "Local Changes", $"{ThemeDownloads.NameOf(directory)} has local changes to {changes.Modified.Count + changes.Missing.Count} files. The update replaces them with the theme's own. Files you added, and theme-customizations, are kept.", "Update Anyway", "Cancel")) return;
+                replace = true;
+            }
+            var cancel = _download = new CancellationTokenSource();
+            FillThemes();
+            _status.Text = $"Downloading {source.Repository}…";
+            var progress = new Progress<(long Read, long? Total)>(p =>
+            {
+                if (_download == cancel) _status.Text = $"Downloading {source.Repository}: {p.Read / 1e6:F1}" + (p.Total is { } t ? $" of {t / 1e6:F1} MB" : " MB");
+            });
+            try
+            {
+                using HttpClient http = _http();
+                http.Timeout = TimeSpan.FromMinutes(30);
+                var unpacking = new Progress<(int Done, int Total)>(p =>
+                {
+                    if (_download == cancel) _status.Text = $"Unpacking {source.Repository}: {p.Done} of {p.Total} files";
+                });
+                Downloading = ThemeDownloads.FetchAsync(http, source, progress, cancel.Token, unpacking, replace);
+                ThemeStamp stamp = await Downloading;
+                _latest[directory] = stamp.Commit ?? "";
+                _status.Text = $"Installed {ThemeDownloads.NameOf(directory)}" + (stamp.Commit is null ? "." : $" at commit {Short(stamp.Commit)}.");
+                if (Current is null) _settings.BigPictureTheme = directory;
+                _settings.Save();
+                _applied(true);
+                if (first && !_closed) ShowAbout(directory);
+            }
+            catch (OperationCanceledException)
+            {
+                _status.Text = "The download was stopped; the theme there before is unchanged.";
+            }
+            catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                ErrorLog.Error("themes", "A theme update failed", ex);
+                _status.Text = $"The download failed, and the theme there before is unchanged: {ex.Message}";
+            }
+            finally
+            {
+                _download = null;
+                cancel.Dispose();
+            }
+            Fill();
+        }
+
+        private Task RemoveAsync(InstalledTheme theme) => RemoveAsync(theme.Directory, this);
+
+        // Asks over the sheet that asked, then removes a folder Mistress downloaded; true when it is gone.
+        internal async Task<bool> RemoveAsync(string directory, Window over)
+        {
+            string name = ThemeDownloads.NameOf(directory);
+            if (!await Dialogs.ConfirmAsync(over, "Remove Theme", $"Remove {name}? Its folder is deleted, theme-customizations included.", "Remove", "Cancel")) return false;
+            bool removed = false;
+            try
+            {
+                ThemeDownloads.Remove(directory);
+                if (Current is { } c && ThemeDownloads.SamePath(c, directory)) _settings.BigPictureTheme = null;
+                _settings.BigPicture.Remove(Key(directory));
+                _settings.Save();
+                _status.Text = $"Removed {name}.";
+                _applied(true);
+                removed = true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                ErrorLog.Error("themes", $"Could not remove {name}", ex);
+                _status.Text = $"Could not remove {name}: {ex.Message}";
+            }
+            Fill();
+            return removed;
+        }
+
+        internal void ShowAbout(string directory, Window? over = null) => _ = SheetLayer.Show(new ThemeAboutWindow(ThemeAttribution.Read(directory)), over ?? this);
+    }
+}

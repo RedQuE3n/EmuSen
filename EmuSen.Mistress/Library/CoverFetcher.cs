@@ -8,6 +8,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Mistress.Library
 {
@@ -76,6 +77,7 @@ namespace EmuSen.Mistress.Library
                     }
                     catch (Exception ex) when (ex is IOException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
                     {
+                        ErrorLog.Error("covers", "A cover lookup failed", ex, game.FullPath);
                         result = new CoverResult(game.FullPath, core.Console, CoverOutcome.Failed, null, null, ex.Message);
                     }
                     _done(result);

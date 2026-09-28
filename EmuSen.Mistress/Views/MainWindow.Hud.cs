@@ -144,6 +144,7 @@ namespace EmuSen.Mistress.Views
                 }
                 catch (Exception ex)
                 {
+                    ErrorLog.Error("screenshots", "Screenshot failed", ex, path);
                     status = $"Screenshot failed: {ex.Message}";
                 }
                 Dispatcher.UIThread.Post(() =>

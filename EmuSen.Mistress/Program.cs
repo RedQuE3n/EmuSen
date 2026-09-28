@@ -19,7 +19,14 @@ namespace EmuSen.Mistress
 
             // A config file that won't parse falls back to defaults either way;
             // this is what stops it doing so silently - see §6.2.
-            EmuSen.Galaxia.ConfigDiagnostics.Sink = m => Console.WriteLine("[config] " + m);
+            EmuSen.Galaxia.ConfigDiagnostics.Sink = m =>
+            {
+                Console.WriteLine("[config] " + m);
+                EmuSen.Galaxia.Library.ErrorLog.Warning("config", m);
+            };
+
+            // A no-op unless running from EmuSen.app, whose manual is copied into Application Support - see EmuSen_Settings_Reference.md §4.82.
+            EmuSen.Galaxia.Library.DataMigration.SeedFromBundle();
 
             // LunaP keeps windows.json and luna.json where Galaxia keeps everything else, and reports through the same sink - see EmuSen_LunaP.md §19.2.
             EmuSen.LunaP.Settings.LunaSettings.Store = new EmuSen.LunaP.Settings.JsonSettingsStore(EmuSen.Galaxia.ConfigStore.Directory);
@@ -34,8 +41,8 @@ namespace EmuSen.Mistress
         }
 
         // The platform/font/X11 sequence this used to spell out lives in LunaApp now - see EmuSen_LunaP.md §3.
-        // gamescope fills the screen with every new window, a dropdown's list included - see EmuSen_Settings_Reference.md §4.45.8.
+        // gamescope fills the screen with every new window, a dropdown's list included - see EmuSen_Settings_Reference.md §4.45.8 and §4.54.
         public static AppBuilder BuildAvaloniaApp() => LunaApp.Configure<App>().EmbedPopups(
-            Views.MainWindow.WantsBigScreen(EmuSen.Galaxia.Models.AppSettings.Load().BigScreen, Environment.GetCommandLineArgs(), Environment.GetEnvironmentVariable));
+            Views.MainWindow.EmbedsPopupsAtStart(Environment.GetCommandLineArgs(), Environment.GetEnvironmentVariable));
     }
 }

@@ -20,6 +20,7 @@ using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Library;
 using EmuSen.Serenity.Shaders;
 using EmuSen.Serenity.Slang;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Mistress.Views
 {
@@ -81,6 +82,28 @@ namespace EmuSen.Mistress.Views
             dock.Children.Add(buttons);
             dock.Children.Add(_tabs);
             Content = dock;
+            MenuLook.SetWidthFraction(this, 0.9);
+            MenuLook.WhenApplied(dock, () =>
+            {
+                dock.Margin = new Thickness(0, 0, 0, 12);
+                // Close at the right of the console tabs' row, which has room for it, so the sliders keep the height a row of buttons would take.
+                dock.Children.Remove(buttons);
+                dock.Children.Remove(_tabs);
+                buttons.Margin = default;
+                buttons.HorizontalAlignment = HorizontalAlignment.Right;
+                buttons.VerticalAlignment = VerticalAlignment.Top;
+                dock.Children.Add(new Grid { Children = { _tabs, buttons } });
+                foreach (ShaderPanel panel in _panels) panel.InLook();
+                // The window's note and the pack's line are the footer, so the list and the sliders keep the height.
+                hint.IsVisible = false;
+                string note = (hint as TextBlock)?.Text ?? "";
+                if (_panels.Count > 0)
+                {
+                    string folder = $"The presets are in {System.IO.Path.GetFullPath(Pack)}.";
+                    MenuLook.SetFooter(this, $"{note} {_panels[0].PackLine} {(Built is null ? "" : folder)}".Trim());
+                    _panels[0].PackText += text => MenuLook.SetFooter(this, $"{note} {text} {(Built is null ? "" : folder)}".Trim());
+                }
+            });
         }
 
         public ShaderPanel PanelFor(string console) => _panels.Single(p => p.Console == console);
@@ -202,6 +225,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or TaskCanceledException or UnauthorizedAccessException)
             {
+                ErrorLog.Error("shaders", "Could not download the shader pack", ex);
                 failure = $"Could not download the pack: {ex.Message}";
             }
             LoadPack();
@@ -342,6 +366,40 @@ namespace EmuSen.Mistress.Views
             Reload(null);
         }
 
+        // On a big-screen sheet: the two columns of equal width, so the search and its category fit beside each other, and the pack's words over its button rather than beside it (§4.83).
+        internal void InLook()
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,24,*");
+            // The pack's button alone under the list, its words the footer; Use and Reset All beside the name, reached from the sliders without crossing the list (§4.83).
+            if (_download.Parent is DockPanel packRow && _use.Parent is StackPanel actions && actions.Parent is StackPanel header)
+            {
+                packRow.Children.Clear();
+                _download.Margin = default;
+                _download.HorizontalAlignment = HorizontalAlignment.Left;
+                _left.Children.Remove(packRow);
+                var pack = new Border { Margin = new Thickness(0, 10, 0, 0), Child = _download };
+                SetRow(pack, 2);
+                _left.Children.Add(pack);
+                int at = header.Children.IndexOf(_name);
+                header.Children.Remove(_name);
+                header.Children.Remove(actions);
+                actions.Margin = new Thickness(12, 0, 0, 0);
+                actions.VerticalAlignment = VerticalAlignment.Top;
+                Grid.SetColumn(actions, 1);
+                header.Children.Insert(at, new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { _name, actions } });
+            }
+            _name.FontSize = 24;
+            _where.FontSize = 18;
+            _inLook = true;
+        }
+
+        private bool _inLook;
+
+        // The pack's line as it changes, for a big-screen sheet's footer.
+        internal event Action<string>? PackText;
+
+        internal string PackLine => _packStatus.Text ?? "";
+
         private GraphicsConfig Config => _owner.Config;
 
         public string Current => Config.Value(Console, GraphicsSettingsWindow.ScreenFilterKey) ?? ScreenFilters.None;
@@ -372,6 +430,7 @@ namespace EmuSen.Mistress.Views
         {
             _packStatus.Text = text;
             _download.IsEnabled = !busy;
+            PackText?.Invoke(text);
         }
 
         private void Refresh()
@@ -423,8 +482,9 @@ namespace EmuSen.Mistress.Views
             }
             Shown = entry;
             _name.Text = entry.Name;
+            // On a big-screen sheet the pack's folder is the footer's, said once for every preset (§4.83).
             _where.Text = entry.IsPreset
-                ? $"{entry.Relative}\nin {Path.GetFullPath(_owner.Pack)}"
+                ? _inLook ? entry.Relative : $"{entry.Relative}\nin {Path.GetFullPath(_owner.Pack)}"
                 : ScreenFilters.Find(entry.Stored).Filter?.Credit is { Length: > 0 } credit ? $"{ShaderCatalog.BuiltIn}. {credit}" : ShaderCatalog.BuiltIn;
             _builtFor = null;
             _parameters.ItemsSource = null;
@@ -547,9 +607,11 @@ namespace EmuSen.Mistress.Views
             if (_builtFor is null) return;
             int count = _parameters.Sliders.Count(), matching = _parameters.Matching.Count();
             string noun = count == 1 ? "parameter" : "parameters";
+            // On a big-screen sheet the help bar says what Left and Right do, so the note is the count alone (§4.83).
+            string how = _inLook ? "" : " Left and right move a slider; the button above one returns it to its default.";
             _parametersNote.Text = count == 0 ? "This shader has nothing to adjust."
-                : _parameters.Search.Length > 0 ? $"{matching} of {count} {noun} match “{_parameters.Search}”. Left and right move a slider; the button above one returns it to its default."
-                : $"{count} {noun}. Left and right move a slider; the button above one returns it to its default.";
+                : _parameters.Search.Length > 0 ? $"{matching} of {count} {noun} match “{_parameters.Search}”.{how}"
+                : $"{count} {noun}.{how}";
         }
 
         // A float as the decimal it was written as, so 0.041f is 0.041 and not 0.041000001, which the row would show to four places.

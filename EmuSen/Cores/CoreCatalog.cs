@@ -103,14 +103,28 @@ namespace EmuSen.Cores
                  .ToArray();
 
         // What the library's console filter and sidebar list: one shelf per core, but two for the Game Boy's, whose games a player knows as two consoles - see EmuSen_Settings_Reference.md §4.46.
-        public sealed record LibraryShelf(string Name, string Label, CoreDescriptor Core);
+        public sealed record LibraryShelf(string Name, string Label, CoreDescriptor Core)
+        {
+            // The system name an ES-DE theme keys its folders and variables by, and the full name it shows - see EmuSen_BigPicture.md §4.1.
+            public string EsdeSystem { get; init; } = "";
+            public string EsdeFullName { get; init; } = "";
+        }
 
         public const string GameBoyColorShelf = "Game Boy Color (Mercury)";
 
+        private static readonly Dictionary<string, (string System, string FullName)> EsdeNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["NES"] = ("nes", "Nintendo Entertainment System"),
+            ["SNES"] = ("snes", "Super Nintendo"),
+            ["N64"] = ("n64", "Nintendo 64"),
+            ["GB"] = ("gb", "Game Boy"),
+        };
+
         public static IReadOnlyList<LibraryShelf> ShelvesInReleaseOrder { get; } =
             ConsolesInReleaseOrder.SelectMany(c => ReferenceEquals(c, Mercury)
-                ? new[] { new LibraryShelf(c.DisplayName, c.Console, c), new LibraryShelf(GameBoyColorShelf, "GBC", c) }
-                : new[] { new LibraryShelf(c.DisplayName, c.Console, c) }).ToArray();
+                ? new[] { new LibraryShelf(c.DisplayName, c.Console, c) { EsdeSystem = "gb", EsdeFullName = "Game Boy" }, new LibraryShelf(GameBoyColorShelf, "GBC", c) { EsdeSystem = "gbc", EsdeFullName = "Game Boy Color" } }
+                : new[] { new LibraryShelf(c.DisplayName, c.Console, c) { EsdeSystem = EsdeNames[c.Console].System, EsdeFullName = EsdeNames[c.Console].FullName } }).ToArray();
+
 
         // Null for AllConsoles or a name no shelf has.
         public static LibraryShelf? ShelfByName(string? name) =>

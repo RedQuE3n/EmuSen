@@ -13,7 +13,40 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- Precompiled at publish for a start ~360 ms sooner; the JIT still re-tiers hot code - see EmuSen_Settings_Reference.md §4.42. -->
     <PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
+    <!-- The crescent-and-E icon; its sources and build script are in Assets/Icon - see EmuSen_Settings_Reference.md §4.55. -->
+    <ApplicationIcon>Assets\Icon\emusen.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <!-- macOS: a publish for osx-* is EmuSen.app, laid out by DianaOSPublishLayout.targets - see EmuSen_Settings_Reference.md §4.82. The id is the GitHub Pages domain of the project's owner, reversed. -->
+  <PropertyGroup>
+    <DianaOSMacAppName>EmuSen</DianaOSMacAppName>
+    <DianaOSMacBundleIdentifier>io.github.redque3n.emusen</DianaOSMacBundleIdentifier>
+    <DianaOSMacAppIcon>$(MSBuildThisFileDirectory)Assets/Icon/emusen.icns</DianaOSMacAppIcon>
+    <DianaOSMacCategory>public.app-category.games</DianaOSMacCategory>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\Icon\png\emusen-256.png" />
+  </ItemGroup>
+
+  <!-- The big-screen menus' typeface, Barlow Condensed (OFL 1.1), beside the program - see EmuSen_Settings_Reference.md §4.69 and THIRD_PARTY_NOTICES.md. -->
+  <ItemGroup>
+    <None Include="Assets\Fonts\BarlowCondensed-Regular.ttf" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- The same file as a resource, so the stock controls of a big-screen sheet can name it as a font family - see EmuSen_Settings_Reference.md §4.80. -->
+    <AvaloniaResource Include="Assets\Fonts\BarlowCondensed-Regular.ttf" />
+  </ItemGroup>
+
+  <!-- Linux: the hicolor icons and a script that installs a desktop entry pointing at this build - see §4.55. -->
+  <Target Name="MistressPublishDesktopIcons" AfterTargets="Publish" Condition="$(RuntimeIdentifier.StartsWith('linux'))">
+    <ItemGroup>
+      <_MistressIconSize Include="16;24;32;48;64;128;256;512" />
+    </ItemGroup>
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)Assets/Icon/png/emusen-%(_MistressIconSize.Identity).png"
+          DestinationFiles="$(PublishDir)share/icons/hicolor/%(_MistressIconSize.Identity)x%(_MistressIconSize.Identity)/apps/emusen-mistress.png" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)Assets/Icon/emusen.svg" DestinationFiles="$(PublishDir)share/icons/hicolor/scalable/apps/emusen-mistress.svg" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)Assets/Icon/install-desktop-entry.sh" DestinationFolder="$(PublishDir)bin" SkipUnchangedFiles="true" />
+    <Exec Command="chmod +x &quot;$(PublishDir)bin/install-desktop-entry.sh&quot;" Condition="'$(OS)' != 'Windows_NT'" />
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.0" />
@@ -71,6 +104,8 @@
        app dir moves to /lib/EmuSen, /bin gets a launcher. See `man hier`. -->
   <Import Project="..\EmuSen.DianaOS\Publish\DianaOSPublishLayout.targets" />
   <Import Project="..\EmuSen\Cores\RustCoresPublish.targets" />
+  <!-- Q40: EmuSen's ScreenScraper developer credentials, scrambled, embedded at publish only - see EmuSen_Settings_Reference.md §4.65. -->
+  <Import Project="Scraping\ScreenScraperDeveloper.targets" />
 
   <Import Project="..\LunaP.props" />
 

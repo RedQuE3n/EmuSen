@@ -19,12 +19,17 @@ namespace EmuSen.Mistress.Views
         // Runs while a game is on screen, stopped for the library and for pauses - see §4.32.
         private readonly Stopwatch _playClock = new();
 
-        // Every way a game is started from outside it: firmware, then the resume question, then the load.
-        private async Task StartGameAsync(string path, string displayName)
+        // Every way a game is started from outside it: firmware, then the resume question, then from big picture the launch screen (§4.71), then the load.
+        private async Task StartGameAsync(string path, string displayName, BigPicture.Scene.SceneGame? bigPicture = null)
         {
             await PromptForMissingFirmwareAsync(path);
             if (await ChooseResumeAsync(path) is not { } choice) return;
+            if (bigPicture is not null && !await ShowLaunchScreenAsync(bigPicture)) return;
             LoadGame(path, displayName, choice == ResumeChoice.Resume ? ResumeStatePath(path) : null, reset: false);
+            if (bigPicture is null) return;
+            bool failed = _currentRomPath != path;
+            CloseLaunchScreen();
+            if (failed) PadNotice.Show(StatusText.Text ?? $"Failed to load {displayName}");
         }
 
         private string ResumeStatePath(string romPath) => SaveLibrary.ResumeStatePathFor(romPath, _appSettings.StateDirectory);
@@ -34,7 +39,7 @@ namespace EmuSen.Mistress.Views
         {
             string state = ResumeStatePath(romPath);
             if (!File.Exists(state)) return ResumeChoice.Restart;
-            StateRecord? record = StateRecord.Read(state);
+            StateRecord? record = _fileRecords.ReadState(state);
             if (Refusal(record, romPath, null) is string refused)
             {
                 StatusText.Text = $"{refused} Starting from the beginning.";
@@ -73,6 +78,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex)
             {
+                ErrorLog.Error("states", "Could not save where you left off", ex);
                 StatusText.Text = $"Could not save where you left off: {ex.Message}";
             }
         }
@@ -100,9 +106,9 @@ namespace EmuSen.Mistress.Views
         }
 
         // Null when the state loaded; otherwise why it did not, and the caller starts the game afresh.
-        private static string? TryResume(EmulatorSession session, string statePath, string romPath)
+        private string? TryResume(EmulatorSession session, string statePath, string romPath)
         {
-            StateRecord? record = StateRecord.Read(statePath);
+            StateRecord? record = _fileRecords.ReadState(statePath);
             if (Refusal(record, romPath, session) is string refused) return $"Could not resume, started from the beginning: {refused}";
             try
             {
@@ -111,6 +117,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex)
             {
+                ErrorLog.Error("states", "Could not resume", ex, statePath);
                 return $"Could not resume, started from the beginning: {ex.Message}{Provenance(record)}";
             }
         }
@@ -124,11 +131,14 @@ namespace EmuSen.Mistress.Views
             _playClock.Restart();
         }
 
+        // What the play clock read, for a test that cannot wait hours; null reads the clock.
+        internal Func<TimeSpan>? PlayClockReading { get; set; }
+
         private void RecordPlayTime()
         {
             if (_currentRomPath is not string path || !_playClock.IsRunning && _playClock.Elapsed == TimeSpan.Zero) return;
             _playClock.Stop();
-            _records.Played(path, _playClock.Elapsed);
+            if (PlayTime.Tracked(PlayClockReading?.Invoke() ?? _playClock.Elapsed, _appSettings.MaxPlayTimeTracking) is { } tracked) _records.Played(path, tracked);
             _playClock.Reset();
         }
     }

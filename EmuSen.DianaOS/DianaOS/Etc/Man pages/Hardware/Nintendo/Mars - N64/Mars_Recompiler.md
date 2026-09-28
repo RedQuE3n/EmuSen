@@ -1046,13 +1046,13 @@ minute what the source could not: the largest thing in a block was not anything 
 
 ## 20. Three small costs the thread was paying for nothing (2026-09-22)
 
-A profile of the emulation thread at e2742fa (instruction-pointer sampling with a frame-pointer stack walk, `ipstack.py` in the speed tooling, flat out from gameplay states in SM64, OoT and GoldenEye's Dam) named three costs that bought nothing:
+A profile of the emulation thread at 4edcbe3 (instruction-pointer sampling with a frame-pointer stack walk, `ipstack.py` in the speed tooling, flat out from gameplay states in SM64, OoT and GoldenEye's Dam) named three costs that bought nothing:
 
 - **A shuffle thunk on every block call, about 1 per cent in each game.** `BlockCode` was an open delegate over a static method. Calling one goes through a stub that moves the arguments along by one register before jumping. Each block's method now takes an unused `object` first and is bound closed over a fixed object (`BlockCompiler.Bound`), so the call reaches the code directly. The emitter's CPU argument moved from `ldarg.0` to `ldarg.1`, at all 52 sites. The call sites still read `code(cpu)`.
 - **`MiInterface.Asserted` called rather than inlined, 0.7 to 1.3 per cent.** It is two fields and an AND, but it was reached from `RspRan` and the block loop. Both inline heavy RSP stepping, and the JIT's inlining budget ran out before it reached the getter. The getter is now `AggressiveInlining`.
 - **Two clock reads in every SP DMA, 0.5 to 1.1 per cent** (vDSO `clock_gettime`). They fed `SpInterface.TransferTicks`, which nothing read. Removed.
 
-**Measured**, base e2742fa against the change, three interleaved rounds of 1,500 frames flat out (`PACED=0`), mean frame:
+**Measured**, base 4edcbe3 against the change, three interleaved rounds of 1,500 frames flat out (`PACED=0`), mean frame:
 
 | Game | Base | Change | Difference |
 |---|---|---|---|

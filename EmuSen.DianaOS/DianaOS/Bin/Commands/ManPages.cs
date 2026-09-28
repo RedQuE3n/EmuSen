@@ -1391,6 +1391,13 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    /Games            your ROM library\n" +
                 "    /Saves            battery-backed cartridge SRAM ('.srm')\n" +
                 "    /Saves/Save States   'state save'/'state load' snapshots\n" +
+                "    /Library          Mistress's own databases, written and read by the\n" +
+                "                      program, not by hand: games.db (favourites, play\n" +
+                "                      time, collections, edits) and records.db (who wrote\n" +
+                "                      each save state, and the shader pack's build date).\n" +
+                "                      Save states no longer get a .json file beside them;\n" +
+                "                      old ones are read into records.db and left in place\n" +
+                "    /Shaders          shader packs downloaded on request\n" +
                 "    /Firmware         coprocessor dumps you supply\n" +
                 "    /Cheats           your own .cht tree - see 'man cheat'\n" +
                 "    /Logs             'dump'/'load'/screenshot/recording output\n" +
@@ -1418,7 +1425,8 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "                      '/tmp/WiseMan' is the test suite's own scratch\n\n" +
                 "    /Documents        published builds only: the EmuSen Manual and the\n" +
                 "                      per-console hardware notes under 'Man pages/', staged\n" +
-                "                      in at publish time. Running from source they stay in\n" +
+                "                      in at publish time, or on a Mac copied in from\n" +
+                "                      EmuSen.app. Running from source they stay in\n" +
                 "                      the repo where they are edited, which is above this\n" +
                 "                      root - use 'man' rather than 'cat' from source\n\n" +
                 "    Every directory above is located by EmuSen.Galaxia, not by this shell -\n" +
@@ -1460,6 +1468,13 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    That is what a publish looks like WITHOUT the layout below - the doc\n" +
                 "    trees stage into 'DianaOSRoot/' either way, so an app dir copied out by\n" +
                 "    hand still finds its own manual instead of coming up rootless.\n\n" +
+                "    On macOS, EmuSen installs as 'EmuSen.app', which is read-only, so the\n" +
+                "    root is '~/Library/Application Support/EmuSen' instead. It is taken\n" +
+                "    BEFORE the walk when the program runs from inside a bundle\n" +
+                "    ('EmuSen.app/Contents/MacOS'), and as the fallback when the walk finds\n" +
+                "    neither marker. From source, or from a marked tree, a Mac roots where\n" +
+                "    Linux does. '/Documents' is copied out of the bundle on every start,\n" +
+                "    never over a file already there. See EmuSen_Galaxia.md §3.4.\n\n" +
                 "    A published tree puts the binaries in 'lib/EmuSen', the launchers in\n" +
                 "    'bin', and the shell's root at 'home' BESIDE them - so every shipped\n" +
                 "    .dll and the running executable are now ABOVE this shell's root and\n" +

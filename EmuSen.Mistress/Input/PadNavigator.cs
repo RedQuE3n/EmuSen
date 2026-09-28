@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace EmuSen.Mistress.Input
 {
     // What a pad asks of the interface, named by what it does rather than by the button - see EmuSen_Settings_Reference.md §4.29.
-    public enum UiButton { Up, Down, Left, Right, Accept, Back, Menu, Options, PageUp, PageDown, First, Last, Guide, Search }
+    public enum UiButton { Up, Down, Left, Right, Accept, Back, Menu, Options, PageUp, PageDown, First, Last, Guide, Search, Random, Screensaver }
 
     // Held buttons turned into presses: one on the way down, and for the ones that move, more while held - see §4.29.
     public sealed class PadNavigator
@@ -83,5 +83,10 @@ namespace EmuSen.Mistress.Input
 
         // Whether accepting it puts the menu away first.
         public bool Closes { get; }
+
+        // The big-screen row's parts where the one line runs them together: its label, its value, and whether it opens another screen (§4.69).
+        public Func<string>? Label { get; init; }
+        public Func<string?>? Value { get; init; }
+        public bool Opens { get; init; }
     }
 }

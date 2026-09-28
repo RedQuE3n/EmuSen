@@ -69,6 +69,9 @@ namespace EmuSen.Mistress.BigPicture.Theme
         public string Name { get; }
         public IReadOnlyList<ResolvedElement> Elements { get; }
 
+        // The name of the help bar and status indicators a view gets when its theme defines none, as ES-DE 3.4.1 was measured to draw them (§39).
+        public const string DefaultName = "(default)";
+
         public ResolvedElement? Find(string type, string name) => Elements.FirstOrDefault(e => e.Type == type && e.Name == name);
 
         public IEnumerable<ResolvedElement> OfType(string type) => Elements.Where(e => e.Type == type);

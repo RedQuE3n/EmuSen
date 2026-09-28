@@ -43,6 +43,11 @@ namespace EmuSen.Mistress.Input
                 PadKeyboard.Send(keyboard, button);
                 return;
             }
+            if (MenuTextPopup.OpenOver(root) is { } popup)
+            {
+                PadKeyboard.Send(popup, button);
+                return;
+            }
 
             if (window is IPadCapturing capturing && capturing.Capturing != PadCapture.None)
             {
@@ -82,7 +87,7 @@ namespace EmuSen.Mistress.Input
                     int by = button == UiButton.Right ? 1 : -1;
                     if (open is not null) return;
                     if (focused is ComboBox combo) { Step(combo, by); return; }
-                    if (focused is Slider slider) { Key(slider, by > 0 ? Avalonia.Input.Key.Right : Avalonia.Input.Key.Left); return; }
+                    if (focused is Slider or ISidewaysAdjustable) { Key(focused, by > 0 ? Avalonia.Input.Key.Right : Avalonia.Input.Key.Left); return; }
                     if (focused is TabItem tab && tab.FindAncestorOfType<TabControl>() is { } strip) { StepTab(strip, by, focusHeader: true); return; }
                     Move(root, focused, by > 0 ? NavigationDirection.Right : NavigationDirection.Left);
                     return;
@@ -93,13 +98,15 @@ namespace EmuSen.Mistress.Input
                 {
                     TabControl? tabs = (focused as Visual)?.FindAncestorOfType<TabControl>(includeSelf: true)
                         ?? root.GetVisualDescendants().OfType<TabControl>().FirstOrDefault();
-                    if (open is null && tabs is not null) StepTab(tabs, button == UiButton.PageDown ? 1 : -1, focusHeader: false);
+                    if (open is null && tabs is not null) { StepTab(tabs, button == UiButton.PageDown ? 1 : -1, focusHeader: false); return; }
+                    if (open is null) Page(focused, button == UiButton.PageDown);
                     return;
                 }
 
                 case UiButton.Accept:
                     if (open is not null) { Choose(open, focused); return; }
                     if (focused is TextBox box) { PadKeyboard.Open(box); return; }
+                    if (focused is ComboBox listed && Views.OptionListWindow.OpensFor(window, listed)) { Views.OptionListWindow.Show(window, listed); return; }
                     if (focused is ComboBox closed) { closed.IsDropDownOpen = true; return; }
                     if (focused is TabItem header) { header.IsSelected = true; return; }
                     if (focused is ToggleButton toggle) { toggle.IsChecked = toggle.IsChecked != true; return; }
@@ -154,11 +161,25 @@ namespace EmuSen.Mistress.Input
             for (Visual? scope = (from as Visual)?.FindAncestorOfType<ScrollViewer>(); scope is not null && IsWithin(scope, root);
                  scope = scope.FindAncestorOfType<ScrollViewer>())
             {
-                if (Next(focus, from, (InputElement)scope, direction) is { } inside) { inside.Focus(NavigationMethod.Directional); return; }
+                if ((Next(focus, from, (InputElement)scope, direction) ?? Unbuilt(focus, from, (ScrollViewer)scope, direction)) is { } inside) { inside.Focus(NavigationMethod.Directional); return; }
             }
 
             // Nothing in line with the focus: the nearest control that way at all, so a button off to one side is still reached - §4.45.3.
             (Next(focus, from, root, direction) ?? Nearest(root, from, direction))?.Focus(NavigationMethod.Directional);
+        }
+
+        // A virtualising area builds rows again only once its view leaves the range it last built for; a page's scroll that way and back builds them around the view as it is - see EmuSen_Settings_Reference.md §4.83.7.
+        private static InputElement? Unbuilt(IFocusManager focus, InputElement from, ScrollViewer area, NavigationDirection direction)
+        {
+            if (direction is not (NavigationDirection.Up or NavigationDirection.Down) || area.VerticalScrollBarVisibility == ScrollBarVisibility.Disabled) return null;
+            Vector was = area.Offset;
+            double room = direction == NavigationDirection.Down ? area.Extent.Height - area.Viewport.Height - was.Y : was.Y;
+            if (room < 1) return null;
+            area.Offset = was + new Vector(0, (direction == NavigationDirection.Down ? 1 : -1) * (area.Viewport.Height + 1));
+            area.UpdateLayout();
+            area.Offset = was;
+            area.UpdateLayout();
+            return Next(focus, from, area, direction);
         }
 
         // Avalonia 12.1's search answers nothing for a control below and wholly to one side; this scores by distance that way, then twice the distance across.
@@ -230,6 +251,26 @@ namespace EmuSen.Mistress.Input
             return next;
         }
 
+        // L1 and R1 with no tabs: a list's selection a page at a time, else the scrolling area the focus is in by its height - see EmuSen_Settings_Reference.md §4.80.
+        private static void Page(InputElement? focused, bool down)
+        {
+            if (focused is ListBoxItem row && row.FindAncestorOfType<ListBox>() is { ItemCount: > 0 } list && list.IndexFromContainer(row) is >= 0 and var at)
+            {
+                double pitch = System.Math.Max(1, row.Bounds.Height);
+                double view = list.FindDescendantOfType<ScrollViewer>()?.Viewport.Height is > 0 and var v ? v : list.Bounds.Height;
+                int by = System.Math.Max(1, (int)System.Math.Round(view / pitch));
+                int next = System.Math.Clamp(at + (down ? by : -by), 0, list.ItemCount - 1);
+                list.SelectedIndex = next;
+                list.ScrollIntoView(next);
+                TopLevel.GetTopLevel(list)?.UpdateLayout();
+                (list.ContainerFromIndex(next) as InputElement)?.Focus(NavigationMethod.Directional);
+                return;
+            }
+            ScrollViewer? area = focused as ScrollViewer ?? (focused as Visual)?.FindAncestorOfType<ScrollViewer>();
+            if (area is null) return;
+            if (down) area.PageDown(); else area.PageUp();
+        }
+
         // A dropdown moved by one without being opened, which also commits it, as the arrow keys do on a closed one.
         private static void Step(ComboBox combo, int by)
         {
@@ -282,8 +323,17 @@ namespace EmuSen.Mistress.Input
         private static InputElement? FirstIn(Control page) =>
             page.GetVisualDescendants().OfType<InputElement>()
                 .Where(e => e.Focusable && e.IsEffectivelyEnabled && e.IsEffectivelyVisible && e is not ScrollViewer && InView((Visual)e, page))
-                .OrderBy(e => System.Math.Round(e.TranslatePoint(default, page)?.Y ?? 0)).ThenBy(e => e.TranslatePoint(default, page)?.X ?? 0)
+                .OrderBy(e => WhollyInView((Visual)e, page) ? 0 : 1)
+                .ThenBy(e => System.Math.Round(e.TranslatePoint(default, page)?.Y ?? 0)).ThenBy(e => e.TranslatePoint(default, page)?.X ?? 0)
                 .FirstOrDefault();
+
+        // Whether all of a control shows, so focusing it scrolls nothing; one cut at the edge comes after, as focusing it would move the page (§4.83).
+        private static bool WhollyInView(Visual e, Control page)
+        {
+            for (ScrollViewer? area = e.FindAncestorOfType<ScrollViewer>(); area is not null && IsWithin(area, page); area = area.FindAncestorOfType<ScrollViewer>())
+                if (e.TranslatePoint(default, area) is not { } at || !new Rect(area.Bounds.Size).Inflate(0.5).Contains(new Rect(at, e.Bounds.Size))) return false;
+            return true;
+        }
 
         // Whether some of a control shows through every scrolling area around it inside the page; a row scrolled away is not the page's first control - see EmuSen_Settings_Reference.md §4.48.10.
         private static bool InView(Visual e, Control page)
@@ -293,10 +343,18 @@ namespace EmuSen.Mistress.Input
             return true;
         }
 
-        private static void Key(InputElement target, Key key, KeyModifiers modifiers = KeyModifiers.None)
+        // True while the router raises a key of its own, which the window must not take for the keyboard's (Q102).
+        [ThreadStatic] internal static bool Raising;
+
+        internal static void Key(InputElement target, Key key, KeyModifiers modifiers = KeyModifiers.None)
         {
-            target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key, KeyModifiers = modifiers, Source = target });
-            target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = key, KeyModifiers = modifiers, Source = target });
+            Raising = true;
+            try
+            {
+                target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key, KeyModifiers = modifiers, Source = target });
+                target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = key, KeyModifiers = modifiers, Source = target });
+            }
+            finally { Raising = false; }
         }
     }
 }

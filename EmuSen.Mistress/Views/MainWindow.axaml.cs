@@ -166,9 +166,11 @@ namespace EmuSen.Mistress.Views
             _speedMenu = new LunaAction("Spee_d", () => { });
             _slotMenu = new LunaAction("State Sl_ot", () => { });
             _fullscreen = new LunaAction("_Fullscreen", a => IsFullScreen = a.IsChecked) { IsCheckable = true };
+            _bigPictureMenu = new LunaAction("_Big Picture", () => SetBigPicture(!_bigScreen)) { HelpText = "Full screen, in big picture mode" };
             _hardwareDashboard = new LunaAction("_Hardware Dashboard...", () => OpenCoretopWindow(_debugTarget));
             _rewindReel = new LunaAction("Re_wind...", () => OpenRewindReel(resumeAfter: false));
             InitializeComponent();
+            SetUpStatusLine();
             ApplyStatusBar();
             SetUpLibraryScreen();
             BuildMenus();
@@ -176,6 +178,7 @@ namespace EmuSen.Mistress.Views
             FullScreenChanged += on => _fullscreen.IsChecked = on;
             // SDL's device scan takes ~150 ms, so it waits for the window's first frame - see EmuSen_Settings_Reference.md §4.42.
             _gamepad = new GamepadManager(_gamepadBindings.For(_activeConsole), start: false);
+            _gamepad.PadChanged += OnPadChanged;
             Opened += (_, _) => RequestAnimationFrame(_ => Dispatcher.UIThread.Post(_gamepad.Start, DispatcherPriority.Background));
             // Endymion is a leaf and reads no globals, so the settings come from here - see EmuSen_Audio_Sync.md §7.1.
             _audioPlayer = new AudioPlayer(
@@ -196,13 +199,16 @@ namespace EmuSen.Mistress.Views
                 _fileDrop?.Dispose();
                 _timer?.Stop();
                 _padTimer?.Stop();
+                CloseThemedLibrary();
                 StopEmulationThread();
                 _session?.SaveSram();
                 WriteResumeState();
                 RecordPlayTime();
+                StopScraping();
                 StopOnlineCovers();
                 CloseRecords();
                 _gamepad.Dispose();
+                PadHints.Swapped = false;
                 _audioPlayer.Dispose();
                 StopLogging();
 
@@ -221,6 +227,8 @@ namespace EmuSen.Mistress.Views
             // Tunnel, not bubbling, or focus navigation eats the arrows - see EmuSen_Settings_Reference.md §4.2.
             AddHandler(KeyDownEvent, (_, e) => SetButtonFromKey(e.Key, pressed: true, e), RoutingStrategies.Tunnel, handledEventsToo: true);
             AddHandler(KeyUpEvent, (_, e) => SetButtonFromKey(e.Key, pressed: false, e), RoutingStrategies.Tunnel, handledEventsToo: true);
+            AddHandler(PointerMovedEvent, (_, _) => ScreensaverPointer(pressed: false), RoutingStrategies.Tunnel, handledEventsToo: true);
+            AddHandler(PointerPressedEvent, (_, e) => { if (ScreensaverOpen) { ScreensaverPointer(pressed: true); e.Handled = true; } else ScreensaverPointer(pressed: false); }, RoutingStrategies.Tunnel, handledEventsToo: true);
         }
 
         // A focused text field owns the whole keyboard - see EmuSen_Settings_Reference.md §4.17.
@@ -229,7 +237,25 @@ namespace EmuSen.Mistress.Views
 
         private void SetButtonFromKey(Key key, bool pressed, KeyEventArgs e)
         {
-            if (TypingIntoATextField(e)) return;
+            if (ScreensaverKey(key, pressed))
+            {
+                e.Handled = true;
+                return;
+            }
+            // In a big-screen menu a text field is a row, which ES-DE's keys move past rather than type into; the pad router's own keys are never the keyboard's (Q102).
+            bool routed = PadWindowRouter.Raising;
+            // A key let go that was steering is released as a button whatever now has the focus, as the text popup takes it on Enter's press (§4.79).
+            if (!pressed && !routed && ThemedKeyButton(key) is { } held && _themedKeys.Remove(held))
+            {
+                e.Handled = true;
+                return;
+            }
+            if (TypingIntoATextField(e) && (routed || !(BigMenuOnScreen && !TextEntryOpen) || FramedTextBoxKeepsKey(key))) return;
+            if (!routed && ThemedKey(key, e.KeyModifiers, pressed))
+            {
+                e.Handled = true;
+                return;
+            }
 
             // A suspended game must not collect the keys used to browse the library - see EmuSen_Settings_Reference.md §4.18.
             // A sheet over the game takes its keys; they are not the game's - see EmuSen_Settings_Reference.md §4.45.2.
@@ -239,6 +265,12 @@ namespace EmuSen.Mistress.Views
                 if (PadControls.IsButton(control, out PadButton button)) ApplyButtonState(button);
                 ApplyAxes();
                 // Or the menu bar, the only focusable control here, also gets the key - see EmuSen_Settings_Reference.md §4.24.
+                e.Handled = true;
+                return;
+            }
+
+            if (pressed && EditMetadataFromTheKeyboard(e))
+            {
                 e.Handled = true;
                 return;
             }
@@ -263,13 +295,13 @@ namespace EmuSen.Mistress.Views
             {
                 case HotkeyAction.SaveState: SaveState(); break;
                 case HotkeyAction.LoadState: LoadState(); break;
-                case HotkeyAction.ExitToLibrary: ToggleLibrary(); break;
+                case HotkeyAction.ExitToLibrary: if (EscapeLeavesBigPicture) SetBigPicture(false); else ToggleLibrary(); break;
                 case HotkeyAction.Screenshot: TakeScreenshot(); break;
                 // Nothing to pause while the library is up: it is already suspended - see §4.18.
                 case HotkeyAction.TogglePause: if (!LibraryView.IsVisible) TogglePause(); break;
-                case HotkeyAction.ToggleFullscreen:
-                    WindowState = WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
-                    break;
+                // Through ToolWindow, so leaving goes back to the state full screen was entered from, a maximised window included.
+                case HotkeyAction.ToggleFullscreen: ToggleFullScreen(); break;
+                case HotkeyAction.ToggleBigPicture: SetBigPicture(!_bigScreen); break;
             }
             e.Handled = true;
         }
@@ -457,21 +489,26 @@ namespace EmuSen.Mistress.Views
             }
         }
 
-        private void ShowPreferences()
+        private void ShowPreferences() => ShowPreferencesAt(null);
+
+        private void ShowPreferencesAt(string? tab)
         {
             // Non-modal, so re-scan on close rather than leaving a stale library behind it.
-            var window = new PreferencesWindow(_appSettings);
+            var window = new PreferencesWindow(_appSettings, this, _bigScreen ? HelpFamily : null) { OpenThemeSettings = ShowThemeSettings };
+            WatchPreferences(window);
+            if (tab is not null) window.ShowTab(tab);
             window.StatusBarChanged += ApplyStatusBar;
-            window.Closed += (_, _) => { ScanArtwork(); ApplyOnlineCovers(); if (LibraryView.IsVisible) RefreshLibrary(); };
+            window.Closed += (_, _) => { ScanArtwork(); ApplyOnlineCovers(); ApplyScraping(); if (LibraryView.IsVisible) RefreshLibrary(); };
             _ = SheetLayer.Show(window, this);
         }
 
-        // The bar goes when it is switched off or when both its parts are - see EmuSen_Settings_Reference.md §4.51.
+        // The bar goes when it is switched off or when both its parts are; a big screen's counters are its HUD's, not the bar's - see EmuSen_Settings_Reference.md §4.51 and §4.83.6.
         private void ApplyStatusBar()
         {
+            bool counters = _appSettings.ShowFpsBar && !_bigScreen;
             StatusText.IsVisible = _appSettings.ShowStatusText;
-            FpsText.IsVisible = _appSettings.ShowFpsBar;
-            StatusBar.IsVisible = _appSettings.ShowStatusBar && (_appSettings.ShowStatusText || _appSettings.ShowFpsBar);
+            FpsText.IsVisible = counters;
+            StatusBar.IsVisible = _appSettings.ShowStatusBar && (_appSettings.ShowStatusText || counters) && !(ThemedLibraryShown && LibraryView.IsVisible);
         }
 
         private void ShowDebugLogging()
@@ -617,6 +654,7 @@ namespace EmuSen.Mistress.Views
                 }
                 catch (Exception ex)
                 {
+                    ErrorLog.Error("states", $"Save State to slot {slot} failed", ex, path);
                     status = $"Save State failed: {ex.Message}";
                 }
 
@@ -642,7 +680,7 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
-            StateRecord? record = StateRecord.Read(path);
+            StateRecord? record = _fileRecords.ReadState(path);
             if (Refusal(record, rom, _session) is string refused)
             {
                 StatusText.Text = $"Load State: {refused}";
@@ -664,6 +702,7 @@ namespace EmuSen.Mistress.Views
                 }
                 catch (Exception ex)
                 {
+                    ErrorLog.Error("states", $"Load State from slot {slot} failed", ex, path);
                     status = $"Load State failed: {ex.Message}{Provenance(record)}";
                 }
 
@@ -713,7 +752,7 @@ namespace EmuSen.Mistress.Views
                 new LunaMenu("_View", _asGrid!, _asList!,
                     new LunaAction("_Larger Covers", () => TileScale.Value = Math.Min(MaximumTileScale, TileScale.Value + 0.25)),
                     new LunaAction("S_maller Covers", () => TileScale.Value = Math.Max(MinimumTileScale, TileScale.Value - 0.25)),
-                    LunaAction.Separator(), _fullscreen),
+                    LunaAction.Separator(), _fullscreen, _bigPictureMenu),
                 new LunaMenu("_Settings",
                     new LunaAction("_Controller Bindings...", ShowControllerBindings),
                     new LunaAction("_Graphics Settings...", ShowGraphicsSettings),
@@ -739,6 +778,7 @@ namespace EmuSen.Mistress.Views
             Gesture(_loadState, HotkeyAction.LoadState);
             Gesture(_fullscreen, HotkeyAction.ToggleFullscreen);
             Gesture(_closeGame, HotkeyAction.ExitToLibrary);
+            Gesture(_bigPictureMenu, HotkeyAction.ToggleBigPicture);
         }
 
         private void Gesture(LunaAction action, HotkeyAction bound)
@@ -882,7 +922,7 @@ namespace EmuSen.Mistress.Views
                 // Off the path, not the session: no core exists yet to ask - see EmuSen_Multicore.md §12.
                 string console = EmuSen.Cores.CoreCatalog.ConsoleForRom(path) ?? "Unknown";
                 // The engine is chosen before the core exists, from the graphics window's row - see EmuSen_Settings_Reference.md §4.44.
-                _session = new EmulatorSession { Cheats = _cheats, Engine = EmuSen.Cores.CoreCatalog.EngineChosen(console, _graphics.Value(console, EmuSen.Cores.CoreCatalog.EngineKey)) };
+                _session = new EmulatorSession { Cheats = _cheats, Engine = EmuSen.Cores.CoreCatalog.EngineChosen(console, GameEngine(path) ?? _graphics.Value(console, EmuSen.Cores.CoreCatalog.EngineKey)) };
                 StartLogging(console);
                 _session.LoadRom(path);
                 if (_session.EngineNotice is { } engineNotice) Console.WriteLine("[core] " + engineNotice);
@@ -941,6 +981,7 @@ namespace EmuSen.Mistress.Views
                 _session = null;
                 // Back to the list rather than a black viewport with only a status line.
                 ShowLibrary();
+                ErrorLog.Error("launch", $"Failed to load {displayName}", ex);
                 StatusText.Text = $"Failed to load {displayName}: {ex.Message}";
             }
         }
@@ -1051,20 +1092,22 @@ namespace EmuSen.Mistress.Views
         {
             string search = LibraryFilter.SearchText;
             _recordSnapshot = _records.All();
+            _editSnapshot = _records.AllEdits();
             _collections = _records.Collections();
+            ShowThemedLibrary();
             RomEntry? keptSelection = LibraryList.Selected;
             bool sameSearch = search == _lastLibrarySearch;
             _lastLibrarySearch = search;
-            IReadOnlyList<RomEntry> pool = InCollection(_libraryScan.Entries);
+            IReadOnlyList<RomEntry> pool = InCollection(Listed(_libraryScan.Entries));
 
             IReadOnlyList<RomEntry> shownEntries = string.IsNullOrWhiteSpace(search)
                 ? pool
-                : pool.Where(e => FilterBar.Matches(search, e.Title)).ToList();
+                : pool.Where(e => FilterBar.Matches(search, DisplayTitle(e))).ToList();
 
             // Off the whole scan, not the search subset, so the tag cannot flicker while typing.
             bool mixed = _libraryScan.Entries.Select(e => e.Shelf).Distinct().Count() > 1;
             MixedConsoles = mixed;
-            LibraryList.Label = e => mixed ? $"{e.Title}   —   {e.Shelf}" : e.Title;
+            LibraryList.Label = e => mixed ? $"{DisplayTitle(e)}   —   {e.Shelf}" : DisplayTitle(e);
             LibraryList.Refresh(shownEntries);
             _shownEntries = shownEntries;
             LibraryGrid.Refresh(shownEntries);
@@ -1345,10 +1388,13 @@ namespace EmuSen.Mistress.Views
                             : $" | offered {offeredInWindow / seconds:F1}, shown {shown.Frames / seconds:F1} fps ({shown.Copies / seconds:F1} copied), copy {shown.CopyMilliseconds / Math.Max(shown.Copies, 1):F2} draw {shown.DrawMilliseconds / shown.Frames:F2}ms, {(shown.Gpu ? "GPU" : "software")} {shown.Width}x{shown.Height}";
                         double Ms(long ticks) => ticks * 1000.0 / Stopwatch.Frequency / framesInWindow;
                         string outside = $" | outside: requests {Ms(requestsTicks):F2} audio {Ms(audioTicks):F2} hand-off {Ms(handOffTicks):F2} sleep+rest {Ms(restTicks):F2}ms";
-                        string line = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms){breakdown}{presentation}{outside}";
+                        string counters = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms)";
+                        string line = $"{counters}{breakdown}{presentation}{outside}";
                         Console.WriteLine($"[fps] {line}");
 
-                        if (_appSettings.ShowFpsBar) Dispatcher.UIThread.Post(() => FpsText.Text = line);
+                        // The bar shows the frame rate, the frame's cost and its top phases; the whole line is its tooltip (§4.83.6).
+                        string barLine = top.Length == 0 ? counters : $"{counters} [{top}]";
+                        if (_appSettings.ShowFpsBar) Dispatcher.UIThread.Post(() => ShowCounters(barLine, line));
                         framesInWindow = 0;
                         offeredInWindow = 0;
                         Array.Clear(phaseMsInWindow);
@@ -1406,9 +1452,7 @@ namespace EmuSen.Mistress.Views
         {
             StopLogging(); // close the previous session's files first - see CategorizedLogWriter.Dispose's own comment
 
-            string logRoot = string.IsNullOrWhiteSpace(_appSettings.LogDirectory)
-                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EmuSen", "Logs")
-                : _appSettings.LogDirectory;
+            string logRoot = ErrorLog.Usable(_appSettings.LogDirectory) ? _appSettings.LogDirectory! : ErrorLog.DefaultRoot;
 
             try
             {
@@ -1420,6 +1464,7 @@ namespace EmuSen.Mistress.Views
             catch (Exception ex)
             {
                 // Best-effort: an unwritable directory must not block the load - see §4.22.
+                ErrorLog.Error("logging", "Per-game logging disabled", ex, logRoot);
                 StatusText.Text = $"Logging disabled: {ex.Message}";
             }
         }

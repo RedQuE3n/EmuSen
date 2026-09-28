@@ -102,6 +102,7 @@ namespace EmuSen.Mistress.BigPicture.Theme
         private readonly List<string> _includeStack = [];
         private readonly HashSet<string> _warnedNames = new(StringComparer.Ordinal);
         private int _order;
+        private int _variantDepth;
 
         private ParseRun(ThemeCapabilities capabilities, ThemeSelection selection, string? variant, ThemeSystem system)
         {
@@ -136,10 +137,11 @@ namespace EmuSen.Mistress.BigPicture.Theme
                 return;
             }
 
-            XDocument document;
+            XElement root;
             try
             {
-                document = XDocument.Load(file, LoadOptions.SetLineInfo);
+                root = ThemeXml.Load(file, out string? leniency);
+                if (leniency is not null) Warn(ThemeDiagnosticCode.LenientXml, file, 0, $"not well-formed XML, read as ES-DE reads it: {leniency}");
             }
             catch (XmlException e)
             {
@@ -148,7 +150,6 @@ namespace EmuSen.Mistress.BigPicture.Theme
             }
             FilesRead.Add(file);
 
-            XElement root = document.Root!;
             if (root.Name.LocalName != "theme")
             {
                 Error(ThemeDiagnosticCode.WrongRoot, file, Line(root), $"root is <{root.Name.LocalName}>, not <theme>");
@@ -180,6 +181,12 @@ namespace EmuSen.Mistress.BigPicture.Theme
                     children.Add(child);
                     continue;
                 }
+                if (tag == "transitions" && kind == Block.Theme)
+                {
+                    if (_variantDepth > 0) { children.Add(child); continue; }
+                    Warn(ThemeDiagnosticCode.IgnoredTag, file, Line(child), "<transitions> outside any <variant> is ignored, as ES-DE ignores it");
+                    continue;
+                }
                 bool known = Allowed[Block.Theme].Contains(tag) || tag == "transitions";
                 Error(known ? ThemeDiagnosticCode.MisplacedTag : ThemeDiagnosticCode.UnknownTag, file, Line(child),
                     known ? $"<{tag}> is not allowed inside <{block.Name.LocalName}>" : $"<{tag}> is not a theme tag");
@@ -196,7 +203,12 @@ namespace EmuSen.Mistress.BigPicture.Theme
             foreach (XElement i in children.Where(c => c.Name.LocalName == "include")) Include(i, file);
             foreach (XElement v in children.Where(c => c.Name.LocalName == "view")) View(v, file);
             foreach (XElement v in children.Where(c => c.Name.LocalName == "variant"))
-                if (VariantApplies(v, file)) ProcessBlock(v, file, Block.Variant);
+                if (VariantApplies(v, file))
+                {
+                    _variantDepth++;
+                    ProcessBlock(v, file, Block.Variant);
+                    _variantDepth--;
+                }
             foreach (XElement a in children.Where(c => c.Name.LocalName == "aspectRatio"))
                 if (Selected(a, file, "aspect ratio", n => ThemeCapabilities.Ratio(n) is not null, _selection.AspectRatio)) ProcessBlock(a, file, Block.AspectRatio);
         }
@@ -258,10 +270,10 @@ namespace EmuSen.Mistress.BigPicture.Theme
             return names;
         }
 
-        // Explicit paths that are missing are errors; paths built from variables are skipped silently - see EmuSen_BigPicture.md §12.3.
+        // Explicit paths that are missing are errors, read untrimmed as ES-DE reads them; paths built from variables are skipped silently - see EmuSen_BigPicture.md §35.2.
         private void Include(XElement include, string file)
         {
-            string written = include.Value.Trim();
+            string written = include.Value;
             bool fromVariable = written.Contains("${", StringComparison.Ordinal);
             string text = Substitute(written, out IReadOnlyList<string> undefined);
             if (undefined.Count > 0)
@@ -269,7 +281,7 @@ namespace EmuSen.Mistress.BigPicture.Theme
                 Debug(ThemeDiagnosticCode.IncludeSkipped, file, Line(include), $"include \"{written}\" skipped: {string.Join(", ", undefined.Select(u => "${" + u + "}"))} undefined");
                 return;
             }
-            if (text.Length == 0)
+            if (text.Trim().Length == 0)
             {
                 if (fromVariable) Debug(ThemeDiagnosticCode.IncludeSkipped, file, Line(include), $"include \"{written}\" skipped: empty");
                 else Error(ThemeDiagnosticCode.NoValue, file, Line(include), "<include> has no path");
@@ -357,13 +369,15 @@ namespace EmuSen.Mistress.BigPicture.Theme
                     Error(ThemeDiagnosticCode.NoValue, file, Line(property), $"property \"{name}\" for element \"{spec.Type}\" has no value defined");
                     continue;
                 }
-                string text = Substitute(written, out IReadOnlyList<string> undefined);
+                string text = Substitute(written, out IReadOnlyList<string> undefined, blank: true);
                 if (undefined.Count > 0)
+                    Warn(ThemeDiagnosticCode.UndefinedVariable, file, Line(property), $"<{name}> uses undefined {string.Join(", ", undefined.Select(u => "${" + u + "}"))}, read as empty, as ES-DE reads it");
+                bool fromVariable = written.Contains("${", StringComparison.Ordinal);
+                if (text.Length == 0 && undefined.Count > 0)
                 {
-                    Error(ThemeDiagnosticCode.UndefinedVariable, file, Line(property), $"<{name}> uses undefined {string.Join(", ", undefined.Select(u => "${" + u + "}"))}");
+                    Error(ThemeDiagnosticCode.NoValue, file, Line(property), $"property \"{name}\" for element \"{spec.Type}\" has no value defined once its undefined variables are read as empty; ES-DE refuses it too");
                     continue;
                 }
-                bool fromVariable = written.Contains("${", StringComparison.Ordinal);
                 if (text.Trim().Length == 0)
                 {
                     Warn(ThemeDiagnosticCode.NoValue, file, Line(property), $"<{name}> is empty once its variables are substituted, and is ignored");
@@ -374,15 +388,15 @@ namespace EmuSen.Mistress.BigPicture.Theme
             return properties;
         }
 
-        // One pass: each reference becomes the variable's value, which was itself substituted when it was defined.
-        private string Substitute(string text, out IReadOnlyList<string> undefined)
+        // One pass: each reference becomes the variable's value, which was itself substituted when it was defined; an undefined one, in a property, nothing (§39).
+        private string Substitute(string text, out IReadOnlyList<string> undefined, bool blank = false)
         {
             var missing = new List<string>();
             string result = Reference.Replace(text, m =>
             {
                 if (_variables.TryGetValue(m.Groups[1].Value, out string? value)) return value;
                 missing.Add(m.Groups[1].Value);
-                return m.Value;
+                return blank ? "" : m.Value;
             });
             undefined = missing;
             return result;

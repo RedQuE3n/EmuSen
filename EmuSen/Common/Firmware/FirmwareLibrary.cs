@@ -38,7 +38,7 @@ namespace EmuSen.Common.Firmware
         public static IReadOnlyList<FirmwareRequest> MissingFrom(IEnumerable<FirmwareRequest> requests) =>
             requests.Where(r => !IsInstalled(r)).ToArray();
 
-        // Copies a file the choice was into the library under its canonical name, so nothing has to ask again.
+        // Copies a file the player picked into the library under its canonical name, so nothing has to ask again.
         public static bool Install(FirmwareRequest request, string sourcePath)
         {
             byte[]? bytes = TryReadExact(sourcePath, request.Size);

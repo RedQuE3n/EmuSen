@@ -28,7 +28,7 @@ namespace EmuSen.WiseMan.DianaOS
             Assert.True(Directory.Exists(Path.Combine(root, "tmp")));
         }
 
-        // The player home is /home itself, not a folder buried in a source project.
+        // The shell's home is /home itself, not a folder buried in a source project.
         [Fact]
         public void The_user_home_is_the_short_path()
         {

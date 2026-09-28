@@ -1,0 +1,193 @@
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Threading;
+using EmuSen.LunaP.Controls;
+using EmuSen.LunaP.Windowing;
+
+namespace EmuSen.WiseMan.Fixtures
+{
+    // The fit audit catches what it is for, each fault made on purpose on a framed sheet, and passes the same sheet laid out properly - see EmuSen_Settings_Reference.md §4.83.
+    public class FitAuditTests
+    {
+        private static (ToolWindow Host, SheetLayer Layer) Host()
+        {
+            var layer = new SheetLayer { PresentsWindows = true, MenuLook = true };
+            var host = new ToolWindow { Width = 1280, Height = 800, Content = new Grid { Children = { new Border(), layer } } };
+            host.Show();
+            return (host, layer);
+        }
+
+        private static List<string> Audit(Control content, string title = "Audit", string? footer = null, System.Action? before = null)
+        {
+            (ToolWindow host, SheetLayer layer) = Host();
+            var window = new ToolWindow { Title = title, Content = content };
+            if (footer is not null) MenuLook.SetFooter(window, footer);
+            _ = SheetLayer.Show(window, host);
+            for (int i = 0; i < 3; i++) { Dispatcher.UIThread.RunJobs(); UiTest.Capture(host); }
+            before?.Invoke();
+            List<string> faults = FitAudit.Check(layer.SheetOf(window)!);
+            window.Close();
+            host.Close();
+            return faults;
+        }
+
+        [Fact]
+        public Task A_sheet_that_fits_passes() => UiTest.Run(() =>
+        {
+            var content = new StackPanel { Spacing = 8, Children = { new TextBlock { Text = "A line that fits", TextWrapping = TextWrapping.Wrap }, new Button { Content = "Close" } } };
+            Assert.Empty(Audit(content));
+        });
+
+        [Fact]
+        public Task A_picture_over_words_is_an_overlap() => UiTest.Run(() =>
+        {
+            var grid = new Grid { Children = { new Image { Width = 300, Height = 200, Source = null }, new TextBlock { Text = "Words under the picture" } } };
+            ((Image)grid.Children[0]).Source = new Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(4, 4), new Vector(96, 96));
+            Assert.Contains(Audit(grid), f => f.StartsWith("overlap:"));
+        });
+
+        [Fact]
+        public Task A_control_wider_than_the_panel_is_past_it() => UiTest.Run(() =>
+        {
+            var content = new StackPanel { Children = { new Border { Width = 3000, Height = 40, Background = Brushes.Gray, Child = new Button { Content = "Far away", HorizontalAlignment = HorizontalAlignment.Right } } } };
+            Assert.Contains(Audit(content), f => f.StartsWith("past its"));
+        });
+
+        [Fact]
+        public Task Words_that_run_past_their_box_or_end_in_an_ellipsis_are_cut() => UiTest.Run(() =>
+        {
+            string words = string.Concat(Enumerable.Repeat("A long line of words ", 20));
+            var content = new StackPanel { Children = { new TextBlock { Text = words, Width = 200 }, new TextBlock { Text = words, Width = 200, TextTrimming = TextTrimming.CharacterEllipsis } } };
+            List<string> faults = Audit(content);
+            Assert.Contains(faults, f => f.StartsWith("runs past its box"));
+            Assert.Contains(faults, f => f.StartsWith("cut with an ellipsis"));
+        });
+
+        [Fact]
+        public Task A_row_scrolled_below_a_list_is_reachable_but_text_past_its_side_is_not() => UiTest.Run(() =>
+        {
+            var list = new ListBox { Height = 100, ItemsSource = Enumerable.Range(0, 20).Select(i => $"Row {i}").ToArray() };
+            Assert.Empty(Audit(new StackPanel { Children = { list } }));
+            var wide = new ScrollViewer { Height = 100, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, Content = new Border { Width = 3000, Height = 40 } };
+            Assert.Contains(Audit(new StackPanel { Children = { wide } }), f => f.StartsWith("past its"));
+        });
+
+        [Fact]
+        public Task A_list_that_scrolls_in_less_than_two_rows_is_too_little_room() => UiTest.Run(() =>
+        {
+            var list = new ListBox { Height = 60, ItemsSource = Enumerable.Range(0, 20).Select(i => $"Row {i}").ToArray() };
+            Assert.Contains(Audit(new StackPanel { Children = { list } }), f => f.StartsWith("scrolls in too little room"));
+        });
+
+        [Fact]
+        public Task A_title_or_footer_too_long_for_the_panel_is_cut() => UiTest.Run(() =>
+        {
+            string words = string.Concat(Enumerable.Repeat("A very long name indeed ", 8));
+            Assert.Contains(Audit(new TextBlock { Text = "Short" }, title: words), f => f.StartsWith("title cut"));
+            Assert.Contains(Audit(new TextBlock { Text = "Short" }, footer: string.Concat(Enumerable.Repeat(words, 10))), f => f.StartsWith("footer cut"));
+        });
+
+        [Fact]
+        public Task Words_wider_than_their_button_are_past_it() => UiTest.Run(() =>
+        {
+            var button = new Button { Width = 100, Content = new TextBlock { Text = "Wide", Width = 300 } };
+            Assert.Contains(Audit(new StackPanel { Children = { button } }), f => f.StartsWith("words past their Button"));
+        });
+
+        [Fact]
+        public Task A_list_cut_at_its_foot_with_no_fade_shows_a_part_row() => UiTest.Run(() =>
+        {
+            var list = new ListBox { Height = 150, ItemsSource = Enumerable.Range(0, 20).Select(i => $"Row {i}").ToArray() };
+            Assert.Empty(Audit(new StackPanel { Children = { list } }));
+            var plain = new ListBox { Height = 150, ItemsSource = Enumerable.Range(0, 20).Select(i => $"Row {i}").ToArray() };
+            List<string> faults = Audit(new StackPanel { Children = { plain } }, before: () => Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(plain).OfType<ScrollViewer>().First().SetValue(MenuLook.FadesBottomProperty, false));
+            Assert.Contains(faults, f => f.StartsWith("cut at a scrolling edge with no fade"));
+        });
+
+        [Fact]
+        public Task A_strip_cut_at_its_side_with_no_fade_shows_a_part_tile() => UiTest.Run(() =>
+        {
+            ScrollViewer Strip()
+            {
+                var tiles = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+                for (int i = 0; i < 20; i++) tiles.Children.Add(new Button { Width = 85, Content = $"Tile {i}" });
+                return new ScrollViewer { Content = tiles, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+            }
+            Assert.DoesNotContain(Audit(new StackPanel { Children = { Strip() } }), f => f.StartsWith("cut at a scrolling edge"));
+            ScrollViewer plain = Strip();
+            List<string> faults = Audit(new StackPanel { Children = { plain } }, before: () => plain.SetValue(MenuLook.FadesRightProperty, false));
+            Assert.Contains(faults, f => f.StartsWith("cut at a scrolling edge with no fade: the right"));
+        });
+
+        private static readonly FontFamily Inter = new("avares://Avalonia.Fonts.Inter/Assets#Inter");
+        private static readonly FontFamily Barlow = new("avares://EmuSen.Mistress/Assets/Fonts#Barlow Condensed");
+
+        // The floor is the capitals Inter, the desktop's face, draws at SmallestText; the constant is what Inter's H measures (§4.83.7).
+        [Fact]
+        public Task The_floor_is_the_desktop_face_s_capitals_at_the_smallest_size() => UiTest.Run(() =>
+        {
+            GlyphTypeface inter = FitAudit.FaceOf(new Typeface(Inter))!;
+            GlyphTypeface barlow = FitAudit.FaceOf(new Typeface(Barlow))!;
+            Assert.Equal("Inter", inter.FamilyName);
+            Assert.Equal("Barlow Condensed", barlow.FamilyName);
+            Assert.Equal(FitAudit.DesktopCaps, FitAudit.CapsOf(inter), 4);
+            Assert.Equal(0.700, FitAudit.CapsOf(barlow), 3);
+        });
+
+        // A condensed face at the desktop's size draws smaller capitals and fails; at the size that draws the same capitals it passes, and the desktop face passes as it did by size (Q189).
+        [Fact]
+        public Task A_condensed_face_must_reach_the_desktop_face_s_capitals() => UiTest.Run(() =>
+        {
+            // With the audit's slack of 0.05 px of the desktop face, Barlow Condensed must reach about 16.57 px.
+            double reach = (FitAudit.SmallestText - 0.05) * FitAudit.DesktopCaps / FitAudit.CapsOf(FitAudit.FaceOf(new Typeface(Barlow)));
+            Assert.InRange(reach, 16.5, 16.6);
+            Assert.Empty(Audit(new TextBlock { Text = "Desktop", FontFamily = Inter, FontSize = FitAudit.SmallestText }));
+            Assert.Contains(Audit(new TextBlock { Text = "Desktop", FontFamily = Inter, FontSize = FitAudit.SmallestText - 0.1 }), f => f.StartsWith("too small to read"));
+            Assert.Contains(Audit(new TextBlock { Text = "Condensed", FontFamily = Barlow, FontSize = FitAudit.SmallestText }), f => f.StartsWith("too small to read"));
+            Assert.Contains(Audit(new TextBlock { Text = "Condensed", FontFamily = Barlow, FontSize = 16.5 }), f => f.StartsWith("too small to read"));
+            Assert.Empty(Audit(new TextBlock { Text = "Condensed", FontFamily = Barlow, FontSize = 16.6 }));
+        });
+
+        // A drawing's labels are measured in the drawing's own face: condensed labels between the two floors fail (§4.83.7).
+        [Fact]
+        public Task A_drawing_s_condensed_labels_are_held_to_the_desktop_face_s_capitals() => UiTest.Run(() =>
+        {
+            ControllerDiagram Drawing(double height)
+            {
+                var d = new ControllerDiagram { Layout = ControllerLayout.Nintendo64, Width = 1100, Height = height, CompactLabels = true };
+                Avalonia.Controls.Documents.TextElement.SetFontFamily(d, Barlow);
+                Avalonia.Controls.Documents.TextElement.SetFontSize(d, 24);
+                return d;
+            }
+            var probe = Drawing(300);
+            var host = new ToolWindow { Width = 1280, Height = 800, Content = probe };
+            host.Show();
+            double found = 0;
+            var seen = new System.Collections.Generic.List<string>();
+            for (double h = 250; h <= 600 && found == 0; h += 2)
+            {
+                probe.Height = h;
+                host.UpdateLayout();
+                seen.Add($"{h}:{probe.LabelTextSize:F2}");
+                if (probe.LabelTextSize is > 16.1 and < 16.45) found = h;
+            }
+            host.Close();
+            Assert.True(found > 0, "no height gives the labels a size between the two floors: " + string.Join(" ", seen.Where((_, i) => i % 10 == 0)));
+            Assert.Contains(Audit(Drawing(found)), f => f.StartsWith("too small to read: ControllerDiagram"));
+        });
+
+        [Fact]
+        public Task Words_or_a_drawing_s_labels_too_small_to_read_at_a_distance_are_flagged() => UiTest.Run(() =>
+        {
+            Assert.Empty(Audit(new TextBlock { Text = "Big enough", FontFamily = Inter, FontSize = FitAudit.SmallestText }));
+            Assert.Contains(Audit(new TextBlock { Text = "Small print", FontSize = 12 }), f => f.StartsWith("too small to read"));
+            var squeezed = new ControllerDiagram { Layout = ControllerLayout.Nintendo64, Height = 260, CompactLabels = false };
+            Assert.Contains(Audit(squeezed), f => f.StartsWith("too small to read: ControllerDiagram"));
+        });
+    }
+}

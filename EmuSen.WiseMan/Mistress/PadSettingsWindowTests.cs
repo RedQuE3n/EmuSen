@@ -51,7 +51,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         // Big screen, as Game Mode starts it, with one synthetic game running.
-        private (MainWindow Window, PadDriver Pad) GameModeWithAGame()
+        private (MainWindow Window, PadDriver Pad) GameModeWithAGame(double tallerBar = 0)
         {
             File.WriteAllBytes(Path.Combine(_romDir, "Game.sfc"), SyntheticRom.BuildBlank());
             new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = true }.Save();
@@ -62,8 +62,23 @@ namespace EmuSen.WiseMan.Mistress
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
             pad.A();
             Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
+            if (tallerBar > 0) TallerBar(window, tallerBar);
             return (window, pad);
         }
+
+        // The status bar made taller by some pixels, so a sheet above it is shorter by as much - see EmuSen_Settings_Reference.md §4.83.7.
+        private static void TallerBar(MainWindow window, double by)
+        {
+            var bar = window.GetControl<Border>("StatusBar");
+            window.UpdateLayout();
+            bar.MinHeight = bar.Bounds.Height + by;
+            window.UpdateLayout();
+        }
+
+        // Sheets shorter by these pixels: 0 to 7 left a row unbuilt, 3 also a view that would not scroll, 7 and 8 bracket the first big-screen status line, 10 and 13 failed the walk's replay (§4.83.7).
+        public static TheoryData<double> Shorter => new() { 0, 3, 5, 7, 8, 10, 13 };
+
+        public static TheoryData<double> EveryShorter => new(Enumerable.Range(0, 17).Select(h => (double)h));
 
         private static string[] MenuLines(MainWindow w) =>
             w.GetControl<ListBox>("PadMenuList").ItemsSource!.Cast<object>().Select(o => o.ToString()!).ToArray();
@@ -128,7 +143,8 @@ namespace EmuSen.WiseMan.Mistress
 
             Assert.Empty(Unreachable(window, pad));
 
-            pad.B();
+            // B a screen at a time: Preferences, ES-DE's menus in Game Mode, goes back from its last submenu first (§4.72.8).
+            for (int guard = 0; guard < 3 && Sheets(window).IsPresenting; guard++) pad.B();
             Assert.False(Sheets(window).IsPresenting);
             Assert.False(IsPaused(window));
             Stop(window);
@@ -266,6 +282,9 @@ namespace EmuSen.WiseMan.Mistress
             Assert.NotEqual(resume, AppSettings.Load().ResumeOnLaunch);
             Picture(window, "preferences-gameplay");
 
+            // In Game Mode Preferences is ES-DE's menus: B leaves Gameplay for the first screen, and B again closes it (§4.72.8).
+            pad.B();
+            Assert.True(Sheets(window).IsPresenting);
             pad.B();
             Assert.False(Sheets(window).IsPresenting);
             Stop(window);
@@ -440,11 +459,50 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // Straight from the pad's menu: a built-in filter's slider moved, Reset All, moved again, then the filter used and the value drawn with - see EmuSen_Settings_Reference.md §4.48.5.
-        [Fact]
-        public Task The_shaders_window_from_the_pad_menu_adjusts_a_built_in_filter_and_resets_it_all() => Session.Dispatch(() =>
+        // Pressed straight down from a preset's first slider, with no walk, the pad reaches each row's Reset and then its slider, whatever the sheet's height - see EmuSen_Settings_Reference.md §4.83.7.
+        [Theory]
+        [MemberData(nameof(EveryShorter))]
+        public Task Down_from_a_preset_s_first_slider_reaches_every_slider_at_any_sheet_height(double tallerBar) => Session.Dispatch(() =>
         {
-            (MainWindow window, PadDriver pad) = GameModeWithAGame();
+            (MainWindow window, PadDriver pad) = GameModeWithAGame(tallerBar);
+            Choose(window, pad, "Shaders");
+            ShaderPanel snes = Assert.IsType<ShaderSettingsWindow>(Sheets(window).Current).PanelFor("SNES");
+            Reach(window, pad, e => e is ListBoxItem item && item.Content?.ToString() == "CRT (Lottes)");
+            string? RowOf() => (Focused(window) as Visual)?.FindAncestorOfType<SliderRow>()?.Label;
+
+            pad.Right();
+            Pump(snes);
+            string[] labels = snes.Parameters.Select(p => p.Label).ToArray();
+            for (int i = 0; i < 4 && !(Focused(window) is Slider && RowOf() == labels[0]); i++) pad.Down();
+            Assert.Equal(labels[0], RowOf());
+            Assert.IsType<Slider>(Focused(window));
+
+            // The view moves by no more than a row a press, so building the next row never jumps the page.
+            ScrollViewer view = snes.ParameterList.FindDescendantOfType<ScrollViewer>()!;
+            double pitch = snes.Sliders.First().Bounds.Height + snes.Sliders.First().Margin.Bottom;
+            void Press()
+            {
+                double was = view.Offset.Y;
+                pad.Down();
+                Assert.True(System.Math.Abs(view.Offset.Y - was) <= pitch, $"the view moved {view.Offset.Y - was:F0} for one press, more than a row ({pitch:F0})");
+            }
+            foreach (string label in labels.Skip(1))
+            {
+                Press();
+                Assert.True(Focused(window) is Button && RowOf() == label, $"Down went to {PadAudit.Describe(Focused(window)!)}, not the Reset of {label}");
+                Press();
+                Assert.True(Focused(window) is Slider && RowOf() == label, $"Down went to {PadAudit.Describe(Focused(window)!)}, not the slider of {label}");
+            }
+            Stop(window);
+            window.Close();
+        }, default);
+
+        // Straight from the pad's menu: a built-in filter's slider moved, Reset All, moved again, then the filter used and the value drawn with - see EmuSen_Settings_Reference.md §4.48.5.
+        [Theory]
+        [MemberData(nameof(Shorter))]
+        public Task The_shaders_window_from_the_pad_menu_adjusts_a_built_in_filter_and_resets_it_all(double tallerBar) => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = GameModeWithAGame(tallerBar);
             Choose(window, pad, "Shaders");
             var shaders = Assert.IsType<ShaderSettingsWindow>(Sheets(window).Current);
             Assert.True(IsPaused(window));
@@ -483,11 +541,12 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         // A preset of 944 parameters on the Game Mode sheet: only the rows in view are built, every control is still reached, and the pad walks down and moves a slider far down - see EmuSen_Settings_Reference.md §4.48.9.
-        [Fact]
-        public Task A_long_preset_s_sliders_on_the_sheet_are_reached_and_walked_by_pad() => Session.Dispatch(() =>
+        [Theory]
+        [MemberData(nameof(Shorter))]
+        public Task A_long_preset_s_sliders_on_the_sheet_are_reached_and_walked_by_pad(double tallerBar) => Session.Dispatch(() =>
         {
             ShaderBrowseTests.WriteBig(ShaderSettingsWindowTests.FakePack());
-            (MainWindow window, PadDriver pad) = GameModeWithAGame();
+            (MainWindow window, PadDriver pad) = GameModeWithAGame(tallerBar);
             Choose(window, pad, "Shaders");
             var shaders = Assert.IsType<ShaderSettingsWindow>(Sheets(window).Current);
             ShaderPanel snes = shaders.PanelFor("SNES");
@@ -535,7 +594,10 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Same(search, keyboard.Target);
             PadCheatsTests.TypeByPad(pad, keyboard, "0031");
             pad.Start();
-            Reach(window, pad, e => e is ListBoxItem item && item.Content?.ToString() == "huge");
+            // A row reached sideways from the search box takes the focus but not the choice, so the pad steps off it and back, as a player would (§4.83.7, Q194).
+            var huge = (ListBoxItem)Reach(window, pad, e => e is ListBoxItem item && item.Content?.ToString() == "huge");
+            if (!huge.IsSelected) { pad.Up(); pad.Down(); }
+            Assert.True(Focused(window) is ListBoxItem { IsSelected: true } chosen && chosen.Content?.ToString() == "huge");
             Pump(snes);
             Assert.Equal("0031", snes.ParameterList.Search);
             Assert.Equal(new[] { "Parameter 0031" }, snes.ParameterList.Matching.Select(p => p.Label));

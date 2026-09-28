@@ -34,6 +34,9 @@ namespace EmuSen.Mistress.BigPicture.Theme
         SecondPrimary,
         LanguageWithoutEnglish,
         UnusedAttribute,
+        LenientValue,
+        LenientXml,
+        IgnoredTag,
     }
 
     public sealed record ThemeDiagnostic(ThemeSeverity Severity, ThemeDiagnosticCode Code, string File, int Line, string Message)

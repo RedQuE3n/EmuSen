@@ -307,7 +307,7 @@ namespace EmuSen.WiseMan.DianaOS
             }
             finally
             {
-                // A test must not leave a map behind in the player's own log directory.
+                // A test must not leave a map behind in the real log directory.
                 if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
             }
         }

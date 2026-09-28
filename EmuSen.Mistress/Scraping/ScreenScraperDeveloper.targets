@@ -1,0 +1,85 @@
+<Project>
+
+  <!-- Q40: a published Mistress carries EmuSen's ScreenScraper developer
+       credentials, XOR-scrambled with a key made for this build and kept
+       beside them, generated into obj/ from a file outside the repository.
+       Only `dotnet publish` embeds; a plain build never does. Why, and what
+       the scrambling does and does not protect against: EmuSen_BigPicture.md
+       §5.7 and §28, and EmuSen_Settings_Reference.md §4.65. -->
+  <PropertyGroup>
+    <_EmuSenDeveloperGiven>$(EmuSenScreenScraperDeveloper)</_EmuSenDeveloperGiven>
+    <EmuSenScreenScraperDeveloper Condition="'$(EmuSenScreenScraperDeveloper)' == ''">$([System.IO.Path]::Combine($([System.Environment]::GetFolderPath(SpecialFolder.ApplicationData)), 'EmuSen', 'screenscraper-developer.json'))</EmuSenScreenScraperDeveloper>
+    <EmuSenScreenScraperResource>EmuSen.Mistress.Scraping.Developer</EmuSenScreenScraperResource>
+  </PropertyGroup>
+
+  <UsingTask TaskName="EmuSenScrambleDeveloper" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Source ParameterType="System.String" Required="true" />
+      <Output ParameterType="System.String" Required="true" />
+      <Problem ParameterType="System.String" Output="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Security.Cryptography" />
+      <Using Namespace="System.Text" />
+      <Using Namespace="System.Text.RegularExpressions" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        // Never logs a value: a problem names the field, not what it holds.
+        string text = File.ReadAllText(Source);
+        var fields = new string[3];
+        string[] names = { "devid", "devpassword", "softname" };
+        for (int i = 0; i < 3; i++)
+        {
+            Match m = Regex.Match(text, "\"" + names[i] + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+            if (!m.Success || m.Groups[1].Value.Trim().Length == 0) { Problem = "it has no " + names[i]; return true; }
+            fields[i] = m.Groups[1].Value;
+        }
+        byte[] body = Encoding.UTF8.GetBytes("{\"devid\":\"" + fields[0] + "\",\"devpassword\":\"" + fields[1] + "\",\"softname\":\"" + fields[2] + "\"}");
+        byte[] key = new byte[32];
+        using (RandomNumberGenerator random = RandomNumberGenerator.Create()) random.GetBytes(key);
+        byte[] blob = new byte[6 + key.Length + body.Length];
+        Encoding.ASCII.GetBytes("ESSD").CopyTo(blob, 0);
+        blob[4] = 1;
+        blob[5] = (byte)key.Length;
+        key.CopyTo(blob, 6);
+        for (int i = 0; i < body.Length; i++) blob[6 + key.Length + i] = (byte)(body[i] ^ key[i % key.Length]);
+        Array.Clear(body, 0, body.Length);
+        Directory.CreateDirectory(Path.GetDirectoryName(Output));
+        File.WriteAllBytes(Output, blob);
+        Problem = "";
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="EmuSenEmbedScreenScraperDeveloper" BeforeTargets="BeforeBuild" Condition="'$(_IsPublishing)' == 'true'">
+    <PropertyGroup>
+      <EmuSenScreenScraperDeveloper>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(EmuSenScreenScraperDeveloper)'))</EmuSenScreenScraperDeveloper>
+      <_EmuSenDeveloperBlob>$(IntermediateOutputPath)screenscraper-developer.bin</_EmuSenDeveloperBlob>
+      <_EmuSenDeveloperProblem />
+    </PropertyGroup>
+    <Warning Condition="!Exists('$(EmuSenScreenScraperDeveloper)') AND '$(_EmuSenDeveloperGiven)' == ''"
+             Code="EMUSEN0040" Text="No ScreenScraper developer file at $(EmuSenScreenScraperDeveloper); this build carries no developer credentials and can scrape only where a developer file is present. Pass -p:EmuSenScreenScraperDeveloper=&lt;path&gt; to name one." />
+    <Warning Condition="!Exists('$(EmuSenScreenScraperDeveloper)') AND '$(_EmuSenDeveloperGiven)' != ''"
+             Code="EMUSEN0040" Text="EmuSenScreenScraperDeveloper names $(EmuSenScreenScraperDeveloper), which does not exist; this build carries no developer credentials." />
+    <EmuSenScrambleDeveloper Condition="Exists('$(EmuSenScreenScraperDeveloper)')" Source="$(EmuSenScreenScraperDeveloper)" Output="$(_EmuSenDeveloperBlob)">
+      <Output TaskParameter="Problem" PropertyName="_EmuSenDeveloperProblem" />
+    </EmuSenScrambleDeveloper>
+    <Warning Condition="'$(_EmuSenDeveloperProblem)' != ''" Code="EMUSEN0040"
+             Text="The ScreenScraper developer file at $(EmuSenScreenScraperDeveloper) was not embedded: $(_EmuSenDeveloperProblem). This build carries no developer credentials." />
+    <ItemGroup Condition="Exists('$(EmuSenScreenScraperDeveloper)') AND '$(_EmuSenDeveloperProblem)' == ''">
+      <EmbeddedResource Include="$(_EmuSenDeveloperBlob)" LogicalName="$(EmuSenScreenScraperResource)" WithCulture="false" Type="Non-Resx" />
+      <_EmuSenDeveloperEmbedded Include="$(_EmuSenDeveloperBlob)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- The scrambled file lives only as long as the compile that reads it. -->
+  <Target Name="EmuSenForgetScreenScraperDeveloper" AfterTargets="CoreCompile" Condition="'@(_EmuSenDeveloperEmbedded)' != ''">
+    <Delete Files="@(_EmuSenDeveloperEmbedded)" />
+  </Target>
+
+  <Target Name="EmuSenWarnNoBuildPublish" BeforeTargets="Publish" Condition="'$(_IsPublishing)' == 'true' AND '$(NoBuild)' == 'true'">
+    <Warning Code="EMUSEN0041" Text="Published with --no-build: the assembly is whatever the last build made, and a plain build carries no ScreenScraper developer credentials." />
+  </Target>
+
+</Project>

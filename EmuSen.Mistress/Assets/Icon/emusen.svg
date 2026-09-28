@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>EmuSen</title>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="#231E52"/>
+  <g transform="translate(0 -6)">
+    <path d="M40.0 96.9 A94 94 0 1 0 216.0 96.9 A88 88 0 1 1 40.0 96.9Z" fill="#F4C542"/>
+    <rect x="96" y="44" width="24" height="100" rx="3" fill="#FBF3E4"/>
+    <rect x="96" y="44" width="68" height="22" rx="3" fill="#FBF3E4"/>
+    <rect x="96" y="83" width="60" height="22" rx="3" fill="#FBF3E4"/>
+    <rect x="96" y="122" width="68" height="22" rx="3" fill="#FBF3E4"/>
+  </g>
+</svg>

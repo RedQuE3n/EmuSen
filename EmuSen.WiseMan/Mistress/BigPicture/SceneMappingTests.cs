@@ -1,0 +1,473 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Media;
+using EmuSen.Mistress.BigPicture.Scene;
+using EmuSen.Mistress.BigPicture.Theme;
+using EmuSen.WiseMan.Fixtures;
+using Xunit.Abstractions;
+
+namespace EmuSen.WiseMan.Mistress.BigPicture
+{
+    // Every property the scene claims to map changes the rendered pixels: one synthetic theme per pair, rendered with two values - see EmuSen_BigPicture.md §13.5.
+    public class SceneMappingTests
+    {
+        private readonly ITestOutputHelper _output;
+
+        public SceneMappingTests(ITestOutputHelper output) => _output = output;
+
+        private const int W = 320, H = 200;
+
+        // What each element needs to be visible at all; a case's own property replaces its entry here.
+        private static readonly Dictionary<string, string> Base = new()
+        {
+            ["image"] = "pos=0.1 0.1;size=0.5 0.6;path={A}",
+            ["video"] = "pos=0.1 0.1;size=0.5 0.6;imageType=cover",
+            ["text"] = "pos=0.05 0.05;size=0.9 0.6;text=Themed words here and more;fontSize=0.1;color=FFFFFF",
+            ["datetime"] = "pos=0.05 0.05;size=0.9 0.6;metadata=releasedate;fontSize=0.1;color=FFFFFF",
+            ["carousel"] = "pos=0 0;size=1 1;imageType=cover;maxItemCount=3;itemSize=0.3 0.6",
+            ["textlist"] = "pos=0 0;size=1 1;fontSize=0.1;primaryColor=FFFFFF",
+            ["grid"] = "pos=0 0;size=1 1;imageType=cover;itemSize=0.3 0.4;itemScale=1.2;unfocusedItemOpacity=0.5",
+            ["rating"] = "pos=0.1 0.1;size=0 0.2;filledPath={S1};unfilledPath={S2}",
+            ["badges"] = "pos=0 0;size=1 0.5;slots=favorite,completed;lines=1;itemsPerLine=4;itemMargin=0 0;customBadgeIcon:favorite=<customBadgeIcon badge=\"favorite\">{S1}</customBadgeIcon>;customBadgeIcon:completed=<customBadgeIcon badge=\"completed\">{S2}</customBadgeIcon>",
+            ["helpsystem"] = "pos=0 0;fontSize=0.1;textColor=FFFFFF;iconColor=FFFFFF",
+            ["clock"] = "pos=0 0;fontSize=0.1;color=FFFFFF",
+            ["systemstatus"] = "pos=1 0;origin=1 0;height=0.15;entries=all",
+            ["gameselector"] = "selection=lastplayed;gameCount=3",
+            ["animation"] = "pos=0.1 0.1;size=0.5 0.6;path={G}",
+            ["gamelistinfo"] = "pos=0.05 0.05;size=0.9 0.3;color=FFFFFF;fontSize=0.1;backgroundColor=203040",
+        };
+
+        private sealed record Case(string Type, string Property, string A, string B)
+        {
+            public string Context { get; init; } = "";
+            public string Remove { get; init; } = "";
+            public string? View { get; init; }
+            public int Game { get; init; } = 4;
+            public int System { get; init; } = 1;
+            public bool HideMetadata { get; init; }
+            public double? At { get; init; }
+            public string Moves { get; init; } = "";
+            public string Beside { get; init; } = "";
+            public override string ToString() => $"{Type}.{Property}";
+        }
+
+        private static Case C(string type, string property, string a, string b) => new(type, property, a, b);
+
+        // Two gameselectors beside an element that names one, and a name text that shows a selector's pick (§36).
+        private const string TwoSelectors = "<gameselector name=\"a\"><selection>lastplayed</selection><gameCount>3</gameCount></gameselector><gameselector name=\"b\"><selection>mostplayed</selection><gameCount>3</gameCount></gameselector>";
+
+        // Ten picks asked of each, where the synthetic library has eight games with a last-played date and eleven with a play count, so entry 9 exists in b only.
+        private const string ShortAndLong = "<gameselector name=\"a\"><selection>lastplayed</selection><gameCount>10</gameCount></gameselector><gameselector name=\"b\"><selection>mostplayed</selection><gameCount>10</gameCount></gameselector>";
+
+        private static string Shown(int entry) => $"<text name=\"shown\"><pos>0.05 0.05</pos><size>0.9 0.6</size><metadata>name</metadata><gameselectorEntry>{entry}</gameselectorEntry><fontSize>0.1</fontSize><color>FFFFFF</color></text>";
+
+        private const string LongText = "A long description that cannot fit in the small box it is given here";
+
+
+        // The two values of each pair, with the context that lets the property show; common properties are generated below.
+        private static readonly Case[] Specific =
+        [
+            C("image", "path", "{A}", "{B}"),
+            C("image", "default", "{A}", "{B}") with { Remove = "path", Context = "path={X}" },
+            C("image", "imageType", "cover", "screenshot") with { Remove = "path" },
+            C("image", "maxSize", "0.5 0.6", "0.2 0.2") with { Remove = "size" },
+            C("image", "cropSize", "0.5 0.6", "0.2 0.6") with { Remove = "size" },
+            C("image", "cropPos", "0 0", "1 1") with { Remove = "size", Context = "cropSize=0.2 0.6" },
+            C("image", "tile", "false", "true"),
+            C("image", "tileSize", "0.1 0.1", "0.2 0") with { Context = "tile=true" },
+            C("image", "tileHorizontalAlignment", "left", "right") with { Context = "tile=true;tileSize=0.13 0.13" },
+            C("image", "tileVerticalAlignment", "top", "bottom") with { Context = "tile=true;tileSize=0.13 0.13" },
+            C("image", "color", "FFFFFF", "FF0000"),
+            C("image", "colorEnd", "FFFFFF", "0000FF") with { Context = "color=FFFFFF" },
+            C("image", "gradientType", "horizontal", "vertical") with { Context = "color=FF0000;colorEnd=0000FF" },
+            C("image", "saturation", "1", "0"),
+            C("image", "cornerRadius", "0", "0.05"),
+            C("image", "interpolation", "nearest", "linear"),
+
+            C("video", "imageType", "cover", "screenshot"),
+            C("video", "defaultImage", "{A}", "{B}") with { Context = "imageType=none" },
+            C("video", "imageSize", "0.5 0.6", "0.2 0.3"),
+            C("video", "imageMaxSize", "0.5 0.6", "0.2 0.2") with { Remove = "size" },
+            C("video", "imageCropSize", "0.5 0.6", "0.2 0.6") with { Remove = "size" },
+            C("video", "imageCropPos", "0 0", "1 1") with { Remove = "size", Context = "imageCropSize=0.2 0.6" },
+            C("video", "maxSize", "0.5 0.6", "0.2 0.2") with { Remove = "size" },
+            C("video", "cropSize", "0.5 0.6", "0.2 0.6") with { Remove = "size" },
+            C("video", "imageCornerRadius", "0", "0.05"),
+            C("video", "color", "FFFFFF", "FF0000"),
+            C("video", "colorEnd", "FFFFFF", "0000FF") with { Context = "color=FFFFFF" },
+            C("video", "gradientType", "horizontal", "vertical") with { Context = "color=FF0000;colorEnd=0000FF" },
+            C("video", "saturation", "1", "0"),
+
+            C("text", "text", "One thing", "Another"),
+            C("text", "metadata", "name", "developer") with { Remove = "text" },
+            C("text", "systemdata", "name", "fullname") with { Remove = "text", View = "system" },
+            C("text", "defaultValue", "one", "two") with { Remove = "text", Context = "metadata=emulator" },
+            C("text", "systemNameSuffix", "false", "true") with { Remove = "text", Context = "metadata=name", System = 5 },
+            C("text", "letterCaseSystemNameSuffix", "uppercase", "lowercase") with { Remove = "text", Context = "metadata=name;systemNameSuffix=true", System = 5 },
+            C("text", "container", "false", "true") with { Context = "size=0.9 0.2;text=A long description that cannot fit in the small box it is given here" },
+            C("text", "containerType", "vertical", "horizontal") with { Context = "container=true;size=0.9 0.3;text=A long description that cannot fit in the small box it is given here" },
+            C("text", "fontPath", "{FT}", "{FB}"),
+            C("text", "fontSize", "0.1", "0.05"),
+            C("text", "horizontalAlignment", "left", "right"),
+            C("text", "verticalAlignment", "top", "bottom"),
+            C("text", "color", "FFFFFF", "FF0000"),
+            C("text", "backgroundColor", "00000000", "FF0000"),
+            C("text", "backgroundMargins", "0 0", "0.05 0.05") with { Context = "backgroundColor=FF0000;pos=0.2 0.2;size=0.5 0.3" },
+            C("text", "backgroundCornerRadius", "0", "0.05") with { Context = "backgroundColor=FF0000" },
+            C("text", "letterCase", "none", "uppercase"),
+            C("text", "lineSpacing", "1", "2") with { Context = "verticalAlignment=top;text=A long description that wraps over several lines of the box" },
+
+            C("datetime", "metadata", "releasedate", "lastplayed"),
+            C("datetime", "defaultValue", "one", "two") with { Context = "metadata=lastplayed", Game = 0 },
+            C("datetime", "fontPath", "{FT}", "{FB}"),
+            C("datetime", "fontSize", "0.1", "0.05"),
+            C("datetime", "horizontalAlignment", "left", "right"),
+            C("datetime", "verticalAlignment", "top", "bottom"),
+            C("datetime", "color", "FFFFFF", "FF0000"),
+            C("datetime", "backgroundColor", "00000000", "FF0000"),
+            C("datetime", "backgroundMargins", "0 0", "0.05 0.05") with { Context = "backgroundColor=FF0000;pos=0.2 0.2;size=0.5 0.3" },
+            C("datetime", "backgroundCornerRadius", "0", "0.05") with { Context = "backgroundColor=FF0000" },
+            C("datetime", "letterCase", "none", "uppercase") with { Context = "format=%b %Y" },
+            C("datetime", "lineSpacing", "1", "2") with { Context = "verticalAlignment=top" },
+            C("datetime", "format", "%Y-%m-%d", "%d/%m"),
+            C("datetime", "displayRelative", "false", "true") with { Context = "metadata=lastplayed" },
+
+            C("carousel", "type", "horizontal", "vertical"),
+            C("carousel", "staticImage", "{A}", "{B}") with { View = "system", Remove = "imageType" },
+            C("carousel", "defaultImage", "{A}", "{B}") with { View = "system", Remove = "imageType", Context = "staticImage={X}" },
+            C("carousel", "imageType", "cover", "screenshot"),
+            C("carousel", "maxItemCount", "3", "5"),
+            C("carousel", "itemSize", "0.3 0.6", "0.2 0.3"),
+            C("carousel", "itemScale", "1", "1.5"),
+            C("carousel", "imageFit", "contain", "fill"),
+            C("carousel", "imageColor", "FFFFFF", "FF0000"),
+            C("carousel", "imageSelectedColor", "FFFFFF", "FF0000"),
+            C("carousel", "imageSaturation", "1", "0"),
+            C("carousel", "itemHorizontalAlignment", "left", "right") with { Context = "type=vertical;itemSize=0.3 0.2" },
+            C("carousel", "itemVerticalAlignment", "top", "bottom") with { Context = "itemSize=0.3 0.3" },
+            C("carousel", "unfocusedItemOpacity", "0.5", "1"),
+            C("carousel", "unfocusedItemSaturation", "1", "0"),
+            C("carousel", "unfocusedItemDimming", "1", "0.3"),
+            C("carousel", "color", "00000000", "FF0000"),
+            C("carousel", "colorEnd", "FF0000", "0000FF") with { Context = "color=FF0000" },
+            C("carousel", "gradientType", "horizontal", "vertical") with { Context = "color=FF0000;colorEnd=0000FF" },
+            C("carousel", "text", "One", "Two") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF;fontSize=0.1" },
+            C("carousel", "textRelativeScale", "1", "0.5") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF;fontSize=0.1" },
+            C("carousel", "textColor", "FFFFFF", "FF0000") with { View = "system", Remove = "imageType", Context = "staticImage={X};fontSize=0.1" },
+            C("carousel", "textBackgroundColor", "FFFFFF00", "FF0000") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF;fontSize=0.1" },
+            C("carousel", "fontPath", "{FT}", "{FB}") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF;fontSize=0.1" },
+            C("carousel", "fontSize", "0.1", "0.05") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF" },
+            C("carousel", "letterCase", "none", "uppercase") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF;fontSize=0.1" },
+
+            C("textlist", "selectorHeight", "0.1", "0.2") with { Context = "selectorColor=FF0000" },
+            C("textlist", "selectorVerticalOffset", "0", "0.1") with { Context = "selectorColor=FF0000" },
+            C("textlist", "selectorColor", "333333", "FF0000"),
+            C("textlist", "primaryColor", "FFFFFF", "FF0000"),
+            C("textlist", "secondaryColor", "FFFFFF", "FF0000") with { System = 6 },
+            C("textlist", "selectedColor", "FFFFFF", "FF0000"),
+            C("textlist", "selectedSecondaryColor", "FFFFFF", "FF0000") with { System = 6, Game = 5 },
+            C("textlist", "selectedBackgroundColor", "00000000", "FF0000"),
+            C("textlist", "selectedBackgroundMargins", "0 0", "0.1 0.1") with { Context = "selectedBackgroundColor=FF0000;selectorColor=00000000;pos=0.2 0;size=0.5 1" },
+            C("textlist", "selectedBackgroundCornerRadius", "0", "0.05") with { Context = "selectedBackgroundColor=FF0000;selectorColor=00000000" },
+            C("textlist", "fontPath", "{FT}", "{FB}"),
+            C("textlist", "fontSize", "0.1", "0.05"),
+            C("textlist", "horizontalAlignment", "left", "right"),
+            C("textlist", "horizontalMargin", "0", "0.1"),
+            C("textlist", "letterCase", "none", "uppercase"),
+            C("textlist", "lineSpacing", "1.5", "2.5"),
+            C("textlist", "indicators", "none", "symbols"),
+            C("textlist", "collectionIndicators", "symbols", "ascii") with { System = 7 },
+            C("carousel", "itemRotation", "7.5", "30") with { Context = "type=verticalWheel;itemSize=0.3 0.2" },
+            C("carousel", "itemRotationOrigin", "-3 0.5", "-1 0.5") with { Context = "type=verticalWheel;itemSize=0.3 0.2;itemRotation=20" },
+            C("carousel", "itemsBeforeCenter", "8", "0") with { Context = "type=verticalWheel;itemSize=0.3 0.2;itemRotation=20" },
+            C("carousel", "itemsAfterCenter", "8", "0") with { Context = "type=verticalWheel;itemSize=0.3 0.2;itemRotation=20" },
+            C("carousel", "itemAxisHorizontal", "false", "true") with { Context = "type=verticalWheel;itemSize=0.3 0.2;itemRotation=20" },
+            C("carousel", "wheelHorizontalAlignment", "center", "left") with { Context = "type=verticalWheel;itemSize=0.3 0.2" },
+            C("carousel", "wheelVerticalAlignment", "center", "top") with { Context = "type=horizontalWheel;itemSize=0.2 0.3" },
+            C("carousel", "horizontalOffset", "0", "0.2"),
+            C("carousel", "verticalOffset", "0", "0.2") with { Context = "itemSize=0.3 0.3" },
+            C("carousel", "reflections", "false", "true") with { Context = "itemSize=0.3 0.3" },
+            C("carousel", "reflectionsOpacity", "0.5", "1") with { Context = "itemSize=0.3 0.3;reflections=true" },
+            C("carousel", "reflectionsFalloff", "1", "3") with { Context = "itemSize=0.3 0.3;reflections=true" },
+            C("carousel", "selectedItemMargins", "0 0", "0.1 0.05") with { Context = "itemSize=0.2 0.3;itemScale=1" },
+            C("carousel", "lineSpacing", "1", "2.5") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF;fontSize=0.07;text=Several words that wrap" },
+            C("carousel", "itemTransitions", "animate", "instant") with { Moves = "step", At = 100 },
+            C("carousel", "fastScrolling", "false", "true") with { Moves = "hold", At = 2000 },
+            C("textlist", "textHorizontalScrolling", "false", "true") with { Context = "size=0.3 1", At = 4000 },
+            C("textlist", "textHorizontalScrollSpeed", "1", "3") with { Context = "size=0.3 1;textHorizontalScrollDelay=0", At = 500 },
+            C("textlist", "textHorizontalScrollDelay", "0", "5") with { Context = "size=0.3 1", At = 1000 },
+            C("textlist", "textHorizontalScrollGap", "0.5", "3") with { Context = "size=0.3 1;textHorizontalScrollDelay=0", At = 1500 },
+            C("text", "containerStartDelay", "0", "5") with { Context = "container=true;size=0.9 0.2;text=" + LongText, At = 2000 },
+            C("text", "containerScrollSpeed", "1", "3") with { Context = "container=true;size=0.9 0.2;containerStartDelay=0;text=" + LongText, At = 1000 },
+            C("text", "containerResetDelay", "0.5", "10") with { Context = "container=true;size=0.9 0.2;containerStartDelay=0;text=" + LongText, At = 4000 },
+            C("text", "containerScrollGap", "0.5", "3") with { Context = "container=true;containerType=horizontal;size=0.9 0.2;containerStartDelay=0;text=" + LongText, At = 7000 },
+            C("text", "containerVerticalSnap", "true", "false") with { Context = "container=true;size=0.9 0.2;text=" + LongText },
+            C("image", "scrollFadeIn", "false", "true") with { Remove = "path", Context = "imageType=cover", Moves = "step", At = 100 },
+            C("video", "scrollFadeIn", "false", "true") with { Moves = "step", At = 100 },
+            C("textlist", "systemNameSuffix", "false", "true") with { System = 5 },
+            C("textlist", "letterCaseSystemNameSuffix", "uppercase", "lowercase") with { System = 5, Context = "systemNameSuffix=true" },
+
+            C("grid", "staticImage", "{A}", "{B}") with { View = "system", Remove = "imageType" },
+            C("grid", "defaultImage", "{A}", "{B}") with { View = "system", Remove = "imageType", Context = "staticImage={X}" },
+            C("grid", "defaultFolderImage", "{A}", "{B}") with { System = 6, Game = 5, Remove = "imageType", Context = "imageType=none" },
+            C("grid", "imageType", "cover", "screenshot"),
+            C("grid", "itemSize", "0.3 0.4", "0.2 0.3"),
+            C("grid", "itemScale", "1", "1.5"),
+            C("grid", "itemSpacing", "0.01 0.01", "0.05 0.05"),
+            C("grid", "scaleInwards", "false", "true"),
+            C("grid", "fractionalRows", "false", "true") with { Context = "itemSize=0.3 0.35" },
+            C("grid", "itemTransitions", "animate", "instant") with { Moves = "step", At = 100 },
+            C("grid", "rowTransitions", "animate", "instant") with { Moves = "down", At = 100 },
+            C("grid", "unfocusedItemOpacity", "0.5", "1"),
+            C("grid", "unfocusedItemSaturation", "1", "0"),
+            C("grid", "unfocusedItemDimming", "1", "0.3"),
+            C("grid", "imageFit", "contain", "fill"),
+            C("grid", "imageCropPos", "0 0", "1 1") with { Context = "imageFit=cover" },
+            C("grid", "imageInterpolation", "nearest", "linear"),
+            C("grid", "imageRelativeScale", "1", "0.5"),
+            C("grid", "imageCornerRadius", "0", "0.05") with { Context = "imageFit=fill" },
+            C("grid", "imageColor", "FFFFFF", "FF0000"),
+            C("grid", "imageColorEnd", "FFFFFF", "0000FF") with { Context = "imageColor=FFFFFF" },
+            C("grid", "imageGradientType", "horizontal", "vertical") with { Context = "imageColor=FF0000;imageColorEnd=0000FF" },
+            C("grid", "imageSelectedColor", "FFFFFF", "FF0000"),
+            C("grid", "imageSaturation", "1", "0"),
+            C("grid", "backgroundImage", "{A}", "{B}") with { Context = "imageRelativeScale=0.5" },
+            C("grid", "backgroundRelativeScale", "1", "0.5") with { Context = "backgroundColor=FF0000;imageRelativeScale=0.3" },
+            C("grid", "backgroundCornerRadius", "0", "0.05") with { Context = "backgroundColor=FF0000;imageRelativeScale=0.3" },
+            C("grid", "backgroundColor", "00000000", "FF0000") with { Context = "imageRelativeScale=0.5" },
+            C("grid", "selectorImage", "{A}", "{B}") with { Context = "imageRelativeScale=0.5" },
+            C("grid", "selectorRelativeScale", "1", "0.5") with { Context = "selectorColor=FF0000;imageRelativeScale=0.3" },
+            C("grid", "selectorLayer", "top", "bottom") with { Context = "selectorColor=FF0000;backgroundColor=00FF00" },
+            C("grid", "selectorCornerRadius", "0", "0.05") with { Context = "selectorColor=FF0000;imageRelativeScale=0.3" },
+            C("grid", "selectorColor", "00000000", "FF0000") with { Context = "imageRelativeScale=0.5" },
+            C("grid", "text", "One", "Two") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF;fontSize=0.05" },
+            C("grid", "textRelativeScale", "1", "0.5") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF;fontSize=0.05" },
+            C("grid", "textBackgroundCornerRadius", "0", "0.05") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF;fontSize=0.05;textBackgroundColor=FF0000" },
+            C("grid", "textColor", "FFFFFF", "FF0000") with { View = "system", Remove = "imageType", Context = "staticImage={X};fontSize=0.05" },
+            C("grid", "textBackgroundColor", "FFFFFF00", "FF0000") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF;fontSize=0.05" },
+            C("grid", "textSelectedColor", "FFFFFF", "FF0000") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF;fontSize=0.05" },
+            C("grid", "textSelectedBackgroundColor", "00000000", "FF0000") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF;fontSize=0.05" },
+            C("grid", "fontPath", "{FT}", "{FB}") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF;fontSize=0.05" },
+            C("grid", "fontSize", "0.05", "0.1") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF" },
+            C("grid", "letterCase", "none", "uppercase") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF;fontSize=0.05" },
+            C("grid", "lineSpacing", "1.5", "3") with { View = "system", Remove = "imageType", Context = "staticImage={X};textColor=FFFFFF;fontSize=0.05;text=Several words that wrap onto lines" },
+            C("grid", "systemNameSuffix", "false", "true") with { System = 5, Remove = "imageType", Context = "imageType=none;textColor=FFFFFF;fontSize=0.05" },
+            C("grid", "letterCaseSystemNameSuffix", "uppercase", "lowercase") with { System = 5, Remove = "imageType", Context = "imageType=none;systemNameSuffix=true;textColor=FFFFFF;fontSize=0.05" },
+
+            C("rating", "hideIfZero", "false", "true") with { Game = 3 },
+            C("rating", "color", "FFFFFF", "FF0000"),
+            C("rating", "filledPath", "{S1}", "{S3}"),
+            C("rating", "unfilledPath", "{S2}", "{S3}"),
+            C("rating", "overlay", "true", "false"),
+
+            C("badges", "horizontalAlignment", "left", "right"),
+            C("badges", "direction", "row", "column") with { Context = "lines=2;itemsPerLine=2" },
+            C("badges", "lines", "1", "2"),
+            C("badges", "itemsPerLine", "4", "2"),
+            C("badges", "itemMargin", "0 0", "0.05 0.05"),
+            C("badges", "slots", "favorite,completed", "favorite"),
+            C("badges", "customBadgeIcon", "<customBadgeIcon badge=\"favorite\">{S1}</customBadgeIcon>", "<customBadgeIcon badge=\"favorite\">{S3}</customBadgeIcon>"),
+            C("badges", "badgeIconColor", "FFFFFF", "FF0000"),
+            C("badges", "controllerPos", "0.5 0.5", "0.2 0.2") with { Context = "slots=controller", System = 8 },
+            C("badges", "controllerSize", "0.5", "1") with { Context = "slots=controller", System = 8 },
+            C("badges", "customControllerIcon", "<customControllerIcon controller=\"gamepad_nintendo_snes\">{S1}</customControllerIcon>",
+                "<customControllerIcon controller=\"gamepad_nintendo_snes\">{S3}</customControllerIcon>") with { Context = "slots=controller", System = 8 },
+            C("badges", "controllerIconColor", "FFFFFF", "FF0000") with { Context = "slots=controller", System = 8 },
+            C("badges", "folderLinkPos", "0.5 0.5", "0.2 0.2") with { Context = "slots=folder", System = 8, Game = 3 },
+            C("badges", "folderLinkSize", "0.5", "1") with { Context = "slots=folder", System = 8, Game = 3 },
+            C("badges", "customFolderLinkIcon", "{S1}", "{S3}") with { Context = "slots=folder", System = 8, Game = 3 },
+            C("badges", "folderLinkIconColor", "FFFFFF", "FF0000") with { Context = "slots=folder", System = 8, Game = 3 },
+
+            C("helpsystem", "textColor", "FFFFFF", "FF0000"),
+            C("helpsystem", "iconColor", "FFFFFF", "FF0000"),
+            C("helpsystem", "fontPath", "{FT}", "{FB}"),
+            C("helpsystem", "fontSize", "0.1", "0.05"),
+            C("helpsystem", "entries", "all", "a,b"),
+            C("helpsystem", "entryRelativeScale", "1", "0.5"),
+            C("helpsystem", "entrySpacing", "0.01", "0.04"),
+            C("helpsystem", "iconTextSpacing", "0", "0.04"),
+            C("helpsystem", "letterCase", "uppercase", "lowercase"),
+            C("helpsystem", "backgroundColor", "00000000", "FF0000"),
+            C("helpsystem", "backgroundHorizontalPadding", "0 0", "0.05 0.05") with { Context = "backgroundColor=FF0000;entries=a" },
+            C("helpsystem", "backgroundVerticalPadding", "0 0", "0.05 0.05") with { Context = "backgroundColor=FF0000" },
+            C("helpsystem", "backgroundCornerRadius", "0", "0.05") with { Context = "backgroundColor=FF0000;backgroundHorizontalPadding=0.03 0.03;backgroundVerticalPadding=0.03 0.03" },
+            C("helpsystem", "customButtonIcon", "<customButtonIcon button=\"button_a_XBOX\">{S1}</customButtonIcon>", "<customButtonIcon button=\"button_a_XBOX\">{S3}</customButtonIcon>") with { Context = "entries=a" },
+
+            C("clock", "fontPath", "{FT}", "{FB}"),
+            C("clock", "fontSize", "0.1", "0.05"),
+            C("clock", "horizontalAlignment", "left", "right") with { Context = "size=0.8 0.3" },
+            C("clock", "verticalAlignment", "top", "bottom") with { Context = "size=0.8 0.5" },
+            C("clock", "color", "FFFFFF", "FF0000"),
+            C("clock", "backgroundColor", "00000000", "FF0000"),
+            C("clock", "backgroundColorEnd", "FF0000", "0000FF") with { Context = "backgroundColor=FF0000" },
+            C("clock", "backgroundGradientType", "horizontal", "vertical") with { Context = "backgroundColor=FF0000;backgroundColorEnd=0000FF" },
+            C("clock", "backgroundHorizontalPadding", "0 0", "0.05 0.05") with { Context = "backgroundColor=FF0000" },
+            C("clock", "backgroundVerticalPadding", "0 0", "0.05 0.05") with { Context = "backgroundColor=FF0000" },
+            C("clock", "backgroundCornerRadius", "0", "0.05") with { Context = "backgroundColor=FF0000;backgroundHorizontalPadding=0.03 0.03;backgroundVerticalPadding=0.03 0.03" },
+            C("clock", "format", "%H:%M", "%Y"),
+
+            C("systemstatus", "height", "0.1", "0.2"),
+            C("systemstatus", "fontPath", "{FT}", "{FB}"),
+            C("systemstatus", "textRelativeScale", "1", "0.5"),
+            C("systemstatus", "color", "FFFFFF", "FF0000"),
+            C("systemstatus", "backgroundColor", "00000000", "FF0000"),
+            C("systemstatus", "backgroundHorizontalPadding", "0 0", "0.05 0.05") with { Context = "backgroundColor=FF0000" },
+            C("systemstatus", "backgroundVerticalPadding", "0 0", "0.05 0.05") with { Context = "backgroundColor=FF0000" },
+            C("systemstatus", "backgroundCornerRadius", "0", "0.05") with { Context = "backgroundColor=FF0000;backgroundHorizontalPadding=0.03 0.03;backgroundVerticalPadding=0.03 0.03" },
+            C("systemstatus", "entries", "all", "wifi"),
+            C("systemstatus", "entrySpacing", "0", "0.04"),
+            C("gameselector", "selection", "lastplayed", "mostplayed") with { View = "system", Beside = Shown(0) },
+            C("gameselector", "gameCount", "1", "3") with { View = "system", Beside = Shown(2) },
+            C("gameselector", "allowDuplicates", "false", "true") with { View = "system", Context = "selection=random;gameCount=20", Beside = Shown(15) },
+            C("image", "gameselector", "a", "b") with { View = "system", Remove = "path", Context = "imageType=cover;gameselectorEntry=9", Beside = ShortAndLong },
+            C("image", "gameselectorEntry", "0", "9") with { View = "system", Remove = "path", Context = "imageType=cover;gameselector=a", Beside = ShortAndLong },
+            C("video", "gameselector", "a", "b") with { View = "system", Context = "gameselectorEntry=9", Beside = ShortAndLong },
+            C("video", "gameselectorEntry", "0", "9") with { View = "system", Context = "gameselector=a", Beside = ShortAndLong },
+            C("text", "gameselector", "a", "b") with { View = "system", Remove = "text", Context = "metadata=name", Beside = TwoSelectors },
+            C("text", "gameselectorEntry", "0", "1") with { View = "system", Remove = "text", Context = "metadata=name", Beside = TwoSelectors },
+            C("datetime", "gameselector", "a", "b") with { View = "system", Beside = TwoSelectors },
+            C("datetime", "gameselectorEntry", "0", "1") with { View = "system", Beside = TwoSelectors },
+            C("rating", "gameselector", "a", "b") with { View = "system", Beside = TwoSelectors },
+            C("rating", "gameselectorEntry", "0", "2") with { View = "system", Beside = TwoSelectors },
+
+            C("animation", "path", "{G}", "{G2}"),
+            C("animation", "maxSize", "0.5 0.6", "0.2 0.2") with { Remove = "size" },
+            C("animation", "speed", "1", "3") with { At = 150 },
+            C("animation", "direction", "normal", "reverse") with { At = 150 },
+            C("animation", "iterationCount", "0", "1") with { At = 900 },
+            C("animation", "interpolation", "nearest", "linear") with { Context = "path={G2}" },
+            C("animation", "cornerRadius", "0", "0.05"),
+            C("animation", "color", "FFFFFF", "00FFFF"),
+            C("animation", "colorEnd", "FFFFFF", "0000FF") with { Context = "color=FFFFFF" },
+            C("animation", "gradientType", "horizontal", "vertical") with { Context = "color=FF0000;colorEnd=0000FF" },
+            C("animation", "saturation", "1", "0"),
+
+            C("gamelistinfo", "fontPath", "{FT}", "{FB}"),
+            C("gamelistinfo", "fontSize", "0.1", "0.05"),
+            C("gamelistinfo", "horizontalAlignment", "left", "right"),
+            C("gamelistinfo", "verticalAlignment", "top", "bottom"),
+            C("gamelistinfo", "color", "FFFFFF", "FF0000"),
+            C("gamelistinfo", "backgroundColor", "00000000", "FF0000"),
+
+            C("systemstatus", "customIcon", "<customIcon icon=\"icon_wifi\">{S1}</customIcon>", "<customIcon icon=\"icon_wifi\">{S3}</customIcon>"),
+        ];
+
+        // The properties every element shares, where its type declares them.
+        private static IEnumerable<Case> Common(string type)
+        {
+            ThemeElementSpec spec = ThemeCatalog.Find(type)!;
+            bool has(string p) => spec.Find(p) is not null;
+            string size = type is "rating" ? "0 0.3" : "0.3 0.3";
+            if (has("pos")) yield return C(type, "pos", "0.1 0.1", "0.3 0.2");
+            if (has("origin")) yield return C(type, "origin", "0 0", "1 1") with { Context = "pos=0.5 0.5" };
+            if (has("size")) yield return C(type, "size", Base[type].Split(';').FirstOrDefault(p => p.StartsWith("size="))?[5..] ?? "0.5 0.5", size);
+            if (has("rotation")) yield return C(type, "rotation", "0", "30");
+            if (has("rotationOrigin")) yield return C(type, "rotationOrigin", "0 0", "1 1") with { Context = "rotation=30" };
+            if (has("zIndex")) yield return C(type, "zIndex", "30", "45") with { Context = "cover" };
+            if (has("opacity")) yield return C(type, "opacity", "1", "0.5");
+            if (has("visible")) yield return C(type, "visible", "true", "false");
+            if (has("metadataElement")) yield return C(type, "metadataElement", "false", "true") with { HideMetadata = true };
+            if (has("scope")) yield return C(type, "scope", "shared", "none");
+        }
+
+        private static IEnumerable<Case> AllCases() => Specific.Concat(Base.Keys.SelectMany(Common));
+
+        private static string Fill(string text) => text
+            .Replace("{A}", SceneAssets.Halves("theme-a", 60, 80, Colors.DarkOrange, Colors.Teal))
+            .Replace("{B}", SceneAssets.Halves("theme-b", 80, 50, Colors.Purple, Colors.Gold))
+            .Replace("{X}", "/nonexistent/emusen/scene/missing.png")
+            .Replace("{G2}", SceneAssets.Gif("anim-checker", 4, 4, [10, 10], (f, x, y) => (x + y + f) % 2 == 0 ? Colors.White : Colors.Teal))
+            .Replace("{G}", SceneAssets.Gif("anim-four", 8, 6, [10, 20, 30, 40], (f, x, y) => new[] { Colors.Red, Colors.Lime, Colors.Blue, Colors.Yellow }[f]))
+            .Replace("{S1}", SceneAssets.Svg("icon-1", "<circle cx='10' cy='10' r='9' fill='#fff' fill-opacity='0.5'/>"))
+            .Replace("{S2}", SceneAssets.Svg("icon-2", "<rect x='2' y='2' width='16' height='16' fill='#888'/>"))
+            .Replace("{S3}", SceneAssets.Svg("icon-3", "<path d='M10 1L19 19H1Z' fill='#fff'/>"))
+            .Replace("{FT}", SceneAssets.Font("Inter-Thin"))
+            .Replace("{FB}", SceneAssets.Font("Inter-Bold"));
+
+        private static string Element(Case c, string value)
+        {
+            var props = new List<KeyValuePair<string, string>>();
+            void Set(string key, string v)
+            {
+                props.RemoveAll(p => p.Key == key);
+                props.Add(new(key, v));
+            }
+
+            foreach (string part in Base[c.Type].Split(';')) { int eq = part.IndexOf('='); Set(part[..eq], part[(eq + 1)..]); }
+            foreach (string r in c.Remove.Split(',', StringSplitOptions.RemoveEmptyEntries)) props.RemoveAll(p => p.Key == r);
+            foreach (string part in c.Context.Split(';', StringSplitOptions.RemoveEmptyEntries).Where(p => p.Contains('='))) { int eq = part.IndexOf('='); Set(part[..eq], part[(eq + 1)..]); }
+            if (value.StartsWith('<')) props.Add(new(c.Property + ":case", value));
+            else Set(c.Property, value);
+            string body = string.Concat(props.Select(p => p.Value.StartsWith('<') ? p.Value : $"<{p.Key}>{p.Value}</{p.Key}>"));
+            string cover = c.Context.Split(';').Contains("cover") ? "<image name=\"cover\"><pos>0 0</pos><size>1 1</size><path>{B}</path><zIndex>35</zIndex></image>" : "";
+            string view = c.View ?? (ThemeCatalog.Find(c.Type)!.Find(c.Property)?.OnlyIn == ThemeViewScope.System ? "system" : "gamelist");
+            return Fill($"<view name=\"{view}\">{cover}<{c.Type} name=\"x\">{body}</{c.Type}>{c.Beside}</view>");
+        }
+
+        // Five regular systems, then a collection and a system whose sixth game is a folder.
+        private static IReadOnlyList<SceneSystem> Systems(SyntheticTheme theme)
+        {
+            var systems = SyntheticLibrary.Systems.Select(s => (s.System, Games: SyntheticLibrary.Games(s.System, s.Extension))).ToList();
+            systems.Add((new ThemeSystem("all", "All Games", "auto-allgames", ThemeSystemKind.AutoCollection), SyntheticLibrary.Games(new ThemeSystem("all", "All Games", "all"), ".nes")));
+            systems.Add((new ThemeSystem("snes", "Super Nintendo", "snes"), SyntheticLibrary.Games(SyntheticTheme.Snes, ".sfc").Select((g, i) => i == 5 ? g with { Folder = true } : g).ToList()));
+            systems.Add((new ThemeSystem("mine", "mine", "mine", ThemeSystemKind.CustomCollection), SyntheticLibrary.Games(SyntheticTheme.Snes, ".sfc").Select((g, i) => g with { InCollection = i % 2 == 0 }).ToList()));
+            systems.Add((new ThemeSystem("pads", "Pads", "snes"), SyntheticLibrary.Games(SyntheticTheme.Snes, ".sfc")
+                .Select((g, i) => i == 3 ? g with { Folder = true, FolderLink = "Linked Game.sfc" } : g with { Controller = "gamepad_nintendo_snes" }).ToList()));
+            return systems.Select(s => new SceneSystem(s.System, theme.Load(new ThemeChoices { ScreenWidth = W, ScreenHeight = H }, s.System), s.Games)).ToList();
+        }
+
+        private static (RenderedFrame Frame, ResolvedTheme Theme) Render(Case c, string value)
+        {
+            using var theme = new SyntheticTheme();
+            theme.Capabilities("").Theme(Element(c, value));
+            IReadOnlyList<SceneSystem> systems = Systems(theme);
+            var data = new SceneData(systems, new Size(W, H))
+            {
+                SystemIndex = c.System, GameIndex = c.Game, Media = new SceneAssets.Media(), HideMetadata = c.HideMetadata,
+                Status = new EmuSen.LunaP.Controls.DeviceStatus(Wifi: true, BatteryPercent: 70),
+            };
+            string view = Element(c, value).Contains("<view name=\"system\"") ? "system" : "gamelist";
+            if (c.At is not { } at) return (SceneAssets.Render(SceneBuilder.Build(data.System.Theme.View(view), data)), data.System.Theme);
+            var moving = new SceneView(data, view, TimeSpan.Zero);
+            if (c.Moves == "step") moving.Step(1, TimeSpan.Zero);
+            if (c.Moves == "hold") moving.Press(1, TimeSpan.Zero);
+            if (c.Moves == "down") moving.Press(1, TimeSpan.Zero, vertical: true);
+            using var host = new SceneMotionHost(moving);
+            return (host.At(TimeSpan.FromMilliseconds(at)), data.System.Theme);
+        }
+
+        [Fact]
+        public Task Every_mapped_property_changes_the_rendered_pixels() => UiTest.Run(() =>
+        {
+            var failures = new List<string>();
+            int cases = 0;
+            foreach (Case c in AllCases())
+            {
+                cases++;
+                (RenderedFrame a, ResolvedTheme ta) = Render(c, c.A);
+                (RenderedFrame b, ResolvedTheme tb) = Render(c, c.B);
+                string errors = string.Join("; ", ta.Errors.Concat(tb.Errors).Select(e => e.Message).Distinct());
+                if (errors.Length > 0) failures.Add($"{c}: theme errors: {errors}");
+                else if (SceneAssets.Differing(a, b) == 0) failures.Add($"{c}: {c.A} and {c.B} render the same pixels");
+            }
+
+            _output.WriteLine($"{cases} cases, {failures.Count} failing");
+            Assert.True(failures.Count == 0, string.Join("\n", failures));
+        });
+
+        // The case list and the mapping's list are the same set, so the mapping cannot claim what no case proves.
+        [Fact]
+        public void Every_pair_the_mapping_names_has_a_case_and_every_case_is_mapped()
+        {
+            var claimed = SceneMapping.Specific.SelectMany(p => p.Value.Select(v => (p.Key, v)))
+                .Concat(SceneMapping.Specific.Keys.SelectMany(t => SceneMapping.Common.Where(p => ThemeCatalog.Find(t)!.Find(p) is not null).Select(p => (t, p))))
+                .ToHashSet();
+            var proved = AllCases().Select(c => (c.Type, c.Property)).ToHashSet();
+            Assert.Empty(claimed.Except(proved).Select(p => $"{p.Item1}.{p.Item2}"));
+            Assert.Empty(proved.Except(claimed).Select(p => $"{p.Item1}.{p.Item2}"));
+        }
+    }
+}

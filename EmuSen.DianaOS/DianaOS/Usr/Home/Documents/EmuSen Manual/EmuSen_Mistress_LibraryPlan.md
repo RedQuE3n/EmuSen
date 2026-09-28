@@ -156,7 +156,7 @@ worth wanting — OpenVGDB — is the one whose licence is unstated.
 
 ## 7. Carried out (2026-09-21)
 
-**The decision this plan was written against has changed.** The csproj header, `EmuSen_Launcher_Multicore_Gameplan.md` §0 and Path E of `EmuSen_LunaP_Adoption_Gameplan.md` all record that a polished frontend was to be a separate project and that Mistress would stay a bug-testing tool. On 2026-09-21 the request was for Mistress itself to be modelled on OpenEmu. Those records are left as they were, since they were true when written; this section is where the change is recorded, and the csproj header is updated to point here.
+**The decision this plan was written against has changed.** The csproj header, `EmuSen_Launcher_Multicore_Gameplan.md` §0 and Path E of `EmuSen_LunaP_Adoption_Gameplan.md` all record that a polished frontend was to be a separate project and that Mistress would stay a bug-testing tool. Requested 2026-09-21: Mistress itself is to be modelled on OpenEmu. Those records are left as they were, since they were true when written; this section is where the change is recorded, and the csproj header is updated to point here.
 
 **Stage 0 is built** (`EmuSen_Settings_Reference.md` §4.31, `EmuSen_Galaxia.md` §5.2), together with the first half of stage 2: every state written from the window now has its picture beside it.
 

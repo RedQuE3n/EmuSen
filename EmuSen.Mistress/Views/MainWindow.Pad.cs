@@ -24,8 +24,6 @@ namespace EmuSen.Mistress.Views
         // Set when a menu closes, until every button is let go, so the press that closed it is not the game's.
         private bool _padQuiet;
 
-        private bool _bigScreen;
-
         private const double PadStickThreshold = 0.55;
 
         private bool GameOnScreen => GameFrame.IsVisible && _session is { IsRomLoaded: true };
@@ -45,24 +43,14 @@ namespace EmuSen.Mistress.Views
 
         private void StartPadNavigation()
         {
-            _bigScreen = WantsBigScreen();
-            if (_bigScreen)
-            {
-                MenuStrip.IsVisible = false;
-                // A desktop sidebar costs a handheld its width, so the console choice goes back in the filter bar - see EmuSen_Settings_Reference.md §4.33.
-                LibrarySidebarPane.IsVisible = false;
-                LibraryFilter.ShowFacet = true;
-                LibraryList.FontSize = 24;
-                LibraryHeaderText.FontSize = 17;
-                LibraryHintText.FontSize = 17;
-                Opened += (_, _) => IsFullScreen = true;
-            }
-
-            // One window on screen in a big-screen session, so the others are drawn inside this one - see EmuSen_Settings_Reference.md §4.45.2.
-            Sheets.PresentsWindows = _bigScreen;
-            Sheets.Hint = "A  Choose      B  Back      L1 R1  Tab      Left Right  Change";
+            // Wired once; what big screen changes is ApplyBigScreen's, which a switch runs again - see EmuSen_Settings_Reference.md §4.54.
+            ApplyPadHints();
             Sheets.PresentedChanged += OnSheetsChanged;
             SizeChanged += (_, e) => Sheets.Scale = Math.Clamp(e.NewSize.Height / 720.0, 1.0, 2.0);
+            SizeChanged += (_, e) => PadNotice.FontSize = _bigScreen ? 18 * Math.Clamp(e.NewSize.Height / 720.0, 1.0, 2.0) : 15;
+            SetUpBigPictureSwitch();
+            SetUpBigMenus();
+            ApplyBigScreen(WantsBigScreen());
 
             PadMenuList.Label = entry => entry.Text();
             _padTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
@@ -70,28 +58,22 @@ namespace EmuSen.Mistress.Views
             _padTimer.Start();
         }
 
-        private bool PadHeld(UiButton button) => button switch
-        {
-            UiButton.Up => _gamepad.IsRawPressed(SDL.GamepadButton.DPadUp) || _gamepad.RawAxis(SDL.GamepadAxis.LeftY) < -PadStickThreshold,
-            UiButton.Down => _gamepad.IsRawPressed(SDL.GamepadButton.DPadDown) || _gamepad.RawAxis(SDL.GamepadAxis.LeftY) > PadStickThreshold,
-            UiButton.Left => _gamepad.IsRawPressed(SDL.GamepadButton.DPadLeft) || _gamepad.RawAxis(SDL.GamepadAxis.LeftX) < -PadStickThreshold,
-            UiButton.Right => _gamepad.IsRawPressed(SDL.GamepadButton.DPadRight) || _gamepad.RawAxis(SDL.GamepadAxis.LeftX) > PadStickThreshold,
-            UiButton.Accept => _gamepad.IsRawPressed(SDL.GamepadButton.South),
-            UiButton.Back => _gamepad.IsRawPressed(SDL.GamepadButton.East),
-            UiButton.Menu => _gamepad.IsRawPressed(SDL.GamepadButton.Start),
-            UiButton.Options => _gamepad.IsRawPressed(SDL.GamepadButton.Back),
-            UiButton.PageUp => _gamepad.IsRawPressed(SDL.GamepadButton.LeftShoulder),
-            UiButton.PageDown => _gamepad.IsRawPressed(SDL.GamepadButton.RightShoulder),
-            UiButton.First => _gamepad.RawAxis(SDL.GamepadAxis.LeftTrigger) > 0.5,
-            UiButton.Last => _gamepad.RawAxis(SDL.GamepadAxis.RightTrigger) > 0.5,
-            UiButton.Search => _gamepad.IsRawPressed(SDL.GamepadButton.North),
-            _ => _gamepad.IsRawPressed(SDL.GamepadButton.Guide),
-        };
-
         private void PadTick()
         {
+            // The launch screen takes no input, as ES-DE's does not (§4.71).
+            if (LaunchScreenOpen)
+            {
+                _gamepad.Poll();
+                AdvanceLaunchScreen();
+                if (LaunchScreenOpen) _padNavigator.Forget(PadHeld);
+                return;
+            }
             _gamepad.Poll();
-            if (!_gamepad.IsConnected) return;
+            _menuOpening.Advance(UiClock());
+            // Before anything else reads the pad: the press that wakes the screensaver is its own (§4.75).
+            if (StepScreensaver()) return;
+            if (!KeyboardSteers() && !_gamepad.IsConnected) return;
+            TrackControllers();
 
             // A game on screen owns the pad; only the chord reaches the interface - see §4.29.
             if (GameOnScreen && !_padMenuOpen && OtherWindow() is null)
@@ -103,7 +85,21 @@ namespace EmuSen.Mistress.Views
             }
 
             _padNavigator.MenuChord(PadHeld);
-            foreach (UiButton press in _padNavigator.Feed(PadHeld, _padClock.Elapsed).ToArray()) OnPadCommand(press);
+            TimeSpan now = UiClock();
+
+            // The themed view takes the directions as held and let go, for its own repeats - see EmuSen_Settings_Reference.md §4.52.
+            bool themed = ThemedTakesThePad;
+            if (ThemedLibraryShown) _themed!.SetPadLayout(HelpFamily, _appSettings.SwapPadButtons);
+            if (themed) ThemedDirections(now);
+            else LetGoOfTheThemedDirection(now);
+
+            foreach (UiButton press in _padNavigator.Feed(PadHeld, now).ToArray())
+            {
+                if (themed && Directions.Contains(press)) continue;
+                OnPadCommand(press);
+            }
+
+            if (ThemedLibraryShown) ScheduleThemedFrame();
         }
 
         // True while the game must not hear the pad: a menu is over it, or the button that closed one is still down.
@@ -122,6 +118,7 @@ namespace EmuSen.Mistress.Views
         // A sheet over a game pauses it, and its last one resumes only what it paused - the pad menu's rule (§4.29).
         private void OnSheetsChanged()
         {
+            UpdateMenuBackdrop();
             if (Sheets.IsPresenting)
             {
                 if (_sheetPaused || !GameOnScreen || IsPaused) return;
@@ -144,10 +141,13 @@ namespace EmuSen.Mistress.Views
         internal void OnPadCommand(UiButton button)
         {
             if (button == UiButton.Guide) button = UiButton.Menu;
+            if (ScreensaverFromButton(button)) return;
 
             if (OtherWindow() is { } other) PadWindowRouter.Send(other, button);
             else if (EmuSen.LunaP.Controls.OnScreenKeyboard.OpenOver(this) is { } keyboard) PadKeyboard.Send(keyboard, button);
+            else if (EmuSen.LunaP.Controls.MenuTextPopup.OpenOver(this) is { } popup) PadKeyboard.Send(popup, button);
             else if (_padMenuOpen) PadMenuCommand(button);
+            else if (LibraryView.IsVisible && ThemedLibraryShown) ThemedPadCommand(button);
             else if (LibraryView.IsVisible) LibraryPadCommand(button);
         }
 
@@ -214,7 +214,7 @@ namespace EmuSen.Mistress.Views
         {
             string back = _session is { IsRomLoaded: true } ? $"B  Back to {_currentDisplayName}      " : "";
             string moves = GridShown ? "L1 R1  Console      L2 R2  Top, End" : "L1 R1  Page      L2 R2  Top, End      Left Right  Console";
-            return $"A  Play      {back}Y  Search      Select  Favourite      {moves}      Start  Menu";
+            return PadHints.Face($"A  Play      {back}Y  Search      Select  Favourite      {moves}      Start  Menu");
         }
 
         private void OpenPadMenu()
@@ -225,11 +225,11 @@ namespace EmuSen.Mistress.Views
             if (inGame)
             {
                 _padMenuEntries.Add(new PadMenuEntry(() => "Resume", () => { }));
-                _padMenuEntries.Add(new PadMenuEntry(() => $"Save State  (slot {_stateSlot})", SaveState));
-                _padMenuEntries.Add(new PadMenuEntry(() => $"Load State  (slot {_stateSlot})", LoadState));
-                _padMenuEntries.Add(new PadMenuEntry(() => $"State Slot      <  {_stateSlot}  >", () => StepStateSlot(1), StepStateSlot, closes: false));
-                _padMenuEntries.Add(new PadMenuEntry(RewindMenuText, RewindFromPadMenu, closes: false));
-                _padMenuEntries.Add(new PadMenuEntry(() => $"Speed      <  {DescribeSpeed(_baseSpeedPercent)}  >", () => StepSpeed(1), StepSpeed, closes: false));
+                _padMenuEntries.Add(new PadMenuEntry(() => $"Save State  (slot {_stateSlot})", SaveState) { Label = () => "Save State", Value = () => $"Slot {_stateSlot}" });
+                _padMenuEntries.Add(new PadMenuEntry(() => $"Load State  (slot {_stateSlot})", LoadState) { Label = () => "Load State", Value = () => $"Slot {_stateSlot}" });
+                _padMenuEntries.Add(new PadMenuEntry(() => $"State Slot      <  {_stateSlot}  >", () => StepStateSlot(1), StepStateSlot, closes: false) { Label = () => "State Slot", Value = () => $"{_stateSlot}" });
+                _padMenuEntries.Add(new PadMenuEntry(RewindMenuText, RewindFromPadMenu, closes: false) { Label = () => "Rewind", Value = RewindUnavailable });
+                _padMenuEntries.Add(new PadMenuEntry(() => $"Speed      <  {DescribeSpeed(_baseSpeedPercent)}  >", () => StepSpeed(1), StepSpeed, closes: false) { Label = () => "Speed", Value = () => DescribeSpeed(_baseSpeedPercent) });
                 _padMenuEntries.Add(new PadMenuEntry(() => "Reset", ResetEmulation));
             }
             else if (_session is { IsRomLoaded: true })
@@ -237,12 +237,22 @@ namespace EmuSen.Mistress.Views
                 _padMenuEntries.Add(new PadMenuEntry(() => $"Back to {_currentDisplayName}", ToggleLibrary));
             }
 
-            _padMenuEntries.Add(new PadMenuEntry(() => "Cheats", ShowActiveCheats));
-            _padMenuEntries.Add(new PadMenuEntry(() => "Graphics Settings", ShowGraphicsSettings));
-            _padMenuEntries.Add(new PadMenuEntry(() => "Shaders", ShowShaderSettings));
-            _padMenuEntries.Add(new PadMenuEntry(() => "Controller Bindings", ShowControllerBindings));
-            _padMenuEntries.Add(new PadMenuEntry(() => "Preferences", ShowPreferences));
-            _padMenuEntries.Add(new PadMenuEntry(() => IsFullScreen ? "Leave Full Screen" : "Full Screen", ToggleFullScreen));
+            _padMenuEntries.Add(new PadMenuEntry(() => "Cheats", ShowActiveCheats) { Opens = true });
+            _padMenuEntries.Add(new PadMenuEntry(() => "Graphics Settings", ShowGraphicsSettings) { Opens = true });
+            _padMenuEntries.Add(new PadMenuEntry(() => "Shaders", ShowShaderSettings) { Opens = true });
+            _padMenuEntries.Add(new PadMenuEntry(() => "Controller Bindings", ShowControllerBindings) { Opens = true });
+            _padMenuEntries.Add(new PadMenuEntry(() => "Preferences", ShowPreferences) { Opens = true });
+            // The sidebar library's game options; the themed gamelist has them on Select - see EmuSen_Settings_Reference.md §4.63.
+            if (!inGame && !ThemedLibraryShown && SelectedLibraryEntry is EmuSen.Mistress.Library.RomEntry chosen)
+                _padMenuEntries.Add(new PadMenuEntry(() => "Game Options...", () => ShowLibraryGameOptions(chosen)) { Opens = true });
+            // Scraping only ever starts here or in Preferences, by the player - see EmuSen_Settings_Reference.md §4.60.
+            if (!inGame && GameToScrape is string game && !ScrapeRunning)
+                _padMenuEntries.Add(new PadMenuEntry(() => "Scrape This Game...", () => _ = ConfirmAndScrapeAsync(Scraping.ScrapeScope.ThisGame(game))) { Opens = true });
+            if (!inGame) _padMenuEntries.Add(new PadMenuEntry(() => ScrapeRunning ? $"Scraping ({_scrapeRun!.Done} of {_scrapeRun.Total})..." : "Scrape Games...", () => { if (ScrapeRunning) ShowScrapeStatus(); else ShowPreferencesAt(PreferencesWindow.ScrapingTab); }) { Opens = true });
+            if (_bigScreen && !inGame) _padMenuEntries.Add(new PadMenuEntry(() => "Theme Settings", ShowThemeSettings) { Opens = true });
+            if (!inGame) AddCollectionMenuEntries(_padMenuEntries);
+            if (!_bigScreen) _padMenuEntries.Add(new PadMenuEntry(() => IsFullScreen ? "Leave Full Screen" : "Full Screen", ToggleFullScreen));
+            if (!_bigScreenForced) _padMenuEntries.Add(new PadMenuEntry(() => _bigScreen ? "Exit Big Picture" : "Big Picture", () => SetBigPicture(!_bigScreen)));
 
             if (inGame)
             {
@@ -257,11 +267,13 @@ namespace EmuSen.Mistress.Views
             if (_padMenuPaused) PauseEmulation();
 
             PadMenuTitle.Text = inGame ? _currentDisplayName ?? "Game" : "EmuSen";
-            PadMenuHint.Text = "A  Choose      B  Close      Left Right  Change";
+            PadMenuHint.Text = PadHints.Face("A  Choose      B  Close      Left Right  Change");
+            if (_bigScreen) ShowBigPadMenu(inGame ? RunningGameTitle() : "Main Menu", _padMenuEntries.Any(e => e.Adjust is not null));
             PadMenuList.Refresh(_padMenuEntries);
             PadMenuList.Select(_padMenuEntries[0]);
             PadMenuPanel.IsVisible = true;
             _padMenuOpen = true;
+            UpdateMenuBackdrop();
         }
 
         private void ClosePadMenu()
@@ -271,6 +283,7 @@ namespace EmuSen.Mistress.Views
             PadMenuPanel.IsVisible = false;
             _padMenuOpen = false;
             _padQuiet = true;
+            UpdateMenuBackdrop();
 
             // Only what this menu paused, and only if the game is still the screen: an entry may have closed or left it.
             if (_padMenuPaused && GameOnScreen) ResumeEmulation();

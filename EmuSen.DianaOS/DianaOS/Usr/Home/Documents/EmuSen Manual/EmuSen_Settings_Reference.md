@@ -143,6 +143,19 @@ The two maps police **each other** on rebind, not just themselves: one key doing
   the stick it comes from and its pad buttons are disabled, because the direction comes from the pad's own stick and
   there is no pad button to bind it to (`EmuSen_Input.md` §7.3).
 
+**A pad lost before any rescan overflowed the clock (fixed 2026-09-26).** `GamepadManager` started its last-rescan
+time at `TimeSpan.MinValue`, and `Poll` computed `now - _lastRescan`. That subtraction overflows for any `now` of zero
+or more, so it threw on the first poll that found no pad. Before stage (e) of big picture the path was rarely reached,
+because the pad opened at `Start` stayed "available" for good. Stage (e) made `Poll` let go of a pad that had
+disconnected, and from then on a Bluetooth pad dropping out threw on every 16 ms pad tick. Mistress's crash log
+recorded it three times on 2026-09-26 (`OverflowException` in `TimeSpan.op_Subtraction`, from `GamepadManager.Poll`
+through `MainWindow.PadTick`). The start value is now `-RescanInterval`, so the first rescan is due at once and the
+subtraction cannot overflow. `GamepadRescanTests` failed on the old value with the same exception, and passes on the new one.
+
+*Since 2026-09-26 (§4.61)* the manager opens every pad, not the first alone, and asks whether a rescan is due at every
+poll rather than only with no pad; a pad plugged in is also opened at once on SDL's added event. The start value above
+is kept, and is now exercised on every tick. The game still reads one pad, the first opened.
+
 ### 4.5 Conflict reporting
 
 `Rebind` guarantees one owner per key going forward, but a hand-edited or older config can still contain duplicates. The window recomputes conflicts after every change, colours the offending rows, and names them in a status line along the bottom rather than leaving the player to work out why one key does two things.
@@ -189,10 +202,11 @@ The fixed widths are sized to the *widest* content each column can hold, not the
 
 `InputSettingsWindowTests.cs` drives **real Avalonia key events** through `Avalonia.Headless` rather than calling the capture handler directly — the §4.2 bug is purely in event routing, so a direct call passes against the broken build. `ClickAsUser` focuses a button before raising `Click`, because that focus is exactly what used to swallow the follow-up key. Reverting the single `AddHandler` line back to `KeyDown +=` fails 3 of its tests (`Enter`, `Space`, and the re-arm check).
 
-Two gotchas worth knowing before adding cases here:
+Three gotchas worth knowing before adding cases here:
 
 - **Match the row by its name cell (column 0) only.** A loose "any `TextBlock` in this row" match picks the wrong row: `Y`'s default keyboard binding is literally `A`, so searching for row "A" finds `Y`'s *value* column first.
 - **Redirect `ConfigStore.OverrideDirectory`** in the fixture. Rebinding saves immediately, so without it the suite overwrites the developer's real bindings.
+- **Build every control, window and picture inside a dispatch** (`UiTest.Run` or the class's `Session.Dispatch`), the class's constructor and disposal included. Work on the test's own thread borrows whichever test's application is running, and makes other tests' start-ups fail; `OffDispatcherTests` fails a test that does it. See §4.78.
 
 The arrow-key half of §4.2 does **not** reproduce headlessly — headless has no real focus-navigation pass — so it is reasoned from Avalonia's routing rather than measured, and the theory cases for `Up`/`Left` pass either way.
 
@@ -229,7 +243,7 @@ dotnet publish <app>/<app>.csproj -c Release -r <rid> --self-contained true \
 
 **Verifying a build launches.** Running it with no `DISPLAY` is *not* a launch test: Avalonia dies at X11 initialisation before `MainWindow`'s constructor runs, so everything SDL-related is never reached and a broken build looks fine. Launch it on a real display and check it is still alive several seconds later.
 
-**macOS cannot be finished from Linux.** Apple Silicon refuses to execute an unsigned arm64 binary outright, so clearing quarantine is not enough; the player must ad-hoc sign (`codesign --force --deep --sign - <name>.app`). There is no signing tool on the Linux build machine.
+**macOS cannot be finished from Linux.** Apple Silicon refuses to execute an unsigned arm64 binary outright, so clearing quarantine is not enough; whoever installs it must ad-hoc sign (`codesign --force --deep --sign - <name>.app`). There is no signing tool on the Linux build machine.
 
 ### 4.10 The SDL3 layer (`EmuSen.Endymion`, formerly `EmuSen.Nehellania`)
 
@@ -267,6 +281,14 @@ The queue's depth is not ours alone. It is `produced − consumed`, and *consume
 
 What the test wants to know is whether rate control is *acting* to drain the queue, and that is observable directly: `DynamicRateControl.TotalInputFrames`/`TotalOutputFrames` (`EmuSen_Audio_Sync.md` §3.3) count frames in against frames handed on, so their difference over the recovery window is exactly the audio the control law withheld — no device clock involved. The test samples both counters at the stall and again at the end, and asserts the withheld fraction is at least half the configured maximum deviation. With the queue sitting well above target the law should be pinned near full authority, and it is: `produced=96375, emitted=95893, 0.500 % withheld`, identical on every run. The queue reading is still checked, but only as the loose bound it can actually support — that it has not climbed to the shedding entry point. The window went back to three seconds.
 
+
+**The test suite never plays through the speakers (2026-09-27).** Only `AudioPlayerTests` and `AudioLatencyDriftTests`
+set SDL's `dummy` audio driver, in their static constructors. Any other test that started a game through Mistress's
+window, such as the launch, screensaver or pad tests, opened the machine's real playback device and played what the
+synthetic ROMs produce, which came out as a screech; whether it did depended on which class ran first. `SilentAudio`, a
+module initializer in EmuSen.WiseMan, now sets `SDL_AUDIODRIVER=dummy` and the matching hint before any test runs.
+`SilentAudioTests` opens an `AudioPlayer` and requires `SDL.GetCurrentAudioDriver()` to be `dummy`. With the initializer
+emptied it read `pipewire`, measured on 2026-09-27.
 ### 4.11 The game library (`Library/RomLibrary.cs`, `Views/MainWindow.axaml`)
 
 `MainWindow`'s viewport is two screens sharing one `Grid`: `LibraryView` (a list of every ROM in `AppSettings.RomDirectory`) and `GameFrame` (the live emulator output). Exactly one is visible; the library is what you get whenever no game is running. Visibility is toggled in code-behind rather than bound, matching how the rest of this window is written.
@@ -315,7 +337,7 @@ The general form is worth stating because the next list will meet it: **`Chose` 
 
 **The one site that could not be migrated.** `CheatDatabaseWindow.GamesList` still holds `_games` and indexes it. `LunaList<T>` is declared `where T : class`, and `CheatDatabaseEntry` is a `readonly struct` in `EmuSen.DianaOS/DianaOS/Var/CheatDatabase.cs`. Making it a reference type would reach `CheatCommand`, `CheatDatabasePruner` and their tests — four call sites outside this frontend — and a struct-to-class change carries allocation and equality consequences that have nothing to do with a list widget. **The parallel array stays there on purpose**, and the constraint is recorded in the XAML beside it so the next person does not rediscover it by compiler error, as this was. The plan claimed four migratable sites; there were three.
 
-**Cost.** Measured against the *unmodified* tree on the same machine rather than against an earlier recorded number, which is what caught it: the suite reads 1m5s before the change and 1m5s after, with the thirteen new tests costing about 700ms in total. An earlier session had recorded ~53s for the same suite, and comparing against that number would have produced a twelve-second "regression" that does not exist.
+**Cost.** Measured against the *unmodified* tree on the same machine rather than against an earlier recorded number, which is what caught it: the suite reads 1m5s before the change and 1m5s after, with the thirteen new tests costing about 700ms in total. An earlier run had recorded ~53s for the same suite, and comparing against that number would have produced a twelve-second "regression" that does not exist.
 
 ### 4.12 The Emulation menu (`Views/MainWindow.axaml`)
 
@@ -413,7 +435,7 @@ This was a threading-model violation, not an accident of one window. `DianaOSInt
 
 This was chosen over routing GUI edits through a scheduler queue because the registry is a small data structure whose readers only ever need a stable snapshot, and because a queue would have made every window action asynchronous — the Active Cheats window could no longer refresh itself synchronously after an edit. It also fixes the same race for any future frontend without each of them having to know about it. `SetEnabled` is the one mutation that writes in place rather than publishing a new array: a reader seeing the old or the new flag is equally correct and a `bool` write cannot tear, so a snapshot swap would buy nothing.
 
-**Apply Cheats.** Ticking a box already takes effect on the next frame, so this button is not an arm/commit step, and it would have been a placebo if it were. It does two things that are not otherwise reachable. It forces one immediate application through the new `SnesDebugTarget.ApplyCheats()` — extracted from the body of `OnFrame`, which now just calls it — which matters while paused, because a paused game has no next frame coming. And it reports how many cheats it applied, which is the confirmation the player was actually looking for when they asked for the button.
+**Apply Cheats.** Ticking a box already takes effect on the next frame, so this button is not an arm/commit step, and it would have been a placebo if it were. It does two things that are not otherwise reachable. It forces one immediate application through the new `SnesDebugTarget.ApplyCheats()` — extracted from the body of `OnFrame`, which now just calls it — which matters while paused, because a paused game has no next frame coming. And it reports how many cheats it applied, which is the confirmation the button was asked for in the first place.
 
 It turns the master switch back on if it is off, because "Applied 12 cheat(s)" is a lie for as long as the switch would swallow all twelve. With no game running it says the cheats are armed rather than claiming to have poked anything.
 
@@ -734,7 +756,7 @@ fault was intermittent, and the frontend had kept no record of either occurrence
 whatever the core throws — including what the display processor's threads threw, which the core rethrows on the
 machine's thread — and showed only the message, as `[CPU HALT]` in the status bar; and nothing at all recorded a
 fault on any other thread, which ends the process. `CrashLog` now writes either to
-`crash_<date>_<time>.txt` in the log directory (§4.22's root): the kind, the console, the frame, the console's
+`crash_<date>_<time>.txt` in the log directory (§4.22's root; since 2026-09-27 `ErrorLog.Root()`, §4.70): the kind, the console, the frame, the console's
 settings as the window would show them, and the exception whole, inner exceptions and traces included.
 `Program.Main` installs it before anything else for unhandled exceptions and unobserved tasks, and the emulation
 loop calls it from its catch and names the file in the status bar. Writing is best effort, since a report that
@@ -813,6 +835,9 @@ Deck's own session sets, starts the window full screen with the menu bar hidden 
 Everything the bar held that a player wants is in the pad's menu; the rest is a desktop session's business. It is
 read once, at start, because hiding and restoring the bar under a running game bought nothing worth the states it
 adds.
+*Retired 2026-09-26 (§4.54):* a way into big picture from the desktop was requested, and a Big Picture entry
+below the plain Fullscreen one in the View menu now enters it while the window runs. The argument above priced the states a
+switch adds against nothing bought; the request is what it buys, and §4.54 lists each state and the test that holds it.
 *Corrected 2026-09-22 (§4.43):* the premise that `SteamDeck=1` marks a Deck's own session was wrong. Steam sets it on
 a Deck in Desktop Mode as well, so a game started from Steam on the desktop lost its menu bar and sidebar. The
 environment trigger is now a gamescope session, and `SteamDeck=1` counts only where no desktop is named.
@@ -1080,6 +1105,8 @@ The Preferences window is tabs: **Library** (the ROM, cover art, save state and 
 
 **What it does not cover.** A file edited in place (patched, or re-dumped) is a different file and keeps nothing. Two identical copies are matched to the first found. Save states are still named by the ROM's file name (`EmuSen_Galaxia.md` §5), so a renamed game's states stay under the old name: the Save States view finds them by the hash in their record, but the resume question and the slot menu, which look up by name, do not. Renaming the state files to follow would mean writing into the state folder on the player's behalf, which on this machine is the ROM folder, and was not done.
 
+*Revised 2026-09-26 by §4.64: the record below is now a row of `records.db`, not a file beside the state; sidecars already written are imported on first sight and left in place. The checks are unchanged.*
+
 **A state records who wrote it.** Every state written from the window (a slot, or the resume state) gets `StateRecord` beside it (`EmuSen_Galaxia.md` §5.3), naming the console, the core, the state version it wrote (`EmuSen_Save_States.md` §6), the build, and the ROM's name and hash. Before a state reaches a core:
 
 - **a state from another console is refused**, with both consoles named, rather than handed to a core that would read another machine's bytes as its own;
@@ -1099,12 +1126,20 @@ OpenEmu's sidebar has a Collections group beneath the consoles, and so does this
 
 **What it does not cover.** No drag and drop onto a collection, and no smart collections beyond the two fixed ones. A pad cannot yet add a game to a collection, only view one. A collection is shown across every console, as OpenEmu's are, so choosing one clears the console filter.
 
-**A flaky test, found here and older than this work.** During the blast-radius run for §4.37 and §4.38, `MainWindowLibraryTests` failed one test in some runs and none in others, on the same binary: `The_search_box_accepts_a_character_that_is_also_a_hotkey` (the typed "p" never reached the box), `Escape_does_nothing_with_no_game_loaded`, `Enter_in_the_search_box_starts_the_narrowed_selection`, and once `Browsing_the_library_cannot_reach_a_suspended_game`. Measured by running the class alone repeatedly: **1 failed run in 10 at c0f1a72, before any of the OpenEmu work**, 1 in 5 at 072fdbd, 2 in 10 with §4.37 and §4.38 in place. So the flake predates this work, and the difference between the rates is within what ten runs can distinguish. **One hypothesis was tested and refuted:** that a window left open by an earlier test in the class takes the next test's keys, since keyboard focus belongs to the process rather than to a window. Closing every window the class opened, in its `Dispose`, left the rate at 3 failed runs in 20. The cause is not known and is recorded here rather than guessed at.
+**A flaky test, found here and older than this work.** During the blast-radius run for §4.37 and §4.38, `MainWindowLibraryTests` failed one test in some runs and none in others, on the same binary: `The_search_box_accepts_a_character_that_is_also_a_hotkey` (the typed "p" never reached the box), `Escape_does_nothing_with_no_game_loaded`, `Enter_in_the_search_box_starts_the_narrowed_selection`, and once `Browsing_the_library_cannot_reach_a_suspended_game`. Measured by running the class alone repeatedly: **1 failed run in 10 at 0140564, before any of the OpenEmu work**, 1 in 5 at c478135, 2 in 10 with §4.37 and §4.38 in place. So the flake predates this work, and the difference between the rates is within what ten runs can distinguish. **One hypothesis was tested and refuted:** that a window left open by an earlier test in the class takes the next test's keys, since keyboard focus belongs to the process rather than to a window. Closing every window the class opened, in its `Dispose`, left the rate at 3 failed runs in 20. The cause is not known and is recorded here rather than guessed at.
 
 
 ### 4.39 Covers from OpenEmu's source, if the player asks (2026-09-21)
 
-**Off by default.** Preferences, Library, **Online Covers**. The switch's hint says what it does, what it sends and where, and that the database states no licence and the covers are other people's scans; the library plan's §4 had asked that a fetch be "off by default, one explicit action, clear about what it sends, and preceded by a decision about the licence", and the player made that decision on 2026-09-21 by asking for it.
+*Revised 2026-09-26 by §4.60, and kept as the record of how it was built.* OpenEmu's sources are now the **failover**
+behind ScreenScraper: the switch is Preferences ▸ Scraping ▸ **OpenEmu Failover** (`OpenEmuFallback`), **on** by default,
+and it asks only inside a scrape the player started, for a game ScreenScraper has no cover for or while ScreenScraper
+cannot be used; a tile drawn without a cover no longer asks anything. What it fetches goes to
+`home/Media/openemu/<console>/`, no longer into the cover art folder, so that a picture the player placed there can be
+told apart and win. The old `OnlineCovers` key is read once and dropped (§4.60). What follows describes the switch as it
+was on 2026-09-21; the identification, the libretro names, the size check and the "never replace" rule are unchanged.
+
+**Off by default.** Preferences, Library, **Online Covers**. The switch's hint says what it does, what it sends and where, and that the database states no licence and the covers are other people's scans; the library plan's §4 had asked that a fetch be "off by default, one explicit action, clear about what it sends, and preceded by a decision about the licence", and that decision was made on 2026-09-21, when the feature was requested.
 
 **What OpenEmu does, and why it could not be copied whole.** OpenEmu identifies a game in OpenVGDB, a SQLite file it downloads from GitHub, and downloads the cover from the address the matching row gives (`EmuSen_Mistress_LibraryPlan.md` §4). Both halves were measured against this library before anything was built:
 
@@ -1145,7 +1180,7 @@ Each console's **Screen Filter** dropdown (§4.40) now ends with **RetroArch Pre
 **The pack.** The picker's **Download Pack** button fetches `shaders_slang.zip` from `buildbot.libretro.com/assets/frontend/`, the file RetroArch's own online updater fetches. Once a pack is there, the button reads **Update Pack**.
 
 - It is unpacked into `home/Shaders/RetroArch/` (`DataStore.Shaders`).
-- The server's `Last-Modified` is recorded in `.emusen-pack` beside the presets, and the picker shows it as the pack's build date.
+- The server's `Last-Modified` is recorded in `.emusen-pack` beside the presets, and the picker shows it as the pack's build date. *Since 2026-09-26 (§4.64) it is recorded in `records.db` instead; a stamp already there is imported on first sight and left.*
 - The zip is written beside its final place and unpacked into a sibling folder. **A failed download, or one holding no presets, leaves the old pack as it was.** A complete one is swapped in.
 - .NET's extractor refuses an entry that would land outside the folder.
 - The download has its own HTTP client with a thirty-minute timeout, because 54 MB outlasts the thirty seconds a cover lookup is given (§4.39).
@@ -1379,7 +1414,8 @@ appear, so the change is not a workaround for a window that never shows; it is c
 cost the reading lists: no letterboxed enlargement of a desk-sized window, no rescaling while a dropdown is open, no
 dependence on the window switcher's pin, the game still visible around the sheet, and one focus model for the pad to
 drive. Desktop Mode, and any session that is not big-screen, keeps real windows, where a pointer and a window
-manager make them the better choice.
+manager make them the better choice. *Since 2026-09-26 (§4.54) the answer follows the mode as it switches: a window
+opened in big picture on the desktop is a sheet, and one opened after leaving is a window again.*
 
 **The mechanism.** `MainWindow.axaml` places a `SheetLayer` named `Sheets` over everything, and `StartPadNavigation`
 sets its `PresentsWindows` to the big-screen flag, its hint to the pad's buttons, and its scale to the window's
@@ -1588,7 +1624,7 @@ The pad menu resumes the game for the moment between closing itself and a sheet 
   reads through;
 - that Steam's own chord for its keyboard still types into a focused box, for a player who prefers it.
 
-**What the device confirmed (2026-09-24, Legion Go S, SteamOS 3.8.27, build 78bf8ea).** Mistress started from Game
+**What the device confirmed (2026-09-24, Legion Go S, SteamOS 3.8.27, build f4d37b6).** Mistress started from Game
 Mode carries `XDG_CURRENT_DESKTOP=gamescope` and `XDG_SESSION_DESKTOP=gamescope` (read from its `/proc` environment),
 so big-screen mode and the sheets are on; gamescope runs the session at 1280×800, a sheet scale of 800/720 ≈ 1.11. The
 player reported every control of the settings windows and the cheat flow reachable and usable by pad, which also
@@ -1610,6 +1646,11 @@ Avalonia's `X11PlatformOptions.OverlayPopups`, which draws a popup in the window
 window. The decision is made before the first window exists, from `AppSettings.Load()` and the environment, because
 platform options are read once at startup: turning the big-screen setting on or off takes effect at the next launch.
 Desktop Mode is unchanged.
+*Amended 2026-09-26 (§4.54):* the setting no longer takes part. A start the setting put in big picture can now be left
+for the desktop, and a process-wide option cannot follow a mode the window switches, so
+`MainWindow.EmbedsPopupsAtStart` asks only `--bigscreen` and a Game Mode session, the two answers that hold for the
+process's whole life. Big picture entered or started on the desktop embeds the window's own popups instead, with
+LunaP's `EmbeddedPopups` on the window (§92.5 there), which a switch turns on and off.
 
 **What it gives up.** An embedded list cannot reach past the window's edge, which in a full-screen session has
 nothing beyond it.
@@ -1648,7 +1689,7 @@ too, since the headless platform does not move the page, so the test does not sh
 **What changed.** The library's console filter (the facet in big-screen mode, the sidebar's Consoles group on the
 desktop) listed one entry per core, so every Game Boy and Game Boy Color game shared *Game Boy (Mercury)*. There is
 now a second entry directly after it, *Game Boy Color (Mercury)*, labelled **GBC** in the sidebar, with its own count.
-The player asked for it on 2026-09-24.
+Requested 2026-09-24.
 
 **What decides the shelf.** A `.gbc` file, or a `.gb` file whose header byte at `0x143` is `0x80` (Color-enhanced) or
 `0xC0` (Color only), is a Game Boy Color game; every other Game Boy file is a Game Boy game. These are the two values
@@ -1663,8 +1704,8 @@ Game Boy game.
 on both shelves, so artwork, covers, the database lookup and the core that loads are unchanged; its `Shelf` is what
 the filter, the sidebar's counts and the list's console tag use. The stored filter (`appsettings.json`'s
 `SelectedCore`) may now name the Color shelf; the two cheat windows, which know cores, are handed Mercury for it.
-The Color shelf sits after the Game Boy rather than in release order (1998, after the N64), because the player asked
-for the two together.
+The Color shelf sits after the Game Boy rather than in release order (1998, after the N64), because the request
+was for the two together.
 
 **Tests.** `RomLibraryTests.Game_Boy_Color_games_sit_on_their_own_shelf_by_extension_or_header` (both header values,
 the extension, a plain `.gb`, a header-less file, the core name unchanged, narrowing by scan and by filter) and
@@ -1727,9 +1768,9 @@ The machine-level behaviour of each choice is `Mercury_Model.md` §6.
 
 ### 4.48 Shaders: a window of their own, tabbed by console (2026-09-24)
 
-**What was asked.** The player wanted a settings entry for shaders alone, tabbed by console as Graphics Settings is,
-where a shader could be chosen and configured, and said that RetroArch's names could not be read whole and the list
-could not be filtered. Before this, a console's shader was the last row of Graphics Settings' tab (§4.40), and
+**What was asked.** A settings entry for shaders alone, tabbed by console as Graphics Settings is, where a shader
+could be chosen and configured; the request added that RetroArch's names could not be read whole and the list could
+not be filtered. Before this, a console's shader was the last row of Graphics Settings' tab (§4.40), and
 RetroArch's presets were a picker of 2,658 relative paths (§4.41), cut at the window's edge, searched as one
 substring, with no way to change a parameter.
 
@@ -2027,7 +2068,7 @@ to key moves, below, removed the case.
 
 **Measured.** `ShaderBrowseBenchTests`, gated on `EMUSEN_SLANG_PACK` like
 `A_pack_preset_with_hundreds_of_parameters_is_shown_in_measured_time`, run from two Release builds, before (WiseMan
-2b9664e with only the bench added) and after, interleaved before/after three times, on the development desktop with
+dbde74a with only the bench added) and after, interleaved before/after three times, on the development desktop with
 the pack of 2026-09-24. **The time to a usable row is end to end**: from the act to the shown preset's sliders built,
 laid out and drawn (a render of the window). Each case opens a fresh window, so the parameter cache starts empty; the
 pack's files are in the OS's cache after the unmeasured warm-up. Medians of three, in ms (the runs are in
@@ -2146,7 +2187,7 @@ LunaP's own six mutants are in `LunaP.md` §97.5.
 
 #### 4.48.10 A step after a pause reads at once, the parameters can be searched, and the cache is bounded (2026-09-24)
 
-§4.48.9 left five things undone, and the player asked for them in turn: the ~100 ms a single pad step onto a small
+§4.48.9 left five things undone, and they were requested in turn: the ~100 ms a single pad step onto a small
 preset had lost to the settle, the focus a tab change put on a row out of view, a search of the parameters, a bound on
 the parameter cache, and settle tests that depended on the speed of the machine.
 
@@ -2162,7 +2203,7 @@ parameters are already in the cache is now built in the same step as the move ra
 at once; the held walk and its stop, unchanged at 80.5 ms a row and about 160 ms; a click and a selection set by
 code, unchanged.
 
-*Measured:* `ShaderBrowseBenchTests`, the build of §4.48.9 (dc321fc5, "before") against this one ("after"),
+*Measured:* `ShaderBrowseBenchTests`, the build of §4.48.9 (ef2a9b11, "before") against this one ("after"),
 interleaved three times, medians in ms, runs in `~/.cache/emusen/probe/shader-browse/runs/`:
 
 | Case | `crt-lottes` | `crt-royale` | `crt-guest-advanced` | `MBZ__0__SMOOTH-ADV` |
@@ -2174,7 +2215,7 @@ interleaved three times, medians in ms, runs in `~/.cache/emusen/probe/shader-br
 | held pad over 40 Mega Bezel rows, per row | 80.5 → **80.6** | | | |
 | from the last press of that walk to a usable row | 163 → **160** | | | |
 
-The single step landed inside its prediction on every preset, and against the build before any of this work (2b9664e:
+The single step landed inside its prediction on every preset, and against the build before any of this work (dbde74a:
 32, 80, 155 and 1,033 ms, §4.48.9) it is now as fast or faster on all four. Two steps without stopping came in
 **under** the prediction for `crt-royale` and Mega Bezel (−43 and −33 ms): the first step, now built at once, reads the
 rows beside it ahead, and the second step's row is one of them, so the settle that follows ends on a read already
@@ -2291,12 +2332,12 @@ checkout lacked 9e8d201, which the after build needs, and the script stopped as 
 - Eight entries is a chosen number; the cache's memory was not measured.
 - `FocusFirst`, the rule for a sheet's first control, still counts a control out of view.
 - How the audit's replay left the focus on a hidden control is not known.
-- The handheld numbers are the coordinator's to take.
+- The handheld numbers are still to be taken.
 
 ### 4.49 Rewind as a reel of pictures (2026-09-24)
 
-**What the player asked for.** "When you're in game and select the rewind button from the quick menu, I want it to
-pull up a reel you can go back through and select where you want to rewind to." Holding Backspace already walked the
+**What was asked for.** In a game, choosing Rewind from the quick menu should pull up a reel to go back through and
+select the point to rewind to. Holding Backspace already walked the
 history back a snapshot at a time (§4.21b, `EmuSen_Rewind_And_FastForward.md` §4); there was no way to see the
 history, and nothing on the pad reached it.
 
@@ -2448,3 +2489,3937 @@ The bar also goes when both of its parts are off, so an empty strip is never lef
 for the frame rate alone, then for the whole bar and a switch for each part. `LibraryScreenTests.The_status_bar_and_its_parts_follow_preferences_at_once_and_are_remembered`
 walks the switches and a restart; mutants that drop the live hook or keep an empty bar are caught.
 
+*Changed on 2026-09-27* (§4.83.6): the readout at the right is a short line (the frame rate, the frame's cost and its
+top phases), the whole measurement is its tooltip, and neither part of the bar is ever cut at the window's edge. In a
+big-screen session the readout is not in the bar at all, whatever **Frame Rate** says, and the messages are larger and
+wrap.
+
+### 4.52 Big picture: an ES-DE theme as the big-screen library (2026-09-25)
+
+`EmuSen_BigPicture.md` plans a big-picture mode that draws EmulationStation-DE themes. Its stages (a) to (c) built the
+theme loader and a scene drawn with LunaP's controls (§12–§14 there). This section is stage (e) as a player meets it:
+the theme's views shown in the library's place in a big-screen session, steered by the pad. The design record, the
+predictions and the measurements are §15 of that plan.
+
+**The settings.** Preferences ▸ Appearance holds four rows, stored in `appsettings.json`:
+
+| Row | Setting | Default | What it does |
+|---|---|---|---|
+| Big Picture Theme | `LibraryStyle` and `BigPictureTheme` | the theme, when one is set | EmuSen's own library (§4.33), stored as `LibraryStyle` `Mistress`, or an ES-DE theme, stored as `LibraryStyle` `Theme` and the theme's folder. Until 2026-09-26 this row was **Library Style** (Mistress / ES-DE theme); §4.56 |
+| ES-DE Theme Folder | `BigPictureTheme` | none | a theme folder holding `capabilities.xml` to read in place, which then joins the Big Picture Theme list; read in place and never written |
+| ES-DE Media | `EsdeMediaDirectory` | none | an ES-DE `downloaded_media` folder, read in place; without one the theme shows the covers of §4.33 |
+| Navigation Sounds | `NavigationSounds` | on | the theme's seven navigation sounds |
+
+A change takes effect when the Preferences sheet closes, since closing it refreshes the library. *Since 2026-09-26 the
+Big Picture Theme row and the folder apply at once, beneath the open sheet, as the Theme Settings sheet's choices do
+(§4.56).*
+
+**When the themed view is shown.** All four must hold: the session is big-screen (§4.29, §4.43); Library Style is
+`Theme` (since 2026-09-26: an ES-DE theme, not EmuSen, is the Big Picture Theme, §4.56); a theme folder is set; and the theme reads without error and has a view for at least one system with games.
+Otherwise the library of §4.33 is shown, as before, and when a set theme could not be read the status line says why.
+The desktop keeps its sidebar library whatever the style says: it was decided on 2026-09-25 that the themed view is
+for big-screen sessions only. *Amended 2026-09-26 (§4.54): the desktop keeps its sidebar library, in a
+window or plain full screen, and gains Big Picture in the View menu, below Fullscreen, behind which the themed view is shown
+under the same four conditions.* While the themed view is showing, the status bar is hidden, so the view has the whole
+window; it comes back with the game.
+
+**What is shown.** One system per library shelf that has games, in the shelves' release order, under ES-DE's system
+name for it (`nes`, `snes`, `n64`, `gb`, `gbc`, carried by `CoreCatalog.LibraryShelf.EsdeSystem`). A gamelist lists
+favourites first, then by title, as ES-DE does by default. Games carry Mistress's own records (§4.32): favourite, last
+played, play count and play time. Media come from the ES-DE folder when one is set, and a game's cover otherwise from
+the art folder of §4.33. *Since 2026-09-26 (§4.60) the order is the player's own cover, then ScreenScraper's media
+store, then the ES-DE folder, then OpenEmu's failover, and the gamelist's description, developer, publisher, genre,
+players, rating and release date come from ScreenScraper.* The theme's clock is off, as ES-DE's `DisplayClock` is by default; there is no switch for it
+yet. *Since 2026-09-27 the clock, the help and each status indicator have switches on Theme Settings' Interface
+tab (§4.66).* The status bar reads the battery and radios from Linux's sysfs (`DeviceStatusReader`): the system's own battery,
+not a mouse's or a pad's (whose `scope` is `Device`); Wi-Fi as on when a wireless interface is up; Bluetooth as on when
+its radio switch is blocked neither by software nor by hardware. Nothing is shown that sysfs does not report. *Since
+2026-09-27 each indicator can also be turned off (§4.66).*
+
+**The pad.** §4.29's grammar, as `EmuSen_BigPicture.md` §4.9 tables it:
+
+| Button | System view | Gamelist |
+|---|---|---|
+| Left, right | move the carousel; held, it repeats after 500 ms and then every 200 ms (180 and 80 ms with the theme's `fastScrolling`) | the next or previous system's gamelist, at the game last chosen there; once per press |
+| Up, down | (a vertical carousel moves on these instead) | move the list; held, 500 ms, then 114 ms, then from 1.7 s four at once and every 15.9 ms; a held list stops at its ends, a tap wraps |
+| South | the system's gamelist, at the game last chosen there | start the game |
+| East | back to a suspended game, if there is one | clear the search if there is one, else back to the system view |
+| L1, R1 | | a page: the rows the list shows at once. *Since 2026-09-26, ten games, stopping at the ends (§4.58)* |
+| L2, R2 | | the first and the last game |
+| North | | search, on the on-screen keyboard (§4.45.6). *Since 2026-09-26, the favourite, and while a custom collection is edited, the game in or out of it; the search is in Select's menu (§4.58)* |
+| Select | | the game options menu (§4.59); *until 2026-09-26 it marked or unmarked a favourite, now the menu's first entry. Since the same day it also holds Jump To, Sort, Filter and Search (§4.58)* |
+| Start, Guide | the pad menu (§4.29) | the same |
+
+The repeats are ES-DE's, measured in `EmuSen_BigPicture.md` §14.7, and run on the view's own clock, not on
+`PadNavigator`'s 400/80 ms: a held direction reaches the view as held and let go. Everything else reaches it through
+`PadNavigator` as before. The search narrows every gamelist to the titles that match until it is cleared, and the list
+moves under it as the library's search box lets it (§4.30). The pad menu, the settings sheets, the cheats and the
+resume question are the same as over the library of §4.33 and are drawn inside the window (§4.45.2); no window is
+opened.
+
+**Starting a game and coming back.** South runs `StartGameAsync`, the path every start takes (§4.31): the firmware
+prompt, then the resume question on a sheet. The menu over the game's "Game Library" (§4.18) brings the themed view back
+at the same system and game, in the same view, with the search still applied; "Close Game" does the same after writing
+the resume state. The selection is kept by the system's name and the game's file, not by position, so a list that
+changed underneath (a favourite marked, a file added) still finds it. *Since 2026-09-27, between the resume question
+and the game, ES-DE's launch screen: §4.71.*
+
+**The help bar follows the pad.** Its entries are the theme's layout filled with the actions above, and its icons are
+drawn by LunaP (`PadGlyph`, `LunaP.md` §103) in the set for the connected pad's family: Xbox, PlayStation, Nintendo, or
+a generic set drawn by position when the family is not known. The family is SDL's own reading of the pad
+(`SDL_GetGamepadType`, from its vendor and product) when SDL knows it; when SDL answers Standard or Unknown, the pad's
+name decides, and a name holding "Legion Go", "Steam Deck" or "Xbox" is taken for an Xbox layout. The window asks at
+every pad poll, so a different pad changes the icons at once and nothing else moves. A theme's own `customButtonIcon`
+files are used when it sets them, under ES-DE's key for the family (`_XBOX`, `_PS`, `_switch`); a generic pad takes
+the Xbox keys, as ES-DE's own default controller type is Xbox. The drawings are Mistress's own through LunaP; none is
+copied from ES-DE or a vendor.
+
+*Limits of the detection.* A pad behind Steam Input reaches SDL as Steam's virtual pad and is classified as that pad
+is, not as the hardware in the player's hands. A generic pad whose name carries none of the words is drawn generic
+even when its printing is known to the player. `GamepadManager` still opens only the first pad (*since 2026-09-26 every pad,
+and the help bar follows the pad last pressed or the Controller Type setting: §4.61*); it now lets a pulled
+pad go (`SDL_GamepadConnected`), so its one-a-second rescan can open the next one.
+
+**Sounds.** The theme's seven sounds (`systembrowse`, `quicksysselect`, `select`, `back`, `scroll`, `favorite`,
+`launch`) play on `UiSoundPlayer` (Endymion), a second SDL audio stream opened on the default playback device beside
+the game's `AudioPlayer`. SDL mixes the two logical devices on the one physical device, so neither stream's clearing or
+gain touches the other. Each WAV is decoded once with `SDL_LoadWAV` and converted to 48 kHz stereo float; a new sound
+clears the stream first, so the steps of a held list replace one another rather than queue. The gain is 0.7, ES-DE's
+default navigation volume (its `SoundVolumeNavigation` of 70). *Since 2026-09-27 it is Preferences' Navigation Sounds Volume, and a sound
+the theme lacks is Mistress's own (§4.66.2).* The stream opens on the first sound, so a session that
+plays none never touches the device. With the switch off nothing reaches the stream.
+
+**Drawing only while something moves.** The view asks for a frame (`RequestAnimationFrame`) only while something moves
+on it: a carousel sliding, a list held, a fade. When a text is in its pause before scrolling (the selected name's three
+seconds, a description's start delay), the window sets a timer for the end of the pause and draws nothing until then;
+when everything is still for good it draws nothing at all. The answers come from LunaP's scroll queries (§103.3 there).
+
+**Tests.** `ThemedLibraryPadTests` (13 cases: each row of the table above, the conditions for showing the view, and the
+page by the list's own rows), `ThemedLibraryFlowTests` (3: the whole walk from system to game and back, the frame after
+the return, the resume question on a sheet), `ThemedLibraryHostTests` (16: the render loop's sleep, the pad families, the help entries,
+the help bar alone changing, the sounds and their switch and stream, sysfs, Preferences, the media scan, and every sheet
+reached by the pad) and `ThemedLibraryReferenceTests` (2 on Art Book Next, skipping visibly without it, and the PNG
+tool). They run on WiseMan's `PadDriver` with a clock the test moves. Mutants are in `EmuSen_BigPicture.md` §15.
+
+**What it does not cover.**
+
+- *No device was used.* The families of real pads, the Legion Go S's name and type under SDL and under Steam Input, and
+  whether the sound stream's latency is acceptable beside the game's 4,096-frame device buffer are for the device.
+- The first showing scans the media folder for each system on the UI thread: 224 ms for 3,508 games with an empty
+  media folder on the desktop (§15 of the plan). Later showings reuse the answer.
+- The search is Mistress's, not ES-DE's: ES-DE offers no search box in a gamelist.
+- The system order is the shelves' release order; ES-DE's own order was not established.
+
+#### 4.52a The keyboard in the themed view (2026-09-27)
+
+**The report.** Reported from play, testing Art Book Next in Mistress on the desktop: games would not launch from inside
+Art Book Next. No crash log was written that day.
+
+**What was measured before anything changed** (`ThemedLaunchTests`, headless, the settings in use at the report: `BigScreen` off,
+`LibraryStyle` Theme, Art Book Next, `ResumeOnLaunch` Ask):
+- The pad's South on a game starts it, in the synthetic theme, in Art Book Next with big screen set, and in Art Book Next
+  entered by F10 from a desktop window. The launch path itself was sound.
+- With the keyboard, nothing in the themed view responded, not even the arrows: `SetButtonFromKey` sent keys to the
+  game's bindings only while the library was hidden and otherwise to hotkeys, and `PadTick` returned at once with no pad
+  connected. The themed view took the pad alone, and ES-DE's theme view has no mouse input either. A player at the desktop
+  without a controller could reach big picture by F10 and then do nothing in it. This is the explanation offered for the
+  report; which input was held at the time was not established, so it is the likely cause, not a proven one.
+
+**What was built.** While the themed view is shown, the library is visible, and nothing is over it (no sheet, no other
+active window, no on-screen keyboard), ES-DE's default keys (USERGUIDE.md, "Default keyboard mappings") are held pad
+buttons: the arrows, Enter for A, Backspace for B, F4 for Start (below), F1 for Back, Insert for Y, Page Up and Page Down for the shoulders,
+Home and End for the triggers, F2 and F3 for the stick clicks. `PadHeld` reads them beside every pad, so the navigator's
+repeats, the view's own held-direction repeats (§4.52) and the help bar behave as for a pad, and `PadTick` polls while
+a key is held and once after the last is let go, with or without a controller. A key let go is always released, even
+after the view it was pressed on has gone. Delete (ES-DE's X) was left unmapped at first, because West is kept for the
+media viewer (Q32). Since 2026-09-27 West and Delete start the screensaver from the system view, as ES-DE's X does there
+(§4.75); in a game list they still do nothing, and stay the media viewer's.
+
+**Escape is left out on purpose, and F4 stands in for it.** ES-DE's Escape is Start, its main menu. Mistress's Escape
+already leaves big picture for the desktop when nothing else is on screen, and returns to a suspended game otherwise
+(§4.18, §4.54). `BigPictureSwitchTests` failed the first time Escape was mapped, so the earlier rule was kept. The pad
+menu (Start) then had no key. Decided 2026-09-27 (plan §10.1): F4 opens it. It is free in the hotkey map, and it sits
+beside F1–F3. Alt+F4 is never taken, so the window manager's close still works.
+
+**Tests and mutants.** `ThemedLaunchTests` has five cases. The keyboard case runs with the pad unplugged; before the change it
+failed at the first arrow. The F4 case covers F4, Backspace and Alt+F4. Three mutants were run by hand. Removing the Alt guard
+is caught. Of the other two: removing the library-visible guard is caught (a key pressed on
+the view would start the game from under it). Removing a `GameOnScreen` guard was *not* caught and was shown to be
+redundant, since a game on screen hides the library, so the guard was deleted rather than tested.
+
+**Not covered.** No real keyboard or window manager was used. Keys rebound in the hotkey map are not consulted: a player
+who bound Enter or an arrow to a hotkey finds the themed view takes it first. The desktop list's keys are unchanged.
+
+### 4.53 Big picture: the theme's settings, the grid, and themes downloaded on request (2026-09-26)
+
+Stage (f) of `EmuSen_BigPicture.md` (its §16 is the record: predictions, measurements, mutants). This section is what a
+player meets.
+
+**Theme Settings.** A sheet over the view, opened from the pad menu's **Theme Settings** (big-screen sessions, outside a
+game, over EmuSen's own library as over a theme's) or from Preferences ▸ Appearance ▸ **Theme Settings…**. Its **Options** tab is built from the theme's
+`capabilities.xml`, so it offers exactly what the theme declares:
+
+| Row | What it lists | Stored as |
+|---|---|---|
+| Variant | the variants the theme marks selectable, in its own order, under their `en_US` labels | `Variant` |
+| Colour Scheme | every declared scheme, under its label | `ColorScheme` |
+| Font Size | the declared sizes, in THEMES.md's menu order (Medium, Large, Small, Extra Large, Extra Small) | `FontSize` |
+| Aspect Ratio | Automatic, then the declared ratios in the table's order | `AspectRatio` (none for Automatic) |
+| Language | only when the theme declares languages; Art Book Next declares none | `Language` |
+| Transitions | Automatic, the theme's selectable profiles, then the built-in ones it does not suppress | `Transitions` (none for Automatic) |
+
+A row the theme declares nothing for is left out. A label two entries share is followed by the entry's name. The first
+time, each row shows what the loader would pick on its own (§12.4 of the plan): the first selectable variant, the first
+scheme, Medium, Automatic.
+
+- **A choice applies at once.** It is saved and the view beneath the sheet is rebuilt at the same system and game before
+  the sheet closes; there is no Apply button.
+- **Choices are kept per theme.** `appsettings.json` holds them under `BigPicture`, keyed by the theme folder's full
+  path, so switching themes and back restores each one's. A stored name the theme no longer declares (an update renamed
+  a variant, say) is not an error: the loader falls back to its default for that row.
+
+**The grid variants.** A theme's game list can be a grid, as Art Book Next's three "Grid" variants are. Mistress draws
+it with LunaP's `ImageGrid` and moves it as ES-DE 3.4.1 was measured moving (`EmuSen_BigPicture.md` §16.5):
+
+| Button | In a grid game list |
+|---|---|
+| Left, right | the previous or next game, across the end of a row to the next; a tap wraps at the ends of the list, a hold stops there |
+| Up, down | the game a row above or below; they stop at the first and last rows, and down into a short last row takes its last game |
+| L1, R1 | a page: the whole rows shown |
+| Held | 500 ms, then a step every 200 ms, with no faster speed |
+
+Each step eases the selected cover up and the last one down over 250 ms; when the selection passes the last row shown,
+the rows slide over the same 250 ms and the selected row stays on the bottom row. The game's metadata fades out while a
+direction is held, as over the list. A grid game list takes all four directions, so left and right do not change the
+system there as they do over a list; East goes back to the system view, where they do.
+
+**Variant triggers use the media Mistress has.** A theme can switch a variant for the game lists when a system's games
+have no media of some kind (`noMedia`) or no videos (`noVideos`). Mistress answers from the ES-DE media folder when one
+is set (§4.52), and the cover type also from its own art folder (§4.33). A type counts when any game of the system has a
+file of it. Files are found under ES-DE's own names and extensions: `.png`, `.jpg` and `.webp` for pictures, and
+`.mp4`, `.mkv`, `.avi`, `.wmv`, `.mov` and `.webm` for videos (ES-DE's `USERGUIDE.md`). Before this stage videos were
+never found, so `noVideos` fired on every system; a `.jpeg` file, which ES-DE does not read, is no longer read either.
+Each type folder is listed once per system, and read again at the next showing when it has changed.
+
+**Themes.** The **Themes** tab lists the themes Mistress downloaded, then the folder set in Preferences when it is
+another one, with where each came from. *Since 2026-09-26 the list begins with **EmuSen (built in)**, EmuSen's own
+big-screen library, which is never downloaded or removed; with it chosen the Options tab holds only a note, and the sheet
+opens on the Themes tab. §4.56 is that change.*
+
+- *Retired 2026-09-26 by §4.62: the button below was replaced by ES-DE's theme list, from which Art Book Next and every
+  other listed theme are downloaded; the checks and the swap it describes still apply. Kept as stage (f)'s record.*
+  **Download Art Book Next** fetches GitHub's archive of the theme's `main` branch
+  (`codeload.github.com/anthonycaccese/art-book-next-es-de/zip/refs/heads/main`, about 220 MB) into
+  `home/Themes/art-book-next-es-de/` (`DataStore.Themes`). Nothing is fetched until the player presses it; EmuSen ships no
+  theme. The newest commit is asked of GitHub's API first and recorded, with the date, in `.emusen-theme` beside the
+  theme. When no theme was set, the new one is used at once, and its About sheet opens, once, after the first download.
+- **The archive is checked before it replaces anything.** It is written beside its final place (`.zip.part`), unpacked
+  into a sibling folder (`.part`), entry by entry, refusing any entry that would land outside it, and swapped in only
+  when its `capabilities.xml` reads without error and a `theme.xml` loads. A failed, stopped or broken download leaves
+  the theme that was there as it was, and nothing beside it.
+- **Check for Update** asks GitHub for the branch's newest commit; when it differs from the stamp the button becomes
+  **Update**. An update keeps the player's `theme-customizations/` folder byte for byte, over anything the archive
+  carries there: that folder is where Art Book Next's README tells a player to put a custom `colors.xml`, artwork and
+  logos.
+- **Remove** asks first, then deletes the folder. It is offered only for a folder Mistress downloaded (directly under
+  `home/Themes`, with its stamp); a folder read in place is never written, let alone removed.
+- **Use** makes a listed theme the big-screen library's theme and sets Library Style to the theme. The one in use reads
+  **In Use**. Since 2026-09-26 the same button on EmuSen's own row sets Library Style back to `Mistress` (§4.56).
+- **Closing the sheet stops a download in flight**, as does closing the window under it; nothing keeps fetching behind a
+  closed sheet (a sheet is not closed when its window is, so both are handled).
+
+**About.** Each listed theme has an **About** sheet: its name; its author (for a downloaded theme, the owner of its
+GitHub repository); its licence and credits, read at display time from the theme's own `README.md` (the sections whose
+headings name a licence and credits), else from a `LICENSE` file, else a line saying it states none; its source and
+commit; and a statement that the theme was downloaded at the player's request, or is read in place, and is not part of
+EmuSen. EmuSen carries no copy of any theme's text: for Art Book Next the sheet shows the licence line of its README, a
+CC BY-NC-SA 2.0 licence, as the README states it on the day it is read.
+
+**Tests.** `ThemeSettingsSheetTests` (the rows from a synthetic theme and from Art Book Next, a choice applied beneath
+the open sheet and equal to a fresh build, choices per theme and a stale one, Preferences, every control reached by the
+pad, the download flow with its About sheet and an update, and the two closing cases), `ThemeDownloadsTests` (a fake
+GitHub: the download and its stamp, an update keeping `theme-customizations`, five broken downloads, a cancelled one,
+removal, the attribution) `ThemedLibraryTriggerTests` (the extensions, presence by listing, the variant following the
+media), `GridSceneTests` (the measured layout, a step, a slide, the ends, the repeats, the metadata fade, a step while
+moving, the units, and Art Book Next's grid against ES-DE's still) and `ThemedGridPadTests` (the pad over a grid). Every server is a fake written for the tests; no test reaches the network.
+
+**What it does not cover.**
+- *Retired 2026-09-26 by §4.62:* only Art Book Next has a download button. Another GitHub theme, ES-DE's theme list and
+  a GitLab theme are §6's plan and are not built; a theme folder can still be chosen in Preferences and read in place.
+- The download is not resumable: a stopped download starts again from the beginning.
+- *Superseded 2026-09-26 by §4.62, where the record moved into `themes.db`:* the stamp is the only record of where a
+  theme came from; a downloaded folder whose stamp is deleted is treated as read in place, and cannot be removed from the
+  sheet.
+
+### 4.54 Big picture from the desktop: Big Picture below Fullscreen in the View menu (2026-09-26)
+
+**The request**, 2026-09-26, in three steps:
+1. A button to enter big picture mode on the desktop as well. A later clarification was first read as "fullscreen enters
+   big picture", and the first build made the desktop's full screen and big picture one state.
+2. That reading was corrected: the Fullscreen button is not to trigger big picture on the desktop. A separate button
+   makes EmuSen full screen and also puts it into big picture, so that a player on the desktop has the choice of both.
+   The second build put a Fullscreen and a Big Picture button in the library's toolbar.
+3. The button was then placed: under the View menu, below Fullscreen. The toolbar buttons were removed.
+
+This section describes the third build. The first two are kept in `EmuSen_BigPicture.md` §18, with what each got wrong.
+Until any of them, big screen was decided once, when the window was made (§4.29, §4.43), and the themed view was offered
+in big-screen sessions only (§4.52; the plan's §10.1, Q8).
+
+**What the player meets on the desktop.** The **View** menu holds two adjacent entries, each showing its key:
+
+- **Fullscreen** (F11) makes the window full screen as it is, with the menu bar, sidebar and library, and ticks itself.
+  F11, the in-game bar's full-screen button, the pad menu's **Full Screen** and the window manager's own full screen all
+  do the same. None of them enters big picture.
+- **Big Picture** (F10), directly below it, makes the window full screen *and* enters big picture. The **Big Picture**
+  hotkey (F10 by default, listed with the other hotkeys in Controller Bindings and rebindable there) and the pad menu's
+  **Big Picture** do the same. It is a command, not a tick, because the menu bar it sits in is hidden while big picture
+  runs, so no one could see a tick on it.
+
+After that:
+
+- **Big picture** is what a big-screen session is (§4.29, §4.45.2, §4.52): the window full screen, no menu bar and no
+  sidebar, the console choice back in the filter bar, and the library's text at 24 points. The library is the theme's
+  view when Library Style is Theme and a theme loads, else Mistress's own big-screen library. Every window opened from
+  there is a sheet, and the pad menu, the resume question and the pausing rules are the session's.
+- **Leaving big picture on purpose** (the pad menu's **Exit Big Picture**, or the Big Picture key) puts the window back in
+  the state it was entered from: normal, maximised, or plain full screen. The menu bar, sidebar and text sizes come back, and the desktop library returns to the console, search and
+  game it had when big picture was entered, whatever the pad did meanwhile in Mistress's big-screen library, which
+  shares those controls.
+- **Esc** leaves the same way, but only where it has nothing else to do: the library showing, no game suspended behind
+  it, and nothing over it (no sheet, no pad menu, no on-screen keyboard). With a game suspended, Esc keeps its meaning
+  (§4.18) and goes back to the game.
+- **Leaving full screen while in big picture leaves big picture too.** F11, the in-game bar's full-screen button or the
+  window manager take the window out of full screen, and big picture follows. The window stays in the state that route
+  chose: F11 goes back to the state full screen was entered from (LunaP §75.2), so a big picture entered from a
+  maximised window comes back maximised. Refusing was the alternative. It was rejected because a refusal fights the
+  window manager, which may already have resized the window, and leaves a big-screen layout in a desktop window with no
+  menu bar. F11 in big picture therefore never strands the player: it is one press back to a desktop window. It does
+  not return to plain full screen when big picture was entered from there, because the press asked to leave full screen.
+- **Game Mode is always big picture.** In a gamescope session (§4.43) there is no menu bar, no pad-menu entry for Full
+  Screen or Big Picture, and neither F11, the Big Picture key, Esc nor a change of window state leaves. Exit is not
+  offered, rather than offered and argued safe. gamescope shows the window full screen whatever it asks for, and the
+  desktop layout there would have a menu bar with no pointer and no window manager to drive it (§4.24, §4.29).
+
+**How the two are kept apart.** Big picture no longer follows the window's full screen. LunaP's
+`ToolWindow.FullScreenChanged` (raised for every change into or out of full screen, whatever made it) is used in one
+direction only: leaving full screen calls `SetBigPicture(false, restoreWindow: false)`. Entering full screen does
+nothing. `SetBigPicture(true)` records `WindowState` before asking for full screen, and `SetBigPicture(false)` sets it
+back. It has already cleared its flag by then, so the event that restoring raises finds nothing to do. `SetBigPicture`
+is also the one guard for Game Mode.
+
+**What was decided once, and what it is now.** Every decision the window took at start for big screen, found by
+reading `StartPadNavigation`, `Program.BuildAvaloniaApp` and every reader of the flag:
+
+| Decision | Before | Now |
+|---|---|---|
+| the flag itself (`_bigScreen`) | set once in `StartPadNavigation` | `ApplyBigScreen(bool)`, run at start and by every switch |
+| menu bar, sidebar, filter facet, the library's text sizes | set only for a big-screen start | set for either answer; the text sizes are cleared back to the inherited ones, not set to a copy |
+| full screen at start | an `Opened` handler added for a big-screen start | one `Opened` handler that reads the flag |
+| `SheetLayer.PresentsWindows` | set once | set by every switch. LunaP reads it when a window is shown, so windows opened after a switch follow the new answer |
+| process-wide popup embedding (`LunaApp.EmbedPopups`) | the setting, `--bigscreen` or Game Mode | `--bigscreen` or Game Mode only. A platform option cannot be switched, and a start the setting put in big picture can now be left, so the desktop after it would otherwise draw every popup inside the window for the whole session |
+| the window's own popups | not embedded | `EmbeddedPopups` on the window (LunaP §92.5), switched with the mode, so the facet's list stays in the window in big picture |
+| the themed library's setup (`SetUpThemedLibrary`) | at start, for a big-screen start only | on the first entry, once for the window's life. Its handlers do nothing on the desktop, since they ask `ThemedStyleWanted`, which reads the flag |
+| the pad's 16 ms timer | started at construction | unchanged: it serves the desktop too (§4.29). The tests hold that it is one timer after every switch |
+| the pad menu | Full Screen or Leave Full Screen; Theme Settings in a big-screen session | Full Screen outside big picture; Big Picture or Exit Big Picture, not in Game Mode; Theme Settings reads the flag when the menu opens |
+| F11 | set `WindowState` to Normal or FullScreen | `ToggleFullScreen`, so leaving returns to the state full screen was entered from. A maximised window used to come back normal. The fix is independent of big picture and was kept through the rework |
+
+**What leaving stops, and what it keeps.** Leaving shows the library again through `ShowLibraryEntries`, which hides
+the themed view's host. `ScheduleThemedFrame` then stops the wake timer and clears the next wake, and a frame already
+asked for finds the host hidden and draws nothing. The interface's sound stream (`UiSoundPlayer`, §4.52) is disposed,
+so a desktop session holds no second stream on the device. The next showing decodes the sounds again, and the next
+sound opens the stream again. A direction held at the moment of leaving is let go by the pad's own poll, which does so
+on every tick that the themed view is not taking the pad. The `ThemedLibrary` itself is kept, with its stage, its
+capabilities and its selection, so coming back finds the same system, game and view without paying the cold first build
+again (P41 in the plan). A Theme Settings sheet open at the switch stays open, and a download in it runs until the
+sheet or the window is closed (§4.53).
+
+**Which mode the next start takes.** Preferences' **Start in big screen mode** (`BigScreen`) alone decides, as Steam's
+own "start in Big Picture" setting does. A switch writes nothing. The first build wrote the mode last used, which fitted
+one control that was both full screen and big picture. With two controls it would make one press of Big Picture
+decide every later start, which a desktop user who pressed it once to try it would not expect. It would also turn a
+setting the player sets into a record the program keeps. A session the setting started in big picture can be left for
+the desktop, and the setting stays on.
+
+**Tests.** `BigPictureSwitchTests`, nine cases on WiseMan's `PadDriver` with headless keys and the menu bar's actions:
+- **The two choices,** with a theme and without:
+  - The View menu holds Fullscreen with F11 and, at the next index, Big Picture with F10, not checkable.
+  - The pad menu offers Full Screen and Big Picture on the desktop, and no Full Screen in big picture.
+  - Plain full screen by the View menu, F11 and the window manager never enters big picture and keeps the sidebar, menu
+    bar and text, with the Fullscreen entry ticked; F11 and the entry come back maximised.
+  - Big picture comes in by the View menu, its key and the pad menu, and the pad steers the carousel with its sound, or
+    the list, its console and a search.
+  - It goes out by the pad menu, Esc and the key, each back to maximised; from plain full screen, the pad menu comes
+    back to plain full screen.
+  - F11 and the window manager in big picture leave both.
+  - After each exit the desktop has the same game, console and empty search, and `BigScreen` is untouched. There is
+    one pad timer and one themed library throughout.
+- **The wake:** leaving with a text in its pause, then 2.6 s of real dispatcher time, draws nothing. Entering again
+  comes back to the same gamelist and draws.
+- **The sound stream** is held in big picture, let go on the desktop, and taken again.
+- **Windows and popups:** in big picture, Preferences opens on a sheet, no window is owned, its "Start in big screen
+  mode" is still off, and the facet's popup is in the window. After leaving, Preferences is a window and the popup is
+  the platform's.
+- **In a game,** Esc goes to the library and back without leaving, and F11 leaves big picture with the game on screen
+  and running.
+- **The next start:** a window made while another is in big picture starts on the desktop. A window the setting starts
+  in big picture can be left, and the setting stays on.
+- **Game Mode:** no menu bar, no pad-menu entries, and F11, the Big Picture key, Esc, a window-state change and a direct call
+  all leave it in big picture.
+- **Process-wide popups:** only `--bigscreen` and Game Mode ask for them, with a saved big-screen setting on disk.
+
+`DesktopButtonPictureTool`, run with `EMUSEN_BIGPICTURE_PNG=1`, writes the desktop window, its View menu open on the two
+entries, plain full screen, big picture and its pad menu (synthetic theme, Art Book Next when cloned, and Mistress's own
+library), and the desktop after leaving, at 1280×800, to `~/.cache/emusen/bigpicture/png/desktop-button/`.
+
+**What it does not cover.**
+
+- *Windows already open at a switch stay what they were.* A desktop Preferences window stays a window over big
+  picture, and a sheet open when leaving stays a sheet until it is closed. Neither is lost; neither is moved.
+- *No real window manager was used.* The headless platform takes every `WindowState` it is given. Whether KDE and GNOME
+  report their own full-screen command through Avalonia's `WindowState` on X11 and on Wayland, and whether a normal
+  window gets its exact size back, was not observed.
+- *F10 is a guess at a free key.* GTK applications open their menu on F10. Mistress's key handler sees keys first and
+  takes it, but a desktop that binds F10 globally would take it before Mistress. The key can be rebound.
+- *The library's own view settings are shared, not given back:* grid or list, cover size, and the Library, Save States
+  and Screenshots choice follow whatever was last chosen in either mode, as they are stored settings.
+- *Steam's own Big Picture on the desktop* (`SteamTenfoot`, `SteamGamepadUI`) is still not read (§4.43), so a game
+  started from it opens on the desktop layout until the player chooses Big Picture.
+- *No pointer way out.* In big picture the menu bar is hidden, so a player with only a mouse leaves by the window
+  manager's own full-screen command, which leaves big picture too. The pad menu, Esc and the key are the other ways. The
+  toolbar button of the second build was a pointer's way out, and it went with the placement of step 3.
+- *The popup embedding by the window* reaches the popups under the window. A tooltip or context menu that Avalonia
+  parents elsewhere may still open as a window of its own on the desktop, where a window manager draws it at its size.
+
+### 4.55 The application icon (2026-09-26)
+
+**What it is.** A gold crescent, horns up, holding a cream letter E, on a deep indigo rounded square: concept A of
+four drawn and chosen on 2026-09-26. It nods to the crescent of *Sailor Moon*, after which EmuSen is named
+(§"The names" in the README), without taking anything from it: the crescent is two plain circles subtracted, the E is
+four straight bars, and no lettering, emblem or palette of the series is used. The colours are `#231E52` (ground),
+`#F4C542` (moon) and `#FBF3E4` (letter).
+
+**Two drawings, not one.** `EmuSen.Mistress/Assets/Icon/emusen.svg` draws 48 px and up. At 16–32 px its 22-unit bars
+become 1.4 px and blur, so `emusen-small.svg` redraws the same mark on a 16-unit grid (every edge a multiple of 16,
+so at 16 px each lands on a whole pixel): a heavier E, a thicker crescent and a full-bleed square. The first render
+went through ImageMagick's default Lanczos resize and smeared that grid back into grey; `build_icons.py` now draws at
+256 px or more and area-averages down (`-filter Box`), which keeps the 16 px E's edges on pixel boundaries. At 24 px
+the grid falls on half pixels, and the E's spine shows a soft column there; that is accepted.
+
+**Outputs**, all made by `python3 EmuSen.Mistress/Assets/Icon/build_icons.py` (ImageMagick 7 with librsvg) and
+committed beside the sources:
+
+| File | Used by |
+| --- | --- |
+| `png/emusen-{16,24,32,48,64,128,256,512,1024}.png` | the window icon (256), the Linux hicolor theme, the others |
+| `emusen.ico` (16–256, seven sizes) | Windows: `ApplicationIcon`, the `.exe` in Explorer and on the taskbar |
+| `emusen.icns` (eleven PNG entries, 16–1024 with the @2x types) | macOS: `EmuSen.app`'s `Contents/Resources/emusen.icns` since 2026-09-27 (§4.82); until then no bundle carried it |
+
+**Where it shows.**
+- **Every Mistress window's frame and taskbar entry.** `App.ShowIconOnEveryWindow` registers one class handler on
+  `Window.WindowOpenedEvent` that gives any window without an icon of its own the 256 px resource, so LunaP windows
+  Mistress opens (Preferences, the settings sheets when they are windows) carry it too, and a window that sets its own
+  keeps it. The window manager scales it to the size it needs.
+- **The Windows executable**, through `<ApplicationIcon>`.
+- **The Linux application menu and desktop.** A Linux publish ships `share/icons/hicolor/<size>/apps/emusen-mistress.png`
+  (and the scalable SVG) and `bin/install-desktop-entry.sh`. Run once from the unpacked build, it copies the icons into
+  `~/.local/share/icons/hicolor` and writes `~/.local/share/applications/emusen-mistress.desktop`, which points at
+  that build's own `bin/EmuSen.Mistress`; `--desktop` adds a desktop shortcut, `--remove` takes everything away. It
+  installs for the current user only and needs no root. `StartupWMClass=EmuSen.Mistress` is Avalonia's X11 default
+  (the entry assembly's name), which LunaP does not change, so the running window groups under the entry. The entry
+  records the build's path, so moving the folder means running the script again.
+
+**Tests.** `AppIconTests`: the resource is a 256 × 256 image of Mistress's; a window opened after the hook shows it,
+and one that set its own icon keeps its own. With the hook's handler removed the second test fails. The installer
+was run against a scratch `XDG_DATA_HOME`: eight sizes and the SVG installed, a desktop entry with the quoted path
+(the development tree's path has a space), a desktop shortcut, and `--remove` cleaning up.
+
+**Not done.** Steam's own artwork for a non-Steam game (the Game Mode library's capsule, hero and logo images) is
+set in Steam, not by Mistress. ~~No macOS app bundle exists to carry the `.icns`.~~ One does since 2026-09-27 (§4.82). Hotaru and Pegasus keep Avalonia's
+default icon. Whether KDE shows the frame icon from `_NET_WM_ICON` or the desktop entry's `Icon=` depends on the
+entry being installed, and was not checked on a real session.
+
+### 4.56 Big picture: EmuSen's own look in the theme list (2026-09-26)
+
+Requested 2026-09-26: EmuSen's own big-picture look as an option in the themes list. Until then the choice
+between EmuSen's own big-screen library (§4.33) and an ES-DE theme's view (§4.52) was two settings in two places:
+Preferences' **Library Style** (Mistress / ES-DE theme) and the theme folder, while the Theme Settings sheet's Themes
+tab (§4.53) listed only ES-DE themes. It is now one list. `EmuSen_BigPicture.md` §19 is the record: the tests, the
+mutants and the pictures.
+
+**The Themes tab.** Its first row is **EmuSen (built in)**, with a line saying it is EmuSen's own library, part of
+EmuSen, never downloaded or removed, and without options. It has one button, **Use**, which reads **In Use** while it is
+the choice. The ES-DE themes follow, as §4.53 lists them, then the Download row. Exactly one row reads In Use.
+
+| Chosen | `LibraryStyle` | `BigPictureTheme` | What a big-screen session shows |
+|---|---|---|---|
+| EmuSen (built in) | `Mistress` | kept as it was | EmuSen's own library |
+| an ES-DE theme | `Theme` | that theme's folder | the theme's view, under §4.52's conditions |
+
+- **Which row is current.** EmuSen's, when `LibraryStyle` is `Mistress` or when no theme folder is set. Otherwise the
+  theme whose folder is `BigPictureTheme`. A folder that is set but no longer loads still reads In Use: it is the
+  choice, and §4.52's fallback shows EmuSen's library meanwhile, with the reason on the status line.
+- **Choosing EmuSen keeps the theme folder.** Choosing the theme again finds it, a folder read in place stays in the
+  list, and its options (§4.53, kept per folder) are unchanged.
+- **A choice applies at once**, beneath the open sheet, as the Options tab's choices do. The view is swapped before the
+  sheet closes, and the choice is saved, so a new window starts with it.
+- **Removing the theme in use** clears `BigPictureTheme`, so EmuSen's row becomes In Use and its library is shown.
+- **A first download.** When no theme folder was set, the downloaded theme becomes the folder, as before. It becomes the
+  choice only when `LibraryStyle` is `Theme`, which is the default. A player who chose EmuSen before downloading keeps
+  EmuSen until they press Use on the new row.
+
+**The Options tab** belongs to an ES-DE theme. With EmuSen chosen it holds only a note ("EmuSen's own look has no options
+here"), and the sheet opens on the Themes tab. With a theme chosen it opens on Options, as before.
+
+**Where the sheet opens from.** The pad menu's **Theme Settings** is offered in every big-screen session outside a game,
+over EmuSen's library as over a theme's view. It always was: the entry's condition never read the style. That is now
+tested for both looks, so the player can always get back to a theme. Preferences ▸ Appearance ▸ **Theme Settings…**
+opens it too, in either mode.
+
+**Preferences: the row was replaced, not synced.** Preferences ▸ Appearance's **Library Style** row became **Big Picture
+Theme**. It is a dropdown of the same entries, built by the same code (`BigPictureLooks`), and it reads and writes the
+same two settings:
+- EmuSen appears as "EmuSen (built in)".
+- A theme appears under its name. Two themes of one name are told apart by their folder, "Synthetic Book
+  (synthetic-book)".
+- A choice there applies at once, like the sheet's, rather than when Preferences closes.
+- The folder row is now **ES-DE Theme Folder**. Choosing a folder there adds it to the list, and it becomes the look
+  shown only when an ES-DE theme is the choice.
+- When the sheet is opened over Preferences and a choice is made on it, Preferences' row and folder show that choice
+  when the sheet closes.
+
+Keeping the old row and syncing it was the other option, and it was rejected. It would leave two controls for one
+decision, one of them naming the choice "Mistress" and "ES-DE theme" and not by the list's own names. It would also
+leave a state the list cannot show: `Theme` style with no folder. The stored settings keep their names and values, so an
+`appsettings.json` from before reads the same: `Mistress` is EmuSen's row, and `Theme` with a folder is that theme's row.
+
+**Tests.** `BigPictureThemeListTests` has 7 cases on WiseMan's `ThemedSession` and `PadDriver`:
+- the list's order and its mark;
+- EmuSen chosen by pad, applied beneath the open sheet, the Options note, and a new window starting with it;
+- from EmuSen's library, the pad menu reaching the sheet on its Themes tab, and an ES-DE theme swapping back;
+- every control of both tabs reached by the pad, over both looks;
+- the built-in row offering only Use, and taking over when the theme in use is removed;
+- Preferences and the list agreeing both ways, over two themes of one name.
+
+`ThemedLibraryHostTests`' Preferences case now chooses on the new row and sees the view change at once.
+
+**What it does not cover.**
+- A folder read in place leaves the list once another theme is chosen, as §4.53's list already did. `BigPictureTheme` is
+  the only record of it, so it must be chosen again in Preferences to come back.
+- Nothing ran on the handheld.
+
+### 4.57 Scraping status: a window, or a sheet in a big-screen session, that follows a run (2026-09-26)
+
+Requested 2026-09-26: a status window for a scraping run. Until then a run of §4.60 showed
+three things: "n of m" on the status line, a bar in Preferences ▸ Scraping, and **Cancel Scraping**. The window adds
+the rest of what a run knows. `EmuSen_BigPicture.md` §20 is the record: the tests, the mutants and the pictures.
+
+**Where it opens.**
+- **When a run starts**, from **Scrape This Game...**, **Scrape Games...**, the Scraping tab's **Scrape...** or
+  **Resume**, once the confirm step has been answered. Declining asks nothing and opens nothing.
+- **During a run**, from the pad menu, whose entry reads "Scraping (n of m)..." and now opens this window rather than
+  Preferences. Outside a run the entry is still **Scrape Games...** and still opens the Scraping tab.
+- **At any time**, from Preferences ▸ Scraping ▸ **Status...**.
+- **By clicking the status line** while it shows the run's own text.
+
+There is one window: opening it again brings it forward and redraws it. On the desktop it is a LunaP window owned by
+Mistress's. In a big-screen session (Game Mode, or big picture on the desktop, §4.54) it is a sheet, like Preferences,
+and the pad drives it.
+
+**What it shows.**
+
+| Part | While the run goes | After it ends |
+|---|---|---|
+| Heading and bar | "Scraping 12 of 40 games", or "Paused at 12 of 40 games" | "Finished", "Stopped after" or "Cancelled after" n of m games |
+| Time | the time elapsed, and the time left at this run's own pace (below) | "Took" the whole run |
+| The current game | its name and console; what it is doing now, "Looking it up" or "Downloading its cover" (screenshot, marquee, title screen, mix image); a thumbnail of the last picture that arrived | not shown |
+| Results | found, not found, failed, skipped, and covers filled by OpenEmu's failover (§4.60); games waiting for a retry; the last failure's reason | the same |
+| Quota | the member (below); the day's requests against the limit, as a meter and in words, with what is left; the threads, the download-speed limit and the limits per day and per minute | the same, and why the run stopped |
+| Summary | not shown | the counts; the requests this run sent and ScreenScraper's count for the day; how many games are left queued, and that Resume, in Preferences ▸ Scraping, goes on with them |
+| Recent games | the last 200 games, newest first: outcome and the pictures that arrived, or the reason for a failure, or "cover from OpenEmu's sources" | the same |
+
+*Skipped* is a game that cost no request: already found (its pictures follow a renamed file), already known to be
+unknown, or a file that has gone. *Failed* is a game ScreenScraper refused for good (a 400, or a fifth failure); a game
+that will be retried later in the run is counted apart, since it is not over.
+
+**The estimate** is the run's own pace, not a constant. It is the time worked (elapsed, less any pause) divided by the
+games ScreenScraper has answered, times the games left. Skipped games cost no time, so they are not counted in the pace;
+until the first game has been answered nothing is estimated. The plan measured (§17.9) that half of a run's time on a
+free account is the download-speed limit, 128 KB/s, and not the requests; the estimate does not model the limit, it
+measures it, as it measures everything else a game costs. The confirm step before a run still uses the fixed 13 s a game
+of §17.9, because nothing has been measured yet at that point.
+
+**Requests sent** counts the run's lookups and pictures, each a request as §17.9 found. It is counted by the run itself,
+not taken from the difference in ScreenScraper's count for the day, because that count is only known after the first
+answer and includes what was used before the run.
+
+**The member**, as §4.60's sign-in leaves it: "Member: *name*", with "(not checked; Check in Preferences ▸ Scraping)" for
+an account from before the sign-in existed, or "No member account: EmuSen's developer credentials alone, with their
+limits". The limits shown are the ones the last answer gave, which are the member's when there is one.
+
+**Why a run stopped**, in the window's own words:
+
+| Cause | "Why it stopped: …" |
+|---|---|
+| the day's requests, at the limit less 2% | today's requests are nearly used up (9800 of 10000) |
+| the day's unrecognised games, likewise | today's allowance of unrecognised games is nearly used up (…) |
+| 430, 431 | today's requests are used up (430); today's allowance of unrecognised games is used up (431) |
+| 403 | ScreenScraper refused EmuSen's developer credentials (403) |
+| 423 | ScreenScraper's API is closed (423) |
+| 426 | ScreenScraper has blocked this version of the software (426); a newer build is needed |
+| no developer file | EmuSen's developer file is not on this computer |
+| the player | you cancelled it |
+
+**The controls.**
+- **Pause** holds the run and becomes **Resume**. Each of ScreenScraper's workers waits before its next request, whether
+  that is the next game or the next picture of the game it holds; a request already sent finishes. Nothing else changes:
+  the quota's pace and stops, the queue in `media.db`, and Cancel all work while paused. Pausing is offered only while
+  ScreenScraper's workers run: once they have finished and a run is waiting only for OpenEmu's failover, there is nothing
+  of ScreenScraper's to hold, and the failover's few lookups are not paused. Closing Mistress while paused leaves the
+  queue as closing it mid-run does, for Resume.
+- **Cancel...** asks first ("Stop this run? What it has not reached stays queued…"), then stops the run as the Scraping
+  tab's Cancel Scraping does: a request in flight is cancelled, and what was not reached stays queued for Resume.
+- **Hide** closes the window and the run goes on; the status line keeps its "n of m". After the run it reads **Close**.
+  Escape does the same on the desktop, B on the pad.
+
+**It asks nothing.** The window never starts a run, never resumes one, and sends nothing to any server. Opened with no
+run in this session it says "No scraping in progress." and where a run starts; opened after a run it shows that run's
+summary. A queue left by an earlier session is still only offered as Resume in the Scraping tab (§4.60).
+
+**Credentials.** Every text the window shows passes the redactor of §4.60, the rows of the recent list and the failure
+reasons included, so neither the developer credentials nor the member's password can appear. The one exception is the
+member's own name in the Quota part, which is shown on purpose: it is the player's, on the player's screen. The redactor
+still blanks it in logs, crash reports and error text.
+
+**How the run reaches the window.** A worker records what it is doing in the run itself, under a lock, and calls nothing
+on the UI thread; a game's result reaches the UI thread as before, through a posted job. The window draws on its own
+timer, every 250 ms at most: when the run or Mistress said something changed, and on every tick while a run goes, for its
+clock. A run whose games finish faster than that is drawn four times a second, not once per event. The thumbnail is
+decoded at 192 px wide, once per picture that arrives.
+
+**Close what you open.** Closing the window unsubscribes it from Mistress's `ScrapeChanged` and stops its timer. Closing
+Mistress closes the window first (`StopScraping`, §17.8 of the plan). A test holds a run open, closes the window, lets the
+run finish and waits 0.8 s of real dispatcher time: the window draws nothing more, its timer is stopped, and Mistress
+holds no handler of it. Removing the cleanup fails that test (plan §20.4).
+
+**From the pad.** On the sheet, the d-pad reaches Pause, Cancel, Hide and the rows of the recent list, and A presses
+them (`PadAudit`, §4.45.3); B closes the sheet as Hide does. The pad menu's entry reopens it during the run.
+
+**Tests,** on the fake ScreenScraper of §4.60, headless:
+- `ScrapeStatusWindowTests`, 21 cases: the window opening with a run and following it request by request (the current
+  game, its step, the progress, the estimate appearing, the recent row and its pictures, the tallies, the quota); a cover
+  filled by the failover; each stop's reason (the 2% rule, 430, 423, 426, 403, and no developer file); Hide; Cancel,
+  declined and then confirmed; Pause holding every request until Resume; the summary staying after the end and the
+  status line reopening it; no request and no resume when opened with no run; a closed window letting go; closing
+  Mistress, with the window on the desktop and as a sheet; a fast run drawn at the timer's pace; one window only; the pad menu and the Scraping tab reopening it; the
+  sheet in a big-screen session, walked and pressed by the pad; nothing shown holding a credential.
+- `ScrapeProgressTests`, 6 cases: the estimate's arithmetic, pauses and skipped games left out of it, each tally and the
+  failure's reason, the recent list's cap, the requests counted, redaction.
+- `ScrapeStatusPictureTool` writes the pictures with `EMUSEN_BIGPICTURE_PNG=1`.
+
+**What it does not cover.**
+- The estimate does not know that one game may cost 1 request (not found) and another 5 (found with four pictures): it
+  is a mean over what has been answered, so a run of found games after a run of unknown ones is estimated short.
+- There is no speed or byte count shown; the download-speed limit is shown as the limit, not as what is being used.
+- OpenEmu's failover is not paused, and its lookups are not counted in "requests sent", which are ScreenScraper's.
+- The recent list keeps 200 games and forgets older ones; the counts are the whole run's.
+- Nothing ran on the handheld.
+
+### 4.58 Big picture: collections, and a game list's sort, filters, jump and random game (2026-09-26)
+
+Requested 2026-09-26: that big picture gain what it lacked against ES-DE: its automatic collections (All Games,
+Favorites, Last Played) and custom collections; and, in a game list, ES-DE's filters and sort orders, its jump to a
+letter and its random game. This section is what a player meets. `EmuSen_BigPicture.md` §22 is the record: what ES-DE
+was measured to do where its documentation is silent, the tests, the mutants and the pictures. Everything here is in
+the themed view of §4.52, in big-screen sessions and in big picture on the desktop (§4.54); EmuSen's own library
+(§4.33, §4.56) is unchanged.
+
+**Where to find it.**
+- **Select** in a game list opens ES-DE's gamelist options menu, one sheet with this section's rows (Jump To, Sort Games
+  By, Filter Gamelist, Search) and the collection entries first, then §4.59's game entries. One menu was chosen on
+  2026-09-26 (Q12 of the plan); until then these rows were a second sheet in the pad menu.
+- **Game Collection Settings**, in the pad menu (Start) after Theme Settings, in either view: ES-DE's main-menu entry of
+  that name, as a sheet.
+- **North** is the favourite (§4.59), and while a custom collection is edited, that collection's add and remove.
+
+**The collections.** Each is a system of the carousel, after the library's own systems, in the order ES-DE 3.4.1 was
+measured to use: the grouped **Collections** system, then **all games**, **favorites** and **last played**. Each takes
+the theme's art under ES-DE's names for it, so Art Book Next shows its own logo and artwork for each:
+
+| Collection | ES-DE system name | Theme folder (`system.theme`) | What it holds |
+|---|---|---|---|
+| All games | `all` | `auto-allgames` | every game of the library, favourites first when **Sort favorite games above non-favorites** is on, then by name |
+| Favorites | `favorites` | `auto-favorites` | the games marked as favourites, by name, with no star before the names (as ES-DE draws it) |
+| Last played | `recent` | `auto-lastplayed` | the 50 games started last, the most recent first; a game counted as played with no date goes last |
+| Collections | `collections` | `custom-collections` | one entry per custom collection, by name; A opens it, B comes back to the list, B again to the systems |
+| A custom collection a theme styles | its name | its name | its games, by name, with no star; its own system in the carousel, beside Collections |
+
+The automatic collections are **on by default**, each with its switch in Game Collection Settings. That is a decision
+of 2026-09-26 and a deliberate difference from ES-DE, whose settings file holds `CollectionSystemsAuto` empty. A
+system or collection with no games is not listed, except Collections, which is listed while any custom collection
+exists, empty ones included.
+
+**Custom collections are Mistress's own**, the ones the library's sidebar lists (§4.38): one list in `games.db`, never a
+copy. A collection created in big picture appears in the sidebar, and one created there appears here. Every one is shown
+unless its switch in Game Collection Settings is turned off. A collection is shown inside **Collections** unless the
+theme has a folder of its name holding a `theme.xml`, as ES-DE's per-system theme folders are; **Group Custom
+Collections** changes that: *If unthemed* (the default, as ES-DE's), *Always*, *Never*. In the Collections list, each
+entry shows one of its games' pictures and a description naming its games, "This collection contains 3 games: 'Aurora
+Drift [SNES]', …", in a random order whose first game is the one pictured, as ES-DE's does; the entry's other fields
+(rating, dates, players) are not drawn. A game inside any collection keeps its own system: its pictures are found under
+that system, and a theme that asks for the system after the name (`systemNameSuffix`) gets "[SNES]" and not the
+collection's name.
+
+**Making and editing a custom collection**, as ES-DE does it:
+1. Game Collection Settings ▸ **Create New Custom Collection...**, and a name. ES-DE's characters `*",./:;<>\|` are
+   dropped, and a name already taken gets " (1)", " (2)" and so on.
+2. The sheet closes and the **edit mode** starts: in any game list, **North** adds the selected game to the collection,
+   or takes it out if it is in. Every member carries a tick before its name (a `!` for a theme whose
+   `collectionIndicators` is `ascii`) and the theme's collection badge; the help bar names North **Collection**. While
+   the edit mode lasts North does not touch the favourite, as USERGUIDE says of ES-DE's Y.
+3. **Finish Editing** ends it, from Game Collection Settings or from Select's menu in any list. In a custom
+   collection's own list, and on its entry in Collections, Select's menu offers **Add/Remove Games to This Collection**,
+   which starts the edit mode on it again. On a Collections entry the menu has only the list's rows and these entries.
+**Delete Custom Collection** asks first, then removes the list, not the games, from `games.db`.
+
+**Select's menu: the gamelist rows.** Its first entries, above §4.59's, with **Apply** and **Cancel** at its foot. **B
+applies** what was changed and closes the sheet, as choosing an entry does; **Select (ES-DE's Back) cancels**, as
+ES-DE's help bar puts it: "Close (Apply)", "Close (Cancel)".
+- **Jump To...**: the first characters the list holds, in the list's order, and a star for the favourites when they are
+  sorted on top among other games. It starts at the selected game's. Choosing one moves the selection to the first game
+  it begins.
+- **Sort Games By**: ES-DE's eleven keys, each ascending or descending: name, rating, release date, developer,
+  publisher, genre, players, last played, times played, play time, and system (in collections only). After the key, the
+  name ascending. A game without the key's value goes last in either direction. Players sorts by the highest count its
+  text names ("1-4" is four).
+- **Filter Gamelist...**: a second sheet. The game name (any part, any case), then each of rating, developer,
+  publisher, genre, players, favorite, completed, kidgame and broken, as switches for the values the list's own games
+  hold, and "Nothing to filter" when the games hold none or all hold the same one. A game without a value is
+  **Unknown**, so the games not yet scraped can be chosen. Within one field any value chosen passes; across fields every
+  field must pass. **Reset All Filters** clears them.
+- **Search...**: the search box and the on-screen keyboard, which narrow every list by name until East clears them.
+  ES-DE has no search; North opened it until North became the favourite.
+- **Add/Remove Games to This Collection** and **Finish Editing '…' Collection**, as above.
+
+The sort and the filters are kept **for each list** (each system, each collection) **until EmuSen closes**, as ES-DE
+keeps them for the session; they are not saved. The default order for every list is a setting (below).
+
+**Random game.** Either **thumbstick pressed in** jumps to another game of the list, never the one already selected,
+with the list's scroll sound. **Random Entry Button** decides where it works: *Games only* (the default, as ES-DE's),
+*Games and systems* (in the system view too), *Disabled*. The help bar names it **Random** when a theme lists that entry.
+
+**The settings**, in `appsettings.json` under `BigPictureCollections`, each applied at once beneath the open sheet:
+
+| Row in Game Collection Settings | Key | Default | ES-DE's name for it |
+|---|---|---|---|
+| Automatic Game Collections: All Games, Favorites, Last Played | `AutoCollections` | all three on | `CollectionSystemsAuto` |
+| Custom Game Collections: one switch per collection | `HiddenCustomCollections` (the ids switched off) | all shown | `CollectionSystemsCustom` (the ones switched on) |
+| Group Custom Collections | `GroupCustomCollections` | `unthemed` | `CollectionCustomGrouping` |
+| Sort favorites on top for custom collections | `FavoritesFirstCustom` | off | `FavFirstCustom` |
+| Display star markings for custom collections | `StarsCustom` | off | (its menu entry) |
+| Game Default Sort Order | `DefaultSortOrder` | `name, ascending` | `DefaultSortOrder` |
+| Sort favorite games above non-favorites | `FavoritesFirst` | on | `FavoritesFirst` |
+| Random Entry Button | `RandomEntryButton` | `games` | `RandomEntryButton` |
+
+The defaults are those ES-DE 3.4.1 wrote into its own settings file, except two: the automatic collections, which were
+requested to be on, and the custom collections' switches: ES-DE enables each one by hand, while Mistress's collections
+are the player's own and are shown until switched off (kept by decision, Q13).
+
+**Where the data comes from.** The program's records are in SQLite, the player's choices in the JSON settings:
+- favourites, last played, play count, play time, the custom collections and which games are in them: `games.db`
+  (`GameRecords`, §4.32 and §4.38), the same rows the library shows;
+- genre, players, rating, release date, developer and publisher: ScreenScraper's text in `media.db` (§4.60), for the
+  games that have been scraped. A game with none of it reads **Unknown** in every filter and sorts last by every such key;
+  completed, kidgame and broken are not recorded by Mistress, so those filters say "Nothing to filter";
+- the settings above: `appsettings.json`;
+- a list's sort and filters: memory only, for the session. Nothing new is written anywhere, and nothing is cached.
+
+**The pad**, changed from §4.52's table:
+
+| Button | Where | What it does now |
+|---|---|---|
+| North | a game list | the favourite (ES-DE's Y); while a custom collection is edited, adds or removes the game instead. The help bar reads **Favorite** or **Collection** |
+| Select | a game list | the one options menu: the gamelist rows, Search, the collection entries, the game's entries |
+| L1, R1 | a game list | ten games back or forward, stopping at the ends, as USERGUIDE's shoulders; the help bar reads **Jump**. L2 and R2 stay the first and last game |
+| Left or right thumbstick, pressed in | a game list; the systems with *Games and systems* | a random game, or system (ES-DE's thumbstick click) |
+| South | an entry of the Collections list | opens the collection; the help bar says **Select** on it |
+| East | inside a collection of the Collections list | back to the list, at that collection |
+| Start | the themed view | the pad menu, now with Game Collection Settings |
+| B / Select | on Select's menu | apply and close / cancel and close |
+
+EmuSen's own library (§4.33) keeps North as its search and Select as its favourite.
+
+**Tests** (WiseMan, headless, the pad through `PadDriver`): `GamelistOptionsTests` (8: the sort keys, the filter values,
+the quick selector, the random entry, the names, the shelves' order and grouping, last played, a folder's description)
+and `ThemedCollectionsTests` (12: the collections in the carousel; the automatic collections from the records, their
+pictures and suffix under the game's own system; the Collections list's folders; how an entry of it is drawn; a theme's
+folder; a collection made on the settings sheet and edited with North; the options sheet sorting, filtering and jumping
+with B and Back; either stick; the settings sheet's switches; every control of the three sheets reached by the pad).
+`CollectionsPictureTool` writes the pictures with `EMUSEN_BIGPICTURE_PNG=1`, and `CollectionsBenchTool` the costs of
+§22.9 with `EMUSEN_BIGPICTURE_BENCH=1`. The mutants are in §22.8 of the plan. LunaP gained the tick and the thumbstick
+glyph (its `docs/LunaP.md` §150 and §151).
+
+**What it does not cover.**
+- *Create New Custom Collection from Theme*, the UI modes (Kiosk, Kid), and the filters for hidden games, controllers
+  and alternative emulators, which need data Mistress does not keep.
+- The game counter that becomes "filtered / total" when a filter is on, which is ES-DE's `gamelistinfo` element; the
+  scene does not draw that element (Art Book Next does not use it).
+- ES-DE's *custom collections sortname*. A game's own sort name (§4.59) does order the name sort and the Jump To
+  letters, and a game excluded from the game counter (§4.59) is in no collection, as USERGUIDE says.
+- In the Collections list, ES-DE shows another random game at each step and lets Y jump to it; here the game is chosen
+  each time the list is built, and there is no jump.
+- Nothing ran on the handheld.
+
+### 4.59 Big picture: a game's options, and editing its metadata (2026-09-26)
+
+Requested 2026-09-26, as the third item of what big picture lacked against ES-DE: the per-game options menu, and a
+metadata editor for a game's name, description, rating, release date, developer, publisher, genre, players, favourite
+and ES-DE's other documented fields, with deleting a game offered only in a guarded form. This is how a player meets it;
+`EmuSen_BigPicture.md` §23 is the record (ES-DE's documented behaviour set against what was built, the predictions, the
+tests, the mutants and the pictures).
+
+**Where it is.** In the themed view of a big-screen session (Game Mode, or Big Picture on the desktop, §4.54), on a game
+in a gamelist. EmuSen's own built-in library (§4.56) is unchanged: there Select still marks a favourite. *Amended by
+§4.63: the menu and the editor are reached from the sidebar library too, by its context menu, Ctrl+I and the pad menu.*
+
+**Opening the menu.** **Select** on a game opens the game options as a sheet over the view, as ES-DE opens its gamelist
+options menu with its Back button. **Select** again, or **B**, puts it away. In the system view Select does nothing, as
+in ES-DE. The menu's entries:
+
+| Entry | What it does |
+|---|---|
+| Add to Favourites / Remove from Favourites | the favourite of §4.32, with the theme's `favorite` sound; the game moves to the top of the list and stays selected. Until 2026-09-26 this was Select's own action |
+| Edit This Game's Metadata | opens the editor, below |
+| Scrape This Game... | stage (d)'s single-game scrape (§4.60): the confirm step, then the run and its status sheet (§4.57). Not offered while a run is going |
+| Close | puts the menu away |
+
+ES-DE's own menu also has *Jump to..*, *Sort games by*, *Filter gamelist* and the custom collections' entries; those are
+the collections work's (§4.58), which adds them to this menu above *Edit This Game's Metadata*.
+
+*Since the answers of 2026-09-26 (§4.58):* the menu begins with Jump To, Sort Games By, Filter Gamelist and
+Search..., then the collection entries, then the entries above. **Select** over the menu now cancels what its rows were
+set to, and **B**, **Apply** or an entry applies it; **Close** reads **Apply**, beside a **Cancel**. **North** in a
+themed gamelist toggles the favourite, as ES-DE's Y does, except while a custom collection is edited; the menu's
+favourite entry stays.
+
+**The editor.** A sheet with one row per field, each saying where its value comes from: *From the file name*, *From
+ScreenScraper*, *Your edit*, *Your edit, shown in place of ScreenScraper's*, or, after the editor's own scrape, *From this
+scrape; Save keeps it*.
+
+| Field | How it is set | Where it shows |
+|---|---|---|
+| Name | text, on the on-screen keyboard (A on the box; B erases, Start is done, §4.45.6) | the themed view; the library's list, grid and search |
+| Sort name | text | the gamelist is ordered by it where it is set, the name shown |
+| Description | text over several lines | the theme's description |
+| Rating | stars: Left and Right step half a star | the theme's rating |
+| Release date | Left and Right change the year; A moves to the month, then the day; the year stepped below 1950 leaves no date | the theme's release date |
+| Developer, Publisher, Genre, Players | text | the theme's fields |
+| Completed, Kid game, Broken / not working | switches | the theme's badges and fields; Mistress has no kid mode |
+| Hidden | switch | the game leaves every library view (below) |
+| Exclude from game counter | switch | not counted in the system view's game and favourite counts |
+| Exclude from multi-scraper | switch | left out of **Scrape Games...** and every run but **Scrape This Game...** |
+| Favourite | switch | as the menu's entry |
+| Times played, Play time | numbers (play time in seconds, as ES-DE keeps it) | Mistress's own counters, which count on from what is typed |
+
+A field that differs from what it would show with no edit has a **Reset** beside it, which returns it to ScreenScraper's
+value or the default (for the name, the file's name).
+
+The buttons, as ES-DE documents its editor's:
+- **Scrape**, or **Y**: stage (d)'s *Scrape This Game*, confirmed first. When the run ends, ScreenScraper's answer is put
+  into every field it has a value for, not yet saved. B puts the status sheet away and returns to the editor.
+- **Save** keeps the changes. **Cancel** discards them. **B** discards nothing silently: with changes it asks *Save* or
+  *Discard*, without any it closes.
+- **Clear...**, after a confirm: removes the player's edits, ScreenScraper's text for the game and its pictures in
+  Mistress's media store (`home/Media`). The game's file, its favourite, its play counters, the player's own covers, an
+  ES-DE media folder and the OpenEmu failover's cover are all kept.
+- **Hide from Library...**, after a confirm, in the place of ES-DE's *Delete*. ES-DE's Delete removes the game's file;
+  **EmuSen never deletes or moves a game's file**, and the confirm says so. The game is hidden instead.
+
+**Hidden games.** A hidden game is left out of the themed gamelists, the library's list and grid, the sidebar's counts
+and the search. Preferences ▸ Appearance ▸ **Hidden Games** (`ShowHiddenGames` in `appsettings.json`, off) lists them
+again; the editor's *Hidden* switch, or its Reset, unhides one. ES-DE shows hidden games, dimmed, unless told not to;
+Mistress hides them, because *Hide from Library* stands where ES-DE's Delete stands. Hiding and unhiding change nothing
+on disk but `games.db`.
+
+**Where the edits are kept, and why they win.** In `games.db` (§4.32), table `game_edit`, one row per edited field,
+beside the favourite and the play records; its fifth migration. What a field shows is the player's edit if there is one,
+else ScreenScraper's value from `media.db` (§4.60), else the default. A scrape writes `media.db` only, so no scrape,
+however often it runs, changes an edit. An edit goes when the player resets that field, clears the game, or saves the
+editor after its own Scrape has filled the field with ScreenScraper's value. A value saved equal to what the field would
+show anyway is stored as no edit, so a later scrape still reaches it. A file renamed or moved keeps its edits (§4.37).
+
+**Buttons that changed.** Select in the themed gamelist: from the favourite to the options menu (the favourite is the
+menu's first entry). Left and Right on a rating or a date: they change it rather than moving the focus. The help bar's
+entry for Select reads *Options*. §4.52's table is amended accordingly.
+
+**What it does not do.**
+- ES-DE's editor fields *Hide metadata fields*, *Controller* and *Alternative emulator* are not built, and *Custom
+  collections sortname* is the collections work's. *Enter folder* does not apply: Mistress has no folders. *Amended
+  2026-09-27: the themed view shows folders now, and Enter Folder and a folder's link are §4.67's.*
+- A hidden game listed again is not dimmed, as ES-DE dims it.
+- The on-screen keyboard has no line break, so a description is typed as one paragraph.
+- ScreenScraper's own name for a game is not offered by the editor's Scrape; the name stays the file's unless the player
+  types one.
+- Nothing ran on the handheld.
+
+### 4.60 ScreenScraper: covers, screenshots, marquees and game text, with OpenEmu's sources as the failover (2026-09-26)
+
+Stage (d) of `EmuSen_BigPicture.md` (its §17 is the record: predictions, the live run, mutants). ScreenScraper
+(`screenscraper.fr`) is Mistress's first source of cover art and game information: the library's covers in the grid and
+the list, and the themed view's pictures and metadata. OpenEmu's sources (§4.39) fill in behind it. The section is
+numbered 4.60 because stage (f) was writing §4.53 at the same time.
+
+**Where it works, and where it cannot.** Every request carries EmuSen's developer credentials, which ScreenScraper issued
+to the project's author and which no build carries (decided under Q5 of the plan). Mistress reads them from a file
+called `screenscraper-developer.json`, holding `devid`, `devpassword` and `softname`, and looks for it in two places, in
+this order:
+
+1. the config directory, `<root>/home/etc/EmuSen/screenscraper-developer.json`, where `<root>` is the folder holding the
+   `.dianaosroot` marker: for a build published to `out/linux-x64/Mistress/`, that folder; for a copy installed at
+   `~/Apps/Mistress/`, that one; running from source, the checkout;
+2. then `~/.config/EmuSen/screenscraper-developer.json` (the config directory from before Galaxia moved it, §1.4 of the
+   config reference).
+
+The file should be mode 0600. Where neither place has it, ScreenScraper cannot be used; the Scraping tab says so, and
+OpenEmu's failover does the covers alone.
+
+*Amended by §4.65 (Q40, 2026-09-27):* a published build may carry EmuSen's developer credentials itself, scrambled,
+and uses them as a third place after the two files. The sentence above now holds only for a build that carries none,
+which every plain `dotnet build` is.
+
+**Nothing is asked until the player starts it.** Decided 2026-09-26: Mistress must not spam the
+ScreenScraper API. No server, ScreenScraper or OpenEmu's, is asked anything when Mistress starts, when the library is shown or
+refreshed, when a game is selected or shown in the themed view, when a game is added, when the developer file appears,
+or because a run was left unfinished. What is already in `home/Media` and `media.db` is shown with no request. The
+ScreenScraper switch (`Scraping`, on) only says ScreenScraper may be used when a run is started; it starts nothing.
+
+**Starting a run.** A run is one of these, chosen by the player:
+
+| Scope | Where |
+|---|---|
+| **this game** | the library's context menu, **Scrape This Game...**; the pad menu, **Scrape This Game...**, for the library's selected game or the themed gamelist's |
+| **a console**, Game Boy Color its own shelf | Preferences ▸ Scraping ▸ **Scrape**: the console list, then **Scrape...** |
+| **games with no cover**, in one console or all | the same, with **Only games with no cover** on (the default) |
+| **every game** | the same, with **Every console** and **Only games with no cover** off |
+
+*Amended by §4.76:* the switch became a dropdown of ES-DE's criteria, *Games with no cover* still the default.
+
+The pad menu's **Scrape Games...** opens Preferences on the Scraping tab. Before a run starts, a confirm sheet gives the
+count of games, how many ScreenScraper has not been asked about, the most requests it can cost against what is left
+today (one lookup and one per picture kind a game), the time at about 13 seconds a game (plan §17.9), and whether
+OpenEmu's sources will be asked. Declining asks nothing. While it runs, the status line and the Scraping tab show "n of
+m", a bar follows it, the pad menu's entry reads "Scraping (n of m)...", and **Cancel Scraping** stops it with a request
+in flight cancelled.
+
+**Resuming.** A run that was cancelled, stopped by the quota, or cut off by closing Mistress leaves its games queued in
+`media.db`. The Scraping tab says how many and offers **Resume**; nothing resumes by itself. Starting a new run replaces
+that queue instead of adding to it. **Scrape This Game** asks ScreenScraper again even about a game it once did not
+know, and asks the failover again too; a wider run does not re-ask what has been answered.
+
+**From the pad.** In a big-screen session (Game Mode), Start or Guide opens the pad menu; **Scrape This Game...** and
+**Scrape Games...** are there outside a game; the shoulders move between Preferences' tabs. Every row, the console
+list, the switch and the Scrape, Resume and Cancel buttons are reached by the d-pad (`PadAudit`, §4.45.3) and pressed
+with A, and so are the member account's **Log In**, **Check** and **Log Out** (below). The name and password boxes open
+the on-screen keyboard of §4.45.6; the password's box and its preview above the keys show its mask, not the text (LunaP
+§110). When Log In succeeds its button is hidden, and the focus is handed to Log Out rather than lost; after Log Out it
+goes back to the name box. **Status...**, and the pad menu's entry during a run, open the status window of §4.57.
+
+**The settings,** stored in `appsettings.json` except the member account:
+
+| Row | Setting | Default | What it does |
+|---|---|---|---|
+| ScreenScraper | `Scraping` | on | a run the player starts may use ScreenScraper when the developer file is present; it starts nothing |
+| Member Account | `screenscraper.json` (`ssid`, `sspassword`, `verified`) | none | optional; a free account at screenscraper.fr, whose contributions or donation raise the day's requests and threads. Signed in with **Log In** (below); its own file in the config directory, mode 0600, written only when ScreenScraper has accepted the account; never in `appsettings.json` |
+| Fetch: Covers | `ScrapeCovers` | on | ScreenScraper's `box-2D` |
+| Fetch: Screenshots | `ScrapeScreenshots` | on | `ss` |
+| Fetch: Marquees | `ScrapeMarquees` | on | `wheel-hd`, else `wheel` |
+| Fetch: Mix images | `ScrapeMiximages` | on | `mixrbv2`, ScreenScraper's ready-made mix, as the theme's miximage (Q7) |
+| Fetch: Title screens | `ScrapeTitleScreens` | off | `sstitle` |
+| Region | `ScrapeRegion` | `auto` | whose box and name are preferred; Automatic reads the file's No-Intro tag, (USA) us, (Europe) eu, (Japan) jp, (World) wor, and the other country names ScreenScraper has a code for |
+| Else world, USA, Europe, Japan, then any | `ScrapeRegionFallback` | on | ES-DE's documented fallback order, then any region; off, only the preferred region (and a file with no region) is taken |
+| Language | `ScrapeLanguage` | `en` | the description's and genre's; English when there is none in it |
+| (no row) | `ScrapeThreads` | 1 | the workers wanted; never more than the member's `maxthreads` |
+| OpenEmu Failover | `OpenEmuFallback` | on | below |
+
+A change takes effect when the sheet closes; a sign-in takes effect at once.
+
+**Signing in with a member account** (requested 2026-09-26: a player may log into ScreenScraper with their
+own account credentials if they prefer). Until then the Member Account row was two boxes
+saved as they were left, and nothing said whether ScreenScraper accepted what was in them.
+- **Log In** sends one request, `ssuserInfos.php` with EmuSen's developer credentials and the name and password typed,
+  and nothing else. It is the only request the Scraping tab ever makes, and only when pressed; typing and closing
+  Preferences send nothing and keep nothing.
+- **Accepted:** the row reads "Signed in as *name*", with ScreenScraper's level for the account (`niveau`), the day's
+  requests against its limit, its threads and its download speed, all from that answer; the account is written to
+  `screenscraper.json` with the time it was checked (`verified`), and the answer's limits become the quota's (§4.60's
+  quota rules take them from every answer). The boxes are replaced by **Log Out**.
+- **Refused:** a sentence says why and nothing is written. A wrong name or password ("ScreenScraper did not accept that
+  name and password."; ScreenScraper answers 403 "Erreur de login : Vérifier les identifiants utilisateurs !", measured
+  in plan §17.9); EmuSen's developer credentials refused (a 403 whose text names the developer); ScreenScraper busy (401)
+  or closed (423); this build blocked (426); refusing more requests (429–431); an answer that could not be read or did
+  not come. Without the developer file on this computer nothing is sent and the row says that signing in can't be
+  checked or used here.
+- **Log Out** deletes `screenscraper.json` (it is deleted, not emptied, and the message says so). From that moment no
+  request carries `ssid` or `sspassword`: a run in progress stops sending them from its next request, the lookups and the
+  pictures alike (a picture's address, which ScreenScraper writes with the account in it, has the two taken out), and a
+  later run starts without them.
+- **An account from before the sign-in.** A `screenscraper.json` written by the old two boxes has no `verified`. It is
+  not dropped: the row reads "Signed in as *name* · not checked", runs go on sending it as before, and **Check** asks
+  ScreenScraper once, as Log In does. Accepted, the file gains `verified`; refused, the reason is shown and the account is
+  kept until Log Out, since it was the player's own choice to save it.
+- **Only EmuSen's developer credentials are supported.** ScreenScraper issues developer credentials to software authors,
+  not to players, so a player cannot bring their own; the row's hint says so. Since §4.65 a published build carries
+  EmuSen's, so a player's member account only raises the limits.
+- **Not measured:** no member account has been signed in against the live service. The fields `id` (the name) and
+  `niveau` (the level) are read as ScreenScraper's API page lists `ssuserInfos`'s answer; a missing level is not shown.
+  The developer-refused text is told apart from a wrong member by the word "développeur", which is the API page's
+  wording and was not seen live; a 403 naming neither is read as a wrong name or password. Whether `ssuserInfos` counts
+  against the day's requests is not known; it is one request, only when pressed.
+
+**What is sent, and to whom.** For each game: the file's name (without its folder), its size, its MD5, CRC32 and SHA-1,
+and ScreenScraper's system number (NES 3, SNES 4, Game Boy 9, Game Boy Color 10, Nintendo 64 14), with the developer
+credentials and the member account when there is one. ScreenScraper therefore sees which games the player has. What comes
+back is written by its contributors, and the art is its publishers'; Mistress keeps it for the player and shares none of
+it.
+
+**How a game is looked up**, inside a run. Only the file's own hashes are asked first; if ScreenScraper does not know them and the
+console's core declares another form of the bytes (the NES without its iNES header, the SNES without a copier header, the
+N64 halfword-swapped: `CoreDescriptor.OpenVgdbBytes`), those hashes are asked once more. There is no search by name
+inside a run (*Amended by §4.76:* the player's **Find by Name...** is one, for one game, and only when pressed). A
+game answered once is not asked again: a renamed file takes its pictures to its new name, and a copy of it gets copies,
+with no request. A whole library is days of a free account's quota (plan §17.10).
+
+**Where things are kept.** `home/Media/`, laid out as ES-DE's `downloaded_media`: `<system>/covers`, `screenshots`,
+`marquees`, `miximages`, `titlescreens`, each file named after the ROM's own file name (and, since §4.67, under the
+game's folder, as ES-DE stores a foldered game's media). Beside them `media.db` holds each
+game's text by its MD5 and size, which file each picture is, the queue, and the day's counts (with `PRAGMA user_version`
+and a newer file refused, as `games.db` is). A picture is written beside its final name and moved into place, never over
+a file already there, and only when the server calls it an image of at least 80 bytes. Nothing is ever written in the
+ROM folder. Deleting `home/Media` loses what was fetched and nothing else.
+
+**The order a picture is looked for in**, the same in the library and the themed view:
+
+1. what the player placed: the cover art folder of §4.33, or **Add Cover Art from File…**;
+2. ScreenScraper's, in `home/Media/<system>/`;
+3. the ES-DE media folder of §4.52, when one is set;
+4. OpenEmu's failover's, in `home/Media/openemu/<console>/`, only while the failover is on;
+5. the placeholder of §4.33.
+
+Screenshots, marquees and the rest take 2 then 3; only covers have a player's folder and a failover. A cover the player
+already has is not fetched from ScreenScraper.
+
+*Amended by §4.65 (Q45, 2026-09-27):* before step 1 comes another game's cover, when the player has chosen one with
+**Use Another Game's Cover…**.
+
+**OpenEmu's failover** (`OpenEmuFallback`, on, a provisional choice of 2026-09-26, open to reversal) is
+asked only inside a run the player started, never for a tile being drawn as §4.39's switch once did. It asks OpenVGDB and
+libretro's thumbnails (§4.39) for a cover in exactly these cases:
+
+- ScreenScraper answered, and had no cover: the game is unknown to it, it has no `box-2D`, or the lookup failed for good;
+- ScreenScraper cannot be used: no developer file, the ScreenScraper switch or its Covers switch off, the day's quota used
+  up (its limit less 2%, or a 430 or 431 answer), the service closed (423), the developer credentials refused (403), or
+  this build blocked (426).
+
+A game ScreenScraper has queued in the run waits for its answer first; when a run stops on the quota, the games it did
+not reach go to the failover. Its hint says what it sends and to whom: OpenVGDB's 9 MB database from GitHub the first
+time, then the game's name to thumbnails.libretro.com and, last, to the address OpenVGDB gives. §4.39's **Look Up Cover
+Online** is now **Scrape This Game...**.
+
+*The old setting.* `OnlineCovers`, the §4.39 switch, is read from an older `appsettings.json` and dropped at the next save.
+The failover is on after the upgrade whatever it held: a stored false was the default every save wrote, and cannot be
+told from a choice. Covers the old switch fetched into the cover art folder stay there and now count as the player's own.
+
+**The quota**, which ScreenScraper requires software to manage itself. Every answer carries the member's limits and
+today's counts; Mistress reads them from every answer and:
+
+- never runs more workers than `maxthreads` (one until an answer says);
+- spaces requests, the media downloads included, at `maxrequestspermin` less 10% (30 a minute until an answer says);
+- waits after a download that came faster than `maxdownloadspeed`;
+- stops for the day at `maxrequestsperday` less 2%, or `maxrequestskoperday` less 2% for unrecognised games, or on a 430
+  or 431 answer, and resumes the next day (taken as Paris's, where the service runs) where it stopped; the stop is kept
+  in `media.db` and outlives a restart;
+- on a 429 halves its pace and waits a minute; on a 401 waits five minutes;
+- on a 403, 423 or 426 stops until the next start or the next change in Preferences, and says why in the status line.
+
+The Scraping tab's **Today** row shows the day's requests against the limit as a meter's percentage and, in the text
+beneath it, the requests, the unrecognised ones, the threads, and
+whether it is running, how many games are queued, or why it stopped and until when. It fills from the first answer of a
+session; until then it shows no bar.
+
+*Measured on 2026-09-26 without a member account* (plan §17.9): 1 thread, 128 KB/s, 10,000 requests a day and 1,000
+unrecognised. **Every picture is a request**, as the game's lookup is; with the default kinds a found game costs about
+4.7 requests and 13 seconds, half of it the 128 KB/s allowance, so a 5,520-file library takes three days of that quota.
+Turning **Mix images** off saves the largest of the files; a member account raises all of it.
+
+**The credentials never leave.** Neither credential file is ever committed: `.gitignore` names both, and a WiseMan test
+fails if either is tracked or if any tracked file holds a `devpassword=` value that is not a placeholder, or the
+developer's real password when its file is on the machine. Every address or message that could reach the status line, a
+log, a crash report or an exception passes through one redactor that blanks `devid`, `devpassword`, `ssid` and
+`sspassword` (and the four values wherever they appear); `CrashLog` writes through it. A published build's zip must not
+carry `home/etc/EmuSen/screenscraper*.json` or `home/Media`, as it already leaves out the sandbox's cheats and saves.
+
+**Everything stops with the window.** Closing Mistress's window stops the workers (a request in flight is cancelled),
+closes `media.db` and the refresh timer, before the HTTP client they share is disposed; Preferences lets go of the window
+when it closes.
+
+**Tests,** all on a fake ScreenScraper written for them (no test reaches the network, and the suite's windows start with
+no network and no developer file unless a test installs its own): `ScrapeRulesTests`, `ScreenScraperClientTests`,
+`ScrapeQuotaTests`, `MediaStoreTests` (with the order of sources), `ScraperTests`, `ScrapeCredentialTests` (the
+redactor, the two places, the member file's mode, never in git), `CrashLogTests`, `ScrapeWindowTests` (each failover
+case, the window closing, Preferences, the old setting), `ScrapeSignInTests` (below) and `ThemedScrapeTests`; `OnlineCoverTests` and
+`OnlineCoverWindowTests` keep §4.39's rules. Mutants and the live run are in the plan's §17.
+
+`ScrapeSignInTests` (2026-09-26): nothing sent before Log In, then exactly one `ssuserInfos` request carrying the member
+and the developer id, and the account kept at mode 0600 with its check time; each refusal (wrong password, developer
+refused, 401, 423, an unreadable answer holding credentials) in its sentence, with nothing kept and no credential in the
+words; no developer file, no request; typing and closing keeps nothing; Log Out during a gated run, after which no
+request (lookups and pictures) carries `ssid` or `sspassword`; an old file shown not checked, sent by a run, and checked
+by Check; a Check refused keeps the old file; on the sheet by pad, the two boxes typed on the on-screen keyboard and Log
+In and Log Out reached, pressed and followed by the focus; and the answer's sentences never holding a credential. Its
+mutants are in the plan's §20.
+
+**What it does not cover.**
+- No video (Q4), no back cover, fan art, 3D box or physical media: ES-DE's folders for them exist, nothing fills them.
+  *Amended by §4.76:* each is now a switch, off by default, and manuals too.
+- The game's name stays the file's; ScreenScraper's is kept in `media.db` but not shown. *Amended by §4.63: the metadata
+  editor offers it, and it becomes the name only when the player takes it.*
+- A game found without a cover because the player had one, whose cover is later removed, goes to the failover rather
+  than back to ScreenScraper.
+- No "refresh": a picture already there is never fetched again, so a better one at ScreenScraper is not seen; delete the
+  file to have it fetched. *Amended by §4.76:* **Refresh what is kept** does it, by checksum.
+- No search by name for a game the hashes miss. *Amended by §4.76:* **Find by Name...**.
+- Nothing ran on the handheld.
+
+### 4.61 Controllers: every pad steers the interface, a notice when one comes or goes, and ES-DE's input settings (2026-09-26)
+
+Until this section Mistress opened one pad, the first SDL listed, and a second pad was not seen until the first went
+(§4.52). Pass 2 of `EmuSen_BigPicture.md` §21 changes that for the interface, as ES-DE's "Input device settings" describe
+it; the design record, the measurements and the mutants are §24 of that plan.
+
+**Every pad steers the interface.** `GamepadManager` (Endymion) opens every connected pad, in the order SDL lists them,
+and opens a pad plugged in later as soon as SDL queues its added event, or at the one-a-second rescan of §4.4 if the
+event is missed; a pad pulled out is let go at the next poll. Any pad then drives the library, the themed view of §4.52,
+the pad menu (§4.29), every sheet (§4.45), the game options of §4.59 and the on-screen keyboard: a button is held when any
+pad holds it. Over a running game any pad's guide button, or Back and Start together, opens the pad menu.
+
+**The game hears player 1 only.** The first pad opened is player 1's, as the only pad was before; when it goes, the next
+one opened takes its place, which is what the rescan did before with one pad. The game's bindings (`GamepadBindingMap`)
+are unchanged, and a second pad is not player 2: that is separate input work (`EmuSen_Input.md` §6).
+
+**Settings.** Preferences ▸ Controllers, stored in `appsettings.json`; each applies at once:
+
+| Row | Setting | Default | What it does |
+|---|---|---|---|
+| Controller Type | `ControllerType` | Automatic | The buttons the big picture help bar draws: Automatic follows the pad last pressed (its family by §4.52's rules), or Xbox, PlayStation, Nintendo or Generic always. Only the pictures change: not what a button does, and not the text hints, which name buttons by an Xbox pad's letters |
+| Button Swap | `SwapPadButtons` | off | A and B trade functions: Accept on East and Back on South, in the library, the themed view, the pad menu, every sheet and the on-screen keyboard. The help bar and the text hints name the swapped buttons. X and Y are not swapped, unlike ES-DE's setting (plan §24.5). The keyboard and every game are unaffected. *Since 2026-09-27 X and Y trade as well, as ES-DE's do (§4.79.5)* |
+| First Controller | `FirstControllerOnly` | off | Only the first pad opened steers the interface; ES-DE's remedy for a wireless pad that registers twice. The game is unaffected (it reads the first pad anyway) |
+| Notifications | `ControllerNotifications` | on | The notice below |
+
+**The notice.** "Controller connected: *name*" or "Controller disconnected: *name*", drawn with LunaP's `NoticeLayer`
+at the top centre over whatever is on screen (the library, the themed view, a sheet or a game), in a desktop or a
+big-screen session. It fades in over half a second, holds three and fades out over half a second, which is ES-DE 3.4.1's
+popup as recorded once (plan §24.4). The pads connected when Mistress starts are not announced.
+
+**The help bar follows the pad last pressed.** With Automatic, the themed help bar draws the family of the pad whose
+buttons most recently went from none held to some held; when that pad goes, the first pad's.
+
+**Nothing is remembered about a pad.** No name, identifier or family is written between sessions, so nothing of this
+section is in SQLite; the four settings above are the player's choices and stay in the JSON config (`EmuSen_Stack.md`
+§4). A later pass that remembers pads would keep them in Mistress's database.
+
+**Tests.** `GamepadManagerPadsTests` (6: opening, announcing and closing pads, player 1, the rebind capture, the handles),
+`ControllersTests` (10 methods, 11 cases: two pads in the library, the menu and a sheet; one unplugged; one pulled out and
+plugged back over 120 polls, the rescan fix included; the notice in each kind of session and its switch; the first
+controller; the swap in the interface and not in the game; the settings persisting; every handle let go), and
+`ThemedControllersTests` (6: two pads in the themed view, every rule from a second pad, the help bar following the pad
+last pressed, the controller type changing the help bar's pixels and none outside it, the swap in the view, its help bar
+and a theme's icons). They run on WiseMan's `PadDriver`, which plugs and pulls simulated pads beneath `GamepadManager`
+(`SimulatedPads`), so the manager's own polling runs as it does on a device.
+
+**What it does not cover.**
+- No real device was used. SDL's events and their timing, Steam Input's virtual pads, a pad that registers twice and
+  sleep and wake are for the handheld (plan §24.10).
+- A second pad as player 2 in a game.
+- The notice's fade is linear; ES-DE's fits a gentle power curve (plan §24.4). Its words are Mistress's own.
+- The Controller Bindings window still names the first pad alone.
+
+### 4.62 Big picture: ES-DE's theme list, browsed and installed from the Themes tab (2026-09-26)
+
+Requested 2026-09-26: a theme browser and installer, similar to ES-DE's. Pass 3 of `EmuSen_BigPicture.md`
+§21 builds it, under Q27 and Q28 as accepted; §25 of that plan is the record (predictions, tests,
+mutants, pictures and the survey of the listed themes). ES-DE's behaviour was taken from its `USERGUIDE.md` ("Theme
+downloader"), never from its source. This section is what a player meets.
+
+**Where it is.** Theme Settings ▸ **Themes** (§4.53, §4.56) ends with **ES-DE's Theme List** and a **Browse Themes…**
+button, in place of stage (f)'s single "Download Art Book Next". It opens the browser as a sheet over the Themes tab, in
+a big-screen session as on the desktop; B (East) closes each sheet in turn.
+
+**The browser** is laid out as ES-DE's downloader is: the list on the left, the selected theme on the right.
+- **The list** names every theme of ES-DE's official list (`themes.json` in `gitlab.com/es-de/themes/themes-list`,
+  66 themes on 2026-09-26), in the list's own order, each marked **Installed**, **update available** or **local
+  changes** once installed, and **New** where the list marks it new. Above it, a line says how many themes the list
+  holds and when it was fetched, beside a **Refresh** button. The list's `themesAndroid` entries, for ES-DE's Android
+  build, are not shown; an entry whose repository is on neither GitHub nor GitLab is left out and counted on that line.
+- **The preview** shows the selected theme's first screenshot and caption, its name, author and repository, what it
+  supports as the list states it ("4 variants · 3 colour schemes · 6 aspect ratios", or "no colour schemes stated"),
+  and its state, with the last update when it is known. **Details…** (or A on a row, or a double click) opens the theme.
+
+**A theme's detail.**
+- Every screenshot the list gives, one at a time, with its caption and **Previous** and **Next**.
+- **Last Updated:** the date of the newest commit on the repository's default branch, with the commit and the branch, as
+  the host reports it.
+- **Here:** not installed; or installed, where, when and at which commit, with "An update is available" and "Local
+  changes to N files (…)" when they hold.
+- What the theme supports, each as the list states it: **Variants**, **Colour Schemes** and **Aspect Ratios** always
+  (with "The list states none"), **Font Sizes**, **Transitions** and **Languages** when the list names them.
+- **Licence**, then the buttons, below both columns and never scrolled out of sight. The licence line is the licence
+  section of the theme's own `README.md`, read from its repository; else the licence the host names from the
+  repository's licence file ("MIT License, as GitHub reads the repository's licence file"); else "The theme states no
+  licence in its README, and GitHub finds no licence file". **Download** waits until the line has been read. The About
+  sheet (§4.53) reads the README again from the installed copy, at display time.
+- **Download** (not installed); **Update** (installed, enabled when the host's newest commit differs from the installed
+  one); **Use** (reading In Use for the theme in use); **Remove**; **About**; and, while a download runs, **Cancel
+  Download**, a progress bar and a line with the megabytes received, then the files unpacked.
+
+**Installing, updating and removing.** Every listed theme downloads the way stage (f)'s Art Book Next did (§4.53): the
+host's archive of the default branch (`codeload.github.com/<owner>/<repo>/zip/refs/heads/<branch>`, or
+`gitlab.com/<group>/<repo>/-/archive/<branch>/<repo>-<branch>.zip`), written beside its final place, unpacked into a
+sibling folder, checked (a `capabilities.xml` that reads, a `theme.xml` that loads), and only then swapped in, into
+`home/Themes/<repository>/`. A failed, stopped or broken download leaves what was there, and nothing beside it.
+- **The first theme** downloaded when no theme folder is set becomes the folder, and its About sheet opens once, as
+  before. It then appears on the Themes tab with **Use**, beside **EmuSen (built in)** (§4.56).
+- **An update keeps** the player's `theme-customizations/` byte for byte, as before, and now also **every file the
+  player added** that the old download did not contain, as ES-DE's guide describes ("these will not interfere"). If
+  the update adds a file at the same path, the update's copy wins, which is the guide's "special (although unlikely)
+  situation".
+- **Local changes.** When a file the download wrote has been edited or deleted, the theme reads **local changes**, and
+  **Update** first asks: "Synthetic Book has local changes to 1 files (colors.xml). The update replaces them with the
+  theme's own. Files you added, and theme-customizations, are kept." **Cancel** downloads nothing. Files the player
+  added and anything under `theme-customizations/` never count as changes, since an update keeps them. A file whose
+  date changed but whose bytes did not is not a change either: it is hashed to be sure.
+- **Removal** is refused for anything Mistress did not download: a folder read in place, a folder under `home/Themes`
+  without a record, and a folder copied in by hand to the path of one Mistress downloaded (its stamp's id does not match
+  the record). A download never replaces any of them either.
+- The Themes tab's own **Check for Update** and **Update** (§4.53) now ask the theme's own host, GitHub or GitLab, and
+  ask before replacing local changes in the same words.
+
+**When Mistress goes to the network.** Only on the player's action, never at start or in the background:
+- **Opening the browser** uses the list kept in `themes.db` while it is less than a day old, and fetches it otherwise;
+  **Refresh** always fetches it. Opening also asks, for each installed listed theme, its host's newest commit (one
+  request each), for the Update mark.
+- **A screenshot** is fetched when it is shown: the preview's once a theme has stayed selected for a quarter of a
+  second, so a held list does not fetch every row; the detail's as Previous and Next show them. Each is kept a month.
+- **Opening a theme's detail** asks its host three things (the repository's record, the newest commit on its default
+  branch, and the README), at most once a day. On GitHub two of them count against the 60 requests an hour GitHub allows
+  a computer without an account; when that allowance is spent, the line says so and when it resets.
+- **Download** asks for the newest commit and the archive.
+- Opening Theme Settings and its Themes tab asks nothing.
+
+**Stopping.** **Cancel Download**, closing the theme's detail, closing the browser, and closing the window beneath each
+stop a download in flight, remove its partial files, and leave no file open under `home/Themes`; closing the browser
+also stops its list and screenshot requests.
+
+**What is kept where.** The project's standing rule (2026-09-26: store in SQLite wherever possible) is
+SQLite for what the program writes and reads back, and JSON for the choices a person makes (`EmuSen_Stack.md` §4.1):
+
+| What | Where | Why there |
+|---|---|---|
+| The fetched list, with every field the browser shows | `home/Themes/themes.db`: `list_fetch`, `list_theme`, `list_screenshot` | the program writes it and reads it back |
+| The screenshot index | `themes.db`: `screenshot_file` | the same; the pictures are files under `home/Themes/.list/screenshots/`, named by a hash of the list's path |
+| What each host said: default branch, newest commit and its date, the licence line and its source, any error | `themes.db`: `theme_remote` | the same, with its time, for the day's expiry |
+| Each installed theme: host, owner, repository, branch, commit and its date, installed and updated | `themes.db`: `theme_installed` | the same; it was stage (f)'s `.emusen-theme` file |
+| Each downloaded file's path, size, time and SHA-256, for local changes | `themes.db`: `theme_file` | the same |
+| Which theme is used, and its options | `appsettings.json`: `BigPictureTheme`, `LibraryStyle`, `BigPicture` | the player's choices, unchanged from §4.53 and §4.56 |
+
+`themes.db` carries its schema version (`PRAGMA user_version`, now 1); a file from a newer build is refused rather than
+written, as `media.db` is. It is not in the repository (`.gitignore`).
+
+**The one file left in a theme folder.** `.emusen-theme` now holds only an id, the key of the folder's row in
+`themes.db`. It is kept for one reason: a row names a path, and a path can be refilled by hand, by deleting a downloaded
+folder and copying another in under the same name. Removal and replacement require the row and the folder's id to
+agree, so the copied folder is not Mistress's to delete. A stage (f) folder, whose stamp held the whole record, is moved
+into `themes.db` the first time it is read, keeping its source and commit; its local changes cannot be told, since no
+file hashes were recorded then, and the detail says so.
+
+**Tests.** `ThemeBrowserModelTests` (14) and `ThemeBrowserSheetTests` (12), on WiseMan's `FakeThemeHosts`: a fake GitLab
+holding a synthetic `themes.json` and synthetic screenshots, and fake GitHub and GitLab repositories holding synthetic
+themes, every request counted. No test reaches the network. `ThemeDownloadsTests`, `ThemeSettingsSheetTests` and
+`BigPictureThemeListTests` run on the same code.
+
+**What it does not cover.**
+- ES-DE's full-screen screenshot view (its X button) is not built; the detail shows one screenshot at a time.
+- The list keeps the list's order; there is no sort, filter or search.
+- A download is not resumable, and a large theme (Art Book Next is about 220 MB, §4.53) takes its time: ES-DE's git
+  transfer fetches only what changed, while Mistress fetches the whole archive again.
+- A README that names its licence under a heading without "licen" in it shows the host's licence or none; the About
+  sheet, reading the installed copy, also reads `LICENSE` files.
+- Most listed themes use elements big picture does not draw yet (plan §25's survey). Such a theme installs and runs,
+  and those parts are missing until §21's pass 14.
+- Nothing ran on the handheld.
+
+### 4.63 A game's options and its metadata from the desktop library, and ScreenScraper's name as an offer (2026-09-26)
+
+The answers to Q18 and Q19 of `EmuSen_BigPicture.md` (§10.1 there; §27 is the record: tests, mutants, pictures).
+§4.59 built the game options menu and the metadata editor for big picture's themed gamelist; this section makes both
+reachable from Mistress's own sidebar library, and changes one thing in the editor. The section is numbered 4.63 because
+§4.62 was being written on another branch at the same time.
+
+**Where the menu and the editor are reached.**
+
+| From | Opens | Shown as |
+|---|---|---|
+| a cover's or a row's context menu (right-click), **Game Options...** | the game options menu | a window over Mistress's on the desktop |
+| the same menu, **Edit Metadata...** (Ctrl+I) | the metadata editor | a window on the desktop |
+| **Ctrl+I** over the library, with a game selected | the metadata editor | a window on the desktop, a sheet in a big-screen session |
+| the pad menu (Start or Guide) over the sidebar library, **Game Options...** | the game options menu | a sheet in a big-screen session, a window on the desktop |
+| the themed gamelist, **Select** (§4.58, §4.59) | the game options menu | a sheet, unchanged |
+
+The windows are the same classes in every place, `GameOptionsWindow` and `MetadataEditorWindow`, shown through LunaP's
+`SheetLayer`: in a big-screen session (Game Mode, `--bigscreen`, or Big Picture from the View menu) they are sheets inside
+the one window, and on the desktop they are ordinary LunaP windows owned by Mistress's. Nothing about an edit depends on
+where it was made: it is a row of `games.db`'s `game_edit` (§4.59), and every view reads it. A name given on the desktop
+is the name in the themed gamelist, and one given in big picture is the name in the desktop's grid and list.
+
+**What the desktop's menu holds.** Add to (or Remove from) Favourites, Edit This Game's Metadata, and Scrape This Game...
+(while no run is going). The themed gamelist's other entries are left out on purpose:
+- *Jump To..., Sort Games By..., Filter Gamelist* and *Search...* act on the themed gamelist's own order, filters and
+  letters (§4.58), which the sidebar library does not have. The sidebar library's equivalents are its own: the search
+  box, the console list in the sidebar and in the filter bar, and the collections. Offering the themed rows there would
+  change a list that is not on the screen.
+- *Add/Remove Games to This Collection* and *Finish Editing* belong to big picture's collection editing (§4.58); on the
+  desktop the context menu's **Add to Collection** and **Remove from *name*** do the same work directly.
+
+**Select in the sidebar library** is still the favourite, as it was before; the options are one entry away in the pad
+menu. Whether Select should open the menu there too, as it does in the themed gamelist, is Q46 of the plan.
+
+**Ctrl+I** is the Get Info gesture of macOS's Finder, whose conventions OpenEmu follows. It works over the grid and the
+list and over the themed gamelist, and it is ignored while a text box has the focus (the search box keeps it), while a
+sheet is shown, and while the options menu is open. It is not in the hotkey map of §4.3, which binds single keys
+without modifiers; it cannot be rebound.
+
+**ScreenScraper's name, offered (Q18).** Since §17.6 the library and the themed view show the file's name, and
+ScreenScraper's is kept in `media.db` unused. The editor now offers it. When ScreenScraper has a name for the game that
+differs from what the Name field holds, a line under the field reads *ScreenScraper calls this game "…"*, with two
+buttons:
+- **Use This Name** puts it in the field. Like a typed name it is an edit from Save on, shown everywhere, and **Reset**
+  returns the field to the file's name.
+- **Keep Current Name** puts the offer away for this editing. The field keeps the file's name, or the name the player
+  gave it.
+
+The offer appears after the editor's own **Scrape** (Y), whose status line then says that the name is offered and changes
+only if the player uses it, and whenever the editor is opened on a game ScreenScraper has already answered for. The
+scrape itself never touches the Name field, although it fills the other fields as §4.59 describes; a Save without taking
+the offer stores no name. Declining is not remembered: the offer is there again the next time the editor opens, since it
+changes nothing until it is taken. The pad reaches both buttons (the plan's §27 measured it with the offer shown).
+
+**Stored where.** Nothing new: the taken name is a `game_edit` row, as any edit is. No setting was added.
+
+**Tests.** `DesktopGameOptionsTests` (6): a right-click on a cover selects it and opens its context menu, whose Game
+Options... opens the menu as a window with the three entries and Edit This Game's Metadata opens the editor as a window;
+the list's context menu's Edit Metadata... saves a name and a description that the list, the grid and big picture show,
+and a name given in big picture's editor is then the desktop's; Ctrl+I opens the editor for the selected game, I alone
+does not, and neither does Ctrl+I in the search box; the pad menu of the built-in big-screen library opens the menu and
+the editor as sheets, the name typed on the on-screen keyboard; the desktop's pad menu has Game Options... and the themed
+gamelist's does not; Ctrl+I over big picture's gamelist opens the editor as a sheet, and in its system view nothing.
+`ThemedMetadataScrapeTests` gained three: the name offered and never put in the field, every control
+reached by the pad with the offer shown, and a Save storing no name; the offer taken and stored as an edit that the
+themed list and the library list show; the offer declined over the player's own name, which stays.
+
+**Not done.** Nothing ran on the handheld. The desktop's menu and editor were driven headlessly by clicks and keys, not
+by a real pointer on a real window manager. ScreenScraper's names as the library's names by default (§21's Q30, a switch,
+off) are not built; the offer is per game.
+
+### 4.64 records.db: save-state records and the shader pack's build move into SQLite (2026-09-26)
+
+The request was to store in SQLite whatever can be stored there. `EmuSen_Stack.md` §1 already assigned tabular program
+data to SQLite; this section records what that rule still left in files, what moved, what did not and why, and how the
+files a user already has are read.
+
+**What moved.** Two stores, both written by Mistress and read back only by Mistress:
+
+| Before | After |
+|---|---|
+| `<state>.json` beside every state Mistress wrote (`EmuSen_Galaxia.md` §5.3) | a row of `state_record` in `home/Library/records.db` |
+| `.emusen-pack` inside `home/Shaders/RetroArch/`, holding the pack's build date (§4.41) | a row of `shader_pack` in the same file |
+
+`FileRecords` (`EmuSen.Mistress/Library/FileRecords.cs`) owns the file. It follows `games.db` (§4.32) and `media.db`
+(`EmuSen_BigPicture.md` §5.6) in form: an append-only list of migrations, each run in one transaction with its
+`PRAGMA user_version` bump, and a file stamped newer than the build refused with `InvalidDataException` before anything
+is written to it. Like theirs, its schema is held in the C# list rather than in a committed `.sql` file, which departs
+from `EmuSen_Stack.md` §5; a migration list is the thing that has to be reviewed, and a single `.sql` file would describe
+only its end. It differs from both in its journal: the file is kept in WAL mode with `synchronous = FULL`, because this
+machine has been subject to hard resets (an AMD hardware fault, repeatedly between 2026-09-17 and 2026-09-26) and a
+state record is written the instant a state is, which is when a player would notice its loss. `FULL` costs one further
+`fsync` per record, and a record is written once per saved state.
+
+**Why a file of its own, and not a table in `games.db`.** Two branches were adding migrations to `games.db` at the same
+time as this one (collections, and the game options, which took schema 5). An append-only migration list merged from
+three branches is correct only if every database in existence was created in the merged order; a file opened by one
+branch's build at schema 5 or 6 would carry that branch's tables under a version number the merged build gives to
+different ones. A separate file removes the conflict rather than coordinating it. The cost is a second connection in
+`MainWindow`, which is negligible. The argument does not extend to data that must join the library's rows: a state
+record is keyed by the state file's path and never joins a game row (the Save States view finds a renamed game through
+the record's MD5 and `GameRecords.PathByHash`, which is a lookup, not a join).
+
+**A record knows which file it describes.** Each row carries the state file's size and last-write time (UTC ticks) as
+they were when the row was written, and `ReadState` returns the record only while the file still has both. A state
+rewritten without a record, whether by the DianaOS `state save` command, by another program, or by a crash between the
+state's write and the record's, is therefore treated as having no record, which is how states from before §4.37 have
+always been treated: loaded, unexamined. With sidecars the same three cases left the *old* sidecar describing the new
+state, so a state could be refused on the strength of a record that was not its own. The check is strictly stronger
+than what it replaces. What it costs: copying a states folder with a tool that does not keep modification times makes
+every record in it inapplicable (never wrong); and since rows are keyed by the full path, a folder moved elsewhere, or a
+changed `StateDirectory`, leaves its states without records where sidecars would have travelled with them. Both losses
+fail towards "no record", the behaviour the refusal checks were built on top of.
+
+**Existing files are migrated on first sight and left where they are.** When `ReadState` finds no row for a state and
+a sidecar beside it parses, the sidecar is inserted as a row (`source = 'sidecar'`, stamped with the state file's size
+and time at that moment) and its record returned; from then on the row is read and the sidecar is not. A `.emusen-pack`
+stamp is treated the same way (`source = 'stamp'`). If the database cannot take the row, the sidecar's record is still
+returned, so the old file is the fallback. Nothing is written beside a state any more, and a download no longer writes
+a stamp.
+
+**No migrated sidecar is deleted.** This was a decision, and its reasons are particular to this installation. The state
+folder is the player's to choose, and on the machine this was written on `StateDirectory` is the ROM library itself
+(`EmuSen_Galaxia.md` §3.3a), which the project reads and never writes; a program deleting files there, however
+carefully it matched them, would break that rule for some 300 bytes a file. A sidecar left in place is also what makes
+the import crash-safe without further argument: an import interrupted at any point loses nothing, because its source is
+untouched and is imported again on the next sight. A left sidecar cannot override a newer record, since a sidecar is
+consulted only when there is no row at all for its state; once a row exists, a stale or edited sidecar is ignored. The
+one deletion that remains is the one that preceded this change: **Delete Save State** in the Save States view deletes
+the state, its picture, its row and its sidecar if it has one, because the player asked for that state to be gone. An
+older build pointed at the same folder still reads whatever sidecars exist, and sees no record for states saved after
+this change. The pack's stamp is likewise left; a new download replaces the whole folder, stamp included, so a stamp
+cannot outlive the pack it describes.
+
+**What stayed JSON, and why.**
+- The six settings files and the ScreenScraper credentials, by the change's scope and by `EmuSen_Stack.md` §4.1.
+- **Save As and Load From in the Active Cheats window** (§4.15a) write and read a file the player names and places.
+  Their shape is unchanged, and is now pinned byte for byte by `CheatFileTests`. The pin records the format as it is,
+  including a quirk: a cheat's writes appear twice, as `Writes` and as the read-only `EffectiveWrites`, and `IsRomPatch`
+  is written too, because `System.Text.Json` serialises public getters. Reading ignores the extra names. Removing them
+  would be a format change and was not made here.
+- **Each game's saved cheat list** (`/etc/EmuSen/cheats/<name>.json`) was examined and left. It is not Mistress's own
+  store but the store of the DianaOS commands `cheat save`, `cheat load` and `cheat files`, which Mistress shares so that
+  a list saved in the window loads in the shell and the reverse (§4.15). `man cheat` documents the file as plain JSON
+  that "can be written or corrected by hand from this shell". Moving Mistress's half alone would split one store into
+  two that disagree, and `cheat load <game>` would no longer find what Mistress saved. Moving both halves requires
+  DianaOS to be handed a store through an interface, as the catalogue is (`EmuSen_Galaxia.md` §7.1), and would still end
+  the documented hand-editing. The change's scope said to stop and record the case instead, and that is what was done;
+  `EmuSen_Stack.md` §4.3 carries the revised argument.
+- **`.emusen-theme`**, the theme download's stamp (`EmuSen.Mistress/BigPicture/ThemeDownloads.cs`), has the shape of the
+  pack's stamp and would move the same way. It was left because the big-picture code belonged to another branch at the
+  time, and it is the next candidate. *Done on that branch (§4.62): the record moved into `home/Themes/themes.db`, and
+  the stamp keeps only the row's id, which removal checks against the row.*
+- **LunaP's layout files** (`windows.json`, `tables.json`, `panes.json`, beside the settings) are program-written state
+  the toolkit reads back. They live in `EmuSen.LunaP`, a separate repository, behind its `ISettingsStore`; the clean
+  route is a SQLite `ISettingsStore` installed by each frontend's `Program.cs`, not an edit to the stores. One EmuSen
+  window (Hotaru's hotkey help) uses the first two, and nothing uses the third. `luna.json`, the chosen theme, is a
+  setting and stays.
+
+**Tests.** `FileRecordsTests` (16): a new file's schema and WAL mode; a newer file refused and left byte-identical; an
+older file (schema 0, holding a table of its own) migrated in place with that table kept; a record round-tripped
+through a reopened file with nothing written beside the state; no record for a missing state; a sidecar in the
+real format imported on first sight, both it and the state left byte-identical, and the row rather than an edited
+sidecar read after reopening; an unparsable sidecar neither imported nor removed; a written record replacing an
+imported one; a state rewritten at another size, or at the same size with a later time, not described by its old row; a
+forgotten state; a closed store that neither writes nor throws; **a crash part way through a write**, as the image a
+kill leaves on disk: the database and its log copied while open, the log cut half way through the second record's
+frames, and the copy opened, with the first record intact, no second record, and `integrity_check` returning `ok`; the
+Save States view reading records through the store and finding a renamed game by the record's hash; a pack stamp
+imported and left and a download's date recorded over it; no build for a folder that is not there.
+`IdentityAndCollectionsTests` gained a state saved from the window, the window closed and another opened, the record
+read back unchanged with `source = 'written'`, no sidecar on disk, and the state loaded; its three older state tests
+now write their altered records through the store. `ScreenFilterSettingTests`' download test asserts no stamp in the
+new pack and a `written` row. `CheatFileTests` pins the export and reads a hand-written file with a comment, trailing
+commas, lower-case names and the flat pre-multi-write fields. The DianaOS cheat tests (`EmuSen.WiseMan.DianaOS.Cheat*`,
+92, among them `CheatPersistenceCommandTests`, `CheatPruneCommandTests` and `CheatDatabaseTests`),
+`ActiveCheatsApplyAndSaveTests` (13) and `MainWindowCheatListTests` (9) pass unchanged.
+
+**Mutants.** Fifteen, each run alone with a WiseMan build and only the tests named for it, and all fifteen caught on
+the first run: a newer schema not refused; a rollback journal in place of WAL (caught by the crash test, which finds no
+log, and by the mode test); no check that a state is the file its row describes; a sidecar never read; an imported
+sidecar deleted; a sidecar read but not imported; a new record also written as a sidecar; the ROM's size not stored; a
+migration that does not bump `user_version`; the window writing no record; Load State reading none; a download that
+records no build; a download that still writes a stamp; a pack stamp not imported; and the cheat export written without
+indentation. The runner (`~/.cache/emusen/probe/sqlite-migration/mutants.py`) keeps the unmutated file beside itself
+while a mutant is applied, restores it on start if a run was interrupted, and rebuilds the restored source at the end.
+
+**The broad run** (WiseMan without the GPU, Vulkan, slang and bench tests and `ShaderSettingsWindowTests`, 2026-09-27):
+7,721 passed, 17 skipped, 2 failed. Both failures (`GameFrameReleaseTests`, `DianaOSShellWindowTests`) threw inside
+Avalonia's headless platform set-up (`AppBuilder.SetupUnsafe`, a dispatcher owned by another thread) before any test
+code ran, neither class touches `records.db` or a state record, and both classes pass when run alone (4 and 11). They
+were not re-run against the unmodified build, so "an ordering race in the shared headless session, independent of this
+change" is the likely reading and not a demonstrated one.
+
+**What this does not cover.** The crash test exercises SQLite's recovery of a torn log under this store's settings; it
+cannot distinguish `synchronous = FULL` from `NORMAL`, which differ only on power loss, and no test here removes power.
+The view's Delete Save State forgetting the row has no test of its own (the store's `ForgetState` has one); a missed
+forget leaves a row describing a file of a size and time that no later state is likely to share. States saved by the
+DianaOS `state save` command still get no record. No sidecar in a player's own folders was read by a test; the fixture
+reproduces their format from one of them, which was read and not changed.
+
+### 4.65 ScreenScraper in published builds, OpenVGDB's Remove, and another game's cover (2026-09-27)
+
+The answers to Q40, Q42 and Q45 of `EmuSen_BigPicture.md` (§10.1 there; §28 is the record: the publish
+measured, the tests, the mutants and the pictures). The section is numbered 4.65 because §4.64 was taken by
+`records.db`, and §4.62 by another branch.
+
+#### 4.65.1 Q40: the developer credentials a published build carries
+
+The answer to Q40, once ES-DE's own approach had been looked at, was to do what ES-DE does. A published Mistress therefore
+carries EmuSen's ScreenScraper developer credentials, so that any player can scrape; a player's own member account
+(§4.60) only raises the day's requests and threads. This reverses Q5, under which no build carried them.
+
+**Where the credentials are looked for,** in this order, the first complete one winning:
+
+1. the tree's own developer file, `<root>/home/etc/EmuSen/screenscraper-developer.json` (§4.60's first place);
+2. `~/.config/EmuSen/screenscraper-developer.json` (§4.60's second place);
+3. what the build carries.
+
+A file that is present but unreadable or missing a field is passed over, not taken as the end of the search. The
+Scraping tab's first hint says which applies: "EmuSen's developer file is on this computer", "This build carries
+EmuSen's developer credentials…", or that neither is the case, in which event ScreenScraper cannot be used and the
+status line, the status window and Log In all say that this build carries no developer credentials and the file is not
+on this computer.
+
+**How a build comes to carry them.** `EmuSen.Mistress/Scraping/ScreenScraperDeveloper.targets`, imported by
+Mistress's project, runs before the compile of a `dotnet publish` and of nothing else:
+
+- it reads the file named by the MSBuild property `EmuSenScreenScraperDeveloper`, by default
+  `~/.config/EmuSen/screenscraper-developer.json` (the builder's config directory, `$XDG_CONFIG_HOME` where set);
+  `-p:EmuSenScreenScraperDeveloper=<path>` names another;
+- it takes the three values, re-encodes them as a three-field JSON object, XORs that with 32 random bytes drawn for this
+  build, and writes `"ESSD"`, a version byte, the key's length, the key and the scrambled bytes to
+  `obj/<configuration>/<framework>[/<rid>]/screenscraper-developer.bin`;
+- that file becomes the manifest resource `EmuSen.Mistress.Scraping.Developer` of `EmuSen.Mistress.dll`, and is
+  deleted as soon as the compile has read it, so it lives in `obj/` (which git ignores) only for the length of one
+  compile.
+
+A publish without the file **succeeds**, warns once (`EMUSEN0040`, naming the path looked at) and produces a build that
+carries nothing; a file missing a field is refused the same way, the warning naming the missing field and never a
+value. `dotnet publish --no-build` warns (`EMUSEN0041`) that the assembly is whatever the last build made.
+
+**Why only a publish.** A plain `dotnet build` is what a developer, a test run, the mutant runner and any contributor
+does many times a day; none of them needs the credentials, and every one of them would otherwise write a copy of them
+into a `bin/` folder that tools, archives and bug reports sweep up. A publish is the one step whose output is meant to
+leave the machine, and it is the step after which Mistress must work for someone who has no file. Keeping the embedding
+to it keeps the number of places the credentials exist, scrambled or not, to the published trees. The WiseMan suite
+runs against a plain build, so no test ever loads real embedded credentials; the tests that exercise the embedding
+publish a scratch project with a fake file (§28.3).
+
+**What the scrambling protects against, and what it does not.** It is obfuscation, not secrecy, exactly as ES-DE's is
+(its developer credentials are XORed with a key held beside them in `ScreenScraper.h`). The key is in the same resource
+as the data, so anyone with the published `EmuSen.Mistress.dll` and this section can recover the credentials in a few
+lines. What it does prevent is their appearing *as text*: `strings` or `grep` over the binary, a search of an unpacked
+archive, and the automated secret scanners that look for literal credentials in files do not find them, and a per-build
+key means two builds do not share scrambled bytes that could themselves be searched for. It does nothing against a
+reader who decides to extract them. The accepted consequence, as it was accepted for ES-DE's model, is that the
+credentials can be recovered from any copy, and that abuse under them could get the `EmuSen-Mistress` software name
+blocked (ScreenScraper's 426, which the scraper reports).
+
+**What never happens to them.** They are never written to disk by Mistress (no code path saves a
+`DeveloperCredentials`), never shown (the object prints as "ScreenScraper developer credentials for *softname*"), and
+never logged: decoding them registers the id and the password, raw and URL-escaped, with the same redactor as the
+files' credentials and the member account (§4.60), so a URL, an exception or `CrashLog` holding them has them blanked.
+The decoded bytes are cleared after parsing; the strings themselves live as long as the process, as the files' do.
+
+#### 4.65.2 Q42: removing OpenVGDB is optional
+
+OpenVGDB, the 42 MB game database OpenEmu's fallback reads (§4.39, §4.60), stays the fallback behind ScreenScraper,
+by a decision of 2026-09-27 to keep it. Its row in Preferences ▸ Scraping ▸
+**OpenEmu Failover** now says whether it is downloaded and how large it is, and offers:
+
+- **Remove**, while it is downloaded: after a confirm, it deletes `home/Library/openvgdb.sqlite` to free the space and
+  switches the fallback off (`OpenEmuFallback` false), because the fallback cannot work without it and would otherwise
+  download it again at the next run the player starts. The covers it already found stay in `home/Media/openemu/`, shown
+  again once the fallback is back on. The fallback's worker, which holds the database open, is stopped first.
+- **Download**, while it is not: one request to GitHub for the newest release, the database checked to open as an
+  OpenVGDB before it replaces anything (§4.39), and the fallback switched back on.
+
+Neither is offered while a run or a download is using the database. Nothing else ever deletes it; turning the fallback
+off with its switch leaves the file where it is. From the pad, both buttons are reached like the rest of the tab, and
+when Remove hides the focus moves to Download.
+
+#### 4.65.3 Q45: Use Another Game's Cover…
+
+For a game with no box of its own, most often a hack or translation whose base game is in the same library, the
+player can have it show another game's cover.
+
+**Where it is.** The game options menu, wherever it opens (the themed gamelist's Select, the sidebar library's pad menu
+on the desktop and in its big screen, **Game Options...** in the context menu), has **Use Another Game's Cover...**, and
+**Use Its Own Cover** while a choice is in force. The grid's and the list's context menu has the same two entries,
+beside Add Cover Art from File… and Remove Cover Art.
+
+**The picker.** A LunaP window on the desktop and a sheet in a big-screen session, titled with the game. It lists the
+library's games that have a cover to give (their cover as the library would show it now, of any console), never the game
+itself and never a game whose cover already comes from this one, so a choice can never make a loop. The games whose
+names begin with the most of this game's words come first ("Super Mario Bros. (Hack)" lists "Super Mario Bros.
+(World)" first), then by name; at most 60 are shown, and the search box narrows them as the library's own search does.
+Each row has a small picture of the cover. From a pad every control is reached by the d-pad, the search box opens the
+on-screen keyboard, A chooses, and B or Select puts the picker away.
+
+**What a choice is.** A row of `games.db`'s `game_edit` table (§4.59), field `coverfrom`, whose value is the chosen
+game's ROM path. No file is copied, written or deleted: not in the ROM folder, not in the cover art folder, not in
+`home/Media`. The choice is the first place a cover is looked for, before the player's own cover art folder (§4.60's
+order gains a step 0), in the library's grid and list and in the themed view alike. It is followed through: if the
+chosen game itself shows a third game's cover, this game shows that too; a chain that comes back round stops at the
+game it reached twice, which shows its own. If the chosen game has no cover at all, the game falls back to its own order.
+
+**Undoing it.** Use Its Own Cover, from the options, the context menu or the picker, deletes the row. The metadata
+editor's **Clear** does not: it clears metadata, and a borrowed cover is the player's cover, as a placed picture is
+(§4.59 already leaves those). A renamed chosen game keeps being chosen under its new name, as `GameRecords.Move` updates
+the rows that name it; a renamed choosing game carries its row with it, as every edit does.
+
+**Why a row and not a copy** is argued in the plan's §26 note: a copy would overwrite whatever the player had placed,
+go stale when the other game's cover changes, and be undone only by deleting a file.
+
+#### 4.65.4 Tests, mutants and what is not done
+
+Tests (all headless through WiseMan, never the network): `ScreenScraperEmbedTests` (5), `ScrapeCredentialTests` (+9),
+`ScrapeWindowTests` (+2 for Q42), `CoverChoiceTests` (8), and the options menus' expected entries in
+`DesktopGameOptionsTests`, `ThemedGameOptionsTests` and `ThemedCollectionsTests`. The plan's §28.3 lists what each
+asserts. Thirty-four mutants were run one at a time (§28.4): 30 caught on the first run, 32 after a second round that
+sharpened one test and rewrote one mutant that did not compile; the two survivors were equivalent, and the redundant
+code they exposed was removed.
+
+**Not done.** Nothing ran on the handheld or through a real window manager. No real developer file was ever embedded
+by a test; one publish of Mistress itself with a fake file was made by hand (§28.2). The picker has no thumbnail cache
+shared with the library's, and lists at most 60 games, so a game past the 60th nearest must be searched for.
+
+### 4.66 Big picture: the interface switches, Mistress's own badges, and its own navigation sounds (2026-09-27)
+
+Pass 4 of `EmuSen_BigPicture.md` §21 (its §29 is the record: predictions, measurements, mutants, pictures). This section
+is what a player meets. It retires two lines of §4.52: "The theme's clock is off … there is no switch for it yet", and
+the status bar showing every indicator sysfs reports with no way to turn one off.
+
+#### 4.66.1 The Interface tab of Theme Settings
+
+ES-DE keeps these in its *UI settings* menu beside the theme's own choices, and its *System status settings* submenu
+under it (`USERGUIDE.md`, "UI settings", "System status settings"). Mistress puts them in the same place: the **Theme
+Settings** sheet (§4.53) gains a third tab, **Interface**, after Options and Themes. Every row applies at once beneath
+the open sheet, as the Options tab's do, and is kept in `appsettings.json` under `BigPictureInterface`, spelled as
+ES-DE's `es_settings.xml` spells the values where it has them. Nothing here is program data, so nothing is in SQLite.
+
+| Row | Key | Default | What it does |
+|---|---|---|---|
+| Quick System Select | `QuickSystemSelect` | `leftrightshoulders` (Left/right or shoulders), ES-DE's | Which pair changes the system in a game list; below |
+| System on Startup | `StartupSystem` | empty: the first system of the order | the system big picture opens at, the first time it is shown in a session |
+| Startup View | `StartupView` | `system` | whether it opens on the carousel or inside that system's game list |
+| Systems Sorting | `SystemsSorting` | `release`: EmuSen's own order | the carousel's order of the systems; below |
+| Quick Scrolling Overlay | `ListScrollOverlay` | off, as ES-DE's `ListScrollOverlay` | the letters over a held list; below |
+| Clock | `DisplayClock` | off, as ES-DE's `DisplayClock` | the theme's `clock` elements drawn, showing the time |
+| On-Screen Help | `DisplayHelp` | on | the theme's `helpsystem` elements drawn |
+| System Status | `StatusBluetooth`, `StatusWifi`, `StatusBattery`, `StatusBatteryPercentage` | all on | each indicator of the theme's `systemstatus` elements |
+| Launch Screen Duration | `LaunchScreenDuration` | `normal`, ES-DE's | *since 2026-09-27:* how long the launch screen shows before a game starts; §4.71 |
+| Screensaver (a group of eleven rows) | `ScreensaverTimer`, `ScreensaverType` and the rest | 5 minutes, Dim | *since 2026-09-27:* when the screensaver starts, which, its controls and its slideshow; §4.75 |
+
+**Quick system select.** ES-DE's six choices, with its documented meanings (UG "UI settings"):
+- *Left/right or shoulders* and *Left/right or triggers*: left and right change the system in a game list whose primary
+  element is a text list or a vertical carousel; in a grid or a horizontal carousel, whose left and right move through
+  the games, the shoulders (or the triggers) change it instead.
+- *Shoulders*, *Triggers*, *Left/right*: that pair always, "consistent regardless of theme configuration but you'll
+  sacrifice the ability to use the selected buttons if the gamelist supports it". With *Left/right* a grid's left and
+  right change the system rather than move; with *Shoulders* a list's jump of ten games is gone, with *Triggers* the jump
+  to the first and last.
+- *Disabled*: nothing changes the system from inside a game list; East goes back to the carousel.
+
+The help bar says so: the pair that changes the system reads **System**, and the left/right entry is left out when left
+and right do not change it. **A change from before this pass:** a grid's shoulders, which paged ten games, now change
+the system under the default, as ES-DE documents; *Left/right* gives them back their jump (`EmuSen_BigPicture.md` §29,
+Q53).
+
+**Startup.** Applied once, at the first showing in a session: coming back from a game, or from a sheet, keeps where the
+player was. A startup system the library has no games for opens at the first system. The list offers *Default* and the
+five systems, in the order the carousel shows them; ES-DE's list also offers its collections, which this one does not.
+
+**Systems sorting.** Three orders, those Mistress can answer from its own data:
+- *Release order (EmuSen's)*, the default and the order before this pass: by manufacturer, then each core's first year,
+  the Game Boy Color beside the Game Boy (NES, Game Boy, Game Boy Color, SNES, Nintendo 64);
+- *Full names*: by the full name the theme shows (Game Boy, Game Boy Color, Nintendo 64, Nintendo Entertainment System,
+  Super Nintendo), ES-DE's own default, *Full names or custom*, without its custom file;
+- *Release year*: each system's first release (Famicom 1983, Game Boy 1989, Super Famicom 1990, Nintendo 64 1996,
+  Game Boy Color 1998).
+
+ES-DE's *Manufacturer, release year* would equal *Release year* for five Nintendo systems and is not offered; its two
+*HW type* orders rank hardware types in its bundled files, which were not read, so they are not offered either.
+Collections come after the systems whatever the order, as §4.58 places them.
+
+**The quick scrolling overlay.** With it on, a game list drawn as a text list, held down past its first repeat (half a
+second, when ES-DE's list starts repeating and fades the game's metadata out, §4.52), is shaded and shows in its middle
+the first two characters of the game passing, or a star while the list passes favourites kept on top. Let go, it is
+gone; a list that stops at its end fades it away with the metadata. ES-DE's user guide describes the overlay ("darken
+the background slightly and display the first two characters of the game names … a star symbol will be shown instead");
+its timing and its look were not measured, so both are Mistress's (§29, Q51). Holding a shoulder shows nothing.
+
+**The clock** follows the wall clock by itself (LunaP's `ClockLabel.Live`), so a still view still draws nothing between
+minutes (§4.52's drawing only while something moves). Art Book Next places its clock at the top left of the system view
+and sets its game lists' clock to `scope none`, so there the clock shows on the carousel only.
+
+**The status indicators.** Each switch removes its indicator from every `systemstatus` element; the percentage goes with
+the battery, since it is drawn beside it. As before, an indicator shows only when sysfs reports the device.
+
+#### 4.66.2 Navigation volume, and Mistress's own navigation sounds
+
+Preferences ▸ Appearance gains **Navigation Sounds Volume**, a slider from 0 to 100 in steps of 5, stored as
+`BigPictureInterface.NavigationVolume`, default 70 (ES-DE's `SoundVolumeNavigation`, which §4.52's fixed gain of 0.7
+was). It is the interface stream's gain and applies at the next sound; at 0 nothing is played at all. It does not touch
+the game's volume.
+
+**A theme without a sound.** THEMES.md: "If no navigation sounds are provided by the theme, then ES-DE will use the
+bundled navigation sounds as a fallback. This is done per sound file." Mistress does the same with sounds of its own,
+synthesised when first wanted (`NavigationSounds`): short sine tones with a quarter of their octave, a 3 ms rise and an
+exponential fall, 30 to 250 ms long, one design per action (a high tick to scroll, a rising glide to choose, a falling
+one to go back, a three-note figure for a favourite, a long rising sweep to launch). Nothing is read from a file and
+nothing of ES-DE's samples is used or copied; the synthesis is in the code and gives the same samples every time. The
+Navigation Sounds switch (§4.52) silences these too.
+
+#### 4.66.3 Badges Mistress draws itself
+
+A theme's `badges` element lists slots; for each slot the game has, ES-DE draws the theme's `customBadgeIcon`, or its
+own picture when the theme names none (THEMES.md, "badges"). Until this pass Mistress drew nothing in the second case.
+Now it draws LunaP's `BadgeGlyph` (`LunaP.md` §180): a rounded plate with a star, a check mark, a face, a crack, two
+arrows, two cards, a folder or a book, in the element's `badgeIconColor`. The decision of 2026-09-25 (Q9) was that these
+are Mistress's own drawings; none is ES-DE's.
+
+- **Controller.** The metadata editor (§4.59) gains ES-DE's **Controller** field, a choice of *None*, *Nintendo
+  Entertainment System*, *Super Nintendo*, *Nintendo 64*, *Gamepad (generic)* and *Unknown*, stored as an edit in
+  `games.db` like every field, under THEMES.md's type names (`gamepad_nintendo_nes` and so on). A game with one shows
+  the controller badge with that pad drawn over it, at `controllerPos` and `controllerSize`, or the theme's
+  `customControllerIcon` for that type when it names one. Any other gamepad type a hand-edited row might hold is drawn
+  as the generic pad, anything else as unknown. ScreenScraper's answers carry no controller, so nothing fills the field
+  but the player.
+- **Folder.** Drawn for any entry that says it is a folder, with a chain link over it when the folder has a link
+  (`folderLinkPos`, `folderLinkSize`, `customFolderLinkIcon`). Since pass 6 (§4.67) a console's folders are
+  entries, and they carry it, a linked folder with the link; a grouped collection's entry still hides its badges, as ES-DE
+  was seen to (§4.58).
+- **Manual** and **alternative emulator** are drawn when a game has them; Mistress fetches no manuals yet (pass 9).
+- A theme that names every slot's image, as Art Book Next does its five, looks exactly as before: the tests compare its
+  game list drawn both ways and find no pixel different.
+
+The slot `all` now keeps the slots a theme names first, in its order, then the rest in THEMES.md's, as documented;
+before, `all` discarded the theme's order.
+
+#### 4.66.4 Tests
+
+`ThemedSwitchesTests` (27, WiseMan, headless, every switch set on its sheet by the pad): the clock off by default and on
+changing only the pixels inside its box, on the synthetic theme and Art Book Next's carousel; the help bar gone and
+nothing else changed; each status switch removing its indicator and changing nothing outside the element; quick system
+select's six choices over a list, with the help bar's words; the startup system and view, a missing system, and a later
+showing; the three orders and the startup list; the overlay off, then on with letters and a star, and gone when let go;
+the volume as the gain, set by the slider, and 0 playing nothing; Mistress's sounds for a theme with none and for one
+missing sound; the synthesis (distinct, short, deterministic); the controller chosen in the editor drawn on its badge;
+and every control of the Interface tab reached by the pad. `BuiltInBadgesTests` (4): the nine slots drawn in order with
+nothing changing outside the element; a named image winning and a missing one falling back; `all`'s order and the
+controller shapes; Art Book Next unchanged. `ThemedGridPadTests` now asserts the grid's shoulders under the default and
+under *Left/right*, and `SceneMappingTests` proves the eight badge properties newly mapped change pixels.
+
+**What it does not cover.** ES-DE was not run: the overlay's timing and look, and whether its built-in badges sit where
+Mistress's do, were not measured. Nothing ran on the handheld. The overlay does not show for held shoulders.
+
+#### 4.66.5 A game's own engine: ES-DE's per-game alternative emulator (2026-09-27)
+
+ES-DE lets a player choose "alternative emulators to use per game system" and, in the metadata editor, per game, where
+the game's choice "will take precedence and override the system-wide emulator selection"; its `altemulator` badge shows
+the per-game choice alone (UG "Other settings", "Metadata editor"). In Mistress the system-wide choice already exists:
+Graphics Settings' **Engine** row for the consoles with two implementations (§4.44: Mars (C#) or MarsRT (Rust) for the
+N64, Mercury (C#) or MercuryRT (Rust) for the Game Boy and Game Boy Color). The metadata editor gains ES-DE's
+**Alternative emulator** field, after Controller:
+
+- For a game of a console with two engines it offers *None (the console's engine)* and the console's two engines; for
+  the NES and the SNES, which have one, it offers *None* and is not enabled, as ES-DE greys the row out.
+- The choice is an edit in `games.db` (`game_edit`, field `altemulator`, the engine's name as the Engine row stores it),
+  like every field. *Reset* and *Clear* remove it.
+- **At launch**, the game's engine runs it instead of the console's choice. A stored engine the console does not have
+  (a hand-edited row, or an engine removed in a later build) is ignored and the console's choice runs, as ES-DE launches
+  with the default emulator after an invalid choice. The engine's own fallbacks are unchanged: MarsRT's missing library
+  still falls back to Mars and says so (§4.44).
+- The theme's `altemulator` badge is drawn for a game with an engine of its own (§4.66.3).
+
+**Not built:** the gamelist filter for alternative emulators (§4.58's filters), and a notice on the row when the stored
+engine is invalid.
+
+#### 4.66.6 A cap on the play time one launch records: ES-DE's "Max play time tracking" (2026-09-27)
+
+Mistress counts the time a game runs into its play time (§4.32), the value the metadata editor and a theme's `playtime`
+show. ES-DE warns that a game left running while the device sleeps "would jump significantly to include the sleep
+time", and limits what one launch may add (UG "Other settings"). Preferences ▸ Gameplay gains **Max Play Time Tracking**,
+`AppSettings.MaxPlayTimeTracking`, in hours:
+
+| Value | Recorded for one launch |
+|---|---|
+| Disabled (0) | nothing: play time is not tracked; the play count still counts |
+| 1 to 23 hours | the launch's time, or **nothing at all** if it ran longer than the limit, as ES-DE's "whatever play time is measured will be ignored if it exceeds the selected value" |
+| No limit (24) | the launch's time, however long |
+
+The default is **8 hours**, ES-DE's `MaxPlayTimeTracking` (§21.1). It applies wherever Mistress records play time, the
+desktop library as well as big picture, since the counter is one. Time already recorded is not changed.
+
+**Tests** for both: `GameEngineAndPlayTimeTests` (9): a game's engine choices are its console's and one its console lacks
+is ignored; the editor offers a Game Boy game its engines and a Super Nintendo game none, and the choice shows the
+badge; a game's own engine runs a synthetic N64 system over the console's choice, the console's runs it with none, and an
+engine of another console is ignored; the cap's five cases; and at the window, a 45-minute launch recorded, a nine-hour
+one dropped under the default, and recorded once Preferences sets No limit. `ThemedGameOptionsTests`' reach test now
+requires the engine row disabled for a Super Nintendo game.
+
+### 4.67 Big picture: a console's folders, the flatten switch, folder links, and the media of games in folders (2026-09-27)
+
+Pass 6 of `EmuSen_BigPicture.md`'s plan of ES-DE parity (§21.3 there; §30 is the record: the prediction P108 shown and
+fixed, P109 on the player's own library, the tests, the mutants and the pictures). §21's recommendations
+were accepted on 2026-09-26 (§10.1): **Q23 (c)**, folders shown as ES-DE shows them, by default, with a per-console
+switch that gives the flat list of before; and **Q24**, directories named like files and `.m3u` playlists wait for a
+disc-based core, so neither is here. The section is numbered 4.67 because §4.66 is another pass's. Everything here is in
+the themed view of §4.52, in big-screen sessions and in big picture on the desktop (§4.54); EmuSen's own library
+(§4.33, §4.56) and the desktop's sidebar library are unchanged and still list every game of a console in one list.
+
+#### 4.67.1 What a game's folder is
+
+ES-DE keeps a system's games under `ROMs/<system>/`, and what lies between that folder and a file is the game's folder
+(USERGUIDE, "Multiple game files installation"). Mistress decides a game's console by its extension, not by where the
+file sits (§4.46), so the rule has to be restated: **the first level below the ROM folder of §4.11 is the console's
+folder, whatever its name, and every folder between it and the file is the game's folder.** With the player's library,
+`Roms/NES/USA/Game.nes` is in `USA`, `Roms/NES/Hacks/Mario/Game.nes` in `Hacks/Mario`, and `Roms/SNES/Game.sfc` and a
+file directly in the ROM folder in none. The rule reads one file's path and nothing else, so adding a game elsewhere
+never changes another game's folder; the plan's §30.2 gives the alternative that was rejected for that reason, and the
+one case the rule reads unlike a person would (a ROM folder pointed at one console's folder).
+
+#### 4.67.2 Folders in a game list
+
+A console whose games sit in folders opens on its folders, as ES-DE's does:
+
+- **South** on a folder enters it (the `select` sound); **East** comes back up one level (`back`), to the folder left;
+  East at the top goes back to the systems. Folders can hold folders, to any depth.
+- **Folders sort on top** (ES-DE's *Sort folders on top of gamelists*, on by default), in the list's own sort order,
+  then the games, favourites first when *Sort favorite games above non-favorites* is on. Turned off, folders and games
+  share one order.
+- A folder is listed while it holds a game the list keeps. The scan lists only the files a core reads (§4.11), so a
+  folder holding nothing else, such as the player's `GB/[BIOS]` of `.7z` archives, does not appear.
+- **Each folder keeps its own selection**, and **each system the folder it is in**: quick system select (left and right)
+  comes back to the same folder and game, and so does the return from a game started inside a folder, by **Game
+  Library** or **Close Game** in the pad menu.
+- **Sort and filters are the system's**, set in Select's menu from any folder and applied over every folder, because
+  USERGUIDE says the filters "are always applied for the complete game system, including all folder content": a folder
+  that holds a favourite shows under a favourites filter, one that does not is hidden, and the filter's values come
+  from every game of the console. The search box of §4.58 narrows the same way. A search or a filter that empties the
+  folder shown moves the list up to the nearest folder that still holds a game.
+- **Jump To…** offers **Folders**, which goes to the first folder, when folders are on top beside games; the letters
+  then index the games only. A list of folders alone is indexed by their first letters, as USERGUIDE says. ES-DE draws a
+  folder icon where Mistress writes *Folders* (§4.67.6).
+- The **system view's count** counts every game of the console, those inside folders included, not the entries its list
+  opens on.
+- **The random entry** (the thumbsticks, §4.58) picks any entry of the list shown, a folder included.
+- **Collections hold no folders**: all games, favorites, last played and the custom collections list the games inside
+  folders as games, since USERGUIDE says "folders can't be part of collections".
+
+**How a folder is drawn.** Each folder entry says it is a folder, for the three things a theme draws from that: a
+`textlist` marks it with LunaP's folder mark (`indicators` *symbols*, LunaP §101.8) in its secondary colour; a `grid` or
+carousel shows the theme's `defaultFolderImage` where the folder has no picture of its own; and a `badges` element's
+`folder` slot is filled, with the folder-link overlay when a link is set (the built-in drawings of those slots are
+another pass's, §21.3 Pass 4). A folder's own picture is looked for as ES-DE names it,
+`<system>/<type>/<parent folders>/<folder name>.<ext>`. The help bar's A reads *Select* on a folder and *Launch* on a
+linked one.
+
+#### 4.67.3 The flatten switch, and Sort folders on top
+
+Both are in **Game Collection Settings** (the pad menu, Start), under **Game Lists** ▸ **Folders**, beside *Sort
+favorite games above non-favorites*. That is where ES-DE's user guide keeps the nearest equivalent, its *Sort folders on
+top of gamelists* in *UI settings*, and where §4.58 put ES-DE's other game-list settings. ES-DE has no menu entry for
+flattening: a file named `flatten.txt` in a system's folder does it ("Folder flattening"), and the guide discourages it.
+Mistress makes it a switch per console because the player's letter folders only repeat what Jump To… does.
+
+| Row | Setting (`appsettings.json`, in `BigPictureCollections`) | Default | Effect |
+|---|---|---|---|
+| Sort folders on top of gamelists | `FoldersOnTop` | on | folders first in every foldered list |
+| Flatten *console* folders, one per console | `FlattenedSystems`, the ES-DE names of the consoles flattened | none | that console's games in one list, as before folders were shown |
+
+Each applies at once beneath the sheet and is saved with the other settings. Flattening changes only the list: a
+flattened console's games keep their folders for where their pictures are looked for (§4.67.5), unlike ES-DE's
+flattening, whose guide warns that "metadata from the wrong game may get used" for files of the same name.
+
+#### 4.67.4 Folder links
+
+ES-DE's *Folder link* (USERGUIDE, "Metadata editor") names a file inside a folder that A launches in place of entering
+the folder. **Select** on a folder opens the options menu with the list's rows and **Edit This Folder's Metadata**; its
+sheet has one field, **Folder link**, a list of the games below the folder by their paths from it, and *(none)*. Save
+keeps the choice; Cancel or B leaves it. While a link is set:
+
+- A on the folder launches the linked game, with the `launch` sound, and that game is what last played and the play
+  counters record;
+- the menu gains **Enter Folder**, ES-DE's *Enter folder (override folder link)*, which opens the folder anyway;
+- while a custom collection is being edited (§4.58), A enters the folder as if it had no link, as USERGUIDE says.
+
+The link is a row of `games.db`'s `game_edit` table (§4.59) on the folder's own path, field `folderlink`, holding the
+file's path from the folder. Nothing on disk but `games.db` changes. A link to a file that has since gone is ignored, and
+A enters the folder. The folder's other ES-DE fields (name, description, rating, hidden and the rest) are not kept.
+
+#### 4.67.5 The media of a game in a folder
+
+USERGUIDE ("Manually copying game media files") keeps a foldered game's pictures under the same folder,
+`downloaded_media/<system>/<type>/<folder>/<file name>.<ext>`. Before this pass Mistress looked only at
+`<system>/<type>/<file name>`, so an ES-DE media folder (§4.52) written for this library would have shown nothing for
+any game in a folder: the plan's prediction P108, shown on the unchanged reader (none of six pictures found) and then
+fixed.
+
+**The order a picture is looked for in** is §4.60's, and in each of Mistress's store and the ES-DE media folder the
+game's folder is tried first, then the flat name. The flat name is kept second for an ES-DE folder written from a
+flattened system, and for pictures placed by hand in the store for an earlier build; a game whose own file is in its
+folder is never shown another's from the flat name. This holds in the themed view, the library's covers, and the variant
+triggers' count of which media a system has.
+
+**Mistress's own store** (`home/Media`, §4.60) now writes a scraped picture of a game in a folder under that folder,
+`home/Media/<system>/<type>/<folder>/<file name>.<ext>`, as ES-DE would; a file renamed or moved to another folder takes
+its pictures along at its next scrape, with no request. Clear (§4.59) deletes the pictures in the game's own folder, so
+two games of the same file name in different folders no longer share them.
+
+**The store is put in folders once.** `media.db`'s second migration adds two tables: `store_step`, which records that
+the step has run, and `store_move`, a log of every file it touched (`from_path`, `to_path`, `how`, `at`). The first time
+Mistress opens the store with a ROM folder set, each picture stored flat for a game in a folder is:
+
+- **moved** into that folder, when one game in one folder names it;
+- **copied** into each folder, when copies of the game sit in several folders or one also sits at the top; the flat file
+  is kept for the one at the top, and with no game at the top the last folder takes the move;
+- **left**, when a file is already at the target: nothing is overwritten, and the log records it as `found`.
+
+`media.db`'s row for each picture then names the file its game shows. **No picture is deleted**: a move keeps the bytes
+under a new name, and the tests compare every file's SHA-256 before and after. A step cut off between a move and its row
+is finished at the next opening, which finds the file already in place. Once `store_step` holds its row the step never
+runs again; the scraper writes folders from now on, and anything else left flat is read through the flat name. The step
+runs only when the ROM folder is set, since that is what names the folders; a player without one is migrated when they
+set it.
+
+#### 4.67.6 What it does not do
+
+- **Directories named like files and `.m3u` playlists** (USERGUIDE, "Directories interpreted as files"): not built, by
+  Q24, until a disc-based core exists. A folder named `Game.cue` is an ordinary folder.
+- **A folder's metadata** other than its link: its name, description, rating, hidden flag, *Hide metadata fields* and
+  the rest of ES-DE's folder fields are not kept, and a folder is not scraped.
+- **A folder-link mark in a `textlist`**: ES-DE marks a linked folder with its own symbol (`>` in *ascii*); LunaP's
+  `TextRowList` has a folder mark and no link mark, so a linked folder is marked as a folder. The badge slot carries the
+  link.
+- **`gamelistinfo`'s folder icon**, which waits for the element to be drawn at all (§21.3 Pass 14).
+- **Jump To…'s folder entry** is the word *Folders*, not ES-DE's icon.
+- **North** on a folder does nothing, and the help bar still names it *Favorite* there.
+- **The desktop's sidebar library** is unchanged: one list per console.
+- Nothing ran on the handheld.
+
+### 4.68 Big picture: themes that ES-DE draws load and install, as ES-DE reads them (2026-09-27)
+
+Q47 of `EmuSen_BigPicture.md` was answered on 2026-09-27 with (b): run ES-DE on the listed themes Mistress refused,
+and match what it does. §31 of that plan is the record (the runs of ES-DE 3.4.1, the rules measured, the tests, the
+mutants and the survey). The section is numbered 4.68 because §4.66 is another pass's. There is no setting: the change
+is in how a theme is read, which is the same in big-screen sessions, in big picture on the desktop (§4.54), in Theme
+Settings (§4.53) and in the theme browser (§4.62).
+
+**What a player meets.** Fifteen themes of ES-DE's list that the browser used to refuse with "The download is not a
+theme that loads" now install and are drawn, as ES-DE draws them: CarAlt, CodyWheel, Diamond, ES-DE-Mini, Showcase,
+Slick (Remixed), TateGriddy, Razor, SimCar, SimpleMenu, X20s, Artflix (Revisited), CoinOPS, Grimmlex and Retrofix
+(Revisited). A theme copied into `home/Themes` by hand is read the same way. Of the 66 themes on ES-DE's list, all 66
+now load for the five systems EmuSen emulates, against 51 before; what big picture does not yet draw of them is
+§25.8's list, unchanged.
+
+**How a value is read**, as ES-DE 3.4.1 was measured to read it:
+
+| A theme writes | It means | Before |
+|---|---|---|
+| a number followed by more, `0.85 0.9` or `0.9abc` | its leading number, 0.85 or 0.9; no number at all is 0, then held to the property's range | refused |
+| a pair with more or less than two plain numbers, `w 0.02`, `0.75 0.3 0.9` | the text is split at its first space and each side read as a number: `0 0.02`, `0.75 0.3` | refused |
+| a pair with no space at all, `w0.02`, `0.6`, or numbers separated only by a tab | **still refused**, as ES-DE refuses it: that console shows EmuSen's own look, and the browser will not install it | refused |
+| a true-or-false value | true when it starts with `t`, `T`, `y`, `Y` or `1` (`true`, `yes`, `1`), false otherwise (`false`, `no`, `flase`, `0`) | only `true`, `false`, `1` and `0` were accepted |
+| an `&` that is not part of `&amp;` or another complete reference, as in `Game & Watch` | the `&` itself, shown as written | refused |
+| text before or after the file's outermost element | ignored | refused |
+| `<transitions>` directly in a theme file | ignored, unless the file is included from inside a `<variant>`, where it chooses that variant's transitions (§4.53's Automatic) | refused |
+
+A space before a value counts, because ES-DE counts it: ` true` is false, and ` 0.5 0.5` reads as `0 0.5`. Tags that do
+not match (`<text>…</view>`) still make a file unreadable, and the console unthemed, in ES-DE and in Mistress alike.
+
+**What is written down.** Each reading of the kinds above adds a warning to the theme's diagnostics, naming the file,
+line and what the value was read as ("it is read as 0.85, as ES-DE reads it"); ES-DE itself writes nothing. A refusal
+names its reason, and the browser shows it after "The download is not a theme that loads:", for example "…is
+"w0.02", which has no space between two values; ES-DE refuses such a pair too".
+
+**What it does not do.**
+- **Colours, whole numbers, words and paths** are read as strictly as before; ES-DE was not run on them (§31 Q70). Two
+  listed themes (Canvas, Iconic) write `3.5` where a whole number belongs, and lose that one property's element in one
+  variant; both still load. *Since §4.73 (2026-09-27), these are read as ES-DE reads them too.*
+- **`capabilities.xml`'s own true-or-false values** (`selectable`) are read as before. *Since §4.73, as ES-DE reads
+  them.*
+- **Nothing is shown to the player** about a theme's warnings; they are for theme authors, in the loader's diagnostics
+  (§31 Q72).
+- Nothing ran on the handheld; the handheld's build that refused Artflix (Revisited) and CarAlt predates this.
+
+### 4.70 The error log: every error a frontend shows, kept whole (2026-09-27)
+
+**Why.** On the handheld, every theme a player tried to install from the theme browser (§4.62) failed. The only record
+was the detail sheet's status line, which word-wrap had broken. Nobody could tell whether the value it quoted
+read `w0.02` or `w 0.02`, and nothing was on disk to settle it. The only log Mistress kept before this was §4.27's
+crash report. An error that was caught and shown left nothing behind once its line was gone. An error logger built
+into EmuSen in general was requested.
+
+**What it is.** `ErrorLog`, in `EmuSen.Galaxia.Library`, so that both frontends and anything else that references
+Galaxia can write to it.
+- **Location:** one plain-text file a day, `emusen_<yyyyMMdd>.log`. It sits in the same folder as §4.22's per-game
+  logs and §4.27's crash reports: the `LogDirectory` setting (Preferences' *Log Directory*), else
+  `~/.config/EmuSen/Logs`. `CrashLog` now takes its folder from `ErrorLog.Root()`, so the two cannot diverge.
+- **The entry:** one line with the time to the millisecond, `ERROR` or `WARN`, an area in brackets (`themes`,
+  `states`, `launch`, `covers`, `scraping`, `cheats`, `library`, `media`, `screenshots`, `shaders`, `config`, `crash`,
+  `logging`, `unhandled`), and the message whole. A message's own line breaks are folded to ` ⏎ `, so one entry's
+  first line is always one line, which keeps `grep` useful. Then, indented, the context (the game, theme, file or
+  slot) and the exception whole, with its inner exceptions and traces.
+- **Credentials:** Mistress sets `ErrorLog.Redactor` to the scraper's redactor in `CrashLog.Install`, the first
+  thing `Program.Main` does. No ScreenScraper credential reaches the file, from the message, the context or the trace
+  (§17 of the plan).
+- **Size and pruning:** files older than 14 days are deleted on the first write of a run. Only `emusen_*.log` files
+  are ever deleted; crash reports and per-game logs are left alone. A day's file stops at 8 MB, with one last line
+  saying so.
+- **Safety:** writing is best effort and never throws. A log that cannot be written must not become a second fault.
+
+**Plain text, not SQLite.** The project keeps program-written data in SQLite where it can (§4.64). This is the
+exception, argued rather than assumed:
+- A log has to be read when something is broken, possibly the database layer or the app itself.
+- It has to be read over ssh on a handheld with `cat`, `tail` or `grep`, without a client.
+- Appending a line is the one write that stays readable after a crash mid-write.
+
+None of those holds for the stores §4.64 moved.
+
+**What writes to it.**
+- **Errors, with the exception:** every place Mistress shows an error it caught. In all, 29 sites across 17 files:
+  - launch;
+  - save state, load state and resume;
+  - screenshots;
+  - cover art added and removed;
+  - media deleted;
+  - OpenVGDB's download and removal;
+  - the cover failover's lookups;
+  - the media store's opening;
+  - a scrape request queued to retry;
+  - the cheat database's download and reading, and a code that would not decode;
+  - the shader pack's download;
+  - the theme list, a theme's screenshots, licence, download, update and removal;
+  - per-game logging that could not start.
+- **`CrashLog`:** each report adds one line pointing at its file.
+- **Warnings, without a trace:**
+  - a theme that has no view for a system, with every loader error it gave;
+  - a themed library that could not be shown, and why;
+  - each configuration problem `ConfigDiagnostics` reports, which until now reached only the console.
+- **Hotaru:** its unhandled faults and configuration problems.
+
+**A folder that cannot be made falls back.** The handheld's `appsettings.json` named `/home/red/Documents/Logs/` as
+its `LogDirectory`, a desktop path copied across with the settings. The deck user cannot create it, so crash reports
+and per-game logs there had been going nowhere, silently. `ErrorLog.Usable` now tries to create the configured folder.
+When that fails, `ErrorLog.Root()`, and through it `CrashLog` and §4.22's per-game logs, use `~/.config/EmuSen/Logs`.
+The setting itself is left as the player wrote it.
+
+**Pulling it from the handheld.** `ls ~/.config/EmuSen/Logs/`, or the folder Preferences names. Then, for example,
+`grep -A12 ERROR emusen_20260927.log`.
+
+**Tests.** `ErrorLogTests`, seven cases, the seventh being the fallback just described:
+- an entry written whole, with area, context and inner trace;
+- entries appended, with a message's line break folded;
+- the redactor over message, context and trace;
+- pruning that spares everything but old `emusen_*.log` files;
+- the 8 MB cap with its last notice;
+- an unwritable folder that returns null and throws nothing.
+
+`ThemeDownloadErrorLogTests` walks the real sheets: a download whose archive holds no `capabilities.xml` fails, and
+its status line and a log entry naming the theme, its address and the whole reason both appear. Removing that one
+`ErrorLog.Error` line from `ThemeDetailWindow` fails the test, so it is not decorative.
+
+The suite never writes to the player's folder. A module initializer, `ErrorLogIsolation`, points the log at a
+scratch folder per test process. The broad Mistress run afterwards (1,176 passed, 29 skipped) left no `emusen_*.log`
+in `~/.config/EmuSen/Logs` or in the configured folder.
+
+**Not covered.**
+- The other 27 of Mistress's 56 `catch (Exception …)` blocks write nothing. They are best-effort paths that report
+  nothing to the player either: a status bar that cannot be read, a picture that cannot be decoded for a preview.
+  They are left until one of them hides a real fault.
+- DianaOS commands and the cores do not write to it. The Rust cores' native crash files (`native_crash_*`,
+  `mercuryrt_crash_*`) stay under the data home's `Logs`, not this folder.
+- There is no viewer inside Mistress. The file is meant for `cat`, a text editor, or a bug report.
+
+### 4.69 Big picture: the Start menu and a game's options in ES-DE's layout (2026-09-27)
+
+Requested 2026-09-27: a big-screen options menu that looks like ES-DE's. This is the first stage: the
+two list menus of a big-screen session. The settings sheets are the second stage, not yet built. The plan and its record
+are `EmuSen_BigPicture.md` §32; the toolkit's pieces are LunaP's §181.
+
+#### 4.69.1 What the player sees
+
+In a big-screen session, Start (or F4, §4.52a) and a game's Select now open a **wide panel in the middle of the screen**,
+over the screen blurred and darkened:
+
+- a large upper-case title: *Main Menu* over the library, the game's name over a running game (as the library names it,
+  with no extension or folder), and *Gamelist Options* over a game's or a folder's options, as ES-DE titles them;
+- full-width upper-case rows separated by thin rules, the chosen row a dark bar across the whole panel;
+- a **chevron** on a row that opens another screen (Cheats, Graphics Settings, Preferences, Theme Settings, Game
+  Collection Settings, Edit This Game's Metadata, Filter Gamelist and the others);
+- a value at the right of a row that has one (*Slot 1* beside Save State, the reason Rewind cannot run), and **arrows**
+  around a value that Left and Right step (State Slot, Speed, Jump To…, Sort Games By);
+- a small footer line, *EmuSen 0.9.0*, the program's version (§4.69.7), under the pad menu;
+- **no Close button**: B and Start close the pad menu, B applies and Select cancels a game's options, as before. A game's
+  options that apply something (the themed gamelist's) keep an Apply and a Cancel button under the rows;
+- **one help bar** at the bottom centre, the pad's own buttons drawn with upper-case labels (*Close Menu*, *Select*,
+  *Change*, *Choose*); the theme's help bar is put away while the menu is open and comes back when it closes.
+
+The rows are the same entries, in the same order, doing the same things. What changed is only how they are drawn. The
+desktop's pad menu, the desktop library and every desktop window are unchanged, and so are the settings sheets.
+
+#### 4.69.2 The typeface: Barlow Condensed
+
+The menus are drawn in **Barlow Condensed Regular** (version 1.408, © 2017 The Barlow Project Authors), under the SIL
+Open Font License 1.1, shipped as `Assets/Fonts/BarlowCondensed-Regular.ttf` beside the program and listed in
+`THIRD_PARTY_NOTICES.md` §1.5 with its licence in `licenses/BarlowCondensed-OFL-1.1.txt`, which every published build
+carries.
+
+Why this one. The look wants a condensed sans-serif whose capitals read at a distance, since every row is upper case.
+Barlow is a low-contrast grotesk with slightly rounded forms, drawn for legibility on screens and signs; its condensed
+width fits a long label (*Use Another Game's Cover…*) in a row at 1280×800 without an ellipsis. Its licence is OFL, which
+lets it ship inside a GPL program as long as it is not sold by itself. It is one file of 80 KB with Latin and Vietnamese
+coverage. Roboto Condensed and Fira Sans Condensed were the alternatives named. Neither was measured against it, so the
+choice rests on the reasons above and not on a comparison. It is not ES-DE's bundled font file: it was downloaded from
+Google Fonts, and no file of ES-DE's was opened. It is bundled in Mistress, not LunaP, because LunaP is MIT and keeps
+every dependency MIT (LunaP §181.2); LunaP's controls take any font file's path.
+
+#### 4.69.3 How it is built
+
+- **LunaP** (§181) provides `MenuPanel` (the panel, title, footer and help bar), `MenuRow` (one drawn row), `MenuRows`
+  (a `Button`, a dropdown or a list's rows drawn as rows, behaviour kept), `BlurBackdrop` and `SheetLayer.Chromeless`.
+- **The pad menu** keeps its `PadMenuList`. In a big-screen session the list moves from the desktop's bordered box into
+  a `MenuPanel` (`PadMenuBig`), and its rows are drawn by `MenuRows`. A `PadMenuEntry` may now carry a `Label`, a `Value`
+  and `Opens`, the parts its one line of text runs together, which the big rows show separately. `Text` is unchanged, so
+  the desktop's list and every test that reads the lines see the same strings.
+- **A game's options** are the same `GameOptionsWindow`. In a big-screen session it is built with a pad family. It then
+  presents itself chromeless on the sheet layer (no sheet title, hint line or surface), and puts its rows in a
+  `MenuPanel` with the game's name as the title. The desktop's shape (a title, buttons, rows with a field label, a Close
+  button) is kept for the desktop. A `GameOption` may carry a `MenuRow` of its own, as Jump To…, Sort Games By and
+  Filter Gamelist do (§4.58), and `Opens` for the chevron. Filter Gamelist's state (*No filter*, *1 filter set*) is the
+  row's value rather than a line of text beside a button.
+- **The backdrop**: the library, the game picture and the game's heads-up bar sit in one panel, `ScreenContent`.
+  `MenuBackdrop` blurs it while the pad menu or a chromeless sheet is open in a big-screen session, and shades the
+  screen. The blur is Avalonia's `BlurEffect`, which Skia draws as a Gaussian image filter at full resolution, with no
+  captured or pre-scaled bitmap and no low-quality sampling. Its radius is 14 pixels at 800 lines, scaled with the
+  window.
+- **Size**: everything is laid out for a screen 800 pixels high and scaled by the window's height over 800
+  (`MenuPanel.Scale`, set once on the window). The panel is 0.66 of the width, but no wider than 1.05 times the height.
+  The rows show whole: at 1280×800 the library's pad menu shows nine of its eleven rows and scrolls to the rest.
+
+#### 4.69.4 Pad and keyboard
+
+Nothing about input changed. The pad menu still takes Up, Down, Left, Right, A, B and Start through `PadMenuCommand`.
+The game options are still driven by `PadWindowRouter`, focus moving by position, a button clicked by A, a dropdown
+stepped by Left and Right and opened by A. F4 opens the menu and Backspace closes it (§4.52a), and Escape closes a game's
+options. The rows' highlight is the list's selection in the pad menu and the keyboard focus in a game's options. Both
+are what they were; only the way they are drawn changed.
+
+#### 4.69.5 Tests
+
+`EsdeMenusTests` (WiseMan, headless, §15's pixel style), six cases:
+
+- The **Start menu at 1280×800 and 1920×1200**: the panel is centred, and the selected row's bar is the panel's width,
+  every pixel of its top line the bar's colour. The screen is blurred and the theme's help bar hidden. The frame
+  differs from the same frame with the panel alone taken away in no pixel outside the panel and the help bar. The
+  backdrop changed more than a twentieth of the screen. Closing lifts the blur and gives the theme's help back.
+- **A game's options at both sizes**: the same checks, and Jump To… has the focus and the bar. Apply stays, and Edit
+  This Game's Metadata has a chevron.
+- **F4 and Backspace with no pad** open the big menu, move in it and close it.
+- **A desktop session** keeps the bordered menu, no backdrop and the list's own rows.
+
+Two existing tests changed their expectations where the look changed and nowhere else.
+`ThemedGameOptionsTests.Select_opens_…` reads the menu's title from the panel rather than a text block (since Q85, *Gamelist Options* rather than the game's name).
+`ThemedCollectionsTests.The_options_sheet_…` reads *1 filter set* from the Filter Gamelist row's value rather than a
+text block beside the button. Every other pad, menu and sheet test passed unchanged. Twelve mutants (six here, six in
+LunaP) were each caught (BigPicture §32.5).
+
+#### 4.69.6 What it does not do
+
+- **The settings sheets**: Theme Settings (with pass 4's Interface tab), Game Collection Settings, Preferences in a
+  big-screen session and the metadata editor keep their sheet look. That is the second stage.
+- **A dropdown opened from a row** (A on Sort Games By) drops down the stock list, not an ES-DE list screen.
+- **The pad menu on the desktop** (Guide over a desktop window) keeps its desktop look.
+- Nothing ran on the handheld or with a real pad; ES-DE was not run for this section. Its look was read from the
+  captures of 2026-09-26.
+
+#### 4.69.7 The program's version: 0.9.0
+
+EmuSen's version was set to 0.9.0 on 2026-09-27 (Q84). It is set once, in `Directory.Build.props` at the
+repository root, and every project that does not set its own carries it. EmuSen.Galaxia and EmuSen.Cauldron keep their
+own 0.1.0. Until then no project set one, and the SDK's default of 1.0.0 was what the program reported.
+
+The places that read it:
+- the big-screen menus' footer;
+- the User-Agent of the cover downloads (`EmuSen/0.9.0`);
+- the build name a new save state's record stores, with the commit after a `+`;
+- the file and product version of the published executables.
+
+ScreenScraper's `softname` does not come from it and is unchanged. A state recorded by an earlier build keeps the
+*1.0.0* its record says; whether a state loads is decided by its state version, never by this. BigPicture §32.11 has
+the survey.
+
+### 4.71 Big picture: the launch screen (2026-09-27)
+
+Pass 11 of `EmuSen_BigPicture.md` §21 (its §33 is the record: ES-DE measured, the predictions, the tests, the mutants
+and the pictures). This section is what a player meets. It amends §4.52's "Starting a game and coming back": between
+the resume question and the game there is now the launch screen.
+
+**What it is.** When big picture starts a game, ES-DE first shows a card in the middle of the screen for a moment: the
+words *Launching Game*, the game's marquee, the game's name and its system, all in capitals, over the view shaded and
+blurred. Mistress now does the same. The card scales up from half its size over the first 117 ms. The view behind it
+is shaded by a fifth and blurred over the first 67 ms. Then nothing moves until the game starts. The game starts when
+the time is up, and the card is gone with the game's first frame. While the card shows, the pad and the keyboard do
+nothing, as in ES-DE.
+
+**The setting.** Theme Settings ▸ Interface (§4.66.1) gains **Launch Screen Duration**, under *On Screen*. It is kept
+in `appsettings.json` as `BigPictureInterface.LaunchScreenDuration`, spelled as ES-DE's `es_settings.xml` spells it:
+
+| Choice | Value | What it does |
+|---|---|---|
+| Normal | `normal` (the default) | the card for 3.0 s |
+| Brief | `brief` | the card for 1.7 s |
+| Long | `long` | the card for 4.5 s |
+| Popup | `popup` | no card: a notice at the top centre, *Launching Game 'Name'*, fading in over 0.5 s; the game starts after 1.7 s |
+| Disabled | `disabled` | the game starts at once, as before this pass |
+
+The times are ES-DE 3.4.1's, measured from the press to the start (§33 of the plan). An unknown value reads as Normal.
+Normal as the default, shown after the resume question, was decided on 2026-09-26 (Q33, §10.1 of the plan).
+
+**When it shows.**
+- **Every start from the themed view:** a game list's South or Enter, a collection's game, the random entry followed by
+  South, and a folder link. These all end in the one launch the view reports.
+- **In a big-screen session and in desktop big picture (F10, §4.54) alike.**
+- **After the resume question** (§4.31), whatever the answer. A question closed without an answer shows nothing and
+  starts nothing.
+- **Never when there is nothing to wait for:**
+  - a game the desktop's own list or grid starts;
+  - Open ROM, a dropped file or the ROM browser;
+  - going back to a suspended game (East in the system view, the pad menu's *Back to …*, or its *Game Library* and back).
+
+  The last kind reloads nothing, so nothing delays it.
+
+**What it shows.**
+- **The name** is the one the game list shows, a name set in the metadata editor (§4.59) included.
+- **The system** is the shelf's full name (*Super Nintendo*, *Game Boy Color*).
+- **The picture:**
+  - the game's **marquee**, found by the library's own order of sources (§4.60): ScreenScraper's media store, then an
+    ES-DE media folder;
+  - failing that, the game's **cover**, by the same order, the player's own cover first;
+  - failing both, no picture, and the card is shorter.
+
+  ES-DE shows only the marquee and draws no picture without one. The cover is Mistress's own addition (Q90 in the
+  plan), since most games have a cover and no marquee.
+- **The layout:**
+  - It follows ES-DE's proportions, taken from the window's height.
+  - The card is 0.886 of the height wide and centred 0.445 of the way down.
+  - It widens for a name that needs more room, up to 0.865 of the window's width. Beyond that the name ends in an
+    ellipsis.
+  - The colours and the typeface are those of the big-screen menus (§4.69), which stand for ES-DE's menu colour scheme
+    here.
+
+**A game that fails to load.** The card stays for its time, as ES-DE's does. Then the load fails, the card goes and the
+game list stays. The reason shows in the notice at the top centre (§4.61's), because the status bar is hidden in big
+picture. It is written to the error log (§4.70) under `launch`, as every failed load is.
+
+**Tests.** `LaunchScreenTests` (WiseMan, headless, 20 cases):
+- each duration stepped on the interface clock, the game not started one poll before its end and started at it;
+- Disabled starting at once;
+- the default and the stored values;
+- the name, system, marquee, cover and no picture;
+- an edited name;
+- the pad ignored while the card shows;
+- a resume from the pad menu and by East not delayed;
+- the resume question answered and closed;
+- a failed load;
+- the collection, random and folder-link routes;
+- F10's big picture shown and the desktop list not;
+- the window closed while the card shows;
+- the Interface row;
+- three pixel cases: the card at 1280×800 and 1920×1200, the scale-up, and the popup.
+
+`LaunchScreenPictureTool` writes the pictures when `EMUSEN_BIGPICTURE_PNG=1`. `ThemedSession` sets the duration to
+Disabled, so the older themed tests start their games at once as they did. The mutants are in §33 of the plan.
+
+**What it does not cover.**
+- **The return.** ES-DE lifts a shade off its game list over about a third of a second when a game ends. Mistress comes
+  back through the pad menu and draws the list at once (Q91).
+- **Menu opening animation** (ES-DE's *Scale-up* or *None*) has no switch. The card always scales up (Q92).
+- **ES-DE's error popups.** A missing emulator shows *Couldn't find emulator* in ES-DE, and a game that exits with an
+  error shows nothing there. Mistress has neither case. It shows its own reason for any load that fails.
+- **The clock and status indicators.** ES-DE keeps them sharp above the blur (with its Linear theme). Mistress blurs the
+  whole view.
+- **Nothing ran on the handheld.**
+
+### 4.72 Big picture: the metadata editor in ES-DE's layout, and its two new fields (2026-09-27)
+
+The first item of the big-screen menus' second stage (`EmuSen_BigPicture.md` §32.8). §34 of that plan is the record:
+what ES-DE documents, what was built, the tests, the mutants and the pictures. LunaP's pieces are its §182. This section
+is what a player meets. It amends §4.59's editor, whose fields, buttons and behaviour are otherwise unchanged.
+
+#### 4.72.1 What the player sees
+
+In a big-screen session, **Edit This Game's Metadata** (from Gamelist Options, §4.69) opens the editor as the menus of
+§4.69 look, over the screen blurred:
+
+- an upper-case **EDIT METADATA** title, and beneath it, smaller, the game's name as the library shows it and its file
+  name, one to a line;
+- **one row per field**, its label at the left and its value at the right, in the order of ES-DE's user guide: Name,
+  Sort name, Custom collections sortname (only inside a custom collection, below), Description, Rating, Release date,
+  Developer, Publisher, Genre, Players, Favourite, Completed, Kid game, Hidden, Broken / not working, Exclude from game
+  counter, Exclude from multi-scraper, Hide metadata fields, Times played, Play time, Controller, Alternative emulator;
+- **text fields** (Name, the two sortnames, Description, Developer, Publisher, Genre, Players, Times played, Play time)
+  as rows with a chevron and their value as written, not upper-cased; **A** opens the on-screen keyboard over the field
+  (§4.52's), and **Start** on the keyboard puts it away. A description's line breaks show as spaces in its row;
+- **the rating as five stars** at the right of its row, stepped in half stars by Left and Right; **the release date**
+  as `YYYY-MM-DD` (or *Unknown*) in the menu's typeface, its year, month or day chosen by A and stepped by Left and
+  Right;
+- **flags as switches**, turned by A;
+- **choices** (Controller, Alternative emulator) **between `<` and `>`**, stepped by Left and Right. The alternative
+  emulator is drawn faded, and cannot be changed, where the console has one engine, as ES-DE greys it out;
+- **ES-DE's colours for a value**: grey as the editor opened it, **blue** once changed in this editing, **red** where
+  this editing's scrape put it. The stars and the date change colour with the text;
+- **the buttons in one row at the bottom**, always in view however the rows scroll: **Scrape**, **Save**, **Cancel**,
+  **Clear**, **Hide from Library…**. There is no Delete: EmuSen never deletes or moves a game's file, and Hide from
+  Library takes its place, as §4.59 has it;
+- a **footer** of up to two lines under the buttons. While a field has the focus it says where its value comes from
+  (*Name: From the file name.*, *Description: From ScreenScraper.*, *Rating: Your edit.*, *…: Not set.*). Just after
+  the editor does something (a scrape starting or answering) it says that instead, until the focus moves. While a button
+  has the focus it is empty;
+- the **help bar** at the bottom of the screen: *Scrape* (the North button, which starts the scrape from anywhere in
+  the editor, as ES-DE's Y does), *Select*, *Back*, *Change*, *Choose*.
+
+**Reset**, Mistress's own since §4.59, still appears beside a field that holds an edit, as a small outlined button at
+the right of its row. **ScreenScraper's name**, offered after a scrape (§4.63), shows as two rows under Name: *Use This
+Name*, with the offered name in red as its value, and *Keep Current Name*.
+
+**The questions** the editor asks (Clear's, Hide from Library's, and whether to keep the changes when B leaves an
+edited game) are **ES-DE's message box**: the question in upper case on a small rounded panel over the editor, which
+stays drawn beneath it, darkened, with the answers in a row under the question and the accepting one chosen first. The
+editor's help bar gives way to the box's own (*Select*, *Choose*) while it is up.
+
+On the desktop, the editor keeps its form of §4.59; it gains the Hide metadata fields switch, and nothing else.
+
+#### 4.72.2 Hide metadata fields
+
+ES-DE's flag of that name: *"This option will hide most metadata fields as well as any badges … The only fields shown
+with this option enabled are the game name and description."* It is stored in `games.db`'s `game_edit` under
+`hidemetadata`, as every other edit is (`1` when on; off is the default and stores nothing). In the themed view's
+gamelist, while such a game is selected, the theme's rating, its badges, its date and time elements, every text element
+bound to metadata other than the name and the description, and every element the theme marks as a metadata element are
+not drawn. Its covers, screenshots and videos are. This is the same rule a collection's entry already followed (§22 of
+the plan, `SceneBuilder`), now also applied to a game with the flag. The desktop library is unaffected: the flag is a
+themed view's matter in ES-DE too.
+
+#### 4.72.3 Custom collections sortname
+
+ES-DE's field of that name: it *"works exactly like sortname but will only affect the sorting for custom collections,"*
+and where both are set it wins there. In Mistress:
+
+- the editor shows it **only when it is opened from inside a custom collection** (a grouped collection's folder, or a
+  custom collection shown as a system of its own), directly under Sort name;
+- it is stored in `game_edit` under `collectionsortname`;
+- in **every custom collection** the game belongs to, it takes the sortname's place: the order, and what the Jump To…
+  letters index. The consoles' lists and the automatic collections (All Games, Favourites, Last Played and the others)
+  keep ordering by the sortname, or the name;
+- it cannot differ between custom collections, as in ES-DE.
+
+#### 4.72.4 How it is built
+
+- `MetadataEditorWindow` builds the layout above when given a pad family (a big-screen session), and §4.59's form
+  otherwise. The fields' controls, their wiring to the draft, Save, Cancel, Clear, Hide, Scrape and Reset are the same
+  objects in both; only where they are placed differs.
+- The rows are LunaP's (§182): a `TextBox` and a switch drawn as rows by `MenuRows.Apply`, the dropdowns as option rows,
+  and a `MenuFieldRow` hosting the `RatingPicker` or the `DateStepper`. The panel's subtitle, button band and two-line
+  footer are `MenuPanel`'s. The questions are `Dialogs.MenuConfirmAsync`.
+- `GameMetadata` gains the two fields, in ES-DE's order. `SceneGame` gains `CustomSortName`, and its `HideMetadata`,
+  until now set only for a collection's entry, is set from the flag. `CollectionShelves` puts the custom sortname in the
+  sortname's place for the games of a custom collection's shelf, and nowhere else.
+
+#### 4.72.5 Tests
+
+`MetadataEditorLayoutTests` (WiseMan, headless, in `EsdeMenusTests`' pixel style), seven cases:
+
+- **the editor at 1280×800 and 1920×1200**: centred; titled *Edit Metadata*, drawn in capitals, with the game's name and
+  file beneath; the rows' labels in ES-DE's order with no custom collections sortname; each kind of row as described;
+  the first row focused with the bar across the panel, every pixel of its top line the bar's colour; the footer naming
+  where the name comes from; the five buttons, Delete absent, on one line inside the button band, below the rows,
+  centred on the panel; the footer empty on a button; and no pixel changed outside the panel and the help bar;
+- **grey, then blue**: the name and the stars hold no pixel of the edited blue as opened, and more than forty each once
+  changed; an untouched field none;
+- **Hide metadata fields**: stored as `hidemetadata`, the rating and a developer text hidden and the description kept,
+  the next game unaffected; turned off, the edit removed and the rating back;
+- **the custom collections sortname**: absent from a console's list's editor, present inside a custom collection under
+  Sort name, stored as `collectionsortname`, ordering the collection and not the console's list;
+- **Hide from Library's question**: a chromeless message box, the editor drawn and not hit-testable beneath it, its help
+  bar hidden; Cancel returns to the editor whole;
+- **with no pad**: Enter turns a focused switch and presses a focused Cancel, which stores nothing.
+
+`ThemedMetadataScrapeTests` gains one: after the editor's scrape, the description is drawn in the scraped red, the
+name is not, and the offered name is.
+
+Two existing test files changed, only where the look did. `ThemedGameOptionsTests` and `ThemedMetadataScrapeTests` read
+a field's *where from* words through `HintOf` rather than a `FieldRow`'s hint, since the big-screen editor has no
+`FieldRow`, and the pad audit walks the fields the editor shows rather than every field. Every other expectation,
+the pad routes included, passed unchanged.
+
+#### 4.72.6 What it does not do
+
+- **ES-DE's text popup.** A opens Mistress's on-screen keyboard, in its own look, not ES-DE's text-editing popup in
+  the menu's (Q100).
+- **ES-DE's green stars** for a rating that was rounded to a half star when read are not drawn; Mistress keeps the
+  rating it reads.
+- **Folder link**, a folder's field in ES-DE, has no counterpart: the editor opens on games only.
+- **The settings sheets, the list screen for an option row, and the Menu opening animation switch** are the rest of
+  stage 2 (§32.8), not yet built.
+- Nothing ran on the handheld or with a real pad, and ES-DE was not run for this section.
+
+#### 4.72.7 Since the look was approved (2026-09-27)
+
+Decided 2026-09-27 (`EmuSen_BigPicture.md` §10.1, built as its §34.11 and after). Where this amends §4.72.1, this is
+what a player meets now.
+
+- **Reset is West.** The small Reset button beside a changed row is gone in a big-screen session. **West** on the pad
+  (X on an Xbox pad, Square on a PlayStation pad) or **Delete** on the keyboard resets the focused field; the help bar
+  shows *Reset* while the focused field holds an edit, and not otherwise. The desktop editor keeps its buttons.
+- **The keyboard.** With or without a pad, ES-DE's keys (§4.52a) drive the big-screen menus as the pad does: the pad
+  menu, a game's options, the editor and its questions. Up and Down move between rows, Left and Right change, Enter
+  chooses, Backspace goes back (and applies a game's options, as B does), Delete resets, and Insert scrapes. A text row
+  is opened with Enter, not typed into.
+- **Controllers** show by their short names in the row: *NES*, *SNES*, *N64*, *Gamepad*.
+- **Hide from Library** asks: *"EmuSen never deletes or moves a game's file. Hide this game from the library instead?
+  Its file stays where it is; turn on Hidden Games in Preferences to list it again."*
+- **The on-screen keyboard** has wider *Shift* and *Done* keys, so their names are no longer cut.
+
+#### 4.72.8 The settings sheets as ES-DE's menus (2026-09-27)
+
+In a big-screen session, **Theme Settings**, **Game Collection Settings** and **Preferences** open as ES-DE's menus
+rather than as sheets with tabs (plan §34.13). Each is a panel like the pad menu's: its name as the title, a row per
+setting, *Back* under the rows, and the help bar at the bottom of the screen.
+
+- **Theme Settings** lists the theme's own options first (variant, colour scheme, font size, aspect ratio, language,
+  transitions, as the theme declares them), then **Themes** and **Interface** as rows that open screens of their own.
+  In Themes, EmuSen's own look is a row with *Use* (or *In Use*) beside it, and each theme a row that opens its own
+  screen with Use, Check for Update or Update, Remove and About.
+- **Game Collection Settings** is one screen: the automatic collections and each custom collection as switches, Create
+  New Custom Collection, Group Custom Collections, the custom collections' switches, the default sort order, the
+  favourites and folders switches and the random button.
+- **Preferences** is a row for each of Library, Scraping, Gameplay, Appearance, Controllers and System Files, each
+  opening its screen.
+
+Rows show what the sheet showed: a **choice** between `<` and `>` (Left and Right step it, A opens its list, §4.72.9), a
+**switch** named in ES-DE's words (*Display clock*), a **text or folder** as a row that A opens on the keyboard
+(§4.72.11), a **slider** as a choice showing its value (*5 min*, *70*). The line at the foot of the panel says what the
+focused row does, as the sheet's hint under each field did. **B** or *Back* goes back a screen and closes the menu
+from its first; **L1** and **R1** turn to the previous or next screen, as they turned the tabs. On the desktop the
+sheets are as before.
+
+#### 4.72.9 An option row's list screen (2026-09-27)
+
+In any big-screen menu, **A** (or Enter) on a row with `<` `>` opens ES-DE's list screen for it (plan §34.15): the
+row's name as the title, a row for each choice, the current one highlighted, and *Back*. A on a choice sets it and
+goes back to the row; B or Back goes back leaving the row as it was. The menu the row is in is not drawn behind the
+list, as in ES-DE. Left and Right on the row still step it without the list. A click on the row with a mouse drops the
+ordinary list down.
+
+#### 4.72.10 Menu opening animation (2026-09-27)
+
+A row of Theme Settings ▸ Interface, ES-DE's *Menu opening effect* (plan §34.14):
+
+| Choice | What it does |
+|---|---|
+| Scale-up (default) | a menu, a menu screen opened from another, and the launch screen's card grow from half their size to their own over 117 ms, as ES-DE's do (measured) |
+| None | they appear whole at once |
+
+Stored as `MenuOpeningEffect` (`scale-up`, `none`) in the big picture interface settings.
+
+#### 4.72.11 The text popup (2026-09-27)
+
+A text row in a big-screen menu (a metadata field, a folder, a user name) opens the on-screen keyboard as ES-DE's text
+popup (plan §34.16): *Enter* and the row's name as its title, the text on a dark bar, the keys as tiles, over the menu
+shaded. The keys, the layouts and what each button does are those of §4.45.6: A types, B erases (and with nothing left,
+closes), Y is a space, Select shifts, L1 and R1 change the layout, Start is Done. Everywhere else (the cheats window,
+the desktop) the keyboard keeps its own look.
+
+#### 4.72.12 The editor's proportions, measured (2026-09-27)
+
+ES-DE's own editor was captured at 1280 by 800 and measured (plan §34.12). The editor's rows are now ES-DE's: 42
+pixels apart (the menus' are 54) with smaller type, stars 21 pixels each, the buttons' type larger than the rows', and
+*unknown* shown for an empty developer, publisher, genre, players and release date, as ES-DE shows it. The title band
+is laid out as ES-DE's. The two lines under the title stay the game's name and its file, as decided; ES-DE shows one
+line, the file and its system in brackets (Q105).
+
+### 4.73 Big picture: colours, whole numbers, words, paths and variants, as ES-DE reads them (2026-09-27)
+
+Q70 and Q71 of `EmuSen_BigPicture.md`, answered on 2026-09-27: run ES-DE on the value types §4.68 left strict, and
+match what it does. §35 of that plan is the record (the runs of ES-DE 3.4.1, the rules, the tests, the mutants and the
+survey). This section continues §4.68 and amends two of its "What it does not do" items. The section is numbered 4.73
+because §4.72 is another pass's. There is no setting: as in §4.68, the change is in how a theme is read, which is the
+same in big-screen sessions, in big picture on the desktop (§4.54), in Theme Settings (§4.53) and in the theme browser
+(§4.62).
+
+**What a player meets.** Canvas and Iconic, which write `3.5` where a whole number belongs, now load for every console
+with no error, and that setting is read as 3 (big picture does not yet use a carousel's counts, §25.8 of the plan). Of the 66 themes on ES-DE's list, 65 now load with no
+error, against 63; the one left is Aura's undefined variable, as before. No listed theme loads differently otherwise.
+A theme that names an unknown picture kind for an image (`boxart`) no longer makes that console fall back to EmuSen's
+own look: the image is left out, as ES-DE leaves it out, and the rest of the view is drawn.
+
+**How a value is read**, as ES-DE 3.4.1 was measured to read it:
+
+| A theme writes | It means | Before |
+|---|---|---|
+| a colour of 6 or 8 characters that are not all hexadecimal digits, `GG0000`, `0xFF0000`, `FF00FF 0` | read as far as it is hexadecimal, as ES-DE reads it: `GG0000` is black, `FF00ZZ` green, `0x00FF00` transparent | refused |
+| a colour of any other length, `#FF0000`, `F00`, ` FF0000` with its space | **still refused**, as ES-DE refuses it: that console shows EmuSen's own look, and the browser will not install the theme | refused |
+| a whole number written otherwise, `3.5`, `+3`, `3abc`, `0x3`, `abc` | the number at its start: 3, 3, 3, 3 and 0; `0x` begins a hexadecimal one, and a leading `0` an octal one (`010` is 8), as in ES-DE | refused |
+| a negative whole number, `-1` | a very large one, 4294967295, as in ES-DE; where the property has a range it is then held to it | refused |
+| badges' `lines` or `itemsPerLine` of 0, or above 10 | the default (3 lines, 4 per line), as in ES-DE | refused, or used as written |
+| a number in hexadecimal, `0x1p-2`, or `inf`, `nan` | 0.25; `inf` held to the property's range (opacity 1); `nan`, and an infinite value where there is no range, 0 | 0 |
+| a word with a different case or a space, `Right`, ` right` | not that word: the default applies, as in ES-DE | ` right` was read as `right`; `Right` as now |
+| a picture kind ES-DE does not know, `boxart`, `Cover` | that image is not drawn; the console stays themed | the console unthemed |
+| a path with a space before or after it | not found, as in ES-DE | the space ignored |
+| a path without `./`, `img/c.png` | relative to the folder Mistress was started in, as ES-DE resolves it against its own; not the theme's folder | the theme's folder |
+| an include written either of those ways | not found, so the console is unthemed, as in ES-DE | found |
+
+**Variants and transitions.** A theme's variant or transitions profile is offered in Theme Settings unless its
+`<selectable>` starts with `0`, `f`, `F`, `n` or `N`: `false`, `no` and `0` hide it, and anything else, a blank value
+included, offers it. A **variant that says nothing** about `selectable` is **not offered**, as in ES-DE; a transitions
+profile that says nothing is. A theme whose variants are all hidden shows none, and draws its first. Every theme on
+ES-DE's list states `selectable` on each variant, so none of them changes.
+
+**What is written down.** Each reading of the kinds above adds a warning to the theme's diagnostics, naming the file,
+line and what the value was read as ("it is read as 3, as ES-DE reads it"); the badges' out-of-range values and the
+unknown picture kinds are warnings too. Decided 2026-09-27 (Q72): none of this is shown to the player; a console
+left unthemed still goes to the error log (§4.70), as before.
+
+**What it does not do.**
+- **Which variant is drawn when none was chosen** stays the first one offered. ES-DE draws the first one declared until
+  its settings menu is opened, and the first one offered after that; the two agree for every listed theme (§35, Q110).
+- **`~` is the player's home.** ES-DE takes it as its own home folder, which is the same unless ES-DE was started with
+  another.
+- **The ranges of other whole numbers** (a carousel's counts, a video's repeats) are held to `THEMES.md`'s as before;
+  ES-DE was run only on the badges'.
+- Nothing ran on the handheld.
+
+### 4.74 Big picture: games picked for the system view, and carousels that turn (2026-09-27)
+
+The first half of pass 14 of `EmuSen_BigPicture.md`, whose §36 is the record (the runs of ES-DE 3.4.1, the rules, the
+tests, the mutants and the pictures). There is no setting: a theme that uses these elements is now drawn as ES-DE draws
+it, in big-screen sessions and in big picture on the desktop (§4.54). The section
+is numbered 4.74 because §4.72 is another pass's.
+
+**Games in the system view.** A theme can pick games to show beside the console list: the most recently played, the
+most played, or games at random. Twenty of the 66 themes on ES-DE's list do, for a background picture, a box, a name or
+a rating. Mistress now draws them:
+- **Most recently played** lists only games that have been played, newest first; **most played** only games played at
+  least once, most first. A console with fewer such games than the theme asks for shows fewer; the rest of those
+  places stay empty, as in ES-DE.
+- **At random**, each game once, and new games each time the console list moves, back to the same console included. A
+  theme that allows repeats fills every place, the first ones different.
+- **Never picked:** a game marked *Exclude from game counter* (§4.59), a folder, and a hidden game while hidden games
+  are not shown.
+- **A theme with no such picker** shows no game pictures, names or ratings in the system view. Before, Mistress showed
+  the console's last selected game there, which ES-DE does not.
+- A random picker shows other games than ES-DE would in the same state; both are random.
+
+**Carousels that turn.** Nine listed themes lay their console or game carousel out as a **wheel**, vertical or
+horizontal; some mirror a row's pictures in a **reflection** beneath it. Mistress now draws both, placed within a pixel
+of ES-DE in every probe measured (§36.3), and moving between items as a straight carousel does. Every carousel is also
+now **clipped** to its box, as in ES-DE, and a selected item that grows does so from the edge the theme aligns it to.
+Canvas and Iconic, whose wheel counts are written `3.5` (§4.73), now draw 3 items each side.
+
+**What it does not do.**
+- A game's missing field (no developer, say) shows nothing in the system view, where ES-DE writes "unknown"; the
+  gamelist has always done the same (Q121 of the plan).
+- The carousel's `selectedItemMargins`, `lineSpacing` and the other properties §36.10 lists are not drawn yet, so Aura's
+  game carousel, for one, spaces its covers evenly where ES-DE sets the selected one apart (§36.9, Q120).
+- `gamelistinfo` and animated pictures are the pass's second half, not yet built.
+- Nothing ran on the handheld.
+
+### 4.75 Big picture: the screensaver (2026-09-27)
+
+Pass 10 of `EmuSen_BigPicture.md` §21 (its §37 is the record: ES-DE measured, the predictions, the tests, the mutants
+and the pictures). This section is what a player meets.
+
+**What it is.** When the big-screen library has had no button, key or click for a while, ES-DE's screensaver starts, and
+Mistress now does the same. There are three looks, as in ES-DE:
+- **Dim** (the default) turns the whole view grey and dark: every pixel becomes the grey of its own brightness, at 0.4
+  of it. It fades in over 167 ms and then holds.
+- **Black** fades the screen to black over 140 ms.
+- **Slideshow** cuts to black and shows the library's pictures one game at a time, a new one every 10 seconds. Each
+  change is a cut to black; the game's name and system appear in the upper left corner within a tenth of a second, and
+  the picture fades in from about a fifth of a second to about half a second.
+- **Video**, ES-DE's fourth look, waits for video support (pass 12 of the plan) and shows Dim meanwhile, as ES-DE does
+  when it has no videos.
+
+The times and levels are ES-DE 3.4.1's, measured from recordings on 2026-09-27.
+
+**When it starts.** After *Start Screensaver After* minutes with nothing pressed, five by default; 0 is never. It
+starts only over the big-screen library: in a big-screen session or in desktop big picture (F10, §4.54). It never
+starts while a game is on screen, while the pad menu, a sheet, the on-screen keyboard or the launch screen (§4.71) is
+open, or while another window is active. The idle time counts from the last button, key, pointer movement or click, and
+from the moment the library became the screen again.
+
+**Waking it.** Any button, key or click wakes the screen at once, in one frame, as in ES-DE, and does nothing else: the
+list does not move, even while the button stays down, and the next press is an ordinary one. The one exception is the
+slideshow's controls below.
+
+**The controls** (*Screensaver Controls*, on by default, ES-DE's *Enable screensaver controls*):
+- **X in the system view** starts the screensaver at once, even with the timer at 0. The system view's help bar shows
+  *Screensaver* on X while the controls are on. On the keyboard it is Delete. X in a game list does nothing here.
+- **In a slideshow of the library's pictures:**
+  - **left and right** show another game at once, and the next change is ten seconds after that;
+  - **A** starts the game shown: its game list comes up with it selected, then the resume question and the launch
+    screen, as for any start from big picture;
+  - **Y** goes to the game shown, in its system's game list, in the folder it sits in, without starting it.
+- **Everything else**, in any look, only wakes the screen. With the controls off, every button only wakes it.
+
+**What the slideshow shows.**
+- **The picture:** each game's first of *miximage*, *screenshot*, *title screen* and *cover*, in that order, the order
+  ES-DE was measured to use. Each kind is looked for in the library's own order of sources (§4.60): the player's own
+  cover and another game's chosen cover first (for covers), then ScreenScraper's media store, an ES-DE media folder,
+  and OpenEmu's covers. A game with none of the four, even if it has a marquee, fan art or a 3D box, is left out, as in
+  ES-DE.
+- **The games:** every game the library lists (hidden games only when *Show Hidden Games* is on), from every system, in
+  random order, never the same game twice running. *Only include favorite games* keeps the favourites.
+- **The fit:** the picture fitted whole and centred on black; *Stretch images to screen resolution* fills the screen
+  instead, as ES-DE's does.
+- **The overlay** (*Display game info overlay*, on by default): a translucent black box in the upper left corner, 17 px
+  in and 16 px down at 800 lines, 84 px high, and as wide as its longer line, with the game's name (and a star for a
+  favourite) above its system, in white capitals. Its place and size follow the window's height. Among favourites only,
+  no star is drawn, as ES-DE's guide says.
+- **Custom images** (*Use custom images*): the pictures of a folder instead, JPG, PNG, WebP, SVG or GIF, with its
+  subfolders when *Custom image directory recursive search* is on. `~` stands for the home folder and `%ROMPATH%` for
+  the ROM folder. These pictures carry no overlay, and A and Y only wake the screen.
+- **Nothing to show** (no game with a picture, or an empty folder): Dim, as in ES-DE.
+
+**The settings.** Theme Settings ▸ Interface (§4.66.1) gains a **Screensaver** group, ES-DE's *Screensaver settings*
+and *Slideshow screensaver settings*, which ES-DE keeps under *UI settings* too. Each is kept in `appsettings.json` under
+`BigPictureInterface`, spelled as ES-DE's `es_settings.xml` spells it, times in milliseconds:
+
+| Row | Key | Default | Notes |
+|---|---|---|---|
+| Start Screensaver After | `ScreensaverTimer` | `300000` (5 min) | a slider of whole minutes, 0 (never) to 30, as ES-DE's |
+| Screensaver Type | `ScreensaverType` | `dim` | `dim`, `black`, `slideshow`, `video`; ES-DE's own default is `video`, which falls back to Dim |
+| Screensaver Controls | `ScreensaverControls` | on | above |
+| In Game Mode | `ScreensaverInGameMode` | on | Mistress's own; below |
+| Swap Images After | `ScreensaverSwapImageTimeout` | `10000` (10 s) | 2 to 120 s in steps of 2, as ES-DE's |
+| Only include favorite games | `ScreensaverSlideshowOnlyFavorites` | off | |
+| Stretch images to screen resolution | `ScreensaverStretchImages` | off | |
+| Display game info overlay | `ScreensaverSlideshowGameInfo` | on | |
+| Use custom images | `ScreensaverSlideshowCustomImages` | off | |
+| Custom image directory recursive search | `ScreensaverSlideshowRecurse` | off | |
+| Custom Image Directory | `ScreensaverSlideshowCustomDir` | empty | typed or browsed |
+
+Dim as the default, and the screensaver on everywhere, were decided on 2026-09-26 (Q34, §10.1 of the plan).
+
+**Game Mode.** Steam dims and sleeps the screen itself in its Game Mode, so two savers could stack. **In Game Mode**, on
+by default, lets Mistress's screensaver start in a gamescope session; turned off, it never starts there, and a desktop
+session is unchanged. Whether Steam's own dimming starts over an application that draws nothing, and whether the two
+stack, has not been measured on the handheld; the default is to be reconsidered then (Q130 in the plan).
+
+**Drawing only while it changes.** A screensaver exists to spare the screen and the battery, so it draws nothing
+between its changes, as the themed view draws nothing while still (§4.52):
+- Dim and Black draw through their fade, about ten frames, and then no frame at all however long they hold;
+- the slideshow draws through each change, about half a second, then no frame until the next change ten seconds later;
+- the themed view beneath draws nothing while the screensaver is up, the theme's clock included; when it wakes, the
+  view catches up in one frame.
+
+**Tests.** `ScreensaverTests` (WiseMan, headless, 28 cases) count the frames drawn and read the pixels:
+- the defaults and ES-DE's values; the start at five idle minutes to the poll; a press starting the idle time again,
+  and 0 never starting it;
+- Dim and Black drawing only their fade and no frame in the 610 s after, the view beneath none either; Dim's two levels
+  fading together; a theme's scrolling text asking for no frame while it shows, and again once it is woken;
+- the pixels: every sampled pixel of Dim within 2 levels of 0.4 times its luma, at 1280×800 and 1920×1200, and Black
+  black;
+- a press and a key waking it and doing nothing else;
+- the slideshow's kinds, order, system names, star, no repeats and ten-second swaps over 40 changes; its frames only
+  through each change, none between, over six changes; ES-DE's change timing;
+- favourites only, the overlay off, the stretch, the fit, custom folders and subfolders;
+- Video and an empty slideshow as Dim;
+- left, right, Y and A; the controls off and Dim waking only; X in the system view and its help entry;
+- never under the pad menu, a sheet or a game; the Game Mode switch; F10's big picture and not the desktop, and F10
+  waking it without leaving big picture;
+- a window closed while it shows; the Interface tab's rows;
+- the overlay's box, colour and text where ES-DE draws them, at 1280×800 and 1920×1200.
+
+`ScreensaverPictureTool` writes the pictures when `EMUSEN_BIGPICTURE_PNG=1`. `ThemedSession` sets the timer to 0, so the
+older themed tests are never interrupted by it. The mutants are in §37 of the plan.
+
+**What it does not cover.**
+- **Video** (pass 12), and ES-DE's *Video screensaver settings* with it.
+- **Render scanlines**, ES-DE's slideshow option, is not offered.
+- **The system's name** in the overlay is the shelf's full name (*Super Nintendo*), not ES-DE's longer `fullname`
+  (*Nintendo SNES (Super Nintendo)*), as on the launch screen (§4.71).
+- **`%ESPATH%`** in the custom folder is not expanded.
+- **The desktop's own library**, outside big picture, has no screensaver.
+- **Nothing ran on the handheld,** in Game Mode or out of it.
+
+### 4.76 ScreenScraper's extras: more kinds, Refresh, Find by Name, which games, ScreenScraper's names, and orphaned media (2026-09-27)
+
+Pass 8 of `EmuSen_BigPicture.md` §21 (its §38 is the record: the offer rates, the request counts, the tests, the mutants
+and the pictures). This section is what a player meets. Everything in §4.60 still holds: **nothing is sent to
+ScreenScraper, or anywhere, until the player starts it**, and every request is paced and counted against the day's
+quota as §4.60 describes.
+
+#### 4.76.1 More kinds (Preferences ▸ Scraping ▸ Fetch More)
+
+Six more of what ES-DE's scraper fetches, each **off** until turned on:
+
+| Switch | Setting | ScreenScraper's | Kept in `home/Media/<system>/` | On average, for a game that has one |
+|---|---|---|---|---|
+| Back covers | `ScrapeBackCovers` | `box-2D-back` | `backcovers/`, png or jpg | 0.47 MB; 33 of 39 found games have one |
+| 3D boxes | `Scrape3DBoxes` | `box-3D` | `3dboxes/` | 0.35 MB; 33 of 39 |
+| Physical media (the cartridge) | `ScrapePhysicalMedia` | `support-2D` | `physicalmedia/` | 0.45 MB; 33 of 39 |
+| Fan art | `ScrapeFanArt` | `fanart` | `fanart/` | 0.40 MB; 25 of 39 |
+| Manuals (PDF) | `ScrapeManuals` | `manuel` | `manuals/`, pdf | 2.3 MB, the largest seen 18 MB; 27 of 39 |
+| Videos | `ScrapeVideos` | `video-normalized` | `videos/`, mp4 | 1.4 MB; 32 of 39 |
+
+The averages are ScreenScraper's own sizes in the answers of the plan's live run (§17.9, §38.1). Each is **one more
+request** for every game that has one, and a free account has 10,000 a day: with the four pictures on, a found game
+costs about 7.9 requests instead of 4.7, and this 5,520-game library about four and a half days instead of three.
+
+A file is kept only when it is what its kind should be: a picture for the pictures, a PDF (it starts `%PDF-`) for a
+manual, an MP4 for a clip; anything else, such as an error page, is dropped. Files up to 128 MB are kept, and a large
+one is given time in proportion to its size. **Manuals and videos are only stored for now**: the media viewer that shows
+manuals and the video playback come later (passes 9 and 12). A theme that asks for back covers, 3D boxes, physical media
+or fan art (ES-DE's `backcover`, `3dbox`, `physicalmedia`, `fanart`) now finds them.
+
+**Turning a kind on later.** A run asks a game already found again only if it may have that kind: a game whose answer,
+kept since this version, said it has no fan art is not asked for fan art. A game found before this version was kept
+without word of the new kinds, so it is asked once.
+
+#### 4.76.2 Game Names
+
+**Show ScreenScraper's names** (`ScrapeGameNames`, off). Off, every list shows the file's name, which in a No-Intro
+library already tells two copies of a game apart (decided under Q30 of the plan); the metadata editor still offers
+ScreenScraper's name to take for one game (§4.63). On, the library's grid and list, big picture's lists and the
+editor's Name field show ScreenScraper's name wherever a run has kept one. A name the player gave a game wins either way,
+and the file is never renamed.
+
+#### 4.76.3 Which games a run takes, and Refresh
+
+The **Scrape** row's second dropdown (`ScrapeCriteria`) is ES-DE's *Scrape these games*:
+
+| Choice | Value | A game is taken when |
+|---|---|---|
+| Games with no cover (the default) | `nocover` | it shows no cover, from any source (§4.60's order) |
+| All games | `all` | always |
+| Favourite games | `favorites` | it is a favourite |
+| No metadata | `nometadata` | it has no description, the player's or ScreenScraper's |
+| No game image | `nogameimage` | it has none of a mix image, screenshot, title screen or cover |
+| No game video | `nogamevideo` | it has no video |
+
+ES-DE's *Folders only* is not offered: it scrapes folders as games, and a library's folders here are regions and letters.
+A game marked *Exclude from multi-scraper* (§4.59) is still left out of a wide run, and **Scrape This Game** always takes
+its one game.
+
+**Refresh what is kept** (`ScrapeRefresh`, off; ES-DE's *Overwrite files and data*, on in ES-DE). On, a run asks again
+about games already found, *Scrape This Game* included:
+- each found game costs one request, and its text is replaced by ScreenScraper's current text; the player's own edits
+  (§4.59) still win;
+- a kept picture, manual or clip is compared with the checksum ScreenScraper states for it: the same, it is kept and
+  costs nothing; changed, the new file replaces the old once it has passed the checks above. Where an answer states no
+  checksum, the file's own is sent and ScreenScraper answers "unchanged" without sending the file, which costs a request
+  and no download;
+- a game ScreenScraper no longer lists keeps what it had.
+
+The status window counts the files kept unchanged. **The confirm step** before a run now gives, beside the most the run
+can cost, the requests and megabytes it is expected to cost by how often ScreenScraper has each kind (§38.6 of the plan),
+how many games found before are asked again and why, and the time at the account's download speed.
+
+#### 4.76.4 Find by Name…
+
+For a game whose file ScreenScraper does not know by its hashes (a hack, a translation, an unnamed dump), a game's
+options and the library's right-click menu offer **Find by Name...**. It opens a small window (a sheet in a big-screen
+session, driven by the pad):
+- the box holds the file's name without its tags, as ES-DE strips it: *SMW Hack (USA) [Hack].sfc* becomes *SMW Hack*;
+  change it as needed;
+- **nothing is sent until Search**. Each search is one request to ScreenScraper for that name on the game's console, and
+  one that finds nothing also counts against the day's allowance of unrecognised games;
+- the answers, up to thirty, most likely first, each with its year and publisher, and another platform in brackets when
+  ScreenScraper returned one. There are no pictures in the list, since each would be another request;
+- choosing one keeps that game's description and other text for this file and fetches its pictures (the kinds turned
+  on, each a request), exactly as a run does, and shows them. The file is not renamed. A later run asks about it by that
+  game, and a file matched this way never falls back to "not in ScreenScraper".
+
+It is never used by itself: no run, no missing game and no failover searches by name.
+
+#### 4.76.5 Orphaned media (Preferences ▸ Scraping ▸ Orphaned Media)
+
+**Clean Up...** finds the pictures, manuals and clips Mistress scraped for games no longer in the library, asks first
+with their count and size, and then **moves** them to `home/Media/CLEANUP/<date_time>/`, keeping their folders, with a
+`cleanup.txt` listing them, as ES-DE's *Orphaned data cleanup* does. Nothing is deleted; delete that folder when sure.
+Only Mistress's own `home/Media` is cleaned: never the ROM folder, an ES-DE media folder, the cover art folder or
+OpenEmu's folder. Only consoles that still have games in the library are looked at, and nothing at all when the ROM
+folder cannot be found, so an unplugged drive never looks like every game deleted. It sends nothing.
+
+#### 4.76.6 Tests and what it does not cover
+
+**Tests** (the plan's §38.10): `ScrapeExtrasTests` and `ScrapeExtrasWindowTests`, on the fake ScreenScraper, headless;
+the fake counts every request, and no test reaches the network. `ScrapeExtrasPictureTool` writes the pictures with
+`EMUSEN_BIGPICTURE_PNG=1`.
+
+**Not covered.**
+- Manuals are not viewable and videos do not play yet.
+- ES-DE's interactive scraping, *Auto-accept single game matches*, *Ratings* and *Other metadata* switches, *Folders
+  only* and *Scrape actual folders*.
+- OpenEmu's failover still finds covers only.
+- The cleanup leaves `games.db`'s rows of games gone; §4.37's orphan pass decides those.
+- None of it has been run against the live service: what a refresh, a search that finds nothing, a manual and a clip
+  cost there is predicted (P240–P243), not measured.
+- Nothing ran on the handheld.
+
+### 4.77 Big picture: game counts, animated pictures, the help bar a theme leaves out, and words for missing details (2026-09-27)
+
+The second half of pass 14 of `EmuSen_BigPicture.md`, whose §39 is the record. There is no setting: a theme that uses
+these elements is drawn as ES-DE draws it, in big-screen sessions and in big picture on the desktop (§4.54).
+
+**Game counts in the list.** A theme can show a line with a gamepad and the number of games, and a star and the number
+of favourites. While a search or a filter is on, it shows a funnel and how many games are kept out of all ("6 / 12").
+Inside a folder it adds an open folder, and the numbers stay the whole console's. Games marked *Exclude from game
+counter* (§4.59) and folders are not counted. Six listed themes show this line.
+
+**Animated pictures.** A theme's animated GIFs now play: backgrounds, frames, overlays. They start again when the view
+opens and whenever the console list moves, and a GIF plays at the pace of its first frame, as ES-DE plays it. Animations
+in the Lottie format are not shown.
+
+**A theme without a help bar or status icons** now gets them where ES-DE puts them: the help bar at the bottom left and
+the status icons at the top right. The Bluetooth, Wi-Fi, cellular and battery icons are now drawn as pictures, where
+Bluetooth used to show as a "B".
+
+**Words.** A console of one game says "1 game", and one favourite "1 favorite". Where a game has no developer,
+publisher, genre, number of players or play time, a theme's text now says "unknown", as ES-DE does, and a game never
+played says "never" for its last played date; before, the text was left out. Yes-or-no details read "yes" and "no".
+A theme's own `defaultValue` still replaces these words. They will be translated with the rest when Pass 5's
+translations exist.
+
+**Carousels.** Themes that set the selected item apart from its neighbours now show the gap (Aura's covers, for one),
+and a carousel of names spaces its lines as the theme asks. A theme variable that is used but never defined is now read
+as empty, as ES-DE reads it, which draws Aura's glass panel behind the game's name.
+
+**What it does not do.**
+- Lottie animations are not drawn (§39.5).
+- A narrow count line is not wrapped or cut.
+- Nothing ran on the handheld.
+
+### 4.78 WiseMan's headless UI tests: Avalonia work off the session's dispatcher (2026-09-27)
+
+**What was seen.** From 2026-09-26 seven recorded runs of the Mistress tests (six broad, one of a stage's blast radius)
+each failed one test, the first two, on a different test each time, and every failing test passed alone. The
+big-picture plan recorded them as they came (`EmuSen_BigPicture.md`):
+`InputSettingsWindowRenderTests.The_window_renders_its_rows(NES)` and `FrameHandOffTests.Once_a_session_ends…` (§16.8),
+`SceneMotionTool.List_held_strip` twice (§17 and §18), `SceneMotionTests.Moving_only_the_list…` (§23, P90),
+`InputSettingsWindowRenderTests(NES)` again (§31.12), `GraphicsSettingsWindowLayoutTests.A_change_is_saved_at_once…`
+(§34.8) and `FrameHandOffTests` again (§35.12). Wherever the message was kept it was the same one, *"The calling thread
+cannot access this object because a different thread owns it"*, thrown inside
+`HeadlessUnitTestSession.EnsureIsolatedApplication` (from `DefaultRenderLoop.Add` where the frame was kept), before the
+test's own code ran. Separately, `GridSceneTests.Item_sizes_and_corner_radii_are_in_ES_DE_s_units` failed 3 of 3 when
+its class ran alone, with *"Unable to locate 'Avalonia.Platform.IPlatformRenderInterface'"*, and `b272675c` moved that
+class's seven plain `[Fact]`s onto the session's dispatcher. This section shows that the two are one defect seen from
+its two sides, finds the other tests that had it, and adds a guard.
+
+#### 4.78.1 What the session shares between threads
+
+Every UI test dispatches onto one `HeadlessUnitTestSession`: all 85 files that start one, `Fixtures/UiTest.cs` among
+them, pass WiseMan's own assembly to `GetOrStartForAssembly`, so there is one session and one dispatch
+thread, not two racing to start. What follows is read from Avalonia's source (`HeadlessUnitTestSession.cs`,
+`Dispatcher.ThreadStorage.cs`, `Dispatcher.Queue.cs`, `AvaloniaLocator.cs`, `AvaloniaObject.cs`); the 12.1.0 DLL WiseMan
+references carries the same `EnsureIsolatedApplication` and `EnsureSharedApplication` methods, but the source read is
+the local checkout's, not the 12.1.0 tag's.
+
+WiseMan declares no `AvaloniaTestIsolation`, so the level is `PerTest`: each `Dispatch` enters a new
+`AvaloniaLocator` scope, calls `Dispatcher.ResetBeforeUnitTests()` and the app builder's `SetupUnsafe()`, runs its body,
+and then resets the dispatcher and leaves the scope. Two things in that are process-wide statics, not per thread:
+
+- **`AvaloniaLocator.Current`**, where every service is found: the Skia render interface, the font manager, the
+  `Application`. Code on a test's own thread sees the scope of whatever dispatch is running at that moment, or, when
+  none is, the empty root.
+- **The UI-thread dispatcher.** `ResetBeforeUnitTests` clears it, and the first `Dispatcher` created afterwards, on any
+  thread, becomes it. Every `AvaloniaObject` takes `Dispatcher.CurrentDispatcher` in a field initialiser, which creates
+  a dispatcher for a thread that has none, and every reset forgets every thread's.
+
+So a control built on a test's own thread in the moment between one dispatch's reset and its platform set-up makes that
+test's thread the UI thread, and the dispatch's own set-up then fails `VerifyAccess`. The failing test is whichever one
+was starting; the test at fault is one that passed. And a picture made off the dispatcher works only while some other
+dispatch is inside its application, so a test that makes one passes in a busy run and fails alone.
+
+*A correction to `b272675c`'s message*, which says the seven facts "passed only when an earlier test had started
+Avalonia". Having started earlier is not enough: the scope is left when a dispatch ends, and §4.78.2's first case shows
+the picture failing with the session long started. They passed when another test's dispatch was **running**.
+
+#### 4.78.2 The race, measured
+
+`Common/HeadlessRaceTool.cs` provokes both sides on purpose, so it is skipped unless `EMUSEN_HEADLESS_RACE=1` and is
+meant to run alone; it is in the `ProcessGlobals` collection, so even in a broad run nothing else dispatches beside it.
+Measured on 2026-09-27, three runs, `nice -n 10`, on the desktop:
+
+- **A picture off the dispatcher** (`new RenderTargetBitmap(2 × 2)` on the test's thread): with no dispatch running it
+  throws *"Unable to locate 'Avalonia.Platform.IPlatformRenderInterface'"*; with a dispatch held open inside its body it
+  is made. Same result all three runs.
+- **400 dispatches**, each showing and closing a 32 × 32 window, first alone, then beside a second thread that builds
+  controls in a loop off the dispatcher:
+
+| Beside the dispatches | Run 1 | Run 2 | Run 3 |
+|---|---|---|---|
+| nothing | 0 of 400 failed | 0 of 400 | 0 of 400 |
+| a thread building `Border`s (167,000–360,000 made) | 399 of 400 failed at start-up | 399 of 400 | 399 of 400 |
+| a thread building `GridSceneTests`' scene, `new SceneView(…)` (5,300–6,200 made) | 135 of 400 failed at start-up | 156 at start-up, 2 in the body | 119 at start-up |
+
+The start-up failures beside the scene are the recorded message, inside `EnsureIsolatedApplication`, thrown from
+`DefaultRenderLoop.Add` (the frame the plan's §18 recorded) or from `Dispatcher.VerifyAccess`. The scene is `GridSceneTests`' own, built by the code its
+seven facts ran before `b272675c`. Run 2's two failures in the body, and one in an earlier run of the tool, were of a
+different kind: *"Stack empty"* from `Stack<T>.Pop` inside a dispatched body, so work off the dispatcher can also break
+a test after its start-up. Their origin was not traced.
+
+#### 4.78.3 Class by class
+
+**Method.** Every test class under `EmuSen.WiseMan` whose file names Avalonia, LunaP, a scene type, a bitmap or
+`UiTest`: 94 classes, of which 91 hold tests, 892 tests in all. Each ran alone with
+`--filter "FullyQualifiedName~<namespace>.<Class>."` twice, on `b272675c`, under `nice -n 10`. Seven classes were left
+out under the load rule because they open a Vulkan device, directly or by setting a slang preset on a frame control:
+`ShaderSettingsWindowTests`, `ShaderBrowseTests`, `ShaderBrowseBenchTests`, `ScreenFilterSettingTests`, `SlangChainTests`,
+`SlangFrameControlTests` and `SlangReadbackTests`.
+
+**Result: no class failed alone.** All 91 passed both runs (one case skipped both times, a live tool of
+`ThemedMetadataScrapeTests`). After WiseMan `b57f224e` was merged, the fifteen classes it or this work changed or added
+(`EsdeSettingsMenusTests` and the enlarged `MetadataEditorLayoutTests` among them, 185 tests) ran alone twice again, and
+all passed. Running a class alone is therefore not enough to find this defect: inside one class the
+cases run one after another, and a case can depend on the one before it. §4.78.5's scan named three classes, and runs of
+single cases and of a probe confirm each:
+
+| Class | What ran off the dispatcher | Before | After |
+|---|---|---|---|
+| `GridSceneTests` | seven plain facts built a `SceneView`, which builds its controls in its constructor | at `b272675c^`, the class alone: `Item_sizes_and_corner_radii_are_in_ES_DE_s_units` failed 2 of 2 runs (and 3 of 3 in `b272675c`'s own record), *"Unable to locate … IPlatformRenderInterface"*; the other six passed | `b272675c`: 10 of 10, twice |
+| `ThemedLibraryTriggerTests` | two plain facts called `Put`, which draws a `RenderTargetBitmap` through `SceneAssets.Halves` | the class alone: 4 of 4, twice. The two facts alone: both failed, twice, *"Unable to locate … IPlatformRenderInterface"* | `e1135cbe`: the two facts 2 of 2 and the class 4 of 4, twice each |
+| `PreferencesThemeTests` | its constructor, `Dispose` and `ThemeStore.Dispose` reset the theme with `LunaTheme.Apply(BuiltIn)` | the class alone: 4 of 4, twice. A probe logging the reset: `Apply` returned **false** in every constructor, and `Current` stayed `midnight` from the second case on. With `midnight` left applied before it, `A_chosen_theme_reaches_a_window_that_was_already_open` failed (*"Values are equal … #ff1e1e1e"*); with the same reset dispatched, it passed | `e3f5afe6`: 4 of 4, twice |
+| `ShaderBenchTests` | `ShaderBench.Run` builds a `GameFrameControl` | not run: it needs a Vulkan device | unchanged, listed in the guard |
+
+**Why each passed alone.** `SceneAssets.Halves` keeps one picture per name for the process, and xUnit runs
+`ThemedLibraryTriggerTests`' dispatched case first, so the two facts found the picture already made. `PreferencesThemeTests`'
+reset had no `Application` to act on (`LunaTheme.TryApply` returns false without one), so it never reset anything, and
+the class passed because xUnit runs the one case that needs the built-in theme at its start first. It is in the
+`ProcessGlobals` collection, which runs after the parallel collections, so the reset never had another test's
+`Application` to act on either; beside a running dispatch it would have removed the theme from that test's application,
+from the wrong thread. `GridSceneTests` failed alone in one case of seven for the same reason: its scenes ask
+`SceneAssets.Media` for covers, which draws them with `Halves`, and only the first case in xUnit's order to ask draws
+the shared picture (the failure's stack runs from `GridElements.GameItems` through `Media.Find` to `Halves`); the other
+six found it made and built only controls, which need no service, only a dispatcher.
+
+**The fixes** move the work, nothing else. The two trigger facts are wrapped in the class's `Session.Dispatch`, as its
+third case already was; `PreferencesThemeTests` resets in `InitializeAsync` and `DisposeAsync` through `UiTest.Run`, and
+`ThemeStore` in its `DisposeAsync`.
+
+#### 4.78.4 The broad-run failures
+
+**Attributed to `GridSceneTests`' seven facts, by mechanism and by timing; not reproduced one by one.**
+
+- *Mechanism.* §4.78.2 builds `GridSceneTests`' scene off the dispatcher and gets the recorded message, in the recorded
+  place, from about a third of the dispatches that start beside it, and none without it.
+- *Timing.* Every recorded failure of that message came after `a98068ef` (2026-09-26 02:16) added `GridSceneTests` with
+  its seven plain facts, and before `b272675c` moved them.
+- *Nothing else the scan can see.* §4.78.5's scan of the WiseMan builds at `013fb764` (§16.8's run), `b0c6bf75` (§34.8's and
+  §35.12's) and `b272675c^` finds the same set each time: `GridSceneTests`' seven, `ThemedLibraryTriggerTests`' two,
+  `PreferencesThemeTests`' reset, and `ShaderBenchTests`, which is not in the Mistress filter. Of these only
+  `GridSceneTests` builds controls on its own thread while other classes dispatch. The trigger facts build brushes
+  (an `AvaloniaObject`) only after their picture is made, which needs a dispatch running, and then the UI thread is
+  already the session's; `PreferencesThemeTests` runs when nothing else dispatches. Git history from 2026-09-20 has no
+  other plain fact made a dispatched one, so none was fixed and forgotten.
+
+**The broad runs of 2026-09-27**, the Mistress filter without `ShaderSettingsWindowTests`, `ShaderBrowse*`,
+`SceneGpuBench` and `ScreenFilterSettingTests`, under `nice -n 10`:
+
+| Build | Tests | Passed | Skipped | Failed | Time |
+|---|---|---|---|---|---|
+| `b272675c^`'s `GridSceneTests`, run 1 | 1,383 | 1,336 | 40 | 7 | 248 s |
+| the same, run 2 | 1,383 | 1,335 | 40 | 8 | 257 s |
+| merged with WiseMan `b57f224e`, all four fixes, run 1 | 1,401 | 1,359 | 42 | 0 | 241 s |
+| the same, run 2 | 1,401 | 1,358 | 42 | 1 | 245 s |
+
+**Neither run of the unfixed build failed with the start-up message.** The plan recorded that message in six runs,
+one test each, and recorded runs without it too (§18's first build, §38.16), so two clean runs neither support
+nor weaken the attribution; a comparison of broad runs cannot decide it at this rate, and the attribution rests on
+§4.78.2 instead. The unfixed build's failures are not this defect. It ran from a copy outside the tree
+(`~/.cache/emusen/headless-order/pre/`), so `ScreenScraperEmbedTests`' five and `ScrapeCredentialTests`' two, which run
+`git` against the tree the assembly sits in, failed on the location (git's exit code 128). Run 2's
+`ScrapeStatusWindowTests.A_closed_status_window_lets_go_of_the_run_and_stops_its_timer` failed its own assertion, inside
+its body, that the window was still polling after 700 ms. The fixed build's one failure,
+`ScrapeStatusWindowTests.Pause_holds_every_request_until_resume_and_the_run_then_finishes` (*"Expected: 1, Actual: 7"*
+requests after Pause), is also in the body: a different fault, not investigated here. The class passed alone twice on
+`b272675c` and twice on the merged build.
+
+**What is still unknown.**
+- §16.8's two failures kept no message, so they are attributed by timing alone. `FrameHandOffTests.Once_a_session_ends…`
+  asserts on a weak reference after `GC.Collect`, and could fail on its own for another reason; §35.12's failure in the
+  same class is the start-up message, so that one is this.
+- Runs of the named tests beside the unfixed `GridSceneTests` alone (42 tests, three runs) failed nothing. In a
+  six-class run the seven facts overlap few start-ups; a broad run gives them hundreds.
+
+#### 4.78.5 The guard
+
+`Common/OffDispatcherTests.cs` with `Fixtures/OffDispatcherScan.cs`. It reads IL by reflection, about a second for the
+whole assembly, and runs in the ordinary suite.
+
+- **Roots:** every method carrying `[Fact]` or an attribute derived from it, and for each test class its constructors,
+  `Dispose`, `DisposeAsync` and `InitializeAsync`, and the same of each `IClassFixture<T>`, since xUnit runs those on
+  the test's own thread.
+- **Followed:** every call into WiseMan or an `EmuSen*` assembly (LunaP included), async and iterator state machines,
+  and lambdas. A lambda is dispatched, and not followed, when it is handed to `HeadlessUnitTestSession.Dispatch` or to a
+  WiseMan method that has a delegate parameter and calls `Dispatch` itself (`UiTest.Run`, a class's own `Run`);
+  handed to anything else (`Task.Run`, a thread, LINQ, `Assert.Throws`) it is followed as work off the dispatcher.
+- **Flagged:** a `new` of any `AvaloniaObject`, of a type in `Avalonia.Media.Imaging`, of `FormattedText` or
+  `TextLayout`, and a read of `Dispatcher.UIThread` in WiseMan's own code.
+- **Its own controls**, in the same class: it must find the site in a method that builds a `SceneView` and in one that
+  calls `SceneAssets.Halves`, and must pass the same `SceneView` built inside `UiTest.Run`.
+- **Failed on purpose, on the real defect:** built from `b272675c^`, it failed, naming `GridSceneTests`' seven facts
+  (`new ScrollLetterOverlay`, via `SceneView..ctor`), the two trigger facts (`new RenderTargetBitmap`, via
+  `SceneAssets.Halves`) and `PreferencesThemeTests`' three resets; on the fixed tree it passes.
+- **Listed, not fixed:** `HeadlessRaceTool`'s two cases, which do it on purpose, and `ShaderBenchTests`, which needs a
+  Vulkan device and so was never run here. Changing a test that cannot be run to see it pass was not done.
+
+**What it cannot see.** It is a static reading, so it over-approximates: a method is flagged if any path through it
+reaches a site, as `LunaTheme.Apply(BuiltIn)` was, through the CSS branch that name never takes (it was wrong there for
+another reason). And it misses: calls through an interface or a virtual method, reflection, Avalonia's own factory
+methods (only constructors are counted), a delegate stored in one place and run from another, `MemberData` members,
+and a site reached only through a recursive cycle, which is memoised as clean. It is a tripwire for the common shape,
+a plain fact that builds a control or a picture, not a proof that no test works off the dispatcher.
+
+#### 4.78.6 Not done
+
+- `ShaderBenchTests` still builds its `GameFrameControl` off the dispatcher; it needs a Vulkan device, and the load rule
+  kept GPU tests out of this work.
+- The seven Vulkan classes of §4.78.3 were not run alone.
+- `AvaloniaTestIsolation(PerAssembly)` would keep one application for the whole run and remove the per-dispatch reset
+  that the race needs. It was not tried: it changes what every UI test starts from, and it would hide the defect rather
+  than remove it.
+- The *"Stack empty"* failure of §4.78.2 was seen in two runs of the tool and not traced.
+
+### 4.79 Big picture: lettered help buttons, the editor's help and subtitle, the scroll indicator, and the On-Screen Keyboard setting (2026-09-27)
+
+`EmuSen_BigPicture.md` §40 is the record. Everything here is for big-screen sessions and big picture on the desktop
+(§4.54); the desktop's own windows are unchanged.
+
+#### 4.79.1 What the player sees
+
+**The help bar's buttons are lettered discs**, as ES-DE draws them: a solid disc with the button's letter (A, B, X, Y)
+or, on a PlayStation pad, its shape cut out of it; a solid plus for the d-pad, with small arrows on the arms that do
+something; solid pills for the shoulders and triggers with their names (LB, L1, L, and so on); the middle buttons with
+their marks. They follow Controller Type (§4.61): Automatic draws the family of the pad last pressed. **A pad Mistress
+does not recognise, or no pad at all, is drawn as an Xbox pad**, as ES-DE's default is; the old four-dot diagram is
+gone from big picture. With Button Swap on, the help names the button that now does the job, as before. This is every
+big-screen help bar: the themed view's (so also under the launch screen and the screensaver), the Start menu, Gamelist
+Options, the metadata editor, every settings screen, list screens and message boxes.
+
+**The metadata editor** (§4.72):
+
+- its subtitle is one line, the file and its system: *Aurora Drift (Synthetic).sfc [SNES]*;
+- its help bar says what A does on the focused row, in ES-DE's words: *Select* on a text row, a choice or ScreenScraper's
+  offered name; *Add Half Star* on the rating; *Edit Date* on the date; *Toggle* on a switch; and on the buttons *Scrape*,
+  *Save Metadata*, *Cancel Changes*, *Clear Metadata* and *Hide Game*. Then *Back* (B), *Scrape* (Y), *Reset* (X) while
+  the field holds an edit, *Change* where Left and Right step the row, and *Choose*, up and down on the rows, left and
+  right on the buttons;
+- **A on the rating adds half a star**, and after five stars goes back to none, as in ES-DE.
+
+**A menu whose rows run past its panel shows a pair of chevrons at its title's right**: pointing down while there is
+more below, up while there is more above, both while there is both.
+
+#### 4.79.2 On-Screen Keyboard
+
+*Preferences → Controllers → On-Screen Keyboard*, on the desktop and in big picture, kept in `appsettings.json` as
+`OnScreenKeyboard`. It decides what types into a big-screen text row (a name, a developer, a collection's name):
+
+| Setting | What happens when a text row is chosen |
+|---|---|
+| **Automatic** (the default) | Under Steam, the text popup with a real text field, and Steam's keyboard is asked for. Otherwise, chosen with Enter on a keyboard: the text popup's field, typed into directly. Otherwise, chosen with a controller: EmuSen's own keyboard. *Since 2026-09-27 a row chosen with Enter gets the field alone under Steam too (§4.79.7).* |
+| **Steam** | Always the text popup with Steam's keyboard asked for. |
+| **EmuSen's** | Always EmuSen's own keyboard, as before this setting existed. |
+
+"Under Steam" means any of: Steam's Game Mode, a program started by Steam (a non-Steam shortcut included), a Steam
+Deck, or the Steam client running on the desktop.
+
+**The text popup** is titled *Enter <row>*, with the row's text in a field ready to type into. **Enter** or **Start**
+keeps what was typed; **Escape** or **B** leaves the row as it was; **Y** asks for Steam's keyboard again after it has
+been put away. **A does nothing** there, so that a press on Steam's keyboard cannot close it by accident.
+
+**Steam's keyboard** is asked for by opening `steam://open/keyboard`, the way the system opens a link (`xdg-open`, or
+the `steam` command). It types into the window that has the focus, which is Mistress with the field focused. It needs
+the Steam client running; with it closed nothing appears, and the field can still be typed into from a keyboard.
+Steamworks' own text input is not used, because it needs a real Steam game's ID, which a non-Steam shortcut does not
+have.
+
+**EmuSen's own keyboard is unchanged** wherever it is used: the themed view's search, the cheats window, the desktop,
+and every text row when this setting is *EmuSen's*. *Since 2026-09-27 the themed view's search follows this setting
+(§4.79.6); the cheats window and the desktop keep EmuSen's keyboard.*
+
+#### 4.79.3 What has not been checked
+
+Steam's keyboard was not seen working: the handheld was offline, and the tests never launch anything. What is expected
+there, in Game Mode, is that the keyboard opens over Mistress at the bottom of the screen, that what is typed reaches
+the field, and that the controller goes back to Mistress when it closes (`EmuSen_BigPicture.md` §40.6, P262–P266).
+Until that is checked, *EmuSen's* is the choice that is known to work with a controller.
+*Partly checked 2026-09-27: in Game Mode the keyboard opens and the text reaches the field; it covered half the popup,
+which now moves above it (§4.79.8). Whether the controller comes back to Mistress, and the Desktop Mode case, are still
+unchecked.*
+
+#### 4.79.4 Tests
+
+`MenusFollowupTests` (§40.7), headless: the choice under every setting with and without Steam, Steam detected from the
+environment, the address asked for exactly and nothing launched, typed text kept on Enter and dropped on Escape or B,
+EmuSen's keyboard still opening with *EmuSen's*, the Preferences row, the subtitle, the help bar's words on every row,
+A on the stars, the scroll indicator's place and pixels, and the filled glyphs in the view and the editor.
+
+#### 4.79.5 Button Swap trades X and Y as well (2026-09-27)
+
+Decided 2026-09-27 (`EmuSen_BigPicture.md` §10.1, Q160; the record is §40.13). *Preferences → Controllers → Swap the
+A/B and X/Y buttons* now trades both pairs, as ES-DE's does. With it on:
+
+| Button | Does | Was, before 2026-09-27 |
+|---|---|---|
+| B (East) | choose, launch, select | the same |
+| A (South) | back, close, cancel | the same |
+| X (West) | favourite in a gamelist; add or remove while a collection is edited; *go to* on the slideshow; *Scrape* in the metadata editor; *Space* on EmuSen's keyboard; *Keyboard* on the text popup | the screensaver and *Reset* |
+| Y (North) | start the screensaver from the system view; *Reset* in the metadata editor | the favourite and the rest of X's row |
+
+The help bars and the text hints follow, so the letter drawn is always the button that acts: with an Xbox pad the
+gamelist reads *B Launch, A Back, X Favorite*, the system view *Y Screensaver*, the editor *X Scrape, Y Reset*, and
+EmuSen's keyboard *B Type, A Erase, X Space*. A theme's own button icons move with their function. The keyboard's keys
+(Insert, Delete) and every game's bindings are unaffected.
+
+#### 4.79.6 The themed search follows On-Screen Keyboard (2026-09-27)
+
+Decided 2026-09-27 (Q164; §40.14). *Search…* in the themed gamelist's options now opens what §4.79.2 would open for a
+text row: the text popup titled *Search*, with Steam's keyboard asked for or typed into from a keyboard, or EmuSen's
+keyboard. With the popup, the list is filtered when the text is kept (Enter, or Start on a controller); Escape or B
+leaves the search as it was. With EmuSen's keyboard it filters as each letter is typed, as before. The cheats window
+keeps EmuSen's keyboard whatever the setting, since its codes need the keyboard's Code layout.
+
+#### 4.79.7 Enter on a keyboard never asks Steam (2026-09-27)
+
+Decided 2026-09-27 (Q165; §40.15). With *Automatic*, a text row or the search chosen with **Enter on a physical
+keyboard** always gets the popup's field alone, even under Steam; Steam's keyboard is asked for only when a
+**controller's A** chose it. *Steam* still asks Steam every time, and *EmuSen's* is unchanged.
+
+| Automatic | Not under Steam | Under Steam |
+|---|---|---|
+| chosen with Enter | the field alone | the field alone |
+| chosen with a controller | EmuSen's keyboard | Steam's keyboard |
+
+#### 4.79.8 The text popup above Steam's keyboard (2026-09-27)
+
+Measured on the handheld on 2026-09-27 (§40.16): in Game Mode Steam's keyboard opens over Mistress and types into the
+field, but it covers about the lower half of the screen and hid half of the popup. **Whenever Steam's keyboard is asked
+for, the popup now sits at the top of the screen**, its top a tenth of the way down and its bottom about a third of the
+way (34.7% at 1280×800 and at 1920×1200), clear of the keyboard. With a physical keyboard, or with EmuSen's keyboard,
+it stays centred as before.
+
+
+**Four lines, and higher still (2026-09-27, from the handheld).** With Steam's keyboard up, the one-line field showed too
+little of what was typed. The popup's field is now four wrapping lines (LunaP `MenuTextPopup.Lines`, §195). The taller
+popup would have ended at 47.7% of the height from the old top at 10%, past the 45% the keyboard leaves clear, so
+`PadKeyboard.SteamPopupTop` is now 5%: 40–342 at 1280×800 and 60–513 at 1920×1200, bottom 42.7% at both. The test
+checks the top, the bottom and that the field is four lines tall.
+#### 4.79.9 Tests (2026-09-27)
+
+`SwapAndKeyboardTests` (§40.17), headless, with Steam simulated and nothing launched: both pairs traded in what the
+controller does and what the help draws, in the gamelist, the system view and the editor; the search under every
+setting, from a controller and from Enter, under Steam and not; Enter under Steam getting the field alone while a
+controller's A asks Steam; and the popup's place at both sizes, above 45% of the height with Steam's keyboard and
+centred otherwise, with nothing in it cut off or overlapped. `PadCheatsTests` checks the cheats window keeps EmuSen's
+keyboard. Twenty-three mutants, all caught (§40.18).
+
+### 4.80 Big picture: the other windows in ES-DE's look (2026-09-27)
+
+Decided 2026-09-27 (`EmuSen_BigPicture.md` §10.1):
+
+- the windows need not be converted one for one into ES-DE's menus;
+- what every window keeps is ES-DE's look: its colours, the Barlow Condensed face and the rounded panels;
+- each window gets a layout a controller can use, wherever one can be had;
+- windows that need their own layout keep it and take the look.
+
+This section is the player's account. The plan's record, its predictions, questions and pictures are
+`EmuSen_BigPicture.md` §41, and the toolkit's pieces are LunaP's §196.
+
+*Superseded in part on 2026-09-27:* every window of §4.80.6's list is now framed, once the fit audit passed it; §4.83
+has what changed and why. What follows is the checkpoint's account, kept as it was.
+
+**Where it stands.** The look is built as one style layer. Three windows have been checked in it: the scraping status,
+Active Cheats and the Cheat Database. The rest keep the plain sheet until their look is approved (§4.80.6).
+
+#### 4.80.1 What the player sees
+
+In a big-screen session (Game Mode, `--bigscreen`, or Big Picture from the desktop's View menu), those three windows open
+as ES-DE's menus do:
+
+- a wide rounded panel in the middle of the screen, over the screen blurred and darkened;
+- the window's name as the large upper-case title, with a rule under it;
+- one help bar at the bottom with the pad's buttons: *Select*, *Back*, *Tab* where the window has tabs, *Change* where a
+  value steps sideways, and *Choose*.
+
+Inside the panel the controls are drawn in Barlow Condensed and ES-DE's greys:
+
+- **buttons** are outlined boxes with upper-case words, and the focused one is filled black with white words;
+- **a list's chosen row**, or a table's focused row, is the black bar across the list;
+- **text boxes** are dark fields with a white border while they are being typed in;
+- **tabs** are upper-case words, the chosen one underlined;
+- **headings** are upper case, in the title's grey.
+
+Each window keeps what it is for. Its layout changes only where a pad needs it to:
+
+- **Scraping.** The run is on the left and the recent games on the right, so every row can be seen and reached at
+  1280×800. The heading is larger and the buttons are centred.
+- **Active Cheats.** *Save As…* and *Load From…* are not offered, because they open a file dialog a pad cannot drive.
+  *Save* and *Load* use the game's own list and stay. The table's small words are larger. The status line sits above
+  the centred buttons.
+- **Cheat Database.** The panel is wider, 0.8 of the screen. The folder's label is beside its box, and the folder is typed
+  on the on-screen keyboard; *Browse…* is not offered. The two lists are the same width. The licence's attribution is
+  the panel's footer, so it stays in view. The status line sits above the centred buttons.
+
+The desktop's windows are unchanged.
+
+#### 4.80.2 Pad and keyboard
+
+- **B** closes the window, or goes back to the window it was opened from (the database goes back to the cheats).
+- **L1 and R1** turn the tabs, as before. Where a window has no tabs, they now move a list's selection a page at a time,
+  or scroll the area the focus is in. This works in any window the pad drives, not only a framed one.
+- **ES-DE's keys** (§4.52a: the arrows, Enter, Backspace, Page Up and Down, Home and End, F1, F4, Insert) drive a framed
+  window as the pad's buttons do, as they drive the menus (§4.72.7).
+- **Text boxes** are the exception. A focused box keeps the keys it types with: Backspace erases, Left and Right move the
+  caret, Enter is the box's own. Up and Down still move out of it. Typed text goes in as always, and A on a box opens the
+  on-screen keyboard.
+
+#### 4.80.3 How it is built
+
+- **LunaP** (§196) provides the pieces:
+  - `MenuLook`, the look's styles and palette for stock controls, scoped to one element;
+  - `SheetLayer.MenuLook`, which frames a sheet in a `MenuPanel` titled by its window;
+  - `MenuHintsFor`, `MenuFrameFor`, `MenuLook.Hints`, `MenuLook.Footer` and `MenuLook.WidthFraction`.
+- **Mistress** does the rest:
+  - It turns `Sheets.MenuLook` on with big screen. `MenuFrameFor` names the windows checked so far.
+  - `SheetMenuHints` builds the help bar from what the window holds.
+  - Barlow Condensed is also an Avalonia resource, so the stock controls can name it as a font family (resource key
+    `LunaMenuFontFamily`). The menus still draw the same file by its path.
+  - The blurred backdrop, and ES-DE's keys, count a framed sheet as a menu.
+- **What the styles cannot reach**, such as a size a window set on a control itself or a layout that needs a pad, each
+  window changes in `MenuLook.WhenApplied`, which runs once when the window is shown in the look. The desktop never
+  runs it.
+
+#### 4.80.4 A defect found on the way: a list's rows left unbuilt
+
+At 1920×1200 the framed Active Cheats showed one of its two cheats in a table with room for both. The cause was
+measured: the list's own viewport was worked out as 524 by 39 pixels, where the list was 774 by 85. It is Avalonia's,
+for a clipping control directly under a scaled one; LunaP §196.4 has the numbers and the fix. After the fix the viewport
+was 774 by 85 and both rows were built.
+
+**Not fixed:** the plain sheet has the same structure, so a list near the foot of a plain sheet above 1280×800
+may still leave rows unbuilt. That frame now belongs to the controller bindings' overhaul; Q175 asks.
+
+#### 4.80.5 Tests
+
+- **`SheetLookTests`** (WiseMan, headless), eight cases, and **`ScrapeStatusLookTests`**, two:
+  - each of the three windows at 1280×800 and 1920×1200 is framed: centred, titled by its window, blurred behind, its
+    help bar's words as §4.80.1 gives them;
+  - a frame differs from the same frame with the panel made transparent in no pixel outside the panel and the help
+    bar;
+  - every control the pad reaches is at least 40 pixels tall at 800 lines;
+  - a focused button is filled with the bar, and the focused row of the cheats' table is the bar from edge to edge;
+  - *Save As…*, *Load From…* and *Browse…* are gone and *Save* stays; the attribution is the footer; the database's
+    panel is its width share; its status is above its buttons; the recent games are right of the run and all built;
+  - every control of the cheats (each tab) and of the database is reached by the pad, and B backs out of each;
+  - R1 and L1 page a list of 300 games;
+  - ES-DE's keys: typing into the code box, Backspace erasing in it, Right staying in it, Down leaving it, Page Down
+    turning the tab, Backspace closing;
+  - the desktop keeps its own cheats window, with no look and *Save As…* shown, and the controller bindings keep the
+    plain sheet.
+- **LunaP's `MenuLookTests`**: six cases (§196.6).
+- **Mutants and the broad run:** `EmuSen_BigPicture.md` §41.
+
+#### 4.80.6 What it does not do yet
+
+- **The other windows**, until the look of these three is approved:
+  - Find by Name and Use Another Game's Cover;
+  - the gamelist filter and the folder editor;
+  - Graphics Settings and Shaders;
+  - the resume question, the rewind reel and a screenshot;
+  - the theme browser, a theme's detail and its About.
+
+  They keep the plain sheet.
+- **The controller bindings** keep the plain sheet until their own overhaul adopts the look.
+- **A desktop ES-DE look.** The style layer can be switched on for a desktop window with one call (LunaP §196.5); no
+  setting does it.
+- **Hardware.** No real pad, keyboard or handheld was used; everything here ran headless.
+
+### 4.81 Controller Bindings: each console's pad drawn, rebound from the drawing, and an input tester (2026-09-27)
+
+Decided 2026-09-27 (`EmuSen_BigPicture.md` §10.1): the Controller Bindings window draws each console's controller as
+vector art with the bindings mapped onto its buttons, and a button pressed on the pad or the keyboard lights up on the
+drawing, so the window doubles as an input tester. The design record, the measurements and the mutants are §42 of that
+plan; the drawing itself is LunaP's `ControllerDiagram` (`LunaP.md` §198). Every console's pad is drawn: the NES pad,
+the Game Boy, the Super NES pad and the Nintendo 64 pad (§4.81.1 has what the second stage changed).
+
+**What the window shows.** The tabs are unchanged (General, then one per console, oldest first; L1 and R1 step them).
+A console's tab is now its controller, filling the height the page shows, with a label beside every button, each arm of
+the cross, each direction of a stick and each trigger. A label names the button and shows the key bound to it and the
+pad button bound to it, or a dash for none; a line joins it to the button. Below the drawing a line of words says what
+the window is doing. Scrolled below that is the list the window always had, under "All Bindings": the same bindings with
+their Rebind Key, Clear, Rebind Pad and Clear Pad buttons, kept as a second view for a screen reader and for clearing a
+binding, which the drawing does not do.
+
+**Rebinding from the drawing.** Choosing a button (a click on it or on its label, the pad's A on its label, or Enter on
+its label from the keyboard) listens for **a key and a pad button at once**: whichever comes first is bound, and the
+other listener stops. The label asks for them ("Press a key", "Press a button") and the line below names the button.
+Escape cancels both. The pad listener keeps §4.45.4's rules: the press that chose the button is not the binding, the
+bound button must be let go before the pad is the window's again, and the pad gives up after five seconds, since every
+button it could be cancelled with is one it could bind; the key listener goes on after that, and B then cancels it. A
+stick direction has no pad button (`EmuSen_Input.md` §7.3), so choosing one listens for a key alone. The rules of a key
+binding are unchanged: a key does one thing on a console, and a key taken from a hotkey is cleared there.
+
+**Moving on the drawing with the pad or the keyboard.** The focus is on a label; the pad's cross (or the left stick) and
+the arrow keys move it to the button drawn nearest that way on the controller, not to the label that happens to stand
+there: on the Super NES, up from B is X and left from X is Y, where the labels in their column would give A. Past the
+drawing's edge the pad's move goes on to the window's other controls, as §4.45.3 moves them.
+
+**The tester.** While the window is open and nothing is being captured, every key held that is bound on the shown
+console lights its button, and so does every button held on **player 1's pad**, read through that console's own
+bindings: the SNES tab lights A for whatever pad button is bound to the SNES's A. The drawn stick's knob follows the
+pad's left stick (with the analog deadzone of §7.3), and is pushed all the way by a key held for a direction; a stick
+direction lights past half its travel, which is where Mars reads a C button (`MarsCore.CButtonThreshold`). On a console
+that reads no stick, the left stick lights the cross when "Use the left stick as a d-pad" is on, past the stick deadzone,
+exactly when the game would take it as the cross. L2 and R2 light at half a trigger's travel, as `GamepadManager` reads
+them. Nothing lights while a binding is being captured, so a capture's own press is not shown as a test. The line below
+the drawing names the pad being read. The tester reads the pad on the **one poll that already exists**: the main
+window's 16 ms tick calls `GamepadManager.Poll`, which now raises `Polled` at its end, and the window redraws from what
+that poll read; it starts no timer of its own. The pad capture's own 50 ms poll is §4.45.4's and is unchanged.
+
+**Test Buttons.** The pad cannot both steer the window and be tried on it: A would rebind whatever label has the focus,
+and B, which is the Super NES's A under the default bindings, would close the window. So the window has a mode for
+trying buttons, Test Buttons, entered with the pad's Y, the Test Buttons button, or its keyboard focus and Enter. In it
+every pad button and every key lights and does nothing else. It is left by holding B for one second (a short press of B
+is a button being tried), by Escape, or by the button again. The words above the drawing, the line below it and, on a
+sheet, the footer all say how.
+
+**On a big-screen sheet** the footer names this window's buttons, "A Rebind  Y Test buttons  B Back  L1 R1 Console",
+and "Every press lights up  Hold B Stop testing" while testing, swapped for the A–B swap of §4.61 as every hint is; the
+footer the sheet had is given back when the window closes. The words above the tabs are hidden on a sheet, where the
+footer and the line below the drawing say the same. The labels grow with the sheet's scaled text (`LunaP.md` §198.2).
+ES-DE's look for this window (Barlow Condensed, ES-DE's colours, rounded panels) is to come from the shared style layer
+another piece of work is building; the drawing takes its colours from the theme's accent, text and surface resources,
+so it follows whatever that layer sets.
+
+**Which region is which control.** The drawing's regions are LunaP's names; `ControllerDiagrams` (Mistress) maps the
+console's controls onto them. On every console but the N64 a region is named for the control (`A`, `Up`, `Select`). On
+the N64: L2 is `Z`, the right stick's four directions are `CUp`, `CDown`, `CLeft` and `CRight`, and the left stick's are
+`StickUp`, `StickDown`, `StickLeft` and `StickRight`, as Mars reads them (`Mars_Core.md` §5). Every control a console
+reads has a region and every region a control; a test holds both directions.
+
+**Tests.** `ControllerBindingsDiagramTests` (13 cases at the first stage, 21 now; §4.81.1): every control of each drawn console has a region and every region
+a control; a click on each region of both drawings chooses it and starts its capture, and Escape ends it; each SNES
+button pressed on a simulated pad lights its region alone and letting go clears it, and the stick lights the cross; a
+bound key lights its region while held and an unbound one lights nothing; the N64 stick moves its knob, lights its
+direction and goes home, the right stick lights the C buttons, and a key pushes the knob all the way; rebinding from
+the drawing by key and by pad updates the binding, the drawing's label and the list; the pad alone reaches every
+region of both drawings through the router; the cross moves by the drawing and A rebinds; Test Buttons takes every press
+until B is held for a second, and takes Enter from the keyboard until Escape; nothing lights during a capture; on a sheet
+the footer is the window's and is given back. `ControllerBindingsPictureTool` writes the pictures of §42 when
+`EMUSEN_BINDINGS_PNG` names a folder, and does nothing otherwise. The window's older tests (`InputSettingsWindowTests`,
+its layout and render tests, and the pad tests of §4.45) pass unchanged.
+
+**What it does not cover.**
+- No real pad was used; every press here is a simulated pad's.
+- The drawing cannot clear a binding; the list below it can.
+- A second pad lights nothing, since the game hears player 1 alone (§4.61); the capture still takes any pad the
+  interface reads.
+- ES-DE's look on a big-screen sheet (done in §4.81.1).
+
+#### 4.81.1 The second stage: every console drawn, lines off the drawing, Z, the pad itself, and ES-DE's look (2026-09-27)
+
+The plan's record is `EmuSen_BigPicture.md` §42.10 to §42.16.
+
+- **Every console's tab is its drawing.** The NES pad and the Game Boy are drawn as the first two were.
+- **No line runs across the drawing.** Each label now stands on the side its button can be left by the shortest way
+  that crosses no other button, and its line runs that way (LunaP §198.2). The labels have moved from where the first
+  stage put them.
+- **Z is the left trigger.** A trigger pulled past half its travel has always pressed L2 and R2, which on the N64 is Z,
+  whatever the binding file holds (`EmuSen_Input.md` §7.3); the window showed Z as unbound. Its pad column and label now
+  say "Left Trigger" (R2 "Right Trigger"), and "*button* or Left Trigger" when a button is bound beside it. Pulling the
+  trigger while rebinding Z takes such a button off again. Nothing is added to `gamepadbindings.json`: a trigger is not
+  an entry in it, so old and new files read it alike.
+- **The pad itself, on General.** The Gamepad section is now the first thing on General, and beside its switch and
+  deadzone slider is a modern pad drawn without labels, lit by player 1's own buttons whatever any console's bindings
+  say, with its triggers filling, its sticks moving, and a dashed ring on each stick at the deadzone, which follows the
+  slider. A pad's own letters are printed on its face buttons where SDL knows them. It shows while General is the tab.
+- **ES-DE's look on a big-screen sheet**, through the shared layer of §4.80: framed as a menu, its own help bar (*Rebind*,
+  *Test buttons*, *Back*, L1/R1 *Console*; *Hold to stop testing* while testing), the words above the tabs, the line
+  under the drawing and the Close and Test Buttons buttons not shown, **Reset to Defaults moved to the end of General**,
+  and the footer row shown only when there is a conflict. Every table's columns take their widest cell in the look, where
+  the desktop's fixed widths cut "REBIND KEY" to "REBIND K". The desktop is unchanged.
+
+**Tests** added: Z and the left trigger; the General tab's pad, its buttons, trigger, stick and ring; the look at
+1280 × 800 and 1920 × 1200 (framed, its help bar, no Close or Test Buttons, Reset on General, the footer hidden, and no
+single-line text on any tab narrower than its words); the click and pad-reach cases over all four consoles; and
+`SheetLookTests`' desktop case now holds that the bindings take the look.
+
+**What it does not cover.** No real pad. The look's switch draws its focus box through its words (`EmuSen_BigPicture.md`
+Q187), and a scrolling area shows part of a row at its edge (Q186); both belong with the window-look audit, which was not
+in WiseMan when this was built.
+
+### 4.82 macOS: EmuSen.app in /Applications (2026-09-27)
+
+Decided 2026-09-27: macOS installs as `EmuSen.app` in `/Applications`. The Linux publish is a self-contained folder with
+the player's data inside it (`man hier`), because Linux has no application standard. macOS has one, and Mistress
+follows it. Nothing here changes a Linux or Windows publish or run.
+
+#### 4.82.1 Where the player's data goes
+
+When Mistress runs from inside a bundle (`…/EmuSen.app/Contents/MacOS/`), or on macOS when no `.dianaosroot` marker or
+`EmuSen.sln` is found above it, the program's root is **`~/Library/Application Support/EmuSen`**:
+
+```
+~/Library/Application Support/EmuSen/
+  home/                  the shell's '/'
+    etc/EmuSen/          appsettings.json, the bindings, graphics.json, windows.json, themes/ ...
+    Saves/  Library/  Media/  Themes/  Shaders/  Screenshots/  Logs/  Firmware/  Cheats/  Games/  tmp/
+    Documents/           the EmuSen Manual and the hardware notes, copied from the bundle
+```
+
+The bundle itself is never written: an update replaces it, a write would break its signature, and `/Applications` may
+not be writable. A checkout and a marked tree still win, on a Mac as anywhere. `EmuSen_Galaxia.md` §3.4 has the rule, its
+order (the bundle before the walk) and why.
+
+The per-day error log and crash reports are not under the root and never were. They go to the **Log Folder** setting,
+or else to `ErrorLog.DefaultRoot`, .NET's `ApplicationData` folder plus `EmuSen/Logs` (§4.70). .NET maps `ApplicationData`
+to `~/.config` on Unix, so on a Mac that is expected to be `~/.config/EmuSen/Logs` rather than `~/Library/Logs`. It works,
+and is left as it is (§4.82.6).
+
+#### 4.82.2 The manual: seeded on start, never over the player's files
+
+The bundle carries what a Linux publish ships in `home/` at `Contents/Resources/home`. On every start Mistress copies
+any file missing from the player's `home` (`DataMigration.SeedFromBundle`, with `CopyTree`'s copy-never-overwrite rule).
+Reading the docs from the bundle in place was rejected because the shell has one root. The reasons, and the cost that an
+update does not refresh a page the player already has, are in `EmuSen_Galaxia.md` §3.4. Outside a bundle the call does
+nothing, so a Linux start is unchanged.
+
+#### 4.82.3 The bundle
+
+A publish of `EmuSen.Mistress` for `osx-arm64` or `osx-x64` produces this, and nothing beside it:
+
+```
+EmuSen.app/
+  Contents/
+    Info.plist
+    MacOS/                    the whole .NET app directory, as lib/EmuSen is on Linux:
+      EmuSen.Mistress         the apphost (CFBundleExecutable)
+      *.dll, *.dylib, ...     libSDL3, libmarsrt, libmercuryrt, Skia, Avalonia.Native ...
+      Assets/Fonts/  Library/Catalogue/
+    Resources/
+      emusen.icns
+      home/Documents/         the seed (§4.82.2)
+      LICENSE  THIRD_PARTY_NOTICES.md  licenses/
+```
+
+There is no `bin/` launcher and no `.dianaosroot`, since the data is not beside the program. The `DianaOSPublishNotices`
+target still runs; for a bundle it writes to `Contents/Resources`, where macOS applications keep their licence texts.
+
+`DianaOSPublishLayout.targets` does it, switched on by a project that sets `DianaOSMacAppName` (only Mistress does) and a
+RID starting `osx`. It rewrites each publish item's destination as the Linux layout does, into `Contents/MacOS` or
+`Contents/Resources` instead of `lib/EmuSen` or the root. `-p:DianaOSMacAppBundle=false` publishes the Linux tree for
+`osx-*` instead. Hotaru, Pharaoh and the DianaOS shell name no bundle and keep the tree on every platform.
+
+**`Info.plist`**, filled from `EmuSen.DianaOS/Publish/Info.plist.in`:
+
+| Key | Value | Why |
+| --- | --- | --- |
+| `CFBundleName`, `CFBundleDisplayName` | `EmuSen` | the name in the menu bar, Finder and the Dock |
+| `CFBundleIdentifier` | `io.github.redque3n.emusen` | see below |
+| `CFBundleExecutable` | `EmuSen.Mistress` | the apphost in `Contents/MacOS` |
+| `CFBundleIconFile` | `emusen` | `Contents/Resources/emusen.icns` (§4.55) |
+| `CFBundleShortVersionString`, `CFBundleVersion` | `$(Version)`, 0.9.0 today | `Directory.Build.props` |
+| `CFBundlePackageType`, `CFBundleInfoDictionaryVersion` | `APPL`, `6.0` | required of an application bundle |
+| `LSMinimumSystemVersion` | `12.0` | measured, below |
+| `LSApplicationCategoryType` | `public.app-category.games` | |
+| `NSHighResolutionCapable` | true | Retina drawing, as in Avalonia's macOS deployment guide |
+| `NSPrincipalClass` | `NSApplication` | the AppKit default |
+| `CFBundleDevelopmentRegion` | `en` | |
+
+**The identifier** is `io.github.redque3n.emusen`. The project's owner on GitHub is RedQuE3n, and the GitHub Pages domain
+`redque3n.github.io`, reversed, is a domain the project controls without buying one. It is lower case by convention. It
+must not change once a build is in players' hands, because macOS keys the application's preferences, its privacy
+permissions and, once it is signed, its identity to it.
+
+**`LSMinimumSystemVersion` is 12.0 because the binaries say so.** Each Mach-O file records the lowest macOS it was built
+for (`LC_BUILD_VERSION`'s `minos`). Read on 2026-09-27 from the packages this publish uses:
+
+- the .NET 10.0.12 runtime and apphost, `osx-arm64` and `osx-x64`, record 12.0;
+- SDL3-CS 3.4.2's `libSDL3.dylib` records 12.0;
+- Avalonia.Native 12.1.0, SkiaSharp 3.119.2 and HarfBuzzSharp 8.3.1.3 record 11.0 (arm64) and 10.13 (x86-64).
+
+The highest is the floor. The Rust cores' libraries were not measured, since none built for macOS was at hand. A newer
+.NET or SDL may raise the floor, and this value has to follow it (`DianaOSMacMinimumSystemVersion`).
+
+**What Avalonia needs.** Nothing beyond the keys above. On macOS `UsePlatformDetect()` picks Avalonia.Native (shipped by
+Avalonia.Desktop as `libAvaloniaNative.dylib`). LunaP's `UseX11()` and `EmbedPopups` are already Linux-only
+(`OperatingSystem.IsLinux()`), so neither needed changing. One thing did: the application menu macOS gives every app
+reads `Application.Name` for its About, Hide and Quit items, and Mistress never set it, so they would have said
+"Avalonia Application". `App.Initialize` sets it to EmuSen on macOS only, so nothing Avalonia derives from it changes
+on Linux.
+
+#### 4.82.4 Signing
+
+On a Mac, the publish ends with `codesign --force --deep -s - EmuSen.app`, an ad hoc signature. It runs after the notices
+and `Info.plist` are written, so the seal covers them. Apple silicon does not run unsigned code, so this is what lets the
+bundle start on the machine that built it. `-p:DianaOSMacCodesign=false` skips it.
+
+**Not done: a Developer ID signature, the hardened runtime and notarization.** Until they are, a copy downloaded on
+another Mac is quarantined and Gatekeeper refuses it. The player has to clear the quarantine
+(`xattr -dr com.apple.quarantine /Applications/EmuSen.app`) or allow it in System Settings. Two things are known ahead
+of that work:
+
+- the hardened runtime forbids writable, executable memory unless an entitlement allows it, and both the .NET JIT and
+  MarsRT's Cranelift recompiler need it (`com.apple.security.cs.allow-jit`);
+- `--deep` is deprecated for real signing: each nested dylib should be signed on its own, inside out, before the
+  bundle.
+
+#### 4.82.5 Publishing a bundle from Linux
+
+```
+dotnet publish EmuSen.Mistress -c Release -r osx-arm64 --self-contained true -p:DebugType=none \
+    -p:ErrorOnDuplicatePublishOutputFiles=false -o <dir>
+```
+
+On Linux this produces the same bundle, with two differences:
+
+- **No bundle signature.** There is no `codesign` off a Mac, so the publish says `EmuSen.app is not signed` and names the
+  command to run on one. The .NET SDK signs the apphost ad hoc on any host, and the vendors' dylibs arrive signed (both
+  checked for `LC_CODE_SIGNATURE`); only the bundle's seal is missing.
+- **No Rust cores** unless `-p:EmuSenNativePrebuilt=<dir>` names their libraries, as for any foreign RID
+  (`Mars_Native.md` §6.3). Without it the publish warns, and the N64 and the Game Boy run on the C# cores.
+
+A zip made on Linux keeps the apphost's execute bit only if the tool stores Unix modes; `zip` does, and the publish sets
+the bit. Measured on 2026-09-27: the `osx-arm64` bundle from Linux is 417 files, 170 MB. A `linux-x64` publish of the same
+tree lists the same 281 files outside `home/` as the build in `out/linux-x64/Mistress`.
+
+#### 4.82.6 What else looks Linux-only (listed, not changed)
+
+- **Vulkan.** The slang shader chain (`EmuSen.Serenity/Slang/`, §4.41) and Mars's GPU renderer (`Mars_Gpu.md`) use
+  Vulkan, which macOS has only through MoltenVK, and MoltenVK is not shipped. `libshaderc_shared.dylib` ships but has
+  nothing to feed. Whether each falls back cleanly with no Vulkan loader present has not been checked on a Mac.
+- **Steam's keyboard** (§4.79.2, §4.79.7) is found by the process name `steam` and asked for with a `steam://` link.
+  Steam's process on macOS is named differently, so the Steam keyboard is not offered there. Game Mode is SteamOS's
+  anyway.
+- **The device status bar** (`DeviceStatusReader`) reads `/sys/class`, which macOS does not have, so it shows nothing.
+- **The error log's default folder** is under `~/.config` (§4.82.1), where a Mac program would use `~/Library/Logs`.
+- **Shortcuts.** Edit Metadata is Ctrl+I, and a Mac player expects ⌘I. Avalonia offers the platform's command modifier,
+  and no Mistress gesture uses it.
+- **The desktop entry and the hicolor icons** are Linux-only already (§4.55), and `launcher.sh` is not in a bundle.
+
+#### 4.82.7 Tests
+
+- **`DianaOSSandboxTests`**, six cases on temporary trees. All run on Linux, because `ConfigRoot.ComputeFor` takes the
+  platform and the home directory as parameters:
+  - a bundle roots in Application Support, with and without a trailing separator;
+  - a bundle inside a checkout that also holds a marker still does;
+  - on macOS, a checkout and a marked tree still win;
+  - on macOS, an unmarked directory falls back to Application Support;
+  - off macOS, a bundle-shaped path keeps `DianaOSRoot/`;
+  - only a bundle on macOS has a seed directory.
+- **`DataMigrationTests`**, three: the seed fills what is missing and keeps the player's file; no seed, no copy; the
+  test host has no seed directory.
+- **`MacAppBundlePublishTests`**, three. Two are a real `dotnet publish` of a scratch project that imports
+  `DianaOSPublishLayout.targets`, framework-dependent, about a second each:
+  - for `osx-arm64`: the publish directory holds only `EmuSen.app`, with the apphost executable, the icon
+    byte-identical, the seed, the notices and no marker, and `Info.plist`'s keys as §4.82.3 lists them;
+  - for `linux-x64`: the tree as before.
+
+  The third checks that Mistress's project names its bundle.
+- **Mutants.** Removing the bundle-first line from `ComputeFor` fails the checkout case. Letting the Linux root target
+  run for a bundle fails the `osx-arm64` publish case.
+
+#### 4.82.8 Not checked here
+
+Nothing in this section ran on a Mac. What has to be confirmed there:
+
+- a publish on the Mac signs without error, and `codesign --verify --deep --strict EmuSen.app` passes;
+- `EmuSen.app` copied to `/Applications` starts from Finder and from `open`, shows its icon in Finder and the Dock, and
+  its menu says EmuSen;
+- `~/Library/Application Support/EmuSen/home` is created, `home/Documents` holds the manual, settings saved from
+  Preferences land in `home/etc/EmuSen`, and nothing is written inside the bundle;
+- where the error log goes by default (§4.82.1);
+- `man hier` and `cat` on a page under `/Documents` work in the DianaOS console;
+- a game runs, with the Rust cores when the publish was given them;
+- a controller is seen. SDL3 over IOKit needs no `Info.plist` key; if macOS asks for Input Monitoring or Bluetooth
+  access, the key that explains why has to be added;
+- the `osx-x64` bundle on an Intel Mac, or under Rosetta;
+- a bundle published on Linux, zipped, unzipped on the Mac and signed there by hand.
+
+**Checked on the Mac mini, 2026-09-28** (Apple M1, macOS 26.6.2). EmuSen.app, built there and installed in `/Applications`,
+opened cleanly from `/Applications`. Its data home was created under `~/Library/Application Support/EmuSen`, and the ROM
+folder chosen in Preferences was saved there (`home/etc/EmuSen/appsettings.json`). The icon, the menu's name and a
+controller were not yet reported.
+
+### 4.83 Big picture: every window in ES-DE's look, and nothing cut off (2026-09-27)
+
+Decided 2026-09-27, for every window a big-screen session frames as a menu: nothing may be cut off, run past its panel
+or be drawn over other content. *"We cannot have window features cutoff. If they dont fit, shrink them or rework
+them."* This section is the player's account, and the account of the audit that holds every window to that rule. The
+plan's record, with its predictions, mutants and pictures, is `EmuSen_BigPicture.md` §43. The toolkit's side is LunaP's
+§196.9 and §196.10.
+
+**Where it stands.** Every window of §4.80.6's list is now framed in ES-DE's look, and so is Controller Bindings
+(§4.81.1). A window is framed only once the audit passes it at 1280×800 and 1920×1200 and its pictures have been looked
+at; a test holds the list of framed windows to the list the audit opens. The desktop's windows are unchanged.
+
+#### 4.83.1 What the player sees
+
+The windows framed in this part are:
+
+- Find by Name and Use Another Game's Cover;
+- the gamelist filter and the folder editor;
+- Graphics Settings and Shaders;
+- the resume question, the rewind reel and a screenshot;
+- the theme browser, a theme's detail and its About.
+
+Each looks as §4.80.1 describes. Where the look's larger words did not fit, the window was laid out again:
+
+- **A theme's detail.** The screenshot, its caption and Previous and Next are at the left; the facts are in a column of
+  their own beside them; the licence and every button are in rows below. The panel is 0.8 of the screen. The first
+  framing drew the screenshot over the facts and the caption over the buttons.
+- **The theme browser.** The list and the preview are two columns. The screenshot is fitted into its column with its
+  words under it, the preview scrolls up and down, and Details and Close are a row of their own. The panel is 0.85 of
+  the screen. The first framing drew the screenshot over the list and past the panel's edge.
+- **Shaders.** The two columns are the same width, so the search fits beside its category. *Download Pack* (or
+  *Update Pack*) stands alone under the list, and the pack's description is the panel's footer, with the folder the
+  presets are in. *Use This Shader* and *Reset All* are beside the preset's name, and Close is at the right of the tabs.
+  The panel is 0.9 of the screen. The first framing ran the search box past its bar and the pack's words past the panel.
+- **The rewind reel.** The preview is 200 pixels high so the strip and the buttons fit, and the help bar names the
+  reel's own buttons: *Step*, *Five Seconds* (L1 and R1), *Oldest* (L2), *Now* (R2), *Rewind Here* and *Cancel*. The
+  strip scrolls sideways by design, and Left and Right step through every moment.
+- **The Cheat Database** (Q170). Its two lines of introduction are in the footer before the licence's attribution, four
+  lines in all, and the two lists have the room. The filter and *Load* are one row above the games.
+- **Active Cheats.** The General page is two columns. The table never scrolls sideways; a description or code too long
+  for its cell ends in an ellipsis and is whole in the footer while its row is chosen.
+- **Scraping.** The panel is 0.9 of the screen. A recent game's line ends in an ellipsis at the column's edge and is
+  whole in the footer while its row is chosen. There is no empty square where the game's picture goes before one
+  arrives (Q177).
+- **A row the pad reaches is the chosen row** (Q178) in the database's two lists, the cheats' table and the recent
+  games, so a button or a footer that follows the choice follows the row in view: *Load into Active Cheats* is
+  enabled as soon as the focus is on a game.
+
+In every framed window:
+
+- **A scrolling area fades at an edge while more lies beyond it** (Q186), so a row the edge cuts reads as *more this
+  way* rather than sliced. The row with the focus is never faded: the fade stops where it begins, and a row the focus
+  brings into view sits flush with the edge. A strip that scrolls sideways, the rewind reel's, fades at its sides the
+  same way.
+- **A focused switch or check box** has the black bar behind it, as a focused row has, instead of an outline drawn
+  through its words (Q187).
+- **The two shoulder buttons** are one glyph in the help bar, each shoulder as large as any other button's (Q174).
+  Controller Bindings' *Console* now uses it too.
+- **A controller drawing's labels** are set closer, so their words stay large. At 1280×800 the Nintendo 64's key and
+  pad lines went from 11.6 pixels to 16.0, and the other consoles' from 14.0 to 17.1; at 1920×1200, from 17.8 and 21.4
+  to 24.6 and 25.6.
+
+#### 4.83.2 The fit audit
+
+`FitAudit.Check` (WiseMan) looks at one framed sheet as it is laid out. Its frame is the menu panel's rectangle, and it
+walks what the window put in the panel. It skips a popup, which opens over the window on purpose, anything with no
+opacity, and anything clipped away entirely. It reports:
+
+- **past its panel**, or past its nearest clipping or scrolling ancestor, for any control the window placed and any
+  words or picture. A scrolling area excuses it only along the axis the pad scrolls, up and down; overflow past a
+  scroller's side is cut, since a pad never scrolls sideways;
+- **words past their** button, toggle, tab, dropdown or row;
+- **overlap** between two drawn controls a player reads or presses (words, pictures, buttons, fields, sliders,
+  switches, rows, tabs, meters), neither inside the other, by more than a pixel either way;
+- **scrolls in too little room**: a scrolling area under two rows of 42 design pixels;
+- **cut at a scrolling edge with no fade**: a drawn control sliced by an edge that does not fade, at the top or foot of
+  an area, or at a side of one that scrolls only sideways (Q186);
+- **cut with an ellipsis**, **runs past its box** and **cut at the foot**, for words;
+- **too small to read**: words under `FitAudit.SmallestText`, 16 design pixels (a screen pixel at 1280×800, four
+  fifths of the look's small text), and a controller drawing's label lines by the size the drawing reports. *Since
+  2026-09-28 by the height of their drawn capitals, held to what Inter draws at 16 (§4.83.7).*
+- **title cut** and **footer cut**, from the panel.
+
+The slack is a pixel, or a pixel and a half at a menu's scale above one, where layout rounds in the scaled content's own
+units: at 1920×1200 two edges measured 1804 and 1806.
+
+**Allowances.** A cut the audit accepts is named, with where the whole text is:
+
+- a text box scrolls its own text, and the caret and the on-screen keyboard reach all of it;
+- a cheat's description or code cut in the table is whole in the footer while its row is chosen;
+- a recent game's line cut in the list is whole in the footer while its row is chosen;
+- the rewind reel's strip scrolls sideways by design, fades at a side with more beyond it, and Left and Right reach
+  every moment.
+
+**The windows it opens.** `WindowFitAuditTests` opens every framed window at both sizes, in-game over a running
+synthetic game or themed over the synthetic theme. Some windows are opened in more than one state:
+
+- Active Cheats on each of its two pages, and Shaders on a 944-parameter preset with its sliders;
+- Use Another Game's Cover with covers;
+- Controller Bindings on every tab.
+
+`WindowFitScrapeAuditTests` opens the scraping status part way through a run and finished, and Find by Name with
+results, over the fake ScreenScraper. With `EMUSEN_WINDOW_FIT_PNG=<folder>` each case also saves what it audited to
+`~/.cache/emusen/probe/window-look/trials/<folder>/`, for the eye's second check.
+
+#### 4.83.3 What it found
+
+Before any rework, three windows were framed on trial and the audit run over them. It failed each, and its output is
+kept in `~/.cache/emusen/probe/window-look/audit/`:
+
+| Window | Faults | What they were |
+|---|---|---|
+| a theme's detail | 39 | the screenshot over six lines of facts; the licence over the caption, Previous and Next; two things past the panel |
+| the theme browser | 18 | the screenshot over the list's rows and past the panel; Close over the author's line; an empty line over the first row |
+| Shaders | 7 | the category over the search box, and the box past its bar; the pack's words past the panel and past their box |
+
+These were the faults seen in those windows' pictures, and the audit reported every one. After the reworks of §4.83.1,
+every case passes with no fault, at 1280×800 and at 1920×1200. That is 22 window states in all: 19 in `WindowFitAuditTests`
+and 3 in `WindowFitScrapeAuditTests`, with Controller Bindings' five tabs audited in its one case.
+
+Controller Bindings, audited on every tab, passed the rules the audit had then. Its pictures showed the Nintendo 64
+labels' small words, which measured 11.6 design pixels at 1280×800. The small-text rule was added for them, and would
+have failed them. LunaP's compact labels (§196.10) raised them to 16.0, which is the floor itself, with no margin
+(§4.83.5).
+
+Looking at the pictures found one more cut the rules allowed: the rewind reel's first tile was sliced at the strip's
+side, since the reel's allowance excused its sideways overflow. The sideways fade and the side check came from that.
+With the fade switched off, the audit reports the reel at both sizes.
+
+#### 4.83.4 Tests
+
+- **`FitAuditTests`** (WiseMan, headless): eleven cases, one for each fault made on purpose on a framed sheet:
+  - a sheet that fits passes;
+  - a picture over words is an overlap;
+  - a control wider than the panel is past it, and words wider than their button are past it;
+  - words that run past their box, or end in an ellipsis, are cut;
+  - a row scrolled below a list is reachable, but text past a scroller's side is not;
+  - a list in under two rows is too little room;
+  - a title or footer too long for the panel is cut;
+  - a list sliced at its foot, or a strip at its side, with no fade is flagged;
+  - words at 12 pixels, or a Nintendo 64 drawing's labels squeezed into 260 pixels, are too small to read.
+- **`WindowFitAuditTests`** and **`WindowFitScrapeAuditTests`**: the audit over every framed window (§4.83.2). Also a
+  case that the windows `MainWindow.FramedWindows` names are exactly the windows the audit opens.
+- **`SheetLookTests`**: the database's footer is its introduction and then the attribution, uncut, and a game row the
+  pad reaches is chosen, with *Load* following it.
+- **`ControllerBindingsDiagramTests`**: the help bar's entries are *Rebind*, *Test buttons*, *Back* and *Console*.
+- **LunaP**: four cases for the fade, the switch's focus, the shoulder pair in a help bar and the compact labels
+  (§196.10).
+- **Mutants**: `EmuSen_BigPicture.md` §43.
+
+#### 4.83.5 What it does not cover
+
+- **Only the states the tests open.** A window in a state no case puts it in is not audited. Examples are a theme with
+  a very long name, a cheat list of a hundred rows, or a shader preset whose parameter names are long.
+- **Only geometry.** The audit does not judge contrast, colour or whether a layout reads well; the pictures are for
+  that. It measures words by their font size, so a condensed face and a wide one of the same size count the same. *It
+  measures their capitals since 2026-09-28 (§4.83.7).*
+- **Words it cannot see.** It sees `TextBlock`s, the panel's title and footer through the panel's own reports, and a
+  controller drawing's labels through `LabelTextSize`. Other words a control draws itself are not measured. That includes
+  the help bar and the words printed on a drawn controller (*START*, *Z*), which stay at the drawing's scale.
+- **The Nintendo 64 labels meet the floor with no margin.** A longer binding name widens the drawing's top row, and the
+  labels then shrink below 16 pixels. The audit would fail, since it measures the drawing as it is shown, but only for
+  the bindings the case uses. *Answered on 2026-09-27* (§4.83.6): the labels are 17.1, with the long names 16.6.
+- **Hardware.** No real pad, keyboard or handheld was used; everything here ran headless.
+
+*The first bullet was narrowed on 2026-09-27:* long names of each kind are now opened (§4.83.6). A cheat list of a
+hundred rows is still not.
+
+#### 4.83.6 The follow-ups: the status line, the Nintendo 64's margin, and long names (2026-09-27)
+
+Three of the plan's open questions (§43.10 there) were built, and the audit was widened to hold them. The fourth, Q189,
+whether words should be measured by their drawn capitals rather than their font size, waits on a decision; the audit
+still measures font size. *Built on 2026-09-28 (§4.83.7).*
+
+**The status line (Q191).** While a game ran unpaused, the line along the window's foot carried the performance
+counters: the frame rate, the frame's cost, every phase, the presentation's numbers and the time outside the frame,
+about 2,270 pixels of words. The counters' column took all of it, so the messages beside them got no width, and the
+counters ran past the window's right edge, at 1280 × 800 and 1920 × 1200, on the desktop and in a big-screen session
+alike. Now:
+
+- **In a big-screen session the counters are not in the status line**, whatever Preferences' **Frame Rate** says (§4.51).
+  The HUD is the place for performance. The messages are in the look's small text at the menus' scale (20 design
+  pixels) and wrap onto more lines rather than being cut, since a pad has no tooltip to show the rest. The bar is 26
+  pixels high at 800, as the desktop's is, and grows with the scale.
+- **On the desktop the line is never cut.** The counters show a short line (the frame rate, the frame's cost and its top
+  phases, such as *60.8 fps (run 4.80ms / total 16.44ms) [cpu+spc700 3.97ms / ppu 0.81ms / hdma 0.01ms]*), take at most
+  half the bar, end in an ellipsis if even that is too long, and carry the whole measurement as their tooltip. The
+  messages take the rest, end in an ellipsis when they are longer, and carry their whole text as their tooltip. The
+  console still gets the whole line as `[fps]`.
+
+Every message the line can show goes through the same one line, so each is held the same way: the longest the audit
+opens is a failure to load a game with a long title from a long path, 330 characters. It wraps to three lines in a
+big-screen session and is trimmed on the desktop.
+
+A first version kept the bar's padding and let its line take the 20-pixel words' natural height, which made the bar 7
+pixels taller at 1280 × 800. Two cases of `PadSettingsWindowTests`, the same two §43.3 there met, then failed to find a
+slider on Shaders by their pad walk, though pressing Down from the first slider reached every one of them in turn. The
+fault was the walk's replay under a shorter sheet, not the window. The bar now keeps the height it had at 800 pixels,
+and both cases pass. The walk's sensitivity is recorded as not fixed (§43.11 there).
+
+**The Nintendo 64's margin (Q188).** In a framed Controller Bindings window, the Nintendo 64's labels were 16.0 design
+pixels, the floor, because its right column holds five labels and the drawing is bound by its height. A side column of
+more than four labels now takes a second column in the width the drawing leaves free, where that lets its labels grow
+without shrinking the drawing (LunaP §198.11). The outer column's lines run level between the inner labels, and no line
+crosses a button, a stick or printed words. Measured in the audit at 1280 × 800 and 1920 × 1200:
+
+| Drawing | Before | Now | Over the floor | With long key names on A and Start |
+|---|---|---|---|---|
+| Nintendo 64 | 16.0 | 17.1 (right column split) | +1.1 | 16.6 (+0.6): its top row binds |
+| Super NES, NES, Game Boy | 17.1 | 17.1 | +1.1 | 17.1 |
+
+17.1 is every drawing's cap, set by the text around the labels and the drawing's width, not by its space. The audit's
+case holds the drawings with the bindings a console starts with to 17.0, a margin of one design pixel, and the case with
+long names to the floor.
+
+**Long names (Q190).** The audit opens ten more window states, each at both sizes, and the status line:
+
+- a theme whose name, author, licence and variants are long: the theme browser with it chosen, its detail and its About;
+- a cheat with a long description and a long code, chosen, then with the longest status Active Cheats says;
+- a shader preset whose parameters have long names;
+- a game with a 102-character title: its screenshot, the resume question, Find by Name and Use Another Game's Cover;
+- Controller Bindings with long key names on A and Start (*MediaPreviousTrack*, *LaunchApplication1*), every tab;
+- the status line, above.
+
+Five of them failed before they were fixed: the three with a long title, the long cheat and the theme browser. What the
+audit reported, and what was found behind it:
+
+- **A long title was cut.** A screenshot's, a theme's detail and its About: *title cut*, at both sizes. A framed sheet's
+  title that does not fit one line at its smallest size now takes a second line, shrinking a little more if it must,
+  and the band under it grows (LunaP §196.11). Past two lines it is still cut, and the audit still says so.
+- **A long cheat code pushed the table sideways.** The code's column took the code's whole width, the description's
+  column went off the right, and the table cut at a side that does not fade. The code's column now takes at most 300
+  design pixels and ends in an ellipsis; the whole code is in the footer while the row is chosen, as the description is.
+- **A long cheat description wrapped.** The look wraps a row's words (LunaP §196.9), and a table's cells are rows, so
+  the row grew to three lines and the table scrolled in less than two rows. A table's cell is now one line (LunaP
+  §196.11).
+- **Active Cheats' table had too little room with three cheats.** The line above the buttons kept a status line's height
+  even when it said nothing, and the table had 78 design pixels, under the audit's two rows. In the look the status is
+  now said in the panel's footer, as a chosen row is, and the line is gone: the last thing to happen is what the footer
+  says. The table has about 110 design pixels at 1280 × 800.
+
+One defect of another kind was found by the theme browser's case: **the pad's row was not the previewed one.** Moving
+the focus down the list by the pad left the preview on the first theme. The browser's list now chooses the row the pad
+reaches, as Q178 did for the cheats' lists, and the preview follows it.
+
+**Tests.**
+
+- `WindowFitAuditTests`: 58 window cases (29 states at two sizes), the framed-windows case, and four status-line cases
+  (a big screen and the desktop at both sizes), each audited running and with the longest message, and the desktop's
+  again at its narrowest width. The audit writes each drawing's label size, its margin and the columns split; the
+  bindings cases fail under the margin. `FitAudit.Check` takes the smallest words' size as a parameter, so the desktop's
+  status line is held to every rule but the big screen's floor, and the allowance for it, *the status line's words are
+  whole in its tooltip*, applies only while the tooltip holds them.
+- `FitAudit` decides whether a list scrolls by its overflow in screen pixels, as its slack is. It had compared the
+  overflow in the list's own design units, so a table 2 design pixels too short at 1920×1200 (3 screen pixels) counted
+  as not scrolling, and its last row as cut past the table (§43.11 there).
+- `WindowFitScrapeAuditTests`: 6 cases, as before.
+- LunaP: the second column, the columns clear of the rows' lines, no line through another label, and the wrapped title
+  (LunaP §196.11, §198.11).
+- **Mutants**: `EmuSen_BigPicture.md` §43.11.
+
+With `EMUSEN_WINDOW_FIT_PNG=before` or `after` and `EMUSEN_WINDOW_FIT_SET=<name>`, the audit saves what it looked at into
+`~/.cache/emusen/bigpicture/png/<name>/<stage>/`, beside the other big-picture pictures; any other value is a trial, kept
+under `~/.cache/emusen/probe/window-look/trials/`.
+
+**Not covered.** A cheat list of a hundred rows; a theme's name or a game's title too long for two lines of a title,
+which the audit would report; the Nintendo 64 with long names in its top row, whose labels keep 0.6 of a pixel over the
+floor; a status message in a big-screen session long enough to take a quarter of the screen. The pad walk's sensitivity
+to a sheet's height is in the harness, not in any window, and is not fixed.
+
+*Two sentences above were answered on 2026-09-28 (§4.83.7):* the pad walk's sensitivity to a sheet's height was in the
+harness and, it turned out, in the window as well, and both are fixed; the Nintendo 64 with long names keeps no margin
+once words are measured by their capitals.
+
+#### 4.83.7 Words measured by their capitals, and the pad walk at any height (2026-09-28)
+
+Two decisions of 2026-09-27 (`EmuSen_BigPicture.md` §10.1, Q189 and Q192) are built here. The plan's record, with
+its predictions, mutants and pictures, is its §43.12; LunaP's side is its §97.9.
+
+**The floor is the height of the drawn capitals (Q189).** Until now the audit held words to a font size of 16 design
+pixels. A condensed face at 16 pixels draws smaller letters than a wide one, so the size let the look's face through
+where the eye would not. The audit now measures how tall each face draws its capitals, from the outline of its *H*
+drawn at a thousand pixels, and holds words to the capitals the desktop's face, Inter, draws at 16 pixels.
+
+| Face | Capitals as a share of the size | Cross-check: the font file's `OS/2` cap height | At 16 px | Size that reaches the floor |
+|---|---|---|---|---|
+| Inter (the desktop's) | 0.7273 | not read | 11.64 | 16.0 |
+| Barlow Condensed (the look's) | 0.6999 | 700 of 1,000 | 11.20 | 16.63, or 16.57 with the audit's slack |
+| Noto Sans (the headless tests' default face) | 0.7141 | 714 of 1,000 | 11.43 | 16.30 |
+
+- **The calibration.** `FitAudit.DesktopCaps` is 0.7273, Inter's measured share. The floor is 16 × 0.7273 = **11.64
+  design pixels of capitals**. The audit's slack, 0.05 of a pixel of the desktop face, becomes 0.036 of a pixel of
+  capitals, so Inter at 16 passes and at 15.9 fails exactly as it did by size. A test holds the constant to Inter's
+  measured *H*. This Avalonia reports no ink height for a single glyph (every glyph's metrics came back 0 high), which is
+  why the outline is drawn.
+- **What the words are measured in.** A text block's face is the one its words were drawn in, after any fallback; a
+  controller drawing's labels are measured in the drawing's own face.
+- **Not the desktop face everywhere in the tests.** The headless tests do not load Inter, so a desktop window's words
+  in a test are drawn in Noto Sans. Framed sheets draw theirs in Barlow Condensed and are measured in it. The status
+  line on the desktop is still held to no floor (§4.83.6).
+
+**What it found: no window fails.** Every state the audit opens, at 1280 × 800 and 1920 × 1200, passes with the floor
+measured this way. The shortest capitals in each (the record, with `EMUSEN_WINDOW_FIT_CAPS=<file>`):
+
+| Window state | Shortest words | Size | Capitals | Over the floor's 11.64 |
+|---|---|---|---|---|
+| Controller Bindings, Nintendo 64 with long key names | the drawing's labels | 16.62 | 11.63 | −0.01, inside the slack |
+| Controller Bindings, every other drawing and console | the drawing's labels | 17.10 | 11.97 | +0.33 |
+| Shaders, all three states | the preset's path, `MonoText` | 18 | 12.85 | +1.21 |
+| Active Cheats, Graphics, Resume, the gamelist filter, scraping, a theme's detail and About, the bindings' General tab | the hint lines | 20 | 14.00 | +2.36 |
+| Find by Name, Use Another Game's Cover, the folder editor | a game's or folder's name | 20 | 14.00 | +2.36 |
+| the Cheat Database, the rewind reel, the theme browser | a field's or a list's words | 24 | 16.80 | +5.16 |
+
+So nothing had to grow and no layout changed for Q189. The one state at the floor is the Nintendo 64 drawing with the
+long names the audit gives its A and Start keys. Measured by size it kept 0.6 of a pixel over the floor; by its
+capitals it is a hundredth of a pixel under the exact floor, and passes only by the slack. Its labels are bound by the
+width of its top row of six, not by the drawing's cap of 17.1 (Q193 keeps the cap), and the plan's Q195 asks whether to
+rework that row.
+
+The drawings' own margin check (§4.83.6) still asks the labels, with the bindings a console starts with, to stand at
+17.0 pixels or more. That is the layout reaching the drawing's cap, stated in size; the floor itself is capitals, and
+the record now writes both.
+
+**The pad walk at any height (Q192).** Two cases of `PadSettingsWindowTests` had failed when the big-screen status bar
+grew by 7 pixels (§4.83.6). They now run with the sheet made shorter by 0, 3, 5, 7, 8, 10 and 13 pixels (the status bar
+given that much more height), and a new case presses Down, one press at a time and with no search, from the first
+slider of *CRT (Lottes)* to its last, at every height from 0 to 16. On the unmodified code, 19 of those 31 cases
+failed. Four causes were found, two in the harness and two in the window:
+
+- **The harness pressed the path it found from the wrong state.** `PadAudit`'s walk explores by replaying each path
+  from the state it began in, with lists and scrolling put back. Having found the control, it then pressed the path
+  once more without putting them back, from wherever its last replay had left the sheet. Under a sheet a few pixels
+  shorter, the parameter list was still scrolled a page down from that last replay, so Down from the search box entered
+  it half way and the path ended on another slider. The walk now ends by replaying the path from the state it began
+  in, as every other replay does. This was the failure §4.83.6 met.
+- **The harness refocused rows that were not there yet.** When a replay passed over other presets, the shader list's
+  settle (120 ms) left the parameter list empty while the walk tried to put the focus back on its starting slider. The
+  walk now waits, up to two seconds, for the rows its start is among before putting the scroll back, and a replay whose
+  start cannot be focused counts as failed rather than pressing on from wherever the focus is.
+- **The harness asked a built row into view.** Putting the focus back on a slider called the list's `ScrollIntoView`
+  every time. With that call made every time, the parameter list was later found with no row built, and the shaders
+  case failed at every height from 10 to 16 pixels shorter. It is now asked only for a row that is not built.
+- **The window: a pad could not pass a row at eight heights.** The straight walk stopped, and pressing Down did nothing,
+  at every height from 0 to 7 pixels shorter: before the fifth slider from 3 to 7, before the eighth from 0 to 2. The
+  list builds rows half a view past each edge, but rebuilds them only once its view leaves the range it last built for;
+  a view brought flush under the focused row could end exactly on that range's edge, with the next row unbuilt, and the
+  pad's search found nothing below. The pad router now, finding nothing inside a scrolling area that could scroll on
+  that way, scrolls it a page and back, which makes the list build the rows around the view, and searches again; when
+  that finds nothing, the view is exactly where it was. At 3 pixels shorter the list could also be left with its view
+  arranged at its own height, so it did not scroll at all, not by pad and not by wheel; LunaP's `SliderList` now
+  arranges it again (LunaP §97.9).
+
+With all four, the 31 cases pass, and so does the rest of `PadSettingsWindowTests`. The first big-screen status line
+was reconstructed for this (its words' natural line and the bar's old padding): at 1280 × 800 it makes the bar 8
+pixels taller, not 7; both heights are among the cases.
+
+**A behaviour of Shaders, recorded, not changed.** With the walk replaying from its true start, the parameter search
+case reached its preset's row sideways from the search box. The row took the focus but not the choice: the list still
+showed the previous preset's sliders. The case now steps off the row and back, as a player would. Making the list
+choose any row that takes the focus, as Q178 and §4.83.6 did for five other lists, was tried: it lost the focus after *Use This
+Shader* in the shaders case, failed both cases at every height, and was taken out. The plan's Q194 asks.
+
+**Tests.**
+
+- `FitAuditTests`: three new cases: the floor is Inter's measured capitals at 16 pixels; Barlow Condensed fails at 16
+  and 16.5 pixels and passes at 16.6 while Inter passes at 16 and fails at 15.9; and a drawing whose labels are set in
+  Barlow Condensed between the two floors fails. The small-words case now gives its passing words Inter, the face the
+  floor is set by.
+- `PadSettingsWindowTests`: the two cases at seven heights each, and the straight walk at seventeen, which also holds
+  the view to at most a row's movement a press.
+- **Mutants**: `EmuSen_BigPicture.md` §43.12.
+
+**Not covered.** Words the audit cannot see (§4.83.5) are still not measured, by size or by capitals: the panel's
+footer and help bar and the words printed on a drawing. The heights are the sheet made shorter by the status bar, at
+1280 × 800 only.

@@ -24,6 +24,12 @@ namespace EmuSen.Galaxia.Library
         // etc/EmuSen moved under home when the shell was rooted there - see EmuSen_Galaxia.md §3.2.
         public static int RunConfig() => CopyTree(ConfigStore.PreviousDirectory, ConfigStore.Directory);
 
+        // A Mac app bundle's read-only skeleton, copied into home on every start and never over the player's files - see EmuSen_Galaxia.md §3.4.
+        public static int SeedFromBundle() => SeedFromBundle(ConfigRoot.SeedDirectory, DataStore.UsrHome);
+
+        public static int SeedFromBundle(string? seedDirectory, string home) =>
+            seedDirectory is null ? 0 : CopyTree(seedDirectory, home);
+
         public static int Run(string legacyRoot, string destinationRoot)
         {
             if (!Directory.Exists(legacyRoot)) return 0;

@@ -50,7 +50,7 @@ A game's category reflects its *current* state, not a permanent verdict — entr
 
 ### Fair
 
-- **Super Mario World** — the coins/Yoshi rendering bug this entry used to describe is **fixed** (confirmed 2026-08-01). What remains recorded against the game is a glitch when the overworld map's hills rise and grow. The old narrowing work (the `$7E8000-$7E97FF` staging buffer, the `$0D80-$0D9F` job table, `EmuSen_Core_Gameplan.md` §1) is history, not an open thread — do not restart from it.
+- **Super Mario World** — the coins/Yoshi rendering bug this entry used to describe is **fixed** (confirmed in play 2026-08-01). What remains recorded against the game is a glitch when the overworld map's hills rise and grow. The old narrowing work (the `$7E8000-$7E97FF` staging buffer, the `$0D80-$0D9F` job table, `EmuSen_Core_Gameplan.md` §1) is history, not an open thread — do not restart from it.
 
   **Boot and title screen re-checked in detail on 2026-08-02 and found correct.** A headless sweep of frames 0–3000 (`--autoshot`, then a neighbour-difference scan for one-frame transients) shows: black, "- Nintendo -/Presents" fading in and out, the title fading in, the circular iris opening onto the level backdrop, the attract demo, and the file-select/player-count menus and overworld after `tap Start`. No missing layer, no transient glitch frame, nothing out of place.
 

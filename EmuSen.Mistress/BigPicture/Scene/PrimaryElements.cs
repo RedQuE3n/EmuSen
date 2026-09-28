@@ -1,0 +1,149 @@
+using System.Collections.Generic;
+using System.Linq;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
+using EmuSen.LunaP.Controls;
+using EmuSen.Mistress.BigPicture.Theme;
+
+namespace EmuSen.Mistress.BigPicture.Scene
+{
+    // carousel and textlist, the views' primary elements, at rest - see EmuSen_BigPicture.md §13.2.
+    internal static class PrimaryElements
+    {
+        internal static Control? Carousel(SceneBuilder b, ResolvedElement e)
+        {
+            bool systems = b.View.Name == "system";
+            IReadOnlyList<CarouselItem> items = systems ? SystemItems(b) : GameItems(b, e);
+            if (items.Count == 0) return null;
+            string type = e.String("type") ?? "horizontal";
+            var carousel = new ImageCarousel
+            {
+                Items = items,
+                SelectedIndex = systems ? b.Data.SystemIndex : b.Data.GameIndex,
+                Orientation = type.StartsWith("vertical") ? Orientation.Vertical : Orientation.Horizontal,
+                MaxItemCount = e.Float("maxItemCount") ?? 3,
+                ItemScale = e.Float("itemScale") ?? 1.2f,
+                UnfocusedItemOpacity = e.Float("unfocusedItemOpacity") ?? 0.5f,
+                UnfocusedItemSaturation = e.Float("unfocusedItemSaturation") ?? 1,
+                UnfocusedItemDimming = e.Float("unfocusedItemDimming") ?? 1,
+                ImageTint = SceneUnits.ToColor(e.Color("imageColor"), Colors.White),
+                ImageSelectedTint = e.Color("imageSelectedColor") is { } selected ? SceneUnits.ToColor(selected) : null,
+                ImageSaturation = e.Float("imageSaturation") ?? 1,
+                ImageFit = e.String("imageFit") switch { "fill" => ImageFit.Fill, "cover" => ImageFit.Cover, _ => ImageFit.Contain },
+                ItemVerticalAlignment = SceneUnits.Vertical(e.String("itemVerticalAlignment")),
+                ItemHorizontalAlignment = SceneUnits.HorizontalLayout(e.String("itemHorizontalAlignment") ?? "center"),
+                Background = SceneUnits.Fill(e.Color("color"), e.Color("colorEnd"), e.String("gradientType")),
+                FontPath = ImageElements.Existing(e.Path("fontPath")),
+                FontSize = SceneUnits.Px((e.Float("fontSize") ?? 0.085f) * (e.Float("textRelativeScale") ?? 1), b.H),
+                TextColor = SceneUnits.ToColor(e.Color("textColor"), Colors.Black),
+                TextBackground = SceneUnits.ToColor(e.Color("textBackgroundColor"), Colors.Transparent),
+                LetterCase = SceneUnits.Case(e.String("letterCase")),
+            };
+            Size item = SceneUnits.ToSize(e.Pair("itemSize"));
+            carousel.ItemSize = new Size(SceneUnits.Px(item.Width, b.W), SceneUnits.Px(item.Height, b.H));
+            carousel.ContentOffset = new Point(e.Float("horizontalOffset") ?? 0, e.Float("verticalOffset") ?? 0);
+            carousel.LineSpacing = e.Float("lineSpacing") ?? 1.5f;
+            if (!type.EndsWith("Wheel") && e.Pair("selectedItemMargins") is { } m)
+            {
+                double axis = type == "vertical" ? b.H : b.W; // by the screen's axis along the row, not the carousel's, as ES-DE was measured (§39)
+                carousel.SelectedItemMargins = new Point(m.X * axis, m.Y * axis);
+            }
+
+            if (type.EndsWith("Wheel")) Wheel(e, carousel, type);
+            else if (type == "horizontal" && e.Bool("reflections") == true)
+            {
+                carousel.Reflections = true;
+                carousel.ReflectionOpacity = e.Float("reflectionsOpacity") ?? 0.5f;
+                carousel.ReflectionFalloff = e.Float("reflectionsFalloff") ?? 1;
+            }
+
+            return carousel;
+        }
+
+        // The wheel types, laid out by the rules measured from ES-DE 3.4.1 (§36.3); itemHorizontalAlignment is the vertical wheel's alone.
+        private static void Wheel(ResolvedElement e, ImageCarousel carousel, string type)
+        {
+            NormalizedPair origin = e.Pair("itemRotationOrigin") ?? new NormalizedPair(-3, 0.5f);
+            carousel.Layout = CarouselLayout.Wheel;
+            carousel.WheelRotation = e.Float("itemRotation") ?? 7.5f;
+            carousel.WheelOrigin = new Point(origin.X, origin.Y);
+            carousel.ItemsBefore = (int)(e.UInt("itemsBeforeCenter") ?? 8);
+            carousel.ItemsAfter = (int)(e.UInt("itemsAfterCenter") ?? 8);
+            carousel.ItemsUpright = e.Bool("itemAxisHorizontal") == true;
+            carousel.WheelHorizontalAlignment = SceneUnits.HorizontalLayout(e.String("wheelHorizontalAlignment") ?? "center");
+            carousel.WheelVerticalAlignment = SceneUnits.Vertical(e.String("wheelVerticalAlignment"));
+            if (type == "horizontalWheel") carousel.ItemHorizontalAlignment = HorizontalAlignment.Center;
+        }
+
+        // One item per system, each drawn with the artwork its own resolved theme names.
+        private static IReadOnlyList<CarouselItem> SystemItems(SceneBuilder b) => b.Data.Systems.Select(s =>
+        {
+            ResolvedElement? own = s.Theme.SystemView.Primary;
+            string? image = own is null ? null : ImageElements.Existing(own.Path("staticImage")) ?? ImageElements.Existing(own.Path("defaultImage"));
+            return new CarouselItem(image, own?.String("text") ?? s.System.FullName);
+        }).ToList();
+
+        private static IReadOnlyList<CarouselItem> GameItems(SceneBuilder b, ResolvedElement e)
+        {
+            SceneSystem system = b.Data.System;
+            IReadOnlyList<string> types = e.Bindings.FirstOrDefault(x => x.Kind == "media")?.Names ?? [];
+            string? fallback = ImageElements.Existing(e.Path("defaultImage"));
+            return system.Games.Select(g => new CarouselItem(
+                types.Select(t => b.Data.Media?.Find(g.SourceIn(system), g.Shown, t)).FirstOrDefault(p => p is not null) ?? fallback, g.Name)).ToList();
+        }
+
+        // ES-DE marks favourites and folders before the name unless indicators is none; the marks are LunaP's own drawings (§3.6).
+        private static TextRowMarker Marker(ResolvedElement e, SceneGame g, bool stars) =>
+            g.InCollection && e.String("collectionIndicators") != "ascii" ? TextRowMarker.Tick
+            : e.String("indicators") == "none" || g.IsCollection ? TextRowMarker.None : g.Folder ? TextRowMarker.Folder : g.Favorite && stars ? TextRowMarker.Star : TextRowMarker.None;
+
+        // While a collection is edited its members carry a tick, which the theme cannot turn off; its ascii form is a "!" (THEMES.md, collectionIndicators).
+        private static string Marked(ResolvedElement e, SceneGame g, string text) =>
+            g.InCollection && e.String("collectionIndicators") == "ascii" ? "!" + text : text;
+
+        internal static Control? TextList(SceneBuilder b, ResolvedElement e)
+        {
+            SceneSystem system = b.Data.System;
+            bool suffix = e.Bool("systemNameSuffix") == true && system.System.Kind != ThemeSystemKind.Regular;
+            string suffixCase = e.String("letterCaseSystemNameSuffix") ?? "uppercase";
+            IReadOnlyList<TextRow> rows = b.View.Name == "system"
+                ? b.Data.Systems.Select(s => new TextRow(s.System.FullName)).ToList()
+                : system.Games.Select(g => new TextRow(Marked(e, g, suffix && !g.Folder ? $"{g.Name} [{SceneUnits.Cased(g.SourceIn(system).Name, suffixCase)}]" : g.Name), g.Folder, Marker(e, g, system.Stars))).ToList();
+            float fontSize = e.Float("fontSize") ?? 0.045f;
+            Size margins = SceneUnits.ToSize(e.Pair("selectedBackgroundMargins"));
+            return new TextRowList
+            {
+                Items = rows,
+                SelectedIndex = b.View.Name == "system" ? b.Data.SystemIndex : b.Data.GameIndex,
+                FontPath = ImageElements.Existing(e.Path("fontPath")),
+                FontSize = SceneUnits.Px(fontSize, b.H),
+                LineSpacing = e.Float("lineSpacing") ?? 1.5f,
+                PrimaryColor = SceneUnits.ToColor(e.Color("primaryColor"), Colors.Blue),
+                SecondaryColor = SceneUnits.ToColor(e.Color("secondaryColor"), Colors.Lime),
+                SelectedColor = SceneUnits.ToColor(e.Color("selectedColor") ?? e.Color("primaryColor"), Colors.Blue),
+                SelectedSecondaryColor = e.Color("selectedSecondaryColor") is { } ss ? SceneUnits.ToColor(ss) : null,
+                SelectorColor = SceneUnits.ToColor(e.Color("selectorColor"), Color.FromRgb(0x33, 0x33, 0x33)),
+                SelectorHeight = SceneUnits.Px(e.Float("selectorHeight") ?? fontSize * 1.5f, b.H),
+                TextBandHeight = SceneUnits.Px(e.Float("selectorHeight") ?? fontSize * 1.5f, b.H),
+                SelectedBackgroundFitsText = true,
+                SelectorOffsetY = SceneUnits.Px(e.Float("selectorVerticalOffset") ?? 0, b.H),
+                SelectedBackgroundColor = SceneUnits.ToColor(e.Color("selectedBackgroundColor"), Colors.Transparent),
+                SelectedBackgroundMargins = new Thickness(SceneUnits.Px(margins.Width, b.W), 0, SceneUnits.Px(margins.Height, b.W), 0),
+                SelectedBackgroundCornerRadius = SceneUnits.Px(e.Float("selectedBackgroundCornerRadius") ?? 0, b.W),
+                TextAlignment = SceneUnits.Horizontal(e.String("horizontalAlignment")),
+                HorizontalMargin = SceneUnits.Px(e.Float("horizontalMargin") ?? 0, b.W),
+                LetterCase = SceneUnits.Case(e.String("letterCase")),
+                Marquee = Marquee(b, e, SceneUnits.Px(fontSize, b.H)),
+            };
+        }
+
+        // The selected name's sideways scroll, from the theme's delay, speed and gap and ES-DE's measured rates (§14.7); the view sets its time.
+        private static EmuSen.LunaP.Motion.TextScroll Marquee(SceneBuilder b, ResolvedElement e, double fontSize) =>
+            e.Bool("textHorizontalScrolling") == false ? default : new(
+                TimeSpan.FromSeconds(e.Float("textHorizontalScrollDelay") ?? 3),
+                b.Data.Motion.MarqueeSpeedPerEm * fontSize * (e.Float("textHorizontalScrollSpeed") ?? 1),
+                b.Data.Motion.MarqueeGapSeconds * (e.Float("textHorizontalScrollGap") ?? 1.5f) * b.Data.Motion.MarqueeSpeedPerEm * fontSize);
+    }
+}

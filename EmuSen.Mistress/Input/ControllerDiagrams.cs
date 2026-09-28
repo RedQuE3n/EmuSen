@@ -31,9 +31,6 @@ namespace EmuSen.Mistress.Input
             [PadControl.LeftStickRight] = "StickRight",
         };
 
-        // The drawings finished so far; a console without one shows its list alone.
-        public static bool IsDrawn(ControllerLayout layout) => layout is ControllerLayout.Snes or ControllerLayout.Nintendo64;
-
         public static string RegionFor(string console, PadControl control) =>
             LayoutFor(console) == ControllerLayout.Nintendo64 && Nintendo64.TryGetValue(control, out string? region) ? region : control.ToString();
 

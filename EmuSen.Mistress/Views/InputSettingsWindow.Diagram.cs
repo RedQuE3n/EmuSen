@@ -7,8 +7,10 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using EmuSen.Cores;
+using EmuSen.Endymion.Input;
 using EmuSen.Galaxia.Input;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
@@ -25,6 +27,9 @@ namespace EmuSen.Mistress.Views
         private readonly Dictionary<string, TextBlock> _diagramStatus = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<Key> _heldKeys = new();
         private bool _testing;
+
+        // The window's content, which a sheet takes away from the window.
+        private Control _body = null!;
         private TimeSpan? _backHeldSince;
         private string? _sheetHintBefore;
         private SheetLayer? _hintedLayer;
@@ -54,10 +59,14 @@ namespace EmuSen.Mistress.Views
         private void SetUpTester()
         {
             HelpText.Text = DesktopHelp;
+            SetUpRawTester();
             if (_gamepad is not null) _gamepad.Polled += OnPadPolled;
             Tabs.SelectionChanged += (_, _) => UpdateTester();
             Deactivated += (_, _) => { _heldKeys.Clear(); UpdateTester(); };
-            ((Control)Content!).AttachedToVisualTree += (_, _) => ShowSheetHint();
+            _body = (Control)Content!;
+            _body.AttachedToVisualTree += (_, _) => ShowSheetHint();
+            MenuLook.SetWidthFraction(this, 0.94);
+            MenuLook.WhenApplied(_body, InLook);
             Closed += (_, _) => TearDownTester();
         }
 
@@ -75,8 +84,56 @@ namespace EmuSen.Mistress.Views
             if (_hintedLayer is null) _sheetHintBefore = layer.Hint;
             _hintedLayer = layer;
             layer.Hint = PadHints.Face(_testing ? TestingPadHint : PadHint);
+            MenuLook.SetHints(this, MenuHints());
             HelpText.IsVisible = false;
         }
+
+        // In ES-DE's look the help bar and the labels' own prompts do what the words above and below the drawing and the Close and Test Buttons buttons did, so the drawing has the room (Q184).
+        private void InLook()
+        {
+            HelpText.IsVisible = false;
+            CloseButton.IsVisible = false;
+            TestToggle.IsVisible = false;
+            foreach (TextBlock status in _diagramStatus.Values) status.IsVisible = false;
+            SizeColumnsToText();
+        }
+
+        // The look's larger capitals do not fit the desktop's fixed columns, so each table's columns take their widest cell, shared by its rows (§4.81).
+        private void SizeColumnsToText()
+        {
+            var tables = new List<(Panel Scope, IEnumerable<Grid> Rows)>
+            {
+                ((Panel)HotkeysPanel.Parent!, new[] { HotkeyHeaderRow }.Concat(HotkeysPanel.Children.OfType<Grid>())),
+            };
+            foreach (StackPanel list in _body.GetLogicalDescendants().OfType<StackPanel>().Where(p => p.Name == "BindingsPanel"))
+                if (list.Parent is Panel page && page.Children.OfType<Grid>().FirstOrDefault(g => g.Name == "ButtonHeaderRow") is { } header)
+                    tables.Add((page, new[] { header }.Concat(list.Children.OfType<Grid>())));
+            int n = 0;
+            foreach ((Panel scope, IEnumerable<Grid> rows) in tables)
+            {
+                Grid.SetIsSharedSizeScope(scope, true);
+                string group = "Table" + n++;
+                foreach (Grid row in rows)
+                {
+                    int count = row.ColumnDefinitions.Count;
+                    row.ColumnDefinitions.Clear();
+                    for (int i = 0; i < count; i++) row.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto) { SharedSizeGroup = $"{group}c{i}" });
+                    row.ColumnSpacing = 12;
+                }
+            }
+        }
+
+        // The help bar of the window framed in ES-DE's look: the same words as the plain sheet's footer, with the pad's buttons drawn.
+        private IReadOnlyList<HintEntry> MenuHints() => _testing
+            ? new[] { new HintEntry("Hold to stop testing") { Button = MainWindow.BackGlyph } }
+            : new[]
+            {
+                new HintEntry("Rebind") { Button = MainWindow.AcceptGlyph },
+                new HintEntry("Test buttons") { Button = PadGlyphButton.North },
+                new HintEntry("Back") { Button = MainWindow.BackGlyph },
+                new HintEntry("") { Button = PadGlyphButton.LeftShoulder },
+                new HintEntry("Console") { Button = PadGlyphButton.RightShoulder },
+            };
 
         // The drawing over the page's list; the drawing takes the height the page shows, and the list is scrolled to below it.
         private Control WithDiagram(string console, ScrollViewer page, Control list)
@@ -173,6 +230,7 @@ namespace EmuSen.Mistress.Views
         // Lights every region of the shown drawing from the held keys and player 1's pad, and moves its sticks; nothing is lit while capturing.
         private void UpdateTester()
         {
+            UpdateRawTester();
             foreach ((string console, ControllerDiagram diagram) in _diagrams)
             {
                 bool live = console == ShownConsole && Capturing == PadCapture.None;
@@ -181,6 +239,43 @@ namespace EmuSen.Mistress.Views
                 foreach ((string stick, PadAxis x, PadAxis y) in StickAxes(diagram.Layout))
                     diagram.SetStick(stick, live ? StickValue(console, x) : 0, live ? StickValue(console, y) : 0);
             }
+        }
+
+        // The General tab's modern pad, and which of player 1's own buttons each of its regions is.
+        internal static readonly IReadOnlyDictionary<string, SDL.GamepadButton> RawButtons = new Dictionary<string, SDL.GamepadButton>
+        {
+            ["B"] = SDL.GamepadButton.South, ["A"] = SDL.GamepadButton.East, ["Y"] = SDL.GamepadButton.West, ["X"] = SDL.GamepadButton.North,
+            ["L"] = SDL.GamepadButton.LeftShoulder, ["R"] = SDL.GamepadButton.RightShoulder, ["L3"] = SDL.GamepadButton.LeftStick, ["R3"] = SDL.GamepadButton.RightStick,
+            ["Select"] = SDL.GamepadButton.Back, ["Start"] = SDL.GamepadButton.Start, ["Guide"] = SDL.GamepadButton.Guide,
+            ["Up"] = SDL.GamepadButton.DPadUp, ["Down"] = SDL.GamepadButton.DPadDown, ["Left"] = SDL.GamepadButton.DPadLeft, ["Right"] = SDL.GamepadButton.DPadRight,
+        };
+
+        private void SetUpRawTester()
+        {
+            foreach ((string region, SDL.GamepadButton button) in RawButtons) RawDiagram.SetBinding(region, null, Friendly(PadName(button)));
+            RawDiagram.SetBinding("L2", null, "Left Trigger");
+            RawDiagram.SetBinding("R2", null, "Right Trigger");
+            RawDiagram.StickRing = _appSettings.StickDeadzone;
+        }
+
+        // Player 1's pad as SDL reads it, whatever any console's bindings say: its buttons, its triggers' travel and its sticks' positions.
+        private void UpdateRawTester()
+        {
+            ConnectedPad? pad = _gamepad?.Primary;
+            bool live = Tabs.SelectedIndex == 0 && pad is not null;
+            foreach ((string region, SDL.GamepadButton button) in RawButtons)
+            {
+                RawDiagram.SetPressed(region, live && pad!.IsRawPressed(button));
+                string? letter = pad?.ButtonLabel(button);
+                if (region is "A" or "B" or "X" or "Y") RawDiagram.SetCaption(region, letter is { Length: <= 2 } ? letter : "");
+            }
+            double left = live ? pad!.RawAxis(SDL.GamepadAxis.LeftTrigger) : 0, right = live ? pad!.RawAxis(SDL.GamepadAxis.RightTrigger) : 0;
+            RawDiagram.SetTrigger("L2", left);
+            RawDiagram.SetTrigger("R2", right);
+            RawDiagram.SetPressed("L2", left >= 0.5);
+            RawDiagram.SetPressed("R2", right >= 0.5);
+            RawDiagram.SetStick("LeftStick", live ? pad!.RawAxis(SDL.GamepadAxis.LeftX) : 0, live ? pad!.RawAxis(SDL.GamepadAxis.LeftY) : 0);
+            RawDiagram.SetStick("RightStick", live ? pad!.RawAxis(SDL.GamepadAxis.RightX) : 0, live ? pad!.RawAxis(SDL.GamepadAxis.RightY) : 0);
         }
 
         private static IEnumerable<(string Stick, PadAxis X, PadAxis Y)> StickAxes(ControllerLayout layout) => layout switch
@@ -259,7 +354,11 @@ namespace EmuSen.Mistress.Views
             _backHeldSince = null;
             TestToggle.IsChecked = on;
             HelpText.Text = on ? TestingHelp : DesktopHelp;
-            if (_hintedLayer is not null) _hintedLayer.Hint = PadHints.Face(on ? TestingPadHint : PadHint);
+            if (_hintedLayer is not null)
+            {
+                _hintedLayer.Hint = PadHints.Face(on ? TestingPadHint : PadHint);
+                MenuLook.SetHints(this, MenuHints());
+            }
             UpdateStatus();
             UpdateTester();
         }
@@ -274,7 +373,7 @@ namespace EmuSen.Mistress.Views
                 return true;
             }
 
-            object? focused = TopLevel.GetTopLevel((Control)Content!)?.FocusManager?.GetFocusedElement();
+            object? focused = TopLevel.GetTopLevel(_body)?.FocusManager?.GetFocusedElement();
             if (_diagrams.FirstOrDefault(d => d.Value.RegionOf(focused) is not null) is not { Value: { } diagram, Key: { } console }) return false;
             switch (button)
             {

@@ -125,8 +125,8 @@ namespace EmuSen.Mistress.Views
         }
 
         // With the swap on, the east button chooses and the south one goes back - §4.61.
-        private static PadGlyphButton AcceptGlyph => PadHints.Swapped ? PadGlyphButton.East : PadGlyphButton.South;
-        private static PadGlyphButton BackGlyph => PadHints.Swapped ? PadGlyphButton.South : PadGlyphButton.East;
+        internal static PadGlyphButton AcceptGlyph => PadHints.Swapped ? PadGlyphButton.East : PadGlyphButton.South;
+        internal static PadGlyphButton BackGlyph => PadHints.Swapped ? PadGlyphButton.South : PadGlyphButton.East;
 
         // Blurred while a big-screen menu is over the screen: the pad menu, or a sheet that draws its own menu.
         private void UpdateMenuBackdrop()

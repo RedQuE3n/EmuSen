@@ -44,7 +44,10 @@ namespace EmuSen.WiseMan.Mistress
 
         private static readonly (int W, int H)[] Sizes = { (1280, 800), (1920, 1200) };
 
-        private static string[] Drawn => CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).Where(c => ControllerDiagrams.IsDrawn(ControllerDiagrams.LayoutFor(c))).ToArray();
+        // Every console's tab, and General, whose modern pad is the raw tester.
+        private static string[] Drawn => CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).Prepend("General").ToArray();
+
+        private static int TabOf(string console) => console == "General" ? 0 : CoreCatalog.ConsolesInReleaseOrder.ToList().FindIndex(c => c.Console == console) + 1;
 
         // What a lit picture holds down: a face button, a shoulder, a direction, a key, and the stick pushed.
         private static void Press(SimulatedPad pad, string console)
@@ -52,7 +55,7 @@ namespace EmuSen.WiseMan.Mistress
             pad.Press(SDL.GamepadButton.East);
             pad.Press(SDL.GamepadButton.LeftShoulder);
             pad.Press(SDL.GamepadButton.DPadUp);
-            if (console == "N64")
+            if (console is "N64" or "General")
             {
                 pad.SetAxis(SDL.GamepadAxis.LeftX, 0.75);
                 pad.SetAxis(SDL.GamepadAxis.LeftY, -0.45);
@@ -70,7 +73,7 @@ namespace EmuSen.WiseMan.Mistress
                 {
                     var pad = new SimulatedPad { Name = "Xbox Wireless Controller" };
                     var gamepad = new GamepadManager(new GamepadBindingMap(), start: true, SimulatedPads.With(pad));
-                    var window = new InputSettingsWindow(new ControllerKeyBindings(consoles), new GamepadBindings(consoles), gamepad, new AppSettings(), new HotkeyBindingMap(), console) { Width = w, Height = h };
+                    var window = new InputSettingsWindow(new ControllerKeyBindings(consoles), new GamepadBindings(consoles), gamepad, new AppSettings(), new HotkeyBindingMap(), console == "General" ? null : console) { Width = w, Height = h };
                     window.Show();
                     UiTest.Capture(window);
                     Dispatcher.UIThread.RunJobs();
@@ -79,7 +82,7 @@ namespace EmuSen.WiseMan.Mistress
                     Press(pad, console);
                     gamepad.Poll();
                     window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.None, null);
-                    window.DiagramFor(console)!.Select("R", NavigationMethod.Directional);
+                    window.DiagramFor(console)?.Select("Start", NavigationMethod.Directional);
                     Dispatcher.UIThread.RunJobs();
                     UiTest.Capture(window).SavePng(Path.Combine(folder, $"desktop-{console}-{w}x{h}-lit.png"));
                     window.Close();
@@ -102,9 +105,9 @@ namespace EmuSen.WiseMan.Mistress
                     SheetLayer sheets = main.GetVisualDescendants().OfType<SheetLayer>().First(l => l.Name == "Sheets");
                     var bindings = (InputSettingsWindow)sheets.Current!;
                     TabControl tabs = sheets.SheetOf(bindings)!.GetVisualDescendants().OfType<TabControl>().First();
-                    tabs.SelectedIndex = CoreCatalog.ConsolesInReleaseOrder.ToList().FindIndex(c => c.Console == console) + 1;
+                    tabs.SelectedIndex = TabOf(console);
                     pad.Tick();
-                    UiTest.Capture(main);
+                    for (int settle = 0; settle < 3; settle++) { UiTest.Capture(main); pad.Tick(); }
                     UiTest.Capture(main).SavePng(Path.Combine(folder, $"bigscreen-{console}-{w}x{h}-idle.png"));
 
                     bindings.SetTesting(true);

@@ -24,7 +24,7 @@ namespace EmuSen.Mistress.Views
         }
 
         // The windows checked in ES-DE's look so far; the others keep the plain sheet until theirs is (§4.80).
-        internal static bool FramedAsMenu(Window window) => window is ScrapeStatusWindow or ActiveCheatsWindow or CheatDatabaseWindow;
+        internal static bool FramedAsMenu(Window window) => window is ScrapeStatusWindow or ActiveCheatsWindow or CheatDatabaseWindow or InputSettingsWindow;
 
         // A framed sheet's help bar, from what its window holds: choose and back always, tabs and sideways values where there are any.
         internal static IReadOnlyList<HintEntry> SheetMenuHints(Window window)

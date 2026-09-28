@@ -149,8 +149,7 @@ namespace EmuSen.Mistress.Views
             foreach (CoreDescriptor console in _consoles)
             {
                 var page = new ScrollViewer();
-                page.Content = ControllerDiagrams.IsDrawn(ControllerDiagrams.LayoutFor(console.Console))
-                    ? WithDiagram(console.Console, page, BuildConsolePanel(console)) : BuildConsolePanel(console);
+                page.Content = WithDiagram(console.Console, page, BuildConsolePanel(console));
                 Tabs.Add(console.Console, page);
             }
         }
@@ -290,8 +289,18 @@ namespace EmuSen.Mistress.Views
         private string CurrentPadLabel(string console, PadControl control)
         {
             if (!PadControls.IsButton(control, out PadButton button)) return control <= PadControl.LeftStickRight ? "Left stick" : "Right stick";
-            return _gamepadBindings.For(console).ButtonToPad.TryGetValue(button, out SDL.GamepadButton p) ? PadName(p) : Unbound;
+            string? bound = _gamepadBindings.For(console).ButtonToPad.TryGetValue(button, out SDL.GamepadButton p) ? PadName(p) : null;
+            string? trigger = TriggerFor(button);
+            return bound is null ? trigger ?? Unbound : trigger is null ? bound : $"{bound} or {trigger}";
         }
+
+        // L2 and R2 are always their trigger, past half its travel, whatever button is bound beside it - see EmuSen_Input.md §7.3 and §4.81.
+        private static string? TriggerFor(PadButton button) => button switch
+        {
+            PadButton.L2 => "Left Trigger",
+            PadButton.R2 => "Right Trigger",
+            _ => null,
+        };
 
         // Short enough for the button column; the help text carries the whole name.
         private static string ShortName(PadControl control) => control switch
@@ -517,6 +526,17 @@ namespace EmuSen.Mistress.Views
                 _padArmed = pressed is null;
                 return;
             }
+            // Pulling the trigger for L2 or R2 binds it alone: the button beside it is cleared, since the trigger is always read.
+            if (pressed is null && TriggerFor(button) is not null
+                && _gamepad.RawAxis(button == PadButton.L2 ? SDL.GamepadAxis.LeftTrigger : SDL.GamepadAxis.RightTrigger) >= 0.5)
+            {
+                _gamepadBindings.For(console).Unbind(button);
+                _gamepadBindings.Save();
+                _listeningForPad = null;
+                if (_listeningForKey == target) ClearKeyListening();
+                RefreshPadLabels();
+                return;
+            }
             if (pressed is not SDL.GamepadButton padButton)
             {
                 if (_padListening.Elapsed >= PadCaptureTimeout) StopListeningForPad();
@@ -579,6 +599,7 @@ namespace EmuSen.Mistress.Views
             _appSettings.StickDeadzone = DeadzoneSlider.Value;
             _appSettings.Save();
             if (_gamepad is not null) _gamepad.StickDeadzone = _appSettings.StickDeadzone;
+            RawDiagram.StickRing = _appSettings.StickDeadzone;
             UpdateDeadzoneText();
         }
 

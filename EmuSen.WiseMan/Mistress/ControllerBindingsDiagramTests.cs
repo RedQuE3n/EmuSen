@@ -75,7 +75,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Every_control_each_console_uses_has_a_region_and_every_region_a_control() => UiTest.Run(() =>
         {
-            foreach (string console in Consoles.Where(c => ControllerDiagrams.IsDrawn(ControllerDiagrams.LayoutFor(c))))
+            foreach (string console in Consoles)
             {
                 var diagram = new ControllerDiagram { Layout = ControllerDiagrams.LayoutFor(console) };
                 IReadOnlyList<PadControl> controls = CoreCatalog.ControlsFor(console);
@@ -90,6 +90,8 @@ namespace EmuSen.WiseMan.Mistress
 
         // A click anywhere a region is drawn hits it, and nowhere else does; the click starts that control's capture.
         [Theory]
+        [InlineData("NES")]
+        [InlineData("GB")]
         [InlineData("SNES")]
         [InlineData("N64")]
         public Task A_click_on_each_region_chooses_that_region(string console) => UiTest.Run(() =>
@@ -225,6 +227,8 @@ namespace EmuSen.WiseMan.Mistress
 
         // Every region of each drawing is reached from its first by the cross alone, through the router as a pad drives any window.
         [Theory]
+        [InlineData("NES")]
+        [InlineData("GB")]
         [InlineData("SNES")]
         [InlineData("N64")]
         public Task The_pad_alone_reaches_every_region(string console) => UiTest.Run(() =>
@@ -277,6 +281,113 @@ namespace EmuSen.WiseMan.Mistress
             bindings.Close();
             Assert.Equal(before, layer.Hint);
             main.Close();
+        });
+
+        // The N64's Z is the left trigger by default, as a trigger is always its L2; a button bound beside it is shown too, and a trigger pulled while capturing takes the button off again.
+        [Fact]
+        public Task Z_is_the_left_trigger_and_a_button_can_be_bound_beside_it() => UiTest.Run(() =>
+        {
+            Rig rig = Open("N64");
+            Assert.Equal("Left Trigger", rig.Diagram.BindingOf("Z").Pad);
+            rig.Pad.SetAxis(SDL.GamepadAxis.LeftTrigger, 0.8);
+            rig.Poll();
+            Assert.True(rig.Diagram.IsPressed("Z"));
+            rig.Pad.SetAxis(SDL.GamepadAxis.LeftTrigger, 0);
+            rig.Poll();
+
+            rig.Diagram.Select("Z", NavigationMethod.Directional);
+            PadWindowRouter.Send(rig.Window, UiButton.Accept);
+            Capture(rig.Window);
+            rig.Pad.Press(SDL.GamepadButton.LeftShoulder);
+            Capture(rig.Window);
+            rig.Pad.Release(SDL.GamepadButton.LeftShoulder);
+            Capture(rig.Window);
+            Assert.Equal(SDL.GamepadButton.LeftShoulder, rig.Pads.For("N64").ButtonToPad[PadButton.L2]);
+            Assert.Equal("Left Shoulder or Left Trigger", rig.Diagram.BindingOf("Z").Pad);
+
+            PadWindowRouter.Send(rig.Window, UiButton.Accept);
+            Capture(rig.Window);
+            rig.Pad.SetAxis(SDL.GamepadAxis.LeftTrigger, 1);
+            Capture(rig.Window);
+            Assert.False(rig.Pads.For("N64").ButtonToPad.ContainsKey(PadButton.L2));
+            Assert.Equal("Left Trigger", rig.Diagram.BindingOf("Z").Pad);
+            Assert.Equal(PadCapture.None, rig.Window.Capturing);
+            rig.Window.Close();
+        });
+
+        // In ES-DE's look on a big-screen sheet: framed as a menu, its own help bar, no Close or Test Buttons, and no word on any tab cut short, at both sizes.
+        [Theory]
+        [InlineData(1280, 800)]
+        [InlineData(1920, 1200)]
+        public Task In_the_look_the_window_is_a_menu_whose_help_bar_is_its_own_and_no_word_is_cut(int w, int h) => UiTest.Run(() =>
+        {
+            Directory.CreateDirectory(Path.Combine(_root, "Roms"));
+            new AppSettings { RomDirectory = Path.Combine(_root, "Roms"), LibraryView = AppSettings.LibraryList, BigScreen = true }.Save();
+            var main = new MainWindow { Width = w, Height = h };
+            main.Show();
+            var layer = main.GetVisualDescendants().OfType<EmuSen.LunaP.Windowing.SheetLayer>().First(l => l.Name == "Sheets");
+            typeof(MainWindow).GetMethod("ShowControllerBindings", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, null);
+            var bindings = (InputSettingsWindow)layer.Current!;
+            Assert.True(layer.DrawsMenu(bindings));
+            Assert.Equal(new[] { "Rebind", "Test buttons", "Back", "", "Console" }, EmuSen.LunaP.Controls.MenuLook.GetHints(bindings)!.Select(e => e.Label));
+            Control sheet = layer.SheetOf(bindings)!;
+            Assert.DoesNotContain(sheet.GetVisualDescendants().OfType<Button>(), b => b.IsEffectivelyVisible && b.Content is "Close" or "Test Buttons");
+
+            TabControl tabs = sheet.GetVisualDescendants().OfType<TabControl>().First();
+            var cut = new List<string>();
+            for (int tab = 0; tab < tabs.ItemCount; tab++)
+            {
+                tabs.SelectedIndex = tab;
+                main.UpdateLayout();
+                UiTest.Capture(main);
+                foreach (TextBlock text in sheet.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible && t.TextWrapping == Avalonia.Media.TextWrapping.NoWrap && !string.IsNullOrEmpty(t.Text)))
+                {
+                    double shown = text.Bounds.Width;
+                    text.Measure(Size.Infinity);
+                    if (text.DesiredSize.Width - text.Margin.Left - text.Margin.Right > shown + 1) cut.Add($"{(tabs.SelectedItem as TabItem)?.Header}: '{text.Text}' needs {text.DesiredSize.Width:0} and has {shown:0}");
+                }
+                main.UpdateLayout();
+            }
+            Assert.Empty(cut);
+
+            bindings.SetTesting(true);
+            Assert.Equal(new[] { "Hold to stop testing" }, EmuSen.LunaP.Controls.MenuLook.GetHints(bindings)!.Select(e => e.Label));
+            bindings.Close();
+            main.Close();
+        });
+
+        // The General tab's modern pad shows player 1's pad itself, whatever the bindings: its buttons, its triggers' travel, its sticks, and the deadzone as a ring.
+        [Fact]
+        public Task The_general_tab_shows_the_pad_itself_beside_the_deadzone() => UiTest.Run(() =>
+        {
+            var pad = new SimulatedPad { Name = "Test Pad" };
+            var gamepad = new GamepadManager(new GamepadBindingMap(), start: true, SimulatedPads.With(pad));
+            var window = new InputSettingsWindow(new ControllerKeyBindings(Consoles), new GamepadBindings(Consoles), gamepad, new AppSettings(), new HotkeyBindingMap()) { Width = 1280, Height = 800 };
+            window.Show();
+            window.CaptureRenderedFrame();
+            ControllerDiagram raw = window.GetVisualDescendants().OfType<ControllerDiagram>().Single(d => d.Name == "RawDiagram");
+            Assert.False(raw.ShowsLabels);
+
+            pad.Press(SDL.GamepadButton.South);
+            pad.Press(SDL.GamepadButton.Guide);
+            pad.SetAxis(SDL.GamepadAxis.LeftTrigger, 0.3);
+            pad.SetAxis(SDL.GamepadAxis.RightX, -0.6);
+            gamepad.Poll();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "B", "Guide" }, raw.Pressed.OrderBy(r => r).ToArray());
+            Assert.Equal(0.3, raw.TriggerValue("L2"), 2);
+            Assert.Equal(-0.6, raw.StickPosition("RightStick").X, 2);
+
+            pad.ReleaseAll();
+            pad.SetAxis(SDL.GamepadAxis.LeftTrigger, 0);
+            pad.SetAxis(SDL.GamepadAxis.RightX, 0);
+            gamepad.Poll();
+            Assert.Empty(raw.Pressed);
+
+            var slider = window.GetVisualDescendants().OfType<Slider>().Single(s => s.Name == "DeadzoneSlider");
+            slider.Value = 0.3;
+            Assert.Equal(0.3, raw.StickRing, 3);
+            window.Close();
         });
 
         // Y tries the buttons: every press lights and none moves or rebinds, until B is held for a second.

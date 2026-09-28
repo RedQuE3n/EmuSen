@@ -5600,6 +5600,12 @@ for, the popup now sits at the top of the screen**, its top a tenth of the way d
 way (34.7% at 1280×800 and at 1920×1200), clear of the keyboard. With a physical keyboard, or with EmuSen's keyboard,
 it stays centred as before.
 
+
+**Four lines, and higher still (2026-09-27, from the handheld).** With Steam's keyboard up, the one-line field showed too
+little of what was typed. The popup's field is now four wrapping lines (LunaP `MenuTextPopup.Lines`, §195). The taller
+popup would have ended at 47.7% of the height from the old top at 10%, past the 45% the keyboard leaves clear, so
+`PadKeyboard.SteamPopupTop` is now 5%: 40–342 at 1280×800 and 60–513 at 1920×1200, bottom 42.7% at both. The test
+checks the top, the bottom and that the field is four lines tall.
 #### 4.79.9 Tests (2026-09-27)
 
 `SwapAndKeyboardTests` (§40.17), headless, with Steam simulated and nothing launched: both pairs traded in what the

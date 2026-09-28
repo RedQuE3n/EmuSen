@@ -61,7 +61,7 @@ namespace EmuSen.Mistress.Input
         }
 
         // The popup's top as a share of the window's height while Steam's keyboard, which covers about the lower half, is asked for (§4.79.8).
-        public const double SteamPopupTop = 0.10;
+        public const double SteamPopupTop = 0.05;
 
         private static void AboveSteamKeyboard(MenuTextPopup popup)
         {

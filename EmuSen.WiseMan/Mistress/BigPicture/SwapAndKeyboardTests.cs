@@ -325,14 +325,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ThemedLibraryPadTests.Enter(s, "snes");
             MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
 
-            // With Steam, from the pad: the popup's top at a tenth of the height, its bottom above 45%.
+            // With Steam, from the pad: the popup's top at a twentieth of the height, its bottom above 45%, and its field four lines tall.
             s.Settings.OnScreenKeyboard = AppSettings.OnScreenKeyboardSteam;
             s.Pad.A();
             MenuTextPopup popup = MenuTextPopup.OpenOver(s.Window) ?? throw new InvalidOperationException("no text popup");
             s.Settle();
             Rect steam = AssertWhole(s, popup);
             _out.WriteLine($"{width}x{height} Steam: {steam}, top {steam.Top / height:P1}, bottom {steam.Bottom / height:P1}");
-            Assert.InRange(steam.Top / height, 0.08, 0.12);
+            Assert.InRange(steam.Top / height, 0.03, 0.07);
+            Assert.True(popup.Field.Bounds.Height >= 4 * popup.Field.FontSize, $"field {popup.Field.Bounds.Height} for text {popup.Field.FontSize}");
             Assert.True(steam.Bottom < 0.45 * height, $"bottom {steam.Bottom} of {height}");
             Assert.True(Math.Abs(width / 2.0 - steam.Center.X) <= 1, $"centre {steam.Center.X} of {width}");
             s.Pad.B();

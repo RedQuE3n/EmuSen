@@ -66,8 +66,14 @@
     <EmuSenHostLibrarySuffix Condition="$([MSBuild]::IsOSPlatform('OSX'))">.dylib</EmuSenHostLibrarySuffix>
     <EmuSenHostLibrarySuffix Condition="'$(EmuSenHostLibrarySuffix)' == ''">.so</EmuSenHostLibrarySuffix>
     <DefaultItemExcludes>$(DefaultItemExcludes);Cores/*/*RT - */target/**;Cores/*/*RT - */pgo/**</DefaultItemExcludes>
-    <!-- A crate holding pgo/<name>.profdata is built profile-guided unless this is false - see Mars_Native.md §6.17. -->
+    <!-- A crate holding pgo/<name>.<this machine's Rust target>.profdata is built profile-guided unless this is false - see Mars_Native.md §6.17. -->
     <EmuSenPgo Condition="'$(EmuSenPgo)' == ''">true</EmuSenPgo>
+    <_EmuSenHostArch>$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)</_EmuSenHostArch>
+    <_EmuSenHostArch Condition="'$(_EmuSenHostArch)' == 'X64'">x86_64</_EmuSenHostArch>
+    <_EmuSenHostArch Condition="'$(_EmuSenHostArch)' == 'Arm64'">aarch64</_EmuSenHostArch>
+    <EmuSenHostRustTarget Condition="'$(EmuSenHostRustTarget)' == '' And $([MSBuild]::IsOSPlatform('Windows'))">$(_EmuSenHostArch)-pc-windows-msvc</EmuSenHostRustTarget>
+    <EmuSenHostRustTarget Condition="'$(EmuSenHostRustTarget)' == '' And $([MSBuild]::IsOSPlatform('OSX'))">$(_EmuSenHostArch)-apple-darwin</EmuSenHostRustTarget>
+    <EmuSenHostRustTarget Condition="'$(EmuSenHostRustTarget)' == ''">$(_EmuSenHostArch)-unknown-linux-gnu</EmuSenHostRustTarget>
   </PropertyGroup>
 
   <!-- A machine without Rust builds the C# cores alone; one with it must build the Rust ones, so a failed cargo step fails the build instead of leaving an old library in place - see Mars_Native.md §1. -->
@@ -89,22 +95,44 @@
     </ItemGroup>
   </Target>
 
-  <!-- Batched: once per crate. Its profile is used from a copy named by its hash, so a refreshed profile rebuilds every crate it guides - see Mars_Native.md §6.17. -->
+  <!-- Batched: once per crate. Its profile for this target is used from a copy named by its hash, so a refreshed profile rebuilds every crate it guides; no profile, no flag and no warning - see Mars_Native.md §6.17. -->
   <Target Name="BuildRustCore" Outputs="%(EmuSenRustCrate.Identity)" DependsOnTargets="FindCargo" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true' And '$(CargoFound)' == 'true'">
     <PropertyGroup>
-      <_EmuSenPgoProfile>%(EmuSenRustCrate.Dir)pgo/%(EmuSenRustCrate.Identity).profdata</_EmuSenPgoProfile>
+      <_EmuSenPgoProfile>%(EmuSenRustCrate.Dir)pgo/%(EmuSenRustCrate.Identity).$(EmuSenHostRustTarget).profdata</_EmuSenPgoProfile>
       <_EmuSenPgoUse>false</_EmuSenPgoUse>
       <_EmuSenPgoUse Condition="'$(EmuSenPgo)' != 'false' And Exists('$(_EmuSenPgoProfile)')">true</_EmuSenPgoUse>
       <_EmuSenPgoConfig></_EmuSenPgoConfig>
+    </PropertyGroup>
+    <ItemGroup>
+      <_EmuSenPgoManifest Remove="@(_EmuSenPgoManifest)" />
+      <_EmuSenPgoFlavour Remove="@(_EmuSenPgoFlavour)" />
+    </ItemGroup>
+    <!-- Only a flavour the manifest lists is given the profile: another compiler's names match nothing, and a newer LLVM's profile would fail the build - see Mars_Native.md §6.17.4. -->
+    <PropertyGroup>
+      <_EmuSenRustcCommand>rustc</_EmuSenRustcCommand>
+      <_EmuSenRustcCommand Condition="'$(RUSTC)' != ''">&quot;$(RUSTC)&quot;</_EmuSenRustcCommand>
+    </PropertyGroup>
+    <Exec Condition="'$(_EmuSenPgoUse)' == 'true'" Command="$(_EmuSenRustcCommand) -V" WorkingDirectory="%(EmuSenRustCrate.Dir)" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_EmuSenRustc" />
+    </Exec>
+    <ReadLinesFromFile Condition="'$(_EmuSenPgoUse)' == 'true'" File="$([System.IO.Path]::ChangeExtension('$(_EmuSenPgoProfile)', '.pgo'))">
+      <Output TaskParameter="Lines" ItemName="_EmuSenPgoManifest" />
+    </ReadLinesFromFile>
+    <ItemGroup Condition="'$(_EmuSenPgoUse)' == 'true'">
+      <_EmuSenPgoFlavour Include="@(_EmuSenPgoManifest)" Condition="'%(_EmuSenPgoManifest.Identity)' == 'flavour = $(_EmuSenRustc) | $(EmuSenNativeProfile) | host'" />
+    </ItemGroup>
+    <Message Condition="'$(_EmuSenPgoUse)' == 'true' And '@(_EmuSenPgoFlavour)' == ''" Importance="normal" Text="%(EmuSenRustCrate.Core) builds without its PGO profile, which was not trained for $(_EmuSenRustc), $(EmuSenNativeProfile)." />
+    <PropertyGroup Condition="'$(_EmuSenPgoUse)' == 'true' And '@(_EmuSenPgoFlavour)' == ''">
+      <_EmuSenPgoUse>false</_EmuSenPgoUse>
     </PropertyGroup>
     <GetFileHash Condition="'$(_EmuSenPgoUse)' == 'true'" Files="$(_EmuSenPgoProfile)">
       <Output TaskParameter="Hash" PropertyName="_EmuSenPgoHash" />
     </GetFileHash>
     <PropertyGroup Condition="'$(_EmuSenPgoUse)' == 'true'">
       <_EmuSenPgoCopy>$([MSBuild]::NormalizePath('$(EmuSenCargoTargetRoot)', '%(EmuSenRustCrate.Identity)', 'pgo', '%(EmuSenRustCrate.Identity)-$(_EmuSenPgoHash.Substring(0, 16))'))</_EmuSenPgoCopy>
-      <_EmuSenPgoConfig> --config &quot;build.rustflags=['-Cprofile-use=$(_EmuSenPgoCopy).profdata']&quot;</_EmuSenPgoConfig>
+      <_EmuSenPgoConfig> --config &quot;build.rustflags=['-Cprofile-use=$(_EmuSenPgoCopy).profdata', '-Cllvm-args=-no-pgo-warn-mismatch']&quot;</_EmuSenPgoConfig>
     </PropertyGroup>
-    <Copy Condition="'$(_EmuSenPgoUse)' == 'true'" SourceFiles="$(_EmuSenPgoProfile);%(EmuSenRustCrate.Dir)pgo/%(EmuSenRustCrate.Identity).pgo" DestinationFiles="$(_EmuSenPgoCopy).profdata;$(_EmuSenPgoCopy).pgo" SkipUnchangedFiles="true" />
+    <Copy Condition="'$(_EmuSenPgoUse)' == 'true'" SourceFiles="$(_EmuSenPgoProfile);$([System.IO.Path]::ChangeExtension('$(_EmuSenPgoProfile)', '.pgo'))" DestinationFiles="$(_EmuSenPgoCopy).profdata;$(_EmuSenPgoCopy).pgo" SkipUnchangedFiles="true" />
     <Warning Condition="'$(_EmuSenPgoUse)' == 'true' And ('$(RUSTFLAGS)' != '' Or '$(CARGO_ENCODED_RUSTFLAGS)' != '')" Text="RUSTFLAGS is set and overrides build.rustflags: %(EmuSenRustCrate.Core) builds without its PGO profile." />
     <Exec Command="cargo build --profile $(EmuSenNativeProfile) --manifest-path &quot;%(EmuSenRustCrate.Dir)Cargo.toml&quot; --target-dir &quot;$(EmuSenCargoTargetRoot)/%(EmuSenRustCrate.Identity)&quot;$(_EmuSenPgoConfig)" StandardOutputImportance="low" />
   </Target>

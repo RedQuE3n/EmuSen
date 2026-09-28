@@ -39,9 +39,9 @@ fn main() {
     let flavour = format!("{compiler} | {cargo_profile} | {}", if explicit { target.as_str() } else { "host" });
 
     let mut lines = vec![format!("source = {source}"), format!("flavour = {flavour}"), format!("llvm = {llvm}")];
-    let (state, warning) = match &used {
-        None if generating => ("instrumented", None),
-        None => ("none", None),
+    let (state, warning, note) = match &used {
+        None if generating => ("instrumented", None, None),
+        None => ("none", None, None),
         Some(path) => {
             let manifest = Path::new(path).with_extension("pgo");
             println!("cargo:rerun-if-changed={path}");
@@ -65,11 +65,12 @@ fn main() {
             lines.push(format!("profile = {path}"));
             let trained = values("source").into_iter().next().unwrap_or_default();
             if !values("flavour").iter().any(|f| *f == flavour) {
-                ("untrained", Some(format!("MarsRT's PGO profile was not trained for this build ({flavour}): it builds, and no function in it is profile-guided. See Mars_Native.md §6.17.")))
+                ("untrained", Some(format!("MarsRT's PGO profile was not trained for this build ({flavour}): it builds, and no function in it is profile-guided. See Mars_Native.md §6.17.")), None)
             } else if trained != source {
-                ("stale", Some(format!("MarsRT's PGO profile was trained on source {trained}, and this is {source}: it builds, and each function changed since loses its guidance. Refresh with pgo/train.sh. See Mars_Native.md §6.17.")))
+                // Not a warning: every edit makes a profile stale, and a stale one is safe - see Mars_Native.md §6.17.4.
+                ("stale", None, Some(format!("MarsRT's PGO profile was trained on source {trained}, and this is {source}: each function changed since loses its guidance. See Mars_Native.md §6.17.6 for when to refresh it.")))
             } else {
-                ("matched", None)
+                ("matched", None, None)
             }
         }
     };
@@ -77,6 +78,9 @@ fn main() {
     if let Some(message) = warning {
         println!("cargo:warning={message}");
         lines.push(format!("warning = {message}"));
+    }
+    if let Some(message) = note {
+        lines.push(format!("note = {message}"));
     }
     let _ = fs::write(profile_dir.join("marsrt-pgo.txt"), lines.join("\n") + "\n");
 }

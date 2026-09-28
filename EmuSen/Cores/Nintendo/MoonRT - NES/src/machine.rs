@@ -205,8 +205,8 @@ impl Machine {
         w.i32("Version", STATE_VERSION);
         w.i64("TotalFrames", self.total_frames);
         w.i64("_lineStartClock", self.line_start_clock);
-        w.i64("_cpuBudget", self.master_clock);
-        w.i64("_masterClock", self.cpu_budget);
+        w.i64("_cpuBudget", self.cpu_budget);
+        w.i64("_masterClock", self.master_clock);
         w.i64("_cpuRemainder", self.cpu_remainder);
         w.group("Cart", |w| self.bus.board.cart.write_state(w));
         w.group("Mapper", |w| self.bus.board.mapper.write_state(w));

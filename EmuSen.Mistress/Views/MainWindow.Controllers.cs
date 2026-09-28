@@ -24,6 +24,7 @@ namespace EmuSen.Mistress.Views
             return false;
         }
 
+        // The swap trades South with East and North with West, as ES-DE's does (§4.79.5).
         private bool PadHeldOn(ConnectedPad pad, UiButton button)
         {
             bool swap = _appSettings.SwapPadButtons;
@@ -41,9 +42,9 @@ namespace EmuSen.Mistress.Views
                 UiButton.PageDown => pad.IsRawPressed(SDL.GamepadButton.RightShoulder),
                 UiButton.First => pad.RawAxis(SDL.GamepadAxis.LeftTrigger) > 0.5,
                 UiButton.Last => pad.RawAxis(SDL.GamepadAxis.RightTrigger) > 0.5,
-                UiButton.Search => pad.IsRawPressed(SDL.GamepadButton.North),
+                UiButton.Search => pad.IsRawPressed(swap ? SDL.GamepadButton.West : SDL.GamepadButton.North),
                 UiButton.Random => pad.IsRawPressed(SDL.GamepadButton.LeftStick) || pad.IsRawPressed(SDL.GamepadButton.RightStick),
-                UiButton.Screensaver => pad.IsRawPressed(SDL.GamepadButton.West),
+                UiButton.Screensaver => pad.IsRawPressed(swap ? SDL.GamepadButton.North : SDL.GamepadButton.West),
                 _ => pad.IsRawPressed(SDL.GamepadButton.Guide),
             };
         }

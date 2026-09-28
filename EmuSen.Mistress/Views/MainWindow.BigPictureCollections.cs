@@ -138,7 +138,7 @@ namespace EmuSen.Mistress.Views
             name = CollectionShelves.Unique(name, _collections.Select(c => c.Name));
             if (_records.CreateCollection(name, DateTime.Now) is not long id) return;
             _editedCollection = (id, name);
-            StatusText.Text = $"Created {name}; add games to it with North";
+            StatusText.Text = $"Created {name}; add games to it with {PadHints.Glyph(EmuSen.LunaP.Controls.PadGlyphButton.North)}";
             ShowLibraryEntries();
         }
 

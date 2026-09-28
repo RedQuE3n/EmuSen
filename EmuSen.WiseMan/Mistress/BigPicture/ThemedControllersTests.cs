@@ -203,11 +203,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var plain = EmuSen.Mistress.BigPicture.Scene.HelpPrompts.For("gamelist", ["a", "b", "y"], icons, PadFamily.Xbox);
             var swapped = EmuSen.Mistress.BigPicture.Scene.HelpPrompts.For("gamelist", ["a", "b", "y"], icons, PadFamily.Xbox, swapped: true);
             Assert.Equal(new[] { "/theme/button_a_XBOX.svg", "/theme/button_b_XBOX.svg", "/theme/button_y_XBOX.svg" }, plain.Select(e => e.IconPath));
-            Assert.Equal(new[] { "/theme/button_b_XBOX.svg", "/theme/button_a_XBOX.svg", "/theme/button_y_XBOX.svg" }, swapped.Select(e => e.IconPath));
+            Assert.Equal(new[] { "/theme/button_b_XBOX.svg", "/theme/button_a_XBOX.svg", "/theme/button_x_XBOX.svg" }, swapped.Select(e => e.IconPath));
             Assert.Equal(new[] { "Launch", "Back", "Favorite" }, swapped.Select(e => e.Label));
         }
 
-        // With the swap, East chooses and South goes back in the view, and the help bar names those buttons.
+        // With the swap, East chooses, South goes back and West is the favourite in the view, and the help bar names those buttons.
         [Fact]
         public Task The_swap_trades_the_view_s_buttons_and_the_help_bar_follows() => Session.Dispatch(() =>
         {
@@ -221,7 +221,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             IReadOnlyList<HintEntry> entries = Bar(s).Entries;
             Assert.Equal(PadGlyphButton.East, entries.Single(e => e.Label == "Launch").Button);
             Assert.Equal(PadGlyphButton.South, entries.Single(e => e.Label == "Back").Button);
-            Assert.Equal(PadGlyphButton.North, entries.Single(e => e.Label == "Favorite").Button);
+            Assert.Equal(PadGlyphButton.West, entries.Single(e => e.Label == "Favorite").Button);
             (int inside, int outside) = Changed(s, plain, s.Capture());
             _out.WriteLine($"swap: {inside} pixels changed in the help bar, {outside} outside it");
             Assert.Equal(0, outside);

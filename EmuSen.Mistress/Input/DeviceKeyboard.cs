@@ -37,12 +37,12 @@ namespace EmuSen.Mistress.Input
         public static Func<bool> SteamRunning { get; set; } = SteamProcessRunning;
         public static IUrlLauncher Launcher { get; set; } = new PlatformUrlLauncher();
 
-        // Automatic: Steam's keyboard under Steam; else the field alone for a physical keyboard, Mistress's keyboard for a pad.
+        // Automatic: the field alone for a physical keyboard, Steam or not (Q165); for a pad, Steam's keyboard under Steam, else Mistress's.
         public static KeyboardKind Choose(string? setting, bool underSteam, bool padInUse) => setting switch
         {
             AppSettings.OnScreenKeyboardSteam => KeyboardKind.Steam,
             AppSettings.OnScreenKeyboardEmuSen => KeyboardKind.EmuSen,
-            _ => underSteam ? KeyboardKind.Steam : padInUse ? KeyboardKind.EmuSen : KeyboardKind.Field,
+            _ => !padInUse ? KeyboardKind.Field : underSteam ? KeyboardKind.Steam : KeyboardKind.EmuSen,
         };
 
         // Game Mode's session, a process Steam launched, a Steam Deck, or a Steam client running (Desktop Mode with Steam open).

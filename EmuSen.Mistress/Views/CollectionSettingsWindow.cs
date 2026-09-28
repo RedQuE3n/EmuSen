@@ -99,7 +99,7 @@ namespace EmuSen.Mistress.Views
 
             Button create = Ui.Button("Create New Custom Collection...", () => _ = CreateAsync());
             create.Name = "CollectionCreate";
-            _page.Children.Add(new FieldRow { Label = "Create New Custom Collection", Hint = "Then add games with North in any game list, until you finish editing.", Content = create });
+            _page.Children.Add(new FieldRow { Label = "Create New Custom Collection", Hint = $"Then add games with {EmuSen.Mistress.Input.PadHints.Glyph(PadGlyphButton.North)} in any game list, until you finish editing.", Content = create });
 
             if (collections.Count > 0)
             {

@@ -281,6 +281,14 @@ The queue's depth is not ours alone. It is `produced − consumed`, and *consume
 
 What the test wants to know is whether rate control is *acting* to drain the queue, and that is observable directly: `DynamicRateControl.TotalInputFrames`/`TotalOutputFrames` (`EmuSen_Audio_Sync.md` §3.3) count frames in against frames handed on, so their difference over the recovery window is exactly the audio the control law withheld — no device clock involved. The test samples both counters at the stall and again at the end, and asserts the withheld fraction is at least half the configured maximum deviation. With the queue sitting well above target the law should be pinned near full authority, and it is: `produced=96375, emitted=95893, 0.500 % withheld`, identical on every run. The queue reading is still checked, but only as the loose bound it can actually support — that it has not climbed to the shedding entry point. The window went back to three seconds.
 
+
+**The test suite never plays through the speakers (2026-09-27).** Only `AudioPlayerTests` and `AudioLatencyDriftTests`
+set SDL's `dummy` audio driver, in their static constructors. Any other test that started a game through Mistress's
+window, such as the launch, screensaver or pad tests, opened the machine's real playback device and played what the
+synthetic ROMs produce, which came out as a screech; whether it did depended on which class ran first. `SilentAudio`, a
+module initializer in EmuSen.WiseMan, now sets `SDL_AUDIODRIVER=dummy` and the matching hint before any test runs.
+`SilentAudioTests` opens an `AudioPlayer` and requires `SDL.GetCurrentAudioDriver()` to be `dummy`. With the initializer
+emptied it read `pipewire`, measured on 2026-09-27.
 ### 4.11 The game library (`Library/RomLibrary.cs`, `Views/MainWindow.axaml`)
 
 `MainWindow`'s viewport is two screens sharing one `Grid`: `LibraryView` (a list of every ROM in `AppSettings.RomDirectory`) and `GameFrame` (the live emulator output). Exactly one is visible; the library is what you get whenever no game is running. Visibility is toggled in code-behind rather than bound, matching how the rest of this window is written.
@@ -3597,7 +3605,7 @@ are unchanged, and a second pad is not player 2: that is separate input work (`E
 | Row | Setting | Default | What it does |
 |---|---|---|---|
 | Controller Type | `ControllerType` | Automatic | The buttons the big picture help bar draws: Automatic follows the pad last pressed (its family by §4.52's rules), or Xbox, PlayStation, Nintendo or Generic always. Only the pictures change: not what a button does, and not the text hints, which name buttons by an Xbox pad's letters |
-| Button Swap | `SwapPadButtons` | off | A and B trade functions: Accept on East and Back on South, in the library, the themed view, the pad menu, every sheet and the on-screen keyboard. The help bar and the text hints name the swapped buttons. X and Y are not swapped, unlike ES-DE's setting (plan §24.5). The keyboard and every game are unaffected |
+| Button Swap | `SwapPadButtons` | off | A and B trade functions: Accept on East and Back on South, in the library, the themed view, the pad menu, every sheet and the on-screen keyboard. The help bar and the text hints name the swapped buttons. X and Y are not swapped, unlike ES-DE's setting (plan §24.5). The keyboard and every game are unaffected. *Since 2026-09-27 X and Y trade as well, as ES-DE's do (§4.79.5)* |
 | First Controller | `FirstControllerOnly` | off | Only the first pad opened steers the interface; ES-DE's remedy for a wireless pad that registers twice. The game is unaffected (it reads the first pad anyway) |
 | Notifications | `ControllerNotifications` | on | The notice below |
 
@@ -5510,7 +5518,7 @@ more below, up while there is more above, both while there is both.
 
 | Setting | What happens when a text row is chosen |
 |---|---|
-| **Automatic** (the default) | Under Steam, the text popup with a real text field, and Steam's keyboard is asked for. Otherwise, chosen with Enter on a keyboard: the text popup's field, typed into directly. Otherwise, chosen with a controller: EmuSen's own keyboard. |
+| **Automatic** (the default) | Under Steam, the text popup with a real text field, and Steam's keyboard is asked for. Otherwise, chosen with Enter on a keyboard: the text popup's field, typed into directly. Otherwise, chosen with a controller: EmuSen's own keyboard. *Since 2026-09-27 a row chosen with Enter gets the field alone under Steam too (§4.79.7).* |
 | **Steam** | Always the text popup with Steam's keyboard asked for. |
 | **EmuSen's** | Always EmuSen's own keyboard, as before this setting existed. |
 
@@ -5528,7 +5536,8 @@ Steamworks' own text input is not used, because it needs a real Steam game's ID,
 have.
 
 **EmuSen's own keyboard is unchanged** wherever it is used: the themed view's search, the cheats window, the desktop,
-and every text row when this setting is *EmuSen's*.
+and every text row when this setting is *EmuSen's*. *Since 2026-09-27 the themed view's search follows this setting
+(§4.79.6); the cheats window and the desktop keep EmuSen's keyboard.*
 
 #### 4.79.3 What has not been checked
 
@@ -5536,6 +5545,9 @@ Steam's keyboard was not seen working: the handheld was offline, and the tests n
 there, in Game Mode, is that the keyboard opens over Mistress at the bottom of the screen, that what is typed reaches
 the field, and that the controller goes back to Mistress when it closes (`EmuSen_BigPicture.md` §40.6, P262–P266).
 Until that is checked, *EmuSen's* is the choice that is known to work with a controller.
+*Partly checked 2026-09-27: in Game Mode the keyboard opens and the text reaches the field; it covered half the popup,
+which now moves above it (§4.79.8). Whether the controller comes back to Mistress, and the Desktop Mode case, are still
+unchecked.*
 
 #### 4.79.4 Tests
 
@@ -5543,6 +5555,65 @@ Until that is checked, *EmuSen's* is the choice that is known to work with a con
 environment, the address asked for exactly and nothing launched, typed text kept on Enter and dropped on Escape or B,
 EmuSen's keyboard still opening with *EmuSen's*, the Preferences row, the subtitle, the help bar's words on every row,
 A on the stars, the scroll indicator's place and pixels, and the filled glyphs in the view and the editor.
+
+#### 4.79.5 Button Swap trades X and Y as well (2026-09-27)
+
+Decided 2026-09-27 (`EmuSen_BigPicture.md` §10.1, Q160; the record is §40.13). *Preferences → Controllers → Swap the
+A/B and X/Y buttons* now trades both pairs, as ES-DE's does. With it on:
+
+| Button | Does | Was, before 2026-09-27 |
+|---|---|---|
+| B (East) | choose, launch, select | the same |
+| A (South) | back, close, cancel | the same |
+| X (West) | favourite in a gamelist; add or remove while a collection is edited; *go to* on the slideshow; *Scrape* in the metadata editor; *Space* on EmuSen's keyboard; *Keyboard* on the text popup | the screensaver and *Reset* |
+| Y (North) | start the screensaver from the system view; *Reset* in the metadata editor | the favourite and the rest of X's row |
+
+The help bars and the text hints follow, so the letter drawn is always the button that acts: with an Xbox pad the
+gamelist reads *B Launch, A Back, X Favorite*, the system view *Y Screensaver*, the editor *X Scrape, Y Reset*, and
+EmuSen's keyboard *B Type, A Erase, X Space*. A theme's own button icons move with their function. The keyboard's keys
+(Insert, Delete) and every game's bindings are unaffected.
+
+#### 4.79.6 The themed search follows On-Screen Keyboard (2026-09-27)
+
+Decided 2026-09-27 (Q164; §40.14). *Search…* in the themed gamelist's options now opens what §4.79.2 would open for a
+text row: the text popup titled *Search*, with Steam's keyboard asked for or typed into from a keyboard, or EmuSen's
+keyboard. With the popup, the list is filtered when the text is kept (Enter, or Start on a controller); Escape or B
+leaves the search as it was. With EmuSen's keyboard it filters as each letter is typed, as before. The cheats window
+keeps EmuSen's keyboard whatever the setting, since its codes need the keyboard's Code layout.
+
+#### 4.79.7 Enter on a keyboard never asks Steam (2026-09-27)
+
+Decided 2026-09-27 (Q165; §40.15). With *Automatic*, a text row or the search chosen with **Enter on a physical
+keyboard** always gets the popup's field alone, even under Steam; Steam's keyboard is asked for only when a
+**controller's A** chose it. *Steam* still asks Steam every time, and *EmuSen's* is unchanged.
+
+| Automatic | Not under Steam | Under Steam |
+|---|---|---|
+| chosen with Enter | the field alone | the field alone |
+| chosen with a controller | EmuSen's keyboard | Steam's keyboard |
+
+#### 4.79.8 The text popup above Steam's keyboard (2026-09-27)
+
+Measured on the handheld on 2026-09-27 (§40.16): in Game Mode Steam's keyboard opens over Mistress and types into the
+field, but it covers about the lower half of the screen and hid half of the popup. **Whenever Steam's keyboard is asked
+for, the popup now sits at the top of the screen**, its top a tenth of the way down and its bottom about a third of the
+way (34.7% at 1280×800 and at 1920×1200), clear of the keyboard. With a physical keyboard, or with EmuSen's keyboard,
+it stays centred as before.
+
+
+**Four lines, and higher still (2026-09-27, from the handheld).** With Steam's keyboard up, the one-line field showed too
+little of what was typed. The popup's field is now four wrapping lines (LunaP `MenuTextPopup.Lines`, §195). The taller
+popup would have ended at 47.7% of the height from the old top at 10%, past the 45% the keyboard leaves clear, so
+`PadKeyboard.SteamPopupTop` is now 5%: 40–342 at 1280×800 and 60–513 at 1920×1200, bottom 42.7% at both. The test
+checks the top, the bottom and that the field is four lines tall.
+#### 4.79.9 Tests (2026-09-27)
+
+`SwapAndKeyboardTests` (§40.17), headless, with Steam simulated and nothing launched: both pairs traded in what the
+controller does and what the help draws, in the gamelist, the system view and the editor; the search under every
+setting, from a controller and from Enter, under Steam and not; Enter under Steam getting the field alone while a
+controller's A asks Steam; and the popup's place at both sizes, above 45% of the height with Steam's keyboard and
+centred otherwise, with nothing in it cut off or overlapped. `PadCheatsTests` checks the cheats window keeps EmuSen's
+keyboard. Twenty-three mutants, all caught (§40.18).
 
 ### 4.80 Big picture: the other windows in ES-DE's look (2026-09-27)
 

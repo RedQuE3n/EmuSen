@@ -63,6 +63,7 @@ namespace EmuSen.Mistress.Views
         {
             _themed = new ThemedLibrary(() => UiClock());
             _themedSearch = new TextBox { Name = "ThemedSearchBox", Watermark = "Search titles", FontSize = 22, MinWidth = 420 };
+            PadKeyboard.FollowSetting(_themedSearch, "Search");
             _themedSearch.TextChanged += (_, _) => { _themed.SetFilter(_themedSearch.Text ?? "", UiClock()); ShowThemedSearchBar(); ScheduleThemedFrame(); };
             _themedSearchBar = new Border
             {
@@ -211,7 +212,7 @@ namespace EmuSen.Mistress.Views
         private void ShowThemedSearchBar(bool open = false)
         {
             if (_themedSearchBar is null) return;
-            _themedSearchBar.IsVisible = open || (_themed?.Filter.Length ?? 0) > 0 || OnScreenKeyboard.OpenOver(this) is not null;
+            _themedSearchBar.IsVisible = open || (_themed?.Filter.Length ?? 0) > 0 || TextEntryOpen;
         }
 
         // Asks for the next frame only while something moves, sleeps until a still text's pause ends, and draws nothing when all is still (§15, P39).

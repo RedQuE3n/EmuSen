@@ -273,7 +273,7 @@ namespace EmuSen.Mistress.Views
                 ? $"{Path.GetFileName(path)} [{system.ToUpperInvariant()}]"
                 : Path.GetFileName(path);
 
-        // What the help bar says for the focused row: A's word, whether Left and Right change it, whether West resets it, and whether the focus is on the buttons.
+        // What the help bar says for the focused row: A's word, whether Left and Right change it, whether X resets it, and whether the focus is on the buttons.
         private sealed record RowHelp(string Accept, bool Sideways, bool Reset, bool OnButtons);
 
         private RowHelp? _hinted;
@@ -281,10 +281,10 @@ namespace EmuSen.Mistress.Views
         // ES-DE's help in the editor, in its order, A's word following the focused row as ES-DE's does (Q106, §4.79).
         private static IReadOnlyList<HintEntry> Hints(RowHelp help) =>
         [
-            new(help.Accept) { Button = PadHints.Swapped ? PadGlyphButton.East : PadGlyphButton.South },
-            new("Back") { Button = PadHints.Swapped ? PadGlyphButton.South : PadGlyphButton.East },
-            new("Scrape") { Button = PadGlyphButton.North },
-            .. help.Reset ? [new HintEntry("Reset") { Button = PadGlyphButton.West }] : Array.Empty<HintEntry>(),
+            new(help.Accept) { Button = PadHints.Glyph(PadGlyphButton.South) },
+            new("Back") { Button = PadHints.Glyph(PadGlyphButton.East) },
+            new("Scrape") { Button = PadHints.Glyph(PadGlyphButton.North) },
+            .. help.Reset ? [new HintEntry("Reset") { Button = PadHints.Glyph(PadGlyphButton.West) }] : Array.Empty<HintEntry>(),
             .. help.Sideways ? [new HintEntry("Change") { Button = PadGlyphButton.DPadLeftRight }] : Array.Empty<HintEntry>(),
             new("Choose") { Button = help.OnButtons ? PadGlyphButton.DPadLeftRight : PadGlyphButton.DPadUpDown },
         ];
@@ -602,7 +602,7 @@ namespace EmuSen.Mistress.Views
                 case UiButton.Search:
                     _ = ScrapeAsync();
                     return true;
-                // West (Delete on the keyboard) resets the focused field in a big-screen session (Q101).
+                // X, or Y with the swap (Delete on the keyboard), resets the focused field in a big-screen session (Q101, §4.79.5).
                 case UiButton.Screensaver when _big:
                     if (_focusedField is { } field && CanReset(field)) ResetField(field);
                     return true;
@@ -632,7 +632,7 @@ namespace EmuSen.Mistress.Views
         private Task<bool> AskAsync(string title, string message, string accept, string cancel) =>
             _family is { } family
                 ? Dialogs.MenuConfirmAsync(this, message, accept, cancel, family,
-                    [new("Select") { Button = PadHints.Swapped ? PadGlyphButton.East : PadGlyphButton.South }, new("Choose") { Button = PadGlyphButton.DPadLeftRight }])
+                    [new("Select") { Button = PadHints.Glyph(PadGlyphButton.South) }, new("Choose") { Button = PadGlyphButton.DPadLeftRight }])
                 : Dialogs.ConfirmAsync(this, title, message, accept, cancel);
 
         private void Stop()

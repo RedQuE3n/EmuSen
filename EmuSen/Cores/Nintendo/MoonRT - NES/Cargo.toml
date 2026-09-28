@@ -1,0 +1,25 @@
+[package]
+name = "moonrt"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# MoonRT, the NES core in Rust, behind a C ABI. See Moon_Native.md.
+[lib]
+name = "moonrt"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+
+[profile.release]
+panic = "abort"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+debug = "line-tables-only"
+
+# What ships: release without the line tables a sampler reads - see Mars_Native.md §6.3.
+[profile.dist]
+inherits = "release"
+debug = false
+strip = "debuginfo"

@@ -506,4 +506,52 @@ does is lost, or the loss is written down; the C# core's role is decided.
 
 ## 8. The work, stage by stage
 
-*Nothing is done yet.* Each stage is recorded here as it is proven, as `Mercury_Native.md` §8 records MercuryRT's.
+Each stage is recorded here as it is proven, as `Mercury_Native.md` §8 records MercuryRT's.
+
+### 8.1 Stage 1: the state, byte for byte (done 2026-09-24)
+
+**How the field list was established.** Not by reading the classes. A throwaway reflection walk (`layoutdump`, in the
+probe cache) printed every field the serializer walks, with its type and array length, for a synthetic image of each of
+the sixteen boards. It confirmed §3.1's reading, including the one surprise of the plan: `Cpu._bus` is an
+interface-typed field that is not `[SkipInState]`, so the `Cpu` walk carries a presence byte and the whole
+`MemoryBus` (`OpenBus`, `PendingDmaCycles`, the 2 KB of `Ram`, `StolenCycles`), which the `Bus` walk then writes again.
+`Nrom` has no serialised fields at all; MMC3 has the most (fourteen, one of them the `A12Watcher` class).
+
+**What was built.** The crate is `EmuSen/Cores/Nintendo/MoonRT - NES/`:
+
+- `state.rs`: MercuryRT's codec without the string primitive, which Moon's state does not need;
+- a Rust struct for every serialised class, one `enum` arm per board, and `Skip<T>` for every `[SkipInState]` field
+  the machine still needs (the PPU's line scratch and evaluated sprites, the mixer, the pads, the board);
+- `machine.rs`: the header, then the six walks, with `Cpu::write_state` writing the bus inside itself under `_bus`;
+- `naming.rs`, MarsRT's rule over eight modules, taught to read Rust's raw identifier `r#loop` as C#'s `Loop`;
+- a C ABI (`moon_machine_new`, `_free`, `_load_state`, `_save_state_size`, `_save_state`, `_state_layout`);
+- on the C# side, `Shim/MoonNative.cs` (the loader, `EMUSEN_MOON_NATIVE=0` to turn it off) and `Shim/MoonMachine.cs`
+  (the handle). `EmuSen.csproj` builds the crate beside MarsRT's and MercuryRT's into `obj/moonrt`.
+
+*Order.* The machine's behaviour was written in the same pass (§8.2 proves it), because the structs are the same
+structs. This stage's claim is the state alone: that MoonRT holds a C# state and gives it back, byte for byte.
+
+**A C# exception is a fault, not a panic.** D4's images (§6.2) make C# throw from inside the machine: an index outside
+an array, a division by zero, a clock running backwards. Under `panic = "abort"` the same arithmetic in Rust would kill
+the frontend. MoonRT does each such access through a helper that records the first fault in a thread-local and returns
+zero; the frame, the load or the step then returns a status, and the shim throws C#'s exception type. The machine is
+left where Rust left it, not where C#'s exception left it, which is a divergence only in a machine already broken.
+
+**The oracles, all identical** (`EmuSen.WiseMan/Cores/MoonRtStateTests.cs`, 70 cases; crate tests, 9):
+
+- **Running machines.** All sixteen boards, each with 8 CHR ROM banks and with CHR RAM, ran a program that turns
+  rendering and a pulse note on, counts in RAM, copies the count to PRG RAM and scrolls by it, for 300 frames. The C#
+  state went into Rust and back out byte for byte, and its layout listing matched C#'s own reflection walk line for
+  line: 158–173 fields, 25,294–82,737 bytes.
+- **Noise.** The same 32, with every serialised field of every object, the header's four clocks included, filled with
+  distinct noise.
+- **Bytes no C# writer makes.** Four bools and three class flags of 2 read as C#'s reader reads them, and the re-save
+  equals the C# core's own.
+- **Refusals.** A truncated state, a foreign magic and a wrong version change nothing; an image with no magic and an
+  MMC5 image are refused with C#'s exception types.
+- **D4.** An image with no PRG is refused on NROM, MMC1 and MMC3 with the exception type the C# core throws from
+  `LoadRom`: `IndexOutOfRangeException` on NROM, `DivideByZeroException` on the others.
+- **Real games.** Super Mario Bros., Zelda, Super Mario Bros. 3 and Punch-Out!! are identical at frames 0, 300, 600 and
+  900 with the bench's input, from `EMUSEN_MOONRT_ROMS`, a directory of scratch copies; absent, the case passes unrun.
+
+MOON_STAGE1_MUTANTS

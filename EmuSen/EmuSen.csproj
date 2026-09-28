@@ -75,6 +75,16 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);Cores/Nintendo/MercuryRT - GB/target/**</DefaultItemExcludes>
   </PropertyGroup>
 
+  <!-- MoonRT, the Rust NES core, built and copied the same way; without it the NES runs on the C# Moon - see Moon_Native.md §2. -->
+  <PropertyGroup>
+    <MoonRtDir>$(MSBuildThisFileDirectory)Cores\Nintendo\MoonRT - NES\</MoonRtDir>
+    <MoonRtTarget>$(MSBuildProjectDirectory)/obj/moonrt</MoonRtTarget>
+    <MoonRtFile Condition="$([MSBuild]::IsOSPlatform('Windows'))">moonrt.dll</MoonRtFile>
+    <MoonRtFile Condition="$([MSBuild]::IsOSPlatform('OSX'))">libmoonrt.dylib</MoonRtFile>
+    <MoonRtFile Condition="'$(MoonRtFile)' == ''">libmoonrt.so</MoonRtFile>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Cores/Nintendo/MoonRT - NES/target/**</DefaultItemExcludes>
+  </PropertyGroup>
+
   <!-- A machine without Rust builds the C# cores alone; one with it must build the Rust ones, so a failed cargo step fails the build instead of leaving an old library in place - see Mars_Native.md §1. -->
   <Target Name="FindCargo" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
     <Exec Command="cargo --version" ContinueOnError="true" StandardOutputImportance="low" StandardErrorImportance="low">
@@ -83,7 +93,14 @@
     <PropertyGroup>
       <CargoFound Condition="'$(CargoExitCode)' == '0'">true</CargoFound>
     </PropertyGroup>
-    <Warning Condition="'$(CargoFound)' != 'true'" Text="cargo was not found: MarsRT and MercuryRT are not built, and their consoles run on the C# cores alone." />
+    <Warning Condition="'$(CargoFound)' != 'true'" Text="cargo was not found: MarsRT, MercuryRT and MoonRT are not built, and their consoles run on the C# cores alone." />
+  </Target>
+
+  <Target Name="BuildMoonRt" BeforeTargets="BeforeBuild" DependsOnTargets="FindCargo" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
+    <Exec Condition="'$(CargoFound)' == 'true'" Command="cargo build --profile $(EmuSenNativeProfile) --manifest-path &quot;$(MoonRtDir)Cargo.toml&quot; --target-dir &quot;$(MoonRtTarget)&quot;" StandardOutputImportance="low" />
+    <ItemGroup Condition="Exists('$(MoonRtTarget)/$(EmuSenNativeProfile)/$(MoonRtFile)')">
+      <None Include="$(MoonRtTarget)/$(EmuSenNativeProfile)/$(MoonRtFile)" Link="$(MoonRtFile)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
   </Target>
 
   <Target Name="BuildMercuryRt" BeforeTargets="BeforeBuild" DependsOnTargets="FindCargo" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">

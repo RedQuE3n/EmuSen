@@ -10,10 +10,14 @@ using EmuSen.DianaOS.DianaOS.Var;
 
 namespace EmuSen.Cores.Nintendo.Moon.Debug
 {
+    // Where a target over a mirror sends what must reach the running machine - see Moon_Native.md §2.4.
+    public sealed record MoonDebugHost(Func<string, int, byte> Read, Action<string, int, byte> Write, Action Refresh, Action ApplyCheats, Func<long> FrameCount, Action<int, bool> SetChannelMuted);
+
     // A space backed by a name the core already knows how to read and write - see Moon_Debug.md §2.
     internal sealed class MoonDebugMemorySpace : IDebugMemorySpace
     {
         private readonly MoonCore _core;
+        private readonly MoonDebugHost? _host;
         private readonly string _space;
 
         public string Name { get; }
@@ -21,9 +25,10 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
         public bool IsWritable { get; }
         public bool HasSideEffects { get; }
 
-        public MoonDebugMemorySpace(MoonCore core, string space, string name, bool isWritable, bool hasSideEffects)
+        public MoonDebugMemorySpace(MoonCore core, MoonDebugHost? host, string space, string name, bool isWritable, bool hasSideEffects)
         {
             _core = core;
+            _host = host;
             _space = space;
             Name = name;
             Size = core.SpaceSize(space);
@@ -31,11 +36,13 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
             HasSideEffects = hasSideEffects;
         }
 
-        public byte Read(int address) => _core.ReadSpace(_space, Wrap(address));
+        public byte Read(int address) => _host is null ? _core.ReadSpace(_space, Wrap(address)) : _host.Read(_space, Wrap(address));
 
         public void Write(int address, byte value)
         {
-            if (IsWritable) _core.WriteSpace(_space, Wrap(address), value);
+            if (!IsWritable) return;
+            if (_host is null) _core.WriteSpace(_space, Wrap(address), value);
+            else _host.Write(_space, Wrap(address), value);
         }
 
         private int Wrap(int address) => Size == 0 ? 0 : ((address % Size) + Size) % Size;
@@ -45,6 +52,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
     public sealed class MoonDebugTarget : IDebugTarget, IWriteObserver
     {
         private readonly MoonCore _core;
+        private readonly MoonDebugHost? _host;
 
         private readonly List<IDebugMemorySpace> _spaces = new();
 
@@ -61,9 +69,10 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
         // Injectable only so a test can assert exact bar percentages - see Moon_Debug.md §3.2.
         private readonly Func<(double CpuApuMs, double PpuMs)> _frameTimings;
 
-        public MoonDebugTarget(MoonCore core, Func<(double CpuApuMs, double PpuMs)>? frameTimings = null)
+        public MoonDebugTarget(MoonCore core, Func<(double CpuApuMs, double PpuMs)>? frameTimings = null, MoonDebugHost? host = null)
         {
             _core = core;
+            _host = host;
             _frameTimings = frameTimings ?? (() => (core.LastFrameCpuApuMs, core.LastFramePpuMs));
 
             BuildSpaces();
@@ -88,12 +97,16 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
         public CheatRegistry Cheats => _core.Cheats;
 
         // The Apply button, which must not wait for a frame the pause is not running - see EmuSen_Cheats.md §6.
-        public void ApplyCheats() => _core.ApplyCheats();
+        public void ApplyCheats()
+        {
+            if (_host is null) _core.ApplyCheats();
+            else _host.ApplyCheats();
+        }
 
         public CoverageRegistry? Coverage => _core.Coverage;
         public LabelRegistry? Labels => _core.Labels;
 
-        public long FrameCount => _core.TotalFrames;
+        public long FrameCount => _host?.FrameCount() ?? _core.TotalFrames;
 
         public int MaxSprites => 64;
 
@@ -123,6 +136,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
 
         public void RefreshProviders()
         {
+            _host?.Refresh();
             _cpuRegisters.Refresh();
             _videoRegisters.Refresh();
             _apuRegisters.Refresh();
@@ -155,16 +169,16 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
 
         private void BuildSpaces()
         {
-            _spaces.Add(new MoonDebugMemorySpace(_core, MoonCore.SpaceRam, "RAM", true, false));
-            _spaces.Add(new MoonDebugMemorySpace(_core, MoonCore.SpacePrgRom, "PRGROM", false, false));
-            _spaces.Add(new MoonDebugMemorySpace(_core, MoonCore.SpacePrgRam, "PRGRAM", true, false));
-            _spaces.Add(new MoonDebugMemorySpace(_core, MoonCore.SpaceChr, "CHR", true, false));
-            _spaces.Add(new MoonDebugMemorySpace(_core, MoonCore.SpaceCiram, "CIRAM", true, false));
-            _spaces.Add(new MoonDebugMemorySpace(_core, MoonCore.SpaceOam, "OAM", true, false));
-            _spaces.Add(new MoonDebugMemorySpace(_core, MoonCore.SpacePalette, "PALETTE", true, false));
+            _spaces.Add(new MoonDebugMemorySpace(_core, _host, MoonCore.SpaceRam, "RAM", true, false));
+            _spaces.Add(new MoonDebugMemorySpace(_core, _host, MoonCore.SpacePrgRom, "PRGROM", false, false));
+            _spaces.Add(new MoonDebugMemorySpace(_core, _host, MoonCore.SpacePrgRam, "PRGRAM", true, false));
+            _spaces.Add(new MoonDebugMemorySpace(_core, _host, MoonCore.SpaceChr, "CHR", true, false));
+            _spaces.Add(new MoonDebugMemorySpace(_core, _host, MoonCore.SpaceCiram, "CIRAM", true, false));
+            _spaces.Add(new MoonDebugMemorySpace(_core, _host, MoonCore.SpaceOam, "OAM", true, false));
+            _spaces.Add(new MoonDebugMemorySpace(_core, _host, MoonCore.SpacePalette, "PALETTE", true, false));
 
             // $2002 clears the vblank flag when read and $2007 advances the address, so this one bites.
-            _spaces.Add(new MoonDebugMemorySpace(_core, MoonCore.SpaceCpuBus, "CPUBUS", true, true));
+            _spaces.Add(new MoonDebugMemorySpace(_core, _host, MoonCore.SpaceCpuBus, "CPUBUS", true, true));
         }
 
         public IReadOnlyList<IDebugMemorySpace> GetMemorySpaces() => _spaces;
@@ -337,7 +351,11 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
 
         private static int Scale(int value, int max) => (int)Math.Round(value / (double)max * 100.0);
 
-        public void SetChannelMuted(int index, bool muted) => _core.Apu?.SetChannelMuted(index, muted);
+        public void SetChannelMuted(int index, bool muted)
+        {
+            _core.Apu?.SetChannelMuted(index, muted);
+            _host?.SetChannelMuted(index, muted);
+        }
 
         // A non-destructive peek, unlike ICore.DequeueAudioSamples - see EmuSen_Audio_Sync.md §7.
         public (short[] Samples, int SampleRate) GetAudioSamples() =>

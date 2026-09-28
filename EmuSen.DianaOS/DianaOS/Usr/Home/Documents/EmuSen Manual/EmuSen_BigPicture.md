@@ -10198,3 +10198,133 @@ Written before the mutants ran (`probe/bindings/predictions.txt`).
 - ES-DE's look on a big-screen sheet, which waits for the shared style layer.
 - Clearing a binding from the drawing.
 - Nothing ran on the handheld or with a real pad.
+
+### 42.10 The second stage (2026-09-27)
+
+*Opened on the review of the checkpoint, 2026-09-27 (§10.1):* the drawings were approved and every recommendation of
+Q180–Q185 taken, with two more decisions: leader lines no longer cross the drawing, and the N64's Z gets a default pad
+button, the left trigger. *Decided 2026-09-27 as well, for every window:* nothing may be cut off, overflow its panel, or
+overlap other content at 1280 × 800 or 1920 × 1200; what does not fit is shrunk or reworked. WiseMan (4e45c49d, with
+§40 and §41) and LunaP's `openemu-library` (c20856f, with its §195 and §196) were merged in first, and WiseMan again at
+a8abe77d (Q160's swap of X and Y, and the tests' silent audio) and `openemu-library` at 4c48ba5 during the stage.
+
+- **Lines out of the drawing.** Each label's side, and its line's path, are now worked out from the drawing itself
+  (LunaP §198.2): the line leaves its button by the shortest way out of the drawing that crosses no other button, and
+  goes on to its label from the drawing's edge. The first stage's hand-chosen sides are gone. Before, the N64's cross
+  right arm, Stick Up and Stick Left, and the SNES's cross right arm, ran across much of the shell; now the longest part
+  of any line over a drawing is the Game Boy's cross right arm, down across its lower face, because every way to the
+  right crosses A or B. A LunaP test holds every line of every drawing to at most 0.35 of the drawing's larger side.
+- **The NES pad, the Game Boy and a modern pad** are drawn (LunaP §198.1), in the same way and under the same rule as
+  the first two: the toolkit's own geometry, nothing traced. Every console's tab now shows its drawing.
+- **Z is the left trigger.** SDL has no trigger button, so a trigger past half its travel has always been read as L2 or
+  R2, the N64's Z among them, on every console and whatever a binding file holds (`EmuSen_Input.md` §7.3). The binding
+  was right; the window said "unbound" for it. It now shows "Left Trigger" for L2 and "Right Trigger" for R2, and
+  "*button* or Left Trigger" when a button is bound beside it. Pulling the trigger while rebinding Z takes the button off
+  again, leaving the trigger alone. **No binding file needs to gain anything**: the trigger is not an entry in the file,
+  so an old file and a new one read it the same. The "free keys" rule of §7.4 is for keys and stick clicks, which are
+  entries.
+- **Q185, the pad itself on the General tab.** The Gamepad section now comes first, and beside its switch and its
+  deadzone slider stands the modern pad, drawn without labels, lit by player 1's own buttons as SDL reads them whatever
+  any console's bindings say; its triggers fill as they are pulled, its sticks move, and a dashed ring on each stick is
+  the deadzone, which follows the slider. A connected pad's own letters, where SDL knows them, are printed on its face
+  buttons. The stale hint that neither console reads an analog axis now says what the switch does.
+- **ES-DE's look (the shared layer of §41).** On a big-screen sheet the window is framed as ES-DE's menus are
+  (`MenuFrameFor` names it): Barlow Condensed, ES-DE's greys, the rounded panel at 0.94 of the screen's width, the title
+  band, and a help bar of its own: *Rebind*, *Test buttons*, *Back*, and L1/R1 *Console*, or while testing *Hold to stop
+  testing*; its Y glyph follows the A–B swap, which since Q160 trades X and Y as well. The desktop keeps LunaP's normal
+  theme.
+
+### 42.11 Q184, decided: the room on a big-screen sheet
+
+In the frame the drawing has about 370 pixels of height at 1280 × 800: the panel's title band, the tab strip and the
+help bar take the rest. What was done with it:
+
+- the words above the tabs, the line under the drawing, and the Close and Test Buttons buttons are not shown in the
+  look: the help bar does their work, and a label says "Press a key" and "Press a button" itself while it listens;
+- Reset to Defaults, which resets every console at once, moves to the end of the General tab, and the footer row under
+  the tabs is shown only when there is a conflict to report, so the row no longer takes height from every drawing;
+- the panel is 0.94 of the screen's width, the widest the frame allows, so a wide drawing is not bounded by width as
+  well;
+- the labels' size may now rise to `height / 420` of the space rather than `height / 520` (LunaP §198.2). Measured on
+  the pictures of the N64 tab framed at 1280 × 800: the labels were 34 pixels tall, with their binding text at about
+  eight pixels, before these changes, and are 44 pixels tall, with the text at about eleven, after them; the drawing is
+  smaller and still reads as its pad.
+
+Two columns of labels a side, the other option recorded at Q184, was not needed.
+
+### 42.12 Nothing cut off: what was found and fixed
+
+The first pictures of the framed window broke the new rule in two places, both on the General tab, which the first
+stage had not pictured on a sheet:
+
+- **The hotkey buttons were cut.** The rows have fixed column widths, chosen on the desktop (§4.6); in the look's larger
+  upper-case face, "REBIND KEY" showed as "REBIND K" and "CLEAR" as "CL", and "Pause / Resume" ran into its key. In the
+  look every table's columns now take their widest cell, shared by the table's rows (`SharedSizeGroup`), with a gap
+  between them; the desktop keeps its fixed columns.
+- **The NES's B line was struck through the "B" printed under the button**, since words on a shell were not in the
+  routing; they are now (roughly boxed) things a line may not cross, and the SNES's Select and Start lines moved above
+  their printed names for the same reason.
+- **The Gamepad section's first picture showed the pad's labels at six pixels**, the drawing being bounded by a 300-pixel
+  height with nineteen labels around it. The tester of the pad itself needs no labels (it shows the pad, not bindings),
+  so LunaP gained `ShowsLabels` and the drawing fills its box.
+
+`In_the_look_the_window_is_a_menu_whose_help_bar_is_its_own_and_no_word_is_cut` walks every tab at both sizes and fails
+for any single-line text narrower than its words. It also caught Reset to Defaults vanishing altogether on its first
+version of the move above (the button bar is an items control, not a panel, so the button was never moved, and the row it
+was in was hidden). Its first run reported the deadzone row's "Stick deadzone" and "50%";
+both were false alarms, the measurement counting the text's margin as width, and the test now subtracts it. It is not
+the window-look work's audit, which was not in WiseMan at this merge; the window will be run under that audit when it
+lands.
+
+**Pictures** (§42.4's tool, now every console and General, idle and lit, both sizes, desktop and sheet: forty in
+`~/.cache/emusen/bigpicture/png/bindings/`). The tool now waits for a sheet to finish its opening animation before the
+idle picture: the first set caught some panels part-way open. Every one was looked at for anything cut, overflowing or overlapping. Two
+things are left, and neither is this window's alone:
+
+- a scrolling area shows part of a row at its lower edge when its content does not end there (the General tab's
+  hotkey table under the fold, on the desktop and on the sheet), which is what scrolling is; whether the audit counts it
+  is Q186;
+- on a framed sheet, the look's focus box around the "Use the left stick as a d-pad" switch is drawn through the foot of
+  its words at both sizes; that is the look's switch style (LunaP §196), and is Q187. Giving the switch more height in
+  this window did not move the box, so it was left to the style.
+
+### 42.13 Tests
+
+LunaP's `ControllerDiagramTests`: 51 cases, every drawing test now over all five layouts, and the line test above. LunaP
+§198.9 also measured the plain sheet's rows that Q175 asked about: none is lost, and the plain frame was left as it is.
+Mistress's `ControllerBindingsDiagramTests`: 21 cases, new ones for Z and the left trigger, the General tab's pad, and the
+look at both sizes; the click and pad-reach cases now run on all four consoles. `SheetLookTests`' desktop case now holds
+that the bindings are framed in the look.
+
+### 42.14 Mutants of the second stage
+
+Fifteen more, run by §42.6's runner (`probe/bindings/mutate.py`, its C and R series), the predictions written first
+(§42.15). **C1–C8, Mistress's, all caught on the first run:** the L2 label ignoring its trigger; a trigger pulled while
+capturing ignored; the pad tester never updated; the deadzone ring not following the slider; the window not framed in
+the look; the look's help bar not the window's; the look's columns kept at the desktop's widths; Close kept in the look.
+**R1–R7, LunaP's: four caught on the first run and three survived** (LunaP §198.10 has each): R1, a line's way out
+ignoring the drawing it crosses, was caught only by a label-size test, by accident; R2, a way out through another
+button, and R3, a band's room ignored, were not caught. After tests comparing each line with the straight ways out,
+checking that no line crosses another button, and counting each band's labels, all three were caught. The first of
+those tests also found a real fault before it was run against a mutant: the modern pad's cross had no way out that
+crossed no other button, and its up arm's line crossed the left bumper; the bumpers were shortened.
+
+**Result: 27 of 30 caught on the first run over both stages' new mutants (C and R), 30 of 30 after.** Mutants of the
+first stage whose code this stage rewrote (L2, L3, L8, L9 and L16 no longer match their snippets; B12 matches twice) were
+not rerun.
+
+### 42.15 Predictions
+
+| # | Prediction | Outcome |
+|---|---|---|
+| P285 | Of 15 mutants (C1–C8, R1–R7), at least 13 are caught on their first run | **Wrong**: 12 |
+| P286 | R3, a band's room ignored, is caught by the label overlap and edge checks on the modern pad | **Wrong**: it survived; the row shrink of LunaP §198.2 made an over-full row fit |
+| P287 | R6, the stick ring never drawn, is caught only by the pixel hash in the host test | **Held** |
+
+### 42.16 Open questions
+
+- **Q186, a scrolling area's last row.** A scroll viewer shows part of a row at its lower edge. Options: count it as cut
+  and snap scrolling to whole rows, as ES-DE's menus do; count it as scrolling. **Recommendation:** the latter for
+  windows that are not menus, decided once with the window-look audit rather than here.
+- **Q187, the look's switch focus box.** It crosses the foot of a switch's words at both sizes. **Recommendation:** fix it
+  in LunaP §196's style, with the window-look work, which owns it.

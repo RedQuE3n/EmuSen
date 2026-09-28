@@ -313,7 +313,7 @@ namespace EmuSen.Mistress.Input
                 .ThenBy(e => System.Math.Round(e.TranslatePoint(default, page)?.Y ?? 0)).ThenBy(e => e.TranslatePoint(default, page)?.X ?? 0)
                 .FirstOrDefault();
 
-        // Whether all of a control shows, so focusing it scrolls nothing; one cut at the edge comes after, as focusing it would move the page (§4.81).
+        // Whether all of a control shows, so focusing it scrolls nothing; one cut at the edge comes after, as focusing it would move the page (§4.83).
         private static bool WhollyInView(Visual e, Control page)
         {
             for (ScrollViewer? area = e.FindAncestorOfType<ScrollViewer>(); area is not null && IsWithin(area, page); area = area.FindAncestorOfType<ScrollViewer>())

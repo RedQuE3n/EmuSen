@@ -23,7 +23,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Mistress.BigPicture
 {
-    // Every window a big-screen session shows, framed as a menu at 1280 by 800 and 1920 by 1200, audited for anything cut, past its panel or drawn over something else - see EmuSen_Settings_Reference.md §4.81.
+    // Every window a big-screen session shows, framed as a menu at 1280 by 800 and 1920 by 1200, audited for anything cut, past its panel or drawn over something else - see EmuSen_Settings_Reference.md §4.83.
     [Collection(TestCollections.ProcessGlobals)]
     public class WindowFitAuditTests : IDisposable
     {

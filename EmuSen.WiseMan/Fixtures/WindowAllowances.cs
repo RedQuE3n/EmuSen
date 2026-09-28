@@ -7,7 +7,7 @@ using EmuSen.Mistress.Views;
 
 namespace EmuSen.WiseMan.Fixtures
 {
-    // The cuts the fit audit accepts per window, each because its full text is reachable another way - see EmuSen_Settings_Reference.md §4.81.
+    // The cuts the fit audit accepts per window, each because its full text is reachable another way - see EmuSen_Settings_Reference.md §4.83.
     public static class WindowAllowances
     {
         private static bool In(Control c, string name) => c.GetVisualAncestors().OfType<Control>().Any(a => a.Name == name);

@@ -145,7 +145,7 @@ namespace EmuSen.Mistress.Views
             ShowGames();
             SheetLook.SelectOnFocus(GamesList);
             SheetLook.SelectOnFocus(SystemsList);
-            // The filter and Load side by side above the games, so the list keeps the room (§4.81).
+            // The filter and Load side by side above the games, so the list keeps the room (§4.83).
             if (GameFilter.Parent is DockPanel games)
             {
                 Avalonia.Thickness filterMargin = GameFilter.Margin;
@@ -214,7 +214,7 @@ namespace EmuSen.Mistress.Views
 
             GamesList.ItemsSource = _games.Select(g => g.Game).ToList();
 
-            // On a big-screen sheet the chosen system is the row beside it, so the heading need not name it again (§4.81).
+            // On a big-screen sheet the chosen system is the row beside it, so the heading need not name it again (§4.83).
             GamesHeaderText.Text = _selectedSystem is null
                 ? "Games"
                 : _inLook ? $"Games  ({_games.Count:N0})" : $"Games in {_selectedSystem}  ({_games.Count:N0})";

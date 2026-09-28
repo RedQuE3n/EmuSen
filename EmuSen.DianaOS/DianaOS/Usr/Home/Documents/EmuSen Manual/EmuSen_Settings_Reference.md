@@ -5627,6 +5627,9 @@ Decided 2026-09-27 (`EmuSen_BigPicture.md` §10.1):
 This section is the player's account. The plan's record, its predictions, questions and pictures are
 `EmuSen_BigPicture.md` §41, and the toolkit's pieces are LunaP's §196.
 
+*Superseded in part on 2026-09-27:* every window of §4.80.6's list is now framed, once the fit audit passed it; §4.83
+has what changed and why. What follows is the checkpoint's account, kept as it was.
+
 **Where it stands.** The look is built as one style layer. Three windows have been checked in it: the scraping status,
 Active Cheats and the Cheat Database. The rest keep the plain sheet until their look is approved (§4.80.6).
 
@@ -6034,3 +6037,166 @@ Nothing in this section ran on a Mac. What has to be confirmed there:
   access, the key that explains why has to be added;
 - the `osx-x64` bundle on an Intel Mac, or under Rosetta;
 - a bundle published on Linux, zipped, unzipped on the Mac and signed there by hand.
+
+### 4.83 Big picture: every window in ES-DE's look, and nothing cut off (2026-09-27)
+
+Decided 2026-09-27, for every window a big-screen session frames as a menu: nothing may be cut off, run past its panel
+or be drawn over other content. *"We cannot have window features cutoff. If they dont fit, shrink them or rework
+them."* This section is the player's account, and the account of the audit that holds every window to that rule. The
+plan's record, with its predictions, mutants and pictures, is `EmuSen_BigPicture.md` §43. The toolkit's side is LunaP's
+§196.9 and §196.10.
+
+**Where it stands.** Every window of §4.80.6's list is now framed in ES-DE's look, and so is Controller Bindings
+(§4.81.1). A window is framed only once the audit passes it at 1280×800 and 1920×1200 and its pictures have been looked
+at; a test holds the list of framed windows to the list the audit opens. The desktop's windows are unchanged.
+
+#### 4.83.1 What the player sees
+
+The windows framed in this part are:
+
+- Find by Name and Use Another Game's Cover;
+- the gamelist filter and the folder editor;
+- Graphics Settings and Shaders;
+- the resume question, the rewind reel and a screenshot;
+- the theme browser, a theme's detail and its About.
+
+Each looks as §4.80.1 describes. Where the look's larger words did not fit, the window was laid out again:
+
+- **A theme's detail.** The screenshot, its caption and Previous and Next are at the left; the facts are in a column of
+  their own beside them; the licence and every button are in rows below. The panel is 0.8 of the screen. The first
+  framing drew the screenshot over the facts and the caption over the buttons.
+- **The theme browser.** The list and the preview are two columns. The screenshot is fitted into its column with its
+  words under it, the preview scrolls up and down, and Details and Close are a row of their own. The panel is 0.85 of
+  the screen. The first framing drew the screenshot over the list and past the panel's edge.
+- **Shaders.** The two columns are the same width, so the search fits beside its category. *Download Pack* (or
+  *Update Pack*) stands alone under the list, and the pack's description is the panel's footer, with the folder the
+  presets are in. *Use This Shader* and *Reset All* are beside the preset's name, and Close is at the right of the tabs.
+  The panel is 0.9 of the screen. The first framing ran the search box past its bar and the pack's words past the panel.
+- **The rewind reel.** The preview is 200 pixels high so the strip and the buttons fit, and the help bar names the
+  reel's own buttons: *Step*, *Five Seconds* (L1 and R1), *Oldest* (L2), *Now* (R2), *Rewind Here* and *Cancel*. The
+  strip scrolls sideways by design, and Left and Right step through every moment.
+- **The Cheat Database** (Q170). Its two lines of introduction are in the footer before the licence's attribution, four
+  lines in all, and the two lists have the room. The filter and *Load* are one row above the games.
+- **Active Cheats.** The General page is two columns. The table never scrolls sideways; a description or code too long
+  for its cell ends in an ellipsis and is whole in the footer while its row is chosen.
+- **Scraping.** The panel is 0.9 of the screen. A recent game's line ends in an ellipsis at the column's edge and is
+  whole in the footer while its row is chosen. There is no empty square where the game's picture goes before one
+  arrives (Q177).
+- **A row the pad reaches is the chosen row** (Q178) in the database's two lists, the cheats' table and the recent
+  games, so a button or a footer that follows the choice follows the row in view: *Load into Active Cheats* is
+  enabled as soon as the focus is on a game.
+
+In every framed window:
+
+- **A scrolling area fades at an edge while more lies beyond it** (Q186), so a row the edge cuts reads as *more this
+  way* rather than sliced. The row with the focus is never faded: the fade stops where it begins, and a row the focus
+  brings into view sits flush with the edge. A strip that scrolls sideways, the rewind reel's, fades at its sides the
+  same way.
+- **A focused switch or check box** has the black bar behind it, as a focused row has, instead of an outline drawn
+  through its words (Q187).
+- **The two shoulder buttons** are one glyph in the help bar, each shoulder as large as any other button's (Q174).
+  Controller Bindings' *Console* now uses it too.
+- **A controller drawing's labels** are set closer, so their words stay large. At 1280×800 the Nintendo 64's key and
+  pad lines went from 11.6 pixels to 16.0, and the other consoles' from 14.0 to 17.1; at 1920×1200, from 17.8 and 21.4
+  to 24.6 and 25.6.
+
+#### 4.83.2 The fit audit
+
+`FitAudit.Check` (WiseMan) looks at one framed sheet as it is laid out. Its frame is the menu panel's rectangle, and it
+walks what the window put in the panel. It skips a popup, which opens over the window on purpose, anything with no
+opacity, and anything clipped away entirely. It reports:
+
+- **past its panel**, or past its nearest clipping or scrolling ancestor, for any control the window placed and any
+  words or picture. A scrolling area excuses it only along the axis the pad scrolls, up and down; overflow past a
+  scroller's side is cut, since a pad never scrolls sideways;
+- **words past their** button, toggle, tab, dropdown or row;
+- **overlap** between two drawn controls a player reads or presses (words, pictures, buttons, fields, sliders,
+  switches, rows, tabs, meters), neither inside the other, by more than a pixel either way;
+- **scrolls in too little room**: a scrolling area under two rows of 42 design pixels;
+- **cut at a scrolling edge with no fade**: a drawn control sliced by an edge that does not fade, at the top or foot of
+  an area, or at a side of one that scrolls only sideways (Q186);
+- **cut with an ellipsis**, **runs past its box** and **cut at the foot**, for words;
+- **too small to read**: words under `FitAudit.SmallestText`, 16 design pixels (a screen pixel at 1280×800, four
+  fifths of the look's small text), and a controller drawing's label lines by the size the drawing reports;
+- **title cut** and **footer cut**, from the panel.
+
+The slack is a pixel, or a pixel and a half at a menu's scale above one, where layout rounds in the scaled content's own
+units: at 1920×1200 two edges measured 1804 and 1806.
+
+**Allowances.** A cut the audit accepts is named, with where the whole text is:
+
+- a text box scrolls its own text, and the caret and the on-screen keyboard reach all of it;
+- a cheat's description or code cut in the table is whole in the footer while its row is chosen;
+- a recent game's line cut in the list is whole in the footer while its row is chosen;
+- the rewind reel's strip scrolls sideways by design, fades at a side with more beyond it, and Left and Right reach
+  every moment.
+
+**The windows it opens.** `WindowFitAuditTests` opens every framed window at both sizes, in-game over a running
+synthetic game or themed over the synthetic theme. Some windows are opened in more than one state:
+
+- Active Cheats on each of its two pages, and Shaders on a 944-parameter preset with its sliders;
+- Use Another Game's Cover with covers;
+- Controller Bindings on every tab.
+
+`WindowFitScrapeAuditTests` opens the scraping status part way through a run and finished, and Find by Name with
+results, over the fake ScreenScraper. With `EMUSEN_WINDOW_FIT_PNG=<folder>` each case also saves what it audited to
+`~/.cache/emusen/probe/window-look/trials/<folder>/`, for the eye's second check.
+
+#### 4.83.3 What it found
+
+Before any rework, three windows were framed on trial and the audit run over them. It failed each, and its output is
+kept in `~/.cache/emusen/probe/window-look/audit/`:
+
+| Window | Faults | What they were |
+|---|---|---|
+| a theme's detail | 39 | the screenshot over six lines of facts; the licence over the caption, Previous and Next; two things past the panel |
+| the theme browser | 18 | the screenshot over the list's rows and past the panel; Close over the author's line; an empty line over the first row |
+| Shaders | 7 | the category over the search box, and the box past its bar; the pack's words past the panel and past their box |
+
+These were the faults seen in those windows' pictures, and the audit reported every one. After the reworks of §4.83.1,
+every case passes with no fault, at 1280×800 and at 1920×1200. That is 22 window states in all: 19 in `WindowFitAuditTests`
+and 3 in `WindowFitScrapeAuditTests`, with Controller Bindings' five tabs audited in its one case.
+
+Controller Bindings, audited on every tab, passed the rules the audit had then. Its pictures showed the Nintendo 64
+labels' small words, which measured 11.6 design pixels at 1280×800. The small-text rule was added for them, and would
+have failed them. LunaP's compact labels (§196.10) raised them to 16.0, which is the floor itself, with no margin
+(§4.83.5).
+
+Looking at the pictures found one more cut the rules allowed: the rewind reel's first tile was sliced at the strip's
+side, since the reel's allowance excused its sideways overflow. The sideways fade and the side check came from that.
+With the fade switched off, the audit reports the reel at both sizes.
+
+#### 4.83.4 Tests
+
+- **`FitAuditTests`** (WiseMan, headless): eleven cases, one for each fault made on purpose on a framed sheet:
+  - a sheet that fits passes;
+  - a picture over words is an overlap;
+  - a control wider than the panel is past it, and words wider than their button are past it;
+  - words that run past their box, or end in an ellipsis, are cut;
+  - a row scrolled below a list is reachable, but text past a scroller's side is not;
+  - a list in under two rows is too little room;
+  - a title or footer too long for the panel is cut;
+  - a list sliced at its foot, or a strip at its side, with no fade is flagged;
+  - words at 12 pixels, or a Nintendo 64 drawing's labels squeezed into 260 pixels, are too small to read.
+- **`WindowFitAuditTests`** and **`WindowFitScrapeAuditTests`**: the audit over every framed window (§4.83.2). Also a
+  case that the windows `MainWindow.FramedWindows` names are exactly the windows the audit opens.
+- **`SheetLookTests`**: the database's footer is its introduction and then the attribution, uncut, and a game row the
+  pad reaches is chosen, with *Load* following it.
+- **`ControllerBindingsDiagramTests`**: the help bar's entries are *Rebind*, *Test buttons*, *Back* and *Console*.
+- **LunaP**: four cases for the fade, the switch's focus, the shoulder pair in a help bar and the compact labels
+  (§196.10).
+- **Mutants**: `EmuSen_BigPicture.md` §43.
+
+#### 4.83.5 What it does not cover
+
+- **Only the states the tests open.** A window in a state no case puts it in is not audited. Examples are a theme with
+  a very long name, a cheat list of a hundred rows, or a shader preset whose parameter names are long.
+- **Only geometry.** The audit does not judge contrast, colour or whether a layout reads well; the pictures are for
+  that. It measures words by their font size, so a condensed face and a wide one of the same size count the same.
+- **Words it cannot see.** It sees `TextBlock`s, the panel's title and footer through the panel's own reports, and a
+  controller drawing's labels through `LabelTextSize`. Other words a control draws itself are not measured. That includes
+  the help bar and the words printed on a drawn controller (*START*, *Z*), which stay at the drawing's scale.
+- **The Nintendo 64 labels meet the floor with no margin.** A longer binding name widens the drawing's top row, and the
+  labels then shrink below 16 pixels. The audit would fail, since it measures the drawing as it is shown, but only for
+  the bindings the case uses.
+- **Hardware.** No real pad, keyboard or handheld was used; everything here ran headless.

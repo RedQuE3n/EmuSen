@@ -10333,3 +10333,231 @@ not rerun.
   windows that are not menus, decided once with the window-look audit rather than here.
 - **Q187, the look's switch focus box.** It crosses the foot of a switch's words at both sizes. **Recommendation:** fix it
   in LunaP §196's style, with the window-look work, which owns it.
+
+## 43. Every window in ES-DE's look, second part: the fit audit, the other windows, and the bindings window's faults in the style layer (2026-09-27)
+
+*Built on branch `bigpicture-window-look` after §41's checkpoint was merged (WiseMan `4e45c49d`, LunaP `c20856f`).
+WiseMan was merged in again at `53201508` and `6b99ec3b`. LunaP's `window-look` merged `openemu-library` at `661148e`
+and `8991a6b`.* Three decisions of 2026-09-27 frame this part:
+
+- §41.10's recommendations were accepted;
+- the rule: nothing in any window may be cut off, run past its panel or overlap other content. *"We cannot have window
+  features cutoff. If they dont fit, shrink them or rework them."*;
+- a window is framed as a menu only once an audit passes it at both sizes and its pictures have been looked at.
+
+The player's account is the settings reference §4.83, and LunaP's is its §196.9 and §196.10.
+
+**Numbering.** Predictions from P288 and questions from Q188. P287 and Q187 were the highest in every tree on this
+machine when this section was written. Q186 and Q187 were §42.16's, and are answered here.
+
+### 43.1 The audit, and its proof
+
+The audit (`FitAudit`, §4.83.2) was built before any window was reworked. It was then made to fail on purpose on the
+three windows whose trial framings had been seen broken: a theme's detail, the theme browser and Shaders. Its output
+is kept as the proof, in `~/.cache/emusen/probe/window-look/audit/trial-*.txt`:
+
+- a theme's detail: 39 faults (37 overlaps, 2 past the panel);
+- the theme browser: 18;
+- Shaders: 7.
+
+Every fault the pictures had shown is in those lists (§4.83.3 has them by kind). Each rule also has a self-test that
+makes its fault on purpose (`FitAuditTests`, eleven cases), and a mutant that removes the rule (§43.6).
+
+Trial renders were kept out of the pictures' folder. They went to `~/.cache/emusen/probe/window-look/trials/` and were
+deleted at the end. `png/window-look/` holds only `before/` and the audited `after/`.
+
+### 43.2 The windows
+
+The twelve windows §41.9 left were framed, together with the scraping status's running and finished states and Find by
+Name's results. §4.83.1 has what changed in each. Three had to be laid out again, not merely restyled:
+
+- a theme's detail: the screenshot at the left, and the facts in their own column;
+- the theme browser: two columns, with the screenshot fitted into its own;
+- Shaders: the pack's words in the footer, the preset's buttons beside its name, and Close in the tab row.
+
+The accepted questions:
+
+- **Q170** is built. The database's introduction is in the footer before the attribution, four lines, and the
+  footer is never cut: `MenuPanel.IsFooterCut` says whether it is, and the audit reports it.
+- **Q173** stands as it was: the file dialogs stay hidden.
+- **Q174** is built: one glyph for the two shoulders (LunaP §196.8). In a help bar the glyph is two squares wide, each
+  shoulder at full size (§196.10).
+- **Q175** was sought and not found. A list at the foot of a plain sheet at scale 1.5 built every row (LunaP §196.9),
+  as §42.10 also measured at four heights.
+- **Q177** is built: no empty picture slot.
+- **Q178** is built, per list, by `SheetLook.SelectOnFocus`, in the database's lists, the cheats' table and the recent
+  games. A first version in the pad router, which selected any focused row in any list, changed the shader shown during
+  a pad walk of Shaders. `PadSettingsWindowTests` failed on it, and it was taken out.
+- Q171, Q172 and Q176 carried no change.
+
+**Lines cut at an edge.** A recent game's line and a cheat's cell end in an ellipsis and are whole in the footer while
+their row is chosen. The audit accepts these two by name (§4.83.2's allowances), and nothing else.
+
+Faults found on the way, each by the audit or a picture before its fix, are in LunaP §196.9 where the toolkit changed:
+
+- a long title cut;
+- a path in the footer upper-cased;
+- a button's control content shown by its type's name;
+- an open dropdown scrolling the Graphics page by 8 and then 372 pixels;
+- a scroll bar's arrows stretched to a button's height;
+- a slider over its Reset button.
+
+Two were in Mistress:
+
+- turning a tab moved the page by 32 pixels, since the router's first control on the new page was one cut at its edge.
+  It now prefers a control wholly in view;
+- at 1920×1200 the audit reported an edge at 1806 against a limit of 1804, which was layout rounding at the menu's
+  scale 1.5. The slack is now a pixel and a half there.
+
+### 43.3 The controller bindings, framed by their own overhaul (§42)
+
+§42.16 left two faults to the style layer, and a third was seen in its pictures:
+
+- **Q186, decided: fade.** A scrolling area fades the last 36 units of an edge while more lies beyond it. The fade
+  stops where the focused row begins. The alternatives, and why they were not taken, are in LunaP §196.10. The audit
+  treats every scrolling area the same way: a control sliced by an edge that does not fade is a fault.
+
+  The first version kept the focused row clear of the fade by making every request to bring a control into view 36
+  units taller. It failed two of `PadSettingsWindowTests`' cases, which pass without it:
+  - a 944-parameter preset's first slider could no longer be reached;
+  - a typed parameter search was found empty after walking back to its preset.
+
+  Switching the two halves on and off separately placed the cause in the widening, not in the fade: with the widening
+  off and the fade on, both passed, and with the fade off and the widening on, both failed. Every move of the focus near
+  an edge scrolled the area, and so changed where the next press went. An attempt to make `PadAudit`'s walk start its
+  replay from the explored state instead, which kept the widening, failed the search case even with the widening off. It
+  was reverted. The fade now ends at the focused row, and the focus behaves exactly as before.
+- **Q187, decided: the bar.** A focused switch or check box has no outline. The near-black bar behind it shows the
+  focus, as it does for a row and a push button.
+- **Q174, again.** The window's help bar named the shoulders as two entries, *LB* with no words and *RB CONSOLE*. It now
+  has one *Console* entry with the pair's glyph.
+
+**The Nintendo 64's small words.** The audit ran over the window at both sizes, every tab. Measured at 1280×800 in the
+framed window, the labels' key and pad lines were:
+
+- 11.6 pixels on the Nintendo 64, and 14.0 on the NES, Game Boy and Super NES, beside 20-pixel text everywhere else;
+- at 1920×1200, 17.8 and 21.4.
+
+The pictures agreed: *Right stick* was about 7 pixels high in its capitals. It was too small to read from arm's length on
+a handheld, and grew. The labels could not grow within the drawing, since the drawing shrinks them until its tallest
+column fits, and the Nintendo 64's right column holds five. So LunaP gained compact labels, which the look turns on
+(§196.10). They measured 16.0 and 17.1 at 1280×800, and 24.6 and 25.6 at 1920×1200.
+
+The audit gained the rule that holds them there: words under 16 design pixels fail. Sixteen is four fifths of the
+look's small text (20). It was chosen before the
+final label spacing, and the spacing was then tightened to meet it (§43.5, P288).
+
+### 43.4 Tests
+
+- **`FitAuditTests`**, eleven cases, one for each rule made to fail on purpose (§4.83.4).
+- **`WindowFitAuditTests`**: 38 cases, 19 window states at two sizes, and the case that the framed windows are exactly
+  the audited ones. **`WindowFitScrapeAuditTests`**: 6 cases, three states at two sizes. All pass, with no fault.
+- **`SheetLookTests`**: the database's footer. The Q178 case enters the games list from outside it, so its first row is
+  reached; that is where the defect was. Its first version reached the second row, which the list's own movement
+  selects, and so passed without the change (§43.6, R8). The scraping status's case also holds that the picture slot
+  shows only with a picture (Q177).
+- **`ControllerBindingsDiagramTests`**: the help bar's four entries.
+- **LunaP**: the fade along both axes, the switch's focus under a host outline, the pair in a help bar, and the compact
+  labels (LunaP §196.10). Its suite is 1,521 tests, all passing.
+
+**The narrow run** is recorded in §43.8.
+
+### 43.5 Predictions
+
+| # | Predicted | Found | Verdict |
+|---|---|---|---|
+| P288 | *(worked out before the first compact build)* Compact labels with a 30-unit leader gap bring the Nintendo 64's lines to about 16.0 pixels at 1280×800, from the height the tallest column needs | 15.7 | **wrong** by 0.3; the gap went to 26 and the lines measured 16.0 |
+| P289 | *(an assumption at the time, not written down before the run)* Widening a request to bring a control into view changes nothing a pad test sees | two pad cases failed (§43.3) | **wrong**; the design changed |
+
+### 43.6 Mutants
+
+Thirty-seven, one at a time, by `~/.cache/emusen/probe/window-look/mutate_fit.py`. It uses §41.7's protocol: a state
+file before each mutant, any leftover restored at the start, and every restored file touched. Each mutant names the
+tests that should catch it. No prediction of the count was written before the run.
+
+**Thirty-two were caught on their first run, and five survived. All thirty-seven were caught after the tests below were
+strengthened.**
+
+| # | Rule broken | First run | After |
+|---|---|---|---|
+| F1–F10 | each rule of the audit taken out: past its panel; words past their button; sideways scrolling counted as reachable; overlap; too little room; a sliced foot with no fade; an ellipsis; small words; a cut title; a cut footer | all caught, each by its own self-test | — |
+| F11 | a strip sliced at its side ignored | caught | — |
+| R1–R3 | Theme Detail, Theme Browser, Shaders not reworked | caught by the window audit | — |
+| R4 | the scraping status at a menu's width | **survived** | caught by the scraping status's frame case. The runner had named only the window audit, under which the narrower panel still fits |
+| R5 | the cheats' table scrolls sideways | caught | — |
+| R6 | the database's introduction not in the footer (Q170) | caught | — |
+| R7 | an empty picture slot kept (Q177) | **survived** | caught, once the scraping status's case held the slot's visibility to its picture |
+| R8 | a game row reached without being chosen (Q178) | **survived** | caught, once the case entered the list from outside (§43.4). The defect was then reproduced: with the change removed, the picture tool's *cheat-database-game-focused* showed the row focused and *Load* disabled |
+| R9 | the reel's preview at its desktop height | caught | — |
+| R10 | the bindings' help bar naming LB and RB apart (Q174) | caught | — |
+| R11, R12 | a window framed with no audit case; the bindings left unframed | caught | — |
+| R13 | the reel's strip not faded at its sides | caught by the window audit | — |
+| L13–L16 | no edge fades; the fade over the focused row; a text box's scroller fades; a focused switch with no bar | caught | — |
+| L17 | a switch keeps the stock outline (Q187) | **survived** | caught, once the case put a host style with an outline above the look (LunaP §196.10) |
+| L18, L19 | the pair in one square however wide; the help bar giving the pair one square | caught | — |
+| L20–L22, L24 | the look not setting labels close; plain spacing; plain line pitch; the plain size reported | caught | — |
+| L23 | compact labels keep the plain height cap | **survived** | caught by a Super NES case bound by the cap |
+| L25 | a sideways strip never fades | caught | — |
+
+R13, F11 and L25 were written after the first thirty-four ran, when the pictures showed the reel's sliced tile (§43.7).
+They were run once each and all were caught.
+
+### 43.7 Pictures
+
+In `~/.cache/emusen/bigpicture/png/window-look/`:
+
+- `before/` is §41.8's, from the unmodified tree, and was kept;
+- `after/` was regenerated from the final build, 64 pictures, and holds only windows that pass the audit.
+
+`after/` covers every framed window at 1280×800 and 1920×1200, the themed ones over the synthetic theme and over Art Book
+Next. It adds `controller-bindings-*`, `controller-bindings-general-*`, `controller-bindings-switch-focused-*` and
+`controller-bindings-n64-*`.
+
+Every picture was looked at. Three things were seen:
+
+- **The rewind reel's first tile was sliced** at the strip's left edge, *".87 s ago"*. The audit's allowance had
+  excused the strip, since it scrolls sideways. That was a cut the rule forbids, so the fade was extended to areas that
+  scroll only sideways (LunaP §196.10), and the audit now checks the sides of such an area whatever its allowances.
+  The audit, with the sideways fade switched off, reported the reel at both sizes; with it on, nothing.
+- **The main window's status line**, under the sheet, shows the performance counters while a game runs unpaused, and is
+  cut at the window's right edge. It is not a framed window and is outside this rule's scope; Q191 asks.
+- **The Cheat Database's lists at 1280×800** show three systems and two games, with room to spare now that the
+  introduction is in the footer (Q170).
+
+Trial renders went to `~/.cache/emusen/probe/window-look/trials/` and were deleted at the end.
+
+### 43.8 The narrow run and the broad run
+
+**The narrow run**, the blast radius, covered the pad, sheets, cheats, scraping, ES-DE, themes, covers, rewind, resume,
+the look, the audit, Shaders, Graphics, folders, filters, input, controllers, bindings and drawings. Benches, GPU and
+Vulkan cases were left out. Every case ran under `nice -n 10`. Its first pass after the fade failed two
+`PadSettingsWindowTests` cases, which was §43.3's widening. After the redesign it was **1,239 tests: 1,201 passed, 38
+skipped, none failed, in 4 min 24 s.**
+
+**The broad run** was one run of the Mistress filter and the audit's self-tests, without `ShaderSettingsWindowTests`,
+the shader browser, the benches or any GPU, Vulkan or slang case, under `nice -n 10`. It ran on the final build with
+WiseMan `6b99ec3b` and LunaP `8991a6b` merged: **1,569 tests, 1,519 passed, 50 skipped (the picture, survey and live
+tools), none failed, in 5 min 31 s.** LunaP's whole suite: 1,521, all passed.
+
+### 43.9 Not done
+
+- **States no case opens** (§4.83.5): long theme names, a hundred cheats, long parameter names.
+- **The Nintendo 64's margin.** The labels meet the floor with none (Q188).
+- **A desktop ES-DE look**, deliberately (§10.1).
+- **A real pad, keyboard or handheld.** Nothing here ran on hardware, and nothing from this part goes to the handheld
+  until it has been looked at.
+
+### 43.10 Open questions
+
+- **Q188, the Nintendo 64 drawing's margin.** Its labels are at 16.0 pixels at 1280×800, the audit's floor exactly. A
+  longer binding name would fail the audit. **Recommendation:** when a drawing is bound by height, let a side column
+  with more than four labels take a second column in the width the drawing leaves free. At 1280×800 about 300 pixels
+  are free.
+- **Q189, the floor's measure.** The audit measures words by font size, so a condensed face counts the same as a wide
+  one. Barlow Condensed at 16 pixels has a smaller x-height than the desktop's face at 16. Keep font size, or measure
+  the drawn capitals' height?
+- **Q190, the audit's reach.** It audits the states the tests open. **Recommendation:** add long-name cases (a theme,
+  a cheat, a parameter, a game) to `WindowFitAuditTests`, since those are where a cut would first appear.
+- **Q191, the main window's status line.** While a game runs unpaused, the status line under a sheet shows the
+  performance counters and is cut at the window's right edge. It is not a framed window. **Recommendation:** in a
+  big-screen session hide the counters there, or end the line in an ellipsis. Leave it to the HUD's own work.

@@ -23,7 +23,7 @@ namespace EmuSen.Mistress.Views
             Sheets.MenuFrameFor = FramedAsMenu;
         }
 
-        // The windows that pass the fit audit at both sizes framed as menus, and the controller bindings, framed by their own overhaul (§4.80, §4.81, §42).
+        // The windows that pass the fit audit at both sizes framed as menus, and the controller bindings, framed by their own overhaul (§4.80, §4.81, §4.83, §42).
         internal static bool FramedAsMenu(Window window) => FramedWindows.Contains(window.GetType());
 
         public static readonly IReadOnlyList<System.Type> FramedWindows =

@@ -107,7 +107,7 @@ namespace EmuSen.Mistress.Views
                 _hint,
                 new ButtonBar { ItemsSource = new[] { rewind, cancel }, HorizontalAlignment = HorizontalAlignment.Right });
             Content = body.Margin(16);
-            // On a big-screen sheet: a shorter preview so the strip and the buttons fit the panel, and the reel's own buttons in the help bar (§4.81).
+            // On a big-screen sheet: a shorter preview so the strip and the buttons fit the panel, and the reel's own buttons in the help bar (§4.83).
             MenuLook.WhenApplied(body, () =>
             {
                 body.Margin = new Thickness(0, 0, 0, 12);

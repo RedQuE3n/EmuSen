@@ -12,7 +12,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Mistress.BigPicture
 {
-    // The scraping windows in the states only a run over the fake ScreenScraper reaches: part way, finished, and Find by Name's results - see EmuSen_Settings_Reference.md §4.81.
+    // The scraping windows in the states only a run over the fake ScreenScraper reaches: part way, finished, and Find by Name's results - see EmuSen_Settings_Reference.md §4.83.
     [Collection(TestCollections.ProcessGlobals)]
     public class WindowFitScrapeAuditTests : ScrapeWindowFixture
     {

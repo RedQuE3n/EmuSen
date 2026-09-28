@@ -24,7 +24,7 @@ namespace EmuSen.Mistress.Views
             buttons.HorizontalAlignment = HorizontalAlignment.Center;
         }
 
-        // A row that takes the focus is the list's chosen row too, so what follows the selection (a button, the footer) follows the row in view (Q178, §4.81).
+        // A row that takes the focus is the list's chosen row too, so what follows the selection (a button, the footer) follows the row in view (Q178, §4.83).
         public static void SelectOnFocus(ListBox list) =>
             list.AddHandler(Avalonia.Input.InputElement.GotFocusEvent, (_, e) =>
             {

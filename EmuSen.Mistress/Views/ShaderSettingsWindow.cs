@@ -366,11 +366,11 @@ namespace EmuSen.Mistress.Views
             Reload(null);
         }
 
-        // On a big-screen sheet: the two columns of equal width, so the search and its category fit beside each other, and the pack's words over its button rather than beside it (§4.81).
+        // On a big-screen sheet: the two columns of equal width, so the search and its category fit beside each other, and the pack's words over its button rather than beside it (§4.83).
         internal void InLook()
         {
             ColumnDefinitions = new ColumnDefinitions("*,24,*");
-            // The pack's button alone under the list, its words the footer; Use and Reset All beside the name, reached from the sliders without crossing the list (§4.81).
+            // The pack's button alone under the list, its words the footer; Use and Reset All beside the name, reached from the sliders without crossing the list (§4.83).
             if (_download.Parent is DockPanel packRow && _use.Parent is StackPanel actions && actions.Parent is StackPanel header)
             {
                 packRow.Children.Clear();
@@ -482,7 +482,7 @@ namespace EmuSen.Mistress.Views
             }
             Shown = entry;
             _name.Text = entry.Name;
-            // On a big-screen sheet the pack's folder is the footer's, said once for every preset (§4.81).
+            // On a big-screen sheet the pack's folder is the footer's, said once for every preset (§4.83).
             _where.Text = entry.IsPreset
                 ? _inLook ? entry.Relative : $"{entry.Relative}\nin {Path.GetFullPath(_owner.Pack)}"
                 : ScreenFilters.Find(entry.Stored).Filter?.Credit is { Length: > 0 } credit ? $"{ShaderCatalog.BuiltIn}. {credit}" : ShaderCatalog.BuiltIn;
@@ -607,7 +607,7 @@ namespace EmuSen.Mistress.Views
             if (_builtFor is null) return;
             int count = _parameters.Sliders.Count(), matching = _parameters.Matching.Count();
             string noun = count == 1 ? "parameter" : "parameters";
-            // On a big-screen sheet the help bar says what Left and Right do, so the note is the count alone (§4.81).
+            // On a big-screen sheet the help bar says what Left and Right do, so the note is the count alone (§4.83).
             string how = _inLook ? "" : " Left and right move a slider; the button above one returns it to its default.";
             _parametersNote.Text = count == 0 ? "This shader has nothing to adjust."
                 : _parameters.Search.Length > 0 ? $"{matching} of {count} {noun} match “{_parameters.Search}”.{how}"

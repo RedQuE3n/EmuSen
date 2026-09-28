@@ -125,7 +125,7 @@ namespace EmuSen.Mistress.Views
             Columns();
             _recentSection.PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) Columns(); };
 
-            // A recent game's line is cut with an ellipsis at the column's edge and is whole in the footer while its row is chosen (§4.81).
+            // A recent game's line is cut with an ellipsis at the column's edge and is whole in the footer while its row is chosen (§4.83).
             _recent.Styles.Add(new Avalonia.Styling.Style(x => Avalonia.Styling.Selectors.OfType<Avalonia.Controls.Presenters.ContentPresenter>(Avalonia.Styling.Selectors.Template(Avalonia.Styling.Selectors.OfType<ListBoxItem>(x))))
             {
                 Setters =

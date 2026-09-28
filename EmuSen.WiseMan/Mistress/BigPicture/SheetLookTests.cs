@@ -302,8 +302,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Settled(window);
             Button load = Named<Button>(window, "LoadGameButton");
             Assert.False(load.IsEffectivelyEnabled);
-            PadAudit.Reach(Sheet(window), pad, e => e is ListBoxItem item && item.FindAncestorOfType<ListBox>() == games && games.IndexFromContainer(item) == 1);
-            Assert.Equal(1, games.SelectedIndex);
+            // The first row, entered from outside the list: a move inside a list selects as it goes, and entering one did not (Q178).
+            PadAudit.Reach(Sheet(window), pad, e => e is ListBoxItem item && item.FindAncestorOfType<ListBox>() == games && games.IndexFromContainer(item) == 0);
+            Assert.Equal(0, games.SelectedIndex);
             Assert.True(load.IsEffectivelyEnabled);
             Stop(window);
             window.Close();
@@ -410,6 +411,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             double recentLeft = recent.TranslatePoint(default, window)!.Value.X, headingRight = heading.TranslatePoint(new Point(heading.Bounds.Width, 0), window)!.Value.X;
             Assert.True(recentLeft > headingRight, $"the recent games at {recentLeft} are not right of the run, which ends at {headingRight}");
             Assert.Equal(names.Length, recent.GetRealizedContainers().Count());
+            Avalonia.Controls.Image picture = sheet.GetVisualDescendants().OfType<Avalonia.Controls.Image>().First(i => i.Name == "ScrapeStatusPicture");
+            Assert.Equal(picture.Source is not null, picture.IsVisible);
 
             window.UpdateLayout();
             var reached = PadAudit.Reachable(sheet, pad);

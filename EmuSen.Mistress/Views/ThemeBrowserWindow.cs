@@ -64,7 +64,7 @@ namespace EmuSen.Mistress.Views
             DockPanel.SetDock(buttons, Dock.Bottom);
             var dock = new DockPanel { LastChildFill = true, Children = { top, buttons, body.Margin(0, 12, 0, 0) } }.Margin(16);
             Content = dock;
-            // On a big-screen sheet: the list and the preview as two columns, the screenshot fitted in its column with its words under it, Details and Close in a row of their own (§4.81).
+            // On a big-screen sheet: the list and the preview as two columns, the screenshot fitted in its column with its words under it, Details and Close in a row of their own (§4.83).
             MenuLook.SetWidthFraction(this, 0.85);
             MenuLook.WhenApplied(dock, () =>
             {

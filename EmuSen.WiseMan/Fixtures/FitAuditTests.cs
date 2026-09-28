@@ -11,7 +11,7 @@ using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.WiseMan.Fixtures
 {
-    // The fit audit catches what it is for, each fault made on purpose on a framed sheet, and passes the same sheet laid out properly - see EmuSen_Settings_Reference.md §4.81.
+    // The fit audit catches what it is for, each fault made on purpose on a framed sheet, and passes the same sheet laid out properly - see EmuSen_Settings_Reference.md §4.83.
     public class FitAuditTests
     {
         private static (ToolWindow Host, SheetLayer Layer) Host()
@@ -93,6 +93,13 @@ namespace EmuSen.WiseMan.Fixtures
         });
 
         [Fact]
+        public Task Words_wider_than_their_button_are_past_it() => UiTest.Run(() =>
+        {
+            var button = new Button { Width = 100, Content = new TextBlock { Text = "Wide", Width = 300 } };
+            Assert.Contains(Audit(new StackPanel { Children = { button } }), f => f.StartsWith("words past their Button"));
+        });
+
+        [Fact]
         public Task A_list_cut_at_its_foot_with_no_fade_shows_a_part_row() => UiTest.Run(() =>
         {
             var list = new ListBox { Height = 150, ItemsSource = Enumerable.Range(0, 20).Select(i => $"Row {i}").ToArray() };
@@ -100,6 +107,21 @@ namespace EmuSen.WiseMan.Fixtures
             var plain = new ListBox { Height = 150, ItemsSource = Enumerable.Range(0, 20).Select(i => $"Row {i}").ToArray() };
             List<string> faults = Audit(new StackPanel { Children = { plain } }, before: () => Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(plain).OfType<ScrollViewer>().First().SetValue(MenuLook.FadesBottomProperty, false));
             Assert.Contains(faults, f => f.StartsWith("cut at a scrolling edge with no fade"));
+        });
+
+        [Fact]
+        public Task A_strip_cut_at_its_side_with_no_fade_shows_a_part_tile() => UiTest.Run(() =>
+        {
+            ScrollViewer Strip()
+            {
+                var tiles = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+                for (int i = 0; i < 20; i++) tiles.Children.Add(new Button { Width = 85, Content = $"Tile {i}" });
+                return new ScrollViewer { Content = tiles, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+            }
+            Assert.DoesNotContain(Audit(new StackPanel { Children = { Strip() } }), f => f.StartsWith("cut at a scrolling edge"));
+            ScrollViewer plain = Strip();
+            List<string> faults = Audit(new StackPanel { Children = { plain } }, before: () => plain.SetValue(MenuLook.FadesRightProperty, false));
+            Assert.Contains(faults, f => f.StartsWith("cut at a scrolling edge with no fade: the right"));
         });
 
         [Fact]

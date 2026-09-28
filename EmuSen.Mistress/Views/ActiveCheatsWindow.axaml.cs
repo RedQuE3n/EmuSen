@@ -123,7 +123,7 @@ namespace EmuSen.Mistress.Views
             SheetLook.StatusOverButtons(StatusText);
             SaveAsButton.IsVisible = LoadFromButton.IsVisible = false;
 
-            // The General page's two parts side by side, so the table under it keeps room for its rows (§4.81).
+            // The General page's two parts side by side, so the table under it keeps room for its rows (§4.83).
             if (Tabs.Items.OfType<TabItem>().FirstOrDefault()?.Content is StackPanel { Children.Count: 2 } general)
             {
                 Control master = general.Children[0], saved = general.Children[1];
@@ -133,7 +133,7 @@ namespace EmuSen.Mistress.Views
                 ((TabItem)Tabs.Items[0]!).Content = sides;
             }
 
-            // The table fits the panel and never scrolls sideways, which a pad cannot; a cut description is whole in the footer while its row is chosen (§4.81).
+            // The table fits the panel and never scrolls sideways, which a pad cannot; a cut description is whole in the footer while its row is chosen (§4.83).
             void NoSideways(ListBox rows)
             {
                 rows.SetValue(Avalonia.Controls.ScrollViewer.HorizontalScrollBarVisibilityProperty, Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled);

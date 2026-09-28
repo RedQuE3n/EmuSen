@@ -13,7 +13,7 @@ using EmuSen.LunaP.Controls;
 
 namespace EmuSen.WiseMan.Fixtures
 {
-    // Whether everything a window shows fits: nothing past its panel or its clipping ancestor, nothing drawn over something else, no text cut - see EmuSen_Settings_Reference.md §4.81.
+    // Whether everything a window shows fits: nothing past its panel or its clipping ancestor, nothing drawn over something else, no text cut - see EmuSen_Settings_Reference.md §4.83.
     public static class FitAudit
     {
         // A cut the audit accepts, because the full text is reachable another way; each names that way.
@@ -80,10 +80,22 @@ namespace EmuSen.WiseMan.Fixtures
             {
                 if (c is not ScrollViewer viewer || c.TemplatedParent is TextBox || viewer.Extent.Height <= viewer.Viewport.Height + Slack) continue;
                 if (r.Height < 2 * 42 * unit - Slack) faults.Add($"scrolls in too little room: {Describe(c)} {r.Height:F0} high");
-                // A part-row at a scrolling edge reads as cut unless the edge fades (Q186).
-                if (viewer.VerticalScrollBarVisibility == ScrollBarVisibility.Disabled) continue;
-                if (viewer.Offset.Y > 0.5 && !MenuLook.GetFadesTop(viewer)) faults.Add($"cut at a scrolling edge with no fade: the top of {Describe(c)}");
-                if (viewer.Offset.Y < viewer.Extent.Height - viewer.Viewport.Height - 0.5 && !MenuLook.GetFadesBottom(viewer)) faults.Add($"cut at a scrolling edge with no fade: the foot of {Describe(c)}");
+                // Something sliced by a scrolling edge reads as cut unless the edge fades (Q186).
+                if (viewer.VerticalScrollBarVisibility == ScrollBarVisibility.Disabled || viewer.Presenter is not Visual presenter) continue;
+                Rect area = Area(presenter, root);
+                bool Sliced(double edge) => shown.Any(s => Drawn(s.C) && presenter.IsVisualAncestorOf(s.C) && s.R.Top < edge - Slack && s.R.Bottom > edge + Slack);
+                if (!MenuLook.GetFadesTop(viewer) && Sliced(area.Top)) faults.Add($"cut at a scrolling edge with no fade: the top of {Describe(c)}");
+                if (!MenuLook.GetFadesBottom(viewer) && Sliced(area.Bottom)) faults.Add($"cut at a scrolling edge with no fade: the foot of {Describe(c)}");
+            }
+
+            // The same across, for an area that scrolls sideways, such as a strip of tiles.
+            foreach ((Control c, _, _) in shown)
+            {
+                if (c is not ScrollViewer viewer || c.TemplatedParent is TextBox || viewer.Presenter is not Visual presenter) continue;
+                Rect area = Area(presenter, root);
+                bool Sliced(double edge) => shown.Any(s => Drawn(s.C) && presenter.IsVisualAncestorOf(s.C) && s.R.Left < edge - Slack && s.R.Right > edge + Slack);
+                if (!MenuLook.GetFadesLeft(viewer) && Sliced(area.Left)) faults.Add($"cut at a scrolling edge with no fade: the left of {Describe(c)}");
+                if (!MenuLook.GetFadesRight(viewer) && Sliced(area.Right)) faults.Add($"cut at a scrolling edge with no fade: the right of {Describe(c)}");
             }
 
             foreach ((Control c, _, _) in shown)
@@ -97,7 +109,7 @@ namespace EmuSen.WiseMan.Fixtures
                 else if (layout.Height > height + Slack) faults.Add($"cut at the foot: {Describe(c)}, {layout.Height:F0} high in {height:F0}");
             }
 
-            // Words under SmallestText design pixels do not read from a handheld's arm's length or a television's sofa (§4.81).
+            // Words under SmallestText design pixels do not read from a handheld's arm's length or a television's sofa (§4.83).
             foreach ((Control c, _, _) in shown)
             {
                 double size = c switch { TextBlock { Text.Length: > 0 } t => t.FontSize, ControllerDiagram d => d.LabelTextSize, _ => 0 };

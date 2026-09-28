@@ -84,7 +84,7 @@ namespace EmuSen.Mistress.Views
             DockPanel.SetDock(bottom, Dock.Bottom);
             var dock = new DockPanel { LastChildFill = true, Children = { buttons, bottom.Margin(0, 12, 0, 0), top } }.Margin(16);
             Content = dock;
-            // On a big-screen sheet: the screenshot and its caption at the left, the facts beside them in a column of their own, the licence and every button in rows below, nothing over anything else (§4.81).
+            // On a big-screen sheet: the screenshot and its caption at the left, the facts beside them in a column of their own, the licence and every button in rows below, nothing over anything else (§4.83).
             MenuLook.SetWidthFraction(this, 0.8);
             MenuLook.WhenApplied(dock, () => InLook(dock, shots, facts, bottom, buttons));
             Closed += (_, _) => { _shotCancel?.Cancel(); StopDownload(); };

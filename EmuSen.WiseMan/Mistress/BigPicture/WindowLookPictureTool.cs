@@ -222,6 +222,17 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     WaitFor(() => Sheets(window).Current is RewindReelWindow, "the reel");
                     Save(window, $"rewind-reel-{p}", _out);
                     CloseAll(window);
+
+                    Call(window, "ShowControllerBindings");
+                    Save(window, $"controller-bindings-{p}", _out);
+                    TabControl tabs = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<TabControl>().First();
+                    for (int i = 0; i < 8 && tabs.SelectedIndex != 0; i++) pad.L1();
+                    Save(window, $"controller-bindings-general-{p}", _out);
+                    PadAudit.Reach(Sheets(window).SheetOf(Sheets(window).Current!)!, pad, e => e is ToggleSwitch);
+                    Save(window, $"controller-bindings-switch-focused-{p}", _out);
+                    for (int i = 0; i < 8 && tabs.SelectedIndex != tabs.ItemCount - 1; i++) pad.R1();
+                    Save(window, $"controller-bindings-n64-{p}", _out);
+                    CloseAll(window);
                 }
                 finally
                 {

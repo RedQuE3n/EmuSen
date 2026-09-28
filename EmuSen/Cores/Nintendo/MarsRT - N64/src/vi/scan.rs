@@ -516,27 +516,33 @@ pub(super) type Hold = bands::Hold;
 pub(super) type Hold = ();
 
 /// `Vi.WriteDevicePicture`: the device's words into the raster as the walk writes them: a shown pixel whole, a dark one's colour cleared and its coverage kept.
+/// A row at a time, its clipped columns split into dark, shown and dark runs; the pixel at a time it replaces is the test's reference (Mars_Performance.md §42).
 fn write_device_picture(picture: &Picture, raster: &mut [u8], raster_width: i32, words: &[u32]) {
     let limit = raster.len() as i64 / 4;
+    let columns = picture.columns.max(0) as i64;
     for row in 0..picture.rows {
         let line = picture.top as i64 * picture.stride as i64 + picture.left as i64 + if picture.lower { raster_width as i64 } else { 0 } + picture.stride as i64 * row as i64;
-        let from = row as i64 * picture.columns as i64;
-        for column in 0..picture.columns {
-            let pixel = line + column as i64;
-            if pixel < 0 || pixel >= limit {
-                continue;
-            }
-            let at = pixel as usize * 4;
-            let shown = column >= picture.first_column && column < picture.last_column;
-            if shown {
-                let word = words.get((from + column as i64) as usize).copied().unwrap_or(0);
-                raster[at..at + 4].copy_from_slice(&word.to_le_bytes());
-            } else {
-                raster[at] = 0;
-                raster[at + 1] = 0;
-                raster[at + 2] = 0;
+        let from = row as i64 * columns;
+        let (first, last) = ((-line).clamp(0, columns), (limit - line).clamp(0, columns));
+        if first >= last {
+            continue;
+        }
+        let (shown_from, shown_to) = ((picture.first_column as i64).clamp(first, last), (picture.last_column as i64).clamp(first, last));
+        let shown_to = shown_to.max(shown_from);
+        let pixels = &mut raster[((line + first) * 4) as usize..((line + last) * 4) as usize];
+        let (dark_before, rest) = pixels.split_at_mut(((shown_from - first) * 4) as usize);
+        let (shown, dark_after) = rest.split_at_mut(((shown_to - shown_from) * 4) as usize);
+        for dark in [dark_before, dark_after] {
+            for pixel in dark.as_chunks_mut::<4>().0 {
+                pixel[..3].fill(0);
             }
         }
+        let (start, end) = ((from + shown_from).min(words.len() as i64) as usize, (from + shown_to).min(words.len() as i64) as usize);
+        let (written, missing) = shown.split_at_mut((end - start) * 4);
+        for (pixel, word) in written.as_chunks_mut::<4>().0.iter_mut().zip(&words[start..end]) {
+            *pixel = word.to_le_bytes();
+        }
+        missing.fill(0);
     }
 }
 
@@ -1037,7 +1043,7 @@ pub(super) fn compose_into(rasters: &mut Rasters, rows: usize, serrate: bool, re
         let at = row * repeat * row_bytes;
         let into = &mut frame[at..at + row_bytes];
         for (to, pixel) in into.as_chunks_mut::<4>().0.iter_mut().zip(from.as_chunks::<4>().0) {
-            *to = [pixel[0], pixel[1], pixel[2], 0xFF];
+            *to = (u32::from_le_bytes(*pixel) | 0xFF00_0000).to_le_bytes();
         }
         for copy in 1..repeat {
             frame.copy_within(at..at + row_bytes, at + copy * row_bytes);

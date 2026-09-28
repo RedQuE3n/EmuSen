@@ -570,3 +570,65 @@ fn three_thousand_banded_walks_lose_no_wake_up() {
     let joined = finished.recv_timeout(std::time::Duration::from_secs(120)).expect("the banded walks hung or failed");
     assert_eq!(joined, 2999);
 }
+
+/// `Vi.WriteDevicePicture` a pixel at a time, as it was written before the rows were split into runs (Mars_Performance.md §42).
+fn write_device_picture_by_pixel(picture: &Picture, raster: &mut [u8], raster_width: i32, words: &[u32]) {
+    let limit = raster.len() as i64 / 4;
+    for row in 0..picture.rows {
+        let line = picture.top as i64 * picture.stride as i64 + picture.left as i64 + if picture.lower { raster_width as i64 } else { 0 } + picture.stride as i64 * row as i64;
+        let from = row as i64 * picture.columns as i64;
+        for column in 0..picture.columns {
+            let pixel = line + column as i64;
+            if pixel < 0 || pixel >= limit {
+                continue;
+            }
+            let at = pixel as usize * 4;
+            if column >= picture.first_column && column < picture.last_column {
+                let word = words.get((from + column as i64) as usize).copied().unwrap_or(0);
+                raster[at..at + 4].copy_from_slice(&word.to_le_bytes());
+            } else {
+                raster[at..at + 3].fill(0);
+            }
+        }
+    }
+}
+
+/// The device's picture written by runs leaves the raster byte for byte as the pixel at a time did: pictures clipped at either end of the
+/// raster, shown columns past either edge or empty, the lower field, and fewer words than the picture has pixels.
+#[test]
+fn the_device_picture_written_by_runs_is_the_picture_written_by_pixels() {
+    let mut seed = 0x9E37_79B9u32;
+    let mut next = |bound: i32| {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        (seed % bound.max(1) as u32) as i32
+    };
+    let (raster_width, raster_rows) = (96, 40);
+    for case in 0..4000 {
+        let columns = next(110) - 4;
+        let picture = Picture {
+            left: next(120) - 30,
+            top: next(50) - 12,
+            columns,
+            rows: next(48) - 3,
+            stride: raster_width * (1 + next(2)),
+            active_lines: 0,
+            start_x: 0,
+            step_x: 0,
+            start_y: 0,
+            step_y: 0,
+            first_column: next(columns.max(1) + 20) - 10,
+            last_column: next(columns.max(1) + 20) - 10,
+            lower: next(2) == 1,
+        };
+        let pixels = (picture.columns.max(0) * picture.rows.max(0)) as usize;
+        let (short, salt) = (if next(4) == 0 { next(200) as usize } else { 0 }, next(i32::MAX) as u32);
+        let words: Vec<u32> = (0..pixels.saturating_sub(short)).map(|i| (i as u32).wrapping_mul(0x0101_0107) ^ salt).collect();
+        let raster: Vec<u8> = (0..raster_width * raster_rows * 4).map(|i| (i as u32 * 31 + case) as u8).collect();
+        let (mut by_runs, mut by_pixels) = (raster.clone(), raster);
+        write_device_picture(&picture, &mut by_runs, raster_width, &words);
+        write_device_picture_by_pixel(&picture, &mut by_pixels, raster_width, &words);
+        assert!(by_runs == by_pixels, "case {case}: {picture:?} with {} words of {pixels}", words.len());
+    }
+}

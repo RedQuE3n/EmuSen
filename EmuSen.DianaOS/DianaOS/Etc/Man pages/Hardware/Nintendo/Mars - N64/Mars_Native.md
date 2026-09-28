@@ -6210,8 +6210,12 @@ recorded for retraining:
    Edits inside them are not a reason by themselves.
 3. **Before a speed measurement that is to be quoted**, so that the number is the profile's and not the profile's
    minus an unknown decay.
-4. **After adding a dependency, or changing one's version** (added 2026-09-28, §6.17.12). Cargo's metadata hashes the
-   dependencies, so every function is renamed and the profile guides nothing, while the verdict still reads `stale`.
+4. **After adding a dependency, or changing one's version** (added 2026-09-28, §6.17.12). Every function's name
+   carries its crate's disambiguator, a hash of what cargo passes as `-C metadata`, and that metadata hashes the
+   crate's dependencies (§6.17.1). So adding `emusen-native` renamed every MarsRT function, not only those moved into
+   it: 1,193 of them had no record afterwards, against 22 before. The profile guided none of them, while the verdict
+   still read `stale`, because `build.rs` compares sources and cannot see a name. Renaming a dependency does the same;
+   the crate's rename from `emusen-state` changed the disambiguator a second time.
 5. Otherwise not: the verdict file's `stale` is information, not a defect.
 
 ##### 6.17.7 Where the profile applies, measured
@@ -6377,6 +6381,12 @@ builds from (`EmuSen_RustState.md`). Three findings belong here.
   - this is §6.17.1's mechanism, and the new §6.17.6 rule 4.
 
   The `stale` verdict cannot show it.
-- **The cost is predicted, not yet measured.** The prediction is §6.17.5's gain lost, 7–9% on SM64 and OoT. The
-  interleaved rounds were stopped on 2026-09-28 because the machine was in use. The state hashes, taken meanwhile, are
-  the base's. The remedy is a retrain, which is a separate decision (`EmuSen_RustState.md` §4.3).
+- **A prediction retired.** Before the move, it was predicted that only the moved functions would lose their
+  guidance, and that, being cold (a state is saved four times a second, never per frame), they would cost nothing.
+  **Refuted**: the moved functions were not the ones that mattered, since the dependency renamed all the rest (rule 4
+  of §6.17.6). The loss predicted in their place was §6.17.5's whole gain, 7–9% on SM64 and OoT.
+- **Merged without a retrain.** Decided 2026-09-28: the crate is merged with the profile as it is, and the retrain is
+  deferred. Until it is run, a `linux-x64` build of MarsRT is in effect unguided, and its cost is the prediction above,
+  not a measurement. The retrain, with the interleaved rounds that measure both the loss and its recovery, is owed;
+  it can wait for MarsRT's move to the common interface (`EmuSen_NativeCores.md` §7), which renames its exports and
+  retrains in any case.

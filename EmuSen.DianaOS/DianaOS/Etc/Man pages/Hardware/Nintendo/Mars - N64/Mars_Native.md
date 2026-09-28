@@ -30,13 +30,17 @@ library is absent, refused or off.**
 
 **A failed cargo step fails the build (2026-09-23).** The cargo `Exec` used to carry `ContinueOnError`, so that a
 machine without Rust would still build; it also meant a machine *with* Rust whose cargo step failed built anyway, kept
-the previous library, and said so only in an MSB3073 warning. That happened for real: with `/tmp` full, a run's
+the previous library, and said so only in an MSB3073 warning. That happened for real: with `/tmp` full, a series of
 mutant rounds ran against a library the build had silently not rebuilt, and read as survivors. The two cases are now
 told apart. A `FindCargo` target runs `cargo --version` first; without cargo the build warns once — *"cargo was not
 found: MarsRT and MercuryRT are not built, and their consoles run on the C# cores alone"* — and goes on, and with
 cargo the build step runs without `ContinueOnError`, so its failure fails the build. Checked three ways: a normal
 build succeeds; a crate with a syntax error fails the build with cargo's exit code 101 where it had succeeded before;
-and with cargo removed from the `PATH` the build warns and succeeds.
+and with cargo removed from the `PATH` the build warns and succeeds. *Re-checked 2026-09-24,* when the build became one
+target over a list of crates (§6.3's last paragraph, `Mercury_Native.md` §8.6). The same three results held with
+either crate broken. The check above had not mentioned that "warns once" was two warnings: the probe's own `Exec` also
+left an MSB3073 for the missing command. The probe now ignores its exit code instead of continuing on error, and only
+the one warning is left.
 
 ## 2. A panic never crosses into C#
 
@@ -292,7 +296,7 @@ throwaway reflection walk over a live `MarsCore`, using the serializer's own que
 sort, `[SkipInState]` and alias fields dropped), printed every serialized field with its type and array length. A
 throwaway script generated the modules from that listing, and they were then edited by hand. It found 210 fields in 21
 types, among them 19 in `Cpu`, 15 in `MemoryBus`, 13 in `Rsp`, 17 in `TextureTile` and **74 in `Rdp`**. The plan this
-stage was planned from said 78; the count here is the serializer's. The listing is not trusted as final either,
+stage was drawn from said 78; the count here is the serializer's. The listing is not trusted as final either,
 because the tests below make the same query at test time: a field added to a C# class later fails them.
 
 **Three properties, each checked separately.** A byte round trip alone cannot see a consistent mistake. If the
@@ -722,7 +726,7 @@ and its raster with it.
 
 **Left out.**
 
-- **The CPU's compiled blocks,** by the stage's brief. The oracle runs without them as well. The idle loop's skip,
+- **The CPU's compiled blocks,** by the stage's plan. The oracle runs without them as well. The idle loop's skip,
   which C# reaches only through them, is kept.
 - **The threaded RDP, its page marks and every `WaitFor*`.** MarsRT runs the RDP inline on the emulation thread, as
   C# does with `ThreadedRdp` off, and the marks exist only to make the threaded path wait.
@@ -1385,7 +1389,7 @@ machine in the library still boots with them off.* The interface version is 5, w
 | the wait sites | a line or two each in `bus_access`, `interp`, `idle`, `si`, `ai`, `sp` and `ffi` | — |
 | `tests/threads.rs`, `tests/sites.rs`, `tests/games.rs` | `MarsThreadedRdpTests`, and more (§5.6.7) | 751, 260, 190 |
 
-The crate's diff against 7ea79b1 is 35 files, 4,447 lines in and 167 out.
+The crate's diff against 030256c is 35 files, 4,447 lines in and 167 out.
 
 #### 5.6.1 Shared memory under Rust's rules
 
@@ -1449,7 +1453,7 @@ MarsRT departs from C# in the following places.
   - *Why the games miss it:* every VI capture, every SP DMA into the RSP and every SI transfer to the PIF is a range
     read of more than eight bytes, so the defect sits on the C# core's most-used wait. No game comparison has caught
     it, because the drain has usually finished before the capture reads.
-  - *Fixed in C# on 2026-09-23, commit 7fbf4b1, the test turned round:* the C# now narrows only a read inside one
+  - *Fixed in C# on 2026-09-23, commit d25a8d1, the test turned round:* the C# now narrows only a read inside one
     aligned doubleword, and `MarsThreadedRdpTests.A_range_read_whose_first_bytes_no_draw_holds_still_waits_for_the_draws_that_hold_the_rest`
     holds the read waiting (`Mars_Rdp.md` §2.9.2).
 - **The workers are threads of MarsRT's own.** C# queues a single drain on the pool and gives several workers threads
@@ -1529,7 +1533,7 @@ the bytes it waited for, so the walk cannot read a byte the drain is still writi
   picture of the frame before.
 - *In MarsRT:* the scan-out notes whether a border or a blank has changed the raster since the last walk, and walks a
   repeat when one has. `a_deferred_scan_repeating_after_a_held_line_expired_shows_the_darkened_picture` holds this.
-- *Fixed in C# on 2026-09-23, commit 419583a, the test turned round:* the C# follows MarsRT's rule, a darkening counted
+- *Fixed in C# on 2026-09-23, commit 025573e, the test turned round:* the C# follows MarsRT's rule, a darkening counted
   only where it changed a byte, and `MarsDeferredPresentationTests.A_deferred_repeat_after_a_held_line_expired_shows_the_darkened_picture`
   finds no stale picture (`Mars_Video.md` §2.8).
 
@@ -1559,7 +1563,7 @@ Each failure was found by a test.
     hang leaves threads spinning.
   - *A candidate, not a proof.* `Mars_Rdp.md` §2.8 records a freeze met in Super Mario 64 whose cause was inferred and
     not proven. This deadlock could cause it, and it has not been shown to.
-  - *Fixed in C# on 2026-09-23, commit a72533c, the test turned round:* MarsRT's rule, a waiter raising the point to its
+  - *Fixed in C# on 2026-09-23, commit 5735332, the test turned round:* MarsRT's rule, a waiter raising the point to its
     own word, now in `DpInterface`; `MarsThreadedRdpTests.A_pause_that_finds_some_processors_at_a_barrier_and_the_rest_short_of_it_is_answered`
     and a stress of pauses and snapshots under a watchdog hang on the unfixed code and pass on the fixed (`Mars_Rdp.md`
     §2.9.1). The freeze is still not proven to have been this.
@@ -1573,7 +1577,7 @@ Each failure was found by a test.
     state wrong in `_lodFraction` alone, for 8 of 16 seeds, with the memory right. Against MarsRT's split, the C#
     split parts at frame 6 of the Dam, again in `_lodFraction` alone.
   - *In MarsRT:* the fraction is stamped only on rows that compute it.
-  - *Fixed in C# on 2026-09-23, commit 51f3377, the test turned round:* the C# stamps it the same way;
+  - *Fixed in C# on 2026-09-23, commit 0f87acc, the test turned round:* the C# stamps it the same way;
     `MarsThreadedRdpTests.A_primitive_drawn_alone_after_rows_that_measured_no_level_assembles_the_raster_orders_fraction`
     is exact for all sixteen seeds, and the Dam no longer parts from MarsRT's split (§5.6.7). The two-cycle path of
     both cores stamps the fraction the old way when level of detail is off; that is argued and not shown, and left
@@ -1590,7 +1594,7 @@ Each failure was found by a test.
     holds this.
   - *In C#:* the rule is unchanged. Its race is argued from the code and not shown in C#, because a race that timing
     hides cannot be shown by a test without a race detector.
-  - *Shown and fixed in C# on 2026-09-23, commit 4291e9e:* the C# game comparison with four processors from Ocarina's
+  - *Shown and fixed in C# on 2026-09-23, commit 43fd3aa:* the C# game comparison with four processors from Ocarina's
     state, under a loaded machine, parted from the C# core unthreaded in 10 of 16 runs; with MarsRT's rule ported,
     in 0 of 18 (`Mars_Rdp.md` §2.9.5).
 
@@ -1646,7 +1650,7 @@ the Dam.
 | two and four workers against one thread | 300 | identical |
 | MarsRT threaded against the C# core threaded, blocks off, at once | 600 | identical |
 | the same, both deferred | 600 | identical |
-| MarsRT's four workers against the C# core's four | 300 | identical in five; the Dam parts at frame 6, in `_lodFraction` (§5.6.6). *Since the C# fix of 2026-09-23 (51f3377), identical in all six.* |
+| MarsRT's four workers against the C# core's four | 300 | identical in five; the Dam parts at frame 6, in `_lodFraction` (§5.6.6). *Since the C# fix of 2026-09-23 (0f87acc), identical in all six.* |
 
 **The C# failures.** Each is shown by a WiseMan test that asserts the C# behaviour: the range read, the deferred
 repeat, the fraction and the deadlock. Fixing the C# therefore fails the test, and the test is then to be turned
@@ -1750,7 +1754,7 @@ are the emulation thread's own cost: 6.0, 7.1 and 17.0 ms a frame.
   to the design. §5.7's 32.2 ms is the mean of 1,500 frames, while these 300 frames cost 28.3 ms on one thread.
 
 **The one-thread path's cost,** checked because it is still the default. `examples/frames … scan` was run on the
-branch's base (7ea79b1) and on this branch, interleaved, three rounds, with the same state hashes:
+branch's base (030256c) and on this branch, interleaved, three rounds, with the same state hashes:
 
 | ms a frame | before | after |
 | --- | --- | --- |
@@ -1761,7 +1765,7 @@ branch's base (7ea79b1) and on this branch, interleaved, three rounds, with the 
 The unthreaded path is 1.5 to 3.5 per cent slower on Super Mario 64 and 2.5 to 3 per cent slower on Ocarina of Time,
 and unchanged on GoldenEye. The candidates are the marks' tests, which the unthreaded path makes too, and `Ram`'s
 accessors, which check each access's bounds. Neither has been measured apart, and the cost is recorded here as a
-regression that has been found and not yet explained. *Explained by §6.14.1 (2026-09-23): the step is 1cad784, the first buildable commit
+regression that has been found and not yet explained. *Explained by §6.14.1 (2026-09-23): the step is c630261, the first buildable commit
 of the branch, and it is the price per access of three tests that answer "nothing to do" without a drain — the page
 marks, the RDP memory's verifier branch and bounds checks, and `Ram`'s bounds checks; without all three the unthreaded
 path runs in the base's time. On the current tree the RDP's checks still cost Super Mario 64 1.5 to 2 per cent.*
@@ -2414,6 +2418,28 @@ config, so the engine is one decision. **The engine's default is still Mars (C#)
 `CoreCatalog` and the factory's rule for a null engine, and it waits, as this stage said it should, for a session of
 play on each machine with the crash log clean.
 
+**The engine flipped, 2026-09-24.** MarsRT (Rust) is the N64 row's default and first choice. It was not quite the one
+line predicted, and the difference is worth stating:
+
+- **The factory's null stayed the reference.** Forty-odd tests call `CoreFactory.Load(rom)` with no engine and cast
+  the result to `MarsCore`; they grade Mars, and a null that meant "the player's default" would have moved every one
+  of them onto MarsRT silently. So the player's default is resolved one step up, `CoreCatalog.EngineChosen(console,
+  stored)`, which `ConfiguredEngine` (Hotaru, Pharaoh, the peer probe) and Mistress both call; the factory is only
+  ever handed a name by a frontend. The Mars performance probe calls the factory itself and still measures Mars (C#).
+- **The notice named the default.** An unknown engine ran Mars and said "*the default* is running"; with MarsRT the
+  default that would have been false, so the notice now names the core that started. And the early return for the
+  default engine would have hidden a missing library on the default; it is gone, so a platform without
+  `libmarsrt.so` says so for every N64 game.
+- **One test read Mars's registers from Mistress's running core** (`MainWindowSaveStateThreadTests`). It now saves the
+  running core's state and reads it through Mars (C#), since both engines write that format, so it grades MarsRT's
+  hotkey path too.
+
+The condition this stage set, a session of play on each machine with a clean crash log, was met on the handheld
+(§6.15.6, no crash log) and not on the desktop, where the N64 had run on Mars (C#); the player made the call. Stage
+G's first criterion (§6.7) now holds wherever the library ships. Tests: the engine, frontend, Mistress, Hotaru,
+Pharaoh and MercuryRT suites, 1,097 cases, pass; a catalogue that forgets the default and a notice that names the
+default instead of the running core are each caught.
+
 ### 6.3 Stage C: every platform
 
 **The gap.** `EmuSen.csproj` builds the crate only when the publish's runtime identifier is the host's
@@ -2492,6 +2518,42 @@ each exports `mars_machine_run_frame`, `mars_machine_set_recompiler` and `mars_b
 out beside the repository (`RedQuE3n/EmuSen.LunaP`), which is left for when a foreign publish is made from these
 artefacts; and no publish for another platform has yet been made and run, which is stage B's engine default's
 concern as much as this stage's.
+
+**The machinery generalised, 2026-09-24** (`Mercury_Native.md` §8.6, MercuryRT's stage 7). What this section built for
+one library now serves a list of crates, and MarsRT is its first row:
+
+- `EmuSen/Cores/RustCores.props` names each crate: its library, its directory, and the C# core its console falls back
+  to. `EmuSen.csproj`'s `BuildEmuSenNative` and `BuildMercuryRt` became one `BuildRustCores` target, batched over the
+  list. It builds MarsRT first, and the first crate to fail stops the build. `EmuSenNativeTarget`, `EmuSenNativeDir`
+  and `EmuSenNativeFile` are gone. Cargo's output root is `EmuSenCargoTargetRoot`, `EmuSen/obj` by default, so the
+  library is still built in `EmuSen/obj/marsrt/`.
+- `MarsRtPublish.targets` moved to `EmuSen/Cores/RustCoresPublish.targets`. For each crate it removes all three host
+  names from a foreign publish and takes `$(EmuSenNativePrebuilt)/<rid>/<library>`, or warns. The property and the
+  folder layout are unchanged, so the directory the recipe above names now holds `mercuryrt.dll` beside `marsrt.dll`.
+- `.github/workflows/marsrt.yml` became `rust-cores.yml`, a crate × platform matrix. MarsRT's four jobs are this
+  section's steps, and its artefacts keep the names `marsrt-<rid>`.
+- The workflow gained the job the paragraph above left for later: WiseMan's tests of MarsRT against Mars on
+  linux-x64, win-x64 and osx-arm64, run against the libraries the matrix ships, with LunaP checked out beside the
+  repository.
+- One behaviour changed. `FindCargo`'s probe used to leave an MSB3073 warning beside its own warning when cargo was
+  absent. It now leaves only its own.
+
+MarsRT's publish was checked again after the change and did not regress. The linux-x64 publish still carries the
+`dist` library, and a win-x64 publish without a library still warns and carries none.
+
+**MarsRT's WiseMan tests on Windows and macOS, first runs (2026-09-24, `rust-cores.yml`, runs 36028263031 and
+36030648210).** The first run passed 769 of 770 on each; the second, 770 of 770 on each. The two failures did not
+recur, and each was a threshold, not a difference between the engines:
+
+- **win-x64, `MarsRT_reports_the_phases_of_the_frame_just_run`:** the frames running the idle loop instruction by
+  instruction took 5.110 ms against 2.568 ms for the frames after them, a ratio of 1.99 against the test's 2. The
+  test exists to catch a profiler reporting the previous frame, which would put the ratio below 1, so the threshold is
+  now 1.5: the defect is still caught, and a runner's noise is not.
+- **osx-arm64, `A_capture_and_a_step_back_allocate_no_array_of_the_state_s_size`:** 1,219,413 bytes and 30.17 ms a
+  capture, and 1,624,652 bytes a step back, against a limit of 1/16 of the 12,986,889-byte snapshot. The likeliest
+  reading is that the capture's delta, encoded on a pool thread, had not finished on a three-core runner and was run
+  inline; that is argued, not shown. The threshold is **not** changed: whether a capture allocates this much on Apple
+  silicon is a question for a Mac, not for a looser test.
 
 ### 6.4 Stage D: the multiple, antialiasing and the device
 
@@ -2664,7 +2726,7 @@ Each was found by an oracle, shown failing, fixed, and is now held by the test t
   first while nothing has drawn, which costs a join once per load or change, and the answer is the words handed over.
   **The C# core has the same race** (`Vi.Prepare` reads `DpInterface.ScaledDrawn`, which on the drain is the workers'
   `Drew`, before `Capture`'s wait), so the C# comparison's oracle is the C# core unthreaded, which is deterministic;
-  documented here and not fixed, as the plan asks of C# findings. *Fixed in C# on 2026-09-23, commit 05d41e4:
+  documented here and not fixed, as the stage's plan asks of C# findings. *Fixed in C# on 2026-09-23, commit 2297ee1:
   `Prepare` asks `ScaledDrawnHandedOver`, which joins first while nothing has drawn, as MarsRT does; the test that shows
   the race and its fix is `Mars_Rdp.md` §2.9.4's. The comparison at the multiple keeps its unthreaded oracle, which
   still suffices.*
@@ -2686,7 +2748,7 @@ is the only comparison either has at the multiple on the device. It touches only
 
 #### 6.4.5 Mutants
 
-Eleven, each put in by hand or by a runner in the scratchpad that restores the source after each, against the crate's
+Eleven, each put in by hand or by a runner in a scratch directory that restores the source after each, against the crate's
 device and multiple tests and, for the one that survived them, the C# comparison:
 
 | Mutant | Tests | Reading |
@@ -2712,7 +2774,7 @@ the device's and this function is not called.
 
 #### 6.4.6 Speed
 
-**The prediction, stated before the measurement** (the plan's reading of `Mars_Gpu.md`): on this machine's RX 6800 the
+**The prediction, stated before the measurement** (the reading of `Mars_Gpu.md` at the time): on this machine's RX 6800 the
 device at 4× runs at 150 to 192 per cent, and 4× antialiasing shown at one at 174 to 248 per cent. Those are
 `pacebench`'s figures for the C# device path in §14.6 and §15.4, and their unit is not the processor path's rate but a
 game's frame rate on the console: 192 per cent is 10.38 ms, so 100 per cent is 19.9 ms, the figure every pair in those
@@ -2723,11 +2785,11 @@ built in Release: from each play state, 600 frames flat out with the picture on,
 default workers, the recompiler at tier 2 on MarsRT and the blocks on C#, four configurations interleaved and the
 order reversed in the middle round, three rounds, medians. Each run's report named the card or said "off". The 1×
 frame was measured apart, with `examples/threads` (`split 4 blocks`) against the same example built from a clean
-extract of 83dca1d, interleaved and alternated the same way.
+extract of 4510a7e, interleaved and alternated the same way.
 
-**1×, against 83dca1d**, ms a frame, medians of three, the joined state's hash identical in all eighteen runs:
+**1×, against 4510a7e**, ms a frame, medians of three, the joined state's hash identical in all eighteen runs:
 
-| Game | 83dca1d | now |
+| Game | 4510a7e | now |
 |---|---|---|
 | Super Mario 64 | 5.76 | 5.77 |
 | Ocarina of Time | 6.80 | 6.79 |
@@ -2751,7 +2813,7 @@ Level, as it should be: at one the machine carries an empty `ScaledDrawing` and 
 
 **The prediction's fate: exceeded, and retired.** In `pacebench`'s unit MarsRT's device at 4× runs Mario at 198 per
 cent and Ocarina at 208, above the range's top of 192; with 4× antialiasing shown at one, Mario at 311 and Ocarina at
-280, above 248. GoldenEye, outside the range's games, is at 103 and 128. Read the other way the plan read it, as a
+280, above 248. GoldenEye, outside the range's games, is at 103 and 128. Read the other way the prediction read it, as a
 ratio to the processor path at the same multiple, the device is 4.2, 4.6 and 2.7 times MarsRT's processor at 4×, and
 6.5, 6.3 and 3.4 times with 4× antialiasing: the prediction's 1.5 to 2.5 was far short. Why the device gains more on
 MarsRT than on C#: the device's own work is the same shaders, and the host's share, walking and binning rows and the
@@ -2781,7 +2843,7 @@ at the same settings in the same process, is interleaved.
 - **The device's report in the window.** The shim exposes `GpuReport` as `MarsCore` does, and no frontend shows either.
 - **The bands and the walk at a multiple on the processor split across threads** are C#'s and not ported; MarsRT's
   walk is one band, at the multiple as at one.
-- **Mistress.** No play session at a multiple on MarsRT; headless only, by standing instruction.
+- **Mistress.** No play session at a multiple on MarsRT; headless only, by the project's testing rule.
 - **The transition off the device** deviates for up to two frames as C#'s does (`Mars_Gpu.md` §15.2), and no test holds
   it on either core.
 
@@ -2804,7 +2866,7 @@ the loop behind its schedule, where the pacer (`FramePacer.Settle`) cannot sleep
 was the `SkipRendering` assignment. On this desktop, the same probe with and without that assignment before every
 frame measured **no difference** (16.6 and 17.7 against 16.7 and 16.7 ms a frame): the desktop's presenter finishes
 within the frame, so the join never waited. *The desktop's negative is recorded because it would have closed the
-question wrongly;* on the handheld, three rounds of 600 frames from the player's state:
+question wrongly;* on the handheld, three rounds of 600 frames from a state saved in play:
 
 | ms a frame, loop | `SkipRendering` never set | set before every frame (Mistress) |
 | --- | --- | --- |
@@ -2907,7 +2969,7 @@ a pointer. Both were decided by measurement, §6.5.5, and the second is the one 
   are seen one at a time either way, and the difference is the frame's speed while the recorder is armed, not what it
   records.
 
-**The four decisions the plan asked for**, then:
+**The four decisions the stage's plan called for**, then:
 
 1. *The recompiler's blocks.* An armed CPU table runs the interpreter for the frame — C#'s rule, and exact by
    construction, since §5.8 proves the blocks against the interpreter and this stage proves the observed loop against
@@ -3110,7 +3172,7 @@ neither is what a player runs. Nothing was done about it.
 
 ### 6.6 Stage F: parity leftovers
 
-Each is small, has its own oracle, and can be given to a run beside larger work.
+Each is small, has its own oracle, and can be taken up beside larger work.
 
 - **ROM-patch cheats** (§5.5.4): the patch list held beside the cartridge reads in `memory/bus_access.rs`, pushed at
   the frame's end as the codes are. No N64 code format produces one, so this closes a hole a hand-made patch would
@@ -3120,19 +3182,19 @@ Each is small, has its own oracle, and can be given to a run beside larger work.
   a game (`EmuSen_Settings_Reference.md` §4.21b, §4.44). MarsRT's snapshot is proven headlessly in every frame of six
   games (§5.6.4) and its pause point is a barrier the C# core lacks. Turning it on for MarsRT alone is a play decision
   of the same kind as stage B's, and the C# core's stays off until its failure is fixed. *The failure the tests could
-  reach, the pause barrier's deadlock, was fixed in C# on 2026-09-23 (a72533c, `Mars_Rdp.md` §2.9.1); the freeze itself
+  reach, the pause barrier's deadlock, was fixed in C# on 2026-09-23 (5735332, `Mars_Rdp.md` §2.9.1); the freeze itself
   was never reproduced, so turning rewind back on is still a play decision.*
 - ~~**The C# core's four failures** (§5.6.2, §5.6.5, §5.6.6): each has a WiseMan test that shows it and is marked as the
   C# core's; the work is to fix each in C# and turn its test around. The pause barrier's is the one that may be a
-  game's freeze, and comes first.~~ *Done 2026-09-23: a72533c (the pause barrier), 7fbf4b1 (the range read), 419583a
-  (the deferred repeat), 51f3377 (the fraction), and 05d41e4 for §6.4.4's race; `Mars_Rdp.md` §2.9.*
+  game's freeze, and comes first.~~ *Done 2026-09-23: 5735332 (the pause barrier), d25a8d1 (the range read), 025573e
+  (the deferred repeat), 0f87acc (the fraction), and 2297ee1 for §6.4.4's race; `Mars_Rdp.md` §2.9.*
 - **MarsRT's single-thread regression** of 1.5 to 3.5 per cent (§5.6.8), found and not explained: a bisection with the
   interleaved bench between the RDP merge and the threads' merge, about two hours, and either a cause or a recorded
-  negative. *Done in §6.14.1: the three tests of 1cad784 together, and a residual of the RDP's checks on the current tree,
+  negative. *Done in §6.14.1: the three tests of c630261 together, and a residual of the RDP's checks on the current tree,
   priced and not built.*
 
 *Done 2026-09-23, the first three items, in §6.6.1 to §6.6.3; §6.6.4 says what they leave. The C# core's four failures
-and the single-thread regression are another run's and are not touched here.* The native interface is 9 since
+and the single-thread regression belong to separate work and are not touched here.* The native interface is 9 since
 §6.6.1.
 
 #### 6.6.1 ROM patches beside the cartridge (2026-09-23)
@@ -3184,7 +3246,7 @@ change it from the UI thread at an arbitrary instruction, so neither core's timi
   replaced, cleared and kept across a state load).
 - The blast radius: the cheat, registry, cheat-wiring and MarsRT frontend classes, 139 tests, passed.
 
-**Mutants.** Ten, each alone (`mutants.py` in the session's scratchpad).
+**Mutants.** Ten, each alone (`mutants.py` in a scratch directory).
 
 | Mutant | Caught by |
 | --- | --- |
@@ -3210,7 +3272,7 @@ picks the later one where enumeration meets the earlier first; only the randomis
 **What the C# core exposes.** Nothing, for the phases: `MarsCore` implements no `IFrameProfiler`, and
 `EmuSen_Multicore.md` §5 lists only Venus and Moon. Mistress's fps line and Pharaoh's profile read whatever a core
 publishes, by capability. So "the same shape on both engines" cannot hold for the phases, and the C# core, being
-another run's, was not given any; MarsRT's are new, and their tests hold them to the frame, not to C#. For the
+under separate work, was not given any; MarsRT's are new, and their tests hold them to the frame, not to C#. For the
 audio peek C# has one: `MarsDebugTarget.GetAudioSamples` returns `Ai.Peek()`, a copy of the samples the frontend has
 not drained, which Pharaoh's `audiodump` reads. MarsRT's target returned an empty array.
 
@@ -3351,6 +3413,21 @@ tests, at 240 frames a game.
 | Rewind on for the C# core too | the window's run test |
 | Rewind still off for MarsRT | the window's run test; the held hotkey |
 
+**Addendum, 2026-09-24: a moment chosen from the reel.** Mistress's rewind reel (`EmuSen_Settings_Reference.md` §4.49)
+goes straight to a snapshot `k` back with one load rather than `k` steps (`EmuSen_Rewind_And_FastForward.md` §5.2).
+`MarsRtRewindToMomentTests` prove it on MarsRT as Mistress runs it — four workers, the picture deferred, pictures
+attached as the loop attaches them — on the synthetic system with the RSP: 300 frames, 75 moments, then one back, the
+middle and the oldest in turn, each leaving `SaveState` hashing to the hash taken at that capture and `TotalFrames`
+restored, with 40 frames played between choices. The oldest of 75 moments took 6.64 ms straight and 275.7 ms by 74
+steps, and both landings hash alike. Game states were not used; the three-game landing test above is still the
+evidence for play.
+
+*What the first run found.* The proof failed on a machine that had only been booted: its first load changes one byte,
+`Bus.Si.Controllers[0].Pak.Dirty`, which `machine.rs` sets on every load (as `MemoryBus.cs` does in the C# core) so that
+the frontend writes the loaded pak to its file. After one load the round trip is exact. The tests above never met it
+because every one starts from a game's state. `On_a_fresh_MarsRT_the_first_load_changes_the_pak_s_dirty_flag_alone`
+names the byte from the state's layout; the proof now loads the machine's own state before it starts.
+
 *Two things the round showed.* The Rust mutant first survived, twice, and neither time was it the test's fault alone.
 Once the count above was wrong; and once the build had not rebuilt the library at all. The host's `/tmp` had filled
 under its per-user quota, so MSBuild's `Exec` could not write its script and cargo never ran, and a temporary folder
@@ -3390,7 +3467,7 @@ is likely to cost a few milliseconds one frame in four. Mistress has no switch t
 
 #### 6.6.4 What is not done
 
-- **The C# core's rewind** stays off; its pause is the other agent's to fix (§5.6.6), and its snapshot was not run
+- **The C# core's rewind** stays off; its pause is left to separate work (§5.6.6), and its snapshot was not run
   through these tests.
 - **A MarsRT snapshot loaded into the C# core**, which §5.6.4 left untested, is still untested; rewind never does it.
 - **A registry changed mid-frame** reaches MarsRT's cartridge at the next frame and the C# core's at once (§6.6.1).
@@ -3458,7 +3535,7 @@ percent is therefore twenty-five to seventy samples, and the standard error of t
 the Dam and a point on Super Mario 64; the two runs of each game agree to within that, and both are printed so that
 the reader can see it rather than take it. The milliseconds are the shares multiplied by an unsampled run's frame,
 taken in the same batch: 14.501, 6.778 and 5.801 ms threaded, 22.659, 10.661 and 10.396 on one thread. The six were
-run twice more after the samples, on 2026-09-23 as another run's test suite was finishing on the machine: 14.47 and
+run twice more after the samples, on 2026-09-23 as another test suite was finishing on the machine: 14.47 and
 14.74, 6.84 and 7.84, 5.79 and 5.80 threaded; 22.32 and 22.94, 10.61 and 10.82, 10.40 and 10.41 on one thread. All but
 Ocarina of Time's higher threaded run, taken first while the load was still falling, are within two per cent of the
 batch's, and the batch's are the ones used.
@@ -3774,8 +3851,8 @@ runs within a point and a half; the presenter walked (`Walker::sample`, `walk`, 
 cent of the frame, 1.4 ms, and was parked for the other 76; the workers were as the Dam's, parked or spinning for
 most of it.
 
-**The prediction for the processor's share, and its fate.** The run that built the sampler and took these runs
-was stopped before writing them up, and no prediction of its survives in the results directory; this write-up
+**The prediction for the processor's share, and its fate.** The work that built the sampler and took these runs
+stopped before they were written up, and no prediction from it survives in the results directory; this write-up
 cannot reproduce one it did not see, and a prediction stated after the tables are read is not a prediction. What
 the record allowed one to expect before the sample is nonetheless worth stating, because the sample tests it:
 §3.4 priced MarsRT's processor at 7.9 to 15 ns a step and the C# blocks at 3, and `Mars_Rsp.md` §13 and
@@ -4000,7 +4077,7 @@ fallback for such windows is test 3's case.
 ##### 6.10.3 Speed, and the prediction's fate
 
 Three interleaved rounds of 600 frames from the gameplay states, on an otherwise idle desktop (load 1.3 at the
-start), each round running the build before this section (WiseMan 8d5e2c7), this section's build, and this section's
+start), each round running the build before this section (WiseMan 6e5d5fb), this section's build, and this section's
 build with `EMUSEN_MARSRT_RSP_SIMD=0` — the element-by-element unit on the new layout — in turn. Production's shape,
 `examples/threads <rom> <state> 600 split 4 blocks`:
 
@@ -4277,9 +4354,9 @@ was built: four bands cut each walk by about C#'s own ratio, 2.5 (§5.4.4, 4.55 
 Dam from 11.67 to about 10.9, its whole 0.8 ms of join.
 
 *The measurement.* Three interleaved rounds of 600 frames, `examples/threads <rom> <state> 600 split 4 blocks`, each
-round running the build before this section (WiseMan 2d85f17, built from a clean checkout), this section's build, and
+round running the build before this section (WiseMan 89bb0ae, built from a clean checkout), this section's build, and
 this section's build with `EMUSEN_MARSRT_SCAN_BANDS=1` in turn, every run under the shared lock with ten seconds'
-pause before each game. The load average at the start of the runs was 1.4 to 5.1: another run's runs were interleaved
+pause before each game. The load average at the start of the runs was 1.4 to 5.1: other runs were interleaved
 with these under the same lock, and a run's own four spinning workers raise the next run's reading, so the number was
 recorded and the rounds were compared with each other rather than rejected. The state hashes are
 `4DEACE55468AA765`, `6881AF7D3E8BF471` and `18279384D87951D7` in all 27 runs, as in §6.10.
@@ -4546,7 +4623,7 @@ two. *Revised after the microbenchmark:* its third of a nanosecond in whole runs
 **about 0.3 ms at the Dam**.
 
 Three interleaved rounds of 600 frames from the gameplay states, the build before this section (a clean checkout of
-2d85f17), this section's build, and this section's build with `EMUSEN_MARSRT_RSP_BLOCKS=0`; production's shape,
+89bb0ae), this section's build, and this section's build with `EMUSEN_MARSRT_RSP_BLOCKS=0`; production's shape,
 `examples/threads <rom> <state> 600 split 4 blocks`, at a load of 1.4 at the start:
 
 | ms a frame | before | the table | the interpreter, this build |
@@ -4641,7 +4718,7 @@ built**; the number to beat, should it be taken up, is the Dam at 10.44 ms.
 
 #### 6.13 The picture lent, not given (2026-09-23)
 
-The handheld's `[fps]` line, read by the parent session on the Legion Go S, showed the loop's time outside `RunFrame`
+The handheld's `[fps]` line, read on the Legion Go S, showed the loop's time outside `RunFrame`
 (`total − run`) at about 1 ms at one multiple, **6 to 7 ms at two and 12 to 13 at four**, with `RunFrame` itself 16 to
 24 ms against 11 to 12 in a bench of the same scene: consistent with full collections stopping every thread. A probe
 on this desktop (`~/.cache/emusen/probe/mars-speed/fpsprobe/`, Donkey Kong 64's title) found the source: 1.2 MB
@@ -4780,7 +4857,7 @@ two rounds). At one and two, where the emulation thread is the bound, the loop g
 
 *What the desktop cannot show.* The handheld's excess was 6 to 13 ms and not 0.3 to 4: its collections are far dearer
 than this machine's one millisecond each, and §6.1 found it bound on the emulation thread. The prediction for it,
-stated here before the parent session measures it: `total − run` at two and four falls to the copy there, 1 ms or a
+stated here before it is measured there: `total − run` at two and four falls to the copy there, 1 ms or a
 little more at four, `RunFrame` returns toward the bench's 11 to 12 ms where it was inflated by collections, and the
 gen-2 count in Mistress's own log is zero.
 
@@ -4797,7 +4874,7 @@ gen-2 count in Mistress's own log is zero.
   few hundred bytes. None was removed.
 - **A lease.** A caller that returns the same array twice across a re-lend is not detectable by array (`EmuSen_Multicore.md`
   §16); Mistress returns once by construction.
-- **The handheld.** Not measured here, by instruction; the prediction for it is stated above.
+- **The handheld.** Not measured here, by plan; the prediction for it is stated above.
 - **A real window.** Every test is headless; Avalonia's live compositor, its order of rendering and disposing draw
   operations, and the GPU backend's copy were not instrumented. The rules of `EmuSen_Serenity.md` §2.8 do not depend
   on that order.
@@ -4806,7 +4883,7 @@ gen-2 count in Mistress's own log is zero.
 
 Two questions were left open by earlier sections, and this one answers both. §5.6.8 found MarsRT's unthreaded path 1.5 to
 3.5 per cent slower after the threads' merge and "recorded [it] as a regression that has been found and not yet
-explained"; §6.6 priced its bisection at two hours. And Donkey Kong 64's title, the player's state, ran 13.4 to 14.4 ms a
+explained"; §6.6 priced its bisection at two hours. And Donkey Kong 64's title, a state saved in play, ran 13.4 to 14.4 ms a
 frame on the handheld and 11.6 on this desktop, with `examples/threads … split 4 blocks` reporting the emulation thread
 waiting about 3 ms a frame at wait site 8 while the first worker was busy about 3 ms; the three control games wait
 0.02 ms there. The first question gets a bisection and, as far as the builds allow, an attribution (§6.14.1). The second
@@ -4816,28 +4893,28 @@ capture kept whole on the processor, both diagnosed and priced and neither built
 
 ##### 6.14.1 The one-thread regression, bisected
 
-*The builds.* Between the RDP's merge and 709e2ce the threads' branch has eleven commits. The first two — b6a613c, the
-drain, and c8601c4, its merge of WiseMan — do not compile: each fails with twelve errors, halves of modules that 1cad784
-completes. So the smallest buildable step is from the branch's base to 1cad784, the drain and the wait sites together.
-The base is 7ea79b1, as in §5.6.8, and 0877875, WiseMan as the branch first took it, which is 7ea79b1 without four
+*The builds.* Between the RDP's merge and bed5e9d the threads' branch has eleven commits. The first two — 7c57764, the
+drain, and 8af9219, its merge of WiseMan — do not compile: each fails with twelve errors, halves of modules that c630261
+completes. So the smallest buildable step is from the branch's base to c630261, the drain and the wait sites together.
+The base is 030256c, as in §5.6.8, and 2558a6e, WiseMan as the branch first took it, which is 030256c without four
 frontend files (739 lines, none on the machine's path). Every run is `examples/frames <rom> <state> 600 scan` on one
 thread, §5.6.8's command, under the lock, in rounds with the order rotated; every build of a game gave the same state
 hash.
 
-*The reproduction and the bisection* (made by a helper agent; three rounds; ms a frame):
+*The reproduction and the bisection* (three rounds; ms a frame):
 
-| | 7ea79b1 | 1cad784 | 876d1e1 | ac10631 | 709e2ce |
+| | 030256c | c630261 | d242f1e | c828e8c | bed5e9d |
 | --- | --- | --- | --- | --- | --- |
 | Super Mario 64 | 13.06–13.30 | 13.47–13.77 | 13.47–13.78 | 13.38–13.59 | 13.47–13.78 |
 | Ocarina of Time | 15.11–15.42 | 15.44–15.66 | 15.31–15.59 | 15.37–15.40 | 15.39–15.46 |
 | GoldenEye, the Dam | 27.95–27.99 | 28.12–28.27 | 27.96–27.97 | 27.97–28.12 | 27.92–27.99 |
 
-The step is at 1cad784, and nothing after it moves the time again. §5.6.8's numbers are reproduced: two per cent on
-Super Mario 64 and one and a half on Ocarina of Time. On GoldenEye 1cad784 alone is 0.1 to 0.3 ms slower and the
+The step is at c630261, and nothing after it moves the time again. §5.6.8's numbers are reproduced: two per cent on
+Super Mario 64 and one and a half on Ocarina of Time. On GoldenEye c630261 alone is 0.1 to 0.3 ms slower and the
 commits after it are not, so there is no step there that lasts.
 
-*The attribution.* §5.6.8 named two candidates. 1cad784 adds three things to every access the unthreaded path makes,
-each a test that answers the same way whenever no drain runs, and a variant of 1cad784 was built without each, and
+*The attribution.* §5.6.8 named two candidates. c630261 adds three things to every access the unthreaded path makes,
+each a test that answers the same way whenever no drain runs, and a variant of c630261 was built without each, and
 without all three:
 
 - *the marks*: `read_marked` and `write_marked`, an atomic load of the page's mark and a branch, at every CPU load, store
@@ -4848,20 +4925,20 @@ without all three:
 
 Three rounds, seven builds, the order rotated (ms a frame):
 
-| | 0877875 | 7ea79b1 | 1cad784 | without the marks | without the RDP's checks | without `Ram`'s assertions | without all three |
+| | 2558a6e | 030256c | c630261 | without the marks | without the RDP's checks | without `Ram`'s assertions | without all three |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Super Mario 64 | 13.04–13.16 | 13.07–13.34 | 13.41–13.56 | 13.26–13.40 | 13.24–13.38 | 13.39–13.43 | 13.11–13.24 |
-| Ocarina of Time | 15.08–15.38 | 15.13–15.17 | 15.33–15.63 | 15.20–15.30 | 15.16–15.35 | 15.35 (and two runs of 16.6 and 26.2 under another run's load) | 15.02–15.09 |
+| Ocarina of Time | 15.08–15.38 | 15.13–15.17 | 15.33–15.63 | 15.20–15.30 | 15.16–15.35 | 15.35 (and two runs of 16.6 and 26.2 under a concurrent build's load) | 15.02–15.09 |
 
-*The verdict.* The regression is real, and it is the three tests together: without all three, 1cad784 runs in 7ea79b1's
-time on both games (13.11–13.24 against 13.07–13.34; 15.02–15.09 against 15.13–15.17), and 1cad784 itself lies outside
+*The verdict.* The regression is real, and it is the three tests together: without all three, c630261 runs in 030256c's
+time on both games (13.11–13.24 against 13.07–13.34; 15.02–15.09 against 15.13–15.17), and c630261 itself lies outside
 both ranges. Of the three, the marks and the RDP's checks each recover two thirds to three quarters of it alone, by the
 medians, and `Ram`'s assertions a fifth or less; but the parts overlap each other, their sum exceeds the whole, and
 each is within about twice the spread of a build's three runs, so no finer split is claimed than that. It is not a
 single cause but a price per access, paid on a path where every one of the tests answers "nothing to do".
 
-*On the current tree.* The three tests are still there, and the same three variants were built from WiseMan at f55bfc0
-(its crate is 88cef31's) and measured against it unmodified, three rounds each way, with the same hashes (ms a frame):
+*On the current tree.* The three tests are still there, and the same three variants were built from WiseMan at 1a7febe
+(its crate is 97e89ab's) and measured against it unmodified, three rounds each way, with the same hashes (ms a frame):
 
 | | unmodified | without the marks | without the RDP's checks | without `Ram`'s assertions |
 | --- | --- | --- | --- | --- |
@@ -5030,7 +5107,7 @@ title's frame at production's shape falls by 0.5 to 1 ms, the 3.1 ms a frame tha
 about 2 ms of it reappearing at sites 2 and 3; the other four states stay within their spread, since their waits are
 small and none of them met the capture's slack as the title does.
 
-*The measurement.* `examples/threads <rom> <state> 600 split 4 blocks`, the base (f55bfc0's crate) and the change
+*The measurement.* `examples/threads <rom> <state> 600 split 4 blocks`, the base (1a7febe's crate) and the change
 interleaved, three rounds under the lock with the order rotated, every pair of builds on a game with the same state
 hash:
 
@@ -5051,7 +5128,7 @@ boxes that meet the lines the walk reads; it was not examined further.
 
 ##### 6.14.8 The multiple: a join at every scan on the device, and the capture kept whole
 
-The parent session measured the title through the shim at 2× with the device on and four workers: `RunFrame` at a mean
+The title was measured through the shim at 2× with the device on and four workers: `RunFrame` at a mean
 of 16.5 ms on this desktop (p50 17.4, p90 22.0), alternating about 19 and 13 ms, against 11.6 ms at one. The per-frame
 trace, now with a column for the drain's joins (`examples/threads … trace=`; `Threads::join` has counted them since
 §5.6, and the example now prints them), says where the difference goes. One run each under the lock, 600 frames, the
@@ -5083,21 +5160,25 @@ that drew the same lines at one. C#'s slack at one is what covers the shadow's o
 that a 1× box bounds every byte the same draw writes at the multiple is not checked by anything: the verifier checks
 RDRAM at one. With the narrowed wait, a pending draw whose 1× box misses the lines read could still be writing the
 shadow's slack while the capture copies it, which is a data race in Rust whatever the value. The multiple-guard commit
-(093d7dd) restores the base's behaviour there, and the game comparisons at the multiple pass either way.
+(741a630) restores the base's behaviour there, and the game comparisons at the multiple pass either way.
 
 *Priced, not built.* Two levers, each a design change rather than a narrower wait. On the device: the scan-out ordered
 into the leading worker's stream, as a command the ring carries, so that the machine's thread waits only for the bytes
 it captures at one. Its ceiling on the title is the join's 3.7 ms a frame less what the processor's depth reads would
 then wait for, 1.8 ms at one and more with the device shading beside them: under 2 ms a frame. On the processor at a
 multiple: a verifier of the shadow's writes against the 1× boxes scaled, which would let the narrowed capture be kept
-there, and the 2.5 ms a frame with it.
+there, and the 2.5 ms a frame with it. *The device's lever is built in §6.15 (2026-09-24): the title at two on the device
+fell by 1.46 ms a frame, its site-8 wait and join to nothing.*
 
 ##### 6.14.9 What is not done
 
 - **The depth image's reads** (§6.14.4). Necessary for exactness; only a faster drain, or one that ran the draws holding
-  the depth image first, which would change raster order, could shorten them.
+  the depth image first, which would change raster order, could shorten them. *Addendum 2026-09-28: at a multiple on the
+  device the wait also covered the device's processor on the leader, which was not necessary; `Mars_Performance.md` §41
+  takes it out, and at one nothing changes.*
 - **The multiple** (§6.14.8): the device's join at every scan, under 2 ms a frame on the title, and the capture kept
   whole on the processor at a multiple, 2.5 ms a frame on the title, each priced with the design change it needs.
+  *The first is built in §6.15.*
 - **The remaining site-3 waits**, 0.2 to 0.3 ms a frame on the title: the end of a load's range keeps thirty-two bytes
   of slack, and a writer still waits for the page's mark rather than the last range that reaches it.
 - **The unthreaded path's residual** (§6.14.1): the RDP's checks, 1.5 to 2 per cent of Super Mario 64's unthreaded
@@ -5106,10 +5187,1167 @@ there, and the 2.5 ms a frame with it.
   apply there at one, and C#'s narrowing of a range by its first eight bytes stays a defect (§5.6.2).
 - **The shim's comparisons.** The WiseMan suites that compare MarsRT with the C# core through the shim
   (`MarsRtThreadsTests`) were not rerun; the crate's own comparisons are against MarsRT unthreaded, the oracle of §5.6.
-- **The handheld.** Not measured here, by instruction. What to measure there, with the prediction for each:
+- **The handheld.** Not measured here, by plan. What to measure there, with the prediction for each:
   `examples/threads` on the title at one, `split <n> blocks` with the handheld's worker count, before and after: site 8
   goes to nothing and site 2 appears, and the frame falls by what site 8 waited less what site 2 then waits, predicted
   a little under a millisecond as here, and more if the handheld's drain is slower beside its emulation thread than
   this desktop's; and at 2× with the device, `… scale=2 gpu trace=<file>`: every light field's present should wait
   about as long as the drain takes over the list, at site 8 with this section's build, and the frame should be the
   base's, since §6.14.8 left that path as it was.
+
+#### 6.15 The scan-out on the drain's leader, at a multiple on the device (2026-09-24)
+
+§6.14.8 found that at a multiple with the device the emulation thread waits, every other field, for the whole display
+list before the scan-out, and priced the lever that would remove the wait: the scan-out ordered into the leading
+worker's stream. This section builds it. The wait had two faces. With the capture narrowed at the multiple it was a
+join (`DpInterface::scan_out`, `scan_into_raster` and `read_back_scaled` each joined the drain before touching the
+device): 7.45 ms at the median of a light field on this desktop. With the capture kept whole, as 741a630 left it, the
+same wait appeared at site 8 instead, and that is the form the handheld showed (`examples/threads … split 4 blocks
+scale=2 gpu`, 15.62 to 15.79 ms a frame, 4.27 to 4.32 ms a frame waited, nearly all at site 8, joins 0.006 ms). A fix
+has to remove the wait in whichever form it takes, so both counters are reported below.
+
+**The claim.** At a multiple on the device, with the list on workers, the emulation thread no longer waits for the list
+to reach the scan-out; the picture, the state and the sound are unchanged, deferred and at once, against the processor
+at the same multiple and against the C# core; the rules of §6.4, the lending of §6.13 and the consistency of states,
+snapshots, setting changes and observed frames hold as before.
+
+##### 6.15.1 The design
+
+*Amended 2026-09-28 (`Mars_Performance.md` §41): the device work, and the processor at the multiple, now run on a thread
+of their own, the device's, rather than the leader's. Every "leader" below that runs device work reads "the device's
+thread", and "the leader's count" reads "the device's thread's count"; the ordering argument is unchanged.*
+
+*Where the device work runs.* `scan_out` and `scan_into_raster` no longer join the drain. With a drain running they hand
+the work (`DeviceWork`, the scan's parameters, or the raster's size, seed, spans and walk) to the leading worker
+through a ring of eight slots, each tagged with `issued`, the count of words handed over when the scan was asked for.
+The leader, between words, runs every piece whose tag its own count has reached (`serve_device`), in the order handed
+over. Two facts make that the scan at once: with a device only the leader's processor at the multiple records rows for
+it (Mars_Gpu.md §11), so the leader having passed word *n* means every row drawn by words before *n* has been recorded;
+and the leader runs no word past *n* until the scan is submitted, so nothing drawn after the scan was asked for reaches
+it. The scan thus lands on the device exactly where it landed when the machine's thread joined and submitted it, and
+the device's command stream is the unthreaded path's. Without a drain the scan is submitted at once, as before.
+
+*The hand-over* is two counts, `device_tail` (the machine's thread, SeqCst) and `device_head` (the leader, Release), and
+the slot between them is written only by the machine's thread before the tail passes it and taken only by the leader
+before the head passes it. The ring's depth, eight, is not a bound that binds: a present hands over one piece, two at
+most, and the next present joins the presenter first; a ninth would wait for a slot.
+
+*Where synchronisation now happens.* Four places wait for the leader's device work, and nothing else touches the device
+while it is owed:
+
+- **A reader of the picture**, the presenter or the machine's thread in an immediate scan, waits in `Pictures` until
+  every piece asked for has been submitted (`asked` counted on the machine's thread, `submitted` on the leader's, a
+  condition variable only to sleep on), and only then on the fence, as §14.2 of Mars_Gpu.md has it. So the order is
+  submission before fence before read; each of the two has its mutant (§6.15.3).
+- **`join`**, and so `read_back_scaled`, a state read (§6.4.2 moves the device into the new machine only after it) and
+  the host's memory access, waits for the device work as well as the words.
+- **`stop`**, which every setting change of the multiple, the device, the worker count or the threads goes through,
+  runs the device work before the drain ends, and **a drain's end** runs it too unless a worker has faulted; a fault
+  abandons it (`Pictures::abandon`) so that no reader waits for a scan that will never be submitted, and the fault is
+  raised where it always was.
+- **The presenter's join** at the next present, which is where the wait the machine's thread no longer makes on the list
+  goes, if the list is still running then.
+
+A state save and a snapshot need nothing new: the device is `[SkipInState]` (§6.4.1), a save waits for the words as
+before (`wait_all`) and a snapshot holds the workers where they stand (§5.6.4). The leader may run a scan while held,
+which touches nothing a state holds.
+
+*The capture on the device.* With the scan ordered on the leader, the capture no longer has to hold the whole reach: the
+device walks its own memory and no shadow is copied, so the only bytes the capture reads are the ones the walk at one
+reads, and `capture_range` narrows the device's capture at a multiple exactly as at one (§6.14.3). The processor at a
+multiple keeps C#'s reach and coarse wait, for §6.14.8's reason, which is unchanged.
+
+*Two small changes that follow.* `publish_raster` no longer asks the device whether it already holds a raster of the
+size (the device may be the leader's at that moment); it sends the seed whenever the host's raster could seed, and the
+device takes it only when it has no raster of that size, which is the decision the machine's thread used to make.
+And the device's pictures are kept beside the device (`ScaledDrawing::pictures`), so that a scan or a presenter reaches
+them without borrowing the device.
+
+**What this departs from.** `Mars_Gpu.md` §13.2 and §14.2 say the scan-out is submitted on the machine's thread after
+a join; that is still the C# core's rule, and MarsRT now departs from it. C#'s `DpInterface.ScanOut` still joins.
+
+##### 6.15.2 The evidence
+
+- *The crate's device tests* (`tests/gpu.rs`, 21): the earlier scan tests run again on a drain of three, the scan
+  run by the leader: the scan-out byte for byte against the processor over thirteen VI modes at two, three and four,
+  deferred and at once; the average scan after scan; a walk left pending; a repeated capture; the device after a state
+  read. Five new tests hold the ordering itself: `the_leader_runs_a_scan_after_the_words_handed_before_it_and_before_those_handed_after`
+  (the words before the scan and after it handed over while the workers stand, the scan asked for between, and the
+  picture the scan at once shows: a rectangle drawn by the last word before the scan and not one drawn by the first
+  after it); `a_picture_read_before_the_leader_has_run_its_scan_waits_for_the_scan` (the leader held short of its
+  device work for 50 ms while the picture is read, at once, deferred and averaged); `a_drain_stopped_while_its_leader_owes_a_scan_runs_the_scan_first`
+  (threads off, the worker count changed, or a state read, while the leader is held for 100 ms);
+  `a_read_back_straight_after_a_scan_waits_for_the_leader_s_scan`; and `a_join_waits_for_the_scans_handed_to_the_leader`,
+  which reads the device's own count of scans after a join made while the leader is held.
+- *Site 8 on the device* (`tests/sites.rs`, 21): the device's capture at two still waits for a draw on the last line
+  the walk at one reads, and goes ahead of one below it where the base's coarse wait would have waited, with the page
+  asserted marked and the picture the list at once leaves.
+- *The game comparisons* (`tests/games.rs`): the seven games at two and at four on the device, deferred and now also at
+  once, split on four workers against the processor at once at the multiple; the device averaged; and the processor
+  at the multiple split and deferred: 63 comparisons of 300 frames, identical in state, picture and sound, Donkey Kong
+  64's title among them.
+- *Against C#, in WiseMan*: `MarsRT_at_a_multiple_leaves_what_the_csharp_core_at_that_multiple_leaves`, the 27 cases
+  (three games, nine settings of multiple, antialiasing and device, each deferred and at once), all exact. The rewind
+  suites (§6.6.3) now run each game at one and again at two on the device: 16 of 16 pass, 882 states compared at
+  interval one per game, every landing's picture a load's, no freeze in 600 operations. The frontend suites (Mistress's
+  hand-off, the frame control, the lending, MarsRT's frontend), 36 tests, pass, with a new one holding a frame through
+  60 frames of Super Mario 64 at two on the device, deferred on four workers, while the others are returned and lent
+  again.
+- The crate's `cargo test --release`, 483 tests, passes, and passes with every driver hidden from the loader
+  (`VK_LOADER_DRIVERS_DISABLE='*'`), where the device tests stand down. Clippy on all targets reports one warning,
+  `chunks_exact_to_as_chunks` in `ffi/mod.rs`, which this change does not touch.
+- *ThreadSanitizer*, §5.6.7's recipe, over the device, site, thread and scan tests: 19 reports outside libtest's
+  channel, none in the hand-over, the leader's service, `Pictures` or the drain; they are the loader's and driver's
+  allocations (`free` and `pthread_mutex_lock` under `GpuDevice::try_create`, uninstrumented) and the `OnceLock`s of
+  §6.14.5. *The positive control*: the tail stored Relaxed, so that the slot's write is not ordered before the leader's
+  read, gives 90 reports, about 65 of them on the slot (`device_due`, the `DeviceWork` taken and dropped).
+- *The validation layer*, with `VK_LAYER_SYNCVAL_SHADER_ACCESSES_HEURISTIC=1` (Mars_Gpu.md §14.4): the device tests
+  and Donkey Kong 64's device comparisons, 60 frames each, report nothing. *The positive control*, the barrier after
+  every dispatch removed, is reported: 54 hazards over the device tests and 2 over the game. The log file the layer
+  writes held nothing for the device tests even with the control, which opens many instances in one process, so those
+  runs were read from the layer's standard output instead, which the test harness does not capture.
+
+##### 6.15.3 Mutants
+
+Each applied alone, built, and run against the named suites, the source restored (`mutants.py` in
+`~/.cache/emusen/probe/marsrt-gpu-join/`):
+
+| Mutant | Caught by |
+| --- | --- |
+| the leader runs a scan one word early, before the last draw handed before it | `the_leader_runs_a_scan_after_the_words_handed_before_it_and_before_those_handed_after` |
+| the leader runs a scan one word late, after the first word handed after it | the same |
+| a picture read without waiting for the leader to submit it | seven device tests |
+| a picture read before the fence (the image read before the device has finished it) | six device tests |
+| a stop that does not run the leader's device work | `a_drain_stopped_while_its_leader_owes_a_scan_runs_the_scan_first` |
+| a join that does not wait for the leader's device work | `a_join_waits_for_the_scans_handed_to_the_leader` |
+| the device's capture at a multiple waits for nothing | `site_8_on_the_device_the_capture_waits_for_a_draw_on_the_last_line_the_walk_reads` |
+| the device's capture at a multiple keeps C#'s reach (the base's) | `site_8_on_the_device_the_capture_goes_ahead_of_a_draw_below_the_lines_the_walk_reads` |
+| a snapshot (a rewind step, a state save while the workers run) that does not hold the workers | the device game comparison, Donkey Kong 64's title |
+| the lending hands out an array it has just lent (`FrameBufferLending`) | the new device lending test, and §6.13's |
+| a barrier that waits for a worker gone home at a stop (§6.15.4's defect) | `a_machine_dropped_while_its_workers_wait_at_barriers_ends` |
+
+All eleven were caught. *What the pattern says.* The join's mutant survived the first version of the tests: no path a
+game takes touches the device after a join without also passing a stop, whose own wait covered it, and a read-back
+straight after a scan, under ThreadSanitizer, showed nothing either, since the driver's own locks, which TSan sees
+through its interceptors, order the two threads' device calls whether or not the join waited. It is caught only by a
+test that asks the device's own count after the join, which is an instrument of the claim, not of a game.
+
+##### 6.15.4 A defect found on the way: a machine dropped at a barrier never ended
+
+The WiseMan rewind suite hung on its first run after the change, for half an hour, with two RDP workers each at a whole
+core and the machine's thread in `Threads::end`, joining them: a core disposed while its drain was mid-list.
+`Threads::drop` ends the drain without waiting for the words, and a worker that sees the stop at the top of its loop
+leaves, while those already waiting at a barrier (`Step::Leader`, `All`, `AllJoined`, §5.6.6) wait for it for good.
+`a_machine_dropped_while_its_workers_wait_at_barriers_ends` (forty drops of a split machine part way through 3,000
+image changes, under a deadline) fails the same way on 991f9d1, unmodified, so the defect is older than this work; the
+change only made it likelier, since the drain's end now runs the device work first and so keeps the workers moving
+through barriers when the stop comes. A barrier now sends its waiters home at a stop, and they run nothing more, which
+is all a dropped machine needs. A stop that is not a drop waits for every word first and never meets the case.
+
+##### 6.15.5 Speed, and the prediction's fate
+
+*The prediction, stated before the rounds* (the stage plan's, and §6.14.8's ceiling): Donkey Kong 64's title at two on the
+device falls by 1.5 to 2 ms a frame, the join or site-8 wait going to nearly nothing and about 2 ms reappearing at the
+processor's depth reads (site 2), as at one; the other six states, and every state at one, stay within their spreads.
+
+*The measurement.* `examples/threads <rom> <state> 600 split 4 blocks [scale=2 gpu]`, 991f9d1's crate against this
+section's, three rounds interleaved with the order rotated, under the bench lock at a load below three; every pair of
+builds gave the same state hash (ms a frame, range and median; the waits per frame):
+
+| | before | after | waits before | waits after |
+| --- | --- | --- | --- | --- |
+| **Donkey Kong 64, title, 2× device** | 13.20–13.42 (13.23) | **11.74–11.90 (11.77)** | 8: 3.80–3.86; joins 0.008 | 2: 2.29–2.30, 3: 0.26, 8: 0.16; joins 0 |
+| Donkey Kong 64, title, 1× | 10.79–10.93 (10.84) | 10.72–10.99 (10.78) | 2: 1.69–1.76, 3: 0.17 | the same |
+| Super Mario 64, 2× device | 5.30–5.34 (5.33) | 5.29–5.47 (5.36) | 8: 0.44–0.86; joins 0.22–0.43 | 8: 0.87–0.91; joins 0 |
+| Super Mario 64, 1× | 3.46–3.58 (3.50) | 3.47–3.58 (3.51) | 8: 0.36 | 8: 0.33–0.36 |
+| Ocarina of Time, 2× device | 5.43–5.54 (5.44) | 5.41–5.55 (5.43) | 2: 0.13–0.32, 11: 0.08–0.22 | 2: 0.31–0.33, 11: 0.25–0.26 |
+| Ocarina of Time, 1× | 4.48–4.55 (4.50) | 4.42–4.46 (4.44) | 2: 0.13, 11: 0.18 | the same |
+| GoldenEye, the Dam, 2× device | 10.70–10.82 (10.78) | 10.65–10.74 (10.69) | 8: 0.07; joins 0.09 | 8: 0.05; joins 0 |
+| GoldenEye, the Dam, 1× | 9.55–9.70 (9.56) | 9.58–9.71 (9.61) | none | none |
+| Super Mario 64 from power-on, 2× device | 3.64–3.76 (3.76) | 3.65–3.72 (3.67) | 8: 0.25–0.27; joins 0.13 | 8: 0.23–0.28; joins 0 |
+| Super Mario 64 from power-on, 1× | 3.01–3.06 (3.06) | 2.96–3.10 (2.98) | 8: 0.07 | 8: 0.07 |
+| Ocarina of Time from power-on, 2× device | 3.52–3.55 (3.54) | 3.46–3.52 (3.47) | 8: 0.23, 11: 0.15; joins 0.04 | 8: 0.23, 11: 0.13; joins 0 |
+| Ocarina of Time from power-on, 1× | 3.01–3.12 (3.04) | 3.03–3.22 (3.15) | 8: 0.15, 11: 0.12 | the same |
+| GoldenEye from power-on, 2× device | 2.68–2.69 (2.68) | 2.60–2.62 (2.61) | joins 0.007 | none |
+| GoldenEye from power-on, 1× | 2.61–2.71 (2.61) | 2.60–2.73 (2.68) | none | none |
+
+On the desktop the base now shows the handheld's form, the wait at site 8 (3.8 ms a frame) and not the join, since
+741a630 restored C#'s capture at the multiple after §6.14.8's join was measured. One traced run each (600 frames, the
+first twenty left out) says where the frame went: the light fields' present fell from 8.45 ms at the median (7.77 of it
+at site 8) to 0.38, and the heavy fields' emulation rose from 17.6 to 22.6 ms, since the list now runs beside the heavy
+field and the processor's depth reads there wait for the draws that hold them (site 2), which is §6.14.4's necessary
+wait. The leader spends 0.29 to 0.32 ms a frame running the scans.
+
+*The prediction's fate.* **The title fell by 1.46 ms at the median** (13.23 to 11.77), the ranges apart, at the bottom of
+the predicted range and just under it. The waits moved as predicted: site 8 from 3.8 to 0.16 ms a frame, the joins to
+none, and 2.3 ms reappearing at site 2 and 0.26 at site 3, a little more than at one (1.7), as §6.14.8 said it would be
+with the device shading beside the depth reads. The other states are within their spreads at one and at two, or a
+little faster where the base joined (GoldenEye and Ocarina of Time from power-on, 0.07 ms). *What the prediction did
+not say:* on the other games the wait the emulation thread no longer makes on the list reappears as the presenter's
+join at the next present (Super Mario 64 at two: 0.76 to 1.49 ms a frame; the Dam 0.53 to 0.90), because the presenter
+now waits for the leader's submission, and the frame is unmoved: those games' lists end well within the next field.
+Donkey Kong 64's does not wait there (0.05 ms), since its heavy field is longer than its list.
+
+##### 6.15.6 The handheld (measured 2026-09-24, after the merge 2625358)
+
+The Legion Go S, SteamOS 3.8.27, power profile "custom", Mistress closed; the `threads` builds of 991f9d1 and
+of the branch, copied over (both need glibc 2.34 at most), three rounds interleaved with the order reversed each
+round, DK64's title state, 600 frames, `split 4 blocks`:
+
+| DK64 title | 991f9d1, ms a frame | branch, ms a frame |
+|---|---|---|
+| 2x on the device | 16.59, 16.79, 16.83 | 14.92, 14.70, 14.81 |
+| 1x | 14.44, 14.68, 14.72 | 14.91, 14.58, 14.58 |
+
+At the multiple the median falls 1.98 ms (16.79 to 14.81), under the 16.7 ms target. Against the prediction of
+§6.15.7's first item, which was written before the measurement and is kept as written:
+
+- **Confirmed:** site 8 fell from 4.44–4.60 to 0.11–0.13 ms a frame (predicted about 0.2); the drain's joins from 7 to
+  0 (predicted near nothing); site 2 appeared at 2.62–2.75 (predicted 2.5 to 3).
+- **The drop was larger than predicted, and the frame longer.** Predicted a fall of 1.3 to 1.8 ms from 15.62–15.79 to
+  14.0–14.4; measured a fall of 1.98 ms from 16.59–16.83 to 14.70–14.92. The base itself ran about a millisecond
+  slower than on 2026-09-23 (§6.14), in the same session and on the same states. The two builds were measured
+  interleaved, so the fall is the comparison to trust; why the base was slower that day was not investigated.
+- **At one nothing moved**, as §6.15.5 found on the desktop: the medians are 14.68 and 14.58, inside each other's
+  spread. The state hash (2D024DBB873B763A) was the same in all twelve runs.
+- **Not measured:** the `trace=` run the prediction also asked for.
+- **In Mistress** (build with libmarsrt 795edd41, the same day), the player reported DK64 at 2x on the device running
+  at full speed, where §6.14 had it at about 45 frames a second on the title. That is the player's reading of the
+  frame counter, not a bench figure. The player then set 3x (the device on, antialiasing off, four workers, read
+  back from the handheld's `graphics.json`) and reported full speed there too. No bench was run at 3x.
+
+##### 6.15.7 What is not done
+
+- **The handheld.** Not measured by the branch, by plan; measured after the merge, §6.15.6. What to measure, with the prediction for each:
+  `examples/threads dk64-us.v64 dk64-us-title.state 600 split 4 blocks scale=2 gpu` before (991f9d1) and after, three
+  rounds interleaved: the site-8 wait of 4.27 to 4.32 ms a frame goes to about 0.2, the joins stay near nothing, and
+  site 2 appears at 2.5 to 3 ms a frame (more than here, the handheld's drain being slower beside its emulation thread);
+  the frame falls by 1.3 to 1.8 ms, from 15.62–15.79 to about 14.0–14.4, under the 16.7 ms target. The `trace=` column
+  for the drain's joins should be zero in every field, and the light fields' present well under a millisecond.
+- **The depth reads.** Site 2 is now the title's whole wait at the multiple as at one (§6.14.4), and it is necessary;
+  nothing here shortens it. *Retired in part 2026-09-28: at the multiple it was larger than at one (2.3 against 1.7 ms)
+  because the leader's count included the device's processor. With that processor on a thread of its own
+  (`Mars_Performance.md` §41), Donkey Kong 64's site-2 wait in play is no larger at two to four than at one; the title's
+  state was not measured again.*
+- **The C# core** still joins the drain at its scan-out (`Mars_Gpu.md` §13.2), and its capture at a multiple is
+  C#'s. The same design would apply there.
+- **The processor at a multiple** still keeps the capture whole, 2.5 ms a frame on the title (§6.14.8); its lever, a
+  verifier of the shadow's writes, is not built.
+- **Other GPU devices.** Every device test ran on the RX 6800 alone (the integrated card and llvmpipe were not asked for).
+
+#### 6.16 What is left on the thread, and what Rust itself can buy (2026-09-24)
+
+§6.9 sampled a production frame, ranked the levers left, and set the order that §6.10 to §6.15 then followed. Those
+sections built four of its levers and changed what a frame is made of; this section samples it again, says what each
+built lever retired against what §6.9 predicted, and then prices the levers the C# core could never have used: the
+compiler's own profile-guided optimisation, a post-link layout pass, instruction sets beyond SSE4.1, the recompiler's
+settings, fastmem through a fault handler, and the threads' placement — and, because the fresh profile pointed at it,
+the lock-step of the signal processor beside the CPU's blocks, which §5.8.3 left decoded. Nothing here changes
+production. Every prototype is outside the repository, and every timed build of a game ended on the base's state
+hash unless it is marked inexact, which only one is.
+
+**The findings in one paragraph.** On this desktop the emulation thread of the Dam is now 9.65 ms: the signal
+processor 4.5 of it (47 per cent), the CPU's decoded tier 2.2, the dispatcher 1.1 and the software float 0.6. The
+vector unit that was §6.9's first row is a quarter of what it was, and the presenter's join is gone. Of the Rust-only
+levers, **profile-guided optimisation is the one that pays**: 7 to 12 per cent on every state in the cleaner batch,
+exact, for a build step. BOLT, the AVX2 and AVX-512 builds and Cranelift's other optimisation level are each within
+about four per cent, the vector unit multiversioned within one, and BOLT added nothing on top of PGO. Fastmem stays
+unrecommended. The largest lever the profile shows is not
+a language feature: **the signal processor run ahead of the CPU to its next event**, which lets the blocks beside it
+compile. An inexact prototype bounds it at 14 to 18 per cent on the Dam and Donkey Kong 64, and counters taken on the
+exact machine say the undo it needs would almost never run.
+
+##### 6.16.1 The method, and what it cannot see
+
+*The builds.* The base is WiseMan dbde74a, whose crate is c185890's, built as the examples are (`release`: fat LTO,
+one codegen unit, `panic = "abort"`, line tables). Every variant is built from the same source into its own target
+directory under `~/.cache/emusen/probe/mars-speed/research-target/`, the source copied to
+`research/crates/<name>/` where a prototype changes it.
+
+*The timing.* `examples/threads <rom> <state> 600 split 4 blocks`, production's shape, for the Dam (`ge.z64`), Ocarina
+of Time, Super Mario 64 and Donkey Kong 64's title (`dk64-us.v64`), all builds of a round run one after another with
+the order rotated between rounds, each run under the shared bench lock (`research/bench.sh`). The machine was shared
+with other .NET builds and a running Mistress through most of the evening, so every run first waits until
+the rest of the machine has been under 1.2 busy processors for a second (logged as `busy=` beside each run); a build
+that starts mid-run is not caught by that gate, and the three or four outliers of 11 to 14 ms in the tables below are
+that. Medians of three rounds are quoted, all runs are printed in `research/results-r*.tsv`, and a difference is called
+a result only where the rounds do not overlap. The base itself moved between batches — the Dam 9.65 (the morning's
+three rounds, 9.63 to 9.77), 9.68 and 9.98 — so each lever is compared with the base of its own batch.
+
+*The sampler.* §6.9's `rtsample.py`, one stop a millisecond, the grouping of `rtreport.py` with §6.12's `split.py` for
+the processor's rows, the shares multiplied by the morning's unsampled medians: 9.648, 4.490, 3.530 and 10.866 ms.
+Two runs of the Dam and DK64 (9,362 and 10,684 samples), four of the two lighter games (6,907 and 4,431), because a
+light frame gives fewer samples a second.
+
+*The counters.* `perf stat` 7.2 extracted from Fedora's package into `research-tools/root/` (no root needed), per
+thread, user mode, over whole 600-frame runs, so a count divided by 600 is a frame's (the state's load included).
+
+*What it cannot see.* The same four as §6.9: no input is pressed; nothing inside a compiled block; no caller for a
+shared handler; and the device, whose runs are left to §6.16.8. And one new: under PGO the
+compiler inlines `decoded::run` and `Blocks::step` into `Machine::run_frame` without inline records that
+`eu-addr2line` can read for all of it, so a PGO build's samples cannot be grouped as the base's are; the PGO build is
+measured by time and counters only.
+
+##### 6.16.2 The fresh profile
+
+The emulation thread, ms a frame and share, the processor's rows by `split.py`:
+
+| component | the Dam, 9.65 | DK64 title, 10.87 | Ocarina, 4.49 | Mario, 3.53 |
+| --- | ---: | ---: | ---: | ---: |
+| RSP: decode and dispatch | 1.81, 18.8% | 1.55, 14.3% | 0.60, 13.4% | 0.61, 17.4% |
+| RSP: the vector unit | 1.28, 13.3% | 0.82, 7.6% | 0.70, 15.6% | 0.63, 17.9% |
+| RSP: the scalar unit, loads and stores | 0.78, 8.0% | 0.51, 4.7% | 0.26, 5.7% | 0.30, 8.4% |
+| RSP: the lock-step (tick, `sp_step`, counters) | 0.57, 5.9% | 0.63, 5.8% | 0.19, 4.2% | 0.10, 2.7% |
+| RSP: events | 0.08, 0.9% | 0.08, 0.7% | 0.03, 0.8% | 0.03, 0.8% |
+| **the signal processor** | **4.52, 46.8%** | **3.58, 33.0%** | **1.78, 39.6%** | **1.67, 47.2%** |
+| decoded blocks: loop and handlers | 2.21, 22.9% | 2.51, 23.1% | 0.74, 16.5% | 0.30, 8.5% |
+| dispatcher: `Blocks::step` and the entry | 0.83, 8.6% | 0.84, 7.8% | 0.54, 11.9% | 0.23, 6.5% |
+| dispatcher: the entry comparison (`memcmp`) | 0.26, 2.7% | 0.32, 3.0% | 0.12, 2.7% | 0.06, 1.6% |
+| compiled blocks | 0.11, 1.1% | 0.08, 0.7% | 0.29, 6.4% | 0.20, 5.6% |
+| CPU: the coprocessor | 0.58, 6.0% | 0.94, 8.7% | 0.39, 8.6% | 0.17, 4.9% |
+| CPU: the TLB | 0.17, 1.8% | 0.04, 0.4% | 0.01, 0.3% | 0.01, 0.3% |
+| RDP on this thread: marks, ranges, publish, `Take` | 0.45, 4.7% | 0.33, 3.0% | 0.16, 3.5% | 0.16, 4.5% |
+| RDP: waiting for the workers | 0.00 | **1.81, 16.7%** | 0.20, 4.6% | 0.31, 8.9% |
+| the presenter's join | 0.04, 0.5% | 0.04, 0.4% | 0.02, 0.3% | 0.22, 6.3% |
+| bus, devices, idle loop, frame loop, other | 0.36, 3.7% | 0.30, 2.8% | 0.20, 4.4% | 0.19, 5.4% |
+
+*What it says.*
+
+- **The signal processor is still the largest thing on every thread but one**, and its largest part is no longer the
+  vector unit but decode and dispatch: 1.8 ms at the Dam, of which the tick's single steps (`Decoded::step`) are
+  0.49, the field extraction in the handlers (`rt`, `rd`) 0.24, the straight loop and `Decoded::run` 0.35, the
+  byte swap of every word 0.11 and the handlers' entry frames the rest (`research/samples/all-ge.rsp`).
+- **The CPU beside the running processor is the second thing.** At the Dam and DK64 the decoded tier is 2.2 and 2.5
+  ms and compiled code a tenth of a millisecond: 98 and 88 per cent of their block instructions run decoded
+  (`examples/frames` counters: DK64 35.9 M of 290.8 M compiled in 600 frames), because a block entered while the
+  processor runs is left decoded (§5.8.3). The dispatcher is another 1.1 ms on each.
+- **DK64's title waits 1.8 ms a frame for the workers** (site 2, the depth reads of §6.14.4), the largest single row
+  of that frame, and necessary.
+- **The coprocessor is 0.94 ms on DK64**, twice the Dam's share. Of it the software float's arithmetic proper
+  (`round`, `add_signed`, `multiply`, `square_root`, `to_integer`, `divide`) is 0.25 ms, and the rest is the
+  dispatch into it: `execute_format`, `execute_cop1`, `ops::cop1` and the loads and stores (`research/fpushare.py`).
+- **The hardware's view** (`perf stat`, the emulation thread, 600 frames): the Dam retires 144 million instructions a
+  frame at 2.79 a cycle, mispredicts 693 thousand branches (3.0 per cent), misses the L1 data cache 430 thousand times
+  and the L1 instruction cache 5.5 thousand; DK64 158 million, 2.60 a cycle, 800 thousand mispredictions. At fifteen to
+  twenty cycles each the mispredictions are a fifth of the Dam's cycles; the instruction cache is under half a per cent.
+  The four rasteriser workers are on the processor the whole run (13 billion user cycles each in three seconds),
+  spinning in `sleep` between words.
+
+*The predictions for the profile*, written before it was sampled (`research/PREDICTIONS.md`, P1): the processor 42 to
+50 per cent of the Dam with each of its rows as found — held; the decoded tier second at the Dam, 18 to 25 per cent —
+held; on the lighter games a wait for the workers the next row after the processor, larger than the presenter's join —
+held for Mario, refuted for Ocarina, where the dispatcher (0.54 ms) is next; DK64's site-2 wait its largest row and the
+processor under 35 per cent — held; the join under 0.2 ms on every game — refuted for Mario, 0.22 ms, §6.11.7's
+residual.
+
+##### 6.16.3 What the built levers retired, against §6.9
+
+The same rows, §6.9's two-run means and this section's, ms a frame:
+
+| row | the Dam: §6.9 → now | Ocarina | Mario | built in | what §6.9 predicted, and its fate |
+| --- | --- | --- | --- | --- | --- |
+| the vector unit | 5.25 → 1.28 (−76%) | 2.44 → 0.70 | 2.43 → 0.63 | §6.10 | the Dam to 10–12 ms: held (§6.10.3) |
+| decode and dispatch | 1.64 → 1.81 | 0.54 → 0.60 | 0.48 → 0.61 | §6.12 | row unchanged in name, 1.24 ms off the Dam's frame, a quarter of it the CPU's loop: held |
+| the lock-step | 0.83 → 0.57 | 0.26 → 0.19 | 0.25 → 0.10 | §6.12 | not predicted |
+| the scalar unit | 1.02 → 0.78 | 0.39 → 0.26 | 0.34 → 0.30 | §6.10, §6.12 | not predicted |
+| the presenter's join | 0.63 → 0.04 | 0.69 → 0.02 | 0.99 → 0.22 | §6.11 | Mario to about 5.0, Ocarina 6.2, the Dam −0.5: retired, the bands took more (§6.11.5) |
+| decoded tier | 2.11 → 2.21 | 0.66 → 0.74 | 0.28 → 0.30 | — | untouched |
+| dispatcher with `memcmp` | 1.11 → 1.09 | 0.65 → 0.66 | 0.31 → 0.29 | — | untouched |
+| the coprocessor | 0.52 → 0.58 | 0.37 → 0.39 | 0.17 → 0.17 | — | untouched |
+| RDP marks and `Take` | 0.54 → 0.45 | 0.18 → 0.16 | 0.15 → 0.16 | — | untouched |
+| waiting for the workers | 0.00 → 0.00 | 0.01 → 0.20 | 0.01 → 0.31 | — | new: a faster thread now meets the workers (§6.10.3) |
+| **the frame** | **14.50 → 9.65** | **6.78 → 4.49** | **5.80 → 3.53** | | |
+
+The vector unit retired three quarters of itself on every game and the join nearly all of itself; together they are
+4.6 of the Dam's 4.85 ms and 3.8 and 2.6 of the other two games'. What the frame lost elsewhere the lighter games
+partly gave back as waits for the workers, which is §6.10.3's observation at a larger size: once the emulation thread
+is faster, the drain is sometimes the bound. The rows no built lever touched — the decoded tier, the dispatcher, the
+coprocessor — are the same size, and are now two fifths of the Dam's frame.
+
+##### 6.16.4 The Rust-only levers of the build: PGO, BOLT, instruction sets, Cranelift's level
+
+*Predictions*, written in `research/PREDICTIONS.md` before any of these was built, and quoted with their fates below.
+
+**Profile-guided optimisation.** `-Cprofile-generate` on the whole build (the crate, Cranelift, std as linked), trained
+on states *disjoint from the measured ones* (`research/train.sh`: Wave Race 64, Banjo-Kazooie, Kirby 64 and Majora's
+Mask from the library's states, GoldenEye, DK64 and Ocarina of Time from power-on, 600 to 1,200 frames each, threaded
+and on one thread), merged with Fedora's `llvm-profdata` 22.1.8 (the compiler's LLVM is 22.1.8), and `-Cprofile-use`.
+A second profile trained on the four measured states themselves bounds the bias of training on the test.
+
+| ms a frame, median of 3 | base | PGO | PGO, in-sample | BOLT | PGO + BOLT |
+| --- | --- | --- | --- | --- | --- |
+| the Dam | 9.684 | **9.016 (−6.9%)** | 9.130 | 9.378 (−3.2%) | 9.132 |
+| Ocarina of Time | 4.579 | **4.121 (−10.0%)** | 4.191 | 4.385 (−4.2%) | 4.109 |
+| Super Mario 64 | 3.534 | **3.124 (−11.6%)** | 3.210 | 3.451 (−2.4%) | 3.151 |
+| DK64 title | 10.965 | **10.154 (−7.4%)** | 10.151 | 10.749 (−2.0%) | 10.384 |
+
+A second batch (r3) gave PGO −9.1, −9.8, −11.5 and −3.6 per cent, the last with one 13.4 ms run in three; every
+round of PGO is under every round of the base on the Dam, Ocarina and Mario in both batches. Every PGO run ended on
+the base's hash. *Prediction P2a* — 4 to 10 per cent, most on the Dam and DK64, least on Mario — **held in size and
+failed in shape**: Mario gained most. *P2b* — the in-sample profile better by under 2 per cent — held, and more: it
+is no better at all, so the disjoint training set is not costing anything measurable.
+
+*Why it pays, from the counters* (whole 600-frame runs, the emulation thread): at the Dam the thread retires 5.6 per
+cent fewer instructions (144.5 to 136.4 million a frame) and 5.9 per cent fewer cycles; at DK64 29 per cent fewer
+instructions and 21 per cent fewer cycles, of which the frame keeps only 7 because the thread then waits longer at
+site 2. Mispredictions do not move (693 to 707 thousand a frame at the Dam, 800 to 805 at DK64): the interpreters'
+indirect dispatch is data-dependent and the profile cannot predict it. The instruction cache's misses fall by two
+thirds, from a level that was already negligible. So PGO's gain is inlining and code layout on the paths the
+profile names hot — the decoded loop, the dispatcher and the processor's table — and not branch prediction.
+
+*What it costs, and what it is not.* A build step and a training set that needs commercial ROMs, which CI does not
+have: the profile would be produced on this machine and checked in (`llvm-profdata` output, a few megabytes), or
+produced at publish time where the ROMs are. A stale profile is safe — LLVM ignores a function whose hash no longer
+matches, so the loss is speed on the changed functions, never behaviour — and the profile is portable across x86-64
+targets and not to aarch64, where the SIMD paths differ. The cdylib and the examples share the functions the
+profile names, so a profile trained through the examples applies to `libmarsrt.so`; that is argued, and not measured
+through the shim.
+
+*Carried on in §6.17* (2026-09-25 to 09-28): the profile built into the library Mistress loads, and measured there
+through Mistress's own loop (§6.17.5), where it takes 8 to 9 per cent off Super Mario 64 and Ocarina of Time and 4 off
+the Dam and Donkey Kong 64's title; two of the paragraph above's claims about where a profile applies were retired
+(§6.17.1).
+
+**BOLT** (Fedora's `llvm-bolt` 22.1.8, the binary linked with `--emit-relocs`, `perf record -j any,u` over the same
+training set, `ext-tsp` block order, `cdsort` function order, hot and cold split): 2 to 4 per cent alone, nothing on
+top of PGO and 1 to 2 per cent worse than PGO alone on the two heavy games. BOLT halved the taken branches in the
+profile's hot functions, but the counters over a whole run of the Dam show no fewer cycles than the base's, so its
+gain alone is not established beyond the bench's spread. *P4a* (0 to 3 per cent) and *P4b* (under 1 per cent over
+PGO) held. It is not recommended: PGO gives what it gives and more.
+
+**Instruction sets beyond SSE4.1.** Two kinds of build, each a bound rather than a candidate, since production must
+keep the portable path: the whole crate for a newer target (`-Ctarget-cpu=x86-64-v3`, `x86-64-v4`, `znver4`), and the
+multiversioned vector unit — only the signal processor's SIMD functions given the AVX2 set (`rspv3`) or the AVX2 and
+AVX-512 set (`rspv4`), the rest untouched, which is what runtime dispatch would ship. Medians, change against the
+base of the same batch; r2 is three rounds of every build, r4 four rounds of the base, the two multiversioned builds
+and `x86-64-v4` alone:
+
+| change in ms a frame | the Dam | Ocarina | Mario | DK64 title |
+| --- | --- | --- | --- | --- |
+| whole crate, `x86-64-v3` (r2) | +0.8% | −1.5% | −1.0% | −0.7% |
+| whole crate, `x86-64-v4` (r2 / r4) | −0.9% / **−3.1%** | −3.8% / — | −0.6% / **−4.1%** | −2.2% / +3.6% (runs 10.8 to 16.7, undecided) |
+| whole crate, `znver4` (r2) | +0.6% | −1.9% | −1.5% | −0.9% |
+| the vector unit alone, AVX2 set (r4) | −1.2% | — | −0.5% | −1.0% |
+| the vector unit alone, AVX-512 set (r4) | −0.5% | — | −1.2% | −0.2% |
+
+Every run of every build ended on the base's hash. **The multiversioned vector unit is worth about one per cent**,
+inside the rounds' spread: the unit is one 128-bit register an operation, and wider registers have nothing to widen
+(§6.10.5 said so of AVX2 before this was measured); what the AVX-512 build could gain from mask registers and
+three-operand blends is what LLVM's own lowering of the SSE intrinsics found, and it found nothing measurable. The
+whole-crate `x86-64-v4` build is the one row that is outside its spread on two games — 3 to 4 per cent on the Dam and
+Mario in r4, whose rounds do not overlap the base's — and its gain is therefore not in the vector unit but spread
+through the scalar code (BMI, three-operand forms, wider moves). It cannot ship as one binary; a second, v4-only
+build of the library chosen at load time could, at the cost of a second artefact per publish, and *P3a* (within ±2
+per cent) is **refuted by one to two points for v4** and held for v3 and `znver4`. *P3b* and *P8a* held: the vector
+unit multiversioned is not worth building.
+
+**Cranelift's `speed_and_size`** in place of `speed` (`research/crates/clss`): −0.5, −1.2 and −0.2 per cent on the
+Dam, Mario and DK64 in r4, inside the spread. A first batch (r2) had DK64 at +14 per cent, with runs from 11.4 to
+14.6 ms; on one thread (`examples/frames`, two runs each way) the two settings ran DK64 in 16.68 and 16.70 ms with the
+same counters, so that reading was the machine's load and not the code. *P5a* — under 1 per cent, because compiled
+code is 0.1 to 0.3 ms of any frame — held. The other settings (the register allocator's algorithm) were not tried
+for the same reason: nothing done to 0.1 to 0.3 ms can show in a frame until the compiled share grows, which is
+§6.16.5's lever and not this one.
+
+##### 6.16.5 The signal processor beside the CPU: a bound on running it ahead
+
+§5.8.3 found that compiling a block for a running processor, stepping it once a cycle from the compiled code, costs
+more than it saves, and leaves such blocks decoded; `Mars_Rsp.md` §13 measured a C# prototype of running the
+processor ahead to its next event, inexact, at 7.5 per cent of Ocarina of Time's mean frame and 2 of its drawing
+frames, and declined it because the undo it needs was the most delicate machinery on the thread for the least return.
+**Two things are new in MarsRT.** The games that matter here are the Dam and DK64, whose blocks run 98 and 88 per cent
+decoded for exactly this reason, which C#'s core did not have (its blocks stepped the processor from compiled code);
+and the undo can now be priced, because MarsRT can count what would trigger it.
+
+*The prototype* (`research/crates/lag`, off unless `EMUSEN_LAG=1`, and inexact by design). The tick owes the processor
+its cycles instead of stepping it; the dispatcher pays what is owed in one call (`sp_step_many`) before each block,
+before the idle loop and at the frame's end; and a block entered while the processor runs takes its compiled quiet
+variant, the processor's cycles for the block owed after it. So the processor runs at most one block behind the CPU,
+and its events land up to a block late. The same binary counts, with the lag off — that is, on the exact machine —
+every CPU access to the processor's memories, registers and program counter while it runs, and the processor's single
+steps and events.
+
+| 600 frames, split 4, blocks | base (ms) | lag (ms, median of 3) | change | lag + a snapshot a payment | compiled block instructions, base → lag |
+| --- | --- | --- | --- | --- | --- |
+| the Dam | 9.68–9.98 | **8.32** | −14 to −17% | 10.64 | 4.0 M → 202.7 M of 214.6 M |
+| DK64 title | 11.08 | **9.05** | −18.3% | 11.11 | 35.9 M → 268.1 M of 290.8 M |
+| Ocarina of Time | 4.57 | **4.14** | −9.4% | 4.60 | 121.6 M → 167.8 M of 188.3 M |
+| Super Mario 64 | 3.69 | **3.44** | −6.8% | 3.60 | 58.3 M → 79.1 M of 86.4 M |
+
+*The work stayed the same.* The CPU retired exactly the base's instruction count over 600 frames in Ocarina, Mario
+and DK64 and 55 fewer in 7.5 billion at the Dam; Ocarina's final state is even the exact hash. The bound is therefore
+a bound on the same game's frames, not on a game doing different work, which is the objection `Mars_Rsp.md` §13
+recorded against its own Wave Race run.
+
+*Where the Dam's frame goes under the bound* (`rtsample`, one run, `research/samples/l1-ge.*`): the decoded tier's 2.2
+ms is 0.15, compiled code rises to 0.92, the dispatcher to 1.18 and its comparison 0.25; the signal processor falls
+from 4.52 to 4.18, its lock-step from 0.57 to 0.29, and its decode and dispatch is now almost all in whole runs (1.85).
+At DK64 the site-2 wait rose only from 1.81 to 2.03 ms, which is why its bound is the larger.
+
+*The counters on the exact machine*, a frame: **no CPU read of the processor's memories, registers or program
+counter while it runs, in any of the four states, and 0.3 to 0.5 register writes** (Ocarina, DK64; none at the Dam
+or in Mario). Single steps from the tick 366 thousand at the Dam and 426 thousand at DK64, of which 12.8 and 14.8
+thousand were events.
+
+*What an exact version must pay.* Run the processor ahead to its next event, stopping before it as `Decoded::run`
+already does; let the CPU run to that event's cycle under the guard compiled blocks already have (`stop` includes the
+event); run the event in lock-step; and keep, from each window's start, what an undo needs should the CPU touch the
+processor inside the window — its registers (720 bytes) and DMEM. The copy's price was measured by taking the whole
+snapshot at every payment of the prototype (`EMUSEN_SNAP=1`): 34 ns at the Dam and 27 at DK64, from 68 and 64 thousand
+copies a frame. At one snapshot a window, and a window an event, that is **0.44 ms at the Dam and 0.40 at DK64**, an
+upper bound, since a log of DMEM's stores in the window is cheaper than a copy of all of it. Two other costs are not
+in the prototype: a window averages about 29 cycles at the Dam (366 thousand steps between 12.8 thousand events), so
+the last block of each window will often not fit under the guard and run decoded; and the events that only read
+(the processor's `MFC0` of status and DMA-busy) need not end a window if nothing the CPU wrote is read, which
+lengthens windows and is part of the design, not a given. **The exact lever is therefore priced at 0.7 to 1.2 ms
+at the Dam (7 to 12 per cent) and 1.2 to 1.6 at DK64**, with the undo itself a cold path that the counters say runs
+under once a frame. That is argued from a measured bound and a measured copy, not measured.
+
+*Prediction P6* held at the Dam (−12 to −22 per cent predicted), held for Ocarina, and was refuted upward for DK64 (−8
+to −15 predicted, −18 measured) and for Mario by two points.
+
+##### 6.16.6 Threads on this desktop: the worker count and the spin
+
+`split 2` and `split 3` against production's four, and the workers' `sleep` spinning 40 rounds before parking rather
+than 400 (`research/crates/spin`, `EMUSEN_SPIN_ROUNDS`), three rounds (r3):
+
+| ms a frame, median | four workers | two | three | four, spin 40 |
+| --- | --- | --- | --- | --- |
+| the Dam | 9.98 | 10.01 (+0.4%) | 9.75 (−2.3%) | 10.04 (+0.6%) |
+| Ocarina of Time | 4.57 | 5.32 (+16.6%) | 4.91 (+7.5%) | 4.54 (−0.6%) |
+| Super Mario 64 | 3.69 | 4.58 (+23.9%) | 3.85 (+4.1%) | 3.58 (−3.0%) |
+| DK64 title | 11.08 | 12.09 (+9.1%) | 11.44 (+3.3%) | 11.98 (+8.2%) |
+
+Four workers are needed on three games of four: with two, the emulation thread waits for the drain at the capture and
+the loads. The shorter spin costs DK64 8 per cent — its site-2 wait is a worker woken from the futex rather than
+caught spinning — and buys nothing measurable elsewhere. On this desktop, where power is not the bound, **neither is
+a lever**. The handheld is another question — the four workers are on-CPU the whole frame, and there they share a
+package budget with the thread that is the bound — and the run there is what answers it (§6.16.8).
+*P7a* held for the Dam and DK64 and did not foresee the lighter games' loss with two workers; its spin clause was
+refuted by DK64.
+
+##### 6.16.7 Fastmem, the coprocessor, allocation and locks, re-priced
+
+**Fastmem.** §6.9's verdict was that a host mapping could serve only the loads and stores compiled code emits, whose
+whole row was under 0.3 ms. Today the compiled rows are 0.08 to 0.29 ms, as then. The loads and stores through the
+interpreter's handlers — the decoded tier's `ops::lw` and `sw`, `read32`, the page marks, the alignment test, the
+TLB's `try_translate` — are 1.02 ms at the Dam, 1.01 at DK64, 0.43 in Ocarina and 0.21 in Mario
+(`research/memshare.py`), but a host mapping does not reach them: they are the interpreter's own code, and what makes
+them cost is the dispatch around each access, the mark test that §6.9 showed a mapping must keep, and at the Dam the
+translation, which a mapping would reach only by mapping every TLB entry's page into the host's space. If the
+run-ahead of §6.16.5 is built, most of those accesses move into compiled code (0.92 ms of it at the Dam under the
+bound), and fastmem's reach becomes the segment, bounds and alignment tests there: a handful of register operations
+an access. **Still not recommended**; the ceiling is under 0.2 ms on every game until the run-ahead exists, and a
+fraction of the compiled row after.
+
+**The coprocessor: host floating point, which only Rust can check.** C#'s §16 declined a host-float fast case
+because the MIPS inexact flag must be produced bit for bit, and .NET cannot read the host's floating-point status.
+Rust can (`_mm_getcsr`, or `stmxcsr` through `core::arch::asm!`): an add, multiply, divide or square root done on
+the host with MXCSR's rounding set to the guest's, its flags read back, and the software path taken whenever an
+operand or the result is denormal, infinite or NaN or an enabled exception is raised, is exact by construction on
+the cases it keeps. Its ceiling is the arithmetic proper: 0.25 ms at DK64, 0.11 at the Dam. The rest of the 0.94 ms
+row is dispatch into the coprocessor, which a fast path does not touch and compiled code inlining the moves would.
+Priced, not prototyped.
+
+**Allocation and locks.** Allocation is 0.1 per cent of every thread (`malloc`, `free`, `munmap` together under 0.02
+ms); the unparking of the workers is 0.04 to 0.05 ms at DK64 (`futex_wake`); `sched_yield` in the presenter's join is
+the join's own row. Nothing here is a lever.
+
+##### 6.16.8 The handheld
+
+The Legion Go S could not be reached when this section was written. The binaries and a script are staged for a later
+run in `~/.cache/emusen/probe/mars-speed/deck-levers/` (`README.txt` says what each is): the base, PGO, PGO with BOLT, the
+`znver4` and `rspv4` bounds, the spin setting and the lag bound, each needing glibc 2.34 at most, run on DK64's title
+and the Dam, three rounds interleaved and rotated, with the main thread's core clock sampled from `scaling_cur_freq`
+beside each run, plus two, three and four workers, the main thread pinned alone on a core with its SMT sibling kept
+free, and the title at 2× on the device with and without PGO:
+
+```
+cd ~/deck-levers && bash run.sh 3 "dk64 ge" > results-$(date +%m%d-%H%M).txt; python3 summ.py results-*.txt
+```
+
+*Predictions for it*, written before it is run: PGO takes 6 to 12 per cent off both games at one, as here, and a
+similar share of the emulation thread at 2× on the device; the lag bound takes 12 to 20 per cent off both; `split2`,
+`split3`, `spin40` and `pin` stay within ±3 per cent of the base on the charger's 40 W profile, with the main thread's
+clock within 100 MHz of the base's in each — the prediction being that the device is not power-bound on the charger;
+`znver4` and `rspv4` within ±3 per cent.
+
+*The run* (2026-09-24, 23:14–23:33; the device on its charger at 100 per cent, Mistress closed,
+the script started under `systemd-run --user`). A first attempt at 22:29 was started with `nohup` from ssh and died
+after five results: the device sets `KillUserProcesses=True` (`/etc/systemd/logind.conf.d/`), with linger off, so a
+job an ssh session starts dies with that session's scope. Its five rows (`results-partial-2229.txt`) agree with the
+second run's to 1 per cent and are not used. All 72 runs of the second finished. Every configuration ended on the base's hash for its game —
+`2D024DBB873B763A` for DK64 and `4DEACE55468AA765` for the Dam — except `lag`, which is inexact by design. The main
+thread's sampled clock stayed between 4,629 and 4,823 MHz in every run.
+
+**The Dam's runs were disturbed, and the table is read by the minimum.** DK64's three rounds agree to about 1 per
+cent. The Dam's do not: round 1's run from `pgo` to `spin40`, and round 2's last two runs (`base`, `pgo`), are 0.6–1.8
+ms slower than the same configuration in the other rounds, with unchanged clocks. Interference that only adds time
+leaves each configuration's fastest run as the better estimate, so both games are given by the minimum of three.
+The medians disagree only where a disturbed run is a median: the Dam's base median (11.67) is itself disturbed, which
+is why `summ.py`'s median column shows the Dam's `znver4`, `rspv4`, `split2` and `spin40` 4–5 per cent ahead. The
+cause of the disturbance was not found: the run's own ssh polls ran once a minute throughout both
+games, a second ssh connection collected the first attempt's file once at 23:16, and nothing else was run on the device.
+
+| configuration | DK64 title, ms (vs base) | the Dam, ms (vs base) | prediction |
+| --- | --- | --- | --- |
+| base | 12.38 | 11.10 | — |
+| pgo | 11.37 (**−8.1 %**; median −8.5 %) | 10.33 (**−6.9 %**) | −6 to −12 %: **held** |
+| pgobolt | 11.60 (−6.3 %) | 10.37 (−6.6 %) | not predicted; BOLT on top of PGO buys nothing here, as on the desktop |
+| znver4 | 12.33 (−0.4 %) | 11.04 (−0.5 %) | ±3 %: held |
+| rspv4 | 12.24 (−1.1 %) | 11.10 (0.0 %) | ±3 %: held |
+| split2 (two workers) | 13.18 (**+6.5 %**) | 11.07 (−0.3 %) | ±3 %: **refuted on DK64** |
+| split3 | 12.72 (+2.8 %) | 11.10 (0.0 %) | ±3 %: held |
+| spin40 | 12.62 (+1.9 %) | 11.09 (−0.1 %) | ±3 %: held |
+| pin | 12.56 (+1.5 %) | 11.29 (+1.7 %) | ±3 %: held |
+| lag (inexact bound) | 10.05 (**−18.8 %**) | 9.63 (**−13.2 %**) | −12 to −20 %: held |
+| base2x | 13.86 | 15.77 | — |
+| pgo2x | 13.07 (**−5.7 %** of base2x) | 15.30 (**−3.0 %**) | "a similar share of the emulation thread": not judged — the frame at 2× is not the emulation thread alone |
+
+What it settles:
+- **PGO carries to the handheld** at about the desktop's size, exact, on both games. It remains lever 1.
+- **The handheld is not power-bound on the charger.** No configuration moved the clock, and the thread placements —
+  three workers, the shorter spin, pinning — are within 3 per cent of the base.
+- **Four workers stay.** Two cost DK64 6.5 per cent here, as the desktop's two cost it 9. This is the one
+  threads prediction refuted, and it refutes it in the direction of keeping the production shape.
+- **The run-ahead's bound holds on the device:** 19 per cent on DK64 and 13 per cent on the Dam.
+- **2× is where the handheld is tight.** The Dam at 2× is 15.77 ms against a 16.7 ms budget at 60 Hz, 5.5 per cent
+  of headroom; PGO widens it to 8.4 per cent. DK64's title at 2× has 17 per cent.
+
+The raw file and `summ.py`'s output are kept in `~/.cache/emusen/probe/mars-speed/deck-levers/results-2026-09-24-full.txt`.
+
+##### 6.16.9 The levers, ranked
+
+Ceilings are the frame if the lever's component cost nothing; measured and bounded numbers are this section's.
+Ranked by what they buy the Dam and DK64, the two games the handheld needs, against their effort.
+
+| # | lever | the Dam (9.65) | DK64 (10.87) | Ocarina (4.49) | Mario (3.53) | status | effort |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | PGO in the release build | **−0.67 to −0.91 ms, measured** | **−0.40 to −0.81, measured** | −0.45, measured | −0.41, measured | exact by construction | a day: a training script, a checked-in profile, the publish step |
+| 2 | the processor run ahead to its next event, with an undo | bound −1.4 to −1.7; exact priced −0.7 to −1.2 | bound −2.0; priced −1.2 to −1.6 | bound −0.43 | bound −0.25 | the undo's trigger counted at < 1 a frame | a week: the design, the undo, its tests and mutants |
+| 3 | a Cranelift tier for the processor's whole runs | ceiling ≈ 1.3 (decode outside the tick's steps); after lever 2 ≈ 1.8 | ≈ 1.1; after 2 ≈ 1.2 | ≈ 0.45 | ≈ 0.5 | §6.12.7's price, raised by lever 2, which puts the steps into whole runs | days, under the exactness contract |
+| 4 | the dispatcher (chaining, extension) | ceiling 1.09; 1.43 after lever 2 | 1.17; 1.61 after 2 | 0.66 | 0.29 | C# measured nothing (`Mars_Recompiler.md` §9–§12); to be re-priced by a ring bench only after lever 2 | days |
+| 5 | host floating point with MXCSR flags | ceiling 0.11 | ceiling 0.25 | ≈ 0.1 | ≈ 0.05 | priced | days, with a differential against the software float |
+| 6 | a second library built for `x86-64-v4`, chosen at load | −0.3, measured | undecided | −0.17 (r2) | −0.15, measured | measured, not shippable as one binary | a day, and a second artefact per publish |
+| 6a | the vector unit alone multiversioned for AVX2 or AVX-512 | ≈ −0.1, inside the spread | ≈ −0.1 | — | ≈ −0.03 | measured | not worth building |
+| 7 | BOLT | −0.3, not over PGO | −0.2 | −0.19 | −0.08 | measured | — |
+| 8 | fastmem | < 0.2 | < 0.2 | < 0.3 | < 0.2 | priced | a week, and page protection against the marks |
+| 9 | worker count, spin, pinning | none on the desktop; none on the handheld (§6.16.8) | none; two workers +6.5 % on the handheld | none | none | measured on both | — |
+| 10 | Cranelift `speed_and_size` | none | none | — | none | measured | — |
+
+##### 6.16.10 The order recommended
+
+1. **PGO**, now: the only lever measured that is exact by construction, portable across x86-64, and a build step.
+   What remains to decide is where the profile is made, since the training needs ROMs (§6.16.4).
+2. **The run-ahead of the signal processor**, next: the largest lever on the two games the handheld needs, its
+   bound measured and its undo priced. It should be built as §6.10 to §6.15 were — the design written first, the
+   lag prototype's numbers as the ceiling to beat, the random-program differential extended with CPU writes into the
+   processor's side inside a window, the seven games — and it changes the arithmetic of levers 3, 4 and 8, which
+   should be re-priced on its frame rather than on this one.
+3. **Then sample again**, and choose between the processor's Cranelift tier and the dispatcher by what the new frame
+   shows; the host-float fast path is DK64's lever and waits for DK64 to need it.
+4. The handheld's run of §6.16.8 answered that the threads' placement is not a lever there: nothing moved by more than 3 per cent except two workers, which lose. PGO held on it at 7–8 per cent.
+
+##### 6.16.11 What is not done
+
+- **The handheld's profile.** §6.16.8 measured the levers there, not where its frame goes; the Dam's disturbed rounds were not explained.
+- **PGO through the shim**: the profile was measured in the examples, not in `libmarsrt.so` under Mistress, and not
+  at a multiple or on the device on this desktop. *Done through Mistress's loop at one on this desktop in §6.17.5; a
+  multiple and the device remain open (§6.17.10).*
+- **The exact run-ahead**, which is priced and not built; its price rests on the snapshot's copy as measured and on
+  two arguments (window length, read-only events) that are not.
+- **The processor's Cranelift tier, chaining, the host-float fast path**: priced, not prototyped.
+- **Pinning on the desktop**, which was not measured here; the handheld script measures it.
+- **The rasteriser in AVX2**: its code is on the workers, off the emulation thread at one, and the whole-crate builds
+  that include it moved DK64, the one game that waits for its workers, by 0.7 to 2.2 per cent; a hand-written AVX2
+  rasteriser was not attempted.
+- **Other states.** Four states, no input, as §6.9; the Dam under the WiseMan comparisons compiles thirty times more.
+
+#### 6.17 The release library profile-guided (2026-09-25)
+
+§6.16.10 put profile-guided optimisation first: measured in the `threads` example at 7 to 12 per cent on this desktop
+and 7 to 8 on the handheld, exact, for a build step. This section builds that step into the library Mistress loads,
+`libmarsrt.so` behind the shim, and says where the profile comes from, what it holds, how a build knows whether it
+still fits, and how much of it survives an edit. Its first finding changed the design before anything was timed: a
+profile is keyed on names that depend on more than the source, and §6.16.4's two claims about where a profile applies
+were both wrong for the library that ships.
+
+##### 6.17.1 What a profile is keyed on
+
+LLVM's instrumented profile holds, for each function, a name, a hash of its control-flow graph and its counters. A
+build given the profile looks each of its functions up by name and uses the record only if the hash matches; a
+function with no record, or with a record of another shape, is compiled as without the profile. The names are the
+symbols. Since Rust 1.98 they are v0-mangled, and every crate's path in them carries a *disambiguator*
+(`CskGwq5vWJMSK_6marsrt`), a hash of what cargo passes as `-C metadata`; an internal function's name is further
+prefixed with its codegen unit's name (`marsrt.f0f0e0c77e6f1f9c-cgu.0;`), which carries another. Cargo's metadata hashes
+the package, its dependencies, the target, the compiler's whole `rustc -vV` and the profile's settings. It does not
+hash `RUSTFLAGS` — were it otherwise, the research's instrumented and guided builds would have named their functions
+differently and §6.16.4 would have measured nothing — so an instrumented build and the build that uses its profile
+name their functions alike, provided everything else is equal.
+
+Measured by building the library and reading the disambiguators in its symbols (`research`'s tools,
+`~/.cache/emusen/probe/mars-speed/pgo/scripts/names.sh`):
+
+| build of the same source | `marsrt`'s disambiguator | `cranelift_codegen`'s | `core`'s |
+| --- | --- | --- | --- |
+| Fedora's rustc 1.98.1, `--profile release` | `kGwq5vWJMSK` | `cf7Ha6Guiq1` | `iU9uQXeQYGI` |
+| Fedora's rustc 1.98.1, `--profile dist` | `2kBkitA4ESG` | `fSZn0polhyn` | `iU9uQXeQYGI` |
+| Fedora's rustc 1.98.1, `--profile dist --target x86_64-unknown-linux-gnu` | `ktKlGesFdsi` | `cnMst1hh60m` | `iU9uQXeQYGI` |
+
+`core` is the standard library, built once by the toolchain, and does not change; every crate cargo compiles does. The
+`release` row is the research's own profile's (`research/pgo-out.profdata` names `CskGwq5vWJMSK_6marsrt`). And LLVM
+agrees: the `dist` library built with the research's profile and `-Cllvm-args=-pgo-warn-missing-function` reports
+**1,215 functions with no profile data; the `release` library built with the same profile reports none.**
+
+So two sentences of §6.16.4 are retired. *"The cdylib and the examples share the functions the profile names, so a
+profile trained through the examples applies to `libmarsrt.so`"* holds for a `release` build and not for the `dist`
+build that a publish makes (§6.3), because `dist` differs from `release` in its debug information and its stripping,
+both of which cargo hashes. *"The profile is portable across x86-64 targets"* does not hold at all: the target is in
+the hash, and so is the compiler's version string, which differs between Fedora's rustc and the upstream build of the
+same release (`rustc 1.98.1 (48a229cea 2026-09-01) (Fedora 1.98.1-1.fc44)` against `rustc 1.98.1 (48a229cea
+2026-09-01)`). What is portable is the *source*: the control-flow hashes of the same source under the same compiler
+are the same, which is what makes a profile trained once apply wherever the names match.
+
+The design therefore calls the unit a **flavour** — a compiler, a cargo profile, and either the host or an explicit
+target — and trains every flavour that is built. A profile holding several flavours is one file: their names do not
+collide, and each build finds its own.
+
+##### 6.17.2 The design
+
+*Revised on 2026-09-28 before any timing (§6.17.4): the profile became one file a target, `pgo/marsrt.<target>.profdata`;
+MSBuild passes it only to a flavour its manifest lists; a stale profile is a note, not a warning; and the training
+counters became atomic. The design as first written follows.*
+
+*Where the profile is made.* Training runs commercial games, which CI does not have and the repository never holds.
+The profile is therefore made on this desktop by `pgo/train.sh` in the crate and checked in as `pgo/marsrt.profdata`,
+with a manifest, `pgo/marsrt.pgo`, that names the LLVM version that wrote it, the source it was trained on, the
+flavours it holds, the toolchain CI must use, and every training run by file name and the first 16 hex digits of its
+SHA-256. A publish anywhere, CI included, then uses the checked-in file and needs no game.
+
+*The flavours trained.* Three, the three builds that are made:
+
+| flavour | who builds it |
+| --- | --- |
+| Fedora's rustc, `release`, host | `dotnet build` on this desktop — the tests, and Mistress run from the tree |
+| Fedora's rustc, `dist`, host | `dotnet publish` on this desktop — `out/`, and every build the handheld has run |
+| upstream Rust 1.98.1, `dist`, `x86_64-unknown-linux-gnu` | CI's linux-x64 library |
+
+CI's Windows and macOS libraries are a fourth to seventh flavour that cannot be trained here, because an instrumented
+library must run to be trained and this desktop runs neither. They build with the profile and get no guidance from
+it, and say so (below). The upstream toolchain is installed without rustup into
+`~/.cache/emusen/toolchains/rust-1.98.1` (`rustc`, `cargo`, `rust-std`, `llvm-tools` from static.rust-lang.org); its
+LLVM is 22.1.8, as Fedora's is.
+
+*How it is trained.* `pgo/train.sh` builds each flavour's library with `-Cprofile-generate` into a scratch target
+directory (build scripts' own counters sent elsewhere, so the profile holds the library alone), and runs the training
+list through `pgo/driver`: a console program that does what Mistress's frame loop does to a core — `EmulatorSession`
+with the MarsRT engine through `CoreFactory`, the debug target refreshed, audio drained, the picture taken when its
+serial changes — and prints milliseconds a frame and the SHA-256 of the state at the end. One process a run; each
+writes its counters at exit. Each flavour's counters are merged by an `llvm-profdata` of the flavour's own LLVM version
+(the raw format is that version's, and the script refuses a mismatch); the three results are merged into one file.
+
+*Every build uses it.* `EmuSen.csproj` builds each crate of `RustCores.props` once (a batched target), and a crate with
+`pgo/<name>.profdata` is given `-Cprofile-use` through `--config build.rustflags` — a TOML array, because the path has
+a space in it and `RUSTFLAGS` splits on spaces. The flag names a copy, `obj/<name>/pgo/<name>-<hash>.profdata`,
+named by the first 16 hex digits of the profile's SHA-256. The copy is the point: cargo rebuilds when its flags
+change, not when a file they name does, and without it a refreshed profile would reach the library's own crate
+(whose build script watches the file) and not Cranelift, whose compiled bitcode would keep the old one. CI does the
+same with `CARGO_BUILD_RUSTFLAGS` and a copy in the workspace. `-p:EmuSenPgo=false` builds without it.
+
+*What a build checks* (`build.rs`, the crate's first build script, which runs wherever cargo does):
+
+- **The LLVM version.** The manifest's `llvm` against the version `rustc -vV` reports. A different major version
+  **fails the build**, naming both and the way out. The raw and indexed formats are versioned by LLVM release; a
+  newer LLVM reads an older profile, an older one refuses a newer, and a toolchain update is exactly when a profile
+  should be refreshed. `train.sh` requires the exact version for its merges.
+- **The flavour.** The build's compiler, cargo profile and target against the manifest's list. An untrained flavour
+  **warns** that it builds and that nothing in it is guided.
+- **The source.** A digest (FNV-1a over `src/` without its tests, `Cargo.toml` and `Cargo.lock`) against the one the
+  profile was trained on. A difference **warns** that the build is correct and that each function changed since
+  loses its guidance.
+
+A warning is a `cargo:warning`, which cargo repeats on every build that finds the library fresh as well as on the one
+that ran the script, and which MSBuild's `Exec` shows as a build warning (`EXEC : warning : marsrt@0.1.0: …`, checked
+on a rebuild that compiled nothing). The verdict is also written beside the library (`<profile
+directory>/marsrt-pgo.txt`: `matched`, `stale`, `untrained`, `instrumented` or `none`), which CI prints and makes a
+`::warning::` annotation on the run, and which `train.sh` reads to know the source and the flavour it trained. A
+stale or untrained build is never wrong, only slower: LLVM compiles a function whose record is missing or of another
+shape exactly as without the profile.
+
+*CI.* The library job reads the manifest's `toolchain` and installs that release rather than whatever `stable` is,
+so the upstream flavour's names match and the LLVM check cannot fail on a toolchain update CI chose by itself; MercuryRT,
+with no profile, stays on `stable`. The `dist` build takes the profile; the tests before it do not, since a test
+harness is another crate and no profile names it. The WiseMan job downloads the libraries and runs the comparison with
+the C# core on each platform, as before, so the check that the three platforms agree is now a check on the guided
+Linux library and the unguided Windows and macOS ones.
+
+##### 6.17.3 The predictions, written before any build was timed
+
+- **P1, the flavour.** A `dist` library given a profile trained only through `release` runs within ±2 per cent of
+  the unguided `dist` on all four games: nothing of the crate's is matched (§6.17.1), and what `core` holds is not on
+  the hot path.
+- **P2, the gain through the shim.** The guided `dist` library, published by `dotnet publish` and timed through the
+  driver, is faster than the unguided one by **4.5 to 7.5 per cent on the Dam, 5 to 8 on Donkey Kong 64's title, 7
+  to 10 on Ocarina of Time and 8 to 11.5 on Super Mario 64**. The example's gains were 6.9, 7.4, 10.0 and 11.6 per
+  cent; the shim adds C# work each frame that no profile touches (the picture's copy, the audio, the loop — 0.2 ms on
+  Mario, §6.16's 3.53 against the driver's 3.74), which dilutes the gain by that share; and the training set shares no
+  ROM with the measured games, where the research's shared three, which should cost at most two points (§6.16.4's
+  in-sample profile was no better than its disjoint one).
+- **P3, exactness.** Every run of every build ends on the unguided build's state hash for its game; the WiseMan tests
+  of MarsRT and of the frontends, and the corpus line for line (46 of 4637), pass on the guided `release` library.
+- **P4, the unrelated edit.** A branch added to a function of the state writer, which no measured frame runs, leaves
+  the gain within one point on all four games, and the build says `stale`: only that function and those it was
+  inlined into before instrumentation lose their records, and none of them is hot.
+- **P5, the hot edit.** The same kind of branch added on the exception path of `cpu::blocks::decoded::run`, the
+  decoded tier's loop, which costs nothing on a measured frame but changes the function's shape, **costs the Dam and
+  Donkey Kong 64 a quarter to a half of their gain and the two lighter games under a quarter**: the loop is 23 per cent
+  of the heavy games' thread and 8 to 17 of the others' (§6.16.2), and its handlers, called through pointers, keep
+  their own records.
+- **P6, the CI flavour.** The upstream `dist --target` build of the crate from another directory is `matched` and
+  reports fewer than ten functions without profile data: the checkout's path is not in cargo's hash.
+- **P7, the handheld** (for a run on the device, which §6.17.10 leaves open): through the shim, the guided
+  library takes **5 to 8 per cent off Donkey Kong 64's title and the Dam at one**, the example's 8.1 and 6.9 per cent
+  there (§6.16.8) diluted as on the desktop, **4 to 9 off Mario and Ocarina**, and **2 to 6 at two on the device**
+  (the example's 5.7 and 3.0); every hash one per game.
+
+##### 6.17.4 The revision before timing (2026-09-28): one profile a target, a build the profile never fails, counters that agree
+
+§6.17.2's design was built and not timed when the work paused on 2026-09-25. Resuming it on WiseMan three days and
+315 commits later, four things were changed before any build was timed. The crate's own source had not moved (its
+digest is still `36a5237755f1c652`), so the profile of the 25th was still `matched`; it was retrained all the same,
+because of the fourth change.
+
+*One profile a target.* §6.17.2 kept every flavour in one file, `pgo/marsrt.profdata`. That holds for one machine, and
+fails for a second: an aarch64 macOS profile has to be trained on a Mac, by a different `llvm-profdata`, on a different
+day, and merging it into this desktop's file would mean carrying the raw counters between machines and retraining here
+whenever the Mac's changed. The profile is now `pgo/marsrt.<target>.profdata` with its manifest
+`pgo/marsrt.<target>.pgo`, the target being Rust's triple: `x86_64-unknown-linux-gnu` here. MSBuild looks for the host's
+triple (from the operating system and `RuntimeInformation.OSArchitecture`), CI for its matrix's `target`, and each
+target's manifest pins its own toolchain. A target with no file builds as before PGO existed: no flag, no build-script
+verdict, no warning, and in CI the `stable` toolchain. That is the case of every Windows and macOS build today.
+
+*A flavour that is not trained is not given the profile.* §6.17.2 passed the profile to every build of the tree and let
+`build.rs` judge it: an untrained flavour warned, and an LLVM of another major version failed the build. The second is
+the wrong failure for a development tree. Fedora updates `rustc` on its own schedule; the day its LLVM's major version
+changes, every `dotnet build` on this desktop would have failed until someone retrained, for a profile whose names could
+not have matched anything anyway — the compiler's version string is in every name's disambiguator (§6.17.1). MSBuild
+now runs `rustc -V` and passes the profile only when the manifest lists `<that compiler> | <cargo profile> | host`;
+otherwise the crate builds unguided and says so in a normal-importance message, which `dotnet build`'s default output
+does not show (checked by building with `RUSTC` set to the upstream compiler: the message, no flag, the verdict `none`).
+`build.rs` keeps both checks for whoever passes a profile to cargo by hand, which is what CI does, and there a warning
+is right: CI pins the toolchain precisely so that its flavour is trained.
+
+*Stale is a note, not a warning.* Every edit to `src/` makes the profile stale, and a stale profile is safe (§6.17.1),
+so §6.17.2's warning would have appeared on every build of an edited crate until the profile was retrained — including
+every build of a branch that has nothing to do with speed. LLVM adds its own, one per changed function (`function
+control flow change detected (hash mismatch)`), which `-Cllvm-args=-no-pgo-warn-mismatch` beside the profile now
+silences; the flag changes no instruction of the library (its disassembly, addresses masked, is identical with and
+without it). The verdict file still says `stale` and gives the reason on a `note =` line, and CI turns that into a
+`::notice::`; when to retrain is §6.17.6's question.
+
+*Counters that agree.* Every guided build warned once,
+`Profile in … rdp::two_cycle … Rdp::draw_two_cycle partially ignored, possibly due to the lack of a return path.` The
+function does return. What it lacks is consistent counts: it runs on the four rasteriser workers at once, the
+instrumented build increments its counters without atomics, and increments lost between threads leave counts that
+LLVM's propagation cannot reconcile, so it drops the part it cannot place. Shown by a control: two training runs (Wave
+Race and Banjo, 600 frames) with the default counters, then the same two with
+`-Cllvm-args=-instrprof-atomic-counter-update-all`; the guided `release` build of the first warned exactly as before, the
+second did not (`~/.cache/emusen/pgo/atomictest/`). The warning is the visible part of a wider loss: every function
+the workers run shared its counters between threads and could lose increments, and `draw_two_cycle` is the one where
+the loss left counts LLVM could not reconcile. `train.sh` now instruments with atomic updates. It costs training time
+(the two runs took 74 and 64 ms a frame against 46 and 36) and nothing at run time, since only the guided build
+ships.
+
+*The recipe, committed.* The training list moved from `~/.cache/emusen/pgo/training.txt` into the crate,
+`pgo/training.txt`, with paths relative to `GAMES` (default `~/.cache/emusen/pgo/games`) and a header that names each
+copy's source in the library. One line changed: the 2× run on the device (`RenderScale=2 Gpu=true`) is now
+`RenderScale=2` on the processor, which ends on the same state hash (`F26A3C8A4639164F`) and keeps GPU work out of a
+training run.
+What the device path runs on the host is guided only where it shares code with the processor path.
+`train.sh` runs on macOS as well (bash 3.2, `shasum`, `.dylib`, rustup's toolchains and its `llvm-tools`), and takes
+`RUN`, a command every build and training run is wrapped in; here that was `flock ~/.cache/emusen/probe/timing.lock
+nice -n 10`, so that training does not disturb another measurement.
+
+*The driver.* `pgo/driver` gained `mistress=1` — `MainWindow`'s rewind: a snapshot four times a second, each with its
+thumbnail, the frame fetched for the thumbnail when it was not offered — and `warmup=n`, frames run before the clock
+starts, and it now prints RunFrame's own mean beside the loop's. The training list uses neither, so its runs are what
+they were.
+
+##### 6.17.5 Measured through Mistress's loop
+
+*The tool.* `pacebench`, the frame-pacing bench the C# core was measured with, constructs a `MarsCore` and cannot run
+MarsRT, so the loop was taken from `MainWindow`'s emulation thread into the committed driver instead: `pgo/driver`
+with `mistress=1 warmup=120` runs `EmulatorSession` with the MarsRT engine, and after each `RunFrame` refreshes the
+debug target, offers the frame to the rewind buffer (a snapshot every 15 frames with its 160-pixel thumbnail, as
+`MainWindow` does), drains the audio and fetches and hands back the picture when its serial changed. It prints the
+loop's wall time a frame, `RunFrame`'s own mean, and the first 16 hex digits of the state's SHA-256 at the end. Only the
+presentation (the render thread, the copy onto the screen) and pacing to the console's rate are absent; neither runs
+on the emulation thread's clock, and the frames were run flat out.
+
+*The builds.* Two `dotnet publish -r linux-x64` of the driver from the same tree, as a publish of Mistress builds the
+library (`dist`): `base` with `-p:EmuSenPgo=false`, and `pgo` with the checked-in profile, each with its own
+`-p:EmuSenCargoTargetRoot`. `pgo`'s build script said `matched`.
+
+*The runs.* The four states of §6.16 (Super Mario 64 and Ocarina of Time, graded; the Dam and Donkey Kong 64's title,
+as further evidence), 120 frames of warm-up and 600 timed, production's settings. Builds interleaved in each round
+with their order rotated between rounds; every run under the shared lock (`flock ~/.cache/emusen/probe/timing.lock`)
+and, inside it, the quiet gate of §6.16.1 (the rest of the machine under 1.2 busy processors for a second). Two
+batches: **r2**, five rounds with the variants of §6.17.6 among the builds, while another task's compiler was running
+(the gate read 1.10 to 1.19); **r3**, eight rounds of the two builds alone on a quieter machine (the gate's median
+0.11). A result is a change whose rounds do not overlap the base's; the paired change is the median over rounds of each
+round's guided time against the same round's base. Scripts and results:
+`~/.cache/emusen/probe/mars-speed/pacebench-rt/` (`mkbuild.sh`, `bench.sh`, `summ2.py`, `results/r2-r4.tsv`,
+`PREDICTIONS.md`).
+
+*Predictions*, written before the first timed run (P8, P9, P10) and between batches (P12, P13), in `PREDICTIONS.md`:
+P8, the loop's gain Mario 7–11 per cent, Ocarina 6–10, the Dam 5–8, DK64 4–8, and `RunFrame`'s P2's ranges (§6.17.3);
+P9, one hash a game; P10, §6.17.7; P12, r3 within 1.5 points of r2 on every game; P13, the Dam's and DK64's gain
+larger without the warm-up, because the frames after a load compile blocks and Cranelift is guided code.
+
+**r3, the loop, ms a frame:**
+
+| game | base, median (range) | pgo, median (range) | paired | overlap |
+| --- | --- | --- | ---: | --- |
+| Super Mario 64 | 3.736 (3.688–3.750) | 3.463 (3.383–3.494) | **−7.2%** | no |
+| Ocarina of Time | 4.659 (4.561–4.797) | 4.253 (4.207–4.406) | **−9.1%** | no |
+| the Dam | 10.931 (10.840–11.520) | 10.382 (10.345–11.013) | −4.6% | one run each way |
+| DK64 title | 10.928 (10.834–10.972) | 10.491 (10.471–10.559) | −3.9% | no |
+
+`RunFrame` alone in the same runs: −7.6, −9.5, −4.7 and −3.9 per cent. The loop's work outside `RunFrame` is 0.15 to
+0.18 ms a frame on every game and both builds. In time, PGO takes 0.27 ms off Mario's frame, 0.41 off Ocarina's, 0.55
+off the Dam's and 0.44 off DK64's. **r2** gave −7.8, −8.6, −4.1 and −3.7 per cent (loop, paired), its rounds apart on
+Ocarina and DK64 and overlapping by one disturbed run on Mario and the Dam. Pooled, the thirteen rounds give −7.7,
+−9.0, −4.4 and −3.8.
+
+*Exactness.* Every run of every build of r2 to r4 ended on one hash for its game: `8553FCCA132C724A` (Mario),
+`D1382AB72E567556` (Ocarina), `03348EC3AB46361C` (the Dam), `52AB776E24D5A170` (DK64), and without the warm-up
+`225BE8131B035B43` and `E957FC1E2B512D4B`. The guided `release` library passes the 627 WiseMan tests whose names
+contain `MarsRt`, and the corpus line for line against the C# core (1,722 lines, 46 of 4,637 failing, as unguided).
+**P9 and P3 held.**
+
+*The fates.* **P8 held on the two graded games and failed at its low end on the other two**: Mario −7.2 against 7 to 11,
+Ocarina −9.1 against 6 to 10, the Dam −4.6 against 5 to 8, DK64 −3.9 against 4 to 8. **P2**, on `RunFrame`: held for
+Ocarina (−9.5 against 7–10) and the Dam (−4.7 against 4.5–7.5), missed for Mario by half a point (−7.6 against
+8–11.5) and for DK64 by a point (−3.9 against 5–8). **P12 held**: the batches differ by at most 0.6 points. **P13 is
+refuted**: without the warm-up (r4, five rounds) the Dam gains −3.5 and DK64 −2.5 per cent, less, not more; the first
+frames' compiling is not where the profile pays.
+
+**Three of the four games gain less here than in §6.16.4's examples**: the Dam 0.55 ms a frame against 0.67, DK64 0.44
+against 0.81 and Mario 0.27 against 0.41; Ocarina about as much, 0.41 against 0.46. Three explanations were tested,
+each with its prediction written first (P13 to P15 in `PREDICTIONS.md`).
+
+- *The first frames* (P13): refuted above; without the warm-up the gain is smaller.
+- *The training set* (H2): §6.16.4's profile trained GoldenEye, DK64 and Ocarina from power-on, and §6.17's trains
+  none of the measured ROMs. The research's own tool, `examples/threads … split 4 blocks`, built from today's source
+  with today's profile, gains **−11.0, −9.7, −6.4 and −6.8 per cent** (e1: five rounds, `release`, every round apart),
+  the research's sizes. The training set is not the cause: refuted.
+- *The flavour* (P15): the same example built as `dist` gains −14.5, −10.3, −5.7 and −7.5 (e2: five rounds on a
+  busier machine, the Dam and DK64 each overlapping by one disturbed base run). The `dist` profile guides as well as
+  the `release` one: held.
+
+What remains is the shim's frame, and one observation says it is not the example's frame. The same state, run 600
+frames from its load, ends on a different hash through the shim (the Dam `225BE8131B035B43`) than through the example
+(`4DEACE55468AA765`, the hash of §6.16.8's handheld runs), so the two run the machine in different configurations. The
+part of the shim's configuration that spends time the profile does not reach was **not identified**. For method the
+consequence is plain: PGO's size for Mistress is the driver's, and the examples overstated it by about one point on
+Ocarina, one to two on the Dam, three on DK64 and four to seven on Mario. A further control, the research's own profile
+on today's source, could not be run: built with it, today's library reports 1,201 functions without profile data. Its
+names no longer match, most likely because §6.17's first commit gave the crate its build script, which is a new
+dependency of the library's unit and so changes cargo's metadata hash (§6.17.1) — a structural change of the kind
+§6.17.6's rule counts.
+
+**The verdict: PGO pays through Mistress, exactly, and is kept.** It is 7 to 9 per cent on the two graded games and 4
+on the two heavy ones, every round apart but one, for a build step and a checked-in file. The profile checked in with
+this section is the one measured.
+
+##### 6.17.6 How a profile ages, and when to retrain it
+
+Three variants of the guided build were timed in the same interleaved rounds as the base and the guided build (r2,
+five rounds, the loop's paired median change against the base):
+
+| build | what differs | Mario | Ocarina | the Dam | DK64 title |
+| --- | --- | ---: | ---: | ---: | ---: |
+| pgo | the profile, matched | −7.8% | −8.6% | −4.1% | −3.7% |
+| pgo, racy counters | the profile trained before §6.17.4's atomic counters | −8.2% | −9.1% | −3.8% | −3.6% |
+| stale | a branch added to `StateWriter::enter`, which no measured frame runs | −4.0% | −10.0% | −4.1% | −3.7% |
+| hot | a branch added on the exception path of `cpu::blocks::decoded::run`, the decoded tier's loop | −7.9% | −9.1% | −4.0% | −3.1% |
+| p1 | the `release` flavour's profile alone given to the `dist` build (built with cargo, since MSBuild no longer passes it) | −0.1% | −0.1% | +0.9% | +0.2% |
+
+Every run of every build ended on its game's one hash. Built without §6.17.4's `-no-pgo-warn-mismatch`, the `stale`
+and `hot` builds each named the one function whose record LLVM discarded (`function control flow change detected (hash mismatch)`: `StateWriter::enter`, "up to 10,344
+count discarded", and `decoded::run`, "up to 12,626,106,089") and said `stale`; `p1` said `untrained` and, with
+`-pgo-warn-missing-function`, reported 1,214 of the library's functions without profile data, where the matched `dist`
+build reports none.
+
+*The predictions' fates.* **P1 held**: the other flavour's profile guides nothing and buys nothing. **P11 held**: the
+atomic counters removed the warning from all three flavours' builds and moved no game by more than half a point.
+**P4, within a point on all four, held on the Dam and DK64** (within 0.1); on Ocarina the stale build was 1.4 points
+*faster* than the matched one, inside both builds' spread, and Mario is undecided, its `stale` rounds running from 3.50
+to 4.06 ms and overlapping both the base's and the guided build's. The edit is in a function no measured frame calls,
+and three games say it cost nothing. **P5 is refuted**: the hot edit was predicted to cost the Dam and DK64 a quarter to a half of their gain,
+and it cost the Dam nothing and DK64 at most 0.6 of 3.7 points, inside the spread. Discarding the record of the loop
+that runs 23 per cent of the heavy games' thread (§6.16.2) is nearly free. The reading that fits is that what the
+profile buys in that loop is not the loop's own block order but the decisions its callers and callees make with their
+own records — which handlers are inlined into it, what is laid out hot — and those survive an edit to the loop.
+
+*So the profile ages slowly, and fails in steps.* An edit discards the records of the functions whose control flow it
+changed, and this measurement says even the hottest one's loss is small. What discards everything at once is a new
+**name**: every function's name carries its crate's disambiguator, which hashes the compiler's version string, the
+cargo profile and the target (§6.17.1). And a moved or renamed function loses its own record the same way. The rule
+recorded for retraining:
+
+1. **Always after a toolchain update** — Fedora's `rustc` or the version CI pins. Until then MSBuild gives the new
+   compiler nothing (§6.17.4), so the build is unguided and silent: it costs the whole gain and nothing else.
+2. **After restructuring the hot paths**: moving or renaming the processor's decode, dispatch and vector unit
+   (`rsp::decoded`, `rsp::simd`), the CPU's decoded tier and dispatcher (`cpu::blocks`), the coprocessor and its
+   software float (`cpu::cop1`, `cpu::softfloat`), or the rasteriser's draw functions (`rdp::one_cycle`,
+   `rdp::two_cycle`, `rdp::walker`), or adding a tier that takes over their work, since new code has no records.
+   Edits inside them are not a reason by themselves.
+3. **Before a speed measurement that is to be quoted**, so that the number is the profile's and not the profile's
+   minus an unknown decay.
+4. Otherwise not: the verdict file's `stale` is information, not a defect.
+
+##### 6.17.7 Where the profile applies, measured
+
+*P6, the CI flavour from elsewhere: held.* The crate's sources copied to another directory
+(`~/.cache/emusen/pgo/p6/other place/Nintendo/MarsRT - N64/`, beside a copy of the shaders it includes), built with the
+upstream toolchain for `--target x86_64-unknown-linux-gnu` and `-pgo-warn-missing-function`: `matched`, and **no**
+function of the library without profile data. The checkout's path is in no name. The host `dist` build in the tree
+reports 576 functions without data, every one of them in a build script: without `--target` cargo gives the build's
+`rustflags` to build scripts too, and no profile holds a build script's counters. That costs nothing, since the
+scripts run once at build time, and it is why `train.sh` sends the build scripts' own counters elsewhere.
+
+*P10, the library Mistress ships is the library measured: held for the code, refuted for the bytes.* A
+`dotnet publish` of Mistress (to a scratch directory, never `out/`) and the measured `dist` build of the driver differ
+in six strings, all paths of files that `cranelift-codegen`'s build script generates into its `OUT_DIR`, which include
+the cargo target directory and a hash of the build script's unit. The disassembly, with addresses masked, is identical.
+The same was seen between two builds whose flags differed only by `-no-pgo-warn-mismatch`, which changes the build
+scripts' unit hash and nothing in the code. A library is therefore reproducible only for a fixed target directory, and
+comparisons of builds are made on their code.
+
+##### 6.17.8 The storage decision, and the recipe
+
+**The profile is made on this desktop and checked in**, `pgo/marsrt.x86_64-unknown-linux-gnu.profdata` (11,028,856
+bytes) with its manifest. The alternative, training at publish time where the ROMs are, was not taken: it makes every
+publish most of an hour longer and dependent on a library and a quiet machine, and it gives CI nothing, since CI has no
+ROMs. The cost of checking it in is the history: each retraining adds about 11 MB, so retraining at every toolchain
+update, about every six weeks, adds on the order of 100 MB a year. That is acceptable at this size; if more targets
+are trained or the file grows, it belongs in Git LFS.
+
+*To regenerate it*, on this desktop:
+
+```
+cd "EmuSen/Cores/Nintendo/MarsRT - N64"
+LLVM_PROFDATA=~/.cache/emusen/probe/mars-speed/research-tools/root/usr/bin/llvm-profdata \
+  RUN="flock ~/.cache/emusen/probe/timing.lock nice -n 10" bash pgo/train.sh
+```
+
+with, as of this writing:
+
+- **Fedora's rustc 1.98.1** (`48a229cea 2026-09-01`, `Fedora 1.98.1-1.fc44`), LLVM 22.1.8, for the `release` and
+  `dist` host flavours; Fedora ships no `llvm-profdata` of that version outside its `llvm` package, so the one used is
+  that package's 22.1.8 extracted without root into `research-tools/root/` (§6.16.1).
+- **Upstream Rust 1.98.1** with `llvm-tools`, LLVM 22.1.8, installed without rustup into
+  `~/.cache/emusen/toolchains/rust-1.98.1` from static.rust-lang.org's `2026-09-03` channel, for CI's flavour.
+- **The games** in `~/.cache/emusen/pgo/games/train/`, copied from the library (§6.17.4, `pgo/training.txt`'s header);
+  the manifest's `run =` lines give each file's SHA-256 prefix, so a regeneration can check it trained on the same
+  inputs.
+- **Time**: about 55 minutes on this desktop with the lock shared (the atomic counters make the
+  instrumented runs about 1.6 times slower), three instrumented builds of about a minute and a half each.
+
+The profile is a function of the source, the toolchains, the training list and its inputs. It is not bit-reproducible,
+since the threaded runs' counts depend on scheduling; but every training run ended on the same state hash in all three
+flavours and in both trainings made on 2026-09-28, and the two profiles (racy and atomic counters, §6.17.4) built
+libraries within half a point of each other on every game (§6.17.6).
+
+*When to regenerate* is §6.17.6's rule: a toolchain update (always, since the names change), a change to the hot paths
+listed there, or a new sample showing a hot function unguided. Nothing breaks if it is not done.
+
+##### 6.17.9 What a run on the Mac must do
+
+macOS on Apple silicon needs its own profile, `pgo/marsrt.aarch64-apple-darwin.profdata`: the target is in every name
+(§6.17.1), and the hot code itself differs: the signal processor's SSE paths (`rsp::decoded`) are compiled for x86-64
+alone, and aarch64 runs their portable fallback, so no x86-64 counter could apply.
+The build side is ready: `dotnet build` and `dotnet publish` on a Mac look for that file, CI's `osx-arm64` job does the
+same, and neither passes anything until it exists. What the Mac itself must do:
+
+1. **The toolchain.** rustup with Rust 1.98.1 and its `llvm-tools` (`rustup toolchain install 1.98.1 --component
+   llvm-tools`), made the default so that `dotnet build` uses it (`rustup default 1.98.1`), and the .NET 10 SDK.
+   `train.sh` then finds `llvm-profdata` in the toolchain's sysroot and uses the same toolchain as CI's flavour; the
+   host flavours and CI's differ only in the cargo profile and the explicit `--target`, which §6.17.1 showed are enough
+   to rename everything, so all three are trained.
+2. **The inputs.** This desktop's `~/.cache/emusen/pgo/games/` copied to the same place on the Mac (both `train/` and
+   `measure/`; 344 MB). The manifest's `run =` lines give each file's SHA-256 prefix, so the Mac's manifest can
+   be compared with this one's line for line.
+3. **Training.** `bash pgo/train.sh` in the crate. It writes `pgo/marsrt.aarch64-apple-darwin.{profdata,pgo}`. No
+   `RUN` is needed on a machine used for nothing else; the instrumented runs are slower on any machine by the atomic
+   counters' cost.
+4. **The measurement**, as §6.17.5's: two publishes of `pgo/driver` (`-r osx-arm64 --self-contained false`), one with
+   `-p:EmuSenPgo=false`, each with its own `-p:EmuSenCargoTargetRoot`, then rounds of `marsrt-pgo <rom> <state> 600 mistress=1 warmup=120` on the four measured
+   states, the builds interleaved and their order rotated each round, at least five rounds. Graded on Super Mario 64
+   and Ocarina of Time. Every run of both builds must end on one hash for its game; the hash need not equal this
+   desktop's, and whether it does is worth recording: the WiseMan job's comparison with the C# core is the only check
+   so far that the platforms agree. This desktop's `bench.sh` reads `/proc/stat` for its quiet gate and does not run on
+   macOS; there the rounds are run on an otherwise idle machine without the gate.
+5. **The decision.** Only if the Mac's gain holds on the two graded games, in rounds that do not overlap, are the two
+   files committed. If it does not, the `osx-arm64` library stays unguided, which costs nothing.
+
+The measurement should record the machine's number of performance cores beside its results: the shim's default is
+four workers and the emulation thread, and a machine with fewer fast cores measures a different balance.
+
+**Windows** is not planned: the library there would be trained on Windows, and `train.sh` refuses any host but Linux
+and macOS. `win-x64` builds unguided and silently.
+
+**MercuryRT**, the Game Boy core, is paused, and nothing here was measured on it. The build step is generic — any crate
+of `RustCores.props` with a `pgo/<name>.<target>.profdata` is guided — but `build.rs`'s checks and `train.sh` are
+MarsRT's. Its cost per frame is the per-cycle design (`Mercury_Native.md`), a loop of data-dependent dispatch, which is
+the part of MarsRT's frame where §6.16.4's counters showed PGO buying nothing (the mispredictions did not move). That
+suggests a smaller gain there; it is a suggestion, not a measurement, and should be measured if that crate resumes.
+
+##### 6.17.10 What is not done
+
+- **The handheld through the shim** (P7). Its `linux-x64` publish carries the guided library once this is merged, and
+  §6.16.8 measured the example there; the driver's rounds on the device are not run. §6.17.5's finding that the
+  examples overstate the gain says to expect less than §6.16.8's 7 to 8 per cent.
+- **A multiple, and the device path.** Every timed run was at one on the processor. The training list trains 2× on the
+  processor only (§6.17.4); what the device path spends on the host is not measured guided.
+- **Why the shim gains less than the example** (§6.17.5): the configuration difference behind the two hashes is
+  unidentified.
+- **The Mac** was trained and measured, and its profile made every game slower (§6.17.11), so it builds unguided;
+  why is not known. **Windows**: no profile, and it builds unguided.
+- **The profile's decay over real edits.** §6.17.6 measured one synthetic edit in a cold function and one in the
+  hottest loop. How a month of ordinary commits ages the profile is not measured; the next retraining should time the
+  stale profile beside the fresh one before replacing it.
+- **Mario's `stale` reading** (−4.0 per cent, rounds overlapping both builds) was not re-run.
+
+##### 6.17.11 The Mac, measured (2026-09-28): slower, and not committed
+
+§6.17.9's recipe was run on the Mac mini (Apple M1, four performance and four efficiency cores, macOS 26.6.2), with
+rustup's Rust 1.98.1, whose LLVM is the same 22.1.8 as Fedora's. `train.sh` ran unchanged: the three flavours trained
+twelve runs each and matched the desktop's source digest (`36a5237755f1c652`), and every input's SHA-256 prefix in the
+Mac's manifest equals the desktop's. The driver was published twice with `-r osx-arm64`, `none` and `matched` by the
+build's own verdict, and timed in six rounds on an otherwise idle machine, the order rotated each round, without a
+quiet gate.
+
+| game | unguided (ms, range) | guided (ms, range) | change |
+| --- | --- | --- | --- |
+| Super Mario 64 (graded) | 6.629 (6.605–6.699) | 7.196 (7.189–7.214) | **+8.5%** |
+| Ocarina of Time (graded) | 7.699 (7.650–7.968) | 8.135 (8.127–8.154) | **+5.7%** |
+| The Dam | 19.602 (19.581–19.650) | 21.193 (21.140–21.296) | +8.1% |
+| Donkey Kong 64's title | 17.402 (17.380–17.410) | 17.764 (17.739–17.783) | +2.1% |
+
+The ranges do not overlap on any game, in the wrong direction: on this machine the profile makes every frame longer.
+By §6.17.9's rule the two files are not committed, and `osx-arm64` stays unguided. They are kept outside the repository
+with the results, so a later attempt can be compared with this one.
+
+**The platforms agree.** Every run of both builds ended on the desktop's hash for its game (`8553FCCA132C724A`,
+`D1382AB72E567556`, `03348EC3AB46361C`, `52AB776E24D5A170`): the first check beside the WiseMan job's that MarsRT's
+aarch64 build, with the signal processor's portable fallback in place of its SSE paths, computes what the x86-64 one
+does.
+
+**Why it is slower is not known**, and the following are candidates, not findings: the M1 has four fast cores, the
+same number as the shim's default workers, so the emulation thread shares them, and a layout tuned from counters taken
+under that contention may not suit the uncontended path; LLVM's aarch64 block placement and inlining thresholds
+respond to a profile differently from x86-64's; and the portable vector fallback, which the desktop never trains, is a
+large share of this target's hot code. Distinguishing these would take the unguided and guided libraries' disassembly
+of the rasteriser and the vector units, and a run with fewer workers; neither was done.

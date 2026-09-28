@@ -43,8 +43,24 @@ namespace EmuSen.Galaxia.Models
         public bool AnalogStickAsDpad { get; set; } = true;
         public double StickDeadzone { get; set; } = 0.5;
 
+        // Controllers in the interface, as ES-DE's input device settings: the help bar's button set, the swap, the first pad alone, the notices - see EmuSen_Settings_Reference.md §4.61.
+        public string ControllerType { get; set; } = ControllerTypeAutomatic;
+        public const string ControllerTypeAutomatic = "Automatic";
+        public bool SwapPadButtons { get; set; } = false;
+        public bool FirstControllerOnly { get; set; } = false;
+        public bool ControllerNotifications { get; set; } = true;
+
+        // What types into a big-screen text row: Automatic, Steam's keyboard, or Mistress's own - see EmuSen_Settings_Reference.md §4.79.
+        public string OnScreenKeyboard { get; set; } = OnScreenKeyboardAutomatic;
+        public const string OnScreenKeyboardAutomatic = "Automatic", OnScreenKeyboardSteam = "Steam", OnScreenKeyboardEmuSen = "EmuSen";
+
         // Full screen, no menu bar and larger type, for a handheld or a television; a Steam Deck's session asks for it by itself - see EmuSen_Settings_Reference.md §4.29.
         public bool BigScreen { get; set; } = false;
+
+        // The status bar at the bottom of the main window, and each of its two parts - see EmuSen_Settings_Reference.md §4.51.
+        public bool ShowStatusBar { get; set; } = true;
+        public bool ShowStatusText { get; set; } = true;
+        public bool ShowFpsBar { get; set; } = true;
 
         // Ask, Resume or Restart when a game with a resume state starts - see EmuSen_Settings_Reference.md §4.31.
         public string ResumeOnLaunch { get; set; } = ResumeAsk;
@@ -63,11 +79,65 @@ namespace EmuSen.Galaxia.Models
         public double Volume { get; set; } = 1.0;
         public bool PauseInBackground { get; set; } = true;
 
-        // Off unless the player turns it on: missing covers looked up in OpenVGDB and fetched - see EmuSen_Settings_Reference.md §4.39.
-        public bool OnlineCovers { get; set; } = false;
+        // Read only from a file written before 2026-09-26, then dropped: OpenEmu's covers became the failover below - see EmuSen_Settings_Reference.md §4.60.
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public bool? OnlineCovers { get; set; }
+
+        // OpenVGDB and libretro's thumbnails, asked only where ScreenScraper has nothing or cannot be used - see EmuSen_Settings_Reference.md §4.39 and §4.60.
+        public bool OpenEmuFallback { get; set; } = true;
+
+        // ScreenScraper as the library's source of media and game text, where EmuSen's developer file exists - see EmuSen_Settings_Reference.md §4.60.
+        public bool Scraping { get; set; } = true;
+        public bool ScrapeCovers { get; set; } = true;
+        public bool ScrapeScreenshots { get; set; } = true;
+        public bool ScrapeMarquees { get; set; } = true;
+        public bool ScrapeTitleScreens { get; set; } = false;
+        public bool ScrapeMiximages { get; set; } = true;
+        public string ScrapeRegion { get; set; } = "auto";
+        public string ScrapeLanguage { get; set; } = "en";
+        public bool ScrapeRegionFallback { get; set; } = true;
+        public int ScrapeThreads { get; set; } = 1;
+
+        // Pass 8's kinds, each off until the player turns it on, and ScreenScraper's names shown (Q30) - see EmuSen_Settings_Reference.md §4.76.
+        public bool ScrapeBackCovers { get; set; }
+        public bool Scrape3DBoxes { get; set; }
+        public bool ScrapePhysicalMedia { get; set; }
+        public bool ScrapeFanArt { get; set; }
+        public bool ScrapeManuals { get; set; }
+        public bool ScrapeVideos { get; set; }
+        public bool ScrapeGameNames { get; set; }
+        public string ScrapeCriteria { get; set; } = "nocover";
+        public bool ScrapeRefresh { get; set; }
 
         // Box art the library shows, read and never written except by Add Cover Art - see EmuSen_Settings_Reference.md §4.33.
         public string? ArtworkDirectory { get; set; }
+
+        // A big-screen session's library: Mistress's own, or an ES-DE theme's view when one is found - see EmuSen_Settings_Reference.md §4.52.
+        public string LibraryStyle { get; set; } = LibraryStyleTheme;
+        public const string LibraryStyleMistress = "Mistress";
+        public const string LibraryStyleTheme = "Theme";
+
+        // The ES-DE theme folder, read in place; and an ES-DE downloaded_media folder, also only read - see §4.52.
+        public string? BigPictureTheme { get; set; }
+        public string? EsdeMediaDirectory { get; set; }
+
+        // The theme's navigation sounds, on a stream beside the game's - see §4.52.
+        public bool NavigationSounds { get; set; } = true;
+
+        // ES-DE's "Max play time tracking" in hours: 0 records none, 24 has no limit, else a longer launch records nothing - see EmuSen_Settings_Reference.md §4.66.
+        public int MaxPlayTimeTracking { get; set; } = 8;
+
+        // Games the player hid from the library, with Hide from Library or the Hidden field, are listed again - see EmuSen_Settings_Reference.md §4.59.
+        public bool ShowHiddenGames { get; set; }
+
+        // The theme settings sheet's choices, keyed by the theme folder's full path so each theme keeps its own - see EmuSen_Settings_Reference.md §4.53.
+        public System.Collections.Generic.Dictionary<string, BigPictureChoices> BigPicture { get; set; } = new();
+
+        // Big picture's collections and gamelist options - see EmuSen_Settings_Reference.md §4.58.
+        public BigPictureCollections BigPictureCollections { get; set; } = new();
+
+        // Big picture's clock, help, status, quick system select, startup, order, scroll overlay and sound volume - see EmuSen_Settings_Reference.md §4.66.
+        public BigPictureInterface BigPictureInterface { get; set; } = new();
 
         private static readonly ConfigFile<AppSettings> File = new("appsettings.json");
 
@@ -80,6 +150,8 @@ namespace EmuSen.Galaxia.Models
         {
             if (!settings.SelectedCoreUpgraded && settings.SelectedCore == LegacySelectedCoreDefault) settings.SelectedCore = AllConsoles;
             settings.SelectedCoreUpgraded = true;
+            // A stored false was the old default every save wrote, so it is no choice; the failover keeps its new default either way and the old key goes - see §4.60.
+            settings.OnlineCovers = null;
             return settings;
         }
     }

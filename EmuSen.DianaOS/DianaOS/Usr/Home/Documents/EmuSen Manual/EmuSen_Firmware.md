@@ -31,7 +31,7 @@ Answering before loading is the whole point. Once `LoadRom` has run, the core ha
 | `TryLoad(request)` | the bytes, or null |
 | `IsInstalled(request)` | as above, as a bool |
 | `MissingFrom(requests)` | filters a batch down to what's absent |
-| `Install(request, sourcePath)` | copies a file the choice was in, under the canonical name |
+| `Install(request, sourcePath)` | copies a file the player picked in, under the canonical name |
 | `PathFor(request)` | where it belongs, for an error message |
 
 `Directory` is settable, and `ResetDirectory()` puts it back. That exists so tests can point at a temp folder — without it every test's result would depend on which dumps happen to be on the machine, which is a bug this project has already been bitten by once (see §6).
@@ -44,7 +44,7 @@ Checksums would be stricter still, and `FirmwareRequest` has room for them later
 
 ### 2.2 Canonical names and alternates
 
-`AlternateNames` lists other filenames the same dump circulates under. They are checked after the canonical name and **never written to**: an install always lands under `FileName`, so the next launch finds it first and the store converges on one layout no matter what the choice was.
+`AlternateNames` lists other filenames the same dump circulates under. They are checked after the canonical name and **never written to**: an install always lands under `FileName`, so the next launch finds it first and the store converges on one layout no matter what the player picked.
 
 ---
 

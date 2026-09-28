@@ -13,6 +13,7 @@ using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Mistress.Views
 {
@@ -87,25 +88,66 @@ namespace EmuSen.Mistress.Views
             });
             CheatsList.Column(new LunaColumn<CheatRow>("Kind", r => Muted(r.Kind), r => r.Kind) { Width = "44" });
             CheatsList.Column(new LunaColumn<CheatRow>("Cheat", r => r.Description) { Width = "*" });
-            CheatsList.Column(new LunaColumn<CheatRow>("Code", r => Mono(r.Detail), r => r.Detail) { Width = "Auto" });
+            // A code longer than the column ends in an ellipsis, whole in the footer while its row is chosen, so the table never scrolls sideways (§4.83.6).
+            CheatsList.Column(new LunaColumn<CheatRow>("Code", r => Mono(r.Detail), r => r.Detail) { Width = "Auto", MaxWidth = CodeColumnMaxWidth });
         }
 
-        private static Control Muted(string text) => new TextBlock
+        internal const double CodeColumnMaxWidth = 300;
+
+        private Control Muted(string text) => SmallCell(new TextBlock
         {
             Text = text,
             Foreground = Brush("LunaMuted"),
-            FontSize = 11,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-        };
+        });
 
-        private static Control Mono(string text) => new TextBlock
+        private Control Mono(string text) => SmallCell(new TextBlock
         {
             Text = text,
             Foreground = Brush("LunaMuted"),
             FontFamily = new Avalonia.Media.FontFamily("monospace"),
-            FontSize = 11,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-        };
+            TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis,
+            TextWrapping = Avalonia.Media.TextWrapping.NoWrap,
+        });
+
+        // A cell's small words: 11 on the desktop, larger on a big-screen sheet in ES-DE's look (§4.80).
+        private static readonly Avalonia.StyledProperty<double> CellFontSizeProperty = Avalonia.AvaloniaProperty.Register<ActiveCheatsWindow, double>("CellFontSize", 11);
+
+        private TextBlock SmallCell(TextBlock cell)
+        {
+            cell.Bind(TextBlock.FontSizeProperty, Avalonia.AvaloniaObjectExtensions.GetObservable(this, CellFontSizeProperty));
+            return cell;
+        }
+
+        // On a big-screen sheet: the cells' words larger, the status in the footer, and no Save As or Load From, whose file dialogs a pad cannot drive (§4.80, §4.83.6).
+        private void InLook(DockPanel dock)
+        {
+            SetValue(CellFontSizeProperty, SheetLook.SmallText);
+            dock.Margin = new Avalonia.Thickness(0, 0, 0, 16);
+            SheetLook.StatusInFooter(this, StatusText);
+            SaveAsButton.IsVisible = LoadFromButton.IsVisible = false;
+
+            // The General page's two parts side by side, so the table under it keeps room for its rows (§4.83).
+            if (Tabs.Items.OfType<TabItem>().FirstOrDefault()?.Content is StackPanel { Children.Count: 2 } general)
+            {
+                Control master = general.Children[0], saved = general.Children[1];
+                general.Children.Clear();
+                Grid.SetColumn(saved, 2);
+                var sides = new Grid { ColumnDefinitions = new ColumnDefinitions("*,24,*"), Margin = general.Margin, Children = { master, saved } };
+                ((TabItem)Tabs.Items[0]!).Content = sides;
+            }
+
+            // The table fits the panel and never scrolls sideways, which a pad cannot; a cut description is whole in the footer while its row is chosen (§4.83).
+            void NoSideways(ListBox rows)
+            {
+                rows.SetValue(Avalonia.Controls.ScrollViewer.HorizontalScrollBarVisibilityProperty, Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled);
+                SheetLook.SelectOnFocus(rows);
+            }
+            CheatsList.TemplateApplied += (_, e) => { if (e.NameScope.Find<ListBox>("PART_Rows") is { } rows) NoSideways(rows); };
+            foreach (ListBox rows in Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(CheatsList).OfType<ListBox>()) NoSideways(rows);
+            CheatsList.Chose += row => EmuSen.LunaP.Controls.MenuLook.SetFooter(this, row is null ? null : $"{row.Description}  ·  {row.Detail}");
+        }
 
         // DynamicResource in code: the theme can change under a live window - see EmuSen_LunaP.md §12.3.
         private static Avalonia.Media.IBrush? Brush(string key) =>
@@ -113,10 +155,16 @@ namespace EmuSen.Mistress.Views
 
         public ActiveCheatsWindow() : this(new CheatRegistry()) { }
 
+        // The database window, which is how a game's cheats arrive when the menu bar is hidden - see EmuSen_Settings_Reference.md §4.45.5.
+        private readonly Action? _openDatabase;
+
         public ActiveCheatsWindow(CheatRegistry registry, ICheatCodeCodec? pokeCodec = null, ICheatCodeCodec? patchCodec = null,
-            Func<bool>? applyNow = null, Func<string?>? saveName = null, string? console = null)
+            Func<bool>? applyNow = null, Func<string?>? saveName = null, string? console = null, Action? openDatabase = null)
         {
             InitializeComponent();
+            if (Content is DockPanel body) EmuSen.LunaP.Controls.MenuLook.WhenApplied(body, () => InLook(body));
+            _openDatabase = openDatabase;
+            DatabaseButton.IsEnabled = openDatabase is not null;
             BuildCheatColumns();
             _registry = registry;
             _pokeCodec = pokeCodec;
@@ -150,6 +198,11 @@ namespace EmuSen.Mistress.Views
                 HintText formats = Ui.Hint("");
 
                 addButton.Click += OnAddClick;
+
+                // A code is typed on the keys it is written in: Game Genie letters for the NES, hexadecimal for the rest - see §4.45.6.
+                EmuSen.Mistress.Input.PadKeyboard.Use(codeBox, console.Console == "NES"
+                    ? new[] { KeyboardLayout.GameGenie, KeyboardLayout.Code, KeyboardLayout.Letters }
+                    : new[] { KeyboardLayout.Code, KeyboardLayout.Letters });
 
                 StackPanel panel = Ui.Stack(6,
                     new TextBlock { Text = $"Add a {console.Console} cheat", FontWeight = Avalonia.Media.FontWeight.Bold },
@@ -258,7 +311,7 @@ namespace EmuSen.Mistress.Views
 
             if (cheats.Count == 0)
             {
-                StatusText.Text = "Load a game's cheats from Settings > Cheat Database..., or add a code on a console tab.";
+                StatusText.Text = "Load a game's cheats from the Cheat Database, or add a code on a console tab.";
             }
 
             // A console whose core has no codec cannot parse a typed code at all - see EmuSen_Multicore.md §4.
@@ -462,6 +515,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex)
             {
+                ErrorLog.Error("cheats", $"Couldn't decode '{code}' as {codec.Name}", ex);
                 StatusText.Text = $"Couldn't decode '{code}' as {codec.Name}: {ex.Message}";
                 return;
             }
@@ -473,5 +527,7 @@ namespace EmuSen.Mistress.Views
         }
 
         private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
+
+        private void OnDatabaseClick(object? sender, RoutedEventArgs e) => _openDatabase?.Invoke();
     }
 }

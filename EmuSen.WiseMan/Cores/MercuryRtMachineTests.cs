@@ -24,14 +24,14 @@ namespace EmuSen.WiseMan.Cores
         public MercuryRtMachineTests(ITestOutputHelper output) => _output = output;
 
         // Counts in WRAM, copies the count to cart RAM, keys a pulse note and scrolls - MercuryRtStateTests' program.
-        private static readonly byte[] Busy =
+        internal static readonly byte[] Busy =
         {
             0x3E, 0x0A, 0xEA, 0x00, 0x00, 0x3E, 0xF0, 0xE0, 0x12, 0x3E, 0x87, 0xE0, 0x14,
             0x21, 0x00, 0xC0, 0x34, 0x7E, 0xEA, 0x00, 0xA0, 0xE0, 0x43, 0x18, 0xF4,
         };
 
         // Timer, STAT and vblank interrupts into HALT; each handler counts; OAM DMA, a window, sprites, a wave note and serial bytes every vblank.
-        private static byte[] InterruptsRom(byte kind, byte ramCode, byte cgb) => SyntheticGbRom.Build(romBanks: 4, cartridgeType: kind, ramSizeCode: ramCode, cgbFlag: cgb,
+        internal static byte[] InterruptsRom(byte kind, byte ramCode, byte cgb) => SyntheticGbRom.Build(romBanks: 4, cartridgeType: kind, ramSizeCode: ramCode, cgbFlag: cgb,
             patches: new (int, byte[])[]
             {
                 (0x40 - 0x150, new byte[] { 0xC3, 0x00, 0x02 }),
@@ -52,7 +52,7 @@ namespace EmuSen.WiseMan.Cores
             });
 
         // On a colour console: a general-purpose HDMA and an hblank HDMA every frame, then KEY1 and STOP into double speed after 60 frames.
-        private static byte[] ColourRom() => SyntheticGbRom.Build(romBanks: 4, cartridgeType: 0x1B, ramSizeCode: 0x03, cgbFlag: 0xC0,
+        internal static byte[] ColourRom() => SyntheticGbRom.Build(romBanks: 4, cartridgeType: 0x1B, ramSizeCode: 0x03, cgbFlag: 0xC0,
             patches: new (int, byte[])[]
             {
                 (0x40 - 0x150, new byte[] { 0xC3, 0x00, 0x02 }),
@@ -353,35 +353,38 @@ namespace EmuSen.WiseMan.Cores
 
         public string Summary => $"{_frames} frames identical in state{(_soundAndPicture ? ", sound and picture" : "")}, {_samples} samples, {Serial} serial bytes, {Csharp.Cpu!.Cycles} CPU cycles";
 
-        public MercuryRtPair(byte[] rom, bool skipRendering, MercuryCore? transferAt = null, int stateEvery = 1, bool soundAndPicture = true)
+        public MercuryRtPair(byte[] rom, bool skipRendering, MercuryCore? transferAt = null, int stateEvery = 1, bool soundAndPicture = true, byte[]? state = null, GbModel model = GbModel.Auto)
         {
             Assert.True(MercuryMachine.Available, MercuryNative.Report);
             CoreOptions.BatteryRamDisabled = true;
             _skip = skipRendering;
             _stateEvery = stateEvery;
             _soundAndPicture = soundAndPicture;
-            Csharp = Load(rom);
+            Csharp = Load(rom, model);
             Csharp.SkipRendering = skipRendering;
-            Rust = new MercuryMachine(rom, null);
+            Rust = new MercuryMachine(rom, model);
             Rust.SetOptions(skipRendering);
             if (transferAt is not null)
             {
-                // Both fresh, so the fields no state carries start equal (§3.1); the save path goes back to null, because D3 puts "" in it.
                 using var stream = new MemoryStream();
                 transferAt.SaveState(stream);
-                Csharp.LoadState(new MemoryStream(stream.ToArray()));
-                typeof(EmuSen.Cores.Nintendo.Mercury.Memory.Cartridge).GetField("_savePath", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(Csharp.Cart, null);
-                Rust.Load(stream.ToArray());
+                state = stream.ToArray();
+            }
+            if (state is not null)
+            {
+                // Both fresh, so the fields no state carries start equal (§3.1).
+                Csharp.LoadState(new MemoryStream(state));
+                Rust.Load(state);
             }
             CompareState("load");
         }
 
-        private static MercuryCore Load(byte[] rom)
+        private static MercuryCore Load(byte[] rom, GbModel model)
         {
             string path = SyntheticGbRom.WriteTemp(rom);
             try
             {
-                var core = new MercuryCore();
+                var core = new MercuryCore { Model = model };
                 core.LoadRom(path);
                 return core;
             }

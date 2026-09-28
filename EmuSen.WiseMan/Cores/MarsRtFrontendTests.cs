@@ -76,16 +76,21 @@ namespace EmuSen.WiseMan.Cores
             CoreBundle unknown = CoreFactory.Load(rom, engine: "MarsJS");
             Assert.IsType<MarsCore>(unknown.Core);
             Assert.Contains("MarsJS", unknown.Notice);
+            Assert.EndsWith($"{CoreCatalog.MarsEngine} is running.", unknown.Notice);
             Assert.Null(CoreFactory.Load(rom, engine: CoreCatalog.MarsEngine).Notice);
         }
 
         [Fact]
-        public void The_N64_and_the_Game_Boy_have_an_engine_to_choose_and_each_defaults_to_its_csharp_core()
+        public void The_N64_defaults_to_MarsRT_and_the_Game_Boy_to_its_csharp_core()
         {
             CoreSetting engine = CoreCatalog.EngineFor("N64")!;
             Assert.Equal(CoreCatalog.EngineKey, engine.Key);
-            Assert.Equal(CoreCatalog.MarsEngine, engine.Default);
-            Assert.Equal(new[] { CoreCatalog.MarsEngine, CoreCatalog.MarsRtEngine }, engine.Choices);
+            Assert.Equal(CoreCatalog.MarsRtEngine, engine.Default);
+            Assert.Equal(new[] { CoreCatalog.MarsRtEngine, CoreCatalog.MarsEngine }, engine.Choices);
+            Assert.Equal(CoreCatalog.MarsRtEngine, CoreCatalog.EngineChosen("N64", null));
+            Assert.Equal(CoreCatalog.MarsEngine, CoreCatalog.EngineChosen("N64", CoreCatalog.MarsEngine));
+            Assert.Equal(CoreCatalog.MercuryEngine, CoreCatalog.EngineChosen("GB", null));
+            Assert.Null(CoreCatalog.EngineChosen("SNES", null));
             foreach (string console in new[] { "SNES", "NES" }) Assert.Null(CoreCatalog.EngineFor(console));
             CoreSetting gameBoy = CoreCatalog.EngineFor("GB")!;
             Assert.Equal(CoreCatalog.MercuryEngine, gameBoy.Default);
@@ -369,7 +374,8 @@ namespace EmuSen.WiseMan.Cores
             }
 
             output.WriteLine($"{presented} frames presented and {skipped} not; the machine {slow / skipped:F3} ms a frame with the idle loop run instruction by instruction and {fast / skipped:F3} ms the frame after it");
-            Assert.True(slow > 2 * fast, "the frames with the idle loop run were not slow enough to catch a report of the frame before");
+            // A report one frame late puts slow below fast; 1.5 leaves room for a noisy runner (Windows CI measured 1.99 against the old 2) - see Mars_Native.md §6.3.
+            Assert.True(slow > 1.5 * fast, "the frames with the idle loop run were not slow enough to catch a report of the frame before");
         }
 
         // The dashboard's peek is the undrained queue, oldest first, and leaves it for the drain, on both engines - see Mars_Native.md §6.6.2.
@@ -456,6 +462,41 @@ namespace EmuSen.WiseMan.Cores
             byte[] fresh = core.GetFrameBufferRgba();
             Assert.True(ReferenceEquals(reused, shown) || ReferenceEquals(fresh, shown), "the returned array was not lent again");
             Assert.Equal(fresh, reused);
+        }
+
+        // The lending on a game at two on the device, deferred on four workers, whose scans the drain's leader runs - see Mars_Native.md §6.15.
+        [Fact]
+        public void At_two_on_the_device_a_frame_held_is_never_written_and_those_returned_are_lent_again()
+        {
+            string? folder = Environment.GetEnvironmentVariable(MarsRtTests.StatesVariable);
+            if (folder is null || !File.Exists(Path.Combine(folder, "sm64.z64")) || !File.Exists(Path.Combine(folder, "sm64.state"))) { output.WriteLine("sm64 absent, not run"); return; }
+            if (EmuSen.Cores.Nintendo.Mars.Rdp.Gpu.GpuDevice.DeviceNames().Count == 0) { output.WriteLine("no Vulkan device: not run"); return; }
+            using var core = new MarsRtCore(expansionPak: true, batteryRamDisabled: true) { ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true, SkipRendering = false };
+            ((ICoreSettings)core).Set("RenderScale", "2");
+            ((ICoreSettings)core).Set("Gpu", "true");
+            core.LoadRom(Rom(File.ReadAllBytes(Path.Combine(folder, "sm64.z64"))));
+            core.LoadState(new MemoryStream(File.ReadAllBytes(Path.Combine(folder, "sm64.state"))));
+            for (int frame = 0; frame < 10; frame++) core.RunFrame();
+
+            byte[] shown = core.GetFrameBufferRgba();
+            byte[] kept = (byte[])shown.Clone();
+            Assert.Equal(MarsCore.ScreenWidthPixels * 2, core.ScreenWidth);
+            long made = core.FrameBuffers.Made;
+            int changed = 0;
+            byte[] last = kept;
+            for (int frame = 0; frame < 60; frame++)
+            {
+                core.RunFrame();
+                byte[] other = core.GetFrameBufferRgba();
+                Assert.NotSame(shown, other);
+                if (!other.AsSpan().SequenceEqual(last)) changed++;
+                last = (byte[])other.Clone();
+                core.ReturnFrameBuffer(other);
+            }
+            Assert.True(changed >= 20, $"the picture changed in {changed} of 60 frames, so the lending was not tested");
+            Assert.Equal(kept, shown);
+            Assert.True(core.FrameBuffers.Made - made <= 1, $"{core.FrameBuffers.Made - made} arrays made for 60 frames returned each time");
+            output.WriteLine($"{core.GpuReport}: the held frame unchanged through 60 frames, {changed} of them new pictures, {core.FrameBuffers.Made - made} arrays made");
         }
 
         [Fact]

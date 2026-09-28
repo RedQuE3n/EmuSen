@@ -6,7 +6,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory.Mappers
     // Seven ROM bank bits, and the $A000 window can point at a clock register instead of RAM - see Mercury_Memory.md §4.4.
     public sealed class Mbc3 : IMapper
     {
-        private readonly Cartridge _cart;
+        // Version 5 wrote the cartridge again here - see Mercury_Native.md §9.3.
+        [EmuSen.Common.RetiredFromState] private readonly Cartridge _cart;
 
         private bool _ramEnabled;
         private int _romBank = 1;

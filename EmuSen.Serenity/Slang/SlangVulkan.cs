@@ -52,6 +52,8 @@ namespace EmuSen.Serenity.Slang
         // One command buffer, and a chain may be built on one thread while another draws.
         private readonly object _submit = new();
         private bool _disposed;
+        private PfnDebugUtilsMessengerCallbackEXT? _validation;
+        private DebugUtilsMessengerEXT _listener;
 
         public string Name { get; }
 
@@ -78,17 +80,58 @@ namespace EmuSen.Serenity.Slang
         }
 
         // Null, with the reason, when no device with a graphics queue is there; the frontend then shows the picture unfiltered.
-        public static SlangVulkan? TryCreate(out string report, string? nameContains = null)
+        public static SlangVulkan? TryCreate(out string report, string? nameContains = null) => TryCreate(out report, nameContains, null);
+
+        // With a sink, the Khronos layer is loaded with synchronisation validation and every finding is handed to it, for a test - see EmuSen_Serenity.md §10.4.
+        internal static SlangVulkan? TryCreate(out string report, string? nameContains, Action<string>? validation)
         {
             nameContains ??= Environment.GetEnvironmentVariable(DeviceVariable);
             Vk? vk = null;
             Instance instance = default;
+            var strings = new List<nint>();
+            nint Text(string s) { nint p = SilkMarshal.StringToPtr(s); strings.Add(p); return p; }
             try
             {
                 vk = Vk.GetApi();
                 var application = new ApplicationInfo { SType = StructureType.ApplicationInfo, ApiVersion = Vk.Version11 };
                 var create = new InstanceCreateInfo { SType = StructureType.InstanceCreateInfo, PApplicationInfo = &application };
+                PfnDebugUtilsMessengerCallbackEXT callback = default;
+                uint on = 1, off = 0;
+                var settings = stackalloc LayerSettingEXT[3];
+                var layerSettings = new LayerSettingsCreateInfoEXT { SType = StructureType.LayerSettingsCreateInfoExt, SettingCount = 3, PSettings = settings };
+                var messenger = new DebugUtilsMessengerCreateInfoEXT { SType = StructureType.DebugUtilsMessengerCreateInfoExt };
+                var layer = stackalloc byte*[1];
+                var extensions = stackalloc byte*[2];
+                if (validation is not null)
+                {
+                    byte* khronos = (byte*)Text("VK_LAYER_KHRONOS_validation");
+                    settings[0] = new LayerSettingEXT { PLayerName = khronos, PSettingName = (byte*)Text("validate_sync"), Type = LayerSettingTypeEXT.Bool32Ext, ValueCount = 1, PValues = &on };
+                    settings[1] = new LayerSettingEXT { PLayerName = khronos, PSettingName = (byte*)Text("syncval_shader_accesses_heuristic"), Type = LayerSettingTypeEXT.Bool32Ext, ValueCount = 1, PValues = &on };
+                    settings[2] = new LayerSettingEXT { PLayerName = khronos, PSettingName = (byte*)Text("enable_message_limit"), Type = LayerSettingTypeEXT.Bool32Ext, ValueCount = 1, PValues = &off };
+                    callback = new PfnDebugUtilsMessengerCallbackEXT((severity, types, data, user) =>
+                    {
+                        validation(Marshal.PtrToStringUTF8((nint)data->PMessage) ?? "");
+                        return Vk.False;
+                    });
+                    messenger.MessageSeverity = DebugUtilsMessageSeverityFlagsEXT.WarningBitExt | DebugUtilsMessageSeverityFlagsEXT.ErrorBitExt;
+                    messenger.MessageType = DebugUtilsMessageTypeFlagsEXT.ValidationBitExt | DebugUtilsMessageTypeFlagsEXT.PerformanceBitExt;
+                    messenger.PfnUserCallback = callback;
+                    layer[0] = khronos;
+                    extensions[0] = (byte*)Text("VK_EXT_debug_utils");
+                    extensions[1] = (byte*)Text("VK_EXT_layer_settings");
+                    create.PNext = &layerSettings;
+                    create.EnabledLayerCount = 1;
+                    create.PpEnabledLayerNames = layer;
+                    create.EnabledExtensionCount = 2;
+                    create.PpEnabledExtensionNames = extensions;
+                }
                 Check(vk.CreateInstance(&create, null, &instance), "vkCreateInstance");
+                DebugUtilsMessengerEXT listener = default;
+                if (validation is not null)
+                {
+                    var make = (delegate* unmanaged<Instance, DebugUtilsMessengerCreateInfoEXT*, AllocationCallbacks*, DebugUtilsMessengerEXT*, Result>)(void*)vk.GetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT").Handle;
+                    Check(make(instance, &messenger, null, &listener), "vkCreateDebugUtilsMessengerEXT");
+                }
 
                 uint count = 0;
                 vk.EnumeratePhysicalDevices(instance, &count, null);
@@ -120,7 +163,7 @@ namespace EmuSen.Serenity.Slang
                     return null;
                 }
 
-                var device = new SlangVulkan(vk, instance, chosen.Physical, chosen.Family, chosen.Name);
+                var device = new SlangVulkan(vk, instance, chosen.Physical, chosen.Family, chosen.Name) { _validation = validation is null ? null : (PfnDebugUtilsMessengerCallbackEXT?)callback, _listener = listener };
                 report = chosen.Name;
                 return device;
             }
@@ -133,6 +176,10 @@ namespace EmuSen.Serenity.Slang
                     vk.Dispose();
                 }
                 return null;
+            }
+            finally
+            {
+                foreach (nint p in strings) SilkMarshal.Free(p);
             }
         }
 
@@ -258,14 +305,18 @@ namespace EmuSen.Serenity.Slang
             Check(Vk.ResetCommandBuffer(_commands, 0), "vkResetCommandBuffer");
             var begin = new CommandBufferBeginInfo { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
             Check(Vk.BeginCommandBuffer(_commands, &begin), "vkBeginCommandBuffer");
+            SlangProbe.Current?.Mark(_commands, SlangProbe.SubmissionBegin);
             record(_commands);
+            SlangProbe.Current?.Mark(_commands, SlangProbe.SubmissionEnd);
             Check(Vk.EndCommandBuffer(_commands), "vkEndCommandBuffer");
             CommandBuffer commands = _commands;
             var submit = new SubmitInfo { SType = StructureType.SubmitInfo, CommandBufferCount = 1, PCommandBuffers = &commands };
             Fence fence = _fence;
             Check(Vk.QueueSubmit(_queue, 1, &submit, fence), "vkQueueSubmit");
+            SlangProbe.Current?.Phase(SlangProbe.Submitted);
             Check(Vk.WaitForFences(Device, 1, &fence, true, ulong.MaxValue), "vkWaitForFences");
             Check(Vk.ResetFences(Device, 1, &fence), "vkResetFences");
+            SlangProbe.Current?.Phase(SlangProbe.Waited);
         }
 
         // Every level of an image moved to a layout, with the widest barrier, since a chain's passes run one after another anyway.
@@ -329,6 +380,44 @@ namespace EmuSen.Serenity.Slang
             });
         }
 
+        // Each row uploaded once into rows, then blitted to repeat times its height by nearest filtering, which repeats each row exactly - see EmuSen_Serenity.md §9.2.
+        internal void UploadRepeated(SlangImage image, ReadOnlySpan<byte> rgba, SlangImage rows, uint repeat, SlangBuffer staging)
+        {
+            fixed (byte* source = rgba) System.Buffer.MemoryCopy(source, staging.Mapped, (long)staging.Size, rgba.Length);
+            lock (_submit) RunLocked(commands =>
+            {
+                Transition(commands, rows, ImageLayout.TransferDstOptimal, from: ImageLayout.Undefined);
+                var region = new BufferImageCopy
+                {
+                    ImageSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1), ImageExtent = new Extent3D(rows.Width, rows.Height, 1),
+                };
+                Vk.CmdCopyBufferToImage(commands, staging.Handle, rows.Handle, ImageLayout.TransferDstOptimal, 1, &region);
+                Transition(commands, rows, ImageLayout.TransferSrcOptimal);
+                Transition(commands, image, ImageLayout.TransferDstOptimal);
+                var blit = new ImageBlit
+                {
+                    SrcSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1),
+                    DstSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1),
+                };
+                blit.SrcOffsets[1] = new Offset3D((int)rows.Width, (int)rows.Height, 1);
+                blit.DstOffsets[1] = new Offset3D((int)rows.Width, (int)(rows.Height * repeat), 1);
+                Vk.CmdBlitImage(commands, rows.Handle, ImageLayout.TransferSrcOptimal, image.Handle, ImageLayout.TransferDstOptimal, 1, &blit, Filter.Nearest);
+                if (image.Levels > 1) GenerateMipmaps(commands, image);
+                else Transition(commands, image, ImageLayout.ShaderReadOnlyOptimal);
+            });
+        }
+
+        // A transfer's writes to a buffer made visible to the host, which a fence alone does not do.
+        internal void HostReadBarrier(CommandBuffer commands, SlangBuffer buffer)
+        {
+            var barrier = new BufferMemoryBarrier
+            {
+                SType = StructureType.BufferMemoryBarrier, SrcAccessMask = AccessFlags.TransferWriteBit, DstAccessMask = AccessFlags.HostReadBit,
+                SrcQueueFamilyIndex = Vk.QueueFamilyIgnored, DstQueueFamilyIndex = Vk.QueueFamilyIgnored, Buffer = buffer.Handle, Offset = 0, Size = Vk.WholeSize,
+            };
+            Vk.CmdPipelineBarrier(commands, PipelineStageFlags.TransferBit, PipelineStageFlags.HostBit, 0, 0, null, 1, &barrier, 0, null);
+        }
+
         public void Dispose()
         {
             if (_disposed) return;
@@ -338,7 +427,13 @@ namespace EmuSen.Serenity.Slang
             Vk.DestroyFence(Device, _fence, null);
             Vk.DestroyCommandPool(Device, _pool, null);
             Vk.DestroyDevice(Device, null);
+            if (_listener.Handle != 0)
+            {
+                var unmake = (delegate* unmanaged<Instance, DebugUtilsMessengerEXT, AllocationCallbacks*, void>)(void*)Vk.GetInstanceProcAddr(_instance, "vkDestroyDebugUtilsMessengerEXT").Handle;
+                unmake(_instance, _listener, null);
+            }
             Vk.DestroyInstance(_instance, null);
+            _validation?.Dispose();
             Vk.Dispose();
         }
     }

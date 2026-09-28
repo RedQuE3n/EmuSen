@@ -278,11 +278,23 @@ impl<'a> StateWriter<'a> {
 pub struct StateReader<'a> {
     data: &'a [u8],
     pos: usize,
+    version: i32,
 }
 
 impl<'a> StateReader<'a> {
+    /// A reader for the current version until the header names another.
     pub fn new(data: &'a [u8]) -> Self {
-        StateReader { data, pos: 0 }
+        StateReader { data, pos: 0, version: i32::MAX }
+    }
+
+    /// The version the header names, so each part of the format reads the fields that version carried.
+    pub fn set_version(&mut self, version: i32) {
+        self.version = version;
+    }
+
+    /// True for a state older than `version`, whose retired fields are read and dropped (Mercury_Native.md §9.3).
+    pub fn before(&self, version: i32) -> bool {
+        self.version < version
     }
 
     pub fn position(&self) -> usize {

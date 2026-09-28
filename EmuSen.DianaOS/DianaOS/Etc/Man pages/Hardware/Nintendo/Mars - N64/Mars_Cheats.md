@@ -287,7 +287,7 @@ second to cover a boot that takes a sixteenth of one here, and it would not cove
 synthetic image, and the wiring tests' image now sets `Status.IE` before it spins, as a running game has.
 
 **What the gate does not cover.** An explicit `ApplyCheats()` — Mistress's Apply button, through
-`IDebugTarget.ApplyCheats` — is not gated, because it is the instruction and an Apply that silently does nothing
+`IDebugTarget.ApplyCheats` — is not gated, because it is the player's instruction and an Apply that silently does nothing
 is `EmuSen_Cheats.md` §6's defect over again; pressed in the boot's first 61–76 ms of console time it can still break
 it. The gate samples IE once, at the frame end. And a game that loads and checksums more code later would need the
 same care; none is known, and it is untested.

@@ -265,8 +265,9 @@ pub(crate) fn compare(folder: &str, rom: &str, state: Option<&str>, frames: u64,
     frames
 }
 
-/// The six of §5.6.7, and Donkey Kong 64's title, whose processor reads the depth image and whose capture met a list's last draws (Mars_Native.md §6.14).
-const GAMES: [(&str, Option<&str>); 7] = [
+/// The six of §5.6.7, Donkey Kong 64's title, whose processor reads the depth image and whose capture met a list's last draws (Mars_Native.md §6.14),
+/// and Perfect Dark in play, whose processor reads the depth image just after handing its list over (Mars_Performance.md §41).
+const GAMES: [(&str, Option<&str>); 8] = [
     ("sm64.z64", None),
     ("oot.z64", None),
     ("ge.z64", None),
@@ -274,6 +275,7 @@ const GAMES: [(&str, Option<&str>); 7] = [
     ("oot.z64", Some("oot.state")),
     ("ge.z64", Some("ge-dam.state")),
     ("dk64-us.v64", Some("dk64-us-title.state")),
+    ("pd-eu.z64", Some("pd-eu-play.state")),
 ];
 
 fn frames() -> u64 {
@@ -333,16 +335,17 @@ fn a_machine_at_a_multiple_split_and_deferred_is_the_machine_at_once_at_that_mul
     }
 }
 
-/// At two and at four on the device, split and deferred, against the processor at once at the same multiple: the device's frames are the
-/// processor's, picture for picture, on real games (Mars_Gpu.md §11, Mars_Native.md §6.4). Stands down without a Vulkan device.
+/// At two and at four on the device, split, deferred and at once, against the processor at once at the same multiple: the device's frames
+/// are the processor's, picture for picture, on real games (Mars_Gpu.md §11, Mars_Native.md §6.4), with the scans run by the drain's
+/// leader (§6.15). Stands down without a Vulkan device.
 #[test]
 fn a_machine_at_a_multiple_on_the_device_is_the_machine_at_once_on_the_processor() {
     if crate::rdp::gpu::GpuDevice::device_names().is_empty() {
         eprintln!("no Vulkan device: not run");
         return;
     }
-    for scale in [2, 4] {
-        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: true, average: 1, rsp_simd: None, rsp_blocks: None, bands: 0 }, Compare::Snapshot);
+    for (scale, deferred) in [(2, true), (4, true), (2, false), (4, false)] {
+        each_game(Mode { threaded: true, deferred, workers: 4, blocks: true, observed: false, scale, gpu: true, average: 1, rsp_simd: None, rsp_blocks: None, bands: 0 }, Compare::Snapshot);
     }
 }
 

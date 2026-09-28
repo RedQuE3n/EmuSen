@@ -6,7 +6,9 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -98,6 +100,76 @@ namespace EmuSen.WiseMan.Mistress
 
             Choose(window, MainWindow.AllGamesKey);
             Assert.Equal(3, Shown(window).Length);
+            window.Close();
+        }, default);
+
+        // The status bar and each of its parts follow Preferences at once and are remembered - see EmuSen_Settings_Reference.md §4.51.
+        [Fact]
+        public Task The_status_bar_and_its_parts_follow_preferences_at_once_and_are_remembered() => Session.Dispatch(() =>
+        {
+            MainWindow window = Open(AppSettings.LibraryList);
+            Control bar = window.GetControl<Border>("StatusBar");
+            TextBlock text = window.GetControl<TextBlock>("StatusText"), fps = window.GetControl<TextBlock>("FpsText");
+            Assert.True(bar.IsVisible && text.IsVisible && fps.IsVisible);
+
+            Invoke(window, "ShowPreferences");
+            Dispatcher.UIThread.RunJobs();
+            var preferences = window.OwnedWindows.OfType<PreferencesWindow>().Single();
+            LunaSwitch Toggle(string name) => preferences.GetLogicalDescendants().OfType<LunaSwitch>().Single(t => t.Name == name);
+            void Set(string name, bool on) { Toggle(name).IsChecked = on; Dispatcher.UIThread.RunJobs(); }
+
+            Set("ShowFpsBarSwitch", false);
+            Assert.True(bar.IsVisible && text.IsVisible);
+            Assert.False(fps.IsVisible);
+
+            Set("ShowStatusTextSwitch", false);
+            Assert.False(bar.IsVisible);
+
+            Set("ShowStatusTextSwitch", true);
+            Assert.True(bar.IsVisible && text.IsVisible);
+
+            Set("ShowStatusBarSwitch", false);
+            Assert.False(bar.IsVisible);
+            AppSettings saved = AppSettings.Load();
+            Assert.False(saved.ShowStatusBar);
+            Assert.True(saved.ShowStatusText);
+            Assert.False(saved.ShowFpsBar);
+            preferences.Close();
+            window.Close();
+
+            var again = new MainWindow { Width = 1024, Height = 768 };
+            again.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(again.GetControl<Border>("StatusBar").IsVisible);
+            again.Close();
+        }, default);
+
+        // The Game Boy's core on two shelves, the Color's listed after it and chosen like any console - see EmuSen_Settings_Reference.md §4.46.
+        [Fact]
+        public Task Game_Boy_Color_games_have_their_own_row_in_the_sidebar() => Session.Dispatch(() =>
+        {
+            Rom("Alpha.sfc");
+            var plain = new byte[0x150];
+            File.WriteAllBytes(Path.Combine(_romDir, "Mono.gb"), plain);
+            var color = new byte[0x150];
+            color[0x143] = 0x80;
+            File.WriteAllBytes(Path.Combine(_romDir, "Tinted.gb"), color);
+            File.WriteAllBytes(Path.Combine(_romDir, "Crystal.gbc"), plain);
+            MainWindow window = Open(AppSettings.LibraryList);
+
+            string[] rows = Sidebar(window).GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToArray();
+            int gb = Array.IndexOf(rows, "GB"), gbc = Array.IndexOf(rows, "GBC");
+            Assert.True(gb >= 0 && gbc > gb, string.Join(" | ", rows));
+            Assert.Equal("1", rows[gb + 1]);
+            Assert.Equal("2", rows[gbc + 1]);
+            UiTest.Dump("library-gbc-sidebar", UiTest.Capture(window));
+
+            Choose(window, MainWindow.ConsoleKeyPrefix + EmuSen.Cores.CoreCatalog.GameBoyColorShelf);
+            Assert.Equal(new[] { "Crystal.gbc", "Tinted.gb" }, Shown(window));
+            Assert.Equal(EmuSen.Cores.CoreCatalog.GameBoyColorShelf, AppSettings.Load().SelectedCore);
+
+            Choose(window, MainWindow.ConsoleKeyPrefix + "Game Boy (Mercury)");
+            Assert.Equal(new[] { "Mono.gb" }, Shown(window));
             window.Close();
         }, default);
 

@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using EmuSen.Galaxia.Models;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Mistress
 {
@@ -12,6 +12,7 @@ namespace EmuSen.Mistress
 
         public static void Install()
         {
+            ErrorLog.Redactor = Scraping.ScrapeRedactor.Redact;
             AppDomain.CurrentDomain.UnhandledException += (_, e) => Write("unhandled", e.ExceptionObject as Exception);
             TaskScheduler.UnobservedTaskException += (_, e) => Write("unobserved task", e.Exception);
         }
@@ -24,7 +25,9 @@ namespace EmuSen.Mistress
                 string root = DirectoryOverride ?? LogRoot();
                 Directory.CreateDirectory(root);
                 string path = Path.Combine(root, $"crash_{DateTime.Now:yyyyMMdd_HHmmss_fff}.txt");
-                File.WriteAllText(path, $"{kind} at {DateTime.Now:O}\n{context}\n\n{fault}\n");
+                // Through the scraper's redactor, so a ScreenScraper URL in a fault's message or stack never carries a credential to disk (EmuSen_BigPicture.md §17).
+                File.WriteAllText(path, Scraping.ScrapeRedactor.Redact($"{kind} at {DateTime.Now:O}\n{context}\n\n{fault}\n"));
+                ErrorLog.Error("crash", $"{kind}: {fault?.Message}", null, $"report {path}");
                 return path;
             }
             catch
@@ -33,12 +36,6 @@ namespace EmuSen.Mistress
             }
         }
 
-        private static string LogRoot()
-        {
-            string? configured = AppSettings.Load().LogDirectory;
-            return string.IsNullOrWhiteSpace(configured)
-                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EmuSen", "Logs")
-                : configured;
-        }
+        private static string LogRoot() => ErrorLog.Root();
     }
 }

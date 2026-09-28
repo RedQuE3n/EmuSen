@@ -6,7 +6,7 @@ using EmuSen.Galaxia.Models;
 
 namespace EmuSen.WiseMan.Fixtures
 {
-    // Finds a real (never-committed) ROM in the player's own library - see EmuSen_Galaxia.md §3.3.
+    // Finds a real (never-committed) ROM in the local library - see EmuSen_Galaxia.md §3.3.
     public static class RealRom
     {
         public static string? Find(string console, string fileName)

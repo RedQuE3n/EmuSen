@@ -89,10 +89,32 @@ namespace EmuSen.Serenity
                     _slang?.Dispose();
                     _slang = value is null ? null : new Slang.SlangRunner(value, problem => SlangFailed?.Invoke(problem),
                         () => Avalonia.Threading.Dispatcher.UIThread.Post(InvalidateVisual));
+                    _slang?.SetParameters(_shaderParameters);
                 }
                 InvalidateVisual();
             }
         }
+
+        private IReadOnlyDictionary<string, float>? _shaderParameters;
+
+        // The player's values for the filter or preset drawn, by parameter id; both take them at their next draw - see EmuSen_Serenity.md §7.6.
+        public IReadOnlyDictionary<string, float>? ShaderParameters
+        {
+            get { lock (_cacheLock) return _shaderParameters; }
+            set
+            {
+                lock (_cacheLock)
+                {
+                    _shaderParameters = value is null ? null : new Dictionary<string, float>(value, StringComparer.Ordinal);
+                    _chain?.SetParameters(_shaderParameters);
+                    _slang?.SetParameters(_shaderParameters);
+                }
+                InvalidateVisual();
+            }
+        }
+
+        // What the running filter's chain holds for a parameter, NaN when there is no chain yet, for a test.
+        internal float FilterParameter(string id) { lock (_cacheLock) return _chain?.ValueOf(id) ?? float.NaN; }
 
         // Whether the preset has finished building, for a test that waits on it.
         internal bool SlangBuilt { get { lock (_cacheLock) return _slang?.Built ?? true; } }
@@ -356,27 +378,28 @@ namespace EmuSen.Serenity
                     }
                     try
                     {
-                        bool copy = fresh || _owner._cachedImage is null;
-                        if (_owner._activeFilter is { } filter && _owner._chain is null) _owner._chain = new FilterChain(filter);
-                        if (copy)
-                        {
-                            var sourceInfo = new SKImageInfo(source.Width, source.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-                            SKImage? previous = _owner._cachedImage;
-                            _owner._cachedImage = SKImage.FromPixelCopy(sourceInfo, source.Rgba);
+                        if (_owner._activeFilter is { } filter && _owner._chain is null) { _owner._chain = new FilterChain(filter); _owner._chain.SetParameters(_owner._shaderParameters); }
 
-                            // A filter that looks back keeps the frame just replaced; otherwise it is freed as before.
-                            if (_owner._chain is { } running) running.Advance(previous);
-                            else previous?.Dispose();
-                        }
+                        // A preset that will draw reads the array itself, so no image of the source is made, and one made earlier is now stale - see EmuSen_Serenity.md §9.3.
+                        bool presetOnly = _owner._slang is { Ready: true } && _owner._chain is null;
+                        if (presetOnly && fresh) { _owner._cachedImage?.Dispose(); _owner._cachedImage = null; }
+                        bool copy = !presetOnly && (fresh || _owner._cachedImage is null);
+                        if (copy) CopySource(source);
                         if (fresh) _owner.Copied(source);
                         long copied = System.Diagnostics.Stopwatch.GetTimestamp();
 
-                        if (_owner._slang is { } slang && DrawSlang(canvas, slang, copy, source)) { }
-                        else if (_owner._chain is { } chain) DrawFiltered(canvas, chain, grContext, _owner._cachedImage!, source);
-                        else Draw(canvas, _owner._cachedImage!, source);
+                        if (_owner._slang is { } slang && DrawSlang(canvas, slang, presetOnly ? fresh : copy, source)) { }
+                        else
+                        {
+                            if (_owner._cachedImage is null) { CopySource(source); copy = true; }
+                            if (_owner._chain is { } chain) DrawFiltered(canvas, chain, grContext, _owner._cachedImage!, source);
+                            else Draw(canvas, _owner._cachedImage!, source);
+                        }
 
                         // Flushed here so the texture's upload, which Skia defers to a flush, is timed with the draw - see EmuSen_Serenity.md §2.5.
+                        Slang.SlangProbe.Current?.Phase(Slang.SlangProbe.FlushBegin);
                         grContext?.Flush();
+                        Slang.SlangProbe.Current?.Phase(Slang.SlangProbe.FlushEnd);
                         _owner.Presented(copy, copied - started, System.Diagnostics.Stopwatch.GetTimestamp() - copied, grContext is not null, source.Width, source.Height);
                     }
                     finally
@@ -386,6 +409,17 @@ namespace EmuSen.Serenity
                 }
             }
 
+            private void CopySource(Offer source)
+            {
+                var sourceInfo = new SKImageInfo(source.Width, source.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+                SKImage? previous = _owner._cachedImage;
+                _owner._cachedImage = SKImage.FromPixelCopy(sourceInfo, source.Rgba);
+
+                // A filter that looks back keeps the frame just replaced; otherwise it is freed as before.
+                if (_owner._chain is { } running) running.Advance(previous);
+                else previous?.Dispose();
+            }
+
             private SKRect Destination(Offer source)
             {
                 var (x, y, w, h) = ComputeLetterboxRect(source.Width, source.Height * source.RowRepeat, Bounds.Width, Bounds.Height);
@@ -393,7 +427,7 @@ namespace EmuSen.Serenity
             }
 
             private bool DrawSlang(SKCanvas canvas, Slang.SlangRunner slang, bool newFrame, Offer source) =>
-                slang.Draw(canvas, source.Rgba, source.Width, source.Height, source.RowRepeat, newFrame, Destination(source));
+                slang.Draw(canvas, source.Rgba, source.Width, source.Height, newFrame, Destination(source));
 
             private void DrawFiltered(SKCanvas canvas, FilterChain chain, GRContext? context, SKImage sourceImage, Offer source) =>
                 chain.Draw(canvas, context, sourceImage, source.RowRepeat, Destination(source));

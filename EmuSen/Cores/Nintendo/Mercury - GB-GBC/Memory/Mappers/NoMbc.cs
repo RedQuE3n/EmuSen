@@ -3,7 +3,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory.Mappers
     // 32K flat, with the optional 8K of unbanked RAM types $08/$09 add - see Mercury_Memory.md §4.1.
     public sealed class NoMbc : IMapper
     {
-        private readonly Cartridge _cart;
+        // Version 5 wrote the cartridge again here - see Mercury_Native.md §9.3.
+        [EmuSen.Common.RetiredFromState] private readonly Cartridge _cart;
 
         public NoMbc(Cartridge cart) => _cart = cart;
 

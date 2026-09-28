@@ -69,7 +69,7 @@ element. A machine with no device reports that and passes, since that machine is
 
 **Which device the tests use.** The table above was taken with every test run as a theory over all three devices.
 Since the same day they run on the machine's first choice only, here the RX 6800, because the suite's time is the
-user's and llvmpipe at four is slow; `EMUSEN_MARS_GPU_TEST_DEVICES=all` brings the other two back for an occasional
+developer's and llvmpipe at four is slow; `EMUSEN_MARS_GPU_TEST_DEVICES=all` brings the other two back for an occasional
 cross-check, which is worth doing when a phase of the shader port lands and is recorded where it was done. This
 retires the plan's §4 sentence that tests run on lavapipe: they can, and by default they do not. The integrated
 adapter has a second use. With two RDNA2 compute units against a Steam Deck's eight it is the machine's stand-in for
@@ -631,7 +631,8 @@ the device's (the plan's §0): only the processor drawing at the multiple is giv
 **One processor at the multiple, not one a worker.** The CPU path gives every drawing thread a processor at the
 multiple, each shading its own rows. The device path has exactly one, because the device is the parallelism. It
 rides the **leading worker's** thread, which already sees every word in order, so nothing about the interface's
-threading, marks or barriers changed. `Rdp.Follow`, which hands a scaled processor its native one's split, is now a
+threading, marks or barriers changed. *In MarsRT since 2026-09-28 it has a thread of its own and runs behind the native
+workers, its loads replayed from the leader's; `Mars_Performance.md` §41 says why, and C# is unchanged.* `Rdp.Follow`, which hands a scaled processor its native one's split, is now a
 no-op for a processor on the device, since that one must always draw alone.
 
 **No device is the CPU path.** With no Vulkan, no matching device or a memory too large to bind, `_gpu` stays null
@@ -698,7 +699,7 @@ a new auto-property is new machine state unless it is said otherwise.**
 
 At four, with deferred presentation, `pacebench` fails in the scan-out: *"The scan reached frame buffer address
 DA9400 outside the lines captured for it."* It fails with the device off as well, and it fails identically, at the
-same address, on `db4b74d`, a build from before any of this work. So it is a defect in `Vi.ReachScaled`'s capture
+same address, on `377b0e9`, a build from before any of this work. So it is a defect in `Vi.ReachScaled`'s capture
 of the memory at a multiple, present since that capture was written, and it is **reachable by a player**: deferred
 presentation is on by default, so an internal resolution of four crashes the emulator. Reading `Walk` and
 `ReachScaled` shows a reach that covers more lines than the walk fetches, so the two must disagree in a number
@@ -959,7 +960,7 @@ dropped batch the recorded case fails, without the fill both do.
 **A repeated capture walked again on the device showed nothing it should.** A capture with the device copies no
 scaled bytes, since the device walks its own memory; a capture that repeats the last returned before walking at all.
 With `SkipRepeatedScans` off, the walk that followed read a scaled capture that had never been taken. Reachable in
-Mistress by turning that setting off with the device on; since 4ddc4a8. The repeat now reuses the device's last
+Mistress by turning that setting off with the device on; since 080a73a. The repeat now reuses the device's last
 picture when the interface's count of scans (`ScanOuts`, which a rebuild also advances) says nothing has replaced it,
 and walks on the device again otherwise. `A_repeated_capture_walked_again_on_the_device_is_the_cpus` failed before
 (from byte 64 at two, 128 at four); its variant with another scan between catches a mutant that always reuses the
@@ -1034,7 +1035,7 @@ frames) were run over it.
 
 ### 14.6 The number
 
-`pacebench`, flat out, deferred presentation, HEAD (4ddc4a8) and this work interleaved and the order alternated,
+`pacebench`, flat out, deferred presentation, HEAD (080a73a) and this work interleaved and the order alternated,
 three rounds; medians. The device is on at two and four and off at one. Each game's state hash was the same across
 all eighteen of its runs.
 
@@ -1155,11 +1156,11 @@ in use on every device run.
 
 ### 15.4 The number
 
-`pacebench`, flat out, deferred presentation, the device on; 55c5e05 and this work interleaved and the order
+`pacebench`, flat out, deferred presentation, the device on; 9f8fd41 and this work interleaved and the order
 alternated, three rounds, medians. "Drawn at 4, shown at 1" is the antialiasing setting at four with the resolution
 at one. Each game's state hash was the same across every run.
 
-| Game | Drawn at, shown at | 55c5e05 | now |
+| Game | Drawn at, shown at | 9f8fd41 | now |
 |---|---|---|---|
 | Super Mario 64 | 2, 1 | 245% (8.12 ms) | **282% (7.05)** |
 | | 4, 1 | 164% (12.15) | **248% (8.04)** |

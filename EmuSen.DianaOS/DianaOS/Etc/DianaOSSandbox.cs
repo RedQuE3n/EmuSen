@@ -20,7 +20,7 @@ namespace EmuSen.DianaOS.DianaOS.Etc
         // Written to a published tree's root by DianaOSPublishLayout.targets.
         public const string RootMarkerFileName = ConfigRoot.RootMarkerFileName;
 
-        // What '/' means to this shell: the player's home, and nothing above it - see `man hier`.
+        // What '/' means to this shell: the sandbox home, and nothing above it - see `man hier`.
         public static string RootDirectory => DataStore.UsrHome;
 
         // Where the install actually lives. Outside the shell's reach on purpose - see `man hier`.
@@ -60,7 +60,7 @@ namespace EmuSen.DianaOS.DianaOS.Etc
         // Old ROM folders still holding files, for the startup notice - see EmuSen_Galaxia.md §3.3.
         public static IReadOnlyList<string> UnmigratedLibraryDirectories => DataMigration.RemainingLibraryDirectories();
 
-        // Forces the process's cwd to the player home exactly once - see `man cd` and EmuSen_Debugging_Tools_Reference_v5.md §3.18.
+        // Forces the process's cwd to the sandbox home exactly once - see `man cd` and EmuSen_Debugging_Tools_Reference_v5.md §3.18.
         private static readonly Lazy<bool> _initialized = new(() =>
         {
             EnsureSkeleton();

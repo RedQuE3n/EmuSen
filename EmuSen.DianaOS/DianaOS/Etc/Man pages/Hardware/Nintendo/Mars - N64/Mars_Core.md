@@ -16,7 +16,7 @@ somebody who opens a `.z64`.*
 
 **This registers Mars before Phase F.** `Mars_Gameplan.md` §4.6 put the `CoreCatalog` descriptor last, after a
 debug target with disassemblers, save states and cheats, on the argument that *"a core reachable from the
-frontends before its seams are tested is a core whose seams get tested in play."* `Mars_Rom.md` §4 said the
+frontends before its seams are tested is a core whose seams get tested by its players."* `Mars_Rom.md` §4 said the
 same thing from the other end. Registration has been brought forward ahead of those seams, so this page does the
 next best thing to meeting the condition: it tests the seams that do exist (§9), and it lists the ones that do
 not, below, so that nobody has to find them by using them.

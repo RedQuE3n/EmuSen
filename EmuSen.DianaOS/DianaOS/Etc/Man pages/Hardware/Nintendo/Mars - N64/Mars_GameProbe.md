@@ -55,7 +55,7 @@ interface landed, `<name>.wav` of everything the game played, drained as the run
 
 ## 3. The first measurement, 2026-09-18
 
-After `a4fb0b9`, 150 seconds a game:
+After `4466f5b`, 150 seconds a game:
 
 | | Super Mario 64 (Europe) | Wave Race 64 (USA) | Ocarina of Time (Europe) |
 | --- | --- | --- | --- |

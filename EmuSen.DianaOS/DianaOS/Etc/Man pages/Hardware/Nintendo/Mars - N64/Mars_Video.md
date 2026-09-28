@@ -259,7 +259,7 @@ the picture on show does not hold that change.
 `The_csharp_deferred_path_keeps_a_stale_picture_when_a_repeat_follows_an_expired_line` finds C# showing a stale
 picture for two frames. MarsRT walks a repeat whenever the raster has been changed in this way. The C# is unchanged.
 
-*Fixed 2026-09-23 (419583a).* §2.8's argument was right about the walk and wrong about the picture. The walk is a pure
+*Fixed 2026-09-23 (025573e).* §2.8's argument was right about the walk and wrong about the picture. The walk is a pure
 function of the job and its bytes, so a repeat's walk writes the raster the last walk wrote; but the raster is not the
 walk's alone, since `Prepare` darkens it (§2.4) before any walk, and the picture on show was composed after the last
 walk and before this darkening. The premise the skip needs is therefore not "the walk would write what is there" but
@@ -327,7 +327,7 @@ denser. The job takes the multiple's lines as it takes the console's (`ReachScal
 another thread (§2.7) reads one frame, and the repeat test of §2.8 includes the multiple, so a change of it is never
 a repeat. `Walk` chooses the multiple's source, picture and raster and records which it walked (`OutputScale`);
 `Raster` returns that raster and `OutputWidth` its width; `Darken` writes the darkened lines into both rasters, and a
-blank clears both. *2026-09-23 (05d41e4): with the display processor threaded, "once it has drawn there" was the drain's
+blank clears both. *2026-09-23 (2297ee1): with the display processor threaded, "once it has drawn there" was the drain's
 progress when `Prepare` read it, before any wait, so the first scan after a load or a change of the multiple chose by
 timing (`Mars_Native.md` §6.4.4); `Prepare` now asks `DpInterface.ScaledDrawnHandedOver`, which joins the drain first
 while nothing has drawn, and `Mars_Rdp.md` §2.9.4 records the test.* `MarsCore.Compose` returns the width it composed and multiplies the rows by the multiple, and
@@ -418,7 +418,7 @@ walk's state moved into a nested `Walker`), starts its counter from the closed f
 of the raster no other band writes. The bands are contiguous, as many as a quarter of the processors and at most
 four, with no band under thirty-two rows; a picture smaller than that is one band, as before.
 
-**Measured** (`pacebench`, flat out, 7d68f4d against this, interleaved and rotated, three rounds, medians, every state
+**Measured** (`pacebench`, flat out, ea303b1 against this, interleaved and rotated, three rounds, medians, every state
 hash the same): at one, Mario ran at 324 per cent of full speed against 261, Ocarina at 217 against 169, Wave Race at
 240 against 221; at two on the processor, Mario 142 against 105, Ocarina 86 against 66. The golden probe's pictures
 were identical for all six hundred frames of both its games, and a mutant starting every band's counter at zero

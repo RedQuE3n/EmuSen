@@ -50,6 +50,7 @@
                            TextWrapping="Wrap"
                            VerticalAlignment="Center" />
                 <lunac:ButtonBar Grid.Column="1">
+                    <Button x:Name="DatabaseButton" Content="Cheat Database..." Click="OnDatabaseClick" />
                     <Button x:Name="ApplyButton" Content="Apply Cheats" Click="OnApplyClick" />
                     <Button x:Name="RemoveButton" Content="Remove" IsEnabled="False" Click="OnRemoveClick" />
                     <Button x:Name="ClearButton" Content="Remove All" Click="OnClearClick" />

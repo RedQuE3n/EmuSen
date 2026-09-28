@@ -23,10 +23,17 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         public const int WramBankSize = 0x1000;
         public const int VramBankSize = 0x2000;
 
-        private readonly Cartridge _cart;
+        // Version 5 wrote the cartridge again here - see Mercury_Native.md §9.3.
+        [EmuSen.Common.RetiredFromState] private readonly Cartridge _cart;
 
-        // Colour mode is decided once at construction from the header - see Mercury_Cgb.md §1.
+        // Colour mode: a Game Boy Color running a cartridge made for it; decided once, at construction - see Mercury_Model.md §2.
         [SkipInState] public readonly bool Cgb;
+
+        // The console itself; a Game Boy Color is one even while it runs a Game Boy cartridge - see Mercury_Model.md §2.
+        [SkipInState] public readonly bool CgbHardware;
+
+        // A Game Boy Color running a Game Boy cartridge: DMG rendering through colour palettes, the colour registers locked - see Mercury_Model.md §4.
+        [SkipInState] public readonly bool DmgCompat;
 
         public byte[] Vram;
         public byte[] Wram;
@@ -69,13 +76,17 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         private bool _lastTimerEdge;
         private int _timaReloadDelay;
 
-        public MemoryBus(Cartridge cart)
+        public MemoryBus(Cartridge cart) : this(cart, cart.Cgb != CgbSupport.None) { }
+
+        public MemoryBus(Cartridge cart, bool cgbHardware)
         {
             _cart = cart;
-            Cgb = cart.Cgb != CgbSupport.None;
+            CgbHardware = cgbHardware;
+            Cgb = cgbHardware && cart.Cgb != CgbSupport.None;
+            DmgCompat = cgbHardware && cart.Cgb == CgbSupport.None;
 
-            Vram = new byte[VramBankSize * (Cgb ? 2 : 1)];
-            Wram = new byte[WramBankSize * (Cgb ? 8 : 2)];
+            Vram = new byte[VramBankSize * (CgbHardware ? 2 : 1)];
+            Wram = new byte[WramBankSize * (CgbHardware ? 8 : 2)];
 
             Ppu = new Ppu(this);
         }
@@ -233,7 +244,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             0xFF49 => Ppu.Obp1,
             0xFF4A => Ppu.Wy,
             0xFF4B => Ppu.Wx,
-            _ => Cgb ? ReadCgbIo(address) : Io[address - 0xFF00],
+            _ => Cgb ? ReadCgbIo(address) : DmgCompat ? ReadCompatIo(address) : Io[address - 0xFF00],
         };
 
         private void WriteIo(ushort address, byte data)
@@ -331,6 +342,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
 
                 default:
                     if (Cgb && WriteCgbIo(address, data)) return;
+                    if (DmgCompat && WriteCompatIo(address, data)) return;
                     Io[address - 0xFF00] = data;
                     return;
             }
@@ -383,7 +395,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         public void Tick(int cycles)
         {
             for (int i = 0; i < cycles; i++) StepOneCycle();
-            _cart.Mapper.Tick(cycles);
+
+            // The cartridge's clock has its own crystal, so it counts base-clock cycles, half the CPU's in double speed - see Mercury_Native.md §9.2.
+            _cart.Mapper.Tick(DoubleSpeed ? cycles >> 1 : cycles);
         }
 
         // TIMA counts falling edges of one selected bit of the DIV counter - see Mercury_Memory.md §5.
@@ -468,6 +482,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             ResetCgb();
             Ppu.Reset();
             Apu.Reset();
+
+            // The Game Boy Color's boot ROM colours a Game Boy cartridge from its title - see Mercury_Model.md §3.
+            if (DmgCompat) Ppu.LoadCompatibilityPalettes(CompatibilityPalettes.PaletteNumber(_cart.Rom));
         }
     }
 }

@@ -41,6 +41,7 @@ namespace EmuSen.Mistress.Views
             Button save = HudMenuButton("HudSave", SaveGlyph, "Save and Load", _saveState, _loadState, _slotMenu);
             Button options = HudMenuButton("HudOptions", OptionsGlyph, "Options", _speedMenu,
                 new LunaAction("_Graphics Settings...", ShowGraphicsSettings),
+                new LunaAction("S_haders...", ShowShaderSettings),
                 new LunaAction("_Controller Bindings...", ShowControllerBindings),
                 new LunaAction("Active _Cheats...", ShowActiveCheats),
                 new LunaAction("Take a _Screenshot", TakeScreenshot));
@@ -100,7 +101,7 @@ namespace EmuSen.Mistress.Views
             {
                 if (!_pausedInBackground) return;
                 _pausedInBackground = false;
-                if (GameFrame.IsVisible && IsPaused && !PadMenuPanel.IsVisible) ResumeEmulation();
+                if (GameFrame.IsVisible && IsPaused && !PadMenuPanel.IsVisible && !Sheets.IsPresenting) ResumeEmulation();
             };
         }
 
@@ -143,6 +144,7 @@ namespace EmuSen.Mistress.Views
                 }
                 catch (Exception ex)
                 {
+                    ErrorLog.Error("screenshots", "Screenshot failed", ex, path);
                     status = $"Screenshot failed: {ex.Message}";
                 }
                 Dispatcher.UIThread.Post(() =>

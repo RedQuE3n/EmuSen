@@ -19,7 +19,7 @@ namespace EmuSen.Mistress.Library
     {
         // "<stem>.state" is slot 1, "<stem>.slotN.state" slot N, "<stem>.resume.state" where the game was left - see EmuSen_Galaxia.md §5.
         // A state whose file name finds no game is matched by the ROM contents its record names, so a renamed ROM keeps its states.
-        public static IReadOnlyList<MediaItem> SaveStates(string directory, IReadOnlyList<RomEntry> games, Func<string, string?>? pathByHash = null)
+        public static IReadOnlyList<MediaItem> SaveStates(string directory, IReadOnlyList<RomEntry> games, Func<string, StateRecord?>? recordFor = null, Func<string, string?>? pathByHash = null)
         {
             if (!Directory.Exists(directory)) return Array.Empty<MediaItem>();
             ILookup<string, RomEntry> byStem = games.ToLookup(g => Path.GetFileNameWithoutExtension(g.FullPath), StringComparer.Ordinal);
@@ -29,7 +29,7 @@ namespace EmuSen.Mistress.Library
                 string name = Path.GetFileNameWithoutExtension(file);
                 (string stem, string label) = Parse(name);
                 string picture = SaveLibrary.PicturePathFor(file);
-                StateRecord? record = StateRecord.Read(file);
+                StateRecord? record = recordFor?.Invoke(file);
                 RomEntry? game = byStem[stem].FirstOrDefault();
                 if (game is null && record?.RomMd5 is string md5 && pathByHash?.Invoke(md5) is string path)
                     game = games.FirstOrDefault(g => g.FullPath == path);

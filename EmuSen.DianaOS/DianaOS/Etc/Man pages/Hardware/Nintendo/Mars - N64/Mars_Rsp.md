@@ -537,7 +537,7 @@ Of the operations still called rather than folded, 45.5 per cent fell to 5.0 in 
 on the emulation thread fell 17.9, 11.1 and 16.6 per cent in the three games, and the blocks' machine code grew from
 2.56 to 2.89 MB.
 
-**The time is less than the instructions**, as it should be read. `pacebench`, flat out, eaed28d against this, five
+**The time is less than the instructions**, as it should be read. `pacebench`, flat out, dadbc54 against this, five
 rounds alternated, medians, every state hash the same: Mario at one ran at 354 per cent of full speed against 340,
 Wave Race at 285 against 259, Ocarina at 256 against 253. Ocarina's frames are bound by its CPU and the interface's
 waits more than by this processor. The golden probe was identical.

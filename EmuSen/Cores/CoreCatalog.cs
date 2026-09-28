@@ -102,6 +102,60 @@ namespace EmuSen.Cores
                  .ThenBy(c => c.Console, StringComparer.OrdinalIgnoreCase)
                  .ToArray();
 
+        // What the library's console filter and sidebar list: one shelf per core, but two for the Game Boy's, whose games a player knows as two consoles - see EmuSen_Settings_Reference.md §4.46.
+        public sealed record LibraryShelf(string Name, string Label, CoreDescriptor Core)
+        {
+            // The system name an ES-DE theme keys its folders and variables by, and the full name it shows - see EmuSen_BigPicture.md §4.1.
+            public string EsdeSystem { get; init; } = "";
+            public string EsdeFullName { get; init; } = "";
+        }
+
+        public const string GameBoyColorShelf = "Game Boy Color (Mercury)";
+
+        private static readonly Dictionary<string, (string System, string FullName)> EsdeNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["NES"] = ("nes", "Nintendo Entertainment System"),
+            ["SNES"] = ("snes", "Super Nintendo"),
+            ["N64"] = ("n64", "Nintendo 64"),
+            ["GB"] = ("gb", "Game Boy"),
+        };
+
+        public static IReadOnlyList<LibraryShelf> ShelvesInReleaseOrder { get; } =
+            ConsolesInReleaseOrder.SelectMany(c => ReferenceEquals(c, Mercury)
+                ? new[] { new LibraryShelf(c.DisplayName, c.Console, c) { EsdeSystem = "gb", EsdeFullName = "Game Boy" }, new LibraryShelf(GameBoyColorShelf, "GBC", c) { EsdeSystem = "gbc", EsdeFullName = "Game Boy Color" } }
+                : new[] { new LibraryShelf(c.DisplayName, c.Console, c) { EsdeSystem = EsdeNames[c.Console].System, EsdeFullName = EsdeNames[c.Console].FullName } }).ToArray();
+
+
+        // Null for AllConsoles or a name no shelf has.
+        public static LibraryShelf? ShelfByName(string? name) =>
+            ShelvesInReleaseOrder.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+
+        // The shelf a ROM sits on, or null for a file no core claims.
+        public static string? ShelfFor(string romPath) =>
+            ByExtension(System.IO.Path.GetExtension(romPath)) is not { } core ? null
+            : ReferenceEquals(core, Mercury) && IsGameBoyColor(romPath) ? GameBoyColorShelf
+            : core.DisplayName;
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> ColorByPath = new();
+
+        // A .gbc file, or a .gb whose header asks for the Color (0x80 or 0xC0 at 0x143, as Mercury reads it); cached, since a scan asks per file.
+        public static bool IsGameBoyColor(string romPath) =>
+            ColorByPath.GetOrAdd(romPath, path =>
+            {
+                if (string.Equals(System.IO.Path.GetExtension(path), ".gbc", StringComparison.OrdinalIgnoreCase)) return true;
+                try
+                {
+                    using var file = System.IO.File.OpenRead(path);
+                    if (file.Length <= 0x143) return false;
+                    file.Position = 0x143;
+                    return file.ReadByte() is 0x80 or 0xC0;
+                }
+                catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+                {
+                    return false;
+                }
+            });
+
         // Read off the core itself rather than restated here, so a pad cannot drift from what the core reads.
         private static readonly Dictionary<string, IReadOnlyList<Galaxia.Input.PadButton>> ButtonsByConsole =
             new(StringComparer.OrdinalIgnoreCase)
@@ -162,6 +216,7 @@ namespace EmuSen.Cores
         private static readonly Dictionary<string, IReadOnlyList<CoreSetting>> SettingsByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
             ["N64"] = Nintendo.Mars.MarsCore.VideoSettings,
+            ["GB"] = Nintendo.Mercury.MercuryCore.ModelSettings,
         };
 
         public static IReadOnlyList<CoreSetting> SettingsFor(string console) =>
@@ -180,10 +235,10 @@ namespace EmuSen.Cores
         private static readonly Dictionary<string, CoreSetting> EngineByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
             ["N64"] = new(EngineKey, "Engine",
-                "Which implementation runs the console. Mars (C#) is the reference. MarsRT (Rust) is exact against it in state, picture and sound, reads the same save states and battery saves, and runs its display processor threaded and its code compiled as Mars does; it honours every setting below, the resolution multiple, antialiasing and the graphics card included. Measured a little faster than Mars on a desktop and about a tenth faster on a handheld. Takes effect when a game is next loaded.",
-                CoreSettingKind.Choice, MarsEngine, Choices: new[] { MarsEngine, MarsRtEngine }),
+                "Which implementation runs the console. MarsRT (Rust) is the default: exact against Mars (C#) in state, picture and sound, reading the same save states and battery saves, and honouring every setting below, the resolution multiple, antialiasing and the graphics card included. Mars (C#) is the reference it is graded against, and runs instead where MarsRT's library is missing. Takes effect when a game is next loaded.",
+                CoreSettingKind.Choice, MarsRtEngine, Choices: new[] { MarsRtEngine, MarsEngine }),
             ["GB"] = new(EngineKey, "Engine",
-                "Which implementation runs the console. Mercury (C#) is the reference. MercuryRT (Rust) is exact against it in state, picture and sound and reads the same save states and battery saves; its debugger view is refreshed from its state, and it does not yet stop at breakpoints. Takes effect when a game is next loaded.",
+                "Which implementation runs the console. Mercury (C#) is the reference. MercuryRT (Rust) is exact against it in state, picture and sound and reads the same save states and battery saves; its debugger view is refreshed from its state, and it stops at breakpoints, steps and records coverage, watches and the call stack as Mercury does. Takes effect when a game is next loaded.",
                 CoreSettingKind.Choice, MercuryEngine, Choices: new[] { MercuryEngine, MercuryRtEngine }),
         };
 
@@ -191,7 +246,10 @@ namespace EmuSen.Cores
         public static CoreSetting? EngineFor(string console) =>
             EngineByConsole.TryGetValue(console, out var engine) ? engine : null;
 
+        // The engine a frontend runs for a console: the stored choice, else the row's default; null for a console with one - see EmuSen_Settings_Reference.md §4.44.
+        public static string? EngineChosen(string console, string? stored) => stored ?? EngineFor(console)?.Default;
+
         public static IReadOnlyList<string> FilterChoices { get; } =
-            new[] { AllConsoles }.Concat(Cores.Select(c => c.DisplayName)).ToArray();
+            new[] { AllConsoles }.Concat(Cores.SelectMany(c => ReferenceEquals(c, Mercury) ? new[] { c.DisplayName, GameBoyColorShelf } : new[] { c.DisplayName })).ToArray();
     }
 }

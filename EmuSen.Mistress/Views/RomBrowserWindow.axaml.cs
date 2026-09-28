@@ -19,7 +19,7 @@ namespace EmuSen.Mistress.Views
     // Close(path)) rather than an event/property MainWindow reads
     // afterward - the idiomatic Avalonia modal-dialog shape, and avoids
     // MainWindow needing to know anything about this window's internal
-    // state beyond "what did the player pick, if anything."
+    // state beyond "what was picked, if anything."
     public partial class RomBrowserWindow : ToolWindow
     {
         // Parameterless constructor exists only so Avalonia's XAML tooling

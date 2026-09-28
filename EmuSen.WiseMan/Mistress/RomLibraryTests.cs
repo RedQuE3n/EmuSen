@@ -47,6 +47,39 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(new[] { "Alpha", "Beta" }, result.Entries.Select(e => e.Title));
         }
 
+        // A Game Boy file with the Color's header byte, or none: 0x80 enhanced, 0xC0 Color only.
+        private void GameBoyAt(string name, byte cgbFlag)
+        {
+            var image = new byte[0x150];
+            image[0x143] = cgbFlag;
+            File.WriteAllBytes(Path.Combine(_dir, name), image);
+        }
+
+        // Two shelves for one core: a .gbc file, or a .gb whose header asks for the Color, sits on Game Boy Color - see EmuSen_Settings_Reference.md §4.46.
+        [Fact]
+        public void Game_Boy_Color_games_sit_on_their_own_shelf_by_extension_or_header()
+        {
+            string gameBoy = EmuSen.Cores.CoreCatalog.ByExtension(".gb")!.DisplayName;
+            string color = EmuSen.Cores.CoreCatalog.GameBoyColorShelf;
+            GameBoyAt("Plain.gb", 0x00);
+            GameBoyAt("Enhanced.gb", 0x80);
+            GameBoyAt("ColorOnly.gb", 0xC0);
+            GameBoyAt("Named.gbc", 0x00);
+            Touch("Short.gb");
+            TouchAt(Path.Combine("SNES", "Alpha.sfc"));
+
+            RomLibraryResult all = RomLibrary.Scan(_dir);
+            Assert.Equal(new[] { "Plain", "Short" }, all.Entries.Where(e => e.Shelf == gameBoy).Select(e => e.Title));
+            Assert.Equal(new[] { "ColorOnly", "Enhanced", "Named" }, all.Entries.Where(e => e.Shelf == color).Select(e => e.Title));
+            Assert.All(all.Entries.Where(e => e.Shelf == color), e => Assert.Equal(gameBoy, e.CoreDisplayName));
+
+            RomLibraryResult narrowed = RomLibrary.Narrow(all, color);
+            Assert.Equal(new[] { "ColorOnly", "Enhanced", "Named" }, narrowed.Entries.Select(e => e.Title));
+            Assert.Equal(color, narrowed.CoreDisplayName);
+            Assert.Equal(new[] { "Plain", "Short" }, RomLibrary.Narrow(all, gameBoy).Entries.Select(e => e.Title));
+            Assert.Equal(new[] { "ColorOnly", "Enhanced", "Named" }, RomLibrary.Scan(_dir, color).Entries.Select(e => e.Title));
+        }
+
         [Fact]
         public void A_console_filter_keeps_only_that_consoles_games()
         {

@@ -12,6 +12,7 @@ using EmuSen.LunaP.Commands;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Library;
+using EmuSen.Mistress.Scraping;
 using EmuSen.Mistress.Views.Covers;
 
 namespace EmuSen.Mistress.Views
@@ -47,7 +48,7 @@ namespace EmuSen.Mistress.Views
             LibraryViewButtons.ItemsSource = new Control[] { new ActionToggle(_asGrid), new ActionToggle(_asList) };
 
             LibraryGrid.Key = e => e.FullPath;
-            LibraryGrid.Label = e => e.Title;
+            LibraryGrid.Label = DisplayTitle;
             LibraryGrid.CreateTile = () => new CoverTile();
             LibraryGrid.BindTile = BindCover;
             LibraryGrid.Chose += entry => LibraryList.Select(entry);
@@ -72,6 +73,8 @@ namespace EmuSen.Mistress.Views
             ApplyLibraryView();
             ScanArtwork();
             ApplyOnlineCovers();
+            SetUpScraping();
+            ApplyScraping();
         }
 
         private void ShowLibraryAs(string view)
@@ -117,15 +120,18 @@ namespace EmuSen.Mistress.Views
                 if (!scan.IsCompletedSuccessfully) return;
                 Dispatcher.UIThread.Post(() =>
                 {
-                    // A cover fetched while the walk ran may have been written after the walk passed its folder.
-                    foreach ((string console, string stem, string file) in _fetchedCovers) scan.Result.Add(console, stem, file);
                     _artwork = scan.Result;
                     LibraryGrid.Refresh(_shownEntries);
                 });
             });
         }
 
+        // The cover the library shows, by the order of §4.60: the player's own, ScreenScraper's, an ES-DE folder's, OpenEmu's.
         private string? CoverPathFor(RomEntry entry) =>
+            EmuSen.Cores.CoreCatalog.ShelfByName(entry.Shelf)?.EsdeSystem is { Length: > 0 } system ? MediaSourcesNow().Cover(system, entry.FullPath) : HandCoverFor(entry);
+
+        // Only what the player placed in the art folder, or added with Add Cover Art.
+        private string? HandCoverFor(RomEntry entry) =>
             _artwork.Find(EmuSen.Cores.CoreCatalog.ByDisplayName(entry.CoreDisplayName)?.Console, entry.Title);
 
         private void BindCover(Control tile, RomEntry entry)
@@ -133,10 +139,9 @@ namespace EmuSen.Mistress.Views
             var descriptor = EmuSen.Cores.CoreCatalog.ByDisplayName(entry.CoreDisplayName);
             string console = descriptor?.Console ?? "";
             string? cover = CoverPathFor(entry);
-            string title = ArtworkIndex.Untagged(entry.Title);
+            string title = DisplayTitle(entry) is var shown && shown != entry.Title ? shown : ArtworkIndex.Untagged(entry.Title);
             string tags = entry.Title.Length > title.Length ? entry.Title[title.Length..].Trim() : "";
             string subtitle = MixedConsoles ? (tags.Length > 0 ? $"{console}  ·  {FirstTag(tags)}" : console) : FirstTag(tags);
-            if (cover is null) AskForCover(entry, descriptor);
             ((CoverTile)tile).Show(title, subtitle, console, descriptor?.CoverAspect ?? 1.365,
                 cover is null ? null : _covers.Get(cover), _recordSnapshot.TryGetValue(entry.FullPath, out GameRecord? r) && r.Favourite);
         }
@@ -173,16 +178,16 @@ namespace EmuSen.Mistress.Views
 
         private void FillSidebar()
         {
-            int favourites = _allScan.Entries.Count(e => _recordSnapshot.TryGetValue(e.FullPath, out GameRecord? r) && r.Favourite);
-            int recent = Math.Min(RecentLimit, _allScan.Entries.Count(e => _recordSnapshot.TryGetValue(e.FullPath, out GameRecord? r) && r.LastPlayed is not null));
+            int favourites = _allScan.Entries.Where(Listed).Count(e => _recordSnapshot.TryGetValue(e.FullPath, out GameRecord? r) && r.Favourite);
+            int recent = Math.Min(RecentLimit, _allScan.Entries.Where(Listed).Count(e => _recordSnapshot.TryGetValue(e.FullPath, out GameRecord? r) && r.LastPlayed is not null));
             var library = new SourceListGroup("Library", new[]
             {
-                new SourceListItem(AllGamesKey, "All Games", _allScan.Entries.Count.ToString()),
+                new SourceListItem(AllGamesKey, "All Games", _allScan.Entries.Count(Listed).ToString()),
                 new SourceListItem(FavouritesKey, "Favourites", favourites.ToString()),
                 new SourceListItem(RecentKey, "Recently Played", recent.ToString()),
             });
-            var consoles = new SourceListGroup("Consoles", EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder
-                .Select(c => new SourceListItem(ConsoleKeyPrefix + c.DisplayName, c.Console, _allScan.Entries.Count(e => e.CoreDisplayName == c.DisplayName).ToString()))
+            var consoles = new SourceListGroup("Consoles", EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder
+                .Select(s => new SourceListItem(ConsoleKeyPrefix + s.Name, s.Label, _allScan.Entries.Count(e => e.Shelf == s.Name && Listed(e)).ToString()))
                 .ToArray());
             LibrarySidebar.Fill(new[] { library, consoles, CollectionsGroup() }, SidebarKey);
         }
@@ -233,7 +238,17 @@ namespace EmuSen.Mistress.Views
             var favourite = new LunaAction("Add to _Favourites", () => { if (SelectedLibraryEntry is RomEntry e) ToggleFavourite(e); });
             var addArt = new LunaAction("Add _Cover Art from File...", () => { if (SelectedLibraryEntry is RomEntry e) _ = AddCoverArtAsync(e); });
             var removeArt = new LunaAction("_Remove Cover Art", () => { if (SelectedLibraryEntry is RomEntry e) RemoveCoverArt(e); });
-            var lookUp = new LunaAction("_Look Up Cover Online", () => { if (SelectedLibraryEntry is RomEntry e) LookUpCoverAgain(e); });
+            // Q45 - see EmuSen_Settings_Reference.md §4.65.
+            var otherArt = new LunaAction("Use Another _Game's Cover...", () => { if (SelectedLibraryEntry is RomEntry e) ShowCoverPicker(e.FullPath, DisplayTitle(e)); });
+            var ownArt = new LunaAction("Use Its O_wn Cover", () => { if (SelectedLibraryEntry is RomEntry e) UseOwnCover(e.FullPath); });
+            var lookUp = new LunaAction("_Scrape This Game...", () => { if (SelectedLibraryEntry is RomEntry e) _ = ConfirmAndScrapeAsync(ScrapeScope.ThisGame(e.FullPath)); });
+            var findByName = new LunaAction("_Find by Name...", () => { if (SelectedLibraryEntry is RomEntry e) ShowFindByName(e.FullPath, DisplayTitle(e)); });
+            // The same menu and editor big picture has - see EmuSen_Settings_Reference.md §4.63.
+            var options = new LunaAction("Game _Options...", () => { if (SelectedLibraryEntry is RomEntry e) ShowLibraryGameOptions(e); });
+            var edit = new LunaAction("_Edit Metadata...", () => { if (SelectedLibraryEntry is RomEntry e) EditLibraryGameMetadata(e); })
+            {
+                Shortcut = EditMetadataGesture,
+            };
 
             var leave = new LunaAction("Remove from This Collection", () =>
             {
@@ -250,15 +265,14 @@ namespace EmuSen.Mistress.Views
                     leave.Text = $"Remove from {shown.Name.Replace("_", "__")}";
                     actions.Add(leave);
                 }
-                actions.AddRange(new[] { LunaAction.Separator(), addArt, removeArt });
-                if (_appSettings.OnlineCovers)
-                {
-                    lookUp.IsEnabled = entry is not null && _fetcher is not null && CoverPathFor(entry) is null;
-                    actions.Add(lookUp);
-                }
+                actions.AddRange(new[] { LunaAction.Separator(), options, edit, LunaAction.Separator(), addArt, removeArt, otherArt });
+                if (entry is not null && CoverChoiceOf(entry.FullPath) is not null) actions.Add(ownArt);
+                lookUp.IsEnabled = findByName.IsEnabled = entry is not null && !ScrapeRunning;
+                actions.Add(lookUp);
+                actions.Add(findByName);
                 menu.ItemsSource = Menus.Items(actions);
                 bool any = entry is not null;
-                play.IsEnabled = favourite.IsEnabled = addArt.IsEnabled = any;
+                play.IsEnabled = favourite.IsEnabled = addArt.IsEnabled = options.IsEnabled = edit.IsEnabled = otherArt.IsEnabled = any;
                 restart.IsEnabled = any && File.Exists(ResumeStatePath(entry!.FullPath));
                 favourite.Text = any && _records.IsFavourite(entry!.FullPath) ? "Remove from _Favourites" : "Add to _Favourites";
                 removeArt.IsEnabled = any && OwnCoverPath(entry!) is not null;
@@ -285,7 +299,7 @@ namespace EmuSen.Mistress.Views
         private string? OwnCoverPath(RomEntry entry)
         {
             string? console = EmuSen.Cores.CoreCatalog.ByDisplayName(entry.CoreDisplayName)?.Console;
-            if (console is null || CoverPathFor(entry) is not string shown) return null;
+            if (console is null || HandCoverFor(entry) is not string shown) return null;
             string folder = Path.GetFullPath(Path.Combine(ArtworkDirectory, console));
             return Path.GetFullPath(shown).StartsWith(folder + Path.DirectorySeparatorChar, StringComparison.Ordinal) ? shown : null;
         }
@@ -314,6 +328,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
+                ErrorLog.Error("library", "Could not add cover art", ex, entry.Title);
                 StatusText.Text = $"Could not add cover art: {ex.Message}";
             }
         }
@@ -330,6 +345,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
+                ErrorLog.Error("library", "Could not remove cover art", ex, entry.Title);
                 StatusText.Text = $"Could not remove cover art: {ex.Message}";
             }
         }

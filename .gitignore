@@ -63,10 +63,6 @@ EmuSen.DianaOS/DianaOS/Usr/Home/Cheats/
 EmuSen.DianaOS/DianaOS/Usr/Home/Firmware/*
 !EmuSen.DianaOS/DianaOS/Usr/Home/Firmware/.gitkeep
 
-# tool config. This repo does not carry one and must not depend on one -
-# it has been added and deleted more than once. Ignored so it cannot come back.
-the working notes
-
 # Databases. The schema is committed and the .db is a build artifact - a binary
 # cannot be reviewed and a schema is the part worth reviewing. Named one by one
 # rather than globbed, so adding a database is a deliberate line here.
@@ -76,6 +72,17 @@ known-differences.db
 *.db-shm
 catalogue.db
 dumps.db
+spirv-cache.db
+spirv-cache.db.damaged
+media.db
+themes.db
+
+# ScreenScraper's credentials: EmuSen's developer file and the player's member
+# account. Both live in the config directory with mode 0600, outside every
+# repository; these lines are the second guard, and a WiseMan test the third.
+# See EmuSen_BigPicture.md §5.7.
+screenscraper-developer.json
+screenscraper.json
 
 # Python bytecode from the analysis tools.
 __pycache__/

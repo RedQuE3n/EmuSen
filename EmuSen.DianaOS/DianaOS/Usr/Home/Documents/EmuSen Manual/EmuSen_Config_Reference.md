@@ -107,7 +107,7 @@ Since hand-editing already worked, and the actual complaint was enum opacity, th
 
 This preserves what all four original classes did, and it is deliberate rather than lazy: a settings change that can't reach the disk shouldn't take the program down with it — it just won't survive a restart. A corrupt file falls back to defaults instead of refusing to launch. `Load(Func<T>)` is the convenience form for callers that always have a default.
 
-The one thing failure must never do is destroy what is already there. A file that fails to parse is left exactly as it is on disk (`SettingsPersistenceTests.An_unreadable_file_is_left_on_disk_untouched`) — the player's hand edit is still there to be fixed, rather than being overwritten with defaults by the next save.
+The one thing failure must never do is destroy what is already there. A file that fails to parse is left exactly as it is on disk (`SettingsPersistenceTests.An_unreadable_file_is_left_on_disk_untouched`) — the hand edit is still there to be fixed, rather than being overwritten with defaults by the next save.
 
 ### 2.3 Writes are atomic
 
@@ -151,6 +151,15 @@ A key that is absent means the setting's default; a console that is absent means
 on purpose, so the file needs no schema per console and a hand edit that the core refuses falls back to the default
 rather than failing the load. `Value`, `SetValue` and `Forget` are the accessors; Mistress's graphics window writes
 them and saves at once.
+
+*2026-09-24:* two more maps, written by Mistress's Shaders window (`EmuSen_Settings_Reference.md` §4.48.3).
+**`ShaderParameters`** is each console's values for each shader's parameters, the shader keyed exactly as that
+console's `ScreenFilter` value would be (a built-in's name, or `slang:` and a preset's path in the pack), the values
+text: `"ShaderParameters": { "SNES": { "CRT (Lottes)": { "maskDark": "0.3" } } }`. Only values that differ from the
+default are held; resetting one removes it, and a shader or console left empty goes with it. **`RecentShaders`** is
+each console's last five shaders used, newest first: `"RecentShaders": { "SNES": [ "slang:crt/crt-royale.slangp" ] }`.
+The accessors are `ParametersFor`, `SetParameter`, `ForgetParameter`, `RecentFor` and `NoteRecent`; `Forget(console)`
+leaves both maps alone.
 
 ### 3.4 `cheats/<name>.json` — `CheatFile`
 
@@ -196,7 +205,7 @@ Three behaviours worth stating:
 - **`load` merges, it does not replace.** It adds to whatever is already loaded; `cheat clear` first to replace. This is the honest reading of "load", and the alternative silently discards cheats added since the last save.
 - **Nothing loads automatically.** There is no per-ROM auto-apply. A cheat set changes the run only when asked for, so a file saved months ago can't quietly alter a later session — which matters when the emulator is being used to investigate whether a game behaves correctly.
 
-`CheatFile.IsValidName` rejects a name rather than sanitizing it. The name arrives from a shell argument, so it must not be able to walk out of the cheats directory; and silently rewriting what the player typed would save to a file they didn't name.
+`CheatFile.IsValidName` rejects a name rather than sanitizing it. The name arrives from a shell argument, so it must not be able to walk out of the cheats directory; and silently rewriting what was typed would save to a file nobody named.
 
 ### 3.4a `CheatDatabaseDirectory` — using a cheat tree you already have
 

@@ -10,6 +10,7 @@ using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Galaxia.Models;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Mistress.Views
 {
@@ -75,6 +76,8 @@ namespace EmuSen.Mistress.Views
             Func<IReadOnlyCollection<string>>? supportedSystems = null, string? console = null)
         {
             InitializeComponent();
+            if (Content is DockPanel body) EmuSen.LunaP.Controls.MenuLook.WhenApplied(body, () => InLook(body));
+            EmuSen.LunaP.Controls.MenuLook.SetWidthFraction(this, 0.8);
             SystemsList.Label = r => $"{r.System}  ({r.Count})";
             SystemsList.Key = r => r.System;
             _settings = settings;
@@ -88,6 +91,9 @@ namespace EmuSen.Mistress.Views
             AttributionText.Text = CheatDatabaseInstaller.Attribution;
             DirectoryPicker.Path = _settings.CheatDatabaseDirectory ?? "";
             DirectoryPicker.PathPicked += OnDirectoryPicked;
+            // A folder typed, and a game loaded with Enter, for a pad in Game Mode - see EmuSen_Settings_Reference.md §4.45.5.
+            DirectoryPicker.IsEditable = true;
+            GamesList.AddHandler(KeyDownEvent, (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) { e.Handled = true; LoadSelectedGame(); } }, handledEventsToo: true);
             ActiveCheatsButton.IsEnabled = _openActiveCheats is not null;
             PruneButton.IsEnabled = _supportedSystems is not null;
 
@@ -105,6 +111,59 @@ namespace EmuSen.Mistress.Views
                 _settings.Save();
             };
         }
+
+        // On a big-screen sheet in ES-DE's look: the status over centred buttons, and the folder typed rather than browsed, as a pad cannot drive the file dialog (§4.80).
+        private void InLook(DockPanel dock)
+        {
+            {
+                dock.Margin = new Avalonia.Thickness(0, 0, 0, 16);
+                // The folder's label beside its box, as a menu row's is, and the two lists given equal room.
+                if (dock.Children.OfType<TextBlock>().FirstOrDefault(t => t.Text == "Cheat Folder") is { } label)
+                {
+                    int at = dock.Children.IndexOf(label);
+                    dock.Children.Remove(label);
+                    dock.Children.Remove(DirectoryPicker);
+                    label.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+                    label.Margin = new Avalonia.Thickness(0, 0, 16, 0);
+                    Grid.SetColumn(DirectoryPicker, 1);
+                    var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = DirectoryPicker.Margin, Children = { label, DirectoryPicker } };
+                    DirectoryPicker.Margin = default;
+                    DockPanel.SetDock(row, Dock.Top);
+                    dock.Children.Insert(at, row);
+                }
+                if (dock.Children.OfType<Grid>().LastOrDefault() is { ColumnDefinitions.Count: 3 } lists) lists.ColumnDefinitions = new ColumnDefinitions("*,16,*");
+            }
+            SheetLook.StatusOverButtons(StatusText);
+            // The introduction and the licence's attribution stay in view as the panel's footer, leaving the lists the room (Q170).
+            if (AttributionText.Parent is Border attribution) attribution.IsVisible = false;
+            string intro = dock.Children.OfType<TextBlock>().FirstOrDefault(t => t.Text?.StartsWith("EmuSen ships no cheat data", StringComparison.Ordinal) == true) is { } first ? first.Text! : "";
+            if (dock.Children.OfType<TextBlock>().FirstOrDefault(t => t.Text == intro) is { } shownIntro) shownIntro.IsVisible = false;
+            EmuSen.LunaP.Controls.MenuLook.SetFooterLines(this, 4);
+            EmuSen.LunaP.Controls.MenuLook.SetFooter(this, (intro + " " + CheatDatabaseInstaller.Attribution).Trim());
+            GamesHeaderText.TextWrapping = Avalonia.Media.TextWrapping.Wrap;
+            _inLook = true;
+            ShowGames();
+            SheetLook.SelectOnFocus(GamesList);
+            SheetLook.SelectOnFocus(SystemsList);
+            // The filter and Load side by side above the games, so the list keeps the room (§4.83).
+            if (GameFilter.Parent is DockPanel games)
+            {
+                Avalonia.Thickness filterMargin = GameFilter.Margin;
+                games.Children.Remove(GameFilter);
+                games.Children.Remove(LoadGameButton);
+                GameFilter.Margin = default;
+                LoadGameButton.Margin = default;
+                LoadGameButton.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+                Grid.SetColumn(LoadGameButton, 2);
+                var tools = new Grid { ColumnDefinitions = new ColumnDefinitions("*,8,Auto"), Margin = filterMargin, Children = { GameFilter, LoadGameButton } };
+                DockPanel.SetDock(tools, Dock.Top);
+                games.Children.Insert(games.Children.IndexOf(GamesHeaderText) + 1, tools);
+            }
+            DirectoryPicker.TemplateApplied += (_, e) => { if (e.NameScope.Find<Control>("PART_Browse") is { } browse) browse.IsVisible = false; };
+            if (Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(DirectoryPicker).OfType<Control>().FirstOrDefault(c => c.Name == "PART_Browse") is { } shown) shown.IsVisible = false;
+        }
+
+        private bool _inLook;
 
         // AppSettings when set, the sandbox's own Cheats folder otherwise -
         // the same resolution `cheat db` uses.
@@ -155,9 +214,10 @@ namespace EmuSen.Mistress.Views
 
             GamesList.ItemsSource = _games.Select(g => g.Game).ToList();
 
+            // On a big-screen sheet the chosen system is the row beside it, so the heading need not name it again (§4.83).
             GamesHeaderText.Text = _selectedSystem is null
                 ? "Games"
-                : $"Games in {_selectedSystem}  ({_games.Count:N0})";
+                : _inLook ? $"Games  ({_games.Count:N0})" : $"Games in {_selectedSystem}  ({_games.Count:N0})";
 
             UpdateLoadButton();
         }
@@ -190,6 +250,7 @@ namespace EmuSen.Mistress.Views
             try { result = CheatImport.FromChtFile(registry, game.Path, _codec, replace: true); }
             catch (Exception ex)
             {
+                ErrorLog.Error("cheats", $"Couldn't read {game.Game}", ex);
                 StatusText.Text = $"Couldn't read {game.Game}: {ex.Message}";
                 return;
             }
@@ -291,6 +352,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex)
             {
+                ErrorLog.Error("cheats", "The cheat database download failed", ex);
                 StatusText.Text = $"Download failed: {ex.Message}";
             }
             finally

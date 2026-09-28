@@ -397,13 +397,13 @@ pub fn present_now(bus: &mut MemoryBus, out: &mut Scanout) -> Presented {
             let view = View { rdram: &bus.rdram[at..at + n], hidden: &bus.rdram_hidden[at / 2..(at + n) / 2], base: from, length: bus.rdram.len() as u32 };
             let shadow = &bus.dp.multiple.0;
             let scaled = (job.scale > 1).then(|| View::whole(&shadow.rdram, &shadow.hidden));
-            let pictures = shadow.gpu.as_ref().map(|g| g.pictures());
+            let pictures = shadow.pictures();
             out.shown_from_device = walk(&mut out.walker, None, &mut out.rasters, &job, view, scaled, out.capture.device_scanned, out.device_raster, pictures.as_deref());
             true
         }
         None => false,
     };
-    let pictures = bus.dp.multiple.gpu.as_ref().map(|g| g.pictures());
+    let pictures = bus.dp.multiple.pictures();
     compose(&bus.vi, out, pictures.as_deref());
     Presented { walked, replaced: true }
 }
@@ -470,7 +470,7 @@ pub fn present_deferred(bus: &mut MemoryBus, out: &mut Scanout) -> Presented {
         average: out.average,
         device_raster: out.device_raster,
         shown_from_device: out.shown_from_device,
-        pictures: bus.dp.multiple.gpu.as_ref().map(|g| g.pictures()),
+        pictures: bus.dp.multiple.pictures(),
         shown: (0, 0, 0),
         fault: None,
         nanos: 0,
@@ -572,9 +572,9 @@ fn scan_parameters_of(job: &Job) -> ScanParameters {
 fn publish_raster(bus: &mut MemoryBus, out: &mut Scanout, job: Option<&Job>) {
     let n = bus.dp.scale() as usize;
     let (width, height) = (RASTER_WIDTH * n, RASTER_HEIGHT * n);
-    let holds = bus.dp.multiple.gpu.as_ref().is_some_and(|g| g.holds_raster(width, height));
-    // Entering, the host's raster seeds the device's; leaving, the host's is stale and is cleared, as a blank would (Mars_Gpu.md §15).
-    let seeding = !holds && !out.seed_stale && out.rasters.scale as usize == n && out.rasters.scaled.len() == width * height * 4;
+    // Entering, the host's raster seeds the device's, which takes it only when it holds no raster of this size; leaving, the host's is
+    // stale and is cleared, as a blank would (Mars_Gpu.md §15). The device is not asked here, since the drain's leader may hold it (§6.15).
+    let seeding = !out.seed_stale && out.rasters.scale as usize == n && out.rasters.scaled.len() == width * height * 4;
     out.seed_stale = true;
     let mut scan = ScanParameters::default();
     if let Some(job) = job {
@@ -595,11 +595,12 @@ fn publish_raster(bus: &mut MemoryBus, out: &mut Scanout, job: Option<&Job>) {
     }
 }
 
-/// The bytes a scan captures, waited for at site 8: at one what the walk reads and the draws that reach it; at a multiple C#'s reach and
-/// wait, since the shadow's lines the capture copies are waited for only through the words that drew the same lines at one (Mars_Native.md §6.14).
+/// The bytes a scan captures, waited for at site 8: what the walk at one reads and the draws that reach it, at one and on the device, whose
+/// walk is ordered after the drawing by the drain's leader and copies no shadow (Mars_Native.md §6.15); on the processor at a multiple C#'s
+/// reach and wait, since the shadow's lines the capture copies are waited for only through the words that drew the same lines at one (§6.14).
 fn capture_range(bus: &mut MemoryBus, job: &Job) -> (u32, u32) {
     let length = bus.rdram.len() as u32;
-    if job.scale > 1 {
+    if job.scale > 1 && !bus.dp.multiple.can_scan_out() {
         let (from, count) = reach_with_slack(job, length);
         bus.dp.wait_read_range_whole(from, count, site::VI);
         return (from, count);
@@ -707,8 +708,7 @@ fn prepare(vi: &mut Vi, mut dp: Option<&mut DpInterface>, out: &mut Scanout) -> 
 fn publish_raster_on(dp: &mut DpInterface, out: &mut Scanout, job: Option<&Job>) {
     let n = dp.scale() as usize;
     let (width, height) = (RASTER_WIDTH * n, RASTER_HEIGHT * n);
-    let holds = dp.multiple.gpu.as_ref().is_some_and(|g| g.holds_raster(width, height));
-    let seeding = !holds && !out.seed_stale && out.rasters.scale as usize == n && out.rasters.scaled.len() == width * height * 4;
+    let seeding = !out.seed_stale && out.rasters.scale as usize == n && out.rasters.scaled.len() == width * height * 4;
     out.seed_stale = true;
     let seed: &[u8] = if seeding { &out.rasters.scaled } else { &[] };
     let scan = ScanParameters::default();

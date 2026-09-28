@@ -201,5 +201,25 @@ namespace EmuSen.WiseMan.Serenity
             foreach (string failure in failures.Take(40)) _output.WriteLine(failure);
             Assert.True(failures.Count == 0, $"{failures.Count} of {presets} presets or their passes did not read; first: {failures.FirstOrDefault()}");
         }
+
+        // A settings window's cost: a pack preset's parameters read with nothing compiled, how many, how many are headings, and how long - see EmuSen_Serenity.md §7.6.
+        [Theory]
+        [InlineData("crt/crt-lottes.slangp")]
+        [InlineData("crt/crt-royale.slangp")]
+        [InlineData("crt/crt-guest-advanced.slangp")]
+        [InlineData("bezel/Mega_Bezel/Presets/MBZ__0__SMOOTH-ADV.slangp")]
+        public void A_pack_preset_s_parameters_are_read_without_compiling(string relative)
+        {
+            string? pack = Environment.GetEnvironmentVariable(PackVariable);
+            if (string.IsNullOrEmpty(pack)) return;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            IReadOnlyList<SlangParameter> parameters = SlangParameters.Read(SlangPreset.Load(Path.Combine(pack, relative)));
+            long cold = clock.ElapsedMilliseconds;
+            clock.Restart();
+            SlangParameters.Read(SlangPreset.Load(Path.Combine(pack, relative)));
+            _output.WriteLine($"{relative}: {parameters.Count} parameters, {parameters.Count(SlangParameters.IsHeading)} headings, read in {cold} ms cold and {clock.ElapsedMilliseconds} ms again");
+            Assert.NotEmpty(parameters);
+            Assert.Equal(parameters.Count, parameters.Select(p => p.Id).Distinct().Count());
+        }
     }
 }

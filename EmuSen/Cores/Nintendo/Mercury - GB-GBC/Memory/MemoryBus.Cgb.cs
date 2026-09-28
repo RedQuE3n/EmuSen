@@ -115,6 +115,45 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             }
         }
 
+        // With a Game Boy cartridge the colour registers read $FF and ignore writes, except VRAM bank and the palette indices - see Mercury_Model.md §4.2.
+        private byte ReadCompatIo(ushort address) => address switch
+        {
+            0xFF4C or 0xFF4D or 0xFF56 or 0xFF6C or 0xFF70 => 0xFF,
+            >= 0xFF51 and <= 0xFF55 => 0xFF,
+            0xFF4F => (byte)(0xFE | VramBank),
+            0xFF68 => Ppu.ReadBgPaletteIndex(),
+            0xFF69 => 0xFF,
+            0xFF6A => Ppu.ReadObjPaletteIndex(),
+            0xFF6B => 0xFF,
+            _ => Io[address - 0xFF00],
+        };
+
+        // True when the address is a colour register, so the generic $FF00 array is left alone.
+        private bool WriteCompatIo(ushort address, byte data)
+        {
+            switch (address)
+            {
+                case 0xFF4F:
+                    VramBank = data & 0x01;
+                    return true;
+
+                case 0xFF68:
+                    Ppu.WriteBgPaletteIndex(data);
+                    return true;
+
+                case 0xFF6A:
+                    Ppu.WriteObjPaletteIndex(data);
+                    return true;
+
+                case 0xFF4C or 0xFF4D or 0xFF56 or 0xFF69 or 0xFF6B or 0xFF6C or 0xFF70:
+                case >= 0xFF51 and <= 0xFF55:
+                    return true;
+
+                default:
+                    return false;
+            }
+        }
+
         // STOP performs the switch KEY1 armed; it is not a stop at all on a CGB - see Mercury_Cgb.md §5.
         public void Stop()
         {

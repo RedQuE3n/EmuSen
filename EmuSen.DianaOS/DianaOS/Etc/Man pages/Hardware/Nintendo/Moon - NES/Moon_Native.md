@@ -1,6 +1,6 @@
 # Moon_Native — a plan to port Moon to Rust
 
-*Written 2026-09-24, before any port code.* On 2026-09-23 the decision was that every EmuSen core moves to Rust
+*Written 2026-09-24, before any port code.* On 2026-09-23 it was decided that every EmuSen core moves to Rust
 (`EmuSen_Stack.md` §2.1). MarsRT (N64) and MercuryRT (Game Boy) are done. This page plans the port of Moon, the NES
 core, as MoonRT. It follows the method of `Mars_Native.md` §5 and takes its shape, stage for stage, from
 `Mercury_Native.md`, the other 2D port. As `EmuSen_Stack.md` §2.1 requires of every 2D port, it states its speed
@@ -16,7 +16,7 @@ prediction is numbered (P1–P6) so that it can be retired later. Mercury's pred
 ### 1.1 The baseline (measured)
 
 **How it was measured.** The harness has no NES bench, so a throwaway console app (`moonbench`, in
-`~/.cache/emusen/probe/moonrt/`) was built against the worktree's `EmuSen.csproj`, in Release on .NET 10, on the Ryzen 7
+`~/.cache/emusen/probe/moonrt/`) was built against the checkout's `EmuSen.csproj`, in Release on .NET 10, on the Ryzen 7
 7700X. It does what Mercury's bench did:
 
 1. It loads a scratch copy of the ROM with the battery disabled.
@@ -26,7 +26,7 @@ prediction is numbered (P1–P6) so that it can be retired later. Mercury's pred
 Every run is its own process, under the bench lock, with the load average under 1.2. Games are interleaved within a
 round. Each game's state hash was the same in every round and in every mode, so the runs were deterministic.
 
-The four games cover the four cases the plan named:
+The four games cover the four cases the plan set out:
 
 | Game | Board | Why |
 |---|---|---|
@@ -114,7 +114,7 @@ console's rate the desktop spends about 1.5 ms × 60.1 ≈ 90 ms of CPU time a s
 
 **So the port is for three things, in order:**
 
-1. **Consistency with the stack, and the method's third instance.** The decision is that every core is Rust.
+1. **Consistency with the stack, and the method's third instance.** The project's decision is that every core is Rust.
    Moon is the second 2D core, and the first whose picture feeds its machine (§2.5). It tests whether Mercury's
    finding, that a line-for-line 2D port moves the costs without changing them, generalises, or was Mercury's own.
 2. **Weak-machine headroom, which Moon actually lacks.** Unlike Mercury, Moon has a measured configuration below 1×
@@ -215,7 +215,7 @@ The in-frame seams become MarsRT's §6.5 mechanisms, because Rust never calls C#
 
 ### 2.2 Name and place
 
-The name is **MoonRT**, in `EmuSen/Cores/Nintendo/MoonRT - NES/`, by the player's pattern for every Rust core. The crate is
+The name is **MoonRT**, in `EmuSen/Cores/Nintendo/MoonRT - NES/`, by the project's pattern for every Rust core. The crate is
 `moonrt`, a `cdylib` + `rlib` with MercuryRT's `[profile.release]` and `[profile.dist]` and no dependencies. Its layout
 mirrors the C# folders:
 
@@ -402,15 +402,15 @@ validation adapters (330) and the README.
 **Finished** means `Mars_Native.md` §6's three criteria: a player gets MoonRT without choosing it; nothing the C# core
 does is lost, or the loss is written down; the C# core's role is decided.
 
-## 5. Risks and open questions for the player
+## 5. Risks and open questions
 
-- **Q1, naming.** MoonRT, by the player's standing pattern.
+- **Q1, naming.** MoonRT, by the project's standing pattern.
 - **Q2, one state crate or three copies.** With MoonRT there are three copies of `state.rs` (MarsRT's, MercuryRT's
   with strings, MoonRT's). `Moon_Memory.md` §6 set the project's own threshold for hoisting a shared shape: "when a
   third core makes the shape a rule instead of a coincidence". This is the third. **The recommendation is a small
   `emusen-state` crate** holding the writer, the reader, the layout and the naming rule, extracted after MoonRT's stage
-  1 and after the run working in MarsRT has merged, because the extraction touches MarsRT. Until then MoonRT copies
-  MercuryRT's pattern, as the plan asks.
+  1 and after the work in progress in MarsRT has merged, because the extraction touches MarsRT. Until then MoonRT
+  copies MercuryRT's pattern.
 - **Q3, whether to fix §6.1's defects first.** The recommendation is **no** for D1: it is the other half of a
   compensating error `Moon_Memory.md` §4.8 records, and fixing it is a design change to the frame loop that MMC3 and
   RAMBO-1 were validated against. It should be done once, after the port, with the corpus and Skull & Crossbones as
@@ -419,7 +419,7 @@ does is lost, or the loss is written down; the C# core's role is decided.
   flat 4-cycle DMC fetch, and the 18 corpus failures. The recommendation, as for Mercury, is to port them exactly.
 - **Q5, the C# Moon's future**, and when the Engine row's default flips. As for Mercury.
 - **Q6, the design levers of §1.2.** Each is exact by argument and could be built in both engines while C# is the
-  oracle, or in MoonRT alone afterwards with the corpus and the goldens as its oracle. That choice is the player's.
+  oracle, or in MoonRT alone afterwards with the corpus and the goldens as its oracle. That choice is left open.
 - **Risk: P1 is wide, and centred low on purpose.** If stage 2's like-for-like number comes in under 1.1×, the port is
   still worth finishing on ground 1 of §1.2, and the levers become the next question.
 - **Risk: bit-exact sound across platforms.** Argued in §3.3, untested on Windows and macOS until stage 6.

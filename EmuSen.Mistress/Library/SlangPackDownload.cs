@@ -13,16 +13,16 @@ namespace EmuSen.Mistress.Library
     {
         public const string PackAddress = "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip";
 
-        // Beside the presets, so the build a folder holds is read from the folder itself.
+        // The stamp builds before 2026-09-26 wrote beside the presets; read once into records.db, never written - see EmuSen_Settings_Reference.md §4.64.
         public const string StampFile = ".emusen-pack";
 
         public static string DefaultDirectory => Path.Combine(EmuSen.Galaxia.Library.DataStore.Shaders, "RetroArch");
 
-        // The build date the stamp records, or null when no pack is there.
+        // The build date records.db holds for this folder, or null when no pack is there.
         public static string? Installed(string directory)
         {
-            string stamp = Path.Combine(directory, StampFile);
-            return File.Exists(stamp) ? File.ReadAllText(stamp).Trim() : null;
+            using FileRecords records = FileRecords.Load();
+            return records.PackBuilt(directory, StampFile);
         }
 
         // Every preset under the pack, as paths relative to it with forward slashes, sorted.
@@ -63,12 +63,12 @@ namespace EmuSen.Mistress.Library
                 await Task.Run(() => ZipFile.ExtractToDirectory(zip, staged), cancel);
                 if (!Directory.EnumerateFiles(staged, "*.slangp", SearchOption.AllDirectories).Any())
                     throw new InvalidDataException("The download holds no .slangp presets.");
-                File.WriteAllText(Path.Combine(staged, StampFile), built);
 
                 if (Directory.Exists(old)) Directory.Delete(old, recursive: true);
                 if (Directory.Exists(directory)) Directory.Move(directory, old);
                 Directory.Move(staged, directory);
                 if (Directory.Exists(old)) Directory.Delete(old, recursive: true);
+                using (FileRecords records = FileRecords.Load()) records.RecordPack(directory, built);
                 return built;
             }
             finally

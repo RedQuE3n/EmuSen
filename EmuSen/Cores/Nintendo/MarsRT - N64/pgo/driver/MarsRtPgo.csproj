@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- MarsRT's PGO driver: the training runs and the timed runs, through the shim as Mistress drives it - see Mars_Native.md §6.17. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AssemblyName>marsrt-pgo</AssemblyName>
+    <RootNamespace>EmuSen.MarsRtPgo</RootNamespace>
+    <!-- EmuSen.DianaOS, an executable, reaches a publish twice; as Mistress's publish - see EmuSen_Settings_Reference.md §4.9. -->
+    <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../../../EmuSen.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,3 +1,4 @@
+using System;
 using EmuSen.Common;
 
 namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
@@ -38,6 +39,11 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
         [SkipInState] private int _tickedThisStep;
 
         public ushort LastInstructionPC { get; private set; }
+
+        // The debugger's seams, set by MercuryCore: a call or restart (source, target), a return, an interrupt dispatch (return address, vector) - see Mercury_Debug.md §7.
+        [SkipInState] public Action<ushort, ushort>? CallObserver;
+        [SkipInState] public Action? ReturnObserver;
+        [SkipInState] public Action<ushort, ushort>? InterruptObserver;
 
         public long Cycles { get; private set; }
 
@@ -82,6 +88,16 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
             _imeScheduled = false;
             _haltBug = false;
             Cycles = 0;
+        }
+
+        // What a Game Boy Color's boot ROM hands a Game Boy cartridge: B is the title checksum, and HL is left where the logo map was drawn - see Mercury_Model.md §3.2.
+        public void ResetForCompatibility(byte titleChecksum)
+        {
+            Reset(cgb: true);
+            AF = 0x1180;
+            BC = (ushort)(titleChecksum << 8);
+            DE = 0x0008;
+            HL = titleChecksum is 0x43 or 0x58 ? (ushort)0x991A : (ushort)0x007C;
         }
 
         // Runs the machine itself as it goes; returns the T-cycles consumed - see Mercury_Cpu.md §3.
@@ -161,8 +177,10 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
         private int ServiceInterrupt(int bit)
         {
             Ime = false;
-            Push(PC);
+            ushort from = PC;
+            Push(from);
             PC = InterruptVectors[bit];
+            InterruptObserver?.Invoke(from, PC);
             return 20;
         }
 

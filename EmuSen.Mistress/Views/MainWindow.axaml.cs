@@ -52,6 +52,7 @@ namespace EmuSen.Mistress.Views
         private readonly LunaAction _slotMenu;
         private readonly LunaAction _fullscreen;
         private readonly LunaAction _hardwareDashboard;
+        private readonly LunaAction _rewindReel;
         private readonly ActionGroup _speeds = new();
         private readonly ActionGroup _slots = new();
 
@@ -65,8 +66,15 @@ namespace EmuSen.Mistress.Views
         private volatile bool _turboHeld;
         private volatile bool _rewindHeld;
 
+        // Four snapshots a second of console time, and a held rewind still plays back at four times speed - see EmuSen_Settings_Reference.md §4.50.
+        internal const double RewindSnapshotsPerSecond = 4, HeldRewindSpeedup = 4;
+        private int _heldRewindTicks;
+
+        internal static int RewindIntervalFor(double frameRateHz) => Math.Max(1, (int)Math.Round(frameRateHz / RewindSnapshotsPerSecond));
+
         private readonly EmuSen.Common.SpeedController _speed = new();
-        private readonly EmuSen.Common.RewindBuffer _rewind = new() { Enabled = true };
+        // Pictures for the reel ride along with each snapshot - see EmuSen_Settings_Reference.md §4.49.
+        private readonly EmuSen.Common.RewindBuffer _rewind = new() { Enabled = true, ThumbnailWidth = EmuSen.Common.RewindBuffer.DefaultThumbnailWidth };
 
         // What the Speed menu picked, read by EmulationLoop - see EmuSen_Settings_Reference.md §4.13.
         private volatile int _baseSpeedPercent = EmuSen.Common.SpeedController.NormalPercent;
@@ -158,14 +166,19 @@ namespace EmuSen.Mistress.Views
             _speedMenu = new LunaAction("Spee_d", () => { });
             _slotMenu = new LunaAction("State Sl_ot", () => { });
             _fullscreen = new LunaAction("_Fullscreen", a => IsFullScreen = a.IsChecked) { IsCheckable = true };
+            _bigPictureMenu = new LunaAction("_Big Picture", () => SetBigPicture(!_bigScreen)) { HelpText = "Full screen, in big picture mode" };
             _hardwareDashboard = new LunaAction("_Hardware Dashboard...", () => OpenCoretopWindow(_debugTarget));
+            _rewindReel = new LunaAction("Re_wind...", () => OpenRewindReel(resumeAfter: false));
             InitializeComponent();
+            SetUpStatusLine();
+            ApplyStatusBar();
             SetUpLibraryScreen();
             BuildMenus();
             // The tick follows the window, so a window-manager key cannot leave it lying - see §4.19.
             FullScreenChanged += on => _fullscreen.IsChecked = on;
             // SDL's device scan takes ~150 ms, so it waits for the window's first frame - see EmuSen_Settings_Reference.md §4.42.
             _gamepad = new GamepadManager(_gamepadBindings.For(_activeConsole), start: false);
+            _gamepad.PadChanged += OnPadChanged;
             Opened += (_, _) => RequestAnimationFrame(_ => Dispatcher.UIThread.Post(_gamepad.Start, DispatcherPriority.Background));
             // Endymion is a leaf and reads no globals, so the settings come from here - see EmuSen_Audio_Sync.md §7.1.
             _audioPlayer = new AudioPlayer(
@@ -186,13 +199,16 @@ namespace EmuSen.Mistress.Views
                 _fileDrop?.Dispose();
                 _timer?.Stop();
                 _padTimer?.Stop();
+                CloseThemedLibrary();
                 StopEmulationThread();
                 _session?.SaveSram();
                 WriteResumeState();
                 RecordPlayTime();
+                StopScraping();
                 StopOnlineCovers();
                 CloseRecords();
                 _gamepad.Dispose();
+                PadHints.Swapped = false;
                 _audioPlayer.Dispose();
                 StopLogging();
 
@@ -211,6 +227,8 @@ namespace EmuSen.Mistress.Views
             // Tunnel, not bubbling, or focus navigation eats the arrows - see EmuSen_Settings_Reference.md §4.2.
             AddHandler(KeyDownEvent, (_, e) => SetButtonFromKey(e.Key, pressed: true, e), RoutingStrategies.Tunnel, handledEventsToo: true);
             AddHandler(KeyUpEvent, (_, e) => SetButtonFromKey(e.Key, pressed: false, e), RoutingStrategies.Tunnel, handledEventsToo: true);
+            AddHandler(PointerMovedEvent, (_, _) => ScreensaverPointer(pressed: false), RoutingStrategies.Tunnel, handledEventsToo: true);
+            AddHandler(PointerPressedEvent, (_, e) => { if (ScreensaverOpen) { ScreensaverPointer(pressed: true); e.Handled = true; } else ScreensaverPointer(pressed: false); }, RoutingStrategies.Tunnel, handledEventsToo: true);
         }
 
         // A focused text field owns the whole keyboard - see EmuSen_Settings_Reference.md §4.17.
@@ -219,15 +237,40 @@ namespace EmuSen.Mistress.Views
 
         private void SetButtonFromKey(Key key, bool pressed, KeyEventArgs e)
         {
-            if (TypingIntoATextField(e)) return;
+            if (ScreensaverKey(key, pressed))
+            {
+                e.Handled = true;
+                return;
+            }
+            // In a big-screen menu a text field is a row, which ES-DE's keys move past rather than type into; the pad router's own keys are never the keyboard's (Q102).
+            bool routed = PadWindowRouter.Raising;
+            // A key let go that was steering is released as a button whatever now has the focus, as the text popup takes it on Enter's press (§4.79).
+            if (!pressed && !routed && ThemedKeyButton(key) is { } held && _themedKeys.Remove(held))
+            {
+                e.Handled = true;
+                return;
+            }
+            if (TypingIntoATextField(e) && (routed || !(BigMenuOnScreen && !TextEntryOpen) || FramedTextBoxKeepsKey(key))) return;
+            if (!routed && ThemedKey(key, e.KeyModifiers, pressed))
+            {
+                e.Handled = true;
+                return;
+            }
 
             // A suspended game must not collect the keys used to browse the library - see EmuSen_Settings_Reference.md §4.18.
-            if (!LibraryView.IsVisible && _keyBindings.For(_activeConsole).TryGetControl(key, out PadControl control))
+            // A sheet over the game takes its keys; they are not the game's - see EmuSen_Settings_Reference.md §4.45.2.
+            if (!LibraryView.IsVisible && !Sheets.IsPresenting && _keyBindings.For(_activeConsole).TryGetControl(key, out PadControl control))
             {
                 _keyboardHeld[(int)control] = pressed;
                 if (PadControls.IsButton(control, out PadButton button)) ApplyButtonState(button);
                 ApplyAxes();
                 // Or the menu bar, the only focusable control here, also gets the key - see EmuSen_Settings_Reference.md §4.24.
+                e.Handled = true;
+                return;
+            }
+
+            if (pressed && EditMetadataFromTheKeyboard(e))
+            {
                 e.Handled = true;
                 return;
             }
@@ -252,13 +295,13 @@ namespace EmuSen.Mistress.Views
             {
                 case HotkeyAction.SaveState: SaveState(); break;
                 case HotkeyAction.LoadState: LoadState(); break;
-                case HotkeyAction.ExitToLibrary: ToggleLibrary(); break;
+                case HotkeyAction.ExitToLibrary: if (EscapeLeavesBigPicture) SetBigPicture(false); else ToggleLibrary(); break;
                 case HotkeyAction.Screenshot: TakeScreenshot(); break;
                 // Nothing to pause while the library is up: it is already suspended - see §4.18.
                 case HotkeyAction.TogglePause: if (!LibraryView.IsVisible) TogglePause(); break;
-                case HotkeyAction.ToggleFullscreen:
-                    WindowState = WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
-                    break;
+                // Through ToolWindow, so leaving goes back to the state full screen was entered from, a maximised window included.
+                case HotkeyAction.ToggleFullscreen: ToggleFullScreen(); break;
+                case HotkeyAction.ToggleBigPicture: SetBigPicture(!_bigScreen); break;
             }
             e.Handled = true;
         }
@@ -359,7 +402,7 @@ namespace EmuSen.Mistress.Views
         // Lists the ROM directory directly, as an alternative to the OS picker - see §4.11.
         private async Task BrowseRomsAsync()
         {
-            string? selected = await new RomBrowserWindow(_appSettings.RomDirectory).ShowDialog<string?>(this);
+            string? selected = await SheetLayer.ShowDialog<string>(new RomBrowserWindow(_appSettings.RomDirectory), this);
             if (selected is null) return;
 
             await StartGameAsync(selected, Path.GetFileName(selected));
@@ -371,7 +414,7 @@ namespace EmuSen.Mistress.Views
                 _session is null ? null : _activeConsole);
             // A rebind has to reach the menu, or it advertises the old key - see §4.19.
             window.Closed += (_, _) => SyncMenuState();
-            window.Show(this);
+            _ = SheetLayer.Show(window, this);
         }
 
         private void ShowGraphicsSettings()
@@ -381,8 +424,17 @@ namespace EmuSen.Mistress.Views
                 // On the emulation thread, between frames, and only when the running game is that console's - see §4.26.
                 if (_session is not null && console == _activeConsole) RequestOnEmulationThread(session => ApplyConsoleSettings(session, console));
                 if (_session is not null && console == _activeConsole) ApplyScreenFilter(console);
-            }, _session is null ? null : _activeConsole, HttpFactory);
-            window.Show(this);
+            }, _session is null ? null : _activeConsole, HttpFactory) { ShadersChanged = ShaderChanged };
+            _ = SheetLayer.Show(window, this);
+        }
+
+        // Its own window, on the running game's console - see EmuSen_Settings_Reference.md §4.48.
+        private void ShowShaderSettings() =>
+            _ = SheetLayer.Show(new ShaderSettingsWindow(_graphics, ShaderChanged, _session is null ? null : _activeConsole, HttpFactory), this);
+
+        private void ShaderChanged(string console)
+        {
+            if (_session is not null && console == _activeConsole) ApplyScreenFilter(console);
         }
 
         // On the UI thread: the filter belongs to the control that draws, not to the core - see EmuSen_Settings_Reference.md §4.40.
@@ -390,10 +442,20 @@ namespace EmuSen.Mistress.Views
         {
             string? stored = _graphics.Value(console, GraphicsSettingsWindow.ScreenFilterKey);
             EmuSen.Serenity.Shaders.ScreenFilterChoice choice = EmuSen.Serenity.Shaders.ScreenFilters.Find(stored);
+            // Before the shader, so a chain or runner built for it starts from the player's values - see EmuSen_Settings_Reference.md §4.48.3.
+            GameFrame.ShaderParameters = ShaderParameterValues(console, stored ?? choice.Name);
             GameFrame.ActiveEffect = choice.Effect;
             GameFrame.ActiveFilter = choice.Filter;
             GameFrame.ActiveSlangPreset = SlangPresetPath(stored);
             GameFrame.InvalidateVisual();
+        }
+
+        private Dictionary<string, float> ShaderParameterValues(string console, string shader)
+        {
+            var values = new Dictionary<string, float>(StringComparer.Ordinal);
+            foreach ((string id, string text) in _graphics.ParametersFor(console, shader))
+                if (float.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float value)) values[id] = value;
+            return values;
         }
 
         private bool _slangFailuresShown;
@@ -427,28 +489,48 @@ namespace EmuSen.Mistress.Views
             }
         }
 
-        private void ShowPreferences()
+        private void ShowPreferences() => ShowPreferencesAt(null);
+
+        private void ShowPreferencesAt(string? tab)
         {
             // Non-modal, so re-scan on close rather than leaving a stale library behind it.
-            var window = new PreferencesWindow(_appSettings);
-            window.Closed += (_, _) => { ScanArtwork(); ApplyOnlineCovers(); if (LibraryView.IsVisible) RefreshLibrary(); };
-            window.Show(this);
+            var window = new PreferencesWindow(_appSettings, this, _bigScreen ? HelpFamily : null) { OpenThemeSettings = ShowThemeSettings };
+            WatchPreferences(window);
+            if (tab is not null) window.ShowTab(tab);
+            window.StatusBarChanged += ApplyStatusBar;
+            window.Closed += (_, _) => { ScanArtwork(); ApplyOnlineCovers(); ApplyScraping(); if (LibraryView.IsVisible) RefreshLibrary(); };
+            _ = SheetLayer.Show(window, this);
+        }
+
+        // The bar goes when it is switched off or when both its parts are; a big screen's counters are its HUD's, not the bar's - see EmuSen_Settings_Reference.md §4.51 and §4.83.6.
+        private void ApplyStatusBar()
+        {
+            bool counters = _appSettings.ShowFpsBar && !_bigScreen;
+            StatusText.IsVisible = _appSettings.ShowStatusText;
+            FpsText.IsVisible = counters;
+            StatusBar.IsVisible = _appSettings.ShowStatusBar && (_appSettings.ShowStatusText || counters) && !(ThemedLibraryShown && LibraryView.IsVisible);
         }
 
         private void ShowDebugLogging()
         {
-            new DebugSettingsWindow().Show(this);
+            _ = SheetLayer.Show(new DebugSettingsWindow(), this);
         }
+
+        // The running game's console, else the library's filter: cheats are for the game being played - see EmuSen_Settings_Reference.md §4.45.5.
+        private string CheatConsole => _session is { IsRomLoaded: true } ? _activeConsole : CoreOfShelf(SelectedConsole);
+
+        // The cheat windows know cores, not shelves: the Game Boy Color shelf is Mercury's - see EmuSen_Settings_Reference.md §4.46.
+        private static string CoreOfShelf(string shelf) => EmuSen.Cores.CoreCatalog.ShelfByName(shelf)?.Core.DisplayName ?? shelf;
 
         // Never needs a ROM: it manages a folder and a list, not a session. See §4.14.
         private void ShowCheatDatabase()
         {
             _cheatDatabaseWindow.Show(this, () => new CheatDatabaseWindow(_appSettings, () => _cheats,
-                ConsoleCodecs(SelectedConsole).AutoDetect,
+                ConsoleCodecs(CheatConsole).AutoDetect,
                 () => _activeCheatsWindow.Current?.Refresh(),
                 ShowActiveCheats,
                 () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems,
-                SelectedConsole));
+                CheatConsole));
         }
 
         
@@ -456,13 +538,14 @@ namespace EmuSen.Mistress.Views
         // The menu item and the database window's button are the same door - see §4.14.
         private void ShowActiveCheats()
         {
-            var codecs = ConsoleCodecs(SelectedConsole);
+            var codecs = ConsoleCodecs(CheatConsole);
             _activeCheatsWindow.Show(this, () => new ActiveCheatsWindow(_cheats,
                 codecs.AutoDetect,
                 codecs.Explicit,
                 RequestCheatApply,
                 () => CheatListName(_cheatsRomPath),
-                SelectedConsole),
+                CheatConsole,
+                ShowCheatDatabase),
                 refresh: w => w.Refresh());
         }
 
@@ -571,6 +654,7 @@ namespace EmuSen.Mistress.Views
                 }
                 catch (Exception ex)
                 {
+                    ErrorLog.Error("states", $"Save State to slot {slot} failed", ex, path);
                     status = $"Save State failed: {ex.Message}";
                 }
 
@@ -596,7 +680,7 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
-            StateRecord? record = StateRecord.Read(path);
+            StateRecord? record = _fileRecords.ReadState(path);
             if (Refusal(record, rom, _session) is string refused)
             {
                 StatusText.Text = $"Load State: {refused}";
@@ -618,6 +702,7 @@ namespace EmuSen.Mistress.Views
                 }
                 catch (Exception ex)
                 {
+                    ErrorLog.Error("states", $"Load State from slot {slot} failed", ex, path);
                     status = $"Load State failed: {ex.Message}{Provenance(record)}";
                 }
 
@@ -663,15 +748,16 @@ namespace EmuSen.Mistress.Views
                     LunaAction.Separator(),
                     _speedMenu,
                     LunaAction.Separator(),
-                    _saveState, _loadState, _slotMenu),
+                    _saveState, _loadState, _slotMenu, _rewindReel),
                 new LunaMenu("_View", _asGrid!, _asList!,
                     new LunaAction("_Larger Covers", () => TileScale.Value = Math.Min(MaximumTileScale, TileScale.Value + 0.25)),
                     new LunaAction("S_maller Covers", () => TileScale.Value = Math.Max(MinimumTileScale, TileScale.Value - 0.25)),
-                    LunaAction.Separator(), _fullscreen),
+                    LunaAction.Separator(), _fullscreen, _bigPictureMenu),
                 new LunaMenu("_Settings",
                     new LunaAction("_Controller Bindings...", ShowControllerBindings),
                     new LunaAction("_Graphics Settings...", ShowGraphicsSettings),
-                    new LunaAction("_Debug Logging...", () => new DebugSettingsWindow().Show(this)),
+                    new LunaAction("_Shaders...", ShowShaderSettings),
+                    new LunaAction("_Debug Logging...", ShowDebugLogging),
                     new LunaAction("_Preferences...", ShowPreferences),
                     new LunaAction("Chea_t Database...", ShowCheatDatabase),
                     new LunaAction("_Active Cheats...", ShowActiveCheats),
@@ -692,6 +778,7 @@ namespace EmuSen.Mistress.Views
             Gesture(_loadState, HotkeyAction.LoadState);
             Gesture(_fullscreen, HotkeyAction.ToggleFullscreen);
             Gesture(_closeGame, HotkeyAction.ExitToLibrary);
+            Gesture(_bigPictureMenu, HotkeyAction.ToggleBigPicture);
         }
 
         private void Gesture(LunaAction action, HotkeyAction bound)
@@ -711,6 +798,7 @@ namespace EmuSen.Mistress.Views
             _saveState.IsEnabled = running;
             _loadState.IsEnabled = running;
             _slotMenu.IsEnabled = running;
+            _rewindReel.IsEnabled = running;
             _pause.IsChecked = running && IsPaused;
 
             // Checking a member unchecks its siblings and runs no handler; ActionGroup.Checked is read-only.
@@ -834,13 +922,13 @@ namespace EmuSen.Mistress.Views
                 // Off the path, not the session: no core exists yet to ask - see EmuSen_Multicore.md §12.
                 string console = EmuSen.Cores.CoreCatalog.ConsoleForRom(path) ?? "Unknown";
                 // The engine is chosen before the core exists, from the graphics window's row - see EmuSen_Settings_Reference.md §4.44.
-                _session = new EmulatorSession { Cheats = _cheats, Engine = _graphics.Value(console, EmuSen.Cores.CoreCatalog.EngineKey) };
+                _session = new EmulatorSession { Cheats = _cheats, Engine = EmuSen.Cores.CoreCatalog.EngineChosen(console, GameEngine(path) ?? _graphics.Value(console, EmuSen.Cores.CoreCatalog.EngineKey)) };
                 StartLogging(console);
                 _session.LoadRom(path);
                 if (_session.EngineNotice is { } engineNotice) Console.WriteLine("[core] " + engineNotice);
 
-                // The pad this ROM's console reads, not whatever the last one used.
-                _activeConsole = _session.CoreName;
+                // The catalogue's console, not the core's name: a Game Boy core says GBC while it is a Color, and the GB tab is its settings - see §4.47.
+                _activeConsole = console == "Unknown" ? _session.CoreName : console;
 
                 // What the graphics window holds for this console, or each setting's own default - see EmuSen_Settings_Reference.md §4.26.
                 ApplyConsoleSettings(_session, _activeConsole);
@@ -857,6 +945,7 @@ namespace EmuSen.Mistress.Views
                 _gamepad.LeftStickIsAnalog = _session.SupportedAxes.Contains(PadAxis.LeftX);
 
                 _rewind.Clear(); // a discontinuous jump - see §1.4
+                _rewind.IntervalFrames = RewindIntervalFor(_session.FrameRateHz);
                 _audioPlayer.RateControl.Reset();
 
                 // Built by CoreFactory alongside the core, so this window names no concrete target.
@@ -892,6 +981,7 @@ namespace EmuSen.Mistress.Views
                 _session = null;
                 // Back to the list rather than a black viewport with only a status line.
                 ShowLibrary();
+                ErrorLog.Error("launch", $"Failed to load {displayName}", ex);
                 StatusText.Text = $"Failed to load {displayName}: {ex.Message}";
             }
         }
@@ -957,8 +1047,8 @@ namespace EmuSen.Mistress.Views
             RefreshLibrary();
 
             // An open cheat window is showing the old console's systems.
-            _cheatDatabaseWindow.Current?.SetConsole(chosen);
-            _activeCheatsWindow.Current?.SetConsole(chosen, ConsoleCodecs(chosen));
+            _cheatDatabaseWindow.Current?.SetConsole(CoreOfShelf(chosen));
+            _activeCheatsWindow.Current?.SetConsole(CoreOfShelf(chosen), ConsoleCodecs(CoreOfShelf(chosen)));
         }
 
         // A running game wins over the filter - its codecs are the ones that can actually be applied.
@@ -1002,20 +1092,22 @@ namespace EmuSen.Mistress.Views
         {
             string search = LibraryFilter.SearchText;
             _recordSnapshot = _records.All();
+            _editSnapshot = _records.AllEdits();
             _collections = _records.Collections();
+            ShowThemedLibrary();
             RomEntry? keptSelection = LibraryList.Selected;
             bool sameSearch = search == _lastLibrarySearch;
             _lastLibrarySearch = search;
-            IReadOnlyList<RomEntry> pool = InCollection(_libraryScan.Entries);
+            IReadOnlyList<RomEntry> pool = InCollection(Listed(_libraryScan.Entries));
 
             IReadOnlyList<RomEntry> shownEntries = string.IsNullOrWhiteSpace(search)
                 ? pool
-                : pool.Where(e => FilterBar.Matches(search, e.Title)).ToList();
+                : pool.Where(e => FilterBar.Matches(search, DisplayTitle(e))).ToList();
 
             // Off the whole scan, not the search subset, so the tag cannot flicker while typing.
-            bool mixed = _libraryScan.Entries.Select(e => e.CoreDisplayName).Distinct().Count() > 1;
+            bool mixed = _libraryScan.Entries.Select(e => e.Shelf).Distinct().Count() > 1;
             MixedConsoles = mixed;
-            LibraryList.Label = e => mixed ? $"{e.Title}   —   {e.CoreDisplayName}" : e.Title;
+            LibraryList.Label = e => mixed ? $"{DisplayTitle(e)}   —   {e.Shelf}" : DisplayTitle(e);
             LibraryList.Refresh(shownEntries);
             _shownEntries = shownEntries;
             LibraryGrid.Refresh(shownEntries);
@@ -1187,7 +1279,12 @@ namespace EmuSen.Mistress.Views
                 if (_rewindHeld && session.Core is not null)
                 {
                     session.SkipRendering = false;
-                    if (!_rewind.Rewind(session.Core)) nextTick = clock.Elapsed;
+                    // One step every interval/speedup ticks, so a sparse history does not rewind in a blur.
+                    if (++_heldRewindTicks >= Math.Max(1, (int)Math.Round(_rewind.IntervalFrames / HeldRewindSpeedup)))
+                    {
+                        _heldRewindTicks = 0;
+                        if (!_rewind.Rewind(session.Core)) nextTick = clock.Elapsed;
+                    }
                     // No RunFrame() ran, so these would otherwise be stale - see §3.
                     _debugTarget?.RefreshProviders();
                     session.DequeueAudioSamples(int.MaxValue);
@@ -1231,7 +1328,7 @@ namespace EmuSen.Mistress.Views
 
                     // Right after RunFrame, which is what produces new samples to drain.
                     // Off for the C# N64 core, whose snapshot with several rasteriser workers froze a game; on for MarsRT, whose is proven - see EmuSen_Settings_Reference.md §4.21b and §4.44.
-                    if (session.Core is not null and not EmuSen.Cores.Nintendo.Mars.MarsCore) _rewind.OnFrameCompleted(session.Core);
+                    bool captured = session.Core is not null and not EmuSen.Cores.Nintendo.Mars.MarsCore && _rewind.OnFrameCompleted(session.Core);
 
                     // Drained every frame either way, so a muted stretch cannot back the buffer up - see EmuSen_Audio_Sync.md §4.
                     short[] samples = session.DequeueAudioSamples(int.MaxValue);
@@ -1255,10 +1352,12 @@ namespace EmuSen.Mistress.Views
                     if (!session.SkipRendering && (serial is null || serial != offeredSerial))
                     {
                         byte[] frame = session.GetFrameBufferRgba();
+                        if (captured) Picture(session, frame, serial);
                         SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release);
                         offeredSerial = serial;
                         offeredInWindow++;
                     }
+                    else if (captured && !session.SkipRendering) PictureUnchanged(session, serial);
 
                     loopMark = Stopwatch.GetTimestamp();
                     handOffTicks += loopMark - afterAudio;
@@ -1289,10 +1388,13 @@ namespace EmuSen.Mistress.Views
                             : $" | offered {offeredInWindow / seconds:F1}, shown {shown.Frames / seconds:F1} fps ({shown.Copies / seconds:F1} copied), copy {shown.CopyMilliseconds / Math.Max(shown.Copies, 1):F2} draw {shown.DrawMilliseconds / shown.Frames:F2}ms, {(shown.Gpu ? "GPU" : "software")} {shown.Width}x{shown.Height}";
                         double Ms(long ticks) => ticks * 1000.0 / Stopwatch.Frequency / framesInWindow;
                         string outside = $" | outside: requests {Ms(requestsTicks):F2} audio {Ms(audioTicks):F2} hand-off {Ms(handOffTicks):F2} sleep+rest {Ms(restTicks):F2}ms";
-                        string line = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms){breakdown}{presentation}{outside}";
+                        string counters = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms)";
+                        string line = $"{counters}{breakdown}{presentation}{outside}";
                         Console.WriteLine($"[fps] {line}");
 
-                        Dispatcher.UIThread.Post(() => FpsText.Text = line);
+                        // The bar shows the frame rate, the frame's cost and its top phases; the whole line is its tooltip (§4.83.6).
+                        string barLine = top.Length == 0 ? counters : $"{counters} [{top}]";
+                        if (_appSettings.ShowFpsBar) Dispatcher.UIThread.Post(() => ShowCounters(barLine, line));
                         framesInWindow = 0;
                         offeredInWindow = 0;
                         Array.Clear(phaseMsInWindow);
@@ -1350,9 +1452,7 @@ namespace EmuSen.Mistress.Views
         {
             StopLogging(); // close the previous session's files first - see CategorizedLogWriter.Dispose's own comment
 
-            string logRoot = string.IsNullOrWhiteSpace(_appSettings.LogDirectory)
-                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EmuSen", "Logs")
-                : _appSettings.LogDirectory;
+            string logRoot = ErrorLog.Usable(_appSettings.LogDirectory) ? _appSettings.LogDirectory! : ErrorLog.DefaultRoot;
 
             try
             {
@@ -1364,6 +1464,7 @@ namespace EmuSen.Mistress.Views
             catch (Exception ex)
             {
                 // Best-effort: an unwritable directory must not block the load - see §4.22.
+                ErrorLog.Error("logging", "Per-game logging disabled", ex, logRoot);
                 StatusText.Text = $"Logging disabled: {ex.Message}";
             }
         }

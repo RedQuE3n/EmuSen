@@ -171,7 +171,9 @@ back to a mean near zero over thirty frames.
 
 Samples are produced at the core's fixed 44100 Hz by a fractional accumulator
 against the 4194304 Hz clock — 95.11 clocks per sample, with the remainder carried
-so the rate cannot drift. One frame yields about 738 stereo frames.
+so the rate cannot drift. One frame yields about 738 stereo frames. Until 2026-09-24
+`SetSampleRate` divided in integers, so the rate was 95 clocks and 44,150.6 Hz
+(`Mercury_Native.md` §6.1, D1, fixed in §9.1).
 
 `Drain` is destructive and matches `ICore.DequeueAudioSamples`; `Peek` is a
 non-destructive snapshot for `audiodump`. When the buffer is full the *oldest*

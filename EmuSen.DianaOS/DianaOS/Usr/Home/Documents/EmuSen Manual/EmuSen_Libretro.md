@@ -377,7 +377,7 @@ and Cranelift 0.136 may need later still. This is the first thing to ask upstrea
   in-house or whose upstream teams have given us explicit approval to distribute it via marketplaces"
   (https://docs.libretro.com/guides/install-ios/). Steam ships cores as free DLC, each "given approval by the authors of
   the core code" (https://www.libretro.com/index.php/retroarch-finally-released-on-steam/). **For EmuSen's cores the
-  approval is the player's to give**, as sole copyright holder. The long-running argument over whether GPL terms can be
+  approval is the author's to give**, as sole copyright holder. The long-running argument over whether GPL terms can be
   met under App Store terms is not settled here, and libretro's practice of written approval sidesteps it.
 
 ---
@@ -570,7 +570,7 @@ the frontend, and the player's unsaved state with it. §2's reasoning still hold
 invariants have failed is not safe to continue. So the libretro build keeps abort. It installs a hook that writes the
 message and the backtrace to `<save directory>/marsrt_crash.txt`, as `emusen_native_set_crash_log` does now
 (`src/lib.rs:55–62`). The alternative, a `panic = "unwind"` build that catches at each export and stops the core, is
-recorded and not recommended. §9 asks the player.
+recorded and not recommended. §9 leaves it open.
 
 **12. Cheats.** `retro_cheat_set` receives GameShark text. The GameShark codec is C#, in DianaOS (`ICheatCodeCodec`,
 `CoreFactory.cs:271–303`), so the wrapper needs a Rust decoder of the N64 GameShark format. That is a small, closed
@@ -649,7 +649,7 @@ routes, and both have measured costs or unmeasured risks.
 Neither route buys anything the plan does not already buy. `EmuSen_Stack.md` §2.1 now says every core is to be ported
 to Rust after Mars, with the C# core as the port's oracle. **A `<Name>RT` core is a libretro core through §7's wrapper,
 at the cost of implementing one trait.** The ports are the route. Mercury's port to Rust is in progress at the time of
-writing, in another worktree. The mapping it will need is §1's: 160×144, 59.7275 Hz (`MercuryCore.cs:58–68`), 8
+writing, on a separate branch. The mapping it will need is §1's: 160×144, 59.7275 Hz (`MercuryCore.cs:58–68`), 8
 buttons on port 0, a battery save, and GB/GBC as one core with the model chosen at load, not two subsystems
 (`libretro.h:1414–1425`).
 
@@ -742,15 +742,15 @@ by their dates. Hold them loosely, as §5 holds its own.
 
 | Stage | What | Oracle | Estimate |
 | --- | --- | --- | --- |
-| **L0** | Decisions: §9's questions answered, the crate's place, the core's name | — | an hour with the player |
+| **L0** | Decisions: §9's questions answered, the crate's place, the core's name | — | an hour of decisions |
 | **L1** | `emusen-libretro`: bindings, trait, macro, option chain, input, pixel swap, log, panic hook; a synthetic test core (a colour-bar machine) | the probe (T1) and a struct-layout test against `bindgen` | 1–2 days |
 | **L2** | `marsrt-libretro`, minimum: load, run, video (native lines, BGRX), audio with `SET_SYSTEM_AV_INFO`, input, hard reset, battery buffer by copy, states (§4.3.4), the Expansion Pak refusal | T2, T3 | 1–2 days |
 | **L3** | Options and categories, descriptors and controller info, dupes, `GET_AUDIO_VIDEO_ENABLE` behind T4, `GET_JIT_CAPABLE`, the GameShark decoder, the drain join for memory consumers | T4, T5 | 1–2 days |
 | **L4** | Achievements behind T6; the `.info` file | T6 | half a day, and longer if (a) of §4.6 is needed |
-| **L5** | CI: add `marsrt_libretro.{so,dll,dylib}` to `.github/workflows/marsrt.yml`'s four runners; later the buildbot's `.gitlab-ci.yml` | the tests run on each runner, as §6.3's do | half a day, plus upstream's time |
+| **L5** | CI: add `marsrt_libretro.{so,dll,dylib}` to `.github/workflows/rust-cores.yml`'s four runners (it was `marsrt.yml` until 2026-09-24); later the buildbot's `.gitlab-ci.yml` | the tests run on each runner, as §6.3's do | half a day, plus upstream's time |
 | **L6** (optional) | Vulkan through RetroArch's device (§4.3.10 b) | the processor path at the same multiple, picture for picture, as `Mars_Gpu.md` grades the device | several days; built only on measurement |
 
-**Tests, all headless.** the working notes' rule, that tests run through WiseMan and not a window, applies. The probe is the
+**Tests, all headless.** The project's rule, that tests run through WiseMan and not a window, applies. The probe is the
 host.
 
 - **T1, the contract.** `probe-rs` already loads any libretro core with `dlopen` (`src/backends/libretro.rs:593–612`),
@@ -786,7 +786,7 @@ host.
 
 ## 9. Open questions
 
-**For the player.**
+**To decide.**
 1. **The name in the Online Updater.** The proposal is `corename = "MarsRT"`, `library_name = "MarsRT"`, file
    `marsrt_libretro`, and `display_name = "Nintendo - Nintendo 64 (MarsRT)"`. The name is hard to change later:
    rcheevos keys its per-core rules by `library_name` (§2.5), and RetroArch keeps per-core configuration under the

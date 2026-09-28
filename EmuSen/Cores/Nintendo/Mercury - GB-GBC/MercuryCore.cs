@@ -10,7 +10,7 @@ using EmuSen.Galaxia.Input;
 namespace EmuSen.Cores.Nintendo.Mercury
 {
     // The Game Boy's ICore implementation; colour is an additive mode on this same core - see Mercury_Core.md §1.
-    public sealed partial class MercuryCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ICheatRegistryHost, global::EmuSen.Cores.IStateFormat
+    public sealed partial class MercuryCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ICheatRegistryHost, global::EmuSen.Cores.IStateFormat, global::EmuSen.Cores.ICoreSettings
     {
         public const int CpuClockHz = 4194304;
 
@@ -20,8 +20,15 @@ namespace EmuSen.Cores.Nintendo.Mercury
         // "MERC" little-endian, then the format version - see EmuSen_Save_States.md §3.
         private const uint StateMagic = 0x4352454D;
 
-        // 2 added the PPU to the bus walk, 3 the colour banks and HDMA, 4 the APU, 5 the serial port - see EmuSen_Save_States.md §1.
-        private const int StateVersion = 5;
+        // 2 PPU, 3 colour banks and HDMA, 4 APU, 5 serial, 6 no save path or cartridge copies, 7 the console - see EmuSen_Save_States.md §7.
+        private const int StateVersion = 7;
+
+        // Version 6 dropped the save path and the cartridge copies; version 7 names the console before the walks - see Mercury_Model.md §5.
+        private const int RetiredCartCopies = 6;
+        private const int ConsoleInHeader = 7;
+
+        // The oldest version LoadState still reads, its retired fields walked and dropped - see Mercury_Native.md §9.3.
+        private const int OldestReadableVersion = 5;
         int global::EmuSen.Cores.IStateFormat.StateVersion => StateVersion;
 
         private const int SaveEveryNFrames = 300;
@@ -48,6 +55,27 @@ namespace EmuSen.Cores.Nintendo.Mercury
         }
         public CoverageRegistry Coverage { get; } = new();
         public LabelRegistry Labels { get; } = new();
+        public CallStackRegistry CallStack { get; } = new();
+
+        // Kept here and handed to each new bus, so a watch outlives a reload - see Mercury_Debug.md §7.
+        private Memory.IWriteObserver? _writeObserver;
+
+        public Memory.IWriteObserver? WriteObserver
+        {
+            get => _writeObserver;
+            set
+            {
+                _writeObserver = value;
+                if (Bus is not null) Bus.WriteObserver = value;
+            }
+        }
+
+        public MercuryCore()
+        {
+            Breakpoints.CallStack = CallStack;
+            CallStack.FrameNumberProvider = () => TotalFrames;
+            CallStack.EntryPointObserver = Coverage.RecordEntryPoint;
+        }
 
         // Handed out before a ROM exists; once one does, the PPU's own buffer is returned instead.
         private readonly byte[] _frame = new byte[ScreenWidthPixels * ScreenHeightPixels * 4];
@@ -58,8 +86,8 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public const int ScreenWidthPixels = 160;
         public const int ScreenHeightPixels = 144;
 
-        // The header decides, once, at load - see Mercury_Cgb.md §1.
-        public string CoreName => Cart?.Cgb is null or Memory.CgbSupport.None ? "GB" : "GBC";
+        // The console running, not the cartridge's flag: the Model setting can put either on either - see Mercury_Model.md §5.
+        public string CoreName => Bus?.CgbHardware == true ? "GBC" : "GB";
 
         public int ScreenWidth => ScreenWidthPixels;
         public int ScreenHeight => ScreenHeightPixels;
@@ -98,17 +126,41 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public void LoadRom(string path)
         {
             Cart = Cartridge.Load(path);
-            Bus = new MemoryBus(Cart) { RomPatcher = new global::EmuSen.Cores.CheatRomPatcher(Cheats) };
-            Cpu = new Cpu.Core.Cpu(Bus);
-
-            Bus.Reset();
-            Cpu.Reset(Bus.Cgb);
-            Bus.Ppu.SkipRendering = _skipRendering;
-            Bus.Apu.SetSampleRate(AudioSampleRate);
+            Bus = null;
+            Build(ConsoleFor(Model, Cart.Cgb));
+            CallStack.Reset();
 
             TotalFrames = 0;
             _cyclesIntoFrame = 0;
             IsHaltedAtBreakpoint = false;
+        }
+
+        // The machine a load builds on one console; a rebuild for a state keeps the host's side of the old one - see Mercury_Model.md §5.
+        private void Build(bool cgbHardware)
+        {
+            MemoryBus? old = Bus;
+            Bus = new MemoryBus(Cart!, cgbHardware) { RomPatcher = new global::EmuSen.Cores.CheatRomPatcher(Cheats), WriteObserver = _writeObserver };
+            Cpu = new Cpu.Core.Cpu(Bus)
+            {
+                CallObserver = (source, target) => CallStack.NotePush(source, target, CallFrameKind.Call),
+                ReturnObserver = CallStack.NotePop,
+                InterruptObserver = (source, target) =>
+                {
+                    CallStack.NotePush(source, target, CallFrameKind.Irq);
+                    Breakpoints.NoteInterrupt(CallFrameKind.Irq);
+                },
+            };
+
+            Bus.Reset();
+            if (Bus.DmgCompat) Cpu.ResetForCompatibility(Video.CompatibilityPalettes.HandOffChecksum(Cart!.Rom));
+            else Cpu.Reset(Bus.Cgb);
+            Bus.Ppu.SkipRendering = _skipRendering;
+            Bus.Apu.SetSampleRate(AudioSampleRate);
+
+            if (old is null) return;
+            Bus.Joypad = old.Joypad;
+            Bus.Apu.MaxBufferedSamples = old.Apu.MaxBufferedSamples;
+            for (int i = 0; i < Audio.Apu.ChannelCount; i++) Bus.Apu.SetChannelMuted(i, old.Apu.IsChannelMuted(i));
         }
 
         public void SetButton(int port, PadButton button, bool pressed)
@@ -142,6 +194,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
 
                 resuming = false;
                 if (Coverage.IsArmed) Coverage.Record(Cpu.PC);
+                if (CallStack.IsProfiling) CallStack.NoteInstruction();
 
                 // Step ticks the bus itself, one machine cycle at a time - see Mercury_Cpu.md §3.
                 int cycles = Cpu.Step(Bus.InterruptEnable, Bus.InterruptFlags, out int serviced);
@@ -173,6 +226,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
 
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
             ApplyCheats();
+            Breakpoints.NoteFrame(TotalFrames);
 
             if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();
         }
@@ -209,6 +263,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
 
             w.Write(StateMagic);
             w.Write(StateVersion);
+            w.Write(Bus.CgbHardware);
             w.Write(TotalFrames);
             w.Write(_cyclesIntoFrame);
 
@@ -230,15 +285,20 @@ namespace EmuSen.Cores.Nintendo.Mercury
             if (r.ReadUInt32() != StateMagic) throw new InvalidDataException("Not a Mercury save state.");
 
             int version = r.ReadInt32();
-            if (version != StateVersion) throw new InvalidDataException($"Save state version {version} is not {StateVersion}.");
+            if (version is < OldestReadableVersion or > StateVersion) throw new InvalidDataException($"Save state version {version} is not one this build reads ({OldestReadableVersion} to {StateVersion}).");
+            bool retired = version < RetiredCartCopies;
+
+            // Older states were made on the console the header chose; a state from the other console rebuilds the machine as that one.
+            bool cgbHardware = version >= ConsoleInHeader ? r.ReadBoolean() : Cart.Cgb != CgbSupport.None;
+            if (cgbHardware != Bus.CgbHardware) Build(cgbHardware);
 
             TotalFrames = r.ReadInt64();
             _cyclesIntoFrame = r.ReadInt64();
 
-            StateSerializer.Read(r, Cart);
-            StateSerializer.Read(r, Cart.Mapper);
-            StateSerializer.Read(r, Cpu);
-            StateSerializer.Read(r, Bus);
+            StateSerializer.Read(r, Cart, includeRetired: retired);
+            StateSerializer.Read(r, Cart.Mapper, includeRetired: retired);
+            StateSerializer.Read(r, Cpu, includeRetired: retired);
+            StateSerializer.Read(r, Bus, includeRetired: retired);
         }
     }
 }

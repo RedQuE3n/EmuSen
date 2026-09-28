@@ -302,6 +302,10 @@ moves.
 
 ### 3.1 The state, byte for byte (read from the code; checked by a reflection walk in stage 1)
 
+*Since 2026-09-28 the codec is shared.* The writer, the reader, the layout listing, the naming rule, `Skip<T>` and the
+state half of the C ABI live in `emusen-native` (`EmuSen_RustState.md`), which every Rust core builds from. MoonRT's `state.rs` keeps its magic, version and refusals; its state exports are `state_exports!`. Its status codes
+were already inside the shared rule and did not change.
+
 The format is `StateSerializer`'s reflection walk (`EmuSen/Common/StateSerializer.cs:36-44`), and MoonRT reproduces it
 exactly. From the code:
 
@@ -360,6 +364,84 @@ platform. Neither RyuJIT nor rustc contracts to FMA by default. The clamp-then-t
 transcript, not a pass list**: for every ROM, both engines must give the same verdict, on the same frame, with the same
 `$6004` text, the same number of resets, and the same state at the verdict frame. A C# baseline is recorded first, so
 that a change to either engine shows as a line.
+
+#### 3.4.1 AccuracyCoin, beside the corpus (baseline measured 2026-09-28)
+
+**The ROM.** AccuracyCoin, by 100thCoin (Chris Siebert), is a single NROM image that runs 144 scored tests of the CPU,
+DMA, APU and PPU on one screen of results.
+
+- Source: `https://github.com/100thCoin/AccuracyCoin`, commit `673ef550db296136d52229961e7d39366116882a`
+  (2026-09-23). The repository has no tags or releases; the prebuilt `AccuracyCoin.nes` is checked in and last
+  changed in that commit.
+- Licence: MIT.
+- `AccuracyCoin.nes`: 40,976 bytes, SHA-256 `4fe8c2bc9abc6f4d418da47b73f62cba89fcacd950fae763097a1681d650e839`.
+  It is iNES 1.0, mapper 0, 32 KB of PRG and 8 KB of CHR ROM, and it targets an NTSC RP2A03G and RP2C02G.
+- Where it lives: `~/.cache/emusen/probe/moonrt/accuracycoin/`. Like the corpus, it is third-party and never
+  committed. WiseMan reads it from `EMUSEN_ACCURACYCOIN`.
+
+It was fetched because NES_MiSTer's 2025–2026 fixes to its bus, DMA and PPU were each graded by one of its sub-tests
+(§3.7.1, Q7). It lets the audit settle those disagreements with a ROM instead of leaving them as candidates.
+
+**How it reports**, read from its source (`AccuracyCoin.asm`):
+
+- One result byte per test in RAM, `$0400`–`$0495`, at the addresses `:146-310` defines.
+  - The low two bits are 1 for a pass and 2 for a fail (`:17074-17083`).
+  - Bits 7–2 are the error code on a fail, and on a pass the "behaviour" number of a test with several passing
+    behaviours (`:977-983`).
+  - 0 means not run, and `$FF` marked to be skipped.
+- The table's tallies are `$37` (tests), `$38` (passed) and `$3F` (skipped) (`:83-91`).
+- The menu is ready when `$EC` reaches `$0A` (`:436-468`).
+- From the menu, Start runs every page and then draws the table. Presses are edge-detected in the NMI, so the button
+  must go from released to pressed.
+- **The end** is the NMI hook at `$0700` rewritten to `JMP PressStartToContinue` (`:1097-1102`), which is
+  `4C 08 93` in this build.
+  - `$35`, `RunningAllTests`, is not the end: the PPU open-bus test clears it and sets it again part-way through.
+  - The address `$9308` was found by searching the PRG for the routine's bytes, not from a listing, and is confirmed
+    by the table appearing on screen at that frame.
+
+**The harness.** `NesTestRomRunner` speaks only blargg's `$6000` protocol and sends no input, so it would report no
+result here.
+
+- `EmuSen.WiseMan/Fixtures/AccuracyCoinRun.cs` drives the protocol above over any NES core's frame, RAM and Start
+  button:
+  - power on;
+  - wait for `$EC = $0A`;
+  - thirty frames later, hold Start for five frames;
+  - run to the table's hook, within 8,000 frames;
+  - read the result block and the tallies.
+- `MoonAccuracyCoinTests` decodes synthetic bytes. With the ROM present, it also runs the C# core and holds it to the
+  baseline below, byte for byte, with the frame the menu was ready and the frame the table was drawn.
+
+**The C# Moon's baseline, on the unmodified tree at `cd6bc71e`: 89 of 144 pass, 55 fail, none skipped.** That is also
+the ROM's own screen, "TESTS PASSED: 89 / 144".
+
+- The menu was ready at frame 23, Start was held for frames 54–58, and the table was drawn at frame 4,099.
+- Two runs gave the same RAM, picture and log.
+
+| Page | Passed | The failures (error code) |
+|---|---|---|
+| 1 CPU behaviour | 8 of 9 | Open bus (1) |
+| 2 Addressing-mode wraparound | 6 of 6 | — |
+| 3–9 The unofficial read-modify-write, `*AX`, DCP and ISC opcodes | 52 of 52 | — |
+| 10 SH* | 1 of 6 | SHA ind,Y and abs,Y, SHS, SHY and SHX (7: the wrong target address when RDY falls two cycles before the write) |
+| 11 Unofficial immediates | 8 of 8 | — |
+| 12 CPU interrupts | 0 of 3 | Interrupt-flag latency (8), NMI overlapping BRK (2) and IRQ (1) |
+| 13 APU registers and DMA | 0 of 10 | DMA with open bus, `$2002`, `$2007` read and write, `$4015`, `$4016`; DMC DMA bus conflicts; DMC DMA with OAM DMA; explicit and implicit DMA abort |
+| 14 APU | 3 of 9 | Frame counter IRQ (7), 4-step (2) and 5-step (2); DMC (18); APU register activation (1); controller strobing (4) |
+| 15 CPU behaviour 2 | 2 of 5 | Instruction timing (2), implied dummy reads (3), internal data bus (1) |
+| 16 Power-on state | not scored | drawn, not scored; the PPU reset flag at `$0360` reads fail 1 |
+| 17 PPU behaviour | 5 of 5 | — |
+| 18 PPU vblank timing | 3 of 7 | NMI timing, suppression, at vblank's end, and disabled at vblank (1 each) |
+| 19 Sprite evaluation | 0 of 8 | all eight fail with code 1 |
+| 20 PPU miscellany | 1 of 7 | `$2004` (4), `INC $4014` (2), the rendering flag (2), `$2007` while rendering (1), the `$2004` and `$2007` stress tests (2 each) |
+| 21 Advanced background evaluation | 0 of 5 | all five |
+| 22 Advanced sprite evaluation | 0 of 4 | all four |
+
+**What the baseline does not say.** Code 1 on page 19 is "a sprite zero hit did not occur", and many of pages 20–22's
+tests begin by relying on sprite 0 hit working. So page 19's failures may cascade: one cause could fail most of pages
+19–22. The same may hold for pages 12, 13 and 15 and the frame counter, many of which depend on DMC DMA timing. Both
+readings are inferred from the error codes and not investigated; the audit of §3.7 begins with the CPU and the bus.
+The corpus's 45 of 63 and this ROM's 89 of 144 measure different things, and neither is folded into the other.
 
 ### 3.5 Every board
 
@@ -545,7 +627,7 @@ does is lost, or the loss is written down; the C# core's role is decided.
 - **Q2, one state crate or three copies.** With MoonRT there are three copies of `state.rs` (MarsRT's, MercuryRT's
   with strings, MoonRT's). `Moon_Memory.md` §6 set the project's own threshold for hoisting a shared shape: "when a
   third core makes the shape a rule instead of a coincidence". This is the third. **The recommendation is a small
-  `emusen-state` crate** holding the writer, the reader, the layout and the naming rule, extracted after MoonRT's stage
+  `emusen-native` crate** holding the writer, the reader, the layout and the naming rule, extracted after MoonRT's stage
   1 and after the work in progress in MarsRT has merged, because the extraction touches MarsRT. Until then MoonRT
   copies MercuryRT's pattern.
 - **Q3, whether to fix §6.1's defects first.** The recommendation is **no** for D1: it is the other half of a

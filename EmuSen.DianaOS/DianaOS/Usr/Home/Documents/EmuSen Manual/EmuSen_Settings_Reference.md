@@ -2907,7 +2907,7 @@ committed beside the sources:
 | --- | --- |
 | `png/emusen-{16,24,32,48,64,128,256,512,1024}.png` | the window icon (256), the Linux hicolor theme, the others |
 | `emusen.ico` (16–256, seven sizes) | Windows: `ApplicationIcon`, the `.exe` in Explorer and on the taskbar |
-| `emusen.icns` (eleven PNG entries, 16–1024 with the @2x types) | macOS, for an app bundle; none is built yet |
+| `emusen.icns` (eleven PNG entries, 16–1024 with the @2x types) | macOS: `EmuSen.app`'s `Contents/Resources/emusen.icns` since 2026-09-27 (§4.82); until then no bundle carried it |
 
 **Where it shows.**
 - **Every Mistress window's frame and taskbar entry.** `App.ShowIconOnEveryWindow` registers one class handler on
@@ -2929,7 +2929,7 @@ was run against a scratch `XDG_DATA_HOME`: eight sizes and the SVG installed, a 
 (the development tree's path has a space), a desktop shortcut, and `--remove` cleaning up.
 
 **Not done.** Steam's own artwork for a non-Steam game (the Game Mode library's capsule, hero and logo images) is
-set in Steam, not by Mistress. No macOS app bundle exists to carry the `.icns`. Hotaru and Pegasus keep Avalonia's
+set in Steam, not by Mistress. ~~No macOS app bundle exists to carry the `.icns`.~~ One does since 2026-09-27 (§4.82). Hotaru and Pegasus keep Avalonia's
 default icon. Whether KDE shows the frame icon from `_NET_WM_ICON` or the desktop entry's `Icon=` depends on the
 entry being installed, and was not checked on a real session.
 
@@ -5732,6 +5732,7 @@ may still leave rows unbuilt. That frame now belongs to the controller bindings'
 - **A desktop ES-DE look.** The style layer can be switched on for a desktop window with one call (LunaP §196.5); no
   setting does it.
 - **Hardware.** No real pad, keyboard or handheld was used; everything here ran headless.
+
 ### 4.81 Controller Bindings: each console's pad drawn, rebound from the drawing, and an input tester (2026-09-27)
 
 Decided 2026-09-27 (`EmuSen_BigPicture.md` §10.1): the Controller Bindings window draws each console's controller as
@@ -5845,3 +5846,191 @@ single-line text on any tab narrower than its words); the click and pad-reach ca
 **What it does not cover.** No real pad. The look's switch draws its focus box through its words (`EmuSen_BigPicture.md`
 Q187), and a scrolling area shows part of a row at its edge (Q186); both belong with the window-look audit, which was not
 in WiseMan when this was built.
+
+### 4.82 macOS: EmuSen.app in /Applications (2026-09-27)
+
+Decided 2026-09-27: macOS installs as `EmuSen.app` in `/Applications`. The Linux publish is a self-contained folder with
+the player's data inside it (`man hier`), because Linux has no application standard. macOS has one, and Mistress
+follows it. Nothing here changes a Linux or Windows publish or run.
+
+#### 4.82.1 Where the player's data goes
+
+When Mistress runs from inside a bundle (`…/EmuSen.app/Contents/MacOS/`), or on macOS when no `.dianaosroot` marker or
+`EmuSen.sln` is found above it, the program's root is **`~/Library/Application Support/EmuSen`**:
+
+```
+~/Library/Application Support/EmuSen/
+  home/                  the shell's '/'
+    etc/EmuSen/          appsettings.json, the bindings, graphics.json, windows.json, themes/ ...
+    Saves/  Library/  Media/  Themes/  Shaders/  Screenshots/  Logs/  Firmware/  Cheats/  Games/  tmp/
+    Documents/           the EmuSen Manual and the hardware notes, copied from the bundle
+```
+
+The bundle itself is never written: an update replaces it, a write would break its signature, and `/Applications` may
+not be writable. A checkout and a marked tree still win, on a Mac as anywhere. `EmuSen_Galaxia.md` §3.4 has the rule, its
+order (the bundle before the walk) and why.
+
+The per-day error log and crash reports are not under the root and never were. They go to the **Log Folder** setting,
+or else to `ErrorLog.DefaultRoot`, .NET's `ApplicationData` folder plus `EmuSen/Logs` (§4.70). .NET maps `ApplicationData`
+to `~/.config` on Unix, so on a Mac that is expected to be `~/.config/EmuSen/Logs` rather than `~/Library/Logs`. It works,
+and is left as it is (§4.82.6).
+
+#### 4.82.2 The manual: seeded on start, never over the player's files
+
+The bundle carries what a Linux publish ships in `home/` at `Contents/Resources/home`. On every start Mistress copies
+any file missing from the player's `home` (`DataMigration.SeedFromBundle`, with `CopyTree`'s copy-never-overwrite rule).
+Reading the docs from the bundle in place was rejected because the shell has one root. The reasons, and the cost that an
+update does not refresh a page the player already has, are in `EmuSen_Galaxia.md` §3.4. Outside a bundle the call does
+nothing, so a Linux start is unchanged.
+
+#### 4.82.3 The bundle
+
+A publish of `EmuSen.Mistress` for `osx-arm64` or `osx-x64` produces this, and nothing beside it:
+
+```
+EmuSen.app/
+  Contents/
+    Info.plist
+    MacOS/                    the whole .NET app directory, as lib/EmuSen is on Linux:
+      EmuSen.Mistress         the apphost (CFBundleExecutable)
+      *.dll, *.dylib, ...     libSDL3, libmarsrt, libmercuryrt, Skia, Avalonia.Native ...
+      Assets/Fonts/  Library/Catalogue/
+    Resources/
+      emusen.icns
+      home/Documents/         the seed (§4.82.2)
+      LICENSE  THIRD_PARTY_NOTICES.md  licenses/
+```
+
+There is no `bin/` launcher and no `.dianaosroot`, since the data is not beside the program. The `DianaOSPublishNotices`
+target still runs; for a bundle it writes to `Contents/Resources`, where macOS applications keep their licence texts.
+
+`DianaOSPublishLayout.targets` does it, switched on by a project that sets `DianaOSMacAppName` (only Mistress does) and a
+RID starting `osx`. It rewrites each publish item's destination as the Linux layout does, into `Contents/MacOS` or
+`Contents/Resources` instead of `lib/EmuSen` or the root. `-p:DianaOSMacAppBundle=false` publishes the Linux tree for
+`osx-*` instead. Hotaru, Pharaoh and the DianaOS shell name no bundle and keep the tree on every platform.
+
+**`Info.plist`**, filled from `EmuSen.DianaOS/Publish/Info.plist.in`:
+
+| Key | Value | Why |
+| --- | --- | --- |
+| `CFBundleName`, `CFBundleDisplayName` | `EmuSen` | the name in the menu bar, Finder and the Dock |
+| `CFBundleIdentifier` | `io.github.redque3n.emusen` | see below |
+| `CFBundleExecutable` | `EmuSen.Mistress` | the apphost in `Contents/MacOS` |
+| `CFBundleIconFile` | `emusen` | `Contents/Resources/emusen.icns` (§4.55) |
+| `CFBundleShortVersionString`, `CFBundleVersion` | `$(Version)`, 0.9.0 today | `Directory.Build.props` |
+| `CFBundlePackageType`, `CFBundleInfoDictionaryVersion` | `APPL`, `6.0` | required of an application bundle |
+| `LSMinimumSystemVersion` | `12.0` | measured, below |
+| `LSApplicationCategoryType` | `public.app-category.games` | |
+| `NSHighResolutionCapable` | true | Retina drawing, as in Avalonia's macOS deployment guide |
+| `NSPrincipalClass` | `NSApplication` | the AppKit default |
+| `CFBundleDevelopmentRegion` | `en` | |
+
+**The identifier** is `io.github.redque3n.emusen`. The project's owner on GitHub is RedQuE3n, and the GitHub Pages domain
+`redque3n.github.io`, reversed, is a domain the project controls without buying one. It is lower case by convention. It
+must not change once a build is in players' hands, because macOS keys the application's preferences, its privacy
+permissions and, once it is signed, its identity to it.
+
+**`LSMinimumSystemVersion` is 12.0 because the binaries say so.** Each Mach-O file records the lowest macOS it was built
+for (`LC_BUILD_VERSION`'s `minos`). Read on 2026-09-27 from the packages this publish uses:
+
+- the .NET 10.0.12 runtime and apphost, `osx-arm64` and `osx-x64`, record 12.0;
+- SDL3-CS 3.4.2's `libSDL3.dylib` records 12.0;
+- Avalonia.Native 12.1.0, SkiaSharp 3.119.2 and HarfBuzzSharp 8.3.1.3 record 11.0 (arm64) and 10.13 (x86-64).
+
+The highest is the floor. The Rust cores' libraries were not measured, since none built for macOS was at hand. A newer
+.NET or SDL may raise the floor, and this value has to follow it (`DianaOSMacMinimumSystemVersion`).
+
+**What Avalonia needs.** Nothing beyond the keys above. On macOS `UsePlatformDetect()` picks Avalonia.Native (shipped by
+Avalonia.Desktop as `libAvaloniaNative.dylib`). LunaP's `UseX11()` and `EmbedPopups` are already Linux-only
+(`OperatingSystem.IsLinux()`), so neither needed changing. One thing did: the application menu macOS gives every app
+reads `Application.Name` for its About, Hide and Quit items, and Mistress never set it, so they would have said
+"Avalonia Application". `App.Initialize` sets it to EmuSen on macOS only, so nothing Avalonia derives from it changes
+on Linux.
+
+#### 4.82.4 Signing
+
+On a Mac, the publish ends with `codesign --force --deep -s - EmuSen.app`, an ad hoc signature. It runs after the notices
+and `Info.plist` are written, so the seal covers them. Apple silicon does not run unsigned code, so this is what lets the
+bundle start on the machine that built it. `-p:DianaOSMacCodesign=false` skips it.
+
+**Not done: a Developer ID signature, the hardened runtime and notarization.** Until they are, a copy downloaded on
+another Mac is quarantined and Gatekeeper refuses it. The player has to clear the quarantine
+(`xattr -dr com.apple.quarantine /Applications/EmuSen.app`) or allow it in System Settings. Two things are known ahead
+of that work:
+
+- the hardened runtime forbids writable, executable memory unless an entitlement allows it, and both the .NET JIT and
+  MarsRT's Cranelift recompiler need it (`com.apple.security.cs.allow-jit`);
+- `--deep` is deprecated for real signing: each nested dylib should be signed on its own, inside out, before the
+  bundle.
+
+#### 4.82.5 Publishing a bundle from Linux
+
+```
+dotnet publish EmuSen.Mistress -c Release -r osx-arm64 --self-contained true -p:DebugType=none \
+    -p:ErrorOnDuplicatePublishOutputFiles=false -o <dir>
+```
+
+On Linux this produces the same bundle, with two differences:
+
+- **No bundle signature.** There is no `codesign` off a Mac, so the publish says `EmuSen.app is not signed` and names the
+  command to run on one. The .NET SDK signs the apphost ad hoc on any host, and the vendors' dylibs arrive signed (both
+  checked for `LC_CODE_SIGNATURE`); only the bundle's seal is missing.
+- **No Rust cores** unless `-p:EmuSenNativePrebuilt=<dir>` names their libraries, as for any foreign RID
+  (`Mars_Native.md` §6.3). Without it the publish warns, and the N64 and the Game Boy run on the C# cores.
+
+A zip made on Linux keeps the apphost's execute bit only if the tool stores Unix modes; `zip` does, and the publish sets
+the bit. Measured on 2026-09-27: the `osx-arm64` bundle from Linux is 417 files, 170 MB. A `linux-x64` publish of the same
+tree lists the same 281 files outside `home/` as the build in `out/linux-x64/Mistress`.
+
+#### 4.82.6 What else looks Linux-only (listed, not changed)
+
+- **Vulkan.** The slang shader chain (`EmuSen.Serenity/Slang/`, §4.41) and Mars's GPU renderer (`Mars_Gpu.md`) use
+  Vulkan, which macOS has only through MoltenVK, and MoltenVK is not shipped. `libshaderc_shared.dylib` ships but has
+  nothing to feed. Whether each falls back cleanly with no Vulkan loader present has not been checked on a Mac.
+- **Steam's keyboard** (§4.79.2, §4.79.7) is found by the process name `steam` and asked for with a `steam://` link.
+  Steam's process on macOS is named differently, so the Steam keyboard is not offered there. Game Mode is SteamOS's
+  anyway.
+- **The device status bar** (`DeviceStatusReader`) reads `/sys/class`, which macOS does not have, so it shows nothing.
+- **The error log's default folder** is under `~/.config` (§4.82.1), where a Mac program would use `~/Library/Logs`.
+- **Shortcuts.** Edit Metadata is Ctrl+I, and a Mac player expects ⌘I. Avalonia offers the platform's command modifier,
+  and no Mistress gesture uses it.
+- **The desktop entry and the hicolor icons** are Linux-only already (§4.55), and `launcher.sh` is not in a bundle.
+
+#### 4.82.7 Tests
+
+- **`DianaOSSandboxTests`**, six cases on temporary trees. All run on Linux, because `ConfigRoot.ComputeFor` takes the
+  platform and the home directory as parameters:
+  - a bundle roots in Application Support, with and without a trailing separator;
+  - a bundle inside a checkout that also holds a marker still does;
+  - on macOS, a checkout and a marked tree still win;
+  - on macOS, an unmarked directory falls back to Application Support;
+  - off macOS, a bundle-shaped path keeps `DianaOSRoot/`;
+  - only a bundle on macOS has a seed directory.
+- **`DataMigrationTests`**, three: the seed fills what is missing and keeps the player's file; no seed, no copy; the
+  test host has no seed directory.
+- **`MacAppBundlePublishTests`**, three. Two are a real `dotnet publish` of a scratch project that imports
+  `DianaOSPublishLayout.targets`, framework-dependent, about a second each:
+  - for `osx-arm64`: the publish directory holds only `EmuSen.app`, with the apphost executable, the icon
+    byte-identical, the seed, the notices and no marker, and `Info.plist`'s keys as §4.82.3 lists them;
+  - for `linux-x64`: the tree as before.
+
+  The third checks that Mistress's project names its bundle.
+- **Mutants.** Removing the bundle-first line from `ComputeFor` fails the checkout case. Letting the Linux root target
+  run for a bundle fails the `osx-arm64` publish case.
+
+#### 4.82.8 Not checked here
+
+Nothing in this section ran on a Mac. What has to be confirmed there:
+
+- a publish on the Mac signs without error, and `codesign --verify --deep --strict EmuSen.app` passes;
+- `EmuSen.app` copied to `/Applications` starts from Finder and from `open`, shows its icon in Finder and the Dock, and
+  its menu says EmuSen;
+- `~/Library/Application Support/EmuSen/home` is created, `home/Documents` holds the manual, settings saved from
+  Preferences land in `home/etc/EmuSen`, and nothing is written inside the bundle;
+- where the error log goes by default (§4.82.1);
+- `man hier` and `cat` on a page under `/Documents` work in the DianaOS console;
+- a game runs, with the Rust cores when the publish was given them;
+- a controller is seen. SDL3 over IOKit needs no `Info.plist` key; if macOS asks for Input Monitoring or Bluetooth
+  access, the key that explains why has to be added;
+- the `osx-x64` bundle on an Intel Mac, or under Rosetta;
+- a bundle published on Linux, zipped, unzipped on the Mac and signed there by hand.

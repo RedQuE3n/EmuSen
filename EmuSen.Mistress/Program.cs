@@ -25,6 +25,9 @@ namespace EmuSen.Mistress
                 EmuSen.Galaxia.Library.ErrorLog.Warning("config", m);
             };
 
+            // A no-op unless running from EmuSen.app, whose manual is copied into Application Support - see EmuSen_Settings_Reference.md §4.82.
+            EmuSen.Galaxia.Library.DataMigration.SeedFromBundle();
+
             // LunaP keeps windows.json and luna.json where Galaxia keeps everything else, and reports through the same sink - see EmuSen_LunaP.md §19.2.
             EmuSen.LunaP.Settings.LunaSettings.Store = new EmuSen.LunaP.Settings.JsonSettingsStore(EmuSen.Galaxia.ConfigStore.Directory);
             EmuSen.LunaP.Settings.LunaSettings.Diagnostics = EmuSen.Galaxia.ConfigDiagnostics.Report;

@@ -28,6 +28,8 @@ namespace EmuSen.Mistress
         public override void Initialize()
         {
             AvaloniaXamlLoader.Load(this);
+            // The Mac app menu's About, Hide and Quit read this; Linux keeps Avalonia's default - see EmuSen_Settings_Reference.md §4.82.
+            if (OperatingSystem.IsMacOS()) Name = "EmuSen";
         }
 
         public override void OnFrameworkInitializationCompleted()

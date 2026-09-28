@@ -1,6 +1,6 @@
 # EmuSen.Galaxia — the librarian
 
-*This revision: the DianaOS shell is now rooted at `/home` itself, so the install tree is unreachable from it, and `etc/EmuSen` moved under home to stay inside that root (§3.2). Before that, the data tree moved to `/home` and the ROM-library migration policy landed (§3.2, §3.3). Previously: Galaxia took over the data half. The `Usr/Home` directories moved out of `DianaOSSandbox` into `DataStore` (§2, §3), binary artifacts got the durable write config already had (§4), and there is now one spelling of what a ROM's save files are called (§5). Before that, config only — `EmuSen_Config_Reference.md`, which is still the per-file reference.*
+*This revision: on macOS the tree lives in `~/Library/Application Support/EmuSen`, outside the app bundle, and the bundle's manual is seeded into it (§3.4, 2026-09-27). Previously: the DianaOS shell was rooted at `/home` itself, so the install tree is unreachable from it, and `etc/EmuSen` moved under home to stay inside that root (§3.2). Before that, the data tree moved to `/home` and the ROM-library migration policy landed (§3.2, §3.3). Previously: Galaxia took over the data half. The `Usr/Home` directories moved out of `DianaOSSandbox` into `DataStore` (§2, §3), binary artifacts got the durable write config already had (§4), and there is now one spelling of what a ROM's save files are called (§5). Before that, config only — `EmuSen_Config_Reference.md`, which is still the per-file reference.*
 
 ---
 
@@ -12,7 +12,7 @@ It has two halves, deliberately the same shape:
 
 | | Config half | Data half |
 |---|---|---|
-| Where | `ConfigStore` → `<install>/home/etc/EmuSen` | `DataStore` → `<install>/home` (§3) |
+| Where | `ConfigStore` → `<root>/home/etc/EmuSen` | `DataStore` → `<root>/home` (§3; on macOS the root is in Application Support, §3.4) |
 | One artifact | `ConfigFile<T>` (typed JSON) | `AtomicFile` (bytes) (§4) |
 | Naming policy | the filename is the constant | `SaveLibrary` (§5) |
 | Test redirect | `ConfigStore.OverrideDirectory` | `DataStore.OverrideDirectory` (§3.1) |
@@ -93,6 +93,30 @@ That is worth stating flatly because the surrounding names invite the opposite c
 **As of 2026-08-05 the in-tree ROMs are gone.** `Usr/Home/Roms/` held eight ROMs used as the test corpus; every one had a byte-identical copy in the author's configured library, and they were removed rather than kept as a second copy that could drift. `Usr/Home/Roms/` itself stays — an end user is free to keep a library inside the shell's tree in a finished build, and `RealRom` still falls back to it — but development reads `AppSettings.RomDirectory`.
 
 `RealRom.Find` therefore tries the configured library first, and searches recursively under the console directory when the flat `<root>/<console>/<file>` path misses. A real library sorts by region (`NES/USA/Super Mario Bros 3 (U) (PRG 0).nes`), so the flat guess is the exception rather than the rule.
+
+### 3.4 The data home on macOS (2026-09-27)
+
+Decided 2026-09-27: macOS installs as `EmuSen.app` in `/Applications`. Linux has no application standard, so its publish is a self-contained tree with the player's data inside it (`man hier`); macOS has one, and a bundle is read-only by that standard. It is replaced whole by an update, it is signed (a file written into it breaks the seal), and `/Applications` may not be writable by the player at all. So on a Mac the root moves out of the install:
+
+| Where the program runs from | `ConfigRoot.Directory` |
+|---|---|
+| inside a bundle (`…/X.app/Contents/MacOS`), on macOS | `~/Library/Application Support/EmuSen` |
+| a checkout (`EmuSen.sln` above it), on any platform | the checkout, as before |
+| a marked tree (`.dianaosroot` above it), on any platform | the tree, as before |
+| none of those, on macOS | `~/Library/Application Support/EmuSen` |
+| none of those, on Linux or Windows | `DianaOSRoot/` beside the binary, as before |
+
+Everything else follows from the root without a change of its own: `DataStore.UsrHome` is `<root>/home`, `ConfigStore.Directory` is `<root>/home/etc/EmuSen`, so saves, `games.db`, themes, media, shaders and the settings files all land under Application Support, and the DianaOS shell's `/` is `~/Library/Application Support/EmuSen/home`. The empty `<root>` level above `home` is kept rather than rooting at `EmuSen` itself, so that every platform has the same shape below the root and nothing that composes paths from `ConfigRoot` needs a Mac case.
+
+**The bundle rule comes before the walk.** A bundle published into a checkout's `out/` would otherwise climb to `EmuSen.sln` and use the checkout as its home, which is the one outcome a bundle must not have. The checkout and the marker still win everywhere else, including on a Mac: `dotnet run` from source roots at the checkout, and a Linux-shaped tree published for `osx-*` with `-p:DianaOSMacAppBundle=false` roots at its marker. The path is built as `Library/Application Support` under `SpecialFolder.UserProfile` rather than taken from another `SpecialFolder`, so that it does not depend on how .NET maps its Windows-named folders onto macOS.
+
+**Testability.** `ConfigRoot.ComputeFor(baseDirectory, macOS, userHome)` takes the platform and the home directory as parameters, so `DianaOSSandboxTests` runs every branch on a Linux host against temporary trees; the one-argument form passes `OperatingSystem.IsMacOS()` and the real home. Linux and Windows pass `false` and take exactly the old path, which `Off_macOS_a_bundle_shaped_path_keeps_the_old_fallback` pins.
+
+**The manual is seeded, not read in place.** A Linux publish ships the EmuSen Manual and the hardware notes in `home/Documents`, inside the shell's root, so `cat`, `find` and `grep` reach them. The bundle carries the same tree at `Contents/Resources/home`, and `DataMigration.SeedFromBundle` copies it into the player's `home` each time Mistress starts, with `CopyTree`'s rule: copy, never overwrite, so a file the player already has always wins. Reading the docs straight from the bundle was the alternative and was rejected, for a reason specific to this program rather than a general one: the shell has one root and resolves every path inside it (`man hier`), so a second, read-only root inside the bundle would need a mount-like exception in `DianaOSSandbox.TryResolve`, which is exactly the kind of hole the walled garden exists not to have. Copying costs about 6 MB once and one existence check per file (149 files) per start.
+
+The cost of never overwriting is recorded rather than hidden: **an update does not refresh a document the player already has.** A page that is new in the update appears on the next start, and a page the player deleted comes back, but a page that changed keeps its old text until the player deletes it. Refreshing unedited pages would need a record of what was seeded (a version stamp and a hash per file); that is not built. The same trade was made for the legacy migration in §3.2, where it was the right one because the files were the player's; here they are the program's, and the question stays open.
+
+No migration moves data from an earlier Mac build laid out as a Linux tree; that tree's data stays where it is, and the player copies it across if they want it.
 
 ---
 

@@ -149,5 +149,38 @@ namespace EmuSen.WiseMan.Galaxia
 
             Assert.Equal(0, DataMigration.Run(_destination, _destination));
         }
+
+        // A Mac bundle's Contents/Resources/home reaches the player's home, and never over a file already there - see EmuSen_Galaxia.md §3.4.
+        [Fact]
+        public void A_bundle_seed_fills_what_is_missing_and_keeps_what_the_player_has()
+        {
+            string seed = Path.Combine(_root, "EmuSen.app", "Contents", "Resources", "home");
+            Directory.CreateDirectory(Path.Combine(seed, "Documents", "Man pages"));
+            File.WriteAllText(Path.Combine(seed, "Documents", "Man pages", "README.md"), "shipped");
+            File.WriteAllText(Path.Combine(seed, "Documents", "Manual.md"), "shipped");
+            Directory.CreateDirectory(Path.Combine(_destination, "Documents"));
+            File.WriteAllText(Path.Combine(_destination, "Documents", "Manual.md"), "the player's notes");
+
+            Assert.Equal(1, DataMigration.SeedFromBundle(seed, _destination));
+
+            Assert.Equal("shipped", File.ReadAllText(Path.Combine(_destination, "Documents", "Man pages", "README.md")));
+            Assert.Equal("the player's notes", File.ReadAllText(Path.Combine(_destination, "Documents", "Manual.md")));
+            Assert.Equal("shipped", File.ReadAllText(Path.Combine(seed, "Documents", "Manual.md")));
+            Assert.Equal(0, DataMigration.SeedFromBundle(seed, _destination));
+        }
+
+        [Fact]
+        public void Outside_a_bundle_there_is_nothing_to_seed()
+        {
+            Assert.Equal(0, DataMigration.SeedFromBundle(null, _destination));
+            Assert.False(Directory.Exists(_destination));
+        }
+
+        // The running test host is no bundle, so the production entry point is a no-op here.
+        [Fact]
+        public void The_test_host_has_no_seed_directory()
+        {
+            Assert.Null(EmuSen.Galaxia.ConfigRoot.SeedDirectory);
+        }
     }
 }

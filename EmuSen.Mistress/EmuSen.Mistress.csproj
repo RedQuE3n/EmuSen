@@ -17,6 +17,14 @@
     <ApplicationIcon>Assets\Icon\emusen.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <!-- macOS: a publish for osx-* is EmuSen.app, laid out by DianaOSPublishLayout.targets - see EmuSen_Settings_Reference.md §4.82. The id is the GitHub Pages domain of the project's owner, reversed. -->
+  <PropertyGroup>
+    <DianaOSMacAppName>EmuSen</DianaOSMacAppName>
+    <DianaOSMacBundleIdentifier>io.github.redque3n.emusen</DianaOSMacBundleIdentifier>
+    <DianaOSMacAppIcon>$(MSBuildThisFileDirectory)Assets/Icon/emusen.icns</DianaOSMacAppIcon>
+    <DianaOSMacCategory>public.app-category.games</DianaOSMacCategory>
+  </PropertyGroup>
+
   <ItemGroup>
     <AvaloniaResource Include="Assets\Icon\png\emusen-256.png" />
   </ItemGroup>

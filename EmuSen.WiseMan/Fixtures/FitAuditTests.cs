@@ -124,10 +124,67 @@ namespace EmuSen.WiseMan.Fixtures
             Assert.Contains(faults, f => f.StartsWith("cut at a scrolling edge with no fade: the right"));
         });
 
+        private static readonly FontFamily Inter = new("avares://Avalonia.Fonts.Inter/Assets#Inter");
+        private static readonly FontFamily Barlow = new("avares://EmuSen.Mistress/Assets/Fonts#Barlow Condensed");
+
+        // The floor is the capitals Inter, the desktop's face, draws at SmallestText; the constant is what Inter's H measures (§4.83.7).
+        [Fact]
+        public Task The_floor_is_the_desktop_face_s_capitals_at_the_smallest_size() => UiTest.Run(() =>
+        {
+            GlyphTypeface inter = FitAudit.FaceOf(new Typeface(Inter))!;
+            GlyphTypeface barlow = FitAudit.FaceOf(new Typeface(Barlow))!;
+            Assert.Equal("Inter", inter.FamilyName);
+            Assert.Equal("Barlow Condensed", barlow.FamilyName);
+            Assert.Equal(FitAudit.DesktopCaps, FitAudit.CapsOf(inter), 4);
+            Assert.Equal(0.700, FitAudit.CapsOf(barlow), 3);
+        });
+
+        // A condensed face at the desktop's size draws smaller capitals and fails; at the size that draws the same capitals it passes, and the desktop face passes as it did by size (Q189).
+        [Fact]
+        public Task A_condensed_face_must_reach_the_desktop_face_s_capitals() => UiTest.Run(() =>
+        {
+            // With the audit's slack of 0.05 px of the desktop face, Barlow Condensed must reach about 16.57 px.
+            double reach = (FitAudit.SmallestText - 0.05) * FitAudit.DesktopCaps / FitAudit.CapsOf(FitAudit.FaceOf(new Typeface(Barlow)));
+            Assert.InRange(reach, 16.5, 16.6);
+            Assert.Empty(Audit(new TextBlock { Text = "Desktop", FontFamily = Inter, FontSize = FitAudit.SmallestText }));
+            Assert.Contains(Audit(new TextBlock { Text = "Desktop", FontFamily = Inter, FontSize = FitAudit.SmallestText - 0.1 }), f => f.StartsWith("too small to read"));
+            Assert.Contains(Audit(new TextBlock { Text = "Condensed", FontFamily = Barlow, FontSize = FitAudit.SmallestText }), f => f.StartsWith("too small to read"));
+            Assert.Contains(Audit(new TextBlock { Text = "Condensed", FontFamily = Barlow, FontSize = 16.5 }), f => f.StartsWith("too small to read"));
+            Assert.Empty(Audit(new TextBlock { Text = "Condensed", FontFamily = Barlow, FontSize = 16.6 }));
+        });
+
+        // A drawing's labels are measured in the drawing's own face: condensed labels between the two floors fail (§4.83.7).
+        [Fact]
+        public Task A_drawing_s_condensed_labels_are_held_to_the_desktop_face_s_capitals() => UiTest.Run(() =>
+        {
+            ControllerDiagram Drawing(double height)
+            {
+                var d = new ControllerDiagram { Layout = ControllerLayout.Nintendo64, Width = 1100, Height = height, CompactLabels = true };
+                Avalonia.Controls.Documents.TextElement.SetFontFamily(d, Barlow);
+                Avalonia.Controls.Documents.TextElement.SetFontSize(d, 24);
+                return d;
+            }
+            var probe = Drawing(300);
+            var host = new ToolWindow { Width = 1280, Height = 800, Content = probe };
+            host.Show();
+            double found = 0;
+            var seen = new System.Collections.Generic.List<string>();
+            for (double h = 250; h <= 600 && found == 0; h += 2)
+            {
+                probe.Height = h;
+                host.UpdateLayout();
+                seen.Add($"{h}:{probe.LabelTextSize:F2}");
+                if (probe.LabelTextSize is > 16.1 and < 16.45) found = h;
+            }
+            host.Close();
+            Assert.True(found > 0, "no height gives the labels a size between the two floors: " + string.Join(" ", seen.Where((_, i) => i % 10 == 0)));
+            Assert.Contains(Audit(Drawing(found)), f => f.StartsWith("too small to read: ControllerDiagram"));
+        });
+
         [Fact]
         public Task Words_or_a_drawing_s_labels_too_small_to_read_at_a_distance_are_flagged() => UiTest.Run(() =>
         {
-            Assert.Empty(Audit(new TextBlock { Text = "Big enough", FontSize = FitAudit.SmallestText }));
+            Assert.Empty(Audit(new TextBlock { Text = "Big enough", FontFamily = Inter, FontSize = FitAudit.SmallestText }));
             Assert.Contains(Audit(new TextBlock { Text = "Small print", FontSize = 12 }), f => f.StartsWith("too small to read"));
             var squeezed = new ControllerDiagram { Layout = ControllerLayout.Nintendo64, Height = 260, CompactLabels = false };
             Assert.Contains(Audit(squeezed), f => f.StartsWith("too small to read: ControllerDiagram"));

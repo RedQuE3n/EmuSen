@@ -161,11 +161,25 @@ namespace EmuSen.Mistress.Input
             for (Visual? scope = (from as Visual)?.FindAncestorOfType<ScrollViewer>(); scope is not null && IsWithin(scope, root);
                  scope = scope.FindAncestorOfType<ScrollViewer>())
             {
-                if (Next(focus, from, (InputElement)scope, direction) is { } inside) { inside.Focus(NavigationMethod.Directional); return; }
+                if ((Next(focus, from, (InputElement)scope, direction) ?? Unbuilt(focus, from, (ScrollViewer)scope, direction)) is { } inside) { inside.Focus(NavigationMethod.Directional); return; }
             }
 
             // Nothing in line with the focus: the nearest control that way at all, so a button off to one side is still reached - §4.45.3.
             (Next(focus, from, root, direction) ?? Nearest(root, from, direction))?.Focus(NavigationMethod.Directional);
+        }
+
+        // A virtualising area builds rows again only once its view leaves the range it last built for; a page's scroll that way and back builds them around the view as it is - see EmuSen_Settings_Reference.md §4.83.7.
+        private static InputElement? Unbuilt(IFocusManager focus, InputElement from, ScrollViewer area, NavigationDirection direction)
+        {
+            if (direction is not (NavigationDirection.Up or NavigationDirection.Down) || area.VerticalScrollBarVisibility == ScrollBarVisibility.Disabled) return null;
+            Vector was = area.Offset;
+            double room = direction == NavigationDirection.Down ? area.Extent.Height - area.Viewport.Height - was.Y : was.Y;
+            if (room < 1) return null;
+            area.Offset = was + new Vector(0, (direction == NavigationDirection.Down ? 1 : -1) * (area.Viewport.Height + 1));
+            area.UpdateLayout();
+            area.Offset = was;
+            area.UpdateLayout();
+            return Next(focus, from, area, direction);
         }
 
         // Avalonia 12.1's search answers nothing for a control below and wholly to one side; this scores by distance that way, then twice the distance across.

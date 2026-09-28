@@ -10296,6 +10296,11 @@ Mistress's `ControllerBindingsDiagramTests`: 21 cases, new ones for Z and the le
 look at both sizes; the click and pad-reach cases now run on all four consoles. `SheetLookTests`' desktop case now holds
 that the bindings are framed in the look.
 
+**The broad run**, on 16b8c444 with WiseMan a8abe77d and LunaP 8480521 merged: one run of the Mistress filter without
+`ShaderSettingsWindowTests`, the shader browser, the benches and any GPU, Vulkan or slang test, under `nice -n 10`:
+**1,504 tests, 1,454 passed, 50 skipped (the picture, survey and live tools), none failed, in 5 min 3 s.** LunaP's whole
+suite: 1,514, all passed.
+
 ### 42.14 Mutants of the second stage
 
 Fifteen more, run by §42.6's runner (`probe/bindings/mutate.py`, its C and R series), the predictions written first

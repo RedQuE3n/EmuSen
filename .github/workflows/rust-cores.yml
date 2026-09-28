@@ -7,12 +7,14 @@ on:
     paths:
       - 'EmuSen/Cores/Nintendo/MarsRT - N64/**'
       - 'EmuSen/Cores/Nintendo/MercuryRT - GB/**'
+      - 'EmuSen/Cores/Nintendo/MoonRT - NES/**'
       - 'EmuSen/Cores/RustCores.props'
       - 'EmuSen/Cores/RustCoresPublish.targets'
       - 'EmuSen/EmuSen.csproj'
       - 'EmuSen.WiseMan/Cores/MarsRt*'
       - 'EmuSen.WiseMan/Cores/MarsNative*'
       - 'EmuSen.WiseMan/Cores/MercuryRt*'
+      - 'EmuSen.WiseMan/Cores/MoonRt*'
       - '.github/workflows/rust-cores.yml'
 
 jobs:
@@ -35,6 +37,9 @@ jobs:
           - name: mercuryrt
             dir: 'EmuSen/Cores/Nintendo/MercuryRT - GB'
             symbol: mercury_
+          - name: moonrt
+            dir: 'EmuSen/Cores/Nintendo/MoonRT - NES'
+            symbol: moon_
         platform:
           # ubuntu-22.04 for its glibc (2.35), so the library loads on older distributions than the one that built it.
           - rid: linux-x64
@@ -183,6 +188,11 @@ jobs:
           name: mercuryrt-${{ matrix.rid }}
           path: native
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: moonrt-${{ matrix.rid }}
+          path: native
+
       # EmuSenNative=false: cargo stays out of this build, and the tests load the shipped libraries.
       - name: Build
         working-directory: EmuSen-Project
@@ -193,7 +203,7 @@ jobs:
         run: |
           out=EmuSen-Project/EmuSen.WiseMan/bin/Release/net10.0
           cp native/* "$out/"
-          ls -la "$out"/*marsrt* "$out"/*mercuryrt*
+          ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt*
 
       # Printed in full, so each platform's digests can be read off the log.
       - name: Test the platform digests
@@ -202,7 +212,7 @@ jobs:
 
       - name: Test the Rust cores against the C# cores
         working-directory: EmuSen-Project
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       - uses: actions/upload-artifact@v4
         if: always()

@@ -18,5 +18,11 @@
       <Console>the Game Boy</Console>
       <Fallback>Mercury (C#)</Fallback>
     </EmuSenRustCrate>
+    <EmuSenRustCrate Include="moonrt">
+      <Dir>$(MSBuildThisFileDirectory)Nintendo\MoonRT - NES\</Dir>
+      <Core>MoonRT</Core>
+      <Console>the NES</Console>
+      <Fallback>Moon (C#)</Fallback>
+    </EmuSenRustCrate>
   </ItemGroup>
 </Project>

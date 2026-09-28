@@ -9699,7 +9699,7 @@ Both are clear of a keyboard that covers the lower half with room to spare, and 
 overlapped. Only the Steam case moves: from a physical keyboard (under Steam too, §40.15) and with Mistress's keyboard
 the popup is where it was. The place is not taken from the keyboard's real height, which Steam does not give a program
 it did not start as a Steam game (§40.5); a keyboard taller than about 65% of the screen would reach the popup again.
-Whether the handheld's keyboard leaves the moved popup whole is P268 below, owed.
+Whether the handheld's keyboard leaves the moved popup whole is P268 below; it held on 2026-09-28.
 
 ### 40.17 Tests
 
@@ -9735,7 +9735,7 @@ Twelve break the swap (S1–S12), five the search (K1–K5), two Q165 (E1, E2) a
 
 | # | Predicted | Found | Verdict |
 |---|---|---|---|
-| P268 | *(for the handheld)* With the popup moved, Game Mode's keyboard leaves all of it, title, field and line, in view at 1920×1200 | not checked | owed |
+| P268 | *(for the handheld)* With the popup moved, Game Mode's keyboard leaves all of it, title, field and line, in view at 1920×1200 | checked on the handheld 2026-09-28, with the four-line field at 5% | **held** |
 | P269 | *(written after the run was started and before any of its results were read)* Of 23 mutants, at least 21 are caught on their first valid run; the likeliest survivor is K3 (the search bar hidden under the popup), whose only witness is one visibility assertion made after the view has drawn | 23 of 23 caught on the first run; K3 was caught, by two cases | held for the count; the survivor it named did not survive |
 
 | # | Rule broken | Result |

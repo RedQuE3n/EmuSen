@@ -325,7 +325,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }, default);
 
         [Fact]
-        public Task The_desktop_keeps_its_own_windows_and_the_controller_bindings_keep_the_plain_sheet() => Session.Dispatch(() =>
+        public Task The_desktop_keeps_its_own_windows_and_the_controller_bindings_take_the_look() => Session.Dispatch(() =>
         {
             (MainWindow desk, _) = InGame(bigScreen: false);
             typeof(MainWindow).GetMethod("ShowActiveCheats", Hidden)!.Invoke(desk, null);
@@ -341,8 +341,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             (MainWindow big, PadDriver pad) = InGame();
             Choose(big, pad, "Controller Bindings");
             Assert.IsType<InputSettingsWindow>(Sheets(big).Current);
-            Assert.False(Sheets(big).DrawsMenu(Sheets(big).Current!));
-            Assert.Empty(Sheet(big).GetVisualDescendants().OfType<MenuPanel>());
+            Assert.True(Sheets(big).DrawsMenu(Sheets(big).Current!));
+            Assert.Single(Sheet(big).GetVisualDescendants().OfType<MenuPanel>());
             Stop(big);
             big.Close();
         }, default);

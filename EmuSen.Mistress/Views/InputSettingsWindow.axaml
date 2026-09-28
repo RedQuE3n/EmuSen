@@ -4,19 +4,20 @@
         xmlns:lunac="clr-namespace:EmuSen.LunaP.Controls;assembly=EmuSen.LunaP"
         x:Class="EmuSen.Mistress.Views.InputSettingsWindow"
         Title="Controller Settings"
-        Width="820" Height="720"
-        MinWidth="760" MinHeight="420"
+        Width="1100" Height="800"
+        MinWidth="760" MinHeight="480"
         CanResize="True">
 
     <!-- General first, then one tab per console - see EmuSen_Input.md §5.1. -->
     <DockPanel Margin="16">
 
+        <!-- The words change with what the window is doing - see EmuSen_Settings_Reference.md §4.81. -->
         <TextBlock DockPanel.Dock="Top"
-                   Text="Click Rebind, then press the key or controller button you want. Escape cancels. A key can only do one thing on the same console, so binding it somewhere new clears it from wherever it was."
+                   x:Name="HelpText"
                    TextWrapping="Wrap"
                    Margin="0,0,0,10" />
 
-        <Border DockPanel.Dock="Bottom" Margin="0,12,0,0">
+        <Border x:Name="FooterBar" DockPanel.Dock="Bottom" Margin="0,12,0,0">
             <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Grid.Column="0"
                            x:Name="ConflictText"
@@ -24,8 +25,10 @@
                            TextWrapping="Wrap"
                            VerticalAlignment="Center" />
                 <lunac:ButtonBar Grid.Column="1">
-                    <Button Content="Reset to Defaults" Click="OnResetClick" />
-                    <Button Content="Close" Click="OnCloseClick" IsCancel="False" />
+                    <ToggleButton x:Name="TestToggle" Content="Test Buttons" Click="OnTestToggleClick"
+                                  AutomationProperties.HelpText="While on, every press lights up on the drawing and nothing else happens" />
+                    <Button x:Name="ResetButton" Content="Reset to Defaults" Click="OnResetClick" />
+                    <Button x:Name="CloseButton" Content="Close" Click="OnCloseClick" IsCancel="False" />
                 </lunac:ButtonBar>
             </Grid>
         </Border>
@@ -36,6 +39,39 @@
                 <ScrollViewer>
                     <StackPanel Spacing="4" Margin="0,8,0,0">
 
+                        <!-- The pad's settings beside player 1's pad as SDL reads it, whose sticks show the deadzone as a ring - see EmuSen_Settings_Reference.md §4.81. -->
+                        <Grid x:Name="GamepadSection" ColumnDefinitions="Auto,*">
+                            <StackPanel Grid.Column="0" Spacing="4" MaxWidth="520">
+                                <TextBlock Text="Gamepad" FontWeight="Bold" Margin="0,0,0,6" />
+                                <TextBlock x:Name="ControllerStatusText" Margin="0,0,0,8" TextWrapping="Wrap" />
+                                <lunac:LunaSwitch x:Name="AnalogStickAsDpadCheckBox"
+                                          Label="Use the left stick as a d-pad"
+                                          IsCheckedChanged="OnAnalogStickAsDpadChanged" />
+                                <lunac:HintText Text="On a console with no stick of its own, the left stick then presses the d-pad."
+                                               Margin="24,2,0,8" />
+                                <Grid ColumnDefinitions="Auto,200,Auto" Margin="24,0,0,0">
+                                    <TextBlock Grid.Column="0" Text="Stick deadzone" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <!-- Named for a screen reader, which has no reason to connect the text to its left to it - LunaP.md §24.2. -->
+                                    <Slider Grid.Column="1"
+                                            x:Name="DeadzoneSlider"
+                                            AutomationProperties.Name="Stick deadzone"
+                                            AutomationProperties.HelpText="How far the stick must travel before it counts as a direction."
+                                            Minimum="0.05" Maximum="0.95"
+                                            SmallChange="0.05" LargeChange="0.1"
+                                            ValueChanged="OnDeadzoneChanged" />
+                                    <TextBlock Grid.Column="2" x:Name="DeadzoneText" VerticalAlignment="Center" Margin="10,0,0,0" />
+                                </Grid>
+                                <lunac:HintText Text="How far the stick must travel before it counts as a direction; the dashed ring on each stick of the drawing. Raise it if your stick drifts."
+                                               Margin="24,2,0,0" />
+                            </StackPanel>
+                            <lunac:ControllerDiagram Grid.Column="1" x:Name="RawDiagram" Layout="Gamepad" IsInteractive="False" ShowsLabels="False"
+                                                     Height="260" Margin="16,0,0,0" MinWidth="280"
+                                                     AutomationProperties.Name="Your controller"
+                                                     AutomationProperties.HelpText="Player 1's pad as it is read: every button, both sticks and both triggers." />
+                        </Grid>
+
+                        <Separator Margin="0,14,0,10" />
+
                         <TextBlock Text="Emulator Hotkeys" FontWeight="Bold" Margin="0,0,0,2" />
                         <lunac:HintText Text="Actions on the emulator itself, shared by every console. Fast Forward and Rewind apply while held; the rest fire once per press."
                                        Margin="0,0,0,6" />
@@ -44,36 +80,6 @@
                             <TextBlock Grid.Column="1" Text="Keyboard" FontWeight="SemiBold" />
                         </Grid>
                         <StackPanel x:Name="HotkeysPanel" Spacing="6" />
-
-                        <Separator Margin="0,14,0,10" />
-
-                        <TextBlock Text="Gamepad" FontWeight="Bold" Margin="0,0,0,6" />
-                        <TextBlock x:Name="ControllerStatusText" Margin="0,0,0,8" />
-                        <lunac:LunaSwitch x:Name="AnalogStickAsDpadCheckBox"
-                                  Label="Use the left stick as a d-pad"
-                                  IsCheckedChanged="OnAnalogStickAsDpadChanged" />
-                        <lunac:HintText Text="Neither of these consoles reads an analog axis, so the stick is only useful mapped onto the d-pad directions."
-                                       Margin="24,2,0,8" />
-                        <Grid ColumnDefinitions="Auto,240,Auto" Margin="24,0,0,0">
-                            <TextBlock Grid.Column="0" Text="Stick deadzone" VerticalAlignment="Center" Margin="0,0,10,0" />
-                            <!-- The label is the TextBlock to its left, which a
-                                 screen reader has no reason to connect to it.
-                                 This was the one control in this window with no
-                                 name at all, and a nameless slider is worse than
-                                 a nameless button: it announces a bare number,
-                                 changing as you press an arrow key, with nothing
-                                 to say what it measures. LunaP.md §24.2. -->
-                            <Slider Grid.Column="1"
-                                    x:Name="DeadzoneSlider"
-                                    AutomationProperties.Name="Stick deadzone"
-                                    AutomationProperties.HelpText="How far the stick must travel before it counts as a direction."
-                                    Minimum="0.05" Maximum="0.95"
-                                    SmallChange="0.05" LargeChange="0.1"
-                                    ValueChanged="OnDeadzoneChanged" />
-                            <TextBlock Grid.Column="2" x:Name="DeadzoneText" VerticalAlignment="Center" Margin="10,0,0,0" />
-                        </Grid>
-                        <lunac:HintText Text="How far the stick must travel before it counts as a direction. Raise it if your stick drifts."
-                                       Margin="24,2,0,0" />
 
                         <Separator Margin="0,14,0,10" />
 

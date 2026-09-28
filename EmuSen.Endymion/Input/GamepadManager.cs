@@ -34,6 +34,9 @@ namespace EmuSen.Endymion.Input
         // Raised from Poll for each pad plugged in or pulled out after Start; the pads present at Start are not announced.
         public event Action<PadConnection>? PadChanged;
 
+        // Raised at the end of each Poll, so a window that shows the pad reads it on the one poll there is - see EmuSen_Settings_Reference.md §4.81.
+        public event Action? Polled;
+
         // Every open pad, in the order they were opened; the first is player 1's and the first controller's.
         public IReadOnlyList<ConnectedPad> Pads => _pads;
 
@@ -112,6 +115,7 @@ namespace EmuSen.Endymion.Input
                 OpenAttached(announce: true);
             }
             _devices.Update();
+            Polled?.Invoke();
         }
 
         // Stick-as-d-pad and its threshold - see EmuSen_Settings_Reference.md §4.4.

@@ -20,7 +20,7 @@ using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Mistress.Views
 {
-    public partial class InputSettingsWindow : ToolWindow, IPadCapturing
+    public partial class InputSettingsWindow : ToolWindow, IPadCapturing, IPadDriven
     {
         private readonly ControllerKeyBindings _keyBindings;
         private readonly GamepadBindings _gamepadBindings;
@@ -28,8 +28,7 @@ namespace EmuSen.Mistress.Views
         private readonly GamepadManager? _gamepad; // null from the previewer/tests
         private readonly AppSettings _appSettings;
 
-        // Key and pad listeners are separate - an event vs a poll. Both carry the
-        // console, since the same control means a different binding per tab.
+        // Key and pad listeners are separate (an event vs a poll) and carry the console; a region chosen on a drawing sets both - see §4.81.
         private (string Console, PadControl Button)? _listeningForKey;
         private HotkeyAction? _listeningForHotkey;
         private (string Console, PadControl Button)? _listeningForPad;
@@ -60,6 +59,7 @@ namespace EmuSen.Mistress.Views
             _padPollTimer?.Stop();
             if (_listeningForPad is { } target) _rebindPadButtons[target].Content = RebindPadText;
             _listeningForPad = null;
+            RefreshDiagramLabels();
         }
 
         // XAML handlers fire during InitializeComponent - see EmuSen_Settings_Reference.md §4.6.
@@ -103,6 +103,7 @@ namespace EmuSen.Mistress.Views
             BuildConsoleTabs();
             SelectConsoleTab(selectedConsole);
             RefreshConflicts();
+            RefreshDiagramLabels();
 
             MirrorPlayer1ToPlayer2CheckBox.IsChecked = _appSettings.MirrorPlayer1ToPlayer2;
             AnalogStickAsDpadCheckBox.IsChecked = _appSettings.AnalogStickAsDpad;
@@ -112,6 +113,11 @@ namespace EmuSen.Mistress.Views
 
             // Tunnel, not bubbling, or the focused button eats the key (§4.2); on the content, which a sheet takes with it (§4.45.2).
             ((Control)Content!).AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
+            ((Control)Content!).AddHandler(KeyUpEvent, OnPreviewKeyUp, RoutingStrategies.Tunnel, handledEventsToo: true);
+            // A key typed with the focus on nothing reaches the window alone.
+            AddHandler(KeyDownEvent, (s, e) => { if (ReferenceEquals(e.Source, this)) OnPreviewKeyDown(s, e); }, RoutingStrategies.Tunnel, handledEventsToo: true);
+            AddHandler(KeyUpEvent, (s, e) => { if (ReferenceEquals(e.Source, this)) OnPreviewKeyUp(s, e); }, RoutingStrategies.Tunnel, handledEventsToo: true);
+            SetUpTester();
 
             // Notices a pad plugged in or out while the window is open.
             if (_gamepad is not null)
@@ -125,6 +131,7 @@ namespace EmuSen.Mistress.Views
             {
                 _padPollTimer?.Stop();
                 _statusPollTimer?.Stop();
+                TearDownTester();
             };
 
             _initialized = true;
@@ -141,7 +148,9 @@ namespace EmuSen.Mistress.Views
         {
             foreach (CoreDescriptor console in _consoles)
             {
-                Tabs.Add(console.Console, new ScrollViewer { Content = BuildConsolePanel(console) });
+                var page = new ScrollViewer();
+                page.Content = WithDiagram(console.Console, page, BuildConsolePanel(console));
+                Tabs.Add(console.Console, page);
             }
         }
 
@@ -182,15 +191,7 @@ namespace EmuSen.Mistress.Views
             TextBlock keyText = NewValueLabel(CurrentKeyLabel(console, button));
             _keyLabels[key] = keyText;
 
-            // FOURTEEN BUTTONS IN SEVEN IDENTICAL PAIRS, and until LunaP 0.5.0 gave this window a
-            // way to say otherwise, every one of them announced as "Rebind Key" or "Clear" with
-            // nothing to say which binding it belonged to. A sighted user reads the row; a screen
-            // reader user got the same two words seven times over and no way to tell them apart.
-            //
-            // The CAPTION stays and the context goes in help text, which is announced after the
-            // name. Renaming the button to "Rebind A on SNES" would break voice control, because
-            // somebody saying "click rebind key" needs those words to be the name. This is the same
-            // trade LunaP made for PathPickerRow's Browse buttons - LunaP.md §24.2.
+            // The caption stays for voice control and the context goes in help text - see LunaP.md §24.2.
             Button rebindKey = Ui.Button(RebindKeyText, () => StartListeningForKey(console, button))
                 .HelpText($"Keyboard key for {console} {FullName(button)}");
             _rebindKeyButtons[key] = rebindKey;
@@ -288,8 +289,18 @@ namespace EmuSen.Mistress.Views
         private string CurrentPadLabel(string console, PadControl control)
         {
             if (!PadControls.IsButton(control, out PadButton button)) return control <= PadControl.LeftStickRight ? "Left stick" : "Right stick";
-            return _gamepadBindings.For(console).ButtonToPad.TryGetValue(button, out SDL.GamepadButton p) ? PadName(p) : Unbound;
+            string? bound = _gamepadBindings.For(console).ButtonToPad.TryGetValue(button, out SDL.GamepadButton p) ? PadName(p) : null;
+            string? trigger = TriggerFor(button);
+            return bound is null ? trigger ?? Unbound : trigger is null ? bound : $"{bound} or {trigger}";
         }
+
+        // L2 and R2 are always their trigger, past half its travel, whatever button is bound beside it - see EmuSen_Input.md §7.3 and §4.81.
+        private static string? TriggerFor(PadButton button) => button switch
+        {
+            PadButton.L2 => "Left Trigger",
+            PadButton.R2 => "Right Trigger",
+            _ => null,
+        };
 
         // Short enough for the button column; the help text carries the whole name.
         private static string ShortName(PadControl control) => control switch
@@ -311,8 +322,7 @@ namespace EmuSen.Mistress.Views
             _ => control.ToString(),
         };
 
-        // The connected pad's printed label where SDL3 knows it, else the
-        // button's position - see EmuSen_Settings_Reference.md §4.6.
+        // The connected pad's printed label where SDL3 knows it, else the button's position - see EmuSen_Settings_Reference.md §4.6.
         private string PadName(SDL.GamepadButton pad) => _gamepad?.ButtonLabel(pad) ?? pad.ToString();
 
         private string CurrentHotkeyLabel(HotkeyAction action) =>
@@ -340,10 +350,12 @@ namespace EmuSen.Mistress.Views
             if (_listeningForHotkey is HotkeyAction a) _rebindHotkeyButtons[a].Content = RebindKeyText;
             _listeningForKey = null;
             _listeningForHotkey = null;
+            RefreshDiagramLabels();
         }
 
         private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
         {
+            if (TesterTakesKey(e)) return;
             if (_listeningForKey is null && _listeningForHotkey is null) return;
 
             // A bare modifier would be an unpressable binding.
@@ -377,6 +389,8 @@ namespace EmuSen.Mistress.Views
                 }
             }
 
+            // A capture begun from the drawing listens for both; a key answers it, or Escape cancels it, for the pad too.
+            if (_listeningForKey is { } answered && _listeningForPad == answered) StopListeningForPad();
             _listeningForKey = null;
             _listeningForHotkey = null;
             RefreshKeyLabels();
@@ -395,6 +409,7 @@ namespace EmuSen.Mistress.Views
                 _rebindKeyButtons[kv.Key].Content = RebindKeyText;
             }
             RefreshConflicts();
+            RefreshDiagramLabels();
         }
 
         private void RefreshHotkeyLabels()
@@ -511,6 +526,17 @@ namespace EmuSen.Mistress.Views
                 _padArmed = pressed is null;
                 return;
             }
+            // Pulling the trigger for L2 or R2 binds it alone: the button beside it is cleared, since the trigger is always read.
+            if (pressed is null && TriggerFor(button) is not null
+                && _gamepad.RawAxis(button == PadButton.L2 ? SDL.GamepadAxis.LeftTrigger : SDL.GamepadAxis.RightTrigger) >= 0.5)
+            {
+                _gamepadBindings.For(console).Unbind(button);
+                _gamepadBindings.Save();
+                _listeningForPad = null;
+                if (_listeningForKey == target) ClearKeyListening();
+                RefreshPadLabels();
+                return;
+            }
             if (pressed is not SDL.GamepadButton padButton)
             {
                 if (_padListening.Elapsed >= PadCaptureTimeout) StopListeningForPad();
@@ -522,6 +548,7 @@ namespace EmuSen.Mistress.Views
 
             _listeningForPad = null;
             _padReleaseWait = true;
+            if (_listeningForKey == target) ClearKeyListening();
             RefreshPadLabels();
         }
 
@@ -533,6 +560,7 @@ namespace EmuSen.Mistress.Views
                 kv.Value.Text = CurrentPadLabel(console, button);
                 _rebindPadButtons[kv.Key].Content = RebindPadText;
             }
+            RefreshDiagramLabels();
         }
 
         private void UpdateControllerStatus()
@@ -571,6 +599,7 @@ namespace EmuSen.Mistress.Views
             _appSettings.StickDeadzone = DeadzoneSlider.Value;
             _appSettings.Save();
             if (_gamepad is not null) _gamepad.StickDeadzone = _appSettings.StickDeadzone;
+            RawDiagram.StickRing = _appSettings.StickDeadzone;
             UpdateDeadzoneText();
         }
 

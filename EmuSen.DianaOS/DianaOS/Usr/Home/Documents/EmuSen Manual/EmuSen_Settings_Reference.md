@@ -5733,6 +5733,120 @@ may still leave rows unbuilt. That frame now belongs to the controller bindings'
   setting does it.
 - **Hardware.** No real pad, keyboard or handheld was used; everything here ran headless.
 
+### 4.81 Controller Bindings: each console's pad drawn, rebound from the drawing, and an input tester (2026-09-27)
+
+Decided 2026-09-27 (`EmuSen_BigPicture.md` §10.1): the Controller Bindings window draws each console's controller as
+vector art with the bindings mapped onto its buttons, and a button pressed on the pad or the keyboard lights up on the
+drawing, so the window doubles as an input tester. The design record, the measurements and the mutants are §42 of that
+plan; the drawing itself is LunaP's `ControllerDiagram` (`LunaP.md` §198). Every console's pad is drawn: the NES pad,
+the Game Boy, the Super NES pad and the Nintendo 64 pad (§4.81.1 has what the second stage changed).
+
+**What the window shows.** The tabs are unchanged (General, then one per console, oldest first; L1 and R1 step them).
+A console's tab is now its controller, filling the height the page shows, with a label beside every button, each arm of
+the cross, each direction of a stick and each trigger. A label names the button and shows the key bound to it and the
+pad button bound to it, or a dash for none; a line joins it to the button. Below the drawing a line of words says what
+the window is doing. Scrolled below that is the list the window always had, under "All Bindings": the same bindings with
+their Rebind Key, Clear, Rebind Pad and Clear Pad buttons, kept as a second view for a screen reader and for clearing a
+binding, which the drawing does not do.
+
+**Rebinding from the drawing.** Choosing a button (a click on it or on its label, the pad's A on its label, or Enter on
+its label from the keyboard) listens for **a key and a pad button at once**: whichever comes first is bound, and the
+other listener stops. The label asks for them ("Press a key", "Press a button") and the line below names the button.
+Escape cancels both. The pad listener keeps §4.45.4's rules: the press that chose the button is not the binding, the
+bound button must be let go before the pad is the window's again, and the pad gives up after five seconds, since every
+button it could be cancelled with is one it could bind; the key listener goes on after that, and B then cancels it. A
+stick direction has no pad button (`EmuSen_Input.md` §7.3), so choosing one listens for a key alone. The rules of a key
+binding are unchanged: a key does one thing on a console, and a key taken from a hotkey is cleared there.
+
+**Moving on the drawing with the pad or the keyboard.** The focus is on a label; the pad's cross (or the left stick) and
+the arrow keys move it to the button drawn nearest that way on the controller, not to the label that happens to stand
+there: on the Super NES, up from B is X and left from X is Y, where the labels in their column would give A. Past the
+drawing's edge the pad's move goes on to the window's other controls, as §4.45.3 moves them.
+
+**The tester.** While the window is open and nothing is being captured, every key held that is bound on the shown
+console lights its button, and so does every button held on **player 1's pad**, read through that console's own
+bindings: the SNES tab lights A for whatever pad button is bound to the SNES's A. The drawn stick's knob follows the
+pad's left stick (with the analog deadzone of §7.3), and is pushed all the way by a key held for a direction; a stick
+direction lights past half its travel, which is where Mars reads a C button (`MarsCore.CButtonThreshold`). On a console
+that reads no stick, the left stick lights the cross when "Use the left stick as a d-pad" is on, past the stick deadzone,
+exactly when the game would take it as the cross. L2 and R2 light at half a trigger's travel, as `GamepadManager` reads
+them. Nothing lights while a binding is being captured, so a capture's own press is not shown as a test. The line below
+the drawing names the pad being read. The tester reads the pad on the **one poll that already exists**: the main
+window's 16 ms tick calls `GamepadManager.Poll`, which now raises `Polled` at its end, and the window redraws from what
+that poll read; it starts no timer of its own. The pad capture's own 50 ms poll is §4.45.4's and is unchanged.
+
+**Test Buttons.** The pad cannot both steer the window and be tried on it: A would rebind whatever label has the focus,
+and B, which is the Super NES's A under the default bindings, would close the window. So the window has a mode for
+trying buttons, Test Buttons, entered with the pad's Y, the Test Buttons button, or its keyboard focus and Enter. In it
+every pad button and every key lights and does nothing else. It is left by holding B for one second (a short press of B
+is a button being tried), by Escape, or by the button again. The words above the drawing, the line below it and, on a
+sheet, the footer all say how.
+
+**On a big-screen sheet** the footer names this window's buttons, "A Rebind  Y Test buttons  B Back  L1 R1 Console",
+and "Every press lights up  Hold B Stop testing" while testing, swapped for the A–B swap of §4.61 as every hint is; the
+footer the sheet had is given back when the window closes. The words above the tabs are hidden on a sheet, where the
+footer and the line below the drawing say the same. The labels grow with the sheet's scaled text (`LunaP.md` §198.2).
+ES-DE's look for this window (Barlow Condensed, ES-DE's colours, rounded panels) is to come from the shared style layer
+another piece of work is building; the drawing takes its colours from the theme's accent, text and surface resources,
+so it follows whatever that layer sets.
+
+**Which region is which control.** The drawing's regions are LunaP's names; `ControllerDiagrams` (Mistress) maps the
+console's controls onto them. On every console but the N64 a region is named for the control (`A`, `Up`, `Select`). On
+the N64: L2 is `Z`, the right stick's four directions are `CUp`, `CDown`, `CLeft` and `CRight`, and the left stick's are
+`StickUp`, `StickDown`, `StickLeft` and `StickRight`, as Mars reads them (`Mars_Core.md` §5). Every control a console
+reads has a region and every region a control; a test holds both directions.
+
+**Tests.** `ControllerBindingsDiagramTests` (13 cases at the first stage, 21 now; §4.81.1): every control of each drawn console has a region and every region
+a control; a click on each region of both drawings chooses it and starts its capture, and Escape ends it; each SNES
+button pressed on a simulated pad lights its region alone and letting go clears it, and the stick lights the cross; a
+bound key lights its region while held and an unbound one lights nothing; the N64 stick moves its knob, lights its
+direction and goes home, the right stick lights the C buttons, and a key pushes the knob all the way; rebinding from
+the drawing by key and by pad updates the binding, the drawing's label and the list; the pad alone reaches every
+region of both drawings through the router; the cross moves by the drawing and A rebinds; Test Buttons takes every press
+until B is held for a second, and takes Enter from the keyboard until Escape; nothing lights during a capture; on a sheet
+the footer is the window's and is given back. `ControllerBindingsPictureTool` writes the pictures of §42 when
+`EMUSEN_BINDINGS_PNG` names a folder, and does nothing otherwise. The window's older tests (`InputSettingsWindowTests`,
+its layout and render tests, and the pad tests of §4.45) pass unchanged.
+
+**What it does not cover.**
+- No real pad was used; every press here is a simulated pad's.
+- The drawing cannot clear a binding; the list below it can.
+- A second pad lights nothing, since the game hears player 1 alone (§4.61); the capture still takes any pad the
+  interface reads.
+- ES-DE's look on a big-screen sheet (done in §4.81.1).
+
+#### 4.81.1 The second stage: every console drawn, lines off the drawing, Z, the pad itself, and ES-DE's look (2026-09-27)
+
+The plan's record is `EmuSen_BigPicture.md` §42.10 to §42.16.
+
+- **Every console's tab is its drawing.** The NES pad and the Game Boy are drawn as the first two were.
+- **No line runs across the drawing.** Each label now stands on the side its button can be left by the shortest way
+  that crosses no other button, and its line runs that way (LunaP §198.2). The labels have moved from where the first
+  stage put them.
+- **Z is the left trigger.** A trigger pulled past half its travel has always pressed L2 and R2, which on the N64 is Z,
+  whatever the binding file holds (`EmuSen_Input.md` §7.3); the window showed Z as unbound. Its pad column and label now
+  say "Left Trigger" (R2 "Right Trigger"), and "*button* or Left Trigger" when a button is bound beside it. Pulling the
+  trigger while rebinding Z takes such a button off again. Nothing is added to `gamepadbindings.json`: a trigger is not
+  an entry in it, so old and new files read it alike.
+- **The pad itself, on General.** The Gamepad section is now the first thing on General, and beside its switch and
+  deadzone slider is a modern pad drawn without labels, lit by player 1's own buttons whatever any console's bindings
+  say, with its triggers filling, its sticks moving, and a dashed ring on each stick at the deadzone, which follows the
+  slider. A pad's own letters are printed on its face buttons where SDL knows them. It shows while General is the tab.
+- **ES-DE's look on a big-screen sheet**, through the shared layer of §4.80: framed as a menu, its own help bar (*Rebind*,
+  *Test buttons*, *Back*, L1/R1 *Console*; *Hold to stop testing* while testing), the words above the tabs, the line
+  under the drawing and the Close and Test Buttons buttons not shown, **Reset to Defaults moved to the end of General**,
+  and the footer row shown only when there is a conflict. Every table's columns take their widest cell in the look, where
+  the desktop's fixed widths cut "REBIND KEY" to "REBIND K". The desktop is unchanged.
+
+**Tests** added: Z and the left trigger; the General tab's pad, its buttons, trigger, stick and ring; the look at
+1280 × 800 and 1920 × 1200 (framed, its help bar, no Close or Test Buttons, Reset on General, the footer hidden, and no
+single-line text on any tab narrower than its words); the click and pad-reach cases over all four consoles; and
+`SheetLookTests`' desktop case now holds that the bindings take the look.
+
+**What it does not cover.** No real pad. The look's switch draws its focus box through its words (`EmuSen_BigPicture.md`
+Q187), and a scrolling area shows part of a row at its edge (Q186); both belong with the window-look audit, which was not
+in WiseMan when this was built.
+
 ### 4.82 macOS: EmuSen.app in /Applications (2026-09-27)
 
 Decided 2026-09-27: macOS installs as `EmuSen.app` in `/Applications`. The Linux publish is a self-contained folder with

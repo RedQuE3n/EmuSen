@@ -129,7 +129,7 @@ namespace EmuSen.Mistress.Views
             : new[]
             {
                 new HintEntry("Rebind") { Button = MainWindow.AcceptGlyph },
-                new HintEntry("Test buttons") { Button = PadGlyphButton.North },
+                new HintEntry("Test buttons") { Button = PadHints.Glyph(PadGlyphButton.North) },
                 new HintEntry("Back") { Button = MainWindow.BackGlyph },
                 new HintEntry("") { Button = PadGlyphButton.LeftShoulder },
                 new HintEntry("Console") { Button = PadGlyphButton.RightShoulder },

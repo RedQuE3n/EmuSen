@@ -107,7 +107,7 @@ namespace EmuSen.WiseMan.Mistress
                     TabControl tabs = sheets.SheetOf(bindings)!.GetVisualDescendants().OfType<TabControl>().First();
                     tabs.SelectedIndex = TabOf(console);
                     pad.Tick();
-                    for (int settle = 0; settle < 3; settle++) { UiTest.Capture(main); pad.Tick(); }
+                    for (int settle = 0; settle < 3; settle++) { UiTest.Capture(main); System.Threading.Thread.Sleep(300); pad.Tick(); }
                     UiTest.Capture(main).SavePng(Path.Combine(folder, $"bigscreen-{console}-{w}x{h}-idle.png"));
 
                     bindings.SetTesting(true);

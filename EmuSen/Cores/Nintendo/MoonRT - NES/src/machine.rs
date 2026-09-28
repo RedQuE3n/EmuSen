@@ -333,7 +333,22 @@ mod tests {
         let mut wrong = state.clone();
         wrong[4] = 2;
         assert_eq!(m.load_state(&wrong).map_err(|e| e.status()), Err(-4));
+        let mut later = m.clone();
+        for _ in 0..3 {
+            later.run_frame().unwrap();
+        }
+        let moved = save(&later);
+        assert_ne!(moved, state);
+        assert_eq!(m.load_state(&moved[..moved.len() - 1]).map_err(|e| e.status()), Err(-2));
         assert_eq!(m, before);
+    }
+
+    #[test]
+    fn an_image_without_the_magic_is_not_ines_at_any_length() {
+        let mut image = rom(0, 1, 1, &[0x4C, 0x00, 0xC0]);
+        image[0] = b'M';
+        assert_eq!(Machine::load_rom(&image).map(|_| ()), Err(LoadError::Rom(RomError::NotInes)));
+        assert_eq!(Machine::load_rom(&image[..3]).map(|_| ()), Err(LoadError::Rom(RomError::NotInes)));
     }
 
     #[test]

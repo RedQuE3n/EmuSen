@@ -50,6 +50,7 @@ mod tests {
         assert_eq!(snake("_a12"), "a12");
         assert_eq!(snake("_irqsFired"), "irqs_fired");
         assert_eq!(snake("PC"), "pc");
+        assert_eq!(snake("_bank0Mode"), "bank0_mode");
     }
 
     /// A writer's label and the field it writes, and a reader's field and its comment, name the same C# field.

@@ -120,6 +120,32 @@ namespace EmuSen.WiseMan.Cores
             AssertSameBytes(csharp, machine.Save());
         }
 
+        // A flag of 0 makes the C# reader leave the object as it was and read on, so every later field is read out of place.
+        [Fact]
+        public void A_class_flag_of_zero_is_skipped_as_the_csharp_reader_skips_it()
+        {
+            Assert.True(MoonMachine.Available, MoonNative.Report);
+            byte[] rom = Rom(4, 8, (0, Busy));
+            MoonCore core = Load(rom);
+            for (int i = 0; i < 10; i++) core.RunFrame();
+            byte[] state = Save(core);
+
+            using var machine = new MoonMachine(rom);
+            machine.Load(state);
+            string layout = machine.Layout();
+            byte[] absent = (byte[])state.Clone();
+            foreach (string field in new[] { "Cpu._bus", "Apu.Dmc" }) absent[OffsetOf(layout, field)] = 0;
+
+            MoonCore reader = Load(rom);
+            for (int i = 0; i < 10; i++) reader.RunFrame();
+            reader.LoadState(new MemoryStream(absent));
+            byte[] csharp = Save(reader);
+            Assert.False(csharp.AsSpan().SequenceEqual(state), "the patches changed nothing, so the test compared nothing");
+
+            machine.Load(absent);
+            AssertSameBytes(csharp, machine.Save());
+        }
+
         [Fact]
         public void A_state_that_is_not_moons_or_is_cut_short_is_refused_and_changes_nothing()
         {
@@ -130,6 +156,12 @@ namespace EmuSen.WiseMan.Cores
             using var machine = new MoonMachine(rom);
             machine.Load(state);
             Assert.Throws<InvalidDataException>(() => machine.Load(state.AsSpan(0, state.Length - 1)));
+            MoonCore later = Load(rom);
+            for (int i = 0; i < 10; i++) later.RunFrame();
+            byte[] moved = Save(later);
+            Assert.False(moved.AsSpan().SequenceEqual(state), "ten frames changed nothing, so a partial read would go unseen");
+            Assert.Throws<InvalidDataException>(() => machine.Load(moved.AsSpan(0, moved.Length - 1)));
+            AssertSameBytes(state, machine.Save());
             Assert.Throws<InvalidDataException>(() => machine.Load(new byte[] { 0x4D, 0x45, 0x52, 0x43, 3, 0, 0, 0 }));
             byte[] version = (byte[])state.Clone();
             version[4] = 2;
@@ -137,6 +169,10 @@ namespace EmuSen.WiseMan.Cores
             AssertSameBytes(state, machine.Save());
 
             Assert.Throws<InvalidDataException>(() => new MoonMachine(new byte[] { 0x4E, 0x45, 0x53 }));
+            byte[] unmarked = SyntheticNesRom.Build(mapper: 0);
+            unmarked[0] = (byte)'M';
+            Exception csharp = Assert.ThrowsAny<Exception>(() => Load(unmarked));
+            Assert.Equal(csharp.GetType(), Assert.ThrowsAny<Exception>(() => new MoonMachine(unmarked)).GetType());
             Assert.Throws<NotSupportedException>(() => new MoonMachine(SyntheticNesRom.Build(mapper: 5)));
         }
 

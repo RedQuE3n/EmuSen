@@ -153,6 +153,7 @@ impl Cartridge {
     pub fn read_state(&mut self, r: &mut StateReader) -> StateResult {
         r.bytes(&mut self.chr)?; // Chr
         self.cpu_cycle = r.i64()?; // CpuCycle
-        r.bytes(&mut self.prg_ram) // PrgRam
+        r.bytes(&mut self.prg_ram)?; // PrgRam
+        Ok(())
     }
 }

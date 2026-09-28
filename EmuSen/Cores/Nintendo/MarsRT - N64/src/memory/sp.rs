@@ -54,6 +54,7 @@ impl Default for Rsp {
 }
 
 impl State for Rsp {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.u64s("Accumulator", &rsp::widen(&self.accumulator, &self.accumulator_top));
         w.bool("Broke", self.broke);
@@ -106,6 +107,7 @@ pub struct SpInterface {
 }
 
 impl State for SpInterface {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.class("Processor", &self.processor);
         w.u32("_dramAddress", self.dram_address);

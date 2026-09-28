@@ -10,6 +10,8 @@ pub mod vi;
 use std::ptr;
 use std::sync::Arc;
 
+use emusen_native::ffi::{copy_text, input, result as status};
+
 use crate::cpu::cop0::ENTRY_HI;
 use crate::cpu::segments::{self, Mode, Segment};
 use crate::cpu::tlb::TlbResult;
@@ -17,11 +19,11 @@ use crate::machine::Machine;
 use crate::memory::bus_access::map;
 use crate::memory::rom_patches::{RomPatch, RomPatches};
 use crate::rom::RomImage;
-use crate::state::{State, StateResult, StateWriter};
+use crate::state::{State, StateWriter};
 use crate::vi::scan::Scanout;
 
 /// A null handle or buffer.
-pub const STATUS_NULL: i32 = -1;
+pub const STATUS_NULL: i32 = emusen_native::ffi::status::NULL;
 /// An image that is not a Nintendo 64 cartridge.
 pub const STATUS_NOT_A_ROM: i32 = -9;
 /// A memory this library has no number for.
@@ -224,18 +226,6 @@ impl Core {
     }
 }
 
-fn status(result: StateResult<usize>) -> i64 {
-    match result {
-        Ok(n) => n as i64,
-        Err(e) => e.status() as i64,
-    }
-}
-
-/// # Safety
-/// `data` must be valid for `len` bytes, or null with `len` zero.
-unsafe fn input<'a>(data: *const u8, len: usize) -> &'a [u8] {
-    if data.is_null() { &[] } else { unsafe { std::slice::from_raw_parts(data, len) } }
-}
 
 /// # Safety
 /// `data` must be valid for `len` bytes, or null.
@@ -350,13 +340,10 @@ pub unsafe extern "C" fn mars_machine_save_state(core: *mut Core, out: *mut u8, 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mars_machine_state_layout(core: *const Core, snapshot: u32, out: *mut u8, len: usize) -> i64 {
     let Some(c) = (unsafe { core.as_ref() }) else { return STATUS_NULL as i64 };
-    status(c.machine.layout(snapshot != 0).map(|text| {
-        if !out.is_null() {
-            let n = text.len().min(len);
-            unsafe { ptr::copy_nonoverlapping(text.as_ptr(), out, n) };
-        }
-        text.len()
-    }))
+    match c.machine.layout(snapshot != 0) {
+        Ok(text) => unsafe { copy_text(&text, out, len) },
+        Err(e) => e.status() as i64,
+    }
 }
 
 /// A machine booted from a cartridge image, as `MarsCore.LoadRom` builds it; the save and pak files as the host read them, or null.

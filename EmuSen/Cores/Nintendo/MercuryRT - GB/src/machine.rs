@@ -307,6 +307,23 @@ fn wrap(address: i32, size: usize) -> usize {
     if size == 0 { 0 } else { address.rem_euclid(size as i32) as usize }
 }
 
+
+impl emusen_native::ffi::StateMachine for Machine {
+    type Error = StateError;
+    fn load_state(&mut self, data: &[u8]) -> StateResult {
+        Machine::load_state(self, data)
+    }
+    fn state_size(&self) -> usize {
+        Machine::state_size(self)
+    }
+    fn save_state(&self, out: &mut [u8]) -> StateResult<usize> {
+        Machine::save_state(self, out)
+    }
+    fn layout(&self) -> String {
+        Machine::layout(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

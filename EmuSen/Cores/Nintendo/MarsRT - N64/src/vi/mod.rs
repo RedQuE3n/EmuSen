@@ -40,6 +40,7 @@ impl Default for Vi {
 }
 
 impl State for Vi {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.i64("<Fields>k__BackingField", self.fields);
         w.i64("_debt", self.debt);

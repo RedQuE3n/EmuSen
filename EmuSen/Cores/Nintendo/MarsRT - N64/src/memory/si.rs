@@ -27,6 +27,7 @@ impl Default for SiInterface {
 }
 
 impl State for SiInterface {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.structures("Controllers", &self.controllers);
         w.u32("_dramAddress", self.dram_address);

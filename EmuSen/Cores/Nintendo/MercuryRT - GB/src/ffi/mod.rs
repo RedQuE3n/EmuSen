@@ -4,26 +4,17 @@ pub mod debug;
 
 use std::ptr;
 
+use emusen_native::ffi::input;
+
 use crate::machine::Machine;
 use crate::memory::cartridge::RomError;
 
 /// A null handle or buffer.
-pub const STATUS_NULL: i32 = -1;
+pub const STATUS_NULL: i32 = emusen_native::ffi::status::NULL;
 /// An image shorter than the 336-byte header.
 pub const STATUS_TOO_SHORT: i32 = -9;
 /// A cartridge type no board here implements.
 pub const STATUS_UNSUPPORTED_BOARD: i32 = -10;
-
-unsafe fn input<'a>(data: *const u8, len: usize) -> &'a [u8] {
-    if data.is_null() || len == 0 { &[] } else { unsafe { std::slice::from_raw_parts(data, len) } }
-}
-
-fn status(result: Result<usize, crate::state::StateError>) -> i64 {
-    match result {
-        Ok(n) => n as i64,
-        Err(e) => e.status() as i64,
-    }
-}
 
 /// A model number that is not Auto, Game Boy or Game Boy Color.
 pub const STATUS_UNKNOWN_MODEL: i32 = -11;
@@ -56,38 +47,10 @@ pub unsafe extern "C" fn mercury_machine_free(machine: *mut Machine) {
     }
 }
 
-/// The state's fields; zero, or a negative status, and a failed load changes nothing.
-///
-/// # Safety
-/// `machine` must be live or null; `data` valid for `len` bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mercury_machine_load_state(machine: *mut Machine, data: *const u8, len: usize) -> i32 {
-    let Some(m) = (unsafe { machine.as_mut() }) else { return STATUS_NULL };
-    match m.load_state(unsafe { input(data, len) }) {
-        Ok(()) => 0,
-        Err(e) => e.status(),
-    }
-}
+emusen_native::state_exports!(Machine, mercury_machine_load_state, mercury_machine_save_state_size, mercury_machine_save_state, mercury_machine_state_layout);
 
-/// # Safety
-/// `machine` must be live or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mercury_machine_save_state_size(machine: *const Machine) -> i64 {
-    unsafe { machine.as_ref() }.map_or(STATUS_NULL as i64, |m| m.state_size() as i64)
-}
 
-/// The bytes written, or a negative status.
-///
-/// # Safety
-/// `machine` must be live or null; `out` valid for `len` bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mercury_machine_save_state(machine: *const Machine, out: *mut u8, len: usize) -> i64 {
-    let Some(m) = (unsafe { machine.as_ref() }) else { return STATUS_NULL as i64 };
-    if out.is_null() {
-        return STATUS_NULL as i64;
-    }
-    status(m.save_state(unsafe { std::slice::from_raw_parts_mut(out, len) }))
-}
+
 
 /// An opcode no SM83 has; the run's `detail` carries it and its address.
 pub const STATUS_ILLEGAL_OPCODE: i32 = -20;
@@ -298,17 +261,3 @@ pub unsafe extern "C" fn mercury_machine_set_rom_patches(machine: *mut Machine, 
     *m.bus.rom_patches = Some(Box::new(map));
 }
 
-/// The state's layout as UTF-8 text, copied up to `len` bytes; returns its whole length, or a negative status.
-///
-/// # Safety
-/// `machine` must be live or null; `out` valid for `len` bytes, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mercury_machine_state_layout(machine: *const Machine, out: *mut u8, len: usize) -> i64 {
-    let Some(m) = (unsafe { machine.as_ref() }) else { return STATUS_NULL as i64 };
-    let text = m.layout();
-    if !out.is_null() {
-        let n = text.len().min(len);
-        unsafe { ptr::copy_nonoverlapping(text.as_ptr(), out, n) };
-    }
-    text.len() as i64
-}

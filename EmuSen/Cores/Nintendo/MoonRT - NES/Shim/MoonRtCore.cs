@@ -15,7 +15,6 @@ namespace EmuSen.Cores.Nintendo.MoonRT
     public sealed class MoonRtCore : ICore, IFrameProfiler, ICheatRegistryHost, IStateFormat, IFrameBufferPool, IDisposable
     {
         private const int SaveEveryNFrames = 300;
-        private const int StateVersion = 3;
 
         private MoonMachine? _machine;
         private Cartridge? _header;
@@ -40,7 +39,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
         public long TotalFrames => _machine?.TotalFrames ?? 0;
         public int AudioSampleRate => 44100;
         public IReadOnlyList<PadButton> SupportedButtons => MoonCore.PadButtons;
-        int IStateFormat.StateVersion => StateVersion;
+        int IStateFormat.StateVersion => MoonCore.StateVersion;
 
         // One phase: the frame is one call into Rust, which has no seam to time its parts through - see Moon_Native.md §2.1.
         public IReadOnlyList<(string Name, double Milliseconds)> LastFramePhases => new[] { ("frame", _lastFrameMs) };
@@ -190,9 +189,9 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             stream.CopyTo(copy);
             byte[] state = copy.ToArray();
             if (state.Length < 8) throw new EndOfStreamException("Unable to read beyond the end of the stream.");
-            if (BitConverter.ToUInt32(state, 0) != 0x4E4F4F4D) throw new InvalidDataException("Not a Moon save state.");
+            if (BitConverter.ToUInt32(state, 0) != MoonCore.StateMagic) throw new InvalidDataException("Not a Moon save state.");
             int version = BitConverter.ToInt32(state, 4);
-            if (version != StateVersion) throw new InvalidDataException($"Save state version {version} is not {StateVersion}.");
+            if (version != MoonCore.StateVersion) throw new InvalidDataException($"Save state version {version} is not {MoonCore.StateVersion}.");
             _machine.Load(state);
         }
 

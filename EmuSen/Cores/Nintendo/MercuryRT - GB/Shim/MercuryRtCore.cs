@@ -43,7 +43,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         public long TotalFrames => _machine?.TotalFrames ?? 0;
         public int AudioSampleRate => 44100;
         public IReadOnlyList<PadButton> SupportedButtons => MercuryCore.PadButtons;
-        int IStateFormat.StateVersion => 7;
+        int IStateFormat.StateVersion => MercuryCore.StateVersion;
 
         private GbModel _model;
         private string? _romPath;
@@ -212,10 +212,10 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             stream.CopyTo(copy);
             byte[] state = copy.ToArray();
             if (state.Length < 4) throw new EndOfStreamException("Unable to read beyond the end of the stream.");
-            if (BitConverter.ToUInt32(state, 0) != 0x4352454D) throw new InvalidDataException("Not a Mercury save state.");
+            if (BitConverter.ToUInt32(state, 0) != MercuryCore.StateMagic) throw new InvalidDataException("Not a Mercury save state.");
             if (state.Length < 8) throw new EndOfStreamException("Unable to read beyond the end of the stream.");
             int version = BitConverter.ToInt32(state, 4);
-            if (version is < 5 or > 7) throw new InvalidDataException($"Save state version {version} is not one this build reads (5 to 7).");
+            if (version is < MercuryCore.OldestReadableVersion or > MercuryCore.StateVersion) throw new InvalidDataException($"Save state version {version} is not one this build reads ({MercuryCore.OldestReadableVersion} to {MercuryCore.StateVersion}).");
             _machine.Load(state);
         }
 

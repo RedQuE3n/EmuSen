@@ -5,10 +5,3 @@ version = 4
 [[package]]
 name = "emusen-native"
 version = "0.1.0"
-
-[[package]]
-name = "moonrt"
-version = "0.1.0"
-dependencies = [
- "emusen-native",
-]

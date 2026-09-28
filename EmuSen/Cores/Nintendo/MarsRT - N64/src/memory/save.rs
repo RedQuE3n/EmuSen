@@ -110,6 +110,7 @@ impl Eeprom {
 }
 
 impl State for Eeprom {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.bytes("Data", &self.data[..]);
         w.bool("Dirty", self.dirty);
@@ -139,6 +140,7 @@ impl Sram {
 }
 
 impl State for Sram {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.bytes("Data", &self.data);
         w.bool("Dirty", self.dirty);
@@ -177,6 +179,7 @@ impl Default for FlashRam {
 }
 
 impl State for FlashRam {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.bytes("Data", &self.data[..]);
         w.bool("Dirty", self.dirty);

@@ -10,6 +10,11 @@ fn main() {
     for path in ["src", "Cargo.toml", "Cargo.lock"] {
         println!("cargo:rerun-if-changed={path}");
     }
+    let manifest = fs::read_to_string(root.join("Cargo.toml")).unwrap_or_default();
+    for dependency in path_dependencies(&manifest) {
+        println!("cargo:rerun-if-changed={dependency}/src");
+        println!("cargo:rerun-if-changed={dependency}/Cargo.toml");
+    }
     let source = format!("{:016x}", source_digest(&root));
 
     let flags: Vec<String> = env::var("CARGO_ENCODED_RUSTFLAGS")
@@ -108,43 +113,4 @@ fn fail(message: &str) -> ! {
     exit(1);
 }
 
-// FNV-1a over what the library is built from: src/ but its tests, Cargo.toml and Cargo.lock, by path, carriage returns dropped.
-fn source_digest(root: &Path) -> u64 {
-    let mut files = vec![root.join("Cargo.toml"), root.join("Cargo.lock")];
-    collect(&root.join("src"), &root.join("src").join("tests"), &mut files);
-    let mut named: Vec<(String, PathBuf)> = files
-        .into_iter()
-        .map(|p| (p.strip_prefix(root).unwrap_or(&p).to_string_lossy().replace('\\', "/"), p))
-        .collect();
-    named.sort();
-    let mut hash = 0xcbf2_9ce4_8422_2325u64;
-    let mut feed = |bytes: &[u8]| {
-        for &b in bytes {
-            if b != b'\r' {
-                hash = (hash ^ b as u64).wrapping_mul(0x0100_0000_01b3);
-            }
-        }
-    };
-    for (name, path) in named {
-        feed(name.as_bytes());
-        feed(&[0]);
-        feed(&fs::read(&path).unwrap_or_default());
-        feed(&[0]);
-    }
-    hash
-}
-
-fn collect(dir: &Path, skip: &Path, into: &mut Vec<PathBuf>) {
-    let Ok(entries) = fs::read_dir(dir) else { return };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path == skip {
-            continue;
-        }
-        if path.is_dir() {
-            collect(&path, skip, into);
-        } else {
-            into.push(path);
-        }
-    }
-}
+include!("pgo/digest.rs");

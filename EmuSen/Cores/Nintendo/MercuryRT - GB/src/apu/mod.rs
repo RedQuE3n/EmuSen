@@ -399,6 +399,7 @@ fn to_sample(value: f64) -> i16 {
 }
 
 impl State for Apu {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.bool("LastSequencerBit", self.last_sequencer_bit);
         w.i32("LeftVolume", self.left_volume);

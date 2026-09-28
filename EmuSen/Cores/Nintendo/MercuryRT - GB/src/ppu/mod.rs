@@ -161,6 +161,7 @@ impl Ppu {
 }
 
 impl State for Ppu {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.u8("BgPaletteIndex", self.bg_palette_index);
         w.bytes("BgPaletteRam", &self.bg_palette_ram);

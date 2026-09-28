@@ -311,6 +311,10 @@ could not afford it every refresh. The view is stale by at most one refresh. Wri
 
 ### 3.1 The state, byte for byte (measured by a reflection walk)
 
+*Since 2026-09-28 the codec is shared.* The writer, the reader, the layout listing, the naming rule, `Skip<T>` and the
+state half of the C ABI live in `emusen-native` (`EmuSen_RustState.md`), which every Rust core builds from. MercuryRT's `state.rs` keeps its magic, version and refusals; its state exports are `state_exports!`. Its status codes
+were already inside the shared rule and did not change.
+
 The format is `StateSerializer`'s reflection walk, and MercuryRT must reproduce it exactly. The facts below were
 checked by walking live objects with the serializer's own query (`EmuSen/Common/StateSerializer.cs:36-44`):
 

@@ -250,6 +250,11 @@ measurement the whole of Phase G used, applied across two languages.
 
 ### 5.1 The state, byte for byte
 
+*Since 2026-09-28 the codec is shared.* The writer, the reader, the layout listing, the naming rule, `Skip<T>` and the
+state half of the C ABI live in `emusen-native` (`EmuSen_RustState.md`), which every Rust core builds from. MarsRT's `state.rs` keeps its magic, versions, refusals and `boxed`. Its three refusals of its own moved from −5, −6
+and −8 to −12, −13 and −14, and the interface went to 10. MarsRT keeps its own state exports, because they take a snapshot flag.
+What that cost the PGO profile is §6.17.12.
+
 *Stage 1a, 2026-09-22.* The port's first step is the machine's data and not its behaviour: every field the C#
 serializer walks, held in Rust structs, and a reader and writer under which MarsRT's state **is** the C# save state,
 byte for byte. The C# serializer therefore stays the format, as §5 requires, and a state written by either machine
@@ -6205,7 +6210,13 @@ recorded for retraining:
    Edits inside them are not a reason by themselves.
 3. **Before a speed measurement that is to be quoted**, so that the number is the profile's and not the profile's
    minus an unknown decay.
-4. Otherwise not: the verdict file's `stale` is information, not a defect.
+4. **After adding a dependency, or changing one's version** (added 2026-09-28, §6.17.12). Every function's name
+   carries its crate's disambiguator, a hash of what cargo passes as `-C metadata`, and that metadata hashes the
+   crate's dependencies (§6.17.1). So adding `emusen-native` renamed every MarsRT function, not only those moved into
+   it: 1,193 of them had no record afterwards, against 22 before. The profile guided none of them, while the verdict
+   still read `stale`, because `build.rs` compares sources and cannot see a name. Renaming a dependency does the same;
+   the crate's rename from `emusen-state` changed the disambiguator a second time.
+5. Otherwise not: the verdict file's `stale` is information, not a defect.
 
 ##### 6.17.7 Where the profile applies, measured
 
@@ -6351,3 +6362,31 @@ under that contention may not suit the uncontended path; LLVM's aarch64 block pl
 respond to a profile differently from x86-64's; and the portable vector fallback, which the desktop never trains, is a
 large share of this target's hot code. Distinguishing these would take the unguided and guided libraries' disassembly
 of the rasteriser and the vector units, and a run with fewer workers; neither was done.
+
+##### 6.17.12 The state crate, and what it did to the profile (2026-09-28)
+
+MarsRT's codec, naming rule, `Skip<T>` and state helpers moved into `emusen-native`, the crate every Rust core now
+builds from (`EmuSen_RustState.md`). Three findings belong here.
+
+- **The digest covers path dependencies.** Until the move, `build.rs` hashed only MarsRT's own sources. It now also
+  hashes each `path = "..."` dependency's `Cargo.toml` and `src/`, tests left out, with names relative to the crate.
+  The function is `pgo/digest.rs`, included by `build.rs` and by `src/tests/pgo_digest.rs`, which pins it. The
+  verdict reads `stale`: the source is `dbc1f949edc3d0f6`, and the profile was trained on `36a5237755f1c652`. It was
+  already `stale` before the move, at `dbcf0e9632091207`.
+- **The profile guides nothing in MarsRT after the move**, measured with `-pgo-warn-missing-function`:
+  - 1,193 of MarsRT's functions have no record, against 22 before;
+  - adding the dependency changed the crate's disambiguator from `CsjrJNaGb5TN3` to `CslNauWps3kSY`, and the
+    crate's rename to `emusen-native` changed it again, to `Cs2b562MR2kMn` (read from the published library's symbols).
+    The profile holds neither;
+  - this is §6.17.1's mechanism, and the new §6.17.6 rule 4.
+
+  The `stale` verdict cannot show it.
+- **A prediction retired.** Before the move, it was predicted that only the moved functions would lose their
+  guidance, and that, being cold (a state is saved four times a second, never per frame), they would cost nothing.
+  **Refuted**: the moved functions were not the ones that mattered, since the dependency renamed all the rest (rule 4
+  of §6.17.6). The loss predicted in their place was §6.17.5's whole gain, 7–9% on SM64 and OoT.
+- **Merged without a retrain.** Decided 2026-09-28: the crate is merged with the profile as it is, and the retrain is
+  deferred. Until it is run, a `linux-x64` build of MarsRT is in effect unguided, and its cost is the prediction above,
+  not a measurement. The retrain, with the interleaved rounds that measure both the loss and its recovery, is owed;
+  it can wait for MarsRT's move to the common interface (`EmuSen_NativeCores.md` §7), which renames its exports and
+  retrains in any case.

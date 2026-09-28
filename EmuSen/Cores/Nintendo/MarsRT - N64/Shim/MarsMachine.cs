@@ -67,10 +67,10 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             -2 => "the state is truncated",
             -3 => "not a Mars save state",
             -4 => "an unknown state version",
-            -5 => "an RDRAM size that is neither 4 MB nor 8 MB",
-            -6 => "more pending display-processor words than a snapshot holds",
             -7 => "the buffer is too small",
-            -8 => "pending display-processor words, which only a snapshot can carry",
+            -12 => "an RDRAM size that is neither 4 MB nor 8 MB",
+            -13 => "more pending display-processor words than a snapshot holds",
+            -14 => "pending display-processor words, which only a snapshot can carry",
             _ => $"status {status}",
         };
 

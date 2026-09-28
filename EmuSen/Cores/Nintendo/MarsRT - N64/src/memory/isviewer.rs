@@ -21,6 +21,7 @@ impl Default for IsViewer {
 }
 
 impl State for IsViewer {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.bytes("_memory", &self.memory[..]);
     }

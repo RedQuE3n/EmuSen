@@ -13,6 +13,7 @@ pub struct PiInterface {
 }
 
 impl State for PiInterface {
+    type Error = crate::state::StateError;
     fn write_state(&self, w: &mut StateWriter) {
         w.u32("_cartAddress", self.cart_address);
         w.u32("_dramAddress", self.dram_address);

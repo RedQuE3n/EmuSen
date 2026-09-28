@@ -2256,7 +2256,10 @@ nothing here changes.
 **What was changed.** A flush no longer waits: the device's thread submits a batch into one of two slots and goes on
 recording, and a slot is staged again only once whatever last read it has finished (§42.8). The presenter writes the
 device's picture into the raster by runs of a row and composes on 32-bit words (§42.8). The pictures, the states and the
-sound are unchanged. The antialiasing setting of the player's settings does nothing at three (§42.5).
+sound are unchanged. On the handheld (on the charger) three on the device went from 16.06 to 15.05 ms a frame and through
+Mistress's frame loop from 15.30 to 13.95, inside the 16.7 ms field; on the desktop from 9.18 to 8.63 (§42.10). What is left is
+the device's own time at 800 MHz, and keeping the device busier does not raise its clock short of saturating it (§42.13).
+The antialiasing setting of the player's settings does nothing at three (§42.5).
 
 ### 42.1 The report: the player's own counters
 
@@ -2484,11 +2487,42 @@ The driver in Mistress's shape (`pgo/driver`, published self-contained with the 
 Antialiasing=3x Gpu=true RdpWorkers=4 mistress=1 warmup=120`, 600 frames, three rounds): Perfect Dark 8.89 (8.51–9.07) to
 **8.12** (7.82–8.42) ms a frame, Super Mario 64 5.60 (5.52–5.62) to **5.02** (4.94–5.06).
 
-*Handheld.* **Not measured.** The handheld left the network shortly after 09:12, before the change was built, and had not returned
-when this was written; the measurements owed there are the same rounds (Perfect Dark U at one, two and three on the device,
-the European state at one and three, Super Mario 64 at one and three), the driver in Mistress's shape, and the diagnostic
-build's timeline and device timestamps after the change, which would say whether the scan now goes out earlier in the pair
-(H2) and whether the device's busy share moves its clock (H4). Everything said above of the handheld is of the base.
+*Handheld*, the same rounds, measured on 2026-09-28 from 11:12 once the handheld was back on the network. **It was on
+the charger throughout** (82 to 89 per cent, charging), where the morning's base runs of §42.2 were on battery, and that moved
+the base: at three 16.06 ms rather than 18.28, the memory and fabric clocks now at 800–937 and 937–1,200 MHz for most of each
+run instead of 400 and 400. The device stayed at 800 MHz. So this table and §42.2 are not one table; this one compares like
+with like. Every run was refused while Mistress ran (none was), and runs under a `systemd-run --user` unit:
+
+| handheld, on the charger | base | change | difference |
+| --- | --- | --- | --- |
+| Perfect Dark U, 1× | 8.36 (8.35–8.38) | 8.49 (8.46–8.51) | +0.13; in four more rounds 8.57 against 8.40, −0.17 |
+| 2×, the device | 12.10 (11.99–12.15) | **11.30** (11.30–11.34) | −0.79 |
+| 3×, the device | 16.06 (16.05–16.20) | **15.05** (15.03–15.16) | −1.01 |
+| its presenter's join at 3× | 6.82 | 5.83 | |
+| Perfect Dark E in play (B's stand-in), 1× | 25.91 (25.89–26.43) | 26.23 (26.13–26.34) | +0.31; in four more rounds 25.96 against 26.20 |
+| 3×, the device | 30.02 (30.02–30.36) | 30.23 (30.11–30.41) | +0.21, ranges overlapping |
+| Super Mario 64 (the control), 1× | 3.87 (3.86–3.92) | 3.84 (3.82–3.88) | within spread |
+| 3×, the device | 11.26 (11.10–11.26) | **10.36** (10.34–10.44) | −0.89 |
+| the driver, Mistress's shape, Perfect Dark 3× | 15.30 (15.29–15.40) | **13.95** (13.91–14.03) | −1.35 |
+| the driver, Super Mario 64 3× | 10.44 (10.38–10.55) | **9.59** (9.55–9.65) | −0.85 |
+
+*The European state at one.* Nothing the change touches runs at one on it except the composition, which is faster, and yet
+its medians lie 0.2 to 0.3 ms over the base's. Two builds were added to tell a cause from the binary: the base with only the
+device's two files of the change (`gpuonly`), whose code cannot run at one, and the base with only the scan-out's (`scanonly`).
+In four rotated rounds of all four at one, the European state ran 25.96 (base), 26.20 (change), **26.49** (`gpuonly`) and 26.45
+(`scanonly`), and Perfect Dark U 8.57, 8.40, 8.62 and 8.50. A build whose changed code never executes is the slowest of the
+four by 0.5 ms, so a difference of this size at one on this machine is the binary's layout, not the work, and the change at
+one is **not shown to be slower and not shown to be equal**: within 0.3 ms either way. On the desktop it is within spread.
+
+*After the change, where a picture goes.* The diagnostic build with the change (the same instrumentation as §42.3, now with
+the device's timestamps working on the handheld too), on the charger, 280 frames, means a field against the base's diagnostic
+build run beside it: the frame 15.98 to 14.91 ms; the emulation thread's join 6.85 to 5.83; the device's thread's fence waits
+4.42 to 0.14, but its waits for a slot to come free 0 to 2.70; the presenter's wait for that thread 4.61 to 4.27 and for the
+fence 2.56 to 2.55; the presenter's copies 1.72 to 0.52 (the picture into the raster) and 0.88 to 0.77 (the composition).
+**The device's own work did not move and is now the bound**: 6.56 ms a field in both builds (shading 4.53, the scan 1.77, that is
+3.56 ms each of the 300 scans, the inputs' copies 0.25, the picture's copy 0.12), 13.1 ms of each pair of fields, at 800 MHz,
+43.6 per cent busy against 40.7. The flush that no longer waits lets the device's thread record while the device shades, and
+the device then has its batches back to back; what is left of the chain is the device's time at its lowest clock.
 
 *Hashes.* Every run of a case ended on one state hash and one pictures hash in both builds: Perfect Dark U 48CF34CE9832AE73,
 pictures 4D87C31E823F7A6E at one, E69B17ABDD006DEE at two, C483DE4176D42B0F at three; the European state BA82A767473D7ADA,
@@ -2500,8 +2534,15 @@ level**: Super Mario 64 at three fell by 0.36 ms, inside the 0.2 to 0.8 the pred
 from 5.5, the base running 0.7 ms above §41's figure in these rounds (other builds were compiling on the machine; both builds
 ran through the same load, interleaved). **At one, held**: the change's medians are within the base's range in all three
 rounds and in five more of the two games at one (Perfect Dark 6.61 against 6.52, Super Mario 64 3.35 against 3.36, those
-rounds slower throughout for the same reason). **H1 to H6 are untested** (the handheld, above). **The hashes held** on
-every run.
+rounds slower throughout for the same reason). **H1 refuted narrowly**: the presenter's work after the fence fell from 2.60 to
+1.29 ms, not under 1.2; the picture's copy fell as predicted and the composition only by a tenth on this processor. **H2
+refuted in size**: the fence waits left the device's thread's path (4.42 to 0.14 ms), but it now waits for slots instead, since
+the device is the bound, and the presenter's wait for it moved only 0.34 ms a field. **H3 refuted in size**: at three −1.01 ms
+(16.06 to 15.05 on the charger) where 1.8 to 3.3 was predicted from the battery's 18.3; at two −0.79, against 0.8 to 2.3. The
+prediction assumed the chain's host links were a larger share than the device's own time; §42.3's accounting on the battery
+and the timestamps above say they were not. **H4 held**: 800 MHz throughout, busy 40.7 to 43.6. **H5 held for Perfect Dark
+U, and for the European state only within the layout's noise** (above). **H6 held**: Super Mario 64 at one within spread, at
+three −0.89. **The hashes held** on every run, on both machines, and the handheld's hashes are the desktop's.
 
 ### 42.11 The settings
 
@@ -2509,9 +2550,11 @@ These are measured choices, not changes; nothing in Mistress's defaults was alte
 
 - **Antialiasing 3x at resolution three can be set to Off** with no change to anything drawn or timed (§42.5). At three and
   four the setting is inert; at two, "2x" is honoured and draws at four, which is §42.2's 4× row on the handheld (22.1 ms).
-- **Resolution two on the device** is the setting that fits the handheld's 16.7 ms field in this scene before the change:
-  14.84 ms a frame against 18.28 at three, one run each, the join 4.75 against 7.54. Whether three fits after the change
-  (H3 predicts 15.0 to 16.5) is the first thing owed on the handheld.
+- **Resolution three fits this scene after the change on the charger, narrowly**: 15.05 ms a frame unpaced, 13.95 through
+  the driver in Mistress's shape, against a 16.7 ms field; the base was 16.06 and 15.30. On battery, where the base was 18.28 and
+  the memory and fabric clocks fall to their lowest (§42.4), three is likely still over; the change on battery was not timed.
+- **Resolution two on the device** is the setting that fits the scene with room on either power source: 11.30 ms a frame on the
+  charger after the change, 14.84 on battery before it.
 - **Resolution one** (8.95 ms) is the fallback for regime B's scenes, where the multiple is not the main cost: B's stand-in costs
   22.7 ms a frame at one and 25.6 at three on the desktop, and the rest is the emulation thread's own.
 - **The device's clock** is the governor's (§42.4). SteamOS's own manual GPU clock is the obvious experiment, but on this
@@ -2520,9 +2563,7 @@ These are measured choices, not changes; nothing in Mistress's defaults was alte
 
 ### 42.12 What is not done
 
-- **The device's clock.** The largest term on the handheld is the device's own time at 800 MHz, and the governor that picks it
-  is not the emulator's to set. A load that keeps the device busier might raise it; none was tried, and a busy loop to fool a
-  governor would spend the battery the governor is saving.
+- **The device's clock** is the governor's, and keeping the device busy does not move it (§42.13).
 - **The memory and fabric clocks.** Their drop to 400 MHz lengthens the emulation thread's field by about half on the handheld
   (§42.4), at one as at three; it is the likeliest cause of B's size there, and it is not addressed.
 - **Regime B** itself is the emulation thread's own work (§41.10's ground: the CPU's decoded tier, the signal processor, the
@@ -2530,7 +2571,54 @@ These are measured choices, not changes; nothing in Mistress's defaults was alte
 - **Deeper overlap.** The picture must still be composed before the second field's present returns, which exactness here
   requires; so the chain's end is the scan's fence plus the copies, and only a faster device or a presenter that composed
   straight from the device's words could shorten it further. The second was not tried.
-- **The settings window** could show that antialiasing is off at three and four; not changed.
+- **The settings window** now shows that antialiasing is off at three and four (`EmuSen_Multicore.md` §13.1).
+- **The change on battery** was not timed, nor was a battery's drain: the handheld was on the charger for every run after it.
 - **PGO.** The functions changed here keep the checked-in profile's records only where their bodies did not change; like §41,
   the profile was not retrained, and both builds of each comparison used it alike.
 - **The C# core** is unchanged.
+
+### 42.13 Keeping the device awake: measured, and not built
+
+*The question, asked 2026-09-28:* would a small, steady amount of extra work on the device lift it from 800 MHz, and the memory
+and fabric clocks from their lowest levels, enough to pay for itself? No prediction was written before these runs; what was expected, and
+is stated here only as that, was that a load of a few per cent would hold the clock at a middle level.
+
+*The measurement.* `gpuload` (a diagnostic example, not kept): a buffer on the device MarsRT would pick, filled at a fixed size and
+interval, each fill submitted and waited for. `mon.py` sampled for eight seconds of each run as in §42.4. On the charger, 97 to 98
+per cent:
+
+| load, alone | the device's share | busy | its clock | memory, fabric (most of the run) | package power |
+| --- | --- | --- | --- | --- | --- |
+| none | 0 | 0 | 800 | 800, 1,200 | 4.2 W |
+| 1 MB every 16 ms | 1.8% | 0 | 800 | 800, 1,200 | 4.6 |
+| 16 MB every 8 ms | 8.3% | 6 | 800 | 800, 1,200 | 4.7 |
+| 16 MB every 4 ms | 10.4% | 7 | 800 | **937, 937** | 5.4 |
+| 64 MB every 8 ms | 25% | 23 | 800 | 800, 1,200 | 5.6 |
+| 64 MB every 4 ms | 31% | 28 | 800 | 937, 937 | 6.3 |
+| 64 MB every 2 ms | 47% | 42 | 800 | 937, 937 | 7.7 |
+| 64 MB continuously | 100% | 91 | **2,700** | 937, 937 | **25.5** |
+
+| beside a game, 900 frames | alone | with 16 MB every 8 ms | the device busy, alone → with |
+| --- | --- | --- | --- |
+| Perfect Dark U 2× | 10.42 ms | 10.53 | 35 → 33 |
+| 3× | 13.36 | 13.47 | 49 → 52 |
+| 4× | 17.16 | 17.46 | 59 → 61 |
+| Super Mario 64 2× | 5.91 | 6.00 | 38 → 18 |
+| 3× | 8.52 | 8.73 | 51 → 36 |
+| 4× | 12.29 | 12.52 | 58 → 59 |
+
+(The game runs here are the change's build from 900 frames, and are not comparable with §42.10's 600-frame rounds.)
+
+*The expectation was wrong.* The governor never raised the device from 800 MHz below saturation — not at 42 per cent busy
+alone, nor at 61 beside the game at four — and raised it to 2,700 only for a load that kept it 91 per cent busy, at 25.5 W against
+7.7. A small load moved the memory and fabric clocks up a level at most, which did not show in the frames. Beside every game and
+multiple the load made the frame slower, by 0.1 to 0.3 ms, since it takes the device's time from the game's batches. The only
+load that lifts the clock would cost some 18 W, past the handheld's 33 W sustained limit together with the game, and would
+compete with the game for the device it was meant to speed up. The setting was **not built**. The battery's drain was not
+measured, because the handheld was on the charger; package power stands in for it.
+
+*Whether SteamOS's own manual clock would do it.* `steamos-manager`'s journal lines for `SetManualGpuClock` come from its root
+manager (`steamos_manager::manager::root`), and the error is the kernel's, "Invalid argument (os error 22)", on writing the clock,
+not a refusal of permission. `pp_od_clk_voltage` offers a range of 800 to 2,700 MHz and `power_dpm_force_performance_level` is
+`auto`; the likeliest reading is that the value or the sequence written is one this kernel's Phoenix support does not accept (a
+manual level is required before a clock), which is a device or driver limit. It was not tested further, since that needs root.

@@ -18,7 +18,7 @@ namespace EmuSen.Mistress.Views
 
         private readonly AppSettings _settings;
         private readonly Dropdown _type = new() { Name = "ControllerTypeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
-        private readonly LunaSwitch _swap = new() { Name = "SwapPadButtonsSwitch", Label = "Swap the A and B buttons" };
+        private readonly LunaSwitch _swap = new() { Name = "SwapPadButtonsSwitch", Label = "Swap the A/B and X/Y buttons" };
         private readonly LunaSwitch _firstOnly = new() { Name = "FirstControllerOnlySwitch", Label = "Only the first controller" };
         private readonly LunaSwitch _notices = new() { Name = "ControllerNotificationsSwitch", Label = "Show a notice" };
         private readonly Dropdown _keyboard = new() { Name = "OnScreenKeyboardDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -64,7 +64,7 @@ namespace EmuSen.Mistress.Views
             new FieldRow
             {
                 Label = "Button Swap",
-                Hint = "A and B trade what they do in the library, the menus and every sheet, for a controller with a Nintendo layout. Games keep their own bindings.",
+                Hint = "A and B trade what they do in the library, the menus and every sheet, and so do X and Y, for a controller with a Nintendo layout. Games keep their own bindings.",
                 Content = _swap,
             },
             new FieldRow
@@ -76,7 +76,7 @@ namespace EmuSen.Mistress.Views
             new FieldRow
             {
                 Label = "On-Screen Keyboard",
-                Hint = "What types into a big picture text row. Automatic uses Steam's keyboard under Steam, the field alone with a keyboard, and EmuSen's keyboard with a controller. EmuSen's is always its own.",
+                Hint = "What types into a big picture text row and the search. Automatic types into the field from a keyboard, and with a controller uses Steam's keyboard under Steam and EmuSen's keyboard otherwise. EmuSen's is always its own.",
                 Content = _keyboard,
             },
             new FieldRow

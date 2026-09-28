@@ -218,9 +218,9 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // The swap trades Accept and Back, and nothing else, in the library, the menu, a sheet, the keyboard and the hints.
+        // The swap trades Accept and Back, and Search and the X function, in the library, the menu, a sheet, the keyboard and the hints (§4.79.5).
         [Fact]
-        public Task The_swap_trades_accept_and_back_everywhere_in_the_interface() => Session.Dispatch(() =>
+        public Task The_swap_trades_A_with_B_and_X_with_Y_everywhere_in_the_interface() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver first) = LibraryOf(3, a => a.SwapPadButtons = true);
             first.Tick();
@@ -240,11 +240,11 @@ namespace EmuSen.WiseMan.Mistress
             first.A();
             Assert.False(window.GetControl<SheetLayer>("Sheets").IsPresenting);
 
-            // X and Y are not swapped: Y still searches, and the keyboard's own A and B trade places.
-            first.X();
-            Assert.Null(OnScreenKeyboard.OpenOver(window));
+            // X and Y trade too: X searches, and the keyboard's own letters trade places.
             first.Y();
-            StringAssert(OnScreenKeyboard.OpenOver(window)!.Hint, "B  Type      A  Erase      Y  Space");
+            Assert.Null(OnScreenKeyboard.OpenOver(window));
+            first.X();
+            StringAssert(OnScreenKeyboard.OpenOver(window)!.Hint, "B  Type      A  Erase      X  Space");
             first.Start();
             Assert.Null(OnScreenKeyboard.OpenOver(window));
             first.A();

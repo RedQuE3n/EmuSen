@@ -44,8 +44,8 @@ namespace EmuSen.Mistress.Views
                 HintFamily = family,
                 Hints =
                 [
-                    new("Select") { Button = PadHints.Swapped ? PadGlyphButton.East : PadGlyphButton.South },
-                    new("Back") { Button = PadHints.Swapped ? PadGlyphButton.South : PadGlyphButton.East },
+                    new("Select") { Button = PadHints.Glyph(PadGlyphButton.South) },
+                    new("Back") { Button = PadHints.Glyph(PadGlyphButton.East) },
                     new("Choose") { Button = PadGlyphButton.DPadUpDown },
                 ],
                 Child = new ScrollViewer { Content = _rows, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden },

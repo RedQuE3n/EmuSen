@@ -20,25 +20,32 @@ namespace EmuSen.Mistress.Input
         // A box that wants a code says so; any other box gets words first.
         public static void Use(TextBox box, params KeyboardLayout[] layouts) => Chosen.AddOrUpdate(box, layouts);
 
-        // Mistress's keyboard, or for a big-screen row with Steam or a physical keyboard the popup with a real field; null when it is the popup (§4.79).
+        // Mistress's keyboard, or for a big-screen row or the themed search, with Steam or a physical keyboard, the popup with a real field; null when it is the popup (§4.79).
         public static OnScreenKeyboard? Open(TextBox box)
         {
             box.Focus(NavigationMethod.Directional);
             box.CaretIndex = box.Text?.Length ?? 0;
             KeyboardLayout[] offered = Chosen.TryGetValue(box, out KeyboardLayout[]? layouts) ? layouts : Words;
-            // A box drawn as a big-screen menu's row opens ES-DE's text popup, titled with the row's name (Q100, §4.72.11).
-            if (MenuRows.GetLabel(box) is { Length: > 0 } label)
+            string? row = MenuRows.GetLabel(box) is { Length: > 0 } label ? "Enter " + label : null;
+            // A big-screen row, or a box that follows the setting as the themed search does, may take the popup with a real field (Q164, §4.79.6).
+            if ((row ?? (Followers.TryGetValue(box, out string? titled) ? titled : null)) is { } title)
             {
                 KeyboardKind kind = TopLevel.GetTopLevel(box) is IDeviceKeyboardHost host ? host.KeyboardFor(box) : KeyboardKind.EmuSen;
                 if (kind != KeyboardKind.EmuSen)
                 {
-                    OpenField(box, "Enter " + label, kind);
+                    OpenField(box, title, kind);
                     return null;
                 }
-                return OnScreenKeyboard.ShowAsMenu(box, offered, PadHints.Face(Hint), "Enter " + label);
             }
+            // A box drawn as a big-screen menu's row opens ES-DE's text popup, titled with the row's name (Q100, §4.72.11).
+            if (row is not null) return OnScreenKeyboard.ShowAsMenu(box, offered, PadHints.Face(Hint), row);
             return OnScreenKeyboard.Show(box, offered, PadHints.Face(Hint));
         }
+
+        private static readonly ConditionalWeakTable<TextBox, string> Followers = new();
+
+        // A box that is not a menu's row but follows the On-Screen Keyboard setting, with the popup's title; the cheats window's boxes do not (Q164).
+        public static void FollowSetting(TextBox box, string title) => Followers.AddOrUpdate(box, title);
 
         private static readonly ConditionalWeakTable<MenuTextPopup, object> SteamPopups = new();
 
@@ -48,8 +55,19 @@ namespace EmuSen.Mistress.Input
             MenuTextPopup popup = MenuTextPopup.Show(box, title, PadHints.Face(kind == KeyboardKind.Steam ? SteamHint : FieldHint));
             if (kind != KeyboardKind.Steam) return popup;
             SteamPopups.Add(popup, kind);
+            AboveSteamKeyboard(popup);
             DeviceKeyboard.AskSteam();
             return popup;
+        }
+
+        // The popup's top as a share of the window's height while Steam's keyboard, which covers about the lower half, is asked for (§4.79.8).
+        public const double SteamPopupTop = 0.10;
+
+        private static void AboveSteamKeyboard(MenuTextPopup popup)
+        {
+            double height = (popup.Parent as Control)?.Height is > 0 and var h ? h : TopLevel.GetTopLevel(popup.Target)?.ClientSize.Height ?? 0;
+            popup.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top;
+            popup.Margin = new Avalonia.Thickness(0, height * SteamPopupTop, 0, 0);
         }
 
         // Start keeps the text and B drops it; Y asks Steam again for a keyboard put away; A is not taken, as it may be Steam's keyboard's own press.

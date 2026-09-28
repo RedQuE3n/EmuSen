@@ -176,6 +176,40 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        // The cheats window's boxes keep Mistress's keyboard whatever the On-Screen Keyboard setting says, under Steam or not (Q164, §4.79.6).
+        [Theory]
+        [InlineData(AppSettings.OnScreenKeyboardSteam)]
+        [InlineData(AppSettings.OnScreenKeyboardAutomatic)]
+        public Task The_cheats_window_keeps_Mistress_s_keyboard_whatever_the_setting(string setting) => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = GameModeWithAGame();
+            ((AppSettings)typeof(MainWindow).GetField("_appSettings", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!).OnScreenKeyboard = setting;
+            Choose(window, pad, "Cheats");
+            Assert.IsType<ActiveCheatsWindow>(Sheets(window).Current);
+            int before = EmuSen.WiseMan.Mistress.NoSteam.Launcher.Opened.Count;
+            try
+            {
+                EmuSen.Mistress.Input.DeviceKeyboard.SteamRunning = () => true;
+                foreach (string name in new[] { "SNESCodeBox", "SNESDescriptionBox" })
+                {
+                    var box = (TextBox)Reach(window, pad, e => e is TextBox t && t.Name == name);
+                    pad.A();
+                    OnScreenKeyboard keyboard = OnScreenKeyboard.OpenOver(window) ?? throw new InvalidOperationException($"no keyboard on {name}");
+                    Assert.Same(box, keyboard.Target);
+                    Assert.Null(MenuTextPopup.OpenOver(window));
+                    pad.Start();
+                }
+            }
+            finally
+            {
+                EmuSen.WiseMan.Mistress.NoSteam.Refuse();
+            }
+            Assert.Equal(before, EmuSen.WiseMan.Mistress.NoSteam.Launcher.Opened.Count);
+            pad.B();
+            Stop(window);
+            window.Close();
+        }, default);
+
         [Fact]
         public Task The_database_opens_over_the_cheats_and_B_comes_back_to_them() => Session.Dispatch(() =>
         {

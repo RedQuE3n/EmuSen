@@ -147,8 +147,7 @@ namespace EmuSen.Mistress.Views
                 new HintEntry("Rebind") { Button = MainWindow.AcceptGlyph },
                 new HintEntry("Test buttons") { Button = PadHints.Glyph(PadGlyphButton.North) },
                 new HintEntry("Back") { Button = MainWindow.BackGlyph },
-                new HintEntry("") { Button = PadGlyphButton.LeftShoulder },
-                new HintEntry("Console") { Button = PadGlyphButton.RightShoulder },
+                new HintEntry("Console") { Button = PadGlyphButton.Shoulders },
             };
 
         // The drawing over the page's list; the drawing takes the height the page shows, and the list is scrolled to below it.

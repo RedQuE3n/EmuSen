@@ -33,7 +33,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
         // The windows a player reaches in a game, and those reached from the themed library.
-        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "ShaderSettings", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume"];
+        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "ShaderSettings", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings"];
         public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "FindByName", "CoverPicker", "CoverPickerCovers", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout"];
 
         // Which window each case opens; the scraping status's running and finished states and Find by Name's results are WindowFitScrapeAuditTests'.
@@ -41,7 +41,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             ["ActiveCheats"] = typeof(ActiveCheatsWindow), ["ActiveCheatsGeneral"] = typeof(ActiveCheatsWindow), ["CheatDatabase"] = typeof(CheatDatabaseWindow),
             ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
-            ["Screenshot"] = typeof(ScreenshotWindow), ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow),
+            ["Screenshot"] = typeof(ScreenshotWindow), ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow), ["ControllerBindings"] = typeof(InputSettingsWindow),
             ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["FindByName"] = typeof(FindByNameWindow), ["CoverPicker"] = typeof(CoverPickerWindow),
             ["CoverPickerCovers"] = typeof(CoverPickerWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow), ["FolderEditor"] = typeof(FolderEditorWindow),
             ["ThemeBrowser"] = typeof(ThemeBrowserWindow), ["ThemeDetail"] = typeof(ThemeDetailWindow), ["ThemeAbout"] = typeof(ThemeAboutWindow),
@@ -53,7 +53,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             Assert.Equal(InGameWindows.Concat(ThemedWindows).OrderBy(w => w), Opens.Keys.OrderBy(w => w));
             Assert.Equal(MainWindow.FramedWindows.Select(t => t.Name).OrderBy(n => n), Opens.Values.Distinct().Select(t => t.Name).OrderBy(n => n));
-            Assert.DoesNotContain(typeof(InputSettingsWindow), MainWindow.FramedWindows);
         }
 
         public static TheoryData<string, int, int> Cases()
@@ -193,6 +192,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 case "GraphicsSettings":
                     Call(window, "ShowGraphicsSettings");
                     break;
+                case "ControllerBindings":
+                    Call(window, "ShowControllerBindings");
+                    break;
                 case "ShaderSettings":
                     Call(window, "ShowShaderSettings");
                     break;
@@ -309,7 +311,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 {
                     OpenInGame(window, pad, which);
                     Assert.IsType(Opens[which], Sheets(window).Current);
-                    Assert.Empty(Audit(window, name, _out));
+                    // A window of tabs is audited on every tab, the first one last so the picture is the one it opens on.
+                    TabControl? tabs = which == "ControllerBindings" ? Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<TabControl>().FirstOrDefault() : null;
+                    var faults = new List<string>();
+                    for (int tab = (tabs?.ItemCount ?? 1) - 1; tab >= 0; tab--)
+                    {
+                        if (tabs is not null) tabs.SelectedIndex = tab;
+                        faults.AddRange(Audit(window, tabs is null ? name : $"{which}-{(tabs.SelectedItem as TabItem)?.Header}-{width}x{height}", _out));
+                    }
+                    Assert.Empty(faults);
                 }
                 finally
                 {

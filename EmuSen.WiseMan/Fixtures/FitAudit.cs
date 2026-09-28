@@ -22,12 +22,18 @@ namespace EmuSen.WiseMan.Fixtures
         // A text box scrolls its own text, and the caret and the on-screen keyboard reach all of it.
         public static readonly Allowance TextBoxesScroll = new("a text box scrolls its own text", c => c.FindAncestorOfType<TextBox>() is not null);
 
-        private const double Slack = 1.0;
+        // The smallest words a framed sheet may draw, in design pixels (a screen pixel at 1280 by 800): four fifths of the look's small text.
+        public const double SmallestText = 16;
+
+        // A pixel of slack, and a pixel and a half at a menu's scale above one, where layout rounds in the scaled content's own units.
+        [System.ThreadStatic] private static double _slack;
+        private static double Slack => _slack > 0 ? _slack : 1.0;
 
         public static List<string> Check(Control root, IReadOnlyList<Allowance>? allow = null)
         {
             allow ??= [];
             var faults = new List<string>();
+            _slack = System.Math.Max(1.0, (MenuPanel.GetScale(root) is > 0 and var scale ? scale : 1) + 0.5);
             Rect frame = FrameOf(root);
             List<(Control C, Rect R, Rect Seen)> shown = Shown(root, frame).ToList();
             if (root.GetVisualDescendants().OfType<MenuPanel>().FirstOrDefault(m => m.Name == "SheetMenu") is { IsTitleCut: true } menu)
@@ -74,6 +80,10 @@ namespace EmuSen.WiseMan.Fixtures
             {
                 if (c is not ScrollViewer viewer || c.TemplatedParent is TextBox || viewer.Extent.Height <= viewer.Viewport.Height + Slack) continue;
                 if (r.Height < 2 * 42 * unit - Slack) faults.Add($"scrolls in too little room: {Describe(c)} {r.Height:F0} high");
+                // A part-row at a scrolling edge reads as cut unless the edge fades (Q186).
+                if (viewer.VerticalScrollBarVisibility == ScrollBarVisibility.Disabled) continue;
+                if (viewer.Offset.Y > 0.5 && !MenuLook.GetFadesTop(viewer)) faults.Add($"cut at a scrolling edge with no fade: the top of {Describe(c)}");
+                if (viewer.Offset.Y < viewer.Extent.Height - viewer.Viewport.Height - 0.5 && !MenuLook.GetFadesBottom(viewer)) faults.Add($"cut at a scrolling edge with no fade: the foot of {Describe(c)}");
             }
 
             foreach ((Control c, _, _) in shown)
@@ -85,6 +95,15 @@ namespace EmuSen.WiseMan.Fixtures
                 if (layout.TextLines.Any(l => l.HasCollapsed)) faults.Add($"cut with an ellipsis: {Describe(c)}");
                 else if (layout.Width > width + Slack) faults.Add($"runs past its box: {Describe(c)}, {layout.Width:F0} wide in {width:F0}");
                 else if (layout.Height > height + Slack) faults.Add($"cut at the foot: {Describe(c)}, {layout.Height:F0} high in {height:F0}");
+            }
+
+            // Words under SmallestText design pixels do not read from a handheld's arm's length or a television's sofa (§4.81).
+            foreach ((Control c, _, _) in shown)
+            {
+                double size = c switch { TextBlock { Text.Length: > 0 } t => t.FontSize, ControllerDiagram d => d.LabelTextSize, _ => 0 };
+                if (size <= 0 || Allowed(c, allow)) continue;
+                double shownAt = size * (c.TransformToVisual(root)?.M11 ?? 1);
+                if (shownAt < SmallestText * unit - 0.05) faults.Add($"too small to read: {Describe(c)} at {shownAt / unit:F1} design px");
             }
             return faults;
         }

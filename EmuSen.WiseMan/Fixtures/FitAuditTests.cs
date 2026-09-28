@@ -22,13 +22,14 @@ namespace EmuSen.WiseMan.Fixtures
             return (host, layer);
         }
 
-        private static List<string> Audit(Control content, string title = "Audit", string? footer = null)
+        private static List<string> Audit(Control content, string title = "Audit", string? footer = null, System.Action? before = null)
         {
             (ToolWindow host, SheetLayer layer) = Host();
             var window = new ToolWindow { Title = title, Content = content };
             if (footer is not null) MenuLook.SetFooter(window, footer);
             _ = SheetLayer.Show(window, host);
             for (int i = 0; i < 3; i++) { Dispatcher.UIThread.RunJobs(); UiTest.Capture(host); }
+            before?.Invoke();
             List<string> faults = FitAudit.Check(layer.SheetOf(window)!);
             window.Close();
             host.Close();
@@ -89,6 +90,25 @@ namespace EmuSen.WiseMan.Fixtures
             string words = string.Concat(Enumerable.Repeat("A very long name indeed ", 8));
             Assert.Contains(Audit(new TextBlock { Text = "Short" }, title: words), f => f.StartsWith("title cut"));
             Assert.Contains(Audit(new TextBlock { Text = "Short" }, footer: string.Concat(Enumerable.Repeat(words, 10))), f => f.StartsWith("footer cut"));
+        });
+
+        [Fact]
+        public Task A_list_cut_at_its_foot_with_no_fade_shows_a_part_row() => UiTest.Run(() =>
+        {
+            var list = new ListBox { Height = 150, ItemsSource = Enumerable.Range(0, 20).Select(i => $"Row {i}").ToArray() };
+            Assert.Empty(Audit(new StackPanel { Children = { list } }));
+            var plain = new ListBox { Height = 150, ItemsSource = Enumerable.Range(0, 20).Select(i => $"Row {i}").ToArray() };
+            List<string> faults = Audit(new StackPanel { Children = { plain } }, before: () => Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(plain).OfType<ScrollViewer>().First().SetValue(MenuLook.FadesBottomProperty, false));
+            Assert.Contains(faults, f => f.StartsWith("cut at a scrolling edge with no fade"));
+        });
+
+        [Fact]
+        public Task Words_or_a_drawing_s_labels_too_small_to_read_at_a_distance_are_flagged() => UiTest.Run(() =>
+        {
+            Assert.Empty(Audit(new TextBlock { Text = "Big enough", FontSize = FitAudit.SmallestText }));
+            Assert.Contains(Audit(new TextBlock { Text = "Small print", FontSize = 12 }), f => f.StartsWith("too small to read"));
+            var squeezed = new ControllerDiagram { Layout = ControllerLayout.Nintendo64, Height = 260, CompactLabels = false };
+            Assert.Contains(Audit(squeezed), f => f.StartsWith("too small to read: ControllerDiagram"));
         });
     }
 }

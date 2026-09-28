@@ -329,7 +329,7 @@ namespace EmuSen.WiseMan.Mistress
             typeof(MainWindow).GetMethod("ShowControllerBindings", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, null);
             var bindings = (InputSettingsWindow)layer.Current!;
             Assert.True(layer.DrawsMenu(bindings));
-            Assert.Equal(new[] { "Rebind", "Test buttons", "Back", "", "Console" }, EmuSen.LunaP.Controls.MenuLook.GetHints(bindings)!.Select(e => e.Label));
+            Assert.Equal(new[] { "Rebind", "Test buttons", "Back", "Console" }, EmuSen.LunaP.Controls.MenuLook.GetHints(bindings)!.Select(e => e.Label));
             Control sheet = layer.SheetOf(bindings)!;
             Assert.DoesNotContain(sheet.GetVisualDescendants().OfType<Button>(), b => b.IsEffectivelyVisible && b.Content is "Close" or "Test Buttons");
 

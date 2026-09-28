@@ -1866,3 +1866,370 @@ did. With the memory size left at the hand-off (`Mars_Boot.md` §6.5) both games
 are identical to the baselines before it for all 600 frames, and the memory hash differs from frame 0, by the word
 that now holds the size; the baselines were recorded again.
 
+
+## 41. Perfect Dark and Donkey Kong 64 at a multiple: the device's processor in the way of the CPU's reads
+
+*Reported 2026-09-28: Perfect Dark and Donkey Kong 64 run badly on MarsRT, worse at an internal resolution of two to
+four, and while they struggle neither the CPU nor the GPU is saturated. Measured 2026-09-28 on this desktop (Ryzen 7
+7700X, eight cores and sixteen threads, and the RX 6800) at WiseMan e299c99c, with the settings Mistress stores for it:
+MarsRT, the device on, four workers, antialiasing off, the resolution three.*
+
+**The finding.** At a multiple on the device, the drain's leader ran the processor at the multiple beside its own native
+processor, word by word, and the leader's count was part of the count every access of the emulation thread waits for.
+Perfect Dark hands its list over and at once reads one halfword of its depth image, which a draw near the list's end
+holds. The emulation thread then waits for the drain to reach that draw. At a multiple that wait also covered the
+device's recording of every word before it, and the device's own shading of the batches those words closed. In the
+frame traced the wait was 7.5 ms at one and 11.7 ms at three, and the difference is the whole of what the multiple cost
+that game. Nothing is saturated because the frame is a chain: the emulation thread idles while four workers draw at
+one's pace, one of them also recording for the device, and the device shades three or four small batches a frame.
+
+**What was changed.** The processor at the multiple reads nothing of RDRAM except through its loads, and a load leaves
+in texture memory exactly what the native leader's same load leaves. So the leader now keeps the texture memory each
+load leaves, and the processor at the multiple runs on a thread of its own, behind the native processors, taking each
+load from what was kept. No access of the emulation thread waits for it; the ring, a join, a stop and a state's write
+do. Perfect Dark's frame at two, three and four is now its frame at one, and the multiple on Pokémon Snap's title,
+which had saturated the leader, costs 0.3 to 1.2 ms where it cost 2.9 to 8.2 (§41.8). The pictures, the states and the
+sound are unchanged.
+
+### 41.1 The report, reproduced
+
+*The reproduction carried no written prediction; it measured what the report described.*
+
+**The player's own counters.** Mistress logs one line a second (`EmuSen_Settings_Reference.md` §4.21). The two Perfect
+Dark sessions of 2026-09-26 in the log folder ran the game at four, then three, two and one. Of the seconds below 45
+frames a second, against a 50 Hz console:
+
+| Perfect Dark, Mistress, 2026-09-26 | seconds logged | below 45 fps | their fps (median, lowest) | `run`, ms (median) | `machine/rdp-wait`, ms (median, most) |
+| --- | --- | --- | --- | --- | --- |
+| 4× (two sessions) | 116 | 41 | 35.0 and 33.5; 6.1 | 27.3 and 22.2 | 8.9 and 3.2; 15.1 |
+| 3× | 10 | 5 | 37.0; 8.2 | 26.5 | 7.6; 8.2 |
+| 2× | 16 | 10 | 34.2; 9.0 | 28.6 | 6.2; 8.0 |
+| 1× | 50 | 14 | 41.6; 9.5 | 23.8 | 2.5; 8.3 |
+
+The Donkey Kong 64 sessions of the same night ran at three at 49.9 to 50.1 frames a second throughout, `run` never
+above 8 ms. On this desktop the report's Perfect Dark reproduces in the player's own numbers and its Donkey Kong 64
+does not; §41.9 has what was found for Donkey Kong 64.
+
+**Headless.** `examples/threads <rom> <state> 600 split 4 blocks [scale=N gpu]`, production's shape, from the library's
+resume states copied to scratch (the library itself is read only), one run each, milliseconds a frame:
+
+| base, one run | 1× | 2× | 3× | 4× |
+| --- | --- | --- | --- | --- |
+| Perfect Dark, in play: the frame | 24.38 | 28.26 | 30.58 | 32.98 |
+| its site-2 wait | 4.78 | 8.68 | 11.15 | 13.50 |
+| the leader busy | 8.88 | 13.08 | 15.72 | 18.21 |
+| Donkey Kong 64, in play: the frame | 7.72 | 8.88 | 8.05 | 9.02 |
+| its site-2 wait | 2.11 | 2.51 | 2.39 | 2.83 |
+| Super Mario 64, in play: the frame | 3.19 | 4.06 | 5.31 | 6.86 |
+| its presenter's join | 0.19 | 0.91 | 1.96 | 3.24 |
+
+Perfect Dark is over its slot of 20 ms at one already, and each step of the multiple adds 2.3 to 3.9 ms, all of it
+waiting at site 2, the processor's loads. Donkey Kong 64 in play is well inside its slot at every multiple, its site-2
+wait growing by 0.3 to 0.7 ms. From power-on both games are light over 1,500 frames (Perfect Dark 3.7 and 4.7 ms at one
+and three, Donkey Kong 64 6.0 and 6.7), so a power-on case says nothing about this.
+
+Neither the processors nor the card is saturated meanwhile; §41.8 measures both.
+
+### 41.2 Where one frame goes
+
+A diagnostic build, not kept, logged for frames 400 to 405 of Perfect Dark every wait of the emulation thread with its
+site, address and the word it waited for, every word each worker ran with its native part and its part at the multiple
+timed apart, every fence the device's submissions waited on, and every worker's sleep. Frame 402, milliseconds from the
+field's start:
+
+| Perfect Dark, frame 402 | 1× | 3×, base |
+| --- | --- | --- |
+| the emulation thread's field | 24.71 | 28.99 |
+| the list handed over (its full sync) at | 1.89 | 1.82 |
+| the depth read waits | 1.90 – 9.39 (7.49) | 1.83 – 13.52 (11.68) |
+| for the word | the list's end − 2,415 | the list's end − 2,415 |
+| the leader: native, at the multiple, of which fences | 8.40, 0, 0 | 7.29, 7.31, 1.91 |
+| workers 1 to 3, native | 8.16, 11.38, 8.23 | 7.32, 7.65, 8.08 |
+
+**Who waits on whom, and why.** The game hands its list over 1.8 ms into the field and at once reads a halfword 96,366
+bytes into its depth image at 0x469000, the same halfword in every frame traced. The last pending draw whose box holds
+that halfword lies 2,415 to 2,459 words before the list's end (the narrowing of §6.14.3 of `Mars_Native.md`, which is
+exact for a small read), so the read waits for nearly the whole list. That much is necessary: the unthreaded machine has
+drawn the whole list before the processor reads a byte (`Mars_Native.md` §6.14.4). What is not necessary is what the wait
+included at a multiple. `completed`, the count every wait compares with, was the least of the workers' counts, and the
+leader's count advanced only when both its native processor and the processor at the multiple beside it had run a word.
+So the depth read also waited for the device's recording of every earlier word: 7.3 ms of the leader's 14.6 at three. Of
+that, 1.9 ms was spent waiting on the device's fences at its four flushes a frame, 2.0 ms binning and staging those
+batches on the host, and the rest walking the primitives at the multiple and writing the rows. After the read the
+emulation thread runs 15 ms of its own work, while the drain has nothing to do.
+
+### 41.3 The proof: the device's processor taken off the leader
+
+**Prediction**, written before the run: with the processor at the multiple skipped on the leader (a diagnostic switch,
+not kept; the picture at the multiple is then empty and the machine unchanged), Perfect Dark at three runs in its time at
+one and ends on the same state hash.
+
+| Perfect Dark, 600 frames, one run each | the frame, ms | site-2 wait, ms | state |
+| --- | --- | --- | --- |
+| 1× | 23.27 | 4.41 | BA82A767473D7ADA |
+| 3× | 30.22 | 10.99 | BA82A767473D7ADA |
+| 3×, the processor at the multiple skipped | 23.22 | 4.24 | BA82A767473D7ADA |
+
+**Held.** The multiple's whole cost on Perfect Dark is the device's processor on the drain's leader. More workers do
+not reach it: at three, six and eight workers leave the frame at 32.7 and 32.1 ms (one run each), since only the leader
+records for the device (`Mars_Gpu.md` §11.1). Donkey Kong 64 at three with the same switch runs in 7.70 ms against 8.08,
+its 0.9 ms of the leader's time at the multiple.
+
+### 41.4 The change, first form: the device's processor behind the native one on the leader
+
+*What makes it possible.* The processor at the multiple draws into the device and reads the machine's RDRAM for one thing
+only: its loads (`RdpMemory::scaled`'s texture view, read by `image_word` and nothing else). A load's result is texture
+memory, and the texture memory of the processor at the multiple is at every word the native leader's. It was cloned from
+it (`Rdp::new_scaled`), it takes the same words, and the registers a load reads — the texture image and the tiles — are
+not scaled; only the colour and depth images and the scissor are. So if the native leader keeps what each load leaves,
+the processor at the multiple needs no RDRAM, and no access of the machine needs to wait for it.
+
+The first form kept both processors on the leader's thread: the native one ran each word as it came, and the one at the
+multiple ran behind it whenever there was no native word, replaying each load from a queue of what the native loads
+left. Readers and writers of RDRAM waited for the native count; the ring, a join, a stop and a state's write waited for
+both. It took Perfect Dark's frame at two to four to its frame at one (§41.8's `lag` column). It did not help a game whose
+leader had no idle time: Pokémon Snap's title, from power-on, keeps the leader busy for 7.9 ms of native work and 5.4 to
+7.9 ms at the multiple in a frame of 15 to 18, and there the wait only moved, from the scan-out's capture (site 8, 7.9
+ms a frame at three) to the presenter's wait for the device's scan (7.8 ms). That measurement is the reason for the
+second form.
+
+### 41.5 The change as built: the device's processor on a thread of its own
+
+`memory/dp_threads.rs`, `rdp/texture_memory.rs`:
+
+- **The leader keeps each load.** With the device, before its count passes a load's word, the leader writes the word and,
+  when the load wrote any, the texture memory it left, into a ring of 1,024 slots (`keep_load`). With every slot unread
+  it waits for the device's thread rather than overwrite one.
+- **The device's thread** (`MarsRT RDP device`, `run_recorder`) runs the processor at the multiple one word at a time,
+  never past the leader's count, with an empty texture view. A load is not executed but replayed (`replay_load`): the
+  tile's size set as the load sets it, and the kept texture memory copied in. Its count is `scaled_completed`. It serves
+  the device work handed over for the scans (`Mars_Native.md` §6.15), at its own count rather than the leader's. It spins
+  a moment and then parks, with a millisecond's timeout as the bound on a wake the leader's plain look at its flag
+  missed; the leader looks after every word, and makes sure of it before it sleeps.
+- **What waits for it** (`drawn()`): the ring, whose words it has still to read; a join, a stop and a state's write, after
+  which the device and the processor at the multiple are the machine's thread's; and every other device access, as
+  before, through the device work. **What does not:** every read and write of RDRAM by the emulation thread and the
+  machine's devices, which wait for the native count as they did before a multiple existed.
+
+*Why it is exact.* The device receives the same rows, batches and scans in the same order, since one processor on one
+thread records them and each scan is served at the word it was handed at. The only input the processor at the multiple
+no longer reads is RDRAM through a load, and it gets exactly what that load would have left, because the native leader's
+load read the same bytes at the same word: a load of bytes the current images can reach is a barrier of all the native
+processors (`Mars_Native.md` §5.6.6), and any other load reads bytes no draw of the current images writes. The machine
+itself is untouched: the native processors run as before, and no wait the emulation thread makes is shorter than the
+native drawing it needs.
+
+*Where the argument does not reach.* The processor path at a multiple, with the device off, keeps a processor at the
+multiple on every worker, each following its native processor's decision to draw a primitive alone (`Rdp::follow`), which
+a processor running behind could not follow; it is unchanged. The C# core's device path is unchanged too, and still joins
+at its scan-out (§6.15.1 of `Mars_Native.md`). `Mars_Native.md` §6.15.1's "the leader runs the device work" now reads
+"the device's thread"; the argument there is the same with its count in place of the leader's.
+
+### 41.6 The evidence
+
+- **The design's own tests** (`tests/gpu.rs`, five new, each on a drain of up to four workers with the verifier on, the
+  device's processor held by a test hook, `hold_behind`, while the native processors run):
+  `the_device_s_processor_behind_replays_the_loads_the_native_ones_read` (a textured list, then a draw of the same list
+  over the texture it loaded, then stores over it by the machine's thread, all while the device's processor is held; the
+  picture at the multiple is the list at once's, at two on one and three workers and at four on four);
+  `a_read_of_what_the_native_processors_drew_does_not_wait_for_the_device_s_processor` (held for 300 ms, it is still
+  behind when a read of the drawn picture returns, which must return in under 200 ms and see the fill);
+  `a_join_a_stop_and_a_state_wait_for_the_device_s_processor_behind` (each returns with nothing behind, and the picture
+  is the list at once's); `the_ring_waits_for_the_device_s_processor_behind` (a list of over 69,600 words, longer than the
+  ring, handed over while it is held); and
+  `the_leader_waits_for_the_device_s_processor_when_every_kept_load_is_unread` (1,200 loads against 1,024 slots).
+- **The crate's suite**, `cargo test --release`, 488 tests, passes after WiseMan's merge (cbf7dcc5); the existing device
+  tests of §6.15 of `Mars_Native.md` — the scan served at its word, a picture read before its scan, a stop while a scan is
+  owed, a join, a read-back — pass unchanged with the scans now served by the device's thread.
+- **The game comparisons** (`tests/games.rs`), with Perfect Dark in play added as their eighth game: every game at two
+  and four on the device, deferred and at once, split on four workers against the processor at once at the multiple,
+  and averaged on the device at 4×2, 4×4 and 2×2 against the device at once, 300 frames each, snapshot-compared every
+  frame: 56 comparisons, every one identical in state, picture and sound in every frame. Perfect Dark's device declines
+  nothing (`primitives_not_shaded` 0), so its device picture is compared with the processor's byte for byte.
+- **Every shown frame hashed** (the example's `pictures`, now part of it): the base and the change, from the library's
+  states, 300 frames at one, two, three and four and at two with antialiasing two: the same hashes in all twenty cases
+  of four games, and in Pokémon Snap's title at one, three and four over 1,500 frames.
+- **ThreadSanitizer**, §5.6.7's recipe of `Mars_Native.md`, over the five tests, the device tests, the thread tests and
+  the site tests: no report but libtest's own channel, one a run. Two positive controls, each a copy of the crate:
+  `drawn()` made to ignore the device's thread, so that a join returns while it records, gives 25 reports beyond
+  libtest's, all between its recording (`record_for_the_device`, `GpuRasteriser::flush`, `stage`) and the machine's
+  thread's read-back, and two of the five tests fail; and the device's thread reading the leader's count Relaxed gives
+  exactly one, the kept load's copy (`keep_load`) against its replay (`replay_load`). The first form's control (§41.4),
+  the count of the processor behind stored Relaxed, gave nothing: that store's ordering was supplied by others the
+  tests pass through, and it was not pursued, since the form was replaced.
+
+### 41.7 Mutants
+
+Each applied alone to a copy of the crate, the device tests (`tests::gpu`, 26) run, the copy discarded
+(`mutants.py` in `~/.cache/emusen/probe/pd-dk64/`). A hang counts as caught; the three that hung were run again with the
+test they hung in skipped, to see which assertion catches them.
+
+| Mutant | Caught by |
+| --- | --- |
+| the device's processor reads its loads from RDRAM, not what the leader kept | hung in the test of more loads than the ring keeps, since no slot is ever freed; without it, `the_device_s_processor_behind_replays_the_loads_the_native_ones_read` |
+| it runs its loads over the empty view, replaying nothing | the same hang; without it, the replay test and `the_interface_draws_the_multiple_on_the_device_as_it_does_on_the_processor` |
+| a replay leaves the tile's size as it was | the replay test and the ring-of-loads test |
+| a replay takes the load after its own | those two and the interface test |
+| the leader keeps a load's word and flag but not its texture memory | the same three |
+| the leader keeps a load over one not yet replayed (no wait for a free slot) | `the_leader_waits_for_the_device_s_processor_when_every_kept_load_is_unread` — **after the test was changed**; see below |
+| the device's thread runs words the leader has not run | the ring-of-loads test and the interface test |
+| a reader of RDRAM waits for the device's thread too | hung in the replay test, whose stores then wait for the processor the test holds; without it, `a_read_of_what_the_native_processors_drew_does_not_wait_for_the_device_s_processor` |
+| a join waits for the native processors alone | `a_join_a_stop_and_a_state_wait_for_the_device_s_processor_behind`, the replay, ring and ring-of-loads tests, and `after_a_state_is_read_the_device_holds_what_the_processor_path_holds` |
+| a stop waits for the native processors alone | the same test |
+| a state's write (`wait_all`) waits for the native processors alone | the same test |
+| the ring waits for the native processors alone | `the_ring_waits_for_the_device_s_processor_behind` |
+| the device's thread serves a scan at the leader's count, not its own | `the_leader_runs_a_scan_after_the_words_handed_before_it_and_before_those_handed_after` |
+| the leader serves scans as well as the device's thread | that test and `averaging_on_the_device_is_the_processor_s_scan_after_scan` |
+| the native load's flag not cleared, so every load's memory is kept and copied | **survived** |
+
+*The survivor, argued equivalent.* Without the clear, a load that writes no texture memory (a four-bit image, a palette
+row past the first) is kept with the memory as it stands, and the replay copies it and marks it changed. The memory
+copied is what the processor at the multiple already holds, since the two memories are equal at every word (§41.4), so
+the only difference is that the next primitive sends the device an identical copy of texture memory where it would
+have reused the last one. The picture cannot differ; the device's input stream does, by one redundant upload.
+
+*A test that did not reach its mutant.* The first form of the test of more loads than the ring keeps handed over ten
+textured lists, each beginning with a clear. The overwritten loads were the first list's, whose triangles the second
+list's clear then erased, so the picture at the end was right with the mutant in. The test now clears once and lets the
+ten lists' triangles accumulate, and catches it.
+
+*The first form's round*, before it was replaced: eleven mutants of `lag` (§41.4) against the same suites, ten caught —
+the replay reading RDRAM or skipped, the replay without the tile's size, a replay taking the next load, readers waiting
+for the processor behind (a hang), the join, the stop, the state's write and the ring waiting for the native processors
+alone, and the scan served at the native count — and the same flag mutant surviving.
+
+### 41.8 Speed
+
+*The predictions*, written before each set of rounds (`PREDICTIONS.md` in `~/.cache/emusen/probe/pd-dk64/`). For the
+first form, `lag`: P1, Perfect Dark at two to four falls to within 0.5 ms of its frame at one, its site-2 wait to the
+one's level; P2, Donkey Kong 64 in play falls by 0.3 to 1.0 ms at two to four; P3, Super Mario 64 stays within its spread,
+the presenter's join growing by up to 0.5 ms; P4, Majora's Mask gains 0 to 1 ms at three and four; P5, every state hash
+is the base's. For the form built, `apart`, written after `lag`'s first rounds and one run of `apart`: P6, Perfect Dark
+within `lag`'s spread; P7, Pokémon Snap's title below `lag` by 3 to 6 ms at three and four, to within 2 ms of its frame
+at one; P8, Super Mario 64 at or below `lag` and the base at two to four, by up to 1 ms; P9, Donkey Kong 64 and Majora's
+Mask within `lag`'s spread; P10, every hash the base's.
+
+*The measurement.* `examples/threads <rom> <state> 600 split 4 blocks [scale=N gpu]` (1,500 frames for Pokémon Snap from
+power-on), three builds — the base, WiseMan e299c99c's crate; `lag`, §41.4; `apart`, §41.5 — built alike with cargo's
+`release` profile and no PGO profile, three rounds with the order rotated, every run under the shared timing lock.
+Milliseconds a frame, the median of three and the range:
+
+| | 1× | 2× | 3× | 4× |
+| --- | --- | --- | --- | --- |
+| **Perfect Dark**, in play, base | 23.75 (23.28–24.10) | 28.04 (27.71–29.44) | 31.19 (30.90–32.80) | 33.22 (33.22–35.31) |
+| `lag` | 23.23 (23.02–23.37) | 23.39 (23.04–24.31) | 23.90 (23.63–25.52) | 24.12 (23.82–25.65) |
+| `apart` | 22.89 (22.62–22.97) | **22.95** (22.63–23.93) | **23.38** (22.96–24.77) | **23.62** (22.93–25.11) |
+| its site-2 wait, base → `apart` | 4.49 → 4.33 | 9.03 → 4.21 | 11.52 → 4.38 | 13.87 → 4.52 |
+| **Donkey Kong 64**, in play, base | 7.42 (7.36–8.18) | 7.88 (7.75–8.31) | 8.11 (8.06–8.15) | 8.35 (8.29–8.35) |
+| `lag` | 7.59 (7.38–8.12) | 7.43 (7.24–7.94) | 7.44 (7.35–7.97) | 7.58 (7.44–7.61) |
+| `apart` | 7.46 (7.30–7.97) | **7.34** (7.18–8.16) | **7.36** (7.27–7.74) | **7.49** (7.40–7.54) |
+| **Majora's Mask**, in play, base | 5.62 (5.56–5.68) | 6.30 (6.20–6.38) | 7.50 (7.45–7.54) | 8.82 (8.69–8.82) |
+| `lag` | 5.73 (5.55–5.84) | 6.05 (5.98–6.47) | 6.88 (6.86–6.92) | 8.15 (8.12–8.17) |
+| `apart` | 5.71 (5.50–5.72) | **5.95** (5.93–6.07) | **7.01** (7.00–7.07) | **8.11** (7.99–8.25) |
+| **Pokémon Snap**, from power-on, base | 9.75 (9.60–9.83) | 12.69 (12.63–12.86) | 15.10 (15.06–15.15) | 17.91 (17.87–17.98) |
+| `lag` | 9.84 (9.70–9.88) | 12.24 (12.11–12.38) | 14.53 (14.34–14.62) | 17.27 (17.22–17.30) |
+| `apart` | 9.89 (9.68–10.18) | **9.92** (9.85–10.04) | **10.18** (9.97–10.19) | **11.12** (11.04–11.12) |
+| **Super Mario 64**, in play (the control), base | 2.92 (2.86–2.99) | 4.11 (4.08–4.19) | 5.54 (5.43–5.57) | 7.11 (7.05–7.13) |
+| `lag` | 2.91 (2.89–3.01) | 4.06 (4.03–4.08) | 5.40 (5.24–5.44) | 6.88 (6.87–6.91) |
+| `apart` | 2.96 (2.86–3.03) | **3.60** (3.60–3.66) | **4.71** (4.64–4.96) | **6.10** (6.07–6.13) |
+
+Every run of a game ended on that game's one state hash, in all three builds and at every setting.
+
+*The predictions' fates.* **P1 held for the wait and for two, and missed by 0.2 to 0.4 ms at three and four**: `lag`'s
+frames there are 0.67 and 0.89 ms above its one. **P2, P4 and P5 held** (Donkey Kong 64 −0.45 to −0.77 ms, Majora's
+Mask −0.62 and −0.67 at three and four). **P3 held**: Super Mario 64 under `lag` is within or under the base's spread,
+its presenter's join 0.2 to 0.4 ms longer. **P6 held at the multiples**; at one, where neither build has a device and
+the code differs only by the branches that ask whether it has one, `apart`'s rounds lie 0.05 ms under `lag`'s, and the
+base's own rounds in an earlier batch ran from 22.71 to 23.67, so that difference is not claimed. **P7 held, and more**:
+Snap's title under `apart` is 4.35 and 6.15 ms under `lag` at three and four, 0.3 and 1.2 ms over its frame at one.
+**P8 held**, at the edge at four (−1.01 ms against the base). **P9 held for Donkey Kong 64 and was refuted narrowly for
+Majora's Mask at three**, where `apart`'s rounds lie 0.08 to 0.21 ms over `lag`'s; at four they overlap. **P10 held.**
+
+**What the table says.** The multiple no longer costs Perfect Dark, Donkey Kong 64 or Pokémon Snap's title anything
+the emulation thread waits for: each game's frame at two to four is within 0.75 ms of its frame at one (Snap's within
+1.25), where the base added 4.3 to 9.5 ms to Perfect Dark and 2.9 to 8.2 ms to Snap. What is left of the multiple is the
+presenter's wait for the device's picture (Majora's Mask 2.2 ms at four, Super Mario 64 3.0), which is the device's own
+time (§41.10).
+
+**Saturation, before and after.** The report is confirmed in both parts. Over eight seconds of Perfect Dark at three
+(`util.py`, per thread from `/proc`, and the RX 6800's `gpu_busy_percent` sampled every 20 ms):
+
+| Perfect Dark, 3× | the emulation thread | workers 0 / 1–3 | the device's thread | the machine | the GPU busy (mean, 90th) |
+| --- | --- | --- | --- | --- | --- |
+| base, 31 ms a frame | 99.7% | 54% / 65% | — | 24% | 12%, 20% |
+| `apart`, 23 ms a frame | 99.7% | 54% / 54% | 47% | 25% | 15%, 24% |
+
+The emulation thread reads as a whole processor in both, because it spins and yields while it waits (`backoff`); a
+monitor that shows it at a hundred per cent is showing its waits. The machine is a quarter busy and the card an eighth.
+With `apart` the same work is done in three quarters of the time: the device's thread is busy about half of it, and the
+card a little more often.
+
+**The frame after it.** The diagnostic build of §41.2 on `apart`, frame 402 at three: the list handed over at 1.86 ms,
+the depth read waiting from 1.87 to 8.23 ms (6.36 ms, for the same word); the four workers 7.4 to 8.3 ms of native
+work each, and the device's thread 8.6 ms of recording (1.9 of it on fences) beside them, done by 11.8 ms; the field
+23.2 ms.
+
+### 41.9 The other games, and Donkey Kong 64
+
+The cause is any wait of the emulation thread on the drain at a multiple on the device, so every game that reads what
+it has drawn shares it in proportion to how much it waits. A survey, one run each of the base and `lag`, from the
+library's resume states, and from power-on for the games that have none, the change at three:
+
+| | 1×, base | 3×, base | 3×, `lag` | the waits at three, base → `lag` |
+| --- | --- | --- | --- | --- |
+| Ocarina of Time, in play | 3.07 | 4.78 | 4.55 | site 2 0.91 → 0.71 |
+| Banjo-Kazooie, in play | 5.53 | 7.38 | 7.18 | site 8 1.32 → 0.94 |
+| Banjo-Tooie, from power-on | 4.01 | 6.37 | 6.17 | small |
+| Jet Force Gemini, from power-on | 2.06 | 3.42 | 3.45 | small |
+| Conker's Bad Fur Day, from power-on | 0.47 | 0.55 | 0.54 | none |
+| Pokémon Snap, from power-on | 9.62 | 15.12 | 14.56 | site 8 7.72 → 1.08, the presenter's join 1.00 → 7.85 |
+
+The three from power-on reach only their introductions, so for Conker, Banjo-Tooie and Jet Force Gemini the survey
+says only that nothing there waits; their play was not reached, and no state of it exists in the library. Majora's Mask
+and Pokémon Snap were measured in rounds (§41.8), and the pause screen of Majora's Mask was not reached.
+
+**Donkey Kong 64.** It shares the cause: its processor reads the depth image as Perfect Dark's does
+(`Mars_Native.md` §6.14.4), and its site-2 wait grew with the multiple, 2.3 ms at two to 2.6 at four against 2.0 at one;
+now it is 1.8, and its frame at every multiple is at or under its frame at one. But the multiple cost it under a
+millisecond on this desktop, and its frame is 7.4 to 8.4 ms of a 20 ms slot, in the library's state and in the player's
+own sessions of 2026-09-26 at three. The report of Donkey Kong 64 running badly is not reproduced here, and nothing
+measured on this desktop explains it: the likeliest places are a scene the state does not reach or the handheld, where
+§6.15.6 of `Mars_Native.md` measured its title at two on the device at 14.8 ms of a 16.7 ms budget.
+
+### 41.10 What is not done
+
+- **Perfect Dark at one.** The game in play is still over its slot at one: about 23.5 ms a frame against 20, of which
+  about 4.5 are the depth read's necessary wait and the rest the emulation thread's own work (the CPU's decoded tier,
+  beside a running signal processor, is 22 per cent of an interrupt sample of that thread at one). That is
+  `Mars_Native.md` §6.16's ground, where the signal processor run ahead of the CPU is the priced lever; PGO, its first
+  lever, is now built (§6.17) and was not in either build measured here. The depth wait itself is shortened only by a
+  faster native drain: six workers took the frame at one to 22.2 ms in one run against 23.3 at four, which was not
+  repeated.
+- **The device's own time.** Its flushes still wait on the device's fence and bin and stage each batch on the host,
+  about 4 ms a frame of Perfect Dark at three and 2.5 to 4.2 ms of Pokémon Snap's title. That time is now the device's
+  thread's, off the emulation thread's path, and reaches a frame only through the presenter's wait for a scan
+  (Super Mario 64 at four: 1.5 ms a frame waiting for the scan's submission, 1.0 for its fence, 1.0 reading the picture).
+  A flush that does not wait (staging and command buffers in a ring of their own) is the lever, not built. The picture's
+  copy is `Mars_Gpu.md` §16's lever, unchanged.
+- **The processor at a multiple, the device off.** Unchanged: each worker there draws its share of the rows at the
+  multiple in step with its native processor (§41.5), and the same wait exists there. Taking it out would need a
+  processor at the multiple that does not follow the native one's decision to draw alone.
+- **The C# core**, unchanged; its device path still joins at its scan-out.
+- **PGO.** The profile checked in with §6.17 of `Mars_Native.md` was trained before this change: the functions changed
+  here (the worker's loop, `sleep`, `publish`) lose their records and the new ones (`run_recorder`, `step_behind`,
+  `keep_load`) have none. By §6.17.6's rule 3 it is to be retrained before a production number is quoted; both builds
+  here were measured without it, like for like. It was not retrained.
+- **The handheld** was not measured. There the device's thread is one more busy thread beside the emulation thread,
+  four workers and the presenter, on four cores and eight hardware threads. The prediction for it, written here: Perfect
+  Dark at two on the device falls to within 1 ms of its frame at one; Donkey Kong 64's title at two, 14.8 ms in §6.15.6,
+  falls by 0.5 to 1.5 ms.
+- **Mistress** was not run, by the project's rule. What the frontend adds was read from the player's own logs: in every
+  slow second quoted in §41.1 `run` is within a millisecond of `total` and `sleep+rest` under one, so the loop was behind
+  and the frame was `RunFrame`'s; presentation (the frame hand-off and the render thread, newest wins) and pacing were
+  not what held it.
+- **Suspects not examined**, because §41.3 accounted for the whole of the multiple's cost: the recompiler's invalidations
+  and the Expansion Pak path, which are the same at every multiple, and the device average, off in these settings.
+  Frame-buffer read-back from the device does not occur on this path: the processor reads the machine's own memory at
+  one, and the device is read only for the scan's picture.
+- **Donkey Kong 64's report** (§41.9) is not reproduced on this desktop, and the scene or machine it came from is not
+  known.

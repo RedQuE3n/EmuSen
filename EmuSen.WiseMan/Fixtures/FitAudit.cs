@@ -7,6 +7,7 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Media.TextFormatting;
 using Avalonia.VisualTree;
 using EmuSen.LunaP.Controls;
@@ -22,7 +23,7 @@ namespace EmuSen.WiseMan.Fixtures
         // A text box scrolls its own text, and the caret and the on-screen keyboard reach all of it.
         public static readonly Allowance TextBoxesScroll = new("a text box scrolls its own text", c => c.FindAncestorOfType<TextBox>() is not null);
 
-        // The smallest words a framed sheet may draw, in design pixels (a screen pixel at 1280 by 800): four fifths of the look's small text.
+        // The smallest words a framed sheet may draw, as a size in the desktop face in design pixels (a screen pixel at 1280 by 800), four fifths of the look's small text; other faces are held to its capitals (§4.83.7).
         public const double SmallestText = 16;
 
         // A pixel of slack, and a pixel and a half at a menu's scale above one, where layout rounds in the scaled content's own units.
@@ -33,6 +34,7 @@ namespace EmuSen.WiseMan.Fixtures
         {
             allow ??= [];
             var faults = new List<string>();
+            LastSmallest = null;
             _slack = System.Math.Max(1.0, (MenuPanel.GetScale(root) is > 0 and var scale ? scale : 1) + 0.5);
             Rect frame = FrameOf(root);
             List<(Control C, Rect R, Rect Seen)> shown = Shown(root, frame).ToList();
@@ -109,16 +111,56 @@ namespace EmuSen.WiseMan.Fixtures
                 else if (layout.Height > height + Slack) faults.Add($"cut at the foot: {Describe(c)}, {layout.Height:F0} high in {height:F0}");
             }
 
-            // Words under SmallestText design pixels do not read from a handheld's arm's length or a television's sofa (§4.83).
+            // Capitals shorter than the desktop face's at SmallestText do not read from a handheld's arm's length or a television's sofa (§4.83.7).
             foreach ((Control c, _, _) in shown)
             {
-                double size = c switch { TextBlock { Text.Length: > 0 } t => t.FontSize, ControllerDiagram d => d.LabelTextSize, _ => 0 };
+                (double size, GlyphTypeface? face) = c switch
+                {
+                    TextBlock { Text.Length: > 0 } t => (t.FontSize, FaceOf(t)),
+                    ControllerDiagram d => (d.LabelTextSize, FaceOf(new Typeface(d.GetValue(Avalonia.Controls.Documents.TextElement.FontFamilyProperty)))),
+                    _ => (0, null),
+                };
                 if (size <= 0 || Allowed(c, allow)) continue;
                 double shownAt = size * (c.TransformToVisual(root)?.M11 ?? 1);
-                if (shownAt < smallest * unit - 0.05) faults.Add($"too small to read: {Describe(c)} at {shownAt / unit:F1} design px");
+                double caps = shownAt * CapsOf(face);
+                if (LastSmallest is not { } least || caps / unit < least.Caps) LastSmallest = (caps / unit, shownAt / unit, $"{Describe(c)} in {face?.FamilyName}");
+                if (caps < (smallest * unit - 0.05) * DesktopCaps)
+                    faults.Add($"too small to read: {Describe(c)}, capitals {caps / unit:F2} design px under {smallest * DesktopCaps:F2} ({shownAt / unit:F1} px of {face?.FamilyName ?? "an unknown face"})");
             }
             return faults;
         }
+
+        // The shortest capitals the last check measured, in design pixels, with their size and what drew them, for the record.
+        [System.ThreadStatic] public static (double Caps, double Size, string What)? LastSmallest;
+
+        // Inter's capitals as a share of its size, measured from its H: the floor is the capitals the desktop face draws at SmallestText (§4.83.7).
+        public const double DesktopCaps = 0.7273;
+
+        private static readonly Dictionary<GlyphTypeface, double> Caps = new();
+
+        // How tall a face draws its capitals, as a share of its size, from the height of its H; a face with no H counts as the desktop's.
+        public static double CapsOf(GlyphTypeface? face)
+        {
+            if (face is null) return DesktopCaps;
+            lock (Caps)
+            {
+                if (Caps.TryGetValue(face, out double known)) return known;
+                // The outline of an H drawn at a thousand pixels, since this Avalonia reports no ink height for a glyph.
+                double share = face.CharacterToGlyphMap.TryGetGlyph('H', out ushort glyph) && glyph != 0
+                    && new GlyphRun(face, 1000, "H".AsMemory(), new[] { glyph }).BuildGeometry() is { Bounds.Height: > 0 } outline
+                    ? outline.Bounds.Height / 1000
+                    : DesktopCaps;
+                Caps[face] = share;
+                return share;
+            }
+        }
+
+        // The face a text block's words are drawn in, after any fallback, else the one its typeface names.
+        private static GlyphTypeface? FaceOf(TextBlock text) =>
+            text.TextLayout.TextLines.SelectMany(l => l.TextRuns).OfType<ShapedTextRun>().FirstOrDefault()?.ShapedBuffer.GlyphTypeface
+            ?? FaceOf(new Typeface(text.FontFamily, text.FontStyle, text.FontWeight));
+
+        public static GlyphTypeface? FaceOf(Typeface typeface) => FontManager.Current.TryGetGlyphTypeface(typeface, out GlyphTypeface? face) ? face : null;
 
         // The framed panel's rectangle when the root is a framed sheet, else the root's own.
         private static Rect FrameOf(Control root) =>

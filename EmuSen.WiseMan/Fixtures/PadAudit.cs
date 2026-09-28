@@ -66,13 +66,10 @@ namespace EmuSen.WiseMan.Fixtures
         {
             TopLevel top = TopLevel.GetTopLevel(root)!;
             System.Action[] presses = { () => pad.Up(), () => pad.Down(), () => pad.Left(), () => pad.Right() };
-            InputElement start = (InputElement)top.FocusManager!.GetFocusedElement()!;
-            object startKey = KeyOf(start);
 
-            Dictionary<object, List<int>> paths = Walk(root, presses, target, limit, out object? found);
+            // The walk itself ends by pressing the path it found from the state it began in (§4.83.7).
+            Walk(root, presses, target, limit, out object? found);
             Assert.True(found is not null, "No pad path to the control asked for.");
-            Refocus(top, startKey, start);
-            foreach (int direction in paths[found!]) presses[direction]();
             return top.FocusManager!.GetFocusedElement() is InputElement end && Equals(KeyOf(end), found) && target(end) ? end : null;
         }
 
@@ -99,10 +96,13 @@ namespace EmuSen.WiseMan.Fixtures
                 foreach ((ListBox list, int index) in selections)
                     if (list.SelectedIndex != index) list.SelectedIndex = index;
                 top.UpdateLayout();
+                // A start among rows a pane rebuilds after a selection, such as a preset's sliders, is waited for before its scroll is put back (§4.83.7).
+                if (startKey is (ItemsControl owner, int item, string _, string _))
+                    for (int wait = 0; wait < 2000 && owner.ItemCount <= item; wait++) { Avalonia.Threading.Dispatcher.UIThread.RunJobs(); System.Threading.Thread.Sleep(1); top.UpdateLayout(); }
                 foreach ((ScrollViewer viewer, Vector offset) in scrolls)
                     if (((Visual)viewer).IsAttachedToVisualTree() && viewer.Offset != offset) viewer.Offset = offset;
                 top.UpdateLayout();
-                Refocus(top, startKey, start);
+                if (Refocus(top, startKey, start) is null) return null;
                 foreach (int direction in paths[key]) presses[direction]();
                 return Focused() is { } replayed && Equals(KeyOf(replayed), key) ? replayed : null;
             }
@@ -125,8 +125,8 @@ namespace EmuSen.WiseMan.Fixtures
                     if (target(to)) { found = toKey; break; }
                 }
             }
-            // Left as the walk began, so what is then counted operable is the window the walk explored, not the state its last press left - see EmuSen_Settings_Reference.md §4.48.9.
-            if (found is null) At(startKey);
+            // Left as the walk began, or on what it found by the path from there, never as its last replay left it - see EmuSen_Settings_Reference.md §4.48.9 and §4.83.7.
+            At(found ?? startKey);
             return paths;
         }
 
@@ -172,8 +172,12 @@ namespace EmuSen.WiseMan.Fixtures
             }
             else if (key is (ItemsControl owner, int item, string within, string _))
             {
-                owner.ScrollIntoView(item);
-                owner.UpdateLayout();
+                // Only a row not built is asked into view; asked every time, the shaders list was later found with no row built (§4.83.7).
+                if (owner.ContainerFromIndex(item) is null)
+                {
+                    owner.ScrollIntoView(item);
+                    owner.UpdateLayout();
+                }
                 element = Follow(owner.ContainerFromIndex(item), within) as InputElement;
             }
             else if (key is string path) element = Follow(top, path) as InputElement;

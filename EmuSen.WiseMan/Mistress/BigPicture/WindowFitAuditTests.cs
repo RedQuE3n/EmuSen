@@ -127,6 +127,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(Sheets(w).DrawsMenu(top), $"{name} is not framed");
             List<string> faults = FitAudit.Check(Sheets(w).SheetOf(top)!, WindowAllowances.For(top));
             foreach (string f in faults) output.WriteLine($"{name}: {f}");
+            if (FitAudit.LastSmallest is { } least)
+            {
+                string line = $"CAPS {name}: {least.Caps:F2} design px of capitals at {least.Size:F2} px, {least.What}";
+                output.WriteLine(line);
+                if (Environment.GetEnvironmentVariable("EMUSEN_WINDOW_FIT_CAPS") is { Length: > 0 } record) File.AppendAllText(record, line + Environment.NewLine);
+            }
             if (Sheets(w).SheetOf(top)!.GetVisualDescendants().OfType<MenuPanel>().FirstOrDefault(m => m.Name == "SheetMenu") is { TitleLines: > 1 } panel)
                 output.WriteLine($"TITLE {name}: {panel.TitleLines} lines at {panel.TitleDrawnSize / MenuPanel.GetScale(panel):F1} design px");
             SavePicture(w, name);
@@ -506,7 +512,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             }
         }, default);
 
-        // The margin a drawing's labels keep over the audit's floor with the bindings a console starts with, in design pixels (Q188).
+        // The size a drawing's labels keep over SmallestText with the bindings a console starts with, in design pixels: the layout's reach, the floor itself being capitals (Q188, §4.83.7).
         internal const double LabelMargin = 1.0;
 
         // Each shown drawing's label words in design pixels, their margin over the floor and the columns split, for the record; a fault when the margin is under the one asked (§4.83.6).
@@ -518,7 +524,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             foreach (ControllerDiagram d in sheet.GetVisualDescendants().OfType<ControllerDiagram>().Where(d => d.IsEffectivelyVisible && d.Bounds.Width > 0 && d.LabelTextSize > 0))
             {
                 double size = d.LabelTextSize * (d.TransformToVisual(sheet)?.M11 ?? 1) / unit;
-                _out.WriteLine($"MARGIN {where}: {d.Layout} {d.Bounds.Width:F0}x{d.Bounds.Height:F0}, labels {size:F1} design px, {size - FitAudit.SmallestText:+0.0;-0.0} over the floor, split {(d.SplitSides.Count == 0 ? "none" : string.Join("+", d.SplitSides))}");
+                double caps = size * FitAudit.CapsOf(FitAudit.FaceOf(new Avalonia.Media.Typeface(d.GetValue(Avalonia.Controls.Documents.TextElement.FontFamilyProperty))));
+                double floor = FitAudit.SmallestText * FitAudit.DesktopCaps;
+                _out.WriteLine($"MARGIN {where}: {d.Layout} {d.Bounds.Width:F0}x{d.Bounds.Height:F0}, labels {size:F2} design px, capitals {caps:F2}, {caps - floor:+0.00;-0.00} over the floor's {floor:F2}, split {(d.SplitSides.Count == 0 ? "none" : string.Join("+", d.SplitSides))}");
                 if (size < FitAudit.SmallestText + margin - 0.05) faults.Add($"labels under the margin: {d.Layout} at {size:F1} design px, where {FitAudit.SmallestText + margin:F1} is asked");
             }
             return faults;

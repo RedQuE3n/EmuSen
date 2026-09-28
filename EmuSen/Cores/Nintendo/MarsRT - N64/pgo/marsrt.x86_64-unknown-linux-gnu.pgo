@@ -1,0 +1,21 @@
+# MarsRT's PGO profile for x86_64-unknown-linux-gnu: written by pgo/train.sh, read by build.rs, MSBuild and CI - see Mars_Native.md §6.17. Not edited by hand.
+llvm = 22.1.8
+source = 36a5237755f1c652
+toolchain = 1.98.1
+target = x86_64-unknown-linux-gnu
+trained = 2026-09-28T08:06Z
+flavour = rustc 1.98.1 (48a229cea 2026-09-01) (Fedora 1.98.1-1.fc44) | release | host
+flavour = rustc 1.98.1 (48a229cea 2026-09-01) (Fedora 1.98.1-1.fc44) | dist | host
+flavour = rustc 1.98.1 (48a229cea 2026-09-01) | dist | x86_64-unknown-linux-gnu
+run = wr.z64 f35d2423ebcb86ea wr.state 3c82e159e351d594 1200 
+run = bk.z64 d4e7534d8bcdc329 bk.state 4918c2bb49da7a18 1200 
+run = kb.z64 391a33a74dedffb8 kb.state a58618bd285e4fb2 1200 
+run = mm.z64 f760c811e02b4951 mm.state 7156e8ce57d64cf4 1200 
+run = rocket.z64 50e9a1eb850b766c rocket.state 56503821751e61dd 1200 
+run = pd.z64 8e432b1a5f4ca512 power-on 2400 
+run = dkr.z64 7de1a8fb2a9558cf power-on 1800 
+run = mk64.z64 8d9d2a68bbc5e951 power-on 1800 
+run = wr.z64 f35d2423ebcb86ea wr.state 3c82e159e351d594 300 ThreadedRdp=false
+run = mm.z64 f760c811e02b4951 mm.state 7156e8ce57d64cf4 300 ThreadedRdp=false
+run = bk.z64 d4e7534d8bcdc329 bk.state 4918c2bb49da7a18 600 rewind=1
+run = wr.z64 f35d2423ebcb86ea wr.state 3c82e159e351d594 600 RenderScale=2

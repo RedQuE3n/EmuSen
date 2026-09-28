@@ -5594,6 +5594,11 @@ targets and not to aarch64, where the SIMD paths differ. The cdylib and the exam
 profile names, so a profile trained through the examples applies to `libmarsrt.so`; that is argued, and not measured
 through the shim.
 
+*Carried on in §6.17* (2026-09-25 to 09-28): the profile built into the library Mistress loads, and measured there
+through Mistress's own loop (§6.17.5), where it takes 8 to 9 per cent off Super Mario 64 and Ocarina of Time and 4 off
+the Dam and Donkey Kong 64's title; two of the paragraph above's claims about where a profile applies were retired
+(§6.17.1).
+
 **BOLT** (Fedora's `llvm-bolt` 22.1.8, the binary linked with `--emit-relocs`, `perf record -j any,u` over the same
 training set, `ext-tsp` block order, `cdsort` function order, hot and cold split): 2 to 4 per cent alone, nothing on
 top of PGO and 1 to 2 per cent worse than PGO alone on the two heavy games. BOLT halved the taken branches in the
@@ -5838,7 +5843,8 @@ Ranked by what they buy the Dam and DK64, the two games the handheld needs, agai
 
 - **The handheld's profile.** §6.16.8 measured the levers there, not where its frame goes; the Dam's disturbed rounds were not explained.
 - **PGO through the shim**: the profile was measured in the examples, not in `libmarsrt.so` under Mistress, and not
-  at a multiple or on the device on this desktop.
+  at a multiple or on the device on this desktop. *Done through Mistress's loop at one on this desktop in §6.17.5; a
+  multiple and the device remain open (§6.17.10).*
 - **The exact run-ahead**, which is priced and not built; its price rests on the snapshot's copy as measured and on
   two arguments (window length, read-only events) that are not.
 - **The processor's Cranelift tier, chaining, the host-float fast path**: priced, not prototyped.
@@ -5847,3 +5853,459 @@ Ranked by what they buy the Dam and DK64, the two games the handheld needs, agai
   that include it moved DK64, the one game that waits for its workers, by 0.7 to 2.2 per cent; a hand-written AVX2
   rasteriser was not attempted.
 - **Other states.** Four states, no input, as §6.9; the Dam under the WiseMan comparisons compiles thirty times more.
+
+#### 6.17 The release library profile-guided (2026-09-25)
+
+§6.16.10 put profile-guided optimisation first: measured in the `threads` example at 7 to 12 per cent on this desktop
+and 7 to 8 on the handheld, exact, for a build step. This section builds that step into the library Mistress loads,
+`libmarsrt.so` behind the shim, and says where the profile comes from, what it holds, how a build knows whether it
+still fits, and how much of it survives an edit. Its first finding changed the design before anything was timed: a
+profile is keyed on names that depend on more than the source, and §6.16.4's two claims about where a profile applies
+were both wrong for the library that ships.
+
+##### 6.17.1 What a profile is keyed on
+
+LLVM's instrumented profile holds, for each function, a name, a hash of its control-flow graph and its counters. A
+build given the profile looks each of its functions up by name and uses the record only if the hash matches; a
+function with no record, or with a record of another shape, is compiled as without the profile. The names are the
+symbols. Since Rust 1.98 they are v0-mangled, and every crate's path in them carries a *disambiguator*
+(`CskGwq5vWJMSK_6marsrt`), a hash of what cargo passes as `-C metadata`; an internal function's name is further
+prefixed with its codegen unit's name (`marsrt.f0f0e0c77e6f1f9c-cgu.0;`), which carries another. Cargo's metadata hashes
+the package, its dependencies, the target, the compiler's whole `rustc -vV` and the profile's settings. It does not
+hash `RUSTFLAGS` — were it otherwise, the research's instrumented and guided builds would have named their functions
+differently and §6.16.4 would have measured nothing — so an instrumented build and the build that uses its profile
+name their functions alike, provided everything else is equal.
+
+Measured by building the library and reading the disambiguators in its symbols (`research`'s tools,
+`~/.cache/emusen/probe/mars-speed/pgo/scripts/names.sh`):
+
+| build of the same source | `marsrt`'s disambiguator | `cranelift_codegen`'s | `core`'s |
+| --- | --- | --- | --- |
+| Fedora's rustc 1.98.1, `--profile release` | `kGwq5vWJMSK` | `cf7Ha6Guiq1` | `iU9uQXeQYGI` |
+| Fedora's rustc 1.98.1, `--profile dist` | `2kBkitA4ESG` | `fSZn0polhyn` | `iU9uQXeQYGI` |
+| Fedora's rustc 1.98.1, `--profile dist --target x86_64-unknown-linux-gnu` | `ktKlGesFdsi` | `cnMst1hh60m` | `iU9uQXeQYGI` |
+
+`core` is the standard library, built once by the toolchain, and does not change; every crate cargo compiles does. The
+`release` row is the research's own profile's (`research/pgo-out.profdata` names `CskGwq5vWJMSK_6marsrt`). And LLVM
+agrees: the `dist` library built with the research's profile and `-Cllvm-args=-pgo-warn-missing-function` reports
+**1,215 functions with no profile data; the `release` library built with the same profile reports none.**
+
+So two sentences of §6.16.4 are retired. *"The cdylib and the examples share the functions the profile names, so a
+profile trained through the examples applies to `libmarsrt.so`"* holds for a `release` build and not for the `dist`
+build that a publish makes (§6.3), because `dist` differs from `release` in its debug information and its stripping,
+both of which cargo hashes. *"The profile is portable across x86-64 targets"* does not hold at all: the target is in
+the hash, and so is the compiler's version string, which differs between Fedora's rustc and the upstream build of the
+same release (`rustc 1.98.1 (48a229cea 2026-09-01) (Fedora 1.98.1-1.fc44)` against `rustc 1.98.1 (48a229cea
+2026-09-01)`). What is portable is the *source*: the control-flow hashes of the same source under the same compiler
+are the same, which is what makes a profile trained once apply wherever the names match.
+
+The design therefore calls the unit a **flavour** — a compiler, a cargo profile, and either the host or an explicit
+target — and trains every flavour that is built. A profile holding several flavours is one file: their names do not
+collide, and each build finds its own.
+
+##### 6.17.2 The design
+
+*Revised on 2026-09-28 before any timing (§6.17.4): the profile became one file a target, `pgo/marsrt.<target>.profdata`;
+MSBuild passes it only to a flavour its manifest lists; a stale profile is a note, not a warning; and the training
+counters became atomic. The design as first written follows.*
+
+*Where the profile is made.* Training runs commercial games, which CI does not have and the repository never holds.
+The profile is therefore made on this desktop by `pgo/train.sh` in the crate and checked in as `pgo/marsrt.profdata`,
+with a manifest, `pgo/marsrt.pgo`, that names the LLVM version that wrote it, the source it was trained on, the
+flavours it holds, the toolchain CI must use, and every training run by file name and the first 16 hex digits of its
+SHA-256. A publish anywhere, CI included, then uses the checked-in file and needs no game.
+
+*The flavours trained.* Three, the three builds that are made:
+
+| flavour | who builds it |
+| --- | --- |
+| Fedora's rustc, `release`, host | `dotnet build` on this desktop — the tests, and Mistress run from the tree |
+| Fedora's rustc, `dist`, host | `dotnet publish` on this desktop — `out/`, and every build the handheld has run |
+| upstream Rust 1.98.1, `dist`, `x86_64-unknown-linux-gnu` | CI's linux-x64 library |
+
+CI's Windows and macOS libraries are a fourth to seventh flavour that cannot be trained here, because an instrumented
+library must run to be trained and this desktop runs neither. They build with the profile and get no guidance from
+it, and say so (below). The upstream toolchain is installed without rustup into
+`~/.cache/emusen/toolchains/rust-1.98.1` (`rustc`, `cargo`, `rust-std`, `llvm-tools` from static.rust-lang.org); its
+LLVM is 22.1.8, as Fedora's is.
+
+*How it is trained.* `pgo/train.sh` builds each flavour's library with `-Cprofile-generate` into a scratch target
+directory (build scripts' own counters sent elsewhere, so the profile holds the library alone), and runs the training
+list through `pgo/driver`: a console program that does what Mistress's frame loop does to a core — `EmulatorSession`
+with the MarsRT engine through `CoreFactory`, the debug target refreshed, audio drained, the picture taken when its
+serial changes — and prints milliseconds a frame and the SHA-256 of the state at the end. One process a run; each
+writes its counters at exit. Each flavour's counters are merged by an `llvm-profdata` of the flavour's own LLVM version
+(the raw format is that version's, and the script refuses a mismatch); the three results are merged into one file.
+
+*Every build uses it.* `EmuSen.csproj` builds each crate of `RustCores.props` once (a batched target), and a crate with
+`pgo/<name>.profdata` is given `-Cprofile-use` through `--config build.rustflags` — a TOML array, because the path has
+a space in it and `RUSTFLAGS` splits on spaces. The flag names a copy, `obj/<name>/pgo/<name>-<hash>.profdata`,
+named by the first 16 hex digits of the profile's SHA-256. The copy is the point: cargo rebuilds when its flags
+change, not when a file they name does, and without it a refreshed profile would reach the library's own crate
+(whose build script watches the file) and not Cranelift, whose compiled bitcode would keep the old one. CI does the
+same with `CARGO_BUILD_RUSTFLAGS` and a copy in the workspace. `-p:EmuSenPgo=false` builds without it.
+
+*What a build checks* (`build.rs`, the crate's first build script, which runs wherever cargo does):
+
+- **The LLVM version.** The manifest's `llvm` against the version `rustc -vV` reports. A different major version
+  **fails the build**, naming both and the way out. The raw and indexed formats are versioned by LLVM release; a
+  newer LLVM reads an older profile, an older one refuses a newer, and a toolchain update is exactly when a profile
+  should be refreshed. `train.sh` requires the exact version for its merges.
+- **The flavour.** The build's compiler, cargo profile and target against the manifest's list. An untrained flavour
+  **warns** that it builds and that nothing in it is guided.
+- **The source.** A digest (FNV-1a over `src/` without its tests, `Cargo.toml` and `Cargo.lock`) against the one the
+  profile was trained on. A difference **warns** that the build is correct and that each function changed since
+  loses its guidance.
+
+A warning is a `cargo:warning`, which cargo repeats on every build that finds the library fresh as well as on the one
+that ran the script, and which MSBuild's `Exec` shows as a build warning (`EXEC : warning : marsrt@0.1.0: …`, checked
+on a rebuild that compiled nothing). The verdict is also written beside the library (`<profile
+directory>/marsrt-pgo.txt`: `matched`, `stale`, `untrained`, `instrumented` or `none`), which CI prints and makes a
+`::warning::` annotation on the run, and which `train.sh` reads to know the source and the flavour it trained. A
+stale or untrained build is never wrong, only slower: LLVM compiles a function whose record is missing or of another
+shape exactly as without the profile.
+
+*CI.* The library job reads the manifest's `toolchain` and installs that release rather than whatever `stable` is,
+so the upstream flavour's names match and the LLVM check cannot fail on a toolchain update CI chose by itself; MercuryRT,
+with no profile, stays on `stable`. The `dist` build takes the profile; the tests before it do not, since a test
+harness is another crate and no profile names it. The WiseMan job downloads the libraries and runs the comparison with
+the C# core on each platform, as before, so the check that the three platforms agree is now a check on the guided
+Linux library and the unguided Windows and macOS ones.
+
+##### 6.17.3 The predictions, written before any build was timed
+
+- **P1, the flavour.** A `dist` library given a profile trained only through `release` runs within ±2 per cent of
+  the unguided `dist` on all four games: nothing of the crate's is matched (§6.17.1), and what `core` holds is not on
+  the hot path.
+- **P2, the gain through the shim.** The guided `dist` library, published by `dotnet publish` and timed through the
+  driver, is faster than the unguided one by **4.5 to 7.5 per cent on the Dam, 5 to 8 on Donkey Kong 64's title, 7
+  to 10 on Ocarina of Time and 8 to 11.5 on Super Mario 64**. The example's gains were 6.9, 7.4, 10.0 and 11.6 per
+  cent; the shim adds C# work each frame that no profile touches (the picture's copy, the audio, the loop — 0.2 ms on
+  Mario, §6.16's 3.53 against the driver's 3.74), which dilutes the gain by that share; and the training set shares no
+  ROM with the measured games, where the research's shared three, which should cost at most two points (§6.16.4's
+  in-sample profile was no better than its disjoint one).
+- **P3, exactness.** Every run of every build ends on the unguided build's state hash for its game; the WiseMan tests
+  of MarsRT and of the frontends, and the corpus line for line (46 of 4637), pass on the guided `release` library.
+- **P4, the unrelated edit.** A branch added to a function of the state writer, which no measured frame runs, leaves
+  the gain within one point on all four games, and the build says `stale`: only that function and those it was
+  inlined into before instrumentation lose their records, and none of them is hot.
+- **P5, the hot edit.** The same kind of branch added on the exception path of `cpu::blocks::decoded::run`, the
+  decoded tier's loop, which costs nothing on a measured frame but changes the function's shape, **costs the Dam and
+  Donkey Kong 64 a quarter to a half of their gain and the two lighter games under a quarter**: the loop is 23 per cent
+  of the heavy games' thread and 8 to 17 of the others' (§6.16.2), and its handlers, called through pointers, keep
+  their own records.
+- **P6, the CI flavour.** The upstream `dist --target` build of the crate from another directory is `matched` and
+  reports fewer than ten functions without profile data: the checkout's path is not in cargo's hash.
+- **P7, the handheld** (for a run on the device, which §6.17.10 leaves open): through the shim, the guided
+  library takes **5 to 8 per cent off Donkey Kong 64's title and the Dam at one**, the example's 8.1 and 6.9 per cent
+  there (§6.16.8) diluted as on the desktop, **4 to 9 off Mario and Ocarina**, and **2 to 6 at two on the device**
+  (the example's 5.7 and 3.0); every hash one per game.
+
+##### 6.17.4 The revision before timing (2026-09-28): one profile a target, a build the profile never fails, counters that agree
+
+§6.17.2's design was built and not timed when the work paused on 2026-09-25. Resuming it on WiseMan three days and
+315 commits later, four things were changed before any build was timed. The crate's own source had not moved (its
+digest is still `36a5237755f1c652`), so the profile of the 25th was still `matched`; it was retrained all the same,
+because of the fourth change.
+
+*One profile a target.* §6.17.2 kept every flavour in one file, `pgo/marsrt.profdata`. That holds for one machine, and
+fails for a second: an aarch64 macOS profile has to be trained on a Mac, by a different `llvm-profdata`, on a different
+day, and merging it into this desktop's file would mean carrying the raw counters between machines and retraining here
+whenever the Mac's changed. The profile is now `pgo/marsrt.<target>.profdata` with its manifest
+`pgo/marsrt.<target>.pgo`, the target being Rust's triple: `x86_64-unknown-linux-gnu` here. MSBuild looks for the host's
+triple (from the operating system and `RuntimeInformation.OSArchitecture`), CI for its matrix's `target`, and each
+target's manifest pins its own toolchain. A target with no file builds as before PGO existed: no flag, no build-script
+verdict, no warning, and in CI the `stable` toolchain. That is the case of every Windows and macOS build today.
+
+*A flavour that is not trained is not given the profile.* §6.17.2 passed the profile to every build of the tree and let
+`build.rs` judge it: an untrained flavour warned, and an LLVM of another major version failed the build. The second is
+the wrong failure for a development tree. Fedora updates `rustc` on its own schedule; the day its LLVM's major version
+changes, every `dotnet build` on this desktop would have failed until someone retrained, for a profile whose names could
+not have matched anything anyway — the compiler's version string is in every name's disambiguator (§6.17.1). MSBuild
+now runs `rustc -V` and passes the profile only when the manifest lists `<that compiler> | <cargo profile> | host`;
+otherwise the crate builds unguided and says so in a normal-importance message, which `dotnet build`'s default output
+does not show (checked by building with `RUSTC` set to the upstream compiler: the message, no flag, the verdict `none`).
+`build.rs` keeps both checks for whoever passes a profile to cargo by hand, which is what CI does, and there a warning
+is right: CI pins the toolchain precisely so that its flavour is trained.
+
+*Stale is a note, not a warning.* Every edit to `src/` makes the profile stale, and a stale profile is safe (§6.17.1),
+so §6.17.2's warning would have appeared on every build of an edited crate until the profile was retrained — including
+every build of a branch that has nothing to do with speed. LLVM adds its own, one per changed function (`function
+control flow change detected (hash mismatch)`), which `-Cllvm-args=-no-pgo-warn-mismatch` beside the profile now
+silences; the flag changes no instruction of the library (its disassembly, addresses masked, is identical with and
+without it). The verdict file still says `stale` and gives the reason on a `note =` line, and CI turns that into a
+`::notice::`; when to retrain is §6.17.6's question.
+
+*Counters that agree.* Every guided build warned once,
+`Profile in … rdp::two_cycle … Rdp::draw_two_cycle partially ignored, possibly due to the lack of a return path.` The
+function does return. What it lacks is consistent counts: it runs on the four rasteriser workers at once, the
+instrumented build increments its counters without atomics, and increments lost between threads leave counts that
+LLVM's propagation cannot reconcile, so it drops the part it cannot place. Shown by a control: two training runs (Wave
+Race and Banjo, 600 frames) with the default counters, then the same two with
+`-Cllvm-args=-instrprof-atomic-counter-update-all`; the guided `release` build of the first warned exactly as before, the
+second did not (`~/.cache/emusen/pgo/atomictest/`). The warning is the visible part of a wider loss: every function
+the workers run shared its counters between threads and could lose increments, and `draw_two_cycle` is the one where
+the loss left counts LLVM could not reconcile. `train.sh` now instruments with atomic updates. It costs training time
+(the two runs took 74 and 64 ms a frame against 46 and 36) and nothing at run time, since only the guided build
+ships.
+
+*The recipe, committed.* The training list moved from `~/.cache/emusen/pgo/training.txt` into the crate,
+`pgo/training.txt`, with paths relative to `GAMES` (default `~/.cache/emusen/pgo/games`) and a header that names each
+copy's source in the library. One line changed: the 2× run on the device (`RenderScale=2 Gpu=true`) is now
+`RenderScale=2` on the processor, which ends on the same state hash (`F26A3C8A4639164F`) and keeps GPU work out of a
+training run.
+What the device path runs on the host is guided only where it shares code with the processor path.
+`train.sh` runs on macOS as well (bash 3.2, `shasum`, `.dylib`, rustup's toolchains and its `llvm-tools`), and takes
+`RUN`, a command every build and training run is wrapped in; here that was `flock ~/.cache/emusen/probe/timing.lock
+nice -n 10`, so that training does not disturb another measurement.
+
+*The driver.* `pgo/driver` gained `mistress=1` — `MainWindow`'s rewind: a snapshot four times a second, each with its
+thumbnail, the frame fetched for the thumbnail when it was not offered — and `warmup=n`, frames run before the clock
+starts, and it now prints RunFrame's own mean beside the loop's. The training list uses neither, so its runs are what
+they were.
+
+##### 6.17.5 Measured through Mistress's loop
+
+*The tool.* `pacebench`, the frame-pacing bench the C# core was measured with, constructs a `MarsCore` and cannot run
+MarsRT, so the loop was taken from `MainWindow`'s emulation thread into the committed driver instead: `pgo/driver`
+with `mistress=1 warmup=120` runs `EmulatorSession` with the MarsRT engine, and after each `RunFrame` refreshes the
+debug target, offers the frame to the rewind buffer (a snapshot every 15 frames with its 160-pixel thumbnail, as
+`MainWindow` does), drains the audio and fetches and hands back the picture when its serial changed. It prints the
+loop's wall time a frame, `RunFrame`'s own mean, and the first 16 hex digits of the state's SHA-256 at the end. Only the
+presentation (the render thread, the copy onto the screen) and pacing to the console's rate are absent; neither runs
+on the emulation thread's clock, and the frames were run flat out.
+
+*The builds.* Two `dotnet publish -r linux-x64` of the driver from the same tree, as a publish of Mistress builds the
+library (`dist`): `base` with `-p:EmuSenPgo=false`, and `pgo` with the checked-in profile, each with its own
+`-p:EmuSenCargoTargetRoot`. `pgo`'s build script said `matched`.
+
+*The runs.* The four states of §6.16 (Super Mario 64 and Ocarina of Time, graded; the Dam and Donkey Kong 64's title,
+as further evidence), 120 frames of warm-up and 600 timed, production's settings. Builds interleaved in each round
+with their order rotated between rounds; every run under the shared lock (`flock ~/.cache/emusen/probe/timing.lock`)
+and, inside it, the quiet gate of §6.16.1 (the rest of the machine under 1.2 busy processors for a second). Two
+batches: **r2**, five rounds with the variants of §6.17.6 among the builds, while another task's compiler was running
+(the gate read 1.10 to 1.19); **r3**, eight rounds of the two builds alone on a quieter machine (the gate's median
+0.11). A result is a change whose rounds do not overlap the base's; the paired change is the median over rounds of each
+round's guided time against the same round's base. Scripts and results:
+`~/.cache/emusen/probe/mars-speed/pacebench-rt/` (`mkbuild.sh`, `bench.sh`, `summ2.py`, `results/r2-r4.tsv`,
+`PREDICTIONS.md`).
+
+*Predictions*, written before the first timed run (P8, P9, P10) and between batches (P12, P13), in `PREDICTIONS.md`:
+P8, the loop's gain Mario 7–11 per cent, Ocarina 6–10, the Dam 5–8, DK64 4–8, and `RunFrame`'s P2's ranges (§6.17.3);
+P9, one hash a game; P10, §6.17.7; P12, r3 within 1.5 points of r2 on every game; P13, the Dam's and DK64's gain
+larger without the warm-up, because the frames after a load compile blocks and Cranelift is guided code.
+
+**r3, the loop, ms a frame:**
+
+| game | base, median (range) | pgo, median (range) | paired | overlap |
+| --- | --- | --- | ---: | --- |
+| Super Mario 64 | 3.736 (3.688–3.750) | 3.463 (3.383–3.494) | **−7.2%** | no |
+| Ocarina of Time | 4.659 (4.561–4.797) | 4.253 (4.207–4.406) | **−9.1%** | no |
+| the Dam | 10.931 (10.840–11.520) | 10.382 (10.345–11.013) | −4.6% | one run each way |
+| DK64 title | 10.928 (10.834–10.972) | 10.491 (10.471–10.559) | −3.9% | no |
+
+`RunFrame` alone in the same runs: −7.6, −9.5, −4.7 and −3.9 per cent. The loop's work outside `RunFrame` is 0.15 to
+0.18 ms a frame on every game and both builds. In time, PGO takes 0.27 ms off Mario's frame, 0.41 off Ocarina's, 0.55
+off the Dam's and 0.44 off DK64's. **r2** gave −7.8, −8.6, −4.1 and −3.7 per cent (loop, paired), its rounds apart on
+Ocarina and DK64 and overlapping by one disturbed run on Mario and the Dam. Pooled, the thirteen rounds give −7.7,
+−9.0, −4.4 and −3.8.
+
+*Exactness.* Every run of every build of r2 to r4 ended on one hash for its game: `8553FCCA132C724A` (Mario),
+`D1382AB72E567556` (Ocarina), `03348EC3AB46361C` (the Dam), `52AB776E24D5A170` (DK64), and without the warm-up
+`225BE8131B035B43` and `E957FC1E2B512D4B`. The guided `release` library passes the 627 WiseMan tests whose names
+contain `MarsRt`, and the corpus line for line against the C# core (1,722 lines, 46 of 4,637 failing, as unguided).
+**P9 and P3 held.**
+
+*The fates.* **P8 held on the two graded games and failed at its low end on the other two**: Mario −7.2 against 7 to 11,
+Ocarina −9.1 against 6 to 10, the Dam −4.6 against 5 to 8, DK64 −3.9 against 4 to 8. **P2**, on `RunFrame`: held for
+Ocarina (−9.5 against 7–10) and the Dam (−4.7 against 4.5–7.5), missed for Mario by half a point (−7.6 against
+8–11.5) and for DK64 by a point (−3.9 against 5–8). **P12 held**: the batches differ by at most 0.6 points. **P13 is
+refuted**: without the warm-up (r4, five rounds) the Dam gains −3.5 and DK64 −2.5 per cent, less, not more; the first
+frames' compiling is not where the profile pays.
+
+**Three of the four games gain less here than in §6.16.4's examples**: the Dam 0.55 ms a frame against 0.67, DK64 0.44
+against 0.81 and Mario 0.27 against 0.41; Ocarina about as much, 0.41 against 0.46. Three explanations were tested,
+each with its prediction written first (P13 to P15 in `PREDICTIONS.md`).
+
+- *The first frames* (P13): refuted above; without the warm-up the gain is smaller.
+- *The training set* (H2): §6.16.4's profile trained GoldenEye, DK64 and Ocarina from power-on, and §6.17's trains
+  none of the measured ROMs. The research's own tool, `examples/threads … split 4 blocks`, built from today's source
+  with today's profile, gains **−11.0, −9.7, −6.4 and −6.8 per cent** (e1: five rounds, `release`, every round apart),
+  the research's sizes. The training set is not the cause: refuted.
+- *The flavour* (P15): the same example built as `dist` gains −14.5, −10.3, −5.7 and −7.5 (e2: five rounds on a
+  busier machine, the Dam and DK64 each overlapping by one disturbed base run). The `dist` profile guides as well as
+  the `release` one: held.
+
+What remains is the shim's frame, and one observation says it is not the example's frame. The same state, run 600
+frames from its load, ends on a different hash through the shim (the Dam `225BE8131B035B43`) than through the example
+(`4DEACE55468AA765`, the hash of §6.16.8's handheld runs), so the two run the machine in different configurations. The
+part of the shim's configuration that spends time the profile does not reach was **not identified**. For method the
+consequence is plain: PGO's size for Mistress is the driver's, and the examples overstated it by about one point on
+Ocarina, one to two on the Dam, three on DK64 and four to seven on Mario. A further control, the research's own profile
+on today's source, could not be run: built with it, today's library reports 1,201 functions without profile data. Its
+names no longer match, most likely because §6.17's first commit gave the crate its build script, which is a new
+dependency of the library's unit and so changes cargo's metadata hash (§6.17.1) — a structural change of the kind
+§6.17.6's rule counts.
+
+**The verdict: PGO pays through Mistress, exactly, and is kept.** It is 7 to 9 per cent on the two graded games and 4
+on the two heavy ones, every round apart but one, for a build step and a checked-in file. The profile checked in with
+this section is the one measured.
+
+##### 6.17.6 How a profile ages, and when to retrain it
+
+Three variants of the guided build were timed in the same interleaved rounds as the base and the guided build (r2,
+five rounds, the loop's paired median change against the base):
+
+| build | what differs | Mario | Ocarina | the Dam | DK64 title |
+| --- | --- | ---: | ---: | ---: | ---: |
+| pgo | the profile, matched | −7.8% | −8.6% | −4.1% | −3.7% |
+| pgo, racy counters | the profile trained before §6.17.4's atomic counters | −8.2% | −9.1% | −3.8% | −3.6% |
+| stale | a branch added to `StateWriter::enter`, which no measured frame runs | −4.0% | −10.0% | −4.1% | −3.7% |
+| hot | a branch added on the exception path of `cpu::blocks::decoded::run`, the decoded tier's loop | −7.9% | −9.1% | −4.0% | −3.1% |
+| p1 | the `release` flavour's profile alone given to the `dist` build (built with cargo, since MSBuild no longer passes it) | −0.1% | −0.1% | +0.9% | +0.2% |
+
+Every run of every build ended on its game's one hash. Built without §6.17.4's `-no-pgo-warn-mismatch`, the `stale`
+and `hot` builds each named the one function whose record LLVM discarded (`function control flow change detected (hash mismatch)`: `StateWriter::enter`, "up to 10,344
+count discarded", and `decoded::run`, "up to 12,626,106,089") and said `stale`; `p1` said `untrained` and, with
+`-pgo-warn-missing-function`, reported 1,214 of the library's functions without profile data, where the matched `dist`
+build reports none.
+
+*The predictions' fates.* **P1 held**: the other flavour's profile guides nothing and buys nothing. **P11 held**: the
+atomic counters removed the warning from all three flavours' builds and moved no game by more than half a point.
+**P4, within a point on all four, held on the Dam and DK64** (within 0.1); on Ocarina the stale build was 1.4 points
+*faster* than the matched one, inside both builds' spread, and Mario is undecided, its `stale` rounds running from 3.50
+to 4.06 ms and overlapping both the base's and the guided build's. The edit is in a function no measured frame calls,
+and three games say it cost nothing. **P5 is refuted**: the hot edit was predicted to cost the Dam and DK64 a quarter to a half of their gain,
+and it cost the Dam nothing and DK64 at most 0.6 of 3.7 points, inside the spread. Discarding the record of the loop
+that runs 23 per cent of the heavy games' thread (§6.16.2) is nearly free. The reading that fits is that what the
+profile buys in that loop is not the loop's own block order but the decisions its callers and callees make with their
+own records — which handlers are inlined into it, what is laid out hot — and those survive an edit to the loop.
+
+*So the profile ages slowly, and fails in steps.* An edit discards the records of the functions whose control flow it
+changed, and this measurement says even the hottest one's loss is small. What discards everything at once is a new
+**name**: every function's name carries its crate's disambiguator, which hashes the compiler's version string, the
+cargo profile and the target (§6.17.1). And a moved or renamed function loses its own record the same way. The rule
+recorded for retraining:
+
+1. **Always after a toolchain update** — Fedora's `rustc` or the version CI pins. Until then MSBuild gives the new
+   compiler nothing (§6.17.4), so the build is unguided and silent: it costs the whole gain and nothing else.
+2. **After restructuring the hot paths**: moving or renaming the processor's decode, dispatch and vector unit
+   (`rsp::decoded`, `rsp::simd`), the CPU's decoded tier and dispatcher (`cpu::blocks`), the coprocessor and its
+   software float (`cpu::cop1`, `cpu::softfloat`), or the rasteriser's draw functions (`rdp::one_cycle`,
+   `rdp::two_cycle`, `rdp::walker`), or adding a tier that takes over their work, since new code has no records.
+   Edits inside them are not a reason by themselves.
+3. **Before a speed measurement that is to be quoted**, so that the number is the profile's and not the profile's
+   minus an unknown decay.
+4. Otherwise not: the verdict file's `stale` is information, not a defect.
+
+##### 6.17.7 Where the profile applies, measured
+
+*P6, the CI flavour from elsewhere: held.* The crate's sources copied to another directory
+(`~/.cache/emusen/pgo/p6/other place/Nintendo/MarsRT - N64/`, beside a copy of the shaders it includes), built with the
+upstream toolchain for `--target x86_64-unknown-linux-gnu` and `-pgo-warn-missing-function`: `matched`, and **no**
+function of the library without profile data. The checkout's path is in no name. The host `dist` build in the tree
+reports 576 functions without data, every one of them in a build script: without `--target` cargo gives the build's
+`rustflags` to build scripts too, and no profile holds a build script's counters. That costs nothing, since the
+scripts run once at build time, and it is why `train.sh` sends the build scripts' own counters elsewhere.
+
+*P10, the library Mistress ships is the library measured: held for the code, refuted for the bytes.* A
+`dotnet publish` of Mistress (to a scratch directory, never `out/`) and the measured `dist` build of the driver differ
+in six strings, all paths of files that `cranelift-codegen`'s build script generates into its `OUT_DIR`, which include
+the cargo target directory and a hash of the build script's unit. The disassembly, with addresses masked, is identical.
+The same was seen between two builds whose flags differed only by `-no-pgo-warn-mismatch`, which changes the build
+scripts' unit hash and nothing in the code. A library is therefore reproducible only for a fixed target directory, and
+comparisons of builds are made on their code.
+
+##### 6.17.8 The storage decision, and the recipe
+
+**The profile is made on this desktop and checked in**, `pgo/marsrt.x86_64-unknown-linux-gnu.profdata` (11,028,856
+bytes) with its manifest. The alternative, training at publish time where the ROMs are, was not taken: it makes every
+publish most of an hour longer and dependent on a library and a quiet machine, and it gives CI nothing, since CI has no
+ROMs. The cost of checking it in is the history: each retraining adds about 11 MB, so retraining at every toolchain
+update, about every six weeks, adds on the order of 100 MB a year. That is acceptable at this size; if more targets
+are trained or the file grows, it belongs in Git LFS.
+
+*To regenerate it*, on this desktop:
+
+```
+cd "EmuSen/Cores/Nintendo/MarsRT - N64"
+LLVM_PROFDATA=~/.cache/emusen/probe/mars-speed/research-tools/root/usr/bin/llvm-profdata \
+  RUN="flock ~/.cache/emusen/probe/timing.lock nice -n 10" bash pgo/train.sh
+```
+
+with, as of this writing:
+
+- **Fedora's rustc 1.98.1** (`48a229cea 2026-09-01`, `Fedora 1.98.1-1.fc44`), LLVM 22.1.8, for the `release` and
+  `dist` host flavours; Fedora ships no `llvm-profdata` of that version outside its `llvm` package, so the one used is
+  that package's 22.1.8 extracted without root into `research-tools/root/` (§6.16.1).
+- **Upstream Rust 1.98.1** with `llvm-tools`, LLVM 22.1.8, installed without rustup into
+  `~/.cache/emusen/toolchains/rust-1.98.1` from static.rust-lang.org's `2026-09-03` channel, for CI's flavour.
+- **The games** in `~/.cache/emusen/pgo/games/train/`, copied from the library (§6.17.4, `pgo/training.txt`'s header);
+  the manifest's `run =` lines give each file's SHA-256 prefix, so a regeneration can check it trained on the same
+  inputs.
+- **Time**: about 55 minutes on this desktop with the lock shared (the atomic counters make the
+  instrumented runs about 1.6 times slower), three instrumented builds of about a minute and a half each.
+
+The profile is a function of the source, the toolchains, the training list and its inputs. It is not bit-reproducible,
+since the threaded runs' counts depend on scheduling; but every training run ended on the same state hash in all three
+flavours and in both trainings made on 2026-09-28, and the two profiles (racy and atomic counters, §6.17.4) built
+libraries within half a point of each other on every game (§6.17.6).
+
+*When to regenerate* is §6.17.6's rule: a toolchain update (always, since the names change), a change to the hot paths
+listed there, or a new sample showing a hot function unguided. Nothing breaks if it is not done.
+
+##### 6.17.9 What a run on the Mac must do
+
+macOS on Apple silicon needs its own profile, `pgo/marsrt.aarch64-apple-darwin.profdata`: the target is in every name
+(§6.17.1), and the hot code itself differs: the signal processor's SSE paths (`rsp::decoded`) are compiled for x86-64
+alone, and aarch64 runs their portable fallback, so no x86-64 counter could apply.
+The build side is ready: `dotnet build` and `dotnet publish` on a Mac look for that file, CI's `osx-arm64` job does the
+same, and neither passes anything until it exists. What the Mac itself must do:
+
+1. **The toolchain.** rustup with Rust 1.98.1 and its `llvm-tools` (`rustup toolchain install 1.98.1 --component
+   llvm-tools`), made the default so that `dotnet build` uses it (`rustup default 1.98.1`), and the .NET 10 SDK.
+   `train.sh` then finds `llvm-profdata` in the toolchain's sysroot and uses the same toolchain as CI's flavour; the
+   host flavours and CI's differ only in the cargo profile and the explicit `--target`, which §6.17.1 showed are enough
+   to rename everything, so all three are trained.
+2. **The inputs.** This desktop's `~/.cache/emusen/pgo/games/` copied to the same place on the Mac (both `train/` and
+   `measure/`; 344 MB). The manifest's `run =` lines give each file's SHA-256 prefix, so the Mac's manifest can
+   be compared with this one's line for line.
+3. **Training.** `bash pgo/train.sh` in the crate. It writes `pgo/marsrt.aarch64-apple-darwin.{profdata,pgo}`. No
+   `RUN` is needed on a machine used for nothing else; the instrumented runs are slower on any machine by the atomic
+   counters' cost.
+4. **The measurement**, as §6.17.5's: two publishes of `pgo/driver` (`-r osx-arm64 --self-contained false`), one with
+   `-p:EmuSenPgo=false`, each with its own `-p:EmuSenCargoTargetRoot`, then rounds of `marsrt-pgo <rom> <state> 600 mistress=1 warmup=120` on the four measured
+   states, the builds interleaved and their order rotated each round, at least five rounds. Graded on Super Mario 64
+   and Ocarina of Time. Every run of both builds must end on one hash for its game; the hash need not equal this
+   desktop's, and whether it does is worth recording: the WiseMan job's comparison with the C# core is the only check
+   so far that the platforms agree. This desktop's `bench.sh` reads `/proc/stat` for its quiet gate and does not run on
+   macOS; there the rounds are run on an otherwise idle machine without the gate.
+5. **The decision.** Only if the Mac's gain holds on the two graded games, in rounds that do not overlap, are the two
+   files committed. If it does not, the `osx-arm64` library stays unguided, which costs nothing.
+
+The measurement should record the machine's number of performance cores beside its results: the shim's default is
+four workers and the emulation thread, and a machine with fewer fast cores measures a different balance.
+
+**Windows** is not planned: the library there would be trained on Windows, and `train.sh` refuses any host but Linux
+and macOS. `win-x64` builds unguided and silently.
+
+**MercuryRT**, the Game Boy core, is paused, and nothing here was measured on it. The build step is generic — any crate
+of `RustCores.props` with a `pgo/<name>.<target>.profdata` is guided — but `build.rs`'s checks and `train.sh` are
+MarsRT's. Its cost per frame is the per-cycle design (`Mercury_Native.md`), a loop of data-dependent dispatch, which is
+the part of MarsRT's frame where §6.16.4's counters showed PGO buying nothing (the mispredictions did not move). That
+suggests a smaller gain there; it is a suggestion, not a measurement, and should be measured if that crate resumes.
+
+##### 6.17.10 What is not done
+
+- **The handheld through the shim** (P7). Its `linux-x64` publish carries the guided library once this is merged, and
+  §6.16.8 measured the example there; the driver's rounds on the device are not run. §6.17.5's finding that the
+  examples overstate the gain says to expect less than §6.16.8's 7 to 8 per cent.
+- **A multiple, and the device path.** Every timed run was at one on the processor. The training list trains 2× on the
+  processor only (§6.17.4); what the device path spends on the host is not measured guided.
+- **Why the shim gains less than the example** (§6.17.5): the configuration difference behind the two hashes is
+  unidentified.
+- **The Mac** (§6.17.9) and **Windows**: no profile, both build unguided.
+- **The profile's decay over real edits.** §6.17.6 measured one synthetic edit in a cold function and one in the
+  hottest loop. How a month of ordinary commits ages the profile is not measured; the next retraining should time the
+  stale profile beside the fresh one before replacing it.
+- **Mario's `stale` reading** (−4.0 per cent, rounds overlapping both builds) was not re-run.

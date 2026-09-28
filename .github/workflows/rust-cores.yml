@@ -65,8 +65,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      # A crate with pgo/<name>.<target>.profdata: the toolchain its manifest pins, which the profile's names need, and a copy named by its hash, so a refreshed profile rebuilds what it guides; a target without one builds on stable, unguided and without a warning - see Mars_Native.md §6.17.
+      - name: The PGO profile
+        id: pgo
+        shell: bash
+        run: |
+          profile="pgo/${{ matrix.crate.name }}.${{ matrix.platform.target }}.profdata"
+          manifest="${profile%.profdata}.pgo"
+          if [ -f "$profile" ]; then
+            hash=$( (sha256sum "$profile" 2> /dev/null || shasum -a 256 "$profile") | cut -c1-16)
+            mkdir -p ../../../../pgo-profile
+            cp "$profile" "../../../../pgo-profile/${{ matrix.crate.name }}-$hash.profdata"
+            cp "$manifest" "../../../../pgo-profile/${{ matrix.crate.name }}-$hash.pgo"
+            printf 'toolchain=%s\n' "$(sed -n 's/^toolchain = //p' "$manifest")" >> "$GITHUB_OUTPUT"
+            printf 'rustflags=%s\n' "-Cprofile-use=${{ github.workspace }}/pgo-profile/${{ matrix.crate.name }}-$hash.profdata -Cllvm-args=-no-pgo-warn-mismatch" >> "$GITHUB_OUTPUT"
+          else
+            printf 'toolchain=stable\n' >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ steps.pgo.outputs.toolchain }}
           targets: ${{ matrix.platform.target }}
 
       - uses: Swatinem/rust-cache@v2
@@ -85,7 +104,26 @@ jobs:
         run: cargo test --release --target ${{ matrix.platform.target }}
 
       - name: Build
+        env:
+          CARGO_BUILD_RUSTFLAGS: ${{ steps.pgo.outputs.rustflags }}
         run: cargo build --profile dist --target ${{ matrix.platform.target }}
+
+      # The build script's verdict on the profile: guided, stale (a notice), or not trained for this toolchain's flavour (a warning: CI pins the toolchain so that it is).
+      - name: The PGO verdict
+        if: steps.pgo.outputs.rustflags != ''
+        shell: bash
+        run: |
+          status="target/${{ matrix.platform.target }}/dist/${{ matrix.crate.name }}-pgo.txt"
+          cat "$status"
+          warning=$(sed -n 's/^warning = //p' "$status")
+          note=$(sed -n 's/^note = //p' "$status")
+          if [ -n "$warning" ]; then
+            echo "::warning title=${{ matrix.crate.name }} ${{ matrix.platform.rid }}::$warning"
+          elif [ -n "$note" ]; then
+            echo "::notice title=${{ matrix.crate.name }} ${{ matrix.platform.rid }}::$note"
+          else
+            echo "::notice title=${{ matrix.crate.name }} ${{ matrix.platform.rid }}::profile-guided ($(sed -n 's/^state = //p' "$status"))"
+          fi
 
       - name: Exports
         shell: bash

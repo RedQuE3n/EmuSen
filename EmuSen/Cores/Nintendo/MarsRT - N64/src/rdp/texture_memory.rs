@@ -225,6 +225,33 @@ impl Rdp {
         self.write_texture_word(two | 0x400, upper as i32);
     }
 
+    /// True when the command the last word completed is a load, which the device's processor replays rather than reads (Mars_Performance.md §41).
+    #[inline(always)]
+    pub fn gathered_load(&self) -> bool {
+        matches!(super::command_id(self.command[0]), super::LOAD_TILE | super::LOAD_BLOCK | super::LOAD_PALETTE)
+    }
+
+    /// Before a load a replay will copy: whether it writes texture memory is then its own flag.
+    #[inline(always)]
+    pub fn begin_load(&mut self) {
+        self.multiple.texture_memory_changed = false;
+    }
+
+    /// The texture memory the load just run left, when it wrote any of it.
+    #[inline(always)]
+    pub fn loaded(&self) -> Option<&[u8; 4096]> {
+        self.multiple.texture_memory_changed.then_some(&*self.texture_memory)
+    }
+
+    /// `Load` without RDRAM: the tile's size set as the load sets it, and the texture memory another processor's same load left (Mars_Performance.md §41).
+    pub fn replay_load(&mut self, loaded: Option<&[u8; 4096]>) {
+        self.set_tile_size(self.command[0]);
+        if let Some(memory) = loaded {
+            self.texture_memory.copy_from_slice(memory);
+            self.multiple.texture_memory_changed = true;
+        }
+    }
+
     #[inline(always)]
     fn write_texture_word(&mut self, index: i32, value: i32) {
         self.multiple.texture_memory_changed = true;

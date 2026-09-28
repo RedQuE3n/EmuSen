@@ -1142,6 +1142,159 @@ fn a_join_waits_for_the_scans_handed_to_the_leader() {
     assert_eq!(after, before + 1, "the join returned before the leader ran the scan it was handed");
 }
 
+// The device's processor behind the native ones (Mars_Performance.md §41).
+
+/// A machine at a multiple on the device, its list on a drain of `workers`, even of one.
+fn drained(scale: i32, workers: usize) -> Machine {
+    let mut m = machine(scale, true, 1);
+    m.set_verify_rdp(true);
+    m.set_rdp_workers(workers);
+    m.set_threaded_rdp(true);
+    m
+}
+
+/// A test's hold on the device's processor, let go from another thread after a while.
+fn let_behind_go_later(m: &Machine, millis: u64) -> std::thread::JoinHandle<()> {
+    let release = m.bus.dp.threads.as_ref().expect("a drain").hold_behind();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(millis));
+        release();
+    })
+}
+
+fn behind(m: &Machine) -> i64 {
+    m.bus.dp.threads.as_ref().map_or(0, |t| t.behind())
+}
+
+/// The device's processor held behind while the native ones load a texture, draw with it, draw over it later in the same list, and
+/// the processor stores over it too: its loads, replayed from the native ones', are what the list at once loaded.
+#[test]
+fn the_device_s_processor_behind_replays_the_loads_the_native_ones_read() {
+    if devices().is_empty() {
+        return;
+    }
+    let mut list = textured(0x3333_8888, 1, false);
+    list.extend([FILL_CYCLE, color_image(TEXTURE_SOURCE, 2, 64), scissor(0, 0, 64 * 4, 32 * 4), fill_color(0x1234_5678), fill_rectangle(0, 0, 63 * 4, 31 * 4)]);
+    list.extend(textured(0x4444_9999, 1, false));
+    for (scale, workers) in [(2, 1), (2, 3), (4, 4)] {
+        let through = |threaded: bool| {
+            let mut m = if threaded { drained(scale, workers) } else { machine(scale, true, 1) };
+            let held = threaded.then(|| m.bus.dp.threads.as_ref().unwrap().hold_behind());
+            hand_only(&mut m, &list, 0x0010_0000);
+            for at in (0..0x4000u32).step_by(4) {
+                m.bus.write32(TEXTURE_SOURCE + at, 0xDEAD_BEEF ^ at);
+            }
+            if let Some(release) = held {
+                assert!(behind(&m) > 0, "the device's processor had caught up, so nothing was replayed");
+                release();
+            }
+            m.join_rdp();
+            shadow(&mut m)
+        };
+        assert_identical(&through(false), &through(true), &format!("{scale}x on {workers} workers, the device's processor behind"));
+    }
+}
+
+/// A read of bytes the native processors have drawn does not wait for the device's processor, which reads no RDRAM: held for three
+/// hundred milliseconds, it is still behind when the read returns, and the read sees the fill.
+#[test]
+fn a_read_of_what_the_native_processors_drew_does_not_wait_for_the_device_s_processor() {
+    if devices().is_empty() {
+        return;
+    }
+    let mut m = drained(2, 3);
+    let released = let_behind_go_later(&m, 300);
+    hand_only(&mut m, &cleared(2), 0x0010_0000);
+    let started = std::time::Instant::now();
+    let pixel = m.bus.read32(FRAMEBUFFER + 100 * WIDTH * 2);
+    let waited = started.elapsed();
+    let still = behind(&m);
+    released.join().unwrap();
+    m.join_rdp();
+    assert_eq!(pixel, 0x2109_8421, "the read did not see the fill");
+    assert!(still > 0, "the device's processor had caught up, so nothing was tested");
+    assert!(waited < std::time::Duration::from_millis(200), "the read waited {waited:?}, for the device's processor");
+}
+
+/// A join, a stop and a state's write each wait for the device's processor behind, which is held for a hundred milliseconds; after
+/// each the words are all its, and the picture is the list at once's.
+#[test]
+fn a_join_a_stop_and_a_state_wait_for_the_device_s_processor_behind() {
+    if devices().is_empty() {
+        return;
+    }
+    let list = shaded(0x7E57_5CA2, 2, false, false);
+    let at_once = {
+        let mut m = machine(2, true, 1);
+        hand_only(&mut m, &list, 0x0010_0000);
+        shadow(&mut m)
+    };
+    for change in ["a join", "a stop", "a state's write"] {
+        let mut m = drained(2, 3);
+        let released = let_behind_go_later(&m, 100);
+        hand_only(&mut m, &list, 0x0010_0000);
+        match change {
+            "a join" => m.join_rdp(),
+            "a stop" => m.set_threaded_rdp(false),
+            _ => drop(m.save_state_vec(false).unwrap()),
+        }
+        let left = behind(&m);
+        released.join().unwrap();
+        assert_eq!(left, 0, "{change} returned with the device's processor {left} words behind");
+        assert_identical(&at_once, &shadow(&mut m), &format!("after {change}"));
+    }
+}
+
+/// More loads than the leader keeps, handed over while the device's processor is held for a hundred milliseconds: the leader waits
+/// for it rather than overwrite a load it has not replayed, and its picture is the list at once's.
+#[test]
+fn the_leader_waits_for_the_device_s_processor_when_every_kept_load_is_unread() {
+    if devices().is_empty() {
+        return;
+    }
+    // One clear, then ten lists' loads and triangles over each other, so that every load's texels can reach the picture.
+    let mut list = cleared(2);
+    for seed in 0..10u32 {
+        list.extend(&textured(0x5151_0000 + seed, 1, false)[cleared(2).len()..]);
+    }
+    let at_once = {
+        let mut m = machine(2, true, 1);
+        hand_only(&mut m, &list, 0x0010_0000);
+        shadow(&mut m)
+    };
+    let mut m = drained(2, 3);
+    let released = let_behind_go_later(&m, 100);
+    hand_only(&mut m, &list, 0x0010_0000);
+    released.join().unwrap();
+    assert_identical(&at_once, &shadow(&mut m), "more loads than the leader keeps");
+}
+
+/// A list longer than the ring, handed over while the device's processor is held: the ring waits for it, so no word it has still to
+/// run is overwritten, and its picture is the list at once's.
+#[test]
+fn the_ring_waits_for_the_device_s_processor_behind() {
+    if devices().is_empty() {
+        return;
+    }
+    let mut s = 0x0BAD_F11Du32;
+    let mut list = cleared(2);
+    while list.len() < (1 << 16) + 4096 {
+        let (x, y) = (next(&mut s) % (WIDTH - 16), next(&mut s) % (ROWS - 16));
+        list.push(fill_color(next(&mut s)));
+        list.push(fill_rectangle(x * 4, y * 4, (x + 1 + next(&mut s) % 15) * 4, (y + 1 + next(&mut s) % 15) * 4));
+    }
+    let at_once = {
+        let mut m = machine(2, true, 1);
+        hand_only(&mut m, &list, 0x0010_0000);
+        shadow(&mut m)
+    };
+    let mut m = drained(2, 3);
+    let released = let_behind_go_later(&m, 200);
+    hand_only(&mut m, &list, 0x0010_0000);
+    released.join().unwrap();
+    assert_identical(&at_once, &shadow(&mut m), "a list longer than the ring");
+}
+
 /// The stop-or-go measurement of Mars_Gpu.md §6.5 on MarsRT, by hand with `EMUSEN_MARS_GPU_BENCH=1`: not a test of anything.
 #[test]
 fn bench_shading_at_a_multiple_on_the_processor_and_on_the_device() {

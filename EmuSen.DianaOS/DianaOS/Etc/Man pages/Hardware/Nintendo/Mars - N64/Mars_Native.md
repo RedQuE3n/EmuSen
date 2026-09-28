@@ -5173,7 +5173,9 @@ fell by 1.46 ms a frame, its site-8 wait and join to nothing.*
 ##### 6.14.9 What is not done
 
 - **The depth image's reads** (§6.14.4). Necessary for exactness; only a faster drain, or one that ran the draws holding
-  the depth image first, which would change raster order, could shorten them.
+  the depth image first, which would change raster order, could shorten them. *Addendum 2026-09-28: at a multiple on the
+  device the wait also covered the device's processor on the leader, which was not necessary; `Mars_Performance.md` §41
+  takes it out, and at one nothing changes.*
 - **The multiple** (§6.14.8): the device's join at every scan, under 2 ms a frame on the title, and the capture kept
   whole on the processor at a multiple, 2.5 ms a frame on the title, each priced with the design change it needs.
   *The first is built in §6.15.*
@@ -5210,6 +5212,10 @@ at the same multiple and against the C# core; the rules of §6.4, the lending of
 snapshots, setting changes and observed frames hold as before.
 
 ##### 6.15.1 The design
+
+*Amended 2026-09-28 (`Mars_Performance.md` §41): the device work, and the processor at the multiple, now run on a thread
+of their own, the device's, rather than the leader's. Every "leader" below that runs device work reads "the device's
+thread", and "the leader's count" reads "the device's thread's count"; the ordering argument is unchanged.*
 
 *Where the device work runs.* `scan_out` and `scan_into_raster` no longer join the drain. With a drain running they hand
 the work (`DeviceWork`, the scan's parameters, or the raster's size, seed, spans and walk) to the leading worker
@@ -5419,7 +5425,10 @@ At the multiple the median falls 1.98 ms (16.79 to 14.81), under the 16.7 ms tar
   the frame falls by 1.3 to 1.8 ms, from 15.62–15.79 to about 14.0–14.4, under the 16.7 ms target. The `trace=` column
   for the drain's joins should be zero in every field, and the light fields' present well under a millisecond.
 - **The depth reads.** Site 2 is now the title's whole wait at the multiple as at one (§6.14.4), and it is necessary;
-  nothing here shortens it.
+  nothing here shortens it. *Retired in part 2026-09-28: at the multiple it was larger than at one (2.3 against 1.7 ms)
+  because the leader's count included the device's processor. With that processor on a thread of its own
+  (`Mars_Performance.md` §41), Donkey Kong 64's site-2 wait in play is no larger at two to four than at one; the title's
+  state was not measured again.*
 - **The C# core** still joins the drain at its scan-out (`Mars_Gpu.md` §13.2), and its capture at a multiple is
   C#'s. The same design would apply there.
 - **The processor at a multiple** still keeps the capture whole, 2.5 ms a frame on the title (§6.14.8); its lever, a

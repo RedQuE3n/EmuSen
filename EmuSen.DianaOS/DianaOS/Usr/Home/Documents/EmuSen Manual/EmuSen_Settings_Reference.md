@@ -750,6 +750,17 @@ its rows from the catalogue, and the setting arrived as one more entry there. It
 draws as before. What the setting actually got — a device's name, or the sentence saying why there is none — is
 `MarsCore.GpuReport`, which the window does not yet show; that is the one frontend change still owed to it.
 
+**Addendum, 2026-09-28: what the multiple on the graphics card costs a game that reads its own drawing.** On MarsRT, a
+game that reads back what it has just drawn waited, at an internal resolution above one with this setting on, for the
+drawing at the multiple as well as the console's: Perfect Dark, which reads its depth image as soon as its list is
+handed over, ran 4 to 10 ms a frame slower at two to four than at one, with neither the processor nor the graphics card
+busy. The multiple is now drawn on a thread of its own that nothing the game reads waits for, so such a game runs at a
+multiple as it runs at one, and a heavy multiple costs that thread's time rather than the game's
+(`Mars_Performance.md` §41). There is nothing to set, and the picture is the same. What it does not change: a game that
+is slow at one is as slow at every multiple — Perfect Dark's heaviest scenes run at about 42 frames a second of 50 at
+one on the desktop this was measured on — and the setting's other costs, the memory and the copy of each picture, are
+as they were.
+
 ### 4.27 A fault leaves a report
 
 *2026-09-20.* A game stopped when its pause menu was opened, twice, and not a third time from a state saved just

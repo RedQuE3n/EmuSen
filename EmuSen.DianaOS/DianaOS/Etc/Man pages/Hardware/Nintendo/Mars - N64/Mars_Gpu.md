@@ -631,7 +631,8 @@ the device's (the plan's §0): only the processor drawing at the multiple is giv
 **One processor at the multiple, not one a worker.** The CPU path gives every drawing thread a processor at the
 multiple, each shading its own rows. The device path has exactly one, because the device is the parallelism. It
 rides the **leading worker's** thread, which already sees every word in order, so nothing about the interface's
-threading, marks or barriers changed. `Rdp.Follow`, which hands a scaled processor its native one's split, is now a
+threading, marks or barriers changed. *In MarsRT since 2026-09-28 it has a thread of its own and runs behind the native
+workers, its loads replayed from the leader's; `Mars_Performance.md` §41 says why, and C# is unchanged.* `Rdp.Follow`, which hands a scaled processor its native one's split, is now a
 no-op for a processor on the device, since that one must always draw alone.
 
 **No device is the CPU path.** With no Vulkan, no matching device or a memory too large to bind, `_gpu` stays null

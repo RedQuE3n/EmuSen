@@ -265,8 +265,9 @@ pub(crate) fn compare(folder: &str, rom: &str, state: Option<&str>, frames: u64,
     frames
 }
 
-/// The six of §5.6.7, and Donkey Kong 64's title, whose processor reads the depth image and whose capture met a list's last draws (Mars_Native.md §6.14).
-const GAMES: [(&str, Option<&str>); 7] = [
+/// The six of §5.6.7, Donkey Kong 64's title, whose processor reads the depth image and whose capture met a list's last draws (Mars_Native.md §6.14),
+/// and Perfect Dark in play, whose processor reads the depth image just after handing its list over (Mars_Performance.md §41).
+const GAMES: [(&str, Option<&str>); 8] = [
     ("sm64.z64", None),
     ("oot.z64", None),
     ("ge.z64", None),
@@ -274,6 +275,7 @@ const GAMES: [(&str, Option<&str>); 7] = [
     ("oot.z64", Some("oot.state")),
     ("ge.z64", Some("ge-dam.state")),
     ("dk64-us.v64", Some("dk64-us-title.state")),
+    ("pd-eu.z64", Some("pd-eu-play.state")),
 ];
 
 fn frames() -> u64 {

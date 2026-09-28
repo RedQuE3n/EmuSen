@@ -7,9 +7,9 @@ use std::cell::{Cell, UnsafeCell};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::Ordering::{AcqRel, Acquire, Relaxed, Release, SeqCst};
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, AtomicU64, fence};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::{self, JoinHandle, Thread};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::memory::ram::{Detached, Ram};
 use crate::rdp::gpu::{DeviceWork, GpuRasteriser, Pictures};
@@ -23,6 +23,8 @@ const IDLE_RANGES: usize = 256;
 const BOX_COUNT: usize = 1 << 14;
 /// Device work outstanding at once: a present hands over two at most, and the machine waits for a slot beyond these.
 const DEVICE_SLOTS: usize = 8;
+/// Loads the leader keeps for the device's processor to replay; past these the leader waits for it (Mars_Performance.md §41).
+const LOADS: usize = 1024;
 /// Pages of the largest RDRAM, 8 MB in 4 KB.
 pub const PAGES: usize = 2048;
 /// `Idle`: an image's mark while its batch is open, everything handed over so far.
@@ -203,14 +205,14 @@ pub struct ScaledStart<'a> {
     pub rdram: &'a Ram,
     pub hidden: &'a Ram,
     pub scale: i32,
-    /// The device the leader's processor at the multiple records for, or null; with a device there is one such processor (Mars_Gpu.md §11).
+    /// The device the processor at the multiple records for, or null; with a device there is one such processor, on the device's thread (Mars_Gpu.md §11).
     pub gpu: *mut GpuRasteriser,
-    /// The device's pictures, whose readers wait for the work handed to the leader (Mars_Native.md §6.15).
+    /// The device's pictures, whose readers wait for the work handed to the device's thread (Mars_Native.md §6.15).
     pub pictures: Option<Arc<Pictures>>,
 }
 
-/// One piece of device work and the word the leader's count must reach first; written by the machine's thread before `device_tail`
-/// passes it, taken by the leader before `device_head` does.
+/// One piece of device work and the word the device's thread's count must reach first; written by the machine's thread before
+/// `device_tail` passes it, taken by the device's thread before `device_head` does.
 #[derive(Default)]
 struct DeviceSlot(UnsafeCell<Option<(i64, DeviceWork)>>);
 
@@ -283,18 +285,31 @@ pub struct Shared {
     scaled_hidden: *mut u8,
     scaled_hidden_len: usize,
     scaled_gpu: *mut GpuRasteriser,
+    /// With the device, the processor at the multiple runs on a thread of its own behind the native ones: its count, its loads, its sleep (Mars_Performance.md §41).
+    apart: bool,
+    recorder: *mut Rdp,
+    scaled_completed: AtomicI64,
+    loads: Box<[LoadSlot]>,
+    loads_tail: AtomicI64,
+    loads_head: AtomicI64,
+    recorder_sleeping: AtomicBool,
+    recorder_thread: OnceLock<Thread>,
+    pub recorder_nanos: AtomicI64,
     /// `ScaledDrawn` over the workers: set once any processor at the multiple has drawn.
     scaled_drawn: AtomicBool,
-    /// Device work the leader runs once its count reaches each item's word: a ring the machine's thread fills to `device_tail` and the
-    /// leader empties to `device_head`, handed over by those two counts alone (Mars_Native.md §6.15).
+    /// Device work the device's thread runs once its count reaches each item's word: a ring the machine's thread fills to `device_tail`
+    /// and the device's thread empties to `device_head`, handed over by those two counts alone (Mars_Native.md §6.15, Mars_Performance.md §41).
     device: Box<[DeviceSlot]>,
     device_tail: AtomicU64,
     pub device_head: AtomicU64,
     pictures: Option<Arc<Pictures>>,
     pub device_nanos: AtomicI64,
-    /// A test's hold on the leader short of the device work it is due to run.
+    /// A test's hold on the device's thread short of the device work it is due to run.
     #[cfg(test)]
     pub hold_device: AtomicBool,
+    /// A test's hold on the device's processor where it stands behind the native ones.
+    #[cfg(test)]
+    pub hold_behind: AtomicBool,
     pub drain_words: AtomicI64,
     pub drain_nanos: AtomicI64,
     pub drain_starts: AtomicI64,
@@ -313,6 +328,26 @@ impl Shared {
             least = least.min(w.completed.load(Acquire));
         }
         least
+    }
+
+    /// `completed`, and the device's processor's count when it runs apart: what the ring, a join and a stop wait for (Mars_Performance.md §41).
+    #[inline(always)]
+    fn drawn(&self) -> i64 {
+        let native = self.completed();
+        if self.apart { native.min(self.scaled_completed.load(Acquire)) } else { native }
+    }
+
+    /// The device's processor woken if it sleeps; `surely` orders the look after the caller's stores, as `kick_surely` does.
+    #[inline(always)]
+    fn wake_recorder(&self, surely: bool) {
+        if surely {
+            fence(SeqCst);
+        }
+        if self.recorder_sleeping.load(Relaxed)
+            && let Some(t) = self.recorder_thread.get()
+        {
+            t.unpark();
+        }
     }
 
     /// Words, barriers passed, and aliased reads, by worker, for the counters.
@@ -618,7 +653,7 @@ pub struct Threads {
     /// The workers' processors at the multiple past the first, which is the interface's own.
     extra_scaled: Vec<Detached<Rdp>>,
     issued: i64,
-    /// Device work handed to the leader, which `device_done` meets when it has all run.
+    /// Device work handed to the device's thread, which `device_done` meets when it has all run.
     device_asked: u64,
     shadow_taken: i32,
     shadow_first: u64,
@@ -669,7 +704,7 @@ impl Threads {
         let pointers: Vec<*mut Rdp> = std::iter::once(processor.as_ptr()).chain(extra.iter().map(|p| p.as_ptr())).collect();
 
         // A processor at the multiple beside each, the leader's the interface's own, the others made from the native leader (`NewScaled`);
-        // with the device, the leader's alone, which rides its thread.
+        // with the device, one, which runs on the device's thread (Mars_Performance.md §41).
         let extra_scaled: Vec<Detached<Rdp>> = match &scaled {
             Some(s) if s.gpu.is_null() => (1..n)
                 .map(|i| {
@@ -685,8 +720,11 @@ impl Threads {
                 s.processor.configure(0, n as i32);
                 std::iter::once(s.processor.as_ptr()).chain(extra_scaled.iter().map(|p| p.as_ptr())).collect()
             }
-            Some(s) => std::iter::once(s.processor.as_ptr()).chain(std::iter::repeat_n(std::ptr::null_mut(), n - 1)).collect(),
-            None => vec![std::ptr::null_mut(); n],
+            _ => vec![std::ptr::null_mut(); n],
+        };
+        let recorder = match scaled.as_mut() {
+            Some(s) if !s.gpu.is_null() => s.processor.as_ptr(),
+            _ => std::ptr::null_mut(),
         };
         let drawn = scaled.as_ref().is_some_and(|s| s.processor.drew());
         let shared = Arc::new(Shared {
@@ -723,6 +761,15 @@ impl Threads {
             scaled_hidden: scaled.as_ref().map_or(std::ptr::null_mut(), |s| s.hidden.as_ptr()),
             scaled_hidden_len: scaled.as_ref().map_or(0, |s| s.hidden.len()),
             scaled_gpu: scaled.as_ref().map_or(std::ptr::null_mut(), |s| s.gpu),
+            apart: !recorder.is_null(),
+            recorder,
+            scaled_completed: AtomicI64::new(0),
+            loads: (0..if recorder.is_null() { 0 } else { LOADS }).map(|_| LoadSlot::default()).collect(),
+            loads_tail: AtomicI64::new(0),
+            loads_head: AtomicI64::new(0),
+            recorder_sleeping: AtomicBool::new(false),
+            recorder_thread: OnceLock::new(),
+            recorder_nanos: AtomicI64::new(0),
             scaled_drawn: AtomicBool::new(drawn),
             device: (0..DEVICE_SLOTS).map(|_| DeviceSlot::default()).collect(),
             device_tail: AtomicU64::new(0),
@@ -731,17 +778,25 @@ impl Threads {
             device_nanos: AtomicI64::new(0),
             #[cfg(test)]
             hold_device: AtomicBool::new(false),
+            #[cfg(test)]
+            hold_behind: AtomicBool::new(false),
             drain_words: AtomicI64::new(0),
             drain_nanos: AtomicI64::new(0),
             drain_starts: AtomicI64::new(0),
         });
-        let drains: Vec<JoinHandle<()>> = (0..n)
+        let mut drains: Vec<JoinHandle<()>> = (0..n)
             .map(|i| {
                 let theirs = shared.clone();
                 thread::Builder::new().name(format!("MarsRT RDP {i}")).spawn(move || work(theirs, i)).expect("a worker thread could not start")
             })
             .collect();
         let threads = drains.iter().map(|d| d.thread().clone()).collect();
+        if shared.apart {
+            let theirs = shared.clone();
+            let recording = thread::Builder::new().name("MarsRT RDP device".into()).spawn(move || record(theirs)).expect("the device's thread could not start");
+            let _ = shared.recorder_thread.set(recording.thread().clone());
+            drains.push(recording);
+        }
         let mut threads = Threads {
             shared,
             drains,
@@ -838,7 +893,7 @@ impl Threads {
     /// `Publish`: the word into the ring, marked for by the shadow, then published; true when it completed a full sync.
     pub fn publish(&mut self, word: u64) -> bool {
         let tail = self.issued;
-        if tail - self.shared.completed() >= RING as i64 {
+        if tail - self.shared.drawn() >= RING as i64 {
             self.make_room(tail);
         }
         self.shared.ring[(tail as usize) & (RING - 1)].store(word, Relaxed);
@@ -885,10 +940,11 @@ impl Threads {
                 t.unpark();
             }
         }
+        self.shared.wake_recorder(false);
     }
 
     fn wake_all(&self) {
-        for t in &self.threads {
+        for t in self.threads.iter().chain(self.shared.recorder_thread.get()) {
             t.unpark();
         }
     }
@@ -929,7 +985,7 @@ impl Threads {
     fn make_room(&self, tail: i64) {
         self.kick_surely();
         let mut spins = 0;
-        while tail - self.shared.completed() >= RING as i64 {
+        while tail - self.shared.drawn() >= RING as i64 {
             self.check_fault();
             backoff(&mut spins);
         }
@@ -1385,7 +1441,21 @@ impl Threads {
         self.check_fault();
     }
 
-    /// A scan's device work handed to the leader, to run once its count reaches the words handed over so far; the device is its from then on (Mars_Native.md §6.15).
+    /// `wait_until` for the device's processor as well, which may run behind the native ones (Mars_Performance.md §41).
+    fn wait_drawn(&self, words: i64) {
+        self.wait_until(words);
+        if self.shared.drawn() < words {
+            self.kick_surely();
+            let mut spins = 0;
+            while self.shared.drawn() < words {
+                self.check_fault();
+                backoff(&mut spins);
+            }
+        }
+        self.check_fault();
+    }
+
+    /// A scan's device work handed to the device's thread, to run once its count reaches the words handed over so far; the device is its from then on (Mars_Native.md §6.15).
     pub fn hand_device(&mut self, work: DeviceWork) {
         debug_assert!(!self.shared.scaled_gpu.is_null(), "device work for a drain with no device");
         let tail = self.device_asked;
@@ -1400,19 +1470,19 @@ impl Threads {
         if let Some(p) = &self.shared.pictures {
             p.ask();
         }
-        // SAFETY: the slot is this thread's until the store below passes it, since the leader's Release of `device_head` past it was acquired above.
+        // SAFETY: the slot is this thread's until the store below passes it, since the device's thread's Release of `device_head` past it was acquired above.
         unsafe { *self.shared.device[tail as usize % DEVICE_SLOTS].0.get() = Some((self.issued, work)) };
         self.device_asked = tail + 1;
         self.shared.device_tail.store(tail + 1, SeqCst);
         self.kick_surely();
     }
 
-    /// True while device work handed to the leader has not all run.
+    /// True while device work handed to the device's thread has not all run.
     fn device_owed(&self) -> bool {
         self.shared.device_head.load(Acquire) < self.device_asked
     }
 
-    /// Every piece of device work handed to the leader has run, so the device is this thread's again; the Acquire orders what it did.
+    /// Every piece of device work handed to the device's thread has run, so the device is this thread's again; the Acquire orders what it did.
     pub fn wait_device(&self) {
         if self.device_owed() {
             self.kick_surely();
@@ -1429,8 +1499,8 @@ impl Threads {
     /// marks and ranges are forgotten.
     pub fn join(&mut self) {
         let started = Instant::now();
-        let waited = self.shared.completed() < self.issued || self.device_owed();
-        self.wait_until(self.issued);
+        let waited = self.shared.drawn() < self.issued || self.device_owed();
+        self.wait_drawn(self.issued);
         self.wait_device();
         assemble(&self.shared);
         self.shared.marks.clear();
@@ -1443,7 +1513,7 @@ impl Threads {
 
     /// Everything handed over has run and the leader assembled, for a caller holding the machine shared; the marks are cleared by the next wait.
     pub fn wait_all(&self) {
-        self.wait_until(self.issued);
+        self.wait_drawn(self.issued);
         assemble(&self.shared);
     }
 
@@ -1482,17 +1552,35 @@ impl Threads {
         }
     }
 
-    /// A test's hold on the leader's device work, and its release from any thread, which wakes the leader.
+    /// A test's hold on the device's thread's device work, and its release from any thread, which wakes it.
     #[cfg(test)]
     pub fn hold_device(&self) -> impl Fn() + Send + Sync + 'static {
         self.shared.hold_device.store(true, SeqCst);
         let (shared, threads) = (self.shared.clone(), self.threads.clone());
         move || {
             shared.hold_device.store(false, SeqCst);
-            for t in &threads {
+            for t in threads.iter().chain(shared.recorder_thread.get()) {
                 t.unpark();
             }
         }
+    }
+
+    /// A test's hold on the device's processor behind the native ones, and its release from any thread, which wakes it.
+    #[cfg(test)]
+    pub fn hold_behind(&self) -> impl Fn() + Send + Sync + 'static {
+        self.shared.hold_behind.store(true, SeqCst);
+        let shared = self.shared.clone();
+        move || {
+            shared.hold_behind.store(false, SeqCst);
+            if let Some(t) = shared.recorder_thread.get() {
+                t.unpark();
+            }
+        }
+    }
+
+    /// The words handed over that the device's processor has still to run behind the native ones; zero without a device.
+    pub fn behind(&self) -> i64 {
+        if self.shared.apart { self.issued - self.shared.scaled_completed.load(Acquire) } else { 0 }
     }
 
     /// A test's way to end a hold from another thread.
@@ -1523,7 +1611,7 @@ impl Threads {
     /// The workers joined, assembled and ended, and the marks left clear; after this the leader and the memories are the machine's alone, and it draws alone.
     pub fn stop(&mut self) {
         if !self.shared.faulted.load(Acquire) {
-            self.wait_until(self.issued);
+            self.wait_drawn(self.issued);
             self.wait_device();
             assemble(&self.shared);
         }
@@ -1531,7 +1619,7 @@ impl Threads {
     }
 
     fn end(&mut self) {
-        // Device work handed over is run before the leader stops, unless it has failed; whatever is left is abandoned so no reader waits for it.
+        // Device work handed over is run before the device's thread stops, unless it has failed; whatever is left is abandoned so no reader waits for it.
         let mut spins = 0;
         while self.device_owed() && !self.shared.faulted.load(Acquire) {
             self.kick_surely();
@@ -1618,20 +1706,21 @@ fn work(shared: Arc<Shared>, index: usize) {
         let message = panic.downcast_ref::<String>().cloned().or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default();
         shared.record_fault(format!("a panic on worker {index}: {message}"));
         shared.workers[index].completed.store(i64::MAX >> 1, Release);
+        shared.scaled_completed.store(i64::MAX >> 1, Release);
         if let Some(p) = &shared.pictures {
             p.abandon();
         }
     }
 }
 
-/// The leader runs the device work whose word its count has reached, in the order handed over, outside the queue's lock (Mars_Native.md §6.15).
+/// The device's thread runs the device work whose word its count has reached, in the order handed over (Mars_Native.md §6.15, Mars_Performance.md §41).
 fn serve_device(shared: &Shared, completed: i64) {
     let started = Instant::now();
     while device_due(shared, completed, Acquire) {
         let head = shared.device_head.load(Relaxed);
         // SAFETY: `device_due` acquired `device_tail` past this slot, so the machine's thread has written it and will not until `device_head` passes it.
         let (_, work) = unsafe { (*shared.device[head as usize % DEVICE_SLOTS].0.get()).take() }.expect("a slot the tail has passed holds its work");
-        // SAFETY: the device is the leader's while its processor at the multiple records for it, and the machine's thread reaches it only after `wait_device`.
+        // SAFETY: the device is the device's thread's while it records, and the machine's thread reaches it only after `wait_device`.
         work.run(unsafe { &mut *shared.scaled_gpu });
         drop(work);
         if let Some(p) = &shared.pictures {
@@ -1642,11 +1731,138 @@ fn serve_device(shared: &Shared, completed: i64) {
     shared.device_nanos.fetch_add(started.elapsed().as_nanos() as i64, Relaxed);
 }
 
+/// One load the leader ran, kept for the device's processor: its word, and the texture memory it left when it wrote any.
+struct LoadSlot {
+    at: AtomicI64,
+    wrote: AtomicBool,
+    memory: UnsafeCell<[u8; 4096]>,
+}
+
+impl Default for LoadSlot {
+    fn default() -> Self {
+        LoadSlot { at: AtomicI64::new(-1), wrote: AtomicBool::new(false), memory: UnsafeCell::new([0; 4096]) }
+    }
+}
+
+/// The leader's load kept, before its count passes the word; with every slot unread it waits for the device's processor.
+fn keep_load(shared: &Shared, at: i64, native: &Rdp) {
+    let tail = shared.loads_tail.load(Relaxed);
+    let mut spins = 0;
+    while tail - shared.loads_head.load(Acquire) >= LOADS as i64 {
+        if shared.stopping.load(Acquire) || shared.faulted.load(Acquire) {
+            return;
+        }
+        shared.wake_recorder(true);
+        backoff(&mut spins);
+    }
+    let slot = &shared.loads[tail as usize % LOADS];
+    let loaded = native.loaded();
+    if let Some(memory) = loaded {
+        // SAFETY: the slot is the leader's until `loads_tail` passes it, since the device's Release of `loads_head` past it was acquired above.
+        unsafe { (*slot.memory.get()).copy_from_slice(memory) };
+    }
+    slot.wrote.store(loaded.is_some(), Relaxed);
+    slot.at.store(at, Relaxed);
+    shared.loads_tail.store(tail + 1, Release);
+}
+
+/// One word of the device's processor: it reads no RDRAM, since a load takes what the leader's load left (Mars_Performance.md §41).
+///
+/// # Safety
+/// The device's thread alone, with the leader's count acquired past the word.
+unsafe fn step_behind(shared: &Shared, at: i64) {
+    let (scaled, word) = (shared.recorder, shared.ring[(at as usize) & (RING - 1)].load(Relaxed));
+    // SAFETY: the processor, the shadow and the device are this thread's; the texture view is empty, so a load that read RDRAM would read zeros.
+    unsafe {
+        let mut at_multiple = RdpMemory::scaled_shared((shared.scaled_rdram, shared.scaled_rdram_len), (shared.scaled_hidden, shared.scaled_hidden_len), (std::ptr::NonNull::<u8>::dangling().as_ptr(), 0)).with_gpu(shared.scaled_gpu);
+        if (*scaled).gather(word) != Step::More {
+            if (*scaled).gathered_load() {
+                let head = shared.loads_head.load(Relaxed);
+                let slot = &shared.loads[head as usize % LOADS];
+                debug_assert_eq!(slot.at.load(Relaxed), at, "a load replayed at another word");
+                (*scaled).replay_load(slot.wrote.load(Relaxed).then(|| &*slot.memory.get()));
+                shared.loads_head.store(head + 1, Release);
+            } else {
+                (*scaled).execute_gathered(&mut at_multiple);
+            }
+            if (*scaled).drew() && !shared.scaled_drawn.load(Relaxed) {
+                shared.scaled_drawn.store(true, Relaxed);
+            }
+        }
+    }
+    shared.scaled_completed.store(at + 1, Release);
+}
+
+/// False unless a test holds the device's processor behind.
+#[inline(always)]
+fn held_behind(_shared: &Shared) -> bool {
+    #[cfg(test)]
+    if _shared.hold_behind.load(Acquire) {
+        return true;
+    }
+    false
+}
+
+/// The device's thread; a panic is recorded, and its count set past every word, as a worker's is.
+fn record(shared: Arc<Shared>) {
+    if let Err(panic) = catch_unwind(AssertUnwindSafe(|| run_recorder(&shared))) {
+        let message = panic.downcast_ref::<String>().cloned().or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default();
+        shared.record_fault(format!("a panic on the device's thread: {message}"));
+        shared.scaled_completed.store(i64::MAX >> 1, Release);
+        if let Some(p) = &shared.pictures {
+            p.abandon();
+        }
+    }
+}
+
+/// The processor at the multiple, every word as far as the leader has run, and the device work handed to it at its word (Mars_Performance.md §41).
+fn run_recorder(shared: &Shared) {
+    let mut at = shared.scaled_completed.load(Relaxed);
+    let mut started = Instant::now();
+    loop {
+        if shared.stopping.load(Acquire) {
+            return;
+        }
+        if device_due(shared, at, Acquire) {
+            serve_device(shared, at);
+        }
+        if at < shared.workers[0].completed.load(Acquire).min(shared.issued.load(Acquire)) && !held_behind(shared) {
+            // SAFETY: this is the device's thread, and the Acquire above passed the leader's count, and its kept load, past `at`.
+            unsafe { step_behind(shared, at) };
+            at += 1;
+            continue;
+        }
+        shared.recorder_nanos.fetch_add(started.elapsed().as_nanos() as i64, Relaxed);
+        rest(shared, at);
+        started = Instant::now();
+    }
+}
+
+/// The device's thread's `sleep`: spinning for the leader's count or device work, then parked, with a timeout for a wake the leader's plain look missed.
+fn rest(shared: &Shared, at: i64) {
+    let wanted = |order| shared.workers[0].completed.load(order) != at && !held_behind(shared) || shared.stopping.load(order) || device_due(shared, at, order);
+    for _ in 0..400 {
+        if wanted(Acquire) {
+            return;
+        }
+        for _ in 0..50 {
+            std::hint::spin_loop();
+        }
+    }
+    shared.recorder_sleeping.store(true, SeqCst);
+    if !wanted(SeqCst) {
+        thread::park_timeout(Duration::from_millis(1));
+    }
+    shared.recorder_sleeping.store(false, SeqCst);
+}
+
 /// `RunWorker`: every word in order, each command as its step asks, standing when asked and sleeping when there is nothing.
+/// With the device the leader keeps each load for the device's processor, which runs on a thread of its own (Mars_Performance.md §41).
 fn run_worker(shared: &Shared, index: usize) {
     let me = &shared.workers[index];
     let processor = me.processor;
     let scaled = me.scaled;
+    let keeps = index == 0 && shared.apart;
     let checked = Checked::default();
     let mut completed = me.completed.load(Relaxed);
     let (mut from, mut started) = (completed, Instant::now());
@@ -1654,7 +1870,7 @@ fn run_worker(shared: &Shared, index: usize) {
         if shared.stopping.load(Acquire) {
             return;
         }
-        if index == 0 && device_due(shared, completed, Acquire) {
+        if index == 0 && !shared.apart && device_due(shared, completed, Acquire) {
             serve_device(shared, completed);
         }
         if shared.pause_request.load(Acquire) != 0 && stand(shared, index, completed) {
@@ -1680,6 +1896,10 @@ fn run_worker(shared: &Shared, index: usize) {
         unsafe {
             let mut memory = RdpMemory::shared((shared.rdram, shared.rdram_len), (shared.hidden, shared.hidden_len), check);
             let step = (*processor).gather(word);
+            let replayed = keeps && step != Step::More && (*processor).gathered_load();
+            if replayed {
+                (*processor).begin_load();
+            }
             // The processor at the multiple takes the same word and follows the native one's decision to draw alone (Mars_Rdp.md §11).
             let mut at_multiple = RdpMemory::scaled_shared((shared.scaled_rdram, shared.scaled_rdram_len), (shared.scaled_hidden, shared.scaled_hidden_len), (shared.rdram.cast_const(), shared.rdram_len))
                 .with_gpu(if index == 0 { shared.scaled_gpu } else { std::ptr::null_mut() });
@@ -1727,9 +1947,15 @@ fn run_worker(shared: &Shared, index: usize) {
             if !scaled.is_null() && (*scaled).drew() && !shared.scaled_drawn.load(Relaxed) {
                 shared.scaled_drawn.store(true, Relaxed);
             }
+            if replayed {
+                keep_load(shared, completed, &*processor);
+            }
         }
         completed += 1;
         me.completed.store(completed, Release);
+        if keeps {
+            shared.wake_recorder(false);
+        }
     }
 }
 
@@ -1750,7 +1976,10 @@ fn device_due(shared: &Shared, completed: i64, order: std::sync::atomic::Orderin
 }
 
 fn sleep(shared: &Shared, index: usize, completed: i64) {
-    let due = |order| index == 0 && device_due(shared, completed, order);
+    let due = |order| index == 0 && !shared.apart && device_due(shared, completed, order);
+    if index == 0 && shared.apart {
+        shared.wake_recorder(true);
+    }
     for _ in 0..400 {
         if shared.issued.load(Acquire) != completed || shared.pause_request.load(Acquire) != 0 || shared.stopping.load(Acquire) || due(Acquire) {
             return;

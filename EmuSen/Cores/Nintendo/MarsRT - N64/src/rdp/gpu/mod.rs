@@ -131,12 +131,12 @@ pub struct HostPicture {
 }
 
 /// What the presenter's thread reaches: the pending submission to wait for, the two host pictures, and the device work handed to the
-/// drain's leader, asked for and submitted, which a reader waits to meet before the fence (Mars_Native.md §6.15).
+/// drain's device thread, asked for and submitted, which a reader waits to meet before the fence (Mars_Native.md §6.15).
 pub struct Pictures {
     pub pending: Arc<Pending>,
     pub scanned: Mutex<HostPicture>,
     pub averaged: Mutex<HostPicture>,
-    /// Device work handed to the leader, counted on the machine's thread, and submitted, counted on the leader's: the order is these
+    /// Device work handed to the device's thread, counted on the machine's thread, and submitted, counted on the device's: the order is these
     /// atomics', which ThreadSanitizer sees; the lock and the condition only put a reader to sleep (Mars_Native.md §5.6.7, §6.15).
     asked: AtomicU64,
     submitted: AtomicU64,
@@ -157,18 +157,18 @@ impl Pictures {
         }
     }
 
-    /// One more piece of device work handed to the leader, which the pictures now wait for; the machine's thread's alone.
+    /// One more piece of device work handed to the device's thread, which the pictures now wait for; the machine's thread's alone.
     pub fn ask(&self) {
         self.asked.fetch_add(1, Release);
     }
 
-    /// The leader has submitted one piece of the work handed to it; the lock taken between the count and the notice keeps a sleeper from missing it.
+    /// The device's thread has submitted one piece of the work handed to it; the lock taken between the count and the notice keeps a sleeper from missing it.
     pub fn submit(&self) {
         self.submitted.fetch_add(1, Release);
         self.wake();
     }
 
-    /// Nothing handed over will be submitted, since the leader has ended or failed: a reader goes on, and the fault is raised elsewhere.
+    /// Nothing handed over will be submitted, since the device's thread has ended or failed: a reader goes on, and the fault is raised elsewhere.
     pub fn abandon(&self) {
         self.submitted.fetch_max(self.asked.load(Acquire), Release);
         self.wake();
@@ -179,7 +179,7 @@ impl Pictures {
         self.woken.notify_all();
     }
 
-    /// Returns once every piece of work handed to the leader so far has been submitted.
+    /// Returns once every piece of work handed to the device's thread so far has been submitted.
     pub fn wait_submitted(&self) {
         let asked = self.asked.load(Acquire);
         if self.submitted.load(Acquire) >= asked {
@@ -191,7 +191,7 @@ impl Pictures {
         }
     }
 
-    /// `ScannedPicture`: the last scan's picture, one word a pixel, once the leader has submitted it and the device has finished it.
+    /// `ScannedPicture`: the last scan's picture, one word a pixel, once the device's thread has submitted it and the device has finished it.
     pub fn scanned(&self, read: impl FnOnce(&[u32])) {
         self.wait_submitted();
         self.pending.wait();
@@ -199,7 +199,7 @@ impl Pictures {
         read(picture.buffer.as_ref().map_or(&[][..], |b| &b.slice::<u32>()[..picture.pixels]));
     }
 
-    /// `AveragedRaster`: the averaged raster, once the leader has submitted it and the device has finished it.
+    /// `AveragedRaster`: the averaged raster, once the device's thread has submitted it and the device has finished it.
     pub fn averaged(&self, read: impl FnOnce(&[u32])) {
         self.wait_submitted();
         self.pending.wait();
@@ -208,7 +208,7 @@ impl Pictures {
     }
 }
 
-/// A scan's device work, carried to the drain's leader and run there at the word the machine had handed over when it asked (Mars_Native.md §6.15).
+/// A scan's device work, carried to the drain's device thread and run there at the word the machine had handed over when it asked (Mars_Native.md §6.15).
 pub enum DeviceWork {
     Scan(ScanParameters),
     Raster { width: usize, height: usize, side: usize, seed: Vec<u8>, clear: bool, spans: Vec<u32>, walk: bool, scan: ScanParameters },

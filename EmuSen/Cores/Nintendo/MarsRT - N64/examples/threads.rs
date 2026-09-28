@@ -1,6 +1,6 @@
 //! A timed run with the picture on, in one of MarsRT's thread modes, printing ms a frame and the joined state's hash. See Mars_Native.md §5.6.8.
-//! `cargo run --release --example threads -- <rom> <state or -> <frames> <plain|threaded|deferred|split> [workers] [blocks] [scale=N] [aa=N] [gpu] [trace=<file>]`;
-//! the last three as the shim's `RenderScale`, `Antialiasing` and `Gpu` (Mars_Native.md §6.4).
+//! `cargo run --release --example threads -- <rom> <state or -> <frames> <plain|threaded|deferred|split> [workers] [blocks] [scale=N] [aa=N] [gpu] [trace=<file>] [pictures]`;
+//! `scale`, `aa` and `gpu` as the shim's `RenderScale`, `Antialiasing` and `Gpu` (Mars_Native.md §6.4); `pictures` hashes every frame shown (Mars_Performance.md §41).
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -40,10 +40,23 @@ fn main() {
     // `trace=<file>`: one line a frame, the emulation, the present, the presenter's join and its job, site 8 and the drain's joins, in nanoseconds (Mars_Native.md §6.11, §6.14).
     let trace = args.iter().skip(5).find_map(|a| a.strip_prefix("trace="));
     let mut lines = String::new();
+    // `pictures`: every shown frame folded into one hash, its size included, so that two builds can be shown to present the same frames.
+    let pictures = args.iter().skip(5).any(|a| a == "pictures");
+    let mut picture_hash = 0xCBF2_9CE4_8422_2325u64;
+    let mut fold = |core: &Core| {
+        picture_hash = (picture_hash ^ ((core.scanout.width as u64) << 32 | core.scanout.height as u64)).wrapping_mul(0x0100_0000_01B3);
+        for chunk in core.scanout.frame.chunks(8) {
+            let word = chunk.iter().fold(0u64, |w, &b| (w << 8) | b as u64);
+            picture_hash = (picture_hash ^ word).wrapping_mul(0x9E37_79B9_7F4A_7C15).rotate_left(29);
+        }
+    };
     let started = Instant::now();
     for frame in 0..frames {
         if trace.is_none() {
             core.run_frame();
+            if pictures {
+                fold(&core);
+            }
             continue;
         }
         let (waited, joined, walked) = (core.scanout.presenter_waits().1, core.scanout.joined, core.scanout.presenter_nanos);
@@ -60,6 +73,9 @@ fn main() {
         lines += &format!("{frame} {} {} {} {} {} {} {site8}\n", (t1 - t0).as_nanos(), (t2 - t1).as_nanos(), core.scanout.presenter_waits().1 - waited, joined, if joined > 0 { core.scanout.presenter_nanos - walked } else { 0 }, presented.walked as u8);
         lines.pop();
         lines += &format!(" {drain_joined}\n");
+        if pictures {
+            fold(&core);
+        }
     }
     let elapsed = started.elapsed();
     if let Some(path) = trace {
@@ -84,9 +100,13 @@ fn main() {
     });
 
     core.machine.join_presentation(&mut core.scanout);
+    if pictures {
+        fold(&core);
+    }
     core.machine.settle();
     let state = core.machine.save_state_vec(false).expect("a state");
     let hash = state.iter().fold(0xCBF2_9CE4_8422_2325u64, |h, &b| (h ^ b as u64).wrapping_mul(0x0100_0000_01B3));
     let presenter = format!("; the presenter's join {:.3} ms a frame ({joins_waited} of {} joins waited), its jobs {:.3}", per_frame(waited), core.scanout.joined, per_frame(core.scanout.presenter_nanos));
-    println!("{mode} {frames} frames: {:.3} ms a frame; state {hash:016X}{}{presenter}", elapsed.as_secs_f64() * 1000.0 / frames as f64, waits.unwrap_or_default());
+    let shown = if pictures { format!("; pictures {picture_hash:016X}") } else { String::new() };
+    println!("{mode} {frames} frames: {:.3} ms a frame; state {hash:016X}{shown}{}{presenter}", elapsed.as_secs_f64() * 1000.0 / frames as f64, waits.unwrap_or_default());
 }

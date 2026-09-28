@@ -48,11 +48,13 @@ namespace EmuSen.Mistress.BigPicture.Scene
             _ => ("XBOX", "XBOX"),
         };
 
-        // With the swap on, a function's prompt names the face button it moved to, and that button's icon (settings reference §4.61).
+        // With the swap on, a function's prompt names the face button it moved to, and that button's icon (settings reference §4.61, §4.79.5).
         private static Prompt Swapped(Prompt p) => p.Button switch
         {
             PadGlyphButton.South => p with { Button = PadGlyphButton.East, IconKey = p.IconKey.Replace("button_a_", "button_b_") },
             PadGlyphButton.East => p with { Button = PadGlyphButton.South, IconKey = p.IconKey.Replace("button_b_", "button_a_") },
+            PadGlyphButton.North => p with { Button = PadGlyphButton.West, IconKey = p.IconKey.Replace("button_y_", "button_x_") },
+            PadGlyphButton.West => p with { Button = PadGlyphButton.North, IconKey = p.IconKey.Replace("button_x_", "button_y_") },
             _ => p,
         };
 

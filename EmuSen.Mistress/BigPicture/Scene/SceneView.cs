@@ -73,7 +73,7 @@ namespace EmuSen.Mistress.BigPicture.Scene
         // Redraws the help bar for another pad without rebuilding the view, so nothing else changes (§15).
         public void SetFamily(PadFamily family) => SetPadLayout(family, Data.SwapFaceButtons);
 
-        // The family and the A/B swap: the help bar's icons, and with a changed swap its entries (settings reference §4.61).
+        // The family and the A/B and X/Y swap: the help bar's icons, and with a changed swap its entries (settings reference §4.61).
         public void SetPadLayout(PadFamily family, bool swapped)
         {
             bool reentered = swapped != Data.SwapFaceButtons;

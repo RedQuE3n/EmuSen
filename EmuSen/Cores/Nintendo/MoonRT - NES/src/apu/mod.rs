@@ -69,6 +69,7 @@ pub struct Apu {
     pub dmc: DmcChannel,
     pub frame_counter: u8,
     pub frame_irq_pending: bool,
+    pub frame_irq_readable: Skip<bool>,
     pub noise: NoiseChannel,
     pub pulse1: PulseChannel,
     pub pulse2: PulseChannel,
@@ -92,6 +93,7 @@ impl Default for Apu {
             dmc: DmcChannel::default(),
             frame_counter: 0,
             frame_irq_pending: false,
+            frame_irq_readable: Skip(false),
             noise: NoiseChannel::default(),
             pulse1: PulseChannel::new(true),
             pulse2: PulseChannel::new(false),
@@ -157,6 +159,7 @@ impl Apu {
     pub fn soft_reset(&mut self) {
         self.write_enable(0);
         self.frame_irq_pending = false;
+        *self.frame_irq_readable = false;
         self.frame_cycle = 0;
         self.frame_step = 0;
         self.apu_cycle = false;
@@ -269,7 +272,7 @@ impl Apu {
         if self.dmc.active() {
             value |= 0x10;
         }
-        if self.frame_irq_pending {
+        if *self.frame_irq_readable {
             value |= 0x40;
         }
         if self.dmc.irq_pending {
@@ -284,6 +287,9 @@ impl Apu {
     pub fn step(&mut self, cpu_cycles: i32) {
         for _ in 0..cpu_cycles {
             self.cycle_count = self.cycle_count.wrapping_add(1);
+            if !self.frame_irq_pending && self.is_get_cycle() {
+                *self.frame_irq_readable = false;
+            }
             self.triangle.step_timer();
             self.dmc.step_timer();
 
@@ -337,6 +343,7 @@ impl Apu {
         if self.frame_cycle >= due {
             if !self.step_mode && self.frame_step >= 3 && !self.irq_inhibited() {
                 self.frame_irq_pending = true;
+                *self.frame_irq_readable = true;
             }
             let kind = FRAME_TYPES[self.frame_step as usize];
             if kind != FRAME_NONE && self.block_frame_counter_tick == 0 {

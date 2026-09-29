@@ -273,9 +273,10 @@ impl Cpu {
         self.fetch(bus);
         self.push(bus, (self.pc >> 8) as u8);
         self.push(bus, self.pc as u8);
+        let vector = self.hijack_vector(IRQ_VECTOR);
         self.push(bus, self.p | 0x30);
         self.set_flag(FLAG_I, true);
-        self.pc = self.read_vector(bus, IRQ_VECTOR);
+        self.pc = self.read_vector(bus, vector);
     }
 
     fn op_rti(&mut self, bus: &mut MemoryBus) {

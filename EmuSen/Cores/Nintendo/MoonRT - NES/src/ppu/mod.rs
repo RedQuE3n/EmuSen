@@ -49,6 +49,7 @@ pub struct Ppu {
     pub bg_line: Skip<[u8; SCREEN_WIDTH]>,
     pub sprite_indices: Skip<[i32; SPRITES_PER_LINE]>,
     pub sprite_count: Skip<i32>,
+    pub skip_last_dot: Skip<bool>,
 }
 
 impl Default for Ppu {
@@ -81,6 +82,7 @@ impl Default for Ppu {
             bg_line: Skip([0; SCREEN_WIDTH]),
             sprite_indices: Skip([0; SPRITES_PER_LINE]),
             sprite_count: Skip(0),
+            skip_last_dot: Skip(false),
         }
     }
 }
@@ -225,8 +227,11 @@ impl Ppu {
                 value
             }
             4 => {
-                let mut value = self.oam[self.oam_address as usize];
-                if (self.oam_address & 0x03) == 0x02 {
+                let clearing = self.rendering_enabled()
+                    && (self.scanline < VISIBLE_SCANLINES || self.scanline == PRE_RENDER_SCANLINE)
+                    && (1..=64).contains(&self.cycle);
+                let mut value = if clearing { 0xFF } else { self.oam[self.oam_address as usize] };
+                if !clearing && (self.oam_address & 0x03) == 0x02 {
                     value &= 0xE3;
                 }
                 self.refresh_open_bus(value, 0xFF);

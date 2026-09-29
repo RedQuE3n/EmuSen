@@ -185,8 +185,10 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
                 case 4:
                 {
                     // Attribute bits 2-4 have no storage behind them and always read back clear.
-                    byte value = Oam[OamAddress];
-                    if ((OamAddress & 0x03) == 0x02) value &= 0xE3;
+                    // Dots 1-64 of a rendered line clear secondary OAM, and $2004 reads the $FF being written - see Moon_Native.md §3.10.
+                    bool clearing = RenderingEnabled && (Scanline < VisibleScanlines || Scanline == PreRenderScanline) && Cycle >= 1 && Cycle <= 64;
+                    byte value = clearing ? (byte)0xFF : Oam[OamAddress];
+                    if (!clearing && (OamAddress & 0x03) == 0x02) value &= 0xE3;
                     RefreshOpenBus(value);
                     return value;
                 }

@@ -320,6 +320,7 @@ namespace EmuSen.Cores.Nintendo.Moon
             Bus.OamDmaPending = tail && r.ReadBoolean();
             Bus.OamDmaPage = tail ? r.ReadByte() : (byte)0;
             Bus.ForgetLastRead();
+            Apu.FrameIrqReadable = Apu.FrameIrqPending;
         }
     }
 }

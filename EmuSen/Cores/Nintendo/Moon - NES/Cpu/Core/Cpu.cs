@@ -1,4 +1,5 @@
 using System;
+using EmuSen.Common;
 
 namespace EmuSen.Cores.Nintendo.Moon.Processor
 {
@@ -67,6 +68,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
         private bool _irqSampledEarlier;
 
 
+        // Set by BRK and the interrupt sequence, which end without polling; not state, as no state falls inside an instruction.
+        [SkipInState] private bool _vectored;
+
         // CLI/SEI/PLP land their I write after the interrupt poll - see Moon_CPU.md §5.3.
         private bool _hasDelayedI;
         private bool _delayedI;
@@ -129,6 +133,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
             {
                 Cycles++;
                 _bus.Tick();
+                _bus.EndCycle();
                 SampleInterrupts();
             }
         }
@@ -162,7 +167,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
             }
             else if (_serviceIrq)
             {
-                ServiceInterrupt(IrqVector);
+                ServiceInterrupt(IrqVector, hijackable: true);
             }
             else
             {
@@ -176,8 +181,10 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
         // The last cycle of an instruction is too late to be recognised, so the earlier sample wins - see Moon_CPU.md §5.5.
         private void PollInterrupts()
         {
-            _serviceNmi = _nmiSampledEarlier;
-            _serviceIrq = !_serviceNmi && _irqSampledEarlier;
+            // BRK and the interrupt sequence poll only at their fourth cycle, so the handler's first instruction always runs - see Moon_Native.md §3.10.
+            _serviceNmi = !_vectored && _nmiSampledEarlier;
+            _serviceIrq = !_vectored && !_serviceNmi && _irqSampledEarlier;
+            _vectored = false;
 
             if (_hasDelayedI)
             {
@@ -187,15 +194,31 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
         }
 
         // Seven cycles: the chip fetches an opcode and its operand, discards both, then vectors - see Moon_CPU.md §5.1.
-        private void ServiceInterrupt(ushort vector)
+        private void ServiceInterrupt(ushort vector, bool hijackable = false)
         {
             Read(PC);
             Read(PC);
             Push((byte)(PC >> 8));
             Push((byte)PC);
+            vector = hijackable ? HijackVector(vector) : NoHijack(vector);
             Push((byte)((P & ~(byte)CpuFlags.B) | (byte)CpuFlags.U));
             SetFlag(CpuFlags.I, true);
             PC = ReadVector(vector);
+        }
+
+        // An NMI seen by the fourth cycle of BRK or IRQ takes over its vector, and is spent - see Moon_Native.md §3.10.
+        private ushort HijackVector(ushort vector)
+        {
+            _vectored = true;
+            if (!_nmiPending) return vector;
+            _nmiPending = false;
+            return NmiVector;
+        }
+
+        private ushort NoHijack(ushort vector)
+        {
+            _vectored = true;
+            return vector;
         }
 
         private ushort ReadVector(ushort vector)
@@ -210,6 +233,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
             if (_bus.DmaPending) _bus.RunDma(address);
             BeginCycle();
             byte value = _bus.Read(address);
+            _bus.EndCycle();
             SampleInterrupts();
             return value;
         }
@@ -218,6 +242,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
         {
             BeginCycle();
             _bus.Write(address, data);
+            _bus.EndCycle();
             SampleInterrupts();
         }
 
@@ -232,7 +257,11 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
         // A cycle the CPU spends halted by DMA: it is clocked and counted, and the lines are still sampled - see Moon_Native.md §3.9.
         internal void BeginHaltedCycle() => BeginCycle();
 
-        internal void EndHaltedCycle() => SampleInterrupts();
+        internal void EndHaltedCycle()
+        {
+            _bus.EndCycle();
+            SampleInterrupts();
+        }
 
         // The decision uses the sample from before the final cycle, so this keeps one cycle of history - see Moon_CPU.md §5.5.
         private void SampleInterrupts()

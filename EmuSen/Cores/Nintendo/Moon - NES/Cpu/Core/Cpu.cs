@@ -207,6 +207,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
 
         private byte Read(ushort address)
         {
+            if (_bus.DmaPending) _bus.RunDma(address);
             BeginCycle();
             byte value = _bus.Read(address);
             SampleInterrupts();
@@ -227,6 +228,11 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
             Cycles++;
             _bus.Tick();
         }
+
+        // A cycle the CPU spends halted by DMA: it is clocked and counted, and the lines are still sampled - see Moon_Native.md §3.9.
+        internal void BeginHaltedCycle() => BeginCycle();
+
+        internal void EndHaltedCycle() => SampleInterrupts();
 
         // The decision uses the sample from before the final cycle, so this keeps one cycle of history - see Moon_CPU.md §5.5.
         private void SampleInterrupts()

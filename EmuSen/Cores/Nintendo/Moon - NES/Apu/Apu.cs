@@ -253,8 +253,13 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
             Pulse2.Enabled = (value & 0x02) != 0;
             Triangle.Enabled = (value & 0x04) != 0;
             Noise.Enabled = (value & 0x08) != 0;
-            Dmc.Enabled = (value & 0x10) != 0;
+            Dmc.SetEnabled((value & 0x10) != 0, IsGetCycle);
         }
+
+        // The cycle now being run is a get cycle: the parity the frame counter's $4017 delay already uses - see Moon_Native.md §3.9.
+        public bool IsGetCycle => (_cycleCount & 1) != 0;
+
+        public bool NextCycleIsGet => (_cycleCount & 1) == 0;
 
         // Reading the status register acknowledges the frame IRQ - see Moon_APU.md §2.
         public byte ReadStatus()

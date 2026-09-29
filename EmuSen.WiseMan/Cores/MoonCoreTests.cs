@@ -269,19 +269,24 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x21, core.Ppu!.Control);
         }
 
+        // The copy waits for the CPU's next read, which it halts for 513 or 514 cycles - see Moon_Native.md §3.9.
         [Fact]
-        public void Oam_dma_copies_a_page_and_bills_the_cpu_for_it()
+        public void Oam_dma_copies_a_page_while_it_halts_the_cpu()
         {
             var core = Load();
             var bus = core.Bus!;
 
             for (int i = 0; i < 256; i++) bus.Write((ushort)(0x0300 + i), (byte)i);
             bus.Write(0x4014, 0x03);
+            Assert.True(bus.DmaPending);
 
+            long before = core.Cpu!.Cycles;
+            bus.RunDma(core.Cpu.PC);
+
+            Assert.False(bus.DmaPending);
             Assert.Equal(0x00, core.Ppu!.Oam[0]);
             Assert.Equal(0x7F, core.Ppu.Oam[0x7F]);
-            Assert.Equal(MemoryBus.OamDmaCycles, bus.TakePendingDmaCycles());
-            Assert.Equal(0, bus.TakePendingDmaCycles());
+            Assert.InRange(core.Cpu.Cycles - before, 513, 514);
         }
 
         [Fact]
@@ -292,8 +297,13 @@ namespace EmuSen.WiseMan.Cores
             core.SetButton(0, NesButton.A, true);
             core.SetButton(0, NesButton.Start, true);
 
+            // The pads take OUT0 at a get cycle's end, so each write is given two cycles to land.
             core.Bus!.Write(0x4016, 1);
+            core.Bus.Tick();
+            core.Bus.Tick();
             core.Bus.Write(0x4016, 0);
+            core.Bus.Tick();
+            core.Bus.Tick();
 
             Assert.Equal(1, core.Bus.Read(0x4016) & 1); // A
             Assert.Equal(0, core.Bus.Read(0x4016) & 1); // B

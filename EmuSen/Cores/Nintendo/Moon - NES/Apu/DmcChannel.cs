@@ -6,9 +6,6 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
     // Delta modulation: the only channel that reads memory, and the only one that stalls the CPU - see Moon_APU.md §3.5.
     public sealed class DmcChannel
     {
-        // Set by MoonCore once the bus exists, since the APU is built first.
-        [SkipInState] public Func<ushort, byte>? ReadMemory;
-
         public bool IrqEnabled;
         public bool Loop;
         public int RateIndex;
@@ -18,8 +15,15 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
 
         public bool IrqPending;
 
-        // Cycles the fetch stole, drained by the bus the same way OAM DMA is.
+        // Always 0 since the fetch became a halt of the CPU; kept so version 3's layout is unchanged - see Moon_Native.md §3.9.
         public int StallCycles;
+
+        // The byte the reader fetched and the output unit has not taken yet; written in version 4's tail - see Moon_Native.md §3.9.
+        [SkipInState] public byte SampleBuffer;
+        [SkipInState] public bool BufferFull;
+
+        // CPU cycles until a $4015 write's load DMA is asked for, 0 when none is waiting.
+        [SkipInState] public int LoadDelay;
 
         private int _timer;
         private int _currentAddress;
@@ -31,18 +35,30 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
 
         public bool Active => _bytesRemaining > 0;
 
+        // The reader wants the bus: the buffer is empty, bytes remain, and no load delay is running.
+        public bool DmaRequested => !BufferFull && _bytesRemaining > 0 && LoadDelay == 0;
+
+        public ushort DmaAddress => (ushort)_currentAddress;
+
         public int Output => OutputLevel;
 
-        public bool Enabled
-        {
-            get => _enabled;
-            set
-            {
-                _enabled = value;
-                IrqPending = false;
+        public bool Enabled => _enabled;
 
-                if (!value) _bytesRemaining = 0;
-                else if (_bytesRemaining == 0) Restart();
+        // A $4015 write; an empty buffer asks for its first byte two cycles later on a get, three on a put - see Moon_Native.md §3.9.
+        public void SetEnabled(bool value, bool onGetCycle)
+        {
+            _enabled = value;
+            IrqPending = false;
+
+            if (!value)
+            {
+                _bytesRemaining = 0;
+                LoadDelay = 0;
+            }
+            else if (_bytesRemaining == 0)
+            {
+                Restart();
+                if (!BufferFull && _bytesRemaining > 0) LoadDelay = onGetCycle ? 2 : 3;
             }
         }
 
@@ -52,16 +68,18 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
             _bytesRemaining = SampleLength;
         }
 
-        // Clocked at the full CPU rate; the rate table is already in CPU cycles.
+        // Clocked at the full CPU rate; the table is the period in CPU cycles, so the count reloads one short (D5) - see Moon_Native.md §3.9.
         public void StepTimer()
         {
+            if (LoadDelay > 0) LoadDelay--;
+
             if (_timer > 0)
             {
                 _timer--;
                 return;
             }
 
-            _timer = ApuTables.DmcRate[RateIndex];
+            _timer = ApuTables.DmcRate[RateIndex] - 1;
             Clock();
         }
 
@@ -86,22 +104,22 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
             if (_bitsRemaining > 0) return;
 
             _bitsRemaining = 8;
-            FillSampleBuffer();
-        }
-
-        private void FillSampleBuffer()
-        {
-            if (_bytesRemaining == 0)
+            if (!BufferFull)
             {
                 _silence = true;
                 return;
             }
 
             _silence = false;
-            _shift = ReadMemory?.Invoke((ushort)_currentAddress) ?? 0;
+            _shift = SampleBuffer;
+            BufferFull = false;
+        }
 
-            // Four cycles per fetch is the usual figure; the exact count depends on alignment.
-            StallCycles += 4;
+        // The reader's get cycle delivered <value>: the buffer fills and the sample moves on.
+        public void CompleteDma(byte value)
+        {
+            SampleBuffer = value;
+            BufferFull = true;
 
             _currentAddress = _currentAddress == 0xFFFF ? 0x8000 : _currentAddress + 1;
             _bytesRemaining--;
@@ -129,6 +147,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
             _bitsRemaining = 8;
             _silence = true;
             _enabled = false;
+            SampleBuffer = 0;
+            BufferFull = false;
+            LoadDelay = 0;
         }
     }
 }

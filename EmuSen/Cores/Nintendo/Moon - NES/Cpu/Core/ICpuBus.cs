@@ -10,6 +10,11 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
         // Runs the cycle-accurate peripherals for the cycle this access occupies - see Moon_CPU.md §5.5.
         void Tick() { }
 
+        // A DMA that wants the bus halts the CPU's next read, running its cycles first - see Moon_Native.md §3.9.
+        bool DmaPending => false;
+
+        void RunDma(ushort address) { }
+
         // Cycles stolen by DMA, which still clock those peripherals - see Moon_CPU.md §5.5.
         void TickStolen(int cycles)
         {

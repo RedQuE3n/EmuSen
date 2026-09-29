@@ -236,7 +236,19 @@ impl Apu {
         self.pulse2.set_enabled((value & 0x02) != 0);
         self.triangle.set_enabled((value & 0x04) != 0);
         self.noise.set_enabled((value & 0x08) != 0);
-        self.dmc.set_enabled((value & 0x10) != 0);
+        let get = self.is_get_cycle();
+        self.dmc.set_enabled((value & 0x10) != 0, get);
+    }
+
+    /// The cycle now being run is a get cycle, the parity the frame counter's $4017 delay uses.
+    #[inline(always)]
+    pub fn is_get_cycle(&self) -> bool {
+        (self.cycle_count & 1) != 0
+    }
+
+    #[inline(always)]
+    pub fn next_cycle_is_get(&self) -> bool {
+        (self.cycle_count & 1) == 0
     }
 
     /// `ReadStatus`: reading acknowledges the frame IRQ.
@@ -269,14 +281,11 @@ impl Apu {
 
     /// `Step`: every timer by one CPU cycle, `cpu_cycles` times; the DMC's byte is read through `read`, and `$4015` by the APU itself.
     #[inline(always)]
-    pub fn step(&mut self, cpu_cycles: i32, read: &mut impl FnMut(u16) -> u8) {
+    pub fn step(&mut self, cpu_cycles: i32) {
         for _ in 0..cpu_cycles {
             self.cycle_count = self.cycle_count.wrapping_add(1);
             self.triangle.step_timer();
-            if let Some(address) = self.dmc.step_timer() {
-                let value = if address == 0x4015 { self.read_status() } else { read(address) };
-                self.dmc.finish_fetch(value);
-            }
+            self.dmc.step_timer();
 
             self.apu_cycle = !self.apu_cycle;
             if self.apu_cycle {

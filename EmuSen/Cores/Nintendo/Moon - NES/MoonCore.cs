@@ -25,8 +25,11 @@ namespace EmuSen.Cores.Nintendo.Moon
 
         // "MOON" little-endian, then the format version - see EmuSen_Save_States.md §3.
         public const uint StateMagic = 0x4E4F4F4D;
-        // Bumped when the timeline folded into the core, replacing Crystal's span - see Moon_Core.md §5.
-        public const int StateVersion = 3;
+        // 3 when the timeline folded into the core (Moon_Core.md §5); 4 the DMA's tail (Moon_Native.md §3.9).
+        public const int StateVersion = 4;
+
+        // Version 4 adds the DMA's tail after version 3's walks; a version 3 state still loads - see Moon_Native.md §3.9.
+        public const int OldestReadableVersion = 3;
         int global::EmuSen.Cores.IStateFormat.StateVersion => StateVersion;
 
         public Cartridge? Cart { get; private set; }
@@ -95,7 +98,6 @@ namespace EmuSen.Cores.Nintendo.Moon
             Bus = new MemoryBus(Cart, Ppu, Apu) { WriteObserver = null, RomPatcher = new CheatRomPatcher(Cheats) };
 
             // DMC fetches go through the real bus, so the APU only gets a reader once one exists.
-            Apu.Dmc.ReadMemory = address => Bus.Read(address);
 
             Cpu = new Cpu(Bus);
             Bus.Cpu = Cpu;
@@ -269,6 +271,12 @@ namespace EmuSen.Cores.Nintendo.Moon
             StateSerializer.Write(w, Bus);
             StateSerializer.Write(w, Ppu);
             StateSerializer.Write(w, Apu);
+
+            w.Write(Apu.Dmc.SampleBuffer);
+            w.Write(Apu.Dmc.BufferFull);
+            w.Write(Apu.Dmc.LoadDelay);
+            w.Write(Bus.OamDmaPending);
+            w.Write(Bus.OamDmaPage);
         }
 
         public void LoadState(Stream stream)
@@ -286,9 +294,9 @@ namespace EmuSen.Cores.Nintendo.Moon
             {
                 throw new InvalidDataException("Not a Moon save state.");
             }
-            if (version != StateVersion)
+            if (version is < OldestReadableVersion or > StateVersion)
             {
-                throw new InvalidDataException($"Save state version {version} is not {StateVersion}.");
+                throw new InvalidDataException($"Save state version {version} is not one this build reads ({OldestReadableVersion} to {StateVersion}).");
             }
 
             TotalFrames = r.ReadInt64();
@@ -303,6 +311,15 @@ namespace EmuSen.Cores.Nintendo.Moon
             StateSerializer.Read(r, Bus);
             StateSerializer.Read(r, Ppu);
             StateSerializer.Read(r, Apu);
+
+            // Version 3 had no sample buffer and no pending OAM DMA: the reader asks for its byte at once.
+            bool tail = version >= 4;
+            Apu.Dmc.SampleBuffer = tail ? r.ReadByte() : (byte)0;
+            Apu.Dmc.BufferFull = tail && r.ReadBoolean();
+            Apu.Dmc.LoadDelay = tail ? r.ReadInt32() : 0;
+            Bus.OamDmaPending = tail && r.ReadBoolean();
+            Bus.OamDmaPage = tail ? r.ReadByte() : (byte)0;
+            Bus.ForgetLastRead();
         }
     }
 }

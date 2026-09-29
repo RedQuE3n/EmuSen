@@ -15,7 +15,9 @@ pub const MASTER_CLOCKS_PER_SCANLINE: i64 = 341 * 4;
 
 /// "MOON" little-endian, then the format version - see Moon_Core.md §5.
 pub const STATE_MAGIC: u32 = 0x4E4F_4F4D;
-pub const STATE_VERSION: i32 = 3;
+pub const STATE_VERSION: i32 = 4;
+/// Version 4 adds the DMA's tail; a version 3 state still loads (Moon_Native.md §3.9).
+pub const OLDEST_READABLE_VERSION: i32 = 3;
 
 /// Why a load or a frame could not complete as C# would have.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -214,6 +216,11 @@ impl Machine {
         w.group("Bus", |w| self.bus.write_state(w));
         w.group("Ppu", |w| self.bus.ppu.write_state(w));
         w.group("Apu", |w| self.bus.apu.write_state(w));
+        w.u8("Apu.Dmc.SampleBuffer", *self.bus.apu.dmc.sample_buffer);
+        w.bool("Apu.Dmc.BufferFull", *self.bus.apu.dmc.buffer_full);
+        w.i32("Apu.Dmc.LoadDelay", *self.bus.apu.dmc.load_delay);
+        w.bool("Bus.OamDmaPending", *self.bus.oam_dma_pending);
+        w.u8("Bus.OamDmaPage", *self.bus.oam_dma_page);
     }
 
     fn read_state(&mut self, r: &mut StateReader) -> StateResult {
@@ -222,7 +229,7 @@ impl Machine {
         if magic != STATE_MAGIC {
             return Err(StateError::NotAMoonState(magic));
         }
-        if version != STATE_VERSION {
+        if !(OLDEST_READABLE_VERSION..=STATE_VERSION).contains(&version) {
             return Err(StateError::Version(version));
         }
         self.total_frames = r.i64()?; // TotalFrames
@@ -235,7 +242,15 @@ impl Machine {
         self.cpu.read_state(r, &mut self.bus)?;
         self.bus.read_state(r)?;
         self.bus.ppu.read_state(r)?;
-        self.bus.apu.read_state(r)
+        self.bus.apu.read_state(r)?;
+        let tail = version >= 4;
+        *self.bus.apu.dmc.sample_buffer = if tail { r.u8()? } else { 0 };
+        *self.bus.apu.dmc.buffer_full = tail && r.bool()?;
+        *self.bus.apu.dmc.load_delay = if tail { r.i32()? } else { 0 };
+        *self.bus.oam_dma_pending = tail && r.bool()?;
+        *self.bus.oam_dma_page = if tail { r.u8()? } else { 0 };
+        self.bus.forget_last_read();
+        Ok(())
     }
 
     /// `MoonCore.LoadState`'s fields; a failed load changes nothing, and bytes past the state are ignored as C# ignores them.

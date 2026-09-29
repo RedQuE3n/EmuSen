@@ -6789,3 +6789,75 @@ added 36, over 55. In all, 1,187 lines removed and 234 added where the copies we
 fewer lines, before the tests. `EmuSen_NativeCores.md`'s P6 predicted the shims would shrink by
 about 600 lines at step 5, with the host about 850; that prediction is about the whole migration and is not retired by a
 first increment.
+
+#### 4.85.8 The proof that emulation did not change
+
+**The probe.** `CoreOutputHashProbe` (WiseMan, gated by `EMUSEN_CORE_HASH_OUT` and `EMUSEN_CORE_HASH_ROMS`) runs every
+engine over scratch copies of games, under `--nobattery` and in a fixed sandbox home, with Start pressed for five frames
+in every 150 and A for ten from frame 600. Each run records three SHA-256 prefixes: every drained sample, the picture
+every 30 frames and at the end, and the final state. Each game runs three times: drained every frame, drained every 200
+frames (so every queue overflows and trims), and loaded from the state the first run saved and run 60 frames more. With
+`EMUSEN_CORE_HASH_STATES_FROM` the third run loads another build's states instead, which is the check that every state
+the base saved still loads and plays on identically.
+
+The games, copied from the library to `~/.cache/emusen/probe/core-cleanup/roms/`: Super Mario Bros. 3, The Legend of
+Zelda and Kirby's Adventure on Moon and MoonRT; Super Mario Land 2 and Link's Awakening, and Rayman on the Color, on
+Mercury and MercuryRT; Super Mario World, Yoshi's Island (SuperFX) and A Link to the Past on Venus; Super Mario 64 and
+Ocarina of Time on Mars and MarsRT, 500 frames each.
+
+**The result.** The base (`d3de4c93`, built in a separate tree) and the pass's last commit produce the same 57 lines,
+byte for byte: every sound, picture and state hash of every engine and game, both drain patterns, and every base state
+loaded into the new build and played on. The same held after §4.85.2 and after §4.85.6, each measured separately.
+Measured on 2026-09-28.
+
+**A negative result on the way.** The probe's first version gave each run a fresh temporary home, and Venus's state
+hashes then differed between two runs of the same build, while its sound and pictures did not. The 30 differing bytes
+were the home's random name: a Venus state carries its battery save's full path (§4.85.6). The probe now uses one fixed
+home, and the base was measured again with it; the first base run's 48 other lines, and the nine Venus lines' sound and pictures, matched the second's exactly.
+
+**Real saves.** Scratch copies of three saves that lie beside their ROMs in the library (The Legend of Zelda on the NES,
+Link's Awakening and Super Mario Land 2) were loaded on both engines of their console in an empty sandbox home. On all
+six loads the save was copied into Saves, all 8,192 bytes of the game's RAM held it, and the original's bytes and
+modification time were unchanged.
+
+**The suites.** The whole of WiseMan ran once, after the shared plumbing was in place: 8,825 passed, none failed, 53
+skipped (the gated probes and the tests that need hardware or files this machine lacks). The blast-radius runs of each
+step are in its section. No run wrote a `.srm` under the tree's `home`, the temporary directory or the ROM library.
+
+#### 4.85.9 The mutants
+
+Each fix, the migration and the shared pieces were checked by applying a deliberate defect, building, and running the
+tests that should catch it, with the source restored after each. A mutant that restores the code as it was before a fix
+is the build before the fix, so the first mutant of each defect is also its failing-then-passing proof. 46 mutants, 46
+caught, none equivalent.
+
+| Section | Mutant | Caught by |
+| --- | --- | --- |
+| §4.85.1 | Moon without the frame notice; MoonRT without it; either with the notice a frame early | `NesRunToFrameTests` |
+| §4.85.2 | Moon, Mercury, Mars, Venus given the old constant; MoonRT and MercuryRT never sent the setting; the Rust limit ignored; the queue trimming before the pair; the queue keeping one pair over | `AudioBufferLimitTests` |
+| §4.85.3 | MoonRT and MercuryRT not closing their lending | `RustShimDisposeTests` |
+| §4.85.4 | Mars declaring rewind; the lookup ignoring declarations; Mistress ignoring the feature at the capture and at the reel | `EngineFeaturesTests`, `MarsRtEngineTests` |
+| §4.85.5 | MarsRT's shim reporting another version; MoonRT's Rust version and MercuryRT's Rust magic drifting | `RustStateHeaderTests` |
+| §4.85.6 | never copying; moving instead of copying; touching the original's time; the file beside the ROM overwriting Saves; copying under `--nobattery`; saving a cartridge without RAM; each of the four engines not migrating; MercuryRT writing beside the ROM; Venus writing the state's path; Venus migrating; the flush period off by one | `BatterySaveTests`, `MarsRtFrontendTests` |
+| §4.85.7 | a debug write not wrapped; a size of zero unguarded; the loader's version check and switch dropped; the patch table's upper bound exclusive; the base's frame notice dropped; the battery read from the wrong space; MercuryRT's observed bus write dropped; the codec's compare dropped; the shared status text losing the console's name | `DebugPlumbingTests`, `NativeHostTests`, `CheatCodecAdapterTests`, the debug-target, RT and battery suites |
+
+MarsRT's Rust source was not mutated, since it is held unchanged (§4.85.2); its copy of the state header is covered by
+`RustStateHeaderTests` without a mutant.
+
+#### 4.85.10 What was held back, and why
+
+- **MarsRT's Rust queue** keeps 128,000 samples and ignores the setting (§4.85.2), and its source is otherwise untouched,
+  until its move to the common interface retrains its profile.
+- **MarsRT's shim on the base class** (§4.85.7): its picture, snapshot arrays, cheats and frame end are the
+  generalisations §4.3 gives the base at step 5.
+- **The crash log's rename** to `marsrt_crash_<pid>` is step 5's, not this pass's.
+- **The registration records** of `EmuSen_NativeCores.md` §5.1, and with them `CoreFactory`'s type switches: only the
+  rewind feature was built ahead of them (§4.85.4).
+- **The shared Saves folder's stem collisions** (§4.85.6): five NES and SNES pairs in the library, three playable on both
+  consoles, now share a save file. A per-console folder is the fix and needs its own decision and migration.
+- **Venus's state still carries its save path and latch** as two fields that are no longer obeyed. Retiring them would
+  change Venus's state format, which this pass does not do.
+- **MoonRT's halt at `runto frame`** waits for its stage-5 observed loop (§4.85.1).
+- **Timing.** Nothing here was timed. The shims' hot calls moved from static function-pointer fields to a per-library
+  table read through an instance, one load more per call, at most a handful of calls a frame; `EmuSen_NativeCores.md`'s
+  P2 (MoonRT's frame within ±1% through the generic host) is its step 2's to retire, interleaved, and is not claimed here.

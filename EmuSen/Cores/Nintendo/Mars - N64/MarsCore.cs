@@ -15,7 +15,7 @@ using VideoInterface = EmuSen.Cores.Nintendo.Mars.Vi.Vi;
 namespace EmuSen.Cores.Nintendo.Mars
 {
     // The Nintendo 64's ICore; what the machine cannot provide yet is stubbed on purpose - see Mars_Core.md.
-    public sealed partial class MarsCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ISnapshotCore, global::EmuSen.Cores.ICoreSettings, global::EmuSen.Cores.IFrameSerial, global::EmuSen.Cores.IRepeatedRows, global::EmuSen.Cores.IStateFormat
+    public sealed partial class MarsCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ISnapshotCore, global::EmuSen.Cores.ICoreSettings, global::EmuSen.Cores.IFrameSerial, global::EmuSen.Cores.IRepeatedRows, global::EmuSen.Cores.IStateFormat, global::EmuSen.Cores.IEngineFeatures
     {
         // The VR4300's pipeline clock, which is what MemoryBus.Cycles counts - see Mars_Memory.md §3.
         public const long ProcessorClockHz = 93_750_000;
@@ -39,6 +39,9 @@ namespace EmuSen.Cores.Nintendo.Mars
 
         // The right stick stands in for the four C buttons, pressed past half its travel - see Mars_Core.md §5.
         public const double CButtonThreshold = 0.5;
+
+        // No rewind: the snapshot with several rasteriser workers froze a game - see EmuSen_Settings_Reference.md §4.21b and §4.44.
+        public global::EmuSen.Cores.EngineFeatures Features { get; } = new(RewindCapture: false, RewindWithheld: "not kept for Mars (C#)");
 
         // "MARS" little-endian, then the format version - see Mars_SaveStates.md §1.
         private const uint StateMagic = 0x5352_414D;

@@ -1327,8 +1327,8 @@ namespace EmuSen.Mistress.Views
                     requestsTicks += afterRequests - afterRun;
 
                     // Right after RunFrame, which is what produces new samples to drain.
-                    // Off for the C# N64 core, whose snapshot with several rasteriser workers froze a game; on for MarsRT, whose is proven - see EmuSen_Settings_Reference.md §4.21b and §4.44.
-                    bool captured = session.Core is not null and not EmuSen.Cores.Nintendo.Mars.MarsCore && _rewind.OnFrameCompleted(session.Core);
+                    // Off for an engine that withholds it, which is Mars (C#) alone - see EmuSen_Settings_Reference.md §4.85.4.
+                    bool captured = session.Core is not null && EmuSen.Cores.EngineFeatures.Of(session.Core).RewindCapture && _rewind.OnFrameCompleted(session.Core);
 
                     // Drained every frame either way, so a muted stretch cannot back the buffer up - see EmuSen_Audio_Sync.md §4.
                     short[] samples = session.DequeueAudioSamples(int.MaxValue);

@@ -18,7 +18,7 @@ namespace EmuSen.Mistress.Views
         // Why the reel cannot open now, or null when it can.
         private string? RewindUnavailable()
         {
-            if (_session?.Core is EmuSen.Cores.Nintendo.Mars.MarsCore) return "not kept for Mars (C#)";
+            if (EngineFeatures.Of(_session?.Core) is { RewindCapture: false } withheld) return withheld.RewindWithheld ?? "not kept for this engine";
             if (_rewind.SnapshotBytes == 0) return "nothing to go back to yet";
             return null;
         }

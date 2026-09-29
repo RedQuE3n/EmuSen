@@ -927,6 +927,9 @@ to build the crate (`RustCores.props:9`–`:26`).
 
 `EngineFeatures.RewindCapture` is false for Mars (C#) and true for every other engine. Mistress's two sites read the
 running engine's feature, and the reason they give ("not kept for Mars (C#)") comes from the registration's own text.
+*Built 2026-09-28, ahead of the records: `EngineFeatures` and the `IEngineFeatures` an engine implements to declare it
+live in `CoreCapabilities.cs`, `MarsCore` declares the withheld rewind and its text, and Mistress's two sites read it
+(`EmuSen_Settings_Reference.md` §4.85.4). The registration reads the same declaration when it is built.*
 Anything later that is a property of an engine rather than a capability of a core goes in the same place. A property
 of an engine is a policy decision about an implementation that does support the interface.
 

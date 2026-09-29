@@ -6568,3 +6568,26 @@ the pool still holds one picture and each shim's test fails.
 **What it does not cover.** A picture lent before `Dispose` and never returned is the caller's, as it always was; closing
 changes only what a return does.
 
+#### 4.85.4 Rewind withheld by a declared feature, not a type check
+
+**Before.** Mistress switched rewind off in two places with `is EmuSen.Cores.Nintendo.Mars.MarsCore`
+(`MainWindow.Rewind.cs`, for the reel's menu entry and its reason, and `MainWindow.axaml.cs`, for the capture after each
+frame). The reason is §4.21b's and §4.44's: the C# core's snapshot with several rasteriser workers froze a game, and
+MarsRT's is proven. That is a property of one engine, found by its type, which `EmuSen_NativeCores.md` §1.5 lists among
+the places the framework reaches around `ICore`.
+
+**After.** An engine declares it. `EngineFeatures` (`CoreCapabilities.cs`) is a record with `RewindCapture` and the text
+a frontend shows when it is withheld; an engine that implements `IEngineFeatures` gives its own, and any other engine
+has `EngineFeatures.All`. `MarsCore` declares `RewindCapture: false` with the reason "not kept for Mars (C#)", the words
+the menu showed before. Both Mistress sites read `EngineFeatures.Of(core)`. This is the `EngineFeatures` of
+`EmuSen_NativeCores.md` §5.2, built ahead of the registration records: when those are built, an
+`EngineRegistration.Features` is read from the same declaration, and Mistress does not change again.
+
+**Behaviour is unchanged, and tested.** `EngineFeaturesTests` pins Mars (C#) withholding rewind with that reason and
+every other engine (MarsRT, Moon, MoonRT, Mercury, MercuryRT, Venus) keeping it. `MarsRtEngineTests` already ran a game
+on each N64 engine through a real `MainWindow` and required rewind history on MarsRT and none on Mars; it now also reads
+the menu's text on Mars. A Mars that declares rewind, a lookup that ignores the declaration, and a Mistress that ignores
+the feature at either site each fail (§4.85.9).
+
+**What it does not cover.** The other type switches of §1.5 (`CoreFactory.Bundle`, `Running`, `EngineNotice`) wait for
+the registration records, and Hotaru's and Pharaoh's one-console affordances stay, as `EmuSen_Multicore.md` §5 argues.

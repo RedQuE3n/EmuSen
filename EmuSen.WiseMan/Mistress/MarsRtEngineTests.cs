@@ -113,6 +113,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Null(Game(window).EngineNotice);
             WaitFor(() => Game(window).TotalFrames > 60);
             Assert.Equal(0, Rewind(window).Depth);
+            Assert.Equal("Rewind  (not kept for Mars (C#))", typeof(MainWindow).GetMethod("RewindMenuText", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null));
             window.Close();
         }, default);
 

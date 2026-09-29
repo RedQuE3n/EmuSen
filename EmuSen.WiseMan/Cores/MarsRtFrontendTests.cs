@@ -69,7 +69,7 @@ namespace EmuSen.WiseMan.Cores
             CoreBundle marsRt = CoreFactory.Load(rom, engine: CoreCatalog.MarsRtEngine);
             Assert.IsType<MarsRtCore>(marsRt.Core);
             Assert.IsType<MarsRtDebugTarget>(marsRt.DebugTarget);
-            Assert.IsType<EmuSen.Cores.Nintendo.Mars.Cheats.N64GameSharkCheatCodec>(marsRt.CheatAutoDetectCodec);
+            Assert.Equal(("GameShark", MarsCore.SpaceRdram), (marsRt.CheatAutoDetectCodec!.Name, marsRt.CheatAutoDetectCodec.SpaceName));
             Assert.Null(marsRt.Notice);
             Assert.True(((MarsRtCore)marsRt.Core).ExpansionPak);
 
@@ -253,7 +253,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(MarsRtCore.Available, MarsNative.Report);
             string rom = Rom(SyntheticN64System.Build(rsp: true));
             var cheats = new CheatRegistry();
-            cheats.AddCheat(CheatKind.RamPoke, new EmuSen.Cores.Nintendo.Mars.Cheats.N64GameSharkCheatCodec().DecodeWrites("8110FB40 FFFF+8110FB42 F801+80001003 0000")!, null, "stripe");
+            cheats.AddCheat(CheatKind.RamPoke, EmuSen.Cores.Nintendo.Mars.Cheats.MarsCheatCodecs.GameShark().DecodeWrites("8110FB40 FFFF+8110FB42 F801+80001003 0000")!, null, "stripe");
 
             MarsCore oracle = MarsRtTests.Oracle();
             using MarsRtCore twin = MarsRtTests.Twin();

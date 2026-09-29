@@ -95,24 +95,24 @@ namespace EmuSen.Cores
                         new SnesDebugTarget(venus.Cpu!, venus.Bus!, venus.Renderer!,
                             venusFrameTimings ?? (() => (venus.LastFrameCpuSpc700Ms, venus.LastFramePpuMs, venus.LastFrameHdmaMs)),
                             cheats),
-                        new ActionReplayCheatCodec(),
-                        new GameGenieCheatCodec(),
+                        VenusCheatCodecs.ActionReplay(),
+                        VenusCheatCodecs.GameGenie(),
                         new VenusCpuTraceSwitch());
 
                 case MoonCore moon:
                     return new CoreBundle(
                         moon,
                         new MoonDebugTarget(moon),
-                        new NesRawCheatCodec(),
-                        new NesGameGenieCheatCodec(),
+                        MoonCheatCodecs.Raw(),
+                        MoonCheatCodecs.GameGenie(),
                         null);
 
                 case MercuryCore mercury:
                     return new CoreBundle(
                         mercury,
                         new MercuryDebugTarget(mercury),
-                        new GbGameSharkCheatCodec(),
-                        new GbGameGenieCheatCodec(),
+                        MercuryCheatCodecs.GameShark(),
+                        MercuryCheatCodecs.GameGenie(),
                         null);
 
                 // The same codecs, and MercuryRT's target: a mirror for what it shows, the core's hooks for what halts - see Mercury_Native.md §8.5.
@@ -120,17 +120,17 @@ namespace EmuSen.Cores
                     return new CoreBundle(
                         mercuryRt,
                         mercuryRt.CreateDebugTarget(),
-                        new GbGameSharkCheatCodec(),
-                        new GbGameGenieCheatCodec(),
+                        MercuryCheatCodecs.GameShark(),
+                        MercuryCheatCodecs.GameGenie(),
                         null);
 
                 // The GameShark pokes; no N64 format patches ROM, so the explicit slot stays empty - see Mars_Cheats.md §1.
                 case MarsCore mars:
-                    return new CoreBundle(mars, new MarsDebugTarget(mars, cheats), new N64GameSharkCheatCodec(), null, null);
+                    return new CoreBundle(mars, new MarsDebugTarget(mars, cheats), MarsCheatCodecs.GameShark(), null, null);
 
                 // The same codec, and a target whose hooks are tables in the Rust loop - see Mars_Native.md §6.5.
                 case MarsRtCore marsRt:
-                    return new CoreBundle(marsRt, new MarsRtDebugTarget(marsRt, cheats), new N64GameSharkCheatCodec(), null, null);
+                    return new CoreBundle(marsRt, new MarsRtDebugTarget(marsRt, cheats), MarsCheatCodecs.GameShark(), null, null);
 
                 default:
                     throw new NotSupportedException($"No debug target is registered for {core.GetType().Name}.");
@@ -141,8 +141,7 @@ namespace EmuSen.Cores
         public static ICore ForFirmwareProbe(string romPath) => Create(romPath, headless: true);
 
         // What a cheat window opened before any ROM is parses with - see EmuSen_Multicore.md §4.
-        public static (ICheatCodeCodec AutoDetect, ICheatCodeCodec Explicit) DefaultCheatCodecs =>
-            (new ActionReplayCheatCodec(), new GameGenieCheatCodec());
+        public static (ICheatCodeCodec AutoDetect, ICheatCodeCodec Explicit) DefaultCheatCodecs => VenusCheatCodecs.Pair();
 
         // The codecs for a console picked in the UI rather than loaded from a ROM - see EmuSen_Multicore.md §10.
         public static (ICheatCodeCodec? AutoDetect, ICheatCodeCodec? Explicit) CheatCodecsFor(string? coreName)
@@ -153,10 +152,10 @@ namespace EmuSen.Cores
             if (core is null) return DefaultCheatCodecs;
 
             // Dispatched on extension for the same reason Create is - no new public surface on the catalog.
-            if (core.SupportsExtension(".sfc")) return (new ActionReplayCheatCodec(), new GameGenieCheatCodec());
-            if (core.SupportsExtension(".nes")) return (new NesRawCheatCodec(), new NesGameGenieCheatCodec());
-            if (core.SupportsExtension(".gb")) return (new GbGameSharkCheatCodec(), new GbGameGenieCheatCodec());
-            if (core.SupportsExtension(".z64")) return (new N64GameSharkCheatCodec(), null);
+            if (core.SupportsExtension(".sfc")) return VenusCheatCodecs.Pair();
+            if (core.SupportsExtension(".nes")) return MoonCheatCodecs.Pair();
+            if (core.SupportsExtension(".gb")) return MercuryCheatCodecs.Pair();
+            if (core.SupportsExtension(".z64")) return MarsCheatCodecs.Pair();
 
             return (null, null);
         }

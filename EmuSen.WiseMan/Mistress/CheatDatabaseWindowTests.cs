@@ -209,7 +209,7 @@ namespace EmuSen.WiseMan.Mistress
         private static ListBox Games(CheatDatabaseWindow w) => w.GetControl<ListBox>("GamesList");
 
         private static EmuSen.DianaOS.DianaOS.Lib.ICheatCodeCodec Codec() =>
-            new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec();
+            EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.ActionReplay();
 
         // Selecting a system used to do nothing at all - the games never
         // appeared, so a downloaded database was unreachable from the GUI.

@@ -47,7 +47,7 @@ namespace EmuSen.WiseMan.DianaOS
         private CheatDatabase Db() => new(_dbDir);
 
         private static EmuSen.DianaOS.DianaOS.Lib.ICheatCodeCodec Codec() =>
-            new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec();
+            EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.ActionReplay();
 
         [Fact]
         public void Games_returns_only_the_named_systems_files_in_name_order()

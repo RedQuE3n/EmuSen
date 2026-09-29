@@ -776,6 +776,11 @@ emusen_native::exports!(Machine);
 All of it lives in the `EmuSen` assembly, in `EmuSen/Cores/Native/`. No new project is made: a new assembly would buy
 no separability that anything uses (`EmuSen_Multicore.md` §9.2).
 
+*Built in part 2026-09-28, over today's per-core exports: `NativeCoreLibrary`, `NativeMachine` (with a `NativeExports`
+table under the present names), `NativeRtCore<TMachine>` for the two 8-bit shims, and `RomPatchTable`, with the names
+and shapes below; MarsRT's shim does not use the base yet. What was built, what was not and why is in
+`EmuSen_Settings_Reference.md` §4.85.7.*
+
 ### 4.1 `NativeCoreLibrary`, the loader
 
 One instance per library, replacing `MoonNative`, `MercuryNative` and `MarsNative`'s loading half. It is built from:

@@ -3,26 +3,16 @@ using EmuSen.DianaOS.DianaOS.Lib;
 namespace EmuSen.Cores.Nintendo.Moon.Cheats
 {
     // The plugs letting CheatCommand use both decoders without DianaOS referencing this project.
-
-    // "Game Genie", not "NES Game Genie", so the detected-format message reads as it always has.
-    public sealed class NesGameGenieCheatCodec : ICheatCodeCodec
+    public static class MoonCheatCodecs
     {
-        public string Name => "Game Genie";
-        public CheatCodeKind Kind => CheatCodeKind.RomPatch;
-        public string? SpaceName => null; // ROM patches aren't RAM-space addressed
+        // "Game Genie", not "NES Game Genie", so the detected-format message reads as it always has.
+        public static ICheatCodeCodec GameGenie() =>
+            new DelegateCheatCodec("Game Genie", CheatCodeKind.RomPatch, null, NesGameGenieCodec.CanDecode, NesGameGenieCodec.Decode, NesGameGenieCodec.DecodeCompare);
 
-        public bool CanDecode(string code) => NesGameGenieCodec.CanDecode(code);
-        public (int Address, byte Value) Decode(string code) => NesGameGenieCodec.Decode(code);
-        public byte? DecodeCompare(string code) => NesGameGenieCodec.DecodeCompare(code);
-    }
+        public static ICheatCodeCodec Raw() =>
+            new DelegateCheatCodec("NES address:value", CheatCodeKind.RamPoke, MoonCore.SpaceCpuBus, NesRawCodec.CanDecode, NesRawCodec.Decode);
 
-    public sealed class NesRawCheatCodec : ICheatCodeCodec
-    {
-        public string Name => "NES address:value";
-        public CheatCodeKind Kind => CheatCodeKind.RamPoke;
-        public string? SpaceName => "CPUBUS";
-
-        public bool CanDecode(string code) => NesRawCodec.CanDecode(code);
-        public (int Address, byte Value) Decode(string code) => NesRawCodec.Decode(code);
+        // The pair a loaded NES game and a console chosen in the UI both get: detected, then explicit.
+        public static (ICheatCodeCodec AutoDetect, ICheatCodeCodec Explicit) Pair() => (Raw(), GameGenie());
     }
 }

@@ -529,7 +529,7 @@ namespace EmuSen.WiseMan.Cores
         {
             core = Load();
             var target = new MarsDebugTarget(core);
-            return DianaOSInterpreter.CreateDefault(target, null, new N64GameSharkCheatCodec(), null);
+            return DianaOSInterpreter.CreateDefault(target, null, MarsCheatCodecs.GameShark(), null);
         }
 
         [Fact]
@@ -606,7 +606,7 @@ namespace EmuSen.WiseMan.Cores
                 """;
 
             var registry = new CheatRegistry();
-            CheatImportResult result = CheatImport.FromChtText(registry, text, new N64GameSharkCheatCodec());
+            CheatImportResult result = CheatImport.FromChtText(registry, text, MarsCheatCodecs.GameShark());
 
             Assert.Equal(2, result.Loaded);
             Assert.Equal(1, result.Skipped);

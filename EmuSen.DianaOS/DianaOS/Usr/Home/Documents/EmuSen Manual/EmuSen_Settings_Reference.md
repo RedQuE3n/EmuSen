@@ -6703,3 +6703,89 @@ Ambition, Uncharted Waters, Wario's Woods, Tecmo Super Bowl), and three of the f
 three would have each load the other's save and overwrite it. Before this change the NES save sat beside its ROM and the
 two could not meet. Nothing here resolves it. A per-console folder in `SramPathFor`, with the SNES and Nintendo 64 saves
 copied across in the same copy-don't-move way, would, and is a decision for a later pass.
+
+#### 4.85.7 The C# plumbing, shared as the first increment of the generic host
+
+`EmuSen_NativeCores.md` §4 designs one loader, one handle class and one `ICore` base for the Rust cores, over one
+common native interface that does not exist yet. The pieces below are built now, with that section's names and shapes,
+over today's per-core exports, so that the later move replaces only the calls into the libraries. They live in
+`EmuSen/Cores/Native/`, as §4 places them; the two debugger pieces live beside the interfaces they implement, in
+`EmuSen.DianaOS/DianaOS/Lib/`. Line counts are of the C# before and after, measured on 2026-09-28; "removed" is what the
+diff took out of the files that had the copies, and "added" includes the new shared files.
+
+**`NativeCoreLibrary`, the loader (§4.1).** `MoonNative.cs`, `MercuryNative.cs` and `MarsNative.cs` were one 48-line
+file three times, differing in the names of the file, the version and crash-log exports, the switch and the log. One
+class now takes those six names and does the rest: the switch (`EMUSEN_MOON_NATIVE=0` and its peers, each kept as it
+was), the load, the exact version check, the crash log, `Available`, `Report` and `Export(name)`. The three static
+classes stay as facades of a few lines, since the shims' static tables, the tests and C# Mars's own native components (`Rsp.Native.cs`) read
+`MarsNative.Export` and its peers, which keep working unchanged. The crash logs keep their names, `moonrt_crash_<pid>`,
+`mercuryrt_crash_<pid>` and MarsRT's `native_crash_<pid>`; the rename to `marsrt_crash_<pid>` belongs to MarsRT's move
+(§4.1, §9's Q6). `Report`'s texts are the old ones word for word, and `NativeHostTests` pins the switches, the log
+names, a library turned off and a version refused.
+
+**`NativeMachine`, the handle (§4.2).** `MoonMachine` and `MercuryMachine` shared most of their 190 and 200 lines; they are 78 and 87 now, and `MarsMachine` 65 of 93. The
+base now holds the handle, its finaliser and `Dispose`, the shared status codes −1 to −8 (with the console's name in
+"not a Moon save state"), the length-query idiom, the state's load, save and layout, and the common calls, resolved once
+per library into a `NativeExports` table under today's `moon_machine_` and `mercury_machine_` names. Each console keeps
+its create call, its own status band, `RunFrame`, `SetButtons`, `Step`, and its extras (Moon's `Reset` and C#-exception
+refusals; Mercury's model, sample rate, serial log and illegal-opcode error). `MarsMachine` derives from it too, but
+MarsRT's exports other than free and load have other shapes today (a snapshot flag on the size, save and layout; a
+different drain; patches as triples), so its table is resolved lifecycle-only, and the 8-bit calls on it throw
+`NotSupportedException` rather than call a function of the wrong shape; its flagged `Save` and `Layout` stay its own.
+One message changes at an edge: status −5, which only Mercury's library returns, is now named by the shared table on
+Moon and Mars too, where it was "status −5".
+
+**`NativeRtCore<TMachine>`, the `ICore` base (§4.3).** It holds what `MoonRtCore` and `MercuryRtCore` copied: cheats and
+the patch version, skip rendering, the picture lending and its copy, the audio drain and the audio limit, the battery
+save through `BatterySave`, state by path and by stream with the console's pre-checks, spaces by name, the frame log's
+reader, mirror sync, mutes and `Dispose`. `BeforeFrame` refreshes the ROM patches and the audio limit; `EndFrame` is
+Mercury's order, which Moon's is too since §4.85.1. Each subclass re-declares `ICore` and its other interfaces, so that
+its own members (MercuryRT's halts, its observed bus writes) are the ones the interfaces map to. The two shims went from
+294 and 320 lines (282 and 310 on the base, before §4.85.1 to §4.85.6 added to them) to 125 and 151. `RomPatchTable.Build(cheats, lo, hi)` replaces the two 29-line copies of the patch
+table, with Moon's bounds (`$4020`–`$FFFF`) and Mercury's (`$0000`–`$7FFF`) given by each shim.
+
+MarsRT's shim does not derive from the base. It adopts what fits without a change of behaviour: the loader (through
+`MarsNative`), the handle's status table (through `MarsMachine`), `BatterySave`, the shared debug space, `Resolve`, the
+register tables and the codec. What does not fit is the base's body itself. MarsRT's handle is a raw `nint` rather
+than a machine object; its picture has a variable size, a row repeat and a serial; its state keeps two reused arrays
+for the rewind's snapshots (`Mars_Native.md` §6.6.3), which must stay; its cheats are sent as triples; and its frame end
+applies the cheats only while interrupts are enabled. §4.3's base is to gain those generalisations when MarsRT moves
+(step 5), and moving it now would change the default engine's code path for no present gain.
+
+**One debugger memory space.** Seven classes implemented `IDebugMemorySpace`: Moon's and Mercury's (identical), Venus's
+three (an array, a bus window, a delegate pair), Mars's and MarsRT's. `DelegateDebugMemorySpace` replaces all seven: a
+live size, a read, an optional write (none is a read-only space), the side-effect flag, and whether addresses wrap. The
+size is read live everywhere, as Mars's was, so a reload is followed on every console; Moon's and Mercury's took it once,
+when the target was built. The edge rule is one: **reads and writes both wrap modulo the size, negatives included, and a
+space of size zero is given address zero**, which was Moon's, Mercury's, Mars's and MarsRT's rule. A bus window or a
+processor's view passes every address through (Venus's `CpuBus`, `IO` and `SRAM`, and both N64 engines' `CPU`), as
+before. What changes is Venus's, at the edges only:
+
+- a write past the end of an array space (`WRAM`, `VRAM`, `CGRAM`, `OAM`, `APURAM`, `GSURAM`, `SA1IRAM`, `BWRAM`) or of a
+  delegate space (`GSUBUS`, `SA1BUS`, `DSPRAM`) used to be dropped while a read there wrapped; both wrap now;
+- `DSPPRG` passed a write that did nothing and so reported itself writable; it has no write now, so `spaces` shows it
+  read-only and `write` refuses it, which is what the program ROM is;
+- an empty array space used to throw on a read; it reads zero.
+
+`DebugPlumbingTests` pins the rule, Venus's wrapped write included, and the existing debug-target suites of every core
+pass unchanged (§4.85.8).
+
+**Mars's and MarsRT's twins.** `MarsDebugSpaces.Resolve` and `MarsRtCore.Resolve` were the same map of physical
+addresses written twice, differing only in where the RDRAM's length came from; one `Resolve(physical, rdramLength)`
+serves both. The o32 register names were written three times (both debug targets and the disassembler's
+`MarsOperands.Gpr`); both targets read the disassembler's table. MarsRT's list of video register names now reads Mars's,
+in Mars's order, which is the order MarsRT's export returns them.
+
+**One cheat-codec adapter.** Seven classes adapted a static decoder to `ICheatCodeCodec` (two each for the NES, the Game
+Boy and the SNES, one for the N64). `DelegateCheatCodec` takes the name, kind and space and the decoder's functions, and
+each console has a static class of factories (`MoonCheatCodecs`, `MercuryCheatCodecs`, `MarsCheatCodecs`,
+`VenusCheatCodecs`) with a `Pair()` that both `CoreFactory.Bundle` and `CheatCodecsFor` now read, where the pairs were
+written out twice. `CheatCodecAdapterTests` pins every format's name, kind and space against the old classes' values,
+and the forwarding of compares and wide writes.
+
+**Counted.** In the files that held the copies, the loader, handle and base removed 791 lines and added 120, over 528
+lines of shared files; the debug spaces and the Mars twins removed 292 and added 78, over 49; the codecs removed 104 and
+added 36, over 55. In all, 1,187 lines removed and 234 added where the copies were, and 632 in the shared files: 321
+fewer lines, before the tests. `EmuSen_NativeCores.md`'s P6 predicted the shims would shrink by
+about 600 lines at step 5, with the host about 850; that prediction is about the whole migration and is not retired by a
+first increment.

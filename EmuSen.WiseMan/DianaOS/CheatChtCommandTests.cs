@@ -20,8 +20,8 @@ namespace EmuSen.WiseMan.DianaOS
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
             target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
             return DianaOSInterpreter.CreateDefault(target, null,
-                new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
-                new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec());
+                EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.ActionReplay(),
+                EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.GameGenie());
         }
 
         // Written inside the sandbox, since that is all `cheat import` will resolve.

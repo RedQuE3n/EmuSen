@@ -53,7 +53,7 @@ fn decode_read(
         (*open_bus & 0xE0) | controller1.read()
     } else if address == 0x4017 {
         (*open_bus & 0xE0) | controller2.read()
-    } else if address < 0x4020 {
+    } else if address < 0x6000 {
         *open_bus
     } else {
         let value = board.mapper.read_prg(&board.cart, address);
@@ -120,9 +120,7 @@ impl MemoryBus {
     #[inline(always)]
     pub fn read(&mut self, address: u16) -> u8 {
         if address == 0x4015 {
-            let value = self.apu.read_status();
-            self.open_bus = value;
-            return value;
+            return self.apu.read_status() | (self.open_bus & 0x20);
         }
         decode_read(
             address,

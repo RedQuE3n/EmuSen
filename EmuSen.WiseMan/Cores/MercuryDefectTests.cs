@@ -209,8 +209,8 @@ namespace EmuSen.WiseMan.Cores
             using var stream = new MemoryStream();
             using (var w = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true))
             {
-                w.Write(0x4352454Du);
-                w.Write(5);
+                w.Write(MercuryCore.StateMagic);
+                w.Write(MercuryCore.OldestReadableVersion);
                 w.Write(core.TotalFrames);
                 w.Write((long)typeof(MercuryCore).GetField("_cyclesIntoFrame", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(core)!);
                 foreach (object part in new object[] { core.Cart!, core.Cart!.Mapper, core.Cpu!, core.Bus! }) StateSerializer.Write(w, part, includeRetired: true);

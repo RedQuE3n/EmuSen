@@ -6591,3 +6591,26 @@ the feature at either site each fail (§4.85.9).
 
 **What it does not cover.** The other type switches of §1.5 (`CoreFactory.Bundle`, `Running`, `EngineNotice`) wait for
 the registration records, and Hotaru's and Pharaoh's one-console affordances stay, as `EmuSen_Multicore.md` §5 argues.
+
+#### 4.85.5 The save-state constants, copied by hand
+
+**What was checked.** Every place outside the four C# cores that writes or compares a state's magic or version.
+`moon-rust` had already made Moon's and Mercury's constants public so that the MoonRT and MercuryRT shims could read
+them, and both shims do. Three copies remained:
+
+- `MarsRtCore.StateVersion` returned a literal `1`, because `MarsCore`'s constants were private. It now reads
+  `MarsCore.StateVersion`, and `MarsCore`'s magic, version and snapshot version are public.
+- Two tests wrote another core's header from literals: `MoonCoreTests` Venus's magic, to prove Moon refuses a foreign
+  state, and `MercuryDefectTests` Mercury's magic and oldest readable version. They now use the constants, and Venus's
+  are public for the purpose.
+- Each Rust library holds its own copy (`src/machine.rs` in all three), since Rust cannot read a C# constant.
+  `emusen-native` holds none, by design.
+
+Literals that remain on purpose: `MarsCoreTests` asserts that a state begins with the bytes `MARS`, which is the format's
+specification rather than a copy of it, and the native status descriptions in the three `*Machine.cs` files name the
+shared codes of `emusen-native`.
+
+**The Rust copies pinned.** `RustStateHeaderTests` saves a state from each Rust engine and requires its first eight bytes
+to be the C# core's magic and version, and MarsRT's snapshot to carry `MarsCore.SnapshotVersion`. A MoonRT whose version
+drifts, a MercuryRT whose magic drifts, and a MarsRT shim reporting another version each fail it (§4.85.9). MarsRT's own
+Rust copy is covered by the test but was not mutated, since its source is held unchanged (§4.85.2).

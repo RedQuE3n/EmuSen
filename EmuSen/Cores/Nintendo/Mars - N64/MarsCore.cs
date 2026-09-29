@@ -44,12 +44,12 @@ namespace EmuSen.Cores.Nintendo.Mars
         public global::EmuSen.Cores.EngineFeatures Features { get; } = new(RewindCapture: false, RewindWithheld: "not kept for Mars (C#)");
 
         // "MARS" little-endian, then the format version - see Mars_SaveStates.md §1.
-        private const uint StateMagic = 0x5352_414D;
-        private const int StateVersion = 1;
+        public const uint StateMagic = 0x5352_414D;
+        public const int StateVersion = 1;
         int global::EmuSen.Cores.IStateFormat.StateVersion => StateVersion;
 
         // The same body, then the words the display processor's thread had not run - see Mars_SaveStates.md §1.
-        private const int SnapshotVersion = 2;
+        public const int SnapshotVersion = 2;
 
         // How often a changed save is written without being asked, as the other cores do - see Mars_Save.md §7.
         public const int SaveEveryNFrames = 300;

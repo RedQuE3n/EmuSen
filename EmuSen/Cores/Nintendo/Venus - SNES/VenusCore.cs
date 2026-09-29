@@ -39,9 +39,9 @@ namespace EmuSen.Cores.Nintendo.Venus
         private const int SaveEveryNFrames = 300; // ~5 seconds at 60fps
 
         // "SNES" little-endian, then the format version - see EmuSen_Save_States.md §3.
-        private const uint StateMagic = 0x53454E53;
+        public const uint StateMagic = 0x53454E53;
         // Each version appends a chip's state, only for a cart carrying it - see EmuSen_Save_States.md §3.
-        private const int StateVersion = 3;
+        public const int StateVersion = 3;
         int global::EmuSen.Cores.IStateFormat.StateVersion => StateVersion;
 
         private readonly bool _headless;

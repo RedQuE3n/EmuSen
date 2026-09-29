@@ -120,7 +120,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         public long Cycles => Counter(0);
         public long Instructions => Counter(3);
         public long IdleTurnsPassed => Counter(4);
-        public int StateVersion => 1;
+        public int StateVersion => MarsCore.StateVersion;
         public long FrameSerial => _frameSerial;
         public bool RepeatRows
         {

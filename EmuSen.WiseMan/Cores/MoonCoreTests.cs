@@ -334,7 +334,7 @@ namespace EmuSen.WiseMan.Cores
             using var stream = new MemoryStream();
             using (var w = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true))
             {
-                w.Write(0x53454E53u); // Venus's magic
+                w.Write(EmuSen.Cores.Nintendo.Venus.VenusCore.StateMagic);
                 w.Write(1);
             }
 

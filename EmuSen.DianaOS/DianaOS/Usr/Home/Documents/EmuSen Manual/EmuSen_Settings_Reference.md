@@ -6478,3 +6478,33 @@ every measurement, and the way out if a profile ever misbehaves.
 It is due after a toolchain update, and after a change to the hot paths §6.17.6 lists; otherwise a stale profile keeps
 most of its gain. A Mac trains its own with the same script (§6.17.9); the one trained on 2026-09-28 was 2 to 9 per
 cent slower on every game measured, and was not kept.
+
+### 4.85 One copy of each piece of core plumbing, and the drift the copies had (2026-09-28)
+
+*Decided 2026-09-28: a cleanup pass across the cores. EmuSen is meant to be a framework of frontends over
+interchangeable cores, so a service two cores need is written once; where copies had already drifted apart, the drift is
+a defect, proved by a test that fails on the build before the fix. The shared pieces are built as the first increment of
+`EmuSen_NativeCores.md` §4, with its names and shapes, so that the later move onto the common native interface replaces
+only the calls into the libraries. Base: `moon-rust` at `d3de4c93`. Everything measured here was measured on 2026-09-28
+on the desktop.*
+
+#### 4.85.1 `runto frame` on the NES
+
+**The defect.** Every core but the NES's tells its breakpoint registry when a frame ends, and `runto frame <n>` is
+nothing more than that notice (`BreakpointRegistry.NoteFrame`, then a halt at the next instruction boundary). Mars
+(`MarsCore.cs`), Mercury (`MercuryCore.cs`), Venus (through `SnesDebugTarget`'s frame observer), and the MarsRT and
+MercuryRT shims all call it. Moon's `EndFrame` (`MoonCore.Schedule.cs`) and MoonRT's `RunFrame` (`MoonRtCore.cs`) did
+not, so on either NES engine `runto frame` armed and then never fired. The two copies of the frame end had drifted from
+the other five.
+
+**The fix.** One line in each, in Mercury's position: after the frame log and the cheats, before the periodic battery
+save. Nothing else in either frame end moved, so what the frame log records, and when, is unchanged.
+
+**The proof.** `NesRunToFrameTests` runs a `JMP $8000` loop. On Moon, `runto frame 2` must leave the registry pending
+after the second frame and halt at the start of the third, with the reason `frame 2 reached`. On MoonRT, the registry
+must be quiet after one frame and pending after two. With the line removed from either core, which is the build before
+the fix, that core's test fails; with the notice sent a frame early, it fails too (§4.85.9's table).
+
+**What it does not cover.** MoonRT has no observed loop until its stage 5 (`Moon_Native.md` §4), so on MoonRT the
+registry now knows the frame was reached but nothing halts the machine; the halt arrives with the debugger bridge. What
+MoonRT's test compares is therefore the registry, not a halt.

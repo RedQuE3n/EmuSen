@@ -136,6 +136,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             _lastFrameMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
             ApplyCheats();
+            Breakpoints.NoteFrame(TotalFrames);
             if (TotalFrames % SaveEveryNFrames == 0) SaveSram();
         }
 

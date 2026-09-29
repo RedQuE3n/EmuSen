@@ -314,12 +314,13 @@ impl Apu {
         let m = &mut *self.mixer;
         let l = to_sample(high_pass(left, &mut m.left_capacitor, m.charge_factor));
         let r = to_sample(high_pass(right, &mut m.right_capacitor, m.charge_factor));
-        if m.buffer.len() + 2 > m.max_buffered_samples {
+        m.buffer.push_back(l);
+        m.buffer.push_back(r);
+        // C#'s SampleQueue: trimmed after the pair, until within the limit (EmuSen_Settings_Reference.md §4.85.2).
+        while m.buffer.len() > m.max_buffered_samples && m.buffer.len() >= 2 {
             m.buffer.pop_front();
             m.buffer.pop_front();
         }
-        m.buffer.push_back(l);
-        m.buffer.push_back(r);
     }
 
     /// A silent channel with a live DAC still sits at the bottom of the swing - see Mercury_Apu.md §5.1.

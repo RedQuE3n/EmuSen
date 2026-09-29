@@ -6508,3 +6508,47 @@ the fix, that core's test fails; with the notice sent a frame early, it fails to
 **What it does not cover.** MoonRT has no observed loop until its stage 5 (`Moon_Native.md` §4), so on MoonRT the
 registry now knows the frame was reached but nothing halts the machine; the halt arrives with the debugger bridge. What
 MoonRT's test compares is therefore the registry, not a halt.
+
+#### 4.85.2 The audio buffer setting, on every core
+
+**The defect.** `AudioSettings.AudioBufferMaxSamples` (`audio.json`'s `AudioBufferMaxSamples`, §2) is the most samples
+a core keeps undrained before it drops the oldest. Only Venus read it (`SDsp.cs`). Moon's and Mercury's `Apu`, Mars's
+`AiInterface`, and the queues in MoonRT's and MercuryRT's Rust each held a constant 128,000 of their own. A player who
+changed the setting changed the SNES and nothing else. Five copies of one queue had drifted from the sixth.
+
+**The fix.** One `SampleQueue` (`EmuSen/Common/SampleQueue.cs`) holds a core's undrained pairs, and Moon, Mercury,
+Mars and Venus use it. Its limit is the setting, read at every pair, unless a test gives the queue a number of its own;
+Mercury's model change carries that number to the rebuilt machine, as it carried the old field. The Rust NES and Game
+Boy queues gain a limit field and an export, `moon_machine_set_audio_limit` and `mercury_machine_set_audio_limit`, and
+each shim sends the setting before a frame whenever it differs from what that machine was last told. The new exports
+move MoonRT's interface version from 1 to 2 and MercuryRT's from 3 to 4, since a shim of this build calls a function
+an older library does not have.
+
+**One trim rule, and why this one.** The copies trimmed at two different moments. Moon, Mercury, Mars and both Rust
+queues dropped a pair *before* queueing, when the queue plus the new pair would exceed the limit. Venus queued *first*
+and then dropped pairs *while* the queue was over. `SampleQueue` takes Venus's rule. With a limit that does not change,
+the two keep exactly the same samples: both hold the queue at the largest even count not above the limit, and both drop
+the oldest pair to do it. They differ only when the limit is lowered while samples are queued. The before-the-pair rule
+drops one pair per new pair and so never falls below its old length; the after-the-pair rule falls to the new limit at
+once. A lowered setting ought to take hold, so the after rule is the one kept. A limit raised while a queue is full
+changes nothing already queued, under either rule.
+
+**Byte-identical at the default.** At 128,000 the change must leave every core's sound as it was. §4.85.8's probe
+hashes every drained sample over a run on each core, twice: drained every frame, where no queue ever reaches the limit,
+and drained every 200 frames, where every queue overflows and the trim runs thousands of times. Both hashes equal the
+base's on every game of every core.
+
+**The proof.** `AudioBufferLimitTests` sets the limit to 4,096 and leaves thirty frames undrained on each core; each
+must hand back exactly 4,096 samples. A queue given the old constant 128,000 instead of the setting is the build before
+the fix, and each such mutant fails its core's test, as does a shim that never sends the setting (§4.85.9). The queue's
+own rules are pinned separately: the lowered limit takes hold at the next pair, and a negative frame count drains
+nothing.
+
+**A difference at an edge.** Venus's old drain computed `min(queued pairs, maxFrames)` and allocated twice that; a
+negative `maxFrames` threw. `SampleQueue.Drain` returns nothing for it, as Moon's, Mercury's and Mars's drains did. No
+caller passes a negative count.
+
+**What it does not cover. MarsRT's Rust queue keeps 128,000.** Its source is held unchanged while its profile-guided
+build waits for a retrain (§4.84, `Mars_Native.md` §6.17), and an export for the limit would change the library. It is
+given the setting when it moves to the common interface (`EmuSen_NativeCores.md` §7, step 5), which retrains the profile
+anyway. Until then the Nintendo 64 honours the setting on Mars (C#) and not on MarsRT, the default engine.

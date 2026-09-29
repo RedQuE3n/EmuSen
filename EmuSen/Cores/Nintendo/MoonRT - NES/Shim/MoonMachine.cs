@@ -20,6 +20,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
         private static readonly delegate* unmanaged<nint, int, uint, void> SetButtonsOf = (delegate* unmanaged<nint, int, uint, void>)MoonNative.Export("moon_machine_set_buttons");
         private static readonly delegate* unmanaged<nint, uint, void> SetOptionsOf = (delegate* unmanaged<nint, uint, void>)MoonNative.Export("moon_machine_set_options");
         private static readonly delegate* unmanaged<nint, uint, void> SetMutesOf = (delegate* unmanaged<nint, uint, void>)MoonNative.Export("moon_machine_set_mutes");
+        private static readonly delegate* unmanaged<nint, ulong, void> SetAudioLimitOf = (delegate* unmanaged<nint, ulong, void>)MoonNative.Export("moon_machine_set_audio_limit");
         private static readonly delegate* unmanaged<nint, byte*, nuint, long> FrameOf = (delegate* unmanaged<nint, byte*, nuint, long>)MoonNative.Export("moon_machine_frame");
         private static readonly delegate* unmanaged<nint, long> AudioBufferedOf = (delegate* unmanaged<nint, long>)MoonNative.Export("moon_machine_audio_buffered");
         private static readonly delegate* unmanaged<nint, short*, nuint, long, long> DrainOf = (delegate* unmanaged<nint, short*, nuint, long, long>)MoonNative.Export("moon_machine_drain_audio");
@@ -37,7 +38,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
 
         public static bool Available => New != null;
 
-        public static bool Complete => Available && SetRomPatchesOf != null && ResetOf != null;
+        public static bool Complete => Available && SetRomPatchesOf != null && ResetOf != null && SetAudioLimitOf != null;
 
         private nint _handle;
 
@@ -83,6 +84,9 @@ namespace EmuSen.Cores.Nintendo.MoonRT
         public void SetOptions(bool skipRendering) => SetOptionsOf(Handle, skipRendering ? 1u : 0u);
 
         public void SetMutes(uint mask) => SetMutesOf(Handle, mask);
+
+        // The most samples the queue holds before the oldest pair goes, as C#'s SampleQueue.
+        public void SetAudioLimit(int samples) => SetAudioLimitOf(Handle, (ulong)Math.Max(0, samples));
 
         public long TotalFrames => TotalFramesOf(Handle);
 

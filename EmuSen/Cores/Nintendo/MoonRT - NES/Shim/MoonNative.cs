@@ -7,7 +7,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
     // MoonRT's Rust library, loaded once; absent, refused or turned off, the NES runs on the C# Moon - see Moon_Native.md §2.3.
     public static unsafe class MoonNative
     {
-        public const uint InterfaceVersion = 1;
+        public const uint InterfaceVersion = 2;
         public const string Variable = "EMUSEN_MOON_NATIVE";
 
         private static readonly Lazy<(nint Handle, string Report)> Library = new(Load);

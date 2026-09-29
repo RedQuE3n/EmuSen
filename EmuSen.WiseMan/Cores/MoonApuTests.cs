@@ -83,7 +83,7 @@ namespace EmuSen.WiseMan.Cores
         public void The_buffer_is_capped_rather_than_growing_without_bound()
         {
             NesApu apu = PlayingPulse();
-            apu.MaxBufferedSamples = 2000;
+            apu.Samples.Limit = 2000;
 
             apu.Step((int)NesApu.CpuClockHz);
 

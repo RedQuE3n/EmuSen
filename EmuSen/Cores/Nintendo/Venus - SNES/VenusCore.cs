@@ -381,14 +381,7 @@ namespace EmuSen.Cores.Nintendo.Venus
         {
             if (Spc700 is null) return Array.Empty<short>();
 
-            var buffer = Spc700.Dsp.AudioBuffer;
-            int framesAvailable = buffer.Count / 2;
-            int framesToSend = Math.Min(framesAvailable, maxFrames);
-            if (framesToSend == 0) return Array.Empty<short>();
-
-            var data = new short[framesToSend * 2];
-            for (int i = 0; i < data.Length; i++) data[i] = buffer.Dequeue();
-            return data;
+            return Spc700.Dsp.AudioBuffer.Drain(maxFrames);
         }
 
         // Everything but the renderer, which is re-derivable from PPU state - see EmuSen_Save_States.md.

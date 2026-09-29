@@ -1523,6 +1523,10 @@ one cartridge, as version 5's reader did.
 version, and gave `mercury_machine_new` a model argument, so the interface version is 3 (`Mercury_Model.md` §5).
 Everything above about version 6 still holds, and version 7 reads 5 and 6 as described here.
 
+*Superseded in part, 2026-09-28.* `mercury_machine_set_audio_limit` carries `AudioSettings.AudioBufferMaxSamples` to the
+Rust queue, which now trims after the new pair as C#'s shared `SampleQueue` does, so the interface version is 4
+(`EmuSen_Settings_Reference.md` §4.85.2).
+
 **Prediction, stated before the run.**
 
 - All six cases of the path test pass on both engines.

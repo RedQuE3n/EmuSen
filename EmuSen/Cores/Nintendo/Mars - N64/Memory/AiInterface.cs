@@ -20,9 +20,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // Two bits that read as one whatever the interface is doing, as the FPGA core builds the register - see Mars_Audio.md §2.
         public const uint StatusAlwaysSet = 0x0110_0000;
 
-        // Past this, undrained samples are dropped oldest first and a stereo pair at a time - see Mars_Audio.md §4.
-        public const int MaxBufferedSamples = 128000;
-
         // What a frontend opens its device at before a game has asked for a rate.
         public const int DefaultSampleRate = 44100;
 
@@ -37,7 +34,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         [EmuSen.Common.SkipInState] private readonly MemoryBus _bus;
         // What the frontend has not drained yet, which a loaded state empties rather than replays - see Mars_SaveStates.md §2.
-        [EmuSen.Common.SkipInState] private readonly Queue<short> _samples = new();
+        [EmuSen.Common.SkipInState] private readonly EmuSen.Common.SampleQueue _samples = new();
 
         private uint _address;
         private uint _length;
@@ -159,19 +156,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public void Rebase() => _debtAt = _bus.Cycles;
 
         // Destructive, interleaved left then right, and whole pairs only - what ICore.DequeueAudioSamples names.
-        public short[] Drain(int maxFrames)
-        {
-            long wanted = Math.Min((long)maxFrames * 2, _samples.Count);
-            wanted -= wanted & 1;
-            if (wanted <= 0) return Array.Empty<short>();
-
-            var samples = new short[wanted];
-            for (int i = 0; i < wanted; i++) samples[i] = _samples.Dequeue();
-            return samples;
-        }
+        public short[] Drain(int maxFrames) => _samples.Drain(maxFrames);
 
         // A snapshot for audiodump; the queue keeps everything.
-        public short[] Peek() => _samples.ToArray();
+        public short[] Peek() => _samples.Peek();
 
         // A loaded state starts the frontend's queue afresh - see Mars_SaveStates.md §2.
         public void DropUndrained() => _samples.Clear();
@@ -244,16 +232,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             if (_length == 0) End();
         }
 
-        private void Enqueue(short left, short right)
-        {
-            if (_samples.Count + 2 > MaxBufferedSamples)
-            {
-                _samples.Dequeue();
-                _samples.Dequeue();
-            }
-
-            _samples.Enqueue(left);
-            _samples.Enqueue(right);
-        }
+        // Past AudioSettings.AudioBufferMaxSamples the oldest pair is dropped - see Mars_Audio.md §4.
+        private void Enqueue(short left, short right) => _samples.Enqueue(left, right);
     }
 }

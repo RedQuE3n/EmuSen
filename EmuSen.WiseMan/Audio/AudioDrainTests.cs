@@ -30,8 +30,7 @@ namespace EmuSen.WiseMan.Audio
             var buffer = core.Spc700!.Dsp.AudioBuffer;
             for (int i = 0; i < 10; i++)
             {
-                buffer.Enqueue((short)(1000 + i)); // L
-                buffer.Enqueue((short)(-1000 - i)); // R
+                buffer.Enqueue((short)(1000 + i), (short)(-1000 - i));
             }
 
             short[] capped = core.DequeueAudioSamples(4);
@@ -46,15 +45,13 @@ namespace EmuSen.WiseMan.Audio
         {
             var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
             var buffer = core.Spc700!.Dsp.AudioBuffer;
-            buffer.Enqueue(1);
-            buffer.Enqueue(2);
-            buffer.Enqueue(3);
-            buffer.Enqueue(4); // 2 frames
+            buffer.Enqueue(1, 2);
+            buffer.Enqueue(3, 4); // 2 frames
 
             short[] result = core.DequeueAudioSamples(1000);
 
             Assert.Equal(new short[] { 1, 2, 3, 4 }, result);
-            Assert.Empty(buffer);
+            Assert.Equal(0, buffer.Count);
         }
 
         [Fact]
@@ -69,8 +66,7 @@ namespace EmuSen.WiseMan.Audio
         public void EmulatorSession_drains_through_to_the_real_core()
         {
             var session = SyntheticRom.LoadSession(SyntheticRom.BuildBlank());
-            ((EmuSen.Cores.Nintendo.Venus.VenusCore)session.Core!).Bus!.Spc700.Dsp.AudioBuffer.Enqueue(42);
-            ((EmuSen.Cores.Nintendo.Venus.VenusCore)session.Core!).Bus!.Spc700.Dsp.AudioBuffer.Enqueue(-42);
+            ((EmuSen.Cores.Nintendo.Venus.VenusCore)session.Core!).Bus!.Spc700.Dsp.AudioBuffer.Enqueue(42, -42);
 
             short[] result = session.DequeueAudioSamples(10);
 

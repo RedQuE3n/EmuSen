@@ -37,9 +37,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
         // The DIV bit the sequencer watches, seen on its previous tick - see Mercury_Apu.md §2.
         public bool LastSequencerBit;
 
-        [SkipInState] private readonly Queue<short> _buffer = new();
-
-        [SkipInState] public int MaxBufferedSamples = 128000;
+        [SkipInState] private readonly SampleQueue _buffer = new();
 
         [SkipInState] private readonly bool[] _channelMuted = new bool[ChannelCount];
 
@@ -51,6 +49,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
         [SkipInState] private double _chargeFactor = Math.Pow(HighPassSeed, MercuryCore.CpuClockHz / 44100.0);
 
         public int BufferedSamples => _buffer.Count;
+
+        // The queue itself, for a test to give it a limit of its own and a model change to carry it over.
+        public SampleQueue Samples => _buffer;
 
         // Divided in doubles: 95.109 clocks, not 95, or 44,100 Hz comes out 0.115% fast - see Mercury_Native.md §9.1.
         public void SetSampleRate(int sampleRate)
@@ -375,15 +376,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
             short leftSample = ToSample(HighPass(left, ref _leftCapacitor));
             short rightSample = ToSample(HighPass(right, ref _rightCapacitor));
 
-            // Oldest pair goes first, so a frontend that stops draining loses history, not the present.
-            if (_buffer.Count + 2 > MaxBufferedSamples)
-            {
-                _buffer.Dequeue();
-                _buffer.Dequeue();
-            }
-
-            _buffer.Enqueue(leftSample);
-            _buffer.Enqueue(rightSample);
+            _buffer.Enqueue(leftSample, rightSample);
         }
 
         // A silent channel with a live DAC still sits at the bottom of the swing, which is not zero - see Mercury_Apu.md §5.1.
@@ -413,19 +406,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
             (short)Math.Clamp(value * short.MaxValue, short.MinValue, short.MaxValue);
 
         // Non-destructive snapshot for `audiodump`; the buffer keeps everything.
-        public short[] Peek() => _buffer.ToArray();
+        public short[] Peek() => _buffer.Peek();
 
         // Destructive drain, matching ICore.DequeueAudioSamples - see EmuSen_Audio_Sync.md §7.
-        public short[] Drain(int maxFrames)
-        {
-            long wantedLong = Math.Min((long)maxFrames * 2, _buffer.Count);
-            int wanted = (int)Math.Max(0, wantedLong);
-            wanted -= wanted & 1;
-            if (wanted <= 0) return Array.Empty<short>();
-
-            var samples = new short[wanted];
-            for (int i = 0; i < wanted; i++) samples[i] = _buffer.Dequeue();
-            return samples;
-        }
+        public short[] Drain(int maxFrames) => _buffer.Drain(maxFrames);
     }
 }

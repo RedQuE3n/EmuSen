@@ -15,7 +15,7 @@ use std::ffi::{CStr, c_char};
 use std::sync::OnceLock;
 
 /// The interface version; C# refuses a library whose number is not the one it was written against.
-pub const INTERFACE_VERSION: u32 = 3;
+pub const INTERFACE_VERSION: u32 = 4;
 
 /// A field C# marks `[SkipInState]`; see emusen-native.
 pub use emusen_native::Skip;

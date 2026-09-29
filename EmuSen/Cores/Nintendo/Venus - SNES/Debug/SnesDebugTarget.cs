@@ -1061,7 +1061,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         // ToArray, never dequeue: it must not steal from a live audio consumer - see §3.1.
         public (short[] Samples, int SampleRate) GetAudioSamples()
         {
-            short[] samples = _bus.Spc700.Dsp.AudioBuffer.ToArray();
+            short[] samples = _bus.Spc700.Dsp.AudioBuffer.Peek();
             return (samples, EmuSen.Audio.AudioSettings.SampleRate);
         }
 

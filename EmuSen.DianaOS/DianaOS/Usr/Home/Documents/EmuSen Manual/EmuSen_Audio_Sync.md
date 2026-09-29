@@ -97,6 +97,8 @@ They exist because that effect is otherwise impossible to observe without readin
 
 A useful side effect: `audiodump` (`EmuSen_Debugging_Tools_Reference_v5.md` §3.15) now captures **2.00 s instead of 0.25 s**, an 8x longer window for investigating audio.
 
+*Revised 2026-09-28: this was Venus's buffer alone. Every C# core now queues through one `SampleQueue`, which trims after the new pair as `SDsp` did and reads the same setting, and the Rust NES and Game Boy engines are sent it; MarsRT's queue keeps 128,000 for now (`EmuSen_Settings_Reference.md` §4.85.2).*
+
 ---
 
 ## 5. Latency, and how to move it

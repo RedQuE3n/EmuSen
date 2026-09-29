@@ -20,6 +20,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         private static readonly delegate* unmanaged<nint, uint, void> SetButtonsOf = (delegate* unmanaged<nint, uint, void>)MercuryNative.Export("mercury_machine_set_buttons");
         private static readonly delegate* unmanaged<nint, uint, void> SetOptionsOf = (delegate* unmanaged<nint, uint, void>)MercuryNative.Export("mercury_machine_set_options");
         private static readonly delegate* unmanaged<nint, uint, void> SetMutesOf = (delegate* unmanaged<nint, uint, void>)MercuryNative.Export("mercury_machine_set_mutes");
+        private static readonly delegate* unmanaged<nint, ulong, void> SetAudioLimitOf = (delegate* unmanaged<nint, ulong, void>)MercuryNative.Export("mercury_machine_set_audio_limit");
         private static readonly delegate* unmanaged<nint, double, double, void> SetSampleRateOf = (delegate* unmanaged<nint, double, double, void>)MercuryNative.Export("mercury_machine_set_sample_rate");
         private static readonly delegate* unmanaged<nint, byte*, nuint, long> FrameOf = (delegate* unmanaged<nint, byte*, nuint, long>)MercuryNative.Export("mercury_machine_frame");
         private static readonly delegate* unmanaged<nint, long> AudioBufferedOf = (delegate* unmanaged<nint, long>)MercuryNative.Export("mercury_machine_audio_buffered");
@@ -37,7 +38,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         // MercuryCore.Spaces' names, numbered as the C ABI numbers them.
         public static readonly string[] SpaceNames = { "ROM", "VRAM", "CARTRAM", "WRAM", "OAM", "HRAM", "CPUBUS" };
 
-        public static bool Complete => Available && TotalFramesOf != null && SetRomPatchesOf != null;
+        public static bool Complete => Available && TotalFramesOf != null && SetRomPatchesOf != null && SetAudioLimitOf != null;
 
         public long TotalFrames => TotalFramesOf(Handle);
 
@@ -112,6 +113,9 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         public void SetOptions(bool skipRendering) => SetOptionsOf(Handle, skipRendering ? 1u : 0u);
 
         public void SetMutes(uint mask) => SetMutesOf(Handle, mask);
+
+        // The most samples the queue holds before the oldest pair goes, as C#'s SampleQueue.
+        public void SetAudioLimit(int samples) => SetAudioLimitOf(Handle, (ulong)Math.Max(0, samples));
 
         public void CopyFrame(byte[] into)
         {

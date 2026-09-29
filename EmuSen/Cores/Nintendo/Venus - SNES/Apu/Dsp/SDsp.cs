@@ -41,8 +41,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         // Pending output, not game state; an explicit field so [SkipInState] can apply.
         [EmuSen.Common.SkipInState]
-        private Queue<short> _audioBuffer = new Queue<short>();
-        public Queue<short> AudioBuffer => _audioBuffer;
+        private readonly EmuSen.Common.SampleQueue _audioBuffer = new();
+        public EmuSen.Common.SampleQueue AudioBuffer => _audioBuffer;
 
         private int _dspCycles;
 
@@ -238,15 +238,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                 foreach (var voice in _voices) voice.GetNextSample();
             }
 
-            AudioBuffer.Enqueue(leftSample);
-            AudioBuffer.Enqueue(rightSample);
-
             // A safety valve when nothing drains; pairs only, or L/R swap - see EmuSen_Audio_Sync.md §4.
-            while (AudioBuffer.Count > AudioSettings.AudioBufferMaxSamples && AudioBuffer.Count >= 2)
-            {
-                AudioBuffer.Dequeue();
-                AudioBuffer.Dequeue();
-            }
+            AudioBuffer.Enqueue(leftSample, rightSample);
         }
 
         // The 8-tap FIR echo, fed by the EON-gated voice sum - see Venus_APU.md §3.

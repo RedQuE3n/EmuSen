@@ -54,9 +54,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
         [SkipInState] private double _cycleFraction;
 
         // Drained by MoonCore.DequeueAudioSamples; never part of a save state.
-        [SkipInState] private readonly Queue<short> _buffer = new();
-
-        [SkipInState] public int MaxBufferedSamples = 128000;
+        [SkipInState] private readonly SampleQueue _buffer = new();
 
         // The console's own output filters; without them the unipolar DAC leaves a DC step - see Moon_APU.md §4.1.
         [SkipInState] private double _hp90;
@@ -69,6 +67,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
         [SkipInState] private double _lowPassAlpha;
 
         public int BufferedSamples => _buffer.Count;
+
+        // The queue itself, for a test to give it a limit of its own.
+        public SampleQueue Samples => _buffer;
 
         public bool IrqInhibited => (FrameCounter & 0x40) != 0;
         public bool FiveStepMode => _stepMode;
@@ -309,16 +310,8 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
 
             short sample = (short)Math.Clamp(Filter(mean) * OutputGain, short.MinValue, short.MaxValue);
 
-            // Oldest pair goes first, so a frontend that stops draining loses history, not the present.
-            if (_buffer.Count + 2 > MaxBufferedSamples)
-            {
-                _buffer.Dequeue();
-                _buffer.Dequeue();
-            }
-
             // The 2A03 is mono, so both output channels carry the same value.
-            _buffer.Enqueue(sample);
-            _buffer.Enqueue(sample);
+            _buffer.Enqueue(sample, sample);
         }
 
         // The two halves of the DAC are non-linear and summed separately - see Moon_APU.md §4.
@@ -413,19 +406,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
         }
 
         // Non-destructive snapshot for `audiodump`; the buffer keeps everything.
-        public short[] Peek() => _buffer.ToArray();
+        public short[] Peek() => _buffer.Peek();
 
         // Destructive drain, matching ICore.DequeueAudioSamples - see EmuSen_Audio_Sync.md §7.
-        public short[] Drain(int maxFrames)
-        {
-            long wantedLong = Math.Min((long)maxFrames * 2, _buffer.Count);
-            int wanted = (int)Math.Max(0, wantedLong);
-            wanted -= wanted & 1;
-            if (wanted <= 0) return Array.Empty<short>();
-
-            var samples = new short[wanted];
-            for (int i = 0; i < wanted; i++) samples[i] = _buffer.Dequeue();
-            return samples;
-        }
+        public short[] Drain(int maxFrames) => _buffer.Drain(maxFrames);
     }
 }

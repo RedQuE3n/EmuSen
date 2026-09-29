@@ -159,7 +159,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
 
             if (old is null) return;
             Bus.Joypad = old.Joypad;
-            Bus.Apu.MaxBufferedSamples = old.Apu.MaxBufferedSamples;
+            Bus.Apu.Samples.Limit = old.Apu.Samples.Limit;
             for (int i = 0; i < Audio.Apu.ChannelCount; i++) Bus.Apu.SetChannelMuted(i, old.Apu.IsChannelMuted(i));
         }
 

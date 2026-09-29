@@ -131,6 +131,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
         {
             if (_machine is null) throw new InvalidOperationException("RunFrame() called before LoadRom().");
             RefreshRomPatches();
+            SyncAudioLimit();
             long start = Stopwatch.GetTimestamp();
             _machine.RunFrame();
             _lastFrameMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
@@ -141,6 +142,19 @@ namespace EmuSen.Cores.Nintendo.MoonRT
         }
 
         public void ApplyCheats() => Cheats.ApplyAll(ReadSpace, WriteSpace);
+
+        // AudioSettings.AudioBufferMaxSamples, sent when it differs from what this machine was last told.
+        private void SyncAudioLimit()
+        {
+            int limit = EmuSen.Audio.AudioSettings.AudioBufferMaxSamples;
+            if (_machine is null || (_audioLimitSent == limit && ReferenceEquals(_audioLimitMachine, _machine))) return;
+            _machine.SetAudioLimit(limit);
+            _audioLimitSent = limit;
+            _audioLimitMachine = _machine;
+        }
+
+        private int _audioLimitSent = -1;
+        private object? _audioLimitMachine;
 
         // A copy in an array no one else holds, as MarsRT's - see EmuSen_Multicore.md §16.
         public byte[] GetFrameBufferRgba()

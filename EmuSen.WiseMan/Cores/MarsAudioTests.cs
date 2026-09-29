@@ -252,10 +252,10 @@ namespace EmuSen.WiseMan.Cores
             var bus = Playing(dacRate: 0);
             Queue(bus, Buffer, 0x3_FFF8);
 
-            PlaySamples(bus, AiInterface.MaxBufferedSamples / 2 + 10, dacRate: 0);
+            PlaySamples(bus, EmuSen.Common.SampleQueue.DefaultLimit / 2 + 10, dacRate: 0);
 
-            Assert.Equal(AiInterface.MaxBufferedSamples, bus.Ai.BufferedSamples);
-            Assert.Equal(AiInterface.MaxBufferedSamples / 2 + 10, bus.Ai.SamplesPlayed);
+            Assert.Equal(EmuSen.Common.SampleQueue.DefaultLimit, bus.Ai.BufferedSamples);
+            Assert.Equal(EmuSen.Common.SampleQueue.DefaultLimit / 2 + 10, bus.Ai.SamplesPlayed);
         }
     }
 }

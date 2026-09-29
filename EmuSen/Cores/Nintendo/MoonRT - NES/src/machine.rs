@@ -250,6 +250,7 @@ impl Machine {
         *self.bus.oam_dma_pending = tail && r.bool()?;
         *self.bus.oam_dma_page = if tail { r.u8()? } else { 0 };
         self.bus.forget_last_read();
+        *self.bus.internal_bus = self.bus.open_bus;
         *self.bus.apu.frame_irq_readable = self.bus.apu.frame_irq_pending;
         Ok(())
     }

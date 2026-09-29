@@ -35,6 +35,8 @@ pub struct MemoryBus {
     pub last_read_address: Skip<u16>,
     pub strobe_latch: Skip<bool>,
     pub strobe_out: Skip<bool>,
+    /// `InternalBus`: the 2A03's internal data bus.
+    pub internal_bus: Skip<u8>,
     /// C#'s `Cpu.Cycles`, which the CPU stamps here at each cycle's start.
     pub cpu_cycles: Skip<i64>,
 }
@@ -60,6 +62,7 @@ impl MemoryBus {
             last_read_address: Skip(0),
             strobe_latch: Skip(false),
             strobe_out: Skip(false),
+            internal_bus: Skip(0),
             cpu_cycles: Skip(0),
         }
     }
@@ -100,7 +103,9 @@ impl MemoryBus {
         } else if address < 0x4000 {
             self.ppu.read_register((address & 0x07) as i32, &mut self.board)
         } else if address == 0x4015 {
-            return self.apu.read_status() | (self.open_bus & 0x20);
+            let status = self.apu.read_status() | (*self.internal_bus & 0x20);
+            *self.internal_bus = status;
+            return status;
         } else if address == 0x4016 {
             let clock = !self.held_read(address);
             (self.open_bus & 0xE0) | self.controller1.read(clock)
@@ -120,6 +125,7 @@ impl MemoryBus {
             }
         };
         self.open_bus = value;
+        *self.internal_bus = value;
         value
     }
 
@@ -138,16 +144,38 @@ impl MemoryBus {
         *self.oam_dma_pending || self.apu.dmc.dma_requested()
     }
 
-    /// `ConflictWithApuRegister`: a CPU halted on $4000-$401F keeps the 2A03's registers enabled for the fetch's low five bits.
-    pub fn conflict_with_apu_register(&mut self, fetch: u16) {
-        let register = 0x4000 | (fetch & 0x1F);
+    /// `DmaRead`: the 2A03's registers answer only while the halted CPU's address is in $4000-$401F, chosen by this address's low five bits.
+    pub fn dma_read(&mut self, address: u16, halted: u16, for_oam: bool) -> u8 {
+        let undriven = (0x4000..0x6000).contains(&address);
+        let internal_before = *self.internal_bus;
+        let value = if undriven { self.open_bus } else { self.read(address) };
+        if !(0x4000..0x4020).contains(&halted) {
+            if undriven {
+                *self.internal_bus = value;
+            }
+            return value;
+        }
+        let register = 0x4000 | (address & 0x1F);
         if register == 0x4015 {
-            self.apu.read_status();
+            let status = self.apu.read_status() | (internal_before & 0x20);
+            *self.internal_bus = status;
+            if undriven {
+                self.open_bus = status;
+            }
+            return if undriven || for_oam { status } else { value };
         }
         if register == 0x4016 || register == 0x4017 {
-            *self.last_read_address = register;
-            *self.last_read_cycle = *self.cpu_cycles;
+            let clock = !self.held_read(register);
+            let bit = if register == 0x4016 { self.controller1.read(clock) } else { self.controller2.read(clock) };
+            let merged = (value & 0xE0) | bit;
+            self.open_bus = merged;
+            *self.internal_bus = merged;
+            return if for_oam && !undriven { value } else { merged };
         }
+        if undriven {
+            *self.internal_bus = value;
+        }
+        value
     }
 
     pub fn forget_last_read(&mut self) {
@@ -158,6 +186,7 @@ impl MemoryBus {
     #[inline(always)]
     pub fn write(&mut self, address: u16, data: u8, cpu_cycles: i64) -> Option<bool> {
         self.open_bus = data;
+        *self.internal_bus = data;
         if address < 0x2000 {
             self.ram[(address & 0x07FF) as usize] = data;
             return None;
@@ -205,6 +234,7 @@ impl MemoryBus {
         self.pending_dma_cycles = 0;
         *self.oam_dma_pending = false;
         *self.last_read_cycle = -2;
+        *self.internal_bus = 0;
         *self.strobe_latch = false;
         *self.strobe_out = false;
         self.open_bus = 0;

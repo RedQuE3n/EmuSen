@@ -22,6 +22,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Input
         private byte _shift;
         private bool _strobe;
 
+        // Only a held read of the cycle after this one's reads it, and none spans a state, so it is not state.
+        private byte _lastBit;
+
         public void SetButton(NesButton button, bool pressed)
         {
             int mask = 1 << (int)button;
@@ -40,14 +43,15 @@ namespace EmuSen.Cores.Nintendo.Moon.Input
             if (high) _shift = _state;
         }
 
-        // Past the eighth read a real pad returns 1s; the open-bus high bits are not modelled.
-        public byte Read()
+        // Past the eighth read a real pad returns 1s; a read held from the cycle before sees the bit the first read saw.
+        public byte Read(bool clock = true)
         {
             if (_strobe) return (byte)(_state & 0x01);
+            if (!clock) return _lastBit;
 
-            byte value = (byte)(_shift & 0x01);
+            _lastBit = (byte)(_shift & 0x01);
             _shift = (byte)((_shift >> 1) | 0x80);
-            return value;
+            return _lastBit;
         }
 
         public void Reset()

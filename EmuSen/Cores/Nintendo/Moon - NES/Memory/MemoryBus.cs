@@ -12,8 +12,6 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
         public const int RamSize = 0x0800;
         public const ushort OamDmaRegister = 0x4014;
 
-        // The copy costs 513 cycles, or 514 when it starts on an odd one - see Moon_Memory.md §5.1.
-        public const int OamDmaCycles = 513;
 
         public readonly byte[] Ram = new byte[RamSize];
 
@@ -32,11 +30,21 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
         // Game Genie's edge-connector intercept, on cartridge reads only - see Moon_Cheats.md §3.
         [SkipInState] public IRomReadPatcher? RomPatcher;
 
-        // Cycles a $4014 transfer stole, collected by the core's timing loop.
+        // Always 0 since DMA became a halt of the CPU; kept so version 3's layout is unchanged - see Moon_Native.md §3.9.
         public int PendingDmaCycles;
-
-        // DMC fetch cycles, already charged to the APU here but still owed to the frame budget.
         public int StolenCycles;
+
+        // A $4014 write waiting for the CPU's next read; written in version 4's tail - see Moon_Native.md §3.9.
+        [SkipInState] public bool OamDmaPending;
+        [SkipInState] public byte OamDmaPage;
+
+        // The last read's cycle and address: a pad clocks once for reads on consecutive cycles - see Moon_Native.md §3.9.
+        [SkipInState] private long _lastReadCycle = -2;
+        [SkipInState] private ushort _lastReadAddress;
+
+        // $4016's OUT0 as written and as the pads see it, which follows the write only at a get cycle's end; not state, as the pads are not (§6.2 D3).
+        [SkipInState] private bool _strobeLatch;
+        [SkipInState] private bool _strobeOut;
 
         // Stamped onto the cartridge so a board can reject back-to-back writes.
         [SkipInState] public Cpu? Cpu;
@@ -67,13 +75,12 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
             Apu.Step(1);
             if (_mapperClocksOnCpu) Cart.Mapper.OnCpuCycle();
 
-            // The DMC steals its fetch cycle from the CPU, and those cycles clock the APU too.
-            if (Apu.Dmc.StallCycles > 0)
+            // The pads take OUT0 at a get cycle's end, the edge the RTL calls put_ce, so this put cycle sees it - see Moon_Native.md §3.9.
+            if (_strobeLatch != _strobeOut && !Apu.IsGetCycle)
             {
-                int stolen = Apu.Dmc.StallCycles;
-                Apu.Dmc.StallCycles = 0;
-                StolenCycles += stolen;
-                Apu.Step(stolen);
+                _strobeOut = _strobeLatch;
+                Controller1.SetStrobe(_strobeOut);
+                Controller2.SetStrobe(_strobeOut);
             }
 
             Cpu?.SetIrqLine(Apu.IrqAsserted || Cart.Mapper.IrqPending);
@@ -98,11 +105,11 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
             }
             else if (address == 0x4016)
             {
-                value = (byte)((OpenBus & 0xE0) | Controller1.Read());
+                value = (byte)((OpenBus & 0xE0) | Controller1.Read(clock: !HeldRead(address)));
             }
             else if (address == 0x4017)
             {
-                value = (byte)((OpenBus & 0xE0) | Controller2.Read());
+                value = (byte)((OpenBus & 0xE0) | Controller2.Read(clock: !HeldRead(address)));
             }
             else if (address < 0x4020)
             {
@@ -123,6 +130,16 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
 
             OpenBus = value;
             return value;
+        }
+
+        // The pad clocks on its select's falling edge, so a read on the cycle after one of the same register does not - see Moon_Native.md §3.9.
+        private bool HeldRead(ushort address)
+        {
+            long cycle = Cpu?.Cycles ?? 0;
+            bool held = address == _lastReadAddress && cycle == _lastReadCycle + 1;
+            _lastReadAddress = address;
+            _lastReadCycle = cycle;
+            return held;
         }
 
         public void Write(ushort address, byte data)
@@ -157,15 +174,14 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
 
             if (address == OamDmaRegister)
             {
-                RunOamDma(data);
+                OamDmaPage = data;
+                OamDmaPending = true;
                 return;
             }
 
             if (address == 0x4016)
             {
-                bool strobe = (data & 0x01) != 0;
-                Controller1.SetStrobe(strobe);
-                Controller2.SetStrobe(strobe);
+                _strobeLatch = (data & 0x01) != 0;
                 return;
             }
 
@@ -182,22 +198,84 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
             if (address < 0x8000) WriteObserver?.OnWrite("PRGRAM", address & 0x1FFF, data);
         }
 
-        // Reads go through the normal decode, so a page pointed at registers behaves as it would.
-        private void RunOamDma(byte page)
+        // A DMA waits for the CPU's next read cycle, which it halts - see Moon_Native.md §3.9.
+        public bool DmaPending => OamDmaPending || Apu.Dmc.DmaRequested;
+
+        // Runs every DMA that wants the bus while the CPU is halted on a read of <address>; each cycle clocks the whole machine.
+        public void RunDma(ushort address)
         {
-            int source = page << 8;
+            while (true)
+            {
+                if (OamDmaPending) RunOamDma(address);
+                else if (Apu.Dmc.DmaRequested) RunDmcDma(address);
+                else return;
+            }
+        }
+
+        // Halt and dummy cycles repeat the CPU's read; one more aligns the fetch to a get cycle - see Moon_Native.md §3.9.
+        private void RunDmcDma(ushort address)
+        {
+            HaltedRead(address);
+            HaltedRead(address);
+            if (!Apu.NextCycleIsGet) HaltedRead(address);
+            DmcGet(address);
+        }
+
+        // The halt cycle, one alignment cycle if the next is a put, then a get read and a put write per byte: 513 or 514 cycles.
+        private void RunOamDma(ushort address)
+        {
+            OamDmaPending = false;
+            int source = OamDmaPage << 8;
+            HaltedRead(address);
+            if (!Apu.NextCycleIsGet) HaltedRead(address);
 
             for (int i = 0; i < 256; i++)
             {
+                // The DMC takes a get cycle it asks for, and the copy realigns on the put after it - see Moon_Native.md §3.9.
+                while (Apu.Dmc.DmaRequested)
+                {
+                    DmcGet(address);
+                    Cpu!.BeginHaltedCycle();
+                    Cpu.EndHaltedCycle();
+                }
+
+                Cpu!.BeginHaltedCycle();
                 byte value = Read((ushort)(source + i));
+                Cpu.EndHaltedCycle();
+
+                Cpu.BeginHaltedCycle();
                 Ppu.Oam[(byte)(Ppu.OamAddress + i)] = value;
+                Cpu.EndHaltedCycle();
             }
+        }
 
-            PendingDmaCycles += OamDmaCycles;
+        private void HaltedRead(ushort address)
+        {
+            Cpu!.BeginHaltedCycle();
+            Read(address);
+            Cpu.EndHaltedCycle();
+        }
 
-            // The transfer is instantaneous here, but the APU still lived through those cycles.
-            Apu.Step(OamDmaCycles);
-            Cpu?.SetIrqLine(Apu.IrqAsserted || Cart.Mapper.IrqPending);
+        // The get cycle: the DMC's read puts its byte on the external bus, as any read does.
+        private void DmcGet(ushort halted)
+        {
+            Cpu!.BeginHaltedCycle();
+            ushort fetch = Apu.Dmc.DmaAddress;
+            Apu.Dmc.CompleteDma(Read(fetch));
+            if (halted >= 0x4000 && halted < 0x4020) ConflictWithApuRegister(fetch);
+            Cpu.EndHaltedCycle();
+        }
+
+        // A CPU halted on $4000-$401F keeps the 2A03's registers enabled, so the fetch's low five bits select one too - see Moon_Native.md §3.9.
+        private void ConflictWithApuRegister(ushort fetch)
+        {
+            ushort register = (ushort)(0x4000 | (fetch & 0x1F));
+            if (register == 0x4015) Apu.ReadStatus();
+            if (register is 0x4016 or 0x4017)
+            {
+                _lastReadAddress = register;
+                _lastReadCycle = Cpu?.Cycles ?? 0;
+            }
         }
 
         public int TakePendingDmaCycles()
@@ -221,9 +299,16 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
         }
 
         // The RESET line does not clear work RAM; only the transient bus state goes - see Moon_Core.md §6.
+        // A loaded state starts with no read on the cycle before it.
+        public void ForgetLastRead() => _lastReadCycle = -2;
+
         public void SoftReset()
         {
             PendingDmaCycles = 0;
+            OamDmaPending = false;
+            _lastReadCycle = -2;
+            _strobeLatch = false;
+            _strobeOut = false;
             OpenBus = 0;
             Controller1.Reset();
             Controller2.Reset();

@@ -166,6 +166,9 @@ impl Cpu {
 
     #[inline(always)]
     fn read(&mut self, bus: &mut MemoryBus, address: u16) -> u8 {
+        if bus.dma_pending() {
+            self.run_dma(bus, address);
+        }
         self.begin_cycle(bus);
         let value = bus.read(address);
         self.sample_interrupts();
@@ -185,7 +188,69 @@ impl Cpu {
     fn begin_cycle(&mut self, bus: &mut MemoryBus) {
         self.instruction_cycles = self.instruction_cycles.wrapping_add(1);
         self.cycles = self.cycles.wrapping_add(1);
+        *bus.cpu_cycles = self.cycles;
         self.tick(bus);
+    }
+
+    /// `MemoryBus.RunDma`: every DMA that wants the bus, run while the CPU is halted on a read of `address`.
+    #[cold]
+    fn run_dma(&mut self, bus: &mut MemoryBus, address: u16) {
+        loop {
+            if *bus.oam_dma_pending {
+                self.run_oam_dma(bus, address);
+            } else if bus.apu.dmc.dma_requested() {
+                self.halted_read(bus, address);
+                self.halted_read(bus, address);
+                if !bus.apu.next_cycle_is_get() {
+                    self.halted_read(bus, address);
+                }
+                self.dmc_get(bus, address);
+            } else {
+                return;
+            }
+        }
+    }
+
+    /// `RunOamDma`: the halt, an alignment cycle before a put, then a get read and a put write per byte.
+    fn run_oam_dma(&mut self, bus: &mut MemoryBus, address: u16) {
+        *bus.oam_dma_pending = false;
+        let source = (*bus.oam_dma_page as u16) << 8;
+        self.halted_read(bus, address);
+        if !bus.apu.next_cycle_is_get() {
+            self.halted_read(bus, address);
+        }
+        for i in 0..256u16 {
+            while bus.apu.dmc.dma_requested() {
+                self.dmc_get(bus, address);
+                self.begin_cycle(bus);
+                self.sample_interrupts();
+            }
+            self.begin_cycle(bus);
+            let value = bus.read(source.wrapping_add(i));
+            self.sample_interrupts();
+            self.begin_cycle(bus);
+            let slot = bus.ppu.oam_address.wrapping_add(i as u8);
+            bus.ppu.oam[slot as usize] = value;
+            self.sample_interrupts();
+        }
+    }
+
+    fn halted_read(&mut self, bus: &mut MemoryBus, address: u16) {
+        self.begin_cycle(bus);
+        bus.read(address);
+        self.sample_interrupts();
+    }
+
+    /// `DmcGet`: the fetch puts its byte on the bus; a CPU halted on $4000-$401F conflicts with the registers.
+    fn dmc_get(&mut self, bus: &mut MemoryBus, halted: u16) {
+        self.begin_cycle(bus);
+        let fetch = bus.apu.dmc.dma_address();
+        let value = bus.read(fetch);
+        bus.apu.dmc.complete_dma(value);
+        if (0x4000..0x4020).contains(&halted) {
+            bus.conflict_with_apu_register(fetch);
+        }
+        self.sample_interrupts();
     }
 
     #[inline(always)]

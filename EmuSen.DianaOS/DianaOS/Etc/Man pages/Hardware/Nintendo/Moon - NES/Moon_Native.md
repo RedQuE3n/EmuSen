@@ -727,6 +727,170 @@ they are later stages' to claim, after their own audits.
 **Reuse.** `AccuracyCoinRun` takes any NES core's frame, RAM read and Start button, which is how MoonRT runs it. Nothing
 in the CPU or the bus was found that a second core shares: Mercury's bus and the SM83 have none of these rules.
 
+### 3.9 Stage 2b: DMA as a halt of the CPU (2026-09-29)
+
+*Candidate C2 of §3.8.4, with D5's period and R13's alignment.* The prediction on record, from §3.8.3, was that D5 and
+C2 must land together. It held: with both in, AccuracyCoin runs through, and D5's `8-dmc_rates` passes with no
+regression elsewhere.
+
+#### 3.9.1 The model
+
+**A DMA waits for the CPU's next read cycle and halts it there.**
+
+- The halt is `Cpu.Read`'s first step. Writes are never halted, as T65's RDY is read-only (`T65.vhd:284`).
+- Each halted cycle is a full cycle: the PPU, the APU and the board are clocked, the CPU's cycle count and the
+  instruction's cycles advance, and the interrupt lines are sampled, as T65 samples them "even if not rdy".
+- So OAM DMA's 513 or 514 cycles now pass for the PPU too. §6.1's D1 goes with it (§3.9.3).
+
+**The DMC's fetch.**
+
+- The DMC now has a real sample buffer (`SampleBuffer`, `BufferFull`).
+- The output unit takes the buffer at the end of each byte, and an empty buffer with bytes left asks for a fetch
+  (`DmaRequested`).
+- The fetch is a halt, a dummy, an alignment cycle when the next would be a put, and the get that reads the sample:
+  3 or 4 cycles. That is the sequence `DMASync` assumes (`AccuracyCoin.asm:18832`), and the RTL's `DmaController`
+  starts only on a CPU read (`nes.v:54`).
+- The halt, dummy and alignment cycles repeat the CPU's read with all its side effects. That is R8: `$2007` advances v,
+  and `$2002` clears vblank.
+
+**Enabling the DMC.** A `$4015` write that enables it with an empty buffer asks for the first byte after 2 cycles on
+a get and 3 on a put. That is the RTL's enable pipeline (`apu.sv:556`, `:595-597`) read as a delay, and it is the
+first number here calibrated against a witness, DMA + `$2002` read. Its `STA $4015 / LDA $2002` needs the halt on the
+`LDA`'s read.
+
+**OAM DMA.** A halt, one alignment cycle when the next would be a put, then a get read and a put write per byte, 513
+or 514 cycles (R13; `nes.v:58`). A DMC request during the copy takes the next get, and the copy realigns on the put
+after it.
+
+**Get and put** are the APU's cycle parity that `$4017`'s write delay already used (`Apu.IsGetCycle`), so the DMA,
+the frame counter and the pads agree by construction.
+
+**The pads.**
+
+- **A read of `$4016`/`$4017` on the cycle after one of the same register neither clocks the pad nor sees a new bit.**
+  The pad clocks on its select's falling edge (`NES.sv:654-658`), so a held read sees the bit the first read saw.
+- **A CPU halted on `$4000`–`$401F` keeps the 2A03's registers enabled through the get.** The fetch's low five bits then
+  select one too: a fetch at `...16` holds `$4016`'s select, and one at `...15` reads `$4015`.
+- **`$4016`'s OUT0 reaches the pads at the end of a get cycle** (C6). This is the edge the RTL calls `put_ce`, which
+  latches `joy_out` (`nes.v:583-590`).
+
+**The save state is version 4.** It is version 3's walks plus a tail of 8 bytes:
+
+- the DMC's buffer, its full flag and the load delay;
+- a pending OAM DMA and its page.
+
+A version 3 state still loads, with an empty buffer, so its reader asks for its byte at once. MoonRT reads and writes
+the same tail. `MoonRtStateTests.A_version_3_state_loads_in_both_engines_alike` builds a version 3 state from a
+version 4 one and loads it into both engines: they agree when loaded, and again after ten frames.
+
+- **Kept as always zero:** `StallCycles`, `PendingDmaCycles` and `StolenCycles`. No DMA charges cycles afterwards any
+  more, and keeping them leaves version 3's layout untouched. They are candidates for removal at the next format change.
+- **Not in the state:** the pads' held-read cycle and OUT0 latch, like the pads' shift registers (§6.2's D3). A state
+  loads with no read on the cycle before it.
+
+#### 3.9.2 What it fixed, and the proofs
+
+**New tests, each failing on the unmodified core** (`MoonCpuBusDefectTests`):
+
+- **D1:** `An_oam_dma_leaves_the_frame_its_length_and_sound`. Before the change a frame with OAM DMA made more sound
+  than one without, as §6.1 measured (746.43 against 733.80).
+- **C2 and R8:** `A_dmc_fetch_repeats_a_halted_read_of_2007`. Unmodified, v moved 3,964 for 3,963 counted reads, which
+  is no repeat at all.
+- **D5:** `A_dmc_byte_lasts_eight_periods_of_its_rate`, three rates. Its version against version 3's DMC API failed at
+  all three rates, before that API changed (§3.8.3).
+- `MoonCoreTests`: the OAM DMA test now checks the copy under a halted CPU in 513–514 cycles, and the controller test
+  gives the strobe two cycles to land.
+
+**AccuracyCoin: 90 → 102 of 144** (measured 2026-09-29). The results table is drawn at frame 3,061, and the menu is
+ready at frame 17 instead of 23. Of the tests that depend on `DMASync` (§3.8):
+
+| Now pass | Still fail, with the code now |
+|---|---|
+| DMA + open bus, DMA + `$2007` read and write, DMA + `$4015` read, DMA + `$4016` read, instruction timing, implied dummy reads, interrupt-flag latency | DMC bus conflicts (1 → 2, "did not correctly emulate the bus conflict with the APU registers"), DMC + OAM DMA (1 → 2, the overlapped cycle count), explicit and implicit abort (1 → 2, the aborted cycle count), SH* ×5 (7, C4) |
+
+- **Passing besides:** DMA + `$2002` read, the frame counter's 4-step and 5-step tests, and controller strobing (C6).
+- **Moved but still failing:**
+  - the Delta Modulation Channel test, from code 12 to 15;
+  - internal data bus, from 1 to 2 (the bus conflict with `$4015`);
+  - APU register activation, from 1 to 4 (OAM DMA reading APU registers).
+- **The code-1 failures are gone.** Every remaining DMA failure is past the "timing is off" check. What is left is
+  the conflicts' data and the overlapped and aborted cycle counts.
+
+**Negative results on the way.**
+
+- The first held-read rule returned the next bit. That broke controller clocking, code 5: a double read must see the
+  same value.
+- The first conflict rule selected the register by the halted CPU address. That broke DMA + `$4016` read.
+- Moving the OAM DMA's alignment to reads on puts fixed the strobe and broke both frame-counter tests. The alignment
+  was right and the strobe's edge was wrong: the pads take OUT0 at the end of a get.
+
+All three were caught by AccuracyCoin between runs, and none is in the tree.
+
+**The corpus:** of 263 ROMs, 90 → **94 passed**, with no previously passing ROM failing:
+
+- `apu_test` passes, from fail 1;
+- `7-dmc_basics`, from fail 19;
+- `8-dmc_rates`, from fail 3;
+- `4-irq_and_dma`, from fail 1;
+- `sprdma_and_dmc_dma` and its 512 variant still fail 1, with changed text.
+
+On both engines (`MoonRtCorpusTests`) the corpus runs identically: 255 ROMs run and 8 refused by both; 362,421
+frames with identical state; 114 verdicts, 94 passed.
+
+#### 3.9.3 The games: hashes changed on purpose, and still played
+
+**D1 is gone.** Every game in the playability run emits 733.79 stereo samples a frame, the rate's own 733.80, against
+737.8–747.7 before (§1.1).
+
+**New state hashes**, frames 900 and 3,900 with the bench's input:
+
+| Game | Frame 900 | Frame 3,900 |
+|---|---|---|
+| Super Mario Bros. | `DAC809EDDF58F2EC` | `0C7C41E0DF6B6C15` |
+| Zelda | `66FC06B58F8F81E7` | `B97DD6CE3362CB82` |
+| Super Mario Bros. 3 | `1C6FE76307F71AF0` | `42DF99FC109B4757` |
+| Punch-Out!! | `A0A79292F5B2AC34` | `46CF6D9898B447D0` |
+
+Every change is expected, since every game runs OAM DMA every frame and it now costs the PPU its cycles too.
+
+**Playability** (`moontruth play`, in the scratch directory):
+
+- **What was run:** the four games and the ROMs of the library's eleven Moon states. The ROMs were copied to scratch,
+  reading the library only.
+- **From boot:** 3,600 frames with the bench's input.
+- **From each state:** 1,800 frames. All the states were written as version 3, so this is also the check that old
+  states load.
+
+**Result:** no fault and no JAM, except one. The picture changed in most seconds of every run. The exception is an
+SMB1
+hack, *Mario's Adventure*:
+
+- its resume state JAMs, and from boot its picture changes in 1 of 60 seconds;
+- the unmodified build (`603567de`) does exactly the same.
+
+So it is not this change, and it is recorded as a finding to investigate apart.
+
+**MoonRT against the fixed core.** All of these pass:
+
+- 331 Moon-filtered cases, which include:
+  - `MoonRtMachineTests`' random programs after every instruction, undocumented opcodes and JAM, interrupts, OAM DMA
+    and the DMC's fetches;
+  - the real games from boot and from a transferred state;
+  - the state oracles;
+  - AccuracyCoin, result for result, with the table at the same frame.
+- The crate's 6.
+
+#### 3.9.4 What is left
+
+1. **SH* under RDY (C4):** five results, code 7. The halt now exists to test it.
+2. **The APU-register conflict's data.** DMC bus conflicts code 2, internal data bus code 2, and APU register activation
+   code 4 (OAM DMA reading `$4000`–`$401F`).
+3. **The overlapped and aborted cycle counts:** DMC + OAM DMA, and explicit and implicit abort, each code 2.
+   - The DMC's slot inside an OAM DMA is simplified here to one get and one realignment put.
+   - A `$4015` write that disables the DMC mid-fetch cancels it outright.
+4. **C1, the NMI hijack,** after the PPU's NMI timing (§3.8.3).
+5. **Reuse:** nothing here is shared with another core. Mercury's DMA is its own, and MarsRT is untouched.
+
 ## 4. Stages
 
 MercuryRT's stages 1–5 were done in one day; Moon's machine is about 5,200 lines of C#: the folder's 6,609, less the

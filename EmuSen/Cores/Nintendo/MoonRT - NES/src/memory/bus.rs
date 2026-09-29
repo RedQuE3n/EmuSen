@@ -10,7 +10,6 @@ use crate::state::{StateReader, StateResult, StateWriter};
 
 pub const RAM_SIZE: usize = 0x0800;
 pub const OAM_DMA_REGISTER: u16 = 0x4014;
-pub const OAM_DMA_CYCLES: i32 = 513;
 pub const DOTS_PER_CPU_CYCLE: i32 = 3;
 
 /// Game Genie's table: per patched CPU address, 256 entries of `0x100 | patched` or 0, one per original byte.
@@ -30,43 +29,14 @@ pub struct MemoryBus {
     pub controller2: Skip<Controller>,
     pub mapper_clocks_on_cpu: Skip<bool>,
     pub rom_patches: Skip<Option<Box<RomPatches>>>,
-}
-
-/// `MemoryBus.Read` for everything but `$4015`, over the parts the APU's own step does not hold (Moon_Native.md §2.5).
-#[inline(always)]
-#[allow(clippy::too_many_arguments)]
-fn decode_read(
-    address: u16,
-    ram: &mut [u8; RAM_SIZE],
-    open_bus: &mut u8,
-    ppu: &mut Ppu,
-    board: &mut Board,
-    controller1: &mut Controller,
-    controller2: &mut Controller,
-    patches: &Option<Box<RomPatches>>,
-) -> u8 {
-    let value = if address < 0x2000 {
-        ram[(address & 0x07FF) as usize]
-    } else if address < 0x4000 {
-        ppu.read_register((address & 0x07) as i32, board)
-    } else if address == 0x4016 {
-        (*open_bus & 0xE0) | controller1.read()
-    } else if address == 0x4017 {
-        (*open_bus & 0xE0) | controller2.read()
-    } else if address < 0x6000 {
-        *open_bus
-    } else {
-        let value = board.mapper.read_prg(&board.cart, address);
-        match patches {
-            Some(table) => match table.get(&address) {
-                Some(entries) if entries[value as usize] != 0 => entries[value as usize] as u8,
-                _ => value,
-            },
-            None => value,
-        }
-    };
-    *open_bus = value;
-    value
+    pub oam_dma_pending: Skip<bool>,
+    pub oam_dma_page: Skip<u8>,
+    pub last_read_cycle: Skip<i64>,
+    pub last_read_address: Skip<u16>,
+    pub strobe_latch: Skip<bool>,
+    pub strobe_out: Skip<bool>,
+    /// C#'s `Cpu.Cycles`, which the CPU stamps here at each cycle's start.
+    pub cpu_cycles: Skip<i64>,
 }
 
 impl MemoryBus {
@@ -84,6 +54,13 @@ impl MemoryBus {
             controller2: Skip(Controller::default()),
             mapper_clocks_on_cpu: Skip(clocks),
             rom_patches: Skip(None),
+            oam_dma_pending: Skip(false),
+            oam_dma_page: Skip(0),
+            last_read_cycle: Skip(-2),
+            last_read_address: Skip(0),
+            strobe_latch: Skip(false),
+            strobe_out: Skip(false),
+            cpu_cycles: Skip(0),
         }
     }
 
@@ -92,22 +69,14 @@ impl MemoryBus {
     pub fn tick(&mut self) -> (bool, bool) {
         self.ppu.step(DOTS_PER_CPU_CYCLE, &mut self.board);
         let nmi = self.ppu.nmi_output();
-
-        let (ram, open_bus, ppu, board, c1, c2, patches) =
-            (&mut self.ram, &mut self.open_bus, &mut *self.ppu, &mut *self.board, &mut *self.controller1, &mut *self.controller2, &*self.rom_patches);
-        let mut read = |a: u16| decode_read(a, ram, open_bus, ppu, board, c1, c2, patches);
-        self.apu.step(1, &mut read);
+        self.apu.step(1);
         if *self.mapper_clocks_on_cpu {
             self.board.mapper.on_cpu_cycle();
         }
-        if self.apu.dmc.stall_cycles > 0 {
-            let stolen = self.apu.dmc.stall_cycles;
-            self.apu.dmc.stall_cycles = 0;
-            self.stolen_cycles = self.stolen_cycles.wrapping_add(stolen);
-            let (ram, open_bus, ppu, board, c1, c2, patches) =
-                (&mut self.ram, &mut self.open_bus, &mut *self.ppu, &mut *self.board, &mut *self.controller1, &mut *self.controller2, &*self.rom_patches);
-            let mut read = |a: u16| decode_read(a, ram, open_bus, ppu, board, c1, c2, patches);
-            self.apu.step(stolen, &mut read);
+        if *self.strobe_latch != *self.strobe_out && !self.apu.is_get_cycle() {
+            *self.strobe_out = *self.strobe_latch;
+            self.controller1.set_strobe(*self.strobe_out);
+            self.controller2.set_strobe(*self.strobe_out);
         }
         (nmi, self.irq_level())
     }
@@ -117,21 +86,66 @@ impl MemoryBus {
         self.apu.irq_asserted() || self.board.mapper.irq_pending()
     }
 
+    /// `MemoryBus.Read`.
     #[inline(always)]
     pub fn read(&mut self, address: u16) -> u8 {
-        if address == 0x4015 {
+        let value = if address < 0x2000 {
+            self.ram[(address & 0x07FF) as usize]
+        } else if address < 0x4000 {
+            self.ppu.read_register((address & 0x07) as i32, &mut self.board)
+        } else if address == 0x4015 {
             return self.apu.read_status() | (self.open_bus & 0x20);
+        } else if address == 0x4016 {
+            let clock = !self.held_read(address);
+            (self.open_bus & 0xE0) | self.controller1.read(clock)
+        } else if address == 0x4017 {
+            let clock = !self.held_read(address);
+            (self.open_bus & 0xE0) | self.controller2.read(clock)
+        } else if address < 0x6000 {
+            self.open_bus
+        } else {
+            let value = self.board.mapper.read_prg(&self.board.cart, address);
+            match &*self.rom_patches {
+                Some(table) => match table.get(&address) {
+                    Some(entries) if entries[value as usize] != 0 => entries[value as usize] as u8,
+                    _ => value,
+                },
+                None => value,
+            }
+        };
+        self.open_bus = value;
+        value
+    }
+
+    /// `HeldRead`: a pad clocks once for reads of it on consecutive cycles.
+    fn held_read(&mut self, address: u16) -> bool {
+        let cycle = *self.cpu_cycles;
+        let held = address == *self.last_read_address && cycle == self.last_read_cycle.wrapping_add(1);
+        *self.last_read_address = address;
+        *self.last_read_cycle = cycle;
+        held
+    }
+
+    /// `DmaPending`.
+    #[inline(always)]
+    pub fn dma_pending(&self) -> bool {
+        *self.oam_dma_pending || self.apu.dmc.dma_requested()
+    }
+
+    /// `ConflictWithApuRegister`: a CPU halted on $4000-$401F keeps the 2A03's registers enabled for the fetch's low five bits.
+    pub fn conflict_with_apu_register(&mut self, fetch: u16) {
+        let register = 0x4000 | (fetch & 0x1F);
+        if register == 0x4015 {
+            self.apu.read_status();
         }
-        decode_read(
-            address,
-            &mut self.ram,
-            &mut self.open_bus,
-            &mut self.ppu,
-            &mut self.board,
-            &mut self.controller1,
-            &mut self.controller2,
-            &self.rom_patches,
-        )
+        if register == 0x4016 || register == 0x4017 {
+            *self.last_read_address = register;
+            *self.last_read_cycle = *self.cpu_cycles;
+        }
+    }
+
+    pub fn forget_last_read(&mut self) {
+        *self.last_read_cycle = -2;
     }
 
     /// `MemoryBus.Write`; `cpu_cycles` is what C# stamps from `Cpu.Cycles`. Returns the IRQ level when an OAM DMA set it.
@@ -147,12 +161,12 @@ impl MemoryBus {
             return None;
         }
         if address == OAM_DMA_REGISTER {
-            return Some(self.run_oam_dma(data));
+            *self.oam_dma_page = data;
+            *self.oam_dma_pending = true;
+            return None;
         }
         if address == 0x4016 {
-            let strobe = (data & 0x01) != 0;
-            self.controller1.set_strobe(strobe);
-            self.controller2.set_strobe(strobe);
+            *self.strobe_latch = (data & 0x01) != 0;
             return None;
         }
         if address < 0x4020 {
@@ -163,22 +177,6 @@ impl MemoryBus {
         board.cart.cpu_cycle = cpu_cycles;
         board.mapper.write_prg(&mut board.cart, address, data);
         None
-    }
-
-    /// The copy happens at once through the normal decode; the APU lives through its cycles, the PPU does not (Moon_Native.md §6.1).
-    fn run_oam_dma(&mut self, page: u8) -> bool {
-        let source = (page as u16) << 8;
-        for i in 0..256u16 {
-            let value = self.read(source.wrapping_add(i));
-            let slot = self.ppu.oam_address.wrapping_add(i as u8);
-            self.ppu.oam[slot as usize] = value;
-        }
-        self.pending_dma_cycles = self.pending_dma_cycles.wrapping_add(OAM_DMA_CYCLES);
-        let (ram, open_bus, ppu, board, c1, c2, patches) =
-            (&mut self.ram, &mut self.open_bus, &mut *self.ppu, &mut *self.board, &mut *self.controller1, &mut *self.controller2, &*self.rom_patches);
-        let mut read = |a: u16| decode_read(a, ram, open_bus, ppu, board, c1, c2, patches);
-        self.apu.step(OAM_DMA_CYCLES, &mut read);
-        self.irq_level()
     }
 
     #[inline(always)]
@@ -199,6 +197,10 @@ impl MemoryBus {
     /// The RESET line leaves work RAM alone - see Moon_Core.md §6.
     pub fn soft_reset(&mut self) {
         self.pending_dma_cycles = 0;
+        *self.oam_dma_pending = false;
+        *self.last_read_cycle = -2;
+        *self.strobe_latch = false;
+        *self.strobe_out = false;
         self.open_bus = 0;
         self.controller1.reset();
         self.controller2.reset();

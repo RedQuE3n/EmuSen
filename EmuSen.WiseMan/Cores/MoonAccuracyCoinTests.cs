@@ -18,9 +18,9 @@ namespace EmuSen.WiseMan.Cores
         // The path of AccuracyCoin.nes, a third-party ROM never committed; absent, the baseline passes unrun.
         public const string RomVariable = "EMUSEN_ACCURACYCOIN";
 
-        // $0400-$0495 after the table is drawn at AccuracyCoin 673ef55, after stage 2a's bus fixes (Moon_Native.md §3.8).
+        // $0400-$0495 after the table is drawn at AccuracyCoin 673ef55, after stage 2b's DMA (Moon_Native.md §3.9).
         public const string Baseline =
-            "000000010101010101010101010101010101010101010101000101010101010101000101010101010101010101010101010101010101010101010101010101010101010101011E1E1E1E1E010A010106010101060606060606060612060A06120A220A060001011E0A0A4A060A0E0101010101010101410606060906010101010A0601060A010A0A0A0606010A060A0E0606060A060E";
+            "000000010101010101010101010101010101010101010101000101010101010101000101010101010101010101010101010101010101010101010101010101010101010101011E1E1E1E1E01010101010101010606060606060606121201050101010A060001011E0101560A01010101010101010101410A0A0A0506010101010A0601060A010A0A050606010A060A0E0A06060A060E";
 
         private readonly ITestOutputHelper _output;
 
@@ -62,9 +62,9 @@ namespace EmuSen.WiseMan.Cores
 
             _output.WriteLine($"menu at frame {run.MenuFrame}, table at {run.TableFrame}: {run.PassedTally} of {run.Tested} passed, {run.SkippedTally} skipped");
             foreach (var failed in run.Results.Where(r => r.Failed)) _output.WriteLine($"${failed.Address:X4} fail {failed.Code}");
-            Assert.Equal((23, 4117), (run.MenuFrame, run.TableFrame));
-            Assert.Equal((144, 90, 0), (run.Tested, run.PassedTally, run.SkippedTally));
-            Assert.Equal((144, 90, 54), (run.Results.Count(), run.Results.Count(r => r.Passed), run.Results.Count(r => r.Failed)));
+            Assert.Equal((17, 3061), (run.MenuFrame, run.TableFrame));
+            Assert.Equal((144, 102, 0), (run.Tested, run.PassedTally, run.SkippedTally));
+            Assert.Equal((144, 102, 42), (run.Results.Count(), run.Results.Count(r => r.Passed), run.Results.Count(r => r.Failed)));
             Assert.Equal(Baseline, Convert.ToHexString(run.Block));
         }
         // MoonRT through the same run: every result byte, and the frame the table is drawn, as the C# core's.
@@ -85,7 +85,7 @@ namespace EmuSen.WiseMan.Cores
             _output.WriteLine($"menu at frame {run.MenuFrame}, table at {run.TableFrame}: {run.PassedTally} of {run.Tested} passed");
             var expected = Convert.FromHexString(Baseline);
             foreach (var r in run.Results) if (expected[r.Address - AccuracyCoinRun.FirstResult] != r.Raw) _output.WriteLine($"${r.Address:X4}: C# {expected[r.Address - AccuracyCoinRun.FirstResult]:X2}, MoonRT {r.Raw:X2}");
-            Assert.Equal((23, 4117), (run.MenuFrame, run.TableFrame));
+            Assert.Equal((17, 3061), (run.MenuFrame, run.TableFrame));
             Assert.Equal(Baseline, Convert.ToHexString(run.Block));
         }
     }

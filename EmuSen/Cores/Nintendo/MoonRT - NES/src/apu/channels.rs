@@ -1,5 +1,6 @@
 //! C#'s `Channels.cs` and `DmcChannel.cs`: the envelope, both pulses, the triangle, the noise and the DMC. See Moon_APU.md §3.
 
+use crate::Skip;
 use crate::state::{State, StateReader, StateResult, StateWriter};
 
 pub static LENGTH_COUNTER: [u8; 32] = [
@@ -396,6 +397,9 @@ pub struct DmcChannel {
     pub shift: i32,
     pub silence: bool,
     pub timer: i32,
+    pub sample_buffer: Skip<u8>,
+    pub buffer_full: Skip<bool>,
+    pub load_delay: Skip<i32>,
 }
 
 impl Default for DmcChannel {
@@ -416,6 +420,9 @@ impl Default for DmcChannel {
             shift: 0,
             silence: true,
             timer: 0,
+            sample_buffer: Skip(0),
+            buffer_full: Skip(false),
+            load_delay: Skip(0),
         }
     }
 }
@@ -426,13 +433,29 @@ impl DmcChannel {
         self.bytes_remaining > 0
     }
 
-    pub fn set_enabled(&mut self, value: bool) {
+    /// The reader wants the bus: the buffer is empty, bytes remain, and no load delay is running.
+    #[inline(always)]
+    pub fn dma_requested(&self) -> bool {
+        !*self.buffer_full && self.bytes_remaining > 0 && *self.load_delay == 0
+    }
+
+    #[inline(always)]
+    pub fn dma_address(&self) -> u16 {
+        self.current_address as u16
+    }
+
+    /// `SetEnabled`: an empty buffer asks for its first byte two cycles later on a get, three on a put.
+    pub fn set_enabled(&mut self, value: bool, on_get_cycle: bool) {
         self.enabled = value;
         self.irq_pending = false;
         if !value {
             self.bytes_remaining = 0;
+            *self.load_delay = 0;
         } else if self.bytes_remaining == 0 {
             self.restart();
+            if !*self.buffer_full && self.bytes_remaining > 0 {
+                *self.load_delay = if on_get_cycle { 2 } else { 3 };
+            }
         }
     }
 
@@ -441,18 +464,21 @@ impl DmcChannel {
         self.bytes_remaining = self.sample_length;
     }
 
-    /// `StepTimer`; when the shift register empties and a byte is due, returns the address to fetch, and `finish_fetch` completes it.
+    /// `StepTimer`: the table is the period, so the count reloads one short.
     #[inline(always)]
-    pub fn step_timer(&mut self) -> Option<u16> {
+    pub fn step_timer(&mut self) {
+        if *self.load_delay > 0 {
+            *self.load_delay -= 1;
+        }
         if self.timer > 0 {
             self.timer -= 1;
-            return None;
+            return;
         }
-        self.timer = table(&DMC_RATE, self.rate_index);
-        self.clock()
+        self.timer = table(&DMC_RATE, self.rate_index) - 1;
+        self.clock();
     }
 
-    fn clock(&mut self) -> Option<u16> {
+    fn clock(&mut self) {
         if !self.silence {
             if (self.shift & 0x01) != 0 {
                 if self.output_level <= 125 {
@@ -465,21 +491,22 @@ impl DmcChannel {
         self.shift >>= 1;
         self.bits_remaining = self.bits_remaining.wrapping_sub(1);
         if self.bits_remaining > 0 {
-            return None;
+            return;
         }
         self.bits_remaining = 8;
-        if self.bytes_remaining == 0 {
+        if !*self.buffer_full {
             self.silence = true;
-            return None;
+            return;
         }
         self.silence = false;
-        Some(self.current_address as u16)
+        self.shift = *self.sample_buffer as i32;
+        *self.buffer_full = false;
     }
 
-    /// The rest of `FillSampleBuffer`, once the byte has been read.
-    pub fn finish_fetch(&mut self, value: u8) {
-        self.shift = value as i32;
-        self.stall_cycles = self.stall_cycles.wrapping_add(4);
+    /// `CompleteDma`: the get cycle's byte fills the buffer and the sample moves on.
+    pub fn complete_dma(&mut self, value: u8) {
+        *self.sample_buffer = value;
+        *self.buffer_full = true;
         self.current_address = if self.current_address == 0xFFFF { 0x8000 } else { self.current_address.wrapping_add(1) };
         self.bytes_remaining = self.bytes_remaining.wrapping_sub(1);
         if self.bytes_remaining != 0 {

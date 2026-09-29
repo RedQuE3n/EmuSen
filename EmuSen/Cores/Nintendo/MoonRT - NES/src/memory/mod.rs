@@ -20,6 +20,7 @@ pub struct Controller {
     pub state: u8,
     pub shift: u8,
     pub strobe: bool,
+    pub last_bit: u8,
 }
 
 impl Controller {
@@ -33,14 +34,18 @@ impl Controller {
         }
     }
 
+    /// A read held from the cycle before sees the bit the first read saw, and does not clock.
     #[inline(always)]
-    pub fn read(&mut self) -> u8 {
+    pub fn read(&mut self, clock: bool) -> u8 {
         if self.strobe {
             return self.state & 0x01;
         }
-        let value = self.shift & 0x01;
+        if !clock {
+            return self.last_bit;
+        }
+        self.last_bit = self.shift & 0x01;
         self.shift = (self.shift >> 1) | 0x80;
-        value
+        self.last_bit
     }
 
     pub fn reset(&mut self) {

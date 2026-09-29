@@ -108,7 +108,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             if (state.Length < 8) throw new EndOfStreamException("Unable to read beyond the end of the stream.");
             if (BitConverter.ToUInt32(state, 0) != MoonCore.StateMagic) throw new InvalidDataException("Not a Moon save state.");
             int version = BitConverter.ToInt32(state, 4);
-            if (version != MoonCore.StateVersion) throw new InvalidDataException($"Save state version {version} is not {MoonCore.StateVersion}.");
+            if (version is < MoonCore.OldestReadableVersion or > MoonCore.StateVersion) throw new InvalidDataException($"Save state version {version} is not one this build reads ({MoonCore.OldestReadableVersion} to {MoonCore.StateVersion}).");
         }
 
         // The debugger's view: the mirror loaded from MoonRT's state, its reads and writes sent to MoonRT - see Moon_Native.md §2.4.

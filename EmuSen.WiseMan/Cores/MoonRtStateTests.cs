@@ -192,6 +192,32 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(csharp.GetType(), rust.GetType());
         }
 
+        // A version 3 state has no DMA tail; both engines load it the same way, and write it back as version 4.
+        [Theory]
+        [InlineData(0)]
+        [InlineData(4)]
+        public void A_version_3_state_loads_in_both_engines_alike(int mapper)
+        {
+            Assert.True(MoonMachine.Available, MoonNative.Report);
+            byte[] rom = Rom(mapper, 8, (0, Busy));
+            MoonCore core = Load(rom);
+            for (int i = 0; i < 30; i++) core.RunFrame();
+            byte[] v4 = Save(core);
+            byte[] v3 = v4.AsSpan(0, v4.Length - 8).ToArray();
+            v3[4] = 3;
+
+            MoonCore csharp = Load(rom);
+            csharp.LoadState(new MemoryStream(v3));
+            using var machine = new MoonMachine(rom);
+            machine.Load(v3);
+            byte[] expected = Save(csharp);
+            Assert.Equal(4, BitConverter.ToInt32(expected, 4));
+            AssertSameBytes(expected, machine.Save());
+            for (int i = 0; i < 10; i++) csharp.RunFrame();
+            for (int i = 0; i < 10; i++) machine.RunFrame();
+            AssertSameBytes(Save(csharp), machine.Save());
+        }
+
         // Real cartridges past their title screens, with the Start and A presses of Moon_Native.md §1.1's bench.
         [Fact]
         public void Real_games_states_come_back_from_rust_byte_for_byte()
@@ -267,7 +293,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(want.Length, got.Length);
         }
 
-        // The C# serializer's own walk as "offset length type path" lines, MoonCore.SaveState's header written by hand.
+        // The C# serializer's own walk as "offset length type path" lines, MoonCore.SaveState's header and version 4's tail written by hand.
         public static string Layout(MoonCore core, byte[] state)
         {
             var layout = new LayoutWalk();
@@ -284,6 +310,11 @@ namespace EmuSen.WiseMan.Cores
             layout.Walk("Bus.", core.Bus!);
             layout.Walk("Ppu.", core.Ppu!);
             layout.Walk("Apu.", core.Apu!);
+            layout.Line("Apu.Dmc.SampleBuffer", "u8", 1);
+            layout.Line("Apu.Dmc.BufferFull", "bool", 1);
+            layout.Line("Apu.Dmc.LoadDelay", "i32", 4);
+            layout.Line("Bus.OamDmaPending", "bool", 1);
+            layout.Line("Bus.OamDmaPage", "u8", 1);
             Assert.Equal(state.Length, layout.Offset);
             return layout.Text;
         }

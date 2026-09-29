@@ -1017,6 +1017,86 @@ frames with identical state; 114 verdicts, 104 passed.
 2. P6 and P7 once P8 exists; P11.
 3. From §3.9.4: SH* under RDY, the APU-register conflict's data, and the overlapped and aborted DMA counts.
 
+### 3.11 Stage 2d: the CPU and bus leftovers (2026-09-29)
+
+*§3.9.4's and §3.10.5's CPU and bus list, with §3.9's two simplifications replaced. The prediction on record was that
+each needed the halt that 2b built, and nothing more. It held: every rule below is stated in terms of that halt.* As in
+the earlier steps, the target tests' expectations were read from the ROM's source before anything was changed. Those
+tests are the DMA cycle-count tables, the SH* tables, and the bus-conflict tables.
+
+#### 3.11.1 The rules, and their weight
+
+| # | Rule | Moon before | Source | Witness | Verdict |
+|---|---|---|---|---|---|
+| C4 | A DMA halting SH*'s dummy read, the cycle before the write, drops the `& (H+1)` term from the stored value; the address is unchanged | always ANDed | T65's `rdy_mod`, set by RDY low at that cycle (`T65.vhd:411-416`), choosing `Write_Data_AX` over `_AXB` (`T65_MCode.vhd:146-178`) | the five SH* results, code 7 | **fixed**; T65 is weak evidence, AccuracyCoin the witness |
+| B1 | A DMA's read reaches the 2A03's registers only while the halted CPU's address is in `$4000`–`$401F`, chosen by the DMA address's low five bits; otherwise `$4000`–`$5FFF` reads the bus | an OAM DMA from page `$40` read `$4015` and the pads | `apu_cs` decodes the CPU's address, `joypad1_cs` the muxed one (`nes.v:501`, `:559-560`) | APU register activation, code 4 | **fixed** |
+| B2 | Under that conflict a pad read puts the pad's bits under the bus's top three; `$4015` clears the frame IRQ and leaves the external bus alone | the pad's select only was held | `dma_data_bus` (`nes.v:466-468`), `open_bus_in` (`:576`), `apu.sv:808` | DMC DMA bus conflicts, code 2 | **fixed** |
+| B3 | The 2A03's internal data bus is a latch of its own: every access loads it, `$4015` reads with bit 5 taken from it; the DMC's get does not load the sample into it when `$4015` answers | one latch | `internal_bus_data` (`nes.v:424-426`, `:836-838`) | internal data bus, code 2 | **fixed** |
+| B4 | A DMC fetch inside an OAM DMA runs its halt and dummy alongside the copy, takes a get at least two cycles after its halt, costs the copy a realigning put, and carries on alone if the copy ends first; one request as the copy's halt shares it | the next get, and one put | the ROM's own account (`AccuracyCoin.asm:12677-12696`) and `DmaController` (`nes.v:54-61`) | DMC DMA + OAM DMA's two tables, code 2 | **fixed**; §3.9's simplification replaced |
+| B5 | A disabling `$4015` write lets the request fall through the enable's lag (3 cycles on a get, 2 on a put); a fetch commits after its halt, and a request gone by then costs the halt alone | the fetch cancelled outright | `dma_req = ~have_buffer & enable_3` (`apu.sv:556`, `:593-594`, `:642-643`); "a DMC hardware bug can make trigger fall before it's done" (`nes.v:62`) | explicit abort's table, matched value for value | **fixed**; §3.9's simplification replaced |
+| B6 | The last byte of a non-looping sample drops the enable and leaves the same lag (3 cycles), so an emptied buffer inside it asks once more | none | `enable <= loop` on the last fetch (`apu.sv:633`), with `enable_3` lagging | implicit abort | **fixed**; its `$500` table was not reproduced by any lag tried (§3.11.3), and the test passes on the other two |
+
+**Two values here are fitted.** B5's lag is the same 3:2 pipeline as §3.10's load delay. Tried against the explicit
+abort's table, 2:2, 3:3 and 4:3 each miss by one or two entries, and 3:2 matches all sixteen. B6's 3 was chosen among
+2, 3, 4 and 5 as the only one to reproduce the implicit abort's `$520` table exactly.
+
+#### 3.11.2 The proofs
+
+**Tests that fail on the unmodified core** (`MoonCpuBusDefectTests`):
+
+- `A_dma_on_shas_dummy_read_drops_the_high_byte_term` (C4). It uses a flat bus that halts the chosen read, and the
+  case without a halt is the control;
+- `An_oam_dma_from_page_40_leaves_the_frame_irq_when_the_cpu_is_elsewhere` (B1);
+- `A_disable_lets_the_dmc_request_fall_after_the_pipelines_lag` (B5).
+- B2, B3, B4 and B6 are measured by AccuracyCoin's tables, which `MoonAccuracyCoinTests` pins byte for byte.
+- §3.8's `$4015` test now sets both latches, as every real access does. The rule it checks is unchanged.
+
+**AccuracyCoin: 113 → 124 of 144** (measured 2026-09-29; the table at frame 3,616):
+
+| Page | Now pass |
+|---|---|
+| 10 SH* | SHA ind,Y, SHA abs,Y, SHS, SHY, SHX: **6 of 6** |
+| 13 APU registers and DMA | DMC DMA bus conflicts, DMC DMA + OAM DMA, explicit abort, implicit abort: **10 of 10** |
+| 14 APU | APU register activation |
+| 15 CPU behaviour 2 | internal data bus |
+
+The DMC channel test moved from code 15 to 21 and still fails; it is the APU's.
+
+**The corpus:** 104 → **105 passed** (`sprdma_and_dmc_dma_512`), and no ROM that passed fails. On both engines it runs identically: 255 ROMs, 363,935 frames with identical
+state, 105 passed.
+
+**The games:**
+
+- The four bench games' state hashes at frames 900 and 3,900 are unchanged from §3.10.4, and so are all eight
+  pictures. None of the rules is reached by their play: no SH*, no DMA reading `$40xx`, and no disable during a fetch.
+- The playability run (§3.9.3) gives the same results as 2c: no fault and no JAM except the SMB1 hack's state, which
+  the base build also JAMs.
+- The save state stays version 4. The new fields are out of it: the internal bus is set from `OpenBus` on a load, and
+  SH*'s halt flag lives inside one instruction.
+
+**MoonRT** carries every rule. All of these pass:
+
+- 338 Moon-filtered cases, including AccuracyCoin result for result;
+- the crate's 6.
+
+**Reuse:** nothing here is shared with another core, and MarsRT is untouched.
+
+#### 3.11.3 Negative results
+
+- **Cancelling after every halted cycle was wrong.** The first version of B5 let a fetch be dropped at any of its
+  cycles. That gave a cost of 2 where the table wants 1. The table fits a fetch that commits after its halt alone.
+- **Taking `$4015`'s bit 5 from the internal latch after the fetch** left the internal data bus test failing. The
+  fetch's own read had already loaded the sample into the latch. Bit 5 is the latch as it was before the fetch.
+- **The implicit abort's `$500` table** (the load DMA landing X cycles before the output unit's boundary) was not
+  reproduced by any lag tried: it stayed zero, where the key has ones at X = A and B. The test passes, because its
+  answer sets are chosen by `$508` and the other two tables match. Which part of the rule is missing is not known.
+
+#### 3.11.4 What is left
+
+- **The DMC channel's code 21, and the APU's own audit.**
+- **C7** (writes to `$4020`–`$5FFF`): no witness turned up, so it stays a candidate.
+- **The per-dot PPU pipelines** of §3.10.5.
+
 ## 4. Stages
 
 MercuryRT's stages 1–5 were done in one day; Moon's machine is about 5,200 lines of C#: the folder's 6,609, less the

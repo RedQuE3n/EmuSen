@@ -44,7 +44,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
 
         public bool Enabled => _enabled;
 
-        // A $4015 write; an empty buffer asks for its first byte two cycles later on a get, three on a put - see Moon_Native.md §3.9.
+        // A $4015 write; an empty buffer asks for its first byte three cycles later on a get, two on a put - see Moon_Native.md §3.10.
         public void SetEnabled(bool value, bool onGetCycle)
         {
             _enabled = value;
@@ -58,7 +58,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
             else if (_bytesRemaining == 0)
             {
                 Restart();
-                if (!BufferFull && _bytesRemaining > 0) LoadDelay = onGetCycle ? 2 : 3;
+                if (!BufferFull && _bytesRemaining > 0) LoadDelay = onGetCycle ? 3 : 2;
             }
         }
 

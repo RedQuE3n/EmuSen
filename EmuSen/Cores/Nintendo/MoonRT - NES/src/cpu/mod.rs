@@ -43,6 +43,8 @@ pub struct Cpu {
     pub nmi_sampled_last: bool,
     pub service_irq: bool,
     pub service_nmi: bool,
+    /// `_vectored`: BRK and the interrupt sequence end without polling.
+    pub vectored: crate::Skip<bool>,
 }
 
 impl Cpu {
@@ -93,7 +95,8 @@ impl Cpu {
         for _ in 0..RESET_CYCLES {
             self.cycles = self.cycles.wrapping_add(1);
             self.tick(bus);
-            self.sample_interrupts();
+            self.end_cycle(bus);
+        self.sample_interrupts();
         }
     }
 
@@ -116,9 +119,9 @@ impl Cpu {
         }
         if self.service_nmi {
             self.nmi_pending = false;
-            self.service_interrupt(bus, NMI_VECTOR);
+            self.service_interrupt(bus, NMI_VECTOR, false);
         } else if self.service_irq {
-            self.service_interrupt(bus, IRQ_VECTOR);
+            self.service_interrupt(bus, IRQ_VECTOR, true);
         } else {
             let pc = self.pc;
             self.pc = pc.wrapping_add(1);
@@ -131,8 +134,9 @@ impl Cpu {
 
     #[inline(always)]
     fn poll_interrupts(&mut self) {
-        self.service_nmi = self.nmi_sampled_earlier;
-        self.service_irq = !self.service_nmi && self.irq_sampled_earlier;
+        self.service_nmi = !*self.vectored && self.nmi_sampled_earlier;
+        self.service_irq = !*self.vectored && !self.service_nmi && self.irq_sampled_earlier;
+        *self.vectored = false;
         if self.has_delayed_i {
             let i = self.delayed_i;
             self.set_flag(FLAG_I, i);
@@ -140,14 +144,30 @@ impl Cpu {
         }
     }
 
-    fn service_interrupt(&mut self, bus: &mut MemoryBus, vector: u16) {
+    fn service_interrupt(&mut self, bus: &mut MemoryBus, vector: u16, hijackable: bool) {
         self.read(bus, self.pc);
         self.read(bus, self.pc);
         self.push(bus, (self.pc >> 8) as u8);
         self.push(bus, self.pc as u8);
+        let vector = if hijackable { self.hijack_vector(vector) } else { self.no_hijack(vector) };
         self.push(bus, (self.p & !FLAG_B) | FLAG_U);
         self.set_flag(FLAG_I, true);
         self.pc = self.read_vector(bus, vector);
+    }
+
+    /// `HijackVector`: an NMI seen by the fourth cycle of BRK or IRQ takes over its vector, and is spent.
+    pub(crate) fn hijack_vector(&mut self, vector: u16) -> u16 {
+        *self.vectored = true;
+        if !self.nmi_pending {
+            return vector;
+        }
+        self.nmi_pending = false;
+        NMI_VECTOR
+    }
+
+    fn no_hijack(&mut self, vector: u16) -> u16 {
+        *self.vectored = true;
+        vector
     }
 
     fn read_vector(&mut self, bus: &mut MemoryBus, vector: u16) -> u16 {
@@ -159,9 +179,14 @@ impl Cpu {
     /// `MemoryBus.Tick`, then the two lines it sets, in C#'s order (Moon_Native.md §2.5).
     #[inline(always)]
     fn tick(&mut self, bus: &mut MemoryBus) {
-        let (nmi, irq) = bus.tick();
+        self.irq_line = bus.tick();
+    }
+
+    /// `MemoryBus.EndCycle`: the third dot, then /NMI as the cycle's end sees it.
+    #[inline(always)]
+    fn end_cycle(&mut self, bus: &mut MemoryBus) {
+        let nmi = bus.end_cycle();
         self.set_nmi_line(nmi);
-        self.irq_line = irq;
     }
 
     #[inline(always)]
@@ -171,6 +196,7 @@ impl Cpu {
         }
         self.begin_cycle(bus);
         let value = bus.read(address);
+        self.end_cycle(bus);
         self.sample_interrupts();
         value
     }
@@ -181,6 +207,7 @@ impl Cpu {
         if let Some(irq) = bus.write(address, data, self.cycles) {
             self.irq_line = irq;
         }
+        self.end_cycle(bus);
         self.sample_interrupts();
     }
 
@@ -223,21 +250,25 @@ impl Cpu {
             while bus.apu.dmc.dma_requested() {
                 self.dmc_get(bus, address);
                 self.begin_cycle(bus);
-                self.sample_interrupts();
+                self.end_cycle(bus);
+        self.sample_interrupts();
             }
             self.begin_cycle(bus);
             let value = bus.read(source.wrapping_add(i));
-            self.sample_interrupts();
+            self.end_cycle(bus);
+        self.sample_interrupts();
             self.begin_cycle(bus);
             let slot = bus.ppu.oam_address.wrapping_add(i as u8);
             bus.ppu.oam[slot as usize] = value;
-            self.sample_interrupts();
+            self.end_cycle(bus);
+        self.sample_interrupts();
         }
     }
 
     fn halted_read(&mut self, bus: &mut MemoryBus, address: u16) {
         self.begin_cycle(bus);
         bus.read(address);
+        self.end_cycle(bus);
         self.sample_interrupts();
     }
 
@@ -250,6 +281,7 @@ impl Cpu {
         if (0x4000..0x4020).contains(&halted) {
             bus.conflict_with_apu_register(fetch);
         }
+        self.end_cycle(bus);
         self.sample_interrupts();
     }
 

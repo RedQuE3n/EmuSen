@@ -9,9 +9,10 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
             Read(PC++);
             Push((byte)(PC >> 8));
             Push((byte)PC);
+            ushort vector = HijackVector(IrqVector);
             Push((byte)(P | 0x30));
             SetFlag(CpuFlags.I, true);
-            PC = ReadVector(IrqVector);
+            PC = ReadVector(vector);
         }
 
         private void OpRTI()

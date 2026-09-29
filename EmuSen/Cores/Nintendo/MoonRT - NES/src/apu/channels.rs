@@ -444,7 +444,7 @@ impl DmcChannel {
         self.current_address as u16
     }
 
-    /// `SetEnabled`: an empty buffer asks for its first byte two cycles later on a get, three on a put.
+    /// `SetEnabled`: an empty buffer asks for its first byte three cycles later on a get, two on a put.
     pub fn set_enabled(&mut self, value: bool, on_get_cycle: bool) {
         self.enabled = value;
         self.irq_pending = false;
@@ -454,7 +454,7 @@ impl DmcChannel {
         } else if self.bytes_remaining == 0 {
             self.restart();
             if !*self.buffer_full && self.bytes_remaining > 0 {
-                *self.load_delay = if on_get_cycle { 2 } else { 3 };
+                *self.load_delay = if on_get_cycle { 3 } else { 2 };
             }
         }
     }

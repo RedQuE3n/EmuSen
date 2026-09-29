@@ -21,6 +21,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
         public byte FrameCounter;
         public bool FrameIrqPending;
 
+        // $4015's bit 6: a read clears FrameIrqPending at once, this copy only at the next get - see Moon_Native.md §3.10.
+        [SkipInState] public bool FrameIrqReadable;
+
         public readonly PulseChannel Pulse1 = new(onesComplement: true);
         public readonly PulseChannel Pulse2 = new(onesComplement: false);
         public readonly TriangleChannel Triangle = new();
@@ -149,6 +152,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
         {
             WriteEnable(0);
             FrameIrqPending = false;
+            FrameIrqReadable = false;
             _frameCycle = 0;
             _frameStep = 0;
             _apuCycle = false;
@@ -270,7 +274,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
             if (Triangle.LengthCounter > 0) value |= 0x04;
             if (Noise.LengthCounter > 0) value |= 0x08;
             if (Dmc.Active) value |= 0x10;
-            if (FrameIrqPending) value |= 0x40;
+            if (FrameIrqReadable) value |= 0x40;
             if (Dmc.IrqPending) value |= 0x80;
 
             FrameIrqPending = false;
@@ -283,6 +287,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
             for (int i = 0; i < cpuCycles; i++)
             {
                 _cycleCount++;
+                if (!FrameIrqPending && IsGetCycle) FrameIrqReadable = false;
                 Triangle.StepTimer();
                 Dmc.StepTimer();
 
@@ -355,7 +360,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
             if (_frameCycle >= steps[_frameStep])
             {
                 // Four-step mode holds the IRQ across all three of the sequence's last cycles.
-                if (!_stepMode && _frameStep >= 3 && !IrqInhibited) FrameIrqPending = true;
+                if (!_stepMode && _frameStep >= 3 && !IrqInhibited) FrameIrqPending = FrameIrqReadable = true;
 
                 int type = FrameTypes[_frameStep];
                 if (type != FrameNone && _blockFrameCounterTick == 0)

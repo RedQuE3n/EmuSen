@@ -69,8 +69,8 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
         // One CPU cycle of everything clocked from the CPU's own clock - see Moon_CPU.md §5.5.
         public void Tick()
         {
-            Ppu.Step(DotsPerCpuCycle);
-            Cpu?.SetNmiLine(Ppu.NmiOutput);
+            // Two dots before the access and the third after it, which is where the CPU's access falls - see Moon_Native.md §3.10.
+            Ppu.Step(DotsPerCpuCycle - 1);
 
             Apu.Step(1);
             if (_mapperClocksOnCpu) Cart.Mapper.OnCpuCycle();
@@ -84,6 +84,13 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
             }
 
             Cpu?.SetIrqLine(Apu.IrqAsserted || Cart.Mapper.IrqPending);
+        }
+
+        // The CPU samples /NMI at the cycle's end, after this cycle's $2002 read or $2000 write - see Moon_Native.md §3.10.
+        public void EndCycle()
+        {
+            Ppu.Step(1);
+            Cpu?.SetNmiLine(Ppu.NmiOutput);
         }
 
         public byte Read(ushort address)

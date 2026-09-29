@@ -1,3 +1,5 @@
+using EmuSen.Common;
+
 namespace EmuSen.Cores.Nintendo.Moon.Video
 {
     // The dot-by-dot clock. Modelled on Mesen's NesPpu::Exec - see Moon_PPU.md §1.
@@ -14,6 +16,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
 
         // Set for the one Step that crosses into a new frame, and cleared by the core that reads it.
         public bool FrameComplete;
+
+        // Decided at dot 338 and spent at 339; not state, as no state falls between them.
+        [SkipInState] private bool _skipLastDot;
 
         public void Step(int dots)
         {
@@ -105,8 +110,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
                 RenderV = V;
             }
 
-            // With rendering on, an odd frame drops the last dot of the pre-render line.
-            else if (Cycle == 339 && RenderingEnabled && (FrameCount & 1) != 0) Cycle = LastDot;
+            // An odd frame drops the pre-render line's last dot if rendering is on at dot 338 - see Moon_Native.md §3.10.
+            else if (Cycle == 338) _skipLastDot = RenderingEnabled && (FrameCount & 1) != 0;
+            else if (Cycle == 339 && _skipLastDot) Cycle = LastDot;
         }
 
         // The addresses hardware would put on the bus, which is what a board watching A12 sees.
@@ -121,6 +127,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
             else if (Cycle >= 257 && Cycle <= 320)
             {
                 SpriteFetch();
+
+                // OAMADDR is held at 0 through the sprite fetches, so a DMA after a frame starts from slot 0 - see Moon_Native.md §3.10.
+                OamAddress = 0;
             }
             else if (Cycle == 337 || Cycle == 339)
             {

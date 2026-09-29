@@ -80,7 +80,9 @@ impl Ppu {
         } else if self.cycle >= 280 && self.cycle <= 304 && self.rendering_enabled() {
             self.copy_vertical();
             self.render_v = self.v;
-        } else if self.cycle == 339 && self.rendering_enabled() && (self.frame_count & 1) != 0 {
+        } else if self.cycle == 338 {
+            *self.skip_last_dot = self.rendering_enabled() && (self.frame_count & 1) != 0;
+        } else if self.cycle == 339 && *self.skip_last_dot {
             self.cycle = LAST_DOT;
         }
     }
@@ -96,6 +98,7 @@ impl Ppu {
             self.background_fetch(board);
         } else if (257..=320).contains(&c) {
             self.sprite_fetch(board);
+            self.oam_address = 0;
         } else if c == 337 || c == 339 {
             self.set_bus_address(0x2000 | (self.v & 0x0FFF), board);
         }

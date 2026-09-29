@@ -64,11 +64,10 @@ impl MemoryBus {
         }
     }
 
-    /// One CPU cycle of everything clocked from the CPU; returns the NMI level after the PPU and the IRQ level at the end, in C#'s order.
+    /// One CPU cycle's first two dots and everything else clocked from the CPU; returns the IRQ level, in C#'s order.
     #[inline(always)]
-    pub fn tick(&mut self) -> (bool, bool) {
-        self.ppu.step(DOTS_PER_CPU_CYCLE, &mut self.board);
-        let nmi = self.ppu.nmi_output();
+    pub fn tick(&mut self) -> bool {
+        self.ppu.step(DOTS_PER_CPU_CYCLE - 1, &mut self.board);
         self.apu.step(1);
         if *self.mapper_clocks_on_cpu {
             self.board.mapper.on_cpu_cycle();
@@ -78,7 +77,14 @@ impl MemoryBus {
             self.controller1.set_strobe(*self.strobe_out);
             self.controller2.set_strobe(*self.strobe_out);
         }
-        (nmi, self.irq_level())
+        self.irq_level()
+    }
+
+    /// `EndCycle`: the cycle's third dot after its access; returns /NMI's level.
+    #[inline(always)]
+    pub fn end_cycle(&mut self) -> bool {
+        self.ppu.step(1, &mut self.board);
+        self.ppu.nmi_output()
     }
 
     #[inline(always)]

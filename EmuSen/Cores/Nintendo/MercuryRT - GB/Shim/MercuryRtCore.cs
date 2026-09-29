@@ -1,47 +1,41 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using EmuSen.Cores.Native;
 using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.Mercury.Debug;
 using EmuSen.Cores.Nintendo.Mercury.Memory;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Galaxia.Input;
-using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Cores.Nintendo.MercuryRT
 {
     // MercuryRT behind the Game Boy's ICore: the machine in Rust, the registries, saves and cheats' rules in C# - see Mercury_Native.md §8.3.
-    public sealed partial class MercuryRtCore : ICore, ICheatRegistryHost, IStateFormat, IFrameBufferPool, ICoreSettings, IDisposable
+    public sealed partial class MercuryRtCore : NativeRtCore<MercuryMachine>, ICore, ICheatRegistryHost, IStateFormat, IFrameBufferPool, ICoreSettings, IDisposable
     {
         private static readonly PadButton[] MaskOrder = { PadButton.Right, PadButton.Left, PadButton.Up, PadButton.Down, PadButton.A, PadButton.B, PadButton.Select, PadButton.Start };
 
-        private MercuryMachine? _machine;
-        private Cartridge? _header;
-        private byte[] _rom = Array.Empty<byte>();
-        private readonly byte[] _frame = new byte[MercuryMachine.FrameBytes];
-        private readonly FrameBufferLending _lending = new();
         private uint _buttons;
-        private bool _skipRendering;
-        private int _patchVersion = -1;
-
-        // The battery save's file, the host's and in no state - see Mercury_Native.md §9.3.
-        private BatterySave _battery = BatterySave.None;
 
         // The C# machine the debugger reads, refreshed from MercuryRT's state; its registries are this core's - see Mercury_Native.md §8.3.
         public MercuryCore Mirror { get; } = new();
 
+        protected override ICore MirrorCore => Mirror;
+        protected override bool MirrorLoaded => Mirror.Bus is not null;
+        protected override CheatRegistry MirrorCheats { get => Mirror.Cheats; set => Mirror.Cheats = value; }
+        protected override IReadOnlyList<string> SpaceNames => MercuryMachine.SpaceNames;
+        protected override int PatchLow => 0;
+        protected override int PatchHigh => 0x7FFF;
+
         public static bool Available => MercuryMachine.Complete;
 
         // The console running, as MercuryCore names it; a state from the other console changes it - see Mercury_Model.md §5.
-        public string CoreName => _machine?.CgbHardware == true ? "GBC" : "GB";
-        public int ScreenWidth => MercuryCore.ScreenWidthPixels;
-        public int ScreenHeight => MercuryCore.ScreenHeightPixels;
-        public double FrameRateHz => MercuryCore.CpuClockHz / (double)MercuryCore.CyclesPerFrame;
-        public bool IsRomLoaded => _machine != null;
-        public long TotalFrames => _machine?.TotalFrames ?? 0;
-        public int AudioSampleRate => 44100;
-        public IReadOnlyList<PadButton> SupportedButtons => MercuryCore.PadButtons;
-        int IStateFormat.StateVersion => MercuryCore.StateVersion;
+        public override string CoreName => _machine?.CgbHardware == true ? "GBC" : "GB";
+        public override int ScreenWidth => MercuryCore.ScreenWidthPixels;
+        public override int ScreenHeight => MercuryCore.ScreenHeightPixels;
+        public override double FrameRateHz => MercuryCore.CpuClockHz / (double)MercuryCore.CyclesPerFrame;
+        public override IReadOnlyList<PadButton> SupportedButtons => MercuryCore.PadButtons;
+        public override int StateVersion => MercuryCore.StateVersion;
 
         private GbModel _model;
         private string? _romPath;
@@ -69,38 +63,18 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         }
 
         public WatchRegistry Watches => Mirror.Watches;
-        public FrameLogRegistry FrameLog => Mirror.FrameLog;
-        public BreakpointRegistry Breakpoints => Mirror.Breakpoints;
+        public override FrameLogRegistry FrameLog => Mirror.FrameLog;
+        public override BreakpointRegistry Breakpoints => Mirror.Breakpoints;
         public CoverageRegistry Coverage => Mirror.Coverage;
         public LabelRegistry Labels => Mirror.Labels;
         public CallStackRegistry CallStack => Mirror.CallStack;
 
-        public MercuryRtCore() => CallStack.FrameNumberProvider = () => _eventFrame;
-
-        public CheatRegistry Cheats
-        {
-            get => Mirror.Cheats;
-            set
-            {
-                Mirror.Cheats = value;
-                _patchVersion = -1;
-            }
-        }
-
-        public bool SkipRendering
-        {
-            get => _skipRendering;
-            set
-            {
-                _skipRendering = value;
-                _machine?.SetOptions(value);
-            }
-        }
+        public MercuryRtCore() : base(MercuryMachine.FrameBytes) => CallStack.FrameNumberProvider = () => _eventFrame;
 
         public MercuryMachine Machine => _machine ?? throw new InvalidOperationException("No ROM is loaded.");
 
         // MercuryCore.LoadRom: the header parsed by the C# Cartridge so its exceptions are C#'s own, the battery save read as C# reads it.
-        public void LoadRom(string path)
+        public override void LoadRom(string path)
         {
             byte[] image = File.ReadAllBytes(path);
             Cartridge header = Cartridge.FromImage(image);
@@ -108,23 +82,15 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             byte[]? saved = battery.Read();
 
             var machine = new MercuryMachine(image, _model);
-            if (saved is not null) machine.WriteSpace(2, 0, saved.AsSpan(0, Math.Min(saved.Length, header.Ram.Length)));
-            machine.SetOptions(_skipRendering);
-
-            _machine?.Dispose();
-            _machine = machine;
-            _header = header;
-            _battery = battery;
+            Adopt(machine, battery, saved, header.Ram.Length);
             _romPath = path;
-            _rom = image;
-            _patchVersion = -1;
             machine.SetButtons(_buttons);
             Mirror.LoadRom(path);
             Mirror.Model = _model;
             IsHaltedAtBreakpoint = false;
         }
 
-        public void SetButton(int port, PadButton button, bool pressed)
+        public override void SetButton(int port, PadButton button, bool pressed)
         {
             if (port != 0) return;
             int bit = Array.IndexOf(MaskOrder, button);
@@ -134,11 +100,10 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         }
 
         // MercuryCore.RunFrame and EndFrame; the observed loop when anything is armed, and a halt returns before the frame's end - see Mercury_Native.md §8.5.
-        public void RunFrame()
+        public override void RunFrame()
         {
             if (_machine is null) throw new InvalidOperationException("RunFrame() called before LoadRom().");
-            RefreshRomPatches();
-            SyncAudioLimit();
+            BeforeFrame();
             bool resuming = IsHaltedAtBreakpoint;
             IsHaltedAtBreakpoint = false;
             if (Observed)
@@ -149,172 +114,38 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             {
                 _machine.RunFrame();
             }
-            FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
-            ApplyCheats();
-            Breakpoints.NoteFrame(TotalFrames);
-            if (BatterySave.IsFlushFrame(TotalFrames)) SaveSram();
+            EndFrame();
         }
 
-        public void ApplyCheats() => Cheats.ApplyAll(ReadSpace, WriteSpace);
-
-        // AudioSettings.AudioBufferMaxSamples, sent when it differs from what this machine was last told.
-        private void SyncAudioLimit()
+        // MercuryCore.LoadState's two refusals with its messages.
+        protected override void CheckState(byte[] state)
         {
-            int limit = EmuSen.Audio.AudioSettings.AudioBufferMaxSamples;
-            if (_machine is null || (_audioLimitSent == limit && ReferenceEquals(_audioLimitMachine, _machine))) return;
-            _machine.SetAudioLimit(limit);
-            _audioLimitSent = limit;
-            _audioLimitMachine = _machine;
-        }
-
-        private int _audioLimitSent = -1;
-        private object? _audioLimitMachine;
-
-        // A copy in an array no one else holds, as MarsRT's - see EmuSen_Multicore.md §16.
-        public byte[] GetFrameBufferRgba()
-        {
-            _machine?.CopyFrame(_frame);
-            byte[] buffer = _lending.Lend(_frame.Length);
-            _frame.AsSpan().CopyTo(buffer);
-            return buffer;
-        }
-
-        public void ReturnFrameBuffer(byte[] buffer) => _lending.Return(buffer);
-
-        // What the lending has done, for the tests.
-        public FrameBufferLending FrameBuffers => _lending;
-
-        public short[] DequeueAudioSamples(int maxFrames) => _machine?.DrainAudio(maxFrames) ?? Array.Empty<short>();
-
-        // Cartridge.SaveSram: the path this session chose at load, which no state can change.
-        public void SaveSram()
-        {
-            if (_machine is null || _header is null || _battery.Path is null) return;
-            var ram = new byte[_header.Ram.Length];
-            _machine.ReadSpace(2, 0, ram);
-            _battery.Write(ram);
-        }
-
-        public void SaveState(string path)
-        {
-            using var stream = File.Create(path);
-            SaveState(stream);
-        }
-
-        public void LoadState(string path)
-        {
-            using var stream = File.OpenRead(path);
-            LoadState(stream);
-        }
-
-        public void SaveState(Stream stream)
-        {
-            if (_machine is null) throw new InvalidOperationException("SaveState() called before LoadRom().");
-            stream.Write(_machine.Save());
-        }
-
-        // MercuryCore.LoadState's two refusals with its messages; a truncated state is refused whole, where C# stops part-way.
-        public void LoadState(Stream stream)
-        {
-            if (_machine is null) throw new InvalidOperationException("LoadState() called before LoadRom().");
-            using var copy = new MemoryStream();
-            stream.CopyTo(copy);
-            byte[] state = copy.ToArray();
             if (state.Length < 4) throw new EndOfStreamException("Unable to read beyond the end of the stream.");
             if (BitConverter.ToUInt32(state, 0) != MercuryCore.StateMagic) throw new InvalidDataException("Not a Mercury save state.");
             if (state.Length < 8) throw new EndOfStreamException("Unable to read beyond the end of the stream.");
             int version = BitConverter.ToInt32(state, 4);
             if (version is < MercuryCore.OldestReadableVersion or > MercuryCore.StateVersion) throw new InvalidDataException($"Save state version {version} is not one this build reads ({MercuryCore.OldestReadableVersion} to {MercuryCore.StateVersion}).");
-            _machine.Load(state);
         }
 
-        public byte ReadSpace(string spaceName, int address)
+        // A store to the bus while a debugger listens goes through the observed path, as C#'s bus reports it.
+        public override void WriteSpace(string spaceName, int address, byte value)
         {
-            int space = Array.IndexOf(MercuryMachine.SpaceNames, spaceName);
-            if (_machine is null || space < 0) return 0;
-            Span<byte> one = stackalloc byte[1];
-            _machine.ReadSpace(space, address, one);
-            return one[0];
-        }
-
-        public void WriteSpace(string spaceName, int address, byte value)
-        {
-            int space = Array.IndexOf(MercuryMachine.SpaceNames, spaceName);
-            if (_machine is null || space < 0) return;
-            if (space == CpuBusSpace && Listening)
+            if (_machine is not null && SpaceNumber(spaceName) == CpuBusSpace && Listening)
             {
                 WriteObserved(_machine.Handle, address, value);
                 return;
             }
-            _machine.WriteSpace(space, address, stackalloc byte[] { value });
-        }
-
-        public int SpaceSize(string spaceName)
-        {
-            int space = Array.IndexOf(MercuryMachine.SpaceNames, spaceName);
-            return _machine is null || space < 0 ? 0 : _machine.SpaceSize(space);
-        }
-
-        private long ReadForFrameLog(string spaceName, int address, int width)
-        {
-            long value = 0;
-            for (int i = 0; i < width; i++) value |= (long)ReadSpace(spaceName, address + i) << (8 * i);
-            return value;
+            base.WriteSpace(spaceName, address, value);
         }
 
         // The debugger's view: the mirror loaded from MercuryRT's state, its reads and writes sent to MercuryRT, its halts this core's - see Mercury_Native.md §8.5.
         public MercuryRtDebugTarget CreateDebugTarget() => new(this);
 
-        public void SyncMirror()
+        protected override uint MuteMask()
         {
-            if (_machine is null || Mirror.Bus is null) return;
-            Mirror.LoadState(new MemoryStream(_machine.Save()));
-        }
-
-        public void SyncMutes()
-        {
-            if (_machine is null || Mirror.Bus is null) return;
             uint mask = 0;
-            for (int i = 0; i < 4; i++) if (Mirror.Bus.Apu.IsChannelMuted(i)) mask |= 1u << i;
-            _machine.SetMutes(mask);
-        }
-
-        // CheatRegistry.TryPatchRom flattened to a table per patched address, rebuilt when the registry changes - see Mercury_Native.md §8.3.
-        private void RefreshRomPatches()
-        {
-            CheatRegistry cheats = Cheats;
-            int version = cheats.Version;
-            if (version == _patchVersion || _machine is null) return;
-            _patchVersion = version;
-
-            var addresses = new List<ushort>();
-            var tables = new List<ushort>();
-            if (cheats.EnabledRomPatches > 0)
-            {
-                var probes = new HashSet<byte> { 0 };
-                foreach (var cheat in cheats.GetCheats())
-                    if (cheat.Kind == DianaOS.DianaOS.Var.CheatKind.RomPatch && cheat.Compare is byte compare) { probes.Add(compare); probes.Add(unchecked((byte)(compare + 1))); }
-
-                for (int address = 0; address < 0x8000; address++)
-                {
-                    bool touched = false;
-                    foreach (byte probe in probes)
-                        if (cheats.TryPatchRom((uint)address, probe, out _)) { touched = true; break; }
-                    if (!touched) continue;
-
-                    addresses.Add((ushort)address);
-                    for (int value = 0; value < 256; value++)
-                        tables.Add(cheats.TryPatchRom((uint)address, (byte)value, out byte patched) ? (ushort)(0x100 | patched) : (ushort)0);
-                }
-            }
-            _machine.SetRomPatches(addresses.ToArray(), tables.ToArray());
-        }
-
-        public void Dispose()
-        {
-            _machine?.Dispose();
-            _machine = null;
-            _lending.Close();
+            for (int i = 0; i < 4; i++) if (Mirror.Bus!.Apu.IsChannelMuted(i)) mask |= 1u << i;
+            return mask;
         }
     }
 }

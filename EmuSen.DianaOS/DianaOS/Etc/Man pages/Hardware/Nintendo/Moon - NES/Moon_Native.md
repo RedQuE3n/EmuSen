@@ -891,6 +891,132 @@ So it is not this change, and it is recorded as a finding to investigate apart.
 4. **C1, the NMI hijack,** after the PPU's NMI timing (§3.8.3).
 5. **Reuse:** nothing here is shared with another core. Mercury's DMA is its own, and MarsRT is untouched.
 
+### 3.10 Stage 2c: the PPU and the NMI (2026-09-29)
+
+*The PPU's audit by §3.7's method. The prediction on record, from §3.8.3, was that C1, the NMI hijack, waited on the
+NMI's timing. It held: with the NMI sampled where the RTL samples it, C1's four witnesses pass.* The decoding of
+AccuracyCoin's PPU failures, read from its source before anything was changed, found two roots behind nearly every
+code 1, and both were confirmed by fixing them:
+
+- **OAMADDR.** Hardware holds OAMADDR at 0 through the sprite fetches of every rendered line. Moon never did, so a test
+  that left it nonzero (`$2003` in the PPU open-bus test) shifted every later OAM DMA, and sprite 0 became `$FF`.
+  That one rule made the Sprite 0 Hit test fail, and with it every test that first checks a hit.
+- **Where the CPU's access and the NMI's sample fall in a cycle.** Moon clocked all three dots, sampled /NMI, then made
+  the access. So a `$2002` read or a `$2000` write could never affect the NMI of its own cycle, and every blargg NMI
+  table was one dot out.
+
+#### 3.10.1 The referee table
+
+| # | Rule | Moon (C#) before | NES_MiSTer | Weight | Witness | Verdict |
+|---|---|---|---|---|---|---|
+| P1 | OAMADDR is 0 through dots 257–320 of a rendered line | never reset | `oam_addr <= '0` while `cycle < 320` in the sprite fetches (`ppu.sv:802-803`) | real | AccuracyCoin page 19's code 1s | **defect, fixed** |
+| P2 | `$2004` reads `$FF` while secondary OAM clears, dots 1–64 | `Oam[OamAddress]` | during the clear `oam_data <= 8'hFF` (`ppu.sv:691`), which is what `$2004` reads (`oam_bus`, `:526`) | real | Address `$2004` behaviour, code 4 → 6 | **defect, fixed** |
+| P3 | The CPU's access falls after the cycle's second dot, and /NMI is sampled after the third | three dots, /NMI, then the access | NMI is `nmi_occured && vbl_enable` (`ppu.sv:1998`), and the `$2002` read clears it with `set_nmi = entering_vblank & ~clear_nmi` (`:1896-1897`); where the CPU's access falls was fitted to blargg's tables | real, fitted | `05-nmi_timing` … `08-nmi_off_timing`; AccuracyCoin NMI timing, suppression, at vblank's end, disabled at vblank | **defect, fixed** |
+| P4 | The odd frame's skipped dot is decided at dot 338 | rendering tested at 339 | `if (cycle == 338) skip_next <= … is_rendering` (`ppu.sv:328-330`) | real | `10-even_odd_timing`, fail 3 → pass | **defect, fixed** |
+| P5 | `$4015`'s frame-IRQ bit clears at the next get after a read; the IRQ line at once | one flag for both | `FrameInterrupt` cleared on the read, `frame_interrupt_buffer` only on `aclk1` (`apu.sv:808-822`) | real | DMA + `$2002` read (its `SLO $4015,X` sync); frame counter IRQ, code 7 → 13 | **defect, fixed** (an APU rule, needed here) |
+| C1 | An NMI in BRK's or an IRQ's first four cycles takes their vector; the sequence ends without polling | none | `NMI_entered` (`T65.vhd:666-675`, `:780`) | weak | `2-nmi_and_brk`, `3-nmi_and_irq`, AccuracyCoin `$462`/`$463` | **defect, fixed**; the no-poll half was found by the corpus's last rows |
+| P6 | Sprite 0 hits on its pixel's dot | at dot 256, when the line is composed | per-pixel shifters (`ppu.sv:1673-1681`) | real | `$2002` flag timing; Rendering Flag Behaviour | **candidate**; a look-ahead was built and measured, and moved no witness (§3.10.3) |
+| P7 | `$2002`'s sprite flags latch about 1.9 dots after vblank's | one instant for all three | the asm's own account (`AccuracyCoin.asm:1776-1781`) | — | `$2002` flag timing | candidate |
+| P8 | Background and sprite shift registers, serial in, stale shifters, ALE with `$2007` | a scanline renderer: the line composed at dot 256 from `RenderV` | per-dot pipelines (`ppu.sv` BgPainter, SpriteSet) | real | Advanced BG and sprite evaluation, `$2004` and `$2007` stress | **disagree by design**: Moon has no per-dot pipeline; the next PPU work |
+| P9 | Secondary OAM, its overflow flag and misaligned addresses | none: sprites evaluated from slot 0 at dot 256 | `oam_temp`, `oam_secondary_ovr` (`ppu.sv:537`, `:744-758`) | real | Frozen OAM2, Misaligned OAM2, sprites on line 0 | disagree by design, as P8 |
+| P10 | Open-bus decay about 600 ms, per bit | per bit, counted in frames (`Moon_PPU.md` §2.5) | per bit group (`ppu.sv:2003-2060`) | real | `ppu_open_bus` passes | **agree** |
+| P11 | Palette writes while rendering | allowed | blocked (`ppu.sv:1824`, `:1838`) | real | none failing | candidate |
+
+**P3's model, and its calibration.** The PPU now runs two dots before the CPU's access and the third after it
+(`MemoryBus.Tick` and `EndCycle`), and the CPU samples /NMI at the cycle's end. The split is the one number here fitted
+to witnesses: all four of blargg's tables and AccuracyCoin's four NMI tests pass with it, and every one was a dot
+out without it. Moving only the sample to the cycle's end, and keeping three dots before the access, fixed the
+suppression window's direction but left every table one dot late.
+
+#### 3.10.2 What was fixed, and the proofs
+
+**Tests that fail on the unmodified core** (`MoonPpuDefectTests`):
+
+- `Rendering_returns_oamaddr_to_zero` (P1);
+- `A_read_of_2004_while_secondary_oam_clears_is_ff` (P2);
+- `The_nmi_and_vblank_timing_roms_pass`: seven corpus ROMs, from `EMUSEN_MOONRT_CORPUS`, unmodified 7 of 7 failing
+  (P3, P4, C1).
+- P5 has no unit test. Its witnesses are DMA + `$2002` read, which regressed without it, and the frame counter IRQ's
+  code.
+
+**AccuracyCoin: 102 → 113 of 144** (measured 2026-09-29; the table at frame 3,602, the menu at 24).
+
+| Page | Now pass | Moved, still failing |
+|---|---|---|
+| 12 CPU interrupts | NMI overlapping BRK, NMI overlapping IRQ | — |
+| 14 APU | — | frame counter IRQ 7 → 13 |
+| 18 vblank timing | NMI timing, suppression, at vblank's end, disabled at vblank: **7 of 7** | — |
+| 19 sprite evaluation | sprite 0 hit, sprite overflow, misaligned OAM DMA | arbitrary sprite zero 1 → 2, suddenly resize 1 → 5, OAM corruption 1 → 2 |
+| 20 PPU miscellany | `INC $4014` | `$2004` 4 → 6, `$2007` read while rendering 1 → 2 |
+| 21 advanced BG | attributes as tiles | stale shift registers 1 → 3, ALE + read 1 → 2, hybrid addresses 1 → 2 |
+
+- **What remains of the code-1 cascade:** only tests that need P8's or P9's per-dot pipelines.
+- **The DMC load delay was re-fitted.** P5 made the `SLO $4015,X` sync of DMA + `$2002` read work, which §3.9's value
+  had been fitted around. The delay is now three cycles on a get and two on a put. Three on both also passes; the
+  parity-dependent one is kept for the RTL's pipeline.
+
+**The corpus:** 94 → **104 passed** of 263, with no ROM that passed failing:
+
+- `ppu_vbl_nmi` and its 05, 06, 07, 08 and 10;
+- `cpu_interrupts_v2` and its 2 and 3;
+- `sprdma_and_dmc_dma`.
+
+On both engines (`MoonRtCorpusTests`) the corpus runs identically: 255 ROMs run and 8 refused by both; 363,934
+frames with identical state; 114 verdicts, 104 passed.
+
+#### 3.10.3 Negative results
+
+- **The sprite-0 look-ahead (P6) moved nothing, and was not kept.** At dot 1 of each line, it found sprite 0's first
+  opaque pixel over an opaque background, and set the flag on that pixel's dot. It did not read the board's CHR through
+  its side effects, since MMC2's latch changes on a read.
+  - With it, no AccuracyCoin result improved.
+  - Rendering Flag Behaviour went from code 2 back to 1. That test needs background shift registers that clock with
+    only sprites on (P8), which a look-ahead from `RenderV` cannot give.
+  - It is a candidate for when the per-dot pipeline exists.
+- **The first cause of page 19 was not sprite 0's timing.** The decoding's first hypothesis was that the hit came too
+  late at dot 256. The source showed the test waits 3,000 cycles, so timing could not matter. A stale OAMADDR was the
+  cause.
+- **A fix elsewhere exposed an APU defect.** Moving P3's access point made DMA + `$2002` read fail. The test's
+  `$4015` sync had never worked (P5), and the test had passed by alignment alone. Fixing P5 restored it.
+
+#### 3.10.4 The games
+
+- **State hashes at frame 900 and 3,900:**
+  - Super Mario Bros., Zelda and Punch-Out!! are unchanged from §3.9.3;
+  - Super Mario Bros. 3's frame 3,900 is now `7D10D7B97B83D054`.
+
+  The NMI now arrives up to a dot earlier relative to the CPU. That moved no instruction boundary in the first three,
+  and one in SMB3's run.
+- **Pictures:** before and after PNGs of all four games at both frames are in `~/.cache/emusen/probe/moonrt/stage2c/pictures/`.
+  All eight are pixel-identical. SMB3's changed state did not reach the picture by frame 3,900.
+- **Playability** (§3.9.3's run): the same results as 2b. There was no fault and no JAM, 733.79 stereo samples a frame,
+  and the picture changing throughout. The one exception is again the SMB1 hack's resume state, which the base build
+  also JAMs.
+- **The save state stays version 4.** The new fields are all out of the state, since none holds a value across an
+  instruction boundary that a state would need:
+  - the odd-frame skip decided at dot 338 and spent at 339;
+  - the hijack's `_vectored`;
+  - the readable frame-IRQ bit, which a load sets from the IRQ.
+
+**MoonRT** carries every rule, with the same model and the same fitted values. All of these pass:
+
+- 334 Moon-filtered cases, which include:
+  - the machine's per-instruction random programs, interrupts and DMA;
+  - the real games from boot and from a transferred state;
+  - the state oracles;
+  - AccuracyCoin, result for result;
+- the crate's 6.
+
+**Reuse:** nothing here is shared with another core, and MarsRT is untouched.
+
+#### 3.10.5 What is left
+
+1. **P8 and P9, the per-dot pipelines**, which the rest of pages 19–22 need. The scanline renderer composes a line at
+   dot 256 from `RenderV`, so mid-line effects and stale registers are out of reach. That is a design change, and needs
+   its own step: the renderer feeds the machine (§2.5), and the four games' pictures would change.
+2. P6 and P7 once P8 exists; P11.
+3. From §3.9.4: SH* under RDY, the APU-register conflict's data, and the overlapped and aborted DMA counts.
+
 ## 4. Stages
 
 MercuryRT's stages 1–5 were done in one day; Moon's machine is about 5,200 lines of C#: the folder's 6,609, less the

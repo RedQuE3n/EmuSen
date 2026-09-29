@@ -250,9 +250,18 @@ Klax, Shinobi and Skull & Crossbones all match the reference exactly at frames 3
 
 ### 5.1 OAM DMA
 
-Writing a page number to `$4014` copies 256 bytes from `$XX00` into OAM starting at the current `OAMADDR`. The copy is performed immediately through the normal decode — so a page pointed at registers reads what those registers would give — and the cost is banked in `PendingDmaCycles` for the core's timing loop to subtract.
+*Retired 2026-09-29. The model below was replaced in stage 2b of the MoonRT port; `Moon_Native.md` §3.9 is the current
+description, and §3.10 adds that rendering holds OAMADDR at 0.* What it said, kept as the record of what the core did
+until then:
 
-513 cycles is charged flat. Real hardware charges 514 when the transfer starts on an odd CPU cycle; that one-cycle alignment detail is not modelled.
+~~Writing a page number to `$4014` copies 256 bytes from `$XX00` into OAM starting at the current `OAMADDR`. The copy is performed immediately through the normal decode — so a page pointed at registers reads what those registers would give — and the cost is banked in `PendingDmaCycles` for the core's timing loop to subtract.~~
+
+~~513 cycles is charged flat. Real hardware charges 514 when the transfer starts on an odd CPU cycle; that one-cycle alignment detail is not modelled.~~
+
+**What replaced it.** The write now only records the page. The copy runs when the CPU next reads, as a halt of the CPU:
+513 or 514 cycles, with the get/put alignment, and every one clocks the PPU and APU (§6.1's D1 went with it). The
+copy still reads through the normal decode, so the first sentence's point about registers holds. The second
+paragraph's "not modelled" is no longer true. `PendingDmaCycles` is kept in the state but is always 0.
 
 ### 5.2 Controllers
 

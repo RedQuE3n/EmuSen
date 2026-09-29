@@ -24,8 +24,8 @@ namespace EmuSen.WiseMan.Mistress
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(ActiveCheatsWindowTests).GetTypeInfo().Assembly);
 
-        private static ICheatCodeCodec Poke() => new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec();
-        private static ICheatCodeCodec Patch() => new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec();
+        private static ICheatCodeCodec Poke() => EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.ActionReplay();
+        private static ICheatCodeCodec Patch() => EmuSen.Cores.Nintendo.Venus.Cheats.VenusCheatCodecs.GameGenie();
 
         private static ActiveCheatsWindow Open(CheatRegistry registry)
         {
@@ -203,8 +203,8 @@ namespace EmuSen.WiseMan.Mistress
         private static ActiveCheatsWindow OpenNes(CheatRegistry registry)
         {
             var window = new ActiveCheatsWindow(registry,
-                new EmuSen.Cores.Nintendo.Moon.Cheats.NesRawCheatCodec(),
-                new EmuSen.Cores.Nintendo.Moon.Cheats.NesGameGenieCheatCodec(), console: "NES");
+                EmuSen.Cores.Nintendo.Moon.Cheats.MoonCheatCodecs.Raw(),
+                EmuSen.Cores.Nintendo.Moon.Cheats.MoonCheatCodecs.GameGenie(), console: "NES");
             window.Show();
             return window;
         }
@@ -260,7 +260,7 @@ namespace EmuSen.WiseMan.Mistress
         private static ActiveCheatsWindow OpenN64(CheatRegistry registry)
         {
             var window = new ActiveCheatsWindow(registry,
-                new EmuSen.Cores.Nintendo.Mars.Cheats.N64GameSharkCheatCodec(), null, console: "N64");
+                EmuSen.Cores.Nintendo.Mars.Cheats.MarsCheatCodecs.GameShark(), null, console: "N64");
             window.Show();
             return window;
         }

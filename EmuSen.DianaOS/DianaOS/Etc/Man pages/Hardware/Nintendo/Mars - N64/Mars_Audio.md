@@ -97,6 +97,10 @@ whole pairs only, destructive. **Nothing draining must not grow memory without b
 oldest pair is dropped for each new one, as Mercury's and Venus's queues do (`EmuSen_Audio_Sync.md` §4). The game probe
 drains as it runs, since it has no frontend.
 
+*Revised 2026-09-28: the limit is `AudioSettings.AudioBufferMaxSamples`, 128,000 by default, through the queue every C#
+core now shares (`EmuSen_Settings_Reference.md` §4.85.2). MarsRT's Rust queue keeps the constant until its move to the
+common native interface.*
+
 **`AudioSampleRate` is the rate the game set the DAC to**, rounded to the nearest hertz: 32,006Hz for Wave Race 64's
 `1520` on an NTSC clock, 31,995Hz for Super Mario 64's `1551` on a PAL one — both libultra's 32kHz, as near as the DAC can
 divide. Before a game sets a rate it is 44,100, which a frontend only uses to open its device.

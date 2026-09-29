@@ -12,52 +12,13 @@ using EmuSen.DianaOS.DianaOS.Var;
 
 namespace EmuSen.Cores.Nintendo.MarsRT
 {
-    // One of MarsRT's memories by Mars's name, read live through the library so a reload is followed.
-    internal sealed class MarsRtMemorySpace : IDebugMemorySpace
-    {
-        private readonly MarsRtCore _core;
-        private readonly MarsRtSpace _space;
-
-        public MarsRtMemorySpace(MarsRtCore core, string name, MarsRtSpace space, bool isWritable)
-        {
-            _core = core;
-            Name = name;
-            _space = space;
-            IsWritable = isWritable;
-        }
-
-        public string Name { get; }
-        public bool IsWritable { get; }
-        public bool HasSideEffects => false;
-        public int Size => (int)Math.Min(int.MaxValue, _core.SpaceSize(_space));
-
-        public byte Read(int address) => _core.Peek(_space, Wrap(address));
-
-        public void Write(int address, byte value)
-        {
-            if (IsWritable) _core.Poke(_space, Wrap(address), value);
-        }
-
-        // An array wraps, as MarsDebugSpaces wraps it; the processor's view is every address.
-        private uint Wrap(int address) => _space == MarsRtSpace.Cpu || Size == 0 ? (uint)address : (uint)(((address % Size) + Size) % Size);
-    }
-
     // The debugger's view of MarsRT: Mars's memories, both processors and the core's registries, the hooks in the Rust loop - see Mars_Native.md §6.5.
     public sealed class MarsRtDebugTarget : IDebugTarget, IWriteObserver
     {
-        private static readonly string[] RegisterNames =
-        {
-            "zero", "at", "v0", "v1", "a0", "a1", "a2", "a3",
-            "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7",
-            "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7",
-            "t8", "t9", "k0", "k1", "gp", "sp", "s8", "ra",
-        };
+        private static readonly string[] RegisterNames = MarsDebugTarget.RegisterNames;
 
-        private static readonly string[] VideoRegisterNames =
-        {
-            "CONTROL", "ORIGIN", "WIDTH", "V_INTR", "V_CURRENT", "BURST", "V_SYNC",
-            "H_SYNC", "LEAP", "H_START", "V_START", "V_BURST", "X_SCALE", "Y_SCALE",
-        };
+        // Mars's names in Mars's order, the order MarsRT's register export returns them.
+        private static readonly string[] VideoRegisterNames = Array.ConvertAll(MarsDebugTarget.VideoRegisterNames, r => r.Name);
 
         private readonly MarsRtCore _core;
         private readonly List<IDebugMemorySpace> _spaces = new();
@@ -74,17 +35,22 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private readonly PollingProvider<IReadOnlyList<DebugAudioChannelInfo>> _audioChannels = new(() => Array.Empty<DebugAudioChannelInfo>(), Array.Empty<DebugAudioChannelInfo>());
         private readonly PollingProvider<IReadOnlyList<DebugLoadInfo>> _hardwareLoad = new(() => Array.Empty<DebugLoadInfo>(), Array.Empty<DebugLoadInfo>());
 
+        // One of MarsRT's memories by Mars's name, sized live through the library so a reload is followed; the processor's view does not wrap.
+        private DelegateDebugMemorySpace Space(string name, MarsRtSpace space, bool isWritable) =>
+            new(name, () => (int)Math.Min(int.MaxValue, _core.SpaceSize(space)), a => _core.Peek(space, (uint)a),
+                isWritable ? (a, v) => _core.Poke(space, (uint)a, v) : null, wrap: space != MarsRtSpace.Cpu);
+
         public MarsRtDebugTarget(MarsRtCore core, CheatRegistry? cheats = null)
         {
             _core = core;
             if (cheats is not null) _core.Cheats = cheats;
 
-            _spaces.Add(new MarsRtMemorySpace(core, MarsDebugSpaces.Rdram, MarsRtSpace.Rdram, true));
-            _spaces.Add(new MarsRtMemorySpace(core, MarsDebugSpaces.Dmem, MarsRtSpace.Dmem, true));
-            _spaces.Add(new MarsRtMemorySpace(core, MarsDebugSpaces.Imem, MarsRtSpace.Imem, true));
-            _spaces.Add(new MarsRtMemorySpace(core, MarsDebugSpaces.PifRam, MarsRtSpace.PifRam, true));
-            _spaces.Add(new MarsRtMemorySpace(core, MarsDebugSpaces.Rom, MarsRtSpace.Rom, false));
-            _spaces.Add(new MarsRtMemorySpace(core, MarsDebugSpaces.Cpu, MarsRtSpace.Cpu, true));
+            _spaces.Add(Space(MarsDebugSpaces.Rdram, MarsRtSpace.Rdram, true));
+            _spaces.Add(Space(MarsDebugSpaces.Dmem, MarsRtSpace.Dmem, true));
+            _spaces.Add(Space(MarsDebugSpaces.Imem, MarsRtSpace.Imem, true));
+            _spaces.Add(Space(MarsDebugSpaces.PifRam, MarsRtSpace.PifRam, true));
+            _spaces.Add(Space(MarsDebugSpaces.Rom, MarsRtSpace.Rom, false));
+            _spaces.Add(Space(MarsDebugSpaces.Cpu, MarsRtSpace.Cpu, true));
 
             _cpuRegisters = new(ReadCpuRegisters, ReadCpuRegisters());
             _videoRegisters = new(ReadVideoRegisters, ReadVideoRegisters());

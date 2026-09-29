@@ -125,6 +125,8 @@ Cartridge types carrying a battery (§4) keep `CARTRAM` across sessions in a `.s
 
 Reads and writes go through `Galaxia`'s `AtomicFile`, so an interrupted autosave cannot truncate a live save (`EmuSen_Galaxia.md` §4). `LoadSram` copies whichever of the file and `Ram` is smaller; a cartridge with no battery or no RAM at all does neither.
 
+*Revised 2026-09-28: the save is in the Saves folder, through the `BatterySave` every core now shares, and a save found beside the ROM is copied there once and left untouched (`EmuSen_Settings_Reference.md` §4.85.6). The paragraphs above describe the build before that.*
+
 ## 10. The serial port — a sink, deliberately not a link
 
 *Added 2026-08-09. Until this landed, `grep -rn "FF01\|FF02"` over the core returned

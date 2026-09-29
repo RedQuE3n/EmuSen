@@ -74,7 +74,7 @@ namespace EmuSen.WiseMan.Cores
             CoreBundle bundle = CoreFactory.Load(path);
             Assert.IsType<MarsCore>(bundle.Core);
             Assert.IsType<MarsDebugTarget>(bundle.DebugTarget);
-            Assert.IsType<N64GameSharkCheatCodec>(bundle.CheatAutoDetectCodec);
+            Assert.Equal(("GameShark", MarsCore.SpaceRdram), (bundle.CheatAutoDetectCodec!.Name, bundle.CheatAutoDetectCodec.SpaceName));
             Assert.Null(bundle.CheatExplicitCodec);
             Assert.True(bundle.Core.IsRomLoaded);
         }
@@ -102,7 +102,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(MarsCore.PadButtons, CoreCatalog.ButtonsFor("N64"));
 
             var codecs = CoreFactory.CheatCodecsFor("N64");
-            Assert.IsType<N64GameSharkCheatCodec>(codecs.AutoDetect);
+            Assert.Equal(("GameShark", MarsCore.SpaceRdram), (codecs.AutoDetect!.Name, codecs.AutoDetect.SpaceName));
             Assert.Null(codecs.Explicit);
         }
 

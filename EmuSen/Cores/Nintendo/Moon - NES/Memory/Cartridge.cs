@@ -48,7 +48,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
         // Stamped by the bus before every mapper write, for boards that reject back-to-back ones - see Moon_Memory.md §4.4.
         public long CpuCycle;
 
-        [SkipInState] private string? _savePath;
+        [SkipInState] private EmuSen.Cores.BatterySave _battery = EmuSen.Cores.BatterySave.None;
 
         public int PrgBanks => PrgRom.Length / PrgBankSize;
         public int ChrBanks => Chr.Length / ChrBankSize;
@@ -185,22 +185,13 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
                 $"iNES mapper {cart.MapperNumber} is not implemented - see Moon_Memory.md §4 for what is."),
         };
 
-        // --nobattery leaves _savePath null, which also disables SaveSram - see Moon_Memory.md §6.
+        // In the Saves folder, copied there once from beside the ROM; --nobattery reads and writes nothing - see EmuSen_Settings_Reference.md §4.85.6.
         private void LoadSram()
         {
-            if (!HasBattery || EmuSen.Cores.CoreOptions.BatteryRamDisabled || string.IsNullOrEmpty(RomPath)) return;
-
-            // Still beside the ROM this pass; relocation is its own change - see EmuSen_Galaxia.md §6.
-            _savePath = Path.ChangeExtension(RomPath, SaveLibrary.SramExtension);
-            if (AtomicFile.TryRead(_savePath) is not { } saved) return;
-
-            Array.Copy(saved, PrgRam, Math.Min(saved.Length, PrgRam.Length));
+            _battery = EmuSen.Cores.BatterySave.Open(RomPath, EmuSen.Cores.BatterySave.Nes, hasRam: HasBattery && PrgRam.Length > 0);
+            _battery.ReadInto(PrgRam);
         }
 
-        public void SaveSram()
-        {
-            if (!HasBattery || _savePath is null) return;
-            AtomicFile.Write(_savePath, PrgRam);
-        }
+        public void SaveSram() => _battery.Write(PrgRam);
     }
 }

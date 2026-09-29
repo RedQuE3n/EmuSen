@@ -22,7 +22,6 @@ namespace EmuSen.Cores.Nintendo.Moon
         public const int DotsPerScanline = 341;
         public const int MasterClocksPerScanline = DotsPerScanline * MasterClocksPerDot;
 
-        private const int SaveEveryNFrames = 300;
 
         // "MOON" little-endian, then the format version - see EmuSen_Save_States.md §3.
         public const uint StateMagic = 0x4E4F4F4D;

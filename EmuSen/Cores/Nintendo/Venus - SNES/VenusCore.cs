@@ -36,12 +36,11 @@ namespace EmuSen.Cores.Nintendo.Venus
 
         // The SNES's two independent crystals - see Venus_CPU.md §8.5b.
         private const int ApuClockHz = 1024000;
-        private const int SaveEveryNFrames = 300; // ~5 seconds at 60fps
 
         // "SNES" little-endian, then the format version - see EmuSen_Save_States.md §3.
-        private const uint StateMagic = 0x53454E53;
+        public const uint StateMagic = 0x53454E53;
         // Each version appends a chip's state, only for a cart carrying it - see EmuSen_Save_States.md §3.
-        private const int StateVersion = 3;
+        public const int StateVersion = 3;
         int global::EmuSen.Cores.IStateFormat.StateVersion => StateVersion;
 
         private readonly bool _headless;
@@ -381,14 +380,7 @@ namespace EmuSen.Cores.Nintendo.Venus
         {
             if (Spc700 is null) return Array.Empty<short>();
 
-            var buffer = Spc700.Dsp.AudioBuffer;
-            int framesAvailable = buffer.Count / 2;
-            int framesToSend = Math.Min(framesAvailable, maxFrames);
-            if (framesToSend == 0) return Array.Empty<short>();
-
-            var data = new short[framesToSend * 2];
-            for (int i = 0; i < data.Length; i++) data[i] = buffer.Dequeue();
-            return data;
+            return Spc700.Dsp.AudioBuffer.Drain(maxFrames);
         }
 
         // Everything but the renderer, which is re-derivable from PPU state - see EmuSen_Save_States.md.

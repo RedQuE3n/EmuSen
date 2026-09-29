@@ -279,3 +279,5 @@ Boards with a battery (`HasBattery`, §4) keep PRG RAM across sessions in a `.sr
 What did change: both directions go through `Galaxia`'s `AtomicFile`, so an interrupted autosave leaves the previous save whole instead of truncated (`EmuSen_Galaxia.md` §4). `LoadSram` copies whichever of the file and PRG RAM is smaller, tolerating a size mismatch rather than refusing to boot.
 
 `CoreOptions.BatteryRamDisabled` (Pharaoh's `--nobattery`) leaves `_savePath` null, which disables the write as well as the read — see `EmuSen_Multicore.md` §6.
+
+*Revised 2026-09-28: the save is in the Saves folder, through the `BatterySave` every core now shares, and a save found beside the ROM is copied there once and left untouched (`EmuSen_Settings_Reference.md` §4.85.6). The paragraphs above describe the build before that.*

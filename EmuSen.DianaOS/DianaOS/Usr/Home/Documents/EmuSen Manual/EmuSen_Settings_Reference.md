@@ -6478,3 +6478,474 @@ every measurement, and the way out if a profile ever misbehaves.
 It is due after a toolchain update, and after a change to the hot paths §6.17.6 lists; otherwise a stale profile keeps
 most of its gain. A Mac trains its own with the same script (§6.17.9); the one trained on 2026-09-28 was 2 to 9 per
 cent slower on every game measured, and was not kept.
+
+### 4.85 One copy of each piece of core plumbing, and the drift the copies had (2026-09-28)
+
+*Decided 2026-09-28: a cleanup pass across the cores. EmuSen is meant to be a framework of frontends over
+interchangeable cores, so a service two cores need is written once; where copies had already drifted apart, the drift is
+a defect, proved by a test that fails on the build before the fix. The shared pieces are built as the first increment of
+`EmuSen_NativeCores.md` §4, with its names and shapes, so that the later move onto the common native interface replaces
+only the calls into the libraries. Base: `moon-rust` at `d3de4c93`. Everything measured here was measured on 2026-09-28
+on the desktop.*
+
+#### 4.85.1 `runto frame` on the NES
+
+**The defect.** Every core but the NES's tells its breakpoint registry when a frame ends, and `runto frame <n>` is
+nothing more than that notice (`BreakpointRegistry.NoteFrame`, then a halt at the next instruction boundary). Mars
+(`MarsCore.cs`), Mercury (`MercuryCore.cs`), Venus (through `SnesDebugTarget`'s frame observer), and the MarsRT and
+MercuryRT shims all call it. Moon's `EndFrame` (`MoonCore.Schedule.cs`) and MoonRT's `RunFrame` (`MoonRtCore.cs`) did
+not, so on either NES engine `runto frame` armed and then never fired. The two copies of the frame end had drifted from
+the other five.
+
+**The fix.** One line in each, in Mercury's position: after the frame log and the cheats, before the periodic battery
+save. Nothing else in either frame end moved, so what the frame log records, and when, is unchanged.
+
+**The proof.** `NesRunToFrameTests` runs a `JMP $8000` loop. On Moon, `runto frame 2` must leave the registry pending
+after the second frame and halt at the start of the third, with the reason `frame 2 reached`. On MoonRT, the registry
+must be quiet after one frame and pending after two. With the line removed from either core, which is the build before
+the fix, that core's test fails; with the notice sent a frame early, it fails too (§4.85.9's table).
+
+**What it does not cover.** MoonRT has no observed loop until its stage 5 (`Moon_Native.md` §4), so on MoonRT the
+registry now knows the frame was reached but nothing halts the machine; the halt arrives with the debugger bridge. What
+MoonRT's test compares is therefore the registry, not a halt.
+
+#### 4.85.2 The audio buffer setting, on every core
+
+**The defect.** `AudioSettings.AudioBufferMaxSamples` (`audio.json`'s `AudioBufferMaxSamples`, §2) is the most samples
+a core keeps undrained before it drops the oldest. Only Venus read it (`SDsp.cs`). Moon's and Mercury's `Apu`, Mars's
+`AiInterface`, and the queues in MoonRT's and MercuryRT's Rust each held a constant 128,000 of their own. A player who
+changed the setting changed the SNES and nothing else. Five copies of one queue had drifted from the sixth.
+
+**The fix.** One `SampleQueue` (`EmuSen/Common/SampleQueue.cs`) holds a core's undrained pairs, and Moon, Mercury,
+Mars and Venus use it. Its limit is the setting, read at every pair, unless a test gives the queue a number of its own;
+Mercury's model change carries that number to the rebuilt machine, as it carried the old field. The Rust NES and Game
+Boy queues gain a limit field and an export, `moon_machine_set_audio_limit` and `mercury_machine_set_audio_limit`, and
+each shim sends the setting before a frame whenever it differs from what that machine was last told. The new exports
+move MoonRT's interface version from 1 to 2 and MercuryRT's from 3 to 4, since a shim of this build calls a function
+an older library does not have.
+
+**One trim rule, and why this one.** The copies trimmed at two different moments. Moon, Mercury, Mars and both Rust
+queues dropped a pair *before* queueing, when the queue plus the new pair would exceed the limit. Venus queued *first*
+and then dropped pairs *while* the queue was over. `SampleQueue` takes Venus's rule. With a limit that does not change,
+the two keep exactly the same samples: both hold the queue at the largest even count not above the limit, and both drop
+the oldest pair to do it. They differ only when the limit is lowered while samples are queued. The before-the-pair rule
+drops one pair per new pair and so never falls below its old length; the after-the-pair rule falls to the new limit at
+once. A lowered setting ought to take hold, so the after rule is the one kept. A limit raised while a queue is full
+changes nothing already queued, under either rule.
+
+**Byte-identical at the default.** At 128,000 the change must leave every core's sound as it was. §4.85.8's probe
+hashes every drained sample over a run on each core, twice: drained every frame, where no queue ever reaches the limit,
+and drained every 200 frames, where every queue overflows and the trim runs thousands of times. Both hashes equal the
+base's on every game of every core.
+
+**The proof.** `AudioBufferLimitTests` sets the limit to 4,096 and leaves thirty frames undrained on each core; each
+must hand back exactly 4,096 samples. A queue given the old constant 128,000 instead of the setting is the build before
+the fix, and each such mutant fails its core's test, as does a shim that never sends the setting (§4.85.9). The queue's
+own rules are pinned separately: the lowered limit takes hold at the next pair, and a negative frame count drains
+nothing.
+
+**A difference at an edge.** Venus's old drain computed `min(queued pairs, maxFrames)` and allocated twice that; a
+negative `maxFrames` threw. `SampleQueue.Drain` returns nothing for it, as Moon's, Mercury's and Mars's drains did. No
+caller passes a negative count.
+
+**What it does not cover. MarsRT's Rust queue keeps 128,000.** Its source is held unchanged while its profile-guided
+build waits for a retrain (§4.84, `Mars_Native.md` §6.17), and an export for the limit would change the library. It is
+given the setting when it moves to the common interface (`EmuSen_NativeCores.md` §7, step 5), which retrains the profile
+anyway. Until then the Nintendo 64 honours the setting on Mars (C#) and not on MarsRT, the default engine.
+
+#### 4.85.3 The Rust NES and Game Boy shims close their picture lending
+
+**The defect.** A core that lends its pictures (`IFrameBufferPool`, `EmuSen_Multicore.md` §16) closes its
+`FrameBufferLending` when it is disposed, so that a picture a presenter hands back afterwards is dropped rather than
+kept alive in a pool nobody will lend from again. MarsRT's `Dispose` does. MoonRT's and MercuryRT's, written from it,
+freed the machine and left the lending open.
+
+**The fix and the proof.** `Dispose` closes it, and each shim exposes its lending as `FrameBuffers`, as MarsRT does.
+`RustShimDisposeTests` lends two pictures, returns one before disposing (the pool holds it) and the other after: after
+`Dispose` the pool must be empty and the late return counted as dropped. Without the close, the build before the fix,
+the pool still holds one picture and each shim's test fails.
+
+**What it does not cover.** A picture lent before `Dispose` and never returned is the caller's, as it always was; closing
+changes only what a return does.
+
+#### 4.85.4 Rewind withheld by a declared feature, not a type check
+
+**Before.** Mistress switched rewind off in two places with `is EmuSen.Cores.Nintendo.Mars.MarsCore`
+(`MainWindow.Rewind.cs`, for the reel's menu entry and its reason, and `MainWindow.axaml.cs`, for the capture after each
+frame). The reason is §4.21b's and §4.44's: the C# core's snapshot with several rasteriser workers froze a game, and
+MarsRT's is proven. That is a property of one engine, found by its type, which `EmuSen_NativeCores.md` §1.5 lists among
+the places the framework reaches around `ICore`.
+
+**After.** An engine declares it. `EngineFeatures` (`CoreCapabilities.cs`) is a record with `RewindCapture` and the text
+a frontend shows when it is withheld; an engine that implements `IEngineFeatures` gives its own, and any other engine
+has `EngineFeatures.All`. `MarsCore` declares `RewindCapture: false` with the reason "not kept for Mars (C#)", the words
+the menu showed before. Both Mistress sites read `EngineFeatures.Of(core)`. This is the `EngineFeatures` of
+`EmuSen_NativeCores.md` §5.2, built ahead of the registration records: when those are built, an
+`EngineRegistration.Features` is read from the same declaration, and Mistress does not change again.
+
+**Behaviour is unchanged, and tested.** `EngineFeaturesTests` pins Mars (C#) withholding rewind with that reason and
+every other engine (MarsRT, Moon, MoonRT, Mercury, MercuryRT, Venus) keeping it. `MarsRtEngineTests` already ran a game
+on each N64 engine through a real `MainWindow` and required rewind history on MarsRT and none on Mars; it now also reads
+the menu's text on Mars. A Mars that declares rewind, a lookup that ignores the declaration, and a Mistress that ignores
+the feature at either site each fail (§4.85.9).
+
+**What it does not cover.** The other type switches of §1.5 (`CoreFactory.Bundle`, `Running`, `EngineNotice`) wait for
+the registration records, and Hotaru's and Pharaoh's one-console affordances stay, as `EmuSen_Multicore.md` §5 argues.
+
+#### 4.85.5 The save-state constants, copied by hand
+
+**What was checked.** Every place outside the four C# cores that writes or compares a state's magic or version.
+`moon-rust` had already made Moon's and Mercury's constants public so that the MoonRT and MercuryRT shims could read
+them, and both shims do. Three copies remained:
+
+- `MarsRtCore.StateVersion` returned a literal `1`, because `MarsCore`'s constants were private. It now reads
+  `MarsCore.StateVersion`, and `MarsCore`'s magic, version and snapshot version are public.
+- Two tests wrote another core's header from literals: `MoonCoreTests` Venus's magic, to prove Moon refuses a foreign
+  state, and `MercuryDefectTests` Mercury's magic and oldest readable version. They now use the constants, and Venus's
+  are public for the purpose.
+- Each Rust library holds its own copy (`src/machine.rs` in all three), since Rust cannot read a C# constant.
+  `emusen-native` holds none, by design.
+
+Literals that remain on purpose: `MarsCoreTests` asserts that a state begins with the bytes `MARS`, which is the format's
+specification rather than a copy of it, and the native status descriptions in the three `*Machine.cs` files name the
+shared codes of `emusen-native`.
+
+**The Rust copies pinned.** `RustStateHeaderTests` saves a state from each Rust engine and requires its first eight bytes
+to be the C# core's magic and version, and MarsRT's snapshot to carry `MarsCore.SnapshotVersion`. A MoonRT whose version
+drifts, a MercuryRT whose magic drifts, and a MarsRT shim reporting another version each fail it (§4.85.9). MarsRT's own
+Rust copy is covered by the test but was not mutated, since its source is held unchanged (§4.85.2).
+
+#### 4.85.6 Every battery save in the Saves folder (a behaviour change)
+
+*Decided 2026-09-28: NES and Game Boy battery saves move from beside the ROM, inside the player's library, to the Saves
+folder where SNES and Nintendo 64 saves already were, and a save found beside the ROM is copied, never moved.*
+
+**Before.** Venus, Mars and MarsRT kept a cartridge's battery save at `SaveLibrary.SramPathFor(rom)`, which is
+`home/Saves/<stem>.srm`. Moon, Mercury and the MoonRT and MercuryRT shims wrote `Path.ChangeExtension(rom, ".srm")`,
+beside the ROM, which is emulator output inside the player's own library; `EmuSen_Galaxia.md` §6 recorded the move as
+deferred until a copy-don't-move migration existed. The logic around the path was copied seven times: the `--nobattery`
+latch, the read, the atomic write, and a `SaveEveryNFrames = 300` constant in each core and shim (six copies and one
+reference).
+
+**One helper.** `BatterySave` (`EmuSen/Cores/BatterySave.cs`) is opened once per load and is then the only thing that
+reads or writes the save. It holds:
+
+- the path, `SaveLibrary.SramPathFor(rom)` with the extension changed for a second file (Mars's Controller Pak,
+  `.mpk`, beside the `.srm` in Saves as before);
+- the latch: `--nobattery` (`CoreOptions.BatteryRamDisabled`) is read when the save is opened, or the core's own
+  override where it has one (Venus's `Cartridge`, `MarsCore`, `MarsRtCore`), and the save is then `BatterySave.None`,
+  which reads nothing and writes nothing;
+- the write, through `AtomicFile` as before;
+- `FlushEveryNFrames`, the one 300, and `IsFlushFrame`, which all seven frame ends call.
+
+All seven use it: Moon's and Mercury's `Cartridge`, Venus's `Cartridge`, `MarsCore`, and the MoonRT, MercuryRT and MarsRT
+shims.
+
+**One rule for a battery with no RAM behind it: neither read nor written.** Mercury already skipped both. Moon read the
+file and would have written an empty one, but every Moon board is given 8 KB of PRG RAM regardless of its header
+(`Cartridge.cs`, `PrgRam = new byte[0x2000]`), so on Moon the case cannot arise, and the rule changes nothing for any NES
+image. Venus read the file and copied no bytes into a cartridge with no battery RAM, and wrote nothing; not reading it
+has the same effect on the machine. Mars keeps reading whatever its save chip is, because a chip the header does not
+declare is inferred from the save's length (`Mars_Save.md`), and a chip with no contents is never written. So no game's
+save changes under the one rule. This is argued from the code, not measured game by game, and it is pinned for the Game
+Boy by a test on an MBC3 with a clock and no RAM.
+
+**The migration.** On the NES and the Game Boy only, when a game loads with a battery, the Saves folder has no save for
+it, and one lies beside the ROM (`<rom>.srm`), that file is **copied** into Saves and the copy is used from then on. The
+file beside the ROM is read and never written, moved, renamed or touched: this project's tools do not write the player's
+ROM library, and the player can delete the old copies once satisfied. A save already in Saves wins, and the one beside
+the ROM is then not read at all. Under `--nobattery` nothing is read, copied or written anywhere. The SNES and the
+Nintendo 64 do not look beside the ROM, since their saves have been in Saves since Galaxia was built
+(`EmuSen_Galaxia.md` §5), so a `.srm` beside one of their ROMs was not written by this project and is left alone.
+
+**The tests** (`BatterySaveTests`, each in a sandbox home and a sandbox library, on Moon, MoonRT, Mercury and MercuryRT):
+
+- a save beside the ROM is copied into Saves and loaded; after a flush, the Saves copy holds the new bytes, and the
+  original's bytes and modification time are exactly what they were;
+- a save already in Saves wins over one beside the ROM, and neither file is changed by the other;
+- a game with no save anywhere gets one only in Saves, and the library folder still holds nothing but the ROM;
+- under `--nobattery` nothing is read (the RAM does not hold the file's bytes), nothing appears in Saves, and the file
+  beside the ROM is unchanged;
+- a Game Boy cartridge with a battery and no RAM gets no save and copies nothing;
+- a Venus ROM with a `.srm` beside it copies nothing.
+
+The fourteen mutants of §4.85.9 each fail at least one of them: a helper that never copies, that moves instead of
+copying, that touches the original's time, that lets the file beside the ROM overwrite Saves, that copies under
+`--nobattery`, or that saves a cartridge without RAM; each core not migrating; MercuryRT writing beside the ROM as
+before; Venus migrating; and the flush period off by one. A run of the suites that load these cores (1,278 tests) wrote
+no `.srm` anywhere under the tree's `home` or the temporary directory.
+
+**A Venus defect this closed.** A Venus save state carries the cartridge's `SavePath` and its `--nobattery` latch, since
+`StateSerializer` writes every field not marked otherwise, and the cartridge used both for its writes. A state saved on
+one game and loaded while playing another therefore sent the second game's battery save to the first game's file, and a
+state saved under `--nobattery` switched the battery off for as long as that game ran. This is Mercury's D3
+(`Mercury_Native.md` §9.3), which Mercury fixed by retiring the field; Venus had the same defect unfixed. Its writes now
+go through the `BatterySave` opened at load, which no state can change. The two fields stay in the state with the same
+values, so every existing Venus state loads and saves byte for byte as before; they are simply no longer obeyed. The
+test, `A_venus_state_from_another_game_leaves_the_save_where_this_game_opened_it`, fails on the base build in both of
+its cases and passes after.
+
+**What it means on the handheld.** The Legion Go S keeps its games on the SD card, and until now a NES or Game Boy save
+was written there beside the game. After this build, the first load of each such game copies its save into the Saves
+folder of the installed tree, on the handheld's own storage, and plays from that copy; the file on the SD card is left as
+it was and is never updated again. Two consequences follow. A player who moves the SD card to another machine carries the
+old save, not the current one; and another emulator on the handheld that reads saves beside the ROMs will not see
+progress made in EmuSen. Both are the price of never writing the library, and both are undone by copying the Saves
+folder's file back by hand.
+
+**What it does not cover, and a hazard it creates.** The Saves folder is named by the ROM's stem alone, so two ROMs of
+different consoles with the same stem share one save file. That was already true of the SNES and the Nintendo 64, whose
+stems rarely coincide. It is now true of the NES and the Game Boy as well, and they do. In the player's library (measured
+on 2026-09-28, file names and headers read, the library not written) 38 stems occur under more than one console, every
+one a NES and a SNES game of the same name; five of those pairs have a battery on both sides (Gemfire, Nobunaga's
+Ambition, Uncharted Waters, Wario's Woods, Tecmo Super Bowl), and three of the five NES boards are ones Moon runs
+(Nobunaga's Ambition on MMC1, Wario's Woods and Tecmo Super Bowl on MMC3). A player of both versions of one of those
+three would have each load the other's save and overwrite it. Before this change the NES save sat beside its ROM and the
+two could not meet. Nothing here resolves it. A per-console folder in `SramPathFor`, with the SNES and Nintendo 64 saves
+copied across in the same copy-don't-move way, would, and is a decision for a later pass.
+
+*Retired 2026-09-28 by §4.85.11: saves are now in a folder per console, so the five pairs no longer meet. The paragraph
+above is kept as the finding that led to it.*
+
+#### 4.85.7 The C# plumbing, shared as the first increment of the generic host
+
+`EmuSen_NativeCores.md` §4 designs one loader, one handle class and one `ICore` base for the Rust cores, over one
+common native interface that does not exist yet. The pieces below are built now, with that section's names and shapes,
+over today's per-core exports, so that the later move replaces only the calls into the libraries. They live in
+`EmuSen/Cores/Native/`, as §4 places them; the two debugger pieces live beside the interfaces they implement, in
+`EmuSen.DianaOS/DianaOS/Lib/`. Line counts are of the C# before and after, measured on 2026-09-28; "removed" is what the
+diff took out of the files that had the copies, and "added" includes the new shared files.
+
+**`NativeCoreLibrary`, the loader (§4.1).** `MoonNative.cs`, `MercuryNative.cs` and `MarsNative.cs` were one 48-line
+file three times, differing in the names of the file, the version and crash-log exports, the switch and the log. One
+class now takes those six names and does the rest: the switch (`EMUSEN_MOON_NATIVE=0` and its peers, each kept as it
+was), the load, the exact version check, the crash log, `Available`, `Report` and `Export(name)`. The three static
+classes stay as facades of a few lines, since the shims' static tables, the tests and C# Mars's own native components (`Rsp.Native.cs`) read
+`MarsNative.Export` and its peers, which keep working unchanged. The crash logs keep their names, `moonrt_crash_<pid>`,
+`mercuryrt_crash_<pid>` and MarsRT's `native_crash_<pid>`; the rename to `marsrt_crash_<pid>` belongs to MarsRT's move
+(§4.1, §9's Q6). `Report`'s texts are the old ones word for word, and `NativeHostTests` pins the switches, the log
+names, a library turned off and a version refused.
+
+**`NativeMachine`, the handle (§4.2).** `MoonMachine` and `MercuryMachine` shared most of their 190 and 200 lines; they are 78 and 87 now, and `MarsMachine` 65 of 93. The
+base now holds the handle, its finaliser and `Dispose`, the shared status codes −1 to −8 (with the console's name in
+"not a Moon save state"), the length-query idiom, the state's load, save and layout, and the common calls, resolved once
+per library into a `NativeExports` table under today's `moon_machine_` and `mercury_machine_` names. Each console keeps
+its create call, its own status band, `RunFrame`, `SetButtons`, `Step`, and its extras (Moon's `Reset` and C#-exception
+refusals; Mercury's model, sample rate, serial log and illegal-opcode error). `MarsMachine` derives from it too, but
+MarsRT's exports other than free and load have other shapes today (a snapshot flag on the size, save and layout; a
+different drain; patches as triples), so its table is resolved lifecycle-only, and the 8-bit calls on it throw
+`NotSupportedException` rather than call a function of the wrong shape; its flagged `Save` and `Layout` stay its own.
+One message changes at an edge: status −5, which only Mercury's library returns, is now named by the shared table on
+Moon and Mars too, where it was "status −5".
+
+**`NativeRtCore<TMachine>`, the `ICore` base (§4.3).** It holds what `MoonRtCore` and `MercuryRtCore` copied: cheats and
+the patch version, skip rendering, the picture lending and its copy, the audio drain and the audio limit, the battery
+save through `BatterySave`, state by path and by stream with the console's pre-checks, spaces by name, the frame log's
+reader, mirror sync, mutes and `Dispose`. `BeforeFrame` refreshes the ROM patches and the audio limit; `EndFrame` is
+Mercury's order, which Moon's is too since §4.85.1. Each subclass re-declares `ICore` and its other interfaces, so that
+its own members (MercuryRT's halts, its observed bus writes) are the ones the interfaces map to. The two shims went from
+294 and 320 lines (282 and 310 on the base, before §4.85.1 to §4.85.6 added to them) to 125 and 151. `RomPatchTable.Build(cheats, lo, hi)` replaces the two 29-line copies of the patch
+table, with Moon's bounds (`$4020`–`$FFFF`) and Mercury's (`$0000`–`$7FFF`) given by each shim.
+
+MarsRT's shim does not derive from the base. It adopts what fits without a change of behaviour: the loader (through
+`MarsNative`), the handle's status table (through `MarsMachine`), `BatterySave`, the shared debug space, `Resolve`, the
+register tables and the codec. What does not fit is the base's body itself. MarsRT's handle is a raw `nint` rather
+than a machine object; its picture has a variable size, a row repeat and a serial; its state keeps two reused arrays
+for the rewind's snapshots (`Mars_Native.md` §6.6.3), which must stay; its cheats are sent as triples; and its frame end
+applies the cheats only while interrupts are enabled. §4.3's base is to gain those generalisations when MarsRT moves
+(step 5), and moving it now would change the default engine's code path for no present gain.
+
+**One debugger memory space.** Seven classes implemented `IDebugMemorySpace`: Moon's and Mercury's (identical), Venus's
+three (an array, a bus window, a delegate pair), Mars's and MarsRT's. `DelegateDebugMemorySpace` replaces all seven: a
+live size, a read, an optional write (none is a read-only space), the side-effect flag, and whether addresses wrap. The
+size is read live everywhere, as Mars's was, so a reload is followed on every console; Moon's and Mercury's took it once,
+when the target was built. The edge rule is one: **reads and writes both wrap modulo the size, negatives included, and a
+space of size zero is given address zero**, which was Moon's, Mercury's, Mars's and MarsRT's rule. A bus window or a
+processor's view passes every address through (Venus's `CpuBus`, `IO` and `SRAM`, and both N64 engines' `CPU`), as
+before. What changes is Venus's, at the edges only:
+
+- a write past the end of an array space (`WRAM`, `VRAM`, `CGRAM`, `OAM`, `APURAM`, `GSURAM`, `SA1IRAM`, `BWRAM`) or of a
+  delegate space (`GSUBUS`, `SA1BUS`, `DSPRAM`) used to be dropped while a read there wrapped; both wrap now;
+- `DSPPRG` passed a write that did nothing and so reported itself writable; it has no write now, so `spaces` shows it
+  read-only and `write` refuses it, which is what the program ROM is;
+- an empty array space used to throw on a read; it reads zero.
+
+`DebugPlumbingTests` pins the rule, Venus's wrapped write included, and the existing debug-target suites of every core
+pass unchanged (§4.85.8).
+
+**Mars's and MarsRT's twins.** `MarsDebugSpaces.Resolve` and `MarsRtCore.Resolve` were the same map of physical
+addresses written twice, differing only in where the RDRAM's length came from; one `Resolve(physical, rdramLength)`
+serves both. The o32 register names were written three times (both debug targets and the disassembler's
+`MarsOperands.Gpr`); both targets read the disassembler's table. MarsRT's list of video register names now reads Mars's,
+in Mars's order, which is the order MarsRT's export returns them.
+
+**One cheat-codec adapter.** Seven classes adapted a static decoder to `ICheatCodeCodec` (two each for the NES, the Game
+Boy and the SNES, one for the N64). `DelegateCheatCodec` takes the name, kind and space and the decoder's functions, and
+each console has a static class of factories (`MoonCheatCodecs`, `MercuryCheatCodecs`, `MarsCheatCodecs`,
+`VenusCheatCodecs`) with a `Pair()` that both `CoreFactory.Bundle` and `CheatCodecsFor` now read, where the pairs were
+written out twice. `CheatCodecAdapterTests` pins every format's name, kind and space against the old classes' values,
+and the forwarding of compares and wide writes.
+
+**Counted.** In the files that held the copies, the loader, handle and base removed 791 lines and added 120, over 528
+lines of shared files; the debug spaces and the Mars twins removed 292 and added 78, over 49; the codecs removed 104 and
+added 36, over 55. In all, 1,187 lines removed and 234 added where the copies were, and 632 in the shared files: 321
+fewer lines, before the tests. `EmuSen_NativeCores.md`'s P6 predicted the shims would shrink by
+about 600 lines at step 5, with the host about 850; that prediction is about the whole migration and is not retired by a
+first increment.
+
+#### 4.85.8 The proof that emulation did not change
+
+**The probe.** `CoreOutputHashProbe` (WiseMan, gated by `EMUSEN_CORE_HASH_OUT` and `EMUSEN_CORE_HASH_ROMS`) runs every
+engine over scratch copies of games, under `--nobattery` and in a fixed sandbox home, with Start pressed for five frames
+in every 150 and A for ten from frame 600. Each run records three SHA-256 prefixes: every drained sample, the picture
+every 30 frames and at the end, and the final state. Each game runs three times: drained every frame, drained every 200
+frames (so every queue overflows and trims), and loaded from the state the first run saved and run 60 frames more. With
+`EMUSEN_CORE_HASH_STATES_FROM` the third run loads another build's states instead, which is the check that every state
+the base saved still loads and plays on identically.
+
+The games, copied from the library to `~/.cache/emusen/probe/core-cleanup/roms/`: Super Mario Bros. 3, The Legend of
+Zelda and Kirby's Adventure on Moon and MoonRT; Super Mario Land 2 and Link's Awakening, and Rayman on the Color, on
+Mercury and MercuryRT; Super Mario World, Yoshi's Island (SuperFX) and A Link to the Past on Venus; Super Mario 64 and
+Ocarina of Time on Mars and MarsRT, 500 frames each.
+
+**The result.** The base (`d3de4c93`, built in a separate tree) and the pass's last commit produce the same 57 lines,
+byte for byte: every sound, picture and state hash of every engine and game, both drain patterns, and every base state
+loaded into the new build and played on. The same held after §4.85.2 and after §4.85.6, each measured separately.
+Measured on 2026-09-28.
+
+**A negative result on the way.** The probe's first version gave each run a fresh temporary home, and Venus's state
+hashes then differed between two runs of the same build, while its sound and pictures did not. The 30 differing bytes
+were the home's random name: a Venus state carries its battery save's full path (§4.85.6). The probe now uses one fixed
+home, and the base was measured again with it; the first base run's 48 other lines, and the nine Venus lines' sound and pictures, matched the second's exactly.
+
+**Real saves.** Scratch copies of three saves that lie beside their ROMs in the library (The Legend of Zelda on the NES,
+Link's Awakening and Super Mario Land 2) were loaded on both engines of their console in an empty sandbox home. On all
+six loads the save was copied into Saves, all 8,192 bytes of the game's RAM held it, and the original's bytes and
+modification time were unchanged.
+
+**The suites.** The whole of WiseMan ran once, after the shared plumbing was in place: 8,825 passed, none failed, 53
+skipped (the gated probes and the tests that need hardware or files this machine lacks). The blast-radius runs of each
+step are in its section. No run wrote a `.srm` under the tree's `home`, the temporary directory or the ROM library.
+
+#### 4.85.9 The mutants
+
+Each fix, the migration and the shared pieces were checked by applying a deliberate defect, building, and running the
+tests that should catch it, with the source restored after each. A mutant that restores the code as it was before a fix
+is the build before the fix, so the first mutant of each defect is also its failing-then-passing proof. 46 mutants, 46
+caught, none equivalent; §4.85.11 added 13 more, all caught.
+
+| Section | Mutant | Caught by |
+| --- | --- | --- |
+| §4.85.1 | Moon without the frame notice; MoonRT without it; either with the notice a frame early | `NesRunToFrameTests` |
+| §4.85.2 | Moon, Mercury, Mars, Venus given the old constant; MoonRT and MercuryRT never sent the setting; the Rust limit ignored; the queue trimming before the pair; the queue keeping one pair over | `AudioBufferLimitTests` |
+| §4.85.3 | MoonRT and MercuryRT not closing their lending | `RustShimDisposeTests` |
+| §4.85.4 | Mars declaring rewind; the lookup ignoring declarations; Mistress ignoring the feature at the capture and at the reel | `EngineFeaturesTests`, `MarsRtEngineTests` |
+| §4.85.5 | MarsRT's shim reporting another version; MoonRT's Rust version and MercuryRT's Rust magic drifting | `RustStateHeaderTests` |
+| §4.85.6 | never copying; moving instead of copying; touching the original's time; the file beside the ROM overwriting Saves; copying under `--nobattery`; saving a cartridge without RAM; each of the four engines not migrating; MercuryRT writing beside the ROM; Venus writing the state's path; Venus migrating; the flush period off by one | `BatterySaveTests`, `MarsRtFrontendTests` |
+| §4.85.7 | a debug write not wrapped; a size of zero unguarded; the loader's version check and switch dropped; the patch table's upper bound exclusive; the base's frame notice dropped; the battery read from the wrong space; MercuryRT's observed bus write dropped; the codec's compare dropped; the shared status text losing the console's name | `DebugPlumbingTests`, `NativeHostTests`, `CheatCodecAdapterTests`, the debug-target, RT and battery suites |
+| §4.85.11 | the flat path again; `.gbc` saved under `GB`; the Game Boy's folder by header; the NES reading the flat folder; the SNES and the N64 each not reading it; a flat save overwriting the console's folder; the flat save moved, or its time touched; copying under `--nobattery`; Venus, MoonRT and the N64's pak in the wrong folder | `BatterySaveTests`, `SaveLibraryTests`, `CartridgeSavePathTests`, `MarsSaveFileTests` |
+
+MarsRT's Rust source was not mutated, since it is held unchanged (§4.85.2); its copy of the state header is covered by
+`RustStateHeaderTests` without a mutant.
+
+#### 4.85.10 What was held back, and why
+
+- **MarsRT's Rust queue** keeps 128,000 samples and ignores the setting (§4.85.2), and its source is otherwise untouched,
+  until its move to the common interface retrains its profile.
+- **MarsRT's shim on the base class** (§4.85.7): its picture, snapshot arrays, cheats and frame end are the
+  generalisations §4.3 gives the base at step 5.
+- **The crash log's rename** to `marsrt_crash_<pid>` is step 5's, not this pass's.
+- **The registration records** of `EmuSen_NativeCores.md` §5.1, and with them `CoreFactory`'s type switches: only the
+  rewind feature was built ahead of them (§4.85.4).
+- ~~The shared Saves folder's stem collisions~~ (§4.85.6): resolved the same day by a folder per console, §4.85.11.
+- **Venus's state still carries its save path and latch** as two fields that are no longer obeyed. Retiring them would
+  change Venus's state format, which this pass does not do.
+- **MoonRT's halt at `runto frame`** waits for its stage-5 observed loop (§4.85.1).
+- **Timing.** Nothing here was timed. The shims' hot calls moved from static function-pointer fields to a per-library
+  table read through an instance, one load more per call, at most a handful of calls a frame; `EmuSen_NativeCores.md`'s
+  P2 (MoonRT's frame within ±1% through the generic host) is its step 2's to retire, interleaved, and is not claimed here.
+
+#### 4.85.11 A folder per console (a behaviour change)
+
+*Decided 2026-09-28: battery saves go in `Saves/<console>/<rom stem>.srm`, with the Nintendo 64's Controller Pak
+beside its save as `<stem>.mpk`. This closes the collision §4.85.6 found, and retires that section's hazard paragraph.*
+
+**The folder names.** Three schemes were available: `CoreCatalog`'s console names (`NES`, `SNES`, `N64`, `GB`, with
+the library's second Game Boy shelf labelled `GBC`), the ES-DE system names (`nes`, `snes`, `n64`, `gb`, `gbc`), and the
+player's ROM library, whose folders are `NES`, `SNES`, `N64`, `GB` and `GBC`. The first and the last agree, letter for
+letter. The folders are therefore **`NES`, `SNES`, `N64`, `GB` and `GBC`**, as constants on `BatterySave`. A player
+who looks for a game's save finds it in the folder named like the one the game is in. The ES-DE names differ only in
+case, and on the handheld's case-sensitive file system that would be a second, different folder; they were not used.
+`Save States` stays where it was, a sibling of the console folders, and no console is named like it.
+
+**The Game Boy's two folders.** Mercury runs `.gb` and `.gbc` images alike. The save's folder is chosen **by the file's
+extension alone**: `.gbc` goes to `GBC`, anything else to `GB` (`BatterySave.GameBoyFolder`). That is how the library
+files them. Two other rules were weighed and rejected:
+
+- *By the Model setting*, or by whether the game ran in Color mode: a save would change folders when a setting changed,
+  which must never happen.
+- *By the header's Color flag*, as the catalogue shelves a game (`CoreCatalog.IsGameBoyColor`): 17 of the library's
+  1,930 `.gb` images carry the flag and sit in its `GB` folder (measured on 2026-09-28, headers read, nothing written).
+  Their saves would have gone to `GBC`, away from the folder the player keeps them in.
+
+So a `.gb` game played as a Game Boy Color, by setting or by header, keeps its save in `GB`. The one disagreement left
+is recorded rather than resolved: the library's sidebar shows those 17 games on the Game Boy Color shelf, while their
+saves are in `GB`.
+
+**The path.** `SaveLibrary.SramPathFor(romPath, console)` is the only spelling, and `BatterySave.Open(romPath, console,
+...)` its only caller. Each of the seven cores and shims passes its own console: Moon and MoonRT `NES`, Venus `SNES`,
+Mars and MarsRT `N64`, Mercury and MercuryRT the Game Boy rule. The one-argument form is gone, so nothing can compute a
+save path without a console. `SaveLibrary.FlatSramPathFor` names the old flat file, and is read only by the migration.
+
+**Nothing else reads saves by path.** A search of every project for the Saves folder, the `.srm` and `.mpk` extensions
+and `SramPathFor` found no save-manager window, no "has a save" badge in the library, no backup or cloud code, and
+nothing in Hotaru, the scraper or the collections. The only other readers are `DataMigration`, which copies the whole
+`Saves` tree from the pre-Galaxia location and so carries subfolders as it carries files, and DianaOS's `hier` page,
+which now names the folders. Mistress's media view lists save states, which did not move. So no view can lose a
+player's existing SNES or N64 save; the save itself is copied at the game's next load, as follows.
+
+**The migration.** At a game's first load with no save in its console's folder, the one earlier home that console had
+is copied in, never moved, deleted or overwritten:
+
+- the SNES and the Nintendo 64: the flat `Saves/<stem>.srm` (and `<stem>.mpk`), which every build before today wrote;
+- the NES and the Game Boy: `<rom>.srm` beside the ROM, which builds before §4.85.6 wrote.
+
+Each console reads only its own earlier home. That is the rule for the collision: a flat `Saves/<stem>.srm` whose stem
+belongs to both an NES and a SNES game is the SNES game's, because only the SNES and the Nintendo 64 wrote that folder,
+and **an NES game never reads the flat folder**. §4.85.6's NES and Game Boy saves in the flat folder were never written
+by a released build: that section and this one are on the same branch, merged together.
+
+**The tests** (`BatterySaveTests`, sandboxes only, 29 cases):
+
+- a save from each console lands in its own folder (`NES`, `GB`, `GBC`, `SNES`, and the N64's pak in `N64`), and nothing
+  in the flat folder;
+- a `.gb` game run with the Model set to Game Boy Color, and a `.gb` image whose header asks for the Color, run on both
+  engines, save in `GB`;
+- a flat-folder SNES save is copied into `Saves/SNES`, loaded into the cartridge's SRAM, written back there after a
+  change and found again by a fresh cartridge; a flat-folder N64 save and Controller Pak are both copied and loaded;
+- a Gemfire-like pair, a synthetic NES image and a synthetic SNES image both named `Gemfire (U)`, with a flat save: on
+  Moon and on MoonRT the NES game copies nothing, its RAM does not hold the flat save's bytes, and it writes its own save
+  in `Saves/NES`; the SNES game copies and loads the flat save;
+- a save already in the console's folder wins over a flat one;
+- under `--nobattery` nothing is read, copied or written, with a flat save present, on the SNES and the N64;
+- in every case the original, beside the ROM or in the flat folder, keeps its bytes and its modification time.
+
+Thirteen mutants each fail at least one of them (§4.85.9's table, second part). A run of the suites that load these
+cores (5,550 tests) wrote no `.srm` outside the sandboxes.
+
+**The hashes.** `CoreOutputHashProbe` was run again on all four consoles. Every sound and picture hash, and every state
+hash on the NES, the Game Boy and the N64, equals the base's. The six Venus state hashes of the first two runs differ, as
+they must: a Venus state carries the cartridge's `SavePath` (§4.85.6), which now names `Saves/SNES`. Substituting the
+old path for the new, length prefix included, makes each of the three states byte-identical to the base's, so that
+string is the whole difference. The Venus states the base saved load and play on to the base's hashes.
+
+**What it means on the handheld.** The first load of each SNES or Nintendo 64 game copies its save from the flat
+`Saves` folder into `Saves/SNES` or `Saves/N64` on the handheld's own storage, and each NES or Game Boy game copies
+its save from beside the game on the SD card into `Saves/NES`, `GB` or `GBC`. The old files are left, and never updated
+again: a player who copies the handheld's saves elsewhere should copy the console folders. A save sync set up against
+the flat folder would miss every save written from now on.
+
+**What it does not cover.** Two ROMs of one console with the same stem, in different folders of the library, still share
+a save, as they did in the flat folder. The old flat and beside-the-ROM files are never removed by the program; the
+player can delete them. A game loaded once under `--nobattery` and again without it copies at the second load, which is
+the first that reads a save.

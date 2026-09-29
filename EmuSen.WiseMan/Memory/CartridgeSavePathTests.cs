@@ -46,8 +46,8 @@ namespace EmuSen.WiseMan.Memory
         {
             var cart = new Cartridge(WriteRom("Synthetic"), batteryRamDisabled: false);
 
-            Assert.Equal(Path.Combine(DataStore.Saves, "Synthetic.srm"), cart.SavePath);
-            Assert.Equal(SaveLibrary.SramPathFor(WriteRom("Synthetic")), cart.SavePath);
+            Assert.Equal(Path.Combine(DataStore.Saves, "SNES", "Synthetic.srm"), cart.SavePath);
+            Assert.Equal(SaveLibrary.SramPathFor(WriteRom("Synthetic"), "SNES"), cart.SavePath);
         }
 
         [Fact]

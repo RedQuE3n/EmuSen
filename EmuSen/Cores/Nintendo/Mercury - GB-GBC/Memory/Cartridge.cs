@@ -43,6 +43,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         // The host's file, not the machine's: version 5 carried it, so a state could redirect a battery save - see Mercury_Native.md §9.3.
         [RetiredFromState] private string? _savePath;
 
+        [SkipInState] private EmuSen.Cores.BatterySave _battery = EmuSen.Cores.BatterySave.None;
+
         public int RomBanks => Rom.Length / RomBankSize;
         public int RamBanks => Ram.Length / RamBankSize;
 
@@ -146,22 +148,14 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
                 $"Cartridge type ${other:X2} is not implemented - see Mercury_Memory.md §4."),
         };
 
-        // --nobattery leaves _savePath null, which is also what disables SaveSram - see Mercury_Memory.md §6.
+        // In the Saves folder, copied there once from beside the ROM; a cartridge without RAM, or --nobattery, reads and writes nothing - see EmuSen_Settings_Reference.md §4.85.6.
         private void LoadSram()
         {
-            if (!HasBattery || EmuSen.Cores.CoreOptions.BatteryRamDisabled || string.IsNullOrEmpty(RomPath)) return;
-
-            _savePath = Path.ChangeExtension(RomPath, ".srm");
-            if (Ram.Length == 0) return;
-            if (AtomicFile.TryRead(_savePath) is not { } saved) return;
-
-            Array.Copy(saved, Ram, Math.Min(saved.Length, Ram.Length));
+            _battery = EmuSen.Cores.BatterySave.Open(RomPath, EmuSen.Cores.BatterySave.GameBoyFolder(RomPath), hasRam: HasBattery && Ram.Length > 0);
+            _savePath = _battery.Path;
+            _battery.ReadInto(Ram);
         }
 
-        public void SaveSram()
-        {
-            if (!HasBattery || _savePath is null || Ram.Length == 0) return;
-            AtomicFile.Write(_savePath, Ram);
-        }
+        public void SaveSram() => _battery.Write(Ram);
     }
 }

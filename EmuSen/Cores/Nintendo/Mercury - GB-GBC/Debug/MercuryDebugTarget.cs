@@ -14,41 +14,6 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
     // Where a target over a mirror reads, writes and refreshes, when the machine it shows runs elsewhere - see Mercury_Native.md §8.3.
     public sealed record MercuryDebugHost(Func<string, int, byte> Read, Action<string, int, byte> Write, Action Refresh, Action ApplyCheats, Func<long> FrameCount, Action<int, bool> SetChannelMuted);
 
-    // A space backed by a name the core already knows how to read and write - see Mercury_Debug.md §2.
-    internal sealed class MercuryDebugMemorySpace : IDebugMemorySpace
-    {
-        private readonly MercuryCore _core;
-        private readonly MercuryDebugHost? _host;
-        private readonly string _space;
-
-        public string Name { get; }
-        public int Size { get; }
-        public bool IsWritable { get; }
-        public bool HasSideEffects { get; }
-
-        public MercuryDebugMemorySpace(MercuryCore core, MercuryDebugHost? host, string space, string name, bool isWritable, bool hasSideEffects)
-        {
-            _core = core;
-            _host = host;
-            _space = space;
-            Name = name;
-            Size = core.SpaceSize(space);
-            IsWritable = isWritable;
-            HasSideEffects = hasSideEffects;
-        }
-
-        public byte Read(int address) => _host is null ? _core.ReadSpace(_space, Wrap(address)) : _host.Read(_space, Wrap(address));
-
-        public void Write(int address, byte value)
-        {
-            if (!IsWritable) return;
-            if (_host is null) _core.WriteSpace(_space, Wrap(address), value);
-            else _host.Write(_space, Wrap(address), value);
-        }
-
-        private int Wrap(int address) => Size == 0 ? 0 : ((address % Size) + Size) % Size;
-    }
-
     // The Game Boy's IDebugTarget, and what finally lets CoreFactory hand Mercury out. See Mercury_Debug.md.
     public sealed class MercuryDebugTarget : IDebugTarget, IWriteObserver
     {
@@ -194,17 +159,23 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
         private string DescribeWriteSite() =>
             _core.Cpu is null ? "" : $"PC=${_core.Cpu.LastInstructionPC:X4}";
 
+        // A space the core already knows by name, sized live so a reload is followed, and read through the host where the core is a mirror.
+        private DelegateDebugMemorySpace Space(string space, string name, bool isWritable, bool hasSideEffects) => new(name, () => _core.SpaceSize(space),
+            a => _host is null ? _core.ReadSpace(space, a) : _host.Read(space, a),
+            isWritable ? (a, v) => { if (_host is null) _core.WriteSpace(space, a, v); else _host.Write(space, a, v); } : null,
+            hasSideEffects);
+
         private void BuildSpaces()
         {
-            _spaces.Add(new MercuryDebugMemorySpace(_core, _host, MercuryCore.SpaceRom, "ROM", false, false));
-            _spaces.Add(new MercuryDebugMemorySpace(_core, _host, MercuryCore.SpaceVram, "VRAM", true, false));
-            _spaces.Add(new MercuryDebugMemorySpace(_core, _host, MercuryCore.SpaceCartRam, "CARTRAM", true, false));
-            _spaces.Add(new MercuryDebugMemorySpace(_core, _host, MercuryCore.SpaceWram, "WRAM", true, false));
-            _spaces.Add(new MercuryDebugMemorySpace(_core, _host, MercuryCore.SpaceOam, "OAM", true, false));
-            _spaces.Add(new MercuryDebugMemorySpace(_core, _host, MercuryCore.SpaceHram, "HRAM", true, false));
+            _spaces.Add(Space(MercuryCore.SpaceRom, "ROM", false, false));
+            _spaces.Add(Space(MercuryCore.SpaceVram, "VRAM", true, false));
+            _spaces.Add(Space(MercuryCore.SpaceCartRam, "CARTRAM", true, false));
+            _spaces.Add(Space(MercuryCore.SpaceWram, "WRAM", true, false));
+            _spaces.Add(Space(MercuryCore.SpaceOam, "OAM", true, false));
+            _spaces.Add(Space(MercuryCore.SpaceHram, "HRAM", true, false));
 
             // $FF00 answers the joypad matrix and $FF41 recomputes STAT, so a bulk scan here is not free.
-            _spaces.Add(new MercuryDebugMemorySpace(_core, _host, MercuryCore.SpaceCpuBus, "CPUBUS", true, true));
+            _spaces.Add(Space(MercuryCore.SpaceCpuBus, "CPUBUS", true, true));
         }
 
         public IReadOnlyList<IDebugMemorySpace> GetMemorySpaces() => _spaces;

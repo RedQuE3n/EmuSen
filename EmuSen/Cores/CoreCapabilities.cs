@@ -88,4 +88,19 @@ namespace EmuSen.Cores
     {
         void SaveSnapshot(Stream stream);
     }
+
+    // What a frontend may do with an engine, a policy the engine declares rather than one found by its type - see EmuSen_NativeCores.md §5.2.
+    public sealed record EngineFeatures(bool RewindCapture = true, string? RewindWithheld = null)
+    {
+        public static readonly EngineFeatures All = new();
+
+        // An engine that declares none has every feature.
+        public static EngineFeatures Of(ICore? core) => core is IEngineFeatures declared ? declared.Features : All;
+    }
+
+    // An engine withholding a feature a frontend would otherwise use - see EmuSen_Settings_Reference.md §4.85.4.
+    public interface IEngineFeatures
+    {
+        EngineFeatures Features { get; }
+    }
 }

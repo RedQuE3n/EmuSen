@@ -124,9 +124,13 @@ SRAM is mapped to the lower 32KB (`$0000-$7FFF`) of banks `$70-$7D` and `$F0-$FF
 
 `home/Saves/<rom-name>.srm`, resolved by `SaveLibrary.SramPathFor` — deliberately *not* derived from the ROM's own directory (which could be anywhere on disk, possibly read-only, and isn't necessarily "ours" to write into — ROMs can load from any path via the CLI arg or the Avalonia frontend's file picker). Only the save *filename* comes from the ROM; the folder is always relative to where the emulator runs from. The path used to be composed here from `DianaOSSandbox.SavesDirectory`; it now comes from `EmuSen.Galaxia`, so the core no longer asks the shell where the player's saves go — see `EmuSen_Galaxia.md` §2. The location is unchanged.
 
+*Revised 2026-09-28: `home/Saves/SNES/<rom-name>.srm`, and the flat file above is copied there at the first load and left as it was (`EmuSen_Settings_Reference.md` §4.85.11).*
+
 `LoadSram()` tolerates a save file that doesn't exactly match the allocated SRAM size (copies whichever is smaller) rather than failing outright — a mismatch most likely means this ROM's header-reported SRAM size differs from whatever created the file, not a corrupted save. A save that fails to load doesn't prevent the game from booting.
 
 `SaveSram()` is called periodically (see `VenusCore.RunFrame`'s autosave, every 300 frames) and on shutdown, not on every SRAM write. Both directions go through `AtomicFile`, which writes a temp file and renames over the target, so one of those ~5-second autosaves being interrupted leaves the previous save whole rather than truncated — see `EmuSen_Galaxia.md` §4.
+
+*Revised 2026-09-28: the reads and writes go through the `BatterySave` opened when the cartridge is built. `SavePath` and the `--nobattery` latch are still fields of the state, and a state loaded from another game used to redirect or disable this game's save through them; they are no longer obeyed (`EmuSen_Settings_Reference.md` §4.85.6).*
 
 ### 2.4a The battery save is emulator state, and it silently broke a three-day measurement
 

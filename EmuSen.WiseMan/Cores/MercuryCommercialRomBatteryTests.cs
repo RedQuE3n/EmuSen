@@ -11,18 +11,19 @@ namespace EmuSen.WiseMan.Cores
         // load rather than about the switch's value now - which is what makes this safe in parallel.
         [Theory]
         [MemberData(nameof(Cartridges))]
-        public void Disabling_the_battery_leaves_no_save_beside_the_rom(string path)
+        public void Disabling_the_battery_leaves_no_save_beside_the_rom_or_in_saves(string path)
         {
             if (path.Length == 0) return;
 
-            string savePath = Path.ChangeExtension(path, ".srm");
-            File.Delete(savePath);
+            string beside = Path.ChangeExtension(path, ".srm"), saves = EmuSen.Galaxia.Library.SaveLibrary.SramPathFor(path, EmuSen.Cores.BatterySave.GameBoyFolder(path));
+            bool besideBefore = File.Exists(beside), savesBefore = File.Exists(saves);
 
             var core = Load(path);
             for (int i = 0; i < 320; i++) core.RunFrame();
             core.SaveSram();
 
-            Assert.False(File.Exists(savePath), $"{Path.GetFileName(path)} wrote {Path.GetFileName(savePath)} despite BatteryRamDisabled.");
+            Assert.Equal(besideBefore, File.Exists(beside));
+            Assert.Equal(savesBefore, File.Exists(saves));
         }
     }
 }

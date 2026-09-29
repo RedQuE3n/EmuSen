@@ -37,7 +37,7 @@ namespace EmuSen.WiseMan.Cores
             WriteEepromBlock(first.Bus!, 2, 0x5A);
             first.SaveSram();
 
-            Assert.Equal(Eeprom.Size, new FileInfo(SaveLibrary.SramPathFor(rom)).Length);
+            Assert.Equal(Eeprom.Size, new FileInfo(SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64)).Length);
 
             var second = new MarsCore(batteryRamDisabled: false);
             second.LoadRom(rom);
@@ -55,8 +55,8 @@ namespace EmuSen.WiseMan.Cores
             core.LoadRom(rom);
             core.SaveSram();
 
-            Assert.False(File.Exists(SaveLibrary.SramPathFor(rom)));
-            Assert.False(File.Exists(Path.ChangeExtension(SaveLibrary.SramPathFor(rom), MarsCore.PakExtension)));
+            Assert.False(File.Exists(SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64)));
+            Assert.False(File.Exists(Path.ChangeExtension(SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64), MarsCore.PakExtension)));
         }
 
         [Fact]
@@ -73,7 +73,7 @@ namespace EmuSen.WiseMan.Cores
             var second = new MarsCore(batteryRamDisabled: false);
             second.LoadRom(rom);
 
-            Assert.Equal(ControllerPak.Size, new FileInfo(Path.ChangeExtension(SaveLibrary.SramPathFor(rom), MarsCore.PakExtension)).Length);
+            Assert.Equal(ControllerPak.Size, new FileInfo(Path.ChangeExtension(SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64), MarsCore.PakExtension)).Length);
             Assert.Equal(32, second.Bus!.Si.Controllers[0].Pak!.Data[0x041F]);
             Assert.Null(second.Bus.Si.Controllers[1].Pak);
         }
@@ -82,7 +82,7 @@ namespace EmuSen.WiseMan.Cores
         public void A_saved_chip_is_written_again_only_after_it_changes_again()
         {
             string rom = WriteRom("Twice");
-            string save = SaveLibrary.SramPathFor(rom);
+            string save = SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64);
 
             var core = new MarsCore(batteryRamDisabled: false);
             core.LoadRom(rom);
@@ -103,7 +103,7 @@ namespace EmuSen.WiseMan.Cores
         public void A_changed_chip_is_written_on_the_three_hundredth_frame_without_being_asked()
         {
             string rom = WriteRom("Autosave");
-            string save = SaveLibrary.SramPathFor(rom);
+            string save = SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64);
 
             var core = new MarsCore(batteryRamDisabled: false);
             core.LoadRom(rom);

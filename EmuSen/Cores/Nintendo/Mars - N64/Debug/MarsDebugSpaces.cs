@@ -72,11 +72,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Debug
         }
 
         // Which memory a physical address names, or none for a register - see Mars_Debug.md §4.
-        public static PhysicalAddress? Resolve(MarsCore core, uint physical)
-        {
-            if (core.Bus is not { } bus) return null;
+        public static PhysicalAddress? Resolve(MarsCore core, uint physical) => core.Bus is { } bus ? Resolve(physical, bus.Rdram.Length) : null;
 
-            if (physical < bus.Rdram.Length) return new PhysicalAddress(Rdram, (int)physical);
+        // The same map for either engine, given the RDRAM installed; MarsRT's shim asks it too.
+        public static PhysicalAddress? Resolve(uint physical, long rdramLength)
+        {
+            if (physical < rdramLength) return new PhysicalAddress(Rdram, (int)physical);
             if (physical < MemoryMap.RdramRegistersBase) return new PhysicalAddress("RDRAM (not installed)", (int)physical, false);
             if (physical < MemoryMap.SpDmemBase) return new PhysicalAddress("RDRAM registers", (int)(physical - MemoryMap.RdramRegistersBase), false);
 

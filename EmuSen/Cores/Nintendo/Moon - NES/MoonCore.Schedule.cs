@@ -67,8 +67,9 @@ namespace EmuSen.Cores.Nintendo.Moon
 
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
             ApplyCheats();
+            Breakpoints.NoteFrame(TotalFrames);
 
-            if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();
+            if (BatterySave.IsFlushFrame(TotalFrames)) Cart!.SaveSram();
 
             _frameComplete = true;
         }

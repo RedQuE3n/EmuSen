@@ -146,9 +146,12 @@ Failure stays best-effort, exactly as it is for config: a save that cannot reach
 One spelling of the naming rules, previously duplicated across two frontends and computed three different ways by three cores.
 
 ```csharp
-string SramPathFor(romPath)                            // Saves/<stem>.srm
+string SramPathFor(romPath, console)                   // Saves/<console>/<stem>.srm, since 2026-09-28
 string StatePathFor(romPath, slot, directoryOverride)  // Save States/<stem>[.slotN].state
 ```
+
+*Revised 2026-09-28: the save is in a folder per console, named as the ROM library names them, and the flat
+`Saves/<stem>.srm` of earlier builds is copied in once (`EmuSen_Settings_Reference.md` §4.85.11).*
 
 ### 5.1 Two decisions worth knowing
 
@@ -196,6 +199,7 @@ The sidecar argument of §5.3 survives the move in one respect and not in anothe
 Two things were separated out rather than bundled in, so each stands on its own review:
 
 - **Moon and Mercury still write `.srm` beside the ROM.** Venus writes to `Saves/`; the other two use `Path.ChangeExtension(romPath, ".srm")`, which puts emulator output inside the player's own ROM folder. They gained the durable write in this pass and nothing else. Relocating them is a user-visible behavior change and needs a copy-don't-move migration in the shape of `ConfigFile<T>.MigrateFromLegacy`, read-only on `Games/`.
+  *Done 2026-09-28: both, and their Rust engines, save in `Saves/` through one `BatterySave`, and a save beside the ROM is copied once, never moved (`EmuSen_Settings_Reference.md` §4.85.6).*
 - **`SaveLibrary` cannot enumerate.** It resolves names; it does not list which slots exist or when they were written. That is the piece which would let a launcher show a save list through LunaP without loading a core — worth building when a UI actually consumes it, not before.
 
 ---

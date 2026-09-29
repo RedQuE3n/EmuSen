@@ -67,7 +67,8 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private const int ExpandedRdram = 8 * 1024 * 1024;
 
         private nint _handle;
-        private string? _romPath, _savePath, _pakPath;
+        private string? _romPath;
+        private BatterySave _save = BatterySave.None, _pak = BatterySave.None;
         private readonly bool? _batteryRamDisabled;
         private byte[] _frame = Blank(MarsCore.DefaultScreenHeight);
         private int _screenWidth = MarsCore.ScreenWidthPixels, _screenHeight = MarsCore.DefaultScreenHeight, _rowRepeat = 1;
@@ -120,7 +121,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         public long Cycles => Counter(0);
         public long Instructions => Counter(3);
         public long IdleTurnsPassed => Counter(4);
-        public int StateVersion => 1;
+        public int StateVersion => MarsCore.StateVersion;
         public long FrameSerial => _frameSerial;
         public bool RepeatRows
         {
@@ -487,11 +488,10 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         public void LoadRom(string path)
         {
             byte[] image = File.ReadAllBytes(path);
-            bool enabled = !(_batteryRamDisabled ?? CoreOptions.BatteryRamDisabled);
-            _savePath = enabled ? SaveLibrary.SramPathFor(path) : null;
-            _pakPath = enabled ? Path.ChangeExtension(_savePath!, MarsCore.PakExtension) : null;
-            byte[]? saved = _savePath is null ? null : AtomicFile.TryRead(_savePath);
-            byte[]? pak = _pakPath is null ? null : AtomicFile.TryRead(_pakPath);
+            _save = BatterySave.Open(path, BatterySave.N64, disabled: _batteryRamDisabled);
+            _pak = BatterySave.Open(path, BatterySave.N64, disabled: _batteryRamDisabled, extension: MarsCore.PakExtension);
+            byte[]? saved = _save.Read();
+            byte[]? pak = _pak.Read();
 
             nint handle;
             fixed (byte* rom = image)
@@ -582,7 +582,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
                 ApplyCheatsAtFrameEnd();
                 FrameLog.RecordFrame(TotalFrames, ReadWidth);
                 Breakpoints.NoteFrame(TotalFrames);
-                if (TotalFrames % MarsCore.SaveEveryNFrames == 0) SaveSram();
+                if (BatterySave.IsFlushFrame(TotalFrames)) SaveSram();
                 if (_skipRendering) return;
                 PresentExport(handle);
                 TakePicture();
@@ -686,21 +686,21 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             if (_handle == 0) return;
             int* info = stackalloc int[2];
             long length = SaveData(_handle, null, 0, info);
-            if (_savePath != null && info[1] != 0 && length > 0)
+            if (_save.Path != null && info[1] != 0 && length > 0)
             {
                 var contents = new byte[length];
                 fixed (byte* data = contents) SaveData(_handle, data, (nuint)contents.Length, info);
-                AtomicFile.Write(_savePath, contents);
+                _save.Write(contents);
                 MarkSaved(_handle, 1);
             }
 
             int dirty = 0;
             long pakLength = PakData(_handle, null, 0, &dirty);
-            if (_pakPath != null && dirty != 0 && pakLength > 0)
+            if (_pak.Path != null && dirty != 0 && pakLength > 0)
             {
                 var pak = new byte[pakLength];
                 fixed (byte* data = pak) PakData(_handle, data, (nuint)pak.Length, &dirty);
-                AtomicFile.Write(_pakPath, pak);
+                _pak.Write(pak);
                 MarkSaved(_handle, 2);
             }
         }

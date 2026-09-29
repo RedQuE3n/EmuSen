@@ -15,7 +15,7 @@ using VideoInterface = EmuSen.Cores.Nintendo.Mars.Vi.Vi;
 namespace EmuSen.Cores.Nintendo.Mars
 {
     // The Nintendo 64's ICore; what the machine cannot provide yet is stubbed on purpose - see Mars_Core.md.
-    public sealed partial class MarsCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ISnapshotCore, global::EmuSen.Cores.ICoreSettings, global::EmuSen.Cores.IFrameSerial, global::EmuSen.Cores.IRepeatedRows, global::EmuSen.Cores.IStateFormat
+    public sealed partial class MarsCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ISnapshotCore, global::EmuSen.Cores.ICoreSettings, global::EmuSen.Cores.IFrameSerial, global::EmuSen.Cores.IRepeatedRows, global::EmuSen.Cores.IStateFormat, global::EmuSen.Cores.IEngineFeatures
     {
         // The VR4300's pipeline clock, which is what MemoryBus.Cycles counts - see Mars_Memory.md §3.
         public const long ProcessorClockHz = 93_750_000;
@@ -40,23 +40,22 @@ namespace EmuSen.Cores.Nintendo.Mars
         // The right stick stands in for the four C buttons, pressed past half its travel - see Mars_Core.md §5.
         public const double CButtonThreshold = 0.5;
 
+        // No rewind: the snapshot with several rasteriser workers froze a game - see EmuSen_Settings_Reference.md §4.21b and §4.44.
+        public global::EmuSen.Cores.EngineFeatures Features { get; } = new(RewindCapture: false, RewindWithheld: "not kept for Mars (C#)");
+
         // "MARS" little-endian, then the format version - see Mars_SaveStates.md §1.
-        private const uint StateMagic = 0x5352_414D;
-        private const int StateVersion = 1;
+        public const uint StateMagic = 0x5352_414D;
+        public const int StateVersion = 1;
         int global::EmuSen.Cores.IStateFormat.StateVersion => StateVersion;
 
         // The same body, then the words the display processor's thread had not run - see Mars_SaveStates.md §1.
-        private const int SnapshotVersion = 2;
-
-        // How often a changed save is written without being asked, as the other cores do - see Mars_Save.md §7.
-        public const int SaveEveryNFrames = 300;
+        public const int SnapshotVersion = 2;
 
         // The Controller Pak's own file beside the cartridge's - see Mars_Save.md §7.
         public const string PakExtension = ".mpk";
 
         private byte[] _frame = Blank(DefaultScreenHeight);
-        private string? _savePath;
-        private string? _pakPath;
+        private BatterySave _save = BatterySave.None, _pak = BatterySave.None;
         private int _screenHeight = DefaultScreenHeight;
 
         // The picture a deferred walk composes while the next frame runs, shown once the walk is joined - see Mars_Video.md §2.7.
@@ -383,7 +382,7 @@ namespace EmuSen.Cores.Nintendo.Mars
             FrameLog.RecordFrame(TotalFrames, (space, address, width) => MarsDebugSpaces.ReadWidth(this, space, address, width));
             Breakpoints.NoteFrame(TotalFrames);
 
-            if (TotalFrames % SaveEveryNFrames == 0) SaveSram();
+            if (BatterySave.IsFlushFrame(TotalFrames)) SaveSram();
 
             if (SkipRendering) return;
             if (_deferred) PresentDeferred(Bus.Vi);
@@ -498,16 +497,16 @@ namespace EmuSen.Cores.Nintendo.Mars
             if (Bus is null) return;
 
             SaveChip chip = Bus.Save;
-            if (_savePath != null && chip.Dirty && chip.Contents is { } contents)
+            if (_save.Path != null && chip.Dirty && chip.Contents is { } contents)
             {
-                AtomicFile.Write(_savePath, contents);
+                _save.Write(contents);
                 chip.Saved();
             }
 
             ControllerPak? pak = Bus.Si.Controllers[0].Pak;
-            if (_pakPath != null && pak is { Dirty: true })
+            if (_pak.Path != null && pak is { Dirty: true })
             {
-                AtomicFile.Write(_pakPath, pak.Data);
+                _pak.Write(pak.Data);
                 pak.Dirty = false;
             }
         }
@@ -516,19 +515,16 @@ namespace EmuSen.Cores.Nintendo.Mars
         private void LoadSaves(MemoryBus bus, RomImage rom, string romPath)
         {
             // Latched here, as a cartridge does, so --nobattery holds for the whole run - see Mars_Save.md §7.
-            bool enabled = !(_batteryRamDisabled ?? CoreOptions.BatteryRamDisabled);
-            _savePath = enabled ? SaveLibrary.SramPathFor(romPath) : null;
-            _pakPath = enabled ? Path.ChangeExtension(_savePath!, PakExtension) : null;
+            _save = BatterySave.Open(romPath, BatterySave.N64, disabled: _batteryRamDisabled);
+            _pak = BatterySave.Open(romPath, BatterySave.N64, disabled: _batteryRamDisabled, extension: PakExtension);
 
-            byte[]? saved = Read(_savePath);
+            byte[]? saved = _save.Read();
             N64SaveType type = SaveTypes.Declared(rom);
             if (type == N64SaveType.Unknown && saved != null) type = SaveChip.FromSaveLength(saved.Length);
 
             bus.Save = new SaveChip(type, saved);
-            bus.Si.Controllers[0].Pak = new ControllerPak(Read(_pakPath));
+            bus.Si.Controllers[0].Pak = new ControllerPak(_pak.Read());
         }
-
-        private static byte[]? Read(string? path) => path is null ? null : AtomicFile.TryRead(path);
 
         // Refused before any file exists, so a failed save leaves no empty state behind - see Mars_SaveStates.md §1.
         public void SaveState(string path)

@@ -257,6 +257,9 @@ stay C#.
 - **Test ABI:** `moon_machine_step` (one `RunCpuUntilBudgetSpent` iteration without the budget: the pending DMA
   charge, the NMI edge, one `Cpu.Step`, the stolen cycles).
 
+*Revised 2026-09-28: `moon_machine_set_audio_limit` joins the sound exports, carrying `AudioSettings.AudioBufferMaxSamples`
+to the Rust queue, and the interface version is 2 (`EmuSen_Settings_Reference.md` §4.85.2).*
+
 ### 2.4 What stays C#
 
 - the frontends, `CoreFactory` and `CoreCatalog`;

@@ -108,15 +108,15 @@ namespace EmuSen.WiseMan.Cores
         {
             CoreBundle bundle = CoreFactory.Load(_romPath);
 
-            Assert.IsType<NesRawCheatCodec>(bundle.CheatAutoDetectCodec);
-            Assert.IsType<NesGameGenieCheatCodec>(bundle.CheatExplicitCodec);
+            Assert.Equal(("NES address:value", MoonCore.SpaceCpuBus), (bundle.CheatAutoDetectCodec!.Name, bundle.CheatAutoDetectCodec.SpaceName));
+            Assert.Equal(("Game Genie", CheatCodeKind.RomPatch), (bundle.CheatExplicitCodec!.Name, bundle.CheatExplicitCodec.Kind));
         }
 
         // The whole chain: a published code, decoded, applied, seen by the CPU.
         [Fact]
         public void A_game_genie_code_decodes_and_patches_end_to_end()
         {
-            ICheatCodeCodec codec = new NesGameGenieCheatCodec();
+            ICheatCodeCodec codec = MoonCheatCodecs.GameGenie();
             // Decodes to $91D9, so this fixture patches the byte the code names rather than the one it has.
             (int address, byte value) = codec.Decode("SXIOPO");
             Assert.Equal(0x91D9, address);

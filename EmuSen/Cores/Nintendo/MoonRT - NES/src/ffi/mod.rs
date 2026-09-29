@@ -117,6 +117,17 @@ pub unsafe extern "C" fn moon_machine_set_options(machine: *mut Machine, flags: 
     }
 }
 
+/// The most samples the queue holds, the host's `AudioSettings.AudioBufferMaxSamples`.
+///
+/// # Safety
+/// `machine` must be live or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn moon_machine_set_audio_limit(machine: *mut Machine, samples: u64) {
+    if let Some(m) = unsafe { machine.as_mut() } {
+        m.bus.apu.mixer.max_buffered_samples = samples as usize;
+    }
+}
+
 /// Channel mutes, bit n for channel n.
 ///
 /// # Safety

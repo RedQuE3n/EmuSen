@@ -8,7 +8,7 @@ namespace EmuSen.Audio
         public static int SampleRate = 32000;
 
         // Core-side safety valve only, not a resync - see EmuSen_Audio_Sync.md §4.
-        public static int AudioBufferMaxSamples = 128000;
+        public static int AudioBufferMaxSamples = EmuSen.Common.SampleQueue.DefaultLimit;
 
         // Where dynamic rate control steers the output queue - see EmuSen_Audio_Sync.md §3.
         public static int OutputTargetLatencyMs = 256;

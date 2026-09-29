@@ -83,13 +83,12 @@ namespace EmuSen.WiseMan.Audio
             var buffer = ((EmuSen.Cores.Nintendo.Venus.VenusCore)session.Core!).Bus!.Spc700.Dsp.AudioBuffer;
             for (int i = 0; i < 2000; i++)
             {
-                buffer.Enqueue((short)i);
-                buffer.Enqueue((short)-i);
+                buffer.Enqueue((short)i, (short)-i);
             } // 2000 frames - under AudioPlayer's 4096-frame per-pump cap
 
             player.Submit(session.DequeueAudioSamples(int.MaxValue), session.AudioSampleRate);
 
-            Assert.Empty(buffer); // fully drained in one call
+            Assert.Equal(0, buffer.Count); // fully drained in one call
         }
 
         [Fact]

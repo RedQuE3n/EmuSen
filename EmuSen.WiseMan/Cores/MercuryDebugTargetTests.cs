@@ -317,8 +317,8 @@ namespace EmuSen.WiseMan.Cores
                 Assert.IsType(rig.CoreType, bundle.Core);
                 Assert.IsType(rig.TargetType, bundle.DebugTarget);
                 (bundle.Core as IDisposable)?.Dispose();
-                Assert.IsType<GbGameSharkCheatCodec>(bundle.CheatAutoDetectCodec);
-                Assert.IsType<GbGameGenieCheatCodec>(bundle.CheatExplicitCodec);
+                Assert.Equal(("GameShark", MercuryCore.SpaceCpuBus), (bundle.CheatAutoDetectCodec!.Name, bundle.CheatAutoDetectCodec.SpaceName));
+                Assert.Equal(("Game Genie", CheatCodeKind.RomPatch), (bundle.CheatExplicitCodec!.Name, bundle.CheatExplicitCodec.Kind));
             }
         }
 

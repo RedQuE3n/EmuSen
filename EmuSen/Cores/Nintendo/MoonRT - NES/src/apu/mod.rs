@@ -29,6 +29,8 @@ pub struct Mixer {
     pub cycles_per_sample: f64,
     pub cycle_fraction: f64,
     pub buffer: VecDeque<i16>,
+    /// The host's `AudioSettings.AudioBufferMaxSamples`, sent through `moon_machine_set_audio_limit`.
+    pub max_buffered_samples: usize,
     pub hp90: f64,
     pub hp90_prev: f64,
     pub hp440: f64,
@@ -48,6 +50,7 @@ impl Default for Mixer {
             cycles_per_sample: CPU_CLOCK_HZ / 44100.0,
             cycle_fraction: 0.0,
             buffer: VecDeque::with_capacity(MAX_BUFFERED_SAMPLES),
+            max_buffered_samples: MAX_BUFFERED_SAMPLES,
             hp90: 0.0,
             hp90_prev: 0.0,
             hp440: 0.0,
@@ -445,12 +448,13 @@ impl Mixer {
         self.sample_accumulator = 0.0;
         self.sample_count = 0;
         let sample = (self.filter(mean) * OUTPUT_GAIN).clamp(i16::MIN as f64, i16::MAX as f64) as i16;
-        if self.buffer.len() + 2 > MAX_BUFFERED_SAMPLES {
+        self.buffer.push_back(sample);
+        self.buffer.push_back(sample);
+        // C#'s SampleQueue: trimmed after the pair, until within the limit (EmuSen_Settings_Reference.md §4.85.2).
+        while self.buffer.len() > self.max_buffered_samples && self.buffer.len() >= 2 {
             self.buffer.pop_front();
             self.buffer.pop_front();
         }
-        self.buffer.push_back(sample);
-        self.buffer.push_back(sample);
     }
 }
 

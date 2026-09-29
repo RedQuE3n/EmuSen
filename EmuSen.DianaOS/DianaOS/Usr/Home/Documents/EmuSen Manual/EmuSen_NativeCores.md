@@ -776,6 +776,11 @@ emusen_native::exports!(Machine);
 All of it lives in the `EmuSen` assembly, in `EmuSen/Cores/Native/`. No new project is made: a new assembly would buy
 no separability that anything uses (`EmuSen_Multicore.md` §9.2).
 
+*Built in part 2026-09-28, over today's per-core exports: `NativeCoreLibrary`, `NativeMachine` (with a `NativeExports`
+table under the present names), `NativeRtCore<TMachine>` for the two 8-bit shims, and `RomPatchTable`, with the names
+and shapes below; MarsRT's shim does not use the base yet. What was built, what was not and why is in
+`EmuSen_Settings_Reference.md` §4.85.7.*
+
 ### 4.1 `NativeCoreLibrary`, the loader
 
 One instance per library, replacing `MoonNative`, `MercuryNative` and `MarsNative`'s loading half. It is built from:
@@ -927,6 +932,9 @@ to build the crate (`RustCores.props:9`–`:26`).
 
 `EngineFeatures.RewindCapture` is false for Mars (C#) and true for every other engine. Mistress's two sites read the
 running engine's feature, and the reason they give ("not kept for Mars (C#)") comes from the registration's own text.
+*Built 2026-09-28, ahead of the records: `EngineFeatures` and the `IEngineFeatures` an engine implements to declare it
+live in `CoreCapabilities.cs`, `MarsCore` declares the withheld rewind and its text, and Mistress's two sites read it
+(`EmuSen_Settings_Reference.md` §4.85.4). The registration reads the same declaration when it is built.*
 Anything later that is a property of an engine rather than a capability of a core goes in the same place. A property
 of an engine is a policy decision about an implementation that does support the interface.
 

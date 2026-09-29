@@ -87,7 +87,7 @@ namespace EmuSen.Cores.Nintendo.Venus
             }
 
             // Periodic autosave - see Cartridge.SaveSram's own comment for why this is safe this often.
-            if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();
+            if (BatterySave.IsFlushFrame(TotalFrames)) Cart!.SaveSram();
 
             // How much a deferred renderer would have to snapshot for this game - see Venus_PPU.md §7.3.
             if (DebugSettings.PpuActiveDisplayWriteLogging)

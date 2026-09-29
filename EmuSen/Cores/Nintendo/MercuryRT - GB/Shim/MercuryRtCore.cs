@@ -13,8 +13,6 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
     // MercuryRT behind the Game Boy's ICore: the machine in Rust, the registries, saves and cheats' rules in C# - see Mercury_Native.md §8.3.
     public sealed partial class MercuryRtCore : ICore, ICheatRegistryHost, IStateFormat, IFrameBufferPool, ICoreSettings, IDisposable
     {
-        private const int SaveEveryNFrames = 300;
-
         private static readonly PadButton[] MaskOrder = { PadButton.Right, PadButton.Left, PadButton.Up, PadButton.Down, PadButton.A, PadButton.B, PadButton.Select, PadButton.Start };
 
         private MercuryMachine? _machine;
@@ -27,7 +25,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         private int _patchVersion = -1;
 
         // The battery save's file, the host's and in no state - see Mercury_Native.md §9.3.
-        private string? _savePath;
+        private BatterySave _battery = BatterySave.None;
 
         // The C# machine the debugger reads, refreshed from MercuryRT's state; its registries are this core's - see Mercury_Native.md §8.3.
         public MercuryCore Mirror { get; } = new();
@@ -106,13 +104,8 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         {
             byte[] image = File.ReadAllBytes(path);
             Cartridge header = Cartridge.FromImage(image);
-            string? savePath = null;
-            byte[]? saved = null;
-            if (header.HasBattery && !CoreOptions.BatteryRamDisabled && !string.IsNullOrEmpty(path))
-            {
-                savePath = Path.ChangeExtension(path, ".srm");
-                if (header.Ram.Length > 0) saved = AtomicFile.TryRead(savePath);
-            }
+            BatterySave battery = BatterySave.Open(path, hasRam: header.HasBattery && header.Ram.Length > 0, migrate: true);
+            byte[]? saved = battery.Read();
 
             var machine = new MercuryMachine(image, _model);
             if (saved is not null) machine.WriteSpace(2, 0, saved.AsSpan(0, Math.Min(saved.Length, header.Ram.Length)));
@@ -121,7 +114,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             _machine?.Dispose();
             _machine = machine;
             _header = header;
-            _savePath = savePath;
+            _battery = battery;
             _romPath = path;
             _rom = image;
             _patchVersion = -1;
@@ -159,7 +152,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
             ApplyCheats();
             Breakpoints.NoteFrame(TotalFrames);
-            if (TotalFrames % SaveEveryNFrames == 0) SaveSram();
+            if (BatterySave.IsFlushFrame(TotalFrames)) SaveSram();
         }
 
         public void ApplyCheats() => Cheats.ApplyAll(ReadSpace, WriteSpace);
@@ -196,11 +189,10 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         // Cartridge.SaveSram: the path this session chose at load, which no state can change.
         public void SaveSram()
         {
-            if (_machine is null || _header is null || !_header.HasBattery || _header.Ram.Length == 0) return;
-            if (_savePath is not { } path) return;
+            if (_machine is null || _header is null || _battery.Path is null) return;
             var ram = new byte[_header.Ram.Length];
             _machine.ReadSpace(2, 0, ram);
-            AtomicFile.Write(path, ram);
+            _battery.Write(ram);
         }
 
         public void SaveState(string path)

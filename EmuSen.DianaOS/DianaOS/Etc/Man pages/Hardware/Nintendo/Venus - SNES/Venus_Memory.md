@@ -128,6 +128,8 @@ SRAM is mapped to the lower 32KB (`$0000-$7FFF`) of banks `$70-$7D` and `$F0-$FF
 
 `SaveSram()` is called periodically (see `VenusCore.RunFrame`'s autosave, every 300 frames) and on shutdown, not on every SRAM write. Both directions go through `AtomicFile`, which writes a temp file and renames over the target, so one of those ~5-second autosaves being interrupted leaves the previous save whole rather than truncated — see `EmuSen_Galaxia.md` §4.
 
+*Revised 2026-09-28: the reads and writes go through the `BatterySave` opened when the cartridge is built. `SavePath` and the `--nobattery` latch are still fields of the state, and a state loaded from another game used to redirect or disable this game's save through them; they are no longer obeyed (`EmuSen_Settings_Reference.md` §4.85.6).*
+
 ### 2.4a The battery save is emulator state, and it silently broke a three-day measurement
 
 **On a SuperFX cart the `.srm` *is* GSU work RAM.** Game Pak RAM is one chip holding the GSU's variables, its framebuffer and the battery-backed save (`Venus_SuperFX.md` §1), and `LoadSram()` copies `_batteryRamSize` bytes straight into the low end of it. So restoring a save does not only restore the player's progress — it pre-loads whatever the GSU last left in those addresses.

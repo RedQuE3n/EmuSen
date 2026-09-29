@@ -54,8 +54,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         // Which console this cartridge expects - see Venus_Memory.md §2.5.
         public ConsoleRegion Region => _region;
 
-        // Saves/<rom-name>.srm - see Venus_Memory.md §2.4.
+        // Saves/<rom-name>.srm - see Venus_Memory.md §2.4; a state carries it, so the writes go through _battery instead - see EmuSen_Settings_Reference.md §4.85.6.
         public string SavePath { get; }
+
+        [EmuSen.Common.SkipInState] private EmuSen.Cores.BatterySave _battery = EmuSen.Cores.BatterySave.None;
 
         // Everything the header says that both the constructor and the no-load firmware query below need - see Venus_Memory.md §2.1a.
         private readonly record struct HeaderInfo(int Base, bool IsHiRom, byte MapMode, byte CartType, byte ChipType, string CartName);
@@ -158,6 +160,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             _region = ConsoleRegions.FromCountryCode(country);
 
             SavePath = SaveLibrary.SramPathFor(romPath);
+            _battery = EmuSen.Cores.BatterySave.Open(romPath, hasRam: _batteryRamSize > 0 || NecDsp is { HasBatteryRam: true }, disabled: _batteryRamDisabled);
             LoadSram();
 
             Console.WriteLine("=== Cartridge Loaded ===");
@@ -174,25 +177,24 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         {
             try
             {
-                if (_batteryRamDisabled) return;
-                if (AtomicFile.TryRead(SavePath) is not { } saved) return;
+                if (_battery.Read() is not { } saved) return;
 
                 // On an ST010/ST011 the .srm is the DSP's own data RAM - see Venus_NecDSP.md §6.
                 if (NecDsp is { HasBatteryRam: true } dsp)
                 {
                     dsp.ImportBatteryRam(saved);
-                    Console.WriteLine($"[Cartridge] Loaded save: {SavePath} ({saved.Length} bytes, {dsp.Name} RAM)");
+                    Console.WriteLine($"[Cartridge] Loaded save: {_battery.Path} ({saved.Length} bytes, {dsp.Name} RAM)");
                     return;
                 }
 
                 int count = Math.Min(saved.Length, _batteryRamSize);
                 Array.Copy(saved, _sram, count);
-                Console.WriteLine($"[Cartridge] Loaded save: {SavePath} ({count} bytes)");
+                Console.WriteLine($"[Cartridge] Loaded save: {_battery.Path} ({count} bytes)");
             }
             catch (Exception ex)
             {
                 // A save that fails to load shouldn't prevent the game itself from booting - worst case the player.
-                Console.WriteLine($"[Cartridge] Failed to load save ({SavePath}): {ex.Message}");
+                Console.WriteLine($"[Cartridge] Failed to load save ({_battery.Path}): {ex.Message}");
             }
         }
 
@@ -203,7 +205,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             set => EmuSen.Cores.CoreOptions.BatteryRamDisabled = value;
         }
 
-        // This cartridge's own copy, taken once at construction - see Venus_Memory.md §2.4a.
+        // This cartridge's own copy, taken once at construction and kept in the state's format; _battery is what honours it - see Venus_Memory.md §2.4a.
         private readonly bool _batteryRamDisabled;
 
         // Called periodically + on shutdown, not on every write - see Venus_Memory.md §2.4.
@@ -211,20 +213,20 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         {
             try
             {
-                if (_batteryRamDisabled) return;
+                if (_battery.Path is null) return;
 
                 if (NecDsp is { HasBatteryRam: true } dsp)
                 {
-                    AtomicFile.Write(SavePath, dsp.ExportBatteryRam());
+                    _battery.Write(dsp.ExportBatteryRam());
                     return;
                 }
 
                 if (_batteryRamSize == 0) return;
-                AtomicFile.Write(SavePath, _sram.AsSpan(0, _batteryRamSize).ToArray());
+                _battery.Write(_sram.AsSpan(0, _batteryRamSize).ToArray());
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Cartridge] Failed to save ({SavePath}): {ex.Message}");
+                Console.WriteLine($"[Cartridge] Failed to save ({_battery.Path}): {ex.Message}");
             }
         }
 

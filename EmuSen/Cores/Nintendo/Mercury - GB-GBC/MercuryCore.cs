@@ -31,7 +31,6 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public const int OldestReadableVersion = 5;
         int global::EmuSen.Cores.IStateFormat.StateVersion => StateVersion;
 
-        private const int SaveEveryNFrames = 300;
 
         public Cartridge? Cart { get; private set; }
         public Cpu.Core.Cpu? Cpu { get; private set; }
@@ -228,7 +227,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
             ApplyCheats();
             Breakpoints.NoteFrame(TotalFrames);
 
-            if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();
+            if (BatterySave.IsFlushFrame(TotalFrames)) Cart!.SaveSram();
         }
 
         // Public so a paused frontend need not wait for a frame boundary - see EmuSen_Cheats.md §6.

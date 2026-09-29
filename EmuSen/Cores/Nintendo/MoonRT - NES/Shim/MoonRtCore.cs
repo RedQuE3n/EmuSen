@@ -14,11 +14,9 @@ namespace EmuSen.Cores.Nintendo.MoonRT
     // MoonRT behind the NES's ICore: the machine in Rust, the registries, saves and cheats' rules in C# - see Moon_Native.md §2.
     public sealed class MoonRtCore : ICore, IFrameProfiler, ICheatRegistryHost, IStateFormat, IFrameBufferPool, IDisposable
     {
-        private const int SaveEveryNFrames = 300;
-
         private MoonMachine? _machine;
         private Cartridge? _header;
-        private string? _savePath;
+        private BatterySave _battery = BatterySave.None;
         private readonly byte[] _frame = new byte[MoonMachine.FrameBytes];
         private readonly FrameBufferLending _lending = new();
         private readonly uint[] _buttons = new uint[2];
@@ -77,13 +75,8 @@ namespace EmuSen.Cores.Nintendo.MoonRT
         {
             byte[] image = File.ReadAllBytes(path);
             Cartridge header = Cartridge.FromImage(image);
-            string? savePath = null;
-            byte[]? saved = null;
-            if (header.HasBattery && !CoreOptions.BatteryRamDisabled && !string.IsNullOrEmpty(path))
-            {
-                savePath = Path.ChangeExtension(path, SaveLibrary.SramExtension);
-                saved = AtomicFile.TryRead(savePath);
-            }
+            BatterySave battery = BatterySave.Open(path, hasRam: header.HasBattery && header.PrgRam.Length > 0, migrate: true);
+            byte[]? saved = battery.Read();
 
             var machine = new MoonMachine(image);
             if (saved is not null) machine.WriteSpace(2, 0, saved.AsSpan(0, Math.Min(saved.Length, header.PrgRam.Length)));
@@ -92,7 +85,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             _machine?.Dispose();
             _machine = machine;
             _header = header;
-            _savePath = savePath;
+            _battery = battery;
             _patchVersion = -1;
             machine.SetButtons(0, _buttons[0]);
             machine.SetButtons(1, _buttons[1]);
@@ -138,7 +131,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
             ApplyCheats();
             Breakpoints.NoteFrame(TotalFrames);
-            if (TotalFrames % SaveEveryNFrames == 0) SaveSram();
+            if (BatterySave.IsFlushFrame(TotalFrames)) SaveSram();
         }
 
         public void ApplyCheats() => Cheats.ApplyAll(ReadSpace, WriteSpace);
@@ -172,13 +165,13 @@ namespace EmuSen.Cores.Nintendo.MoonRT
 
         public short[] DequeueAudioSamples(int maxFrames) => _machine?.DrainAudio(maxFrames) ?? Array.Empty<short>();
 
-        // Cartridge.SaveSram: beside the ROM, and not at all under --nobattery.
+        // Cartridge.SaveSram: the save this session opened at load, which no state can change.
         public void SaveSram()
         {
-            if (_machine is null || _header is null || !_header.HasBattery || _savePath is null) return;
+            if (_machine is null || _header is null || _battery.Path is null) return;
             var ram = new byte[_header.PrgRam.Length];
             _machine.ReadSpace(2, 0, ram);
-            AtomicFile.Write(_savePath, ram);
+            _battery.Write(ram);
         }
 
         public void SaveState(string path)

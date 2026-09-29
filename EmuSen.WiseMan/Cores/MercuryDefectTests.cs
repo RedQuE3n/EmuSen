@@ -6,6 +6,7 @@ using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.Mercury.Memory;
 using EmuSen.Cores.Nintendo.MercuryRT;
+using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 
@@ -22,10 +23,12 @@ namespace EmuSen.WiseMan.Cores
         {
             _output = output;
             Directory.CreateDirectory(_dir);
+            DataStore.OverrideDirectory = Path.Combine(_dir, "Home");
         }
 
         public void Dispose()
         {
+            DataStore.OverrideDirectory = null;
             CoreOptions.BatteryRamDisabled = true;
             try { Directory.Delete(_dir, recursive: true); } catch (IOException) { }
         }
@@ -50,7 +53,7 @@ namespace EmuSen.WiseMan.Cores
         {
             string sub = Path.Combine(_dir, name);
             Directory.CreateDirectory(sub);
-            string path = Path.Combine(sub, "game.gb");
+            string path = Path.Combine(sub, name + ".gb");
             File.WriteAllBytes(path, image);
             return path;
         }
@@ -136,7 +139,7 @@ namespace EmuSen.WiseMan.Cores
         {
             byte[] image = BatteryRom();
             string a = Rom($"a-{engine}-{saverWithoutBattery}-{loaderWithoutBattery}", image), b = Rom($"b-{engine}-{saverWithoutBattery}-{loaderWithoutBattery}", image);
-            string srmA = Path.ChangeExtension(a, ".srm"), srmB = Path.ChangeExtension(b, ".srm");
+            string srmA = SaveLibrary.SramPathFor(a), srmB = SaveLibrary.SramPathFor(b);
             string stray = Path.Combine(Environment.CurrentDirectory, ".tmp");
             bool strayBefore = File.Exists(stray);
 

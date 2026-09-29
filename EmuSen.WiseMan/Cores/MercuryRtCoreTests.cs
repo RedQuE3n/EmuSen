@@ -6,6 +6,7 @@ using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.Galaxia.Input;
+using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 
@@ -22,10 +23,12 @@ namespace EmuSen.WiseMan.Cores
         {
             _output = output;
             Directory.CreateDirectory(_dir);
+            DataStore.OverrideDirectory = Path.Combine(_dir, "Home");
         }
 
         public void Dispose()
         {
+            DataStore.OverrideDirectory = null;
             CoreOptions.BatteryRamDisabled = true;
             try { Directory.Delete(_dir, recursive: true); } catch (IOException) { }
         }
@@ -84,12 +87,13 @@ namespace EmuSen.WiseMan.Cores
             _output.WriteLine($"WRAM count {cs.Bus!.Wram[0]} on both after 360 frames");
         }
 
-        // One ROM path for both, since the path is in the state (Mercury_Native.md §6.1, D3); C#'s save is moved aside before MercuryRT's frame 300.
+        // One ROM path for both, and so one save in the Saves folder; C#'s save is moved aside before MercuryRT's frame 300.
         [Fact]
         public void A_battery_save_loads_and_writes_the_same_bytes()
         {
             CoreOptions.BatteryRamDisabled = false;
-            string rom = Rom("battery", CountingRom(0x03)), srm = Path.ChangeExtension(rom, ".srm");
+            string rom = Rom("battery", CountingRom(0x03)), srm = SaveLibrary.SramPathFor(rom);
+            Directory.CreateDirectory(Path.GetDirectoryName(srm)!);
             var saved = new byte[8192];
             new Random(64).NextBytes(saved);
             File.WriteAllBytes(srm, saved);

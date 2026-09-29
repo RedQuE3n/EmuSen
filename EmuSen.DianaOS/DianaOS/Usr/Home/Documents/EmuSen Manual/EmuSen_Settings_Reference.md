@@ -6614,3 +6614,92 @@ shared codes of `emusen-native`.
 to be the C# core's magic and version, and MarsRT's snapshot to carry `MarsCore.SnapshotVersion`. A MoonRT whose version
 drifts, a MercuryRT whose magic drifts, and a MarsRT shim reporting another version each fail it (§4.85.9). MarsRT's own
 Rust copy is covered by the test but was not mutated, since its source is held unchanged (§4.85.2).
+
+#### 4.85.6 Every battery save in the Saves folder (a behaviour change)
+
+*Decided 2026-09-28: NES and Game Boy battery saves move from beside the ROM, inside the player's library, to the Saves
+folder where SNES and Nintendo 64 saves already were, and a save found beside the ROM is copied, never moved.*
+
+**Before.** Venus, Mars and MarsRT kept a cartridge's battery save at `SaveLibrary.SramPathFor(rom)`, which is
+`home/Saves/<stem>.srm`. Moon, Mercury and the MoonRT and MercuryRT shims wrote `Path.ChangeExtension(rom, ".srm")`,
+beside the ROM, which is emulator output inside the player's own library; `EmuSen_Galaxia.md` §6 recorded the move as
+deferred until a copy-don't-move migration existed. The logic around the path was copied seven times: the `--nobattery`
+latch, the read, the atomic write, and a `SaveEveryNFrames = 300` constant in each core and shim (six copies and one
+reference).
+
+**One helper.** `BatterySave` (`EmuSen/Cores/BatterySave.cs`) is opened once per load and is then the only thing that
+reads or writes the save. It holds:
+
+- the path, `SaveLibrary.SramPathFor(rom)` with the extension changed for a second file (Mars's Controller Pak,
+  `.mpk`, beside the `.srm` in Saves as before);
+- the latch: `--nobattery` (`CoreOptions.BatteryRamDisabled`) is read when the save is opened, or the core's own
+  override where it has one (Venus's `Cartridge`, `MarsCore`, `MarsRtCore`), and the save is then `BatterySave.None`,
+  which reads nothing and writes nothing;
+- the write, through `AtomicFile` as before;
+- `FlushEveryNFrames`, the one 300, and `IsFlushFrame`, which all seven frame ends call.
+
+All seven use it: Moon's and Mercury's `Cartridge`, Venus's `Cartridge`, `MarsCore`, and the MoonRT, MercuryRT and MarsRT
+shims.
+
+**One rule for a battery with no RAM behind it: neither read nor written.** Mercury already skipped both. Moon read the
+file and would have written an empty one, but every Moon board is given 8 KB of PRG RAM regardless of its header
+(`Cartridge.cs`, `PrgRam = new byte[0x2000]`), so on Moon the case cannot arise, and the rule changes nothing for any NES
+image. Venus read the file and copied no bytes into a cartridge with no battery RAM, and wrote nothing; not reading it
+has the same effect on the machine. Mars keeps reading whatever its save chip is, because a chip the header does not
+declare is inferred from the save's length (`Mars_Save.md`), and a chip with no contents is never written. So no game's
+save changes under the one rule. This is argued from the code, not measured game by game, and it is pinned for the Game
+Boy by a test on an MBC3 with a clock and no RAM.
+
+**The migration.** On the NES and the Game Boy only, when a game loads with a battery, the Saves folder has no save for
+it, and one lies beside the ROM (`<rom>.srm`), that file is **copied** into Saves and the copy is used from then on. The
+file beside the ROM is read and never written, moved, renamed or touched: this project's tools do not write the player's
+ROM library, and the player can delete the old copies once satisfied. A save already in Saves wins, and the one beside
+the ROM is then not read at all. Under `--nobattery` nothing is read, copied or written anywhere. The SNES and the
+Nintendo 64 do not look beside the ROM, since their saves have been in Saves since Galaxia was built
+(`EmuSen_Galaxia.md` §5), so a `.srm` beside one of their ROMs was not written by this project and is left alone.
+
+**The tests** (`BatterySaveTests`, each in a sandbox home and a sandbox library, on Moon, MoonRT, Mercury and MercuryRT):
+
+- a save beside the ROM is copied into Saves and loaded; after a flush, the Saves copy holds the new bytes, and the
+  original's bytes and modification time are exactly what they were;
+- a save already in Saves wins over one beside the ROM, and neither file is changed by the other;
+- a game with no save anywhere gets one only in Saves, and the library folder still holds nothing but the ROM;
+- under `--nobattery` nothing is read (the RAM does not hold the file's bytes), nothing appears in Saves, and the file
+  beside the ROM is unchanged;
+- a Game Boy cartridge with a battery and no RAM gets no save and copies nothing;
+- a Venus ROM with a `.srm` beside it copies nothing.
+
+The fourteen mutants of §4.85.9 each fail at least one of them: a helper that never copies, that moves instead of
+copying, that touches the original's time, that lets the file beside the ROM overwrite Saves, that copies under
+`--nobattery`, or that saves a cartridge without RAM; each core not migrating; MercuryRT writing beside the ROM as
+before; Venus migrating; and the flush period off by one. A run of the suites that load these cores (1,278 tests) wrote
+no `.srm` anywhere under the tree's `home` or the temporary directory.
+
+**A Venus defect this closed.** A Venus save state carries the cartridge's `SavePath` and its `--nobattery` latch, since
+`StateSerializer` writes every field not marked otherwise, and the cartridge used both for its writes. A state saved on
+one game and loaded while playing another therefore sent the second game's battery save to the first game's file, and a
+state saved under `--nobattery` switched the battery off for the rest of the session. This is Mercury's D3
+(`Mercury_Native.md` §9.3), which Mercury fixed by retiring the field; Venus had the same defect unfixed. Its writes now
+go through the `BatterySave` opened at load, which no state can change. The two fields stay in the state with the same
+values, so every existing Venus state loads and saves byte for byte as before; they are simply no longer obeyed. The
+test, `A_venus_state_from_another_game_leaves_the_save_where_this_session_opened_it`, fails on the base build in both of
+its cases and passes after.
+
+**What it means on the handheld.** The Legion Go S keeps its games on the SD card, and until now a NES or Game Boy save
+was written there beside the game. After this build, the first load of each such game copies its save into the Saves
+folder of the installed tree, on the handheld's own storage, and plays from that copy; the file on the SD card is left as
+it was and is never updated again. Two consequences follow. A player who moves the SD card to another machine carries the
+old save, not the current one; and another emulator on the handheld that reads saves beside the ROMs will not see
+progress made in EmuSen. Both are the price of never writing the library, and both are undone by copying the Saves
+folder's file back by hand.
+
+**What it does not cover, and a hazard it creates.** The Saves folder is named by the ROM's stem alone, so two ROMs of
+different consoles with the same stem share one save file. That was already true of the SNES and the Nintendo 64, whose
+stems rarely coincide. It is now true of the NES and the Game Boy as well, and they do. In the player's library (measured
+on 2026-09-28, file names and headers read, the library not written) 38 stems occur under more than one console, every
+one a NES and a SNES game of the same name; five of those pairs have a battery on both sides (Gemfire, Nobunaga's
+Ambition, Uncharted Waters, Wario's Woods, Tecmo Super Bowl), and three of the five NES boards are ones Moon runs
+(Nobunaga's Ambition on MMC1, Wario's Woods and Tecmo Super Bowl on MMC3). A player of both versions of one of those
+three would have each load the other's save and overwrite it. Before this change the NES save sat beside its ROM and the
+two could not meet. Nothing here resolves it. A per-console folder in `SramPathFor`, with the SNES and Nintendo 64 saves
+copied across in the same copy-don't-move way, would, and is a decision for a later pass.

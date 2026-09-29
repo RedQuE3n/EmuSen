@@ -196,6 +196,7 @@ The sidecar argument of §5.3 survives the move in one respect and not in anothe
 Two things were separated out rather than bundled in, so each stands on its own review:
 
 - **Moon and Mercury still write `.srm` beside the ROM.** Venus writes to `Saves/`; the other two use `Path.ChangeExtension(romPath, ".srm")`, which puts emulator output inside the player's own ROM folder. They gained the durable write in this pass and nothing else. Relocating them is a user-visible behavior change and needs a copy-don't-move migration in the shape of `ConfigFile<T>.MigrateFromLegacy`, read-only on `Games/`.
+  *Done 2026-09-28: both, and their Rust engines, save in `Saves/` through one `BatterySave`, and a save beside the ROM is copied once, never moved (`EmuSen_Settings_Reference.md` §4.85.6).*
 - **`SaveLibrary` cannot enumerate.** It resolves names; it does not list which slots exist or when they were written. That is the piece which would let a launcher show a save list through LunaP without loading a core — worth building when a UI actually consumes it, not before.
 
 ---

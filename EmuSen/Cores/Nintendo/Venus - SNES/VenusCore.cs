@@ -36,7 +36,6 @@ namespace EmuSen.Cores.Nintendo.Venus
 
         // The SNES's two independent crystals - see Venus_CPU.md §8.5b.
         private const int ApuClockHz = 1024000;
-        private const int SaveEveryNFrames = 300; // ~5 seconds at 60fps
 
         // "SNES" little-endian, then the format version - see EmuSen_Save_States.md §3.
         public const uint StateMagic = 0x53454E53;

@@ -9,6 +9,7 @@ using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.MoonRT;
+using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Audio
@@ -21,11 +22,17 @@ namespace EmuSen.WiseMan.Audio
         private readonly int _before = AudioSettings.AudioBufferMaxSamples;
         private readonly List<string> _files = new();
 
-        public AudioBufferLimitTests() => AudioSettings.AudioBufferMaxSamples = Limit;
+        public AudioBufferLimitTests()
+        {
+            AudioSettings.AudioBufferMaxSamples = Limit;
+            DataStore.OverrideDirectory = Path.Combine(Path.GetTempPath(), "EmuSenAudioLimit_" + Guid.NewGuid().ToString("N"));
+        }
 
         public void Dispose()
         {
             AudioSettings.AudioBufferMaxSamples = _before;
+            try { Directory.Delete(DataStore.OverrideDirectory!, recursive: true); } catch (IOException) { }
+            DataStore.OverrideDirectory = null;
             foreach (string path in _files) try { File.Delete(path); } catch (IOException) { }
         }
 

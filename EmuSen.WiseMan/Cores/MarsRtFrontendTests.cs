@@ -680,11 +680,11 @@ namespace EmuSen.WiseMan.Cores
 
             using var core = new MarsRtCore(batteryRamDisabled: false);
             core.LoadRom(rom);
-            for (int frame = 1; frame < MarsCore.SaveEveryNFrames; frame++) core.RunFrame();
+            for (int frame = 1; frame < BatterySave.FlushEveryNFrames; frame++) core.RunFrame();
             Assert.False(File.Exists(save));
 
             core.RunFrame();
-            Assert.Equal(MarsCore.SaveEveryNFrames, core.TotalFrames);
+            Assert.Equal(BatterySave.FlushEveryNFrames, core.TotalFrames);
             Assert.True(File.Exists(save));
         }
 

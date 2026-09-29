@@ -93,7 +93,8 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
             }
             else if (address == 0x4015)
             {
-                value = Apu.ReadStatus();
+                // Driven on the chip's internal bus only: bit 5 floats, and the external bus keeps its value - see Moon_Native.md §3.8.
+                return (byte)(Apu.ReadStatus() | (OpenBus & 0x20));
             }
             else if (address == 0x4016)
             {
@@ -105,6 +106,11 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
             }
             else if (address < 0x4020)
             {
+                value = OpenBus;
+            }
+            else if (address < 0x6000)
+            {
+                // No board here drives the expansion area on a read, so it floats - see Moon_Native.md §3.8.
                 value = OpenBus;
             }
             else

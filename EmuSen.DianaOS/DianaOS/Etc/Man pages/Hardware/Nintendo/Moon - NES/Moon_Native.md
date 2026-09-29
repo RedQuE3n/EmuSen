@@ -601,6 +601,132 @@ AccuracyCoin, which is the ROM the RTL's 2025–2026 fixes were graded by (Q7).
   - Irem H3001's counter (`misc.sv:1175-1181`);
   - NINA-003/006's decode (`generic.sv:893`).
 
+### 3.8 Stage 2a's audit: the CPU and the bus (2026-09-28)
+
+*The first component audited by §3.7's method. The prediction on record was P7 (§3.7.3): disagreements would gather in
+the DMA and the bus, and few would be in the CPU.* The witnesses were:
+
+- AccuracyCoin's CPU- and bus-side failures (§3.4.1), each error code decoded from its source;
+- the corpus's transcript, line by line (§3.4);
+- NES_MiSTer's RTL, weighted by §3.7.1's provenance, with its T65 CPU as weak evidence.
+
+**What the decoding found first.** Most of the CPU- and bus-side failures are not separate defects. Sixteen AccuracyCoin
+results depend on one routine, the DMC-DMA cycle sync (`DMASync`, `AccuracyCoin.asm:18809-18839`). It assumes the rate
+15 DMA arrives every 432 CPU cycles, and that a read cycle's stall is halt, dummy, alignment and get. Moon passes the
+sync's pre-test, that a DMA puts its byte on the bus (`result_DMCDMASync_PreTest` = 1). It fails every check of the
+cycle a DMA lands on:
+
+- DMA + open bus, `$2007` read and write, `$4015` and `$4016` reads, and the DMC's bus conflicts;
+- DMC DMA with OAM DMA, and both aborts;
+- instruction timing, implied dummy reads, and the interrupt-flag latency's test 8;
+- all five SH* results (code 7, RDY two cycles before the write).
+
+So these are **cascades of one model**, not sixteen rules.
+
+#### 3.8.1 The referee table
+
+Weight is §3.7.1's lineage for the RTL's lines. "Witness" is the hardware test ROM that covers the rule, where one does.
+
+| # | Rule | Moon (C#) | NES_MiSTer | Weight | Witness | Verdict |
+|---|---|---|---|---|---|---|
+| R1 | A taken branch delays an IRQ that just arrived | `Cpu.SuppressJustArrivedIrq` (`Moon_CPU.md` §5.5) | IRQ and NMI sampling held during a branch (`T65.vhd:576-584`) | weak | `5-branch_delays_irq` passes; AccuracyCoin's latency tests 1–7 pass | **agree** |
+| R2 | IRQ sampled while RDY holds the CPU | no RDY: a DMA never halts the CPU mid-instruction | "detect irq even if not rdy" (`T65.vhd:576-578`) | weak | latency test 8 (a cascade of R7) | not comparable until R7 |
+| R3 | SH*'s high-byte term dropped when RDY falls before the write | `UnstableStore` has no RDY input | `rdy_mod` set by RDY low at cycle 3 (cycle 4 for `$93`, `T65.vhd:411-415`), from VICE's tests (`:5-6`) | weak | SH* code 7, five results | **disagree**, candidate C4, needs R7 |
+| R4 | `KIL`/`JAM` wedges the CPU | three cycles, then the bus held (`Moon_CPU.md` §6.4) | `KIL` in the microcode (`T65_MCode.vhd:579-591`) | weak | SingleStepTests' vectors (§3.6) | **agree** |
+| R5 | An NMI in the first four cycles of `BRK` or of an IRQ takes their vector | none: the vector is chosen before the pushes | `NMI_entered` switches `BRK`'s vector (`T65.vhd:666-675`, `:780`, `:794-796`) | weak, but the rule is the 6502's own documented hijack | `2-nmi_and_brk` and `3-nmi_and_irq` fail 1; AccuracyCoin `$462` and `$463` fail | **disagree**, candidate C1 (below) |
+| R6 | The DMC's period is the rate table's value | `StepTimer` reloads with the value and counts to 0, so a bit lasts value + 1 cycles: 440 per byte at rate 15, not 432 | an LFSR (`apu.sv:547-553`, `:593-605`, `:647-648`); stepping its reload values to `$100` gives 213 steps at rate 0 and 26 at rate 15, and with the reload 214 and 27 APU cycles, exactly 428 and 54 CPU cycles | real (netlist) | `8-dmc_rates` fails 3, and passes with the fix | **defect D5, demonstrated; fix not committed** (§3.8.3) |
+| R7 | A DMC fetch halts the CPU on a read cycle: halt, dummy, alignment, get | a fetch lands inside the cycle's tick, the CPU is not halted, and a flat 4 cycles are charged afterwards (`DmcChannel.cs`, `MemoryBus.Tick`) | `DmaController` holds RDY (`nes.v:21-72`); `dmc_state` starts only on a CPU read and a put cycle (`:54`) | real (AccuracyCoin-graded) | the sixteen cascades above | **disagree**, candidate C2, the next CPU and bus work |
+| R8 | A halted CPU re-drives its address, so a fetch during a read repeats it | nothing is repeated | the address bus falls back to the CPU's (`nes.v:465`); the pads clock on a falling edge of their select (`NES.sv:654-658`) | real | DMA + `$2007` read and write, `$4016` read (cascades) | part of C2 |
+| R9 | A DMA's read of `$4016`/`$4017` drives D0–D4 only | not reachable: no DMA reads the pads | `dma_data_bus` (`nes.v:466-468`) | real | none until C2 | part of C2 |
+| R10 | `$4015` answers on the internal bus: bit 5 floats, the external bus keeps its value | the full status returned and written to the bus latch, bit 5 zero | `apu_reg_value` fills bit 5 from `internal_bus_data`; `open_bus_data` takes the external bus (`nes.v:424-428`, `:847-848`) | real | AccuracyCoin open bus codes 7 and 9 | **defect D8, fixed** |
+| R11 | Nothing answers a read of `$4020`–`$5FFF` on these boards | PRG RAM's mirror (`address & 0x1FFF`) on every board | open bus unless `prg_allow` (`$6000`+ or a PRG read, `nes.v:853-866`, `MMC1.sv:194-195`) | real | AccuracyCoin open bus code 1; `test_cpu_exec_space_apu` fails 2 | **defect D6, fixed** |
+| R12 | Two bus latches, internal and external | one latch, `OpenBus` | `open_bus_data` and `internal_bus_data` (`nes.v:841-850`) | real | AccuracyCoin internal data bus code 1 (a cascade of C2 and D6) | candidate C5; the one latch reproduces D8's cases |
+| R13 | OAM DMA waits for a get cycle: 513 or 514 cycles | always 513, the copy instantaneous | `spr_state` 1 → 3 only on a CPU read and a get (`nes.v:58`) | real | DMC + OAM DMA (a cascade) | part of C2, and §3.7.4's D1 |
+| R14 | `$4016`'s strobe reaches the pads on a put cycle | immediately on the write | `joy_out <= joy_latch` on `put_ce` (`nes.v:583-590`) | real | controller strobing code 4 | **disagree, demonstrated**; candidate C6, needs get/put parity |
+| R15 | DMA leaves the PPU running (D1) | the PPU does not see OAM DMA's 513 cycles | `ppu_ce` independent of `pause_cpu` (`nes.v:240`, `:298`) | real | §6.1's measurement | recorded in §3.7.4; lands with C2 |
+
+**P7 held.** Of the five CPU rules, R1 and R4 agree, R2 and R3 wait on the DMA model, and only R5 disagrees on its own.
+Of the ten bus and DMA rules, eight disagree. As P7 said, the disagreements are in the DMA and the bus. The CPU's
+disagreement is the one place the documented rule and the RTL both say Moon is short.
+
+#### 3.8.2 What was fixed, and what it changed
+
+| Defect | Test that fails on the unmodified core | Witness that moved |
+|---|---|---|
+| **D6** reads of `$4020`–`$5FFF` float | `MoonCpuBusDefectTests.A_read_of_the_expansion_area_is_open_bus` | `test_cpu_exec_space_apu`: fail 2 → pass; AccuracyCoin open bus: fail 1 → fail 7 |
+| **D8** `$4015` floats bit 5 and leaves the bus | `MoonCpuBusDefectTests.A_read_of_4015_floats_bit_5_and_leaves_the_bus` | AccuracyCoin open bus: fail 7 → pass |
+
+- **Where the fixes are:** both are in `MemoryBus.Read`, and MoonRT's `bus.rs` carries the same two edits.
+- **Writes:** D6 fixes reads only. A write to `$4020`–`$5FFF` still reaches the board, which must see it because
+  NINA-003-006's register is at `$4100`. Most boards also store it in PRG RAM's mirror, which is wrong in the same way
+  as the read was. No witness covers it, so it is candidate C7.
+- **Save state:** the format is unchanged.
+
+**Output changes (measured 2026-09-28, against `10c59639`):**
+
+- **The four bench games:** identical state hashes at frames 900 and 3,900 with the bench's input:
+  - Super Mario Bros. `E3BFD7E43ACA761B` / `2DA2BBA9743B909E`;
+  - Zelda `320DCAE6E4073688` / `E61F6EAA163F691C`;
+  - Super Mario Bros. 3 `258BA3EB5CA8637D` / `F210BBD8B96E2350`;
+  - Punch-Out!! `A34AC61F9177AC3A` / `84BB41D777C97B56`.
+
+  None of them reads the expansion area or depends on `$4015`'s bus behaviour.
+- **The corpus:** of 263 ROMs, one line changed, `test_cpu_exec_space_apu`, from fail 2 to pass. Every other line's
+  verdict, frame, resets and text hash is the base's. The count is 90 passed, 24 failed, 141 without a verdict and 8
+  unsupported, against 89, 25, 141 and 8.
+- **AccuracyCoin:** 89 → **90 of 144**. The open bus test passes. No other result byte changed, and the table is drawn
+  at frame 4,117 instead of 4,099, because the open bus test now runs to its end.
+
+**MoonRT.** Both fixes were carried into the Rust bus, and MoonRT was proven against the fixed C# core:
+
+- `MoonRtMachineTests`, 72 cases: random programs compared after every instruction, undocumented opcodes and JAM,
+  interrupts, OAM DMA and the DMC's stolen cycles, among the rest;
+- `MoonRtRandomProgramTests`, 32 cases;
+- `MoonRtStateTests`, 71 cases;
+- AccuracyCoin through MoonRT (`MoonAccuracyCoinTests.MoonRT_scores_as_the_csharp_core_does`): every result byte and the
+  table's frame match C#'s;
+- all 324 Moon-filtered cases pass.
+- the corpus on both engines (`MoonRtCorpusTests`, from `EMUSEN_MOONRT_CORPUS`): 255 ROMs run and 8 refused by both; 362,375 frames with identical state; 114 verdicts, 90 passed, the same as C#'s.
+
+This stage's claim is the CPU and the bus. The same classes cover MoonRT's boards, PPU and APU, and those pass too, but
+they are later stages' to claim, after their own audits.
+
+#### 3.8.3 Negative results
+
+- **The DMC period fix is correct, and cannot land alone.** With D5, `8-dmc_rates` passes, but AccuracyCoin stops at
+  test 82, the interrupt-flag latency. The trace shows why:
+  - The test's last case runs `JSR $4013`. It expects a DMC DMA to land on the opcode fetch there and put `$90`
+    (`BCC`) on the bus, whose target reads `$60` (`RTS`) from the PPU's read buffer (`AccuracyCoin.asm:9500-9530`).
+  - With the period right, the DMA arrives close enough to matter. But Moon's DMA does not halt the CPU (R7), so the
+    fetch's byte feeds the wrong access.
+  - The CPU then executes into PPU registers (a write at `pc=$3125`) and never returns.
+
+  The wrong period had been compensating for the missing halt: it kept the sync from ever succeeding. So D5 and C2
+  must land together. The one-line fix and its tests are kept out of the tree
+  (`~/.cache/emusen/probe/moonrt/stage2a/d5-dmc-period.patch`) until C2 exists.
+- **The hijack fix (C1) moves no witness.** A prepared patch implements R5, and its unit tests pass. But
+  `2-nmi_and_brk`, `3-nmi_and_irq` and AccuracyCoin `$462`/`$463` still fail with it. AccuracyCoin also fails four of
+  its vblank-timing tests (NMI timing, suppression, at vblank's end, disabled at vblank), all code 1. So the NMI itself
+  arrives on the wrong dot, and both witnesses wait on that, which is the PPU's audit.
+  - By §3.7.3's rule, a fix no hardware test confirms is a candidate, so C1 was not committed
+    (`stage2a/d7-nmi-hijack.patch`).
+  - `Moon_CPU.md` §5.6 said this was blocked because the PPU advanced a scanline at a time. The PPU now steps three dots
+    a CPU cycle, so the hijack is expressible. What blocks it now is the NMI's timing, not its granularity.
+- **Stage 2a's prediction of its own cost was right in kind and wrong in size.** Expected: several small CPU fixes.
+  Found: two small bus fixes, and one model (R7) behind most of the rest.
+
+#### 3.8.4 What is left for the CPU and the bus, in order
+
+1. **C2: DMC DMA as a halt on the CPU's read cycles, with get/put parity**, together with D5's period and R13's OAM DMA
+   alignment. Its oracle is the sixteen cascades, the corpus's `dmc_dma_during_read4`, `sprdma_and_dmc_dma` and
+   `4-irq_and_dma`, and the four games' hashes, which it will change.
+2. **C6: the strobe on put cycles.** It needs the parity C2 introduces, and its witness is controller strobing code 4.
+3. **C1: the hijack**, after the PPU's NMI timing.
+4. C3 (R2), C4 (R3), C5 (R12) and C7 (writes to `$4020`–`$5FFF`) are measured by C2's witnesses once it exists.
+
+**Reuse.** `AccuracyCoinRun` takes any NES core's frame, RAM read and Start button, which is how MoonRT runs it. Nothing
+in the CPU or the bus was found that a second core shares: Mercury's bus and the SM83 have none of these rules.
+
 ## 4. Stages
 
 MercuryRT's stages 1–5 were done in one day; Moon's machine is about 5,200 lines of C#: the folder's 6,609, less the

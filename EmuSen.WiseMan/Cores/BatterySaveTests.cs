@@ -198,11 +198,11 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(Pattern(6), File.ReadAllBytes(Beside(rom)));
         }
 
-        // A Venus state carries the saving session's save path and --nobattery latch, which used to steer the loader's save.
+        // A Venus state carries the saving game's save path and --nobattery latch, which used to steer the loader's save.
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
-        public void A_venus_state_from_another_game_leaves_the_save_where_this_session_opened_it(bool saverWithoutBattery)
+        public void A_venus_state_from_another_game_leaves_the_save_where_this_game_opened_it(bool saverWithoutBattery)
         {
             string a = Path.Combine(_library, "A.smc"), b = Path.Combine(_library, "B.smc");
             File.WriteAllBytes(a, SyntheticRom.Build((0x7FD8, new byte[] { 0x03 })));

@@ -128,7 +128,7 @@ namespace EmuSen.Cores.Native
 
         public short[] DequeueAudioSamples(int maxFrames) => _machine?.DrainAudio(maxFrames) ?? Array.Empty<short>();
 
-        // The save this session opened at load, which no state can change.
+        // The save opened at load, which no state can change.
         public void SaveSram()
         {
             if (_machine is null || _battery.Path is null) return;

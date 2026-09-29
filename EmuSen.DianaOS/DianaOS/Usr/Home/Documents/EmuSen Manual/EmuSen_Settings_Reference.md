@@ -6678,11 +6678,11 @@ no `.srm` anywhere under the tree's `home` or the temporary directory.
 **A Venus defect this closed.** A Venus save state carries the cartridge's `SavePath` and its `--nobattery` latch, since
 `StateSerializer` writes every field not marked otherwise, and the cartridge used both for its writes. A state saved on
 one game and loaded while playing another therefore sent the second game's battery save to the first game's file, and a
-state saved under `--nobattery` switched the battery off for the rest of the session. This is Mercury's D3
+state saved under `--nobattery` switched the battery off for as long as that game ran. This is Mercury's D3
 (`Mercury_Native.md` §9.3), which Mercury fixed by retiring the field; Venus had the same defect unfixed. Its writes now
 go through the `BatterySave` opened at load, which no state can change. The two fields stay in the state with the same
 values, so every existing Venus state loads and saves byte for byte as before; they are simply no longer obeyed. The
-test, `A_venus_state_from_another_game_leaves_the_save_where_this_session_opened_it`, fails on the base build in both of
+test, `A_venus_state_from_another_game_leaves_the_save_where_this_game_opened_it`, fails on the base build in both of
 its cases and passes after.
 
 **What it means on the handheld.** The Legion Go S keeps its games on the SD card, and until now a NES or Game Boy save

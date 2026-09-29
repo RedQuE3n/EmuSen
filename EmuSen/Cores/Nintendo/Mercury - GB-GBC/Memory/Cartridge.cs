@@ -151,7 +151,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         // In the Saves folder, copied there once from beside the ROM; a cartridge without RAM, or --nobattery, reads and writes nothing - see EmuSen_Settings_Reference.md §4.85.6.
         private void LoadSram()
         {
-            _battery = EmuSen.Cores.BatterySave.Open(RomPath, hasRam: HasBattery && Ram.Length > 0, migrate: true);
+            _battery = EmuSen.Cores.BatterySave.Open(RomPath, EmuSen.Cores.BatterySave.GameBoyFolder(RomPath), hasRam: HasBattery && Ram.Length > 0);
             _savePath = _battery.Path;
             _battery.ReadInto(Ram);
         }

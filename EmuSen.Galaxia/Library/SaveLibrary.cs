@@ -11,7 +11,12 @@ namespace EmuSen.Galaxia.Library
         // The slot that keeps the plain <rom>.state name - see EmuSen_Galaxia.md §5.1.
         public const int DefaultStateSlot = 1;
 
-        public static string SramPathFor(string romPath) =>
+        // One folder per console, named as the ROM library names them (NES, SNES, N64, GB, GBC) - see EmuSen_Settings_Reference.md §4.85.11.
+        public static string SramPathFor(string romPath, string console) =>
+            Path.Combine(DataStore.Saves, console, Path.GetFileNameWithoutExtension(romPath) + SramExtension);
+
+        // Where SNES and N64 saves went before 2026-09-28, read once to copy them into their console's folder, never written.
+        public static string FlatSramPathFor(string romPath) =>
             Path.Combine(DataStore.Saves, Path.GetFileNameWithoutExtension(romPath) + SramExtension);
 
         // directoryOverride is a parameter, not an AppSettings read - see EmuSen_Galaxia.md §5.1.

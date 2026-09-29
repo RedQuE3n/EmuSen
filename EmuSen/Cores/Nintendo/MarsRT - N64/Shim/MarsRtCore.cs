@@ -488,8 +488,8 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         public void LoadRom(string path)
         {
             byte[] image = File.ReadAllBytes(path);
-            _save = BatterySave.Open(path, disabled: _batteryRamDisabled);
-            _pak = BatterySave.Open(path, disabled: _batteryRamDisabled, extension: MarsCore.PakExtension);
+            _save = BatterySave.Open(path, BatterySave.N64, disabled: _batteryRamDisabled);
+            _pak = BatterySave.Open(path, BatterySave.N64, disabled: _batteryRamDisabled, extension: MarsCore.PakExtension);
             byte[]? saved = _save.Read();
             byte[]? pak = _pak.Read();
 

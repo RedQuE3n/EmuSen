@@ -4,7 +4,7 @@ using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Cores
 {
-    // A cartridge's battery save: its one place in the Saves folder, the --nobattery latch, the atomic write and the flush period - see EmuSen_Settings_Reference.md §4.85.6.
+    // A cartridge's battery save: its console's folder in Saves, the --nobattery latch, the atomic write and the flush period - see EmuSen_Settings_Reference.md §4.85.6 and §4.85.11.
     public sealed class BatterySave
     {
         // How often a core writes its save without being asked, about five seconds at sixty frames.
@@ -19,22 +19,36 @@ namespace EmuSen.Cores
 
         public static bool IsFlushFrame(long frame) => frame % FlushEveryNFrames == 0;
 
-        // disabled null defers to CoreOptions.BatteryRamDisabled, read here and latched; migrate copies a save a build before 2026-09-28 wrote beside the ROM.
-        public static BatterySave Open(string? romPath, bool hasRam = true, bool? disabled = null, string extension = SaveLibrary.SramExtension, bool migrate = false)
+        // The save folders, one per console as the ROM library names them.
+        public const string Nes = "NES", Snes = "SNES", N64 = "N64", GameBoy = "GB", GameBoyColor = "GBC";
+
+        // By the file's extension alone, as the library files them: a setting or a header never moves a Game Boy save.
+        public static string GameBoyFolder(string romPath) =>
+            string.Equals(System.IO.Path.GetExtension(romPath), ".gbc", StringComparison.OrdinalIgnoreCase) ? GameBoyColor : GameBoy;
+
+        // disabled null defers to CoreOptions.BatteryRamDisabled, read here and latched; a save made before 2026-09-28 is copied in at the first load.
+        public static BatterySave Open(string? romPath, string console, bool hasRam = true, bool? disabled = null, string extension = SaveLibrary.SramExtension)
         {
             if ((disabled ?? CoreOptions.BatteryRamDisabled) || !hasRam || string.IsNullOrEmpty(romPath)) return None;
-            string path = System.IO.Path.ChangeExtension(SaveLibrary.SramPathFor(romPath), extension);
-            if (migrate) CopyFromBesideRom(romPath, path, extension);
+            string path = System.IO.Path.ChangeExtension(SaveLibrary.SramPathFor(romPath, console), extension);
+            if (!File.Exists(path) && PreviousHome(romPath, console, extension) is { } previous) CopyIn(previous, path);
             return new BatterySave(path);
         }
 
-        // Copied, never moved: the file beside the ROM is left exactly as it was, and a save already in Saves wins.
-        private static void CopyFromBesideRom(string romPath, string path, string extension)
+        // The one place each console's saves were kept before: the flat Saves folder for the SNES and N64, beside the ROM for the NES and Game Boy.
+        public static string? PreviousHome(string romPath, string console, string extension = SaveLibrary.SramExtension) => console switch
         {
-            string beside = System.IO.Path.GetFullPath(System.IO.Path.ChangeExtension(romPath, extension));
-            if (File.Exists(path) || string.Equals(beside, System.IO.Path.GetFullPath(path), StringComparison.Ordinal)) return;
-            if (AtomicFile.TryRead(beside) is not { } saved) return;
-            if (AtomicFile.Write(path, saved)) Console.WriteLine($"[BatterySave] Copied {beside} to {path}, where this game's battery save now lives; the original is untouched.");
+            Snes or N64 => System.IO.Path.ChangeExtension(SaveLibrary.FlatSramPathFor(romPath), extension),
+            Nes or GameBoy or GameBoyColor => System.IO.Path.ChangeExtension(romPath, extension),
+            _ => null,
+        };
+
+        // Copied, never moved: the old file is left exactly as it was.
+        private static void CopyIn(string previous, string path)
+        {
+            if (string.Equals(System.IO.Path.GetFullPath(previous), System.IO.Path.GetFullPath(path), StringComparison.Ordinal)) return;
+            if (AtomicFile.TryRead(previous) is not { } saved) return;
+            if (AtomicFile.Write(path, saved)) Console.WriteLine($"[BatterySave] Copied {previous} to {path}, where this game's battery save now lives; the original is untouched.");
         }
 
         public byte[]? Read() => Path is null ? null : AtomicFile.TryRead(Path);

@@ -173,7 +173,7 @@ namespace EmuSen.WiseMan.Mistress
         public Task A_battery_save_is_read_when_MarsRT_starts_a_game_and_written_when_it_stops() => Session.Dispatch(() =>
         {
             Choose(CoreCatalog.MarsRtEngine);
-            string save = SaveLibrary.SramPathFor(_rom);
+            string save = SaveLibrary.SramPathFor(_rom, EmuSen.Cores.BatterySave.N64);
             byte[] original = Enumerable.Repeat((byte)0xFF, EmuSen.Cores.Nintendo.Mars.Memory.Eeprom.Size).ToArray();
             Marker.CopyTo(original, Marked);
             Directory.CreateDirectory(Path.GetDirectoryName(save)!);

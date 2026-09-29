@@ -130,7 +130,7 @@ namespace EmuSen.WiseMan.Cores
                             if (b == original[i]) matching++;
                         }
                         (core as IDisposable)?.Dispose();
-                        byte[] copy = File.ReadAllBytes(SaveLibrary.SramPathFor(rom));
+                        byte[] copy = File.ReadAllBytes(SaveLibrary.SramPathFor(rom, nes ? BatterySave.Nes : BatterySave.GameBoyFolder(rom)));
                         bool untouched = File.ReadAllBytes(beside).AsSpan().SequenceEqual(original) && File.GetLastWriteTimeUtc(beside) == written;
                         lines.Add($"{engine} {Path.GetFileName(rom)}: copied {copy.AsSpan().SequenceEqual(original)}, RAM matching {matching} of {original.Length}, original untouched {untouched}");
                     }

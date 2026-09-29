@@ -139,7 +139,7 @@ namespace EmuSen.WiseMan.Cores
         {
             byte[] image = BatteryRom();
             string a = Rom($"a-{engine}-{saverWithoutBattery}-{loaderWithoutBattery}", image), b = Rom($"b-{engine}-{saverWithoutBattery}-{loaderWithoutBattery}", image);
-            string srmA = SaveLibrary.SramPathFor(a), srmB = SaveLibrary.SramPathFor(b);
+            string srmA = SaveLibrary.SramPathFor(a, BatterySave.GameBoy), srmB = SaveLibrary.SramPathFor(b, BatterySave.GameBoy);
             string stray = Path.Combine(Environment.CurrentDirectory, ".tmp");
             bool strayBefore = File.Exists(stray);
 

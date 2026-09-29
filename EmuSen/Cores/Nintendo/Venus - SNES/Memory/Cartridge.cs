@@ -159,8 +159,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             byte country = _rom.Length > headerBase + 0x19 ? _rom[headerBase + 0x19] : (byte)0x01;
             _region = ConsoleRegions.FromCountryCode(country);
 
-            SavePath = SaveLibrary.SramPathFor(romPath);
-            _battery = EmuSen.Cores.BatterySave.Open(romPath, hasRam: _batteryRamSize > 0 || NecDsp is { HasBatteryRam: true }, disabled: _batteryRamDisabled);
+            SavePath = SaveLibrary.SramPathFor(romPath, EmuSen.Cores.BatterySave.Snes);
+            _battery = EmuSen.Cores.BatterySave.Open(romPath, EmuSen.Cores.BatterySave.Snes, hasRam: _batteryRamSize > 0 || NecDsp is { HasBatteryRam: true }, disabled: _batteryRamDisabled);
             LoadSram();
 
             Console.WriteLine("=== Cartridge Loaded ===");

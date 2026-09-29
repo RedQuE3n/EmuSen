@@ -6704,6 +6704,9 @@ three would have each load the other's save and overwrite it. Before this change
 two could not meet. Nothing here resolves it. A per-console folder in `SramPathFor`, with the SNES and Nintendo 64 saves
 copied across in the same copy-don't-move way, would, and is a decision for a later pass.
 
+*Retired 2026-09-28 by §4.85.11: saves are now in a folder per console, so the five pairs no longer meet. The paragraph
+above is kept as the finding that led to it.*
+
 #### 4.85.7 The C# plumbing, shared as the first increment of the generic host
 
 `EmuSen_NativeCores.md` §4 designs one loader, one handle class and one `ICore` base for the Rust cores, over one
@@ -6829,7 +6832,7 @@ step are in its section. No run wrote a `.srm` under the tree's `home`, the temp
 Each fix, the migration and the shared pieces were checked by applying a deliberate defect, building, and running the
 tests that should catch it, with the source restored after each. A mutant that restores the code as it was before a fix
 is the build before the fix, so the first mutant of each defect is also its failing-then-passing proof. 46 mutants, 46
-caught, none equivalent.
+caught, none equivalent; §4.85.11 added 13 more, all caught.
 
 | Section | Mutant | Caught by |
 | --- | --- | --- |
@@ -6840,6 +6843,7 @@ caught, none equivalent.
 | §4.85.5 | MarsRT's shim reporting another version; MoonRT's Rust version and MercuryRT's Rust magic drifting | `RustStateHeaderTests` |
 | §4.85.6 | never copying; moving instead of copying; touching the original's time; the file beside the ROM overwriting Saves; copying under `--nobattery`; saving a cartridge without RAM; each of the four engines not migrating; MercuryRT writing beside the ROM; Venus writing the state's path; Venus migrating; the flush period off by one | `BatterySaveTests`, `MarsRtFrontendTests` |
 | §4.85.7 | a debug write not wrapped; a size of zero unguarded; the loader's version check and switch dropped; the patch table's upper bound exclusive; the base's frame notice dropped; the battery read from the wrong space; MercuryRT's observed bus write dropped; the codec's compare dropped; the shared status text losing the console's name | `DebugPlumbingTests`, `NativeHostTests`, `CheatCodecAdapterTests`, the debug-target, RT and battery suites |
+| §4.85.11 | the flat path again; `.gbc` saved under `GB`; the Game Boy's folder by header; the NES reading the flat folder; the SNES and the N64 each not reading it; a flat save overwriting the console's folder; the flat save moved, or its time touched; copying under `--nobattery`; Venus, MoonRT and the N64's pak in the wrong folder | `BatterySaveTests`, `SaveLibraryTests`, `CartridgeSavePathTests`, `MarsSaveFileTests` |
 
 MarsRT's Rust source was not mutated, since it is held unchanged (§4.85.2); its copy of the state header is covered by
 `RustStateHeaderTests` without a mutant.
@@ -6853,11 +6857,95 @@ MarsRT's Rust source was not mutated, since it is held unchanged (§4.85.2); its
 - **The crash log's rename** to `marsrt_crash_<pid>` is step 5's, not this pass's.
 - **The registration records** of `EmuSen_NativeCores.md` §5.1, and with them `CoreFactory`'s type switches: only the
   rewind feature was built ahead of them (§4.85.4).
-- **The shared Saves folder's stem collisions** (§4.85.6): five NES and SNES pairs in the library, three playable on both
-  consoles, now share a save file. A per-console folder is the fix and needs its own decision and migration.
+- ~~The shared Saves folder's stem collisions~~ (§4.85.6): resolved the same day by a folder per console, §4.85.11.
 - **Venus's state still carries its save path and latch** as two fields that are no longer obeyed. Retiring them would
   change Venus's state format, which this pass does not do.
 - **MoonRT's halt at `runto frame`** waits for its stage-5 observed loop (§4.85.1).
 - **Timing.** Nothing here was timed. The shims' hot calls moved from static function-pointer fields to a per-library
   table read through an instance, one load more per call, at most a handful of calls a frame; `EmuSen_NativeCores.md`'s
   P2 (MoonRT's frame within ±1% through the generic host) is its step 2's to retire, interleaved, and is not claimed here.
+
+#### 4.85.11 A folder per console (a behaviour change)
+
+*Decided 2026-09-28: battery saves go in `Saves/<console>/<rom stem>.srm`, with the Nintendo 64's Controller Pak
+beside its save as `<stem>.mpk`. This closes the collision §4.85.6 found, and retires that section's hazard paragraph.*
+
+**The folder names.** Three schemes were available: `CoreCatalog`'s console names (`NES`, `SNES`, `N64`, `GB`, with
+the library's second Game Boy shelf labelled `GBC`), the ES-DE system names (`nes`, `snes`, `n64`, `gb`, `gbc`), and the
+player's ROM library, whose folders are `NES`, `SNES`, `N64`, `GB` and `GBC`. The first and the last agree, letter for
+letter. The folders are therefore **`NES`, `SNES`, `N64`, `GB` and `GBC`**, as constants on `BatterySave`. A player
+who looks for a game's save finds it in the folder named like the one the game is in. The ES-DE names differ only in
+case, and on the handheld's case-sensitive file system that would be a second, different folder; they were not used.
+`Save States` stays where it was, a sibling of the console folders, and no console is named like it.
+
+**The Game Boy's two folders.** Mercury runs `.gb` and `.gbc` images alike. The save's folder is chosen **by the file's
+extension alone**: `.gbc` goes to `GBC`, anything else to `GB` (`BatterySave.GameBoyFolder`). That is how the library
+files them. Two other rules were weighed and rejected:
+
+- *By the Model setting*, or by whether the game ran in Color mode: a save would change folders when a setting changed,
+  which must never happen.
+- *By the header's Color flag*, as the catalogue shelves a game (`CoreCatalog.IsGameBoyColor`): 17 of the library's
+  1,930 `.gb` images carry the flag and sit in its `GB` folder (measured on 2026-09-28, headers read, nothing written).
+  Their saves would have gone to `GBC`, away from the folder the player keeps them in.
+
+So a `.gb` game played as a Game Boy Color, by setting or by header, keeps its save in `GB`. The one disagreement left
+is recorded rather than resolved: the library's sidebar shows those 17 games on the Game Boy Color shelf, while their
+saves are in `GB`.
+
+**The path.** `SaveLibrary.SramPathFor(romPath, console)` is the only spelling, and `BatterySave.Open(romPath, console,
+...)` its only caller. Each of the seven cores and shims passes its own console: Moon and MoonRT `NES`, Venus `SNES`,
+Mars and MarsRT `N64`, Mercury and MercuryRT the Game Boy rule. The one-argument form is gone, so nothing can compute a
+save path without a console. `SaveLibrary.FlatSramPathFor` names the old flat file, and is read only by the migration.
+
+**Nothing else reads saves by path.** A search of every project for the Saves folder, the `.srm` and `.mpk` extensions
+and `SramPathFor` found no save-manager window, no "has a save" badge in the library, no backup or cloud code, and
+nothing in Hotaru, the scraper or the collections. The only other readers are `DataMigration`, which copies the whole
+`Saves` tree from the pre-Galaxia location and so carries subfolders as it carries files, and DianaOS's `hier` page,
+which now names the folders. Mistress's media view lists save states, which did not move. So no view can lose a
+player's existing SNES or N64 save; the save itself is copied at the game's next load, as follows.
+
+**The migration.** At a game's first load with no save in its console's folder, the one earlier home that console had
+is copied in, never moved, deleted or overwritten:
+
+- the SNES and the Nintendo 64: the flat `Saves/<stem>.srm` (and `<stem>.mpk`), which every build before today wrote;
+- the NES and the Game Boy: `<rom>.srm` beside the ROM, which builds before §4.85.6 wrote.
+
+Each console reads only its own earlier home. That is the rule for the collision: a flat `Saves/<stem>.srm` whose stem
+belongs to both an NES and a SNES game is the SNES game's, because only the SNES and the Nintendo 64 wrote that folder,
+and **an NES game never reads the flat folder**. §4.85.6's NES and Game Boy saves in the flat folder were never written
+by a released build: that section and this one are on the same branch, merged together.
+
+**The tests** (`BatterySaveTests`, sandboxes only, 29 cases):
+
+- a save from each console lands in its own folder (`NES`, `GB`, `GBC`, `SNES`, and the N64's pak in `N64`), and nothing
+  in the flat folder;
+- a `.gb` game run with the Model set to Game Boy Color, and a `.gb` image whose header asks for the Color, run on both
+  engines, save in `GB`;
+- a flat-folder SNES save is copied into `Saves/SNES`, loaded into the cartridge's SRAM, written back there after a
+  change and found again by a fresh cartridge; a flat-folder N64 save and Controller Pak are both copied and loaded;
+- a Gemfire-like pair, a synthetic NES image and a synthetic SNES image both named `Gemfire (U)`, with a flat save: on
+  Moon and on MoonRT the NES game copies nothing, its RAM does not hold the flat save's bytes, and it writes its own save
+  in `Saves/NES`; the SNES game copies and loads the flat save;
+- a save already in the console's folder wins over a flat one;
+- under `--nobattery` nothing is read, copied or written, with a flat save present, on the SNES and the N64;
+- in every case the original, beside the ROM or in the flat folder, keeps its bytes and its modification time.
+
+Thirteen mutants each fail at least one of them (§4.85.9's table, second part). A run of the suites that load these
+cores (5,550 tests) wrote no `.srm` outside the sandboxes.
+
+**The hashes.** `CoreOutputHashProbe` was run again on all four consoles. Every sound and picture hash, and every state
+hash on the NES, the Game Boy and the N64, equals the base's. The six Venus state hashes of the first two runs differ, as
+they must: a Venus state carries the cartridge's `SavePath` (§4.85.6), which now names `Saves/SNES`. Substituting the
+old path for the new, length prefix included, makes each of the three states byte-identical to the base's, so that
+string is the whole difference. The Venus states the base saved load and play on to the base's hashes.
+
+**What it means on the handheld.** The first load of each SNES or Nintendo 64 game copies its save from the flat
+`Saves` folder into `Saves/SNES` or `Saves/N64` on the handheld's own storage, and each NES or Game Boy game copies
+its save from beside the game on the SD card into `Saves/NES`, `GB` or `GBC`. The old files are left, and never updated
+again: a player who copies the handheld's saves elsewhere should copy the console folders. A save sync set up against
+the flat folder would miss every save written from now on.
+
+**What it does not cover.** Two ROMs of one console with the same stem, in different folders of the library, still share
+a save, as they did in the flat folder. The old flat and beside-the-ROM files are never removed by the program; the
+player can delete them. A game loaded once under `--nobattery` and again without it copies at the second load, which is
+the first that reads a save.

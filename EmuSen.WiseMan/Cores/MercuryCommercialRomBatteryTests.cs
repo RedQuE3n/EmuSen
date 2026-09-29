@@ -15,7 +15,7 @@ namespace EmuSen.WiseMan.Cores
         {
             if (path.Length == 0) return;
 
-            string beside = Path.ChangeExtension(path, ".srm"), saves = EmuSen.Galaxia.Library.SaveLibrary.SramPathFor(path);
+            string beside = Path.ChangeExtension(path, ".srm"), saves = EmuSen.Galaxia.Library.SaveLibrary.SramPathFor(path, EmuSen.Cores.BatterySave.GameBoyFolder(path));
             bool besideBefore = File.Exists(beside), savesBefore = File.Exists(saves);
 
             var core = Load(path);

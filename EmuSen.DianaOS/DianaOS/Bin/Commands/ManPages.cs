@@ -1389,7 +1389,8 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "                      itself - the binaries, the repo when running from\n" +
                 "                      source - sits ABOVE this root and is unreachable.\n\n" +
                 "    /Games            your ROM library\n" +
-                "    /Saves            battery-backed cartridge SRAM ('.srm')\n" +
+                "    /Saves            battery-backed cartridge SRAM ('.srm'), a folder per\n" +
+                "                      console: NES, SNES, N64, GB, GBC\n" +
                 "    /Saves/Save States   'state save'/'state load' snapshots\n" +
                 "    /Library          Mistress's own databases, written and read by the\n" +
                 "                      program, not by hand: games.db (favourites, play\n" +

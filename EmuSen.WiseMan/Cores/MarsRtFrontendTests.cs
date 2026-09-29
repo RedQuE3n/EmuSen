@@ -605,8 +605,8 @@ namespace EmuSen.WiseMan.Cores
 
         private static void Place(string rom, byte[] save)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(SaveLibrary.SramPathFor(rom))!);
-            File.WriteAllBytes(SaveLibrary.SramPathFor(rom), save);
+            Directory.CreateDirectory(Path.GetDirectoryName(SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64))!);
+            File.WriteAllBytes(SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64), save);
         }
 
         [Fact]
@@ -621,7 +621,7 @@ namespace EmuSen.WiseMan.Cores
             for (int frame = 0; frame < 40; frame++) first.RunFrame();
             first.SaveSram();
 
-            byte[] file = File.ReadAllBytes(SaveLibrary.SramPathFor(rom));
+            byte[] file = File.ReadAllBytes(SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64));
             Assert.Equal(EmuSen.Cores.Nintendo.Mars.Memory.Eeprom.Size, file.Length);
             Assert.Equal(Marker, file[Marked..(Marked + 8)]);
             Assert.NotEqual(Enumerable.Repeat((byte)0xFF, 8), file[Written..(Written + 8)]);
@@ -646,15 +646,15 @@ namespace EmuSen.WiseMan.Cores
             core.RunFrame();
             core.SaveSram();
 
-            Assert.False(File.Exists(SaveLibrary.SramPathFor(rom)));
-            Assert.False(File.Exists(Path.ChangeExtension(SaveLibrary.SramPathFor(rom), MarsCore.PakExtension)));
+            Assert.False(File.Exists(SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64)));
+            Assert.False(File.Exists(Path.ChangeExtension(SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64), MarsCore.PakExtension)));
         }
 
         [Fact]
         public void A_saved_chip_is_written_again_only_after_it_changes_again()
         {
             string rom = WriteRom("Twice");
-            string save = SaveLibrary.SramPathFor(rom);
+            string save = SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64);
 
             using var core = new MarsRtCore(batteryRamDisabled: false);
             core.LoadRom(rom);
@@ -676,7 +676,7 @@ namespace EmuSen.WiseMan.Cores
         public void A_changed_chip_is_written_on_the_three_hundredth_frame_without_being_asked()
         {
             string rom = WriteRom("Autosave");
-            string save = SaveLibrary.SramPathFor(rom);
+            string save = SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64);
 
             using var core = new MarsRtCore(batteryRamDisabled: false);
             core.LoadRom(rom);
@@ -701,7 +701,7 @@ namespace EmuSen.WiseMan.Cores
             for (int frame = 0; frame < 40; frame++) core.RunFrame();
             core.SaveSram();
 
-            Assert.Equal(original, File.ReadAllBytes(SaveLibrary.SramPathFor(rom)));
+            Assert.Equal(original, File.ReadAllBytes(SaveLibrary.SramPathFor(rom, EmuSen.Cores.BatterySave.N64)));
         }
 
         // A scratch copy of Super Mario 64, the libretro database's own code for it, and the byte it names - see Mars_Native.md §5.5.

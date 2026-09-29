@@ -15,19 +15,19 @@ namespace EmuSen.WiseMan.Galaxia
         public void Sram_lands_in_Saves_named_after_the_rom()
         {
             Assert.Equal(
-                Path.Combine(DataStore.Saves, "Super Metroid.srm"),
-                SaveLibrary.SramPathFor(Path.Combine("anywhere", "Super Metroid.smc")));
+                Path.Combine(DataStore.Saves, "SNES", "Super Metroid.srm"),
+                SaveLibrary.SramPathFor(Path.Combine("anywhere", "Super Metroid.smc"), "SNES"));
         }
 
         // The ROM's own folder never appears in the answer, whatever it was.
         [Fact]
         public void Sram_ignores_where_the_rom_itself_lives()
         {
-            string fromGames = SaveLibrary.SramPathFor(Path.Combine("Usr", "Home", "Games", "SNES", "ALTTP.smc"));
-            string fromElsewhere = SaveLibrary.SramPathFor(Path.Combine("tmp", "ALTTP.smc"));
+            string fromGames = SaveLibrary.SramPathFor(Path.Combine("Usr", "Home", "Games", "SNES", "ALTTP.smc"), "SNES");
+            string fromElsewhere = SaveLibrary.SramPathFor(Path.Combine("tmp", "ALTTP.smc"), "SNES");
 
             Assert.Equal(fromGames, fromElsewhere);
-            Assert.Equal(DataStore.Saves, Path.GetDirectoryName(fromGames));
+            Assert.Equal(Path.Combine(DataStore.Saves, "SNES"), Path.GetDirectoryName(fromGames));
         }
 
         // Slot 1 keeps the plain <rom>.state name every frontend already wrote.
@@ -77,7 +77,7 @@ namespace EmuSen.WiseMan.Galaxia
             string dir = Path.Combine(Path.GetTempPath(), "EmuSenData_" + Guid.NewGuid().ToString("N"));
             DataStore.OverrideDirectory = dir;
 
-            Assert.Equal(Path.Combine(dir, "Saves", "ALTTP.srm"), SaveLibrary.SramPathFor("ALTTP.smc"));
+            Assert.Equal(Path.Combine(dir, "Saves", "SNES", "ALTTP.srm"), SaveLibrary.SramPathFor("ALTTP.smc", "SNES"));
             Assert.Equal(
                 Path.Combine(dir, "Saves", "Save States", "ALTTP.state"),
                 SaveLibrary.StatePathFor("ALTTP.smc"));

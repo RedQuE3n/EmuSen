@@ -92,7 +92,7 @@ namespace EmuSen.WiseMan.Cores
         public void A_battery_save_loads_and_writes_the_same_bytes()
         {
             CoreOptions.BatteryRamDisabled = false;
-            string rom = Rom("battery", CountingRom(0x03)), srm = SaveLibrary.SramPathFor(rom);
+            string rom = Rom("battery", CountingRom(0x03)), srm = SaveLibrary.SramPathFor(rom, BatterySave.GameBoy);
             Directory.CreateDirectory(Path.GetDirectoryName(srm)!);
             var saved = new byte[8192];
             new Random(64).NextBytes(saved);

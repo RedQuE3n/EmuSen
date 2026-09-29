@@ -188,7 +188,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
         // In the Saves folder, copied there once from beside the ROM; --nobattery reads and writes nothing - see EmuSen_Settings_Reference.md §4.85.6.
         private void LoadSram()
         {
-            _battery = EmuSen.Cores.BatterySave.Open(RomPath, hasRam: HasBattery && PrgRam.Length > 0, migrate: true);
+            _battery = EmuSen.Cores.BatterySave.Open(RomPath, EmuSen.Cores.BatterySave.Nes, hasRam: HasBattery && PrgRam.Length > 0);
             _battery.ReadInto(PrgRam);
         }
 

@@ -515,8 +515,8 @@ namespace EmuSen.Cores.Nintendo.Mars
         private void LoadSaves(MemoryBus bus, RomImage rom, string romPath)
         {
             // Latched here, as a cartridge does, so --nobattery holds for the whole run - see Mars_Save.md §7.
-            _save = BatterySave.Open(romPath, disabled: _batteryRamDisabled);
-            _pak = BatterySave.Open(romPath, disabled: _batteryRamDisabled, extension: PakExtension);
+            _save = BatterySave.Open(romPath, BatterySave.N64, disabled: _batteryRamDisabled);
+            _pak = BatterySave.Open(romPath, BatterySave.N64, disabled: _batteryRamDisabled, extension: PakExtension);
 
             byte[]? saved = _save.Read();
             N64SaveType type = SaveTypes.Declared(rom);

@@ -146,9 +146,12 @@ Failure stays best-effort, exactly as it is for config: a save that cannot reach
 One spelling of the naming rules, previously duplicated across two frontends and computed three different ways by three cores.
 
 ```csharp
-string SramPathFor(romPath)                            // Saves/<stem>.srm
+string SramPathFor(romPath, console)                   // Saves/<console>/<stem>.srm, since 2026-09-28
 string StatePathFor(romPath, slot, directoryOverride)  // Save States/<stem>[.slotN].state
 ```
+
+*Revised 2026-09-28: the save is in a folder per console, named as the ROM library names them, and the flat
+`Saves/<stem>.srm` of earlier builds is copied in once (`EmuSen_Settings_Reference.md` §4.85.11).*
 
 ### 5.1 Two decisions worth knowing
 

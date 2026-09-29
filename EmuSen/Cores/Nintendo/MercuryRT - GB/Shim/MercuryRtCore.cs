@@ -78,7 +78,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         {
             byte[] image = File.ReadAllBytes(path);
             Cartridge header = Cartridge.FromImage(image);
-            BatterySave battery = BatterySave.Open(path, hasRam: header.HasBattery && header.Ram.Length > 0, migrate: true);
+            BatterySave battery = BatterySave.Open(path, BatterySave.GameBoyFolder(path), hasRam: header.HasBattery && header.Ram.Length > 0);
             byte[]? saved = battery.Read();
 
             var machine = new MercuryMachine(image, _model);

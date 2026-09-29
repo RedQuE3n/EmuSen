@@ -54,7 +54,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
         {
             byte[] image = File.ReadAllBytes(path);
             Cartridge header = Cartridge.FromImage(image);
-            BatterySave battery = BatterySave.Open(path, hasRam: header.HasBattery && header.PrgRam.Length > 0, migrate: true);
+            BatterySave battery = BatterySave.Open(path, BatterySave.Nes, hasRam: header.HasBattery && header.PrgRam.Length > 0);
             byte[]? saved = battery.Read();
 
             var machine = new MoonMachine(image);

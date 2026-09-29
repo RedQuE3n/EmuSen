@@ -86,7 +86,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
 
             baseHigh = hi;
             crossed = (effective & 0xFF00) != (baseAddress & 0xFF00);
+            long before = Cycles;
             Read((ushort)((baseAddress & 0xFF00) | (effective & 0x00FF)));
+            _unstableHalted = Cycles - before > 1;
             return effective;
         }
 
@@ -100,7 +102,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
 
             baseHigh = hi;
             crossed = (effective & 0xFF00) != (baseAddress & 0xFF00);
+            long before = Cycles;
             Read((ushort)((baseAddress & 0xFF00) | (effective & 0x00FF)));
+            _unstableHalted = Cycles - before > 1;
             return effective;
         }
 

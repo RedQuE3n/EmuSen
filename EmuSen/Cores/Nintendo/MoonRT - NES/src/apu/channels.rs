@@ -436,7 +436,7 @@ impl DmcChannel {
     /// The reader wants the bus: the buffer is empty, bytes remain, and no load delay is running.
     #[inline(always)]
     pub fn dma_requested(&self) -> bool {
-        !*self.buffer_full && self.bytes_remaining > 0 && *self.load_delay == 0
+        !*self.buffer_full && ((self.bytes_remaining > 0 && *self.load_delay == 0) || *self.load_delay < 0)
     }
 
     #[inline(always)]
@@ -449,8 +449,8 @@ impl DmcChannel {
         self.enabled = value;
         self.irq_pending = false;
         if !value {
+            *self.load_delay = if self.bytes_remaining > 0 && *self.load_delay == 0 { if on_get_cycle { -3 } else { -2 } } else { 0 };
             self.bytes_remaining = 0;
-            *self.load_delay = 0;
         } else if self.bytes_remaining == 0 {
             self.restart();
             if !*self.buffer_full && self.bytes_remaining > 0 {
@@ -469,6 +469,8 @@ impl DmcChannel {
     pub fn step_timer(&mut self) {
         if *self.load_delay > 0 {
             *self.load_delay -= 1;
+        } else if *self.load_delay < 0 {
+            *self.load_delay += 1;
         }
         if self.timer > 0 {
             self.timer -= 1;
@@ -507,6 +509,10 @@ impl DmcChannel {
     pub fn complete_dma(&mut self, value: u8) {
         *self.sample_buffer = value;
         *self.buffer_full = true;
+        *self.load_delay = 0;
+        if self.bytes_remaining == 0 {
+            return;
+        }
         self.current_address = if self.current_address == 0xFFFF { 0x8000 } else { self.current_address.wrapping_add(1) };
         self.bytes_remaining = self.bytes_remaining.wrapping_sub(1);
         if self.bytes_remaining != 0 {
@@ -514,9 +520,12 @@ impl DmcChannel {
         }
         if self.r#loop {
             self.restart();
-        } else if self.irq_enabled {
+            return;
+        }
+        if self.irq_enabled {
             self.irq_pending = true;
         }
+        *self.load_delay = -3;
     }
 
     pub fn reset(&mut self) {

@@ -34,7 +34,7 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // D8: $4015 answers on the chip's internal bus, so bit 5 is whatever was last on the bus and the bus itself is left as it was.
+        // D8: $4015 answers on the chip's internal bus, so bit 5 is that bus's and the external bus is left as it was; stage 2d split the two latches.
         [Fact]
         public void A_read_of_4015_floats_bit_5_and_leaves_the_bus()
         {
@@ -45,10 +45,10 @@ namespace EmuSen.WiseMan.Cores
                 var core = new MoonCore();
                 core.LoadRom(path);
                 var bus = core.Bus!;
-                bus.OpenBus = 0x7A;
+                bus.OpenBus = bus.InternalBus = 0x7A;
                 Assert.Equal(0x20, bus.Read(0x4015) & 0x20);
                 Assert.Equal(0x7A, bus.OpenBus);
-                bus.OpenBus = 0x45;
+                bus.OpenBus = bus.InternalBus = 0x45;
                 Assert.Equal(0x00, bus.Read(0x4015) & 0x20);
                 Assert.Equal(0x45, bus.Read(0x4018));
             }
@@ -143,6 +143,67 @@ namespace EmuSen.WiseMan.Cores
             }
             Assert.True(fetches.Count >= 3, $"{fetches.Count} fetches");
             Assert.Equal(period * 8, fetches[2] - fetches[1]);
+        }
+        // A 64 KB bus that halts one chosen read, as a DMA would, spending three cycles.
+        private sealed class HaltingBus : EmuSen.Cores.Nintendo.Moon.Processor.ICpuBus
+        {
+            public readonly byte[] Memory = new byte[0x10000];
+            public EmuSen.Cores.Nintendo.Moon.Processor.Cpu? Cpu;
+            public int Reads;
+            public int HaltBeforeRead = -1;
+
+            public bool DmaPending => Reads == HaltBeforeRead;
+            public void RunDma(ushort address) { Cpu!.Cycles += 3; HaltBeforeRead = -1; }
+            public byte Read(ushort address) { Reads++; return Memory[address]; }
+            public void Write(ushort address, byte data) => Memory[address] = data;
+        }
+
+        // C4: a DMA halting SH*'s dummy read before the write drops the high byte's term, so SHA stores A & X.
+        [Theory]
+        [InlineData(false, 0x06)]
+        [InlineData(true, 0x8F)]
+        public void A_dma_on_shas_dummy_read_drops_the_high_byte_term(bool halted, byte expected)
+        {
+            var bus = new HaltingBus();
+            bus.Memory[0xFFFC] = 0x00; bus.Memory[0xFFFD] = 0x80;
+            bus.Memory[0x8000] = 0x9F; bus.Memory[0x8001] = 0x00; bus.Memory[0x8002] = 0x05;
+            var cpu = new EmuSen.Cores.Nintendo.Moon.Processor.Cpu(bus);
+            bus.Cpu = cpu;
+            cpu.Reset();
+            cpu.A = 0x8F; cpu.X = 0xFF; cpu.Y = 0;
+            bus.Reads = 0;
+            if (halted) bus.HaltBeforeRead = 3;
+            cpu.Step();
+            Assert.Equal(expected, bus.Memory[0x0500]);
+        }
+
+        // An OAM DMA from page $40 reads the APU's registers only while the halted CPU's address is in $4000-$401F; from ROM it reads the bus.
+        [Fact]
+        public void An_oam_dma_from_page_40_leaves_the_frame_irq_when_the_cpu_is_elsewhere()
+        {
+            var core = Run(SyntheticNesRom.Build(mapper: 0));
+            core.Apu!.FrameIrqPending = true;
+            core.Apu.FrameIrqReadable = true;
+            core.Bus!.Write(0x4014, 0x40);
+            core.Bus.RunDma(0x8000);
+            Assert.True(core.Apu.FrameIrqPending);
+        }
+
+        // A $4015 write that disables the DMC lets its request fall through the enable's pipeline, not at once.
+        [Fact]
+        public void A_disable_lets_the_dmc_request_fall_after_the_pipelines_lag()
+        {
+            var dmc = new EmuSen.Cores.Nintendo.Moon.Apu.DmcChannel();
+            dmc.Reset();
+            dmc.SampleLength = 17;
+            dmc.SetEnabled(true, onGetCycle: false);
+            for (int i = 0; i < 4; i++) dmc.StepTimer();
+            Assert.True(dmc.DmaRequested);
+            dmc.SetEnabled(false, onGetCycle: false);
+            Assert.True(dmc.DmaRequested);
+            dmc.StepTimer();
+            dmc.StepTimer();
+            Assert.False(dmc.DmaRequested);
         }
     }
 }

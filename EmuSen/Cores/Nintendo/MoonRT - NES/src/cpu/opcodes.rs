@@ -82,7 +82,9 @@ impl Cpu {
         let base = lo | ((hi as u16) << 8);
         let effective = base.wrapping_add(index as u16);
         let crossed = (effective & 0xFF00) != (base & 0xFF00);
+        let before = self.cycles;
         self.read(bus, (base & 0xFF00) | (effective & 0x00FF));
+        *self.unstable_halted = self.cycles.wrapping_sub(before) > 1;
         (effective, hi, crossed)
     }
 
@@ -93,7 +95,9 @@ impl Cpu {
         let base = lo | ((hi as u16) << 8);
         let effective = base.wrapping_add(self.y as u16);
         let crossed = (effective & 0xFF00) != (base & 0xFF00);
+        let before = self.cycles;
         self.read(bus, (base & 0xFF00) | (effective & 0x00FF));
+        *self.unstable_halted = self.cycles.wrapping_sub(before) > 1;
         (effective, hi, crossed)
     }
 
@@ -413,7 +417,7 @@ impl Cpu {
     }
 
     fn unstable_store(&mut self, bus: &mut MemoryBus, value: u8, effective: u16, base_high: u8, crossed: bool) {
-        let stored = value & base_high.wrapping_add(1);
+        let stored = if *self.unstable_halted { value } else { value & base_high.wrapping_add(1) };
         let address = if crossed { ((stored as u16) << 8) | (effective & 0x00FF) } else { effective };
         self.write(bus, address, stored);
     }

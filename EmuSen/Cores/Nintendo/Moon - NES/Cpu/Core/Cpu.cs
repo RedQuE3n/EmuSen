@@ -71,6 +71,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
         // Set by BRK and the interrupt sequence, which end without polling; not state, as no state falls inside an instruction.
         [SkipInState] private bool _vectored;
 
+        // SH*'s dummy read before the write was halted by DMA; set and spent inside one instruction.
+        [SkipInState] private bool _unstableHalted;
+
         // CLI/SEI/PLP land their I write after the interrupt poll - see Moon_CPU.md §5.3.
         private bool _hasDelayedI;
         private bool _delayedI;

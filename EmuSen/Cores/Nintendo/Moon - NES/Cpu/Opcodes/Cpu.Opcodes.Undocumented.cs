@@ -106,7 +106,8 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
         // Crossing a page makes the value itself become the address's high byte - see Moon_CPU.md §6.3.
         private void UnstableStore(byte value, ushort effective, byte baseHigh, bool crossed)
         {
-            byte stored = (byte)(value & (byte)(baseHigh + 1));
+            // A DMA that halted the dummy read before the write drops the high-byte term - see Moon_Native.md §3.11.
+            byte stored = _unstableHalted ? value : (byte)(value & (byte)(baseHigh + 1));
             ushort address = crossed ? (ushort)((stored << 8) | (effective & 0x00FF)) : effective;
             Write(address, stored);
         }

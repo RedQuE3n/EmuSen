@@ -22,7 +22,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
         [SkipInState] public byte SampleBuffer;
         [SkipInState] public bool BufferFull;
 
-        // CPU cycles until a $4015 write's load DMA is asked for, 0 when none is waiting.
+        // The request's lag behind a $4015 write, in CPU cycles: positive while a load's rises, negative while a disable's falls - see Moon_Native.md §3.11.
         [SkipInState] public int LoadDelay;
 
         private int _timer;
@@ -35,8 +35,8 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
 
         public bool Active => _bytesRemaining > 0;
 
-        // The reader wants the bus: the buffer is empty, bytes remain, and no load delay is running.
-        public bool DmaRequested => !BufferFull && _bytesRemaining > 0 && LoadDelay == 0;
+        // The reader wants the bus: an empty buffer, and bytes left with no load delay running or a disable's lag not yet run out.
+        public bool DmaRequested => !BufferFull && ((_bytesRemaining > 0 && LoadDelay == 0) || LoadDelay < 0);
 
         public ushort DmaAddress => (ushort)_currentAddress;
 
@@ -52,8 +52,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
 
             if (!value)
             {
+                // The request follows the enable through the same pipeline, so a disable lets it fall only after the lag.
+                LoadDelay = _bytesRemaining > 0 && LoadDelay == 0 ? -(onGetCycle ? 3 : 2) : 0;
                 _bytesRemaining = 0;
-                LoadDelay = 0;
             }
             else if (_bytesRemaining == 0)
             {
@@ -72,6 +73,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
         public void StepTimer()
         {
             if (LoadDelay > 0) LoadDelay--;
+            else if (LoadDelay < 0) LoadDelay++;
 
             if (_timer > 0)
             {
@@ -120,14 +122,25 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
         {
             SampleBuffer = value;
             BufferFull = true;
+            LoadDelay = 0;
+
+            // A fetch that got its get inside a disable's lag fills the buffer and ends there.
+            if (_bytesRemaining == 0) return;
 
             _currentAddress = _currentAddress == 0xFFFF ? 0x8000 : _currentAddress + 1;
             _bytesRemaining--;
 
             if (_bytesRemaining != 0) return;
 
-            if (Loop) Restart();
-            else if (IrqEnabled) IrqPending = true;
+            if (Loop)
+            {
+                Restart();
+                return;
+            }
+            if (IrqEnabled) IrqPending = true;
+
+            // The last fetch drops the enable, and the request trails it by the get's lag: an empty buffer inside it asks once more - see Moon_Native.md §3.11.
+            LoadDelay = -3;
         }
 
         public void Reset()

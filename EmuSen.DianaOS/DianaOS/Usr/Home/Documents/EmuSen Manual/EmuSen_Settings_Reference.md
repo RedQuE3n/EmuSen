@@ -6552,3 +6552,19 @@ caller passes a negative count.
 build waits for a retrain (§4.84, `Mars_Native.md` §6.17), and an export for the limit would change the library. It is
 given the setting when it moves to the common interface (`EmuSen_NativeCores.md` §7, step 5), which retrains the profile
 anyway. Until then the Nintendo 64 honours the setting on Mars (C#) and not on MarsRT, the default engine.
+
+#### 4.85.3 The Rust NES and Game Boy shims close their picture lending
+
+**The defect.** A core that lends its pictures (`IFrameBufferPool`, `EmuSen_Multicore.md` §16) closes its
+`FrameBufferLending` when it is disposed, so that a picture a presenter hands back afterwards is dropped rather than
+kept alive in a pool nobody will lend from again. MarsRT's `Dispose` does. MoonRT's and MercuryRT's, written from it,
+freed the machine and left the lending open.
+
+**The fix and the proof.** `Dispose` closes it, and each shim exposes its lending as `FrameBuffers`, as MarsRT does.
+`RustShimDisposeTests` lends two pictures, returns one before disposing (the pool holds it) and the other after: after
+`Dispose` the pool must be empty and the late return counted as dropped. Without the close, the build before the fix,
+the pool still holds one picture and each shim's test fails.
+
+**What it does not cover.** A picture lent before `Dispose` and never returned is the caller's, as it always was; closing
+changes only what a return does.
+

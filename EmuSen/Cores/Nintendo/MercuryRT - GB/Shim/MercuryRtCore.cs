@@ -188,6 +188,9 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
 
         public void ReturnFrameBuffer(byte[] buffer) => _lending.Return(buffer);
 
+        // What the lending has done, for the tests.
+        public FrameBufferLending FrameBuffers => _lending;
+
         public short[] DequeueAudioSamples(int maxFrames) => _machine?.DrainAudio(maxFrames) ?? Array.Empty<short>();
 
         // Cartridge.SaveSram: the path this session chose at load, which no state can change.
@@ -319,6 +322,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         {
             _machine?.Dispose();
             _machine = null;
+            _lending.Close();
         }
     }
 }

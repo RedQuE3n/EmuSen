@@ -245,25 +245,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         }
 
         // MarsDebugSpaces.Resolve: which memory a physical address names, or the register block it falls in, not addressable.
-        public PhysicalAddress? Resolve(uint physical)
-        {
-            if (_handle == 0) return null;
-            long rdram = SpaceSize(MarsRtSpace.Rdram);
-            if (physical < rdram) return new PhysicalAddress(MarsDebugSpaces.Rdram, (int)physical);
-            if (physical < MemoryMap.RdramRegistersBase) return new PhysicalAddress("RDRAM (not installed)", (int)physical, false);
-            if (physical < MemoryMap.SpDmemBase) return new PhysicalAddress("RDRAM registers", (int)(physical - MemoryMap.RdramRegistersBase), false);
-            if (physical < MemoryMap.SpRegistersBase)
-            {
-                uint local = (physical - MemoryMap.SpDmemBase) % (2 * MemoryMap.SpMemSize);
-                return local < MemoryMap.SpMemSize ? new PhysicalAddress(MarsDebugSpaces.Dmem, (int)local) : new PhysicalAddress(MarsDebugSpaces.Imem, (int)(local - MemoryMap.SpMemSize));
-            }
-            if (physical < MemoryMap.CartDomain2Address1) return new PhysicalAddress("interface registers", (int)physical, false);
-            if (physical < MemoryMap.CartDomain2Address2) return new PhysicalAddress("64DD", (int)physical, false);
-            if (physical < MemoryMap.CartDomain1Address2) return new PhysicalAddress("save chip", (int)(physical - MemoryMap.CartDomain2Address2), false);
-            if (physical >= MemoryMap.PifRamBase && physical < MemoryMap.PifRamBase + MemoryMap.PifRamSize) return new PhysicalAddress(MarsDebugSpaces.PifRam, (int)(physical - MemoryMap.PifRamBase));
-            if (physical < MemoryMap.PifRomBase) return new PhysicalAddress(MarsDebugSpaces.Rom, (int)(physical - MemoryMap.CartDomain1Address2));
-            return new PhysicalAddress("PIF ROM", (int)(physical - MemoryMap.PifRomBase), false);
-        }
+        public PhysicalAddress? Resolve(uint physical) => _handle == 0 ? null : MarsDebugSpaces.Resolve(physical, SpaceSize(MarsRtSpace.Rdram));
 
         // A test's way to a device register, MemoryBus.Write32 and Read32 at a physical address, side effects and all.
         public void WriteBus32(uint physical, uint value) => BusWrite32(Handle, physical, value);

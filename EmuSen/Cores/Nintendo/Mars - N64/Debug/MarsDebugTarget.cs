@@ -11,47 +11,13 @@ using VideoInterface = EmuSen.Cores.Nintendo.Mars.Vi.Vi;
 
 namespace EmuSen.Cores.Nintendo.Mars.Debug
 {
-    // One of the machine's memories by name, read live so a reload is followed - see Mars_Debug.md §4.
-    internal sealed class MarsDebugMemorySpace : IDebugMemorySpace
-    {
-        private readonly MarsCore _core;
-        private readonly Func<int> _size;
-
-        public string Name { get; }
-        public bool IsWritable { get; }
-        public bool HasSideEffects => false;
-
-        public MarsDebugMemorySpace(MarsCore core, string name, Func<int> size, bool isWritable)
-        {
-            _core = core;
-            Name = name;
-            _size = size;
-            IsWritable = isWritable;
-        }
-
-        public int Size => _size();
-
-        public byte Read(int address) => MarsDebugSpaces.Read(_core, Name, address);
-
-        public void Write(int address, byte value)
-        {
-            if (IsWritable) MarsDebugSpaces.Write(_core, Name, address, value);
-        }
-    }
-
     // The debugger's view of Mars: its memories, both processors, and the core's registries - see Mars_Debug.md.
     public sealed class MarsDebugTarget : IDebugTarget, IWriteObserver
     {
-        // The o32 names, so `regs` reads the way a MIPS listing does.
-        private static readonly string[] RegisterNames =
-        {
-            "zero", "at", "v0", "v1", "a0", "a1", "a2", "a3",
-            "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7",
-            "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7",
-            "t8", "t9", "k0", "k1", "gp", "sp", "s8", "ra",
-        };
+        // The o32 names, so `regs` reads the way a MIPS listing does; the disassembler's table, shared with MarsRT.
+        internal static readonly string[] RegisterNames = MarsOperands.Gpr;
 
-        private static readonly (string Name, uint Offset)[] VideoRegisterNames =
+        internal static readonly (string Name, uint Offset)[] VideoRegisterNames =
         {
             ("CONTROL", VideoInterface.Control), ("ORIGIN", VideoInterface.Origin), ("WIDTH", VideoInterface.Width),
             ("V_INTR", VideoInterface.Interrupt), ("V_CURRENT", VideoInterface.CurrentLine), ("BURST", VideoInterface.Burst),
@@ -72,19 +38,23 @@ namespace EmuSen.Cores.Nintendo.Mars.Debug
         private readonly PollingProvider<IReadOnlyList<DebugAudioChannelInfo>> _audioChannels = new(() => Array.Empty<DebugAudioChannelInfo>(), Array.Empty<DebugAudioChannelInfo>());
         private readonly PollingProvider<IReadOnlyList<DebugLoadInfo>> _hardwareLoad = new(() => Array.Empty<DebugLoadInfo>(), Array.Empty<DebugLoadInfo>());
 
+        // One of the machine's memories by name, sized live so a reload is followed - see Mars_Debug.md §4.
+        private DelegateDebugMemorySpace Space(string name, Func<int> size, bool isWritable, bool wrap = true) =>
+            new(name, size, a => MarsDebugSpaces.Read(_core, name, a), isWritable ? (a, v) => MarsDebugSpaces.Write(_core, name, a, v) : null, wrap: wrap);
+
         public MarsDebugTarget(MarsCore core, CheatRegistry? cheats = null)
         {
             _core = core;
             if (cheats is not null) _core.Cheats = cheats;
 
-            _spaces.Add(new MarsDebugMemorySpace(core, MarsDebugSpaces.Rdram, () => _core.Bus?.Rdram.Length ?? 0, true));
-            _spaces.Add(new MarsDebugMemorySpace(core, MarsDebugSpaces.Dmem, () => _core.Bus?.SpDmem.Length ?? 0, true));
-            _spaces.Add(new MarsDebugMemorySpace(core, MarsDebugSpaces.Imem, () => _core.Bus?.SpImem.Length ?? 0, true));
-            _spaces.Add(new MarsDebugMemorySpace(core, MarsDebugSpaces.PifRam, () => _core.Bus?.PifRam.Length ?? 0, true));
-            _spaces.Add(new MarsDebugMemorySpace(core, MarsDebugSpaces.Rom, () => _core.Rom?.Rom.Length ?? 0, false));
+            _spaces.Add(Space(MarsDebugSpaces.Rdram, () => _core.Bus?.Rdram.Length ?? 0, true));
+            _spaces.Add(Space(MarsDebugSpaces.Dmem, () => _core.Bus?.SpDmem.Length ?? 0, true));
+            _spaces.Add(Space(MarsDebugSpaces.Imem, () => _core.Bus?.SpImem.Length ?? 0, true));
+            _spaces.Add(Space(MarsDebugSpaces.PifRam, () => _core.Bus?.PifRam.Length ?? 0, true));
+            _spaces.Add(Space(MarsDebugSpaces.Rom, () => _core.Rom?.Rom.Length ?? 0, false));
 
-            // Every 32-bit virtual address, so the size is the largest an int can say - see Mars_Debug.md §4.
-            _spaces.Add(new MarsDebugMemorySpace(core, MarsDebugSpaces.Cpu, () => int.MaxValue, true));
+            // Every 32-bit virtual address, so the size is the largest an int can say, and no address wraps - see Mars_Debug.md §4.
+            _spaces.Add(Space(MarsDebugSpaces.Cpu, () => int.MaxValue, true, wrap: false));
 
             _cpuRegisters = new(ReadCpuRegistersLive, ReadCpuRegistersLive());
             _videoRegisters = new(ReadVideoRegistersLive, ReadVideoRegistersLive());

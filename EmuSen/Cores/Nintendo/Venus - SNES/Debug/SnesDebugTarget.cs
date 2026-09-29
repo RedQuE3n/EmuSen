@@ -17,84 +17,6 @@ using EmuSen.Cauldron;
 
 namespace EmuSen.Cores.Nintendo.Venus.Debug
 {
-    // Wraps a byte[] directly - the array index is the address.
-    internal sealed class ByteArrayDebugMemorySpace : IDebugMemorySpace
-    {
-        private readonly byte[] _data;
-        public string Name { get; }
-        public int Size => _data.Length;
-        public bool IsWritable { get; }
-
-        // Plain array access, so never a side effect beyond returning a byte.
-        public bool HasSideEffects => false;
-
-        public ByteArrayDebugMemorySpace(string name, byte[] data, bool isWritable = true)
-        {
-            Name = name;
-            _data = data;
-            IsWritable = isWritable;
-        }
-
-        public byte Read(int address) => _data[((address % _data.Length) + _data.Length) % _data.Length];
-        public void Write(int address, byte value)
-        {
-            if (!IsWritable) return;
-            if (address >= 0 && address < _data.Length) _data[address] = value;
-        }
-    }
-
-    // Bus-routed at a fixed bank, for spaces only meaningful as CPU addresses - see §3.2.
-    internal sealed class BusDebugMemorySpace : IDebugMemorySpace
-    {
-        private readonly MemoryBus _bus;
-        private readonly uint _baseAddress;
-        public string Name { get; }
-        public int Size { get; }
-        public bool IsWritable => true;
-
-        // Conservative by default; SRAM opts out because its range is inert - see §3.2a.
-        public bool HasSideEffects { get; }
-
-        public BusDebugMemorySpace(string name, MemoryBus bus, uint baseAddress, int size, bool hasSideEffects = true)
-        {
-            Name = name;
-            _bus = bus;
-            _baseAddress = baseAddress;
-            Size = size;
-            HasSideEffects = hasSideEffects;
-        }
-
-        public byte Read(int address) => _bus.Read8((uint)(_baseAddress + (uint)address));
-        public void Write(int address, byte value) => _bus.Write8((uint)(_baseAddress + (uint)address), value);
-    }
-
-    // A read/write pair, which is what a coprocessor's own decode needs - see Venus_SA1.md §11.2.
-    internal sealed class DelegateDebugMemorySpace : IDebugMemorySpace
-    {
-        private readonly Func<int, byte> _read;
-        private readonly Action<int, byte>? _write;
-        public string Name { get; }
-        public int Size { get; }
-        public bool IsWritable => _write != null;
-        public bool HasSideEffects { get; }
-
-        public DelegateDebugMemorySpace(string name, int size, Func<int, byte> read, Action<int, byte>? write = null, bool hasSideEffects = false)
-        {
-            Name = name;
-            Size = size;
-            _read = read;
-            _write = write;
-            HasSideEffects = hasSideEffects;
-        }
-
-        public byte Read(int address) => _read(((address % Size) + Size) % Size);
-
-        public void Write(int address, byte value)
-        {
-            if (address >= 0 && address < Size) _write?.Invoke(address, value);
-        }
-    }
-
     // Reshapes already-verified state; also owns the WatchRegistry - see §3.2.
     public class SnesDebugTarget : IDebugTarget, IWriteObserver, IReadObserver, IFrameObserver, IRomReadPatcher, EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.IHistoricalCoprocessorTarget
     {
@@ -698,23 +620,23 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         {
             var spaces = new List<IDebugMemorySpace>
             {
-                new BusDebugMemorySpace("CpuBus", _bus, 0x000000, 0x1000000),
+                Bus("CpuBus", 0x000000, 0x1000000),
                 // Bank 0, because registers mirror across every hardware bank - see §3.2a.
-                new BusDebugMemorySpace("IO", _bus, 0x000000, 0x10000),
-                new ByteArrayDebugMemorySpace("WRAM", _bus.Ram),
-                new ByteArrayDebugMemorySpace("VRAM", _ppu.Vram),
-                new ByteArrayDebugMemorySpace("CGRAM", _ppu.Cgram),
-                new ByteArrayDebugMemorySpace("OAM", _ppu.Oam),
-                new BusDebugMemorySpace("SRAM", _bus, 0x700000, _bus.SramSize, hasSideEffects: false),
+                Bus("IO", 0x000000, 0x10000),
+                DelegateDebugMemorySpace.Over("WRAM", _bus.Ram),
+                DelegateDebugMemorySpace.Over("VRAM", _ppu.Vram),
+                DelegateDebugMemorySpace.Over("CGRAM", _ppu.Cgram),
+                DelegateDebugMemorySpace.Over("OAM", _ppu.Oam),
+                Bus("SRAM", 0x700000, _bus.SramSize, hasSideEffects: false),
                 // The underlying array, not Spc700.Read8, which would consume timers - see Venus_APU.md §1.1.
-                new ByteArrayDebugMemorySpace("APURAM", _bus.Spc700.Ram),
+                DelegateDebugMemorySpace.Over("APURAM", _bus.Spc700.Ram),
             };
 
             // Only when the cartridge carries the chip - see §3.2a and Venus_SuperFX.md §5.1.
             var cart = _bus.Cart;
             if (cart.SuperFx is { } gsu)
             {
-                spaces.Add(new ByteArrayDebugMemorySpace("GSURAM", gsu.DebugRam));
+                spaces.Add(DelegateDebugMemorySpace.Over("GSURAM", gsu.DebugRam));
 
                 // The GSU's own program space, so `disasm GSUBUS` decodes it - see Venus_SuperFX.md §8.1.
                 spaces.Add(new DelegateDebugMemorySpace("GSUBUS", 0x1000000,
@@ -722,10 +644,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             }
             if (cart.Sa1 is { } sa1)
             {
-                spaces.Add(new ByteArrayDebugMemorySpace("SA1IRAM", sa1.IRam));
+                spaces.Add(DelegateDebugMemorySpace.Over("SA1IRAM", sa1.IRam));
 
                 // SRAM is anchored at bank $70 and cannot reach BW-RAM - see Venus_SA1.md §11.2.
-                if (sa1.BwRamSize > 0) spaces.Add(new ByteArrayDebugMemorySpace("BWRAM", sa1.DebugBwRam));
+                if (sa1.BwRamSize > 0) spaces.Add(DelegateDebugMemorySpace.Over("BWRAM", sa1.DebugBwRam));
 
                 // The SA-1's own space with Super MMC banking applied - see Venus_SA1.md §11.3.
                 spaces.Add(new DelegateDebugMemorySpace("SA1BUS", 0x1000000,
@@ -746,16 +668,19 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                     }));
             }
 
-            // `disasm DSPPRG` indexes words, not bytes - see Venus_NecDSP.md §8.
+            // `disasm DSPPRG` indexes words, not bytes; the program is mask ROM, so the space is read-only - see Venus_NecDSP.md §8.
             if (cart.NecDsp is { } prgDsp && prgDsp.DebugProgramWords > 0)
             {
                 spaces.Add(new DelegateDebugMemorySpace("DSPPRG", prgDsp.DebugProgramWords * 3,
-                    a => (byte)(prgDsp.DebugProgramWord(a / 3) >> (8 * (a % 3))),
-                    (a, v) => { }));
+                    a => (byte)(prgDsp.DebugProgramWord(a / 3) >> (8 * (a % 3)))));
             }
 
             return spaces;
         }
+
+        // Bus-routed at a fixed bank, every address passed through, for spaces only meaningful as CPU addresses - see §3.2.
+        private DelegateDebugMemorySpace Bus(string name, uint baseAddress, int size, bool hasSideEffects = true) =>
+            new(name, size, a => _bus.Read8(baseAddress + (uint)a), (a, v) => _bus.Write8(baseAddress + (uint)a, v), hasSideEffects, wrap: false);
 
         private IReadOnlyList<DebugRegisterValue> ReadCpuRegistersLive()
         {

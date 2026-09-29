@@ -13,41 +13,6 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
     // Where a target over a mirror sends what must reach the running machine - see Moon_Native.md §2.4.
     public sealed record MoonDebugHost(Func<string, int, byte> Read, Action<string, int, byte> Write, Action Refresh, Action ApplyCheats, Func<long> FrameCount, Action<int, bool> SetChannelMuted);
 
-    // A space backed by a name the core already knows how to read and write - see Moon_Debug.md §2.
-    internal sealed class MoonDebugMemorySpace : IDebugMemorySpace
-    {
-        private readonly MoonCore _core;
-        private readonly MoonDebugHost? _host;
-        private readonly string _space;
-
-        public string Name { get; }
-        public int Size { get; }
-        public bool IsWritable { get; }
-        public bool HasSideEffects { get; }
-
-        public MoonDebugMemorySpace(MoonCore core, MoonDebugHost? host, string space, string name, bool isWritable, bool hasSideEffects)
-        {
-            _core = core;
-            _host = host;
-            _space = space;
-            Name = name;
-            Size = core.SpaceSize(space);
-            IsWritable = isWritable;
-            HasSideEffects = hasSideEffects;
-        }
-
-        public byte Read(int address) => _host is null ? _core.ReadSpace(_space, Wrap(address)) : _host.Read(_space, Wrap(address));
-
-        public void Write(int address, byte value)
-        {
-            if (!IsWritable) return;
-            if (_host is null) _core.WriteSpace(_space, Wrap(address), value);
-            else _host.Write(_space, Wrap(address), value);
-        }
-
-        private int Wrap(int address) => Size == 0 ? 0 : ((address % Size) + Size) % Size;
-    }
-
     // The NES's IDebugTarget - the second implementation this interface has ever had. See Moon_Debug.md.
     public sealed class MoonDebugTarget : IDebugTarget, IWriteObserver
     {
@@ -167,18 +132,24 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
         private string DescribeWriteSite() =>
             _core.Cpu is null ? "" : $"PC=${_core.Cpu.LastInstructionPC:X4}";
 
+        // A space the core already knows by name, sized live so a reload is followed, and read through the host where the core is a mirror.
+        private DelegateDebugMemorySpace Space(string space, string name, bool isWritable, bool hasSideEffects) => new(name, () => _core.SpaceSize(space),
+            a => _host is null ? _core.ReadSpace(space, a) : _host.Read(space, a),
+            isWritable ? (a, v) => { if (_host is null) _core.WriteSpace(space, a, v); else _host.Write(space, a, v); } : null,
+            hasSideEffects);
+
         private void BuildSpaces()
         {
-            _spaces.Add(new MoonDebugMemorySpace(_core, _host, MoonCore.SpaceRam, "RAM", true, false));
-            _spaces.Add(new MoonDebugMemorySpace(_core, _host, MoonCore.SpacePrgRom, "PRGROM", false, false));
-            _spaces.Add(new MoonDebugMemorySpace(_core, _host, MoonCore.SpacePrgRam, "PRGRAM", true, false));
-            _spaces.Add(new MoonDebugMemorySpace(_core, _host, MoonCore.SpaceChr, "CHR", true, false));
-            _spaces.Add(new MoonDebugMemorySpace(_core, _host, MoonCore.SpaceCiram, "CIRAM", true, false));
-            _spaces.Add(new MoonDebugMemorySpace(_core, _host, MoonCore.SpaceOam, "OAM", true, false));
-            _spaces.Add(new MoonDebugMemorySpace(_core, _host, MoonCore.SpacePalette, "PALETTE", true, false));
+            _spaces.Add(Space(MoonCore.SpaceRam, "RAM", true, false));
+            _spaces.Add(Space(MoonCore.SpacePrgRom, "PRGROM", false, false));
+            _spaces.Add(Space(MoonCore.SpacePrgRam, "PRGRAM", true, false));
+            _spaces.Add(Space(MoonCore.SpaceChr, "CHR", true, false));
+            _spaces.Add(Space(MoonCore.SpaceCiram, "CIRAM", true, false));
+            _spaces.Add(Space(MoonCore.SpaceOam, "OAM", true, false));
+            _spaces.Add(Space(MoonCore.SpacePalette, "PALETTE", true, false));
 
             // $2002 clears the vblank flag when read and $2007 advances the address, so this one bites.
-            _spaces.Add(new MoonDebugMemorySpace(_core, _host, MoonCore.SpaceCpuBus, "CPUBUS", true, true));
+            _spaces.Add(Space(MoonCore.SpaceCpuBus, "CPUBUS", true, true));
         }
 
         public IReadOnlyList<IDebugMemorySpace> GetMemorySpaces() => _spaces;

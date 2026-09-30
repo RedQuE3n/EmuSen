@@ -3,7 +3,7 @@
 use crate::apu::Apu;
 use crate::cpu::Cpu;
 use crate::memory::Board;
-use crate::memory::bus::MemoryBus;
+use crate::memory::bus::{MemoryBus, Observed, Plain};
 use crate::memory::cartridge::{Cartridge, RomError};
 use crate::memory::mappers::Mapper;
 use crate::ppu::Ppu;
@@ -53,7 +53,7 @@ impl Machine {
         m.bus.ppu.reset();
         m.bus.apu.reset();
         m.bus.reset();
-        m.cpu.reset(&mut m.bus);
+        m.cpu.reset(&mut Plain(&mut m.bus));
         if let Some(fault) = crate::take_fault() {
             return Err(LoadError::Fault(fault));
         }
@@ -75,7 +75,7 @@ impl Machine {
         self.bus.ppu.soft_reset();
         self.bus.apu.soft_reset();
         self.bus.soft_reset();
-        self.cpu.soft_reset(&mut self.bus);
+        self.cpu.soft_reset(&mut Plain(&mut self.bus));
         self.reset_schedule();
         crate::take_fault().map_or(Ok(()), Err)
     }
@@ -122,7 +122,6 @@ impl Machine {
         *self.frame_complete = false;
         let mut earned = std::mem::take(&mut *self.frame_open);
         let mut unchecked = flags & emusen_native::debug::run::UNCHECKED != 0;
-        *self.bus.observing = true;
         let result = (|| {
             while !*self.frame_complete {
                 let deadline = self.line_start_clock.wrapping_add(MASTER_CLOCKS_PER_SCANLINE);
@@ -148,7 +147,7 @@ impl Machine {
                     unchecked = false;
                     self.bus.hooks.record(pc);
                     let mark = self.bus.hooks.writes_log.len();
-                    self.cpu_budget -= self.cpu.step(&mut self.bus) as i64;
+                    self.cpu_budget -= self.cpu.step(&mut Observed(&mut self.bus)) as i64;
                     self.bus.hooks.stamp(mark, self.cpu.last_instruction_pc as u32);
                     self.cpu_budget -= self.bus.take_stolen_cycles() as i64;
                     if !self.bus.ppu.frame_complete {
@@ -169,7 +168,6 @@ impl Machine {
             }
             Ok(emusen_native::debug::stop::FRAME)
         })();
-        *self.bus.observing = false;
         result
     }
 
@@ -182,7 +180,7 @@ impl Machine {
             }
             let nmi = self.bus.ppu.nmi_output();
             self.cpu.set_nmi_line(nmi);
-            self.cpu_budget -= self.cpu.step(&mut self.bus) as i64;
+            self.cpu_budget -= self.cpu.step(&mut Plain(&mut self.bus)) as i64;
             self.cpu_budget -= self.bus.take_stolen_cycles() as i64;
             if !self.bus.ppu.frame_complete {
                 continue;
@@ -199,7 +197,7 @@ impl Machine {
         let dma = self.bus.take_pending_dma_cycles();
         let nmi = self.bus.ppu.nmi_output();
         self.cpu.set_nmi_line(nmi);
-        let cycles = self.cpu.step(&mut self.bus);
+        let cycles = self.cpu.step(&mut Plain(&mut self.bus));
         dma + cycles + self.bus.take_stolen_cycles()
     }
 
@@ -250,12 +248,12 @@ impl Machine {
             6 => bus.ppu.palette_ram[(address & 0x1F) as usize] = value,
             7 => {
                 // A host store the debugger listens to is reported as C#'s bus reports the processor's, under the last instruction.
-                *bus.observing = bus.hooks.writes;
                 let mark = bus.hooks.writes_log.len();
-                if let Some(irq) = bus.write((address & 0xFFFF) as u16, value, self.cpu.cycles) {
+                let address = (address & 0xFFFF) as u16;
+                let irq = if bus.hooks.writes { bus.write_reported(address, value, self.cpu.cycles) } else { bus.write(address, value, self.cpu.cycles) };
+                if let Some(irq) = irq {
                     self.cpu.irq_line = irq;
                 }
-                *bus.observing = false;
                 bus.hooks.stamp(mark, self.cpu.last_instruction_pc as u32);
             }
             _ => {}

@@ -2,7 +2,7 @@
 
 mod opcodes;
 
-use crate::memory::bus::MemoryBus;
+use crate::memory::bus::{CpuBus, MemoryBus};
 use crate::state::{StateReader, StateResult, StateWriter};
 
 pub const NMI_VECTOR: u16 = 0xFFFA;
@@ -65,7 +65,7 @@ impl Cpu {
     }
 
     /// Power-on: A/X/Y cleared, S at 0, then the soft reset's three phantom pushes.
-    pub fn reset(&mut self, bus: &mut MemoryBus) {
+    pub fn reset<B: CpuBus>(&mut self, bus: &mut B) {
         self.a = 0;
         self.x = 0;
         self.y = 0;
@@ -76,7 +76,7 @@ impl Cpu {
     }
 
     /// RESET only sets I and subtracts 3 from S - see Moon_CPU.md §5.1.
-    pub fn soft_reset(&mut self, bus: &mut MemoryBus) {
+    pub fn soft_reset<B: CpuBus>(&mut self, bus: &mut B) {
         self.s = self.s.wrapping_sub(3);
         self.p |= FLAG_I | FLAG_U;
         self.jammed = false;
@@ -112,7 +112,7 @@ impl Cpu {
     }
 
     /// One instruction or one interrupt entry; the cycles it cost.
-    pub fn step(&mut self, bus: &mut MemoryBus) -> i32 {
+    pub fn step<B: CpuBus>(&mut self, bus: &mut B) -> i32 {
         self.instruction_cycles = 0;
         self.last_instruction_pc = self.pc;
         if self.jammed {
@@ -146,7 +146,7 @@ impl Cpu {
         }
     }
 
-    fn service_interrupt(&mut self, bus: &mut MemoryBus, vector: u16, hijackable: bool) {
+    fn service_interrupt<B: CpuBus>(&mut self, bus: &mut B, vector: u16, hijackable: bool) {
         self.read(bus, self.pc);
         self.read(bus, self.pc);
         let from = self.pc;
@@ -156,10 +156,7 @@ impl Cpu {
         self.push(bus, (self.p & !FLAG_B) | FLAG_U);
         self.set_flag(FLAG_I, true);
         self.pc = self.read_vector(bus, vector);
-        if *bus.observing {
-            let kind = if vector == NMI_VECTOR { emusen_native::debug::kind::NMI } else { emusen_native::debug::kind::IRQ };
-            bus.hooks.note_call(from as u32, self.pc as u32, kind);
-        }
+        bus.note_call(from, self.pc, if vector == NMI_VECTOR { emusen_native::debug::kind::NMI } else { emusen_native::debug::kind::IRQ });
     }
 
     /// `HijackVector`: an NMI seen by the fourth cycle of BRK or IRQ takes over its vector, and is spent.
@@ -177,7 +174,7 @@ impl Cpu {
         vector
     }
 
-    fn read_vector(&mut self, bus: &mut MemoryBus, vector: u16) -> u16 {
+    fn read_vector<B: CpuBus>(&mut self, bus: &mut B, vector: u16) -> u16 {
         let lo = self.read(bus, vector) as u16;
         let hi = self.read(bus, vector.wrapping_add(1)) as u16;
         lo | (hi << 8)
@@ -185,19 +182,19 @@ impl Cpu {
 
     /// `MemoryBus.Tick`, then the two lines it sets, in C#'s order (Moon_Native.md §2.5).
     #[inline(always)]
-    fn tick(&mut self, bus: &mut MemoryBus) {
+    fn tick<B: CpuBus>(&mut self, bus: &mut B) {
         self.irq_line = bus.tick();
     }
 
     /// `MemoryBus.EndCycle`: the third dot, then /NMI as the cycle's end sees it.
     #[inline(always)]
-    fn end_cycle(&mut self, bus: &mut MemoryBus) {
+    fn end_cycle<B: CpuBus>(&mut self, bus: &mut B) {
         let nmi = bus.end_cycle();
         self.set_nmi_line(nmi);
     }
 
     #[inline(always)]
-    fn read(&mut self, bus: &mut MemoryBus, address: u16) -> u8 {
+    fn read<B: CpuBus>(&mut self, bus: &mut B, address: u16) -> u8 {
         if bus.dma_pending() {
             self.run_dma(bus, address);
         }
@@ -209,9 +206,9 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn write(&mut self, bus: &mut MemoryBus, address: u16, data: u8) {
+    fn write<B: CpuBus>(&mut self, bus: &mut B, address: u16, data: u8) {
         self.begin_cycle(bus);
-        if let Some(irq) = bus.write(address, data, self.cycles) {
+        if let Some(irq) = bus.store(address, data, self.cycles) {
             self.irq_line = irq;
         }
         self.end_cycle(bus);
@@ -219,7 +216,7 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn begin_cycle(&mut self, bus: &mut MemoryBus) {
+    fn begin_cycle<B: CpuBus>(&mut self, bus: &mut B) {
         self.instruction_cycles = self.instruction_cycles.wrapping_add(1);
         self.cycles = self.cycles.wrapping_add(1);
         *bus.cpu_cycles = self.cycles;
@@ -228,7 +225,7 @@ impl Cpu {
 
     /// `MemoryBus.RunDma`: every DMA that wants the bus, run while the CPU is halted on a read of `address`.
     #[cold]
-    fn run_dma(&mut self, bus: &mut MemoryBus, address: u16) {
+    fn run_dma<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
         loop {
             if *bus.oam_dma_pending {
                 self.run_oam_dma(bus, address);
@@ -241,7 +238,7 @@ impl Cpu {
     }
 
     /// `RunDmcDma`: the DMA commits after its halt; a request gone by then costs the halt alone.
-    fn run_dmc_dma(&mut self, bus: &mut MemoryBus, address: u16) {
+    fn run_dmc_dma<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
         self.halted_read(bus, address);
         if !bus.apu.dmc.dma_requested() {
             return;
@@ -254,14 +251,14 @@ impl Cpu {
     }
 
     /// `NoteDmcHalt`: the cycle about to run is a DMC request's halt, if one has just risen.
-    fn note_dmc_halt(&self, bus: &MemoryBus, dmc_halt: &mut i64) {
+    fn note_dmc_halt<B: CpuBus>(&self, bus: &B, dmc_halt: &mut i64) {
         if *dmc_halt < 0 && bus.apu.dmc.dma_requested() {
             *dmc_halt = self.cycles.wrapping_add(1);
         }
     }
 
     /// `RunOamDma`: the halt, an alignment cycle before a put, then a get read and a put write per byte, with a DMC fetch alongside.
-    fn run_oam_dma(&mut self, bus: &mut MemoryBus, address: u16) {
+    fn run_oam_dma<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
         *bus.oam_dma_pending = false;
         let source = (*bus.oam_dma_page as u16) << 8;
         let mut dmc_halt = -1i64;
@@ -305,7 +302,7 @@ impl Cpu {
         self.dmc_get(bus, address);
     }
 
-    fn halted_read(&mut self, bus: &mut MemoryBus, address: u16) {
+    fn halted_read<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
         self.begin_cycle(bus);
         bus.read(address);
         self.end_cycle(bus);
@@ -313,7 +310,7 @@ impl Cpu {
     }
 
     /// `DmcGet`: the fetch reads through the DMA's view of the bus.
-    fn dmc_get(&mut self, bus: &mut MemoryBus, halted: u16) {
+    fn dmc_get<B: CpuBus>(&mut self, bus: &mut B, halted: u16) {
         self.begin_cycle(bus);
         let fetch = bus.apu.dmc.dma_address();
         let value = bus.dma_read(fetch, halted, false);
@@ -339,19 +336,19 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn push(&mut self, bus: &mut MemoryBus, value: u8) {
+    fn push<B: CpuBus>(&mut self, bus: &mut B, value: u8) {
         let s = self.s;
         self.s = s.wrapping_sub(1);
         self.write(bus, 0x0100 | s as u16, value);
     }
 
     #[inline(always)]
-    fn pull(&mut self, bus: &mut MemoryBus) -> u8 {
+    fn pull<B: CpuBus>(&mut self, bus: &mut B) -> u8 {
         self.s = self.s.wrapping_add(1);
         self.read(bus, 0x0100 | self.s as u16)
     }
 
-    fn pull_with_dummy(&mut self, bus: &mut MemoryBus) -> u8 {
+    fn pull_with_dummy<B: CpuBus>(&mut self, bus: &mut B) -> u8 {
         self.read(bus, 0x0100 | self.s as u16);
         self.pull(bus)
     }

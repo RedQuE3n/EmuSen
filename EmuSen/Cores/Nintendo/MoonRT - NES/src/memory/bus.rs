@@ -46,8 +46,7 @@ pub struct MemoryBus {
     pub internal_bus: Skip<u8>,
     /// C#'s `Cpu.Cycles`, which the CPU stamps here at each cycle's start.
     pub cpu_cycles: Skip<i64>,
-    /// Set only while an observed frame or an observed host store runs: stores, calls and returns are then noted in `hooks`.
-    pub observing: Skip<bool>,
+    /// The debugger's tables and logs, which only the `Observed` view of this bus writes.
     pub hooks: Skip<Box<Hooks>>,
 }
 
@@ -74,7 +73,6 @@ impl MemoryBus {
             strobe_out: Skip(false),
             internal_bus: Skip(0),
             cpu_cycles: Skip(0),
-            observing: Skip(false),
             hooks: Skip(Box::new(Hooks::new(&[16]))),
         }
     }
@@ -197,10 +195,13 @@ impl MemoryBus {
     /// `MemoryBus.Write`; `cpu_cycles` is what C# stamps from `Cpu.Cycles`. Returns the IRQ level when an OAM DMA set it.
     #[inline(always)]
     pub fn write(&mut self, address: u16, data: u8, cpu_cycles: i64) -> Option<bool> {
+        self.write_unobserved(address, data, cpu_cycles)
+    }
+
+    /// A store the debugger hears, as C#'s bus reports one to its write observer.
+    pub fn write_reported(&mut self, address: u16, data: u8, cpu_cycles: i64) -> Option<bool> {
         let irq = self.write_unobserved(address, data, cpu_cycles);
-        if *self.observing {
-            self.report_write(address, data);
-        }
+        self.report_write(address, data);
         irq
     }
 
@@ -291,5 +292,70 @@ impl MemoryBus {
         r.bytes(&mut self.ram)?; // Ram
         self.stolen_cycles = r.i32()?; // StolenCycles
         Ok(())
+    }
+}
+
+/// The bus as the CPU drives it. The plain frame's view is `Plain`, in which the hooks' seams are empty and compile away;
+/// the observed frame's is `Observed`, which notes stores, calls and returns (Moon_Native.md §8.4).
+pub trait CpuBus: std::ops::DerefMut<Target = MemoryBus> {
+    fn store(&mut self, address: u16, data: u8, cpu_cycles: i64) -> Option<bool>;
+    #[inline(always)]
+    fn note_call(&mut self, _source: u16, _target: u16, _kind: u32) {}
+    #[inline(always)]
+    fn note_return(&mut self) {}
+}
+
+pub struct Plain<'a>(pub &'a mut MemoryBus);
+pub struct Observed<'a>(pub &'a mut MemoryBus);
+
+impl std::ops::Deref for Plain<'_> {
+    type Target = MemoryBus;
+    #[inline(always)]
+    fn deref(&self) -> &MemoryBus {
+        self.0
+    }
+}
+
+impl std::ops::DerefMut for Plain<'_> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut MemoryBus {
+        self.0
+    }
+}
+
+impl CpuBus for Plain<'_> {
+    #[inline(always)]
+    fn store(&mut self, address: u16, data: u8, cpu_cycles: i64) -> Option<bool> {
+        self.0.write_unobserved(address, data, cpu_cycles)
+    }
+}
+
+impl std::ops::Deref for Observed<'_> {
+    type Target = MemoryBus;
+    #[inline(always)]
+    fn deref(&self) -> &MemoryBus {
+        self.0
+    }
+}
+
+impl std::ops::DerefMut for Observed<'_> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut MemoryBus {
+        self.0
+    }
+}
+
+impl CpuBus for Observed<'_> {
+    #[inline(always)]
+    fn store(&mut self, address: u16, data: u8, cpu_cycles: i64) -> Option<bool> {
+        if self.0.hooks.writes { self.0.write_reported(address, data, cpu_cycles) } else { self.0.write_unobserved(address, data, cpu_cycles) }
+    }
+
+    fn note_call(&mut self, source: u16, target: u16, kind: u32) {
+        self.0.hooks.note_call(source as u32, target as u32, kind);
+    }
+
+    fn note_return(&mut self) {
+        self.0.hooks.note_return();
     }
 }

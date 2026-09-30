@@ -36,7 +36,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
         // The windows a player reaches in a game, and those reached from the themed library.
-        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "ShaderSettings", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
+        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "ShaderSettings", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
             "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ScreenshotLongTitle", "ResumeLongTitle", "ControllerBindingsLongNames"];
         public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "FindByName", "CoverPicker", "CoverPickerCovers", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
             "FindByNameLongTitle", "CoverPickerLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName"];
@@ -45,7 +45,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         internal static readonly Dictionary<string, Type> Opens = new()
         {
             ["ActiveCheats"] = typeof(ActiveCheatsWindow), ["ActiveCheatsGeneral"] = typeof(ActiveCheatsWindow), ["CheatDatabase"] = typeof(CheatDatabaseWindow),
-            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
+            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
             ["Screenshot"] = typeof(ScreenshotWindow), ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow), ["ControllerBindings"] = typeof(InputSettingsWindow),
             ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["FindByName"] = typeof(FindByNameWindow), ["CoverPicker"] = typeof(CoverPickerWindow),
             ["CoverPickerCovers"] = typeof(CoverPickerWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow), ["FolderEditor"] = typeof(FolderEditorWindow),
@@ -202,6 +202,17 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Settle(window);
         }
 
+        // The NES tab, whose Engine row MoonRT's stage 4 added (Moon_Native.md §8.3).
+        internal static void ShowNesTab(MainWindow window)
+        {
+            Call(window, "ShowGraphicsSettings");
+            Settle(window);
+            var tabs = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<EmuSen.LunaP.Controls.Tabs>().First(t => t.Name == "ConsoleTabs");
+            tabs.SelectedIndex = EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToList().IndexOf("NES");
+            Settle(window);
+            Assert.Contains(Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>(), c => c.Name == $"NES.{EmuSen.Cores.CoreCatalog.EngineKey}" && c.IsEffectivelyVisible);
+        }
+
         private void OpenInGame(MainWindow window, PadDriver pad, string which)
         {
             var cheats = (CheatRegistry)Field(window, "_cheats");
@@ -226,6 +237,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     break;
                 case "GraphicsSettingsN64Note":
                     ShowN64WithNote(window);
+                    break;
+                case "GraphicsSettingsNesEngine":
+                    ShowNesTab(window);
                     break;
                 case "ControllerBindings":
                     Call(window, "ShowControllerBindings");

@@ -231,6 +231,9 @@ namespace EmuSen.Cores
         public const string MercuryEngine = "Mercury (C#)";
         public const string MercuryRtEngine = "MercuryRT (Rust)";
 
+        public const string MoonEngine = "Moon (C#)";
+        public const string MoonRtEngine = "MoonRT (Rust)";
+
         // Which implementation runs a console, for the consoles that have more than one; the first is the default - see EmuSen_Settings_Reference.md §4.44.
         private static readonly Dictionary<string, CoreSetting> EngineByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -240,6 +243,9 @@ namespace EmuSen.Cores
             ["GB"] = new(EngineKey, "Engine",
                 "Which implementation runs the console. Mercury (C#) is the reference. MercuryRT (Rust) is exact against it in state, picture and sound and reads the same save states and battery saves; its debugger view is refreshed from its state, and it stops at breakpoints, steps and records coverage, watches and the call stack as Mercury does. Takes effect when a game is next loaded.",
                 CoreSettingKind.Choice, MercuryEngine, Choices: new[] { MercuryEngine, MercuryRtEngine }),
+            ["NES"] = new(EngineKey, "Engine",
+                "Which implementation runs the console. Moon (C#) is the reference. MoonRT (Rust) is exact against it in state, picture and sound, reads the same save states and battery saves, and takes the same cheats; its debugger view is refreshed from its state, and it does not yet stop at breakpoints or record coverage. Takes effect when a game is next loaded.",
+                CoreSettingKind.Choice, MoonEngine, Choices: new[] { MoonEngine, MoonRtEngine }),
         };
 
         // Null for a console with one implementation.

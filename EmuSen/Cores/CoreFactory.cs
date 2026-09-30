@@ -13,6 +13,7 @@ using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.Moon.Cheats;
 using EmuSen.Cores.Nintendo.Moon.Debug;
+using EmuSen.Cores.Nintendo.MoonRT;
 using EmuSen.Galaxia.Models;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Cheats;
@@ -40,7 +41,7 @@ namespace EmuSen.Cores
         public static ICore Create(string romPath, bool headless = true, string? engine = null) => Extension(romPath) switch
         {
             ".smc" or ".sfc" => new VenusCore(headless),
-            ".nes" => new MoonCore(),
+            ".nes" => engine == CoreCatalog.MoonRtEngine && MoonRtCore.Available ? new MoonRtCore() : new MoonCore(),
             ".gb" or ".gbc" => engine == CoreCatalog.MercuryRtEngine && MercuryRtCore.Available ? new MercuryRtCore() : new MercuryCore(),
             ".z64" or ".n64" or ".v64" => engine == CoreCatalog.MarsRtEngine && MarsRtCore.Available ? new MarsRtCore(expansionPak: true) : new MarsCore(expansionPak: true),
             var other => throw new NotSupportedException(
@@ -67,6 +68,7 @@ namespace EmuSen.Cores
             if (choice.Choices?.Contains(engine) != true) return $"No {choice.Label.ToLowerInvariant()} is named \"{engine}\"; {Running(core)} is running.";
             if (engine == CoreCatalog.MarsRtEngine && core is not MarsRtCore) return $"{CoreCatalog.MarsRtEngine} is not available ({MarsNative.Report}); {CoreCatalog.MarsEngine} is running.";
             if (engine == CoreCatalog.MercuryRtEngine && core is not MercuryRtCore) return $"{CoreCatalog.MercuryRtEngine} is not available ({MercuryNative.Report}); {CoreCatalog.MercuryEngine} is running.";
+            if (engine == CoreCatalog.MoonRtEngine && core is not MoonRtCore) return $"{CoreCatalog.MoonRtEngine} is not available ({MoonNative.Report}); {CoreCatalog.MoonEngine} is running.";
             return null;
         }
 
@@ -77,6 +79,8 @@ namespace EmuSen.Cores
             MarsCore => CoreCatalog.MarsEngine,
             MercuryRtCore => CoreCatalog.MercuryRtEngine,
             MercuryCore => CoreCatalog.MercuryEngine,
+            MoonRtCore => CoreCatalog.MoonRtEngine,
+            MoonCore => CoreCatalog.MoonEngine,
             _ => core.CoreName,
         };
 
@@ -103,6 +107,15 @@ namespace EmuSen.Cores
                     return new CoreBundle(
                         moon,
                         new MoonDebugTarget(moon),
+                        MoonCheatCodecs.Raw(),
+                        MoonCheatCodecs.GameGenie(),
+                        null);
+
+                // The same codecs, and MoonRT's target: a mirror for what it shows; its hooks are stage 5's - see Moon_Native.md §8.3.
+                case MoonRtCore moonRt:
+                    return new CoreBundle(
+                        moonRt,
+                        moonRt.CreateDebugTarget(),
                         MoonCheatCodecs.Raw(),
                         MoonCheatCodecs.GameGenie(),
                         null);

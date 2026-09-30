@@ -3,7 +3,7 @@ new file mode 100644
 index 00000000..d043f17d
 --- /dev/null
 +++ b/Core/Shared/EmuSenProbeApi.cpp
-@@ -0,0 +1,516 @@
+@@ -0,0 +1,530 @@
 +// A C ABI for EmuSen's reference probe - see EmuSen_Debugging_Tools_Reference_v5.md §3.52.
 +//
 +// This file exists so the probe can be written in a language that is not C++.
@@ -318,6 +318,12 @@ index 00000000..d043f17d
 +
 +		g_probe.Emu->Initialize();
 +		g_probe.Emu->GetSettings()->SetFlag(EmulationFlags::MaximumSpeed);
++		// The flag alone left the probe paced at the console's rate (measured 2026-09-30:
++		// 600 SNES frames in 10.1 s of wall time for 1.2 s of CPU). The pacing follows the
++		// configured emulation speed, where 0 means unlimited - see §3.52.
++		EmulationConfig ecfg = g_probe.Emu->GetSettings()->GetEmulationConfig();
++		ecfg.EmulationSpeed = 0;
++		g_probe.Emu->GetSettings()->SetEmulationConfig(ecfg);
 +
 +		// Stops LoadRom writing HomeFolder/RecentGames/<rom>.rgd, which embeds a
 +		// screenshot and a save state and therefore differs between two runs of
@@ -413,15 +419,23 @@ index 00000000..d043f17d
 +	// machine and every exit from here leaves it parked, so "already at the
 +	// frame" means "already stopped at the frame" rather than "still running
 +	// past it".
-+	void probe_run_until(uint32_t frame)
++	static void RunToFrame(uint32_t frame)
 +	{
-+		if(g_probe.Emu->GetFrameCount() >= frame) { return; }
 +		g_probeStopFrame.store(frame);
 +		g_probeStopArmed.store(true);
 +		g_probe.Emu->Resume();
 +		while(!g_probe.Emu->IsPaused() || g_probe.Emu->GetFrameCount() < frame) {
 +			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 +		}
++	}
++
++	// Unpaced, the screen read on arriving from far behind is a stale picture while
++	// memory is current (measured, §3.59); the last frame is therefore run on its own.
++	void probe_run_until(uint32_t frame)
++	{
++		if(g_probe.Emu->GetFrameCount() >= frame) { return; }
++		if(frame > g_probe.Emu->GetFrameCount() + 1) { RunToFrame(frame - 1); }
++		RunToFrame(frame);
 +	}
 +
 +	uint32_t probe_frame_count() { return g_probe.Emu ? g_probe.Emu->GetFrameCount() : 0; }

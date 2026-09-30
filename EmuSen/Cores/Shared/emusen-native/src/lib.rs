@@ -8,12 +8,14 @@
 //! - [`debug`] is the debugger's hooks as data: the tables, the logs and their drain (EmuSen_NativeCores.md §3.14).
 //! - [`abi`] is the common native interface: the `NativeCore` trait and `native_exports!`, the fixed `emusen_native_*`
 //!   names, the version, the capability bits and the interface's status codes (EmuSen_NativeCores.md §3).
+//! - [`json`] reads the single-step suites' files for a core's tests, with no dependency.
 //!
 //! Nothing here knows a console: magics, versions and a core's own refusals stay in the core. See EmuSen_RustState.md.
 
 pub mod abi;
 pub mod debug;
 pub mod ffi;
+pub mod json;
 pub mod naming;
 mod reader;
 pub mod samples;

@@ -1651,3 +1651,100 @@ engines carry it. It is why the C# column here is not §1.1's.
   - P4 needs the quota runs through the frontend.
   - P5 needs the boundary priced on its own; here it is inside MoonRT's column.
 - Whether the games' smaller gain comes from the CPU, the boards or the composition, which was not measured (§8.2.3).
+
+### 8.3 Stage 4: MoonRT in the frontends, on the common native interface (done 2026-09-30)
+
+*§4's stage-4 row, built on `EmuSen_NativeCores.md` rather than on a fourth bespoke shim, as that page decided on
+2026-09-28. What the interface is and how the old ABIs sit beside it is that page's §12. This section is MoonRT's
+side: the row, the oracles and what is owed.*
+
+#### 8.3.1 What was built
+
+- **The library.**
+  - MoonRT exports the common interface as core 3: the 24 required names, `reset`, `set_mutes` and `set_rom_patches`.
+  - Its capabilities are `RESET | MUTES | ROM_PATCHES`, and the host requires all three.
+  - Its `moon_*` exports and `moon_interface_version` are gone.
+  - Its extensions are `moonrt_step`, which the instruction-level rigs use, and `moonrt_rom_patch`, the patch table's
+    test view.
+  - Its faults are −321 to −323. They were −31 to −33, and the move is §3.3's.
+- **The shim.**
+  - `MoonMachine` is a `NativeMachine`, with Moon's band: `Not an iNES image`, the mapper, the truncated PRG, and
+    −323's `masterDelta` exception.
+  - `MoonRtCore` is a `NativeRtCore<MoonMachine>`. It supplies the header parse and the battery rule
+    (`Cartridge.FromImage`, `HasBattery && PrgRam.Length > 0`), the button order, the ports, the spaces, the state
+    pre-checks and the mirror.
+  - The rigs of stages 1–3 (`MoonRtPair`, the state and machine tests) call the same `MoonMachine` methods as before.
+    None of their assertions changed.
+- **The row.**
+  - `CoreCatalog.EngineFor("NES")` offers *Moon (C#)*, the default and first, and *MoonRT (Rust)*.
+  - `CoreFactory` builds MoonRT when it is chosen and `MoonRtCore.Available`, and otherwise Moon with the loader's
+    report in the notice.
+  - The bundle has Moon's two cheat codecs and MoonRT's debug target over its mirror.
+  - The registration record of `EmuSen_NativeCores.md` §5.1 is owed. The row went in the existing way (§12.2 there).
+- **The rest of the row.**
+  - Battery saves go through `BatterySave` into `Saves/NES`. The file is handed to the core at create.
+  - Both cheat codecs, with Game Genie's patches sent as triples.
+  - `FrameLog` and the frame-end order, in the base's `EndFrame`, which is Moon's.
+  - Exception mapping, with the −320 band in the host.
+  - The crash log at `moonrt_crash_<pid>`.
+  - The debug target over the mirror.
+  - Rewind, through `IEngineFeatures`: kept.
+
+**§9 Q7 is not reached.** MoonRT has no breakpoints yet, so there is no first instruction to check. Stage 5 places
+that check in Rust.
+
+#### 8.3.2 The oracles (measured 2026-09-30)
+
+`MoonRtFrontendTests` drives both engines through `CoreFactory` and `ICore`:
+
+| Case | What it holds | Result |
+|---|---|---|
+| The row and the factory | Moon the default; MoonRT built when named, with no notice; the same codec types; rewind kept; an unknown engine's notice names MoonRT as running | pass |
+| The bench games and the library states | The four games for 1,800 frames with the bench's input, and the eleven library states for 600 frames each, loaded into fresh instances. Picture, sound and state are identical after every frame, and the state's size is constant through each run | pass |
+| States crossing | A C# state loaded by MoonRT re-saves byte for byte, and runs beside a C# instance loaded with the same state; the reverse the same | pass |
+| The battery | A marked save is read by MoonRT, rewritten at frame 300 with the mark kept, and loaded by Moon; the two machines are equal straight after a load with a battery (§3.4 there); Moon's rewrite is read back by MoonRT; a cartridge without a battery reports none; the length equals the C# `PrgRam`'s | pass |
+| Game Genie | `SXIOPO` on Super Mario Bros.: 900 frames identical on both engines, and different from the plain run | pass |
+| The patch triples | Against `TryPatchRom` at every address from `$4020` to `$FFFF`: every byte at the touched addresses, three probes elsewhere. The registry mixes compares, an unconditional patch behind a compared one, a shadowed repeat, both ends of the range, one below it and a disabled one | pass |
+| A read after a new cheat | A CPU-bus read between frames sees a patch added since the last frame, as the C# core does (§9 Q11 there) | pass |
+| Capabilities and exports | Each bit's exports are present exactly when it is claimed, every required name is there, and `moon_machine_new` is not | pass |
+| A missing library | Refused with "not found beside the assemblies" | pass |
+| A reproduced exception | D4's image with no PRG throws the C# type through `MoonRtCore.LoadRom` | pass |
+
+The instruction- and frame-level rigs pass unchanged through the new ABI:
+
+- `MoonRtStateTests`, `MoonRtMachineTests` and `MoonRtSoundAndPictureTests`;
+- AccuracyCoin through both engines;
+- the corpus test, with sound and picture: 255 ROMs, 363,935 frames identical, 105 passed.
+
+`MoonRtEngineTests` covers Mistress:
+
+- It picks MoonRT from the NES tab's Engine row and plays frames, with rewind filling.
+- It saves a state through the hotkey, and the C# Moon loads it.
+- It runs Moon by default.
+- The fallback runs in a child process started with `EMUSEN_MOON_NATIVE=0`. Mistress runs Moon, and the status bar
+  carries "turned off by EMUSEN_MOON_NATIVE=0".
+- The missing-library case is held at the loader, not in Mistress. Taking the library away from a running test host
+  would take it from every other test too.
+
+The fit audit gains `GraphicsSettingsNesEngine`, the NES tab at 1280×800 and 1920×1200, and passes. So do
+`MarsRtEngineTests`, whose check that no other console has an Engine row now admits the NES.
+
+**What passes on the old ABIs:** MercuryRT's and MarsRT's suites, 498 cases, and `NativeHostTests`.
+
+#### 8.3.3 The speed
+
+`EmuSen_NativeCores.md` §12.3 retires P2 as held: the generic host is within 0.7% of the bespoke shim on each game,
+with a geometric mean of +0.06%. The same rounds' C# control gives MoonRT 1.28–1.40× C# Moon, as §8.2.3 measured.
+
+P4, P5 and P6 stay open:
+
+- **P4** needs the quota runs, and was not run.
+- **P5** needs the boundary priced on its own.
+- **P6** holds on the desktop, but the quota runs are what it is to be retired by.
+
+#### 8.3.4 What is left
+
+- **Stage 5:** the debugger over `NativeDebugBridge`. That includes the first instruction's check in Rust (§9 Q7),
+  and the `DEBUG` capability.
+- **The registration records** (`EmuSen_NativeCores.md` §5.1), and the equivalence test.
+- **MercuryRT and MarsRT** on the common interface, at that page's steps 4 and 5, when the legacy classes go.

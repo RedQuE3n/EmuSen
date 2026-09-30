@@ -1748,3 +1748,147 @@ P4, P5 and P6 stay open:
   and the `DEBUG` capability.
 - **The registration records** (`EmuSen_NativeCores.md` §5.1), and the equivalence test.
 - **MercuryRT and MarsRT** on the common interface, at that page's steps 4 and 5, when the legacy classes go.
+
+### 8.4 Stage 5: the debugger on the shared hooks (done 2026-09-30)
+
+*§4's stage-5 row, built on `EmuSen_NativeCores.md` §3.14 and §4.4 with its §9 decisions. The shared data and its
+ABI are that page's §12.4. This section is MoonRT's mechanism and oracles.*
+
+#### 8.4.1 The oracle first
+
+The C# Moon had no call stack or profile, and its data breakpoints never fired (`Moon_Debug.md` §7). Each was added
+to the C# core before MoonRT, so that MoonRT has something to be graded against. Adding them also found one defect:
+a resume from a breakpoint earned the halted scanline's CPU cycles twice. A halted and resumed machine then differed
+from an unhalted one in its CPU budget. The same section has the measurement, and both engines now earn the halted
+scanline once.
+
+#### 8.4.2 MoonRT's mechanism
+
+- **The hooks** are `emusen_native::debug::Hooks`, boxed in the bus as MercuryRT's and MarsRT's are.
+- **The observed frame** is `Machine::run_frame_debug`, which is `RunFrame` with these additions:
+  - Before each instruction, the hooks are asked whether to stop. The first instruction is asked too, unless the host
+    sends `UNCHECKED`, which it does on a resume and after a stop it refused. That places §9 Q7's check in Rust.
+  - Coverage and the profile are recorded.
+  - Each store is stamped with its instruction's address.
+  - A stop leaves the frame open. The resume, observed or plain, then does not earn the halted scanline again.
+- **The seams are compiled out of the plain frame.** The CPU is generic over `CpuBus`, and it is driven through one
+  of two views of the bus:
+  - `Plain`, used by the plain frame, `step` and reset. Its store is the bus's write, and its call and return notes
+    are empty.
+  - `Observed`, used by the observed frame. It reports each store under C#'s spaces while writes are armed: `RAM`,
+    `PRGRAM` (all of `$4020`–`$7FFF`, as C# reports it), `PPUREG` and `APUREG`, but not `$4014` or `$4016`. It also
+    notes JSR, RTS, RTI, BRK and the interrupts, with the call kinds of §12.4 there.
+  - A host store to `CPUBUS` is reported while writes are armed, as C#'s bus reports it.
+  - *The first version was measured and not kept.* It put a flag in the bus that every store tested, and the flag
+    cost 0.8 and 1.2% of the plain frame on Super Mario Bros. 3 and Punch-Out!!. A build with the test removed was
+    0.8–0.9% faster than stage 4, so the cost was the branch, not the new field.
+- **The host side** is `NativeDebugBridge`, over `NativeRtCore`'s seam.
+  - An observed frame runs whenever the registries are not quiet, coverage or the profiler is armed, or a debug
+    target listens for stores.
+  - The mirror's call stack stamps its pushes with the frame the bridge is draining.
+
+**What is not the C# core's, and why.** MoonRT's call stack moves only in observed frames. A frame with nothing armed
+is plain, and its calls reach no registry. So after plain frames the registry's stack stands where the last observed
+frame left it, while the C# core's has followed every call. `The_two_engines_halt_and_step_alike` compares the depth
+only in observed frames for that reason. It is the rule MercuryRT follows (`Mercury_Native.md` §8.5), and
+`Mars_Native.md` §6.5.6 lists the same gap for MarsRT. Keeping the stack in a plain frame would put the seams back into
+it. Whether that is worth its cost is not measured.
+
+#### 8.4.3 The oracles (measured 2026-09-30)
+
+**Both engines, one debug target contract.**
+
+- `MoonDebugTargetContract` holds the 24 debug-target cases that go through `IDebugTarget` alone, and runs them once
+  per engine, 48 cases in all:
+  - memory spaces, disassembly and static references;
+  - tiles, nametables, palettes and sprites, each written through the target's own spaces;
+  - the bus's side effects, the video registers set through `$2006`, and the vectors;
+  - a watch, a breakpoint and its resume, the summary, and the registers after a frame.
+- `MoonDebugTargetTests` keeps the five that poke the C# machine directly: register pokes, and the injected and
+  measured hardware load.
+
+**Behaviour, on both engines** (`MoonDebugEngineTests`):
+
+- a breakpoint's halt, its program counter, the frame and the call stack's top, and its resume;
+- stepping in, over and out;
+- run-to NMI and run-to frame;
+- a watch logging the CPU's store with its `PC=$8012` context;
+- a data breakpoint halting after the store;
+- coverage and the profile;
+- a store through `CPUBUS` reaching a watch, and one to `$2000` logged under `PPUREG`;
+- a halt and resume leaving the machine as an unhalted run.
+
+`NesRunToFrameTests` now halts MoonRT at the start of the frame after the one run to, as Moon.
+
+**Hits identical.** `The_two_engines_halt_and_step_alike` runs one script on both engines and compares after every
+call:
+- five breakpoint halts and resumes;
+- twelve single steps;
+- a step out;
+- a run to the NMI;
+- four data-breakpoint frames;
+- three plain frames.
+It compares the halt, the program counter, the frame, the call stack's depth and the whole state's hash. All 26 lines
+are identical, the plain frames' depth excepted as §8.4.2 says.
+
+**Armed equals plain.** `MoonRtArmedEqualsPlainTests` runs each game twice on MoonRT:
+- once armed with a breakpoint no game executes, watches over all of RAM and PRG RAM, a data breakpoint no store
+  matches, coverage and the profiler;
+- once with nothing armed.
+The four bench games run for 900 frames and four library states for 400. Picture, sound and state are byte-identical
+after every frame. The armed runs took the observed frame (over 100,000 instructions covered each) and filled their
+watches.
+
+**Nothing else moved.** The Moon-filtered and native cases pass, 436 of 436, from a clean rebuild of the library.
+
+**Mutants: 12, all caught** (measured 2026-09-30).
+
+The round ran with the stage-5 filters: the contract, the engine cases, armed-equals-plain and run-to-frame. Its
+three survivors were then handled:
+- H2 and H6 are caught by the shared crate's own tests, which the round did not run. Each was shown failing there
+  with the mutant applied.
+- M2 is caught by a PPU-register watch case added for it.
+
+| Mutant | Caught by |
+|---|---|
+| H1 no breakpoint stops the frame | five cases, the engine script among them |
+| H2 a watched store also sets the data stop | the crate's write and full-log tests (a refused stop, so no C# case can see it) |
+| H3 stores never stamped with their instruction | the watch's `PC=$8012` context |
+| H4 a return pops nothing | stepping out, and the engine script |
+| H5 a coverage bit set one address off | the coverage case |
+| H6 an IRQ does not set the interrupt stop | the crate's interrupt test over IRQ, NMI and BRK (the NES programs here raise no IRQ) |
+| M1 a stop does not leave the frame open | the halt-and-resume cases, the engine script |
+| M2 PPU-register stores logged under RAM | `A_watch_on_the_ppu_registers_logs_the_store_under_its_register`, added for it |
+| M3 the first instruction never checked | run-to frame |
+| O1 the observed frame's budget one cycle off at its end | armed-equals-plain, the engine script |
+| O2 a reported store touches the open bus | armed-equals-plain, the engine script |
+| G1 the observed view's return note empty | stepping, the engine script, the breakpoint case's stack |
+
+O1 and O2 change only the observed frame. Armed-equals-plain is the oracle built to catch that class, and it caught
+both.
+
+#### 8.4.4 The speed (measured 2026-09-30)
+
+Five rounds under the timing lock, interleaved game by game. The comparison is stage 4 (8a8296d6) against this stage,
+debug off, with MoonRT and C# both armed as above beside them. The load average was 0.7–1.6. Every run of a game had
+one state hash, whether armed or not and on either engine.
+
+| Game | Stage 4, ms/frame | Stage 5 plain | Change | Stage 5 armed | Armed ÷ plain | C# armed ÷ plain |
+|---|---|---|---|---|---|---|
+| Super Mario Bros. | 0.991 | 0.992 | +0.10% | 1.145 | 1.15× | 1.13× |
+| Zelda | 0.902 | 0.900 | −0.18% | 1.026 | 1.14× | 1.12× |
+| Super Mario Bros. 3 | 1.313 | 1.300 | −0.97% | 1.551 | 1.19× | 1.15× |
+| Punch-Out!! | 1.175 | 1.174 | −0.10% | 1.381 | 1.18× | 1.16× |
+
+- **The plain frame is not slower.** The geometric mean is −0.29%, and only Super Mario Bros. 3's ranges fail to
+  overlap, on the faster side.
+- **The armed frame costs 14–19%** in MoonRT, about what arming costs the C# core. Armed MoonRT is still faster than
+  plain C# Moon on every game.
+
+#### 8.4.5 What is left
+
+- **The call stack in a plain frame** (§8.4.2).
+- **Read breakpoints and read watches**, on both engines (`Moon_Debug.md` §7).
+- **The DianaOS console against a MoonRT target, and Mistress's debugger window.** They are covered only through the
+  interface here.
+- **MercuryRT and MarsRT onto the shared hooks**, at `EmuSen_NativeCores.md` §7's steps 4 and 5 (§12.4 there).

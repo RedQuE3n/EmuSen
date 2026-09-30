@@ -9,8 +9,8 @@ use crate::memory::bus::RomPatches;
 use crate::memory::cartridge::RomError;
 use crate::ppu::{FRAME_BYTES, SCREEN_HEIGHT, SCREEN_WIDTH};
 
-/// MoonRT's half of the interface version: 3, the first on the common interface (1 and 2 were `moon_interface_version`).
-pub const CORE_VERSION: u16 = 3;
+/// MoonRT's half of the interface version: 4 with the debug exports; 3 was the first on the common interface.
+pub const CORE_VERSION: u16 = 4;
 
 /// A null handle or buffer.
 pub const STATUS_NULL: i32 = emusen_native::ffi::status::NULL;
@@ -31,7 +31,7 @@ const BATTERY_SPACE: u32 = 2;
 
 impl NativeCore for Machine {
     const CORE_VERSION: u16 = CORE_VERSION;
-    const CAPABILITIES: u64 = caps::RESET | caps::MUTES | caps::ROM_PATCHES;
+    const CAPABILITIES: u64 = caps::RESET | caps::MUTES | caps::ROM_PATCHES | caps::DEBUG | caps::DEBUG_STACK;
     const ENGINE: &'static str = "MoonRT";
 
     /// `MoonCore.LoadRom` from an image, then the battery save written into PRG RAM, clipped to it, before any frame.
@@ -146,6 +146,18 @@ impl NativeCore for Machine {
         Ok(())
     }
 
+    fn debug_hooks(&mut self) -> Option<&mut emusen_native::debug::Hooks> {
+        Some(&mut self.bus.hooks)
+    }
+
+    fn debug_run_frame(&mut self, flags: u32, _detail: &mut u64) -> Result<u32, i32> {
+        self.run_frame_debug(flags).map_err(fault_status)
+    }
+
+    fn debug_pc(&self, processor: u32) -> Option<u64> {
+        (processor == 0).then_some(self.cpu.pc as u64)
+    }
+
     fn end_call() {
         crate::take_fault();
     }
@@ -172,7 +184,7 @@ pub fn build_rom_patches(triples: &[u32]) -> Option<Box<RomPatches>> {
     if map.is_empty() { None } else { Some(Box::new(map)) }
 }
 
-emusen_native::native_exports!(Machine; reset, mutes, rom_patches);
+emusen_native::native_exports!(Machine; reset, mutes, rom_patches, debug, debug_stack);
 
 /// One instruction with the frame loop's DMA charge, NMI edge and stolen cycles: a test extension; the cycles, or a fault status.
 ///

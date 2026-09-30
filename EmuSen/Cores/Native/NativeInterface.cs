@@ -45,7 +45,7 @@ namespace EmuSen.Cores.Native
             (RowRepeat, "ROW_REPEAT", Array.Empty<string>()),
             (BatteryDirty, "BATTERY_DIRTY", Array.Empty<string>()),
             (RomPatches, "ROM_PATCHES", new[] { "emusen_native_set_rom_patches" }),
-            (Debug, "DEBUG", new[] { "emusen_native_debug_set", "emusen_native_debug_run_frame" }),
+            (Debug, "DEBUG", new[] { "emusen_native_debug_set", "emusen_native_debug_set_breakpoints", "emusen_native_debug_set_ranges", "emusen_native_debug_run_frame", "emusen_native_debug_writes", "emusen_native_debug_calls", "emusen_native_debug_profile", "emusen_native_debug_coverage", "emusen_native_debug_counters", "emusen_native_debug_pc" }),
             (DebugStack, "DEBUG_STACK", new[] { "emusen_native_debug_set_stack" }),
         };
 
@@ -124,6 +124,17 @@ namespace EmuSen.Cores.Native
         public readonly delegate* unmanaged<nint, uint, byte*, nuint, uint*, long> Battery;
         public readonly delegate* unmanaged<nint, uint, int> BatterySaved;
         public readonly delegate* unmanaged<nint, uint*, nuint, long> SetRomPatches;
+        public readonly delegate* unmanaged<nint, uint, int, int, int> DebugSet;
+        public readonly delegate* unmanaged<nint, uint*, nuint, int> DebugSetStack;
+        public readonly delegate* unmanaged<nint, int*, nuint, int> DebugSetBreakpoints;
+        public readonly delegate* unmanaged<nint, uint, uint*, nuint, int> DebugSetRanges;
+        public readonly delegate* unmanaged<nint, uint, ulong*, ulong*, int> DebugRunFrame;
+        public readonly delegate* unmanaged<nint, uint*, nuint, long> DebugWrites;
+        public readonly delegate* unmanaged<nint, uint*, nuint, long> DebugCalls;
+        public readonly delegate* unmanaged<nint, long*, nuint, long> DebugProfile;
+        public readonly delegate* unmanaged<nint, uint, byte*, nuint, long*, long> DebugCoverage;
+        public readonly delegate* unmanaged<nint, long*, nuint, long> DebugCounters;
+        public readonly delegate* unmanaged<nint, uint, ulong*, int> DebugPc;
 
         public NativeInterface(NativeCoreLibrary library)
         {
@@ -153,6 +164,17 @@ namespace EmuSen.Cores.Native
             Battery = (delegate* unmanaged<nint, uint, byte*, nuint, uint*, long>)E("battery");
             BatterySaved = (delegate* unmanaged<nint, uint, int>)E("battery_saved");
             SetRomPatches = (delegate* unmanaged<nint, uint*, nuint, long>)E("set_rom_patches");
+            DebugSet = (delegate* unmanaged<nint, uint, int, int, int>)E("debug_set");
+            DebugSetStack = (delegate* unmanaged<nint, uint*, nuint, int>)E("debug_set_stack");
+            DebugSetBreakpoints = (delegate* unmanaged<nint, int*, nuint, int>)E("debug_set_breakpoints");
+            DebugSetRanges = (delegate* unmanaged<nint, uint, uint*, nuint, int>)E("debug_set_ranges");
+            DebugRunFrame = (delegate* unmanaged<nint, uint, ulong*, ulong*, int>)E("debug_run_frame");
+            DebugWrites = (delegate* unmanaged<nint, uint*, nuint, long>)E("debug_writes");
+            DebugCalls = (delegate* unmanaged<nint, uint*, nuint, long>)E("debug_calls");
+            DebugProfile = (delegate* unmanaged<nint, long*, nuint, long>)E("debug_profile");
+            DebugCoverage = (delegate* unmanaged<nint, uint, byte*, nuint, long*, long>)E("debug_coverage");
+            DebugCounters = (delegate* unmanaged<nint, long*, nuint, long>)E("debug_counters");
+            DebugPc = (delegate* unmanaged<nint, uint, ulong*, int>)E("debug_pc");
         }
 
         // Every required export resolved; a library that loads but lacks one is not in use.

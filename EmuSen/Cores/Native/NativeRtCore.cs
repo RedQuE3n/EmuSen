@@ -7,11 +7,11 @@ using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Cores.Native
 {
-    // Where stage 5's NativeDebugBridge plugs in: when armed, it runs the frame instead of advance - see EmuSen_NativeCores.md §4.4.
+    // Where a NativeDebugBridge plugs in: when armed, it runs the frame instead of advance, and false is a halt at <haltedAt> - see EmuSen_NativeCores.md §4.4.
     public interface INativeDebugBridge
     {
         bool Armed { get; }
-        void RunFrame();
+        bool RunFrame(bool resuming, out int haltedAt);
     }
 
     // The ICore body over the common native interface; a console supplies its data and its differences - see EmuSen_NativeCores.md §4.3, §4.5.
@@ -91,6 +91,13 @@ namespace EmuSen.Cores.Native
 
         public TMachine Machine => _machine ?? throw new InvalidOperationException("No ROM is loaded.");
 
+        // Halted in front of a breakpoint, with the frame left open for the next RunFrame to resume, as the C# cores keep it.
+        public bool IsHaltedAtBreakpoint { get; private set; }
+        public int HaltedAddress { get; private set; }
+
+        // A console's RESET, which the C# cores let end a halt.
+        protected void ClearHalt() => IsHaltedAtBreakpoint = false;
+
         public CheatRegistry Cheats
         {
             get => MirrorCheats;
@@ -127,6 +134,7 @@ namespace EmuSen.Cores.Native
             _machine = machine;
             _battery = battery;
             _patchVersion = -1;
+            IsHaltedAtBreakpoint = false;
             Loaded(path);
         }
 
@@ -144,10 +152,25 @@ namespace EmuSen.Cores.Native
             if (_machine is null) throw new InvalidOperationException("RunFrame() called before LoadRom().");
             RefreshRomPatches();
             SyncAudioLimit();
+            bool resuming = IsHaltedAtBreakpoint;
+            IsHaltedAtBreakpoint = false;
             long start = Stopwatch.GetTimestamp();
-            if (DebugBridge is { Armed: true } bridge) bridge.RunFrame();
-            else _machine.Advance();
-            _lastFrameMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+            if (DebugBridge is { Armed: true } bridge)
+            {
+                bool ended = bridge.RunFrame(resuming, out int haltedAt);
+                _lastFrameMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+                if (!ended)
+                {
+                    IsHaltedAtBreakpoint = true;
+                    HaltedAddress = haltedAt;
+                    return;
+                }
+            }
+            else
+            {
+                _machine.Advance();
+                _lastFrameMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+            }
             EndFrame();
         }
 

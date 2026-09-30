@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use super::{Board, Controller};
 use crate::Skip;
+use emusen_native::debug::Hooks;
 use crate::apu::Apu;
 use crate::ppu::Ppu;
 use crate::state::{StateReader, StateResult, StateWriter};
@@ -11,6 +12,12 @@ use crate::state::{StateReader, StateResult, StateWriter};
 pub const RAM_SIZE: usize = 0x0800;
 pub const OAM_DMA_REGISTER: u16 = 0x4014;
 pub const DOTS_PER_CPU_CYCLE: i32 = 3;
+
+/// The spaces a reported store is logged under, as C#'s `IWriteObserver` names them: RAM, PRGRAM, PPUREG and APUREG.
+pub const SPACE_RAM: u32 = 0;
+pub const SPACE_PRG_RAM: u32 = 2;
+pub const SPACE_PPU_REGISTERS: u32 = 8;
+pub const SPACE_APU_REGISTERS: u32 = 9;
 
 /// Game Genie's table: per patched CPU address, 256 entries of `0x100 | patched` or 0, one per original byte.
 pub type RomPatches = HashMap<u16, Box<[u16; 256]>>;
@@ -39,6 +46,8 @@ pub struct MemoryBus {
     pub internal_bus: Skip<u8>,
     /// C#'s `Cpu.Cycles`, which the CPU stamps here at each cycle's start.
     pub cpu_cycles: Skip<i64>,
+    /// The debugger's tables and logs, which only the `Observed` view of this bus writes.
+    pub hooks: Skip<Box<Hooks>>,
 }
 
 impl MemoryBus {
@@ -64,6 +73,7 @@ impl MemoryBus {
             strobe_out: Skip(false),
             internal_bus: Skip(0),
             cpu_cycles: Skip(0),
+            hooks: Skip(Box::new(Hooks::new(&[16]))),
         }
     }
 
@@ -185,6 +195,33 @@ impl MemoryBus {
     /// `MemoryBus.Write`; `cpu_cycles` is what C# stamps from `Cpu.Cycles`. Returns the IRQ level when an OAM DMA set it.
     #[inline(always)]
     pub fn write(&mut self, address: u16, data: u8, cpu_cycles: i64) -> Option<bool> {
+        self.write_unobserved(address, data, cpu_cycles)
+    }
+
+    /// A store the debugger hears, as C#'s bus reports one to its write observer.
+    pub fn write_reported(&mut self, address: u16, data: u8, cpu_cycles: i64) -> Option<bool> {
+        let irq = self.write_unobserved(address, data, cpu_cycles);
+        self.report_write(address, data);
+        irq
+    }
+
+    /// `WriteObserver.OnWrite` as C#'s `MemoryBus.Write` calls it, after the store; `$4014` and `$4016` are not reported.
+    #[cold]
+    #[inline(never)]
+    fn report_write(&mut self, address: u16, data: u8) {
+        let (space, offset) = match address {
+            0x0000..=0x1FFF => (SPACE_RAM, address & 0x07FF),
+            0x2000..=0x3FFF => (SPACE_PPU_REGISTERS, address & 0x07),
+            OAM_DMA_REGISTER | 0x4016 => return,
+            0x4000..=0x401F => (SPACE_APU_REGISTERS, address - 0x4000),
+            0x4020..=0x7FFF => (SPACE_PRG_RAM, address & 0x1FFF),
+            _ => return,
+        };
+        self.hooks.note_write(space, offset as u32, data, 0);
+    }
+
+    #[inline(always)]
+    fn write_unobserved(&mut self, address: u16, data: u8, cpu_cycles: i64) -> Option<bool> {
         self.open_bus = data;
         *self.internal_bus = data;
         if address < 0x2000 {
@@ -255,5 +292,70 @@ impl MemoryBus {
         r.bytes(&mut self.ram)?; // Ram
         self.stolen_cycles = r.i32()?; // StolenCycles
         Ok(())
+    }
+}
+
+/// The bus as the CPU drives it. The plain frame's view is `Plain`, in which the hooks' seams are empty and compile away;
+/// the observed frame's is `Observed`, which notes stores, calls and returns (Moon_Native.md §8.4).
+pub trait CpuBus: std::ops::DerefMut<Target = MemoryBus> {
+    fn store(&mut self, address: u16, data: u8, cpu_cycles: i64) -> Option<bool>;
+    #[inline(always)]
+    fn note_call(&mut self, _source: u16, _target: u16, _kind: u32) {}
+    #[inline(always)]
+    fn note_return(&mut self) {}
+}
+
+pub struct Plain<'a>(pub &'a mut MemoryBus);
+pub struct Observed<'a>(pub &'a mut MemoryBus);
+
+impl std::ops::Deref for Plain<'_> {
+    type Target = MemoryBus;
+    #[inline(always)]
+    fn deref(&self) -> &MemoryBus {
+        self.0
+    }
+}
+
+impl std::ops::DerefMut for Plain<'_> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut MemoryBus {
+        self.0
+    }
+}
+
+impl CpuBus for Plain<'_> {
+    #[inline(always)]
+    fn store(&mut self, address: u16, data: u8, cpu_cycles: i64) -> Option<bool> {
+        self.0.write_unobserved(address, data, cpu_cycles)
+    }
+}
+
+impl std::ops::Deref for Observed<'_> {
+    type Target = MemoryBus;
+    #[inline(always)]
+    fn deref(&self) -> &MemoryBus {
+        self.0
+    }
+}
+
+impl std::ops::DerefMut for Observed<'_> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut MemoryBus {
+        self.0
+    }
+}
+
+impl CpuBus for Observed<'_> {
+    #[inline(always)]
+    fn store(&mut self, address: u16, data: u8, cpu_cycles: i64) -> Option<bool> {
+        if self.0.hooks.writes { self.0.write_reported(address, data, cpu_cycles) } else { self.0.write_unobserved(address, data, cpu_cycles) }
+    }
+
+    fn note_call(&mut self, source: u16, target: u16, kind: u32) {
+        self.0.hooks.note_call(source as u32, target as u32, kind);
+    }
+
+    fn note_return(&mut self) {
+        self.0.hooks.note_return();
     }
 }

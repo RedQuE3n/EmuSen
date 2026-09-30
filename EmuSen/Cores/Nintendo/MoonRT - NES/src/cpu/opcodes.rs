@@ -4,7 +4,7 @@ use super::*;
 
 impl Cpu {
     #[inline(always)]
-    fn consume_implied(&mut self, bus: &mut MemoryBus) {
+    fn consume_implied<B: CpuBus>(&mut self, bus: &mut B) {
         self.read(bus, self.pc);
     }
 
@@ -16,26 +16,26 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn fetch(&mut self, bus: &mut MemoryBus) -> u8 {
+    fn fetch<B: CpuBus>(&mut self, bus: &mut B) -> u8 {
         let pc = self.pc;
         self.pc = pc.wrapping_add(1);
         self.read(bus, pc)
     }
 
     #[inline(always)]
-    fn addr_zero_page(&mut self, bus: &mut MemoryBus) -> u16 {
+    fn addr_zero_page<B: CpuBus>(&mut self, bus: &mut B) -> u16 {
         self.fetch(bus) as u16
     }
 
     #[inline(always)]
-    fn addr_zero_page_indexed(&mut self, bus: &mut MemoryBus, index: u8) -> u16 {
+    fn addr_zero_page_indexed<B: CpuBus>(&mut self, bus: &mut B, index: u8) -> u16 {
         let pointer = self.fetch(bus);
         self.read(bus, pointer as u16);
         pointer.wrapping_add(index) as u16
     }
 
     #[inline(always)]
-    fn addr_absolute(&mut self, bus: &mut MemoryBus) -> u16 {
+    fn addr_absolute<B: CpuBus>(&mut self, bus: &mut B) -> u16 {
         let lo = self.fetch(bus) as u16;
         let hi = self.fetch(bus) as u16;
         lo | (hi << 8)
@@ -43,7 +43,7 @@ impl Cpu {
 
     /// `always_fixup` for writes and read-modify-writes, which pay the fixup cycle without a page cross.
     #[inline(always)]
-    fn addr_absolute_indexed(&mut self, bus: &mut MemoryBus, index: u8, always_fixup: bool) -> u16 {
+    fn addr_absolute_indexed<B: CpuBus>(&mut self, bus: &mut B, index: u8, always_fixup: bool) -> u16 {
         let base = self.addr_absolute(bus);
         let effective = base.wrapping_add(index as u16);
         if always_fixup || (effective & 0xFF00) != (base & 0xFF00) {
@@ -53,7 +53,7 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn addr_indexed_indirect(&mut self, bus: &mut MemoryBus) -> u16 {
+    fn addr_indexed_indirect<B: CpuBus>(&mut self, bus: &mut B) -> u16 {
         let pointer = self.fetch(bus);
         self.read(bus, pointer as u16);
         let indexed = pointer.wrapping_add(self.x);
@@ -63,7 +63,7 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn addr_indirect_indexed(&mut self, bus: &mut MemoryBus, always_fixup: bool) -> u16 {
+    fn addr_indirect_indexed<B: CpuBus>(&mut self, bus: &mut B, always_fixup: bool) -> u16 {
         let pointer = self.fetch(bus);
         let lo = self.read(bus, pointer as u16) as u16;
         let hi = self.read(bus, pointer.wrapping_add(1) as u16) as u16;
@@ -76,7 +76,7 @@ impl Cpu {
     }
 
     /// The base's high byte, which the unstable stores AND against - see Moon_CPU.md §6.3.
-    fn addr_absolute_indexed_unstable(&mut self, bus: &mut MemoryBus, index: u8) -> (u16, u8, bool) {
+    fn addr_absolute_indexed_unstable<B: CpuBus>(&mut self, bus: &mut B, index: u8) -> (u16, u8, bool) {
         let lo = self.fetch(bus) as u16;
         let hi = self.fetch(bus);
         let base = lo | ((hi as u16) << 8);
@@ -88,7 +88,7 @@ impl Cpu {
         (effective, hi, crossed)
     }
 
-    fn addr_indirect_indexed_unstable(&mut self, bus: &mut MemoryBus) -> (u16, u8, bool) {
+    fn addr_indirect_indexed_unstable<B: CpuBus>(&mut self, bus: &mut B) -> (u16, u8, bool) {
         let pointer = self.fetch(bus);
         let lo = self.read(bus, pointer as u16) as u16;
         let hi = self.read(bus, pointer.wrapping_add(1) as u16);
@@ -103,14 +103,14 @@ impl Cpu {
 
     /// The untouched value goes back before the modified one - see Moon_CPU.md §3.3.
     #[inline(always)]
-    fn rmw_fetch(&mut self, bus: &mut MemoryBus, address: u16) -> u8 {
+    fn rmw_fetch<B: CpuBus>(&mut self, bus: &mut B, address: u16) -> u8 {
         let value = self.read(bus, address);
         self.write(bus, address, value);
         value
     }
 
     #[inline(always)]
-    fn load(&mut self, bus: &mut MemoryBus, address: u16) -> u8 {
+    fn load<B: CpuBus>(&mut self, bus: &mut B, address: u16) -> u8 {
         self.read(bus, address)
     }
 
@@ -136,13 +136,13 @@ impl Cpu {
         self.set_zero_negative(register.wrapping_sub(operand));
     }
 
-    fn op_inc(&mut self, bus: &mut MemoryBus, address: u16) {
+    fn op_inc<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
         let value = self.rmw_fetch(bus, address);
         let result = self.set_zero_negative(value.wrapping_add(1));
         self.write(bus, address, result);
     }
 
-    fn op_dec(&mut self, bus: &mut MemoryBus, address: u16) {
+    fn op_dec<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
         let value = self.rmw_fetch(bus, address);
         let result = self.set_zero_negative(value.wrapping_sub(1));
         self.write(bus, address, result);
@@ -195,25 +195,25 @@ impl Cpu {
         self.set_zero_negative((value >> 1) | carry_in)
     }
 
-    fn op_asl(&mut self, bus: &mut MemoryBus, address: u16) {
+    fn op_asl<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
         let v = self.rmw_fetch(bus, address);
         let r = self.shift_left(v);
         self.write(bus, address, r);
     }
 
-    fn op_lsr(&mut self, bus: &mut MemoryBus, address: u16) {
+    fn op_lsr<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
         let v = self.rmw_fetch(bus, address);
         let r = self.shift_right(v);
         self.write(bus, address, r);
     }
 
-    fn op_rol(&mut self, bus: &mut MemoryBus, address: u16) {
+    fn op_rol<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
         let v = self.rmw_fetch(bus, address);
         let r = self.rotate_left(v);
         self.write(bus, address, r);
     }
 
-    fn op_ror(&mut self, bus: &mut MemoryBus, address: u16) {
+    fn op_ror<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
         let v = self.rmw_fetch(bus, address);
         let r = self.rotate_right(v);
         self.write(bus, address, r);
@@ -221,7 +221,7 @@ impl Cpu {
 
     // Branches, flags, stack, system.
 
-    fn branch(&mut self, bus: &mut MemoryBus, taken: bool) {
+    fn branch<B: CpuBus>(&mut self, bus: &mut B, taken: bool) {
         let offset = self.fetch(bus) as i8;
         if !taken {
             return;
@@ -235,35 +235,35 @@ impl Cpu {
         self.pc = target;
     }
 
-    fn set_flag_opcode(&mut self, bus: &mut MemoryBus, flag: u8, value: bool) {
+    fn set_flag_opcode<B: CpuBus>(&mut self, bus: &mut B, flag: u8, value: bool) {
         self.consume_implied(bus);
         self.set_flag(flag, value);
     }
 
     /// CLI and SEI land their I after the interrupt poll.
-    fn set_interrupt_disable(&mut self, bus: &mut MemoryBus, value: bool) {
+    fn set_interrupt_disable<B: CpuBus>(&mut self, bus: &mut B, value: bool) {
         self.consume_implied(bus);
         self.delayed_i = value;
         self.has_delayed_i = true;
     }
 
-    fn op_pha(&mut self, bus: &mut MemoryBus) {
+    fn op_pha<B: CpuBus>(&mut self, bus: &mut B) {
         self.consume_implied(bus);
         self.push(bus, self.a);
     }
 
-    fn op_php(&mut self, bus: &mut MemoryBus) {
+    fn op_php<B: CpuBus>(&mut self, bus: &mut B) {
         self.consume_implied(bus);
         self.push(bus, self.p | 0x30);
     }
 
-    fn op_pla(&mut self, bus: &mut MemoryBus) {
+    fn op_pla<B: CpuBus>(&mut self, bus: &mut B) {
         self.consume_implied(bus);
         let v = self.pull_with_dummy(bus);
         self.a = self.set_zero_negative(v);
     }
 
-    fn op_plp(&mut self, bus: &mut MemoryBus) {
+    fn op_plp<B: CpuBus>(&mut self, bus: &mut B) {
         self.consume_implied(bus);
         let pulled = self.pull_with_dummy(bus);
         let previous_i = self.flag(FLAG_I);
@@ -273,7 +273,7 @@ impl Cpu {
         self.set_flag(FLAG_I, previous_i);
     }
 
-    fn op_brk(&mut self, bus: &mut MemoryBus) {
+    fn op_brk<B: CpuBus>(&mut self, bus: &mut B) {
         self.fetch(bus);
         self.push(bus, (self.pc >> 8) as u8);
         self.push(bus, self.pc as u8);
@@ -281,43 +281,47 @@ impl Cpu {
         self.push(bus, self.p | 0x30);
         self.set_flag(FLAG_I, true);
         self.pc = self.read_vector(bus, vector);
+        bus.note_call(self.last_instruction_pc, self.pc, if vector == NMI_VECTOR { emusen_native::debug::kind::NMI } else { emusen_native::debug::kind::BRK });
     }
 
-    fn op_rti(&mut self, bus: &mut MemoryBus) {
+    fn op_rti<B: CpuBus>(&mut self, bus: &mut B) {
         self.consume_implied(bus);
         let pulled = self.pull_with_dummy(bus);
         self.p = (pulled | FLAG_U) & !FLAG_B;
         let lo = self.pull(bus) as u16;
         let hi = self.pull(bus) as u16;
         self.pc = lo | (hi << 8);
+        bus.note_return();
     }
 
-    fn op_jsr(&mut self, bus: &mut MemoryBus) {
+    fn op_jsr<B: CpuBus>(&mut self, bus: &mut B) {
         let lo = self.fetch(bus) as u16;
         self.read(bus, 0x0100 | self.s as u16);
         self.push(bus, (self.pc >> 8) as u8);
         self.push(bus, self.pc as u8);
         let hi = self.read(bus, self.pc) as u16;
         self.pc = lo | (hi << 8);
+        bus.note_call(self.last_instruction_pc, self.pc, emusen_native::debug::kind::CALL);
     }
 
-    fn op_rts(&mut self, bus: &mut MemoryBus) {
+    fn op_rts<B: CpuBus>(&mut self, bus: &mut B) {
         self.consume_implied(bus);
         let lo = self.pull_with_dummy(bus) as u16;
         let hi = self.pull(bus) as u16;
         self.pc = lo | (hi << 8);
         self.read(bus, self.pc);
         self.pc = self.pc.wrapping_add(1);
+        bus.note_return();
     }
 
-    fn op_jmp_indirect(&mut self, bus: &mut MemoryBus) {
+    fn op_jmp_indirect<B: CpuBus>(&mut self, bus: &mut B) {
         let pointer = self.addr_absolute(bus);
         let lo = self.read(bus, pointer) as u16;
         let hi = self.read(bus, (pointer & 0xFF00) | (pointer.wrapping_add(1) & 0x00FF)) as u16;
         self.pc = lo | (hi << 8);
     }
 
-    fn op_jam(&mut self, bus: &mut MemoryBus) {
+    fn op_jam<B: CpuBus>(&mut self, bus: &mut B) {
         self.read(bus, self.pc);
         self.read(bus, self.pc);
         self.pc = self.pc.wrapping_sub(1);
@@ -326,47 +330,47 @@ impl Cpu {
 
     // The undocumented opcodes.
 
-    fn op_slo(&mut self, bus: &mut MemoryBus, address: u16) {
+    fn op_slo<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
         let v = self.rmw_fetch(bus, address);
         let value = self.shift_left(v);
         self.write(bus, address, value);
         self.op_ora(value);
     }
 
-    fn op_rla(&mut self, bus: &mut MemoryBus, address: u16) {
+    fn op_rla<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
         let v = self.rmw_fetch(bus, address);
         let value = self.rotate_left(v);
         self.write(bus, address, value);
         self.op_and(value);
     }
 
-    fn op_sre(&mut self, bus: &mut MemoryBus, address: u16) {
+    fn op_sre<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
         let v = self.rmw_fetch(bus, address);
         let value = self.shift_right(v);
         self.write(bus, address, value);
         self.op_eor(value);
     }
 
-    fn op_rra(&mut self, bus: &mut MemoryBus, address: u16) {
+    fn op_rra<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
         let v = self.rmw_fetch(bus, address);
         let value = self.rotate_right(v);
         self.write(bus, address, value);
         self.op_adc(value);
     }
 
-    fn op_dcp(&mut self, bus: &mut MemoryBus, address: u16) {
+    fn op_dcp<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
         let value = self.rmw_fetch(bus, address).wrapping_sub(1);
         self.write(bus, address, value);
         self.compare(self.a, value);
     }
 
-    fn op_isc(&mut self, bus: &mut MemoryBus, address: u16) {
+    fn op_isc<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
         let value = self.rmw_fetch(bus, address).wrapping_add(1);
         self.write(bus, address, value);
         self.op_sbc(value);
     }
 
-    fn op_sax(&mut self, bus: &mut MemoryBus, address: u16) {
+    fn op_sax<B: CpuBus>(&mut self, bus: &mut B, address: u16) {
         self.write(bus, address, self.a & self.x);
     }
 
@@ -416,13 +420,13 @@ impl Cpu {
         self.x = self.s;
     }
 
-    fn unstable_store(&mut self, bus: &mut MemoryBus, value: u8, effective: u16, base_high: u8, crossed: bool) {
+    fn unstable_store<B: CpuBus>(&mut self, bus: &mut B, value: u8, effective: u16, base_high: u8, crossed: bool) {
         let stored = if *self.unstable_halted { value } else { value & base_high.wrapping_add(1) };
         let address = if crossed { ((stored as u16) << 8) | (effective & 0x00FF) } else { effective };
         self.write(bus, address, stored);
     }
 
-    pub(super) fn dispatch(&mut self, bus: &mut MemoryBus, opcode: u8) {
+    pub(super) fn dispatch<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) {
         let (x, y) = (self.x, self.y);
         match opcode {
             0x00 => self.op_brk(bus),

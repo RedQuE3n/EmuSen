@@ -43,9 +43,9 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal("frame 2 reached", core.Breakpoints.LastBreakReason);
         }
 
-        // MoonRT has no observed loop until its stage 5, so the registry is what can be compared: armed, then pending, as Moon's is.
+        // MoonRT's observed frame stops where Moon's does, since its stage 5 - see Moon_Native.md §8.4.
         [Fact]
-        public void MoonRT_tells_the_registry_each_frame_as_Moon_does()
+        public void MoonRT_halts_at_the_start_of_the_frame_after_the_one_run_to()
         {
             Assert.True(MoonRtCore.Available, MoonNative.Report);
             using var core = new MoonRtCore();
@@ -53,10 +53,15 @@ namespace EmuSen.WiseMan.Cores
             core.Breakpoints.ArmRunToFrame(2);
 
             core.RunFrame();
-            Assert.False(core.Breakpoints.HasPendingBreak);
             core.RunFrame();
+            Assert.False(core.IsHaltedAtBreakpoint);
             Assert.True(core.Breakpoints.HasPendingBreak);
-            Assert.Equal("frame 2 reached", core.Breakpoints.LastEventBreak);
+
+            core.RunFrame();
+            Assert.True(core.IsHaltedAtBreakpoint);
+            Assert.Equal(2, core.TotalFrames);
+            Assert.Equal(0x8000, core.HaltedAddress);
+            Assert.Equal("frame 2 reached", core.Breakpoints.LastBreakReason);
         }
     }
 }

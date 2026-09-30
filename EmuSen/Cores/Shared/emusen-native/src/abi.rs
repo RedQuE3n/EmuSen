@@ -186,6 +186,21 @@ pub trait NativeCore: Sized + StateMachine {
         Err(status::NOT_SUPPORTED)
     }
 
+    /// `DEBUG`: the hooks the host's tables are pushed into and its logs drained from.
+    fn debug_hooks(&mut self) -> Option<&mut crate::debug::Hooks> {
+        None
+    }
+
+    /// `DEBUG`: the frame through the core's observed loop; the stop reasons (`debug::stop`), zero at the frame's end.
+    fn debug_run_frame(&mut self, _flags: u32, _detail: &mut u64) -> Result<u32, i32> {
+        Err(status::NOT_SUPPORTED)
+    }
+
+    /// `DEBUG`: the address of the step processor `processor` stands in front of.
+    fn debug_pc(&self, _processor: u32) -> Option<u64> {
+        None
+    }
+
     /// Clears whatever the core records between calls, so that nothing outlives the call that made it.
     fn end_call() {}
 }
@@ -226,6 +241,12 @@ macro_rules! __native_capability {
     (rom_patches) => {
         $crate::abi::caps::ROM_PATCHES
     };
+    (debug) => {
+        $crate::abi::caps::DEBUG
+    };
+    (debug_stack) => {
+        $crate::abi::caps::DEBUG_STACK
+    };
 }
 
 /// One optional group's exports.
@@ -252,6 +273,181 @@ macro_rules! __native_optional {
             <$t as $crate::abi::NativeCore>::set_mutes(m, mask).map_or_else(|e| e, |()| 0)
         }
     };
+    ($t:ty, debug_stack) => {
+        /// The registry's call stack as (source, target) pairs, innermost last (`DEBUG_STACK`).
+        ///
+        /// # Safety
+        /// `handle` must be live or null; `pairs` valid for `2 * count` values, or null with `count` zero.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn emusen_native_debug_set_stack(handle: *mut $t, pairs: *const u32, count: usize) -> i32 {
+            match $crate::abi::hooks_of(handle) {
+                Ok(h) => {
+                    let values = unsafe { $crate::abi::slice(pairs, 2 * count) };
+                    let pairs: Vec<(u32, u32)> = values.chunks_exact(2).map(|p| (p[0], p[1])).collect();
+                    h.set_stack(&pairs);
+                    0
+                }
+                Err(e) => e,
+            }
+        }
+    };
+    ($t:ty, debug) => {
+        /// The flags (`debug::flag`), the depth `step over`/`out` stop at (`i32::MIN` unarmed) and the guard (`-1` unarmed).
+        ///
+        /// # Safety
+        /// `handle` must be live or null.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn emusen_native_debug_set(handle: *mut $t, flags: u32, depth_target: i32, depth_guard: i32) -> i32 {
+            match $crate::abi::hooks_of(handle) {
+                Ok(h) => {
+                    h.configure(flags, depth_target, depth_guard);
+                    0
+                }
+                Err(e) => e,
+            }
+        }
+
+        /// The enabled breakpoints as `count` pairs of first and last address.
+        ///
+        /// # Safety
+        /// `handle` must be live or null; `pairs` valid for `2 * count` values, or null with `count` zero.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn emusen_native_debug_set_breakpoints(handle: *mut $t, pairs: *const i32, count: usize) -> i32 {
+            match $crate::abi::hooks_of(handle) {
+                Ok(h) => {
+                    h.set_breakpoints(unsafe { $crate::abi::slice(pairs, 2 * count) });
+                    0
+                }
+                Err(e) => e,
+            }
+        }
+
+        /// The stores to report: `count` triples of space, first and last offset; `kind` 0 the watches, 1 the data breakpoints.
+        ///
+        /// # Safety
+        /// `handle` must be live or null; `triples` valid for `3 * count` values, or null with `count` zero.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn emusen_native_debug_set_ranges(handle: *mut $t, kind: u32, triples: *const u32, count: usize) -> i32 {
+            match $crate::abi::hooks_of(handle) {
+                Ok(h) => {
+                    h.set_ranges(kind, unsafe { $crate::abi::slice(triples, 3 * count) });
+                    0
+                }
+                Err(e) => e,
+            }
+        }
+
+        /// The observed frame: its stop reasons, zero at the frame's end, with processor 0's program counter in `pc`.
+        ///
+        /// # Safety
+        /// `handle` must be live or null; `pc` and `detail` writable or null.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn emusen_native_debug_run_frame(handle: *mut $t, flags: u32, pc: *mut u64, detail: *mut u64) -> i32 {
+            let Some(m) = (unsafe { handle.as_mut() }) else { return $crate::ffi::status::NULL };
+            let mut word = 0u64;
+            let r = <$t as $crate::abi::NativeCore>::debug_run_frame(m, flags, &mut word);
+            <$t as $crate::abi::NativeCore>::end_call();
+            if let Some(p) = unsafe { pc.as_mut() } {
+                *p = <$t as $crate::abi::NativeCore>::debug_pc(m, 0).unwrap_or(0);
+            }
+            if let Some(d) = unsafe { detail.as_mut() } {
+                *d = word;
+            }
+            match r {
+                Ok(why) => why as i32,
+                Err(e) => e,
+            }
+        }
+
+        /// The stores logged, four values each (space, offset, value, pc), copied and forgotten when they all fit; the count.
+        ///
+        /// # Safety
+        /// `handle` must be live or null; `out` valid for `len` values, or null.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn emusen_native_debug_writes(handle: *mut $t, out: *mut u32, len: usize) -> i64 {
+            match $crate::abi::hooks_of(handle) {
+                Ok(h) => $crate::debug::drain(&mut h.writes_log, unsafe { $crate::abi::slice_mut(out, len) }, |w: &$crate::debug::Write| [w.space, w.address, w.value, w.pc]) as i64,
+                Err(e) => e as i64,
+            }
+        }
+
+        /// The calls, interrupts and returns logged, three values each (kind, source, target), drained as the writes are.
+        ///
+        /// # Safety
+        /// `handle` must be live or null; `out` valid for `len` values, or null.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn emusen_native_debug_calls(handle: *mut $t, out: *mut u32, len: usize) -> i64 {
+            match $crate::abi::hooks_of(handle) {
+                Ok(h) => $crate::debug::drain(&mut h.calls_log, unsafe { $crate::abi::slice_mut(out, len) }, |c: &$crate::debug::Call| [c.kind, c.source, c.target]) as i64,
+                Err(e) => e as i64,
+            }
+        }
+
+        /// The profile's runs, (owner, instructions) pairs, drained as the logs are; the pair count.
+        ///
+        /// # Safety
+        /// `handle` must be live or null; `out` valid for `len` values, or null.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn emusen_native_debug_profile(handle: *mut $t, out: *mut i64, len: usize) -> i64 {
+            match $crate::abi::hooks_of(handle) {
+                Ok(h) => $crate::debug::drain_profile(h, unsafe { $crate::abi::slice_mut(out, len) }) as i64,
+                Err(e) => e as i64,
+            }
+        }
+
+        /// A processor's coverage bitmap, copied and cleared when `len` holds it, with its recorded steps; its length, zero unarmed.
+        ///
+        /// # Safety
+        /// `handle` must be live or null; `out` valid for `len` bytes, or null; `recorded` writable or null.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn emusen_native_debug_coverage(handle: *mut $t, processor: u32, out: *mut u8, len: usize, recorded: *mut i64) -> i64 {
+            match $crate::abi::hooks_of(handle) {
+                Ok(h) => {
+                    let mut n = 0i64;
+                    let r = $crate::debug::drain_coverage(h, processor as usize, unsafe { $crate::abi::slice_mut(out, len) }, &mut n);
+                    if let Some(p) = unsafe { recorded.as_mut() } {
+                        *p = n;
+                    }
+                    r as i64
+                }
+                Err(e) => e as i64,
+            }
+        }
+
+        /// The depth and the unmatched returns, copied up to `len`; how many there are.
+        ///
+        /// # Safety
+        /// `handle` must be live or null; `out` valid for `len` values, or null.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn emusen_native_debug_counters(handle: *mut $t, out: *mut i64, len: usize) -> i64 {
+            match $crate::abi::hooks_of(handle) {
+                Ok(h) => {
+                    let values = h.counters();
+                    let out = unsafe { $crate::abi::slice_mut(out, len) };
+                    let n = values.len().min(out.len());
+                    out[..n].copy_from_slice(&values[..n]);
+                    values.len() as i64
+                }
+                Err(e) => e as i64,
+            }
+        }
+
+        /// # Safety
+        /// `handle` must be live or null; `pc` writable or null.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn emusen_native_debug_pc(handle: *const $t, processor: u32, pc: *mut u64) -> i32 {
+            let Some(m) = (unsafe { handle.as_ref() }) else { return $crate::ffi::status::NULL };
+            match <$t as $crate::abi::NativeCore>::debug_pc(m, processor) {
+                Some(value) => {
+                    if let Some(p) = unsafe { pc.as_mut() } {
+                        *p = value;
+                    }
+                    0
+                }
+                None => $crate::abi::status::NOT_SUPPORTED,
+            }
+        }
+    };
     ($t:ty, rom_patches) => {
         /// `count` triples of (address, value, compare), `u32::MAX` for no compare; zero clears them. Returns the triples taken.
         ///
@@ -269,13 +465,38 @@ macro_rules! __native_optional {
     };
 }
 
+/// The hooks of a live handle, or the status to return: null, or a core without `DEBUG`.
+#[doc(hidden)]
+pub fn hooks_of<'a, T: NativeCore + 'a>(handle: *mut T) -> Result<&'a mut crate::debug::Hooks, i32> {
+    // SAFETY: the export's caller promises `handle` is live or null.
+    let m: &'a mut T = unsafe { handle.as_mut() }.ok_or(crate::ffi::status::NULL)?;
+    m.debug_hooks().ok_or(status::NOT_SUPPORTED)
+}
+
+/// A caller's buffer as a slice, empty when null.
+///
+/// # Safety
+/// `data` valid for `len` values, or null.
+#[doc(hidden)]
+pub unsafe fn slice_mut<'a, T>(data: *mut T, len: usize) -> &'a mut [T] {
+    if data.is_null() || len == 0 { &mut [] } else { unsafe { std::slice::from_raw_parts_mut(data, len) } }
+}
+
+/// # Safety
+/// `data` valid for `len` values, or null.
+#[doc(hidden)]
+pub unsafe fn slice<'a, T>(data: *const T, len: usize) -> &'a [T] {
+    if data.is_null() || len == 0 { &[] } else { unsafe { std::slice::from_raw_parts(data, len) } }
+}
+
 /// The common exports over a `NativeCore`, and the optional groups named, whose bits must be exactly the optional bits
 /// `CAPABILITIES` claims: `native_exports!(Machine; reset, mutes, rom_patches);`.
 #[macro_export]
 macro_rules! native_exports {
     ($t:ty; $($opt:ident),* $(,)?) => {
         const _: () = assert!(
-            (<$t as $crate::abi::NativeCore>::CAPABILITIES & ($crate::abi::caps::RESET | $crate::abi::caps::MUTES | $crate::abi::caps::ROM_PATCHES))
+            (<$t as $crate::abi::NativeCore>::CAPABILITIES
+                & ($crate::abi::caps::RESET | $crate::abi::caps::MUTES | $crate::abi::caps::ROM_PATCHES | $crate::abi::caps::DEBUG | $crate::abi::caps::DEBUG_STACK))
                 == (0 $(| $crate::__native_capability!($opt))*),
             "the optional exports and CAPABILITIES disagree"
         );

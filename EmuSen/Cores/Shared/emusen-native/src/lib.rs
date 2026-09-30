@@ -5,12 +5,14 @@
 //! - [`naming`] is the rule that ties each Rust field to the C# name written beside it.
 //! - [`Skip`] is a field C# does not serialize; [`ffi`] is the status range and the state exports of a core's C ABI.
 //! - [`SampleQueue`] is C#'s `EmuSen.Common.SampleQueue`, a core's undrained audio with its drop-oldest limit.
+//! - [`debug`] is the debugger's hooks as data: the tables, the logs and their drain (EmuSen_NativeCores.md §3.14).
 //! - [`abi`] is the common native interface: the `NativeCore` trait and `native_exports!`, the fixed `emusen_native_*`
 //!   names, the version, the capability bits and the interface's status codes (EmuSen_NativeCores.md §3).
 //!
 //! Nothing here knows a console: magics, versions and a core's own refusals stay in the core. See EmuSen_RustState.md.
 
 pub mod abi;
+pub mod debug;
 pub mod ffi;
 pub mod naming;
 mod reader;

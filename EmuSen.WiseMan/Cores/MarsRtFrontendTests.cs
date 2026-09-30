@@ -91,7 +91,10 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(CoreCatalog.MarsEngine, CoreCatalog.EngineChosen("N64", CoreCatalog.MarsEngine));
             Assert.Equal(CoreCatalog.MercuryEngine, CoreCatalog.EngineChosen("GB", null));
             Assert.Null(CoreCatalog.EngineChosen("SNES", null));
-            foreach (string console in new[] { "SNES", "NES" }) Assert.Null(CoreCatalog.EngineFor(console));
+            Assert.Null(CoreCatalog.EngineFor("SNES"));
+            CoreSetting nes = CoreCatalog.EngineFor("NES")!;
+            Assert.Equal(CoreCatalog.MoonEngine, nes.Default);
+            Assert.Equal(new[] { CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine }, nes.Choices);
             CoreSetting gameBoy = CoreCatalog.EngineFor("GB")!;
             Assert.Equal(CoreCatalog.MercuryEngine, gameBoy.Default);
             Assert.Equal(new[] { CoreCatalog.MercuryEngine, CoreCatalog.MercuryRtEngine }, gameBoy.Choices);

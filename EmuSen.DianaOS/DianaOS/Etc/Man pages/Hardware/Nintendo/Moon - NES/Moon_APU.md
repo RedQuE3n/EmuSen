@@ -53,6 +53,9 @@ A "half" entry clocks the quarter units too — envelopes and the triangle's lin
 
 **The frame IRQ is asserted across all three of the last steps** in four-step mode — 29828, 29829 *and* 29830 — not on one cycle. That is the detail that made several tests unfixable from the outside.
 
+**With the inhibit set, the flag still rises at 29828 and 29829.** The IRQ line stays low, and 29830 sets the flag only
+when uninhibited. This was added in stage 2e; see Moon_Native.md §3.12, rule A1.
+
 **A retraction.** This section previously claimed the short period was deliberate and was "compensating for a larger error in the opposite direction", after correcting it in isolation regressed `apu_reset/4017_timing`. That was wrong, and it was wrong because it was reasoned from which tests moved rather than from what the hardware does. The period is not compensating for anything; the table was simply missing two entries and the IRQ window was a third the width it should be. With the real table, `4017_timing`, `4017_written`, `5-len_timing` and `6-irq_flag_timing` all pass and nothing regresses. The general rule this cost a lot of time to relearn is in `Moon_TestRoms.md` §5.
 
 ### 2.2 `$4017` lands late, and RESET rewrites it
@@ -83,13 +86,18 @@ Silent when the length counter is zero, the timer period is under 8, or the swee
 
 ### 3.3 Triangle
 
-The only channel with no volume control at all — on or off. Both the length counter and the linear counter must be non-zero for the sequencer to advance.
+The only channel with no volume control at all — on or off. Both the length counter and the linear counter must be non-zero for the sequencer to advance. They gate only the sequencer: the timer keeps counting while they hold it (Moon_Native.md §3.12, rule A6).
 
 A period below 2 is silenced by refusing to *output*, not by refusing to *clock*. Stopping the sequencer would strand whatever step it was on as a DC level, which is a click. This is the one place the implementation deliberately differs in shape from the other channels.
 
 ### 3.4 Noise
 
-A 15-bit LFSR. The mode bit picks the feedback tap — bit 6 for the short, tonal mode, bit 1 otherwise. The period table is in APU cycles, so it is indexed after the divide-by-two.
+A 15-bit LFSR. The mode bit picks the feedback tap — bit 6 for the short, tonal mode, bit 1 otherwise.
+
+**The period table is in CPU cycles.** The timer runs at the APU rate, so it reloads with half the entry less one.
+*Retracted (stage 2e, Moon_Native.md §3.12, rule A5):* this section used to say the table was in APU cycles, and the
+timer reloaded with the entry itself. That made every noise period 2(t+1) CPU cycles, about an octave low. The
+netlist's LFSR seeds, as `apu.sv` has them, count out the table's values in CPU cycles exactly.
 
 ### 3.5 DMC
 

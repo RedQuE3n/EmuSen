@@ -1087,7 +1087,8 @@ state, 105 passed.
   cycles. That gave a cost of 2 where the table wants 1. The table fits a fetch that commits after its halt alone.
 - **Taking `$4015`'s bit 5 from the internal latch after the fetch** left the internal data bus test failing. The
   fetch's own read had already loaded the sample into the latch. Bit 5 is the latch as it was before the fetch.
-- **The implicit abort's `$500` table** (the load DMA landing X cycles before the output unit's boundary) was not
+- *Retracted in §3.12.4: the table did match, and this reading was taken after the ROM had cleared the page.*
+  **The implicit abort's `$500` table** (the load DMA landing X cycles before the output unit's boundary) was not
   reproduced by any lag tried: it stayed zero, where the key has ones at X = A and B. The test passes, because its
   answer sets are chosen by `$508` and the other two tables match. Which part of the rule is missing is not known.
 
@@ -1096,6 +1097,194 @@ state, 105 passed.
 - **The DMC channel's code 21, and the APU's own audit.**
 - **C7** (writes to `$4020`–`$5FFF`): no witness turned up, so it stays a candidate.
 - **The per-dot PPU pipelines** of §3.10.5.
+
+### 3.12 Stage 2e: the APU (2026-09-29)
+
+*The APU audited against NES_MiSTer's `apu.sv` (26e2efb). The file was rewritten in 2020, and its noise and pitch
+tables and its frame counter are LFSRs read from the 2A03 netlist, so its agreement counts as evidence here. The
+exception is where the file marks its own holes: the triangle's ultrasonic output is held on purpose (`allow_us`,
+`sample_latch`, `apu.sv:299`) and is no referee point, and the PAL tables are marked speculative. §3.11.4 predicted
+that the DMC channel's code 21 was the APU's. That held, and the frame counter's code 19 was the other APU failure.
+The audit also found four rules that no AccuracyCoin test reaches. Two of them have a witness in the corpus that the
+runner could not read, blargg's 2005 set, which reports in `$F0` rather than through `$6000`.* As in §3.7, each target
+test's expectation was read from the ROM's source before anything was changed.
+
+#### 3.12.1 The rules, and their weight
+
+| # | Rule | Moon before | Source | Witness | Verdict |
+|---|---|---|---|---|---|
+| A1 | In four-step mode `$4015`'s bit 6 rises at 29828 and 29829 even with `$4017`'s inhibit set. The IRQ line does not rise, and the flag is set at 29830 only when uninhibited | never set while inhibited | `set_irq` loads `frame_interrupt_buffer` whatever the inhibit is, and `frame_int_disabled` clears only `FrameInterrupt` (`apu.sv:781-783`, `:811-814`, `:828-830`) | Frame Counter IRQ, code 19 ("J": the flag at 29828 while suppressed), and I, K and L beside it | **fixed**; agreement |
+| A2 | A `$4015` enable makes the DMC request wait out the enable's lag (3 cycles on a get, 2 on a put) whatever the buffer holds, so a buffer that empties inside the lag asks only once the lag ends | a full buffer at the write set no lag, so a buffer emptied 1–2 cycles later asked at once | `dma_req = ~have_buffer & enable_3` (`apu.sv:556`), and the enable runs its pipeline from the write whatever the buffer holds (`:593-594`, `:642-643`) | Delta Modulation Channel, code 21 ("L": the write 2 cycles before the timer's clock), and M and N | **fixed**; agreement; the lag is §3.10's 3:2, not refitted |
+| A3 | A length-halt write takes effect one cycle late: a halt written the cycle before a length clock does not stop that clock, and a release written then does not let it through | the clock saw the new halt | blargg's 2005 notes, "Write to halt flag is delayed by one clock" (`blargg_apu_2005.07.30/readme.txt`) | `10.len_halt_timing`, code 3 | **fixed**; the ROM is the witness; the RTL leaves it open (below) |
+| A4 | A length reload in the cycle before a length clock is lost when the count was running, because the clock decrements the old count. When the count was 0 the reload is kept and not decremented | reloaded, then decremented | `lc_on_1` is sampled at the get before the clock, and the clock overwrites the load: "This deliberately can overwrite being loaded from writes" (`apu.sv:32-33`, `:46-51`) | `11.len_reload_timing`, code 4 | **fixed**; agreement |
+| A5 | The noise table is in CPU cycles. The timer runs at the APU rate, so it reloads with half the entry less one | reloaded with the entry itself at the APU rate, so every period was 2(t+1) CPU cycles instead of t: 2.5× too long at the shortest, 2× at the longest | `noise_ntsc_lut` "read directly from the netlist" (`apu.sv:442`), counted to `'h400` on the put (`:458-466`). Stepping each seed gives 4, 8, 16 … 4068 CPU cycles, Moon's table exactly | none among the ROMs; the CPU cannot read the noise channel | **fixed**; netlist provenance, unit-tested |
+| A6 | The triangle's length and linear counters hold its sequencer, not its timer | the timer stopped with the sequencer | the timer reloads every period, and only `SeqPos` is gated on `IsNonZero & ~LinCtrZero` (`apu.sv:318-326`) | none; the CPU cannot read the triangle's phase | **fixed**; argued from the RTL, unit-tested |
+
+**Agreement, no change.** The RTL was also read for the rules below, and Moon already matches each one:
+
+- **The `$4017` delay.** `w4017_1` passes to `w4017_2` on the get (`apu.sv:818`), then `frame_reset_2` on the put
+  (`:826`), and the LFSR reloads `7FFF` on the next get (`:817`). That is 3 cycles for a write before a get and 4 for a
+  write before a put.
+- **The sequencer's cycles.** The LFSR takes 3728, 7456, 11185, 14914 and 18640 steps from `7FFF` to its five decodes.
+  In CPU cycles, with `ClkE`/`ClkL`'s one-cycle put delay, those are the clocks at 7457, 14913, 22371, 29829 and 37281.
+  Those are the six-entry table's clocks (Moon_APU.md §2.1), and the IRQ's decode starts at 29828.
+- **Five-step mode's immediate clock.** It falls when the delayed write lands (`w4017_2 & seq_mode`).
+- **A `$4015` read against the IRQ's set.** When a read clears the interrupt in the same cycle that `set_irq` sets it,
+  the set wins, because it comes later in the block (`:808-814`).
+- **The sweep.**
+  - It mutes the channel below period 8, or when an add carries out of 11 bits; a negate never mutes (`:167`).
+  - It writes a new period only when the shift is non-zero and the frequency is valid.
+  - Pulse 1 negates in ones' complement, pulse 2 in twos' (`:162`).
+- **The pulse sequencer and the envelope.**
+  - A `$4003` write resets the sequencer but not the timer (`:241-246`).
+  - The four duty patterns, read against `SeqPos` counting down, are Moon's table.
+  - The envelope's divider, decay and loop match.
+- **The DMC's pitch table.** Its LFSR seeds count out 428, 380 … 54 CPU cycles, Moon's table exactly.
+- **The rest of the DMC.**
+  - The output level moves in steps of 2 within 0–127.
+  - The silence flag is taken at the byte boundary.
+  - The IRQ rises on a non-looping last byte.
+  - A `$4010` write with bit 7 clear drops the IRQ.
+  - A `$4015` enable restarts the sample only when the channel was off.
+- **The length table.** The RTL stores each entry less one and counts to its own zero.
+
+**Candidates, argued only.** Each is a disagreement with no witness, recorded and not changed.
+
+- **K1, `$4011` against a DMC clock.** The put's level adjust starts from the level latched at the get
+  (`dmc_volume_next`, `apu.sv:571`, `:612-615`, `:645`). A `$4011` write between the two therefore loses bits 6–1.
+  Moon applies the write and the clock to the same value.
+- **K2, `$4015` disabling a channel.** The RTL clears the length counter at the next put (`:28`, through
+  `enabled_buffer`, `:991`). Moon clears it at once. Only a reload written in between could tell the two apart.
+- **K3, the triangle's linear reload value.** It is latched at the get (`LinCtrPeriod_1`, `:330`). A `$4008` write in
+  the cycle before a linear clock reloads the old value.
+- **K4, `$4015`'s bit 5.** The RTL drives it as 0 (`:1006`), without marking that as a hole. Moon takes it from the
+  internal bus (B3), where AccuracyCoin is the witness and overrules the RTL.
+- **K5, A3 and A4 on the other channels.** Pulse 2, the triangle and the noise channel share the same code, but both
+  ROMs use pulse 1 only. A *halted* count reloaded in the cycle before a clock keeps the reload, as the RTL's
+  `halt ? len_counter_int` does. blargg's "completely ignored" is stated only for the unhalted case.
+- **K6, the envelope's loop bit.** It is the same bit as the length halt, but A3 delays only the halt, which is all
+  that blargg's text says. The envelope's side is not tested.
+
+**Where the RTL leaves A3 open.** The clock uses `len_counter_next`, computed at the get before it from the halt as it
+stood then (`apu.sv:33`). It also consults the current `halt` (`:48`). Which of the two samples a write reaches depends
+on where the write falls inside the CPU cycle, and the RTL's level-sensitive `write` does not settle that. So the ROM
+is the only witness. In Moon's numbering blargg's two writes land at C−2 and C−1 for a clock at C, and C−1 is the only
+placement where both halves of each test agree. That places A3 and A4 in Moon's cycle numbering. Neither is a value
+fitted among alternatives.
+
+#### 3.12.2 The proofs
+
+**Tests that fail on the unmodified core** (`MoonApuDefectTests`, measured by stashing the core's directory):
+
+- `The_frame_flag_rises_for_two_cycles_while_the_irq_is_inhibited` (A1);
+- `An_enable_with_a_full_buffer_waits_out_its_lag` (A2), for the buffer emptying 1 and 2 cycles after the write;
+- `A_halt_written_the_cycle_before_a_clock_does_not_stop_it` (A3), with the write two cycles early as the control;
+- `A_reload_the_cycle_before_a_clock_is_lost_or_kept_whole` (A4), both halves;
+- `The_noise_channel_clocks_once_per_table_period` (A5), at indices 0, 3, 8 and 15. It takes the greatest common
+  divisor of the gaps between the output's changes;
+- `The_triangle_timer_runs_while_its_sequencer_is_held` (A6). Every step before and after a 1,234-cycle hold must sit on
+  one lattice of period + 1;
+- `Blarggs_2005_apu_tests_pass_on_both_engines`: all eleven of blargg's 2005 ROMs read `$F0` = 1 on each engine. They
+  run from `EMUSEN_MOONRT_CORPUS` when it is set, as the corpus test does. 10 and 11 fail on the unmodified core.
+
+**AccuracyCoin: 124 → 126 of 144** (measured 2026-09-29; the table at frame 3,620):
+
+| Page | Passed | Still failing (code) |
+|---|---|---|
+| 1–13 CPU, unofficial opcodes, interrupts, APU registers and DMA | 94 of 94 | — |
+| 14 APU | **9 of 9** (Frame Counter IRQ and Delta Modulation Channel now pass) | — |
+| 15 CPU behaviour 2 | 5 of 5 | — |
+| 17 PPU behaviour | 5 of 5 | — |
+| 18 PPU vblank timing | 7 of 7 | — |
+| 19 Sprite evaluation | 3 of 8 | `$2002` flag timing (1), suddenly resized sprite (5), arbitrary sprite zero (2), misaligned OAM (1), OAM corruption (2) |
+| 20 PPU miscellany | 2 of 7 | `$2004` (6), the rendering flag (2), `$2007` while rendering (2), the `$2004` and `$2007` stress tests (2 each) |
+| 21 Advanced background evaluation | 1 of 5 | stale shift registers (3), serial in (2), ALE + read (2), hybrid addresses (2) |
+| 22 Advanced sprite evaluation | 0 of 4 | sprites on scanline 0 (2), stale shift registers (3), frozen OAM2 increment (2), misaligned OAM2 address (3) |
+
+Every CPU and APU page now passes. All 18 remaining failures are on the PPU's pages 19–22 (§3.10.5).
+
+**The corpus:** unchanged at **105 passed**. Every ROM's outcome, frame count, reset count and transcript hash matches
+2d's. The runner's `$6000` protocol grades none of the four rules. blargg's 2005 set is graded by the test above: 9 of
+11 before, 11 of 11 now. On both engines the corpus test runs identically ROM by ROM.
+
+**The games:**
+
+- The four bench games' **CPU RAM** at frame 3,900 is identical to 2d's.
+- All eight **pictures** are byte-identical to 2d's.
+- The **state hashes** change, because the noise and triangle timers are part of the save state:
+
+  | Game | 900 | 3,900 |
+  |---|---|---|
+  | SMB | 5FEE46B00AE060B1 | 9E947B8B7F05CE56 |
+  | Zelda | D0F3FC71E3D9D4C1 | 6AEE7A8942BDE7CE |
+  | SMB3 | BA44BCE2704A4E0C | B0087A51E432D6AC |
+  | Punch-Out!! | 5DC308CD1083A630 | CC29D393FFAC1228 |
+
+- **Playability** from boot and from the 11 library states (§3.9.3): the same verdicts as 2d. Every run plays at
+  733.79 samples a frame, and the picture changes in the same number of seconds. There is no fault and no JAM, except
+  the SMB1 hack's resume state, which the base build also JAMs.
+
+**The save state stays version 4.** Every field the rules add is `[SkipInState]`:
+
+- the halt a length clock sees;
+- the count a reload replaced;
+- the flag that a channel register was just written.
+
+Each lives for one cycle after a write. A load re-derives them: the halt as the register holds it, and no reload
+pending. A state taken on the cycle right after a length write therefore loses that one cycle's delay, and both
+engines lose it identically.
+
+**MoonRT** carries all six rules in `apu/channels.rs` and `apu/mod.rs`, and the load's re-derivation in `machine.rs`.
+All of these pass:
+
+- 358 Moon-filtered WiseMan cases, including AccuracyCoin result for result and blargg's 2005 set on both engines;
+- the corpus test: 255 ROMs, 363,935 frames with identical state, 105 passed;
+- the crate's 6.
+
+**Reuse:** nothing here is shared with another core, and MarsRT is untouched.
+
+#### 3.12.3 The sound
+
+The four bench games were run for 3,900 frames with the bench's inputs, on 295ca478 and on this stage, once with the
+mix and once with each channel soloed through the debug mute (measured 2026-09-29):
+
+| | samples/frame | pulse 1, pulse 2, DMC | triangle RMS | noise RMS | mix RMS | clipped |
+|---|---|---|---|---|---|---|
+| SMB | 733.79 → 733.79 | identical | 818.9 → 819.1 | 723.3 → 597.7 | 2818.3 → 2806.7 | 0 → 0 |
+| Zelda | 733.79 → 733.79 | identical | 178.9 → 178.8 | 0 → 0 (unused) | 1058.9 → 1059.1 | 0 → 0 |
+| SMB3 | 733.79 → 733.79 | identical | 892.3 → 892.3 | 1389.1 → 1083.9 | 1985.0 → 1915.4 | 0 → 0 |
+| Punch-Out!! | 733.79 → 733.79 | identical | 1336.7 → 1337.1 | 813.2 → 775.3 | 2947.4 → 2945.2 | 0 → 0 |
+
+- **Pulse and DMC.** Both pulses' and the DMC's samples are byte-identical. None of A1–A4 is reached by these games'
+  playing.
+- **Noise.** The noise channel's samples change in every game that uses it (A5). Its RMS falls by 5–22%, because it now
+  toggles two to two and a half times as often. More of its energy then sits above the 14 kHz low-pass and inside each
+  output sample's box average. That is the expected consequence of the right pitch, not a level change.
+- **Triangle.** Its samples change slightly (A6). The phase it resumes at after a hold now depends on the free-running
+  timer.
+- **Nothing is broken.** No game went silent, no channel ran away, and none clipped. Peak levels are within 4% of
+  before.
+- **The mixer is unchanged.** `Mix`, the filters and the sample queue were not touched, and none of the six rules
+  needed them to be.
+
+#### 3.12.4 Negative results, and a retraction
+
+- **§3.11.3's "`$500` table not reproduced" was a misreading, and the table matched at 2d's head.** Retracted. It was
+  measured on 2026-09-29 by logging the test's own stores to `$500`–`$54F`. On 295ca478 and on this stage alike, those
+  stores are key 1, key 2 and key 3 exactly: `$50A` and `$50B` are 1, `$52A` is 1, and `$54A`–`$54F` are 4. The earlier
+  reading was taken from RAM after the test ended, as `dump` takes it. By then the ROM has stored zeros over
+  `$500`–`$521`, and those stores are in the same log. So the reading showed zeros that are not the test's results. No APU rule was needed.
+- **`dmc_tests` (four ROMs) could not be graded.** They have no text, no `$6000` or `$F0` protocol, and a plain grey
+  screen on both builds. The corpus's `tvsha1` hashes a television output this harness does not produce. They remain
+  unread.
+- **The RTL alone would not have found A3.** Read naively, `apu.sv:48` stops a clock with the newly written halt, which
+  is the defect. The rule came from blargg's notes and his ROM.
+
+#### 3.12.5 What is left
+
+- **Pages 19–22:** the per-dot PPU pipelines of §3.10.5, which hold all 18 remaining AccuracyCoin failures.
+- **K1–K6** above, and **C7** from §3.11: candidates with no witness.
+- **The mixer**, which is stage 3's.
 
 ## 4. Stages
 

@@ -1,5 +1,6 @@
 using System;
 using EmuSen.Common;
+using EmuSen.DianaOS.DianaOS.Var;
 
 namespace EmuSen.Cores.Nintendo.Moon.Processor
 {
@@ -70,6 +71,11 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
 
         // Set by BRK and the interrupt sequence, which end without polling; not state, as no state falls inside an instruction.
         [SkipInState] private bool _vectored;
+
+        // The call stack's seams: JSR, RTS and RTI, and every interrupt entered with the vector it took - see Moon_Debug.md §6.
+        [SkipInState] public Action<int, int>? CallObserver;
+        [SkipInState] public Action? ReturnObserver;
+        [SkipInState] public Action<int, int, CallFrameKind>? InterruptObserver;
 
         // SH*'s dummy read before the write was halted by DMA; set and spent inside one instruction.
         [SkipInState] private bool _unstableHalted;
@@ -201,12 +207,14 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
         {
             Read(PC);
             Read(PC);
+            ushort from = PC;
             Push((byte)(PC >> 8));
             Push((byte)PC);
             vector = hijackable ? HijackVector(vector) : NoHijack(vector);
             Push((byte)((P & ~(byte)CpuFlags.B) | (byte)CpuFlags.U));
             SetFlag(CpuFlags.I, true);
             PC = ReadVector(vector);
+            InterruptObserver?.Invoke(from, PC, vector == NmiVector ? CallFrameKind.Nmi : CallFrameKind.Irq);
         }
 
         // An NMI seen by the fourth cycle of BRK or IRQ takes over its vector, and is spent - see Moon_Native.md §3.10.

@@ -11,7 +11,7 @@ using EmuSen.DianaOS.DianaOS.Var;
 namespace EmuSen.Cores.Nintendo.Moon.Debug
 {
     // Where a target over a mirror sends what must reach the running machine - see Moon_Native.md §2.4.
-    public sealed record MoonDebugHost(Func<string, int, byte> Read, Action<string, int, byte> Write, Action Refresh, Action ApplyCheats, Func<long> FrameCount, Action<int, bool> SetChannelMuted);
+    public sealed record MoonDebugHost(Func<string, int, byte> Read, Action<string, int, byte> Write, Action Refresh, Action ApplyCheats, Func<long> FrameCount, Action<int, bool> SetChannelMuted, Func<int>? ProgramCounter = null);
 
     // The NES's IDebugTarget - the second implementation this interface has ever had. See Moon_Debug.md.
     public sealed class MoonDebugTarget : IDebugTarget, IWriteObserver
@@ -96,8 +96,16 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
 
         public IReadOnlyList<DebugCpu> DebugCpus => new[]
         {
-            new DebugCpu("cpu", "2A03", _core.Breakpoints),
+            new DebugCpu("cpu", "2A03", _core.Breakpoints)
+            {
+                Coverage = _core.Coverage,
+                CallStack = _core.CallStack,
+                CodeSpace = MoonCore.SpaceCpuBus,
+                ProgramCounter = _host?.ProgramCounter ?? (() => _core.Cpu?.PC ?? 0),
+            },
         };
+
+        public CallStackRegistry? CallStack => _core.CallStack;
 
         public void RefreshProviders()
         {
@@ -126,8 +134,12 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
             };
         }
 
-        public void OnWrite(string spaceName, int address, byte value) =>
+        // A store, as the watches record it and as a data breakpoint notes it - see `man bp`.
+        public void OnWrite(string spaceName, int address, byte value)
+        {
             Watches.RecordWrite(spaceName, address, value, DescribeWriteSite);
+            Breakpoints.NoteWrite(spaceName, address, value);
+        }
 
         private string DescribeWriteSite() =>
             _core.Cpu is null ? "" : $"PC=${_core.Cpu.LastInstructionPC:X4}";

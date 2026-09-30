@@ -56,6 +56,15 @@ namespace EmuSen.Cores.Nintendo.Moon
         }
         public CoverageRegistry Coverage { get; } = new();
         public LabelRegistry Labels { get; } = new();
+        public CallStackRegistry CallStack { get; } = new();
+
+        // The call stack serves step over and out, stamps its pushes with the frame, and shows coverage its entry points - see Moon_Debug.md §6.
+        public MoonCore()
+        {
+            Breakpoints.CallStack = CallStack;
+            CallStack.FrameNumberProvider = () => TotalFrames;
+            CallStack.EntryPointObserver = Coverage.RecordEntryPoint;
+        }
 
         public string CoreName => "NES";
 
@@ -99,8 +108,18 @@ namespace EmuSen.Cores.Nintendo.Moon
 
             // DMC fetches go through the real bus, so the APU only gets a reader once one exists.
 
-            Cpu = new Cpu(Bus);
+            Cpu = new Cpu(Bus)
+            {
+                CallObserver = (source, target) => CallStack.NotePush(source, target, CallFrameKind.Call),
+                ReturnObserver = CallStack.NotePop,
+                InterruptObserver = (source, target, kind) =>
+                {
+                    CallStack.NotePush(source, target, kind);
+                    Breakpoints.NoteInterrupt(kind);
+                },
+            };
             Bus.Cpu = Cpu;
+            CallStack.Reset();
 
             Ppu.Reset();
             Apu.Reset();
@@ -144,10 +163,13 @@ namespace EmuSen.Cores.Nintendo.Moon
             Ppu.SkipRendering = SkipRendering;
             Bus.ApuTraceFrame = (uint)TotalFrames;
 
+            // The halted scanline has had its cycles, so a resume must not earn them twice - see Moon_Debug.md §6.
+            bool earned = resuming;
             while (!_frameComplete)
             {
                 long deadline = NextScanlineBoundary;
-                _cpuBudget += EarnCpuCycles(deadline - _masterClock);
+                if (!earned) _cpuBudget += EarnCpuCycles(deadline - _masterClock);
+                earned = false;
 
                 // A halt returns without closing the phase, so the resumed frame keeps accumulating - see Moon_Debug.md §3.2.
                 long phaseStart = Stopwatch.GetTimestamp();
@@ -180,6 +202,7 @@ namespace EmuSen.Cores.Nintendo.Moon
 
                 resuming = false;
                 if (Coverage.IsArmed) Coverage.Record(Cpu.PC);
+                if (CallStack.IsProfiling) CallStack.NoteInstruction();
 
                 // The APU and PPU are clocked inside the CPU's own bus cycles now - see Moon_CPU.md §5.5.
                 _cpuBudget -= Cpu.Step();

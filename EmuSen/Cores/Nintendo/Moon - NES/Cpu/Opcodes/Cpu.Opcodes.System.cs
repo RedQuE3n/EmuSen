@@ -1,3 +1,5 @@
+using EmuSen.DianaOS.DianaOS.Var;
+
 namespace EmuSen.Cores.Nintendo.Moon.Processor
 {
     // Jumps, subroutine linkage, the software interrupt, and the do-nothings.
@@ -13,6 +15,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
             Push((byte)(P | 0x30));
             SetFlag(CpuFlags.I, true);
             PC = ReadVector(vector);
+            InterruptObserver?.Invoke(LastInstructionPC, PC, vector == NmiVector ? CallFrameKind.Nmi : CallFrameKind.Brk);
         }
 
         private void OpRTI()
@@ -24,6 +27,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
             byte lo = Pull();
             byte hi = Pull();
             PC = (ushort)(lo | (hi << 8));
+            ReturnObserver?.Invoke();
         }
 
         // JSR pushes the address of its own last byte, which is why RTS has to add one back.
@@ -35,6 +39,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
             Push((byte)PC);
             byte hi = Read(PC);
             PC = (ushort)(lo | (hi << 8));
+            CallObserver?.Invoke(LastInstructionPC, PC);
         }
 
         private void OpRTS()
@@ -45,6 +50,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
             PC = (ushort)(lo | (hi << 8));
             Read(PC);
             PC++;
+            ReturnObserver?.Invoke();
         }
 
         private void OpJMPIndirect()

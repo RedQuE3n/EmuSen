@@ -252,6 +252,7 @@ impl Machine {
         self.bus.forget_last_read();
         *self.bus.internal_bus = self.bus.open_bus;
         *self.bus.apu.frame_irq_readable = self.bus.apu.frame_irq_pending;
+        self.bus.apu.end_length_cycle();
         Ok(())
     }
 

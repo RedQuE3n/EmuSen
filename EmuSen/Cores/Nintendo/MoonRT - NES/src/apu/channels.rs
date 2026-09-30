@@ -103,6 +103,8 @@ pub struct PulseChannel {
     pub sweep_divider: i32,
     pub sweep_reload: bool,
     pub timer: i32,
+    pub clock_halt: Skip<bool>,
+    pub reloaded_from: Skip<Option<i32>>,
 }
 
 impl PulseChannel {
@@ -157,10 +159,35 @@ impl PulseChannel {
         self.sequence_step = (self.sequence_step + 1) & 0x07;
     }
 
-    pub fn clock_length(&mut self) {
-        if !self.length_halted && self.length_counter > 0 {
-            self.length_counter -= 1;
+    /// A `$4003`-style load: remembers the count it replaced, for a length clock in the next cycle.
+    pub fn load_length(&mut self, value: i32) {
+        if !self.enabled {
+            return;
         }
+        *self.reloaded_from = Some(self.length_counter);
+        self.length_counter = value;
+    }
+
+    /// The halt as it stood a cycle ago; a reload in the last cycle is lost when the count ran, kept whole when it was 0.
+    pub fn clock_length(&mut self) {
+        match *self.reloaded_from {
+            Some(from) if from > 0 => {
+                if !*self.clock_halt {
+                    self.length_counter = from - 1;
+                }
+            }
+            Some(_) => {}
+            None => {
+                if !*self.clock_halt && self.length_counter > 0 {
+                    self.length_counter -= 1;
+                }
+            }
+        }
+    }
+
+    pub fn end_length_cycle(&mut self) {
+        *self.clock_halt = self.length_halted;
+        *self.reloaded_from = None;
     }
 
     pub fn clock_sweep(&mut self) {
@@ -227,6 +254,8 @@ pub struct TriangleChannel {
     pub linear_reload: bool,
     pub sequence_step: i32,
     pub timer: i32,
+    pub clock_halt: Skip<bool>,
+    pub reloaded_from: Skip<Option<i32>>,
 }
 
 impl TriangleChannel {
@@ -245,15 +274,14 @@ impl TriangleChannel {
 
     #[inline(always)]
     pub fn step_timer(&mut self) {
-        if self.length_counter == 0 || self.linear_counter == 0 {
-            return;
-        }
         if self.timer > 0 {
             self.timer -= 1;
             return;
         }
         self.timer = self.timer_period;
-        self.sequence_step = (self.sequence_step + 1) & 0x1F;
+        if self.length_counter != 0 && self.linear_counter != 0 {
+            self.sequence_step = (self.sequence_step + 1) & 0x1F;
+        }
     }
 
     pub fn clock_linear(&mut self) {
@@ -267,10 +295,35 @@ impl TriangleChannel {
         }
     }
 
-    pub fn clock_length(&mut self) {
-        if !self.control_flag && self.length_counter > 0 {
-            self.length_counter -= 1;
+    /// A `$4003`-style load: remembers the count it replaced, for a length clock in the next cycle.
+    pub fn load_length(&mut self, value: i32) {
+        if !self.enabled {
+            return;
         }
+        *self.reloaded_from = Some(self.length_counter);
+        self.length_counter = value;
+    }
+
+    /// The halt as it stood a cycle ago; a reload in the last cycle is lost when the count ran, kept whole when it was 0.
+    pub fn clock_length(&mut self) {
+        match *self.reloaded_from {
+            Some(from) if from > 0 => {
+                if !*self.clock_halt {
+                    self.length_counter = from - 1;
+                }
+            }
+            Some(_) => {}
+            None => {
+                if !*self.clock_halt && self.length_counter > 0 {
+                    self.length_counter -= 1;
+                }
+            }
+        }
+    }
+
+    pub fn end_length_cycle(&mut self) {
+        *self.clock_halt = self.control_flag;
+        *self.reloaded_from = None;
     }
 }
 
@@ -312,11 +365,13 @@ pub struct NoiseChannel {
     pub enabled: bool,
     pub shift: i32,
     pub timer: i32,
+    pub clock_halt: Skip<bool>,
+    pub reloaded_from: Skip<Option<i32>>,
 }
 
 impl Default for NoiseChannel {
     fn default() -> Self {
-        NoiseChannel { envelope: Envelope::default(), length_counter: 0, length_halted: false, period_index: 0, short_mode: false, enabled: false, shift: 1, timer: 0 }
+        NoiseChannel { envelope: Envelope::default(), length_counter: 0, length_halted: false, period_index: 0, short_mode: false, enabled: false, shift: 1, timer: 0, clock_halt: Skip(false), reloaded_from: Skip(None) }
     }
 }
 
@@ -340,16 +395,41 @@ impl NoiseChannel {
             self.timer -= 1;
             return;
         }
-        self.timer = table(&NOISE_PERIOD, self.period_index);
+        self.timer = (table(&NOISE_PERIOD, self.period_index) >> 1) - 1;
         let tap = if self.short_mode { (self.shift >> 6) & 0x01 } else { (self.shift >> 1) & 0x01 };
         let feedback = (self.shift & 0x01) ^ tap;
         self.shift = (self.shift >> 1) | (feedback << 14);
     }
 
-    pub fn clock_length(&mut self) {
-        if !self.length_halted && self.length_counter > 0 {
-            self.length_counter -= 1;
+    /// A `$4003`-style load: remembers the count it replaced, for a length clock in the next cycle.
+    pub fn load_length(&mut self, value: i32) {
+        if !self.enabled {
+            return;
         }
+        *self.reloaded_from = Some(self.length_counter);
+        self.length_counter = value;
+    }
+
+    /// The halt as it stood a cycle ago; a reload in the last cycle is lost when the count ran, kept whole when it was 0.
+    pub fn clock_length(&mut self) {
+        match *self.reloaded_from {
+            Some(from) if from > 0 => {
+                if !*self.clock_halt {
+                    self.length_counter = from - 1;
+                }
+            }
+            Some(_) => {}
+            None => {
+                if !*self.clock_halt && self.length_counter > 0 {
+                    self.length_counter -= 1;
+                }
+            }
+        }
+    }
+
+    pub fn end_length_cycle(&mut self) {
+        *self.clock_halt = self.length_halted;
+        *self.reloaded_from = None;
     }
 }
 
@@ -444,7 +524,7 @@ impl DmcChannel {
         self.current_address as u16
     }
 
-    /// `SetEnabled`: an empty buffer asks for its first byte three cycles later on a get, two on a put.
+    /// `SetEnabled`: the request waits three cycles on a get, two on a put, full buffer or not.
     pub fn set_enabled(&mut self, value: bool, on_get_cycle: bool) {
         self.enabled = value;
         self.irq_pending = false;
@@ -453,7 +533,7 @@ impl DmcChannel {
             self.bytes_remaining = 0;
         } else if self.bytes_remaining == 0 {
             self.restart();
-            if !*self.buffer_full && self.bytes_remaining > 0 {
+            if self.bytes_remaining > 0 {
                 *self.load_delay = if on_get_cycle { 3 } else { 2 };
             }
         }

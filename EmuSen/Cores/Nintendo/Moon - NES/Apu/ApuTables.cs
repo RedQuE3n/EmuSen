@@ -26,7 +26,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
         };
 
-        // NTSC noise periods in APU cycles - see Moon_APU.md §3.4.
+        // NTSC noise periods in CPU cycles, which the 2A03 netlist's LFSR seeds count out - see Moon_Native.md §3.12.
         public static readonly int[] NoisePeriod =
         {
             4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068,

@@ -1,3 +1,5 @@
+using EmuSen.Common;
+
 namespace EmuSen.Cores.Nintendo.Moon.Apu
 {
     // Volume envelope shared by both pulses and the noise channel - see Moon_APU.md §3.1.
@@ -111,9 +113,33 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
             _sequenceStep = (_sequenceStep + 1) & 0x07;
         }
 
+        // What a length clock sees: the halt as it stood a cycle ago, and the count a reload in the last cycle replaced - see Moon_Native.md §3.12.
+        [SkipInState] private bool _clockHalt;
+        [SkipInState] private int _reloadedFrom = -1;
+
+        public void LoadLength(int value)
+        {
+            if (!_enabled) return;
+            _reloadedFrom = LengthCounter;
+            LengthCounter = value;
+        }
+
+        // A reload in the cycle before a clock is lost when the count was running, and is not decremented when it was 0.
         public void ClockLength()
         {
-            if (!LengthHalted && LengthCounter > 0) LengthCounter--;
+            if (_reloadedFrom > 0)
+            {
+                if (!_clockHalt) LengthCounter = _reloadedFrom - 1;
+                return;
+            }
+            if (_reloadedFrom == 0) return;
+            if (!_clockHalt && LengthCounter > 0) LengthCounter--;
+        }
+
+        public void EndLengthCycle()
+        {
+            _clockHalt = LengthHalted;
+            _reloadedFrom = -1;
         }
 
         public void ClockSweep()
@@ -164,11 +190,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
         // Silenced by period rather than by output, or it would emit a DC pop instead of nothing.
         public int Output => TimerPeriod < 2 ? 0 : ApuTables.TriangleSequence[_sequenceStep];
 
-        // Clocked at the full CPU rate, unlike every other channel.
+        // Clocked at the full CPU rate; the two counters gate the sequencer, never the timer - see Moon_Native.md §3.12.
         public void StepTimer()
         {
-            if (LengthCounter == 0 || _linearCounter == 0) return;
-
             if (_timer > 0)
             {
                 _timer--;
@@ -176,7 +200,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
             }
 
             _timer = TimerPeriod;
-            _sequenceStep = (_sequenceStep + 1) & 0x1F;
+            if (LengthCounter != 0 && _linearCounter != 0) _sequenceStep = (_sequenceStep + 1) & 0x1F;
         }
 
         public void ClockLinear()
@@ -187,9 +211,33 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
             if (!ControlFlag) _linearReload = false;
         }
 
+        // What a length clock sees: the halt as it stood a cycle ago, and the count a reload in the last cycle replaced - see Moon_Native.md §3.12.
+        [SkipInState] private bool _clockHalt;
+        [SkipInState] private int _reloadedFrom = -1;
+
+        public void LoadLength(int value)
+        {
+            if (!_enabled) return;
+            _reloadedFrom = LengthCounter;
+            LengthCounter = value;
+        }
+
+        // A reload in the cycle before a clock is lost when the count was running, and is not decremented when it was 0.
         public void ClockLength()
         {
-            if (!ControlFlag && LengthCounter > 0) LengthCounter--;
+            if (_reloadedFrom > 0)
+            {
+                if (!_clockHalt) LengthCounter = _reloadedFrom - 1;
+                return;
+            }
+            if (_reloadedFrom == 0) return;
+            if (!_clockHalt && LengthCounter > 0) LengthCounter--;
+        }
+
+        public void EndLengthCycle()
+        {
+            _clockHalt = ControlFlag;
+            _reloadedFrom = -1;
         }
     }
 
@@ -227,16 +275,41 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
                 return;
             }
 
-            _timer = ApuTables.NoisePeriod[PeriodIndex];
+            // The table is in CPU cycles and this timer runs at the APU rate - see Moon_Native.md §3.12.
+            _timer = (ApuTables.NoisePeriod[PeriodIndex] >> 1) - 1;
 
             int tap = ShortMode ? (_shift >> 6) & 0x01 : (_shift >> 1) & 0x01;
             int feedback = (_shift & 0x01) ^ tap;
             _shift = (_shift >> 1) | (feedback << 14);
         }
 
+        // What a length clock sees: the halt as it stood a cycle ago, and the count a reload in the last cycle replaced - see Moon_Native.md §3.12.
+        [SkipInState] private bool _clockHalt;
+        [SkipInState] private int _reloadedFrom = -1;
+
+        public void LoadLength(int value)
+        {
+            if (!_enabled) return;
+            _reloadedFrom = LengthCounter;
+            LengthCounter = value;
+        }
+
+        // A reload in the cycle before a clock is lost when the count was running, and is not decremented when it was 0.
         public void ClockLength()
         {
-            if (!LengthHalted && LengthCounter > 0) LengthCounter--;
+            if (_reloadedFrom > 0)
+            {
+                if (!_clockHalt) LengthCounter = _reloadedFrom - 1;
+                return;
+            }
+            if (_reloadedFrom == 0) return;
+            if (!_clockHalt && LengthCounter > 0) LengthCounter--;
+        }
+
+        public void EndLengthCycle()
+        {
+            _clockHalt = LengthHalted;
+            _reloadedFrom = -1;
         }
     }
 }

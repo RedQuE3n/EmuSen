@@ -322,6 +322,7 @@ namespace EmuSen.Cores.Nintendo.Moon
             Bus.ForgetLastRead();
             Bus.InternalBus = Bus.OpenBus;
             Apu.FrameIrqReadable = Apu.FrameIrqPending;
+            Apu.EndLengthCycle();
         }
     }
 }

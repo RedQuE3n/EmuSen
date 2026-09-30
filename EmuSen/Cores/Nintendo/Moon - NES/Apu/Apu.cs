@@ -47,6 +47,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
         // One tick blocks the next two cycles from producing another - see Moon_APU.md §2.2.
         private int _blockFrameCounterTick;
 
+        // A channel register was written last cycle, so the next length clock still sees the old halt and count.
+        [SkipInState] private bool _lengthWritten;
+
         // Parity decides the write delay, so the sequencer needs its own cycle count.
         private long _cycleCount;
 
@@ -145,6 +148,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
             SoftReset();
             Dmc.Reset();
             _buffer.Clear();
+            EndLengthCycle();
         }
 
         // RESET silences every channel and rewrites $4017 with the mode it already had - see Moon_APU.md §2.2.
@@ -164,6 +168,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
         public void WriteRegister(int address, byte value)
         {
             if (address >= 0x4000 && address <= 0x4013) Registers[address - 0x4000] = value;
+            if (address <= 0x400F) _lengthWritten = true;
 
             switch (address)
             {
@@ -184,7 +189,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
                 case 0x400A: Triangle.TimerPeriod = (Triangle.TimerPeriod & 0x700) | value; break;
                 case 0x400B:
                     Triangle.TimerPeriod = (Triangle.TimerPeriod & 0xFF) | ((value & 0x07) << 8);
-                    if (Triangle.Enabled) Triangle.LengthCounter = ApuTables.LengthCounter[value >> 3];
+                    Triangle.LoadLength(ApuTables.LengthCounter[value >> 3]);
                     Triangle.ReloadLinear();
                     break;
 
@@ -199,7 +204,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
                     Noise.PeriodIndex = value & 0x0F;
                     break;
                 case 0x400F:
-                    if (Noise.Enabled) Noise.LengthCounter = ApuTables.LengthCounter[value >> 3];
+                    Noise.LoadLength(ApuTables.LengthCounter[value >> 3]);
                     Noise.Envelope.Restart();
                     break;
 
@@ -247,7 +252,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
         private static void WritePulseHigh(PulseChannel pulse, byte value)
         {
             pulse.TimerPeriod = (pulse.TimerPeriod & 0xFF) | ((value & 0x07) << 8);
-            if (pulse.Enabled) pulse.LengthCounter = ApuTables.LengthCounter[value >> 3];
+            pulse.LoadLength(ApuTables.LengthCounter[value >> 3]);
             pulse.RestartSequencer();
         }
 
@@ -300,6 +305,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
                 }
 
                 StepFrameCounter();
+                if (_lengthWritten) EndLengthCycle();
 
                 _sampleAccumulator += Mix();
                 _sampleCount++;
@@ -359,8 +365,12 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
 
             if (_frameCycle >= steps[_frameStep])
             {
-                // Four-step mode holds the IRQ across all three of the sequence's last cycles.
-                if (!_stepMode && _frameStep >= 3 && !IrqInhibited) FrameIrqPending = FrameIrqReadable = true;
+                // Four-step mode holds the IRQ across the last three cycles; the flag rises on the first two even when inhibited - see Moon_Native.md §3.12.
+                if (!_stepMode && _frameStep >= 3)
+                {
+                    if (!IrqInhibited) FrameIrqPending = true;
+                    if (!IrqInhibited || _frameStep < 5) FrameIrqReadable = true;
+                }
 
                 int type = FrameTypes[_frameStep];
                 if (type != FrameNone && _blockFrameCounterTick == 0)
@@ -395,6 +405,15 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
             }
 
             if (_blockFrameCounterTick > 0) _blockFrameCounterTick--;
+        }
+
+        public void EndLengthCycle()
+        {
+            _lengthWritten = false;
+            Pulse1.EndLengthCycle();
+            Pulse2.EndLengthCycle();
+            Triangle.EndLengthCycle();
+            Noise.EndLengthCycle();
         }
 
         private void ClockQuarterFrame()

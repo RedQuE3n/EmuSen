@@ -91,6 +91,10 @@
     <None Include="..\EmuSen.Galaxia\Library\Catalogue\*.sql"
           Link="Library\Catalogue\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- The SNES corpus's recorded verdicts, which the runner reproduces - see VenusRT_Native.md §3.5. -->
+  <ItemGroup>
+    <None Include="Cores\VenusRtBaseline.tsv" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
   <Import Project="..\LunaP.props" />
 
 </Project>

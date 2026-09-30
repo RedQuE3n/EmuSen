@@ -1031,7 +1031,8 @@ that the retrain changes nothing measurable (P5). The retrain is done anyway, be
 
 **MercuryRT is paused** (since 2026-09-24). Step 4 touches a paused port, so §9's Q2 asks whether it is done then or
 when the port resumes. Until it is done, MercuryRT keeps its own ABI and bridge, and the shared crate carries no
-MercuryRT-only concession.
+MercuryRT-only concession. *Done 2026-09-30 (§12.5), as Q2 decided.* The shared crate still carries no MercuryRT-only
+concession. The Game Boy's parts are the `Model` setting and six `mercuryrt_*` extensions.
 
 ---
 
@@ -1041,14 +1042,14 @@ MercuryRT-only concession.
 
 | # | Prediction | Retired when |
 |---|---|---|
-| P1 | Every existing save state of every engine loads and re-saves byte-identically through the new host | Steps 2, 4 and 5 |
+| P1 | Every existing save state of every engine loads and re-saves byte-identically through the new host | Steps 2, 4 and 5. **Held for MercuryRT 2026-09-30** (§12.5) |
 | P2 | MoonRT's plain frame through the generic host is within ±1% of the bespoke `MoonRtCore`'s, interleaved | **Retired 2026-09-30, held:** −0.65% to +0.48% on the four games, geometric mean +0.06% (§12.3) |
 | P3 | MarsRT's plain frame is within ±1% of today's on each of the four measured states, retrained, interleaved | Step 5b |
-| P4 | The plain path's functions keep their sizes in MercuryRT's and MarsRT's symbol tables. Only `create` and the functions that allocate or configure the hooks differ | Steps 4 and 5 |
+| P4 | The plain path's functions keep their sizes in MercuryRT's and MarsRT's symbol tables. Only `create` and the functions that allocate or configure the hooks differ | Steps 4 and 5. **MercuryRT 2026-09-30: held for the plain path once one inlining loss was removed; the cold functions that differ include `load_state` and `write_space`; and equal sizes did not mean equal speed** (§12.5) |
 | P5 | Retraining MarsRT's profile moves no measured game by more than half a point against the stale profile | Step 5a |
 | P6 | The C# shims shrink from 2,514 lines (the eleven loader, handle, adapter and bridge files of §1.4) to about 1,900, the host about 850 of them | Step 5 |
 | P7 | The Rust `ffi` modules and hooks shrink by about 600 lines net, the shared crate gaining about 700 | Step 5 |
-| P8 | No test of the three RT suites changes an assertion; only constructors and names change | Steps 2, 4 and 5 |
+| P8 | No test of the three RT suites changes an assertion; only constructors and names change | Steps 2, 4 and 5. **Held for MercuryRT 2026-09-30** |
 
 P6 and P7 are estimates from the duplication of §1.3 and §1.4, not derivations. They are held to ±30%.
 
@@ -1056,7 +1057,8 @@ P6 and P7 are estimates from the duplication of §1.3 and §1.4, not derivations
 
 - **R1, layout.** Both 2D ports measured a few per cent from moving a field (`Mercury_Native.md` §8.5.5, `Mars_Native.md`
   §6.5.5). The shared `Hooks` stays behind each core's box, so the machine's field is still a pointer. The machine
-  structs are not otherwise touched. P4 and the timing steps are the guard.
+  structs are not otherwise touched. P4 and the timing steps are the guard. Step 4 showed that only the timing
+  guards placement: MercuryRT's plain frame lost 2.5–7.5% with every hot function the same size (§12.5).
 - **R2, the hasher.** §3.14. MarsRT's `HashMap` goes, and MoonRT is built with the `BTreeMap` from the first day.
   P4 is the guard.
 - **R3, the input semantics.** §3.8's finding. A host that re-sends whole masks would pass every test that does not load
@@ -1332,3 +1334,69 @@ measured and not kept.
 - **An "armed equals plain" helper in the crate** for the three cores' Rust tests, as MercuryRT's `tests/debug.rs`
   has for itself. The generic loop needs only `NativeCore`, but it was not written. MoonRT's oracle for it is the C#
   one, `MoonRtArmedEqualsPlainTests`, through the whole host.
+
+### 12.5 Step 4: MercuryRT on the interface (2026-09-30)
+
+**What moved.** The full record is in `Mercury_Native.md` §8.7. In outline:
+
+- **The library.** The 36 `mercury_*` exports became 37 `emusen_native_*` ones:
+  - the 24 every core has;
+  - `set_mutes` and `set_rom_patches`;
+  - the ten `debug_*` exports and `debug_set_stack`.
+- **Version and capabilities.** The version is `0x0001_0005`, and the capabilities are `MUTES | ROM_PATCHES | DEBUG |
+  DEBUG_STACK`.
+- **What only the Game Boy has.** The model is the create setting `Model`, and the battery save is file 0. Six
+  `mercuryrt_*` extensions carry the rest: the sample rate's two doubles, the serial log, `cgb_hardware`, `step`,
+  `rom_patch` and `ram_length`.
+- **The status codes.** They are −9, −10, −11 and −20, in the core's band. −20 has the opcode and pc in the detail word,
+  which `NativeMachine`'s new `FrameException` seam turns back into C#'s exception.
+- **The shim.** `MercuryRtCore` is over `NativeRtCore` and `NativeDebugBridge`. `LegacyNativeRtCore` and
+  `RomPatchTable` are deleted, and `LegacyNativeMachine` is left for MarsRT alone.
+- **The debugger** is on the shared `Hooks`, with the four changes §12.4 listed.
+- **CI.** The export count in `rust-cores.yml` now counts `emusen_native_` for MercuryRT and MoonRT. MoonRT's row
+  still counted `moon_`, which step 2 retired, so its job would have counted none and failed.
+
+**Oracles.** All hold:
+
+- The crate's tests pass.
+- 586 WiseMan tests over both engines pass: the Mercury, native-host, battery, engine and state-header ones.
+- A digest over the picture, the sound and the state matches pre-move MercuryRT on 24 runs. That is 7 games in the
+  three models from boot and from a state, and 3 library resume states.
+- The fallback to Mercury (C#), with `EMUSEN_MERCURY_NATIVE=0` and without the library, is tested in a child process.
+
+**P4 held for the plain path, and was not enough.** The symbol diff found one inlining regression, and once it was
+removed every function of the plain path had its old size. The functions that still differ are all cold, though not
+all are `create` or the hooks: `load_state`, the patch table's builder, and `write_space` by one byte. The plain frame
+was still 2.5–7.5% slower on DMG games. Built with functions and jump targets
+aligned, the moved core is as fast as the old one or faster, so what had moved was the linker's placement of unchanged
+code (`Mercury_Native.md` §8.7.3). MercuryRT is now built aligned, from its own `.cargo/config.toml`. It is 0.2–4.2%
+faster than before the move through `ICore`, and the armed frame costs 1.14–1.25× the plain one. §8.2's R1 therefore
+has a second half: sizes guard against what is inlined, but not against where it lands, and only a timing does.
+
+**Retired or advanced here.** P1 held for MercuryRT. The digest's library resume states, `MercuryRtStateTests`, and
+`MercuryDefectTests`' version-5 states from the unmodified build all load on the moved core and re-save as before.
+P8 held for step 4: no WiseMan assertion changed. The crate's `tests/debug.rs` changed only how the hooks are
+configured and read.
+
+**What the two 8-bit shims still duplicate**, as candidates for `NativeRtCore`. None was moved, so that this step
+changes MoonRT not at all.
+
+- The bridge's construction, one coverage table of `0x10000 / 8` over the mirror's registries, with the call stack's
+  frame provider.
+- `Debug`, `Pc` and the six registry pass-throughs: `Watches`, `FrameLog`, `Breakpoints`, `Coverage`, `Labels` and
+  `CallStack`.
+- The `WriteSpace` override that sends a listened CPU-bus store through `Observed`.
+- `ReportedName` and `ReportedSpace`, which are one table of (id, name) pairs.
+- `CheckState`'s magic-and-version check, with the two constants as parameters.
+- `MuteMask` as a loop over a channel count.
+
+Together that is about 60 lines in each shim.
+
+**Left for MarsRT, step 5:**
+
+- the hooks, profile and flags of §12.4;
+- `LegacyNativeMachine` deleted with its last user;
+- `rust-cores.yml`'s `symbol: mars_` changed with the exports;
+- the PGO retrain;
+- whether its placement matters as MercuryRT's did. PGO lays out the hot code already, so the prediction is that it
+  does not, and 5b's interleaved timing is the check.

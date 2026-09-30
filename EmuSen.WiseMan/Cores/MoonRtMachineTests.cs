@@ -189,7 +189,7 @@ namespace EmuSen.WiseMan.Cores
                 MoonRtPair pair;
                 try
                 {
-                    pair = new MoonRtPair(rom, skipRendering: true, stateEvery: 30, soundAndPicture: false);
+                    pair = new MoonRtPair(rom, skipRendering: false, stateEvery: 30);
                 }
                 catch (MoonRtPair.BothRefused)
                 {
@@ -251,7 +251,7 @@ namespace EmuSen.WiseMan.Cores
     {
         private const ushort Nmi = 0xC100, Irq = 0xC180, Palette = 0xC200;
 
-        public static byte[] Build(int mapper, int chrBanks, bool cycleIrq)
+        public static byte[] Build(int mapper, int chrBanks, bool cycleIrq, bool maskCycle = false)
         {
             var main = new Asm(0xC000);
             main.Op(0x78).Op(0xD8).Ldx(0xFF).Op(0x9A);
@@ -274,7 +274,14 @@ namespace EmuSen.WiseMan.Cores
             main.Inc(0x00).Lda(0x0000).Sta(0x6000).Lda(0x4016).Sta(0x0003).Lda(0x4017).Sta(0x0004).Jmp(loop);
 
             var nmi = new Asm(Nmi);
-            nmi.Op(0x48).LdaImm(0x01).Sta(0x4016).LdaImm(0x00).Sta(0x4016).LdaImm(0x02).Sta(0x4014).Inc(0x01).Lda(0x0001).Sta(0x2005).Sta(0x2005);
+            nmi.Op(0x48).LdaImm(0x01).Sta(0x4016).LdaImm(0x00).Sta(0x4016).LdaImm(0x02).Sta(0x4014).Inc(0x01);
+            if (maskCycle)
+            {
+                // A palette entry a frame, then $2001 with the frame's grayscale and emphasis bits and rendering on.
+                nmi.LdaImm(0x3F).Sta(0x2006).Lda(0x0001).AndImm(0x1F).Sta(0x2006).Lda(0x0001).Sta(0x2007);
+                nmi.Lda(0x0001).AndImm(0xE1).Op(0x09, 0x1E).Sta(0x2001);
+            }
+            nmi.Lda(0x0001).Sta(0x2005).Sta(0x2005);
             BoardNmi(nmi, mapper);
             nmi.Op(0x68).Op(0x40);
 
@@ -407,10 +414,13 @@ namespace EmuSen.WiseMan.Cores
 
         public readonly MoonCore Csharp;
         public readonly MoonMachine Rust;
-        private readonly bool _skip;
+        private bool _skip;
         private readonly int _stateEvery;
         private readonly bool _soundAndPicture;
         private readonly byte[] _frame = new byte[MoonMachine.FrameBytes];
+
+        // Frames between drains; between them the queues fill, and only their lengths are compared.
+        public int DrainEvery = 1;
         private long _samples;
         private int _frames;
         private string? _layout;
@@ -446,6 +456,13 @@ namespace EmuSen.WiseMan.Cores
                 Rust.Load(state);
             }
             CompareState("load");
+        }
+
+        public void SetSkip(bool skip)
+        {
+            _skip = skip;
+            Csharp.SkipRendering = skip;
+            Rust.SetOptions(skip);
         }
 
         public void Run(int frames, Func<int, (uint, uint)?>? script)
@@ -495,10 +512,17 @@ namespace EmuSen.WiseMan.Cores
 
             if (_soundAndPicture)
             {
-                short[] a = Csharp.DequeueAudioSamples(int.MaxValue), b = Rust.DrainAudio(int.MaxValue);
-                int same = a.AsSpan().CommonPrefixLength(b);
-                Assert.True(same == a.Length && a.Length == b.Length, $"frame {_frames}: {a.Length} C# samples, {b.Length} Rust, first difference at {same}");
-                _samples += a.Length;
+                if (_frames % DrainEvery == 0)
+                {
+                    short[] a = Csharp.DequeueAudioSamples(int.MaxValue), b = Rust.DrainAudio(int.MaxValue);
+                    int same = a.AsSpan().CommonPrefixLength(b);
+                    Assert.True(same == a.Length && a.Length == b.Length, $"frame {_frames}: {a.Length} C# samples, {b.Length} Rust, first difference at {same}");
+                    _samples += a.Length;
+                }
+                else
+                {
+                    Assert.True(Csharp.Apu!.BufferedSamples == Rust.BufferedSamples, $"frame {_frames}: {Csharp.Apu.BufferedSamples} C# samples queued, {Rust.BufferedSamples} Rust");
+                }
                 if (!_skip)
                 {
                     Rust.CopyFrame(_frame);

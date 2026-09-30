@@ -2460,6 +2460,38 @@ Re-confirmed at commit time: full suite **2,621 passed, 0 failed, 53s**; the fil
 
 **Since textures, `rdp-reference` also writes texture memory** at every sync, as a fifth record, through `get_tmem`, an accessor the angrylion library already exports; nothing in the checkout was changed to get it. The tool has to be rebuilt with `./build-probe.sh rdp` for the texture cases: an older binary writes no such record, the test then takes the reference's texture memory to be zeros, and the texture cases fail rather than pass (`Mars_RdpTextures.md` §7.1).
 
+### 3.59 The Mesen probe was paced at the console's rate, and the flag that was meant to stop it did not
+
+*Measured 2026-09-30, while building VenusRT's baseline (`VenusRT_Plan.md` §3.4).* The Mesen backend ran an SNES ROM at
+the console's frame rate, not flat out: 600 frames of gilyon's `cputest-full` took 10.11 s of wall time and 1.23 s of
+CPU, and 1,200 frames 20.07 s and 2.44 s. The whole corpus of 295 ROMs to frame 3600 took an hour of wall time with
+fourteen probes in parallel, almost all of it asleep.
+
+**Why the flag was not enough.** `probe_load` set `EmulationFlags::MaximumSpeed`, and several passages above were
+written on the understanding that it unpaces the machine (§3.45a's "thousands of frames a second"). Mesen's emulation
+loop reads a second, separate value: the configured emulation speed, `EmulationConfig.EmulationSpeed`, a percentage
+whose default is 100 and where 0 means unlimited. The frame-stop patch's own context line already shows the loop
+comparing it with 0 and 100. What the flag does on its own was not examined, because answering that means reading
+Mesen's emulation code, which VenusRT's clean-room protocol (`VenusRT_Plan.md` §1.2) keeps closed to anyone writing
+that core; the fix needed only the public settings API.
+
+**The fix** is three lines in `probe-c-api.patch`: read the `EmulationConfig`, set `EmulationSpeed` to 0 and write it
+back through `EmuSettings::SetEmulationConfig`, beside the existing flag. No Mesen source file was edited, and the ABI
+version stays 1 because no signature changed.
+
+**`build-probe.sh` needed a sentinel for it.** The add-only patch was applied only when `EmuSenProbeApi.cpp` was
+missing, so a checkout patched before the fix kept the old file and rebuilt nothing. The check is now a `grep` for the
+unlimited speed; a checkout without it has the file replaced from the patch. This is the rule §3.45b's frame-stop
+sentinel already follows: the sentinel names the newest behaviour, not the file's existence.
+
+**Measured after the fix**, on the same ROM and machine: 600 frames in 0.96 s of wall time and 0.81 s of CPU, 10.5×
+faster. VRAM, WRAM, APU RAM, CGRAM, OAM and the screen at frame 600 are byte-identical to the paced run's, as they must
+be if pacing only slept between frames.
+
+**Not covered.** Only the SNES was timed before the fix; whether an NES run was paced too was not measured. Audio
+recorded with `--wav` is taken before the device gate (§3.43), so it should not depend on pacing, but no recording was
+compared across the fix.
+
 ---
 
 ## 8. A note on the 2026-08-06 commit, for whoever runs `git log` and wonders

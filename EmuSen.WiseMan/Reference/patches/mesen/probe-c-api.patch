@@ -3,7 +3,7 @@ new file mode 100644
 index 00000000..d043f17d
 --- /dev/null
 +++ b/Core/Shared/EmuSenProbeApi.cpp
-@@ -0,0 +1,516 @@
+@@ -0,0 +1,522 @@
 +// A C ABI for EmuSen's reference probe - see EmuSen_Debugging_Tools_Reference_v5.md §3.52.
 +//
 +// This file exists so the probe can be written in a language that is not C++.
@@ -318,6 +318,12 @@ index 00000000..d043f17d
 +
 +		g_probe.Emu->Initialize();
 +		g_probe.Emu->GetSettings()->SetFlag(EmulationFlags::MaximumSpeed);
++		// The flag alone left the probe paced at the console's rate (measured 2026-09-30:
++		// 600 SNES frames in 10.1 s of wall time for 1.2 s of CPU). The pacing follows the
++		// configured emulation speed, where 0 means unlimited - see §3.52.
++		EmulationConfig ecfg = g_probe.Emu->GetSettings()->GetEmulationConfig();
++		ecfg.EmulationSpeed = 0;
++		g_probe.Emu->GetSettings()->SetEmulationConfig(ecfg);
 +
 +		// Stops LoadRom writing HomeFolder/RecentGames/<rom>.rgd, which embeds a
 +		// screenshot and a save state and therefore differs between two runs of

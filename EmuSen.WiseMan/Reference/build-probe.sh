@@ -317,7 +317,9 @@ grep -q g_probeStopArmed Core/Shared/Emulator.cpp         || git apply "$HERE/pa
 # Add-only: it creates Core/Shared/EmuSenProbeApi.cpp, which makefile:138 globs
 # in with no makefile edit, so it can never conflict on a rebase - see §3.52.
 # That glob is also exactly why this backend has no Windows host - see §3.54.
-[ -f Core/Shared/EmuSenProbeApi.cpp ]                     || git apply "$HERE/patches/mesen/probe-c-api.patch"
+# The sentinel is the unlimited emulation speed, so a checkout carrying the file from
+# before the pacing fix has it replaced rather than kept - see §3.52.
+grep -qs "EmulationSpeed = 0" Core/Shared/EmuSenProbeApi.cpp || { rm -f Core/Shared/EmuSenProbeApi.cpp; git apply "$HERE/patches/mesen/probe-c-api.patch"; }
 
 # STATICLINK=false: the stock recipe wants libstdc++.a, which Fedora splits out.
 # The makefile forces both off on Darwin anyway, so passing them is harmless.

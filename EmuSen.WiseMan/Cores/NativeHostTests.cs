@@ -54,6 +54,24 @@ namespace EmuSen.WiseMan.Cores
             Assert.EndsWith($"speaks common interface 1 core {MoonNative.CoreVersion}, this build common 1 core 999", wrong.Report);
         }
 
+        // A MercuryRT library that is not there is refused with the words the notice carries, and its capabilities agree with its exports.
+        [Fact]
+        public void MercuryRTs_library_is_on_the_common_interface_and_a_missing_one_is_refused()
+        {
+            var missing = NativeCoreLibrary.Common("mercuryrt_missing", "EMUSEN_MERCURYRT_MISSING_TEST", MercuryNative.CoreVersion, MercuryNative.RequiredCapabilities);
+            Assert.False(missing.Available);
+            Assert.Contains("not found beside the assemblies", missing.Report);
+
+            Assert.True(MercuryNative.Available, MercuryNative.Report);
+            Assert.Equal(MercuryNative.RequiredCapabilities, MercuryNative.Library.Capabilities);
+            nint handle = System.Runtime.InteropServices.NativeLibrary.Load(System.IO.Path.Combine(AppContext.BaseDirectory, MercuryNative.Library.FileName));
+            foreach (string name in NativeInterface.Required) Assert.True(System.Runtime.InteropServices.NativeLibrary.TryGetExport(handle, name, out _), name);
+            foreach (var (bit, name, exports) in NativeInterface.Optional)
+                foreach (string export in exports)
+                    Assert.True(System.Runtime.InteropServices.NativeLibrary.TryGetExport(handle, export, out _) == ((MercuryNative.Library.Capabilities & bit) != 0), $"{name}: {export}");
+            Assert.False(System.Runtime.InteropServices.NativeLibrary.TryGetExport(handle, "mercury_machine_new", out _), "the old mercury_* exports are retired");
+        }
+
         // The shared status table and each console's band, in the words the shims used before.
         [Fact]
         public void Each_machine_describes_the_shared_codes_and_its_own()

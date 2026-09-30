@@ -28,8 +28,8 @@ Venus was EmuSen's first core, and parts of it were taken from Mesen during earl
 value rests on its cores being independent implementations: a finding that "EmuSen agrees with Mesen" means nothing if
 EmuSen's rule was Mesen's to begin with. Venus cannot be made independent by editing it, because nobody can say which
 of its rules survived from the copied code. *Decided 2026-09-30:* Venus is replaced by a clean rewrite, VenusRT, and
-C# Venus keeps running SNES games in Mistress until VenusRT reaches parity (§7). Then it is deleted or moved to a
-legacy branch (§9, Q9).
+C# Venus keeps running SNES games in Mistress until VenusRT reaches parity (§7). Then it moves to a legacy branch
+(§9, Q9).
 
 ### 1.2 Who may read what
 
@@ -46,8 +46,8 @@ supervised step whose only product is one entry in the disputes log (§1.4). It 
 | C# Venus, **run** as a black box through `ICore` | yes, as a baseline | yes, as a baseline | Never an expected value (§1.6) |
 | C# Venus's **source**, and the algorithm sections of its pages (`Venus_CPU.md`, `Venus_PPU.md`, `Venus_APU.md`, `Venus_Memory.md`, `Venus_SA1.md`, `Venus_SuperFX.md`, `Venus_NecDSP.md`, `Venus_OBC1.md`, `Venus_Referee.md` §1–§9) | **no** | **no** | Not even in a dispute step |
 | C# Venus's **public surface**: its `ICore` members, declared interfaces, save files, debugger surface, cheat codecs' input formats | yes | yes | What parity means (§4) |
-| Other emulators' source (bsnes/higan/ares, snes9x, blargg's `snes_spc`, and the rest) | **no** | **no**, by recommendation | §9, Q4 |
-| The SNES Development Manual (Nintendo's, circulated without permission) | undecided | undecided | §9, Q1 |
+| Other emulators' source (bsnes/higan/ares, snes9x, blargg's `snes_spc`, and the rest) | **no** | **no** | §9, Q4 |
+| The SNES Development Manual (Nintendo's, circulated without permission) | **no** | **no** | §9, Q1; public documents that cite it are read as any document is |
 
 Three rules follow from the table:
 
@@ -103,8 +103,8 @@ weighting here. Only §0 of that page is cited: its later sections describe Venu
 protocol.
 
 The checkout is `github.com/MiSTer-devel/SNES_MiSTer` at `c61bfd4` (2026-09-17). It includes, beside what Venus
-supports, `rtl/chip/` folders for the Cx4, S-DD1, SPC7110, S-RTC, BS-X and Sufami Turbo, which matter only if §9's Q8
-widens the scope.
+supports, `rtl/chip/` folders for the Cx4, S-DD1, SPC7110, S-RTC, BS-X and Sufami Turbo, which matter only after retirement,
+when §9's Q8 takes them one at a time.
 
 ### 1.6 Why C# Venus is excluded as an oracle
 
@@ -149,7 +149,11 @@ path. No CPU, PPU, APU, DMA or coprocessor implementation was opened, and no Mes
 | **NEC µPD7725 / µPD96050 datasheets** | to be pinned in stage 5 | — | The DSP-n and ST01x instruction sets and timing; the firmware itself is the player's dump (§9, Q2) |
 
 anomie's documents could not be fetched mechanically on 2026-09-30 (romhacking.net answered each download with a page
-rather than the file). They are fetched by hand in stage 0, and their dates recorded then.
+rather than the file). They are fetched by hand in stage 0, and their dates recorded then. *Stage 0, 2026-09-30:* six
+of the eight were fetched from the Wayback Machine's captures of 2017-07-31: 191 (S-DSP, `$Revision: 1212`), 193
+(memory mapping, 1160), 194 (open bus and wrapping, 1126), 196 (registers, 1157), 198 (SPC700 cycles, 1126) and 199
+(timing, 1160), into `docs/anomie/` with their SHA-256 sums. 195 (ports) and 197 (SPC700 with the boot ROM) were not
+obtained: every capture of them replays as a page, not the file (`VenusRT_Native.md` §6).
 
 ### 2.2 Where the public documents are thin
 
@@ -204,7 +208,7 @@ and licences are in that folder's `PROVENANCE.txt`. 384 ROM files, 295 distinct 
 
 **Nothing like AccuracyCoin exists for the SNES** (searched 2026-09-30, a negative result): no single ROM grades a
 hundred-odd behaviours with one pass/fail table. The nearest are gilyon's exhaustive CPU tests and the higan
-collection taken together. §9's Q6 asks whether writing one belongs to this project.
+collection taken together. None is written during the rewrite (§9, Q6).
 
 ### 3.2 By component
 
@@ -248,6 +252,10 @@ Two runners are needed and neither exists in the repository yet (stage 0):
 - **Defect: it runs at the console's speed, not flat out.** 600 frames took 10.11 s of wall time and 1.22 s of CPU;
   1,200 took 20.07 s and 2.44 s. The probe's C ABI sets Mesen's maximum-speed flag, so something else paces it. Not
   investigated further in this step. The workaround used here is parallelism: fourteen probes at once over the corpus.
+  *Fixed at stage 0, 2026-09-30:* the pacing follows Mesen's configured emulation speed, a setting separate from the
+  flag, and the probe now sets it to unlimited through the public settings API. The same 600 frames take 0.96 s,
+  with every space and the screen byte-identical (`EmuSen_Debugging_Tools_Reference_v5.md` §3.59,
+  `VenusRT_Native.md` §5).
 - Usage is `EmuSen_Debugging_Tools_Reference_v5.md` §3.45–§3.54; positional arguments come before flags.
 
 ### 3.5 The old core's baseline (measured 2026-09-30)
@@ -354,7 +362,7 @@ Read from its public surface only (§1.2).
 `CoreFactory` gives the SNES two codecs: Pro Action Replay (auto-detect) and Game Genie (explicit). Game Genie patches
 ROM reads by CPU address through `IRomReadPatcher`; the pokes are applied once a frame through the debug target.
 VenusRT takes both through the common interface's `set_rom_patches` triples and `space_write`
-(`EmuSen_NativeCores.md` §3.12). Whether the codec classes themselves can be kept is §9's Q5.
+(`EmuSen_NativeCores.md` §3.12). The codec classes are rewritten in the shim, not kept (§9, Q5).
 
 ### 4.5 Save states and rewind
 
@@ -416,7 +424,7 @@ Each decision states the trade-off, the recommendation, and what the recommendat
 - **What spans do not cover:** effects below the granularity of "a register changes at dot *x*": the INIDISP early-read
   glitch (undisbeliever's `inidisp_*`), VRAM reads and writes during active display (`vram-mid-scanline-test`), and
   per-dot fetch-pipeline artefacts (lidnariq's `ppubusact`). These are accepted as known losses at first and listed
-  in §7's gate as named exceptions; §9's Q10 asks whether any must be modelled.
+  in §7's gate as named exceptions, and none is modelled before the default flips (§9, Q10).
 
 ### 5.2 CPU and bus timing
 
@@ -539,6 +547,9 @@ Each stage is a run of supervised steps of a few hours, with a check-in after ea
 | 8 | Parity gates: §7's list run in full, the goldens recorded, the clone check | §7 | 3 |
 | 9 | Retirement: the default flipped; after the waiting period, Venus removed or moved; Pharaoh's and Hotaru's Venus uses given equivalents or retired | §7 | 1 |
 
+*Stage 0 was run on 2026-09-30, with the crate skeleton, the probe's pacing fix and the clone check brought forward
+into it; `VenusRT_Native.md` §1 is its record.*
+
 About 44 steps, or 130–160 hours (P3). Stage 6 can run after stage 4, before the coprocessors, so that the player gets
 the engine for ordinary cartridges early; games with a chip then fall back to Venus with a notice until stage 5 lands.
 That order is recommended, and the table keeps the order in which the stages depend on each other.
@@ -571,7 +582,7 @@ Two gates: one to make VenusRT Mistress's SNES default, and one to remove C# Ven
   write the entries.
 
 **To remove C# Venus:** VenusRT has been the default for four weeks of play with no open regression against Venus
-(each report either fixed or shown to be Venus's behaviour, not hardware's), and §9's Q9 is answered.
+(each report either fixed or shown to be Venus's behaviour, not hardware's). It then moves to a legacy branch (§9, Q9).
 
 ---
 
@@ -604,34 +615,34 @@ console part as §4.5 of `EmuSen_NativeCores.md` lays out for the other three.
 
 ---
 
-## 9. Open questions, each with a recommendation
+## 9. Questions, decided 2026-09-30
 
-- **Q1. May the SNES Development Manual be used as a source?** It is Nintendo's, circulated without permission. It is
-  the only first-party register description, and parts of the public documents already rest on it. *Recommendation:*
-  not as a source for writers. Public documents that cite it are used as any document is. If it is ever allowed, it
-  enters §2's table with its version, and every rule taken from it is marked so that the record can be audited.
-- **Q2. How is coprocessor firmware obtained?** As today: the player's own dumps, found or picked through
-  `FirmwareLibrary` (`EmuSen_Firmware.md` §5 is why nothing ships). *Recommendation:* keep it, with no high-level
-  emulation of the DSPs; VenusRT reads the same files, combined or split.
-- **Q3. How much accuracy is traded for speed on the handheld and the weak laptop?** *Recommendation:* none by default
-  and no second "fast" core. If §5.5's budget is missed, the first lever is the SA-1 slice bound (§5.4), which changes
-  only contention timing, and it becomes a setting before anything in the PPU or CPU is loosened.
-- **Q4. Are other emulators' sources excluded as Mesen's is?** *Recommendation:* yes, all of them, with the MiSTer RTL
-  the only implementation read, and only in dispute steps.
-- **Q5. Can the cheat codecs be kept?** They encode two public cheat formats and sit in Venus's folder.
-  *Recommendation:* rewrite them in the shim (about 140 lines), because provenance is judged by folder under this
-  protocol and the cost is small.
-- **Q6. Should the project write an SNES accuracy ROM of its own?** Nothing like AccuracyCoin exists (§3.1).
-  *Recommendation:* not during the rewrite; disputes produce small test ROMs anyway (§1.4), and collecting them into one
-  suite afterwards is the cheaper route.
-- **Q7. What happens to Venus's `.resume.state` files in the library?** They cannot load (§4.5). *Recommendation:* a
-  cold boot with a one-line notice; no converter.
-- **Q8. Does the scope grow beyond parity?** Cx4, S-DD1, SPC7110, ST018, S-RTC, BS-X, Sufami Turbo, MSU-1, overscan,
-  the mouse, the Super Scope and the multitap. *Recommendation:* after retirement, one at a time, each with its oracle.
-- **Q9. Is C# Venus deleted or moved to a legacy branch?** *Recommendation:* a legacy branch, as was decided for the
-  other C# cores, so that §3.5's baseline stays reproducible.
-- **Q10. Which of §5.1's named losses must be modelled?** *Recommendation:* none before the default flips, unless a
-  game in the goldens needs one; each is then its own stage with its undisbeliever ROM as the oracle.
+Each question as it was put, and its decision. Every recommendation this page made was accepted as written.
+
+1. **Q1, may the SNES Development Manual be used as a source?** It is Nintendo's, circulated without permission, the
+   only first-party register description, and parts of the public documents already rest on it. Decided: it is not a
+   source for writers. Public documents that cite it are used as any document is (§1.2, §2).
+2. **Q2, how is coprocessor firmware obtained?** Decided: as today, from the player's own dumps, found or picked
+   through `FirmwareLibrary` (`EmuSen_Firmware.md` §5 is why nothing ships). There is no high-level emulation of the
+   DSPs, and VenusRT reads the same files, combined or split (§4.2).
+3. **Q3, how much accuracy is traded for speed on the handheld and the weak laptop?** Decided: none by default, and
+   no second "fast" core. If §5.5's budget is missed, the first lever is the SA-1 slice bound (§5.4), which changes only
+   contention timing, and it becomes a setting before anything in the PPU or CPU is loosened.
+4. **Q4, are other emulators' sources excluded as Mesen's is?** Decided: yes, all of them. The MiSTer RTL is the only
+   implementation read, and only in dispute steps (§1.2, §1.5).
+5. **Q5, can Venus's cheat codecs be kept?** They encode two public cheat formats and sit in Venus's folder. Decided:
+   they are rewritten in the shim, about 140 lines, because provenance is judged by folder under this protocol and the
+   cost is small (§4.4).
+6. **Q6, should the project write an SNES accuracy ROM of its own?** Decided: not during the rewrite. Disputes produce
+   small test ROMs anyway (§1.4), and collecting them into one suite afterwards is the cheaper route (§3.1).
+7. **Q7, what happens to Venus's `.resume.state` files in the library?** They cannot load (§4.5). Decided: a cold boot
+   with a one-line notice, and no converter.
+8. **Q8, does the scope grow beyond parity?** Cx4, S-DD1, SPC7110, ST018, S-RTC, BS-X, Sufami Turbo, MSU-1, overscan,
+   the mouse, the Super Scope and the multitap. Decided: only after retirement, one at a time, each with its oracle.
+9. **Q9, is C# Venus deleted or moved to a legacy branch?** Decided: moved to a legacy branch, as was decided for the
+   other C# cores, so that §3.5's baseline stays reproducible (§7).
+10. **Q10, which of §5.1's named losses must be modelled?** Decided: none before the default flips, unless a game in
+    the goldens needs one. Each is then its own stage, with its undisbeliever ROM as the oracle (§5.1, §7's G3).
 
 ---
 
@@ -639,7 +650,7 @@ console part as §4.5 of `EmuSen_NativeCores.md` lays out for the other three.
 
 - No SNES counterpart of AccuracyCoin was found (§3.1).
 - anomie's documents could not be downloaded mechanically (§2.1).
-- The Mesen probe does not run flat out (§3.4).
+- ~~The Mesen probe does not run flat out (§3.4).~~ Fixed at stage 0 (§3.4).
 - The Legion Go S was unreachable, so the handheld column of §5.5 is argued, not measured.
 - Two benched games did not reach gameplay, and no bench scene was verified by screenshot.
 

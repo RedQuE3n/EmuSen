@@ -2464,8 +2464,8 @@ Re-confirmed at commit time: full suite **2,621 passed, 0 failed, 53s**; the fil
 
 *Measured 2026-09-30, while building VenusRT's baseline (`VenusRT_Plan.md` §3.4).* The Mesen backend ran an SNES ROM at
 the console's frame rate, not flat out: 600 frames of gilyon's `cputest-full` took 10.11 s of wall time and 1.23 s of
-CPU, and 1,200 frames 20.07 s and 2.44 s. The whole corpus of 295 ROMs to frame 3600 took an hour of wall time with
-fourteen probes in parallel, almost all of it asleep.
+CPU, and 1,200 frames 20.07 s and 2.44 s. The whole corpus of 295 ROMs to frame 3600 took about 25 minutes of wall
+time with fourteen probes in parallel (from its dumps' times), almost all of it asleep.
 
 **Why the flag was not enough.** `probe_load` set `EmulationFlags::MaximumSpeed`, and several passages above were
 written on the understanding that it unpaces the machine (§3.45a's "thousands of frames a second"). Mesen's emulation
@@ -2488,9 +2488,23 @@ sentinel already follows: the sentinel names the newest behaviour, not the file'
 faster. VRAM, WRAM, APU RAM, CGRAM, OAM and the screen at frame 600 are byte-identical to the paced run's, as they must
 be if pacing only slept between frames.
 
-**Not covered.** Only the SNES was timed before the fix; whether an NES run was paced too was not measured. Audio
-recorded with `--wav` is taken before the device gate (§3.43), so it should not depend on pacing, but no recording was
-compared across the fix.
+**The fix exposed a second defect: the first screen of an unpaced run is stale.** The whole VenusRT corpus, 295 ROMs
+at frames 1800 and 3600, was dumped again with the unpaced probe and compared with the paced dumps of the same day.
+All 2,270 memory dumps were byte-identical. 42 of the 590 screens were not, on 24 ROMs, every one an undisbeliever
+effect whose picture changes each frame. On one of them (`vmain-vertical-scrolling`) the unpaced probe was run three
+times to frame 1800 and gave the same screen each time, so the difference is not a race between runs; run from 1797 to
+1803 at stride 1, its screen at 1800 equalled the paced dump exactly, and its screen at 1797, the first report,
+equalled the stale one the single-frame run had returned. So when the probe arrives at a report frame from far behind
+at unlimited speed, memory is current and the screen is a picture from some earlier frame; a frame run on its own
+after a park is right. Which buffer Mesen hands back, and why pacing hid it, was not examined, for the reason above.
+
+**The second fix** is also in the probe's glue: `probe_run_until` runs to the frame before its target, parks, and runs
+the last frame on its own (`RunToFrame`, which is now `build-probe.sh`'s sentinel). *Measured after it:* see
+`VenusRT_Native.md` §5, where the corpus's screens are compared with the paced dumps again.
+
+**Not covered.** Only the SNES was timed before the fix; whether an NES run was paced too was not measured, and the
+stale first screen was examined only on the SNES. Audio recorded with `--wav` is taken before the device gate
+(§3.43), so it should not depend on pacing, but no recording was compared across the fix.
 
 ---
 

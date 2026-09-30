@@ -24,5 +24,11 @@
       <Console>the NES</Console>
       <Fallback>Moon (C#)</Fallback>
     </EmuSenRustCrate>
+    <EmuSenRustCrate Include="venusrt">
+      <Dir>$(MSBuildThisFileDirectory)Nintendo\VenusRT - SNES\</Dir>
+      <Core>VenusRT</Core>
+      <Console>the SNES</Console>
+      <Fallback>Venus (C#)</Fallback>
+    </EmuSenRustCrate>
   </ItemGroup>
 </Project>

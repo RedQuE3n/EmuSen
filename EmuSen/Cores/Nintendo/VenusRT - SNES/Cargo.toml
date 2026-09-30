@@ -1,0 +1,26 @@
+[package]
+name = "venusrt"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# VenusRT, the SNES core in Rust, written from hardware documents and graded by test ROMs, behind the common native interface. See VenusRT_Plan.md and VenusRT_Native.md.
+[lib]
+name = "venusrt"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+emusen-native = { path = "../../Shared/emusen-native" }
+
+[profile.release]
+panic = "abort"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+debug = "line-tables-only"
+
+# What ships: release without the line tables a sampler reads - see Mars_Native.md §6.3.
+[profile.dist]
+inherits = "release"
+debug = false
+strip = "debuginfo"

@@ -55,10 +55,10 @@ jobs:
             symbol: mars_
           - name: mercuryrt
             dir: 'EmuSen/Cores/Nintendo/MercuryRT - GB'
-            symbol: mercury_
+            symbol: emusen_native_
           - name: moonrt
             dir: 'EmuSen/Cores/Nintendo/MoonRT - NES'
-            symbol: moon_
+            symbol: emusen_native_
         platform:
           # ubuntu-22.04 for its glibc (2.35), so the library loads on older distributions than the one that built it.
           - rid: linux-x64

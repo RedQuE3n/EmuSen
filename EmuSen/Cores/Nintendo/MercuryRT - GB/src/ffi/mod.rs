@@ -263,12 +263,11 @@ pub unsafe extern "C" fn mercuryrt_step(handle: *mut Machine) -> i32 {
 pub unsafe extern "C" fn mercuryrt_rom_patch(handle: *const Machine, address: u32, original: u32) -> i32 {
     let Some(m) = (unsafe { handle.as_ref() }) else { return STATUS_NULL };
     let (Ok(address), Ok(original)) = (u16::try_from(address), u8::try_from(original)) else { return -1 };
-    match &*m.bus.rom_patches {
-        Some(map) => match map.get(&address) {
-            Some(entries) if entries[original as usize] != 0 => (entries[original as usize] & 0xFF) as i32,
-            _ => -1,
-        },
-        None => -1,
+    // A scan, not `get`: a second call site of the map's `get` stops it being inlined into the plain bus read (Mercury_Native.md §8.7).
+    let found = m.bus.rom_patches.as_ref().and_then(|map| map.iter().find(|(a, _)| **a == address).map(|(_, t)| t[original as usize]));
+    match found {
+        Some(entry) if entry != 0 => (entry & 0xFF) as i32,
+        _ => -1,
     }
 }
 

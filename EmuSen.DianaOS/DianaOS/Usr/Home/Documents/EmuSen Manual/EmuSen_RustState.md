@@ -41,6 +41,7 @@ The three cores' sources lost 1,624 lines and gained 260, 51 of them MarsRT's ne
 | `ffi::status` | The status codes the crate owns (§3). |
 | `ffi::{Status, result, input, copy_text}` | The helpers every export uses. |
 | `ffi::StateMachine`, `state_exports!` | A machine whose whole state is one walk, and the four exports over it (load, size, save, layout) under names the core chooses. |
+| `SampleQueue` | C#'s `EmuSen.Common.SampleQueue`: a core's undrained stereo samples. `push_pair` queues a pair, then drops the oldest pairs until the queue is within its limit. `drain` takes whole pairs only. `set_limit` takes hold at the next pair. Added 2026-09-30; see §2.1. It is not part of any state. |
 
 **What stays in a core:**
 
@@ -58,6 +59,35 @@ The three cores' sources lost 1,624 lines and gained 260, 51 of them MarsRT's ne
 - `impl From<Truncated> for StateError`, and `ffi::Status` for it;
 - `StateMachine` for the machine, and one `state_exports!` line;
 - a `naming.rs` of one test calling `naming::check` over its modules.
+
+### 2.1 The audio queue (added 2026-09-30)
+
+MoonRT and MercuryRT each carried the same queue in their mixers:
+
+- a `VecDeque<i16>` and a limit;
+- the push of a pair, with the trim loop that follows it;
+- the whole-pair drain.
+
+The two copies differed only in the queue's initial capacity. They are now one `SampleQueue`, and each core's
+`*_machine_set_audio_limit` and `*_machine_audio_buffered` exports call it. The C# twin, which the host drives
+through `AudioSettings.AudioBufferMaxSamples`, is `EmuSen/Common/SampleQueue.cs`
+(`EmuSen_Settings_Reference.md` §4.85.2).
+
+**What proves nothing changed (measured 2026-09-30):**
+
+- MercuryRT: its platform cases hold its sound to the SHA-256 digests recorded on linux-x64 before the change, byte
+  for byte, on all four programs. Its machine cases still match the C# Mercury's samples every frame.
+- MoonRT: `MoonRtSoundAndPictureTests` compares its queue with the C# one under limits of 0, 3, 500, 1,001, 2,000 and
+  128,000, with the queue left undrained for up to seven frames (`Moon_Native.md` §8.2).
+
+**MarsRT is not moved.** Its audio interface (`memory/ai.rs`) is a different shape, and its Rust stays as it is until
+the PGO profile is retrained. It joins at its migration step. The crate's new module is not reached from MarsRT's code.
+This was measured on 2026-09-30. MarsRT was built in release twice from the same path, once with the crate as it was
+and once with the queue added. The two libraries' disassemblies are the same instruction for instruction, once
+addresses and the crate hash in mangled names are set aside. Their `.text`, `.rodata` and `.data` sections are the
+same size. The only other difference is `samples.rs` in the line tables' file list. The files are not byte-identical,
+because a change to a crate's source changes the hash inside every mangled name. So byte identity is not the test
+here.
 
 ## 3. The status codes
 
@@ -236,6 +266,7 @@ use. The cores' oracles cover only the paths their own formats take.
   - the `*_interface_version` export and the C# loaders around it (`MoonNative.cs` and `MercuryNative.cs` differ only
     in their names and numbers; `MarsNative.cs` is a superset);
   - the ROM-patch tables (`*_machine_set_rom_patches`) in MercuryRT and MoonRT, the same shape;
-  - the audio queue and its drain export (`*_machine_drain_audio`);
+  - the audio queue and its drain export (`*_machine_drain_audio`). *The queue was extracted on 2026-09-30 (§2.1);
+    the exports are still each core's own.*
   - MoonRT's fault helper (`Fault`, `at`, `put`, `rem`). It is used by one core so far, but the C#-exception-as-status
     pattern applies to any core ported from a C# core that throws.

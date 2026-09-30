@@ -1324,8 +1324,8 @@ measured and not kept.
   - its flags are renumbered (`COVERAGE` 16 → bit 8, `PROFILING` 32 → 16);
   - `note_call`'s `interrupt: bool` becomes a kind;
   - `mercury_debug_*` becomes `emusen_native_debug_*`, with `mercury_machine_pc` becoming `debug_pc`.
-  Its `ObservedBus` stays its own. Not done now, since it is step 4's with its oracles, and the brief for this step
-  held it back unless trivially safe; the renumbered flags alone make it not trivial.
+  Its `ObservedBus` stays its own. Not done now: it is step 4's, with its oracles, and was
+  to be done here only if trivially safe; the renumbered flags alone make it not trivial.
 - **MarsRT.** Its hooks move with its profile (`HashMap` → `BTreeMap`), its 24- and 12-bit coverage onto
   `Hooks::new(&[24, 12])`, and its `PROFILING` 64 and `RSP_COVERAGE` 32 onto 16 and bit 9. That is step 5, with the
   PGO retrain after it. Its Rust is untouched here.

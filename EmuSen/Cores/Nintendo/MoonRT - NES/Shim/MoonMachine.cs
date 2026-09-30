@@ -1,78 +1,70 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using EmuSen.Cores.Native;
 
 namespace EmuSen.Cores.Nintendo.MoonRT
 {
-    // MoonRT's machine behind its handle, its state read and written in the C# Moon's own format - see Moon_Native.md §3.2.
+    // MoonRT's machine behind the common interface, its state read and written in the C# Moon's own format - see Moon_Native.md §3.2, §8.3.
     public sealed unsafe class MoonMachine : NativeMachine
     {
-        private static readonly NativeExports Exports = new(MoonNative.Library, "moon_machine_");
-        private static readonly delegate* unmanaged<byte*, nuint, int*, nint> New = (delegate* unmanaged<byte*, nuint, int*, nint>)MoonNative.Export("moon_machine_new");
-        private static readonly delegate* unmanaged<nint, int> RunFrameOf = (delegate* unmanaged<nint, int>)MoonNative.Export("moon_machine_run_frame");
-        private static readonly delegate* unmanaged<nint, int> ResetOf = (delegate* unmanaged<nint, int>)MoonNative.Export("moon_machine_reset");
-        private static readonly delegate* unmanaged<nint, int> StepOf = (delegate* unmanaged<nint, int>)MoonNative.Export("moon_machine_step");
-        private static readonly delegate* unmanaged<nint, int, uint, void> SetButtonsOf = (delegate* unmanaged<nint, int, uint, void>)MoonNative.Export("moon_machine_set_buttons");
+        private static readonly delegate* unmanaged<nint, int> StepOf = (delegate* unmanaged<nint, int>)MoonNative.Export("moonrt_step");
+        private static readonly delegate* unmanaged<nint, uint, uint, int> RomPatchOf = (delegate* unmanaged<nint, uint, uint, int>)MoonNative.Export("moonrt_rom_patch");
 
         public const int FrameBytes = 256 * 240 * 4;
 
         // MoonCore.Spaces' names, numbered as the C ABI numbers them.
         public static readonly string[] SpaceNames = { "RAM", "PRGROM", "PRGRAM", "CHR", "CIRAM", "OAM", "PALETTE", "CPUBUS" };
 
-        public static bool Available => New != null;
+        public static bool Available => MoonNative.Available;
 
-        public static bool Complete => Available && Exports.SetRomPatches != null && ResetOf != null && Exports.SetAudioLimit != null;
+        public static bool Complete => Available && StepOf != null;
 
-        // The iNES image; the board is built from the header as C# builds it.
-        public MoonMachine(ReadOnlySpan<byte> image) : base(Exports, "MoonRT", Describe)
+        // The iNES image, and the battery save as file 0; the board is built from the header as C# builds it.
+        public MoonMachine(ReadOnlySpan<byte> image, byte[]? battery = null)
+            : base(MoonNative.Api, "MoonRT", "Moon", Own, OwnWords, image, "", battery is null ? Array.Empty<(uint, byte[])>() : new[] { (0u, battery) })
         {
-            if (!Available) throw new InvalidOperationException($"MoonRT is not in use: {MoonNative.Report}");
-            int status;
-            nint handle;
-            fixed (byte* data = image) handle = New(data, (nuint)image.Length, &status);
-            if (handle == 0) throw Refusal(status);
-            Attach(handle);
         }
 
         // The C# exception MoonCore.LoadRom or RunFrame would have thrown for this status - see Moon_Native.md §6.2, D4.
-        public static Exception Refusal(int status) => status switch
+        public static Exception Refusal(int status) => Own(status) ?? status switch
+        {
+            NativeInterface.FaultBase - 1 => new IndexOutOfRangeException("Index was outside the bounds of the array."),
+            NativeInterface.FaultBase - 2 => new DivideByZeroException("Attempted to divide by zero."),
+            _ => new InvalidOperationException($"MoonRT refused: {Describe(status)}."),
+        };
+
+        private static Exception? Own(int status) => status switch
         {
             -9 => new InvalidDataException("Not an iNES image: missing the \"NES\\x1A\" magic."),
             -10 => new NotSupportedException("The iNES mapper is not implemented - see Moon_Memory.md §4 for what is."),
             -11 => new InvalidDataException("The header claims more PRG than the file holds."),
-            -31 => new IndexOutOfRangeException("Index was outside the bounds of the array."),
-            -32 => new DivideByZeroException("Attempted to divide by zero."),
-            -33 => new ArgumentOutOfRangeException("masterDelta", "A clock cannot run backwards."),
-            _ => new InvalidOperationException($"MoonRT refused: {Describe(status)}."),
+            NativeInterface.FaultBase - 3 => new ArgumentOutOfRangeException("masterDelta", "A clock cannot run backwards."),
+            _ => null,
         };
 
-        public void RunFrame()
-        {
-            int status = RunFrameOf(Handle);
-            if (status != 0) throw Refusal(status);
-        }
-
-        public void Reset()
-        {
-            int status = ResetOf(Handle);
-            if (status != 0) throw Refusal(status);
-        }
-
-        // One instruction with the frame loop's DMA charge, NMI edge and stolen cycles; the cycles, or a negative status.
-        public int Step() => StepOf(Handle);
-
-        // Bit n for NesButton n: A, B, Select, Start, Up, Down, Left, Right.
-        public void SetButtons(int port, uint mask) => SetButtonsOf(Handle, port, mask);
-
-        public static string Describe(long status) => Describe(status, "Moon", status => status switch
+        private static string? OwnWords(long status) => status switch
         {
             -9 => "not an iNES image",
             -10 => "a mapper no board implements",
             -11 => "a header claiming more PRG than the file holds",
-            -31 => "an index outside an array",
-            -32 => "a division by zero",
-            -33 => "a clock running backwards",
+            NativeInterface.FaultBase - 1 => "an index outside an array",
+            NativeInterface.FaultBase - 2 => "a division by zero",
+            NativeInterface.FaultBase - 3 => "a clock running backwards",
             _ => null,
-        });
+        };
+
+        public static string Describe(long status) => OwnWords(status) ?? Shared(status, "Moon") ?? $"status {status}";
+
+        public void RunFrame() => Advance();
+
+        // One instruction with the frame loop's DMA charge, NMI edge and stolen cycles; the cycles, or a negative status.
+        public int Step() => StepOf(Handle);
+
+        // Bit n for NesButton n: A, B, Select, Start, Up, Down, Left, Right; the pad is in no state, so the whole mask is sent.
+        public void SetButtons(int port, uint mask) => SetButtons(port, mask, 0xFF);
+
+        // The byte a CPU read of address returns for an original byte under the current patches, or -1 for none.
+        public int RomPatch(int address, byte original) => RomPatchOf(Handle, (uint)address, original);
     }
 }

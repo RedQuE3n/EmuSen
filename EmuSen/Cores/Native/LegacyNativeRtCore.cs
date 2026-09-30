@@ -1,21 +1,13 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Cores.Native
 {
-    // Where stage 5's NativeDebugBridge plugs in: when armed, it runs the frame instead of advance - see EmuSen_NativeCores.md §4.4.
-    public interface INativeDebugBridge
-    {
-        bool Armed { get; }
-        void RunFrame();
-    }
-
-    // The ICore body over the common native interface; a console supplies its data and its differences - see EmuSen_NativeCores.md §4.3, §4.5.
-    public abstract class NativeRtCore<TMachine> : ICore, ICheatRegistryHost, IStateFormat, IFrameBufferPool, IFrameProfiler, IEngineFeatures, IDisposable where TMachine : NativeMachine
+    // MercuryRT's ICore body over its per-core ABI, until it moves to NativeRtCore at the common interface's step 4 - see EmuSen_NativeCores.md §7.
+    public abstract class LegacyNativeRtCore<TMachine> : ICore, ICheatRegistryHost, IStateFormat, IFrameBufferPool, IDisposable where TMachine : LegacyNativeMachine
     {
         protected TMachine? _machine;
         private readonly byte[] _frame;
@@ -23,50 +15,34 @@ namespace EmuSen.Cores.Native
         private bool _skipRendering;
         private int _patchVersion = -1;
         private BatterySave _battery = BatterySave.None;
+        private int _batteryLength;
         private int _audioLimitSent = -1;
         private object? _audioLimitMachine;
-        private readonly uint[] _buttons;
-        private byte[] _stateBuffer = Array.Empty<byte>();
-        private double _lastFrameMs;
 
-        protected NativeRtCore(int frameBytes, int ports)
-        {
-            _frame = new byte[frameBytes];
-            _buttons = new uint[ports];
-        }
-
-        // What the console's C# part decides before the library sees the image: the oracle's refusals, the battery file and the create-time settings.
-        protected abstract (BatterySave Battery, string Settings) Prepare(string path, byte[] image);
-
-        protected abstract TMachine CreateMachine(byte[] image, string settings, IReadOnlyList<(uint Which, byte[] Data)> files);
-
-        // After a machine is adopted: the mirror's load, and whatever else the console keeps per game.
-        protected virtual void Loaded(string path) { }
+        protected LegacyNativeRtCore(int frameBytes) => _frame = new byte[frameBytes];
 
         // The C# core the debugger reads, refreshed from the machine's state; its registries are this core's.
         protected abstract ICore MirrorCore { get; }
+
         protected abstract bool MirrorLoaded { get; }
+
         protected abstract CheatRegistry MirrorCheats { get; set; }
 
-        // The C# core's space names, numbered as the core's ABI numbers them, and the one whose reads are the CPU's.
+        // The C# core's space names, numbered as the C ABI numbers them.
         protected abstract IReadOnlyList<string> SpaceNames { get; }
-        protected virtual int CpuBusSpace => -1;
 
-        // The addresses ResolveRomPatches' list is kept to, inclusive.
-        protected abstract long PatchLow { get; }
-        protected abstract long PatchHigh { get; }
+        // The battery RAM's space number, the same on both 8-bit machines.
+        protected virtual int BatterySpace => 2;
 
-        // The pad bit a button is, or -1; and the machine's port for a frontend's.
-        protected abstract int ButtonBit(PadButton button);
-        protected virtual int PortFor(int port) => Math.Clamp(port, 0, _buttons.Length - 1);
+        // The addresses CheatRegistry.TryPatchRom is asked about, inclusive.
+        protected abstract int PatchLow { get; }
+        protected abstract int PatchHigh { get; }
 
+        // The mirror's mutes as a mask, bit n for channel n.
         protected abstract uint MuteMask();
 
         // The C# core's refusals, with its messages, before the bytes reach the machine.
         protected abstract void CheckState(byte[] state);
-
-        // Stage 5's bridge; null runs every frame through advance.
-        protected INativeDebugBridge? DebugBridge { get; set; }
 
         public abstract string CoreName { get; }
         public abstract int ScreenWidth { get; }
@@ -77,19 +53,13 @@ namespace EmuSen.Cores.Native
         public abstract FrameLogRegistry FrameLog { get; }
         public abstract BreakpointRegistry Breakpoints { get; }
 
-        // A rewind capture is kept on every engine of this host until one withholds it - see EmuSen_NativeCores.md §5.2.
-        public virtual EngineFeatures Features => EngineFeatures.All;
-
-        public int AudioSampleRate => _machine?.AudioSampleRate ?? 44100;
+        public virtual int AudioSampleRate => 44100;
         public bool IsRomLoaded => _machine != null;
         public long TotalFrames => _machine?.TotalFrames ?? 0;
 
-        // One phase unless the core reports its own: the frame is one call, timed here.
-        public IReadOnlyList<(string Name, double Milliseconds)> LastFramePhases => new[] { ("frame", _lastFrameMs) };
-
-        public double LastFrameMilliseconds => _lastFrameMs;
-
-        public TMachine Machine => _machine ?? throw new InvalidOperationException("No ROM is loaded.");
+        public abstract void LoadRom(string path);
+        public abstract void RunFrame();
+        public abstract void SetButton(int port, PadButton button, bool pressed);
 
         public CheatRegistry Cheats
         {
@@ -111,48 +81,28 @@ namespace EmuSen.Cores.Native
             }
         }
 
-        // The console's rules first, then the machine with its battery file, then the old one freed and the per-game state reset.
-        public void LoadRom(string path)
+        // The new machine, its battery save written in and the old one freed; the registries' per-game state is the subclass's.
+        protected void Adopt(TMachine machine, BatterySave battery, byte[]? saved, int batteryLength)
         {
-            byte[] image = File.ReadAllBytes(path);
-            var (battery, settings) = Prepare(path, image);
-            byte[]? saved = battery.Read();
-            var files = saved is null ? Array.Empty<(uint, byte[])>() : new[] { (0u, saved) };
-
-            TMachine machine = CreateMachine(image, settings, files);
+            if (saved is not null) machine.WriteSpace(BatterySpace, 0, saved.AsSpan(0, Math.Min(saved.Length, batteryLength)));
             machine.SetOptions(_skipRendering);
-            for (int port = 0; port < _buttons.Length; port++) machine.SetButtons(port, _buttons[port]);
 
             _machine?.Dispose();
             _machine = machine;
             _battery = battery;
+            _batteryLength = batteryLength;
             _patchVersion = -1;
-            Loaded(path);
         }
 
-        public void SetButton(int port, PadButton button, bool pressed)
+        // Before the machine runs: the ROM patches when the registry moved, and the audio limit when the setting did.
+        protected void BeforeFrame()
         {
-            int bit = ButtonBit(button);
-            if (bit < 0) return;
-            int pad = PortFor(port);
-            _buttons[pad] = pressed ? _buttons[pad] | (1u << bit) : _buttons[pad] & ~(1u << bit);
-            _machine?.SetButtons(pad, _buttons[pad]);
-        }
-
-        public void RunFrame()
-        {
-            if (_machine is null) throw new InvalidOperationException("RunFrame() called before LoadRom().");
             RefreshRomPatches();
             SyncAudioLimit();
-            long start = Stopwatch.GetTimestamp();
-            if (DebugBridge is { Armed: true } bridge) bridge.RunFrame();
-            else _machine.Advance();
-            _lastFrameMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
-            EndFrame();
         }
 
         // Mercury's frame-end order, which Moon's is too: the frame log, the cheats, the frame's notice, the periodic battery save.
-        protected virtual void EndFrame()
+        protected void EndFrame()
         {
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
             ApplyCheats();
@@ -162,7 +112,7 @@ namespace EmuSen.Cores.Native
 
         public void ApplyCheats() => Cheats.ApplyAll(ReadSpace, WriteSpace);
 
-        // A copy in an array no one else holds - see EmuSen_Multicore.md §16.
+        // A copy in an array no one else holds, as MarsRT's - see EmuSen_Multicore.md §16.
         public byte[] GetFrameBufferRgba()
         {
             _machine?.CopyFrame(_frame);
@@ -173,18 +123,18 @@ namespace EmuSen.Cores.Native
 
         public void ReturnFrameBuffer(byte[] buffer) => _lending.Return(buffer);
 
+        // What the lending has done, for the tests.
         public FrameBufferLending FrameBuffers => _lending;
 
         public short[] DequeueAudioSamples(int maxFrames) => _machine?.DrainAudio(maxFrames) ?? Array.Empty<short>();
 
-        // The save opened at load, which no state can change; the core says how long its battery RAM is, and empty where there is none.
+        // The save opened at load, which no state can change.
         public void SaveSram()
         {
             if (_machine is null || _battery.Path is null) return;
-            var (data, _) = _machine.Battery(0);
-            if (data.Length == 0) return;
-            _battery.Write(data);
-            _machine.BatterySaved(0);
+            var ram = new byte[_batteryLength];
+            _machine.ReadSpace(BatterySpace, 0, ram);
+            _battery.Write(ram);
         }
 
         public void SaveState(string path)
@@ -199,14 +149,10 @@ namespace EmuSen.Cores.Native
             LoadState(stream);
         }
 
-        // Written through one array reused while the state's size stands, as a session's does - see EmuSen_NativeCores.md §3.9.
         public void SaveState(Stream stream)
         {
             if (_machine is null) throw new InvalidOperationException("SaveState() called before LoadRom().");
-            int size = _machine.StateSize;
-            if (_stateBuffer.Length != size) _stateBuffer = new byte[size];
-            _machine.Save(_stateBuffer);
-            stream.Write(_stateBuffer);
+            stream.Write(_machine.Save());
         }
 
         // The C# core's refusals with its messages; a truncated state is refused whole, where C# stops part-way.
@@ -227,12 +173,10 @@ namespace EmuSen.Cores.Native
             return -1;
         }
 
-        // A read of the CPU's bus first brings the ROM patches up to the registry, so it answers as the C# core would (§9 Q11).
         public byte ReadSpace(string spaceName, int address)
         {
             int space = SpaceNumber(spaceName);
             if (_machine is null || space < 0) return 0;
-            if (space == CpuBusSpace) RefreshRomPatches();
             Span<byte> one = stackalloc byte[1];
             _machine.ReadSpace(space, address, one);
             return one[0];
@@ -280,28 +224,15 @@ namespace EmuSen.Cores.Native
             _audioLimitMachine = _machine;
         }
 
-        // CheatRegistry.ResolveRomPatches within the console's range, sent as triples when the registry moves - see EmuSen_NativeCores.md §3.12.
+        // CheatRegistry.TryPatchRom flattened to a table per patched address, rebuilt when the registry changes - see Moon_Native.md §2.4.
         private void RefreshRomPatches()
         {
             CheatRegistry cheats = Cheats;
             int version = cheats.Version;
             if (version == _patchVersion || _machine is null) return;
             _patchVersion = version;
-            _machine.SetRomPatches(RomPatchTriples(cheats, PatchLow, PatchHigh));
-        }
-
-        // (address, value, compare) for each byte ResolveRomPatches lists in [lo, hi], in its order; uint.MaxValue is no compare.
-        public static uint[] RomPatchTriples(CheatRegistry cheats, long lo, long hi)
-        {
-            var words = new List<uint>();
-            foreach (var patch in cheats.ResolveRomPatches(hi + 1))
-            {
-                if (patch.Address < lo) continue;
-                words.Add(patch.Address);
-                words.Add(patch.Value);
-                words.Add(patch.Compare is byte compare ? compare : uint.MaxValue);
-            }
-            return words.ToArray();
+            var (addresses, tables) = RomPatchTable.Build(cheats, PatchLow, PatchHigh);
+            _machine.SetRomPatches(addresses, tables);
         }
 
         public virtual void Dispose()

@@ -6949,3 +6949,42 @@ the flat folder would miss every save written from now on.
 a save, as they did in the flat folder. The old flat and beside-the-ROM files are never removed by the program; the
 player can delete them. A game loaded once under `--nobattery` and again without it copies at the second load, which is
 the first that reads a save.
+
+### 4.86 The NES's engine: Moon (C#) or MoonRT (Rust) (2026-09-30)
+
+Graphics Settings' NES tab now begins, after the screen filter, with **Engine**, a dropdown of *Moon (C#)* and *MoonRT
+(Rust)*. It is stored in `graphics.json` as `Consoles.NES.Engine`, and is resolved as §4.44's rows are, by
+`CoreCatalog.EngineChosen`. **The default is Moon (C#)**, listed first, so a player who never opens the row plays as
+before. MoonRT is the NES core in Rust, exact against Moon in state, picture and sound (`Moon_Native.md` §8.2 and §8.3).
+It is the first engine built on the common native interface (`EmuSen_NativeCores.md`), whose loader, handle and `ICore`
+base it runs through.
+
+**When MoonRT cannot run.** The game runs on Moon (C#), and the status bar says so after the game's name, quoting what
+the loader found. That happens when:
+
+- `libmoonrt.so` is missing;
+- it speaks another interface, which is refused unless both halves of its version match;
+- it lacks one of the three capabilities the engine needs, which are reset, mutes and ROM patches;
+- it is turned off with `EMUSEN_MOON_NATIVE=0`.
+
+An example: *"MoonRT (Rust) is not available (turned off by EMUSEN_MOON_NATIVE=0); Moon (C#) is running."*
+
+**What stays the same across the two:**
+
+- Save states are one format: a state saved on either loads on the other.
+- The battery save is the same `.srm` in `Saves/NES`. MoonRT is handed it when the machine is made, not written into
+  it afterwards.
+- Both of the NES's cheat formats go through the same registry. Game Genie's ROM patches reach MoonRT as the
+  registry's resolved list, and a CPU-bus read in the debugger sees a new patch at once.
+- Rewind is kept on both.
+
+**What MoonRT does not offer yet.** Breakpoints, stepping, watches and coverage. Its debugger view is a C# Moon
+refreshed from its state, as MercuryRT's was before its hooks. The hooks are stage 5's (`Moon_Native.md` §4).
+
+**Tests:**
+
+- `MoonRtEngineTests` drives a real window on the headless platform. It covers the row and its storage, a game on
+  Moon until MoonRT is chosen and then on MoonRT with rewind filling, and a state saved through the hotkey that the C#
+  Moon loads. It also runs the fallback in a child process started with the library off.
+- `MoonRtFrontendTests` holds the core's side.
+- The fit audit's `GraphicsSettingsNesEngine` case opens the NES tab at both sizes.

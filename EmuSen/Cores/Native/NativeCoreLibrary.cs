@@ -9,7 +9,7 @@ namespace EmuSen.Cores.Native
     {
         private readonly Lazy<(nint Handle, string Report)> _library;
 
-        // The crate names the file; the exports and the crash log's stem are today's per-core names until the common interface.
+        // A per-core ABI's library, MercuryRT's and MarsRT's until their steps 4 and 5: its own version and crash-log exports.
         public NativeCoreLibrary(string crate, string variable, uint interfaceVersion, string versionExport, string crashLogExport, string crashLogStem)
         {
             Crate = crate;
@@ -20,6 +20,21 @@ namespace EmuSen.Cores.Native
             CrashLogStem = crashLogStem;
             _library = new(Load);
         }
+
+        // A library on the common interface: the fixed names, (common << 16) | core matched exactly, and the capabilities its engine needs - see EmuSen_NativeCores.md §3.2.
+        public static NativeCoreLibrary Common(string crate, string variable, ushort coreVersion, ulong requiredCapabilities) =>
+            new(crate, variable, NativeInterface.Version(coreVersion), NativeInterface.VersionExport, NativeInterface.CrashLogExport, crate + "_crash")
+            {
+                IsCommon = true,
+                RequiredCapabilities = requiredCapabilities,
+            };
+
+        public bool IsCommon { get; private init; }
+        public ulong RequiredCapabilities { get; private init; }
+
+        // The library's capability bits, zero until it loads or when it is not on the common interface.
+        public ulong Capabilities => _library.Value.Handle != 0 && IsCommon ? _capabilities : 0;
+        private ulong _capabilities;
 
         public string Crate { get; }
         public string Variable { get; }
@@ -46,7 +61,18 @@ namespace EmuSen.Cores.Native
             if (!NativeLibrary.TryGetExport(handle, VersionExport, out nint versionExport))
                 return (0, $"{FileName} has no interface version");
             uint version = ((delegate* unmanaged<uint>)versionExport)();
-            if (version != InterfaceVersion) return (0, $"{FileName} speaks interface {version}, this build {InterfaceVersion}");
+            if (version != InterfaceVersion)
+                return (0, IsCommon
+                    ? $"{FileName} speaks common interface {version >> 16} core {version & 0xFFFF}, this build common {InterfaceVersion >> 16} core {InterfaceVersion & 0xFFFF}"
+                    : $"{FileName} speaks interface {version}, this build {InterfaceVersion}");
+
+            if (IsCommon)
+            {
+                if (!NativeLibrary.TryGetExport(handle, NativeInterface.CapabilitiesExport, out nint capsExport)) return (0, $"{FileName} has no capabilities");
+                _capabilities = ((delegate* unmanaged<ulong>)capsExport)();
+                ulong missing = RequiredCapabilities & ~_capabilities;
+                if (missing != 0) return (0, $"{FileName} lacks the capabilities {NativeInterface.Describe(missing)} its engine needs");
+            }
 
             if (NativeLibrary.TryGetExport(handle, CrashLogExport, out nint crashExport))
             {
@@ -54,7 +80,7 @@ namespace EmuSen.Cores.Native
                 nint text = Marshal.StringToCoTaskMemUTF8(log);
                 ((delegate* unmanaged<nint, void>)crashExport)(text);
             }
-            return (handle, $"{path}, interface {version}");
+            return (handle, IsCommon ? $"{path}, common interface {version >> 16} core {version & 0xFFFF}" : $"{path}, interface {version}");
         }
 
         // An export by name, or zero when the library is not in use; callers fall back to C# on zero.

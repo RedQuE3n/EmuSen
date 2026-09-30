@@ -45,19 +45,19 @@ namespace EmuSen.WiseMan.Cores
             Assert.NotEqual(0, MarsNative.Export("mars_machine_new"));
             Assert.Equal(0, MarsNative.Export("no_such_export"));
 
-            var off = new NativeCoreLibrary("moonrt", "EMUSEN_CLEANUP_TEST_OFF", 2, "moon_interface_version", "moon_set_crash_log", "moonrt_crash");
+            var off = NativeCoreLibrary.Common("moonrt", "EMUSEN_CLEANUP_TEST_OFF", MoonNative.CoreVersion, MoonNative.RequiredCapabilities);
             Environment.SetEnvironmentVariable("EMUSEN_CLEANUP_TEST_OFF", "0");
             try
             {
                 Assert.False(off.Available);
                 Assert.Equal("turned off by EMUSEN_CLEANUP_TEST_OFF=0", off.Report);
-                Assert.Equal(0, off.Export("moon_machine_new"));
+                Assert.Equal(0, off.Export("emusen_native_create"));
             }
             finally { Environment.SetEnvironmentVariable("EMUSEN_CLEANUP_TEST_OFF", null); }
 
-            var wrong = new NativeCoreLibrary("moonrt", "EMUSEN_CLEANUP_TEST_UNSET", 999, "moon_interface_version", "moon_set_crash_log", "moonrt_crash");
+            var wrong = NativeCoreLibrary.Common("moonrt", "EMUSEN_CLEANUP_TEST_UNSET", 999, MoonNative.RequiredCapabilities);
             Assert.False(wrong.Available);
-            Assert.EndsWith("this build 999", wrong.Report);
+            Assert.EndsWith($"speaks common interface 1 core {MoonNative.CoreVersion}, this build common 1 core 999", wrong.Report);
         }
 
         // The shared status table and each console's band, in the words the shims used before.

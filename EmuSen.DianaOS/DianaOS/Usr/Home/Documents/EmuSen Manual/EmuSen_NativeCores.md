@@ -1,5 +1,8 @@
 # EmuSen — one native interface for the Rust cores
 
+*Built in part on 2026-09-30: §7's steps 1 and 2 as far as MoonRT needs them. §12 says what was built, how the old and
+new ABIs coexist, and what is owed; P2 is retired there.*
+
 *This revision: the first, 2026-09-28. A design, not an implementation: nothing described here is built. It
 defines one C ABI that every Rust core exports, one generic C# host over it, one place a console and its engines are
 registered, and the order in which the three Rust cores move onto it. Every claim about the code is cited to a file and
@@ -1039,7 +1042,7 @@ MercuryRT-only concession.
 | # | Prediction | Retired when |
 |---|---|---|
 | P1 | Every existing save state of every engine loads and re-saves byte-identically through the new host | Steps 2, 4 and 5 |
-| P2 | MoonRT's plain frame through the generic host is within ±1% of the bespoke `MoonRtCore`'s, interleaved | Step 2 |
+| P2 | MoonRT's plain frame through the generic host is within ±1% of the bespoke `MoonRtCore`'s, interleaved | **Retired 2026-09-30, held:** −0.65% to +0.48% on the four games, geometric mean +0.06% (§12.3) |
 | P3 | MarsRT's plain frame is within ±1% of today's on each of the four measured states, retrained, interleaved | Step 5b |
 | P4 | The plain path's functions keep their sizes in MercuryRT's and MarsRT's symbol tables. Only `create` and the functions that allocate or configure the hooks differ | Steps 4 and 5 |
 | P5 | Retraining MarsRT's profile moves no measured game by more than half a point against the stale profile | Step 5a |
@@ -1137,3 +1140,127 @@ Each question as it was put, and its decision.
   a Rust core today.
 - Windows and macOS. The loader's rules are argued for all three hosts (§3.2). Nothing here was run on anything but
   Linux x64.
+
+---
+
+## 12. What was built: steps 1 and 2 for MoonRT (2026-09-30)
+
+*§7's first two steps, cut to what MoonRT needs. The prediction retired here is P2. P1 and P8 hold for MoonRT's part
+and stay open for the other two cores.*
+
+### 12.1 The Rust side
+
+`emusen-native` gains the module `abi` (`src/abi.rs`), as §3.17 places it. It holds:
+
+- the constants: `COMMON_VERSION` 1, `version(core)`, the fourteen capability bits of §3.2, the interface's codes
+  −256 to −262 and the fault base −320 of §3.3, and the five fault kinds;
+- `NativeFile`, `File`, `FrameInfo` (§3.6's layout), `Region`, and `Settings`, the `key=value` parser;
+- the `NativeCore` trait;
+- `install_crash_log`;
+- `native_exports!`.
+
+**The trait, shaped for §9 Q8.**
+
+- It has `reset` behind `RESET`.
+- It has a `region()`, `Ntsc` by default. No export reads it yet; it is there for a libretro adapter's AV info.
+- It requires that kind 0's state size is constant for a machine's life, which `retro_serialize_size` needs. MoonRT's
+  is, and a test pins it over 1,800 frames of each bench game.
+- `end_call` is the macro's hook for §3.17's rule that no fault outlives the call that made it. MoonRT's takes its
+  thread-local fault.
+
+**The macro writes only the optional groups it is given.** It is invoked as
+`native_exports!(Machine; reset, mutes, rom_patches)`. A `macro_rules` macro cannot read a trait's constant, so §3.16's
+rule that "a library exports only the optional names its capabilities claim" is enforced from both ends:
+
+- a compile-time assertion that the named groups' bits are exactly the optional bits in `CAPABILITIES`;
+- `The_capabilities_and_the_exports_agree`, which loads the library and checks every bit against its exports, in
+  both directions.
+
+**Only MoonRT's optional groups are written:** reset, mutes and ROM patches. The generator for present, phases, audio
+peek, axes, settings, snapshot and the debug exports is not written. Each comes with the core that first needs it.
+
+**One export was added to the common set: `emusen_native_set_audio_limit(handle, samples) -> i32`.** §3.7 omitted it,
+although every core then had it (`*_machine_set_audio_limit`, the host's `AudioSettings.AudioBufferMaxSamples`). It is
+required, which makes 24 required names, not 23. MoonRT exports 27 common names:
+
+- the 24 required;
+- `reset`, `set_mutes` and `set_rom_patches`.
+
+It also exports two extensions: `moonrt_step` (§3.15) and `moonrt_rom_patch`, a test view of the patch table that
+§3.12's exhaustive oracle reads. §3.16's argued 26 for MoonRT is one short, by the audio limit.
+
+**MoonRT, moved.**
+
+- Its `moon_*` exports are retired, as §7 step 2 said.
+- Its core version is 3, so its interface version is `0x0001_0003`. It was `moon_interface_version` 2.
+- Its faults are −321 to −323 (§3.3).
+- The battery file is written into PRG RAM inside `create`, clipped to it, before any frame (§3.4).
+- The ROM patches arrive as `ResolveRomPatches`' triples, and Rust builds the bus's 256-entry tables from them (§3.12).
+  For each original byte it keeps the first entry whose compare is absent or equal.
+
+### 12.2 The C# side, and how the two ABIs coexist
+
+In `EmuSen/Cores/Native/`:
+
+- `NativeCoreLibrary.Common(crate, variable, coreVersion, requiredCapabilities)`:
+  - the fixed names;
+  - both halves of the version matched exactly (§9 Q3);
+  - the capabilities read, and the library refused, with a report, when it lacks one its engine needs;
+  - the crash log at `<crate>_crash_<pid>`.
+- `NativeInterface` holds the export table, the constants and the lists of required and optional names.
+- `NativeMachine` is the handle:
+  - the create contract, with pinned files;
+  - one method per export;
+  - the shared status words;
+  - `ExceptionFor`, which asks the console's band first and then maps −321 to −325 to .NET's types.
+- `NativeRtCore<TMachine>` is the `ICore` base of §4.3. It does the load, the frame, the picture, the sound, the state,
+  the spaces, the battery, the cheats, the mutes and the mirror.
+  - It reuses one state array while the size stands (§3.9).
+  - It refreshes the patches before a read of the CPU's bus (§9 Q11).
+  - It declares `IEngineFeatures` with every feature kept (§5.2).
+  - It carries `INativeDebugBridge`, an empty seam that stage 5's bridge fills.
+
+**The old path is kept beside the new one, under other names.** The per-core classes are renamed
+`LegacyNativeMachine`, `LegacyNativeExports` and `LegacyNativeRtCore<T>`. `MercuryMachine`, `MercuryRtCore` and
+`MarsMachine` derive from them as before, and nothing else in them changed. `NativeCoreLibrary`'s original
+constructor still serves MercuryRT's and MarsRT's own version and crash-log exports. MarsRT's Rust source is
+untouched.
+
+The two paths cannot meet:
+
+- A library is read either as common, through `Common`, or as legacy, through the old constructor.
+- MarsRT's library does export `emusen_native_interface_version`, but it answers 10. That reads as common 0, so it
+  would be refused if it were ever loaded as common.
+
+At steps 4 and 5 the legacy files are deleted.
+
+**What is owed from these steps:**
+
+- **The registration records (§5.1).** The NES's row went in the existing way, as a `CoreCatalog` entry and three
+  lines in `CoreFactory`. The records, and the equivalence test that step 1 names, were not built. Moving four
+  consoles' registrations is not cheap enough to do beside a stage.
+- **§9 Q7, the first instruction's breakpoint check in Rust.** MoonRT has no breakpoints until stage 5, so there is
+  no check to place yet. Stage 5 places it in Rust.
+- **The snapshot kind.** Kind 1 is refused with `NOT_SUPPORTED`, as MoonRT needs no snapshot.
+
+### 12.3 P2, retired
+
+**P2 held.** It predicted that MoonRT's plain frame through the generic host would be within ±1% of the bespoke
+`MoonRtCore`'s, interleaved.
+
+How it was measured, on 2026-09-30:
+
+- `moonbench` was built against 77d71298, the bespoke shim, and against this step's tree.
+- Five rounds, each engine's order swapped every round, under the timing lock, with a C# control run beside them.
+- Load average 1.1–1.7.
+- Every state hash was the same across both builds and both engines.
+
+| Game | Bespoke shim, ms/frame | Generic host | Change |
+|---|---|---|---|
+| Super Mario Bros. | 1.012 | 1.005 | −0.65% |
+| Zelda | 0.913 | 0.917 | +0.48% |
+| Super Mario Bros. 3 | 1.336 | 1.336 | +0.01% |
+| Punch-Out!! | 1.194 | 1.199 | +0.40% |
+
+The geometric mean is +0.06%. Every game's two ranges across rounds overlap. So the difference is inside the noise,
+and no direction is claimed.

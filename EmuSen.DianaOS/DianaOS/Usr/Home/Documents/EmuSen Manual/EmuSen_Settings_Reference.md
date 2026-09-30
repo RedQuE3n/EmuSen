@@ -6978,8 +6978,13 @@ An example: *"MoonRT (Rust) is not available (turned off by EMUSEN_MOON_NATIVE=0
   registry's resolved list, and a CPU-bus read in the debugger sees a new patch at once.
 - Rewind is kept on both.
 
-**What MoonRT does not offer yet.** Breakpoints, stepping, watches and coverage. Its debugger view is a C# Moon
-refreshed from its state, as MercuryRT's was before its hooks. The hooks are stage 5's (`Moon_Native.md` §4).
+**What MoonRT does not offer yet.** ~~Breakpoints, stepping, watches and coverage. Its debugger view is a C# Moon
+refreshed from its state, as MercuryRT's was before its hooks. The hooks are stage 5's (`Moon_Native.md` §4).~~
+*Since 2026-09-30 it has all of these, as Moon has them: breakpoints, data breakpoints on stores, stepping in, over
+and out, run to a frame or an interrupt, coverage, watches, the profile and the call stack (`Moon_Native.md` §8.4).
+Its debugger view is still a C# Moon refreshed from its state. Two things differ:*
+- *its call stack moves only while something is armed, since an unarmed frame is the plain one;*
+- *neither NES engine yet stops on a read.*
 
 **Tests:**
 

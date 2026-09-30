@@ -1,19 +1,22 @@
-//! What every Rust core builds from. For now, its state: the C# `StateSerializer`'s byte format, so a core's state is a C# core's, byte for byte.
+//! What every Rust core builds from: its state, and its audio queue. The state is the C# `StateSerializer`'s byte format, so a core's state is a C# core's, byte for byte.
 //!
 //! - [`StateWriter`] writes a state, counts one, or lists its layout; [`StateReader`] reads one back.
 //! - [`State`] is one C# class or struct, walked in the C# ordinal order; its `Error` is the core's own.
 //! - [`naming`] is the rule that ties each Rust field to the C# name written beside it.
 //! - [`Skip`] is a field C# does not serialize; [`ffi`] is the status range and the state exports of a core's C ABI.
+//! - [`SampleQueue`] is C#'s `EmuSen.Common.SampleQueue`, a core's undrained audio with its drop-oldest limit.
 //!
 //! Nothing here knows a console: magics, versions and a core's own refusals stay in the core. See EmuSen_RustState.md.
 
 pub mod ffi;
 pub mod naming;
 mod reader;
+pub mod samples;
 mod skip;
 mod writer;
 
 pub use reader::StateReader;
+pub use samples::SampleQueue;
 pub use skip::Skip;
 pub use writer::StateWriter;
 

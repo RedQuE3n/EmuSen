@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
-# What every Rust core builds from; for now its save state: codec, layout listing, naming rule and state exports. See EmuSen_RustState.md.
+# What every Rust core builds from: its save state (codec, layout listing, naming rule and state exports) and its audio queue. See EmuSen_RustState.md.
 [lib]
 name = "emusen_native"
 

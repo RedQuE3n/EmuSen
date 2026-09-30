@@ -113,7 +113,7 @@ pub unsafe extern "C" fn mercury_machine_set_sample_rate(machine: *mut Machine, 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mercury_machine_set_audio_limit(machine: *mut Machine, samples: u64) {
     if let Some(m) = unsafe { machine.as_mut() } {
-        m.bus.apu.mixer.max_buffered_samples = samples as usize;
+        m.bus.apu.mixer.samples.set_limit(samples as usize);
     }
 }
 
@@ -150,7 +150,7 @@ pub unsafe extern "C" fn mercury_machine_frame(machine: *const Machine, out: *mu
 /// `machine` must be live or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mercury_machine_audio_buffered(machine: *const Machine) -> i64 {
-    unsafe { machine.as_ref() }.map_or(STATUS_NULL as i64, |m| m.bus.apu.mixer.buffer.len() as i64)
+    unsafe { machine.as_ref() }.map_or(STATUS_NULL as i64, |m| m.bus.apu.mixer.samples.len() as i64)
 }
 
 /// `Apu.Drain`: interleaved stereo into `out`; returns the samples written.

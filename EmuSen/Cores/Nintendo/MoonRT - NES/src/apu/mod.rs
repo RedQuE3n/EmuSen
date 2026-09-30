@@ -2,16 +2,14 @@
 
 pub mod channels;
 
-use std::collections::VecDeque;
-
 use crate::Skip;
+use emusen_native::SampleQueue;
 use crate::state::{StateReader, StateResult, StateWriter};
 use channels::{DmcChannel, LENGTH_COUNTER, NoiseChannel, PulseChannel, TriangleChannel};
 
 pub const CHANNEL_COUNT: usize = 5;
 pub const CPU_CLOCK_HZ: f64 = 1789773.0;
 const OUTPUT_GAIN: f64 = 80000.0;
-pub const MAX_BUFFERED_SAMPLES: usize = 128000;
 
 const FRAME_NONE: i32 = 0;
 const FRAME_QUARTER: i32 = 1;
@@ -28,9 +26,8 @@ pub struct Mixer {
     pub sample_count: i32,
     pub cycles_per_sample: f64,
     pub cycle_fraction: f64,
-    pub buffer: VecDeque<i16>,
-    /// The host's `AudioSettings.AudioBufferMaxSamples`, sent through `moon_machine_set_audio_limit`.
-    pub max_buffered_samples: usize,
+    /// Its limit is the host's `AudioSettings.AudioBufferMaxSamples`, sent through `moon_machine_set_audio_limit`.
+    pub samples: SampleQueue,
     pub hp90: f64,
     pub hp90_prev: f64,
     pub hp440: f64,
@@ -49,8 +46,7 @@ impl Default for Mixer {
             sample_count: 0,
             cycles_per_sample: CPU_CLOCK_HZ / 44100.0,
             cycle_fraction: 0.0,
-            buffer: VecDeque::with_capacity(MAX_BUFFERED_SAMPLES),
-            max_buffered_samples: MAX_BUFFERED_SAMPLES,
+            samples: SampleQueue::with_capacity(emusen_native::samples::DEFAULT_LIMIT),
             hp90: 0.0,
             hp90_prev: 0.0,
             hp440: 0.0,
@@ -154,7 +150,7 @@ impl Apu {
         self.cycle_count = 0;
         self.soft_reset();
         self.dmc.reset();
-        self.mixer.buffer.clear();
+        self.mixer.samples.clear();
         self.end_length_cycle();
     }
 
@@ -417,13 +413,7 @@ impl Apu {
 
     /// `Drain`: whole stereo pairs, oldest first, into `out`; returns the samples written.
     pub fn drain(&mut self, out: &mut [i16], max_frames: usize) -> usize {
-        let buffer = &mut self.mixer.buffer;
-        let mut wanted = (max_frames.saturating_mul(2)).min(buffer.len()).min(out.len());
-        wanted -= wanted & 1;
-        for (slot, sample) in out.iter_mut().zip(buffer.drain(..wanted)) {
-            *slot = sample;
-        }
-        wanted
+        self.mixer.samples.drain(out, max_frames)
     }
 
     pub fn write_state(&self, w: &mut StateWriter) {
@@ -483,13 +473,7 @@ impl Mixer {
         self.sample_accumulator = 0.0;
         self.sample_count = 0;
         let sample = (self.filter(mean) * OUTPUT_GAIN).clamp(i16::MIN as f64, i16::MAX as f64) as i16;
-        self.buffer.push_back(sample);
-        self.buffer.push_back(sample);
-        // C#'s SampleQueue: trimmed after the pair, until within the limit (EmuSen_Settings_Reference.md §4.85.2).
-        while self.buffer.len() > self.max_buffered_samples && self.buffer.len() >= 2 {
-            self.buffer.pop_front();
-            self.buffer.pop_front();
-        }
+        self.samples.push_pair(sample, sample);
     }
 }
 

@@ -3,6 +3,7 @@
 pub mod channels;
 
 use crate::Skip;
+use emusen_native::SampleQueue;
 use crate::apu::channels::{NoiseChannel, PulseChannel, WaveChannel};
 use crate::state::{State, StateReader, StateResult, StateWriter};
 
@@ -19,8 +20,7 @@ pub struct Mixer {
     pub right_capacitor: f64,
     pub charge_factor: f64,
     pub channel_muted: [bool; CHANNEL_COUNT],
-    pub buffer: std::collections::VecDeque<i16>,
-    pub max_buffered_samples: usize,
+    pub samples: SampleQueue,
 }
 
 impl Default for Mixer {
@@ -32,8 +32,7 @@ impl Default for Mixer {
             right_capacitor: 0.0,
             charge_factor: 0.0,
             channel_muted: [false; CHANNEL_COUNT],
-            buffer: std::collections::VecDeque::new(),
-            max_buffered_samples: 128_000,
+            samples: SampleQueue::default(),
         }
     }
 }
@@ -91,7 +90,7 @@ impl Apu {
         self.mixer.cycle_fraction = 0.0;
         self.mixer.left_capacitor = 0.0;
         self.mixer.right_capacitor = 0.0;
-        self.mixer.buffer.clear();
+        self.mixer.samples.clear();
     }
 
     /// Wave RAM survives a power cycle; nothing else does - see Mercury_Apu.md §4.
@@ -314,13 +313,7 @@ impl Apu {
         let m = &mut *self.mixer;
         let l = to_sample(high_pass(left, &mut m.left_capacitor, m.charge_factor));
         let r = to_sample(high_pass(right, &mut m.right_capacitor, m.charge_factor));
-        m.buffer.push_back(l);
-        m.buffer.push_back(r);
-        // C#'s SampleQueue: trimmed after the pair, until within the limit (EmuSen_Settings_Reference.md §4.85.2).
-        while m.buffer.len() > m.max_buffered_samples && m.buffer.len() >= 2 {
-            m.buffer.pop_front();
-            m.buffer.pop_front();
-        }
+        m.samples.push_pair(l, r);
     }
 
     /// A silent channel with a live DAC still sits at the bottom of the swing - see Mercury_Apu.md §5.1.
@@ -340,13 +333,7 @@ impl Apu {
 
     /// `Drain`: whole stereo pairs, oldest first, at most `max_frames` of them.
     pub fn drain(&mut self, out: &mut [i16], max_frames: usize) -> usize {
-        let buffer = &mut self.mixer.buffer;
-        let mut wanted = (max_frames.saturating_mul(2)).min(buffer.len()).min(out.len());
-        wanted -= wanted & 1;
-        for (dst, src) in out.iter_mut().zip(buffer.drain(..wanted)) {
-            *dst = src;
-        }
-        wanted
+        self.mixer.samples.drain(out, max_frames)
     }
 }
 

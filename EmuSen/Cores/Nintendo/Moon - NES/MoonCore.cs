@@ -58,7 +58,7 @@ namespace EmuSen.Cores.Nintendo.Moon
         public LabelRegistry Labels { get; } = new();
         public CallStackRegistry CallStack { get; } = new();
 
-        // The call stack serves step over and out, stamps its pushes with the frame, and shows coverage its entry points - see Moon_Debug.md §6.
+        // The call stack serves step over and out, stamps its pushes with the frame, and shows coverage its entry points - see Moon_Debug.md §7.
         public MoonCore()
         {
             Breakpoints.CallStack = CallStack;
@@ -163,7 +163,7 @@ namespace EmuSen.Cores.Nintendo.Moon
             Ppu.SkipRendering = SkipRendering;
             Bus.ApuTraceFrame = (uint)TotalFrames;
 
-            // The halted scanline has had its cycles, so a resume must not earn them twice - see Moon_Debug.md §6.
+            // The halted scanline has had its cycles, so a resume must not earn them twice - see Moon_Debug.md §7.
             bool earned = resuming;
             while (!_frameComplete)
             {

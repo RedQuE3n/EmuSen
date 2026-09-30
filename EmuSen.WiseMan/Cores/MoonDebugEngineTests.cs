@@ -190,6 +190,20 @@ namespace EmuSen.WiseMan.Cores
             Assert.Contains(rig.CallStack.Hottest(5), h => h.Address == 0x8010);
         }
 
+        // A store to a PPU register is logged under PPUREG with the register's number: the program's STA $2000 at $8002.
+        [Theory]
+        [MemberData(nameof(NesDebugRig.Engines), MemberType = typeof(NesDebugRig))]
+        public void A_watch_on_the_ppu_registers_logs_the_store_under_its_register(string engine)
+        {
+            using var rig = Load(engine);
+            int ppu = rig.Watches.AddWatch("PPUREG", 0, 8);
+            int ram = rig.Watches.AddWatch("RAM", 0, 8);
+            rig.Core.RunFrame();
+            DebugWatchEvent e = rig.Watches.GetEvents(ppu).First();
+            Assert.Equal((0, (byte)0x80, "PC=$8002"), (e.Address, e.Value, e.Context));
+            Assert.Empty(rig.Watches.GetEvents(ram));
+        }
+
         // A CPU-bus store from the debugger is reported as the processor's are.
         [Theory]
         [MemberData(nameof(NesDebugRig.Engines), MemberType = typeof(NesDebugRig))]

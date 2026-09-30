@@ -72,7 +72,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
         // Set by BRK and the interrupt sequence, which end without polling; not state, as no state falls inside an instruction.
         [SkipInState] private bool _vectored;
 
-        // The call stack's seams: JSR, RTS and RTI, and every interrupt entered with the vector it took - see Moon_Debug.md §6.
+        // The call stack's seams: JSR, RTS and RTI, and every interrupt entered with the vector it took - see Moon_Debug.md §7.
         [SkipInState] public Action<int, int>? CallObserver;
         [SkipInState] public Action? ReturnObserver;
         [SkipInState] public Action<int, int, CallFrameKind>? InterruptObserver;

@@ -184,6 +184,9 @@ RGBA copy and about 3 KB of audio.
 **The first like-for-like number** comes at the end of stage 2 (§4), with both engines' pixel writes skipped. That is
 exact like for like, because `SkipRendering` removes the same code on both sides. P1 is re-priced there.
 
+*Retired on 2026-09-30 (§8.2.3), with the pixel writes on and through the shim.* P1 held, at 0.72–0.78 of C#'s time.
+P2 was refuted in the favourable direction, at 0.52 ms.
+
 ## 2. Shape
 
 ### 2.1 The whole machine, one boundary a frame
@@ -1407,8 +1410,8 @@ does is lost, or the loss is written down; the C# core's role is decided.
 
 | # | Prediction | Retired when |
 |---|---|---|
-| P1 | A line-for-line MoonRT's plain frame takes 0.69–0.99 of C#'s time, central 0.83 (1.2×), on the four games | Stage 2, like for like with pixel writes skipped; final at stage 4 through the shim |
-| P2 | The idle machine (the `JMP` loop) runs in 0.60–0.77 ms against C#'s 0.77 | Stage 2 |
+| P1 | A line-for-line MoonRT's plain frame takes 0.69–0.99 of C#'s time, central 0.83 (1.2×), on the four games | **Retired 2026-09-30, held:** 0.72–0.78 through the shim, geometric mean 1.34× (§8.2.3) |
+| P2 | The idle machine (the `JMP` loop) runs in 0.60–0.77 ms against C#'s 0.77 | **Retired 2026-09-30, refuted in the favourable direction:** 0.52 ms, 1.48× (§8.2.3) |
 | P3 | No sampled time on breakpoint, coverage, patch or phase-timer checks in MoonRT's plain frame | Stage 5, with every table disarmed |
 | P4 | Nothing observable changes on the desktop or at 33%; SMB3 at 10% goes from 78% to 80–113%, central 94% | Stage 4 |
 | P5 | The once-a-frame boundary costs under 3% of MoonRT's frame | Stage 4 |
@@ -1529,3 +1532,122 @@ alone catches the reader's rule for bytes C# never writes (S5). Without any one 
 **What stage 1 does not establish.** It establishes that MoonRT holds a C# state and gives it back. It says nothing
 about running one. The `Skip<T>` fields exist in Rust but no stage-1 test reads them. The fault helper is exercised
 only through D4's load, not inside a running frame.
+
+### 8.2 Stage 3: the mixer and the pixel writes (done 2026-09-30)
+
+*§4's table gives stage 3 the mixer (`Mix`, the box filter, the three filters, the queue with its drop-oldest rule,
+`Drain`) and the palette writes, with "samples and RGBA identical every frame" as the oracle. Stage 2 had already
+written both paths. They are the same structs, and `MoonRtPair` compared samples and pictures on the games from the
+start. So this stage is mostly proof: it drives the paths that no earlier comparison reached, extracts the queue into
+the shared crate, and takes the first speed number with everything on.*
+
+#### 8.2.1 The oracle
+
+`EmuSen.WiseMan/Cores/MoonRtSoundAndPictureTests.cs` covers each path with a case:
+
+| Case | What it drives | Result (measured 2026-09-30) |
+|---|---|---|
+| `A_low_audio_limit_drops_the_oldest_pairs_alike` | Six audio limits in turn on a program that plays all five channels: 2,000, 1,001 (odd), 3, 0, 500 and 128,000. The queue is drained only every seventh frame, and between drains both queues' lengths are compared. | 294 frames, 96,426 samples identical |
+| `A_muted_channel_mixes_alike` | The same program with no channel muted, each of the five alone, and all five muted | seven masks, 300 frames and 440,274 samples each, identical |
+| `The_bench_games_mix_each_channel_alike` | The four bench games, 1,200 frames each, once for each channel alone | twenty runs, 1.76 million samples each, identical |
+| `Skip_rendering_switched_mid_run_draws_alike` | `SkipRendering` switched eight times, every 37–44 frames, with the picture compared on every drawn frame | 324 frames identical |
+| `Palette_writes_grayscale_and_emphasis_draw_alike` | A palette entry rewritten every frame, and `$2001` cycled through all sixteen combinations of grayscale and the three emphasis bits | 512 frames identical |
+| `Library_states_sound_and_draw_alike` | The eleven library states (§3.9.3), each loaded into both engines and run for 900 frames with the bench's input | all eleven, 1.32 million samples and 900 pictures each, identical |
+
+**The earlier comparisons still hold, now with sound and picture.**
+
+- `Real_games_run_identically_from_boot_and_from_a_transferred_state` still runs the four games from boot and from their
+  frame-3,000 states.
+- The corpus test now draws and compares sound and picture on every frame. It used to skip the pixel writes and compare
+  state alone. Result: 255 ROMs, 363,935 frames identical in state, sound and picture, and 105 passed.
+- The Moon-filtered cases: 370 of 370.
+
+**Stage 2e's noise change (A5) is in every comparison.** The bench games' noise-alone runs compare the channel's new
+periods sample for sample. In every run the two engines' mixes agree to the last sample.
+
+**What the cases could not include:**
+
+- **A sample-rate change.** Moon has none to test: `AudioSampleRate` is a constant 44,100. The only caller of
+  `Apu.SetSampleRate` is `LoadRom`, and MoonRT has no export for it.
+- **Emphasis colours.** Neither engine applies them (`Moon_PPU.md` §3.5), so the palette case shows only that the two
+  engines ignore emphasis identically. The oracle is the C# core, and emphasis is a gap in the core, not a port
+  difference.
+
+**Four mutants, all caught:**
+
+| Mutant | Caught by |
+|---|---|
+| the trim drops one sample instead of a pair | the audio limit case |
+| the trim runs two samples late | the audio limit case |
+| mute bits reversed | four of the seven mute masks |
+| grayscale ignored in the pixel writes | the palette case |
+
+**Nothing needed fixing.** No case found a difference, so no C# test was owed.
+
+#### 8.2.2 The shared queue
+
+`SampleQueue` in `emusen-native` replaces the copies in MoonRT and MercuryRT (`EmuSen_RustState.md` §2.1).
+
+- **MercuryRT's audio is unchanged byte for byte.** Its platform cases hold the sound of four programs to SHA-256
+  digests recorded on linux-x64 before the change, and all 159 MercuryRT-filtered cases pass.
+- **MarsRT stays out.** Its Rust is untouched, and it joins at its migration step. Its library, rebuilt against the
+  extended crate, disassembles to the same instructions as before.
+
+#### 8.2.3 The first speed number with everything on
+
+Measured on 2026-09-30 with §1.1's `moonbench`, through `MoonRtCore`, so the shim's once-a-frame boundary is included.
+
+- 3,000 timed frames after a 900-frame boot.
+- Picture taken and audio drained every frame.
+- Five rounds interleaved game by game and engine by engine, under the timing lock.
+- The load average was 1.5–1.8, with only the desktop's usual applications running. That is higher than §1.1's 1.2,
+  but interleaving puts any drift on both engines alike. The spread across rounds was under 5% for C# and under 2% for
+  MoonRT.
+- Every game's state hash was the same on both engines in every round.
+
+| Game | C# Moon, mean ms/frame (range) | MoonRT (range) | MoonRT / C# | Speed-up | MoonRT, % of full speed |
+|---|---|---|---|---|---|
+| Super Mario Bros. | 1.412 (1.401–1.447) | 1.010 (1.009–1.011) | 0.716 | 1.40× | 1647% |
+| Zelda | 1.264 (1.237–1.300) | 0.915 (0.910–0.920) | 0.724 | 1.38× | 1819% |
+| Super Mario Bros. 3 | 1.716 (1.693–1.742) | 1.341 (1.329–1.354) | 0.782 | 1.28× | 1241% |
+| Punch-Out!! | 1.576 (1.571–1.585) | 1.196 (1.192–1.201) | 0.759 | 1.32× | 1391% |
+| Synthetic `JMP` loop (3 rounds) | 0.770 | 0.521 | 0.677 | 1.48× | 3194% |
+
+The geometric mean over the four games is **1.34×**. With the pixel writes skipped (three rounds), the geometric
+mean is 1.33×, and the frame costs are:
+
+| Game | C# ms/frame | MoonRT ms/frame |
+|---|---|---|
+| Super Mario Bros. | 1.282 | 0.944 |
+| Zelda | 1.153 | 0.865 |
+| Super Mario Bros. 3 | 1.609 | 1.254 |
+| Punch-Out!! | 1.509 | 1.120 |
+
+**P1 is retired, and it held.** P1 predicted 0.69–0.99 of C#'s time, central 0.83 (1.2×). The measured values are
+0.72–0.78, inside the range and on the fast side of its central value. This is the number P1 was to be settled by. It is through the shim, not the engine alone, so stage
+4's measurement repeats it rather than replaces it.
+
+**P2 is refuted in the favourable direction.** The idle machine was predicted at 0.60–0.77 ms and measured at
+0.52 ms. That is 1.48×, more than any game gains.
+
+P2's own reading was that a larger gain on the idle machine would mean "the renderer is where the games lose it". The
+pixel writes alone do not bear that out:
+
+- Full minus skip gives the pixel writes' cost. It is 0.05–0.09 ms in MoonRT, against 0.07–0.13 ms in C#.
+- So the Rust pixel path is not slower, unlike Mercury's renderer (`Mercury_Native.md` §8.2).
+- The games' smaller gain must then come from what they add to the idle loop: the CPU's work, the boards, and the line
+  composition that runs whether or not pixels are written.
+
+Which of those three it is was not measured. `ipsample.py` over both engines is the tool for it.
+
+**C# Moon itself got slower through stage 2's audit.** Against §1.1's baseline, the four games are 5–9% slower, and the
+idle loop is unchanged within its noise. That is the cost of the halts, the per-dot rules and the APU fixes. Both
+engines carry it. It is why the C# column here is not §1.1's.
+
+#### 8.2.4 What is left
+
+- Stage 4: the shim, the frontends and the engine row.
+- **P3–P6 stay open.**
+  - P4 needs the quota runs through the frontend.
+  - P5 needs the boundary priced on its own; here it is inside MoonRT's column.
+- Whether the games' smaller gain comes from the CPU, the boards or the composition, which was not measured (§8.2.3).

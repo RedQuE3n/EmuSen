@@ -82,7 +82,7 @@ impl Machine {
         if let Some(old) = old {
             bus.apu.set_sample_rate(old.apu.mixer.cycles_per_sample, old.apu.mixer.charge_factor);
             bus.apu.mixer.channel_muted = old.apu.mixer.channel_muted;
-            bus.apu.mixer.max_buffered_samples = old.apu.mixer.max_buffered_samples;
+            bus.apu.mixer.samples.set_limit(old.apu.mixer.samples.limit());
             bus.joypad = old.joypad;
             bus.rom_patches = old.rom_patches.clone();
             bus.ppu.skip_rendering = old.ppu.skip_rendering;

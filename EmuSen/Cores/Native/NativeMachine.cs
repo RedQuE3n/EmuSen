@@ -104,8 +104,14 @@ namespace EmuSen.Cores.Native
         public void Advance()
         {
             ulong detail;
-            Ok(_api.Advance(Handle, &detail));
+            int status = _api.Advance(Handle, &detail);
+            if (status != 0) throw FrameFailure(status, detail);
         }
+
+        // A frame's failure with the core's detail word, which some of a console's exceptions are built from.
+        public Exception FrameFailure(int status, ulong detail) => FrameException(status, detail) ?? ExceptionFor(status);
+
+        protected virtual Exception? FrameException(int status, ulong detail) => null;
 
         public void SetOptions(bool skipRendering) => _api.SetOptions(Handle, skipRendering ? 1u : 0u);
 

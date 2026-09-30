@@ -1,7 +1,7 @@
 //! The debugger's hooks driven through the machine alone: what an observed frame stops for, what it records, and that a frame
 //! observed, halted or refused and resumed is the frame run plain. See Mercury_Native.md §8.5.
 
-use mercuryrt::debug::{Call, Range, Write, stop};
+use mercuryrt::debug::{Call, Range, Write, flag, stop};
 use mercuryrt::machine::{Machine, Model, RUN_CONTINUING, RUN_UNCHECKED};
 use mercuryrt::memory::cartridge::{HEADER_CHECKSUM_ADDRESS, header_checksum};
 
@@ -89,23 +89,23 @@ fn stopping_before_each_instruction_stops_at_every_step_and_the_first_runs_unche
 fn coverage_records_what_the_processor_ran_only_while_armed() {
     let mut m = load(rom(COUNT_FOREVER, &[]));
     m.run_frame_debug(0).unwrap();
-    assert!(m.hooks.coverage.is_none());
-    m.hooks.configure(false, false, false, false, true, false);
+    assert!(m.hooks.coverage[0].is_none());
+    m.hooks.configure(1 << flag::COVERAGE, i32::MIN, -1);
     m.run_frame_debug(0).unwrap();
-    let bits = m.hooks.coverage.as_deref().unwrap();
+    let bits = &m.hooks.coverage[0].as_ref().unwrap().bits;
     let ran = |a: usize| bits[a >> 3] & (1 << (a & 7)) != 0;
     assert!(ran(0x153) && ran(0x154));
     assert!(!ran(0x150) && !ran(0x151) && !ran(0x156));
-    assert!(m.hooks.covered > 1000);
-    m.hooks.configure(false, false, false, false, false, false);
+    assert!(m.hooks.coverage[0].as_ref().unwrap().covered > 1000);
+    m.hooks.configure(0, i32::MIN, -1);
     m.run_frame_debug(0).unwrap();
-    assert!(m.hooks.coverage.is_none());
+    assert!(m.hooks.coverage[0].is_none());
 }
 
 #[test]
 fn a_data_breakpoint_stops_after_the_store_that_wrote_it_and_a_watch_logs_every_byte() {
     let mut m = load(rom(COUNT_FOREVER, &[]));
-    m.hooks.configure(false, true, false, false, false, false);
+    m.hooks.configure(flag::WRITES, i32::MIN, -1);
     m.hooks.watch_ranges = vec![Range { space: 3, start: 0, end: 0 }];
     m.hooks.break_ranges = vec![Range { space: 3, start: 0, end: 0 }];
     assert_eq!(m.run_frame_debug(0), Ok(stop::DATA));
@@ -125,7 +125,7 @@ fn a_store_is_reported_only_while_something_listens_and_only_in_a_range_that_cov
     m.hooks.watch_ranges = vec![Range { space: 3, start: 0, end: 0 }];
     m.run_frame_debug(0).unwrap();
     assert!(m.hooks.writes_log.is_empty());
-    m.hooks.configure(false, true, false, false, false, false);
+    m.hooks.configure(flag::WRITES, i32::MIN, -1);
     m.hooks.watch_ranges = vec![Range { space: 3, start: 1, end: 0x1FFF }, Range { space: 5, start: 0, end: 0x7E }];
     m.run_frame_debug(0).unwrap();
     assert!(m.hooks.writes_log.is_empty());
@@ -134,7 +134,7 @@ fn a_store_is_reported_only_while_something_listens_and_only_in_a_range_that_cov
 #[test]
 fn a_host_write_to_the_cpu_bus_is_reported_as_the_bus_reports_it() {
     let mut m = load(rom(COUNT_FOREVER, &[]));
-    m.hooks.configure(false, true, false, false, false, false);
+    m.hooks.configure(flag::WRITES, i32::MIN, -1);
     m.hooks.watch_ranges = vec![Range { space: 3, start: 0x10, end: 0x10 }, Range { space: 2, start: 0, end: 0x1FFF }];
     m.run_frame_debug(0).unwrap();
     m.hooks.writes_log.clear();
@@ -148,7 +148,7 @@ fn a_host_write_to_the_cpu_bus_is_reported_as_the_bus_reports_it() {
 #[test]
 fn a_call_is_logged_and_stepping_to_a_depth_stops_back_in_the_caller() {
     let mut m = load(call_once());
-    m.hooks.configure(true, false, false, false, false, false);
+    m.hooks.configure(flag::CALLS, i32::MIN, -1);
     m.hooks.breakpoints = vec![(0x150, 0x150)];
     assert_eq!(m.run_frame_debug(0), Ok(stop::BREAKPOINT));
     m.hooks.breakpoints.clear();
@@ -159,7 +159,7 @@ fn a_call_is_logged_and_stepping_to_a_depth_stops_back_in_the_caller() {
     assert_eq!(m.hooks.depth(), 0);
 
     let mut m = load(call_once());
-    m.hooks.configure(true, false, false, false, false, false);
+    m.hooks.configure(flag::CALLS, i32::MIN, -1);
     m.hooks.breakpoints = vec![(0x164, 0x164)];
     assert_eq!(m.run_frame_debug(0), Ok(stop::BREAKPOINT));
     assert_eq!(m.hooks.depth(), 1);
@@ -172,7 +172,7 @@ fn a_call_is_logged_and_stepping_to_a_depth_stops_back_in_the_caller() {
 #[test]
 fn an_interrupt_stops_before_its_vector_and_is_pushed_as_one() {
     let mut m = load(interrupts());
-    m.hooks.configure(true, false, true, false, false, false);
+    m.hooks.configure(flag::CALLS | flag::INTERRUPTS, i32::MIN, -1);
     assert_eq!(m.run_frame_debug(0), Ok(stop::INTERRUPT));
     assert_eq!(m.cpu.pc, 0x40);
     assert_eq!(m.hooks.calls_log, vec![Call { kind: 2, source: 0x159, target: 0x40 }]);
@@ -182,13 +182,13 @@ fn an_interrupt_stops_before_its_vector_and_is_pushed_as_one() {
 #[test]
 fn the_profiler_charges_the_steps_and_the_calls_they_ran_in() {
     let mut m = load(interrupts());
-    m.hooks.configure(true, false, false, false, true, true);
+    m.hooks.configure(flag::CALLS | (1 << flag::COVERAGE) | flag::PROFILING, i32::MIN, -1);
     for _ in 0..3 {
         run_through(&mut m, 0);
     }
     m.hooks.flush();
     let charged: i64 = m.hooks.profile.values().sum();
-    assert_eq!(charged, m.hooks.covered);
+    assert_eq!(charged, m.hooks.coverage[0].as_ref().unwrap().covered);
     let calls = m.bus.high_ram[0x10] as i64;
     assert!(calls > 0 && m.hooks.depth() == 0);
     assert_eq!((m.hooks.profile[&0x220], m.hooks.profile[&0x40]), (4 * calls, 9 * calls));
@@ -198,7 +198,7 @@ fn the_profiler_charges_the_steps_and_the_calls_they_ran_in() {
 fn a_full_log_stops_the_frame_and_nothing_is_lost_once_it_is_drained() {
     let mut m = load(rom(COUNT_FOREVER, &[]));
     m.hooks.capacity = 16;
-    m.hooks.configure(false, true, false, false, false, false);
+    m.hooks.configure(flag::WRITES, i32::MIN, -1);
     m.hooks.watch_ranges = vec![Range { space: 3, start: 0, end: 0 }];
     let mut logged = 0;
     let mut flags = 0;
@@ -223,7 +223,7 @@ fn a_full_log_stops_the_frame_and_nothing_is_lost_once_it_is_drained() {
 fn an_illegal_opcode_in_an_observed_frame_is_the_plain_frames_error() {
     let mut m = load(rom(&[0x00, 0xD3], &[]));
     let mut plain = m.clone();
-    m.hooks.configure(true, true, true, false, true, true);
+    m.hooks.configure(flag::CALLS | flag::WRITES | flag::INTERRUPTS | (1 << flag::COVERAGE) | flag::PROFILING, i32::MIN, -1);
     assert_eq!(m.run_frame_debug(0).unwrap_err(), plain.run_frame().unwrap_err());
     assert_eq!(state(&m), state(&plain));
 }
@@ -251,7 +251,7 @@ fn a_frame_continued_past_a_refused_stop_keeps_the_budget_it_began_with() {
 fn assert_armed_is_plain(image: Vec<u8>, frames: usize) {
     let mut plain = load(image.clone());
     let mut armed = load(image);
-    armed.hooks.configure(true, true, true, false, true, true);
+    armed.hooks.configure(flag::CALLS | flag::WRITES | flag::INTERRUPTS | (1 << flag::COVERAGE) | flag::PROFILING, i32::MIN, -1);
     armed.hooks.breakpoints = vec![(0xFEFF, 0xFEFF), (0x40, 0x40)];
     armed.hooks.watch_ranges = vec![Range { space: 3, start: 0, end: 0x0FFF }, Range { space: 5, start: 0, end: 0x7E }];
     armed.hooks.break_ranges = vec![Range { space: 3, start: 0, end: 0xFF }];

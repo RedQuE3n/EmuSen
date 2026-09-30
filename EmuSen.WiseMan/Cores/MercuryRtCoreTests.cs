@@ -1,10 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Mercury;
+using EmuSen.Cores.Nintendo.Mercury.Cheats;
 using EmuSen.Cores.Nintendo.MercuryRT;
 using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
@@ -134,6 +137,62 @@ namespace EmuSen.WiseMan.Cores
             Assert.Throws<InvalidDataException>(() => rt.LoadState(new MemoryStream(new byte[] { 0x4D, 0x41, 0x52, 0x54, 5, 0, 0, 0 })));
             Assert.Throws<InvalidDataException>(() => rt.LoadState(new MemoryStream(new byte[] { 0x4D, 0x45, 0x52, 0x43, 4, 0, 0, 0 })));
             Assert.Throws<InvalidOperationException>(() => new MercuryRtCore().RunFrame());
+        }
+
+        // The triples against TryPatchRom for every ROM address, over mixed compares, repeats, a Game Genie code and one past the range (EmuSen_NativeCores.md §3.12).
+        [Fact]
+        public void The_patch_triples_answer_as_TryPatchRom_everywhere()
+        {
+            CoreOptions.BatteryRamDisabled = true;
+            var cheats = new CheatRegistry();
+            cheats.AddRomPatch(0x1123, 0x42, 0x07, "compared");
+            cheats.AddRomPatch(0x1123, 0x55, null, "later, unconditional");
+            cheats.AddRomPatch(0x1124, 0x10, null, "unconditional");
+            cheats.AddRomPatch(0x1124, 0x20, null, "shadowed, unconditional");
+            cheats.AddRomPatch(0x1123, 0x66, 0x07, "shadowed");
+            cheats.AddRomPatch(0x7FFF, 0x01, 0xFF, "last");
+            cheats.AddRomPatch(0x0000, 0x02, null, "first");
+            cheats.AddRomPatch(0x8000, 0x03, null, "above the range");
+            const string GameGenie = "00A-17B-C49";
+            var (gg, value) = GbGameGenieCodec.Decode(GameGenie);
+            cheats.AddRomPatch(gg, value, GbGameGenieCodec.DecodeCompare(GameGenie), "nine");
+            int disabled = cheats.AddRomPatch(0x2200, 0x77, null, "off");
+            cheats.SetEnabled(disabled, false);
+
+            var core = (MercuryRtCore)CoreFactory.Load(Rom("patches", CountingRom(0x03)), cheats: cheats, engine: CoreCatalog.MercuryRtEngine).Core;
+            core.RunFrame();
+            var touched = new HashSet<int> { 0x1123, 0x1124, 0x7FFF, 0x0000, gg, 0x2200 };
+            for (int address = 0; address <= 0x7FFF; address++)
+            {
+                IEnumerable<int> values = touched.Contains(address) ? Enumerable.Range(0, 256) : new[] { 0, 0x07, 0xFF };
+                foreach (int original in values)
+                {
+                    int want = cheats.TryPatchRom((uint)address, (byte)original, out byte patched) ? patched : -1;
+                    int got = core.Machine.RomPatch(address, (byte)original);
+                    Assert.True(want == got, $"${address:X4} over {original:X2}: TryPatchRom {want}, MercuryRT {got}");
+                }
+            }
+            Assert.Equal(-1, core.Machine.RomPatch(0x8000, 0));
+            core.Dispose();
+        }
+
+        // A second pad's buttons reach neither engine's joypad, as MercuryCore.SetButton ignores them (§8.7.4).
+        [Fact]
+        public void A_second_ports_buttons_are_ignored_on_both_engines()
+        {
+            CoreOptions.BatteryRamDisabled = true;
+            string rom = Rom("ports", CountingRom(0x03));
+            var cs = (MercuryCore)CoreFactory.Load(rom).Core;
+            using var rt = (MercuryRtCore)CoreFactory.Load(rom, engine: CoreCatalog.MercuryRtEngine).Core;
+            foreach (ICore core in new ICore[] { cs, rt })
+            {
+                core.SetButton(1, PadButton.A, true);
+                core.SetButton(0, PadButton.B, true);
+            }
+            cs.WriteSpace(MercuryCore.SpaceCpuBus, 0xFF00, 0x10);
+            rt.WriteSpace(MercuryCore.SpaceCpuBus, 0xFF00, 0x10);
+            Assert.Equal(0b1101, cs.ReadSpace(MercuryCore.SpaceCpuBus, 0xFF00) & 0x0F);
+            Assert.Equal(0b1101, rt.ReadSpace(MercuryCore.SpaceCpuBus, 0xFF00) & 0x0F);
         }
 
         // Every named space read and sized as MercuryCore reads it, wrapping, past the ROM's end and on a cart with no RAM - mutant M22 (§8.4).

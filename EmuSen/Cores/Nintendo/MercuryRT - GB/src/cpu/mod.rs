@@ -22,7 +22,7 @@ pub trait CpuBus {
     fn stop(&mut self);
     /// A call, a restart or an interrupt dispatch has pushed its return and jumped; the debugger's seam, empty on the plain bus.
     #[inline(always)]
-    fn note_call(&mut self, _source: u16, _target: u16, _interrupt: bool) {}
+    fn note_call(&mut self, _source: u16, _target: u16, _kind: u32) {}
     /// A return has popped its address; the debugger's seam, empty on the plain bus.
     #[inline(always)]
     fn note_return(&mut self) {}
@@ -183,7 +183,7 @@ impl Cpu {
         let from = self.pc;
         self.push(bus, from);
         self.pc = INTERRUPT_VECTORS[bit as usize];
-        bus.note_call(from, self.pc, true);
+        bus.note_call(from, self.pc, emusen_native::debug::kind::IRQ);
         20
     }
 

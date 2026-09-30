@@ -134,7 +134,8 @@
     </PropertyGroup>
     <Copy Condition="'$(_EmuSenPgoUse)' == 'true'" SourceFiles="$(_EmuSenPgoProfile);$([System.IO.Path]::ChangeExtension('$(_EmuSenPgoProfile)', '.pgo'))" DestinationFiles="$(_EmuSenPgoCopy).profdata;$(_EmuSenPgoCopy).pgo" SkipUnchangedFiles="true" />
     <Warning Condition="'$(_EmuSenPgoUse)' == 'true' And ('$(RUSTFLAGS)' != '' Or '$(CARGO_ENCODED_RUSTFLAGS)' != '')" Text="RUSTFLAGS is set and overrides build.rustflags: %(EmuSenRustCrate.Core) builds without its PGO profile." />
-    <Exec Command="cargo build --profile $(EmuSenNativeProfile) --manifest-path &quot;%(EmuSenRustCrate.Dir)Cargo.toml&quot; --target-dir &quot;$(EmuSenCargoTargetRoot)/%(EmuSenRustCrate.Identity)&quot;$(_EmuSenPgoConfig)" StandardOutputImportance="low" />
+    <!-- Run from the crate's directory, as CI runs it, so a crate's own .cargo/config.toml applies - see Mercury_Native.md §8.7. -->
+    <Exec WorkingDirectory="%(EmuSenRustCrate.Dir)" Command="cargo build --profile $(EmuSenNativeProfile) --manifest-path &quot;%(EmuSenRustCrate.Dir)Cargo.toml&quot; --target-dir &quot;$(EmuSenCargoTargetRoot)/%(EmuSenRustCrate.Identity)&quot;$(_EmuSenPgoConfig)" StandardOutputImportance="low" />
   </Target>
 
 </Project>

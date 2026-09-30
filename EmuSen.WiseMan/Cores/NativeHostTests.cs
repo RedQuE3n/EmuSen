@@ -12,29 +12,23 @@ namespace EmuSen.WiseMan.Cores
     // The first increment of the generic native host: one loader, one handle, one patch table - see EmuSen_Settings_Reference.md §4.85.7.
     public class NativeHostTests
     {
-        // The table both 8-bit shims send: an unconditional patch fills all 256 entries, a compared one only its own.
+        // The triples both 8-bit shims send, in ResolveRomPatches' order and within the console's range; no compare is uint.MaxValue.
         [Fact]
-        public void The_rom_patch_table_flattens_try_patch_rom_within_its_bounds()
+        public void The_rom_patch_triples_keep_the_registrys_order_within_their_bounds()
         {
             var cheats = new CheatRegistry();
-            var (address, value) = NesGameGenieCodec.Decode("SXIOPO");
-            cheats.AddRomPatch(address, value, NesGameGenieCodec.DecodeCompare("SXIOPO"), "six");
             cheats.AddRomPatch(0x9123, 0x42, 0x07, "compared");
+            cheats.AddRomPatch(0x9123, 0x55, null, "later");
+            cheats.AddRomPatch(0x3FFF, 0x01, null, "below");
 
-            var (addresses, tables) = RomPatchTable.Build(cheats, 0x4020, 0xFFFF);
-            Assert.Equal(addresses.Length * 256, tables.Length);
-            int compared = Array.IndexOf(addresses, (ushort)0x9123);
-            Assert.True(compared >= 0);
-            for (int v = 0; v < 256; v++) Assert.Equal(v == 0x07 ? 0x142 : 0, tables[compared * 256 + v]);
-
-            cheats.AddRomPatch(0x7FFF, 0x01, null, "last");
-            var (low, _) = RomPatchTable.Build(cheats, 0, 0x7FFF);
-            Assert.DoesNotContain((ushort)0x9123, low);
-            Assert.Equal((ushort)0x7FFF, low[^1]);
-            Assert.Empty(RomPatchTable.Build(new CheatRegistry(), 0, 0xFFFF).Addresses);
+            uint[] nes = NativeRtCore<MoonMachine>.RomPatchTriples(cheats, 0x4020, 0xFFFF);
+            Assert.Equal(new uint[] { 0x9123, 0x42, 0x07, 0x9123, 0x55, uint.MaxValue }, nes);
+            uint[] gb = NativeRtCore<MoonMachine>.RomPatchTriples(cheats, 0, 0x7FFF);
+            Assert.Equal(new uint[] { 0x3FFF, 0x01, uint.MaxValue }, gb);
+            Assert.Empty(NativeRtCore<MoonMachine>.RomPatchTriples(new CheatRegistry(), 0, 0xFFFF));
         }
 
-        // One loader, three facades, and today's switches, crash-log names and reports kept exactly.
+        // One loader, three facades, and their switches and crash-log names; MoonRT and MercuryRT on the common interface, MarsRT on its own until its step.
         [Fact]
         public void The_three_loaders_keep_their_switches_and_crash_logs()
         {
@@ -58,6 +52,24 @@ namespace EmuSen.WiseMan.Cores
             var wrong = NativeCoreLibrary.Common("moonrt", "EMUSEN_CLEANUP_TEST_UNSET", 999, MoonNative.RequiredCapabilities);
             Assert.False(wrong.Available);
             Assert.EndsWith($"speaks common interface 1 core {MoonNative.CoreVersion}, this build common 1 core 999", wrong.Report);
+        }
+
+        // A MercuryRT library that is not there is refused with the words the notice carries, and its capabilities agree with its exports.
+        [Fact]
+        public void MercuryRTs_library_is_on_the_common_interface_and_a_missing_one_is_refused()
+        {
+            var missing = NativeCoreLibrary.Common("mercuryrt_missing", "EMUSEN_MERCURYRT_MISSING_TEST", MercuryNative.CoreVersion, MercuryNative.RequiredCapabilities);
+            Assert.False(missing.Available);
+            Assert.Contains("not found beside the assemblies", missing.Report);
+
+            Assert.True(MercuryNative.Available, MercuryNative.Report);
+            Assert.Equal(MercuryNative.RequiredCapabilities, MercuryNative.Library.Capabilities);
+            nint handle = System.Runtime.InteropServices.NativeLibrary.Load(System.IO.Path.Combine(AppContext.BaseDirectory, MercuryNative.Library.FileName));
+            foreach (string name in NativeInterface.Required) Assert.True(System.Runtime.InteropServices.NativeLibrary.TryGetExport(handle, name, out _), name);
+            foreach (var (bit, name, exports) in NativeInterface.Optional)
+                foreach (string export in exports)
+                    Assert.True(System.Runtime.InteropServices.NativeLibrary.TryGetExport(handle, export, out _) == ((MercuryNative.Library.Capabilities & bit) != 0), $"{name}: {export}");
+            Assert.False(System.Runtime.InteropServices.NativeLibrary.TryGetExport(handle, "mercury_machine_new", out _), "the old mercury_* exports are retired");
         }
 
         // The shared status table and each console's band, in the words the shims used before.

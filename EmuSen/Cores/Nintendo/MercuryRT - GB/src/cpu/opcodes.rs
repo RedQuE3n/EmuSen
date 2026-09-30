@@ -319,7 +319,7 @@ impl Cpu {
             0xC7 | 0xCF | 0xD7 | 0xDF | 0xE7 | 0xEF | 0xF7 | 0xFF => {
                 self.push(bus, self.pc);
                 self.pc = (op & 0x38) as u16;
-                bus.note_call(self.last_instruction_pc, self.pc, false);
+                bus.note_call(self.last_instruction_pc, self.pc, emusen_native::debug::kind::CALL);
                 16
             }
 
@@ -492,7 +492,7 @@ impl Cpu {
         }
         self.push(bus, self.pc);
         self.pc = target;
-        bus.note_call(self.last_instruction_pc, target, false);
+        bus.note_call(self.last_instruction_pc, target, emusen_native::debug::kind::CALL);
         24
     }
 

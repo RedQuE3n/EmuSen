@@ -56,7 +56,7 @@ namespace EmuSen.Cores.Native
         protected abstract long PatchLow { get; }
         protected abstract long PatchHigh { get; }
 
-        // The pad bit a button is, or -1; and the machine's port for a frontend's.
+        // The pad bit a button is, or -1; and the machine's port for a frontend's, or -1 for one the console ignores.
         protected abstract int ButtonBit(PadButton button);
         protected virtual int PortFor(int port) => Math.Clamp(port, 0, _buttons.Length - 1);
 
@@ -143,6 +143,7 @@ namespace EmuSen.Cores.Native
             int bit = ButtonBit(button);
             if (bit < 0) return;
             int pad = PortFor(port);
+            if (pad < 0) return;
             _buttons[pad] = pressed ? _buttons[pad] | (1u << bit) : _buttons[pad] & ~(1u << bit);
             _machine?.SetButtons(pad, _buttons[pad]);
         }

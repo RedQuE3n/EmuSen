@@ -3,19 +3,29 @@ using System.Collections.Generic;
 using System.IO;
 using EmuSen.Cores.Native;
 using EmuSen.Cores.Nintendo.Mercury;
-using EmuSen.Cores.Nintendo.Mercury.Debug;
 using EmuSen.Cores.Nintendo.Mercury.Memory;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Cores.Nintendo.MercuryRT
 {
-    // MercuryRT behind the Game Boy's ICore: the machine in Rust, the registries, saves and cheats' rules in C# - see Mercury_Native.md §8.3.
-    public sealed partial class MercuryRtCore : LegacyNativeRtCore<MercuryMachine>, ICore, ICheatRegistryHost, IStateFormat, IFrameBufferPool, ICoreSettings, IDisposable
+    // MercuryRT behind the Game Boy's ICore, on the common native host: the machine in Rust, the registries, saves and cheats' rules in C# - see Mercury_Native.md §8.7.
+    public sealed class MercuryRtCore : NativeRtCore<MercuryMachine>, ICore, ICheatRegistryHost, IStateFormat, IFrameBufferPool, ICoreSettings, IDisposable
     {
         private static readonly PadButton[] MaskOrder = { PadButton.Right, PadButton.Left, PadButton.Up, PadButton.Down, PadButton.A, PadButton.B, PadButton.Select, PadButton.Start };
 
-        private uint _buttons;
+        private readonly NativeDebugBridge _debug;
+        private GbModel _model;
+        private string? _romPath;
+
+        // The debugger's bridge over the mirror's registries, its pushes stamped with the frame being drained - see Mercury_Native.md §8.5.
+        public MercuryRtCore() : base(MercuryMachine.FrameBytes, ports: 1)
+        {
+            _debug = new NativeDebugBridge(() => _machine, Mirror.Breakpoints, Mirror.Watches, Mirror.CallStack,
+                new[] { Mirror.Coverage }, new[] { 0x10000 / 8 }, ReportedName, ReportedSpace);
+            Mirror.CallStack.FrameNumberProvider = () => _debug.EventFrame;
+            DebugBridge = _debug;
+        }
 
         // The C# machine the debugger reads, refreshed from MercuryRT's state; its registries are this core's - see Mercury_Native.md §8.3.
         public MercuryCore Mirror { get; } = new();
@@ -24,8 +34,9 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         protected override bool MirrorLoaded => Mirror.Bus is not null;
         protected override CheatRegistry MirrorCheats { get => Mirror.Cheats; set => Mirror.Cheats = value; }
         protected override IReadOnlyList<string> SpaceNames => MercuryMachine.SpaceNames;
-        protected override int PatchLow => 0;
-        protected override int PatchHigh => 0x7FFF;
+        protected override int CpuBusSpace => 6;
+        protected override long PatchLow => 0;
+        protected override long PatchHigh => 0x7FFF;
 
         public static bool Available => MercuryMachine.Complete;
 
@@ -36,9 +47,6 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         public override double FrameRateHz => MercuryCore.CpuClockHz / (double)MercuryCore.CyclesPerFrame;
         public override IReadOnlyList<PadButton> SupportedButtons => MercuryCore.PadButtons;
         public override int StateVersion => MercuryCore.StateVersion;
-
-        private GbModel _model;
-        private string? _romPath;
 
         // MercuryCore.Model: the console the next load builds, and a change before the first frame loads the game again at once.
         public GbModel Model
@@ -69,53 +77,50 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         public LabelRegistry Labels => Mirror.Labels;
         public CallStackRegistry CallStack => Mirror.CallStack;
 
-        public MercuryRtCore() : base(MercuryMachine.FrameBytes) => CallStack.FrameNumberProvider = () => _eventFrame;
+        public NativeDebugBridge Debug => _debug;
 
-        public MercuryMachine Machine => _machine ?? throw new InvalidOperationException("No ROM is loaded.");
+        // The instruction the processor is about to run, live, as the registry compares it.
+        public int Pc => _debug.ProgramCounter();
 
-        // MercuryCore.LoadRom: the header parsed by the C# Cartridge so its exceptions are C#'s own, the battery save read as C# reads it.
-        public override void LoadRom(string path)
+        // MercuryRT's own depth, which the registry's pushes it and its runs move; for tests.
+        public long NativeDepth => _machine is null ? 0 : _debug.Counters().Depth;
+
+        internal void Listen() => _debug.Listen();
+
+        // MercuryDebugTarget.OnWrite's two listeners: a store is reported while a watch or a data breakpoint exists.
+        public bool Listening => _debug.Listening;
+
+        // The spaces the core logs a store under, by the C ABI's number: VRAM to HRAM, as C#'s bus reports them.
+        private static string? ReportedName(uint id) => id is >= 1 and <= 5 ? MercuryMachine.SpaceNames[id] : null;
+
+        private static uint? ReportedSpace(string name)
         {
-            byte[] image = File.ReadAllBytes(path);
-            Cartridge header = Cartridge.FromImage(image);
-            BatterySave battery = BatterySave.Open(path, BatterySave.GameBoyFolder(path), hasRam: header.HasBattery && header.Ram.Length > 0);
-            byte[]? saved = battery.Read();
+            for (uint space = 1; space <= 5; space++)
+                if (string.Equals(name, MercuryMachine.SpaceNames[space], StringComparison.OrdinalIgnoreCase)) return space;
+            return null;
+        }
 
-            var machine = new MercuryMachine(image, _model);
-            Adopt(machine, battery, saved, header.Ram.Length);
+        // MercuryCore.LoadRom: the header parsed by the C# Cartridge so its exceptions are C#'s own, the battery save opened as C# opens it.
+        protected override (BatterySave Battery, string Settings) Prepare(string path, byte[] image)
+        {
+            Cartridge header = Cartridge.FromImage(image);
+            return (BatterySave.Open(path, BatterySave.GameBoyFolder(path), hasRam: header.HasBattery && header.Ram.Length > 0), "");
+        }
+
+        protected override MercuryMachine CreateMachine(byte[] image, string settings, IReadOnlyList<(uint Which, byte[] Data)> files) =>
+            new(image, _model, files.Count > 0 ? files[0].Data : null);
+
+        protected override void Loaded(string path)
+        {
             _romPath = path;
-            machine.SetButtons(_buttons);
             Mirror.LoadRom(path);
             Mirror.Model = _model;
-            IsHaltedAtBreakpoint = false;
         }
 
-        public override void SetButton(int port, PadButton button, bool pressed)
-        {
-            if (port != 0) return;
-            int bit = Array.IndexOf(MaskOrder, button);
-            if (bit < 0) return;
-            _buttons = pressed ? _buttons | (1u << bit) : _buttons & ~(1u << bit);
-            _machine?.SetButtons(_buttons);
-        }
+        protected override int ButtonBit(PadButton button) => Array.IndexOf(MaskOrder, button);
 
-        // MercuryCore.RunFrame and EndFrame; the observed loop when anything is armed, and a halt returns before the frame's end - see Mercury_Native.md §8.5.
-        public override void RunFrame()
-        {
-            if (_machine is null) throw new InvalidOperationException("RunFrame() called before LoadRom().");
-            BeforeFrame();
-            bool resuming = IsHaltedAtBreakpoint;
-            IsHaltedAtBreakpoint = false;
-            if (Observed)
-            {
-                if (!RunObserved(_machine.Handle, resuming)) return;
-            }
-            else
-            {
-                _machine.RunFrame();
-            }
-            EndFrame();
-        }
+        // Pad 1 alone; another port is ignored, as MercuryCore.SetButton ignores it.
+        protected override int PortFor(int port) => port == 0 ? 0 : -1;
 
         // MercuryCore.LoadState's two refusals with its messages.
         protected override void CheckState(byte[] state)
@@ -132,7 +137,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         {
             if (_machine is not null && SpaceNumber(spaceName) == CpuBusSpace && Listening)
             {
-                WriteObserved(_machine.Handle, address, value);
+                _debug.Observed(() => base.WriteSpace(spaceName, address, value));
                 return;
             }
             base.WriteSpace(spaceName, address, value);

@@ -74,7 +74,7 @@ namespace EmuSen.Cores.Native
                 int reasons = api.DebugRunFrame(machine.Handle, flags, &pc, &detail);
                 flags = RunUnchecked | RunContinue;
                 Drain(machine);
-                if (reasons < 0) throw machine.ExceptionFor(reasons);
+                if (reasons < 0) throw machine.FrameFailure(reasons, detail);
                 if (reasons == 0)
                 {
                     haltedAt = 0;

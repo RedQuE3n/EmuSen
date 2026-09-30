@@ -2,7 +2,7 @@
 
 use crate::Skip;
 use crate::cpu::{Cpu, IllegalOpcode};
-use crate::debug::{Hooks, ObservedBus, stop};
+use crate::debug::{Hooks, ObservedBus, new_hooks, stop};
 use crate::memory::bus::MemoryBus;
 use crate::memory::cartridge::{Cartridge, RomError};
 use crate::state::{StateError, StateReader, StateResult, StateWriter};
@@ -43,10 +43,10 @@ impl Model {
     }
 }
 
-/// `run_frame_debug`'s flags: the first step runs unchecked, as the one a halt stopped in front of does.
-pub const RUN_UNCHECKED: u32 = 1;
+/// `run_frame_debug`'s flags, emusen-native's `debug::run`: the first step runs unchecked, as the one a halt stopped in front of does.
+pub const RUN_UNCHECKED: u32 = emusen_native::debug::run::UNCHECKED;
 /// ... and the frame is the one the last call stopped inside, its budget kept, rather than a new call of `RunFrame`.
-pub const RUN_CONTINUING: u32 = 2;
+pub const RUN_CONTINUING: u32 = emusen_native::debug::run::CONTINUE;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Machine {
@@ -87,7 +87,7 @@ impl Machine {
             bus.rom_patches = old.rom_patches.clone();
             bus.ppu.skip_rendering = old.ppu.skip_rendering;
         }
-        Machine { total_frames: 0, cycles_into_frame: 0, cpu, bus, hooks: Skip(Box::default()) }
+        Machine { total_frames: 0, cycles_into_frame: 0, cpu, bus, hooks: Skip(Box::new(new_hooks())) }
     }
 
     /// True while the machine is a Game Boy Color, whatever its cartridge.
@@ -133,17 +133,17 @@ impl Machine {
         let mut unchecked = flags & RUN_UNCHECKED != 0;
         while *cycles_into_frame < budget {
             if !unchecked {
-                let why = hooks.stop_before(cpu.pc);
+                let why = hooks.stop_before(cpu.pc as u32);
                 if why != stop::FRAME {
                     return Ok(why);
                 }
             }
             unchecked = false;
-            hooks.record(cpu.pc);
+            hooks.record(cpu.pc as u32);
             let mark = hooks.writes_log.len();
             let (ie, iflags) = (bus.interrupt_enable, bus.interrupt_flags);
             let stepped = cpu.step(&mut ObservedBus { bus, hooks }, ie, iflags);
-            hooks.stamp(mark, cpu.last_instruction_pc);
+            hooks.stamp(mark, cpu.last_instruction_pc as u32);
             let (cycles, serviced) = stepped?;
             if serviced >= 0 {
                 bus.interrupt_flags &= !(1u8 << serviced);
@@ -212,7 +212,7 @@ impl Machine {
                 let reported = if self.hooks.writes { bus.reported_space(address) } else { None };
                 bus.write(address, value);
                 if let Some((space, offset)) = reported {
-                    self.hooks.note_write(space, offset, value, self.cpu.last_instruction_pc);
+                    self.hooks.note_write(space, offset, value, self.cpu.last_instruction_pc as u32);
                 }
             }
             _ => {}

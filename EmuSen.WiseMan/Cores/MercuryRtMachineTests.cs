@@ -96,13 +96,36 @@ namespace EmuSen.WiseMan.Cores
             _output.WriteLine(pair.Summary);
         }
 
+        // The pictures are compared with rendering skipped too; only the colour program draws anything a skip that rendered would change (§8.7.4).
         [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public void Rendering_skipped_or_not_leaves_the_same_machine(bool skip)
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        public void Rendering_skipped_or_not_leaves_the_same_machine(bool skip, bool colour)
         {
-            var pair = new MercuryRtPair(InterruptsRom(0x03, 0x02, 0x80), skipRendering: skip);
+            var pair = new MercuryRtPair(colour ? ColourRom() : InterruptsRom(0x03, 0x02, 0x80), skipRendering: skip);
             pair.Run(300, null);
+        }
+
+        // An illegal opcode in a plain frame stops both engines with C#'s message, the opcode and pc rebuilt from the frame's detail word (§8.7.1).
+        [Fact]
+        public void An_illegal_opcode_in_a_plain_frame_stops_both_engines_alike()
+        {
+            var pair = new MercuryRtPair(SyntheticGbRom.Build(patches: (0, new byte[] { 0x00, 0x00, 0xD3 })), skipRendering: false);
+            Assert.False(pair.Frame(null, 0), "the frame ran past $D3");
+        }
+
+        // Each channel muted alone on both engines, the sound compared every frame; the busy program keys pulse 1 (§8.7.4).
+        [Fact]
+        public void Each_channel_mutes_the_same_channel_on_both_engines()
+        {
+            for (int channel = 0; channel < 4; channel++)
+            {
+                var pair = new MercuryRtPair(SyntheticGbRom.Build(patches: (0, Busy)), skipRendering: false);
+                pair.Csharp.Bus!.Apu.SetChannelMuted(channel, true);
+                pair.Rust.SetMutes(1u << channel);
+                pair.Run(30, null);
+            }
         }
 
         // HALT with IME clear and an interrupt pending, the HALT bug's one case, then EI's one-instruction delay into a pending interrupt - mutant M3 survived without it (§8.4).
@@ -420,12 +443,9 @@ namespace EmuSen.WiseMan.Cores
                 int same = a.AsSpan().CommonPrefixLength(b);
                 Assert.True(same == a.Length && a.Length == b.Length, $"frame {_frames}: {a.Length} C# samples, {b.Length} Rust, first difference at {same}");
                 _samples += a.Length;
-                if (!_skip)
-                {
-                    Rust.CopyFrame(_frame);
-                    int pixel = Csharp.GetFrameBufferRgba().AsSpan().CommonPrefixLength(_frame);
-                    Assert.True(pixel == _frame.Length, $"frame {_frames}: the pictures differ first at byte {pixel} (x {pixel / 4 % 160}, y {pixel / 640})");
-                }
+                Rust.CopyFrame(_frame);
+                int pixel = Csharp.GetFrameBufferRgba().AsSpan().CommonPrefixLength(_frame);
+                Assert.True(pixel == _frame.Length, $"frame {_frames}: the pictures differ first at byte {pixel} (x {pixel / 4 % 160}, y {pixel / 640}){(_skip ? ", rendering skipped" : "")}");
             }
             if (_frames % _stateEvery == 0 || csharp is not null) CompareState($"frame {_frames}");
             return csharp is null;

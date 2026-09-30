@@ -96,3 +96,36 @@ One deliberate difference from the SNES: this core normalizes against its real `
 `HardwareLoad` publishes an empty list — there is no per-subsystem timing breakdown, so `coretop` skips that section rather than showing fake bars. `AudioChannels` reports the five channels with real length-counter state but no levels, because nothing is synthesized (`Moon_APU.md`).
 
 **Untested against the shell.** Everything here is exercised by `EmuSen.WiseMan/Cores/MoonDebugTargetTests.cs` against the interface directly. No DianaOS command has been run against a Moon target, and `EmuSen.Pharaoh`/`EmuSen.Mistress` have not been wired to construct one — they still build `SnesDebugTarget` from a concrete `VenusCore`. That wiring is the obvious next step and is where any remaining assumption that "the core" means Venus will surface.
+
+## 7. The call stack, data breakpoints, the profile, and a resume (2026-09-30)
+
+*Added for MoonRT's stage 5, which needs a C# oracle for each thing its debugger does (`Moon_Native.md` §8.4).
+Before this, the Moon core had no call stack and no profile, and its data breakpoints never fired. Two of §6's
+defaults are no longer defaults.*
+
+- **The call stack.** `MoonCore.CallStack` is a `CallStackRegistry`, and `Breakpoints.CallStack` points at it, so
+  step over, step out and the depth guard work. The CPU has three observers, `[SkipInState]` delegates that
+  `LoadRom` wires:
+  - `CallObserver`: JSR, with its own address as the source and its target;
+  - `ReturnObserver`: RTS and RTI;
+  - `InterruptObserver`: each interrupt entered. Its kind is taken from the vector it read: NMI for `$FFFA`, and
+    otherwise IRQ, or BRK for the instruction. A hijacked BRK or IRQ is therefore an NMI, as the handler that runs is
+    the NMI's.
+  Each interrupt also reaches `Breakpoints.NoteInterrupt`, which is what `runto nmi` waits for. The stack is reset
+  at `LoadRom` and not at RESET, as Mercury's is.
+- **The profile.** A frame with the profiler armed charges each instruction to the innermost call
+  (`NoteInstruction`).
+- **Data breakpoints.** `MoonDebugTarget.OnWrite` now tells `Breakpoints.NoteWrite` as well as the watches. The
+  debug target's CPU carries the coverage, the call stack, the code space (`CPUBUS`) and the program counter.
+- **A resume earns the halted scanline once.** `RunFrame` earns each scanline's CPU cycles before running them. A
+  frame halted at a breakpoint returns partway through a scanline, and the next `RunFrame` used to earn that
+  scanline again. After a halt and a resume, the CPU budget was a scanline's cycles above that of a run without the
+  breakpoint.
+  - The picture and the cycle count agreed, but the state did not. A probe halting on a frame's first instruction,
+    measured on 2026-09-30, gave 643700128FB8D2E8 against 288C0F83FEB12AF8.
+  - A resume now skips the halted scanline's earning. The two hashes are equal, and
+    `A_halt_and_its_resume_leave_the_machine_as_an_unhalted_run` holds it on both engines.
+  - The defect did not reach play, because only a halt could cause it.
+
+What stays out: read breakpoints and read watches. The bus reports no reads to an observer, on either engine, so a
+data breakpoint `OnRead` never fires. That is the same on Mercury and on both NES engines.

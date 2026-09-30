@@ -1264,3 +1264,71 @@ How it was measured, on 2026-09-30:
 
 The geometric mean is +0.06%. Every game's two ranges across rounds overlap. So the difference is inside the noise,
 and no direction is claimed.
+
+### 12.4 Step 3: the debugger's hooks, shared, with MoonRT on them (2026-09-30)
+
+**What is shared.** `emusen-native`'s `debug` module (`src/debug.rs`) holds the data of §3.14 and its helpers:
+
+- `Hooks`, with `configure`, `armed`, `set_stack`, `note_call`, `note_return`, `flush`, `record` and `record_on`,
+  `stop_before`, `covers`, `note_write`, `stamp`, `set_breakpoints`, `set_ranges` and `counters`;
+- the stop bits, the flags, the run flags and the call kinds;
+- `Range`, `Write`, `Call`, `MAX_DEPTH` and `LOG_CAPACITY`;
+- per-processor `Coverage`;
+- `drain`, `drain_profile` and `drain_coverage`.
+
+`native_exports!` gains two groups:
+
+- `debug`, which has ten of §3.14's exports: `debug_set`, `debug_set_breakpoints`, `debug_set_ranges`,
+  `debug_run_frame`, `debug_writes`, `debug_calls`, `debug_profile`, `debug_coverage`, `debug_counters` and
+  `debug_pc`;
+- `debug_stack`, which has `debug_set_stack`.
+
+They sit over three `NativeCore` methods: `debug_hooks`, `debug_run_frame` and `debug_pc`. The C# side is
+`NativeDebugBridge`, with `RunFrame`, `PushTables`, `Drain`, `Grow`, `Observed` for a host store, `Counters` and
+`ProgramCounter`. It fills `NativeRtCore`'s seam, whose `RunFrame(resuming, out haltedAt)` returns false on a halt.
+
+**Not generic over the program counter.** Every address in the hooks is a `u32`, which holds the 6502's, the SM83's
+and the low word MarsRT's C# oracle compares. The processor's width is given only to coverage, at `Hooks::new`: 16 bits
+for a 6502 or an SM83, and 24 and 12 for MarsRT. A type parameter would have made each core's hooks a different type
+for no case that needs one.
+
+**The drift of §1.3, reconciled as decided:**
+
+| | Now |
+|---|---|
+| Stack | (source, target) pairs, as MarsRT's; `set_stack` takes pairs |
+| Returns with nothing open | counted (`unmatched_returns`), as MarsRT's, and logged, as MercuryRT's |
+| `armed()` | on the shared hooks, as MarsRT's |
+| Log capacity | a field, as MercuryRT's |
+| `stamp` | shared, as MercuryRT's |
+| Call kinds | 0 return, 1 call, then C#'s `CallFrameKind` from 2: IRQ 2, NMI 3, BRK 4, COP 5. MercuryRT's 2 is unchanged; the NES needed NMI and BRK apart |
+| An interrupt of any kind | sets the one-shot `INTERRUPT` stop when `INTERRUPTS` is armed |
+| Profile | a `BTreeMap` |
+| Coverage | per processor, armed by bit 8 + n |
+| Flags | `CALLS` 1, `WRITES` 2, `INTERRUPTS` 4, `EACH` 8, `PROFILING` 16 |
+| `return_after_slot` | not shared: it is MarsRT's delay slot, a mechanism, and stays in MarsRT (§3.14) |
+| Frame continuation | not shared: MoonRT's is `frame_open` in its machine, as MercuryRT's is its budget and MarsRT's its frame clock |
+
+**The host reports each interrupt from the call log.** The bridge calls `Breakpoints.NoteInterrupt` for every push
+of kind 2 or more as it drains the log. MercuryRT's bridge calls it from the `INTERRUPT` stop's reason. The difference
+matters because the NES has three kinds and the reason carries none. The log is always drained at the stop that
+follows a dispatch, so the note lands before the handler's first instruction is asked about, as C# has it.
+
+**MoonRT's mechanism** is `Moon_Native.md` §8.4.2: the CPU generic over two views of the bus, with a flag version
+measured and not kept.
+
+**Owed for MercuryRT's and MarsRT's moves, steps 4 and 5:**
+
+- **MercuryRT.** Its `debug.rs` is the shared module's ancestor. It adopts the module with four changes:
+  - its stack becomes pairs;
+  - its flags are renumbered (`COVERAGE` 16 → bit 8, `PROFILING` 32 → 16);
+  - `note_call`'s `interrupt: bool` becomes a kind;
+  - `mercury_debug_*` becomes `emusen_native_debug_*`, with `mercury_machine_pc` becoming `debug_pc`.
+  Its `ObservedBus` stays its own. Not done now, since it is step 4's with its oracles, and the brief for this step
+  held it back unless trivially safe; the renumbered flags alone make it not trivial.
+- **MarsRT.** Its hooks move with its profile (`HashMap` → `BTreeMap`), its 24- and 12-bit coverage onto
+  `Hooks::new(&[24, 12])`, and its `PROFILING` 64 and `RSP_COVERAGE` 32 onto 16 and bit 9. That is step 5, with the
+  PGO retrain after it. Its Rust is untouched here.
+- **An "armed equals plain" helper in the crate** for the three cores' Rust tests, as MercuryRT's `tests/debug.rs`
+  has for itself. The generic loop needs only `NativeCore`, but it was not written. MoonRT's oracle for it is the C#
+  one, `MoonRtArmedEqualsPlainTests`, through the whole host.

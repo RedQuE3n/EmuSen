@@ -83,6 +83,7 @@ pub struct Apu {
     pub pending_frame_value: i32,
     pub step_mode: bool,
     pub write_delay_counter: i32,
+    pub length_written: Skip<bool>,
 
     pub mixer: Skip<Mixer>,
 }
@@ -107,6 +108,7 @@ impl Default for Apu {
             pending_frame_value: -1,
             step_mode: false,
             write_delay_counter: 0,
+            length_written: Skip(false),
             mixer: Skip(Mixer::default()),
         }
     }
@@ -153,6 +155,16 @@ impl Apu {
         self.soft_reset();
         self.dmc.reset();
         self.mixer.buffer.clear();
+        self.end_length_cycle();
+    }
+
+    /// `EndLengthCycle`: the cycle after a channel write, when the length clocks catch up with it.
+    pub fn end_length_cycle(&mut self) {
+        *self.length_written = false;
+        self.pulse1.end_length_cycle();
+        self.pulse2.end_length_cycle();
+        self.triangle.end_length_cycle();
+        self.noise.end_length_cycle();
     }
 
     /// RESET silences every channel and rewrites `$4017` with the mode it already had - see Moon_APU.md §2.2.
@@ -172,6 +184,9 @@ impl Apu {
         if (0x4000..=0x4013).contains(&address) {
             self.registers[(address - 0x4000) as usize] = value;
         }
+        if address <= 0x400F {
+            *self.length_written = true;
+        }
         let v = value as i32;
         match address {
             0x4000 => write_pulse_control(&mut self.pulse1, value),
@@ -189,9 +204,7 @@ impl Apu {
             0x400A => self.triangle.timer_period = (self.triangle.timer_period & 0x700) | v,
             0x400B => {
                 self.triangle.timer_period = (self.triangle.timer_period & 0xFF) | ((v & 0x07) << 8);
-                if self.triangle.enabled {
-                    self.triangle.length_counter = LENGTH_COUNTER[(value >> 3) as usize] as i32;
-                }
+                self.triangle.load_length(LENGTH_COUNTER[(value >> 3) as usize] as i32);
                 self.triangle.linear_reload = true;
             }
             0x400C => {
@@ -205,9 +218,7 @@ impl Apu {
                 self.noise.period_index = v & 0x0F;
             }
             0x400F => {
-                if self.noise.enabled {
-                    self.noise.length_counter = LENGTH_COUNTER[(value >> 3) as usize] as i32;
-                }
+                self.noise.load_length(LENGTH_COUNTER[(value >> 3) as usize] as i32);
                 self.noise.envelope.restart();
             }
             0x4010 => {
@@ -301,6 +312,9 @@ impl Apu {
             }
 
             self.step_frame_counter();
+            if *self.length_written {
+                self.end_length_cycle();
+            }
 
             let mix = self.mix();
             let m = &mut *self.mixer;
@@ -341,9 +355,14 @@ impl Apu {
             }
         };
         if self.frame_cycle >= due {
-            if !self.step_mode && self.frame_step >= 3 && !self.irq_inhibited() {
-                self.frame_irq_pending = true;
-                *self.frame_irq_readable = true;
+            if !self.step_mode && self.frame_step >= 3 {
+                let inhibited = self.irq_inhibited();
+                if !inhibited {
+                    self.frame_irq_pending = true;
+                }
+                if !inhibited || self.frame_step < 5 {
+                    *self.frame_irq_readable = true;
+                }
             }
             let kind = FRAME_TYPES[self.frame_step as usize];
             if kind != FRAME_NONE && self.block_frame_counter_tick == 0 {
@@ -494,8 +513,6 @@ fn write_sweep(pulse: &mut PulseChannel, value: u8) {
 
 fn write_pulse_high(pulse: &mut PulseChannel, value: u8) {
     pulse.timer_period = (pulse.timer_period & 0xFF) | (((value & 0x07) as i32) << 8);
-    if pulse.enabled {
-        pulse.length_counter = LENGTH_COUNTER[(value >> 3) as usize] as i32;
-    }
+    pulse.load_length(LENGTH_COUNTER[(value >> 3) as usize] as i32);
     pulse.restart_sequencer();
 }

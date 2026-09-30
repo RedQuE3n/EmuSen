@@ -11,7 +11,7 @@ using EmuSen.Galaxia.Input;
 namespace EmuSen.Cores.Nintendo.MercuryRT
 {
     // MercuryRT behind the Game Boy's ICore: the machine in Rust, the registries, saves and cheats' rules in C# - see Mercury_Native.md §8.3.
-    public sealed partial class MercuryRtCore : NativeRtCore<MercuryMachine>, ICore, ICheatRegistryHost, IStateFormat, IFrameBufferPool, ICoreSettings, IDisposable
+    public sealed partial class MercuryRtCore : LegacyNativeRtCore<MercuryMachine>, ICore, ICheatRegistryHost, IStateFormat, IFrameBufferPool, ICoreSettings, IDisposable
     {
         private static readonly PadButton[] MaskOrder = { PadButton.Right, PadButton.Left, PadButton.Up, PadButton.Down, PadButton.A, PadButton.B, PadButton.Select, PadButton.Start };
 

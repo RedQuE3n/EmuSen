@@ -5,9 +5,9 @@ using EmuSen.Cores.Native;
 namespace EmuSen.Cores.Nintendo.MercuryRT
 {
     // MercuryRT's machine behind its handle, its state read and written in the C# Mercury's own format - see Mercury_Native.md §3.2.
-    public sealed unsafe class MercuryMachine : NativeMachine
+    public sealed unsafe class MercuryMachine : LegacyNativeMachine
     {
-        private static readonly NativeExports Exports = new(MercuryNative.Library, "mercury_machine_");
+        private static readonly LegacyNativeExports Exports = new(MercuryNative.Library, "mercury_machine_");
         private static readonly delegate* unmanaged<byte*, nuint, uint, int*, nint> New = (delegate* unmanaged<byte*, nuint, uint, int*, nint>)MercuryNative.Export("mercury_machine_new");
         private static readonly delegate* unmanaged<nint, int> CgbHardwareOf = (delegate* unmanaged<nint, int>)MercuryNative.Export("mercury_machine_cgb_hardware");
         private static readonly delegate* unmanaged<nint, uint*, int> RunFrameOf = (delegate* unmanaged<nint, uint*, int>)MercuryNative.Export("mercury_machine_run_frame");

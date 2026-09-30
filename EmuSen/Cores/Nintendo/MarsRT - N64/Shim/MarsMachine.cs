@@ -8,9 +8,9 @@ using EmuSen.Cores.Nintendo.Mars.Native;
 namespace EmuSen.Cores.Nintendo.MarsRT
 {
     // MarsRT's machine behind its handle: for now its state, read and written in the C# Mars's own format - see Mars_Native.md §5.1.
-    public sealed unsafe class MarsMachine : NativeMachine
+    public sealed unsafe class MarsMachine : LegacyNativeMachine
     {
-        private static readonly NativeExports Exports = new(MarsNative.Library, "mars_machine_", lifecycleOnly: true);
+        private static readonly LegacyNativeExports Exports = new(MarsNative.Library, "mars_machine_", lifecycleOnly: true);
         private static readonly delegate* unmanaged<uint, nint> New = (delegate* unmanaged<uint, nint>)MarsNative.Export("mars_machine_new");
         private static readonly delegate* unmanaged<nint, uint> RdramOf = (delegate* unmanaged<nint, uint>)MarsNative.Export("mars_machine_rdram_bytes");
         private static readonly delegate* unmanaged<nint, int> KindOf = (delegate* unmanaged<nint, int>)MarsNative.Export("mars_machine_state_kind");

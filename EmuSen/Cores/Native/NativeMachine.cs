@@ -1,82 +1,65 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
 namespace EmuSen.Cores.Native
 {
-    // The exports every Rust core has under today's per-core names, resolved once per library; zero where a library lacks one - see EmuSen_NativeCores.md §4.2.
-    public sealed unsafe class NativeExports
-    {
-        public readonly delegate* unmanaged<nint, void> Free;
-        public readonly delegate* unmanaged<nint, byte*, nuint, int> LoadState;
-        public readonly delegate* unmanaged<nint, long> SaveStateSize;
-        public readonly delegate* unmanaged<nint, byte*, nuint, long> SaveState;
-        public readonly delegate* unmanaged<nint, byte*, nuint, long> StateLayout;
-        public readonly delegate* unmanaged<nint, uint, void> SetOptions;
-        public readonly delegate* unmanaged<nint, uint, void> SetMutes;
-        public readonly delegate* unmanaged<nint, ulong, void> SetAudioLimit;
-        public readonly delegate* unmanaged<nint, byte*, nuint, long> Frame;
-        public readonly delegate* unmanaged<nint, long> AudioBuffered;
-        public readonly delegate* unmanaged<nint, short*, nuint, long, long> DrainAudio;
-        public readonly delegate* unmanaged<nint, long> TotalFrames;
-        public readonly delegate* unmanaged<nint, uint, long> SpaceSize;
-        public readonly delegate* unmanaged<nint, uint, int, byte*, nuint, long> ReadSpace;
-        public readonly delegate* unmanaged<nint, uint, int, byte*, nuint, long> WriteSpace;
-        public readonly delegate* unmanaged<nint, ushort*, ushort*, nuint, void> SetRomPatches;
-        public readonly bool LifecycleOnly;
-
-        // prefix is "moon_machine_" or "mercury_machine_"; lifecycleOnly resolves free and load_state alone, for MarsRT, whose other exports differ in shape.
-        public NativeExports(NativeCoreLibrary library, string prefix, bool lifecycleOnly = false)
-        {
-            Free = (delegate* unmanaged<nint, void>)library.Export(prefix + "free");
-            LoadState = (delegate* unmanaged<nint, byte*, nuint, int>)library.Export(prefix + "load_state");
-            LifecycleOnly = lifecycleOnly;
-            if (lifecycleOnly) return;
-            SaveStateSize = (delegate* unmanaged<nint, long>)library.Export(prefix + "save_state_size");
-            SaveState = (delegate* unmanaged<nint, byte*, nuint, long>)library.Export(prefix + "save_state");
-            StateLayout = (delegate* unmanaged<nint, byte*, nuint, long>)library.Export(prefix + "state_layout");
-            SetOptions = (delegate* unmanaged<nint, uint, void>)library.Export(prefix + "set_options");
-            SetMutes = (delegate* unmanaged<nint, uint, void>)library.Export(prefix + "set_mutes");
-            SetAudioLimit = (delegate* unmanaged<nint, ulong, void>)library.Export(prefix + "set_audio_limit");
-            Frame = (delegate* unmanaged<nint, byte*, nuint, long>)library.Export(prefix + "frame");
-            AudioBuffered = (delegate* unmanaged<nint, long>)library.Export(prefix + "audio_buffered");
-            DrainAudio = (delegate* unmanaged<nint, short*, nuint, long, long>)library.Export(prefix + "drain_audio");
-            TotalFrames = (delegate* unmanaged<nint, long>)library.Export(prefix + "total_frames");
-            SpaceSize = (delegate* unmanaged<nint, uint, long>)library.Export(prefix + "space_size");
-            ReadSpace = (delegate* unmanaged<nint, uint, int, byte*, nuint, long>)library.Export(prefix + "read_space");
-            WriteSpace = (delegate* unmanaged<nint, uint, int, byte*, nuint, long>)library.Export(prefix + "write_space");
-            SetRomPatches = (delegate* unmanaged<nint, ushort*, ushort*, nuint, void>)library.Export(prefix + "set_rom_patches");
-        }
-    }
-
-    // A Rust machine behind its handle: the handle's life, the shared status codes and the common calls - see EmuSen_NativeCores.md §4.2.
+    // A machine behind the common native interface: its handle, the shared statuses mapped, one method per export - see EmuSen_NativeCores.md §4.2.
     public abstract unsafe class NativeMachine : IDisposable
     {
         private nint _handle;
-        private readonly NativeExports _exports;
+        private readonly NativeInterface _api;
+        private readonly Func<int, Exception?> _refusal;
+        private readonly Func<long, string?> _describe;
+        private readonly string _stateName;
 
-        private readonly Func<long, string> _describe;
-
-        // engine names the library in messages ("MoonRT"); describe is the console's static table over the shared one.
-        protected NativeMachine(NativeExports exports, string engine, Func<long, string> describe)
+        // engine names the library in messages ("MoonRT"); refusal and describe are the console's own band, asked before the shared codes.
+        protected NativeMachine(NativeInterface api, string engine, string stateName, Func<int, Exception?> refusal, Func<long, string?> describe,
+            ReadOnlySpan<byte> image, string settings, IReadOnlyList<(uint Which, byte[] Data)> files)
         {
-            _exports = exports;
+            _api = api;
             Engine = engine;
+            _stateName = stateName;
+            _refusal = refusal;
             _describe = describe;
+            if (!api.Library.Available || !api.Complete) throw new InvalidOperationException($"{engine} is not in use: {api.Library.Report}");
+
+            byte[] text = Encoding.UTF8.GetBytes(settings);
+            var pins = new System.Runtime.InteropServices.GCHandle[files.Count];
+            var entries = new NativeInterface.NativeFile[files.Count];
+            try
+            {
+                for (int i = 0; i < files.Count; i++)
+                {
+                    pins[i] = System.Runtime.InteropServices.GCHandle.Alloc(files[i].Data, System.Runtime.InteropServices.GCHandleType.Pinned);
+                    entries[i] = new NativeInterface.NativeFile { Which = files[i].Which, Data = (byte*)pins[i].AddrOfPinnedObject(), Length = (nuint)files[i].Data.Length };
+                }
+                int status;
+                nint handle;
+                fixed (byte* data = image)
+                fixed (byte* s = text)
+                fixed (NativeInterface.NativeFile* f = entries)
+                {
+                    handle = api.Create(data, (nuint)image.Length, s, (nuint)text.Length, f, (nuint)entries.Length, &status);
+                }
+                if (handle == 0) throw ExceptionFor(status);
+                _handle = handle;
+            }
+            finally
+            {
+                foreach (var pin in pins) if (pin.IsAllocated) pin.Free();
+            }
         }
 
         public string Engine { get; }
 
-        // Set once by the subclass's constructor, from its own create export.
-        protected void Attach(nint handle) => _handle = handle;
+        public NativeInterface Api => _api;
 
         public nint Handle => _handle != 0 ? _handle : throw new ObjectDisposedException(GetType().Name);
 
-        // emusen-native's shared codes first, then the console's own band below -8, else "status n".
-        public static string Describe(long status, string stateName, Func<long, string?> own) => Shared(status, stateName) ?? own(status) ?? $"status {status}";
-
-        // emusen-native's shared codes, -1 to -8, the same in every core.
-        private static string? Shared(long status, string stateName) => status switch
+        // The shared codes' words: emusen-native's -1 to -8, then the interface's own.
+        public static string? Shared(long status, string stateName) => status switch
         {
             -1 => "no machine",
             -2 => "the state is truncated",
@@ -84,57 +67,68 @@ namespace EmuSen.Cores.Native
             -4 => "an unknown state version",
             -5 => "a string length the C# reader refuses",
             -7 => "the buffer is too small",
+            NativeInterface.NotSupported => "not supported by this core",
+            NativeInterface.NoSuchSpace => "no such memory space",
+            NativeInterface.ReadOnly => "a read-only memory space",
+            NativeInterface.UnknownSetting => "an unknown setting",
+            NativeInterface.BadSetting => "a setting value the core cannot take",
+            NativeInterface.NoSuchPort => "no such port",
+            NativeInterface.BadFile => "a file the core refuses",
+            <= NativeInterface.FaultBase - 1 and >= -383 => $"the C# exception of kind {NativeInterface.FaultBase - status}",
             _ => null,
         };
 
-        protected long Check(long result) => result >= 0 ? result : throw new InvalidDataException($"{Engine} could not write the state: {_describe(result)}.");
+        public string Words(long status) => _describe(status) ?? Shared(status, _stateName) ?? $"status {status}";
 
-        // A failed load leaves the machine as it was.
-        public void Load(ReadOnlySpan<byte> state)
+        // The console's exception for its own band first; then the reproduced C# exceptions, whose types are the oracle's - see EmuSen_NativeCores.md §3.3.
+        public Exception ExceptionFor(int status) => _refusal(status) ?? status switch
         {
-            int status;
-            fixed (byte* data = state) status = _exports.LoadState(Handle, data, (nuint)state.Length);
-            if (status != 0) throw new InvalidDataException($"{Engine} refused the state: {_describe(status)}.");
+            NativeInterface.FaultBase - 1 => new IndexOutOfRangeException("Index was outside the bounds of the array."),
+            NativeInterface.FaultBase - 2 => new DivideByZeroException("Attempted to divide by zero."),
+            NativeInterface.FaultBase - 3 => new ArgumentOutOfRangeException(),
+            NativeInterface.FaultBase - 4 => new InvalidOperationException($"{Engine} reproduced an InvalidOperationException."),
+            NativeInterface.FaultBase - 5 => new OverflowException(),
+            _ => new InvalidOperationException($"{Engine} refused: {Words(status)}."),
+        };
+
+        private long Check(long result) => result >= 0 ? result : throw new InvalidDataException($"{Engine} could not write the state: {Words(result)}.");
+
+        private void Ok(int status)
+        {
+            if (status != 0) throw ExceptionFor(status);
         }
 
-        public byte[] Save()
+        public void Reset() => Ok(_api.ResetOf != null ? _api.ResetOf(Handle) : NativeInterface.NotSupported);
+
+        // The machine to the frame's end; a failure is thrown as the oracle's exception.
+        public void Advance()
         {
-            long size = Check(_exports.SaveStateSize(Live));
-            var state = new byte[size];
-            fixed (byte* data = state) Check(_exports.SaveState(Live, data, (nuint)state.Length));
-            return state;
+            ulong detail;
+            Ok(_api.Advance(Handle, &detail));
         }
 
-        // One line per field, "offset length type path", in the order the state writes them.
-        public string Layout() => Encoding.UTF8.GetString(Query(_exports.LifecycleOnly ? throw new NotSupportedException($"{Engine} lays its state out by kind.") : _exports.StateLayout));
+        public void SetOptions(bool skipRendering) => _api.SetOptions(Handle, skipRendering ? 1u : 0u);
 
-        // The length-query idiom: asked with no buffer for the length, then again to fill one.
-        protected byte[] Query(delegate* unmanaged<nint, byte*, nuint, long> export)
+        public long TotalFrames => _api.FrameCount(Handle);
+
+        public NativeInterface.FrameInfo FrameInfo
         {
-            long size = Check(export(Handle, null, 0));
-            var bytes = new byte[size];
-            fixed (byte* data = bytes) Check(export(Handle, data, (nuint)bytes.Length));
-            return bytes;
+            get
+            {
+                NativeInterface.FrameInfo info;
+                Ok(_api.FrameInfoOf(Handle, &info));
+                return info;
+            }
         }
-
-        // The handle, for a call only a fully resolved table has; MarsRT's present exports differ in shape, so its table is lifecycle only.
-        private nint Live => _exports.LifecycleOnly ? throw new NotSupportedException($"{Engine} has no such export in its present interface.") : Handle;
-
-        public long TotalFrames => _exports.TotalFrames(Live);
-
-        public void SetOptions(bool skipRendering) => _exports.SetOptions(Live, skipRendering ? 1u : 0u);
-
-        public void SetMutes(uint mask) => _exports.SetMutes(Live, mask);
-
-        // The most samples the queue holds before the oldest pair goes, as C#'s SampleQueue.
-        public void SetAudioLimit(int samples) => _exports.SetAudioLimit(Live, (ulong)Math.Max(0, samples));
 
         public void CopyFrame(byte[] into)
         {
-            fixed (byte* data = into) _exports.Frame(Live, data, (nuint)into.Length);
+            fixed (byte* data = into) _api.FrameCopy(Handle, data, (nuint)into.Length);
         }
 
-        public int BufferedSamples => (int)_exports.AudioBuffered(Live);
+        public int AudioSampleRate => _api.AudioRate(Handle);
+
+        public int BufferedSamples => (int)_api.AudioBuffered(Handle);
 
         public short[] DrainAudio(int maxFrames)
         {
@@ -142,43 +136,95 @@ namespace EmuSen.Cores.Native
             wanted -= wanted & 1;
             if (wanted <= 0) return Array.Empty<short>();
             var samples = new short[wanted];
-            fixed (short* data = samples) _exports.DrainAudio(Live, data, (nuint)samples.Length, maxFrames);
+            fixed (short* data = samples) _api.AudioDrain(Handle, data, (nuint)samples.Length, maxFrames);
             return samples;
         }
 
-        public int SpaceSize(int space) => (int)_exports.SpaceSize(Live, (uint)space);
+        // The most samples the queue holds before the oldest pair goes, as C#'s SampleQueue.
+        public void SetAudioLimit(int samples) => _api.SetAudioLimit(Handle, (ulong)Math.Max(0, samples));
+
+        public void SetMutes(uint mask)
+        {
+            if (_api.SetMutes != null) _api.SetMutes(Handle, mask);
+        }
+
+        // Bits in changed take mask's values: a console whose pad is in no state sends 0xFF, one whose pad is sends the bit that moved - see EmuSen_NativeCores.md §3.8.
+        public void SetButtons(int port, uint mask, uint changed = 0xFF) => _api.SetButtons(Handle, (uint)port, mask, changed);
+
+        public void Load(ReadOnlySpan<byte> state)
+        {
+            int status;
+            fixed (byte* data = state) status = _api.StateLoad(Handle, data, (nuint)state.Length);
+            if (status != 0) throw new InvalidDataException($"{Engine} refused the state: {Words(status)}.");
+        }
+
+        public int StateSize => (int)Check(_api.StateSize(Handle, 0));
+
+        public byte[] Save()
+        {
+            var state = new byte[StateSize];
+            Save(state);
+            return state;
+        }
+
+        // Into a caller's array of StateSize bytes, so a rewind capture allocates nothing - see EmuSen_NativeCores.md §3.9.
+        public void Save(byte[] into)
+        {
+            fixed (byte* data = into) Check(_api.StateSave(Handle, 0, data, (nuint)into.Length));
+        }
+
+        // One line per field, "offset length type path", in the order the state writes them.
+        public string Layout()
+        {
+            long size = Check(_api.StateLayout(Handle, 0, null, 0));
+            var bytes = new byte[size];
+            fixed (byte* data = bytes) Check(_api.StateLayout(Handle, 0, data, (nuint)bytes.Length));
+            return Encoding.UTF8.GetString(bytes);
+        }
+
+        public int SpaceSize(int space) => (int)Math.Max(0, _api.SpaceSize(Handle, (uint)space));
 
         // Read as the C# core's ReadSpace reads, a byte at a time from address on; a bus space's reads have their side effects.
         public void ReadSpace(int space, int address, Span<byte> into)
         {
-            fixed (byte* data = into) _exports.ReadSpace(Live, (uint)space, address, data, (nuint)into.Length);
+            fixed (byte* data = into) _api.SpaceRead(Handle, (uint)space, (uint)address, data, (nuint)into.Length);
         }
 
         public void WriteSpace(int space, int address, ReadOnlySpan<byte> from)
         {
-            fixed (byte* data = from) _exports.WriteSpace(Live, (uint)space, address, data, (nuint)from.Length);
+            fixed (byte* data = from) _api.SpaceWrite(Handle, (uint)space, (uint)address, data, (nuint)from.Length);
         }
 
-        // Addresses, then 256 entries each: 0x100 | patched for an original byte a patch replaces, 0 where none does.
-        public void SetRomPatches(ushort[] addresses, ushort[] tables)
+        // A battery file's bytes, empty where the cartridge has none, with its flags: bit 0 changed, bit 1 tracked.
+        public (byte[] Data, uint Flags) Battery(uint which)
         {
-            fixed (ushort* a = addresses)
-            fixed (ushort* t = tables)
-            {
-                _exports.SetRomPatches(Live, a, t, (nuint)addresses.Length);
-            }
+            uint flags;
+            long length = _api.Battery(Handle, which, null, 0, &flags);
+            if (length <= 0) return (Array.Empty<byte>(), flags);
+            var data = new byte[length];
+            fixed (byte* d = data) _api.Battery(Handle, which, d, (nuint)data.Length, &flags);
+            return (data, flags);
+        }
+
+        public void BatterySaved(uint which) => _api.BatterySaved(Handle, which);
+
+        // CheatRegistry.ResolveRomPatches' list as (address, value, compare) triples, uint.MaxValue for no compare.
+        public void SetRomPatches(uint[] triples)
+        {
+            if (_api.SetRomPatches == null) return;
+            fixed (uint* words = triples) _api.SetRomPatches(Handle, words, (nuint)(triples.Length / 3));
         }
 
         public void Dispose()
         {
-            if (_handle != 0) _exports.Free(_handle);
+            if (_handle != 0) _api.Free(_handle);
             _handle = 0;
             GC.SuppressFinalize(this);
         }
 
         ~NativeMachine()
         {
-            if (_handle != 0) _exports.Free(_handle);
+            if (_handle != 0) _api.Free(_handle);
         }
     }
 }

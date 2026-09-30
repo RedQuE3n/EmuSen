@@ -281,6 +281,10 @@ impl Cpu {
         self.push(bus, self.p | 0x30);
         self.set_flag(FLAG_I, true);
         self.pc = self.read_vector(bus, vector);
+        if *bus.observing {
+            let kind = if vector == NMI_VECTOR { emusen_native::debug::kind::NMI } else { emusen_native::debug::kind::BRK };
+            bus.hooks.note_call(self.last_instruction_pc as u32, self.pc as u32, kind);
+        }
     }
 
     fn op_rti(&mut self, bus: &mut MemoryBus) {
@@ -290,6 +294,9 @@ impl Cpu {
         let lo = self.pull(bus) as u16;
         let hi = self.pull(bus) as u16;
         self.pc = lo | (hi << 8);
+        if *bus.observing {
+            bus.hooks.note_return();
+        }
     }
 
     fn op_jsr(&mut self, bus: &mut MemoryBus) {
@@ -299,6 +306,9 @@ impl Cpu {
         self.push(bus, self.pc as u8);
         let hi = self.read(bus, self.pc) as u16;
         self.pc = lo | (hi << 8);
+        if *bus.observing {
+            bus.hooks.note_call(self.last_instruction_pc as u32, self.pc as u32, emusen_native::debug::kind::CALL);
+        }
     }
 
     fn op_rts(&mut self, bus: &mut MemoryBus) {
@@ -308,6 +318,9 @@ impl Cpu {
         self.pc = lo | (hi << 8);
         self.read(bus, self.pc);
         self.pc = self.pc.wrapping_add(1);
+        if *bus.observing {
+            bus.hooks.note_return();
+        }
     }
 
     fn op_jmp_indirect(&mut self, bus: &mut MemoryBus) {

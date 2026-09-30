@@ -149,12 +149,17 @@ impl Cpu {
     fn service_interrupt(&mut self, bus: &mut MemoryBus, vector: u16, hijackable: bool) {
         self.read(bus, self.pc);
         self.read(bus, self.pc);
+        let from = self.pc;
         self.push(bus, (self.pc >> 8) as u8);
         self.push(bus, self.pc as u8);
         let vector = if hijackable { self.hijack_vector(vector) } else { self.no_hijack(vector) };
         self.push(bus, (self.p & !FLAG_B) | FLAG_U);
         self.set_flag(FLAG_I, true);
         self.pc = self.read_vector(bus, vector);
+        if *bus.observing {
+            let kind = if vector == NMI_VECTOR { emusen_native::debug::kind::NMI } else { emusen_native::debug::kind::IRQ };
+            bus.hooks.note_call(from as u32, self.pc as u32, kind);
+        }
     }
 
     /// `HijackVector`: an NMI seen by the fourth cycle of BRK or IRQ takes over its vector, and is spent.

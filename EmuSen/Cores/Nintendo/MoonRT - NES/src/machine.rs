@@ -34,6 +34,8 @@ pub struct Machine {
     pub master_clock: i64,
     pub cpu_remainder: i64,
     pub frame_complete: Skip<bool>,
+    /// A frame an observed stop left part-run: its scanline's cycles are earned, so its resume must not earn them again.
+    pub frame_open: Skip<bool>,
     pub cpu: Cpu,
     pub bus: MemoryBus,
 }
@@ -46,7 +48,7 @@ impl Machine {
         let mut apu = Apu::default();
         apu.set_sample_rate(44100);
         let bus = MemoryBus::new(Board { cart, mapper }, Ppu::default(), apu);
-        let mut m = Machine { total_frames: 0, line_start_clock: 0, cpu_budget: 0, master_clock: 0, cpu_remainder: 0, frame_complete: Skip(false), cpu: Cpu::default(), bus };
+        let mut m = Machine { total_frames: 0, line_start_clock: 0, cpu_budget: 0, master_clock: 0, cpu_remainder: 0, frame_complete: Skip(false), frame_open: Skip(false), cpu: Cpu::default(), bus };
         crate::take_fault();
         m.bus.ppu.reset();
         m.bus.apu.reset();
@@ -64,6 +66,7 @@ impl Machine {
         self.cpu_remainder = 0;
         self.cpu_budget = 0;
         *self.frame_complete = false;
+        *self.frame_open = false;
     }
 
     /// `MoonCore.Reset`: the RESET button - see Moon_Core.md §6.
@@ -81,15 +84,13 @@ impl Machine {
     pub fn run_frame(&mut self) -> Result<(), Fault> {
         crate::take_fault();
         *self.frame_complete = false;
+        let mut earned = std::mem::take(&mut *self.frame_open);
         while !*self.frame_complete {
             let deadline = self.line_start_clock.wrapping_add(MASTER_CLOCKS_PER_SCANLINE);
-            let delta = deadline.wrapping_sub(self.master_clock);
-            if delta < 0 {
-                return Err(Fault::ArgumentOutOfRange);
+            if !earned {
+                self.earn(deadline)?;
             }
-            let scaled = delta.wrapping_add(self.cpu_remainder);
-            self.cpu_remainder = scaled % MASTER_CLOCKS_PER_CPU_CYCLE;
-            self.cpu_budget = self.cpu_budget.wrapping_add(scaled / MASTER_CLOCKS_PER_CPU_CYCLE);
+            earned = false;
             self.run_cpu_until_budget_spent();
             if deadline > self.master_clock {
                 self.master_clock = deadline;
@@ -100,6 +101,76 @@ impl Machine {
             }
         }
         Ok(())
+    }
+
+    /// `EarnCpuCycles` for the scanline ending at `deadline`.
+    #[inline(always)]
+    fn earn(&mut self, deadline: i64) -> Result<(), Fault> {
+        let delta = deadline.wrapping_sub(self.master_clock);
+        if delta < 0 {
+            return Err(Fault::ArgumentOutOfRange);
+        }
+        let scaled = delta.wrapping_add(self.cpu_remainder);
+        self.cpu_remainder = scaled % MASTER_CLOCKS_PER_CPU_CYCLE;
+        self.cpu_budget = self.cpu_budget.wrapping_add(scaled / MASTER_CLOCKS_PER_CPU_CYCLE);
+        Ok(())
+    }
+
+    /// `MoonCore.RunFrame` with its debugger seams, stopping where the hooks say; a stop leaves the frame open (Moon_Native.md §8.4).
+    pub fn run_frame_debug(&mut self, flags: u32) -> Result<u32, Fault> {
+        crate::take_fault();
+        *self.frame_complete = false;
+        let mut earned = std::mem::take(&mut *self.frame_open);
+        let mut unchecked = flags & emusen_native::debug::run::UNCHECKED != 0;
+        *self.bus.observing = true;
+        let result = (|| {
+            while !*self.frame_complete {
+                let deadline = self.line_start_clock.wrapping_add(MASTER_CLOCKS_PER_SCANLINE);
+                if !earned {
+                    self.earn(deadline)?;
+                }
+                earned = false;
+                while self.cpu_budget > 0 {
+                    self.cpu_budget -= self.bus.take_pending_dma_cycles() as i64;
+                    if self.cpu_budget <= 0 {
+                        break;
+                    }
+                    let nmi = self.bus.ppu.nmi_output();
+                    self.cpu.set_nmi_line(nmi);
+                    let pc = self.cpu.pc as u32;
+                    if !unchecked {
+                        let why = self.bus.hooks.stop_before(pc);
+                        if why != emusen_native::debug::stop::FRAME {
+                            *self.frame_open = true;
+                            return Ok(why);
+                        }
+                    }
+                    unchecked = false;
+                    self.bus.hooks.record(pc);
+                    let mark = self.bus.hooks.writes_log.len();
+                    self.cpu_budget -= self.cpu.step(&mut self.bus) as i64;
+                    self.bus.hooks.stamp(mark, self.cpu.last_instruction_pc as u32);
+                    self.cpu_budget -= self.bus.take_stolen_cycles() as i64;
+                    if !self.bus.ppu.frame_complete {
+                        continue;
+                    }
+                    self.bus.ppu.frame_complete = false;
+                    self.total_frames = self.total_frames.wrapping_add(1);
+                    *self.frame_complete = true;
+                    break;
+                }
+                if deadline > self.master_clock {
+                    self.master_clock = deadline;
+                }
+                self.line_start_clock = self.line_start_clock.wrapping_add(MASTER_CLOCKS_PER_SCANLINE);
+                if let Some(fault) = crate::take_fault() {
+                    return Err(fault);
+                }
+            }
+            Ok(emusen_native::debug::stop::FRAME)
+        })();
+        *self.bus.observing = false;
+        result
     }
 
     #[inline(always)]
@@ -178,9 +249,14 @@ impl Machine {
             5 => bus.ppu.oam[(address & 0xFF) as usize] = value,
             6 => bus.ppu.palette_ram[(address & 0x1F) as usize] = value,
             7 => {
+                // A host store the debugger listens to is reported as C#'s bus reports the processor's, under the last instruction.
+                *bus.observing = bus.hooks.writes;
+                let mark = bus.hooks.writes_log.len();
                 if let Some(irq) = bus.write((address & 0xFFFF) as u16, value, self.cpu.cycles) {
                     self.cpu.irq_line = irq;
                 }
+                *bus.observing = false;
+                bus.hooks.stamp(mark, self.cpu.last_instruction_pc as u32);
             }
             _ => {}
         }

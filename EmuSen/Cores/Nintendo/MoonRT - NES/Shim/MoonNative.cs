@@ -5,12 +5,12 @@ namespace EmuSen.Cores.Nintendo.MoonRT
     // MoonRT's Rust library on the common native interface, loaded once; absent, refused or turned off, the NES runs on the C# Moon - see Moon_Native.md §8.3.
     public static class MoonNative
     {
-        // MoonRT's half of the interface version; 1 and 2 were its own moon_interface_version.
-        public const ushort CoreVersion = 3;
+        // MoonRT's half of the interface version: 4 with the debug exports, 3 before them; 1 and 2 were its own moon_interface_version.
+        public const ushort CoreVersion = 4;
         public const string Variable = "EMUSEN_MOON_NATIVE";
 
-        // What MoonRtCore needs of the library: the RESET button, the channel mutes and the Game Genie patches.
-        public const ulong RequiredCapabilities = NativeInterface.Reset | NativeInterface.Mutes | NativeInterface.RomPatches;
+        // What MoonRtCore needs of the library: the RESET button, the channel mutes, the Game Genie patches and the debugger's hooks.
+        public const ulong RequiredCapabilities = NativeInterface.Reset | NativeInterface.Mutes | NativeInterface.RomPatches | NativeInterface.Debug | NativeInterface.DebugStack;
 
         public static readonly NativeCoreLibrary Library = NativeCoreLibrary.Common("moonrt", Variable, CoreVersion, RequiredCapabilities);
 

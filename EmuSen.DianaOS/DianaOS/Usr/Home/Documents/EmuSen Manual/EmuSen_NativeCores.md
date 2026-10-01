@@ -3,6 +3,13 @@
 *Built in part on 2026-09-30: §7's steps 1 and 2 as far as MoonRT needs them. §12 says what was built, how the old and
 new ABIs coexist, and what is owed; P2 is retired there.*
 
+*Partly superseded on 2026-10-01 by `EmuSen_CoreAPI.md`, which makes this interface the starting point of a stable,
+versioned core ABI (`emusen_core_*`, major 1) with DianaOS as the runtime above it. Each decision it supersedes is
+marked where it stands, and kept: §2's non-goal of a stable ABI for third parties, §3.2's version scheme and exact
+matching, §3.4's create signature, §3.6's `FrameInfo`, §3.7's drain, §3.8's axis units, §3.13's last paragraph, §5's
+registration records for native engines, §9 Q3 and Q4, and one item of §10. What is not marked stands, and its calls
+carry over into the stable set (`EmuSen_CoreAPI.md` §6).*
+
 *This revision: the first, 2026-09-28. A design, not an implementation: nothing described here is built. It
 defines one C ABI that every Rust core exports, one generic C# host over it, one place a console and its engines are
 registered, and the order in which the three Rust cores move onto it. Every claim about the code is cited to a file and
@@ -186,6 +193,8 @@ The comparison below renamed the cores, dropped blank lines and braces, and comp
   The ABI does not, because they have none.
 - **A stable ABI for third parties.** The libraries ship beside the assemblies that load them. The version check
   guards a mismatched prebuilt library, not an ecosystem.
+  *Superseded 2026-10-01: a stable ABI for third parties is now a goal, decided that day; `EmuSen_CoreAPI.md` §4.8
+  says why this non-goal's reasoning missed the cost.*
 - **Changing any state format.** States stay the C# formats, written by `emusen-state`.
 - **Moving the hooks' mechanisms.** `ObservedBus` and `HOOKED` stay in their cores.
 - **MarsRT's component exports** (`mars_rsp_*`, `mars_rdp_*`, `mars_vi_*`). They serve C# Mars and its tests, and keep
@@ -240,6 +249,12 @@ emusen_native_interface_version() -> u32      // (COMMON << 16) | CORE
 The host refuses any library whose two halves are not exactly the ones it was built with. MarsRT already exports this
 name, returning 9, or 10 after the state crate. A library of today therefore reads as `COMMON` 0 and is refused with a
 clear report, rather than being mistaken for the new interface.
+
+*Superseded 2026-10-01 for the stable set by `EmuSen_CoreAPI.md` §4.1 and §4.8: a major and a minor, the major
+matched and every minor accepted, features found by name and bit, under the new prefix `emusen_core_`. The `CORE` half
+retires there: a core's status band is described by `status_text`, its settings by its schema, and its extensions
+version themselves. This paragraph's rule still governs the pre-stable `emusen_native_*` set until that set is
+deleted (§13.5 there).*
 
 **Capabilities** are a `u64` of bits, static for the library:
 
@@ -360,6 +375,9 @@ followed by a `write_space(2, 0, …)` of the same clipped bytes. For both 8-bit
 into cartridge RAM, and nothing runs between the two steps (argued). The oracle is §7's state comparison straight after
 load.
 
+*Revised 2026-10-01 by `EmuSen_CoreAPI.md` §6.2: the stable `create` takes one size-prefixed parameter struct,
+adding the host's version, the accepted pixel formats and an error buffer; the contract above is kept.*
+
 **Reset.** Only MoonRT has one, which the blargg runner uses (`Moon_Native.md` §2.1). The others do not export it, and
 the capability bit says so.
 
@@ -424,6 +442,9 @@ emusen_native_frame_copy(handle, out: *mut u8, len: usize) -> i64
 // flags bit 0: the last present walked, as C#'s Scan() reports
 ```
 
+*Revised 2026-10-01 by `EmuSen_CoreAPI.md` §6.6: the stable `frame_info` gains a size, the pixel format, the stride
+and the display aspect (56 bytes), and the format is negotiated at create, RGBA8888 always accepted.*
+
 The format is RGBA8888, the only format `ICore.GetFrameBufferRgba` knows. Without `FRAME_SERIAL`, the serial is the
 frame count. The host then implements no `IFrameSerial`, and copies the picture when it is asked for, as
 `MoonRtCore.GetFrameBufferRgba` does. With it, the host copies only when the serial moves, as MarsRT's `TakePicture`
@@ -459,6 +480,9 @@ all four. The drain gains a buffer length it lacks on MarsRT (`ffi/mod.rs:516`).
 it is not answered today: samples buffered at the old rate but drained after a change are labelled with the new one
 (§9, Q10).
 
+*Revised 2026-10-01 by `EmuSen_CoreAPI.md` §6.7: the stable drain never crosses a rate change and reports the rate of
+the samples it returns, which builds Q10's decision.*
+
 ### 3.8 Input, and the finding that decides its shape
 
 ```
@@ -488,7 +512,9 @@ The bit order stays the console's (§4.5). The host keeps no mask of its own for
 - Mars rounds `value × StickReach`, and turns Y (`MarsRtCore.cs`, `SetAxis`);
 - the C stick becomes four buttons at a threshold, which reach the core as buttons, not axes.
 
-So the console's C# part scales, and the core receives an `i32`. `set_axis` on a port or axis the core lacks returns
+So the console's C# part scales, and the core receives an `i32`. *Superseded 2026-10-01 by `EmuSen_CoreAPI.md`
+§6.8: a host with no per-core code cannot know a console's units, so the stable `set_axis` takes a `double`
+normalised as `ICore.SetAxis` defines it, and the core scales.* `set_axis` on a port or axis the core lacks returns
 `NO_SUCH_PORT`, or 0 where the C# oracle ignores it. `SetButton` ignores ports it lacks, and the host keeps that rule.
 
 ### 3.9 State, snapshot and restore
@@ -619,6 +645,9 @@ before and after, and takes a new picture if it moved, which is today's rule.
 
 Where the settings list lives is §9's Q4. It stays C# for now (`MarsCore.VideoSettings`, `MercuryCore.ModelSettings`),
 because `CoreCatalog.SettingsFor` must answer before any library is loaded.
+*Superseded 2026-10-01 by `EmuSen_CoreAPI.md` §6.13: the core exports its settings schema, read at discovery from a
+sidecar without loading the library (§7.1 there), so the list can answer before any library is loaded and still
+have one source per engine.*
 
 ### 3.14 The debug interface
 
@@ -891,6 +920,10 @@ The space numbering it needs is the console's table, shared with §4.3.
 
 ### 5.1 The record
 
+*Superseded 2026-10-01 for native engines by `EmuSen_CoreAPI.md` §6.3 and §7: a v1 core describes itself in its info
+and is found by discovery, with no hand-written record. A hand-written registration survives only for the C# cores, as
+managed engines, until each retires (§9.5 there). The records below were never built (§12.2).*
+
 ```csharp
 public sealed record EngineRegistration(
     string Name,                                   // "MarsRT (Rust)", the Engine row's choice
@@ -1084,9 +1117,11 @@ Each question as it was put, and its decision.
    it will hold the interface (§3.17).
 2. **Q2, MercuryRT while paused.** Decided: it moves at step 4 regardless. It is the Game Boy engine in use, and moving
    it is framework work, not a resumption of its port.
-3. **Q3, exact version matching.** Decided: exact on both halves (§3.2).
+3. **Q3, exact version matching.** Decided: exact on both halves (§3.2). *Superseded 2026-10-01 by
+   `EmuSen_CoreAPI.md` §4: a stable major with additive minors.*
 4. **Q4, where a settings list lives.** Decided: in C# until the C# cores retire; the `settings_schema` export is added
-   then, so there is never a second source for the same list.
+   then, so there is never a second source for the same list. *Superseded 2026-10-01 by `EmuSen_CoreAPI.md` §6.13: the
+   schema is part of v1, and the one-source rule is kept engine by engine.*
 5. **Q5, `EmuSen_Multicore.md` §2's position on `Bundle`'s switch.** Decided: retired (§5.3).
 6. **Q6, MarsRT's crash log's file name.** Decided: `native_crash_<pid>` becomes `marsrt_crash_<pid>` (§4.1).
 7. **Q7, the first instruction's breakpoint check.** Decided: in Rust, in every core, as MercuryRT does it (§4.4).
@@ -1120,6 +1155,8 @@ Each question as it was put, and its decision.
 - **Messages across the boundary** (JSON, protobuf, flatbuffers). They add a parse per call and a dependency. They buy
   schema evolution between binaries built separately, which never happens here. The settings text of §3.13 is a
   handful of lines between frames.
+  *Retired 2026-10-01 for descriptors read once, by `EmuSen_CoreAPI.md` §6.3: binaries built separately are now
+  intended, so schema evolution is what is wanted. The rejection stands for every call on the hot path.*
 - **Generated C# bindings** (cbindgen, csbindgen). A build dependency for 42 names. A test that compares `nm -D`'s list
   with the C# table catches drift as well.
 - **Sharing only the C# helpers** and keeping three ABIs. It leaves the status collisions, the drifted hooks and a

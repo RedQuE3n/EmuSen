@@ -1363,6 +1363,15 @@ namespace EmuSen.Mistress.Views
 
                     // Nothing new was drawn on a skipped frame.
                     long? serial = session.FrameSerial;
+                    // A picture for a later refresh is not handed over a refresh early - see EmuSen_Settings_Reference.md §4.87.6.
+                    long held = 0;
+                    if (scheduler.HandOverNotBefore is { } notBefore && clock.Elapsed < notBefore)
+                    {
+                        long holdStart = Stopwatch.GetTimestamp();
+                        SleepUntil(notBefore, clock);
+                        held = Stopwatch.GetTimestamp() - holdStart;
+                    }
+
                     if (!session.SkipRendering && (serial is null || serial != offeredSerial))
                     {
                         byte[] frame = session.GetFrameBufferRgba();
@@ -1380,7 +1389,7 @@ namespace EmuSen.Mistress.Views
 
                     loopMark = Stopwatch.GetTimestamp();
                     handOffTicks += loopMark - afterAudio;
-                    scheduler.Completed(TimeSpan.FromTicks((loopMark - frameStart) * TimeSpan.TicksPerSecond / Stopwatch.Frequency));
+                    scheduler.Completed(TimeSpan.FromTicks((loopMark - frameStart - held) * TimeSpan.TicksPerSecond / Stopwatch.Frequency));
 
                     framesInWindow++;
                     TimeSpan windowElapsed = clock.Elapsed - fpsWindowStart;

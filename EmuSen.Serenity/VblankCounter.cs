@@ -7,6 +7,12 @@ namespace EmuSen.Serenity
     public static unsafe class VblankCounter
     {
         private static int _state; // 0 unprobed, 1 usable, -1 absent
+        private static int _slow;
+        private static readonly long SlowTicks = System.Diagnostics.Stopwatch.Frequency / 500;
+        private const int SlowLimit = 5;
+
+        // Whether the display's count is being read, for the frame rate's tooltip.
+        public static bool Usable => _state == 1;
         private static delegate* unmanaged<IntPtr, IntPtr, long*, long*, long*, int> _getSyncValues;
 
         [DllImport("libGL.so.1")] private static extern IntPtr glXGetCurrentDisplay();
@@ -31,7 +37,11 @@ namespace EmuSen.Serenity
                 IntPtr display = glXGetCurrentDisplay(), drawable = glXGetCurrentDrawable();
                 if (display == IntPtr.Zero || drawable == IntPtr.Zero) return false;
                 long ust, m, s;
-                if (_getSyncValues(display, drawable, &ust, &m, &s) == 0) return false;
+                long before = System.Diagnostics.Stopwatch.GetTimestamp();
+                int ok = _getSyncValues(display, drawable, &ust, &m, &s);
+                // A query that holds the render thread up is given up on - see §4.87.2.
+                if (System.Diagnostics.Stopwatch.GetTimestamp() - before > SlowTicks && ++_slow >= SlowLimit) _state = -1;
+                if (ok == 0) return false;
                 ustMicroseconds = ust; msc = m; sbc = s;
                 return true;
             }

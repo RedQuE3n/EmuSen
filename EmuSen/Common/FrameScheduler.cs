@@ -65,7 +65,7 @@ namespace EmuSen.Common
             int k = (int)Math.Max(1, Math.Round(refresh / contentHz));
             if (k > MaxRefreshesPerFrame) return new(PacingMode.ContentPaced, 1, refresh, contentHz, $"{refresh:F2} Hz is too far above");
             double error = Math.Abs(refresh / k - contentHz) / contentHz;
-            if (error > tolerance) return new(PacingMode.ContentPaced, 1, refresh, contentHz, $"{refresh:F2} Hz{(k > 1 ? $" / {k}" : "")} is {error:P1} away");
+            if (error > tolerance) return new(PacingMode.ContentPaced, 1, refresh, contentHz, $"{refresh:F2} Hz{(k > 1 ? $" / {k}" : "")} is {error * 100:F1}% away");
             return new(PacingMode.DisplayLocked, k, refresh, contentHz, "");
         }
 
@@ -76,14 +76,23 @@ namespace EmuSen.Common
             _contentHz = _contentHz <= 0 || Math.Abs(contentHz - _contentHz) > RateJump * _contentHz ? contentHz : _contentHz + (contentHz - _contentHz) / 32;
             DisplayReading? reading = _display(now);
             Decision = Decide(_contentHz, reading, SyncToDisplay, speed.IsNormalSpeed, Tolerance);
-            if (!Decision.Locked) return due + speed.FrameInterval(contentHz);
+            if (!Decision.Locked) { _held = _upcoming = 0; return due + speed.FrameInterval(contentHz); }
 
             double period = reading!.PeriodTicks;
             long lead = Lead(period);
             long target = _origin + due.Ticks * Stopwatch.Frequency / TimeSpan.TicksPerSecond + lead + (long)Math.Round(Decision.RefreshesPerFrame * period);
             long grid = reading.NearestVblank(target);
+            _held = _upcoming;
+            _upcoming = Decision.RefreshesPerFrame > 1 ? grid - (long)Math.Round(period) : 0;
             return TimeSpan.FromTicks((grid - lead - _origin) * TimeSpan.TicksPerSecond / Stopwatch.Frequency);
         }
+
+        private long _held, _upcoming;
+
+        // When a frame spans several refreshes, the earliest its picture may be handed over: the refresh before the one it is for - see §4.87.6.
+        public TimeSpan? HandOverNotBefore => Decision.Locked && _held != 0
+            ? TimeSpan.FromTicks((_held - _origin) * TimeSpan.TicksPerSecond / Stopwatch.Frequency)
+            : null;
 
         // From the start of a frame to its picture being handed over, so the next can start that long before its vblank.
         public void Completed(TimeSpan work)

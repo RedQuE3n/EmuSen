@@ -457,8 +457,15 @@ namespace EmuSen.Hotaru.Views
                     else _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
 
                     // Nothing new was drawn on a skipped frame.
+                    long held = 0;
+                    if (scheduler.HandOverNotBefore is { } notBefore && clock.Elapsed < notBefore)
+                    {
+                        long holdStart = Stopwatch.GetTimestamp();
+                        SleepUntil(notBefore, clock);
+                        held = Stopwatch.GetTimestamp() - holdStart;
+                    }
                     if (!_core.SkipRendering) SubmitFrame(_core.GetFrameBufferRgba(), _core.ScreenWidth, _core.ScreenHeight);
-                    scheduler.Completed(TimeSpan.FromTicks((Stopwatch.GetTimestamp() - frameStart) * TimeSpan.TicksPerSecond / Stopwatch.Frequency));
+                    scheduler.Completed(TimeSpan.FromTicks((Stopwatch.GetTimestamp() - frameStart - held) * TimeSpan.TicksPerSecond / Stopwatch.Frequency));
 
                     if (ProcessHotkeys()) { RequestClose(); return; }
                     if (ProcessPendingConsoleCommands()) { RequestClose(); return; }

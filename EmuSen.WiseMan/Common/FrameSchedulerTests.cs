@@ -81,7 +81,7 @@ namespace EmuSen.WiseMan.Common
         {
             Assert.Equal("display-locked 60.00 Hz (content 60.10)", Decide(60.0988, 60.0).Describe());
             Assert.Equal("display-locked 119.90 Hz / 2 (content 60.10)", Decide(60.0988, 119.90).Describe());
-            Assert.StartsWith("content-paced 50.01 Hz", Decide(50.007, 60.0).Describe());
+            Assert.Equal("content-paced 50.01 Hz (60.00 Hz is 20.0% away)", Decide(50.007, 60.0).Describe());
         }
 
         private static (FrameScheduler, long) Scheduler(Func<DisplayReading?> reading)
@@ -111,6 +111,29 @@ namespace EmuSen.WiseMan.Common
                 previous = due;
             }
             Assert.Equal(2, scheduler.Decision.RefreshesPerFrame);
+        }
+
+        [Fact]
+        public void A_picture_for_a_later_refresh_is_held_until_the_refresh_before_it_and_only_when_k_is_above_one()
+        {
+            double period = Stopwatch.Frequency / 120.0;
+            long origin = Stopwatch.GetTimestamp();
+            var reading = new DisplayReading(period, origin, false, true, 240, 0);
+            var scheduler = new FrameScheduler(_ => reading, origin) { Margin = TimeSpan.Zero };
+            var speed = new SpeedController();
+            Assert.Null(scheduler.HandOverNotBefore);
+            TimeSpan first = scheduler.Next(TimeSpan.Zero, 60.0, speed);
+            Assert.Null(scheduler.HandOverNotBefore); // the frame running now was not scheduled by the lock
+            scheduler.Next(first, 60.0, speed);
+            Assert.Equal((first - TimeSpan.FromSeconds(1 / 120.0)).TotalMilliseconds, scheduler.HandOverNotBefore!.Value.TotalMilliseconds, 2);
+            speed.SetTurbo(true);
+            scheduler.Next(first, 60.0, speed);
+            Assert.Null(scheduler.HandOverNotBefore);
+
+            var single = new FrameScheduler(_ => new DisplayReading(Stopwatch.Frequency / 60.0, origin, false, true, 240, 0), origin);
+            TimeSpan due = single.Next(TimeSpan.Zero, 60.0, new SpeedController());
+            single.Next(due, 60.0, new SpeedController());
+            Assert.Null(single.HandOverNotBefore);
         }
 
         [Fact]

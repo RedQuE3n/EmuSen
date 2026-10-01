@@ -30,6 +30,8 @@ namespace EmuSen.WiseMan.Common
             public string? TracePath;
             public bool Audio = true;
             public double ContentHzOverride;
+            public bool RealDevice;
+            public double AudioSettleSeconds = 3;
             public TextWriter? Log;
         }
 
@@ -41,8 +43,9 @@ namespace EmuSen.WiseMan.Common
             AudioPlayer? player = null;
             if (o.Audio)
             {
-                SDL.SetHint(SDL.Hints.AudioDriver, "dummy");
+                if (!o.RealDevice) SDL.SetHint(SDL.Hints.AudioDriver, "dummy");
                 player = new AudioPlayer();
+                if (o.RealDevice) player.Volume = 0f;
                 if (!player.IsAvailable) { player.Dispose(); player = null; }
             }
 
@@ -94,15 +97,22 @@ namespace EmuSen.WiseMan.Common
                 {
                     player.RateControl.NominalRatio = scheduler.Decision.AudioRatio;
                     int queued = player.QueuedFrames;
-                    if (clock.Elapsed.TotalSeconds > 3) { minQueued = Math.Min(minQueued, queued); minRatio = Math.Min(minRatio, player.RateControl.LastRatio); maxRatio = Math.Max(maxRatio, player.RateControl.LastRatio); }
+                    if (clock.Elapsed.TotalSeconds > o.AudioSettleSeconds) { minQueued = Math.Min(minQueued, queued); minRatio = Math.Min(minRatio, player.RateControl.LastRatio); maxRatio = Math.Max(maxRatio, player.RateControl.LastRatio); }
                     else shedAtStart = player.RateControl.SheddingEvents;
                     player.Submit(samples, session.AudioSampleRate);
                     lastQueueMs = queued * 1000.0 / Math.Max(1, player.SampleRate);
                 }
+                long held = 0;
+                if (scheduler.HandOverNotBefore is { } notBefore && clock.Elapsed < notBefore)
+                {
+                    long holdStart = Stopwatch.GetTimestamp();
+                    while (clock.Elapsed < notBefore) Thread.SpinWait(100);
+                    held = Stopwatch.GetTimestamp() - holdStart;
+                }
                 session.GetFrameBufferRgba();
                 Volatile.Write(ref newest, session.TotalFrames);
                 long offered = Stopwatch.GetTimestamp();
-                scheduler.Completed(TimeSpan.FromTicks((offered - start) * TimeSpan.TicksPerSecond / frequency));
+                scheduler.Completed(TimeSpan.FromTicks((offered - start - held) * TimeSpan.TicksPerSecond / frequency));
                 frames.Append(CultureInfo.InvariantCulture, $"F,{session.TotalFrames},{start},{offered},1\n");
 
                 if (o.Log is not null && clock.Elapsed >= nextLog)
@@ -150,6 +160,8 @@ namespace EmuSen.WiseMan.Common
                 Seconds = double.Parse(Env("EMUSEN_CADENCE_SECONDS", "30"), CultureInfo.InvariantCulture),
                 SyncToDisplay = Env("EMUSEN_CADENCE_MODE", "content") == "locked",
                 TracePath = Env("EMUSEN_CADENCE_TRACE", Path.Combine(Path.GetTempPath(), "cadence.trace")),
+                AudioSettleSeconds = double.Parse(Env("EMUSEN_CADENCE_AUDIO_SETTLE", "3"), CultureInfo.InvariantCulture),
+                RealDevice = Env("EMUSEN_CADENCE_AUDIO", "dummy") == "device",
                 Log = Console.Out,
             });
             Console.WriteLine(FormattableString.Invariant($"[cadence] {result.Decision} minQueue={result.MinQueuedFrames} ratio=[{result.MinRatio:F5},{result.MaxRatio:F5}] shed={result.Shed} lastQueue={result.LastQueueMs:F1}ms sha={result.StateSha[..16]}"));

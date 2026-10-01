@@ -160,6 +160,38 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.False(Sheets(s).IsPresenting);
         }, default);
 
+        // Sync to display is a switch on Gameplay, on by default, saved to graphics.json as it turns, and its menu fits - see EmuSen_Settings_Reference.md §4.87.7.
+        [Theory]
+        [MemberData(nameof(Sizes))]
+        public Task Sync_to_display_is_a_gameplay_switch_on_by_default_that_is_saved_and_fits(int width, int height) => Session.Dispatch(() =>
+        {
+            bool was = EmuSen.Graphics.GraphicsSettings.SyncToDisplay;
+            using var s = new ThemedSession(width, height);
+            try
+            {
+                Assert.True(new EmuSen.Galaxia.Models.GraphicsConfig().SyncToDisplay);
+                EmuSen.Graphics.GraphicsSettings.SyncToDisplay = true;
+                ThemedLibraryFlowTests.Choose(s, "Preferences");
+                s.Settle();
+                var sheet = Assert.IsType<PreferencesWindow>(Sheets(s).Current);
+                Reach(s, "BigMenuPage2");
+                s.Pad.A();
+                Assert.Equal("Gameplay", sheet.Form!.Menu.Title);
+                Reach(s, "SyncToDisplaySwitch");
+                Assert.StartsWith("Runs one frame per refresh", sheet.Form.Menu.Footer);
+                Assert.True(RowOf(Named<LunaSwitch>(s, "SyncToDisplaySwitch")).IsOn);
+                Assert.Empty(FitAudit.Check(Sheet(s), WindowAllowances.For(sheet)));
+                s.Pad.A();
+                Assert.False(EmuSen.Graphics.GraphicsSettings.SyncToDisplay);
+                Assert.False(EmuSen.Galaxia.Models.GraphicsConfig.Load().SyncToDisplay);
+                Assert.False(RowOf(Named<LunaSwitch>(s, "SyncToDisplaySwitch")).IsOn);
+                s.Pad.A();
+                Assert.True(EmuSen.Galaxia.Models.GraphicsConfig.Load().SyncToDisplay);
+                ThemedSwitchesTests.PutAway(s);
+            }
+            finally { EmuSen.Graphics.GraphicsSettings.SyncToDisplay = was; }
+        }, default);
+
         // Q86: A on an option row opens ES-DE's list screen: the row's name as its title, a row per choice with the current one focused, Back; the menu beneath is not drawn.
         [Theory]
         [MemberData(nameof(Sizes))]

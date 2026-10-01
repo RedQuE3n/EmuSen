@@ -85,6 +85,14 @@ impl System {
     fn move_byte(&mut self, a_address: u32, b: u8, to_b: bool) {
         let b_address = 0x2100 | b as u32;
         let a_blocked = a_address & 0x40_0000 == 0 && matches!(a_address as u16, 0x2100..=0x21FF | 0x4300..=0x437F | 0x420B | 0x420C);
+        // WRAM cannot be on both buses at once: its port is not reached, and a read of it writes $00 (D-18).
+        let a_is_wram = (a_address >> 16) & 0xFE == 0x7E || (a_address & 0x40_0000 == 0 && a_address as u16 <= 0x1FFF);
+        if b == 0x80 && a_is_wram {
+            if !to_b {
+                self.write_value(a_address, 0);
+            }
+            return;
+        }
         if to_b {
             let v = if a_blocked { self.mdr } else { self.read_value(a_address, true).unwrap_or(self.mdr) };
             self.mdr = v;

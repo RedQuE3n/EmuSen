@@ -475,4 +475,7 @@ their data.
 - Conclusion: fullsnes's rule with the test's details; in the port-to-WRAM direction the byte written is `$00`, the
   one value a console is recorded as showing. Argued for that value, measured for the rest.
 - Pinned by: the two `test_dmavalid` rows of the corpus.
+- Implemented 2026-10-01. **Measured:** both copies pass (blue backdrop). The eight bytes test 2 stores are the
+  console's as its comment lists them, `3F 55 55 00 14 7E 00 00`, and the V counter latched after the DMA is the
+  console's `$36`; the H counter is `$D4` against its `$CE`, inside the test's four lines of latitude.
 

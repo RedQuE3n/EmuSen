@@ -433,3 +433,23 @@ their data.
 - Pinned by: `offset_per_tile_takes_each_visible_tiles_scroll_from_bg3` in `ppu.rs`, which pins the reading, not
   the hardware.
 
+### D-17. DMA: an HDMA run or init on a channel ends a general DMA on that channel where it stands
+- Opened: 2026-10-01, at stage 3 step 4, by `snestest_082506/test_dma` (byuu, 2006-07-27) failing at its test 1. The
+  test starts a 128-byte DMA on a channel that HDMA is also enabled on, so that the line's HDMA point falls inside
+  it, and expects the count left non-zero; VenusRT runs the DMA to its end ($4305 = 0).
+- Documents read: anomie's timing document, "HDMA": "HDMA takes priority over DMA", and nothing on what becomes of
+  the DMA. fullsnes, "SNES DMA and HDMA Notes": nothing on the overlap.
+- Test ROM: `test_dma`'s four tests and their comments, the author's console results. Tests 1 and 2: "if HDMA run
+  [init] occurs on the same channel as an active DMA channel, the HDMA run [init] will kill the DMA transfer,
+  leaving $43x5 != 0", with "$4305 = ~#$37 on hardware" and "~#$41". Tests 3 and 4, DMA on channels 0 and 1 with
+  HDMA on both: "HDMA run will kill DMA on both channels, 0 *and* 1; not just 0", with the registers read from a
+  console: channel 0's address advanced by `$47` and its count `$39` left, channel 1's address and count untouched;
+  for the init, channel 0's A2AxW is its A1TxW as the DMA left it, plus one.
+- Referee: not read. Mesen's source: none.
+- Conclusion: when HDMA's init or a line's run takes its channels, a general DMA in progress on one of them stops
+  with its address and count as they are, and a pending DMA on another of them does not start. The DMA's address
+  and count are in the registers as each byte moves, so the init reloads the table address from what the DMA
+  reached. The tests enable HDMA on every channel the DMA uses, so they do not say what happens to a DMA channel
+  HDMA does not take; it is left running, the narrower reading, argued and open.
+- Pinned by: `test_dma` in the corpus.
+

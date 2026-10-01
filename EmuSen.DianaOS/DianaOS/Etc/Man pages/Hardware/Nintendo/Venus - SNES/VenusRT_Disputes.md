@@ -34,7 +34,27 @@ so that the clean-room protocol of §1.2 can be audited from outside.
 
 ## Entries
 
-None. Stage 0 wrote no emulation rule, so nothing could disagree with an oracle (`VenusRT_Native.md` §1).
+Stage 0 wrote no emulation rule and opened none. The entries begin with stage 1.
+
+### D-1. 65C816, emulation mode: a direct-page pointer's second byte is read at the first byte's address plus one, carried across the page, even when DL is zero
+- Opened: 2026-09-30, at stage 1, by SingleStepTests 65816 case `e1 e 8669` (SBC (d,x), E=1, D=$F400, DO=$B0, X=$4F).
+  The index addition wrapped within the page to $00:F4FF, as every other emulation-mode case requires; the pointer's
+  high byte was then read at $00:F500. VenusRT, wrapping it within the page, read $00:F400.
+- Documents read: WDC, W65C816S datasheet (March 13, 2024), Table 5-7, rows 11, 12 and 13, which give the pointer's
+  second address as D+DO+X+1 and D+DO+1 with no wrap; anomie, "SNES OpenBus & Wrapping" (romhacking.net document 194,
+  revision 1126), "Instruction Wrapping", which says that word reads in emulation mode with DL zero wrap within the
+  page "theoretically" and that the (d) and (d,X) address loads follow the same rule, untested.
+- Test ROM: the single-step suite above, one case. No ROM in the corpus isolates the rule, and none was written; the
+  suite holds no case of the same crossing for (d) or (d),y (a search of all of it, 2026-09-30).
+- Referee: not read.
+- Mesen's source: none.
+- Conclusion: the pointer's second byte is never page-wrapped; only the index addition of d,X and (d,X) is, with DL
+  zero in emulation mode. Measured for (d,X) by the one case; argued for (d) and (d),Y from the datasheet, against
+  anomie's untested note. The datasheet is the primary document and the only test agrees with it, so the dispute is
+  settled at the first rung for (d,X). For (d) and (d),Y it stays open until a test ROM or the referee is read; a
+  later step that finds a game or ROM depending on it reopens this entry.
+- Pinned by: `the_cpu_through_the_whole_suite` (case `e1 e 8669`).
+- Implemented in: the commit after this entry's, "VenusRT stage 1: the 65816's data instructions".
 
 Two readings of the oracles were made at stage 0 that a later reader might take for disputes. They are not: each is
 about what a suite's file format means, settled by the suite's own data and README, and neither says anything about

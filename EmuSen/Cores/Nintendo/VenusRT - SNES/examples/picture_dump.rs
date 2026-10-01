@@ -13,4 +13,6 @@ fn main() {
         "inidisp {:02X} obsel {:02X} bgmode {:02X} mosaic {:02X} tm {:02X} ts {:02X} tmw {:02X} w12sel {:02X} w34sel {:02X} wobjsel {:02X} cgwsel {:02X} cgadsub {:02X} setini {:02X}",
         r[0x00], r[0x01], r[0x05], r[0x06], r[0x2C], r[0x2D], r[0x2E], r[0x23], r[0x24], r[0x25], r[0x30], r[0x31], r[0x33]
     );
+    let p = &m.sys.ppu;
+    println!("sc {:02X} {:02X} {:02X} {:02X} nba {:02X} {:02X} hofs {:04X?} vofs {:04X?}", r[0x07], r[0x08], r[0x09], r[0x0A], r[0x0B], r[0x0C], p.hofs, p.vofs);
 }

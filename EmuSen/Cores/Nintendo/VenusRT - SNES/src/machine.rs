@@ -260,6 +260,8 @@ impl Machine {
             w.bool("RangeOver", p.range_over);
             w.bool("TimeOver", p.time_over);
             w.bytes("Fixed", &p.fixed);
+            w.u8("MosaicRow", p.mosaic_row);
+            w.u8("MosaicSize", p.mosaic_size);
         });
         w.bytes("Wram", &self.sys.wram);
         w.u16s("Vram", &p.vram);
@@ -373,6 +375,8 @@ impl Machine {
         for c in p.fixed.iter_mut() {
             *c &= 0x1F;
         }
+        p.mosaic_row = r.u8()? & 0x0F;
+        p.mosaic_size = (r.u8()?).clamp(1, 16);
         r.bytes(&mut self.sys.wram)?;
         r.u16s(&mut p.vram)?;
         r.u16s(&mut p.cgram)?;
@@ -472,14 +476,14 @@ pub(crate) mod tests {
 
     // Version 4: the CPU, the clock, the bus and the S-CPU's devices; the listing is its record (plan §5.6).
     #[test]
-    fn the_version_8_layout_is_pinned() {
+    fn the_version_9_layout_is_pinned() {
         let m = Machine::load_rom(&rom(&[])).unwrap();
         let layout = m.layout();
         assert!(layout.starts_with("0 4 u32 Magic\n4 4 i32 Version\n8 2 u16 Cpu.A\n"), "{layout}");
         assert!(layout.contains(" u64 Timing.Clock\n") && layout.contains(" u8[1024] Bus.Io\n") && layout.contains(" u16[32768] Vram\n"), "{layout}");
         assert!(layout.contains(" u8[64] Ppu.Regs\n") && layout.contains(" u16[256] Cgram\n"), "{layout}");
-        assert_eq!(layout.lines().count(), 92, "{layout}");
-        assert_eq!(m.state_size(), 264_455);
+        assert_eq!(layout.lines().count(), 94, "{layout}");
+        assert_eq!(m.state_size(), 264_457);
         assert_eq!(&save(&m)[..4], b"VNRT");
     }
 

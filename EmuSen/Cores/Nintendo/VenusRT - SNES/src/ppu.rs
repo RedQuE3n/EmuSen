@@ -52,6 +52,9 @@ pub struct Ppu {
     pub bg_line: Box<[[u16; WIDTH]; 4]>,
     /// COLDATA's fixed colour, as red, green and blue.
     pub fixed: [u8; 3],
+    /// Mosaic's row within its block and the block's height, taken when a block ends (D-15).
+    pub mosaic_row: u8,
+    pub mosaic_size: u8,
 }
 
 impl Default for Ppu {
@@ -92,6 +95,8 @@ impl Default for Ppu {
             obj_line: vec![0; WIDTH].into(),
             bg_line: Box::new([[0; WIDTH]; 4]),
             fixed: [0; 3],
+            mosaic_row: 0,
+            mosaic_size: 1,
         }
     }
 }
@@ -113,6 +118,12 @@ const MODE1: [(usize, u16); 10] = [(OBJ, 3), (0, 1), (1, 1), (OBJ, 2), (0, 0), (
 const MODE1_BG3_HIGH: [(usize, u16); 10] = [(2, 1), (OBJ, 3), (0, 1), (1, 1), (OBJ, 2), (0, 0), (1, 0), (OBJ, 1), (OBJ, 0), (2, 0)];
 /// The modes whose backgrounds are later steps': the sprites alone.
 const OBJ_ONLY: [(usize, u16); 4] = [(OBJ, 3), (OBJ, 2), (OBJ, 1), (OBJ, 0)];
+/// Modes 2, 3 and 4: two backgrounds, each priority of BG2 behind BG1's.
+const MODE2: [(usize, u16); 8] = [(OBJ, 3), (0, 1), (OBJ, 2), (1, 1), (OBJ, 1), (0, 0), (OBJ, 0), (1, 0)];
+/// Bits a pixel of each background has, by mode; 0 where the mode has no such background or a later step draws it.
+const DEPTHS: [[u8; 4]; 8] = [[2, 2, 2, 2], [4, 4, 2, 0], [4, 4, 0, 0], [8, 4, 0, 0], [8, 2, 0, 0], [0; 4], [0; 4], [0; 4]];
+/// A line-buffer entry whose low 8 bits are a direct colour and bits 10-12 its palette bits, not a CGRAM index.
+const DIRECT: u16 = 0x4000;
 
 /// OBSEL's sizes as (small, large), each (width, height) (fullsnes, OBSEL, with its two undocumented settings).
 const OBJ_SIZES: [((u16, u16), (u16, u16)); 8] = [
@@ -335,6 +346,12 @@ impl Ppu {
         }
         if (1..=HEIGHT as u16).contains(&next) {
             self.evaluate(next);
+            // The first block starts at the top; a new size waits for the current block's end (fullsnes; D-15).
+            self.mosaic_row += 1;
+            if next == 1 || self.mosaic_row >= self.mosaic_size {
+                self.mosaic_row = 0;
+                self.mosaic_size = (self.regs[0x06] >> 4) + 1;
+            }
         }
     }
 
@@ -465,20 +482,27 @@ impl Ppu {
         }
     }
 
-    /// Each background's pixels from `from` to `to` into its line buffer, for the layers either screen shows.
+    /// Each background's pixels from `from` to `to` into its line buffer, for the layers either screen shows;
+    /// mosaic then repeats each block's first pixel (fullsnes, MOSAIC; D-15 for the rows).
     fn fill_backgrounds(&mut self, line: u16, from: u16, to: u16) {
         let mode = self.regs[0x05] & 7;
-        let layers = match mode {
-            0 => 4,
-            1 => 3,
-            _ => 0,
-        };
+        let depths = DEPTHS[mode as usize];
         let shown = self.regs[0x2C] | self.regs[0x2D];
-        for bg in 0..layers {
-            if shown & (1 << bg) == 0 {
+        let mosaic = self.regs[0x06];
+        let size = (mosaic >> 4) as u16 + 1;
+        for bg in 0..4 {
+            if depths[bg] == 0 || shown & (1 << bg) == 0 {
                 continue;
             }
-            self.fill_row(bg, mode, line, from, to);
+            let blocks = mosaic & (1 << bg) != 0;
+            let row = if blocks { line - self.mosaic_row as u16 } else { line };
+            self.fill_row(bg, mode, row, from, to);
+            if blocks && size > 1 {
+                for x in from..to {
+                    let first = x - x % size;
+                    self.bg_line[bg][x as usize] = self.bg_line[bg][first as usize];
+                }
+            }
         }
     }
 
@@ -488,7 +512,7 @@ impl Ppu {
         let mut chunk = [0u16; 8];
         let mut x = from;
         while x < to {
-            let (hofs, vofs) = self.scroll(bg, x);
+            let (hofs, vofs) = self.scroll(bg, mode, x);
             let px = x.wrapping_add(hofs);
             self.decode_chunk(bg, mode, px & !7, line.wrapping_add(vofs), &mut chunk);
             let first = (px & 7) as usize;
@@ -499,17 +523,38 @@ impl Ppu {
         }
     }
 
-    /// The scroll a background is drawn with at screen X; the per-column offset of modes 2, 4 and 6 belongs here.
-    fn scroll(&self, bg: usize, _x: u16) -> (u16, u16) {
-        (self.hofs[bg], self.vofs[bg])
+    /// The scroll a background is drawn with at screen X: its registers, or in modes 2 and 4 the offsets BG3's map
+    /// holds for the visible tile X is in (anomie's "Mode 2" and "Mode 4"; D-16).
+    fn scroll(&self, bg: usize, mode: u8, x: u16) -> (u16, u16) {
+        let (mut hofs, mut vofs) = (self.hofs[bg], self.vofs[bg]);
+        if !matches!(mode, 2 | 4) || bg > 1 {
+            return (hofs, vofs);
+        }
+        let tile = (x + (hofs & 7)) >> 3;
+        if tile == 0 {
+            return (hofs, vofs);
+        }
+        let column = ((tile - 1) << 3).wrapping_add(self.hofs[2] & !7);
+        let valid = 0x2000 << bg;
+        let first = self.map_entry(2, column, self.vofs[2]);
+        let (h, v) = if mode == 4 {
+            if first & 0x8000 != 0 { (0, first) } else { (first, 0) }
+        } else {
+            (first, self.map_entry(2, column, self.vofs[2].wrapping_add(8)))
+        };
+        if h & valid != 0 {
+            hofs = (h & 0x03F8) | (hofs & 7);
+        }
+        if v & valid != 0 {
+            vofs = v & 0x03FF;
+        }
+        (hofs, vofs)
     }
 
-    /// The eight pixels of the background at (px0..px0+8, py), px0 a multiple of 8, in screen order and the line
-    /// buffer's encoding: the map entry is read and the tile row's words fetched once for all eight.
-    fn decode_chunk(&self, bg: usize, mode: u8, px0: u16, py: u16, out: &mut [u16; 8]) {
-        let big = self.regs[0x05] & (0x10 << bg) != 0;
-        let shift = if big { 4 } else { 3 };
-        let (tx, ty) = (px0 >> shift, py >> shift);
+    /// A background's map entry for the point (px, py) of its plane (anomie, "Tile Maps and Character Maps").
+    fn map_entry(&self, bg: usize, px: u16, py: u16) -> u16 {
+        let shift = if self.regs[0x05] & (0x10 << bg) != 0 { 4 } else { 3 };
+        let (tx, ty) = (px >> shift, py >> shift);
         let sc = self.regs[0x07 + bg];
         let screen = match sc & 3 {
             0 => 0,
@@ -518,8 +563,14 @@ impl Ppu {
             _ => ((tx >> 5) & 1) + 2 * ((ty >> 5) & 1),
         };
         let base = ((sc as u16 >> 2) << 10).wrapping_add(screen << 10);
-        let entry = self.vram[(base.wrapping_add(((ty & 31) << 5) | (tx & 31)) & 0x7FFF) as usize];
-        let size = 1u16 << shift;
+        self.vram[(base.wrapping_add(((ty & 31) << 5) | (tx & 31)) & 0x7FFF) as usize]
+    }
+
+    /// The eight pixels of the background at (px0..px0+8, py), px0 a multiple of 8, in screen order and the line
+    /// buffer's encoding: the map entry is read and the tile row's words fetched once for all eight.
+    fn decode_chunk(&self, bg: usize, mode: u8, px0: u16, py: u16, out: &mut [u16; 8]) {
+        let size = if self.regs[0x05] & (0x10 << bg) != 0 { 16u16 } else { 8 };
+        let entry = self.map_entry(bg, px0, py);
         let hflip = entry & 0x4000 != 0;
         let mut fx = px0 & (size - 1);
         let mut fy = py & (size - 1);
@@ -530,25 +581,35 @@ impl Ppu {
             fy = size - 1 - fy;
         }
         let tile = ((entry & 0x3FF) + (fx >> 3) + ((fy >> 3) << 4)) & 0x3FF;
-        let deep = mode == 1 && bg < 2;
+        let depth = DEPTHS[mode as usize][bg] as u16;
         let nba = (self.regs[0x0B + bg / 2] >> (4 * (bg & 1))) as u16 & 0x0F;
-        let words = if deep { 16 } else { 8 };
-        let at = (nba << 12).wrapping_add(tile * words).wrapping_add(fy & 7);
-        let w0 = self.vram[(at & 0x7FFF) as usize];
-        let w1 = if deep { self.vram[(at.wrapping_add(8) & 0x7FFF) as usize] } else { 0 };
+        let at = (nba << 12).wrapping_add(tile.wrapping_mul(4 * depth)).wrapping_add(fy & 7);
+        let mut words = [0u16; 4];
+        for (plane, w) in words.iter_mut().enumerate().take(depth as usize / 2) {
+            *w = self.vram[(at.wrapping_add(8 * plane as u16) & 0x7FFF) as usize];
+        }
         let palette = (entry >> 10) & 7;
         let high = 0x8000 | (((entry >> 13) & 1) << 8);
+        // A 256-colour background's pixel is a colour itself in direct colour mode, with the palette bits (anomie).
+        let direct = depth == 8 && self.regs[0x30] & 1 != 0;
+        let base = match depth {
+            2 if mode == 0 => bg as u16 * 0x20 + palette * 4,
+            2 => palette * 4,
+            4 => palette * 16,
+            _ => 0,
+        };
         for (i, o) in out.iter_mut().enumerate() {
             let bit = if hflip { i as u16 } else { 7 - i as u16 };
-            let colour = ((w0 >> bit) & 1) | (((w0 >> (bit + 8)) & 1) << 1) | (((w1 >> bit) & 1) << 2) | (((w1 >> (bit + 8)) & 1) << 3);
+            let mut colour = 0;
+            for (plane, w) in words.iter().enumerate().take(depth as usize / 2) {
+                colour |= (((w >> bit) & 1) | (((w >> (bit + 8)) & 1) << 1)) << (2 * plane);
+            }
             *o = if colour == 0 {
                 0
-            } else if deep {
-                high | (palette * 16 + colour)
-            } else if mode == 0 {
-                high | (bg as u16 * 0x20 + palette * 4 + colour)
+            } else if direct {
+                high | DIRECT | (palette << 10) | colour
             } else {
-                high | (palette * 4 + colour)
+                high | (base + colour)
             };
         }
     }
@@ -579,6 +640,7 @@ impl Ppu {
             0 => &MODE0,
             1 if self.regs[0x05] & 0x08 != 0 => &MODE1_BG3_HIGH,
             1 => &MODE1,
+            2..=4 => &MODE2,
             _ => &OBJ_ONLY,
         };
         for &(layer, priority) in order {
@@ -588,7 +650,14 @@ impl Ppu {
             }
             let p = if layer == OBJ { self.obj_line[x as usize] } else { self.bg_line[layer][x as usize] };
             if p != 0 && (p >> 8) & 3 == priority {
-                return Some((self.cgram[(p & 0xFF) as usize], layer, p & 0xFF));
+                let colour = if layer != OBJ && p & DIRECT != 0 {
+                    // BBGGGRRR and the palette's bgr make Red=RRRr0, Green=GGGg0, Blue=BBb00 (anomie, "Direct Color Mode").
+                    let (c, bgr) = (p & 0xFF, (p >> 10) & 7);
+                    ((c & 7) << 2 | (bgr & 1) << 1) | ((c >> 3 & 7) << 2 | (bgr >> 1 & 1) << 1) << 5 | ((c >> 6) << 3 | (bgr >> 2) << 2) << 10
+                } else {
+                    self.cgram[(p & 0xFF) as usize]
+                };
+                return Some((colour, layer, p & 0xFF));
             }
         }
         None
@@ -825,5 +894,64 @@ mod tests {
         p.obj_line[30] = 0x8000 | 3 << 8 | 0xC1;
         p.obj_line[31] = 0x8000 | 3 << 8 | 0x81;
         assert_eq!((p.compose(30), p.compose(31)), (31 | 4 << 5 | 4 << 10, 0x03E0));
+    }
+
+    // fullsnes: each block of the mosaic shows its upper-left pixel, the first block at the top-left of the picture.
+    #[test]
+    fn mosaic_repeats_the_blocks_first_pixel_and_first_line() {
+        let mut p = Ppu::default();
+        p.regs[0x2C] = 0x01;
+        p.regs[0x0B] = 0x01;
+        // Tile 0 of BG1's characters at $1000: row r's pixel x has colour 1 only where x == r.
+        for r in 0..8 {
+            p.vram[0x1000 + r] = 0x80 >> r;
+        }
+        p.cgram[1] = 0x7FFF;
+        let lit = |p: &mut Ppu, line: u16| -> Vec<u16> {
+            p.fill_backgrounds(line, 0, 16);
+            (0..16).filter(|&x| p.bg_line[0][x] != 0).map(|x| x as u16).collect()
+        };
+        p.end_line(0, 1);
+        assert_eq!(lit(&mut p, 2), [2, 10]);
+        p.regs[0x06] = 0x31;
+        p.end_line(0, 1);
+        // Blocks of four: line 1 is the block's first line, whose only lit pixel is x=1, not a block's first.
+        assert_eq!(lit(&mut p, 1), Vec::<u16>::new());
+        p.end_line(1, 2);
+        p.end_line(2, 3);
+        p.end_line(3, 4);
+        assert_eq!(p.mosaic_row, 3);
+        assert_eq!(lit(&mut p, 4), Vec::<u16>::new());
+        p.end_line(4, 5);
+        // Line 5 starts the second block: its row lights x=5 and x=13, neither a block's first pixel; scrolled by one
+        // the lit pixel is x=4, the block's first, and fills the block.
+        assert_eq!(p.mosaic_row, 0);
+        p.hofs[0] = 1;
+        assert_eq!(lit(&mut p, 5), [4, 5, 6, 7, 12, 13, 14, 15]);
+    }
+
+    // anomie's "Mode 2", as D-16 reads it: visible tile T takes its scroll from BG3's visible tile T-1.
+    #[test]
+    fn offset_per_tile_takes_each_visible_tiles_scroll_from_bg3() {
+        let mut p = Ppu::default();
+        p.regs[0x05] = 2;
+        p.regs[0x09] = 0x10;
+        p.hofs[0] = 3;
+        p.vofs[0] = 5;
+        assert_eq!(p.scroll(0, 2, 0), (3, 5));
+        assert_eq!(p.scroll(0, 2, 5), (3, 5));
+        // BG3's map at $1000: column 0 holds tile 1's offsets, H in row 0 and V in row 1.
+        p.vram[0x1000] = 0x2000 | 0x48;
+        p.vram[0x1020] = 0x2000 | 0x30;
+        p.vram[0x1001] = 0x4000 | 0x80;
+        assert_eq!(p.scroll(0, 2, 5), (0x48 | 3, 0x30));
+        assert_eq!(p.scroll(0, 2, 12), (0x48 | 3, 0x30));
+        // Tile 2's entry is marked for BG2 only, so BG1 keeps its registers there.
+        assert_eq!(p.scroll(0, 2, 13), (3, 5));
+        assert_eq!(p.scroll(1, 2, 8), (0, 0));
+        assert_eq!(p.scroll(1, 2, 16), (0x80, 0));
+        // Mode 4 reads one entry: bit 15 makes it the vertical offset.
+        p.vram[0x1000] = 0x8000 | 0x2000 | 0x48;
+        assert_eq!(p.scroll(0, 4, 5), (3, 0x48));
     }
 }

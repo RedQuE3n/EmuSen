@@ -142,3 +142,54 @@ language (`Mars_Gpu.md` §4 on Metal) was declined for the reason the stack is f
 - A new **database**: schema as committed `.sql` next to its owner, `IF NOT EXISTS` throughout, `PRAGMA foreign_keys = ON`, a header comment carrying the argument for the table's existence, a `<None … CopyToOutputDirectory="PreserveNewest">` item in the owning `.csproj` (it propagates transitively through `ProjectReference`; no consumer needs its own), and a new `.gitignore` line for the `.db`.
 - A new **Python tool**: `EmuSen.WiseMan/Reference/analysis/`, stdlib only, `#!/usr/bin/env python3`, module docstring as the manual, exit code as the verdict, `unittest` beside it.
 - A new **exception**: a section in §4, with the evidence, and a sentence on where it does not generalise.
+
+## 6. A later stack: DianaOS in Rust, and C# retired (deferred, 2026-10-01)
+
+*Decided 2026-10-01: recorded as a plan, and scheduled after more cores have been added, not before.* It would revise §1's
+division of the stack, so it is written down here rather than re-derived when its time comes.
+
+**The direction.** Every emulator core is moving to Rust behind one native interface (`EmuSen_NativeCores.md`, and the
+stable API in `EmuSen_CoreAPI.md`). The plan is to bring the runtime above the cores with them. DianaOS would become a
+Rust program, the platform's runtime and shell: core discovery and loading, sessions, the debugger and cheat services,
+states and rewind, settings, input routing, and the Unix-like shell. Its frontend API would be a language-neutral C
+interface. C# would then leave the tree.
+
+**Why it is coherent.**
+- Below the user interface the platform becomes one language, with the stable API native end to end: the reference
+  implementation of the interface is written in the language its cores are written in.
+- No .NET runtime is shipped. That means a smaller install, no JIT warm-up at start, and a native binary on small
+  ARM machines, which matters for a single-board-computer appliance.
+- A user interface in another toolkit can bind to it directly, instead of through a bridge into a managed runtime.
+
+**The user interface,** to be chosen by prototype and not argued in advance. Two candidates:
+- **Qt with QML through cxx-qt,** a maintained Rust–Qt bridge. Its strengths are native Wayland, a mature kiosk
+  backend (EGLFS), and the platform look and accessibility.
+- **Slint,** a Rust-native toolkit built for embedded and kiosk use, which draws through DRM/KMS with no desktop.
+
+The test of the choice is one Big Picture screen built in each, measured on the desktop and on a small ARM board. Qt
+through C# was considered and set aside: its .NET bindings (Qml.Net, QtSharp) are unmaintained, so a Qt interface
+implies a non-C# frontend in any case.
+
+**What it costs, measured 2026-10-01.**
+
+| Part | Lines |
+|---|---|
+| DianaOS | about 16,100 |
+| Mistress, of which Big Picture is about 7,500 | about 28,300 |
+| LunaP | about 29,800 |
+| Hotaru, Galaxia and Endymion | about 4,300 |
+| WiseMan's user-interface tests | about 37,200 |
+
+The rest of WiseMan's suite would need a Rust home too. This is a platform rewrite, not the port of one assembly.
+
+**The order, in which no step leaves a broken platform.**
+1. Every core is ported to Rust, which retires each C# core.
+2. The stable core API lands.
+3. DianaOS is ported to Rust as the headless runtime. Its first client is the conformance kit, and Mistress keeps
+   working by calling it through its C interface.
+4. The interface toolkit is chosen by prototype.
+5. The user interface is ported, and C# and LunaP are retired. Tests move piece by piece, with WiseMan kept until
+   each piece reaches parity.
+
+**What does not change now.** Until this plan starts, §1–§5 stand as written: Rust for cores, C# for everything else.
+The work in progress is not to be bent towards it beyond keeping the frontend API's design open to a C interface.

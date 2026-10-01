@@ -85,6 +85,46 @@ Two cumulative counters over everything `Process()` has taken in and handed on. 
 
 They exist because that effect is otherwise impossible to observe without reading the output queue, and the queue's depth is a function of the *device's* clock as much as ours. `AudioLatencyDriftTests` asserts against these instead of against a queue reading for exactly that reason — see `EmuSen_Settings_Reference.md` §4.10. Cumulative, never reset (not even by `Reset()`), so a test can subtract two samples and get the interval it cares about.
 
+### 3.4 The nominal ratio: a pacer that runs the content off its own rate (2026-10-01)
+
+Until 2026-10-01 the only drift this loop saw was drift nobody chose: the sound card's clock against the machine's, and
+the core's own rounding. `EmuSen_Settings_Reference.md` §4.87 adds a drift that is chosen. When the display's refresh is
+within 1% of the core's frame rate, the frontend runs one emulated frame per refresh, so a Game Boy at 59.7275 Hz runs
+at 60 on a 60 Hz display and produces 0.456% more samples a second than the device plays.
+
+**The band covers that figure and should not be asked to.** 0.456% is inside `MaxDeviation`'s 0.5%, so the loop does
+hold it. It holds it where §3's formula says, at `target * (1 + 0.00456 / 0.005)`, which is 1.91 times the target: 489
+ms of queue for a 256 ms target, and 0.044% of authority left for the sound card. A 1% mismatch, the edge of the
+tolerance, is past the band altogether, and the queue runs into shedding or runs dry according to its sign.
+`Without_the_nominal_ratio_the_game_boys_drift_nearly_doubles_the_queue_and_one_percent_is_past_the_band` pins all
+three.
+
+**So the known part of the drift is fed forward.** `DynamicRateControl.NominalRatio` multiplies the law:
+
+```
+ratio = NominalRatio * (1 - delta * MaxDeviation)
+```
+
+The pacer sets it each frame to `content rate / rate the frames actually run at` (`PacingDecision.AudioRatio`):
+1.00165 for the NES on 60 Hz, 0.99546 for the Game Boy, 1.0 whenever the content is paced at its own rate. The
+proportional term is then left with what it had before, the drift nobody chose, and the queue settles at its target.
+`With_the_nominal_ratio_a_locked_rate_settles_at_the_target_and_inside_the_band` runs ten simulated minutes at each of
+five rate pairs, the two 1% edges among them, and asserts no underrun, no shedding, a final queue within 10% of target
+and a correction that never leaves `1 ± MaxDeviation` of the nominal. RetroArch separates the two the same way: its
+`audio_max_timing_skew` adjusts the input rate to the display, and its rate control delta corrects around that.
+
+**What the player hears** is the pitch moved by the same ratio: 2.8 cents for the NES on 60 Hz, 7.9 cents for the Game
+Boy, 17 cents at the 1% edge. §4.87.5 gives this as one of the two reasons the tolerance is 1% and not RetroArch's 5%.
+
+**At 1.0 the output is what it was.** The default is 1.0, the multiplication by it is exact in floating point, and
+`Reset()` returns `LastRatio` to the nominal rather than to 1.0, which is the same number unless a pacer has set it.
+A change of nominal is a change of 0.5% at most between two frames, well under what the linear resampler already does
+every frame under the proportional term, so it is not a discontinuity and does not call for `Reset()` (§3.2).
+
+**Not covered.** The measured refresh has an error of its own. With the display's vblank count (§4.87.2) it is a few
+parts per million; from presenter ticks alone it is the tick's jitter over the fitting window, which has not been
+measured on a platform that has only ticks. Either lands in the proportional term as residual drift.
+
 ---
 
 ## 4. The core-side buffer is a safety valve now

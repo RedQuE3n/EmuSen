@@ -37,6 +37,8 @@ pub struct Machine {
     pub skip_rendering: bool,
     pub frame_rgba: Box<[u8]>,
     pub samples: SampleQueue,
+    /// The I flag the last interrupt check saw.
+    pub i_checked: bool,
 }
 
 impl Machine {
@@ -57,6 +59,7 @@ impl Machine {
             skip_rendering: false,
             frame_rgba: frame.into(),
             samples: SampleQueue::default(),
+            i_checked: true,
         };
         m.cpu.interrupt(&mut m.sys, Interrupt::Reset);
         Ok(m)
@@ -70,8 +73,44 @@ impl Machine {
     pub fn run_frame(&mut self) {
         let frame = self.sys.timing.frame;
         while self.sys.timing.frame == frame {
-            self.cpu.step(&mut self.sys);
+            self.step();
         }
+    }
+
+    /// One instruction, or the interrupt the machine takes instead. NMI's edge wins over IRQ's level; IRQ needs I
+    /// clear as the check saw it, which is the old I after CLI, SEI, PLP, REP and SEP, which change it in their final
+    /// cycle, after the check (anomie's timing document). WAI ends on either line with two internal cycles.
+    pub fn step(&mut self) {
+        self.sys.dev.pads = self.pads;
+        let irq = self.sys.timing.irq_flag;
+        if self.cpu.waiting {
+            if self.sys.dev.nmi_pending || irq {
+                self.cpu.waiting = false;
+                let at = ((self.cpu.pbr as u32) << 16) | self.cpu.pc as u32;
+                crate::cpu::Bus::idle(&mut self.sys, at, 0);
+                crate::cpu::Bus::idle(&mut self.sys, at, 0);
+            } else {
+                self.cpu.step(&mut self.sys);
+                return;
+            }
+        }
+        if self.sys.dev.nmi_pending {
+            self.sys.dev.nmi_pending = false;
+            self.cpu.interrupt(&mut self.sys, Interrupt::Nmi);
+            self.i_checked = true;
+            return;
+        }
+        if irq && !self.i_checked && !self.cpu.stopped {
+            self.cpu.interrupt(&mut self.sys, Interrupt::Irq);
+            self.i_checked = true;
+            return;
+        }
+        let at = ((self.cpu.pbr as u32) << 16) | self.cpu.pc as u32;
+        let opcode = self.sys.read_value(at, false).unwrap_or(self.sys.mdr);
+        let before = self.cpu.p & crate::cpu::flag::I != 0;
+        self.cpu.step(&mut self.sys);
+        let after = self.cpu.p & crate::cpu::flag::I != 0;
+        self.i_checked = if matches!(opcode, 0x58 | 0x78 | 0x28 | 0xC2 | 0xE2) { before } else { after };
     }
 
     pub fn vram_bytes(&self) -> Vec<u8> {
@@ -103,6 +142,36 @@ impl Machine {
             w.bool("Refreshed", t.refreshed);
             w.bool("VBlank", t.vblank);
             w.bool("NmiFlag", t.nmi_flag);
+            w.u8("IrqMode", t.irq_mode);
+            w.u16("HTime", t.htime);
+            w.u16("VTime", t.vtime);
+            w.bool("IrqFlag", t.irq_flag);
+            w.bool("JoypadDue", t.joypad_due);
+            w.bool("HdmaInitDone", t.hdma_init_done);
+            w.bool("HdmaLineDone", t.hdma_line_done);
+        });
+        let d = &self.sys.dev;
+        w.group("Devices", |w| {
+            w.u8("Nmitimen", d.nmitimen);
+            w.bool("NmiSeen", d.nmi_seen);
+            w.bool("NmiPending", d.nmi_pending);
+            w.bool("IChecked", self.i_checked);
+            for (n, v) in [("WrMpyA", d.wrmpya), ("WrMpyB", d.wrmpyb), ("WrDivB", d.wrdivb)] {
+                w.u8(n, v);
+            }
+            for (n, v) in [("WrDiv", d.wrdiv), ("RdDiv", d.rddiv), ("RdMpy", d.rdmpy)] {
+                w.u16(n, v);
+            }
+            w.u8("Math", d.math as u8);
+            w.u8("MathStep", d.math_step);
+            w.bool("MathFresh", d.math_fresh);
+            for (n, v) in [("DmaPending", d.dma_pending), ("DmaWait", d.dma_wait), ("HdmaActive", d.hdma_active), ("HdmaTransfer", d.hdma_transfer)] {
+                w.u8(n, v);
+            }
+            w.u16s("Joy", &d.joy);
+            w.u64("JoyBusyUntil", d.joy_busy_until);
+            w.bool("Strobe", d.strobe);
+            w.u16s("Shift", &d.shift);
         });
         w.group("Bus", |w| {
             w.u8("Mdr", self.sys.mdr);
@@ -149,6 +218,40 @@ impl Machine {
         t.refreshed = r.bool()?;
         t.vblank = r.bool()?;
         t.nmi_flag = r.bool()?;
+        t.irq_mode = r.u8()? & 3;
+        t.htime = r.u16()? & 0x1FF;
+        t.vtime = r.u16()? & 0x1FF;
+        t.irq_flag = r.bool()?;
+        t.joypad_due = r.bool()?;
+        t.hdma_init_done = r.bool()?;
+        t.hdma_line_done = r.bool()?;
+        let d = &mut self.sys.dev;
+        d.nmitimen = r.u8()?;
+        d.nmi_seen = r.bool()?;
+        d.nmi_pending = r.bool()?;
+        self.i_checked = r.bool()?;
+        let d = &mut self.sys.dev;
+        d.wrmpya = r.u8()?;
+        d.wrmpyb = r.u8()?;
+        d.wrdivb = r.u8()?;
+        d.wrdiv = r.u16()?;
+        d.rddiv = r.u16()?;
+        d.rdmpy = r.u16()?;
+        d.math = match r.u8()? {
+            1 => crate::scpu::Math::Multiply,
+            2 => crate::scpu::Math::Divide,
+            _ => crate::scpu::Math::Idle,
+        };
+        d.math_step = r.u8()?.min(16);
+        d.math_fresh = r.bool()?;
+        d.dma_pending = r.u8()?;
+        d.dma_wait = r.u8()?;
+        d.hdma_active = r.u8()?;
+        d.hdma_transfer = r.u8()?;
+        r.u16s(&mut d.joy)?;
+        d.joy_busy_until = r.u64()?;
+        d.strobe = r.bool()?;
+        r.u16s(&mut d.shift)?;
         self.sys.mdr = r.u8()?;
         self.sys.wram_address = r.u32()? & 0x1FFFF;
         self.sys.fast_rom = r.bool()?;
@@ -251,15 +354,15 @@ pub(crate) mod tests {
         assert!(m.sys.timing.clock >= 2 * 262 * 1364 - 4);
     }
 
-    // Version 2 carries the CPU, the clock and the bus; the listing is its record (VenusRT_Plan.md §5.6).
+    // Version 3 adds the S-CPU's devices to version 2's CPU, clock and bus; the listing is its record (plan §5.6).
     #[test]
-    fn the_version_2_layout_is_pinned() {
+    fn the_version_3_layout_is_pinned() {
         let m = Machine::load_rom(&rom(&[])).unwrap();
         let layout = m.layout();
         assert!(layout.starts_with("0 4 u32 Magic\n4 4 i32 Version\n8 2 u16 Cpu.A\n"), "{layout}");
         assert!(layout.contains(" u64 Timing.Clock\n") && layout.contains(" u8[1024] Bus.Io\n") && layout.contains(" u16[32768] Vram\n"), "{layout}");
-        assert_eq!(layout.lines().count(), 34, "{layout}");
-        assert_eq!(m.state_size(), 264_283);
+        assert_eq!(layout.lines().count(), 62, "{layout}");
+        assert_eq!(m.state_size(), 264_333);
         assert_eq!(&save(&m)[..4], b"VNRT");
     }
 

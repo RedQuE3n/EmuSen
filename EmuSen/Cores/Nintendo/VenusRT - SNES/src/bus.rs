@@ -4,6 +4,7 @@
 
 use crate::cart::{Cartridge, Region, Slot};
 use crate::cpu::{Bus, pin};
+use crate::scpu::Devices;
 
 pub const LINE: u16 = 1364;
 /// The refresh's start, H=133.5 in dots, and its length (fullsnes, "SNES Timing H/V Events").
@@ -23,7 +24,30 @@ pub struct Timing {
     pub refreshed: bool,
     pub vblank: bool,
     pub nmi_flag: bool,
+    /// $4200 bits 4-5, HTIME and VTIME, and $4211's flag the comparator sets.
+    pub irq_mode: u8,
+    pub htime: u16,
+    pub vtime: u16,
+    pub irq_flag: bool,
+    /// Set when line 225 reaches H=74.5, for the auto-joypad read to start (anomie's timing document).
+    pub joypad_due: bool,
+    /// HDMA's init on line 0 and its transfer on this line are done.
+    pub hdma_init_done: bool,
+    pub hdma_line_done: bool,
 }
+
+/// Where in a line the H comparator fires for an HTIME: 14 clocks past the dot, the two long dots counted, and HTIME
+/// 0 at 10 clocks, which is 1374 past the previous line's dot 0 (anomie's timing document).
+pub fn irq_point(htime: u16) -> u16 {
+    if htime == 0 {
+        return 10;
+    }
+    14 + 4 * htime + if htime > 323 { 2 } else { 0 } + if htime > 327 { 2 } else { 0 }
+}
+
+pub const JOYPAD_AT: u16 = 298;
+pub const HDMA_INIT_AT: u16 = 24;
+pub const HDMA_AT: u16 = 278 * 4;
 
 impl Timing {
     /// 1364 master clocks, but 1360 for line 240 of field 1 at 60 Hz without interlace.
@@ -38,17 +62,45 @@ impl Timing {
 
     #[inline]
     pub fn advance(&mut self, clocks: u16) {
-        self.clock += clocks as u64;
-        self.line_clock += clocks;
-        while self.line_clock >= self.line_length() {
-            self.line_clock -= self.line_length();
-            self.next_line();
+        let mut left = clocks;
+        while left > 0 {
+            let len = self.line_length();
+            let step = left.min(len - self.line_clock);
+            let (from, to) = (self.line_clock, self.line_clock + step);
+            if self.irq_mode != 0 {
+                self.compare(from, to, len);
+            }
+            if self.line == VBLANK_LINE && from < JOYPAD_AT && JOYPAD_AT <= to {
+                self.joypad_due = true;
+            }
+            self.clock += step as u64;
+            self.line_clock = to;
+            left -= step;
+            if self.line_clock >= len {
+                self.line_clock = 0;
+                self.next_line();
+            }
+        }
+    }
+
+    /// The H/V comparator over the clocks (from, to] of this line; a point past the line's end falls in the next.
+    fn compare(&mut self, from: u16, to: u16, len: u16) {
+        let h = if self.irq_mode == 2 { 0 } else { self.htime };
+        if h > 339 {
+            return;
+        }
+        let at = irq_point(h);
+        let (at, v) = if at >= len { (at - len, self.line.checked_sub(1).unwrap_or(self.lines() - 1)) } else { (at, self.line) };
+        let line_matches = self.irq_mode == 1 || v == self.vtime;
+        if line_matches && from < at && at <= to {
+            self.irq_flag = true;
         }
     }
 
     fn next_line(&mut self) {
         self.line += 1;
         self.refreshed = false;
+        self.hdma_line_done = false;
         if self.line == VBLANK_LINE {
             self.vblank = true;
             self.nmi_flag = true;
@@ -59,6 +111,7 @@ impl Timing {
             self.frame += 1;
             self.vblank = false;
             self.nmi_flag = false;
+            self.hdma_init_done = false;
         }
     }
 
@@ -84,6 +137,7 @@ pub struct System {
     pub vram: Box<[u16]>,
     pub vram_address: u16,
     pub vmain: u8,
+    pub dev: Devices,
 }
 
 impl System {
@@ -100,6 +154,7 @@ impl System {
             vram: vec![0; 0x8000].into(),
             vram_address: 0,
             vmain: 0,
+            dev: Devices::default(),
         }
     }
 
@@ -124,14 +179,13 @@ impl System {
         }
     }
 
-    /// The refresh pauses the CPU between two of its cycles, at the first boundary past H=133.5.
+    /// A CPU cycle: first whatever pauses the CPU at its boundary (HDMA, DMA, the refresh at the first boundary past
+    /// H=133.5), then the cycle's own clocks.
     #[inline]
     fn clock_cycle(&mut self, clocks: u16) {
-        if !self.timing.refreshed && self.timing.line_clock >= REFRESH_AT {
-            self.timing.refreshed = true;
-            self.timing.advance(REFRESH);
-        }
+        self.before_cycle(clocks);
         self.timing.advance(clocks);
+        self.after_clock();
     }
 
     fn vram_step(&mut self, high: bool) {
@@ -165,7 +219,7 @@ impl System {
                     }
                     return Some(v);
                 }
-                0x4212 => return Some((if self.timing.vblank { 0x80 } else { 0 }) | (if self.timing.hblank() { 0x40 } else { 0 }) | (self.mdr & 0x3E)),
+                0x4016 | 0x4017 | 0x4211..=0x421F => return self.read_scpu(offset, side_effects),
                 0x4300..=0x437F if offset & 0x0F <= 0x0B => return Some(self.io[(offset - 0x4000) as usize]),
                 0x4000..=0x5FFF => return None,
                 0x6000..=0x7FFF if !matches!(self.cart.decode(address), Some(_)) => return None,
@@ -178,7 +232,7 @@ impl System {
         }
     }
 
-    fn write_value(&mut self, address: u32, value: u8) {
+    pub(crate) fn write_value(&mut self, address: u32, value: u8) {
         let bank = (address >> 16) as u8;
         let offset = address as u16;
         if bank & 0xFE == 0x7E {
@@ -211,6 +265,7 @@ impl System {
                     self.fast_rom = value & 1 != 0;
                     self.io[0x20D] = value;
                 }
+                0x4016 | 0x4200..=0x420B => self.write_scpu(offset, value),
                 0x4000..=0x43FF => self.io[(offset - 0x4000) as usize] = value,
                 _ => {}
             }
@@ -231,6 +286,7 @@ impl Bus for System {
         self.clock_cycle(clocks);
         let v = self.read_value(address, true).unwrap_or(self.mdr);
         self.mdr = v;
+        self.math_tick();
         v
     }
 
@@ -239,21 +295,25 @@ impl Bus for System {
     fn write(&mut self, address: u32, value: u8, pins: u8) {
         if pins & (pin::VDA | pin::VPA) == 0 {
             self.clock_cycle(6);
+            self.math_tick();
             return;
         }
         let clocks = self.speed(address);
         self.clock_cycle(clocks);
         self.mdr = value;
         self.write_value(address, value);
+        self.math_tick();
     }
 
     #[inline]
     fn idle(&mut self, _address: u32, _pins: u8) {
         self.clock_cycle(6);
+        self.math_tick();
     }
 
     fn halted(&mut self) {
         self.clock_cycle(6);
+        self.math_tick();
     }
 }
 

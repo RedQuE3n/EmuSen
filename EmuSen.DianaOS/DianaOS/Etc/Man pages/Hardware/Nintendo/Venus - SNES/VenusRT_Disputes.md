@@ -222,7 +222,7 @@ their data.
   colour and a brightness for every line by HDMA; the pairs come from its own `Gradient.py`, which was run to list
   them. VenusRT's red component equals the formula on 219 of 224 lines; Mesen's is one lower on 59 of them (colour
   26 at brightness 12: the formula gives 21.125, so 21; Mesen shows 20), and never higher. The other five lines
-  are the gradient's ends, where neither engine equals the table's pair for that line.
+  are the table's lines at brightness 0, black in both engines, as fullsnes's "0=Screen Black" has it.
 - Documents read: fullsnes, "PPU Registers, INIDISP": "N=1..15: Brightness*(N+1)/16"; anomie's register document,
   `$2100`: "F=max, 0=off", no formula.
 - Test ROM: `RedSpace9BitHDMA`, as above. Its folder holds two PNG screenshots, 8-bit colour, one named for colour

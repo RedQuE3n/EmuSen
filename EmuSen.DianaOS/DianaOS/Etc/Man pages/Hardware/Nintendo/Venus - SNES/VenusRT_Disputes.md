@@ -186,8 +186,30 @@ their data.
   180 clocks later in the line than a reset that starts at H=0, or by a refresh placed earlier; the CPU cannot tell
   the two apart, and the PPU's H-counter latch of stage 3 can.
 - Referee: not read. Mesen's source: none.
-- Conclusion: fullsnes's start at H=0, V=0 and the documents' refresh point; argued. Open until stage 3's H-counter.
-  It bounds every frame-exact differential until then: memory compared at a frame may differ by what one line's
-  phase changes.
-- Pinned by: nothing yet.
+- Conclusion, as it stood at stage 2: fullsnes's start at H=0, V=0 and the documents' refresh point; argued. Open
+  until stage 3's H-counter.
+- Measured 2026-09-30, at stage 3 step 1, with `$2137`, `$213C` and `$213D` built. Sour's `timing_test` latches the
+  counters four times before it uses HDMA and prints each as H and V. VenusRT, whose reset sequence begins at clock
+  0 of line 0, prints `$00AD.$0001`, `$0041.$0002`, `$00C0.$0004` and `$0050.$00DB`; Mesen prints `$00CD.$0001`,
+  `$0061.$0002`, `$00E0.$0004` and `$0070.$00DB`. Every row is 32 dots, 128 master clocks, later in Mesen. The
+  `power_phase` example moves VenusRT's power-on position by a number of clocks; of 0, 120, 124 to 132, 136
+  and 140, 128 alone reproduces all four of Mesen's rows; 127 and 129 each miss two or more. The prediction of stage 2, one cause and a size of 130 to 180 clocks,
+  holds in kind and is retired in size: the cause is the CPU's start, 128 clocks, and the refresh needs no moving.
+  Stage 2's two observations, the refresh's instruction and Super Metroid's `$4212`, were not measured again at the
+  new position.
+- What the documents and the test ROMs say of the number: nothing. fullsnes puts the counters at H=0, V=0 "after
+  /RESET" and does not say how long after that the CPU's first cycle is; anomie's timing document credits the
+  observation "that the SNES returns to a known timing position on reset" and does not give the position. Sour's
+  `timing_test` carries no expected values (its README calls it work in progress, and the row is printed, not
+  graded), `test_dmatiming` latches in its NMI handler after `libclock` has sought a known dot, as every test of
+  `snestest_082506` does, and so cannot see where the machine began. Run at 0 and at 128 for 1,200 frames, the
+  text 304 images leave in VRAM differs in Sour's three images and in five of PeterLemon's SPC700 images, which
+  need an APU that is still a stand-in, and in no self-graded test: the corpus holds no hardware verdict on the phase.
+- Referee: not read. Mesen's source: none.
+- Conclusion: unchanged, and still argued: the reset sequence begins at H=0, V=0. Mesen's 128 clocks is an
+  observation with one sample and no document behind it; adopting it would make four printed rows equal and prove
+  nothing. Open. It would be settled by `timing_test`'s first row on a console: `$00AD` for a start at clock 0,
+  `$00CD` for a start 128 clocks later, and anything else for neither. Until then it bounds every frame-exact
+  differential with Mesen by what 128 clocks of phase change, and `power_phase` measures that for a ROM.
+- Pinned by: nothing; `power_phase` (an example of the crate) reproduces the measurement.
 

@@ -212,4 +212,25 @@ their data.
   `$00CD` for a start 128 clocks later, and anything else for neither. Until then it bounds every frame-exact
   differential with Mesen by what 128 clocks of phase change, and `power_phase` measures that for a ROM.
 - Pinned by: nothing; `power_phase` (an example of the crate) reproduces the measurement.
+- Added the same day: undisbeliever's `reset-position-test` exists to answer this question. Its reset handler
+  latches the counters as its first instruction and prints them. Mesen prints OPHCT `$0035`, VenusRT `$0015`, and
+  VenusRT at 128 clocks prints `$0035`, the same 32 dots. Its source records no console result. It is the cheaper
+  of the two ROMs that would settle the entry: `$0015` on a console for a start at clock 0, `$0035` for Mesen's.
+
+### D-7. PPU: master brightness N scales a colour component c to c×(N+1)/16, rounded down
+- Opened: 2026-09-30, at stage 3 step 1, by PeterLemon's `RedSpace9BitHDMA` at frame 300. The ROM writes a backdrop
+  colour and a brightness for every line by HDMA; the pairs come from its own `Gradient.py`, which was run to list
+  them. VenusRT's red component equals the formula on 219 of 224 lines; Mesen's is one lower on 59 of them (colour
+  26 at brightness 12: the formula gives 21.125, so 21; Mesen shows 20), and never higher. The other five lines
+  are the gradient's ends, where neither engine equals the table's pair for that line.
+- Documents read: fullsnes, "PPU Registers, INIDISP": "N=1..15: Brightness*(N+1)/16"; anomie's register document,
+  `$2100`: "F=max, 0=off", no formula.
+- Test ROM: `RedSpace9BitHDMA`, as above. Its folder holds two PNG screenshots, 8-bit colour, one named for colour
+  emulation; the README names emulators as the way to run the ROMs, so neither image is taken as a console's
+  output.
+- Referee: not read. Mesen's source: none.
+- Conclusion: fullsnes's formula, rounded down; argued from the one document that gives a formula. Mesen's lower
+  values are an observation with no document behind them. Open: a console capture of this ROM, or of any ROM that
+  pairs one colour with several brightnesses, would settle it.
+- Pinned by: nothing yet. The picture comparison of `VenusRT_Native.md` §15 reproduces it.
 

@@ -518,3 +518,19 @@ their data.
 - Implemented 2026-10-01, after interlace's line count. **Measured:** `demo_irq` and `blobs/demo_irqtest` pass all
   six tests (blue backdrop); they stopped at test 6's first check. Settled, measured on the test ROM.
 
+### D-21. IRQ: enabling V-IRQ on its line, after its point, raises it at once
+- Opened: 2026-10-01, at stage 3 step 5, by `blobs/test_irq4200` failing. The ROM (lost source, disassembled by
+  Jonas Quinn) sets VTIME 1 and HTIME 0, then HTIME `$152`, waits into the line, and for ten combinations writes
+  `$4200` four times with a disabling write between, recording each IRQ taken; it compares the record with a table.
+- Documents read: anomie's timing document, "Interrupts": V-IRQ at "V=VTIME, H=~2.5", and that "when enabling IRQs,
+  the IRQ output will go low even if the enable write occurs at the exact cycle when the IRQ is scheduled to
+  trigger". fullsnes, "H/V Events": "H=2.5, V=VTIME V-IRQ". Neither says what an enable later in the line does.
+- Test ROM: the table. With either HTIME: writing `$20` (V-IRQ) raises an IRQ every time it is written after a
+  disable, four times for `$20,$20,$20,$20` and twice wherever it is two of the four; writing `$10` (H-IRQ) or `$30`
+  (HV-IRQ) past their point raises none.
+- Referee: not read. Mesen's source: none.
+- Conclusion: the V comparator alone is a level across its line: a `$4200` write that selects V-IRQ from another
+  setting while V=VTIME, past the line's point, sets the flag at that write. H-IRQ and HV-IRQ stay points. Argued
+  from the test's table; the table does not say what a `$20` written over `$20` does, and it is left raising nothing.
+- Pinned by: `test_irq4200` in the corpus.
+

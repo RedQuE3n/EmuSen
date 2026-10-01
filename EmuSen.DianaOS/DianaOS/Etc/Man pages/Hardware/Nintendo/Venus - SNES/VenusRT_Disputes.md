@@ -365,3 +365,15 @@ their data.
   affected by OAM Address Invalidation"), which is therefore right only while nothing invalidates it.
 - Pinned by: nothing.
 
+### D-13. Colour math: the front-most sub-screen pixel is used whatever its priority against the main pixel's
+- Opened: 2026-10-01, at stage 3 step 3, by reading the documents before the colour-math code. fullsnes, "SNES PPU
+  Color-Math": math occurs "only if the front-most Sub Screen pixel has same or higher (XXX or is it same or lower
+  -- or is it ANY priority?) priority than the Main Screen pixel", the question its own. anomie's register
+  document, "RENDERING THE SCREEN", "Color Math": "Add the corresponding subscreen pixel, or the fixed color if
+  it's the subscreen backdrop", and its three-step rendering list, with no priority condition.
+- Test ROM: none in the corpus isolates it.
+- Referee: not read. Mesen's source: none.
+- Conclusion: anomie's, any priority; argued from fullsnes's sentence being a question and anomie's procedure being
+  stated. Open until a ROM puts a sub-screen pixel behind the main pixel's priority with math on.
+- Pinned by: nothing yet.
+

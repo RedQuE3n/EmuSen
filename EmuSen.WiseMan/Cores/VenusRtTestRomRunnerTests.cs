@@ -180,6 +180,8 @@ namespace EmuSen.WiseMan.Cores
             var engines = new List<ISnesEngine> { ICoreSnesEngine.Venus() };
             if (mesen) engines.Add(new MesenProbeSnesEngine(Path.Combine(root, "runs", "mesen")));
             int threads = int.TryParse(Environment.GetEnvironmentVariable("EMUSEN_VENUSRT_THREADS"), out int t) ? t : 4;
+            // VenusRT as a third column when asked for; its verdicts are reported, not compared with the baseline.
+            bool venusRt = Environment.GetEnvironmentVariable("EMUSEN_VENUSRT_ENGINE") == "1";
 
             var roms = SnesTestRomCorpus.Unique(root);
             var rows = new ConcurrentDictionary<string, string>();
@@ -214,10 +216,28 @@ namespace EmuSen.WiseMan.Cores
                     bool steady = mesenRun.Snapshots.Count == 2 && mesenRun.Snapshots[0].Spaces["vram"].AsSpan().SequenceEqual(mesenRun.Snapshots[1].Spaces["vram"]);
                     cells.Add(steady ? "steady" : "moving");
                 }
+                if (venusRt)
+                {
+                    try
+                    {
+                        var run = new VenusRtSnesEngine().Run(path, frames);
+                        var v = SnesTestRomGrader.Grade(path, run);
+                        cells.Add(v.Outcome.ToString());
+                        cells.Add(v.SelfGraded || v.Outcome == SnesOutcome.Done ? $"{v.Protocol} {v.Detail}".Trim() : "");
+                        var against = runs.Count == 2 ? SnesDifferential.Compare(run, runs[1]).LastOrDefault() : null;
+                        cells.Add(against is null ? "n/a" : against.SpaceBytes.GetValueOrDefault("vram") == 0 ? "same" : $"{against.SpaceBytes["vram"]}B");
+                    }
+                    catch (Exception e)
+                    {
+                        cells.Add("Threw");
+                        cells.Add(e.GetType().Name);
+                        cells.Add("n/a");
+                    }
+                }
                 rows[rom.Md5] = string.Join('\t', cells);
             });
 
-            string header = "md5\trom\tsuite\tvenus\tvenus_detail" + (mesen ? "\tmesen\tmesen_detail\tvram_last\tmesen_vram" : "");
+            string header = "md5\trom\tsuite\tvenus\tvenus_detail" + (mesen ? "\tmesen\tmesen_detail\tvram_last\tmesen_vram" : "") + (venusRt ? "\tvenusrt\tvenusrt_detail\tvenusrt_vram" : "");
             string table = header + "\n" + string.Join("\n", roms.Select(r => rows[r.Md5])) + "\n";
             if (Environment.GetEnvironmentVariable(ReportVariable) is { } report) File.WriteAllText(report, table);
 

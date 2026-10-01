@@ -42,6 +42,9 @@ namespace EmuSen.Mistress.Views
         private string[] _lookTexts = [];
         private PathPickerRow? _themeFolder;
 
+        // The graphics settings the main window holds, which Sync to display is saved into.
+        public GraphicsConfig? Graphics { get; set; }
+
         // Opens the theme's settings sheet; set by the main window, which owns the themed view.
         public Action? OpenThemeSettings { get; set; }
 
@@ -251,7 +254,13 @@ namespace EmuSen.Mistress.Views
                 ThemeChosen?.Invoke();
             };
             _syncToDisplay.IsChecked = EmuSen.Graphics.GraphicsSettings.SyncToDisplay;
-            _syncToDisplay.IsCheckedChanged += (_, _) => { EmuSen.Graphics.GraphicsSettings.SyncToDisplay = _syncToDisplay.IsChecked == true; EmuSen.Graphics.GraphicsSettings.SaveToDisk(); };
+            _syncToDisplay.IsCheckedChanged += (_, _) =>
+            {
+                // Into the object the graphics window saves, or one of the two would write the other's keys away - see EmuSen_Config_Reference.md §3.3.
+                GraphicsConfig config = Graphics ?? GraphicsConfig.Load();
+                EmuSen.Graphics.GraphicsSettings.SyncToDisplay = config.SyncToDisplay = _syncToDisplay.IsChecked == true;
+                config.Save();
+            };
             _pauseInBackground.IsChecked = _settings.PauseInBackground;
             _pauseInBackground.IsCheckedChanged += (_, _) => { _settings.PauseInBackground = _pauseInBackground.IsChecked == true; _settings.Save(); };
 

@@ -181,7 +181,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Assert.StartsWith("Runs one frame per refresh", sheet.Form.Menu.Footer);
                 Assert.True(RowOf(Named<LunaSwitch>(s, "SyncToDisplaySwitch")).IsOn);
                 Assert.Empty(FitAudit.Check(Sheet(s), WindowAllowances.For(sheet)));
+                // What the graphics window wrote stays in the file when the switch saves.
+                var held = (EmuSen.Galaxia.Models.GraphicsConfig)typeof(MainWindow).GetField("_graphics", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(s.Window)!;
+                held.SetValue("NES", "Engine", "MoonRT (Rust)");
                 s.Pad.A();
+                Assert.Equal("MoonRT (Rust)", EmuSen.Galaxia.Models.GraphicsConfig.Load().Value("NES", "Engine"));
                 Assert.False(EmuSen.Graphics.GraphicsSettings.SyncToDisplay);
                 Assert.False(EmuSen.Galaxia.Models.GraphicsConfig.Load().SyncToDisplay);
                 Assert.False(RowOf(Named<LunaSwitch>(s, "SyncToDisplaySwitch")).IsOn);

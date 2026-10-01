@@ -73,7 +73,8 @@ namespace EmuSen.WiseMan.Common
             Assert.False(FrameScheduler.Decide(60.0988, null, true, true).Locked);
             Assert.False(FrameScheduler.Decide(60.0988, Display(60, variable: true), true, true).Locked);
             Assert.False(FrameScheduler.Decide(0, Display(60), true, true).Locked);
-            Assert.False(FrameScheduler.Decide(60.0, Display(1000), true, true).Locked);
+            Assert.True(FrameScheduler.Decide(60.0, Display(480), true, true).Locked);
+            Assert.False(FrameScheduler.Decide(60.0, Display(600), true, true).Locked); // ten refreshes a frame is past the cap of eight
         }
 
         [Fact]
@@ -193,9 +194,10 @@ namespace EmuSen.WiseMan.Common
             TimeSpan due = TimeSpan.Zero;
             for (int i = 0; i < 500; i++)
             {
-                due = scheduler.Next(due, 60.0 + (i % 2 == 0 ? 0.05 : -0.05), speed);
-                Assert.True(scheduler.Decision.Locked);
-                Assert.InRange(scheduler.Decision.ContentHz, 59.94, 60.06);
+                // 60.52 is inside the tolerance of 60 and 60.63 outside it; their mean is inside.
+                due = scheduler.Next(due, i % 2 == 0 ? 60.52 : 60.63, speed);
+                Assert.True(scheduler.Decision.Locked, $"frame {i} left the lock at {scheduler.Decision.ContentHz}");
+                Assert.InRange(scheduler.Decision.ContentHz, 60.51, 60.59);
             }
         }
 

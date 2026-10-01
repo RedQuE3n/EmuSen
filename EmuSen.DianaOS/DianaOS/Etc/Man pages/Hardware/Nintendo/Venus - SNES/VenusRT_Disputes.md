@@ -313,3 +313,33 @@ their data.
   line, and a `$4211` read whose cycle ends less than eight clocks after `irq_point` leaves it set. Argued from
   the header's console results.
 - Pinned by: `test_irq` in the corpus, once the runner reads the backdrop.
+
+### D-11. OAM: the internal address reloads at the start of line 225 outside forced blank, and when forced blank ends during that line
+- Opened: 2026-10-01, at stage 3 step 2, by reading the two documents for sprite priority, which takes the first
+  sprite from the internal address. They disagree. fullsnes, "OAMADDL/OAMADDH": the reload occurs "at begin of line
+  225/240, but only if not in Forced Blank mode", and "also when deactivating forced blank anytime during the first
+  scanline of vblank". anomie's register document, `$2102`/`$2103` and "SPRITES": "The reload also occurs on a 1->0
+  transition of $2100.7", with no line named; its timing document, "OAM RESET", reports byuu as seeing "the reset
+  occurs on any 1->0" transition as well.
+- Test ROM: none in the corpus isolates it.
+- Referee: not read. Mesen's source: none.
+- Conclusion: fullsnes's rule, as stage 3 step 1 built it; argued only from its being the narrower statement and the
+  one built first. Open: a ROM that ends forced blank mid-frame after writing OAM, and shows the first sprite's
+  priority, would settle it.
+- Pinned by: `oam_and_cgram_latch_their_low_bytes_and_the_counters_latch_on_2137` (the line-225 reload).
+
+### D-12. OAM: a write during active display lands where the internal address points
+- Opened: 2026-10-01, at stage 3 step 2, by the step's scope. fullsnes, "OAMADDL/OAMADDH": "During rendering, the
+  PPU is destroying the Address register (using it internally for whatever purposes)"; its "PPU Memory Accesses"
+  notes that Mario Kart uses forced blank to change OAM mid-screen. anomie: the address "is invalidated during the
+  rendering of a scanline; this invalidation is deterministic, but we do not know how or when the value is
+  determined", and a write in H-blank "CAN" happen but "the actual OAM byte written will probably not be what you
+  expect".
+- Test ROM: none in the corpus.
+- Referee: not read. Mesen's source: none.
+- Conclusion: not modelled. Both documents say the address is replaced during rendering and neither says by what, so
+  any rule would be invented; VenusRT writes where the address points, as in forced blank, and names it a known
+  difference. The priority rotation reads the same address (anomie: the first sprite comes from the address "not
+  affected by OAM Address Invalidation"), which is therefore right only while nothing invalidates it.
+- Pinned by: nothing.
+

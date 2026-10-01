@@ -478,12 +478,78 @@ impl Ppu {
             if shown & (1 << bg) == 0 {
                 continue;
             }
-            for x in from..to {
-                self.bg_line[bg][x as usize] = match self.background(bg, mode, x, line) {
-                    Some((index, priority)) => 0x8000 | (priority << 8) | index,
-                    None => 0,
-                };
-            }
+            self.fill_row(bg, mode, line, from, to);
+        }
+    }
+
+    /// A background's line buffer from `from` to `to`, a tile row decoded once for each 8 pixels of the background it
+    /// covers; a span that starts or ends inside a chunk takes the part of it that falls inside.
+    fn fill_row(&mut self, bg: usize, mode: u8, line: u16, from: u16, to: u16) {
+        let mut chunk = [0u16; 8];
+        let mut x = from;
+        while x < to {
+            let (hofs, vofs) = self.scroll(bg, x);
+            let px = x.wrapping_add(hofs);
+            self.decode_chunk(bg, mode, px & !7, line.wrapping_add(vofs), &mut chunk);
+            let first = (px & 7) as usize;
+            let n = (8 - first).min((to - x) as usize);
+            let at = x as usize;
+            self.bg_line[bg][at..at + n].copy_from_slice(&chunk[first..first + n]);
+            x += n as u16;
+        }
+    }
+
+    /// The scroll a background is drawn with at screen X; the per-column offset of modes 2, 4 and 6 belongs here.
+    fn scroll(&self, bg: usize, _x: u16) -> (u16, u16) {
+        (self.hofs[bg], self.vofs[bg])
+    }
+
+    /// The eight pixels of the background at (px0..px0+8, py), px0 a multiple of 8, in screen order and the line
+    /// buffer's encoding: the map entry is read and the tile row's words fetched once for all eight.
+    fn decode_chunk(&self, bg: usize, mode: u8, px0: u16, py: u16, out: &mut [u16; 8]) {
+        let big = self.regs[0x05] & (0x10 << bg) != 0;
+        let shift = if big { 4 } else { 3 };
+        let (tx, ty) = (px0 >> shift, py >> shift);
+        let sc = self.regs[0x07 + bg];
+        let screen = match sc & 3 {
+            0 => 0,
+            1 => (tx >> 5) & 1,
+            2 => (ty >> 5) & 1,
+            _ => ((tx >> 5) & 1) + 2 * ((ty >> 5) & 1),
+        };
+        let base = ((sc as u16 >> 2) << 10).wrapping_add(screen << 10);
+        let entry = self.vram[(base.wrapping_add(((ty & 31) << 5) | (tx & 31)) & 0x7FFF) as usize];
+        let size = 1u16 << shift;
+        let hflip = entry & 0x4000 != 0;
+        let mut fx = px0 & (size - 1);
+        let mut fy = py & (size - 1);
+        if hflip {
+            fx = size - 1 - fx;
+        }
+        if entry & 0x8000 != 0 {
+            fy = size - 1 - fy;
+        }
+        let tile = ((entry & 0x3FF) + (fx >> 3) + ((fy >> 3) << 4)) & 0x3FF;
+        let deep = mode == 1 && bg < 2;
+        let nba = (self.regs[0x0B + bg / 2] >> (4 * (bg & 1))) as u16 & 0x0F;
+        let words = if deep { 16 } else { 8 };
+        let at = (nba << 12).wrapping_add(tile * words).wrapping_add(fy & 7);
+        let w0 = self.vram[(at & 0x7FFF) as usize];
+        let w1 = if deep { self.vram[(at.wrapping_add(8) & 0x7FFF) as usize] } else { 0 };
+        let palette = (entry >> 10) & 7;
+        let high = 0x8000 | (((entry >> 13) & 1) << 8);
+        for (i, o) in out.iter_mut().enumerate() {
+            let bit = if hflip { i as u16 } else { 7 - i as u16 };
+            let colour = ((w0 >> bit) & 1) | (((w0 >> (bit + 8)) & 1) << 1) | (((w1 >> bit) & 1) << 2) | (((w1 >> (bit + 8)) & 1) << 3);
+            *o = if colour == 0 {
+                0
+            } else if deep {
+                high | (palette * 16 + colour)
+            } else if mode == 0 {
+                high | (bg as u16 * 0x20 + palette * 4 + colour)
+            } else {
+                high | (palette * 4 + colour)
+            };
         }
     }
 
@@ -585,52 +651,6 @@ impl Ppu {
             out |= c.min(31) << shift;
         }
         out
-    }
-
-    /// A background's pixel as (CGRAM index, tile priority), or None where it is transparent.
-    fn background(&self, bg: usize, mode: u8, x: u16, line: u16) -> Option<(u16, u16)> {
-        let big = self.regs[0x05] & (0x10 << bg) != 0;
-        let shift = if big { 4 } else { 3 };
-        let px = x.wrapping_add(self.hofs[bg]);
-        let py = line.wrapping_add(self.vofs[bg]);
-        let (tx, ty) = (px >> shift, py >> shift);
-        let sc = self.regs[0x07 + bg];
-        let screen = match sc & 3 {
-            0 => 0,
-            1 => (tx >> 5) & 1,
-            2 => (ty >> 5) & 1,
-            _ => ((tx >> 5) & 1) + 2 * ((ty >> 5) & 1),
-        };
-        let base = ((sc as u16 >> 2) << 10).wrapping_add(screen << 10);
-        let entry = self.vram[(base.wrapping_add(((ty & 31) << 5) | (tx & 31)) & 0x7FFF) as usize];
-        let size = 1u16 << shift;
-        let mut fx = px & (size - 1);
-        let mut fy = py & (size - 1);
-        if entry & 0x4000 != 0 {
-            fx = size - 1 - fx;
-        }
-        if entry & 0x8000 != 0 {
-            fy = size - 1 - fy;
-        }
-        let tile = ((entry & 0x3FF) + (fx >> 3) + ((fy >> 3) << 4)) & 0x3FF;
-        let deep = mode == 1 && bg < 2;
-        let nba = (self.regs[0x0B + bg / 2] >> (4 * (bg & 1))) as u16 & 0x0F;
-        let words = if deep { 16 } else { 8 };
-        let at = (nba << 12).wrapping_add(tile * words).wrapping_add(fy & 7);
-        let bit = 7 - (fx & 7);
-        let plane = |word: u16, high: bool| -> u16 { ((if high { word >> 8 } else { word }) >> bit) & 1 };
-        let w0 = self.vram[(at & 0x7FFF) as usize];
-        let mut colour = plane(w0, false) | plane(w0, true) << 1;
-        if deep {
-            let w1 = self.vram[(at.wrapping_add(8) & 0x7FFF) as usize];
-            colour |= plane(w1, false) << 2 | plane(w1, true) << 3;
-        }
-        if colour == 0 {
-            return None;
-        }
-        let palette = (entry >> 10) & 7;
-        let index = if deep { palette * 16 + colour } else if mode == 0 { bg as u16 * 0x20 + palette * 4 + colour } else { palette * 4 + colour };
-        Some((index, (entry >> 13) & 1))
     }
 }
 
@@ -765,5 +785,45 @@ mod tests {
         p.oam_address = 4;
         p.end_line(0, 1);
         assert_eq!((p.obj_line[10], p.obj_line[13]), (0x8081, 0x8091));
+    }
+
+    // fullsnes and anomie: windows per layer, the colour window's clip and prevent, add and subtract, halving
+    // except when clipped or on the sub backdrop, sprites only with palettes 4 to 7.
+    #[test]
+    fn windows_and_colour_math_compose_from_the_line_buffers() {
+        let mut p = Ppu::default();
+        p.regs[0x05] = 1;
+        p.regs[0x2C] = 0x11;
+        p.cgram[0] = 0x0000;
+        p.cgram[1] = 10 | 20 << 5 | 30 << 10;
+        p.cgram[0xC1] = 0x001F;
+        p.cgram[0x81] = 0x03E0;
+        p.bg_line[0] = [0x8001; WIDTH];
+        p.write(0x32, 0xE0 | 4, blank());
+        p.write(0x31, 0x01, blank());
+        assert_eq!(p.compose(0), 14 | 24 << 5 | 31 << 10);
+        p.write(0x31, 0x41, blank());
+        assert_eq!(p.compose(0), 7 | 12 << 5 | 17 << 10);
+        p.write(0x31, 0x81, blank());
+        assert_eq!(p.compose(0), 6 | 16 << 5 | 26 << 10);
+        // Window 1 over x 10..=20 hides BG1 there, so the backdrop shows, unmathed.
+        p.write(0x31, 0x00, blank());
+        p.write(0x26, 10, blank());
+        p.write(0x27, 20, blank());
+        p.write(0x23, 0x02, blank());
+        p.write(0x2E, 0x01, blank());
+        assert_eq!((p.compose(9), p.compose(10), p.compose(20), p.compose(21)), (p.cgram[1], 0, 0, p.cgram[1]));
+        // The colour window clips to black inside it, and the sub backdrop, not halved, is what math adds there.
+        p.write(0x2E, 0x00, blank());
+        p.write(0x25, 0x20, blank());
+        p.write(0x30, 0xC2, blank());
+        p.write(0x31, 0x41, blank());
+        assert_eq!(p.compose(15), 4 | 4 << 5 | 4 << 10);
+        // A sprite with palette 4 to 7 takes part; one with palette 0 to 3 does not.
+        p.write(0x30, 0x00, blank());
+        p.write(0x31, 0x10, blank());
+        p.obj_line[30] = 0x8000 | 3 << 8 | 0xC1;
+        p.obj_line[31] = 0x8000 | 3 << 8 | 0x81;
+        assert_eq!((p.compose(30), p.compose(31)), (31 | 4 << 5 | 4 << 10, 0x03E0));
     }
 }

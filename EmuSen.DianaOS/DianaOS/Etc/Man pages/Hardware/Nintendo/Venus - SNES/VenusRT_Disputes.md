@@ -393,4 +393,9 @@ their data.
 - Conclusion: the test's rule, in every table load (the init and a line's reload alike, since the documents describe
   one load); the second read costs 8 master clocks, the one read it is. Argued from the test ROM's console results.
 - Pinned by: `test_hdma` in the corpus, once it passes its test 1.
+- Implemented 2026-10-01. **Measured:** at the failure the five registers are now the test's ($00, $AA, $02, $00,
+  $00), where before DASx kept $5555. The test still stops at test 1, on its next check: OPHCT latched just after the
+  init reads `$3A` where the test wants `$38`, two dots late. The test's own comment says the init's timing differs
+  between console revisions ("1/1/1 and 2/1/3 SNES units") and seeks a DMA phase to cope; the init's cost was not
+  changed to fit one number. Settled for the registers; the init's timing is open.
 

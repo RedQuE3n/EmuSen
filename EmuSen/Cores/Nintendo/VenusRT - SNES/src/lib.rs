@@ -10,4 +10,6 @@ pub mod machine;
 pub mod state;
 
 #[cfg(test)]
+mod cputest;
+#[cfg(test)]
 mod singlestep;

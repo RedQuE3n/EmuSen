@@ -280,7 +280,7 @@ impl Cpu {
                     self.push(bus, v as u8);
                 }
             }
-            // 22b: PLA, PLX, PLY, PLB, PLP, and PLD by the 65816's own rule.
+            // 22b: PLA, PLX, PLY, PLB and PLP, and PLD and PLB by the 65816's own rule.
             0x68 | 0xFA | 0x7A | 0xAB | 0x28 | 0x2B => {
                 self.io_pc(bus);
                 self.io_pc(bus);
@@ -295,9 +295,11 @@ impl Cpu {
                         self.p = self.pull(bus);
                         self.settle();
                     }
+                    // PLB addresses S in 16 bits, as gilyon's cputest finds and the datasheet's list omits (D-3).
                     0xAB => {
-                        let v = self.pull(bus) as u16;
+                        let v = self.pull_wide(bus) as u16;
                         self.dbr = self.pull_into(v, false) as u8;
+                        self.stack_back_in_page();
                     }
                     _ => {
                         let wide = if opcode == 0x68 { !self.m8() } else { !self.x8() };

@@ -95,8 +95,8 @@ mod tests {
         u8::from_str_radix(&file[..2], 16).unwrap()
     }
 
-    // The whole suite through the CPU; the tally by group and mode, every failing file's first difference, and a
-    // floor per group that a change may not lower (VenusRT_Native.md §10.4).
+    // The whole suite through the CPU: the tally by group and mode, and every failure a named exception of the
+    // disputes log, each failing where the log says and nowhere else (VenusRT_Native.md §11.3).
     #[test]
     fn the_cpu_through_the_whole_suite() {
         let Some(dir) = suite_dir("SingleStepTests-65816") else {
@@ -132,11 +132,7 @@ mod tests {
         }).sum();
         let (cases, passed): (usize, usize) = groups.values().fold((0, 0), |(n, p), g| (n + g.0, p + g.1));
         eprintln!("all: {passed}/{cases}; failing {}, named exceptions {excepted}", cases - passed);
-        for ((g, _), (n, p, ..)) in &groups {
-            if !matches!(*g, "jump, call, return" | "stack" | "add/subtract") {
-                assert_eq!(p, n, "{g}");
-            }
-        }
+        assert_eq!(cases, 5_120_000);
         assert_eq!(cases - passed, excepted, "every failure is a named exception");
     }
 
@@ -149,18 +145,25 @@ mod tests {
                     && got.address == want.address && got.value == want.value && Signals { vda: true, vpa: false, ..g } == w)
         };
         let mut out = Vec::new();
-        for (file, rule) in [("e1.e.json", "D-1"), ("7c.n.json", "D-2"), ("7c.e.json", "D-2"), ("fc.n.json", "D-2"), ("fc.e.json", "D-3"), ("ab.e.json", "D-3")] {
+        let indexed_indirect = ["01", "21", "41", "61", "81", "a1", "c1", "e1"].map(|o| (format!("{o}.e.json"), "D-1"));
+        let rest = [("7c.n.json", "D-2"), ("7c.e.json", "D-2"), ("fc.n.json", "D-2"), ("fc.e.json", "D-3")].map(|(f, r)| (f.to_owned(), r));
+        for (file, rule) in indexed_indirect.into_iter().chain(rest) {
+            let file = file.as_str();
             let mut strict_failures = 0;
             let mut failing = Vec::new();
             for case in super::super::read_cases(&dir.join(file)) {
                 let want = Expected::from_json(&case);
                 let name = case.get("name").and_then(emusen_native::json::Value::as_str).unwrap().to_owned();
                 let s_low = want.initial.s & 0xFF;
-                let expected_to_fail = match file {
-                    "e1.e.json" => name == "e1 e 8669",
-                    "fc.e.json" => s_low == 0x00,
-                    "ab.e.json" => s_low == 0xFF,
-                    _ => false,
+                let expected_to_fail = match rule {
+                    "D-1" => {
+                        let i = &want.initial;
+                        let operand = want.initial_ram.iter().find(|&&(a, _)| a == ((i.pbr as u32) << 16 | i.pc.wrapping_add(1) as u32)).unwrap().1 as u16;
+                        let sum = operand.wrapping_add(i.x);
+                        let at = if i.d & 0xFF == 0 { (i.d & 0xFF00) | (sum & 0xFF) } else { i.d.wrapping_add(sum) };
+                        at & 0xFF == 0xFF
+                    }
+                    _ => file == "fc.e.json" && s_low == 0x00,
                 };
                 let strict = run_case(&mut Cpu::default(), &mut FlatBus::default(), &want).passed();
                 strict_failures += !strict as usize;

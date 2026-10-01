@@ -68,10 +68,34 @@ namespace EmuSen.WiseMan.Fixtures.Snes
             var words = Regex.Matches(string.Join(" ", runs), @"\b(Passed|PASSED|Failed|FAILED|FAIL|OK|Done|Success)\b").Select(m => m.Value).ToList();
             string detail = string.Join(" | ", runs.Select(s => s.Trim()));
             if (detail.Length > 400) detail = detail[..400];
-            if (words.Count == 0) return new(SnesOutcome.Visual, "text", detail);
+            if (words.Count == 0) return Backdrop(romPath, last) ?? new(SnesOutcome.Visual, "text", detail);
             string word = words[^1];
             var outcome = word == "Done" ? SnesOutcome.Done : word is "Passed" or "PASSED" or "OK" or "Success" ? SnesOutcome.Passed : SnesOutcome.Failed;
             return new(outcome, "text", detail);
+        }
+
+        // byuu's protocol in Jonas Quinn's collection: colour 0 is $7C00 (blue) for a pass and $001F (red) for a failure.
+        private static SnesVerdict? Backdrop(string romPath, SnesSnapshot last)
+        {
+            if (!romPath.Contains("jonasquinn-test-roms") || !WritesBackdropVerdicts(Path.GetDirectoryName(romPath))) return null;
+            byte[] cg = last.Spaces.GetValueOrDefault("cgram") ?? new byte[2];
+            int colour = (cg[0] | cg[1] << 8) & 0x7FFF;
+            return colour switch
+            {
+                0x7C00 => new(SnesOutcome.Passed, "byuu-backdrop", "colour0=7C00"),
+                0x001F => new(SnesOutcome.Failed, "byuu-backdrop", "colour0=001F"),
+                _ => null,
+            };
+        }
+
+        // A folder whose sources, or blobs' disassembly, write both verdict colours to colour 0.
+        private static bool WritesBackdropVerdicts(string? dir)
+        {
+            if (dir is null) return false;
+            var asm = new List<string>();
+            foreach (string d in new[] { dir, Path.Combine(dir, "disassembly") })
+                if (Directory.Exists(d)) asm.AddRange(Directory.GetFiles(d, "*.asm"));
+            return asm.Any(f => File.ReadAllText(f, Encoding.Latin1) is var t && Regex.IsMatch(t, @"(?i)#\$7c\b") && Regex.IsMatch(t, @"(?i)#\$1f\b") && t.Contains("2122", StringComparison.Ordinal));
         }
 
         private static string TextAt(byte[] vram, int word, int n) =>

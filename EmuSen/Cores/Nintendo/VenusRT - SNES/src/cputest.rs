@@ -147,7 +147,7 @@ pub fn run(rom: Vec<u8>, frames: u64) -> Verdict {
 /// The ROM on the machine's own bus, to its verdict: the text at word $0032, the test number at $006E, the frames.
 pub fn run_on_machine(image: &[u8], frames: u64) -> (String, String, u64) {
     let mut m = crate::machine::Machine::load_rom(image).expect("an image");
-    let text = |m: &crate::machine::Machine, word: usize, n: usize| (0..n).map(|i| (m.sys.vram[word + i] & 0xFF) as u8 as char).collect::<String>();
+    let text = |m: &crate::machine::Machine, word: usize, n: usize| (0..n).map(|i| (m.sys.ppu.vram[word + i] & 0xFF) as u8 as char).collect::<String>();
     while (m.total_frames() as u64) < frames {
         m.run_frame();
         let verdict = text(&m, 0x32, 7);

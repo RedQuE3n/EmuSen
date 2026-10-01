@@ -186,8 +186,77 @@ their data.
   180 clocks later in the line than a reset that starts at H=0, or by a refresh placed earlier; the CPU cannot tell
   the two apart, and the PPU's H-counter latch of stage 3 can.
 - Referee: not read. Mesen's source: none.
-- Conclusion: fullsnes's start at H=0, V=0 and the documents' refresh point; argued. Open until stage 3's H-counter.
-  It bounds every frame-exact differential until then: memory compared at a frame may differ by what one line's
-  phase changes.
+- Conclusion, as it stood at stage 2: fullsnes's start at H=0, V=0 and the documents' refresh point; argued. Open
+  until stage 3's H-counter.
+- Measured 2026-09-30, at stage 3 step 1, with `$2137`, `$213C` and `$213D` built. Sour's `timing_test` latches the
+  counters four times before it uses HDMA and prints each as H and V. VenusRT, whose reset sequence begins at clock
+  0 of line 0, prints `$00AD.$0001`, `$0041.$0002`, `$00C0.$0004` and `$0050.$00DB`; Mesen prints `$00CD.$0001`,
+  `$0061.$0002`, `$00E0.$0004` and `$0070.$00DB`. Every row is 32 dots, 128 master clocks, later in Mesen. The
+  `power_phase` example moves VenusRT's power-on position by a number of clocks; of 0, 120, 124 to 132, 136
+  and 140, 128 alone reproduces all four of Mesen's rows; 127 and 129 each miss two or more. The prediction of stage 2, one cause and a size of 130 to 180 clocks,
+  holds in kind and is retired in size: the cause is the CPU's start, 128 clocks, and the refresh needs no moving.
+  Stage 2's two observations, the refresh's instruction and Super Metroid's `$4212`, were not measured again at the
+  new position.
+- What the documents and the test ROMs say of the number: nothing. fullsnes puts the counters at H=0, V=0 "after
+  /RESET" and does not say how long after that the CPU's first cycle is; anomie's timing document credits the
+  observation "that the SNES returns to a known timing position on reset" and does not give the position. Sour's
+  `timing_test` carries no expected values (its README calls it work in progress, and the row is printed, not
+  graded), `test_dmatiming` latches in its NMI handler after `libclock` has sought a known dot, as every test of
+  `snestest_082506` does, and so cannot see where the machine began. Run at 0 and at 128 for 1,200 frames, the
+  text 304 images leave in VRAM differs in Sour's three images and in five of PeterLemon's SPC700 images, which
+  need an APU that is still a stand-in, and in no self-graded test: the corpus holds no hardware verdict on the phase.
+- Referee: not read. Mesen's source: none.
+- Conclusion: unchanged, and still argued: the reset sequence begins at H=0, V=0. Mesen's 128 clocks is an
+  observation with one sample and no document behind it; adopting it would make four printed rows equal and prove
+  nothing. Open. It would be settled by `timing_test`'s first row on a console: `$00AD` for a start at clock 0,
+  `$00CD` for a start 128 clocks later, and anything else for neither. Until then it bounds every frame-exact
+  differential with Mesen by what 128 clocks of phase change, and `power_phase` measures that for a ROM.
+- Pinned by: nothing; `power_phase` (an example of the crate) reproduces the measurement.
+- Added the same day: undisbeliever's `reset-position-test` exists to answer this question. Its reset handler
+  latches the counters as its first instruction and prints them. Mesen prints OPHCT `$0035`, VenusRT `$0015`, and
+  VenusRT at 128 clocks prints `$0035`, the same 32 dots. Its source records no console result. It is the cheaper
+  of the two ROMs that would settle the entry: `$0015` on a console for a start at clock 0, `$0035` for Mesen's.
+
+### D-7. PPU: master brightness N scales a colour component c to c×(N+1)/16, rounded down
+- Opened: 2026-09-30, at stage 3 step 1, by PeterLemon's `RedSpace9BitHDMA` at frame 300. The ROM writes a backdrop
+  colour and a brightness for every line by HDMA; the pairs come from its own `Gradient.py`, which was run to list
+  them. VenusRT's red component equals the formula on 219 of 224 lines; Mesen's is one lower on 59 of them (colour
+  26 at brightness 12: the formula gives 21.125, so 21; Mesen shows 20), and never higher. The other five lines
+  are the table's lines at brightness 0, black in both engines, as fullsnes's "0=Screen Black" has it.
+- Documents read: fullsnes, "PPU Registers, INIDISP": "N=1..15: Brightness*(N+1)/16"; anomie's register document,
+  `$2100`: "F=max, 0=off", no formula.
+- Test ROM: `RedSpace9BitHDMA`, as above. Its folder holds two PNG screenshots, 8-bit colour, one named for colour
+  emulation; the README names emulators as the way to run the ROMs, so neither image is taken as a console's
+  output.
+- Referee: not read. Mesen's source: none.
+- Conclusion: fullsnes's formula, rounded down; argued from the one document that gives a formula. Mesen's lower
+  values are an observation with no document behind them. Open: a console capture of this ROM, or of any ROM that
+  pairs one colour with several brightnesses, would settle it.
+- Pinned by: nothing yet. The picture comparison of `VenusRT_Native.md` §15 reproduces it.
+
+### D-8. NMI: the CPU's /NMI falls at HC=6 of the first V-Blank line, four clocks after `$4210` bit 7 sets at HC=2
+- Opened: 2026-09-30, at stage 3 step 1. With a picture, 28 of the corpus's standing ROMs turn out to grade
+  themselves through the backdrop, colour 0 blue (`$7C00`) for a pass and red (`$001F`) for a failure, the protocol
+  of byuu's `snestest_082506` and the `blobs` and `nmi_irq` folders. Mesen passes all 28; VenusRT passes 11 and
+  fails 17, at a power-on phase of 0 clocks and of 128 alike (D-6 is not the cause). Each keeps its test number in
+  SRAM at `$700000`. `snestest_082506/test_nmi`, and its copies in `blobs` and `nmi_irq/nmi_pf`, stop at test 1.
+- Documents read: fullsnes, "SNES Timing H/V Events": "H=0.5, V=225 set NMI flag". anomie's timing document,
+  "Interrupts": the timer "will set its NMI output low at H=0.5", and "the actual check occurs just before the final
+  CPU cycle of the instruction". VenusRT sets the flag and the CPU's edge together at HC=0, and samples the edge at
+  the start of each cycle, so its check is anomie's and its timing of the edge is neither document's.
+- Test ROM: `test_nmi.asm`'s header, written for the purpose (byuu, 2006-07-25), states as results: `$4210` bit 7
+  sets at HC=2; NMI "goes low at HC=6", so a final cycle that begins at HC=4 does not see it and one that begins at
+  HC=6 or later does; reading `$4210` at HC=2 or 4 leaves the bit set for the next read, at HC=6 or later clears
+  it; a `$4200` write that disables NMI prevents it only if its bus cycle begins by V=224, HC=1362. Test 1 runs SEC
+  with its final cycle at V=225, HC=4 and expects the NMI after the next instruction; VenusRT takes it after SEC
+  (the handler finds `$EA`, NOP, at its return address, where the test wants `$18`, CLC).
+- Referee: not read. Mesen's source: none.
+- Conclusion: open, and expected to be settled by the test ROM, which is the order of recourse's second source and
+  more precise than the two documents: the flag at HC=2 as fullsnes and anomie say, the CPU's line at HC=6. Not
+  implemented in this step, which is the PPU's: it changes the interrupt timing of stage 2, and the 17 ROMs and the
+  CPU trace against Mesen are its measure. The other sixteen's first failures were not read: `irq` at test `$16`,
+  `test_irq`, `demo_irqtest` and `demo_irq` at 6, `test_irqb` at 7, both `test_hdma` at 2, `test_hdmatiming` at
+  `$52`, `nmi` at `$1F`; `test_dma` and `test_hdmasync` leave 0, and the two `test_dmavalid` write `$AA` there and
+  use the address for something else.
 - Pinned by: nothing yet.
 

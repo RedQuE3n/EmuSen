@@ -14,8 +14,6 @@ pub const FRAME_BYTES: usize = SCREEN_WIDTH * SCREEN_HEIGHT * 4;
 /// The S-DSP's output rate, nominal (VenusRT_Plan.md §5.3).
 pub const DSP_RATE: i32 = 32_000;
 
-pub const CGRAM_BYTES: usize = 0x200;
-pub const OAM_BYTES: usize = 0x220;
 pub const APURAM_BYTES: usize = 0x10000;
 
 /// The memory spaces by id, named as C# Venus's debug target names them (VenusRT_Plan.md §4.7).
@@ -29,13 +27,9 @@ pub struct ImageTooShort(pub usize);
 pub struct Machine {
     pub cpu: Cpu,
     pub sys: System,
-    pub cgram: Box<[u8]>,
-    pub oam: Box<[u8]>,
     pub apuram: Box<[u8]>,
     /// B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R from bit 0, per port; not in the state.
     pub pads: [u16; 2],
-    pub skip_rendering: bool,
-    pub frame_rgba: Box<[u8]>,
     pub samples: SampleQueue,
     /// The I flag the last interrupt check saw.
     pub i_checked: bool,
@@ -68,19 +62,11 @@ impl Machine {
     }
 
     pub fn with_cartridge(cart: Cartridge) -> Machine {
-        let mut frame = vec![0u8; FRAME_BYTES];
-        for px in frame.chunks_exact_mut(4) {
-            px[3] = 0xFF;
-        }
         let mut m = Machine {
             cpu: Cpu::default(),
             sys: System::new(cart),
-            cgram: vec![0; CGRAM_BYTES].into(),
-            oam: vec![0; OAM_BYTES].into(),
             apuram: vec![0; APURAM_BYTES].into(),
             pads: [0; 2],
-            skip_rendering: false,
-            frame_rgba: frame.into(),
             samples: SampleQueue::default(),
             i_checked: true,
             woke: false,
@@ -170,7 +156,11 @@ impl Machine {
     }
 
     pub fn vram_bytes(&self) -> Vec<u8> {
-        self.sys.vram.iter().flat_map(|w| w.to_le_bytes()).collect()
+        self.sys.ppu.vram.iter().flat_map(|w| w.to_le_bytes()).collect()
+    }
+
+    pub fn cgram_bytes(&self) -> Vec<u8> {
+        self.sys.ppu.cgram.iter().flat_map(|w| w.to_le_bytes()).collect()
     }
 
     fn write_state(&self, w: &mut StateWriter) {
@@ -240,13 +230,36 @@ impl Machine {
             w.u32("WramAddress", self.sys.wram_address);
             w.bool("FastRom", self.sys.fast_rom);
             w.bytes("Io", &self.sys.io);
-            w.u16("VramAddress", self.sys.vram_address);
-            w.u8("Vmain", self.sys.vmain);
+            w.u16("PpuLine", self.sys.ppu_line);
+        });
+        let p = &self.sys.ppu;
+        w.group("Ppu", |w| {
+            w.bytes("Regs", &p.regs);
+            w.u16("VramAddress", p.vram_address);
+            w.u16("VramBuffer", p.vram_buffer);
+            w.u8("CgramAddress", p.cgram_address);
+            w.bool("CgramSecond", p.cgram_second);
+            w.u8("CgramLow", p.cgram_low);
+            w.u16("OamReload", p.oam_reload);
+            w.bool("OamRotation", p.oam_rotation);
+            w.u16("OamAddress", p.oam_address);
+            w.u8("OamLow", p.oam_low);
+            w.u16s("Hofs", &p.hofs);
+            w.u16s("Vofs", &p.vofs);
+            w.u8("BgOld", p.bg_old);
+            w.u16("Ophct", p.ophct);
+            w.u16("Opvct", p.opvct);
+            w.bool("OphSecond", p.oph_second);
+            w.bool("OpvSecond", p.opv_second);
+            w.bool("Latched", p.latched);
+            w.u8("Ppu1Mdr", p.ppu1_mdr);
+            w.u8("Ppu2Mdr", p.ppu2_mdr);
+            w.u16("Drawn", p.drawn);
         });
         w.bytes("Wram", &self.sys.wram);
-        w.u16s("Vram", &self.sys.vram);
-        w.bytes("Cgram", &self.cgram);
-        w.bytes("Oam", &self.oam);
+        w.u16s("Vram", &p.vram);
+        w.u16s("Cgram", &p.cgram);
+        w.bytes("Oam", &p.oam);
         w.bytes("ApuRam", &self.apuram);
         w.bytes("Sram", &self.sys.cart.sram);
     }
@@ -325,12 +338,33 @@ impl Machine {
         self.sys.wram_address = r.u32()? & 0x1FFFF;
         self.sys.fast_rom = r.bool()?;
         r.bytes(&mut self.sys.io)?;
-        self.sys.vram_address = r.u16()?;
-        self.sys.vmain = r.u8()?;
+        self.sys.ppu_line = r.u16()?;
+        let p = &mut self.sys.ppu;
+        r.bytes(&mut p.regs)?;
+        p.vram_address = r.u16()?;
+        p.vram_buffer = r.u16()?;
+        p.cgram_address = r.u8()?;
+        p.cgram_second = r.bool()?;
+        p.cgram_low = r.u8()?;
+        p.oam_reload = r.u16()? & 0x1FF;
+        p.oam_rotation = r.bool()?;
+        p.oam_address = r.u16()? & 0x3FF;
+        p.oam_low = r.u8()?;
+        r.u16s(&mut p.hofs)?;
+        r.u16s(&mut p.vofs)?;
+        p.bg_old = r.u8()?;
+        p.ophct = r.u16()?;
+        p.opvct = r.u16()?;
+        p.oph_second = r.bool()?;
+        p.opv_second = r.bool()?;
+        p.latched = r.bool()?;
+        p.ppu1_mdr = r.u8()?;
+        p.ppu2_mdr = r.u8()?;
+        p.drawn = r.u16()?.min(256);
         r.bytes(&mut self.sys.wram)?;
-        r.u16s(&mut self.sys.vram)?;
-        r.bytes(&mut self.cgram)?;
-        r.bytes(&mut self.oam)?;
+        r.u16s(&mut p.vram)?;
+        r.u16s(&mut p.cgram)?;
+        r.bytes(&mut p.oam)?;
         r.bytes(&mut self.apuram)?;
         r.bytes(&mut self.sys.cart.sram)?;
         self.sys.timing.schedule();
@@ -426,13 +460,14 @@ pub(crate) mod tests {
 
     // Version 4: the CPU, the clock, the bus and the S-CPU's devices; the listing is its record (plan §5.6).
     #[test]
-    fn the_version_4_layout_is_pinned() {
+    fn the_version_5_layout_is_pinned() {
         let m = Machine::load_rom(&rom(&[])).unwrap();
         let layout = m.layout();
         assert!(layout.starts_with("0 4 u32 Magic\n4 4 i32 Version\n8 2 u16 Cpu.A\n"), "{layout}");
         assert!(layout.contains(" u64 Timing.Clock\n") && layout.contains(" u8[1024] Bus.Io\n") && layout.contains(" u16[32768] Vram\n"), "{layout}");
-        assert_eq!(layout.lines().count(), 68, "{layout}");
-        assert_eq!(m.state_size(), 264_345);
+        assert!(layout.contains(" u8[64] Ppu.Regs\n") && layout.contains(" u16[256] Cgram\n"), "{layout}");
+        assert_eq!(layout.lines().count(), 88, "{layout}");
+        assert_eq!(m.state_size(), 264_449);
         assert_eq!(&save(&m)[..4], b"VNRT");
     }
 
@@ -451,5 +486,30 @@ pub(crate) mod tests {
         venus[..4].copy_from_slice(&VENUS_MAGIC.to_le_bytes());
         assert_eq!(back.load_state(&venus), Err(StateError::Foreign(VENUS_MAGIC)));
         assert!(matches!(back.load_state(&state[..state.len() - 1]), Err(StateError::Truncated { .. })));
+    }
+
+    #[test]
+    fn a_skipped_picture_leaves_the_machine_as_a_drawn_one_does() {
+        // Draws through the ports and feeds every readable PPU port back into the machine, frame after frame.
+        let program = [
+            0xE2, 0x20, 0xA9, 0x0F, 0x8D, 0x00, 0x21, 0xA9, 0x01, 0x8D, 0x2C, 0x21, // SEP #$20; INIDISP=$0F; TM=1
+            0x9C, 0x21, 0x21, 0xA9, 0x1F, 0x8D, 0x22, 0x21, 0x9C, 0x22, 0x21, // colour 0 = red
+            0xA9, 0x80, 0x8D, 0x15, 0x21, // VMAIN: step on the high byte
+            0xAD, 0x37, 0x21, 0xAD, 0x3C, 0x21, 0x8D, 0x0D, 0x21, 0x8D, 0x18, 0x21, // loop: latch; OPHCT to scroll and VRAM
+            0xAD, 0x3D, 0x21, 0x8D, 0x19, 0x21, 0xAD, 0x39, 0x21, 0x09, 0x1F, 0x8D, 0x22, 0x21, // OPVCT to VRAM; VRAM read to CGRAM
+            0xAD, 0x3F, 0x21, 0x8D, 0x04, 0x21, 0xAD, 0x38, 0x21, 0x8D, 0x00, 0x10, // STAT78 to OAM; OAM read to WRAM
+            0xE6, 0x10, 0xA5, 0x10, 0x8D, 0x00, 0x21, 0x80, 0xD1, // brightness and forced blank from a counter
+        ];
+        let mut drawn = Machine::load_rom(&rom(&program)).unwrap();
+        let mut skipped = Machine::load_rom(&rom(&program)).unwrap();
+        skipped.sys.ppu.skip = true;
+        for frame in 0..6 {
+            drawn.run_frame();
+            skipped.run_frame();
+            assert_eq!(save(&drawn), save(&skipped), "frame {frame}");
+        }
+        assert!(drawn.sys.ppu.frame.chunks_exact(4).any(|px| px[..3] != [0, 0, 0]));
+        assert!(skipped.sys.ppu.frame.chunks_exact(4).all(|px| px[..3] == [0, 0, 0]));
+        assert!(drawn.sys.ppu.vram.iter().any(|&w| w != 0) && drawn.sys.ppu.oam.iter().any(|&b| b != 0));
     }
 }

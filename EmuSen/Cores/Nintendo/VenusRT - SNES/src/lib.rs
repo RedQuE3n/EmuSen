@@ -9,6 +9,7 @@ pub mod bus;
 pub mod cart;
 pub mod ffi;
 pub mod machine;
+pub mod ppu;
 pub mod scpu;
 pub mod state;
 

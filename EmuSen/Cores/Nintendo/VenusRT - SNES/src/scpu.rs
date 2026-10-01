@@ -284,6 +284,11 @@ impl System {
 
     /// After any advance of the clock: the NMI edge, the joypad read's start, the vblank end of HDMA.
     pub(crate) fn after_clock(&mut self) {
+        while self.ppu_line != self.timing.line {
+            let next = if self.ppu_line + 1 >= self.timing.lines() { 0 } else { self.ppu_line + 1 };
+            self.ppu.end_line(self.ppu_line, next);
+            self.ppu_line = next;
+        }
         let nmi = self.timing.nmi_flag && self.dev.nmitimen & 0x80 != 0;
         if nmi && !self.dev.nmi_seen {
             self.dev.nmi_pending = true;

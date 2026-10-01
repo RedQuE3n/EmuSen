@@ -39,7 +39,7 @@ impl NativeCore for Machine {
     }
 
     fn set_options(&mut self, flags: u32) {
-        self.skip_rendering = flags & 1 != 0;
+        self.sys.ppu.skip = flags & 1 != 0;
     }
 
     fn frame_count(&self) -> i64 {
@@ -51,7 +51,7 @@ impl NativeCore for Machine {
     }
 
     fn frame(&self) -> &[u8] {
-        &self.frame_rgba
+        &self.sys.ppu.frame
     }
 
     /// Bit n for `PadButton` n: B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R; ports 0 and 1.
@@ -83,9 +83,9 @@ impl NativeCore for Machine {
             0 => 0x100_0000,
             1 => self.sys.io.len() as i64,
             2 => self.sys.wram.len() as i64,
-            3 => 2 * self.sys.vram.len() as i64,
-            4 => self.cgram.len() as i64,
-            5 => self.oam.len() as i64,
+            3 => 2 * self.sys.ppu.vram.len() as i64,
+            4 => 2 * self.sys.ppu.cgram.len() as i64,
+            5 => self.sys.ppu.oam.len() as i64,
             6 => self.sys.cart.sram.len() as i64,
             7 => self.apuram.len() as i64,
             _ => return Err(abi::status::NO_SUCH_SPACE),
@@ -101,9 +101,9 @@ impl NativeCore for Machine {
                 0 => self.sys.read_value(a as u32 & 0xFF_FFFF, false).unwrap_or(self.sys.mdr),
                 1 => self.sys.io.get(a).copied().unwrap_or(0),
                 2 => self.sys.wram.get(a).copied().unwrap_or(0),
-                3 => self.sys.vram.get(a / 2).map_or(0, |w| w.to_le_bytes()[a & 1]),
-                4 => self.cgram.get(a).copied().unwrap_or(0),
-                5 => self.oam.get(a).copied().unwrap_or(0),
+                3 => self.sys.ppu.vram.get(a / 2).map_or(0, |w| w.to_le_bytes()[a & 1]),
+                4 => self.sys.ppu.cgram.get(a / 2).map_or(0, |w| w.to_le_bytes()[a & 1]),
+                5 => self.sys.ppu.oam.get(a).copied().unwrap_or(0),
                 6 => self.sys.cart.sram.get(a).copied().unwrap_or(0),
                 7 => self.apuram.get(a).copied().unwrap_or(0),
                 _ => return Err(abi::status::NO_SUCH_SPACE),
@@ -119,16 +119,16 @@ impl NativeCore for Machine {
             let slot = match space {
                 0 | 1 => return Err(abi::status::READ_ONLY),
                 2 => self.sys.wram.get_mut(a),
-                3 => {
-                    if let Some(w) = self.sys.vram.get_mut(a / 2) {
+                3 | 4 => {
+                    let words = if space == 3 { &mut self.sys.ppu.vram } else { &mut self.sys.ppu.cgram };
+                    if let Some(w) = words.get_mut(a / 2) {
                         let mut bytes = w.to_le_bytes();
                         bytes[a & 1] = b;
                         *w = u16::from_le_bytes(bytes);
                     }
                     continue;
                 }
-                4 => self.cgram.get_mut(a),
-                5 => self.oam.get_mut(a),
+                5 => self.sys.ppu.oam.get_mut(a),
                 6 => self.sys.cart.sram.get_mut(a),
                 7 => self.apuram.get_mut(a),
                 _ => return Err(abi::status::NO_SUCH_SPACE),

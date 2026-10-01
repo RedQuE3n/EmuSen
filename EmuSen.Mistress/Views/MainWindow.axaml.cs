@@ -1237,6 +1237,9 @@ namespace EmuSen.Mistress.Views
             Stopwatch clock = Stopwatch.StartNew();
             TimeSpan nextTick = clock.Elapsed;
 
+            // One frame per refresh when the display is close to the core's rate, the core's own rate otherwise - see EmuSen_Settings_Reference.md §4.87.
+            var scheduler = new FrameScheduler(GameFrame.Display.Current, Stopwatch.GetTimestamp());
+
             // Counts completed RunFrame calls, not presented frames - see §4.21.
             TimeSpan fpsWindowStart = clock.Elapsed;
             int framesInWindow = 0, offeredInWindow = 0;
@@ -1282,7 +1285,8 @@ namespace EmuSen.Mistress.Views
 
                 // Held turbo wins over the menu's base speed - see EmuSen_Settings_Reference.md §4.13.
                 _speed.SpeedPercent = _turboHeld ? _speed.TurboPercent : _baseSpeedPercent;
-                nextTick += _speed.FrameInterval(session.FrameRateHz);
+                scheduler.SyncToDisplay = EmuSen.Graphics.GraphicsSettings.SyncToDisplay;
+                nextTick = scheduler.Next(nextTick, session.FrameRateHz, _speed);
 
                 // Takes over the frame entirely - see EmuSen_Rewind_And_FastForward.md §4.
                 if (_rewindHeld && session.Core is not null)
@@ -1341,6 +1345,7 @@ namespace EmuSen.Mistress.Views
 
                     // Drained every frame either way, so a muted stretch cannot back the buffer up - see EmuSen_Audio_Sync.md §4.
                     short[] samples = session.DequeueAudioSamples(int.MaxValue);
+                    _audioPlayer.RateControl.NominalRatio = scheduler.Decision.AudioRatio; // the locked rate's drift, centred - see EmuSen_Audio_Sync.md §3.4
                     if (_speed.ShouldPlayAudio) _audioPlayer.Submit(samples, session.AudioSampleRate);
                     else _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
 
@@ -1375,6 +1380,7 @@ namespace EmuSen.Mistress.Views
 
                     loopMark = Stopwatch.GetTimestamp();
                     handOffTicks += loopMark - afterAudio;
+                    scheduler.Completed(TimeSpan.FromTicks((loopMark - frameStart) * TimeSpan.TicksPerSecond / Stopwatch.Frequency));
 
                     framesInWindow++;
                     TimeSpan windowElapsed = clock.Elapsed - fpsWindowStart;
@@ -1403,7 +1409,8 @@ namespace EmuSen.Mistress.Views
                         double Ms(long ticks) => ticks * 1000.0 / Stopwatch.Frequency / framesInWindow;
                         string outside = $" | outside: requests {Ms(requestsTicks):F2} audio {Ms(audioTicks):F2} hand-off {Ms(handOffTicks):F2} sleep+rest {Ms(restTicks):F2}ms";
                         string counters = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms)";
-                        string line = $"{counters}{breakdown}{presentation}{outside}";
+                        string line = $"{counters}{breakdown}{presentation}{outside} | {scheduler.Decision.Describe()}";
+                        PresentationTrace.Note(scheduler.Decision.Describe());
                         Console.WriteLine($"[fps] {line}");
 
                         // The bar shows the frame rate, the frame's cost and its top phases; the whole line is its tooltip (§4.83.6).
@@ -1436,7 +1443,7 @@ namespace EmuSen.Mistress.Views
                 else
                 {
                     // Owed rather than forgotten, up to a cap, or a game whose drawing frames overrun runs slow - see §4.28.
-                    nextTick = FramePacer.Settle(nextTick, clock.Elapsed, _speed.FrameInterval(session.FrameRateHz));
+                    nextTick = FramePacer.Settle(nextTick, clock.Elapsed, scheduler.Interval(session.FrameRateHz, _speed));
                 }
             }
         }

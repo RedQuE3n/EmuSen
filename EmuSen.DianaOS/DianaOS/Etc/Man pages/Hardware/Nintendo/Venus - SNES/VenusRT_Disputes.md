@@ -259,4 +259,20 @@ their data.
   `$52`, `nmi` at `$1F`; `test_dma` and `test_hdmasync` leave 0, and the two `test_dmavalid` write `$AA` there and
   use the address for something else.
 - Pinned by: nothing yet.
+- Read again 2026-10-01, before the code, at stage 3 step 2. The header's results are a console's (byuu ran the ROM
+  on hardware; the ROM grades itself against them), and they are taken as the document for this rule. The header
+  names times in two frames, and the test bodies say which: an interrupt check is placed at the *start* of the
+  instruction's last bus cycle (tests 1 and 2: SEC's last cycle starting at HC=4 sees no NMI, at HC=6 sees it), but a
+  read of `$4210` is placed two clocks *into* its six-clock cycle (tests 15 to 18: the read cycles start at
+  V=224 HC=1362 and at V=225 HC=0, 2 and 4, and the header calls the last three "HC=2", "HC=4" and "HC>=6"). Writes
+  to `$4200` take effect at the end of their cycle (tests 19 to 26: a disabling write whose cycle ends at HC=4
+  prevents the NMI, one that ends at HC=6 does not). VenusRT applies a read's and a write's effect at the end of its
+  cycle, so in its own frame the header's rules are one time, HC=6 of line 225:
+  - at HC=6 the `$4210` flag sets and, if `$4200` bit 7 is set, /NMI falls; a cycle that ends exactly at HC=6 sees
+    both, and a write ending there applies after them;
+  - a read of `$4210` whose cycle ends before HC=10 of line 225 returns the flag without clearing it (the header's
+    "HC=2 or HC=4");
+  - the check stays where it was, at the start of the instruction's last cycle.
+  The rule, in hardware terms: the flag is visible from HC=2 and the line falls at HC=6, and a read before HC=6 does
+  not clear the flag; argued from the header's console results, and implemented in the end-of-cycle frame above.
 

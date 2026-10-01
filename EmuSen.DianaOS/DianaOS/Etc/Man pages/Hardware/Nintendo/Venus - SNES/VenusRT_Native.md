@@ -748,3 +748,143 @@ the auto-joypad read with its busy flag. Its oracles are the plan's §3.2 rows f
 and HDMA tests and `muldiv_tests`, undisbeliever's DMA, HDMA and auto-joypad tests, Sour's tests, this step's
 memory ROMs, and the probe's WRAM differential on the commercial games once they run past their first vblank.
 
+---
+
+## 13. Stage 2, step 2: DMA, interrupts, the math unit and the joypads (2026-09-30)
+
+### 13.1 What it built
+
+`src/scpu.rs`, with the clock's line events in `bus.rs` and the interrupt dispatch in `machine.rs`. Written from
+fullsnes ("SNES DMA Transfers", the $42xx register pages, "SNES Maths Multiply/Divide", "SNES Controllers I/O
+Ports"), anomie's timing document (199) for every timing below, and the notes and sources of jonasquinn's
+`muldiv_tests` for the math unit's partial values.
+
+- **DMA.** The pause comes one CPU cycle after the write to $420B. It waits to a multiple of 8 master clocks, takes
+  8 for the transfer, 8 a channel and 8 a byte, and ends on a whole cycle of the speed the CPU resumes at, counted
+  from the pause's start. The eight unit patterns, the A-bus step, the registers left as the transfer leaves them
+  (address advanced, count zero), and DMA's own decode: the A-bus never reaches $2100-$21FF, $4300-$437F or
+  $420B/$420C. The refresh and a due HDMA are taken between a DMA's bytes.
+- **HDMA.** At V=0, H=6 every enabled channel reloads its table and first entry (18 clocks, 8 a direct channel, 24
+  an indirect one). At H=278 of lines 0 to 224 each active channel transfers its unit when its entry says so, counts
+  its line and loads the next entry at zero (18 clocks a line, 8 a channel, 16 for a new indirect pointer, 8 a
+  byte). A zero entry ends the channel for the frame; vblank ends them all; a channel HDMA takes is dropped from a
+  pending DMA.
+- **NMI and IRQ.** $4210's flag is set at line 225 and cleared at line 0 or by a read; the CPU's NMI is the edge of
+  that flag with $4200 bit 7. The H/V comparator sets $4211 at 14 clocks past HTIME's dot, the two long dots
+  counted, and at 10 clocks for HTIME 0 or the V mode; a read or a disable clears it.
+- **The dispatch**, between instructions: NMI's latched edge before IRQ's level; IRQ only with I clear as the
+  check saw it, which after CLI, SEI, PLP, REP and SEP is the old I; WAI ends on either line with two internal
+  cycles and then takes the interrupt or carries on.
+- **The multiply and divide unit**, one step a CPU cycle, between a read's sampling and a write's latch. A product
+  adds the WRMPYB shifter to RDMPY on RDDIV's low bit and shifts RDDIV right, 8 steps; a quotient shifts the divisor
+  right, takes it from RDMPY when it fits and shifts the bit into RDDIV, 16 steps. Writes to the operands during a
+  run change nothing; WRMPYB clears RDMPY and WRDIVB reloads it without restarting.
+- **The joypads.** With $4200 bit 0 set, $4218-$421B are read at line 225, H=74.5, and $4212 bit 0 is set for 4224
+  clocks. $4016's strobe reloads two 16-bit shift registers, which $4016 and $4017 shift out, B first, ones after.
+- **The state** is version 3: version 2 and the devices, 264,337 bytes without SRAM, the layout pinned.
+
+### 13.2 The self-grading ROMs (measured 2026-09-30)
+
+The corpus runner with `EMUSEN_VENUSRT_ENGINE=1` adds VenusRT as a third engine, 295 ROMs in 7 min 41 s.
+
+| Suite | ROMs | Venus passes | Mesen passes | VenusRT passes |
+|---|---|---|---|---|
+| gilyon `cputest` | 2 | 0 | 2 | 2 |
+| PeterLemon CPU | 23 | 23 | 23 | 23 |
+| ADC/SBC | 6 | 6 | 6 | 6 |
+| multiply/divide | 7 | 0 | 5 | 5 |
+| higan collection, other (one self-grading) | 56 | 1 | 1 | 1 |
+| those that need the APU, the GSU or the SA-1 | 62 | 43 | 55 | 0 |
+
+**The old core's five multiply/divide failures all pass**: `mul_behavior`, `div_behavior`, and the three timing
+ROMs whose printed partial values equal Mesen's (`muldiv_tests/mul_timing` and `div_timing`,
+`snes_mul_div_timing/div_timing`). The sixth ROM both Mesen and Venus fail, and VenusRT fails it too. VenusRT passes
+37 of the 92 ROMs Mesen passes, and every ROM it can run that Venus passes; the other 55 wait for the APU (stage 4)
+and the coprocessors (stage 5). Nothing threw.
+
+### 13.3 The picture ROMs, by VRAM (measured 2026-09-30)
+
+Without a PPU the measure is VRAM against Mesen's at the last frame, on the 176 ROMs with no verdict whose VRAM stands
+still in Mesen. It is weak evidence, as the plan's §3.5 says: a ROM that draws nothing agrees trivially.
+
+| Family (by name) | ROMs | Venus equals Mesen | VenusRT equals Mesen |
+|---|---|---|---|
+| HDMA | 36 | 36 | 36 |
+| DMA | 30 | 26 | 26 |
+| IRQ | 14 | 12 | 13 |
+| NMI | 4 | 4 | 4 |
+| joypad | 3 | 2 | 2 |
+| Sour's | 2 | 0 | 0 |
+| `memtest` | 1 | 0 | 0 |
+| the rest | 86 | 77 | 64 |
+| **All** | **176** | **157** | **145** |
+
+VenusRT equals Mesen on `test_irqb`, where Venus does not. The 13 where Venus equals Mesen and VenusRT does not are
+the PPU's: eight of undisbeliever's VMAIN remapping ROMs, `test_vram`, the two 240p suites, `intro` and
+`inidisp_extend_vblank`; the VRAM port here is a stub with no remapping and no reads.
+
+### 13.4 Step 1's memory ROMs, again
+
+`memtest` now runs to its table. `speed_test_v51` and both `test_mdrhdma` still write nothing by frame 600 and sit in
+a wait; what they wait for was not traced (the APU's ports are the likely answer, argued).
+
+### 13.5 A first look at four games (measured 2026-09-30)
+
+Scratch copies of four library games, WRAM after each of 120 frames against the probe's. Not a gate: with no PPU and
+no APU each game stalls where it first needs one.
+
+| Game | First difference | By frame 120 |
+|---|---|---|
+| Super Mario World | frame 1, one byte: $7E01FA is 0, Mesen's $CC | 9 bytes to frame 60, 2,255 from frame 70 |
+| A Link to the Past | frame 1, one byte: $7E01FA is 0, Mesen's $73 | 2 bytes at frame 60, 832 |
+| Super Metroid | frame 5, 159 bytes | 4 bytes |
+| Donkey Kong Country | frame 3, two bytes at $7E01FE | 238 bytes |
+
+Super Metroid's WRAM converges on Mesen's to four bytes and stays there, with NMI enabled and its handler running.
+**Unexplained:** the single stack byte at $7E01FA that differs from the first frame in two games. It is in the
+reset's stack region, and the datasheet's reset reads the stack without writing it, which is what VenusRT does. The
+probe's CPU trace would show which instruction writes it in Mesen; that is the next step's first task, and a dispute
+if it turns on the reset sequence. The probe hard-links dumps that did not change and leaves some frames out; the
+comparison skips those.
+
+### 13.6 The cost of the CPU, the bus and DMA (measured 2026-09-30)
+
+`frame_cost`, best of three under the lock, twice, load average 0.6 and 1.9 with the same results to 1 per cent:
+
+| ROM | ms a frame |
+|---|---|
+| gilyon `cputest-full` | 0.66 |
+| the slow-ROM loop | 0.56 |
+| Super Mario World | 0.61 |
+| A Link to the Past | 0.60 |
+| Super Metroid | 0.70 |
+| Donkey Kong Country | 0.73 |
+
+**Against §5.5's 0.8 ms for the CPU, the bus and DMA on a plain cartridge: inside it, with a tenth to a third left.**
+Step 1 measured 0.25 to 0.30 ms on the same two test ROMs, so this step's per-cycle work (the HDMA and DMA checks
+before each cycle, the edges after each advance, the math step, the dispatch's look at the next opcode) more than
+doubled the cost. No tuning was done, as decided. This is the first place the budget is close, and P1 is the
+prediction at risk: the games here are not yet running their real loads, so the number will move.
+
+### 13.7 The clone check (measured 2026-09-30)
+
+17 files against Mesen's 164, with jonasquinn's `muldiv_tests` added to the vocabulary: **no pair shares 12
+fingerprints, no table is shared.** The largest below the threshold is still `bus.rs` with 6. Seven of Mesen's
+identifiers outside the vocabulary are VenusRT's too: `hdmainit`, `irqflag`, `nmiflag`, `softwareinterrupt`,
+`sramsize`, `vramaddress` and `writevalue`, the plain names of what they are.
+
+### 13.8 What is left of stage 2
+
+D-4, the header scorer's rule, was not attempted: a rule that weighs where a reset handler leads needs designing and
+testing over the whole library, which did not fit. **Stage 2 needs a third step**, to close what this one measured
+and did not explain:
+
+- the stack byte of §13.5, with the probe's CPU trace;
+- the four DMA ROMs, the IRQ ROM, the joypad ROM, Sour's two and `memtest` whose VRAM differs from Mesen's, each
+  either explained by the missing PPU or fixed;
+- the interrupt check placed before an instruction's final cycle, as anomie describes it, in place of the check
+  between instructions with the old I;
+- HDMA started mid-frame (fullsnes's two cases) and the IRQ's exclusions on the short and last lines;
+- D-4;
+- what `speed_test_v51` and `test_mdrhdma` wait for.
+

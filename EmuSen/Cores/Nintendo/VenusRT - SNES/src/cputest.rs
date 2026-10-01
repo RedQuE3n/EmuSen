@@ -144,9 +144,37 @@ pub fn run(rom: Vec<u8>, frames: u64) -> Verdict {
     }
 }
 
+/// The ROM on the machine's own bus, to its verdict: the text at word $0032, the test number at $006E, the frames.
+pub fn run_on_machine(image: &[u8], frames: u64) -> (String, String, u64) {
+    let mut m = crate::machine::Machine::load_rom(image).expect("an image");
+    let text = |m: &crate::machine::Machine, word: usize, n: usize| (0..n).map(|i| (m.sys.vram[word + i] & 0xFF) as u8 as char).collect::<String>();
+    while (m.total_frames() as u64) < frames {
+        m.run_frame();
+        let verdict = text(&m, 0x32, 7);
+        if verdict.starts_with("Success") || verdict.starts_with("Failed") {
+            break;
+        }
+    }
+    (text(&m, 0x32, 7), text(&m, 0x6E, 4), m.total_frames() as u64)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // The same ROMs through the cartridge's LoROM map, the access speeds, the refresh and the real I/O decode.
+    #[test]
+    fn gilyons_cpu_tests_on_the_machine() {
+        for (name, tests) in [("cputest-basic.sfc", "0452"), ("cputest-full.sfc", "0649")] {
+            let Some(image) = rom(name) else {
+                eprintln!("EMUSEN_VENUSRT_CORPUS unset, not run");
+                return;
+            };
+            let (verdict, number, frames) = run_on_machine(&image, 1000);
+            eprintln!("{name} on the machine: {verdict} at {number}, frame {frames}");
+            assert_eq!((verdict.as_str(), number.as_str()), ("Success", tests), "{name}");
+        }
+    }
 
     fn rom(name: &str) -> Option<Vec<u8>> {
         let root = std::env::var_os("EMUSEN_VENUSRT_CORPUS")?;

@@ -1,0 +1,324 @@
+//! The S-CPU's side of the machine: the master clock and its line events, the access speeds, open bus, WRAM and its
+//! port, and the I/O decode, from fullsnes ("SNES Memory Map", "SNES Timings") and anomie's open-bus document.
+//! Devices later stages build are stubs here. See VenusRT_Native.md §12.
+
+use crate::cart::{Cartridge, Region, Slot};
+use crate::cpu::{Bus, pin};
+
+pub const LINE: u16 = 1364;
+/// The refresh's start, H=133.5 in dots, and its length (fullsnes, "SNES Timing H/V Events").
+pub const REFRESH_AT: u16 = 534;
+pub const REFRESH: u16 = 40;
+pub const VBLANK_LINE: u16 = 225;
+
+/// The master clock and where it stands in the frame.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Timing {
+    pub clock: u64,
+    pub line: u16,
+    pub line_clock: u16,
+    pub field: bool,
+    pub frame: u64,
+    pub pal: bool,
+    pub refreshed: bool,
+    pub vblank: bool,
+    pub nmi_flag: bool,
+}
+
+impl Timing {
+    /// 1364 master clocks, but 1360 for line 240 of field 1 at 60 Hz without interlace.
+    #[inline]
+    pub fn line_length(&self) -> u16 {
+        if !self.pal && self.field && self.line == 240 { LINE - 4 } else { LINE }
+    }
+
+    pub fn lines(&self) -> u16 {
+        if self.pal { 312 } else { 262 }
+    }
+
+    #[inline]
+    pub fn advance(&mut self, clocks: u16) {
+        self.clock += clocks as u64;
+        self.line_clock += clocks;
+        while self.line_clock >= self.line_length() {
+            self.line_clock -= self.line_length();
+            self.next_line();
+        }
+    }
+
+    fn next_line(&mut self) {
+        self.line += 1;
+        self.refreshed = false;
+        if self.line == VBLANK_LINE {
+            self.vblank = true;
+            self.nmi_flag = true;
+        }
+        if self.line == self.lines() {
+            self.line = 0;
+            self.field = !self.field;
+            self.frame += 1;
+            self.vblank = false;
+            self.nmi_flag = false;
+        }
+    }
+
+    pub fn hblank(&self) -> bool {
+        self.line_clock >= 274 * 4 || self.line_clock < 4
+    }
+}
+
+/// What the CPU's bus reaches: the cartridge, WRAM, the I/O registers and the master clock.
+#[derive(Clone, Debug)]
+pub struct System {
+    pub cart: Cartridge,
+    pub wram: Box<[u8]>,
+    pub wram_address: u32,
+    /// The data bus's last value, which an unmapped read returns (anomie's MDR).
+    pub mdr: u8,
+    /// $420D bit 0: banks $80-$FF's ROM at 6 master clocks instead of 8.
+    pub fast_rom: bool,
+    pub timing: Timing,
+    /// $4200-$43FF as last written, for the devices later steps build.
+    pub io: Box<[u8]>,
+    /// The VRAM port ($2115-$2119) alone, until the PPU of stage 3.
+    pub vram: Box<[u16]>,
+    pub vram_address: u16,
+    pub vmain: u8,
+}
+
+impl System {
+    pub fn new(cart: Cartridge) -> System {
+        let pal = cart.header.region() == Region::Pal;
+        System {
+            cart,
+            wram: vec![0; 0x20000].into(),
+            wram_address: 0,
+            mdr: 0,
+            fast_rom: false,
+            timing: Timing { pal, ..Timing::default() },
+            io: vec![0; 0x400].into(),
+            vram: vec![0; 0x8000].into(),
+            vram_address: 0,
+            vmain: 0,
+        }
+    }
+
+    /// Master clocks a CPU access to `address` takes (fullsnes, "SNES Memory Map" and MEMSEL).
+    #[inline]
+    pub fn speed(&self, address: u32) -> u16 {
+        let bank = (address >> 16) as u8;
+        let offset = address as u16;
+        if bank & 0x40 == 0 {
+            match offset {
+                0x0000..=0x1FFF => 8,
+                0x2000..=0x3FFF => 6,
+                0x4000..=0x41FF => 12,
+                0x4200..=0x5FFF => 6,
+                0x6000..=0x7FFF => 8,
+                _ => if bank & 0x80 != 0 && self.fast_rom { 6 } else { 8 },
+            }
+        } else if bank & 0x80 != 0 && self.fast_rom {
+            6
+        } else {
+            8
+        }
+    }
+
+    /// The refresh pauses the CPU between two of its cycles, at the first boundary past H=133.5.
+    #[inline]
+    fn clock_cycle(&mut self, clocks: u16) {
+        if !self.timing.refreshed && self.timing.line_clock >= REFRESH_AT {
+            self.timing.refreshed = true;
+            self.timing.advance(REFRESH);
+        }
+        self.timing.advance(clocks);
+    }
+
+    fn vram_step(&mut self, high: bool) {
+        if high == (self.vmain & 0x80 != 0) {
+            self.vram_address = self.vram_address.wrapping_add([1, 32, 128, 128][(self.vmain & 3) as usize]);
+        }
+    }
+
+    /// A read's value, or None where nothing drives the bus. `side_effects` false is the debugger's look.
+    pub fn read_value(&mut self, address: u32, side_effects: bool) -> Option<u8> {
+        let bank = (address >> 16) as u8;
+        let offset = address as u16;
+        if bank & 0xFE == 0x7E {
+            return Some(self.wram[(address & 0x1FFFF) as usize]);
+        }
+        if bank & 0x40 == 0 {
+            match offset {
+                0x0000..=0x1FFF => return Some(self.wram[offset as usize]),
+                0x2180 => {
+                    let v = self.wram[self.wram_address as usize];
+                    if side_effects {
+                        self.wram_address = (self.wram_address + 1) & 0x1FFFF;
+                    }
+                    return Some(v);
+                }
+                0x2000..=0x3FFF => return None,
+                0x4210 => {
+                    let v = (if self.timing.nmi_flag { 0x80 } else { 0 }) | (self.mdr & 0x70) | 0x02;
+                    if side_effects {
+                        self.timing.nmi_flag = false;
+                    }
+                    return Some(v);
+                }
+                0x4212 => return Some((if self.timing.vblank { 0x80 } else { 0 }) | (if self.timing.hblank() { 0x40 } else { 0 }) | (self.mdr & 0x3E)),
+                0x4300..=0x437F if offset & 0x0F <= 0x0B => return Some(self.io[(offset - 0x4000) as usize]),
+                0x4000..=0x5FFF => return None,
+                0x6000..=0x7FFF if !matches!(self.cart.decode(address), Some(_)) => return None,
+                _ => {}
+            }
+        }
+        match self.cart.decode(address)? {
+            Slot::Rom(i) => Some(self.cart.rom[i]),
+            Slot::Sram(i) => Some(self.cart.sram[i]),
+        }
+    }
+
+    fn write_value(&mut self, address: u32, value: u8) {
+        let bank = (address >> 16) as u8;
+        let offset = address as u16;
+        if bank & 0xFE == 0x7E {
+            self.wram[(address & 0x1FFFF) as usize] = value;
+            return;
+        }
+        if bank & 0x40 == 0 {
+            match offset {
+                0x0000..=0x1FFF => {
+                    self.wram[offset as usize] = value;
+                    return;
+                }
+                0x2115 => self.vmain = value,
+                0x2116 => self.vram_address = (self.vram_address & 0xFF00) | value as u16,
+                0x2117 => self.vram_address = (self.vram_address & 0x00FF) | (value as u16) << 8,
+                0x2118 | 0x2119 => {
+                    let high = offset == 0x2119;
+                    let w = &mut self.vram[(self.vram_address & 0x7FFF) as usize];
+                    *w = if high { (*w & 0x00FF) | (value as u16) << 8 } else { (*w & 0xFF00) | value as u16 };
+                    self.vram_step(high);
+                }
+                0x2180 => {
+                    self.wram[self.wram_address as usize] = value;
+                    self.wram_address = (self.wram_address + 1) & 0x1FFFF;
+                }
+                0x2181 => self.wram_address = (self.wram_address & 0x1FF00) | value as u32,
+                0x2182 => self.wram_address = (self.wram_address & 0x100FF) | (value as u32) << 8,
+                0x2183 => self.wram_address = (self.wram_address & 0x0FFFF) | ((value as u32 & 1) << 16),
+                0x420D => {
+                    self.fast_rom = value & 1 != 0;
+                    self.io[0x20D] = value;
+                }
+                0x4000..=0x43FF => self.io[(offset - 0x4000) as usize] = value,
+                _ => {}
+            }
+            if offset < 0x8000 && !(0x6000..0x8000).contains(&offset) {
+                return;
+            }
+        }
+        if let Some(Slot::Sram(i)) = self.cart.decode(address) {
+            self.cart.sram[i] = value;
+        }
+    }
+}
+
+impl Bus for System {
+    #[inline]
+    fn read(&mut self, address: u32, _pins: u8) -> u8 {
+        let clocks = self.speed(address);
+        self.clock_cycle(clocks);
+        let v = self.read_value(address, true).unwrap_or(self.mdr);
+        self.mdr = v;
+        v
+    }
+
+    /// A write with neither VDA nor VPA selects no memory: an internal cycle, which leaves the MDR alone too.
+    #[inline]
+    fn write(&mut self, address: u32, value: u8, pins: u8) {
+        if pins & (pin::VDA | pin::VPA) == 0 {
+            self.clock_cycle(6);
+            return;
+        }
+        let clocks = self.speed(address);
+        self.clock_cycle(clocks);
+        self.mdr = value;
+        self.write_value(address, value);
+    }
+
+    #[inline]
+    fn idle(&mut self, _address: u32, _pins: u8) {
+        self.clock_cycle(6);
+    }
+
+    fn halted(&mut self) {
+        self.clock_cycle(6);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn system(map_mode: u8) -> System {
+        let mut rom = vec![0u8; 0x10_0000];
+        let at = if map_mode & 1 == 1 { 0xFFC0 } else { 0x7FC0 };
+        rom[at + 0x15] = map_mode;
+        rom[at + 0x16] = 0x02;
+        rom[at + 0x18] = 0x03;
+        rom[at + 0x1C..at + 0x20].copy_from_slice(&[0xFF, 0xFF, 0x00, 0x00]);
+        System::new(Cartridge::new(&rom).unwrap())
+    }
+
+    // fullsnes's table, region by region, and MEMSEL moving only banks $80-$FF's ROM.
+    #[test]
+    fn each_region_takes_its_documented_master_clocks() {
+        let mut s = system(0x20);
+        let table = [(0x00_0000, 8), (0x00_1FFF, 8), (0x00_2100, 6), (0x00_3FFF, 6), (0x00_4016, 12), (0x00_41FF, 12), (0x00_4200, 6), (0x00_5FFF, 6),
+            (0x00_6000, 8), (0x00_8000, 8), (0x80_8000, 8), (0x40_0000, 8), (0x7E_0000, 8), (0xC0_0000, 8), (0x80_0000, 8)];
+        for (a, c) in table {
+            assert_eq!(s.speed(a), c, "{a:06X}");
+        }
+        s.write(0x00_420D, 1, pin::VDA);
+        for (a, c) in [(0x80_8000, 6), (0xC0_0000, 6), (0xFF_FFFF, 6), (0x00_8000, 8), (0x40_0000, 8), (0x7F_0000, 8), (0x80_1000, 8), (0x80_6000, 8)] {
+            assert_eq!(s.speed(a), c, "{a:06X} with FastROM");
+        }
+    }
+
+    #[test]
+    fn a_line_holds_one_refresh_and_a_field_one_short_line() {
+        let mut s = system(0x20);
+        let mut refreshes = 0;
+        let start_of = |s: &System| s.timing.clock - s.timing.line_clock as u64;
+        while s.timing.frame < 1 {
+            s.idle(0, 0);
+        }
+        let one = start_of(&s);
+        while s.timing.frame < 3 {
+            let before = s.timing.refreshed;
+            s.idle(0, 0);
+            refreshes += (!before && s.timing.refreshed) as u32;
+        }
+        assert_eq!(start_of(&s) - one, 2 * 262 * LINE as u64 - 4);
+        assert_eq!(refreshes, 2 * 262);
+    }
+
+    #[test]
+    fn open_bus_is_the_last_value_and_the_wram_port_increments() {
+        let mut s = system(0x20);
+        s.write(0x7E_1234, 0x5A, pin::VDA);
+        assert_eq!(s.read(0x00_5000, pin::VDA), 0x5A);
+        assert_eq!(s.read(0x00_1234, pin::VDA), 0x5A);
+        for (r, v) in [(0x2181, 0x34), (0x2182, 0x12), (0x2183, 0x00)] {
+            s.write(r, v, pin::VDA);
+        }
+        assert_eq!(s.read(0x00_2180, pin::VDA), 0x5A);
+        s.write(0x00_2180, 0xA5, pin::VDA);
+        assert_eq!(s.wram[0x1235], 0xA5);
+        s.write(0x00_1000, 0x77, 0);
+        assert_eq!((s.wram[0x1000], s.mdr), (0, 0xA5));
+        s.write(0x70_0010, 0x42, pin::VDA);
+        assert_eq!(s.read(0xF0_0010, pin::VDA), 0x42);
+    }
+}

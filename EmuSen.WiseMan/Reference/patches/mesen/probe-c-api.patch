@@ -3,7 +3,7 @@ new file mode 100644
 index 00000000..d043f17d
 --- /dev/null
 +++ b/Core/Shared/EmuSenProbeApi.cpp
-@@ -0,0 +1,530 @@
+@@ -0,0 +1,534 @@
 +// A C ABI for EmuSen's reference probe - see EmuSen_Debugging_Tools_Reference_v5.md §3.52.
 +//
 +// This file exists so the probe can be written in a language that is not C++.
@@ -35,6 +35,7 @@ index 00000000..d043f17d
 +#include "Shared/Emulator.h"
 +#include "Shared/EmuSettings.h"
 +#include "Shared/KeyManager.h"
++#include "Shared/MessageManager.h"
 +#include "Shared/SettingTypes.h"
 +#include "Shared/Interfaces/IKeyManager.h"
 +#include "Shared/MemoryType.h"
@@ -384,6 +385,9 @@ index 00000000..d043f17d
 +			printf("[INFO] recording audio to %s\n", wavPath);
 +			g_probe.Recording = true;
 +		}
++
++		// EMUSEN_PROBE_LOG prints Mesen's message log after the load, the cartridge it reports among it - §3.60.
++		if(getenv("EMUSEN_PROBE_LOG")) { printf("[MESEN LOG]\n%s\n[END MESEN LOG]\n", MessageManager::GetLog().c_str()); }
 +
 +		g_probe.Snes = dynamic_cast<SnesConsole*>(g_probe.Emu->GetConsole().get());
 +		g_probe.Nes = dynamic_cast<NesConsole*>(g_probe.Emu->GetConsole().get());

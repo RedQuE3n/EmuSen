@@ -2506,6 +2506,16 @@ the last frame on its own (`RunToFrame`, which is now `build-probe.sh`'s sentine
 stale first screen was examined only on the SNES. Audio recorded with `--wav` is taken before the device gate
 (§3.43), so it should not depend on pacing, but no recording was compared across the fix.
 
+### 3.60 The probe prints Mesen's own loader log, for the cartridge it chose
+
+*Added 2026-09-30, for VenusRT's header check (`VenusRT_Native.md` §12.3).* The probe reports no board for an SNES
+cartridge (`probe_identity` fills it for the NES only), and a header scorer has nothing to be compared with without
+one. Mesen's loader writes what it settled on into its message log: the type (LoROM, HiROM, ExLoROM), the map mode,
+the title, the sizes. With `EMUSEN_PROBE_LOG` set in the environment, `probe_load` prints that log after the load,
+between `[MESEN LOG]` and `[END MESEN LOG]`, through `MessageManager::GetLog`, the log the frontend shows. Nothing
+else changed and the ABI version stays 1; the sentinel `build-probe.sh` looks for is now `EMUSEN_PROBE_LOG`. What was
+read of Mesen for it was `MessageManager.h`'s declarations; the log's text is Mesen's output, read as any dump is.
+
 ---
 
 ## 8. A note on the 2026-08-06 commit, for whoever runs `git log` and wonders

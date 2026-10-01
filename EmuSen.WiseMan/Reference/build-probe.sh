@@ -319,7 +319,7 @@ grep -q g_probeStopArmed Core/Shared/Emulator.cpp         || git apply "$HERE/pa
 # That glob is also exactly why this backend has no Windows host - see §3.54.
 # The sentinel is the newest behaviour, the last frame run on its own, so a checkout
 # carrying an older copy of the file has it replaced rather than kept - see §3.59.
-grep -qs "RunToFrame" Core/Shared/EmuSenProbeApi.cpp || { rm -f Core/Shared/EmuSenProbeApi.cpp; git apply "$HERE/patches/mesen/probe-c-api.patch"; }
+grep -qs "EMUSEN_PROBE_LOG" Core/Shared/EmuSenProbeApi.cpp || { rm -f Core/Shared/EmuSenProbeApi.cpp; git apply "$HERE/patches/mesen/probe-c-api.patch"; }
 
 # STATICLINK=false: the stock recipe wants libstdc++.a, which Fedora splits out.
 # The makefile forces both off on Darwin anyway, so passing them is harmless.

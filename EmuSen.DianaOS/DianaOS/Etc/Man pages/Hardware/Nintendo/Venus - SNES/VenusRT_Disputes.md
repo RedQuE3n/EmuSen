@@ -130,3 +130,32 @@ about what a suite's file format means, settled by the suite's own data and READ
 the hardware. They are recorded in `VenusRT_Native.md` §2.3: the SingleStepTests 65816 cases of MVN and MVP stop at
 100 cycles in the middle of a move, and the SPC700 suite records dummy reads of memory a case does not list without
 their data.
+
+### D-4. Cartridge header: Batman: Revenge of the Joker (U) is a LoROM cartridge, though its only well-formed header is at the HiROM place
+- Opened: 2026-09-30, at stage 2 step 1, by the header check over the player's library (826 SNES files, read by header
+  only, each copied to scratch). VenusRT chose HiROM: at $00FFC0 the file has a readable title, map mode $31, a
+  complement and checksum that agree, and a checksum ($FDBC) equal to the sum of the whole file; at $007FC0 it has 64
+  zero bytes. Mesen, through the probe's log of its own loader, chose LoROM with map mode $00.
+- Documents read: fullsnes, "SNES Cartridge ROM Header" and "SNES Memory Map". Both say where a header is for each
+  map and what its fields mean; neither gives a rule that picks LoROM for a file whose LoROM header is empty.
+- Test ROM: the game itself, run as a black box. *Measured:* with the HiROM choice VenusRT never leaves its first
+  loop ($00:8024) and its WRAM at frame 30 is empty; with the HiROM-place header blanked, so that its scorer takes
+  LoROM, its WRAM at frame 30 equals Mesen's in 131,069 of 131,072 bytes. Mesen draws mode 7 by frame 600.
+- Referee: not read. Mesen's source: none; its outputs only.
+- Conclusion: the cartridge is LoROM; measured. VenusRT's scorer is wrong on this file, and how to fix it without
+  a list of titles is not settled: the rule owed is one that weighs a candidate by where its reset handler leads,
+  checked against all 826 files before it replaces the present scorer. Open in that sense; no code changes here.
+- Pinned by: nothing yet. The library check of `VenusRT_Native.md` §12.3 is the test that will.
+
+### D-5. Cartridge map: map mode $x2 without an S-DD1, which Mesen calls ExLoROM
+- Opened: 2026-09-30, by the same check: Street Fighter Alpha 2 (U), 4 MiB with an S-DD1, and two dumps of Test Drive
+  II: The Duel (U), 1 MiB with no coprocessor, all with map mode $32. Both engines read the same header; VenusRT
+  maps them as LoROM and Mesen's loader names them ExLoROM.
+- Documents read: fullsnes, "ROM Speed and Map Mode" (mode 2 is "LoROM/32K Banks + S-DD1", "mappable") and "SNES
+  Memory Map" (BigLoROM and SpecialLoROM, which map further LoROM banks above 2 MiB).
+- Test ROM: none. Below 2 MiB the two maps decode banks $00-$3F and $80-$BF alike (argued), so a 1 MiB cartridge can
+  differ only where it reads banks $40-$7D or $C0-$FF; nothing run here touched them.
+- Referee: not read. Mesen's source: none.
+- Conclusion: open. The S-DD1 is outside parity (`VenusRT_Plan.md` §4.2). Test Drive II is settled when the goldens of
+  stage 6 run it against Mesen.
+

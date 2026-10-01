@@ -42,6 +42,12 @@ pub struct Ppu {
     /// How far the current line is drawn, in pixels.
     pub drawn: u16,
     pub skip: bool,
+    /// $213E's OBJ range and time overflow flags.
+    pub range_over: bool,
+    pub time_over: bool,
+    /// The current line's sprite pixels, 0 where none: the CGRAM index, and the OAM priority in bits 8-9, with
+    /// bit 15 set. Drawing's alone; not part of the machine's state.
+    pub obj_line: Box<[u16]>,
 }
 
 impl Default for Ppu {
@@ -77,6 +83,9 @@ impl Default for Ppu {
             frame: frame.into(),
             drawn: 0,
             skip: false,
+            range_over: false,
+            time_over: false,
+            obj_line: vec![0; WIDTH].into(),
         }
     }
 }
@@ -91,10 +100,19 @@ pub struct Beam {
     pub pal: bool,
 }
 
-/// The layers of modes 0 and 1 from the front, as (background, tile priority) (fullsnes, "Background Priority Chart").
-const MODE0: [(usize, u16); 8] = [(0, 1), (1, 1), (0, 0), (1, 0), (2, 1), (3, 1), (2, 0), (3, 0)];
-const MODE1: [(usize, u16); 6] = [(0, 1), (1, 1), (0, 0), (1, 0), (2, 1), (2, 0)];
-const MODE1_BG3_HIGH: [(usize, u16); 6] = [(2, 1), (0, 1), (1, 1), (0, 0), (1, 0), (2, 0)];
+/// The layers from the front, as (layer, priority), layer 4 the sprites (fullsnes, "Background Priority Chart").
+const OBJ: usize = 4;
+const MODE0: [(usize, u16); 12] = [(OBJ, 3), (0, 1), (1, 1), (OBJ, 2), (0, 0), (1, 0), (OBJ, 1), (2, 1), (3, 1), (OBJ, 0), (2, 0), (3, 0)];
+const MODE1: [(usize, u16); 10] = [(OBJ, 3), (0, 1), (1, 1), (OBJ, 2), (0, 0), (1, 0), (OBJ, 1), (2, 1), (OBJ, 0), (2, 0)];
+const MODE1_BG3_HIGH: [(usize, u16); 10] = [(2, 1), (OBJ, 3), (0, 1), (1, 1), (OBJ, 2), (0, 0), (1, 0), (OBJ, 1), (OBJ, 0), (2, 0)];
+/// The modes whose backgrounds are later steps': the sprites alone.
+const OBJ_ONLY: [(usize, u16); 4] = [(OBJ, 3), (OBJ, 2), (OBJ, 1), (OBJ, 0)];
+
+/// OBSEL's sizes as (small, large), each (width, height) (fullsnes, OBSEL, with its two undocumented settings).
+const OBJ_SIZES: [((u16, u16), (u16, u16)); 8] = [
+    ((8, 8), (16, 16)), ((8, 8), (32, 32)), ((8, 8), (64, 64)), ((16, 16), (32, 32)),
+    ((16, 16), (64, 64)), ((32, 32), (64, 64)), ((16, 32), (32, 64)), ((16, 32), (32, 32)),
+];
 
 impl Ppu {
     pub fn forced_blank(&self) -> bool {
@@ -258,7 +276,7 @@ impl Ppu {
                 }
                 v
             }
-            0x3E => (self.ppu1_mdr & 0x10) | 0x01,
+            0x3E => (if self.time_over { 0x80 } else { 0 }) | (if self.range_over { 0x40 } else { 0 }) | (self.ppu1_mdr & 0x10) | 0x01,
             0x3F => {
                 let v = (if beam.field { 0x80 } else { 0 }) | (if self.latched { 0x40 } else { 0 }) | (self.ppu2_mdr & 0x20) | (if beam.pal { 0x10 } else { 0 }) | 0x03;
                 if side_effects {
@@ -297,6 +315,108 @@ impl Ppu {
         if next == 225 && !self.forced_blank() {
             self.reload_oam();
         }
+        // The overflow flags clear at the end of V-Blank, but not in forced blank (fullsnes, STAT77).
+        if next == 0 && !self.forced_blank() {
+            self.range_over = false;
+            self.time_over = false;
+        }
+        if (1..=HEIGHT as u16).contains(&next) {
+            self.evaluate(next);
+        }
+    }
+
+    /// The sprites of picture line `line`, chosen during the line before it as anomie's "SPRITES" describes: the
+    /// first 32 in range from the first sprite, then up to 34 tiles loaded from the last of them back, setting
+    /// $213E's flags. The tiles are decoded a row at a time into the line's sprite pixels unless the picture is skipped.
+    fn evaluate(&mut self, line: u16) {
+        if !self.skip {
+            self.obj_line.fill(0);
+        }
+        if self.forced_blank() {
+            return;
+        }
+        let obsel = self.regs[0x01];
+        let sizes = OBJ_SIZES[(obsel >> 5) as usize];
+        // Priority rotation takes the first sprite from the internal word address (anomie; D-12 for its limits).
+        let first = if self.oam_rotation { ((self.oam_address >> 2) & 0x7F) as usize } else { 0 };
+        let y_line = line - 1;
+        let mut range = [0u8; 32];
+        let mut n = 0;
+        for k in 0..128 {
+            let i = (first + k) & 127;
+            let (x, _, (w, h)) = self.obj_geometry(i, sizes);
+            let row = y_line.wrapping_sub(self.oam[i * 4 + 1] as u16) & 0xFF;
+            // An OBJ at X=256 counts as if at 0 for range and time, though it draws off the screen (anomie).
+            let xr = if x == -256 { 0 } else { x };
+            if row >= h || xr <= -(w as i16) {
+                continue;
+            }
+            if n == 32 {
+                self.range_over = true;
+                break;
+            }
+            range[n] = i as u8;
+            n += 1;
+        }
+        let mut tiles = 0;
+        'load: for &i in range[..n].iter().rev() {
+            let i = i as usize;
+            let (x, attr, (w, _)) = self.obj_geometry(i, sizes);
+            let xr = if x == -256 { 0 } else { x };
+            let mut row = y_line.wrapping_sub(self.oam[i * 4 + 1] as u16) & 0xFF;
+            if attr & 0x80 != 0 {
+                // A rectangular sprite flips as two square ones (anomie).
+                row = (row / w) * w + (w - 1 - row % w);
+            }
+            let columns = w / 8;
+            for c in 0..columns {
+                let tx = xr + 8 * c as i16;
+                if tx <= -8 || tx >= 256 {
+                    continue;
+                }
+                if tiles == 34 {
+                    self.time_over = true;
+                    break 'load;
+                }
+                tiles += 1;
+                if !self.skip {
+                    let column = if attr & 0x40 != 0 { columns - 1 - c } else { c };
+                    self.draw_obj_tile(i, attr, column, row, x + 8 * c as i16);
+                }
+            }
+        }
+    }
+
+    /// An OBJ's X (signed, 9 bits), its attribute byte and its (width, height).
+    fn obj_geometry(&self, i: usize, sizes: ((u16, u16), (u16, u16))) -> (i16, u8, (u16, u16)) {
+        let high = self.oam[0x200 + i / 4] >> ((i & 3) * 2);
+        let x = self.oam[i * 4] as i16 | if high & 1 != 0 { -256 } else { 0 };
+        (x, self.oam[i * 4 + 3], if high & 2 != 0 { sizes.1 } else { sizes.0 })
+    }
+
+    /// One 8-pixel row of an OBJ's tile, decoded once, into the line's sprite pixels at screen X `at`; a sprite loaded
+    /// later is one nearer the first, so it covers what is there.
+    fn draw_obj_tile(&mut self, i: usize, attr: u8, column: u16, row: u16, at: i16) {
+        let obsel = self.regs[0x01] as u16;
+        let c = self.oam[i * 4 + 2] as u16;
+        // The tile table is 16 by 16 and wraps in each direction (anomie, "Character table in VRAM").
+        let tile = ((((c >> 4) + row / 8) & 0x0F) << 4) | (((c & 0x0F) + column) & 0x0F);
+        let name = if attr & 1 != 0 { (((obsel >> 3) & 3) + 1) << 12 } else { 0 };
+        let word = (((obsel & 7) << 13) + (tile << 4) + name + (row & 7)) & 0x7FFF;
+        let (w0, w1) = (self.vram[word as usize], self.vram[((word + 8) & 0x7FFF) as usize]);
+        let palette = 128 + (((attr >> 1) & 7) as u16) * 16;
+        let priority = ((attr >> 4) & 3) as u16;
+        for p in 0..8u16 {
+            let x = at + p as i16;
+            if !(0..256).contains(&x) {
+                continue;
+            }
+            let bit = if attr & 0x40 != 0 { p } else { 7 - p };
+            let colour = ((w0 >> bit) & 1) | ((w0 >> (bit + 7)) & 2) | (((w1 >> bit) & 1) << 2) | (((w1 >> (bit + 8)) & 1) << 3);
+            if colour != 0 {
+                self.obj_line[x as usize] = 0x8000 | (priority << 8) | (palette + colour);
+            }
+        }
     }
 
     /// Draws the pixels of `line` not yet drawn, up to `to`, from the registers as they stand.
@@ -325,19 +445,26 @@ impl Ppu {
         }
     }
 
-    /// The main screen's colour at a pixel: the frontmost opaque background of modes 0 and 1, or the backdrop.
+    /// The main screen's colour at a pixel: the frontmost opaque sprite or background of modes 0 and 1, or the backdrop.
     fn pixel(&self, x: u16, line: u16) -> u16 {
         let mode = self.regs[0x05] & 7;
         let order: &[(usize, u16)] = match mode {
             0 => &MODE0,
             1 if self.regs[0x05] & 0x08 != 0 => &MODE1_BG3_HIGH,
             1 => &MODE1,
-            _ => &[],
+            _ => &OBJ_ONLY,
         };
         let mut cache: [Option<(u16, u16)>; 4] = [None; 4];
         let mut fetched = [false; 4];
         for &(bg, priority) in order {
             if self.regs[0x2C] & (1 << bg) == 0 {
+                continue;
+            }
+            if bg == OBJ {
+                let o = self.obj_line[x as usize];
+                if o != 0 && (o >> 8) & 3 == priority {
+                    return self.cgram[(o & 0xFF) as usize];
+                }
                 continue;
             }
             if !fetched[bg] {
@@ -485,5 +612,51 @@ mod tests {
         skipped.write(0x00, 0x0F, blank());
         skipped.end_line(1, 2);
         assert!(skipped.frame.chunks_exact(4).all(|px| px[..3] == [0, 0, 0]));
+    }
+
+    // anomie's limits: 32 sprites in range, 34 tiles loaded from the last of them back, flags kept when skipped.
+    #[test]
+    fn sprites_overflow_at_32_in_range_and_34_tiles_and_the_first_wins() {
+        for skip in [false, true] {
+            let mut p = Ppu::default();
+            p.skip = skip;
+            p.regs[0x2C] = 0x10;
+            for i in 0..128 {
+                p.oam[i * 4 + 1] = 200;
+            }
+            for i in 0..33 {
+                p.oam[i * 4] = (i * 7) as u8;
+                p.oam[i * 4 + 1] = 9;
+            }
+            p.end_line(9, 10);
+            assert!(p.range_over && !p.time_over, "skip {skip}");
+            for i in 0..18 {
+                p.oam[i * 4] = (i * 14) as u8;
+            }
+            for i in 18..33 {
+                p.oam[i * 4 + 1] = 200;
+            }
+            p.regs[0x01] = 0x00;
+            p.oam[0x200..0x205].copy_from_slice(&[0xAA; 5]);
+            p.range_over = false;
+            p.end_line(9, 10);
+            assert!(p.time_over && !p.range_over, "skip {skip}");
+        }
+        let mut p = Ppu::default();
+        p.regs[0x2C] = 0x10;
+        for i in 0..128 {
+            p.oam[i * 4 + 1] = 200;
+        }
+        p.vram[0] = 0x00FF;
+        p.cgram[0x81] = 0x001F;
+        p.cgram[0x91] = 0x03E0;
+        p.oam[0..4].copy_from_slice(&[10, 0, 0, 0x00]);
+        p.oam[4..8].copy_from_slice(&[12, 0, 0, 0x02]);
+        p.end_line(0, 1);
+        assert_eq!((p.obj_line[9], p.obj_line[10], p.obj_line[13], p.obj_line[18]), (0, 0x8081, 0x8081, 0x8091));
+        p.oam_rotation = true;
+        p.oam_address = 4;
+        p.end_line(0, 1);
+        assert_eq!((p.obj_line[10], p.obj_line[13]), (0x8081, 0x8091));
     }
 }

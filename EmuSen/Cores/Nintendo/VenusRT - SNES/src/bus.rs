@@ -86,7 +86,8 @@ impl Timing {
     /// The H/V comparator over the clocks (from, to] of this line; a point past the line's end falls in the next.
     fn compare(&mut self, from: u16, to: u16, len: u16) {
         let h = if self.irq_mode == 2 { 0 } else { self.htime };
-        if h > 339 {
+        // No IRQ for dot 153 on the short line or on a frame's last line (anomie's timing document).
+        if h > 339 || (h == 153 && (len != LINE || self.line == self.lines() - 1)) {
             return;
         }
         let at = irq_point(h);
@@ -138,6 +139,8 @@ pub struct System {
     pub vram_address: u16,
     pub vmain: u8,
     pub dev: Devices,
+    /// CPU writes to $2100-$43FF since power-on, which the header's reset-handler evidence counts; not in the state.
+    pub io_writes: u32,
 }
 
 impl System {
@@ -155,6 +158,7 @@ impl System {
             vram_address: 0,
             vmain: 0,
             dev: Devices::default(),
+            io_writes: 0,
         }
     }
 
@@ -183,6 +187,8 @@ impl System {
     /// H=133.5), then the cycle's own clocks.
     #[inline]
     fn clock_cycle(&mut self, clocks: u16) {
+        self.dev.nmi_at_cycle = self.dev.nmi_pending;
+        self.dev.irq_at_cycle = self.timing.irq_flag;
         self.before_cycle(clocks);
         self.timing.advance(clocks);
         self.after_clock();
@@ -211,6 +217,7 @@ impl System {
                     }
                     return Some(v);
                 }
+                0x2140..=0x217F => return Some(self.read_apu_stub((offset & 3) as usize)),
                 0x2000..=0x3FFF => return None,
                 0x4210 => {
                     let v = (if self.timing.nmi_flag { 0x80 } else { 0 }) | (self.mdr & 0x70) | 0x02;
@@ -240,6 +247,9 @@ impl System {
             return;
         }
         if bank & 0x40 == 0 {
+            if (0x2100..0x4400).contains(&offset) {
+                self.io_writes += 1;
+            }
             match offset {
                 0x0000..=0x1FFF => {
                     self.wram[offset as usize] = value;
@@ -257,6 +267,10 @@ impl System {
                 0x2180 => {
                     self.wram[self.wram_address as usize] = value;
                     self.wram_address = (self.wram_address + 1) & 0x1FFFF;
+                }
+                0x2140..=0x217F => {
+                    self.dev.apu_stub[(offset & 3) as usize] = value;
+                    self.dev.apu_written |= offset & 3 == 0 && value == 0xCC;
                 }
                 0x2181 => self.wram_address = (self.wram_address & 0x1FF00) | value as u32,
                 0x2182 => self.wram_address = (self.wram_address & 0x100FF) | (value as u32) << 8,

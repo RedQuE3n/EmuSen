@@ -633,3 +633,118 @@ through the real bus where it can be (flat memory is the suite's model, so only 
 memory-mapping tests of the higan collection (`memtest`). DMA, HDMA, NMI, IRQ, the multiply and divide unit and the
 auto-joypad follow in stage 2's later steps.
 
+---
+
+## 12. Stage 2, step 1: the bus and the memory map (2026-09-30)
+
+### 12.1 What it built
+
+Written from fullsnes ("SNES Memory Map", "SNES Memory Control", "SNES Memory Work RAM Access", "SNES Timings",
+"SNES Cartridge ROM Header") and anomie's document 194 (open bus); nothing else was read, except Mesen's message-log
+API for the probe (§12.3).
+
+- **`cart.rs`**: the header looked for at the LoROM, HiROM and ExHiROM places (the last only in an image over
+  4 MiB), each scored (§12.2); LoROM, HiROM and ExHiROM decoded with fullsnes's mirroring of odd sizes (the larger
+  power of two, then the remainder's mirrors); SRAM by the header's size when the chipset says RAM, LoROM's at banks
+  $70-$7D and $F0-$FF below $8000, HiROM's at $6000-$7FFF of banks $20-$3F and $A0-$BF. ExHiROM is not in Venus's
+  parity list (plan §4.2); it is there because it costs two lines of the same decode.
+- **`bus.rs`**: `System`, which implements the CPU's `Bus`:
+  - the access speeds by region (8 for WRAM, $6000-$7FFF and slow ROM; 6 for $2000-$3FFF, $4200-$5FFF, internal
+    cycles and, with $420D bit 0 set, the ROM of banks $80-$FF; 12 for $4000-$41FF);
+  - the master clock: 1364-clock lines, 262 or 312 a frame by the header's country, line 240 of field 1 four
+    clocks short at 60 Hz, and the 40-clock refresh taken between two CPU cycles at the first boundary past H=133.5
+    (master clock 534 of the line);
+  - the vblank and NMI flags at line 225, cleared at line 0 (and the NMI flag on a read of $4210);
+  - open bus as the MDR, which every read and write sets and internal cycles leave alone;
+  - WRAM, its mirror and its port ($2180-$2183);
+  - the I/O decode, with what later steps fill in kept as written ($4000-$43FF), and two stubs so that test ROMs can
+    report: the VRAM port ($2115-$2119) and $4210/$4212's flags;
+  - a write with neither VDA nor VPA, the emulation-mode modify cycle, taken as an internal cycle (§10.2);
+  - `halted` as a 6-clock cycle while WAI or STP holds the CPU.
+- **`machine.rs`**: the machine resets through `Cpu::interrupt(Reset)` and runs a frame to the master clock's next
+  frame. Its state is version 2: the CPU, the clock, the bus, WRAM, VRAM, SRAM and the stage-0 memories, 264,283 bytes
+  for a cartridge without SRAM, with the layout pinned.
+
+### 12.2 The header's score
+
+Each candidate scores on its own fields: +4 when the map mode fits the place (bits 5-7 $20, and mode 0, 2 or 3 for
+LoROM, 1 or $A for HiROM, 5 for ExHiROM); +4 when the complement and checksum agree, +2 more when the checksum is
+neither $0000 nor $FFFF; +2 for a reset vector at $8000 or above, +2 more when the byte there is a plausible first
+instruction, −4 for one below $8000; +2 for a printable title; +1 for a ROM size byte that covers half the image or
+more; +1 for an SRAM size byte of 8 or less. The highest wins, ties going to LoROM, then HiROM. A file with no header
+that scores is mapped LoROM. The weights are this core's own; the library is their test (§12.3).
+
+### 12.3 The header check on the library (measured 2026-09-30)
+
+All 826 SNES files of the player's library, each copied to scratch, read by header, and removed; nothing in the
+library was written. Mesen's choice was read from its own loader's message log, which the probe now prints after a
+load when `EMUSEN_PROBE_LOG` is set (`EmuSen_Debugging_Tools_Reference_v5.md` §3.60). It names the type, the map mode
+and the title it settled on. **822 of 826 agree** on the map family and the map mode, which says the same header was
+chosen. Mesen named 663 LoROM, 160 HiROM and 3 ExLoROM. The four that differ:
+
+- **Batman: Revenge of the Joker (U)**, D-4. VenusRT took the HiROM-place header, whose checksum even equals the
+  file's sum; the LoROM place is empty; Mesen took LoROM. The game decides it: under LoROM VenusRT's WRAM at frame 30
+  equals Mesen's in 131,069 of 131,072 bytes, and under HiROM it never leaves its first loop. VenusRT's scorer is
+  wrong on this file, and the fix is owed (D-4).
+- **Street Fighter Alpha 2 (U) and two dumps of Test Drive II: The Duel (U)**, D-5: the same header, map mode $32,
+  which Mesen maps as ExLoROM and VenusRT as LoROM. The S-DD1 is outside parity; Test Drive II waits for the goldens.
+
+### 12.4 The access speeds, three ways (measured 2026-09-30)
+
+`speedtest.rs` builds nine LoROM images whose loop counts in WRAM: the loop's code in slow ROM, fast ROM (MEMSEL set,
+banks $80+) or WRAM, and one long read a pass from WRAM, ROM, $2000, $4100, $4300 or $6000. The documents' table and
+the datasheet's cycles give each pass 82 to 104 master clocks.
+
+- **Against the documents:** over 60 frames every variant's count is within 0.001 per cent of the frame (less 40
+  clocks of refresh a line) over its documented pass, with the carry every 256th pass spread in.
+- **Against Mesen**, the same images through the probe, the counter's growth from frame 300 to frame 600:
+
+| Variant | Clocks a pass | VenusRT | Mesen | Difference |
+|---|---|---|---|---|
+| slow ROM code, ROM data | 100 | 1,038,459 | 1,038,458 | +1 |
+| slow ROM code, WRAM data | 100 | 1,038,459 | 1,038,458 | +1 |
+| slow ROM code, $2000 data | 98 | 1,059,607 | 1,059,607 | 0 |
+| slow ROM code, $4100 data | 104 | 998,599 | 998,599 | 0 |
+| slow ROM code, $4300 data | 98 | 1,059,607 | 1,059,607 | 0 |
+| slow ROM code, $6000 data | 100 | 1,038,459 | 1,038,458 | +1 |
+| fast ROM code, fast ROM data | 82 | 1,266,309 | 1,266,310 | −1 |
+| fast ROM code, slow ROM data | 84 | 1,236,224 | 1,236,224 | 0 |
+| WRAM code, WRAM data | 100 | 1,038,459 | 1,038,458 | +1 |
+
+One pass in a million is the two engines' different phase in the frame, not a rate. The refresh's 40 clocks, the short
+line and every region's speed agree with Mesen's. What this does not cover: where in a line the refresh falls (a
+counter over whole frames cannot see it; H-counter latching in stage 3 can), fullsnes's 50:50 "stuttering" refresh,
+which is not modelled, and DMA's speed, which is the next step's.
+
+### 12.5 The other oracles
+
+- **gilyon's `cputest-full` and `cputest-basic` on the machine's own bus**: both pass, every test, at frames 163 and
+  113, against 162 and 112 on the minimal bus (the real bus is slower by the refresh).
+- **The memory and timing ROMs of the corpus**, `memtest`, VitorVilela7's `speed_test_v51` and `test_mdrhdma`, write
+  no text by frame 600: each needs DMA for its font or NMI for its waits, which are the next step's. Run again then.
+- **The probe's WRAM and SRAM differential** on commercial games needs NMI too (a game waits for its vblank handler
+  within its first frames); the one game run here is D-4's.
+
+### 12.6 The cost with the real bus (measured 2026-09-30)
+
+`examples/frame_cost.rs`, best of three under the timing lock, load average 0.6: **0.27 ms a frame** for gilyon's
+`cputest-full` (160 frames), **0.25** for the slow-ROM loop and **0.30** for the fast-ROM one (600 frames each),
+against §5.5's 0.8 ms for the CPU, the bus and DMA together. Over the flat bus of §11.7 the CPU alone cost 0.06 ms;
+the decode, the clock and the refresh check on every cycle are the rest. No tuning was done.
+
+### 12.7 The clone check (measured 2026-09-30)
+
+16 files against Mesen's 164: **no pair shares 12 fingerprints, no table is shared.** The largest pair below the
+threshold is `bus.rs` with 6, above the calibration negative's 4 and half the threshold; the names it shares are the
+registers' own (`nmiflag`, `vramaddress`), and fullsnes spells them so. Five Mesen identifiers outside the vocabulary
+are also VenusRT's: `nmiflag`, `softwareinterrupt`, `sramsize`, `vramaddress` and `writevalue`, each the plain name
+of what it holds or does, recorded as §4.2's reading list.
+
+### 12.8 Stage 2's next step
+
+DMA and HDMA (their channels, the per-byte cost and alignment, HDMA's line timing and its overlap with DMA), NMI and
+the H/V IRQ with their timers ($4200, $4207-$420A, $4211), the multiply and divide unit with its partial results, and
+the auto-joypad read with its busy flag. Its oracles are the plan's §3.2 rows for those: jonasquinn's IRQ, NMI, DMA
+and HDMA tests and `muldiv_tests`, undisbeliever's DMA, HDMA and auto-joypad tests, Sour's tests, this step's
+memory ROMs, and the probe's WRAM differential on the commercial games once they run past their first vblank.
+

@@ -15,5 +15,5 @@ pub mod state;
 mod cputest;
 #[cfg(test)]
 mod singlestep;
-#[cfg(test)]
-mod speedtest;
+#[doc(hidden)]
+pub mod speedtest;

@@ -262,7 +262,10 @@ impl Ppu {
             0x3F => {
                 let v = (if beam.field { 0x80 } else { 0 }) | (if self.latched { 0x40 } else { 0 }) | (self.ppu2_mdr & 0x20) | (if beam.pal { 0x10 } else { 0 }) | 0x03;
                 if side_effects {
-                    self.latched = false;
+                    // The latch flag resets only while WRIO bit 7 is set (anomie's register document, $213F).
+                    if wrio & 0x80 != 0 {
+                        self.latched = false;
+                    }
                     self.oph_second = false;
                     self.opv_second = false;
                 }
@@ -454,7 +457,9 @@ mod tests {
         let v = [p.read(0x3D, beam, 0, true).unwrap(), p.read(0x3D, beam, 0, true).unwrap() & 1];
         assert_eq!((h, v), ([0x23, 1], [0x05, 1]));
         p.read(0x3F, beam, 0, true);
-        assert!(!p.latched && !p.oph_second);
+        assert!(p.latched && !p.oph_second);
+        p.read(0x3F, beam, 0x80, true);
+        assert!(!p.latched);
     }
 
     // One 2bpp tile in mode 0 on BG1, its second pixel colour 3, with the backdrop behind and a mid-line change.

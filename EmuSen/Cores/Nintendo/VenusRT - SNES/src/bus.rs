@@ -34,6 +34,9 @@ pub struct Timing {
     /// HDMA's init on line 0 and its transfer on this line are done.
     pub hdma_init_done: bool,
     pub hdma_line_done: bool,
+    /// The line clock of the next thing a cycle must stop for: an event of this line, or its end. A cycle that ends
+    /// before it only moves the clock (VenusRT_Plan.md §5.2's scheduler). Zero until first scheduled; not in the state.
+    pub next_event: u16,
 }
 
 /// Where in a line the H comparator fires for an HTIME: 14 clocks past the dot, the two long dots counted, and HTIME
@@ -116,6 +119,34 @@ impl Timing {
         }
     }
 
+    /// The earliest of this line's pending events and its end.
+    pub fn schedule(&mut self) {
+        let mut next = self.line_length();
+        if !self.refreshed {
+            next = next.min(REFRESH_AT);
+        }
+        if self.line == 0 && !self.hdma_init_done {
+            next = next.min(HDMA_INIT_AT);
+        }
+        if self.line < VBLANK_LINE && !self.hdma_line_done {
+            next = next.min(HDMA_AT);
+        }
+        if self.line == VBLANK_LINE && JOYPAD_AT > self.line_clock {
+            next = next.min(JOYPAD_AT);
+        }
+        if self.irq_mode != 0 {
+            let h = if self.irq_mode == 2 { 0 } else { self.htime };
+            if h <= 339 {
+                let at = irq_point(h);
+                let at = if at >= self.line_length() { at - self.line_length() } else { at };
+                if at > self.line_clock {
+                    next = next.min(at);
+                }
+            }
+        }
+        self.next_event = next;
+    }
+
     pub fn hblank(&self) -> bool {
         self.line_clock >= 274 * 4 || self.line_clock < 4
     }
@@ -189,9 +220,16 @@ impl System {
     fn clock_cycle(&mut self, clocks: u16) {
         self.dev.nmi_at_cycle = self.dev.nmi_pending;
         self.dev.irq_at_cycle = self.timing.irq_flag;
+        let t = &mut self.timing;
+        if t.line_clock + clocks < t.next_event && self.dev.dma_wait == 0 {
+            t.line_clock += clocks;
+            t.clock += clocks as u64;
+            return;
+        }
         self.before_cycle(clocks);
         self.timing.advance(clocks);
         self.after_clock();
+        self.timing.schedule();
     }
 
     fn vram_step(&mut self, high: bool) {
@@ -223,6 +261,7 @@ impl System {
                     let v = (if self.timing.nmi_flag { 0x80 } else { 0 }) | (self.mdr & 0x70) | 0x02;
                     if side_effects {
                         self.timing.nmi_flag = false;
+                        self.after_clock();
                     }
                     return Some(v);
                 }

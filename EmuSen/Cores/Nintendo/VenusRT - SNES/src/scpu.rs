@@ -434,6 +434,7 @@ impl System {
         if (0x4200..=0x421F).contains(&offset) {
             self.io[(offset - 0x4000) as usize] = value;
         }
+        self.timing.schedule();
     }
 }
 

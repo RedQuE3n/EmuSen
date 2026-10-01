@@ -333,6 +333,7 @@ impl Machine {
         r.bytes(&mut self.oam)?;
         r.bytes(&mut self.apuram)?;
         r.bytes(&mut self.sys.cart.sram)?;
+        self.sys.timing.schedule();
         Ok(())
     }
 

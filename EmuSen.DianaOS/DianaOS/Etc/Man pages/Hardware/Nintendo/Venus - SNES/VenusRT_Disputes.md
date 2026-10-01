@@ -515,4 +515,6 @@ their data.
   line and after a frame's last line, where it is lost; the line counts are interlace's (263 lines on frames with
   the flag clear). anomie's two dot-153 exclusions stay beside it. Argued from the test ROM's console results.
 - Pinned by: `demo_irq` in the corpus.
+- Implemented 2026-10-01, after interlace's line count. **Measured:** `demo_irq` and `blobs/demo_irqtest` pass all
+  six tests (blue backdrop); they stopped at test 6's first check. Settled, measured on the test ROM.
 

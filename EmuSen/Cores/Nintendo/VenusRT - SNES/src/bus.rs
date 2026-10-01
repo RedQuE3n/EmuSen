@@ -108,7 +108,11 @@ impl Timing {
             return;
         }
         let at = irq_line_point(h);
-        let (at, v) = if at >= len { (at - len, self.line.checked_sub(1).unwrap_or(self.lines() - 1)) } else { (at, self.line) };
+        // A point past its line's end falls in the next line, but not over a frame's end or the short line's (D-20).
+        if at >= len && (self.line == 0 || (self.line == 241 && !self.pal && !self.interlace && self.field)) {
+            return;
+        }
+        let (at, v) = if at >= len { (at - len, self.line - 1) } else { (at, self.line) };
         let line_matches = self.irq_mode == 1 || v == self.vtime;
         if line_matches && from < at && at <= to {
             self.irq_flag = true;

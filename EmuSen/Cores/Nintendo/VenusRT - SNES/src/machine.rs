@@ -524,8 +524,8 @@ pub(crate) mod tests {
             skipped.run_frame();
             assert_eq!(save(&drawn), save(&skipped), "frame {frame}");
         }
-        assert!(drawn.sys.ppu.frame.chunks_exact(4).any(|px| px[..3] != [0, 0, 0]));
-        assert!(skipped.sys.ppu.frame.chunks_exact(4).all(|px| px[..3] == [0, 0, 0]));
+        assert!(drawn.sys.ppu.picture().chunks_exact(4).any(|px| px[..3] != [0, 0, 0]));
+        assert!(skipped.sys.ppu.picture().chunks_exact(4).all(|px| px[..3] == [0, 0, 0]));
         assert!(drawn.sys.ppu.vram.iter().any(|&w| w != 0) && drawn.sys.ppu.oam.iter().any(|&b| b != 0));
     }
 }

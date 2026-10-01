@@ -40,11 +40,17 @@ namespace EmuSen.WiseMan.Fixtures.Snes
         public static (int Compared, int Differing) Pictures(SnesPicture? p, SnesPicture? q, int rowOffset)
         {
             if (p is null || q is null) return (0, 0);
-            int w = Math.Min(p.Width, q.Width), h = Math.Min(p.Height, q.Height - rowOffset);
+            // A picture more than 300 rows high shows each line twice (or interlaced); one 512 wide against one 256 wide is
+            // compared at the wider one's columns, the narrow pixel standing for both halves, the main screen's being the odd one.
+            int py = p.Height > 300 ? 2 : 1, qy = q.Height > 300 ? 2 : 1;
+            int w = Math.Max(p.Width, q.Width), h = Math.Min(p.Height / py, q.Height / qy - rowOffset);
             int differing = 0;
             for (int y = 0; y < h; y++)
                 for (int x = 0; x < w; x++)
-                    if (((p.Pixels[y * p.Width + x] ^ q.Pixels[(y + rowOffset) * q.Width + x]) & 0x7FFF) != 0) differing++;
+                {
+                    int px = p.Width == w ? x : x * p.Width / w, qx = q.Width == w ? x : x * q.Width / w;
+                    if (((p.Pixels[y * py * p.Width + px] ^ q.Pixels[(y + rowOffset) * qy * q.Width + qx]) & 0x7FFF) != 0) differing++;
+                }
             return (Math.Max(0, w * h), differing);
         }
 

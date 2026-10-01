@@ -37,8 +37,15 @@ pub struct Ppu {
     /// The two chips' own open-bus latches (anomie's open-bus document).
     pub ppu1_mdr: u8,
     pub ppu2_mdr: u8,
-    /// RGBA8888, 256x224; not part of the machine's state.
+    /// The picture as last presented, RGBA8888, `frame_width` by 224 at the start of the buffer; not part of the
+    /// machine's state.
     pub frame: Box<[u8]>,
+    /// 256, or 512 for a frame with a hi-res line in it.
+    pub frame_width: u16,
+    /// The frame being drawn, always 512 wide, a low-res pixel written twice; presented at the start of V-Blank.
+    pub canvas: Box<[u8]>,
+    /// Whether a line of the frame being drawn was hi-res.
+    pub wide: bool,
     /// How far the current line is drawn, in pixels.
     pub drawn: u16,
     pub skip: bool,
@@ -50,6 +57,10 @@ pub struct Ppu {
     pub obj_line: Box<[u16]>,
     /// The four backgrounds' pixels for the current line, in the sprites' encoding; drawing's alone, like `obj_line`.
     pub bg_line: Box<[[u16; WIDTH]; 4]>,
+    /// Modes 5 and 6: BG1's and BG2's even half-pixels, the sub screen's; `bg_line` holds the odd ones, the main's.
+    pub bg_sub_line: Box<[[u16; WIDTH]; 2]>,
+    /// What the compositor did at the pixel before, which decides the next sub half-pixel's math in hi-res (D-19).
+    pub before: Mix,
     /// COLDATA's fixed colour, as red, green and blue.
     pub fixed: [u8; 3],
     /// Mosaic's row within its block and the block's height, taken when a block ends (D-15).
@@ -59,7 +70,7 @@ pub struct Ppu {
 
 impl Default for Ppu {
     fn default() -> Self {
-        let mut frame = vec![0u8; WIDTH * HEIGHT * 4];
+        let mut frame = vec![0u8; 2 * WIDTH * HEIGHT * 4];
         for px in frame.chunks_exact_mut(4) {
             px[3] = 0xFF;
         }
@@ -87,18 +98,35 @@ impl Default for Ppu {
             latched: false,
             ppu1_mdr: 0,
             ppu2_mdr: 0,
+            canvas: frame.clone().into(),
             frame: frame.into(),
+            frame_width: WIDTH as u16,
+            wide: false,
             drawn: 0,
             skip: false,
             range_over: false,
             time_over: false,
             obj_line: vec![0; WIDTH].into(),
             bg_line: Box::new([[0; WIDTH]; 4]),
+            bg_sub_line: Box::new([[0; WIDTH]; 2]),
+            before: Mix::default(),
             fixed: [0; 3],
             mosaic_row: 0,
             mosaic_size: 1,
         }
     }
+}
+
+/// A composed main-screen pixel and how it was made: the colour shown; whether math was done, with the fixed colour
+/// (1) or the sub screen's pixel (2); the main colour before math; and the clip, subtract and half that applied.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Mix {
+    pub colour: u16,
+    pub math: u8,
+    pub before: u16,
+    pub clip: bool,
+    pub subtract: bool,
+    pub half: bool,
 }
 
 /// Where the raster stands when a register is touched.
@@ -121,7 +149,9 @@ const OBJ_ONLY: [(usize, u16); 4] = [(OBJ, 3), (OBJ, 2), (OBJ, 1), (OBJ, 0)];
 /// Modes 2, 3 and 4: two backgrounds, each priority of BG2 behind BG1's.
 const MODE2: [(usize, u16); 8] = [(OBJ, 3), (0, 1), (OBJ, 2), (1, 1), (OBJ, 1), (0, 0), (OBJ, 0), (1, 0)];
 /// Bits a pixel of each background has, by mode; 0 where the mode has no such background or a later step draws it.
-const DEPTHS: [[u8; 4]; 8] = [[2, 2, 2, 2], [4, 4, 2, 0], [4, 4, 0, 0], [8, 4, 0, 0], [8, 2, 0, 0], [0; 4], [0; 4], [0; 4]];
+const DEPTHS: [[u8; 4]; 8] = [[2, 2, 2, 2], [4, 4, 2, 0], [4, 4, 0, 0], [8, 4, 0, 0], [8, 2, 0, 0], [4, 2, 0, 0], [4, 0, 0, 0], [0; 4]];
+/// Mode 6: one background.
+const MODE6: [(usize, u16); 6] = [(OBJ, 3), (0, 1), (OBJ, 2), (OBJ, 1), (0, 0), (OBJ, 0)];
 /// A line-buffer entry whose low 8 bits are a direct colour and bits 10-12 its palette bits, not a CGRAM index.
 const DIRECT: u16 = 0x4000;
 
@@ -339,6 +369,9 @@ impl Ppu {
         if next == 225 && !self.forced_blank() {
             self.reload_oam();
         }
+        if next == 225 && !self.skip {
+            self.present();
+        }
         // The overflow flags clear at the end of V-Blank, but not in forced blank (fullsnes, STAT77).
         if next == 0 && !self.forced_blank() {
             self.range_over = false;
@@ -353,6 +386,26 @@ impl Ppu {
                 self.mosaic_size = (self.regs[0x06] >> 4) + 1;
             }
         }
+    }
+
+    /// The finished frame becomes the picture: 512 wide if a line of it was hi-res, else every other pixel of the
+    /// canvas, which is the 256-wide picture exactly.
+    fn present(&mut self) {
+        if self.wide {
+            self.frame.copy_from_slice(&self.canvas);
+            self.frame_width = 2 * WIDTH as u16;
+        } else {
+            for (out, pair) in self.frame.chunks_exact_mut(4).zip(self.canvas.chunks_exact(8)) {
+                out.copy_from_slice(&pair[..4]);
+            }
+            self.frame_width = WIDTH as u16;
+        }
+        self.wide = false;
+    }
+
+    /// The presented picture: `frame_width` by 224 pixels of RGBA.
+    pub fn picture(&self) -> &[u8] {
+        &self.frame[..self.frame_width as usize * HEIGHT * 4]
     }
 
     /// The sprites of picture line `line`, chosen during the line before it as anomie's "SPRITES" describes: the
@@ -459,12 +512,13 @@ impl Ppu {
         if self.skip || !(1..=HEIGHT as u16).contains(&line) {
             return;
         }
-        let row = (line as usize - 1) * WIDTH * 4;
+        let row = (line as usize - 1) * 2 * WIDTH * 4;
         let brightness = (self.regs[0] & 0x0F) as u32;
         if self.forced_blank() || brightness == 0 {
             for x in from..to {
-                let at = row + x as usize * 4;
-                self.frame[at..at + 3].fill(0);
+                let at = row + x as usize * 8;
+                self.canvas[at..at + 3].fill(0);
+                self.canvas[at + 4..at + 7].fill(0);
             }
             return;
         }
@@ -473,13 +527,27 @@ impl Ppu {
             let c = (c as u32 & 31) * (brightness + 1) / 16;
             ((c << 3) | (c >> 2)) as u8
         };
-        for x in from..to {
-            let colour = self.compose(x);
-            let at = row + x as usize * 4;
-            self.frame[at] = scale(colour);
-            self.frame[at + 1] = scale(colour >> 5);
-            self.frame[at + 2] = scale(colour >> 10);
+        // Modes 5 and 6 and SETINI's pseudo-hi-res show the sub screen's pixel left of the main's (anomie, "Mode 5").
+        let hires = self.hires();
+        self.wide |= hires;
+        if from == 0 {
+            self.before = Mix::default();
         }
+        for x in from..to {
+            let mix = self.mix(x);
+            let left = if hires { self.sub_half_pixel(x, self.before) } else { mix.colour };
+            self.before = mix;
+            let at = row + x as usize * 8;
+            for (at, colour) in [(at, left), (at + 4, mix.colour)] {
+                self.canvas[at] = scale(colour);
+                self.canvas[at + 1] = scale(colour >> 5);
+                self.canvas[at + 2] = scale(colour >> 10);
+            }
+        }
+    }
+
+    fn hires(&self) -> bool {
+        matches!(self.regs[0x05] & 7, 5 | 6) || self.regs[0x33] & 0x08 != 0
     }
 
     /// Each background's pixels from `from` to `to` into its line buffer, for the layers either screen shows;
@@ -497,7 +565,14 @@ impl Ppu {
             let blocks = mosaic & (1 << bg) != 0;
             let row = if blocks { line - self.mosaic_row as u16 } else { line };
             self.fill_row(bg, mode, row, from, to);
-            if blocks && size > 1 {
+            if blocks && matches!(mode, 5 | 6) {
+                // In true hi-res a block's first half-pixel, a sub-screen one, fills both screens' (fullsnes, "Hires Notes").
+                for x in from..to {
+                    let first = (x - x % size) as usize;
+                    self.bg_sub_line[bg][x as usize] = self.bg_sub_line[bg][first];
+                    self.bg_line[bg][x as usize] = self.bg_sub_line[bg][first];
+                }
+            } else if blocks && size > 1 {
                 for x in from..to {
                     let first = x - x % size;
                     self.bg_line[bg][x as usize] = self.bg_line[bg][first as usize];
@@ -514,10 +589,16 @@ impl Ppu {
         while x < to {
             let (hofs, vofs) = self.scroll(bg, mode, x);
             let px = x.wrapping_add(hofs);
-            self.decode_chunk(bg, mode, px & !7, line.wrapping_add(vofs), &mut chunk);
             let first = (px & 7) as usize;
             let n = (8 - first).min((to - x) as usize);
             let at = x as usize;
+            if matches!(mode, 5 | 6) {
+                let mut sub = [0u16; 8];
+                self.decode_chunk_hires(bg, mode, px & !7, line.wrapping_add(vofs), &mut chunk, &mut sub);
+                self.bg_sub_line[bg][at..at + n].copy_from_slice(&sub[first..first + n]);
+            } else {
+                self.decode_chunk(bg, mode, px & !7, line.wrapping_add(vofs), &mut chunk);
+            }
             self.bg_line[bg][at..at + n].copy_from_slice(&chunk[first..first + n]);
             x += n as u16;
         }
@@ -527,7 +608,7 @@ impl Ppu {
     /// holds for the visible tile X is in (anomie's "Mode 2" and "Mode 4"; D-16).
     fn scroll(&self, bg: usize, mode: u8, x: u16) -> (u16, u16) {
         let (mut hofs, mut vofs) = (self.hofs[bg], self.vofs[bg]);
-        if !matches!(mode, 2 | 4) || bg > 1 {
+        if !matches!(mode, 2 | 4 | 6) || bg > 1 {
             return (hofs, vofs);
         }
         let tile = (x + (hofs & 7)) >> 3;
@@ -554,7 +635,9 @@ impl Ppu {
     /// A background's map entry for the point (px, py) of its plane (anomie, "Tile Maps and Character Maps").
     fn map_entry(&self, bg: usize, px: u16, py: u16) -> u16 {
         let shift = if self.regs[0x05] & (0x10 << bg) != 0 { 4 } else { 3 };
-        let (tx, ty) = (px >> shift, py >> shift);
+        // Modes 5 and 6 take tiles 16 half-pixels wide whatever the size bit says, which is 8 pixels (anomie).
+        let across = if matches!(self.regs[0x05] & 7, 5 | 6) { 3 } else { shift };
+        let (tx, ty) = (px >> across, py >> shift);
         let sc = self.regs[0x07 + bg];
         let screen = match sc & 3 {
             0 => 0,
@@ -580,37 +663,70 @@ impl Ppu {
         if entry & 0x8000 != 0 {
             fy = size - 1 - fy;
         }
-        let tile = ((entry & 0x3FF) + (fx >> 3) + ((fy >> 3) << 4)) & 0x3FF;
         let depth = DEPTHS[mode as usize][bg] as u16;
+        let words = self.tile_row(bg, depth, (entry & 0x3FF) + (fx >> 3) + ((fy >> 3) << 4), fy);
+        for (i, o) in out.iter_mut().enumerate() {
+            let bit = if hflip { i as u16 } else { 7 - i as u16 };
+            *o = self.encode(bg, mode, depth, entry, &words, bit);
+        }
+    }
+
+    /// Modes 5 and 6: the tile is 16 half-pixels wide, two tiles side by side; the even half-pixels are the sub
+    /// screen's and the odd ones the main's (anomie, "Mode 5").
+    fn decode_chunk_hires(&self, bg: usize, mode: u8, px0: u16, py: u16, main: &mut [u16; 8], sub: &mut [u16; 8]) {
+        let size = if self.regs[0x05] & (0x10 << bg) != 0 { 16u16 } else { 8 };
+        let entry = self.map_entry(bg, px0, py);
+        let hflip = entry & 0x4000 != 0;
+        let mut fy = py & (size - 1);
+        if entry & 0x8000 != 0 {
+            fy = size - 1 - fy;
+        }
+        let depth = DEPTHS[mode as usize][bg] as u16;
+        let tile = (entry & 0x3FF) + ((fy >> 3) << 4);
+        let pair = [self.tile_row(bg, depth, tile, fy), self.tile_row(bg, depth, tile + 1, fy)];
+        for half in 0..16u16 {
+            let column = if hflip { 15 - half } else { half };
+            let value = self.encode(bg, mode, depth, entry, &pair[(column >> 3) as usize], 7 - (column & 7));
+            if half & 1 == 0 {
+                sub[(half >> 1) as usize] = value;
+            } else {
+                main[(half >> 1) as usize] = value;
+            }
+        }
+    }
+
+    /// The words of one row of a tile's bitplanes, two planes a word.
+    fn tile_row(&self, bg: usize, depth: u16, tile: u16, fy: u16) -> [u16; 4] {
         let nba = (self.regs[0x0B + bg / 2] >> (4 * (bg & 1))) as u16 & 0x0F;
-        let at = (nba << 12).wrapping_add(tile.wrapping_mul(4 * depth)).wrapping_add(fy & 7);
+        let at = (nba << 12).wrapping_add((tile & 0x3FF).wrapping_mul(4 * depth)).wrapping_add(fy & 7);
         let mut words = [0u16; 4];
         for (plane, w) in words.iter_mut().enumerate().take(depth as usize / 2) {
             *w = self.vram[(at.wrapping_add(8 * plane as u16) & 0x7FFF) as usize];
         }
+        words
+    }
+
+    /// One pixel of a tile row as a line-buffer entry: 0 if transparent, else its priority and CGRAM index, or its
+    /// direct colour.
+    fn encode(&self, bg: usize, mode: u8, depth: u16, entry: u16, words: &[u16; 4], bit: u16) -> u16 {
+        let mut colour = 0;
+        for (plane, w) in words.iter().enumerate().take(depth as usize / 2) {
+            colour |= (((w >> bit) & 1) | (((w >> (bit + 8)) & 1) << 1)) << (2 * plane);
+        }
+        if colour == 0 {
+            return 0;
+        }
         let palette = (entry >> 10) & 7;
         let high = 0x8000 | (((entry >> 13) & 1) << 8);
         // A 256-colour background's pixel is a colour itself in direct colour mode, with the palette bits (anomie).
-        let direct = depth == 8 && self.regs[0x30] & 1 != 0;
-        let base = match depth {
-            2 if mode == 0 => bg as u16 * 0x20 + palette * 4,
-            2 => palette * 4,
-            4 => palette * 16,
-            _ => 0,
-        };
-        for (i, o) in out.iter_mut().enumerate() {
-            let bit = if hflip { i as u16 } else { 7 - i as u16 };
-            let mut colour = 0;
-            for (plane, w) in words.iter().enumerate().take(depth as usize / 2) {
-                colour |= (((w >> bit) & 1) | (((w >> (bit + 8)) & 1) << 1)) << (2 * plane);
-            }
-            *o = if colour == 0 {
-                0
-            } else if direct {
-                high | DIRECT | (palette << 10) | colour
-            } else {
-                high | (base + colour)
-            };
+        if depth == 8 && self.regs[0x30] & 1 != 0 {
+            return high | DIRECT | (palette << 10) | colour;
+        }
+        high | match depth {
+            2 if mode == 0 => bg as u16 * 0x20 + palette * 4 + colour,
+            2 => palette * 4 + colour,
+            4 => palette * 16 + colour,
+            _ => colour,
         }
     }
 
@@ -635,20 +751,28 @@ impl Ppu {
 
     /// The front-most pixel of the layers `enabled` shows and `masked` does not hide inside its window, as (colour,
     /// layer, CGRAM index), the layer 0-3 a background and 4 the sprites; None where all are transparent.
-    fn front(&self, enabled: u8, masked: u8, windows: u8, x: u16) -> Option<(u16, usize, u16)> {
+    fn front(&self, enabled: u8, masked: u8, windows: u8, x: u16, sub: bool) -> Option<(u16, usize, u16)> {
         let order: &[(usize, u16)] = match self.regs[0x05] & 7 {
             0 => &MODE0,
             1 if self.regs[0x05] & 0x08 != 0 => &MODE1_BG3_HIGH,
             1 => &MODE1,
-            2..=4 => &MODE2,
+            2..=5 => &MODE2,
+            6 => &MODE6,
             _ => &OBJ_ONLY,
         };
+        let halves = sub && matches!(self.regs[0x05] & 7, 5 | 6);
         for &(layer, priority) in order {
             let bit = 1 << layer;
             if enabled & bit == 0 || (masked & bit != 0 && windows & bit != 0) {
                 continue;
             }
-            let p = if layer == OBJ { self.obj_line[x as usize] } else { self.bg_line[layer][x as usize] };
+            let p = if layer == OBJ {
+                self.obj_line[x as usize]
+            } else if halves {
+                self.bg_sub_line[layer][x as usize]
+            } else {
+                self.bg_line[layer][x as usize]
+            };
             if p != 0 && (p >> 8) & 3 == priority {
                 let colour = if layer != OBJ && p & DIRECT != 0 {
                     // BBGGGRRR and the palette's bgr make Red=RRRr0, Green=GGGg0, Blue=BBb00 (anomie, "Direct Color Mode").
@@ -666,7 +790,13 @@ impl Ppu {
     /// One pixel of the picture: the main screen's front-most pixel, clipped to black and mathed with the sub screen
     /// or the fixed colour as the colour window and CGWSEL and CGADSUB say (fullsnes, "SNES PPU Color-Math"; anomie's
     /// "RENDERING THE SCREEN"; D-13).
+    #[cfg(test)]
     fn compose(&self, x: u16) -> u16 {
+        self.mix(x).colour
+    }
+
+    /// The six window masks at `x` as bits: backgrounds 1 to 4, the sprites, the colour window.
+    fn windows_at(&self, x: u16) -> u8 {
         let mut windows = 0u8;
         for (layer, (sel, logic)) in [
             (self.regs[0x23], self.regs[0x2A]),
@@ -683,7 +813,30 @@ impl Ppu {
                 windows |= 1 << layer;
             }
         }
-        let (main, layer, index) = self.front(self.regs[0x2C], self.regs[0x2E], windows, x).unwrap_or((self.cgram[0], 5, 0));
+        windows
+    }
+
+    fn fixed_colour(&self) -> u16 {
+        (self.fixed[0] as u16) | (self.fixed[1] as u16) << 5 | (self.fixed[2] as u16) << 10
+    }
+
+    /// Add or subtract by component, halved if asked, saturated.
+    fn blend(a: u16, b: u16, subtract: bool, half: bool) -> u16 {
+        let mut out = 0;
+        for shift in [0, 5, 10] {
+            let (m, s) = ((a >> shift) & 31, (b >> shift) & 31);
+            let mut c = if subtract { m.saturating_sub(s) } else { m + s };
+            if half {
+                c >>= 1;
+            }
+            out |= c.min(31) << shift;
+        }
+        out
+    }
+
+    fn mix(&self, x: u16) -> Mix {
+        let windows = self.windows_at(x);
+        let (main, layer, index) = self.front(self.regs[0x2C], self.regs[0x2E], windows, x, false).unwrap_or((self.cgram[0], 5, 0));
         let cgwsel = self.regs[0x30];
         let cgadsub = self.regs[0x31];
         let colour_window = windows & 0x20 != 0;
@@ -698,28 +851,32 @@ impl Ppu {
         // Only sprites with palettes 4 to 7 take part (fullsnes, CGADSUB).
         let takes_part = if layer == OBJ { index >= 0xC0 && cgadsub & 0x10 != 0 } else { cgadsub & (1 << layer) != 0 };
         if region(cgwsel >> 4) || !takes_part {
-            return main;
+            return Mix { colour: main, before: main, clip, ..Mix::default() };
         }
-        let fixed = (self.fixed[0] as u16) | (self.fixed[1] as u16) << 5 | (self.fixed[2] as u16) << 10;
-        let (sub, sub_backdrop) = if cgwsel & 2 != 0 {
-            match self.front(self.regs[0x2D], self.regs[0x2F], windows, x) {
-                Some((c, _, _)) => (c, false),
-                None => (fixed, true),
+        let (sub, math, sub_backdrop) = if cgwsel & 2 != 0 {
+            match self.front(self.regs[0x2D], self.regs[0x2F], windows, x, true) {
+                Some((c, _, _)) => (c, 2, false),
+                None => (self.fixed_colour(), 1, true),
             }
         } else {
-            (fixed, false)
+            (self.fixed_colour(), 1, false)
         };
+        let subtract = cgadsub & 0x80 != 0;
         let half = cgadsub & 0x40 != 0 && !clip && !sub_backdrop;
-        let mut out = 0;
-        for shift in [0, 5, 10] {
-            let (m, s) = ((main >> shift) & 31, (sub >> shift) & 31);
-            let mut c = if cgadsub & 0x80 != 0 { m.saturating_sub(s) } else { m + s };
-            if half {
-                c >>= 1;
-            }
-            out |= c.min(31) << shift;
+        Mix { colour: Self::blend(main, sub, subtract, half), math, before: main, clip, subtract, half }
+    }
+
+    /// The sub screen's half-pixel at `x` on a hi-res line: its front-most pixel over colour 0 (fullsnes, "Hires
+    /// Notes"), clipped and mathed as the main pixel before it was (anomie; D-19).
+    fn sub_half_pixel(&self, x: u16, before: Mix) -> u16 {
+        let windows = self.windows_at(x);
+        let raw = self.front(self.regs[0x2D], self.regs[0x2F], windows, x, true).map_or(self.cgram[0], |p| p.0);
+        let raw = if before.clip { 0 } else { raw };
+        match before.math {
+            0 => raw,
+            1 => Self::blend(raw, self.fixed_colour(), before.subtract, before.half),
+            _ => Self::blend(raw, before.before, before.subtract, before.half),
         }
-        out
     }
 }
 
@@ -796,7 +953,7 @@ mod tests {
             p.write(r, v, blank());
         }
         p.vram[0x0400] = 0x0000;
-        let at = |p: &Ppu, x: usize| [p.frame[x * 4], p.frame[x * 4 + 1], p.frame[x * 4 + 2]];
+        let at = |p: &Ppu, x: usize| [p.canvas[x * 8], p.canvas[x * 8 + 1], p.canvas[x * 8 + 2]];
         p.write(0x2C, 0x00, Beam { line: 1, dot: FIRST_DOT + 100, ..Beam::default() });
         p.end_line(1, 2);
         assert_eq!(at(&p, 0), [0xFF, 0, 0]);
@@ -953,5 +1110,51 @@ mod tests {
         // Mode 4 reads one entry: bit 15 makes it the vertical offset.
         p.vram[0x1000] = 0x8000 | 0x2000 | 0x48;
         assert_eq!(p.scroll(0, 4, 5), (3, 0x48));
+    }
+
+    // anomie's "Mode 5": a tile is 16 half-pixels wide, the even ones the sub screen's and the odd ones the main's.
+    #[test]
+    fn a_hi_res_tile_gives_its_even_half_pixels_to_the_sub_screen() {
+        let mut p = Ppu::default();
+        p.regs[0x05] = 5;
+        p.regs[0x0B] = 0x01;
+        // BG1's map entry 0 is tile 0; tile 0's row lights half-pixels 0 and 3, tile 1's row half-pixel 8 (its bit 7).
+        p.vram[0x1000] = 0b1001_0000;
+        p.vram[0x1010] = 0b1000_0000;
+        let (mut main, mut sub) = ([0u16; 8], [0u16; 8]);
+        p.decode_chunk_hires(0, 5, 0, 0, &mut main, &mut sub);
+        assert_eq!((sub.map(|v| v & 0xFF), main.map(|v| v & 0xFF)), ([1, 0, 0, 0, 1, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0]));
+        // Flipped, half-pixel h shows column 15-h: columns 0, 3 and 8 land on half-pixels 15, 12 and 7.
+        p.vram[0] = 0x4000;
+        p.decode_chunk_hires(0, 5, 0, 0, &mut main, &mut sub);
+        assert_eq!((sub.map(|v| v & 0xFF), main.map(|v| v & 0xFF)), ([0, 0, 0, 0, 0, 0, 1, 0], [0, 0, 0, 1, 0, 0, 0, 1]));
+    }
+
+    // fullsnes: both screens show colour 0 behind them in hi-res; anomie: the sub half-pixel is mathed as the main
+    // pixel before it was (D-19).
+    #[test]
+    fn the_sub_half_pixel_takes_colour_0_and_the_math_of_the_main_pixel_before() {
+        let mut p = Ppu::default();
+        p.regs[0x05] = 1;
+        p.regs[0x33] = 0x08;
+        p.regs[0x2C] = 0x01;
+        p.regs[0x2D] = 0x02;
+        p.cgram[0] = 0x0421;
+        p.cgram[1] = 10;
+        p.cgram[2] = 6 << 5;
+        p.bg_line[0] = [0x8001; WIDTH];
+        p.bg_line[1][1] = 0x8002;
+        assert!(p.hires());
+        let none = Mix::default();
+        assert_eq!((p.sub_half_pixel(0, none), p.sub_half_pixel(1, none)), (0x0421, 6 << 5));
+        // Main plus sub, halved: the main pixel at 0 adds the fixed colour (the sub screen is clear there), at 1 BG2.
+        p.regs[0x30] = 0x02;
+        p.regs[0x31] = 0x41;
+        p.fixed = [4, 0, 0];
+        let (first, second) = (p.mix(0), p.mix(1));
+        assert_eq!((first.math, first.colour, second.math, second.colour), (1, 14, 2, 5 | 3 << 5));
+        assert_eq!(p.sub_half_pixel(1, first), 4 | 6 << 5);
+        // Colour 0 (1, 1, 1) plus the main pixel before math (10, 0, 0), halved.
+        assert_eq!(p.sub_half_pixel(2, second), 5);
     }
 }

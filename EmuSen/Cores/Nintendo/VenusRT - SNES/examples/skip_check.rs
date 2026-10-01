@@ -22,7 +22,7 @@ fn main() {
             println!("PARTED frame {frame} offset {at}\t{path}");
             std::process::exit(1);
         }
-        lit += drawn.sys.ppu.frame.chunks_exact(4).any(|px| px[..3] != [0, 0, 0]) as u32;
+        lit += drawn.sys.ppu.picture().chunks_exact(4).any(|px| px[..3] != [0, 0, 0]) as u32;
     }
     println!("same {frames} frames, {lit} with a picture\t{path}");
 }

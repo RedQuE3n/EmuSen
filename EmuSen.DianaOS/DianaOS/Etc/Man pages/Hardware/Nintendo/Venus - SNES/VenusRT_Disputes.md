@@ -479,3 +479,21 @@ their data.
   console's as its comment lists them, `3F 55 55 00 14 7E 00 00`, and the V counter latched after the DMA is the
   console's `$36`; the H counter is `$D4` against its `$CE`, inside the test's four lines of latitude.
 
+### D-19. Hi-res: colour math reaches the sub screen's half-pixels through the main pixel before them
+- Opened: 2026-10-01, at stage 3 step 5, by the documents before the hi-res code. fullsnes, "BGMODE": "Mode 5/6 don't
+  support screen addition/subtraction"; its "Hires and Pseudo 3-Layer Math" says COLDATA's addition applies to both
+  screens' half-pixels. anomie's register document, "Color Math": "In hires modes, color math is applied to the
+  visible subscreen pixels as well ... look at the previous main-screen pixel ... If no math was applied to that
+  pixel, don't math this subscreen pixel either. If the fixed color was added/subtracted, add/subtract the fixed
+  color. And if a pixel from the subscreen was added/subtracted, add/subtract that main-screen pixel (the original
+  value before math). What happens to the subscreen pixel at the left edge of the screen is unknown"; and for the
+  colour window, "we use the previous main-screen pixel to determine whether the color window effect should be
+  applied to a subscreen pixel".
+- Test ROM: PeterLemon's four `HiColor64PerTileRowPseudoHiRes` ROMs use pseudo-hi-res with the sub screen and
+  colour math; they are the measure, through Mesen's picture.
+- Referee: not read. Mesen's source: none.
+- Conclusion: anomie's rule, which is a procedure where fullsnes has a sentence; the fixed colour's case is common to
+  both. The left edge's sub half-pixel is taken as unmathed and unclipped, his unknown. Argued; the four ROMs'
+  result is recorded when measured.
+- Pinned by: nothing yet.
+

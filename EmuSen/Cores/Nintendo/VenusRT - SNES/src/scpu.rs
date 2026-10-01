@@ -529,18 +529,27 @@ mod tests {
         for i in 0..4 {
             s.wram[0x100 + i] = 0x10 + i as u8;
         }
-        for (r, v) in [(0x4300u32, 0x00u8), (0x4301, 0x80), (0x4302, 0x00), (0x4303, 0x01), (0x4304, 0x7E), (0x4305, 4), (0x4306, 0), (0x2181, 0x00), (0x2182, 0x02), (0x2183, 0)] {
+        // To OAM's port: WRAM cannot be DMA's source and, through $2180, its destination at once (D-18).
+        for (r, v) in [(0x2100u32, 0x80u8), (0x4300, 0x00), (0x4301, 0x04), (0x4302, 0x00), (0x4303, 0x01), (0x4304, 0x7E), (0x4305, 4), (0x4306, 0)] {
             s.write(r, v, pin::VDA);
         }
         s.write(0x420B, 1, pin::VDA);
         let before = s.timing.clock;
         s.idle(0, 0);
-        assert_eq!(s.wram[0x200], 0);
+        assert_eq!(s.ppu.oam[1], 0);
         s.idle(0, 0);
-        assert_eq!(&s.wram[0x200..0x204], &[0x10, 0x11, 0x12, 0x13]);
+        assert_eq!(&s.ppu.oam[0..4], &[0x10, 0x11, 0x12, 0x13]);
         let paused = s.timing.clock - before - 12;
         assert!((48..=48 + 14).contains(&paused), "{paused}");
         assert_eq!((s.io[0x305], s.io[0x306], s.io[0x302], s.io[0x303]), (0, 0, 0x04, 0x01));
+        // The same bytes to WRAM's own port: the count runs out and nothing arrives, the port's address unmoved.
+        for (r, v) in [(0x4301u32, 0x80u8), (0x4302, 0x00), (0x4305, 4), (0x2181, 0x00), (0x2182, 0x02), (0x2183, 0)] {
+            s.write(r, v, pin::VDA);
+        }
+        s.write(0x420B, 1, pin::VDA);
+        s.idle(0, 0);
+        s.idle(0, 0);
+        assert_eq!((&s.wram[0x200..0x204], s.wram_address, s.io[0x305]), (&[0u8; 4][..], 0x200, 0));
     }
 
     #[test]

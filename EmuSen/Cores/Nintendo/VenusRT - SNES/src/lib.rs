@@ -4,6 +4,7 @@
 //! Stage 0: the machine is a stub with the memories and the state format, so that the runners and the build have an
 //! engine to drive. No part of the console is emulated yet.
 
+pub mod cpu;
 pub mod ffi;
 pub mod machine;
 pub mod state;

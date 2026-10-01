@@ -2,6 +2,7 @@
 //! cycle. The corpus is found through `EMUSEN_VENUSRT_CORPUS`; absent, the corpus tests pass unrun.
 //! See VenusRT_Native.md §2.3 for the protocol, the capped cases and the controls.
 
+pub mod cpu65816;
 pub mod spc700;
 pub mod w65816;
 

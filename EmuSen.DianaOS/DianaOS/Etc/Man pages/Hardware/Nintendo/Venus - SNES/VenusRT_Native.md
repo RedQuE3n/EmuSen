@@ -379,3 +379,106 @@ itself is the player's dump or the SNESdev wiki's description, a question for st
   says nothing yet.
 - The runner has no engine for Pharaoh's traces or Hotaru's dumps (plan §4.8), which stage 9 decides.
 - The speed budget of the plan's §5.5 is not re-measured: no timing was taken at stage 0.
+
+---
+
+## 10. Stage 1, step 1: the 65816's data instructions (2026-09-30)
+
+### 10.1 What it built
+
+`src/cpu/`: the 65C816's registers, flags, the M and X widths, emulation mode and the rules it imposes (M and X
+forced, the stack in page 1, the indexes' high bytes cleared with X set), the decode, every data addressing mode, and
+these instruction groups: loads, stores (STA, STX, STY, STZ), transfers (with XBA and XCE), the flag instructions
+(with REP and SEP), add and subtract in binary and decimal, the compares, the logic group with BIT, the
+read-modify-write group (shifts, rotates, INC, DEC, TSB, TRB, on the accumulator and on memory) and the index
+increments. Written from WDC's W65C816S datasheet (March 13, 2024; fetched into the corpus's `docs/wdc/` and pinned),
+whose Table 5-7 lists every cycle of every mode with its address and pins, and from anomie's wrapping document (194)
+for the bank and page carries; decimal mode from the arithmetic as Bruce Clark's tutorial states it; fullsnes for its
+notes on wrapping and the dummy write; the suite's own README for its pins. Nothing else was read. The remaining 44 opcodes (§10.7) set `unimplemented` and do nothing.
+
+### 10.2 The interface the stage-2 bus implements
+
+`cpu::Bus` has three calls, one per cycle: `read(address, pins)`, `write(address, value, pins)` and
+`idle(address, pins)`. The pins are VDA, VPA, VPB, MLB, E, M and X as one byte; RWB is which call it is. The CPU knows
+nothing of time: the bus decides what each cycle costs (6, 8 or 12 master clocks, or 6 for an internal cycle) and
+advances the master clock by it, which is §5.2's design. The CPU is generic over the bus, so each call is a direct,
+inlinable call with no boxing and no table (§10.5 prices it).
+
+**One write is not a memory write.** In emulation mode the modify cycle of a read-modify-write instruction is a write
+with VDA low (Table 5-7's cycle with VDA 0 and VPA 0, and note 17: RWB low). The single-step suite records it so, with
+the old value on the data bus and RAM unselected. fullsnes says the 65C816 does not reproduce the 6502's dummy write
+(its "CPU Glitches"). The two agree once VDA is read: the cycle drives RWB low but selects no memory. The stage-2 bus
+therefore treats a write without VDA as an internal cycle (argued; stage 2 checks it against a ROM if one exists).
+
+### 10.3 Decimal mode
+
+ADC adds digit by digit, adding 6 to a digit above 9 and carrying; V is taken from the sum before the top digit's
+adjustment. SBC subtracts digit by digit, subtracting 6 from a digit that borrowed; V and C are the binary
+subtraction's and the last borrow's. *Measured:* these passed every decimal case of the suite on the first run, in
+both widths and both modes, including the cases with digits above 9, which the suite draws at random.
+
+### 10.4 The grade, by group (measured 2026-09-30)
+
+`singlestep::cpu65816::tests::the_cpu_through_the_whole_suite`, every case of all 512 files, 3.3 s on six threads. A
+case passes when its registers, its listed memory and its whole cycle list (address, data and all eight pins) match.
+
+| Group | Native mode | Emulation mode |
+|---|---|---|
+| load (LDA, LDX, LDY) | 250,000 / 250,000 | 250,000 / 250,000 |
+| store (STA, STX, STY, STZ) | 240,000 / 240,000 | 240,000 / 240,000 |
+| transfer (with XBA, XCE) | 140,000 / 140,000 | 140,000 / 140,000 |
+| flag (with REP, SEP, NOP) | 100,000 / 100,000 | 100,000 / 100,000 |
+| add/subtract (ADC, SBC) | 300,000 / 300,000 | 300,000 / 300,000 |
+| compare (CMP, CPX, CPY) | 210,000 / 210,000 | 210,000 / 210,000 |
+| logic (ORA, AND, EOR, BIT) | 500,000 / 500,000 | 500,000 / 500,000 |
+| read-modify-write, index increments | 380,000 / 380,000 | 380,000 / 380,000 |
+| **implemented, all** | **2,120,000** | **2,120,000** |
+| later steps (44 opcodes) | 0 / 440,000 | 0 / 440,000 |
+
+The test fails if any implemented group falls below all of its cases. None of the suite's three known quirks
+(§2.3) touches these groups: WAI and STP, MVN and MVP are later steps, and the SPC700's valueless reads are the other
+suite's. A fourth reading was needed, and like the other three it is about the file format:
+
+4. **Emulation-mode cases start with a stack high byte no 65816 can hold.** Every `.e` case's initial S has a random
+   high byte, and every final S has `$01` there. On the first run every emulation-mode file failed on that alone. The
+   harness now loads S as an emulation-mode 65816 holds it, `$01` and the low byte. *Measured:* the first failure of
+   `ff.e.json` on the first run was `s: got F638 want 138`, which is word for word the failure §3.5 of the plan quotes
+   from Pharaoh's run of C# Venus. So the 238 emulation-mode files Venus failed there are, at least in the first
+   failure each shows, the harness adapter's loading rather than Venus's CPU (argued from the identical value; Venus
+   was not rerun with the loading changed, which would need its internals).
+
+**The two failures that remained after the first runs**, and what fixed them:
+
+- The emulation-mode modify cycle was first written with VDA high, so it wrote RAM; all 380,000 read-modify-write
+  emulation cases failed on the cycle's pins (§10.2).
+- One case, `e1 e 8669`, read a direct-page pointer's second byte from the wrong page. That is dispute D-1 in
+  `VenusRT_Disputes.md`, settled for (d,X) at the documents and left open for (d) and (d),Y, which the suite never
+  exercises.
+
+### 10.5 The CPU's own cost (measured 2026-09-30)
+
+`examples/cpu_cost.rs`: the CPU over a flat 64 KiB bus whose only work is to add 8 master clocks an access and 6 an
+internal cycle, through a straight-line program of implemented opcodes with random operands that wraps within its
+bank (REP, SEP and XCE left out, so the widths stay as drawn). Three runs of 3 s each under the timing lock, load
+average 0.9: **3.85–3.87 ns a bus cycle, 14.7–14.8 ns an instruction**. At the program's 7.66 master clocks a cycle,
+an NTSC frame's 357,368 master clocks are about 46,700 cycles, or **0.18 ms**: the first number against §5.5's 0.8 ms
+budget for the CPU, the bus and DMA together. *Not covered:* the real bus's decode and its events, which stage 2 adds
+to every call; branches and calls, which change the instruction mix; and any game's mix. No optimisation was done.
+
+### 10.6 The clone check (measured 2026-09-30)
+
+`clonecheck.py` over VenusRT's sources (11 files) against Mesen's `Core/SNES` (164 files), with the vocabulary of
+fullsnes, anomie's documents, the datasheet's text and the other Rust cores: **no pair shares 12 fingerprints, no
+table of eight literals is shared, and no identifier of Mesen's beyond the vocabulary's is used.** The largest pair
+below the threshold shares 4 fingerprints (`cpu/mod.rs`), the same as the calibration's unplanted negative (§4.2).
+Convergence on documented behaviour was expected, and at this threshold none showed; the tool's limits of §4.2 apply.
+
+### 10.7 What is left of stage 1
+
+The 44 opcodes: the branches (nine relative, BRL), the jumps and calls (JMP in four modes, JML, JSR in two, JSL, RTS,
+RTL), the stack (PHA, PHX, PHY, PHB, PHD, PHK, PHP and their pulls, PEA, PEI, PER), BRK, COP and RTI with the hardware
+interrupt sequence, MVN and MVP under the suite's cycle cap, WAI and STP with their halted cycles, and WDM; then
+gilyon's `cputest-full` on a minimal bus with the VRAM port only, the plan's other stage-1 oracle. *Predicted:* the
+first step took about a third of its budget, so these fit in one more step, and stage 1 takes two steps against the
+plan's four; P3's estimate for stage 1 is retired at its end.
+

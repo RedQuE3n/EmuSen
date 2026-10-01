@@ -111,18 +111,18 @@ namespace EmuSen.WiseMan.Fixtures.Snes
             using var m = new VenusMachine(File.ReadAllBytes(rom));
             var shots = new List<SnesSnapshot>();
             var sound = new List<short>();
-            int frame = 0;
             foreach (int target in frames.Order())
             {
-                while (frame < target)
+                // The machine's own count: a DMA longer than a frame is one step, and one Advance then ends two frames on.
+                while (m.TotalFrames < target)
                 {
+                    int frame = (int)m.TotalFrames;
                     uint mask = 0;
                     foreach (var b in SnesEngine.Buttons) if (SnesEngine.Held(presses, b, frame)) mask |= 1u << (int)b;
                     m.SetButtons(0, mask, 0xFFF);
                     m.Advance();
                     short[] s = m.DrainAudio(int.MaxValue);
                     if (audio) sound.AddRange(s);
-                    frame++;
                 }
                 var mem = SnesEngine.Spaces.ToDictionary(n => n, n => m.ReadSpace(n));
                 var info = m.FrameInfo;

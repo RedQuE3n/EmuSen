@@ -482,3 +482,154 @@ gilyon's `cputest-full` on a minimal bus with the VRAM port only, the plan's oth
 first step took about a third of its budget, so these fit in one more step, and stage 1 takes two steps against the
 plan's four; P3's estimate for stage 1 is retired at its end.
 
+---
+
+## 11. Stage 1, step 2: the rest of the 65816 (2026-09-30)
+
+### 11.1 What it built
+
+`src/cpu/control.rs`: the 44 remaining opcodes, from Table 5-7 and the datasheet's §7: the branches and BRL; JMP in
+its four modes, JML, JSR in two, JSL, RTS, RTL; the pushes and pulls, PEA, PEI and PER, with the emulation-mode stack
+of the 6502 for the old opcodes and the 16-bit addressing of S for the 65816's own (§7.1's list, with PLB added by
+D-3), S put back in page 1 after each; BRK, COP and RTI, and RTI's pulled P applied only after its last pull, which is
+when the suite's pins show it; MVN and MVP, one repetition a step with the opcode fetched again; WAI and STP; WDM, which
+skips its second byte without reading it. `Cpu::interrupt` is the hardware sequence of row 22a for RESET, ABORT, NMI
+and IRQ, which the machine calls between instructions when it takes a line: the dropped opcode fetch, an internal
+cycle, PC (not advanced) pushed with the bank in native mode and P with B clear in emulation mode, the vector read
+with VPB; a reset reads the stack instead of writing it and conditions the registers as §2.25 lists, and any
+interrupt ends WAI. Four unit tests pin those sequences, which the single-step suite does not exercise.
+
+**The bus gained `halted`**, a cycle in which WAI or STP holds the processor. A halted CPU's `step` is one such cycle.
+The suite records exactly one after the instruction's three; the harness steps WAI and STP, like the block moves,
+until the case's cycle count is reached.
+
+### 11.2 Three readings of the datasheet, and a fourth source
+
+The datasheet's §7, which step 1 had not read, says which direct modes leave the page in emulation mode (§7.2) and
+which opcodes leave the stack's page (§7.1). Both disagreed with the single-step suite in places, which opened D-1
+again and opened D-2 and D-3. gilyon's `cputest-full`, a test ROM written for exactly these behaviours (its README
+names two of them as undocumented: PLB at S=$01FF and (d,X) with DL nonzero), then settled D-1 and D-3 at the
+protocol's second rung. It also answers the question whether a new opcode could settle D-1's (d) and (d),Y cases:
+**PEI could not**, because §7.2 names PEI as an exception (the suite's one crossing PEI case carries, as §7.2 says);
+**the ROM did**, with 26 tests of (d) and (d),Y in emulation mode with DL zero, all wrapping within the page.
+
+| Entry | Rule | Settled by | Single-step cases left as named exceptions |
+|---|---|---|---|
+| D-1 | (d,X)'s pointer wraps within its page in emulation mode whatever DL is; (d) and (d),Y wrap with DL zero; [d], [d],Y and PEI carry | gilyon `cputest-full`, 64 tests | 265: every emulation-mode (d,X) case whose pointer starts at a page's last byte |
+| D-2 | JMP (a,X) and JSR (a,X) read their pointer with VPA, as Table 5-7 gives | open; unobservable on the SNES bus (argued) | 40,000: the two pointer reads' VDA and VPA |
+| D-3 | JSR (a,X) and PLB address S in 16 bits in emulation mode | gilyon `cputest-full`, tests 0277 and 03D9 | 43 JSR (a,X) cases at S=$0100, inside D-2's |
+
+### 11.3 The grade, by group (measured 2026-09-30)
+
+All 512 files, 5,120,000 cases, registers, memory and every cycle; the test takes about 18 s on six threads with the
+exceptions' files graded a second time:
+
+| Group | Native | Emulation |
+|---|---|---|
+| load | 250,000 / 250,000 | 249,972 / 250,000 (D-1) |
+| store | 240,000 / 240,000 | 239,968 / 240,000 (D-1) |
+| transfer | 140,000 / 140,000 | 140,000 / 140,000 |
+| flag (with REP, SEP, NOP, WDM) | 110,000 / 110,000 | 110,000 / 110,000 |
+| add/subtract | 300,000 / 300,000 | 299,922 / 300,000 (D-1) |
+| compare | 210,000 / 210,000 | 209,970 / 210,000 (D-1) |
+| logic | 500,000 / 500,000 | 499,903 / 500,000 (D-1) |
+| read-modify-write, index increments | 380,000 / 380,000 | 380,000 / 380,000 |
+| branch | 100,000 / 100,000 | 100,000 / 100,000 |
+| jump, call, return | 80,000 / 100,000 (D-2) | 80,000 / 100,000 (D-2, D-3) |
+| stack (with PEA, PEI, PER) | 160,000 / 160,000 | 160,000 / 160,000 |
+| BRK, COP, RTI | 30,000 / 30,000 | 30,000 / 30,000 |
+| block move (MVN, MVP) | 20,000 / 20,000 | 20,000 / 20,000 |
+| WAI, STP | 20,000 / 20,000 | 20,000 / 20,000 |
+| **All** | **2,540,000 / 2,560,000** | **2,539,735 / 2,560,000** |
+
+**5,079,735 pass and 40,265 fail, and the 40,265 are exactly the named exceptions.**
+`the_cpu_through_the_whole_suite` checks that case by case: each exception must fail, every other case of its file
+must pass, and D-2's files must pass in full once the two pointer reads' VDA and VPA are exchanged. So no failure is
+unexplained, and none is hidden in a group's total. The suite's quirks, as the harness treats them:
+- WAI and STP: stepped until the case's cycle count, the halted cycle compared (all 40,000 pass);
+- MVN and MVP: stepped whole repetitions; the 39,989 capped cases compared on their 100 cycles only, the 11 that
+  finish compared on everything (all 40,000 pass);
+- unlisted dummy reads: an SPC700 matter, not this suite's;
+- the emulation-mode stack high byte: loaded as the chip holds it (§10.4).
+
+### 11.4 C# Venus's emulation-mode result, read again (argued)
+
+Plan §3.5 records C# Venus passing 275,938 of 2,560,000 emulation-mode cases through Pharaoh's runner, with 238 of 256
+files failing, the first failures showing "the stack's high byte kept rather than forced (s: got F638 want 138)", and
+the cause not examined. *Argued:* the failures are most likely the adapter's loading of the suite's initial S, not
+Venus's CPU. The evidence:
+- every emulation-mode case of the suite starts with a random stack high byte, which no 65816 in emulation mode can
+  hold, and ends with $01 there (§10.4, reading 4);
+- VenusRT's own harness, before it loaded S as the chip holds it, failed `ff.e.json` first with `s: got F638 want 138`,
+  the identical values;
+- once S was loaded so, every emulation-mode case of the groups then implemented passed.
+
+Not covered: Venus was not rerun with the loading changed, because that needs its internals (plan §1.2), so the share of
+its 238 files that would still fail is unknown. Its gilyon failure at test 0024, `adc ($EF,x)`, is a separate matter:
+that is a D-1 case, decided by the ROM, and says Venus's (d,X) rule differs from the hardware's.
+
+### 11.5 gilyon's CPU tests (measured 2026-09-30)
+
+`cputest::gilyons_cpu_tests_on_the_minimal_bus`: the CPU over a bus with only what the ROM uses. That is LoROM, WRAM
+and the VRAM port ($2115 to $2119) the ROM writes its text through; $4210's vblank flag on a frame of 357,368 master
+clocks, which `wait_for_vblank` polls; and $4212 and $4218 for the press it waits for after a failure. Its DMA only
+clears and fills VRAM, so it is left out, and every other register reads 0 and drops writes. The grader reads the
+text the plan's §3.1 describes (word $0032, `Success` or `Failed`; word $006E, the test number). When the ROM asks
+for a key after a failure, the runner records the number and presses A, so that one run lists every failing test.
+
+| ROM | Tests | Before the rulings | Now |
+|---|---|---|---|
+| `cputest-basic` | 452 | all pass, 112 frames | all pass, 112 frames |
+| `cputest-full` | 649 | 13 fail: 0027, 0074, 015F, 0194, 0216, 02CC, 0397, 046F, 04E0, 0518, 05D2, 0621, all `(d,X)` with DL nonzero, and 03D9, `plb` | all pass, 162 frames |
+
+C# Venus fails both (at 0024 and 02BD) and Mesen passes both (plan §3.5).
+
+### 11.6 The clone check, over the whole CPU (measured 2026-09-30)
+
+13 files of VenusRT against Mesen's 164 in `Core/SNES`, with gilyon's sources added to the vocabulary: **no pair
+shares 12 fingerprints and no table is shared.** The largest pair below the threshold shares 4 (`cpu/mod.rs`), the
+calibration's negative level. Two of Mesen's identifiers that are in neither the documents nor the other cores are
+also VenusRT's, `nmiflag` (the minimal bus's field in `cputest.rs`) and `softwareinterrupt` (a method in
+`cpu/control.rs`). Both are ordinary names for what they name: the datasheet calls BRK and COP software interrupts,
+and $4210's bit is the NMI flag in fullsnes (whose spelling, "NMI Flag", the vocabulary does not fold into one word).
+They are recorded here as the reading list §4.2 says the names signal is, not as findings.
+
+### 11.7 The cost, with branches and calls in the mix (measured 2026-09-30)
+
+`examples/cpu_cost.rs` now runs every opcode but REP, SEP, XCE, WAI and STP, and the block moves unless asked for
+(a move counts as one instruction a repetition). A random program with branches falls into loops that the host's
+predictors learn, so the program restarts at a pseudo-random address every 32 instructions; a store that writes WAI
+or STP into the program is counted and cleared (about 0.18 per cent of instructions). Three runs of 3 s under the
+timing lock, load average 0.9: **1.33–1.36 ns a bus cycle, 8.0–8.2 ns an instruction, 6.0 cycles an instruction**, so an
+NTSC frame's cycles cost **0.062–0.063 ms** against §5.5's 0.8 ms for the CPU, the bus and DMA.
+
+**The number moved, and the cause was not found.** Step 1 recorded 3.85 ns a cycle (§10.5). A build of step 1's
+commit, timed interleaved with this one under the lock, reproduces 3.83–3.86 ns; this build runs step 1's own mix
+(its opcodes only, straight-line) at 1.47 ns. So the same kind of program costs 2.6 times less on this build. The
+two builds differ in what the opcode dispatch's last arm does: an assignment in step 1, a call into the control
+instructions now. That this changed how LLVM compiled the dispatch is argued, not measured. Optimisation is on hold,
+so it was not pursued. What it does show: at this stage a single number for the CPU's cost is a statement about one
+build's code generation as much as about the design. The budget is checked again at stage 2 with the real bus, and
+that check, not this one, is what §5.5 needs.
+
+### 11.8 Stage 1 is complete
+
+The 65816 is complete: every opcode, every addressing mode and the interrupt sequence. It passes all 5,120,000
+single-step cases but the named exceptions, and both of gilyon's CPU ROMs in full. Stage 1 took two steps against the
+plan's four. P3 is not retired, because the plan predicted stages 3 and 5, not this one, as the likely overruns.
+
+**Stage 2's first step**, the bus and the memory map:
+- the cartridge header, its scoring, and LoROM and HiROM with their mirrors and SRAM;
+- WRAM and its port ($2180 to $2183);
+- the access speeds (6, 8 or 12 master clocks by region and $420D's FastROM bit);
+- the open bus, the MDR;
+- the I/O registers' decode;
+- the scheduler's master clock that every `Bus` call advances;
+- the write without VDA of §10.2 treated as an internal cycle;
+- `halted` cycles while WAI waits.
+
+Its oracles are gilyon's `cputest-full` on the real bus in place of the minimal one, the single-step suite unchanged
+through the real bus where it can be (flat memory is the suite's model, so only the CPU tests carry over), and the
+memory-mapping tests of the higan collection (`memtest`). DMA, HDMA, NMI, IRQ, the multiply and divide unit and the
+auto-joypad follow in stage 2's later steps.
+

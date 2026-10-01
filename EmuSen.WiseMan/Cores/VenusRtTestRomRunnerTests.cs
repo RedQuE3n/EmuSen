@@ -166,6 +166,35 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // The corpus over C# Venus and Mesen, graded by each suite's protocol, against the committed baseline table.
+        // Opt-in: each game in EMUSEN_VENUSRT_GAMES against Mesen every tenth frame, and where each space and the picture first part.
+        [Fact]
+        public void The_games_pictures_and_spaces_against_Mesen()
+        {
+            string? dir = Environment.GetEnvironmentVariable("EMUSEN_VENUSRT_GAMES");
+            string? root = SnesTestRomCorpus.Root;
+            if (dir is null || root is null || !MesenProbeSnesEngine.Available)
+            {
+                _output.WriteLine("EMUSEN_VENUSRT_GAMES, the corpus or the probe unset, not run");
+                return;
+            }
+            var frames = Enumerable.Range(1, 60).Select(i => i * 10).ToArray();
+            var mesen = new MesenProbeSnesEngine(Path.Combine(root, "runs", "mesen"));
+            var table = new List<string> { "game\tmesen_lit\tvenusrt_lit\tvram\tcgram\toam\tpicture\tat_600" };
+            foreach (string rom in Directory.GetFiles(dir).Order(StringComparer.Ordinal))
+            {
+                SnesRun theirs = mesen.Run(rom, frames), ours = new VenusRtSnesEngine().Run(rom, frames);
+                var d = SnesDifferential.Compare(ours, theirs, SnesDifferential.MesenRowOffset);
+                static string Lit(SnesRun r) => r.Snapshots.FirstOrDefault(s => s.Picture is { } p && p.Pixels.Any(x => (x & 0x7FFF) != 0))?.Frame.ToString() ?? "never";
+                string First(Func<SnesFrameDiff, int> n) => d.FirstOrDefault(f => n(f) != 0)?.Frame.ToString() ?? "never";
+                var last = d[^1];
+                table.Add(string.Join('\t', Path.GetFileName(rom), Lit(theirs), Lit(ours), First(f => f.SpaceBytes.GetValueOrDefault("vram")), First(f => f.SpaceBytes.GetValueOrDefault("cgram")),
+                    First(f => f.SpaceBytes.GetValueOrDefault("oam")), First(f => f.PixelsDiffering),
+                    $"vram {last.SpaceBytes.GetValueOrDefault("vram")}B cgram {last.SpaceBytes.GetValueOrDefault("cgram")}B oam {last.SpaceBytes.GetValueOrDefault("oam")}B picture {last.PixelsDiffering}/{last.PixelsCompared}px"));
+            }
+            foreach (string line in table) _output.WriteLine(line);
+            if (Environment.GetEnvironmentVariable(ReportVariable) is { } report) File.WriteAllLines(report, table);
+        }
+
         [Fact]
         public void The_corpus_reproduces_the_recorded_baseline()
         {
@@ -224,20 +253,22 @@ namespace EmuSen.WiseMan.Cores
                         var v = SnesTestRomGrader.Grade(path, run);
                         cells.Add(v.Outcome.ToString());
                         cells.Add(v.SelfGraded || v.Outcome == SnesOutcome.Done ? $"{v.Protocol} {v.Detail}".Trim() : "");
-                        var against = runs.Count == 2 ? SnesDifferential.Compare(run, runs[1]).LastOrDefault() : null;
-                        cells.Add(against is null ? "n/a" : against.SpaceBytes.GetValueOrDefault("vram") == 0 ? "same" : $"{against.SpaceBytes["vram"]}B");
+                        var against = runs.Count == 2 ? SnesDifferential.Compare(run, runs[1], SnesDifferential.MesenRowOffset).LastOrDefault() : null;
+                        foreach (string space in new[] { "vram", "cgram", "oam" })
+                            cells.Add(against is null ? "n/a" : against.SpaceBytes.GetValueOrDefault(space) == 0 ? "same" : $"{against.SpaceBytes[space]}B");
+                        cells.Add(against is null || against.PixelsCompared == 0 ? "n/a" : against.PixelsDiffering == 0 ? "same" : $"{against.PixelsDiffering}px");
                     }
                     catch (Exception e)
                     {
                         cells.Add("Threw");
                         cells.Add(e.GetType().Name);
-                        cells.Add("n/a");
+                        cells.AddRange(new[] { "n/a", "n/a", "n/a", "n/a" });
                     }
                 }
                 rows[rom.Md5] = string.Join('\t', cells);
             });
 
-            string header = "md5\trom\tsuite\tvenus\tvenus_detail" + (mesen ? "\tmesen\tmesen_detail\tvram_last\tmesen_vram" : "") + (venusRt ? "\tvenusrt\tvenusrt_detail\tvenusrt_vram" : "");
+            string header = "md5\trom\tsuite\tvenus\tvenus_detail" + (mesen ? "\tmesen\tmesen_detail\tvram_last\tmesen_vram" : "") + (venusRt ? "\tvenusrt\tvenusrt_detail\tvenusrt_vram\tvenusrt_cgram\tvenusrt_oam\tvenusrt_picture" : "");
             string table = header + "\n" + string.Join("\n", roms.Select(r => rows[r.Md5])) + "\n";
             if (Environment.GetEnvironmentVariable(ReportVariable) is { } report) File.WriteAllText(report, table);
 

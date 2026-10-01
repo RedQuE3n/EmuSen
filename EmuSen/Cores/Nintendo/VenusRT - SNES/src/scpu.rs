@@ -26,6 +26,8 @@ pub struct Devices {
     pub rddiv: u16,
     pub rdmpy: u16,
     pub math: Math,
+    /// The unit's internal shifter: WRMPYB moving left for a product, WRDIVB moving right for a quotient.
+    pub shifter: u32,
     pub math_step: u8,
     /// The step the write that started the unit does not take.
     pub math_fresh: bool,
@@ -296,37 +298,36 @@ impl System {
         }
     }
 
-    /// One CPU cycle's step of the multiply or divide unit, which the CPU clock drives (fullsnes): the multiplier's
-    /// bits from the lowest, the quotient's from the highest, the partial values readable throughout.
+    /// One CPU cycle's step of the unit, which the CPU clock drives (fullsnes), between a read's sampling and a write's
+    /// latch in the same cycle, as jonasquinn's `muldiv_tests` notes and timing tests describe it: a product adds the shifter to RDMPY when RDDIV's low bit is set and shifts RDDIV right; a quotient
+    /// shifts the divisor right, takes it from RDMPY when it fits and shifts the bit into RDDIV.
     pub(crate) fn math_tick(&mut self) {
         if self.dev.math_fresh {
             self.dev.math_fresh = false;
             return;
         }
-        match self.dev.math {
-            Math::Idle => {}
+        let d = &mut self.dev;
+        match d.math {
+            Math::Idle => return,
             Math::Multiply => {
-                let s = self.dev.math_step;
-                if self.dev.wrmpyb & (1 << s) != 0 {
-                    self.dev.rdmpy = self.dev.rdmpy.wrapping_add((self.dev.wrmpya as u16) << s);
+                if d.rddiv & 1 != 0 {
+                    d.rdmpy = d.rdmpy.wrapping_add(d.shifter as u16);
                 }
-                self.dev.math_step += 1;
-                if self.dev.math_step == 8 {
-                    self.dev.math = Math::Idle;
-                }
+                d.shifter <<= 1;
+                d.rddiv >>= 1;
             }
             Math::Divide => {
-                let bit = 15 - self.dev.math_step as u32;
-                let divisor = self.dev.wrdivb as u32;
-                if (self.dev.rdmpy as u32 >> bit) >= divisor {
-                    self.dev.rdmpy = (self.dev.rdmpy as u32 - (divisor << bit)) as u16;
-                    self.dev.rddiv |= 1 << bit;
+                d.shifter >>= 1;
+                let fits = d.rdmpy as u32 >= d.shifter;
+                if fits {
+                    d.rdmpy = (d.rdmpy as u32 - d.shifter) as u16;
                 }
-                self.dev.math_step += 1;
-                if self.dev.math_step == 16 {
-                    self.dev.math = Math::Idle;
-                }
+                d.rddiv = (d.rddiv << 1) | fits as u16;
             }
+        }
+        d.math_step += 1;
+        if d.math_step == if d.math == Math::Multiply { 8 } else { 16 } {
+            d.math = Math::Idle;
         }
     }
 
@@ -385,21 +386,24 @@ impl System {
             0x4202 => self.dev.wrmpya = value,
             0x4203 => {
                 self.dev.wrmpyb = value;
-                self.dev.rddiv = value as u16;
                 self.dev.rdmpy = 0;
-                self.dev.math = Math::Multiply;
-                self.dev.math_step = 0;
-                self.dev.math_fresh = true;
+                if self.dev.math != Math::Multiply {
+                    self.dev.rddiv = (value as u16) << 8 | self.dev.wrmpya as u16;
+                    self.dev.shifter = value as u32;
+                    self.dev.math = Math::Multiply;
+                    self.dev.math_step = 0;
+                }
             }
             0x4204 => self.dev.wrdiv = (self.dev.wrdiv & 0xFF00) | value as u16,
             0x4205 => self.dev.wrdiv = (self.dev.wrdiv & 0x00FF) | (value as u16) << 8,
             0x4206 => {
                 self.dev.wrdivb = value;
                 self.dev.rdmpy = self.dev.wrdiv;
-                self.dev.rddiv = 0;
-                self.dev.math = Math::Divide;
-                self.dev.math_step = 0;
-                self.dev.math_fresh = true;
+                if self.dev.math != Math::Divide {
+                    self.dev.shifter = (value as u32) << 16;
+                    self.dev.math = Math::Divide;
+                    self.dev.math_step = 0;
+                }
             }
             0x4207 => self.timing.htime = (self.timing.htime & 0x100) | value as u16,
             0x4208 => self.timing.htime = (self.timing.htime & 0xFF) | ((value as u16 & 1) << 8),

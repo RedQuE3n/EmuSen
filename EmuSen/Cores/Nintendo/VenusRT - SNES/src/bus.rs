@@ -300,9 +300,9 @@ impl Bus for System {
         }
         let clocks = self.speed(address);
         self.clock_cycle(clocks);
+        self.math_tick();
         self.mdr = value;
         self.write_value(address, value);
-        self.math_tick();
     }
 
     #[inline]

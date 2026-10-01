@@ -163,6 +163,7 @@ impl Machine {
                 w.u16(n, v);
             }
             w.u8("Math", d.math as u8);
+            w.u32("Shifter", d.shifter);
             w.u8("MathStep", d.math_step);
             w.bool("MathFresh", d.math_fresh);
             for (n, v) in [("DmaPending", d.dma_pending), ("DmaWait", d.dma_wait), ("HdmaActive", d.hdma_active), ("HdmaTransfer", d.hdma_transfer)] {
@@ -242,6 +243,7 @@ impl Machine {
             2 => crate::scpu::Math::Divide,
             _ => crate::scpu::Math::Idle,
         };
+        d.shifter = r.u32()?;
         d.math_step = r.u8()?.min(16);
         d.math_fresh = r.bool()?;
         d.dma_pending = r.u8()?;
@@ -361,8 +363,8 @@ pub(crate) mod tests {
         let layout = m.layout();
         assert!(layout.starts_with("0 4 u32 Magic\n4 4 i32 Version\n8 2 u16 Cpu.A\n"), "{layout}");
         assert!(layout.contains(" u64 Timing.Clock\n") && layout.contains(" u8[1024] Bus.Io\n") && layout.contains(" u16[32768] Vram\n"), "{layout}");
-        assert_eq!(layout.lines().count(), 62, "{layout}");
-        assert_eq!(m.state_size(), 264_333);
+        assert_eq!(layout.lines().count(), 63, "{layout}");
+        assert_eq!(m.state_size(), 264_337);
         assert_eq!(&save(&m)[..4], b"VNRT");
     }
 

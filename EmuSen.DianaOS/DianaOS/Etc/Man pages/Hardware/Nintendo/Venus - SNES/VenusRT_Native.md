@@ -1030,3 +1030,201 @@ the backdrop, as a scanline renderer drawn in spans (plan §5.1), with the frame
 is Mesen's picture at standing frames on the 240p suite and PeterLemon's PPU ROMs, and the VRAM, CGRAM and OAM
 spaces of every ROM in §14.2's table.
 
+
+---
+
+## 15. Stage 3, step 1: the PPU's ports and the picture's backbone (2026-09-30)
+
+### 15.1 What it built
+
+`src/ppu.rs`, from fullsnes's PPU sections and anomie's register document, in place of stage 2's VRAM-port stub:
+
+- **VRAM** through `$2115`-`$2119` and `$2139`/`$213A`: VMAIN's step (1, 32 or 128 words, on the low or the high
+  byte) and its three translations (the low 8, 9 or 10 bits of the address rotated left by three); the read
+  prefetch, refilled from the address as it stood before the step, and taken again on a write to `$2116`/`$2117`.
+  Writes land only in V-Blank or forced blank (fullsnes: "All video memory can be accessed only during V-Blank, or
+  Forced Blank"); the address steps whether or not the write landed.
+- **CGRAM** through `$2121`, `$2122` and `$2138`/`$213B`, with the low byte held until the second write and bit 7 of
+  the second read byte from PPU2's open bus. **OAM** through `$2102`-`$2104` and `$2138`: the 9-bit reload value and
+  the 10-bit address, the low table written in pairs, the high table byte by byte, and the address reloaded at the
+  start of line 225 when not in forced blank and when forced blank ends during that line. CGRAM and OAM take writes at
+  any time; what the hardware does with OAM writes during display is not modelled (stage 3's sprite step).
+- **The counter latch**: `$2137` latches when WRIO (`$4201`) bit 7 is set, as a 1-to-0 write of that bit does; the
+  counters read low byte then high through `$213C`/`$213D`, with PPU2's open bus in the high byte's upper bits;
+  `$213F` returns the field, the latch flag, the region and version 3, and resets the high/low selectors, and the
+  latch flag only while WRIO bit 7 is set. The dot counts the line's two long dots (323 and 327, six clocks each). WRIO
+  is `$FF` at power-on.
+- **The two open-bus latches** of PPU1 and PPU2 (anomie's open-bus document), shown by the write-only addresses
+  that read as PPU1's and by the unused bits of `$213B`-`$213F`.
+- **The picture**, as plan §5.1's scanline renderer in spans. Each register write first draws the current line up to
+  the pixel of the write's dot (H=22 is the first visible pixel), from the registers as they stood; each line's end
+  draws the rest. A pixel is the frontmost opaque pixel of the enabled backgrounds in modes 0 and 1, in fullsnes's
+  priority chart (mode 1 with and without BG3's priority bit), or the backdrop: tile maps of 32 or 64 tiles a side,
+  8×8 and 16×16 tiles, both flips, 2 and 4 bits a pixel, mode 0's per-background palette offset, and the
+  two-write scroll registers. Forced blank is black; brightness N scales each 5-bit component to c×(N+1)/16 (D-7).
+  The frame, 256×224, is the interface's picture. **What it does not do**: a register write takes effect at its own
+  dot, with no per-register latency (the plan's "documented or disputed rule per register"; no document gives one for
+  these registers yet); sprites, windows, colour math, mosaic and modes 2 to 7 draw nothing.
+- **Drawing is apart from the machine.** The renderer reads the PPU's state and writes only the frame, which is not
+  part of the state; the line counter that tells the PPU of each line's end, the OAM reload and the latches run
+  whether or not the picture is drawn. `set_options` bit 0 skips the pixel writes and nothing else.
+- **The state is version 5**: a `Ppu` group of every port, latch and counter, then VRAM, CGRAM as 256 words, and
+  OAM; 264,449 bytes in 88 layout lines, pinned by `the_version_5_layout_is_pinned`.
+
+### 15.2 Skipping the picture never changes the machine (measured 2026-09-30)
+
+`a_skipped_picture_leaves_the_machine_as_a_drawn_one_does` runs a program that draws and feeds every readable PPU
+port back into VRAM, CGRAM, OAM and the scroll and brightness registers, twice, once skipping the picture, and
+compares the whole saved state after each of six frames. `examples/skip_check.rs` does the same for any ROM: over
+every image of the corpus and the nine bench games (304 images, 300 frames each) the two runs never part, 268 of the
+304 with a picture lit; over 3,600 frames of `inidisp_extend_vblank` likewise. This is P7 for stage 3 so far.
+
+### 15.3 D-6, the power-on phase (measured 2026-09-30)
+
+The H counter settles the measurement, not the dispute. Sour's `timing_test` prints four positions before it
+starts HDMA; every one is 32 dots, 128 master clocks, later in Mesen than in VenusRT, and `examples/power_phase.rs`,
+which moves VenusRT's power-on position, reproduces all four at 128 clocks and at no other offset tried.
+undisbeliever's `reset-position-test`, whose reset handler latches the counters first, prints OPHCT `$0015` on
+VenusRT and `$0035` in Mesen, the same 32 dots. No document gives the position and no ROM in the corpus records a
+console's result, so the rule stays fullsnes's start at H=0, V=0 and Mesen's offset an observation. The full
+argument, and the two console readings that would settle it, are in `VenusRT_Disputes.md` D-6. Over 1,200 frames of
+all 304 images, moving the phase changes the text left in VRAM in eight images and the verdict of no
+self-grading test.
+
+### 15.4 The pictures against Mesen (measured 2026-09-30)
+
+Mesen through the probe and VenusRT at frame 300, compared over 256×224 with Mesen's rows offset by 7 (§3); a
+ROM's features are read from VenusRT's registers at that frame.
+
+| Set | ROMs | Using only this step's features | Of those, equal to Mesen |
+|---|---|---|---|
+| PeterLemon's PPU ROMs | 47 | 9 | 8 |
+| the 240p suite (NTSC and PAL) | 2 | 0 (sprites) | — |
+
+The eight equal ones: the four `8x8BGnMap2BPP32x328PAL`, `GreenSpace`, `RedSpaceHDMA`, `RedSpaceIndirectHDMA` and
+`Rings`, every pixel. The ninth, `RedSpace9BitHDMA`, pairs each line's backdrop colour with a brightness by HDMA;
+VenusRT follows fullsnes's formula on every line, and Mesen is one lower on 59 of 224 (D-7). The other 38 use
+modes 3, 5 or 7, sprites, windows, colour math, mosaic, pseudo-hi-res or interlace, the remaining PPU steps. **The 240p suite's
+menu differs from Mesen's in one 54×101 region**, x 177 to 230 and y 80 to 180, which is its sprite character;
+the rest of the screen, three backgrounds in mode 1, is equal.
+
+### 15.5 The corpus again (measured 2026-09-30)
+
+The runner gained VenusRT columns for CGRAM, OAM and the picture at the last frame. The VRAM table of §13.3 and
+§14.6, by family, on the 176 ROMs with no verdict whose VRAM stands still in Mesen:
+
+| Family | ROMs | VRAM equal, step 3 of stage 2 | Now | CGRAM equal | OAM equal | Picture equal |
+|---|---|---|---|---|---|---|
+| HDMA | 36 | 36 | 36 | 30 | 36 | 12 |
+| DMA | 30 | 26 | 27 | 28 | 30 | 26 |
+| IRQ | 14 | 13 | 14 | 7 | 14 | 7 |
+| NMI | 4 | 4 | 4 | 1 | 4 | 1 |
+| joypad | 3 | 2 | 2 | 3 | 3 | 1 |
+| Sour's | 2 | 0 | 0 | 2 | 2 | 0 |
+| `memtest` | 1 | 1 | 1 | 1 | 1 | 1 |
+| the rest | 86 | 66 | 81 | 82 | 82 | 34 |
+| **All** | **176** | **148** | **165** | **154** | **172** | **82** |
+
+C# Venus's VRAM equals Mesen's on 157. The eleven that still differ in VRAM: Sour's two, `test_dmatiming/demo`,
+`blip-autojoy-timing-test` and `reset-position-test`, which print latched counters (moving the power-on phase by D-6's 128
+clocks changes four of the five, and makes none of them equal); `test_speed`, `test_timer_speed3` and `wrmpyb-in-flight`, which print timings; `cx4test`, a
+Cx4 cartridge (stage 5); `hvdma`, ten words written by HDMA during H-blank with forced blank set and cleared around
+them, the ROM's own README describing what a console shows; and `test_dma`, below. The self-grading verdicts are as
+at stage 2: 37 of Mesen's 92.
+
+Of the 176, **116 use only this step's features at their last frame and 79 of those are equal to Mesen** in every
+pixel. The 37 that are not are mostly not the PPU's:
+
+- **28 ROMs grade themselves through the backdrop**, colour 0 blue (`$7C00`) for a pass and red (`$001F`) for a
+  failure: byuu's `snestest_082506`, and the `blobs`, `nmi_irq`, `test_dmavalid`, `test_mdrhdma` and other folders of
+  the same collection. The runner's protocols do not read it, so they count as visual, and VRAM equal to Mesen hid
+  their verdicts. **Mesen passes all 28; VenusRT passes 11 and fails 17**, IRQ, NMI, HDMA and DMA tests, at either
+  power-on phase. The first of them read, `test_nmi`, stops at its test 1 on an NMI taken one instruction early;
+  its header records the console's timing of the NMI line, which neither document gives, and that is D-8. These are
+  stage 2's behaviours, seen for the first time because there is now a picture. Teaching the runner this protocol
+  would move the recorded baseline of all three engines, and was left for the step that re-records it.
+- `hdma_midframe/demo` shows a red backdrop where Mesen's is black, `test_noise` a grey one level brighter on a
+  third of the screen, `inidisp_brightness_delay` 30 pixels, the INIDISP early-read effect plan §5.1 accepts as a
+  span's loss (argued from its name); the two `hdmaen_latch_test` copies, `hdma-double-buffered-parallax`,
+  `test_hello`, Sour's and blargg's timing printers and `cx4test` make up the rest. Not read further.
+- `window-precalculated-single` and `-symmetrical` clip the main screen to black with the colour window, a feature
+  the tagging missed; windows are a later step.
+
+### 15.6 The leftover ROMs of stage 2 (measured 2026-09-30)
+
+| ROM | VRAM | CGRAM | OAM | Picture | Why |
+|---|---|---|---|---|---|
+| Sour's `timing_test`, two copies | 30 B, 28 B | equal | equal | 598, 526 px | the printed counters (D-6); sprites |
+| `test_dmatiming/demo` | 4 B | equal | equal | 77 px | two printed positions (D-6) |
+| `blip-autojoy-timing-test` | 37 B | equal | equal | 677 px | its plotted positions |
+| `hvdma` | 16 B | equal | equal | sprites | §15.5 |
+| `hvdma_max` | equal | equal | equal | equal | |
+| `test_dma` | 1 B | 128 B | equal | every pixel | its own verdict, a failure: DMA overlapping HDMA on the same channel |
+| `test_mdrhdma` (both) | equal | equal | equal | equal | runs now that `$213F` reads |
+
+### 15.7 Two defects of this step, and one of the runner's
+
+- **VRAM opened on line 0.** The first version let writes land on line 0 as well, on no document's authority.
+  `vram-mid-scanline-test`, whose writes begin as V-Blank ends, wrote 672 words that Mesen does not; with the
+  documents' rule its VRAM and picture equal Mesen's. Nothing else in the corpus moved. Plan §5.1 had listed this
+  ROM as a known loss of spans; it is not one.
+- **`$213F` cleared its latch flag on every read**; anomie's document clears it only while WRIO bit 7 is set.
+- **The runner counted calls, not frames.** A DMA longer than a frame (a 64 KiB fill is about 1.5 frames of bus time)
+  is one CPU step, so one `Advance` can end two frames on, and after 3,600 calls `inidisp_extend_vblank` was at
+  frame 3,602, compared with Mesen's 3,600. The runner now stops on the machine's own frame count. The examples that
+  run to a frame number by `total_frames` were never affected; stage 2's per-frame WRAM comparison of four games
+  (§13.5) counted calls and was not measured again.
+
+### 15.8 The four games (measured 2026-09-30)
+
+`The_games_pictures_and_spaces_against_Mesen` (opt-in through `EMUSEN_VENUSRT_GAMES`), every tenth frame to 600:
+
+| Game | Mesen's first picture | VenusRT's | First frame VRAM, CGRAM, OAM, picture differ | Why the picture parts |
+|---|---|---|---|---|
+| Super Mario World | 90 | none | 70, 90, 70, 90 | forced blank throughout: stalled on the sound CPU's stand-in |
+| A Link to the Past | 90 | 580 | 60, 60, 60, 90 | sprites only (TM `$10`) until 580; then colour math |
+| Super Metroid | 20 | none | 280, 250, 230, 20 | sprites only, then mode 7 |
+| Donkey Kong Country | 80 | none | 70, 80, never, 80 | forced blank throughout, as Super Mario World |
+
+No game's first picture uses only this step's features, so each parts from Mesen at the first frame it draws. The
+two that stall are stage 4's.
+
+### 15.9 The cost, and the PPU's share (measured 2026-09-30)
+
+`frame_cost`, best of three under the timing lock, load average 1.5, with the picture drawn and skipped:
+
+| ROM | Drawn, ms a frame | Skipped | The picture |
+|---|---|---|---|
+| gilyon `cputest-full` | 1.10 | 0.44 | 0.66 |
+| the slow-ROM loop (forced blank) | 0.40 | 0.38 | 0.03 |
+| the 240p suite's menu (three backgrounds) | 1.27 | 0.31 | 0.95 |
+| `Rings` | 1.42 | 0.42 | 0.99 |
+| `8x8BG1Map2BPP32x328PAL` (one background) | 1.05 | 0.44 | 0.61 |
+| Super Mario World (blank) | 0.43 | 0.40 | 0.03 |
+| A Link to the Past | 0.69 | 0.43 | 0.26 |
+| Super Metroid | 0.65 | 0.51 | 0.15 |
+| Donkey Kong Country (blank) | 0.60 | 0.58 | 0.02 |
+
+Against §5.5's split, 1.5 ms for the PPU on a plain cartridge: **backgrounds alone in modes 0 and 1 take 0.6 to 1.0
+ms, two thirds of it**, before sprites, windows, colour math and the other modes. The renderer works a pixel at a
+time, fetching each background's map entry and tile row again for every pixel; spans make a line with no mid-line
+write cost what a scanline costs, as the plan says, and the scanline itself is what is slow. Nothing was tuned, as
+decided. This is P1's first likely overrun, and it is recorded now so that the remaining steps are priced against
+it: at this rate the sprite and colour-math steps alone would take the PPU past its 1.5 ms. The skipped column is
+stage 2's cost (§14.7) to within a few hundredths: the span bookkeeping on each register write costs little.
+
+### 15.10 The clone check (measured 2026-09-30)
+
+18 files against Mesen's 164: no pair shares 12 fingerprints, no run of 8 literals is shared, `ppu.rs` shares no
+fingerprint with any Mesen file, and the largest pair below the threshold is still 4 (`cpu/mod.rs`). The names are
+the seven of §14.8 and two more, `cgramaddress` and `forcedblank`, fullsnes's own two-word terms run together.
+
+### 15.11 What is left of stage 3, and the next step
+
+Open: D-6 (the power-on phase), D-7 (brightness's rounding) and D-8 (the NMI line's time, stage 2's). The plan gives
+stage 3 eight steps; this was the first. The next, in the plan's order: **sprites and their evaluation** (OBSEL's
+sizes and base, the 32-sprite and 34-tile limits and `$213E`'s flags, which run when the picture is skipped,
+priority rotation, OAM writes during display), then windows and colour math with the sub screen, then modes 2 to 6
+with offset-per-tile and direct colour, mosaic, hi-res, pseudo-hi-res and interlace, then mode 7, then the PPU's
+read-side timing. Before the sprite step: D-8, implemented from `test_nmi`'s header and measured on the 17
+backdrop-graded ROMs and the CPU trace, and the backdrop protocol taught to the runner with the baseline re-recorded.

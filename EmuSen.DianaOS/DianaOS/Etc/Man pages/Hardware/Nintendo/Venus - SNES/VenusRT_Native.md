@@ -888,3 +888,145 @@ and did not explain:
 - D-4;
 - what `speed_test_v51` and `test_mdrhdma` wait for.
 
+---
+
+## 14. Stage 2, step 3: the traces, the scheduler, and what step 2 left open (2026-09-30)
+
+### 14.1 The CPU trace, and the stack byte
+
+The probe records every instruction Mesen's CPU executes in a 24-byte record: the address, the opcode, the
+registers and the instruction's master clocks (`EmuSen_Debugging_Tools_Reference_v5.md` §3.40). The machine can now
+write the same record (`Machine::trace`, `examples/cpu_trace.rs`), so the two engines are compared instruction by
+instruction, cost included. That is Mesen's output, read as any dump is.
+
+- **The stack byte of §13.5 was the stack pointer at power-on.** The first record differed: S was $01FF in Mesen and
+  $01FD in VenusRT. The datasheet's §2.25 leaves SL uninitialised at reset, and its reset sequence makes three stack
+  cycles; no SNES document gives S after reset. Both values are therefore within the documents, and the choice is a
+  power-on value like the RAM fill, not a rule. *Decided 2026-09-30:* power-on SL is $02, so S is $01FF after the
+  three decrements, and the engines are comparable from the first instruction. A reset later decrements from
+  wherever S stands.
+- **With that, the first 1,994 instructions of Super Mario World agree** in every register, and the clocks' running
+  total is identical at record 1,990: 50,222. 74 instructions' own costs differ before that, each time by the
+  refresh's 40 clocks landing in a different instruction, about 175 clocks earlier in Mesen. Super Metroid's 44th
+  instruction reads $4212 with the H-blank flag set in Mesen and clear here. One cause explains both, the CPU's
+  phase in line 0 at power-on, and it is D-6: open until the PPU's H-counter can separate a later start from an
+  earlier refresh.
+- **Where each game first parts from Mesen now**, by trace: Super Mario World at instruction 1,446 and A Link to
+  the Past at 32, where the sound CPU's boot signature is ready here at once and in Mesen only after its boot;
+  Donkey Kong Country at 494, on the acknowledge's timing; Super Metroid at 44, on D-6. Each is stage 4's or D-6's.
+  Donkey Kong Country's two bytes at $7E01FE are the same matter: pushes made at a different time.
+
+| Game | First WRAM difference (frame, bytes) | Bytes at frames 10, 30, 60, 120 |
+|---|---|---|
+| Super Mario World | 4, 1 | 2, 1, 1, 2,255 |
+| A Link to the Past | 30, 1 | 0, 1, 254, 3,038 |
+| Super Metroid | 5, 159 | 95, 4, 4, 4 |
+| Donkey Kong Country | 3, 2 | 16, 38, 0, 216 |
+
+### 14.2 The ROMs whose VRAM differed (measured 2026-09-30)
+
+VenusRT's and Mesen's VRAM words were set side by side for each of the nine.
+
+| ROM | What differs | Cause |
+|---|---|---|
+| `memtest` | the lower halves of banks $40-$6F read as ROM | **fixed**: step 1 mapped a ROM mirror there on no document's authority; fullsnes gives a LoROM cartridge only SRAM below $8000. VRAM now equals Mesen's |
+| Sour's `timing_test` (two copies) | every printed value | the PPU's latched H and V counters ($2137, $213C, $213D), read as open bus; stage 3 |
+| Sour's `dma_irq_test` | the picture it draws from those counters | stage 3 |
+| `test_dmatiming/demo` | two printed positions | the same counters; stage 3 |
+| `blip-autojoy-timing-test` | its plotted positions | the same counters; stage 3 |
+| `hvdma`, `hvdma_max` | words written by DMA in H-blank | VRAM's access rules during display; stage 3. Venus differs by the same bytes |
+| `test_dma` | one word | a VRAM read, which the port's stub lacks; stage 3 (argued). Venus differs by the same byte |
+
+None is DMA's, IRQ's or the joypad's own.
+
+### 14.3 The interrupt check, mid-frame HDMA, the IRQ's exclusions
+
+- **The check.** The bus keeps the NMI edge and the IRQ flag as each cycle found them, so that when an instruction
+  ends the machine has them as its final cycle found them, which is where anomie's document places the check. An
+  edge that arrives in the final cycle waits for the next instruction. After WAI the line that ended it is taken
+  without a further instruction.
+- **HDMA started mid-frame**, fullsnes's two cases: a channel enabled after V=0 is active at once, and transfers on
+  its first line only if an init ran this frame, that is, if any channel was enabled at V=0.
+- **The exclusions:** dot 153 raises no IRQ on the short line or on a frame's last line.
+
+*Measured after them:* the single-step suite is unchanged, 5,079,735 of 5,120,000 with the same 40,265 named
+exceptions; gilyon's two ROMs pass on the machine; the nine speed variants are within one pass of Mesen; the IRQ and
+NMI picture ROMs are as in §14.6. No ROM in the corpus was found that passes or fails on any of the three alone,
+which is a negative result: they are implemented from the documents and not yet pinned by an oracle.
+
+### 14.4 What the two silent ROMs wait for
+
+Not the sound CPU. `speed_test_v51` polls $3000, cartridge coprocessor space: it is an SA-1 test (stage 5).
+`test_mdrhdma` polls $213F bit 7, the PPU's field flag (stage 3). The games do wait on the sound CPU, so its ports
+have a stand-in for the boot ROM (fullsnes, "Uploader"): $BBAA until the CPU's $CC on port 0, then each port as last
+written. It is marked as stage 4's in the code and it answers at once, which no real sound CPU does (§14.1).
+
+### 14.5 D-4, the header's reset handler (measured 2026-09-30)
+
+Every candidate header of all 826 library files (scratch copies, removed after) was run from its reset vector for
+4,000 instructions under its own map. Of the candidates the fields reject, 819 crash (BRK, COP, STP or unmapped
+memory); of those they choose, 4. Counting I/O writes separates little by itself: 337 chosen handlers write fewer than
+8 registers in that time. The rule taken is the narrow one the data supports: when the fields' choice neither
+crashes nor writes more than one register, and another candidate does not crash and writes at least 4, the other is
+taken. **It changes one file of 826, Batman, to LoROM with map mode $00, which is Mesen's choice; 823 of 826 now
+agree with Mesen and none of the 822 moved.** The other three are D-5. The constants are calibrated on this library
+and on nothing else, and the entry says so.
+
+### 14.6 The oracle tables again
+
+| | Step 2 | Step 3 |
+|---|---|---|
+| Self-grading ROMs VenusRT passes, of Mesen's 92 | 37 | 37 |
+| Standing picture ROMs with VRAM equal to Mesen's, of 176 (Venus: 157) | 145 | 148 |
+
+By family: HDMA 36 of 36, DMA 26 of 30, IRQ 13 of 14, NMI 4 of 4, joypad 2 of 3, Sour's 0 of 2, `memtest` 1 of 1
+(after §14.2's fix; the corpus run before it counted 147), the rest 66 of 86. Every one that differs in the first
+seven families is in §14.2's table.
+
+### 14.7 The cost, and where it went
+
+**A profile first.** A ptrace sampler over Super Metroid's frames (5,816 samples, each attributed to its innermost
+inlined function through the binary's line tables) put 41 per cent of the time in the clock's `advance`, 17 in the
+HDMA check and 8 in the other checks made before each cycle: two thirds in bookkeeping repeated on every CPU cycle,
+against 7 in the CPU's own step and 11 in the memory decode.
+
+**That was a drift from the plan, and it is corrected.** §5.2 of the plan says "a scheduler holds the fixed events of
+a line (the DRAM refresh, HDMA initialisation and transfer points, the H/V IRQ comparators, auto-joypad reads, the
+NMI line) as master-clock times". Steps 1 and 2 instead asked on every cycle whether each event was due. The clock
+now keeps the line clock of its next event, the earliest of the line's pending events and its end; a cycle that ends
+before it only adds to the clock, and the checks are the slow path taken at an event. Following the plan's design is
+not tuning, and nothing else was changed for speed. *Measured:* 35 CPU traces (four games over 60 frames,
+`cputest-full`, thirty test ROMs) are byte-identical before and after, registers and each instruction's clocks.
+
+| ROM | Step 2, ms a frame | Now |
+|---|---|---|
+| the slow-ROM loop | 0.56 | 0.36 |
+| Super Mario World | 0.61 | 0.38 |
+| A Link to the Past | 0.60 | 0.40 |
+| gilyon `cputest-full` | 0.66 | 0.42 |
+| Super Metroid | 0.70 | 0.49 |
+| Donkey Kong Country | 0.73 | 0.55 |
+
+Best of three under the lock, load average 1.5. Against §5.5's 0.8 ms for the CPU, the bus and DMA, a third to a
+half is left. The profile after: the clock a quarter, the memory decode about 30 per cent, the CPU's step 11. The
+games still stall where they need the sound CPU, so these are not their real loads.
+
+### 14.8 The clone check
+
+17 files against Mesen's 164: no pair shares 12 fingerprints, no table is shared, and the largest pair below the
+threshold is back to 4 (`cpu/mod.rs`); `bus.rs`'s 6 went with the per-cycle checks. The same seven plain names.
+
+### 14.9 Stage 2 is complete, with what it leaves open
+
+Built and graded: the cartridge and its header, the bus, the master clock and its scheduled events, DMA and HDMA,
+NMI and IRQ, the multiply and divide unit, the joypads. Open, and named: D-2 (a pin), D-5 (map mode $32 without an
+S-DD1), D-6 (the power-on phase), and the three behaviours of §14.3, implemented from the documents with no oracle
+yet. The state is version 4.
+
+**Stage 3's first step**, the PPU: the registers and their ports with their real behaviour in place of the stubs
+(VRAM with VMAIN's remapping and its reads, CGRAM, OAM with its address reload, the H/V counter latch and $213F,
+which D-6, Sour's tests and `test_mdrhdma` wait for); then the picture's backbone, backgrounds in mode 0 and 1 and
+the backdrop, as a scanline renderer drawn in spans (plan §5.1), with the frame handed to the interface. Its oracle
+is Mesen's picture at standing frames on the 240p suite and PeterLemon's PPU ROMs, and the VRAM, CGRAM and OAM
+spaces of every ROM in §14.2's table.
+

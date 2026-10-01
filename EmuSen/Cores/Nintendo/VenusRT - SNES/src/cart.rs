@@ -207,9 +207,7 @@ impl Cartridge {
                 if !self.sram.is_empty() && (matches!(bank, 0x70..=0x7D) || bank >= 0xF0) {
                     return Some(Slot::Sram((((bank & 0x0F) << 15) | offset) & (self.sram.len() - 1)));
                 }
-                if bank & 0x7F >= 0x40 && bank & 0x7F < 0x70 {
-                    return Some(Slot::Rom(mirror(((bank & 0x7F) << 15) | offset, size)));
-                }
+                // Below $8000 a LoROM cartridge drives only its SRAM (fullsnes; jonasquinn's memtest agrees).
                 None
             }
             Map::HiRom | Map::ExHiRom => {
@@ -280,6 +278,8 @@ mod tests {
         assert_eq!(lo.decode(0x00_8000), Some(Slot::Rom(0)));
         assert_eq!(lo.decode(0x81_FFFF), Some(Slot::Rom(0xFFFF)));
         assert_eq!(lo.decode(0x00_1234), None);
+        assert_eq!(lo.decode(0x40_1234), None);
+        assert_eq!(lo.decode(0x40_8000), Some(Slot::Rom(0)));
         assert_eq!(lo.decode(0x70_0000), Some(Slot::Sram(0)));
         assert_eq!(lo.decode(0xF0_1FFF), Some(Slot::Sram(0x1FFF)));
         assert_eq!(lo.decode(0x70_2000), Some(Slot::Sram(0)));

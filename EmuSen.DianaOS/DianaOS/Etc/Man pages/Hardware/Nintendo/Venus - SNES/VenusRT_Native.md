@@ -1130,7 +1130,8 @@ C# Venus's VRAM equals Mesen's on 157. The eleven that still differ in VRAM: Sou
 clocks changes four of the five, and makes none of them equal); `test_speed`, `test_timer_speed3` and `wrmpyb-in-flight`, which print timings; `cx4test`, a
 Cx4 cartridge (stage 5); `hvdma`, ten words written by HDMA during H-blank with forced blank set and cleared around
 them, the ROM's own README describing what a console shows; and `test_dma`, below. The self-grading verdicts are as
-at stage 2: 37 of Mesen's 92.
+at stage 2: 37 of Mesen's 92. The corpus was run again after §15.7's `$213F` fix, and every VenusRT cell of all 295 rows
+was the same.
 
 Of the 176, **116 use only this step's features at their last frame and 79 of those are equal to Mesen** in every
 pixel. The 37 that are not are mostly not the PPU's:

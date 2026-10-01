@@ -30,6 +30,10 @@ impl Bus for Flat {
         self.clock += 6;
         self.calls += 1;
     }
+    fn halted(&mut self) {
+        self.clock += 6;
+        self.calls += 1;
+    }
 }
 
 fn main() {

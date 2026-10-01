@@ -59,10 +59,11 @@ impl Cpu {
         if self.page_wrapped() { ((self.d & 0xFF00) | (offset & 0xFF)) as u32 } else { self.d.wrapping_add(offset) as u32 }
     }
 
-    /// A direct-page pointer; its second byte carries across the page even when the index wrapped (D-1).
+    /// A (d), (d,X) or (d),Y pointer: its second byte stays in the page as the first did, the datasheet's §7.2 (D-1).
     fn pointer16<B: Bus>(&mut self, bus: &mut B, at: u32) -> u16 {
         let lo = self.read8(bus, at, 0) as u16;
-        lo | (self.read8(bus, (at + 1) & 0xFFFF, 0) as u16) << 8
+        let next = if self.page_wrapped() { (at & 0xFF00) | ((at + 1) & 0xFF) } else { (at + 1) & 0xFFFF };
+        lo | (self.read8(bus, next, 0) as u16) << 8
     }
 
     /// Note 4's cycle: indexing across a page, a write, or a 16-bit index; at the address before the carry.
@@ -439,7 +440,7 @@ impl Cpu {
                 self.settle();
             }
             0xEA => self.implied(bus),
-            _ => self.unimplemented = true,
+            _ => self.execute_control(bus, opcode),
         }
     }
 }

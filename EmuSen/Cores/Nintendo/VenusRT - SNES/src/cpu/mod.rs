@@ -2,7 +2,10 @@
 //! One call on the bus per cycle; the bus decides what a cycle costs. See VenusRT_Native.md §10.
 
 mod alu;
+mod control;
 mod ops;
+
+pub use control::Interrupt;
 
 /// The pins of a cycle, besides RWB, which the call's kind gives.
 pub mod pin {
@@ -33,6 +36,8 @@ pub trait Bus {
     fn read(&mut self, address: u32, pins: u8) -> u8;
     fn write(&mut self, address: u32, value: u8, pins: u8);
     fn idle(&mut self, address: u32, pins: u8);
+    /// A cycle in which WAI or STP holds the processor; the bus decides its length.
+    fn halted(&mut self);
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -48,7 +53,11 @@ pub struct Cpu {
     pub pc: u16,
     pub p: u8,
     pub e: bool,
-    /// The opcode is not one this stage implements.
+    /// WAI: halted until an interrupt line is taken.
+    pub waiting: bool,
+    /// STP: halted until reset.
+    pub stopped: bool,
+    /// The opcode is not one the core implements.
     pub unimplemented: bool,
 }
 
@@ -163,8 +172,12 @@ impl Cpu {
         }
     }
 
-    /// One instruction: the opcode fetch and everything it does.
+    /// One instruction: the opcode fetch and everything it does; a halted cycle while WAI or STP holds.
     pub fn step<B: Bus>(&mut self, bus: &mut B) {
+        if self.waiting || self.stopped {
+            bus.halted();
+            return;
+        }
         let opcode = bus.read(self.pc_address(), pin::VDA | pin::VPA | self.state_pins());
         self.pc = self.pc.wrapping_add(1);
         self.execute(bus, opcode);

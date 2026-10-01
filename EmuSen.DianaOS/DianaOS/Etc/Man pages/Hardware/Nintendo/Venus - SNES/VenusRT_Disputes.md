@@ -497,3 +497,22 @@ their data.
   result is recorded when measured.
 - Pinned by: nothing yet.
 
+### D-20. IRQ: a point past its line's end is not carried over the short line's end or a frame's
+- Opened: 2026-10-01, at stage 3 step 5, by `nmi_irq/demo_irq` (and `blobs/demo_irqtest`) failing at test 6's first
+  check, with interlace now built. With HTIME 339 the flag's point, anomie's 14+4×339 and the long dots, is past the
+  line's 1,364 clocks, and VenusRT raises the IRQ in the next line for the line before; it did so across the short
+  line and across the frame's end as well.
+- Documents read: anomie's timing document, "Interrupts": "no IRQ will trigger for dot 153 on the short scanline in
+  non-interlace mode, and no IRQ will trigger for dot 153 on the last scanline of any frame"; nothing on dot 339.
+  fullsnes, "Long and Short Scanlines": the short line has 340 dots of four clocks.
+- Test ROM: `demo_irq.asm`'s test 6 and its comment, the author's console results, as lists. Unlatchable: V=240,
+  H=339 without interlace on the frame with the field flag set; V=261, H=339 without interlace; V=262 without
+  interlace; H=340; V=263 with interlace; V=262 with interlace on the frame with the flag set. Latchable: V=240,
+  H=339 with interlace on the flagged frame; V=262 with interlace; H=339 on an ordinary line; V=261 without
+  interlace.
+- Referee: not read. Mesen's source: none.
+- Conclusion: the test's lists. A point past its line's end raises its IRQ in the next line, except after the short
+  line and after a frame's last line, where it is lost; the line counts are interlace's (263 lines on frames with
+  the flag clear). anomie's two dot-153 exclusions stay beside it. Argued from the test ROM's console results.
+- Pinned by: `demo_irq` in the corpus.
+

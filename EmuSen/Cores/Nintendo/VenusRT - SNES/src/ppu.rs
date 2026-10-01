@@ -48,6 +48,10 @@ pub struct Ppu {
     /// The current line's sprite pixels, 0 where none: the CGRAM index, and the OAM priority in bits 8-9, with
     /// bit 15 set. Drawing's alone; not part of the machine's state.
     pub obj_line: Box<[u16]>,
+    /// The four backgrounds' pixels for the current line, in the sprites' encoding; drawing's alone, like `obj_line`.
+    pub bg_line: Box<[[u16; WIDTH]; 4]>,
+    /// COLDATA's fixed colour, as red, green and blue.
+    pub fixed: [u8; 3],
 }
 
 impl Default for Ppu {
@@ -86,6 +90,8 @@ impl Default for Ppu {
             range_over: false,
             time_over: false,
             obj_line: vec![0; WIDTH].into(),
+            bg_line: Box::new([[0; WIDTH]; 4]),
+            fixed: [0; 3],
         }
     }
 }
@@ -180,6 +186,13 @@ impl Ppu {
                     self.oam[a as usize] = value;
                 }
                 self.oam_address = (a + 1) & 0x3FF;
+            }
+            0x32 => {
+                for (c, bit) in [(0, 0x20), (1, 0x40), (2, 0x80)] {
+                    if value & bit != 0 {
+                        self.fixed[c] = value & 0x1F;
+                    }
+                }
             }
             0x0D..=0x14 => {
                 let bg = (r - 0x0D) / 2;
@@ -431,13 +444,20 @@ impl Ppu {
         }
         let row = (line as usize - 1) * WIDTH * 4;
         let brightness = (self.regs[0] & 0x0F) as u32;
-        let blank = self.forced_blank() || brightness == 0;
+        if self.forced_blank() || brightness == 0 {
+            for x in from..to {
+                let at = row + x as usize * 4;
+                self.frame[at..at + 3].fill(0);
+            }
+            return;
+        }
+        self.fill_backgrounds(line, from, to);
+        let scale = |c: u16| -> u8 {
+            let c = (c as u32 & 31) * (brightness + 1) / 16;
+            ((c << 3) | (c >> 2)) as u8
+        };
         for x in from..to {
-            let colour = if blank { 0 } else { self.pixel(x, line) };
-            let scale = |c: u16| -> u8 {
-                let c = (c as u32 & 31) * (brightness + 1) / 16;
-                ((c << 3) | (c >> 2)) as u8
-            };
+            let colour = self.compose(x);
             let at = row + x as usize * 4;
             self.frame[at] = scale(colour);
             self.frame[at + 1] = scale(colour >> 5);
@@ -445,48 +465,51 @@ impl Ppu {
         }
     }
 
-    /// The main screen's colour at a pixel: the frontmost opaque sprite or background of modes 0 and 1, or the backdrop.
-    fn pixel(&self, x: u16, line: u16) -> u16 {
+    /// Each background's pixels from `from` to `to` into its line buffer, for the layers either screen shows.
+    fn fill_backgrounds(&mut self, line: u16, from: u16, to: u16) {
         let mode = self.regs[0x05] & 7;
-        let order: &[(usize, u16)] = match mode {
-            0 => &MODE0,
-            1 if self.regs[0x05] & 0x08 != 0 => &MODE1_BG3_HIGH,
-            1 => &MODE1,
-            _ => &OBJ_ONLY,
+        let layers = match mode {
+            0 => 4,
+            1 => 3,
+            _ => 0,
         };
-        let mut cache: [Option<(u16, u16)>; 4] = [None; 4];
-        let mut fetched = [false; 4];
-        for &(bg, priority) in order {
-            if self.regs[0x2C] & (1 << bg) == 0 {
+        let shown = self.regs[0x2C] | self.regs[0x2D];
+        for bg in 0..layers {
+            if shown & (1 << bg) == 0 {
                 continue;
             }
-            if bg == OBJ {
-                let o = self.obj_line[x as usize];
-                if o != 0 && (o >> 8) & 3 == priority {
-                    return self.cgram[(o & 0xFF) as usize];
-                }
-                continue;
-            }
-            if !fetched[bg] {
-                fetched[bg] = true;
-                cache[bg] = self.background(bg, mode, x, line);
-            }
-            if let Some((index, p)) = cache[bg] {
-                if p == priority {
-                    return self.cgram[index as usize];
-                }
-            }
+            self.fill_row(bg, mode, line, from, to);
         }
-        self.cgram[0]
     }
 
-    /// A background's pixel as (CGRAM index, tile priority), or None where it is transparent.
-    fn background(&self, bg: usize, mode: u8, x: u16, line: u16) -> Option<(u16, u16)> {
+    /// A background's line buffer from `from` to `to`, a tile row decoded once for each 8 pixels of the background it
+    /// covers; a span that starts or ends inside a chunk takes the part of it that falls inside.
+    fn fill_row(&mut self, bg: usize, mode: u8, line: u16, from: u16, to: u16) {
+        let mut chunk = [0u16; 8];
+        let mut x = from;
+        while x < to {
+            let (hofs, vofs) = self.scroll(bg, x);
+            let px = x.wrapping_add(hofs);
+            self.decode_chunk(bg, mode, px & !7, line.wrapping_add(vofs), &mut chunk);
+            let first = (px & 7) as usize;
+            let n = (8 - first).min((to - x) as usize);
+            let at = x as usize;
+            self.bg_line[bg][at..at + n].copy_from_slice(&chunk[first..first + n]);
+            x += n as u16;
+        }
+    }
+
+    /// The scroll a background is drawn with at screen X; the per-column offset of modes 2, 4 and 6 belongs here.
+    fn scroll(&self, bg: usize, _x: u16) -> (u16, u16) {
+        (self.hofs[bg], self.vofs[bg])
+    }
+
+    /// The eight pixels of the background at (px0..px0+8, py), px0 a multiple of 8, in screen order and the line
+    /// buffer's encoding: the map entry is read and the tile row's words fetched once for all eight.
+    fn decode_chunk(&self, bg: usize, mode: u8, px0: u16, py: u16, out: &mut [u16; 8]) {
         let big = self.regs[0x05] & (0x10 << bg) != 0;
         let shift = if big { 4 } else { 3 };
-        let px = x.wrapping_add(self.hofs[bg]);
-        let py = line.wrapping_add(self.vofs[bg]);
-        let (tx, ty) = (px >> shift, py >> shift);
+        let (tx, ty) = (px0 >> shift, py >> shift);
         let sc = self.regs[0x07 + bg];
         let screen = match sc & 3 {
             0 => 0,
@@ -497,9 +520,10 @@ impl Ppu {
         let base = ((sc as u16 >> 2) << 10).wrapping_add(screen << 10);
         let entry = self.vram[(base.wrapping_add(((ty & 31) << 5) | (tx & 31)) & 0x7FFF) as usize];
         let size = 1u16 << shift;
-        let mut fx = px & (size - 1);
+        let hflip = entry & 0x4000 != 0;
+        let mut fx = px0 & (size - 1);
         let mut fy = py & (size - 1);
-        if entry & 0x4000 != 0 {
+        if hflip {
             fx = size - 1 - fx;
         }
         if entry & 0x8000 != 0 {
@@ -510,20 +534,123 @@ impl Ppu {
         let nba = (self.regs[0x0B + bg / 2] >> (4 * (bg & 1))) as u16 & 0x0F;
         let words = if deep { 16 } else { 8 };
         let at = (nba << 12).wrapping_add(tile * words).wrapping_add(fy & 7);
-        let bit = 7 - (fx & 7);
-        let plane = |word: u16, high: bool| -> u16 { ((if high { word >> 8 } else { word }) >> bit) & 1 };
         let w0 = self.vram[(at & 0x7FFF) as usize];
-        let mut colour = plane(w0, false) | plane(w0, true) << 1;
-        if deep {
-            let w1 = self.vram[(at.wrapping_add(8) & 0x7FFF) as usize];
-            colour |= plane(w1, false) << 2 | plane(w1, true) << 3;
-        }
-        if colour == 0 {
-            return None;
-        }
+        let w1 = if deep { self.vram[(at.wrapping_add(8) & 0x7FFF) as usize] } else { 0 };
         let palette = (entry >> 10) & 7;
-        let index = if deep { palette * 16 + colour } else if mode == 0 { bg as u16 * 0x20 + palette * 4 + colour } else { palette * 4 + colour };
-        Some((index, (entry >> 13) & 1))
+        let high = 0x8000 | (((entry >> 13) & 1) << 8);
+        for (i, o) in out.iter_mut().enumerate() {
+            let bit = if hflip { i as u16 } else { 7 - i as u16 };
+            let colour = ((w0 >> bit) & 1) | (((w0 >> (bit + 8)) & 1) << 1) | (((w1 >> bit) & 1) << 2) | (((w1 >> (bit + 8)) & 1) << 3);
+            *o = if colour == 0 {
+                0
+            } else if deep {
+                high | (palette * 16 + colour)
+            } else if mode == 0 {
+                high | (bg as u16 * 0x20 + palette * 4 + colour)
+            } else {
+                high | (palette * 4 + colour)
+            };
+        }
+    }
+
+    /// Whether a layer's window mask covers `x`: each window inside or outside, then the two combined (fullsnes, "SNES
+    /// PPU Window"). `sel` is the layer's four bits of W12SEL, W34SEL or WOBJSEL, `logic` its two of WBGLOG or WOBJLOG.
+    fn window(&self, sel: u8, logic: u8, x: u16) -> bool {
+        let inside = |l: u8, r: u8| (l as u16..=r as u16).contains(&x);
+        let w1 = inside(self.regs[0x26], self.regs[0x27]) != (sel & 1 != 0);
+        let w2 = inside(self.regs[0x28], self.regs[0x29]) != (sel & 4 != 0);
+        match (sel & 2 != 0, sel & 8 != 0) {
+            (false, false) => false,
+            (true, false) => w1,
+            (false, true) => w2,
+            (true, true) => match logic & 3 {
+                0 => w1 | w2,
+                1 => w1 & w2,
+                2 => w1 ^ w2,
+                _ => !(w1 ^ w2),
+            },
+        }
+    }
+
+    /// The front-most pixel of the layers `enabled` shows and `masked` does not hide inside its window, as (colour,
+    /// layer, CGRAM index), the layer 0-3 a background and 4 the sprites; None where all are transparent.
+    fn front(&self, enabled: u8, masked: u8, windows: u8, x: u16) -> Option<(u16, usize, u16)> {
+        let order: &[(usize, u16)] = match self.regs[0x05] & 7 {
+            0 => &MODE0,
+            1 if self.regs[0x05] & 0x08 != 0 => &MODE1_BG3_HIGH,
+            1 => &MODE1,
+            _ => &OBJ_ONLY,
+        };
+        for &(layer, priority) in order {
+            let bit = 1 << layer;
+            if enabled & bit == 0 || (masked & bit != 0 && windows & bit != 0) {
+                continue;
+            }
+            let p = if layer == OBJ { self.obj_line[x as usize] } else { self.bg_line[layer][x as usize] };
+            if p != 0 && (p >> 8) & 3 == priority {
+                return Some((self.cgram[(p & 0xFF) as usize], layer, p & 0xFF));
+            }
+        }
+        None
+    }
+
+    /// One pixel of the picture: the main screen's front-most pixel, clipped to black and mathed with the sub screen
+    /// or the fixed colour as the colour window and CGWSEL and CGADSUB say (fullsnes, "SNES PPU Color-Math"; anomie's
+    /// "RENDERING THE SCREEN"; D-13).
+    fn compose(&self, x: u16) -> u16 {
+        let mut windows = 0u8;
+        for (layer, (sel, logic)) in [
+            (self.regs[0x23], self.regs[0x2A]),
+            (self.regs[0x23] >> 4, self.regs[0x2A] >> 2),
+            (self.regs[0x24], self.regs[0x2A] >> 4),
+            (self.regs[0x24] >> 4, self.regs[0x2A] >> 6),
+            (self.regs[0x25], self.regs[0x2B]),
+            (self.regs[0x25] >> 4, self.regs[0x2B] >> 2),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if self.window(sel & 0x0F, logic, x) {
+                windows |= 1 << layer;
+            }
+        }
+        let (main, layer, index) = self.front(self.regs[0x2C], self.regs[0x2E], windows, x).unwrap_or((self.cgram[0], 5, 0));
+        let cgwsel = self.regs[0x30];
+        let cgadsub = self.regs[0x31];
+        let colour_window = windows & 0x20 != 0;
+        let region = |v: u8| match v & 3 {
+            0 => false,
+            1 => !colour_window,
+            2 => colour_window,
+            _ => true,
+        };
+        let clip = region(cgwsel >> 6);
+        let main = if clip { 0 } else { main };
+        // Only sprites with palettes 4 to 7 take part (fullsnes, CGADSUB).
+        let takes_part = if layer == OBJ { index >= 0xC0 && cgadsub & 0x10 != 0 } else { cgadsub & (1 << layer) != 0 };
+        if region(cgwsel >> 4) || !takes_part {
+            return main;
+        }
+        let fixed = (self.fixed[0] as u16) | (self.fixed[1] as u16) << 5 | (self.fixed[2] as u16) << 10;
+        let (sub, sub_backdrop) = if cgwsel & 2 != 0 {
+            match self.front(self.regs[0x2D], self.regs[0x2F], windows, x) {
+                Some((c, _, _)) => (c, false),
+                None => (fixed, true),
+            }
+        } else {
+            (fixed, false)
+        };
+        let half = cgadsub & 0x40 != 0 && !clip && !sub_backdrop;
+        let mut out = 0;
+        for shift in [0, 5, 10] {
+            let (m, s) = ((main >> shift) & 31, (sub >> shift) & 31);
+            let mut c = if cgadsub & 0x80 != 0 { m.saturating_sub(s) } else { m + s };
+            if half {
+                c >>= 1;
+            }
+            out |= c.min(31) << shift;
+        }
+        out
     }
 }
 
@@ -658,5 +785,45 @@ mod tests {
         p.oam_address = 4;
         p.end_line(0, 1);
         assert_eq!((p.obj_line[10], p.obj_line[13]), (0x8081, 0x8091));
+    }
+
+    // fullsnes and anomie: windows per layer, the colour window's clip and prevent, add and subtract, halving
+    // except when clipped or on the sub backdrop, sprites only with palettes 4 to 7.
+    #[test]
+    fn windows_and_colour_math_compose_from_the_line_buffers() {
+        let mut p = Ppu::default();
+        p.regs[0x05] = 1;
+        p.regs[0x2C] = 0x11;
+        p.cgram[0] = 0x0000;
+        p.cgram[1] = 10 | 20 << 5 | 30 << 10;
+        p.cgram[0xC1] = 0x001F;
+        p.cgram[0x81] = 0x03E0;
+        p.bg_line[0] = [0x8001; WIDTH];
+        p.write(0x32, 0xE0 | 4, blank());
+        p.write(0x31, 0x01, blank());
+        assert_eq!(p.compose(0), 14 | 24 << 5 | 31 << 10);
+        p.write(0x31, 0x41, blank());
+        assert_eq!(p.compose(0), 7 | 12 << 5 | 17 << 10);
+        p.write(0x31, 0x81, blank());
+        assert_eq!(p.compose(0), 6 | 16 << 5 | 26 << 10);
+        // Window 1 over x 10..=20 hides BG1 there, so the backdrop shows, unmathed.
+        p.write(0x31, 0x00, blank());
+        p.write(0x26, 10, blank());
+        p.write(0x27, 20, blank());
+        p.write(0x23, 0x02, blank());
+        p.write(0x2E, 0x01, blank());
+        assert_eq!((p.compose(9), p.compose(10), p.compose(20), p.compose(21)), (p.cgram[1], 0, 0, p.cgram[1]));
+        // The colour window clips to black inside it, and the sub backdrop, not halved, is what math adds there.
+        p.write(0x2E, 0x00, blank());
+        p.write(0x25, 0x20, blank());
+        p.write(0x30, 0xC2, blank());
+        p.write(0x31, 0x41, blank());
+        assert_eq!(p.compose(15), 4 | 4 << 5 | 4 << 10);
+        // A sprite with palette 4 to 7 takes part; one with palette 0 to 3 does not.
+        p.write(0x30, 0x00, blank());
+        p.write(0x31, 0x10, blank());
+        p.obj_line[30] = 0x8000 | 3 << 8 | 0xC1;
+        p.obj_line[31] = 0x8000 | 3 << 8 | 0x81;
+        assert_eq!((p.compose(30), p.compose(31)), (31 | 4 << 5 | 4 << 10, 0x03E0));
     }
 }

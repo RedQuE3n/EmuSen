@@ -365,3 +365,37 @@ their data.
   affected by OAM Address Invalidation"), which is therefore right only while nothing invalidates it.
 - Pinned by: nothing.
 
+### D-13. Colour math: the front-most sub-screen pixel is used whatever its priority against the main pixel's
+- Opened: 2026-10-01, at stage 3 step 3, by reading the documents before the colour-math code. fullsnes, "SNES PPU
+  Color-Math": math occurs "only if the front-most Sub Screen pixel has same or higher (XXX or is it same or lower
+  -- or is it ANY priority?) priority than the Main Screen pixel", the question its own. anomie's register
+  document, "RENDERING THE SCREEN", "Color Math": "Add the corresponding subscreen pixel, or the fixed color if
+  it's the subscreen backdrop", and its three-step rendering list, with no priority condition.
+- Test ROM: none in the corpus isolates it.
+- Referee: not read. Mesen's source: none.
+- Conclusion: anomie's, any priority; argued from fullsnes's sentence being a question and anomie's procedure being
+  stated. Open until a ROM puts a sub-screen pixel behind the main pixel's priority with math on.
+- Pinned by: nothing yet.
+
+### D-14. HDMA, indirect mode: a line count of zero still loads the pointer's high byte, clears its low byte, and advances the table by two
+- Opened: 2026-10-01, at stage 3 step 3, by `snestest_082506/test_hdma` (byuu, 2005-10-21) failing at its test 1, one
+  of the 13 backdrop failures. The test runs an HDMA init on an indirect channel whose table begins `00 AA BB`, and
+  expects DASxL `$00`, DASxH `$AA`, A2AxW the table start plus 2 and NTRLx `$00`. VenusRT leaves DASx as the program
+  wrote it ($5555) and A2AxW at the start plus 1: it loads the pointer only for a non-zero count.
+- Documents read: fullsnes, "HDMA Table Formats" (a `00h` count terminates the channel; nothing on the pointer) and
+  `43x5h`-`43x7h`; anomie's timing document, "HDMA" (24 master clocks for an indirect channel's init, 16 to load a new
+  indirect address; nothing on a terminator). Neither covers the case.
+- Test ROM: `test_hdma`'s test 1 and its comment, the author's console results: after loading NTRLx, "if the value is
+  zero, then it will load the next byte from the table into DASxH and clear DASxL. A2AxW is equal to A1TxW plus
+  two", and "it won't actually read from the table three times -- only two reads actually occur, as determined by
+  checking OPHCT".
+- Referee: not read. Mesen's source: none.
+- Conclusion: the test's rule, in every table load (the init and a line's reload alike, since the documents describe
+  one load); the second read costs 8 master clocks, the one read it is. Argued from the test ROM's console results.
+- Pinned by: `test_hdma` in the corpus, once it passes its test 1.
+- Implemented 2026-10-01. **Measured:** at the failure the five registers are now the test's ($00, $AA, $02, $00,
+  $00), where before DASx kept $5555. The test still stops at test 1, on its next check: OPHCT latched just after the
+  init reads `$3A` where the test wants `$38`, two dots late. The test's own comment says the init's timing differs
+  between console revisions ("1/1/1 and 2/1/3 SNES units") and seeks a DMA phase to cope; the init's cost was not
+  changed to fit one number. Settled for the registers; the init's timing is open.
+

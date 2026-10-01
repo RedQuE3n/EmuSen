@@ -189,6 +189,13 @@ impl System {
             self.set_reg(channel, 5, lo);
             self.set_reg(channel, 6, hi);
             cost = 16;
+        } else if self.reg(channel, 0) & 0x40 != 0 {
+            // A terminator still loads the pointer's high byte, with the low byte cleared (D-14).
+            let hi = self.read_value(bank | table as u32, true).unwrap_or(self.mdr);
+            table = table.wrapping_add(1);
+            self.set_reg(channel, 5, 0);
+            self.set_reg(channel, 6, hi);
+            cost = 8;
         }
         self.set_reg16(channel, 8, table);
         if ntrl == 0 {

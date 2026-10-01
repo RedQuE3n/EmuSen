@@ -1357,3 +1357,115 @@ part, and the clip to black; its oracles are undisbeliever's window ROMs, PeterL
 where their mode allows, and the colour-math frames of A Link to the Past. The 13 backdrop failures can be read test
 by test beside it, as D-8 and D-10 were.
 
+---
+
+## 17. Stage 3, step 3: windows and colour math, the backgrounds decoded per tile, and the backdrop failures (2026-10-01)
+
+### 17.1 What it built
+
+- **The compositor, on line buffers.** Each span first fills the line buffers of the backgrounds either screen
+  shows, beside the sprites' buffer of §16.3; the compositor reads only the buffers, so how a layer fills its
+  buffer can change without touching it. Per pixel: the two windows, each inside or outside, combined by
+  WBGLOG/WOBJLOG for each layer and for the colour window (fullsnes, "SNES PPU Window"); the main screen's front-most
+  pixel of the layers TM shows and TMW does not hide; the colour window's clip to black and prevent-math (CGWSEL,
+  both documents agreeing); math on the front-most sub-screen pixel of TS less TSW, or on COLDATA's fixed colour
+  when CGWSEL bit 1 is clear or the sub screen is transparent; add or subtract per component, halved except on a
+  clipped pixel or the sub backdrop, saturated; sprites taking part only with palettes 4 to 7. Which sub pixel is
+  used regardless of priority is D-13. Brightness is applied after. The state is version 8, with COLDATA's colour.
+- **The backgrounds decoded per tile** (§17.3).
+- **D-14**, an indirect HDMA terminator's pointer load (§17.4).
+
+### 17.2 The window and colour-math oracles (measured 2026-10-01)
+
+- **undisbeliever's window ROMs**: `window-mask-logic`, `window-shapes-single`, `window-precalculated-single` and
+  `window-precalculated-symmetrical`, **every pixel equal to Mesen at frame 3600**; at §15.5 they differed on 9,664
+  to 56,607 pixels. So is `color_halve_proof/demo`, which differed on every pixel; `test_math` and
+  `inidisp_fadein_fadeout` stay equal.
+- **PeterLemon's `Window` and `Blend` folders** are in mode 3 or pseudo-hi-res, later steps': nothing there is in
+  this step's modes. His eight ROMs in modes 0 and 1 stay equal, and `RedSpace9BitHDMA` stays D-7's.
+- **A Link to the Past's colour-math frames** (580 to 600, CGADSUB `$31`, CGWSEL `$02`) differ from Mesen's over
+  the title's centre, but its VRAM already differs from frame 60, where the sound CPU's stand-in answers at once
+  (§15.8); the frames show different scenes, so they are no oracle for the math until stage 4. A negative result.
+- **The corpus**: §17.6.
+
+### 17.3 The backgrounds decoded once per tile (decided 2026-10-01, measured)
+
+*Decided 2026-10-01*: the background renderer's per-pixel fetch is reworked now, ahead of the general hold on
+optimisation, because every later PPU step builds on it. Each span walks the 8-pixel chunks of background space it
+covers; for each, the map entry is read and the tile row's words fetched once, decoded to eight pixels in screen
+order, and the part of the chunk inside the span copied to the line buffer. Spans split where they did: the chunk is
+re-decoded at a span's start from the registers as they stand then.
+
+**Built for what follows:** the scroll is read per chunk through one function, where offset-per-tile's per-column
+offsets (modes 2, 4, 6) go; mosaic can repeat pixels over the filled buffer, which persists across a line's spans,
+so a block that began in an earlier span is still there; the buffers are 256 wide, and hi-res needs 512, a
+widening of the buffers and of the compositor's loop, not of the decode; mode 7 is its own fill into the same
+buffer.
+
+**Proof (measured 2026-10-01).** `examples/frame_hashes.rs` hashes the picture after every frame. Built from the
+commit before the rework and from the rework, over all 304 images (the corpus's 295 and the nine bench games) to
+frame 3600: **1,094,067 frames, every hash equal**. The hashes are 64-bit SipHash, so this is equality to within a
+collision probability of order 10⁻¹³ over the set, not a byte comparison. The skip check of §15.2 passes on all
+304; the crate's 39 tests pass.
+
+**The cost**, `frame_cost` before and after in turn, best of three under the timing lock, load 1.4:
+
+| ROM | Before: drawn, skipped, picture | After | §16.5's picture (no windows or math) |
+|---|---|---|---|
+| gilyon `cputest-full` | 1.65, 0.52, 1.12 | 1.48, 0.50, 0.99 | 0.66 |
+| the 240p menu | 1.61, 0.39, 1.22 | 1.31, 0.38, 0.92 | 0.96 |
+| `Rings` | 1.82, 0.52, 1.31 | 1.46, 0.50, 0.96 | 1.01 |
+| `object-dropout-test` | 1.22, 0.38, 0.84 | 1.18, 0.37, 0.80 | 0.40 |
+| A Link to the Past | 1.38, 0.50, 0.88 | 1.29, 0.48, 0.81 | 0.35 |
+| Super Metroid | 1.11, 0.59, 0.52 | 1.07, 0.55, 0.51 | 0.26 |
+
+(`Rings`' skipped run after the rework read 0.64 once and 0.50 once; 0.50 is taken.) **The rework takes 0.1 to 0.4
+ms off the picture where backgrounds dominate, and the compositor of §17.1 added more than that**: it evaluates six
+window masks and walks the priority chart up to twice for every pixel, so a sprite-and-one-background test costs
+twice §16.5's figure. Against §5.5's 1.5 ms for the PPU, modes 0 and 1 with windows and colour math now take 0.5 to
+1.0 ms of picture, before modes 2 to 7, mosaic and hi-res. **P1's likely overrun of §15.9 still stands**, now with
+its cause moved: the per-pixel compositor, not the fetch. The masks are constant between the window edges, so they
+could be computed per run of pixels within a span; that is a structural question for the same decision, recorded
+here and not built.
+
+### 17.4 The 13 backdrop failures, read (2026-10-01)
+
+| ROM | Where it stops | What it needs |
+|---|---|---|
+| `snestest_082506/test_hdma`, `blobs/test_hdma` | test 1 | **D-14**: an indirect terminator loads the pointer's high byte. With it the five registers are right; the test then stops on OPHCT `$3A` where it wants `$38`, the init two dots late; its own comment says the init's timing differs between console revisions. Open |
+| `blobs/test_irqb` | test 7 | its disassembly's note: it uploads code to the sound CPU so the ports return `$18`; stage 4 |
+| `blobs/test_irq4200` | (SRAM `$FF`) | which `$4200` enable sequences raise an IRQ at H=0 and H=338, against a stored table: the comparator on enable (anomie: "the IRQ output will go low even if the enable write occurs at the exact cycle"). Not read further |
+| `nmi_irq/demo_irq`, `blobs/demo_irqtest` | test 6 | IRQ positions the counters cannot reach: H=339 on the short line, H=340, lines 262 and 263 with interlace; VenusRT has no interlace line count (stage 3's interlace step), and its comparator carries a point past the short line's end into the next line, which the test calls unlatchable. Not changed: the documents were not read for it in this step |
+| `blobs/irq` | test `$2D` | not read |
+| `blobs/nmi` | test `$1E` | not read |
+| `blobs/test_hdmasync`, `blobs/test_hdmatiming` | 0 and `$51` | HDMA timing; not read |
+| `snestest_082506/test_dma` | 0 | DMA overlapping HDMA on one channel (§15.6); not read |
+| the two `test_dmavalid` | (no number) | not read |
+
+None of the 13 passes yet; D-14 moved two of them to their next check.
+
+### 17.5 Disputes
+
+D-13 (opened, argued: anomie's sub pixel at any priority), D-14 (opened and implemented: the registers settled by
+the test ROM, the init's timing open). The others as at §16.
+
+### 17.6 The corpus again (measured 2026-10-01)
+
+The runner over all 295 rows on the step's head, against §16's run: every verdict of all three engines is the
+same (VenusRT 49 of Mesen's 117; the baseline test passes); VRAM, CGRAM and OAM equal Mesen's on 206, 272 and 290
+rows, as before; **pictures equal on 162, from 157**, the five gained being the four window ROMs and
+`color_halve_proof/demo`, and none lost. D-14 changed no verdict and no space.
+
+### 17.7 The clone check (measured 2026-10-01)
+
+18 files against Mesen's 164: no pair at 12 fingerprints, no shared run of literals, the largest pair below the
+threshold still 4 (`cpu/mod.rs`), `ppu.rs` sharing none; the eleven names of §16.6, no new one.
+
+### 17.8 The next step
+
+Stage 3's remaining PPU work, in the plan's order: **modes 2 to 6** (4bpp and 8bpp backgrounds, mode 2's and 4's
+offset-per-tile and 6's, direct colour), **mosaic**, **hi-res and pseudo-hi-res** (512-wide buffers, the sub
+screen's half-pixels and their colour math, anomie's previous-main-pixel rule), **interlace** (the 263-line field,
+which `demo_irq`'s test 6 also needs), then **mode 7**. Beside it: the compositor's per-pixel window masks, if the
+decision of §17.3 extends to them, and the backdrop failures not yet read.
+

@@ -413,6 +413,10 @@ their data.
   argued from its describing a mechanism where anomie records a question. The two agree for a size set in V-Blank.
   Open for mid-frame changes.
 - Pinned by: `mosaic_repeats_the_blocks_first_pixel_and_first_line` in `ppu.rs`, for the agreed case.
+- Measured 2026-10-01, on the agreed case: the 240p suite's intro fades by mosaic, one size a frame, written in
+  V-Blank. Mesen runs it ten frames after VenusRT (the sound CPU's stand-in answers at once), and with that offset
+  its frames 60, 64 and 68 equal VenusRT's 50, 54 and 58 in every pixel, at sizes 5, 9 and 13. An experiment that
+  counted the rows from line 0 instead of the first picture line matched none. Mid-frame changes stay open.
 
 ### D-16. Offset-per-tile: visible tile T of the background takes its offsets from visible tile T-1 of BG3, and keeps the low three bits of its own scroll
 - Opened: 2026-10-01, at stage 3 step 4. fullsnes's section is "Under construction (see Anomie's docs for now)".
@@ -452,4 +456,9 @@ their data.
   reached. The tests enable HDMA on every channel the DMA uses, so they do not say what happens to a DMA channel
   HDMA does not take; it is left running, the narrower reading, argued and open.
 - Pinned by: `test_dma` in the corpus.
+- Implemented 2026-10-01. **Measured:** `test_dma` passes all four tests (blue backdrop); it failed at test 1.
+  After test 4 channel 1's twelve registers equal the console's as the test's comment lists them; channel 0 stopped
+  four bytes earlier than the console's ($4302 `$3F` and $4305 `$41` against `$43` and `$3D`), which is the DMA's
+  start within the line, set by the test's own NOPs, and inside what the test accepts. Settled for the channels HDMA
+  takes; open for a DMA channel it does not.
 

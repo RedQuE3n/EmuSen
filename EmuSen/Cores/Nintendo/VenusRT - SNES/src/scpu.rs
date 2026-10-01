@@ -140,8 +140,16 @@ impl System {
                 _ => 0,
             };
             let mut i = 0usize;
+            let mut killed = false;
             loop {
+                // The registers hold the DMA's progress as each byte moves, for an HDMA that takes the channel (D-17).
+                self.set_reg16(channel, 2, address);
+                self.set_reg16(channel, 5, count);
                 self.hdma_if_due(resume);
+                if self.dev.dma_pending & (1 << channel) == 0 {
+                    killed = true;
+                    break;
+                }
                 if !self.timing.refreshed && self.timing.line_clock >= REFRESH_AT {
                     self.timing.refreshed = true;
                     self.advance_paused(REFRESH);
@@ -155,8 +163,10 @@ impl System {
                     break;
                 }
             }
-            self.set_reg16(channel, 2, address);
-            self.set_reg16(channel, 5, 0);
+            if !killed {
+                self.set_reg16(channel, 2, address);
+                self.set_reg16(channel, 5, 0);
+            }
         }
         self.dev.dma_pending = 0;
         self.io[0x20B] = 0;
@@ -217,6 +227,8 @@ impl System {
         if enabled == 0 {
             return;
         }
+        // The init takes its channels from a general DMA in progress or pending (D-17).
+        self.dev.dma_pending &= !enabled;
         let start = self.align_before();
         self.advance_paused(18);
         for channel in 0..8 {

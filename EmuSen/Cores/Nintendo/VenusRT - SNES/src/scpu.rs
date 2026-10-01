@@ -2,7 +2,7 @@
 //! fullsnes ("SNES DMA Transfers", "SNES Maths Multiply/Divide", "SNES Controllers I/O Ports") and anomie's timing
 //! document for their timing. See VenusRT_Native.md §13.
 
-use crate::bus::{HDMA_AT, HDMA_INIT_AT, REFRESH, REFRESH_AT, System};
+use crate::bus::{HDMA_AT, HDMA_INIT_AT, REFRESH, REFRESH_AT, System, irq_line_point};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(u8)]
@@ -438,6 +438,11 @@ impl System {
             0x4200 => {
                 self.dev.writing_nmitimen = true;
                 self.dev.nmitimen = value;
+                // V-IRQ selected on its own line, past its point, is raised by the write (D-21).
+                let t = &mut self.timing;
+                if (value >> 4) & 3 == 2 && t.irq_mode != 2 && t.line == t.vtime && t.line_clock >= irq_line_point(0) {
+                    t.irq_flag = true;
+                }
                 self.timing.irq_mode = (value >> 4) & 3;
                 if self.timing.irq_mode == 0 {
                     self.timing.irq_flag = false;

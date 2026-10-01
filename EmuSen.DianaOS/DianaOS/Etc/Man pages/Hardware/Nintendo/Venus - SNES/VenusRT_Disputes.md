@@ -533,4 +533,6 @@ their data.
   setting while V=VTIME, past the line's point, sets the flag at that write. H-IRQ and HV-IRQ stay points. Argued
   from the test's table; the table does not say what a `$20` written over `$20` does, and it is left raising nothing.
 - Pinned by: `test_irq4200` in the corpus.
+- Implemented 2026-10-01. **Measured:** `test_irq4200` passes (blue backdrop), its record equal to the table; the
+  other backdrop-graded ROMs are unchanged by it. Settled for the table's cases.
 

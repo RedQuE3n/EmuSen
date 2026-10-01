@@ -39,12 +39,35 @@ pub struct Machine {
     pub samples: SampleQueue,
     /// The I flag the last interrupt check saw.
     pub i_checked: bool,
+    /// WAI has just ended: the line that ended it is taken without waiting for another instruction's check.
+    pub woke: bool,
+    /// When set, every instruction and interrupt in the reference probe's 24-byte record; not in the state.
+    pub trace: Option<Vec<u8>>,
 }
 
 impl Machine {
     /// The cartridge from the image, and the CPU through its reset sequence (fullsnes: H=0, V=0 after /RESET).
     pub fn load_rom(image: &[u8]) -> Result<Machine, ImageTooShort> {
         let cart = Cartridge::new(image).ok_or(ImageTooShort(image.len()))?;
+        Ok(Machine::with_cartridge(cart))
+    }
+
+    /// What a candidate header's reset handler does in its first `instructions`: its writes to the I/O registers,
+    /// and whether it ran into BRK, COP, STP or an opcode fetched from nothing (VenusRT_Disputes.md, D-4).
+    pub fn reset_evidence(rom: &[u8], header: crate::cart::Header, instructions: u32) -> (u32, bool) {
+        let mut m = Machine::with_cartridge(Cartridge::with_header(rom, header));
+        for _ in 0..instructions {
+            let at = ((m.cpu.pbr as u32) << 16) | m.cpu.pc as u32;
+            let opcode = m.sys.read_value(at, false);
+            if matches!(opcode, None | Some(0x00 | 0x02 | 0xDB)) {
+                return (m.sys.io_writes, true);
+            }
+            m.step();
+        }
+        (m.sys.io_writes, false)
+    }
+
+    pub fn with_cartridge(cart: Cartridge) -> Machine {
         let mut frame = vec![0u8; FRAME_BYTES];
         for px in frame.chunks_exact_mut(4) {
             px[3] = 0xFF;
@@ -60,9 +83,13 @@ impl Machine {
             frame_rgba: frame.into(),
             samples: SampleQueue::default(),
             i_checked: true,
+            woke: false,
+            trace: None,
         };
+        // The datasheet leaves SL uninitialised at power-on; $02 puts S at $01FF after the reset's three stack cycles.
+        m.cpu.s = 0x0102;
         m.cpu.interrupt(&mut m.sys, Interrupt::Reset);
-        Ok(m)
+        m
     }
 
     pub fn total_frames(&self) -> i64 {
@@ -77,15 +104,18 @@ impl Machine {
         }
     }
 
-    /// One instruction, or the interrupt the machine takes instead. NMI's edge wins over IRQ's level; IRQ needs I
-    /// clear as the check saw it, which is the old I after CLI, SEI, PLP, REP and SEP, which change it in their final
-    /// cycle, after the check (anomie's timing document). WAI ends on either line with two internal cycles.
+    /// One instruction, or the interrupt the machine takes instead. The check is made just before an instruction's
+    /// final cycle (anomie's timing document), so it sees the lines as that cycle found them, and the I flag before
+    /// CLI, SEI, PLP, REP or SEP changed it in that cycle. NMI's edge wins over IRQ's level. WAI ends on either line
+    /// with two internal cycles.
     pub fn step(&mut self) {
         self.sys.dev.pads = self.pads;
-        let irq = self.sys.timing.irq_flag;
+        let irq = self.sys.dev.irq_at_cycle && self.sys.timing.irq_flag;
+        let nmi = self.sys.dev.nmi_at_cycle && self.sys.dev.nmi_pending;
         if self.cpu.waiting {
-            if self.sys.dev.nmi_pending || irq {
+            if self.sys.dev.nmi_pending || self.sys.timing.irq_flag {
                 self.cpu.waiting = false;
+                self.woke = true;
                 let at = ((self.cpu.pbr as u32) << 16) | self.cpu.pc as u32;
                 crate::cpu::Bus::idle(&mut self.sys, at, 0);
                 crate::cpu::Bus::idle(&mut self.sys, at, 0);
@@ -94,23 +124,49 @@ impl Machine {
                 return;
             }
         }
-        if self.sys.dev.nmi_pending {
+        if nmi || (self.sys.dev.nmi_pending && self.woke) {
             self.sys.dev.nmi_pending = false;
+            self.record(0, 1);
             self.cpu.interrupt(&mut self.sys, Interrupt::Nmi);
             self.i_checked = true;
+            self.woke = false;
             return;
         }
-        if irq && !self.i_checked && !self.cpu.stopped {
+        if (irq || (self.woke && self.sys.timing.irq_flag)) && !self.i_checked && !self.cpu.stopped {
+            self.record(0, 2);
             self.cpu.interrupt(&mut self.sys, Interrupt::Irq);
             self.i_checked = true;
+            self.woke = false;
             return;
         }
+        self.woke = false;
         let at = ((self.cpu.pbr as u32) << 16) | self.cpu.pc as u32;
         let opcode = self.sys.read_value(at, false).unwrap_or(self.sys.mdr);
         let before = self.cpu.p & crate::cpu::flag::I != 0;
+        self.record(opcode, 0);
+        let clock = self.sys.timing.clock;
         self.cpu.step(&mut self.sys);
+        if let Some(t) = &mut self.trace {
+            let n = t.len();
+            t[n - 4..].copy_from_slice(&((self.sys.timing.clock - clock) as u32).to_le_bytes());
+        }
         let after = self.cpu.p & crate::cpu::flag::I != 0;
         self.i_checked = if matches!(opcode, 0x58 | 0x78 | 0x28 | 0xC2 | 0xE2) { before } else { after };
+    }
+
+    /// The probe's CPU trace record (EmuSen_Debugging_Tools_Reference_v5.md §3.40): address, opcode, kind, A, X, Y, S, D,
+    /// DBR, P, E, and the instruction's master clocks, filled in after it.
+    fn record(&mut self, opcode: u8, kind: u8) {
+        let c = self.cpu;
+        if let Some(t) = &mut self.trace {
+            let pc = ((c.pbr as u32) << 16) | c.pc as u32;
+            t.extend_from_slice(&pc.to_le_bytes());
+            t.extend_from_slice(&[opcode, kind]);
+            for v in [c.a, c.x, c.y, c.s, c.d] {
+                t.extend_from_slice(&v.to_le_bytes());
+            }
+            t.extend_from_slice(&[c.dbr, c.p, c.e as u8, 0, 0, 0, 0, 0]);
+        }
     }
 
     pub fn vram_bytes(&self) -> Vec<u8> {
@@ -173,6 +229,11 @@ impl Machine {
             w.u64("JoyBusyUntil", d.joy_busy_until);
             w.bool("Strobe", d.strobe);
             w.u16s("Shift", &d.shift);
+            w.bool("NmiAtCycle", d.nmi_at_cycle);
+            w.bool("IrqAtCycle", d.irq_at_cycle);
+            w.bool("Woke", self.woke);
+            w.bytes("ApuStub", &d.apu_stub);
+            w.bool("ApuWritten", d.apu_written);
         });
         w.group("Bus", |w| {
             w.u8("Mdr", self.sys.mdr);
@@ -254,6 +315,12 @@ impl Machine {
         d.joy_busy_until = r.u64()?;
         d.strobe = r.bool()?;
         r.u16s(&mut d.shift)?;
+        d.nmi_at_cycle = r.bool()?;
+        d.irq_at_cycle = r.bool()?;
+        self.woke = r.bool()?;
+        let d = &mut self.sys.dev;
+        r.bytes(&mut d.apu_stub)?;
+        d.apu_written = r.bool()?;
         self.sys.mdr = r.u8()?;
         self.sys.wram_address = r.u32()? & 0x1FFFF;
         self.sys.fast_rom = r.bool()?;
@@ -266,6 +333,7 @@ impl Machine {
         r.bytes(&mut self.oam)?;
         r.bytes(&mut self.apuram)?;
         r.bytes(&mut self.sys.cart.sram)?;
+        self.sys.timing.schedule();
         Ok(())
     }
 
@@ -356,15 +424,15 @@ pub(crate) mod tests {
         assert!(m.sys.timing.clock >= 2 * 262 * 1364 - 4);
     }
 
-    // Version 3 adds the S-CPU's devices to version 2's CPU, clock and bus; the listing is its record (plan §5.6).
+    // Version 4: the CPU, the clock, the bus and the S-CPU's devices; the listing is its record (plan §5.6).
     #[test]
-    fn the_version_3_layout_is_pinned() {
+    fn the_version_4_layout_is_pinned() {
         let m = Machine::load_rom(&rom(&[])).unwrap();
         let layout = m.layout();
         assert!(layout.starts_with("0 4 u32 Magic\n4 4 i32 Version\n8 2 u16 Cpu.A\n"), "{layout}");
         assert!(layout.contains(" u64 Timing.Clock\n") && layout.contains(" u8[1024] Bus.Io\n") && layout.contains(" u16[32768] Vram\n"), "{layout}");
-        assert_eq!(layout.lines().count(), 63, "{layout}");
-        assert_eq!(m.state_size(), 264_337);
+        assert_eq!(layout.lines().count(), 68, "{layout}");
+        assert_eq!(m.state_size(), 264_345);
         assert_eq!(&save(&m)[..4], b"VNRT");
     }
 

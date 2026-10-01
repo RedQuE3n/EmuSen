@@ -548,7 +548,7 @@ Each stage is a run of supervised steps of a few hours, with a check-in after ea
 | 9 | Retirement: the default flipped; after the waiting period, Venus removed or moved; Pharaoh's and Hotaru's Venus uses given equivalents or retired | §7 | 1 |
 
 *Stage 0 was run on 2026-09-30, with the crate skeleton, the probe's pacing fix and the clone check brought forward
-into it; `VenusRT_Native.md` §1 is its record. Stage 1 took two steps, not four, the same day (§10 and §11 there).*
+into it; `VenusRT_Native.md` §1 is its record. Stage 1 took two steps, not four, the same day (§10 and §11 there), and stage 2 three, not five (§12 to §14).*
 
 About 44 steps, or 130–160 hours (P3). Stage 6 can run after stage 4, before the coprocessors, so that the player gets
 the engine for ordinary cartridges early; games with a chip then fall back to Venus with a notice until stage 5 lands.

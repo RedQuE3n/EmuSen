@@ -105,21 +105,40 @@ fn score(image: &[u8], map: Map, at: usize) -> Option<(i32, Header)> {
     Some((s, Header { map, at, title, map_mode: mode, chipset: h[0x16], rom_size: h[0x17], sram_size: h[0x18], country: h[0x19], score: s }))
 }
 
-/// The best-scoring candidate; a tie goes to the earlier of LoROM, HiROM and ExHiROM. ExHiROM is considered only for
-/// an image of more than 4 MiB, which is the only place its header can be.
+/// The best-scoring candidate by its fields, a tie going to the earlier of LoROM, HiROM and ExHiROM, unless D-4's rule
+/// overrules it. ExHiROM is considered only for an image of more than 4 MiB, the only place its header can be.
 pub fn find_header(image: &[u8]) -> Option<Header> {
-    let mut best: Option<Header> = None;
+    let all = candidates(image);
+    let best = all.iter().fold(None, |best: Option<&Header>, h| if best.is_none_or(|b| h.score > b.score) { Some(h) } else { best })?;
+    // D-4: a choice whose reset handler does nothing gives way to a candidate whose handler works.
+    let (writes, crashed) = crate::machine::Machine::reset_evidence(image, best.clone(), HANDLER_INSTRUCTIONS);
+    if !crashed && writes <= 1 {
+        let working = all.iter().filter(|h| h.map != best.map).find(|h| {
+            let (w, c) = crate::machine::Machine::reset_evidence(image, (*h).clone(), HANDLER_INSTRUCTIONS);
+            !c && w >= 4
+        });
+        if let Some(other) = working {
+            return Some(other.clone());
+        }
+    }
+    Some(best.clone())
+}
+
+/// How far a candidate's reset handler is run for D-4's evidence.
+const HANDLER_INSTRUCTIONS: u32 = 4000;
+
+/// Every candidate with its fields' score, in LoROM, HiROM, ExHiROM order.
+pub fn candidates(image: &[u8]) -> Vec<Header> {
+    let mut all = Vec::new();
     for (map, at) in CANDIDATES {
         if map == Map::ExHiRom && image.len() <= 0x40_0000 {
             continue;
         }
-        if let Some((s, h)) = score(image, map, at) {
-            if best.as_ref().is_none_or(|b| s > b.score) {
-                best = Some(h);
-            }
+        if let Some((_, h)) = score(image, map, at) {
+            all.push(h);
         }
     }
-    best
+    all
 }
 
 /// An offset into a ROM of any size, as the chips decode it: the larger power of two first, then the remainder's
@@ -146,6 +165,12 @@ pub struct Cartridge {
 }
 
 impl Cartridge {
+    /// The cartridge under a header already chosen.
+    pub fn with_header(rom: &[u8], header: Header) -> Cartridge {
+        let sram = vec![0u8; header.sram_bytes()].into_boxed_slice();
+        Cartridge { rom: rom.into(), sram, header }
+    }
+
     /// A copier's 512-byte header is dropped by the image's length modulo 1 KiB; an image with no header that scores
     /// is mapped as LoROM, as a homebrew file of no header would be.
     pub fn new(image: &[u8]) -> Option<Cartridge> {
@@ -182,9 +207,7 @@ impl Cartridge {
                 if !self.sram.is_empty() && (matches!(bank, 0x70..=0x7D) || bank >= 0xF0) {
                     return Some(Slot::Sram((((bank & 0x0F) << 15) | offset) & (self.sram.len() - 1)));
                 }
-                if bank & 0x7F >= 0x40 && bank & 0x7F < 0x70 {
-                    return Some(Slot::Rom(mirror(((bank & 0x7F) << 15) | offset, size)));
-                }
+                // Below $8000 a LoROM cartridge drives only its SRAM (fullsnes; jonasquinn's memtest agrees).
                 None
             }
             Map::HiRom | Map::ExHiRom => {
@@ -255,6 +278,8 @@ mod tests {
         assert_eq!(lo.decode(0x00_8000), Some(Slot::Rom(0)));
         assert_eq!(lo.decode(0x81_FFFF), Some(Slot::Rom(0xFFFF)));
         assert_eq!(lo.decode(0x00_1234), None);
+        assert_eq!(lo.decode(0x40_1234), None);
+        assert_eq!(lo.decode(0x40_8000), Some(Slot::Rom(0)));
         assert_eq!(lo.decode(0x70_0000), Some(Slot::Sram(0)));
         assert_eq!(lo.decode(0xF0_1FFF), Some(Slot::Sram(0x1FFF)));
         assert_eq!(lo.decode(0x70_2000), Some(Slot::Sram(0)));
@@ -269,6 +294,23 @@ mod tests {
         assert_eq!(ex.decode(0xC0_0000), Some(Slot::Rom(0)));
         assert_eq!(ex.decode(0x40_0000), Some(Slot::Rom(0x40_0000)));
         assert_eq!(ex.decode(0x00_FFC0), Some(Slot::Rom(0x40_FFC0)));
+    }
+
+    // Batman's shape: the only well-formed header at the HiROM place, whose reset leads to an idle loop, and an empty
+    // LoROM place whose reset vector leads to a handler that sets the machine up (D-4).
+    #[test]
+    fn the_reset_handler_decides_when_the_fields_choose_a_handler_that_does_nothing() {
+        let mut rom = image(0x10_0000, Map::HiRom, 0x31);
+        rom[0x8000..0x8002].copy_from_slice(&[0x80, 0xFE]);
+        rom[0xFFFC..0xFFFE].copy_from_slice(&[0x00, 0x80]);
+        let handler = [0x78, 0x9C, 0x00, 0x42, 0x9C, 0x0B, 0x42, 0x9C, 0x0C, 0x42, 0x9C, 0x00, 0x21, 0x9C, 0x05, 0x21, 0x80, 0xFE];
+        rom[..handler.len()].copy_from_slice(&handler);
+        rom[0x7FFC..0x7FFE].copy_from_slice(&[0x00, 0x80]);
+        rom[0x7FC0..0x7FFC].fill(0);
+        assert_eq!(find_header(&rom).unwrap().map, Map::LoRom);
+        // With the HiROM handler doing the same work, the fields' choice stands.
+        rom[0x8000..0x8000 + handler.len()].copy_from_slice(&handler);
+        assert_eq!(find_header(&rom).unwrap().map, Map::HiRom);
     }
 
     #[test]

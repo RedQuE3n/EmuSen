@@ -145,7 +145,21 @@ their data.
 - Conclusion: the cartridge is LoROM; measured. VenusRT's scorer is wrong on this file, and how to fix it without
   a list of titles is not settled: the rule owed is one that weighs a candidate by where its reset handler leads,
   checked against all 826 files before it replaces the present scorer. Open in that sense; no code changes here.
-- Pinned by: nothing yet. The library check of `VenusRT_Native.md` §12.3 is the test that will.
+- ~~Pinned by: nothing yet. The library check of `VenusRT_Native.md` §12.3 is the test that will.~~
+- **The rule, 2026-09-30, at stage 2 step 3.** *Measured first, over all 826 library files (scratch copies):* each
+  candidate header's reset handler was run for 4,000 instructions under its own map, counting its writes to the I/O
+  registers and whether it ran into BRK, COP, STP or unmapped memory. Of the candidates the fields reject, 819 of 826
+  crash, and of those they choose, 4. The write count alone separates nothing (337 chosen handlers write fewer than 8
+  registers), and a rule that added evidence to the score would turn Street Fighter Alpha 2 to HiROM, whose rejected
+  candidate writes 81 registers. Batman is the one file where the chosen handler does nothing (1 write, no crash)
+  and another's works (9 writes, no crash).
+- Conclusion, final for this file: when the fields' choice has a handler that neither crashes nor writes more than
+  one I/O register in 4,000 instructions, and another candidate's handler does not crash and writes at least 4, the
+  other is taken. Measured: over the library it changes Batman alone, to LoROM, as Mesen has it and as the game
+  runs. The three constants are calibrated on these 826 files and on nothing else; a file outside them that breaks
+  the rule reopens this entry.
+- Pinned by: `the_reset_handler_decides_when_the_fields_choose_a_handler_that_does_nothing` in `cart.rs`, on a
+  synthetic image of Batman's shape, and the library check of `VenusRT_Native.md` §14.5.
 
 ### D-5. Cartridge map: map mode $x2 without an S-DD1, which Mesen calls ExLoROM
 - Opened: 2026-09-30, by the same check: Street Fighter Alpha 2 (U), 4 MiB with an S-DD1, and two dumps of Test Drive
@@ -158,4 +172,22 @@ their data.
 - Referee: not read. Mesen's source: none.
 - Conclusion: open. The S-DD1 is outside parity (`VenusRT_Plan.md` §4.2). Test Drive II is settled when the goldens of
   stage 6 run it against Mesen.
+
+### D-6. Power-on: where in line 0 the CPU's first instruction begins
+- Opened: 2026-09-30, at stage 2 step 3, by the probe's CPU trace of four games against VenusRT's own, instruction by
+  instruction. Registers and each instruction's master clocks agree for the first 1,994 instructions of Super Mario
+  World, and the clocks' running total is identical (50,222 at record 1,990); but Mesen's 40-clock refresh falls in
+  an instruction about 175 clocks earlier than VenusRT's, line after line, and Super Metroid's 44th instruction reads
+  $4212 with the H-blank flag set in Mesen and clear in VenusRT.
+- Documents read: fullsnes, "SNES Timing H/V Events": "H=0, V=0, F=0: SNES starts at this time after /RESET", and
+  the refresh at H=133.5; anomie's timing document: the refresh "begins at 538 cycles into the first scanline of the
+  first frame". The datasheet's reset is seven cycles.
+- Test ROM: none. Both observations are explained by one cause, Mesen's CPU beginning its first instruction 130 to
+  180 clocks later in the line than a reset that starts at H=0, or by a refresh placed earlier; the CPU cannot tell
+  the two apart, and the PPU's H-counter latch of stage 3 can.
+- Referee: not read. Mesen's source: none.
+- Conclusion: fullsnes's start at H=0, V=0 and the documents' refresh point; argued. Open until stage 3's H-counter.
+  It bounds every frame-exact differential until then: memory compared at a frame may differ by what one line's
+  phase changes.
+- Pinned by: nothing yet.
 

@@ -42,6 +42,12 @@ pub struct Devices {
     pub strobe: bool,
     pub shift: [u16; 2],
     pub pads: [u16; 2],
+    /// The interrupt lines as the final cycle of the instruction found them, which is what the CPU's check sees.
+    pub nmi_at_cycle: bool,
+    pub irq_at_cycle: bool,
+    /// A stand-in for the sound CPU's boot ROM until stage 4: the CPU's writes to $2140-$2143, and whether its kick came.
+    pub apu_stub: [u8; 4],
+    pub apu_written: bool,
 }
 
 /// The B-bus addresses of a DMA unit's bytes, by its mode.
@@ -193,8 +199,10 @@ impl System {
     fn hdma_init(&mut self, resume: u16) {
         self.timing.hdma_init_done = true;
         let enabled = self.io[0x20C];
-        self.dev.hdma_active = enabled;
-        self.dev.hdma_transfer = 0;
+        // No channel has ended yet; one enabled later in the frame transfers at once only if an init ran (fullsnes's
+        // two cases of HDMA started mid-frame).
+        self.dev.hdma_active = 0xFF;
+        self.dev.hdma_transfer = if enabled == 0 { 0 } else { 0xFF };
         if enabled == 0 {
             return;
         }
@@ -331,6 +339,12 @@ impl System {
         }
     }
 
+    /// The sound CPU's ports as its boot ROM presents them (fullsnes, "Uploader"): $BBAA until the CPU's $CC kick on
+    /// port 0, then each port as last written, which is the boot ROM's acknowledge on port 0. Stage 4 replaces this.
+    pub(crate) fn read_apu_stub(&self, port: usize) -> u8 {
+        if self.dev.apu_written { self.dev.apu_stub[port] } else { [0xAA, 0xBB, 0, 0][port] }
+    }
+
     /// $4016-$4017 and $4200-$421F as the CPU reads them, or None for open bus.
     pub(crate) fn read_scpu(&mut self, offset: u16, side_effects: bool) -> Option<u8> {
         Some(match offset {
@@ -420,6 +434,7 @@ impl System {
         if (0x4200..=0x421F).contains(&offset) {
             self.io[(offset - 0x4000) as usize] = value;
         }
+        self.timing.schedule();
     }
 }
 

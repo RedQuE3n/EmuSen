@@ -1,10 +1,12 @@
 //! VenusRT, the SNES core in Rust, called through the common native interface (EmuSen_NativeCores.md).
 //! Written from hardware documents under VenusRT_Plan.md §1's clean-room protocol; the build record is VenusRT_Native.md.
 //!
-//! Stage 0: the machine is a stub with the memories and the state format, so that the runners and the build have an
-//! engine to drive. No part of the console is emulated yet.
+//! Built so far: the 65816 (`cpu`), the cartridge (`cart`) and the S-CPU's bus and master clock (`bus`); the PPU, the
+//! APU and the S-CPU's other devices come with later stages.
 
 pub mod cpu;
+pub mod bus;
+pub mod cart;
 pub mod ffi;
 pub mod machine;
 pub mod state;

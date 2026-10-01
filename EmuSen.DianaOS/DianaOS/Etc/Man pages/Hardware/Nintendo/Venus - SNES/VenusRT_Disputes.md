@@ -462,3 +462,17 @@ their data.
   start within the line, set by the test's own NOPs, and inside what the test accepts. Settled for the channels HDMA
   takes; open for a DMA channel it does not.
 
+### D-18. DMA between WRAM and its own port `$2180`: nothing reaches the port, and a read of it writes `$00`
+- Opened: 2026-10-01, at stage 3 step 4, by the two `test_dmavalid` copies (byuu, 2008-03-03) failing. VenusRT moved
+  the bytes both ways.
+- Documents read: fullsnes, "WMDATA", "DMA Notes": "WRAM-to-WRAM DMA isn't possible (neither in A-Bus to B-Bus
+  direction, nor vice-versa)", the chip being "unable to process both at once". It does not say what is left behind.
+- Test ROM: `test_dmavalid`'s tests 2 and 3 and their comments, a console's results. WRAM to `$2180`: the port's
+  address is not incremented, the write does not occur, the DMA's address and count move as usual and its time is
+  spent. `$2180` to WRAM: the port's address is not incremented, and "DMA write did occur, but wrote unknown value
+  (not MDR ...)", the byte the console showed being `$00`; the test accepts anything but the old value.
+- Referee: not read. Mesen's source: none.
+- Conclusion: fullsnes's rule with the test's details; in the port-to-WRAM direction the byte written is `$00`, the
+  one value a console is recorded as showing. Argued for that value, measured for the rest.
+- Pinned by: the two `test_dmavalid` rows of the corpus.
+

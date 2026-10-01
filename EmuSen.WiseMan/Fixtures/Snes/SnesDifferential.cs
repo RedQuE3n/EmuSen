@@ -43,6 +43,8 @@ namespace EmuSen.WiseMan.Fixtures.Snes
             // A picture more than 300 rows high shows each line twice (or interlaced); one 512 wide against one 256 wide is
             // compared at the wider one's columns, the narrow pixel standing for both halves, the main screen's being the odd one.
             int py = p.Height > 300 ? 2 : 1, qy = q.Height > 300 ? 2 : 1;
+            // Two such pictures are compared row for row, the offset doubled: an interlaced picture's fields differ.
+            if (py == 2 && qy == 2) (py, qy, rowOffset) = (1, 1, rowOffset * 2);
             int w = Math.Max(p.Width, q.Width), h = Math.Min(p.Height / py, q.Height / qy - rowOffset);
             int differing = 0;
             for (int y = 0; y < h; y++)

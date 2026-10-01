@@ -315,8 +315,12 @@ impl System {
 
     /// After any advance of the clock: the NMI edge, the joypad read's start, the vblank end of HDMA.
     pub(crate) fn after_clock(&mut self) {
+        self.ppu.field = self.timing.field;
         while self.ppu_line != self.timing.line {
-            let next = if self.ppu_line + 1 >= self.timing.lines() { 0 } else { self.ppu_line + 1 };
+            // The frame the PPU's line is in may be the one before, a line longer or shorter than this one.
+            let wrapped = self.timing.line < self.ppu_line;
+            let last = if wrapped { 261 + (self.ppu_line > 261) as u16 } else { self.timing.lines() - 1 };
+            let next = if self.ppu_line >= last { 0 } else { self.ppu_line + 1 };
             self.ppu.end_line(self.ppu_line, next);
             self.ppu_line = next;
         }

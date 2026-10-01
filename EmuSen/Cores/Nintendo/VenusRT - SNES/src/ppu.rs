@@ -40,8 +40,12 @@ pub struct Ppu {
     /// The picture as last presented, RGBA8888, `frame_width` by 224 at the start of the buffer; not part of the
     /// machine's state.
     pub frame: Box<[u8]>,
-    /// 256, or 512 for a frame with a hi-res line in it.
+    /// 256, or 512 for a frame with a hi-res line in it; 224, or 448 for one with an interlaced hi-res line.
     pub frame_width: u16,
+    pub frame_height: u16,
+    /// The field being drawn, and whether a line of it was interlaced hi-res; the clock's, for drawing.
+    pub field: bool,
+    pub tall: bool,
     /// The frame being drawn, always 512 wide, a low-res pixel written twice; presented at the start of V-Blank.
     pub canvas: Box<[u8]>,
     /// Whether a line of the frame being drawn was hi-res.
@@ -70,7 +74,7 @@ pub struct Ppu {
 
 impl Default for Ppu {
     fn default() -> Self {
-        let mut frame = vec![0u8; 2 * WIDTH * HEIGHT * 4];
+        let mut frame = vec![0u8; 2 * WIDTH * 2 * HEIGHT * 4];
         for px in frame.chunks_exact_mut(4) {
             px[3] = 0xFF;
         }
@@ -98,9 +102,12 @@ impl Default for Ppu {
             latched: false,
             ppu1_mdr: 0,
             ppu2_mdr: 0,
-            canvas: frame.clone().into(),
+            canvas: frame[..2 * WIDTH * HEIGHT * 4].to_vec().into(),
             frame: frame.into(),
             frame_width: WIDTH as u16,
+            frame_height: HEIGHT as u16,
+            field: false,
+            tall: false,
             wide: false,
             drawn: 0,
             skip: false,
@@ -389,23 +396,40 @@ impl Ppu {
     }
 
     /// The finished frame becomes the picture: 512 wide if a line of it was hi-res, else every other pixel of the
-    /// canvas, which is the 256-wide picture exactly.
+    /// canvas, which is the 256-wide picture exactly; 448 high, the fields woven, if a line was interlaced hi-res.
     fn present(&mut self) {
-        if self.wide {
-            self.frame.copy_from_slice(&self.canvas);
+        let row = 2 * WIDTH * 4;
+        if self.tall {
+            // Each field's lines go to its own rows of the 448; a first interlaced frame fills both.
+            let both = self.frame_height != 2 * HEIGHT as u16;
+            for y in 0..HEIGHT {
+                let line = &self.canvas[y * row..(y + 1) * row];
+                for half in 0..2 {
+                    if both || half == self.field as usize {
+                        self.frame[(2 * y + half) * row..(2 * y + half + 1) * row].copy_from_slice(line);
+                    }
+                }
+            }
             self.frame_width = 2 * WIDTH as u16;
+            self.frame_height = 2 * HEIGHT as u16;
+        } else if self.wide {
+            self.frame[..self.canvas.len()].copy_from_slice(&self.canvas);
+            self.frame_width = 2 * WIDTH as u16;
+            self.frame_height = HEIGHT as u16;
         } else {
             for (out, pair) in self.frame.chunks_exact_mut(4).zip(self.canvas.chunks_exact(8)) {
                 out.copy_from_slice(&pair[..4]);
             }
             self.frame_width = WIDTH as u16;
+            self.frame_height = HEIGHT as u16;
         }
         self.wide = false;
+        self.tall = false;
     }
 
-    /// The presented picture: `frame_width` by 224 pixels of RGBA.
+    /// The presented picture: `frame_width` by `frame_height` pixels of RGBA.
     pub fn picture(&self) -> &[u8] {
-        &self.frame[..self.frame_width as usize * HEIGHT * 4]
+        &self.frame[..self.frame_width as usize * self.frame_height as usize * 4]
     }
 
     /// The sprites of picture line `line`, chosen during the line before it as anomie's "SPRITES" describes: the
@@ -423,6 +447,8 @@ impl Ppu {
         // Priority rotation takes the first sprite from the internal word address (anomie; D-12 for its limits).
         let first = if self.oam_rotation { ((self.oam_address >> 2) & 0x7F) as usize } else { 0 };
         let y_line = line - 1;
+        // SETINI bit 1: the sprites take every other row by the field, and show at half their height (anomie, SETINI).
+        let obj_interlace = self.regs[0x33] & 2 != 0;
         let mut range = [0u8; 32];
         let mut n = 0;
         for k in 0..128 {
@@ -431,7 +457,7 @@ impl Ppu {
             let row = y_line.wrapping_sub(self.oam[i * 4 + 1] as u16) & 0xFF;
             // An OBJ at X=256 counts as if at 0 for range and time, though it draws off the screen (anomie).
             let xr = if x == -256 { 0 } else { x };
-            if row >= h || xr <= -(w as i16) {
+            if row >= h >> obj_interlace as u16 || xr <= -(w as i16) {
                 continue;
             }
             if n == 32 {
@@ -447,6 +473,9 @@ impl Ppu {
             let (x, attr, (w, _)) = self.obj_geometry(i, sizes);
             let xr = if x == -256 { 0 } else { x };
             let mut row = y_line.wrapping_sub(self.oam[i * 4 + 1] as u16) & 0xFF;
+            if obj_interlace {
+                row = 2 * row + self.field as u16;
+            }
             if attr & 0x80 != 0 {
                 // A rectangular sprite flips as two square ones (anomie).
                 row = (row / w) * w + (w - 1 - row % w);
@@ -530,6 +559,7 @@ impl Ppu {
         // Modes 5 and 6 and SETINI's pseudo-hi-res show the sub screen's pixel left of the main's (anomie, "Mode 5").
         let hires = self.hires();
         self.wide |= hires;
+        self.tall |= self.half_lines();
         if from == 0 {
             self.before = Mix::default();
         }
@@ -544,6 +574,11 @@ impl Ppu {
                 self.canvas[at + 2] = scale(colour >> 10);
             }
         }
+    }
+
+    /// Modes 5 and 6 with SETINI's interlace draw the even or the odd half-lines by the field (anomie, "Mode 5").
+    fn half_lines(&self) -> bool {
+        matches!(self.regs[0x05] & 7, 5 | 6) && self.regs[0x33] & 1 != 0
     }
 
     fn hires(&self) -> bool {
@@ -564,6 +599,9 @@ impl Ppu {
             }
             let blocks = mosaic & (1 << bg) != 0;
             let row = if blocks { line - self.mosaic_row as u16 } else { line };
+            // In half-lines the picture's line L is rows 2L and 2L+1, the field choosing which.
+            // A mosaic block there is two half-lines high at the least, so both fields show the even one (anomie, "Mosaic").
+            let row = if self.half_lines() { 2 * row + (self.field && !blocks) as u16 } else { row };
             self.fill_row(bg, mode, row, from, to);
             if blocks && matches!(mode, 5 | 6) {
                 // In true hi-res a block's first half-pixel, a sub-screen one, fills both screens' (fullsnes, "Hires Notes").

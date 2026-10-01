@@ -3,7 +3,7 @@
 
 use emusen_native::abi::{self, File, FrameInfo, NativeCore, Settings};
 
-use crate::machine::{DSP_RATE, Machine, SCREEN_HEIGHT};
+use crate::machine::{DSP_RATE, Machine};
 
 /// VenusRT's half of the interface version.
 pub const CORE_VERSION: u16 = 1;
@@ -47,9 +47,9 @@ impl NativeCore for Machine {
     }
 
     fn frame_info(&self) -> FrameInfo {
-        // 256 wide, or 512 for a frame with a hi-res line in it; the size is the frame's, read after it.
+        // 256 or 512 wide and 224 or 448 high by what the frame held; the size is the frame's, read after it.
         let picture = self.sys.ppu.picture();
-        FrameInfo { width: self.sys.ppu.frame_width as i32, height: SCREEN_HEIGHT as i32, row_repeat: 1, flags: 0, serial: self.total_frames(), bytes: picture.len() as i64 }
+        FrameInfo { width: self.sys.ppu.frame_width as i32, height: self.sys.ppu.frame_height as i32, row_repeat: 1, flags: 0, serial: self.total_frames(), bytes: picture.len() as i64 }
     }
 
     fn frame(&self) -> &[u8] {

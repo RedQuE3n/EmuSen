@@ -377,12 +377,14 @@ impl Machine {
         }
         p.mosaic_row = r.u8()? & 0x0F;
         p.mosaic_size = (r.u8()?).clamp(1, 16);
+        let interlace = p.regs[0x33] & 1 != 0;
         r.bytes(&mut self.sys.wram)?;
         r.u16s(&mut p.vram)?;
         r.u16s(&mut p.cgram)?;
         r.bytes(&mut p.oam)?;
         r.bytes(&mut self.apuram)?;
         r.bytes(&mut self.sys.cart.sram)?;
+        self.sys.timing.interlace = interlace;
         self.sys.timing.schedule();
         Ok(())
     }

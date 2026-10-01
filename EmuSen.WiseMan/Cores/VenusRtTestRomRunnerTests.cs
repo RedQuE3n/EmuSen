@@ -71,6 +71,11 @@ namespace EmuSen.WiseMan.Cores
             var narrow = new ushort[256 * 224];
             for (int y = 0; y < 224; y++) for (int x = 0; x < 256; x++) narrow[y * 256 + x] = (ushort)(y * 600 + 2 * x & 0x7FFF);
             Assert.Equal((512 * 224, 256 * 224), SnesDifferential.Pictures(new SnesPicture(256, 224, narrow), new SnesPicture(512, 478, wide), SnesDifferential.MesenRowOffset));
+            var tall = new ushort[512 * 448];
+            for (int y = 0; y < 448; y++) for (int x = 0; x < 512; x++) tall[y * 512 + x] = (ushort)((y / 2) * 600 + x & 0x7FFF);
+            Assert.Equal((512 * 448, 0), SnesDifferential.Pictures(new SnesPicture(512, 448, tall), new SnesPicture(512, 478, wide), SnesDifferential.MesenRowOffset));
+            tall[3 * 512] ^= 1;
+            Assert.Equal((512 * 448, 1), SnesDifferential.Pictures(new SnesPicture(512, 448, tall), new SnesPicture(512, 478, wide), SnesDifferential.MesenRowOffset));
         }
 
         // byuu's ROMs pass on a blue backdrop and fail on a red one, where their folder's source writes both colours.

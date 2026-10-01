@@ -4,6 +4,7 @@
 
 use crate::cart::{Cartridge, Region, Slot};
 use crate::cpu::{Bus, pin};
+use crate::ppu::{Beam, Ppu};
 use crate::scpu::Devices;
 
 pub const LINE: u16 = 1364;
@@ -165,10 +166,9 @@ pub struct System {
     pub timing: Timing,
     /// $4200-$43FF as last written, for the devices later steps build.
     pub io: Box<[u8]>,
-    /// The VRAM port ($2115-$2119) alone, until the PPU of stage 3.
-    pub vram: Box<[u16]>,
-    pub vram_address: u16,
-    pub vmain: u8,
+    pub ppu: Ppu,
+    /// The line the PPU last finished, so that it is told of every line's end.
+    pub ppu_line: u16,
     pub dev: Devices,
     /// CPU writes to $2100-$43FF since power-on, which the header's reset-handler evidence counts; not in the state.
     pub io_writes: u32,
@@ -184,10 +184,14 @@ impl System {
             mdr: 0,
             fast_rom: false,
             timing: Timing { pal, ..Timing::default() },
-            io: vec![0; 0x400].into(),
-            vram: vec![0; 0x8000].into(),
-            vram_address: 0,
-            vmain: 0,
+            io: {
+                // WRIO is all ones at power-on, which is what lets $2137 latch the counters (fullsnes).
+                let mut io = vec![0u8; 0x400];
+                io[0x201] = 0xFF;
+                io.into()
+            },
+            ppu: Ppu::default(),
+            ppu_line: 0,
             dev: Devices::default(),
             io_writes: 0,
         }
@@ -232,10 +236,22 @@ impl System {
         self.timing.schedule();
     }
 
-    fn vram_step(&mut self, high: bool) {
-        if high == (self.vmain & 0x80 != 0) {
-            self.vram_address = self.vram_address.wrapping_add([1, 32, 128, 128][(self.vmain & 3) as usize]);
-        }
+    /// Where the raster stands: the line, and the dot of the line's clock with the two long dots counted.
+    pub fn beam(&self) -> Beam {
+        let t = &self.timing;
+        let c = t.line_clock;
+        let dot = if t.line_length() != LINE || c < 1292 {
+            c / 4
+        } else if c < 1298 {
+            323
+        } else if c < 1310 {
+            324 + (c - 1298) / 4
+        } else if c < 1316 {
+            327
+        } else {
+            328 + (c - 1316) / 4
+        };
+        Beam { line: t.line, dot, vblank: t.vblank, field: t.field, pal: t.pal }
     }
 
     /// A read's value, or None where nothing drives the bus. `side_effects` false is the debugger's look.
@@ -254,6 +270,10 @@ impl System {
                         self.wram_address = (self.wram_address + 1) & 0x1FFFF;
                     }
                     return Some(v);
+                }
+                0x2100..=0x213F => {
+                    let beam = self.beam();
+                    return self.ppu.read(offset as u8, beam, self.io[0x201], side_effects);
                 }
                 0x2140..=0x217F => return Some(self.read_apu_stub((offset & 3) as usize)),
                 0x2000..=0x3FFF => return None,
@@ -294,14 +314,17 @@ impl System {
                     self.wram[offset as usize] = value;
                     return;
                 }
-                0x2115 => self.vmain = value,
-                0x2116 => self.vram_address = (self.vram_address & 0xFF00) | value as u16,
-                0x2117 => self.vram_address = (self.vram_address & 0x00FF) | (value as u16) << 8,
-                0x2118 | 0x2119 => {
-                    let high = offset == 0x2119;
-                    let w = &mut self.vram[(self.vram_address & 0x7FFF) as usize];
-                    *w = if high { (*w & 0x00FF) | (value as u16) << 8 } else { (*w & 0xFF00) | value as u16 };
-                    self.vram_step(high);
+                0x2100..=0x213F => {
+                    let beam = self.beam();
+                    self.ppu.write(offset as u8, value, beam);
+                }
+                0x4201 => {
+                    // Bit 7 falling latches the counters, as a read of $2137 does (fullsnes, OPHCT).
+                    if self.io[0x201] & 0x80 != 0 && value & 0x80 == 0 {
+                        let beam = self.beam();
+                        self.ppu.latch(beam);
+                    }
+                    self.io[0x201] = value;
                 }
                 0x2180 => {
                     self.wram[self.wram_address as usize] = value;
@@ -318,7 +341,7 @@ impl System {
                     self.fast_rom = value & 1 != 0;
                     self.io[0x20D] = value;
                 }
-                0x4016 | 0x4200..=0x420B => self.write_scpu(offset, value),
+                0x4016 | 0x4200 | 0x4202..=0x420B => self.write_scpu(offset, value),
                 0x4000..=0x43FF => self.io[(offset - 0x4000) as usize] = value,
                 _ => {}
             }

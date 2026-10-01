@@ -18,6 +18,7 @@ using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Endymion;
 using EmuSen.Endymion.Input;
+using EmuSen.Serenity;
 using EmuSen.Serenity.Dashboards;
 using EmuSen.Mistress.Input;
 using EmuSen.LunaP.Commands;
@@ -157,7 +158,7 @@ namespace EmuSen.Mistress.Views
 
         public MainWindow()
         {
-            _frames = new FrameHandOff((pixels, width, height, rowRepeat, release) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release));
+            _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence));
             _pause = new LunaAction("_Pause", _ => TogglePause()) { IsCheckable = true };
             _reset = new LunaAction("_Reset", ResetEmulation);
             _closeGame = new LunaAction("_Close Game", ShowLibrary);
@@ -180,6 +181,8 @@ namespace EmuSen.Mistress.Views
             _gamepad = new GamepadManager(_gamepadBindings.For(_activeConsole), start: false);
             _gamepad.PadChanged += OnPadChanged;
             Opened += (_, _) => RequestAnimationFrame(_ => Dispatcher.UIThread.Post(_gamepad.Start, DispatcherPriority.Background));
+            // `--play <rom>` starts a game straight away, which the cadence measurement of §4.87.1 launches with.
+            Opened += (_, _) => { if (PlayArgument(Environment.GetCommandLineArgs()) is { } rom) Dispatcher.UIThread.Post(() => LoadRom(rom, Path.GetFileNameWithoutExtension(rom)), DispatcherPriority.Background); };
             // Endymion is a leaf and reads no globals, so the settings come from here - see EmuSen_Audio_Sync.md §7.1.
             _audioPlayer = new AudioPlayer(
                 AudioSettings.SampleRate, AudioSettings.OutputTargetLatencyMs, AudioSettings.RateControlMaxDeviation);
@@ -909,6 +912,12 @@ namespace EmuSen.Mistress.Views
             _session?.FlushVerboseLogs();
         }
 
+        internal static string? PlayArgument(string[] args)
+        {
+            int i = Array.IndexOf(args, "--play");
+            return i >= 0 && i + 1 < args.Length && File.Exists(args[i + 1]) ? args[i + 1] : null;
+        }
+
         private void LoadRom(string path, string displayName) => LoadGame(path, displayName, resumeFrom: null, reset: false);
 
         // resumeFrom is a state to load before the first frame runs - see EmuSen_Settings_Reference.md §4.31.
@@ -1353,11 +1362,16 @@ namespace EmuSen.Mistress.Views
                     {
                         byte[] frame = session.GetFrameBufferRgba();
                         if (captured) Picture(session, frame, serial);
-                        SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release);
+                        SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release, session.TotalFrames);
                         offeredSerial = serial;
                         offeredInWindow++;
+                        PresentationTrace.Frame(session.TotalFrames, frameStart, Stopwatch.GetTimestamp(), true);
                     }
-                    else if (captured && !session.SkipRendering) PictureUnchanged(session, serial);
+                    else
+                    {
+                        if (captured && !session.SkipRendering) PictureUnchanged(session, serial);
+                        PresentationTrace.Frame(session.TotalFrames, frameStart, Stopwatch.GetTimestamp(), false);
+                    }
 
                     loopMark = Stopwatch.GetTimestamp();
                     handOffTicks += loopMark - afterAudio;
@@ -1437,9 +1451,9 @@ namespace EmuSen.Mistress.Views
         }
 
         // Called from the emulation thread; newest wins - see EmuSen_Serenity.md §4.
-        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release)
+        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0)
         {
-            _frames.Offer(pixels, width, height, rowRepeat, release);
+            _frames.Offer(pixels, width, height, rowRepeat, release, sequence);
         }
 
         private void OnExitClick(object? sender, RoutedEventArgs e)

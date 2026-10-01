@@ -96,7 +96,8 @@ impl Machine {
     /// with two internal cycles.
     pub fn step(&mut self) {
         self.sys.dev.pads = self.pads;
-        let irq = self.sys.dev.irq_at_cycle && self.sys.timing.irq_flag;
+        // What the check saw is taken, though the final cycle cleared or disabled the line (D-10).
+        let irq = self.sys.dev.irq_at_cycle;
         let nmi = self.sys.dev.nmi_at_cycle && self.sys.dev.nmi_pending;
         if self.cpu.waiting {
             if self.sys.dev.nmi_pending || self.sys.timing.irq_flag {
@@ -220,6 +221,7 @@ impl Machine {
             w.bool("Strobe", d.strobe);
             w.u16s("Shift", &d.shift);
             w.bool("NmiAtCycle", d.nmi_at_cycle);
+            w.bool("NmiHold", d.nmi_hold);
             w.bool("IrqAtCycle", d.irq_at_cycle);
             w.bool("Woke", self.woke);
             w.bytes("ApuStub", &d.apu_stub);
@@ -255,6 +257,8 @@ impl Machine {
             w.u8("Ppu1Mdr", p.ppu1_mdr);
             w.u8("Ppu2Mdr", p.ppu2_mdr);
             w.u16("Drawn", p.drawn);
+            w.bool("RangeOver", p.range_over);
+            w.bool("TimeOver", p.time_over);
         });
         w.bytes("Wram", &self.sys.wram);
         w.u16s("Vram", &p.vram);
@@ -329,6 +333,7 @@ impl Machine {
         d.strobe = r.bool()?;
         r.u16s(&mut d.shift)?;
         d.nmi_at_cycle = r.bool()?;
+        d.nmi_hold = r.bool()?;
         d.irq_at_cycle = r.bool()?;
         self.woke = r.bool()?;
         let d = &mut self.sys.dev;
@@ -361,6 +366,8 @@ impl Machine {
         p.ppu1_mdr = r.u8()?;
         p.ppu2_mdr = r.u8()?;
         p.drawn = r.u16()?.min(256);
+        p.range_over = r.bool()?;
+        p.time_over = r.bool()?;
         r.bytes(&mut self.sys.wram)?;
         r.u16s(&mut p.vram)?;
         r.u16s(&mut p.cgram)?;
@@ -460,14 +467,14 @@ pub(crate) mod tests {
 
     // Version 4: the CPU, the clock, the bus and the S-CPU's devices; the listing is its record (plan §5.6).
     #[test]
-    fn the_version_5_layout_is_pinned() {
+    fn the_version_7_layout_is_pinned() {
         let m = Machine::load_rom(&rom(&[])).unwrap();
         let layout = m.layout();
         assert!(layout.starts_with("0 4 u32 Magic\n4 4 i32 Version\n8 2 u16 Cpu.A\n"), "{layout}");
         assert!(layout.contains(" u64 Timing.Clock\n") && layout.contains(" u8[1024] Bus.Io\n") && layout.contains(" u16[32768] Vram\n"), "{layout}");
         assert!(layout.contains(" u8[64] Ppu.Regs\n") && layout.contains(" u16[256] Cgram\n"), "{layout}");
-        assert_eq!(layout.lines().count(), 88, "{layout}");
-        assert_eq!(m.state_size(), 264_449);
+        assert_eq!(layout.lines().count(), 91, "{layout}");
+        assert_eq!(m.state_size(), 264_452);
         assert_eq!(&save(&m)[..4], b"VNRT");
     }
 

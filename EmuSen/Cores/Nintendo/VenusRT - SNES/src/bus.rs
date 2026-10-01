@@ -12,6 +12,8 @@ pub const LINE: u16 = 1364;
 pub const REFRESH_AT: u16 = 534;
 pub const REFRESH: u16 = 40;
 pub const VBLANK_LINE: u16 = 225;
+/// Where line 225's NMI flag and /NMI line take effect, in the bus's end-of-cycle frame (VenusRT_Disputes.md D-8).
+pub const NMI_AT: u16 = 6;
 
 /// The master clock and where it stands in the frame.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -49,6 +51,11 @@ pub fn irq_point(htime: u16) -> u16 {
     14 + 4 * htime + if htime > 323 { 2 } else { 0 } + if htime > 327 { 2 } else { 0 }
 }
 
+/// Where the flag and the CPU's line take effect in the bus's end-of-cycle frame: four clocks after the flag's point.
+pub fn irq_line_point(htime: u16) -> u16 {
+    irq_point(htime) + 4
+}
+
 pub const JOYPAD_AT: u16 = 298;
 pub const HDMA_INIT_AT: u16 = 24;
 pub const HDMA_AT: u16 = 278 * 4;
@@ -77,6 +84,9 @@ impl Timing {
             if self.line == VBLANK_LINE && from < JOYPAD_AT && JOYPAD_AT <= to {
                 self.joypad_due = true;
             }
+            if self.line == VBLANK_LINE && from < NMI_AT && NMI_AT <= to {
+                self.nmi_flag = true;
+            }
             self.clock += step as u64;
             self.line_clock = to;
             left -= step;
@@ -94,7 +104,7 @@ impl Timing {
         if h > 339 || (h == 153 && (len != LINE || self.line == self.lines() - 1)) {
             return;
         }
-        let at = irq_point(h);
+        let at = irq_line_point(h);
         let (at, v) = if at >= len { (at - len, self.line.checked_sub(1).unwrap_or(self.lines() - 1)) } else { (at, self.line) };
         let line_matches = self.irq_mode == 1 || v == self.vtime;
         if line_matches && from < at && at <= to {
@@ -108,7 +118,6 @@ impl Timing {
         self.hdma_line_done = false;
         if self.line == VBLANK_LINE {
             self.vblank = true;
-            self.nmi_flag = true;
         }
         if self.line == self.lines() {
             self.line = 0;
@@ -135,10 +144,13 @@ impl Timing {
         if self.line == VBLANK_LINE && JOYPAD_AT > self.line_clock {
             next = next.min(JOYPAD_AT);
         }
+        if self.line == VBLANK_LINE && NMI_AT > self.line_clock {
+            next = next.min(NMI_AT);
+        }
         if self.irq_mode != 0 {
             let h = if self.irq_mode == 2 { 0 } else { self.htime };
             if h <= 339 {
-                let at = irq_point(h);
+                let at = irq_line_point(h);
                 let at = if at >= self.line_length() { at - self.line_length() } else { at };
                 if at > self.line_clock {
                     next = next.min(at);
@@ -222,7 +234,8 @@ impl System {
     /// H=133.5), then the cycle's own clocks.
     #[inline]
     fn clock_cycle(&mut self, clocks: u16) {
-        self.dev.nmi_at_cycle = self.dev.nmi_pending;
+        self.dev.nmi_at_cycle = self.dev.nmi_pending && !self.dev.nmi_hold;
+        self.dev.nmi_hold = false;
         self.dev.irq_at_cycle = self.timing.irq_flag;
         let t = &mut self.timing;
         if t.line_clock + clocks < t.next_event && self.dev.dma_wait == 0 {
@@ -238,9 +251,22 @@ impl System {
 
     /// Where the raster stands: the line, and the dot of the line's clock with the two long dots counted.
     pub fn beam(&self) -> Beam {
+        self.beam_at(self.timing.line_clock)
+    }
+
+    /// The beam at a clock of the current line; a clock before the line's start is the previous line's end.
+    pub fn beam_at(&self, clock: u16) -> Beam {
         let t = &self.timing;
-        let c = t.line_clock;
-        let dot = if t.line_length() != LINE || c < 1292 {
+        if clock >= LINE {
+            let previous = if t.line == 0 { t.lines() - 1 } else { t.line - 1 };
+            let c = clock.wrapping_add(LINE);
+            return Beam { line: previous, dot: Self::dot_of(c, LINE), vblank: previous >= VBLANK_LINE, field: t.field, pal: t.pal };
+        }
+        Beam { line: t.line, dot: Self::dot_of(clock, t.line_length()), vblank: t.vblank, field: t.field, pal: t.pal }
+    }
+
+    fn dot_of(c: u16, len: u16) -> u16 {
+        if len != LINE || c < 1292 {
             c / 4
         } else if c < 1298 {
             323
@@ -250,8 +276,7 @@ impl System {
             327
         } else {
             328 + (c - 1316) / 4
-        };
-        Beam { line: t.line, dot, vblank: t.vblank, field: t.field, pal: t.pal }
+        }
     }
 
     /// A read's value, or None where nothing drives the bus. `side_effects` false is the debugger's look.
@@ -272,14 +297,16 @@ impl System {
                     return Some(v);
                 }
                 0x2100..=0x213F => {
-                    let beam = self.beam();
+                    let beam = if offset == 0x2137 { self.beam_at(self.timing.line_clock.wrapping_sub(4)) } else { self.beam() };
                     return self.ppu.read(offset as u8, beam, self.io[0x201], side_effects);
                 }
                 0x2140..=0x217F => return Some(self.read_apu_stub((offset & 3) as usize)),
                 0x2000..=0x3FFF => return None,
                 0x4210 => {
                     let v = (if self.timing.nmi_flag { 0x80 } else { 0 }) | (self.mdr & 0x70) | 0x02;
-                    if side_effects {
+                    // A read ending before HC=10 of line 225 leaves the flag set (D-8).
+                    let held = self.timing.line == VBLANK_LINE && self.timing.line_clock < NMI_AT + 4;
+                    if side_effects && !held {
                         self.timing.nmi_flag = false;
                         self.after_clock();
                     }

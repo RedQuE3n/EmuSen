@@ -1136,7 +1136,8 @@ was the same.
 Of the 176, **116 use only this step's features at their last frame and 79 of those are equal to Mesen** in every
 pixel. The 37 that are not are mostly not the PPU's:
 
-- **28 ROMs grade themselves through the backdrop**, colour 0 blue (`$7C00`) for a pass and red (`$001F`) for a
+- **28 ROMs grade themselves through the backdrop** (*corrected 2026-10-01: 25; three of the 28 write only blue, when
+  they finish, and grade nothing, §16.2*), colour 0 blue (`$7C00`) for a pass and red (`$001F`) for a
   failure: byuu's `snestest_082506`, and the `blobs`, `nmi_irq`, `test_dmavalid`, `test_mdrhdma` and other folders of
   the same collection. The runner's protocols do not read it, so they count as visual, and VRAM equal to Mesen hid
   their verdicts. **Mesen passes all 28; VenusRT passes 11 and fails 17**, IRQ, NMI, HDMA and DMA tests, at either
@@ -1229,3 +1230,130 @@ priority rotation, OAM writes during display), then windows and colour math with
 with offset-per-tile and direct colour, mosaic, hi-res, pseudo-hi-res and interlace, then mode 7, then the PPU's
 read-side timing. Before the sprite step: D-8, implemented from `test_nmi`'s header and measured on the 17
 backdrop-graded ROMs and the CPU trace, and the backdrop protocol taught to the runner with the baseline re-recorded.
+
+---
+
+## 16. Stage 3, step 2: the interrupt lines, the backdrop protocol, and sprites (2026-10-01)
+
+### 16.1 The interrupt lines and the counter latch (D-8, D-9, D-10)
+
+byuu's `test_nmi` and `test_irq` state their console results in their headers, and the ROMs grade themselves
+against them; they were taken as the documents for three rules (the entries give the argument):
+
+- **NMI** (D-8): line 225's flag and /NMI take effect at HC=6 in the bus's end-of-cycle frame (the header's HC=2 for
+  the flag, read two clocks into a six-clock cycle, and HC=6 for the line); a `$4210` read ending before HC=10 does
+  not clear the flag; an NMI edge a `$4200` write makes is not seen by the check at the very next cycle's start.
+- **The latch** (D-9): `$2137` latches four clocks before its cycle ends, which with the WRIO latch at the end of
+  its write is anomie's "1 dot later". `test_nmi` reaches its test points through a seek that reads the counter, so
+  D-8 could not be measured without it.
+- **IRQ** (D-10): the flag and the CPU's line at anomie's point plus four; a `$4211` read within four clocks of it
+  leaves the flag; the IRQ the check saw is taken though the final cycle disables it.
+
+**Measured:** the three copies of `test_nmi` and `blobs/test_irq` pass every test; they stopped at test 1. Of the
+25 backdrop-graded ROMs (§16.2) VenusRT passes 12, against 8 before. gilyon's two CPU ROMs still pass on the
+machine. **D-6 moved:** with the latch a dot earlier no power-on offset reproduces all four of Sour's rows (132
+clocks gives three, 130 the other three), and the 128 of §15.3 is retired. The state is version 6 for the NMI hold,
+then 7 for the sprite flags.
+
+### 16.2 The backdrop protocol, and the baseline re-recorded (measured 2026-10-01)
+
+The runner reads byuu's verdict where no text verdict is found: colour 0 `$7C00` is a pass and `$001F` a failure,
+for ROMs of the jonasquinn collection whose folder's source, or `blobs`' disassembly, writes both colours. **25 ROMs**
+grade this way, not §15.5's 28: `test_math`, `test_mul` and `test_mdrhdma2` write only blue, when they finish, with
+their results in SRAM for another engine to compare, and the protocol rightly leaves them visual.
+
+| On the 25 | Passed | Failed | Other colour |
+|---|---|---|---|
+| Mesen | 25 | 0 | 0 |
+| C# Venus | 8 | 13 | 4 |
+| VenusRT | 12 | 13 | 0 |
+
+The old core's 13 are IRQ, NMI, HDMA and DMA tests: eight of VenusRT's 13, its four new passes (the three
+`test_nmi` and `test_irq`), and `demo_nmi`, which VenusRT passed already; its other four are on a colour that is
+neither verdict. It is black-box information for the plan's baseline, which §3.1 and §3.5 of the plan now carry. Across the
+corpus as the runner counts: Mesen passes 117 self-grading ROMs (92 before), Venus 81 of those (73), VenusRT 49
+(37). `VenusRtBaseline.tsv` is re-recorded with all three engines' columns (VenusRT's for the record; the test
+compares Venus's and Mesen's), and every cell that changed was a backdrop verdict or its detail. The test passes against the new table
+(a fresh Venus run, Mesen from its cache).
+
+### 16.3 Sprites (`ppu.rs`)
+
+From anomie's register document ("SPRITES") and fullsnes (OBSEL, STAT77, the priority chart):
+
+- **Evaluation, a line ahead.** As each line ends the PPU chooses the next line's sprites: from the first sprite
+  (sprite 0, or with priority rotation the internal word address's sprite), the first 32 whose rows cover the line
+  and whose X is within range, setting `$213E` bit 6 at a 33rd; then, from the last of those back, up to 34 tiles
+  whose X is on the screen, setting bit 7 at a 35th, so it is the first sprites that lose tiles. An OBJ at X=256
+  counts as at 0 for both limits and draws off the screen. A sprite's row is the line less one less its Y, in eight
+  bits, so tall sprites wrap from the bottom to the top. The flags clear at the end of V-Blank outside forced blank;
+  nothing is evaluated in forced blank. **The evaluation runs whether or not the picture is skipped**; only the tile
+  decoding below is skipped.
+- **Tiles.** OBSEL's eight size pairs (two undocumented), its base and its name gap; the 16×16 tile table wrapping
+  in each direction; horizontal flip, and vertical flip with a rectangular sprite flipped as two squares. **Each
+  tile's row is decoded once** into a 256-entry line of sprite pixels (CGRAM index and OAM priority), a tile loaded
+  later covering what is there, so the first sprite is on top and only its priority meets the backgrounds. Plan
+  §5.1 does not say how a span is decoded; for sprites this is the simplest correct way, since the time limit is
+  counted in tiles.
+- **Priority.** Sprites take their four places in modes 0 and 1's chart, and draw over the backdrop alone in the
+  modes whose backgrounds are later steps'.
+- **Not modelled:** OAM writes during display land where the address points (D-12); the overflow flags are set as
+  the line is chosen, not at the dots fullsnes gives (H=index×2 and H=0 of the next line); the "write 4n+2(A&1)+1
+  bytes" rotation oddity anomie describes; sprite interlace; the reload on any 1-to-0 of `$2100` bit 7 (D-11).
+
+### 16.4 The sprite oracles (measured 2026-10-01)
+
+- **PeterLemon's PPU ROMs have no sprite test**: the sprites in that folder are in its mode 3, pseudo-hi-res and
+  interlace demos, later steps'.
+- **The 240p suite's menu** (NTSC and PAL), whose one difference at §15.4 was its sprite character: **equal to
+  Mesen in every pixel.**
+- **The standing ROMs** (§15.5's 176): pictures equal on 115 (82 at §15.5). Of the 40 whose only feature beyond
+  step 1 is sprites, **29 are equal**, among them undisbeliever's `object-dropout-test` (the range and time limits,
+  flipped sprites, the X=256 case), byuu's `rto` (range and time overflow) and `test_oam`, and
+  `setini-early-read-obj`. The 11 that are not: INIDISP and HDMA-to-INIDISP glitch tests (plan §5.1's accepted
+  losses), `hvdma` (§15.6), Sour's two (D-6) and `HblankEmuTest`. Over all 295 rows, pictures equal Mesen's on 157
+  (124).
+- **The four games**, every tenth frame to 600. **Super Metroid** draws sprites only, then sprites over mode 7's
+  disabled background: equal to Mesen at every twentieth frame from 20 to 400 but the fades at 20 and 160, which
+  are D-7's brightness, until its state parts at 420. **A Link to the Past**: its sprite-only frames 100, 120 and 240
+  to 280 are equal; at 60 to 80 and 140 to 220 its "Nintendo" logo comes and goes on different frames in the two
+  engines, VenusRT ahead with the sound CPU's stand-in answering at once, which is timing and not the PPU. Super
+  Mario World and Donkey Kong Country stay in forced blank, as before (stage 4).
+- **Skip versus draw:** the 304 images of §15.2 never part over 300 frames, with evaluation running in both.
+
+### 16.5 The cost (measured 2026-10-01)
+
+`frame_cost`, best of three under the timing lock, load average 1.75 (1.46 at §15.9):
+
+| ROM | Drawn | Skipped | The picture | §15.9's picture |
+|---|---|---|---|---|
+| gilyon `cputest-full` | 1.19 | 0.53 | 0.66 | 0.66 |
+| the 240p menu (three backgrounds, sprites) | 1.35 | 0.39 | 0.96 | 0.95 (no sprites) |
+| `Rings` | 1.53 | 0.52 | 1.01 | 0.99 |
+| `object-dropout-test` (sprites, one background) | 0.77 | 0.37 | 0.40 | — |
+| `rto` | 0.85 | 0.48 | 0.37 | — |
+| A Link to the Past | 0.85 | 0.50 | 0.35 | 0.26 |
+| Super Metroid | 0.82 | 0.56 | 0.26 | 0.15 |
+| Super Mario World (forced blank) | 0.45 | 0.42 | 0.03 | 0.03 |
+
+**The sprites' decoding is small beside the backgrounds**: a sprite-heavy test costs 0.4 ms of picture against
+1.0 for three backgrounds. The skipped column rose by 0.06 to 0.09 ms on every ROM that is not in forced blank,
+the sprite evaluation that runs in both modes (128 entries a line for 224 lines), argued from its absence on the
+blank Super Mario World; part of it is the higher load. Against §5.5's 1.5 ms for the PPU, the backgrounds' 0.6 to
+1.0 ms of §15.9 stand, the evaluation adds about 0.07 always, and a sprite-heavy line about 0.1 to 0.3 more. Nothing
+was tuned, as decided; the backgrounds' per-pixel fetch is the open question.
+
+### 16.6 The clone check (measured 2026-10-01)
+
+18 files against Mesen's 164: no pair shares 12 fingerprints, no table is shared (`OBJ_SIZES` included), the largest
+pair below the threshold is still 4 (`cpu/mod.rs`), and `ppu.rs` shares none. The names are §15.10's nine and two
+more, `rangeover` and `timeover`, fullsnes's "Range overflow" and "Time overflow".
+
+### 16.7 What is left, and the next step
+
+Open: D-6, D-7, D-11, D-12; D-10 for five IRQ tests; the HDMA and DMA tests among the 13 backdrop failures. The next
+PPU step in the plan's order is **windows and colour math with the sub screen**: the two windows and their logic, the
+colour window, the sub screen and fixed colour, add and subtract with halving, OBJ palettes 4 to 7 alone taking
+part, and the clip to black; its oracles are undisbeliever's window ROMs, PeterLemon's `Window` and `Blend` folders
+where their mode allows, and the colour-math frames of A Link to the Past. The 13 backdrop failures can be read test
+by test beside it, as D-8 and D-10 were.
+

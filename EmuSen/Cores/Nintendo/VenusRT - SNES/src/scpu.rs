@@ -45,6 +45,10 @@ pub struct Devices {
     /// The interrupt lines as the final cycle of the instruction found them, which is what the CPU's check sees.
     pub nmi_at_cycle: bool,
     pub irq_at_cycle: bool,
+    /// An NMI edge a $4200 write made, which the check at the very next cycle's start does not see (D-8).
+    pub nmi_hold: bool,
+    /// True only inside a $4200 write; not in the state.
+    pub writing_nmitimen: bool,
     /// A stand-in for the sound CPU's boot ROM until stage 4: the CPU's writes to $2140-$2143, and whether its kick came.
     pub apu_stub: [u8; 4],
     pub apu_written: bool,
@@ -292,6 +296,7 @@ impl System {
         let nmi = self.timing.nmi_flag && self.dev.nmitimen & 0x80 != 0;
         if nmi && !self.dev.nmi_seen {
             self.dev.nmi_pending = true;
+            self.dev.nmi_hold = self.dev.writing_nmitimen;
         }
         self.dev.nmi_seen = nmi;
         if self.timing.vblank {
@@ -364,7 +369,12 @@ impl System {
             }
             0x4211 => {
                 let v = (if self.timing.irq_flag { 0x80 } else { 0 }) | (self.mdr & 0x7F);
-                if side_effects {
+                // A read ending within four clocks of the flag's setting leaves it set (D-10).
+                let t = &self.timing;
+                let h = if t.irq_mode == 2 { 0 } else { t.htime };
+                let at = crate::bus::irq_line_point(h) % t.line_length();
+                let held = t.irq_mode != 0 && t.line_clock >= at && t.line_clock < at + 4;
+                if side_effects && !held {
                     self.timing.irq_flag = false;
                 }
                 v
@@ -395,12 +405,14 @@ impl System {
                 self.dev.strobe = strobe;
             }
             0x4200 => {
+                self.dev.writing_nmitimen = true;
                 self.dev.nmitimen = value;
                 self.timing.irq_mode = (value >> 4) & 3;
                 if self.timing.irq_mode == 0 {
                     self.timing.irq_flag = false;
                 }
                 self.after_clock();
+                self.dev.writing_nmitimen = false;
             }
             0x4202 => self.dev.wrmpya = value,
             0x4203 => {
@@ -505,6 +517,26 @@ mod tests {
     }
 
     #[test]
+    fn the_nmi_flag_sets_at_hc_6_of_line_225_and_an_early_read_leaves_it() {
+        // D-8, in the bus's end-of-cycle frame: test_nmi's flag at HC=2 and line at HC=6, read four clocks early.
+        let mut s = system();
+        s.write(0x4200, 0x80, pin::VDA);
+        while s.timing.line != 225 {
+            s.idle(0, 0);
+        }
+        s.timing.line_clock = 4;
+        assert!(!s.timing.nmi_flag);
+        s.idle(0, 0);
+        assert!(s.timing.nmi_flag && s.dev.nmi_pending);
+        s.timing.line_clock = 8;
+        assert_eq!(s.read_value(0x4210, true).unwrap() & 0x80, 0x80);
+        assert!(s.timing.nmi_flag);
+        s.timing.line_clock = 10;
+        assert_eq!(s.read_value(0x4210, true).unwrap() & 0x80, 0x80);
+        assert!(!s.timing.nmi_flag);
+    }
+
+    #[test]
     fn the_comparator_raises_the_irq_flag_at_htime_and_vtime() {
         let mut s = system();
         for (r, v) in [(0x4207u32, 100u8), (0x4208, 0), (0x4209, 3), (0x420A, 0), (0x4200, 0x30)] {
@@ -514,7 +546,12 @@ mod tests {
             s.idle(0, 0);
         }
         assert_eq!(s.timing.line, 3);
-        assert!((14 + 400..14 + 400 + 6).contains(&s.timing.line_clock), "{}", s.timing.line_clock);
+        // D-10: the flag and the line four clocks after anomie's 14+4H, a read within four clocks of it not clearing it.
+        assert!((18 + 400..18 + 400 + 6).contains(&s.timing.line_clock), "{}", s.timing.line_clock);
+        s.timing.line_clock = 418;
+        assert_eq!(s.read_scpu(0x4211, true).unwrap() & 0x80, 0x80);
+        assert!(s.timing.irq_flag);
+        s.timing.line_clock = 422;
         assert_eq!(s.read_scpu(0x4211, true).unwrap() & 0x80, 0x80);
         assert!(!s.timing.irq_flag);
     }

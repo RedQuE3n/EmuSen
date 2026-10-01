@@ -57,6 +57,27 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(SnesOutcome.NoDump, SnesTestRomGrader.Grade(text, new SnesRun("none", Array.Empty<SnesSnapshot>(), 0, Array.Empty<short>())).Outcome);
         }
 
+        // byuu's ROMs pass on a blue backdrop and fail on a red one, where their folder's source writes both colours.
+        [Fact]
+        public void A_backdrop_verdict_counts_only_where_the_source_writes_it()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), $"backdrop-{Guid.NewGuid():N}", "jonasquinn-test-roms", "t");
+            Directory.CreateDirectory(dir);
+            try
+            {
+                string rom = Path.Combine(dir, "test_nmi.smc"), other = Path.Combine(Path.GetDirectoryName(dir)!, "u", "x.smc");
+                File.WriteAllText(Path.Combine(dir, "test_nmi.asm"), "pass() {\n  lda #$00 : sta $2122\n  lda #$7c : sta $2122\n}\nfail() {\n  lda #$1f : sta $2122\n}\n");
+                Assert.Equal(SnesOutcome.Passed, SnesTestRomGrader.Grade(rom, RunWith(rom, Vram(), new byte[] { 0x00, 0x7C })).Outcome);
+                Assert.Equal(SnesOutcome.Failed, SnesTestRomGrader.Grade(rom, RunWith(rom, Vram(), new byte[] { 0x1F, 0x00 })).Outcome);
+                Assert.Equal(SnesOutcome.Visual, SnesTestRomGrader.Grade(rom, RunWith(rom, Vram(), new byte[] { 0x10, 0x42 })).Outcome);
+                Assert.Equal(SnesOutcome.Visual, SnesTestRomGrader.Grade(other, RunWith(other, Vram(), new byte[] { 0x00, 0x7C })).Outcome);
+            }
+            finally
+            {
+                Directory.Delete(Path.GetDirectoryName(Path.GetDirectoryName(dir))!, true);
+            }
+        }
+
         // PeterLemon's tests pass by showing PASS on a screen that has stopped changing, and fail by showing FAIL at all.
         [Fact]
         public void A_peterlemon_test_passes_only_on_a_steady_screen()

@@ -216,6 +216,12 @@ their data.
   latches the counters as its first instruction and prints them. Mesen prints OPHCT `$0035`, VenusRT `$0015`, and
   VenusRT at 128 clocks prints `$0035`, the same 32 dots. Its source records no console result. It is the cheaper
   of the two ROMs that would settle the entry: `$0015` on a console for a start at clock 0, `$0035` for Mesen's.
+- Measured again 2026-10-01, after D-9 moved `$2137`'s latch four clocks earlier. VenusRT at clock 0 now prints
+  Sour's first row as `$00AC` and `reset-position-test`'s OPHCT as `$0014`. No offset reproduces all four of Sour's
+  rows any longer: 132 clocks gives the first three and `reset-position-test`'s `$0035`, 130 the last three. The
+  128 of 2026-09-30 is retired; it agreed with Mesen only while VenusRT latched a dot late. The two latch points,
+  Mesen's and VenusRT's, now differ in a way four rows cannot separate from the start's phase. Unchanged: the rule
+  and what would settle it, now `$0014` for a start at clock 0.
 
 ### D-7. PPU: master brightness N scales a colour component c to c×(N+1)/16, rounded down
 - Opened: 2026-09-30, at stage 3 step 1, by PeterLemon's `RedSpace9BitHDMA` at frame 300. The ROM writes a backdrop
@@ -259,4 +265,103 @@ their data.
   `$52`, `nmi` at `$1F`; `test_dma` and `test_hdmasync` leave 0, and the two `test_dmavalid` write `$AA` there and
   use the address for something else.
 - Pinned by: nothing yet.
+- Read again 2026-10-01, before the code, at stage 3 step 2. The header's results are a console's (the header states
+  them as the console's behaviour, and the ROM grades itself against them), and they are taken as the document for this rule. The header
+  names times in two frames, and the test bodies say which: an interrupt check is placed at the *start* of the
+  instruction's last bus cycle (tests 1 and 2: SEC's last cycle starting at HC=4 sees no NMI, at HC=6 sees it), but a
+  read of `$4210` is placed two clocks *into* its six-clock cycle (tests 15 to 18: the read cycles start at
+  V=224 HC=1362 and at V=225 HC=0, 2 and 4, and the header calls the last three "HC=2", "HC=4" and "HC>=6"). Writes
+  to `$4200` take effect at the end of their cycle (tests 19 to 26: a disabling write whose cycle ends at HC=4
+  prevents the NMI, one that ends at HC=6 does not). VenusRT applies a read's and a write's effect at the end of its
+  cycle, so in its own frame the header's rules are one time, HC=6 of line 225:
+  - at HC=6 the `$4210` flag sets and, if `$4200` bit 7 is set, /NMI falls; a cycle that ends exactly at HC=6 sees
+    both, and a write ending there applies after them;
+  - a read of `$4210` whose cycle ends before HC=10 of line 225 returns the flag without clearing it (the header's
+    "HC=2 or HC=4");
+  - the check stays where it was, at the start of the instruction's last cycle.
+  The rule, in hardware terms: the flag is visible from HC=2 and the line falls at HC=6, and a read before HC=6 does
+  not clear the flag; argued from the header's console results, and implemented in the end-of-cycle frame above.
+- Implemented 2026-10-01 (with D-9, which its seek needed, and a one-cycle hold for an edge a `$4200` write makes,
+  the header's version-1.1 case: the check at the very next cycle's start does not see it). **Measured:** all three
+  copies of `test_nmi` (`snestest_082506`, `blobs`, `nmi_irq/nmi_pf`) pass every test, 1 to 27, on VenusRT; before,
+  they stopped at test 1. Of the 25 ROMs that grade by the backdrop, VenusRT now passes 12 and fails 13 (it
+  passed 8 of them before: these four are the difference); the 13 are IRQ, HDMA and DMA tests (D-10 and later steps). gilyon's two
+  CPU ROMs still pass on the machine. **Settled**, measured on the test ROM written for it.
+- Pinned by: `the_nmi_flag_sets_at_hc_6_of_line_225_and_an_early_read_leaves_it` in `scpu.rs`, and the three
+  `test_nmi` rows of `VenusRtBaseline.tsv`.
+
+### D-9. PPU: a read of `$2137` latches the counters four master clocks before its bus cycle ends
+- Opened: 2026-10-01, at stage 3 step 2, by `test_nmi` after D-8's rule went in. Its test 1 and 2 SECs were meant
+  to begin their last cycle at V=224 HC=1360 and 1362 (the header's cycle lists); on VenusRT they began at 1356 and
+  1358, four clocks early. The ROM reaches those points through `libclock`'s `seek_frame`, which latches the counters
+  with `$2137` twice and subtracts the dot it reads from a fixed count, so a latch one dot late lands the seek one
+  dot early. VenusRT latched at the end of the read's cycle, the frame in which it applies every read and write.
+- Documents read: anomie's timing document, its preface: the counter "may also be latched by writing 0 to $4201
+  bit 7: this will latch 1 dot later than if the same memory access cycle were reading $2137". fullsnes, "OPHCT",
+  gives no point within the cycle.
+- Test ROM: `test_nmi` and its `libclock`, as above. With the read's latch four clocks before the cycle's end, the
+  SECs begin at 1360 and 1362 and `nmi_irq/nmi_pf/test_nmi` passes. The WRIO latch stays at the end of its write's
+  cycle, which with this rule is anomie's "1 dot later".
+- Referee: not read. Mesen's source: none.
+- Conclusion: a `$2137` read latches the dot of its cycle's end less four clocks; argued from anomie's relative
+  statement and measured on the test ROM. It moves every latched H counter by one dot, so D-6's figures are read
+  again after it. Only `$2137` is moved; whether other reads sample early, as D-8's `$4210` reads do in the same
+  frame, is not settled by this entry.
+- Pinned by: `test_nmi` in the corpus, once the runner reads the backdrop.
+- Measured 2026-10-01: with the latch moved, `test_nmi`'s SECs begin where the header says, and the ROM passes
+  (D-8). Settled for `$2137`, measured.
+
+### D-10. IRQ: `$4211`'s flag sets at HTIME×4+14 (10 for HTIME 0), the CPU's /IRQ falls four clocks later
+- Opened: 2026-10-01, at stage 3 step 2, by `test_irq` (byuu, 2005-10-01) stopping at its test 1, and the other
+  IRQ tests among D-8's 17.
+- Documents read: anomie's timing document, "Interrupts": `$4211` bit 7 "gets set 1374 master cycles after dot 0.0
+  of the previous scanline" for H=0, "otherwise ... 14+H*4", which is VenusRT's `irq_point`, used until now for the
+  flag and the line alike. fullsnes, "SNES Timing H/V Events": "H=HTIME+3.5 H-IRQ", "H=2.5 V-IRQ", in dots.
+- Test ROM: `test_irq`'s header, the same author's console results in the form of `test_nmi`'s: "test when IRQ
+  trigger occurs: V=VTIME,H=(HTIME)?(HTIME*4+18):(14)"; "test when $4211.d7 is set: (HTIME*4+14):(10)"; reading
+  `$4211` at that point or two clocks after leaves the flag set, any later clears it; a `$4200` write prevents the
+  IRQ only if it is earlier than the trigger. Its tests 1 and 2 place SEC's last cycle at V=225 HC=12 (no IRQ
+  after SEC) and HC=14 (IRQ after SEC).
+- Referee: not read. Mesen's source: none.
+- Conclusion: the shape of D-8. The flag sets at anomie's point and the line falls four clocks after it; a read
+  whose sampling point is within four clocks of the flag's setting does not clear it. In VenusRT's end-of-cycle
+  frame, where a read's sampling point is its end less four: one event at `irq_point` + 4 sets the flag and the
+  line, and a `$4211` read whose cycle ends less than eight clocks after `irq_point` leaves it set. Argued from
+  the header's console results.
+- Pinned by: `test_irq` in the corpus, once the runner reads the backdrop.
+- Implemented 2026-10-01, with one more piece the header requires: the IRQ the check saw is taken though the
+  instruction's final cycle disables the line (its tests 9 and 10: a disabling `$4200` write whose cycle begins at
+  the trigger point does not stop the IRQ). VenusRT had also required the flag to be set still at the instruction's
+  end, a remnant of stage 2's first check. **Measured:** `blobs/test_irq` passes all its tests; it stopped at test
+  1. `test_irq4209` passes as before. `test_irq4200`, `test_irqb`, `irq`, `demo_irq` and `demo_irqtest` still fail,
+  at tests not read. Settled for the trigger and flag points, measured; open for those five.
+
+### D-11. OAM: the internal address reloads at the start of line 225 outside forced blank, and when forced blank ends during that line
+- Opened: 2026-10-01, at stage 3 step 2, by reading the two documents for sprite priority, which takes the first
+  sprite from the internal address. They disagree. fullsnes, "OAMADDL/OAMADDH": the reload occurs "at begin of line
+  225/240, but only if not in Forced Blank mode", and "also when deactivating forced blank anytime during the first
+  scanline of vblank". anomie's register document, `$2102`/`$2103` and "SPRITES": "The reload also occurs on a 1->0
+  transition of $2100.7", with no line named; its timing document, "OAM RESET", reports byuu as seeing "the reset
+  occurs on any 1->0" transition as well.
+- Test ROM: none in the corpus isolates it.
+- Referee: not read. Mesen's source: none.
+- Conclusion: fullsnes's rule, as stage 3 step 1 built it; argued only from its being the narrower statement and the
+  one built first. Open: a ROM that ends forced blank mid-frame after writing OAM, and shows the first sprite's
+  priority, would settle it.
+- Pinned by: `oam_and_cgram_latch_their_low_bytes_and_the_counters_latch_on_2137` (the line-225 reload).
+
+### D-12. OAM: a write during active display lands where the internal address points
+- Opened: 2026-10-01, at stage 3 step 2, by the step's scope. fullsnes, "OAMADDL/OAMADDH": "During rendering, the
+  PPU is destroying the Address register (using it internally for whatever purposes)"; its "PPU Memory Accesses"
+  notes that Mario Kart uses forced blank to change OAM mid-screen. anomie: the address "is invalidated during the
+  rendering of a scanline; this invalidation is deterministic, but we do not know how or when the value is
+  determined", and a write in H-blank "CAN" happen but "the actual OAM byte written will probably not be what you
+  expect".
+- Test ROM: none in the corpus.
+- Referee: not read. Mesen's source: none.
+- Conclusion: not modelled. Both documents say the address is replaced during rendering and neither says by what, so
+  any rule would be invented; VenusRT writes where the address points, as in forced blank, and names it a known
+  difference. The priority rotation reads the same address (anomie: the first sprite comes from the address "not
+  affected by OAM Address Invalidation"), which is therefore right only while nothing invalidates it.
+- Pinned by: nothing.
 

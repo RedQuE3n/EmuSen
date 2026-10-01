@@ -197,7 +197,7 @@ and licences are in that folder's `PROVENANCE.txt`. 384 ROM files, 295 distinct 
 | **PeterLemon (krom)** | `github.com/PeterLemon/SNES` @`350b394` (2022-09-20) | none stated | `CPUTest/CPU` (23 ROMs by instruction group), `CPUTest/SPC700` (7), `CHIP/GSU/GSUTest` (31, in the higan collection); plus PPU, DMA and chip demos | `PASS`/`FAIL` written into the BG tilemap's low bytes; a failing test loops on its `FAIL`, so the final page shows it |
 | **blargg's SPC tests** | higan collection `blargg-spc-6/` | unstated | `spc_smp`, `spc_timer`, `spc_mem_access_times`, `spc_dsp6` | Backdrop colour: blue passed, red failed (CGRAM entry 0), with a list of test names |
 | **blargg 2010 tests** | higan collection `jonasquinn-test-roms/blargg_2010-03-14/` | unstated | SPC700 execution from I/O, IPL RAM disable, timer speed and stop, controller strobe | Text `Passed`/`Failed` in VRAM |
-| **anomie/byuu era tests** | higan collection `jonasquinn-test-roms/` (82 ROMs) | unstated | ADC/SBC, multiply/divide behaviour and timing, IRQ/NMI, DMA and HDMA timing, VRAM/OAM timing, a Cx4 test | Text in VRAM; some print values only |
+| **anomie/byuu era tests** | higan collection `jonasquinn-test-roms/` (82 ROMs) | unstated | ADC/SBC, multiply/divide behaviour and timing, IRQ/NMI, DMA and HDMA timing, VRAM/OAM timing, a Cx4 test | Text in VRAM; some print values only; ~~that is all~~ byuu's (`snestest_082506`, `blobs`, `nmi_irq`, `test_dmavalid`, `test_hdmadisable`, `test_mdrhdma`) grade themselves by the backdrop, colour 0 blue (`$7C00`) for a pass and red (`$001F`) for a failure, with the failing test's number in SRAM at `$700000` (corrected 2026-10-01: missed when the table was written; `VenusRT_Native.md` §16.2) |
 | **Sour's tests** | higan collection `Sour/SnesTests` (mirror of `github.com/SourMesen/SnesTests`) | unstated | DMA/IRQ interaction, per-opcode timing | Values on screen, graded against a recording of a real console (the `.mp4` in the folder) |
 | **absindx's SA-1 tests** | higan collection `absindx/` | per its `LICENSE` | SA-1 RAM protection, version code | Text `PASSED`/`FAILED` |
 | **undisbeliever's tests** | `github.com/undisbeliever/snes-test-roms` @`ac6ef80` (2026-05-01), built here (108 ROMs); release v20210217 (29) | zlib (MIT for the INIDISP set) | Auto-joypad timing, HDMA/DMA glitches, INIDISP early-read glitch, VMAIN remapping, windows, mode 7 tilemaps, `wrmpyb-in-flight`, `vram-mid-scanline-test` | Mostly visual, with hardware photographs described in each source's header |
@@ -291,13 +291,17 @@ numbers describe the old core's accuracy for comparison; they are not expected v
 | absindx SA-1 version code | 1 | 0 | 0 (it reads open bus where the test expects values) |
 | Cx4 memory test | 1 | not supported | pass |
 
-Of the 93 self-grading ROMs Mesen passes, Venus passes 73. Of the 20 it fails, 9 are about timing (the SPC700's
+Of the 93 self-grading ROMs Mesen passes, Venus passes 73. *Corrected 2026-10-01:* the count missed 25 ROMs of the
+jonasquinn collection that grade themselves by the backdrop (§3.1's row). Read by that protocol, Mesen passes all 25
+and Venus 8, failing 13 (IRQ, NMI, HDMA and DMA tests) and leaving 4 on another colour; so Mesen passes 117 of the
+corpus's self-grading ROMs as the runner counts them, and Venus 81 of those 117 (`VenusRT_Native.md` §16.2). The
+sentences below keep the count of the 93. Of the 20 it fails, 9 are about timing (the SPC700's
 timers and memory access times, the multiply/divide unit's timing), one is a chip Venus does not support, and the rest
 are instruction, IPL, DSP, multiply/divide and SA-1 behaviour. Excluded as ungradable here: `timer_at_power_reset`
 (it asks for the reset button), `test_speed` and `test_timer_speed3` (they print values and "Done"), `speed_2_freezes2`
 and one `mul_timing` (both engines report failure, which may be the expected output).
 
-**The rest, 196 ROMs that grade by picture or by values on screen.** Mesen's VRAM was identical at frames 1800 and
+**The rest, 196 ROMs that grade by picture or by values on screen** (171 once the 25 backdrop-graded ROMs are counted as self-grading, 2026-10-01). Mesen's VRAM was identical at frames 1800 and
 3600 on 172 of them. On 157 of those 172, Venus's VRAM at frame 3600 is byte-identical to Mesen's; the 15 that differ
 include the H-blank DMA to VRAM tests, Sour's timing and DMA/IRQ tests, `vram-mid-scanline-test`, `wrmpyb-in-flight`,
 `blip-autojoy-timing-test` and `test_dma`. VRAM agreement is weak evidence (a test that prints nothing agrees

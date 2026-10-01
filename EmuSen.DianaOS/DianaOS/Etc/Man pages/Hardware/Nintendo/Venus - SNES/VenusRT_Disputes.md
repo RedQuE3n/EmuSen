@@ -399,3 +399,37 @@ their data.
   between console revisions ("1/1/1 and 2/1/3 SNES units") and seeks a DMA phase to cope; the init's cost was not
   changed to fit one number. Settled for the registers; the init's timing is open.
 
+### D-15. Mosaic: the first row of blocks starts at the top of the picture, and a size change waits for the current block to end
+- Opened: 2026-10-01, at stage 3 step 4, by the two documents before the mosaic code. fullsnes, "MOSAIC": "Vertically,
+  the first block is located on the top of the TV screen. When changing the mosaic size mid-frame, the hardware does
+  first finish current block (using the old vertical size) before applying the new vertical size", implemented as an
+  index within the block subtracted from the vertical scroll. anomie's register document, `$2106`: the first row of
+  squares is on the "starting scanline", which "if this register is set during the frame ... is the current
+  scanline", with his own note "XXX: It seems that writing the same value to this register does not reset the
+  'starting scanline', but which changes do reset it?".
+- Test ROM: none in the corpus writes `$2106` mid-frame; PeterLemon's `MosaicMode3` sets it once.
+- Referee: not read. Mesen's source: none.
+- Conclusion: fullsnes's, a counter that starts at the first picture line and takes a new size when it wraps;
+  argued from its describing a mechanism where anomie records a question. The two agree for a size set in V-Blank.
+  Open for mid-frame changes.
+- Pinned by: `mosaic_repeats_the_blocks_first_pixel_and_first_line` in `ppu.rs`, for the agreed case.
+
+### D-16. Offset-per-tile: visible tile T of the background takes its offsets from visible tile T-1 of BG3, and keeps the low three bits of its own scroll
+- Opened: 2026-10-01, at stage 3 step 4. fullsnes's section is "Under construction (see Anomie's docs for now)".
+  anomie's register document, "Mode 2", gives a per-pixel formula headed "Hopefully these calculations are right":
+  the BG3 entry at `((X-8)&~7)+(BG3HOFS&~7)`, and a replaced `HOFS = (HOFS&7) | ((X&~7) + (Hval&~7))`; and then prose:
+  "number the visible tiles in BGn from 0-32, and the 'visible' tiles in BG3 the same way. BGn tile 0 is offset as
+  normal, then for 1<=T<33 BGn tile T gets the offset data from BG3 tile T-1. It doesn't matter whether or not the
+  tiles actually align". When the background's scroll is not a multiple of 8 a visible tile straddles two values of
+  `X&~7`, so the formula read per pixel splits one tile between two columns, and the prose does not.
+- Test ROM: `snestest_082506/test_opt` grades HDMA and register behaviour, not the picture (it passed before any
+  offset-per-tile existed). No ROM in the corpus draws with offset-per-tile; the bench games that use it (Yoshi's
+  Island) do not reach it yet.
+- Referee: not read. Mesen's source: none.
+- Conclusion: the prose, per visible tile: with T the pixel's visible tile, `(X + (BGnHOFS&7)) / 8`, tile 0 uses the
+  registers; tile T reads BG3's map at column `(T-1)*8 + (BG3HOFS&~7)`, rows BG3VOFS and BG3VOFS+8 (mode 4: one
+  entry, bit 15 choosing which it is); a valid horizontal value replaces the scroll with `(Hval&~7) | (BGnHOFS&7)`,
+  a valid vertical value replaces BGnVOFS whole. Argued; **no oracle**, so it is built and unmeasured.
+- Pinned by: `offset_per_tile_takes_each_visible_tiles_scroll_from_bg3` in `ppu.rs`, which pins the reading, not
+  the hardware.
+

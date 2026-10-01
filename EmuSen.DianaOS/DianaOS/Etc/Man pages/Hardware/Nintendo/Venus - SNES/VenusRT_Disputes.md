@@ -69,8 +69,23 @@ Stage 0 wrote no emulation rule and opened none. The entries begin with stage 1.
   and is a named exception: one model's output against the chip's datasheet and anomie, with no hardware result
   either way. Open for a dispute step with the referee (`Venus_Referee.md` §0 weighs its 65C816 as real support,
   transcribed from the same datasheet, so its agreement would be correlated with §7.2's).
-- Pinned by: `the_cpu_through_the_whole_suite`, which requires `e1 e 8669` to be the only failure of `e1.e.json` and
-  the only (d,X) case of its kind.
+- ~~Pinned by: `the_cpu_through_the_whole_suite`, which requires `e1 e 8669` to be the only failure of `e1.e.json` and
+  the only (d,X) case of its kind.~~
+- **Settled 2026-09-30, at stage 1 step 2, by a test ROM written for the purpose** (the second rung): gilyon's
+  `cputest-full` v1.4, whose README lists among the "undocumented behavior" it tests that in emulation mode "when the
+  low byte of D is nonzero, the (direct,X) addressing mode behaves strangely: the low byte of the indirect address is
+  read from direct_addr+X+D without page wrapping (as expected). The high byte is read from direct_addr+X+D+1, but the
+  +1 is done *with* wrapping within the page", and that "this behavior only applies to this addressing mode". Its test
+  list (`tests-full.txt`) holds 26 tests of (d) and (d),Y and 26 of (d,X) in emulation mode with DL zero and the
+  pointer at the page's last byte, and 12 of (d,X) with DL nonzero (D=$011A, X=$EE, $F7: low byte at $02FF, high at
+  $0200). *Measured:* VenusRT with the conclusion above passed all 52 DL-zero tests and failed the 12 DL-nonzero
+  ones, which it carried. Mesen passes the whole ROM; C# Venus fails it at test 0024, `adc ($EF,x)`, one of these.
+- Conclusion, final: in emulation mode a (d,X) pointer's second byte is read within the page of its first byte,
+  whatever DL is; a (d) or (d),Y pointer's second byte within the page when DL is zero and carried when it is not;
+  [d], [d],Y and PEI carry. Measured by the ROM. The single-step suite's model carries (d,X) where the ROM wraps, so
+  its emulation-mode (d,X) cases whose pointer starts at a page's last byte are named exceptions.
+- Pinned by: `gilyons_cpu_tests_on_the_minimal_bus`, which requires `cputest-full` to pass with no failing test, and
+  `the_cpu_through_the_whole_suite`, which requires those (d,X) cases, and only they, to fail.
 
 ### D-2. 65C816: JMP (a,X) and JSR (a,X) read their pointer as a program address, VPA high and VDA low
 - Opened: 2026-09-30, at stage 1 step 2, by every case of SingleStepTests `7c` and `fc`, 40,000: the suite gives the
@@ -98,9 +113,16 @@ Stage 0 wrote no emulation rule and opened none. The entries begin with stage 1.
 - Test ROM: none. A ROM that runs JSR (a,X) at S=$0100 and PLB at S=$01FF in emulation mode on a console would
   settle both; writing one is owed if a game is found to depend on either.
 - Referee: not read. Mesen's source: none.
-- Conclusion: the datasheet's list; argued. The 80 cases are named exceptions. Open.
-- Pinned by: `the_cpu_through_the_whole_suite`, which requires the failures of `fc.e` (besides D-2's pins) and of
-  `ab.e` to be exactly the cases at those stack edges.
+- ~~Conclusion: the datasheet's list; argued. The 80 cases are named exceptions. Open.~~
+- **Settled 2026-09-30 by gilyon's `cputest-full`** (the second rung). Its test 0277 runs `jsr ($FFFF,x)` in emulation
+  mode at S=$0100 and expects the return address at $00FF and $0100 and S=$01FE: the datasheet's rule. Its test 03D9
+  runs `plb` at S=$01FF and expects DBR from $0200; its README names this as undocumented, "despite the fact that the
+  CPU manual doesn't list it". *Measured:* VenusRT on the datasheet's list passed 0277 and failed 03D9.
+- Conclusion, final: in emulation mode JSR (a,X) addresses S in 16 bits, as the datasheet lists, and so does PLB,
+  which the list omits; S is returned to page 1 after each. Measured by the ROM. The suite's 43 JSR (a,X) cases at
+  S=$0100 are named exceptions; its PLB cases agree with the ROM and are no longer exceptions.
+- Pinned by: `gilyons_cpu_tests_on_the_minimal_bus`, and `the_cpu_through_the_whole_suite`, which requires the 43
+  cases, and only they, to fail in `fc.e` once D-2's pins are set aside.
 
 
 Two readings of the oracles were made at stage 0 that a later reader might take for disputes. They are not: each is

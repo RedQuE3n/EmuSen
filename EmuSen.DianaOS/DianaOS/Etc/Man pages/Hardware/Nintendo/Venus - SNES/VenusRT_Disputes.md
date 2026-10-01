@@ -234,3 +234,29 @@ their data.
   pairs one colour with several brightnesses, would settle it.
 - Pinned by: nothing yet. The picture comparison of `VenusRT_Native.md` §15 reproduces it.
 
+### D-8. NMI: the CPU's /NMI falls at HC=6 of the first V-Blank line, four clocks after `$4210` bit 7 sets at HC=2
+- Opened: 2026-09-30, at stage 3 step 1. With a picture, 28 of the corpus's standing ROMs turn out to grade
+  themselves through the backdrop, colour 0 blue (`$7C00`) for a pass and red (`$001F`) for a failure, the protocol
+  of byuu's `snestest_082506` and the `blobs` and `nmi_irq` folders. Mesen passes all 28; VenusRT passes 11 and
+  fails 17, at a power-on phase of 0 clocks and of 128 alike (D-6 is not the cause). Each keeps its test number in
+  SRAM at `$700000`. `snestest_082506/test_nmi`, and its copies in `blobs` and `nmi_irq/nmi_pf`, stop at test 1.
+- Documents read: fullsnes, "SNES Timing H/V Events": "H=0.5, V=225 set NMI flag". anomie's timing document,
+  "Interrupts": the timer "will set its NMI output low at H=0.5", and "the actual check occurs just before the final
+  CPU cycle of the instruction". VenusRT sets the flag and the CPU's edge together at HC=0, and samples the edge at
+  the start of each cycle, so its check is anomie's and its timing of the edge is neither document's.
+- Test ROM: `test_nmi.asm`'s header, written for the purpose (byuu, 2006-07-25), states as results: `$4210` bit 7
+  sets at HC=2; NMI "goes low at HC=6", so a final cycle that begins at HC=4 does not see it and one that begins at
+  HC=6 or later does; reading `$4210` at HC=2 or 4 leaves the bit set for the next read, at HC=6 or later clears
+  it; a `$4200` write that disables NMI prevents it only if its bus cycle begins by V=224, HC=1362. Test 1 runs SEC
+  with its final cycle at V=225, HC=4 and expects the NMI after the next instruction; VenusRT takes it after SEC
+  (the handler finds `$EA`, NOP, at its return address, where the test wants `$18`, CLC).
+- Referee: not read. Mesen's source: none.
+- Conclusion: open, and expected to be settled by the test ROM, which is the order of recourse's second source and
+  more precise than the two documents: the flag at HC=2 as fullsnes and anomie say, the CPU's line at HC=6. Not
+  implemented in this step, which is the PPU's: it changes the interrupt timing of stage 2, and the 17 ROMs and the
+  CPU trace against Mesen are its measure. The other sixteen's first failures were not read: `irq` at test `$16`,
+  `test_irq`, `demo_irqtest` and `demo_irq` at 6, `test_irqb` at 7, both `test_hdma` at 2, `test_hdmatiming` at
+  `$52`, `nmi` at `$1F`; `test_dma` and `test_hdmasync` leave 0, and the two `test_dmavalid` write `$AA` there and
+  use the address for something else.
+- Pinned by: nothing yet.
+

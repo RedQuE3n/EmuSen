@@ -31,13 +31,17 @@ impl<B: w::Bus> cpu::Bus for Adapter<'_, B> {
     fn idle(&mut self, address: u32, pins: u8) {
         self.0.read(address, signals(pins & !(pin::VDA | pin::VPA), false));
     }
+
+    fn halted(&mut self) {
+        self.0.halted();
+    }
 }
 
 impl w::Cpu for Cpu {
     fn set_registers(&mut self, r: &Registers) {
         // Emulation-mode cases start with a stack high byte no 65816 can hold there; it is loaded as the chip holds it.
         let s = if r.e { 0x0100 | (r.s & 0xFF) } else { r.s };
-        *self = Cpu { a: r.a, x: r.x, y: r.y, s, d: r.d, dbr: r.dbr, pbr: r.pbr, pc: r.pc, p: r.p, e: r.e, unimplemented: false };
+        *self = Cpu { a: r.a, x: r.x, y: r.y, s, d: r.d, dbr: r.dbr, pbr: r.pbr, pc: r.pc, p: r.p, e: r.e, ..Cpu::default() };
     }
 
     fn registers(&self) -> Registers {
@@ -69,14 +73,20 @@ pub fn group(opcode: u8) -> &'static str {
         0x0A | 0x2A | 0x4A | 0x6A | 0x1A | 0x3A | 0x06 | 0x16 | 0x0E | 0x1E | 0x26 | 0x36 | 0x2E | 0x3E | 0x46 | 0x56 | 0x4E
         | 0x5E | 0x66 | 0x76 | 0x6E | 0x7E | 0xC6 | 0xD6 | 0xCE | 0xDE | 0xE6 | 0xF6 | 0xEE | 0xFE | 0x04 | 0x0C | 0x14 | 0x1C
         | 0xE8 | 0xC8 | 0xCA | 0x88 => "read-modify-write, increment",
-        0xEA => "flag",
+        0xEA | 0x42 => "flag",
+        0x10 | 0x30 | 0x50 | 0x70 | 0x90 | 0xB0 | 0xD0 | 0xF0 | 0x80 | 0x82 => "branch",
+        0x4C | 0x5C | 0x6C | 0x7C | 0xDC | 0x20 | 0xFC | 0x22 | 0x60 | 0x6B => "jump, call, return",
+        0x48 | 0xDA | 0x5A | 0x8B | 0x4B | 0x08 | 0x0B | 0x68 | 0xFA | 0x7A | 0xAB | 0x28 | 0x2B | 0xF4 | 0xD4 | 0x62 => "stack",
+        0x00 | 0x02 | 0x40 => "BRK, COP, RTI",
+        0x44 | 0x54 => "block move",
+        0xCB | 0xDB => "WAI, STP",
         _ => "later steps",
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::w65816::{FlatBus, run_case, run_file, Expected};
+    use super::super::w65816::{self as w, FlatBus, run_case, run_case_with, run_file, Expected};
     use super::super::{FileReport, run_suite, suite_dir, suite_files, threads};
     use super::*;
     use std::collections::BTreeMap;
@@ -85,8 +95,8 @@ mod tests {
         u8::from_str_radix(&file[..2], 16).unwrap()
     }
 
-    // The whole suite through the CPU; the tally by group and mode, every failing file's first difference, and a
-    // floor per group that a change may not lower (VenusRT_Native.md §10.4).
+    // The whole suite through the CPU: the tally by group and mode, and every failure a named exception of the
+    // disputes log, each failing where the log says and nowhere else (VenusRT_Native.md §11.3).
     #[test]
     fn the_cpu_through_the_whole_suite() {
         let Some(dir) = suite_dir("SingleStepTests-65816") else {
@@ -116,11 +126,65 @@ mod tests {
             let rows: String = reports.iter().map(|r| format!("{}\t{}\t{}\t{}\t{}\t{}\n", r.file, r.cases, r.passed, r.registers, r.memory, r.cycles)).collect();
             std::fs::write(path, rows).unwrap();
         }
-        for ((g, _), (n, p, ..)) in &groups {
-            if *g != "later steps" {
-                assert_eq!(p, n, "{g}");
+        let excepted: usize = disputed(&dir).iter().map(|(file, names)| {
+            eprintln!("{file}: {} named exceptions fail as the disputes log says, and only they", names.len());
+            names.len()
+        }).sum();
+        let (cases, passed): (usize, usize) = groups.values().fold((0, 0), |(n, p), g| (n + g.0, p + g.1));
+        eprintln!("all: {passed}/{cases}; failing {}, named exceptions {excepted}", cases - passed);
+        assert_eq!(cases, 5_120_000);
+        assert_eq!(cases - passed, excepted, "every failure is a named exception");
+    }
+
+    /// The disputes log's named exceptions, file by file: each must fail and every other case of the file pass.
+    /// D-2's files are graded with the two pointer reads' VDA and VPA exchanged; their own failures are then D-3's.
+    fn disputed(dir: &std::path::Path) -> Vec<(String, Vec<String>)> {
+        let swapped = |got: &w::Cycle, want: &w::Cycle| {
+            got == want
+                || matches!((got.signals, want.signals), (Some(g), Some(w)) if g.vpa && !g.vda && w.vda && !w.vpa
+                    && got.address == want.address && got.value == want.value && Signals { vda: true, vpa: false, ..g } == w)
+        };
+        let mut out = Vec::new();
+        let indexed_indirect = ["01", "21", "41", "61", "81", "a1", "c1", "e1"].map(|o| (format!("{o}.e.json"), "D-1"));
+        let rest = [("7c.n.json", "D-2"), ("7c.e.json", "D-2"), ("fc.n.json", "D-2"), ("fc.e.json", "D-3")].map(|(f, r)| (f.to_owned(), r));
+        for (file, rule) in indexed_indirect.into_iter().chain(rest) {
+            let file = file.as_str();
+            let mut strict_failures = 0;
+            let mut failing = Vec::new();
+            for case in super::super::read_cases(&dir.join(file)) {
+                let want = Expected::from_json(&case);
+                let name = case.get("name").and_then(emusen_native::json::Value::as_str).unwrap().to_owned();
+                let s_low = want.initial.s & 0xFF;
+                let expected_to_fail = match rule {
+                    "D-1" => {
+                        let i = &want.initial;
+                        let operand = want.initial_ram.iter().find(|&&(a, _)| a == ((i.pbr as u32) << 16 | i.pc.wrapping_add(1) as u32)).unwrap().1 as u16;
+                        let sum = operand.wrapping_add(i.x);
+                        let at = if i.d & 0xFF == 0 { (i.d & 0xFF00) | (sum & 0xFF) } else { i.d.wrapping_add(sum) };
+                        at & 0xFF == 0xFF
+                    }
+                    _ => file == "fc.e.json" && s_low == 0x00,
+                };
+                let strict = run_case(&mut Cpu::default(), &mut FlatBus::default(), &want).passed();
+                strict_failures += !strict as usize;
+                let o = if rule == "D-2" || file == "fc.e.json" {
+                    run_case_with(&mut Cpu::default(), &mut FlatBus::default(), &want, swapped)
+                } else {
+                    run_case(&mut Cpu::default(), &mut FlatBus::default(), &want)
+                };
+                assert_eq!(!o.passed(), expected_to_fail, "{file} {name} under {rule}: {:?}", o.first_difference);
+                if expected_to_fail {
+                    failing.push(name);
+                }
+            }
+            if rule == "D-2" || file == "fc.e.json" {
+                assert_eq!(strict_failures, 10_000, "{file}: every case differs in D-2's pins");
+                out.push((file.to_owned(), vec![String::new(); 10_000]));
+            } else {
+                out.push((file.to_owned(), failing));
             }
         }
+        out
     }
 
     // One case written out by hand, so the CPU's harness wiring is checked without the corpus.

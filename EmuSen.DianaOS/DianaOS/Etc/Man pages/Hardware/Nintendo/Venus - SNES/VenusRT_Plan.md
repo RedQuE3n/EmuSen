@@ -271,7 +271,7 @@ numbers describe the old core's accuracy for comparison; they are not expected v
 |---|---|
 | SPC700 v1 | 255,105 / 256,000 |
 | 65816 v1, native mode | 2,539,998 / 2,560,000; `MVN` and `MVP` 0 of 10,000 each; `C0` and `C4` 9,999 |
-| 65816 v1, emulation mode | 275,938 / 2,560,000; 238 of 256 files fail. The failures shown have the stack's high byte kept rather than forced (`s: got F638 want 138`); whether the core or the harness adapter is responsible was not examined |
+| 65816 v1, emulation mode | 275,938 / 2,560,000; 238 of 256 files fail. The failures shown have the stack's high byte kept rather than forced (`s: got F638 want 138`); whether the core or the harness adapter is responsible was not examined. *Read again at stage 1 (2026-09-30), argued:* most likely the adapter. The suite's emulation-mode cases start with a stack high byte no 65816 can hold, and VenusRT's harness, before loading S as the chip holds it, failed with these identical values (`VenusRT_Native.md` §11.4). The numbers stand as measured |
 
 **The self-grading ROMs:**
 
@@ -548,7 +548,7 @@ Each stage is a run of supervised steps of a few hours, with a check-in after ea
 | 9 | Retirement: the default flipped; after the waiting period, Venus removed or moved; Pharaoh's and Hotaru's Venus uses given equivalents or retired | §7 | 1 |
 
 *Stage 0 was run on 2026-09-30, with the crate skeleton, the probe's pacing fix and the clone check brought forward
-into it; `VenusRT_Native.md` §1 is its record.*
+into it; `VenusRT_Native.md` §1 is its record. Stage 1 took two steps, not four, the same day (§10 and §11 there).*
 
 About 44 steps, or 130–160 hours (P3). Stage 6 can run after stage 4, before the coprocessors, so that the player gets
 the engine for ordinary cartridges early; games with a chip then fall back to Venus with a notice until stage 5 lands.

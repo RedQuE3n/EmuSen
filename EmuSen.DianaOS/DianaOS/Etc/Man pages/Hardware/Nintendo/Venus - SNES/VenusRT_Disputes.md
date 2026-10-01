@@ -36,7 +36,7 @@ so that the clean-room protocol of §1.2 can be audited from outside.
 
 Stage 0 wrote no emulation rule and opened none. The entries begin with stage 1.
 
-### D-1. 65C816, emulation mode: a direct-page pointer's second byte is read at the first byte's address plus one, carried across the page, even when DL is zero
+### D-1. 65C816, emulation mode with DL zero: ~~a direct-page pointer's second byte is read at the first byte's address plus one, carried across the page~~ a (d), (d,X) or (d),Y pointer's second byte stays within the direct page; [d], [d],Y and PEI carry
 - Opened: 2026-09-30, at stage 1, by SingleStepTests 65816 case `e1 e 8669` (SBC (d,x), E=1, D=$F400, DO=$B0, X=$4F).
   The index addition wrapped within the page to $00:F4FF, as every other emulation-mode case requires; the pointer's
   high byte was then read at $00:F500. VenusRT, wrapping it within the page, read $00:F400.
@@ -55,6 +55,75 @@ Stage 0 wrote no emulation rule and opened none. The entries begin with stage 1.
   later step that finds a game or ROM depending on it reopens this entry.
 - Pinned by: `the_cpu_through_the_whole_suite` (case `e1 e 8669`).
 - Implemented in: the commit after this entry's, "VenusRT stage 1: the 65816's data instructions".
+- **Reopened 2026-09-30, at stage 1 step 2, and the conclusion above overturned.** A document not read before: the
+  same datasheet's §7.2, "Direct Addressing": in emulation mode with DL zero "the direct addressing range is 000000
+  to 0000FF, except for [Direct] and [Direct],Y addressing modes and the PEI instruction which will increment from
+  0000FE or 0000FF into the Stack area", and the same for a nonzero DH. That names the exceptions, and (d), (d,X) and
+  (d),Y are not among them. It also takes away the first conclusion's ground: Table 5-7 writes D+DO+X for d,X, which
+  every emulation-mode case of the suite shows wrapping, so the table's formulas do not encode emulation wrapping and
+  say nothing either way. anomie's note agrees with §7.2. *Measured:* the suite's one PEI case of the same crossing
+  (`d4 e 232`, D=$0C00, DO=$FF) carries to $0D00, as §7.2 says PEI does; being §7.2's named exception, it does not
+  bear on (d) or (d),Y.
+- New conclusion: (d), (d,X) and (d),Y read a pointer's second byte within the direct page, in emulation mode with
+  DL zero; [d], [d],Y and PEI carry. Argued from two documents. The single-step case `e1 e 8669` disagrees for (d,X)
+  and is a named exception: one model's output against the chip's datasheet and anomie, with no hardware result
+  either way. Open for a dispute step with the referee (`Venus_Referee.md` §0 weighs its 65C816 as real support,
+  transcribed from the same datasheet, so its agreement would be correlated with §7.2's).
+- ~~Pinned by: `the_cpu_through_the_whole_suite`, which requires `e1 e 8669` to be the only failure of `e1.e.json` and
+  the only (d,X) case of its kind.~~
+- **Settled 2026-09-30, at stage 1 step 2, by a test ROM written for the purpose** (the second rung): gilyon's
+  `cputest-full` v1.4, whose README lists among the "undocumented behavior" it tests that in emulation mode "when the
+  low byte of D is nonzero, the (direct,X) addressing mode behaves strangely: the low byte of the indirect address is
+  read from direct_addr+X+D without page wrapping (as expected). The high byte is read from direct_addr+X+D+1, but the
+  +1 is done *with* wrapping within the page", and that "this behavior only applies to this addressing mode". Its test
+  list (`tests-full.txt`) holds 26 tests of (d) and (d),Y and 26 of (d,X) in emulation mode with DL zero and the
+  pointer at the page's last byte, and 12 of (d,X) with DL nonzero (D=$011A, X=$EE, $F7: low byte at $02FF, high at
+  $0200). *Measured:* VenusRT with the conclusion above passed all 52 DL-zero tests and failed the 12 DL-nonzero
+  ones, which it carried. Mesen passes the whole ROM; C# Venus fails it at test 0024, `adc ($EF,x)`, one of these.
+- Conclusion, final: in emulation mode a (d,X) pointer's second byte is read within the page of its first byte,
+  whatever DL is; a (d) or (d),Y pointer's second byte within the page when DL is zero and carried when it is not;
+  [d], [d],Y and PEI carry. Measured by the ROM. The single-step suite's model carries (d,X) where the ROM wraps, so
+  its emulation-mode (d,X) cases whose pointer starts at a page's last byte are named exceptions.
+- Pinned by: `gilyons_cpu_tests_on_the_minimal_bus`, which requires `cputest-full` to pass with no failing test, and
+  `the_cpu_through_the_whole_suite`, which requires those (d,X) cases, and only they, to fail.
+
+### D-2. 65C816: JMP (a,X) and JSR (a,X) read their pointer as a program address, VPA high and VDA low
+- Opened: 2026-09-30, at stage 1 step 2, by every case of SingleStepTests `7c` and `fc`, 40,000: the suite gives the
+  two pointer reads VDA high and VPA low.
+- Documents read: the W65C816S datasheet, Table 5-7, rows 2a and 2b: "PBR,AA+X, New PCL", VDA 0, VPA 1, and the same
+  for the high byte. §2.26 defines VPA as a valid program address. The pointer is read from the program bank, PBR,
+  not from DBR as (a,X)'s data modes would.
+- Test ROM: none. On the SNES both pin pairs select memory, so the difference is not observable through the console's
+  bus (argued: stage 2's bus treats VDA or VPA as an access); only a logic analyser on the chip could settle it.
+- Referee: not read. Mesen's source: none.
+- Conclusion: VPA, as the datasheet's table gives it; argued. The 40,000 cases are named exceptions on these two
+  cycles' VDA and VPA only. Open, and of no consequence to a game.
+- Pinned by: `the_cpu_through_the_whole_suite`, which grades `7c` and `fc` again with only those two pins of the
+  pointer reads exchanged, and requires every case to pass that way.
+
+### D-3. 65C816, emulation mode: JSR (a,X) addresses S in 16 bits; PLB stays in page 1
+- Opened: 2026-09-30, at stage 1 step 2, by SingleStepTests `fc.e` and `ab.e`. At S=$0100 the suite's JSR (a,X)
+  pushes to $0100 and then $01FF (43 cases); at S=$01FF its PLB reads $0200 (37 cases). Both are the reverse of the
+  datasheet's list.
+- Documents read: the W65C816S datasheet, §7.1, "Stack Addressing": "The following opcodes and addressing modes will
+  increment or decrement beyond this range when accessing two or three bytes: JSL, JSR (a,x), PEA, PEI, PER, PHD,
+  PLD, RTL". PLB is not there, and PLB accesses one byte. anomie's document 194 repeats the list from the datasheet
+  and confirms on hardware PEA, PLD, d,S and (d,S),Y only. The suite agrees with the list on every other opcode in it
+  (JSL, PEA, PEI, PER, PHD, PLD, RTL) at the page edge.
+- Test ROM: none. A ROM that runs JSR (a,X) at S=$0100 and PLB at S=$01FF in emulation mode on a console would
+  settle both; writing one is owed if a game is found to depend on either.
+- Referee: not read. Mesen's source: none.
+- ~~Conclusion: the datasheet's list; argued. The 80 cases are named exceptions. Open.~~
+- **Settled 2026-09-30 by gilyon's `cputest-full`** (the second rung). Its test 0277 runs `jsr ($FFFF,x)` in emulation
+  mode at S=$0100 and expects the return address at $00FF and $0100 and S=$01FE: the datasheet's rule. Its test 03D9
+  runs `plb` at S=$01FF and expects DBR from $0200; its README names this as undocumented, "despite the fact that the
+  CPU manual doesn't list it". *Measured:* VenusRT on the datasheet's list passed 0277 and failed 03D9.
+- Conclusion, final: in emulation mode JSR (a,X) addresses S in 16 bits, as the datasheet lists, and so does PLB,
+  which the list omits; S is returned to page 1 after each. Measured by the ROM. The suite's 43 JSR (a,X) cases at
+  S=$0100 are named exceptions; its PLB cases agree with the ROM and are no longer exceptions.
+- Pinned by: `gilyons_cpu_tests_on_the_minimal_bus`, and `the_cpu_through_the_whole_suite`, which requires the 43
+  cases, and only they, to fail in `fc.e` once D-2's pins are set aside.
+
 
 Two readings of the oracles were made at stage 0 that a later reader might take for disputes. They are not: each is
 about what a suite's file format means, settled by the suite's own data and README, and neither says anything about

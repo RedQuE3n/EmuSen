@@ -221,9 +221,9 @@ impl Expected {
     }
 }
 
-fn first_cycle_difference(got: &[Cycle], want: &[Cycle]) -> Option<String> {
+fn first_cycle_difference(got: &[Cycle], want: &[Cycle], same: &impl Fn(&Cycle, &Cycle) -> bool) -> Option<String> {
     for (i, (g, w)) in got.iter().zip(want).enumerate() {
-        if g != w {
+        if !same(g, w) {
             return Some(format!("cycle {i}: got {} want {}", g.text(), w.text()));
         }
     }
@@ -232,20 +232,26 @@ fn first_cycle_difference(got: &[Cycle], want: &[Cycle]) -> Option<String> {
 
 /// One case: registers, then memory, then the cycles, each checked on its own.
 pub fn run_case<C: Cpu>(cpu: &mut C, bus: &mut FlatBus, want: &Expected) -> Outcome {
+    run_case_with(cpu, bus, want, |got, want| got == want)
+}
+
+/// As `run_case`, with the cycles compared by `same`, for a disputes-log entry that names a pin difference.
+pub fn run_case_with<C: Cpu>(cpu: &mut C, bus: &mut FlatBus, want: &Expected, same: impl Fn(&Cycle, &Cycle) -> bool) -> Outcome {
     bus.load(&want.initial_ram);
     let r = &want.initial;
     let opcode = bus.memory[((r.pbr as usize) << 16) | r.pc as usize];
     let capped = matches!(opcode, 0x44 | 0x54) && want.cycles.len() >= CYCLE_CAP;
+    let repeats = matches!(opcode, 0x44 | 0x54 | 0xCB | 0xDB);
     cpu.set_registers(r);
     cpu.step(bus);
     let mut steps = 1;
-    while capped && bus.log.len() < want.cycles.len() && steps < 64 {
+    while repeats && bus.log.len() < want.cycles.len() && steps < 64 {
         cpu.step(bus);
         steps += 1;
     }
     let mut o = Outcome { capped, ..Outcome::default() };
     let got = if capped { &bus.log[..bus.log.len().min(want.cycles.len())] } else { &bus.log[..] };
-    let cycles = first_cycle_difference(got, &want.cycles);
+    let cycles = first_cycle_difference(got, &want.cycles, &same);
     o.cycles = cycles.is_none();
     if capped {
         o.registers = true;

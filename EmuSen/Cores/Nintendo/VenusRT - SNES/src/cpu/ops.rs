@@ -59,10 +59,11 @@ impl Cpu {
         if self.page_wrapped() { ((self.d & 0xFF00) | (offset & 0xFF)) as u32 } else { self.d.wrapping_add(offset) as u32 }
     }
 
-    /// A direct-page pointer; its second byte carries across the page even when the index wrapped (D-1).
-    fn pointer16<B: Bus>(&mut self, bus: &mut B, at: u32) -> u16 {
+    /// A direct-page pointer; `wrap` keeps its second byte in the first's page (D-1).
+    fn pointer16<B: Bus>(&mut self, bus: &mut B, at: u32, wrap: bool) -> u16 {
         let lo = self.read8(bus, at, 0) as u16;
-        lo | (self.read8(bus, (at + 1) & 0xFFFF, 0) as u16) << 8
+        let next = if wrap { (at & 0xFF00) | ((at + 1) & 0xFF) } else { (at + 1) & 0xFFFF };
+        lo | (self.read8(bus, next, 0) as u16) << 8
     }
 
     /// Note 4's cycle: indexing across a page, a write, or a 16-bit index; at the address before the carry.
@@ -120,7 +121,7 @@ impl Cpu {
                 let o = self.fetch(bus) as u16;
                 self.dl_cycle(bus);
                 let at = self.direct(o);
-                let a = self.pointer16(bus, at);
+                let a = self.pointer16(bus, at, self.page_wrapped());
                 if mode == Mode::Ind {
                     return Ea { address: self.data_bank(a), wrap: Wrap::Linear };
                 }
@@ -133,7 +134,7 @@ impl Cpu {
                 self.dl_cycle(bus);
                 self.io_operand(bus);
                 let at = self.direct(o.wrapping_add(self.x));
-                let a = self.pointer16(bus, at);
+                let a = self.pointer16(bus, at, self.e);
                 Ea { address: self.data_bank(a), wrap: Wrap::Linear }
             }
             // 14, 15
@@ -439,7 +440,7 @@ impl Cpu {
                 self.settle();
             }
             0xEA => self.implied(bus),
-            _ => self.unimplemented = true,
+            _ => self.execute_control(bus, opcode),
         }
     }
 }

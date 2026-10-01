@@ -399,3 +399,83 @@ their data.
   between console revisions ("1/1/1 and 2/1/3 SNES units") and seeks a DMA phase to cope; the init's cost was not
   changed to fit one number. Settled for the registers; the init's timing is open.
 
+### D-15. Mosaic: the first row of blocks starts at the top of the picture, and a size change waits for the current block to end
+- Opened: 2026-10-01, at stage 3 step 4, by the two documents before the mosaic code. fullsnes, "MOSAIC": "Vertically,
+  the first block is located on the top of the TV screen. When changing the mosaic size mid-frame, the hardware does
+  first finish current block (using the old vertical size) before applying the new vertical size", implemented as an
+  index within the block subtracted from the vertical scroll. anomie's register document, `$2106`: the first row of
+  squares is on the "starting scanline", which "if this register is set during the frame ... is the current
+  scanline", with his own note "XXX: It seems that writing the same value to this register does not reset the
+  'starting scanline', but which changes do reset it?".
+- Test ROM: none in the corpus writes `$2106` mid-frame; PeterLemon's `MosaicMode3` sets it once.
+- Referee: not read. Mesen's source: none.
+- Conclusion: fullsnes's, a counter that starts at the first picture line and takes a new size when it wraps;
+  argued from its describing a mechanism where anomie records a question. The two agree for a size set in V-Blank.
+  Open for mid-frame changes.
+- Pinned by: `mosaic_repeats_the_blocks_first_pixel_and_first_line` in `ppu.rs`, for the agreed case.
+- Measured 2026-10-01, on the agreed case: the 240p suite's intro fades by mosaic, one size a frame, written in
+  V-Blank. Mesen runs it ten frames after VenusRT (the sound CPU's stand-in answers at once), and with that offset
+  its frames 60, 64 and 68 equal VenusRT's 50, 54 and 58 in every pixel, at sizes 5, 9 and 13. An experiment that
+  counted the rows from line 0 instead of the first picture line matched none. Mid-frame changes stay open.
+
+### D-16. Offset-per-tile: visible tile T of the background takes its offsets from visible tile T-1 of BG3, and keeps the low three bits of its own scroll
+- Opened: 2026-10-01, at stage 3 step 4. fullsnes's section is "Under construction (see Anomie's docs for now)".
+  anomie's register document, "Mode 2", gives a per-pixel formula headed "Hopefully these calculations are right":
+  the BG3 entry at `((X-8)&~7)+(BG3HOFS&~7)`, and a replaced `HOFS = (HOFS&7) | ((X&~7) + (Hval&~7))`; and then prose:
+  "number the visible tiles in BGn from 0-32, and the 'visible' tiles in BG3 the same way. BGn tile 0 is offset as
+  normal, then for 1<=T<33 BGn tile T gets the offset data from BG3 tile T-1. It doesn't matter whether or not the
+  tiles actually align". When the background's scroll is not a multiple of 8 a visible tile straddles two values of
+  `X&~7`, so the formula read per pixel splits one tile between two columns, and the prose does not.
+- Test ROM: `snestest_082506/test_opt` grades HDMA and register behaviour, not the picture (it passed before any
+  offset-per-tile existed). No ROM in the corpus draws with offset-per-tile; the bench games that use it (Yoshi's
+  Island) do not reach it yet.
+- Referee: not read. Mesen's source: none.
+- Conclusion: the prose, per visible tile: with T the pixel's visible tile, `(X + (BGnHOFS&7)) / 8`, tile 0 uses the
+  registers; tile T reads BG3's map at column `(T-1)*8 + (BG3HOFS&~7)`, rows BG3VOFS and BG3VOFS+8 (mode 4: one
+  entry, bit 15 choosing which it is); a valid horizontal value replaces the scroll with `(Hval&~7) | (BGnHOFS&7)`,
+  a valid vertical value replaces BGnVOFS whole. Argued; **no oracle**, so it is built and unmeasured.
+- Pinned by: `offset_per_tile_takes_each_visible_tiles_scroll_from_bg3` in `ppu.rs`, which pins the reading, not
+  the hardware.
+
+### D-17. DMA: an HDMA run or init on a channel ends a general DMA on that channel where it stands
+- Opened: 2026-10-01, at stage 3 step 4, by `snestest_082506/test_dma` (byuu, 2006-07-27) failing at its test 1. The
+  test starts a 128-byte DMA on a channel that HDMA is also enabled on, so that the line's HDMA point falls inside
+  it, and expects the count left non-zero; VenusRT runs the DMA to its end ($4305 = 0).
+- Documents read: anomie's timing document, "HDMA": "HDMA takes priority over DMA", and nothing on what becomes of
+  the DMA. fullsnes, "SNES DMA and HDMA Notes": nothing on the overlap.
+- Test ROM: `test_dma`'s four tests and their comments, the author's console results. Tests 1 and 2: "if HDMA run
+  [init] occurs on the same channel as an active DMA channel, the HDMA run [init] will kill the DMA transfer,
+  leaving $43x5 != 0", with "$4305 = ~#$37 on hardware" and "~#$41". Tests 3 and 4, DMA on channels 0 and 1 with
+  HDMA on both: "HDMA run will kill DMA on both channels, 0 *and* 1; not just 0", with the registers read from a
+  console: channel 0's address advanced by `$47` and its count `$39` left, channel 1's address and count untouched;
+  for the init, channel 0's A2AxW is its A1TxW as the DMA left it, plus one.
+- Referee: not read. Mesen's source: none.
+- Conclusion: when HDMA's init or a line's run takes its channels, a general DMA in progress on one of them stops
+  with its address and count as they are, and a pending DMA on another of them does not start. The DMA's address
+  and count are in the registers as each byte moves, so the init reloads the table address from what the DMA
+  reached. The tests enable HDMA on every channel the DMA uses, so they do not say what happens to a DMA channel
+  HDMA does not take; it is left running, the narrower reading, argued and open.
+- Pinned by: `test_dma` in the corpus.
+- Implemented 2026-10-01. **Measured:** `test_dma` passes all four tests (blue backdrop); it failed at test 1.
+  After test 4 channel 1's twelve registers equal the console's as the test's comment lists them; channel 0 stopped
+  four bytes earlier than the console's ($4302 `$3F` and $4305 `$41` against `$43` and `$3D`), which is the DMA's
+  start within the line, set by the test's own NOPs, and inside what the test accepts. Settled for the channels HDMA
+  takes; open for a DMA channel it does not.
+
+### D-18. DMA between WRAM and its own port `$2180`: nothing reaches the port, and a read of it writes `$00`
+- Opened: 2026-10-01, at stage 3 step 4, by the two `test_dmavalid` copies (byuu, 2008-03-03) failing. VenusRT moved
+  the bytes both ways.
+- Documents read: fullsnes, "WMDATA", "DMA Notes": "WRAM-to-WRAM DMA isn't possible (neither in A-Bus to B-Bus
+  direction, nor vice-versa)", the chip being "unable to process both at once". It does not say what is left behind.
+- Test ROM: `test_dmavalid`'s tests 2 and 3 and their comments, a console's results. WRAM to `$2180`: the port's
+  address is not incremented, the write does not occur, the DMA's address and count move as usual and its time is
+  spent. `$2180` to WRAM: the port's address is not incremented, and "DMA write did occur, but wrote unknown value
+  (not MDR ...)", the byte the console showed being `$00`; the test accepts anything but the old value.
+- Referee: not read. Mesen's source: none.
+- Conclusion: fullsnes's rule with the test's details; in the port-to-WRAM direction the byte written is `$00`, the
+  one value a console is recorded as showing. Argued for that value, measured for the rest.
+- Pinned by: the two `test_dmavalid` rows of the corpus.
+- Implemented 2026-10-01. **Measured:** both copies pass (blue backdrop). The eight bytes test 2 stores are the
+  console's as its comment lists them, `3F 55 55 00 14 7E 00 00`, and the V counter latched after the DMA is the
+  console's `$36`; the H counter is `$D4` against its `$CE`, inside the test's four lines of latitude.
+

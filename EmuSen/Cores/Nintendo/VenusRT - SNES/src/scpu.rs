@@ -85,6 +85,14 @@ impl System {
     fn move_byte(&mut self, a_address: u32, b: u8, to_b: bool) {
         let b_address = 0x2100 | b as u32;
         let a_blocked = a_address & 0x40_0000 == 0 && matches!(a_address as u16, 0x2100..=0x21FF | 0x4300..=0x437F | 0x420B | 0x420C);
+        // WRAM cannot be on both buses at once: its port is not reached, and a read of it writes $00 (D-18).
+        let a_is_wram = (a_address >> 16) & 0xFE == 0x7E || (a_address & 0x40_0000 == 0 && a_address as u16 <= 0x1FFF);
+        if b == 0x80 && a_is_wram {
+            if !to_b {
+                self.write_value(a_address, 0);
+            }
+            return;
+        }
         if to_b {
             let v = if a_blocked { self.mdr } else { self.read_value(a_address, true).unwrap_or(self.mdr) };
             self.mdr = v;
@@ -140,8 +148,16 @@ impl System {
                 _ => 0,
             };
             let mut i = 0usize;
+            let mut killed = false;
             loop {
+                // The registers hold the DMA's progress as each byte moves, for an HDMA that takes the channel (D-17).
+                self.set_reg16(channel, 2, address);
+                self.set_reg16(channel, 5, count);
                 self.hdma_if_due(resume);
+                if self.dev.dma_pending & (1 << channel) == 0 {
+                    killed = true;
+                    break;
+                }
                 if !self.timing.refreshed && self.timing.line_clock >= REFRESH_AT {
                     self.timing.refreshed = true;
                     self.advance_paused(REFRESH);
@@ -155,8 +171,10 @@ impl System {
                     break;
                 }
             }
-            self.set_reg16(channel, 2, address);
-            self.set_reg16(channel, 5, 0);
+            if !killed {
+                self.set_reg16(channel, 2, address);
+                self.set_reg16(channel, 5, 0);
+            }
         }
         self.dev.dma_pending = 0;
         self.io[0x20B] = 0;
@@ -217,6 +235,8 @@ impl System {
         if enabled == 0 {
             return;
         }
+        // The init takes its channels from a general DMA in progress or pending (D-17).
+        self.dev.dma_pending &= !enabled;
         let start = self.align_before();
         self.advance_paused(18);
         for channel in 0..8 {
@@ -509,18 +529,27 @@ mod tests {
         for i in 0..4 {
             s.wram[0x100 + i] = 0x10 + i as u8;
         }
-        for (r, v) in [(0x4300u32, 0x00u8), (0x4301, 0x80), (0x4302, 0x00), (0x4303, 0x01), (0x4304, 0x7E), (0x4305, 4), (0x4306, 0), (0x2181, 0x00), (0x2182, 0x02), (0x2183, 0)] {
+        // To OAM's port: WRAM cannot be DMA's source and, through $2180, its destination at once (D-18).
+        for (r, v) in [(0x2100u32, 0x80u8), (0x4300, 0x00), (0x4301, 0x04), (0x4302, 0x00), (0x4303, 0x01), (0x4304, 0x7E), (0x4305, 4), (0x4306, 0)] {
             s.write(r, v, pin::VDA);
         }
         s.write(0x420B, 1, pin::VDA);
         let before = s.timing.clock;
         s.idle(0, 0);
-        assert_eq!(s.wram[0x200], 0);
+        assert_eq!(s.ppu.oam[1], 0);
         s.idle(0, 0);
-        assert_eq!(&s.wram[0x200..0x204], &[0x10, 0x11, 0x12, 0x13]);
+        assert_eq!(&s.ppu.oam[0..4], &[0x10, 0x11, 0x12, 0x13]);
         let paused = s.timing.clock - before - 12;
         assert!((48..=48 + 14).contains(&paused), "{paused}");
         assert_eq!((s.io[0x305], s.io[0x306], s.io[0x302], s.io[0x303]), (0, 0, 0x04, 0x01));
+        // The same bytes to WRAM's own port: the count runs out and nothing arrives, the port's address unmoved.
+        for (r, v) in [(0x4301u32, 0x80u8), (0x4302, 0x00), (0x4305, 4), (0x2181, 0x00), (0x2182, 0x02), (0x2183, 0)] {
+            s.write(r, v, pin::VDA);
+        }
+        s.write(0x420B, 1, pin::VDA);
+        s.idle(0, 0);
+        s.idle(0, 0);
+        assert_eq!((&s.wram[0x200..0x204], s.wram_address, s.io[0x305]), (&[0u8; 4][..], 0x200, 0));
     }
 
     #[test]

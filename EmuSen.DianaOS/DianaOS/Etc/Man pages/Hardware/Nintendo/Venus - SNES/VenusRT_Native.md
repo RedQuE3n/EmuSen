@@ -1469,3 +1469,132 @@ screen's half-pixels and their colour math, anomie's previous-main-pixel rule), 
 which `demo_irq`'s test 6 also needs), then **mode 7**. Beside it: the compositor's per-pixel window masks, if the
 decision of §17.3 extends to them, and the backdrop failures not yet read.
 
+---
+
+## 18. Stage 3, step 4: modes 2 to 4, direct colour, offset-per-tile, mosaic, and three DMA rules (2026-10-01)
+
+### 18.1 What it built
+
+- **Modes 2, 3 and 4** through §17.3's per-chunk decode: 16- and 256-colour tiles (two and four words a row), the
+  palette bases anomie gives for each mode, and the two-background priority chart of modes 2 to 5.
+- **Direct colour**: a 256-colour pixel under CGWSEL bit 0 is a colour itself, BBGGGRRR with the map entry's
+  palette bits as each component's next bit; the line buffer carries it with a flag and the compositor converts it
+  where it reads CGRAM for any other pixel.
+- **Offset-per-tile** in modes 2 and 4, in the scroll function §17.3 left for it: visible tile T of BG1 or BG2 takes
+  its scroll from visible tile T-1 of BG3's map, mode 4 reading one entry where mode 2 reads two (D-16). **It has no
+  oracle**: no ROM in the corpus draws with it, and the bench games that use it do not reach it yet.
+- **Mosaic**: a block's first pixel repeated over the filled line buffer, and its first line through a row counter
+  that starts at the first picture line and takes a new size when a block ends (D-15). The counter is machine state
+  and runs whether or not the picture is drawn.
+- **Three DMA rules** from byuu's tests (§18.4): D-17 and D-18, and D-14's continuation.
+- The state is version 9, with mosaic's row and height.
+- **Not built: modes 5 and 6 and pseudo-hi-res.** They need the picture 512 wide: both screens' half-pixels, the
+  compositor's loop and its hi-res colour math, the frame's width reported per frame, and the runner's comparison
+  against a 512-wide Mesen picture. That is a step of its own, the next; mode 6's offset-per-tile comes with it.
+
+### 18.2 The picture oracles (measured 2026-10-01)
+
+Frame 300, VenusRT against Mesen, as §15.4:
+
+| Set | ROMs | Equal to Mesen, §17 | Now |
+|---|---|---|---|
+| PeterLemon's PPU ROMs | 47 | 8 | 25 |
+| the 240p suite | 2 | 2 | 2 |
+
+The 17 gained: `8x8BGMap4BPP`, three of the four `8x8BGMap8BPP` sizes, `8x8BGMapTileFlip`, the five
+`HiColor64PerTileRow` ROMs and `WaveHDMA` (mode 3, with HDMA writing CGRAM each line); `MosaicMode3`; **`WindowHDMA`
+and `WindowMultiHDMA`** (mode 3 with windows); and the three `Blend/HiColor` ROMs (mode 3, the sub screen added),
+which are the colour-math oracle §17.2 lacked. The fourth 8bpp size, `32x32`, scrolls by a counter it advances
+whenever `$4210` reads set, which happens twice in some frames in both engines (a read in D-8's window leaves the
+flag): its scroll advances 15 in ten frames in Mesen and in VenusRT alike, and VenusRT's frames 305 and 315 equal
+Mesen's 300 and 310 in every pixel; the two engines are a constant five frames apart on it, not different in the
+picture. Still different: the five `HiColor128PerTileRow` ROMs, whose CGRAM differs from Mesen's by 223 bytes at
+the frame's end (HDMA writing 128 colours a tile row; not read), `RedSpace9BitHDMA` (D-7), and the modes 5 to 7,
+pseudo-hi-res and interlace ROMs.
+
+**Mosaic over time.** The 240p suite's intro fades by mosaic, a size a frame. Mesen runs it ten frames after
+VenusRT, and its frames 60, 64 and 68 equal VenusRT's 50, 54 and 58 in every pixel, at sizes 5, 9 and 13.
+
+**The corpus**, all 295 rows against §17.6: pictures equal on **169, from 162**, none lost; gained `demo_mode3`,
+the two `vmain-8bpp` ROMs, `test_opt`, and the three ROMs of §18.4. CGRAM equal on 275 (272); VRAM and OAM as before.
+
+**Modes 0 and 1 untouched.** `frame_hashes` over the 304 images to frame 3600 against §17.3's hashes: 292 images
+identical in every frame; the 12 that differ are the ROMs that use this step's features (the 240p suites from their
+mosaic intro, `demo_mode3`, the `vmain-8bpp` pair, `test_opt`, `SplitScreen`, `ppubusact`,
+`inidisp_forgot_to_force_blank` and `hdma-2100-glitch-2ch-0a`, each listed twice where the corpus holds two copies).
+The skip check passes on all 304.
+
+### 18.3 Disputes
+
+D-15 (mosaic's vertical start: fullsnes's counter built, the agreed case measured, mid-frame changes open); D-16
+(offset-per-tile's columns: anomie's prose over his formula, argued, no oracle); D-17 and D-18 (settled by their
+test ROMs, each with a named remainder).
+
+### 18.4 The backdrop failures, continued (measured 2026-10-01)
+
+| ROM | Before | Now | What |
+|---|---|---|---|
+| `snestest_082506/test_dma` | failed, test 1 | **passes** | D-17: an HDMA run or init ends a general DMA on the channels it takes; the DMA's address and count are live in the registers. Channel 1's registers after test 4 equal the console's; channel 0 stopped four bytes earlier than the console's |
+| the two `test_dmavalid` | failed | **pass** | D-18: DMA between WRAM and `$2180` reaches nothing through the port, and a read of it writes `$00`; fullsnes has the rule, the test its details |
+| `blobs/test_hdmasync` | 0 | stops at `$85` | 512 HDMA runs, one for each channel mask twice, each followed by two latches compared with a console's cached table; its header: "hdma begins at H=1100+DMA_counter". VenusRT now agrees with the table for the first `$85` masks; not read further |
+| `blobs/test_hdmatiming` | `$51` | `$51` | not read |
+| `blobs/test_irq4200` | — | — | §17.4; not read further |
+| `blobs/irq`, `blobs/nmi` | `$2D`, `$1E` | same | binaries without source or disassembly; not read |
+
+Of the 25 backdrop-graded ROMs VenusRT now passes **15** (12 at §17), Mesen 25, C# Venus 8; across the corpus
+VenusRT passes 52 of Mesen's 117 (49). A unit test of stage 2 had itself used a WRAM-to-`$2180` DMA, which D-18
+made move nothing; it now moves its bytes to OAM's port and pins D-18's case beside it.
+
+### 18.5 The cost (measured 2026-10-01)
+
+`frame_cost`, §17.3's binary and this step's in turn, best of three under the lock, load 2.3 falling to 1.75; the
+picture's share, drawn less skipped:
+
+| ROM | §17's | Now |
+|---|---|---|
+| gilyon `cputest-full` | 0.98 | 0.97 |
+| the 240p menu | 0.91 | 0.99 |
+| `Rings` | 0.96 | 0.98 |
+| `object-dropout-test` | 0.79 | 0.81 |
+| A Link to the Past | 0.80 | 0.84 |
+| Super Metroid | 0.50 | 0.53 |
+| `8x8BGMap8BPP64x64` (mode 3, one 256-colour background) | (not drawn) | 0.90 |
+| `MosaicMode3` | (not drawn) | 0.89 |
+
+The decode by depth and the mosaic pass cost 0.01 to 0.08 ms on modes 0 and 1. A 256-colour background costs what
+the others do, about 0.9 ms with the compositor, against §5.5's 1.5 ms for the PPU. §17.3's finding stands: the
+compositor's per-pixel windows and priority walks are the larger part, and were left as they are in this step.
+
+### 18.6 The clone check (measured 2026-10-01)
+
+18 files against Mesen's 164: no pair at 12 fingerprints, no shared run of literals (`DEPTHS` and the charts
+included), the largest pair below the threshold still 4, `ppu.rs` sharing none. One new name, `mosaicsize`,
+fullsnes's "Mosaic Size".
+
+### 18.7 VenusRT against `EmuSen_CoreAPI.md` §13.2, read for stage 6
+
+Nothing was changed for it; these are what would meet it:
+
+- **The picture's size.** VenusRT's frame is one fixed 256×224 buffer and its frame info a constant. §6.6 reports
+  the size every frame, 256 or 512 wide for VenusRT, with the host allocating from machine info's maximum. The
+  hi-res step has to make the width vary within the present interface's frame info, and stage 6 inherits that.
+- **`advance` and the frame's end.** §6.5 has `advance` take "the machine to the frame's end". VenusRT's ends at
+  the first instruction boundary past it, and a DMA longer than a frame is one instruction, so one call can end two
+  frames on (§15.7). A host that counts calls drifts, as the runner did. Either the specification says the frame
+  count is the authority, or VenusRT must be able to stop inside a DMA.
+- **No per-core C# class.** `Shim/VenusNative.cs` and `Shim/VenusMachine.cs` exist for the runner; stage 6 replaces
+  them with the generic engine, and the runner's VenusRT engine and its space names (a C# array today) move to the
+  core's own descriptors.
+- **Smaller things:** VenusRT's own status, -9 for an image shorter than a bank, needs its place in §6.15's
+  status space; it uses only bit 0 of the options and refuses every setting, which §6.5 and §6.13 already allow;
+  it has no `present`, `phases`, axes, events or log queue yet.
+
+### 18.8 The next step
+
+**Hi-res**: modes 5 and 6 (16-pixel-wide tiles, even pixels to the sub screen and odd to the main), pseudo-hi-res
+by SETINI, 512-wide line buffers and frame, the hi-res colour math anomie describes (the previous main pixel's
+choice), mode 6's offset-per-tile, and the runner's comparison of a 512-wide picture. Then **interlace** with the
+263-line field (which `demo_irq`'s test 6 needs), then **mode 7**. Beside it: `test_hdmasync` and `test_hdmatiming`
+(the HDMA start, from the first's header and table), `test_irq4200`, and the compositor's masks if that decision
+comes.
+

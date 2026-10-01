@@ -259,8 +259,8 @@ their data.
   `$52`, `nmi` at `$1F`; `test_dma` and `test_hdmasync` leave 0, and the two `test_dmavalid` write `$AA` there and
   use the address for something else.
 - Pinned by: nothing yet.
-- Read again 2026-10-01, before the code, at stage 3 step 2. The header's results are a console's (byuu ran the ROM
-  on hardware; the ROM grades itself against them), and they are taken as the document for this rule. The header
+- Read again 2026-10-01, before the code, at stage 3 step 2. The header's results are a console's (the header states
+  them as the console's behaviour, and the ROM grades itself against them), and they are taken as the document for this rule. The header
   names times in two frames, and the test bodies say which: an interrupt check is placed at the *start* of the
   instruction's last bus cycle (tests 1 and 2: SEC's last cycle starting at HC=4 sees no NMI, at HC=6 sees it), but a
   read of `$4210` is placed two clocks *into* its six-clock cycle (tests 15 to 18: the read cycles start at
@@ -276,3 +276,40 @@ their data.
   The rule, in hardware terms: the flag is visible from HC=2 and the line falls at HC=6, and a read before HC=6 does
   not clear the flag; argued from the header's console results, and implemented in the end-of-cycle frame above.
 
+### D-9. PPU: a read of `$2137` latches the counters four master clocks before its bus cycle ends
+- Opened: 2026-10-01, at stage 3 step 2, by `test_nmi` after D-8's rule went in. Its test 1 and 2 SECs were meant
+  to begin their last cycle at V=224 HC=1360 and 1362 (the header's cycle lists); on VenusRT they began at 1356 and
+  1358, four clocks early. The ROM reaches those points through `libclock`'s `seek_frame`, which latches the counters
+  with `$2137` twice and subtracts the dot it reads from a fixed count, so a latch one dot late lands the seek one
+  dot early. VenusRT latched at the end of the read's cycle, the frame in which it applies every read and write.
+- Documents read: anomie's timing document, its preface: the counter "may also be latched by writing 0 to $4201
+  bit 7: this will latch 1 dot later than if the same memory access cycle were reading $2137". fullsnes, "OPHCT",
+  gives no point within the cycle.
+- Test ROM: `test_nmi` and its `libclock`, as above. With the read's latch four clocks before the cycle's end, the
+  SECs begin at 1360 and 1362 and `nmi_irq/nmi_pf/test_nmi` passes. The WRIO latch stays at the end of its write's
+  cycle, which with this rule is anomie's "1 dot later".
+- Referee: not read. Mesen's source: none.
+- Conclusion: a `$2137` read latches the dot of its cycle's end less four clocks; argued from anomie's relative
+  statement and measured on the test ROM. It moves every latched H counter by one dot, so D-6's figures are read
+  again after it. Only `$2137` is moved; whether other reads sample early, as D-8's `$4210` reads do in the same
+  frame, is not settled by this entry.
+- Pinned by: `test_nmi` in the corpus, once the runner reads the backdrop.
+
+### D-10. IRQ: `$4211`'s flag sets at HTIME×4+14 (10 for HTIME 0), the CPU's /IRQ falls four clocks later
+- Opened: 2026-10-01, at stage 3 step 2, by `test_irq` (byuu, 2005-10-01) stopping at its test 1, and the other
+  IRQ tests among D-8's 17.
+- Documents read: anomie's timing document, "Interrupts": `$4211` bit 7 "gets set 1374 master cycles after dot 0.0
+  of the previous scanline" for H=0, "otherwise ... 14+H*4", which is VenusRT's `irq_point`, used until now for the
+  flag and the line alike. fullsnes, "SNES Timing H/V Events": "H=HTIME+3.5 H-IRQ", "H=2.5 V-IRQ", in dots.
+- Test ROM: `test_irq`'s header, the same author's console results in the form of `test_nmi`'s: "test when IRQ
+  trigger occurs: V=VTIME,H=(HTIME)?(HTIME*4+18):(14)"; "test when $4211.d7 is set: (HTIME*4+14):(10)"; reading
+  `$4211` at that point or two clocks after leaves the flag set, any later clears it; a `$4200` write prevents the
+  IRQ only if it is earlier than the trigger. Its tests 1 and 2 place SEC's last cycle at V=225 HC=12 (no IRQ
+  after SEC) and HC=14 (IRQ after SEC).
+- Referee: not read. Mesen's source: none.
+- Conclusion: the shape of D-8. The flag sets at anomie's point and the line falls four clocks after it; a read
+  whose sampling point is within four clocks of the flag's setting does not clear it. In VenusRT's end-of-cycle
+  frame, where a read's sampling point is its end less four: one event at `irq_point` + 4 sets the flag and the
+  line, and a `$4211` read whose cycle ends less than eight clocks after `irq_point` leaves it set. Argued from
+  the header's console results.
+- Pinned by: `test_irq` in the corpus, once the runner reads the backdrop.

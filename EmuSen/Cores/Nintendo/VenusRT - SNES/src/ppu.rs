@@ -123,7 +123,7 @@ impl Ppu {
 
     /// VRAM takes writes in forced blank and in vertical blank (fullsnes: "accessed only during V-Blank, or Forced Blank").
     fn vram_open(&self, beam: Beam) -> bool {
-        self.forced_blank() || beam.vblank || beam.line == 0
+        self.forced_blank() || beam.vblank
     }
 
     /// The pixel a dot is, clipped to the picture.

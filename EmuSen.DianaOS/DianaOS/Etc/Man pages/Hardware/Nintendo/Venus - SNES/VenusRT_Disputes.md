@@ -655,6 +655,14 @@ their data.
   the only difference the read found, and it belongs to D-27.
 - Conclusion: open, argued to be D-27: no rule in the read process separates `test_timer_stop` from
   `test_timer_stop2` other than TEST's speed bits, so the ROM is to be measured again once D-27 is built.
+- **Measured 2026-10-02, after D-27: still 00 against 04; the argument above is retired.** A log of the ROM's timer
+  accesses shows what it does: timer 0 at divider 2, then TEST written $0B and $0A alternately every four cycles
+  for about 110 cycles, then T0OUT read. `test_timer_stop` alternates $02 and $0A (bit 3) instead, and passes with
+  00. In 110 cycles the first stage as built ticks timer 0 at most once, so 04 (eight second-stage ticks) cannot
+  come from the 8 kHz stage at all: toggling bit 0 must itself clock the second stage, or bit 0 must change the
+  first stage's rate. Two readings were tried and rejected: the timers' part of a cycle after the access (built
+  for D-27; no change here), and bit 0 freezing the first stage (00). Not settled; the referee's read process
+  gates stage 2 by bits 0 and 3 alike and does not explain it.
 - Pinned by: `test_timer_stop2`.
 
 ### D-27. S-SMP: TEST bits 4 to 7 add waitstates to the SPC700's cycles
@@ -670,9 +678,19 @@ their data.
 - Referee: not read for this rule. D-26's read of `rtl/SMP.vhd` lines 210-360 found that the timers' prescalers
   step by an amount TEST bits 4 to 7 set, which fullsnes does not state; the SPC700's own waitstates were not read.
   Mesen's source: none.
-- Conclusion: open; fullsnes's rule is to be built and measured on the three ROMs. A setting the software "should
-  never change" (fullsnes), so no game is expected to depend on it.
-- Pinned by: `test_timer_speed`, `test_timer_speed2`.
+- Conclusion: settled by measurement, 2026-10-02, and **not** as fullsnes reads. The counts the ROMs print are
+  explained exactly by the referee's timer step alone: the first stage advances by 2^(bits 7-6) + 2·2^(bits 5-4)
+  per SPC700 cycle and ticks timers 0 and 1 at 384 and timer 2 at 48 (128 and 16 cycles at TEST's default), which
+  is also the formula in blargg's `notes.txt` beside the ROMs ("step = 1 << clock_speed + 2 << timer_speed"). Bits
+  4-5 do not slow the SPC700: `test_speed` prints 251 for 0A to 3A in Mesen's run, and fullsnes's RAM waitstates
+  would have changed it. Bits 6-7 stretch every SPC700 cycle to 1, 2, 5 or 10 of the 1.024 MHz cycles (fullsnes's
+  0/1/4/9 waits, applied to every cycle rather than to I/O and ROM alone): `test_speed` then prints 251, 126 and
+  25, Mesen's 251, 126 and 25-26. Built: the stretch, the step, and the timers' part of a cycle evaluated after the
+  SPC700's access in it. **Measured:** `test_timer_speed` and `test_timer_speed2` pass, `test_timer_speed_2` and
+  `test_speed` print Mesen's counts to within one, and `spc_timer`, `spc_smp`, `spc_mem_access_times`,
+  `test_timer_stop` and gilyon's `spctest` still pass. fullsnes's per-opcode table of internal cycles' timings is
+  not built, since nothing here distinguishes it. A setting the software "should never change" (fullsnes).
+- Pinned by: `test_timer_speed`, `test_timer_speed2`, `test_speed`.
 
 ### D-28. S-DSP: the Gaussian interpolation's rounding, where fullsnes and anomie give different formulas
 - Opened: 2026-10-02, at stage 4 step 2, before the S-DSP's code, by reading the two sources side by side.

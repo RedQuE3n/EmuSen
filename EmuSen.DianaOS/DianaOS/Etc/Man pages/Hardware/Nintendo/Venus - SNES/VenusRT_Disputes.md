@@ -816,3 +816,29 @@ their data.
   To be measured against the games' pictures.
 - Pinned by: the DSP games' pictures against Mesen.
 
+### D-33. SA-1: the value of the version code register, $230E
+- Opened: 2026-10-02, at stage 5 step 2, before the SA-1's code: fullsnes says "Existing value(s) are unknown",
+  and absindx's `SA1VersionCodeTest` reads it.
+- Documents read: fullsnes, "230Eh SNES VC - Version Code Register": "0-7 SA-1 Chip Version ... Existing value(s)
+  are unknown. There seems to be only one chip version (labeled SA-1 RF5A123)".
+- Test ROM: `SA1VersionCodeTest` reports "FAILED" on VenusRT and on Mesen alike (Mesen reads $230E as open bus); its
+  screen shows $23 / $23 beside the result, which its source, not fetched, would explain.
+- Referee: not read. Mesen's source: none.
+- Conclusion: open. VenusRT returns $23, after the chip's label, as a choice; no game is known to read it (fullsnes).
+- Pinned by: `SA1VersionCodeTest`.
+
+### D-34. SA-1: where BW-RAM answers, and what the SA-1's reset clears
+- Opened: 2026-10-02, at stage 5 step 2, by absindx's `SA1RamProtectionTest`, which has a photograph of its result
+  on a console beside its source. With fullsnes's map, it fails test 155 ("BW-RAM mirror at $400000"): VenusRT showed
+  the BW-RAM at the S-CPU's $70:0000 (its LoROM SRAM map) and not at the SA-1's $50:0000. With that fixed it fails 221.
+- Documents read: fullsnes, "SNES Cart SA-1", "Memory Map (SNES Side)": "40h-4Fh:0000h-FFFFh Entire 256Kbyte
+  BW-RAM (mirrors in 44h-4Fh)", and the SA-1 side "same as on SNES side"; CCNT: "Unknown if Reset resets any I/O
+  Ports". absindx's notes (`README.md`, `MessageID.asm`): tests 155-162 list the mirrors, $40-5F:0000 on the SA-1's
+  side and $40-4F on the S-CPU's; test 221, "SA-1 I-RAM Protection after reset returns protection status $00".
+- Test ROM: the test above, whose expectations are the console's.
+- Referee: not read. Mesen's source: none.
+- Conclusion: three rules, measured 2026-10-02: the S-CPU sees BW-RAM in banks $40-4F and nothing of the board in the
+  LoROM SRAM banks; the SA-1 sees it in $40-5F; and holding the SA-1 in reset (CCNT bit 5) clears CIWP. With them
+  the test passes all 222 of its tests.
+- Pinned by: `SA1RamProtectionTest`, tests 155-162 and 221.
+

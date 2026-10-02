@@ -46,7 +46,9 @@ pub struct Ppu {
     /// The field being drawn, and whether a line of it was interlaced hi-res; the clock's, for drawing.
     pub field: bool,
     pub tall: bool,
-    /// The frame being drawn, always 512 wide, a low-res pixel written twice; presented at the start of V-Blank.
+    /// The frame being drawn: 256 wide in `narrow` until a hi-res line appears, then 512 wide in `canvas`, the lines
+    /// drawn before it doubled; presented at the start of V-Blank (decided 2026-10-02).
+    pub narrow: Box<[u8]>,
     pub canvas: Box<[u8]>,
     /// Whether a line of the frame being drawn was hi-res.
     pub wide: bool,
@@ -106,6 +108,7 @@ impl Default for Ppu {
             ppu1_mdr: 0,
             ppu2_mdr: 0,
             canvas: frame[..2 * WIDTH * HEIGHT * 4].to_vec().into(),
+            narrow: frame.clone().into(),
             frame: frame.into(),
             frame_width: WIDTH as u16,
             frame_height: HEIGHT as u16,
@@ -437,9 +440,7 @@ impl Ppu {
             self.frame_width = 2 * WIDTH as u16;
             self.frame_height = HEIGHT as u16;
         } else {
-            for (out, pair) in self.frame.chunks_exact_mut(4).zip(self.canvas.chunks_exact(8)) {
-                out.copy_from_slice(&pair[..4]);
-            }
+            std::mem::swap(&mut self.frame, &mut self.narrow);
             self.frame_width = WIDTH as u16;
             self.frame_height = HEIGHT as u16;
         }
@@ -561,9 +562,27 @@ impl Ppu {
         if self.skip || !(1..=HEIGHT as u16).contains(&line) {
             return;
         }
-        let row = (line as usize - 1) * 2 * WIDTH * 4;
         let brightness = (self.regs[0] & 0x0F) as u32;
-        if self.forced_blank() || brightness == 0 {
+        // Modes 5 and 6 and SETINI's pseudo-hi-res show the sub screen's pixel left of the main's (anomie, "Mode 5").
+        let blank = self.forced_blank() || brightness == 0;
+        // A blank line does not make the frame hi-res, whatever the mode.
+        let hires = self.hires() && !blank;
+        if hires && !self.wide {
+            self.widen(line);
+        }
+        self.wide |= hires;
+        if !self.wide {
+            let row = (line as usize - 1) * WIDTH * 4;
+            if blank {
+                self.narrow[row + from as usize * 4..row + to as usize * 4].chunks_exact_mut(4).for_each(|px| px[..3].fill(0));
+                return;
+            }
+            self.fill_backgrounds(line, from, to);
+            self.draw_span(from, to, brightness, false, row, 1);
+            return;
+        }
+        let row = (line as usize - 1) * 2 * WIDTH * 4;
+        if blank {
             for x in from..to {
                 let at = row + x as usize * 8;
                 self.canvas[at..at + 3].fill(0);
@@ -572,13 +591,28 @@ impl Ppu {
             return;
         }
         self.fill_backgrounds(line, from, to);
+        self.draw_span(from, to, brightness, hires, row, 2);
+    }
+
+    /// The lines of this frame drawn 256 wide so far, `line` included, each pixel doubled into the 512-wide canvas.
+    fn widen(&mut self, line: u16) {
+        for y in 0..line as usize {
+            for x in 0..WIDTH {
+                let from = (y * WIDTH + x) * 4;
+                let to = (y * 2 * WIDTH + 2 * x) * 4;
+                let px: [u8; 4] = self.narrow[from..from + 4].try_into().unwrap();
+                self.canvas[to..to + 4].copy_from_slice(&px);
+                self.canvas[to + 4..to + 8].copy_from_slice(&px);
+            }
+        }
+    }
+
+    /// Composes and writes the span's pixels, `per` buffer pixels a picture pixel: 1 into `narrow`, 2 into `canvas`.
+    fn draw_span(&mut self, from: u16, to: u16, brightness: u32, hires: bool, row: usize, per: usize) {
         let scale = |c: u16| -> u8 {
             let c = (c as u32 & 31) * (brightness + 1) / 16;
             ((c << 3) | (c >> 2)) as u8
         };
-        // Modes 5 and 6 and SETINI's pseudo-hi-res show the sub screen's pixel left of the main's (anomie, "Mode 5").
-        let hires = self.hires();
-        self.wide |= hires;
         self.tall |= self.half_lines();
         if from == 0 {
             self.before = Mix::default();
@@ -594,11 +628,13 @@ impl Ppu {
             let mix = self.mix(x, windows);
             let left = if hires { self.sub_half_pixel(x, self.before, windows) } else { mix.colour };
             self.before = mix;
-            let at = row + x as usize * 8;
-            for (at, colour) in [(at, left), (at + 4, mix.colour)] {
-                self.canvas[at] = scale(colour);
-                self.canvas[at + 1] = scale(colour >> 5);
-                self.canvas[at + 2] = scale(colour >> 10);
+            let at = row + x as usize * 4 * per;
+            let out = if per == 1 { &mut self.narrow } else { &mut self.canvas };
+            for (k, colour) in [left, mix.colour].into_iter().enumerate().skip(2 - per) {
+                let at = at + 4 * (k + per - 2);
+                out[at] = scale(colour);
+                out[at + 1] = scale(colour >> 5);
+                out[at + 2] = scale(colour >> 10);
             }
         }
     }
@@ -1080,7 +1116,7 @@ mod tests {
             p.write(r, v, blank());
         }
         p.vram[0x0400] = 0x0000;
-        let at = |p: &Ppu, x: usize| [p.canvas[x * 8], p.canvas[x * 8 + 1], p.canvas[x * 8 + 2]];
+        let at = |p: &Ppu, x: usize| [p.narrow[x * 4], p.narrow[x * 4 + 1], p.narrow[x * 4 + 2]];
         p.write(0x2C, 0x00, Beam { line: 1, dot: FIRST_DOT + 100, ..Beam::default() });
         p.end_line(1, 2);
         assert_eq!(at(&p, 0), [0xFF, 0, 0]);
@@ -1340,5 +1376,29 @@ mod tests {
                 assert_eq!(windows, p.windows_at(x), "x {x} regs {:02X?}", &p.regs[0x23..0x2C]);
             }
         }
+    }
+
+    // Decided 2026-10-02: a low-res frame is drawn 256 wide, and one that turns hi-res mid-frame is presented 512 wide
+    // with the lines before the change doubled, and a low-res frame after it is 256 wide again.
+    #[test]
+    fn a_frame_that_turns_hi_res_mid_frame_doubles_the_lines_before() {
+        let mut p = Ppu::default();
+        p.regs[0x00] = 0x0F;
+        p.cgram[0] = 0x001F;
+        let frame = |p: &mut Ppu, hires_from: u16| {
+            for line in 1..=HEIGHT as u16 {
+                p.regs[0x33] = if line >= hires_from { 0x08 } else { 0 };
+                p.end_line(line, line + 1);
+            }
+        };
+        frame(&mut p, 100);
+        assert_eq!((p.frame_width, p.frame_height), (512, 224));
+        let red = [0xFF, 0, 0, 0xFF];
+        let px = |p: &Ppu, x: usize, y: usize| -> [u8; 4] { p.picture()[(y * 512 + x) * 4..][..4].try_into().unwrap() };
+        // Line 1 (row 0) was low-res, doubled; line 100 (row 99) hi-res; both show the backdrop on both halves.
+        assert_eq!((px(&p, 0, 0), px(&p, 1, 0), px(&p, 511, 0), px(&p, 0, 99), px(&p, 511, 223)), (red, red, red, red, red));
+        frame(&mut p, 1000);
+        assert_eq!((p.frame_width, p.frame_height, p.picture().len()), (256, 224, 256 * 224 * 4));
+        assert!(p.picture().chunks_exact(4).all(|q| q == red));
     }
 }

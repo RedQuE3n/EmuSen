@@ -199,7 +199,7 @@ pub struct System {
 }
 
 impl System {
-    /// Runs the SA-1 to the S-CPU's clock and takes its IRQ line.
+    /// Runs the cartridge's processor (the SA-1 or the GSU) to the S-CPU's clock and takes its IRQ line.
     #[inline]
     pub fn catch_up_sa1(&mut self) {
         let clock = self.timing.clock;
@@ -207,6 +207,9 @@ impl System {
         if let Some(sa1) = c.sa1.as_mut() {
             sa1.run_to(clock, &c.rom, &mut c.sram);
             self.cart_irq = sa1.snes_irq();
+        } else if let Some(gsu) = c.gsu.as_mut() {
+            gsu.run_to(clock, &c.rom, &mut c.sram);
+            self.cart_irq = gsu.snes_irq();
         }
     }
 
@@ -308,6 +311,17 @@ impl System {
     pub fn read_value(&mut self, address: u32, side_effects: bool) -> Option<u8> {
         let bank = (address >> 16) as u8;
         let offset = address as u16;
+        if self.cart.gsu.is_some() && crate::chips::gsu::Gsu::snes_maps(address) {
+            if side_effects {
+                self.catch_up_sa1();
+            }
+            let c = &mut self.cart;
+            let v = c.gsu.as_mut()?.snes_read(address, &c.rom, &c.sram);
+            if side_effects {
+                self.cart_irq = c.gsu.as_ref().is_some_and(|g| g.snes_irq());
+            }
+            return v;
+        }
         if self.cart.sa1.is_some() && crate::chips::sa1::Sa1::snes_maps(address) {
             if side_effects {
                 self.catch_up_sa1();
@@ -374,6 +388,15 @@ impl System {
     pub(crate) fn write_value(&mut self, address: u32, value: u8) {
         let bank = (address >> 16) as u8;
         let offset = address as u16;
+        if self.cart.gsu.is_some() && crate::chips::gsu::Gsu::snes_maps(address) {
+            self.catch_up_sa1();
+            let c = &mut self.cart;
+            if let Some(gsu) = c.gsu.as_mut() {
+                gsu.snes_write(address, value, &c.rom, &mut c.sram);
+                self.cart_irq = gsu.snes_irq();
+            }
+            return;
+        }
         if self.cart.sa1.is_some() && crate::chips::sa1::Sa1::snes_maps(address) {
             self.catch_up_sa1();
             let c = &mut self.cart;

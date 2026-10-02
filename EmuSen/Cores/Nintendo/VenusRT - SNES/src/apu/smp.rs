@@ -126,8 +126,8 @@ impl Smp {
             0xF0 => self.test = v,
             0xF1 => {
                 for (i, t) in self.timers.iter_mut().enumerate() {
-                    // A clear enable bit holds the timer at zero (fullsnes, CONTROL).
-                    if v & (1 << i) == 0 {
+                    // A timer enabled from disabled starts again from zero; a clear bit only stops it (D-25).
+                    if v & !self.control & (1 << i) != 0 {
                         t.stage = 0;
                         t.out = 0;
                     }
@@ -226,6 +226,31 @@ pub(crate) mod tests {
         let out = s.read(0xFF);
         assert!((4..=5).contains(&out), "{out}");
         assert_eq!(s.read(0xFF), 0);
+    }
+
+    // D-25: clearing a timer's CONTROL bit stops it and keeps TnOUT; setting the bit again starts it from zero.
+    #[test]
+    fn a_timer_restarts_on_its_enable_edge() {
+        let mut s = Smp::new(Some(idle_ipl()), false);
+        use spc700::Bus;
+        s.write(0xFC, 1);
+        s.write(0xF1, 0x84);
+        while s.timers[2].out < 3 {
+            s.idle();
+        }
+        s.write(0xF1, 0x80);
+        for _ in 0..64 {
+            s.idle();
+        }
+        assert_eq!(s.timers[2].out, 3);
+        s.write(0xF1, 0x84);
+        assert_eq!((s.timers[2].out, s.timers[2].stage), (0, 0));
+        s.write(0xF1, 0x84);
+        while s.timers[2].out == 0 {
+            s.idle();
+        }
+        s.write(0xF1, 0x84);
+        assert_eq!(s.timers[2].out, 1);
     }
 
     // The boot ROM's reset vector starts the CPU, and run_to keeps the SPC700 at the master clock's share.

@@ -20,6 +20,14 @@ namespace EmuSen.WiseMan.Cores
 
         public VenusRtTestRomRunnerTests(ITestOutputHelper output) => _output = output;
 
+        // A stand-in boot ROM whose reset jumps to a loop at $FFC0; not the console's, which is never shipped.
+        public static byte[] IdleIpl()
+        {
+            var r = new byte[64];
+            (r[0], r[1], r[62], r[63]) = (0x2F, 0xFE, 0xC0, 0xFF);
+            return r;
+        }
+
         private static SnesRun RunWith(string path, byte[] vram, byte[]? cgram = null, byte[]? earlier = null)
         {
             var shots = new List<SnesSnapshot>();
@@ -151,7 +159,8 @@ namespace EmuSen.WiseMan.Cores
             foreach (var (_, name, exports) in NativeInterface.Optional)
                 foreach (string export in exports) Assert.False(NativeLibrary.TryGetExport(handle, export, out _), $"{name}: {export}");
 
-            using var m = new VenusMachine(new byte[0x8000 + 512]);
+            Assert.Throws<FileNotFoundException>(() => new VenusMachine(new byte[0x8000 + 512], null));
+            using var m = new VenusMachine(new byte[0x8000 + 512], IdleIpl());
             for (int i = 0; i < 3; i++) m.Advance();
             Assert.Equal(3, m.TotalFrames);
             Assert.Equal((256, 224), (m.FrameInfo.Width, m.FrameInfo.Height));
@@ -161,7 +170,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal("VNRT"u8.ToArray(), state[..4]);
             state[0] = (byte)'S'; state[1] = (byte)'N'; state[2] = (byte)'E'; state[3] = (byte)'S';
             Assert.Throws<InvalidDataException>(() => m.Load(state));
-            Assert.Throws<InvalidDataException>(() => new VenusMachine(new byte[0x4000]));
+            Assert.Throws<InvalidDataException>(() => new VenusMachine(new byte[0x4000], IdleIpl()));
         }
 
         [Fact]
@@ -171,7 +180,7 @@ namespace EmuSen.WiseMan.Cores
             File.WriteAllBytes(rom, SyntheticRom.Build());
             try
             {
-                var run = new VenusRtSnesEngine().Run(rom, new[] { 20, 10 }, new[] { new SnesPress(2, EmuSen.Galaxia.Input.PadButton.Start) }, audio: true);
+                var run = new VenusRtSnesEngine(IdleIpl()).Run(rom, new[] { 20, 10 }, new[] { new SnesPress(2, EmuSen.Galaxia.Input.PadButton.Start) }, audio: true);
                 Assert.Equal(new[] { 10, 20 }, run.Snapshots.Select(s => s.Frame));
                 Assert.Equal(SnesOutcome.Visual, SnesTestRomGrader.Grade(rom, run).Outcome);
                 Assert.True(SnesDifferential.Compare(run, run).All(d => d.Identical));

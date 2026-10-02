@@ -49,9 +49,6 @@ pub struct Devices {
     pub nmi_hold: bool,
     /// True only inside a $4200 write; not in the state.
     pub writing_nmitimen: bool,
-    /// A stand-in for the sound CPU's boot ROM until stage 4: the CPU's writes to $2140-$2143, and whether its kick came.
-    pub apu_stub: [u8; 4],
-    pub apu_written: bool,
 }
 
 /// The B-bus addresses of a DMA unit's bytes, by its mode.
@@ -382,9 +379,6 @@ impl System {
 
     /// The sound CPU's ports as its boot ROM presents them (fullsnes, "Uploader"): $BBAA until the CPU's $CC kick on
     /// port 0, then each port as last written, which is the boot ROM's acknowledge on port 0. Stage 4 replaces this.
-    pub(crate) fn read_apu_stub(&self, port: usize) -> u8 {
-        if self.dev.apu_written { self.dev.apu_stub[port] } else { [0xAA, 0xBB, 0, 0][port] }
-    }
 
     /// $4016-$4017 and $4200-$421F as the CPU reads them, or None for open bus.
     pub(crate) fn read_scpu(&mut self, offset: u16, side_effects: bool) -> Option<u8> {

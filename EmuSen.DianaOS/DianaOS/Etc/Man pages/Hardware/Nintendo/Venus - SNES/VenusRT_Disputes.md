@@ -620,6 +620,11 @@ their data.
   counters), so that cycle does not read the bus.
 - Referee: not read. Mesen's source: none.
 - Conclusion: open. Not a sound-unit rule; left for a CPU-side step with the probe's CPU trace of the fifth case.
+- **Left open at stage 4's close (2026-10-02), with the reason:** the question is how many WMDATA reads the S-CPU
+  makes between a CLC fetched from $217F and the IRQ handler, which no document states; a purpose-written ROM
+  counting them would need a console to be evidence, and `test_irqb`'s own expectation (two) is already the
+  hardware's answer without the mechanism. The next recourse is the referee's 65C816 interrupt sequence, rated
+  real support in `Venus_Referee.md` §0, in a dispute step of its own at a CPU-side stage.
 - Pinned by: `test_irqb`, case 5.
 
 ### D-25. S-SMP: a timer is reset when its CONTROL bit goes from 0 to 1, and a cleared bit only stops it
@@ -663,6 +668,10 @@ their data.
   first stage's rate. Two readings were tried and rejected: the timers' part of a cycle after the access (built
   for D-27; no change here), and bit 0 freezing the first stage (00). Not settled; the referee's read process
   gates stage 2 by bits 0 and 3 alike and does not explain it.
+- **Left open at stage 4's close (2026-10-02), with the reason:** a purpose-written ROM that toggles TEST bit 0 at
+  chosen rates and reads T0OUT would separate the remaining readings only when run on a console; run on Mesen it
+  would measure Mesen's model, which ranks last in §1's order, and none is to hand. The referee's rule for TEST is
+  read and does not produce 04. The ROM itself remains the oracle for a later step.
 - Pinned by: `test_timer_stop2`.
 
 ### D-27. S-SMP: TEST bits 4 to 7 add waitstates to the SPC700's cycles
@@ -769,7 +778,7 @@ their data.
   address comes from the sample before the one that plays the loop block). With the noise generator updated before
   voice 0's step in cycle 30, so that voice 0 uses this sample's noise, the two noise tests pass.
 - Referee: not read. Mesen's source: none.
-- Conclusion: both rules as just stated; measured 2026-10-02 on the seven tests, with the other 99 that passed still
-  passing.
+- Conclusion: both rules as just stated; measured 2026-10-02 on the seven tests, with none of the tests that passed
+  before failing because of them.
 - Pinned by: the seven tests named above.
 

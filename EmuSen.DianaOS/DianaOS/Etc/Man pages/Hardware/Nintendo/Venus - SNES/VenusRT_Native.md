@@ -2105,3 +2105,90 @@ with the sound unit complete. No tuning was done.
 - D-26 and D-24, the one SPC700-side and one CPU-side case left from step 1.
 - The sound's waveform against Mesen's at the sample level, which the envelope does not measure; the probe's WAV is
   48 kHz, so it needs the resampler §5.3 describes, or a 32 kHz dump.
+
+---
+
+## 23. Stage 4, step 3, and the stage's close (2026-10-02)
+
+### 23.1 `spc_dsp6`, test by test
+
+The whole ROM stops at its first failure, so the step began by making the rest of it reachable. **Each of its 111
+tests was run on its own**, from a copy of the ROM (built in scratch, never committed) whose every test block holds
+that one test; a test passes when its first run completes without "Failed". Mesen passes every such copy that
+VenusRT fails, which checks that the tests do not depend on the ones before them. The rules found (each a dispute
+entry or a document's sentence, as marked):
+
+| Rule | From | Tests it brought |
+|---|---|---|
+| The key-on sample keeps its own BRR decode; ring, position and block offset reset on the first start-up sample | anomie ("#0 ... the final pre-KON BRR decode also occurs here"), D-29's third rule | "kon decoding when another kon" and the eleven key-on tests after it |
+| A voice's ENVX or OUTX written between the DSP preparing it and writing it keeps the SMP's value; an ENDX write also clears the prepared ENDX | anomie, VxENVX/VxOUTX/ENDX ("a write by the SMP to this register up to 2 cycles earlier will overwrite the DSP's updated value") | "endx write clears immediately", "endx after final brr decode", "V7 endx set", "V8 outx", "V9 envx" |
+| The loop address is the one the voice's S2 read in the sample whose block ended | D-30 (anomie's S4 sentence read literally fails) | "loop addr read in prev sample", "V1 srcn.loop", "V2 dir.loop.lsb/msb", "28 dir" |
+| The noise moves before voice 0's step in cycle 30 | D-30 (no document gives the order) | "noise rate flg.1F", "voice 0 noise" |
+| EFB is read once, at cycle 26, for both sides | anomie ("EFB is accessed during cycle 26") | "26 efb" |
+
+**Measured 2026-10-02: 106 of the 111 tests pass on their own** (21 at §22). The whole ROM, run in order, now
+passes 33 and stops at its 34th, "Misc/$F0-$FF are not ram". Left: that test; "Random/brr while playing",
+"Random/echo data" and "Random/envelope", which print only a checksum; and "Random/pitch mod", whose first run
+passed before the ENVX/OUTX window rule and no longer completes within 5,000 frames with it, a regression
+measured and not explained. Its later random rounds failed before that too.
+
+### 23.2 D-28, D-26 and D-24
+
+- **D-28 is settled by the single-test runs:** fullsnes's interpolation passes "Random/brr before playing",
+  "Random/kon pitch" and "Random/pitch mod"'s first run, and anomie's formula fails all three. The rule built at
+  §22 stands.
+- **D-26 and D-24 stay open, with the reason recorded in their entries:** a purpose-written ROM could separate the
+  remaining readings only on a console, and run on Mesen it would measure Mesen. D-24's next recourse is the
+  referee's 65C816 interrupt sequence, at a CPU-side step.
+
+### 23.3 The sound, sample by sample
+
+The harness now resamples (linear interpolation, both runs to mono at 32 kHz; Mesen's WAV is 48 kHz) and compares
+each second from frame 60 on at that second's best lag within 1,600 samples, silent seconds left out:
+Pearson's r, the least-squares gain of Mesen's onto VenusRT's, and the residual's RMS over VenusRT's. A chirp test
+pins the resampler, the lag and the gain.
+
+| Game | Median r (least) | Lag, samples | Gain | Residual | Seconds |
+|---|---|---|---|---|---|
+| A Link to the Past | 0.988 (0.967) | 6 to 20 | 0.985 | 19% | 4 |
+| Donkey Kong Country | 0.992 (0.984) | 8 to 18 | 0.993 | 12% | 7 |
+| Super Metroid | 0.998 (0.997) | 32 to 36 | 1.002 | 6% | 3 |
+| Super Mario World | 0.964 (0.941) | 12 to 22 | 0.967 | 31% | 6 |
+
+**The waveforms agree at the sample level, at the same loudness** (gain within 3.5% of 1) and in phase (every r
+positive). The lag drifts by up to 14 samples within a game, and a single lag over the whole run gives r of only
+0.71 to 0.97 (measured): the two engines' sound runs at slightly different rates over a run, which Mesen's 48 kHz
+resampling and its own audio clock would explain (argued, not measured). The residual is the comparison's
+resolution and is not attributed: linear interpolation, Mesen's resampler and the drift within a second all
+contribute. A bit-exact sound comparison needs a 32 kHz dump from the probe.
+
+### 23.4 The corpus, the pictures and the skip check (measured 2026-10-02)
+
+The corpus is as at §22: 76 of the 117 ROMs Mesen passes pass, 199 of 295 pictures equal Mesen's at the last frame,
+and nothing that passed fails (C# Venus passes 81). The games' pictures and spaces are as at §21. The skip-versus-
+draw check holds on all 304 images over 600 frames.
+
+### 23.5 The clone check (measured 2026-10-02)
+
+As at §22.5: the one pair over the threshold and the two shared tables are the DSP's documented Gaussian table and
+counter rates; no new identifier.
+
+### 23.6 The cost (measured 2026-10-02)
+
+Under the timing lock (load 2.7 falling to 1.8), §22's binary against this step's, best of three over 600 frames:
+every figure within 0.01 ms of §22's (drawn 1.26 to 1.80 ms, skipped 0.50 to 0.74, the sound unit alone 0.18 to
+0.24). This step changed rules, not cost.
+
+### 23.7 Stage 4 closed
+
+**Built:** the SPC700 (256,000 of 256,000 single-step cases with cycles), the S-SMP with its ports, timers, boot ROM
+and clock domain, and the S-DSP. **Graded:** gilyon's `spctest`, blargg's `spc_smp`, `spc_timer` and
+`spc_mem_access_times`, PeterLemon's seven SPC700 ROMs, nine of the 2010 SPC ROMs, 106 of `spc_dsp6`'s 111 tests on
+their own, and the four games' sound against Mesen's at r 0.96 to 0.998 sample by sample.
+
+**Predictions retired.** P1 (a desktop mean of at most 2.8 ms a frame on the plain benched games at the end of stage
+4): **met** on the four measured, at 1.26 to 1.80 ms drawn with the sound unit complete; Pilotwings, the fifth in
+the plan's table, waits for its DSP-1 at stage 5.
+
+**Left open, named:** D-6, D-7, D-11, D-12 and the other PPU exceptions of §20.5; D-24 (CPU side); D-26
+(`test_timer_stop2`); and `spc_dsp6`'s five tests of §23.1. None is a game-facing difference this stage measured.

@@ -1,8 +1,9 @@
 //! The S-SMP around the SPC700: 64 KiB of RAM, the boot ROM, the I/O page with its four ports both ways, the three
-//! timers and a stand-in DSP whose registers read and write but make no sound; and its clock, run behind the S-CPU's
-//! and caught up at a port access and at the frame's end (fullsnes, "SNES APU"; VenusRT_Plan.md §5.3). See
-//! VenusRT_Native.md §21.
+//! timers and the S-DSP, which takes one of its steps in each SPC700 cycle; and its clock, run behind the S-CPU's and
+//! caught up at a port access and at the frame's end (fullsnes, "SNES APU"; VenusRT_Plan.md §5.3). See
+//! VenusRT_Native.md §21 and §22.
 
+use super::dsp::Dsp;
 use super::spc700::{self, Spc700};
 
 /// SPC700 cycles to master clocks, exactly: 1.024 MHz against 236,250,000/11 Hz (NTSC) or 21,281,370 Hz (PAL).
@@ -28,8 +29,9 @@ pub struct Smp {
     pub test: u8,
     pub control: u8,
     pub dsp_address: u8,
-    /// The stand-in DSP's 128 registers, RAM-like as fullsnes describes the buffer.
-    pub dsp: Box<[u8]>,
+    pub dsp: Dsp,
+    /// The DSP's stereo samples since the machine last took them.
+    pub out: Vec<i16>,
     /// $2140-$2143 as the S-CPU wrote them, and $F4-$F7 as the SPC700 wrote them.
     pub to_apu: [u8; 4],
     pub to_cpu: [u8; 4],
@@ -49,7 +51,8 @@ impl Smp {
             test: 0x0A,
             control: 0xB0,
             dsp_address: 0,
-            dsp: vec![0; 0x80].into(),
+            dsp: Dsp { step: 1, ..Dsp::default() },
+            out: Vec::new(),
             to_apu: [0; 4],
             to_cpu: [0; 4],
             timers: Default::default(),
@@ -87,6 +90,7 @@ impl Smp {
     /// One SPC700 cycle passes: the timers' sources tick on their division of it (8 kHz is every 128th, 64 kHz every 16th).
     fn tick(&mut self) {
         self.cycles += 1;
+        self.dsp.step(&mut self.ram, self.test & 0x02 != 0, &mut self.out);
         // TEST bit 3 lets the timers run and bit 0 stops them (fullsnes, TEST).
         if self.test & 0x09 != 0x08 {
             return;
@@ -107,7 +111,7 @@ impl Smp {
     fn io_read(&mut self, a: u16) -> u8 {
         match a {
             0xF2 => self.dsp_address,
-            0xF3 => self.dsp[(self.dsp_address & 0x7F) as usize],
+            0xF3 => self.dsp.read(self.dsp_address),
             0xF4..=0xF7 => self.to_apu[(a - 0xF4) as usize],
             0xF8 | 0xF9 => self.ram[a as usize],
             0xFD..=0xFF => {
@@ -143,11 +147,7 @@ impl Smp {
                 self.control = v;
             }
             0xF2 => self.dsp_address = v,
-            0xF3 => {
-                if self.dsp_address < 0x80 {
-                    self.dsp[self.dsp_address as usize] = v;
-                }
-            }
+            0xF3 => self.dsp.write(self.dsp_address, v),
             0xF4..=0xF7 => self.to_cpu[(a - 0xF4) as usize] = v,
             0xFA..=0xFC => self.timers[(a - 0xFA) as usize].divider = v,
             _ => {}

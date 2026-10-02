@@ -94,6 +94,10 @@ impl Machine {
             self.step();
         }
         self.sys.apu.run_to(self.sys.timing.clock);
+        for pair in self.sys.apu.out.chunks_exact(2) {
+            self.samples.push_pair(pair[0], pair[1]);
+        }
+        self.sys.apu.out.clear();
     }
 
     /// One instruction, or the interrupt the machine takes instead. The check is made just before an instruction's
@@ -243,7 +247,10 @@ impl Machine {
             w.u8("Test", a.test);
             w.u8("Control", a.control);
             w.u8("DspAddress", a.dsp_address);
-            w.bytes("Dsp", &a.dsp);
+            w.bytes("Dsp", &a.dsp.regs);
+            let mut core = [0u8; crate::apu::dsp::PACKED_BYTES];
+            a.dsp.pack(&mut core);
+            w.bytes("DspCore", &core);
             w.bytes("ToApu", &a.to_apu);
             w.bytes("ToCpu", &a.to_cpu);
             for (i, t) in a.timers.iter().enumerate() {
@@ -376,7 +383,11 @@ impl Machine {
         a.test = r.u8()?;
         a.control = r.u8()?;
         a.dsp_address = r.u8()?;
-        r.bytes(&mut a.dsp)?;
+        r.bytes(&mut a.dsp.regs)?;
+        let mut core = [0u8; crate::apu::dsp::PACKED_BYTES];
+        r.bytes(&mut core)?;
+        a.dsp.unpack(&core);
+        a.out.clear();
         r.bytes(&mut a.to_apu)?;
         r.bytes(&mut a.to_cpu)?;
         for t in a.timers.iter_mut() {
@@ -523,14 +534,14 @@ pub(crate) mod tests {
 
     // Version 4: the CPU, the clock, the bus and the S-CPU's devices; the listing is its record (plan §5.6).
     #[test]
-    fn the_version_11_layout_is_pinned() {
+    fn the_version_12_layout_is_pinned() {
         let m = Machine::load_rom(&rom(&[])).unwrap();
         let layout = m.layout();
         assert!(layout.starts_with("0 4 u32 Magic\n4 4 i32 Version\n8 2 u16 Cpu.A\n"), "{layout}");
         assert!(layout.contains(" u64 Timing.Clock\n") && layout.contains(" u8[1024] Bus.Io\n") && layout.contains(" u16[32768] Vram\n"), "{layout}");
         assert!(layout.contains(" u8[64] Ppu.Regs\n") && layout.contains(" u16[256] Cgram\n"), "{layout}");
-        assert_eq!(layout.lines().count(), 111, "{layout}");
-        assert_eq!(m.state_size(), 264_633);
+        assert_eq!(layout.lines().count(), 112, "{layout}");
+        assert_eq!(m.state_size(), 265_201);
         assert_eq!(&save(&m)[..4], b"VNRT");
     }
 

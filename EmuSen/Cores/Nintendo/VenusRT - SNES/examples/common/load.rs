@@ -7,8 +7,13 @@ pub fn machine(path: &str) -> venusrt::machine::Machine {
         .or_else(|| std::env::var_os("HOME").map(|h| std::path::Path::new(&h).join(".cache/emusen/probe/venusrt/firmware/spc700.rom")))
         .and_then(|p| std::fs::read(p).ok())
         .and_then(|b| <[u8; 64]>::try_from(b.as_slice()).ok());
-    match ipl {
+    let mut m = match ipl {
         Some(ipl) => venusrt::machine::Machine::with_ipl(&image, ipl).expect("an image"),
         None => venusrt::machine::Machine::load_rom(&image).expect("an image"),
+    };
+    // A NEC DSP's firmware, when EMUSEN_VENUSRT_DSP names one.
+    if let Some(fw) = std::env::var_os("EMUSEN_VENUSRT_DSP").and_then(|p| std::fs::read(p).ok()) {
+        assert!(m.attach_dsp(&fw), "firmware of 8,192 or 53,248 bytes");
     }
+    m
 }

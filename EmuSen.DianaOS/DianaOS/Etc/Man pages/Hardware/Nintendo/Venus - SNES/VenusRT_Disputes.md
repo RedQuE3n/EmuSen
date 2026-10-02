@@ -782,3 +782,18 @@ their data.
   before failing because of them.
 - Pinned by: the seven tests named above.
 
+### D-31. S-SMP: AUXIO4 and AUXIO5 ($F8, $F9) are latches of their own, not the RAM beneath them
+- Opened: 2026-10-02, after stage 4's close, by `spc_dsp6`'s "Misc/$F0-$FF are not ram", the test the in-order run
+  stops at (34th): run on its own it fails on VenusRT and passes on Mesen. VenusRT read $F8 and $F9 from the RAM
+  under the I/O page, which the DSP's echo writes reach.
+- Documents read: fullsnes, "00F8h - AUXIO4 / 00F9h - AUXIO5": "Writing changes the output levels. Reading normally
+  returns the same value as the written value ... In the SNES, these pins are unused (not connected), so the
+  registers do effectively work as if they'd be 'RAM-like' general purpose storage registers", and the memory map's
+  "FFh" for both. "RAM-like" was read as "RAM"; the paragraph describes an output latch read back, which RAM written
+  by the DSP does not change.
+- Test ROM: the test above. With $F8 and $F9 as two latches (power-on $FF), written by the SPC700 and read back, the
+  test passes (measured 2026-10-02 in a trial build).
+- Referee: not read. Mesen's source: none.
+- Conclusion: the rule above; the SPC700's writes still pass to the RAM beneath as well (fullsnes's map).
+- Pinned by: `spc_dsp6`, "Misc/$F0-$FF are not ram".
+

@@ -229,16 +229,17 @@ namespace EmuSen.WiseMan.Cores
             }
             var frames = Enumerable.Range(1, 60).Select(i => i * 10).ToArray();
             var mesen = new MesenProbeSnesEngine(Path.Combine(root, "runs", "mesen"));
-            var table = new List<string> { "game\tmesen_lit\tvenusrt_lit\tvram\tcgram\toam\tpicture\tpictures_differing\tat_600" };
+            var table = new List<string> { "game\tmesen_lit\tvenusrt_lit\tvram\tcgram\toam\tpicture\tpictures_differing\taudio\tat_600" };
             foreach (string rom in Directory.GetFiles(dir).Order(StringComparer.Ordinal))
             {
-                SnesRun theirs = mesen.Run(rom, frames), ours = new VenusRtSnesEngine().Run(rom, frames);
+                SnesRun theirs = mesen.Run(rom, frames, audio: true), ours = new VenusRtSnesEngine().Run(rom, frames, audio: true);
+                var sound = SnesDifferential.Audio(ours, theirs);
                 var d = SnesDifferential.Compare(ours, theirs, SnesDifferential.MesenRowOffset);
                 static string Lit(SnesRun r) => r.Snapshots.FirstOrDefault(s => s.Picture is { } p && p.Pixels.Any(x => (x & 0x7FFF) != 0))?.Frame.ToString() ?? "never";
                 string First(Func<SnesFrameDiff, int> n) => d.FirstOrDefault(f => n(f) != 0)?.Frame.ToString() ?? "never";
                 var last = d[^1];
                 table.Add(string.Join('\t', Path.GetFileName(rom), Lit(theirs), Lit(ours), First(f => f.SpaceBytes.GetValueOrDefault("vram")), First(f => f.SpaceBytes.GetValueOrDefault("cgram")),
-                    First(f => f.SpaceBytes.GetValueOrDefault("oam")), First(f => f.PixelsDiffering), $"{d.Count(f => f.PixelsDiffering != 0)} of {d.Count}",
+                    First(f => f.SpaceBytes.GetValueOrDefault("oam")), First(f => f.PixelsDiffering), $"{d.Count(f => f.PixelsDiffering != 0)} of {d.Count}", $"r {sound.Correlation:F3} lag {sound.LagWindows}{(sound.FirstSilent ? " venusrt silent" : "")}{(sound.SecondSilent ? " mesen silent" : "")}",
                     $"vram {last.SpaceBytes.GetValueOrDefault("vram")}B cgram {last.SpaceBytes.GetValueOrDefault("cgram")}B oam {last.SpaceBytes.GetValueOrDefault("oam")}B picture {last.PixelsDiffering}/{last.PixelsCompared}px"));
             }
             foreach (string line in table) _output.WriteLine(line);

@@ -183,6 +183,8 @@ pub struct Cartridge {
     pub sa1: Option<Box<crate::chips::sa1::Sa1>>,
     /// The GSU, when the chipset names it (1xh); its Game Pak RAM is `sram`.
     pub gsu: Option<Box<crate::chips::gsu::Gsu>>,
+    /// The OBC1, when a LoROM header's chipset names it (2xh); its 8 KiB are `sram`.
+    pub obc1: Option<crate::chips::obc1::Obc1>,
 }
 
 impl Cartridge {
@@ -191,13 +193,18 @@ impl Cartridge {
         let gsu = Self::gsu_for(&header, rom.len());
         let sram = vec![0u8; if gsu.is_some() { Self::gsu_ram(rom, &header) } else { header.sram_bytes() }].into_boxed_slice();
         let sa1 = Self::sa1_for(&header);
-        Cartridge { rom: rom.into(), sram, header, dsp: None, sa1, gsu }
+        Cartridge { rom: rom.into(), sram, obc1: Self::obc1_for(&header), header, dsp: None, sa1, gsu }
     }
 
     /// A GSU for a chipset of 13h-1Ah on map mode 20h (fullsnes, "GSU Cartridge Header"); a ROM over 1 MiB takes the
     /// GSU-2, whose version code is 4, as fullsnes's rule of thumb has it.
     fn gsu_for(header: &Header, size: usize) -> Option<Box<crate::chips::gsu::Gsu>> {
         (matches!(header.chipset, 0x13..=0x1A) && header.map == Map::LoRom).then(|| Box::new(crate::chips::gsu::Gsu::new(size > 0x10_0000)))
+    }
+
+    /// An OBC1 for a LoROM chipset of 2xh (fullsnes's chipset table; Metal Combat's is 25h).
+    fn obc1_for(header: &Header) -> Option<crate::chips::obc1::Obc1> {
+        (header.chipset >> 4 == 2 && header.map == Map::LoRom).then(crate::chips::obc1::Obc1::default)
     }
 
     /// The Game Pak RAM's size from the extended header's FFBDh, 32 KiB where there is none (Star Fox).
@@ -234,7 +241,7 @@ impl Cartridge {
         let gsu = Self::gsu_for(&header, rom.len());
         let sram = vec![0u8; if gsu.is_some() { Self::gsu_ram(rom, &header) } else { header.sram_bytes() }].into_boxed_slice();
         let sa1 = Self::sa1_for(&header);
-        Some(Cartridge { rom: rom.into(), sram, header, dsp: None, sa1, gsu })
+        Some(Cartridge { rom: rom.into(), sram, obc1: Self::obc1_for(&header), header, dsp: None, sa1, gsu })
     }
 
     /// Whether the header names a NEC DSP: chipset 03h-05h for a DSP-n, F6h for an ST010 or ST011 (fullsnes).

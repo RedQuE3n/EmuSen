@@ -2192,3 +2192,28 @@ the plan's table, waits for its DSP-1 at stage 5.
 
 **Left open, named:** D-6, D-7, D-11, D-12 and the other PPU exceptions of §20.5; D-24 (CPU side); D-26
 (`test_timer_stop2`); and `spc_dsp6`'s five tests of §23.1. None is a game-facing difference this stage measured.
+
+### 23.8 Addendum: the in-order stop and the pitch-mod regression (2026-10-02)
+
+**"Misc/$F0-$FF are not ram" passes (D-31).** VenusRT read AUXIO4 and AUXIO5 from the RAM under the I/O page,
+which the DSP's echo writes reach; fullsnes describes output latches read back as written. As latches (power-on
+$FF), the test passes alone and in order. The state is version 14. `spc_smp`, `spc_timer`,
+`spc_mem_access_times`, `spctest` and the 2010 SPC ROMs still pass (measured).
+
+**`spc_dsp6` now (measured 2026-10-02):** 107 of 111 tests pass on their own. In order, the ROM passes 34 and stops
+at the 35th, "Misc/brr addr wrap-around", which passes on its own: run after "$F0-$FF are not ram" (a copy of the ROM
+alternating the two) it prints its table with two wrong entries (514E and BE44 where 8008 and 9008 belong) and the
+suite ends with "Passed 01", the SPC700 back in the boot ROM's wait loop and the S-CPU in the suite's idle loop at
+00:808F. The preceding test leaves the bytes 0A FF 7C 01 FE FF ... at $8000 in VenusRT and in Mesen alike, so the
+leftover is not the difference; what is, is not found. Recorded, not settled.
+
+**The "Random/pitch mod" regression is the ENVX half of the window rule** (measured: with only the OUTX half the
+test's first run passes; with only the ENVX half it fails as with both). Moving the ENVX window: excluding the cycle
+in which S7 prepares the value fails "Timing/Voice/V9 envx", and any window that includes that cycle stops pitch mod
+the same way. The stop is not inside the test: its last DSP accesses are the cleanup (FLG $E0, EDL 0), after which
+the SPC700 is back in the boot ROM's wait loop and the screen reads "Passed 01", the same end as the in-order stop
+above. The test synchronises by writing $88 to ENVX and reading it back until the DSP overwrites it, so the window
+moves the point it synchronises to by up to a sample, and every write it times after that moves with it; argued to
+be the mechanism, not measured. **Neither is the rule shown wrong:** the window is anomie's sentence, and "V9 envx"
+needs it. Kept, with the regression recorded; the two "Passed 01" ends are the next thing to trace, from the SPC700's
+last instructions before it re-enters the boot ROM.

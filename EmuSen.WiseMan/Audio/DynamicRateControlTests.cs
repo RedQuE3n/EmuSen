@@ -151,5 +151,66 @@ namespace EmuSen.WiseMan.Audio
         {
             Assert.Equal(1.0, new DynamicRateControl(0).ComputeRatio(1234));
         }
+    
+        // A pacer that runs the content off its own rate centres the loop on the ratio it knows - see EmuSen_Audio_Sync.md §3.4.
+        [Theory]
+        [InlineData(60.0988, 60.0)]
+        [InlineData(59.7275, 60.0)]
+        [InlineData(60.0988, 59.95)]
+        [InlineData(60.0, 60.6)]
+        [InlineData(60.0, 59.4)]
+        public void With_the_nominal_ratio_a_locked_rate_settles_at_the_target_and_inside_the_band(double contentHz, double frameHz)
+        {
+            const int rate = 48000;
+            var control = new DynamicRateControl(Target) { NominalRatio = contentHz / frameHz };
+            double queue = Target, low = double.MaxValue, high = double.MinValue;
+            int perFrame = (int)Math.Round(rate / contentHz);
+            for (int frame = 0; frame < (int)(frameHz * 600); frame++)
+            {
+                short[] output = control.Process(Silence(perFrame), (int)queue);
+                queue += output.Length / 2 - rate / frameHz;
+                Assert.True(queue > 0, $"underrun at frame {frame}");
+                low = Math.Min(low, control.LastRatio / control.NominalRatio);
+                high = Math.Max(high, control.LastRatio / control.NominalRatio);
+            }
+            Assert.Equal(0, control.SheddingEvents);
+            Assert.InRange(queue, Target * 0.9, Target * 1.1);
+            Assert.InRange(low, 1 - control.MaxDeviation, 1.0 + 1e-9);
+            Assert.InRange(high, 1.0 - 1e-9, 1 + control.MaxDeviation);
+        }
+
+        // Without it the same drift sits the queue far off its target, or past the band altogether - §3.4.
+        [Fact]
+        public void Without_the_nominal_ratio_the_game_boys_drift_nearly_doubles_the_queue_and_one_percent_is_past_the_band()
+        {
+            const int rate = 48000;
+            (double Queue, int Shed) Settle(double contentHz, double frameHz)
+            {
+                var control = new DynamicRateControl(Target);
+                double queue = Target;
+                int perFrame = (int)Math.Round(rate / contentHz);
+                for (int frame = 0; frame < (int)(frameHz * 600) && queue > 0; frame++)
+                {
+                    short[] output = control.Process(Silence(perFrame), (int)queue);
+                    queue += output.Length / 2 - rate / frameHz;
+                }
+                return (queue, control.SheddingEvents);
+            }
+            Assert.InRange(Settle(59.7275, 60.0).Queue, Target * 1.8, Target * 2.0);
+            Assert.True(Settle(60.0, 60.6).Shed > 0);
+            Assert.True(Settle(60.6, 60.0).Queue <= 0);
+        }
+
+        [Fact]
+        public void The_nominal_ratio_defaults_to_one_and_scales_the_whole_law()
+        {
+            var control = new DynamicRateControl(Target);
+            Assert.Equal(1.0, control.NominalRatio);
+            double plain = control.ComputeRatio(Target / 2);
+            control.NominalRatio = 1.00165;
+            Assert.Equal(plain * 1.00165, control.ComputeRatio(Target / 2), 12);
+            control.Reset();
+            Assert.Equal(1.00165, control.LastRatio);
+        }
     }
 }

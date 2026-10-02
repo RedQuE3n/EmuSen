@@ -28,6 +28,7 @@ namespace EmuSen.Mistress.Views
 
         private readonly AppSettings _settings;
         private readonly LunaSwitch _bigScreen = new() { Name = "BigScreenSwitch", Label = "Start in big screen mode" };
+        private readonly LunaSwitch _syncToDisplay = new() { Name = "SyncToDisplaySwitch", Label = "Sync to display" };
         private readonly LunaSwitch _pauseInBackground = new() { Name = "PauseInBackgroundSwitch", Label = "Pause the game when another window is in front" };
         private readonly LunaSwitch _showStatusBar = new() { Name = "ShowStatusBarSwitch", Label = "Show the status bar" };
         private readonly LunaSwitch _showStatusText = new() { Name = "ShowStatusTextSwitch", Label = "Show messages" };
@@ -40,6 +41,9 @@ namespace EmuSen.Mistress.Views
         private IReadOnlyList<BigPictureLook> _looks = [];
         private string[] _lookTexts = [];
         private PathPickerRow? _themeFolder;
+
+        // The graphics settings the main window holds, which Sync to display is saved into.
+        public GraphicsConfig? Graphics { get; set; }
 
         // Opens the theme's settings sheet; set by the main window, which owns the themed view.
         public Action? OpenThemeSettings { get; set; }
@@ -126,6 +130,12 @@ namespace EmuSen.Mistress.Views
                     Label = "Max Play Time Tracking",
                     Hint = "A game left running while the device sleeps would count the whole night. A launch longer than this adds nothing to the game's play time; Disabled records none, No limit every minute. ES-DE's default is 8 hours.",
                     Content = _maxPlayTime,
+                },
+                new FieldRow
+                {
+                    Label = "Smooth Motion",
+                    Hint = "Runs one frame per refresh when the display's rate is within 1% of the console's, so no frame is shown twice or skipped; the sound is resampled by the difference. Fast-forward, slow motion and other displays keep the console's own rate. The frame rate's tooltip says which is in use.",
+                    Content = _syncToDisplay,
                 },
                 new FieldRow
                 {
@@ -242,6 +252,14 @@ namespace EmuSen.Mistress.Views
                 if (i < 0) return;
                 BigPictureLooks.Choose(_settings, _looks[i]);
                 ThemeChosen?.Invoke();
+            };
+            _syncToDisplay.IsChecked = EmuSen.Graphics.GraphicsSettings.SyncToDisplay;
+            _syncToDisplay.IsCheckedChanged += (_, _) =>
+            {
+                // Into the object the graphics window saves, or one of the two would write the other's keys away - see EmuSen_Config_Reference.md §3.3.
+                GraphicsConfig config = Graphics ?? GraphicsConfig.Load();
+                EmuSen.Graphics.GraphicsSettings.SyncToDisplay = config.SyncToDisplay = _syncToDisplay.IsChecked == true;
+                config.Save();
             };
             _pauseInBackground.IsChecked = _settings.PauseInBackground;
             _pauseInBackground.IsCheckedChanged += (_, _) => { _settings.PauseInBackground = _pauseInBackground.IsChecked == true; _settings.Save(); };

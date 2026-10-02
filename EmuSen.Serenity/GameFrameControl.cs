@@ -15,9 +15,10 @@ namespace EmuSen.Serenity
     public sealed class GameFrameControl : Control
     {
         // One offered picture, its rows' repeat (§2.7) and who can still read its array - see EmuSen_Serenity.md §2.8.
-        internal sealed class Offer(byte[] rgba, int width, int height, int rowRepeat, long version, Action<byte[]>? release)
+        internal sealed class Offer(byte[] rgba, int width, int height, int rowRepeat, long version, Action<byte[]>? release, long sequence = 0)
         {
             public readonly byte[] Rgba = rgba;
+            public readonly long Sequence = sequence;
             public readonly int Width = width, Height = height, RowRepeat = rowRepeat;
             public readonly long Version = version;
             public readonly Action<byte[]>? Release = release;
@@ -142,6 +143,18 @@ namespace EmuSen.Serenity
                 (int)(shape >> 32), (int)shape);
         }
 
+        // Every draw is a presenter tick the display clock learns from, and a trace line when one is being written - see EmuSen_Settings_Reference.md §4.87.2.
+        private void SampleDisplay(long started, long sequence, bool fresh)
+        {
+            bool sampled = VblankCounter.TrySample(out long ust, out long msc, out long sbc);
+            if (sampled) Display.ObserveVblank(ust, msc, started);
+            else Display.ObserveTick(started);
+            PresentationTrace.Draw(started, sequence, fresh, sampled, ust, msc, sbc);
+        }
+
+        // The refresh this control's draws have seen, for a frontend that paces to it.
+        public DisplayClock Display { get; } = new();
+
         private void Presented(bool copied, long copyTicks, long drawTicks, bool gpu, int width, int height)
         {
             if (copied) System.Threading.Interlocked.Increment(ref _copies);
@@ -153,12 +166,12 @@ namespace EmuSen.Serenity
         }
 
         // Stores the frame and asks for a repaint; release, if given, is called once with the array when nothing here can read it again - see EmuSen_Serenity.md §2.8.
-        public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null)
+        public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null, long sequence = 0)
         {
             lock (_offerLock)
             {
                 Offer? previous = _current;
-                _current = new Offer(rgba, width, height, Math.Max(1, rowRepeat), ++_version, release);
+                _current = new Offer(rgba, width, height, Math.Max(1, rowRepeat), ++_version, release, sequence);
                 if (previous is not null)
                 {
                     previous.Superseded = true;
@@ -401,6 +414,7 @@ namespace EmuSen.Serenity
                         grContext?.Flush();
                         Slang.SlangProbe.Current?.Phase(Slang.SlangProbe.FlushEnd);
                         _owner.Presented(copy, copied - started, System.Diagnostics.Stopwatch.GetTimestamp() - copied, grContext is not null, source.Width, source.Height);
+                        _owner.SampleDisplay(started, source.Sequence, fresh);
                     }
                     finally
                     {

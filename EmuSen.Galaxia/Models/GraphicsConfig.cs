@@ -14,6 +14,7 @@ namespace EmuSen.Galaxia.Models
         public bool VSyncEnabled { get; set; } = true;
         public bool WindowResizable { get; set; } = true;
         public bool BilinearFiltering { get; set; } = true;
+        public bool SyncToDisplay { get; set; } = true;
 
         // Each console's own settings by key, in their text form, as the console's core reads and writes them - see EmuSen_Config_Reference.md §3.3.
         public Dictionary<string, Dictionary<string, string>> Consoles { get; set; } = new();

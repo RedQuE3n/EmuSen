@@ -17,6 +17,9 @@ namespace EmuSen.Graphics
         public static bool WindowResizable = true;
         public static bool BilinearFiltering = true;
 
+        // One emulated frame per refresh when the display's rate is close to the core's - see EmuSen_Settings_Reference.md §4.87.
+        public static bool SyncToDisplay = true;
+
         // Applies etc/EmuSen/graphics.json, seeding it on first run - see EmuSen_Config_Reference.md §3.3.
         public static void LoadFromDisk()
         {
@@ -29,6 +32,7 @@ namespace EmuSen.Graphics
             VSyncEnabled = config.VSyncEnabled;
             WindowResizable = config.WindowResizable;
             BilinearFiltering = config.BilinearFiltering;
+            SyncToDisplay = config.SyncToDisplay;
 
             if (seed) SaveToDisk();
         }
@@ -41,6 +45,7 @@ namespace EmuSen.Graphics
             VSyncEnabled = VSyncEnabled,
             WindowResizable = WindowResizable,
             BilinearFiltering = BilinearFiltering,
+            SyncToDisplay = SyncToDisplay,
         }.Save();
     }
 }

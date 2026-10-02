@@ -28,6 +28,7 @@ using EmuSen.Hotaru.Input;
 using EmuSen.Serenity;
 using EmuSen.Galaxia.Input;
 using EmuSen.Audio;
+using EmuSen.Common;
 
 namespace EmuSen.Hotaru.Views
 {
@@ -403,13 +404,16 @@ namespace EmuSen.Hotaru.Views
             Stopwatch clock = Stopwatch.StartNew();
             TimeSpan nextTick = clock.Elapsed;
 
+            // Shared with Mistress - see EmuSen_Settings_Reference.md §4.87.
+            var scheduler = new FrameScheduler(GameFrame.Display.Current, Stopwatch.GetTimestamp());
+
             try
             {
                 while (_running)
                 {
                     _speed.SetTurbo(_turboHeld);
-                    TimeSpan interval = _speed.FrameInterval(_core.FrameRateHz);
-                    nextTick += interval;
+                    scheduler.SyncToDisplay = GraphicsSettings.SyncToDisplay;
+                    nextTick = scheduler.Next(nextTick, _core.FrameRateHz, _speed);
 
                     // Takes over the frame entirely - see EmuSen_Rewind_And_FastForward.md §4.
                     if (_rewindHeld)
@@ -428,6 +432,7 @@ namespace EmuSen.Hotaru.Views
 
                     _core.SkipRendering = !_speed.ShouldRender(_core.TotalFrames);
 
+                    long frameStart = Stopwatch.GetTimestamp();
                     _core.RunFrame();
 
                     // Publishes this frame's snapshots, on the thread that produced them - see EmuSen_Cauldron.md.
@@ -447,11 +452,20 @@ namespace EmuSen.Hotaru.Views
 
                     // Drained every frame either way, so a muted stretch cannot back the buffer up - see EmuSen_Audio_Sync.md §4.
                     short[] samples = _core.DequeueAudioSamples(int.MaxValue);
+                    _audioPlayer.RateControl.NominalRatio = scheduler.Decision.AudioRatio;
                     if (_speed.ShouldPlayAudio) _audioPlayer.Submit(samples, _core.AudioSampleRate);
                     else _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
 
                     // Nothing new was drawn on a skipped frame.
+                    long held = 0;
+                    if (scheduler.HandOverNotBefore is { } notBefore && clock.Elapsed < notBefore)
+                    {
+                        long holdStart = Stopwatch.GetTimestamp();
+                        SleepUntil(notBefore, clock);
+                        held = Stopwatch.GetTimestamp() - holdStart;
+                    }
                     if (!_core.SkipRendering) SubmitFrame(_core.GetFrameBufferRgba(), _core.ScreenWidth, _core.ScreenHeight);
+                    scheduler.Completed(TimeSpan.FromTicks((Stopwatch.GetTimestamp() - frameStart - held) * TimeSpan.TicksPerSecond / Stopwatch.Frequency));
 
                     if (ProcessHotkeys()) { RequestClose(); return; }
                     if (ProcessPendingConsoleCommands()) { RequestClose(); return; }

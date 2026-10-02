@@ -161,6 +161,9 @@ each console's last five shaders used, newest first: `"RecentShaders": { "SNES":
 The accessors are `ParametersFor`, `SetParameter`, `ForgetParameter`, `RecentFor` and `NoteRecent`; `Forget(console)`
 leaves both maps alone.
 
+*2026-10-01:* **`SyncToDisplay`**, a boolean, on when absent (`EmuSen_Settings_Reference.md` §4.87.7). Preferences
+writes it into the same object Mistress's graphics window saves, so neither overwrites the other's keys.
+
 ### 3.4 `cheats/<name>.json` — `CheatFile`
 
 New capability, not a migration: `CheatRegistry` previously had no persistence at all, so every cheat was lost on exit.

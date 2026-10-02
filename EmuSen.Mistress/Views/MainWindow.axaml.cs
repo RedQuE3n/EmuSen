@@ -18,6 +18,7 @@ using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Endymion;
 using EmuSen.Endymion.Input;
+using EmuSen.Serenity;
 using EmuSen.Serenity.Dashboards;
 using EmuSen.Mistress.Input;
 using EmuSen.LunaP.Commands;
@@ -157,7 +158,7 @@ namespace EmuSen.Mistress.Views
 
         public MainWindow()
         {
-            _frames = new FrameHandOff((pixels, width, height, rowRepeat, release) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release));
+            _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence));
             _pause = new LunaAction("_Pause", _ => TogglePause()) { IsCheckable = true };
             _reset = new LunaAction("_Reset", ResetEmulation);
             _closeGame = new LunaAction("_Close Game", ShowLibrary);
@@ -180,6 +181,8 @@ namespace EmuSen.Mistress.Views
             _gamepad = new GamepadManager(_gamepadBindings.For(_activeConsole), start: false);
             _gamepad.PadChanged += OnPadChanged;
             Opened += (_, _) => RequestAnimationFrame(_ => Dispatcher.UIThread.Post(_gamepad.Start, DispatcherPriority.Background));
+            // `--play <rom>` starts a game straight away, which the cadence measurement of §4.87.1 launches with.
+            Opened += (_, _) => { if (PlayArgument(Environment.GetCommandLineArgs()) is { } rom) Dispatcher.UIThread.Post(() => LoadRom(rom, Path.GetFileNameWithoutExtension(rom)), DispatcherPriority.Background); };
             // Endymion is a leaf and reads no globals, so the settings come from here - see EmuSen_Audio_Sync.md §7.1.
             _audioPlayer = new AudioPlayer(
                 AudioSettings.SampleRate, AudioSettings.OutputTargetLatencyMs, AudioSettings.RateControlMaxDeviation);
@@ -494,7 +497,7 @@ namespace EmuSen.Mistress.Views
         private void ShowPreferencesAt(string? tab)
         {
             // Non-modal, so re-scan on close rather than leaving a stale library behind it.
-            var window = new PreferencesWindow(_appSettings, this, _bigScreen ? HelpFamily : null) { OpenThemeSettings = ShowThemeSettings };
+            var window = new PreferencesWindow(_appSettings, this, _bigScreen ? HelpFamily : null) { OpenThemeSettings = ShowThemeSettings, Graphics = _graphics };
             WatchPreferences(window);
             if (tab is not null) window.ShowTab(tab);
             window.StatusBarChanged += ApplyStatusBar;
@@ -909,6 +912,12 @@ namespace EmuSen.Mistress.Views
             _session?.FlushVerboseLogs();
         }
 
+        internal static string? PlayArgument(string[] args)
+        {
+            int i = Array.IndexOf(args, "--play");
+            return i >= 0 && i + 1 < args.Length && File.Exists(args[i + 1]) ? args[i + 1] : null;
+        }
+
         private void LoadRom(string path, string displayName) => LoadGame(path, displayName, resumeFrom: null, reset: false);
 
         // resumeFrom is a state to load before the first frame runs - see EmuSen_Settings_Reference.md §4.31.
@@ -1228,6 +1237,9 @@ namespace EmuSen.Mistress.Views
             Stopwatch clock = Stopwatch.StartNew();
             TimeSpan nextTick = clock.Elapsed;
 
+            // One frame per refresh when the display is close to the core's rate, the core's own rate otherwise - see EmuSen_Settings_Reference.md §4.87.
+            var scheduler = new FrameScheduler(GameFrame.Display.Current, Stopwatch.GetTimestamp());
+
             // Counts completed RunFrame calls, not presented frames - see §4.21.
             TimeSpan fpsWindowStart = clock.Elapsed;
             int framesInWindow = 0, offeredInWindow = 0;
@@ -1273,7 +1285,8 @@ namespace EmuSen.Mistress.Views
 
                 // Held turbo wins over the menu's base speed - see EmuSen_Settings_Reference.md §4.13.
                 _speed.SpeedPercent = _turboHeld ? _speed.TurboPercent : _baseSpeedPercent;
-                nextTick += _speed.FrameInterval(session.FrameRateHz);
+                scheduler.SyncToDisplay = EmuSen.Graphics.GraphicsSettings.SyncToDisplay;
+                nextTick = scheduler.Next(nextTick, session.FrameRateHz, _speed);
 
                 // Takes over the frame entirely - see EmuSen_Rewind_And_FastForward.md §4.
                 if (_rewindHeld && session.Core is not null)
@@ -1332,6 +1345,7 @@ namespace EmuSen.Mistress.Views
 
                     // Drained every frame either way, so a muted stretch cannot back the buffer up - see EmuSen_Audio_Sync.md §4.
                     short[] samples = session.DequeueAudioSamples(int.MaxValue);
+                    _audioPlayer.RateControl.NominalRatio = scheduler.Decision.AudioRatio; // the locked rate's drift, centred - see EmuSen_Audio_Sync.md §3.4
                     if (_speed.ShouldPlayAudio) _audioPlayer.Submit(samples, session.AudioSampleRate);
                     else _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
 
@@ -1349,18 +1363,33 @@ namespace EmuSen.Mistress.Views
 
                     // Nothing new was drawn on a skipped frame.
                     long? serial = session.FrameSerial;
+                    // A picture for a later refresh is not handed over a refresh early - see EmuSen_Settings_Reference.md §4.87.6.
+                    long held = 0;
+                    if (scheduler.HandOverNotBefore is { } notBefore && clock.Elapsed < notBefore)
+                    {
+                        long holdStart = Stopwatch.GetTimestamp();
+                        SleepUntil(notBefore, clock);
+                        held = Stopwatch.GetTimestamp() - holdStart;
+                    }
+
                     if (!session.SkipRendering && (serial is null || serial != offeredSerial))
                     {
                         byte[] frame = session.GetFrameBufferRgba();
                         if (captured) Picture(session, frame, serial);
-                        SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release);
+                        SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release, session.TotalFrames);
                         offeredSerial = serial;
                         offeredInWindow++;
+                        PresentationTrace.Frame(session.TotalFrames, frameStart, Stopwatch.GetTimestamp(), true);
                     }
-                    else if (captured && !session.SkipRendering) PictureUnchanged(session, serial);
+                    else
+                    {
+                        if (captured && !session.SkipRendering) PictureUnchanged(session, serial);
+                        PresentationTrace.Frame(session.TotalFrames, frameStart, Stopwatch.GetTimestamp(), false);
+                    }
 
                     loopMark = Stopwatch.GetTimestamp();
                     handOffTicks += loopMark - afterAudio;
+                    scheduler.Completed(TimeSpan.FromTicks((loopMark - frameStart - held) * TimeSpan.TicksPerSecond / Stopwatch.Frequency));
 
                     framesInWindow++;
                     TimeSpan windowElapsed = clock.Elapsed - fpsWindowStart;
@@ -1389,7 +1418,8 @@ namespace EmuSen.Mistress.Views
                         double Ms(long ticks) => ticks * 1000.0 / Stopwatch.Frequency / framesInWindow;
                         string outside = $" | outside: requests {Ms(requestsTicks):F2} audio {Ms(audioTicks):F2} hand-off {Ms(handOffTicks):F2} sleep+rest {Ms(restTicks):F2}ms";
                         string counters = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms)";
-                        string line = $"{counters}{breakdown}{presentation}{outside}";
+                        string line = $"{counters}{breakdown}{presentation}{outside} | {scheduler.Decision.Describe()}";
+                        PresentationTrace.Note(scheduler.Decision.Describe());
                         Console.WriteLine($"[fps] {line}");
 
                         // The bar shows the frame rate, the frame's cost and its top phases; the whole line is its tooltip (§4.83.6).
@@ -1422,7 +1452,7 @@ namespace EmuSen.Mistress.Views
                 else
                 {
                     // Owed rather than forgotten, up to a cap, or a game whose drawing frames overrun runs slow - see §4.28.
-                    nextTick = FramePacer.Settle(nextTick, clock.Elapsed, _speed.FrameInterval(session.FrameRateHz));
+                    nextTick = FramePacer.Settle(nextTick, clock.Elapsed, scheduler.Interval(session.FrameRateHz, _speed));
                 }
             }
         }
@@ -1437,9 +1467,9 @@ namespace EmuSen.Mistress.Views
         }
 
         // Called from the emulation thread; newest wins - see EmuSen_Serenity.md §4.
-        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release)
+        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release, long sequence = 0)
         {
-            _frames.Offer(pixels, width, height, rowRepeat, release);
+            _frames.Offer(pixels, width, height, rowRepeat, release, sequence);
         }
 
         private void OnExitClick(object? sender, RoutedEventArgs e)

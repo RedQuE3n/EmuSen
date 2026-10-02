@@ -84,6 +84,7 @@ Window size, title, vsync, target frame rate, and texture filtering. **None of t
 - **`TargetFps`** (default 60) — not currently wired to anything (kept for parity/future use); `VSyncEnabled` separately asks the OS/driver to sync to the display's refresh rate.
 - **`VSyncEnabled`**, **`WindowResizable`** — self-explanatory Avalonia `Window` settings (`CanResize`, etc.).
 - **`BilinearFiltering`** — Bilinear smooths the upscaled image; Point (the alternative) keeps hard pixel edges (the classic "sharp pixel" look). Point is generally more period-authentic for pixel art; Bilinear can look better at non-integer scale factors. Wired via `SKSamplingOptions(SKFilterMode.Linear/Nearest, ...)` in `GameFrameControl`'s draw path.
+- **`SyncToDisplay`** (default on, 2026-10-01) — one emulated frame per refresh when the display's measured rate is within 1% of the core's, the core's own rate otherwise. The one setting here that changes when frames run; it still changes nothing they compute. See §4.87.
 
 **`ShowDebugPanels`/`PanelBackgroundColor`/`LetterboxColor` are gone** — they existed to configure the on-window Raylib debug overlay (VRAM tile sheet + CGRAM palette panels drawn directly onto the game window), which was removed entirely as part of the Raylib→Avalonia migration: `DianaOS`'s `regs`/`sprites`/`pal`/`tile`/`vramsheet`/`paletteswatch` commands and the `coretop` dashboard already cover the same data, and `EmuSen.Mistress` never had this overlay at all, which was the strongest evidence it wasn't load-bearing. See `EmuSen_Frontend_Driver.md`'s own top-of-file revision note and `EmuSen_Debugging_Tools_Reference_v5.md`'s own revision note on the same change.
 
@@ -6993,3 +6994,335 @@ Its debugger view is still a C# Moon refreshed from its state. Two things differ
   Moon loads. It also runs the fallback in a child process started with the library off.
 - `MoonRtFrontendTests` holds the core's side.
 - The fit audit's `GraphicsSettingsNesEngine` case opens the NES tab at both sizes.
+
+### 4.87 Sync to display: one emulated frame per refresh, and the audio resampled by the difference (2026-10-01)
+
+**The complaint.** On the handheld, playing the NES on MoonRT, the frame rate read between 58 and 62 and motion
+looked slightly uneven.
+
+**The suspected cause, stated before anything was measured.** The emulation thread paces frames with a Stopwatch at
+the core's own rate, 60.0988 Hz for an NTSC NES, and hands each picture over newest-wins (`EmuSen_Serenity.md` §4).
+The presenter shows pictures on the display's refresh, which is another clock. Two clocks that nearly agree beat: every
+so often a refresh passes with no new picture, or two pictures arrive within one refresh and the first is never shown.
+
+This section records what was measured, the pacing that replaces the Stopwatch when the display allows it, and what is
+still owed. The audio side is `EmuSen_Audio_Sync.md` §3.4.
+
+#### 4.87.1 The measurement, its predictions, and what the desktop showed
+
+**Two instruments.**
+
+- `EMUSEN_PRESENT_TRACE=<file>` makes a running Mistress write one line per emulated frame (its number, when it
+  started, when its picture was handed over) and one per draw (when, which frame's picture, and the display's vblank
+  count and time at that moment, §4.87.2). `--play <rom>` starts a game without the library, so a run needs no hands.
+  The frame number travels with the picture through `FrameHandOff` and `GameFrameControl.UpdateFrame`, so a draw says
+  which frame it drew and not merely that it drew.
+- `CadenceBench` (WiseMan) runs a real core through the same scheduler Mistress uses, with the real spin-wait and the
+  real audio path on SDL's dummy device, against a **modelled** presenter: a thread that at each vblank of a stated
+  refresh takes the newest picture handed over at least half a millisecond earlier. It writes the same trace format.
+  It exists because a real window may not be opened on the development desktop; what it measures of the emulation
+  thread is real, and what it says of the presenter is the best case, a presenter locked to the vblank with no
+  compositor of its own between.
+
+`analyze.py` (kept with the probe scripts, not in the tree) reads either and reports, per vblank, which frame was on
+screen: how many vblanks each picture was **held**, and how many frames each change **advanced**. A steady picture is
+one hold length and an advance of one. A hold of another length is a repeat; an advance of two is a frame never shown.
+
+**Predictions, written down first.**
+
+1. *The desktop cannot lock.* Its displays measure 164.90 and 74.92 Hz. No whole divisor of either is within 2% of
+   60, so the design below must leave the desktop exactly as it was.
+2. *A beat every `1 / |F - R/k|` seconds*: one repeated or skipped picture every 10.1 s for the NES on 60 Hz, every
+   6.7 s on the handheld's 119.90 Hz panel at two refreshes a frame.
+3. *The frame rate reading 58 to 62 comes from stalls repaid in a burst* (§4.28's debt), not from the beat, since a
+   beat moves the one-second count by one at most.
+4. *Avalonia's X11 render timer is not the vblank.* Read from its source before measuring: `SleepLoopRenderTimer`
+   sleeps a whole-number rate taken from RandR, rounded (120 for the handheld's 119.90), and restarts its interval
+   from when it woke, so it can only run slower than asked.
+
+**What the desktop showed, measured 2026-10-01.** 30 s runs, the first 3 s and the last second dropped, Super Mario
+Bros. 3 on MoonRT, Super Mario Land 2 on Mercury, Super Mario 64 (USA) on MarsRT. "Irregular" is holds of other than
+the common length, per second.
+
+| Core, content rate | Modelled refresh | Pacing | Hold lengths (vblanks: count) | Frames never shown | Irregular /s | Handed over to shown, mean (p95) ms |
+|---|---|---|---|---|---|---|
+| NES 60.0987 | 60.00 | content | 1: 1542, 2: 7 | 9 | 0.27 | 8.1 (15.8) |
+| NES | 60.00 | **locked** | 1: 1553, 3: 1 | 2 | 0.04 | 3.4 (3.7) |
+| NES | 119.90 | content | 1: 11, 2: 1546, 3: 3 | 0 | 0.54 | 4.6 (8.4) |
+| NES | 119.90 | **locked / 2** | 1: 1, 2: 1554, 3: 1 | 0 | 0.08 | 3.2 (3.4) |
+| GB 59.7275 | 60.00 | content | 1: 1500, 2: 28 | 21 | 1.08 | 8.8 (16.2) |
+| GB | 60.00 | **locked** | 1: 1554, 2: 1 | 1 | 0.04 | 3.4 (3.9) |
+| GB | 119.90 | content | 1: 4, 2: 1532, 3: 15 | 0 | 0.73 | 4.7 (8.4) |
+| GB | 119.90 | **locked / 2** | 1: 1, 2: 1555, 3: 1 | 0 | 0.08 | 3.2 (3.4) |
+| N64 59.96 | 60.00 | content | 1: 1026, 2: 265 | 264 | 10.2 | 8.7 (16.2) |
+| N64 | 60.00 | **locked** | 1: 1552, 2: 2 | 2 | 0.08 | 6.4 (10.6) |
+| N64 | 119.90 | content | 1: 757, 2: 44, 3: 754 | 0 | 30.8 | 3.9 (6.9) |
+| N64 | 119.90 | **locked / 2** | 1: 1, 2: 1554, 3: 1 | 0 | 0.08 | 5.7 (8.3) |
+| NES | 164.90 | content | 2: 399, 3: 1160 | 0 | 15.4 | 3.5 (6.3) |
+| NES | 164.90 | setting on | 2: 399, 3: 1159 | 0 | 15.5 | 3.5 (6.3) |
+| NES | 74.92 | content | 1: 1175, 2: 385 | 0 | 14.8 | 7.2 (13.1) |
+| NES | 74.92 | setting on | 1: 1173, 2: 386 | 1 | 14.9 | 7.2 (13.2) |
+
+**The cause is confirmed, and prediction 2 is refuted in its size.** The beat arrives when predicted: the NES on 60 Hz
+is irregular at 9.55 to 9.80 s and again at 19.70 to 19.78 s, 10.1 s apart. It is not one picture. The phase between
+the two clocks moves 27 µs a frame, and the moment a picture is handed over jitters by more than that, since it
+follows the frame's own work; so while the phase crosses the presenter's deadline, successive frames fall on either
+side of it, and each crossing is a burst of repeats and skips. **The closer the rates, the longer the burst.** Super
+Mario 64 at 59.96 Hz against 60 crosses once in 25 s and takes four seconds to do it, 265 repeated pictures and 264
+never shown, which is the worst figure in the table and belongs to the pair that agrees best. A slow beat is not a
+mild one.
+
+**Prediction 1 held.** On 164.90 and 74.92 Hz the setting changes nothing: the decision is content-paced, the rows
+match their content rows to within run-to-run noise, and the state hashes of the two runs are the same. What those
+rows show is the cadence a display with no divisor near 60 gives any 60 Hz content, two refreshes then three; no
+pacing removes it, and a variable refresh is the only remedy.
+
+**Prediction 3 was not reproduced on the desktop.** The one-second frame counts were 60 or 61 in every content-paced
+run. Whether the handheld's emulation thread stalls is the handheld's to answer (§4.87.9).
+
+**Prediction 4 is unmeasured.** It is a reading of Avalonia 12.1's source and stays one until a trace from a real
+window is taken (§4.87.9). It matters: if it holds, the presenter itself misses about one of the handheld's vblanks a
+second whatever the emulation does, and the modelled presenter above is kinder than the real one.
+
+**A second cause, not predicted.** Super Mario 64 on 119.90 Hz, content-paced, holds its pictures one refresh and
+then three, on nearly every frame: 757 holds of one, 754 of three and 44 of two. The game draws on alternate frames,
+so a light frame follows a heavy one; paced at an even 16.68 ms, the light frame's picture is ready before a vblank
+the heavy frame's misses. No frame is lost and the frame rate reads a steady 60, yet no two consecutive pictures are
+on screen for the same time. This has nothing to do with the two clocks disagreeing and would happen if they agreed
+exactly. It is the reason §4.87.6 holds a picture back.
+
+**One run is set aside.** An earlier Super Mario 64 pair on the modelled 119.90 Hz ran at 57.8 frames a second with
+one-second counts down to 30, in both modes, while the machine was shared with another build. The rows above are its
+repeat.
+
+**Over 396 s** on the modelled 60 Hz, content-paced, the NES held 17 pictures twice and never showed 56 frames, 39 of
+which the rates force: 60.0988 frames cannot be shown in 60 refreshes. Locked, the Game Boy had one irregular hold in
+396 s, at 3.3 s, as the lock was taken. The NES locked had 14, and 13 of them fall inside six seconds, 165.5 to 171.7
+s, in which two frames started 45 ms late: the machine was busy. That burst is the lock's cost and is recorded as
+one. A content-paced frame is on average half a refresh ahead of the presenter's deadline and a 5 ms stall usually
+costs nothing; a locked frame is one margin ahead by design, and every stall longer than the margin costs a repeated
+picture. §4.87.6 returns to it.
+
+#### 4.87.2 What the presenter can say about the display
+
+The refresh is measured, never read from a mode list, because the mode is what the display was asked for and under a
+nested compositor may be neither the panel's rate nor steady.
+
+**`VblankCounter`** asks GLX for `glXGetSyncValuesOML` on the render thread, inside the draw, where Avalonia's context
+is current: the time of the last vblank (UST, microseconds of `CLOCK_MONOTONIC`, the clock `Stopwatch` reads on Linux)
+and its count (MSC). Two samples give the period exactly, however irregularly the draws fall, and one sample gives the
+phase. Both the desktop's and the handheld's GLX list `GLX_OML_sync_control`. A UST more than a second from the draw's
+own time is from another clock and is dropped. Five queries slower than 2 ms turn the counter off for the run, since
+the query is a round trip to the X server and must not be allowed to hold the render thread.
+
+**Without it** (no GLX, another platform, a context that is not GLX's) each draw's own time is the sample
+(`DisplayClock.ObserveTick`). On Windows and macOS Avalonia's render timer is the compositor's vblank, so the draw
+times carry the refresh. On X11 they carry `SleepLoopRenderTimer`'s rate, which is prediction 4's concern.
+
+**Not verified.** No real window has run this code. The query is written against Mesa's documented behaviour and
+guarded three ways (the extension absent, the context not GLX's, the query slow); that it returns what is expected
+inside Avalonia's draw on XWayland and under gamescope is owed (§4.87.9).
+
+#### 4.87.3 `DisplayClock`: the fit, and when the refresh is called variable
+
+`DisplayClock` (Serenity, one per `GameFrameControl`) keeps the last 240 samples and fits time against count by least
+squares. The slope is the period; the line at the newest count is a vblank to extrapolate from. With 30 samples it
+publishes a `DisplayReading`, immutable, which the emulation thread reads without a lock.
+
+**Variable refresh.** A fixed display's vblanks lie on a lattice. The reading is **variable** when fewer than 90% of
+the window's samples lie within 12% of a period of the fitted line, and a variable reading is never locked to. This
+catches a display that follows irregular content, and it catches a change of display, since two lattices in one window
+fit neither; the reading returns once the window has turned over.
+
+**What this cannot detect, and why that is harmless.** A variable-refresh display following *regular* content is a
+lattice at the content's own rate. It reads as a fixed display at that rate, the decision locks to it with one
+refresh a frame, and the lock asks for what content pacing would have asked for, to within the measurement. The two
+modes coincide there. gamescope's own switch could be read from its root window's properties instead, but that is one
+compositor's answer and the intervals are every presenter's.
+
+**Staleness.** Samples arrive only while pictures are drawn. A reading older than five seconds is no reading, and
+pacing falls back to the content's rate until draws resume. Five seconds is long because the lattice extrapolates to
+parts per million; it is finite so a display that changed while nothing was drawn is not trusted.
+
+**Not verified.** No trace has been taken with variable refresh on. The rule is tested against synthetic intervals
+only (`DisplayClockTests`).
+
+#### 4.87.4 `FrameScheduler`: the decision and the deadline, in one place
+
+`EmuSen/Common/FrameScheduler.cs` is the whole of the pacing. Mistress's and Hotaru's emulation loops both call it
+and neither holds any of its logic; it is written to be moved behind a runtime interface without change. **Its inputs
+from the core are the two every core already reports through `ICore`: `FrameRateHz`, read each frame, and the samples
+drained.** Nothing was added to a core or to the core interface, and there is no branch on which core is running.
+
+**The decision** (`Decide`, a pure function): with `F` the content rate and `R` the measured refresh,
+`k = round(R / F)`, at least 1, and the display is locked to when `|R/k - F| / F` is within the tolerance. Otherwise,
+and whenever the setting is off, the speed is not 100%, the refresh is unmeasured, stale or variable, or `k` would
+exceed 8, the pacing is the content's: `SpeedController.FrameInterval`, the arithmetic it was before. Fast-forward,
+slow motion, held turbo and the unthrottled speed therefore behave exactly as they did.
+
+| Content | Refresh | Decision |
+|---|---|---|
+| 60.0988 (NES, SNES) | 60.00 | locked, 1 |
+| 59.7275 (Game Boy) | 60.00 | locked, 1 |
+| 59.94 | 60.00 | locked, 1 |
+| 60.0988 | 119.90 (the handheld) | locked, 2, frames at 59.95 |
+| 60.00 | 240.00 | locked, 4 |
+| 50.007 (PAL) | 50.00 / 100.00 | locked, 1 / 2 |
+| 50.007 (PAL) | 60.00 | content: 60 is 20% away |
+| 60.00 | 144.00 | content: 72 is 20% away |
+| 60.0988 | 164.90, 74.92 (the desktop) | content |
+
+**A rate that changes mid-game.** The rate is read every frame. A step of more than 0.2%, a region switch or an N64
+video mode, is taken at once and decided again on that frame. Smaller movement is smoothed over about 32 frames,
+because Mars reports each frame's own length and a rate that wobbles around a boundary must not flap the mode.
+
+**The deadline** (`Next`): locked, the frame after the one due at `d` is due at the vblank nearest `d + k` periods,
+less a lead (§4.87.6). Snapping to the lattice each frame is what makes it a lock: an error in the period cannot
+accumulate, and the frame rate is the display's by construction.
+
+**A late frame** is treated as before. Mistress keeps §4.28's debt, with the interval now `k` periods when locked;
+Hotaru keeps its resynchronisation. A debt repaid in a burst still shows as skipped pictures in either mode. That was
+left alone deliberately: dropping the debt when locked would trade a skipped picture for lost audio, and no stall has
+yet been measured to weigh the two.
+
+#### 4.87.5 The tolerance is 1%
+
+Decided 2026-10-01. Two costs grow with it, and both are the player's:
+
+- **Speed and pitch.** The game runs faster or slower by the mismatch and its sound moves in pitch by the same
+  ratio: 2.8 cents at the NES's 0.16%, 7.9 at the Game Boy's 0.46%, 17 at 1%. A just-noticeable difference for
+  sustained tones is of the order of 5 to 10 cents in the middle of the range; 17 cents is audible to a trained ear
+  against a reference and not otherwise. At 2% it would be 34.
+- **What it admits.** 1% takes in every pairing this project has: each console's NTSC rate on 60 Hz and its
+  multiples, PAL on 50 and 100, and the handheld's 119.90. The nearest pairing it refuses is a 59.19 Hz arcade board
+  on 60 Hz, at 1.4%, and no core here runs one.
+
+RetroArch's `audio_max_timing_skew` defaults to 5%. That is a ceiling for an arbitrary core on an arbitrary display;
+with the pairings above there is nothing between 1% and 5% to gain and a third of a semitone to lose.
+`FrameScheduler.Tolerance` is a property, so a core that needed more could be given it by measurement.
+
+`DynamicRateControl.MaxDeviation` stays 0.5% and does not need to cover the tolerance: the known mismatch is fed
+forward as the nominal ratio and the band corrects only what is left (`EmuSen_Audio_Sync.md` §3.4).
+
+#### 4.87.6 Latency: the frame starts its own work plus a margin before the vblank
+
+A lock fixes the phase between the frame and the vblank, so the phase has to be chosen. Started at the vblank, a
+frame's picture waits nearly a whole refresh to be shown: the first build did this and measured 14.9 ms from handed
+over to shown on the modelled 60 Hz, against 8.1 ms content-paced, where the phase wanders and the mean is half a
+refresh. That would have added latency, and was not kept.
+
+`FrameScheduler.Lead` is the 95th percentile of the last 64 frames' work, from the start of the frame to its picture
+handed over, plus `Margin`, 3 ms, capped at 90% of the frame's span. The deadline is the vblank less the lead, so the
+picture is handed over about a margin ahead of the vblank it is for. Input is read at the start of the frame, so the
+same lead is the age of the input when the picture is shown, plus the presenter's own delay.
+
+**A picture for a later refresh is held.** With `k` above one, a frame that finishes early would be shown a refresh
+early, which is §4.87.1's second cause. `HandOverNotBefore` is the refresh before the one the frame is for, and the
+loop waits for it before handing the picture over. With one refresh a frame the lead's cap already puts the whole
+frame inside its own refresh and nothing is held.
+
+**Measured** (the table in §4.87.1): 8.1 to 3.4 ms on the NES at 60 Hz, 4.6 to 3.2 at 119.90, and 8.7 to 6.4 on the
+N64 at 60 Hz, whose frame work varies more. The 95th percentiles fall further, 15.8 to 3.7 ms on the NES, because the
+lock removes the wander as well as the mean.
+
+**One case is slower, and was accepted.** The N64 at 119.90 Hz goes from 3.9 to 5.7 ms in the mean and 6.9 to 8.3 at
+the 95th percentile. The content-paced figure is low because every light frame was being shown a refresh early; the
+hold that evens the cadence gives that refresh back. Decided 2026-10-01: an even two-and-two is worth 1.8 ms there.
+Everywhere else measured, the lock removes latency and adds none.
+
+**The margin trades latency against stalls.** 3 ms is what a late frame may lose before its picture misses its
+vblank, and §4.87.1's busy six seconds is what that looks like. A larger margin is more latency on every frame for
+fewer repeats under load; the handheld's stall distribution is what should set it, and has not been measured.
+
+**The margin is a guess for a real presenter.** 3 ms covers the model's half millisecond six times over. In Mistress
+the picture crosses to the UI thread, invalidates the control, and is drawn on the render timer's next tick; what that
+takes on the handheld is unmeasured, and a margin shorter than it would show as holds of the wrong length at the rate
+the render tick drifts against the vblank. `Margin` is a property for that measurement to set (§4.87.9).
+
+#### 4.87.7 The setting, and what the frame rate's tooltip says
+
+**Preferences, Gameplay, Smooth Motion: "Sync to display"**, on by default. It is stored as `SyncToDisplay` in
+`graphics.json`, beside `VSyncEnabled` and `BilinearFiltering`, and read each frame, so it takes effect while a game
+runs. Hotaru reads the same value. In big picture it is a row of the Gameplay menu, and the fit audit passes on that
+menu at 1280 by 800 and 1920 by 1200.
+
+The frame rate's tooltip ends with the pacing in use, and the `[fps]` log line carries it too:
+
+- `display-locked 60.00 Hz (content 60.10)`
+- `display-locked 119.90 Hz / 2 (content 60.10)`
+- `content-paced 50.01 Hz (60.00 Hz is 20.0% away)`, or `(sync to display off)`, `(speed not 100%)`,
+  `(refresh not measured)`, `(refresh follows the content)`.
+
+#### 4.87.8 Output unchanged, the audio over minutes, and the tests
+
+**Pacing changes when a frame runs and never what it computes.**
+`The_state_after_n_frames_is_the_same_locked_and_content_paced` runs a synthetic NES program 300 frames each way
+through `CadenceBench` and compares the SHA-256 of the saved state; a 301st frame changes it, so the comparison is
+not vacuous.
+
+**Audio over minutes.** `CadenceBench` for 400 s on the modelled 60 Hz, the lock held from the first
+second, on SDL's dummy device and on the desktop's own output at zero gain. "Correction" is the ratio the control law
+asked for over the nominal ratio, lowest to highest after the queue's first 90 s (3 s on the dummy device).
+
+| Run | Device | Nominal ratio | Correction | Shedding | Queue read before each submit |
+|---|---|---|---|---|---|
+| NES, content-paced | dummy | 1.00000 | +0.32% to +0.50% | 0 | 0 to 89 ms |
+| NES, locked | dummy | 1.00165 | +0.27% to +0.50% | 0 | 0 to 84 ms |
+| Game Boy, locked | dummy | 0.99546 | +0.32% to +0.50% | 0 | 7 to 91 ms |
+| NES, locked | desktop output | 1.00165 | +0.26% to +0.50% | 0 | 0 to 75 ms |
+| Game Boy, locked | desktop output | 0.99546 | +0.25% to +0.50% | 0 | 7 to 90 ms |
+| Game Boy, content-paced | desktop output | 1.00000 | +0.32% to +0.50% | 0 | 0 to 84 ms |
+
+**The lock leaves the audio where content pacing has it.** With the nominal ratio the correction sits in the same
+place locked as content-paced, to within a twentieth of a percent, on either device; nothing sheds; the Game Boy's
+0.46% does not show in the correction at all. That is what §3.4 of `EmuSen_Audio_Sync.md` set out to get.
+
+**Where it sits is not where `EmuSen_Audio_Sync.md` §3 says it should, and that is not the lock's doing.** In every
+run, the content-paced ones included, the correction is near the top of its band and the queue hovers around a fifth
+of its 256 ms target, reading zero at times just before a submit. By §3's formula that is the equilibrium for a
+device that takes about 0.4% more than it is given. It is the same on the dummy device and the real one, on the NES
+and the Game Boy, so it is not a sound card's clock. It was found by this measurement and is not explained; whether
+the reading of zero is an audible gap depends on what the device has already taken, which the bench does not see.
+It is owed an investigation of its own (§4.87.9) and is recorded here so that the lock is not later blamed for it.
+
+**Tests.**
+
+- `FrameSchedulerTests`: the decision over the table of §4.87.4 and its refusals; the tolerance's edge at 1.00% and
+  1.01% on both sides; the setting, the speed, an unmeasured and a variable refresh; deadlines on every `k`th vblank
+  for 2000 frames with no drift off the lattice; content-paced deadlines equal to the speed controller's; fast-forward
+  and slow motion leaving the lock and normal speed returning to it; a region switch decided on its own frame; a
+  wobbling rate that does not flap; a display that changes or is lost; the lead and its cap.
+- `DisplayClockTests`: five refresh rates measured from counted vblanks; draws on every second vblank still measuring
+  the display; the lattice extrapolated; irregular intervals variable; a display change re-measured; a count that goes
+  backwards; a UST from another clock; uncounted ticks, steady and not; staleness.
+- `DynamicRateControlTests`: §3.4's three.
+- `EsdeSettingsMenusTests`: the switch, its default, its saving, and the fit audit, at both sizes.
+
+**Mutants.** Eighteen, by hand, each built and run against the three test classes: the tolerance's comparison, `k`
+rounded down, each of the four refusals removed (variable, speed, setting, the cap on `k`), the audio ratio inverted,
+the deadline left off the lattice, the lattice's nearest vblank replaced by its next, a rate step never taken at once,
+a rate never smoothed, a clock never variable, never stale, and without its clock-domain check, the nominal ratio
+dropped from the law, the lead's cap loosened, the lead without its margin, and the hold applied at one refresh a
+frame. Seventeen failed at least one test. **The cap on `k` survived**: the only case above eight refreshes a frame
+was also outside the tolerance, so removing the cap changed nothing it could see. A 600 Hz display against 60 Hz
+content, ten refreshes and exact, was added, and the mutant now fails. The wobbling-rate test had the same weakness
+and was moved to straddle the tolerance before the round.
+
+#### 4.87.9 Not covered, and owed
+
+- **The handheld was unreachable on 2026-10-01**, so nothing in this section was measured on it, before or after. Owed,
+  in order: a trace of the unchanged pacing on its 119.90 Hz panel for the three games, which settles predictions 3
+  and 4 and says what the complaint was; the same with the lock; the margin of §4.87.6 set from the time between a
+  picture handed over and its draw; five minutes of audio on its real device. `--play` and the trace exist for this.
+
+- **No real window has run the vblank query** (§4.87.2) or the lock. If the query fails the pacing is the content's,
+  as before; if it succeeds and Avalonia's render timer drifts against the vblank as predicted, the lock removes the
+  emulation's beat and leaves the presenter's, and the remedy is then a render timer driven by the vblank, which is
+  the toolkit's to carry and is not built.
+- **Variable refresh** is detected by a rule tested on synthetic intervals only (§4.87.3).
+- **The desktop is unchanged**, by design: neither of its displays has a divisor near 60.
+- **A stall repaid in a burst** still skips pictures in both modes (§4.87.4), and a locked frame is nearer its
+  deadline than a content-paced one, so a busy machine costs the lock more (§4.87.1, §4.87.6).
+- **The audio queue sits at a fifth of its target in every run, locked or not** (§4.87.8). Not explained.
+- **Rewind while held** takes the scheduler's deadline like any frame and was not measured.
+- **macOS and Windows** take the uncounted path. It is tested on synthetic ticks and has not run on either.

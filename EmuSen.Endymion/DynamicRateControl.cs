@@ -18,6 +18,9 @@ namespace EmuSen.Endymion
         public double SheddingEntryFactor { get; set; } = 3.0;
         public double SheddingExitFactor { get; set; } = 2.0;
 
+        // The ratio the drift is centred on, set by a pacer that knowingly runs the content off its own rate - see EmuSen_Audio_Sync.md §3.4.
+        public double NominalRatio { get; set; } = 1.0;
+
         public double LastRatio { get; private set; } = 1.0;
 
         // A stall counter; expected to stay at 0 in normal play - see EmuSen_Audio_Sync.md §3.1.
@@ -37,9 +40,9 @@ namespace EmuSen.Endymion
         // Ratio the queue's current fill calls for - see EmuSen_Audio_Sync.md §3.
         public double ComputeRatio(int queuedFrames)
         {
-            if (TargetQueuedFrames <= 0) return 1.0;
+            if (TargetQueuedFrames <= 0) return NominalRatio;
             double delta = (queuedFrames - (double)TargetQueuedFrames) / TargetQueuedFrames;
-            return 1.0 - Math.Clamp(delta, -1.0, 1.0) * MaxDeviation;
+            return NominalRatio * (1.0 - Math.Clamp(delta, -1.0, 1.0) * MaxDeviation);
         }
 
         // Returns what to hand the output device, or empty while shedding.
@@ -74,7 +77,7 @@ namespace EmuSen.Endymion
         {
             _resampler.Reset();
             _shedding = false;
-            LastRatio = 1.0;
+            LastRatio = NominalRatio;
         }
     }
 }

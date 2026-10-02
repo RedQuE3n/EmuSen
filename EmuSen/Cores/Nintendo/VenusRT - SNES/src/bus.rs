@@ -2,6 +2,7 @@
 //! port, and the I/O decode, from fullsnes ("SNES Memory Map", "SNES Timings") and anomie's open-bus document.
 //! Devices later stages build are stubs here. See VenusRT_Native.md §12.
 
+use crate::apu::smp::Smp;
 use crate::cart::{Cartridge, Region, Slot};
 use crate::cpu::{Bus, pin};
 use crate::ppu::{Beam, Ppu};
@@ -189,6 +190,8 @@ pub struct System {
     /// The line the PPU last finished, so that it is told of every line's end.
     pub ppu_line: u16,
     pub dev: Devices,
+    /// The sound unit, run behind the S-CPU and caught up at a port access and the frame's end.
+    pub apu: Smp,
     /// CPU writes to $2100-$43FF since power-on, which the header's reset-handler evidence counts; not in the state.
     pub io_writes: u32,
 }
@@ -212,6 +215,7 @@ impl System {
             ppu: Ppu::default(),
             ppu_line: 0,
             dev: Devices::default(),
+            apu: Smp::new(None, pal),
             io_writes: 0,
         }
     }
@@ -307,7 +311,12 @@ impl System {
                     let beam = if offset == 0x2137 { self.beam_at(self.timing.line_clock.wrapping_sub(4)) } else { self.beam() };
                     return self.ppu.read(offset as u8, beam, self.io[0x201], side_effects);
                 }
-                0x2140..=0x217F => return Some(self.read_apu_stub((offset & 3) as usize)),
+                0x2140..=0x217F => {
+                    if side_effects {
+                        self.apu.run_to(self.timing.clock);
+                    }
+                    return Some(self.apu.cpu_read((offset & 3) as usize));
+                }
                 0x2000..=0x3FFF => return None,
                 0x4210 => {
                     let v = (if self.timing.nmi_flag { 0x80 } else { 0 }) | (self.mdr & 0x70) | 0x02;
@@ -366,8 +375,8 @@ impl System {
                     self.wram_address = (self.wram_address + 1) & 0x1FFFF;
                 }
                 0x2140..=0x217F => {
-                    self.dev.apu_stub[(offset & 3) as usize] = value;
-                    self.dev.apu_written |= offset & 3 == 0 && value == 0xCC;
+                    self.apu.run_to(self.timing.clock);
+                    self.apu.cpu_write((offset & 3) as usize, value);
                 }
                 0x2181 => self.wram_address = (self.wram_address & 0x1FF00) | value as u32,
                 0x2182 => self.wram_address = (self.wram_address & 0x100FF) | (value as u32) << 8,

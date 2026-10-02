@@ -3,14 +3,16 @@
 
 use std::time::Instant;
 
+#[path = "common/load.rs"]
+mod load;
+
 fn main() {
     let a: Vec<String> = std::env::args().collect();
-    let image = std::fs::read(&a[1]).unwrap();
     let frames: i64 = a.get(2).and_then(|f| f.parse().ok()).unwrap_or(600);
     let skip = a.get(3).is_some_and(|s| s == "skip");
     let mut best = f64::MAX;
     for _ in 0..3 {
-        let mut m = venusrt::machine::Machine::load_rom(&image).unwrap();
+        let mut m = load::machine(&a[1]);
         m.sys.ppu.skip = skip;
         let start = Instant::now();
         while m.total_frames() < frames {

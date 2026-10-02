@@ -83,6 +83,10 @@ pub trait Cpu {
     fn set_registers(&mut self, r: &Registers);
     fn registers(&self) -> Registers;
     fn step<B: Bus>(&mut self, bus: &mut B);
+    /// SLEEP or STOP ran; the harness then steps on until the suite's cycle count, as for the 65816's WAI and STP.
+    fn halted(&self) -> bool {
+        false
+    }
 }
 
 /// 64 KiB of RAM with no I/O page, as the suite assumes.
@@ -144,6 +148,9 @@ pub fn run_case<C: Cpu>(cpu: &mut C, bus: &mut FlatBus, want: &Expected) -> Outc
     }
     cpu.set_registers(&want.initial);
     cpu.step(bus);
+    while cpu.halted() && bus.log.len() < want.cycles.len() {
+        cpu.step(bus);
+    }
     let registers = cpu.registers().differences(&want.last);
     let memory = want.last_ram.iter().find(|&&(a, v)| bus.memory[a as usize & 0xFFFF] != v).map(|&(a, v)| format!("{a:04X} got {:02X} want {v:02X}", bus.memory[a as usize & 0xFFFF]));
     let cycles = bus.log.iter().zip(&want.cycles).enumerate().find(|(_, (g, w))| !w.matches(g)).map(|(i, (g, w))| format!("cycle {i}: got {} want {}", g.text(), w.text()))

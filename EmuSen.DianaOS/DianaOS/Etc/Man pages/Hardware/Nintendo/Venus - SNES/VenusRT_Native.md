@@ -1822,3 +1822,171 @@ The plan's §5.3 and stage 4 row. In order:
 The first two are what most of the remaining picture differences wait for, because the games' states part from
 Mesen's where the stand-in answers at once.
 
+
+---
+
+## 21. Stage 4, step 1: the SPC700 and the S-SMP around it (2026-10-02)
+
+### 21.1 The SPC700
+
+`apu/spc700.rs`, written from fullsnes ("SPC700 CPU" and its opcode tables) and anomie's SPC700 cycle document
+(romhacking.net document 198), against a bus of three calls: a read, a write, and an internal cycle with no address.
+Every opcode makes its bus cycles in the order anomie gives where he marks it verified, and in the order the suite
+records where he leaves it open (D-22); an internal cycle is either a dummy read of the next program byte or a wait,
+as the suite records it. SLEEP and STOP halt the CPU, and the harness steps the halted CPU on to the case's cycle
+count. DIV divides bit-serially, as the referee's divider does (D-23); the documents give only the case whose
+quotient fits in a byte.
+
+**SingleStepTests' SPC700 suite with cycle lists (measured 2026-10-02):** 256,000 of 256,000 cases pass on
+registers, memory and every cycle's address, value and kind. The suite's one known quirk is kept as §2.3 reads it: a
+dummy read of memory the case does not list has no recorded value, and is checked on its address and kind only. The
+old core's baseline (§3) was 255,105 on state alone, without cycles.
+
+| Group | Opcodes | Cases | Passing, with cycles |
+|---|---|---|---|
+| ALU (ADC, SBC, AND, OR, EOR, CMP in every mode) | 78 | 78,000 | 78,000 |
+| branches (relative, BBS/BBC, CBNE, DBNZ) | 29 | 29,000 | 29,000 |
+| shift, rotate, increment, decrement | 28 | 28,000 | 28,000 |
+| one-bit (SET1, CLR1, AND1, OR1, EOR1, NOT1, MOV1) | 24 | 24,000 | 24,000 |
+| jump, call, return (JMP, CALL, PCALL, TCALL, BRK, RET, RETI) | 23 | 23,000 | 23,000 |
+| load | 18 | 18,000 | 18,000 |
+| store | 17 | 17,000 | 17,000 |
+| stack and transfer | 14 | 14,000 | 14,000 |
+| flags and control (incl. SLEEP, STOP) | 11 | 11,000 | 11,000 |
+| 16-bit (MOVW, INCW, DECW, ADDW, SUBW, CMPW) | 7 | 7,000 | 7,000 |
+| decimal, XCN, test-and-set (DAA, DAS, XCN, TSET1, TCLR1) | 5 | 5,000 | 5,000 |
+| multiply and divide | 2 | 2,000 | 2,000 (1,240 before D-23) |
+| **All** | 256 | 256,000 | 256,000 |
+
+### 21.2 The S-SMP
+
+`apu/smp.rs` replaces §14.4's stand-in. From fullsnes's "SNES APU" chapters:
+
+- **64 KiB of RAM and the IPL ROM** over its last 64 bytes while CONTROL bit 7 is set; writes go to RAM beneath the
+  ROM and the I/O page, while TEST bit 1 allows them. TEST is $0A and CONTROL $B0 at power-on, and the PC starts at
+  the ROM's reset vector.
+- **The four ports both ways:** $2140-$2143 (and their mirrors to $217F) write the SPC700's inputs and read its
+  outputs; CONTROL bits 4 and 5 clear the input pairs. The OR of old and new values that fullsnes describes for a read
+  racing a write is not modelled, since the two sides do not run in the same cycle (§21.3).
+- **The three timers:** a first stage of 128 SPC700 cycles for timers 0 and 1 (8 kHz) and of 16 for timer 2 (64 kHz),
+  counting toward TnDIV (0 meaning 256), then TnOUT's four bits, cleared by a read. TEST bits 0 and 3 gate the count.
+  A timer starts again from zero when its CONTROL bit goes from 0 to 1, and a cleared bit only stops it (D-25,
+  measured on `spc_smp`; the referee's read under D-26 agrees). **Not built:** TEST bits 4 to 7, the waitstates and
+  the timers' step they change (D-27).
+- **The S-DSP is a stand-in:** 128 registers, readable and writable through $F2/$F3, and silence. It is step 2.
+- **Reads of TEST, CONTROL and TnDIV return 0.** fullsnes marks them write-only and does not say what a read returns;
+  no oracle in this step distinguished another value.
+
+**The boot ROM is firmware the frontend supplies.** The plan's §4.2 covers firmware for the NEC DSPs only, asked for
+from the header and loaded from `home/Firmware/` through `FirmwareLibrary`, where a missing image is never fatal.
+The IPL follows its path and name convention, `spc700.rom` in that folder, and departs from its fallback, since
+without the boot ROM no game passes its first handshake with the sound CPU: it is file 1 of the native interface's
+`create`, exactly 64 bytes (another size is `BAD_FILE`), and without it `create` returns VenusRT's own status -10,
+which the shim raises as `FileNotFoundException`. An image too short is still -9, checked first. Nothing in the
+repository holds the ROM: the test fixtures use a synthetic two-instruction stand-in, and the corpus runner reads
+`firmware/spc700.rom` beside the corpus, then `FirmwareLibrary`'s folder. The interface's exports are unchanged.
+
+### 21.3 The clock domain
+
+The plan's §5.3: the SPC700 at 1.024 MHz, carried against the master clock as an exact rational (5,632/118,125 for
+NTSC, 102,400/2,128,137 for PAL), run behind the S-CPU and caught up at every access to $2140-$217F and at the frame's
+end. The catch-up runs whole instructions, so the SPC700 may finish up to an instruction's cycles (at most 12, about
+250 master clocks) past the S-CPU's time; a port written by the S-CPU then reaches it a few cycles late. That is
+argued to be below anything the corpus measures, and is recorded as the granularity, not a rule. The state is
+version 11, with the S-SMP's registers, timers and cycle count in an `Apu` group and its RAM in the RAM block.
+
+### 21.4 The oracles (measured 2026-10-02)
+
+The corpus with VenusRT as the third engine, after D-25:
+
+| ROM | Mesen | VenusRT before (§20) | VenusRT now |
+|---|---|---|---|
+| gilyon `spctest` (both copies) | Passed | Incomplete | **Passed** (tests 0557 and 0527, "Success") |
+| blargg `spc_smp` | Passed | Incomplete | **Passed** (after D-25; before it, failed at "Timers/random timer0 enable") |
+| blargg `spc_timer` | Passed | Incomplete | **Passed** |
+| blargg `spc_mem_access_times` | Passed | Incomplete | **Passed** |
+| PeterLemon's seven SPC700 ROMs | Passed | Incomplete | **Passed** |
+| blargg 2010 `exec_io_tests` 1-4 | Passed | not graded or Failed | **Passed** |
+| blargg 2010 `test_ram_disable_ipl` | Passed | Failed | **Passed** |
+| blargg 2010 `test_timer_stop`, `test_timer_speed_2` | Passed | not graded | **Passed** |
+| blargg 2010 `test_timer_stop2` | Passed | not graded | Failed, 00 against 04 (D-26) |
+| blargg 2010 `test_timer_speed`, `test_timer_speed2` | Passed | not graded | Failed, 2731 for every TEST setting (D-27) |
+| blargg 2010 `test_speed`, `test_timer_speed3` | Done | — | Done; print constant counts where Mesen's vary with TEST (D-27) |
+| blargg 2010 `speed_2_freezes2` | Failed | — | Failed, as Mesen |
+| KungFuFurby `test_irqb` | Passed | Failed | Failed: cases 1 to 4 pass, case 5 leaves the record one byte early (D-24) |
+| blargg `spc_dsp6` | Passed | Incomplete | Incomplete (step 2) |
+
+Over the corpus: **74 of the 117 ROMs Mesen passes now pass** (55 at §20), and none that passed before fails. Of the
+43 left, 32 are the GSU and SA-1 ROMs of stage 5, one is `spc_dsp6`, three are D-26 and D-27, and seven are byuu's
+backdrop-graded IRQ, NMI and HDMA ROMs (`irq`, `nmi`, `test_hdma` twice, `test_hdmasync`, `test_hdmatiming`,
+`test_irqb`), all failing before. Pictures equal to Mesen's at the last frame: **199** of 295 (180); VRAM equal: 225
+(206). The skip-versus-draw check, whose state now includes the S-SMP's, holds on all 304 images over 600 frames.
+
+### 21.5 The games (measured 2026-10-02)
+
+`The_games_pictures_and_spaces_against_Mesen`, every tenth frame to 600; first frame each part differs, and how many
+of the 60 sampled pictures differ (a column added to the table in this step):
+
+| Game | First lit (Mesen / VenusRT) | VRAM | CGRAM | OAM | Picture | Pictures differing | At frame 600 |
+|---|---|---|---|---|---|---|---|
+| the 240p suite | 40 / 40 | 80 | 80 | never | never | 0 of 60 | all equal |
+| A Link to the Past | 90 / 90 | 90 | never | 380 | 170 | 2 of 60 | all equal |
+| Donkey Kong Country | 80 / 80 | 70 | 80 | never | never | 0 of 60 | all equal |
+| Super Metroid | 20 / 20 | never | 310 | 430 | 20 | 3 of 60 | CGRAM 4 bytes; picture equal |
+| Super Mario World | 90 / 90 | 90 | 410 | 420 | 200 | 7 of 60 | VRAM 230 bytes; picture equal |
+
+At §20 Super Mario World and Donkey Kong Country never lit (forced blank, waiting on the stand-in), and A Link to the
+Past lit at the sampled frame 60 against Mesen's 90; §14.1 and §20.6 had it and the 240p suite running about ten
+frames ahead, by the stand-in's instant answers. **All four of the plan's cases are answered:** the two stalled games
+pass their forced blank and light on Mesen's frame, and A Link to the Past and the 240p suite no longer lead. Where a
+space differs early and is equal later, the difference is a transient of a frame or two (an upload landing one
+sampled frame apart), not a divergence; Super Mario World's VRAM at 600 and Super Metroid's four CGRAM bytes are the
+standing differences, not read further. The games run with silence: no game in the set waits on a DSP register.
+
+### 21.6 Disputes
+
+D-22 (the SPC700's cycle order where anomie is open) and D-23 (DIV, settled by the referee and measured) before the
+SPC700's code; D-24 to D-27 after the corpus run, before the timer change. D-25 is settled by measurement. D-26 read
+the referee's timer process (`rtl/SMP.vhd` lines 210-360), which agrees with VenusRT's timers in every rule but one,
+the step TEST's speed bits set, and argues `test_timer_stop2` waits on D-27. D-24 is a CPU-side question and stays
+open with one reading rejected by measurement. The entries list what was read.
+
+### 21.7 The clone check (measured 2026-10-02)
+
+22 files against Mesen's 164, with fullsnes, anomie's documents, the datasheet, jonasquinn's `muldiv_tests` and the
+other Rust cores as vocabulary: **no pair shares 12 fingerprints, no table of eight literals is shared, and no new
+identifier of Mesen's appears.** `apu/smp.rs` and `singlestep/spc700_cpu.rs` share no fingerprint with any Mesen
+file; `apu/spc700.rs` shares 4 with `SpcTypes.h` and 3 with `SnesCpuTypes.h`, the processor-status flag names, the
+same counts as `cpu/mod.rs` has with those two files.
+
+### 21.8 The cost (measured 2026-10-02)
+
+Under the timing lock, load 1.2 falling to 1.1, best of three over 600 frames. `apu_cost` copies the S-SMP out of a
+machine at frame 600 and runs it alone for 600 more frames' worth of master clock with the ports held; the frame
+costs are `frame_cost` with the picture drawn and skipped, §20's binary (the stand-in) against this step's:
+
+| ROM | SPC700 alone | Skipped, §20 | Skipped, now | Drawn, §20 | Drawn, now |
+|---|---|---|---|---|---|
+| the 240p menu | 0.049 | 0.309 | 0.368 | 1.359 | 1.405 |
+| A Link to the Past | 0.059 | 0.483 | 0.549 | 1.152 | 1.186 |
+| Super Metroid | 0.055 | 0.528 | 0.617 | 1.024 | 1.145 |
+| gilyon `spctest` | 0.051 | 0.466 | 0.559 | 1.408 | 1.503 |
+| Super Mario World | 0.060 | (stalled) 0.386 | 0.560 | (blank) 0.397 | 1.607 |
+| Donkey Kong Country | 0.053 | (stalled) 0.547 | 0.546 | (blank) 0.561 | 1.660 |
+
+**The SPC700 costs 0.05 to 0.06 ms a frame alone** (17,038 cycles, about 3.3 ns a cycle), and 0.06 to 0.09 ms in the
+machine, the difference being the catch-up at each port access of a polling loop. Against §5.5's 0.5 ms for the
+SPC700 and the DSP together, that leaves about 0.4 ms for the DSP. The two games that stalled before now draw
+their pictures, at 1.6 to 1.7 ms a frame, inside P1's 2.8 ms with the DSP still to come. No tuning was done.
+
+### 21.9 What step 2 is
+
+**The S-DSP**, from anomie's S-DSP document (romhacking.net 191, whose 32-step sample loop places every register
+access and the timers' first-stage ticks) and fullsnes's "SNES APU DSP" chapters: BRR decoding, the ADSR and GAIN
+envelopes, the Gaussian interpolation, noise, pitch modulation, echo with its FIR filter and its buffer in APU RAM,
+KON and KOFF with their every-other-sample poll, ENDX, ENVX and OUTX, and FLG's reset and mute; one of its 32 steps
+per SPC700 cycle (§5.3), so the timers' first stage moves into the DSP's loop where anomie places it; the 32 kHz
+stereo into the native interface's audio, which the exports already carry. **Oracles:** blargg `spc_dsp6`, and the
+audio against Mesen's through the probe's sample dump on the four games and the 240p suite's sound tests. **Also
+owed:** D-27's waitstates and timer step (then `test_timer_stop2` again under D-26), and the cost against §5.5's
+0.4 ms left. D-24 belongs to a CPU step.

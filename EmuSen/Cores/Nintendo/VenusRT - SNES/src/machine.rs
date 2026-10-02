@@ -14,7 +14,6 @@ pub const FRAME_BYTES: usize = SCREEN_WIDTH * SCREEN_HEIGHT * 4;
 /// The S-DSP's output rate, nominal (VenusRT_Plan.md §5.3).
 pub const DSP_RATE: i32 = 32_000;
 
-pub const APURAM_BYTES: usize = 0x10000;
 
 /// The memory spaces by id, named as C# Venus's debug target names them (VenusRT_Plan.md §4.7).
 pub const SPACE_NAMES: [&str; 8] = ["CpuBus", "IO", "WRAM", "VRAM", "CGRAM", "OAM", "SRAM", "APURAM"];
@@ -27,7 +26,6 @@ pub struct ImageTooShort(pub usize);
 pub struct Machine {
     pub cpu: Cpu,
     pub sys: System,
-    pub apuram: Box<[u8]>,
     /// B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R from bit 0, per port; not in the state.
     pub pads: [u16; 2],
     pub samples: SampleQueue,
@@ -44,6 +42,14 @@ impl Machine {
     pub fn load_rom(image: &[u8]) -> Result<Machine, ImageTooShort> {
         let cart = Cartridge::new(image).ok_or(ImageTooShort(image.len()))?;
         Ok(Machine::with_cartridge(cart))
+    }
+
+    /// As `load_rom`, with the sound unit's 64-byte boot ROM, without which the SPC700 does not run.
+    pub fn with_ipl(image: &[u8], ipl: [u8; 64]) -> Result<Machine, ImageTooShort> {
+        let mut m = Machine::load_rom(image)?;
+        let pal = m.sys.timing.pal;
+        m.sys.apu = crate::apu::smp::Smp::new(Some(ipl), pal);
+        Ok(m)
     }
 
     /// What a candidate header's reset handler does in its first `instructions`: its writes to the I/O registers,
@@ -65,7 +71,6 @@ impl Machine {
         let mut m = Machine {
             cpu: Cpu::default(),
             sys: System::new(cart),
-            apuram: vec![0; APURAM_BYTES].into(),
             pads: [0; 2],
             samples: SampleQueue::default(),
             i_checked: true,
@@ -88,6 +93,7 @@ impl Machine {
         while self.sys.timing.frame == frame {
             self.step();
         }
+        self.sys.apu.run_to(self.sys.timing.clock);
     }
 
     /// One instruction, or the interrupt the machine takes instead. The check is made just before an instruction's
@@ -224,8 +230,26 @@ impl Machine {
             w.bool("NmiHold", d.nmi_hold);
             w.bool("IrqAtCycle", d.irq_at_cycle);
             w.bool("Woke", self.woke);
-            w.bytes("ApuStub", &d.apu_stub);
-            w.bool("ApuWritten", d.apu_written);
+        });
+        let a = &self.sys.apu;
+        w.group("Apu", |w| {
+            w.u16("Pc", a.cpu.pc);
+            w.u8("A", a.cpu.a);
+            w.u8("X", a.cpu.x);
+            w.u8("Y", a.cpu.y);
+            w.u8("Sp", a.cpu.sp);
+            w.u8("Psw", a.cpu.psw);
+            w.bool("Stopped", a.cpu.stopped);
+            w.u8("Test", a.test);
+            w.u8("Control", a.control);
+            w.u8("DspAddress", a.dsp_address);
+            w.bytes("Dsp", &a.dsp);
+            w.bytes("ToApu", &a.to_apu);
+            w.bytes("ToCpu", &a.to_cpu);
+            for (i, t) in a.timers.iter().enumerate() {
+                w.bytes(["Timer0", "Timer1", "Timer2"][i], &[t.divider, t.stage, t.out]);
+            }
+            w.u64("Cycles", a.cycles);
         });
         w.group("Bus", |w| {
             w.u8("Mdr", self.sys.mdr);
@@ -269,7 +293,7 @@ impl Machine {
         w.u16s("Vram", &p.vram);
         w.u16s("Cgram", &p.cgram);
         w.bytes("Oam", &p.oam);
-        w.bytes("ApuRam", &self.apuram);
+        w.bytes("ApuRam", &self.sys.apu.ram);
         w.bytes("Sram", &self.sys.cart.sram);
     }
 
@@ -341,9 +365,26 @@ impl Machine {
         d.nmi_hold = r.bool()?;
         d.irq_at_cycle = r.bool()?;
         self.woke = r.bool()?;
-        let d = &mut self.sys.dev;
-        r.bytes(&mut d.apu_stub)?;
-        d.apu_written = r.bool()?;
+        let a = &mut self.sys.apu;
+        a.cpu.pc = r.u16()?;
+        a.cpu.a = r.u8()?;
+        a.cpu.x = r.u8()?;
+        a.cpu.y = r.u8()?;
+        a.cpu.sp = r.u8()?;
+        a.cpu.psw = r.u8()?;
+        a.cpu.stopped = r.bool()?;
+        a.test = r.u8()?;
+        a.control = r.u8()?;
+        a.dsp_address = r.u8()?;
+        r.bytes(&mut a.dsp)?;
+        r.bytes(&mut a.to_apu)?;
+        r.bytes(&mut a.to_cpu)?;
+        for t in a.timers.iter_mut() {
+            let mut b = [0u8; 3];
+            r.bytes(&mut b)?;
+            *t = crate::apu::smp::Timer { divider: b[0], stage: b[1], out: b[2] & 0x0F };
+        }
+        a.cycles = r.u64()?;
         self.sys.mdr = r.u8()?;
         self.sys.wram_address = r.u32()? & 0x1FFFF;
         self.sys.fast_rom = r.bool()?;
@@ -386,7 +427,7 @@ impl Machine {
         r.u16s(&mut p.vram)?;
         r.u16s(&mut p.cgram)?;
         r.bytes(&mut p.oam)?;
-        r.bytes(&mut self.apuram)?;
+        r.bytes(&mut self.sys.apu.ram)?;
         r.bytes(&mut self.sys.cart.sram)?;
         self.sys.timing.interlace = interlace;
         self.sys.timing.schedule();
@@ -482,14 +523,14 @@ pub(crate) mod tests {
 
     // Version 4: the CPU, the clock, the bus and the S-CPU's devices; the listing is its record (plan §5.6).
     #[test]
-    fn the_version_10_layout_is_pinned() {
+    fn the_version_11_layout_is_pinned() {
         let m = Machine::load_rom(&rom(&[])).unwrap();
         let layout = m.layout();
         assert!(layout.starts_with("0 4 u32 Magic\n4 4 i32 Version\n8 2 u16 Cpu.A\n"), "{layout}");
         assert!(layout.contains(" u64 Timing.Clock\n") && layout.contains(" u8[1024] Bus.Io\n") && layout.contains(" u16[32768] Vram\n"), "{layout}");
         assert!(layout.contains(" u8[64] Ppu.Regs\n") && layout.contains(" u16[256] Cgram\n"), "{layout}");
-        assert_eq!(layout.lines().count(), 96, "{layout}");
-        assert_eq!(m.state_size(), 264_474);
+        assert_eq!(layout.lines().count(), 111, "{layout}");
+        assert_eq!(m.state_size(), 264_633);
         assert_eq!(&save(&m)[..4], b"VNRT");
     }
 

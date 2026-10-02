@@ -106,9 +106,21 @@ namespace EmuSen.WiseMan.Fixtures.Snes
     {
         public string Name => "VenusRT";
 
+        private readonly byte[]? _ipl;
+
+        public VenusRtSnesEngine(byte[]? ipl = null) => _ipl = ipl ?? Ipl();
+
+        // The SPC700 boot ROM from the corpus's firmware folder or the firmware library, never shipped (VenusRT_Native.md §21).
+        public static byte[]? Ipl()
+        {
+            foreach (string? dir in new[] { SnesTestRomCorpus.Root is { } r ? Path.Combine(r, "firmware") : null, EmuSen.Common.Firmware.FirmwareLibrary.Directory })
+                if (dir is not null && File.Exists(Path.Combine(dir, "spc700.rom"))) return File.ReadAllBytes(Path.Combine(dir, "spc700.rom"));
+            return null;
+        }
+
         public SnesRun Run(string rom, IReadOnlyList<int> frames, IReadOnlyList<SnesPress>? presses = null, bool audio = false)
         {
-            using var m = new VenusMachine(File.ReadAllBytes(rom));
+            using var m = new VenusMachine(File.ReadAllBytes(rom), _ipl);
             var shots = new List<SnesSnapshot>();
             var sound = new List<short>();
             foreach (int target in frames.Order())

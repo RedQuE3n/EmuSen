@@ -569,3 +569,108 @@ their data.
 - Implemented 2026-10-01. **Measured:** `test_irq4200` passes (blue backdrop), its record equal to the table; the
   other backdrop-graded ROMs are unchanged by it. Settled for the table's cases.
 
+### D-22. SPC700: the order of each instruction's bus cycles where anomie's cycle document leaves it open
+- Opened: 2026-10-02, at stage 4 step 1, before the SPC700's code, by reading the two sources side by side.
+  anomie's SPC700 cycle document (romhacking.net document 198, revision 1126) gives every addressing mode's cycles
+  in order, marking each as "Verified by blargg", "This should be accurate", or open ("2 and 3 could be swapped",
+  "Cycles 2-5 could be rearranged", "Or is it Data-IO-IO or IO-IO-Data?", "Order of reading new addr and pushing
+  old addr may be wrong", "WTF with all the IO cycles?"); its IO cycles have no address ("??"). fullsnes gives each
+  opcode's total cycles and its dummy reads in prose ("Most of the Memory Store opcodes are implemented like ALU
+  opcodes (ie. as RMW opcodes, issuing a dummy read ...)"), and no order. SingleStepTests' SPC700 suite records,
+  for each of 256,000 cases, every cycle with its address and kind; it shows orders anomie leaves open (POP reading
+  its byte last, RET popping after its IO cycles, CALL fetching its target before pushing), and gives its IO cycles
+  as either a read of the next program byte or a wait with no address.
+- Test ROM: the suite is the measure, and the plan's oracle for the SPC700 (`VenusRT_Plan.md` §6, stage 4).
+- Referee: not read. Mesen's source: none.
+- Conclusion: where anomie marks a cycle verified, his order is built, and where the suite departs from it the
+  case is recorded as a failure, not adopted; where he leaves the order open, the suite's order is built, as the
+  only source that states one. The IO cycles' form (a read of the next byte, or a wait) is the suite's. The
+  results are recorded by group in `VenusRT_Native.md` §21.
+- Pinned by: the SingleStepTests SPC700 run with cycle lists.
+
+### D-23. SPC700: DIV YA,X divides bit-serially, which gives its results when the quotient does not fit in a byte
+- Opened: 2026-10-02, at stage 4 step 1, by the SPC700 suite: 760 of the 1,000 DIV cases fail, every one with a
+  quotient above 255 or X zero; VenusRT computed the documented case and left the rest.
+- Documents read: fullsnes, "SPC700 CPU ALU Commands": "DIV YA,X ... A=YA/X, Y=YA MOD X ... NV..H.Z.", 12 cycles,
+  nothing on overflow or on what H means; anomie's cycle document: DIV's cycles only. No document covers it.
+- Test ROM: SingleStepTests' DIV cases give the results but not a rule; no ROM in the corpus isolates DIV.
+- Referee: `Venus_Referee.md` §0 rates the SPC700 "real support" and names its divider "a 9-iteration bit-serial
+  divider, not bsnes's closed form". Read: SNES_MiSTer `rtl/SPC700/MulDiv.vhd` whole (the multiply and divide
+  unit), and the nine rows of `rtl/SPC700/MCode.vhd` for opcode 9E; nothing else. What it does, in prose: a
+  17-bit register starts as 0, Y, A; each of nine steps rotates it left by one, the bit rotated in inverted when
+  the rotated value is at least X shifted left by nine, and then subtracts X shifted left by nine when the new low
+  bit is set. A is the register's low eight bits, Y its top eight; V is its bit 8, N its bit 7, Z its low byte's
+  zero; H is set when Y's low nibble is at least X's.
+- Conclusion: the referee's divider, to be measured on the suite's 1,000 DIV cases. Argued from the referee until
+  measured.
+- Pinned by: the SPC700 suite's DIV file.
+- Implemented 2026-10-02. **Measured:** all 1,000 DIV cases pass with their cycles, and with them the whole suite,
+  256,000 of 256,000. Settled, measured: the referee's divider and the suite's recorded results agree on every case.
+
+### D-24. 65816: how many times an interrupt taken while executing from WMDATA ($2180) reads it
+- Opened: 2026-10-02, at stage 4 step 1, by KungFuFurby's `test_irqb` once the sound CPU answers its ports: its
+  first four cases agree with the ROM's expectations, and the fifth (`jmp $217F`, a CLC read from the APU port and
+  the next fetch from $2180) leaves the IRQ handler's record one byte early: the ROM expects WMDATA's address to have
+  advanced twice before the handler, and VenusRT advances it once. Mesen passes; C# Venus is not graded on it.
+- Documents read: the W65C816S datasheet's Table 5-7, the interrupt sequence (an opcode read of the program
+  counter, then an internal cycle); fullsnes on WMDATA; neither says what the S-CPU's bus does on an internal cycle.
+- Test ROM: `test_irqb` itself, and its disassembly (`jonasquinn-test-roms/blobs/disassembly/test_irqb.asm`). One
+  reading was tried and is rejected by measurement: making the interrupt's internal cycle a second read of the
+  program counter moves case 1's latched H from 7 to 9 (cases 1 to 4 execute from $2137, whose read latches the
+  counters), so that cycle does not read the bus.
+- Referee: not read. Mesen's source: none.
+- Conclusion: open. Not a sound-unit rule; left for a CPU-side step with the probe's CPU trace of the fifth case.
+- Pinned by: `test_irqb`, case 5.
+
+### D-25. S-SMP: a timer is reset when its CONTROL bit goes from 0 to 1, and a cleared bit only stops it
+- Opened: 2026-10-02, at stage 4 step 1, by blargg's `spc_smp`: every test passes up to "Timers/random timer0
+  enable", which fails (code 02), with the timers built as fullsnes reads literally.
+- Documents read: fullsnes, "00F1h - CONTROL": "0-2 Timer 0-2 Enable (0=Disable, set TnOUT=0 & reload divider,
+  1=Enable)". Read literally, a write of 0 clears TnOUT and the stage, and that is what VenusRT built. The text does
+  not say whether the reset happens at the write of 0 or at the next enabling write. No other fetched document
+  covers it.
+- Test ROM: `spc_smp`, `spc_timer`, blargg 2010 `test_timer_stop` and gilyon `spctest`. With the reset moved to the
+  write that sets a cleared bit, and a cleared bit only stopping the count (TnOUT kept, still cleared by a read),
+  `spc_smp` passes every test ("PASSED TESTS"), and `spc_timer`, `test_timer_stop` and `spctest` still pass. Measured
+  2026-10-02 in a trial build, before this entry's code.
+- Referee: not read. Mesen's source: none.
+- Conclusion: the rule above; measured on the four ROMs.
+- Pinned by: `spc_smp`'s "random timer0 enable", and a unit test in `apu/smp.rs`.
+
+### D-26. S-SMP: what blargg's `test_timer_stop2` stops, which the documents' TEST bits do not explain
+- Opened: 2026-10-02, at stage 4 step 1, by blargg 2010 `test_timer_stop2`: VenusRT prints 00 and fails, Mesen
+  prints 04 and passes. `test_timer_stop` passes on both. Neither has a source.
+- Documents read: fullsnes, "00F0h - TEST": bit 0 "Timer-Enable (0=Normal, 1=Timers don't work)", bit 3
+  "Timer-Disable (0=Timers don't work, 1=Normal)"; "00F1h - CONTROL" as in D-25. anomie's S-DSP document places
+  the timers' first-stage ticks in the DSP's 32-cycle sample loop and notes that "frobbing the SPC700 TEST register
+  can change this syncronization". Neither says which stage a TEST bit stops.
+- Test ROM: the ROM itself; its SPC700 program is not disassembled yet.
+- Referee: `Venus_Referee.md` §0 rates the SMP "real support". Read 2026-10-02: SNES_MiSTer `rtl/SMP.vhd` lines
+  210-360, the process holding the I/O registers' writes and the timers, and nothing else. What it does, in prose:
+  TEST bits 0 and 3 gate only the second stage (the count toward TnDIV) of all three timers; the first-stage
+  prescalers, one shared by timers 0 and 1 and one for timer 2, run on every SPC700 cycle whatever TEST and CONTROL
+  hold, and are never reset by them; CONTROL's write clears a timer's count and TnOUT only where its bit goes from 0
+  to 1 (as D-25 measured); and the prescalers' step per cycle depends on TEST bits 4 to 7, so that the 8 kHz and
+  64 kHz ticks come every 128 and 16 cycles only at TEST's default. VenusRT matches the first three. The fourth is
+  the only difference the read found, and it belongs to D-27.
+- Conclusion: open, argued to be D-27: no rule in the read process separates `test_timer_stop` from
+  `test_timer_stop2` other than TEST's speed bits, so the ROM is to be measured again once D-27 is built.
+- Pinned by: `test_timer_stop2`.
+
+### D-27. S-SMP: TEST bits 4 to 7 add waitstates to the SPC700's cycles
+- Opened: 2026-10-02, at stage 4 step 1, by blargg 2010 `test_timer_speed` and `test_timer_speed2`: they write TEST
+  with bits 4 to 7 set and count timer ticks against a loop; VenusRT ignores those bits and prints 2731 for every
+  setting, Mesen prints 2731, 1639, 910, 482, 2049, 1366, 819, 456, 820, 683, 512 and 342 and passes.
+- Documents read: fullsnes, "00F0h - TEST": bits 4-5 "Waitstates on RAM Access (0..3 = 0/1/4/9 cycles)", bits 6-7
+  "Waitstates on I/O and ROM Access (0..3 = 0/1/4/9 cycles)", internal cycles timed as one or the other, and the
+  table "SPC700 Waitstates on Internal Cycles", giving per opcode how many internal cycles take the I/O timing,
+  with two more for a conditional branch taken. The ROMs' folder holds blargg's `notes.txt`, a table of the same
+  counts with the ratios between them.
+- Test ROM: the two ROMs, and `test_timer_speed3` (ungraded) for the same counts.
+- Referee: not read for this rule. D-26's read of `rtl/SMP.vhd` lines 210-360 found that the timers' prescalers
+  step by an amount TEST bits 4 to 7 set, which fullsnes does not state; the SPC700's own waitstates were not read.
+  Mesen's source: none.
+- Conclusion: open; fullsnes's rule is to be built and measured on the three ROMs. A setting the software "should
+  never change" (fullsnes), so no game is expected to depend on it.
+- Pinned by: `test_timer_speed`, `test_timer_speed2`.
+

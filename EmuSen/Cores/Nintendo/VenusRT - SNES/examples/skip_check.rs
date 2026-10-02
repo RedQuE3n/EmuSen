@@ -1,14 +1,15 @@
 //! Runs a ROM twice, with the picture drawn and with it skipped, and compares the whole state after every frame.
 //! `skip_check <rom> [frames]` prints the first frame at which the two part, or that they never did.
-use venusrt::machine::Machine;
+
+#[path = "common/load.rs"]
+mod load;
 
 fn main() {
     let mut args = std::env::args().skip(1);
     let path = args.next().expect("skip_check <rom> [frames]");
     let frames: u32 = args.next().and_then(|f| f.parse().ok()).unwrap_or(600);
-    let image = std::fs::read(&path).expect("the ROM");
-    let mut drawn = Machine::load_rom(&image).expect("an image");
-    let mut skipped = Machine::load_rom(&image).expect("an image");
+    let mut drawn = load::machine(&path);
+    let mut skipped = load::machine(&path);
     skipped.sys.ppu.skip = true;
     let (mut a, mut b) = (vec![0u8; drawn.state_size()], vec![0u8; skipped.state_size()]);
     let mut lit = 0u32;

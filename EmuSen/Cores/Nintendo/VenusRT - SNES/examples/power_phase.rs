@@ -1,8 +1,11 @@
 //! Runs a ROM with the power-on position moved some master clocks into line 0, and prints the text it leaves in VRAM.
 //! `power_phase <rom> <frames> <clocks> [dir]`, with a dir writing VRAM, CGRAM and OAM there; dispute D-6's experiment.
+#[path = "common/load.rs"]
+mod load;
+
 fn main() {
     let a: Vec<String> = std::env::args().collect();
-    let mut m = venusrt::machine::Machine::load_rom(&std::fs::read(&a[1]).unwrap()).unwrap();
+    let mut m = load::machine(&a[1]);
     let clocks: u16 = a[3].parse().unwrap();
     if clocks > 0 {
         m.sys.timing.line_clock += clocks;

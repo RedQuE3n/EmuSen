@@ -1346,6 +1346,7 @@ namespace EmuSen.Mistress.Views
                     // Drained every frame either way, so a muted stretch cannot back the buffer up - see EmuSen_Audio_Sync.md §4.
                     short[] samples = session.DequeueAudioSamples(int.MaxValue);
                     _audioPlayer.RateControl.NominalRatio = scheduler.Decision.AudioRatio; // the locked rate's drift, centred - see EmuSen_Audio_Sync.md §3.4
+                    if (PresentationTrace.Enabled) PresentationTrace.Audio(Stopwatch.GetTimestamp(), _audioPlayer.QueuedFrames, _audioPlayer.RateControl.LastRatio, _audioPlayer.RateControl.NominalRatio, _audioPlayer.RateControl.SheddingEvents);
                     if (_speed.ShouldPlayAudio) _audioPlayer.Submit(samples, session.AudioSampleRate);
                     else _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
 

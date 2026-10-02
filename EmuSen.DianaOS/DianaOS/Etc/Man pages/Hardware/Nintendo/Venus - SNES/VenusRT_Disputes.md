@@ -645,8 +645,16 @@ their data.
   the timers' first-stage ticks in the DSP's 32-cycle sample loop and notes that "frobbing the SPC700 TEST register
   can change this syncronization". Neither says which stage a TEST bit stops.
 - Test ROM: the ROM itself; its SPC700 program is not disassembled yet.
-- Referee: to be read for this rule only: SNES_MiSTer `rtl/SMP.vhd`, the timer process.
-- Conclusion: open.
+- Referee: `Venus_Referee.md` §0 rates the SMP "real support". Read 2026-10-02: SNES_MiSTer `rtl/SMP.vhd` lines
+  210-360, the process holding the I/O registers' writes and the timers, and nothing else. What it does, in prose:
+  TEST bits 0 and 3 gate only the second stage (the count toward TnDIV) of all three timers; the first-stage
+  prescalers, one shared by timers 0 and 1 and one for timer 2, run on every SPC700 cycle whatever TEST and CONTROL
+  hold, and are never reset by them; CONTROL's write clears a timer's count and TnOUT only where its bit goes from 0
+  to 1 (as D-25 measured); and the prescalers' step per cycle depends on TEST bits 4 to 7, so that the 8 kHz and
+  64 kHz ticks come every 128 and 16 cycles only at TEST's default. VenusRT matches the first three. The fourth is
+  the only difference the read found, and it belongs to D-27.
+- Conclusion: open, argued to be D-27: no rule in the read process separates `test_timer_stop` from
+  `test_timer_stop2` other than TEST's speed bits, so the ROM is to be measured again once D-27 is built.
 - Pinned by: `test_timer_stop2`.
 
 ### D-27. S-SMP: TEST bits 4 to 7 add waitstates to the SPC700's cycles
@@ -659,7 +667,9 @@ their data.
   with two more for a conditional branch taken. The ROMs' folder holds blargg's `notes.txt`, a table of the same
   counts with the ratios between them.
 - Test ROM: the two ROMs, and `test_timer_speed3` (ungraded) for the same counts.
-- Referee: not read. Mesen's source: none.
+- Referee: not read for this rule. D-26's read of `rtl/SMP.vhd` lines 210-360 found that the timers' prescalers
+  step by an amount TEST bits 4 to 7 set, which fullsnes does not state; the SPC700's own waitstates were not read.
+  Mesen's source: none.
 - Conclusion: open; fullsnes's rule is to be built and measured on the three ROMs. A setting the software "should
   never change" (fullsnes), so no game is expected to depend on it.
 - Pinned by: `test_timer_speed`, `test_timer_speed2`.

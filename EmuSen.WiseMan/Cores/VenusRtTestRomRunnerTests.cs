@@ -229,7 +229,7 @@ namespace EmuSen.WiseMan.Cores
             }
             var frames = Enumerable.Range(1, 60).Select(i => i * 10).ToArray();
             var mesen = new MesenProbeSnesEngine(Path.Combine(root, "runs", "mesen"));
-            var table = new List<string> { "game\tmesen_lit\tvenusrt_lit\tvram\tcgram\toam\tpicture\tat_600" };
+            var table = new List<string> { "game\tmesen_lit\tvenusrt_lit\tvram\tcgram\toam\tpicture\tpictures_differing\tat_600" };
             foreach (string rom in Directory.GetFiles(dir).Order(StringComparer.Ordinal))
             {
                 SnesRun theirs = mesen.Run(rom, frames), ours = new VenusRtSnesEngine().Run(rom, frames);
@@ -238,7 +238,7 @@ namespace EmuSen.WiseMan.Cores
                 string First(Func<SnesFrameDiff, int> n) => d.FirstOrDefault(f => n(f) != 0)?.Frame.ToString() ?? "never";
                 var last = d[^1];
                 table.Add(string.Join('\t', Path.GetFileName(rom), Lit(theirs), Lit(ours), First(f => f.SpaceBytes.GetValueOrDefault("vram")), First(f => f.SpaceBytes.GetValueOrDefault("cgram")),
-                    First(f => f.SpaceBytes.GetValueOrDefault("oam")), First(f => f.PixelsDiffering),
+                    First(f => f.SpaceBytes.GetValueOrDefault("oam")), First(f => f.PixelsDiffering), $"{d.Count(f => f.PixelsDiffering != 0)} of {d.Count}",
                     $"vram {last.SpaceBytes.GetValueOrDefault("vram")}B cgram {last.SpaceBytes.GetValueOrDefault("cgram")}B oam {last.SpaceBytes.GetValueOrDefault("oam")}B picture {last.PixelsDiffering}/{last.PixelsCompared}px"));
             }
             foreach (string line in table) _output.WriteLine(line);

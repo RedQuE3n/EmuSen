@@ -146,6 +146,14 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(s.Correlation > 0.95, $"{s}");
             Assert.InRange(s.LagWindows, 4, 6);
             Assert.True(SnesDifferential.Audio(new SnesRun("a", Array.Empty<SnesSnapshot>(), 32000, new short[64000]), new SnesRun("b", Array.Empty<SnesSnapshot>(), 32000, tone)).FirstSilent);
+
+            short[] Chirp(int rate, int seconds, double amp, int delay) => Enumerable.Range(0, rate * seconds).SelectMany(i => { double t = (double)(i - delay) / rate; short v = (short)(i < delay ? 0 : amp * Math.Sin(2 * Math.PI * (100 * t + 90 * t * t))); return new[] { v, v }; }).ToArray();
+            var at32 = new SnesRun("a", Array.Empty<SnesSnapshot>(), 32000, Chirp(32000, 4, 8000, 0));
+            var at48 = new SnesRun("b", Array.Empty<SnesSnapshot>(), 48000, Chirp(48000, 4, 4000, 30));
+            var w = SnesDifferential.Samples(at32, at48);
+            Assert.True(w.Correlation > 0.999 && w.Least > 0.99 && w.RelativeError < 0.05, $"{w}");
+            Assert.Equal((20, 20), (w.LagFrom, w.LagTo));
+            Assert.InRange(w.Gain, 1.98, 2.02);
         }
 
         [Fact]
@@ -229,17 +237,18 @@ namespace EmuSen.WiseMan.Cores
             }
             var frames = Enumerable.Range(1, 60).Select(i => i * 10).ToArray();
             var mesen = new MesenProbeSnesEngine(Path.Combine(root, "runs", "mesen"));
-            var table = new List<string> { "game\tmesen_lit\tvenusrt_lit\tvram\tcgram\toam\tpicture\tpictures_differing\taudio\tat_600" };
+            var table = new List<string> { "game\tmesen_lit\tvenusrt_lit\tvram\tcgram\toam\tpicture\tpictures_differing\taudio\tsamples\tat_600" };
             foreach (string rom in Directory.GetFiles(dir).Order(StringComparer.Ordinal))
             {
                 SnesRun theirs = mesen.Run(rom, frames, audio: true), ours = new VenusRtSnesEngine().Run(rom, frames, audio: true);
                 var sound = SnesDifferential.Audio(ours, theirs);
+                var wave = SnesDifferential.Samples(ours, theirs);
                 var d = SnesDifferential.Compare(ours, theirs, SnesDifferential.MesenRowOffset);
                 static string Lit(SnesRun r) => r.Snapshots.FirstOrDefault(s => s.Picture is { } p && p.Pixels.Any(x => (x & 0x7FFF) != 0))?.Frame.ToString() ?? "never";
                 string First(Func<SnesFrameDiff, int> n) => d.FirstOrDefault(f => n(f) != 0)?.Frame.ToString() ?? "never";
                 var last = d[^1];
                 table.Add(string.Join('\t', Path.GetFileName(rom), Lit(theirs), Lit(ours), First(f => f.SpaceBytes.GetValueOrDefault("vram")), First(f => f.SpaceBytes.GetValueOrDefault("cgram")),
-                    First(f => f.SpaceBytes.GetValueOrDefault("oam")), First(f => f.PixelsDiffering), $"{d.Count(f => f.PixelsDiffering != 0)} of {d.Count}", $"r {sound.Correlation:F3} lag {sound.LagWindows}{(sound.FirstSilent ? " venusrt silent" : "")}{(sound.SecondSilent ? " mesen silent" : "")}",
+                    First(f => f.SpaceBytes.GetValueOrDefault("oam")), First(f => f.PixelsDiffering), $"{d.Count(f => f.PixelsDiffering != 0)} of {d.Count}", $"r {sound.Correlation:F3} lag {sound.LagWindows}{(sound.FirstSilent ? " venusrt silent" : "")}{(sound.SecondSilent ? " mesen silent" : "")}", $"r {wave.Correlation:F4} least {wave.Least:F4} lag {wave.LagFrom}..{wave.LagTo} gain {wave.Gain:F3} error {wave.RelativeError:F4} over {wave.Seconds}s",
                     $"vram {last.SpaceBytes.GetValueOrDefault("vram")}B cgram {last.SpaceBytes.GetValueOrDefault("cgram")}B oam {last.SpaceBytes.GetValueOrDefault("oam")}B picture {last.PixelsDiffering}/{last.PixelsCompared}px"));
             }
             foreach (string line in table) _output.WriteLine(line);

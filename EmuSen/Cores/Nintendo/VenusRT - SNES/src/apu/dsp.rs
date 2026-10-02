@@ -88,7 +88,6 @@ pub struct Voice {
     pub brr_addr: u16,
     /// The next data byte's offset within the 9-byte block, 1 to 7.
     pub brr_offset: u8,
-    pub loop_pending: bool,
     /// Samples left of the key-on start-up (anomie's #1 to #5), and what it was at this sample's S3c.
     pub kon_delay: u8,
     pub prev_delay: u8,
@@ -130,6 +129,8 @@ pub struct Dsp {
     pub t_esa: u8,
     pub t_echo_off: bool,
     pub t_ffc: [i8; 8],
+    /// EFB as read at cycle 26, for both sides.
+    pub t_efb: i8,
     /// The last voice's output after its envelope, the next voice's pitch modulator.
     pub last_out: i32,
     pub endx_buf: u8,
@@ -167,6 +168,7 @@ impl Default for Dsp {
             t_esa: 0,
             t_echo_off: true,
             t_ffc: [0; 8],
+            t_efb: 0,
             last_out: 0,
             endx_buf: 0,
             outx_buf: 0,
@@ -234,7 +236,7 @@ impl Dsp {
             p.put(&x.pos.to_le_bytes());
             p.put(&x.brr_addr.to_le_bytes());
             p.put(&x.next_addr.to_le_bytes());
-            p.put(&[x.write, x.brr_offset, x.loop_pending as u8, x.kon_delay, x.prev_delay, x.keyed as u8, x.looped as u8, x.mode as u8]);
+            p.put(&[x.write, x.brr_offset, 0, x.kon_delay, x.prev_delay, x.keyed as u8, x.looped as u8, x.mode as u8]);
             p.put(&x.env.to_le_bytes());
             p.put(&x.hidden_env.to_le_bytes());
             p.put(&x.out.to_le_bytes());
@@ -243,7 +245,7 @@ impl Dsp {
             p.put(&[x.adsr1, x.header, x.data, x.envx]);
         }
         p.put(&[self.step, self.every_other as u8, self.new_kon, self.t_kon, self.t_koff, self.t_pmon, self.t_non, self.t_eon]);
-        p.put(&[self.t_dir, self.t_esa, self.t_echo_off as u8, self.endx_buf, self.outx_buf, self.envx_buf, self.fir_pos, 0]);
+        p.put(&[self.t_dir, self.t_esa, self.t_echo_off as u8, self.endx_buf, self.outx_buf, self.envx_buf, self.fir_pos, self.t_efb as u8]);
         p.put(&self.counter.to_le_bytes());
         p.put(&self.noise.to_le_bytes());
         p.put(&self.echo_ptr.to_le_bytes());
@@ -275,7 +277,6 @@ impl Dsp {
             let f: [u8; 8] = u.take();
             x.write = f[0] % 12;
             x.brr_offset = f[1];
-            x.loop_pending = f[2] != 0;
             x.kon_delay = f[3];
             x.prev_delay = f[4];
             x.keyed = f[5] != 0;
@@ -292,7 +293,7 @@ impl Dsp {
         let g: [u8; 8] = u.take();
         (self.step, self.every_other, self.new_kon, self.t_kon, self.t_koff, self.t_pmon, self.t_non, self.t_eon) = (g[0] & 31, g[1] != 0, g[2], g[3], g[4], g[5], g[6], g[7]);
         let g: [u8; 8] = u.take();
-        (self.t_dir, self.t_esa, self.t_echo_off, self.endx_buf, self.outx_buf, self.envx_buf, self.fir_pos) = (g[0], g[1], g[2] != 0, g[3], g[4], g[5], g[6] & 7);
+        (self.t_dir, self.t_esa, self.t_echo_off, self.endx_buf, self.outx_buf, self.envx_buf, self.fir_pos, self.t_efb) = (g[0], g[1], g[2] != 0, g[3], g[4], g[5], g[6] & 7, g[7] as i8);
         self.counter = u.u16();
         self.noise = u.u16();
         self.echo_ptr = u.u16();
@@ -321,8 +322,19 @@ impl Dsp {
         if a >= 0x80 {
             return;
         }
+        // anomie: a voice's ENVX or OUTX written between the DSP's preparing it (S7, S6) and writing it (S9, S8) keeps the SMP's value.
+        let last = (self.step as usize + 31) & 31;
+        let voice = a >> 4;
+        match a & 0x0F {
+            8 if last >= 2 && (last - 2) % 3 < 2 && (last - 2) / 3 == voice => self.envx_buf = value,
+            9 if last >= 1 && (last - 1) % 3 < 2 && (last - 1) / 3 == voice => self.outx_buf = value,
+            _ => {}
+        }
         match a {
-            reg::ENDX => self.regs[a] = 0,
+            reg::ENDX => {
+                self.regs[a] = 0;
+                self.endx_buf = 0;
+            }
             reg::KON => {
                 self.new_kon = value;
                 self.regs[a] = value;
@@ -510,15 +522,16 @@ impl Dsp {
                     self.t_koff = self.regs[reg::KOFF];
                     self.t_kon = self.new_kon;
                 }
+                // D-30: the noise moves before voice 0's step in this cycle.
+                if self.fires(self.regs[reg::FLG]) {
+                    let n = self.noise;
+                    self.noise = (n >> 1) | (((n << 14) ^ (n << 13)) & 0x4000);
+                }
                 self.s3c(0);
                 self.echo_write(1, ram, writable);
                 self.echo_offset = self.echo_offset.wrapping_add(4);
                 if self.echo_offset >= self.echo_length {
                     self.echo_offset = 0;
-                }
-                if self.fires(self.regs[reg::FLG]) {
-                    let n = self.noise;
-                    self.noise = (n >> 1) | (((n << 14) ^ (n << 13)) & 0x4000);
                 }
             }
             _ => {
@@ -541,9 +554,6 @@ impl Dsp {
         x.next_addr = u16::from_le_bytes([ram[at as usize], ram[at.wrapping_add(1) as usize]]);
         if x.kon_delay == 5 {
             x.brr_addr = x.next_addr;
-        } else if x.loop_pending {
-            x.brr_addr = x.next_addr;
-            x.loop_pending = false;
         }
         x.pitch = pitch_lo as i32;
         x.adsr1 = adsr1;
@@ -588,7 +598,6 @@ impl Dsp {
             x.pos = 0;
             x.write = 0;
             x.brr_offset = 1;
-            x.loop_pending = false;
         }
         let sample = if non { noise } else { interpolate(x) };
         x.out = (sample * x.env) >> 11;
@@ -710,7 +719,10 @@ impl Dsp {
         }
         out.push(sample as i16);
         self.main[side] = 0;
-        let feedback = ((fir * self.regs[reg::EFB] as i8 as i32) >> 7) as i16 as i32;
+        if side == 0 {
+            self.t_efb = self.regs[reg::EFB] as i8;
+        }
+        let feedback = ((fir * self.t_efb as i32) >> 7) as i16 as i32;
         self.echo[side] = clamp16(self.echo[side] + feedback);
     }
 
@@ -725,7 +737,7 @@ impl Dsp {
     }
 }
 
-/// fullsnes's interpolation (D-28): three products by the table shifted by 10 and summed in 16 bits with no overflow
+/// fullsnes's interpolation (D-28, settled by spc_dsp6): three products by the table shifted by 10 and summed in 16 bits with no overflow
 /// handling, the fourth added with saturation, the result halved to 15 bits.
 fn interpolate(x: &Voice) -> i32 {
     let i = ((x.pos >> 4) & 0xFF) as usize;
@@ -764,7 +776,8 @@ fn decode(x: &mut Voice, ram: &[u8]) {
     if x.brr_offset >= 9 {
         x.brr_offset = 1;
         if x.header & 1 != 0 {
-            x.loop_pending = true;
+            // D-30: the loop address the voice's S2 read in this sample.
+            x.brr_addr = x.next_addr;
             x.looped = true;
         } else {
             x.brr_addr = x.brr_addr.wrapping_add(9);

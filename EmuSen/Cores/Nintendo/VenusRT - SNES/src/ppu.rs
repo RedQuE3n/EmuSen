@@ -583,9 +583,16 @@ impl Ppu {
         if from == 0 {
             self.before = Mix::default();
         }
+        // The masks change only at the windows' edges, so they are found once for each run between them (decided 2026-10-02).
+        let mut windows = 0;
+        let mut until = from;
         for x in from..to {
-            let mix = self.mix(x);
-            let left = if hires { self.sub_half_pixel(x, self.before) } else { mix.colour };
+            if x == until {
+                windows = self.windows_at(x);
+                until = self.next_window_edge(x).min(to);
+            }
+            let mix = self.mix(x, windows);
+            let left = if hires { self.sub_half_pixel(x, self.before, windows) } else { mix.colour };
             self.before = mix;
             let at = row + x as usize * 8;
             for (at, colour) in [(at, left), (at + 4, mix.colour)] {
@@ -905,7 +912,7 @@ impl Ppu {
     /// "RENDERING THE SCREEN"; D-13).
     #[cfg(test)]
     fn compose(&self, x: u16) -> u16 {
-        self.mix(x).colour
+        self.mix(x, self.windows_at(x)).colour
     }
 
     /// The six window masks at `x` as bits: backgrounds 1 to 4, the sprites, the colour window.
@@ -947,8 +954,16 @@ impl Ppu {
         out
     }
 
-    fn mix(&self, x: u16) -> Mix {
-        let windows = self.windows_at(x);
+    /// The first X after `x` at which a window's inside begins or ends, 256 if none does.
+    fn next_window_edge(&self, x: u16) -> u16 {
+        [self.regs[0x26] as u16, self.regs[0x27] as u16 + 1, self.regs[0x28] as u16, self.regs[0x29] as u16 + 1]
+            .into_iter()
+            .filter(|&e| e > x)
+            .min()
+            .unwrap_or(WIDTH as u16)
+    }
+
+    fn mix(&self, x: u16, windows: u8) -> Mix {
         let (main, layer, index) = self.front(self.regs[0x2C], self.regs[0x2E], windows, x, false).unwrap_or((self.cgram[0], 5, 0));
         let cgwsel = self.regs[0x30];
         let cgadsub = self.regs[0x31];
@@ -981,8 +996,7 @@ impl Ppu {
 
     /// The sub screen's half-pixel at `x` on a hi-res line: its front-most pixel over colour 0 (fullsnes, "Hires
     /// Notes"), clipped and mathed as the main pixel before it was (anomie; D-19).
-    fn sub_half_pixel(&self, x: u16, before: Mix) -> u16 {
-        let windows = self.windows_at(x);
+    fn sub_half_pixel(&self, x: u16, before: Mix, windows: u8) -> u16 {
         let raw = self.front(self.regs[0x2D], self.regs[0x2F], windows, x, true).map_or(self.cgram[0], |p| p.0);
         let raw = if before.clip { 0 } else { raw };
         match before.math {
@@ -1259,16 +1273,16 @@ mod tests {
         p.bg_line[1][1] = 0x8002;
         assert!(p.hires());
         let none = Mix::default();
-        assert_eq!((p.sub_half_pixel(0, none), p.sub_half_pixel(1, none)), (0x0421, 6 << 5));
+        assert_eq!((p.sub_half_pixel(0, none, 0), p.sub_half_pixel(1, none, 0)), (0x0421, 6 << 5));
         // Main plus sub, halved: the main pixel at 0 adds the fixed colour (the sub screen is clear there), at 1 BG2.
         p.regs[0x30] = 0x02;
         p.regs[0x31] = 0x41;
         p.fixed = [4, 0, 0];
-        let (first, second) = (p.mix(0), p.mix(1));
+        let (first, second) = (p.mix(0, 0), p.mix(1, 0));
         assert_eq!((first.math, first.colour, second.math, second.colour), (1, 14, 2, 5 | 3 << 5));
-        assert_eq!(p.sub_half_pixel(1, first), 4 | 6 << 5);
+        assert_eq!(p.sub_half_pixel(1, first, 0), 4 | 6 << 5);
         // Colour 0 (1, 1, 1) plus the main pixel before math (10, 0, 0), halved.
-        assert_eq!(p.sub_half_pixel(2, second), 5);
+        assert_eq!(p.sub_half_pixel(2, second, 0), 5);
     }
 
     // fullsnes's and anomie's mode 7: the identity matrix shows the field as it is, M7SEL flips the screen and
@@ -1305,5 +1319,26 @@ mod tests {
         }
         let product: Vec<u8> = (0x34..=0x36).map(|r| p.read(r, blank(), 0, true).unwrap()).collect();
         assert_eq!(product, [2, 0, 0]);
+    }
+
+    // Decided 2026-10-02: the masks are found once per run between window edges; they must equal the per-pixel ones.
+    #[test]
+    fn window_masks_found_per_run_equal_those_found_per_pixel() {
+        let mut p = Ppu::default();
+        let mut seed = 0x1234_5678u32;
+        for _ in 0..200 {
+            for r in [0x23usize, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B] {
+                seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                p.regs[r] = (seed >> 16) as u8;
+            }
+            let (mut windows, mut until) = (0, 0);
+            for x in 0..WIDTH as u16 {
+                if x == until {
+                    windows = p.windows_at(x);
+                    until = p.next_window_edge(x);
+                }
+                assert_eq!(windows, p.windows_at(x), "x {x} regs {:02X?}", &p.regs[0x23..0x2C]);
+            }
+        }
     }
 }

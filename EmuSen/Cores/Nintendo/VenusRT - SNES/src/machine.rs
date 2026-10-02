@@ -44,6 +44,14 @@ impl Machine {
         Ok(Machine::with_cartridge(cart))
     }
 
+    /// Fits a NEC DSP from its firmware image (8,192 or 53,248 bytes), mapped where the header's board puts it.
+    pub fn attach_dsp(&mut self, firmware: &[u8]) -> bool {
+        let Some(dsp) = crate::chips::necdsp::NecDsp::from_firmware(firmware) else { return false };
+        let map = self.sys.cart.dsp_map(dsp.st);
+        self.sys.cart.dsp = Some((dsp, map));
+        true
+    }
+
     /// As `load_rom`, with the sound unit's 64-byte boot ROM, without which the SPC700 does not run.
     pub fn with_ipl(image: &[u8], ipl: [u8; 64]) -> Result<Machine, ImageTooShort> {
         let mut m = Machine::load_rom(image)?;
@@ -94,6 +102,9 @@ impl Machine {
             self.step();
         }
         self.sys.apu.run_to(self.sys.timing.clock);
+        if let Some((dsp, _)) = self.sys.cart.dsp.as_mut() {
+            dsp.run_to(self.sys.timing.clock);
+        }
         for pair in self.sys.apu.out.chunks_exact(2) {
             self.samples.push_pair(pair[0], pair[1]);
         }
@@ -253,12 +264,16 @@ impl Machine {
             w.bytes("DspCore", &core);
             w.bytes("ToApu", &a.to_apu);
             w.bytes("ToCpu", &a.to_cpu);
+            w.bytes("Aux", &a.aux);
             for (i, t) in a.timers.iter().enumerate() {
                 w.bytes(["Timer0", "Timer1", "Timer2"][i], &[t.divider, t.stage, t.out]);
             }
             w.u64("Cycles", a.cycles);
             w.u16s("Prescale", &a.prescale);
         });
+        if let Some((dsp, _)) = &self.sys.cart.dsp {
+            w.group("Coprocessor", |w| w.bytes("NecDsp", &dsp.pack()));
+        }
         w.group("Bus", |w| {
             w.u8("Mdr", self.sys.mdr);
             w.u32("WramAddress", self.sys.wram_address);
@@ -391,6 +406,7 @@ impl Machine {
         a.out.clear();
         r.bytes(&mut a.to_apu)?;
         r.bytes(&mut a.to_cpu)?;
+        r.bytes(&mut a.aux)?;
         for t in a.timers.iter_mut() {
             let mut b = [0u8; 3];
             r.bytes(&mut b)?;
@@ -399,6 +415,11 @@ impl Machine {
         a.cycles = r.u64()?;
         r.u16s(&mut a.prescale)?;
         a.prescale = [a.prescale[0] % 384, a.prescale[1] % 48];
+        if let Some((dsp, _)) = self.sys.cart.dsp.as_mut() {
+            let mut packed = dsp.pack();
+            r.bytes(&mut packed)?;
+            dsp.unpack(&packed);
+        }
         self.sys.mdr = r.u8()?;
         self.sys.wram_address = r.u32()? & 0x1FFFF;
         self.sys.fast_rom = r.bool()?;
@@ -537,14 +558,14 @@ pub(crate) mod tests {
 
     // Version 4: the CPU, the clock, the bus and the S-CPU's devices; the listing is its record (plan §5.6).
     #[test]
-    fn the_version_13_layout_is_pinned() {
+    fn the_version_14_layout_is_pinned() {
         let m = Machine::load_rom(&rom(&[])).unwrap();
         let layout = m.layout();
         assert!(layout.starts_with("0 4 u32 Magic\n4 4 i32 Version\n8 2 u16 Cpu.A\n"), "{layout}");
         assert!(layout.contains(" u64 Timing.Clock\n") && layout.contains(" u8[1024] Bus.Io\n") && layout.contains(" u16[32768] Vram\n"), "{layout}");
         assert!(layout.contains(" u8[64] Ppu.Regs\n") && layout.contains(" u16[256] Cgram\n"), "{layout}");
-        assert_eq!(layout.lines().count(), 113, "{layout}");
-        assert_eq!(m.state_size(), 265_205);
+        assert_eq!(layout.lines().count(), 114, "{layout}");
+        assert_eq!(m.state_size(), 265_207);
         assert_eq!(&save(&m)[..4], b"VNRT");
     }
 
@@ -563,6 +584,27 @@ pub(crate) mod tests {
         venus[..4].copy_from_slice(&VENUS_MAGIC.to_le_bytes());
         assert_eq!(back.load_state(&venus), Err(StateError::Foreign(VENUS_MAGIC)));
         assert!(matches!(back.load_state(&state[..state.len() - 1]), Err(StateError::Truncated { .. })));
+    }
+
+    // A NEC DSP's registers and RAM travel in the state, in a group only its cartridges have.
+    #[test]
+    fn a_dsp_cartridges_state_round_trips() {
+        let mut image = rom(&[0xAD, 0x00, 0xC0, 0x80, 0xFB]);
+        image[0x7FC0 + 0x16] = 0x03;
+        let mut m = Machine::load_rom(&image).unwrap();
+        let mut firmware = vec![0u8; 8192];
+        firmware[3..6].copy_from_slice(&[0xC0, 0x00, 0xC0]);
+        assert!(m.attach_dsp(&firmware));
+        m.run_frame();
+        assert!(m.layout().contains(" Coprocessor.NecDsp\n"), "{}", m.layout());
+        let state = save(&m);
+        let mut back = Machine::load_rom(&image).unwrap();
+        back.attach_dsp(&firmware);
+        back.load_state(&state).unwrap();
+        assert_eq!(save(&back), state);
+        back.run_frame();
+        m.run_frame();
+        assert_eq!(save(&back), save(&m));
     }
 
     #[test]

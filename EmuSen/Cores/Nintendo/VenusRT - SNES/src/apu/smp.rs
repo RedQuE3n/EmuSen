@@ -35,6 +35,8 @@ pub struct Smp {
     /// $2140-$2143 as the S-CPU wrote them, and $F4-$F7 as the SPC700 wrote them.
     pub to_apu: [u8; 4],
     pub to_cpu: [u8; 4],
+    /// AUXIO4 and AUXIO5, latches read back as written, not the RAM beneath (D-31).
+    pub aux: [u8; 2],
     pub timers: [Timer; 3],
     /// The DSP's cycles (1.024 MHz) since power-on; an SPC700 cycle is one of them at TEST's default.
     pub cycles: u64,
@@ -57,6 +59,7 @@ impl Smp {
             out: Vec::new(),
             to_apu: [0; 4],
             to_cpu: [0; 4],
+            aux: [0xFF; 2],
             timers: Default::default(),
             cycles: 0,
             prescale: [0; 2],
@@ -136,7 +139,7 @@ impl Smp {
             0xF2 => self.dsp_address,
             0xF3 => self.dsp.read(self.dsp_address),
             0xF4..=0xF7 => self.to_apu[(a - 0xF4) as usize],
-            0xF8 | 0xF9 => self.ram[a as usize],
+            0xF8 | 0xF9 => self.aux[(a - 0xF8) as usize],
             0xFD..=0xFF => {
                 let t = &mut self.timers[(a - 0xFD) as usize];
                 let v = t.out;
@@ -172,6 +175,7 @@ impl Smp {
             0xF2 => self.dsp_address = v,
             0xF3 => self.dsp.write(self.dsp_address, v),
             0xF4..=0xF7 => self.to_cpu[(a - 0xF4) as usize] = v,
+            0xF8 | 0xF9 => self.aux[(a - 0xF8) as usize] = v,
             0xFA..=0xFC => self.timers[(a - 0xFA) as usize].divider = v,
             _ => {}
         }

@@ -8,6 +8,7 @@ pub mod apu;
 pub mod cpu;
 pub mod bus;
 pub mod cart;
+pub mod chips;
 pub mod ffi;
 pub mod machine;
 pub mod ppu;

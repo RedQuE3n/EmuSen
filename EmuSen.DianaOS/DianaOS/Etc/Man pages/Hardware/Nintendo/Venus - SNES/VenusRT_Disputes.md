@@ -782,3 +782,37 @@ their data.
   before failing because of them.
 - Pinned by: the seven tests named above.
 
+### D-31. S-SMP: AUXIO4 and AUXIO5 ($F8, $F9) are latches of their own, not the RAM beneath them
+- Opened: 2026-10-02, after stage 4's close, by `spc_dsp6`'s "Misc/$F0-$FF are not ram", the test the in-order run
+  stops at (34th): run on its own it fails on VenusRT and passes on Mesen. VenusRT read $F8 and $F9 from the RAM
+  under the I/O page, which the DSP's echo writes reach.
+- Documents read: fullsnes, "00F8h - AUXIO4 / 00F9h - AUXIO5": "Writing changes the output levels. Reading normally
+  returns the same value as the written value ... In the SNES, these pins are unused (not connected), so the
+  registers do effectively work as if they'd be 'RAM-like' general purpose storage registers", and the memory map's
+  "FFh" for both. "RAM-like" was read as "RAM"; the paragraph describes an output latch read back, which RAM written
+  by the DSP does not change.
+- Test ROM: the test above. With $F8 and $F9 as two latches (power-on $FF), written by the SPC700 and read back, the
+  test passes (measured 2026-10-02 in a trial build).
+- Referee: not read. Mesen's source: none.
+- Conclusion: the rule above; the SPC700's writes still pass to the RAM beneath as well (fullsnes's map).
+- Pinned by: `spc_dsp6`, "Misc/$F0-$FF are not ram".
+
+### D-32. NEC DSP-n and ST01x: the chips' instruction rate against the master clock
+- Opened: 2026-10-02, at stage 5 step 1, before the NEC DSP's code, because no document gives it: the plan's §5.4
+  carries each chip's clock as a rational against the master clock, and that rate decides how far a polled chip
+  gets between two S-CPU reads of its status register.
+- Documents read: fullsnes, "SNES Cart DSP-n/ST010/ST011": "All opcodes are executed in one clock cycle (at
+  max=8.192MHz clock)", the ST01x "faster CPU clock", and nothing on the cartridges' crystals; the plan's §2.2 lists
+  "the DSP-n's clocking" among the places the documents are thin. No other fetched document covers the cartridges.
+- Test ROM: none in the corpus isolates it; the games through Mesen's pictures are the coarse oracle.
+- Referee: `Venus_Referee.md` §0 rates the NEC DSP datapath "real support", and the only second opinion. Read
+  2026-10-02: SNES_MiSTer `rtl/chip/DSP/DSP_LHRomMap.vhd` lines 110-122 (the clock-enable generator's instance and
+  the rate it is given), `rtl/CEGen.vhd` whole (a fractional divider of the 21.47727 MHz master clock), and line 113
+  of `rtl/chip/DSP/DSPn.vhd` (the chip's enable is that clock enable); nothing else. What it does: the DSP-n runs at
+  7.60 MHz and the ST010/ST011 at 10.00 MHz, each derived from the master clock by an exact fraction.
+- Conclusion: settled for the rate, argued for the instruction: the DSP-n executes at 7,600,000/21,477,270 of the
+  master clock and the ST01x at 10,000,000/21,477,270, one instruction per cycle of that clock (fullsnes: "All
+  opcodes are executed in one clock cycle"), caught up at each S-CPU access to the chip as the plan's §5.4 says.
+  To be measured against the games' pictures.
+- Pinned by: the DSP games' pictures against Mesen.
+

@@ -118,9 +118,23 @@ namespace EmuSen.WiseMan.Fixtures.Snes
             return null;
         }
 
+        // The NEC DSP firmware C# Venus's public FirmwareRequirements names for the ROM, whole or as a program and data pair, from the same folders.
+        public static byte[]? DspFirmware(string rom)
+        {
+            foreach (var request in EmuSen.Cores.Nintendo.Venus.Memory.Cartridge.FirmwareRequirements(rom))
+                foreach (string? dir in new[] { SnesTestRomCorpus.Root is { } r ? Path.Combine(r, "firmware") : null, EmuSen.Common.Firmware.FirmwareLibrary.Directory })
+                {
+                    if (dir is null) continue;
+                    string whole = Path.Combine(dir, request.FileName), stem = Path.Combine(dir, Path.GetFileNameWithoutExtension(request.FileName));
+                    if (File.Exists(whole) && new FileInfo(whole).Length == request.Size) return File.ReadAllBytes(whole);
+                    if (File.Exists(stem + ".program.rom") && File.Exists(stem + ".data.rom")) return File.ReadAllBytes(stem + ".program.rom").Concat(File.ReadAllBytes(stem + ".data.rom")).ToArray();
+                }
+            return null;
+        }
+
         public SnesRun Run(string rom, IReadOnlyList<int> frames, IReadOnlyList<SnesPress>? presses = null, bool audio = false)
         {
-            using var m = new VenusMachine(File.ReadAllBytes(rom), _ipl);
+            using var m = new VenusMachine(File.ReadAllBytes(rom), _ipl, dspFirmware: DspFirmware(rom));
             var shots = new List<SnesSnapshot>();
             var sound = new List<short>();
             foreach (int target in frames.Order())
@@ -174,14 +188,23 @@ namespace EmuSen.WiseMan.Fixtures.Snes
             var args = new List<string> { rom, "", start.ToString(), end.ToString(), stride.ToString() };
             foreach (var p in presses ?? Array.Empty<SnesPress>()) { args.Add("--press"); args.Add($"{p.Frame}:{SnesEngine.ProbeName(p.Button)}:{p.Frames}"); }
             var probe = new FileInfo(Probe);
+            byte[]? firmware = VenusRtSnesEngine.DspFirmware(rom);
             string key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-                string.Join("\n", args.Skip(2)) + $"\n{audio}\n{probe.Length}:{probe.LastWriteTimeUtc.Ticks}\n" + Convert.ToHexString(MD5.HashData(File.ReadAllBytes(rom))))))[..20];
+                string.Join("\n", args.Skip(2)) + $"\n{audio}\n{probe.Length}:{probe.LastWriteTimeUtc.Ticks}\n" + Convert.ToHexString(MD5.HashData(File.ReadAllBytes(rom)))
+                + (firmware is null ? "" : "\nfirmware " + Convert.ToHexString(MD5.HashData(firmware))))))[..20];
             string dir = Path.Combine(_cache, key);
             string log = Path.Combine(dir, "probe.log");
             if (!File.Exists(Path.Combine(dir, "done")))
             {
                 Directory.CreateDirectory(dir);
                 args[1] = dir;
+                // Mesen reads a DSP's firmware as home/Firmware/<name>.rom, program and data in one file (measured 2026-10-02).
+                if (firmware is not null)
+                    foreach (var request in EmuSen.Cores.Nintendo.Venus.Memory.Cartridge.FirmwareRequirements(rom))
+                    {
+                        Directory.CreateDirectory(Path.Combine(dir, "mesenhome", "Firmware"));
+                        File.WriteAllBytes(Path.Combine(dir, "mesenhome", "Firmware", request.FileName), firmware);
+                    }
                 if (audio) { args.Add("--wav"); args.Add(Path.Combine(dir, "audio.wav")); }
                 var psi = new ProcessStartInfo(Probe) { WorkingDirectory = Checkout, RedirectStandardOutput = true, RedirectStandardError = true };
                 foreach (string a in args) psi.ArgumentList.Add(a);

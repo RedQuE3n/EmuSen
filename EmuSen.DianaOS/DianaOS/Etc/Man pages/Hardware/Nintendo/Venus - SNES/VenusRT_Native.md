@@ -2192,3 +2192,99 @@ the plan's table, waits for its DSP-1 at stage 5.
 
 **Left open, named:** D-6, D-7, D-11, D-12 and the other PPU exceptions of §20.5; D-24 (CPU side); D-26
 (`test_timer_stop2`); and `spc_dsp6`'s five tests of §23.1. None is a game-facing difference this stage measured.
+
+### 23.8 Addendum: the in-order stop and the pitch-mod regression (2026-10-02)
+
+**"Misc/$F0-$FF are not ram" passes (D-31).** VenusRT read AUXIO4 and AUXIO5 from the RAM under the I/O page,
+which the DSP's echo writes reach; fullsnes describes output latches read back as written. As latches (power-on
+$FF), the test passes alone and in order. The state is version 14. `spc_smp`, `spc_timer`,
+`spc_mem_access_times`, `spctest` and the 2010 SPC ROMs still pass (measured).
+
+**`spc_dsp6` now (measured 2026-10-02):** 107 of 111 tests pass on their own. In order, the ROM passes 34 and stops
+at the 35th, "Misc/brr addr wrap-around", which passes on its own: run after "$F0-$FF are not ram" (a copy of the ROM
+alternating the two) it prints its table with two wrong entries (514E and BE44 where 8008 and 9008 belong) and the
+suite ends with "Passed 01", the SPC700 back in the boot ROM's wait loop and the S-CPU in the suite's idle loop at
+00:808F. The preceding test leaves the bytes 0A FF 7C 01 FE FF ... at $8000 in VenusRT and in Mesen alike, so the
+leftover is not the difference; what is, is not found. Recorded, not settled.
+
+**The "Random/pitch mod" regression is the ENVX half of the window rule** (measured: with only the OUTX half the
+test's first run passes; with only the ENVX half it fails as with both). Moving the ENVX window: excluding the cycle
+in which S7 prepares the value fails "Timing/Voice/V9 envx", and any window that includes that cycle stops pitch mod
+the same way. The stop is not inside the test: its last DSP accesses are the cleanup (FLG $E0, EDL 0), after which
+the SPC700 is back in the boot ROM's wait loop and the screen reads "Passed 01", the same end as the in-order stop
+above. The test synchronises by writing $88 to ENVX and reading it back until the DSP overwrites it, so the window
+moves the point it synchronises to by up to a sample, and every write it times after that moves with it; argued to
+be the mechanism, not measured. **Neither is the rule shown wrong:** the window is anomie's sentence, and "V9 envx"
+needs it. Kept, with the regression recorded; the two "Passed 01" ends are the next thing to trace, from the SPC700's
+last instructions before it re-enters the boot ROM.
+
+---
+
+## 24. Stage 5, step 1: the NEC DSP-n and ST01x (2026-10-02)
+
+### 24.1 What it built
+
+`chips/necdsp.rs`, the NEC µPD77C25 of the DSP-1 to DSP-4 and the µPD96050 of the ST010 and ST011, from fullsnes's
+"SNES Cart DSP-n/ST010/ST011" chapters: the 24-bit ALU, LD and JP instructions, both accumulators with their six
+flags (S1 and OV1 as fullsnes describes them, including S1 following the sign on the logical operations), the K*L*2
+multiplier, the data RAM and ROM pointers with their adjust fields, the stack (four levels, eight on the µPD96050),
+the 8- and 16-bit DR handshake with RQM and DRS, and the boards' maps of fullsnes's "SNES I/O Ports" table (LoROM at
+30-3F or 20-3F, LoROM of 2 MiB at 60-6F, HiROM at 00-1F:6000-7FFF, the ST01x at 60-67 with its RAM at 68-6F). The
+serial port is not wired on the SNES, so its acknowledges read as set. The ST01x map is chosen when the firmware is
+the µPD96050's, since a dump of F1 ROC in the library carries chipset 02h, not fullsnes's F6h.
+
+**Clock (D-32):** the referee's rate, 7.60 MHz for the DSP-n and 10 MHz for the ST01x as exact fractions of the
+master clock, one instruction per cycle as fullsnes states, caught up at each S-CPU access and at the frame's end.
+
+**Firmware** is create file 2, 8,192 bytes (µPD77C25) or 53,248 (µPD96050), in fullsnes's newer little-endian
+layout or the older big-endian one, told apart by the "JRQM $" every image opens with; the interface's exports are
+unchanged. The harness asks C# Venus's public `Cartridge.FirmwareRequirements` which image a ROM needs and reads it
+whole or as a program and data pair from the corpus's firmware folder. **Mesen reads it as
+`<home>/Firmware/<name>.rom`, program and data in one file** (measured: Pilotwings' attract mode parts from the run
+without firmware at frame 2400 only with that file), so the probe's runs for DSP games now get it, and their cache
+key carries the firmware's hash. One image in the player's `home/Firmware`, `dsp1.rom`, is 8,192 bytes but not the
+DSP-1's program (its first opcodes are not "JRQM $", and it differs from the split pair); the harness builds the
+DSP-1 from the pair.
+
+The state carries the chip's registers and RAM in a `Coprocessor` group only a DSP cartridge has; a test round-trips
+it. **Not built:** the ST01x's battery-backed RAM as a battery file (stage 6's file handling), and the debugger's view.
+
+### 24.2 The games (measured 2026-10-02)
+
+The games table over nine DSP titles from the player's library, every tenth frame to 2,400 with no input, both
+engines given the firmware C# Venus names:
+
+| Game (chip) | The DSP used by frame 2,400 (VenusRT with and without it) | Picture at 2,400 | First picture difference |
+|---|---|---|---|
+| Super Mario Kart (DSP-1) | yes, 99,456 WRAM bytes | equal | 140, 23 of 240 frames differ |
+| Pilotwings (DSP-1) | yes, 1,690 | equal | 150, 6 of 240 |
+| Top Gear 3000 (DSP-4) | yes, 27,747 | 19 pixels | 70 |
+| Michael Andretti's Indy Car Challenge (DSP-1) | yes, 9,468 at 600 | differs | 440; equal again at 600, WRAM within 3 bytes of Mesen's at 100, 300 and 600 |
+| Ballz 3D (DSP-1B) | yes, 25,973 | 4,117 pixels | 760 (OAM from 60) |
+| Dungeon Master (DSP-2), Lock On (DSP-1), Super Bases Loaded 2 (DSP-1) | no | equal | — |
+| F1 ROC (ST010) | no (Mesen's runs with and without the firmware also agree to 600) | differs from frame 40 | not the chip's |
+
+**Where the DSP runs, VenusRT follows Mesen**: Super Mario Kart's and Pilotwings' attract modes end on Mesen's
+picture, and Andretti's WRAM stays within three bytes of Mesen's through frame 600. The later partings of Andretti,
+Ballz 3D and Top Gear 3000 are not attributed: a DSP result, the clock's rate (argued, D-32) or the S-CPU or PPU are
+all candidates. The three DSP-2 and ST01x games, and Lock On and Super Bases Loaded 2, do not reach their chips
+without input, so the DSP-2, DSP-3, ST010 and ST011 are built and untested on games.
+
+### 24.3 The clone check (measured 2026-10-02)
+
+25 files: `chips/necdsp.rs` shares at most 2 fingerprints with any Mesen file, and no table. Two names are Mesen's
+too: `necdsp`, the chip's name (C# Venus's public `NecDspVariant` spells it so), and `datarom`, fullsnes's "Data
+ROM". The rest is as at §22.5.
+
+### 24.4 The cost (measured 2026-10-02)
+
+Under the lock (load 2.4 falling to 1.4), best of three over 2,400 frames, the same binary with and without the
+firmware: Pilotwings 1.28 → 2.11 ms a frame drawn, Super Mario Kart 1.44 → 2.45, Top Gear 3000 0.67 → 2.60 (it
+stalls without its chip). **The DSP costs about 0.6 to 1.0 ms a frame**: 127,000 instructions, executed whether the
+chip waits on RQM or computes. Against §5.5, where Pilotwings costs C# Venus 2.60 ms, VenusRT is inside it. No
+tuning was done; skipping the chip's waiting loop is a lever recorded, not taken.
+
+### 24.5 What is left of the NEC DSPs
+
+Games driven with input to the DSP-2, DSP-3 and ST01x titles' chip use; the ST01x RAM as a battery file at stage 6;
+the three late partings above.

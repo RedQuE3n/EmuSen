@@ -739,5 +739,12 @@ their data.
   eight tests after it pass (measured 2026-10-02); the hidden-value reading already built agrees with the
   referee's. Sustain is now matched on bits 8-10 of the new value, as the referee and anomie's "upper 3 bits of E"
   read it.
-- Pinned by: `spc_dsp6`, "hidden env 0 at kon" to "kon clears independent".
+- **A third rule, measured 2026-10-02 at stage 4 step 3**, from "KON/kon decoding when another kon" (each round
+  printing 0000 five times, FFFE twice, 0000 three times): the key-on sample itself keeps its interpolation
+  position, ring index and block offset, so the sample's own BRR decode still happens ("#0 ... The final pre-KON BRR
+  decode also occurs here", anomie), and they are reset on the first start-up sample. The first new block's filter
+  then reads the ring's physical end as anomie says, which that decode may have filled. The referee's lines already
+  read (925-953) reset the position only on start-up samples, not on the key-on sample, and agree. With it,
+  `spc_dsp6` passes through "KON/pitch at kon", its 33rd test.
+- Pinned by: `spc_dsp6`, "hidden env 0 at kon" to "pitch at kon".
 

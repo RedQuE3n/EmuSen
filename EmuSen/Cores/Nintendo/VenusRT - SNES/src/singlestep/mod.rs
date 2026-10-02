@@ -4,6 +4,7 @@
 
 pub mod cpu65816;
 pub mod spc700;
+pub mod spc700_cpu;
 pub mod w65816;
 
 use std::path::{Path, PathBuf};
@@ -83,6 +84,8 @@ pub struct FileReport {
     pub cycles: usize,
     pub capped: usize,
     pub first_failure: Option<String>,
+    /// Cases whose registers and memory both end as the suite's, the cycles aside.
+    pub state: usize,
 }
 
 impl FileReport {
@@ -92,6 +95,7 @@ impl FileReport {
         self.registers += o.registers as usize;
         self.memory += o.memory as usize;
         self.cycles += o.cycles as usize;
+        self.state += (o.registers && o.memory) as usize;
         self.capped += o.capped as usize;
         if !o.passed() && self.first_failure.is_none() {
             self.first_failure = Some(format!("{name}: {}", o.first_difference.as_deref().unwrap_or("?")));

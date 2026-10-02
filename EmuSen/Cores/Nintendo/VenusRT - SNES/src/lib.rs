@@ -4,6 +4,7 @@
 //! Built so far: the 65816 (`cpu`), the cartridge (`cart`) and the S-CPU's bus and master clock (`bus`); the PPU, the
 //! APU and the S-CPU's other devices come with later stages.
 
+pub mod apu;
 pub mod cpu;
 pub mod bus;
 pub mod cart;

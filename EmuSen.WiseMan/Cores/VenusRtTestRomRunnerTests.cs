@@ -207,7 +207,6 @@ namespace EmuSen.WiseMan.Cores
             Assert.All(best, o => Assert.Equal(SnesDifferential.MesenRowOffset, o));
         }
 
-        // The corpus over C# Venus and Mesen, graded by each suite's protocol, against the committed baseline table.
         // Opt-in: each game in EMUSEN_VENUSRT_GAMES against Mesen every tenth frame, and where each space and the picture first part.
         [Fact]
         public void The_games_pictures_and_spaces_against_Mesen()
@@ -237,6 +236,7 @@ namespace EmuSen.WiseMan.Cores
             if (Environment.GetEnvironmentVariable(ReportVariable) is { } report) File.WriteAllLines(report, table);
         }
 
+        // The corpus over C# Venus and Mesen, graded by each suite's protocol, against the committed baseline table.
         [Fact]
         public void The_corpus_reproduces_the_recorded_baseline()
         {

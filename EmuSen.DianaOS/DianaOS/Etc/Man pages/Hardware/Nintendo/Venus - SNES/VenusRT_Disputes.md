@@ -513,6 +513,22 @@ their data.
   documents', and the entry is **open**: it is the first case in which the documents give a rule and Mesen's
   output disagrees with it, and the next source in the order of recourse is the SNES_MiSTer RTL, in a dispute step
   of its own.
+- **Referee, 2026-10-01, at stage 3 step 6**, a dispute step that changed no code. Read: `Venus_Referee.md` §0 only
+  (the PPU is "real support", from anomie's and fullsnes's register documents, apart from two mode 7 quirks), then
+  SNES_MiSTer `rtl/PPU.vhd` at `c61bfd4`: a search of the file for its hi-res and math signals, and lines 2403-2480,
+  the colour-math process. Nothing else of the RTL was opened. What it does, in prose: each dot has a sub-screen
+  phase and then a main-screen phase; the colour fetched at each phase is kept as "the previous colour" for the
+  next; the math enable, the halving and the clip mask are taken only in the main phase. So at the sub phase of
+  dot x the colour mathed with the sub pixel is the main pixel of dot x-1 as fetched from CGRAM, before its math,
+  under dot x-1's enable, halving and clip; with the fixed colour where that pixel used it. The previous colour is
+  cleared at the line's last dot, so the left edge's sub half-pixel is mathed with black under whatever the
+  enables last were.
+- **Conclusion: settled for the rule as built.** The referee agrees with anomie's sentence read literally, so the
+  documents and the referee agree and Mesen's picture is the one that differs: the four pseudo-hi-res ROMs stay
+  different from Mesen on 2,691 to 27,099 half-pixels, and those differences are recorded as Mesen's, not VenusRT's.
+  The variant of the measurement above is not adopted. The left edge is open between "unmathed" (built) and the
+  referee's "mathed with black under the last enables"; it moves one column of four ROMs and is left as built.
+- Pinned by: `the_sub_half_pixel_takes_colour_0_and_the_math_of_the_main_pixel_before` in `ppu.rs`.
 
 ### D-20. IRQ: a point past its line's end is not carried over the short line's end or a frame's
 - Opened: 2026-10-01, at stage 3 step 5, by `nmi_irq/demo_irq` (and `blobs/demo_irqtest`) failing at test 6's first

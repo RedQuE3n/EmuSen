@@ -1711,3 +1711,114 @@ multiplier at `$2134`; its oracles PeterLemon's four mode 7 ROMs, `StarWars` and
 Metroid's title). Beside it: D-19 as a referee dispute step (the SNES_MiSTer RTL), mode 6's 86 half-pixels in
 `ppubusact`, `test_hdmasync`'s HDMA start, and the canvas and compositor costs if those decisions come.
 
+---
+
+## 20. Stage 3, step 6: mode 7, D-19 refereed, and the compositor's two structural changes (2026-10-02)
+
+### 20.1 Mode 7
+
+Built from fullsnes ("Rotation/Scaling") and anomie (`$211A`-`$2120`, "Mode 7"), which agree: the matrix with the
+origin's and the line's products rounded to a quarter pixel and the pixel's product not; the 13-bit centre and
+scroll, the scroll less the centre kept to ten bits and a sign; the shared write-twice byte M7_old, through which
+`$210D` and `$210E` write mode 7's scroll beside BG1's; M7SEL's screen flips and the field's outside (wrapped,
+transparent, or tile 0's pixels); direct colour; EXTBG's BG2 from the same pixels with bit 7 its priority, and its
+mosaic taking vertical blocks from BG1's enable bit and horizontal ones from its own; mode 7's two priority charts;
+and `$2134`-`$2136`, M7A times M7B's high byte, signed. **Not modelled:** the products `$2134` returns during mode 7's
+drawing (fullsnes lists eight per pixel), and a mode 7 picture in hi-res. Mode 7 fills the same line buffers by its
+own path. The state is version 10, with the mode 7 registers.
+
+**Oracles (measured 2026-10-02):**
+
+- PeterLemon's `RotZoom`, `Perspective` and `Mode7HDMA` equal Mesen's picture in every pixel at frame 300.
+  `StarWars` differs on about 2,500 pixels scattered over the screen, with VRAM, CGRAM and OAM equal to Mesen's at
+  the frame and no pairing of neighbouring frames closer; not read further.
+- undisbeliever's six VMAIN mode 7 ROMs (`vmain-mode7-tilemap-columns` and `-rows`, `vmain-mode7-image-*`) and
+  `setini-early-read-mode7ex` now equal Mesen in the corpus run.
+- Super Metroid's title equals Mesen at every twentieth frame from 240 to 400, but its mode 7 frames show the sprites
+  alone (TM `$10`), so they do not test the mode 7 background; its state parts after 420, as before.
+- PeterLemon's 47 PPU ROMs: **35 equal** (32 at §19). The corpus: pictures equal on **180** of 295 (173), none lost.
+
+### 20.2 D-19, refereed
+
+A dispute step of its own, which changed no code: `Venus_Referee.md` §0, then SNES_MiSTer's `rtl/PPU.vhd`, its
+colour-math process only. The referee maths the sub half-pixel with the previous main pixel's colour before math,
+under that pixel's enable, halving and clip, which is anomie's sentence read literally and the rule built. D-19 is
+**settled** for the built rule; Mesen's pictures of the four pseudo-hi-res ROMs are recorded as the ones that differ,
+and the variant they agree with is not adopted. The left edge stays open between "unmathed" (built) and the
+referee's "mathed with black". The entry lists what was read.
+
+### 20.3 The two structural changes (decided 2026-10-02)
+
+*Decided 2026-10-02*, as an extension of the rework decision of 2026-10-01 (§17.3): (1) the compositor's six window
+masks are found once for each run of pixels between the windows' edges, instead of for every pixel; (2) a low-res
+frame is drawn straight into a 256-wide picture, swapped in at V-Blank with no copy, and the 512-wide canvas is used
+only from a frame's first hi-res line, the lines drawn before it doubled into it. A blank line does not make a frame
+hi-res, as before.
+
+**Proof (measured 2026-10-02).** `frame_hashes` over all 304 images to frame 3600, built before the two changes,
+after the first, and after the second: **1,094,067 frames, every hash equal at each change**, hi-res and interlaced
+ROMs included. A unit test checks the run masks against the per-pixel ones over 200 random window settings, and one
+pins a frame that turns hi-res at line 100 (the earlier lines doubled, presented 512 wide) and the low-res frame
+after it (256 wide again). The skip check passes on all 304; the crate's 46 tests pass.
+
+**The cost**, `frame_cost`, the build before the changes, after the first, and after both, best of three under the
+lock, load 1.3 to 1.45; the picture's share, drawn less skipped, in ms:
+
+| ROM | Before | Masks per run | And the 256-wide picture |
+|---|---|---|---|
+| gilyon `cputest-full` | 1.29 | 1.06 | 0.95 |
+| the 240p menu | 1.38 | 1.12 | 1.05 |
+| `Rings` | 1.39 | 1.17 | 1.08 |
+| `object-dropout-test` | 1.05 | 0.84 | 0.75 |
+| A Link to the Past | 1.01 | 0.78 | 0.68 |
+| Super Metroid | 0.78 | 0.58 | 0.50 |
+| `8x8BGMap8BPP64x64` (mode 3) | 1.17 | 0.95 | 0.90 |
+| `MosaicMode3` | 1.18 | 0.95 | 0.89 |
+| `HiColor64PerTileRowPseudoHiRes` | 2.72 | 2.20 | 2.12 |
+| `InterlaceRPG` (mode 5, interlaced) | 2.06 | 1.60 | 1.58 |
+
+**The masks per run take 0.2 to 0.5 ms off the picture, and the 256-wide picture another 0.05 to 0.11** on low-res
+frames; on the two hi-res ROMs, which still use the canvas, 0.02 and 0.08, within the runs' spread. The "before"
+column is 0.15 to 0.2 ms above §19.5's "now"; mode 7's added branches are the likely part of it (argued, not
+measured apart from the spread between runs). Against §5.5's
+1.5 ms for the PPU: **low-res modes 0 to 4 now take 0.5 to 1.1 ms of picture, inside the budget; hi-res and
+interlaced frames 1.6 to 2.1 ms, still over it.** P1's overrun of §15.9 and §19.5 is retired for low-res frames and
+stands for hi-res ones, where the sub half-pixel's second priority walk and math is the cost.
+
+### 20.4 The clone check (measured 2026-10-02)
+
+18 files against Mesen's 164: no pair at 12 fingerprints, the largest below it still 4. One run of nine literals was
+reported, `ppu.rs`'s window-mask test listing the register numbers `0x23` to `0x2B`, nine consecutive integers that
+a table in Mesen's DSP code also holds; the list is now written as a range, and the check reports none. One new
+name, `mode7extbg`, anomie's "Mode 7 EXTBG".
+
+### 20.5 Is the PPU stage complete?
+
+**Every feature of the plan's stage 3 row is built**: the ports and their timing, backgrounds in modes 0 to 7,
+sprites and their evaluation, windows, colour math, mosaic, offset-per-tile, direct colour, hi-res and
+pseudo-hi-res, interlace and mode 7, in spans, with the skip-versus-draw test passing on every image. **What it
+leaves open, named:** D-6 (power-on phase), D-7 (brightness rounding), D-11 and D-12 (OAM reload and writes during
+display), D-15 (mosaic mid-frame), D-16 for mode 6's 86 half-pixels in `ppubusact`, D-19's left edge; `StarWars`'s
+scattered pixels; the five `HiColor128PerTileRow` ROMs' CGRAM (HDMA writing colours a tile row); the products of
+`$2134` during mode 7; and from the S-CPU side, `test_hdmasync`'s and `test_hdmatiming`'s HDMA start and both
+`test_hdma`'s init timing. None of these blocks stage 4. **Stage 3 is complete in the plan's sense**, with those
+recorded as named exceptions for §7's gate.
+
+### 20.6 What stage 4 needs first
+
+The plan's §5.3 and stage 4 row. In order:
+
+1. **The SPC700 against SingleStepTests' SPC700 suite with cycle lists**, through the harness stage 0 built for it
+   (`singlestep/spc700.rs`, its bus trait and the three readings of §2.3): the CPU and its own bus, nothing else.
+2. **The APU's side of the machine**: the IPL ROM, the four ports both ways, the three timers, and the clock domain
+   of §5.3 (24.576 MHz, an exact rational to the master clock, catch-up at a port access and the frame's end). That
+   replaces the APU stand-in of §14.4, which is what Super Mario World and Donkey Kong Country stall on, A Link to the
+   Past and the 240p suite run ten frames early against, and `test_irqb` needs.
+3. **gilyon's `spctest`** on the machine, then blargg's `spc_smp`, `spc_timer` and `spc_mem_access_times` and the 2010
+   tests.
+4. **The S-DSP**: BRR, envelopes, echo, noise, pitch modulation, one of its 32 steps per SPC700 cycle, into the 32 kHz
+   queue; graded by `spc_dsp6` and by audio against Mesen.
+
+The first two are what most of the remaining picture differences wait for, because the games' states part from
+Mesen's where the stand-in answers at once.
+

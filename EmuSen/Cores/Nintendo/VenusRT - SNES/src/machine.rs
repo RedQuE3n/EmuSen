@@ -283,6 +283,12 @@ impl Machine {
                 w.bool("CartIrq", self.sys.cart_irq);
             });
         }
+        if let Some(gsu) = &self.sys.cart.gsu {
+            w.group("Coprocessor", |w| {
+                w.bytes("Gsu", &gsu.pack());
+                w.bool("CartIrq", self.sys.cart_irq);
+            });
+        }
         w.group("Bus", |w| {
             w.u8("Mdr", self.sys.mdr);
             w.u32("WramAddress", self.sys.wram_address);
@@ -433,6 +439,12 @@ impl Machine {
             let mut packed = sa1.pack();
             r.bytes(&mut packed)?;
             sa1.unpack(&packed);
+            self.sys.cart_irq = r.bool()?;
+        }
+        if let Some(gsu) = self.sys.cart.gsu.as_mut() {
+            let mut packed = gsu.pack();
+            r.bytes(&mut packed)?;
+            gsu.unpack(&packed);
             self.sys.cart_irq = r.bool()?;
         }
         self.sys.mdr = r.u8()?;

@@ -2343,9 +2343,15 @@ picture: the slice and the absent contention are the first suspects (argued).
 
 **Clone check:** 26 files. The first run found `chips/sa1.rs` sharing 18 fingerprints with Mesen's `Sa1.cpp`, over
 §4.2's threshold of 12: the byte-at-a-time register writes for fullsnes's registers (CRV, CNV, CIV, SNV, SIV, SDA,
-DTC) written as the same masking expression in the same order, a convergence on the documented layout. Written
-through two small helpers instead, the pair shares fewer than 2, and the largest pair left is 4 fingerprints with
-`Sa1Types.h` (the fields named after fullsnes's registers). No table, and no new identifier, is Mesen's.
+DTC) written as the same masking expression in the same order. **Those fingerprints are convergence forced by the
+documented register layout:** the shared lines are, all of them, single-byte writes to fullsnes's registers in
+fullsnes's address order (its "SA-1 I/O Map" table lists CRV, CNV, CIV at 2203h-2208h, SNV, SIV at 220Ch-220Fh,
+SDA at 2232h-2234h and DTC at 2238h-2239h, each "Lsb"/"Msb"/"Mid"), and the masking expression is the one way to
+write a byte of a wider register; no logic beyond the layout is in them, and the module was written from fullsnes
+alone (no Mesen file was read). The writes were then put through two small helpers, which drops the pair below 2
+fingerprints; that rewrite changes the count, not the provenance, and is recorded as such: the helpers are kept
+because they say what the code does, not as evidence. The largest pair left is 4 fingerprints with `Sa1Types.h`,
+the fields named after fullsnes's registers. No table, and no new identifier, is Mesen's.
 
 **Cost** (the lock, load 0.8 rising to 1.1, best of three over 2,400 frames):
 
@@ -2366,3 +2372,85 @@ Mario RPG inside P2; whether it explains the two games' phase differences is the
 ROM and BW-RAM contention and the SA-1's real access timings (fullsnes's missing pages); character conversion 1 as
 the hardware streams it (the two golf games that use it are not in the library); the variable-length reader's
 unknowns (Jumpin' Derby, not in the library); $230E (D-33); the two games' phase differences.
+
+---
+
+## 26. Stage 5, step 3: the GSU (2026-10-02)
+
+### 26.1 What it built
+
+`chips/gsu.rs`, the Mario Chip and the Super FX 1 and 2, from fullsnes's "SNES Cart GSU-n" chapters: R0-R15 with
+R15 pipelined, so that the byte after a jump or branch runs before its target, as fullsnes's "Jump Notes" describe
+(the opcode byte executes while the next is fetched; a write to R15 sends the next fetch to the target); the
+ALT1/ALT2/ALT3, TO, WITH and FROM prefixes with the B flag, the branches keeping the prefixes, ALT3 falling back to
+ALT1 and both to the base opcode where a variant does not exist; the ALU, shift, byte and multiply opcodes with
+fullsnes's flags (MERGE's four masks, CMP as SUB under ALT3); GETB/GETBH/GETBL/GETBS and GETC from the one-byte ROM
+buffer, refilled when R14 is written; LDB/LDW/STB/STW, LM/LMS/SM/SMS and SBK with the swapped bytes of an odd word;
+PLOT and RPIX on the 128, 160 and 192 heights and OBJ mode, with transparency, dither and POR's nibble and freeze
+bits; COLOR, CMODE, RAMB and ROMB; CACHE, LJMP and STOP; the 512-byte code cache with its SNES window at
+3100h-32FFh, a line marked loaded when its last byte is written; and the S-CPU's view: the I/O page with GSU2's
+mirrors, R0-R15 through the latch, SFR and its IRQ bit cleared by a read, ROM in LoROM and HiROM form and Game Pak
+RAM at 70-71 and 6000-7FFF, and the fixed vector values the S-CPU reads from ROM while the GSU owns it. A chipset of
+13h-1Ah on a LoROM map selects the board; the RAM's size comes from the extended header's FFBDh, 32 KiB where there
+is none (Star Fox); a ROM over 1 MiB gives the GSU-2's version code.
+
+**Clocking:** 10.74 or 21.48 MHz by CLSR, caught up as the SA-1 is (§25.1). Costs follow fullsnes's "CPU Misc",
+where it is itself uncertain: 1 cycle for a cached opcode byte, 3 or 5 for an uncached one or a ROM or RAM byte,
+twice that for a word, and the multiply table's counts. **Not modelled:** the pixel caches (PLOT writes RAM at once,
+which is the same RAM by the time anything can read it, since RPIX and the S-CPU's access both flush or wait), the
+RAM write buffer and RON/RAN's wait states.
+
+### 26.2 The oracles (measured 2026-10-02)
+
+- **PeterLemon's `GSUTest`: all 31 pass**, each table of results equal to Mesen's picture (they stood Incomplete).
+- **His 27 drawing ROMs** (PlotPixel, PlotLine and FillPoly at 2, 4 and 8 bits and the three heights): every picture
+  compared equals Mesen's at frame 600 (three compare no picture in either engine).
+- **The games**, every tenth frame to 2,400 with no input:
+
+| Game | First lit (Mesen / VenusRT) | Picture at 2,400 | First picture difference | Pictures differing |
+|---|---|---|---|---|
+| Super Mario World 2: Yoshi's Island (GSU-2) | 80 / 90 | 6,867 pixels | 80 | 174 of 240 |
+| Star Fox (Mario Chip) | 210 / 200 | 19,461 pixels | 200 | 213 of 240 |
+| Doom (GSU-2) | 10 / 10 | 106,657 of 114,688 | 260 | 190 of 240 |
+| Stunt Race FX (GSU-1) | 80 / 80 | 26,733 | 250 | 99 of 240 |
+| Vortex (GSU-1) | 150 / 150 | 22,661 | 150 | 182 of 240 |
+| Dirt Trax FX (GSU-1) | never / 220 | — | — | Mesen's run shows no picture |
+
+Every GSU game boots and draws its 3D or scaled scenes as Mesen's pictures show them; looked at side by side, Star
+Fox's space attract scene at frame 600 and Doom's first room at 1,500 are the same pictures, and Yoshi's Island's
+storybook intro the same pages, **a little apart in time**: the actors stand at other points of the same movement,
+and Star Fox lights ten frames early. That phase is what the counts measure. The GSU's cycle costs, fullsnes's
+uncertain ones, are the first suspect (argued); they decide how long each frame's drawing takes and so when the game
+moves on.
+
+- **The corpus**: 108 of the 117 ROMs Mesen passes now pass (77 at §25), the 31 `GSUTest` ROMs the gain; pictures equal
+  to Mesen's at the last frame on 230 of 295 (199); nothing that passed fails. The skip-versus-draw check holds on
+  the six GSU games over 600 frames.
+
+### 26.3 The clone check (measured 2026-10-02)
+
+27 files. `chips/gsu.rs` shares fewer than 2 fingerprints with any Mesen file, and no table. Seven names are Mesen's
+too, each the plain name of what fullsnes calls it or of a common operation: `rombuffer` ("ROM Read Buffer"),
+`ramaddress` ("RAM Address"), `readbyte`, `readword`, `writebyte`, `writeword`, and `gsuram` in `cart.rs`.
+
+### 26.4 The cost (measured 2026-10-02)
+
+The lock, load 1.0 rising to 1.5, best of three over 2,400 frames:
+
+| Game | Drawn | Picture skipped |
+|---|---|---|
+| Yoshi's Island | 1.95 ms | 0.92 |
+| Star Fox | 2.14 | 1.15 |
+| Doom | 2.76 | 1.50 |
+| Stunt Race FX | 2.04 | 1.01 |
+| Vortex | 2.38 | 1.18 |
+| Dirt Trax FX | 1.97 | 1.32 |
+
+**P2 (Yoshi's Island at most 3.8 ms at the end of stage 5): met**, at 1.95 against C# Venus's 3.13, with the caveat
+that the GSU's cycle costs are approximate and a slower model would cost more host time only as far as the GSU runs
+longer between the same frames. No tuning was done.
+
+### 26.5 What is left of the GSU
+
+The pixel caches, the RAM write buffer and RON/RAN waits; the cycle costs fullsnes marks unknown, which the games'
+phase measures; and Dirt Trax FX, whose Mesen run shows no picture.

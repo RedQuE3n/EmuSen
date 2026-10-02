@@ -181,14 +181,31 @@ pub struct Cartridge {
     pub dsp: Option<(crate::chips::necdsp::NecDsp, DspMap)>,
     /// The SA-1, when the header's chipset names it (3xh); its BW-RAM is `sram`.
     pub sa1: Option<Box<crate::chips::sa1::Sa1>>,
+    /// The GSU, when the chipset names it (1xh); its Game Pak RAM is `sram`.
+    pub gsu: Option<Box<crate::chips::gsu::Gsu>>,
 }
 
 impl Cartridge {
     /// The cartridge under a header already chosen.
     pub fn with_header(rom: &[u8], header: Header) -> Cartridge {
-        let sram = vec![0u8; header.sram_bytes()].into_boxed_slice();
+        let gsu = Self::gsu_for(&header, rom.len());
+        let sram = vec![0u8; if gsu.is_some() { Self::gsu_ram(rom, &header) } else { header.sram_bytes() }].into_boxed_slice();
         let sa1 = Self::sa1_for(&header);
-        Cartridge { rom: rom.into(), sram, header, dsp: None, sa1 }
+        Cartridge { rom: rom.into(), sram, header, dsp: None, sa1, gsu }
+    }
+
+    /// A GSU for a chipset of 13h-1Ah on map mode 20h (fullsnes, "GSU Cartridge Header"); a ROM over 1 MiB takes the
+    /// GSU-2, whose version code is 4, as fullsnes's rule of thumb has it.
+    fn gsu_for(header: &Header, size: usize) -> Option<Box<crate::chips::gsu::Gsu>> {
+        (matches!(header.chipset, 0x13..=0x1A) && header.map == Map::LoRom).then(|| Box::new(crate::chips::gsu::Gsu::new(size > 0x10_0000)))
+    }
+
+    /// The Game Pak RAM's size from the extended header's FFBDh, 32 KiB where there is none (Star Fox).
+    fn gsu_ram(rom: &[u8], header: &Header) -> usize {
+        match rom.get(header.at.wrapping_sub(3)) {
+            Some(&n) if (1..=7).contains(&n) => 1024 << n,
+            _ => 0x8000,
+        }
     }
 
     /// An SA-1 for a header whose chipset's high nibble is 3 (fullsnes's 32h-35h), on a map mode of 23h.
@@ -214,9 +231,10 @@ impl Cartridge {
             country: 0,
             score: 0,
         });
-        let sram = vec![0u8; header.sram_bytes()].into_boxed_slice();
+        let gsu = Self::gsu_for(&header, rom.len());
+        let sram = vec![0u8; if gsu.is_some() { Self::gsu_ram(rom, &header) } else { header.sram_bytes() }].into_boxed_slice();
         let sa1 = Self::sa1_for(&header);
-        Some(Cartridge { rom: rom.into(), sram, header, dsp: None, sa1 })
+        Some(Cartridge { rom: rom.into(), sram, header, dsp: None, sa1, gsu })
     }
 
     /// Whether the header names a NEC DSP: chipset 03h-05h for a DSP-n, F6h for an ST010 or ST011 (fullsnes).
@@ -266,7 +284,7 @@ impl Cartridge {
     #[inline]
     pub fn decode(&self, address: u32) -> Option<Slot> {
         // An SA-1 board decodes its own space (chips/sa1.rs); nothing else on it answers the S-CPU.
-        if self.sa1.is_some() {
+        if self.sa1.is_some() || self.gsu.is_some() {
             return None;
         }
         if self.dsp.is_some() {

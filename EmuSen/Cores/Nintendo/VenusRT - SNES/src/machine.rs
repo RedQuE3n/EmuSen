@@ -257,6 +257,7 @@ impl Machine {
                 w.bytes(["Timer0", "Timer1", "Timer2"][i], &[t.divider, t.stage, t.out]);
             }
             w.u64("Cycles", a.cycles);
+            w.u16s("Prescale", &a.prescale);
         });
         w.group("Bus", |w| {
             w.u8("Mdr", self.sys.mdr);
@@ -396,6 +397,8 @@ impl Machine {
             *t = crate::apu::smp::Timer { divider: b[0], stage: b[1], out: b[2] & 0x0F };
         }
         a.cycles = r.u64()?;
+        r.u16s(&mut a.prescale)?;
+        a.prescale = [a.prescale[0] % 384, a.prescale[1] % 48];
         self.sys.mdr = r.u8()?;
         self.sys.wram_address = r.u32()? & 0x1FFFF;
         self.sys.fast_rom = r.bool()?;
@@ -534,14 +537,14 @@ pub(crate) mod tests {
 
     // Version 4: the CPU, the clock, the bus and the S-CPU's devices; the listing is its record (plan §5.6).
     #[test]
-    fn the_version_12_layout_is_pinned() {
+    fn the_version_13_layout_is_pinned() {
         let m = Machine::load_rom(&rom(&[])).unwrap();
         let layout = m.layout();
         assert!(layout.starts_with("0 4 u32 Magic\n4 4 i32 Version\n8 2 u16 Cpu.A\n"), "{layout}");
         assert!(layout.contains(" u64 Timing.Clock\n") && layout.contains(" u8[1024] Bus.Io\n") && layout.contains(" u16[32768] Vram\n"), "{layout}");
         assert!(layout.contains(" u8[64] Ppu.Regs\n") && layout.contains(" u16[256] Cgram\n"), "{layout}");
-        assert_eq!(layout.lines().count(), 112, "{layout}");
-        assert_eq!(m.state_size(), 265_201);
+        assert_eq!(layout.lines().count(), 113, "{layout}");
+        assert_eq!(m.state_size(), 265_205);
         assert_eq!(&save(&m)[..4], b"VNRT");
     }
 

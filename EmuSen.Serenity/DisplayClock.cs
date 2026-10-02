@@ -4,7 +4,7 @@ using System.Diagnostics;
 namespace EmuSen.Serenity
 {
     // The display's refresh as the presenter observed it: period, a vblank to extrapolate from, and whether it holds still - see EmuSen_Settings_Reference.md §4.87.3.
-    public sealed record DisplayReading(double PeriodTicks, long VblankTicks, bool Variable, bool Counted, int Samples, long TakenTicks)
+    public sealed record DisplayReading(double PeriodTicks, long VblankTicks, bool Variable, bool Counted, int Samples, long TakenTicks, bool FromPresents = false)
     {
         public double RefreshHz => Stopwatch.Frequency / PeriodTicks;
 
@@ -38,6 +38,9 @@ namespace EmuSen.Serenity
         private int _count, _head;
         private long _lastCount = long.MinValue;
         private bool _counted;
+        private long _samples, _lastGap = long.MinValue / 2;
+        private readonly long[] _inferred = new long[Window];
+        private readonly long[] _deltas = new long[Window];
         private DisplayReading? _reading;
 
         public DisplayReading? Reading => System.Threading.Volatile.Read(ref _reading);
@@ -60,7 +63,9 @@ namespace EmuSen.Serenity
             _counted = true;
             if (msc == _lastCount) return;
             if (msc < _lastCount) Reset();
+            if (_lastCount != long.MinValue && msc - _lastCount > 1) _lastGap = _samples;
             _lastCount = msc;
+            _samples++;
             Add(t, msc, now);
         }
 
@@ -83,6 +88,8 @@ namespace EmuSen.Serenity
         {
             _count = _head = 0;
             _lastCount = long.MinValue;
+            _samples = 0;
+            _lastGap = long.MinValue / 2;
             _counted = false;
             System.Threading.Volatile.Write(ref _reading, null);
         }
@@ -101,7 +108,54 @@ namespace EmuSen.Serenity
             _t[_head] = t; _n[_head] = n;
             _head = (_head + 1) % Window;
             if (_count < Window) _count++;
-            if (_count >= MinimumSamples) System.Threading.Volatile.Write(ref _reading, Fit(_t, _n, _count, _head, _counted, now));
+            if (_count < MinimumSamples) return;
+            // A count that has risen by exactly one at every draw for a whole window counts presents, not refreshes; the refreshes are then read from the times - see §4.87.11.
+            bool presents = _counted && _samples - _lastGap >= Window;
+            if (!presents) { System.Threading.Volatile.Write(ref _reading, Fit(_t, _n, _count, _head, _counted, now)); return; }
+            InferCounts(_t, _count, _head, _inferred, _deltas);
+            DisplayReading? fit = Fit(_t, _inferred, _count, _head, _counted, now);
+            System.Threading.Volatile.Write(ref _reading, fit is null ? null : fit with { FromPresents = true });
+        }
+
+        // Counts for present times that sit on a refresh lattice: the base is the shortest interval that recurs, and each interval is a whole number of it.
+        internal static void InferCounts(long[] times, int count, int head, long[] counts, long[] deltas)
+        {
+            int first = (head - count + times.Length) % times.Length;
+            int m = count - 1;
+            for (int i = 0; i < m; i++) deltas[i] = times[(first + i + 1) % times.Length] - times[(first + i) % times.Length];
+            double baseTicks = BaseInterval(deltas, m);
+            long n = 0;
+            counts[first] = 0;
+            for (int i = 0; i < m; i++)
+            {
+                n += Math.Max(1, (long)Math.Round(deltas[i] / baseTicks));
+                counts[(first + i + 1) % times.Length] = n;
+            }
+        }
+
+        // The median interval over the smallest whole divisor that puts every interval, within the residual, on a multiple of it: two refreshes and the odd one or three is the refresh.
+        internal static double BaseInterval(long[] deltas, int m)
+        {
+            long[] sorted = new long[m];
+            Array.Copy(deltas, sorted, m);
+            Array.Sort(sorted);
+            double median = Math.Max(1, sorted[m / 2]);
+            double[] share = new double[5];
+            for (int divisor = 1; divisor <= 4; divisor++)
+            {
+                double b = median / divisor;
+                int on = 0;
+                for (int i = 0; i < m; i++)
+                {
+                    double steps = sorted[i] / b;
+                    if (steps >= 0.5 && Math.Abs(steps - Math.Round(steps)) <= FixedResidual) on++;
+                }
+                share[divisor] = on / (double)m;
+            }
+            double best = Math.Max(Math.Max(share[1], share[2]), Math.Max(share[3], share[4]));
+            for (int divisor = 1; divisor <= 4; divisor++)
+                if (share[divisor] >= best) return median / divisor;
+            return median;
         }
 
         // Least squares of time on count over the window, and how many samples fall near the line - see §4.87.3.

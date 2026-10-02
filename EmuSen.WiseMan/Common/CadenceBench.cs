@@ -168,3 +168,32 @@ namespace EmuSen.WiseMan.Common
         }
     }
 }
+
+namespace EmuSen.WiseMan.Common
+{
+    // Feeds a recorded trace's vblank samples through DisplayClock and prints what the scheduler would decide, when EMUSEN_REPLAY_TRACE is set.
+    public class DisplayClockReplayProbe
+    {
+        [Fact]
+        public void Replay_a_trace()
+        {
+            string? path = System.Environment.GetEnvironmentVariable("EMUSEN_REPLAY_TRACE");
+            if (string.IsNullOrEmpty(path)) return;
+            double content = double.Parse(System.Environment.GetEnvironmentVariable("EMUSEN_REPLAY_CONTENT") ?? "60.0988", System.Globalization.CultureInfo.InvariantCulture);
+            var clock = new EmuSen.Serenity.DisplayClock();
+            int n = 0, locked = 0, decided = 0;
+            foreach (string line in System.IO.File.ReadLines(path))
+            {
+                if (!line.StartsWith("D,", System.StringComparison.Ordinal)) continue;
+                string[] f = line.Split(',');
+                if (f[4] != "1") continue;
+                clock.ObserveVblank(long.Parse(f[5]), long.Parse(f[6]), long.Parse(f[1]));
+                if (++n % 60 != 0 || clock.Reading is not { } r) continue;
+                var d = EmuSen.Common.FrameScheduler.Decide(content, r, true, true);
+                decided++; if (d.Locked) locked++;
+                if (n % 600 == 0) System.Console.WriteLine(System.FormattableString.Invariant($"[replay] {n}: {r.RefreshHz:F3} Hz variable={r.Variable} presents={r.FromPresents} -> {d.Describe()}"));
+            }
+            System.Console.WriteLine(System.FormattableString.Invariant($"[replay] {path}: locked in {locked} of {decided} readings"));
+        }
+    }
+}

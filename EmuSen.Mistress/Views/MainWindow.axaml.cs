@@ -1239,6 +1239,7 @@ namespace EmuSen.Mistress.Views
 
             // One frame per refresh when the display is close to the core's rate, the core's own rate otherwise - see EmuSen_Settings_Reference.md §4.87.
             var scheduler = new FrameScheduler(GameFrame.Display.Current, Stopwatch.GetTimestamp());
+            if (double.TryParse(Environment.GetEnvironmentVariable("EMUSEN_SYNC_MARGIN_MS"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double marginMs)) scheduler.Margin = TimeSpan.FromMilliseconds(marginMs);
 
             // Counts completed RunFrame calls, not presented frames - see §4.21.
             TimeSpan fpsWindowStart = clock.Elapsed;
@@ -1420,7 +1421,7 @@ namespace EmuSen.Mistress.Views
                         string outside = $" | outside: requests {Ms(requestsTicks):F2} audio {Ms(audioTicks):F2} hand-off {Ms(handOffTicks):F2} sleep+rest {Ms(restTicks):F2}ms";
                         string counters = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms)";
                         string line = $"{counters}{breakdown}{presentation}{outside} | {scheduler.Decision.Describe()}";
-                        PresentationTrace.Note(scheduler.Decision.Describe());
+                        PresentationTrace.Note($"{scheduler.Decision.Describe()}; render timer {RenderTimerRate.Current} fps");
                         Console.WriteLine($"[fps] {line}");
 
                         // The bar shows the frame rate, the frame's cost and its top phases; the whole line is its tooltip (§4.83.6).

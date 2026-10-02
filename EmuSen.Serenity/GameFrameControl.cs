@@ -152,6 +152,37 @@ namespace EmuSen.Serenity
             PresentationTrace.Draw(started, sequence, fresh, sampled, ust, msc, sbc);
         }
 
+        // The render timer's rate while a game's pictures arrive, so one is drawn as it is handed over; 0 leaves the platform's - see EmuSen_Settings_Reference.md §4.87.10.
+        public static int RenderFps { get; set; } = int.TryParse(Environment.GetEnvironmentVariable("EMUSEN_RENDER_FPS"), out int fps) ? fps : DefaultRenderFps;
+        public const int DefaultRenderFps = 1000;
+
+        // A quarter of a second with no picture gives the platform its rate back, so menus over a paused game do not tick at the game's.
+        private static readonly TimeSpan RenderHoldIdle = TimeSpan.FromMilliseconds(250);
+        private static Avalonia.Threading.DispatcherTimer? _renderHoldTimer;
+        private static long _lastHeldPicture;
+        private static int _platformFps;
+
+        private static void HoldRenderRate()
+        {
+            _lastHeldPicture = System.Diagnostics.Stopwatch.GetTimestamp();
+            if (_renderHoldTimer is null)
+            {
+                int before = RenderTimerRate.Current;
+                if (!RenderTimerRate.Hold(RenderFps)) return;
+                _platformFps = before;
+                _renderHoldTimer = new Avalonia.Threading.DispatcherTimer { Interval = RenderHoldIdle };
+                _renderHoldTimer.Tick += (_, _) =>
+                {
+                    if (System.Diagnostics.Stopwatch.GetElapsedTime(_lastHeldPicture) < RenderHoldIdle && GraphicsSettings.SyncToDisplay) return;
+                    _renderHoldTimer!.Stop();
+                    _renderHoldTimer = null;
+                    RenderTimerRate.Hold(_platformFps);
+                };
+                _renderHoldTimer.Start();
+            }
+            else RenderTimerRate.Hold(RenderFps);
+        }
+
         // The refresh this control's draws have seen, for a frontend that paces to it.
         public DisplayClock Display { get; } = new();
 
@@ -168,6 +199,7 @@ namespace EmuSen.Serenity
         // Stores the frame and asks for a repaint; release, if given, is called once with the array when nothing here can read it again - see EmuSen_Serenity.md §2.8.
         public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null, long sequence = 0)
         {
+            if (RenderFps > 0 && GraphicsSettings.SyncToDisplay) HoldRenderRate();
             lock (_offerLock)
             {
                 Offer? previous = _current;

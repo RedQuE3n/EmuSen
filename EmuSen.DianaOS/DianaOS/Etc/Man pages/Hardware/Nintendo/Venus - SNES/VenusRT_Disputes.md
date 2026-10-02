@@ -620,6 +620,11 @@ their data.
   counters), so that cycle does not read the bus.
 - Referee: not read. Mesen's source: none.
 - Conclusion: open. Not a sound-unit rule; left for a CPU-side step with the probe's CPU trace of the fifth case.
+- **Left open at stage 4's close (2026-10-02), with the reason:** the question is how many WMDATA reads the S-CPU
+  makes between a CLC fetched from $217F and the IRQ handler, which no document states; a purpose-written ROM
+  counting them would need a console to be evidence, and `test_irqb`'s own expectation (two) is already the
+  hardware's answer without the mechanism. The next recourse is the referee's 65C816 interrupt sequence, rated
+  real support in `Venus_Referee.md` §0, in a dispute step of its own at a CPU-side stage.
 - Pinned by: `test_irqb`, case 5.
 
 ### D-25. S-SMP: a timer is reset when its CONTROL bit goes from 0 to 1, and a cleared bit only stops it
@@ -663,6 +668,10 @@ their data.
   first stage's rate. Two readings were tried and rejected: the timers' part of a cycle after the access (built
   for D-27; no change here), and bit 0 freezing the first stage (00). Not settled; the referee's read process
   gates stage 2 by bits 0 and 3 alike and does not explain it.
+- **Left open at stage 4's close (2026-10-02), with the reason:** a purpose-written ROM that toggles TEST bit 0 at
+  chosen rates and reads T0OUT would separate the remaining readings only when run on a console; run on Mesen it
+  would measure Mesen's model, which ranks last in §1's order, and none is to hand. The referee's rule for TEST is
+  read and does not produce 04. The ROM itself remains the oracle for a later step.
 - Pinned by: `test_timer_stop2`.
 
 ### D-27. S-SMP: TEST bits 4 to 7 add waitstates to the SPC700's cycles
@@ -706,7 +715,14 @@ their data.
 - Conclusion: open. fullsnes's formula is built first, since it states the partial overflow handling explicitly
   and anomie's comment ("the above 3 wrap at 15 bits") is a simplification of the same structure at half the
   scale; `spc_dsp6` is to decide, and the other formula is tried if it fails on an interpolation case.
-- Pinned by: `spc_dsp6`.
+- **Settled by test ROM, 2026-10-02 (stage 4 step 3).** `spc_dsp6` stops at an unrelated test before its
+  interpolation cases, so each of its 111 tests was run on its own, from a copy of the ROM (kept outside the
+  repository) whose every test block holds that one test; Mesen passes every such copy that VenusRT fails, which
+  checks the method. With fullsnes's formula, "Random/brr before playing", "Random/kon pitch" and "Random/pitch mod"
+  pass their first run; with anomie's (each product shifted by 11, the first three wrapped to 15 bits, the last
+  clamped to 15) all three fail. **fullsnes's formula is the hardware's**, as far as blargg's measurements go; anomie's
+  is a half-scale paraphrase that loses the low bit.
+- Pinned by: `spc_dsp6`, "Random/brr before playing", "Random/kon pitch", "Random/pitch mod".
 
 ### D-29. S-DSP: what a key-on does to the envelope and its hidden value over the start-up samples
 - Opened: 2026-10-02, at stage 4 step 2, by blargg's `spc_dsp6`: every test before it passes, and "Envelope/hidden
@@ -739,5 +755,30 @@ their data.
   eight tests after it pass (measured 2026-10-02); the hidden-value reading already built agrees with the
   referee's. Sustain is now matched on bits 8-10 of the new value, as the referee and anomie's "upper 3 bits of E"
   read it.
-- Pinned by: `spc_dsp6`, "hidden env 0 at kon" to "kon clears independent".
+- **A third rule, measured 2026-10-02 at stage 4 step 3**, from "KON/kon decoding when another kon" (each round
+  printing 0000 five times, FFFE twice, 0000 three times): the key-on sample itself keeps its interpolation
+  position, ring index and block offset, so the sample's own BRR decode still happens ("#0 ... The final pre-KON BRR
+  decode also occurs here", anomie), and they are reset on the first start-up sample. The first new block's filter
+  then reads the ring's physical end as anomie says, which that decode may have filled. The referee's lines already
+  read (925-953) reset the position only on start-up samples, not on the key-on sample, and agree. With it,
+  `spc_dsp6` passes through "KON/pitch at kon", its 33rd test.
+- Pinned by: `spc_dsp6`, "hidden env 0 at kon" to "pitch at kon".
+
+### D-30. S-DSP: the loop address, and the noise's update within cycle 30, as `spc_dsp6`'s single-test runs measure them
+- Opened: 2026-10-02, at stage 4 step 3, by `spc_dsp6`'s tests run one at a time (D-28): "Order/loop addr read in
+  prev sample", "Timing/Voice/V1 srcn.loop", "V2 dir.loop.lsb", "V2 dir.loop.msb" and "Timing/Misc/28 dir" fail, and
+  so do "Order/noise rate flg.1F" and "Order/voice 0 noise".
+- Documents read: anomie's S-DSP document, step S4 ("If necessary, adjust the BRR pointer to the next block, or flag
+  the loop address for loading next step S2 and set ENDX.x in step S7"), and the loop's cycle 30 ("V0:S3c ... Load
+  FLG bits 0-4 and update noise sample if necessary"), which gives no order within the cycle. fullsnes's timing
+  chart reads DIR and the table entry at each voice's S2 (its "VxSRCN/DIR.lsb/msb" slot).
+- Test ROM: the seven tests above. Read literally, anomie's S4 sentence (the loop address loaded at the next
+  sample's S2) fails five of them; taking, at the end of a block whose end flag is set, the loop address the
+  voice's S2 read earlier in the same sample, all five pass ("loop addr read in prev sample" names the rule: the
+  address comes from the sample before the one that plays the loop block). With the noise generator updated before
+  voice 0's step in cycle 30, so that voice 0 uses this sample's noise, the two noise tests pass.
+- Referee: not read. Mesen's source: none.
+- Conclusion: both rules as just stated; measured 2026-10-02 on the seven tests, with none of the tests that passed
+  before failing because of them.
+- Pinned by: the seven tests named above.
 

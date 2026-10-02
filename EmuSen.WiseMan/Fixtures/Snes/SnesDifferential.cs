@@ -9,6 +9,9 @@ namespace EmuSen.WiseMan.Fixtures.Snes
     // The sound's agreement: the loudness envelope's best correlation within a lag, and whether each side is silent.
     public sealed record SnesAudioDiff(double Correlation, int LagWindows, bool FirstSilent, bool SecondSilent);
 
+    // The waveforms' agreement at one rate, second by second: the median and least of Pearson's r at each second's best sample lag, the lags' range, and the median least-squares gain and residual RMS over the first's.
+    public sealed record SnesSampleDiff(double Correlation, double Least, int LagFrom, int LagTo, double Gain, double RelativeError, int Seconds);
+
     // Frame-by-frame differential of two runs - see VenusRT_Native.md §3.4 for what each comparison can and cannot say.
     public static class SnesDifferential
     {
@@ -68,6 +71,57 @@ namespace EmuSen.WiseMan.Fixtures.Snes
                 if (double.IsNaN(best) || r > best) { best = r; bestLag = lag; }
             }
             return new SnesAudioDiff(best, bestLag, sa, sb);
+        }
+
+        // Both runs as mono at `rate` from frame `skipFrames` on, each second compared at its own best lag within maxLag samples, silent seconds left out; see VenusRT_Native.md §23.
+        public static SnesSampleDiff Samples(SnesRun a, SnesRun b, int rate = 32000, int maxLag = 1600, int skipFrames = 60)
+        {
+            double[] x = Resample(a, rate), y = Resample(b, rate);
+            var r = new List<double>();
+            var lags = new List<int>();
+            var gains = new List<double>();
+            var errors = new List<double>();
+            for (int from = Math.Max(skipFrames * rate / 60, maxLag); from + rate + maxLag <= Math.Min(x.Length, y.Length); from += rate)
+            {
+                double best = double.NaN;
+                int bestLag = 0;
+                for (int lag = -maxLag; lag <= maxLag; lag++)
+                {
+                    double sxy = 0, sxx = 0, syy = 0;
+                    for (int i = from; i < from + rate; i++) { double u = x[i], v = y[i + lag]; sxy += u * v; sxx += u * u; syy += v * v; }
+                    double c = sxx == 0 || syy == 0 ? double.NaN : sxy / Math.Sqrt(sxx * syy);
+                    if (!double.IsNaN(c) && (double.IsNaN(best) || Math.Abs(c) > Math.Abs(best))) { best = c; bestLag = lag; }
+                }
+                if (double.IsNaN(best)) continue;
+                double xy = 0, yy = 0, xx = 0;
+                for (int i = from; i < from + rate; i++) { xy += x[i] * y[i + bestLag]; yy += y[i + bestLag] * y[i + bestLag]; xx += x[i] * x[i]; }
+                double gain = xy / yy, err = 0;
+                for (int i = from; i < from + rate; i++) { double e = x[i] - gain * y[i + bestLag]; err += e * e; }
+                r.Add(best); lags.Add(bestLag); gains.Add(gain); errors.Add(Math.Sqrt(err / xx));
+            }
+            static double Median(List<double> v) => v.Count == 0 ? double.NaN : v.Order().ElementAt(v.Count / 2);
+            return r.Count == 0 ? new SnesSampleDiff(double.NaN, double.NaN, 0, 0, double.NaN, double.NaN, 0)
+                : new SnesSampleDiff(Median(r), r.Min(), lags.Min(), lags.Max(), Median(gains), Median(errors), r.Count);
+        }
+
+        // A run's sound as mono (the mean of its two sides) at `rate`, by linear interpolation between its own samples.
+        public static double[] Resample(SnesRun run, int rate)
+        {
+            if (run.AudioRate <= 0) return Array.Empty<double>();
+            int frames = run.Audio.Length / 2;
+            var mono = new double[frames];
+            for (int i = 0; i < frames; i++) mono[i] = (run.Audio[i * 2] + run.Audio[i * 2 + 1]) / 2.0;
+            if (run.AudioRate == rate) return mono;
+            int length = (int)((long)frames * rate / run.AudioRate);
+            var o = new double[length];
+            for (int j = 0; j < length; j++)
+            {
+                double t = (double)j * run.AudioRate / rate;
+                int k = (int)t;
+                double f = t - k;
+                o[j] = k + 1 < frames ? mono[k] * (1 - f) + mono[k + 1] * f : mono[Math.Min(k, frames - 1)];
+            }
+            return o;
         }
 
         public static double[] Envelope(SnesRun run)

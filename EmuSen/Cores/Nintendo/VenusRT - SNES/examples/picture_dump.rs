@@ -7,7 +7,7 @@ fn main() {
     while m.total_frames() < frame {
         m.run_frame();
     }
-    std::fs::write(&a[3], &m.sys.ppu.frame).unwrap();
+    std::fs::write(&a[3], m.sys.ppu.picture()).unwrap();
     let r = &m.sys.ppu.regs;
     println!(
         "inidisp {:02X} obsel {:02X} bgmode {:02X} mosaic {:02X} tm {:02X} ts {:02X} tmw {:02X} w12sel {:02X} w34sel {:02X} wobjsel {:02X} cgwsel {:02X} cgadsub {:02X} setini {:02X}",

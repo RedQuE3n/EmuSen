@@ -436,6 +436,13 @@ their data.
   a valid vertical value replaces BGnVOFS whole. Argued; **no oracle**, so it is built and unmeasured.
 - Pinned by: `offset_per_tile_takes_each_visible_tiles_scroll_from_bg3` in `ppu.rs`, which pins the reading, not
   the hardware.
+- **An oracle found, 2026-10-01, at stage 3 step 5.** lidnariq's `ppubusact` (higan collection) changes BGMODE by
+  HDMA every 32 lines, modes 0 to 6, and its README says "HDMA changes BG3VOFS to get offset-per-tile to be
+  visible". At frame 3600 its mode 2 and mode 4 bands equal Mesen's picture in every pixel; built without
+  offset-per-tile, the same bands differ on 3,294 and 3,300 pixels. So the ROM exercises the rule, and this reading
+  agrees with Mesen's output there (Mesen's output is an observation, not a hardware result; the ROM's author posted
+  bus traces, not a picture). Mode 6's band: 2,295 differing half-pixels without offset-per-tile, 86 with it, in
+  two small clusters; not read further. **Measured against Mesen for modes 2 and 4; open for mode 6's 86.**
 
 ### D-17. DMA: an HDMA run or init on a channel ends a general DMA on that channel where it stands
 - Opened: 2026-10-01, at stage 3 step 4, by `snestest_082506/test_dma` (byuu, 2006-07-27) failing at its test 1. The
@@ -478,4 +485,71 @@ their data.
 - Implemented 2026-10-01. **Measured:** both copies pass (blue backdrop). The eight bytes test 2 stores are the
   console's as its comment lists them, `3F 55 55 00 14 7E 00 00`, and the V counter latched after the DMA is the
   console's `$36`; the H counter is `$D4` against its `$CE`, inside the test's four lines of latitude.
+
+### D-19. Hi-res: colour math reaches the sub screen's half-pixels through the main pixel before them
+- Opened: 2026-10-01, at stage 3 step 5, by the documents before the hi-res code. fullsnes, "BGMODE": "Mode 5/6 don't
+  support screen addition/subtraction"; its "Hires and Pseudo 3-Layer Math" says COLDATA's addition applies to both
+  screens' half-pixels. anomie's register document, "Color Math": "In hires modes, color math is applied to the
+  visible subscreen pixels as well ... look at the previous main-screen pixel ... If no math was applied to that
+  pixel, don't math this subscreen pixel either. If the fixed color was added/subtracted, add/subtract the fixed
+  color. And if a pixel from the subscreen was added/subtracted, add/subtract that main-screen pixel (the original
+  value before math). What happens to the subscreen pixel at the left edge of the screen is unknown"; and for the
+  colour window, "we use the previous main-screen pixel to determine whether the color window effect should be
+  applied to a subscreen pixel".
+- Test ROM: PeterLemon's four `HiColor64PerTileRowPseudoHiRes` ROMs use pseudo-hi-res with the sub screen and
+  colour math; they are the measure, through Mesen's picture.
+- Referee: not read. Mesen's source: none.
+- Conclusion: anomie's rule, which is a procedure where fullsnes has a sentence; the fixed colour's case is common to
+  both. The left edge's sub half-pixel is taken as unmathed and unclipped, his unknown. Argued; the four ROMs'
+  result is recorded when measured.
+- Pinned by: nothing yet.
+- Measured 2026-10-01, at stage 3 step 5, on PeterLemon's four pseudo-hi-res ROMs with the sub screen added and
+  halved (CGADSUB `$61`). The rule as built, anomie's sentence read literally (the sub half-pixel mathed with "that
+  main-screen pixel (the original value before math)"), differs from Mesen's picture on 2,691 to 27,099 of each
+  ROM's half-pixels. A variant tried and not kept: the sub half-pixel mathed with the main pixel before it *after*
+  its math, and the left edge's taken as mathed with black, equals Mesen's picture in every half-pixel of all four.
+  The two readings differ only in that operand. anomie's words favour the first; the sentence can be parsed for the
+  second ("the original value before math" read as the sub pixel's own). The built rule is kept, being the
+  documents', and the entry is **open**: it is the first case in which the documents give a rule and Mesen's
+  output disagrees with it, and the next source in the order of recourse is the SNES_MiSTer RTL, in a dispute step
+  of its own.
+
+### D-20. IRQ: a point past its line's end is not carried over the short line's end or a frame's
+- Opened: 2026-10-01, at stage 3 step 5, by `nmi_irq/demo_irq` (and `blobs/demo_irqtest`) failing at test 6's first
+  check, with interlace now built. With HTIME 339 the flag's point, anomie's 14+4×339 and the long dots, is past the
+  line's 1,364 clocks, and VenusRT raises the IRQ in the next line for the line before; it did so across the short
+  line and across the frame's end as well.
+- Documents read: anomie's timing document, "Interrupts": "no IRQ will trigger for dot 153 on the short scanline in
+  non-interlace mode, and no IRQ will trigger for dot 153 on the last scanline of any frame"; nothing on dot 339.
+  fullsnes, "Long and Short Scanlines": the short line has 340 dots of four clocks.
+- Test ROM: `demo_irq.asm`'s test 6 and its comment, the author's console results, as lists. Unlatchable: V=240,
+  H=339 without interlace on the frame with the field flag set; V=261, H=339 without interlace; V=262 without
+  interlace; H=340; V=263 with interlace; V=262 with interlace on the frame with the flag set. Latchable: V=240,
+  H=339 with interlace on the flagged frame; V=262 with interlace; H=339 on an ordinary line; V=261 without
+  interlace.
+- Referee: not read. Mesen's source: none.
+- Conclusion: the test's lists. A point past its line's end raises its IRQ in the next line, except after the short
+  line and after a frame's last line, where it is lost; the line counts are interlace's (263 lines on frames with
+  the flag clear). anomie's two dot-153 exclusions stay beside it. Argued from the test ROM's console results.
+- Pinned by: `demo_irq` in the corpus.
+- Implemented 2026-10-01, after interlace's line count. **Measured:** `demo_irq` and `blobs/demo_irqtest` pass all
+  six tests (blue backdrop); they stopped at test 6's first check. Settled, measured on the test ROM.
+
+### D-21. IRQ: enabling V-IRQ on its line, after its point, raises it at once
+- Opened: 2026-10-01, at stage 3 step 5, by `blobs/test_irq4200` failing. The ROM (lost source, disassembled by
+  Jonas Quinn) sets VTIME 1 and HTIME 0, then HTIME `$152`, waits into the line, and for ten combinations writes
+  `$4200` four times with a disabling write between, recording each IRQ taken; it compares the record with a table.
+- Documents read: anomie's timing document, "Interrupts": V-IRQ at "V=VTIME, H=~2.5", and that "when enabling IRQs,
+  the IRQ output will go low even if the enable write occurs at the exact cycle when the IRQ is scheduled to
+  trigger". fullsnes, "H/V Events": "H=2.5, V=VTIME V-IRQ". Neither says what an enable later in the line does.
+- Test ROM: the table. With either HTIME: writing `$20` (V-IRQ) raises an IRQ every time it is written after a
+  disable, four times for `$20,$20,$20,$20` and twice wherever it is two of the four; writing `$10` (H-IRQ) or `$30`
+  (HV-IRQ) past their point raises none.
+- Referee: not read. Mesen's source: none.
+- Conclusion: the V comparator alone is a level across its line: a `$4200` write that selects V-IRQ from another
+  setting while V=VTIME, past the line's point, sets the flag at that write. H-IRQ and HV-IRQ stay points. Argued
+  from the test's table; the table does not say what a `$20` written over `$20` does, and it is left raising nothing.
+- Pinned by: `test_irq4200` in the corpus.
+- Implemented 2026-10-01. **Measured:** `test_irq4200` passes (blue backdrop), its record equal to the table; the
+  other backdrop-graded ROMs are unchanged by it. Settled for the table's cases.
 

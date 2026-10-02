@@ -57,6 +57,27 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(SnesOutcome.NoDump, SnesTestRomGrader.Grade(text, new SnesRun("none", Array.Empty<SnesSnapshot>(), 0, Array.Empty<short>())).Outcome);
         }
 
+        // A 512x478 reference frame holds each line twice; a 512-wide picture is compared with it column for column, a 256-wide one pixel for pair.
+        [Fact]
+        public void A_hi_res_reference_frame_is_compared_line_for_doubled_line()
+        {
+            var wide = new ushort[512 * 478];
+            for (int y = 0; y < 478; y++) for (int x = 0; x < 512; x++) wide[y * 512 + x] = (ushort)((y / 2 - 7) * 600 + x & 0x7FFF);
+            var ours = new ushort[512 * 224];
+            for (int y = 0; y < 224; y++) for (int x = 0; x < 512; x++) ours[y * 512 + x] = (ushort)(y * 600 + x & 0x7FFF);
+            Assert.Equal((512 * 224, 0), SnesDifferential.Pictures(new SnesPicture(512, 224, ours), new SnesPicture(512, 478, wide), SnesDifferential.MesenRowOffset));
+            ours[5 * 512 + 9] ^= 1;
+            Assert.Equal((512 * 224, 1), SnesDifferential.Pictures(new SnesPicture(512, 224, ours), new SnesPicture(512, 478, wide), SnesDifferential.MesenRowOffset));
+            var narrow = new ushort[256 * 224];
+            for (int y = 0; y < 224; y++) for (int x = 0; x < 256; x++) narrow[y * 256 + x] = (ushort)(y * 600 + 2 * x & 0x7FFF);
+            Assert.Equal((512 * 224, 256 * 224), SnesDifferential.Pictures(new SnesPicture(256, 224, narrow), new SnesPicture(512, 478, wide), SnesDifferential.MesenRowOffset));
+            var tall = new ushort[512 * 448];
+            for (int y = 0; y < 448; y++) for (int x = 0; x < 512; x++) tall[y * 512 + x] = (ushort)((y / 2) * 600 + x & 0x7FFF);
+            Assert.Equal((512 * 448, 0), SnesDifferential.Pictures(new SnesPicture(512, 448, tall), new SnesPicture(512, 478, wide), SnesDifferential.MesenRowOffset));
+            tall[3 * 512] ^= 1;
+            Assert.Equal((512 * 448, 1), SnesDifferential.Pictures(new SnesPicture(512, 448, tall), new SnesPicture(512, 478, wide), SnesDifferential.MesenRowOffset));
+        }
+
         // byuu's ROMs pass on a blue backdrop and fail on a red one, where their folder's source writes both colours.
         [Fact]
         public void A_backdrop_verdict_counts_only_where_the_source_writes_it()

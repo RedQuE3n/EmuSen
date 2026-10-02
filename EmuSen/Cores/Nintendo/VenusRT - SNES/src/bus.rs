@@ -40,6 +40,8 @@ pub struct Timing {
     /// The line clock of the next thing a cycle must stop for: an event of this line, or its end. A cycle that ends
     /// before it only moves the clock (VenusRT_Plan.md §5.2's scheduler). Zero until first scheduled; not in the state.
     pub next_event: u16,
+    /// SETINI bit 0, which the line count turns on; the register is the PPU's, so this is not in the state.
+    pub interlace: bool,
 }
 
 /// Where in a line the H comparator fires for an HTIME: 14 clocks past the dot, the two long dots counted, and HTIME
@@ -64,11 +66,12 @@ impl Timing {
     /// 1364 master clocks, but 1360 for line 240 of field 1 at 60 Hz without interlace.
     #[inline]
     pub fn line_length(&self) -> u16 {
-        if !self.pal && self.field && self.line == 240 { LINE - 4 } else { LINE }
+        if !self.pal && !self.interlace && self.field && self.line == 240 { LINE - 4 } else { LINE }
     }
 
     pub fn lines(&self) -> u16 {
-        if self.pal { 312 } else { 262 }
+        // Interlaced frames with the field flag clear have a line more (anomie's timing document, "Clocks & Refresh").
+        (if self.pal { 312 } else { 262 }) + (self.interlace && !self.field) as u16
     }
 
     #[inline]
@@ -105,7 +108,11 @@ impl Timing {
             return;
         }
         let at = irq_line_point(h);
-        let (at, v) = if at >= len { (at - len, self.line.checked_sub(1).unwrap_or(self.lines() - 1)) } else { (at, self.line) };
+        // A point past its line's end falls in the next line, but not over a frame's end or the short line's (D-20).
+        if at >= len && (self.line == 0 || (self.line == 241 && !self.pal && !self.interlace && self.field)) {
+            return;
+        }
+        let (at, v) = if at >= len { (at - len, self.line - 1) } else { (at, self.line) };
         let line_matches = self.irq_mode == 1 || v == self.vtime;
         if line_matches && from < at && at <= to {
             self.irq_flag = true;
@@ -344,6 +351,7 @@ impl System {
                 0x2100..=0x213F => {
                     let beam = self.beam();
                     self.ppu.write(offset as u8, value, beam);
+                    self.timing.interlace = self.ppu.regs[0x33] & 1 != 0;
                 }
                 0x4201 => {
                     // Bit 7 falling latches the counters, as a read of $2137 does (fullsnes, OPHCT).

@@ -10,7 +10,7 @@ fn main() {
     while m.total_frames() < frames {
         m.run_frame();
         let mut h = std::collections::hash_map::DefaultHasher::new();
-        m.sys.ppu.frame.hash(&mut h);
+        m.sys.ppu.picture().hash(&mut h);
         out.extend(h.finish().to_le_bytes());
     }
     std::fs::write(&a[3], out).unwrap();

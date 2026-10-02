@@ -202,6 +202,10 @@ namespace EmuSen.WiseMan.Fixtures.Snes
                 {
                     var (w, h) = sizes[i];
                     byte[] raw = File.ReadAllBytes(screen);
+                    // A hi-res or interlaced frame fills the probe's whole 512x478 buffer, every line twice when not interlaced; its log still says 256x239.
+                    bool wide = false;
+                    for (int j = w * h * 2; j + 1 < raw.Length && !wide; j += 2) wide = ((raw[j] | raw[j + 1] << 8) & 0x7FFF) != 0;
+                    if (wide) (w, h) = (512, 478);
                     var px = new ushort[w * h];
                     for (int j = 0; j < px.Length && j * 2 + 1 < raw.Length; j++) px[j] = (ushort)(raw[j * 2] | raw[j * 2 + 1] << 8);
                     pic = new SnesPicture(w, h, px);

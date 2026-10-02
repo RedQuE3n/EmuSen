@@ -436,6 +436,13 @@ their data.
   a valid vertical value replaces BGnVOFS whole. Argued; **no oracle**, so it is built and unmeasured.
 - Pinned by: `offset_per_tile_takes_each_visible_tiles_scroll_from_bg3` in `ppu.rs`, which pins the reading, not
   the hardware.
+- **An oracle found, 2026-10-01, at stage 3 step 5.** lidnariq's `ppubusact` (higan collection) changes BGMODE by
+  HDMA every 32 lines, modes 0 to 6, and its README says "HDMA changes BG3VOFS to get offset-per-tile to be
+  visible". At frame 3600 its mode 2 and mode 4 bands equal Mesen's picture in every pixel; built without
+  offset-per-tile, the same bands differ on 3,294 and 3,300 pixels. So the ROM exercises the rule, and this reading
+  agrees with Mesen's output there (Mesen's output is an observation, not a hardware result; the ROM's author posted
+  bus traces, not a picture). Mode 6's band: 2,295 differing half-pixels without offset-per-tile, 86 with it, in
+  two small clusters; not read further. **Measured against Mesen for modes 2 and 4; open for mode 6's 86.**
 
 ### D-17. DMA: an HDMA run or init on a channel ends a general DMA on that channel where it stands
 - Opened: 2026-10-01, at stage 3 step 4, by `snestest_082506/test_dma` (byuu, 2006-07-27) failing at its test 1. The
@@ -496,6 +503,16 @@ their data.
   both. The left edge's sub half-pixel is taken as unmathed and unclipped, his unknown. Argued; the four ROMs'
   result is recorded when measured.
 - Pinned by: nothing yet.
+- Measured 2026-10-01, at stage 3 step 5, on PeterLemon's four pseudo-hi-res ROMs with the sub screen added and
+  halved (CGADSUB `$61`). The rule as built, anomie's sentence read literally (the sub half-pixel mathed with "that
+  main-screen pixel (the original value before math)"), differs from Mesen's picture on 2,691 to 27,099 of each
+  ROM's half-pixels. A variant tried and not kept: the sub half-pixel mathed with the main pixel before it *after*
+  its math, and the left edge's taken as mathed with black, equals Mesen's picture in every half-pixel of all four.
+  The two readings differ only in that operand. anomie's words favour the first; the sentence can be parsed for the
+  second ("the original value before math" read as the sub pixel's own). The built rule is kept, being the
+  documents', and the entry is **open**: it is the first case in which the documents give a rule and Mesen's
+  output disagrees with it, and the next source in the order of recourse is the SNES_MiSTer RTL, in a dispute step
+  of its own.
 
 ### D-20. IRQ: a point past its line's end is not carried over the short line's end or a frame's
 - Opened: 2026-10-01, at stage 3 step 5, by `nmi_irq/demo_irq` (and `blobs/demo_irqtest`) failing at test 6's first

@@ -1990,3 +1990,118 @@ stereo into the native interface's audio, which the exports already carry. **Ora
 audio against Mesen's through the probe's sample dump on the four games and the 240p suite's sound tests. **Also
 owed:** D-27's waitstates and timer step (then `test_timer_stop2` again under D-26), and the cost against §5.5's
 0.4 ms left. D-24 belongs to a CPU step.
+
+---
+
+## 22. Stage 4, step 2: the S-DSP, D-27, and the sound against Mesen's (2026-10-02)
+
+### 22.1 What it built
+
+`apu/dsp.rs`, written from anomie's S-DSP document (romhacking.net 191, revision 1212) and fullsnes's "SNES APU
+DSP" chapters, in place of §21's stand-in. The DSP takes one of its 32 steps in each 1.024 MHz cycle, as the plan's
+§5.3 recommends, and each step does what anomie's sample loop places there: the voices' nine steps interleaved,
+the echo's reads at 22 and 23, the FIR coefficients at 22 to 25, the outputs at 26 and 27, NON, EON and DIR at 28,
+the counter, EDL, ESA and the left echo write at 29, the right echo write, the noise and the KON/KOFF poll at 30.
+
+- **BRR:** 9-byte blocks decoded four samples at a time into a 12-sample ring of three groups, the four filters as
+  both documents give them, clamped to 16 bits and clipped to 15; shifts 13 to 15 as fullsnes and anomie agree. The
+  end and loop flags set ENDX, take the loop address at the next sample's S2, and an end without loop releases the
+  voice with its envelope at zero.
+- **Interpolation:** the 512-entry table both documents list (identical, checked by script), and fullsnes's
+  rounding, since the two documents' formulas differ (D-28, open: no oracle in this step separated them).
+- **Envelopes:** ADSR, the four GAIN modes and direct gain, run every sample on the global counter with anomie's
+  rates and offsets, the new value computed every sample and applied when the counter fires; the phase changes and
+  the bent increase's memory follow the new value either way (anomie's four-point list).
+- **Key-on:** the five start-up samples of anomie's "BRR DECODING", the three groups decoded at the second to fourth;
+  KON and KOFF taken on the poll's samples only, every other one, and ENVX showing the envelope applied to the
+  sample before its update (D-29).
+- **Noise, pitch modulation, volumes, echo:** the 15-bit noise generator, PMON from the previous voice's output, the
+  voice volumes summed into the main and echo pairs with 16-bit clamps after each addition, MVOL and EVOL, the FIR
+  over eight samples with only its last addition saturating, EFB, the echo ring by ESA and EDL with EDL applied at
+  offset 0, and FLG's reset, mute and echo-write bits. FLG acts as $E0 at power-on.
+- **Output:** the stereo pair at cycles 26 and 27 into the machine's sample queue, 32 kHz, before fullsnes's
+  "final phase inversion", which it attributes to the post-amplifier outside the chip.
+
+The DSP's state beyond its registers is packed into a fixed 568-byte block beside them; the state is version 13
+with D-27's prescalers.
+
+### 22.2 D-27, settled: TEST's speed bits
+
+The 2010 ROMs' counts are explained exactly by one rule, the referee's (read under D-26) and blargg's own notes
+beside the ROMs: the timers' first stage advances by 2^(bits 7-6) + 2·2^(bits 5-4) each SPC700 cycle and ticks at
+384 (timers 0 and 1) and 48 (timer 2). And `test_speed`, as Mesen prints it, shows bits 6-7 stretching every SPC700
+cycle to 1, 2, 5 or 10 of the 1.024 MHz cycles and bits 4-5 slowing nothing, which is fullsnes's 0/1/4/9 applied to
+every cycle, not its RAM-versus-I/O split. Both are built; the timers' part of a cycle now follows the SPC700's
+access in it. `test_timer_speed` and `test_timer_speed2` pass; `test_timer_speed_2`, `test_timer_speed3` and
+`test_speed` print Mesen's counts to within one. **D-26 is not explained by it:** `test_timer_stop2` still prints 00
+against 04, and the log of its accesses (TEST alternating $0B and $0A every four cycles for about 110 cycles)
+shows that 04 cannot come from the 8 kHz first stage at all. The prediction of §21.6 and D-26, that D-27 would
+settle it, is retired.
+
+### 22.3 The oracles (measured 2026-10-02)
+
+**blargg's `spc_dsp6`:** 21 of its 104 tests pass in order, the eight echo tests, the seven envelope tests and six
+of the key-on tests, and it stops at "KON/kon decoding when another kon" (each round prints 0000 five times, FFFE
+twice and 0000 three times, whichever round). Two rules came from it on the way, D-29's. The rest of the list
+(more key-on cases, the "Misc", "Order", "Random" and "Timing" groups) is not reached, so this is a lower bound, not a
+grade.
+
+**The sound against Mesen's**, by the differential's loudness envelope (sixtieth-of-a-second windows, Pearson's r at
+the best lag within half a second), over 600 frames of each game, with a column added to the games table:
+
+| Game | r | Lag | Pictures equal at 600 |
+|---|---|---|---|
+| A Link to the Past | 0.992 | 0 | yes |
+| Donkey Kong Country | 0.997 | 0 | yes |
+| Super Metroid | 0.997 | 0 | yes |
+| Super Mario World | 0.986 | 0 | yes |
+| the 240p suite's menu | — | — | silent in both |
+
+The four games' loudness follows Mesen's frame for frame with no lag. The envelope measures loudness, not the
+waveform: a difference in a sample's low bits, or a phase inversion, is invisible to it.
+
+**The corpus**, after both: **76 of the 117 ROMs Mesen passes now pass** (74 at §21), the two timer-speed ROMs the
+gain; `spc_dsp6` moves from Incomplete to Failed; nothing that passed fails. The pictures, the games' tables and
+the skip-versus-draw check (all 304 images, 600 frames, the DSP's state included) are as at §21.
+
+### 22.4 Disputes
+
+D-28 (interpolation's rounding) logged before the code, open. D-29 (key-on and the hidden envelope) opened by
+`spc_dsp6`, the referee's DSP read for that rule (`rtl/DSP.vhd` lines 925-1000, 1075-1090, 1108-1120 and
+1185-1270), and settled for its two rules by measurement. D-27 settled by measurement; D-26 measured again and left
+open. Each entry lists what was read.
+
+### 22.5 The clone check (measured 2026-10-02)
+
+23 files against Mesen's 164. **One pair passes the threshold and two tables are shared, and all three are the
+documented constants:** `apu/dsp.rs` shares 115 fingerprints with Mesen's `DspInterpolation.h`, and the check's table
+runs are the 512-entry Gaussian table (in both fullsnes and anomie) and the 32 counter rates (anomie's
+`counter_rates`). Run again on `dsp.rs` with those two tables blanked, it reports no table and a largest pair of 8
+fingerprints, `DspTypes.h`, the register names fullsnes gives. Three new names are Mesen's too: `brroffset`,
+`echooffset` and `echolength`, anomie's "echo offset" and the plain names of the BRR pointer's offset and the
+ring's length.
+
+### 22.6 The cost (measured 2026-10-02)
+
+Under the timing lock, load 3.6 falling to 2.3 (higher than §21's 1.1, so the absolute figures are a little high),
+best of three over 600 frames; §21's binary against this step's, and `apu_cost`, the sound unit alone:
+
+| ROM | Sound unit alone, §21 / now | Skipped, §21 / now | Drawn, §21 / now |
+|---|---|---|---|
+| the 240p menu | 0.050 / 0.173 | 0.367 / 0.507 | 1.405 / 1.543 |
+| A Link to the Past | 0.059 / 0.234 | 0.550 / 0.690 | 1.186 / 1.320 |
+| Super Metroid | 0.055 / 0.199 | 0.623 / 0.738 | 1.140 / 1.250 |
+| Super Mario World | 0.060 / 0.230 | 0.561 / 0.694 | 1.596 / 1.729 |
+| Donkey Kong Country | 0.053 / 0.182 | 0.548 / 0.701 | 1.651 / 1.782 |
+
+**The SPC700 and the DSP together cost 0.17 to 0.23 ms a frame alone, and 0.11 to 0.15 ms more than §21 in the
+machine**, against §5.5's 0.5 ms for the two. Every bench game draws at 1.25 to 1.78 ms a frame, inside P1's 2.8 ms
+with the sound unit complete. No tuning was done.
+
+### 22.7 What is left of stage 4
+
+- `spc_dsp6` beyond its 22nd test, one case at a time, starting with "kon decoding when another kon".
+- D-28, which a later `spc_dsp6` case or an audio sample comparison against Mesen's (not its envelope) can decide.
+- D-26 and D-24, the one SPC700-side and one CPU-side case left from step 1.
+- The sound's waveform against Mesen's at the sample level, which the envelope does not measure; the probe's WAV is
+  48 kHz, so it needs the resampler §5.3 describes, or a 32 kHz dump.

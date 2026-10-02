@@ -1363,7 +1363,7 @@ mod tests {
         let mut p = Ppu::default();
         let mut seed = 0x1234_5678u32;
         for _ in 0..200 {
-            for r in [0x23usize, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B] {
+            for r in 0x23usize..0x2C {
                 seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
                 p.regs[r] = (seed >> 16) as u8;
             }

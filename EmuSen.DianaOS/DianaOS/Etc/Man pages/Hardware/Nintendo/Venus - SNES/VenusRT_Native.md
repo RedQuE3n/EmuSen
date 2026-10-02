@@ -1598,3 +1598,117 @@ choice), mode 6's offset-per-tile, and the runner's comparison of a 512-wide pic
 (the HDMA start, from the first's header and table), `test_irq4200`, and the compositor's masks if that decision
 comes.
 
+---
+
+## 19. Stage 3, step 5: hi-res, interlace, and four interrupt and DMA rules (2026-10-01)
+
+### 19.1 What it built
+
+- **Hi-res.** Modes 5 and 6 take tiles 16 half-pixels wide (two tiles side by side whatever the size bit), the even
+  half-pixels to the sub screen's line buffer and the odd to the main's; SETINI bit 3's pseudo-hi-res shows the sub
+  screen's pixel left of the main's in any mode; both screens show colour 0 behind them (fullsnes, "Hires Notes");
+  the sub half-pixel is clipped and mathed as the main pixel before it was (D-19); mode 6 has offset-per-tile
+  through the same scroll function as modes 2 and 4; in true hi-res a mosaic block's first half-pixel fills both
+  screens'. Mode 5 and 6's priority chart is mode 2's and mode 6's own.
+- **The picture is 256 or 512 wide, and 224 or 448 high, by the frame.** Lines are drawn 512 wide into a canvas,
+  a low-res pixel written twice, and the frame is presented at the start of V-Blank: 512 wide if a line of it was
+  hi-res, 448 high with the two fields woven if a line was interlaced hi-res, else the 256-wide picture exactly.
+  The interface's frame info reports the size; no export changed. A frame a ROM turns hi-res for some lines is 512
+  wide for all of them, its low-res lines doubled, which is how the reference shows such a frame too.
+- **Interlace.** SETINI bit 0 gives frames with the field flag clear a 263rd line and takes away the short line
+  (anomie's timing document); modes 5 and 6 then draw the even or odd half-lines by the field, a mosaic block
+  covering both; SETINI bit 1 gives the sprites every other row at half height. The line count is derived from the
+  register, so the state stays version 9.
+- **Four rules from byuu's tests** (§19.4): D-20 and D-21, and the runner's reading of a hi-res reference frame.
+
+### 19.2 The runner and the reference's hi-res frames
+
+The probe's screen buffer is always 512×478 (its glue reports 256×239 in the log whatever the frame). A low-res
+frame fills the first 256×239 of it; a hi-res frame fills all of it, every line twice, and an interlaced one with
+the two fields. The runner now tells them apart by whether anything lies past the first 256×239, and compares a
+512-wide picture with it column for column on every other row, a 256-wide one pixel for pair, and a 448-high one
+row for row with the offset doubled. A test pins the three.
+
+### 19.3 The picture oracles (measured 2026-10-01)
+
+- **PeterLemon's 47 PPU ROMs at frame 300: 34 equal to Mesen** (25 at §18). Gained: the seven interlaced mode 5
+  ROMs (`InterlaceFont`, `MosaicMode5`, `InterlaceMoogle`, `InterlaceScroll`, `InterlaceMystHDMA`,
+  `InterlaceSimpsonsHDMA` and `InterlaceRPG`, every pixel of 512×448), and two of the four pseudo-hi-res ROMs
+  equal in their main-screen half-pixels and differing only where D-19's operand matters, which leaves them on the
+  differing list. The four pseudo-hi-res ROMs differ on 2,691 to 27,099 half-pixels, all D-19's (with the variant
+  it records they equal Mesen in every half-pixel). Still different besides: mode 7's four, the five
+  `HiColor128PerTileRow` ROMs (§18.2), `RedSpace9BitHDMA` (D-7) and `8x8BGMap8BPP32x32` (five frames apart, §18.2).
+- **An offset-per-tile oracle exists after all**: lidnariq's `ppubusact` switches modes every 32 lines and makes
+  offset-per-tile visible by HDMA on BG3VOFS. Its mode 2 and mode 4 bands equal Mesen's in every pixel, and differ
+  on 3,294 and 3,300 without offset-per-tile; its mode 6 band differs on 86 half-pixels (2,295 without). D-16 is
+  measured for modes 2 and 4. No commercial game in the bench reaches an offset-per-tile scene yet.
+- **The corpus**, 295 rows: pictures equal on **173**, from 169, none lost: `SplitScreen` (interlaced mode 5) and
+  the three ROMs of §19.4. CGRAM equal on 278 (275). VenusRT passes **55** of Mesen's 117 self-grading ROMs (52).
+- **Modes 0 to 4 untouched by the canvas**: the frame hashes of all 304 images to frame 3600, against §18's, are
+  identical on 299; the five that differ are §18.4's three DMA ROMs (whose rules came after §18's hashes),
+  `ppubusact` and `SplitScreen`. The skip check passes on all 304.
+
+### 19.4 The backdrop failures, continued (measured 2026-10-01)
+
+| ROM | Now | Rule |
+|---|---|---|
+| `nmi_irq/demo_irq`, `blobs/demo_irqtest` | **pass** (stopped at test 6) | D-20: an IRQ point past its line's end is lost over the short line's end and a frame's, with interlace's line counts |
+| `blobs/test_irq4200` | **passes** | D-21: V-IRQ selected on its own line, past its point, is raised by the `$4200` write; its record equals the stored table |
+| `blobs/test_hdmasync` | stops at `$85` | the HDMA start at H=1100 plus the DMA counter's phase, from its header; not built |
+| `blobs/test_hdmatiming` | stops at `$51` | not read |
+| both `test_hdma` | test 1 | D-14's open init timing |
+| `blobs/test_irqb` | test 7 | the sound CPU (stage 4) |
+| `blobs/irq`, `blobs/nmi` | `$2D`, `$1E` | no source or disassembly |
+
+Of the 25 backdrop-graded ROMs VenusRT passes **18** (15 at §18; 21 of the wider 28-ROM list of §16).
+
+### 19.5 The cost (measured 2026-10-01)
+
+`frame_cost`, §18's binary and this step's in turn, best of three under the lock, load 2.7 falling to 2.3 (above
+§18's 1.75, so the absolute figures are a little high); the picture's share, drawn less skipped:
+
+| ROM | §18 | Now |
+|---|---|---|
+| gilyon `cputest-full` | 0.98 | 1.12 |
+| the 240p menu | 1.01 | 1.18 |
+| `Rings` | 0.98 | 1.21 |
+| `object-dropout-test` | 0.82 | 1.00 |
+| A Link to the Past | 0.86 | 1.00 |
+| Super Metroid | 0.54 | 0.69 |
+| `8x8BGMap8BPP64x64` | 0.92 | 1.14 |
+| `MosaicMode3` | 0.92 | 1.13 |
+| `HiColor64PerTileRowPseudoHiRes` (pseudo-hi-res, sub screen) | 1.53 (drawn low-res) | 2.45 |
+| `InterlaceRPG` (mode 5, interlace) | 0.65 (backdrop only) | 2.07 |
+
+**The canvas costs every ROM 0.14 to 0.23 ms**: each pixel is written twice into a 512-wide line and the frame is
+copied out at V-Blank. **A hi-res line costs about twice a low-res one**, its sub half-pixel being a second
+priority walk and a second math. Against §5.5's 1.5 ms for the PPU: low-res modes 0 to 4 now take 1.0 to 1.2 ms of
+picture, hi-res 2.0 to 2.5. The overrun §15.9 predicted is here for hi-res; it is recorded, not tuned, as decided.
+The compositor's per-pixel structure, whose rework awaits a decision, is most of both figures. Writing low-res
+frames straight to a 256-wide picture, and doubling only when a hi-res line appears, would take back most of the
+canvas's share; that is a structural choice of the same kind, recorded here and not built.
+
+### 19.6 Disputes
+
+D-19 (hi-res colour math: anomie's rule built, Mesen's picture equal to a variant; open for the MiSTer referee);
+D-20 and D-21 (settled by their test ROMs); D-16 measured for modes 2 and 4.
+
+### 19.7 The clone check (measured 2026-10-01)
+
+18 files against Mesen's 164: no pair at 12 fingerprints, no shared run of literals, the largest pair below the
+threshold still 4 (`cpu/mod.rs`), `ppu.rs` sharing none. Two new names, `objinterlace` (anomie's "OBJ Interlace")
+and `tilerow`, a plain one.
+
+### 19.8 The interface, again
+
+`advance`'s stopping rule (§18.7) is unchanged and still recorded: a DMA longer than a frame ends one call two
+frames on. The picture's size now varies by frame within the present frame info, as the stable API will want.
+
+### 19.9 The next step
+
+**Mode 7**: the matrix and its centre, the screen flips, the playing field's outside (wrap, transparent, tile 0),
+EXTBG's BG2 with its priority bit, direct colour, mosaic's odd case, and mode 7's write-twice registers and the
+multiplier at `$2134`; its oracles PeterLemon's four mode 7 ROMs, `StarWars` and the games' mode 7 frames (Super
+Metroid's title). Beside it: D-19 as a referee dispute step (the SNES_MiSTer RTL), mode 6's 86 half-pixels in
+`ppubusact`, `test_hdmasync`'s HDMA start, and the canvas and compositor costs if those decisions come.
+

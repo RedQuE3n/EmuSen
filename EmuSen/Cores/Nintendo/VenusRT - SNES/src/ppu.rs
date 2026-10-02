@@ -67,6 +67,9 @@ pub struct Ppu {
     pub before: Mix,
     /// COLDATA's fixed colour, as red, green and blue.
     pub fixed: [u8; 3],
+    /// Mode 7's matrix A to D, centre, and scroll as written through the shared byte M7_old (fullsnes, "M7xx").
+    pub m7: [u16; 8],
+    pub m7_old: u8,
     /// Mosaic's row within its block and the block's height, taken when a block ends (D-15).
     pub mosaic_row: u8,
     pub mosaic_size: u8,
@@ -118,6 +121,8 @@ impl Default for Ppu {
             bg_sub_line: Box::new([[0; WIDTH]; 2]),
             before: Mix::default(),
             fixed: [0; 3],
+            m7: [0; 8],
+            m7_old: 0,
             mosaic_row: 0,
             mosaic_size: 1,
         }
@@ -151,14 +156,15 @@ const OBJ: usize = 4;
 const MODE0: [(usize, u16); 12] = [(OBJ, 3), (0, 1), (1, 1), (OBJ, 2), (0, 0), (1, 0), (OBJ, 1), (2, 1), (3, 1), (OBJ, 0), (2, 0), (3, 0)];
 const MODE1: [(usize, u16); 10] = [(OBJ, 3), (0, 1), (1, 1), (OBJ, 2), (0, 0), (1, 0), (OBJ, 1), (2, 1), (OBJ, 0), (2, 0)];
 const MODE1_BG3_HIGH: [(usize, u16); 10] = [(2, 1), (OBJ, 3), (0, 1), (1, 1), (OBJ, 2), (0, 0), (1, 0), (OBJ, 1), (OBJ, 0), (2, 0)];
-/// The modes whose backgrounds are later steps': the sprites alone.
-const OBJ_ONLY: [(usize, u16); 4] = [(OBJ, 3), (OBJ, 2), (OBJ, 1), (OBJ, 0)];
 /// Modes 2, 3 and 4: two backgrounds, each priority of BG2 behind BG1's.
 const MODE2: [(usize, u16); 8] = [(OBJ, 3), (0, 1), (OBJ, 2), (1, 1), (OBJ, 1), (0, 0), (OBJ, 0), (1, 0)];
 /// Bits a pixel of each background has, by mode; 0 where the mode has no such background or a later step draws it.
 const DEPTHS: [[u8; 4]; 8] = [[2, 2, 2, 2], [4, 4, 2, 0], [4, 4, 0, 0], [8, 4, 0, 0], [8, 2, 0, 0], [4, 2, 0, 0], [4, 0, 0, 0], [0; 4]];
 /// Mode 6: one background.
 const MODE6: [(usize, u16); 6] = [(OBJ, 3), (0, 1), (OBJ, 2), (OBJ, 1), (0, 0), (OBJ, 0)];
+/// Mode 7, and with EXTBG its BG2 with a priority bit per pixel (anomie, "Mode 7").
+const MODE7: [(usize, u16); 5] = [(OBJ, 3), (OBJ, 2), (OBJ, 1), (0, 0), (OBJ, 0)];
+const MODE7_EXTBG: [(usize, u16); 7] = [(OBJ, 3), (OBJ, 2), (1, 1), (OBJ, 1), (0, 0), (OBJ, 0), (1, 0)];
 /// A line-buffer entry whose low 8 bits are a direct colour and bits 10-12 its palette bits, not a CGRAM index.
 const DIRECT: u16 = 0x4000;
 
@@ -242,7 +248,16 @@ impl Ppu {
                     }
                 }
             }
+            0x1B..=0x20 => {
+                self.m7[r - 0x1B] = ((value as u16) << 8) | self.m7_old as u16;
+                self.m7_old = value;
+            }
             0x0D..=0x14 => {
+                // $210D and $210E are mode 7's scroll as well, through M7_old (fullsnes, "M7HOVS/M7VOFS Port Notes").
+                if r <= 0x0E {
+                    self.m7[6 + (r - 0x0D)] = ((value as u16) << 8) | self.m7_old as u16;
+                    self.m7_old = value;
+                }
                 let bg = (r - 0x0D) / 2;
                 if r & 1 == 1 {
                     self.hofs[bg] = ((value as u16) << 8) | (self.bg_old as u16 & !7) | ((self.hofs[bg] >> 8) & 7);
@@ -292,6 +307,11 @@ impl Ppu {
         let v = match r {
             // Write-only registers that show PPU1's latch (anomie's open-bus document).
             0x04..=0x06 | 0x08..=0x0A | 0x14..=0x16 | 0x18..=0x1A | 0x24..=0x26 | 0x28..=0x2A => return Some(self.ppu1_mdr),
+            // M7A times M7B's high byte, signed (fullsnes, MPYL); the products during mode 7's drawing are not modelled.
+            0x34..=0x36 => {
+                let product = (self.m7[0] as i16 as i32) * ((self.m7[1] >> 8) as i8 as i32);
+                (product >> (8 * (r - 0x34))) as u8
+            }
             0x37 => {
                 if side_effects && wrio & 0x80 != 0 {
                     self.latch(beam);
@@ -353,7 +373,7 @@ impl Ppu {
             _ => return None,
         };
         if side_effects {
-            if matches!(r, 0x38..=0x3A | 0x3E) { self.ppu1_mdr = v } else { self.ppu2_mdr = v }
+            if matches!(r, 0x34..=0x36 | 0x38..=0x3A | 0x3E) { self.ppu1_mdr = v } else { self.ppu2_mdr = v }
         }
         Some(v)
     }
@@ -593,6 +613,10 @@ impl Ppu {
         let shown = self.regs[0x2C] | self.regs[0x2D];
         let mosaic = self.regs[0x06];
         let size = (mosaic >> 4) as u16 + 1;
+        if mode == 7 {
+            self.fill_mode7(line, from, to, shown, mosaic, size);
+            return;
+        }
         for bg in 0..4 {
             if depths[bg] == 0 || shown & (1 << bg) == 0 {
                 continue;
@@ -617,6 +641,56 @@ impl Ppu {
                 }
             }
         }
+    }
+
+    /// Mode 7's BG1, and with EXTBG its BG2 from the same pixels, for `from` to `to`. Mosaic repeats as for the other
+    /// modes, but EXTBG's BG2 takes its vertical blocks from BG1's enable bit and its horizontal ones from its own (anomie).
+    fn fill_mode7(&mut self, line: u16, from: u16, to: u16, shown: u8, mosaic: u8, size: u16) {
+        let extbg = self.regs[0x33] & 0x40 != 0;
+        let direct = self.regs[0x30] & 1 != 0;
+        for (bg, vertical, horizontal) in [(0usize, mosaic & 1 != 0, mosaic & 1 != 0), (1, mosaic & 1 != 0, mosaic & 2 != 0)] {
+            if shown & (1 << bg) == 0 || (bg == 1 && !extbg) {
+                continue;
+            }
+            let row = if vertical { line - self.mosaic_row as u16 } else { line };
+            for x in from..to {
+                let sx = if horizontal { x - x % size } else { x };
+                let p = self.mode7_pixel(sx, row);
+                self.bg_line[bg][x as usize] = match (bg, p) {
+                    (_, 0) => 0,
+                    (0, p) if direct => 0x8000 | DIRECT | p as u16,
+                    (0, p) => 0x8000 | p as u16,
+                    (_, p) if p & 0x7F == 0 => 0,
+                    (_, p) => 0x8000 | ((p as u16 >> 7) << 8) | (p as u16 & 0x7F),
+                };
+            }
+        }
+    }
+
+    /// The 8-bit pixel of mode 7's playing field that screen pixel (sx, sy) shows, 0 if transparent: fullsnes's and
+    /// anomie's formula, the origin's products and the line's rounded to 1/4 pixel, the screen flipped by M7SEL, and
+    /// the outside of the 1024-pixel field wrapped, transparent or tile 0's.
+    fn mode7_pixel(&self, sx: u16, sy: u16) -> u8 {
+        let sel = self.regs[0x1A];
+        let signed13 = |v: u16| ((v as i32) << 19) >> 19;
+        let clip = |v: i32| if v & 0x2000 != 0 { v | !0x3FF } else { v & 0x3FF };
+        let (a, b, c, d) = (self.m7[0] as i16 as i32, self.m7[1] as i16 as i32, self.m7[2] as i16 as i32, self.m7[3] as i16 as i32);
+        let (cx, cy) = (signed13(self.m7[4]), signed13(self.m7[5]));
+        let (ox, oy) = (clip(signed13(self.m7[6]) - cx), clip(signed13(self.m7[7]) - cy));
+        let x = (if sel & 1 != 0 { sx ^ 0xFF } else { sx } & 0xFF) as i32;
+        let y = (if sel & 2 != 0 { sy ^ 0xFF } else { sy } & 0xFF) as i32;
+        let vx = ((a * ox) & !63) + ((b * oy) & !63) + ((b * y) & !63) + (cx << 8) + a * x;
+        let vy = ((c * ox) & !63) + ((d * oy) & !63) + ((d * y) & !63) + (cy << 8) + c * x;
+        let (px, py) = (vx >> 8, vy >> 8);
+        let tile = if (px | py) & !0x3FF != 0 && sel & 0x80 != 0 {
+            if sel & 0x40 == 0 {
+                return 0;
+            }
+            0
+        } else {
+            self.vram[((((py & 0x3FF) >> 3) << 7) | ((px & 0x3FF) >> 3)) as usize] & 0xFF
+        };
+        (self.vram[((tile << 6) | (((py & 7) as u16) << 3) | (px & 7) as u16) as usize] >> 8) as u8
     }
 
     /// A background's line buffer from `from` to `to`, a tile row decoded once for each 8 pixels of the background it
@@ -796,7 +870,8 @@ impl Ppu {
             1 => &MODE1,
             2..=5 => &MODE2,
             6 => &MODE6,
-            _ => &OBJ_ONLY,
+            _ if self.regs[0x33] & 0x40 != 0 => &MODE7_EXTBG,
+            _ => &MODE7,
         };
         let halves = sub && matches!(self.regs[0x05] & 7, 5 | 6);
         for &(layer, priority) in order {
@@ -1194,5 +1269,41 @@ mod tests {
         assert_eq!(p.sub_half_pixel(1, first), 4 | 6 << 5);
         // Colour 0 (1, 1, 1) plus the main pixel before math (10, 0, 0), halved.
         assert_eq!(p.sub_half_pixel(2, second), 5);
+    }
+
+    // fullsnes's and anomie's mode 7: the identity matrix shows the field as it is, M7SEL flips the screen and
+    // chooses the outside, and $2134 is M7A times M7B's high byte through the shared write-twice byte.
+    #[test]
+    fn mode7_maps_the_screen_through_its_matrix_and_multiplies_on_2134() {
+        let mut p = Ppu::default();
+        for (r, v) in [(0x1Bu8, 0x00u8), (0x1B, 0x01), (0x1E, 0x00), (0x1E, 0x01)] {
+            p.write(r, v, blank());
+        }
+        assert_eq!((p.m7[0], p.m7[3]), (0x0100, 0x0100));
+        // Map entry (1, 0) is tile 2, whose pixel (1, 1) is colour $55; tile 0's pixel (1, 1) is $77.
+        p.vram[1] = 2;
+        p.vram[(2 << 6) | (1 << 3) | 1] = 0x5500;
+        p.vram[(1 << 3) | 1] = 0x7700;
+        assert_eq!(p.mode7_pixel(9, 1), 0x55);
+        p.regs[0x1A] = 0x01;
+        assert_eq!(p.mode7_pixel(255 - 9, 1), 0x55);
+        // Scrolled 1016, pixel 9 is 1025, past the field's right edge: wrapped to 1 (tile 0), transparent, or tile 0.
+        // The scroll less the centre keeps ten bits and a sign, so 1024 would be 0 (anomie's CLIP).
+        p.regs[0x1A] = 0x00;
+        for (r, v) in [(0x0Du8, 0xF8u8), (0x0D, 0x03)] {
+            p.write(r, v, blank());
+        }
+        assert_eq!(p.m7[6], 0x03F8);
+        assert_eq!(p.mode7_pixel(9, 1), 0x77);
+        p.regs[0x1A] = 0x80;
+        assert_eq!(p.mode7_pixel(9, 1), 0);
+        p.regs[0x1A] = 0xC0;
+        assert_eq!(p.mode7_pixel(9, 1), 0x77);
+        // -2 ($FFFE) times $FF (-1) is 2.
+        for (r, v) in [(0x1Bu8, 0xFEu8), (0x1B, 0xFF), (0x1C, 0x00), (0x1C, 0xFF)] {
+            p.write(r, v, blank());
+        }
+        let product: Vec<u8> = (0x34..=0x36).map(|r| p.read(r, blank(), 0, true).unwrap()).collect();
+        assert_eq!(product, [2, 0, 0]);
     }
 }

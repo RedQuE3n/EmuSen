@@ -262,6 +262,8 @@ impl Machine {
             w.bytes("Fixed", &p.fixed);
             w.u8("MosaicRow", p.mosaic_row);
             w.u8("MosaicSize", p.mosaic_size);
+            w.u16s("Mode7", &p.m7);
+            w.u8("Mode7Old", p.m7_old);
         });
         w.bytes("Wram", &self.sys.wram);
         w.u16s("Vram", &p.vram);
@@ -377,6 +379,8 @@ impl Machine {
         }
         p.mosaic_row = r.u8()? & 0x0F;
         p.mosaic_size = (r.u8()?).clamp(1, 16);
+        r.u16s(&mut p.m7)?;
+        p.m7_old = r.u8()?;
         let interlace = p.regs[0x33] & 1 != 0;
         r.bytes(&mut self.sys.wram)?;
         r.u16s(&mut p.vram)?;
@@ -478,14 +482,14 @@ pub(crate) mod tests {
 
     // Version 4: the CPU, the clock, the bus and the S-CPU's devices; the listing is its record (plan §5.6).
     #[test]
-    fn the_version_9_layout_is_pinned() {
+    fn the_version_10_layout_is_pinned() {
         let m = Machine::load_rom(&rom(&[])).unwrap();
         let layout = m.layout();
         assert!(layout.starts_with("0 4 u32 Magic\n4 4 i32 Version\n8 2 u16 Cpu.A\n"), "{layout}");
         assert!(layout.contains(" u64 Timing.Clock\n") && layout.contains(" u8[1024] Bus.Io\n") && layout.contains(" u16[32768] Vram\n"), "{layout}");
         assert!(layout.contains(" u8[64] Ppu.Regs\n") && layout.contains(" u16[256] Cgram\n"), "{layout}");
-        assert_eq!(layout.lines().count(), 94, "{layout}");
-        assert_eq!(m.state_size(), 264_457);
+        assert_eq!(layout.lines().count(), 96, "{layout}");
+        assert_eq!(m.state_size(), 264_474);
         assert_eq!(&save(&m)[..4], b"VNRT");
     }
 

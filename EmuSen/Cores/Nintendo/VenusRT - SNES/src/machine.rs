@@ -105,6 +105,7 @@ impl Machine {
         if let Some((dsp, _)) = self.sys.cart.dsp.as_mut() {
             dsp.run_to(self.sys.timing.clock);
         }
+        self.sys.catch_up_sa1();
         for pair in self.sys.apu.out.chunks_exact(2) {
             self.samples.push_pair(pair[0], pair[1]);
         }
@@ -121,7 +122,7 @@ impl Machine {
         let irq = self.sys.dev.irq_at_cycle;
         let nmi = self.sys.dev.nmi_at_cycle && self.sys.dev.nmi_pending;
         if self.cpu.waiting {
-            if self.sys.dev.nmi_pending || self.sys.timing.irq_flag {
+            if self.sys.dev.nmi_pending || self.sys.timing.irq_flag || self.sys.cart_irq {
                 self.cpu.waiting = false;
                 self.woke = true;
                 let at = ((self.cpu.pbr as u32) << 16) | self.cpu.pc as u32;
@@ -129,6 +130,7 @@ impl Machine {
                 crate::cpu::Bus::idle(&mut self.sys, at, 0);
             } else {
                 self.cpu.step(&mut self.sys);
+                self.sys.catch_up_sa1();
                 return;
             }
         }
@@ -140,7 +142,7 @@ impl Machine {
             self.woke = false;
             return;
         }
-        if (irq || (self.woke && self.sys.timing.irq_flag)) && !self.i_checked && !self.cpu.stopped {
+        if (irq || (self.woke && (self.sys.timing.irq_flag || self.sys.cart_irq))) && !self.i_checked && !self.cpu.stopped {
             self.record(0, 2);
             self.cpu.interrupt(&mut self.sys, Interrupt::Irq);
             self.i_checked = true;
@@ -154,6 +156,7 @@ impl Machine {
         self.record(opcode, 0);
         let clock = self.sys.timing.clock;
         self.cpu.step(&mut self.sys);
+        self.sys.catch_up_sa1();
         if let Some(t) = &mut self.trace {
             let n = t.len();
             t[n - 4..].copy_from_slice(&((self.sys.timing.clock - clock) as u32).to_le_bytes());
@@ -273,6 +276,12 @@ impl Machine {
         });
         if let Some((dsp, _)) = &self.sys.cart.dsp {
             w.group("Coprocessor", |w| w.bytes("NecDsp", &dsp.pack()));
+        }
+        if let Some(sa1) = &self.sys.cart.sa1 {
+            w.group("Coprocessor", |w| {
+                w.bytes("Sa1", &sa1.pack());
+                w.bool("CartIrq", self.sys.cart_irq);
+            });
         }
         w.group("Bus", |w| {
             w.u8("Mdr", self.sys.mdr);
@@ -419,6 +428,12 @@ impl Machine {
             let mut packed = dsp.pack();
             r.bytes(&mut packed)?;
             dsp.unpack(&packed);
+        }
+        if let Some(sa1) = self.sys.cart.sa1.as_mut() {
+            let mut packed = sa1.pack();
+            r.bytes(&mut packed)?;
+            sa1.unpack(&packed);
+            self.sys.cart_irq = r.bool()?;
         }
         self.sys.mdr = r.u8()?;
         self.sys.wram_address = r.u32()? & 0x1FFFF;

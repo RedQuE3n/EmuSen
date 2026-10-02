@@ -179,13 +179,21 @@ pub struct Cartridge {
     pub header: Header,
     /// A NEC DSP-n or ST01x, when its firmware was supplied, and where it is mapped.
     pub dsp: Option<(crate::chips::necdsp::NecDsp, DspMap)>,
+    /// The SA-1, when the header's chipset names it (3xh); its BW-RAM is `sram`.
+    pub sa1: Option<Box<crate::chips::sa1::Sa1>>,
 }
 
 impl Cartridge {
     /// The cartridge under a header already chosen.
     pub fn with_header(rom: &[u8], header: Header) -> Cartridge {
         let sram = vec![0u8; header.sram_bytes()].into_boxed_slice();
-        Cartridge { rom: rom.into(), sram, header, dsp: None }
+        let sa1 = Self::sa1_for(&header);
+        Cartridge { rom: rom.into(), sram, header, dsp: None, sa1 }
+    }
+
+    /// An SA-1 for a header whose chipset's high nibble is 3 (fullsnes's 32h-35h), on a map mode of 23h.
+    fn sa1_for(header: &Header) -> Option<Box<crate::chips::sa1::Sa1>> {
+        (header.chipset >> 4 == 3 && header.map_mode & 0x0F == 3).then(|| Box::new(crate::chips::sa1::Sa1::new(header.region() == Region::Pal)))
     }
 
     /// A copier's 512-byte header is dropped by the image's length modulo 1 KiB; an image with no header that scores
@@ -207,7 +215,8 @@ impl Cartridge {
             score: 0,
         });
         let sram = vec![0u8; header.sram_bytes()].into_boxed_slice();
-        Some(Cartridge { rom: rom.into(), sram, header, dsp: None })
+        let sa1 = Self::sa1_for(&header);
+        Some(Cartridge { rom: rom.into(), sram, header, dsp: None, sa1 })
     }
 
     /// Whether the header names a NEC DSP: chipset 03h-05h for a DSP-n, F6h for an ST010 or ST011 (fullsnes).
@@ -256,6 +265,10 @@ impl Cartridge {
     /// The ROM byte or SRAM slot a CPU address selects, or None for nothing the cartridge drives.
     #[inline]
     pub fn decode(&self, address: u32) -> Option<Slot> {
+        // An SA-1 board decodes its own space (chips/sa1.rs); nothing else on it answers the S-CPU.
+        if self.sa1.is_some() {
+            return None;
+        }
         if self.dsp.is_some() {
             if let Some(port) = self.dsp_port(address) {
                 return Some(Slot::Dsp(port));

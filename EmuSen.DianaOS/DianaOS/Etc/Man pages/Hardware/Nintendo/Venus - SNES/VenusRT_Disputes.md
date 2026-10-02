@@ -674,3 +674,19 @@ their data.
   never change" (fullsnes), so no game is expected to depend on it.
 - Pinned by: `test_timer_speed`, `test_timer_speed2`.
 
+### D-28. S-DSP: the Gaussian interpolation's rounding, where fullsnes and anomie give different formulas
+- Opened: 2026-10-02, at stage 4 step 2, before the S-DSP's code, by reading the two sources side by side.
+  fullsnes ("SNES APU DSP BRR Pitch", "4-Point Gaussian Interpolation") multiplies each of the four 15-bit samples
+  by its coefficient and shifts right by 10, sums the first three with no overflow handling, adds the fourth with
+  16-bit saturation, and shifts the 16-bit result right by one. anomie's S-DSP document (romhacking.net 191,
+  revision 1212, "PITCH ADJUSTMENTS") shifts each product right by 11, wraps the first three's sum to 15 bits, and
+  clamps the fourth's addition to 15 bits. Both use the same 512-entry table, given in both. The two differ in the
+  low bit of most results, and in where the sum wraps.
+- Test ROM: blargg's `spc_dsp6`, which grades the DSP by its own measurements; the audio against Mesen's through
+  the probe is the second, coarser, oracle.
+- Referee: not read. Mesen's source: none.
+- Conclusion: open. fullsnes's formula is built first, since it states the partial overflow handling explicitly
+  and anomie's comment ("the above 3 wrap at 15 bits") is a simplification of the same structure at half the
+  scale; `spc_dsp6` is to decide, and the other formula is tried if it fails on an interpolation case.
+- Pinned by: `spc_dsp6`.
+

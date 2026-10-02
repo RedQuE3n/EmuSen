@@ -1,8 +1,11 @@
 //! The picture at a frame, as raw RGBA, and the PPU registers that name the features a scene uses (VenusRT_Native.md §15).
 //! cargo run --release --example picture_dump <rom> <frame> <out.rgba>
+#[path = "common/load.rs"]
+mod load;
+
 fn main() {
     let a: Vec<String> = std::env::args().collect();
-    let mut m = venusrt::machine::Machine::load_rom(&std::fs::read(&a[1]).unwrap()).unwrap();
+    let mut m = load::machine(&a[1]);
     let frame: i64 = a[2].parse().unwrap();
     while m.total_frames() < frame {
         m.run_frame();

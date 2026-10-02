@@ -2,9 +2,12 @@
 //! (VenusRT_Native.md §17). `frame_hashes <rom> <frames> <out>` writes one little-endian u64 a frame.
 use std::hash::{Hash, Hasher};
 
+#[path = "common/load.rs"]
+mod load;
+
 fn main() {
     let a: Vec<String> = std::env::args().collect();
-    let mut m = venusrt::machine::Machine::load_rom(&std::fs::read(&a[1]).unwrap()).unwrap();
+    let mut m = load::machine(&a[1]);
     let frames: i64 = a[2].parse().unwrap();
     let mut out = Vec::with_capacity(frames as usize * 8);
     while m.total_frames() < frames {

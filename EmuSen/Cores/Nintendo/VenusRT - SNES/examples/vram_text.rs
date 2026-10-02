@@ -1,7 +1,10 @@
 //! Runs a ROM for some frames and prints the printable runs of VRAM's low bytes, the text a test ROM writes.
+#[path = "common/load.rs"]
+mod load;
+
 fn main() {
     let a: Vec<String> = std::env::args().collect();
-    let mut m = venusrt::machine::Machine::load_rom(&std::fs::read(&a[1]).unwrap()).unwrap();
+    let mut m = load::machine(&a[1]);
     while m.total_frames() < a[2].parse::<i64>().unwrap() {
         m.run_frame();
     }

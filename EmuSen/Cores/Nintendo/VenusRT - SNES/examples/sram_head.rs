@@ -1,8 +1,11 @@
 //! The first bytes of SRAM after some frames: byuu's tests keep the failing test's number at $700000.
 //! `sram_head <rom> [frames]`
+#[path = "common/load.rs"]
+mod load;
+
 fn main() {
     let a: Vec<String> = std::env::args().collect();
-    let mut m = venusrt::machine::Machine::load_rom(&std::fs::read(&a[1]).unwrap()).unwrap();
+    let mut m = load::machine(&a[1]);
     let frames: i64 = a.get(2).and_then(|f| f.parse().ok()).unwrap_or(600);
     while m.total_frames() < frames {
         m.run_frame();

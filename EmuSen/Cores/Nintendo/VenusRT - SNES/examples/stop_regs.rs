@@ -1,8 +1,11 @@
 //! Runs a ROM until its CPU stops (byuu's tests end in STP) and prints the DMA registers, the latched counters and
 //! the IRQ target and the first SRAM bytes, for reading where such a test failed. `stop_regs <rom> [frames]`
+#[path = "common/load.rs"]
+mod load;
+
 fn main() {
     let a: Vec<String> = std::env::args().collect();
-    let mut m = venusrt::machine::Machine::load_rom(&std::fs::read(&a[1]).unwrap()).unwrap();
+    let mut m = load::machine(&a[1]);
     let frames: i64 = a.get(2).and_then(|f| f.parse().ok()).unwrap_or(3600);
     while m.total_frames() < frames && !m.cpu.stopped {
         m.step();

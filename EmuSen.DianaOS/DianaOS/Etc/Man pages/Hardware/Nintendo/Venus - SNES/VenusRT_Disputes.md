@@ -797,3 +797,16 @@ their data.
 - Conclusion: the rule above; the SPC700's writes still pass to the RAM beneath as well (fullsnes's map).
 - Pinned by: `spc_dsp6`, "Misc/$F0-$FF are not ram".
 
+### D-32. NEC DSP-n and ST01x: the chips' instruction rate against the master clock
+- Opened: 2026-10-02, at stage 5 step 1, before the NEC DSP's code, because no document gives it: the plan's §5.4
+  carries each chip's clock as a rational against the master clock, and that rate decides how far a polled chip
+  gets between two S-CPU reads of its status register.
+- Documents read: fullsnes, "SNES Cart DSP-n/ST010/ST011": "All opcodes are executed in one clock cycle (at
+  max=8.192MHz clock)", the ST01x "faster CPU clock", and nothing on the cartridges' crystals; the plan's §2.2 lists
+  "the DSP-n's clocking" among the places the documents are thin. No other fetched document covers the cartridges.
+- Test ROM: none in the corpus isolates it; the games through Mesen's pictures are the coarse oracle.
+- Referee: `Venus_Referee.md` §0 rates the NEC DSP datapath "real support", and the only second opinion. To be read
+  for this rule only: how SNES_MiSTer clocks `chip/DSP/DSPn.vhd` (its clock enable and where it is generated).
+- Conclusion: open.
+- Pinned by: the DSP games' pictures against Mesen.
+

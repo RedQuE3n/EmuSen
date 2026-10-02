@@ -690,3 +690,26 @@ their data.
   scale; `spc_dsp6` is to decide, and the other formula is tried if it fails on an interpolation case.
 - Pinned by: `spc_dsp6`.
 
+### D-29. S-DSP: what a key-on does to the envelope and its hidden value over the start-up samples
+- Opened: 2026-10-02, at stage 4 step 2, by blargg's `spc_dsp6`: every test before it passes, and "Envelope/hidden
+  env 0 at kon" fails, printing 0000 six times, then 0020, then 0008 three times (checksum 179DD951). The test keys
+  voice 0 twice ten samples apart with GAIN at $80 (linear decrease, rate 0), and sets GAIN to $FF (bent increase,
+  every sample) for one sample at an offset moved by six SPC700 cycles each round; each value is the envelope's
+  step that sample gave. VenusRT gives +32 only when the bent sample is the start-up's fifth, where the hidden value
+  is still the key-on's 0, and +8 after it, where the linear decrease has left the hidden value negative.
+- Documents read: anomie's S-DSP document, "BRR DECODING" (the five start-up samples, "#0 ... the envelope is set to
+  0 and enters the Attack state, and is not updated for the next several samples"; "#5 = Envelope updating
+  begins"), the register section on VxADSR/VxGAIN (the new value saved before clamping for the bent increase) and
+  KON/KOFF (the internal KON, cleared at cycle 29 and loaded with KOFF at cycle 30 every other sample); fullsnes,
+  "KON/KOFF Notes" and "Gain Notes". Neither says what the hidden value is during the start-up samples, or on which
+  of the two polls a KON written at cycle 30 is taken.
+- Test ROM: `spc_dsp6`, with its DSP register accesses logged around the case (the test synchronises by writing
+  ENVX and reading it back until the DSP overwrites it). Two readings were tried and rejected by measurement: a
+  key-on that keeps the hidden value (every step +8), and a rate-0 setting that leaves the envelope's phase and
+  hidden value untouched (fails the earlier "attack->decay during gain").
+- Referee: `Venus_Referee.md` §0 rates the S-DSP's formulas weak (they follow an emulator's, the key-on delay
+  among them) and its rate counter real. To be read for this rule only: SNES_MiSTer `rtl/DSP.vhd`, the key-on and
+  start-up handling and the envelope's hidden value.
+- Conclusion: open.
+- Pinned by: `spc_dsp6`, "hidden env 0 at kon".
+

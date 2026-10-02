@@ -805,8 +805,14 @@ their data.
   max=8.192MHz clock)", the ST01x "faster CPU clock", and nothing on the cartridges' crystals; the plan's §2.2 lists
   "the DSP-n's clocking" among the places the documents are thin. No other fetched document covers the cartridges.
 - Test ROM: none in the corpus isolates it; the games through Mesen's pictures are the coarse oracle.
-- Referee: `Venus_Referee.md` §0 rates the NEC DSP datapath "real support", and the only second opinion. To be read
-  for this rule only: how SNES_MiSTer clocks `chip/DSP/DSPn.vhd` (its clock enable and where it is generated).
-- Conclusion: open.
+- Referee: `Venus_Referee.md` §0 rates the NEC DSP datapath "real support", and the only second opinion. Read
+  2026-10-02: SNES_MiSTer `rtl/chip/DSP/DSP_LHRomMap.vhd` lines 110-122 (the clock-enable generator's instance and
+  the rate it is given), `rtl/CEGen.vhd` whole (a fractional divider of the 21.47727 MHz master clock), and line 113
+  of `rtl/chip/DSP/DSPn.vhd` (the chip's enable is that clock enable); nothing else. What it does: the DSP-n runs at
+  7.60 MHz and the ST010/ST011 at 10.00 MHz, each derived from the master clock by an exact fraction.
+- Conclusion: settled for the rate, argued for the instruction: the DSP-n executes at 7,600,000/21,477,270 of the
+  master clock and the ST01x at 10,000,000/21,477,270, one instruction per cycle of that clock (fullsnes: "All
+  opcodes are executed in one clock cycle"), caught up at each S-CPU access to the chip as the plan's §5.4 says.
+  To be measured against the games' pictures.
 - Pinned by: the DSP games' pictures against Mesen.
 

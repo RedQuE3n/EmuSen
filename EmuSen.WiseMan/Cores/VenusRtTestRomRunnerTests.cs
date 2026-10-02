@@ -235,9 +235,10 @@ namespace EmuSen.WiseMan.Cores
                 _output.WriteLine("EMUSEN_VENUSRT_GAMES, the corpus or the probe unset, not run");
                 return;
             }
-            var frames = Enumerable.Range(1, 60).Select(i => i * 10).ToArray();
+            int until = int.TryParse(Environment.GetEnvironmentVariable("EMUSEN_VENUSRT_GAMES_FRAMES"), out int l) ? l : 600;
+            var frames = Enumerable.Range(1, until / 10).Select(i => i * 10).ToArray();
             var mesen = new MesenProbeSnesEngine(Path.Combine(root, "runs", "mesen"));
-            var table = new List<string> { "game\tmesen_lit\tvenusrt_lit\tvram\tcgram\toam\tpicture\tpictures_differing\taudio\tsamples\tat_600" };
+            var table = new List<string> { "game\tmesen_lit\tvenusrt_lit\tvram\tcgram\toam\tpicture\tpictures_differing\taudio\tsamples\tat_last" };
             foreach (string rom in Directory.GetFiles(dir).Order(StringComparer.Ordinal))
             {
                 SnesRun theirs = mesen.Run(rom, frames, audio: true), ours = new VenusRtSnesEngine().Run(rom, frames, audio: true);

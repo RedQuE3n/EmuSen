@@ -338,6 +338,14 @@ impl System {
         match self.cart.decode(address)? {
             Slot::Rom(i) => Some(self.cart.rom[i]),
             Slot::Sram(i) => Some(self.cart.sram[i]),
+            Slot::Dsp(port) => {
+                let clock = self.timing.clock;
+                let (dsp, _) = self.cart.dsp.as_mut()?;
+                if side_effects {
+                    dsp.run_to(clock);
+                }
+                Some(dsp.host_read(port, side_effects))
+            }
         }
     }
 
@@ -393,8 +401,16 @@ impl System {
                 return;
             }
         }
-        if let Some(Slot::Sram(i)) = self.cart.decode(address) {
-            self.cart.sram[i] = value;
+        match self.cart.decode(address) {
+            Some(Slot::Sram(i)) => self.cart.sram[i] = value,
+            Some(Slot::Dsp(port)) => {
+                let clock = self.timing.clock;
+                if let Some((dsp, _)) = self.cart.dsp.as_mut() {
+                    dsp.run_to(clock);
+                    dsp.host_write(port, value);
+                }
+            }
+            _ => {}
         }
     }
 }

@@ -157,18 +157,35 @@ pub fn mirror(offset: usize, size: usize) -> usize {
     }
 }
 
+/// Where a NEC DSP's DR, SR and RAM sit, by fullsnes's "SNES I/O Ports" table for the board the header describes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DspMap {
+    /// LoROM of 1 MiB: banks 30-3F, DR at 8000-BFFF, SR at C000-FFFF.
+    LoRom30,
+    /// LoROM with RAM: banks 20-3F, as LoRom30.
+    LoRom20,
+    /// LoROM of 2 MiB: banks 60-6F, DR at 0000-3FFF, SR at 4000-7FFF.
+    LoRom60,
+    /// HiROM: banks 00-1F, DR at 6000-6FFF, SR at 7000-7FFF.
+    HiRom,
+    /// ST010/ST011: DR at 60-67:0000, SR at 0001, the chip's RAM at 68-6F:0000-0FFF.
+    St,
+}
+
 #[derive(Clone, Debug)]
 pub struct Cartridge {
     pub rom: Box<[u8]>,
     pub sram: Box<[u8]>,
     pub header: Header,
+    /// A NEC DSP-n or ST01x, when its firmware was supplied, and where it is mapped.
+    pub dsp: Option<(crate::chips::necdsp::NecDsp, DspMap)>,
 }
 
 impl Cartridge {
     /// The cartridge under a header already chosen.
     pub fn with_header(rom: &[u8], header: Header) -> Cartridge {
         let sram = vec![0u8; header.sram_bytes()].into_boxed_slice();
-        Cartridge { rom: rom.into(), sram, header }
+        Cartridge { rom: rom.into(), sram, header, dsp: None }
     }
 
     /// A copier's 512-byte header is dropped by the image's length modulo 1 KiB; an image with no header that scores
@@ -190,12 +207,60 @@ impl Cartridge {
             score: 0,
         });
         let sram = vec![0u8; header.sram_bytes()].into_boxed_slice();
-        Some(Cartridge { rom: rom.into(), sram, header })
+        Some(Cartridge { rom: rom.into(), sram, header, dsp: None })
+    }
+
+    /// Whether the header names a NEC DSP: chipset 03h-05h for a DSP-n, F6h for an ST010 or ST011 (fullsnes).
+    pub fn wants_dsp(&self) -> bool {
+        matches!(self.header.chipset, 0x03..=0x05 | 0xF6)
+    }
+
+    /// The board's DSP map: the ST01x's when its firmware is the µPD96050's or the chipset says so, then HiROM, then
+    /// LoROM by size and RAM.
+    pub fn dsp_map(&self, st: bool) -> DspMap {
+        if st || self.header.chipset == 0xF6 {
+            DspMap::St
+        } else if self.header.map != Map::LoRom {
+            DspMap::HiRom
+        } else if self.rom.len() > 0x10_0000 {
+            DspMap::LoRom60
+        } else if !self.sram.is_empty() {
+            DspMap::LoRom20
+        } else {
+            DspMap::LoRom30
+        }
+    }
+
+    /// The DSP's port a CPU address selects, if the cartridge has one there.
+    #[inline]
+    pub fn dsp_port(&self, address: u32) -> Option<crate::chips::necdsp::Port> {
+        use crate::chips::necdsp::Port;
+        let (_, map) = self.dsp.as_ref()?;
+        let bank = (address >> 16) as usize & 0x7F;
+        let offset = address as usize & 0xFFFF;
+        match map {
+            DspMap::LoRom30 | DspMap::LoRom20 => {
+                let first = if *map == DspMap::LoRom30 { 0x30 } else { 0x20 };
+                ((first..=0x3F).contains(&bank) && offset >= 0x8000).then_some(if offset < 0xC000 { Port::Dr } else { Port::Sr })
+            }
+            DspMap::LoRom60 => ((0x60..=0x6F).contains(&bank) && offset < 0x8000).then_some(if offset < 0x4000 { Port::Dr } else { Port::Sr }),
+            DspMap::HiRom => (bank < 0x20 && (0x6000..0x8000).contains(&offset)).then_some(if offset < 0x7000 { Port::Dr } else { Port::Sr }),
+            DspMap::St => match bank {
+                0x60..=0x67 if offset < 0x1000 => Some(if offset & 1 == 0 { Port::Dr } else { Port::Sr }),
+                0x68..=0x6F if offset < 0x1000 => Some(Port::Ram(offset)),
+                _ => None,
+            },
+        }
     }
 
     /// The ROM byte or SRAM slot a CPU address selects, or None for nothing the cartridge drives.
     #[inline]
     pub fn decode(&self, address: u32) -> Option<Slot> {
+        if self.dsp.is_some() {
+            if let Some(port) = self.dsp_port(address) {
+                return Some(Slot::Dsp(port));
+            }
+        }
         let bank = (address >> 16) as usize;
         let offset = address as usize & 0xFFFF;
         let size = self.rom.len();
@@ -233,6 +298,7 @@ impl Cartridge {
 pub enum Slot {
     Rom(usize),
     Sram(usize),
+    Dsp(crate::chips::necdsp::Port),
 }
 
 #[cfg(test)]
@@ -311,6 +377,27 @@ mod tests {
         // With the HiROM handler doing the same work, the fields' choice stands.
         rom[0x8000..0x8000 + handler.len()].copy_from_slice(&handler);
         assert_eq!(find_header(&rom).unwrap().map, Map::HiRom);
+    }
+
+    // fullsnes's "SNES I/O Ports" for the DSP boards: LoROM 1 MiB at 30-3F, HiROM at 00-1F:6000-7FFF, the ST01x at 60-6F.
+    #[test]
+    fn a_dsp_board_maps_dr_and_sr_where_fullsnes_puts_them() {
+        use crate::chips::necdsp::{NecDsp, Port};
+        let mut lo = image(0x8_0000, Map::LoRom, 0x20);
+        lo[0x7FC0 + 0x16] = 0x03;
+        let mut c = Cartridge::new(&lo).unwrap();
+        assert!(c.wants_dsp());
+        let dsp = NecDsp::from_firmware(&vec![0u8; 8192]).unwrap();
+        c.dsp = Some((dsp.clone(), c.dsp_map(false)));
+        assert_eq!(c.dsp.as_ref().unwrap().1, DspMap::LoRom30);
+        assert_eq!((c.decode(0x30_8000), c.decode(0xBF_C000), c.decode(0x00_8000)), (Some(Slot::Dsp(Port::Dr)), Some(Slot::Dsp(Port::Sr)), Some(Slot::Rom(0))));
+        let mut hi = Cartridge::new(&image(0x10_0000, Map::HiRom, 0x21)).unwrap();
+        hi.dsp = Some((dsp, hi.dsp_map(false)));
+        assert_eq!((hi.decode(0x00_6000), hi.decode(0x9F_7FFF), hi.decode(0x20_6000)), (Some(Slot::Dsp(Port::Dr)), Some(Slot::Dsp(Port::Sr)), Some(Slot::Sram(0))));
+        let st = NecDsp::from_firmware(&vec![0u8; 53248]).unwrap();
+        let mut f1 = Cartridge::new(&lo).unwrap();
+        f1.dsp = Some((st, f1.dsp_map(true)));
+        assert_eq!((f1.decode(0x60_0000), f1.decode(0x60_0001), f1.decode(0x68_0FFF)), (Some(Slot::Dsp(Port::Dr)), Some(Slot::Dsp(Port::Sr)), Some(Slot::Dsp(Port::Ram(0xFFF)))));
     }
 
     #[test]

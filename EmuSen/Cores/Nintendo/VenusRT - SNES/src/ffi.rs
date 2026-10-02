@@ -19,7 +19,8 @@ impl NativeCore for Machine {
     const CAPABILITIES: u64 = 0;
     const ENGINE: &'static str = "VenusRT";
 
-    /// The battery save is file 0, clipped to the cartridge's RAM; file 1 is the SPC700's 64-byte boot ROM, required.
+    /// The battery save is file 0, clipped to the cartridge's RAM; file 1 is the SPC700's 64-byte boot ROM, required;
+    /// file 2 is a NEC DSP's firmware, 8,192 or 53,248 bytes, for a cartridge whose header names one.
     fn create(image: &[u8], settings: &Settings, files: &[File<'_>]) -> Result<Self, i32> {
         if settings.keys().next().is_some() {
             return Err(abi::status::UNKNOWN_SETTING);
@@ -32,10 +33,10 @@ impl NativeCore for Machine {
         let pal = m.sys.timing.pal;
         m.sys.apu = crate::apu::smp::Smp::new(Some(ipl), pal);
         for file in files {
-            if file.which > 1 {
+            if file.which > 2 || (file.which == 2 && !m.attach_dsp(file.data)) {
                 return Err(abi::status::BAD_FILE);
             }
-            if file.which == 1 {
+            if file.which != 0 {
                 continue;
             }
             let sram = &mut m.sys.cart.sram;

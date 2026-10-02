@@ -10,14 +10,14 @@ namespace EmuSen.Cores.Nintendo.VenusRT
 
         public static bool Available => VenusNative.Available;
 
-        // File 0 is the battery save and file 1 the sound unit's 64-byte boot ROM, which the core requires.
-        public VenusMachine(ReadOnlySpan<byte> image, byte[]? ipl, byte[]? battery = null)
-            : base(VenusNative.Api, "VenusRT", "VenusRT", Own, OwnWords, image, "", Files(ipl, battery))
+        // File 0 is the battery save, file 1 the sound unit's 64-byte boot ROM, which the core requires, and file 2 a NEC DSP's firmware.
+        public VenusMachine(ReadOnlySpan<byte> image, byte[]? ipl, byte[]? battery = null, byte[]? dspFirmware = null)
+            : base(VenusNative.Api, "VenusRT", "VenusRT", Own, OwnWords, image, "", Files(ipl, battery, dspFirmware))
         {
         }
 
-        private static (uint, byte[])[] Files(byte[]? ipl, byte[]? battery) =>
-            new[] { (0u, battery), (1u, ipl) }.Where(f => f.Item2 is not null).Select(f => (f.Item1, f.Item2!)).ToArray();
+        private static (uint, byte[])[] Files(byte[]? ipl, byte[]? battery, byte[]? dsp) =>
+            new[] { (0u, battery), (1u, ipl), (2u, dsp) }.Where(f => f.Item2 is not null).Select(f => (f.Item1, f.Item2!)).ToArray();
 
         private static Exception? Own(int status) => status switch
         {

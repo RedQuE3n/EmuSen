@@ -1631,11 +1631,10 @@ row for row with the offset doubled. A test pins the three.
 
 ### 19.3 The picture oracles (measured 2026-10-01)
 
-- **PeterLemon's 47 PPU ROMs at frame 300: 34 equal to Mesen** (25 at §18). Gained: the seven interlaced mode 5
-  ROMs (`InterlaceFont`, `MosaicMode5`, `InterlaceMoogle`, `InterlaceScroll`, `InterlaceMystHDMA`,
-  `InterlaceSimpsonsHDMA` and `InterlaceRPG`, every pixel of 512×448), and two of the four pseudo-hi-res ROMs
-  equal in their main-screen half-pixels and differing only where D-19's operand matters, which leaves them on the
-  differing list. The four pseudo-hi-res ROMs differ on 2,691 to 27,099 half-pixels, all D-19's (with the variant
+- **PeterLemon's 47 PPU ROMs at frame 300: 32 equal to Mesen** (25 at §18), and the 240p suite's two as before.
+  Gained: the seven interlaced mode 5 ROMs (`InterlaceFont`, `MosaicMode5`, `InterlaceMoogle`, `InterlaceScroll`,
+  `InterlaceMystHDMA`, `InterlaceSimpsonsHDMA` and `InterlaceRPG`), every pixel of 512×448. The four pseudo-hi-res
+  ROMs differ on 2,691 to 27,099 half-pixels, all D-19's (with the variant
   it records they equal Mesen in every half-pixel). Still different besides: mode 7's four, the five
   `HiColor128PerTileRow` ROMs (§18.2), `RedSpace9BitHDMA` (D-7) and `8x8BGMap8BPP32x32` (five frames apart, §18.2).
 - **An offset-per-tile oracle exists after all**: lidnariq's `ppubusact` switches modes every 32 lines and makes

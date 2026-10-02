@@ -99,6 +99,8 @@ pub struct Voice {
     /// The last new envelope value before clamping, for the bent increase.
     pub hidden_env: i32,
     pub out: i32,
+    /// ENVX as this sample shows it: the envelope applied to the sample, before this sample's update.
+    pub envx: u8,
     pub srcn: u8,
     pub next_addr: u16,
     pub pitch: i32,
@@ -238,7 +240,7 @@ impl Dsp {
             p.put(&x.out.to_le_bytes());
             p.put(&[x.srcn]);
             p.put(&x.pitch.to_le_bytes());
-            p.put(&[x.adsr1, x.header, x.data, 0]);
+            p.put(&[x.adsr1, x.header, x.data, x.envx]);
         }
         p.put(&[self.step, self.every_other as u8, self.new_kon, self.t_kon, self.t_koff, self.t_pmon, self.t_non, self.t_eon]);
         p.put(&[self.t_dir, self.t_esa, self.t_echo_off as u8, self.endx_buf, self.outx_buf, self.envx_buf, self.fir_pos, 0]);
@@ -285,7 +287,7 @@ impl Dsp {
             x.srcn = u.u8();
             x.pitch = u.i32();
             let g: [u8; 4] = u.take();
-            (x.adsr1, x.header, x.data) = (g[0], g[1], g[2]);
+            (x.adsr1, x.header, x.data, x.envx) = (g[0], g[1], g[2], g[3]);
         }
         let g: [u8; 8] = u.take();
         (self.step, self.every_other, self.new_kon, self.t_kon, self.t_koff, self.t_pmon, self.t_non, self.t_eon) = (g[0] & 31, g[1] != 0, g[2], g[3], g[4], g[5], g[6], g[7]);
@@ -504,6 +506,10 @@ impl Dsp {
                 self.t_echo_off = self.regs[reg::FLG] & 0x20 != 0;
             }
             30 => {
+                if self.every_other {
+                    self.t_koff = self.regs[reg::KOFF];
+                    self.t_kon = self.new_kon;
+                }
                 self.s3c(0);
                 self.echo_write(1, ram, writable);
                 self.echo_offset = self.echo_offset.wrapping_add(4);
@@ -513,10 +519,6 @@ impl Dsp {
                 if self.fires(self.regs[reg::FLG]) {
                     let n = self.noise;
                     self.noise = (n >> 1) | (((n << 14) ^ (n << 13)) & 0x4000);
-                }
-                if self.every_other {
-                    self.t_koff = self.regs[reg::KOFF];
-                    self.t_kon = self.new_kon;
                 }
             }
             _ => {
@@ -576,6 +578,7 @@ impl Dsp {
         let noise = clip15(self.noise as i32);
         let (koff, kon, non) = (self.t_koff & bit != 0, self.t_kon & bit != 0, self.t_non & bit != 0);
         let counter = self.counter;
+        let even = self.every_other;
         let x = &mut self.voices[v];
         let d = x.kon_delay;
         x.kon_delay = d.saturating_sub(1);
@@ -583,18 +586,20 @@ impl Dsp {
         x.keyed = false;
         let sample = if non { noise } else { interpolate(x) };
         x.out = (sample * x.env) >> 11;
+        x.envx = (x.env >> 4) as u8;
         self.last_out = x.out;
         if d != 5 && x.header & 3 == 1 {
             x.mode = Mode::Release;
             x.env = 0;
         }
-        if flg & 0x80 != 0 || koff {
+        // D-29: KON and KOFF act on the samples the poll loads them, every other one.
+        if flg & 0x80 != 0 || (koff && even) {
             x.mode = Mode::Release;
             if flg & 0x80 != 0 {
                 x.env = 0;
             }
         }
-        if kon && x.kon_delay == 0 && d == 0 {
+        if kon && even {
             x.kon_delay = 5;
             x.keyed = true;
             x.mode = Mode::Attack;
@@ -661,7 +666,7 @@ impl Dsp {
 
     fn s7(&mut self, v: usize) {
         self.regs[reg::ENDX] = self.endx_buf;
-        self.envx_buf = (self.voices[v].env >> 4) as u8;
+        self.envx_buf = self.voices[v].envx;
     }
 
     fn s8(&mut self, v: usize) {
@@ -794,7 +799,7 @@ fn run_envelope(x: &mut Voice, setting: u8, fires: impl Fn(u8) -> bool) {
             _ => (e + if (x.hidden_env as u32) < 0x600 { 32 } else { 8 }, rate),
         }
     };
-    if x.mode == Mode::Decay && new >> 8 == (setting >> 5) as i32 {
+    if x.mode == Mode::Decay && (new >> 8) & 7 == (setting >> 5) as i32 {
         x.mode = Mode::Sustain;
     }
     x.hidden_env = new;

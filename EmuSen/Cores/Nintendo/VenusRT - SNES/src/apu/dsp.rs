@@ -584,6 +584,12 @@ impl Dsp {
         x.kon_delay = d.saturating_sub(1);
         x.prev_delay = d;
         x.keyed = false;
+        if d == 5 {
+            x.pos = 0;
+            x.write = 0;
+            x.brr_offset = 1;
+            x.loop_pending = false;
+        }
         let sample = if non { noise } else { interpolate(x) };
         x.out = (sample * x.env) >> 11;
         x.envx = (x.env >> 4) as u8;
@@ -605,10 +611,6 @@ impl Dsp {
             x.mode = Mode::Attack;
             x.env = 0;
             x.hidden_env = 0;
-            x.pos = 0;
-            x.write = 0;
-            x.brr_offset = 1;
-            x.loop_pending = false;
             x.looped = false;
         }
         let setting = if x.adsr1 & 0x80 != 0 { gain_reg } else { gain };

@@ -740,18 +740,20 @@ impl Spc700 {
         }
     }
 
-    /// DIV YA,X: A=YA/X and Y=YA MOD X, V set when the quotient does not fit (fullsnes). No document gives the
-    /// results then, or H; they are left as the plain quotient's (VenusRT_Native.md §21).
+    /// DIV YA,X, bit-serially as the SNES_MiSTer referee does it (D-23): a 17-bit register of 0, Y and A rotated left
+    /// nine times, taking X shifted left by nine away where it fits; it is A=YA/X, Y=YA MOD X whenever that fits.
     fn div(&mut self) {
-        let ya = self.ya();
-        let x = self.x as u16;
-        if x != 0 && ya / x <= 0xFF {
-            self.a = (ya / x) as u8;
-            self.y = (ya % x) as u8;
-            self.set(flag::V, false);
-        } else {
-            self.set(flag::V, true);
+        let divisor = (self.x as u32) << 9;
+        self.set(flag::H, self.y & 0x0F >= self.x & 0x0F);
+        let mut t = (self.ya() as u32) & 0x1FFFF;
+        for _ in 0..9 {
+            let rotated = ((t << 1) & 0x1FFFF) | (t >> 16);
+            let shifted = if rotated >= divisor { rotated ^ 1 } else { rotated };
+            t = if shifted & 1 != 0 { shifted.wrapping_sub(divisor) & 0x1FFFF } else { shifted };
         }
+        self.a = t as u8;
+        self.y = (t >> 9) as u8;
+        self.set(flag::V, t & 0x100 != 0);
         self.nz(self.a);
     }
 

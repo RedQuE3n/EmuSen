@@ -109,6 +109,6 @@ mod tests {
             a
         });
         eprintln!("SPC700: {} of {} with cycles, {} on state", all.passed, all.cases, all.state);
-        assert_eq!(all.cases, 256_000);
+        assert_eq!((all.cases, all.passed), (256_000, 256_000));
     }
 }

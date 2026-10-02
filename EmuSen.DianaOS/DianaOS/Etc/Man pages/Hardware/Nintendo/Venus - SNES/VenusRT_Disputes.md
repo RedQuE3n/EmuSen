@@ -604,4 +604,6 @@ their data.
 - Conclusion: the referee's divider, to be measured on the suite's 1,000 DIV cases. Argued from the referee until
   measured.
 - Pinned by: the SPC700 suite's DIV file.
+- Implemented 2026-10-02. **Measured:** all 1,000 DIV cases pass with their cycles, and with them the whole suite,
+  256,000 of 256,000. Settled, measured: the referee's divider and the suite's recorded results agree on every case.
 

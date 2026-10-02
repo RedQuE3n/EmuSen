@@ -1,8 +1,9 @@
 //! The S-SMP around the SPC700: 64 KiB of RAM, the boot ROM, the I/O page with its four ports both ways, the three
-//! timers and a stand-in DSP whose registers read and write but make no sound; and its clock, run behind the S-CPU's
-//! and caught up at a port access and at the frame's end (fullsnes, "SNES APU"; VenusRT_Plan.md §5.3). See
-//! VenusRT_Native.md §21.
+//! timers and the S-DSP, which takes one of its steps in each SPC700 cycle; and its clock, run behind the S-CPU's and
+//! caught up at a port access and at the frame's end (fullsnes, "SNES APU"; VenusRT_Plan.md §5.3). See
+//! VenusRT_Native.md §21 and §22.
 
+use super::dsp::Dsp;
 use super::spc700::{self, Spc700};
 
 /// SPC700 cycles to master clocks, exactly: 1.024 MHz against 236,250,000/11 Hz (NTSC) or 21,281,370 Hz (PAL).
@@ -28,14 +29,17 @@ pub struct Smp {
     pub test: u8,
     pub control: u8,
     pub dsp_address: u8,
-    /// The stand-in DSP's 128 registers, RAM-like as fullsnes describes the buffer.
-    pub dsp: Box<[u8]>,
+    pub dsp: Dsp,
+    /// The DSP's stereo samples since the machine last took them.
+    pub out: Vec<i16>,
     /// $2140-$2143 as the S-CPU wrote them, and $F4-$F7 as the SPC700 wrote them.
     pub to_apu: [u8; 4],
     pub to_cpu: [u8; 4],
     pub timers: [Timer; 3],
-    /// SPC700 cycles since power-on, for the timers' 8 kHz and 64 kHz sources.
+    /// The DSP's cycles (1.024 MHz) since power-on; an SPC700 cycle is one of them at TEST's default.
     pub cycles: u64,
+    /// The timers' first stages, one for timers 0 and 1 and one for timer 2, counting toward 384 and 48 (D-27).
+    pub prescale: [u16; 2],
     pub ratio: (u64, u64),
 }
 
@@ -49,11 +53,13 @@ impl Smp {
             test: 0x0A,
             control: 0xB0,
             dsp_address: 0,
-            dsp: vec![0; 0x80].into(),
+            dsp: Dsp { step: 1, ..Dsp::default() },
+            out: Vec::new(),
             to_apu: [0; 4],
             to_cpu: [0; 4],
             timers: Default::default(),
             cycles: 0,
+            prescale: [0; 2],
             ratio: if pal { PAL_RATIO } else { NTSC_RATIO },
         };
         if let Some(rom) = s.ipl {
@@ -86,14 +92,35 @@ impl Smp {
 
     /// One SPC700 cycle passes: the timers' sources tick on their division of it (8 kHz is every 128th, 64 kHz every 16th).
     fn tick(&mut self) {
-        self.cycles += 1;
-        // TEST bit 3 lets the timers run and bit 0 stops them (fullsnes, TEST).
+        // D-27: TEST bits 6-7 stretch every SPC700 cycle to 1, 2, 5 or 10 of the DSP's; bits 4-7 set the timers' step.
+        let clk = (self.test >> 6) as usize;
+        for _ in 0..[1, 2, 5, 10][clk] {
+            self.cycles += 1;
+            self.dsp.step(&mut self.ram, self.test & 0x02 != 0, &mut self.out);
+        }
+    }
+
+    /// The timers' part of a cycle, after the SPC700's access in it, so that a TEST or CONTROL write counts at once (D-27).
+    fn timer_step(&mut self) {
+        let clk = (self.test >> 6) as usize;
+        let step = (1u16 << clk) + (2u16 << ((self.test >> 4) & 3));
+        let mut fire = [false; 3];
+        self.prescale[0] += step;
+        if self.prescale[0] >= 384 {
+            self.prescale[0] -= 384;
+            fire = [true, true, false];
+        }
+        self.prescale[1] += step;
+        if self.prescale[1] >= 48 {
+            self.prescale[1] -= 48;
+            fire[2] = true;
+        }
+        // TEST bit 3 lets the timers count and bit 0 stops them; the first stage runs regardless (fullsnes, TEST; D-26).
         if self.test & 0x09 != 0x08 {
             return;
         }
         for (i, t) in self.timers.iter_mut().enumerate() {
-            let period = if i == 2 { 16 } else { 128 };
-            if self.control & (1 << i) == 0 || self.cycles % period != 0 {
+            if self.control & (1 << i) == 0 || !fire[i] {
                 continue;
             }
             t.stage = t.stage.wrapping_add(1);
@@ -107,7 +134,7 @@ impl Smp {
     fn io_read(&mut self, a: u16) -> u8 {
         match a {
             0xF2 => self.dsp_address,
-            0xF3 => self.dsp[(self.dsp_address & 0x7F) as usize],
+            0xF3 => self.dsp.read(self.dsp_address),
             0xF4..=0xF7 => self.to_apu[(a - 0xF4) as usize],
             0xF8 | 0xF9 => self.ram[a as usize],
             0xFD..=0xFF => {
@@ -143,11 +170,7 @@ impl Smp {
                 self.control = v;
             }
             0xF2 => self.dsp_address = v,
-            0xF3 => {
-                if self.dsp_address < 0x80 {
-                    self.dsp[self.dsp_address as usize] = v;
-                }
-            }
+            0xF3 => self.dsp.write(self.dsp_address, v),
             0xF4..=0xF7 => self.to_cpu[(a - 0xF4) as usize] = v,
             0xFA..=0xFC => self.timers[(a - 0xFA) as usize].divider = v,
             _ => {}
@@ -158,11 +181,13 @@ impl Smp {
 impl spc700::Bus for Smp {
     fn read(&mut self, address: u16) -> u8 {
         self.tick();
-        match address {
+        let v = match address {
             0x00F0..=0x00FF => self.io_read(address),
             0xFFC0..=0xFFFF if self.control & 0x80 != 0 => self.ipl.map_or(0, |r| r[(address - 0xFFC0) as usize]),
             _ => self.ram[address as usize],
-        }
+        };
+        self.timer_step();
+        v
     }
 
     fn write(&mut self, address: u16, value: u8) {
@@ -174,10 +199,12 @@ impl spc700::Bus for Smp {
         if self.test & 0x02 != 0 {
             self.ram[address as usize] = value;
         }
+        self.timer_step();
     }
 
     fn idle(&mut self) {
         self.tick();
+        self.timer_step();
     }
 }
 

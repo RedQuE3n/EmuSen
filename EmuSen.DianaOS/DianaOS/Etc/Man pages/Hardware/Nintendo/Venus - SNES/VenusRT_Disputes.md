@@ -655,6 +655,14 @@ their data.
   the only difference the read found, and it belongs to D-27.
 - Conclusion: open, argued to be D-27: no rule in the read process separates `test_timer_stop` from
   `test_timer_stop2` other than TEST's speed bits, so the ROM is to be measured again once D-27 is built.
+- **Measured 2026-10-02, after D-27: still 00 against 04; the argument above is retired.** A log of the ROM's timer
+  accesses shows what it does: timer 0 at divider 2, then TEST written $0B and $0A alternately every four cycles
+  for about 110 cycles, then T0OUT read. `test_timer_stop` alternates $02 and $0A (bit 3) instead, and passes with
+  00. In 110 cycles the first stage as built ticks timer 0 at most once, so 04 (eight second-stage ticks) cannot
+  come from the 8 kHz stage at all: toggling bit 0 must itself clock the second stage, or bit 0 must change the
+  first stage's rate. Two readings were tried and rejected: the timers' part of a cycle after the access (built
+  for D-27; no change here), and bit 0 freezing the first stage (00). Not settled; the referee's read process
+  gates stage 2 by bits 0 and 3 alike and does not explain it.
 - Pinned by: `test_timer_stop2`.
 
 ### D-27. S-SMP: TEST bits 4 to 7 add waitstates to the SPC700's cycles
@@ -670,7 +678,66 @@ their data.
 - Referee: not read for this rule. D-26's read of `rtl/SMP.vhd` lines 210-360 found that the timers' prescalers
   step by an amount TEST bits 4 to 7 set, which fullsnes does not state; the SPC700's own waitstates were not read.
   Mesen's source: none.
-- Conclusion: open; fullsnes's rule is to be built and measured on the three ROMs. A setting the software "should
-  never change" (fullsnes), so no game is expected to depend on it.
-- Pinned by: `test_timer_speed`, `test_timer_speed2`.
+- Conclusion: settled by measurement, 2026-10-02, and **not** as fullsnes reads. The counts the ROMs print are
+  explained exactly by the referee's timer step alone: the first stage advances by 2^(bits 7-6) + 2·2^(bits 5-4)
+  per SPC700 cycle and ticks timers 0 and 1 at 384 and timer 2 at 48 (128 and 16 cycles at TEST's default), which
+  is also the formula in blargg's `notes.txt` beside the ROMs ("step = 1 << clock_speed + 2 << timer_speed"). Bits
+  4-5 do not slow the SPC700: `test_speed` prints 251 for 0A to 3A in Mesen's run, and fullsnes's RAM waitstates
+  would have changed it. Bits 6-7 stretch every SPC700 cycle to 1, 2, 5 or 10 of the 1.024 MHz cycles (fullsnes's
+  0/1/4/9 waits, applied to every cycle rather than to I/O and ROM alone): `test_speed` then prints 251, 126 and
+  25, Mesen's 251, 126 and 25-26. Built: the stretch, the step, and the timers' part of a cycle evaluated after the
+  SPC700's access in it. **Measured:** `test_timer_speed` and `test_timer_speed2` pass, `test_timer_speed_2` and
+  `test_speed` print Mesen's counts to within one, and `spc_timer`, `spc_smp`, `spc_mem_access_times`,
+  `test_timer_stop` and gilyon's `spctest` still pass. fullsnes's per-opcode table of internal cycles' timings is
+  not built, since nothing here distinguishes it. A setting the software "should never change" (fullsnes).
+- Pinned by: `test_timer_speed`, `test_timer_speed2`, `test_speed`.
+
+### D-28. S-DSP: the Gaussian interpolation's rounding, where fullsnes and anomie give different formulas
+- Opened: 2026-10-02, at stage 4 step 2, before the S-DSP's code, by reading the two sources side by side.
+  fullsnes ("SNES APU DSP BRR Pitch", "4-Point Gaussian Interpolation") multiplies each of the four 15-bit samples
+  by its coefficient and shifts right by 10, sums the first three with no overflow handling, adds the fourth with
+  16-bit saturation, and shifts the 16-bit result right by one. anomie's S-DSP document (romhacking.net 191,
+  revision 1212, "PITCH ADJUSTMENTS") shifts each product right by 11, wraps the first three's sum to 15 bits, and
+  clamps the fourth's addition to 15 bits. Both use the same 512-entry table, given in both. The two differ in the
+  low bit of most results, and in where the sum wraps.
+- Test ROM: blargg's `spc_dsp6`, which grades the DSP by its own measurements; the audio against Mesen's through
+  the probe is the second, coarser, oracle.
+- Referee: not read. Mesen's source: none.
+- Conclusion: open. fullsnes's formula is built first, since it states the partial overflow handling explicitly
+  and anomie's comment ("the above 3 wrap at 15 bits") is a simplification of the same structure at half the
+  scale; `spc_dsp6` is to decide, and the other formula is tried if it fails on an interpolation case.
+- Pinned by: `spc_dsp6`.
+
+### D-29. S-DSP: what a key-on does to the envelope and its hidden value over the start-up samples
+- Opened: 2026-10-02, at stage 4 step 2, by blargg's `spc_dsp6`: every test before it passes, and "Envelope/hidden
+  env 0 at kon" fails, printing 0000 six times, then 0020, then 0008 three times (checksum 179DD951). The test keys
+  voice 0 twice ten samples apart with GAIN at $80 (linear decrease, rate 0), and sets GAIN to $FF (bent increase,
+  every sample) for one sample at an offset moved by six SPC700 cycles each round; each value is the envelope's
+  step that sample gave. VenusRT gives +32 only when the bent sample is the start-up's fifth, where the hidden value
+  is still the key-on's 0, and +8 after it, where the linear decrease has left the hidden value negative.
+- Documents read: anomie's S-DSP document, "BRR DECODING" (the five start-up samples, "#0 ... the envelope is set to
+  0 and enters the Attack state, and is not updated for the next several samples"; "#5 = Envelope updating
+  begins"), the register section on VxADSR/VxGAIN (the new value saved before clamping for the bent increase) and
+  KON/KOFF (the internal KON, cleared at cycle 29 and loaded with KOFF at cycle 30 every other sample); fullsnes,
+  "KON/KOFF Notes" and "Gain Notes". Neither says what the hidden value is during the start-up samples, or on which
+  of the two polls a KON written at cycle 30 is taken.
+- Test ROM: `spc_dsp6`, with its DSP register accesses logged around the case (the test synchronises by writing
+  ENVX and reading it back until the DSP overwrites it). Two readings were tried and rejected by measurement: a
+  key-on that keeps the hidden value (every step +8), and a rate-0 setting that leaves the envelope's phase and
+  hidden value untouched (fails the earlier "attack->decay during gain").
+- Referee: `Venus_Referee.md` §0 rates the S-DSP's formulas weak (they follow an emulator's, the key-on delay
+  among them) and its rate counter real. Read 2026-10-02: SNES_MiSTer `rtl/DSP.vhd` lines 925-1000 (the voice's
+  envelope stage: start-up and key-on), 1075-1090 (the KON clear and the KON/KOFF load), 1108-1120 (where its
+  every-other-sample flag turns) and 1185-1270 (the envelope's update), and nothing else. What it does, in prose: a
+  key-on and a key-off act only on the samples the poll belongs to, every other one; the start-up samples hold the
+  envelope and the bent-increase memory at zero; the bent increase's memory is a flag set from each new value
+  (12-bit, at 0x600 or more, or out of range), whether or not the counter applies the value; and the decay-to-sustain
+  test compares bits 8-10 of the new value. Its ENVX is taken from the envelope before the sample's update.
+- Conclusion: settled by measurement for two rules: KON and KOFF act on the poll's samples only, the poll made
+  before voice 0's envelope step in cycle 30; and ENVX shows the envelope applied to the sample, before that
+  sample's update (the test list's "Order/envx uses prev env" names it). With both, "hidden env 0 at kon" and the
+  eight tests after it pass (measured 2026-10-02); the hidden-value reading already built agrees with the
+  referee's. Sustain is now matched on bits 8-10 of the new value, as the referee and anomie's "upper 3 bits of E"
+  read it.
+- Pinned by: `spc_dsp6`, "hidden env 0 at kon" to "kon clears independent".
 

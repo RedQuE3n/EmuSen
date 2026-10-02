@@ -94,6 +94,10 @@ impl Machine {
             self.step();
         }
         self.sys.apu.run_to(self.sys.timing.clock);
+        for pair in self.sys.apu.out.chunks_exact(2) {
+            self.samples.push_pair(pair[0], pair[1]);
+        }
+        self.sys.apu.out.clear();
     }
 
     /// One instruction, or the interrupt the machine takes instead. The check is made just before an instruction's
@@ -243,13 +247,17 @@ impl Machine {
             w.u8("Test", a.test);
             w.u8("Control", a.control);
             w.u8("DspAddress", a.dsp_address);
-            w.bytes("Dsp", &a.dsp);
+            w.bytes("Dsp", &a.dsp.regs);
+            let mut core = [0u8; crate::apu::dsp::PACKED_BYTES];
+            a.dsp.pack(&mut core);
+            w.bytes("DspCore", &core);
             w.bytes("ToApu", &a.to_apu);
             w.bytes("ToCpu", &a.to_cpu);
             for (i, t) in a.timers.iter().enumerate() {
                 w.bytes(["Timer0", "Timer1", "Timer2"][i], &[t.divider, t.stage, t.out]);
             }
             w.u64("Cycles", a.cycles);
+            w.u16s("Prescale", &a.prescale);
         });
         w.group("Bus", |w| {
             w.u8("Mdr", self.sys.mdr);
@@ -376,7 +384,11 @@ impl Machine {
         a.test = r.u8()?;
         a.control = r.u8()?;
         a.dsp_address = r.u8()?;
-        r.bytes(&mut a.dsp)?;
+        r.bytes(&mut a.dsp.regs)?;
+        let mut core = [0u8; crate::apu::dsp::PACKED_BYTES];
+        r.bytes(&mut core)?;
+        a.dsp.unpack(&core);
+        a.out.clear();
         r.bytes(&mut a.to_apu)?;
         r.bytes(&mut a.to_cpu)?;
         for t in a.timers.iter_mut() {
@@ -385,6 +397,8 @@ impl Machine {
             *t = crate::apu::smp::Timer { divider: b[0], stage: b[1], out: b[2] & 0x0F };
         }
         a.cycles = r.u64()?;
+        r.u16s(&mut a.prescale)?;
+        a.prescale = [a.prescale[0] % 384, a.prescale[1] % 48];
         self.sys.mdr = r.u8()?;
         self.sys.wram_address = r.u32()? & 0x1FFFF;
         self.sys.fast_rom = r.bool()?;
@@ -523,14 +537,14 @@ pub(crate) mod tests {
 
     // Version 4: the CPU, the clock, the bus and the S-CPU's devices; the listing is its record (plan §5.6).
     #[test]
-    fn the_version_11_layout_is_pinned() {
+    fn the_version_13_layout_is_pinned() {
         let m = Machine::load_rom(&rom(&[])).unwrap();
         let layout = m.layout();
         assert!(layout.starts_with("0 4 u32 Magic\n4 4 i32 Version\n8 2 u16 Cpu.A\n"), "{layout}");
         assert!(layout.contains(" u64 Timing.Clock\n") && layout.contains(" u8[1024] Bus.Io\n") && layout.contains(" u16[32768] Vram\n"), "{layout}");
         assert!(layout.contains(" u8[64] Ppu.Regs\n") && layout.contains(" u16[256] Cgram\n"), "{layout}");
-        assert_eq!(layout.lines().count(), 111, "{layout}");
-        assert_eq!(m.state_size(), 264_633);
+        assert_eq!(layout.lines().count(), 113, "{layout}");
+        assert_eq!(m.state_size(), 265_205);
         assert_eq!(&save(&m)[..4], b"VNRT");
     }
 

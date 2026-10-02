@@ -2288,3 +2288,81 @@ tuning was done; skipping the chip's waiting loop is a lever recorded, not taken
 
 Games driven with input to the DSP-2, DSP-3 and ST01x titles' chip use; the ST01x RAM as a battery file at stage 6;
 the three late partings above.
+
+---
+
+## 25. Stage 5, step 2: the SA-1 (2026-10-02)
+
+### 25.1 What it built
+
+`chips/sa1.rs`, from fullsnes's "SNES Cart SA-1" chapters: a second 65816, the stage 1 CPU unchanged, over its own
+bus with its own map (I-RAM at 0000-07FF and 3000-37FF, the I/O at 2200-23FF, the BW-RAM window at 6000-7FFF,
+BW-RAM itself and its 2- and 4-bit bitmap view at 60-6F, ROM through the MMC's four 1 MiB regions in LoROM and
+HiROM form). Both sides' control and interrupt registers with the S-CPU's NMI and IRQ vectors replaceable and the
+SA-1's always replaced; the H/V timer, with HCNT and VCNT read as compare values (fullsnes's argument); BW-RAM and
+I-RAM write protection; normal DMA, charged to the SA-1's clock at fullsnes's rates; character conversion 2 (pixels
+written to the register file, bitplaned into I-RAM) and 1 (a bitmap in BW-RAM read out as tiles through the S-CPU's
+reads of banks 40-4F); the arithmetic unit; the variable-length bit reader. Registers take only their side's writes,
+by fullsnes's "Side" column. The SA-1 board is chosen by a chipset of 3xh on map mode 23h, and decodes the whole
+cartridge space; the S-CPU sees nothing of it outside the SA-1's map.
+
+**Clocking (P5's slice):** the SA-1 runs at 2 master clocks a bus cycle (10.74 MHz) and 4 on BW-RAM, behind the
+S-CPU, caught up **after every S-CPU instruction** and before every S-CPU access to the board, its IRQ line joining
+the S-CPU's at the next cycle. The slice is therefore one S-CPU instruction. Contention between the two CPUs for ROM
+and BW-RAM, which fullsnes leaves undocumented ("XXX pg 62..66 timings"), is not modelled. The SA-1's state and the
+line travel in the `Coprocessor` group; a 128 KiB-board image skip-checks equal (§25.3).
+
+### 25.2 The oracles (measured 2026-10-02)
+
+- **absindx's `SA1RamProtectionTest`: passes all 222 tests**, with three rules from it beyond fullsnes (D-34): BW-RAM
+  at the S-CPU's banks 40-4F only, nothing of the board in the LoROM SRAM banks, the SA-1 seeing BW-RAM in 40-5F,
+  and the SA-1's reset clearing CIWP. Before them it stopped at tests 155 and 221. Its photograph of a console's
+  run shows stack pointers ($01FD, $01FC) that differ from VenusRT's and Mesen's, which are power-on values.
+- **`SA1VersionCodeTest`**: "FAILED" on VenusRT and on Mesen alike; $230E's value is VenusRT's choice (D-33).
+- **The games** (every tenth frame to 2,400, no input), all five SA-1 titles in the player's library:
+
+| Game | First lit (Mesen / VenusRT) | Picture at 2,400 | First picture difference | Pictures differing |
+|---|---|---|---|---|
+| Kirby Super Star | 110 / 110 | 10,961 pixels; spaces equal | 110 | 82 of 240 |
+| Super Mario RPG | 40 / 40 | 2,686 pixels; VRAM 1,139 bytes | 40 | 179 of 240 |
+| PGA European Tour | 50 / 50 | equal | 50 | 14 of 240 |
+| PGA Tour 96 | 50 / 50 | equal | 50 | 15 of 240 |
+| Power Rangers Zeo: Battle Racers | 80 / 80 | equal | 400 | 4 of 240 |
+
+Every title boots, lights on Mesen's frame and plays its attract sequence. Super Mario RPG's and Kirby Super Star's
+frames at 2,400 show the same scene as Mesen's with the actors a little apart in time (Kirby a few pixels along his
+path; Mario, the Goomba and the Shy Guy at other points of the same walk), a phase difference rather than a broken
+picture: the slice and the absent contention are the first suspects (argued).
+
+- **The corpus**: 77 of the 117 ROMs Mesen passes now pass (76 at §23), `SA1RamProtectionTest` the gain; nothing
+  that passed fails.
+
+### 25.3 The skip check, the clone check, the cost (measured 2026-10-02)
+
+**Skip-versus-draw:** 309 images (the 304 and the five SA-1 games) equal over 600 frames, the SA-1's state included.
+
+**Clone check:** 26 files. The first run found `chips/sa1.rs` sharing 18 fingerprints with Mesen's `Sa1.cpp`, over
+§4.2's threshold of 12: the byte-at-a-time register writes for fullsnes's registers (CRV, CNV, CIV, SNV, SIV, SDA,
+DTC) written as the same masking expression in the same order, a convergence on the documented layout. Written
+through two small helpers instead, the pair shares fewer than 2, and the largest pair left is 4 fingerprints with
+`Sa1Types.h` (the fields named after fullsnes's registers). No table, and no new identifier, is Mesen's.
+
+**Cost** (the lock, load 0.8 rising to 1.1, best of three over 2,400 frames):
+
+| Game | Drawn | Picture skipped |
+|---|---|---|
+| Super Mario RPG | 2.72 ms | 1.64 |
+| Kirby Super Star | 2.70 | 1.77 |
+| Power Rangers Zeo | 2.59 | 1.50 |
+| PGA European Tour | 2.17 | 1.39 |
+| PGA Tour 96 | 2.18 | 1.40 |
+
+**P2 (Super Mario RPG at most 3.8 ms at the end of stage 5): met so far**, at 2.72 against C# Venus's 4.16; Yoshi's
+Island waits for the GSU. **P5's slice** (one S-CPU instruction) passes absindx's RAM-protection test and keeps Super
+Mario RPG inside P2; whether it explains the two games' phase differences is the next measurement. No tuning was done.
+
+### 25.4 What is left of the SA-1
+
+ROM and BW-RAM contention and the SA-1's real access timings (fullsnes's missing pages); character conversion 1 as
+the hardware streams it (the two golf games that use it are not in the library); the variable-length reader's
+unknowns (Jumpin' Derby, not in the library); $230E (D-33); the two games' phase differences.

@@ -194,9 +194,22 @@ pub struct System {
     pub apu: Smp,
     /// CPU writes to $2100-$43FF since power-on, which the header's reset-handler evidence counts; not in the state.
     pub io_writes: u32,
+    /// The cartridge's IRQ line to the S-CPU (the SA-1's), as last caught up.
+    pub cart_irq: bool,
 }
 
 impl System {
+    /// Runs the SA-1 to the S-CPU's clock and takes its IRQ line.
+    #[inline]
+    pub fn catch_up_sa1(&mut self) {
+        let clock = self.timing.clock;
+        let c = &mut self.cart;
+        if let Some(sa1) = c.sa1.as_mut() {
+            sa1.run_to(clock, &c.rom, &mut c.sram);
+            self.cart_irq = sa1.snes_irq();
+        }
+    }
+
     pub fn new(cart: Cartridge) -> System {
         let pal = cart.header.region() == Region::Pal;
         System {
@@ -217,6 +230,7 @@ impl System {
             dev: Devices::default(),
             apu: Smp::new(None, pal),
             io_writes: 0,
+            cart_irq: false,
         }
     }
 
@@ -247,7 +261,7 @@ impl System {
     fn clock_cycle(&mut self, clocks: u16) {
         self.dev.nmi_at_cycle = self.dev.nmi_pending && !self.dev.nmi_hold;
         self.dev.nmi_hold = false;
-        self.dev.irq_at_cycle = self.timing.irq_flag;
+        self.dev.irq_at_cycle = self.timing.irq_flag || self.cart_irq;
         let t = &mut self.timing;
         if t.line_clock + clocks < t.next_event && self.dev.dma_wait == 0 {
             t.line_clock += clocks;
@@ -294,6 +308,14 @@ impl System {
     pub fn read_value(&mut self, address: u32, side_effects: bool) -> Option<u8> {
         let bank = (address >> 16) as u8;
         let offset = address as u16;
+        if self.cart.sa1.is_some() && crate::chips::sa1::Sa1::snes_maps(address) {
+            if side_effects {
+                self.catch_up_sa1();
+            }
+            let c = &mut self.cart;
+            let v = c.sa1.as_mut()?.snes_read(address, &c.rom, &c.sram, side_effects);
+            return v;
+        }
         if bank & 0xFE == 0x7E {
             return Some(self.wram[(address & 0x1FFFF) as usize]);
         }
@@ -352,6 +374,15 @@ impl System {
     pub(crate) fn write_value(&mut self, address: u32, value: u8) {
         let bank = (address >> 16) as u8;
         let offset = address as u16;
+        if self.cart.sa1.is_some() && crate::chips::sa1::Sa1::snes_maps(address) {
+            self.catch_up_sa1();
+            let c = &mut self.cart;
+            if let Some(sa1) = c.sa1.as_mut() {
+                sa1.snes_write(address, value, &c.rom, &mut c.sram);
+                self.cart_irq = sa1.snes_irq();
+            }
+            return;
+        }
         if bank & 0xFE == 0x7E {
             self.wram[(address & 0x1FFFF) as usize] = value;
             return;

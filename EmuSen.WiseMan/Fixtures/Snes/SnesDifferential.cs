@@ -40,8 +40,7 @@ namespace EmuSen.WiseMan.Fixtures.Snes
         public static (int Compared, int Differing) Pictures(SnesPicture? p, SnesPicture? q, int rowOffset)
         {
             if (p is null || q is null) return (0, 0);
-            // A picture more than 300 rows high shows each line twice (or interlaced); one 512 wide against one 256 wide is
-            // compared at the wider one's columns, the narrow pixel standing for both halves, the main screen's being the odd one.
+            // Pictures of different heights and widths are compared at the larger layout - see VenusRT_Native.md §19.2.
             int py = p.Height > 300 ? 2 : 1, qy = q.Height > 300 ? 2 : 1;
             // Two such pictures are compared row for row, the offset doubled: an interlaced picture's fields differ.
             if (py == 2 && qy == 2) (py, qy, rowOffset) = (1, 1, rowOffset * 2);

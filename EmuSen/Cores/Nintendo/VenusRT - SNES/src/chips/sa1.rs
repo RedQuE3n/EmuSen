@@ -334,12 +334,12 @@ impl Sa1 {
             }
             0x2201 => self.sie = v,
             0x2202 => self.sfr &= !(v & 0xA0),
-            0x2203 => self.crv = (self.crv & 0xFF00) | v as u16,
-            0x2204 => self.crv = (self.crv & 0x00FF) | (v as u16) << 8,
-            0x2205 => self.cnv = (self.cnv & 0xFF00) | v as u16,
-            0x2206 => self.cnv = (self.cnv & 0x00FF) | (v as u16) << 8,
-            0x2207 => self.civ = (self.civ & 0xFF00) | v as u16,
-            0x2208 => self.civ = (self.civ & 0x00FF) | (v as u16) << 8,
+            0x2203 => set_byte16(&mut self.crv, 0, v),
+            0x2204 => set_byte16(&mut self.crv, 1, v),
+            0x2205 => set_byte16(&mut self.cnv, 0, v),
+            0x2206 => set_byte16(&mut self.cnv, 1, v),
+            0x2207 => set_byte16(&mut self.civ, 0, v),
+            0x2208 => set_byte16(&mut self.civ, 1, v),
             0x2209 => {
                 self.scnt = v;
                 self.sfr = (self.sfr & 0xA0) | (v & 0x5F);
@@ -354,10 +354,10 @@ impl Sa1 {
                     self.nmi_pending = false;
                 }
             }
-            0x220C => self.snv = (self.snv & 0xFF00) | v as u16,
-            0x220D => self.snv = (self.snv & 0x00FF) | (v as u16) << 8,
-            0x220E => self.siv = (self.siv & 0xFF00) | v as u16,
-            0x220F => self.siv = (self.siv & 0x00FF) | (v as u16) << 8,
+            0x220C => set_byte16(&mut self.snv, 0, v),
+            0x220D => set_byte16(&mut self.snv, 1, v),
+            0x220E => set_byte16(&mut self.siv, 0, v),
+            0x220F => set_byte16(&mut self.siv, 1, v),
             0x2210 => self.tmc = v,
             0x2211 => {
                 self.timer_zero = self.clock;
@@ -387,12 +387,12 @@ impl Sa1 {
                     self.char1 = None;
                 }
             }
-            0x2232 => self.sda = (self.sda & 0xFFFF00) | v as u32,
-            0x2233 => self.sda = (self.sda & 0xFF00FF) | (v as u32) << 8,
-            0x2234 => self.sda = (self.sda & 0x00FFFF) | (v as u32) << 16,
-            0x2235 => self.dda = (self.dda & 0xFFFF00) | v as u32,
+            0x2232 => set_byte24(&mut self.sda, 0, v),
+            0x2233 => set_byte24(&mut self.sda, 1, v),
+            0x2234 => set_byte24(&mut self.sda, 2, v),
+            0x2235 => set_byte24(&mut self.dda, 0, v),
             0x2236 => {
-                self.dda = (self.dda & 0xFF00FF) | (v as u32) << 8;
+                set_byte24(&mut self.dda, 1, v);
                 if self.dcnt & 0x20 != 0 && self.dcnt & 0x10 != 0 {
                     // Character conversion 1 starts on DDA; its first character is ready for the S-CPU at once.
                     self.char1 = Some(0);
@@ -402,13 +402,13 @@ impl Sa1 {
                 }
             }
             0x2237 => {
-                self.dda = (self.dda & 0x00FFFF) | (v as u32) << 16;
+                set_byte24(&mut self.dda, 2, v);
                 if self.dcnt & 0xA4 == 0x84 {
                     self.dma(rom, bw);
                 }
             }
-            0x2238 => self.dtc = (self.dtc & 0xFF00) | v as u16,
-            0x2239 => self.dtc = (self.dtc & 0x00FF) | (v as u16) << 8,
+            0x2238 => set_byte16(&mut self.dtc, 0, v),
+            0x2239 => set_byte16(&mut self.dtc, 1, v),
             0x223F => self.bbf = v,
             0x2240..=0x224F => {
                 self.brf[(reg - 0x2240) as usize] = v;
@@ -423,11 +423,11 @@ impl Sa1 {
                     self.overflow = false;
                 }
             }
-            0x2251 => self.ma = (self.ma & 0xFF00) | v as u16,
-            0x2252 => self.ma = (self.ma & 0x00FF) | (v as u16) << 8,
-            0x2253 => self.mb = (self.mb & 0xFF00) | v as u16,
+            0x2251 => set_byte16(&mut self.ma, 0, v),
+            0x2252 => set_byte16(&mut self.ma, 1, v),
+            0x2253 => set_byte16(&mut self.mb, 0, v),
             0x2254 => {
-                self.mb = (self.mb & 0x00FF) | (v as u16) << 8;
+                set_byte16(&mut self.mb, 1, v);
                 self.arithmetic();
             }
             0x2258 => {
@@ -436,10 +436,10 @@ impl Sa1 {
                     self.vbit += self.vlen();
                 }
             }
-            0x2259 => self.vda = (self.vda & 0xFFFF00) | v as u32,
-            0x225A => self.vda = (self.vda & 0xFF00FF) | (v as u32) << 8,
+            0x2259 => set_byte24(&mut self.vda, 0, v),
+            0x225A => set_byte24(&mut self.vda, 1, v),
             0x225B => {
-                self.vda = (self.vda & 0x00FFFF) | (v as u32) << 16;
+                set_byte24(&mut self.vda, 2, v);
                 self.vbit = 0;
             }
             _ => {}
@@ -627,6 +627,16 @@ impl Sa1 {
         self.char1 = char1.then_some(l(4));
         self.iram.copy_from_slice(&b[103..103 + 0x800]);
     }
+}
+
+/// Byte `i` of a 16-bit register, as the S-CPU and the SA-1 write them a byte at a time.
+fn set_byte16(r: &mut u16, i: u32, v: u8) {
+    *r = (*r & !(0xFF << (i * 8))) | (v as u16) << (i * 8);
+}
+
+/// Byte `i` of a 24-bit address register.
+fn set_byte24(r: &mut u32, i: u32, v: u8) {
+    *r = (*r & !(0xFF << (i * 8))) | (v as u32) << (i * 8);
 }
 
 /// $230E's version code. fullsnes knows none; the chip is the RF5A123, and the value is VenusRT's choice until a

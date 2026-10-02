@@ -588,3 +588,20 @@ their data.
   results are recorded by group in `VenusRT_Native.md` §21.
 - Pinned by: the SingleStepTests SPC700 run with cycle lists.
 
+### D-23. SPC700: DIV YA,X divides bit-serially, which gives its results when the quotient does not fit in a byte
+- Opened: 2026-10-02, at stage 4 step 1, by the SPC700 suite: 760 of the 1,000 DIV cases fail, every one with a
+  quotient above 255 or X zero; VenusRT computed the documented case and left the rest.
+- Documents read: fullsnes, "SPC700 CPU ALU Commands": "DIV YA,X ... A=YA/X, Y=YA MOD X ... NV..H.Z.", 12 cycles,
+  nothing on overflow or on what H means; anomie's cycle document: DIV's cycles only. No document covers it.
+- Test ROM: SingleStepTests' DIV cases give the results but not a rule; no ROM in the corpus isolates DIV.
+- Referee: `Venus_Referee.md` §0 rates the SPC700 "real support" and names its divider "a 9-iteration bit-serial
+  divider, not bsnes's closed form". Read: SNES_MiSTer `rtl/SPC700/MulDiv.vhd` whole (the multiply and divide
+  unit), and the nine rows of `rtl/SPC700/MCode.vhd` for opcode 9E; nothing else. What it does, in prose: a
+  17-bit register starts as 0, Y, A; each of nine steps rotates it left by one, the bit rotated in inverted when
+  the rotated value is at least X shifted left by nine, and then subtracts X shifted left by nine when the new low
+  bit is set. A is the register's low eight bits, Y its top eight; V is its bit 8, N its bit 7, Z its low byte's
+  zero; H is set when Y's low nibble is at least X's.
+- Conclusion: the referee's divider, to be measured on the suite's 1,000 DIV cases. Argued from the referee until
+  measured.
+- Pinned by: the SPC700 suite's DIV file.
+

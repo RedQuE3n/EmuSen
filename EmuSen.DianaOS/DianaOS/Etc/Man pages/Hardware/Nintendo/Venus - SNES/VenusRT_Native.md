@@ -2343,9 +2343,15 @@ picture: the slice and the absent contention are the first suspects (argued).
 
 **Clone check:** 26 files. The first run found `chips/sa1.rs` sharing 18 fingerprints with Mesen's `Sa1.cpp`, over
 §4.2's threshold of 12: the byte-at-a-time register writes for fullsnes's registers (CRV, CNV, CIV, SNV, SIV, SDA,
-DTC) written as the same masking expression in the same order, a convergence on the documented layout. Written
-through two small helpers instead, the pair shares fewer than 2, and the largest pair left is 4 fingerprints with
-`Sa1Types.h` (the fields named after fullsnes's registers). No table, and no new identifier, is Mesen's.
+DTC) written as the same masking expression in the same order. **Those fingerprints are convergence forced by the
+documented register layout:** the shared lines are, all of them, single-byte writes to fullsnes's registers in
+fullsnes's address order (its "SA-1 I/O Map" table lists CRV, CNV, CIV at 2203h-2208h, SNV, SIV at 220Ch-220Fh,
+SDA at 2232h-2234h and DTC at 2238h-2239h, each "Lsb"/"Msb"/"Mid"), and the masking expression is the one way to
+write a byte of a wider register; no logic beyond the layout is in them, and the module was written from fullsnes
+alone (no Mesen file was read). The writes were then put through two small helpers, which drops the pair below 2
+fingerprints; that rewrite changes the count, not the provenance, and is recorded as such: the helpers are kept
+because they say what the code does, not as evidence. The largest pair left is 4 fingerprints with `Sa1Types.h`,
+the fields named after fullsnes's registers. No table, and no new identifier, is Mesen's.
 
 **Cost** (the lock, load 0.8 rising to 1.1, best of three over 2,400 frames):
 

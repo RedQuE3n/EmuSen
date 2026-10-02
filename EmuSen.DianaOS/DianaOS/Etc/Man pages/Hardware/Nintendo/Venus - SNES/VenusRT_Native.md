@@ -1777,9 +1777,10 @@ lock, load 1.3 to 1.45; the picture's share, drawn less skipped, in ms:
 | `HiColor64PerTileRowPseudoHiRes` | 2.72 | 2.20 | 2.12 |
 | `InterlaceRPG` (mode 5, interlaced) | 2.06 | 1.60 | 1.58 |
 
-**The masks per run take 0.2 to 0.5 ms off the picture and the 256-wide picture another 0.05 to 0.1** on low-res
-frames (none on hi-res ones, which still use the canvas). The "before" column is higher than §19.5's "now" by about
-0.15 ms: mode 7's priority-chart selection and its fill branch, and run-to-run spread under the lock. Against §5.5's
+**The masks per run take 0.2 to 0.5 ms off the picture, and the 256-wide picture another 0.05 to 0.11** on low-res
+frames; on the two hi-res ROMs, which still use the canvas, 0.02 and 0.08, within the runs' spread. The "before"
+column is 0.15 to 0.2 ms above §19.5's "now"; mode 7's added branches are the likely part of it (argued, not
+measured apart from the spread between runs). Against §5.5's
 1.5 ms for the PPU: **low-res modes 0 to 4 now take 0.5 to 1.1 ms of picture, inside the budget; hi-res and
 interlaced frames 1.6 to 2.1 ms, still over it.** P1's overrun of §15.9 and §19.5 is retired for low-res frames and
 stands for hi-res ones, where the sub half-pixel's second priority walk and math is the cost.

@@ -7310,7 +7310,7 @@ and was moved to straddle the tolerance before the round.
 
 #### 4.87.9 Not covered, and owed
 
-- **The handheld was unreachable on 2026-10-01**, so nothing in this section was measured on it, before or after. Owed,
+- ~~**The handheld was unreachable on 2026-10-01**, so nothing in this section was measured on it, before or after.~~ *Measured later on 2026-10-01: §4.87.10.* Owed,
   in order: a trace of the unchanged pacing on its 119.90 Hz panel for the three games, which settles predictions 3
   and 4 and says what the complaint was; the same with the lock; the margin of §4.87.6 set from the time between a
   picture handed over and its draw; five minutes of audio on its real device. `--play` and the trace exist for this.
@@ -7319,10 +7319,113 @@ and was moved to straddle the tolerance before the round.
   as before; if it succeeds and Avalonia's render timer drifts against the vblank as predicted, the lock removes the
   emulation's beat and leaves the presenter's, and the remedy is then a render timer driven by the vblank, which is
   the toolkit's to carry and is not built.
-- **Variable refresh** is detected by a rule tested on synthetic intervals only (§4.87.3).
+- **Variable refresh** is detected by a rule tested on synthetic intervals only (§4.87.3). *On the handheld, with variable refresh on, gamescope's count turned out to count presents and the rule read the timer's quantisation as variable; §4.87.11 replaces the reading for such a count.*
 - **The desktop is unchanged**, by design: neither of its displays has a divisor near 60.
 - **A stall repaid in a burst** still skips pictures in both modes (§4.87.4), and a locked frame is nearer its
   deadline than a content-paced one, so a busy machine costs the lock more (§4.87.1, §4.87.6).
-- **The audio queue sits at a fifth of its target in every run, locked or not** (§4.87.8). Not explained.
+- **The audio queue sits at a fifth of its target in every run, locked or not** (§4.87.8). Not explained. *On the handheld's own device it sits near its target (§4.87.10), so it is the desktop's; still not explained there.*
 - **Rewind while held** takes the scheduler's deadline like any frame and was not measured.
 - **macOS and Windows** take the uncounted path. It is tested on synthetic ticks and has not run on either.
+
+#### 4.87.10 The handheld, measured: the render timer was the cause (2026-10-01)
+
+**The conditions.** Lenovo Legion Go S, SteamOS Game Mode. gamescope reports 1920x1200 at 119.90 Hz, and its root
+window says `GAMESCOPE_VRR_ENABLED = 1` and `GAMESCOPE_VRR_FEEDBACK = 1`: variable refresh was on and engaged for the
+whole session. The player's setting was left as it was. The build was this branch's, published to a scratch directory
+with its own configuration (NES on MoonRT, volume zero, no resume), started with `--play` under `systemd-run`, with
+its window given the focused application's `STEAM_GAME` so that gamescope shows it. 71 s measured per run after the
+first 3 s, the trace written by `EMUSEN_PRESENT_TRACE_SECONDS`, since a Mistress ended by a signal runs no exit
+handlers.
+
+**Predictions, written before the first trace was read.** H1, variable refresh removes the desktop's beat. H2,
+Avalonia's sleeping timer quantises the draws, and that is the jitter. H3, the count either counts gamescope's
+composites (the reading is variable and the lock stays off) or a fixed 120 Hz (a lock at two refreshes). H4, the
+58-to-62 counter is stalls. H5, the audio queue sits at a fifth of its target here too.
+
+**What the unchanged build showed** (Sync to display off; on gave the same figures, and why is below):
+
+| Game | Frame start interval, sd | One-second counts | Draw intervals, p5 / p50 / p95 ms | Draws off the median by > 25% | Handed over to drawn, p5 / p50 / p95 ms |
+|---|---|---|---|---|---|
+| Super Mario Bros. 3, MoonRT | 0.9 µs | 60 or 61 | 15.60 / 15.74 / 23.80 | 6.8 /s | 0.5 / 4.2 / 7.8 |
+| Super Mario Land 2, Mercury | 2 µs | 59 or 60 | 15.55 / 15.71 / 23.80 | 7.3 /s | 0.6 / 4.2 / 7.9 |
+| Super Mario 64, MarsRT | 0.3 ms | 59 or 60 | 23.85 / 32.16 / 40.37 | 7.0 /s | 0.6 / 4.4 / 8.0 |
+
+**H2 is confirmed, and it is the whole of the complaint here.** The emulation thread is exact: frames start 16.639
+ms apart to a microsecond, none late, the one-second counts 60 or 61. The picture is then drawn at the render timer's
+next tick, uniformly 0 to 8 ms later, and with the display following the draws the screen shows that: seven pictures
+15.7 ms apart, then one 23.8 ms, about seven times a second. The ticks fall 7.87 ms apart, not the 8.33 of the
+timer's 120, because a stopped timer restarted by a new picture ticks at once and restarts its interval. Super Mario
+64 draws every second frame and shows the same quantisation at twice the spacing.
+
+**H4 is refuted on this evidence.** No run had a frame late by half a frame or more except one each of the N64's, and
+every one-second count was within one of the rate. What the player read as 58 to 62 was not reproduced; the counter
+counts frames run, which were steady, and the motion was not.
+
+**H1 and H3: neither branch as stated.** The count rose by exactly one at every draw in every run, including the
+N64's, whose draws are two frames apart: gamescope's OML count counts presents. With the timer's quantisation the
+present times are irregular, the reading is variable, and the lock stays off, which is why Sync to display on and off
+gave the same figures. But the present times are not free: with the quantisation removed (below), they lie on the
+panel's 8.34 ms lattice, two refreshes for most frames. Variable refresh was on, and this window's pictures were still
+shown on refreshes.
+
+**H5 is refuted.** The queue on the handheld's own device averaged 226 ms of its 256 ms target with the correction
++0.18% on average, no submit found it empty, and nothing shed. The desktop's fifth-of-target queue (§4.87.8) is the
+desktop's.
+
+**The experiment.** The timer's rate is a property Avalonia keeps private; `RenderTimerRate` reaches it by name. The
+same game at four rates:
+
+| Render timer | Draw intervals, p5 / p50 / p95 ms, sd | Off the median by > 25% | Handed over to drawn, p50 / p95 ms | CPU, % of one core |
+|---|---|---|---|---|
+| 120 (the platform's) | 15.61 / 15.73 / 23.79, 2.57 | 6.84 /s | 4.20 / 7.84 | 105.4 |
+| 240 | 15.66 / 15.88 / 20.00, 1.64 | 8.44 /s | 2.25 / 4.09 | 106.9 |
+| 480 | 15.88 / 16.15 / 18.25, 0.96 | 0.08 /s | 1.27 / 2.18 | 107.7 |
+| 1000 | 16.45 / 16.67 / 16.91, 0.24 | 0.03 /s | 0.20 / 0.25 | 107.0 |
+
+The CPU column is the process. The emulation thread spins through its wait (§4.21), which is the 100%; the render
+timer at 1000 adds about 1.6 points, within the run-to-run spread of the 120 row. At 1000 a tick is a millisecond, the
+timer does not sleep at all between ticks (it waits only when more than a millisecond remains), and it is cheap only
+because the loop stops when nothing is drawn and restarts at once when a picture arrives. That is why 1000 and not a
+round multiple of the refresh: the aim is no tick to wait for, not a faster one.
+
+**The fix, decided 2026-10-01.** While a game's pictures arrive and Sync to display is on, `GameFrameControl` holds
+the timer at 1000, re-applied with each picture since the platform resets it when the screens change, and gives the
+platform its rate back a quarter of a second after the last picture, so the menus over a paused game tick as before.
+With the setting off nothing is held, and the old behaviour is exact. On a platform whose timer is not Avalonia's
+sleeping one, macOS and Windows, nothing is found and nothing changes. `EMUSEN_RENDER_FPS` overrides the rate for a
+measurement and 0 turns the hold off.
+
+#### 4.87.11 A count of presents is not a count of refreshes
+
+With the draws prompt, the lock engaged, and showed the next defect. Fitted to gamescope's count, it fitted its own
+presents: when a present came late the period grew, the lock slowed to it, and the next measurement agreed. With a 1.5
+ms margin it settled at 59.69 Hz; the Game Boy flapped between locked and not. This is the self-reference §4.87.3
+called harmless for regular content, and it is not harmless once a present can be late.
+
+**`DisplayClock` now tells the two counts apart.** A vblank count skips when a refresh passes without a draw; a count
+of presents never does. A count that has risen by exactly one at every sample for a whole window (240 samples) is
+treated as presents, and the refreshes are read from the present times instead: the median interval is divided by the
+smallest whole number, from one to four, that puts every interval within the residual of a multiple of the quotient,
+and each interval is counted as that many refreshes. Two refreshes with the odd one or three gives the 8.34 ms panel; a
+late present is then three refreshes, not one long one, and the period does not move. A counter that does skip, as
+the desktop model's and any true vblank count does, is used as it was.
+
+`DisplayClockReplayProbe` feeds a recorded trace through the clock. On the handheld traces taken before this change it
+reads 119.91 Hz and would lock at two refreshes in 70 of 74 readings for Super Mario Bros. 3 with the timer at 1000,
+in all 319 of the five-minute run, and in none for the timer at 120, whose quantised presents put the base at 127 Hz
+and the content 5.6% away. The traces taken while the old lock was drifting replay at that drift, 59.78 Hz, since
+those presents were already late; they are not evidence either way.
+
+**Tests.** `RenderTimerRateTests` constructs Avalonia's sleeping timer by name and holds it at the rate asked for, and
+leaves any other timer and a rate below one alone. `DisplayClockTests` gains presents on gamescope's grid, content-
+paced, which must read as the grid and lock; a locked stream with a late present every 97, which must not drag the
+period; a count that skips, which must be used as a count; and the quantised presents of the 120 Hz timer as
+measured, which must not lock.
+
+**Measured with both changes: owed.** The build with the timer held and presents read as presents was published on
+2026-10-02, and the handheld was unreachable from then until this was written. What the figures above already say of
+it: the timer at 1000 was measured on the handheld (the last row of the experiment, and a five-minute run at 59.95 Hz
+locked, 0.02 draws a second off the median, one frame never shown, the queue at 345 ms after its first 90 s and no
+submit finding it empty); the present-count reading was measured only by replaying those traces. A run of the three
+games with Sync to display on, one with it off as the control, and the margin at 1.5 and 3 ms on the fixed build
+remain to be taken.

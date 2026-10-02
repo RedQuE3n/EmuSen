@@ -134,5 +134,68 @@ namespace EmuSen.WiseMan.Serenity
             Assert.NotNull(clock.Current(taken + Second));
             Assert.Null(clock.Current(taken + DisplayClock.StaleTicks + 1));
         }
+    
+        // gamescope's count rises by one at every present, whatever the refreshes between - see EmuSen_Settings_Reference.md §4.87.11.
+        private const double PanelUs = 1e6 / 119.90;
+
+        // Presents on the 119.90 Hz grid: each draw is shown at the first refresh at least a millisecond after it.
+        private static DisplayClock Presents(Func<int, double> drawUs, int samples, DisplayClock? into = null, int firstCount = 0)
+        {
+            DisplayClock clock = into ?? new DisplayClock();
+            for (int i = 0; i < samples; i++)
+            {
+                double draw = drawUs(i);
+                long ust = Base + (long)Math.Round(Math.Ceiling((draw + 1000) / PanelUs) * PanelUs);
+                clock.ObserveVblank(ust, firstCount + i, Ticks(ust) + Second / 1000);
+            }
+            return clock;
+        }
+
+        [Fact]
+        public void Content_paced_presents_on_gamescopes_grid_read_as_the_grid_not_as_the_content()
+        {
+            DisplayReading r = Presents(i => i * 1e6 / 60.0988, 600).Reading!;
+            Assert.True(r.FromPresents);
+            Assert.False(r.Variable);
+            double perFrame = r.RefreshHz / Math.Round(r.RefreshHz / 60.0988);
+            Assert.Equal(119.90 / 2, perFrame, 2);
+            Assert.True(EmuSen.Common.FrameScheduler.Decide(60.0988, r, true, true).Locked);
+        }
+
+        [Fact]
+        public void A_late_present_does_not_drag_a_locked_reading_down()
+        {
+            var clock = new DisplayClock();
+            double frame = 2 * PanelUs;
+            Presents(i => i * frame + (i % 97 == 0 ? frame * 0.6 : 0), 3000, clock);
+            DisplayReading r = clock.Reading!;
+            Assert.False(r.Variable);
+            double perFrame = r.RefreshHz / Math.Round(r.RefreshHz / 60.0);
+            Assert.Equal(119.90 / 2, perFrame, 2);
+        }
+
+        [Fact]
+        public void A_count_that_skips_is_a_vblank_count_and_is_used_as_one()
+        {
+            DisplayReading r = Counted(119.90, 240, every: 2).Reading!;
+            Assert.False(r.FromPresents);
+            Assert.Equal(119.90, r.RefreshHz, 2);
+        }
+
+        [Fact]
+        public void Presents_drawn_on_a_slow_render_tick_are_not_locked_to()
+        {
+            // Two ticks of 7.87 ms, and a third about one draw in eight, as measured on the handheld on 2026-10-01.
+            var clock = new DisplayClock();
+            double t = 0;
+            for (int i = 0; i < 600; i++)
+            {
+                t += i % 9 == 8 ? 23.8e3 : 15.7e3;
+                long ust = Base + (long)t;
+                clock.ObserveVblank(ust, i, Ticks(ust));
+            }
+            DisplayReading r = clock.Reading!;
+            Assert.False(EmuSen.Common.FrameScheduler.Decide(60.0988, r, true, true).Locked);
+        }
     }
 }

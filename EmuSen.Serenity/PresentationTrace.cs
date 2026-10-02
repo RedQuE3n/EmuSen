@@ -15,9 +15,15 @@ namespace EmuSen.Serenity
         public static readonly string? Path = Environment.GetEnvironmentVariable("EMUSEN_PRESENT_TRACE") is { Length: > 0 } p ? p : null;
         public static bool Enabled => Path is not null;
 
+        // With EMUSEN_PRESENT_TRACE_SECONDS the file is written that long after the first frame, for a run that is ended by a signal.
+        private static readonly long FlushAfter = double.TryParse(Environment.GetEnvironmentVariable("EMUSEN_PRESENT_TRACE_SECONDS"), System.Globalization.NumberStyles.Float, CultureInfo.InvariantCulture, out double s) && s > 0
+            ? (long)(s * Stopwatch.Frequency) : 0;
+        private static long _firstFrame;
+
         private static readonly long[] _frames = Enabled ? new long[Capacity * 4] : Array.Empty<long>();
         private static readonly long[] _draws = Enabled ? new long[Capacity * 7] : Array.Empty<long>();
-        private static int _frameCount, _drawCount, _flushed;
+        private static readonly long[] _audio = Enabled ? new long[Capacity * 5] : Array.Empty<long>();
+        private static int _frameCount, _drawCount, _audioCount, _flushed;
         private static string _note = "";
 
         static PresentationTrace()
@@ -33,6 +39,8 @@ namespace EmuSen.Serenity
         {
             if (!Enabled) return;
             int i = Interlocked.Increment(ref _frameCount) - 1;
+            if (i == 0) _firstFrame = start;
+            if (FlushAfter > 0 && start - _firstFrame > FlushAfter) { Flush(); return; }
             if (i >= Capacity) return;
             int o = i * 4;
             _frames[o] = seq; _frames[o + 1] = start; _frames[o + 2] = offered; _frames[o + 3] = handedOver ? 1 : 0;
@@ -47,6 +55,16 @@ namespace EmuSen.Serenity
             int o = i * 7;
             _draws[o] = t; _draws[o + 1] = seq; _draws[o + 2] = fresh ? 1 : 0; _draws[o + 3] = sampled ? 1 : 0;
             _draws[o + 4] = ust; _draws[o + 5] = msc; _draws[o + 6] = sbc;
+        }
+
+        // The emulation thread, before a submit: the output queue in frames, the ratio applied and its nominal part in millionths, and the shedding count.
+        public static void Audio(long t, int queuedFrames, double ratio, double nominal, int shed)
+        {
+            if (!Enabled) return;
+            int i = Interlocked.Increment(ref _audioCount) - 1;
+            if (i >= Capacity) return;
+            int o = i * 5;
+            _audio[o] = t; _audio[o + 1] = queuedFrames; _audio[o + 2] = (long)Math.Round(ratio * 1e6); _audio[o + 3] = (long)Math.Round(nominal * 1e6); _audio[o + 4] = shed;
         }
 
         public static void Flush()
@@ -65,6 +83,14 @@ namespace EmuSen.Serenity
                 int o = i * 7;
                 sb.Append("D");
                 for (int k = 0; k < 7; k++) sb.Append(',').Append(_draws[o + k]);
+                sb.Append('\n');
+            }
+            int audio = Math.Min(_audioCount, Capacity);
+            for (int i = 0; i < audio; i++)
+            {
+                int o = i * 5;
+                sb.Append("A");
+                for (int k = 0; k < 5; k++) sb.Append(',').Append(_audio[o + k]);
                 sb.Append('\n');
             }
             File.WriteAllText(Path!, sb.ToString());

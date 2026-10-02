@@ -607,3 +607,60 @@ their data.
 - Implemented 2026-10-02. **Measured:** all 1,000 DIV cases pass with their cycles, and with them the whole suite,
   256,000 of 256,000. Settled, measured: the referee's divider and the suite's recorded results agree on every case.
 
+### D-24. 65816: how many times an interrupt taken while executing from WMDATA ($2180) reads it
+- Opened: 2026-10-02, at stage 4 step 1, by KungFuFurby's `test_irqb` once the sound CPU answers its ports: its
+  first four cases agree with the ROM's expectations, and the fifth (`jmp $217F`, a CLC read from the APU port and
+  the next fetch from $2180) leaves the IRQ handler's record one byte early: the ROM expects WMDATA's address to have
+  advanced twice before the handler, and VenusRT advances it once. Mesen passes; C# Venus is not graded on it.
+- Documents read: the W65C816S datasheet's Table 5-7, the interrupt sequence (an opcode read of the program
+  counter, then an internal cycle); fullsnes on WMDATA; neither says what the S-CPU's bus does on an internal cycle.
+- Test ROM: `test_irqb` itself, and its disassembly (`jonasquinn-test-roms/blobs/disassembly/test_irqb.asm`). One
+  reading was tried and is rejected by measurement: making the interrupt's internal cycle a second read of the
+  program counter moves case 1's latched H from 7 to 9 (cases 1 to 4 execute from $2137, whose read latches the
+  counters), so that cycle does not read the bus.
+- Referee: not read. Mesen's source: none.
+- Conclusion: open. Not a sound-unit rule; left for a CPU-side step with the probe's CPU trace of the fifth case.
+- Pinned by: `test_irqb`, case 5.
+
+### D-25. S-SMP: a timer is reset when its CONTROL bit goes from 0 to 1, and a cleared bit only stops it
+- Opened: 2026-10-02, at stage 4 step 1, by blargg's `spc_smp`: every test passes up to "Timers/random timer0
+  enable", which fails (code 02), with the timers built as fullsnes reads literally.
+- Documents read: fullsnes, "00F1h - CONTROL": "0-2 Timer 0-2 Enable (0=Disable, set TnOUT=0 & reload divider,
+  1=Enable)". Read literally, a write of 0 clears TnOUT and the stage, and that is what VenusRT built. The text does
+  not say whether the reset happens at the write of 0 or at the next enabling write. No other fetched document
+  covers it.
+- Test ROM: `spc_smp`, `spc_timer`, blargg 2010 `test_timer_stop` and gilyon `spctest`. With the reset moved to the
+  write that sets a cleared bit, and a cleared bit only stopping the count (TnOUT kept, still cleared by a read),
+  `spc_smp` passes every test ("PASSED TESTS"), and `spc_timer`, `test_timer_stop` and `spctest` still pass. Measured
+  2026-10-02 in a trial build, before this entry's code.
+- Referee: not read. Mesen's source: none.
+- Conclusion: the rule above; measured on the four ROMs.
+- Pinned by: `spc_smp`'s "random timer0 enable", and a unit test in `apu/smp.rs`.
+
+### D-26. S-SMP: what blargg's `test_timer_stop2` stops, which the documents' TEST bits do not explain
+- Opened: 2026-10-02, at stage 4 step 1, by blargg 2010 `test_timer_stop2`: VenusRT prints 00 and fails, Mesen
+  prints 04 and passes. `test_timer_stop` passes on both. Neither has a source.
+- Documents read: fullsnes, "00F0h - TEST": bit 0 "Timer-Enable (0=Normal, 1=Timers don't work)", bit 3
+  "Timer-Disable (0=Timers don't work, 1=Normal)"; "00F1h - CONTROL" as in D-25. anomie's S-DSP document places
+  the timers' first-stage ticks in the DSP's 32-cycle sample loop and notes that "frobbing the SPC700 TEST register
+  can change this syncronization". Neither says which stage a TEST bit stops.
+- Test ROM: the ROM itself; its SPC700 program is not disassembled yet.
+- Referee: to be read for this rule only: SNES_MiSTer `rtl/SMP.vhd`, the timer process.
+- Conclusion: open.
+- Pinned by: `test_timer_stop2`.
+
+### D-27. S-SMP: TEST bits 4 to 7 add waitstates to the SPC700's cycles
+- Opened: 2026-10-02, at stage 4 step 1, by blargg 2010 `test_timer_speed` and `test_timer_speed2`: they write TEST
+  with bits 4 to 7 set and count timer ticks against a loop; VenusRT ignores those bits and prints 2731 for every
+  setting, Mesen prints 2731, 1639, 910, 482, 2049, 1366, 819, 456, 820, 683, 512 and 342 and passes.
+- Documents read: fullsnes, "00F0h - TEST": bits 4-5 "Waitstates on RAM Access (0..3 = 0/1/4/9 cycles)", bits 6-7
+  "Waitstates on I/O and ROM Access (0..3 = 0/1/4/9 cycles)", internal cycles timed as one or the other, and the
+  table "SPC700 Waitstates on Internal Cycles", giving per opcode how many internal cycles take the I/O timing,
+  with two more for a conditional branch taken. The ROMs' folder holds blargg's `notes.txt`, a table of the same
+  counts with the ratios between them.
+- Test ROM: the two ROMs, and `test_timer_speed3` (ungraded) for the same counts.
+- Referee: not read. Mesen's source: none.
+- Conclusion: open; fullsnes's rule is to be built and measured on the three ROMs. A setting the software "should
+  never change" (fullsnes), so no game is expected to depend on it.
+- Pinned by: `test_timer_speed`, `test_timer_speed2`.
+

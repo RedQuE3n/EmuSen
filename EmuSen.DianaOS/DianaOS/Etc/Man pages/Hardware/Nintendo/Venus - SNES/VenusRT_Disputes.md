@@ -569,3 +569,22 @@ their data.
 - Implemented 2026-10-01. **Measured:** `test_irq4200` passes (blue backdrop), its record equal to the table; the
   other backdrop-graded ROMs are unchanged by it. Settled for the table's cases.
 
+### D-22. SPC700: the order of each instruction's bus cycles where anomie's cycle document leaves it open
+- Opened: 2026-10-02, at stage 4 step 1, before the SPC700's code, by reading the two sources side by side.
+  anomie's SPC700 cycle document (romhacking.net document 198, revision 1126) gives every addressing mode's cycles
+  in order, marking each as "Verified by blargg", "This should be accurate", or open ("2 and 3 could be swapped",
+  "Cycles 2-5 could be rearranged", "Or is it Data-IO-IO or IO-IO-Data?", "Order of reading new addr and pushing
+  old addr may be wrong", "WTF with all the IO cycles?"); its IO cycles have no address ("??"). fullsnes gives each
+  opcode's total cycles and its dummy reads in prose ("Most of the Memory Store opcodes are implemented like ALU
+  opcodes (ie. as RMW opcodes, issuing a dummy read ...)"), and no order. SingleStepTests' SPC700 suite records,
+  for each of 256,000 cases, every cycle with its address and kind; it shows orders anomie leaves open (POP reading
+  its byte last, RET popping after its IO cycles, CALL fetching its target before pushing), and gives its IO cycles
+  as either a read of the next program byte or a wait with no address.
+- Test ROM: the suite is the measure, and the plan's oracle for the SPC700 (`VenusRT_Plan.md` §6, stage 4).
+- Referee: not read. Mesen's source: none.
+- Conclusion: where anomie marks a cycle verified, his order is built, and where the suite departs from it the
+  case is recorded as a failure, not adopted; where he leaves the order open, the suite's order is built, as the
+  only source that states one. The IO cycles' form (a read of the next byte, or a wait) is the suite's. The
+  results are recorded by group in `VenusRT_Native.md` §21.
+- Pinned by: the SingleStepTests SPC700 run with cycle lists.
+

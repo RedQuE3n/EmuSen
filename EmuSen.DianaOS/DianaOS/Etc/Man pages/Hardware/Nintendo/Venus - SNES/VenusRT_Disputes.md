@@ -708,8 +708,18 @@ their data.
   key-on that keeps the hidden value (every step +8), and a rate-0 setting that leaves the envelope's phase and
   hidden value untouched (fails the earlier "attack->decay during gain").
 - Referee: `Venus_Referee.md` §0 rates the S-DSP's formulas weak (they follow an emulator's, the key-on delay
-  among them) and its rate counter real. To be read for this rule only: SNES_MiSTer `rtl/DSP.vhd`, the key-on and
-  start-up handling and the envelope's hidden value.
-- Conclusion: open.
-- Pinned by: `spc_dsp6`, "hidden env 0 at kon".
+  among them) and its rate counter real. Read 2026-10-02: SNES_MiSTer `rtl/DSP.vhd` lines 925-1000 (the voice's
+  envelope stage: start-up and key-on), 1075-1090 (the KON clear and the KON/KOFF load), 1108-1120 (where its
+  every-other-sample flag turns) and 1185-1270 (the envelope's update), and nothing else. What it does, in prose: a
+  key-on and a key-off act only on the samples the poll belongs to, every other one; the start-up samples hold the
+  envelope and the bent-increase memory at zero; the bent increase's memory is a flag set from each new value
+  (12-bit, at 0x600 or more, or out of range), whether or not the counter applies the value; and the decay-to-sustain
+  test compares bits 8-10 of the new value. Its ENVX is taken from the envelope before the sample's update.
+- Conclusion: settled by measurement for two rules: KON and KOFF act on the poll's samples only, the poll made
+  before voice 0's envelope step in cycle 30; and ENVX shows the envelope applied to the sample, before that
+  sample's update (the test list's "Order/envx uses prev env" names it). With both, "hidden env 0 at kon" and the
+  eight tests after it pass (measured 2026-10-02); the hidden-value reading already built agrees with the
+  referee's. Sustain is now matched on bits 8-10 of the new value, as the referee and anomie's "upper 3 bits of E"
+  read it.
+- Pinned by: `spc_dsp6`, "hidden env 0 at kon" to "kon clears independent".
 

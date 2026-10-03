@@ -3257,7 +3257,7 @@ are the player's own and are shown until switched off (kept by decision, Q13).
 
 | Button | Where | What it does now |
 |---|---|---|
-| North | a game list | the favourite (ES-DE's Y); while a custom collection is edited, adds or removes the game instead. The help bar reads **Favorite** or **Collection** |
+| North | a game list | the favourite (ES-DE's Y); the game moves and the highlight keeps its row (EmuSen_BigPicture.md §44). While a custom collection is edited, adds or removes the game instead. The help bar reads **Favorite** or **Collection** |
 | Select | a game list | the one options menu: the gamelist rows, Search, the collection entries, the game's entries |
 | L1, R1 | a game list | ten games back or forward, stopping at the ends, as USERGUIDE's shoulders; the help bar reads **Jump**. L2 and R2 stay the first and last game |
 | Left or right thumbstick, pressed in | a game list; the systems with *Games and systems* | a random game, or system (ES-DE's thumbstick click) |
@@ -3307,7 +3307,7 @@ in ES-DE. The menu's entries:
 
 | Entry | What it does |
 |---|---|
-| Add to Favourites / Remove from Favourites | the favourite of §4.32, with the theme's `favorite` sound; the game moves to the top of the list and stays selected. Until 2026-09-26 this was Select's own action |
+| Add to Favourites / Remove from Favourites | the favourite of §4.32, with the theme's `favorite` sound; the game moves to the top of the list. Until 2026-09-26 this was Select's own action. *Since 2026-10-03 the highlight keeps its row rather than following the game, so the next press down reaches the game after it (EmuSen_BigPicture.md §44)* |
 | Edit This Game's Metadata | opens the editor, below |
 | Scrape This Game... | stage (d)'s single-game scrape (§4.60): the confirm step, then the run and its status sheet (§4.57). Not offered while a run is going |
 | Close | puts the menu away |

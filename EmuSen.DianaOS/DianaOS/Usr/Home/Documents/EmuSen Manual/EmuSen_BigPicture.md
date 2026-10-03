@@ -2328,7 +2328,8 @@ drawn inside the window; no window is opened.
 **In Mistress:**
 - `BigPicture/ThemedLibrary.cs` holds the stage, the pad's rules, the sounds and the selection. The selection is kept by
   the system's name and each system's game file, so a rebuild from new data (a favourite, a search, a refresh, a return
-  from a game) finds it again.
+  from a game) finds it again. *Since 2026-10-03 a favourite's toggle keeps the row instead, and the game moves alone
+  (§44).*
 - `Views/MainWindow.BigPicture.cs` puts it in the library's place, feeds it the library's shelves, records and covers,
   routes the pad and runs the render loop.
 - `Input/PadFamilies.cs` gives a pad's family from SDL's type, then its name. `BigPicture/DeviceStatusReader.cs` reads
@@ -2356,7 +2357,7 @@ Every row of §4.9's table is a rule with a test in WiseMan, driven through `Pad
 | Up and down move the list (`scroll`) at 500, 114 ms and stop at the end when held; left and right change the system at the game last chosen there (`quicksysselect`) | `Up_and_down_move_the_list…` |
 | L1 and R1 page by the rows the list shows; L2 and R2 go to the first and last | `Shoulders_page_by_the_rows…`, `Shoulders_page_a_list_longer_than_a_page…` |
 | North searches on the on-screen keyboard; East clears the search before it goes back | `North_searches_with_the_on_screen_keyboard…` |
-| Select marks a favourite, which moves first and stays selected | `Select_marks_a_favourite…` |
+| Select marks a favourite, which moves first and stays selected. *Superseded 2026-10-03: North and the options menu's entry mark it, it moves first, and the highlight keeps its row (§44)* | `Select_marks_a_favourite…`; *since §44, `North_toggles_the_favourite…`, `Select_opens_the_game_options_whose_favourite_entry…`, `ThemedFavouriteCursorTests`* |
 | Start opens the pad menu over the view, and the view hears nothing under it | `Start_opens_the_pad_menu_over_the_view…` |
 | South starts the game; the menu's Game Library comes back to the same system and game; East in the system view resumes it; Close Game comes back too | `ThemedLibraryFlowTests.A_pad_walks_systems_searches_favourites_starts_a_game_and_comes_back…` |
 | The resume question is asked on a sheet over the view | `The_resume_question_is_asked_on_a_sheet…` |
@@ -10956,3 +10957,144 @@ the shader browser, the benches or any GPU, Vulkan or slang case, under `nice -n
   capitals under the exact floor, bound by the width of its top row of six. **Recommendation:** leave it while the
   slack holds; if a longer binding is ever audited, let the top row split into two staggered rows as a tall column
   does (§43.11, Q188), not raise the cap Q193 keeps.
+
+## 44. A favourite's toggle moves the game, not the highlight (2026-10-03)
+
+*Built on branch `bp-favorite-cursor` from WiseMan `61998d92`.* In the themed view, marking a game as a favourite moved
+the game to the top of the list, as it should with favourites sorted first, and moved the highlight there with it. To
+favourite a run of games the player had to scroll back down after each one. The decision of 2026-10-03 is that the game
+moves and the highlight does not. **Numbering.** P301 and Q196 are new here; P300 and Q195 were the highest in every
+tree on this machine when this section was written.
+
+### 44.1 The cause (measured)
+
+The selection is kept by the game's file, by system and folder (`ThemedLibrary._cursor`, §15.2), so that a rebuild from
+new data finds the same game again. A toggle goes through `MainWindow.ToggleThemedFavourite`
+(`Views/MainWindow.GameOptions.cs`). It writes `games.db` and calls `ShowLibraryEntries`, which calls
+`ThemedLibrary.Show`. `Show` builds a new stage from `Data()`, and `Data()` looked the kept file up in the re-sorted
+list (`BigPicture/ThemedLibrary.cs`, the `int game = _cursor.TryGetValue(...)` line of `Data()`, line 218 at
+`61998d92`). With favourites first, the file is at row 0, so the highlight went to row 0. The same line gave two other
+faults, both shown by the tests of §44.5 before the fix:
+
+- unfavouriting the game at the top sent the highlight down to wherever the game was sorted to (row 7 in the test);
+- in the favorites collection an unfavourited game is no longer listed. `FindIndex` gives −1, and the `Math.Max(0, …)`
+  sent the highlight to row 0.
+
+**The scroll needs nothing of its own.** The three primary elements all derive their scroll from the selected index
+when they are built: `TextRowList.FirstVisible` centres the selection and clamps at the ends, the grid's `ScrollRow`
+starts at `GridGeometry.ScrollFor(index)`, and a carousel's position starts at `Glide.At(index)`. A rebuild at the same
+index therefore draws the same window of the list, and keeping the row is enough. The text list, the grid and the
+carousel shared the cause, since all three are rebuilt through the same `Data()`. All three had the jump and all three
+are fixed by the one change.
+
+### 44.2 What ES-DE's documentation says (cited)
+
+The following were read on 2026-10-03 for where ES-DE puts the cursor after a toggle:
+
+- ES-DE's `USERGUIDE.md` at master (`gitlab.com/es-de/emulationstation-de/-/blob/master/USERGUIDE.md`):
+  - "General navigation", the Y button;
+  - "UI settings": *Sort favorite games above non-favorites*, *Add star markings to favorite games*, *Enable quick list
+    scrolling overlay* and *Enable toggle favorites button*;
+  - "Game collection settings": *Sort favorites on top for custom collections*;
+  - "Jump to..";
+  - "Metadata entries": *Favorite*;
+  - "Automatic collections";
+- `FAQ.md` and `CHANGELOG.md` at master, in the same repository.
+
+None of them says where the cursor goes when a game is marked or unmarked. None distinguishes marking from unmarking,
+and no setting is said to govern it. *Sort favorite games above non-favorites* decides only whether the game moves at
+all. ES-DE's source was not read and ES-DE was not run.
+
+The documentation is silent, so the rule below is the one the player gives as ES-DE's behaviour: the highlight stays
+where it was, and only the game moves. That is a claim about ES-DE that nothing here has measured. It is recorded as
+**P301**: *in ES-DE 3.4.1, the release §22.2 measured, with favourites sorted first, Y on the game at row i leaves the cursor at row i, both for
+marking and for unmarking.* P301 is retired by a measurement on ES-DE, the next time one is run for §22.2's kind of
+question.
+
+### 44.3 The rule (argued)
+
+- **The row is kept, not the game.** When the game at row *i* moves to the top, the highlight stays on row *i*, which
+  now holds the game that was at *i − 1*. One press down reaches the game that came after the favourite, as it would
+  have before the toggle. Unmarking works the same way: the highlight keeps its row, and the game is sorted back among
+  the others.
+- **Clamped.** If the list is shorter, as in the favorites collection or under a filter that keeps only favourites, the
+  row is clamped to the new last row.
+- **The details follow the highlight.** The game under the highlight drives the metadata, art and video, as it does
+  after any move of the cursor, because the scene is built from the index.
+- **Both ways in.** North (ES-DE's Y) and the game options menu's *Add to Favourites* / *Remove from Favourites* both go
+  through `ToggleThemedFavourite`, so they follow the same rule.
+- **A list that is gone.** Unmarking the last game of the favorites collection removes the collection from the
+  carousel. Before this change the view fell through to the first system's gamelist: the NES list, at its top, which
+  is the same kind of jump. It now returns to the system view at the place the collection held, clamped to the last
+  system. The documentation says nothing here either. This is a choice, and like P301 it waits on a measurement.
+
+**Why the rule is not general.** Every other rebuild still keeps the game: a search, a sort or filter change, quick
+system select, a return from a game, and a save in the metadata editor (§15.2, §23). The argument rests on the action.
+A toggle is done in place, often to a run of games in turn, so the player's place in the list is what matters. A
+renamed or re-sorted game is the subject of the edit, and the player expects to see it afterwards; `A_sort_name_orders…`
+holds the editor to that. With favourites not sorted first, no game moves, and the two rules give the same row.
+
+**Q196, the editor's Favorite field.** The metadata editor's *Favorite* field changes the same flag, but it is saved
+with every other field, so it keeps the game. Whether a save that changes only that field should keep the row instead
+is left open. **Recommendation:** leave it as it is unless P301's measurement shows that ES-DE's editor keeps the row
+too.
+
+### 44.4 The mechanism
+
+`ThemedLibrary.KeepPlace()` records the gamelist's view key and its current index. `ToggleThemedFavourite` calls it
+before it writes the record. The next `Data()` for that same key uses the recorded index, clamped, in place of the file
+lookup, and then forgets it. A `Show` that fails, or that returns early for a zero-sized screen, forgets it too, so a
+later rebuild cannot pick up a stale index. `Remember()` then keeps the file of the game now on that row, so a later
+rebuild, such as the one after `IdentifyLater`, stays on that game. The vanished-list case is a check in `Show`: if the
+view is a gamelist and its system is no longer among the systems, the view becomes the system view at the old system
+index, clamped.
+
+### 44.5 Tests
+
+`ThemedFavouriteCursorTests` drives the pad over a `ThemedSession` with thirty SNES games, enough that the text list
+must scroll. A metadata `text` element shows the selected game's name, so the tests can check what the details show.
+
+| Rule | Test |
+|---|---|
+| A favourite moves to the top; the highlight, the text list's selected row and its first visible row stay; the details show the game now there; one press down reaches the game after the favourite | `A_favourite_moves_to_the_top_while_the_highlight_and_the_scroll_stay_where_they_were` |
+| Unmarking the game at the top leaves the highlight on row 0 | `Unfavouriting_the_game_at_the_top_keeps_the_highlight_at_the_top` |
+| Marking the last game leaves the highlight on the last row, with the scroll unchanged | `Favouriting_the_last_game_keeps_the_highlight_on_the_last_row` |
+| All games, an automatic collection that keeps the game | `In_all_games_a_favourite_moves_to_the_top_and_the_highlight_stays` |
+| Favorites, where the game leaves: the row is kept, then clamped to the shorter list | `In_the_favorites_collection_an_unfavourited_game_leaves_and_the_highlight_keeps_its_row_within_the_shorter_list` |
+| Favorites losing its last game: the system view at the collection's place | `Unfavouriting_the_last_game_of_favorites_returns_to_the_system_view_at_the_collection_s_place` |
+| The game options menu's entry | `The_game_options_favourite_entry_keeps_the_highlight_too` |
+| A grid (its scroll row) and a horizontal carousel (its position) | `A_grid_and_a_carousel_keep_the_highlight_where_it_was` (2 cases) |
+
+**Before and after.** The first eight cases were written first and run on the unfixed code. All eight failed, each at
+its index assertion and after its assertions on the new order had passed:
+
+| Case | expected row | row on the unfixed code |
+|---|---|---|
+| a favourite at row 20 | 20 | 0 |
+| unmarking at the top | 0 | 7 |
+| the last game | 29 | 0 |
+| All games, row 12 | 12 | 0 |
+| Favorites, row 1 | 1 | 0 |
+| the options menu, row 9 | 9 | 0 |
+| grid, row 13 | 13 | 0 |
+| carousel, row 13 | 13 | 0 |
+
+After the fix all eight passed. The vanished-list case was written with its branch. With that branch disabled it failed,
+expecting `("system", "all")` and getting `("gamelist", "nes")`. With the branch restored it passed.
+
+**Tests that held the old rule.** Four tests asserted that the highlight follows the game, which was stage (e)'s rule
+(§15.3). They were rewritten to the new rule:
+
+- `ThemedLibraryPadTests.North_toggles_the_favourite…` and `Select_opens_the_game_options_whose_favourite_entry…`, both
+  renamed to end `…while_the_highlight_keeps_its_row`;
+- `SwapAndKeyboardTests.With_the_swap_X_is_the_favourite…`, which now reads the favourite at the top of the list;
+- `ThemedCollectionsTests.A_collection_created_in_big_picture…`, which checked the favourite on whatever game was under
+  the highlight after the toggle.
+
+§15.2's sentence that a favourite's rebuild finds the same game, and §15.3's row "Select marks a favourite, which moves
+first and stays selected", are superseded by this section.
+
+**The run.** The blast radius was run on the final build under `nice -n 10`: every test in
+`EmuSen.WiseMan.Mistress.BigPicture`, with `GameRecordsTests`, `LibraryScreenTests`, `IdentityAndCollectionsTests`,
+`DesktopGameOptionsTests` and `GameMetadataTests`. **969 tests: 928 passed, 41 skipped (the picture, survey and live
+tools), none failed, in 4 min 17 s.**

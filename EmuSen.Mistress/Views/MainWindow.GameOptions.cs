@@ -133,6 +133,7 @@ namespace EmuSen.Mistress.Views
         private void ToggleThemedFavourite(SceneGame game)
         {
             _themed?.Sound("favorite");
+            _themed?.KeepPlace();
             _records.ToggleFavourite(game.File);
             IdentifyLater(game.File);
             StatusText.Text = _records.IsFavourite(game.File) ? $"Added {game.Name} to Favourites" : $"Removed {game.Name} from Favourites";

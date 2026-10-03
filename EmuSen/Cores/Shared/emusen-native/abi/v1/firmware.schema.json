@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "emusen-core/v1/firmware",
+  "title": "emusen_core_firmware_for: the firmware one image needs (EmuSen_CoreAPI.md 6.2)",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["which", "name", "label", "size", "required"],
+    "properties": {
+      "which": { "type": "integer", "minimum": 1 },
+      "name": { "type": "string" },
+      "label": { "type": "string" },
+      "size": { "type": "integer", "minimum": 0 },
+      "required": { "type": "boolean" },
+      "parts": { "type": "array", "items": { "type": "array", "items": { "type": "string" } } }
+    }
+  }
+}

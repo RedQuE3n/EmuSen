@@ -1,0 +1,14 @@
+[package]
+name = "emusen-core-abi-check"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The core ABI's guard, run in CI only: emusen_core.h against emusen-native's Rust (signatures, layouts, constants)
+# and against abi/v1/baseline.txt. No core's build depends on it. See EmuSen_CoreAPI.md §5.2 and §5.4.
+[dependencies]
+emusen-native = { path = "../emusen-native" }
+clang-sys = { version = "1.9", features = ["clang_11_0", "runtime"] }
+
+[build-dependencies]
+bindgen = "0.72"

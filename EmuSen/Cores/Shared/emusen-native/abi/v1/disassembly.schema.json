@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "emusen-core/v1/disassembly",
+  "title": "emusen_core_debug_disassemble: instructions as the core decodes them (EmuSen_CoreAPI.md 6.14)",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["address", "bytes", "mnemonic", "operands", "reference"],
+    "properties": {
+      "address": { "type": "integer", "minimum": 0 },
+      "bytes": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+      "mnemonic": { "type": "string" },
+      "operands": { "type": "string" },
+      "reference": {
+        "type": ["object", "null"],
+        "required": ["kind", "target"],
+        "properties": { "kind": { "type": "string" }, "target": { "type": "integer", "minimum": 0 } }
+      }
+    }
+  }
+}

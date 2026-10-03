@@ -122,6 +122,15 @@ impl Settings {
     pub fn keys(&self) -> impl Iterator<Item = &str> {
         self.pairs.iter().map(|(k, _)| k.as_str())
     }
+
+    /// Every line as (key, value), in the order given.
+    pub fn pairs(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.pairs.iter().map(|(k, v)| (k.as_str(), v.as_str()))
+    }
+
+    pub fn from_pairs(pairs: Vec<(String, String)>) -> Settings {
+        Settings { pairs }
+    }
 }
 
 /// What a Rust core implements; `native_exports!` turns it into the C ABI. Every `Err` is a status (§3.3).

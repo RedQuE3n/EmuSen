@@ -9,3 +9,8 @@ publish = false
 name = "emusen_native"
 
 [dependencies]
+
+# A core on the v1 ABI claiming every capability, for the crate's tests, the ABI check and CI's export check.
+[[example]]
+name = "v1_test_core"
+crate-type = ["cdylib"]

@@ -94,6 +94,7 @@
   <!-- The SNES corpus's recorded verdicts, which the runner reproduces - see VenusRT_Native.md §3.5. -->
   <ItemGroup>
     <None Include="Cores\VenusRtBaseline.tsv" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\EmuSen\Cores\Shared\emusen-native\abi\v1\baseline.txt" Link="Cores\CoreAbiBaseline.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <Import Project="..\LunaP.props" />
 

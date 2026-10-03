@@ -583,6 +583,11 @@ int64_t emusen_core_last_error(const emusen_machine *machine, uint8_t *out, size
   `required: false` means the game loads without it, as VenusRT's plan requires for the NEC DSPs (`VenusRT_Plan.md`
   §4.2). `parts` lists alternative split forms, each part passed as its own file, numbered from `which` upwards.
   Where the files are kept is the runtime's (`FirmwareLibrary`, `home/Firmware`), never the core's.
+
+  *Decided 2026-10-03, for every core the project builds:* no firmware entry is `required`. Each piece of firmware has
+  an open replacement inside the core, so every game runs with no firmware folder, and an image the tester or player
+  supplies is used, when present, as the exact path. A frontend never prompts for firmware. `EmuSen_Firmware.md` §0 is
+  the policy; a foreign core may still declare `required: true`, and its games then wait for the file.
 - **`free` — In.** It may be called from any thread, provided no other call on that machine is in flight; that is what
   the host's finaliser already does (§1.2, item 9). Every thread the core started for the machine has stopped when it
   returns.

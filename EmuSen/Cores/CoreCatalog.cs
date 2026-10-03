@@ -248,9 +248,49 @@ namespace EmuSen.Cores
                 CoreSettingKind.Choice, MoonEngine, Choices: new[] { MoonEngine, MoonRtEngine }),
         };
 
-        // Null for a console with one implementation.
-        public static CoreSetting? EngineFor(string console) =>
-            EngineByConsole.TryGetValue(console, out var engine) ? engine : null;
+        public const string VenusEngine = "Venus (C#)";
+
+        // The system ids of EmuSen_CoreAPI.md §6.3 each console answers to, so a v1 core's info is matched to it.
+        private static readonly Dictionary<string, string[]> SystemIdsByConsole = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SNES"] = new[] { "snes" },
+            ["NES"] = new[] { "nes" },
+            ["GB"] = new[] { "gb", "gbc" },
+            ["N64"] = new[] { "n64" },
+        };
+
+        public static IReadOnlyList<string> SystemIdsFor(string console) => SystemIdsByConsole.TryGetValue(console, out var ids) ? ids : Array.Empty<string>();
+
+        public static string? ConsoleForSystem(string systemId) => SystemIdsByConsole.FirstOrDefault(c => c.Value.Contains(systemId)).Key;
+
+        // The C# core each console's engines are graded against, the default of a row discovery adds.
+        private static readonly Dictionary<string, string> ReferenceEngineByConsole = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SNES"] = VenusEngine,
+            ["NES"] = MoonEngine,
+            ["GB"] = MercuryEngine,
+            ["N64"] = MarsEngine,
+        };
+
+        // The v1 engines discovery found for a console, by the names their info gives them - see EmuSen_CoreAPI.md §19.
+        public static IReadOnlyList<string> DiscoveredEngines(string console) =>
+            SystemIdsFor(console).SelectMany(Native.CoreDiscovery.ForSystem).Select(c => c.EngineName).Distinct().ToArray();
+
+        // Null for a console with one implementation; a v1 engine found by discovery is appended to the row, which it creates for a console that had none.
+        public static CoreSetting? EngineFor(string console)
+        {
+            EngineByConsole.TryGetValue(console, out var row);
+            string[] found = DiscoveredEngines(console).Where(n => row?.Choices?.Contains(n) != true).ToArray();
+            if (found.Length == 0) return row;
+            if (row is null)
+            {
+                if (!ReferenceEngineByConsole.TryGetValue(console, out var reference)) return null;
+                row = new CoreSetting(EngineKey, "Engine",
+                    $"Which implementation runs the console. {reference} is the reference and the default; each other engine is a core found beside the program and described by its own info. Takes effect when a game is next loaded.",
+                    CoreSettingKind.Choice, reference, Choices: new[] { reference });
+            }
+            return row with { Choices = row.Choices!.Concat(found).ToArray() };
+        }
 
         // The engine a frontend runs for a console: the stored choice, else the row's default; null for a console with one - see EmuSen_Settings_Reference.md §4.44.
         public static string? EngineChosen(string console, string? stored) => stored ?? EngineFor(console)?.Default;

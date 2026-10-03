@@ -20,6 +20,7 @@ on:
       - 'EmuSen.WiseMan/Cores/VenusRt*'
       - 'EmuSen.WiseMan/Cores/CoreAbi*'
       - 'EmuSen.WiseMan/Cores/CoreAdapter*'
+      - 'EmuSen.WiseMan/Cores/CoreDiscovery*'
       - 'EmuSen/Cores/Native/**'
       - '.github/workflows/rust-cores.yml'
   # The core ABI's guard must see every pull request that could change version 1 (EmuSen_CoreAPI.md §5.4).
@@ -40,6 +41,7 @@ on:
       - 'EmuSen.WiseMan/Cores/VenusRt*'
       - 'EmuSen.WiseMan/Cores/CoreAbi*'
       - 'EmuSen.WiseMan/Cores/CoreAdapter*'
+      - 'EmuSen.WiseMan/Cores/CoreDiscovery*'
       - 'EmuSen/Cores/Native/**'
       - '.github/workflows/rust-cores.yml'
 
@@ -328,7 +330,7 @@ jobs:
 
       - name: Test the Rust cores against the C# cores
         working-directory: EmuSen-Project
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       - uses: actions/upload-artifact@v4
         if: always()

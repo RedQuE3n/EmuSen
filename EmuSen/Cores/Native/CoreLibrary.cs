@@ -38,6 +38,9 @@ namespace EmuSen.Cores.Native
 
         public bool Has(ulong capability) => (Capabilities & capability) == capability;
 
+        // Whether this process has loaded the library at path.
+        public static bool IsOpen(string path) => Loaded.ContainsKey(System.IO.Path.GetFullPath(path));
+
         private void Refuse(string why)
         {
             Available = false;

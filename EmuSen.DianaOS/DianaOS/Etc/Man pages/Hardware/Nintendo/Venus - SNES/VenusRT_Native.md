@@ -2878,6 +2878,7 @@ VenusRT claims `RESET`, `SNAPSHOT`, `BATTERY_DIRTY`, `ROM_PATCHES` and `CHEAT_PO
   firmware names, the DSP firmware in two parts, CpuBus pokes); WiseMan's VenusRt, Snes, CoreAbi, CoreAdapter,
   CoreDiscovery and NativeHost tests, 93 of 93.
 - `export_check.py`: capabilities 0x4C05, 35 `emusen_core_` symbols, as the baseline requires.
+- The corpus with VenusRT as its third engine: every VenusRT column of all 295 ROMs identical to §31's run.
 - The conformance kit (C4's decided rule) on the same eleven images as §31.2: compliant on every one.
 - The state's hash every 60 frames to frame 600: identical to before the switch to v1 for Super Mario World, Super
   Mario RPG, Star Fox and Super Mario Kart.

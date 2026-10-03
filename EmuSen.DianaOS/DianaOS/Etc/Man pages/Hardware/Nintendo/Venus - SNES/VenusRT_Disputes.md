@@ -854,8 +854,22 @@ their data.
 - Test ROM: PeterLemon's GSU tests grade results, not time; Star Fox's $15BB and Vortex's $198C are the timing
   measures, against Mesen's runs as a comparison only.
 - Referee: `Venus_Referee.md` §0 rates the GSU's instruction core the author's own microcode (with the pixel-cache
-  shape bsnes's). To be read for the cycle rules only: SNES_MiSTer `rtl/chip/GSU/GSU.vhd` and `GSU_PKG.vhd`, the
-  parts that decide how many clocks an opcode fetch, a memory access, a multiply and a PLOT take.
+  shape bsnes's). Read 2026-10-03 for the cycle rules only, in SNES_MiSTer `rtl/chip/GSU/GSU.vhd`: the clock enable
+  and the CPU's stall conditions (lines 458-492), the cache-fill bookkeeping (536-585), the multiply wait (960-1012),
+  the ROM port's wait flags and state machine (1040-1215) and the RAM port's (1465-1480, 1550-1720); nothing of the
+  instruction decoder, the pixel cache's contents or the register file was read. What it says, in GSU cycles (one
+  every 2 master clocks at CLS=0, every 1 at CLS=1, as built):
+  - The ROM and RAM ports count `ROM_CYCLES`/`RAM_CYCLES` down to zero, 1 at CLS=0 and 3 at CLS=1.
+  - A code-cache line fill runs the whole 16-byte line from its start, each byte its count plus a "done" state (3
+    cycles a byte at CLS=0, 5 at CLS=1), with a state to begin and one to end; the CPU waits until the line ends, not
+    only until its own byte arrives.
+  - An uncached opcode fetch from ROM counts from `ROM_CYCLES - 1`, a ROM-buffer load (R14) from `ROM_CYCLES + 2`; a
+    RAM byte load or store counts from `RAM_CYCLES`, a word twice; an uncached fetch from RAM from `RAM_CYCLES - 1`.
+  - The ports run beside the instruction stream: the CPU stalls only when it needs a result still pending (an opcode
+    byte, a ROM buffer read before the load ends, a RAM access while the port is busy).
+  - After the instruction's last cycle the multiplier holds the CPU for a start state plus a count: MULT and UMULT
+    only at MS0=0, with a count of 0 (about 2 cycles); FMULT and LMULT always, with a count of 4 at MS0=0 (about 6
+    cycles) and 0 at MS0=1 (about 2).
 - Conclusion: open.
 - Pinned by: Star Fox's $15BB, Vortex's $198C, and the GSU test ROMs staying passed.
 

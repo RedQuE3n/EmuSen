@@ -2619,3 +2619,4 @@ unchanged) and skip-versus-draw over the six GSU games for 600 frames.
 |---|---|---|---|---|---|---|
 | Stage 5 as closed | fullsnes's guesses | 147 | 137 at 4.38 | 2:2 3:34 4:45 5:24 6:29 7:2 | 174 at 2.586 | - |
 | Cache line fill at slow() a byte, the CPU waiting for the line | the line runs 16 bytes at 3/5 cycles each, plus a state to begin and one to end | 147 | 126 at 4.76 | 2:1 3:28 4:28 5:26 6:29 7:13 | 174 at 2.586 | yes |
+| FMULT and LMULT hold the CPU 5 cycles at MS0=0, 1 at MS0=1 (were 7 and 3, LMULT one more) | the multiplier's start state plus a count of 4 or 0; MULT's 1 cycle at MS0=0 already matched | 147 | 127 at 4.72 | 2:1 3:29 4:28 5:28 6:26 7:14 | 174 at 2.586 | yes |

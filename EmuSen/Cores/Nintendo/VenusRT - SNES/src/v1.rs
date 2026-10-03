@@ -47,6 +47,25 @@ fn dsp(named: Option<(&str, u64)>) -> Firmware {
     Firmware { which: 2, name, label: "The cartridge's NEC DSP program and data: DSP-1 to DSP-4 (8,192 bytes) or ST010/ST011 (53,248)".into(), size, required: true, parts }
 }
 
+impl Machine {
+    /// An ST010 or ST011's battery-backed RAM, the cartridge's save (fullsnes: "680000h-6FFFFFh ST010/ST011 On-chip
+    /// Battery-backed RAM"), read out byte by byte as the S-CPU sees it; empty for any other cartridge.
+    fn refresh_st_battery(&mut self) {
+        if let Some((dsp, _)) = self.sys.cart.dsp.as_mut().filter(|(d, _)| d.st) {
+            let n = 2 * dsp.ram.len();
+            self.st_battery.resize(n, 0);
+            for (i, b) in self.st_battery.iter_mut().enumerate() {
+                *b = dsp.host_read(crate::chips::necdsp::Port::Ram(i), false);
+            }
+        }
+    }
+
+    /// The battery file's bytes: the ST01x's RAM, or the cartridge's RAM.
+    fn battery_bytes(&self) -> &[u8] {
+        if self.st_battery.is_empty() { &self.sys.cart.sram } else { &self.st_battery }
+    }
+}
+
 impl Core for Machine {
     const CAPABILITIES: u64 = caps::RESET | caps::SNAPSHOT | caps::BATTERY_DIRTY | caps::ROM_PATCHES | caps::CHEAT_POKES;
 
@@ -79,6 +98,11 @@ impl Core for Machine {
     }
 
     fn firmware_for(image: &[u8]) -> Vec<Firmware> {
+        // The headers' scores alone first: only an image with a NEC DSP's chipset among its candidates is loaded whole.
+        let rom = if image.len() % 1024 == 512 { &image[512..] } else { image };
+        if !crate::cart::candidates(rom).iter().any(|h| matches!(h.chipset, 0x03..=0x05 | 0xF6)) {
+            return vec![ipl()];
+        }
         match crate::cart::Cartridge::new(image).and_then(|c| c.nec_firmware()) {
             Some(named) => vec![ipl(), dsp(Some(named))],
             None => vec![ipl()],
@@ -95,7 +119,13 @@ impl Core for Machine {
 
     fn create(request: &Create<'_>) -> Result<Self, i32> {
         let mut m = <Machine as NativeCore>::create(request.image, &Settings::default(), &request.files)?;
-        m.battery_copy = m.sys.cart.sram.to_vec();
+        if let (Some((dsp, _)), Some(file)) = (m.sys.cart.dsp.as_mut().filter(|(d, _)| d.st), request.files.iter().find(|f| f.which == 0)) {
+            for (i, &b) in file.data.iter().enumerate().take(2 * dsp.ram.len()) {
+                dsp.host_write(crate::chips::necdsp::Port::Ram(i), b);
+            }
+        }
+        m.refresh_st_battery();
+        m.battery_copy = m.battery_bytes().to_vec();
         Ok(m)
     }
 
@@ -143,7 +173,8 @@ impl Core for Machine {
                 _ => self.sys.wram[address as usize & 0x1_FFFF] = value as u8,
             }
         }
-        if self.sys.cart.header.battery() && !self.battery_changed && *self.sys.cart.sram != *self.battery_copy {
+        self.refresh_st_battery();
+        if self.sys.cart.header.battery() && !self.battery_changed && *self.battery_bytes() != *self.battery_copy {
             self.battery_changed = true;
             emit(event::BATTERY, 0, 0);
         }
@@ -203,6 +234,7 @@ impl Core for Machine {
 
     fn battery(&self, which: u32) -> Result<(&[u8], u32), i32> {
         let (bytes, _) = NativeCore::battery(self, which)?;
+        let bytes = if self.st_battery.is_empty() { bytes } else { &self.st_battery[..] };
         Ok((bytes, flags::BATTERY_TRACKED | if self.battery_changed { flags::BATTERY_CHANGED } else { 0 }))
     }
 
@@ -210,7 +242,7 @@ impl Core for Machine {
         if which != 0 {
             return Err(status::BAD_FILE);
         }
-        self.battery_copy = self.sys.cart.sram.to_vec();
+        self.battery_copy = self.battery_bytes().to_vec();
         self.battery_changed = false;
         Ok(())
     }
@@ -350,6 +382,24 @@ mod tests {
         Core::advance(&mut m, &mut 0).unwrap();
         assert_eq!((m.sys.wram[0x10], m.sys.wram[0x11], m.sys.cart.sram[2]), (0x63, 0, 0x65));
         assert_eq!(Core::set_cheat_pokes(&mut m, &[3, 0, 0, flags::NO_COMPARE]), Err(status::NO_SUCH_SPACE));
+    }
+
+    // An ST010's battery is its on-chip RAM, read from file 0 and reported byte by byte as the S-CPU sees it at $68:0000.
+    #[test]
+    fn an_st01x_battery_is_its_on_chip_ram() {
+        let mut image = crate::machine::tests::rom(&[0x80, 0xFE]);
+        image[0x7FD6] = 0xF6;
+        let ipl = crate::apu::smp::tests::idle_ipl();
+        let firmware = vec![0u8; 53_248];
+        let saved: Vec<u8> = (0..4096).map(|i| (i * 5 + 1) as u8).collect();
+        let files = vec![File { which: 0, data: &saved }, File { which: 1, data: &ipl }, File { which: 2, data: &firmware }];
+        let mut m = <Machine as Core>::create(&Create { image: &image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION }).unwrap();
+        assert_eq!(Core::battery(&m, 0).unwrap(), (&saved[..], flags::BATTERY_TRACKED));
+        assert_eq!(m.sys.read_value(0x68_0003, false), Some(saved[3]));
+        Core::space_write(&mut m, 0, 0x68_0003, &[0xEE]).unwrap();
+        Core::advance(&mut m, &mut 0).unwrap();
+        let (bytes, f) = Core::battery(&m, 0).unwrap();
+        assert_eq!((bytes[3], f), (0xEE, flags::BATTERY_TRACKED | flags::BATTERY_CHANGED));
     }
 
     // SNAPSHOT: the full state under kind 1.

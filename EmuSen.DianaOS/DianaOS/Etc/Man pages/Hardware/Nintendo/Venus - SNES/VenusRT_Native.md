@@ -2885,3 +2885,46 @@ VenusRT claims `RESET`, `SNAPSHOT`, `BATTERY_DIRTY`, `ROM_PATCHES` and `CHEAT_PO
 - The cost of the patch check with no patch, `frame_cost` before and after in turn under the timing lock at load 5 to
   11: Super Mario World 2.20-2.25 against 2.18-2.24 ms a frame, Donkey Kong Country 2.10-2.15 against 2.10-2.14,
   within the noise.
+
+## 33. Stage 6, step 2: VenusRT in the SNES's engine row through discovery (2026-10-03)
+
+### 33.1 What was done
+
+- **The sidecar.** `RustCores.props` marks VenusRT `CoreAbi 1`, so `EmuSen.csproj`'s `WriteCoreSidecars` target, the
+  one MoonRT's move added (`EmuSen_CoreAPI.md` §22), runs the kit's runner with `--sidecar` and copies
+  `libvenusrt.so.core.json` beside the library in every build that carries it; no second mechanism was made.
+- **No code names VenusRT.** It has no hand-registered engine (`CoreCatalog.IsRegisteredEngine` is false for
+  `VenusRT (Rust)`), so discovery appends it to the SNES row, which it creates with Venus (C#) the default, and the
+  factory's generic branch opens it as a `CoreEngine`. Where the library is missing, the row is not there and a stored
+  choice of VenusRT runs Venus (C#); where the library is not the one its sidecar names, it is never loaded, and the
+  engine notice says why.
+- **An ST010 or ST011's battery is its on-chip RAM** (fullsnes: "680000h-6FFFFFh ST010/ST011 On-chip Battery-backed
+  RAM"), 4,096 bytes as the S-CPU reads them, low byte of each word first: read from file 0 at create, reported by
+  the battery export with its changes tracked, shown as the SRAM space, and reached by a CpuBus poke at $68:0000. Found
+  by the round trip below, where F1 ROC II's save came out empty.
+- **`firmware_for` scores the headers before it loads anything**: an image with no NEC DSP chipset among its header
+  candidates is answered without building the cartridge, which had cost a copy of the ROM and D-4's reset evidence on
+  every call (the kit's C13 counted 264 calls on Donkey Kong Country in its window against about 225,000 on MoonRT).
+  An image with one is loaded whole as before, so the answer is the one the machine's own header choice gives.
+- **Tests whose premise was a single SNES engine** now read the row: `CoreDiscoveryTests` points discovery at an empty
+  folder before asserting there is no row; `MarsRtEngineTests`, `MarsRtFrontendTests`, `GameEngineAndPlayTimeTests`
+  and `ThemedGameOptionsTests` expect the SNES's engines and its game editor's engine choice as discovery gives them.
+
+### 33.2 The checks, measured 2026-10-03
+
+| Check | Result |
+|---|---|
+| The engine row and the factory (`VenusRtCoreAbiTests`) | the build's sidecar lists VenusRT, capabilities 0x4C05; the row is Venus (C#), VenusRT (Rust), Venus the default; the factory gives `VenusCore` by default and `CoreEngine` when VenusRT is asked for, with no notice |
+| The fallback | with no library, no row and Venus (C#) running; with a library one byte longer than its sidecar's, never loaded, Venus (C#) running and the notice naming the SHA-256 |
+| The adapter against the shim, a synthetic game | 240 frames with the pad pressed in turn: the same picture and samples every frame and a byte-identical state; a WRAM cheat lands |
+| Commercial games through `ICore` on the adapter (opt-in, `EMUSEN_VENUSRT_GAMES`) | 13 games, 600 frames each, against the shim with the same firmware: the picture and the samples equal every frame and the states byte-identical at the end, for A Link to the Past, Chrono Trigger, Donkey Kong Country, F1 ROC II (ST010), Kirby Super Star (SA-1), Metal Combat (OBC1), Pilotwings (DSP-1), Star Fox (GSU), Super Mario Kart (DSP-1B), Super Mario RPG (SA-1), Super Mario World, Super Metroid and Yoshi's Island (GSU-2) |
+| `.srm` round trips with C# Venus (opt-in, `EMUSEN_VENUSRT_BATTERY_GAMES`) | ten games, one each of LoROM, HiROM, DSP-1B, DSP-2, ST010, SA-1 (two), GSU (two) and OBC1: the length VenusRT keeps equals the file Venus (C#) writes; a file Venus (C#) wrote is read whole by VenusRT; a file VenusRT wrote after a change is read whole by Venus (C#) |
+| Mistress (`VenusRtEngineTests`) | the SNES tab's engine row offers VenusRT under Venus (C#) and stores the choice; a game runs on Venus until VenusRT is chosen, then on the adapter, with rewind filling from the snapshot |
+| The fit audit | 92 of 92, the SNES tab's engine row at 1280x800 and 1920x1200 among them; `WindowFitScrapeAuditTests` failed once in two runs on the scrape window, which this change does not touch, and passed alone and in the full run |
+| The kit (`emusen-core-conform`, the build's runner) | compliant on 13 images, Metal Combat and F1 ROC II (with its ST010 firmware) added to §31's eleven |
+| The state's hash every 60 frames to frame 600 | identical to before the v1 switch for the four bench games |
+| The full WiseMan suite | 9,088 passed, 53 skipped and two failed, both a single-SNES-engine premise, since corrected; the affected tests then 151 of 151 |
+
+`dotnet publish` of Mistress alone stopped on NETSDK1152 (DianaOS's apphost and runtime files found twice), before
+the sidecar step, so the publish half was not seen end to end here; the target copies the sidecar into the publish
+folder by the same item as the library.

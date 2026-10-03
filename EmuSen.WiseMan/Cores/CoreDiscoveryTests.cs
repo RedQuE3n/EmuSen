@@ -135,6 +135,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_v1_engine_of_a_known_system_joins_its_row_and_the_factory_honours_or_refuses_it_by_name()
         {
+            CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "nothing") });
             Assert.Null(CoreCatalog.EngineFor("SNES"));
             string built = Install("v1_test_core", Path.Combine(_root, "build"));
             Place(built, Path.Combine(_root, "snes"), ClaimSnes);

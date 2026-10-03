@@ -31,21 +31,21 @@ namespace EmuSen.WiseMan.Mistress
 
         private static readonly BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
-        // A game's choices are its console's engines; a console with one engine has none to offer; a stored engine its console lacks is not used.
+        // A game's choices are its console's engines, the SNES's those discovery adds to Venus (C#); a stored engine its console lacks is not used.
         [Fact]
         public void A_game_s_engines_are_its_console_s_and_one_its_console_lacks_is_ignored()
         {
             MetadataField field = GameMetadata.Fields.Single(f => f.Key == GameMetadata.AltEmulator);
             Assert.Equal(new[] { "", CoreCatalog.MarsRtEngine, CoreCatalog.MarsEngine }, GameMetadata.ChoicesFor(field, "/r/Game.z64").Select(c => c.Value));
             Assert.Equal(new[] { "", CoreCatalog.MercuryEngine, CoreCatalog.MercuryRtEngine }, GameMetadata.ChoicesFor(field, "/r/Game.gbc").Select(c => c.Value));
-            Assert.Equal(new[] { "" }, GameMetadata.ChoicesFor(field, "/r/Game.sfc").Select(c => c.Value));
+            Assert.Equal(new[] { "" }.Concat(CoreCatalog.EngineFor("SNES")?.Choices ?? Array.Empty<string>()), GameMetadata.ChoicesFor(field, "/r/Game.sfc").Select(c => c.Value));
             Assert.Equal(CoreCatalog.MarsEngine, GameMetadata.EngineFor("/r/Game.z64", CoreCatalog.MarsEngine));
             Assert.Null(GameMetadata.EngineFor("/r/Game.z64", CoreCatalog.MercuryEngine));
             Assert.Null(GameMetadata.EngineFor("/r/Game.sfc", CoreCatalog.MarsEngine));
             Assert.Null(GameMetadata.EngineFor("/r/Game.z64", ""));
         }
 
-        // The editor offers a Game Boy game its two engines and a Super Nintendo game none; the choice is an edit, and the badge shows it.
+        // The editor offers a Game Boy game its two engines, and a Super Nintendo game its engines when discovery found a second; the choice is an edit, and the badge shows it.
         [Fact]
         public Task The_editor_sets_a_game_s_engine_and_the_alternative_emulator_badge_shows_it() => Session.Dispatch(() =>
         {
@@ -53,7 +53,7 @@ namespace EmuSen.WiseMan.Mistress
             using var s = new ThemedSession(extraGamelist: badges, status: ThemedSwitchesTests.Device);
             ThemedLibraryPadTests.Enter(s, "snes");
             MetadataEditorWindow snes = ThemedGameOptionsTests.OpenEditor(s);
-            Assert.False(((Dropdown)snes.EditorOf(GameMetadata.AltEmulator)).IsEnabled);
+            Assert.Equal(CoreCatalog.EngineFor("SNES") is not null, ((Dropdown)snes.EditorOf(GameMetadata.AltEmulator)).IsEnabled);
             snes.Close();
             s.Settle();
             s.Pad.B();

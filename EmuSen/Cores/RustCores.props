@@ -30,6 +30,7 @@
       <Core>VenusRT</Core>
       <Console>the SNES</Console>
       <Fallback>Venus (C#)</Fallback>
+      <CoreAbi>1</CoreAbi>
     </EmuSenRustCrate>
   </ItemGroup>
 </Project>

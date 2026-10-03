@@ -36,7 +36,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
         // The windows a player reaches in a game, and those reached from the themed library.
-        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "ShaderSettings", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
+        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "ShaderSettings", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
             "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ScreenshotLongTitle", "ResumeLongTitle", "ControllerBindingsLongNames"];
         public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "FindByName", "CoverPicker", "CoverPickerCovers", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
             "FindByNameLongTitle", "CoverPickerLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName"];
@@ -45,7 +45,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         internal static readonly Dictionary<string, Type> Opens = new()
         {
             ["ActiveCheats"] = typeof(ActiveCheatsWindow), ["ActiveCheatsGeneral"] = typeof(ActiveCheatsWindow), ["CheatDatabase"] = typeof(CheatDatabaseWindow),
-            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
+            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsSnesEngine"] = typeof(GraphicsSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
             ["Screenshot"] = typeof(ScreenshotWindow), ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow), ["ControllerBindings"] = typeof(InputSettingsWindow),
             ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["FindByName"] = typeof(FindByNameWindow), ["CoverPicker"] = typeof(CoverPickerWindow),
             ["CoverPickerCovers"] = typeof(CoverPickerWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow), ["FolderEditor"] = typeof(FolderEditorWindow),
@@ -203,14 +203,18 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
 
         // The NES tab, whose Engine row MoonRT's stage 4 added (Moon_Native.md §8.3).
-        internal static void ShowNesTab(MainWindow window)
+        internal static void ShowNesTab(MainWindow window) => ShowEngineTab(window, "NES");
+
+        // The console's tab with its engine row showing, where the console has one (the SNES's comes from discovery).
+        internal static void ShowEngineTab(MainWindow window, string console)
         {
             Call(window, "ShowGraphicsSettings");
             Settle(window);
             var tabs = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<EmuSen.LunaP.Controls.Tabs>().First(t => t.Name == "ConsoleTabs");
-            tabs.SelectedIndex = EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToList().IndexOf("NES");
+            tabs.SelectedIndex = EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToList().IndexOf(console);
             Settle(window);
-            Assert.Contains(Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>(), c => c.Name == $"NES.{EmuSen.Cores.CoreCatalog.EngineKey}" && c.IsEffectivelyVisible);
+            if (EmuSen.Cores.CoreCatalog.EngineFor(console) is null) return;
+            Assert.Contains(Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>(), c => c.Name == $"{console}.{EmuSen.Cores.CoreCatalog.EngineKey}" && c.IsEffectivelyVisible);
         }
 
         private void OpenInGame(MainWindow window, PadDriver pad, string which)
@@ -240,6 +244,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     break;
                 case "GraphicsSettingsNesEngine":
                     ShowNesTab(window);
+                    break;
+                case "GraphicsSettingsSnesEngine":
+                    ShowEngineTab(window, "SNES");
                     break;
                 case "ControllerBindings":
                     Call(window, "ShowControllerBindings");

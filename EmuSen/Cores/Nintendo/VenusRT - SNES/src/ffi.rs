@@ -114,7 +114,10 @@ impl NativeCore for Machine {
             3 => 2 * self.sys.ppu.vram.len() as i64,
             4 => 2 * self.sys.ppu.cgram.len() as i64,
             5 => self.sys.ppu.oam.len() as i64,
-            6 => self.sys.cart.sram.len() as i64,
+            6 => match self.sys.cart.dsp.as_ref().filter(|(d, _)| d.st) {
+                Some((dsp, _)) => 2 * dsp.ram.len() as i64,
+                None => self.sys.cart.sram.len() as i64,
+            },
             7 => self.sys.apu.ram.len() as i64,
             _ => return Err(abi::status::NO_SUCH_SPACE),
         })
@@ -132,7 +135,11 @@ impl NativeCore for Machine {
                 3 => self.sys.ppu.vram.get(a / 2).map_or(0, |w| w.to_le_bytes()[a & 1]),
                 4 => self.sys.ppu.cgram.get(a / 2).map_or(0, |w| w.to_le_bytes()[a & 1]),
                 5 => self.sys.ppu.oam.get(a).copied().unwrap_or(0),
-                6 => self.sys.cart.sram.get(a).copied().unwrap_or(0),
+                6 => match self.st_ram() {
+                    Some(dsp) if a < 2 * dsp.ram.len() => dsp.host_read(crate::chips::necdsp::Port::Ram(a), false),
+                    Some(_) => 0,
+                    None => self.sys.cart.sram.get(a).copied().unwrap_or(0),
+                },
                 7 => self.sys.apu.ram.get(a).copied().unwrap_or(0),
                 _ => return Err(abi::status::NO_SUCH_SPACE),
             };
@@ -162,7 +169,15 @@ impl NativeCore for Machine {
                     continue;
                 }
                 5 => self.sys.ppu.oam.get_mut(a),
-                6 => self.sys.cart.sram.get_mut(a),
+                6 => {
+                    if let Some(dsp) = self.st_ram() {
+                        if a < 2 * dsp.ram.len() {
+                            dsp.host_write(crate::chips::necdsp::Port::Ram(a), b);
+                        }
+                        continue;
+                    }
+                    self.sys.cart.sram.get_mut(a)
+                }
                 7 => self.sys.apu.ram.get_mut(a),
                 _ => return Err(abi::status::NO_SUCH_SPACE),
             };
@@ -180,6 +195,13 @@ impl NativeCore for Machine {
         }
         let cart = &self.sys.cart;
         Ok((if cart.header.battery() { &cart.sram } else { &[] }, 0))
+    }
+}
+
+impl Machine {
+    /// An ST010 or ST011, whose on-chip RAM is the cartridge's battery RAM and stands as SRAM, space 6.
+    fn st_ram(&mut self) -> Option<&mut crate::chips::necdsp::NecDsp> {
+        self.sys.cart.dsp.as_mut().map(|(d, _)| d).filter(|d| d.st)
     }
 }
 

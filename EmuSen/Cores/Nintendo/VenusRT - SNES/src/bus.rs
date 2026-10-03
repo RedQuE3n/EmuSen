@@ -331,8 +331,8 @@ impl System {
     }
 
     /// A write from outside the machine (a cheat's poke, the debugger) to the CPU's bus: it lands where the bus would
-    /// take it in memory (WRAM, the cartridge's RAM, the SA-1's I-RAM and BW-RAM under their protection, the GSU's RAM
-    /// when the GSU does not own it) and is dropped elsewhere, touching no register, the MDR or a coprocessor's clock.
+    /// take it in memory (WRAM, the cartridge's RAM, an ST01x's RAM, the SA-1's I-RAM and BW-RAM under their protection,
+    /// the GSU's RAM when the GSU does not own it) and is dropped elsewhere, touching no register, the MDR or a coprocessor's clock.
     pub fn poke(&mut self, address: u32, value: u8) {
         let bank = (address >> 16) as u8;
         let offset = address as u16;
@@ -366,8 +366,14 @@ impl System {
                 return;
             }
         }
-        if let Some(Slot::Sram(i)) = c.decode(address) {
-            c.sram[i] = value;
+        match c.decode(address) {
+            Some(Slot::Sram(i)) => c.sram[i] = value,
+            Some(Slot::Dsp(port @ crate::chips::necdsp::Port::Ram(_))) => {
+                if let Some((dsp, _)) = c.dsp.as_mut() {
+                    dsp.host_write(port, value);
+                }
+            }
+            _ => {}
         }
     }
 

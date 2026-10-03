@@ -154,7 +154,7 @@ namespace EmuSen.WiseMan.Cores
                 core.RunFrame();
                 rewind.OnFrameCompleted(core);
             }
-            Thread.Sleep(50);
+            rewind.Moments();
             Assert.True(rewind.Rewind(core), "the warming step back found no history");
 
             long captured = 0, stepped = 0, captures = 0, steps = 0;
@@ -163,6 +163,8 @@ namespace EmuSen.WiseMan.Cores
             for (int frame = 0; frame < 80; frame++)
             {
                 core.RunFrame();
+                // A delta the pool has not started is encoded by the next Settle on this thread, so it is settled outside the window - see Mars_Native.md §6.6.3.
+                rewind.Moments();
                 long before = GC.GetAllocatedBytesForCurrentThread();
                 clock.Restart();
                 rewind.OnFrameCompleted(core);
@@ -170,8 +172,7 @@ namespace EmuSen.WiseMan.Cores
                 captured += GC.GetAllocatedBytesForCurrentThread() - before;
                 captures++;
                 if (frame % 4 != 3) continue;
-                // The capture's delta is encoded on a pool thread; a step taken before it finishes runs it here, which is the buffer's cost, not the core's.
-                Thread.Sleep(50);
+                rewind.Moments();
                 before = GC.GetAllocatedBytesForCurrentThread();
                 clock.Restart();
                 Assert.True(rewind.Rewind(core));

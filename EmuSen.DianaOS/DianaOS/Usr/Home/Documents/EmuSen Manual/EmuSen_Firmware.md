@@ -6,6 +6,24 @@ Covers `EmuSen/Common/Firmware/`, `ICore.GetFirmwareRequirements`, and the picke
 
 ---
 
+## 0. The policy (decided 2026-10-03)
+
+For every emulator the project builds, present and future:
+
+1. **An open version first.** Wherever real hardware runs code its maker shipped inside the machine or the cartridge
+   (a boot ROM, a BIOS, a coprocessor's program), the core carries its own replacement, written from public
+   documentation of what that code does. Every game the core supports then runs with no firmware folder.
+2. **The player's own firmware, if they have it.** An image placed in `home/Firmware` is used in place of the
+   replacement, as the exact path. It is offered, never required, and no frontend prompts for it.
+3. **Nothing copyrighted ships or is fetched.** No firmware is committed, bundled or downloaded on the player's behalf
+   (§5); the unofficial BIOS collections hosted online are unauthorised copies and are not a source.
+
+Each replacement states its accuracy cost in its core's documentation and in the core's info, as any performance
+setting does. The rule does not bind a foreign core (`EmuSen_CoreAPI.md` §6.2). The first cases are VenusRT's SPC700
+boot program and its NEC DSP chips (`VenusRT_Native.md`).
+
+---
+
 ## 1. The contract
 
 Some hardware needs code the software never shipped with. A DSP-1's program is inside the chip, not on the cartridge; a PlayStation cannot boot without its BIOS. Emulating that hardware means having a dump, and **EmuSen does not ship one** — see §5.

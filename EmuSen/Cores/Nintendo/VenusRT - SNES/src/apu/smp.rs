@@ -51,6 +51,8 @@ pub struct Smp {
     pub to_cpu_q: Vec<(u64, u8, u8)>,
     /// The last `peek`, kept while the SPC700 and the input queue stand where they were.
     peeked: Option<(u64, Peeked)>,
+    /// The debugger's seam, fitted for an observed frame only; not in the state.
+    pub probe: Option<Box<crate::probe::Probe>>,
     /// AUXIO4 and AUXIO5, latches read back as written, not the RAM beneath (D-31).
     pub aux: [u8; 2],
     pub timers: [Timer; 3],
@@ -78,6 +80,7 @@ impl Smp {
             to_apu_q: Vec::new(),
             to_cpu_q: Vec::new(),
             peeked: None,
+            probe: None,
             aux: [0xFF; 2],
             timers: Default::default(),
             cycles: 0,
@@ -117,6 +120,11 @@ impl Smp {
             if 4 * (self.cycles + 12 * self.stretch()) > q {
                 let (len, _, _) = self.peek();
                 if 4 * (self.cycles + len - 1) >= q {
+                    break;
+                }
+            }
+            if let Some(p) = self.probe.as_mut() {
+                if p.before(self.cpu.pc as u32) {
                     break;
                 }
             }
@@ -369,6 +377,9 @@ impl spc700::Bus for Smp {
 
     fn write(&mut self, address: u16, value: u8) {
         self.tick();
+        if let Some(p) = self.probe.as_mut() {
+            p.store(address as u32, value);
+        }
         if (0x00F0..=0x00FF).contains(&address) {
             self.io_write(address, value);
         }

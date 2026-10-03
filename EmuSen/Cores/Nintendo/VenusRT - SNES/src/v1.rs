@@ -12,6 +12,9 @@ use crate::state::STATE_VERSION;
 /// The space names, in id order; `CpuBus` and `WRAM` are the SNES system pack's, which its cheat codecs target.
 pub const SPACES: [&str; 8] = ["CpuBus", "IO", "WRAM", "VRAM", "CGRAM", "OAM", "SRAM", "APURAM"];
 
+/// The chips' spaces, ids 8 to 14, listed for a cartridge that has the chip (`ffi::GSURAM` and on).
+pub const CHIP_SPACES: [&str; 7] = ["GSURAM", "GSUBUS", "SA1IRAM", "BWRAM", "SA1BUS", "DSPRAM", "DSPPRG"];
+
 /// The pad's bits as `set_buttons` takes them: bit n is `PadButton` n.
 const BUTTONS: [(Control, &str); 12] = [
     (Control::B, "B"),
@@ -48,6 +51,45 @@ fn dsp(named: Option<(&str, u64)>) -> Firmware {
 }
 
 impl Machine {
+    /// What follows a frame: the cheat pokes, then the battery RAM compared with the copy the host last saved.
+    fn frame_end(&mut self) {
+        for &[space, address, value, compare] in &self.pokes {
+            let now = match space {
+                0 => self.sys.read_value(address & 0xFF_FFFF, false),
+                _ => self.sys.wram.get(address as usize & 0x1_FFFF).copied(),
+            };
+            if compare != flags::NO_COMPARE && now != Some(compare as u8) {
+                continue;
+            }
+            match space {
+                0 => self.sys.poke(address & 0xFF_FFFF, value as u8),
+                _ => self.sys.wram[address as usize & 0x1_FFFF] = value as u8,
+            }
+        }
+        self.refresh_st_battery();
+        if self.sys.cart.header.battery() && !self.battery_changed && *self.battery_bytes() != *self.battery_copy {
+            self.battery_changed = true;
+            emit(event::BATTERY, 0, 0);
+        }
+    }
+
+    /// The debugger's processors: the S-CPU, the SPC700 and the cartridge's own, if it has one.
+    fn processors(&self) -> Vec<Processor> {
+        use crate::debugger::{CPU_REGISTERS, Chip, DSP_REGISTERS, GSU_REGISTERS, SPC_REGISTERS};
+        let named = |r: &[(&str, u32)]| r.iter().map(|&(n, b)| (n.to_owned(), b)).collect::<Vec<_>>();
+        let mut list = vec![
+            Processor { id: 0, name: "65C816".into(), pc_bits: 24, registers: named(&CPU_REGISTERS) },
+            Processor { id: 1, name: "SPC700".into(), pc_bits: 16, registers: named(&SPC_REGISTERS) },
+        ];
+        match self.chip() {
+            Some(Chip::Sa1) => list.push(Processor { id: 2, name: "SA-1".into(), pc_bits: 24, registers: named(&CPU_REGISTERS) }),
+            Some(Chip::Gsu) => list.push(Processor { id: 2, name: "GSU".into(), pc_bits: 24, registers: named(&GSU_REGISTERS) }),
+            Some(Chip::Dsp) => list.push(Processor { id: 2, name: "DSP".into(), pc_bits: 16, registers: named(&DSP_REGISTERS) }),
+            None => {}
+        }
+        list
+    }
+
     /// An ST010 or ST011's battery-backed RAM, the cartridge's save (fullsnes: "680000h-6FFFFFh ST010/ST011 On-chip
     /// Battery-backed RAM"), read out byte by byte as the S-CPU sees it; empty for any other cartridge.
     fn refresh_st_battery(&mut self) {
@@ -67,7 +109,7 @@ impl Machine {
 }
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::RESET | caps::SNAPSHOT | caps::BATTERY_DIRTY | caps::ROM_PATCHES | caps::CHEAT_POKES;
+    const CAPABILITIES: u64 = caps::RESET | caps::SNAPSHOT | caps::BATTERY_DIRTY | caps::ROM_PATCHES | caps::CHEAT_POKES | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS;
 
     fn info() -> Info {
         Info {
@@ -140,10 +182,17 @@ impl Core for Machine {
             ports: vec![Port { port: 0, controller: Some("snes.pad".into()) }, Port { port: 1, controller: Some("snes.pad".into()) }],
             spaces: SPACES
                 .iter()
+                .chain(&CHIP_SPACES)
                 .enumerate()
-                .map(|(id, &name)| Space { read_only: name == "IO", cheats: matches!(name, "CpuBus" | "WRAM"), ..Space::new(id as u32, name) })
+                .filter(|&(id, _)| id < SPACES.len() || self.chip_space_size(id as u32).is_some())
+                .map(|(id, &name)| Space {
+                    read_only: matches!(name, "IO" | "GSUBUS" | "SA1BUS" | "DSPPRG"),
+                    cheats: matches!(name, "CpuBus" | "WRAM"),
+                    reports_stores: matches!(name, "CpuBus" | "WRAM" | "SRAM" | "APURAM"),
+                    ..Space::new(id as u32, name)
+                })
                 .collect(),
-            processors: Vec::new(),
+            processors: self.processors(),
             battery: vec![Battery { which: 0, suffix: ".srm".into() }],
             state: StateFormat { format: "VNRT".into(), version: STATE_VERSION as i64, loads_from: vec![STATE_VERSION as i64] },
             phases: Vec::new(),
@@ -157,27 +206,11 @@ impl Core for Machine {
         Ok(())
     }
 
-    /// The frame, then the cheat pokes, then the battery RAM compared with the copy the host last saved.
+    /// The frame, with nothing of the debugger's fitted, then what follows every frame.
     fn advance(&mut self, detail: &mut u64) -> Result<(), i32> {
+        self.disarm();
         NativeCore::advance(self, detail)?;
-        for &[space, address, value, compare] in &self.pokes {
-            let now = match space {
-                0 => self.sys.read_value(address & 0xFF_FFFF, false),
-                _ => self.sys.wram.get(address as usize & 0x1_FFFF).copied(),
-            };
-            if compare != flags::NO_COMPARE && now != Some(compare as u8) {
-                continue;
-            }
-            match space {
-                0 => self.sys.poke(address & 0xFF_FFFF, value as u8),
-                _ => self.sys.wram[address as usize & 0x1_FFFF] = value as u8,
-            }
-        }
-        self.refresh_st_battery();
-        if self.sys.cart.header.battery() && !self.battery_changed && *self.battery_bytes() != *self.battery_copy {
-            self.battery_changed = true;
-            emit(event::BATTERY, 0, 0);
-        }
+        self.frame_end();
         Ok(())
     }
 
@@ -265,6 +298,40 @@ impl Core for Machine {
         Ok(())
     }
 
+    fn debug_hooks(&mut self) -> Option<&mut Hooks> {
+        Some(&mut self.hooks)
+    }
+
+    /// Processor 0's breakpoints live in the hooks; the SPC700's and the cartridge processor's go to their probes.
+    fn debug_breakpoints(&mut self, processor: u32, pairs: &[i32]) -> Result<(), i32> {
+        match processor {
+            0 => self.hooks.set_breakpoints(pairs),
+            1 | 2 if processor == 1 || self.chip().is_some() => self.debug_breakpoints[processor as usize - 1] = pairs.chunks_exact(2).map(|p| (p[0], p[1])).collect(),
+            _ => return Err(status::NOT_SUPPORTED),
+        }
+        Ok(())
+    }
+
+    fn debug_run_frame(&mut self, flags: u32, _detail: &mut u64) -> Result<u32, i32> {
+        let why = self.run_frame_debug(flags);
+        if why == emusen_native::debug::stop::FRAME {
+            self.frame_end();
+        }
+        Ok(why)
+    }
+
+    fn debug_stopped(&self) -> u32 {
+        self.debug_stopped
+    }
+
+    fn debug_pc(&self, processor: u32) -> Option<u64> {
+        Machine::debug_pc(self, processor)
+    }
+
+    fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
+        Machine::debug_registers(self, processor).ok_or(status::NOT_SUPPORTED)
+    }
+
     /// Pokes in CpuBus (space 0) and WRAM (space 2), the spaces machine info marks for cheats.
     fn set_cheat_pokes(&mut self, quads: &[u32]) -> Result<(), i32> {
         if quads.chunks_exact(4).any(|q| q[0] != 0 && q[0] != 2) {
@@ -276,7 +343,7 @@ impl Core for Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; reset, rom_patches, cheat_pokes);
+emusen_native::core_exports!(Machine; reset, rom_patches, cheat_pokes, debug, debug_stack, debug_registers);
 
 #[cfg(test)]
 mod tests {

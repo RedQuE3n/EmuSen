@@ -42,6 +42,13 @@ pub struct Machine {
     pub st_battery: Vec<u8>,
     /// The host's cheat pokes, (space, address, value, compare), applied at each frame's end; not in the state.
     pub pokes: Vec<[u32; 4]>,
+    /// The debugger's tables and logs, the frame it left open, the processor it last stopped on, the breakpoints of
+    /// processors 1 and 2, and what the last step took (0 an instruction, 1 NMI, 2 IRQ); none of it in the state.
+    pub hooks: emusen_native::debug::Hooks,
+    pub debug_open: Option<u64>,
+    pub debug_stopped: u32,
+    pub debug_breakpoints: [Vec<(i32, i32)>; 2],
+    pub took: u8,
 }
 
 impl Machine {
@@ -95,6 +102,11 @@ impl Machine {
             battery_changed: false,
             st_battery: Vec::new(),
             pokes: Vec::new(),
+            hooks: emusen_native::debug::Hooks::new(&[24, 16, 24]),
+            debug_open: None,
+            debug_stopped: 0,
+            debug_breakpoints: [Vec::new(), Vec::new()],
+            took: 0,
         };
         // The datasheet leaves SL uninitialised at power-on; $02 puts S at $01FF after the reset's three stack cycles.
         m.cpu.s = 0x0102;
@@ -132,6 +144,8 @@ impl Machine {
         m.battery_changed = self.battery_changed;
         m.st_battery = std::mem::take(&mut self.st_battery);
         m.pokes = std::mem::take(&mut self.pokes);
+        m.hooks = self.hooks.clone();
+        m.debug_breakpoints = std::mem::take(&mut self.debug_breakpoints);
         *self = m;
     }
 
@@ -145,6 +159,11 @@ impl Machine {
         while self.sys.timing.frame == frame {
             self.step();
         }
+        self.finish_frame();
+    }
+
+    /// The frame's end: every processor caught up to the S-CPU, and the frame's samples taken.
+    pub(crate) fn finish_frame(&mut self) {
         self.sys.apu.run_to(self.sys.timing.clock);
         if let Some((dsp, _)) = self.sys.cart.dsp.as_mut() {
             dsp.run_to(self.sys.timing.clock);
@@ -212,6 +231,7 @@ impl Machine {
     /// The probe's CPU trace record (EmuSen_Debugging_Tools_Reference_v5.md §3.40): address, opcode, kind, A, X, Y, S, D,
     /// DBR, P, E, and the instruction's master clocks, filled in after it.
     fn record(&mut self, opcode: u8, kind: u8) {
+        self.took = kind;
         let c = self.cpu;
         if let Some(t) = &mut self.trace {
             let pc = ((c.pbr as u32) << 16) | c.pc as u32;

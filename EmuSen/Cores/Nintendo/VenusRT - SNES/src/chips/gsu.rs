@@ -667,8 +667,8 @@ impl Gsu {
                 self.set(d, r, rom);
                 self.flag(sfr::CY, p & 0x8000 != 0);
                 self.set_sz(r);
-                // D-35: the multiplier holds the CPU 5 cycles at MS0=0 and 1 at MS0=1, LMULT as FMULT.
-                extra += if self.cfgr & 0x20 != 0 { 1 } else { 5 };
+                // D-35: three microcode cycles, then the multiplier's hold of 5 at MS0=0 and 1 at MS0=1, LMULT as FMULT.
+                extra += 2 + if self.cfgr & 0x20 != 0 { 1 } else { 5 };
             }
             0xA0..=0xAF => {
                 let (k, c) = self.operand(rom, ram);

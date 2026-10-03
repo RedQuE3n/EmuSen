@@ -163,6 +163,62 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // A machine loaded with another's state at frame 300 sounds exactly as the first from then on, in both engines - see Mercury_Native.md §10.
+        [Theory]
+        [InlineData(0x00)]
+        [InlineData(0x80)]
+        public void A_state_loaded_into_a_second_machine_resumes_its_sound_exactly(byte cgb)
+        {
+            Assert.True(MercuryMachine.Available, MercuryNative.Report);
+            byte[] rom = SyntheticGbRom.Build(romBanks: 4, cartridgeType: 0x13, ramSizeCode: 0x03, cgbFlag: cgb, patches: (0, Busy));
+            foreach (Func<ICore> make in new Func<ICore>[] { () => Load(rom), () => LoadRt(rom) })
+            {
+                ICore a = make();
+                for (int f = 0; f < 300; f++) { Press(a, f); a.RunFrame(); a.DequeueAudioSamples(int.MaxValue); }
+                var state = new MemoryStream();
+                a.SaveState(state);
+                ICore b = make();
+                b.LoadState(new MemoryStream(state.ToArray()));
+                for (int f = 300; f < 600; f++)
+                {
+                    Press(a, f);
+                    Press(b, f);
+                    a.RunFrame();
+                    b.RunFrame();
+                    Assert.Equal(a.DequeueAudioSamples(int.MaxValue), b.DequeueAudioSamples(int.MaxValue));
+                }
+                var sa = new MemoryStream();
+                var sb = new MemoryStream();
+                a.SaveState(sa);
+                b.SaveState(sb);
+                Assert.True(sa.ToArray().AsSpan().SequenceEqual(sb.ToArray()), "the two machines' states differ after 300 frames");
+                (a as IDisposable)?.Dispose();
+                (b as IDisposable)?.Dispose();
+            }
+        }
+
+        private static void Press(ICore core, int frame)
+        {
+            core.SetButton(0, PadButton.Start, frame % 90 < 5);
+            core.SetButton(0, PadButton.A, frame % 90 is >= 45 and < 50);
+        }
+
+        private static ICore LoadRt(byte[] rom)
+        {
+            CoreOptions.BatteryRamDisabled = true;
+            string path = SyntheticGbRom.WriteTemp(rom);
+            try
+            {
+                var core = new MercuryRtCore();
+                core.LoadRom(path);
+                return core;
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
         private static MercuryCore Load(byte[] rom)
         {
             CoreOptions.BatteryRamDisabled = true;
@@ -218,6 +274,7 @@ namespace EmuSen.WiseMan.Cores
             layout.Walk("Mapper.", core.Cart!.Mapper);
             layout.Walk("Cpu.", core.Cpu!);
             layout.Walk("Bus.", core.Bus!);
+            foreach (string field in new[] { "_cycleFraction", "_leftCapacitor", "_rightCapacitor" }) layout.Line("Bus.Apu." + field, "f64", 8);
             Assert.Equal(state.Length, layout.Offset);
             return layout.Text;
         }

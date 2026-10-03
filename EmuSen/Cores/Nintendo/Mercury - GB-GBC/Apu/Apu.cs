@@ -50,6 +50,21 @@ namespace EmuSen.Cores.Nintendo.Mercury.Audio
 
         public int BufferedSamples => _buffer.Count;
 
+        // The mixer's running state, from version 8 on after the walks, so a loaded state resumes its sound exactly - see Mercury_Native.md §10.
+        internal void WriteMixer(BinaryWriter w)
+        {
+            w.Write(_cycleFraction);
+            w.Write(_leftCapacitor);
+            w.Write(_rightCapacitor);
+        }
+
+        internal void ReadMixer(BinaryReader r)
+        {
+            _cycleFraction = r.ReadDouble();
+            _leftCapacitor = r.ReadDouble();
+            _rightCapacitor = r.ReadDouble();
+        }
+
         // The queue itself, for a test to give it a limit of its own and a model change to carry it over.
         public SampleQueue Samples => _buffer;
 

@@ -11,7 +11,7 @@ pub const CHANNEL_COUNT: usize = 4;
 pub const REGISTER_BASE: u16 = 0xFF10;
 pub const REGISTER_COUNT: usize = 0x17;
 
-/// The mixer's host-side state: none of it is in a save state, so a load keeps what the instance had (Mercury_Native.md §3.1).
+/// The mixer's host-side state: the fraction and the capacitors are in the state from version 8, the rest is configuration (Mercury_Native.md §10).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mixer {
     pub cycles_per_sample: f64,

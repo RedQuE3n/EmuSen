@@ -20,12 +20,13 @@ namespace EmuSen.Cores.Nintendo.Mercury
         // "MERC" little-endian, then the format version - see EmuSen_Save_States.md §3.
         public const uint StateMagic = 0x4352454D;
 
-        // 2 PPU, 3 colour banks and HDMA, 4 APU, 5 serial, 6 no save path or cartridge copies, 7 the console - see EmuSen_Save_States.md §7.
-        public const int StateVersion = 7;
+        // 2 PPU, 3 colour banks and HDMA, 4 APU, 5 serial, 6 no save path or cartridge copies, 7 the console, 8 the mixer - see EmuSen_Save_States.md §7, Mercury_Native.md §10.
+        public const int StateVersion = 8;
 
         // Version 6 dropped the save path and the cartridge copies; version 7 names the console before the walks - see Mercury_Model.md §5.
         private const int RetiredCartCopies = 6;
         private const int ConsoleInHeader = 7;
+        private const int MixerInState = 8;
 
         // The oldest version LoadState still reads, its retired fields walked and dropped - see Mercury_Native.md §9.3.
         public const int OldestReadableVersion = 5;
@@ -270,6 +271,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
             StateSerializer.Write(w, Cart.Mapper);
             StateSerializer.Write(w, Cpu);
             StateSerializer.Write(w, Bus);
+            Bus.Apu.WriteMixer(w);
         }
 
         public void LoadState(Stream stream)
@@ -298,6 +300,8 @@ namespace EmuSen.Cores.Nintendo.Mercury
             StateSerializer.Read(r, Cart.Mapper, includeRetired: retired);
             StateSerializer.Read(r, Cpu, includeRetired: retired);
             StateSerializer.Read(r, Bus, includeRetired: retired);
+            // Before version 8 the mixer was not in the state: it keeps what it held, as it did then.
+            if (version >= MixerInState) Bus.Apu.ReadMixer(r);
         }
     }
 }

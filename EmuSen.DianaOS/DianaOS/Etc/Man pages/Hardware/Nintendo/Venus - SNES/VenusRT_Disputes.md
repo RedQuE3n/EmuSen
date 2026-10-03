@@ -870,6 +870,14 @@ their data.
   - After the instruction's last cycle the multiplier holds the CPU for a start state plus a count: MULT and UMULT
     only at MS0=0, with a count of 0 (about 2 cycles); FMULT and LMULT always, with a count of 4 at MS0=0 (about 6
     cycles) and 0 at MS0=1 (about 2).
+  - Read 2026-10-03 as a second pass, in `GSU_PKG.vhd`: the microcode table's per-cycle `LAST_CYCLE`, `INCPC`,
+    `ROMWAIT` and `RAMWAIT` flags (not its register or ALU fields), and the opcode table's row for FMULT/LMULT to
+    learn which microcode they run. Each opcode's own cycles, counting the operand bytes: 1 for most; BRA-type and
+    IBT 2, IWT 3; LDB, LDW, STB, STW, SBK and RPIX 2; LMS and SMS 3; LM and SM 4; FMULT and LMULT 3 (microcode 24),
+    MULT and UMULT 1. GETB/GETC and ROMB wait on a pending ROM load; every RAM opcode and RAMB wait while a store is
+    pending or running; STOP waits on both. A load (LDB, LDW, LM, LMS) holds the CPU until its data arrive; a store
+    (STB, STW, SM, SMS, SBK) is posted and the CPU carries on. The multiplier's hold counts after the third cycle, so
+    an FMULT is 3 + 5 cycles at MS0=0 and 3 + 1 at MS0=1, which the first pass's reading (hold alone) had missed.
 - Conclusion: open.
 - Pinned by: Star Fox's $15BB, Vortex's $198C, and the GSU test ROMs staying passed.
 

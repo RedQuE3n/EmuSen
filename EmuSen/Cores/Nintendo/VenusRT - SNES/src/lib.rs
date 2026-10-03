@@ -7,6 +7,7 @@
 pub mod apu;
 pub mod cpu;
 pub mod debugger;
+pub mod disasm;
 pub mod bus;
 pub mod cart;
 pub mod chips;

@@ -109,7 +109,7 @@ impl Machine {
 }
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::RESET | caps::SNAPSHOT | caps::BATTERY_DIRTY | caps::ROM_PATCHES | caps::CHEAT_POKES | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS;
+    const CAPABILITIES: u64 = caps::RESET | caps::SNAPSHOT | caps::BATTERY_DIRTY | caps::ROM_PATCHES | caps::CHEAT_POKES | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE;
 
     fn info() -> Info {
         Info {
@@ -332,6 +332,69 @@ impl Core for Machine {
         Machine::debug_registers(self, processor).ok_or(status::NOT_SUPPORTED)
     }
 
+    /// The instruction set is the space's where the space is a processor's own (APURAM the SPC700's, GSUBUS and
+    /// GSURAM the GSU's, SA1BUS, SA1IRAM and BWRAM the SA-1's, DSPPRG the DSP's), else `processor`'s.
+    fn debug_disassemble(&mut self, processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<Instruction>, i32> {
+        use crate::debugger::Chip;
+        use crate::disasm::{gsu, spc700, upd77c25, w65816};
+        use crate::ffi::{BWRAM, DSPPRG, GSUBUS, GSURAM, SA1BUS, SA1IRAM};
+        #[derive(Clone, Copy, PartialEq)]
+        enum Isa {
+            Cpu,
+            Sa1,
+            Spc,
+            Gsu,
+            Dsp,
+        }
+        NativeCore::space_size(self, space)?;
+        let chip = self.chip();
+        let isa = match (space, processor, chip) {
+            (7, _, _) => Isa::Spc,
+            (GSURAM | GSUBUS, _, _) => Isa::Gsu,
+            (SA1BUS | SA1IRAM | BWRAM, _, _) => Isa::Sa1,
+            (DSPPRG, _, _) => Isa::Dsp,
+            (_, 1, _) => Isa::Spc,
+            (_, 2, Some(Chip::Sa1)) => Isa::Sa1,
+            (_, 2, Some(Chip::Gsu)) => Isa::Gsu,
+            (_, 2, Some(Chip::Dsp)) => Isa::Dsp,
+            (_, 0, _) => Isa::Cpu,
+            _ => return Err(status::NOT_SUPPORTED),
+        };
+        let cpu = match (isa, self.sys.cart.sa1.as_ref()) {
+            (Isa::Sa1, Some(s)) => s.cpu,
+            _ => self.cpu,
+        };
+        let mut widths = w65816::Widths { m: cpu.e || cpu.p & 0x20 != 0, x: cpu.e || cpu.p & 0x10 != 0, e: cpu.e };
+        let mut prefix = match self.sys.cart.gsu.as_ref() {
+            Some(g) if Machine::debug_pc(self, 2) == Some(address as u64) => gsu::Prefix { alt: g.alt, b: g.b },
+            _ => gsu::Prefix::default(),
+        };
+        let st = self.sys.cart.dsp.as_ref().is_some_and(|(d, _)| d.st);
+        let machine = std::cell::RefCell::new(self);
+        let read = |a: u32| {
+            let mut byte = [0u8];
+            let _ = NativeCore::space_read(&mut **machine.borrow_mut(), space, a, &mut byte);
+            byte[0]
+        };
+        let mut list = Vec::new();
+        let mut at = address;
+        for _ in 0..count.min(4096) {
+            let i = match isa {
+                Isa::Cpu | Isa::Sa1 => w65816::decode(&read, at, &mut widths, cpu.dbr),
+                Isa::Spc => spc700::decode(&read, at),
+                Isa::Gsu => gsu::decode(&read, at, &mut prefix),
+                Isa::Dsp => upd77c25::decode(&read, at, st),
+            };
+            let n = i.bytes.len() as u32;
+            at = match isa {
+                Isa::Spc | Isa::Dsp => i.address.wrapping_add(n),
+                _ => (at & 0xFF_0000) | (at.wrapping_add(n) & 0xFFFF),
+            };
+            list.push(i);
+        }
+        Ok(list)
+    }
+
     /// Pokes in CpuBus (space 0) and WRAM (space 2), the spaces machine info marks for cheats.
     fn set_cheat_pokes(&mut self, quads: &[u32]) -> Result<(), i32> {
         if quads.chunks_exact(4).any(|q| q[0] != 0 && q[0] != 2) {
@@ -343,7 +406,7 @@ impl Core for Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; reset, rom_patches, cheat_pokes, debug, debug_stack, debug_registers);
+emusen_native::core_exports!(Machine; reset, rom_patches, cheat_pokes, debug, debug_stack, debug_registers, debug_disassemble);
 
 #[cfg(test)]
 mod tests {
@@ -467,6 +530,23 @@ mod tests {
         Core::advance(&mut m, &mut 0).unwrap();
         let (bytes, f) = Core::battery(&m, 0).unwrap();
         assert_eq!((bytes[3], f), (0xEE, flags::BATTERY_TRACKED | flags::BATTERY_CHANGED));
+    }
+
+    // DEBUG_DISASSEMBLE: the space picks the instruction set where it is a processor's own, else the processor does.
+    #[test]
+    fn disassembly_goes_by_the_space_and_the_processor() {
+        let mut m = machine();
+        let text = |m: &mut Machine, processor: u32, space: u32, at: u32| {
+            Core::debug_disassemble(m, processor, space, at, 2).map(|l| l.iter().map(|i| format!("{:06X} {} {}", i.address, i.mnemonic, i.operands).trim_end().to_owned()).collect::<Vec<_>>())
+        };
+        assert_eq!(text(&mut m, 0, 0, 0x00_8000).unwrap(), ["008000 BRA $8000", "008002 NOP"]);
+        Core::space_write(&mut m, 7, 0x0200, &[0xE8, 0x12, 0x3F, 0x00, 0x03]).unwrap();
+        assert_eq!(text(&mut m, 0, 7, 0x0200).unwrap(), ["000200 MOV A,#$12", "000202 CALL !$0300"]);
+        Core::space_write(&mut m, 2, 0x0100, &[0xE8, 0x12, 0xEA]).unwrap();
+        assert_eq!(text(&mut m, 0, 2, 0x0100).unwrap(), ["000100 INX", "000101 ORA ($EA)"]);
+        assert_eq!(text(&mut m, 1, 2, 0x0100).unwrap()[0], "000100 MOV A,#$12");
+        assert_eq!(text(&mut m, 2, 2, 0x0100), Err(status::NOT_SUPPORTED));
+        assert_eq!(text(&mut m, 0, 99, 0), Err(status::NO_SUCH_SPACE));
     }
 
     // SNAPSHOT: the full state under kind 1.

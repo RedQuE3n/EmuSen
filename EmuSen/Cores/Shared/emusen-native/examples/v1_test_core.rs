@@ -23,6 +23,8 @@ pub const TEST_CAPABILITIES: u64 = emusen_native::core::caps::RESET
     | emusen_native::core::caps::DEBUG_REGISTERS
     | emusen_native::core::caps::DEBUG_DISASSEMBLE;
 
+pub const TEST_FAULTS: u32 = 0;
+
 include!("common/test_core.rs");
 
 emusen_native::core_exports!(TestCore; reset, present, phases, audio_peek, mutes, axes, settings, setting_notes, rom_patches, cheat_pokes, debug, debug_stack, debug_registers, debug_disassemble);

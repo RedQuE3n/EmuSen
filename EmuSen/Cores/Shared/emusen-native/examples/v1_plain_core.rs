@@ -5,6 +5,8 @@ pub const TEST_ID: &str = "v1-plain-core";
 pub const TEST_NAME: &str = "V1PlainCore";
 pub const TEST_CAPABILITIES: u64 = 0;
 
+pub const TEST_FAULTS: u32 = 0;
+
 include!("common/test_core.rs");
 
 emusen_native::core_exports!(TestCore;);

@@ -21,6 +21,11 @@ impl ffi::Status for StateError {
     }
 }
 
+/// Seeded faults for the conformance kit's own tests: each machine differs from the last, and a truncated state loads.
+pub const FAULT_MACHINES_DIFFER: u32 = 1;
+pub const FAULT_TAKES_TRUNCATED_STATE: u32 = 2;
+static MADE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
 /// The core's own refusal of an image: an empty one.
 pub const STATUS_EMPTY_IMAGE: i32 = -9;
 /// An image is this magic, a little-endian u16 payload length, and the payload.
@@ -93,7 +98,11 @@ impl StateMachine for TestCore {
             return Err(StateError::Foreign);
         }
         if data.len() < self.state_size() {
-            return Err(StateError::Truncated);
+            if TEST_FAULTS & FAULT_TAKES_TRUNCATED_STATE == 0 || data.len() < 12 {
+                return Err(StateError::Truncated);
+            }
+            self.frames = i64::from_le_bytes(data[4..12].try_into().unwrap());
+            return Ok(());
         }
         self.frames = i64::from_le_bytes(data[4..12].try_into().unwrap());
         self.ram.copy_from_slice(&data[12..268]);
@@ -177,6 +186,9 @@ impl Core for TestCore {
         let mut ram = [0u8; 256];
         ram[0] = r.settings.get("Ram").and_then(|v| v.parse().ok()).unwrap_or(0);
         ram[1..].iter_mut().zip(body).for_each(|(d, s)| *d = *s);
+        if TEST_FAULTS & FAULT_MACHINES_DIFFER != 0 {
+            ram[255] = MADE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
         let mut sram = [0u8; 16];
         for f in &r.files {
             match f.which {

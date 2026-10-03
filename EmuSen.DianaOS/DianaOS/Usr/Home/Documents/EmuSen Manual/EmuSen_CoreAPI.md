@@ -2,7 +2,8 @@
 
 *This revision: the second, 2026-10-03: §15's eighteen questions decided, each as this page recommended (§0.2, §15),
 and §13.2's items 1 and 2 built: the header, the `core` module with `core_exports!`, and the guard (§18, which also lists
-the points of §4–§6 that building them made precise); then items 3 and 4, the host adapter and discovery (§19). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
+the points of §4–§6 that building them made precise); then items 3 and 4, the host adapter and discovery (§19); item 5, the SNES's system pack (§20); and item 6, the
+conformance kit's core suite (§21). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
 three prototype checks recorded in §5.1 to §5.3. It supersedes parts of `EmuSen_NativeCores.md`, listed in §0.3 and
 marked in place there. Every claim about the code is cited to a file, read on `WiseMan` at `f69c94a4`. Claims marked
 **measured** were measured on 2026-10-01; claims marked **argued** are reasoning that a later step must prove, and
@@ -1722,8 +1723,9 @@ nothing was changed.
 
 ## 17. Changelog of the ABI, and what was not checked
 
-**Changelog.** v1.0: this page; the header, the baseline and the reference macro committed 2026-10-03 (§18). No minor
-has been released.
+**Changelog.** v1.0: this page; the header, the baseline and the reference macro committed 2026-10-03 (§18), with the
+host adapter, discovery, the SNES's system pack and the kit's core suite after them (§19–§21). No minor has been
+released.
 
 **Not checked here.**
 - Layouts were checked on x86-64 Linux only, with gcc 16 and clang. The baseline's other three targets are argued from
@@ -1960,14 +1962,120 @@ a project core ships with a sidecar.
 
 ### 19.4 Not done here
 
-- **The build step** that writes the project's sidecars: no project core is on v1 yet. The conformance runner (§13.2
-  item 6) is to carry a `--sidecar` mode for it.
+- **The build step** that writes the project's sidecars: no project core is on v1 yet. The conformance runner's
+  `--sidecar` mode (§21.1) is the tool it is to run.
 - **Trust beyond the sidecar** (§7.2 rules 1–3): `cores.manifest`, the player's one-time approval, the file checks
   before loading, and the player's `/Cores` directory.
 - **Halting through `debug_run_frame`**: the debug target observes and disassembles, but its processors report
   `CanHalt = false` until a bridge over §6.14's run exports is built.
 - **Validation of descriptors by their schemas in C#**: the loader checks the fields a host relies on; the full schema
   validation is the kit's (C2, C3).
+
+---
+
+## 20. What was built, 2026-10-03: §13.2's item 5, the SNES's system pack
+
+### 20.1 Where it is, and what it holds
+
+`EmuSen.DianaOS/DianaOS/Sys/Systems/`, the folder §15 Q13 decided, holds `SystemEntry`, `SystemPack` and the registry
+`SystemPacks.For(id)`. The SNES's pack is `Sys/Systems/Snes/`:
+
+- **The systems-table entry** (`SnesSystem.Entry`): the id `snes`, the name, the console `SNES`, Nintendo and 1990, the
+  extensions, the libretro cheat-database folders, OpenVGDB's system and its hashing rule (the image without a 512-byte
+  copier header), the cover aspect and the ES-DE names. `CoreCatalog`'s SNES row is now built from it, so the row and
+  any SNES engine read one source; the values are those the row held, moved, not changed.
+- **The space names the SNES's engines share**: `CpuBus` and `WRAM`, so that a cheat means the same memory on each. The
+  names are VenusRT's own (`Shim/VenusMachine.cs`, `SpaceNames`); an SNES engine's machine info must use them.
+- **The two codecs**, Pro Action Replay (auto-detected) and Game Genie (explicit), in `SnesCheatFormats`.
+  `CoreFactory.Bundle` gives a v1 engine the codecs of the pack its machine's system names.
+
+### 20.2 The formats, and where they were read
+
+Both are written from one source: fullsnes, "SNES Cart Cheat Devices - Code Formats", in the copy `VenusRT_Plan.md` §2.1
+pins (`~/.cache/emusen/probe/venusrt/docs/fullsnes.txt`).
+
+- **Pro Action Replay**, `AAAAAADD`: a 24-bit address and a byte. fullsnes states that the device rewrites WRAM on each
+  vertical blank and accepts WRAM only as 7E0000h–7FFFFFh, not by its mirrors, so those addresses become `WRAM` pokes at
+  their offset; every other address is a `CpuBus` poke, which is how the device patches cartridge ROM and SRAM.
+  `7E000000` is the device's "do nothing" padding code and applies nothing. The pre-boot codes (FE and FF), the
+  multi-byte prefix `DEADC0DE` and the device-control codes (`C0DEnn00`) are refused rather than applied as pokes,
+  which they are not.
+- **Game Genie**, `DDAA-AAAA`: the digits enciphered by fullsnes's table (Genie `DF4709156BC8A23E` for hex 0 to F),
+  the value the first two, the 24-bit address the last six with its bits in the documented order
+  `ijklqrst opabcduv wxefghmn` for the address `abcdefgh ijklmnop qrstuvwx`. A Game Genie code patches ROM reads, so it
+  is a ROM patch, sent to a core with `ROM_PATCHES` within machine info's `patches`.
+- **Which claims which.** The two are both eight hex digits, so the Game Genie claims the printed form with its dash
+  and the Action Replay the bare form; `cheat gg` decodes either form as Game Genie.
+
+**Tests** (`SnesSystemPackTests`): vectors worked by hand from fullsnes's table and order, one address bit and the
+value byte at a time; the shuffle shown to be a permutation that the encoder inverts over a thousand random codes; the
+WRAM and bus pokes and the padding code; each format claiming only its own form, and the cheat command's routing; the
+SNES row held to the entry. **What the tests cannot show:** the vectors check the code against the document, not the
+document against a device. No hardware or reference result was consulted, by the rule of item 5.
+
+### 20.3 Provenance
+
+Nothing of C# Venus was read to write the pack. One line of C# Venus was seen: while searching for the SNES's space
+names, a `grep` pattern matched a line of `Venus - SNES/Cheats/VenusCheatCodecs.cs`, which shows only that its Action
+Replay codec targets a space named `CpuBus`. Nothing further in that folder was read. The name has an independent
+source, VenusRT's own `VenusMachine.SpaceNames`, which is the one cited above.
+
+## 21. What was built, 2026-10-03: §13.2's item 6, the conformance kit's core suite
+
+### 21.1 The runner
+
+`EmuSen/Cores/Shared/emusen-core-conform/`, as §12.2 placed it: a Rust library and the binary `emusen-core-conform`.
+It loads a library through the ABI and nothing else (`libloading` and `emusen-native`'s structs), and runs on an image
+the author supplies:
+
+```
+emusen-core-conform --core LIB --image FILE [--frames N] [--input SCRIPT] [--settings KEY=VALUE]... [--file WHICH=PATH]... [--report REPORT.json]
+emusen-core-conform --sidecar LIB
+```
+
+The exit status is 0 when every case passes; the report lists each case's verdict and evidence with the kit's version
+and the core's `abi`, `id` and `version`. `--sidecar` writes `<LIB>.core.json` in §19.2's format, with the descriptors
+as the library wrote them, for the build step §7.1 asks for.
+
+- **Input** is Pharaoh's hold, release and tap as lines `hold F PORT MASK`, `release F PORT MASK`, `tap F PORT MASK`
+  (the mask in hex, `tap` holding for one frame). Without a script, port 0's buttons are pressed in turn, eight frames
+  on and eight off, from the first controller of the core's info.
+- **Digests** are Pharaoh's: each frame's FNV-1a hash folded per frame (`framesum`), each sample folded as an unsigned
+  16-bit value (`audiosum`), and the state's bytes hashed.
+
+### 21.2 What each case checks
+
+| Case | As built |
+|---|---|
+| C1 | major 1; every required export resolves; where `nm` exists, no `emusen_core_` symbol outside version 1's exports |
+| C2 | info validates against `info.schema.json`; its `abi` is the export's; its capability names are the claimed bits; each optional export present exactly when its bit is claimed |
+| C3 | the schema validates; keys unique; each default in its own domain; an `accuracy` default its `accurate` value, an `enhancement` default its `hardware` value; every trade-off with a cost |
+| C4 | an empty, a garbage and a half-length image each refused with a negative status that `status_text` names and an error text; a machine with no settings equal to one with every default stated, frames, sound and state, over up to 300 frames |
+| C5 | each claimed capability answers on a running machine without `NOT_SUPPORTED`; an unclaimed snapshot and state kind 77 refused; an unlisted space refused; reserved option bits ignored; port 99 ignored or `NO_SUCH_PORT`; an unknown pixel-format bit accepted with RGBA8888 produced |
+| C6 | over N frames: `frame_info`'s length is `frame_copy`'s, the format the one offered, the size within its stride; a size change preceded by `GEOMETRY`; each change of the drained rate met by an `AUDIO_RATE` of that rate in its frame or the next |
+| C7 | the state's size constant until a `STATE_SIZE`; save, load, save byte-identical; a truncated, a foreign and an empty state refused with the machine unchanged; machine B loaded with A's state continuing as A; a claimed snapshot loading and restoring the state it was taken from |
+| C8 | two machines alike giving identical digests in both halves and the same end state; a machine loaded with the state at N/2 continuing identically; where skipping is declared state-neutral, rendering skipped on odd frames leaving the same end state |
+| C10 | two machines on two threads, each equal to the solo run, with a third created and freed while they run |
+| C11 | every machine export with a null machine answering `EMUSEN_NULL`, and create with null params; the length query with a one-byte buffer; `create_params` of 80 bytes, a 16-byte file element, a 48-byte `frame_info` and 16-byte events each `BAD_STRUCT`; `status_text` answering for every code the core returned in the run |
+
+### 21.3 What was tested
+
+On the test cores, built again as this crate's examples: both pass every case. A third build of the same machine with
+two seeded faults, each machine differing from the last and a truncated state accepted, fails C4, C7, C8 and C10 and
+passes the rest, which is the set those faults break (`tests/kit.rs`). The kit's SHA-256 is checked against FIPS
+180-4's examples. CI runs the crate's tests on the three shared runners with the other shared crates.
+
+### 21.4 A point of §12 for decision
+
+C4 requires an image truncated to half its length to be refused. For a format that records its own length, such as the
+test core's, that is a fair test. For a SNES cartridge image it is not: half of a 1 MiB image is a well-formed 512 KiB
+image, and refusing it would refuse genuine smaller dumps. The kit applies the rule as §12.1 states it. Whether C4's
+truncation should become per-system, or optional, is left to be decided before VenusRT is graded by it (§13.2).
+
+### 21.5 Not done here
+
+C9 and C12–C15 are not in §13.2's item 6. The build step that runs `--sidecar` on the project's cores waits for the
+first project core on v1.
 
 ---
 

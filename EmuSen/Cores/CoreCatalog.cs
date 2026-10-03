@@ -8,16 +8,12 @@ namespace EmuSen.Cores
     // Every core this build actually implements, in one place - see EmuSen_Settings_Reference.md §4.16.
     public static class CoreCatalog
     {
-        // The libretro cheat-database folder names for the SNES - `man cheat`.
-        private static readonly string[] SnesCheatSystems =
-        {
-            "Nintendo - Super Nintendo Entertainment System",
-            "Nintendo - Satellaview",
-        };
+        // The SNES's facts are its system pack's, so every SNES engine and this row read one source - see EmuSen_CoreAPI.md §20.
+        private static readonly CoreDescriptor Venus = FromSystem("SNES (Venus)", DianaOS.DianaOS.Sys.Systems.Snes.SnesSystem.Entry);
 
-        private static readonly CoreDescriptor Venus =
-            new("SNES (Venus)", new[] { ".smc", ".sfc" }, SnesCheatSystems, "SNES", "Nintendo", 1990, CoverAspect: 0.73,
-                OpenVgdbSystems: new[] { "SNES" }, OpenVgdbBytes: WithoutCopierHeader);
+        private static CoreDescriptor FromSystem(string displayName, DianaOS.DianaOS.Sys.Systems.SystemEntry e) =>
+            new(displayName, e.Extensions.ToArray(), e.CheatSystems.ToArray(), e.Console, e.Manufacturer, e.ReleaseYear, CoverAspect: e.CoverAspect,
+                OpenVgdbSystems: e.OpenVgdbSystems.ToArray(), OpenVgdbBytes: e.OpenVgdbBytes);
 
         // The libretro folder name for the NES; Famicom Disk System is different hardware and is not claimed.
         private static readonly string[] NesCheatSystems =
@@ -50,9 +46,6 @@ namespace EmuSen.Cores
         private static readonly CoreDescriptor Mars =
             new("Nintendo 64 (Mars)", new[] { ".z64", ".n64", ".v64" }, N64CheatSystems, "N64", "Nintendo", 1996, CoverAspect: 0.7,
                 OpenVgdbSystems: new[] { "N64" }, OpenVgdbBytes: InByteSwappedOrder);
-
-        // OpenVGDB hashes a SNES image without the 512-byte copier header some dumps carry, as No-Intro does - see EmuSen_Settings_Reference.md §4.39.
-        private static byte[] WithoutCopierHeader(byte[] file) => file.Length % 1024 == 512 ? file[512..] : file;
 
         // Its SYSTEMS row gives the NES a 16-byte header to skip, which is the iNES header when the file has one.
         private static byte[] WithoutInesHeader(byte[] file) =>
@@ -115,7 +108,7 @@ namespace EmuSen.Cores
         private static readonly Dictionary<string, (string System, string FullName)> EsdeNames = new(StringComparer.OrdinalIgnoreCase)
         {
             ["NES"] = ("nes", "Nintendo Entertainment System"),
-            ["SNES"] = ("snes", "Super Nintendo"),
+            [Venus.Console] = (DianaOS.DianaOS.Sys.Systems.Snes.SnesSystem.Entry.EsdeSystem, DianaOS.DianaOS.Sys.Systems.Snes.SnesSystem.Entry.EsdeFullName),
             ["N64"] = ("n64", "Nintendo 64"),
             ["GB"] = ("gb", "Game Boy"),
         };
@@ -253,7 +246,7 @@ namespace EmuSen.Cores
         // The system ids of EmuSen_CoreAPI.md §6.3 each console answers to, so a v1 core's info is matched to it.
         private static readonly Dictionary<string, string[]> SystemIdsByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["SNES"] = new[] { "snes" },
+            ["SNES"] = new[] { DianaOS.DianaOS.Sys.Systems.Snes.SnesSystem.Id },
             ["NES"] = new[] { "nes" },
             ["GB"] = new[] { "gb", "gbc" },
             ["N64"] = new[] { "n64" },

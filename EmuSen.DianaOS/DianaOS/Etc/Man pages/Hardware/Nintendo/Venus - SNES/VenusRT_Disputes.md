@@ -915,6 +915,22 @@ their data.
   waits for the S-CPU's access to the same memory; and, because the SA-1's side of the rule is phrased by the S-CPU's
   bus clock, the lines of `rtl/CPU.vhd` that place SYSCLK's falling and rising edges within an S-CPU cycle (no
   document gives that phase).
+  Read 2026-10-03: `SA1.vhd` lines 270-376 (the clock enable, the S-CPU's window, the two sides' address decodes for
+  ROM, BW-RAM and I-RAM, the select and enable signals, and BW-RAM's two-cycle access) and the signal list's grep
+  lines; `CPU.vhd` lines 244-268 and 312-341 (where SYSCLK falls and rises in an S-CPU cycle). Nothing of the SA-1's
+  registers, DMA, character conversion, arithmetic or the 65C816 core was read. What it says:
+  - The SA-1 runs one cycle every 2 master clocks, its phase restarted at each S-CPU cycle's start (SYSCLK's fall).
+  - SYSCLK falls at the end of every S-CPU cycle and rises 3 master clocks into it (6, 8 and 12 clocks alike; DMA's
+    8-clock cycles at 4). From the fall until the SA-1 clock after the rise (the "window") the S-CPU's address is not
+    yet decoded; after it, to the cycle's end, an S-CPU address in ROM selects ROM for the S-CPU, one in BW-RAM
+    selects BW-RAM, and one in I-RAM selects I-RAM.
+  - The S-CPU never waits. An SA-1 access to the memory the S-CPU has selected is not enabled, and the SA-1 stops
+    (its clock enable is the access's enable) until the S-CPU's cycle ends; an access to another memory, or an
+    internal cycle, goes on. A BW-RAM access takes two SA-1 cycles running, and an S-CPU selection of BW-RAM in
+    between restarts it.
+  - The decode is by address alone: ROM is $8000-$FFFF of banks $00-$3F/$80-$BF and all of $C0-$FF on both sides;
+    BW-RAM is $6000-$7FFF of those banks and banks $40-$4F (the SA-1 also $50-$6F); I-RAM is $3000-$37FF (the SA-1
+    also $0000-$07FF).
 - Conclusion: open.
 - Pinned by: Super Mario RPG's $1D3F and Kirby Super Star's $95/$A7, the SA-1 games' pictures, and absindx's SA-1
   tests staying passed.

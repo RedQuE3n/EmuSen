@@ -11011,6 +11011,10 @@ where it was, and only the game moves. That is a claim about ES-DE that nothing 
 marking and for unmarking.* P301 is retired by a measurement on ES-DE, the next time one is run for §22.2's kind of
 question.
 
+*Observed 2026-10-03, on the handheld:* the player compared the fixed build (157dd7ef) with ES-DE and found the
+behaviour identical. P301 is retired by that observation. It was a comparison in play, not a scripted measurement, and
+which of the cases above it covered was not recorded; Q196's recommendation stands until the editor's case is compared.
+
 ### 44.3 The rule (argued)
 
 - **The row is kept, not the game.** When the game at row *i* moves to the top, the highlight stays on row *i*, which

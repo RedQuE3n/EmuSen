@@ -199,6 +199,26 @@ pub struct System {
 }
 
 impl System {
+    /// D-36: an S-CPU cycle holds the SA-1 off the memory its address selects over master clocks `from..to`.
+    #[inline]
+    pub fn hold_sa1(&mut self, address: u32, from: u64, to: u64) {
+        if let Some(sa1) = self.cart.sa1.as_mut() {
+            let kind = crate::chips::sa1::Sa1::snes_kind(address);
+            if kind != 0 {
+                sa1.hold(from, to, kind);
+            }
+        }
+    }
+
+    /// The CPU cycle of `clocks` ending now: held from the clock after SYSCLK rises, 3 into the cycle, to its end.
+    #[inline]
+    fn hold_cycle(&mut self, address: u32, clocks: u16) {
+        if self.cart.sa1.is_some() {
+            let end = self.timing.clock;
+            self.hold_sa1(address, end - clocks as u64 + 3, end);
+        }
+    }
+
     /// Runs the cartridge's processor (the SA-1 or the GSU) to the S-CPU's clock and takes its IRQ line.
     #[inline]
     pub fn catch_up_sa1(&mut self) {
@@ -486,6 +506,7 @@ impl Bus for System {
     fn read(&mut self, address: u32, _pins: u8) -> u8 {
         let clocks = self.speed(address);
         self.clock_cycle(clocks);
+        self.hold_cycle(address, clocks);
         let v = self.read_value(address, true).unwrap_or(self.mdr);
         self.mdr = v;
         self.math_tick();
@@ -497,19 +518,22 @@ impl Bus for System {
     fn write(&mut self, address: u32, value: u8, pins: u8) {
         if pins & (pin::VDA | pin::VPA) == 0 {
             self.clock_cycle(6);
+            self.hold_cycle(address, 6);
             self.math_tick();
             return;
         }
         let clocks = self.speed(address);
         self.clock_cycle(clocks);
+        self.hold_cycle(address, clocks);
         self.math_tick();
         self.mdr = value;
         self.write_value(address, value);
     }
 
     #[inline]
-    fn idle(&mut self, _address: u32, _pins: u8) {
+    fn idle(&mut self, address: u32, _pins: u8) {
         self.clock_cycle(6);
+        self.hold_cycle(address, 6);
         self.math_tick();
     }
 

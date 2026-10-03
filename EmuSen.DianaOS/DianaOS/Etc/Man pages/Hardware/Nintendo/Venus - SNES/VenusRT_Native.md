@@ -2650,3 +2650,39 @@ fingerprints (`sa1.rs` against `Sa1Types.h`, unchanged from §27.2), `gsu.rs` at
 Next, recorded and not started: the S-CPU-side drift from D-6's power-on phase, which Super Mario World shows from
 frame 77 and which may hold Star Fox's one-frame lead; and Yoshi's Island's picture difference from frame 80 with its
 WRAM equal to Mesen's until 279, a PPU-side look.
+
+### 28.2 The SA-1's contention with the S-CPU (measured 2026-10-03)
+
+D-36's rule as built: every S-CPU cycle, its memory cycles, internal cycles and DMA's A-bus cycles alike, holds the
+SA-1 off the memory its address selects (ROM, BW-RAM or I-RAM, by the referee's decode of the address alone) from 3
+master clocks into the cycle (4 for DMA) to its end. An SA-1 access to that memory waits for the hold's end, a BW-RAM
+access needing its two cycles clear; an access to another memory, or an internal cycle, goes on. Because the SA-1 is
+caught up by whole instructions, it can run a few clocks past the S-CPU's clock before the S-CPU's next cycles are
+known; its accesses past the catch-up's target are kept (16 at most, in the state), and a hold arriving over one of
+them moves that access, and the SA-1's clock with it, past the hold. The S-CPU never waits. State version 16.
+
+How much the SA-1 is held, counted over the first 300 frames by a probe not kept: Super Mario RPG's SA-1 loses 5.0%
+of the master clocks to holds, Kirby Super Star's 42.6%. Against the measures D-36 named:
+
+| Game | Measure | Before | With contention | Mesen |
+|---|---|---|---|---|
+| Super Mario RPG | $1D3F differing, frames 1-300 | 14 frames, first 1, last 22 | the same | - |
+| Super Mario RPG | WRAM outside the stack equal | 44 of 300 | 44 of 300 | - |
+| Kirby Super Star | $95 and $A7 differing | 81 frames, first 11, last 122 | the same | - |
+| Kirby Super Star | WRAM outside the stack equal | 51 of 300 | 51 of 300 | - |
+| The five SA-1 games | pictures differing from Mesen's, every tenth frame to 600 | 4, 10, 8, 4, 18 of 60 | the same | - |
+
+**The transients and the pictures do not move**, although Kirby Super Star's SA-1 spends two fifths of its time held.
+The SA-1's speed is therefore not what sets them. The likely reading, not measured: both games' SA-1 waits on the
+S-CPU for much of each frame, so holding it shortens its idle loops rather than delaying the work the S-CPU waits for. Super Mario RPG's $1D3F differs
+from frame 1, in the frame the SA-1 is first released, which points at the start-up or the S-CPU's side (D-6) rather
+than at the board. The change was kept on its referee basis: absindx's RAM-protection test still shows all 222 tests
+passed; the version-code test, a table of what each register reads, shows the same result with the SA-1's H-counter
+latch reading other values, as a timing change should; skip-versus-draw holds over the five SA-1 games for 600
+frames; the crate's tests, with one for the holds, and the WiseMan VenusRT tests pass. The cost, best of three over
+1,200 frames under the timing lock, run before and after in turn at load average 8: Super Mario RPG 2.78-2.83 ms a
+frame before and 2.78-2.80 after, Kirby Super Star 2.56 and 2.57.
+
+Not modelled: the SA-1's own DMA and character conversion against the S-CPU (they wait on the SA-1's priority bits,
+which the referee reading did not cover), HDMA's table reads from the board, and the SA-1's clock phase restarting at
+each S-CPU cycle (the cycles are even lengths, so the phase drifts at most a clock).

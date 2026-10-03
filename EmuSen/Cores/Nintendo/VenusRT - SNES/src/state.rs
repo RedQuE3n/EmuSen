@@ -7,7 +7,7 @@ pub use emusen_native::{StateReader, StateWriter, Truncated};
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"VNRT");
 /// C# Venus's magic, "SNES": a state it made is refused as foreign, and the host names the engine.
 pub const VENUS_MAGIC: u32 = 0x5345_4E53;
-pub const STATE_VERSION: i32 = 15;
+pub const STATE_VERSION: i32 = 16;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StateError {

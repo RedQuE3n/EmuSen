@@ -48,6 +48,9 @@ pub struct Gsu {
     /// The master clock the ROM buffer's load ends at, and whether this opcode wrote R14 (D-35).
     pub rom_ready: u64,
     pub r14_written: bool,
+    /// The master clock the RAM port finishes its posted store at, and the bytes this opcode posted (D-35).
+    pub ram_ready: u64,
+    pub stored: u64,
     pub ram_address: u16,
     /// Master clocks the GSU has run.
     pub clock: u64,
@@ -85,6 +88,8 @@ impl Gsu {
             rom_buffer: 0,
             rom_ready: 0,
             r14_written: false,
+            ram_ready: 0,
+            stored: 0,
             ram_address: 0,
             clock: 0,
         }
@@ -324,7 +329,18 @@ impl Gsu {
 
     /// D-35: a load's second microcode cycle, then the RAM port's start state and slow() - 1 cycles a byte.
     fn ram_load(&self, bytes: u64) -> u64 {
-        2 + bytes * (self.slow() - 1)
+        self.ram_wait() + 2 + bytes * (self.slow() - 1)
+    }
+
+    /// The cycles a RAM opcode waits for a store still pending or running.
+    fn ram_wait(&self) -> u64 {
+        self.ram_ready.saturating_sub(self.clock).div_ceil(self.cycle())
+    }
+
+    /// A store posted to the RAM port: its wait for an earlier one and its second microcode cycle; the port runs it after.
+    fn ram_store(&mut self, bytes: u64) -> u64 {
+        self.stored = bytes;
+        self.ram_wait() + 1
     }
 
     fn refill_rom_buffer(&mut self, rom: &[u8]) {
@@ -427,6 +443,10 @@ impl Gsu {
             self.r14_written = false;
             self.rom_ready = self.clock + (cost + self.rom_load()) * self.cycle();
         }
+        if self.stored != 0 {
+            self.ram_ready = self.clock + (cost + 1 + self.stored * (self.slow() - 1)) * self.cycle();
+            self.stored = 0;
+        }
         cost
     }
 
@@ -521,7 +541,7 @@ impl Gsu {
                 } else {
                     self.write_word(ram, a, s);
                 }
-                extra += self.slow();
+                extra += self.ram_store(if alt & 1 != 0 { 1 } else { 2 });
             }
             0x3C => {
                 let r = self.r[12].wrapping_sub(1);
@@ -623,7 +643,7 @@ impl Gsu {
             0x90 => {
                 let a = self.ram_address;
                 self.write_word(ram, a, s);
-                extra += self.slow();
+                extra += self.ram_store(2);
             }
             0x91..=0x94 => {
                 let r = self.r[15].wrapping_add(n as u16);
@@ -683,7 +703,7 @@ impl Gsu {
                     2 => {
                         let v = self.r[n];
                         self.write_word(ram, (k as u16) << 1, v);
-                        extra += self.slow() * 2;
+                        extra += self.ram_store(2);
                     }
                     _ => {
                         let v = self.read_word(ram, (k as u16) << 1);
@@ -715,7 +735,10 @@ impl Gsu {
                 self.set_sz(r);
             }
             0xDF => match alt {
-                2 => self.rambr = s as u8 & 1,
+                2 => {
+                    self.rambr = s as u8 & 1;
+                    extra += self.ram_wait();
+                }
                 3 => self.rombr = s as u8 & 0x7F,
                 _ => {
                     self.colr = self.color_in(self.rom_buffer);
@@ -748,7 +771,7 @@ impl Gsu {
                     2 => {
                         let v = self.r[n];
                         self.write_word(ram, k, v);
-                        extra += self.slow() * 2;
+                        extra += self.ram_store(2);
                     }
                     _ => {
                         let v = self.read_word(ram, k);
@@ -838,6 +861,7 @@ impl Gsu {
         o.extend(self.clock.to_le_bytes());
         o.extend_from_slice(&self.cache);
         o.extend(self.rom_ready.to_le_bytes());
+        o.extend(self.ram_ready.to_le_bytes());
         o
     }
 
@@ -856,6 +880,7 @@ impl Gsu {
         self.clock = u64::from_le_bytes(b[23..31].try_into().expect("eight bytes"));
         self.cache.copy_from_slice(&b[31..31 + 512]);
         self.rom_ready = u64::from_le_bytes(b[543..551].try_into().expect("eight bytes"));
+        self.ram_ready = u64::from_le_bytes(b[551..559].try_into().expect("eight bytes"));
     }
 }
 

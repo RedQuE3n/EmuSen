@@ -2,7 +2,7 @@
 
 *This revision: the second, 2026-10-03: §15's eighteen questions decided, each as this page recommended (§0.2, §15),
 and §13.2's items 1 and 2 built: the header, the `core` module with `core_exports!`, and the guard (§18, which also lists
-the points of §4–§6 that building them made precise). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
+the points of §4–§6 that building them made precise); then items 3 and 4, the host adapter and discovery (§19). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
 three prototype checks recorded in §5.1 to §5.3. It supersedes parts of `EmuSen_NativeCores.md`, listed in §0.3 and
 marked in place there. Every claim about the code is cited to a file, read on `WiseMan` at `f69c94a4`. Claims marked
 **measured** were measured on 2026-10-01; claims marked **argued** are reasoning that a later step must prove, and
@@ -673,7 +673,11 @@ What depends on the game, read after create:
 | `skip_rendering_state_neutral` | true when skipping rendering leaves the state as a rendered frame would; run-ahead needs it (§6.22), and VenusRT designs for it (`VenusRT_Plan.md` §4.1) |
 | `achievements` | reserved; §6.22 |
 
-Every field a host requires has a stated default when absent, so an older core is read by a newer host (§4.6).
+Every field a host requires has a stated default when absent, so an older core is read by a newer host (§4.6). The
+defaults, as the host adapter applies them (§19): `frame_rate` 60/1; every `video` size 0 and `aspect` 0/0, so that the
+first `frame_info` decides; `audio.rate` the `audio_rate` export's answer; `ports`, `spaces`, `processors`, `battery`
+and `phases` empty; `state.kinds` `[0]`, its `format` empty and `version` 0; no `patches`, so no ROM patches are sent;
+`skip_rendering_state_neutral` false.
 
 ### 6.5 A frame
 
@@ -1872,8 +1876,98 @@ must name its trait. The pre-stable macro is removed when the adapter replaces t
 
 §13.2's items 3 to 6 (the adapter and loader, discovery, the SNES's system pack, the conformance kit). The pre-stable
 host's `set_crash_log` declaration (§1.2, item 8) is left as it is: it retires with that host (§13.5), and the v1 table
-declares it correctly. `VenusRT_Plan.md` §4.4's last sentence still places the codec rewrite in the shim; §9 Q5 there
-records the change.
+declares it correctly. `VenusRT_Plan.md` §4.4's last sentence, which still placed the codec rewrite in the shim, was
+corrected with §19.
+
+---
+
+## 19. What was built, 2026-10-03: §13.2's items 3 and 4
+
+### 19.1 The host: loader, machine, engine and debug target
+
+All in `EmuSen/Cores/Native/` until D1 moves them (§10.2).
+
+| Class | File | What it is |
+|---|---|---|
+| `CoreLibrary` | `CoreLibrary.cs` | One library, loaded once from its path and checked as §7.2's step 4 asks: major 1; every required export; capabilities and exports agreeing in both directions; info and schema UTF-8 JSON under 1 MiB; info's `abi`, capability names and `host_requires` matching. A refusal names the check, and the same object, with the same verdict, answers every later `Open` of that path |
+| `CoreDescriptorReader` and its records | `CoreDescriptors.cs` | Core info, machine info, the settings schema, firmware and notes as C# records |
+| `CoreMachine` | `CoreMachine.cs` | One handle, one method per export; every refusal thrown with the core's own words, from `last_error` or `status_text` |
+| `CoreEngine` | `CoreEngine.cs` | The one engine class: `ICore` and every optional interface of the engine SPI over any v1 core |
+| `CoreDebugTarget` | `CoreDebugTarget.cs` | `IDebugTarget` from the descriptors: spaces, processors, registers, disassembly, mutes |
+
+**The engine's answers, capability by capability.** Where the core has the capability the engine passes it through;
+where it lacks it the answer is the one a frontend saw before the interface existed:
+
+| Interface | With the capability | Without |
+|---|---|---|
+| `ISnapshotCore` | state kind 1 | the full state |
+| `IFrameSerial` | `frame_info.serial` | the frame count, which the macro writes |
+| `IRepeatedRows` | rows repeated by the engine, or handed once with `RowRepeat` | a repeat of 1 |
+| `IFrameProfiler` | machine info's phases with `phases`' times | one phase, `frame`, timed by the engine |
+| `ICoreSettings` | the schema's switch, count and choice rows; a run-scope change sent with `set_settings`, its note read back | the same rows; a run-scope change kept and sent at the next load, inside create's settings |
+| cheats | ROM patches within machine info's `patches`; with `CHEAT_POKES`, plain one-byte pokes as quads and the rest through `space_write` | every poke through `space_write` |
+| `IStateFormat`, `IFrameBufferPool`, `IEngineFeatures`, `ICheatRegistryHost` | as the pre-stable host has them | — |
+
+Input is routed by the descriptors: a `PadButton` to every bit of the port's controller labelled with it, a `PadAxis`
+to `set_axis` with the axis number the controller gives, clamped to the kind's range.
+
+**The frame** follows §8.2's order: `advance`, the frame-end work (frame log, cheats, the breakpoints' frame notice,
+the battery period), `present` when claimed and rendering is not skipped, then the events drained. `GEOMETRY` re-reads
+the picture's shape, `AUDIO_RATE` the rate, `MACHINE_INFO` the descriptor, `BATTERY` writes the battery file where the
+core tracks changes, and `LOG` drains the log, which is drained once a second as well.
+
+**Battery files before create.** File 0 is read from the runtime's path rule (`BatterySave`, `.srm`) before create.
+After it, machine info names the files the machine keeps; where those differ in number or suffix and one of them
+exists on disk, the engine creates the machine again with them. The cost is a second create in that case only. It is
+recorded because v1.0 gives a host no way to know a core's battery files before a game is loaded: core info could
+carry them per system in a later minor (§4.4 permits the field), and §15 does not decide it.
+
+### 19.2 Discovery and the engine row
+
+`CoreDiscovery.cs` holds the sidecar, the discovered core and the scan.
+
+- **The sidecar**, `<library>.core.json`: `{ "sidecar": 1, "library": <file name>, "sha256": <hex>, "abi": "1.0",
+  "capabilities": <bits>, "info": <core info>, "settings": <schema> }`. `CoreSidecar.Write` loads the library once
+  and writes it, which is the build step's job (§7.1). The library is named by file name only and must sit beside its
+  sidecar.
+- **The scan** reads the sidecars in the directories beside the assemblies (and their `cores` folder) and loads
+  nothing. Two sidecars with one `id` keep the first.
+- **Opening** a discovered core, when a game is opened on it, checks the library's SHA-256 against the sidecar's
+  before loading, and its info against the sidecar's (as JSON, field by field) after. Either difference refuses it with
+  a report that the engine notice carries.
+- **The engine row.** `CoreCatalog.EngineFor(console)` appends every discovered engine whose system id is the
+  console's (a small table maps `snes`, `nes`, `gb`/`gbc` and `n64` to the four consoles) to the console's row, and
+  creates the row for a console that had one engine, with the C# reference as its default. The SNES's row therefore
+  lists `Venus (C#)` and a discovered SNES engine, with no code naming the engine.
+- **The factory.** `CoreFactory.Create` has one generic branch before its per-console switch: the discovered engine
+  asked for by name, or, for an extension no C# core claims, the first engine that claims it. An engine that cannot be
+  opened falls through to the switch, and `EngineNotice` says why in the same words as the pre-stable engines' notices.
+  `Bundle` gives a `CoreEngine` the generic debug target and the codecs of its system's pack (§13.2 item 5).
+
+### 19.3 What was tested
+
+On the two test cores, `v1_test_core` (every capability) and `v1_plain_core` (none), which WiseMan builds and copies
+beside its tests: `CoreAdapterTests` (10 cases: the loader's acceptance and refusals, a refused game's words, frames,
+picture, sound and input from the descriptors, settings, states and snapshots, the neutral answers, cheats both ways,
+battery files written and read back, the debug target, firmware), `CoreDiscoveryTests` (5 cases: listing without
+loading, a swapped library never loaded, altered info refused, the SNES row and the factory's refusal with its notice,
+a game no C# core claims opened on the v1 engine with its bundle), and `CoreAbiTests`, which now also holds the host's
+export table and capability numbers to the baseline.
+
+**P6, in part.** Listing the engines and asking which extensions are supported loads no library, by the loader's own
+record of what it has opened (`CoreLibrary.IsOpen`). P6's `strace` check of a whole frontend's start remains for when
+a project core ships with a sidecar.
+
+### 19.4 Not done here
+
+- **The build step** that writes the project's sidecars: no project core is on v1 yet. The conformance runner (§13.2
+  item 6) is to carry a `--sidecar` mode for it.
+- **Trust beyond the sidecar** (§7.2 rules 1–3): `cores.manifest`, the player's one-time approval, the file checks
+  before loading, and the player's `/Cores` directory.
+- **Halting through `debug_run_frame`**: the debug target observes and disassembles, but its processors report
+  `CanHalt = false` until a bridge over §6.14's run exports is built.
+- **Validation of descriptors by their schemas in C#**: the loader checks the fields a host relies on; the full schema
+  validation is the kit's (C2, C3).
 
 ---
 

@@ -45,7 +45,8 @@ fn params(image: &[u8], settings: &str, files: &[FileEntry]) -> CreateParams {
 
 fn make(settings: &str) -> *mut Machine {
     let mut code = 1;
-    let m = unsafe { emusen_core_create(&params(&[1, 2, 3], settings, &[]), &mut code) };
+    let img = image(&[1, 2, 3]);
+    let m = unsafe { emusen_core_create(&params(&img, settings, &[]), &mut code) };
     assert_eq!(code, 0);
     assert!(!m.is_null());
     m
@@ -72,7 +73,7 @@ fn every_descriptor_validates_against_its_committed_schema() {
     let cases = [
         (schema::INFO, info.clone()),
         (schema::SETTINGS, text(|o, l| unsafe { emusen_core_settings_schema(o, l) })),
-        (schema::FIRMWARE, text(|o, l| unsafe { emusen_core_firmware_for([0xB0u8].as_ptr(), 1, o, l) })),
+        (schema::FIRMWARE, text(|o, l| unsafe { emusen_core_firmware_for(image(&[0xB0]).as_ptr(), 7, o, l) })),
         (schema::MACHINE_INFO, text(|o, l| unsafe { emusen_core_machine_info(m, o, l) })),
         (schema::SETTING_NOTES, text(|o, l| unsafe { emusen_core_setting_notes(m, o, l) })),
         (schema::DISASSEMBLY, text(|o, l| unsafe { emusen_core_debug_disassemble(m, 0, 0, 0, 4, o, l) })),
@@ -142,16 +143,17 @@ fn create_refuses_with_a_status_and_nul_terminated_words() {
     assert_eq!(&err, b"the image i\0");
     assert!(unsafe { emusen_core_create(null(), &mut code) }.is_null());
     assert_eq!(code, status::NULL);
-    let small = CreateParams { size: 80, ..params(&[1], "", &[]) };
+    let one = image(&[1]);
+    let small = CreateParams { size: 80, ..params(&one, "", &[]) };
     assert!(unsafe { emusen_core_create(&small, &mut code) }.is_null());
     assert_eq!(code, status::BAD_STRUCT);
     let file = FileEntry { size: 24, which: 0, data: null(), len: 0 };
-    let short_files = CreateParams { file_size: 16, ..params(&[1], "", std::slice::from_ref(&file)) };
+    let short_files = CreateParams { file_size: 16, ..params(&one, "", std::slice::from_ref(&file)) };
     assert!(unsafe { emusen_core_create(&short_files, &mut code) }.is_null());
     assert_eq!(code, status::BAD_STRUCT);
     let mut words = [0u8; 64];
     for (settings, want, says) in [("Nope=1", status::UNKNOWN_SETTING, "no setting Nope"), ("Ram=0", status::BAD_SETTING, "Ram=0 is not a whole number from 1 to 255"), ("Ram=2\nRam=3", status::BAD_SETTING, "Ram given twice"), ("junk", status::BAD_SETTING, "not key=value")] {
-        let mut p = params(&[1], settings, &[]);
+        let mut p = params(&one, settings, &[]);
         (p.error, p.error_len) = (words.as_mut_ptr(), words.len());
         assert!(unsafe { emusen_core_create(&p, &mut code) }.is_null());
         assert_eq!(code, want, "{settings}");
@@ -159,10 +161,16 @@ fn create_refuses_with_a_status_and_nul_terminated_words() {
         assert!(got.contains(says), "{got}");
     }
     let bad_file = FileEntry { size: 24, which: 5, data: [1u8].as_ptr(), len: 1 };
-    let mut p = params(&[1], "", std::slice::from_ref(&bad_file));
+    let mut p = params(&one, "", std::slice::from_ref(&bad_file));
     (p.error, p.error_len) = (words.as_mut_ptr(), words.len());
     assert!(unsafe { emusen_core_create(&p, &mut code) }.is_null());
     assert_eq!((code, std::ffi::CStr::from_bytes_until_nul(&words).unwrap().to_str().unwrap()), (status::BAD_FILE, "file 5 is not this core's"));
+    for (bytes, want) in [(b"garbage!".to_vec(), "not a test core image"), (one[..6].to_vec(), "the image is truncated")] {
+        let mut p = params(&bytes, "", &[]);
+        (p.error, p.error_len) = (words.as_mut_ptr(), words.len());
+        assert!(unsafe { emusen_core_create(&p, &mut code) }.is_null());
+        assert_eq!((code, std::ffi::CStr::from_bytes_until_nul(&words).unwrap().to_str().unwrap()), (status::BAD_IMAGE, want));
+    }
 }
 
 #[test]
@@ -302,7 +310,7 @@ fn settings_spaces_options_and_status_words_follow_the_header() {
     assert_eq!(unsafe { emusen_core_space_read(m, 7, 0, null_mut(), 9) }, status::NO_SUCH_SPACE as i64);
     let mut ram = [0u8; 2];
     unsafe { emusen_core_space_read(m, 0, 0, ram.as_mut_ptr(), 2) };
-    assert_eq!(ram, [7, 1], "the create-time default reached the machine");
+    assert_eq!(ram, [7, 1], "the create-time default reached the machine and the payload follows it");
     assert_eq!(unsafe { emusen_core_space_write(m, 1, 0, [1u8].as_ptr(), 1) }, status::READ_ONLY as i64);
     assert_eq!(unsafe { emusen_core_set_options(m, !1) }, 0);
     unsafe { emusen_core_advance(m, null_mut()) };

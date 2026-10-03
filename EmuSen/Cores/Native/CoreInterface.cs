@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 namespace EmuSen.Cores.Native
@@ -8,6 +9,50 @@ namespace EmuSen.Cores.Native
         public const uint Major = 1;
         public const uint Minor = 0;
         public const uint Version = (Major << 16) | Minor;
+
+        // The capability bits, numbered as emusen_core.h's EMUSEN_CAP_*.
+        public const ulong CapReset = 1UL << 0, CapPresent = 1UL << 1, CapSnapshot = 1UL << 2, CapAxes = 1UL << 3, CapAudioPeek = 1UL << 4, CapMutes = 1UL << 5;
+        public const ulong CapSettings = 1UL << 6, CapPhases = 1UL << 7, CapFrameSerial = 1UL << 8, CapRowRepeat = 1UL << 9, CapBatteryDirty = 1UL << 10;
+        public const ulong CapRomPatches = 1UL << 11, CapDebug = 1UL << 12, CapDebugStack = 1UL << 13, CapCheatPokes = 1UL << 14, CapSettingNotes = 1UL << 15;
+        public const ulong CapDebugRegisters = 1UL << 16, CapDebugDisassemble = 1UL << 17;
+
+        // Each bit's name, as core info lists it.
+        public static readonly IReadOnlyList<(ulong Bit, string Name)> CapabilityNames = new[]
+        {
+            (CapReset, "RESET"), (CapPresent, "PRESENT"), (CapSnapshot, "SNAPSHOT"), (CapAxes, "AXES"), (CapAudioPeek, "AUDIO_PEEK"), (CapMutes, "MUTES"),
+            (CapSettings, "SETTINGS"), (CapPhases, "PHASES"), (CapFrameSerial, "FRAME_SERIAL"), (CapRowRepeat, "ROW_REPEAT"), (CapBatteryDirty, "BATTERY_DIRTY"),
+            (CapRomPatches, "ROM_PATCHES"), (CapDebug, "DEBUG"), (CapDebugStack, "DEBUG_STACK"), (CapCheatPokes, "CHEAT_POKES"), (CapSettingNotes, "SETTING_NOTES"),
+            (CapDebugRegisters, "DEBUG_REGISTERS"), (CapDebugDisassemble, "DEBUG_DISASSEMBLE"),
+        };
+
+        // Every export, and the bit that claims it; zero for a required one.
+        public static readonly IReadOnlyList<(string Name, ulong Bit)> Exports = new (string, ulong)[]
+        {
+            ("emusen_core_abi_version", 0), ("emusen_core_capabilities", 0), ("emusen_core_info", 0), ("emusen_core_settings_schema", 0),
+            ("emusen_core_firmware_for", 0), ("emusen_core_status_text", 0), ("emusen_core_set_crash_log", 0), ("emusen_core_log_drain", 0),
+            ("emusen_core_create", 0), ("emusen_core_free", 0), ("emusen_core_reset", CapReset), ("emusen_core_machine_info", 0), ("emusen_core_last_error", 0),
+            ("emusen_core_advance", 0), ("emusen_core_present", CapPresent), ("emusen_core_set_options", 0), ("emusen_core_frame_count", 0),
+            ("emusen_core_phases", CapPhases), ("emusen_core_events", 0), ("emusen_core_frame_info", 0), ("emusen_core_frame_copy", 0),
+            ("emusen_core_audio_rate", 0), ("emusen_core_audio_buffered", 0), ("emusen_core_audio_drain", 0), ("emusen_core_set_audio_limit", 0),
+            ("emusen_core_audio_peek", CapAudioPeek), ("emusen_core_set_mutes", CapMutes), ("emusen_core_set_buttons", 0), ("emusen_core_set_axis", CapAxes),
+            ("emusen_core_state_size", 0), ("emusen_core_state_save", 0), ("emusen_core_state_load", 0), ("emusen_core_state_layout", 0),
+            ("emusen_core_space_size", 0), ("emusen_core_space_read", 0), ("emusen_core_space_write", 0), ("emusen_core_battery", 0), ("emusen_core_battery_saved", 0),
+            ("emusen_core_set_rom_patches", CapRomPatches), ("emusen_core_set_cheat_pokes", CapCheatPokes), ("emusen_core_set_settings", CapSettings),
+            ("emusen_core_setting_notes", CapSettingNotes), ("emusen_core_debug_set", CapDebug), ("emusen_core_debug_set_stack", CapDebugStack),
+            ("emusen_core_debug_set_breakpoints", CapDebug), ("emusen_core_debug_set_ranges", CapDebug), ("emusen_core_debug_run_frame", CapDebug),
+            ("emusen_core_debug_writes", CapDebug), ("emusen_core_debug_calls", CapDebug), ("emusen_core_debug_profile", CapDebug),
+            ("emusen_core_debug_coverage", CapDebug), ("emusen_core_debug_counters", CapDebug), ("emusen_core_debug_pc", CapDebug),
+            ("emusen_core_debug_registers", CapDebugRegisters), ("emusen_core_debug_disassemble", CapDebugDisassemble),
+        };
+
+        // The host obligations this host meets, for a core's host_requires - see EmuSen_CoreAPI.md §4.6.
+        public static readonly IReadOnlyList<string> HostObligations = new[] { "present" };
+
+        // The status codes a host acts on by number.
+        public const int StatusNull = -1, StatusBufferTooSmall = -7, StatusNotSupported = -256, StatusUnknownSetting = -259, StatusBadSetting = -260, StatusBadStruct = -263;
+
+        // The event kinds of enum emusen_event_kind.
+        public const uint EventAudioRate = 1, EventGeometry = 2, EventStateSize = 3, EventBattery = 4, EventLog = 5, EventMachineInfo = 6;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct File

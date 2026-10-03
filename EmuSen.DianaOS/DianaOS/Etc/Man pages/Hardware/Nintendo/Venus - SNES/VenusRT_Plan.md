@@ -366,7 +366,8 @@ Read from its public surface only (§1.2).
 `CoreFactory` gives the SNES two codecs: Pro Action Replay (auto-detect) and Game Genie (explicit). Game Genie patches
 ROM reads by CPU address through `IRomReadPatcher`; the pokes are applied once a frame through the debug target.
 VenusRT takes both through the common interface's `set_rom_patches` triples and `space_write`
-(`EmuSen_NativeCores.md` §3.12). The codec classes are rewritten in the shim, not kept (§9, Q5).
+(`EmuSen_NativeCores.md` §3.12). The codec classes are rewritten, not kept, in the SNES's system pack rather than in a
+shim, so that any SNES engine has them (§9, Q5; `EmuSen_CoreAPI.md` §15 Q14).
 
 ### 4.5 Save states and rewind
 

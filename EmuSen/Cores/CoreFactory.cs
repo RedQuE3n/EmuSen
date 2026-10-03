@@ -35,10 +35,11 @@ namespace EmuSen.Cores
     // The one place a ROM path turns into a running core - see EmuSen_Multicore.md §2.
     public static class CoreFactory
     {
-        public static bool IsSupported(string romPath) => CoreCatalog.IsRomExtension(Extension(romPath));
+        public static bool IsSupported(string romPath) => CoreCatalog.IsRomExtension(Extension(romPath)) || Native.CoreDiscovery.ForExtension(Extension(romPath)).Any();
 
         // <headless> only means anything to a core that owns a window-ish resource; <engine> is a CoreCatalog.EngineFor name, and null is the reference core, not the player's default - see EmuSen_Settings_Reference.md §4.44.
-        public static ICore Create(string romPath, bool headless = true, string? engine = null) => Extension(romPath) switch
+        public static ICore Create(string romPath, bool headless = true, string? engine = null) =>
+            V1Library(Extension(romPath), engine) is { } v1 ? new Native.CoreEngine(v1) : Extension(romPath) switch
         {
             ".smc" or ".sfc" => new VenusCore(headless),
             ".nes" => engine == CoreCatalog.MoonRtEngine && MoonRtCore.Available ? new MoonRtCore() : new MoonCore(),
@@ -47,6 +48,14 @@ namespace EmuSen.Cores
             var other => throw new NotSupportedException(
                 $"No core in this build handles '{other}' - see CoreCatalog for what is registered."),
         };
+
+        // The one generic branch for v1 engines: the one asked for by name, or the first for an extension no C# core claims; null when it is not loadable - see EmuSen_CoreAPI.md §19.
+        private static Native.CoreLibrary? V1Library(string extension, string? engine)
+        {
+            var found = engine is not null ? Native.CoreDiscovery.ForExtension(extension).FirstOrDefault(c => c.EngineName == engine)
+                : CoreCatalog.IsRomExtension(extension) ? null : Native.CoreDiscovery.ForExtension(extension).FirstOrDefault();
+            return found?.Open();
+        }
 
         // Loads the ROM too, because a debug target needs the core's hardware to already exist.
         public static CoreBundle Load(string romPath, bool headless = true, CheatRegistry? cheats = null,
@@ -69,6 +78,8 @@ namespace EmuSen.Cores
             if (engine == CoreCatalog.MarsRtEngine && core is not MarsRtCore) return $"{CoreCatalog.MarsRtEngine} is not available ({MarsNative.Report}); {CoreCatalog.MarsEngine} is running.";
             if (engine == CoreCatalog.MercuryRtEngine && core is not MercuryRtCore) return $"{CoreCatalog.MercuryRtEngine} is not available ({MercuryNative.Report}); {CoreCatalog.MercuryEngine} is running.";
             if (engine == CoreCatalog.MoonRtEngine && core is not MoonRtCore) return $"{CoreCatalog.MoonRtEngine} is not available ({MoonNative.Report}); {CoreCatalog.MoonEngine} is running.";
+            if (Native.CoreDiscovery.ByEngineName(engine) is { } v1 && (core is not Native.CoreEngine running || running.Info.Id != v1.Info.Id))
+                return $"{engine} is not available ({v1.Report}); {Running(core)} is running.";
             return null;
         }
 
@@ -81,6 +92,8 @@ namespace EmuSen.Cores
             MercuryCore => CoreCatalog.MercuryEngine,
             MoonRtCore => CoreCatalog.MoonRtEngine,
             MoonCore => CoreCatalog.MoonEngine,
+            VenusCore => CoreCatalog.VenusEngine,
+            Native.CoreEngine v1 => v1.Info.DisplayName,
             _ => core.CoreName,
         };
 
@@ -145,10 +158,18 @@ namespace EmuSen.Cores
                 case MarsRtCore marsRt:
                     return new CoreBundle(marsRt, new MarsRtDebugTarget(marsRt, cheats), MarsCheatCodecs.GameShark(), null, null);
 
+                // Any v1 engine: the generic target, and the codecs of its system's pack - see EmuSen_CoreAPI.md §19.
+                case Native.CoreEngine v1:
+                    var (auto, explicitCodec) = SystemCodecs(v1);
+                    return new CoreBundle(v1, v1.CreateDebugTarget(), auto, explicitCodec, null);
+
                 default:
                     throw new NotSupportedException($"No debug target is registered for {core.GetType().Name}.");
             }
         }
+
+        // A v1 engine's codecs come from its system's pack, never from the engine; none for a system without one.
+        private static (ICheatCodeCodec? AutoDetect, ICheatCodeCodec? Explicit) SystemCodecs(Native.CoreEngine engine) => (null, null);
 
         // Answered without loading, so a caller can resolve a missing chip first - see EmuSen_Firmware.md §3.
         public static ICore ForFirmwareProbe(string romPath) => Create(romPath, headless: true);

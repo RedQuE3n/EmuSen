@@ -32,7 +32,7 @@ fn verdicts(name: &str) -> Vec<(&'static str, bool)> {
     report.cases.iter().map(|c| (c.id, c.passed)).collect()
 }
 
-const ALL: [&str; 10] = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C10", "C11"];
+const ALL: [&str; 15] = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13", "C14", "C15"];
 
 #[test]
 fn both_test_cores_pass_every_case() {
@@ -41,10 +41,41 @@ fn both_test_cores_pass_every_case() {
     }
 }
 
+// Machines that differ and a truncated state accepted break C4, C7, C8 and C10, and through them C9's and C13's
+// comparisons with a solo run and C12's rerun of C6-C8.
 #[test]
 fn the_seeded_faults_fail_the_cases_they_break_and_no_others() {
-    let failing = ["C4", "C7", "C8", "C10"];
+    let failing = ["C4", "C7", "C8", "C9", "C10", "C12", "C13"];
     assert_eq!(verdicts("kit_faulty_core"), ALL.iter().map(|&c| (c, !failing.contains(&c))).collect::<Vec<_>>());
+}
+
+// An exact setting that changes the state, a refusal of any host but 1.0, info that drifts, a writable read-only
+// space and an observed frame with other sound break C9, C12, C13, C14 and C15, each alone.
+#[test]
+fn the_faults_of_c9_and_c12_to_c15_fail_those_cases_and_no_others() {
+    let failing = ["C9", "C12", "C13", "C14", "C15"];
+    assert_eq!(verdicts("kit_faulty_full_core"), ALL.iter().map(|&c| (c, !failing.contains(&c))).collect::<Vec<_>>());
+}
+
+// Each of those faults alone, in a runner process of its own, fails exactly the case it is for.
+#[test]
+fn each_fault_of_c9_and_c12_to_c15_alone_fails_its_case_alone() {
+    let file = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("kit-faulty-full.v1tc");
+    std::fs::write(&file, image(&[1, 2, 3, 0x20, 0x41])).unwrap();
+    for (fault, case) in [(8, "C9"), (16, "C12"), (32, "C13"), (64, "C14"), (128, "C15")] {
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_emusen-core-conform"))
+            .args(["--self-delimiting", "--frames", "120", "--core"])
+            .arg(library("kit_faulty_full_core"))
+            .arg("--image")
+            .arg(&file)
+            .env("EMUSEN_TEST_CORE_FAULTS", fault.to_string())
+            .output()
+            .unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        let failed: Vec<&str> = text.lines().filter_map(|l| l.strip_prefix("FAIL ")).filter_map(|l| l.split_whitespace().next()).collect();
+        assert_eq!(failed, vec![case], "fault {fault}:\n{text}");
+        assert_eq!(out.status.code(), Some(1), "fault {fault}");
+    }
 }
 
 // Refusal passes C4 whether or not the system's format is self-delimiting.
@@ -76,7 +107,7 @@ fn a_report_says_what_was_run_and_a_missing_library_fails_c1() {
     let v = json::parse(report.json().as_bytes()).unwrap();
     assert_eq!(v.get("passed"), Some(&Value::Bool(true)));
     assert_eq!(v.get("id").and_then(Value::as_str), Some("v1-test-core"));
-    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(10));
+    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(15));
     let none = run(&library("no_such_core"), &options());
     assert!(!none.passed());
     assert_eq!(none.cases[0].id, "C1");

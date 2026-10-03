@@ -147,14 +147,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 ((TextBox)editor.EditorOf(field.Key)).Text = "x";
             foreach (MetadataField field in editor.Shown.Where(f => f.Kind == MetadataKind.Flag))
                 ((LunaSwitch)editor.EditorOf(field.Key)).IsChecked = true;
-            // A choice with nothing to choose for this game (a Super Nintendo game's engine) is disabled and has no Reset to show.
+            // A choice with nothing to choose for this game (a Super Nintendo game's engine where discovery found none) is disabled and has no Reset to show.
             bool Choosable(MetadataField f) => f.Kind != MetadataKind.Choice || GameMetadata.ChoicesFor(f, editor.GamePath).Count > 1;
             foreach (MetadataField field in editor.Shown.Where(f => f.Kind == MetadataKind.Choice && Choosable(f)))
                 ((Dropdown)editor.EditorOf(field.Key)).SelectedItem = editor.ChoicesOf(field.Key)[1].Text;
             Reach(s, "Meta_" + GameMetadata.ReleaseDate);
             s.Pad.Right();
             Assert.All(editor.Shown.Where(Choosable), f => Assert.True(editor.CanReset(f.Key), f.Key));
-            Assert.False(editor.EditorOf(GameMetadata.AltEmulator).IsEnabled);
+            Assert.Equal(EmuSen.Cores.CoreCatalog.EngineFor("SNES") is not null, editor.EditorOf(GameMetadata.AltEmulator).IsEnabled);
             Audit("editor");
             foreach (string m in missing) _out.WriteLine("unreachable: " + m);
             Assert.Empty(missing);

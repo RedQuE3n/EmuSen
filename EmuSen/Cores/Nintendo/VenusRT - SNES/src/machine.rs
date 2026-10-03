@@ -38,6 +38,8 @@ pub struct Machine {
     /// The battery RAM as the host last saved it, and whether it has changed since; not in the state.
     pub battery_copy: Vec<u8>,
     pub battery_changed: bool,
+    /// An ST010 or ST011's on-chip RAM as the S-CPU reads it at $68:0000, the cartridge's battery; not in the state.
+    pub st_battery: Vec<u8>,
     /// The host's cheat pokes, (space, address, value, compare), applied at each frame's end; not in the state.
     pub pokes: Vec<[u32; 4]>,
 }
@@ -91,6 +93,7 @@ impl Machine {
             trace: None,
             battery_copy: Vec::new(),
             battery_changed: false,
+            st_battery: Vec::new(),
             pokes: Vec::new(),
         };
         // The datasheet leaves SL uninitialised at power-on; $02 puts S at $01FF after the reset's three stack cycles.
@@ -127,6 +130,7 @@ impl Machine {
         m.trace = self.trace.take();
         m.battery_copy = std::mem::take(&mut self.battery_copy);
         m.battery_changed = self.battery_changed;
+        m.st_battery = std::mem::take(&mut self.st_battery);
         m.pokes = std::mem::take(&mut self.pokes);
         *self = m;
     }

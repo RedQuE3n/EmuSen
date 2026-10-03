@@ -886,6 +886,13 @@ their data.
     runs it between other accesses (stores and loads take priority at each start state); the CPU waits only when a
     flush is wanted while one still executes, for RPIX, and for STOP. RPIX flushes the primary row (read and write),
     then reads one byte per bitplane, the CPU waiting for all of it.
-- Conclusion: open.
+- Conclusion: settled 2026-10-03 for the costs the referee states, adopted one at a time (VenusRT_Native.md §28.1):
+  the code-cache line fill at 3/5 cycles a byte with the CPU waiting for the line; FMULT and LMULT at 3 cycles plus
+  the multiplier's hold; the ROM buffer and the stores beside the instruction stream, the CPU waiting only on a
+  pending result; LDB's second cycle; PLOT's pixel-cache flush on the RAM port; RPIX's flush and reads. The uncached
+  opcode fetch (3/5) and MULT's 1-cycle hold already matched. Not modelled, each a second-order overlap: the opcode
+  fetch and cache fill running during the current instruction's later cycles, the RAM port interleaving loads and
+  stores between a flush's accesses, the ROM port's priority between a buffer load and a cache fill, back-to-back R14
+  writes, and STOP's wait for the ports.
 - Pinned by: Star Fox's $15BB, Vortex's $198C, and the GSU test ROMs staying passed.
 

@@ -3,7 +3,7 @@
 *This revision: the second, 2026-10-03: §15's eighteen questions decided, each as this page recommended (§0.2, §15),
 and §13.2's items 1 and 2 built: the header, the `core` module with `core_exports!`, and the guard (§18, which also lists
 the points of §4–§6 that building them made precise); then items 3 and 4, the host adapter and discovery (§19); item 5, the SNES's system pack (§20); and item 6, the
-conformance kit's core suite (§21). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
+conformance kit's core suite (§21); and MoonRT's exports onto v1 beside its pre-stable ones (§22). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
 three prototype checks recorded in §5.1 to §5.3. It supersedes parts of `EmuSen_NativeCores.md`, listed in §0.3 and
 marked in place there. Every claim about the code is cited to a file, read on `WiseMan` at `f69c94a4`. Claims marked
 **measured** were measured on 2026-10-01; claims marked **argued** are reasoning that a later step must prove, and
@@ -647,7 +647,8 @@ the physical bindings stay the frontend's:
 
 An axis entry is `{ "axis": n, "control": "LeftX", "kind": "stick", "label": "Control Stick" }`: `axis` is the number
 `set_axis` receives, `kind` is `stick` (−1 to 1) or `trigger` (0 to 1), so that a host can normalise a non-canonical
-axis too. `control` is one of `PadButton`'s names (`EmuSen.Galaxia/Input/PadButton.cs`, append-only, 16 today) or, for an
+axis too. The `buttons` are listed in the order a bindings screen presents them, which need not be the order of their bits
+(MoonRT lists Up, Down, Left, Right, Select, Start, B, A, as its C# oracle presents them). `control` is one of `PadButton`'s names (`EmuSen.Galaxia/Input/PadButton.cs`, append-only, 16 today) or, for an
 axis, of `PadAxis`'s; the header carries both as open enumerations (Appendix A). `label` is the console's own word,
 which the diagram shows: the N64's "C-Up", the Game Boy's "Select". A control with no canonical match is allowed, with
 `"control": null`, and the frontend offers it as an unbound extra.
@@ -2086,6 +2087,75 @@ takes any non-empty image whole, passes without the flag and fails with it, and 
 
 C9 and C12–C15 are not in §13.2's item 6. The build step that runs `--sidecar` on the project's cores waits for the
 first project core on v1.
+
+---
+
+## 22. MoonRT onto v1, 2026-10-03: §13.3's step 4, its first half
+
+### 22.1 What was done
+
+- **The exports.** `src/ffi/v1.rs` implements `emusen_native::core::Core` for MoonRT's machine and invokes
+  `core_exports!` beside the pre-stable `native_exports!`, as §18.6 describes: the library now exports 46 `emusen_core_`
+  symbols (the 32 required and `RESET`, `MUTES`, `ROM_PATCHES`, `DEBUG` and `DEBUG_STACK`'s), its 38 `emusen_native_`
+  and its two `moonrt_` extensions. The pre-stable implementation is unchanged.
+- **The descriptors** carry what the shim held in C#: the pad's eight bits under their canonical controls, listed in
+  `MoonCore.PadButtons`' order; the eight spaces under `MoonMachine.SpaceNames`, `CPUBUS` marked as reading with side
+  effects; the battery file where the cartridge has one; the state's magic `MOON`, version 4, read from 3; the patch
+  range 4020h–FFFFh; the frame rate as `MoonCore.FrameRateHz` computes it, 21,477,272 / (262 × 1,364); the five APU
+  channels by name; and `status_text` for its band in the shim's words. Settings: none.
+- **The shim stays MoonRT's loader.** The build writes MoonRT's sidecar (below), so discovery lists it. So that this
+  changes nothing, an engine the build registers by hand (`CoreCatalog.IsRegisteredEngine`) keeps its own branch:
+  `CoreFactory`'s generic branch and the engine notice pass it by. `MoonRT (Rust)` therefore still runs as
+  `MoonRtCore`, Moon (C#) stays the NES's default, and the NES row is unchanged.
+- **The sidecar.** `RustCores.props` marks MoonRT `CoreAbi 1`; `EmuSen.csproj`'s `WriteCoreSidecars` builds the kit's
+  runner and runs `--sidecar` on each such library, and the sidecar is copied beside it. CI does the same in the
+  library job for any library that exports `emusen_core_abi_version`, on every platform whose library the runner can
+  load.
+
+### 22.2 The oracle, §13.1's row, measured 2026-10-03
+
+| Oracle | Result |
+|---|---|
+| The state and machine tests, the engine tests | WiseMan's `MoonRt`, `NativeHost`, `BatterySave`, `MoonCheat`, engine-row and factory tests: 331 pass, unchanged, on the library with both interfaces; the crate's own 6 pass |
+| The adapter against the shim | `MoonRtCoreAbiTests`: the generic `CoreEngine` over MoonRT's v1 exports and `MoonRtCore` over its pre-stable ones, run side by side for 240 frames with input on both pads, give the same picture every frame, the same samples every frame and byte-identical states; a cheat applied through the adapter lands |
+| The bench's state hashes | `moonbench`'s four games, 900 boot and 3,000 timed frames: one state hash per game in all forty runs, before and after, and the same as C# Moon's |
+| The plain frame, interleaved | below: not slower; 1.37% faster by the geometric mean, which is outside ±1% on the fast side |
+| The kit | C1–C6, C10 and C11 pass on all four games; C7 and C8 fail, below |
+
+**The timing.** Five rounds under the bench lock, the four games interleaved and the two builds alternated within each
+game. "Before" is the same source without `v1.rs`; both were built by cargo's release profile with the same toolchain
+(MoonRT has no PGO profile). The load average was 6.0–6.4 throughout, against the 0.7–1.6 of §8.4.4 of
+`Moon_Native.md`, so single runs spiked (p90 to 2.5 ms on both builds alike) and the comparison is of medians:
+
+| Game | Before, median p50 ms | After | Change | Median of means, change |
+|---|---|---|---|---|
+| Super Mario Bros. | 1.159 | 1.139 | −1.73% | −1.58% |
+| The Legend of Zelda | 0.956 | 0.938 | −1.88% | −1.34% |
+| Super Mario Bros. 3 | 1.386 | 1.368 | −1.30% | −0.85% |
+| Mike Tyson's Punch-Out!! | 1.264 | 1.257 | −0.55% | −0.24% |
+
+The frame is not slower on any game. It is faster by more than P1's band allows on three, which is the kind of code
+layout effect `EmuSen_NativeCores.md` §8.2 measured before, and it was measured on a loaded machine. P1 is not retired:
+it is to be measured again on a quiet machine before MoonRT's move is judged complete.
+
+### 22.3 The kit's C7 and C8: a finding about Moon's state format
+
+On every game C7's "B, loaded with A's state, continues as A" and C8's "across a save and load at N/2" fail on the
+sound alone: the picture and the state agree, and the samples differ (on Super Mario Bros., B made 2 fewer samples
+over 300 frames and a different digest).
+
+**The cause is the oracle's format, not the port.** C# Moon marks its mixer `[SkipInState]`: the resampler's
+accumulator and cycle fraction and the three filters' states (`Apu/Apu.cs`, `_sampleAccumulator`, `_cycleFraction`,
+`_hp90`, `_hp440`, `_lp14k` and the rest). A machine loaded with a state therefore resumes its sound with those reset,
+and MoonRT, whose state is C# Moon's byte for byte, does the same. **Measured** with a scratch probe that runs a machine
+300 frames, loads its state into a second, and runs both 300 more through `ICore` without input: on Punch-Out!! the
+samples differ from the first one after the load, in C# Moon and in MoonRT alike, with equal states and equal sample
+counts; on Super Mario Bros. they agree. The kit's scripted input makes the difference show on every game.
+
+**For decision:** the kit holds that a state carries everything that determines what follows (§6.9, C7, C8). Moon's
+format leaves the mixer out by design. The ways forward are to add the mixer to Moon's state (a version 5, in C# Moon
+and in MoonRT together, which changes the oracle), or to let a core declare that its sound resumes approximately after a
+load and have C7 and C8 compare picture and state for it. Until that is decided MoonRT is not v1-compliant.
 
 ---
 

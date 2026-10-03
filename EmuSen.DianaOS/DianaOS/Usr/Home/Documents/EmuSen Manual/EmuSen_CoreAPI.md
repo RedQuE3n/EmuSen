@@ -1,6 +1,7 @@
 # EmuSen — the core API: a stable ABI for cores, and DianaOS as the runtime above it
 
-*This revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
+*This revision: the second, 2026-10-03: §15's eighteen questions decided, each as this page recommended (§0.2, §15).
+Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
 three prototype checks recorded in §5.1 to §5.3. It supersedes parts of `EmuSen_NativeCores.md`, listed in §0.3 and
 marked in place there. Every claim about the code is cited to a file, read on `WiseMan` at `f69c94a4`. Claims marked
 **measured** were measured on 2026-10-01; claims marked **argued** are reasoning that a later step must prove, and
@@ -47,6 +48,13 @@ Each part of the aim becomes a test this specification is judged by:
 3. **The platform is Unix-like where that fits**, and the specification says where it does not.
 4. **DianaOS stays C# for this version** (`EmuSen_Stack.md` §6 defers its Rust port), and its frontend API is shaped so
    that it can later be offered as a C interface without changing shape (§9).
+
+**Decided 2026-10-03:** the eighteen questions of §15, each as this page recommended and with nothing changed. Among
+them: the stable set is `emusen_core_*` beside the pre-stable `emusen_native_*` (Q1); descriptors are JSON (Q2); the
+"bus" is §8.3's call surface, event stream and two hand-offs (Q5); the accurate-default rule covers `accuracy` and
+`enhancement` settings, not `latency` (Q12); the runtime goes in `DianaOS/Sys/` (Q13); the SNES's new cheat codecs go
+in its system pack, not in VenusRT's shim (Q14); the axis value is a normalised `double` (Q15); and MarsRT moves
+straight to v1 at its step 5 (Q16).
 
 ### 0.3 The design in one paragraph
 
@@ -172,8 +180,8 @@ the cores. What they say is narrower, and points the same way:
   can't run mutating commands) is real future work"; its example is `su parent`, and `useradd`'s is `useradd kid`.
 
 The pages therefore record a core-agnostic debugger and shell meant to grow, a Unix hierarchy that is the player's
-home, and accounts meant for a household. They do not record the runtime role. §8.1 states it, and §15 asks the
-questions the code leaves open.
+home, and accounts meant for a household. They do not record the runtime role. §8.1 states it, and §15 records the
+decisions on the questions the code left open.
 
 ### 1.4 How each client reaches a core today
 
@@ -780,7 +788,7 @@ interrupts are off (`EmuSen_NativeCores.md` §3.12), which today needs C# that r
 ### 6.13 The settings schema
 
 `EmuSen_NativeCores.md` §9 Q4 deferred the schema until the C# cores retire, "so there is never a second source for
-the same list". A framework that presents outside cores cannot wait. **Decided here, subject to §15 Q2:** the core
+the same list". A framework that presents outside cores cannot wait. **Decided here, and confirmed by §15 Q2:** the core
 is the one source for its settings, and the C# lists (`MarsCore.VideoSettings`, `MercuryCore.ModelSettings`,
 `CoreCatalog.SettingsFor`) are generated from or replaced by the schema engine by engine, so that there is still one
 source per engine.
@@ -841,7 +849,7 @@ will not use the value as chosen" (`CoreCapabilities.cs`). A function cannot cro
 
 **A finding to settle.** MarsCore's `DeferredPresentation` ("the picture … reaches the screen one frame late[r]")
 defaults to on (`MarsCore.cs`). Under this schema it is `effect: latency`. The rule that defaults are accurate
-applies to `accuracy` and `enhancement`; whether it extends to latency is §15 Q12.
+applies to `accuracy` and `enhancement`; §15 Q12 decided that it does not extend to latency.
 
 ### 6.14 The debug interface
 
@@ -865,7 +873,7 @@ The eleven exports of `EmuSen_NativeCores.md` §3.14, as built for MoonRT and Me
 **Extensions, not v1:** the console-shaped views (sprites, palettes, tiles and tilemaps, DMA channels, coprocessor
 register flow). A generic debugger shows memory, registers, disassembly, breakpoints, watches, stepping, the call
 stack, coverage and the profile for any core that claims `DEBUG`, and a console's views come from its system pack in
-DianaOS (§8.2) or from a core's extension exports. Whether views enter the ABI is §15 Q10.
+DianaOS (§8.2) or from a core's extension exports. §15 Q10 decided that views do not enter v1.0.
 
 ### 6.15 The status-code space
 
@@ -974,7 +982,7 @@ writer is the one the schema test validates.
 
 ### 6.22 Doors kept open: run-ahead, netplay, achievements, hardware rendering
 
-None of these is assumed in; adopting each is a question (§15 Q7–Q9). What each would need from the ABI, so that v1
+None of these is assumed in; §15 Q7–Q9 record when each is to be taken up. What each would need from the ABI, so that v1
 does not close the door:
 
 - **Run-ahead** runs frames ahead and rolls back each frame. It needs a cheap snapshot (`SNAPSHOT`, generated now),
@@ -1049,7 +1057,8 @@ Because the ABI never calls the host and copies everything out, it can be carrie
 helper process without changing either side: a broker process loads the core, and the runtime's adapter forwards each
 call. That would contain a foreign core's crash and confine its permissions. It costs a copy of every picture per
 frame and a round trip per call, and nothing needs it yet. It is recorded because the pull model is what makes it
-possible, and §15 Q11 asks whether foreign cores should require it.
+possible. §15 Q11 decided that foreign cores do not require it: they load in-process after approval, and the
+broker is deferred.
 
 ---
 
@@ -1123,7 +1132,7 @@ For the picture that is a copy and an allocation per frame that the slot avoids;
 ring avoids; for input it is a delay the latch avoids. The two ports measured layout and inlining effects of a few per
 cent (`EmuSen_NativeCores.md` §8.2, R1), and the frame budget leaves no room for a dispatch layer on the hot path.
 What is bus-like is the event stream, which carries what clients need to *hear about*, and the call surface, which
-carries what they ask. §15 Q5 asks whether "bus" was meant more literally.
+carries what they ask. §15 Q5 decided that "bus" means this, not a literal message bus.
 
 ### 8.4 The frame loop and pacing
 
@@ -1152,7 +1161,7 @@ carries what they ask. §15 Q5 asks whether "bus" was meant more literally.
 | Configuration | **`/etc/EmuSen/`**, as `man hier` describes; per-core and per-game settings as files there | **Adopted for what the player edits**, as now; declined for what the program writes | `EmuSen_Stack.md` §4 put program-written data in SQLite and config the player edits in JSON. Per-game settings layered over a system's are player-edited, so they are files: `/etc/EmuSen/games/<game id>.json` |
 | Logs | **`/var/log`** | **Kept as `/Logs`** | `man hier` already places logs at `/Logs` in the home. Moving them buys nothing |
 | Saves, states, cheats | **`/var`** | **Declined; kept in the home** (`/Saves`, `/Saves/Save States`, `/Cheats`) | They are the player's documents. Unix keeps an account's documents in its home and the system's state in `/var` |
-| Users | **accounts**: `su`, `useradd`, `passwd` | **Exists as identity only** (`man su`); profiles are §15 Q4 | `su parent` and `useradd kid` read as a household. Profiles would give each account its bindings, settings overlay and perhaps saves |
+| Users | **accounts**: `su`, `useradd`, `passwd` | **Exists as identity only** (`man su`); profiles later, as their own step (§15 Q4) | `su parent` and `useradd kid` read as a household. Profiles would give each account its bindings, settings overlay and perhaps saves |
 | Frames, sound and input | **pipes and streams** | **Declined for the hot path**; offered as inspection | A pipe per picture adds a copy, framing and back-pressure to every frame. `cat /dev/s1/frame > shot.rgba` as a one-off is offered; the loop never uses it |
 | Composition | **pipelines and scripts** | **Exists and is extended** | The interpreter has pipes, redirection, `$(...)` and control flow. Every session command (§8.6) is a shell verb, so a script can drive anything a frontend can |
 | The sandbox | **chroot** | **Kept** | `DianaOSSandbox` walls the shell to the home, and `/dev` and `/proc` are virtual directories inside that root |
@@ -1475,7 +1484,7 @@ C# class.** For that, before stage 6 begins:
    (C#) and VenusRT without code naming VenusRT. *About 1 day.*
 5. **The SNES's system pack**: its systems-table entry (already `CoreCatalog`'s data) and the two codecs written fresh
    (Pro Action Replay, Game Genie), keyed by system id. *About 1 day.* (`VenusRT_Plan.md` §9 Q5 placed the rewrite in
-   VenusRT's shim; §15 Q14 asks to place it here instead.)
+   VenusRT's shim; §15 Q14 decided to place it here instead.)
 6. **The kit's core suite, at least C1–C8 and C10–C11**, which becomes part of stage 6's oracle. *About 2 days.*
 
 **In all, about 9–10 days**, against a stage 6 that `VenusRT_Plan.md` §6 recommends running after stage 4 (five steps
@@ -1483,7 +1492,7 @@ away). The DianaOS moves (D1–D5), MoonRT's and MercuryRT's moves and MarsRT's 
 
 ### 13.3 The order
 
-1. Decisions: §15 answered.
+1. Decisions: §15 answered, 2026-10-03, every question as recommended.
 2. §13.2's items 1–2, then VenusRT's switch.
 3. §13.2's items 3–6.
 4. MoonRT, then MercuryRT, onto v1 (each with its timing, since MercuryRT measured layout sensitivity before).
@@ -1555,7 +1564,7 @@ This is a real option and is weighed as one.
 chosen so that the adapter fills `retro_system_info`, the options and the input descriptors from them with no per-core
 code, which is a design test of this page (P7). Inbound, a libretro engine under DianaOS could let a player run any
 libretro core inside Mistress, with what libretro carries and without the debugger. That is how EmuSen would fold in
-RetroArch's library of cores, and it is §15 Q6.
+RetroArch's library of cores, and §15 Q6 decided it in principle, as its own plan after D1.
 
 ### 14.2 Keeping exact matching
 
@@ -1610,52 +1619,53 @@ until they retire.
 
 ---
 
-## 15. Open questions
+## 15. Questions, decided 2026-10-03
 
-Each with a recommendation.
+Each question as it was put, and its decision. Every recommendation this page made was accepted as written, and
+nothing was changed.
 
 1. **Q1, the prefix.** Stable exports `emusen_core_*`, types `emusen_*`, beside the pre-stable `emusen_native_*` until
-   that set is deleted? *Recommended: yes.* A library's two possible interfaces then never meet in a loader, the
-   baseline starts clean, and the header's name matches its exports. The cost is the macro, a CI column and the C#
-   table, all of which change anyway.
-2. **Q2, descriptors as JSON.** *Recommended: yes* (§6.3, §14.6).
+   that set is deleted? Decided: yes. A library's two possible interfaces then never meet in a loader, the baseline
+   starts clean, and the header's name matches its exports. The cost is the macro, a CI column and the C# table, all of
+   which change anyway.
+2. **Q2, descriptors as JSON.** Decided: yes (§6.3, §14.6).
 3. **Q3, is a session a process?** Listed by `ps`, ended by `kill`, paused and resumed by `kill -STOP` and `-CONT`.
-   *Recommended: yes*, with reset as the named signal `RESET` (§8.5).
-4. **Q4, are users real profiles?** Today accounts are identity only (`man su`). *Recommended:* profiles later, as
-   their own step: each account with its bindings, its settings overlay and its own saves folder, `su` switching all
-   three; until then the runtime keys nothing on the account, so the step adds and changes nothing.
-5. **Q5, what "bus" means.** A literal message bus, or §8.3's call surface, event stream and two hand-offs?
-   *Recommended: §8.3.*
+   Decided: yes, with reset as the named signal `RESET` (§8.5).
+4. **Q4, are users real profiles?** Today accounts are identity only (`man su`). Decided: profiles later, as their own
+   step: each account with its bindings, its settings overlay and its own saves folder, `su` switching all three. Until
+   then the runtime keys nothing on the account, so the step adds and changes nothing.
+5. **Q5, what "bus" means.** A literal message bus, or §8.3's call surface, event stream and two hand-offs? Decided:
+   §8.3.
 6. **Q6, a libretro engine inbound.** Should DianaOS host libretro cores as engines, so a player can use them inside
-   Mistress? *Recommended:* yes in principle, after v1's adapter and the runtime's move (D1), and as its own plan; the
-   engine SPI is shaped so it fits.
-7. **Q7, run-ahead.** *Recommended:* adopt after VenusRT becomes the SNES default, since VenusRT designs its skipped
+   Mistress? Decided: yes in principle, after v1's adapter and the runtime's move (D1), and as its own plan; the engine
+   SPI is shaped so it fits.
+7. **Q7, run-ahead.** Decided: adopted after VenusRT becomes the SNES default, since VenusRT designs its skipped
    rendering to be state-neutral; the ABI needs nothing more (§6.22).
-8. **Q8, netplay.** *Recommended:* not before run-ahead; first add a cross-host determinism case to the kit and run it
-   on two platforms.
-9. **Q9, achievements.** *Recommended:* decide together with Q6, since rcheevos' integration and its console memory
-   maps are what libretro's frontends already carry; the ABI reserves `achievements` in machine info.
-10. **Q10, console-shaped debug views in the ABI.** Sprites, palettes, tiles, DMA. *Recommended: no for v1.0*; they
-    stay system packs and extensions, and enter a later minor only if a second core of a console needs the same view.
+8. **Q8, netplay.** Decided: not before run-ahead; first a cross-host determinism case is added to the kit and run on
+   two platforms.
+9. **Q9, achievements.** Decided: together with Q6, since rcheevos' integration and its console memory maps are what
+   libretro's frontends already carry; the ABI reserves `achievements` in machine info.
+10. **Q10, console-shaped debug views in the ABI.** Sprites, palettes, tiles, DMA. Decided: not in v1.0. They stay
+    system packs and extensions, and enter a later minor only if a second core of a console needs the same view.
 11. **Q11, foreign cores.** Loadable at all, and if so in-process with a one-time approval by hash, or only through a
-    broker (§7.3)? *Recommended:* in-process with approval, the broker deferred.
+    broker (§7.3)? Decided: in-process with approval; the broker is deferred.
 12. **Q12, latency and the accurate default.** Should `latency` settings also default to the lowest latency? MarsCore's
-    `DeferredPresentation` defaults to on, a frame late. *Recommended:* the rule covers `accuracy` and `enhancement`
-    only; a `latency` setting's default is its author's choice, shown with its cost; MarsRT's default reviewed at its
-    step 5.
-13. **Q13, the runtime's folder.** `DianaOS/Sys/`, beside `Bin`, `Lib`, `Var`, `Etc` and `Dev`? *Recommended: yes*:
-    `/sys` is where Unix exposes devices and drivers to the system, which is the runtime's subject.
-14. **Q14, where the SNES's new codecs live.** `VenusRT_Plan.md` §9 Q5 put the rewrite in VenusRT's shim.
-    *Recommended:* in the SNES's system pack instead, written fresh as decided, so that any SNES engine has them and the
-    shim is not needed at all.
-15. **Q15, the axis value.** A `double` normalised to −1..1, the core scaling (§6.8)? *Recommended: yes.*
-16. **Q16, MarsRT straight to v1.** Skipping the pre-stable set at its step 5? *Recommended: yes*, so it moves once,
-    with one retrain.
+    `DeferredPresentation` defaults to on, a frame late. Decided: the rule covers `accuracy` and `enhancement` only; a
+    `latency` setting's default is its author's choice, shown with its cost; MarsRT's default is reviewed at its step 5.
+13. **Q13, the runtime's folder.** `DianaOS/Sys/`, beside `Bin`, `Lib`, `Var`, `Etc` and `Dev`? Decided: yes. `/sys` is
+    where Unix exposes devices and drivers to the system, which is the runtime's subject.
+14. **Q14, where the SNES's new codecs live.** `VenusRT_Plan.md` §9 Q5 put the rewrite in VenusRT's shim. Decided: in
+    the SNES's system pack instead, written fresh as decided there, so that any SNES engine has them and the shim is not
+    needed at all. `VenusRT_Plan.md` §9 Q5 records the change.
+15. **Q15, the axis value.** A `double` normalised to −1..1, the core scaling (§6.8)? Decided: yes.
+16. **Q16, MarsRT straight to v1.** Skipping the pre-stable set at its step 5? Decided: yes, so it moves once, with one
+    retrain.
 17. **Q17, publishing the frontend API.** Package `EmuSen.DianaOS` for outside frontends now, as LunaP is packed for
-    Pegasus? *Recommended:* apply the stability policy now (the baseline, §9.3) and publish once D3 has landed.
-18. **Q18, a `Dev/` for machines.** `Dev/` in the source tree holds the console line reader. Is the hierarchy's
-    `/dev` meant for machine devices, as §8.5 proposes for the virtual tree? *Recommended:* yes in the virtual tree; the
-    source folder keeps its meaning (the host's devices) and is not renamed.
+    Pegasus? Decided: the stability policy applies now (the baseline, §9.3), and the package is published once D3 has
+    landed.
+18. **Q18, a `Dev/` for machines.** `Dev/` in the source tree holds the console line reader. Is the hierarchy's `/dev`
+    meant for machine devices, as §8.5 proposes for the virtual tree? Decided: yes in the virtual tree; the source
+    folder keeps its meaning (the host's devices) and is not renamed.
 
 ---
 

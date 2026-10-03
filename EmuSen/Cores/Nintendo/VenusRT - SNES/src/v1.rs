@@ -73,16 +73,17 @@ impl Machine {
         }
     }
 
-    /// The debugger's processors: the S-CPU, the SPC700 and the cartridge's own, if it has one.
+    /// The debugger's processors, named as its commands' scope words name them: the S-CPU, the SPC700 and the
+    /// cartridge's own, if it has one.
     fn processors(&self) -> Vec<Processor> {
         use crate::debugger::{CPU_REGISTERS, Chip, DSP_REGISTERS, GSU_REGISTERS, SPC_REGISTERS};
         let named = |r: &[(&str, u32)]| r.iter().map(|&(n, b)| (n.to_owned(), b)).collect::<Vec<_>>();
         let mut list = vec![
-            Processor { id: 0, name: "65C816".into(), pc_bits: 24, registers: named(&CPU_REGISTERS) },
-            Processor { id: 1, name: "SPC700".into(), pc_bits: 16, registers: named(&SPC_REGISTERS) },
+            Processor { id: 0, name: "CPU".into(), pc_bits: 24, registers: named(&CPU_REGISTERS) },
+            Processor { id: 1, name: "SPC".into(), pc_bits: 16, registers: named(&SPC_REGISTERS) },
         ];
         match self.chip() {
-            Some(Chip::Sa1) => list.push(Processor { id: 2, name: "SA-1".into(), pc_bits: 24, registers: named(&CPU_REGISTERS) }),
+            Some(Chip::Sa1) => list.push(Processor { id: 2, name: "SA1".into(), pc_bits: 24, registers: named(&CPU_REGISTERS) }),
             Some(Chip::Gsu) => list.push(Processor { id: 2, name: "GSU".into(), pc_bits: 24, registers: named(&GSU_REGISTERS) }),
             Some(Chip::Dsp) => list.push(Processor { id: 2, name: "DSP".into(), pc_bits: 16, registers: named(&DSP_REGISTERS) }),
             None => {}

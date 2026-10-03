@@ -574,6 +574,7 @@ impl Machine {
     pub fn load_state(&mut self, data: &[u8]) -> StateResult {
         let mut next = self.clone();
         next.read_state(&mut StateReader::new(data))?;
+        next.debug_open = None;
         *self = next;
         Ok(())
     }

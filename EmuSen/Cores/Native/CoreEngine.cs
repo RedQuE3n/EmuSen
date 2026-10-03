@@ -11,7 +11,7 @@ namespace EmuSen.Cores.Native
 {
     // The one engine class over any core ABI v1 library: every optional interface of the engine SPI, answered neutrally where the core lacks the capability - see EmuSen_CoreAPI.md §13.2, §19.
     public sealed class CoreEngine : ICore, ICheatRegistryHost, IStateFormat, IFrameBufferPool, IFrameProfiler, IEngineFeatures, ISnapshotCore, IFrameSerial,
-        IRepeatedRows, ICoreSettings, IDisposable
+        IRepeatedRows, ICoreSettings, ICoprocessorHalt, IDisposable
     {
         private CoreMachine? _machine;
         private byte[] _frame = Array.Empty<byte>();
@@ -41,11 +41,15 @@ namespace EmuSen.Cores.Native
         public FrameLogRegistry FrameLog { get; } = new();
         public BreakpointRegistry Breakpoints { get; } = new();
 
+        // The debugger's tables and logs over DEBUG, every processor's registries in it.
+        public CoreDebugBridge Debug { get; }
+
         // The settings a frontend stored for this engine, by key; a key the schema lacks is dropped, as §6.13 asks of a host.
         public CoreEngine(CoreLibrary library, IReadOnlyDictionary<string, string>? settings = null)
         {
             if (!library.Available) throw new InvalidOperationException($"{System.IO.Path.GetFileName(library.Path)} is not in use: {library.Report}");
             Library = library;
+            Debug = new CoreDebugBridge(this);
             foreach (var s in library.Settings) _values[s.Key] = s.Default;
             if (settings is not null)
                 foreach (var (key, value) in settings)
@@ -114,8 +118,12 @@ namespace EmuSen.Cores.Native
             }
         }
 
-        public bool IsHaltedAtBreakpoint => false;
-        public int HaltedAddress => 0;
+        // Halted in front of a breakpoint on processor HaltedProcessor, the frame left open for the next RunFrame to resume.
+        public bool IsHaltedAtBreakpoint { get; private set; }
+        public int HaltedAddress { get; private set; }
+        public uint HaltedProcessor { get; private set; }
+        public bool IsHaltedOnCoprocessor => IsHaltedAtBreakpoint && HaltedProcessor != 0;
+        public string HaltedProcessorName => _machine?.Info.Processors.FirstOrDefault(p => p.Id == HaltedProcessor)?.Name ?? "CPU";
 
         // What the image needs, answered from its bytes without a machine; Purpose says whether the game runs without it.
         public IReadOnlyList<FirmwareRequest> GetFirmwareRequirements(string romPath) =>
@@ -151,6 +159,8 @@ namespace EmuSen.Cores.Native
 
             _machine?.Dispose();
             _machine = machine;
+            IsHaltedAtBreakpoint = false;
+            Debug.Attach(machine);
             _battery.Clear();
             _battery.AddRange(wanted);
             RomPath = path;
@@ -187,7 +197,19 @@ namespace EmuSen.Cores.Native
             RefreshCheats(m);
             SyncAudioLimit(m);
             long start = Stopwatch.GetTimestamp();
-            m.Advance();
+            bool resuming = IsHaltedAtBreakpoint;
+            IsHaltedAtBreakpoint = false;
+            if (resuming || Debug.Armed)
+            {
+                if (!Debug.RunFrame(resuming, out int haltedAt, out uint processor))
+                {
+                    (IsHaltedAtBreakpoint, HaltedAddress, HaltedProcessor) = (true, haltedAt, processor);
+                    _lastFrameMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+                    Drain();
+                    return;
+                }
+            }
+            else m.Advance();
             EndFrame(m);
             if (!_skipRendering && Library.Has(CoreInterface.CapPresent)) m.Present();
             _lastFrameMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
@@ -312,6 +334,7 @@ namespace EmuSen.Cores.Native
             stream.CopyTo(copy);
             m.Load(copy.ToArray());
             _cheatVersion = -1;
+            IsHaltedAtBreakpoint = false;
             Drain();
         }
 

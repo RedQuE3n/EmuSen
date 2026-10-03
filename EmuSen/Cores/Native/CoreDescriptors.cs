@@ -32,6 +32,7 @@ namespace EmuSen.Cores.Native
     {
         public bool ReadOnly => Flags.Contains("read_only");
         public bool SideEffects => Flags.Contains("side_effects");
+        public bool ReportsStores => Flags.Contains("reports_stores");
     }
 
     public sealed record CoreProcessor(uint Id, string Name, int PcBits, IReadOnlyList<(string Name, int Bits)> Registers);

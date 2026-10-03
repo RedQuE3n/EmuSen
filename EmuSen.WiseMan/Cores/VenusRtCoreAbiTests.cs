@@ -80,7 +80,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new[] { ".smc", ".sfc" }, found.Info.Systems.Single().Extensions);
             var library = found.Open();
             Assert.True(library is { Available: true }, found.Report);
-            Assert.Equal(CoreInterface.CapReset | CoreInterface.CapSnapshot | CoreInterface.CapBatteryDirty | CoreInterface.CapRomPatches | CoreInterface.CapCheatPokes, library!.Capabilities);
+            Assert.Equal(CoreInterface.CapReset | CoreInterface.CapSnapshot | CoreInterface.CapBatteryDirty | CoreInterface.CapRomPatches | CoreInterface.CapCheatPokes
+                | CoreInterface.CapDebug | CoreInterface.CapDebugStack | CoreInterface.CapDebugRegisters | CoreInterface.CapDebugDisassemble, library!.Capabilities);
         }
 
         [Fact]

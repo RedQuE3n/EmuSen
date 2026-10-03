@@ -80,6 +80,10 @@ impl<'a> StateReader<'a> {
         Ok(u64::from_le_bytes(self.fixed()?))
     }
 
+    pub fn f64(&mut self) -> Result<f64, Truncated> {
+        Ok(f64::from_le_bytes(self.fixed()?))
+    }
+
     pub fn bytes(&mut self, into: &mut [u8]) -> Result<(), Truncated> {
         into.copy_from_slice(self.take(into.len())?);
         Ok(())

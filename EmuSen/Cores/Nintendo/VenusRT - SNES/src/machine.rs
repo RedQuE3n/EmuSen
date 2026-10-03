@@ -267,6 +267,7 @@ impl Machine {
             w.bytes("DspCore", &core);
             w.bytes("ToApu", &a.to_apu);
             w.bytes("ToCpu", &a.to_cpu);
+            w.bytes("PortQueues", &a.pack_ports());
             w.bytes("Aux", &a.aux);
             for (i, t) in a.timers.iter().enumerate() {
                 w.bytes(["Timer0", "Timer1", "Timer2"][i], &[t.divider, t.stage, t.out]);
@@ -424,6 +425,9 @@ impl Machine {
         a.out.clear();
         r.bytes(&mut a.to_apu)?;
         r.bytes(&mut a.to_cpu)?;
+        let mut queues = [0u8; crate::apu::smp::PORT_BYTES];
+        r.bytes(&mut queues)?;
+        a.unpack_ports(&queues);
         r.bytes(&mut a.aux)?;
         for t in a.timers.iter_mut() {
             let mut b = [0u8; 3];
@@ -591,14 +595,14 @@ pub(crate) mod tests {
 
     // Version 4: the CPU, the clock, the bus and the S-CPU's devices; the listing is its record (plan §5.6).
     #[test]
-    fn the_version_14_layout_is_pinned() {
+    fn the_version_17_layout_is_pinned() {
         let m = Machine::load_rom(&rom(&[])).unwrap();
         let layout = m.layout();
         assert!(layout.starts_with("0 4 u32 Magic\n4 4 i32 Version\n8 2 u16 Cpu.A\n"), "{layout}");
         assert!(layout.contains(" u64 Timing.Clock\n") && layout.contains(" u8[1024] Bus.Io\n") && layout.contains(" u16[32768] Vram\n"), "{layout}");
         assert!(layout.contains(" u8[64] Ppu.Regs\n") && layout.contains(" u16[256] Cgram\n"), "{layout}");
-        assert_eq!(layout.lines().count(), 114, "{layout}");
-        assert_eq!(m.state_size(), 265_207);
+        assert_eq!(layout.lines().count(), 115, "{layout}");
+        assert_eq!(m.state_size(), 265_369);
         assert_eq!(&save(&m)[..4], b"VNRT");
     }
 

@@ -383,9 +383,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Contains(s.Themed.Stage.Current.Scene.Entries.Select(e => e.Control).OfType<HintBar>().Single().Entries!, h => h.Label == "Favorite");
             s.Pad.B();
             Enter(s, "snes");
+            string favoured = s.Game!;
             s.Pad.Y();
             Assert.Null(OnScreenKeyboard.OpenOver(s.Window));
-            Assert.True(Records(s).IsFavourite(Rom(s, s.Game!)));
+            Assert.True(Records(s).IsFavourite(Rom(s, favoured)));
 
             // A second collection of the same name is numbered, as ES-DE numbers it.
             Assert.Equal("Beat Up (1)", CollectionShelves.Unique("Beat Up", Records(s).Collections().Select(c => c.Name)));

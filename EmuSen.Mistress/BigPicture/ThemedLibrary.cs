@@ -106,7 +106,11 @@ namespace EmuSen.Mistress.BigPicture
         // Reads the theme when its folder changed, then builds the stage at the kept selection; false, with Error, when there is nothing to show.
         public bool Show(string themeDirectory, Size screen, IReadOnlyList<ThemedShelf> shelves, ISceneMedia? media, string? mediaKey = null, ThemeChoices? chosen = null)
         {
-            if (screen.Width < 1 || screen.Height < 1) return Stage is not null;
+            if (screen.Width < 1 || screen.Height < 1)
+            {
+                _place = null;
+                return Stage is not null;
+            }
             var clock = Stopwatch.StartNew();
             if (_directory != themeDirectory || _capabilities is null)
             {
@@ -145,6 +149,12 @@ namespace EmuSen.Mistress.BigPicture
             }
             _systems = systems;
             StartAt(systems);
+            // A gamelist whose system has gone, as favorites goes with its last game, gives way to the system view at its place (§44).
+            if (_view == "gamelist" && Stage is { } before && systems.Count > 0 && systems.All(x => x.System.Name != _system))
+            {
+                _view = "system";
+                _system = systems[Math.Min(before.Current.Data.SystemIndex, systems.Count - 1)].System.Name;
+            }
             MediaTime = scan.Elapsed;
             LoadTime = clock.Elapsed - scan.Elapsed;
             if (systems.Count == 0) return Fail(shelves.Any(s => s.Games.Count > 0) ? "The theme has no view for any system in the library." : "The library has no games.");
@@ -170,6 +180,7 @@ namespace EmuSen.Mistress.BigPicture
         {
             ErrorLog.Warning("themes", why, _capabilities?.ThemeName);
             Error = why;
+            _place = null;
             Stage = null;
             Root.Children.Clear();
             return false;
@@ -215,13 +226,24 @@ namespace EmuSen.Mistress.BigPicture
             }).ToList();
             int system = Math.Max(0, systems.ToList().FindIndex(s => s.System.Name == _system));
             SceneSystem chosen = systems[system];
-            int game = _cursor.TryGetValue(ViewKey(chosen.System.Name), out string? file) ? Math.Max(0, chosen.Games.ToList().FindIndex(g => g.File == file)) : 0;
+            string key = ViewKey(chosen.System.Name);
+            int game = _place is { } place && place.Key == key && chosen.Games.Count > 0 ? Math.Min(place.Index, chosen.Games.Count - 1)
+                : _cursor.TryGetValue(key, out string? file) ? Math.Max(0, chosen.Games.ToList().FindIndex(g => g.File == file)) : 0;
+            _place = null;
             return new SceneData(systems, _screen)
             {
                 SystemIndex = system, GameIndex = game, Media = _media, Motion = Motion, Family = Family, SwapFaceButtons = SwapFaceButtons, Status = Status, Now = Now(), ShowClock = Interface.DisplayClock, LiveClock = LiveClock,
                 ShowHelp = Interface.DisplayHelp, StatusShown = StatusShown, ScrollOverlay = Interface.ListScrollOverlay, Help = HelpContext,
                 Shuffle = unchecked(_shuffle += 7919),
             };
+        }
+
+        private (string Key, int Index)? _place;
+
+        // The next rebuild keeps the gamelist's row rather than its game, as a favourite's toggle asks (§44).
+        public void KeepPlace()
+        {
+            if (Stage is { Current.ViewName: "gamelist" } s) _place = (ViewKey(_system), s.Current.Index);
         }
 
         private void Build(string view)

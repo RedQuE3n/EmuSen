@@ -14,6 +14,7 @@ pub mod machine;
 pub mod ppu;
 pub mod scpu;
 pub mod state;
+pub mod v1;
 
 #[cfg(test)]
 mod cputest;

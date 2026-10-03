@@ -11,6 +11,7 @@ using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.BigPicture;
+using EmuSen.Mistress.BigPicture.Scene;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 using SDL3;
@@ -235,7 +236,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         });
 
         [Fact]
-        public Task North_toggles_the_favourite_as_ES_DE_s_Y_does_moving_the_game_first_and_keeping_it_selected() => Run(s =>
+        public Task North_toggles_the_favourite_as_ES_DE_s_Y_does_moving_the_game_first_while_the_highlight_keeps_its_row() => Run(s =>
         {
             Enter(s, "snes");
             s.Pad.Down(3);
@@ -244,19 +245,21 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.Y();
             Assert.Null(OnScreenKeyboard.OpenOver(s.Window));
             Assert.Equal(new[] { "favorite" }, s.Sounds);
-            Assert.Equal(chosen, s.Game);
-            Assert.True(s.Themed.SelectedGame!.Favorite);
-            Assert.Equal(0, s.Themed.Stage!.Current.Index);
+            SceneGame top = s.Themed.Stage!.Current.Data.System.Games[0];
+            Assert.Equal((chosen, true), (top.Name, top.Favorite));
+            Assert.Equal(3, s.Themed.Stage.Current.Index);
+            Assert.Equal(ThemedSession.SnesGames[2], s.Game);
             HintBar help = s.Themed.Stage.Current.Scene.Entries.Select(e => e.Control).OfType<HintBar>().Single();
             Assert.Contains(help.Entries!, h => h.Label == "Favorite" && h.Button == PadGlyphButton.North);
+            s.Pad.L2();
             s.Pad.Y();
-            Assert.False(s.Themed.SelectedGame!.Favorite);
-            Assert.Equal(chosen, s.Game);
-            Assert.Equal(3, s.Themed.Stage.Current.Index);
+            Assert.False(s.Themed.Stage.Current.Data.System.Games.Any(g => g.Favorite));
+            Assert.Equal(ThemedSession.SnesGames, s.Themed.Stage.Current.Data.System.Games.Select(g => g.Name));
+            Assert.Equal(0, s.Themed.Stage.Current.Index);
         });
 
         [Fact]
-        public Task Select_opens_the_game_options_whose_favourite_entry_moves_the_game_first_and_keeps_it_selected() => Run(s =>
+        public Task Select_opens_the_game_options_whose_favourite_entry_moves_the_game_first_while_the_highlight_keeps_its_row() => Run(s =>
         {
             Enter(s, "snes");
             s.Pad.Down(3);
@@ -264,14 +267,16 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Sounds.Clear();
             ThemedGameOptionsTests.Choose(s, "Add to Favourites");
             Assert.Equal(new[] { "favorite" }, s.Sounds);
-            Assert.Equal(chosen, s.Game);
-            Assert.True(s.Themed.SelectedGame!.Favorite);
-            Assert.Equal(chosen, s.Themed.Stage!.Current.Data.System.Games[0].Name);
-            Assert.Equal(0, s.Themed.Stage.Current.Index);
-            ThemedGameOptionsTests.Choose(s, "Remove from Favourites");
-            Assert.False(s.Themed.SelectedGame!.Favorite);
-            Assert.Equal(chosen, s.Game);
+            Assert.True(s.Themed.Stage!.Current.Data.System.Games[0].Favorite);
+            Assert.Equal(chosen, s.Themed.Stage.Current.Data.System.Games[0].Name);
             Assert.Equal(3, s.Themed.Stage.Current.Index);
+            Assert.Equal(ThemedSession.SnesGames[2], s.Game);
+            s.Pad.L2();
+            Assert.Equal(chosen, s.Game);
+            ThemedGameOptionsTests.Choose(s, "Remove from Favourites");
+            Assert.False(s.Themed.Stage.Current.Data.System.Games.Any(g => g.Favorite));
+            Assert.Equal(0, s.Themed.Stage.Current.Index);
+            Assert.Equal(ThemedSession.SnesGames[0], s.Game);
         });
 
         [Fact]

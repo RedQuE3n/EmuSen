@@ -2725,3 +2725,117 @@ SPC700's writes timestamped (cheap) and its reads of the S-CPU's writes made at 
 instruction-stepped SPC700 cannot do while it runs ahead of the S-CPU. Measured against the four traces above, which
 show the effect within the first frame. D-6's 150-clock SPC700 lead is judged after it. Yoshi's Island's PPU-side
 look stays recorded as next.
+
+## 30. The S-CPU's and SPC700's ports by the cycle, and the SPC700's start (2026-10-03)
+
+### 30.1 What was built (D-37, D-6)
+
+- **The ports' latches as the referee places them.** Each side's writes wait in a queue stamped in quarters of a DSP
+  cycle (1.024 MHz). The S-CPU's write lands at the end of its bus cycle. The SPC700 latches $F4-$F7 in the first
+  quarter of its read cycle and its write lands in the fourth, as does CONTROL's clearing of the inputs. The S-CPU
+  reads at its cycle's end what had landed by then. The queues travel in the state (state version 17).
+- **The SPC700 kept behind the S-CPU.** It runs an instruction only when every cycle of it starts before the
+  S-CPU's clock, so no S-CPU write still to come is one it should have seen. The instruction it stands at, which
+  would cross the S-CPU's clock, is run on a copy that changes nothing (`Smp::peek`) when the S-CPU reads a port, for
+  the port writes it makes before the read. The peek is cached while the SPC700 and the input queue stand still.
+- **The SPC700's start (D-6, the referee's half).** The SPC700 leaves reset 150 master clocks before the 65C816 and
+  runs its 8-cycle reset sequence (its BRK with the writes held off) before fetching at $FFC0, where before it
+  fetched in its first cycle with the 65C816. The 65C816's start against the PPU's counters is unchanged.
+
+### 30.2 The keep checks (measured 2026-10-03)
+
+| Check | Before | Ports timed | With the SPC700's start |
+|---|---|---|---|
+| SPC700 single-step suite (`cargo test spc700`, the corpus set) | passes | passes | passes |
+| Corpus, VenusRT's verdicts | 108 of Mesen's 117 passed, 172 visual | the same, verdict for verdict | the same |
+| spc_dsp6, its 111 tests singly | 105 pass, 6 hang | the same | 106 pass, 5 hang: `4c000_Random_pitch_mod` (§23.8's regression) passes |
+| Skip-versus-draw, 25 games for 600 frames | - | all same | all same |
+| WiseMan VenusRT tests, the crate's tests | pass | pass (one new test of the ports' timing) | pass |
+
+blargg's three SPC700 ROMs, spctest and the 2010 ROMs keep their verdicts. The 2010 ROMs and the two speed
+measurements print timing numbers without a verdict; against Mesen's prints, VRAM bytes differing, before / ports /
+start: `test_speed` 4 / 1 / 1, `test_timer_speed` and `_speed2` 7 / 4 / 6, `test_timer_speed3` 5 / 3 / 8,
+`test_timer_speed_2` 2 / 3 / 2, lidnariq's `smpspeed` 9 / 3 / 9, undisbeliever's `ipl-speed-test` 6 / 17 / 21. The
+numbers move by one count here and there, toward Mesen's and away; none has a console's value to be graded by.
+
+### 30.3 The four traces against Mesen's
+
+| Game | Before | Ports timed | With the SPC700's start |
+|---|---|---|---|
+| Star Fox | 149 | 149 | 149 |
+| Super Mario World | 2,039 | 1,994 | 1,994 |
+| Super Mario RPG | 6,944 | 6,920 | 6,920 |
+| Super Mario Kart | 8,729 | 8,560 | 8,560 |
+
+The exact ports agree with Mesen's less, not more: each handshake game now parts a few polls earlier. Star Fox's
+parting is the PPU phase, D-6's other half, which neither change touches. A scan of SPC700 leads from -40 to 200
+master clocks on the timed ports found Super Mario World's trace following Mesen's furthest, to instruction 6,952
+with the CPU's start at 132, at a lead near 82; that is fitting Mesen, not a rule, and nothing was built from it.
+
+### 30.4 The cost
+
+`frame_cost`, best of three over 1,200 frames under the timing lock, before and after in turn: Super Mario World 2.09
+against 2.10 ms a frame at load 0.4 (ports timed, after the peek's allocation was removed and its result cached), and
+at load 6.7 with the SPC700's start, Super Mario World 2.19 against 2.24, Donkey Kong Country 2.14 against 2.18-2.21,
+Super Mario Kart 1.60 against 1.65, Kirby Super Star 2.69 against 2.71-2.72: about 2-3% where the S-CPU polls the
+ports often, under 1% where it does not.
+
+### 30.5 What is left
+
+- D-6's other half, the 65C816's start against the PPU's counters: open, Mesen's 132 the only number (§29).
+- fullsnes's OR of a simultaneous SPC700 write and S-CPU read, not modelled.
+- Yoshi's Island's PPU-side look, recorded as next.
+
+## 31. VenusRT on the core ABI v1 (2026-10-03)
+
+### 31.1 What was built
+
+`src/v1.rs` implements `emusen_native::core::Core` for the machine and invokes `core_exports!(Machine;)`, as
+`EmuSen_CoreAPI.md` §18.6 lays out; `ffi.rs`'s `native_exports!` stays beside it while the shim and WiseMan's SNES
+fixtures still load the library through `emusen_native_*`. Where the two traits share a method, the v1 one forwards to
+the pre-stable one by naming the trait (`NativeCore::advance(self, ...)`), so one body serves both.
+
+- **No optional group is claimed yet** (capabilities 0): the pre-stable library had none either. Reset, snapshots,
+  the battery's change tracking, ROM patches and cheat pokes are stage 6's.
+- **`info()`**: the id `venusrt`, the SNES with the system pack's extensions (`.smc`, `.sfc`), both regions, the
+  `snes.pad` controller on ports 0 and 1 with its twelve buttons at `PadButton`'s bits, and two firmware files: the
+  SPC700's 64-byte boot ROM as file 1, required; a NEC DSP cartridge's firmware as file 2, its size left open, since
+  the header does not say which of DSP-1 to DSP-4, ST010 or ST011 the game needs (`VenusRT_Plan.md` stage 6's title
+  lookup is what will name it). `firmware_for` asks for file 2 only where the header names a NEC DSP.
+- **`machine_info()`**: the region from the header; the frame rate exactly, NTSC 236,250,000/11 Hz over 357,366
+  master clocks a frame and PAL 21,281,370 Hz over 425,568; 256x224 to 512x448 at 4:3; 32 kHz; the eight spaces in
+  the shim's order, `CpuBus` (0) and `WRAM` (2) marked for cheats, as the SNES pack's Action Replay codec requires,
+  and `IO` read-only; the battery as file 0, `.srm`; the state as `VNRT`, version 17; rendering skipped state-neutral,
+  which skip-versus-draw proves.
+- **`settings_schema()`** is empty: VenusRT has no settings yet, and create receives none.
+- **`status_text()`** names VenusRT's two codes of the core band: -9, an image shorter than one 32 KiB bank, and -10,
+  file 1 not given.
+- **CpuBus writes** (`System::poke`): a write from outside the machine lands where the documented bus would take it in
+  memory, WRAM through its mirrors, the cartridge's SRAM, the SA-1's I-RAM and BW-RAM under their write protection,
+  the GSU's RAM when the GSU does not own it, the OBC1's SRAM below its registers, and is dropped at registers,
+  the APU's ports, a coprocessor's I/O and ROM. Nothing else is touched: no register, the MDR or a coprocessor's
+  clock. The test `cpu_bus_pokes_land_in_memory_and_nowhere_else` holds a poke's landing and the state's bytes
+  unchanged by pokes at $2100, $2140, $4200, $420B, $4300, $8000 and $80FFFF.
+
+### 31.2 Measured 2026-10-03
+
+- **The exports**: 32 `emusen_core_` symbols beside the 24 `emusen_native_` ones; `export_check.py` reports ABI 1.0,
+  capabilities 0, the exports as the baseline requires.
+- **The conformance kit** (`emusen-core-conform`, built from the branch carrying C4's decided rule, that a malformed
+  image need only not harm the core), on eleven images with the boot ROM as file 1: Super Mario World, Super Mario
+  RPG, Yoshi's Island, Star Fox, Super Mario Kart (with the DSP-1B's firmware as file 2), A Link to the Past, the
+  240p test suite, blargg's `spc_smp` and `spc_timer`, PeterLemon's `GSUADD` and absindx's `SA1RamProtectionTest`:
+  **compliant on every one**. C4's empty and garbage images are refused with -9 and its words; the half-length image
+  is accepted and runs 300 frames, half of a cartridge image being often a well-formed smaller one.
+- **The sidecar**, `libvenusrt.so.core.json`, written by `--sidecar` beside the built library (a build artefact, not
+  committed: it carries the library's SHA-256).
+- **The machine is unchanged by the switch**: the state's FNV-1a hash every 60 frames to frame 600, by the new example
+  `state_hash`, is identical before and after for Super Mario World, Super Mario RPG, Star Fox and Super Mario Kart.
+- **Every oracle as before**: the corpus with VenusRT as its third engine gives every VenusRT column of all 295 ROMs
+  identical to the run before the switch; the crate's 68 tests and WiseMan's VenusRT, core-ABI, adapter, discovery
+  and SNES-pack tests pass.
+
+### 31.3 Not done here
+
+VenusRT is not selectable in Mistress (stage 6). The optional groups, the DSP firmware's name, and the pre-stable
+exports' removal wait for the adapter to be VenusRT's only loader.

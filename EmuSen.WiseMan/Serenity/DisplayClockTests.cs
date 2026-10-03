@@ -197,5 +197,36 @@ namespace EmuSen.WiseMan.Serenity
             DisplayReading r = clock.Reading!;
             Assert.False(EmuSen.Common.FrameScheduler.Decide(60.0988, r, true, true).Locked);
         }
+    
+        // With the limit at 120 the presents followed the draws, 15.5 to 18 ms apart and on no finer lattice; a lock fitted to them ran the game 0.7% fast (§4.87.12).
+        [Fact]
+        public void Presents_that_follow_the_draws_with_no_finer_refresh_are_not_locked_to()
+        {
+            var clock = new DisplayClock();
+            var random = new Random(11);
+            double t = 0;
+            for (int i = 0; i < 1200; i++)
+            {
+                t += 16_639 + (random.NextDouble() - 0.5) * 2_400;
+                long ust = Base + (long)t;
+                clock.ObserveVblank(ust, i, Ticks(ust));
+            }
+            DisplayReading r = clock.Reading!;
+            Assert.True(r.FromPresents);
+            Assert.True(r.Variable);
+            Assert.False(EmuSen.Common.FrameScheduler.Decide(60.0988, r, true, true).Locked);
+        }
+
+        [Fact]
+        public void A_refresh_seen_once_is_kept_while_two_refreshes_a_frame_hide_it()
+        {
+            var clock = new DisplayClock();
+            Presents(i => i * 1e6 / 60.0988, 600, clock);
+            Assert.False(clock.Reading!.Variable);
+            Presents(i => (600 + i) * 2 * PanelUs, 600, clock, firstCount: 600);
+            DisplayReading r = clock.Reading!;
+            Assert.False(r.Variable);
+            Assert.Equal(119.90, r.RefreshHz, 1);
+        }
     }
 }

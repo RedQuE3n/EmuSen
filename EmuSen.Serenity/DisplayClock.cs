@@ -90,6 +90,7 @@ namespace EmuSen.Serenity
             _lastCount = long.MinValue;
             _samples = 0;
             _lastGap = long.MinValue / 2;
+            _panel = 0;
             _counted = false;
             System.Threading.Volatile.Write(ref _reading, null);
         }
@@ -112,50 +113,71 @@ namespace EmuSen.Serenity
             // A count that has risen by exactly one at every draw for a whole window counts presents, not refreshes; the refreshes are then read from the times - see §4.87.11.
             bool presents = _counted && _samples - _lastGap >= Window;
             if (!presents) { System.Threading.Volatile.Write(ref _reading, Fit(_t, _n, _count, _head, _counted, now)); return; }
-            InferCounts(_t, _count, _head, _inferred, _deltas);
+            int m = Deltas(_t, _count, _head, _deltas);
+            (double baseTicks, int divisor) = BaseInterval(_deltas, m);
+            // A refresh seen finer than the presents is remembered; presents with nothing finer measure only themselves and are not locked to - see §4.87.12.
+            if (divisor >= 2) _panel = baseTicks;
+            else if (_panel > 0 && ShareOnMultiples(_deltas, m, _panel) >= FixedShare) baseTicks = _panel;
+            else _panel = Rigid(_deltas, m, baseTicks) ? baseTicks : 0;
+            InferCounts(_t, _count, _head, _inferred, _deltas, baseTicks);
             DisplayReading? fit = Fit(_t, _inferred, _count, _head, _counted, now);
-            System.Threading.Volatile.Write(ref _reading, fit is null ? null : fit with { FromPresents = true });
+            System.Threading.Volatile.Write(ref _reading, fit is null ? null : fit with { FromPresents = true, Variable = fit.Variable || _panel == 0 });
         }
 
-        // Counts for present times that sit on a refresh lattice: the base is the shortest interval that recurs, and each interval is a whole number of it.
-        internal static void InferCounts(long[] times, int count, int head, long[] counts, long[] deltas)
+        private double _panel;
+
+        internal static int Deltas(long[] times, int count, int head, long[] deltas)
         {
             int first = (head - count + times.Length) % times.Length;
-            int m = count - 1;
-            for (int i = 0; i < m; i++) deltas[i] = times[(first + i + 1) % times.Length] - times[(first + i) % times.Length];
-            double baseTicks = BaseInterval(deltas, m);
+            for (int i = 0; i < count - 1; i++) deltas[i] = times[(first + i + 1) % times.Length] - times[(first + i) % times.Length];
+            return count - 1;
+        }
+
+        // Counts for present times that sit on a refresh lattice of the given base: each interval is a whole number of it.
+        internal static void InferCounts(long[] times, int count, int head, long[] counts, long[] deltas, double baseTicks)
+        {
+            int first = (head - count + times.Length) % times.Length;
             long n = 0;
             counts[first] = 0;
-            for (int i = 0; i < m; i++)
+            for (int i = 0; i < count - 1; i++)
             {
                 n += Math.Max(1, (long)Math.Round(deltas[i] / baseTicks));
                 counts[(first + i + 1) % times.Length] = n;
             }
         }
 
+        // Intervals as even as a hardware clock's, nine in ten within 1% of the base: a vblank count with a draw at every refresh, not presents that follow the draws.
+        internal static bool Rigid(long[] deltas, int m, double b)
+        {
+            int tight = 0;
+            for (int i = 0; i < m; i++) if (Math.Abs(deltas[i] - b) <= 0.01 * b) tight++;
+            return m > 0 && tight >= FixedShare * m;
+        }
+
+        internal static double ShareOnMultiples(long[] deltas, int m, double b)
+        {
+            int on = 0;
+            for (int i = 0; i < m; i++)
+            {
+                double steps = deltas[i] / b;
+                if (steps >= 0.5 && Math.Abs(steps - Math.Round(steps)) <= FixedResidual) on++;
+            }
+            return m == 0 ? 0 : on / (double)m;
+        }
+
         // The median interval over the smallest whole divisor that puts every interval, within the residual, on a multiple of it: two refreshes and the odd one or three is the refresh.
-        internal static double BaseInterval(long[] deltas, int m)
+        internal static (double Base, int Divisor) BaseInterval(long[] deltas, int m)
         {
             long[] sorted = new long[m];
             Array.Copy(deltas, sorted, m);
             Array.Sort(sorted);
             double median = Math.Max(1, sorted[m / 2]);
-            double[] share = new double[5];
+            double best = 0;
+            var share = new double[5];
+            for (int divisor = 1; divisor <= 4; divisor++) best = Math.Max(best, share[divisor] = ShareOnMultiples(sorted, m, median / divisor));
             for (int divisor = 1; divisor <= 4; divisor++)
-            {
-                double b = median / divisor;
-                int on = 0;
-                for (int i = 0; i < m; i++)
-                {
-                    double steps = sorted[i] / b;
-                    if (steps >= 0.5 && Math.Abs(steps - Math.Round(steps)) <= FixedResidual) on++;
-                }
-                share[divisor] = on / (double)m;
-            }
-            double best = Math.Max(Math.Max(share[1], share[2]), Math.Max(share[3], share[4]));
-            for (int divisor = 1; divisor <= 4; divisor++)
-                if (share[divisor] >= best) return median / divisor;
-            return median;
+                if (share[divisor] >= best) return (median / divisor, divisor);
+            return (median, 1);
         }
 
         // Least squares of time on count over the window, and how many samples fall near the line - see §4.87.3.

@@ -223,6 +223,33 @@ their data.
   Mesen's and VenusRT's, now differ in a way four rows cannot separate from the start's phase. Unchanged: the rule
   and what would settle it, now `$0014` for a start at clock 0.
 
+- Measured 2026-10-03, after stage 5, with the probe's CPU trace of Mesen and VenusRT's own (the `cpu_trace`
+  example, which now takes a power-on offset), instruction by instruction from power-on, for the drift §27.4 found in
+  every game. Where each game's two traces first part, and why:
+  - **Star Fox** at instruction 149, 3,990 master clocks in: `LDA $2137` then `LDA $213D` reads the V counter as 2 in
+    VenusRT and 3 in Mesen. A PPU-phase difference: the CPU's start against the counters, this entry's rule.
+  - **Super Mario World** at instruction 2,039, 51,498 clocks in, **Super Mario RPG** at 6,944 (262,438 clocks, its
+    frame 1, where §27.4's $1D3F first differs) and **Super Mario Kart** at 8,729: each a `CMP $2140` / `BNE` loop
+    waiting on the SPC700's boot ROM, which leaves it one poll (52 to 58 clocks) earlier or later in Mesen. The
+    SPC700's speed is not the cause: over Super Mario World's two uploads (11,974 and 28,528 bytes) the clocks per
+    byte agree to 0.003% and exactly. The relation of the S-CPU's port accesses to the SPC700's is.
+  - Star Fox's trace is equal to Mesen's for all 115,103 instructions of its first ten frames with the CPU's start
+    moved 132 master clocks into line 0, and at no other offset tried (0, 100, 106, 110, 120, 128, 130, 136, 140,
+    160, 200). That is the third measurement of the same number: Sour's `timing_test` rows and undisbeliever's
+    `reset-position-test` gave 132 on 2026-10-01. Super Mario World's trace matches no single offset past its fourth
+    handshake: the port timing is a second cause, separate from this entry.
+  - VenusRT runs the SPC700 a whole instruction at a time to the S-CPU's clock before each port access, so the
+    SPC700's writes in that instruction reach the S-CPU early and the S-CPU's writes reach the SPC700 after
+    instructions that already read the port. An experiment that timestamped both directions (not kept) moved Super
+    Mario World's first parting from 2,039 to 1,994 instructions and still matched no single offset, so the port's
+    exact timing, not only the granularity, differs from Mesen's.
+- Referee, logged 2026-10-03 before reading: SNES_MiSTer, for this entry's rule only: where the S-CPU's first cycle
+  falls after reset against the PPU's H and V counters, and against the SPC700's own start. To be read: in
+  `rtl/CPU.vhd` the reset counter that releases the 65C816 and the clock it counts; in `rtl/PPU.vhd` the H and V
+  counters' values at reset; in `rtl/SMP.vhd` when the SPC700 leaves reset. Read earlier by accident, while reading
+  `CPU.vhd` lines 300-345 for D-36: lines 300-305, a counter `P65_RST_CNT` releasing `P65_RST_N` at 150 counts;
+  what it counts was not read then.
+
 ### D-7. PPU: master brightness N scales a colour component c to c×(N+1)/16, rounded down
 - Opened: 2026-09-30, at stage 3 step 1, by PeterLemon's `RedSpace9BitHDMA` at frame 300. The ROM writes a backdrop
   colour and a brightness for every line by HDMA; the pairs come from its own `Gradient.py`, which was run to list

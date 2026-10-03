@@ -2120,7 +2120,7 @@ first project core on v1.
 | The adapter against the shim | `MoonRtCoreAbiTests`: the generic `CoreEngine` over MoonRT's v1 exports and `MoonRtCore` over its pre-stable ones, run side by side for 240 frames with input on both pads, give the same picture every frame, the same samples every frame and byte-identical states; a cheat applied through the adapter lands |
 | The bench's state hashes | `moonbench`'s four games, 900 boot and 3,000 timed frames: one state hash per game in all forty runs, before and after, and the same as C# Moon's |
 | The plain frame, interleaved | below: not slower; 1.37% faster by the geometric mean, which is outside ±1% on the fast side |
-| The kit | C1–C6, C10 and C11 pass on all four games; C7 and C8 fail, below |
+| The kit | C1–C8, C10 and C11 pass on all four games since Moon's state version 5 (§22.3); before it, C7 and C8 failed |
 
 **The timing.** Five rounds under the bench lock, the four games interleaved and the two builds alternated within each
 game. "Before" is the same source without `v1.rs`; both were built by cargo's release profile with the same toolchain
@@ -2152,10 +2152,15 @@ and MoonRT, whose state is C# Moon's byte for byte, does the same. **Measured** 
 samples differ from the first one after the load, in C# Moon and in MoonRT alike, with equal states and equal sample
 counts; on Super Mario Bros. they agree. The kit's scripted input makes the difference show on every game.
 
-**For decision:** the kit holds that a state carries everything that determines what follows (§6.9, C7, C8). Moon's
-format leaves the mixer out by design. The ways forward are to add the mixer to Moon's state (a version 5, in C# Moon
-and in MoonRT together, which changes the oracle), or to let a core declare that its sound resumes approximately after a
-load and have C7 and C8 compare picture and state for it. Until that is decided MoonRT is not v1-compliant.
+**Decided 2026-10-03:** accuracy comes first, and a state load must resume exactly, sound included. The mixer joins
+Moon's state as version 5, in C# Moon and MoonRT together and byte for byte the same; both still read versions 3 and 4
+with the mixer kept as it was, and every state written is version 5 (`Moon_Native.md` §3.13). The kit asks no
+declaration of approximate sound, and none is offered.
+
+**After it** (measured 2026-10-03): the second machine's samples are identical to the first's in both engines, C1–C8,
+C10 and C11 pass on all four games, and the bench's state hashes change only by the added bytes: each version 5 state
+is its version 4 state with the version field 4 → 5 and 60 bytes appended, which hashes to the old value with those
+undone. MoonRT is v1-compliant on the four games. P1's timing is still to be measured on a quiet machine.
 
 ---
 

@@ -878,6 +878,14 @@ their data.
     pending or running; STOP waits on both. A load (LDB, LDW, LM, LMS) holds the CPU until its data arrive; a store
     (STB, STW, SM, SMS, SBK) is posted and the CPU carries on. The multiplier's hold counts after the third cycle, so
     an FMULT is 3 + 5 cycles at MS0=0 and 3 + 1 at MS0=1, which the first pass's reading (hold alone) had missed.
+  - Read 2026-10-03 as a third pass, in `GSU.vhd`, for PLOT's and RPIX's time only: the pixel cache's flush trigger
+    and the PLOT and RPIX cases of the RAM-side register process (lines 1478-1550), and the RAM port's PCF, PCF_END
+    and RPIX states (1630-1692). The primary row moves to the secondary and is flushed when the plot position leaves
+    its 8 pixels with any plotted, or when all 8 are plotted; the flush is a read and a write per bitplane byte, write
+    only when all 8 were plotted, each access a start state and RAM_CYCLES + 1 cycles, then an end state. The port
+    runs it between other accesses (stores and loads take priority at each start state); the CPU waits only when a
+    flush is wanted while one still executes, for RPIX, and for STOP. RPIX flushes the primary row (read and write),
+    then reads one byte per bitplane, the CPU waiting for all of it.
 - Conclusion: open.
 - Pinned by: Star Fox's $15BB, Vortex's $198C, and the GSU test ROMs staying passed.
 

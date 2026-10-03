@@ -54,7 +54,7 @@ namespace EmuSen.Cores
         {
             var found = engine is not null ? Native.CoreDiscovery.ForExtension(extension).FirstOrDefault(c => c.EngineName == engine)
                 : CoreCatalog.IsRomExtension(extension) ? null : Native.CoreDiscovery.ForExtension(extension).FirstOrDefault();
-            return found?.Open();
+            return found is null || CoreCatalog.IsRegisteredEngine(found.EngineName) ? null : found.Open();
         }
 
         // Loads the ROM too, because a debug target needs the core's hardware to already exist.
@@ -78,7 +78,7 @@ namespace EmuSen.Cores
             if (engine == CoreCatalog.MarsRtEngine && core is not MarsRtCore) return $"{CoreCatalog.MarsRtEngine} is not available ({MarsNative.Report}); {CoreCatalog.MarsEngine} is running.";
             if (engine == CoreCatalog.MercuryRtEngine && core is not MercuryRtCore) return $"{CoreCatalog.MercuryRtEngine} is not available ({MercuryNative.Report}); {CoreCatalog.MercuryEngine} is running.";
             if (engine == CoreCatalog.MoonRtEngine && core is not MoonRtCore) return $"{CoreCatalog.MoonRtEngine} is not available ({MoonNative.Report}); {CoreCatalog.MoonEngine} is running.";
-            if (Native.CoreDiscovery.ByEngineName(engine) is { } v1 && (core is not Native.CoreEngine running || running.Info.Id != v1.Info.Id))
+            if (!CoreCatalog.IsRegisteredEngine(engine) && Native.CoreDiscovery.ByEngineName(engine) is { } v1 && (core is not Native.CoreEngine running || running.Info.Id != v1.Info.Id))
                 return $"{engine} is not available ({v1.Report}); {Running(core)} is running.";
             return null;
         }

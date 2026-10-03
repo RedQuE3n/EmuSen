@@ -9,6 +9,8 @@ use crate::memory::bus::RomPatches;
 use crate::memory::cartridge::RomError;
 use crate::ppu::{FRAME_BYTES, SCREEN_HEIGHT, SCREEN_WIDTH};
 
+mod v1;
+
 /// MoonRT's half of the interface version: 4 with the debug exports; 3 was the first on the common interface.
 pub const CORE_VERSION: u16 = 4;
 
@@ -27,7 +29,7 @@ pub fn fault_status(fault: Fault) -> i32 {
 }
 
 /// The battery RAM's space, `PRGRAM`.
-const BATTERY_SPACE: u32 = 2;
+pub(crate) const BATTERY_SPACE: u32 = 2;
 
 impl NativeCore for Machine {
     const CORE_VERSION: u16 = CORE_VERSION;

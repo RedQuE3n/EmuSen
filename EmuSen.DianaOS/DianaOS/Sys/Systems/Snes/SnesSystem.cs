@@ -23,7 +23,8 @@ namespace EmuSen.DianaOS.DianaOS.Sys.Systems.Snes
             WithoutCopierHeader,
             0.73,
             "snes",
-            "Super Nintendo");
+            "Super Nintendo",
+            SelfDelimitingImages: false);
 
         // OpenVGDB hashes an image without the 512-byte copier header some dumps carry, as No-Intro does - see EmuSen_Settings_Reference.md §4.39.
         public static byte[] WithoutCopierHeader(byte[] file) => file.Length % 1024 == 512 ? file[512..] : file;

@@ -45,6 +45,16 @@ pub struct Gsu {
     pub pipe: u8,
     pub jumped: bool,
     pub rom_buffer: u8,
+    /// The master clock the ROM buffer's load ends at, and whether this opcode wrote R14 (D-35).
+    pub rom_ready: u64,
+    pub r14_written: bool,
+    /// The master clock the RAM port finishes its posted store at, and the bytes this opcode posted (D-35).
+    pub ram_ready: u64,
+    pub stored: u64,
+    /// The pixel cache's primary row for timing (its y and x / 8, and which pixels were plotted) and its flush's end (D-35).
+    pub pc_offset: u16,
+    pub pc_valid: u8,
+    pub pcf_ready: u64,
     pub ram_address: u16,
     /// Master clocks the GSU has run.
     pub clock: u64,
@@ -80,6 +90,13 @@ impl Gsu {
             pipe: 0x01,
             jumped: false,
             rom_buffer: 0,
+            rom_ready: 0,
+            r14_written: false,
+            ram_ready: 0,
+            stored: 0,
+            pc_offset: 0,
+            pc_valid: 0,
+            pcf_ready: 0,
             ram_address: 0,
             clock: 0,
         }
@@ -232,6 +249,7 @@ impl Gsu {
                 self.r[n] = (v as u16) << 8 | self.latch as u16;
                 if n == 14 {
                     self.refill_rom_buffer(rom);
+                    self.rom_ready = self.clock + self.rom_load() * self.cycle();
                 }
                 if n == 15 {
                     self.start(rom, ram);
@@ -292,7 +310,8 @@ impl Gsu {
                 self.cache[at as usize & 0x1FF] = self.fetch_memory(at, rom, ram);
             }
             self.lines |= 1 << line;
-            return (self.cache[pc as usize & 0x1FF], self.slow());
+            // D-35: the whole line at slow() a byte, a state to begin and one to end, the CPU waiting for all of it.
+            return (self.cache[pc as usize & 0x1FF], 16 * self.slow() + 2);
         }
         (self.fetch_memory(pc, rom, ram), self.slow())
     }
@@ -303,6 +322,56 @@ impl Gsu {
         } else {
             Self::rom_at((self.pbr as u32) << 16 | pc as u32, rom.len()).map_or(0, |o| rom[o])
         }
+    }
+
+    /// D-35: a ROM-buffer load ends ROM_CYCLES + 4 cycles after the opcode that wrote R14.
+    fn rom_load(&self) -> u64 {
+        if self.clsr & 1 != 0 { 7 } else { 5 }
+    }
+
+    /// The cycles an opcode reading the ROM buffer waits for a load still running.
+    fn rom_wait(&self) -> u64 {
+        self.rom_ready.saturating_sub(self.clock).div_ceil(self.cycle())
+    }
+
+    /// D-35: a load's second microcode cycle, then the RAM port's start state and slow() - 1 cycles a byte.
+    fn ram_load(&self, bytes: u64) -> u64 {
+        self.ram_wait() + 2 + bytes * (self.slow() - 1)
+    }
+
+    /// The cycles a RAM opcode waits for a store still pending or running.
+    fn ram_wait(&self) -> u64 {
+        self.ram_ready.saturating_sub(self.clock).div_ceil(self.cycle())
+    }
+
+    /// A store posted to the RAM port: its wait for an earlier one and its second microcode cycle; the port runs it after.
+    fn ram_store(&mut self, bytes: u64) -> u64 {
+        self.stored = bytes;
+        self.ram_wait() + 1
+    }
+
+    fn pixel_block(&self) -> u16 {
+        (self.r[2] & 0xFF) << 5 | (self.r[1] & 0xFF) >> 3
+    }
+
+    /// D-35: the primary row moves to the secondary and the RAM port writes it out, a read and a write a bitplane
+    /// unless all 8 pixels were plotted; the CPU waits only while an earlier flush still runs. Returns that wait.
+    fn pixel_flush(&mut self) -> u64 {
+        let stall = self.pcf_ready.saturating_sub(self.clock).div_ceil(self.cycle());
+        let start = (self.clock + stall * self.cycle()).max(self.ram_ready);
+        let accesses = self.bpp() as u64 * if self.pc_valid == 0xFF { 1 } else { 2 };
+        self.pcf_ready = start + (accesses * self.slow() + 1) * self.cycle();
+        self.pc_valid = 0;
+        stall
+    }
+
+    /// D-35: RPIX's second microcode cycle, a wait for a running flush or store, the primary row flushed (a read and
+    /// a write a bitplane), a read a bitplane, and the end state; the port is free after.
+    fn rpix_cost(&mut self) -> u64 {
+        let stall = self.pcf_ready.max(self.ram_ready).saturating_sub(self.clock).div_ceil(self.cycle());
+        self.pc_valid = 0;
+        self.pcf_ready = 0;
+        1 + stall + 3 * self.bpp() as u64 * self.slow() + 1
     }
 
     fn refill_rom_buffer(&mut self, rom: &[u8]) {
@@ -351,6 +420,7 @@ impl Gsu {
             self.jumped = true;
         } else if n == 14 {
             self.refill_rom_buffer(rom);
+            self.r14_written = true;
         }
     }
 
@@ -399,7 +469,18 @@ impl Gsu {
         }
         let (next, mut cost) = self.code(self.r[15], rom, ram);
         self.pipe = next;
+        if self.pc_valid != 0 && self.pixel_block() != self.pc_offset {
+            cost += self.pixel_flush();
+        }
         cost += self.execute(op, rom, ram);
+        if self.r14_written {
+            self.r14_written = false;
+            self.rom_ready = self.clock + (cost + self.rom_load()) * self.cycle();
+        }
+        if self.stored != 0 {
+            self.ram_ready = self.clock + (cost + 1 + self.stored * (self.slow() - 1)) * self.cycle();
+            self.stored = 0;
+        }
         cost
     }
 
@@ -494,7 +575,7 @@ impl Gsu {
                 } else {
                     self.write_word(ram, a, s);
                 }
-                extra += self.slow();
+                extra += self.ram_store(if alt & 1 != 0 { 1 } else { 2 });
             }
             0x3C => {
                 let r = self.r[12].wrapping_sub(1);
@@ -514,16 +595,16 @@ impl Gsu {
                 let a = self.r[n];
                 let v = if alt & 1 != 0 { self.read_byte(ram, a) as u16 } else { self.read_word(ram, a) };
                 self.set(d, v, rom);
-                extra += self.slow() * if alt & 1 != 0 { 1 } else { 2 };
+                extra += self.ram_load(if alt & 1 != 0 { 1 } else { 2 });
             }
             0x4C => {
                 if alt & 1 != 0 {
                     let v = self.pixel(ram) as u16;
                     self.set(d, v, rom);
                     self.set_sz(v);
-                    extra += 20;
+                    extra += self.rpix_cost();
                 } else {
-                    self.plot(ram);
+                    extra += self.plot(ram);
                 }
             }
             0x4D => {
@@ -596,7 +677,7 @@ impl Gsu {
             0x90 => {
                 let a = self.ram_address;
                 self.write_word(ram, a, s);
-                extra += self.slow();
+                extra += self.ram_store(2);
             }
             0x91..=0x94 => {
                 let r = self.r[15].wrapping_add(n as u16);
@@ -645,7 +726,8 @@ impl Gsu {
                 self.set(d, r, rom);
                 self.flag(sfr::CY, p & 0x8000 != 0);
                 self.set_sz(r);
-                extra += if self.cfgr & 0x20 != 0 { 3 } else { 7 } + (alt & 1) as u64;
+                // D-35: three microcode cycles, then the multiplier's hold of 5 at MS0=0 and 1 at MS0=1, LMULT as FMULT.
+                extra += 2 + if self.cfgr & 0x20 != 0 { 1 } else { 5 };
             }
             0xA0..=0xAF => {
                 let (k, c) = self.operand(rom, ram);
@@ -655,12 +737,12 @@ impl Gsu {
                     2 => {
                         let v = self.r[n];
                         self.write_word(ram, (k as u16) << 1, v);
-                        extra += self.slow() * 2;
+                        extra += self.ram_store(2);
                     }
                     _ => {
                         let v = self.read_word(ram, (k as u16) << 1);
                         self.set(n, v, rom);
-                        extra += self.slow() * 2;
+                        extra += self.ram_load(2);
                     }
                 }
             }
@@ -687,11 +769,14 @@ impl Gsu {
                 self.set_sz(r);
             }
             0xDF => match alt {
-                2 => self.rambr = s as u8 & 1,
+                2 => {
+                    self.rambr = s as u8 & 1;
+                    extra += self.ram_wait();
+                }
                 3 => self.rombr = s as u8 & 0x7F,
                 _ => {
                     self.colr = self.color_in(self.rom_buffer);
-                    extra += self.slow();
+                    extra += self.rom_wait();
                 }
             },
             0xE0..=0xEE => {
@@ -708,7 +793,7 @@ impl Gsu {
                     _ => v as u8 as i8 as i16 as u16,
                 };
                 self.set(d, r, rom);
-                extra += self.slow();
+                extra += self.rom_wait();
             }
             _ => {
                 let (lo, c1) = self.operand(rom, ram);
@@ -720,12 +805,12 @@ impl Gsu {
                     2 => {
                         let v = self.r[n];
                         self.write_word(ram, k, v);
-                        extra += self.slow() * 2;
+                        extra += self.ram_store(2);
                     }
                     _ => {
                         let v = self.read_word(ram, k);
                         self.set(n, v, rom);
-                        extra += self.slow() * 2;
+                        extra += self.ram_load(2);
                     }
                 }
             }
@@ -761,7 +846,7 @@ impl Gsu {
         tile * 8 * self.bpp() + (self.scbr as usize) * 0x400 + (y & 7) * 2
     }
 
-    fn plot(&mut self, ram: &mut [u8]) {
+    fn plot(&mut self, ram: &mut [u8]) -> u64 {
         let (x, y) = (self.r[1] & 0xFF, self.r[2] & 0xFF);
         let bpp = self.bpp();
         let mut c = self.colr;
@@ -782,8 +867,11 @@ impl Gsu {
                     ram[i] = (ram[i] & !(1 << bit)) | (((c >> p) & 1) << bit);
                 }
             }
+            self.pc_valid |= 0x80 >> (x & 7);
         }
+        self.pc_offset = (y << 5) | (x >> 3);
         self.r[1] = self.r[1].wrapping_add(1);
+        if self.pc_valid == 0xFF { self.pixel_flush() } else { 0 }
     }
 
     fn pixel(&self, ram: &[u8]) -> u8 {
@@ -809,6 +897,11 @@ impl Gsu {
         o.extend(self.lines.to_le_bytes());
         o.extend(self.clock.to_le_bytes());
         o.extend_from_slice(&self.cache);
+        o.extend(self.rom_ready.to_le_bytes());
+        o.extend(self.ram_ready.to_le_bytes());
+        o.extend(self.pcf_ready.to_le_bytes());
+        o.extend(self.pc_offset.to_le_bytes());
+        o.push(self.pc_valid);
         o
     }
 
@@ -826,6 +919,10 @@ impl Gsu {
         self.lines = u32::from_le_bytes(b[19..23].try_into().expect("four bytes"));
         self.clock = u64::from_le_bytes(b[23..31].try_into().expect("eight bytes"));
         self.cache.copy_from_slice(&b[31..31 + 512]);
+        self.rom_ready = u64::from_le_bytes(b[543..551].try_into().expect("eight bytes"));
+        self.ram_ready = u64::from_le_bytes(b[551..559].try_into().expect("eight bytes"));
+        self.pcf_ready = u64::from_le_bytes(b[559..567].try_into().expect("eight bytes"));
+        (self.pc_offset, self.pc_valid) = (u16::from_le_bytes([b[567], b[568]]), b[569]);
     }
 }
 

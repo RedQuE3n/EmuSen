@@ -2598,3 +2598,55 @@ read in Mesen's):
   then measured against the transients' length (Super Mario RPG's $1D3F, Kirby's $95/$A7) and the pictures.
 - **The S-CPU-side drift the control shows** (Super Mario World from frame 77) is smaller and separate; D-6's
   power-on phase is the open item it would start from.
+
+## 28. The coprocessors' costs from the referee (2026-10-03)
+
+§27.4's recommendation carried out: the referee's cost rules read in logged dispute steps (D-35 for the GSU), then one
+cost changed at a time, measured against the games' own counters and kept only while the GSU's test ROMs, the drawing
+ROMs and the skip-versus-draw check still pass. Mesen's counters are the comparison, not the authority: a change is
+kept for its referee basis, and one that only moved a number toward Mesen's would not be.
+
+### 28.1 The GSU, one cost at a time (measured 2026-10-03)
+
+Each row is the build after that change and every change above it. "Star Fox" is $15BB: the SNES frame its first 3D
+frame completes at, then over frames 300-900 the count, SNES frames per 3D frame, and the histogram of SNES frames
+between counts (gap: occurrences). "Vortex" is $198C over 450-900, its count and SNES frames per count. Mesen's runs:
+Star Fox 148, 131 counts at 4.58, gaps 3:31 4:37 5:25 6:30 7:7; Vortex 173 at 2.601. Every row kept passed the 31
+GSUTest ROMs and the 27 drawing ROMs (each final picture equal to Mesen's, and the frames differing on the way
+unchanged) and skip-versus-draw over the six GSU games for 600 frames.
+
+| Build | D-35 basis | Star Fox first | Star Fox 300-900 | Gaps | Vortex 450-900 | Kept |
+|---|---|---|---|---|---|---|
+| Stage 5 as closed | fullsnes's guesses | 147 | 137 at 4.38 | 2:2 3:34 4:45 5:24 6:29 7:2 | 174 at 2.586 | - |
+| Cache line fill at slow() a byte, the CPU waiting for the line | the line runs 16 bytes at 3/5 cycles each, plus a state to begin and one to end | 147 | 126 at 4.76 | 2:1 3:28 4:28 5:26 6:29 7:13 | 174 at 2.586 | yes |
+| FMULT and LMULT hold the CPU 5 cycles at MS0=0, 1 at MS0=1 (were 7 and 3, LMULT one more) | the multiplier's start state plus a count of 4 or 0; MULT's 1 cycle at MS0=0 already matched | 147 | 127 at 4.72 | 2:1 3:29 4:28 5:28 6:26 7:14 | 174 at 2.586 | yes |
+| The ROM buffer loads beside the instruction stream: GETB, GETBH, GETBL, GETBS and GETC wait only for a load still running (were slow() each) | the load ends ROM_CYCLES + 4 cycles after the opcode writing R14, and the CPU waits only on a pending load; the GSU's state gains the load's end, state version 15 | 147 | 129 at 4.65 | 2:1 3:30 4:31 5:26 6:30 7:10 | 174 at 2.586 | yes |
+| FMULT and LMULT run three microcode cycles before the hold: 8 cycles at MS0=0, 4 at MS0=1, for both (correcting the multiply row, which read the hold alone; against stage 5 only LMULT's extra cycle is gone) | the microcode table's cycle count for microcode 24, which FMULT and LMULT share | 147 | 127 at 4.72 | 2:1 3:29 4:28 5:27 6:27 7:14 | 174 at 2.586 | yes |
+| Loads cost their second microcode cycle, the RAM port's start state and slow() - 1 cycles a byte: LDB one cycle more, LDW, LM and LMS unchanged | the microcode table's 2-cycle LDB and LDW, and the RAM port counting RAM_CYCLES + 1 a byte from a start state | 147 | 127 at 4.72 | 2:2 3:27 4:28 5:28 6:28 7:13 | 174 at 2.586 | yes |
+| Stores are posted to the RAM port: STB, STW, SBK, SM and SMS cost their second microcode cycle and the CPU carries on, while the port runs the store for a start state and slow() - 1 cycles a byte; a later RAM opcode, and RAMB, waits for it (were slow() a byte, SM and SMS 2 slow()) | RAM_SAVE_PEND posted at the store's last cycle, and RAMWAIT held while a save is pending or running; the GSU's state gains the port's end | 147 | 129 at 4.65 | 2:1 3:31 4:30 5:25 6:33 7:8 | 188 at 2.394 | yes |
+| PLOT's pixel cache flushed on the RAM port: when the plot leaves the primary row's 8 pixels or fills them, the port writes the row out (slow() an access, a read and a write a bitplane unless all 8 were plotted) and the CPU waits only while an earlier flush still runs (PLOT was 1 cycle with no flush) | the flush trigger (`PC0_OFFS_HIT`, `PC0_FULL`), `RAM_PCF_WAIT` while a flush executes, and the PCF state's accesses; the GSU's state gains the row's position, its plotted pixels and the flush's end | 147 | 129 at 4.65 | 2:1 3:31 4:29 5:27 6:32 7:8 | 188 at 2.394 | yes |
+| RPIX waits for a running flush or store, flushes the primary row and reads a byte a bitplane, 2 + 3 x bpp x slow() cycles past the wait (was 20) | the RPIX microcode's 2 cycles, `RAM_PCF_WAIT` held to the RPIX state's end | 147 | 129 at 4.65 | 2:1 3:29 4:32 5:26 6:32 7:8 | 188 at 2.394 | yes |
+
+What the referee changed, and what it did not:
+
+- **Star Fox's long-window rate moved to within 2% of Mesen's** (129 counts at 4.65 against 131 at 4.58, from 137 at
+  4.38), with the gap histogram's 2-frame gaps nearly gone and its 4- to 6-frame gaps near Mesen's. The cache fill
+  carried most of it, overshooting to 4.76; the ROM buffer and the posted stores took back part of the overshoot.
+- **Star Fox's first 3D frame stayed at 147** through every change, one SNES frame ahead of Mesen's 148. No GSU cost
+  moves it, so the lead is set before or outside the GSU's work: the S-CPU's side (D-6's power-on phase) or the start
+  of the GSU's first job, not the GSU's speed.
+- **Vortex moved away from Mesen** with the posted stores (188 counts at 2.394 against 173 at 2.601, from 174 at
+  2.586): its GSU code stores heavily, and posting the stores beside the instruction stream is the referee's rule,
+  so the change was kept on its basis. Vortex's first counter difference stayed at frame 141.
+- The overlaps D-35 lists as not modelled are each a cycle or a few per occurrence; none was built, since none has a
+  measurement asking for it.
+
+Each kept change passed the GSUTest ROMs and the drawing ROMs with every picture as before, skip-versus-draw over
+the six GSU games, and the crate's unit tests. The cost after all of them, measured 2026-10-03 with `frame_cost`
+under the timing lock, best of three over 1,200 frames, load average 2.0: Yoshi's Island 1.76 ms a frame, Star Fox
+2.14 ms. The clone check over `chips/` against Mesen's `Core/SNES` with fullsnes's vocabulary: largest pair 4 shared
+fingerprints (`sa1.rs` against `Sa1Types.h`, unchanged from §27.2), `gsu.rs` at most 1.
+
+Next, recorded and not started: the S-CPU-side drift from D-6's power-on phase, which Super Mario World shows from
+frame 77 and which may hold Star Fox's one-frame lead; and Yoshi's Island's picture difference from frame 80 with its
+WRAM equal to Mesen's until 279, a PPU-side look.

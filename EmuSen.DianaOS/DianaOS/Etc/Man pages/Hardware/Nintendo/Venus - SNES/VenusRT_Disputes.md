@@ -842,3 +842,57 @@ their data.
   the test passes all 222 of its tests.
 - Pinned by: `SA1RamProtectionTest`, tests 155-162 and 221.
 
+### D-35. GSU: the cycles an opcode, a cached and an uncached fetch, a ROM or RAM access, a multiply and a PLOT take
+- Opened: 2026-10-02, after stage 5's close, by the phase drift §27.4 measured: Star Fox's own 3D-frame counter ($15BB)
+  completes its first 3D frame at SNES frame 147 in VenusRT and 148 in Mesen, and VenusRT runs about 4% more 3D
+  frames over frames 300-900; the S-CPU makes no cartridge fetch while the GSU runs, so contention is ruled out.
+- Documents read: fullsnes, "SNES Cart GSU-n CPU Misc" ("The uncached timings aren't well documented. Possibly
+  ROM/RAM-byte read/write are all having the same timing (3/5 clks at 10/21MHz)"), the opcode tables' "Clks" column
+  (several entries a range, e.g. GETB "1-6", PLOT "1-48"), "Code-Cache" (cache 3 or 6 times faster than ROM/RAM,
+  unresolved) and "Other Caches" (the ROM buffer's and RAM write buffer's waits). The costs VenusRT built are
+  fullsnes's guesses.
+- Test ROM: PeterLemon's GSU tests grade results, not time; Star Fox's $15BB and Vortex's $198C are the timing
+  measures, against Mesen's runs as a comparison only.
+- Referee: `Venus_Referee.md` §0 rates the GSU's instruction core the author's own microcode (with the pixel-cache
+  shape bsnes's). Read 2026-10-03 for the cycle rules only, in SNES_MiSTer `rtl/chip/GSU/GSU.vhd`: the clock enable
+  and the CPU's stall conditions (lines 458-492), the cache-fill bookkeeping (536-585), the multiply wait (960-1012),
+  the ROM port's wait flags and state machine (1040-1215) and the RAM port's (1465-1480, 1550-1720); nothing of the
+  instruction decoder, the pixel cache's contents or the register file was read. What it says, in GSU cycles (one
+  every 2 master clocks at CLS=0, every 1 at CLS=1, as built):
+  - The ROM and RAM ports count `ROM_CYCLES`/`RAM_CYCLES` down to zero, 1 at CLS=0 and 3 at CLS=1.
+  - A code-cache line fill runs the whole 16-byte line from its start, each byte its count plus a "done" state (3
+    cycles a byte at CLS=0, 5 at CLS=1), with a state to begin and one to end; the CPU waits until the line ends, not
+    only until its own byte arrives.
+  - An uncached opcode fetch from ROM counts from `ROM_CYCLES - 1`, a ROM-buffer load (R14) from `ROM_CYCLES + 2`; a
+    RAM byte load or store counts from `RAM_CYCLES`, a word twice; an uncached fetch from RAM from `RAM_CYCLES - 1`.
+  - The ports run beside the instruction stream: the CPU stalls only when it needs a result still pending (an opcode
+    byte, a ROM buffer read before the load ends, a RAM access while the port is busy).
+  - After the instruction's last cycle the multiplier holds the CPU for a start state plus a count: MULT and UMULT
+    only at MS0=0, with a count of 0 (about 2 cycles); FMULT and LMULT always, with a count of 4 at MS0=0 (about 6
+    cycles) and 0 at MS0=1 (about 2).
+  - Read 2026-10-03 as a second pass, in `GSU_PKG.vhd`: the microcode table's per-cycle `LAST_CYCLE`, `INCPC`,
+    `ROMWAIT` and `RAMWAIT` flags (not its register or ALU fields), and the opcode table's row for FMULT/LMULT to
+    learn which microcode they run. Each opcode's own cycles, counting the operand bytes: 1 for most; BRA-type and
+    IBT 2, IWT 3; LDB, LDW, STB, STW, SBK and RPIX 2; LMS and SMS 3; LM and SM 4; FMULT and LMULT 3 (microcode 24),
+    MULT and UMULT 1. GETB/GETC and ROMB wait on a pending ROM load; every RAM opcode and RAMB wait while a store is
+    pending or running; STOP waits on both. A load (LDB, LDW, LM, LMS) holds the CPU until its data arrive; a store
+    (STB, STW, SM, SMS, SBK) is posted and the CPU carries on. The multiplier's hold counts after the third cycle, so
+    an FMULT is 3 + 5 cycles at MS0=0 and 3 + 1 at MS0=1, which the first pass's reading (hold alone) had missed.
+  - Read 2026-10-03 as a third pass, in `GSU.vhd`, for PLOT's and RPIX's time only: the pixel cache's flush trigger
+    and the PLOT and RPIX cases of the RAM-side register process (lines 1478-1550), and the RAM port's PCF, PCF_END
+    and RPIX states (1630-1692). The primary row moves to the secondary and is flushed when the plot position leaves
+    its 8 pixels with any plotted, or when all 8 are plotted; the flush is a read and a write per bitplane byte, write
+    only when all 8 were plotted, each access a start state and RAM_CYCLES + 1 cycles, then an end state. The port
+    runs it between other accesses (stores and loads take priority at each start state); the CPU waits only when a
+    flush is wanted while one still executes, for RPIX, and for STOP. RPIX flushes the primary row (read and write),
+    then reads one byte per bitplane, the CPU waiting for all of it.
+- Conclusion: settled 2026-10-03 for the costs the referee states, adopted one at a time (VenusRT_Native.md §28.1):
+  the code-cache line fill at 3/5 cycles a byte with the CPU waiting for the line; FMULT and LMULT at 3 cycles plus
+  the multiplier's hold; the ROM buffer and the stores beside the instruction stream, the CPU waiting only on a
+  pending result; LDB's second cycle; PLOT's pixel-cache flush on the RAM port; RPIX's flush and reads. The uncached
+  opcode fetch (3/5) and MULT's 1-cycle hold already matched. Not modelled, each a second-order overlap: the opcode
+  fetch and cache fill running during the current instruction's later cycles, the RAM port interleaving loads and
+  stores between a flush's accesses, the ROM port's priority between a buffer load and a cache fill, back-to-back R14
+  writes, and STOP's wait for the ports.
+- Pinned by: Star Fox's $15BB, Vortex's $198C, and the GSU test ROMs staying passed.
+

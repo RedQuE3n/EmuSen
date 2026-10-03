@@ -139,6 +139,12 @@ impl<'a> StateWriter<'a> {
         self.put(&v.to_le_bytes());
     }
 
+    /// `BinaryWriter.Write(double)`: the IEEE 754 bits, little-endian.
+    pub fn f64(&mut self, name: &str, v: f64) {
+        self.record(name, "f64", None, 8);
+        self.put(&v.to_le_bytes());
+    }
+
     pub fn bytes(&mut self, name: &str, v: &[u8]) {
         self.record(name, "u8", Some(v.len()), v.len());
         self.put(v);

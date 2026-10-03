@@ -3,7 +3,8 @@
 *This revision: the second, 2026-10-03: §15's eighteen questions decided, each as this page recommended (§0.2, §15),
 and §13.2's items 1 and 2 built: the header, the `core` module with `core_exports!`, and the guard (§18, which also lists
 the points of §4–§6 that building them made precise); then items 3 and 4, the host adapter and discovery (§19); item 5, the SNES's system pack (§20); and item 6, the
-conformance kit's core suite (§21); and MoonRT's exports onto v1 beside its pre-stable ones (§22). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
+conformance kit's core suite (§21); and MoonRT's and MercuryRT's exports onto v1 beside their pre-stable ones (§22,
+§23). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
 three prototype checks recorded in §5.1 to §5.3. It supersedes parts of `EmuSen_NativeCores.md`, listed in §0.3 and
 marked in place there. Every claim about the code is cited to a file, read on `WiseMan` at `f69c94a4`. Claims marked
 **measured** were measured on 2026-10-01; claims marked **argued** are reasoning that a later step must prove, and
@@ -2120,7 +2121,7 @@ first project core on v1.
 | The adapter against the shim | `MoonRtCoreAbiTests`: the generic `CoreEngine` over MoonRT's v1 exports and `MoonRtCore` over its pre-stable ones, run side by side for 240 frames with input on both pads, give the same picture every frame, the same samples every frame and byte-identical states; a cheat applied through the adapter lands |
 | The bench's state hashes | `moonbench`'s four games, 900 boot and 3,000 timed frames: one state hash per game in all forty runs, before and after, and the same as C# Moon's |
 | The plain frame, interleaved | below: not slower; 1.37% faster by the geometric mean, which is outside ±1% on the fast side |
-| The kit | C1–C6, C10 and C11 pass on all four games; C7 and C8 fail, below |
+| The kit | C1–C8, C10 and C11 pass on all four games since Moon's state version 5 (§22.3); before it, C7 and C8 failed |
 
 **The timing.** Five rounds under the bench lock, the four games interleaved and the two builds alternated within each
 game. "Before" is the same source without `v1.rs`; both were built by cargo's release profile with the same toolchain
@@ -2135,8 +2136,22 @@ game. "Before" is the same source without `v1.rs`; both were built by cargo's re
 | Mike Tyson's Punch-Out!! | 1.264 | 1.257 | −0.55% | −0.24% |
 
 The frame is not slower on any game. It is faster by more than P1's band allows on three, which is the kind of code
-layout effect `EmuSen_NativeCores.md` §8.2 measured before, and it was measured on a loaded machine. P1 is not retired:
-it is to be measured again on a quiet machine before MoonRT's move is judged complete.
+layout effect `EmuSen_NativeCores.md` §8.2 measured before, and it was measured on a loaded machine.
+
+**Measured again, 2026-10-03,** batched with MercuryRT's (§23.3): "before" as above against the library with both
+interfaces and state version 5, five rounds each held until the load fell under 2.0 (starting at 1.73–1.97; the load
+at the start of the MoonRT runs was 1.73–6.01):
+
+| Game | Before, median p50 ms | After | Change |
+|---|---|---|---|
+| Super Mario Bros. | 1.149 | 1.097 | −4.53% |
+| The Legend of Zelda | 0.916 | 0.918 | +0.22% |
+| Super Mario Bros. 3 | 1.320 | 1.326 | +0.45% |
+| Mike Tyson's Punch-Out!! | 1.218 | 1.234 | +1.31% |
+
+The geometric mean is −0.66%, inside P1's band. Super Mario Bros. is faster outside it in every round, as it was in the
+first measurement, and Punch-Out!! is 1.31% slower, outside it by 0.31 points on a loaded machine. P1 holds for the
+geometric mean and is not retired game by game; the machine was never quiet, and a quiet run remains owed.
 
 ### 22.3 The kit's C7 and C8: a finding about Moon's state format
 
@@ -2152,10 +2167,73 @@ and MoonRT, whose state is C# Moon's byte for byte, does the same. **Measured** 
 samples differ from the first one after the load, in C# Moon and in MoonRT alike, with equal states and equal sample
 counts; on Super Mario Bros. they agree. The kit's scripted input makes the difference show on every game.
 
-**For decision:** the kit holds that a state carries everything that determines what follows (§6.9, C7, C8). Moon's
-format leaves the mixer out by design. The ways forward are to add the mixer to Moon's state (a version 5, in C# Moon
-and in MoonRT together, which changes the oracle), or to let a core declare that its sound resumes approximately after a
-load and have C7 and C8 compare picture and state for it. Until that is decided MoonRT is not v1-compliant.
+**Decided 2026-10-03:** accuracy comes first, and a state load must resume exactly, sound included. The mixer joins
+Moon's state as version 5, in C# Moon and MoonRT together and byte for byte the same; both still read versions 3 and 4
+with the mixer kept as it was, and every state written is version 5 (`Moon_Native.md` §3.13). The kit asks no
+declaration of approximate sound, and none is offered.
+
+**After it** (measured 2026-10-03): the second machine's samples are identical to the first's in both engines, C1–C8,
+C10 and C11 pass on all four games, and the bench's state hashes change only by the added bytes: each version 5 state
+is its version 4 state with the version field 4 → 5 and 60 bytes appended, which hashes to the old value with those
+undone. MoonRT is v1-compliant on the four games. P1's timing is still to be measured on a quiet machine.
+
+---
+
+## 23. MercuryRT onto v1, 2026-10-03: §13.3's step 4, its second half
+
+### 23.1 What was done
+
+- **The mixer gap first.** Before the move, Mercury's mixer was checked for §22.3's gap, and it had it: the resampler's
+  cycle fraction and the two output capacitors were `[SkipInState]`. They join Mercury's state as version 8, in both
+  engines, as Moon's did (`Mercury_Native.md` §10).
+- **The exports.** `src/ffi/v1.rs` implements the `Core` trait and invokes `core_exports!` beside `native_exports!`:
+  45 `emusen_core_` symbols (the 32 required and `MUTES`, `ROM_PATCHES`, `DEBUG` and `DEBUG_STACK`'s), the pre-stable
+  37 and the six `mercuryrt_` extensions unchanged. The crate keeps its aligned build (`Mercury_Native.md` §8.7.3).
+- **The descriptors.** Two systems, `gb` (`.gb`) and `gbc` (`.gbc`), each with the pad's eight bits listed in
+  `MercuryCore.PadButtons`' order; machine info's `system` names the console running, so a Game Boy game forced onto
+  the colour console is `gbc`; the seven spaces under `MercuryMachine.SpaceNames`; the battery file; the state's magic
+  `MERC`, version 8, read from 5; the patch range 0000h–7FFFh; the frame rate 4,194,304 / 70,224; the four channels;
+  and `status_text` in the shim's words. **The Model setting** is the schema's one entry, a create-time choice whose
+  values are C# Mercury's own words (`Auto`, `Game Boy`, `Game Boy Color`), the values frontends already store.
+- **The shim stays the loader**, and Mercury (C#) the default, by §22.1's rule; `RustCores.props` marks MercuryRT
+  `CoreAbi 1`, so the build writes its sidecar.
+- **A defect of the adapter, found by this core and fixed.** The adapter chose a game's battery folder from the
+  catalogue's console, under which a `.gbc` game is `GB`. The shim and C# Mercury file a `.gbc` game's save under `GBC`
+  (`BatterySave.GameBoyFolder`). The adapter now takes the folder from the system the extension names, which gives
+  `GBC` for it and the same folders as before for every other core.
+
+### 23.2 The oracle, §13.1's row, measured 2026-10-03
+
+| Oracle | Result |
+|---|---|
+| The 586 WiseMan tests §12.5 of `EmuSen_NativeCores.md` names | WiseMan's Mercury, native-host, battery and engine tests: 590 pass on the library with both interfaces, with the version 8 state |
+| The adapter against the shim | `MercuryRtCoreAbiTests`: the generic `CoreEngine` over the v1 exports equals `MercuryRtCore` over the old ones for 240 frames with input, on a Game Boy, a Game Boy Color and with the colour console forced: picture and samples every frame, and the state. The shim gives the mixer C#'s own `Math.Pow` coefficients and the v1 path Rust's `powf`; they agree here (linux-x64) |
+| The digest over runs | the platform digests: sound and picture unchanged on all four programs and both engines; the states changed only by version 8's bytes (`Mercury_Native.md` §10) |
+| The kit | C1–C8, C10 and C11 pass on four games (Tetris, Kirby's Dream Land, Link's Awakening, Pokémon Yellow). Under C4's rule a Game Boy image is not self-delimiting; MercuryRT refuses an empty image and accepts the garbage and half-length ones, each then stopping cleanly at an illegal opcode or running |
+| The plain frame, interleaved, aligned build | §23.3 |
+
+### 23.3 The timing
+
+Measured 2026-10-03 with `mercbench`, `moonbench`'s method for the Game Boy (900 frames booted with Start and A
+pressed in turn, 3,000 timed through `ICore`, the picture taken and the sound drained every frame). "Before" is
+MercuryRT as it stood before this step (state version 7, no v1 exports), "after" this step's library; both built by
+cargo's release profile from the crate's directory, so both carry its alignment flags, which their symbol tables
+confirm. Five rounds under the bench lock, interleaved with MoonRT's re-run (§22.2), the two builds alternated within
+each game. **The load:** each round was held until the one-minute load average fell under 2.0, and the rounds started
+at 1.83, 1.94, 1.97, 1.73 and 1.92; other work on the machine raised it within the rounds, and the load at the start
+of the Mercury runs was 2.11–4.68. This is not the quiet machine §8.7.3 of `Mercury_Native.md` had, and is stated as
+such.
+
+| Game | Before, median p50 ms | After | Change |
+|---|---|---|---|
+| Tetris | 0.4473 | 0.4482 | +0.20% |
+| Kirby's Dream Land | 0.5003 | 0.4986 | −0.34% |
+| The Legend of Zelda: Link's Awakening | 0.4178 | 0.4140 | −0.91% |
+| Pokémon Yellow | 0.5486 | 0.5490 | +0.07% |
+
+Every game within ±1%; the geometric mean −0.24%. **The bench's state hashes** were one per game per build in every
+run; each version 8 state is its version 7 state with the version field 7 → 8 and the 24 mixer bytes appended,
+byte for byte (checked by undoing the two on all four), and C# Mercury writes the same bytes as MercuryRT.
 
 ---
 

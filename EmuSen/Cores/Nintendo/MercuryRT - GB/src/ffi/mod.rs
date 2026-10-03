@@ -10,6 +10,8 @@ use crate::debug::Hooks;
 use crate::machine::{Machine, Model};
 use crate::memory::cartridge::RomError;
 
+mod v1;
+
 /// MercuryRT's half of the interface version: 5, the first on the common interface (1 to 4 were `mercury_interface_version`).
 pub const CORE_VERSION: u16 = 5;
 
@@ -28,7 +30,7 @@ pub const STATUS_ILLEGAL_OPCODE: i32 = -20;
 pub const MODEL_KEY: &str = "Model";
 
 /// The battery RAM's space, `CARTRAM`.
-const BATTERY_SPACE: u32 = 2;
+pub(crate) const BATTERY_SPACE: u32 = 2;
 
 pub const SCREEN_WIDTH: i32 = 160;
 pub const SCREEN_HEIGHT: i32 = 144;

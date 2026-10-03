@@ -12,7 +12,9 @@ pub const CYCLES_PER_FRAME: i64 = 70_224;
 
 /// "MERC" little-endian, then the format version - see EmuSen_Save_States.md §3.
 pub const STATE_MAGIC: u32 = 0x4352_454D;
-pub const STATE_VERSION: i32 = 7;
+pub const STATE_VERSION: i32 = 8;
+/// Version 8 adds the mixer after the walks; earlier versions still load, the mixer kept (Mercury_Native.md §10).
+const MIXER_IN_STATE: i32 = 8;
 /// The oldest version a load still reads, its retired fields read and dropped (Mercury_Native.md §9.3).
 pub const OLDEST_READABLE_VERSION: i32 = 5;
 /// The first version to name its console before the walks (Mercury_Model.md §5).
@@ -243,6 +245,10 @@ impl Machine {
         w.group("Mapper", |w| self.bus.mapper.write_state(w));
         w.group("Cpu", |w| crate::state::State::write_state(&self.cpu, w));
         w.group("Bus", |w| self.bus.write_state(w));
+        let mix = &*self.bus.apu.mixer;
+        w.f64("Bus.Apu._cycleFraction", mix.cycle_fraction);
+        w.f64("Bus.Apu._leftCapacitor", mix.left_capacitor);
+        w.f64("Bus.Apu._rightCapacitor", mix.right_capacitor);
     }
 
     fn read_state(&mut self, r: &mut StateReader) -> StateResult {
@@ -268,7 +274,15 @@ impl Machine {
         self.bus.cart.read_state(r)?;
         self.bus.mapper.read_state(r, &mut self.bus.cart)?;
         crate::state::State::read_state(&mut self.cpu, r)?;
-        self.bus.read_state(r)
+        self.bus.read_state(r)?;
+        // Before version 8 the mixer was not in the state: it keeps what it held, as it did then.
+        if version >= MIXER_IN_STATE {
+            let mix = &mut *self.bus.apu.mixer;
+            mix.cycle_fraction = r.f64()?;
+            mix.left_capacitor = r.f64()?;
+            mix.right_capacitor = r.f64()?;
+        }
+        Ok(())
     }
 
     /// `MercuryCore.LoadState`'s fields; a failed load changes nothing, and bytes past the state are ignored as C# ignores them.

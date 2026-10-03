@@ -202,6 +202,9 @@ namespace EmuSen.WiseMan.Cores
             return stream.ToArray();
         }
 
+        // Version 8's mixer after the walks: the cycle fraction and the two capacitors.
+        private const int MixerBytes = 3 * 8;
+
         private static string Sha(byte[] bytes) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))[..16];
 
         private static readonly System.Reflection.FieldInfo SavePath = typeof(Cartridge).GetField("_savePath", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
@@ -233,17 +236,19 @@ namespace EmuSen.WiseMan.Cores
             SavePath.SetValue(source.Cart, "/mercury-v5/A.srm");
             byte[] v5 = WriteVersion5(source), v6 = Save(source);
             Assert.True(Sha(v5) == sha, $"the version-5 writer's bytes hash {Sha(v5)}, not the unmodified build's {sha}");
-            Assert.Equal(7, BitConverter.ToInt32(v6, 4));
+            Assert.Equal(MercuryCore.StateVersion, BitConverter.ToInt32(v6, 4));
             Assert.DoesNotContain("mercury-v5", System.Text.Encoding.UTF8.GetString(v6));
 
+            // Version 5 carries no mixer, so a machine reading it keeps its own: the bytes before the mixer are the source's.
             MercuryCore cs = LoadCs(rom);
             cs.LoadState(new MemoryStream(v5));
-            Assert.True(Save(cs).AsSpan().SequenceEqual(v6), "C# read version 5 into a different machine");
+            byte[] read = Save(cs);
+            Assert.True(read.AsSpan(0, read.Length - MixerBytes).SequenceEqual(v6.AsSpan(0, v6.Length - MixerBytes)), "C# read version 5 into a different machine");
             Assert.Null(SavePath.GetValue(cs.Cart));
 
             using var rt = new MercuryMachine(rom);
             rt.Load(v5);
-            Assert.True(rt.Save().AsSpan().SequenceEqual(v6), "MercuryRT read version 5 into a different machine");
+            Assert.True(rt.Save().AsSpan().SequenceEqual(read), "MercuryRT read version 5 into a different machine from C#'s");
 
             var pair = new MercuryRtPair(rom, skipRendering: false, state: v5);
             pair.Run(120, null);

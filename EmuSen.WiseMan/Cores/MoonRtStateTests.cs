@@ -192,30 +192,88 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(csharp.GetType(), rust.GetType());
         }
 
-        // A version 3 state has no DMA tail; both engines load it the same way, and write it back as version 4.
+        // Version 3 has neither the DMA tail nor the mixer, version 4 no mixer; both engines load each alike, the mixer kept as it was, and write it back as version 5.
         [Theory]
-        [InlineData(0)]
-        [InlineData(4)]
-        public void A_version_3_state_loads_in_both_engines_alike(int mapper)
+        [InlineData(0, 3)]
+        [InlineData(4, 3)]
+        [InlineData(0, 4)]
+        [InlineData(4, 4)]
+        public void An_older_state_loads_in_both_engines_alike(int mapper, int version)
         {
             Assert.True(MoonMachine.Available, MoonNative.Report);
             byte[] rom = Rom(mapper, 8, (0, Busy));
             MoonCore core = Load(rom);
             for (int i = 0; i < 30; i++) core.RunFrame();
-            byte[] v4 = Save(core);
-            byte[] v3 = v4.AsSpan(0, v4.Length - 8).ToArray();
-            v3[4] = 3;
+            byte[] v5 = Save(core);
+            byte[] old = v5.AsSpan(0, v5.Length - MixerBytes - (version == 3 ? DmaTailBytes : 0)).ToArray();
+            old[4] = (byte)version;
 
             MoonCore csharp = Load(rom);
-            csharp.LoadState(new MemoryStream(v3));
+            csharp.LoadState(new MemoryStream(old));
             using var machine = new MoonMachine(rom);
-            machine.Load(v3);
+            machine.Load(old);
             byte[] expected = Save(csharp);
-            Assert.Equal(4, BitConverter.ToInt32(expected, 4));
+            Assert.Equal(5, BitConverter.ToInt32(expected, 4));
             AssertSameBytes(expected, machine.Save());
             for (int i = 0; i < 10; i++) csharp.RunFrame();
             for (int i = 0; i < 10; i++) machine.RunFrame();
             AssertSameBytes(Save(csharp), machine.Save());
+        }
+
+        // Version 4's tail after the walks, and version 5's mixer after it: three doubles and an int, then five filter doubles.
+        public const int DmaTailBytes = 8, MixerBytes = 8 + 4 + 8 + 5 * 8;
+
+        // A machine loaded with another's state at frame 300 sounds exactly as the first from then on, in both engines - see Moon_Native.md §3.13.
+        [Theory]
+        [InlineData(0)]
+        [InlineData(4)]
+        public void A_state_loaded_into_a_second_machine_resumes_its_sound_exactly(int mapper)
+        {
+            Assert.True(MoonMachine.Available, MoonNative.Report);
+            byte[] rom = Rom(mapper, 8, (0, Busy));
+            foreach (Func<ICore> make in new Func<ICore>[] { () => Load(rom), () => LoadRt(rom) })
+            {
+                ICore a = make();
+                for (int f = 0; f < 300; f++) { Press(a, f); a.RunFrame(); a.DequeueAudioSamples(int.MaxValue); }
+                var state = new MemoryStream();
+                a.SaveState(state);
+                ICore b = make();
+                b.LoadState(new MemoryStream(state.ToArray()));
+                for (int f = 300; f < 600; f++)
+                {
+                    Press(a, f);
+                    Press(b, f);
+                    a.RunFrame();
+                    b.RunFrame();
+                    Assert.Equal(a.DequeueAudioSamples(int.MaxValue), b.DequeueAudioSamples(int.MaxValue));
+                }
+                var sa = new MemoryStream();
+                var sb = new MemoryStream();
+                a.SaveState(sa);
+                b.SaveState(sb);
+                AssertSameBytes(sa.ToArray(), sb.ToArray());
+                (a as IDisposable)?.Dispose();
+                (b as IDisposable)?.Dispose();
+            }
+        }
+
+        private static void Press(ICore core, int frame)
+        {
+            core.SetButton(0, PadButton.Start, frame % 90 < 5);
+            core.SetButton(0, PadButton.A, frame % 90 is >= 45 and < 50);
+        }
+
+        private static ICore LoadRt(byte[] rom)
+        {
+            CoreOptions.BatteryRamDisabled = true;
+            string path = SyntheticNesRom.WriteTemp(rom);
+            try
+            {
+                var core = new MoonRtCore();
+                core.LoadRom(path);
+                return core;
+            }
+            finally { File.Delete(path); }
         }
 
         // Real cartridges past their title screens, with the Start and A presses of Moon_Native.md §1.1's bench.
@@ -293,7 +351,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(want.Length, got.Length);
         }
 
-        // The C# serializer's own walk as "offset length type path" lines, MoonCore.SaveState's header and version 4's tail written by hand.
+        // The C# serializer's own walk as "offset length type path" lines, MoonCore.SaveState's header, version 4's tail and version 5's mixer written by hand.
         public static string Layout(MoonCore core, byte[] state)
         {
             var layout = new LayoutWalk();
@@ -315,6 +373,10 @@ namespace EmuSen.WiseMan.Cores
             layout.Line("Apu.Dmc.LoadDelay", "i32", 4);
             layout.Line("Bus.OamDmaPending", "bool", 1);
             layout.Line("Bus.OamDmaPage", "u8", 1);
+            layout.Line("Apu._sampleAccumulator", "f64", 8);
+            layout.Line("Apu._sampleCount", "i32", 4);
+            layout.Line("Apu._cycleFraction", "f64", 8);
+            foreach (string filter in new[] { "_hp90", "_hp90Prev", "_hp440", "_hp440Prev", "_lp14k" }) layout.Line("Apu." + filter, "f64", 8);
             Assert.Equal(state.Length, layout.Offset);
             return layout.Text;
         }

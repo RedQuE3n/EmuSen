@@ -84,11 +84,11 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Theory]
-        [InlineData("four channels", "420DFAA8EBA40746C2D711BEFF1F0DB7AAF122785EF8A9654F2F72D00F745E3A", "C0B17C1556732C6B10B6529BAA908977C7699AE27497BE3F70788D2899F222BA", "77C2E5E688DADF3C29F3D9B59042B906F16516215980777F42CBA7BEB0659D1C")]
-        [InlineData("busy", "B327BA1B261D9A7859CB8DE670F6C84ED355B853EC6B0C2F360F1EE82B399BF5", "8A0803654A95C3659704CC9C2BC839A75C04626BAA5F4926B09ADE2EE56FD705", "03A4D5FD14721517124E10FF600EBD5B416C549F4009206B28BA27975407A2D2")]
-        [InlineData("interrupts", "2802C96FCC6175A4C59CCAD791DB5C69860133AEFCF42611F41A9A7808BB87AB", "8A0803654A95C3659704CC9C2BC839A75C04626BAA5F4926B09ADE2EE56FD705", "7F1AFC4645C7719E0F6EBC4B76336916533730A807256E1CBA99E1DC3196D29B")]
-        [InlineData("colour", "D3A2D8F2637085A1BAFD9F981A948D3170B2738889A7F70109ADDA16964B698B", "E293A91DAADF31E4B368DD0D0C2BDE7190D8D5312A4E924370CA4A8F4F180C39", "A01BE81DA02C4029173D9BBF659C8E8515B70702E8730DC620CD71097B6ACE0A")]
-        public void Sound_picture_and_state_match_linuxs_on_both_engines(string program, string sound, string picture, string state)
+        [InlineData("four channels", "420DFAA8EBA40746C2D711BEFF1F0DB7AAF122785EF8A9654F2F72D00F745E3A", "C0B17C1556732C6B10B6529BAA908977C7699AE27497BE3F70788D2899F222BA", "F2EC0FE7F2799B2ADFAD82BC8C505E8C8327B85293EF20994573DFCFD5358618", "77C2E5E688DADF3C29F3D9B59042B906F16516215980777F42CBA7BEB0659D1C")]
+        [InlineData("busy", "B327BA1B261D9A7859CB8DE670F6C84ED355B853EC6B0C2F360F1EE82B399BF5", "8A0803654A95C3659704CC9C2BC839A75C04626BAA5F4926B09ADE2EE56FD705", "2C4BD52E3438D86096CC7D68E6A2778457001895C5B314D4AFDB5CB1393AB7FF", "03A4D5FD14721517124E10FF600EBD5B416C549F4009206B28BA27975407A2D2")]
+        [InlineData("interrupts", "2802C96FCC6175A4C59CCAD791DB5C69860133AEFCF42611F41A9A7808BB87AB", "8A0803654A95C3659704CC9C2BC839A75C04626BAA5F4926B09ADE2EE56FD705", "1FAEAC94D6F3B39AF2080525BCCF856C18AD11BA3124A2A66494549502BF91CD", "7F1AFC4645C7719E0F6EBC4B76336916533730A807256E1CBA99E1DC3196D29B")]
+        [InlineData("colour", "D3A2D8F2637085A1BAFD9F981A948D3170B2738889A7F70109ADDA16964B698B", "E293A91DAADF31E4B368DD0D0C2BDE7190D8D5312A4E924370CA4A8F4F180C39", "76F66F69FFD4A73173FBBDA7F274B2FE87AC005A76C240CD8FA7C39817867157", "A01BE81DA02C4029173D9BBF659C8E8515B70702E8730DC620CD71097B6ACE0A")]
+        public void Sound_picture_and_state_match_linuxs_on_both_engines(string program, string sound, string picture, string state, string stateVersion7)
         {
             Assert.True(MercuryMachine.Available, MercuryNative.Report);
             CoreOptions.BatteryRamDisabled = true;
@@ -109,12 +109,20 @@ namespace EmuSen.WiseMan.Cores
                 rust.CopyFrame(frame);
                 digests[1].Frame(rust.DrainAudio(int.MaxValue), frame);
             }
+            byte[] saved;
             using (var stream = new MemoryStream())
             {
                 csharp.SaveState(stream);
-                digests[0].State = Convert.ToHexString(SHA256.HashData(stream.ToArray()));
+                saved = stream.ToArray();
+                digests[0].State = Convert.ToHexString(SHA256.HashData(saved));
             }
             digests[1].State = Convert.ToHexString(SHA256.HashData(rust.Save()));
+
+            // Version 8 is version 7 with the mixer's 24 bytes after the walks: undone, the state hashes as it did before - see Mercury_Native.md §10.
+            byte[] asVersion7 = saved[..^24];
+            BitConverter.GetBytes(7).CopyTo(asVersion7, 4);
+            _output.WriteLine($"{program}: as version 7 {Convert.ToHexString(SHA256.HashData(asVersion7))}");
+            Assert.True(Convert.ToHexString(SHA256.HashData(asVersion7)) == stateVersion7, "the state differs from version 7's by more than the version and the mixer");
 
             string[] engines = { "Mercury (C#)", "MercuryRT" };
             for (int e = 0; e < 2; e++)

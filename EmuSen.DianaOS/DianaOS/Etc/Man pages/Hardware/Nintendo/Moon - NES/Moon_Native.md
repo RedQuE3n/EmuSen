@@ -1289,6 +1289,46 @@ mix and once with each channel soloed through the debug mute (measured 2026-09-2
 - **K1–K6** above, and **C7** from §3.11: candidates with no witness.
 - **The mixer**, which is stage 3's.
 
+### 3.13 Version 5: the mixer in the state (2026-10-03)
+
+**Decided 2026-10-03:** a state load must resume exactly, sound included, so the mixer joins the state. Until version 4
+C# Moon marked its mixer `[SkipInState]`, and MoonRT, whose state is C# Moon's byte for byte, did the same. A machine
+loaded with another's state therefore resumed its sound with the resampler and the output filters as the loading
+machine had them, which the conformance kit's C7 and C8 caught (`EmuSen_CoreAPI.md` §22.3).
+
+**The format.** Version 5 appends, after version 4's DMA tail, 60 bytes, in C# Moon (`Apu.WriteMixer`) and MoonRT
+(`Machine::write_state`) alike:
+
+| Field | Type | Bytes |
+|---|---|---|
+| `Apu._sampleAccumulator` | double | 8 |
+| `Apu._sampleCount` | int | 4 |
+| `Apu._cycleFraction` | double | 8 |
+| `Apu._hp90`, `_hp90Prev`, `_hp440`, `_hp440Prev`, `_lp14k` | double each | 40 |
+
+Doubles are `BinaryWriter.Write(double)`'s eight little-endian bytes, which the shared codec's new `f64` writes and
+reads. The magic stays `MOON`. The cycles per sample and the filters' coefficients are constants of the 44.1 kHz output
+and stay out; so does the undrained sample queue, whose length varies, because a state's size must be constant
+(`EmuSen_CoreAPI.md` §6.9): a state is taken at a frame boundary after the host has drained the frame's sound.
+
+**Older states.** Both engines still read versions 3 and 4. For them the mixer keeps what it held, exactly as before
+version 5, so a player's older states load as they always did; every state written is version 5.
+
+**What it proves** (measured 2026-10-03):
+
+- `MoonRtStateTests.A_state_loaded_into_a_second_machine_resumes_its_sound_exactly`: 300 frames of the bench's
+  input, the state loaded into a second machine, 300 more: the samples are identical frame by frame, and so are the
+  states, in C# Moon and in MoonRT, on mappers 0 and 4.
+- `An_older_state_loads_in_both_engines_alike`: version 3 and version 4 states, cut from a version 5 one, load alike
+  in both engines and are written back as version 5, byte for byte the same.
+- The layout walk names the new fields and both engines' layouts still agree by name, offset, length and type.
+- **The bench's state hashes change only by the added bytes.** For each of the four games at frame 3,900, the version
+  5 state is the version 4 state with its version field 4 → 5 and the 60 mixer bytes appended: with those two
+  differences undone it hashes to the recorded version 4 hash. The new hashes, the same from both engines: Super Mario
+  Bros. `0ED799A150F20023` (25,362 bytes), The Legend of Zelda `C615B5D3AB959325` (25,390), Super Mario Bros. 3
+  `5D8C02E36AA890C0` (148,320), Punch-Out!! `EF1FEC5B2CFF3B66` (148,271).
+- The conformance kit's C1–C8, C10 and C11 pass on all four games.
+
 ## 4. Stages
 
 MercuryRT's stages 1–5 were done in one day; Moon's machine is about 5,200 lines of C#: the folder's 6,609, less the

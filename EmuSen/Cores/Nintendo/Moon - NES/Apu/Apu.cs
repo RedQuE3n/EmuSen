@@ -74,6 +74,31 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
 
         public int BufferedSamples => _buffer.Count;
 
+        // The mixer's running state, from version 5 on after the version 4 tail, so a loaded state resumes its sound exactly - see Moon_Native.md §3.13.
+        internal void WriteMixer(BinaryWriter w)
+        {
+            w.Write(_sampleAccumulator);
+            w.Write(_sampleCount);
+            w.Write(_cycleFraction);
+            w.Write(_hp90);
+            w.Write(_hp90Prev);
+            w.Write(_hp440);
+            w.Write(_hp440Prev);
+            w.Write(_lp14k);
+        }
+
+        internal void ReadMixer(BinaryReader r)
+        {
+            _sampleAccumulator = r.ReadDouble();
+            _sampleCount = r.ReadInt32();
+            _cycleFraction = r.ReadDouble();
+            _hp90 = r.ReadDouble();
+            _hp90Prev = r.ReadDouble();
+            _hp440 = r.ReadDouble();
+            _hp440Prev = r.ReadDouble();
+            _lp14k = r.ReadDouble();
+        }
+
         // The queue itself, for a test to give it a limit of its own.
         public SampleQueue Samples => _buffer;
 

@@ -15,8 +15,8 @@ pub const MASTER_CLOCKS_PER_SCANLINE: i64 = 341 * 4;
 
 /// "MOON" little-endian, then the format version - see Moon_Core.md §5.
 pub const STATE_MAGIC: u32 = 0x4E4F_4F4D;
-pub const STATE_VERSION: i32 = 4;
-/// Version 4 adds the DMA's tail; a version 3 state still loads (Moon_Native.md §3.9).
+pub const STATE_VERSION: i32 = 5;
+/// Version 4 adds the DMA's tail, version 5 the mixer after it; versions 3 and 4 still load (Moon_Native.md §3.9, §3.13).
 pub const OLDEST_READABLE_VERSION: i32 = 3;
 
 /// Why a load or a frame could not complete as C# would have.
@@ -295,6 +295,15 @@ impl Machine {
         w.i32("Apu.Dmc.LoadDelay", *self.bus.apu.dmc.load_delay);
         w.bool("Bus.OamDmaPending", *self.bus.oam_dma_pending);
         w.u8("Bus.OamDmaPage", *self.bus.oam_dma_page);
+        let mix = &*self.bus.apu.mixer;
+        w.f64("Apu._sampleAccumulator", mix.sample_accumulator);
+        w.i32("Apu._sampleCount", mix.sample_count);
+        w.f64("Apu._cycleFraction", mix.cycle_fraction);
+        w.f64("Apu._hp90", mix.hp90);
+        w.f64("Apu._hp90Prev", mix.hp90_prev);
+        w.f64("Apu._hp440", mix.hp440);
+        w.f64("Apu._hp440Prev", mix.hp440_prev);
+        w.f64("Apu._lp14k", mix.lp14k);
     }
 
     fn read_state(&mut self, r: &mut StateReader) -> StateResult {
@@ -323,6 +332,18 @@ impl Machine {
         *self.bus.apu.dmc.load_delay = if tail { r.i32()? } else { 0 };
         *self.bus.oam_dma_pending = tail && r.bool()?;
         *self.bus.oam_dma_page = if tail { r.u8()? } else { 0 };
+        // Before version 5 the mixer was not in the state: it keeps what it held, as it did then.
+        if version >= 5 {
+            let mix = &mut *self.bus.apu.mixer;
+            mix.sample_accumulator = r.f64()?;
+            mix.sample_count = r.i32()?;
+            mix.cycle_fraction = r.f64()?;
+            mix.hp90 = r.f64()?;
+            mix.hp90_prev = r.f64()?;
+            mix.hp440 = r.f64()?;
+            mix.hp440_prev = r.f64()?;
+            mix.lp14k = r.f64()?;
+        }
         self.bus.forget_last_read();
         *self.bus.internal_bus = self.bus.open_bus;
         *self.bus.apu.frame_irq_readable = self.bus.apu.frame_irq_pending;

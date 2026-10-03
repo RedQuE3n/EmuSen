@@ -990,3 +990,23 @@ their data.
   restarting at each S-CPU cycle.
 - Pinned by: Super Mario RPG's $1D3F and Kirby Super Star's $95/$A7, the SA-1 games' pictures, and absindx's SA-1
   tests staying passed.
+
+### D-37. S-SMP: when an SPC700 write to $F4-$F7 reaches an S-CPU read of $2140-$2143, and an S-CPU write the SPC700's read
+- Opened: 2026-10-03, by D-6's traces (VenusRT_Native.md §29): Super Mario World, Super Mario RPG and Super Mario
+  Kart first part from Mesen at a `CMP $2140` / `BNE` wait, one poll early or late, with the SPC700's speed equal.
+  VenusRT runs the SPC700 a whole instruction past the S-CPU's clock before each port access, so its port writes in
+  that instruction are seen early and the S-CPU's writes arrive after SPC700 reads that already happened.
+- Documents read: fullsnes, "SNES APU SPC700 I/O Ports" (eight registers behind four addresses, four each way; "If
+  the SPC700 writes to an output port while the S-CPU is reading it, the S-CPU will read the logical OR of the old
+  and new values"; the converse "unknown"), "SNES APU Main CPU Communication Port" (the 16-bit write glitch, the
+  uploader and the boot ROM, "The acknowledge for the last data byte lasts only for a few clock cycles"); anomie's
+  register list ($2140-$217F mirrors). None gives the cycle at which either side's write becomes visible to the
+  other's read.
+- Test ROM: none grades it; the measures are the four traces of §29 (Star Fox, Super Mario World, Super Mario RPG,
+  Super Mario Kart) against Mesen's as a comparison only, and every APU oracle staying passed.
+- Referee: `Venus_Referee.md` §0 rates the SPC700 real support. To be read for this rule only: in SNES_MiSTer
+  `rtl/SMP.vhd`, the CPU-side and SPC700-side port registers, the strobes and clock edges at which each side writes
+  and reads them, and how the SMP's clock is placed against the S-CPU's bus cycle; in `rtl/SNES.vhd`, only the
+  wiring of those strobes and clocks.
+- Conclusion: open.
+- Pinned by: the four traces of §29 and the APU oracles.

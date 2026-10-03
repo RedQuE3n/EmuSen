@@ -19,6 +19,7 @@ on:
       - 'EmuSen.WiseMan/Cores/MoonRt*'
       - 'EmuSen.WiseMan/Cores/VenusRt*'
       - 'EmuSen.WiseMan/Cores/CoreAbi*'
+      - 'EmuSen.WiseMan/Cores/CoreAdapter*'
       - 'EmuSen/Cores/Native/**'
       - '.github/workflows/rust-cores.yml'
   # The core ABI's guard must see every pull request that could change version 1 (EmuSen_CoreAPI.md §5.4).
@@ -38,6 +39,7 @@ on:
       - 'EmuSen.WiseMan/Cores/MoonRt*'
       - 'EmuSen.WiseMan/Cores/VenusRt*'
       - 'EmuSen.WiseMan/Cores/CoreAbi*'
+      - 'EmuSen.WiseMan/Cores/CoreAdapter*'
       - 'EmuSen/Cores/Native/**'
       - '.github/workflows/rust-cores.yml'
 
@@ -74,6 +76,16 @@ jobs:
           esac
           py=$(command -v python3 || command -v python)
           "$py" $dir/abi/v1/export_check.py $dir/abi/v1/baseline.txt $dir/target/release/examples/$lib
+          "$py" $dir/abi/v1/export_check.py $dir/abi/v1/baseline.txt $dir/target/release/examples/${lib/test_core/plain_core}
+
+      # The two test cores, for the WiseMan job's tests of the v1 adapter on the same platform.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v1-test-cores-${{ runner.os }}
+          path: |
+            EmuSen/Cores/Shared/emusen-native/target/release/examples/*v1_test_core.*
+            EmuSen/Cores/Shared/emusen-native/target/release/examples/*v1_plain_core.*
+          if-no-files-found: error
 
   # The header against emusen-native's Rust and against the baseline on all four triples, and the base branch's baseline against this one: a removed or changed line fails (EmuSen_CoreAPI.md §5.2, §5.4).
   abi-guard:
@@ -243,7 +255,7 @@ jobs:
   # WiseMan's tests of the Rust cores against the C# cores, run on each platform against the libraries the job above ships; osx-x64 is left out, its runner being arm64.
   wiseman:
     name: WiseMan ${{ matrix.rid }}
-    needs: library
+    needs: [library, shared]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -292,6 +304,11 @@ jobs:
           name: venusrt-${{ matrix.rid }}
           path: native
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: v1-test-cores-${{ runner.os }}
+          path: native
+
       # EmuSenNative=false: cargo stays out of this build, and the tests load the shipped libraries.
       - name: Build
         working-directory: EmuSen-Project
@@ -302,7 +319,7 @@ jobs:
         run: |
           out=EmuSen-Project/EmuSen.WiseMan/bin/Release/net10.0
           cp native/* "$out/"
-          ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt*
+          ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*v1_test_core* "$out"/*v1_plain_core*
 
       # Printed in full, so each platform's digests can be read off the log.
       - name: Test the platform digests
@@ -311,7 +328,7 @@ jobs:
 
       - name: Test the Rust cores against the C# cores
         working-directory: EmuSen-Project
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       - uses: actions/upload-artifact@v4
         if: always()

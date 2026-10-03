@@ -104,6 +104,18 @@ namespace EmuSen.WiseMan.Cores
             Assert.Contains(Lines("const"), w => w[1] == "EMUSEN_CORE_ABI_VERSION" && Convert.ToUInt32(w[2], 16) == CoreInterface.Version);
         }
 
+        // The host's export table and capability names, which its loader checks a library by, are the baseline's.
+        [Fact]
+        public void The_hosts_export_classification_and_capability_numbers_are_the_baselines()
+        {
+            var exports = Lines("export").ToDictionary(w => w[1], w => w[2] == "optional" ? w[3] : null);
+            var caps = Lines("const").Where(w => w[1].StartsWith("EMUSEN_CAP_")).ToDictionary(w => w[1], w => Convert.ToUInt64(w[2], 16));
+            Assert.Equal(exports.Keys.Order(), CoreInterface.Exports.Select(e => e.Name).Order());
+            foreach (var (name, bit) in CoreInterface.Exports)
+                Assert.True(exports[name] is null ? bit == 0 : caps[exports[name]!] == bit, name);
+            Assert.Equal(caps.OrderBy(c => c.Value).Select(c => (c.Value, c.Key["EMUSEN_CAP_".Length..])), CoreInterface.CapabilityNames.OrderBy(c => c.Bit).Select(c => (c.Bit, c.Name)));
+        }
+
         private sealed class PreStableCrashLogDeclaration
         {
             public readonly delegate* unmanaged<nint, void> SetCrashLog;

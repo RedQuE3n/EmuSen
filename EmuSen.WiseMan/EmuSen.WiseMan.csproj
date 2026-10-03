@@ -96,6 +96,22 @@
     <None Include="Cores\VenusRtBaseline.tsv" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\EmuSen\Cores\Shared\emusen-native\abi\v1\baseline.txt" Link="Cores\CoreAbiBaseline.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- The core ABI's test core, a cdylib example of emusen-native, built by cargo and copied beside the tests that drive the v1 adapter; CI copies the shared job's build instead - see EmuSen_CoreAPI.md §19. -->
+  <PropertyGroup>
+    <EmuSenTestCoreDir>$(MSBuildThisFileDirectory)..\EmuSen\Cores\Shared\emusen-native\</EmuSenTestCoreDir>
+    <EmuSenTestCoreTarget>$(MSBuildThisFileDirectory)obj\emusen-native</EmuSenTestCoreTarget>
+    <EmuSenTestCorePrefix Condition="!$([MSBuild]::IsOSPlatform('Windows'))">lib</EmuSenTestCorePrefix>
+    <EmuSenTestCoreSuffix Condition="$([MSBuild]::IsOSPlatform('Windows'))">.dll</EmuSenTestCoreSuffix>
+    <EmuSenTestCoreSuffix Condition="$([MSBuild]::IsOSPlatform('OSX'))">.dylib</EmuSenTestCoreSuffix>
+    <EmuSenTestCoreSuffix Condition="'$(EmuSenTestCoreSuffix)' == ''">.so</EmuSenTestCoreSuffix>
+  </PropertyGroup>
+  <Target Name="BuildV1TestCore" BeforeTargets="BeforeBuild" Condition="'$(EmuSenNative)' != 'false'">
+    <Exec Command="cargo build --release --example v1_test_core --example v1_plain_core --manifest-path &quot;$(EmuSenTestCoreDir)Cargo.toml&quot; --target-dir &quot;$(EmuSenTestCoreTarget)&quot;" WorkingDirectory="$(EmuSenTestCoreDir)" StandardOutputImportance="low" />
+    <ItemGroup>
+      <None Include="$(EmuSenTestCoreTarget)\release\examples\$(EmuSenTestCorePrefix)v1_test_core$(EmuSenTestCoreSuffix)" Link="$(EmuSenTestCorePrefix)v1_test_core$(EmuSenTestCoreSuffix)" CopyToOutputDirectory="PreserveNewest" />
+      <None Include="$(EmuSenTestCoreTarget)\release\examples\$(EmuSenTestCorePrefix)v1_plain_core$(EmuSenTestCoreSuffix)" Link="$(EmuSenTestCorePrefix)v1_plain_core$(EmuSenTestCoreSuffix)" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
   <Import Project="..\LunaP.props" />
 
 </Project>

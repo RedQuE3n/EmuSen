@@ -14,3 +14,8 @@ name = "emusen_native"
 [[example]]
 name = "v1_test_core"
 crate-type = ["cdylib"]
+
+# The same machine claiming no capability, for a host's neutral answers and the kit on a core with nothing optional.
+[[example]]
+name = "v1_plain_core"
+crate-type = ["cdylib"]

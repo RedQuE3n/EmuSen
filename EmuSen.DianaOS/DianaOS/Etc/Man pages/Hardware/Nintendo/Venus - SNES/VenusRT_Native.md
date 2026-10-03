@@ -2454,3 +2454,86 @@ longer between the same frames. No tuning was done.
 
 The pixel caches, the RAM write buffer and RON/RAN waits; the cycle costs fullsnes marks unknown, which the games'
 phase measures; and Dirt Trax FX, whose Mesen run shows no picture.
+
+---
+
+## 27. Stage 5, step 4: the OBC1, and stage 5 closed (2026-10-02)
+
+### 27.1 The OBC1
+
+`chips/obc1.rs`, from fullsnes's "SNES Cart OBC1": the board's 8 KiB of SRAM at 6000h-7FFFh in banks 00-3F and 80-BF,
+and the eight registers at 7FF0h-7FF7h: 7FF0h-7FF3h read and write the four bytes of OBJ Index (7FF6h) in a
+220h-byte workspace based at 7C00h or 7800h (7FF5h bit 0), and 7FF4h writes that OBJ's two bits into the
+workspace's high table, read back as the whole byte as fullsnes reports. A LoROM chipset of 2xh selects it (Metal
+Combat's is 25h). Not built, as fullsnes leaves them unknown: 7FF7h's meaning and the "Index bits 7+5" SRAM-mapping
+report. **Metal Combat** (the only OBC1 game, in the library): lit on Mesen's frame (10), the picture equal to
+Mesen's at frame 2,400 with 18 of 240 sampled frames differing; whether its attract mode reaches the chip's registers
+was not measured. 2.10 ms a frame drawn.
+
+### 27.2 Stage 5 at its close (measured 2026-10-02)
+
+- **The corpus: 108 of the 117 ROMs Mesen passes pass** (76 at stage 4's close), and **every ROM C# Venus passes,
+  VenusRT passes**, 27 more besides (C# Venus passes 81). Pictures equal to Mesen's at the last frame: 230 of 295
+  (199). The nine Mesen passes left: `spc_dsp6` (§23.8), `test_timer_stop2` (D-26), `test_irqb` (D-24), and byuu's
+  six backdrop-graded IRQ, NMI and HDMA ROMs, all failing since stage 2.
+- **Skip-versus-draw over every coprocessor game: 21 of 21 equal over 600 frames** (nine NEC DSP games with their
+  firmware, five SA-1, six GSU, the OBC1), with the chips' state in the comparison.
+- **P2 (Super Mario RPG and Yoshi's Island at most 3.8 ms a frame at the end of stage 5): met.** Under the lock (load
+  2.6 falling to 1.9): Super Mario RPG 2.77 ms drawn (1.67 skipped), Yoshi's Island 1.97 (0.94), against C# Venus's
+  4.16 and 3.13; Pilotwings 2.23. P2 is retired as met.
+- **The clone check across `chips/`** (the four coprocessor files, 2,353 lines with mod.rs, against Mesen's 164 files): the
+  largest pair is 4 fingerprints (`sa1.rs` with `Sa1Types.h`, fullsnes's register names, §25.3), `gsu.rs`'s largest
+  3 and `necdsp.rs`'s 2; `obc1.rs` shares none; no table. Over the whole crate (28 files) the one pair over the
+  threshold and the two shared tables are still the S-DSP's documented Gaussian table and counter rates (§22.5).
+
+### 27.3 Every coprocessor's open items
+
+| Chip | Open item | Where recorded |
+|---|---|---|
+| NEC DSP-n, ST01x | The DSP-2, DSP-3, ST010 and ST011 unexercised on games (their titles reach the chip only with input) | §24.2 |
+| | The ST01x's battery RAM as a battery file | §24.1, stage 6 |
+| | Andretti, Ballz 3D and Top Gear 3000 parting from Mesen late | §24.2 |
+| | The instruction rate is the referee's, one instruction a cycle argued (D-32) | D-32 |
+| | VenusRT's own firmware lookup, replacing the harness's call into C# Venus | plan §6, stage 6 |
+| SA-1 | ROM and BW-RAM contention and the access timings fullsnes lacks | §25.1 |
+| | The phase drift in Super Mario RPG and Kirby Super Star | §25.2, §27.4 |
+| | Character conversion 1 and the variable-length reader untested on games | §25.4 |
+| | $230E's value (D-33) | D-33 |
+| GSU | Pixel caches, the RAM write buffer and RON/RAN waits not modelled | §26.1 |
+| | Cycle costs fullsnes marks unknown; the phase drift in every GSU game | §26.2, §27.4 |
+| | Dirt Trax FX, whose Mesen run shows no picture | §26.2 |
+| OBC1 | 7FF7h and the SRAM-mapping bits; whether the attract mode reaches the chip | §27.1 |
+
+### 27.4 The phase drift: a proposal, not started
+
+Super Mario RPG, Kirby Super Star and every GSU game show Mesen's scenes with the actors a little apart in time; Star
+Fox lights ten frames early and Yoshi's Island ten late. The plain games and the NEC DSP games do not drift this way
+over the same frames (Super Mario Kart's and Pilotwings' attract modes end on Mesen's picture), which points at the
+two processors with their own instruction streams rather than at the S-CPU, the PPU or the APU. Candidates, each
+with the measurement that would tell it from the others:
+
+1. **The coprocessor's own cycle costs** (the GSU's opcode, cache and memory costs from fullsnes's uncertain table;
+   the SA-1's 2 and 4 master clocks per access). A coprocessor too fast finishes each frame's work early and the game
+   runs ahead (Star Fox), too slow and it falls behind (Yoshi's Island), so the sign can differ per game.
+   *Telling it apart:* read the games' own frame-rate counters from WRAM in both engines (Star Fox and Doom draw below
+   60 Hz and count the SNES frames each 3D frame takes; the counter's address is found by diffing WRAM over a steady
+   scene). If VenusRT's 3D frames take a different number of SNES frames than Mesen's, the costs are the cause, and
+   the counter measures by how much. Then a sweep of the cost model (one parameter at a time) against that counter,
+   kept only where PeterLemon's GSU tests and absindx's test still pass.
+2. **Contention between the S-CPU and the coprocessor** (unmodelled for both). *Telling it apart:* count, in VenusRT,
+   the S-CPU's accesses to the board's ROM and RAM while the coprocessor runs. Near zero for the GSU games (the S-CPU
+   waits in WRAM while the GSU owns the bus) would rule contention out there, leaving it a candidate for the SA-1
+   only; a large count is the case to model first.
+3. **The slice** (the coprocessor caught up after each S-CPU instruction, its IRQ seen up to one instruction late).
+   *Telling it apart:* rerun with the catch-up moved to every S-CPU bus cycle (a slower build kept for the test). If
+   the drift does not move, the slice is not the cause; P5's bound would then stand as built.
+4. **A start-up difference** (the coprocessor's state at power-on or when the S-CPU first starts it, or the boot ROM
+   handshake's timing). *Telling it apart:* the first frame at which WRAM differs from Mesen's, from the probe's
+   per-frame dumps over the first 300 frames, and which bytes: a drift that is there from the first coprocessor run
+   is a start-up or cost cause; one that grows from a later point is an event's.
+5. **The referee as a second opinion on the costs:** SNES_MiSTer's GSU and SA-1 (rated mixed and real support in
+   `Venus_Referee.md` §0) carry their own cycle counts; read in a logged dispute step for the cost rules alone, after
+   (1) has measured how far off VenusRT is, so the reading answers a measured question.
+
+The order proposed: (4) and (2) first, being measurements without code changes; then (1)'s counter, which decides
+whether the sweep is worth making; (3) only if the others leave the drift unexplained; (5) when (1) has a number.

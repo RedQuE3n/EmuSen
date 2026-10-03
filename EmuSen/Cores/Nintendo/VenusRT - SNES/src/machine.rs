@@ -283,6 +283,9 @@ impl Machine {
                 w.bool("CartIrq", self.sys.cart_irq);
             });
         }
+        if let Some(obc1) = &self.sys.cart.obc1 {
+            w.group("Coprocessor", |w| w.bytes("Obc1", &obc1.regs));
+        }
         if let Some(gsu) = &self.sys.cart.gsu {
             w.group("Coprocessor", |w| {
                 w.bytes("Gsu", &gsu.pack());
@@ -440,6 +443,9 @@ impl Machine {
             r.bytes(&mut packed)?;
             sa1.unpack(&packed);
             self.sys.cart_irq = r.bool()?;
+        }
+        if let Some(obc1) = self.sys.cart.obc1.as_mut() {
+            r.bytes(&mut obc1.regs)?;
         }
         if let Some(gsu) = self.sys.cart.gsu.as_mut() {
             let mut packed = gsu.pack();

@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "emusen-core/v1/machine-info",
+  "title": "emusen_core_machine_info: this machine, for this game (EmuSen_CoreAPI.md 6.4)",
+  "type": "object",
+  "required": ["system", "frame_rate", "video", "audio", "ports", "spaces", "state"],
+  "properties": {
+    "system": { "type": "string" },
+    "region": { "type": "string" },
+    "frame_rate": { "$ref": "#/$defs/ratio" },
+    "video": {
+      "type": "object",
+      "required": ["base_width", "base_height", "max_width", "max_height", "aspect", "formats"],
+      "properties": {
+        "base_width": { "type": "integer", "minimum": 0 },
+        "base_height": { "type": "integer", "minimum": 0 },
+        "max_width": { "type": "integer", "minimum": 0 },
+        "max_height": { "type": "integer", "minimum": 0 },
+        "aspect": { "$ref": "#/$defs/ratio" },
+        "formats": { "type": "array", "items": { "type": "integer", "minimum": 0 } }
+      }
+    },
+    "audio": {
+      "type": "object",
+      "required": ["rate"],
+      "properties": {
+        "rate": { "type": "integer" },
+        "channels": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "ports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["port", "controller"],
+        "properties": {
+          "port": { "type": "integer", "minimum": 0 },
+          "controller": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "spaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "size", "flags"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 0 },
+          "name": { "type": "string" },
+          "size": { "type": "integer", "minimum": 0 },
+          "flags": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "processors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "pc_bits", "registers"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 0 },
+          "name": { "type": "string" },
+          "pc_bits": { "type": "integer", "minimum": 0 },
+          "registers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "bits"],
+              "properties": { "name": { "type": "string" }, "bits": { "type": "integer", "minimum": 0 } }
+            }
+          }
+        }
+      }
+    },
+    "battery": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["which", "suffix", "length"],
+        "properties": {
+          "which": { "type": "integer", "minimum": 0 },
+          "suffix": { "type": "string" },
+          "length": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "required": ["format", "version", "kinds"],
+      "properties": {
+        "format": { "type": "string" },
+        "version": { "type": "integer" },
+        "kinds": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+        "loads_from": { "type": "array", "items": { "type": "integer" } }
+      }
+    },
+    "phases": { "type": "array", "items": { "type": "string" } },
+    "patches": {
+      "type": "object",
+      "required": ["low", "high"],
+      "properties": { "low": { "type": "integer", "minimum": 0 }, "high": { "type": "integer", "minimum": 0 } }
+    },
+    "skip_rendering_state_neutral": { "type": "boolean" },
+    "achievements": {}
+  },
+  "$defs": {
+    "ratio": {
+      "type": "object",
+      "required": ["num", "den"],
+      "properties": { "num": { "type": "integer", "minimum": 0 }, "den": { "type": "integer", "minimum": 0 } }
+    }
+  }
+}

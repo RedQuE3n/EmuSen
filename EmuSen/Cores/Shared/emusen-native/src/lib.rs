@@ -6,13 +6,19 @@
 //! - [`Skip`] is a field C# does not serialize; [`ffi`] is the status range and the state exports of a core's C ABI.
 //! - [`SampleQueue`] is C#'s `EmuSen.Common.SampleQueue`, a core's undrained audio with its drop-oldest limit.
 //! - [`debug`] is the debugger's hooks as data: the tables, the logs and their drain (EmuSen_NativeCores.md §3.14).
-//! - [`abi`] is the common native interface: the `NativeCore` trait and `native_exports!`, the fixed `emusen_native_*`
-//!   names, the version, the capability bits and the interface's status codes (EmuSen_NativeCores.md §3).
+//! - [`abi`] is the pre-stable common native interface: the `NativeCore` trait and `native_exports!`, the fixed
+//!   `emusen_native_*` names, the version, the capability bits and the interface's status codes (EmuSen_NativeCores.md §3).
+//! - [`core`] is the stable core ABI, version 1: the `Core` trait and `core_exports!`, which generate every
+//!   `emusen_core_*` export of `include/emusen_core.h`, the descriptors, the events and the log (EmuSen_CoreAPI.md).
 //! - [`json`] reads the single-step suites' files for a core's tests, with no dependency.
 //!
 //! Nothing here knows a console: magics, versions and a core's own refusals stay in the core. See EmuSen_RustState.md.
 
+// The test core is written as an outside crate would write it, and compiles inside this crate's tests too.
+extern crate self as emusen_native;
+
 pub mod abi;
+pub mod core;
 pub mod debug;
 pub mod ffi;
 pub mod json;

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "emusen-core/v1/info",
+  "title": "emusen_core_info: who the core is, without loading a game (EmuSen_CoreAPI.md 6.3)",
+  "type": "object",
+  "required": ["abi", "id", "name", "version", "license", "systems", "capabilities"],
+  "properties": {
+    "abi": { "type": "string", "pattern": "^[0-9]+[.][0-9]+$" },
+    "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "name": { "type": "string" },
+    "display_name": { "type": "string" },
+    "version": { "type": "string" },
+    "license": { "type": "string" },
+    "authors": { "type": "array", "items": { "type": "string" } },
+    "url": { "type": "string" },
+    "description": { "type": "string" },
+    "systems": { "type": "array", "items": { "$ref": "#/$defs/system" } },
+    "capabilities": { "type": "array", "items": { "type": "string" } },
+    "host_requires": { "type": "array", "items": { "type": "string" } },
+    "deterministic": { "type": "boolean" },
+    "accuracy": {
+      "type": "object",
+      "required": ["measured_with"],
+      "properties": {
+        "measured_with": { "type": "string" },
+        "suite": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    }
+  },
+  "$defs": {
+    "system": {
+      "type": "object",
+      "required": ["id", "name", "extensions"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "name": { "type": "string" },
+        "extensions": { "type": "array", "items": { "type": "string" } },
+        "regions": { "type": "array", "items": { "type": "string" } },
+        "controllers": { "type": "array", "items": { "$ref": "#/$defs/controller" } },
+        "firmware": { "type": "array", "items": { "$ref": "#/$defs/firmware" } }
+      }
+    },
+    "controller": {
+      "type": "object",
+      "required": ["id", "label", "ports", "buttons"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "ports": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+        "buttons": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["bit", "control", "label"],
+            "properties": {
+              "bit": { "type": "integer", "minimum": 0 },
+              "control": { "type": ["string", "null"] },
+              "label": { "type": "string" }
+            }
+          }
+        },
+        "axes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["axis", "control", "kind", "label"],
+            "properties": {
+              "axis": { "type": "integer", "minimum": 0 },
+              "control": { "type": ["string", "null"] },
+              "kind": { "type": "string", "enum": ["stick", "trigger"] },
+              "label": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "firmware": {
+      "type": "object",
+      "required": ["which", "name", "label", "size", "required"],
+      "properties": {
+        "which": { "type": "integer", "minimum": 1 },
+        "name": { "type": "string" },
+        "label": { "type": "string" },
+        "size": { "type": "integer", "minimum": 0 },
+        "required": { "type": "boolean" },
+        "parts": { "type": "array", "items": { "type": "array", "items": { "type": "string" } } }
+      }
+    }
+  }
+}

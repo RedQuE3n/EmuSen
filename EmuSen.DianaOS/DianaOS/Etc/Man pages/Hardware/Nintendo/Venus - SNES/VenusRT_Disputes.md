@@ -842,3 +842,20 @@ their data.
   the test passes all 222 of its tests.
 - Pinned by: `SA1RamProtectionTest`, tests 155-162 and 221.
 
+### D-35. GSU: the cycles an opcode, a cached and an uncached fetch, a ROM or RAM access, a multiply and a PLOT take
+- Opened: 2026-10-02, after stage 5's close, by the phase drift §27.4 measured: Star Fox's own 3D-frame counter ($15BB)
+  completes its first 3D frame at SNES frame 147 in VenusRT and 148 in Mesen, and VenusRT runs about 4% more 3D
+  frames over frames 300-900; the S-CPU makes no cartridge fetch while the GSU runs, so contention is ruled out.
+- Documents read: fullsnes, "SNES Cart GSU-n CPU Misc" ("The uncached timings aren't well documented. Possibly
+  ROM/RAM-byte read/write are all having the same timing (3/5 clks at 10/21MHz)"), the opcode tables' "Clks" column
+  (several entries a range, e.g. GETB "1-6", PLOT "1-48"), "Code-Cache" (cache 3 or 6 times faster than ROM/RAM,
+  unresolved) and "Other Caches" (the ROM buffer's and RAM write buffer's waits). The costs VenusRT built are
+  fullsnes's guesses.
+- Test ROM: PeterLemon's GSU tests grade results, not time; Star Fox's $15BB and Vortex's $198C are the timing
+  measures, against Mesen's runs as a comparison only.
+- Referee: `Venus_Referee.md` §0 rates the GSU's instruction core the author's own microcode (with the pixel-cache
+  shape bsnes's). To be read for the cycle rules only: SNES_MiSTer `rtl/chip/GSU/GSU.vhd` and `GSU_PKG.vhd`, the
+  parts that decide how many clocks an opcode fetch, a memory access, a multiply and a PLOT take.
+- Conclusion: open.
+- Pinned by: Star Fox's $15BB, Vortex's $198C, and the GSU test ROMs staying passed.
+

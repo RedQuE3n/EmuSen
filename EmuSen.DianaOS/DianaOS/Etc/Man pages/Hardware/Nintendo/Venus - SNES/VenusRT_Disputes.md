@@ -281,6 +281,17 @@ their data.
   P65C816.vhd` and `MCode.vhd` (the same for the 65C816). Seen before logging: the grep lines naming `RST_N` in
   `rtl/SPC700/`, which carry no rule.
 
+- Read 2026-10-03, as logged: `rtl/SPC700/SPC700.vhd` lines 70-115 and 155-175 and 376-440 (the instruction
+  register's next value, the reset's forced interrupt and its suppressed writes) and `MCode.vhd`'s rows for $0F,
+  BRK; `rtl/65C816/P65C816.vhd` lines 99-101, 160-172 and 500-528 and `MCode.vhd`'s rows for $00, BRK. What they say:
+  both cores leave reset by running their BRK with the writes held off and the vector of reset: the SPC700's eight
+  cycles, then its first fetch at $FFC0; the 65C816's BRK, the datasheet's seven cycles in emulation mode, as
+  VenusRT's reset already is. VenusRT's SPC700 had no reset sequence: it fetched at $FFC0 in its first cycle.
+- Judged 2026-10-03, on D-37's timed ports: the SPC700 now leaves reset 150 master clocks before the 65C816 and
+  runs eight cycles of reset first, so its first fetch falls about 18 master clocks after the 65C816's reset begins
+  (150 clocks before it, plus 8 cycles of 20.97). The counters' half is unchanged: the 65C816 still begins at clock
+  0 of line 0.
+
 ### D-7. PPU: master brightness N scales a colour component c to c×(N+1)/16, rounded down
 - Opened: 2026-09-30, at stage 3 step 1, by PeterLemon's `RedSpace9BitHDMA` at frame 300. The ROM writes a backdrop
   colour and a brightness for every line by HDMA; the pairs come from its own `Gradient.py`, which was run to list
@@ -1030,5 +1041,12 @@ their data.
   - The $F1 write's clearing of the input registers lands at the fourth sub-step too.
   - The S-CPU never waits on the SPC700, nor the SPC700 on the S-CPU; fullsnes's OR of old and new values in a
     simultaneous write and read is not modelled.
-- Conclusion: open.
+- Conclusion: settled 2026-10-03 as the referee states it, built in VenusRT_Native.md §30: the S-CPU's write lands
+  at its bus cycle's end, the SPC700 latches a port in the first quarter of its read cycle and its write lands in the
+  fourth, and the S-CPU reads at its cycle's end what had landed by then. The SPC700 is kept up to an instruction
+  behind the S-CPU, never ahead, and the instruction it stands at is run on a copy that changes nothing when the
+  S-CPU reads a port, for the writes it makes before the read. Against Mesen, Super Mario World's trace first parts at
+  instruction 1,994 instead of 2,039, Super Mario RPG's at 6,920 instead of 6,944, Super Mario Kart's at 8,560
+  instead of 8,729: the exact ports agree with Mesen's less, not more, and Mesen is the comparison, not the
+  authority. Not modelled: fullsnes's OR of a simultaneous write and read.
 - Pinned by: the four traces of §29 and the APU oracles.

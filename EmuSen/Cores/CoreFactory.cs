@@ -169,7 +169,10 @@ namespace EmuSen.Cores
         }
 
         // A v1 engine's codecs come from its system's pack, never from the engine; none for a system without one.
-        private static (ICheatCodeCodec? AutoDetect, ICheatCodeCodec? Explicit) SystemCodecs(Native.CoreEngine engine) => (null, null);
+        private static (ICheatCodeCodec? AutoDetect, ICheatCodeCodec? Explicit) SystemCodecs(Native.CoreEngine engine) =>
+            DianaOS.DianaOS.Sys.Systems.SystemPacks.For(engine.IsRomLoaded ? engine.Machine.Info.System : engine.Info.Systems.FirstOrDefault()?.Id) is { } pack
+                ? (pack.AutoDetectCodec?.Invoke(), pack.ExplicitCodec?.Invoke())
+                : (null, null);
 
         // Answered without loading, so a caller can resolve a missing chip first - see EmuSen_Firmware.md §3.
         public static ICore ForFirmwareProbe(string romPath) => Create(romPath, headless: true);

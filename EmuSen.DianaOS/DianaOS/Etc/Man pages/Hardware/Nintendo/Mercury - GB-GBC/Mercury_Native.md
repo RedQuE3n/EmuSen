@@ -1889,3 +1889,29 @@ copy stands.
 `MercuryMachine`'s constructor replaces it with the shim's before any frame runs. The default is read only by
 `examples/frames.rs`, which has no shim. So the mutant changes the samples that example drains and nothing any
 frontend runs. It is left untested on purpose.
+
+## 10. State version 8: the mixer in the state (2026-10-03)
+
+**Decided 2026-10-03,** for Moon first (`Moon_Native.md` §3.13) and found to apply here: a state load must resume
+exactly, sound included. Mercury marked its mixer's running state `[SkipInState]`, so a machine loaded with another's
+state resumed its sound from its own mixer. The gap was checked for before MercuryRT's move onto the core ABI v1, and
+it was there: the resampler's `_cycleFraction` and the two output capacitors.
+
+**The format.** Version 8 appends, after the four walks, 24 bytes, in C# Mercury (`Apu.WriteMixer`) and MercuryRT
+(`Machine::write_state`) alike: `Bus.Apu._cycleFraction`, `Bus.Apu._leftCapacitor` and `Bus.Apu._rightCapacitor`,
+each a double. The magic stays `MERC`. The cycles per sample and the charge factor stay out: they follow
+`SetSampleRate`, which is the host's configuration, not the machine's state (§9.1). Versions 5 to 7 still load in both
+engines, the mixer keeping what it held, as before; every state written is version 8.
+
+**What it proves** (measured 2026-10-03):
+
+- `MercuryRtStateTests.A_state_loaded_into_a_second_machine_resumes_its_sound_exactly`: 300 frames, the state loaded
+  into a second machine, 300 more, on a Game Boy and a Game Boy Color: identical samples frame by frame and identical
+  states, in both engines.
+- D3's test: a version 5 state still loads alike in both engines; it equals its source up to the mixer, which version
+  5 does not carry.
+- §9.4's recorded platform digests: the four synthetic programs' state digests are re-recorded, and the test now holds
+  each new state to its old one. With its version field set back to 7 and its last 24 bytes removed, each version 8
+  state hashes to the version 7 digest recorded on 2026-09-24. Sound and picture digests did not move.
+- The layout walk names the three new fields, and both engines' layouts agree.
+

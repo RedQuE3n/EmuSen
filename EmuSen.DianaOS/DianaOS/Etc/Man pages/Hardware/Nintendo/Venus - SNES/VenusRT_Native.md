@@ -2537,3 +2537,64 @@ with the measurement that would tell it from the others:
 
 The order proposed: (4) and (2) first, being measurements without code changes; then (1)'s counter, which decides
 whether the sweep is worth making; (3) only if the others leave the drift unexplained; (5) when (1) has a number.
+
+**Measured 2026-10-02: items 4, 2 and 1.** No core code was changed; two examples were added (`chip_activity`,
+where the S-CPU runs while the board's processor does; `gsu_jobs`, the GSU's jobs per frame with WRAM per frame).
+
+*Item 4, the first WRAM difference*, from both engines' WRAM after every one of the first 300 frames:
+
+| Game | First byte differing | First difference outside the stack pages, persisting 10 frames | Frames with WRAM equal outside the stack |
+|---|---|---|---|
+| Super Mario World (plain, the control) | 68 | 77 | 80 of 300 |
+| Super Mario Kart (DSP-1) | 85 | 87, growing to 81,786 bytes | 86 |
+| Super Mario RPG (SA-1) | 1 | 1 (one byte) | 44 |
+| Kirby Super Star (SA-1) | 11 | 11 | 51 |
+| Yoshi's Island (GSU-2) | 73 | 279 | 274 |
+| Star Fox (Mario Chip) | 1 (four bytes, frame 1 only) | 152 | 136 |
+| Doom (GSU-2) | 1 | 14 | 135 |
+
+**The control drifts too:** Super Mario World, with no coprocessor, has a few WRAM bytes apart from frame 77 on (2 at
+frame 100, 10 at 300), and Super Mario Kart, whose pictures end on Mesen's, parts wholesale at 87. Small WRAM
+differences are therefore not a coprocessor's signature, and a part of every game's drift is S-CPU or PPU side. The
+SA-1 games' first bytes (Super Mario RPG's $1D3F from frame 1, Kirby's $95 and $A7 from 11) differ for tens of
+frames and are equal again by frame 100: a transient that converges, the shape of a wait-loop count or a seed taken
+while the two processors race, not a broken start. **Yoshi's Island's WRAM is equal to Mesen's outside the stack
+until frame 279**, although its pictures differ from frame 80: its early picture difference is not GSU-driven.
+
+*Item 2, the S-CPU while the coprocessor runs* (`chip_activity`, 600 frames; Doom 1,800, as it starts its GSU later):
+in all six GSU games **no S-CPU instruction was fetched from the cartridge while the GSU ran**: the S-CPU waits in
+WRAM (17-47% of its instructions in Vortex, Dirt Trax FX and Star Fox, 2-14% in Stunt Race FX, Yoshi's Island and
+Doom). Bus contention therefore cannot be a GSU game's drift (its data accesses were not counted, but code running
+in WRAM has only I/O reads to make). In the SA-1 games the S-CPU fetches from the cartridge for **38% (Super Mario
+RPG), 84% (Kirby Super Star) and 100% (the two PGA titles, Power Rangers Zeo)** of its instructions while the SA-1 runs:
+contention is a live candidate there, and only there.
+
+*Item 1, the games' own frame counters* (WRAM bytes that step by +1 at the 3D frame rate, found in VenusRT's dumps and
+read in Mesen's):
+
+- **Star Fox, $15BB** (one count per 3D frame): the first 3D frame completes at SNES frame 147 in VenusRT and 148 in
+  Mesen, the first parting of the two counters; later frames land one SNES frame earlier now and then. Over frames
+  300-900, **4.38 SNES frames per 3D frame in VenusRT against 4.58 in Mesen**, 137 counts against 131: VenusRT's GSU
+  finishes its 3D frames a little sooner, the game running about 4% ahead (the scenes are no longer the same after
+  frame 152, so the long-window rate mixes speed with scene; the first-frame lead is the clean measurement).
+- **Vortex, $198C**: the counters agree to frame 140; from 141 VenusRT steps one frame early, then Mesen one frame
+  early, both ways; over 150-450 both 1.500 SNES frames per count, over 450-900 2.586 against 2.601.
+- Doom and Stunt Race FX: no such counter in the windows searched (Doom's GSU runs six jobs every four frames in
+  VenusRT; Stunt Race FX's attract runs in menus without the GSU at 700-740).
+
+**Recommendation.** The measurements separate the two chips:
+
+- **GSU: the cycle costs are the candidate; contention is ruled out.** Star Fox's GSU completes its first 3D frame
+  one SNES frame earlier than Mesen's, and runs about 4% more 3D frames over 600 frames, so VenusRT's GSU costs are
+  slightly low. The next step is the referee's GSU cycle rules read in a logged dispute step (fullsnes marks them
+  unknown; `Venus_Referee.md` §0 rates the GSU mixed, its instruction core the author's own), then one cost change at
+  a time measured against Star Fox's $15BB (first 3D frame at 148, the gaps' histogram) and Vortex's $198C, kept only
+  while PeterLemon's 31 GSU tests and 27 drawing ROMs still pass. Yoshi's Island's early picture difference, with its
+  WRAM equal to frame 279, belongs to the PPU side and to a separate look.
+- **SA-1: contention first, costs second.** The S-CPU runs from the cartridge during most of the SA-1's time, the
+  first differences are transients that converge, and no 3D counter exists to measure speed by. A contention model
+  needs the rule (who waits, and for how many cycles, when both reach ROM or BW-RAM in the same cycle), which no
+  fetched document gives; the referee's SA-1 (real support on structure) is the source to read in a dispute step,
+  then measured against the transients' length (Super Mario RPG's $1D3F, Kirby's $95/$A7) and the pictures.
+- **The S-CPU-side drift the control shows** (Super Mario World from frame 77) is smaller and separate; D-6's
+  power-on phase is the open item it would start from.

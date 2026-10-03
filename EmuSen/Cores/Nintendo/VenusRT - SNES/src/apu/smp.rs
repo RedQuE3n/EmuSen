@@ -11,6 +11,9 @@ type Peeked = (u64, [(u64, u8, u8); 4], usize);
 
 /// The writes a port queue holds at most; the SPC700 is never more than an instruction behind, so a few at most.
 const QUEUE: usize = 8;
+/// D-6: the SPC700 leaves reset 150 master clocks before the 65C816, and spends 8 cycles in its reset sequence.
+const LEAD: u64 = 150;
+const RESET_CYCLES: u32 = 8;
 pub const PORT_BYTES: usize = 2 * (1 + QUEUE * 10);
 
 /// SPC700 cycles to master clocks, exactly: 1.024 MHz against 236,250,000/11 Hz (NTSC) or 21,281,370 Hz (PAL).
@@ -83,12 +86,18 @@ impl Smp {
         };
         if let Some(rom) = s.ipl {
             s.cpu.pc = u16::from_le_bytes([rom[62], rom[63]]);
+            // D-6: the reset sequence is the BRK's cycles with its writes held off; nothing it reads has an effect.
+            for _ in 0..RESET_CYCLES {
+                s.tick();
+                s.timer_step();
+            }
         }
         s
     }
 
     /// A master clock in quarters of a DSP cycle, the unit the ports' writes are stamped in (D-37).
     fn quarters(&self, clock: u64) -> u64 {
+        let clock = clock + LEAD;
         (clock as u128 * 4 * self.ratio.0 as u128 / self.ratio.1 as u128) as u64
     }
 
@@ -420,7 +429,7 @@ pub(crate) mod tests {
         assert_eq!(s.cpu_read(1, 10_000), 0);
         s.run_to(10_400);
         assert_eq!(s.cpu_read(1, 10_400), 0x55);
-        assert!(s.to_apu_q.is_empty() && s.cycles * 118_125 <= 10_400 * 5_632);
+        assert!(s.to_apu_q.is_empty() && s.cycles * 118_125 <= (10_400 + LEAD) * 5_632);
     }
 
     // fullsnes: timer 2 counts at 64 kHz, every 16 SPC700 cycles, divided by T2DIV; TnOUT clears when read.

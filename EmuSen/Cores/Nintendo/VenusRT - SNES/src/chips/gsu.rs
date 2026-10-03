@@ -365,6 +365,15 @@ impl Gsu {
         stall
     }
 
+    /// D-35: RPIX's second microcode cycle, a wait for a running flush or store, the primary row flushed (a read and
+    /// a write a bitplane), a read a bitplane, and the end state; the port is free after.
+    fn rpix_cost(&mut self) -> u64 {
+        let stall = self.pcf_ready.max(self.ram_ready).saturating_sub(self.clock).div_ceil(self.cycle());
+        self.pc_valid = 0;
+        self.pcf_ready = 0;
+        1 + stall + 3 * self.bpp() as u64 * self.slow() + 1
+    }
+
     fn refill_rom_buffer(&mut self, rom: &[u8]) {
         self.rom_buffer = Self::rom_at((self.rombr as u32) << 16 | self.r[14] as u32, rom.len()).map_or(0, |o| rom[o]);
     }
@@ -593,7 +602,7 @@ impl Gsu {
                     let v = self.pixel(ram) as u16;
                     self.set(d, v, rom);
                     self.set_sz(v);
-                    extra += 20;
+                    extra += self.rpix_cost();
                 } else {
                     extra += self.plot(ram);
                 }

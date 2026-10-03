@@ -274,6 +274,13 @@ their data.
   - What would settle the counters' half is unchanged: `reset-position-test`'s OPHCT on a console, `$0014` for a
     start at clock 0, `$0035` for Mesen's.
 
+- Referee, a second step logged 2026-10-03 before reading, to judge the 150-clock lead once D-37's ports are timed:
+  the 150 clocks separate the two cores' releases from reset, so what VenusRT can compare is the time from each
+  release to that core's first opcode fetch. To be read for that only: the reset sequence in `rtl/SPC700/SPC700.vhd`
+  and `MCode.vhd` (how many cycles from `RST_N` rising to the fetch at the reset vector) and in `rtl/65C816/
+  P65C816.vhd` and `MCode.vhd` (the same for the 65C816). Seen before logging: the grep lines naming `RST_N` in
+  `rtl/SPC700/`, which carry no rule.
+
 ### D-7. PPU: master brightness N scales a colour component c to c×(N+1)/16, rounded down
 - Opened: 2026-09-30, at stage 3 step 1, by PeterLemon's `RedSpace9BitHDMA` at frame 300. The ROM writes a backdrop
   colour and a brightness for every line by HDMA; the pairs come from its own `Gradient.py`, which was run to list

@@ -2785,3 +2785,57 @@ ports often, under 1% where it does not.
 - D-6's other half, the 65C816's start against the PPU's counters: open, Mesen's 132 the only number (§29).
 - fullsnes's OR of a simultaneous SPC700 write and S-CPU read, not modelled.
 - Yoshi's Island's PPU-side look, recorded as next.
+
+## 31. VenusRT on the core ABI v1 (2026-10-03)
+
+### 31.1 What was built
+
+`src/v1.rs` implements `emusen_native::core::Core` for the machine and invokes `core_exports!(Machine;)`, as
+`EmuSen_CoreAPI.md` §18.6 lays out; `ffi.rs`'s `native_exports!` stays beside it while the shim and WiseMan's SNES
+fixtures still load the library through `emusen_native_*`. Where the two traits share a method, the v1 one forwards to
+the pre-stable one by naming the trait (`NativeCore::advance(self, ...)`), so one body serves both.
+
+- **No optional group is claimed yet** (capabilities 0): the pre-stable library had none either. Reset, snapshots,
+  the battery's change tracking, ROM patches and cheat pokes are stage 6's.
+- **`info()`**: the id `venusrt`, the SNES with the system pack's extensions (`.smc`, `.sfc`), both regions, the
+  `snes.pad` controller on ports 0 and 1 with its twelve buttons at `PadButton`'s bits, and two firmware files: the
+  SPC700's 64-byte boot ROM as file 1, required; a NEC DSP cartridge's firmware as file 2, its size left open, since
+  the header does not say which of DSP-1 to DSP-4, ST010 or ST011 the game needs (`VenusRT_Plan.md` stage 6's title
+  lookup is what will name it). `firmware_for` asks for file 2 only where the header names a NEC DSP.
+- **`machine_info()`**: the region from the header; the frame rate exactly, NTSC 236,250,000/11 Hz over 357,366
+  master clocks a frame and PAL 21,281,370 Hz over 425,568; 256x224 to 512x448 at 4:3; 32 kHz; the eight spaces in
+  the shim's order, `CpuBus` (0) and `WRAM` (2) marked for cheats, as the SNES pack's Action Replay codec requires,
+  and `IO` read-only; the battery as file 0, `.srm`; the state as `VNRT`, version 17; rendering skipped state-neutral,
+  which skip-versus-draw proves.
+- **`settings_schema()`** is empty: VenusRT has no settings yet, and create receives none.
+- **`status_text()`** names VenusRT's two codes of the core band: -9, an image shorter than one 32 KiB bank, and -10,
+  file 1 not given.
+- **CpuBus writes** (`System::poke`): a write from outside the machine lands where the documented bus would take it in
+  memory, WRAM through its mirrors, the cartridge's SRAM, the SA-1's I-RAM and BW-RAM under their write protection,
+  the GSU's RAM when the GSU does not own it, the OBC1's SRAM below its registers, and is dropped at registers,
+  the APU's ports, a coprocessor's I/O and ROM. Nothing else is touched: no register, the MDR or a coprocessor's
+  clock. The test `cpu_bus_pokes_land_in_memory_and_nowhere_else` holds a poke's landing and the state's bytes
+  unchanged by pokes at $2100, $2140, $4200, $420B, $4300, $8000 and $80FFFF.
+
+### 31.2 Measured 2026-10-03
+
+- **The exports**: 32 `emusen_core_` symbols beside the 24 `emusen_native_` ones; `export_check.py` reports ABI 1.0,
+  capabilities 0, the exports as the baseline requires.
+- **The conformance kit** (`emusen-core-conform`, built from the branch carrying C4's decided rule, that a malformed
+  image need only not harm the core), on eleven images with the boot ROM as file 1: Super Mario World, Super Mario
+  RPG, Yoshi's Island, Star Fox, Super Mario Kart (with the DSP-1B's firmware as file 2), A Link to the Past, the
+  240p test suite, blargg's `spc_smp` and `spc_timer`, PeterLemon's `GSUADD` and absindx's `SA1RamProtectionTest`:
+  **compliant on every one**. C4's empty and garbage images are refused with -9 and its words; the half-length image
+  is accepted and runs 300 frames, half of a cartridge image being often a well-formed smaller one.
+- **The sidecar**, `libvenusrt.so.core.json`, written by `--sidecar` beside the built library (a build artefact, not
+  committed: it carries the library's SHA-256).
+- **The machine is unchanged by the switch**: the state's FNV-1a hash every 60 frames to frame 600, by the new example
+  `state_hash`, is identical before and after for Super Mario World, Super Mario RPG, Star Fox and Super Mario Kart.
+- **Every oracle as before**: the corpus with VenusRT as its third engine gives every VenusRT column of all 295 ROMs
+  identical to the run before the switch; the crate's 68 tests and WiseMan's VenusRT, core-ABI, adapter, discovery
+  and SNES-pack tests pass.
+
+### 31.3 Not done here
+
+VenusRT is not selectable in Mistress (stage 6). The optional groups, the DSP firmware's name, and the pre-stable
+exports' removal wait for the adapter to be VenusRT's only loader.

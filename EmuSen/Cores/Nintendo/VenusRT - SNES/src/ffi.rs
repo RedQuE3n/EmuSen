@@ -127,12 +127,17 @@ impl NativeCore for Machine {
         Ok(())
     }
 
-    /// Past a space's end is dropped; CpuBus and IO are not written by the host yet.
+    /// Past a space's end is dropped; CpuBus lands where the bus would take a write in memory (`System::poke`), and
+    /// IO is not written from outside.
     fn space_write(&mut self, space: u32, address: u32, data: &[u8]) -> Result<(), i32> {
         for (i, &b) in data.iter().enumerate() {
             let a = address as usize + i;
             let slot = match space {
-                0 | 1 => return Err(abi::status::READ_ONLY),
+                0 => {
+                    self.sys.poke(a as u32 & 0xFF_FFFF, b);
+                    continue;
+                }
+                1 => return Err(abi::status::READ_ONLY),
                 2 => self.sys.wram.get_mut(a),
                 3 | 4 => {
                     let words = if space == 3 { &mut self.sys.ppu.vram } else { &mut self.sys.ppu.cgram };

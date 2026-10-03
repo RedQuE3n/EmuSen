@@ -2686,3 +2686,42 @@ frame before and 2.78-2.80 after, Kirby Super Star 2.56 and 2.57.
 Not modelled: the SA-1's own DMA and character conversion against the S-CPU (they wait on the SA-1's priority bits,
 which the referee reading did not cover), HDMA's table reads from the board, and the SA-1's clock phase restarting at
 each S-CPU cycle (the cycles are even lengths, so the phase drifts at most a clock).
+
+## 29. D-6 and the start-up drift, measured (2026-10-03)
+
+§27.4 left a drift that every game shows: the plain control parts from Mesen from frame 77, Super Mario RPG's $1D3F
+differs from frame 1, Star Fox's first 3D frame lands one early. Measured instead of WRAM's first byte, which shows
+only the effect: the probe's CPU trace of Mesen against VenusRT's own (`cpu_trace`, which now takes a power-on
+offset in master clocks as D-6's `power_phase` does), instruction by instruction from power-on, to where the two
+first part.
+
+| Game | First parting | Master clocks in | What the instruction does | Cause |
+|---|---|---|---|---|
+| Star Fox | instruction 149 | 3,990 | `LDA $213D` after `LDA $2137`: the V counter reads 2, Mesen 3 | the CPU's start against the PPU's counters (D-6) |
+| Super Mario World | 2,039 | 51,498 | `CMP $2140` / `BNE` on the SPC700's boot ROM: one poll later than Mesen | the S-CPU's and SPC700's port timing |
+| Super Mario RPG | 6,944 | 262,438 (frame 1) | the same wait on `$2140` | the same |
+| Super Mario Kart | 8,729 | 1,297,542 | a `CMP` / `BNE` wait loop | the same kind |
+
+- **Star Fox's trace equals Mesen's for its first ten frames (115,103 instructions) with the CPU's start moved 132
+  master clocks into line 0**, and at no other offset tried. That is D-6's 132 a third time.
+- **The SPC700's speed is not the cause** of the handshake partings: Super Mario World's two uploads take 525.04 and
+  587.81 clocks a byte in both engines, equal to 0.003% and exactly.
+- **VenusRT's port timing is granular**: before each port access the SPC700 is run a whole instruction past the
+  S-CPU's clock, so its port writes in that instruction are seen early and the S-CPU's writes arrive after SPC700
+  reads that already happened. An experiment (not kept) timestamped both directions to the SPC700 cycle. It moved
+  the first parting to instruction 1,994, and no SPC700 lead from -60 to 180 clocks, with the CPU's start at 0 or
+  132, carried Super Mario World past instruction 2,062. Mesen's port timing differs from both of VenusRT's in a
+  way a phase does not absorb.
+
+The referee was read for D-6's rule as logged: the SPC700 leaves reset with the reset line and the 65C816 is held
+150 master clocks more, while the S-PPU's counters do not reset at all, so the referee has no rule for the phase
+against the counters. D-6 stays open and nothing was changed: the counters' half has only Mesen behind it, and the
+SPC700's half cannot be measured until the ports are right.
+
+**Proposed next, not started:** D-37, the S-CPU's and SPC700's port timing: when an SPC700 write to $F4-$F7 becomes
+visible to an S-CPU read of $2140-$2143, and the converse, at the bus cycle. Documents first (fullsnes's and anomie's
+APU port notes), then the referee's `SMP.vhd` port latches in a logged step. A cycle-timed port in VenusRT needs the
+SPC700's writes timestamped (cheap) and its reads of the S-CPU's writes made at the right cycle, which the
+instruction-stepped SPC700 cannot do while it runs ahead of the S-CPU. Measured against the four traces above, which
+show the effect within the first frame. D-6's 150-clock SPC700 lead is judged after it. Yoshi's Island's PPU-side
+look stays recorded as next.

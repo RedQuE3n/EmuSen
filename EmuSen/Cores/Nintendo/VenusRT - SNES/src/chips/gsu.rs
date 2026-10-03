@@ -322,6 +322,11 @@ impl Gsu {
         self.rom_ready.saturating_sub(self.clock).div_ceil(self.cycle())
     }
 
+    /// D-35: a load's second microcode cycle, then the RAM port's start state and slow() - 1 cycles a byte.
+    fn ram_load(&self, bytes: u64) -> u64 {
+        2 + bytes * (self.slow() - 1)
+    }
+
     fn refill_rom_buffer(&mut self, rom: &[u8]) {
         self.rom_buffer = Self::rom_at((self.rombr as u32) << 16 | self.r[14] as u32, rom.len()).map_or(0, |o| rom[o]);
     }
@@ -536,7 +541,7 @@ impl Gsu {
                 let a = self.r[n];
                 let v = if alt & 1 != 0 { self.read_byte(ram, a) as u16 } else { self.read_word(ram, a) };
                 self.set(d, v, rom);
-                extra += self.slow() * if alt & 1 != 0 { 1 } else { 2 };
+                extra += self.ram_load(if alt & 1 != 0 { 1 } else { 2 });
             }
             0x4C => {
                 if alt & 1 != 0 {
@@ -683,7 +688,7 @@ impl Gsu {
                     _ => {
                         let v = self.read_word(ram, (k as u16) << 1);
                         self.set(n, v, rom);
-                        extra += self.slow() * 2;
+                        extra += self.ram_load(2);
                     }
                 }
             }
@@ -748,7 +753,7 @@ impl Gsu {
                     _ => {
                         let v = self.read_word(ram, k);
                         self.set(n, v, rom);
-                        extra += self.slow() * 2;
+                        extra += self.ram_load(2);
                     }
                 }
             }

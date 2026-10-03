@@ -45,6 +45,9 @@ pub struct Gsu {
     pub pipe: u8,
     pub jumped: bool,
     pub rom_buffer: u8,
+    /// The master clock the ROM buffer's load ends at, and whether this opcode wrote R14 (D-35).
+    pub rom_ready: u64,
+    pub r14_written: bool,
     pub ram_address: u16,
     /// Master clocks the GSU has run.
     pub clock: u64,
@@ -80,6 +83,8 @@ impl Gsu {
             pipe: 0x01,
             jumped: false,
             rom_buffer: 0,
+            rom_ready: 0,
+            r14_written: false,
             ram_address: 0,
             clock: 0,
         }
@@ -232,6 +237,7 @@ impl Gsu {
                 self.r[n] = (v as u16) << 8 | self.latch as u16;
                 if n == 14 {
                     self.refill_rom_buffer(rom);
+                    self.rom_ready = self.clock + self.rom_load() * self.cycle();
                 }
                 if n == 15 {
                     self.start(rom, ram);
@@ -306,6 +312,16 @@ impl Gsu {
         }
     }
 
+    /// D-35: a ROM-buffer load ends ROM_CYCLES + 4 cycles after the opcode that wrote R14.
+    fn rom_load(&self) -> u64 {
+        if self.clsr & 1 != 0 { 7 } else { 5 }
+    }
+
+    /// The cycles an opcode reading the ROM buffer waits for a load still running.
+    fn rom_wait(&self) -> u64 {
+        self.rom_ready.saturating_sub(self.clock).div_ceil(self.cycle())
+    }
+
     fn refill_rom_buffer(&mut self, rom: &[u8]) {
         self.rom_buffer = Self::rom_at((self.rombr as u32) << 16 | self.r[14] as u32, rom.len()).map_or(0, |o| rom[o]);
     }
@@ -352,6 +368,7 @@ impl Gsu {
             self.jumped = true;
         } else if n == 14 {
             self.refill_rom_buffer(rom);
+            self.r14_written = true;
         }
     }
 
@@ -401,6 +418,10 @@ impl Gsu {
         let (next, mut cost) = self.code(self.r[15], rom, ram);
         self.pipe = next;
         cost += self.execute(op, rom, ram);
+        if self.r14_written {
+            self.r14_written = false;
+            self.rom_ready = self.clock + (cost + self.rom_load()) * self.cycle();
+        }
         cost
     }
 
@@ -693,7 +714,7 @@ impl Gsu {
                 3 => self.rombr = s as u8 & 0x7F,
                 _ => {
                     self.colr = self.color_in(self.rom_buffer);
-                    extra += self.slow();
+                    extra += self.rom_wait();
                 }
             },
             0xE0..=0xEE => {
@@ -710,7 +731,7 @@ impl Gsu {
                     _ => v as u8 as i8 as i16 as u16,
                 };
                 self.set(d, r, rom);
-                extra += self.slow();
+                extra += self.rom_wait();
             }
             _ => {
                 let (lo, c1) = self.operand(rom, ram);
@@ -811,6 +832,7 @@ impl Gsu {
         o.extend(self.lines.to_le_bytes());
         o.extend(self.clock.to_le_bytes());
         o.extend_from_slice(&self.cache);
+        o.extend(self.rom_ready.to_le_bytes());
         o
     }
 
@@ -828,6 +850,7 @@ impl Gsu {
         self.lines = u32::from_le_bytes(b[19..23].try_into().expect("four bytes"));
         self.clock = u64::from_le_bytes(b[23..31].try_into().expect("eight bytes"));
         self.cache.copy_from_slice(&b[31..31 + 512]);
+        self.rom_ready = u64::from_le_bytes(b[543..551].try_into().expect("eight bytes"));
     }
 }
 

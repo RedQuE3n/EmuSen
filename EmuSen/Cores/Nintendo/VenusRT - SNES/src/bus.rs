@@ -376,7 +376,8 @@ impl System {
                     if side_effects {
                         self.apu.run_to(self.timing.clock);
                     }
-                    return Some(self.apu.cpu_read((offset & 3) as usize));
+                    let clock = self.timing.clock;
+                    return Some(self.apu.cpu_read((offset & 3) as usize, clock));
                 }
                 0x2000..=0x3FFF => return None,
                 0x4210 => {
@@ -470,7 +471,8 @@ impl System {
                 }
                 0x2140..=0x217F => {
                     self.apu.run_to(self.timing.clock);
-                    self.apu.cpu_write((offset & 3) as usize, value);
+                    let clock = self.timing.clock;
+                    self.apu.cpu_write((offset & 3) as usize, value, clock);
                 }
                 0x2181 => self.wram_address = (self.wram_address & 0x1FF00) | value as u32,
                 0x2182 => self.wram_address = (self.wram_address & 0x100FF) | (value as u32) << 8,

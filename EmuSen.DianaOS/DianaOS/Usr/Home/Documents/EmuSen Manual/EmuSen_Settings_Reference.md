@@ -7329,6 +7329,12 @@ and was moved to straddle the tolerance before the round.
 
 #### 4.87.10 The handheld, measured: the render timer was the cause (2026-10-01)
 
+*Caveat added 2026-10-03.* gamescope's root window read `GAMESCOPE_FPS_LIMIT = 60` on every check from 2026-10-02 on,
+including after the limit was set to 120 in both the game's and the universal profile; the property does not reflect
+the setting for a window Steam did not launch. The checks on 2026-10-01 did not look for it, so whether a limit was in
+force for this section's runs is not known. The render timer's quantisation of the draws does not depend on it; the
+present lattice of §4.87.11 may.
+
 **The conditions.** Lenovo Legion Go S, SteamOS Game Mode. gamescope reports 1920x1200 at 119.90 Hz, and its root
 window says `GAMESCOPE_VRR_ENABLED = 1` and `GAMESCOPE_VRR_FEEDBACK = 1`: variable refresh was on and engaged for the
 whole session. The player's setting was left as it was. The build was this branch's, published to a scratch directory
@@ -7422,10 +7428,51 @@ paced, which must read as the grid and lock; a locked stream with a late present
 period; a count that skips, which must be used as a count; and the quantised presents of the 120 Hz timer as
 measured, which must not lock.
 
-**Measured with both changes: owed.** The build with the timer held and presents read as presents was published on
-2026-10-02, and the handheld was unreachable from then until this was written. What the figures above already say of
-it: the timer at 1000 was measured on the handheld (the last row of the experiment, and a five-minute run at 59.95 Hz
-locked, 0.02 draws a second off the median, one frame never shown, the queue at 345 ms after its first 90 s and no
-submit finding it empty); the present-count reading was measured only by replaying those traces. A run of the three
-games with Sync to display on, one with it off as the control, and the margin at 1.5 and 3 ms on the fixed build
-remain to be taken.
+~~**Measured with both changes: owed.** The build with the timer held and presents read as presents was published on 2026-10-02, and the handheld was unreachable from then until this was written. What the figures above already say of it: the timer at 1000 was measured on the handheld (the last row of the experiment, and a five-minute run at 59.95 Hz locked, 0.02 draws a second off the median, one frame never shown, the queue at 345 ms after its first 90 s and no submit finding it empty); the present-count reading was measured only by replaying those traces. A run of the three games with Sync to display on, one with it off as the control, and the margin at 1.5 and 3 ms on the fixed build remain to be taken.~~ *Measured 2026-10-03: §4.87.12.*
+
+#### 4.87.12 The fixed build on the handheld, and presents that follow the draws (2026-10-03)
+
+**Conditions.** As §4.87.10: 119.90 Hz panel, variable refresh on, the limit set to 120 in Steam (its root-window
+property still read 60, §4.87.10's caveat). Whether a 60 fps limit was in force is decided from the presents, not the
+property: they came at the content's rate, 60.10 a second for the NES, which a 60 cap would not allow.
+
+**A defect found on the way, and fixed before these runs.** The first run on the build of §4.87.11 (2026-10-02, 20:26)
+locked, drifted to 60.70 Hz, the tolerance's edge, ran the game 0.7% fast, and fell off. Its presents followed the
+draws, 15.5 to 18 ms apart on no finer lattice, so the count-of-presents reading measured nothing but its own frames.
+`DisplayClock` now locks to a count of presents only when a refresh finer than the presents has been seen (two
+refreshes and the odd one or three) and the intervals stay on it, or when the intervals are as even as a hardware
+clock's, nine in ten within 1%, which a true vblank count with a draw at every refresh gives. Otherwise the reading is
+variable and the pacing is the content's. Replayed, that trace is never locked; the 2026-10-01 grid traces still are.
+
+**Before and after, 71 s each** ("before" is Sync to display off on the same build, which is the old behaviour exactly):
+
+| Run | Pacing as decided | Draw intervals p5 / p50 / p95 ms | Off the median by > 25% | Handed over to drawn, p50 / p95 ms | Frames never shown |
+|---|---|---|---|---|---|
+| SMB3, setting off (before) | content 60.10 | 15.55 / 15.78 / 23.86 | 6.17 /s | 4.29 / 7.94 | 0 |
+| SMB3, setting on | content 60.10, follows the content | 16.46 / 16.64 / 16.83 | 0 | 0.18 / 0.24 | 0 |
+| SMB3, margin 1.5 ms | content 60.10, follows the content | 16.46 / 16.64 / 16.83 | 0 | 0.18 / 0.24 | 0 |
+| SML2, setting on | content 59.73, follows the content | 16.55 / 16.74 / 16.94 | 0 | 0.17 / 0.23 | 0 |
+| SM64, setting on | locked 119.91 / 2 by the end | 26.02 / 33.34 / 38.35 (two frames a draw) | 1.33 /s | 0.29 / 0.45 | none beyond the game's own |
+| SMB3, 316 s, setting on | locked 119.91 / 2 by the end | 16.47 / 16.64 / 16.82 | 0.02 /s | 0.18 / 0.24 | 0 |
+
+**The 15.7 / 23.8 ms step is gone on the device.** With the setting on, every run's draws are 16.64 ms apart within
+0.2 ms at the 5th and 95th percentiles, none off the median in the 71 s runs and five in 316 s; with it off, the same
+build still shows the step, 6.17 a second.
+
+**The lock took the panel's lattice when gamescope offered one, and only then.** Super Mario 64's presents were on the
+8.34 ms grid for a fifth of its first half and all of its second, and the decision went from content-paced to two
+refreshes a frame at 119.91 Hz as they did. The five-minute NES run ended locked the same way. No run drifted: the
+frame rates were 60.0987, 59.7275, 59.959 and, over 316 s with part of it locked at 59.95, 60.090. When the presents
+followed the draws, nothing locked, which is the old pacing with the timer's step removed.
+
+**The margin stays 3 ms. Decided 2026-10-03.** The 1.5 ms run never locked, because the presents followed the draws,
+so it says nothing about the margin. Locked at 3 ms, the five-minute run had five draws off the median and no frame
+lost, and a hand-over is drawn in 0.18 ms, so 3 ms leaves the presenter's latch its room. No measurement argues for a
+change.
+
+**Audio, five minutes on the handheld's own device.** After the first 90 s the queue averaged 342 ms, never read
+empty, shed nothing, and the correction stayed within 0.9967 to 1.0023 of the nominal. In the 71 s runs the queue
+averaged 222 to 232 ms, Super Mario 64's 158 ms.
+
+**Not covered.** Whether gamescope presents on its grid or follows the draws was not under this build's control and
+changed within runs; what decides it is not known. The desktop has not run the timer hold in a real window.

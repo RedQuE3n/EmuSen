@@ -292,7 +292,8 @@ impl Gsu {
                 self.cache[at as usize & 0x1FF] = self.fetch_memory(at, rom, ram);
             }
             self.lines |= 1 << line;
-            return (self.cache[pc as usize & 0x1FF], self.slow());
+            // D-35: the whole line at slow() a byte, a state to begin and one to end, the CPU waiting for all of it.
+            return (self.cache[pc as usize & 0x1FF], 16 * self.slow() + 2);
         }
         (self.fetch_memory(pc, rom, ram), self.slow())
     }

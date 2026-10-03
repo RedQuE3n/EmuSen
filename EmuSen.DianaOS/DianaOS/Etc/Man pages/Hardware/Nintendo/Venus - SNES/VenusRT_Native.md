@@ -2598,3 +2598,24 @@ read in Mesen's):
   then measured against the transients' length (Super Mario RPG's $1D3F, Kirby's $95/$A7) and the pictures.
 - **The S-CPU-side drift the control shows** (Super Mario World from frame 77) is smaller and separate; D-6's
   power-on phase is the open item it would start from.
+
+## 28. The coprocessors' costs from the referee (2026-10-03)
+
+§27.4's recommendation carried out: the referee's cost rules read in logged dispute steps (D-35 for the GSU), then one
+cost changed at a time, measured against the games' own counters and kept only while the GSU's test ROMs, the drawing
+ROMs and the skip-versus-draw check still pass. Mesen's counters are the comparison, not the authority: a change is
+kept for its referee basis, and one that only moved a number toward Mesen's would not be.
+
+### 28.1 The GSU, one cost at a time (measured 2026-10-03)
+
+Each row is the build after that change and every change above it. "Star Fox" is $15BB: the SNES frame its first 3D
+frame completes at, then over frames 300-900 the count, SNES frames per 3D frame, and the histogram of SNES frames
+between counts (gap: occurrences). "Vortex" is $198C over 450-900, its count and SNES frames per count. Mesen's runs:
+Star Fox 148, 131 counts at 4.58, gaps 3:31 4:37 5:25 6:30 7:7; Vortex 173 at 2.601. Every row kept passed the 31
+GSUTest ROMs and the 27 drawing ROMs (each final picture equal to Mesen's, and the frames differing on the way
+unchanged) and skip-versus-draw over the six GSU games for 600 frames.
+
+| Build | D-35 basis | Star Fox first | Star Fox 300-900 | Gaps | Vortex 450-900 | Kept |
+|---|---|---|---|---|---|---|
+| Stage 5 as closed | fullsnes's guesses | 147 | 137 at 4.38 | 2:2 3:34 4:45 5:24 6:29 7:2 | 174 at 2.586 | - |
+| Cache line fill at slow() a byte, the CPU waiting for the line | the line runs 16 bytes at 3/5 cycles each, plus a state to begin and one to end | 147 | 126 at 4.76 | 2:1 3:28 4:28 5:26 6:29 7:13 | 174 at 2.586 | yes |

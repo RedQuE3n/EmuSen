@@ -51,6 +51,10 @@ pub struct Gsu {
     /// The master clock the RAM port finishes its posted store at, and the bytes this opcode posted (D-35).
     pub ram_ready: u64,
     pub stored: u64,
+    /// The pixel cache's primary row for timing (its y and x / 8, and which pixels were plotted) and its flush's end (D-35).
+    pub pc_offset: u16,
+    pub pc_valid: u8,
+    pub pcf_ready: u64,
     pub ram_address: u16,
     /// Master clocks the GSU has run.
     pub clock: u64,
@@ -90,6 +94,9 @@ impl Gsu {
             r14_written: false,
             ram_ready: 0,
             stored: 0,
+            pc_offset: 0,
+            pc_valid: 0,
+            pcf_ready: 0,
             ram_address: 0,
             clock: 0,
         }
@@ -343,6 +350,21 @@ impl Gsu {
         self.ram_wait() + 1
     }
 
+    fn pixel_block(&self) -> u16 {
+        (self.r[2] & 0xFF) << 5 | (self.r[1] & 0xFF) >> 3
+    }
+
+    /// D-35: the primary row moves to the secondary and the RAM port writes it out, a read and a write a bitplane
+    /// unless all 8 pixels were plotted; the CPU waits only while an earlier flush still runs. Returns that wait.
+    fn pixel_flush(&mut self) -> u64 {
+        let stall = self.pcf_ready.saturating_sub(self.clock).div_ceil(self.cycle());
+        let start = (self.clock + stall * self.cycle()).max(self.ram_ready);
+        let accesses = self.bpp() as u64 * if self.pc_valid == 0xFF { 1 } else { 2 };
+        self.pcf_ready = start + (accesses * self.slow() + 1) * self.cycle();
+        self.pc_valid = 0;
+        stall
+    }
+
     fn refill_rom_buffer(&mut self, rom: &[u8]) {
         self.rom_buffer = Self::rom_at((self.rombr as u32) << 16 | self.r[14] as u32, rom.len()).map_or(0, |o| rom[o]);
     }
@@ -438,6 +460,9 @@ impl Gsu {
         }
         let (next, mut cost) = self.code(self.r[15], rom, ram);
         self.pipe = next;
+        if self.pc_valid != 0 && self.pixel_block() != self.pc_offset {
+            cost += self.pixel_flush();
+        }
         cost += self.execute(op, rom, ram);
         if self.r14_written {
             self.r14_written = false;
@@ -570,7 +595,7 @@ impl Gsu {
                     self.set_sz(v);
                     extra += 20;
                 } else {
-                    self.plot(ram);
+                    extra += self.plot(ram);
                 }
             }
             0x4D => {
@@ -812,7 +837,7 @@ impl Gsu {
         tile * 8 * self.bpp() + (self.scbr as usize) * 0x400 + (y & 7) * 2
     }
 
-    fn plot(&mut self, ram: &mut [u8]) {
+    fn plot(&mut self, ram: &mut [u8]) -> u64 {
         let (x, y) = (self.r[1] & 0xFF, self.r[2] & 0xFF);
         let bpp = self.bpp();
         let mut c = self.colr;
@@ -833,8 +858,11 @@ impl Gsu {
                     ram[i] = (ram[i] & !(1 << bit)) | (((c >> p) & 1) << bit);
                 }
             }
+            self.pc_valid |= 0x80 >> (x & 7);
         }
+        self.pc_offset = (y << 5) | (x >> 3);
         self.r[1] = self.r[1].wrapping_add(1);
+        if self.pc_valid == 0xFF { self.pixel_flush() } else { 0 }
     }
 
     fn pixel(&self, ram: &[u8]) -> u8 {
@@ -862,6 +890,9 @@ impl Gsu {
         o.extend_from_slice(&self.cache);
         o.extend(self.rom_ready.to_le_bytes());
         o.extend(self.ram_ready.to_le_bytes());
+        o.extend(self.pcf_ready.to_le_bytes());
+        o.extend(self.pc_offset.to_le_bytes());
+        o.push(self.pc_valid);
         o
     }
 
@@ -881,6 +912,8 @@ impl Gsu {
         self.cache.copy_from_slice(&b[31..31 + 512]);
         self.rom_ready = u64::from_le_bytes(b[543..551].try_into().expect("eight bytes"));
         self.ram_ready = u64::from_le_bytes(b[551..559].try_into().expect("eight bytes"));
+        self.pcf_ready = u64::from_le_bytes(b[559..567].try_into().expect("eight bytes"));
+        (self.pc_offset, self.pc_valid) = (u16::from_le_bytes([b[567], b[568]]), b[569]);
     }
 }
 

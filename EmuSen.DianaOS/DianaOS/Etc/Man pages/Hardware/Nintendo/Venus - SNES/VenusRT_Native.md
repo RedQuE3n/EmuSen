@@ -2481,7 +2481,7 @@ was not measured. 2.10 ms a frame drawn.
 - **P2 (Super Mario RPG and Yoshi's Island at most 3.8 ms a frame at the end of stage 5): met.** Under the lock (load
   2.6 falling to 1.9): Super Mario RPG 2.77 ms drawn (1.67 skipped), Yoshi's Island 1.97 (0.94), against C# Venus's
   4.16 and 3.13; Pilotwings 2.23. P2 is retired as met.
-- **The clone check across `chips/`** (the four coprocessor files, 2,800 lines, against Mesen's 164 files): the
+- **The clone check across `chips/`** (the four coprocessor files, 2,353 lines with mod.rs, against Mesen's 164 files): the
   largest pair is 4 fingerprints (`sa1.rs` with `Sa1Types.h`, fullsnes's register names, §25.3), `gsu.rs`'s largest
   3 and `necdsp.rs`'s 2; `obc1.rs` shares none; no table. Over the whole crate (28 files) the one pair over the
   threshold and the two shared tables are still the S-DSP's documented Gaussian table and counter rates (§22.5).

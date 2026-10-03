@@ -1,6 +1,5 @@
 //! The state's bytes hashed every `step` frames, for proving a change leaves the machine where it was.
 //! `state_hash <rom> <frames> [step]` prints one FNV-1a hash a line.
-use emusen_native::ffi::StateMachine;
 
 #[path = "common/load.rs"]
 mod load;

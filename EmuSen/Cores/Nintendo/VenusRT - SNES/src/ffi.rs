@@ -20,7 +20,8 @@ impl NativeCore for Machine {
     const ENGINE: &'static str = "VenusRT";
 
     /// The battery save is file 0, clipped to the cartridge's RAM; file 1 is the SPC700's 64-byte boot ROM, required;
-    /// file 2 is a NEC DSP's firmware, 8,192 or 53,248 bytes, for a cartridge whose header names one.
+    /// file 2 is a NEC DSP's firmware, 8,192 or 53,248 bytes, for a cartridge whose header names one, or its program
+    /// with file 3 its data (6,144 and 2,048, or 49,152 and 4,096).
     fn create(image: &[u8], settings: &Settings, files: &[File<'_>]) -> Result<Self, i32> {
         if settings.keys().next().is_some() {
             return Err(abi::status::UNKNOWN_SETTING);
@@ -32,8 +33,20 @@ impl NativeCore for Machine {
         };
         let pal = m.sys.timing.pal;
         m.sys.apu = crate::apu::smp::Smp::new(Some(ipl), pal);
+        // File 2 is the DSP's firmware whole, or its program with file 3 its data.
+        let program = files.iter().find(|f| f.which == 2).map(|f| f.data);
+        let data = files.iter().find(|f| f.which == 3).map(|f| f.data);
+        let firmware: Option<Vec<u8>> = match (program, data) {
+            (Some(p), Some(d)) => Some([p, d].concat()),
+            (Some(p), None) => Some(p.to_vec()),
+            (None, Some(_)) => return Err(abi::status::BAD_FILE),
+            (None, None) => None,
+        };
+        if firmware.is_some_and(|f| !m.attach_dsp(&f)) {
+            return Err(abi::status::BAD_FILE);
+        }
         for file in files {
-            if file.which > 2 || (file.which == 2 && !m.attach_dsp(file.data)) {
+            if file.which > 3 {
                 return Err(abi::status::BAD_FILE);
             }
             if file.which != 0 {

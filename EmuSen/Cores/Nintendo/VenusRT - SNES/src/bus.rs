@@ -327,6 +327,47 @@ impl System {
         }
     }
 
+    /// A write from outside the machine (a cheat's poke, the debugger) to the CPU's bus: it lands where the bus would
+    /// take it in memory (WRAM, the cartridge's RAM, the SA-1's I-RAM and BW-RAM under their protection, the GSU's RAM
+    /// when the GSU does not own it) and is dropped elsewhere, touching no register, the MDR or a coprocessor's clock.
+    pub fn poke(&mut self, address: u32, value: u8) {
+        let bank = (address >> 16) as u8;
+        let offset = address as u16;
+        if bank & 0xFE == 0x7E || (bank & 0x40 == 0 && offset < 0x2000) {
+            let at = if bank & 0xFE == 0x7E { address & 0x1FFFF } else { offset as u32 };
+            self.wram[at as usize] = value;
+            return;
+        }
+        let c = &mut self.cart;
+        if c.obc1.is_some() && crate::chips::obc1::Obc1::snes_maps(address) {
+            if !(0x7FF0..=0x7FF7).contains(&offset) {
+                if let Some(b) = c.sram.get_mut(offset as usize - 0x6000) {
+                    *b = value;
+                }
+            }
+            return;
+        }
+        if let Some(gsu) = c.gsu.as_mut() {
+            if crate::chips::gsu::Gsu::snes_maps(address) {
+                if bank & 0x40 != 0 || offset >= 0x6000 {
+                    gsu.snes_write(address, value, &c.rom, &mut c.sram);
+                }
+                return;
+            }
+        }
+        if let Some(sa1) = c.sa1.as_mut() {
+            if crate::chips::sa1::Sa1::snes_maps(address) {
+                if !(bank & 0x40 == 0 && (0x2200..=0x23FF).contains(&offset)) {
+                    sa1.snes_write(address, value, &c.rom, &mut c.sram);
+                }
+                return;
+            }
+        }
+        if let Some(Slot::Sram(i)) = c.decode(address) {
+            c.sram[i] = value;
+        }
+    }
+
     /// A read's value, or None where nothing drives the bus. `side_effects` false is the debugger's look.
     pub fn read_value(&mut self, address: u32, side_effects: bool) -> Option<u8> {
         let bank = (address >> 16) as u8;

@@ -1008,5 +1008,20 @@ their data.
   `rtl/SMP.vhd`, the CPU-side and SPC700-side port registers, the strobes and clock edges at which each side writes
   and reads them, and how the SMP's clock is placed against the S-CPU's bus cycle; in `rtl/SNES.vhd`, only the
   wiring of those strobes and clocks.
+  Read 2026-10-03: `SMP.vhd` lines 1-60 (the ports and signals), 150-190 (the S-CPU-side input registers and their
+  clear), 225-300 (the SPC700-side register writes, the output registers among them), 345-372 (the SPC700's read
+  latch and its read multiplexer), and the grep lines for the ports; `SNES.vhd`'s grep lines for the SMP's clock and
+  enables; and, because the SMP's clock enables are made there and not in `SMP.vhd`, `DSP.vhd` lines 238-276 (the
+  clock generator and the four sub-steps) with `DSP_PKG.vhd`'s four clock constants. Nothing of the SPC700 core, the
+  timers' counting or the DSP's voices was read. What they say:
+  - The S-CPU's write lands in the input register at its bus cycle's end (`PAWR_N` low at `SYSCLKF_CE`). The S-CPU's
+    read is driven straight from the output register, so it takes what the register holds when the 65C816 latches
+    its data, at the same cycle end.
+  - The SPC700's cycle is four sub-steps of a 4.096 MHz enable (4.10496 MHz as an option, 32,060 Hz, off by default),
+    so one SPC700 cycle is the documents' 1.024 MHz. Its read of $F4-$F7 latches the input register at the first
+    sub-step of the read cycle; its write of $F4-$F7 lands in the output register at the fourth.
+  - The $F1 write's clearing of the input registers lands at the fourth sub-step too.
+  - The S-CPU never waits on the SPC700, nor the SPC700 on the S-CPU; fullsnes's OR of old and new values in a
+    simultaneous write and read is not modelled.
 - Conclusion: open.
 - Pinned by: the four traces of §29 and the APU oracles.

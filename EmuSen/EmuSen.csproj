@@ -88,11 +88,24 @@
   </Target>
 
   <!-- One cargo build per crate of RustCores.props, in its order; the first to fail stops the build. -->
-  <Target Name="BuildRustCores" BeforeTargets="BeforeBuild" DependsOnTargets="FindCargo;BuildRustCore" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
+  <Target Name="BuildRustCores" BeforeTargets="BeforeBuild" DependsOnTargets="FindCargo;BuildRustCore;WriteCoreSidecars" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
     <ItemGroup>
       <_EmuSenRustLibrary Include="@(EmuSenRustCrate->'$(EmuSenCargoTargetRoot)/%(Identity)/$(EmuSenNativeProfile)/$(EmuSenHostLibraryPrefix)%(Identity)$(EmuSenHostLibrarySuffix)')" />
       <None Include="@(_EmuSenRustLibrary)" Condition="Exists('%(_EmuSenRustLibrary.FullPath)')" Link="%(_EmuSenRustLibrary.Filename)%(_EmuSenRustLibrary.Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <_EmuSenRustSidecar Include="@(_EmuSenRustLibrary->'%(Identity).core.json')" />
+      <None Include="@(_EmuSenRustSidecar)" Condition="Exists('%(_EmuSenRustSidecar.FullPath)')" Link="%(_EmuSenRustSidecar.Filename)%(_EmuSenRustSidecar.Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
+  </Target>
+
+  <!-- Each library on the core ABI v1 (CoreAbi 1) gets its sidecar from the conformance kit's runner, which loads it once, so a frontend lists it without loading it - see EmuSen_CoreAPI.md §7.1, §22. -->
+  <Target Name="WriteCoreSidecars" DependsOnTargets="BuildRustCore" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true' And '$(CargoFound)' == 'true' And '@(EmuSenRustCrate->WithMetadataValue('CoreAbi', '1'))' != ''">
+    <PropertyGroup>
+      <_EmuSenConformDir>$(MSBuildThisFileDirectory)Cores/Shared/emusen-core-conform/</_EmuSenConformDir>
+      <_EmuSenConformRunner>$(EmuSenCargoTargetRoot)/emusen-core-conform/release/emusen-core-conform</_EmuSenConformRunner>
+      <_EmuSenConformRunner Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(_EmuSenConformRunner).exe</_EmuSenConformRunner>
+    </PropertyGroup>
+    <Exec WorkingDirectory="$(_EmuSenConformDir)" Command="cargo build --release --bin emusen-core-conform --manifest-path &quot;$(_EmuSenConformDir)Cargo.toml&quot; --target-dir &quot;$(EmuSenCargoTargetRoot)/emusen-core-conform&quot;" StandardOutputImportance="low" />
+    <Exec Condition="'%(EmuSenRustCrate.CoreAbi)' == '1'" Command="&quot;$(_EmuSenConformRunner)&quot; --sidecar &quot;$(EmuSenCargoTargetRoot)/%(EmuSenRustCrate.Identity)/$(EmuSenNativeProfile)/$(EmuSenHostLibraryPrefix)%(EmuSenRustCrate.Identity)$(EmuSenHostLibrarySuffix)&quot;" StandardOutputImportance="low" />
   </Target>
 
   <!-- Batched: once per crate. Its profile for this target is used from a copy named by its hash, so a refreshed profile rebuilds every crate it guides; no profile, no flag and no warning - see Mars_Native.md §6.17. -->

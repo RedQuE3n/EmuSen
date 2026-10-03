@@ -250,10 +250,25 @@ jobs:
           esac
           ls -la "$file"
 
+      # A library on the core ABI v1 gets its sidecar from the kit's runner, as the local build writes it (EmuSen_CoreAPI.md §22); not on osx-x64, whose library this runner cannot load.
+      - name: The sidecar
+        if: matrix.platform.test == true
+        shell: bash
+        run: |
+          file="target/${{ matrix.platform.target }}/dist/$LIBRARY"
+          py=$(command -v python3 || command -v python)
+          if "$py" -c "import ctypes, sys; sys.exit(0 if hasattr(ctypes.CDLL(sys.argv[1]), 'emusen_core_abi_version') else 1)" "$file"; then
+            cargo run --release --manifest-path ../../Shared/emusen-core-conform/Cargo.toml -- --sidecar "$file"
+          else
+            echo "not on the core ABI v1: no sidecar"
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.crate.name }}-${{ matrix.platform.rid }}
-          path: ${{ matrix.crate.dir }}/target/${{ matrix.platform.target }}/dist/${{ env.LIBRARY }}
+          path: |
+            ${{ matrix.crate.dir }}/target/${{ matrix.platform.target }}/dist/${{ env.LIBRARY }}
+            ${{ matrix.crate.dir }}/target/${{ matrix.platform.target }}/dist/${{ env.LIBRARY }}.core.json
           if-no-files-found: error
 
   # WiseMan's tests of the Rust cores against the C# cores, run on each platform against the libraries the job above ships; osx-x64 is left out, its runner being arm64.
@@ -333,7 +348,7 @@ jobs:
 
       - name: Test the Rust cores against the C# cores
         working-directory: EmuSen-Project
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery|FullyQualifiedName~MoonRtCoreAbi" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       - uses: actions/upload-artifact@v4
         if: always()

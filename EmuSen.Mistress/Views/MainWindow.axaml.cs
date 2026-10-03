@@ -372,10 +372,17 @@ namespace EmuSen.Mistress.Views
             await StartGameAsync(file.Path, file.Name);
         }
 
-        // Runs before LoadRom because afterwards is too late; declining is fine - see EmuSen_Firmware.md §3.
+        // The engine is chosen before the core exists, from the game's own choice or the graphics window's row - see EmuSen_Settings_Reference.md §4.44.
+        private string? EngineChosenFor(string path)
+        {
+            string console = EmuSen.Cores.CoreCatalog.ConsoleForRom(path) ?? "Unknown";
+            return EmuSen.Cores.CoreCatalog.EngineChosen(console, GameEngine(path) ?? _graphics.Value(console, EmuSen.Cores.CoreCatalog.EngineKey));
+        }
+
+        // Runs before LoadRom because afterwards is too late, asking the engine that will run the game; declining is fine - see EmuSen_Firmware.md §3.
         private async Task PromptForMissingFirmwareAsync(string romPath)
         {
-            foreach (FirmwareRequest request in EmulatorSession.MissingFirmwareFor(romPath))
+            foreach (FirmwareRequest request in EmulatorSession.MissingFirmwareFor(romPath, EngineChosenFor(romPath)))
             {
                 var types = new[]
                 {
@@ -930,8 +937,7 @@ namespace EmuSen.Mistress.Views
             {
                 // Off the path, not the session: no core exists yet to ask - see EmuSen_Multicore.md §12.
                 string console = EmuSen.Cores.CoreCatalog.ConsoleForRom(path) ?? "Unknown";
-                // The engine is chosen before the core exists, from the graphics window's row - see EmuSen_Settings_Reference.md §4.44.
-                _session = new EmulatorSession { Cheats = _cheats, Engine = EmuSen.Cores.CoreCatalog.EngineChosen(console, GameEngine(path) ?? _graphics.Value(console, EmuSen.Cores.CoreCatalog.EngineKey)) };
+                _session = new EmulatorSession { Cheats = _cheats, Engine = EngineChosenFor(path) };
                 StartLogging(console);
                 _session.LoadRom(path);
                 if (_session.EngineNotice is { } engineNotice) Console.WriteLine("[core] " + engineNotice);

@@ -175,7 +175,7 @@ namespace EmuSen.Cores
                 : (null, null);
 
         // Answered without loading, so a caller can resolve a missing chip first - see EmuSen_Firmware.md §3.
-        public static ICore ForFirmwareProbe(string romPath) => Create(romPath, headless: true);
+        public static ICore ForFirmwareProbe(string romPath, string? engine = null) => Create(romPath, headless: true, engine);
 
         // What a cheat window opened before any ROM is parses with - see EmuSen_Multicore.md §4.
         public static (ICheatCodeCodec AutoDetect, ICheatCodeCodec Explicit) DefaultCheatCodecs => VenusCheatCodecs.Pair();

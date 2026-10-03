@@ -2928,3 +2928,26 @@ VenusRT claims `RESET`, `SNAPSHOT`, `BATTERY_DIRTY`, `ROM_PATCHES` and `CHEAT_PO
 `dotnet publish` of Mistress alone stopped on NETSDK1152 (DianaOS's apphost and runtime files found twice), before
 the sidecar step, so the publish half was not seen end to end here; the target copies the sidecar into the publish
 folder by the same item as the library.
+
+## 34. The adapter's split firmware, and the prompt asking the engine that runs (2026-10-03)
+
+§33 left the generic adapter loading a firmware file whole by its name only, so the program and data pair VenusRT's
+`firmware_for` also names was never tried. Built, in `EmuSen/Cores/Native/CoreEngine.cs` and `EmuSen/Common/Firmware/`:
+
+- **`FirmwareRequest.Parts`** carries `firmware_for`'s split forms; **`FirmwareLibrary.TryLoadParts`** returns the first
+  form whose files are all present and together the whole's size, part by part, and `IsInstalled` holds a request met
+  either way.
+- **`CoreEngine.LoadRom`** takes each file whole by its name and size, else its first split form found, part n as
+  file `which` + n (`EmuSen_CoreAPI.md` §6.2). For VenusRT that is `dsp1b.program.rom` and `dsp1b.data.rom` as files 2
+  and 3, which §32's `create` accepts.
+- **The missing-firmware prompt asks the engine that will run the game.** `EmulatorSession.MissingFirmwareFor` and
+  `CoreFactory.ForFirmwareProbe` take the engine, and Mistress passes the one it is about to start (the game's own
+  choice, else the graphics window's row). Before, the reference engine was always asked, so a game about to run on
+  VenusRT was never asked for the SPC700's boot ROM, which Venus (C#) does not need and VenusRT refuses to start
+  without.
+
+Tested with synthetic bytes, no dump (`VenusRtCoreAbiTests.The_adapter_takes_a_dsp_firmware_whole_or_as_its_split_pair`):
+a DSP-1 cartridge of `SyntheticRom` asks VenusRT for `spc700.rom` and `dsp1.rom` and Venus (C#) for no boot ROM; with
+the pair in the firmware folder nothing is missing and the DSP is fitted (the state grows by its group); a pair of the
+wrong total size is not taken; the whole file gives the same machine. WiseMan's firmware, factory, adapter, discovery,
+engine and Mistress window tests: 306 of 306.

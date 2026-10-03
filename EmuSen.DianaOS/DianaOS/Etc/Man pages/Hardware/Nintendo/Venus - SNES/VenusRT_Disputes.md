@@ -931,6 +931,11 @@ their data.
   - The decode is by address alone: ROM is $8000-$FFFF of banks $00-$3F/$80-$BF and all of $C0-$FF on both sides;
     BW-RAM is $6000-$7FFF of those banks and banks $40-$4F (the SA-1 also $50-$6F); I-RAM is $3000-$37FF (the SA-1
     also $0000-$07FF).
-- Conclusion: open.
+- Conclusion: settled 2026-10-03 as the referee states it, built in VenusRT_Native.md §28.2: each S-CPU cycle holds
+  the SA-1 off the memory its address selects from 3 master clocks in (4 for DMA) to the cycle's end, and the SA-1
+  waits; the S-CPU never does. Measured: Kirby Super Star's SA-1 loses 42.6% of its clocks to holds and Super Mario
+  RPG's 5.0%, yet neither game's transient nor any SA-1 game's pictures move, so contention is not their cause. Not
+  modelled: the SA-1's DMA and character conversion against the S-CPU, HDMA's table reads, and the SA-1's clock phase
+  restarting at each S-CPU cycle.
 - Pinned by: Super Mario RPG's $1D3F and Kirby Super Star's $95/$A7, the SA-1 games' pictures, and absindx's SA-1
   tests staying passed.

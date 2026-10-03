@@ -2725,3 +2725,63 @@ SPC700's writes timestamped (cheap) and its reads of the S-CPU's writes made at 
 instruction-stepped SPC700 cannot do while it runs ahead of the S-CPU. Measured against the four traces above, which
 show the effect within the first frame. D-6's 150-clock SPC700 lead is judged after it. Yoshi's Island's PPU-side
 look stays recorded as next.
+
+## 30. The S-CPU's and SPC700's ports by the cycle, and the SPC700's start (2026-10-03)
+
+### 30.1 What was built (D-37, D-6)
+
+- **The ports' latches as the referee places them.** Each side's writes wait in a queue stamped in quarters of a DSP
+  cycle (1.024 MHz). The S-CPU's write lands at the end of its bus cycle. The SPC700 latches $F4-$F7 in the first
+  quarter of its read cycle and its write lands in the fourth, as does CONTROL's clearing of the inputs. The S-CPU
+  reads at its cycle's end what had landed by then. The queues travel in the state (state version 17).
+- **The SPC700 kept behind the S-CPU.** It runs an instruction only when every cycle of it starts before the
+  S-CPU's clock, so no S-CPU write still to come is one it should have seen. The instruction it stands at, which
+  would cross the S-CPU's clock, is run on a copy that changes nothing (`Smp::peek`) when the S-CPU reads a port, for
+  the port writes it makes before the read. The peek is cached while the SPC700 and the input queue stand still.
+- **The SPC700's start (D-6, the referee's half).** The SPC700 leaves reset 150 master clocks before the 65C816 and
+  runs its 8-cycle reset sequence (its BRK with the writes held off) before fetching at $FFC0, where before it
+  fetched in its first cycle with the 65C816. The 65C816's start against the PPU's counters is unchanged.
+
+### 30.2 The keep checks (measured 2026-10-03)
+
+| Check | Before | Ports timed | With the SPC700's start |
+|---|---|---|---|
+| SPC700 single-step suite (`cargo test spc700`, the corpus set) | passes | passes | passes |
+| Corpus, VenusRT's verdicts | 108 of Mesen's 117 passed, 172 visual | the same, verdict for verdict | the same |
+| spc_dsp6, its 111 tests singly | 105 pass, 6 hang | the same | 106 pass, 5 hang: `4c000_Random_pitch_mod` (§23.8's regression) passes |
+| Skip-versus-draw, 25 games for 600 frames | - | all same | all same |
+| WiseMan VenusRT tests, the crate's tests | pass | pass (one new test of the ports' timing) | pass |
+
+blargg's three SPC700 ROMs, spctest and the 2010 ROMs keep their verdicts. The 2010 ROMs and the two speed
+measurements print timing numbers without a verdict; against Mesen's prints, VRAM bytes differing, before / ports /
+start: `test_speed` 4 / 1 / 1, `test_timer_speed` and `_speed2` 7 / 4 / 6, `test_timer_speed3` 5 / 3 / 8,
+`test_timer_speed_2` 2 / 3 / 2, lidnariq's `smpspeed` 9 / 3 / 9, undisbeliever's `ipl-speed-test` 6 / 17 / 21. The
+numbers move by one count here and there, toward Mesen's and away; none has a console's value to be graded by.
+
+### 30.3 The four traces against Mesen's
+
+| Game | Before | Ports timed | With the SPC700's start |
+|---|---|---|---|
+| Star Fox | 149 | 149 | 149 |
+| Super Mario World | 2,039 | 1,994 | 1,994 |
+| Super Mario RPG | 6,944 | 6,920 | 6,920 |
+| Super Mario Kart | 8,729 | 8,560 | 8,560 |
+
+The exact ports agree with Mesen's less, not more: each handshake game now parts a few polls earlier. Star Fox's
+parting is the PPU phase, D-6's other half, which neither change touches. A scan of SPC700 leads from -40 to 200
+master clocks on the timed ports found Super Mario World's trace following Mesen's furthest, to instruction 6,952
+with the CPU's start at 132, at a lead near 82; that is fitting Mesen, not a rule, and nothing was built from it.
+
+### 30.4 The cost
+
+`frame_cost`, best of three over 1,200 frames under the timing lock, before and after in turn: Super Mario World 2.09
+against 2.10 ms a frame at load 0.4 (ports timed, after the peek's allocation was removed and its result cached), and
+at load 6.7 with the SPC700's start, Super Mario World 2.19 against 2.24, Donkey Kong Country 2.14 against 2.18-2.21,
+Super Mario Kart 1.60 against 1.65, Kirby Super Star 2.69 against 2.71-2.72: about 2-3% where the S-CPU polls the
+ports often, under 1% where it does not.
+
+### 30.5 What is left
+
+- D-6's other half, the 65C816's start against the PPU's counters: open, Mesen's 132 the only number (§29).
+- fullsnes's OR of a simultaneous SPC700 write and S-CPU read, not modelled.
+- Yoshi's Island's PPU-side look, recorded as next.

@@ -33,7 +33,21 @@ namespace EmuSen.Common.Firmware
             return null;
         }
 
-        public static bool IsInstalled(FirmwareRequest request) => TryLoad(request) != null;
+        public static bool IsInstalled(FirmwareRequest request) => TryLoad(request) != null || TryLoadParts(request) != null;
+
+        // The first split form whose files are all present and together the whole's size (any size where the request gives none), part by part.
+        public static IReadOnlyList<byte[]>? TryLoadParts(FirmwareRequest request)
+        {
+            foreach (var form in request.Parts)
+            {
+                if (form.Count < 2) continue;
+                var parts = form.Select(name => TryRead(Path.Combine(Directory, name))).ToArray();
+                if (parts.Any(p => p is null)) continue;
+                if (request.Size > 0 && parts.Sum(p => p!.Length) != request.Size) continue;
+                return parts.Select(p => p!).ToArray();
+            }
+            return null;
+        }
 
         public static IReadOnlyList<FirmwareRequest> MissingFrom(IEnumerable<FirmwareRequest> requests) =>
             requests.Where(r => !IsInstalled(r)).ToArray();
@@ -54,6 +68,18 @@ namespace EmuSen.Common.Firmware
             {
                 Console.WriteLine($"[Firmware] Could not install {request.FileName}: {ex.Message}");
                 return false;
+            }
+        }
+
+        private static byte[]? TryRead(string path)
+        {
+            try
+            {
+                return File.Exists(path) ? File.ReadAllBytes(path) : null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return null;
             }
         }
 

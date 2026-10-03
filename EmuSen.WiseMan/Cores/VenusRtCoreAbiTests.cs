@@ -122,6 +122,46 @@ namespace EmuSen.WiseMan.Cores
             Assert.False(CoreLibrary.IsOpen(library));
         }
 
+        // A DSP's firmware found whole or as its program and data pair, the pair passed as files 2 and 3, and what is missing asked of the engine that will run; synthetic bytes, not a dump.
+        [Fact]
+        public void The_adapter_takes_a_dsp_firmware_whole_or_as_its_split_pair()
+        {
+            if (Discovered is not { } found) return;
+            string rom = Path.Combine(_root, "pilot.sfc");
+            File.WriteAllBytes(rom, SyntheticRom.BuildNecDsp("PILOTWINGS"));
+            Assert.Equal(new[] { "spc700.rom", "dsp1.rom" }, EmuSen.Common.EmulatorSession.MissingFirmwareFor(rom, Engine).Select(r => r.FileName));
+            Assert.DoesNotContain(EmuSen.Common.EmulatorSession.MissingFirmwareFor(rom), r => r.FileName == "spc700.rom");
+            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, "spc700.rom"), VenusRtTestRomRunnerTests.IdleIpl());
+            byte[] program = Enumerable.Range(0, 6144).Select(i => (byte)(i * 3)).ToArray(), data = Enumerable.Range(0, 2048).Select(i => (byte)(i * 5)).ToArray();
+            string whole = Path.Combine(FirmwareLibrary.Directory, "dsp1.rom");
+            int StateSize()
+            {
+                using var engine = new CoreEngine(found.Open()!);
+                engine.LoadRom(rom);
+                return engine.Machine.StateSize(0);
+            }
+
+            var request = new CoreEngine(found.Open()!).GetFirmwareRequirements(rom).Single(r => r.FileName == "dsp1.rom");
+            Assert.Equal(8192, request.Size);
+            Assert.Contains(request.Parts, form => form.SequenceEqual(new[] { "dsp1.program.rom", "dsp1.data.rom" }));
+            int none = StateSize();
+            Assert.False(FirmwareLibrary.IsInstalled(request));
+
+            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, "dsp1.program.rom"), program);
+            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, "dsp1.data.rom"), data);
+            Assert.True(FirmwareLibrary.IsInstalled(request));
+            Assert.Empty(EmuSen.Common.EmulatorSession.MissingFirmwareFor(rom, Engine));
+            Assert.Equal(new[] { program, data }, FirmwareLibrary.TryLoadParts(request));
+            int pair = StateSize();
+            Assert.True(pair > none, "the split pair did not reach the DSP");
+
+            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, "dsp1.data.rom"), data[..1000]);
+            Assert.Null(FirmwareLibrary.TryLoadParts(request));
+            Assert.Equal(none, StateSize());
+            File.WriteAllBytes(whole, program.Concat(data).ToArray());
+            Assert.Equal(pair, StateSize());
+        }
+
         // The generic engine over VenusRT's v1 exports and the shim over its pre-stable ones: the same picture, sound and state, frame for frame.
         [Fact]
         public void The_v1_adapter_runs_venusrt_exactly_as_the_shim()

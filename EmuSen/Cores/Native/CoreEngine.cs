@@ -119,7 +119,10 @@ namespace EmuSen.Cores.Native
 
         // What the image needs, answered from its bytes without a machine; Purpose says whether the game runs without it.
         public IReadOnlyList<FirmwareRequest> GetFirmwareRequirements(string romPath) =>
-            Library.FirmwareFor(File.ReadAllBytes(romPath)).Select(f => new FirmwareRequest(Info.Name, f.Label, f.Name, (int)f.Size, f.Required ? "required" : "optional")).ToArray();
+            Library.FirmwareFor(File.ReadAllBytes(romPath)).Select(Request).ToArray();
+
+        private FirmwareRequest Request(CoreFirmware f) =>
+            new(Info.Name, f.Label, f.Name, (int)f.Size, f.Required ? "required" : "optional") { Parts = f.Parts };
 
         // The image, its firmware from the library and its battery files by the runtime's path rule; a second create when machine info names battery files the first could not know.
         public void LoadRom(string path)
@@ -128,8 +131,12 @@ namespace EmuSen.Cores.Native
             string extension = System.IO.Path.GetExtension(path).ToLowerInvariant();
             string console = CoreCatalog.ConsoleForRom(path) ?? Info.SystemFor(extension)?.Id.ToUpperInvariant() ?? Info.Id;
             var firmware = new List<(uint, byte[])>();
+            // Each file whole by its name and size, else its first split form found, part n as file Which + n - see EmuSen_CoreAPI.md §6.2.
             foreach (var f in Library.FirmwareFor(image))
-                if (FirmwareLibrary.TryLoad(new FirmwareRequest(Info.Name, f.Label, f.Name, (int)f.Size, "")) is { } data) firmware.Add((f.Which, data));
+            {
+                if (FirmwareLibrary.TryLoad(Request(f)) is { } data) firmware.Add((f.Which, data));
+                else if (FirmwareLibrary.TryLoadParts(Request(f)) is { } parts) firmware.AddRange(parts.Select((p, n) => (f.Which + (uint)n, p)));
+            }
 
             var saves = new List<(uint Which, BatterySave Save)> { (0, BatterySave.Open(path, console)) };
             CoreMachine machine = Create(image, firmware, saves);

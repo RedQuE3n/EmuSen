@@ -14,6 +14,9 @@ namespace EmuSen.Common.Firmware
         // Other filenames the same dump is distributed under.
         public IReadOnlyList<string> AlternateNames { get; init; } = Array.Empty<string>();
 
+        // Split forms of the same dump, each a list of files that together make it, passed as files from the core's number upwards - see EmuSen_CoreAPI.md §6.2.
+        public IReadOnlyList<IReadOnlyList<string>> Parts { get; init; } = Array.Empty<IReadOnlyList<string>>();
+
         // What the picker shows the player - see EmuSen_Firmware.md §3.
         public string Describe() => $"{CoreName} {ChipName} firmware - {FileName}, {Size:N0} bytes";
     }

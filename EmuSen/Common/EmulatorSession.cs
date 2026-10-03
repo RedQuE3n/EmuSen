@@ -41,9 +41,9 @@ namespace EmuSen.Common
         public ICheatCodeCodec? CheatExplicitCodec { get; private set; }
         public ICpuTraceSwitch? CpuTraceSwitch { get; private set; }
 
-        // Firmware <romPath> needs that isn't in the library yet - see EmuSen_Firmware.md §3.
-        public static IReadOnlyList<FirmwareRequest> MissingFirmwareFor(string romPath) =>
-            FirmwareLibrary.MissingFrom(CoreFactory.ForFirmwareProbe(romPath).GetFirmwareRequirements(romPath));
+        // Firmware <romPath> needs on <engine>, a CoreCatalog.EngineFor name or null for the reference, that isn't in the library yet - see EmuSen_Firmware.md §3.
+        public static IReadOnlyList<FirmwareRequest> MissingFirmwareFor(string romPath, string? engine = null) =>
+            FirmwareLibrary.MissingFrom(CoreFactory.ForFirmwareProbe(romPath, engine).GetFirmwareRequirements(romPath));
 
         // Set by the frontend before LoadRom so the debug target shares its registry.
         public CheatRegistry? Cheats { get; set; }

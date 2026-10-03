@@ -2839,3 +2839,48 @@ the pre-stable one by naming the trait (`NativeCore::advance(self, ...)`), so on
 
 VenusRT is not selectable in Mistress (stage 6). The optional groups, the DSP firmware's name, and the pre-stable
 exports' removal wait for the adapter to be VenusRT's only loader.
+
+## 32. Stage 6, step 1: the optional groups and the firmware lookup (2026-10-03)
+
+### 32.1 What was built
+
+VenusRT claims `RESET`, `SNAPSHOT`, `BATTERY_DIRTY`, `ROM_PATCHES` and `CHEAT_POKES` (capabilities 0x4C05;
+`core_exports!(Machine; reset, rom_patches, cheat_pokes)`, the other two having no exports).
+
+- **Reset** (`Machine::reset`): the console's reset button. /RESET reaches the S-CPU, the PPUs, the S-SMP (fullsnes:
+  "The SPC and DSP chips are started via same /RESET") and the cartridge's chips, which start again as at power-on,
+  the counters at H=0, V=0 and D-6's SPC700 lead included. The memories keep what they held (WRAM, VRAM, CGRAM, OAM,
+  the APU's RAM, the cartridge's RAM, the SA-1's I-RAM), a NEC DSP its firmware, and the frame count carries on.
+- **The snapshot** is the full state under kind 1, which `state_load` reads for either kind; rewind takes it.
+- **The battery's changes**: the battery RAM is compared at each frame's end with the copy the host last saved, and
+  the first difference raises `BATTERY` and sets the changed flag until `battery_saved`. The copy is not in the state.
+- **ROM patches** (`System::patched`): a patch answers a read the cartridge serves, with or without its compare value;
+  WRAM and the I/O page are the console's, which a Game Genie between the console and the cartridge cannot reach.
+  They apply to the S-CPU's bus, DMA included, and not to the SA-1's or GSU's own reads of the ROM, which the device
+  cannot see. Machine info's patch range is the whole 24-bit bus. With no patch the read path is one branch more.
+- **Cheat pokes**: applied at each frame's end, in CpuBus through `System::poke` and in WRAM, a compare value holding
+  a poke until the byte matches it; another space is refused.
+- **The firmware lookup** (`Cartridge::nec_firmware`), from the header's chipset and title against fullsnes's list of
+  the 23 games: ST010 for F1 ROC II / Exhaust Heat II, ST011 for the other ST01x game; DSP-2 (Dungeon Master), DSP-3
+  (SD Gundam GX), DSP-4 (Top Gear 3000); DSP-1 for Pilotwings, which fullsnes names as the DSP-1 game with its
+  visible glitch, and DSP-1B, the corrected revision, for every other DSP-1 game. `firmware_for` names the file
+  (`dsp1b.rom` and so on, 8,192 or 53,248 bytes) and its split form, the program and data as files 2 and 3, which
+  `create` now accepts. Compared with C# Venus's public `FirmwareRequirements` on the nine DSP games of the bench
+  folder, the names agree for every one. SD Gundam GX's title was not available to test; a Japanese title the match
+  misses gets DSP-1B.
+- **The WiseMan harness** asks VenusRT's library for the firmware (`CoreLibrary.FirmwareFor`) instead of C# Venus,
+  for its own runs and for the Mesen runs it prepares. Mesen's cached runs were found under the same keys, so the
+  firmware bytes are the ones it had before.
+
+### 32.2 Measured 2026-10-03
+
+- The crate's 75 tests, eight of them new (reset, battery tracking, ROM patches, cheat pokes, the snapshot, the
+  firmware names, the DSP firmware in two parts, CpuBus pokes); WiseMan's VenusRt, Snes, CoreAbi, CoreAdapter,
+  CoreDiscovery and NativeHost tests, 93 of 93.
+- `export_check.py`: capabilities 0x4C05, 35 `emusen_core_` symbols, as the baseline requires.
+- The conformance kit (C4's decided rule) on the same eleven images as §31.2: compliant on every one.
+- The state's hash every 60 frames to frame 600: identical to before the switch to v1 for Super Mario World, Super
+  Mario RPG, Star Fox and Super Mario Kart.
+- The cost of the patch check with no patch, `frame_cost` before and after in turn under the timing lock at load 5 to
+  11: Super Mario World 2.20-2.25 against 2.18-2.24 ms a frame, Donkey Kong Country 2.10-2.15 against 2.10-2.14,
+  within the noise.

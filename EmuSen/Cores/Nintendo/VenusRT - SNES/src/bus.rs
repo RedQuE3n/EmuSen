@@ -196,6 +196,8 @@ pub struct System {
     pub io_writes: u32,
     /// The cartridge's IRQ line to the S-CPU (the SA-1's), as last caught up.
     pub cart_irq: bool,
+    /// ROM patches as a Game Genie makes them, (address, value, compare or `u32::MAX`); the host's, not in the state.
+    pub patches: Vec<(u32, u8, u32)>,
 }
 
 impl System {
@@ -254,6 +256,7 @@ impl System {
             apu: Smp::new(None, pal),
             io_writes: 0,
             cart_irq: false,
+            patches: Vec::new(),
         }
     }
 
@@ -369,7 +372,29 @@ impl System {
     }
 
     /// A read's value, or None where nothing drives the bus. `side_effects` false is the debugger's look.
+    #[inline]
     pub fn read_value(&mut self, address: u32, side_effects: bool) -> Option<u8> {
+        let v = self.read_bus(address, side_effects);
+        if self.patches.is_empty() { v } else { self.patched(address, v) }
+    }
+
+    /// A read the cartridge answers, through the ROM patches: WRAM and the I/O page are the console's, which a
+    /// Game Genie between the console and the cartridge cannot reach.
+    #[cold]
+    fn patched(&self, address: u32, v: Option<u8>) -> Option<u8> {
+        let (bank, offset) = ((address >> 16) as u8, address as u16);
+        if bank & 0xFE == 0x7E || (bank & 0x40 == 0 && offset < 0x6000) {
+            return v;
+        }
+        for &(at, value, compare) in &self.patches {
+            if at == address & 0xFF_FFFF && (compare == u32::MAX || v == Some(compare as u8)) {
+                return Some(value);
+            }
+        }
+        v
+    }
+
+    fn read_bus(&mut self, address: u32, side_effects: bool) -> Option<u8> {
         let bank = (address >> 16) as u8;
         let offset = address as u16;
         if let Some(obc1) = &self.cart.obc1 {

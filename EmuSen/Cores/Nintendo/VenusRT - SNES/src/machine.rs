@@ -35,6 +35,11 @@ pub struct Machine {
     pub woke: bool,
     /// When set, every instruction and interrupt in the reference probe's 24-byte record; not in the state.
     pub trace: Option<Vec<u8>>,
+    /// The battery RAM as the host last saved it, and whether it has changed since; not in the state.
+    pub battery_copy: Vec<u8>,
+    pub battery_changed: bool,
+    /// The host's cheat pokes, (space, address, value, compare), applied at each frame's end; not in the state.
+    pub pokes: Vec<[u32; 4]>,
 }
 
 impl Machine {
@@ -84,11 +89,46 @@ impl Machine {
             i_checked: true,
             woke: false,
             trace: None,
+            battery_copy: Vec::new(),
+            battery_changed: false,
+            pokes: Vec::new(),
         };
         // The datasheet leaves SL uninitialised at power-on; $02 puts S at $01FF after the reset's three stack cycles.
         m.cpu.s = 0x0102;
         m.cpu.interrupt(&mut m.sys, Interrupt::Reset);
         m
+    }
+
+    /// The console's reset button. /RESET reaches the S-CPU, the PPUs, the S-SMP (fullsnes: "The SPC and DSP chips are
+    /// started via same /RESET") and the cartridge's chips, which start again as at power-on, H=0 and V=0 included;
+    /// the memories keep what they held: WRAM, VRAM, CGRAM, OAM, the APU's RAM, the cartridge's RAM, the SA-1's
+    /// I-RAM, and a NEC DSP its firmware. The frame count carries on.
+    pub fn reset(&mut self) {
+        let old = &mut self.sys;
+        let mut m = Machine::with_cartridge(Cartridge::with_header(&old.cart.rom, old.cart.header.clone()));
+        m.sys.cart.sram.copy_from_slice(&old.cart.sram);
+        m.sys.wram.copy_from_slice(&old.wram);
+        m.sys.ppu.vram.copy_from_slice(&old.ppu.vram);
+        m.sys.ppu.cgram.copy_from_slice(&old.ppu.cgram);
+        m.sys.ppu.oam.copy_from_slice(&old.ppu.oam);
+        if let Some((mut dsp, map)) = old.cart.dsp.take() {
+            dsp.reset();
+            m.sys.cart.dsp = Some((dsp, map));
+        }
+        if let (Some(a), Some(b)) = (&old.cart.sa1, m.sys.cart.sa1.as_mut()) {
+            b.iram.copy_from_slice(&a.iram);
+        }
+        m.sys.apu = crate::apu::smp::Smp::new(old.apu.ipl, old.timing.pal);
+        m.sys.apu.ram.copy_from_slice(&old.apu.ram);
+        m.sys.timing.frame = old.timing.frame;
+        m.sys.patches = std::mem::take(&mut old.patches);
+        m.pads = self.pads;
+        m.samples = std::mem::take(&mut self.samples);
+        m.trace = self.trace.take();
+        m.battery_copy = std::mem::take(&mut self.battery_copy);
+        m.battery_changed = self.battery_changed;
+        m.pokes = std::mem::take(&mut self.pokes);
+        *self = m;
     }
 
     pub fn total_frames(&self) -> i64 {

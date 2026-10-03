@@ -331,13 +331,16 @@ fn settings_spaces_options_and_status_words_follow_the_header() {
 fn logs_drain_whole_records_and_a_freed_machine_leaves_its_own_to_the_library() {
     let _turn = LIBRARY.lock().unwrap_or_else(|e| e.into_inner());
     unsafe { emusen_core_log_drain(null_mut(), vec![0u8; 1 << 20].as_mut_ptr(), 1 << 20) };
-    let m = make("");
-    let waiting = unsafe { emusen_core_log_drain(m, null_mut(), 0) };
-    assert_eq!(waiting, "info\ttest\tcreated\n".len() as i64);
+    let img = image(&[7; 77]);
+    let mut code = 1;
+    let m = unsafe { emusen_core_create(&params(&img, "", &[]), &mut code) };
+    let record = "info\ttest\tcreated with 77 bytes\n";
+    assert_eq!(unsafe { emusen_core_log_drain(m, null_mut(), 0) }, record.len() as i64);
     let mut small = [0u8; 4];
     assert_eq!(unsafe { emusen_core_log_drain(m, small.as_mut_ptr(), 4) }, 0, "only whole records");
     unsafe { emusen_core_free(m) };
-    assert_eq!(text(|o, l| unsafe { emusen_core_log_drain(null_mut(), o, l) }), "info\ttest\tcreated\n");
+    let library = text(|o, l| unsafe { emusen_core_log_drain(null_mut(), o, l) });
+    assert_eq!(library.matches(record).count(), 1, "the freed machine's record moved to the library's queue: {library:?}");
     let mut q = super::outbox::LogQueue::default();
     for i in 0..super::outbox::LOG_CAPACITY + 3 {
         q.push(super::Level::Debug, "a\tb", &format!("{i}\nx"));

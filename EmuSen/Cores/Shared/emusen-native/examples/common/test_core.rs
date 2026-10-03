@@ -24,6 +24,8 @@ impl ffi::Status for StateError {
 /// Seeded faults for the conformance kit's own tests: each machine differs from the last, and a truncated state loads.
 pub const FAULT_MACHINES_DIFFER: u32 = 1;
 pub const FAULT_TAKES_TRUNCATED_STATE: u32 = 2;
+/// Not a fault for an open image format: any non-empty image is taken as the payload whole.
+pub const LENIENT_IMAGES: u32 = 4;
 static MADE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
 
 /// The core's own refusal of an image: an empty one.
@@ -42,6 +44,9 @@ pub fn image(payload: &[u8]) -> Vec<u8> {
 fn payload(image: &[u8]) -> Result<&[u8], i32> {
     if image.is_empty() {
         return Err(STATUS_EMPTY_IMAGE);
+    }
+    if TEST_FAULTS & LENIENT_IMAGES != 0 && (image.len() < 6 || &image[..4] != IMAGE_MAGIC) {
+        return Ok(image);
     }
     if image.len() < 6 || &image[..4] != IMAGE_MAGIC {
         detail("not a test core image");
@@ -200,7 +205,7 @@ impl Core for TestCore {
                 }
             }
         }
-        log(Level::Info, "test", "created");
+        log(Level::Info, "test", &format!("created with {} bytes", body.len()));
         let mut m = TestCore {
             frames: 0,
             ram,

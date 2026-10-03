@@ -103,7 +103,7 @@ namespace EmuSen.WiseMan.Cores
             engine.SetButton(0, PadButton.A, true);
             engine.RunFrame();
             Assert.Equal((byte)(3 + 1), engine.ReadSpace("RAM", 3));
-            Assert.Contains(engine.RecentLog, l => l == "info\ttest\tcreated");
+            Assert.Contains(engine.RecentLog, l => l == "info\ttest\tcreated with 3 bytes");
         }
 
         [Fact]

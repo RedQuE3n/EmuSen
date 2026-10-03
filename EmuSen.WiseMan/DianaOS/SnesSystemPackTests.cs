@@ -89,6 +89,7 @@ namespace EmuSen.WiseMan.DianaOS
             var pack = SystemPacks.For("snes")!;
             Assert.Same(SnesSystem.Entry, pack.Entry);
             Assert.Null(SystemPacks.For("test"));
+            Assert.False(pack.Entry.SelfDelimitingImages, "a SNES image does not record its own length, so C4 may not require a truncated one refused");
             var row = CoreCatalog.ByAnyName("SNES")!;
             Assert.Equal(pack.Entry.CheatSystems, row.CheatSystems);
             Assert.Equal(pack.Entry.Extensions, row.Extensions);

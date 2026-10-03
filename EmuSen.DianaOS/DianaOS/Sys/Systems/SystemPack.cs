@@ -5,7 +5,7 @@ using EmuSen.DianaOS.DianaOS.Lib;
 
 namespace EmuSen.DianaOS.DianaOS.Sys.Systems
 {
-    // A console's facts that are no one engine's: its names, library folders, hashing rule and cover shape - see EmuSen_CoreAPI.md §8.2, §20.
+    // A console's facts that are no one engine's; SelfDelimitingImages says a malformed image must be refused, which C4 asks only of such a format - see EmuSen_CoreAPI.md §8.2, §20, §21.4.
     public sealed record SystemEntry(
         string Id,
         string Name,
@@ -18,7 +18,8 @@ namespace EmuSen.DianaOS.DianaOS.Sys.Systems
         Func<byte[], byte[]> OpenVgdbBytes,
         double CoverAspect,
         string EsdeSystem,
-        string EsdeFullName);
+        string EsdeFullName,
+        bool SelfDelimitingImages = false);
 
     // A console's system pack: its entry and its cheat codecs, which any engine of the console uses - see EmuSen_CoreAPI.md §8.2, §20.
     public sealed record SystemPack(SystemEntry Entry, Func<ICheatCodeCodec>? AutoDetectCodec, Func<ICheatCodeCodec>? ExplicitCodec);

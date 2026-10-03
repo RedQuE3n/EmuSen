@@ -29,3 +29,7 @@ crate-type = ["cdylib"]
 [[example]]
 name = "kit_faulty_core"
 crate-type = ["cdylib"]
+
+[[example]]
+name = "kit_lenient_core"
+crate-type = ["cdylib"]

@@ -1407,7 +1407,7 @@ supplies. The cases:
 | **C1, loading** | the library loads; `abi_version`'s major is 1; every required export resolves; no `emusen_core_` symbol outside the baseline |
 | **C2, info** | `info()` validates against the schema; `abi` equals the version; `capabilities` names equal the bits; every claimed optional export exists and every unclaimed one does not |
 | **C3, the schema** | the settings schema validates; keys are unique; every default lies in its own domain; **an `accuracy` setting's default is its `accurate` value and an `enhancement`'s is its `hardware` value**; every trade-off has its `cost` |
-| **C4, create and refusal** | garbage, empty and truncated images are refused with null, a documented status and an error text, and leave nothing to free; **a machine created with no settings equals one created with every default stated, over N frames** |
+| **C4, create and refusal** | **a malformed image never harms the core** (decided 2026-10-03): each of an empty, a garbage and a truncated image is either refused with null, a documented status and an error text, leaving nothing to free, or accepted and run for the kit's frames without crashing, hanging or corrupting the host. Refusal is required only where the system pack declares its image format self-delimiting (it records its own length, or a checksum the core must verify); the report says of each image whether it was refused or accepted and ran; **a machine created with no settings equals one created with every default stated, over N frames** |
 | **C5, capability honesty** | every claimed capability works on a running machine; every unclaimed one is refused with `NOT_SUPPORTED` or absent; an unknown kind, space, port, axis, format or option bit is refused or ignored as the header says |
 | **C6, the frame** | N frames run; `frame_info` agrees with `frame_copy`'s length and the format is one offered; a size change is preceded by `GEOMETRY`; samples drain at the rates the drain reports, with an `AUDIO_RATE` event at each change |
 | **C7, state** | save, load, save is byte-identical; a kind's size is constant over N frames except after a `STATE_SIZE` event; a truncated, foreign or random state is refused and the machine's state hash is unchanged; a state saved on machine A and loaded on machine B makes B continue exactly as A; the snapshot kind, if claimed, loads |
@@ -2050,7 +2050,7 @@ as the library wrote them, for the build step §7.1 asks for.
 | C1 | major 1; every required export resolves; where `nm` exists, no `emusen_core_` symbol outside version 1's exports |
 | C2 | info validates against `info.schema.json`; its `abi` is the export's; its capability names are the claimed bits; each optional export present exactly when its bit is claimed |
 | C3 | the schema validates; keys unique; each default in its own domain; an `accuracy` default its `accurate` value, an `enhancement` default its `hardware` value; every trade-off with a cost |
-| C4 | an empty, a garbage and a half-length image each refused with a negative status that `status_text` names and an error text; a machine with no settings equal to one with every default stated, frames, sound and state, over up to 300 frames |
+| C4 | an empty, a garbage and a half-length image each refused with a negative status that `status_text` names and an error text, or, unless `--self-delimiting` is given, accepted and run for up to 300 frames on a thread of its own within 60 seconds (a frame refused with a status is a clean stop); each image's outcome in the report as `refused`, `accepted and ran`, `accepted and stopped` or `hung`; a machine with no settings equal to one with every default stated, frames, sound and state, over up to 300 frames |
 | C5 | each claimed capability answers on a running machine without `NOT_SUPPORTED`; an unclaimed snapshot and state kind 77 refused; an unlisted space refused; reserved option bits ignored; port 99 ignored or `NO_SUCH_PORT`; an unknown pixel-format bit accepted with RGBA8888 produced |
 | C6 | over N frames: `frame_info`'s length is `frame_copy`'s, the format the one offered, the size within its stride; a size change preceded by `GEOMETRY`; each change of the drained rate met by an `AUDIO_RATE` of that rate in its frame or the next |
 | C7 | the state's size constant until a `STATE_SIZE`; save, load, save byte-identical; a truncated, a foreign and an empty state refused with the machine unchanged; machine B loaded with A's state continuing as A; a claimed snapshot loading and restoring the state it was taken from |
@@ -2065,12 +2065,22 @@ two seeded faults, each machine differing from the last and a truncated state ac
 passes the rest, which is the set those faults break (`tests/kit.rs`). The kit's SHA-256 is checked against FIPS
 180-4's examples. CI runs the crate's tests on the three shared runners with the other shared crates.
 
-### 21.4 A point of §12 for decision
+### 21.4 C4's rule, decided 2026-10-03
 
-C4 requires an image truncated to half its length to be refused. For a format that records its own length, such as the
-test core's, that is a fair test. For a SNES cartridge image it is not: half of a 1 MiB image is a well-formed 512 KiB
-image, and refusing it would refuse genuine smaller dumps. The kit applies the rule as §12.1 states it. Whether C4's
-truncation should become per-system, or optional, is left to be decided before VenusRT is graded by it (§13.2).
+The first version of C4 required every malformed image, a half-length one included, to be refused. That is a fair test
+of a format that records its own length, such as the test core's, and not of a SNES cartridge image: half of a 1 MiB
+image is a well-formed 512 KiB image, and refusing it would refuse genuine smaller dumps. **Decided:** what C4 requires
+is that the core is never harmed by a bad image. A malformed image is refused with words, or loads and runs the kit's
+frames without crashing, hanging or corrupting the host; refusal is required only where the system pack declares its
+image format self-delimiting. The SNES's pack does not declare it (`SystemEntry.SelfDelimitingImages` is false); the
+test core's format does, and the kit's tests pass `--self-delimiting` for it.
+
+The kit runs an accepted image on a thread of its own and waits 60 seconds; a hang is reported and the thread left, so
+one bad core cannot stall the suite. A crash ends the kit's process, which is itself the failure; corruption of the host
+that does not crash it cannot be observed from inside the process (§7.3's broker is the boundary that would). **Tested:**
+the test core refuses all three images and passes with or without `--self-delimiting`; a lenient build of it, which
+takes any non-empty image whole, passes without the flag and fails with it, and its report names `accepted and ran`
+(`tests/kit.rs`).
 
 ### 21.5 Not done here
 

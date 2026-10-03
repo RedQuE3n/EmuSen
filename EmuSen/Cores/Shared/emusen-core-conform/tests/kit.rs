@@ -21,7 +21,7 @@ fn image(payload: &[u8]) -> Vec<u8> {
 }
 
 fn options() -> Options {
-    Options { image: image(&[1, 2, 3, 0x20, 0x41]), frames: 120, settings: String::new(), files: Vec::new(), script: None }
+    Options { self_delimiting: true, image: image(&[1, 2, 3, 0x20, 0x41]), frames: 120, settings: String::new(), files: Vec::new(), script: None }
 }
 
 fn verdicts(name: &str) -> Vec<(&'static str, bool)> {
@@ -45,6 +45,29 @@ fn both_test_cores_pass_every_case() {
 fn the_seeded_faults_fail_the_cases_they_break_and_no_others() {
     let failing = ["C4", "C7", "C8", "C10"];
     assert_eq!(verdicts("kit_faulty_core"), ALL.iter().map(|&c| (c, !failing.contains(&c))).collect::<Vec<_>>());
+}
+
+// Refusal passes C4 whether or not the system's format is self-delimiting.
+#[test]
+fn c4_reports_each_malformed_image_as_refused_or_accepted_and_passes_refusal_under_either_rule() {
+    for self_delimiting in [true, false] {
+        let report = run(&library("kit_test_core"), &Options { self_delimiting, ..options() });
+        let c4 = report.cases.iter().find(|c| c.id == "C4").unwrap();
+        assert!(c4.passed, "{:?}", c4.evidence);
+        assert_eq!(c4.images.iter().map(|i| (i.image, i.outcome.name())).collect::<Vec<_>>(), vec![("an empty image", "refused"), ("a garbage image", "refused"), ("the image truncated to half", "refused")]);
+    }
+}
+
+// A core that runs a malformed image passes only where the system's format is open.
+#[test]
+fn an_accepted_malformed_image_passes_only_where_the_format_is_open() {
+    for (self_delimiting, passes) in [(false, true), (true, false)] {
+        let report = run(&library("kit_lenient_core"), &Options { self_delimiting, ..options() });
+        let c4 = report.cases.iter().find(|c| c.id == "C4").unwrap();
+        assert_eq!(c4.passed, passes, "{:?}", c4.evidence);
+        assert!(c4.images.iter().any(|i| i.outcome.name() == "accepted and ran"), "{:?}", c4.images);
+        assert!(report.json().contains("\"outcome\":\"accepted and ran\""));
+    }
 }
 
 #[test]

@@ -26,6 +26,20 @@ pub const FAULT_MACHINES_DIFFER: u32 = 1;
 pub const FAULT_TAKES_TRUNCATED_STATE: u32 = 2;
 /// Not a fault for an open image format: any non-empty image is taken as the payload whole.
 pub const LENIENT_IMAGES: u32 = 4;
+/// Seeded faults for the kit's C9 and C12-C15: an "exact" setting that changes the state, a refusal of any host but
+/// version 1.0, an info document that changes from call to call, a read-only space that takes writes, and an observed
+/// frame whose sound differs from the plain one.
+pub const FAULT_EXACT_SETTING_CHANGES_STATE: u32 = 8;
+pub const FAULT_ONLY_HOST_1_0: u32 = 16;
+pub const FAULT_INFO_DRIFTS: u32 = 32;
+pub const FAULT_READ_ONLY_WRITABLE: u32 = 64;
+pub const FAULT_OBSERVED_FRAME_DIFFERS: u32 = 128;
+/// The included faults, narrowed to the bits of `EMUSEN_TEST_CORE_FAULTS` when that is set, so each can be shown alone.
+fn faults() -> u32 {
+    static MASK: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+    TEST_FAULTS & *MASK.get_or_init(|| std::env::var("EMUSEN_TEST_CORE_FAULTS").ok().and_then(|v| v.parse().ok()).unwrap_or(u32::MAX))
+}
+static INFO_CALLS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 static MADE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
 
 /// The core's own refusal of an image: an empty one.
@@ -45,7 +59,7 @@ fn payload(image: &[u8]) -> Result<&[u8], i32> {
     if image.is_empty() {
         return Err(STATUS_EMPTY_IMAGE);
     }
-    if TEST_FAULTS & LENIENT_IMAGES != 0 && (image.len() < 6 || &image[..4] != IMAGE_MAGIC) {
+    if faults() & LENIENT_IMAGES != 0 && (image.len() < 6 || &image[..4] != IMAGE_MAGIC) {
         return Ok(image);
     }
     if image.len() < 6 || &image[..4] != IMAGE_MAGIC {
@@ -82,6 +96,7 @@ pub struct TestCore {
     patches: Vec<u32>,
     pokes: Vec<u32>,
     hooks: Hooks,
+    threads: u8,
 }
 
 impl TestCore {
@@ -103,7 +118,7 @@ impl StateMachine for TestCore {
             return Err(StateError::Foreign);
         }
         if data.len() < self.state_size() {
-            if TEST_FAULTS & FAULT_TAKES_TRUNCATED_STATE == 0 || data.len() < 12 {
+            if faults() & FAULT_TAKES_TRUNCATED_STATE == 0 || data.len() < 12 {
                 return Err(StateError::Truncated);
             }
             self.frames = i64::from_le_bytes(data[4..12].try_into().unwrap());
@@ -148,7 +163,11 @@ impl Core for TestCore {
             version: "1.0.0".into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("A counter that exercises every export of the core ABI.".into()),
+            description: Some(if faults() & FAULT_INFO_DRIFTS != 0 {
+                format!("A counter, asked {} times.", INFO_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+            } else {
+                "A counter that exercises every export of the core ABI.".into()
+            }),
             systems: vec![System {
                 id: "test".into(),
                 name: "Test system".into(),
@@ -187,11 +206,15 @@ impl Core for TestCore {
     }
 
     fn create(r: &Create<'_>) -> Result<Self, i32> {
+        if faults() & FAULT_ONLY_HOST_1_0 != 0 && r.host_abi_version != sys::ABI_VERSION {
+            detail("this core runs only on a host of core ABI 1.0");
+            return Err(status::NOT_SUPPORTED);
+        }
         let body = payload(r.image)?;
         let mut ram = [0u8; 256];
         ram[0] = r.settings.get("Ram").and_then(|v| v.parse().ok()).unwrap_or(0);
         ram[1..].iter_mut().zip(body).for_each(|(d, s)| *d = *s);
-        if TEST_FAULTS & FAULT_MACHINES_DIFFER != 0 {
+        if faults() & FAULT_MACHINES_DIFFER != 0 {
             ram[255] = MADE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
         let mut sram = [0u8; 16];
@@ -226,6 +249,7 @@ impl Core for TestCore {
             patches: Vec::new(),
             pokes: Vec::new(),
             hooks: Hooks::new(&[8]),
+            threads: r.settings.get("Threads").and_then(|v| v.parse().ok()).unwrap_or(1),
         };
         m.draw();
         Ok(m)
@@ -258,6 +282,9 @@ impl Core for TestCore {
     fn advance(&mut self, _detail: &mut u64) -> Result<(), i32> {
         self.frames += 1;
         self.ram[2] = self.ram[2].wrapping_add(1);
+        if faults() & FAULT_EXACT_SETTING_CHANGES_STATE != 0 {
+            self.ram[4] = self.ram[4].wrapping_add(self.threads.wrapping_sub(1));
+        }
         if self.pads[0] & 1 != 0 {
             self.ram[3] = self.ram[3].wrapping_add(1);
             self.sram[0] = self.sram[0].wrapping_add(1);
@@ -397,6 +424,7 @@ impl Core for TestCore {
                 }
                 Ok(())
             }
+            1 if faults() & FAULT_READ_ONLY_WRITABLE != 0 => Ok(()),
             1 => Err(status::READ_ONLY),
             _ => Err(status::NO_SUCH_SPACE),
         }
@@ -432,6 +460,9 @@ impl Core for TestCore {
         if let Some(v) = s.get("Rate") {
             self.pending_rate = v.parse().unwrap_or(32000);
         }
+        if let Some(v) = s.get("Threads") {
+            self.threads = v.parse().unwrap_or(1);
+        }
         Ok(())
     }
 
@@ -443,14 +474,22 @@ impl Core for TestCore {
         Some(&mut self.hooks)
     }
 
-    fn debug_run_frame(&mut self, _flags: u32, detail: &mut u64) -> Result<u32, i32> {
+    /// One step is one frame here: checked before it unless the host says it has already decided to run it.
+    fn debug_run_frame(&mut self, flags: u32, detail: &mut u64) -> Result<u32, i32> {
         let pc = self.frames as u32 & 0xFF;
-        self.hooks.record(pc);
-        let why = self.hooks.stop_before(pc);
-        if why != 0 {
-            return Ok(why);
+        if flags & emusen_native::debug::run::UNCHECKED == 0 {
+            let why = self.hooks.stop_before(pc);
+            if why != 0 {
+                return Ok(why);
+            }
         }
-        self.advance(detail).map(|()| 0)
+        self.hooks.record(pc);
+        let before = self.samples.len();
+        self.advance(detail)?;
+        if faults() & FAULT_OBSERVED_FRAME_DIFFERS != 0 {
+            self.samples.truncate(before);
+        }
+        Ok(0)
     }
 
     fn debug_pc(&self, processor: u32) -> Option<u64> {

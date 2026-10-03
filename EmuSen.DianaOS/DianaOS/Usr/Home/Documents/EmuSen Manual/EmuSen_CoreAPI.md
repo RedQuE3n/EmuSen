@@ -2086,8 +2086,8 @@ takes any non-empty image whole, passes without the flag and fails with it, and 
 
 ### 21.5 Not done here
 
-C9 and C12–C15 are not in §13.2's item 6. The build step that runs `--sidecar` on the project's cores waits for the
-first project core on v1.
+C9 and C12–C15 are not in §13.2's item 6; they were built afterwards (§24). The build step that runs `--sidecar` on
+the project's cores waits for the first project core on v1.
 
 ---
 
@@ -2234,6 +2234,64 @@ such.
 Every game within ±1%; the geometric mean −0.24%. **The bench's state hashes** were one per game per build in every
 run; each version 8 state is its version 7 state with the version field 7 → 8 and the 24 mixer bytes appended,
 byte for byte (checked by undoing the two on all four), and C# Mercury writes the same bytes as MercuryRT.
+
+---
+
+## 24. The kit's remaining cases, 2026-10-03: C9 and C12–C15
+
+### 24.1 What each case checks, as built
+
+| Case | As built |
+|---|---|
+| C9 | every setting of `effect: exact`, at each value other than its default (both values of a switch, each choice, a count's minimum, middle and maximum), on a machine of its own over up to 300 frames, giving the default's frame, sound and state digests |
+| C12 | C6, C7 and C8 run twice more: as a host of minor 0 whose `create_params`, file elements, `frame_info` and events are version 1.0's sizes, and as a host of minor 99 whose structs are each 32 bytes longer, those bytes filled with the canary `0xA5`; every case passes in both, and after every call the kit finds each canary intact |
+| C13 | four threads call `abi_version`, `capabilities`, `info`, `settings_schema`, `firmware_for` on the image, `status_text` on four codes and `log_drain` with no machine, round after round, while a machine runs up to 300 frames; every answer equals the one taken before the threads started, and the machine's digests equal a run alone |
+| C14 | for each space in machine info, `space_size` equals the declared size; a `read_only` space answers a one-byte write with a negative status and reads back unchanged; each battery file's `length` equals `battery`'s length query; when `DEBUG` is claimed, `debug_pc` answers 0 for each processor named |
+| C15 | where `DEBUG` is claimed: a machine with calls, writes, profiling and coverage 0 armed, a breakpoint on an address no processor has, and a range over the top of each space, run through `debug_run_frame` (a `RING` stop continued, any other stop a failure) gives the plain run's digests; on a machine two frames in, a breakpoint at processor 0's next instruction stops with `BREAKPOINT` at that pc on a processor machine info names; with `EACH` set, a `CONTINUE` call stops with `EACH` without moving the machine, and eight `UNCHECKED` steps each answer 0 or `EACH` and each move it |
+
+**Points of §12.1 made precise.** §12.1's C15 says "a breakpoint at the first instruction stops before it"; the kit
+places it at processor 0's pc after two frames, since the reset vector's first instruction has already run by the time
+a host could set anything through a created machine. Its "`EACH` stops at every step" is held to a `CONTINUE` call
+stopping at once, which is what a debugger's step needs, and to eight steps that each move the machine. C12's "a minor
+far ahead" is 99 and its "larger structs" 32 bytes longer; C13's "several threads" are four.
+
+### 24.2 The seeded faults
+
+The test core's machine (`emusen-native/examples/common/test_core.rs`) gained five faults, one for each case, and a
+seventh build of it, `kit_faulty_full_core`, claims every capability with all five on. The faults, and the case each
+breaks:
+
+| Fault | What the core then does | Case | The kit's words |
+|---|---|---|---|
+| 8 | its `Threads` setting, declared `exact`, adds threads − 1 to a RAM byte each frame | C9 | `Threads=2 is declared exact and changes the output` |
+| 16 | `create` refuses any host version but 1.0 | C12 | `a host of minor 99 ...: C6 fails: create refused the image` |
+| 32 | `info`'s description carries a call counter | C13 | `a library-level answer changed while a machine ran: "info"` |
+| 64 | a write to the read-only ROM space succeeds | C14 | `space 1 (ROM) is read-only and a write to it answered 1` |
+| 128 | `debug_run_frame` drops the frame's sound | C15 | `every table armed with nothing to hit gives ... the plain run ...` |
+
+**Tested** (`emusen-core-conform/tests/kit.rs`): the two test cores pass all fifteen cases; the full faulty build
+fails exactly C9 and C12–C15; and each fault alone, set through `EMUSEN_TEST_CORE_FAULTS` in a runner process of its
+own (the variable narrows the faults a build includes and is read once per process), fails exactly its own case. The
+earlier faulty build fails C4, C7, C8, C10 and, through machines that differ from a solo run, C9's, C12's and C13's
+comparisons as well.
+
+### 24.3 The project's cores
+
+Run 2026-10-03 from the merged tree's release libraries, with the runner's 600 frames:
+
+| Core | Images | Result | Notes |
+|---|---|---|---|
+| MoonRT | Super Mario Bros., The Legend of Zelda, Super Mario Bros. 3, Punch-Out!!, with `--self-delimiting` | all fifteen pass on all four | no settings, so C9 has nothing to check; C14 finds 8 spaces and the battery file on Zelda; C15 runs on its one processor |
+| MercuryRT | Tetris, Kirby's Dream Land, Link's Awakening, Pokémon Yellow | all fifteen pass on all four | its one setting, `Model`, is `effect: none`, so C9 has nothing to check; 7 spaces; C15 runs |
+| VenusRT | A Link to the Past, Donkey Kong Country, with the SPC700 boot ROM as file 1 | all fifteen pass on both | no settings; C14 finds 8 spaces and one battery file; `DEBUG` is not claimed, so C15 has nothing to check |
+
+**No defect was found in any of the three.** Two observations, neither a failure. C9 has not yet met a setting it
+can check on a project core; MarsRT's step 5 is the first (P9). And C13's rounds differ by three orders of magnitude,
+about 225,000 on MoonRT and 75,000 on MercuryRT against 2,856 on A Link to the Past and 264 on Donkey Kong Country:
+VenusRT's `firmware_for` builds a whole cartridge from the image to read its header (`VenusRT - SNES/src/v1.rs:81`), so
+each call costs in proportion to the image, a 4 MiB copy for Donkey Kong Country. The ABI sets no cost on a
+library-level call, and the case still ran its checks a few hundred times; it is recorded for VenusRT's crate and was
+not changed here.
 
 ---
 

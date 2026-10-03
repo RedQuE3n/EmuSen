@@ -1,5 +1,5 @@
-//! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C8, C10 and C11 on a library loaded through the core
-//! ABI v1 alone, and a library's sidecar (§7.1). Each case reports its verdict and its evidence; §21 records what each
+//! The conformance kit's core suite (EmuSen_CoreAPI.md §12): C1-C15 on a library loaded through the core
+//! ABI v1 alone, and a library's sidecar (§7.1). Each case reports its verdict and its evidence; §21 and §24 record what each
 //! checks and how.
 
 pub mod api;
@@ -199,6 +199,8 @@ struct Session<'a> {
     opts: &'a Options,
     script: Script,
     statuses: BTreeSet<i32>,
+    /// Frames advance through `debug_run_frame` with the tables `arm` set, for C15.
+    observed: bool,
 }
 
 impl<'a> Session<'a> {
@@ -243,7 +245,9 @@ impl<'a> Session<'a> {
                 m.set_options(skip as u32);
                 skipping = skip;
             }
-            if let Err(code) = m.advance() {
+            if self.observed {
+                observed_frame(m).map_err(|e| format!("frame {f}: {e}"))?;
+            } else if let Err(code) = m.advance() {
                 self.statuses.insert(code);
                 return Err(format!("advance failed at frame {f}: status {code} ({})", m.last_error()));
             }
@@ -340,7 +344,7 @@ pub fn run(path: &Path, opts: &Options) -> Report {
         .filter_map(|b| b.get("bit").and_then(Value::as_i64).map(|v| v as u32))
         .collect();
     let script = opts.script.clone().unwrap_or_else(|| Script::default_for(&bits));
-    let mut s = Session { lib: &lib, opts, script, statuses: BTreeSet::new() };
+    let mut s = Session { lib: &lib, opts, script, statuses: BTreeSet::new(), observed: false };
     report.cases.push(c1(&lib));
     report.cases.push(c2(&lib, &info_text));
     report.cases.push(c3(&lib));
@@ -349,8 +353,13 @@ pub fn run(path: &Path, opts: &Options) -> Report {
     report.cases.push(c6(&mut s));
     report.cases.push(c7(&mut s));
     report.cases.push(c8(&mut s));
+    report.cases.push(c9(&mut s));
     report.cases.push(c10(&mut s));
     report.cases.push(c11(&mut s));
+    report.cases.push(c12(&mut s));
+    report.cases.push(c13(&mut s));
+    report.cases.push(c14(&mut s));
+    report.cases.push(c15(&mut s));
     report
 }
 
@@ -736,7 +745,7 @@ fn c10(s: &mut Session<'_>) -> Case {
             .map(|i| {
                 let (settings, script) = (settings.clone(), script.clone());
                 scope.spawn(move || -> Result<(Digests, u64), String> {
-                    let mut own = Session { lib, opts, script, statuses: BTreeSet::new() };
+                    let mut own = Session { lib, opts, script, statuses: BTreeSet::new(), observed: false };
                     let m = own.machine(&settings)?;
                     let t = own.play(&m, 0, n, false)?;
                     let d = own.state_digest(&m)?;
@@ -845,4 +854,316 @@ fn c11(s: &mut Session<'_>) -> Case {
     }
     c.note(format!("status_text answered for every code returned: {returned:?}"));
     c.done("C11", "error paths")
+}
+
+// ---- C9 and C12-C15 -----------------------------------------------------------------------------------------------
+
+/// A run of up to 300 frames from a fresh machine: its digests and its state's.
+fn solo(s: &mut Session<'_>, settings: &str, frames: u64) -> Result<(Digests, u64), String> {
+    let m = s.machine(settings)?;
+    let t = s.play(&m, 0, frames, false)?;
+    Ok((t.digests, s.state_digest(&m)?))
+}
+
+/// The values a setting's domain is sampled at: both of a switch's, each choice, a count's bounds and middle.
+fn sampled_values(setting: &Value) -> Vec<String> {
+    let get = |k: &str| setting.get(k).and_then(Value::as_str).unwrap_or("").to_owned();
+    match get("kind").as_str() {
+        "switch" => vec!["true".into(), "false".into()],
+        "choice" => setting.get("choices").and_then(Value::as_array).unwrap_or(&[]).iter().filter_map(|c| c.get("value").and_then(Value::as_str).map(str::to_owned)).collect(),
+        "count" => {
+            let (lo, hi) = (setting.get("min").and_then(Value::as_i64).unwrap_or(0), setting.get("max").and_then(Value::as_i64).unwrap_or(0));
+            let mut v = vec![lo, (lo + hi) / 2, hi];
+            v.dedup();
+            v.into_iter().map(|n| n.to_string()).collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn c9(s: &mut Session<'_>) -> Case {
+    let mut c = Check::new();
+    let list = s.lib.settings().ok().and_then(|t| parse(&t)).and_then(|v| v.as_array().map(|a| a.to_vec())).unwrap_or_default();
+    let exact: Vec<&Value> = list.iter().filter(|x| x.get("effect").and_then(Value::as_str) == Some("exact")).collect();
+    if exact.is_empty() {
+        c.note("no setting declares effect exact");
+        return c.done("C9", "exact settings");
+    }
+    let frames = s.opts.frames.min(300);
+    let base = match solo(s, "", frames) {
+        Ok(v) => v,
+        Err(e) => {
+            c.that(false, || e);
+            return c.done("C9", "exact settings");
+        }
+    };
+    let mut runs = 0;
+    for setting in exact {
+        let key = setting.get("key").and_then(Value::as_str).unwrap_or("").to_owned();
+        let default = setting.get("default").and_then(Value::as_str).unwrap_or("").to_owned();
+        for value in sampled_values(setting).into_iter().filter(|v| *v != default) {
+            runs += 1;
+            match solo(s, &format!("{key}={value}"), frames) {
+                Ok(v) => c.that(v == base, || format!("{key}={value} is declared exact and changes the output over {frames} frames: {v:?} against the default's {base:?}")),
+                Err(e) => c.that(false, || format!("{key}={value}: {e}")),
+            }
+        }
+    }
+    c.note(format!("{runs} values of exact settings against the defaults over {frames} frames"));
+    c.done("C9", "exact settings")
+}
+
+fn c12(s: &mut Session<'_>) -> Case {
+    let mut c = Check::new();
+    for (minor, pad, what) in [(0u32, 0usize, "a host of minor 0 with version 1.0's struct sizes"), (99, 32, "a host of minor 99 whose structs are 32 bytes longer")] {
+        s.lib.set_host(minor, pad);
+        let before = s.lib.canaries_broken.load(std::sync::atomic::Ordering::Relaxed);
+        let cases = [c6(s), c7(s), c8(s)];
+        let damaged = s.lib.canaries_broken.load(std::sync::atomic::Ordering::Relaxed) - before;
+        for case in &cases {
+            c.that(case.passed, || format!("{what}: {} fails: {}", case.id, case.evidence.first().cloned().unwrap_or_default()));
+        }
+        c.that(damaged == 0, || format!("{what}: the core wrote {damaged} bytes past the structs' version 1.0 size"));
+        if cases.iter().all(|x| x.passed) && damaged == 0 {
+            c.note(format!("{what}: C6, C7 and C8 pass, no canary touched"));
+        }
+    }
+    s.lib.set_host(0, 0);
+    c.done("C12", "skew")
+}
+
+fn c13(s: &mut Session<'_>) -> Case {
+    let mut c = Check::new();
+    let lib = s.lib;
+    let image = s.opts.image.clone();
+    let firmware = |lib: &Lib| api::text(|o, l| unsafe { (lib.f.firmware_for)(image.as_ptr(), image.len(), o, l) });
+    let codes = [status::NULL, status::FOREIGN, status::NOT_SUPPORTED, status::BAD_STRUCT];
+    let answers = |lib: &Lib| (unsafe { (lib.f.abi_version)() }, lib.capabilities(), lib.info(), lib.settings(), firmware(lib), codes.map(|x| lib.words(x)));
+    let reference = answers(lib);
+    let frames = s.opts.frames.min(300);
+    let alone = solo(s, &s.opts.settings.clone(), frames);
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    let (beside, mismatches, calls) = std::thread::scope(|scope| {
+        let workers: Vec<_> = (0..4)
+            .map(|_| {
+                scope.spawn(|| {
+                    let (mut wrong, mut n) = (Vec::new(), 0u64);
+                    while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                        let got = answers(lib);
+                        let mut drain = vec![0u8; 1 << 16];
+                        unsafe { (lib.f.log_drain)(std::ptr::null_mut(), drain.as_mut_ptr(), drain.len()) };
+                        if got != reference && wrong.len() < 3 {
+                            wrong.push(format!("a library-level answer changed while a machine ran: {:?}", if got.2 != reference.2 { "info" } else if got.3 != reference.3 { "settings_schema" } else if got.4 != reference.4 { "firmware_for" } else { "status_text, abi_version or capabilities" }));
+                        }
+                        n += 1;
+                    }
+                    (wrong, n)
+                })
+            })
+            .collect();
+        let run = solo(s, &s.opts.settings.clone(), frames);
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        let mut all = Vec::new();
+        let mut total = 0;
+        for w in workers {
+            let (wrong, n) = w.join().unwrap_or_default();
+            all.extend(wrong);
+            total += n;
+        }
+        (run, all, total)
+    });
+    for m in mismatches {
+        c.that(false, || m);
+    }
+    match (alone, beside) {
+        (Ok(a), Ok(b)) => c.that(a == b, || format!("a machine run while four threads called the library-level exports differs from one run alone: {b:?} against {a:?}")),
+        (Err(e), _) | (_, Err(e)) => c.that(false, || e),
+    }
+    c.note(format!("{calls} rounds of library-level calls on four threads beside {frames} frames"));
+    c.done("C13", "library-level concurrency")
+}
+
+fn c14(s: &mut Session<'_>) -> Case {
+    let mut c = Check::new();
+    let m = match s.machine(&s.opts.settings.clone()) {
+        Ok(m) => m,
+        Err(e) => {
+            c.that(false, || e);
+            return c.done("C14", "descriptors against exports");
+        }
+    };
+    let _ = s.play(&m, 0, 2, false);
+    let Some(info) = m.machine_info().ok().and_then(|t| parse(&t)) else {
+        c.that(false, || "machine info is not JSON".to_owned());
+        return c.done("C14", "descriptors against exports");
+    };
+    let f = &s.lib.f;
+    let list = |k: &str| info.get(k).and_then(Value::as_array).map(|a| a.to_vec()).unwrap_or_default();
+    for space in list("spaces") {
+        let id = space.get("id").and_then(Value::as_i64).unwrap_or(-1) as u32;
+        let name = space.get("name").and_then(Value::as_str).unwrap_or("").to_owned();
+        let declared = space.get("size").and_then(Value::as_i64).unwrap_or(-1);
+        let size = unsafe { (f.space_size)(m.h, id) };
+        c.that(size == declared, || format!("space {id} ({name}) is declared {declared} bytes and space_size says {size}"));
+        if strs(space.get("flags")).iter().any(|x| x == "read_only") {
+            let mut before = [0u8];
+            unsafe { (f.space_read)(m.h, id, 0, before.as_mut_ptr(), 1) };
+            let poke = [before[0] ^ 0xFF];
+            let r = unsafe { (f.space_write)(m.h, id, 0, poke.as_ptr(), 1) };
+            let mut after = [0u8];
+            unsafe { (f.space_read)(m.h, id, 0, after.as_mut_ptr(), 1) };
+            c.that(r < 0, || format!("space {id} ({name}) is read-only and a write to it answered {r}"));
+            c.that(after == before, || format!("space {id} ({name}) is read-only and a write changed it"));
+        }
+    }
+    for file in list("battery") {
+        let which = file.get("which").and_then(Value::as_i64).unwrap_or(-1) as u32;
+        let declared = file.get("length").and_then(Value::as_i64).unwrap_or(-1);
+        let mut flags = 0u32;
+        let length = unsafe { (f.battery)(m.h, which, std::ptr::null_mut(), 0, &mut flags) };
+        c.that(length == declared, || format!("battery file {which} is declared {declared} bytes and battery says {length}"));
+    }
+    if s.lib.claims(caps::DEBUG) {
+        for p in list("processors") {
+            let id = p.get("id").and_then(Value::as_i64).unwrap_or(-1) as u32;
+            let mut pc = 0u64;
+            let r = f.debug_pc.map_or(status::NOT_SUPPORTED, |g| unsafe { g(m.h, id, &mut pc) });
+            c.that(r == 0, || format!("processor {id} is named and debug_pc answers {r}"));
+        }
+    }
+    c.note(format!("{} spaces, {} battery files, {} processors", list("spaces").len(), list("battery").len(), list("processors").len()));
+    c.done("C14", "descriptors against exports")
+}
+
+use emusen_native::debug::{flag, run as runflag, stop};
+
+/// Every debug log drained, so that a full one does not stop the frame.
+fn drain_debug(m: &Machine<'_>) {
+    let f = &m.lib.f;
+    unsafe {
+        if let Some(g) = f.debug_writes {
+            let n = g(m.h, std::ptr::null_mut(), 0).max(0) as usize;
+            let mut b = vec![0u32; 4 * n + 4];
+            g(m.h, b.as_mut_ptr(), b.len());
+        }
+        if let Some(g) = f.debug_calls {
+            let n = g(m.h, std::ptr::null_mut(), 0).max(0) as usize;
+            let mut b = vec![0u32; 3 * n + 3];
+            g(m.h, b.as_mut_ptr(), b.len());
+        }
+        if let Some(g) = f.debug_profile {
+            let n = g(m.h, std::ptr::null_mut(), 0).max(0) as usize;
+            let mut b = vec![0i64; 2 * n + 2];
+            g(m.h, b.as_mut_ptr(), b.len());
+        }
+        if let Some(g) = f.debug_coverage {
+            let mut recorded = 0i64;
+            let n = g(m.h, 0, std::ptr::null_mut(), 0, &mut recorded).max(0) as usize;
+            let mut b = vec![0u8; n];
+            g(m.h, 0, b.as_mut_ptr(), b.len(), &mut recorded);
+        }
+    }
+}
+
+/// One frame through the observed loop; a stop other than a full log is a table hit, which an armed run must not have.
+fn observed_frame(m: &Machine<'_>) -> Result<(), String> {
+    let run = m.lib.f.debug_run_frame.ok_or("DEBUG is claimed and debug_run_frame is missing")?;
+    let mut flags = 0;
+    for _ in 0..1_000_000 {
+        let (mut p, mut pc, mut detail) = (0u32, 0u64, 0u64);
+        let r = unsafe { run(m.h, flags, &mut p, &mut pc, &mut detail) };
+        drain_debug(m);
+        if r < 0 {
+            return Err(format!("debug_run_frame failed with {r}"));
+        }
+        if r == 0 {
+            return Ok(());
+        }
+        if r as u32 & !stop::RING != 0 {
+            return Err(format!("the armed frame stopped with reasons {r:#x} on processor {p} at {pc:#x}, though nothing was set to hit"));
+        }
+        flags = runflag::CONTINUE;
+    }
+    Err("the armed frame did not end".to_owned())
+}
+
+/// Every table armed with nothing to hit: calls, stores, the profile and processor 0's coverage tracked, a breakpoint
+/// at an address no 32-bit counter reaches, and watch and data-breakpoint ranges over a space no core has.
+fn arm(m: &Machine<'_>) {
+    let f = &m.lib.f;
+    unsafe {
+        if let Some(g) = f.debug_set {
+            g(m.h, flag::CALLS | flag::WRITES | flag::PROFILING | (1 << flag::COVERAGE), i32::MIN, -1);
+        }
+        if let Some(g) = f.debug_set_breakpoints {
+            let pairs = [-2i32, -2];
+            g(m.h, 0, pairs.as_ptr(), 1);
+        }
+        if let Some(g) = f.debug_set_ranges {
+            let none = [u32::MAX - 1, 0, u32::MAX];
+            g(m.h, 0, none.as_ptr(), 1);
+            g(m.h, 1, none.as_ptr(), 1);
+        }
+    }
+}
+
+fn c15(s: &mut Session<'_>) -> Case {
+    let mut c = Check::new();
+    if !s.lib.claims(caps::DEBUG) {
+        c.note("DEBUG is not claimed");
+        return c.done("C15", "debug");
+    }
+    let frames = s.opts.frames.min(300);
+    let settings = s.opts.settings.clone();
+    let body = |s: &mut Session<'_>, c: &mut Check| -> Result<(), String> {
+        let plain = solo(s, &settings, frames)?;
+        let armed = s.machine(&settings)?;
+        arm(&armed);
+        s.observed = true;
+        let t = s.play(&armed, 0, frames, false);
+        s.observed = false;
+        let got = (t?.digests, s.state_digest(&armed)?);
+        c.that(got == plain, || format!("every table armed with nothing to hit gives {got:?}, the plain run {plain:?}"));
+
+        let f = &s.lib.f;
+        let ids: Vec<i64> = armed.machine_info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("processors")?.as_array().map(|a| a.iter().filter_map(|p| p.get("id").and_then(Value::as_i64)).collect())).unwrap_or_default();
+        let m = s.machine(&settings)?;
+        s.play(&m, 0, 2, false)?;
+        let (run, set, set_bp, pc_of) = (f.debug_run_frame.unwrap(), f.debug_set.unwrap(), f.debug_set_breakpoints.unwrap(), f.debug_pc.unwrap());
+        unsafe {
+            let mut first = 0u64;
+            pc_of(m.h, 0, &mut first);
+            let pair = [first as u32 as i32, first as u32 as i32];
+            set_bp(m.h, 0, pair.as_ptr(), 1);
+            let (mut p, mut pc, mut d) = (u32::MAX, 0u64, 0u64);
+            let r = run(m.h, 0, &mut p, &mut pc, &mut d);
+            c.that(r > 0 && r as u32 & stop::BREAKPOINT != 0 && pc == first, || format!("a breakpoint at the next instruction, {first:#x}, gave reasons {r:#x} at {pc:#x}"));
+            c.that(ids.contains(&(p as i64)), || format!("the halt reported processor {p}, which machine info does not name"));
+            set_bp(m.h, 0, std::ptr::null(), 0);
+
+            set(m.h, flag::EACH, i32::MIN, -1);
+            let at = |m: &Machine<'_>| {
+                let mut pc = 0u64;
+                pc_of(m.h, 0, &mut pc);
+                ((m.lib.f.frame_count)(m.h), pc)
+            };
+            let before = at(&m);
+            let r = run(m.h, runflag::CONTINUE, &mut p, &mut pc, &mut d);
+            c.that(r > 0 && r as u32 & stop::EACH != 0 && at(&m) == before, || format!("with EACH armed, the call stopped with {r:#x} and moved the machine from {before:?} to {:?}", at(&m)));
+            for i in 0..8 {
+                let before = at(&m);
+                let r = run(m.h, runflag::UNCHECKED | runflag::CONTINUE, &mut p, &mut pc, &mut d);
+                c.that(r == 0 || (r > 0 && r as u32 & stop::EACH != 0), || format!("step {i} under EACH answered {r:#x}"));
+                c.that(at(&m) != before, || format!("step {i} under EACH did not move the machine from {before:?}"));
+            }
+            set(m.h, 0, i32::MIN, -1);
+        }
+        c.note(format!("armed against plain over {frames} frames; a breakpoint at the next instruction; eight steps under EACH"));
+        Ok(())
+    };
+    if let Err(e) = body(s, &mut c) {
+        c.that(false, || e);
+    }
+    s.observed = false;
+    c.done("C15", "debug")
 }

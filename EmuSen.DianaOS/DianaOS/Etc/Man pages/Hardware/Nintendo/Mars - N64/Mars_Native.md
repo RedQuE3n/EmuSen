@@ -3357,6 +3357,22 @@ One array is made the first time each is used. What `RewindBuffer` itself alloca
 encodes on a pool thread, which a step taken before the encoding finishes runs inline on the emulation thread (the
 test waits 50 ms before measuring a step for that reason, and records it).
 
+*Retired 2026-10-03: the 50 ms wait, and the assumption that only a step meets an unfinished encoding.* The test
+failed under the full parallel suite and passed alone. The cause is in `RewindBuffer`, not the core. `Settle` takes
+the pending delta with `GetAwaiter().GetResult()`; a task the pool has not yet started is then run inline on the
+calling thread (the runtime's task inlining), and `XorDeltaCodec.Encode` begins with a `MemoryStream` of an eighth of
+the state, 1,623,361 bytes here, above the test's limit of a sixteenth. The test captures every frame, and a synthetic
+cartridge's frame is short, so the capture's own `Settle` meets the previous capture's delta as often as the step
+does, and no wait placed before the step covers it. Measured by reading the buffer's pending task before each call:
+alone, 15 of 80 captures found it `WaitingToRun` and each allocated 1,624,456 to 1,624,488 bytes on the test thread,
+which averaged below the limit; with the pool held busy by four blocking work items per minimum worker, every capture
+and every step found it unstarted, and the test failed at 1,218,418 bytes a capture and 1,624,277 a step. A capture
+or step that found the task `Running` waited and allocated nothing, which is why the failure needed a busy pool. The
+test now calls `Moments()`, which settles, before each measured call, so the window holds the core's snapshot or load
+and the buffer's copy alone. Under the same held pool it measures 256 bytes a capture and 64 a step, as it does
+without one. Whether the buffer should encode inline on the emulation thread when the pool is late is a property of
+`RewindBuffer` (`EmuSen_Rewind_And_FastForward.md` §1.8), not of either Mars engine, and is left as it is.
+
 **The claim.** With four workers and the picture deferred, rewinding lands on exactly the state the machine had at
 the frame it lands on, and shows exactly the picture a load of that state shows; the lent pictures (§6.13) are kept
 through the rewind path's offers; and alternating rewind and advance with the workers busy never freezes.

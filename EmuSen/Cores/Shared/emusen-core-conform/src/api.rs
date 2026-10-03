@@ -2,6 +2,7 @@
 
 use std::ffi::c_char;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 
 use emusen_native::core::sys::{CreateParams, Event, FileEntry, FrameInfo, Machine as RawMachine, caps, status};
 
@@ -96,6 +97,20 @@ pub struct Lib {
     lib: libloading::Library,
     pub path: PathBuf,
     pub f: Fns,
+    /// The host this kit plays (C12): the minor it says it was built with, and the bytes its structs carry past
+    /// version 1.0's, each filled with `CANARY`.
+    host_minor: AtomicU32,
+    pad: AtomicUsize,
+    /// Canary bytes a core changed, which must stay zero.
+    pub canaries_broken: AtomicUsize,
+}
+
+/// The byte a skewed host's structs carry past their 1.0 size.
+pub const CANARY: u8 = 0xA5;
+
+/// Bytes `buf` holds past `from` that are no longer the canary.
+fn broken(buf: &[u8], from: usize) -> usize {
+    buf[from..].iter().filter(|&&b| b != CANARY).count()
 }
 
 /// Reads a text the length-query way.
@@ -117,7 +132,17 @@ impl Lib {
     pub fn open(path: &Path) -> Result<Lib, String> {
         let lib = unsafe { libloading::Library::new(path) }.map_err(|e| format!("could not be loaded: {e}"))?;
         let f = unsafe { Fns::resolve(&lib) }.map_err(|name| format!("lacks the required export {name}"))?;
-        Ok(Lib { lib, path: path.to_owned(), f })
+        Ok(Lib { lib, path: path.to_owned(), f, host_minor: AtomicU32::new(0), pad: AtomicUsize::new(0), canaries_broken: AtomicUsize::new(0) })
+    }
+
+    /// Plays a host of minor `minor` whose structs are `pad` bytes longer than version 1.0's (a multiple of 8).
+    pub fn set_host(&self, minor: u32, pad: usize) {
+        self.host_minor.store(minor, Ordering::Relaxed);
+        self.pad.store(pad, Ordering::Relaxed);
+    }
+
+    pub fn host(&self) -> (u32, usize) {
+        (self.host_minor.load(Ordering::Relaxed), self.pad.load(Ordering::Relaxed))
     }
 
     /// Whether the library exports `name`.
@@ -149,23 +174,44 @@ impl Lib {
 
     /// A machine, or the refusal's status and its error text.
     pub fn create(&self, image: &[u8], settings: &str, files: &[(u32, Vec<u8>)], pixel_formats: u64) -> Result<Machine<'_>, (i32, String)> {
-        let entries: Vec<FileEntry> = files.iter().map(|(w, d)| FileEntry { size: 24, which: *w, data: d.as_ptr(), len: d.len() }).collect();
+        let (minor, pad) = self.host();
+        let element = std::mem::size_of::<FileEntry>() + pad;
+        let mut entries = vec![CANARY; element * files.len()];
+        for (i, (w, d)) in files.iter().enumerate() {
+            let e = FileEntry { size: element as u32, which: *w, data: d.as_ptr(), len: d.len() };
+            unsafe { std::ptr::write_unaligned(entries.as_mut_ptr().add(i * element) as *mut FileEntry, e) };
+        }
         let mut error = vec![0u8; 512];
+        let mut params = vec![CANARY; std::mem::size_of::<CreateParams>() + pad];
         let p = CreateParams {
-            size: std::mem::size_of::<CreateParams>() as u32,
-            host_abi_version: emusen_native::core::sys::ABI_VERSION,
+            size: params.len() as u32,
+            host_abi_version: (1 << 16) | minor,
             image: image.as_ptr(),
             image_len: image.len(),
             settings: settings.as_ptr(),
             settings_len: settings.len(),
-            files: entries.as_ptr(),
-            file_count: entries.len(),
-            file_size: std::mem::size_of::<FileEntry>(),
+            files: entries.as_ptr() as *const FileEntry,
+            file_count: files.len(),
+            file_size: element,
             pixel_formats,
             error: error.as_mut_ptr(),
             error_len: error.len(),
         };
-        self.create_with(&p, &mut error)
+        unsafe { std::ptr::write_unaligned(params.as_mut_ptr() as *mut CreateParams, p) };
+        let made = self.create_raw(params.as_ptr() as *const CreateParams, &mut error);
+        let damaged = broken(&params, std::mem::size_of::<CreateParams>()) + (0..files.len()).map(|i| broken(&entries[i * element..(i + 1) * element], std::mem::size_of::<FileEntry>())).sum::<usize>();
+        self.canaries_broken.fetch_add(damaged, Ordering::Relaxed);
+        made
+    }
+
+    fn create_raw(&self, p: *const CreateParams, error: &mut [u8]) -> Result<Machine<'_>, (i32, String)> {
+        let mut code = 0;
+        let h = unsafe { (self.f.create)(p, &mut code) };
+        if h.is_null() {
+            let end = error.iter().position(|&b| b == 0).unwrap_or(0);
+            return Err((code, String::from_utf8_lossy(&error[..end]).into_owned()));
+        }
+        Ok(Machine { lib: self, h })
     }
 
     pub fn create_with(&self, p: &CreateParams, error: &mut [u8]) -> Result<Machine<'_>, (i32, String)> {
@@ -208,9 +254,16 @@ impl Machine<'_> {
     }
 
     pub fn frame_info(&self) -> Result<FrameInfo, i32> {
-        let mut f = FrameInfo { size: std::mem::size_of::<FrameInfo>() as u32, ..FrameInfo::default() };
-        match unsafe { (self.lib.f.frame_info)(self.h, &mut f) } {
-            0 => Ok(f),
+        let (_, pad) = self.lib.host();
+        let known = std::mem::size_of::<FrameInfo>();
+        let mut words = vec![u64::from_ne_bytes([CANARY; 8]); (known + pad).div_ceil(8)];
+        let buf = unsafe { std::slice::from_raw_parts_mut(words.as_mut_ptr() as *mut u8, known + pad) };
+        buf[..known].fill(0);
+        buf[..4].copy_from_slice(&((known + pad) as u32).to_ne_bytes());
+        let r = unsafe { (self.lib.f.frame_info)(self.h, buf.as_mut_ptr() as *mut FrameInfo) };
+        self.lib.canaries_broken.fetch_add(broken(buf, known), Ordering::Relaxed);
+        match r {
+            0 => Ok(unsafe { std::ptr::read(buf.as_ptr() as *const FrameInfo) }),
             e => Err(e),
         }
     }
@@ -243,11 +296,20 @@ impl Machine<'_> {
     }
 
     pub fn events(&self) -> Vec<Event> {
+        let (_, pad) = self.lib.host();
+        let known = std::mem::size_of::<Event>();
+        let element = known + pad;
         let n = unsafe { (self.lib.f.events)(self.h, std::ptr::null_mut(), 0, 0) }.max(0) as usize;
-        let mut out = vec![Event { size: 24, ..Event::default() }; n];
-        let got = unsafe { (self.lib.f.events)(self.h, out.as_mut_ptr(), n, std::mem::size_of::<Event>()) }.max(0) as usize;
-        out.truncate(got);
-        out
+        let mut words = vec![u64::from_ne_bytes([CANARY; 8]); (element * n).div_ceil(8)];
+        let buf = unsafe { std::slice::from_raw_parts_mut(words.as_mut_ptr() as *mut u8, element * n) };
+        for i in 0..n {
+            buf[i * element..i * element + known].fill(0);
+            buf[i * element..i * element + 4].copy_from_slice(&(element as u32).to_ne_bytes());
+        }
+        let got = unsafe { (self.lib.f.events)(self.h, buf.as_mut_ptr() as *mut Event, n, element) }.max(0) as usize;
+        let damaged: usize = (0..n).map(|i| broken(&buf[i * element..(i + 1) * element], known)).sum();
+        self.lib.canaries_broken.fetch_add(damaged, Ordering::Relaxed);
+        (0..got.min(n)).map(|i| unsafe { std::ptr::read_unaligned(buf.as_ptr().add(i * element) as *const Event) }).collect()
     }
 
     pub fn set_buttons(&self, port: u32, mask: u32, changed: u32) -> i32 {

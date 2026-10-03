@@ -896,3 +896,25 @@ their data.
   writes, and STOP's wait for the ports.
 - Pinned by: Star Fox's $15BB, Vortex's $198C, and the GSU test ROMs staying passed.
 
+
+### D-36. SA-1: who waits, and for how long, when the S-CPU and the SA-1 reach the cartridge's ROM, BW-RAM or I-RAM together
+- Opened: 2026-10-03, after D-35, by §27.4's measurements: in the SA-1 games the S-CPU fetches from the cartridge for
+  38% (Super Mario RPG), 84% (Kirby Super Star) and 100% (the two PGA titles, Power Rangers Zeo) of its instructions
+  while the SA-1 runs, and the first WRAM differences against Mesen are transients that converge (Super Mario RPG's
+  $1D3F from frame 1, Kirby Super Star's $95 and $A7 from frame 11). VenusRT models no contention: the SA-1 takes 2
+  master clocks a ROM or I-RAM access and 4 a BW-RAM access whatever the S-CPU does.
+- Documents read: fullsnes, "SNES Cart SA-1", "Misc": "The SA-1 CPU can access memory at 10.74MHz rate (or less, if
+  the SNES does simultaneouly access cartridge memory)", and its open item "XXX pg 62..66 timings"; "Character
+  Conversion": "waits may occur on BW-RAM and I-RAM accesses". No document gives the rule. anomie's documents do not
+  cover the SA-1.
+- Test ROM: none of the corpus grades the SA-1's timing; the measures are the transients above and the pictures,
+  against Mesen's runs as a comparison only.
+- Referee: `Venus_Referee.md` §0 rates the SA-1 real support on bit numbers and structure, with the clock phasing the
+  author's own. To be read for the contention and access-timing rules only: SNES_MiSTer `rtl/chip/SA1/SA1.vhd`, the
+  parts that decide the SA-1's clock enable, how many clocks its ROM, BW-RAM and I-RAM accesses take, and when it
+  waits for the S-CPU's access to the same memory; and, because the SA-1's side of the rule is phrased by the S-CPU's
+  bus clock, the lines of `rtl/CPU.vhd` that place SYSCLK's falling and rising edges within an S-CPU cycle (no
+  document gives that phase).
+- Conclusion: open.
+- Pinned by: Super Mario RPG's $1D3F and Kirby Super Star's $95/$A7, the SA-1 games' pictures, and absindx's SA-1
+  tests staying passed.

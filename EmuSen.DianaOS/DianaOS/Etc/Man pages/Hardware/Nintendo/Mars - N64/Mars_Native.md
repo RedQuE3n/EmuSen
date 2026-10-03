@@ -2440,7 +2440,7 @@ line predicted, and the difference is worth stating:
   hotkey path too.
 
 The condition this stage set, a session of play on each machine with a clean crash log, was met on the handheld
-(§6.15.6, no crash log) and not on the desktop, where the N64 had run on Mars (C#); the player made the call. Stage
+(§6.15.6, no crash log) and not on the desktop, where the N64 had run on Mars (C#); the tester made the call. Stage
 G's first criterion (§6.7) now holds wherever the library ships. Tests: the engine, frontend, Mistress, Hotaru,
 Pharaoh and MercuryRT suites, 1,097 cases, pass; a catalogue that forgets the default and a notice that names the
 default instead of the running core are each caught.
@@ -5416,9 +5416,9 @@ At the multiple the median falls 1.98 ms (16.79 to 14.81), under the 16.7 ms tar
 - **At one nothing moved**, as §6.15.5 found on the desktop: the medians are 14.68 and 14.58, inside each other's
   spread. The state hash (2D024DBB873B763A) was the same in all twelve runs.
 - **Not measured:** the `trace=` run the prediction also asked for.
-- **In Mistress** (build with libmarsrt 795edd41, the same day), the player reported DK64 at 2x on the device running
-  at full speed, where §6.14 had it at about 45 frames a second on the title. That is the player's reading of the
-  frame counter, not a bench figure. The player then set 3x (the device on, antialiasing off, four workers, read
+- **In Mistress** (build with libmarsrt 795edd41, the same day), the tester reported DK64 at 2x on the device running
+  at full speed, where §6.14 had it at about 45 frames a second on the title. That is the tester's reading of the
+  frame counter, not a bench figure. The tester then set 3x (the device on, antialiasing off, four workers, read
   back from the handheld's `graphics.json`) and reported full speed there too. No bench was run at 3x.
 
 ##### 6.15.7 What is not done

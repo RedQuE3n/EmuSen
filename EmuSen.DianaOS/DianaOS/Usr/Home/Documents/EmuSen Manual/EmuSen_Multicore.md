@@ -341,7 +341,7 @@ the setting rather than in the frontend so that the rule it states is the core's
 function both N64 cores' `EffectiveAntialiasing` calls. (MarsRT's library applies the rule a third time, in Rust, at
 `Core::set_multiple`; `MarsRtThreadsTests` compares the two cores' pictures at levels that apply and at 4x antialiasing
 at 4x resolution, which is held back, and that comparison is what keeps the three in step.) A note is text for a person, never parsed; a frontend that does not show notes loses nothing but the sentence.
-It was added because the player's settings for Perfect Dark on the handheld held antialiasing 3x at resolution three,
+It was added because the tester's settings for Perfect Dark on the handheld held antialiasing 3x at resolution three,
 where it draws nothing (`Mars_Performance.md` §42.5), and the window said so only inside the hint's last clause.
 
 ## 14. A picture that has not changed (2026-09-21)

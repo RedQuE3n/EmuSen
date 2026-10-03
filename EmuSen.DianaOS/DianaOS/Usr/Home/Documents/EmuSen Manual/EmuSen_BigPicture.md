@@ -109,7 +109,7 @@ it is in the format chosen above, and ES-DE's own documentation describes that f
 
 The request says the Legion Go S runs at 1280×800. `EmuSen_Settings_Reference.md` §4.45.2 describes "a Legion Go S's
 8-inch 1920 by 1200 panel". Both are 16:10, so the aspect-ratio choice is the same either way. The performance budget
-is not: 1920×1200 has 2.25 times the pixels. §4.8 prices both, and Q2 asks which the player actually runs, because
+is not: 1920×1200 has 2.25 times the pixels. §4.8 prices both, and Q2 asks which the tester actually runs, because
 gamescope can render at 1280×800 and scale up to the panel.
 
 ---
@@ -6705,7 +6705,7 @@ temporary ROM folder beside its own top-level games (`ThemedSession` gained a `r
 Ten of the eleven first view tests passed at their first run. The one that failed was the test's error: it assumed the
 selection moved to the first row after a sort, where the view keeps it on its entry, which the test now asserts.
 
-### 30.6 P109 on the player's library, read-only
+### 30.6 P109 on the tester's library, read-only
 
 `FoldersLibraryTool` (`EMUSEN_BIGPICTURE_REALLIB=1`) scans `AppSettings.RomDirectory` with `RomLibrary.Scan`, which
 lists files and opens none, builds the shelves as the window does, and shows them in a `ThemedLibrary` on the synthetic
@@ -6757,7 +6757,7 @@ gap it does find.
 | P108 | `EsdeMediaFolder` finds none of a foldered game's media in an ES-DE tree, shown on the unchanged reader | 0 of 6 found on the unchanged reader; 6 of 6 after the fix | **held**, then fixed |
 | P109 | Shown as folders, NES opens on 16 entries and GB on 28; the return from a game in a folder comes back to that folder and game, its first frame equal to a fresh build; the first showing costs within 10% of the flat one | NES 16; **GB 27**: `GB/[BIOS]` holds four `.7z` archives, which no core reads, so the scan lists nothing there and the folder does not show; the return held, 0 pixels differing at 1280×800; the first showing **half** the flat one's cost, 1.6 against 3.2 ms, since the text list builds a row per entry, 16 rather than 3,537 | **failed** on two clauses: the count, because §21.1 counted folders and not the files in them; the cost, which was predicted as a ceiling and came out far under it |
 | P144 | *(written during the build)* The layout step loses no picture in any of its cases, and a second run changes nothing | the SHA-256 comparison in every case of §30.4, and the rerun | held |
-| P145 | *(written during the build)* No file stem of the player's library repeats between two folders of one console, so the flat name second (Q61) never shows one game another's picture there | 0 on each console (§30.6), as §21.1 counted | held |
+| P145 | *(written during the build)* No file stem of the tester's library repeats between two folders of one console, so the flat name second (Q61) never shows one game another's picture there | 0 on each console (§30.6), as §21.1 counted | held |
 | P146 | *(written before the round)* Of the round's mutants, at least nine in ten are caught on their first run | 49 of 50 (98%) | held |
 | P147 | *(written before the broad run)* The broad Mistress run passes with no failure this branch causes | once, after merging WiseMan at `b62a3d3e` and a rebuild: the Mistress filter without `ShaderSettingsWindowTests`, `ShaderBrowseBench`, `SceneGpuBench` or any test named for the GPU or Vulkan, under `nice -n 10`: 998 tests, 971 passed, 27 skipped (the picture, bench, live and real-library tools, which need their variables), none failed, in 3 min 50 s | held; one pass is weak evidence against an intermittent failure, as §15.14 says |
 
@@ -7282,7 +7282,7 @@ when this began.
   - afterwards, a check that no ES-DE process remained (`ps` with an anchored pattern).
 - **What it could reach.**
   - `ApplicationUpdaterFrequency` was `never`, and the ScreenScraper account fields were empty. Nothing scraped.
-  - The ROM folder was `esde/launch-roms/`: ten empty `.sfc` files and seven empty `.nes` files. The player's library
+  - The ROM folder was `esde/launch-roms/`: ten empty `.sfc` files and seven empty `.nes` files. The tester's library
     was never named, and the runner asserts that its ROM folder is not the library.
   - `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT` admitted only §22.2's uinput pad.
 - **Something to launch.** `custom_systems/es_systems.xml` gave `snes` and `nes` one command each: a stand-in script
@@ -8259,7 +8259,7 @@ the tests write their own themes and pictures.
   (five systems of twelve games, with the same gamelists) and seven more systems for the wheels. Two of those carry
   metadata for the gameselector's rules: `gba` has one game played three times and two never played, and `genesis` has
   its most recently and most often played game excluded from the game counter and another hidden. Their media are flat
-  labelled pictures drawn by the probe's own script. The player's library was never named.
+  labelled pictures drawn by the probe's own script. The tester's library was never named.
 - **The runner** is `~/.cache/emusen/probe/pass14/esde_run14.py` (settings, launch, a capture by `ffmpeg -f x11grab`,
   pad timelines by §22.2's uinput pad, the log copied), batched by `batch.sh`. 63 runs; every `es_log.txt` is kept in
   `probe/pass14/logs/`, and none logged an error.
@@ -8484,7 +8484,7 @@ repository.
   - closed by the PIDs it started, and the run waits until they are gone before it gives the lock back.
 - **What it could reach.** `ApplicationUpdaterFrequency` `never`, the ScreenScraper fields empty, nothing scraped. The ROM
   folder was `esde/screensaver-roms/`: ten empty `.sfc` files and three empty `.nes` files. The runner asserts that no
-  folder it names lies in the player's library. `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT` admitted only §22.2's uinput
+  folder it names lies in the tester's library. `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT` admitted only §22.2's uinput
   pad.
 - **Media.** Pictures drawn for the probe (§33.1's `mkmedia.py`): each kind its own colour with its name on it, so a
   capture shows which kind was chosen. One game had every kind, one every kind but miximages, and single games had only
@@ -10962,7 +10962,7 @@ the shader browser, the benches or any GPU, Vulkan or slang case, under `nice -n
 
 *Built on branch `bp-favorite-cursor` from WiseMan `61998d92`.* In the themed view, marking a game as a favourite moved
 the game to the top of the list, as it should with favourites sorted first, and moved the highlight there with it. To
-favourite a run of games the player had to scroll back down after each one. The decision of 2026-10-03 is that the game
+favourite a run of games the tester had to scroll back down after each one. The decision of 2026-10-03 is that the game
 moves and the highlight does not. **Numbering.** P301 and Q196 are new here; P300 and Q195 were the highest in every
 tree on this machine when this section was written.
 
@@ -11005,13 +11005,13 @@ None of them says where the cursor goes when a game is marked or unmarked. None 
 and no setting is said to govern it. *Sort favorite games above non-favorites* decides only whether the game moves at
 all. ES-DE's source was not read and ES-DE was not run.
 
-The documentation is silent, so the rule below is the one the player gives as ES-DE's behaviour: the highlight stays
+The documentation is silent, so the rule below is the one the tester gives as ES-DE's behaviour: the highlight stays
 where it was, and only the game moves. That is a claim about ES-DE that nothing here has measured. It is recorded as
 **P301**: *in ES-DE 3.4.1, the release §22.2 measured, with favourites sorted first, Y on the game at row i leaves the cursor at row i, both for
 marking and for unmarking.* P301 is retired by a measurement on ES-DE, the next time one is run for §22.2's kind of
 question.
 
-*Observed 2026-10-03, on the handheld:* the player compared the fixed build (157dd7ef) with ES-DE and found the
+*Observed 2026-10-03, on the handheld:* the tester compared the fixed build (157dd7ef) with ES-DE and found the
 behaviour identical. P301 is retired by that observation. It was a comparison in play, not a scripted measurement, and
 which of the cases above it covered was not recorded; Q196's recommendation stands until the editor's case is compared.
 

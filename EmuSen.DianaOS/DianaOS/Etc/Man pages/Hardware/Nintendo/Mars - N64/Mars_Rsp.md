@@ -366,7 +366,7 @@ That is about a quarter of a second in total, spent on a black screen. What the 
 
 ### 11.2 Two tiers: a block compiled cheaply at once, and folded when hot (2026-09-22)
 
-**The report.** On a Legion Go S (Ryzen Z1 Extreme, SteamOS, RADV), Ocarina of Time's intro was "very slow" after the file-select screen. The case was a state the player made there, with A pressed to load a save. It was run headless on the device over SSH with pacebench built ReadyToRun, from that state, with the device's settings (GPU on, 8 RDP workers).
+**The report.** On a Legion Go S (Ryzen Z1 Extreme, SteamOS, RADV), Ocarina of Time's intro was "very slow" after the file-select screen. The case was a state the tester made there, with A pressed to load a save. It was run headless on the device over SSH with pacebench built ReadyToRun, from that state, with the device's settings (GPU on, 8 RDP workers).
 
 **The build on the device predated §11.1.** It showed a single frame of **5,233 ms** and 58.5% of full speed over fifteen seconds: the pool defect of §11.1, worse on a handheld's slower cores.
 

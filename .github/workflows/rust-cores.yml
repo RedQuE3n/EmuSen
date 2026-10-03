@@ -18,6 +18,27 @@ on:
       - 'EmuSen.WiseMan/Cores/MercuryRt*'
       - 'EmuSen.WiseMan/Cores/MoonRt*'
       - 'EmuSen.WiseMan/Cores/VenusRt*'
+      - 'EmuSen.WiseMan/Cores/CoreAbi*'
+      - 'EmuSen/Cores/Native/**'
+      - '.github/workflows/rust-cores.yml'
+  # The core ABI's guard must see every pull request that could change version 1 (EmuSen_CoreAPI.md §5.4).
+  pull_request:
+    paths:
+      - 'EmuSen/Cores/Nintendo/MarsRT - N64/**'
+      - 'EmuSen/Cores/Nintendo/MercuryRT - GB/**'
+      - 'EmuSen/Cores/Nintendo/MoonRT - NES/**'
+      - 'EmuSen/Cores/Nintendo/VenusRT - SNES/**'
+      - 'EmuSen/Cores/Shared/**'
+      - 'EmuSen/Cores/RustCores.props'
+      - 'EmuSen/Cores/RustCoresPublish.targets'
+      - 'EmuSen/EmuSen.csproj'
+      - 'EmuSen.WiseMan/Cores/MarsRt*'
+      - 'EmuSen.WiseMan/Cores/MarsNative*'
+      - 'EmuSen.WiseMan/Cores/MercuryRt*'
+      - 'EmuSen.WiseMan/Cores/MoonRt*'
+      - 'EmuSen.WiseMan/Cores/VenusRt*'
+      - 'EmuSen.WiseMan/Cores/CoreAbi*'
+      - 'EmuSen/Cores/Native/**'
       - '.github/workflows/rust-cores.yml'
 
 jobs:
@@ -32,12 +53,55 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # The ABI check needs libclang and runs in abi-guard alone.
       - name: Test
         shell: bash
         run: |
           for crate in EmuSen/Cores/Shared/*/; do
+            case "$crate" in *emusen-core-abi-check/) continue ;; esac
             (cd "$crate" && cargo test --release)
           done
+
+      # The test core claims every capability, so all of version 1's exports are checked on each platform's linker.
+      - name: The v1 test core's exports
+        shell: bash
+        run: |
+          dir=EmuSen/Cores/Shared/emusen-native
+          case "$RUNNER_OS" in
+            Windows) lib=v1_test_core.dll ;;
+            macOS) lib=libv1_test_core.dylib ;;
+            *) lib=libv1_test_core.so ;;
+          esac
+          py=$(command -v python3 || command -v python)
+          "$py" $dir/abi/v1/export_check.py $dir/abi/v1/baseline.txt $dir/target/release/examples/$lib
+
+  # The header against emusen-native's Rust and against the baseline on all four triples, and the base branch's baseline against this one: a removed or changed line fails (EmuSen_CoreAPI.md §5.2, §5.4).
+  abi-guard:
+    name: Core ABI guard
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: libclang
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev clang
+      - name: The base branch's baseline
+        shell: bash
+        run: |
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          path=EmuSen/Cores/Shared/emusen-native/abi/v1/baseline.txt
+          if [ -n "$base" ] && git cat-file -e "$base:$path" 2>/dev/null; then
+            git show "$base:$path" > "$RUNNER_TEMP/base-baseline.txt"
+            echo "AGAINST=--against $RUNNER_TEMP/base-baseline.txt" >> "$GITHUB_ENV"
+          else
+            echo "no baseline at the base commit; checked against the header only"
+          fi
+      - name: The guard
+        working-directory: EmuSen/Cores/Shared/emusen-core-abi-check
+        run: |
+          cargo test --release
+          cargo run --release -- --check $AGAINST
 
   library:
     name: ${{ matrix.crate.name }} ${{ matrix.platform.rid }}
@@ -154,10 +218,16 @@ jobs:
             echo "::notice title=${{ matrix.crate.name }} ${{ matrix.platform.rid }}::profile-guided ($(sed -n 's/^state = //p' "$status"))"
           fi
 
+      # A library on version 1: its exports against the baseline and its capability bits (EmuSen_CoreAPI.md §5.4 item 5); a pre-stable one is skipped by it and still counted below. Not on osx-x64, whose library this runner's Python cannot load.
       - name: Exports
         shell: bash
         run: |
           file="target/${{ matrix.platform.target }}/dist/$LIBRARY"
+          if [ "${{ matrix.platform.test }}" = "true" ]; then
+            py=$(command -v python3 || command -v python)
+            abi="${{ github.workspace }}/EmuSen/Cores/Shared/emusen-native/abi/v1"
+            "$py" "$abi/export_check.py" "$abi/baseline.txt" "$file"
+          fi
           case "${{ matrix.platform.rid }}" in
             win-*) ;;
             *) nm -gU "$file" 2>/dev/null | grep -c ' _\?${{ matrix.crate.symbol }}' || nm -D "$file" | grep -c ' ${{ matrix.crate.symbol }}' ;;
@@ -241,7 +311,7 @@ jobs:
 
       - name: Test the Rust cores against the C# cores
         working-directory: EmuSen-Project
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       - uses: actions/upload-artifact@v4
         if: always()

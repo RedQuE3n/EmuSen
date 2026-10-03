@@ -250,6 +250,30 @@ their data.
   `CPU.vhd` lines 300-345 for D-36: lines 300-305, a counter `P65_RST_CNT` releasing `P65_RST_N` at 150 counts;
   what it counts was not read then.
 
+- Read 2026-10-03, as logged: `CPU.vhd` lines 268-306 (the process holding the 65C816 in reset), `SNES.vhd`'s port
+  maps of the S-CPU, S-PPU and SMP (lines 220-232, 317-326, 371-380), `PPU.vhd` lines 310-330 and 826-856 (the dot
+  clock and the H and V counters), the grep lines naming the counters and the resets in `PPU.vhd`, `SMP.vhd` and
+  `main.v`. What they say:
+  - The S-CPU, the S-PPU and the SMP share one reset line. The SMP leaves reset with it. `CPU.vhd` counts 150
+    master clocks (its clock is the master clock, `MCLK`) after the line rises before it releases the 65C816.
+  - The S-PPU's H and V counters are not reset by the line: they are initialised when the FPGA is configured and
+    then run, so the referee places the S-CPU's start at no particular dot. It has no rule for the phase against the
+    counters, which is what this entry asks.
+  - So the referee answers half of the question: the 65C816 starts 150 master clocks after the SPC700, where
+    VenusRT starts both at clock 0. Measured with that lead (and every lead from -60 to 180, with the port accesses
+    both granular as built and exactly timestamped), Super Mario World's trace parts from Mesen's at its first
+    handshakes (instructions 1,988 to 2,062) whatever the lead: the port timing hides the phase, and the lead cannot
+    be judged, by Mesen or by any test ROM in the corpus, until the ports are right.
+- Conclusion, 2026-10-03: **open**, and not changed.
+  - Against the counters: three measurements against Mesen now agree on a start 132 master clocks into line 0 (Sour's
+    rows and `reset-position-test` on 2026-10-01, Star Fox's whole ten-frame trace today). No document gives the
+    number, and the referee gives no rule. Adopting it would match Mesen on no other basis than Mesen.
+  - Against the SPC700: the referee's 150-clock hold is a basis, but its effect cannot be measured while the
+    S-CPU's and SPC700's port accesses are timed by whole SPC700 instructions. That timing is its own question, D-37's
+    to open, and the lead waits for it.
+  - What would settle the counters' half is unchanged: `reset-position-test`'s OPHCT on a console, `$0014` for a
+    start at clock 0, `$0035` for Mesen's.
+
 ### D-7. PPU: master brightness N scales a colour component c to c×(N+1)/16, rounded down
 - Opened: 2026-09-30, at stage 3 step 1, by PeterLemon's `RedSpace9BitHDMA` at frame 300. The ROM writes a backdrop
   colour and a brightness for every line by HDMA; the pairs come from its own `Gradient.py`, which was run to list

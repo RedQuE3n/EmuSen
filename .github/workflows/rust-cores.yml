@@ -87,6 +87,8 @@ jobs:
           path: |
             EmuSen/Cores/Shared/emusen-native/target/release/examples/*v1_test_core.*
             EmuSen/Cores/Shared/emusen-native/target/release/examples/*v1_plain_core.*
+            EmuSen/Cores/Shared/emusen-core-conform/target/release/emusen-core-conform
+            EmuSen/Cores/Shared/emusen-core-conform/target/release/emusen-core-conform.exe
           if-no-files-found: error
 
   # The header against emusen-native's Rust and against the baseline on all four triples, and the base branch's baseline against this one: a removed or changed line fails (EmuSen_CoreAPI.md §5.2, §5.4).
@@ -248,10 +250,25 @@ jobs:
           esac
           ls -la "$file"
 
+      # A library on the core ABI v1 gets its sidecar from the kit's runner, as the local build writes it (EmuSen_CoreAPI.md §22); not on osx-x64, whose library this runner cannot load.
+      - name: The sidecar
+        if: matrix.platform.test == true
+        shell: bash
+        run: |
+          file="target/${{ matrix.platform.target }}/dist/$LIBRARY"
+          py=$(command -v python3 || command -v python)
+          if "$py" -c "import ctypes, sys; sys.exit(0 if hasattr(ctypes.CDLL(sys.argv[1]), 'emusen_core_abi_version') else 1)" "$file"; then
+            cargo run --release --manifest-path ../../Shared/emusen-core-conform/Cargo.toml -- --sidecar "$file"
+          else
+            echo "not on the core ABI v1: no sidecar"
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.crate.name }}-${{ matrix.platform.rid }}
-          path: ${{ matrix.crate.dir }}/target/${{ matrix.platform.target }}/dist/${{ env.LIBRARY }}
+          path: |
+            ${{ matrix.crate.dir }}/target/${{ matrix.platform.target }}/dist/${{ env.LIBRARY }}
+            ${{ matrix.crate.dir }}/target/${{ matrix.platform.target }}/dist/${{ env.LIBRARY }}.core.json
           if-no-files-found: error
 
   # WiseMan's tests of the Rust cores against the C# cores, run on each platform against the libraries the job above ships; osx-x64 is left out, its runner being arm64.
@@ -321,6 +338,7 @@ jobs:
         run: |
           out=EmuSen-Project/EmuSen.WiseMan/bin/Release/net10.0
           cp native/* "$out/"
+          chmod +x "$out"/emusen-core-conform* || true
           ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*v1_test_core* "$out"/*v1_plain_core*
 
       # Printed in full, so each platform's digests can be read off the log.
@@ -330,7 +348,7 @@ jobs:
 
       - name: Test the Rust cores against the C# cores
         working-directory: EmuSen-Project
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery|FullyQualifiedName~MoonRtCoreAbi" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       - uses: actions/upload-artifact@v4
         if: always()

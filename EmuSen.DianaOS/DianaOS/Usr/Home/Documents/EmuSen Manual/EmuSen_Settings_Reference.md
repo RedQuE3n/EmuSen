@@ -1348,7 +1348,7 @@ that machine and was not measured on a slow one; the row is for choosing it, not
 2026-09-22: with its threads and recompiler on, MarsRT measures a little faster than Mars on the development
 desktop and eight to nine per cent faster on a handheld (`Mars_Native.md` §5.8.8 and §6.1). The default stays Mars
 until it has been played on both.* *It was played on the Legion Go S, Donkey Kong 64 at full speed at 2x and 3x on the
-graphics card with no crash log (`Mars_Native.md` §6.15.6), and made the default on 2026-09-24 at the player's word,
+graphics card with no crash log (`Mars_Native.md` §6.15.6), and made the default on 2026-09-24 at the tester's word,
 without the desktop session §6.2 of that page had asked for.*
 
 **When MarsRT cannot run.** If `libmarsrt.so` is missing, speaks another interface, or is turned off with
@@ -1681,7 +1681,7 @@ player confirmed it the same day.
 
 #### 4.45.9 The highlight in an open list, and the page behind it
 
-**What the player saw.** With the list drawn in the window (§4.45.8), up and down in an open dropdown moved no
+**What the tester saw.** With the list drawn in the window (§4.45.8), up and down in an open dropdown moved no
 visible highlight, the page behind the list moved instead, and backing out showed the choice had been changed.
 
 **What was reproduced, and what was not.** A headless run (whose platform draws every popup in the window's
@@ -2474,7 +2474,7 @@ none of this has been tried on the handheld.
 ### 4.50 Rewind takes four snapshots a second (2026-09-24)
 
 **What changed.** Mistress used `RewindBuffer`'s default interval, a snapshot every 4 frames: fifteen a second on a
-60 Hz console. The player found that too many save states once the reel (§4.49) made them visible, and asked for four
+60 Hz console. The tester found that too many save states once the reel (§4.49) made them visible, and asked for four
 a second. Mistress now sets the interval when a game loads from that console's own frame rate,
 `RewindIntervalFor(hz) = round(hz / 4)`: 15 frames on the NES, Game Boy, SNES and N64 at 60 Hz, 12 on a 50 Hz PAL
 game (`Math.Round` takes 12.5 to the even 12, so 4.17 a second). `RewindBuffer.DefaultIntervalFrames` stays 4, so the harness and every other user
@@ -3257,7 +3257,7 @@ are the player's own and are shown until switched off (kept by decision, Q13).
 
 | Button | Where | What it does now |
 |---|---|---|
-| North | a game list | the favourite (ES-DE's Y); while a custom collection is edited, adds or removes the game instead. The help bar reads **Favorite** or **Collection** |
+| North | a game list | the favourite (ES-DE's Y); the game moves and the highlight keeps its row (EmuSen_BigPicture.md §44). While a custom collection is edited, adds or removes the game instead. The help bar reads **Favorite** or **Collection** |
 | Select | a game list | the one options menu: the gamelist rows, Search, the collection entries, the game's entries |
 | L1, R1 | a game list | ten games back or forward, stopping at the ends, as USERGUIDE's shoulders; the help bar reads **Jump**. L2 and R2 stay the first and last game |
 | Left or right thumbstick, pressed in | a game list; the systems with *Games and systems* | a random game, or system (ES-DE's thumbstick click) |
@@ -3307,7 +3307,7 @@ in ES-DE. The menu's entries:
 
 | Entry | What it does |
 |---|---|
-| Add to Favourites / Remove from Favourites | the favourite of §4.32, with the theme's `favorite` sound; the game moves to the top of the list and stays selected. Until 2026-09-26 this was Select's own action |
+| Add to Favourites / Remove from Favourites | the favourite of §4.32, with the theme's `favorite` sound; the game moves to the top of the list. Until 2026-09-26 this was Select's own action. *Since 2026-10-03 the highlight keeps its row rather than following the game, so the next press down reaches the game after it (EmuSen_BigPicture.md §44)* |
 | Edit This Game's Metadata | opens the editor, below |
 | Scrape This Game... | stage (d)'s single-game scrape (§4.60): the confirm step, then the run and its status sheet (§4.57). Not offered while a run is going |
 | Close | puts the menu away |
@@ -4296,7 +4296,7 @@ the themed view of §4.52, in big-screen sessions and in big picture on the desk
 ES-DE keeps a system's games under `ROMs/<system>/`, and what lies between that folder and a file is the game's folder
 (USERGUIDE, "Multiple game files installation"). Mistress decides a game's console by its extension, not by where the
 file sits (§4.46), so the rule has to be restated: **the first level below the ROM folder of §4.11 is the console's
-folder, whatever its name, and every folder between it and the file is the game's folder.** With the player's library,
+folder, whatever its name, and every folder between it and the file is the game's folder.** With the tester's library,
 `Roms/NES/USA/Game.nes` is in `USA`, `Roms/NES/Hacks/Mario/Game.nes` in `Hacks/Mario`, and `Roms/SNES/Game.sfc` and a
 file directly in the ROM folder in none. The rule reads one file's path and nothing else, so adding a game elsewhere
 never changes another game's folder; the plan's §30.2 gives the alternative that was rejected for that reason, and the
@@ -4344,7 +4344,7 @@ Both are in **Game Collection Settings** (the pad menu, Start), under **Game Lis
 favorite games above non-favorites*. That is where ES-DE's user guide keeps the nearest equivalent, its *Sort folders on
 top of gamelists* in *UI settings*, and where §4.58 put ES-DE's other game-list settings. ES-DE has no menu entry for
 flattening: a file named `flatten.txt` in a system's folder does it ("Folder flattening"), and the guide discourages it.
-Mistress makes it a switch per console because the player's letter folders only repeat what Jump To… does.
+Mistress makes it a switch per console because the tester's letter folders only repeat what Jump To… does.
 
 | Row | Setting (`appsettings.json`, in `BigPictureCollections`) | Default | Effect |
 |---|---|---|---|
@@ -6696,7 +6696,7 @@ folder's file back by hand.
 
 **What it does not cover, and a hazard it creates.** The Saves folder is named by the ROM's stem alone, so two ROMs of
 different consoles with the same stem share one save file. That was already true of the SNES and the Nintendo 64, whose
-stems rarely coincide. It is now true of the NES and the Game Boy as well, and they do. In the player's library (measured
+stems rarely coincide. It is now true of the NES and the Game Boy as well, and they do. In the tester's library (measured
 on 2026-09-28, file names and headers read, the library not written) 38 stems occur under more than one console, every
 one a NES and a SNES game of the same name; five of those pairs have a battery on both sides (Gemfire, Nobunaga's
 Ambition, Uncharted Waters, Wario's Woods, Tecmo Super Bowl), and three of the five NES boards are ones Moon runs
@@ -7337,7 +7337,7 @@ present lattice of §4.87.11 may.
 
 **The conditions.** Lenovo Legion Go S, SteamOS Game Mode. gamescope reports 1920x1200 at 119.90 Hz, and its root
 window says `GAMESCOPE_VRR_ENABLED = 1` and `GAMESCOPE_VRR_FEEDBACK = 1`: variable refresh was on and engaged for the
-whole session. The player's setting was left as it was. The build was this branch's, published to a scratch directory
+whole session. The tester's setting was left as it was. The build was this branch's, published to a scratch directory
 with its own configuration (NES on MoonRT, volume zero, no resume), started with `--play` under `systemd-run`, with
 its window given the focused application's `STEAM_GAME` so that gamescope shows it. 71 s measured per run after the
 first 3 s, the trace written by `EMUSEN_PRESENT_TRACE_SECONDS`, since a Mistress ended by a signal runs no exit
@@ -7364,7 +7364,7 @@ timer's 120, because a stopped timer restarted by a new picture ticks at once an
 64 draws every second frame and shows the same quantisation at twice the spacing.
 
 **H4 is refuted on this evidence.** No run had a frame late by half a frame or more except one each of the N64's, and
-every one-second count was within one of the rate. What the player read as 58 to 62 was not reproduced; the counter
+every one-second count was within one of the rate. What the tester read as 58 to 62 was not reproduced; the counter
 counts frames run, which were steady, and the motion was not.
 
 **H1 and H3: neither branch as stated.** The count rose by exactly one at every draw in every run, including the

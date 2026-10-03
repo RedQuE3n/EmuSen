@@ -1,4 +1,4 @@
-//! `emusen-core-conform --core LIB --image FILE [--frames N] [--input SCRIPT] [--settings KEY=VALUE]... [--file WHICH=PATH]...
+//! `emusen-core-conform --core LIB --image FILE [--self-delimiting] [--frames N] [--input SCRIPT] [--settings KEY=VALUE]... [--file WHICH=PATH]...
 //! [--report REPORT.json]` runs the core suite and exits 0 when every case passes; `emusen-core-conform --sidecar LIB`
 //! writes the library's sidecar. See EmuSen_CoreAPI.md §12.3 and §21.
 
@@ -8,7 +8,7 @@ use std::process::ExitCode;
 use emusen_core_conform::{Options, Script, run, sidecar};
 
 fn usage() -> ExitCode {
-    eprintln!("usage: emusen-core-conform --core LIB --image FILE [--frames N] [--input SCRIPT] [--settings KEY=VALUE]... [--file WHICH=PATH]... [--report REPORT.json]");
+    eprintln!("usage: emusen-core-conform --core LIB --image FILE [--self-delimiting] [--frames N] [--input SCRIPT] [--settings KEY=VALUE]... [--file WHICH=PATH]... [--report REPORT.json]");
     eprintln!("       emusen-core-conform --sidecar LIB");
     ExitCode::from(2)
 }
@@ -22,8 +22,14 @@ fn main() -> ExitCode {
     let mut settings = String::new();
     let mut files = Vec::new();
     let mut report = None;
+    let mut self_delimiting = false;
     let mut i = 0;
     while i < args.len() {
+        if args[i] == "--self-delimiting" {
+            self_delimiting = true;
+            i += 1;
+            continue;
+        }
         let value = args.get(i + 1).cloned();
         let Some(v) = value else { return usage() };
         match args[i].as_str() {
@@ -74,11 +80,14 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let result = run(&core, &Options { image, frames, settings, files, script });
+    let result = run(&core, &Options { self_delimiting, image, frames, settings, files, script });
     for c in &result.cases {
         println!("{} {:<4} {}", if c.passed { "pass" } else { "FAIL" }, c.id, c.name);
         for e in &c.evidence {
             println!("          {e}");
+        }
+        for i in &c.images {
+            println!("          image: {} - {}", i.image, i.outcome.name());
         }
     }
     println!("{} {} {}: {}", result.id, result.version, result.abi, if result.passed() { "EmuSen v1 compliant on this image" } else { "not compliant" });

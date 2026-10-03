@@ -676,7 +676,7 @@ that scores is mapped LoROM. The weights are this core's own; the library is the
 
 ### 12.3 The header check on the library (measured 2026-09-30)
 
-All 826 SNES files of the player's library, each copied to scratch, read by header, and removed; nothing in the
+All 826 SNES files of the tester's library, each copied to scratch, read by header, and removed; nothing in the
 library was written. Mesen's choice was read from its own loader's message log, which the probe now prints after a
 load when `EMUSEN_PROBE_LOG` is set (`EmuSen_Debugging_Tools_Reference_v5.md` §3.60). It names the type, the map mode
 and the title it settled on. **822 of 826 agree** on the map family and the map mode, which says the same header was
@@ -2242,7 +2242,7 @@ unchanged. The harness asks C# Venus's public `Cartridge.FirmwareRequirements` w
 whole or as a program and data pair from the corpus's firmware folder. **Mesen reads it as
 `<home>/Firmware/<name>.rom`, program and data in one file** (measured: Pilotwings' attract mode parts from the run
 without firmware at frame 2400 only with that file), so the probe's runs for DSP games now get it, and their cache
-key carries the firmware's hash. One image in the player's `home/Firmware`, `dsp1.rom`, is 8,192 bytes but not the
+key carries the firmware's hash. One image in the tester's `home/Firmware`, `dsp1.rom`, is 8,192 bytes but not the
 DSP-1's program (its first opcodes are not "JRQM $", and it differs from the split pair); the harness builds the
 DSP-1 from the pair.
 
@@ -2251,7 +2251,7 @@ it. **Not built:** the ST01x's battery-backed RAM as a battery file (stage 6's f
 
 ### 24.2 The games (measured 2026-10-02)
 
-The games table over nine DSP titles from the player's library, every tenth frame to 2,400 with no input, both
+The games table over nine DSP titles from the tester's library, every tenth frame to 2,400 with no input, both
 engines given the firmware C# Venus names:
 
 | Game (chip) | The DSP used by frame 2,400 (VenusRT with and without it) | Picture at 2,400 | First picture difference |
@@ -2319,7 +2319,7 @@ line travel in the `Coprocessor` group; a 128 KiB-board image skip-checks equal 
   and the SA-1's reset clearing CIWP. Before them it stopped at tests 155 and 221. Its photograph of a console's
   run shows stack pointers ($01FD, $01FC) that differ from VenusRT's and Mesen's, which are power-on values.
 - **`SA1VersionCodeTest`**: "FAILED" on VenusRT and on Mesen alike; $230E's value is VenusRT's choice (D-33).
-- **The games** (every tenth frame to 2,400, no input), all five SA-1 titles in the player's library:
+- **The games** (every tenth frame to 2,400, no input), all five SA-1 titles in the tester's library:
 
 | Game | First lit (Mesen / VenusRT) | Picture at 2,400 | First picture difference | Pictures differing |
 |---|---|---|---|---|

@@ -269,6 +269,9 @@ namespace EmuSen.Cores
         public static IReadOnlyList<string> DiscoveredEngines(string console) =>
             SystemIdsFor(console).SelectMany(Native.CoreDiscovery.ForSystem).Select(c => c.EngineName).Distinct().ToArray();
 
+        // An engine this build registers by hand, whose own branch runs it even when discovery also lists its library - see EmuSen_CoreAPI.md §22.
+        public static bool IsRegisteredEngine(string? name) => name is not null && EngineByConsole.Values.Any(row => row.Choices?.Contains(name) == true);
+
         // Null for a console with one implementation; a v1 engine found by discovery is appended to the row, which it creates for a console that had none.
         public static CoreSetting? EngineFor(string console)
         {

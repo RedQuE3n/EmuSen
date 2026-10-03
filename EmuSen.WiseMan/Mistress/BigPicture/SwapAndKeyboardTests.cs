@@ -100,8 +100,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Empty(s.Sounds);
             s.Pad.X();
             Assert.Equal(new[] { "favorite" }, s.Sounds);
-            Assert.Equal(chosen, s.Game);
-            Assert.True(s.Themed.SelectedGame!.Favorite);
+            Assert.Equal(chosen, s.Themed.Stage!.Current.Data.System.Games[0].Name);
+            Assert.True(s.Themed.Stage.Current.Data.System.Games[0].Favorite);
 
             s.Run(300);
             HintBar bar = Bar(s);

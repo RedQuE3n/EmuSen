@@ -132,7 +132,7 @@ the hardware. They are recorded in `VenusRT_Native.md` §2.3: the SingleStepTest
 their data.
 
 ### D-4. Cartridge header: Batman: Revenge of the Joker (U) is a LoROM cartridge, though its only well-formed header is at the HiROM place
-- Opened: 2026-09-30, at stage 2 step 1, by the header check over the player's library (826 SNES files, read by header
+- Opened: 2026-09-30, at stage 2 step 1, by the header check over the tester's library (826 SNES files, read by header
   only, each copied to scratch). VenusRT chose HiROM: at $00FFC0 the file has a readable title, map mode $31, a
   complement and checksum that agree, and a checksum ($FDBC) equal to the sum of the whole file; at $007FC0 it has 64
   zero bytes. Mesen, through the probe's log of its own loader, chose LoROM with map mode $00.

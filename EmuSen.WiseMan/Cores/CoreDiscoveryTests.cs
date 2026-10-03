@@ -78,6 +78,34 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(CoreLibrary.IsOpen(listed));
         }
 
+        // The build step's tool writes the sidecar; the host's discovery reads it and opens the library it describes.
+        [Fact]
+        public void A_sidecar_the_kits_runner_writes_is_read_by_discovery_and_its_library_opens()
+        {
+            string dir = Path.Combine(_root, "runner");
+            Directory.CreateDirectory(dir);
+            string source = CoreAdapterTests.LibraryPath("v1_plain_core");
+            string library = Path.Combine(dir, Path.GetFileName(source));
+            File.Copy(source, library);
+            string runner = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "emusen-core-conform.exe" : "emusen-core-conform");
+            var start = new System.Diagnostics.ProcessStartInfo(runner) { RedirectStandardOutput = true, RedirectStandardError = true };
+            start.ArgumentList.Add("--sidecar");
+            start.ArgumentList.Add(library);
+            using var process = System.Diagnostics.Process.Start(start)!;
+            string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            Assert.True(process.ExitCode == 0, output);
+            Assert.Equal(CoreSidecar.PathFor(library), output.Trim());
+
+            CoreDiscovery.UseDirectories(new[] { dir });
+            var found = CoreDiscovery.Found.Single();
+            Assert.Equal(("v1-plain-core", 0UL, "1.0", CoreSidecar.HashOf(library)), (found.Info.Id, found.Sidecar.Capabilities, found.Sidecar.Abi, found.Sidecar.Sha256));
+            Assert.False(CoreLibrary.IsOpen(library));
+            Assert.NotNull(found.Open());
+            Assert.Equal("not yet loaded", new DiscoveredCore(found.Sidecar).Report);
+            Assert.EndsWith("core ABI 1.0", found.Report);
+        }
+
         [Fact]
         public void A_library_that_is_not_the_one_its_sidecar_describes_is_never_loaded()
         {

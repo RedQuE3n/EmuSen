@@ -3,7 +3,7 @@
 *This revision: the second, 2026-10-03: §15's eighteen questions decided, each as this page recommended (§0.2, §15),
 and §13.2's items 1 and 2 built: the header, the `core` module with `core_exports!`, and the guard (§18, which also lists
 the points of §4–§6 that building them made precise); then items 3 and 4, the host adapter and discovery (§19); item 5, the SNES's system pack (§20); and item 6, the
-conformance kit's core suite (§21). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
+conformance kit's core suite (§21); and MoonRT's exports onto v1 beside its pre-stable ones (§22). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
 three prototype checks recorded in §5.1 to §5.3. It supersedes parts of `EmuSen_NativeCores.md`, listed in §0.3 and
 marked in place there. Every claim about the code is cited to a file, read on `WiseMan` at `f69c94a4`. Claims marked
 **measured** were measured on 2026-10-01; claims marked **argued** are reasoning that a later step must prove, and
@@ -647,7 +647,8 @@ the physical bindings stay the frontend's:
 
 An axis entry is `{ "axis": n, "control": "LeftX", "kind": "stick", "label": "Control Stick" }`: `axis` is the number
 `set_axis` receives, `kind` is `stick` (−1 to 1) or `trigger` (0 to 1), so that a host can normalise a non-canonical
-axis too. `control` is one of `PadButton`'s names (`EmuSen.Galaxia/Input/PadButton.cs`, append-only, 16 today) or, for an
+axis too. The `buttons` are listed in the order a bindings screen presents them, which need not be the order of their bits
+(MoonRT lists Up, Down, Left, Right, Select, Start, B, A, as its C# oracle presents them). `control` is one of `PadButton`'s names (`EmuSen.Galaxia/Input/PadButton.cs`, append-only, 16 today) or, for an
 axis, of `PadAxis`'s; the header carries both as open enumerations (Appendix A). `label` is the console's own word,
 which the diagram shows: the N64's "C-Up", the Game Boy's "Select". A control with no canonical match is allowed, with
 `"control": null`, and the frontend offers it as an unbound extra.
@@ -1407,7 +1408,7 @@ supplies. The cases:
 | **C1, loading** | the library loads; `abi_version`'s major is 1; every required export resolves; no `emusen_core_` symbol outside the baseline |
 | **C2, info** | `info()` validates against the schema; `abi` equals the version; `capabilities` names equal the bits; every claimed optional export exists and every unclaimed one does not |
 | **C3, the schema** | the settings schema validates; keys are unique; every default lies in its own domain; **an `accuracy` setting's default is its `accurate` value and an `enhancement`'s is its `hardware` value**; every trade-off has its `cost` |
-| **C4, create and refusal** | garbage, empty and truncated images are refused with null, a documented status and an error text, and leave nothing to free; **a machine created with no settings equals one created with every default stated, over N frames** |
+| **C4, create and refusal** | **a malformed image never harms the core** (decided 2026-10-03): each of an empty, a garbage and a truncated image is either refused with null, a documented status and an error text, leaving nothing to free, or accepted and run for the kit's frames without crashing, hanging or corrupting the host. Refusal is required only where the system pack declares its image format self-delimiting (it records its own length, or a checksum the core must verify); the report says of each image whether it was refused or accepted and ran; **a machine created with no settings equals one created with every default stated, over N frames** |
 | **C5, capability honesty** | every claimed capability works on a running machine; every unclaimed one is refused with `NOT_SUPPORTED` or absent; an unknown kind, space, port, axis, format or option bit is refused or ignored as the header says |
 | **C6, the frame** | N frames run; `frame_info` agrees with `frame_copy`'s length and the format is one offered; a size change is preceded by `GEOMETRY`; samples drain at the rates the drain reports, with an `AUDIO_RATE` event at each change |
 | **C7, state** | save, load, save is byte-identical; a kind's size is constant over N frames except after a `STATE_SIZE` event; a truncated, foreign or random state is refused and the machine's state hash is unchanged; a state saved on machine A and loaded on machine B makes B continue exactly as A; the snapshot kind, if claimed, loads |
@@ -2050,7 +2051,7 @@ as the library wrote them, for the build step §7.1 asks for.
 | C1 | major 1; every required export resolves; where `nm` exists, no `emusen_core_` symbol outside version 1's exports |
 | C2 | info validates against `info.schema.json`; its `abi` is the export's; its capability names are the claimed bits; each optional export present exactly when its bit is claimed |
 | C3 | the schema validates; keys unique; each default in its own domain; an `accuracy` default its `accurate` value, an `enhancement` default its `hardware` value; every trade-off with a cost |
-| C4 | an empty, a garbage and a half-length image each refused with a negative status that `status_text` names and an error text; a machine with no settings equal to one with every default stated, frames, sound and state, over up to 300 frames |
+| C4 | an empty, a garbage and a half-length image each refused with a negative status that `status_text` names and an error text, or, unless `--self-delimiting` is given, accepted and run for up to 300 frames on a thread of its own within 60 seconds (a frame refused with a status is a clean stop); each image's outcome in the report as `refused`, `accepted and ran`, `accepted and stopped` or `hung`; a machine with no settings equal to one with every default stated, frames, sound and state, over up to 300 frames |
 | C5 | each claimed capability answers on a running machine without `NOT_SUPPORTED`; an unclaimed snapshot and state kind 77 refused; an unlisted space refused; reserved option bits ignored; port 99 ignored or `NO_SUCH_PORT`; an unknown pixel-format bit accepted with RGBA8888 produced |
 | C6 | over N frames: `frame_info`'s length is `frame_copy`'s, the format the one offered, the size within its stride; a size change preceded by `GEOMETRY`; each change of the drained rate met by an `AUDIO_RATE` of that rate in its frame or the next |
 | C7 | the state's size constant until a `STATE_SIZE`; save, load, save byte-identical; a truncated, a foreign and an empty state refused with the machine unchanged; machine B loaded with A's state continuing as A; a claimed snapshot loading and restoring the state it was taken from |
@@ -2065,17 +2066,96 @@ two seeded faults, each machine differing from the last and a truncated state ac
 passes the rest, which is the set those faults break (`tests/kit.rs`). The kit's SHA-256 is checked against FIPS
 180-4's examples. CI runs the crate's tests on the three shared runners with the other shared crates.
 
-### 21.4 A point of §12 for decision
+### 21.4 C4's rule, decided 2026-10-03
 
-C4 requires an image truncated to half its length to be refused. For a format that records its own length, such as the
-test core's, that is a fair test. For a SNES cartridge image it is not: half of a 1 MiB image is a well-formed 512 KiB
-image, and refusing it would refuse genuine smaller dumps. The kit applies the rule as §12.1 states it. Whether C4's
-truncation should become per-system, or optional, is left to be decided before VenusRT is graded by it (§13.2).
+The first version of C4 required every malformed image, a half-length one included, to be refused. That is a fair test
+of a format that records its own length, such as the test core's, and not of a SNES cartridge image: half of a 1 MiB
+image is a well-formed 512 KiB image, and refusing it would refuse genuine smaller dumps. **Decided:** what C4 requires
+is that the core is never harmed by a bad image. A malformed image is refused with words, or loads and runs the kit's
+frames without crashing, hanging or corrupting the host; refusal is required only where the system pack declares its
+image format self-delimiting. The SNES's pack does not declare it (`SystemEntry.SelfDelimitingImages` is false); the
+test core's format does, and the kit's tests pass `--self-delimiting` for it.
+
+The kit runs an accepted image on a thread of its own and waits 60 seconds; a hang is reported and the thread left, so
+one bad core cannot stall the suite. A crash ends the kit's process, which is itself the failure; corruption of the host
+that does not crash it cannot be observed from inside the process (§7.3's broker is the boundary that would). **Tested:**
+the test core refuses all three images and passes with or without `--self-delimiting`; a lenient build of it, which
+takes any non-empty image whole, passes without the flag and fails with it, and its report names `accepted and ran`
+(`tests/kit.rs`).
 
 ### 21.5 Not done here
 
 C9 and C12–C15 are not in §13.2's item 6. The build step that runs `--sidecar` on the project's cores waits for the
 first project core on v1.
+
+---
+
+## 22. MoonRT onto v1, 2026-10-03: §13.3's step 4, its first half
+
+### 22.1 What was done
+
+- **The exports.** `src/ffi/v1.rs` implements `emusen_native::core::Core` for MoonRT's machine and invokes
+  `core_exports!` beside the pre-stable `native_exports!`, as §18.6 describes: the library now exports 46 `emusen_core_`
+  symbols (the 32 required and `RESET`, `MUTES`, `ROM_PATCHES`, `DEBUG` and `DEBUG_STACK`'s), its 38 `emusen_native_`
+  and its two `moonrt_` extensions. The pre-stable implementation is unchanged.
+- **The descriptors** carry what the shim held in C#: the pad's eight bits under their canonical controls, listed in
+  `MoonCore.PadButtons`' order; the eight spaces under `MoonMachine.SpaceNames`, `CPUBUS` marked as reading with side
+  effects; the battery file where the cartridge has one; the state's magic `MOON`, version 4, read from 3; the patch
+  range 4020h–FFFFh; the frame rate as `MoonCore.FrameRateHz` computes it, 21,477,272 / (262 × 1,364); the five APU
+  channels by name; and `status_text` for its band in the shim's words. Settings: none.
+- **The shim stays MoonRT's loader.** The build writes MoonRT's sidecar (below), so discovery lists it. So that this
+  changes nothing, an engine the build registers by hand (`CoreCatalog.IsRegisteredEngine`) keeps its own branch:
+  `CoreFactory`'s generic branch and the engine notice pass it by. `MoonRT (Rust)` therefore still runs as
+  `MoonRtCore`, Moon (C#) stays the NES's default, and the NES row is unchanged.
+- **The sidecar.** `RustCores.props` marks MoonRT `CoreAbi 1`; `EmuSen.csproj`'s `WriteCoreSidecars` builds the kit's
+  runner and runs `--sidecar` on each such library, and the sidecar is copied beside it. CI does the same in the
+  library job for any library that exports `emusen_core_abi_version`, on every platform whose library the runner can
+  load.
+
+### 22.2 The oracle, §13.1's row, measured 2026-10-03
+
+| Oracle | Result |
+|---|---|
+| The state and machine tests, the engine tests | WiseMan's `MoonRt`, `NativeHost`, `BatterySave`, `MoonCheat`, engine-row and factory tests: 331 pass, unchanged, on the library with both interfaces; the crate's own 6 pass |
+| The adapter against the shim | `MoonRtCoreAbiTests`: the generic `CoreEngine` over MoonRT's v1 exports and `MoonRtCore` over its pre-stable ones, run side by side for 240 frames with input on both pads, give the same picture every frame, the same samples every frame and byte-identical states; a cheat applied through the adapter lands |
+| The bench's state hashes | `moonbench`'s four games, 900 boot and 3,000 timed frames: one state hash per game in all forty runs, before and after, and the same as C# Moon's |
+| The plain frame, interleaved | below: not slower; 1.37% faster by the geometric mean, which is outside ±1% on the fast side |
+| The kit | C1–C6, C10 and C11 pass on all four games; C7 and C8 fail, below |
+
+**The timing.** Five rounds under the bench lock, the four games interleaved and the two builds alternated within each
+game. "Before" is the same source without `v1.rs`; both were built by cargo's release profile with the same toolchain
+(MoonRT has no PGO profile). The load average was 6.0–6.4 throughout, against the 0.7–1.6 of §8.4.4 of
+`Moon_Native.md`, so single runs spiked (p90 to 2.5 ms on both builds alike) and the comparison is of medians:
+
+| Game | Before, median p50 ms | After | Change | Median of means, change |
+|---|---|---|---|---|
+| Super Mario Bros. | 1.159 | 1.139 | −1.73% | −1.58% |
+| The Legend of Zelda | 0.956 | 0.938 | −1.88% | −1.34% |
+| Super Mario Bros. 3 | 1.386 | 1.368 | −1.30% | −0.85% |
+| Mike Tyson's Punch-Out!! | 1.264 | 1.257 | −0.55% | −0.24% |
+
+The frame is not slower on any game. It is faster by more than P1's band allows on three, which is the kind of code
+layout effect `EmuSen_NativeCores.md` §8.2 measured before, and it was measured on a loaded machine. P1 is not retired:
+it is to be measured again on a quiet machine before MoonRT's move is judged complete.
+
+### 22.3 The kit's C7 and C8: a finding about Moon's state format
+
+On every game C7's "B, loaded with A's state, continues as A" and C8's "across a save and load at N/2" fail on the
+sound alone: the picture and the state agree, and the samples differ (on Super Mario Bros., B made 2 fewer samples
+over 300 frames and a different digest).
+
+**The cause is the oracle's format, not the port.** C# Moon marks its mixer `[SkipInState]`: the resampler's
+accumulator and cycle fraction and the three filters' states (`Apu/Apu.cs`, `_sampleAccumulator`, `_cycleFraction`,
+`_hp90`, `_hp440`, `_lp14k` and the rest). A machine loaded with a state therefore resumes its sound with those reset,
+and MoonRT, whose state is C# Moon's byte for byte, does the same. **Measured** with a scratch probe that runs a machine
+300 frames, loads its state into a second, and runs both 300 more through `ICore` without input: on Punch-Out!! the
+samples differ from the first one after the load, in C# Moon and in MoonRT alike, with equal states and equal sample
+counts; on Super Mario Bros. they agree. The kit's scripted input makes the difference show on every game.
+
+**For decision:** the kit holds that a state carries everything that determines what follows (§6.9, C7, C8). Moon's
+format leaves the mixer out by design. The ways forward are to add the mixer to Moon's state (a version 5, in C# Moon
+and in MoonRT together, which changes the oracle), or to let a core declare that its sound resumes approximately after a
+load and have C7 and C8 compare picture and state for it. Until that is decided MoonRT is not v1-compliant.
 
 ---
 

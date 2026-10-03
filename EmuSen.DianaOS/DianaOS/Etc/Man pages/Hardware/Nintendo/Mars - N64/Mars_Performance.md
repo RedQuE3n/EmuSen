@@ -1895,7 +1895,7 @@ sound are unchanged.
 
 *The reproduction carried no written prediction; it measured what the report described.*
 
-**The player's own counters.** Mistress logs one line a second (`EmuSen_Settings_Reference.md` §4.21). The two Perfect
+**The tester's own counters.** Mistress logs one line a second (`EmuSen_Settings_Reference.md` §4.21). The two Perfect
 Dark sessions of 2026-09-26 in the log folder ran the game at four, then three, two and one. Of the seconds below 45
 frames a second, against a 50 Hz console:
 
@@ -1907,7 +1907,7 @@ frames a second, against a 50 Hz console:
 | 1× | 50 | 14 | 41.6; 9.5 | 23.8 | 2.5; 8.3 |
 
 The Donkey Kong 64 sessions of the same night ran at three at 49.9 to 50.1 frames a second throughout, `run` never
-above 8 ms. On this desktop the report's Perfect Dark reproduces in the player's own numbers and its Donkey Kong 64
+above 8 ms. On this desktop the report's Perfect Dark reproduces in the tester's own numbers and its Donkey Kong 64
 does not; §41.9 has what was found for Donkey Kong 64.
 
 **Headless.** `examples/threads <rom> <state> 600 split 4 blocks [scale=N gpu]`, production's shape, from the library's
@@ -2191,7 +2191,7 @@ and Pokémon Snap were measured in rounds (§41.8), and the pause screen of Majo
 **Donkey Kong 64.** It shares the cause: its processor reads the depth image as Perfect Dark's does
 (`Mars_Native.md` §6.14.4), and its site-2 wait grew with the multiple, 2.3 ms at two to 2.6 at four against 2.0 at one;
 now it is 1.8, and its frame at every multiple is at or under its frame at one. But the multiple cost it under a
-millisecond on this desktop, and its frame is 7.4 to 8.4 ms of a 20 ms slot, in the library's state and in the player's
+millisecond on this desktop, and its frame is 7.4 to 8.4 ms of a 20 ms slot, in the library's state and in the tester's
 own sessions of 2026-09-26 at three. The report of Donkey Kong 64 running badly is not reproduced here, and nothing
 measured on this desktop explains it: the likeliest places are a scene the state does not reach or the handheld, where
 §6.15.6 of `Mars_Native.md` measured its title at two on the device at 14.8 ms of a 16.7 ms budget.
@@ -2223,7 +2223,7 @@ measured on this desktop explains it: the likeliest places are a scene the state
   four workers and the presenter, on four cores and eight hardware threads. The prediction for it, written here: Perfect
   Dark at two on the device falls to within 1 ms of its frame at one; Donkey Kong 64's title at two, 14.8 ms in §6.15.6,
   falls by 0.5 to 1.5 ms.
-- **Mistress** was not run, by the project's rule. What the frontend adds was read from the player's own logs: in every
+- **Mistress** was not run, by the project's rule. What the frontend adds was read from the tester's own logs: in every
   slow second quoted in §41.1 `run` is within a millisecond of `total` and `sleep+rest` under one, so the loop was behind
   and the frame was `RunFrame`'s; presentation (the frame hand-off and the render thread, newest wins) and pacing were
   not what held it.
@@ -2249,7 +2249,7 @@ before recording another word; the scan went out with the last batch; the presen
 picture into the raster and composed the frame, a pixel at a time. Nothing in the chain was ever busy beside anything else
 in it. On the handheld the device runs that work at **800 MHz, its lowest clock**, because the chain leaves it idle two
 thirds of the time and the power firmware reads that as a light load; after a few seconds it also drops the memory and
-fabric clocks to their lowest level, and the emulation thread's own field grows by half. The second regime of the player's
+fabric clocks to their lowest level, and the emulation thread's own field grows by half. The second regime of the tester's
 log is a different thing: the emulation thread's own work in a scene that draws every field, the ground of §41.10, which
 nothing here changes.
 
@@ -2259,9 +2259,9 @@ device's picture into the raster by runs of a row and composes on 32-bit words (
 sound are unchanged. On the handheld (on the charger) three on the device went from 16.06 to 15.05 ms a frame and through
 Mistress's frame loop from 15.30 to 13.95, inside the 16.7 ms field; on the desktop from 9.18 to 8.63 (§42.10). What is left is
 the device's own time at 800 MHz, and keeping the device busier does not raise its clock short of saturating it (§42.13).
-The antialiasing setting of the player's settings does nothing at three (§42.5).
+The antialiasing setting of the tester's settings does nothing at three (§42.5).
 
-### 42.1 The report: the player's own counters
+### 42.1 The report: the tester's own counters
 
 Mistress's one line a second (`EmuSen_Settings_Reference.md` §4.21), 125 seconds of the session before the state was
 saved, shows two regimes:
@@ -2281,11 +2281,11 @@ emulation thread's own field is over its slot. The state was saved in A, eight s
 and copied to the handheld, one run each, the handheld on battery at 76–80 per cent with its SteamOS profile "custom"
 (sustained package limit 33 W), milliseconds a frame:
 
-| Perfect Dark U, the player's state | handheld | its presenter's join | desktop | its presenter's join |
+| Perfect Dark U, the tester's state | handheld | its presenter's join | desktop | its presenter's join |
 | --- | --- | --- | --- | --- |
 | 1× | 8.95 | 0.01 | 5.97 | 0.01 |
 | 2×, the device | 14.84 | 4.75 | 7.72 | 1.28 |
-| 3×, the device (the player's) | 18.28 | 7.54 | 9.39 | 1.61 |
+| 3×, the device (the tester's) | 18.28 | 7.54 | 9.39 | 1.61 |
 | 3×, the device, antialiasing 3 | 19.46 | 7.83 | 9.31 | 1.51 |
 | 4×, the device | 22.07 | 10.53 | — | — |
 | 3×, the processor, no device | 23.77 | 0 (site 2: 13.0) | — | — |
@@ -2301,7 +2301,7 @@ thread's mean in each 300 frames 5.6–6.0 ms at three on the desktop, every oth
 place. The game's pause menu, reached with a scripted Start through `EmuSen.Pharaoh` and saved, is light (2.8 ms at one on
 the desktop, every other field) and is not B. §41's European state in play has B's signature exactly — every field walked,
 the emulation thread 20–26 ms a field on the desktop, 4.3 ms of it waiting at site 2, no presenter's join — and stands in
-for B in the rounds (§42.10); it is a stand-in, not the player's scene.
+for B in the rounds (§42.10); it is a stand-in, not the tester's scene.
 
 ### 42.3 Where a picture goes
 
@@ -2350,7 +2350,7 @@ the game is slow: the same observation §41 made on the desktop, now with the de
   at 17–22 W, well inside the 33 W limit, so this is not a power limit but the same governor's choice. The emulation
   thread's first field of each pair grew with it, from 11.5 ms in the first seconds to 16–18 ms (a 2,400-frame run: the
   mean of that field 13.95 ms in its first 150 frames and 15.6–17.8 in every 150 after). Every timed comparison here runs
-  base and change alike through the same drop, and the player's log (`machine` 5.3–11.9 ms a field averaged over both fields in A, so 10–24 ms for
+  base and change alike through the same drop, and the tester's log (`machine` 5.3–11.9 ms a field averaged over both fields in A, so 10–24 ms for
   the pair's first field) is consistent with the low state, without showing it.
 - Neither the CPU's governor (`powersave`, `balance_performance`) nor the platform profile was changed, and nothing was
   written to the handheld's power settings; the journal shows Steam's `SetManualGpuClock` and TDP requests refused by
@@ -2359,7 +2359,7 @@ the game is slow: the same observation §41 made on the desktop, now with the de
 ### 42.5 Antialiasing 3x at three is off
 
 `Core::set_multiple` takes the antialiasing that fits with the resolution under the limit of four, `min(aa, 4 / scale)`,
-which at three is one. The player's "3x" at resolution three therefore draws exactly what "Off" draws: the same pictures
+which at three is one. The tester's "3x" at resolution three therefore draws exactly what "Off" draws: the same pictures
 hash at three with and without it (C483DE4176D42B0F, 600 frames, both machines), and the shown frame 1920 by 720 in the
 log, not averaged. The 1.2 ms between the two handheld runs of §42.2 is one run each and no more than their spread. The
 setting is not a cause, and the settings window might say that it is off at three (§42.12).

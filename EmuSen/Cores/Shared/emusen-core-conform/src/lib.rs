@@ -17,6 +17,9 @@ use emusen_native::json::{self, Value};
 
 /// What the author supplies: the image, how many frames, settings text, files and the input.
 pub struct Options {
+    /// The system pack declares the image format self-delimiting: it records its own length or a checksum the core
+    /// must verify, so a malformed image must be refused (§12.1, C4).
+    pub self_delimiting: bool,
     pub image: Vec<u8>,
     pub frames: u64,
     pub settings: String,
@@ -79,6 +82,37 @@ pub struct Case {
     pub name: &'static str,
     pub passed: bool,
     pub evidence: Vec<String>,
+    /// C4's malformed images: what each was, and whether it was refused or accepted and run.
+    pub images: Vec<ImageOutcome>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Outcome {
+    /// Refused at create, with its status and error text.
+    Refused { status: i32, text: String },
+    /// Created and run for every frame asked.
+    AcceptedAndRan { frames: u64 },
+    /// Created, and a frame refused with a status: a clean stop, not harm.
+    AcceptedAndStopped { frame: u64, status: i32 },
+    /// Created, and the frames did not finish within the deadline.
+    Hung { seconds: u64 },
+}
+
+impl Outcome {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Outcome::Refused { .. } => "refused",
+            Outcome::AcceptedAndRan { .. } => "accepted and ran",
+            Outcome::AcceptedAndStopped { .. } => "accepted and stopped",
+            Outcome::Hung { .. } => "hung",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ImageOutcome {
+    pub image: &'static str,
+    pub outcome: Outcome,
 }
 
 pub struct Report {
@@ -101,7 +135,22 @@ impl Report {
         j.field_str("abi", &self.abi).field_str("id", &self.id).field_str("version", &self.version).field_uint("frames", self.frames);
         j.field_bool("passed", self.passed()).key("cases").begin_array();
         for c in &self.cases {
-            j.begin_object().field_str("id", c.id).field_str("name", c.name).field_bool("passed", c.passed).field_strs("evidence", &c.evidence).end_object();
+            j.begin_object().field_str("id", c.id).field_str("name", c.name).field_bool("passed", c.passed).field_strs("evidence", &c.evidence);
+            if !c.images.is_empty() {
+                j.key("images").begin_array();
+                for i in &c.images {
+                    j.begin_object().field_str("image", i.image).field_str("outcome", i.outcome.name());
+                    match &i.outcome {
+                        Outcome::Refused { status, text } => j.field_int("status", *status as i64).field_str("text", text),
+                        Outcome::AcceptedAndRan { frames } => j.field_uint("frames", *frames),
+                        Outcome::AcceptedAndStopped { frame, status } => j.field_uint("frame", *frame).field_int("status", *status as i64),
+                        Outcome::Hung { seconds } => j.field_uint("seconds", *seconds),
+                    };
+                    j.end_object();
+                }
+                j.end_array();
+            }
+            j.end_object();
         }
         j.end_array().end_object();
         j.finish()
@@ -133,7 +182,7 @@ impl Check {
         let passed = self.fails.is_empty();
         let mut evidence = self.fails;
         evidence.extend(self.notes);
-        Case { id, name, passed, evidence }
+        Case { id, name, passed, evidence, images: Vec::new() }
     }
 }
 
@@ -274,7 +323,7 @@ pub fn run(path: &Path, opts: &Options) -> Report {
     let lib = match Lib::open(path) {
         Ok(lib) => lib,
         Err(why) => {
-            report.cases.push(Case { id: "C1", name: "loading", passed: false, evidence: vec![why] });
+            report.cases.push(Case { id: "C1", name: "loading", passed: false, evidence: vec![why], images: Vec::new() });
             return report;
         }
     };
@@ -295,7 +344,7 @@ pub fn run(path: &Path, opts: &Options) -> Report {
     report.cases.push(c1(&lib));
     report.cases.push(c2(&lib, &info_text));
     report.cases.push(c3(&lib));
-    report.cases.push(c4(&mut s));
+    report.cases.push(c4(&mut s, path));
     report.cases.push(c5(&mut s));
     report.cases.push(c6(&mut s));
     report.cases.push(c7(&mut s));
@@ -406,8 +455,40 @@ fn defaults(lib: &Lib) -> String {
         .collect()
 }
 
-fn c4(s: &mut Session<'_>) -> Case {
+/// How long an accepted malformed image may take over the kit's frames before it counts as a hang.
+pub const MALFORMED_DEADLINE_SECONDS: u64 = 60;
+
+/// A malformed image the core accepted, run on a thread of its own against a deadline, so a hang is reported and not waited on.
+fn run_accepted(path: &Path, image: Vec<u8>, files: Vec<(u32, Vec<u8>)>, frames: u64) -> Result<Outcome, String> {
+    // Leaked on purpose: a hung machine's thread keeps the library, which a host never unloads anyway (§6.16).
+    let lib: &'static Lib = Box::leak(Box::new(Lib::open(path)?));
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let outcome = match lib.create(&image, "", &files, 1) {
+            Err((status, text)) => Outcome::Refused { status, text },
+            Ok(m) => {
+                let mut stopped = None;
+                for f in 0..frames {
+                    if let Err(status) = m.advance() {
+                        stopped = Some(Outcome::AcceptedAndStopped { frame: f, status });
+                        break;
+                    }
+                    m.present();
+                    let _ = (m.events(), m.frame(), m.drain_audio());
+                }
+                stopped.unwrap_or(Outcome::AcceptedAndRan { frames })
+            }
+        };
+        let _ = tx.send(outcome);
+    });
+    Ok(rx.recv_timeout(std::time::Duration::from_secs(MALFORMED_DEADLINE_SECONDS)).unwrap_or(Outcome::Hung { seconds: MALFORMED_DEADLINE_SECONDS }))
+}
+
+/// C4 as decided 2026-10-03: a malformed image never harms the core; it is refused with words, or, unless the system's
+/// format is self-delimiting, it loads and runs the kit's frames without hanging.
+fn c4(s: &mut Session<'_>, path: &Path) -> Case {
     let mut c = Check::new();
+    let mut images = Vec::new();
     let mut garbage = vec![0u8; 4096];
     let mut x: u32 = 0x2545F491;
     for b in &mut garbage {
@@ -417,17 +498,42 @@ fn c4(s: &mut Session<'_>) -> Case {
         *b = x as u8;
     }
     let half = s.opts.image[..s.opts.image.len() / 2].to_vec();
+    let frames = s.opts.frames.min(300);
     for (what, image) in [("an empty image", Vec::new()), ("a garbage image", garbage), ("the image truncated to half", half)] {
-        match s.lib.create(&image, "", &s.opts.files, 1) {
-            Ok(_) => c.that(false, || format!("{what} was accepted")),
-            Err((code, text)) => {
-                s.statuses.insert(code);
-                c.that(code < 0, || format!("{what}: refused with the non-negative status {code}"));
-                c.that(s.lib.words(code).is_some(), || format!("{what}: status_text has no words for {code}"));
+        let outcome = match s.lib.create(&image, "", &s.opts.files, 1) {
+            Err((status, text)) => Outcome::Refused { status, text },
+            Ok(m) => {
+                drop(m);
+                match run_accepted(path, image, s.opts.files.clone(), frames) {
+                    Ok(o) => o,
+                    Err(e) => {
+                        c.that(false, || format!("{what}: {e}"));
+                        continue;
+                    }
+                }
+            }
+        };
+        match &outcome {
+            Outcome::Refused { status, text } => {
+                s.statuses.insert(*status);
+                c.that(*status < 0, || format!("{what}: refused with the non-negative status {status}"));
+                c.that(s.lib.words(*status).is_some(), || format!("{what}: status_text has no words for {status}"));
                 c.that(!text.is_empty(), || format!("{what}: the refusal left no error text"));
-                c.note(format!("{what}: {code}, {text:?}"));
+                c.note(format!("{what}: refused, {status}, {text:?}"));
+            }
+            Outcome::Hung { seconds } => c.that(false, || format!("{what}: accepted, and its {frames} frames did not finish in {seconds} s")),
+            accepted => {
+                if let Outcome::AcceptedAndStopped { status, .. } = accepted {
+                    s.statuses.insert(*status);
+                }
+                c.that(!s.opts.self_delimiting, || format!("{what}: accepted, though the system's image format is self-delimiting and a malformed image must be refused"));
+                c.note(format!("{what}: {}", match accepted {
+                    Outcome::AcceptedAndStopped { frame, status } => format!("accepted, and stopped cleanly at frame {frame} with status {status}"),
+                    _ => format!("accepted and ran {frames} frames"),
+                }));
             }
         }
+        images.push(ImageOutcome { image: what, outcome });
     }
     let stated = defaults(s.lib);
     let frames = s.opts.frames.min(300);
@@ -440,7 +546,7 @@ fn c4(s: &mut Session<'_>) -> Case {
         (Ok(a), Ok(b)) => c.that(a == b, || format!("no settings and every default stated differ over {frames} frames: {a:?} against {b:?}")),
         (Err(e), _) | (_, Err(e)) => c.that(false, || e),
     }
-    c.done("C4", "create and refusal")
+    Case { images, ..c.done("C4", "create and refusal") }
 }
 
 fn c5(s: &mut Session<'_>) -> Case {

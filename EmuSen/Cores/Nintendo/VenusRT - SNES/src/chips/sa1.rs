@@ -17,12 +17,24 @@ pub enum Side {
 const FAST: u64 = 2;
 const BWRAM: u64 = 4;
 
+/// The board's memories, as the referee's decode names them for contention (D-36).
+pub const ROM: u8 = 1;
+pub const BW: u8 = 2;
+pub const IRAM: u8 = 3;
+/// The SA-1's accesses kept for holds that arrive after it ran past them.
+const LOG: usize = 16;
+
 #[derive(Clone, Debug)]
 pub struct Sa1 {
     pub cpu: Cpu,
     pub iram: Box<[u8]>,
     /// Master clocks the SA-1 has run, against the S-CPU's.
     pub clock: u64,
+    /// D-36: the S-CPU's holds on a memory (from, to, which) ahead of the SA-1, the SA-1's own accesses past the
+    /// catch-up's target, and that target.
+    holds: Vec<(u64, u64, u8)>,
+    log: Vec<(u64, u64, u8)>,
+    horizon: u64,
     /// The SA-1's own data bus, which unmapped reads return (absindx's RAM-protection notes).
     pub mdr: u8,
     pub ccnt: u8,
@@ -83,6 +95,9 @@ impl Sa1 {
             cpu: Cpu::default(),
             iram: vec![0; 0x800].into(),
             clock: 0,
+            holds: Vec::new(),
+            log: Vec::new(),
+            horizon: 0,
             mdr: 0,
             ccnt: 0x20,
             sie: 0,
@@ -209,6 +224,81 @@ impl Sa1 {
         } else {
             matches!(bank, 0x40..=0x4F) || bank >= 0xC0
         }
+    }
+
+    /// The memory an S-CPU address selects, by the referee's decode of the address alone (D-36); 0 for none.
+    pub fn snes_kind(address: u32) -> u8 {
+        let bank = (address >> 16) as u8;
+        let offset = address as u16;
+        if bank & 0x40 == 0 {
+            match offset {
+                0x3000..=0x37FF => IRAM,
+                0x6000..=0x7FFF => BW,
+                0x8000..=0xFFFF => ROM,
+                _ => 0,
+            }
+        } else if bank <= 0x4F {
+            BW
+        } else if bank >= 0xC0 {
+            ROM
+        } else {
+            0
+        }
+    }
+
+    /// The memory an SA-1 address selects (D-36); 0 for its I/O, open bus and internal cycles.
+    fn sa1_kind(address: u32) -> u8 {
+        let bank = (address >> 16) as u8;
+        let offset = address as u16;
+        if bank & 0x40 == 0 {
+            match offset {
+                0x0000..=0x07FF | 0x3000..=0x37FF => IRAM,
+                0x6000..=0x7FFF => BW,
+                0x8000..=0xFFFF => ROM,
+                _ => 0,
+            }
+        } else if bank <= 0x6F {
+            BW
+        } else if bank >= 0xC0 {
+            ROM
+        } else {
+            0
+        }
+    }
+
+    /// D-36: the S-CPU holds memory `kind` over master clocks `from..to`. The S-CPU never waits: an SA-1 access
+    /// already run into the hold is moved past it, with everything the SA-1 did after; one still ahead waits there.
+    pub fn hold(&mut self, from: u64, to: u64, kind: u8) {
+        let hit = self.log.iter().filter(|e| e.2 == kind && e.0 < to && from < e.1).map(|e| e.0).min();
+        if let Some(start) = hit {
+            let late = to - start;
+            for e in self.log.iter_mut().filter(|e| e.0 >= start) {
+                (e.0, e.1) = (e.0 + late, e.1 + late);
+            }
+            self.clock += late;
+        }
+        self.log.retain(|e| e.1 > from);
+        if to > self.clock {
+            self.holds.push((from, to, kind));
+        }
+    }
+
+    /// An SA-1 access of `cost` clocks to memory `kind`, started past any S-CPU hold on it; BW-RAM's two cycles
+    /// restart when a hold falls between them.
+    fn access(&mut self, kind: u8, cost: u64) {
+        let mut at = self.clock;
+        if kind != 0 {
+            while let Some(h) = self.holds.iter().find(|h| h.2 == kind && h.0 < at + cost && at < h.1) {
+                at = h.1;
+            }
+            if at + cost > self.horizon {
+                if self.log.len() == LOG {
+                    self.log.remove(0);
+                }
+                self.log.push((at, at + cost, kind));
+            }
+        }
+        self.clock = at + cost;
     }
 
     /// The S-CPU's read of a cartridge address, or None where nothing drives the bus.
@@ -553,6 +643,12 @@ impl Sa1 {
 
     /// Runs the SA-1 until its clock reaches `target`; held in reset or by CCNT's wait it only lets time pass.
     pub fn run_to(&mut self, target: u64, rom: &[u8], bw: &mut [u8]) {
+        self.horizon = target;
+        self.run_until(target, rom, bw);
+        self.holds.retain(|h| h.1 > self.clock);
+    }
+
+    fn run_until(&mut self, target: u64, rom: &[u8], bw: &mut [u8]) {
         while self.clock < target {
             if self.ccnt & 0x60 != 0 {
                 self.clock = target;
@@ -602,6 +698,13 @@ impl Sa1 {
             o.extend(v.to_le_bytes());
         }
         o.extend_from_slice(&self.iram);
+        o.push(self.log.len() as u8);
+        for k in 0..LOG {
+            let (from, to, kind) = self.log.get(k).copied().unwrap_or_default();
+            o.extend(from.to_le_bytes());
+            o.extend(to.to_le_bytes());
+            o.push(kind);
+        }
         o
     }
 
@@ -626,6 +729,10 @@ impl Sa1 {
         (self.sda, self.dda, self.vda, self.vbit) = (l(0), l(1), l(2), l(3));
         self.char1 = char1.then_some(l(4));
         self.iram.copy_from_slice(&b[103..103 + 0x800]);
+        let g = &b[103 + 0x800..];
+        let q = |i: usize| u64::from_le_bytes(g[i..i + 8].try_into().expect("eight bytes"));
+        self.log = (0..(g[0] as usize).min(LOG)).map(|k| (q(1 + k * 17), q(9 + k * 17), g[17 + k * 17])).collect();
+        self.holds.clear();
     }
 }
 
@@ -764,7 +871,7 @@ impl Bus for Sa1Bus<'_> {
     fn read(&mut self, address: u32, _pins: u8) -> u8 {
         let (v, cost) = self.load(address);
         self.s.mdr = v;
-        self.s.clock += cost;
+        self.s.access(Sa1::sa1_kind(address), cost);
         v
     }
 
@@ -774,7 +881,8 @@ impl Bus for Sa1Bus<'_> {
             return;
         }
         self.s.mdr = value;
-        self.s.clock += self.store(address, value);
+        let cost = self.store(address, value);
+        self.s.access(Sa1::sa1_kind(address), cost);
     }
 
     fn idle(&mut self, _address: u32, _pins: u8) {
@@ -789,6 +897,27 @@ impl Bus for Sa1Bus<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // D-36: an SA-1 access to the memory the S-CPU holds waits for the hold's end, one to another memory does not,
+    // and one the SA-1 already ran into a later hold is moved past it.
+    #[test]
+    fn an_scpu_hold_delays_the_sa1_on_that_memory_only() {
+        let mut s = Sa1::new(false);
+        s.hold(3, 8, ROM);
+        s.access(ROM, FAST);
+        assert_eq!(s.clock, 2);
+        s.access(ROM, FAST);
+        assert_eq!(s.clock, 10);
+        s.access(IRAM, FAST);
+        assert_eq!(s.clock, 12);
+        s.horizon = 12;
+        s.access(ROM, FAST);
+        s.hold(13, 16, ROM);
+        assert_eq!(s.clock, 18);
+        s.access(BW, BWRAM);
+        s.hold(19, 22, BW);
+        assert_eq!(s.clock, 26);
+    }
 
     // fullsnes, "Memory Control": LoROM banks use their region's 1 MiB block until bit 7 maps another; HiROM always
     // follows the register.

@@ -90,6 +90,10 @@ impl System {
             }
             return;
         }
+        if !a_blocked {
+            let at = self.timing.clock;
+            self.hold_sa1(a_address, at + 4, at + 8);
+        }
         if to_b {
             let v = if a_blocked { self.mdr } else { self.read_value(a_address, true).unwrap_or(self.mdr) };
             self.mdr = v;

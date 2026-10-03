@@ -37,17 +37,14 @@ fn ipl() -> Firmware {
     Firmware { which: 1, name: "spc700.rom".into(), label: "The sound unit's 64-byte boot ROM".into(), size: 64, required: true, parts: Vec::new() }
 }
 
-/// A NEC DSP cartridge's firmware: which of DSP-1 to DSP-4, ST010 or ST011 the header does not say, so the size is
-/// left open (8,192 or 53,248 bytes).
-fn dsp() -> Firmware {
-    Firmware {
-        which: 2,
-        name: "dsp.rom".into(),
-        label: "The cartridge's NEC DSP program and data: DSP-1 to DSP-4 (8,192 bytes) or ST010/ST011 (53,248)".into(),
-        size: 0,
-        required: true,
-        parts: Vec::new(),
-    }
+/// A NEC DSP cartridge's firmware as file 2, whole or as its program and data in files 2 and 3; `stem` and `size` as
+/// `Cartridge::nec_firmware` names them, or the open entry core info lists for any of them.
+fn dsp(named: Option<(&str, u64)>) -> Firmware {
+    let (name, size, parts) = match named {
+        Some((stem, size)) => (format!("{stem}.rom"), size, vec![vec![format!("{stem}.rom")], vec![format!("{stem}.program.rom"), format!("{stem}.data.rom")]]),
+        None => ("dsp.rom".to_owned(), 0, Vec::new()),
+    };
+    Firmware { which: 2, name, label: "The cartridge's NEC DSP program and data: DSP-1 to DSP-4 (8,192 bytes) or ST010/ST011 (53,248)".into(), size, required: true, parts }
 }
 
 impl Core for Machine {
@@ -74,7 +71,7 @@ impl Core for Machine {
                     buttons: BUTTONS.iter().enumerate().map(|(bit, &(c, label))| Button { bit: bit as u32, control: Some(c), label: label.into() }).collect(),
                     axes: Vec::new(),
                 }],
-                firmware: vec![ipl(), dsp()],
+                firmware: vec![ipl(), dsp(None)],
             }],
             deterministic: true,
             ..Info::default()
@@ -82,8 +79,10 @@ impl Core for Machine {
     }
 
     fn firmware_for(image: &[u8]) -> Vec<Firmware> {
-        let wants_dsp = crate::cart::Cartridge::new(image).is_some_and(|c| c.wants_dsp());
-        if wants_dsp { vec![ipl(), dsp()] } else { vec![ipl()] }
+        match crate::cart::Cartridge::new(image).and_then(|c| c.nec_firmware()) {
+            Some(named) => vec![ipl(), dsp(Some(named))],
+            None => vec![ipl()],
+        }
     }
 
     fn status_text(code: i32) -> Option<String> {
@@ -200,6 +199,40 @@ mod tests {
         let mut v = vec![0; m.state_size()];
         m.save_state(&mut v).unwrap();
         v
+    }
+
+    fn named(title: &[u8], chipset: u8) -> Vec<String> {
+        let mut image = crate::machine::tests::rom(&[]);
+        image[0x7FC0..0x7FD5].fill(b' ');
+        image[0x7FC0..0x7FC0 + title.len()].copy_from_slice(title);
+        image[0x7FD6] = chipset;
+        <Machine as Core>::firmware_for(&image).iter().map(|f| format!("{} {} {}", f.which, f.name, f.size)).collect()
+    }
+
+    // The NEC DSP named from the header and title by fullsnes's list of games; the boot ROM always.
+    #[test]
+    fn the_firmware_is_named_from_the_header_and_title() {
+        assert_eq!(named(b"SUPER MARIO WORLD", 0x02), ["1 spc700.rom 64"]);
+        assert_eq!(named(b"PILOTWINGS", 0x03), ["1 spc700.rom 64", "2 dsp1.rom 8192"]);
+        assert_eq!(named(b"SUPER MARIO KART", 0x05)[1], "2 dsp1b.rom 8192");
+        assert_eq!(named(b"DUNGEON MASTER", 0x03)[1], "2 dsp2.rom 8192");
+        assert_eq!(named(b"TOP GEAR 3000", 0x03)[1], "2 dsp4.rom 8192");
+        assert_eq!(named(b"F1 ROC II", 0xF6)[1], "2 st010.rom 53248");
+        assert_eq!(named(b"MORITA SHOGI", 0xF6)[1], "2 st011.rom 53248");
+    }
+
+    // A DSP's firmware whole as file 2, or as its program in file 2 and its data in file 3; the data alone is refused.
+    #[test]
+    fn a_dsp_firmware_comes_whole_or_in_two_parts() {
+        let mut image = crate::machine::tests::rom(&[0x80, 0xFE]);
+        image[0x7FD6] = 0x03;
+        let ipl = crate::apu::smp::tests::idle_ipl();
+        let (program, data) = (vec![0u8; 6_144], vec![0u8; 2_048]);
+        let make = |files: Vec<File<'_>>| <Machine as Core>::create(&Create { image: &image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION });
+        let whole = [program.as_slice(), data.as_slice()].concat();
+        assert!(make(vec![File { which: 1, data: &ipl }, File { which: 2, data: &whole }]).unwrap().sys.cart.dsp.is_some());
+        assert!(make(vec![File { which: 1, data: &ipl }, File { which: 2, data: &program }, File { which: 3, data: &data }]).unwrap().sys.cart.dsp.is_some());
+        assert_eq!(make(vec![File { which: 1, data: &ipl }, File { which: 3, data: &data }]).err(), Some(status::BAD_FILE));
     }
 
     // A cheat's CpuBus poke lands in WRAM through its mirror and in the cartridge's SRAM; one at an I/O register, the

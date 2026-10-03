@@ -249,6 +249,33 @@ impl Cartridge {
         matches!(self.header.chipset, 0x03..=0x05 | 0xF6)
     }
 
+    /// Which NEC DSP firmware the cartridge needs, as a file stem and its size, from the header and title against
+    /// fullsnes's list of the 23 games ("List of Games using that chips"): ST010 for F1 ROC II / Exhaust Heat II,
+    /// ST011 for the other ST01x game; DSP-2, DSP-3 and DSP-4 for their one game each; DSP-1 for Pilotwings, which
+    /// fullsnes names as the DSP-1 game with its visible glitch, and DSP-1B, the corrected revision, for the rest.
+    pub fn nec_firmware(&self) -> Option<(&'static str, u64)> {
+        let title = self.header.title.to_ascii_uppercase();
+        let has = |s: &str| title.contains(s);
+        match self.header.chipset {
+            0xF6 => Some((if has("F1 ROC") || has("EXHAUST") { "st010" } else { "st011" }, 53_248)),
+            0x03..=0x05 => Some((
+                if has("DUNGEON MASTER") {
+                    "dsp2"
+                } else if has("GUNDAM") {
+                    "dsp3"
+                } else if has("TOP GEAR 3000") || has("TG3000") || has("TG 3000") {
+                    "dsp4"
+                } else if has("PILOTWINGS") {
+                    "dsp1"
+                } else {
+                    "dsp1b"
+                },
+                8_192,
+            )),
+            _ => None,
+        }
+    }
+
     /// The board's DSP map: the ST01x's when its firmware is the µPD96050's or the chipset says so, then HiROM, then
     /// LoROM by size and RAM.
     pub fn dsp_map(&self, st: bool) -> DspMap {

@@ -759,7 +759,8 @@ preferred.
 
 - **P1.** Of the DSP-1B's named commands, counting each family once (17), at least 11 agree with the LLE bit for bit
   over the full random and edge sets by the end of step 7. Inverse and Distance each reach exactness or a largest error
-  of one in the last bit.
+  of one in the last bit. *Retired 2026-10-04, false* (`VenusRT_Native.md` §51.4): seven codes are exact, the sine's
+  loss making every command built on it approximate, and Inverse and Distance stay within 2 and 4.
 - **P2.** The DSP-1's sine values are reproduced exactly by one formula from a family of at most 8 bits of choice, or
   by none; no formula matches all but a few entries.
 - **P3.** Every DSP-1 command's measured latency, phase by phase, is a constant or a function of one input feature, and
@@ -770,7 +771,8 @@ preferred.
 - **P5.** No bench game issues a data-ROM transfer (DSP-1 1Fh, DSP-4 13h) after boot, so the named loss costs nothing in
   play.
 - **P6.** With every command it uses exact, Super Mario Kart and Pilotwings run 3,600 frames on the replacement with
-  states identical to the LLE's.
+  states identical to the LLE's. *Retired 2026-10-04, false* (`VenusRT_Native.md` §44.3, §51.2): no command built on
+  the sine can be exact, and both games part in the frame after their first command that computes.
 - **P7.** F1 ROC II issues at most three distinct ST010 commands in its first race. *Retired 2026-10-04, false*
   (`VenusRT_Native.md` §37.6): it issues seven, 02h-08h, in its attract mode.
 - **P8.** Every DSP-2 command is exact by the end of step 9. *Retired 2026-10-04, false in part* (`VenusRT_Native.md`

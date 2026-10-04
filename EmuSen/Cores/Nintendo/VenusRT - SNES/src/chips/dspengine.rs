@@ -91,6 +91,11 @@ impl DspEngine {
         }
     }
 
+    /// A DSP-1 or DSP-1B replacement, whose state gained the projection at version 22 (VenusRT_Native.md §49.5).
+    pub fn dsp1_replacement(&self) -> bool {
+        matches!(self, DspEngine::Hle(h) if matches!(h.program, super::dsphle::Program::Dsp1 | super::dsphle::Program::Dsp1b))
+    }
+
     pub fn pack(&self) -> Vec<u8> {
         match self {
             DspEngine::Lle(d) => d.pack(),

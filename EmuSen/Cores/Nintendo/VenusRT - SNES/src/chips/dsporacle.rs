@@ -219,12 +219,14 @@ pub struct Host {
     /// The DSP-3's decoder: a rise with USF1 set is answered with a write, whatever the chip did (fullsnes, "USF1 bit
     /// in SR register = direction").
     pub usf1_writes: bool,
+    /// Every transfer from this index on answered with a write: ends a raster run after the lines wanted.
+    pub write_from: usize,
 }
 
 impl Host {
     /// A poll loop's response, fixed: 8 cycles to the first byte, 3 between a word's bytes.
     pub fn steady() -> Host {
-        Host { respond: (8, 8), gap: (3, 3), rng: Pcg::new(0), cap: 4_000_000, max_steps: 4096, filler: 0, late_at: None, write_over: 0, usf1_writes: false }
+        Host { respond: (8, 8), gap: (3, 3), rng: Pcg::new(0), cap: 4_000_000, max_steps: 4096, filler: 0, late_at: None, write_over: 0, usf1_writes: false, write_from: usize::MAX }
     }
 
     /// A response drawn anew at each transfer, for the phase check.
@@ -436,7 +438,7 @@ pub fn transact<C: Chip>(chip: &mut C, host: &mut Host, command: u8, inputs: &[u
             return Transaction { command, steps, end: End::Capped };
         }
         let sr_access = chip.status();
-        let over = steps.len() < 64 && host.write_over >> steps.len() & 1 != 0 || host.usf1_writes && sr_rise & 0x40 != 0;
+        let over = steps.len() < 64 && host.write_over >> steps.len() & 1 != 0 || host.usf1_writes && sr_rise & 0x40 != 0 || steps.len() >= host.write_from;
         let (dir, value, bytes, gap) = match edge.write.filter(|_| !over) {
             None => {
                 let v = *next.next().unwrap_or(&host.filler);
@@ -853,6 +855,75 @@ mod tests {
                         assert!(!compare(&x, &y).latency && x.outputs()[1] == y.outputs()[1], "{stem} 10 case {k}");
                     }
                 }
+            }
+        }
+    }
+
+    // VenusRT_Native.md §49.5: Parameter, Raster and Project against the image after a Parameter, in §49.2's ranges
+    // below the limit; every transfer alike, and the results close (within 2, or 1/128 of the image's value) in the
+    // shares §49.5 measured, less a margin.
+    #[test]
+    fn the_replacements_projection_stays_close_to_the_image() {
+        use super::super::dsphle::Program;
+        let close = |a: u16, b: u16| (a as i16 as i32 - b as i16 as i32).abs() <= 2.max((a as i16 as i32).abs() / 128);
+        for (stem, program) in [("dsp1", Program::Dsp1), ("dsp1b", Program::Dsp1b)] {
+            let Some(mut lle) = chip(stem) else { return };
+            let mut hle = Hle::new(program);
+            power_on(&mut hle, &Host::steady()).unwrap();
+            let mut p = Pcg::new(0x49);
+            let mut good = [0u32; 3];
+            let cases = 1024;
+            for k in 0..cases {
+                let mut w = |lo: i32, hi: i32| (lo + p.within(0, (hi - lo) as u32) as i32) as u16;
+                let params = [w(-4096, 4096), w(-4096, 4096), w(0, 1000), w(0, 1024), w(64, 1024), w(0, 0xFFFF), w(0x0800, 0x3800)];
+                let mut run = |c: usize, command: u8, inputs: &[u16], host: Host| -> Vec<u16> {
+                    let (x, y) = (transact(&mut lle, &mut host.clone(), command, inputs), transact(&mut hle, &mut host.clone(), command, inputs));
+                    assert!(!compare(&x, &y).shape, "{stem} {command:02X} case {k}");
+                    good[c] += x.outputs().iter().zip(y.outputs()).all(|(&a, b)| close(a, b)) as u32;
+                    x.outputs()
+                };
+                let got = run(0, 0x02, &params, Host::steady());
+                let point = [got[2].wrapping_add(w(-500, 500)), got[3].wrapping_add(w(-500, 500)), w(0, 200)];
+                run(2, 0x06, &point, Host::steady());
+                let line = w((got[1] as i16 as i32 + 2).clamp(-112, 112), 112);
+                run(1, 0x0A, &[line], Host { write_from: 9, filler: 0x8000, ..Host::steady() });
+            }
+            for (c, share) in [(0, 0.99), (1, 0.99), (2, 0.97)] {
+                assert!(good[c] as f64 >= share * cases as f64, "{stem}: command {c} close in {} of {cases}", good[c]);
+            }
+        }
+    }
+
+    // VenusRT_Native.md §50.3: Target after a Parameter, and Gyrate, against the image in §50.2's ranges; every transfer
+    // alike, and the results close (Gyrate's angles within 2, the long way round counted short) in §50.3's shares, less
+    // a margin.
+    #[test]
+    fn the_replacements_target_and_gyrate_stay_close_to_the_image() {
+        use super::super::dsphle::Program;
+        let close = |a: u16, b: u16| (a as i16 as i32 - b as i16 as i32).abs() <= 2.max((a as i16 as i32).abs() / 128);
+        let close_angle = |a: u16, b: u16| (a.wrapping_sub(b) as i16 as i32).abs() <= 2;
+        for (stem, program) in [("dsp1", Program::Dsp1), ("dsp1b", Program::Dsp1b)] {
+            let Some(mut lle) = chip(stem) else { return };
+            let mut hle = Hle::new(program);
+            power_on(&mut hle, &Host::steady()).unwrap();
+            let mut p = Pcg::new(0x50);
+            let mut good = [0u32; 2];
+            let cases = 1024;
+            for k in 0..cases {
+                let mut w = |lo: i32, hi: i32| (lo + p.within(0, (hi - lo) as u32) as i32) as u16;
+                let params = [w(-4096, 4096), w(-4096, 4096), w(0, 1000), w(0, 1024), w(64, 1024), w(0, 0xFFFF), w(0x0800, 0x3800)];
+                let got = transact(&mut lle, &mut Host::steady(), 0x02, &params).outputs();
+                transact(&mut hle, &mut Host::steady(), 0x02, &params);
+                let hv = [w(-128, 128), w((got[1] as i16 as i32 + 2).clamp(-112, 112), 112)];
+                let g = [w(0, 0xFFFF), w(-0x3555, 0x3555), w(0, 0xFFFF), w(-1024, 1024), w(-1024, 1024), w(-1024, 1024)];
+                for (c, command, inputs) in [(0usize, 0x0Eu8, &hv[..]), (1, 0x14, &g[..])] {
+                    let (x, y) = (transact(&mut lle, &mut Host::steady(), command, inputs), transact(&mut hle, &mut Host::steady(), command, inputs));
+                    assert!(!compare(&x, &y).shape, "{stem} {command:02X} case {k}");
+                    good[c] += x.outputs().iter().zip(y.outputs()).all(|(&a, b)| if c == 0 { close(a, b) } else { close_angle(a, b) }) as u32;
+                }
+            }
+            for (c, share) in [(0, 0.96), (1, 0.94)] {
+                assert!(good[c] as f64 >= share * cases as f64, "{stem}: command {c} close in {} of {cases}", good[c]);
             }
         }
     }

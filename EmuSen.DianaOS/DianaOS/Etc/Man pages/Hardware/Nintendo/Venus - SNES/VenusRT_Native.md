@@ -4943,3 +4943,396 @@ The DSP-4 learns no command place from the program counter, so the old count mis
 Short of them, 11h's and 0Ah's results would keep the run identical a few frames further, to frame 3,183, but would
 not draw a race. Building the road commands is plan step 12a, estimated at 4 to 6 steps, with no measurement yet of
 whether they are formula-like.
+
+## 49. The NEC DSP replacements, step 7 begun: the DSP-1's Parameter, Raster and Project (2026-10-04)
+
+Step 7 of `VenusRT_DspHle.md` §8, first part. No document read for this work gives an equation for any projection
+command: SnesLab names their parameters, fullsnes their codes, and the SNESdev wiki stops at Polar (plan §3.1). The
+commands are therefore characterised from the oracle under plan §1.3, then each is stated as a formula with a declared
+family, as §44 did for the attitude commands. §49.1 and §49.2 were written and committed before the first comparison
+of any member. The sine is a named loss (§40.7), so no member can be exact and every grade below is a closeness grade.
+
+### 49.1 What was characterised, from the oracle
+
+Measured 2026-10-04 with `dsp_oracle ask` and `dsp_oracle chains` (a new mode: one chain of transactions a line, each
+from the same idle chip) on the DSP-1B, as real-valued errors of a stated geometry against the image's outputs. A
+handful of cases are cited where a rule rests on them (R1).
+
+- **The frame.** The eye E sits Lfe behind the point F along the view's forward vector f, and the screen Les in front
+  of the eye. With a = Aas and z = Azs (z the angle from straight down):
+  - f = (sin a·sin z, -cos a·sin z, -cos z); the screen's right r = (cos a, sin a, 0); the screen's down
+    u = (-sin a·cos z, cos a·cos z, -sin z). §44.1's (-sin a, -cos a) had the horizontal sign of x wrong: at a = 45° the
+    centre point lies at +x.
+  - E = F - Lfe·f, so the eye's height is Fz + Lfe·cos z. Raster's scale is proportional to Fz + Lfe·cos z within 1 over
+    every Fz, Lfe, Les and z tried.
+- **Parameter (02h).** Vva = -Les·cot z, the horizon's raster line. (Cx, Cy) is where f meets the ground: E's
+  horizontal position moved along (sin a, -cos a) by the eye's height times tan z. Vof is 0 below a limit angle. Over 800
+  seeded cases with Azs from 11° to 79° the errors of this geometry are within 3.4 (Vva) and 6 (Cx, Cy).
+- **The limit branch.** Above a limit near 79.9°, the same for every Les, Fz and Lfe tried, Vva holds its value at the
+  limit, Vof grows as Les·tan(z - limit), and (Cx, Cy) moves on another course. §44.1's Les·(cot θ - cot z) fails at
+  z = 112.5°. No document gives the limit (§49.3).
+- **Raster (0Ah).** The run gives line Vs first, then Vs + 1, and so on; the values are a function of the line alone,
+  whichever line the run starts from. For a line v with the denominator n = Les·cos z + v·sin z and the scale
+  k = 256·(eye height)/n:
+  - An = k·cos a, Cn = k·sin a, Bn = -k·sin a / cos z, Dn = k·cos a / cos z. Dn/An is 1/cos z on every line.
+  - **The denominator is an integer.** Near the horizon An falls as 1, 1/2, 1/3 ... of its first value, and the same
+    value repeats every 23 lines at 73°, where sin z is 0.957: the signature of n taken whole. The value at n = 1 is not
+    256 times the eye height but one below, and the run's values near n = 1 to 7 follow a 15-bit reciprocal's mantissa
+    as Inverse's (§44.1) does.
+  - Where n is 0 the line saturates, and on the sky's side (n < 0) the values are negative.
+- **Project (06h).** With d = (X, Y, Z) - E: H = Les·(d·r)/(d·f), V = Les·(d·u)/(d·f), and M = 256·Les/(d·f), the
+  enlargement in 8.8. Over 800 seeded cases the errors are within 1.4 of this geometry where nothing overflows; past
+  16 bits the results saturate.
+- **Raster, Project and Target use Parameter's state**, and only that: §37.4's sequences found Raster and Target
+  disturbed by the memory test alone.
+
+### 49.2 The families, declared before the first comparison
+
+Every product of two words is the µPD77C25's, floored at 2^-15, as Multiply's member (§39.3). The sine and cosine are
+the replacement's (§40.4). Results saturate to 16 bits. The **reciprocal** of a word w is one of S2's two forms below;
+the replacement's own Inverse routine (§44.2) normalises w to a mantissa in [4000h, 8000h) with s shifts and takes
+2^29 over it, floored, so that 1/w = mantissa·2^(1 + s - 15 - 15).
+
+**Shared choices**, one member for all three commands:
+
+- **S1, the eye's height** Ez = Fz + Lfe·cos z: taken whole (floored), or carried with 15 fraction bits (2).
+- **S2, the reciprocal**: the replacement's Inverse routine, or an exact division at full width (2).
+- **S3, a quotient's last rounding**: floor, or half up (2).
+
+**Parameter (02h)**:
+
+- Vva = -(Les·cos z)/sin z; Eh = (Fx, Fy) - Lfe·sin z·(sin a, -cos a); (Cx, Cy) = Eh + Ez·(sin z/cos z)·(sin a, -cos a);
+  Vof = 0.
+- **P1, the horizontal offset**: Lfe·sin z floored, then times sin a and cos a, floored; or the triple product scaled
+  once (2).
+
+**Raster (nAh)**:
+
+- k = 256·Ez/n, saturated; An = k·cos a, Cn = k·sin a; K = k/cos z, saturated; Bn = -K·sin a, Dn = K·cos a.
+- **R1, the denominator n**: the sum of the two floored products Les·cos z and v·sin z; the floor of their exact sum;
+  or unquantised, carried with 15 fraction bits (3).
+
+**Project (06h)**:
+
+- d = (X, Y, Z) - E; x = d·r, y = d·u, w = d·f; H = Les·x/w, V = Les·y/w, M = 256·Les/w.
+- **J1, the view's elements** (sin a·sin z and the rest): floored Q15 products, or exact (2).
+- **J2, each dot product**: its terms floored and summed, or the exact sum floored once (2).
+
+That is 2·2·2·2·3·2·2 = 192 members, under 8 bits, chosen as one implementation.
+
+**The grade.** A result is *close* when it is within 2 of the image's, or within 1/128 of the image's value where that
+is larger: the sine's own error at full scale is 10 in 32,768, and Raster's values near the horizon reach 32,767. The
+member chosen is the one with the most close cases over the three commands together, ties broken by the smaller
+largest difference. Two sets:
+
+- **Seeded**: 2^16 cases from `Pcg`, Fx and Fy in ±4,096, Fz in 0-1,000, Lfe in 0-1,024, Les in 64-1,024, any Aas, Azs in
+  0800h-3800h (11° to 79°, below the limit); a point within 500 of (Cx, Cy) at a height of 0-200 for Project; a line
+  between the horizon and +112 for Raster.
+- **Traced**: every Parameter, Raster and Project the seven DSP-1 titles give in §37.6's 7,200 frames, their inputs
+  replayed on both engines in order (plan §4.2's trace oracle). Inputs only are taken from the traces.
+
+**Timing.** Parameter's, Project's and a raster line's phases that vary take their medians, as Triangle's did
+(§40.4). A rule of one feature may replace a median: the declared feature is the reciprocal's normalisation shift, as
+Inverse's time follows it (§44.1).
+
+### 49.3 The limit branch, a named loss
+
+No document gives the limit angle, nor the way Vof and (Cx, Cy) behave past it. It could be read from the image to
+within one step, but that is a constant taken from the chip, which R1 forbids (§48.2 withdrew ST010 07h's for the same
+reason). **The replacement therefore has no limit**: past 79.9° it keeps the geometry of §49.1, with Vof 0 and the
+horizon where Les·cot z puts it. That is a named loss, measured in the grade and in the games. The traces say what it
+costs: Lock On's and Ballz 3D's every Parameter is past the limit, and 190 of Pilotwings' 600; Super Mario Kart's,
+Suzuka 8 Hours', Michael Andretti's Indy Car Challenge's and Super Bases Loaded 2's never are. Whether to admit the
+one threshold, as §40.6 admitted a second widening, is the tester's decision, put in §49 after the games are measured.
+
+### 49.4 Project's family widened once, in writing (plan §5.2, rule 4)
+
+The first grading (`dsp_projection`, 2^16 seeded cases and the seven traces) left Parameter and Raster close
+wherever the limit branch is not reached. Two corrections to the grader came first, neither a model change: a traced
+Raster run's last line is where the game writes its terminator over the results, so it is not graded; and Pilotwings'
+Parameter failures are all past the limit (§49.3).
+
+**Project was not.** Its best member was close in 98% of Super Mario Kart's results but 67% of Michael Andretti's
+Indy Car Challenge's, whose eye sits 24 units behind F at a height near 10. The errors have structure:
+
+- The image's M is 256·Les over a whole number. In that game's cases (Les = 96) it is 24,576/w for w = 23, 11, 8, 4,
+  2 and -1, so w = d·f is taken whole before the reciprocal. No member of §49.2 does that while carrying the eye's
+  height with its fraction.
+- F itself projects to V = 0 on the image, and to V = -4 with the eye's height taken whole (9.98 floored to 9). The
+  image's H for F is 0 or ±3 as Aas changes by 40 steps, which a whole horizontal eye position gives.
+
+The family for Project is widened once, by two choices, before they are graded:
+
+- **J3, Project's eye**, independently of S1 and P1: its height whole or with 15 fraction bits, and its horizontal
+  position whole (P1's) or with 15 fraction bits, from F - Lfe·f with f's elements as J1 gives them (4).
+- **J4, w**: taken whole (floored) before the reciprocal, or not (2).
+
+With J1 and J2, Project has 32 members of its own, and the whole family 48·32 = 1,536 members, about 10.6 bits, still
+chosen as one implementation. The member chosen is the one with the most close results over both sets together. If no
+member is close on nearly all of a game's traced Project results below the limit, the remainder is recorded as the
+sine's and this structure's joint error, with no further widening.
+
+### 49.5 Chosen, built, and the grade (measured 2026-10-04)
+
+**The choice.** `dsp_projection dsp1b 65536` with the seven traces graded all 1,536 members. By §49.2's rule, the most
+close results over both sets, the member is:
+
+| Choice | Member |
+|---|---|
+| S1, the eye's height (Parameter, Raster) | whole: Fz + Lfe·cos z, floored |
+| S2, the reciprocal | the Inverse routine's 15-bit mantissa |
+| S3, the last rounding | half up |
+| P1, the horizontal offset | the triple product Lfe·sin z·sin a scaled once |
+| R1, Raster's denominator | the sum of the two floored products: n = ⌊Les·cos z⌋ + ⌊v·sin z⌋ |
+| J1, J2 | the view's elements exact, each dot product's sum floored once |
+| J3, Project's eye | height whole, horizontal position with its fraction |
+| J4 | w not taken whole |
+
+**Measured against it.** The member ranked 69th by the rule, 1,954 close results behind in 2.1 million, takes the
+exact division floored, the elements floored, the eye with both fractions and w whole. It is exact far more often: in
+Super Mario Kart's traced Project 97% against 52%, and in the seeded Project 83% against 51%; and the seeded set alone
+on the DSP-1 ranks it first. It loses the count on Super Mario Kart's and Suzuka 8 Hours' Raster lines and Lock On's
+Project. The rule was declared, so the first member is built. The other's exact share says the chip's own sequence
+lies nearer to it, and §49.6 records it with §49.4's structure for a later decision.
+
+**Built** in `dsphle.rs`, as `Projection`, from Parameter's seven inputs, which the replacement keeps:
+
+- **Parameter** gives Vva, (Cx, Cy) and Vof = 0, by §49.2's formulas with the member above. It has no limit (§49.3).
+- **Raster** gives line Vs and then Vs + 1, Vs + 2 and so on for as long as the S-CPU reads.
+  - **The run ends when DR no longer holds a line's last result.** Writing another word over the fourth result ends it:
+    measured on the image with the driver's `write_over`, a write over the first, second or third result goes on, and
+    a write of the same value as the fourth is taken as a read. §38's frame ended on any write; that was wrong.
+  - Bench games write a terminator over the fourth result, so the rule only matters for writes elsewhere.
+- **Project** gives H, V and M.
+- **Timing**, from `DSP_PROJ_TIMING` over 4,096 seeded cases after a Parameter:
+  - Parameter: work 527 and notice 485 for its last input (ranges 508-555 and 464-515);
+  - Project: notice 362 for its last input (328-404);
+  - Raster: the first line's first result at work 128 and notice 116, each later line's at notice 115 (109-129), and
+    idle 6 cycles after the terminator.
+  - Each is the median. The declared feature, the reciprocal's normalisation shift, does not decide Project's time
+    alone: over 1,500 cases one shift count spans 40 cycles. The medians stay.
+- **State version 22.** The DSP-1 replacement's state gains Parameter's seven inputs. A DSP-1 or DSP-1B replacement's
+  state of version 21 is refused with `VERSION`; the DSP-2's, DSP-4's and ST010's still load, since their layout did not
+  change. The low-level path's states of 17-21 load as before. Test: `a_dsp1_replacement_state_before_version_22_is_refused`.
+- **No new table.** The commands use the sine of §40.4 and the Inverse routine's normalisation, so firmwarecheck's counts
+  are §40.4's.
+
+**The grade through the ports** (`DSP_PROJ_PORTS=1 dsp_projection`, 65,536 seeded cases, every other one under a
+jittered S-CPU; values, transfers, SR and latency compared; the DSP-1 and DSP-1B alike):
+
+| Command | All results close | All exact | Transfers or SR differ | Latency differs | Largest difference |
+|---|---|---|---|---|---|
+| 02h Parameter | 65,301 (99.6%) | 3,997 (6.1%) | 0 | 56,948 | 6 |
+| 0Ah Raster, two lines | 65,434 (99.8%) | 10,733 (16.4%) | 0 | 49,578 | 4,237 (a line beside the horizon) |
+| 06h Project | 64,587 (98.6%) | 9,151 (14.0%) | 0 | 60,501 | wraps at 16 bits |
+
+**The traced shares**, results close of results graded, from the chosen member's row:
+
+| Game | Parameter | Raster | Project |
+|---|---|---|---|
+| Super Mario Kart | 27,124 of 27,124 | 49,600 of 49,600 | 90,064 of 91,200 (98.8%) |
+| Suzuka 8 Hours | all | all | all |
+| Super Bases Loaded 2 | all | all | 40,891 of 40,893 |
+| Michael Andretti's Indy Car Challenge | all | all | 25,529 of 31,086 (82.1%) |
+| Ballz 3D | 978 of 5,588 (past the limit) | none given | all |
+| Pilotwings | 1,845 of 2,400 (past the limit) | 358,306 of 422,416 (84.8%) | 8,621 of 8,955 (96.3%) |
+| Lock On | 5,497 of 43,872 (past the limit) | 57,699 of 2,647,288 (2.2%) | 74,331 of 75,588 (98.3%) |
+
+Every Parameter result that is not close lies past the limit. The four games that never pass it are close in every
+Parameter and Raster result. Michael Andretti's Indy Car Challenge's Project misses are the eye's own rounding (§49.4):
+F itself is drawn at an enlargement of 1,024 against the image's 1,068.
+
+The crate test `the_replacements_projection_stays_close_to_the_image` holds the shares on both images, and
+`a_raster_run_ends_on_a_write` the run's end.
+
+### 49.6 What is open
+
+- **The limit branch** (§49.3): Lock On's and Ballz 3D's views and a third of Pilotwings' are past it. The cost in play is
+  measured in §51.
+- **Project's eye and the choice.** §49.4's characterisation found the eye at F - ⌊Lfe·f⌋ coordinate by coordinate,
+  with w floored, which is not in the family; §49.4 allowed no further widening. The 69th member (§49.5), which is in
+  it, is exact twice as often as the one the rule chose. Whether to choose by exact share instead, or to admit the
+  coordinate-wise eye, is a decision for the tester.
+- **Latency.** The medians leave most cases a few cycles off. Exact timing needs the reciprocal's sequence, which the
+  sine's loss already puts out of reach of exact values.
+
+## 50. The NEC DSP replacements, step 7 continued: the DSP-1's Target and Gyrate (2026-10-04)
+
+§50.1 and §50.2 were written and committed before the first comparison of any member.
+
+### 50.1 What was characterised, from the oracle
+
+Measured 2026-10-04 with `dsp_oracle chains` on the DSP-1B, as errors of a stated formula against the image.
+
+- **Target (0Eh)** gives the ground point under a screen position (H, V), as SnesLab says.
+  - At Aas = 0 it is §49.1's geometry: the ray from the eye through (H, V) on the screen, met with the ground.
+  - **Its H axis turns the other way from Project's.** Moving H moves the ground point along (cos a, -sin a), where
+    Project's right is (cos a, sin a): at a = 90° the two are opposite, and at 45° Target's H runs along the view.
+    Measured at a = 0, 45°, 90°, 135° and 270°.
+  - **Target is Raster's matrix applied to (H, V).** With Raster's line-V results An, Bn, Cn, Dn from the same Parameter,
+    the image's (X, Y) is (Cx + (H·An + V·Bn)/256, Cy + (V·Dn - H·Cn)/256) within 2 in 594 of 600 seeded cases. The
+    six others are where the line's values saturate. The geometry agrees: the ground's offset from C for line V is
+    -V·Ez/(cos z·n), which is -V·K/256 in §49.2's terms, and its lateral scale is k/256.
+- **Gyrate (14h)** takes three angles and three turns and gives three angles. With the inputs (Az, Ax, Ay, U, F, L):
+  - Az' = Az + (U·cos Ay - F·sin Ay)/cos Ax;
+  - Ax' = Ax + U·sin Ay + F·cos Ay;
+  - Ay' = Ay + L - (U·cos Ay + F·sin Ay)·tan Ax.
+  - Over 600 seeded cases each result is within 2 of this, its median error -0.5 to -1, except near Ax = ±90°, where
+    1/cos Ax saturates. The sign of F in Ay' is not the one that Az' has. These are the Euler-angle rates for turns
+    about the body's axes, as fullsnes's name, "3D Angle Rotation", suggests.
+
+### 50.2 The families, declared before the first comparison
+
+Products and the sine as §49.2. Target uses Parameter's state and §49.5's member for Cx, Cy and Raster's k and K.
+
+**Target (0Eh)**: X = Cx + (H·k·cos a - V·K·sin a)/256, Y = Cy + (V·K·cos a - H·k·sin a)/256, with k and K Raster's for
+line V.
+
+- **T1, k and K**: saturated to 16 bits as Raster gives them, or carried at full width (2).
+- **T2, the products**: through Raster's floored An-Dn, then times H or V; or each triple product scaled once (2).
+- **T3, the division by 256**: floor, or half up (2).
+
+That is 8 members, 3 bits.
+
+**Gyrate (14h)**: §50.1's three equations, each increment saturated to 16 bits and added to its angle with wrapping.
+
+- **G1, 1/cos Ax and tan Ax**: through the Inverse routine on cos Ax, tan Ax as sin Ax times it; or exact division (2).
+- **G2, each sum**: its terms floored and summed, or the sum scaled once (2).
+- **G3, Az's quotient**: the bracket formed and then divided, or each term divided (2).
+- **G4, a quotient's rounding**: floor, or half up (2).
+
+That is 16 members, 4 bits.
+
+**The grade**, as §49.2's: a result is close within 2 or 1/128 of the image's value; the member with the most close
+results wins, ties to the smaller largest difference. Target is graded over 2^16 seeded cases (§49.2's Parameter
+ranges, H in ±128 and V from the horizon's line plus 2 to +112) and the traced Target commands of Pilotwings, the only
+bench game that gives it (§37.6). Gyrate is graded over 2^16 seeded cases (any Az and Ay, Ax in ±75°, turns in ±1,024)
+and Pilotwings' traced Gyrates. Timing as §49.2: medians of the phases that vary.
+
+### 50.3 Chosen, built, and the grade (measured 2026-10-04)
+
+`dsp_target_gyrate dsp1b 65536` with Pilotwings' trace graded both families. One grader defect was found and corrected
+before the choice, not a model change: tan Ax had been held to a word, so past 45° it saturated at 1, and Gyrate's
+Ay' missed by hundreds. It is now carried at full width, as §50.2's "tan Ax as sin Ax times it" requires.
+
+| Command | Member chosen | Seeded results close | Traced results close |
+|---|---|---|---|
+| 0Eh Target | T1 at full width, T2 each triple product scaled once, T3 floor | 128,983 of 131,072 (98.4%) | 995 of 1,202 (82.8%); every miss past the limit |
+| 14h Gyrate | G1 the Inverse routine, G2 each sum scaled once, G3 the bracket divided, G4 floor | 193,975 of 196,608 (98.7%), largest 6 | 1,257 of 1,257, largest 1 |
+
+**Built** in `dsphle.rs`: Target as `Projection::target`, which applies Raster's line-V scale to (H, V) at full width
+and adds (Cx, Cy); Gyrate as `gyrate`. 1Eh, 2Eh and 3Eh take Target's transfers, as §37.5 measured them alike.
+**Timing**, the medians over 4,096 seeded cases (`DSP_PROJ_TIMING`): Target's last input at notice 116 (110-132),
+Raster's own line time; Gyrate's last input at work 237 (205-273) and notice 3.
+
+**The grade through the ports** (`DSP_TG_PORTS=1 dsp_target_gyrate`, 65,536 seeded cases, half under a jittered S-CPU;
+the DSP-1 and DSP-1B alike):
+
+| Command | All results close | All exact | Transfers or SR differ | Latency differs | Largest difference |
+|---|---|---|---|---|---|
+| 0Eh Target | 63,994 (97.6%) | 3,138 (4.8%) | 0 | 49,159 | saturates beside the horizon |
+| 14h Gyrate | 62,928 (96.0%) | 4,596 (7.0%) | 0 | 57,329 | 6 |
+
+Gyrate's misses are of 3 to 6, where Ax is past 60° and tan Ax magnifies the sine's error. The crate test
+`the_replacements_target_and_gyrate_stay_close_to_the_image` holds these shares on both images.
+
+**Step 7 is built.** Every command the bench games give the DSP-1 is now computed: exactly for 00h, 0Fh and 2Fh, and
+approximately for the rest on the named-loss sine. What remains is the limit branch (§49.3) and the DSP-1's own 28h
+bug (§44.1).
+
+## 51. The NEC DSP replacements, step 8: the seven DSP-1 titles in lockstep (2026-10-04)
+
+Step 8 of `VenusRT_DspHle.md` §8, with every command the games give now computed (§49, §50). P6 was retired at §44.3;
+the question here is the one the sine's loss leaves: whether the games play acceptably, and what their pictures cost.
+
+### 51.1 What was added to measure it
+
+- **`dsp_lockstep`** reports the visual error as well as the first parting:
+  - per frame, the share of pixels that differ;
+  - for sprites alike in tile and attributes on both machines, in frames whose pictures differ, the larger of their x
+    and y distances, which is where Project placed them;
+  - `LOCKSTEP_SHOTS=f1,f2,...` saves the image's picture, the replacement's and their differing pixels side by side as a
+    PNG in the probe cache's `shots/` folder, never in the repository;
+  - `LOCKSTEP_OTHER=<stem>` runs a second image in the replacement's place, and `LOCKSTEP_AS=<stem>` runs both machines as
+    another program of the same slot (`Machine::attach_replacement_as`); `LOCKSTEP_OTHER_CLOCK=<per mille>` runs that
+    second image's clock faster or slower, so that only its timing differs.
+- **`dsp_replay <chip> <trace>`**, plan §4.2's trace oracle for the whole DSP-1: every transaction of a game's trace
+  replayed on the replacement in order and compared with the image's recorded results, per command.
+- **`examples/dsp_pads/smk_race.txt`**: Super Mario Kart through its menus into a 50cc Mushroom Cup race as Mario, then
+  accelerating and steering.
+
+### 51.2 The seven titles (measured 2026-10-04)
+
+`dsp_lockstep <rom> 7200` with §37.6's pad scripts. "Placed within 1" is the share of sprites alike on both machines
+whose positions differ by at most one pixel. The pixel share counts any difference, so a mode 7 floor sampled one
+texel over counts whole, though it looks the same.
+
+| Game | Identical until | Pictures equal (§44.3, of 3,600) | Pixels differing, median and 95th percentile | Sprites placed within 1 (within 4) |
+|---|---|---|---|---|
+| Super Mario Kart | 96 | 3,893 of 7,200 (258) | 0.00%, 21.2% | 98.1% (99.1%) of 56,445 |
+| Super Mario Kart, `smk_race.txt`, 3,014 frames | 96 | 1,289 | 8.65%, 28.1% | 99.2% (99.8%) of 41,034 |
+| Michael Andretti's Indy Car Challenge | 3,310 | 3,310 of 7,193 (3,310) | 7.66%, 7.83% | 80.9% (99.96%) of 126,880 |
+| Suzuka 8 Hours | 1,474 | 1,499 of 7,195 (1,491) | 5.59%, 7.47% | 100.0% of 58,728 |
+| Super Bases Loaded 2 | 3,029 | 3,054 of 7,198 (3,030) | 56.3%, 98.7% | 93.8% (95.9%) of 136,414 |
+| Ballz 3D | 762 | 2,528 of 7,200 (1,007) | 0.46%, 77.4% | 69.7% (77.5%) of 43,565 |
+| Pilotwings | 1,799 | 1,802 of 7,200 (1,802) | 69.3%, 100% | 90.4% (92.8%) of 76,232 |
+| Lock On | 1,523 | 1,525 of 7,198 (1,525) | 37.3%, 99.9% | 98.0% (98.5%) of 638,697 |
+
+Each still parts in the frame after its first command that computes, as the sine's loss requires. **The trace oracle**
+(`dsp_replay`) agrees with the ports' grades: in Super Mario Kart's trace every Parameter, Raster, Triangle and
+Distance transaction is close, and 29,935 of 30,400 Projects; in Pilotwings', every Attitude, Subjective, Objective,
+Rotate and Gyrate transaction is close, while Parameter, Raster and Target miss where the limit is passed and Distance
+in 198 of 419, the DSP-1's own bug (§44.1).
+
+### 51.3 Playable or not, game by game
+
+The pictures named are in `~/.cache/emusen/probe/venusrt/dsp-hle/shots/`.
+
+- **Super Mario Kart: playable.** In the attract race (`smk-f2400.png`) and in a race driven by `smk_race.txt`
+  (`smk-race/`), the track, the karts on it, Lakitu, the map below and the race's course are as on the image. Sprites
+  sit within a pixel of the image's in 98-99% of cases and within four in 99.1-99.8%. The race keeps its course: at
+  every frame shown the karts stand where they stand on the image's map. What differs is the floor's texture sampling
+  and the odd sprite a pixel off, which no player would see.
+- **Suzuka 8 Hours, Michael Andretti's Indy Car Challenge, Super Bases Loaded 2: playable.** Their roads and field are
+  drawn as on the image (`suzuka-f3000.png`, `andretti-f6500.png`, `sbl2-f3500.png`). Andretti's own car sits 4%
+  larger and a few pixels off where Project's eye rounding (§49.4) matters, at the eye's height of 10.
+- **Ballz 3D: plays, and its attract fight diverges.** The arena floor is the image's. The fighters are built of their
+  balls correctly, but the fight takes another course after a few seconds (`ballz-f5000.png`), since Subjective's and
+  Project's small differences feed the game's own animation.
+- **Pilotwings: not acceptable as it stands.**
+  - Below the limit angle the views are the image's (`pilotwings-f2000.png`, `-f2400.png`).
+  - In level flight, past the limit, the ground is drawn in the wrong place. At frame 2,120 (`pilotwings-f2120.png`)
+    the image shows the island below the glider and the replacement shows sea; 190 of the game's 600 traced Parameters
+    are past the limit (§49.3).
+  - The demo flights diverge from about frame 2,400: at frame 3,500 the image's glider is at 529 feet and climbing, the
+    replacement's at 126 near the runway. This is not the DSP-1's Distance bug: with both machines run as the DSP-1B
+    (`LOCKSTEP_AS=dsp1b`, `pilotwings-as-dsp1b/`) the demo diverges alike, while the DSP-1B's image against the
+    DSP-1's stays within 3 feet for 53 seconds (`pilotwings-dsp1-vs-dsp1b/`). The demo replays its pad frame by frame,
+    so the flight model integrates every small difference. **The divergence is the values', not the timing's:** with
+    the image's own clock run 2% faster and 2% slower against itself (`LOCKSTEP_OTHER=dsp1 LOCKSTEP_OTHER_CLOCK=1020`
+    and `980`), so that only the chip's timing moves, every picture is equal for 5,010 frames and the states meet
+    again by frame 2,342. The flight model's commands (Attitude, Subjective, Objective, Gyrate, Rotate) are close to
+    the image's in every traced transaction but exact in 57-99%, and their differences of 1 or 2 accumulate. A flight
+    the player flies is therefore not the image's flight to the foot, though it looks and handles alike; a recorded
+    demo does not replay.
+- **Lock On: not acceptable as it stands.** Its view is always level, Azs 90°, past the limit. With no limit, Raster's
+  K = k/cos z saturates there, and the ground under the aircraft is drawn as streaks (`lockon-f2000.png`). The chip's
+  limit exists, in effect, to keep cos z away from zero.
+
+### 51.4 Against the plan, and what is put for decision
+
+- **P1**, at least eleven of the DSP-1B's seventeen command families bit-exact: retired, false. Seven codes are exact
+  (00h, 20h, 08h, 18h, 38h, 0Fh and 2Fh), and every command built on the sine is approximate, as §40.7 made certain.
+- **P6** stays retired (§44.3).
+- **The limit branch is the one defect a player sees** in the DSP-1's replacement: Pilotwings' level flight, Lock On
+  throughout. Fixing it needs one constant, the limit angle, which no document read gives, and the branch's behaviour
+  past it, which §49.1 began to characterise: Vva held at the limit's and Vof = Les·tan(z - limit). Measured since
+  (`dsp_oracle chains`, Les 256, z from 81.6° to 91.4°): past the limit Raster keeps the limit's horizon and
+  denominator on every line, while its scale follows the eye's height at the true z (An at line 0 falls with
+  Fz + Lfe·cos z, 1,115 to 1,002); the game scrolls the picture by Vof. (Cx, Cy), Project and Target there are still to
+  be measured. Taking the constant from the image is what R1 forbids (§48.2).
+  **The decision is the tester's:** admit the limit angle as one measured constant under a written amendment, as §40.6
+  admitted the sine's second widening; or leave the branch a named loss, with Lock On and Pilotwings' level flight
+  needing the player's image.
+- **Project's member** (§49.6): choose by exact share, or admit the coordinate-wise eye. Either would bring Michael
+  Andretti's Indy Car Challenge's car to the image's size.

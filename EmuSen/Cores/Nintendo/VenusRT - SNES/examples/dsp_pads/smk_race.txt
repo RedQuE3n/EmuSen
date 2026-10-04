@@ -1,0 +1,45 @@
+# Super Mario Kart: through the menus into a Mushroom Cup race as Mario at 50cc, then accelerating and steering.
+frames 300
+tap start 6
+frames 90
+tap up 6
+frames 30
+tap b 6
+frames 60
+tap b 6
+frames 60
+tap start 6
+frames 60
+tap start 6
+frames 90
+tap b 6
+frames 60
+tap b 6
+frames 90
+tap b 6
+frames 60
+tap b 6
+frames 60
+tap b 6
+frames 120
+tap b 6
+frames 60
+tap b 6
+frames 60
+tap b 6
+frames 300
+hold b
+frames 400
+tap right 20
+frames 100
+tap right 20
+frames 200
+tap left 10
+frames 200
+tap right 30
+frames 200
+tap right 30
+frames 200
+tap left 20
+frames 200
+tap right 30

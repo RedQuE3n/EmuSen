@@ -4,8 +4,16 @@
 //! master clock and the whole state with the chip's group left out; the report goes to stdout and to
 //! ~/.cache/emusen/probe/venusrt/dsp-hle/lockstep-<rom>.txt.
 //!
+//! LOCKSTEP_AS=<stem> runs both machines as that program instead of the cartridge's.
+//! LOCKSTEP_OTHER=<stem> puts another image in the replacement's place, so two programs can be run against each other;
+//! LOCKSTEP_OTHER_CLOCK=<per mille> runs its clock faster or slower, so that only its timing differs.
+//!
 //! The script takes dsp_trace's verbs (`frames`, `tap`, `hold`, `release`, `tapuntil BTN wram ADDR HEX [cap] [every]`,
 //! `tapuntil BTN chip N - [cap] [every]`), decided on the image's machine and given to both.
+//!
+//! The visual error: per frame, the share of pixels that differ, and for sprites alike in tile and attributes on both
+//! machines, how far apart they are placed (VenusRT_Native.md §51). LOCKSTEP_SHOTS=f1,f2,... saves at those frames a PNG
+//! of the image's picture, the replacement's and their differing pixels side by side, to the cache's shots/ folder.
 use std::fmt::Write as _;
 use std::hash::{Hash, Hasher};
 use venusrt::chips::dsporacle::{Place, Places};
@@ -46,6 +54,56 @@ struct Pair {
     met_again: Option<u64>,
     at_idle: bool,
     dsp4: bool,
+    /// Per frame, the share of pixels that differ; per sprite compared, the larger of its x and y distances.
+    pixel_shares: Vec<f64>,
+    sprite_errors: Vec<u32>,
+    sprites_unmatched: u64,
+    name: String,
+    shots: Vec<u64>,
+}
+
+/// The on-screen sprites of an OAM image by index: (x, y, tile and attributes), from the low and high tables.
+fn sprites(oam: &[u8]) -> Vec<Option<(i32, i32, u16)>> {
+    (0..128)
+        .map(|i| {
+            let (lo, hi) = (&oam[i * 4..i * 4 + 4], oam[512 + i / 4] >> ((i % 4) * 2));
+            let x = lo[0] as i32 - if hi & 1 != 0 { 256 } else { 0 };
+            let y = lo[1] as i32;
+            (y < 224 && x > -64 && x < 256).then_some((x, y, lo[2] as u16 | (lo[3] as u16) << 8))
+        })
+        .collect()
+}
+
+/// A PNG of RGBA rows, stored without compression.
+fn png(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
+    let crc_table: Vec<u32> = (0..256u32).map(|n| (0..8).fold(n, |c, _| if c & 1 != 0 { 0xEDB8_8320 ^ (c >> 1) } else { c >> 1 })).collect();
+    let crc = |data: &[u8]| !data.iter().fold(!0u32, |c, &b| crc_table[((c ^ b as u32) & 0xFF) as usize] ^ (c >> 8));
+    let mut raw = Vec::new();
+    for row in rgba.chunks(width as usize * 4) {
+        raw.push(0);
+        raw.extend_from_slice(row);
+    }
+    let mut z = vec![0x78, 0x01];
+    let blocks: Vec<&[u8]> = raw.chunks(65535).collect();
+    for (k, b) in blocks.iter().enumerate() {
+        z.push((k + 1 == blocks.len()) as u8);
+        z.extend((b.len() as u16).to_le_bytes());
+        z.extend((!(b.len() as u16)).to_le_bytes());
+        z.extend_from_slice(b);
+    }
+    let (a, b) = raw.iter().fold((1u32, 0u32), |(a, b), &x| ((a + x as u32) % 65521, (b + (a + x as u32) % 65521) % 65521));
+    z.extend(((b << 16) | a).to_be_bytes());
+    let mut out = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+    let mut chunk = |kind: &[u8], data: &[u8]| {
+        out.extend((data.len() as u32).to_be_bytes());
+        let body = [kind, data].concat();
+        out.extend_from_slice(&body);
+        out.extend(crc(&body).to_be_bytes());
+    };
+    chunk(b"IHDR", &[&width.to_be_bytes()[..], &height.to_be_bytes()[..], &[8, 6, 0, 0, 0]].concat());
+    chunk(b"IDAT", &z);
+    chunk(b"IEND", &[]);
+    out
 }
 
 impl Pair {
@@ -90,6 +148,36 @@ impl Pair {
         let (a, b) = (&self.lle, &self.hle);
         let picture = hash(a.sys.ppu.picture()) == hash(b.sys.ppu.picture());
         self.equal_pictures += picture as u64;
+        let (pa, pb) = (a.sys.ppu.picture(), b.sys.ppu.picture());
+        let differing = pa.chunks(4).zip(pb.chunks(4)).filter(|(x, y)| x != y).count();
+        self.pixel_shares.push(differing as f64 / (pa.len() / 4).max(1) as f64);
+        if !picture {
+            for (x, y) in sprites(&a.sys.ppu.oam).into_iter().zip(sprites(&b.sys.ppu.oam)) {
+                match (x, y) {
+                    (Some(x), Some(y)) if x.2 == y.2 => self.sprite_errors.push((x.0 - y.0).unsigned_abs().max((x.1 - y.1).unsigned_abs())),
+                    (None, None) => {}
+                    _ => self.sprites_unmatched += 1,
+                }
+            }
+        }
+        if self.shots.contains(&a.sys.timing.frame) {
+            let (fw, fh) = (a.sys.ppu.frame_width as usize, a.sys.ppu.frame_height as usize);
+            let mut wide = vec![0u8; fw * 3 * fh * 4];
+            for row in 0..fh {
+                for col in 0..fw {
+                    let i = (row * fw + col) * 4;
+                    let mark = if pa[i..i + 4] == pb[i..i + 4] { [0, 0, 0, 255] } else { [255, 255, 255, 255] };
+                    for (k, px) in [&pa[i..i + 4], &pb[i..i + 4], &mark[..]].into_iter().enumerate() {
+                        let o = (row * fw * 3 + k * fw + col) * 4;
+                        wide[o..o + 3].copy_from_slice(&px[..3]);
+                        wide[o + 3] = 255;
+                    }
+                }
+            }
+            let dir = std::path::PathBuf::from(std::env::var_os("HOME").unwrap()).join(".cache/emusen/probe/venusrt/dsp-hle/shots");
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join(format!("{}-f{}.png", self.name, a.sys.timing.frame)), png(fw as u32 * 3, fh as u32, &wide)).unwrap();
+        }
         let spaces = [
             ("picture", picture),
             ("WRAM", a.sys.wram == b.sys.wram),
@@ -192,18 +280,49 @@ fn main() {
     let mut lle = Machine::load_rom(&image).expect("an image");
     let mut hle = lle.clone();
     let (stem, _) = lle.sys.cart.nec_firmware().expect("a NEC DSP cartridge");
+    // LOCKSTEP_AS=<stem> runs both engines as another program of the same slot, the DSP-1B's in Pilotwings for one.
+    let stem: &str = &std::env::var("LOCKSTEP_AS").unwrap_or(stem.to_string());
     let fw = venusrt::chips::dsporacle::firmware(stem).unwrap_or_else(|| std::process::exit(1));
     assert!(lle.attach_dsp(&fw));
-    assert!(hle.attach_replacement(), "no replacement for {stem}");
+    // LOCKSTEP_OTHER=<stem> runs a second image in the replacement's place, the DSP-1 against the DSP-1B for one.
+    match std::env::var("LOCKSTEP_OTHER") {
+        Ok(other) => {
+            assert!(hle.attach_dsp(&venusrt::chips::dsporacle::firmware(&other).expect("the other image")));
+            // LOCKSTEP_OTHER_CLOCK=<per mille> runs the other image's clock that much faster: its timing alone moved.
+            if let Some(pm) = std::env::var("LOCKSTEP_OTHER_CLOCK").ok().and_then(|v| v.parse::<u64>().ok()) {
+                let d = hle.sys.cart.dsp.as_mut().and_then(|(d, _)| d.lle_mut()).unwrap();
+                d.ratio.0 = d.ratio.0 * pm / 1000;
+            }
+        }
+        Err(_) => assert!(hle.attach_replacement_as(venusrt::chips::dsphle::Program::for_stem(stem).expect("a program with a replacement")), "no replacement for {stem}"),
+    }
     lle.sys.cart.dsp.as_mut().and_then(|(d, _)| d.lle_mut()).unwrap().transfers = Some(Vec::new());
-    let mut p = Pair { lle, hle, places: Places::default(), working: 0, commands: [0; 256], frames: 0, first: None, equal_pictures: 0, met_again: None, at_idle: false, dsp4: stem == "dsp4" };
+    let name = std::path::Path::new(&a[1]).file_stem().unwrap().to_string_lossy().to_string();
+    let shots = std::env::var("LOCKSTEP_SHOTS").map(|v| v.split(',').filter_map(|f| f.trim().parse().ok()).collect()).unwrap_or_default();
+    let mut p = Pair {
+        lle,
+        hle,
+        places: Places::default(),
+        working: 0,
+        commands: [0; 256],
+        frames: 0,
+        first: None,
+        equal_pictures: 0,
+        met_again: None,
+        at_idle: false,
+        dsp4: stem == "dsp4",
+        pixel_shares: Vec::new(),
+        sprite_errors: Vec::new(),
+        sprites_unmatched: 0,
+        name: name.clone(),
+        shots,
+    };
     if let Some(path) = a.get(3) {
         script(&mut p, &std::fs::read_to_string(path).expect("the script"), frames);
     }
     while p.lle.sys.timing.frame < frames {
         p.frame();
     }
-    let name = std::path::Path::new(&a[1]).file_stem().unwrap().to_string_lossy().to_string();
     let mut out = format!(
         "{name} ({stem}): {} frames; first parting {}; pictures equal in {} of {} frames; {}\n",
         p.frames,
@@ -215,6 +334,34 @@ fn main() {
             (Some(_), Some(f)) => format!("states equal again at frame {f}"),
             (Some(_), None) => "states not equal again".to_string(),
         }
+    );
+    let mut shares = p.pixel_shares.clone();
+    shares.sort_by(f64::total_cmp);
+    let at = |v: &[f64], q: f64| v.get(((v.len() as f64 - 1.0) * q) as usize).copied().unwrap_or(0.0) * 100.0;
+    let _ = writeln!(
+        out,
+        "  pixels differing per frame: median {:.2}%, 95th percentile {:.2}%, largest {:.2}%; frames under 1% {}",
+        at(&shares, 0.5),
+        at(&shares, 0.95),
+        at(&shares, 1.0),
+        shares.iter().filter(|&&s| s < 0.01).count()
+    );
+    let mut e = p.sprite_errors.clone();
+    e.sort();
+    let within = |d: u32| e.iter().filter(|&&x| x <= d).count();
+    let _ = writeln!(
+        out,
+        "  sprites alike on both, in frames that differ: {}; placed alike {}, within 1 {}, 2 {}, 4 {}, 8 {}; median {}, 95th percentile {}, largest {}; unmatched {}",
+        e.len(),
+        within(0),
+        within(1),
+        within(2),
+        within(4),
+        within(8),
+        e.get(e.len() / 2).copied().unwrap_or(0),
+        e.get(e.len().saturating_sub(1) * 95 / 100).copied().unwrap_or(0),
+        e.last().copied().unwrap_or(0),
+        p.sprites_unmatched
     );
     // Where each S-CPU spends one more frame: a game held in a wait loop shows few distinct addresses.
     for (name, m) in [("image", &mut p.lle), ("replacement", &mut p.hle)] {

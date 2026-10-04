@@ -106,6 +106,8 @@ pub struct DspHle {
     pub(super) d4: super::dsp4::Dsp4,
     /// The DSP-1's three attitude matrices, m/2 times the rotation in Q15 (VenusRT_Native.md §44).
     pub(super) att: [[i16; 9]; 3],
+    /// The DSP-1's projection, Parameter's seven inputs, which Raster and Project read (VenusRT_Native.md §49).
+    pub(super) proj: [u16; 7],
     /// A phase's work and notice that depend on the inputs, by phase, set when the inputs are complete.
     pub(super) varying: Option<(u8, u16, u16)>,
     /// Edges made, and the last one's place (0 idle, 1 command, 2 other) and written word, for the oracle; not in the state.
@@ -140,6 +142,7 @@ impl DspHle {
             mail: Default::default(),
             d4: Default::default(),
             att: [[0; 9]; 3],
+            proj: [0; 7],
             varying: None,
             edges: 0,
             edge_place: 2,
@@ -201,6 +204,13 @@ impl DspHle {
     fn next_phase(&mut self, next: Next) {
         let (work, notice) = match self.varying {
             Some((phase, w, n)) if phase == self.phase => (w, n),
+            // A raster run: the first line, each later line, and the run's end (VenusRT_Native.md §49.5).
+            _ if self.command & 0xCF == 0x0A => match (next, self.stage) {
+                (Next::Offer(_), Stage::Giving { given: 0, .. }) if self.phase == 1 => (128, 116),
+                (Next::Offer(_), Stage::Giving { given: 0, .. }) => (0, 115),
+                (Next::Idle, _) => (0, 6),
+                _ => (0, NOTICE as u16),
+            },
             _ => dsp1_timing(self.command).get(self.phase as usize).copied().unwrap_or((0, NOTICE as u16)),
         };
         self.next = next;
@@ -316,9 +326,6 @@ impl DspHle {
             Port::Dr => {
                 let high = self.sr & (sr::DRC | sr::DRS) == sr::DRS;
                 self.dr = if high { (self.dr & 0x00FF) | (value as u16) << 8 } else { (self.dr & 0xFF00) | value as u16 };
-                if let Stage::Giving { ref mut overwritten, .. } = self.stage {
-                    *overwritten = true;
-                }
                 if self.byte_done() {
                     self.completed();
                 }
@@ -371,6 +378,9 @@ impl DspHle {
                 }
             }
             Stage::Giving { total, given, run, overwritten } => {
+                // A raster run ends when DR no longer holds a line's last result: the S-CPU wrote another word over it
+                // (VenusRT_Native.md §49.5).
+                let overwritten = overwritten || run && given + 1 == total && self.dr != self.outputs[given as usize];
                 let given = given + 1;
                 if given < total {
                     self.stage = Stage::Giving { total, given, run, overwritten };
@@ -378,6 +388,9 @@ impl DspHle {
                     self.next_phase(Next::Offer(v));
                 } else if run && !overwritten {
                     self.stage = Stage::Giving { total, given: 0, run, overwritten: false };
+                    self.inputs[0] = self.inputs[0].wrapping_add(1);
+                    let line = Projection::new(&self.proj).raster(self.inputs[0] as i16 as i64);
+                    self.outputs[..4].copy_from_slice(&line.map(|v| v as u16));
                     self.next_phase(Next::Offer(self.outputs[0]));
                 } else {
                     self.next_phase(Next::Idle);
@@ -463,6 +476,26 @@ impl DspHle {
                 let notice = if k >= 16 { 122 - 4 * (k / 2) } else if k >= 4 { 83 - 4 * (k / 2) } else { 79 };
                 self.varying = Some((3, 0, notice - (self.program == Program::Dsp1) as u16));
             }
+            // Parameter, Raster and Project: approximate (VenusRT_Native.md §49), §49.5's member; no limit branch (§49.3).
+            0x02 => {
+                self.proj.copy_from_slice(&self.inputs[..7]);
+                let out = Projection::new(&self.proj).parameter();
+                self.outputs[..4].copy_from_slice(&out.map(|v| v as u16));
+            }
+            0x0A | 0x1A | 0x2A | 0x3A => {
+                let line = Projection::new(&self.proj).raster(i[0]);
+                self.outputs[..4].copy_from_slice(&line.map(|v| v as u16));
+            }
+            0x06 => {
+                let out = Projection::new(&self.proj).project([i[0], i[1], i[2]]);
+                self.outputs[..3].copy_from_slice(&out.map(|v| v as u16));
+            }
+            0x0E | 0x1E | 0x2E | 0x3E => {
+                let out = Projection::new(&self.proj).target(i[0], i[1]);
+                self.outputs[..2].copy_from_slice(&out.map(|v| v as u16));
+            }
+            // Gyrate: approximate (VenusRT_Native.md §50), §50.3's member.
+            0x14 => self.outputs[..3].copy_from_slice(&gyrate(&i).map(|v| v as u16)),
             // Attitude: matrix n set to m/2 times the rotations about X by I4, Y by I3 and Z by I2, in that product (§44).
             0x01 | 0x11 | 0x21 => {
                 let n = (self.command >> 4) as usize;
@@ -535,6 +568,9 @@ impl DspHle {
             o.push(p);
             o.extend(w.to_le_bytes());
             o.extend(n.to_le_bytes());
+            for w in self.proj {
+                o.extend(w.to_le_bytes());
+            }
         }
         o
     }
@@ -590,6 +626,9 @@ impl DspHle {
             let at = at + 54;
             let (w, n) = (u16::from_le_bytes([d[at + 1], d[at + 2]]), u16::from_le_bytes([d[at + 3], d[at + 4]]));
             self.varying = (d[at] != 0xFF).then_some((d[at], w, n));
+            for (k, p) in self.proj.iter_mut().enumerate() {
+                *p = u16::from_le_bytes([d[at + 5 + 2 * k], d[at + 6 + 2 * k]]);
+            }
         }
     }
 }
@@ -615,6 +654,140 @@ fn inverse(a: i16, b: i16) -> (i16, i16, u16, bool) {
         -((1i32 << 29) / -m)
     };
     (r as i16, (1 + s as i32 - b as i32) as i16, s, m == 0x4000 || m == -0x8000)
+}
+
+/// The DSP-1's projection from Parameter's inputs, by VenusRT_Native.md §49.5's member of §49.2's family: the
+/// Inverse routine's reciprocal, quotients rounded half up, the eye's height whole, its horizontal offset scaled once.
+struct Projection {
+    f: [i64; 3],
+    lfe: i64,
+    les: i64,
+    sa: i64,
+    ca: i64,
+    sz: i64,
+    cz: i64,
+    /// Fz + Lfe·cos z, floored.
+    ez: i64,
+}
+
+impl Projection {
+    fn new(p: &[u16; 7]) -> Projection {
+        let w = |k: usize| p[k] as i16 as i64;
+        let (a, z) = (p[5], p[6]);
+        let (sa, ca, sz, cz) = (sine(a), sine(a.wrapping_add(0x4000)), sine(z), sine(z.wrapping_add(0x4000)));
+        Projection { f: [w(0), w(1), w(2)], lfe: w(3), les: w(4), sa, ca, sz, cz, ez: w(2) + ((w(3) * cz) >> 15) }
+    }
+
+    /// num/den through the Inverse routine, half up, saturated; a zero denominator saturates by the numerator's sign.
+    fn quotient(num: i128, den: i128) -> i64 {
+        Self::divide(num, den, true, (-0x8000, 0x7FFF))
+    }
+
+    /// num/den through the Inverse routine, rounded half up or floored, held within `range`.
+    fn divide(num: i128, den: i128, half: bool, range: (i64, i64)) -> i64 {
+        let (mut d, mut extra) = (den, 0u32);
+        while d > i64::MAX as i128 / 4 || d < i64::MIN as i128 / 4 {
+            d >>= 1;
+            extra += 1;
+        }
+        let Some((r, shift)) = reciprocal(d as i64) else { return if num >= 0 { range.1 } else { range.0 } };
+        let sh = shift + extra;
+        let p = num * r as i128 + if half { 1i128 << (sh - 1) } else { 0 };
+        (p >> sh).clamp(range.0 as i128, range.1 as i128) as i64
+    }
+
+    /// Vof, Vva, Cx, Cy: the horizon's line and where the view's axis meets the ground; Vof 0, with no limit (§49.3).
+    fn parameter(&self) -> [i64; 4] {
+        let (sa, ca, sz, cz) = (self.sa, self.ca, self.sz, self.cz);
+        let ex = self.f[0] - ((self.lfe * sz * sa) >> 30);
+        let ey = self.f[1] + ((self.lfe * sz * ca) >> 30);
+        let t = Self::quotient(self.ez as i128 * sz as i128, cz as i128);
+        let vva = Self::quotient(-(self.les * cz) as i128, sz as i128);
+        [0, vva, (ex + ((t * sa) >> 15)).clamp(-0x8000, 0x7FFF), (ey - ((t * ca) >> 15)).clamp(-0x8000, 0x7FFF)]
+    }
+
+    /// The mode 7 matrix for line v: the scale 256·Ez over the whole denominator Les·cos z + v·sin z, and over cos z.
+    fn raster(&self, v: i64) -> [i64; 4] {
+        let n = ((self.les * self.cz) >> 15) + ((v * self.sz) >> 15);
+        let k = Self::quotient(256 * self.ez as i128, n as i128);
+        let kk = Self::quotient((k as i128) << 15, self.cz as i128);
+        [(k * self.ca) >> 15, (-kk * self.sa) >> 15, (k * self.sa) >> 15, (kk * self.ca) >> 15]
+    }
+
+    /// Target (VenusRT_Native.md §50.3): (Cx, Cy) plus Raster's line-V matrix, at full width, applied to (H, V)/256,
+    /// with H along (cos a, -sin a) as the chip turns it.
+    fn target(&self, h: i64, v: i64) -> [i64; 2] {
+        let [_, _, cx, cy] = self.parameter();
+        let wide = (i64::MIN / 4, i64::MAX / 4);
+        let n = ((self.les * self.cz) >> 15) + ((v * self.sz) >> 15);
+        let k = Self::divide(256 * self.ez as i128, n as i128, true, wide) as i128;
+        let kk = Self::divide(k << 15, self.cz as i128, true, wide) as i128;
+        let (h, v, sa, ca) = (h as i128, v as i128, self.sa as i128, self.ca as i128);
+        let dx = (((h * k * ca) >> 15) - ((v * kk * sa) >> 15)) >> 8;
+        let dy = (((v * kk * ca) >> 15) - ((h * k * sa) >> 15)) >> 8;
+        [(cx as i128 + dx).clamp(-0x8000, 0x7FFF) as i64, (cy as i128 + dy).clamp(-0x8000, 0x7FFF) as i64]
+    }
+
+    /// H, V and M for a point: its offset from the eye along the screen's right, down and forward axes.
+    fn project(&self, p: [i64; 3]) -> [i64; 3] {
+        let (sa, ca, sz, cz) = (self.sa, self.ca, self.sz, self.cz);
+        let r = [ca << 15, sa << 15, 0];
+        let u = [-sa * cz, ca * cz, -sz << 15];
+        let f = [sa * sz, -ca * sz, -cz << 15];
+        // The eye in Q15: its horizontal position with its fraction, its height whole.
+        let e = [(self.f[0] << 15) - ((self.lfe * f[0]) >> 15), (self.f[1] << 15) - ((self.lfe * f[1]) >> 15), self.ez << 15];
+        let d = [(p[0] << 15) - e[0], (p[1] << 15) - e[1], (p[2] << 15) - e[2]];
+        let dot = |row: [i64; 3]| (0..3).map(|k| d[k] as i128 * row[k] as i128).sum::<i128>() >> 30;
+        let (x, y, w) = (dot(r), dot(u), dot(f));
+        let les = self.les as i128;
+        [Self::quotient(les * x, w), Self::quotient(les * y, w), Self::quotient((256 * les) << 15, w)]
+    }
+}
+
+/// Gyrate (VenusRT_Native.md §50.1, §50.3): the angles (Az, Ax, Ay) turned by (U, F, L) about the body's axes, each
+/// increment saturated and added with wrapping; 1/cos Ax through the Inverse routine, floored.
+fn gyrate(i: &[i64; WORDS]) -> [i64; 3] {
+    let (az, ax, ay, u, f, l) = (i[0], i[1], i[2], i[3], i[4], i[5]);
+    let (sx, cx) = (sine(ax as u16), sine((ax as u16).wrapping_add(0x4000)));
+    let (sy, cy) = (sine(ay as u16), sine((ay as u16).wrapping_add(0x4000)));
+    let sat = |v: i64| v.clamp(-0x8000, 0x7FFF);
+    let daz = Projection::divide((u * cy - f * sy) as i128, cx as i128, false, (-0x8000, 0x7FFF));
+    let dax = sat((u * sy + f * cy) >> 15);
+    let tan = Projection::divide((sx as i128) << 15, cx as i128, false, (i64::MIN / 4, i64::MAX / 4));
+    let day = sat(l - ((((u * cy + f * sy) >> 15) as i128 * tan as i128) >> 15) as i64);
+    let wrap = |a: i64, d: i64| (a + d) as u16 as i16 as i64;
+    [wrap(az, daz), wrap(ax, dax), wrap(ay, day)]
+}
+
+/// The Inverse routine's reciprocal at any width (§44.2, VenusRT_Native.md §49.2): w normalised to a mantissa in
+/// [4000h, 8000h) or [-8000h, -4000h), and 2^29 over it, floored; 1/w is about r / 2^shift. None for 0.
+pub fn reciprocal(w: i64) -> Option<(i64, u32)> {
+    if w == 0 {
+        return None;
+    }
+    let (mut m, mut s) = (w, 0i32);
+    let r = if m > 0 {
+        while m >= 0x8000 {
+            m >>= 1;
+            s -= 1;
+        }
+        while m < 0x4000 {
+            m <<= 1;
+            s += 1;
+        }
+        ((1i64 << 29) / m).min(0x7FFF)
+    } else {
+        while m < -0x8000 {
+            m >>= 1;
+            s -= 1;
+        }
+        while m >= -0x4000 {
+            m *= 2;
+            s += 1;
+        }
+        -((1i64 << 29) / -m)
+    };
+    Some((r, (29 - s) as u32))
 }
 
 /// Attitude's matrix: m/2 times Rx(I4)·Ry(I3)·Rz(I2), Q15, with the replacement's sine (§44).
@@ -692,6 +865,12 @@ fn dsp1_timing(command: u8) -> &'static [(u16, u16)] {
         0x0B | 0x1B | 0x2B => &[(0, 2), (17, 2), (0, 2), (0, 5), (0, 3)],
         0x10 | 0x30 => &[(0, 2), (15, 2), (0, 40), (0, 2), (0, 3)],
         0x28 => &[(0, 2), (17, 2), (0, 2), (0, 66), (0, 3)],
+        // The medians of Parameter's and Project's phases that vary, after a Parameter (VenusRT_Native.md §49.5).
+        0x02 => &[(0, 2), (13, 2), (0, 2), (0, 2), (0, 2), (0, 2), (0, 2), (527, 485), (0, 2), (10, 2), (0, 2), (0, 3)],
+        0x06 => &[(0, 2), (14, 2), (0, 2), (0, 362), (0, 2), (0, 2), (0, 3)],
+        // Target's and Gyrate's medians (VenusRT_Native.md §50.3).
+        0x0E | 0x1E | 0x2E | 0x3E => &[(0, 2), (13, 2), (0, 116), (0, 2), (0, 3)],
+        0x14 => &[(0, 2), (16, 2), (0, 2), (0, 2), (0, 2), (0, 2), (237, 3), (0, 2), (0, 2), (0, 3)],
         _ => &[],
     }
 }
@@ -715,7 +894,7 @@ fn dsp1_shape(command: u8) -> Option<(u8, u16, bool)> {
         0x14 => (6, 3, false),
         0x02 => (7, 4, false),
         0x06 => (3, 3, false),
-        0x0E => (2, 2, false),
+        0x0E | 0x1E | 0x2E | 0x3E => (2, 2, false),
         0x0A | 0x1A | 0x2A | 0x3A => (1, 4, true),
         0x01 | 0x11 | 0x21 => (4, 0, false),
         0x03 | 0x13 | 0x23 | 0x0D | 0x1D | 0x2D => (3, 3, false),
@@ -800,24 +979,35 @@ mod tests {
         assert_eq!(d.ram[0x10], 0);
     }
 
-    // A raster run repeats its line until the S-CPU writes over a result, then the chip is idle.
+    // A raster run gives line after line until the S-CPU writes another word over a line's last result, then the chip
+    // is idle (VenusRT_Native.md §49.5).
     #[test]
     fn a_raster_run_ends_on_a_write() {
         let mut d = DspHle::new(Program::Dsp1b);
         tick(&mut d, 10);
+        put(&mut d, 0x02);
+        for w in [0, 0, 100, 64, 256, 0, 0x3400] {
+            tick(&mut d, 20);
+            put(&mut d, w);
+        }
+        let mut get = |d: &mut DspHle| {
+            tick(d, 600);
+            assert_eq!(d.sr & sr::RQM, sr::RQM);
+            d.host_read(Port::Dr, true) as u16 | (d.host_read(Port::Dr, true) as u16) << 8
+        };
+        (0..4).for_each(|_| _ = get(&mut d));
+        tick(&mut d, 10);
         put(&mut d, 0x0A);
         tick(&mut d, 10);
-        put(&mut d, 0x0040);
-        for _ in 0..8 {
-            tick(&mut d, 10);
-            assert_eq!(d.sr & sr::RQM, sr::RQM);
-            d.host_read(Port::Dr, true);
-            d.host_read(Port::Dr, true);
-        }
-        for _ in 0..4 {
-            tick(&mut d, 10);
+        put(&mut d, 0x0000);
+        let lines: Vec<u16> = (0..16).map(|_| get(&mut d)).collect();
+        assert!(lines[0] > lines[12] && lines[12] > 0, "the scale falls line by line: {lines:04X?}");
+        for _ in 0..3 {
+            tick(&mut d, 200);
             put(&mut d, 0);
         }
+        tick(&mut d, 200);
+        put(&mut d, 0x8000);
         tick(&mut d, 10);
         assert_eq!((d.host_read(Port::Sr, false), d.dr), (0x84, 0x80));
     }

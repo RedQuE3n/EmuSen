@@ -413,6 +413,26 @@ fn main() {
                 println!("{} | {} | {end} | {}", shape_runs(&t.shape()), t.outputs().iter().map(|v| format!("{v:02X}")).collect::<Vec<_>>().join(" "), h.unwrap_or_default());
             }
         }
+        Some("chains") => {
+            // One chain a line on stdin, as `ask` takes it, each from the same idle chip; per line each transaction's
+            // outputs and latencies, `/` between transactions.
+            use std::io::BufRead;
+            let chip = idle(&a[2], 0, &mut host());
+            for line in std::io::stdin().lock().lines() {
+                let line = line.unwrap();
+                let words: Vec<&str> = line.split_whitespace().collect();
+                let mut c = chip.clone();
+                let mut out = Vec::new();
+                for part in words.split(|w| *w == "/") {
+                    let set: Vec<u16> = part[1..].iter().map(|v| u16::from_str_radix(v, 16).unwrap()).collect();
+                    let t = transact(&mut c, &mut host(), u8::from_str_radix(part[0], 16).unwrap(), &set);
+                    let o: Vec<String> = t.outputs().iter().map(|v| format!("{v:04X}")).collect();
+                    let l: Vec<String> = t.latencies().iter().map(|v| v.to_string()).collect();
+                    out.push(format!("{} : {}", o.join(" "), l.join(" ")));
+                }
+                println!("{}", out.join(" / "));
+            }
+        }
         Some("mailbatch") => {
             // One ST010 case a line on stdin, `word=value` pairs in hex, each from the same idle chip; per line the cycles
             // and every word that changed.

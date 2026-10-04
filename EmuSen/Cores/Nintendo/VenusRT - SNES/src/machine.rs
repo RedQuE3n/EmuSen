@@ -74,6 +74,14 @@ impl Machine {
     /// Fits VenusRT's open replacement for the program the cartridge names, where one exists (VenusRT_DspHle.md §7.1).
     pub fn attach_replacement(&mut self) -> bool {
         let Some(program) = self.sys.cart.nec_firmware().and_then(|(stem, _)| crate::chips::dsphle::Program::for_stem(stem)) else { return false };
+        self.attach_replacement_as(program)
+    }
+
+    /// The replacement for `program` in the cartridge's DSP slot, whichever chip the cartridge names; for the oracle.
+    pub fn attach_replacement_as(&mut self, program: crate::chips::dsphle::Program) -> bool {
+        if self.sys.cart.nec_firmware().is_none() {
+            return false;
+        }
         let dsp = crate::chips::dspengine::DspEngine::replacement(program);
         let map = self.sys.cart.dsp_map(dsp.st());
         self.sys.cart.dsp = Some((dsp, map));
@@ -525,8 +533,9 @@ impl Machine {
             if saved != dsp.tag() {
                 return Err(StateError::DspEngine { saved, running: dsp.tag() });
             }
-            // Before 21 the replacement kept no DSP-2, ST010 or attitude state (VenusRT_Native.md §44.2, §48.1).
-            if saved == 1 && version < 21 {
+            // Before 21 the replacement kept no DSP-2, ST010 or attitude state, and before 22 no DSP-1 projection
+            // (VenusRT_Native.md §44.2, §48.1, §49.5).
+            if saved == 1 && (version < 21 || version < 22 && dsp.dsp1_replacement()) {
                 return Err(StateError::Version(version));
             }
             let mut packed = dsp.pack();

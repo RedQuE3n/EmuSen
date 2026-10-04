@@ -80,18 +80,23 @@ namespace EmuSen.Common
 
             double period = reading!.PeriodTicks;
             long lead = Lead(period);
-            long target = _origin + due.Ticks * Stopwatch.Frequency / TimeSpan.TicksPerSecond + lead + (long)Math.Round(Decision.RefreshesPerFrame * period);
+            long target = _origin + ToStopwatch(due) + lead + (long)Math.Round(Decision.RefreshesPerFrame * period);
             long grid = reading.NearestVblank(target);
             _held = _upcoming;
             _upcoming = Decision.RefreshesPerFrame > 1 ? grid - (long)Math.Round(period) : 0;
-            return TimeSpan.FromTicks((grid - lead - _origin) * TimeSpan.TicksPerSecond / Stopwatch.Frequency);
+            return FromStopwatch(grid - lead - _origin);
         }
+
+        // Through 128 bits: a 64-bit product of Stopwatch ticks and TimeSpan ticks overflows 922 s into a session on Linux - see §4.87.13.
+        public static long ToStopwatch(TimeSpan t) => (long)((Int128)t.Ticks * Stopwatch.Frequency / TimeSpan.TicksPerSecond);
+
+        public static TimeSpan FromStopwatch(long ticks) => TimeSpan.FromTicks((long)((Int128)ticks * TimeSpan.TicksPerSecond / Stopwatch.Frequency));
 
         private long _held, _upcoming;
 
         // When a frame spans several refreshes, the earliest its picture may be handed over: the refresh before the one it is for - see §4.87.6.
         public TimeSpan? HandOverNotBefore => Decision.Locked && _held != 0
-            ? TimeSpan.FromTicks((_held - _origin) * TimeSpan.TicksPerSecond / Stopwatch.Frequency)
+            ? FromStopwatch(_held - _origin)
             : null;
 
         // From the start of a frame to its picture being handed over, so the next can start that long before its vblank.

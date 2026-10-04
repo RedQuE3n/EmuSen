@@ -7333,6 +7333,7 @@ and was moved to straddle the tolerance before the round.
   deadline than a content-paced one, so a busy machine costs the lock more (§4.87.1, §4.87.6).
 - **The audio queue sits at a fifth of its target in every run, locked or not** (§4.87.8). Not explained. *On the handheld's own device it sits near its target (§4.87.10), so it is the desktop's; still not explained there.*
 - **Rewind while held** takes the scheduler's deadline like any frame and was not measured.
+- **Sessions longer than 922 s** were never measured, locked; the lock ran unthrottled past that instant until §4.87.13.
 - **macOS and Windows** take the uncounted path. It is tested on synthetic ticks and has not run on either.
 
 #### 4.87.10 The handheld, measured: the render timer was the cause (2026-10-01)
@@ -7484,6 +7485,95 @@ averaged 222 to 232 ms, Super Mario 64's 158 ms.
 
 **Not covered.** Whether gamescope presents on its grid or follows the draws was not under this build's control and
 changed within runs; what decides it is not known. The desktop has not run the timer hold in a real window.
+
+#### 4.87.13 A locked game ran unthrottled from 922 s into a session (2026-10-04)
+
+**The report.** On the handheld, playing Super Mario 64 on both N64 engines, the game "will randomly speed up for a few
+seconds during gameplay … there's no pause, it just randomly behaves like the clock runs off the rails and then will
+return to normal." Two engines that share no code share the frontend's loop and `FrameScheduler`, so the cause was
+looked for there first.
+
+**Four hypotheses, and what each predicts, written before any was tested.**
+
+- *H1, a wrong lock.* The lock taken on a mis-measured refresh or `k`, or a change of mode releasing frames early to
+  align the phase. Predicted bound: no more than the 1% tolerance sustained, since every locked deadline is `k` periods
+  of the reading that was locked to, and taking the lock moves the phase by at most half a refresh, once.
+- *H2, a stall repaid.* A late frame's debt run back to back. Predicted bound: §4.28's cap, three frame intervals, so
+  at most a burst of four frame starts, never seconds.
+- *H3, the audio pacing the emulation.* Predicted: impossible as built. `AudioPlayer.Submit` never waits, and
+  `DynamicRateControl` changes the resampling ratio and nothing else; the queue's level moves the pitch of the sound by
+  at most half a percent and cannot make the emulation thread start a frame.
+- *H4, a clock that wraps.* Read from the code before measuring: `Next` converted the loop's deadline to Stopwatch ticks
+  as `due.Ticks * Stopwatch.Frequency / TimeSpan.TicksPerSecond` in 64 bits. With the nanosecond Stopwatch of Linux the
+  product passes `long.MaxValue` when the deadline passes 2^63 / 10^16 s, which is **922.34 s**. Predicted: from then on
+  every locked deadline lands 2^64 / 10^16 = 1844.67 s in the past; §4.28's rule moves it to three frames behind the
+  present; the next deadline, computed from that, is in the past again; and the loop runs with no wait at all, as fast as
+  the machine runs the core, for as long as the decision stays locked. The conversion back and `HandOverNotBefore`
+  overflow at the same instant. Content-paced frames never reach this arithmetic and are untouched. The instant scales
+  with the reciprocal of `Stopwatch.Frequency`; at the customary 10 MHz of Windows it is 25.6 h.
+
+**The recorded traces cannot show H4, and show none of the others.** All 67 traces of §4.87, handheld and desktop,
+were mined for frame starts in sliding windows of 0.25 to 3 s. Past each run's first two seconds, no second holds more
+than 62 starts on the handheld or 63 on the desktop, against 60 or 61 at the content's rate: a late frame's debt, at
+most a burst of five starts after the desktop's loading stalls of 150 to 390 ms, and on the handheld at most two. The
+62 on the handheld is §4.87.11's drifting lock (`deck-f5-*`) and the NES's boot. None of this is a speed-up of seconds.
+And every trace is shorter than 922 s: the longest is 400 s, on the desktop (§4.87.8), and 320 s on the handheld
+(§4.87.12). No trace has been recorded under the conditions of the report.
+
+**The model.** `PacingLoopModel` (WiseMan) runs Mistress's loop as written, `Next`, the frame's cost, the hold, the
+hand-over, `Completed`, and then the spin or §4.28's `Settle`, on a virtual clock that may start anywhere in a session,
+which a real-time bench reaches only by waiting a quarter of an hour. The display is either a fixed 119.90 Hz lattice
+or a `DisplayClock` fed with modelled presents, each landing on the panel's next vblank ("grid") or 0.2 to 0.5 ms after
+the hand-over ("follow"), as §4.87.12 saw gamescope do both. Frames cost 12 and 1.5 ms alternately, the 95th and 5th
+percentiles of Super Mario 64's work in the handheld's trace. Frames started in each second, 905 to 955 s:
+
+| Display | Before the fix | After |
+|---|---|---|
+| fixed lattice, locked throughout | 60 to 921 s; 119 in 922; 148 or 149 in every second after (2.47 times the content) | 59 to 61 |
+| presents alternating, 8 s on the grid, 8 s following | 60 to 923 s; then 62 to 72 in eight of the 31 seconds after | 59 to 61 |
+
+**H4 is the cause; the instant is as predicted.** In the second case the episodes end because running unthrottled
+spoils the very present lattice the lock was taken from, the reading turns variable, and content pacing, which the
+overflow never touched, takes the game back to its rate. That is the report's shape: whether gamescope presents on its
+grid is not under the build's control and changes within a run (§4.87.12), so past 922 s each stretch on the grid is a
+speed-up and each stretch following the draws is normal. The 922 s are counted from the emulation thread's start, which
+is the game's load; the Stopwatch runs through pauses and the library. The traces were all shorter than that, which is
+why §4.87.12 saw nothing. It is not the N64's: any core locked past 922 s runs the same way, and the N64 is presumably
+only what was played longest. Super Mario 64 runs at 148 frames a second in the model; on the device the figure is
+whatever the core manages unthrottled.
+
+**H1, H2 and H3 are ruled out as the cause.** H3 by construction, above. H2 by the model: stalls of 60, 250 and 2000 ms
+at 1010 s are each followed by at most four starts back to back, the debt of three plus the frame that found it, and no
+second holds more than three frames beyond the rate. H1 by the model: from windows that mix the two kinds of present
+the clock measures refreshes that are not the panel's (149.9 Hz, and 179.8 Hz locked at three refreshes a frame), but
+each is locked to only within the tolerance and the mean rate stays inside it; taking the lock puts one extra frame in
+the first second, the half-refresh alignment.
+
+**The fix.** Both conversions go through 128 bits (`FrameScheduler.ToStopwatch`, `FromStopwatch`), exact for any
+session length. The cost is two 128-bit multiplications and divisions a frame.
+
+**The rule, stated, decided 2026-10-04.** Emulation runs faster than the content's own rate only (a) at a speed above
+100%, which is explicit fast-forward; (b) by the lock's `R / k`, within the 1% tolerance (§4.87.5); (c) by repaying a
+late frame, at most three frame intervals (§4.28); and (d) by the alignment when the lock is taken, at most half a
+refresh, once. The debt of (c) is kept rather than dropped in RetroArch's manner, because it was not the cause, the
+model bounds its burst at four starts and about 50 ms of game time, and dropping it would return Ocarina of Time to
+96.8% of full speed (§4.28). Each of the four bounds is a case of `PacingLoopModelTests`.
+
+**Tests.** `PacingLoopModelTests`: a locked session from 0, 900, 925, 1900 s and three hours in, every interval after
+the alignment two refreshes; the 20 s straddling the overflow; the deadline and the hold on the lattice a day into a
+session; the three stalls; and the alternating presents. On the unfixed scheduler 9 of the 11 failed, every case that
+runs past 922 s, and the two that end before it passed.
+
+**Owed on the device.** A trace that runs past the instant, so the cause is seen and not only modelled. With the
+scripts of §4.87.10, Super Mario 64 on MarsRT, Sync to display on, 1200 s each (`EMUSEN_PRESENT_TRACE_SECONDS=1200`;
+the trace holds a million frames):
+
+1. *The build of §4.87.12, unfixed.* Predicted: no second above 61 before 922 s after the load; after it, each stretch
+   the decision is `display-locked` runs well above 60 frames a second, and its `[fps]` lines say so; content-paced
+   stretches at 60.
+2. *This build.* Predicted: every second within 59 to 61 throughout, apart from at most three extra frames after a
+   stall.
+3. *This build, Super Mario Bros. 3 on MoonRT, 1200 s,* the second core, with the same prediction.
 
 ### 4.88 Quitting with Preferences open (2026-10-04)
 

@@ -4199,3 +4199,53 @@ words are struck through and followed by the restated conclusion. No entry's imp
 
 The tool for D-5's comparison, `anchorshot` (VenusRT through `ICore` with a pad script) with `cmp.py` (Mesen over a
 window of frames), is in the corpus folder beside `venusrtbench`, outside the repository.
+
+### 41.14 Blocker 1: HDMA's counter and its run's timing (D-39, D-40), measured 2026-10-04
+
+- **D-39, from the documents.** anomie's register document says a line decrements NTRLx as a whole byte, so $00
+  becomes 127 lines with repeat and $80 127 lines without. VenusRT had kept bit 7. With the whole byte decremented,
+  `hdma_midframe/demo` and `hdma-double-buffered-parallax` equal Mesen's picture in every pixel. The corpus run with
+  D-39 alone changed no verdict.
+- **D-40, from the referee.** `rtl/CPU.vhd`'s HDMA machine was read in a logged step, with `PPU.vhd`'s H-blank line.
+  It was then measured against the two console tables in the corpus: `test_hdmasync`, 1,022 latched H positions
+  recorded from a console, and `test_hdmatiming`, eight rows.
+
+  | Change | `test_hdmasync`, latches off the console's | `test_hdmatiming` rows differing |
+  |---|---|---|
+  | before (18 clocks before the channels, per-channel interleave, run at the first cycle start past dot 278) | 1,020 of 1,022 (511 pairs at +1 to +3 dots) | 2 |
+  | run start moved to clock 1,100, nothing else | 1,020 | 2 |
+  | the ending step 8 clocks | **0** | 2 |
+  | and transfers before counters, each byte at its step's end | 0 | 1 |
+  | and the referee's start, sampling point swept 1,084-1,124 in twos | 0 at 1,098 and 1,100 only; elsewhere 42 to 1,020 | 1 at those two |
+
+  The stage-count and sampling-point sweep is recorded in the corpus folder's `fit.txt`. It was a check of where the
+  referee's structure agrees with the console, not a search for a structure. The single-stage and immediate variants
+  also had sampling points that kept both tables, at 1,106 and 1,112, so the tables alone do not choose the referee's
+  structure. `hdmaen_latch_test` does: with the referee's two stages at 1,100, both its ROMs equal Mesen's picture in
+  every pixel. The single stage at 1,106 left 3,584 and 5,888 pixels differing, the immediate run at 1,112 6,144 and
+  12,032.
+- **The corpus, with the tester's images** (against §41.3's run):
+  - **111 of Mesen's 117 self-grading passes** (108 before). Newly passing: `test_hdmasync`, `blobs/test_hdma`,
+    `snestest_082506/test_hdma`. Every C# Venus pass still passes, and no verdict got worse.
+  - **Pictures** equal to Mesen's on the two `hdmaen_latch_test` ROMs (each in two builds), `hdma_midframe/demo` and
+    `hdma-double-buffered-parallax`. Several other pictures are closer to Mesen's: Sour's two timing tests, VitorVilela7's
+    speed test, `dma-ends-hdma-start-1-ch`.
+  - **One picture is further from Mesen's:** `hvdma`, 252 pixels against 36. Line 1, which Mesen shows in forced
+    blank, is drawn in VenusRT. Its eight channels' burst now ends before the line begins. The ROM's console
+    photograph cannot resolve one line, so this is recorded and not judged.
+- **Skip versus draw**: the nine bench games, 600 frames each, the same.
+- **The cost**, `frame_cost` best of three over 1,200 frames, before and after in turn under the timing lock at load
+  1.3:
+
+  | Game | Before | After |
+  |---|---|---|
+  | Super Mario World | 2.13-2.18 | 2.10 |
+  | A Link to the Past | 1.91 | 1.88 |
+  | Super Mario RPG | 2.80 | 2.78 |
+  | Yoshi's Island | 1.75 | 1.82-1.83 |
+
+  The 4% on Yoshi's Island is the slow path the bus now takes from clock 1,097 of every visible line, so that the
+  run's two stages see each cycle.
+- **The state** is version 20. The run's stage and its channels travel in it. Versions 17 to 19 still load, with no
+  run pending.
+- **Left open**: `test_hdmatiming`'s test 2, one dot (D-40). `blobs/test_hdmatiming` therefore still fails.

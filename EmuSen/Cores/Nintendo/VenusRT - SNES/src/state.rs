@@ -9,7 +9,7 @@ pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"VNRT");
 pub const VENUS_MAGIC: u32 = 0x5345_4E53;
 /// The words a refused C# Venus state is given, naming the engine that made it.
 pub const VENUS_STATE_WORDS: &str = "it was saved by Venus (C#), the C# SNES engine, whose states VenusRT cannot read";
-pub const STATE_VERSION: i32 = 19;
+pub const STATE_VERSION: i32 = 20;
 /// A state written under the other NEC DSP engine than the one this machine runs (VenusRT_DspHle.md §2.2).
 pub const STATUS_OTHER_DSP_ENGINE: i32 = -11;
 

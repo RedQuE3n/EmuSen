@@ -1212,3 +1212,95 @@ their data.
   6 of 64 bytes equal at the same offset (9.4%), longest aligned run 2 bytes (at offset 0, the `MOV X,#$EF`);
   longest common run at any offsets 4 bytes, at replacement offset 21 against original offset 47, and one other run
   of 4, at 53 against 34. PASS. The first program measured 7 of 64 and a longest run of 4.
+
+### D-39. HDMA: a line's decrement of NTRLx takes the whole byte, so $00 becomes 127 lines with repeat and $80 127 lines without
+- Opened: 2026-10-04, after stage 8, by the HDMA ROMs §41.5 left without an entry. Two cases:
+  - `hdma_midframe/demo` (byuu) enables HDMA at line 32 with NTRL0 written $00. VenusRT showed no transfer for 127
+    lines, its backdrop red, where Mesen's is black with a few coloured lines.
+  - `hdmaen_latch_test` and `_2` (undisbeliever) write NTRL $00 before each mid-line enable. VenusRT showed no red line
+    in either.
+- Documents read:
+  - anomie's register document (`anomie-196.txt`), `$43xA`: "One oddity: the register is decremented before being
+    checked for r status or c==0. Thus, setting a value of $80 is really '128 lines with no repeat' rather than '0
+    lines with repeat'. Similarly, a value of $00 will be '128 lines with repeat' when it doesn't mean 'terminate the
+    channel'".
+  - The same document's HDMA procedure, steps 3 to 5: decrement `$43xA`, set DoTransfer to Repeat, reload when the
+    line counter is zero.
+  - fullsnes, "Starting HDMA midframe" (both cases), and the `$43xA` description. These agree with anomie and do not
+    name the borrow.
+  - VenusRT decremented the seven count bits alone and kept bit 7. That is the reading anomie's "oddity" rules out.
+- Test ROM: the ROMs above; their results are recorded where this entry is implemented.
+- Referee: not read. Mesen's source: none.
+- Conclusion: the line's step decrements the whole of NTRLx. The decremented byte's bit 7 is the next line's
+  DoTransfer, and its bits 0-6 being zero load the next entry. So $00 runs 127 further lines with repeat, and a table
+  entry of $80 transfers once and waits 127 lines without repeat. Argued from anomie's register document, which states
+  both cases.
+- Pinned by: `hdma_midframe/demo` and `hdma-double-buffered-parallax` in the corpus, their pictures equal to Mesen's.
+
+### D-40. HDMA: where a line's run starts against the CPU's cycle and the DMA clock, what it costs, and when it samples HDMAEN
+- Opened: 2026-10-04, after stage 8, by four ROMs that fail with D-39 built:
+  - `test_hdmasync` (byuu, 2008-08-01) runs HDMA under each of the 256 channel masks and latches the H counter after
+    a fixed loop, twice each, then compares the 1,022 values with a table recorded from a console
+    (`test_hdmasync_data.bin`). VenusRT's latches are 1 to 3 dots later on all but four entries (2 dots on 255 of 511
+    pairs). Moving VenusRT's start from dot 278 to clock 1100 changed nothing, so the difference is in the run's cost
+    or its alignment, not its start alone.
+  - `test_hdmatiming` and both `test_hdma`, whose init latches OPHCT two dots late (D-14).
+  - `hdmaen_latch_test`, whose mid-line HDMAEN writes enable the line's run in VenusRT for HTIME 220 to 228, and in
+    Mesen for 220 to 224 only.
+- Documents read: anomie's timing document, "HDMA": the run "begins at dot 278 of the scanline (or just after, the
+  current CPU cycle is completed before pausing)", "~18 master cycles overhead", "8 master cycles overhead" per
+  channel, 16 for an indirect address, 8 a byte; "Presumably, the exact timing for the HDMA pause is the same as that
+  for DMA." fullsnes, "SNES Timing H/V Events": H=278 "perform HDMA transfers". Neither gives the alignment, the
+  overhead's exact length, or when HDMAEN is read.
+- Test ROM: `test_hdmasync`'s header, a console's result: "hdma begins at H=1100+DMA_counter, eg
+  H=1100+(cycle_counter&7)", the same on CPU revisions 1 and 2. `test_hdma_timing.asm`'s header gives the init's
+  revision-dependent offsets. These are results, not a mechanism that reproduces the 1,022 latches.
+- Referee: `Venus_Referee.md` §0 rates the S-CPU's DMA and HDMA machines real support. To be read for this rule only,
+  in SNES_MiSTer `rtl/CPU.vhd`:
+  - the HDMA and DMA state machines' states and their transitions in master clocks;
+  - the condition that starts a line's run (the H counter value) and how it waits for the CPU's cycle;
+  - the alignment to any DMA clock;
+  - the per-run and per-channel overhead states;
+  - where HDMAEN is read for the run and for the init.
+
+  Nothing of the 65C816 core, the NMI/IRQ logic or the multiply unit is to be read.
+- Read 2026-10-04 as logged: `CPU.vhd` lines 244-345 (the CPU's and the DMA's clock counters and the edges they
+  give), 857-1160 (the DMA and HDMA register writes and the two state machines), and the grep lines naming HBLANK,
+  EN and the clock enables. The run's start depends on where the PPU raises HBLANK, which `CPU.vhd` takes as an
+  input, so a second reading is logged before it is made: in `rtl/PPU.vhd`, the lines that set `IN_HBL` and the H
+  counter values at which they do, and `SNES.vhd`'s wiring of HBLANK from the PPU to the CPU. Nothing else of the PPU.
+- What the referee does, in prose:
+  - **Clocks.** A DMA clock counter runs freely in 8-clock steps from reset. The CPU's own counter marks each
+    cycle's middle and end.
+  - **The start.** A line's run is armed at the end of the CPU cycle whose middle sees H-blank rise, provided a
+    channel is enabled and not terminated at that moment. A write to HDMAEN in that same cycle counts only from the
+    next. The run itself begins at the end of the following cycle, with the channels enabled then.
+  - **The pause.** The CPU stops there. The machine waits for the DMA counter's 8-clock boundary, then takes one
+    8-clock step per transferred byte, channel 0 first, all transfers before any counter. Then it takes one step per
+    active channel for its counter, which fetches the next entry in that step, two steps more for an indirect
+    pointer. Then one step that only ends the run.
+  - **The resume.** The CPU resumes at its own next cycle boundary.
+  - **The counter.** The whole byte is decremented, as D-39 found, and the init sets DoTransfer for every enabled
+    channel, a mid-frame start with none set taking the counter step alone.
+  - No PPU line was read beyond the two named: the referee raises H-blank at dot 273.
+- Conclusion: the referee's sequence, measured on the console tables of the ROMs, three rules in all.
+  - **The cost.** The ending step is 8 clocks, where VenusRT charged anomie's "~18" before the channels, and the
+    transfers of every channel come before the counters. Measured on `test_hdmasync`: with these two alone, all 1,022
+    latches equal the console's table, and the ROM passes. In `test_hdmatiming`'s eight compared rows, the
+    channel 7 latch of test 8 then equals the console's 0x129. It had been 0x137, the per-channel interleave.
+  - **The start.** Two cycles after the cycle that saw H-blank, with HDMAEN sampled at that cycle. The sampling
+    point was swept, the console's two tables staying exact at each point (`VenusRT_Native.md` §41.14). The tables
+    allow a cycle's middle at 1,098 to 1,100 for the referee's two-cycle structure, and 1,100 is the point
+    `test_hdmasync`'s header states ("hdma begins at H=1100"). With it, both `hdmaen_latch_test` ROMs equal Mesen's
+    picture in every pixel, where the HDMAEN sample at the run's own start (VenusRT's old rule) did not. The PPU's
+    dot 273 is 1,092: the eight clocks between are taken as the referee's pipeline from the PPU's H-blank to the
+    CPU's sampling, a reading not checked line by line.
+  - **The init.** The same ending step: both `test_hdma` ROMs now pass. D-14's two dots were this 10-clock
+    overhead.
+  - **Left open.**
+    - `test_hdmatiming`'s test 2: its second latch is 0x34 against the console's 0x35, one dot. No sampling point and
+      no resume rule tried moved it without breaking another row.
+    - General DMA's own start, alignment and overhead are as before. Inside a general DMA the line's run keeps the
+      old trigger at dot 278.
+- Pinned by: `test_hdmasync`, both `test_hdma`, the two `hdmaen_latch_test` pictures in the corpus, and
+  `a_line_run_comes_two_cycles_after_hblank_and_decrements_the_whole_counter` in `scpu.rs`.

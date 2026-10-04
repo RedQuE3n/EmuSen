@@ -62,6 +62,8 @@ pub fn irq_line_point(htime: u16) -> u16 {
 pub const JOYPAD_AT: u16 = 298;
 pub const HDMA_INIT_AT: u16 = 24;
 pub const HDMA_AT: u16 = 278 * 4;
+/// The first cycle start that can see H-blank for the line's HDMA, three clocks before its middle (D-40).
+pub const HDMA_SEEN_FROM: u16 = 1097;
 
 impl Timing {
     /// 1364 master clocks, but 1360 for line 240 of field 1 at 60 Hz without interlace.
@@ -147,7 +149,7 @@ impl Timing {
             next = next.min(HDMA_INIT_AT);
         }
         if self.line < VBLANK_LINE && !self.hdma_line_done {
-            next = next.min(HDMA_AT);
+            next = next.min(HDMA_SEEN_FROM);
         }
         if self.line == VBLANK_LINE && JOYPAD_AT > self.line_clock {
             next = next.min(JOYPAD_AT);

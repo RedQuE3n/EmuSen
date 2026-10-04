@@ -310,6 +310,8 @@ impl Machine {
             for (n, v) in [("DmaPending", d.dma_pending), ("DmaWait", d.dma_wait), ("HdmaActive", d.hdma_active), ("HdmaTransfer", d.hdma_transfer)] {
                 w.u8(n, v);
             }
+            w.u8("HdmaStage", d.hdma_stage);
+            w.u8("HdmaSel", d.hdma_sel);
             w.u16s("Joy", &d.joy);
             w.u64("JoyBusyUntil", d.joy_busy_until);
             w.bool("Strobe", d.strobe);
@@ -472,6 +474,13 @@ impl Machine {
         d.dma_wait = r.u8()?;
         d.hdma_active = r.u8()?;
         d.hdma_transfer = r.u8()?;
+        // Version 20 keeps a line's HDMA run between the cycle that saw H-blank and the run (D-40).
+        if version >= 20 {
+            d.hdma_stage = r.u8()?.min(2);
+            d.hdma_sel = r.u8()?;
+        } else {
+            (d.hdma_stage, d.hdma_sel) = (0, 0);
+        }
         r.u16s(&mut d.joy)?;
         d.joy_busy_until = r.u64()?;
         d.strobe = r.bool()?;
@@ -688,8 +697,8 @@ pub(crate) mod tests {
         assert!(layout.starts_with("0 4 u32 Magic\n4 4 i32 Version\n8 2 u16 Cpu.A\n"), "{layout}");
         assert!(layout.contains(" u64 Timing.Clock\n") && layout.contains(" u8[1024] Bus.Io\n") && layout.contains(" u16[32768] Vram\n"), "{layout}");
         assert!(layout.contains(" u8[64] Ppu.Regs\n") && layout.contains(" u16[256] Cgram\n"), "{layout}");
-        assert_eq!(layout.lines().count(), 115, "{layout}");
-        assert_eq!(m.state_size(), 265_369);
+        assert_eq!(layout.lines().count(), 117, "{layout}");
+        assert_eq!(m.state_size(), 265_371);
         assert_eq!(&save(&m)[..4], b"VNRT");
     }
 

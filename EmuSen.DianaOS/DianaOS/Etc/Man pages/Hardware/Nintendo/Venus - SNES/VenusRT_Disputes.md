@@ -172,6 +172,19 @@ their data.
 - Referee: not read. Mesen's source: none.
 - Conclusion: open. The S-DD1 is outside parity (`VenusRT_Plan.md` §4.2). Test Drive II is settled when the goldens of
   stage 6 run it against Mesen.
+- **Read again 2026-10-04 (stage 8's read of the log, `VenusRT_Native.md` §41.9), and the check this entry owed run.**
+  The conclusion above deferred Test Drive II to "the goldens of stage 6", which never included it. Run instead on
+  both of the library's dumps (MD5 `c15db5c5…` and `74b7f01d…`, header map mode $32, 1 MiB), VenusRT through `ICore`
+  and Mesen through the probe, with one pad script for both: Start at frames 1200 to 2600 every 200 frames, and Up
+  held from 3000. That takes the game through its menus, the car and course choices, and into a race. *Measured:* at
+  frames 600, 1350, 1550, 1950, 3000 and 3800, VenusRT's picture equals Mesen's at the same frame in every pixel,
+  on both dumps.
+- Conclusion for Test Drive II: settled, measured as far as these scenes go. Decoding map mode $32 as LoROM is
+  indistinguishable from Mesen's ExLoROM there, as the argument above expected for an image under 2 MiB. The run
+  proves no more than that: whether the game ever reads banks $40-$7D or $C0-$FF is not observed, because v1 reports
+  no reads. A later scene that parts from Mesen reopens it. Street Fighter Alpha 2 (S-DD1) stays open, outside parity.
+- Pinned by: nothing in the repository (the ROM is not); the measurement is reproduced by the corpus folder's
+  `anchorshot/cmp.py` with the script above.
 
 ### D-6. Power-on: where in line 0 the CPU's first instruction begins
 - Opened: 2026-09-30, at stage 2 step 3, by the probe's CPU trace of four games against VenusRT's own, instruction by
@@ -291,6 +304,17 @@ their data.
   runs eight cycles of reset first, so its first fetch falls about 18 master clocks after the 65C816's reset begins
   (150 clocks before it, plus 8 cycles of 20.97). The counters' half is unchanged: the 65C816 still begins at clock
   0 of line 0.
+- **Read again 2026-10-04 (stage 8, `VenusRT_Native.md` §41.9).** The "Judged 2026-10-03" paragraph above takes the
+  SPC700's 150-master-clock lead from `CPU.vhd`'s reset counter as the console's rule. That over-reads the referee.
+  `Venus_Referee.md` §0 weighs the RTL subsystem by subsystem for the logic each was written from, the 65C816 core,
+  the SPC700, the PPU, and says nothing of the board's reset sequencing. A counter that releases the soft 65C816 150
+  clocks after the reset line is as likely to be the FPGA's own arrangement (clock enables settling, a core held
+  until the others run) as a transcription of the console. ~~the 65C816 starts 150 master clocks after the SPC700,
+  where VenusRT starts both at clock 0~~ *Restated:* the referee's implementation releases the 65C816 150 master
+  clocks after the SPC700; VenusRT adopts that number as an argued choice with the referee as its only source, not as
+  a rule the referee establishes for the console. The implementation is unchanged. What would settle it is a console
+  measurement of the SPC700's first port write against the S-CPU's first instruction, for instance the time to $BBAA
+  as an S-CPU loop counts it from reset.
 
 ### D-7. PPU: master brightness N scales a colour component c to c×(N+1)/16, rounded down
 - Opened: 2026-09-30, at stage 3 step 1, by PeterLemon's `RedSpace9BitHDMA` at frame 300. The ROM writes a backdrop
@@ -418,6 +442,14 @@ their data.
   one built first. Open: a ROM that ends forced blank mid-frame after writing OAM, and shows the first sprite's
   priority, would settle it.
 - Pinned by: `oam_and_cgram_latch_their_low_bytes_and_the_counters_latch_on_2137` (the line-225 reload).
+- **Read again 2026-10-04 (stage 8, `VenusRT_Native.md` §41.9).** ~~argued only from its being the narrower statement
+  and the one built first~~. Neither is evidence for a rule, and the two documents are not equal in kind: anomie's
+  timing document ("OAM RESET") reports an observation of a console, attributed to byuu, that "the reset occurs on any
+  1->0 transition of $2100 bit 7", while fullsnes's line-225 restriction cites no test. *Restated:* the built rule is
+  fullsnes's, kept against the only reported console observation, which favours anomie's wider rule. That is a
+  choice awaiting a test ROM, not an argued conclusion. The entry stays open. The ROM that would settle it (end
+  forced blank mid-frame after an OAM address write, and show which sprite has priority) is cheap to write, and the
+  rule should move to anomie's if no such ROM is run before a game needs it.
 
 ### D-12. OAM: a write during active display lands where the internal address points
 - Opened: 2026-10-01, at stage 3 step 2, by the step's scope. fullsnes, "OAMADDL/OAMADDH": "During rendering, the
@@ -598,6 +630,15 @@ their data.
   The variant of the measurement above is not adopted. The left edge is open between "unmathed" (built) and the
   referee's "mathed with black under the last enables"; it moves one column of four ROMs and is left as built.
 - Pinned by: `the_sub_half_pixel_takes_colour_0_and_the_math_of_the_main_pixel_before` in `ppu.rs`.
+- **Read again 2026-10-04 (stage 8, `VenusRT_Native.md` §41.9).** "Settled for the rule as built" counts the referee's
+  agreement as a second source. `Venus_Referee.md` §0 says the referee's PPU was written from anomie's and fullsnes's
+  register documents, so its agreement with anomie's sentence read literally is correlated with the document. D-1
+  makes the same caveat for the 65C816 core and the datasheet. ~~Conclusion: settled for the rule as built.~~
+  *Restated:* the rule as built is anomie's sentence read literally, with an implementation written from the same
+  documents agreeing. Against it stands Mesen's picture, an implementation of unknown provenance. That is argued, not
+  settled. The built rule is kept and the four ROMs' differences stay recorded as Mesen's. A game that uses hi-res
+  sub-screen math would arbitrate: the tricky-to-emulate list names Jurassic Park's gameplay under exactly this cause,
+  and a capture of it from a console is the evidence to look for.
 
 ### D-20. IRQ: a point past its line's end is not carried over the short line's end or a frame's
 - Opened: 2026-10-01, at stage 3 step 5, by `nmi_irq/demo_irq` (and `blobs/demo_irqtest`) failing at test 6's first
@@ -769,6 +810,17 @@ their data.
   `test_timer_stop` and gilyon's `spctest` still pass. fullsnes's per-opcode table of internal cycles' timings is
   not built, since nothing here distinguishes it. A setting the software "should never change" (fullsnes).
 - Pinned by: `test_timer_speed`, `test_timer_speed2`, `test_speed`.
+- **Read again 2026-10-04 (stage 8, `VenusRT_Native.md` §41.9).** The conclusion's timer step rests on the graded ROMs
+  (`test_timer_speed`, `test_timer_speed2`) and blargg's own `notes.txt`. Those are measured, and settled. Its two
+  other rules rest on something weaker: that bits 4-5 do not slow the SPC700, and that bits 6-7 stretch every SPC700
+  cycle rather than I/O and ROM cycles alone. Both are argued from the counts Mesen prints for `test_speed`, a ROM that
+  prints without a verdict, against fullsnes's text. That makes Mesen the authority, which the order of recourse ranks
+  last. ~~settled by measurement, 2026-10-02, and **not** as fullsnes reads~~ for those two rules. *Restated:* the
+  timer step is settled, measured on graded ROMs. The stretch of every cycle under bits 6-7, and bits 4-5 leaving the
+  SPC700's speed alone, are argued from Mesen's output, pending a console reading of `test_speed`'s twelve counts or
+  the referee's SPC700 wait logic read in a dispute step. The implementation is unchanged. fullsnes calls TEST a
+  setting software "should never change", which bounds what the open rules can cost a game; that no game writes the
+  bits was not measured.
 
 ### D-28. S-DSP: the Gaussian interpolation's rounding, where fullsnes and anomie give different formulas
 - Opened: 2026-10-02, at stage 4 step 2, before the S-DSP's code, by reading the two sources side by side.

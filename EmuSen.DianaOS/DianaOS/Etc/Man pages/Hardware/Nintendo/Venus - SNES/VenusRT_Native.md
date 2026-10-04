@@ -4177,3 +4177,25 @@ the twenty ROMs G1 and G3 leave open or unlogged.
   - `IdentityAndCollectionsTests` expects the engine's name.
   - VenusRt, FileRecords, IdentityAndCollections, Resume and StateRecord filters: 137 passed, 1 skipped. The crate:
     112 of 112.
+
+### 41.13 Blocker 15: the five entries amended, and D-5's check run (2026-10-04)
+
+Each of §41.9's five entries gains a dated paragraph in `VenusRT_Disputes.md`, as the log's rules ask. The overturned
+words are struck through and followed by the restated conclusion. No entry's implementation changes.
+
+- **D-5.** Test Drive II's check, owed since stage 2, has now run. Both library dumps went through `ICore` and Mesen
+  with one pad script into a race, and pictures at six frames from the opening to the race are equal at the same
+  frame in every pixel. Settled as far as the scenes reach. Whether the game reads banks $40-$7D or $C0-$FF remains
+  unobserved, since v1 reports no reads.
+- **D-6.** The SPC700's 150-clock lead is restated as the referee's implementation choice, argued, not a console
+  rule. The counters' half is unchanged and open.
+- **D-11.** The built rule is fullsnes's, kept against the one reported console observation, which favours anomie's.
+  Recorded as a choice that a cheap test ROM would settle.
+- **D-19.** Restated as argued. The referee's PPU was written from the same documents, so its agreement with anomie
+  is correlated. Jurassic Park's gameplay, on the tricky-to-emulate list under this cause, is the game that would
+  arbitrate.
+- **D-27.** The timer step stays settled. The per-cycle stretch and bits 4-5's effect are restated as argued from
+  Mesen's printed counts, pending a console reading of `test_speed`.
+
+The tool for D-5's comparison, `anchorshot` (VenusRT through `ICore` with a pad script) with `cmp.py` (Mesen over a
+window of frames), is in the corpus folder beside `venusrtbench`, outside the repository.

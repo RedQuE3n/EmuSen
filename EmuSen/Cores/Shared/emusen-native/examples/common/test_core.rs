@@ -180,7 +180,7 @@ impl Core for TestCore {
                     buttons: vec![Button { bit: 0, control: Some(Control::A), label: "A".into() }, Button { bit: 1, control: None, label: "Turbo".into() }],
                     axes: vec![AxisControl { axis: Axis::LeftX as u32, control: Some(Axis::LeftX), trigger: false, label: "Stick".into() }],
                 }],
-                firmware: vec![Firmware { which: 16, name: "boot.rom".into(), label: "Boot ROM".into(), size: 64, required: false, parts: vec![] }],
+                firmware: vec![Firmware { which: 16, name: "boot.rom".into(), label: "Boot ROM".into(), size: 64, required: false, parts: vec![], replacement: None }],
             }],
             deterministic: true,
             accuracy: Some(Accuracy { measured_with: "defaults".into(), suite: "the crate's tests".into(), notes: String::new() }),
@@ -270,6 +270,7 @@ impl Core for TestCore {
             phases: vec!["count".into()],
             patches: Some((0, 0xFF)),
             skip_rendering_state_neutral: true,
+            firmware: Vec::new(),
         }
     }
 

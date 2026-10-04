@@ -178,7 +178,7 @@ pub struct Cartridge {
     pub sram: Box<[u8]>,
     pub header: Header,
     /// A NEC DSP-n or ST01x, when its firmware was supplied, and where it is mapped.
-    pub dsp: Option<(crate::chips::necdsp::NecDsp, DspMap)>,
+    pub dsp: Option<(crate::chips::dspengine::DspEngine, DspMap)>,
     /// The SA-1, when the header's chipset names it (3xh); its BW-RAM is `sram`.
     pub sa1: Option<Box<crate::chips::sa1::Sa1>>,
     /// The GSU, when the chipset names it (1xh); its Game Pak RAM is `sram`.
@@ -447,19 +447,20 @@ mod tests {
     // fullsnes's "SNES I/O Ports" for the DSP boards: LoROM 1 MiB at 30-3F, HiROM at 00-1F:6000-7FFF, the ST01x at 60-6F.
     #[test]
     fn a_dsp_board_maps_dr_and_sr_where_fullsnes_puts_them() {
+        use crate::chips::dspengine::DspEngine;
         use crate::chips::necdsp::{NecDsp, Port};
         let mut lo = image(0x8_0000, Map::LoRom, 0x20);
         lo[0x7FC0 + 0x16] = 0x03;
         let mut c = Cartridge::new(&lo).unwrap();
         assert!(c.wants_dsp());
-        let dsp = NecDsp::from_firmware(&vec![0u8; 8192]).unwrap();
+        let dsp = DspEngine::Lle(NecDsp::from_firmware(&vec![0u8; 8192]).unwrap());
         c.dsp = Some((dsp.clone(), c.dsp_map(false)));
         assert_eq!(c.dsp.as_ref().unwrap().1, DspMap::LoRom30);
         assert_eq!((c.decode(0x30_8000), c.decode(0xBF_C000), c.decode(0x00_8000)), (Some(Slot::Dsp(Port::Dr)), Some(Slot::Dsp(Port::Sr)), Some(Slot::Rom(0))));
         let mut hi = Cartridge::new(&image(0x10_0000, Map::HiRom, 0x21)).unwrap();
         hi.dsp = Some((dsp, hi.dsp_map(false)));
         assert_eq!((hi.decode(0x00_6000), hi.decode(0x9F_7FFF), hi.decode(0x20_6000)), (Some(Slot::Dsp(Port::Dr)), Some(Slot::Dsp(Port::Sr)), Some(Slot::Sram(0))));
-        let st = NecDsp::from_firmware(&vec![0u8; 53248]).unwrap();
+        let st = DspEngine::Lle(NecDsp::from_firmware(&vec![0u8; 53248]).unwrap());
         let mut f1 = Cartridge::new(&lo).unwrap();
         f1.dsp = Some((st, f1.dsp_map(true)));
         assert_eq!((f1.decode(0x60_0000), f1.decode(0x60_0001), f1.decode(0x68_0FFF)), (Some(Slot::Dsp(Port::Dr)), Some(Slot::Dsp(Port::Sr)), Some(Slot::Dsp(Port::Ram(0xFFF)))));

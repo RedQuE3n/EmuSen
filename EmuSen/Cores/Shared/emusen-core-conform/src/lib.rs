@@ -493,6 +493,32 @@ fn run_accepted(path: &Path, image: Vec<u8>, files: Vec<(u32, Vec<u8>)>, frames:
     Ok(rx.recv_timeout(std::time::Duration::from_secs(MALFORMED_DEADLINE_SECONDS)).unwrap_or(Outcome::Hung { seconds: MALFORMED_DEADLINE_SECONDS }))
 }
 
+/// C4's firmware rule (EmuSen_CoreAPI.md §6.2): a replacement's effect is one of the schema's words with a cost unless
+/// exact, and an image whose entries are all optional is created with no files at all.
+fn firmware_optional(s: &mut Session<'_>, c: &mut Check) {
+    let image = s.opts.image.clone();
+    let Ok(text) = api::text(|o, l| unsafe { (s.lib.f.firmware_for)(image.as_ptr(), image.len(), o, l) }) else { return };
+    let list = parse(&text).and_then(|v| v.as_array().map(|a| a.to_vec())).unwrap_or_default();
+    if list.is_empty() {
+        return;
+    }
+    for f in &list {
+        let name = f.get("name").and_then(Value::as_str).unwrap_or("?").to_owned();
+        if let Some(r) = f.get("replacement") {
+            let effect = r.get("effect").and_then(Value::as_str).unwrap_or("");
+            c.that(matches!(effect, "exact" | "accuracy" | "none"), || format!("{name}: the replacement's effect {effect:?} is not exact, accuracy or none"));
+            let cost = r.get("cost").and_then(Value::as_str).unwrap_or("");
+            c.that(effect == "exact" || !cost.trim().is_empty(), || format!("{name}: a replacement short of exact needs its cost"));
+        }
+    }
+    if list.iter().all(|f| matches!(f.get("required"), Some(Value::Bool(false)))) {
+        match s.lib.create(&image, "", &[], 1) {
+            Ok(_) => c.note(format!("every firmware entry optional ({}): created with no files", list.len())),
+            Err((status, text)) => c.that(false, || format!("every firmware entry is optional, yet create with no files refused: {status}, {text:?}")),
+        }
+    }
+}
+
 /// C4 as decided 2026-10-03: a malformed image never harms the core; it is refused with words, or, unless the system's
 /// format is self-delimiting, it loads and runs the kit's frames without hanging.
 fn c4(s: &mut Session<'_>, path: &Path) -> Case {
@@ -544,6 +570,7 @@ fn c4(s: &mut Session<'_>, path: &Path) -> Case {
         }
         images.push(ImageOutcome { image: what, outcome });
     }
+    firmware_optional(s, &mut c);
     let stated = defaults(s.lib);
     let frames = s.opts.frames.min(300);
     let run = |s: &mut Session<'_>, settings: &str| -> Result<(Digests, u64), String> {

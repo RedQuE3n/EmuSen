@@ -21,5 +21,5 @@ fn main() {
     }
     std::fs::write(&a[4], &m.sys.wram[..]).unwrap();
     std::fs::write(format!("{}.rgba", a[4]), m.sys.ppu.picture()).unwrap();
-    println!("{} frames, dsp {}", frames, m.sys.cart.dsp.as_ref().map(|(d, map)| format!("{:?} pc {:04X} sr {:04X} cycles {}", map, d.pc, d.sr, d.cycles)).unwrap_or("none".into()));
+    println!("{} frames, dsp {}", frames, m.sys.cart.dsp.as_ref().and_then(|(d, map)| Some((d.lle()?, map))).map(|(d, map)| format!("{:?} pc {:04X} sr {:04X} cycles {}", map, d.pc, d.sr, d.cycles)).unwrap_or("none".into()));
 }

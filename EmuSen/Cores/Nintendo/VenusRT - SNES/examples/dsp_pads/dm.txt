@@ -1,0 +1,2 @@
+# Dungeon Master: Start through the title into the dungeon.
+tapuntil start chip 50 - 4000 40

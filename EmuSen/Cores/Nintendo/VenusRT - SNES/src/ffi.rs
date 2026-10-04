@@ -24,6 +24,10 @@ impl NativeCore for Machine {
             return Err(abi::status::UNKNOWN_SETTING);
         }
         let mut m = Machine::load_rom(image).map_err(|_| STATUS_IMAGE_TOO_SHORT)?;
+        // File 1 is the player's SPC700 boot image, used in place of VenusRT's own program (D-38).
+        if let Some(f) = files.iter().find(|f| f.which == 1) {
+            m.attach_boot(f.data.try_into().map_err(|_| abi::status::BAD_FILE)?);
+        }
         // File 2 is the DSP's firmware whole, or its program with file 3 its data.
         let program = files.iter().find(|f| f.which == 2).map(|f| f.data);
         let data = files.iter().find(|f| f.which == 3).map(|f| f.data);
@@ -33,11 +37,16 @@ impl NativeCore for Machine {
             (None, Some(_)) => return Err(abi::status::BAD_FILE),
             (None, None) => None,
         };
-        if firmware.is_some_and(|f| !m.attach_dsp(&f)) {
-            return Err(abi::status::BAD_FILE);
+        match firmware {
+            Some(f) if !m.attach_dsp(&f) => return Err(abi::status::BAD_FILE),
+            Some(_) => {}
+            None if m.sys.cart.wants_dsp() => {
+                m.attach_replacement();
+            }
+            None => {}
         }
         for file in files {
-            if file.which == 1 || file.which > 3 {
+            if file.which > 3 {
                 return Err(abi::status::BAD_FILE);
             }
             if file.which != 0 {
@@ -105,8 +114,8 @@ impl NativeCore for Machine {
             3 => 2 * self.sys.ppu.vram.len() as i64,
             4 => 2 * self.sys.ppu.cgram.len() as i64,
             5 => self.sys.ppu.oam.len() as i64,
-            6 => match self.sys.cart.dsp.as_ref().filter(|(d, _)| d.st) {
-                Some((dsp, _)) => 2 * dsp.ram.len() as i64,
+            6 => match self.sys.cart.dsp.as_ref().filter(|(d, _)| d.st()) {
+                Some((dsp, _)) => 2 * dsp.ram().len() as i64,
                 None => self.sys.cart.sram.len() as i64,
             },
             7 => self.sys.apu.ram.len() as i64,
@@ -127,7 +136,7 @@ impl NativeCore for Machine {
                 4 => self.sys.ppu.cgram.get(a / 2).map_or(0, |w| w.to_le_bytes()[a & 1]),
                 5 => self.sys.ppu.oam.get(a).copied().unwrap_or(0),
                 6 => match self.st_ram() {
-                    Some(dsp) if a < 2 * dsp.ram.len() => dsp.host_read(crate::chips::necdsp::Port::Ram(a), false),
+                    Some(dsp) if a < 2 * dsp.ram().len() => dsp.host_read(crate::chips::necdsp::Port::Ram(a), false),
                     Some(_) => 0,
                     None => self.sys.cart.sram.get(a).copied().unwrap_or(0),
                 },
@@ -162,7 +171,7 @@ impl NativeCore for Machine {
                 5 => self.sys.ppu.oam.get_mut(a),
                 6 => {
                     if let Some(dsp) = self.st_ram() {
-                        if a < 2 * dsp.ram.len() {
+                        if a < 2 * dsp.ram().len() {
                             dsp.host_write(crate::chips::necdsp::Port::Ram(a), b);
                         }
                         continue;
@@ -211,8 +220,8 @@ impl Machine {
             SA1IRAM => c.sa1.as_ref()?.iram.len() as i64,
             BWRAM if c.sa1.is_some() => c.sram.len() as i64,
             SA1BUS if c.sa1.is_some() => 0x100_0000,
-            DSPRAM => 2 * c.dsp.as_ref()?.0.ram.len() as i64,
-            DSPPRG => 3 * c.dsp.as_ref()?.0.program.len() as i64,
+            DSPRAM => Some(2 * c.dsp.as_ref()?.0.ram().len() as i64).filter(|&n| n > 0)?,
+            DSPPRG => 3 * c.dsp.as_ref()?.0.lle()?.program.len() as i64,
             _ => return None,
         })
     }
@@ -229,8 +238,8 @@ impl Machine {
             GSUBUS => crate::chips::gsu::Gsu::peek(a as u32, &c.rom, &c.sram),
             SA1IRAM => c.sa1.as_ref()?.iram[a],
             SA1BUS => c.sa1.as_ref()?.peek(a as u32, &c.rom, &c.sram),
-            DSPRAM => c.dsp.as_ref()?.0.ram[a >> 1].to_le_bytes()[a & 1],
-            _ => c.dsp.as_ref()?.0.program[a / 3].to_le_bytes()[a % 3],
+            DSPRAM => c.dsp.as_ref()?.0.ram()[a >> 1].to_le_bytes()[a & 1],
+            _ => c.dsp.as_ref()?.0.lle()?.program[a / 3].to_le_bytes()[a % 3],
         })
     }
 
@@ -244,7 +253,7 @@ impl Machine {
             GSURAM | BWRAM => c.sram[a] = value,
             SA1IRAM => c.sa1.as_mut().expect("the space's size says so").iram[a] = value,
             _ => {
-                let w = &mut c.dsp.as_mut().expect("the space's size says so").0.ram[a >> 1];
+                let w = &mut c.dsp.as_mut().expect("the space's size says so").0.ram_mut()[a >> 1];
                 let mut bytes = w.to_le_bytes();
                 bytes[a & 1] = value;
                 *w = u16::from_le_bytes(bytes);
@@ -254,8 +263,8 @@ impl Machine {
     }
 
     /// An ST010 or ST011, whose on-chip RAM is the cartridge's battery RAM and stands as SRAM, space 6.
-    fn st_ram(&mut self) -> Option<&mut crate::chips::necdsp::NecDsp> {
-        self.sys.cart.dsp.as_mut().map(|(d, _)| d).filter(|d| d.st)
+    fn st_ram(&mut self) -> Option<&mut crate::chips::dspengine::DspEngine> {
+        self.sys.cart.dsp.as_mut().map(|(d, _)| d).filter(|d| d.st())
     }
 }
 
@@ -270,7 +279,8 @@ mod tests {
         let image = crate::machine::tests::rom(&[0x80, 0xFE]);
         assert_eq!(Machine::create(&image[..0x4000], &Settings::default(), &[]).err(), Some(STATUS_IMAGE_TOO_SHORT));
         assert_eq!(Machine::create(&image, &Settings::parse(b"SampleRate=48000").unwrap(), &[]).err(), Some(abi::status::UNKNOWN_SETTING));
-        assert_eq!(Machine::create(&image, &Settings::default(), &[File { which: 1, data: &[0; 64] }]).err(), Some(abi::status::BAD_FILE));
+        assert_eq!(Machine::create(&image, &Settings::default(), &[File { which: 1, data: &[0; 63] }]).err(), Some(abi::status::BAD_FILE));
+        assert!(Machine::create(&image, &Settings::default(), &[File { which: 1, data: &[0; 64] }]).unwrap().sys.apu.boot_file);
         assert_eq!(Machine::create(&image, &Settings::default(), &[File { which: 2, data: &[1] }]).err(), Some(abi::status::BAD_FILE));
         let mut m = Machine::create(&image, &Settings::default(), &[File { which: 0, data: &[1, 2] }]).unwrap();
         assert_eq!(m.sys.apu.cpu.pc, 0xFFC0);

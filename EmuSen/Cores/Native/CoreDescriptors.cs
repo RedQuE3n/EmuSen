@@ -14,8 +14,17 @@ namespace EmuSen.Cores.Native
 
     public sealed record CoreController(string Id, string Label, IReadOnlyList<uint> Ports, IReadOnlyList<CoreButton> Buttons, IReadOnlyList<CoreAxis> Axes);
 
-    // A firmware file, passed as file Which; Parts are its split forms - see EmuSen_CoreAPI.md §6.2.
-    public sealed record CoreFirmware(uint Which, string Name, string Label, long Size, bool Required, IReadOnlyList<IReadOnlyList<string>> Parts);
+    // A firmware file, passed as file Which; Parts are its split forms, Replacement what runs without it - see EmuSen_CoreAPI.md §6.2.
+    public sealed record CoreFirmware(uint Which, string Name, string Label, long Size, bool Required, IReadOnlyList<IReadOnlyList<string>> Parts)
+    {
+        public CoreReplacement? Replacement { get; init; }
+    }
+
+    // An open replacement's effect in the settings schema's words, exact, accuracy or none, and its cost in plain words - see EmuSen_CoreAPI.md §6.2.
+    public sealed record CoreReplacement(string Effect, string? Cost);
+
+    // Which path a machine runs for firmware file Which: file, replacement or absent - see EmuSen_CoreAPI.md §6.4.
+    public sealed record CoreFirmwareSource(uint Which, string Source);
 
     public sealed record CoreSystem(string Id, string Name, IReadOnlyList<string> Extensions, IReadOnlyList<string> Regions, IReadOnlyList<CoreController> Controllers, IReadOnlyList<CoreFirmware> Firmware);
 
@@ -48,6 +57,8 @@ namespace EmuSen.Cores.Native
         IReadOnlyList<string> Phases, long? PatchLow, long? PatchHigh, bool SkipRenderingStateNeutral)
     {
         public double FrameRateHz => FrameRateDen == 0 ? 60.0 : (double)FrameRateNum / FrameRateDen;
+
+        public IReadOnlyList<CoreFirmwareSource> Firmware { get; init; } = Array.Empty<CoreFirmwareSource>();
     }
 
     // One setting of a v1 core's schema, its words and trade-off kept for presentation - see EmuSen_CoreAPI.md §6.13.
@@ -93,7 +104,10 @@ namespace EmuSen.Cores.Native
         private static T? EnumNamed<T>(string? name) where T : struct, Enum => name is not null && Enum.TryParse(name, false, out T v) && Enum.IsDefined(v) ? v : null;
 
         private static CoreFirmware Firmware(JsonElement f) => new((uint)Long(f, "which"), Str(f, "name"), Str(f, "label"), Long(f, "size"), Bool(f, "required"),
-            Arr(f, "parts").Select(p => (IReadOnlyList<string>)p.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToArray()).ToArray());
+            Arr(f, "parts").Select(p => (IReadOnlyList<string>)p.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToArray()).ToArray())
+        {
+            Replacement = Obj(f, "replacement") is { ValueKind: JsonValueKind.Object } r ? new CoreReplacement(Str(r, "effect", "none"), OptStr(r, "cost")) : null,
+        };
 
         public static CoreInfo Info(string json)
         {
@@ -142,7 +156,10 @@ namespace EmuSen.Cores.Native
                 Str(state, "format"), Long(state, "version"), kinds.Length == 0 ? new uint[] { 0 } : kinds,
                 Strs(r, "phases"),
                 patches.ValueKind == JsonValueKind.Object ? Long(patches, "low") : null, patches.ValueKind == JsonValueKind.Object ? Long(patches, "high") : null,
-                Bool(r, "skip_rendering_state_neutral"));
+                Bool(r, "skip_rendering_state_neutral"))
+            {
+                Firmware = Arr(r, "firmware").Select(f => new CoreFirmwareSource((uint)Long(f, "which"), Str(f, "source", "absent"))).ToArray(),
+            };
         }
 
         public static IReadOnlyList<CoreSettingDescriptor> Settings(string json)

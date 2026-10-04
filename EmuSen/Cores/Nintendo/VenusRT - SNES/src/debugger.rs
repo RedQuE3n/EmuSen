@@ -23,7 +23,7 @@ impl Machine {
             Some(Chip::Sa1)
         } else if c.gsu.is_some() {
             Some(Chip::Gsu)
-        } else if c.dsp.is_some() {
+        } else if c.dsp.as_ref().is_some_and(|(d, _)| d.lle().is_some()) {
             Some(Chip::Dsp)
         } else {
             None
@@ -41,7 +41,7 @@ impl Machine {
                 } else if let Some(g) = c.gsu.as_mut() {
                     Some(&mut g.probe)
                 } else {
-                    c.dsp.as_mut().map(|(d, _)| &mut d.probe)
+                    c.dsp.as_mut().and_then(|(d, _)| d.lle_mut()).map(|d| &mut d.probe)
                 }
             }
             _ => None,
@@ -94,7 +94,7 @@ impl Machine {
 
     fn chip_unprobed(&self) -> bool {
         let c = &self.sys.cart;
-        c.sa1.as_ref().is_none_or(|s| s.probe.is_none()) && c.gsu.as_ref().is_none_or(|g| g.probe.is_none()) && c.dsp.as_ref().is_none_or(|(d, _)| d.probe.is_none())
+        c.sa1.as_ref().is_none_or(|s| s.probe.is_none()) && c.gsu.as_ref().is_none_or(|g| g.probe.is_none()) && c.dsp.as_ref().and_then(|(d, _)| d.lle()).is_none_or(|d| d.probe.is_none())
     }
 
     /// The frame through the observed loop: `stop`'s reasons, zero at the frame's end. `run::UNCHECKED` takes the
@@ -190,7 +190,7 @@ impl Machine {
             2 => match self.chip()? {
                 Chip::Sa1 => c.sa1.as_ref().map(|s| ((s.cpu.pbr as u64) << 16) | s.cpu.pc as u64),
                 Chip::Gsu => c.gsu.as_ref().map(|g| ((g.pbr as u64) << 16) | g.pipe_at as u64),
-                Chip::Dsp => c.dsp.as_ref().map(|(d, _)| d.pc as u64 * 3),
+                Chip::Dsp => c.dsp.as_ref()?.0.lle().map(|d| d.pc as u64 * 3),
             },
             _ => None,
         }
@@ -213,7 +213,7 @@ impl Machine {
                     v.extend([g.sfr as i64, g.pbr as i64, g.rombr as i64, g.rambr as i64, g.cbr as i64, g.scbr as i64, g.scmr as i64, g.colr as i64, g.por as i64, g.cfgr as i64, g.clsr as i64]);
                     v
                 }),
-                Chip::Dsp => c.dsp.as_ref().map(|(d, _)| vec![d.pc as i64, d.rp as i64, d.dp as i64, d.sp as i64, d.k as i64, d.l as i64, d.a as i64, d.b as i64, d.tr as i64, d.trb as i64, d.sr as i64, d.dr as i64, d.so as i64, d.si as i64]),
+                Chip::Dsp => c.dsp.as_ref()?.0.lle().map(|d| vec![d.pc as i64, d.rp as i64, d.dp as i64, d.sp as i64, d.k as i64, d.l as i64, d.a as i64, d.b as i64, d.tr as i64, d.trb as i64, d.sr as i64, d.dr as i64, d.so as i64, d.si as i64]),
             },
             _ => None,
         }

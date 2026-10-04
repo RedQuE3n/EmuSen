@@ -122,14 +122,59 @@ namespace EmuSen.WiseMan.Cores
             Assert.False(CoreLibrary.IsOpen(library));
         }
 
-        // A DSP's firmware found whole or as its program and data pair, the pair passed as files 2 and 3, and what is missing asked of the engine that will run; synthetic bytes, not a dump.
+        // VenusRT_DspHle.md §7.3: a DSP-1 cartridge and an empty firmware folder; nothing is missing, the game is created on the replacement, its state carries the replacement's tag, machine info says so, and the notice names the cost.
+        [Fact]
+        public void A_dsp_cartridge_runs_on_the_replacement_with_no_firmware()
+        {
+            if (Discovered is not { } found) return;
+            string rom = Path.Combine(_root, "kart.sfc");
+            File.WriteAllBytes(rom, SyntheticRom.BuildNecDsp("SUPER MARIO KART"));
+            Assert.Empty(Directory.GetFiles(FirmwareLibrary.Directory).Where(f => f.EndsWith(".rom")));
+            Assert.Empty(EmuSen.Common.EmulatorSession.MissingFirmwareFor(rom, Engine));
+            using var engine = new CoreEngine(found.Open()!);
+            engine.LoadRom(rom);
+            Assert.Equal(new[] { new CoreFirmwareSource(1, "replacement"), new CoreFirmwareSource(2, "replacement") }, engine.Machine.Info.Firmware);
+            Assert.DoesNotContain(engine.Machine.Info.Processors, p => p.Name == "DSP");
+            Assert.Contains("Coprocessor.DspHle", engine.Machine.Layout(0));
+            Assert.StartsWith("VenusRT's open replacement for dsp1b.rom - Without the image", engine.FirmwareNotice);
+            string gear = Path.Combine(_root, "gear.sfc");
+            File.WriteAllBytes(gear, SyntheticRom.BuildNecDsp("TOP GEAR 3000"));
+            Assert.Empty(EmuSen.Common.EmulatorSession.MissingFirmwareFor(gear, Engine));
+            engine.LoadRom(gear);
+            Assert.Equal(new[] { new CoreFirmwareSource(1, "replacement"), new CoreFirmwareSource(2, "absent") }, engine.Machine.Info.Firmware);
+            Assert.EndsWith("dsp4.rom would supply the chip.", engine.FirmwareNotice);
+        }
+
+        // EmuSen_Firmware.md §0: a player's spc700.rom in the folder is passed as file 1 and runs in place of VenusRT's own boot program; a synthetic image, never a dump.
+        [Fact]
+        public void A_players_boot_image_runs_in_place_of_the_open_program()
+        {
+            if (Discovered is not { } found) return;
+            string rom = Path.Combine(_root, "plain.sfc");
+            File.WriteAllBytes(rom, SyntheticRom.BuildNecDsp("PLAIN", cartType: 0x00));
+            using var engine = new CoreEngine(found.Open()!);
+            var request = engine.GetFirmwareRequirements(rom).Single();
+            Assert.Equal(("spc700.rom", 64, false, "accuracy"), (request.FileName, request.Size, request.Required, request.ReplacementEffect));
+            engine.LoadRom(rom);
+            Assert.Equal(new[] { new CoreFirmwareSource(1, "replacement") }, engine.Machine.Info.Firmware);
+            Assert.StartsWith("VenusRT's open replacement for spc700.rom", engine.FirmwareNotice);
+            byte[] image = new byte[64];
+            (image[0], image[1], image[62], image[63]) = (0x2F, 0xFE, 0xC0, 0xFF);
+            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, "spc700.rom"), image);
+            engine.LoadRom(rom);
+            Assert.Equal(new[] { new CoreFirmwareSource(1, "file") }, engine.Machine.Info.Firmware);
+            Assert.Null(engine.FirmwareNotice);
+            Assert.Empty(EmuSen.Common.EmulatorSession.MissingFirmwareFor(rom, Engine));
+        }
+
+        // A DSP's firmware found whole or as its program and data pair, the pair passed as files 2 and 3, and nothing missing on VenusRT, which needs none; synthetic bytes, not a dump.
         [Fact]
         public void The_adapter_takes_a_dsp_firmware_whole_or_as_its_split_pair()
         {
             if (Discovered is not { } found) return;
             string rom = Path.Combine(_root, "pilot.sfc");
             File.WriteAllBytes(rom, SyntheticRom.BuildNecDsp("PILOTWINGS"));
-            Assert.Equal(new[] { "dsp1.rom" }, EmuSen.Common.EmulatorSession.MissingFirmwareFor(rom, Engine).Select(r => r.FileName));
+            Assert.Empty(EmuSen.Common.EmulatorSession.MissingFirmwareFor(rom, Engine));
             Assert.DoesNotContain(EmuSen.Common.EmulatorSession.MissingFirmwareFor(rom), r => r.FileName == "spc700.rom");
             byte[] program = Enumerable.Range(0, 6144).Select(i => (byte)(i * 3)).ToArray(), data = Enumerable.Range(0, 2048).Select(i => (byte)(i * 5)).ToArray();
             string whole = Path.Combine(FirmwareLibrary.Directory, "dsp1.rom");
@@ -142,6 +187,8 @@ namespace EmuSen.WiseMan.Cores
 
             var request = new CoreEngine(found.Open()!).GetFirmwareRequirements(rom).Single(r => r.FileName == "dsp1.rom");
             Assert.Equal(8192, request.Size);
+            Assert.False(request.Required);
+            Assert.Equal("accuracy", request.ReplacementEffect);
             Assert.Contains(request.Parts, form => form.SequenceEqual(new[] { "dsp1.program.rom", "dsp1.data.rom" }));
             int none = StateSize();
             Assert.False(FirmwareLibrary.IsInstalled(request));

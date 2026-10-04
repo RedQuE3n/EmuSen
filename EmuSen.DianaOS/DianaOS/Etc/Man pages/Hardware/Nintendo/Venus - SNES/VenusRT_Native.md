@@ -2965,7 +2965,8 @@ withdrawn here. The NEC DSP firmware (files 2 and 3) is unchanged.
   $FFC0-$FFFF while CONTROL bit 7 is set, and the SPC700 always runs: the `Option` that let it stand still without a
   boot ROM is gone.
 - **The interface.** `create` takes no file 1 and refuses one as `BAD_FILE`, since the number no longer names
-  anything. Status -10 and its words are removed from the core, `status_text` and the shim. `info()` lists only the
+  anything (*superseded 2026-10-04 by §38.4*: file 1 is again the player's optional image). Status -10 and its words
+  are removed from the core, `status_text` and the shim. `info()` lists only the
   NEC DSP's file, and `firmware_for` answers an empty list for a cartridge without a NEC DSP. The core info's
   description states the accuracy cost below.
 - **No dependence on the console's image.** The examples' loader, the WiseMan SNES harness
@@ -3133,3 +3134,344 @@ stepping, the call stack, coverage and the profile. Console-shaped views wait fo
 - **Kept from before:** cheats, the frame log and labels, all host-side.
 
 The plain frame is untouched by this step, so it has no cost to measure.
+
+## 37. The NEC DSP replacements, step 1: the oracle over the low-level path (2026-10-04)
+
+Step 1 of `VenusRT_DspHle.md` §8: the port driver, the command oracle, the trace recorder and the bench games' command
+histograms, run against the low-level path (LLE) alone. No replacement exists yet. Everything below was measured on
+2026-10-04 with the tools named, from the tester's dumps in `home/Firmware` (split pairs). No dump, no LLE output in
+bulk and no game trace is in the repository; the reports are in `~/.cache/emusen/probe/venusrt/dsp-hle/`. Only counts,
+shares and cycle numbers are recorded here, and individual values only where fullsnes documents them.
+
+### 37.1 What was built
+
+- **`chips/necdsp.rs`, one additive change**: a `Transfer` log, `NecDsp::transfers`, `None` unless the oracle fits it,
+  and not part of the state. When fitted, it records the chip cycle of every DR transfer: the chip's read that raises
+  RQM, the chip's write, the S-CPU's DR reads and writes, and its stores into an ST01x's RAM. The chip's two entries
+  carry the program counter after the instruction. Unfitted, the cost is one branch per DR transfer.
+- **`chips/dsporacle.rs`**, the driver and the oracle:
+  - the `Chip` trait, which offers a clock, the ports and the edge each cycle made, the only interface a replacement
+    will need in order to be graded. `Lle` implements it over `NecDsp`;
+  - `Places`, which tells the chip's idle place from its command place by the program counter alone. The idle place is
+    the first edge after power-on, and the command place is the first read edge after the S-CPU's first write at idle;
+  - `Host`, how the S-CPU answers. It has a delay to the first byte, a gap between a word's two bytes, and limits;
+    `FASTEST`, 4 and 3 chip cycles, is about one S-CPU bus cycle each;
+  - `transact`, which drives one command from idle. It writes the next input wherever the chip asks for one and reads
+    wherever it wrote. Each transfer is recorded as a `Step` with its direction, value, byte count, latency, answer
+    time, SR at RQM's rise and at the first byte, and the edges made after the rise. The run ends `Idle`, `Ignored`,
+    `Stalled` or `Capped`;
+  - `compare`, `timing` with `predict` (§37.3), the ST010's `st_ready` and `mailbox`, `sweep`, `sweep_mailbox` and
+    `mirror_classes`;
+  - `firmware`, which reads a chip's image from `EMUSEN_VENUSRT_FIRMWARE` as a pair or whole, checks its size, and
+    otherwise prints "not run";
+  - `Pcg`, the seeded generator.
+- **Eight tests.** The driver on a synthetic program; the timing model on its own. Through the real images: fullsnes's
+  ROM versions and DR on completion, and SNESdev's Multiply of 4000h by 4000h; the ST010's 00h and its mirrors; the
+  DSP-2's and DSP-4's documented mirrors; every command byte of all seven chips from two power-on phases; the model's
+  prediction of a jittered S-CPU on the DSP-1B; and the DSP-1 against the DSP-1B. Expected values are fullsnes's or
+  come from running the LLE at test time. The tests pass without an image, saying "not run".
+- **`examples/dsp_oracle.rs`**: `sweep`, `versus`, `pair`, `latency` and `rate`.
+- **`examples/dsp_trace.rs`**: the trace recorder, which records every command a game gives its chip with the frame,
+  inputs, results and each transfer's latency, and the game's histogram. It runs no battery file, so runs reproduce.
+  Its pad scripts use the harness's verbs (`frames`, `tap`, `hold`, `release`, `tapuntil ... wram`), plus
+  `tapuntil BTN chip N`, which taps until N commands that compute have reached the chip, and `shot`. The five scripts
+  are in `examples/dsp_pads/`.
+
+### 37.2 The protocol as the ports show it
+
+- **DSP-1, DSP-1B, DSP-3.** At idle the chip writes 80h in 8-bit mode. Its read of the command byte raises RQM, which
+  is the request for the first input. DRC changes to 16-bit 3 cycles after that rise, so a driver that answered sooner
+  would move one byte, not a word. Each input read raises RQM for the next, the last is read without raising it, and
+  the results follow as writes. A command without inputs still raises RQM at its read, so one transfer in either
+  direction (fullsnes's "oblivious" chip) comes before its first result: Multiply is `i2o`, the ROM version `io`.
+- **Bytes passed over.** On the DSP-1 and DSP-1B, 40h-FFh are read and passed over: the chip takes the next byte as a
+  command without returning to idle (`End::Ignored`). The bench games resynchronise this way: Pilotwings and Super
+  Mario Kart write 128 bytes of 80h at boot, Suzuka 8 Hours 256, Super Bases Loaded 2 one FFh. The DSP-3's 40h-FFh form
+  one class too.
+- **Raster runs.** 0Ah gives one line of four results after another for as long as the S-CPU reads. Every bench game
+  ends a run by writing over the results it no longer wants, after which the chip returns to idle: four words a run in
+  Pilotwings, Super Mario Kart, Lock On and Suzuka 8 Hours, one word in Michael Andretti's Indy Car Challenge and Super
+  Bases Loaded 2.
+- **DSP-2.** 8-bit throughout. At idle the chip writes 00h after power-on and FFh after a command.
+- **DSP-4.** 16-bit throughout, the command word included; idle is FFFFh. An S-CPU read at idle makes the chip write
+  FFFFh again, and Top Gear 3000 polls that way (514 reads before its first command). The first transfer after a
+  command is a write by the chip.
+- **ST010.** At power-on the chip writes a word to DR. It serves its mailbox only after the S-CPU has read that word:
+  without the read, no command completed within 5,000 cycles. F1 ROC II reads it once. The busy flag is polled every 3
+  cycles, so the mailbox's latency moves with the start's phase modulo 3, by a constant for every command.
+- **ST011.** It does not answer the mailbox. It speaks through DR in 8-bit mode and signals with USF1 and USF0.
+
+### 37.3 The latency model, corrected
+
+**`VenusRT_DspHle.md` §6.2's model does not hold.** That model takes one constant per phase, counted from the S-CPU's
+completion of the previous transfer. The measured latency from completion depends on when the S-CPU answered, because
+the chip goes on computing while RQM is high. For Triangle (04h), with the S-CPU answering d cycles after each rise, the
+second input's latency is 14 - d down to a floor of 2, and the result's 28 - d down to a floor of 4: the edges
+themselves come 14 and 28 cycles after the preceding ones, or 2 and 4 after the answer, whichever is later.
+
+**Two numbers per phase** describe it: the *work*, cycles from the previous rise, and the *notice*, cycles from the
+S-CPU's completion. RQM rises at the later of the two. `dsporacle::timing` measures them from two runs, one with the
+S-CPU answering at `FASTEST` and one answering after all work is done, and `predict` gives the latencies of any other
+run. Against runs whose answer time was drawn anew at every transfer, from 4 to 29 cycles to the first byte and 3 to
+6 between bytes:
+
+| Chip | Seeded cases | Predicted exactly | Mispredicted | Not modelled (the transfers change with the answer time, or capped) |
+|---|---|---|---|---|
+| DSP-1, DSP-1B | 1,024 each | 1,008 | 0 | 16 |
+| DSP-2 | 1,024 | 832 | 0 | 192 |
+| DSP-3 | 1,024 | 860 | 0 | 164 |
+| DSP-4 | 1,024 | 939 | 0 | 85 |
+| ST011 | 1,024 | 992 | 0 | 32 |
+
+**The start's phase does not matter** on the DR chips. Over 1,024 cases each, a start 10,007 cycles later gave the
+same values, transfers, SR and latencies, so every wait loop resolves to the cycle. On the ST010 only the poll period of
+§37.2 moves the latency.
+
+**Some transfers are not handshaken.** On these command bytes the values or the sequence of transfers change with the
+S-CPU's answer time:
+
+- **DSP-1, DSP-1B**: none.
+- **DSP-2**: 01h, 0Fh and their mirrors, and the 0Eh class. On 01h, the command Dungeon Master gives most, the change
+  comes once the S-CPU answers 16 cycles or more after a rise (12 still answers alike). This is fullsnes's remark that
+  the game moves the data with block moves and no handshake, now seen at the ports.
+- **DSP-3**: 22 bytes, among them 02h, 06h, 07h, 18h and 38h.
+- **DSP-4**: 00h, 09h, 0Ah and 0Fh, and five of 11h's mirrors in single cases.
+- **ST011**: 03h, 0Fh and F2h.
+
+A replacement must reproduce these by the same rule, which §6.4 of the plan anticipated for the DSP-2 alone.
+
+**The DSP-1B's phases** for the commands the bench games use, from `dsp_oracle latency dsp1b 256`, as work/notice in
+chip cycles. "-" is work hidden behind the fastest answer, and "a-b (n)" a range of n values over the seeded cases. The
+first phase runs from the command byte, and the second absorbs the command's decoding:
+
+| Command | Transfers | Phases |
+|---|---|---|
+| 00h Multiply | `i2o` | -/2, 14/2, -/4, -/3 |
+| 01h, 11h Attitude | `i4` | -/2, 15/2, -/2, -/2, 119-132 (7)/91-99 (3) |
+| 02h Parameter | `i7o4` | -/2, 13/2, -/2 x5, 489-545 (47)/448-503 (45), -/2, 10/2, -/2, -/3 |
+| 03h, 13h, 0Dh Subjective, Objective | `i3o3` | -/2, 15/2, -/2, -/5, -/2, -/2, -/3 |
+| 04h Triangle | `i2o2` | -/2, 14/2, 28-33 (4)/4, -/2, -/3 |
+| 06h Project | `i3o3` | -/2, 14/2, -/2, -/245-269 (21), -/2, -/2, -/3 |
+| 0Ah Raster | `io4...` | with zero inputs, a line's first result 71 cycles after the read of the last line's fourth (64 on 1Ah-3Ah); per input not yet measured |
+| 0Ch Rotate | `i3o2` | -/2, 14/2, -/2, 31-35 (2)/4, -/2, -/3 |
+| 0Eh Target | `i2o2` | -/2, 13/2, -/72, -/2, -/3 |
+| 10h Inverse | `i2o2` | -/2, 15/2, -/36-54 (10), -/2, -/3 |
+| 14h Gyrate | `i6o3` | -/2, 16/2, -/2 x4, 201-242 (35)/3, -/2, -/2, -/3 |
+| 1Ch Polar | `i6o3` | -/2, 15/2, -/2 x4, 89-102 (8)/33-38 (4), -/2, -/2, -/3 |
+| 28h Distance | `i3o` | -/2, 17/2, -/2, -/59-74 (5), -/3; on the DSP-1, -/58-73 (5) |
+
+Against SNESdev's split, the first input's work less its notice equals SNESdev's first input column for seven of the
+eight commands it splits (Inverse is one cycle over). The later phases agree only for Multiply, Radius and Range; for
+Triangle, only at the range's lower end. Inverse, Distance, Rotate and Polar compute in fewer cycles than SNESdev gives
+(36-54 against 73; 59-74 against 127; 27-31 against 37; at most 64 against 107).
+
+**The rate.** Multiply runs back to back on one chip at 2.49 million cases a second, about 152 million chip cycles a
+second (`dsp_oracle rate dsp1b 00`, under the timing lock with the load average at 8). 2^32 pairs would take 29
+minutes on one thread, and about 3.6 minutes on eight if the work scales.
+
+### 37.4 The DSP-1 against the DSP-1B
+
+From `dsp_oracle versus dsp1 dsp1b 2048`, 2,048 seeded cases per command byte, and `pair` for sequences:
+
+- **28h Distance**: the values differ in 1,049 of 2,048 cases, and the latency in all of them. This is the fix
+  fullsnes names.
+- **2Fh, 27h**: 0100h against 0101h, as fullsnes says.
+- **17h, 1Fh, 37h, 3Fh**, the data ROM dump and its mirrors: the two data ROMs differ.
+- **40h-FFh**: both pass the byte over. The rest of each transaction is the following byte's own command (on the
+  DSP-1B, 12,288 seeded cases agree but at the transfer cap), so it differs exactly where that command does.
+- **Pairs**: of every command from 00h to 3Fh followed by every other, only the memory test (07h, 0Fh) changes a later
+  command. After it, Raster (0Ah) differs in 4,096 of 4,096 cases and Target (0Eh) in 4,058; Project does not. The
+  memory test leaves the RAM in a state Parameter never produces. After Parameter itself, Raster, Target and Project
+  agree in 4,096 of 4,096 cases each.
+- **Sequences**: 16,384 random commands from the bytes in neither list, without a reset, agree.
+
+Everything else agrees bit for bit, latency included. **The two programs differ, for a game, only in Distance**, which
+Pilotwings, Super Mario Kart, Michael Andretti's Indy Car Challenge, Lock On and Super Bases Loaded 2 use (§37.6).
+
+### 37.5 The sweeps
+
+The 256 command bytes per chip: zero inputs and four seeded sets of 64 words for the DR chips, and four seeded RAM
+fills for the ST010 (`dsp_oracle sweep`).
+
+| Chip | Distinct behaviours | What the classes show |
+|---|---|---|
+| DSP-1, DSP-1B | 27 | fullsnes's commands, and as alike: 04h/24h, 0Ch/2Ch, 0Eh/1Eh/2Eh/3Eh, 10h/30h, 1Ch/3Ch, 17h/1Fh/37h/3Fh, 07h/0Fh, 27h/2Fh. **20h is not 00h, and 38h is not 18h**, though fullsnes names each pair alike. 0Ah, 1Ah-3Ah are raster runs, 1Ah-3Ah with a shorter line. Gyrate (14h) takes six inputs and gives three. On a fresh chip the attitude matrices are zero, so commands that read them look alike here (03h with 0Dh; 01h with 05h); telling them apart needs a setter first, left to step 5 |
+| DSP-2 | 18 | fullsnes's "10h..FFh mirrors of 00h..0Fh" holds for every command it names, and for all but 0Eh, whose 16 bytes form four classes by bits 4-5. 09h and 0Ah answer alike |
+| DSP-3 | 21 | 2Fh gives 0300h; mirrors with periods from 4 to 20h within 00h-3Fh; 40h-FFh one class. 1Ch, 3Ch and 20h stall with zero inputs (no edge in 2 million cycles) |
+| DSP-4 | 22 | 13h gives 1,024 words and 14h 0400h. 15h-1Eh do nothing, as fullsnes says; 1Fh also does nothing, a cycle sooner. 20h-FFh mirror 10h-1Fh in every case. 03h and 0Eh do nothing in 377 cycles |
+| ST010 | 9 | exactly fullsnes's list: 00h-08h, 09h-0Fh mirroring 01h-07h, 10h-FFh mirroring 00h-0Fh |
+| ST011 | 16 | 00h, 08h, 0Ah, 0Dh, 10h-EFh, F0h and F4h-FFh do nothing, F0h with F4h-FFh (18 cycles) and not with 10h-EFh (12) as fullsnes groups it; 01h takes 128 bytes; 0Bh, 0Ch and 0Eh compute for about 1,000-1,800 cycles; F1h-F3h are their own |
+
+**ST010 00h.** fullsnes's "Set RAM[0010h]=0000h" is the chip's word 0010h, the mailbox that the S-CPU reaches as bytes
+0020h-0021h. Every command clears it on completion. 00h clears it and changes nothing else (test
+`the_st010_mailbox_answers_and_mirrors_as_documented`). The superfamicom wiki's parameter tables are in bytes: 01h
+changes words 0-3 and 8, its X1, Y1, Quadrant, Y0 and Theta.
+
+### 37.6 The bench games' command histograms
+
+`dsp_trace <rom> 7200 [script]`: 7,200 frames from power-on, no battery file. Shares are of every command recorded,
+the resynchronising bytes included (at most 256 a game). The third column is the first command below 40h other than a
+test.
+
+| Game (chip) | Input | First command that computes | Commands, as a share of the total |
+|---|---|---|---|
+| Pilotwings (DSP-1) | none | frame 1,798 | 122,649: 00h 30%, 13h 23%, 06h 19%, 0Ah, 0Eh, 02h, 0Dh 3% each, 01h, 03h, 14h, 28h, 11h 2.9% each, 0Ch 1.5% |
+| Super Mario Kart (DSP-1B) | none | 95 | 54,580: 06h 56%, 04h 23%, 02h 12%, 00h 6%, 28h 2%, 0Ah 0.2% |
+| Ballz 3D (DSP-1B) | none | 760 | 112,641: 06h 48%, 03h 47%, 01h 2%, 0Ch 2%, 02h 1%, 04h 0.6%; 0Fh and 2Fh once at boot |
+| Michael Andretti's Indy Car Challenge (DSP-1B) | `andretti.txt`, Start | 3,309 | 22,502: 06h 46%, 28h 30%, 04h 13%, 02h 6%, 0Ah 6%; 0Fh and 2Fh once at boot |
+| Lock On (DSP-1B) | `lockon.txt`, Start | 1,522 | 266,536: 28h 21.5%, 00h 13.7%, 10h 13.7%, 01h 13.3%, 03h 13.3%, 06h 9.5%, 1Ch 8.8%, 02h 4%, 0Ah 2% |
+| Super Bases Loaded 2 (DSP-1B) | none | 3,028 | 14,434: 06h 94%, 28h 3%, 02h 1%, 04h 1%, 0Ah 0.5%, 0Ch 0.3% |
+| Suzuka 8 Hours (DSP-1B) | `suzuka.txt`, Start | 1,473 | 25,724: 02h 47%, 06h 44%, 00h, 04h, 0Ch 2% each, 0Ah 0.5% |
+| Dungeon Master (DSP-2) | `dm.txt`, Start | 1,035 | 334,894: 05h 66.5%, 01h 29%, 0Fh 3%, 03h 0.8%, 09h 0.8% |
+| Top Gear 3000 (DSP-4) | `tg3000.txt`, through the menus and the shop | 3,006 | 223,899: 00h 82%, 0Ah 11%, 0Bh 1.3%, 01h, 03h, 05h, 06h, 07h, 08h, 09h 0.7% each, 11h 0.3% |
+| F1 ROC II (ST010) | none | 1,005 | 183,207 mailbox commands: 05h 53.6%, 08h 17%, 03h 12.5%, 04h 12.5%, 02h 2%, 07h 2%, 06h 12 times |
+
+**Every script reaches the chip**, and the five games without one reach it without input. Super Bases Loaded 2 and
+F1 ROC II reach their chips in the attract mode, against §24.2 and plan §4.3. Michael Andretti's Indy Car Challenge and
+Top Gear 3000, which §24.2 counted as using their chips by frame 2,400, give no command that computes without input.
+There the chip's presence changed WRAM through the boot's tests (Andretti's 0Fh and 2Fh) and the idle reads (Top Gear
+3000's 514), not through commands. Suzuka 8 Hours, not in §24.2, needs input too: without it no command arrives in
+3,600 frames, and at frame 3,368 a DMA reads DR, which the chip takes as bytes passed over. Top Gear 3000's script
+follows its menus exactly and is the one likely to need rewriting if the game's timing moves.
+
+**The union of commands used**, which sets the scope of the later steps:
+
+- **DSP-1 family**: 00h, 01h/11h, 02h, 03h/13h, 04h, 06h, 0Ah, 0Ch, 0Dh, 0Eh, 10h, 14h, 1Ch and 28h, with 0Fh and 2Fh at
+  boot. No bench game uses Radius (08h), Range (18h, 38h), Scalar (0Bh-2Bh), the second Multiply (20h), the data ROM
+  dump (1Fh), Raster's other forms or attitude C.
+- **DSP-2**: 01h, 03h, 05h, 09h and 0Fh. 06h and 0Dh are unused.
+- **DSP-4**: 00h, 01h, 03h, 05h-0Bh and 11h. 00h carries 82% of the commands.
+- **ST010**: 02h-08h, all seven computing commands.
+
+### 37.7 Against the plan's predictions and claims
+
+- **P3, retired, false in its second half.** For only three of SNESdev's eight commands (Multiply, Radius, Range) are
+  all phases within 2 cycles of its columns, and four if Triangle's lowest is taken. The first half, a constant or a
+  function of one input feature per phase, is open: nine of the DSP-1B's commands have a phase that varies (§37.3), and
+  which feature drives each is steps 3-7's question.
+- **P4, holds by extrapolation**: about 3.6 minutes on eight threads against the 30 predicted (§37.3), not run.
+- **P5, holds**: no bench game issues 1Fh or 13h in 7,200 frames.
+- **P7, retired, false**: F1 ROC II issues seven distinct commands in its attract mode, against at most three.
+- **§6.2's model** is replaced by work and notice (§37.3). **§6.4's unhandshaken transfers** are not the DSP-2's alone:
+  the DSP-3, DSP-4 and ST011 have them too.
+- **§2.1 and §3.5**: the ST010 needs its power-on DR word read before its mailbox runs; fullsnes's RAM[0010h] for 00h is
+  a word address.
+- **§3.1**: 20h and 38h are not the alike forms the table presumes; Gyrate takes six inputs and gives three; Raster is a
+  run, ended by the S-CPU's writes.
+- **§4.3**: of the four games said not to reach their chips without input, two do; three others need input.
+
+## 38. The NEC DSP replacements, step 2: the replacement's frame (2026-10-04)
+
+Step 2 of `VenusRT_DspHle.md` §8. A DSP game now runs with no firmware folder: on VenusRT's open replacement for the
+DSP-1, DSP-1B, DSP-2 and ST010, or without its chip for the DSP-3, DSP-4 and ST011. The player's image, when present,
+stays the exact path. The replacement is a frame. Its ports behave as the chip's, and of its commands only those
+fullsnes fixes answer exactly. Steps 3 to 11 fill it in command by command against §37's oracle.
+
+### 38.1 What was built
+
+- **The slot.** `chips/dspengine.rs` holds `DspEngine`, either `Lle(NecDsp)` or `Hle(DspHle)`, behind the low-level
+  path's port interface (`host_read`, `host_write`, `run_to`, `reset`, `pack`). The bus code is unchanged.
+  - Under the replacement there is no µPD77C25 program, so the debugger lists neither processor 2 nor the `DSPPRG`
+    space.
+  - `DSPRAM` stays for the ST010, whose RAM is real on both engines and is the battery file as before.
+- **The replacement.** `chips/dsphle.rs` is a state machine over the ports with one scheduled chip edge. Its DR and SR
+  handshake is the low-level path's, byte for byte, including the "oblivious" chip (a read or a write completes a
+  transfer alike). It follows §37.2:
+  - **DSP-1 and DSP-1B.** At idle the chip writes 80h in 8-bit mode. The command's read raises RQM, and DRC turns to
+    16-bit 3 cycles later. A command without inputs takes one transfer before its result. 40h-FFh are passed over, and
+    a raster run repeats its line until the S-CPU writes over a result.
+  - **DSP-2.** 8-bit throughout, with the idle word 00h after power-on and FFh after a command.
+  - **ST010.** A word written to DR at power-on, and the mailbox served only after that word is read.
+- **What it computes.**
+  - Exactly: the DSP-1's 2Fh (0100h, and 0101h on the DSP-1B), the DSP-2's 0Fh, a no-op, and the ST010's 00h, which
+    clears the mailbox and nothing else.
+  - Every other DSP-1 command takes its documented transfers and gives zeros. The counts come from fullsnes's codes,
+    SnesLab's parameter lists and SNESdev's two words for Radius. Gyrate's six inputs and three results are
+    characterised (§37.5): a count, the one choice R2 leaves open there, since SnesLab's list of three inputs and one
+    result would desynchronise every game that uses it.
+  - A DSP-2 command other than 0Fh returns to idle, since nothing documents its lengths. An ST010 command clears its
+    busy bit 16 cycles after it is set.
+  - **Timing** is one notice of 2 cycles for every phase. The work of §37.3 is not yet modelled.
+- **No table** is written in the source. A crate test fails on an array literal of more than 16 numbers in
+  `dsphle.rs`: this is plan §5.4's guard.
+- **Selection at create** (`ffi.rs`, shared by both export sets): a file 2 fits the low-level path. Without one, a
+  cartridge whose chip has a replacement gets it, and the DSP-3, DSP-4 and ST011 run without their chip as before.
+- **The state** is version 18. A DSP cartridge's `Coprocessor` group gains `DspEngine`, 0 for the low-level path and 1
+  for the replacement, then `NecDsp` or `DspHle`. A version 17 state still loads, as the low-level path's. A state
+  written under the other engine is refused, the machine unchanged, with status -11 and its words.
+- **The descriptors**:
+  - **emusen-native.** `Firmware` gains `replacement: Option<Replacement>`, which is `Exact`, `Accuracy { cost }` or
+    `None { cost }`. `MachineInfo` gains `firmware: Vec<(which, FirmwareSource)>`, where the source is `File`,
+    `Replacement` or `Absent`.
+  - **Schemas and baseline.** The firmware, info and machine-info schemas carry the new fields, and the ABI baseline
+    gains their nine lines at 1.0, since no minor has been released (`EmuSen_CoreAPI.md` §4.1). §6.2 and §6.4 there
+    record them.
+  - **VenusRT's answers.** Every firmware entry is `required: false`. The DSP-1, DSP-2 and ST010 entries carry
+    `accuracy` with a cost naming what is exact; the DSP-3, DSP-4 and ST011 entries carry `none`. Machine info lists
+    the path the cartridge runs on.
+- **The C# side**:
+  - `CoreFirmware.Replacement`, `CoreReplacement`, `CoreFirmwareSource` and `CoreMachineInfo.Firmware`.
+  - `FirmwareRequest` carries `Required` as a field, true unless a core says otherwise, with the replacement's effect
+    and cost.
+  - `EmulatorSession.MissingFirmwareFor` returns required requests only, so Mistress's picker never opens for VenusRT.
+    C# Venus's NEC DSP requests stay required.
+  - `CoreEngine.FirmwareNotice`, read through `ICore` and the session, gives Mistress one status line when the game
+    runs on a replacement short of exact or without its chip.
+- **The conformance kit.** C4 checks each entry's `replacement.effect` word, and its cost unless the effect is `exact`.
+  It also creates an image whose entries are all optional with no files.
+- **The oracle.** `dsporacle::Hle` implements `Chip` over the replacement, so steps 3 onward grade it through the same
+  driver as the image.
+
+### 38.2 Measured 2026-10-04
+
+| Check | Result |
+|---|---|
+| The crate's tests, with the tester's images | 108 of 108, nine new with §38.4's. `the_replacements_rom_version_agrees_with_the_image`: the replacement's 2Fh gives the same values and transfers as the DSP-1's and DSP-1B's images, and 41h is passed over on both. Latency is not compared until step 3 |
+| emusen-native, the conformance kit's tests, the ABI check | 51, 9, and 382 facts agreeing with the header on four triples and the baseline |
+| The kit against VenusRT with no files: Super Mario Kart, Pilotwings, Dungeon Master, F1 ROC II, Top Gear 3000, 300 frames, and after §38.4 Super Mario Kart and Super Mario World, and Super Mario World with the tester's boot image as file 1 | compliant on every one; C4 notes "every firmware entry optional (1): created with no files". The first Super Mario Kart run failed C15: a debug-armed run's state differed from a plain one, because `run_to` made only one due edge per catch-up. It now makes every due edge |
+| The games without an image at frame 1,500, by eye | Super Mario Kart's title, Pilotwings' menu, F1 ROC II's race, Dungeon Master's opening text, all drawn. Their 3D results are zeros, so play is wrong where a game computes with its chip |
+| WiseMan, each run under an 8 GB cap | the Mistress suite, 1,641 passed and 51 skipped, before §38.4; after it, the VenusRt, CoreAdapter, Firmware, NecDsp, CoreAbi, CoreDiscovery, NativeHost, CoreDebug, Conform, MainWindowLibrary and WindowFitAudit filters, 319 of 319. Among them are the new `A_dsp_cartridge_runs_on_the_replacement_with_no_firmware` (no request missing, the replacement's tag in the state, machine info's `replacement`, and the notice; a DSP-4 cartridge `absent`), `A_players_boot_image_runs_in_place_of_the_open_program` and the revised `An_ordinary_game_on_venusrt_prompts_for_no_firmware`, in which neither game asks and the DSP-1 cartridge loads with the notice |
+
+### 38.3 What is open
+
+- **The commands.** Steps 3 to 11 build the commands into the frame and grade each against the image. Until then the
+  DSP-1, DSP-2 and ST010 games run with wrong results, which their costs state.
+- **The timing.** Step 3 takes on the work and notice of §37.3. Until then every phase answers 2 cycles after the
+  S-CPU, so a game's polling loops run fewer times than on the chip.
+- **The DSP-2's lengths** are characterised at step 9. Until then Dungeon Master's walls are not drawn.
+- **Plan §7.3's firmware window**, which lists each entry with its replacement's effect, is not built. The status line
+  is the notice.
+
+### 38.4 The player's SPC700 boot image, file 1 again
+
+*Decided 2026-10-04* (`EmuSen_Firmware.md` §0, point 2: the player's own image is used in place of the replacement when
+present). §35 withdrew file 1 outright. It returns the way the NEC DSPs' files do, and D-38's program is unchanged.
+
+- **The interface.**
+  - `firmware_for` lists `spc700.rom` for every image: 64 bytes, `required: false`, never prompted for, with
+    `replacement: { effect: accuracy }` and §35.3's cost in a player's words.
+  - Core info lists it too.
+  - `create` takes a 64-byte file 1 and refuses any other length with `BAD_FILE`.
+  - Machine info's `firmware` gives `{ which: 1, source: file }` or `replacement`.
+  - A frontend finds the file in its firmware folder like any other; Mistress's status line names the open program
+    when no file is there, and a DSP's line first when both apply.
+- **The core.** `Smp::with_boot` maps the image at $FFC0-$FFFF in place of `apu/boot.rs`'s program and starts from its
+  reset vector. The console's reset button keeps it, and the debugger's disassembly reads it while CONTROL maps it. The
+  examples take it from `EMUSEN_VENUSRT_BOOT`.
+- **The tests** use a synthetic 64-byte image, a loop at its own vector, for the path with a file. No image is
+  committed.
+
+**Measured 2026-10-04**, with the tester's own image from the probe cache as the input (the core reads it; its bytes
+were not inspected):
+
+| Check | VenusRT's own program | The tester's image |
+|---|---|---|
+| blargg `spc_smp`, the backdrop at frames 600, 1,800 and 3,600 | red from 1,800: Failed ("CPU/verify IPL ROM", §35.3) | blue at 3,600: **Passed** |
+| blargg `spc_timer`, `spc_mem_access_times` | Passed | Passed |
+| spc_dsp6's 111 tests singly, 600 frames, §30.2's grading | 104 pass, 1 fails, 6 hang | **106 pass, 5 hang**, §30.2's result before D-38 |
+| "Misc/brr addr wrap-around" | fails | passes |
+| "Order/voice 0 noise" | hangs | passes |
+
+With the console's program, VenusRT returns to its §30.2 results. **§35.5's argument stands with this evidence**:
+the two spc_dsp6 tests are a sensitivity of VenusRT's to the boot program's timing, not a fault in the open
+program's protocol. The open program remains the default, and these two tests and `spc_smp` are its named cost.

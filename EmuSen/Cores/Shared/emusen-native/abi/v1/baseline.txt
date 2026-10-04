@@ -235,6 +235,9 @@ json firmware array<object> @1.0
 json firmware[].label string required @1.0
 json firmware[].name string required @1.0
 json firmware[].parts array<array<string>> optional @1.0
+json firmware[].replacement object optional @1.0
+json firmware[].replacement.cost string optional @1.0
+json firmware[].replacement.effect string required @1.0
 json firmware[].required boolean required @1.0
 json firmware[].size integer required @1.0
 json firmware[].which integer required @1.0
@@ -272,6 +275,9 @@ json info.systems[].firmware array<object> optional @1.0
 json info.systems[].firmware[].label string required @1.0
 json info.systems[].firmware[].name string required @1.0
 json info.systems[].firmware[].parts array<array<string>> optional @1.0
+json info.systems[].firmware[].replacement object optional @1.0
+json info.systems[].firmware[].replacement.cost string optional @1.0
+json info.systems[].firmware[].replacement.effect string required @1.0
 json info.systems[].firmware[].required boolean required @1.0
 json info.systems[].firmware[].size integer required @1.0
 json info.systems[].firmware[].which integer required @1.0
@@ -289,6 +295,9 @@ json machine_info.battery array<object> optional @1.0
 json machine_info.battery[].length integer required @1.0
 json machine_info.battery[].suffix string required @1.0
 json machine_info.battery[].which integer required @1.0
+json machine_info.firmware array<object> optional @1.0
+json machine_info.firmware[].source string required @1.0
+json machine_info.firmware[].which integer required @1.0
 json machine_info.frame_rate object required @1.0
 json machine_info.frame_rate.den integer required @1.0
 json machine_info.frame_rate.num integer required @1.0

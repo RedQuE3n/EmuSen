@@ -965,6 +965,7 @@ namespace EmuSen.Mistress.Views
                     ? $"Running: {displayName}  ({restoredCheats} saved cheat(s) restored)"
                     : $"Running: {displayName}";
                 if (_session.EngineNotice is { } notice) StatusText.Text += $"  ({notice})";
+                if (_session.FirmwareNotice is { } firmware) StatusText.Text += $"  ({firmware})";
                 _currentRomPath = path;
                 _currentDisplayName = displayName;
                 if (!reset) RecordStart(path);

@@ -45,6 +45,9 @@ namespace EmuSen.Cores
         // Answered without loading, so a caller can resolve it first - see EmuSen_Firmware.md §1.
         IReadOnlyList<FirmwareRequest> GetFirmwareRequirements(string romPath) => Array.Empty<FirmwareRequest>();
 
+        // After LoadRom: a line saying the game runs on a firmware replacement short of exact, or without a chip, else null - see VenusRT_DspHle.md §7.3.
+        string? FirmwareNotice => null;
+
         // One frame of internal timing; touches no presentation surface. Not before LoadRom.
         void RunFrame();
 

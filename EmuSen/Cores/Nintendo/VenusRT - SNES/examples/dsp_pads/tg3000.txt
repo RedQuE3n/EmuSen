@@ -1,0 +1,36 @@
+# Top Gear 3000: title, Championship, 1 Player Full, Race, the track and the shop's Exit, to the start line.
+tapuntil start chip 50 - 1500 40
+frames 60
+tap a
+frames 60
+tap a
+frames 60
+tap down
+frames 30
+tap a
+frames 240
+tap down 8
+frames 60
+tap down 8
+frames 60
+tap down 8
+frames 60
+tap a
+frames 180
+tap a
+frames 180
+tap down 8
+frames 60
+tap down 8
+frames 60
+tap down 8
+frames 60
+tap down 8
+frames 60
+tap down 8
+frames 60
+tap down 8
+frames 60
+tap a
+frames 240
+tapuntil start chip 50 - 2000 40

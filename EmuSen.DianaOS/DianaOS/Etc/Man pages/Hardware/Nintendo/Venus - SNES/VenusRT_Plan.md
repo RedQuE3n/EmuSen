@@ -631,7 +631,9 @@ Each question as it was put, and its decision. Every recommendation this page ma
    source for writers. Public documents that cite it are used as any document is (§1.2, §2).
 2. **Q2, how is coprocessor firmware obtained?** Decided: as today, from the player's own dumps, found or picked
    through `FirmwareLibrary` (`EmuSen_Firmware.md` §5 is why nothing ships). There is no high-level emulation of the
-   DSPs, and VenusRT reads the same files, combined or split (§4.2).
+   DSPs, and VenusRT reads the same files, combined or split (§4.2). *Superseded 2026-10-04* by `EmuSen_Firmware.md`
+   §0: VenusRT carries open replacements for the NEC DSP programs, planned in `VenusRT_DspHle.md`, whose first step is
+   recorded in `VenusRT_Native.md` §37; the player's own image stays the exact path when present.
 3. **Q3, how much accuracy is traded for speed on the handheld and the weak laptop?** Decided: none by default, and
    no second "fast" core. If §5.5's budget is missed, the first lever is the SA-1 slice bound (§5.4), which changes only
    contention timing, and it becomes a setting before anything in the PPU or CPU is loosened.

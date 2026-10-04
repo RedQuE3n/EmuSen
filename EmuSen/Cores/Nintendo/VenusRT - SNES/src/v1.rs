@@ -68,7 +68,7 @@ fn replacement(stem: Option<&str>) -> Replacement {
     let without = |chip: &str| Replacement::None { cost: format!("VenusRT has no replacement for the {chip} yet: without the image the game runs without its chip.") };
     match stem {
         Some("dsp1") | Some("dsp1b") => Replacement::Accuracy {
-            cost: "Without the image, VenusRT's open replacement for the DSP-1 runs: its ports and timing as the chip's, Multiply, Radius, Range, the memory test and the ROM version exact, Triangle, Rotate and Polar within a few units, and its other commands not computed yet, so 3D results are wrong (VenusRT_DspHle.md §5.5).".into(),
+            cost: "Without the image, VenusRT's open replacement for the DSP-1 runs: its ports as the chip's, Multiply, Radius, Range, the memory test and the ROM version exact, and every other command a game gives within a few units, so Super Mario Kart and the racing and baseball games play as with the image; a view tilted past about 80 degrees is not reproduced, so Pilotwings' level flight and Lock On's ground are drawn wrongly (VenusRT_Native.md §51).".into(),
         },
         Some("dsp2") => Replacement::Accuracy {
             cost: "Without the image, VenusRT's open replacement for the DSP-2 runs: every command Dungeon Master gives answers as the chip does, to the cycle, and the game runs as with the image; the data ROM transfer gives zeros, the scaling command's timing is estimated, and counts beyond the chip's buffers are not reproduced (VenusRT_Native.md §42).".into(),

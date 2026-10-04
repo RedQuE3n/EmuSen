@@ -3475,3 +3475,374 @@ were not inspected):
 With the console's program, VenusRT returns to its §30.2 results. **§35.5's argument stands with this evidence**:
 the two spc_dsp6 tests are a sensitivity of VenusRT's to the boot program's timing, not a fault in the open
 program's protocol. The open program remains the default, and these two tests and `spc_smp` are its named cost.
+
+## 41. Stage 8: the parity gates (2026-10-04)
+
+`VenusRT_Plan.md` §7 lists eight conditions, G1 to G8, that must all hold before VenusRT becomes Mistress's SNES
+default in place of C# Venus. This section runs each in full on the branch's head and records a verdict: **met**,
+**met with named exceptions**, or **not met**. No core behaviour was changed; the step's commits are a harness option
+for G1, a test fix for G7 and the goldens test for G5. What was found is listed as blockers (§41.10), each with a
+proposed fix and its effort, for a following step to take up after review.
+
+The firmware policy (`EmuSen_Firmware.md` §0) changed what two of the gates mean after the plan was written. The plan
+assumed the player's own images (§9, Q2), and the policy now makes VenusRT's open replacements the default path: its
+SPC700 boot program (§35) and the NEC DSP replacement, whose frame exists (§38) and whose commands are being built on
+another branch. Each gate below is therefore read twice where firmware can matter: with no firmware folder, and with
+the tester's own images.
+
+### 41.1 What was run, and what was added to run it
+
+- **The corpus runner** (`VenusRtTestRomRunnerTests.The_corpus_reproduces_the_recorded_baseline`), with C# Venus,
+  Mesen through the probe and VenusRT as its third engine, over the 295 ROMs of the manifest, twice:
+  - *no firmware*: `EMUSEN_VENUSRT_NO_FIRMWARE=1`, which withholds the NEC DSP image from VenusRT, and no boot image;
+  - *the tester's images*: the DSP images (the copies in the corpus's `firmware/` folder, byte-identical to
+    `home/Firmware`'s split pairs, checked file by file) and `EMUSEN_VENUSRT_BOOT` naming the cached SPC700 image.
+
+  Both options are new in `VenusRtSnesEngine`. VenusRT then receives the boot image as file 1, through
+  `VenusMachine`'s new `boot` parameter. Mesen is always given the DSP image, because it is the oracle. The test
+  `The_runner_starts_VenusRT_from_a_boot_image_when_given_one` checks the option on a synthetic image. Both runs
+  reproduced the committed baseline for C# Venus and Mesen in every cell; each took about 21 minutes on six threads,
+  with the desktop's load average between 4 and 19 from other work.
+- **The single-step suites** through the crate's own harness (`cargo test --release`, the corpus set):
+  `the_cpu_through_the_whole_suite` and `the_spc700_suite_with_cycles`.
+- **The crate's tests** with the corpus and the tester's DSP images: 108 of 108.
+- **WiseMan's VenusRT, adapter, Mistress-engine, debugger and fit-audit tests**, with the opt-in game sets: 104
+  tests, 102 passing at first and the other two after the corrections of §41.7.
+- **The goldens**, a new opt-in test (§41.6).
+- **The speed bench** through `ICore` on the adapter, at a 33% CPU quota and unquota'd, under the timing lock (§41.8).
+- **The clone check** of every VenusRT source against Mesen's SNES sources and against the DSP comparison set of
+  `VenusRT_DspHle.md` §5.4; `firmwarecheck.py` on the boot program; a read of the disputes log end to end (§41.9).
+
+### 41.2 The gates
+
+| Gate | Verdict | Evidence | Exceptions, and what keeps it from being met |
+|---|---|---|---|
+| G1, the test ROMs | **not met** | With the tester's images, 108 of the 117 self-grading ROMs Mesen passes; with none, 107. All 81 C# Venus passes pass in both runs, and VenusRT passes none that Mesen fails (§41.3) | Nine Mesen passes fail in both runs. None has a ruling against Mesen: D-24, D-26 and D-14 are open, and four have no entry. Without images, `spc_smp` fails as well; it reads the console's boot ROM (§41.3) |
+| G2, single-step | **met with named exceptions** | 65816: 5,079,735 of 5,120,000 with cycle lists; SPC700: 256,000 of 256,000 (§41.4) | 40,265 cases, every one named and pinned by the test that requires exactly these to fail: D-1 (265 emulation-mode (d,X) cases), D-2 (the 40,000 cases of `7c` and `fc` on two cycles' VDA/VPA) and D-3 (43 JSR (a,X) cases in `fc.e`, inside D-2's files) |
+| G3, pictures | **not met** | 151 picture-graded ROMs stand still in Mesen. VenusRT's VRAM equals Mesen's on 141, and VRAM and picture both on 118 (§41.5) | Of the 33 that differ, 22 are named: plan §5.1's losses with D-12 (13), D-6 (5), D-27 (2), D-16 (1), and the Cx4, outside parity (1). Eleven have no entry |
+| G4, the frontend | **not met** | Every plan §4 item is present, or written down as a loss, except two. `.srm` round trips on ten games, one or more of each kind. The fit audit passes 73 of 73. Mistress's engine, rewind and firmware tests pass (§41.7) | A C# Venus state is refused, but the message does not name the engine that made it. No output-rate setting exists, against plan §4.6. The debugger's console views are a recorded loss (§36.3) |
+| G5, the goldens | **not met** | 29 of 36 anchors equal to a Mesen frame within ±30 frames (§41.6) | Three are D-7. Two are Super Mario RPG's attract mode running 40 frames ahead, equal outside the window (the drift of D-6 and D-37). Two have no entry: Yoshi's Island's stork, and NHL '94's puck |
+| G6, speed | **not met** | At 33% quota, every bench game's mean is within 13.3 ms and every p99 but one within 16.6 ms (§41.8) | Super Mario RPG's p99 is 18.69 and 19.26 ms. The handheld was unreachable all day, so the battery run is owed |
+| G7, the debugger | **met** | §36.2's 19 claims, 19 of 19. Every table armed, equal to plain on all nine bench games, with a coprocessor halt on each of the five chip games (§41.7) | None. One test fix was needed to include Yoshi's Island |
+| G8, the clean room | **met with named exceptions** | The mechanical check finds one pair over the threshold and two shared tables. All three are the S-DSP's documented tables (fullsnes's Gaussian table and anomie's counter rates). Nothing is shared with any DSP comparison source. `firmwarecheck` passes. The log was read end to end (§41.9) | Five entries whose reasoning is weaker than stated (D-5, D-6's SPC700 lead, D-11, D-19, D-27). Each is to be amended by a dispute step, not by code |
+
+**The default does not flip at this stage.** One gate is met, two are met with named exceptions, and five are not met.
+The blockers are §41.10. Most are small, and they cluster: HDMA timing, alone or with other causes, accounts for
+eight ROMs across G1 and G3.
+
+### 41.3 G1, the test ROMs (measured 2026-10-04)
+
+| Suite | ROMs | C# Venus passes | Mesen passes | VenusRT, the tester's images | VenusRT, no firmware |
+|---|---|---|---|---|---|
+| gilyon `cputest` | 2 | 0 | 2 | 2 | 2 |
+| gilyon `spctest` | 2 | 2 | 2 | 2 | 2 |
+| PeterLemon CPU, SPC700, GSU | 61 | 61 | 61 | 61 | 61 |
+| blargg SPC (`spc_smp`, `spc_timer`, `spc_mem_access_times`) | 3 | 0 | 3 | 3 | 2 |
+| blargg `spc_dsp6` | 1 | 0 | 1 | 0 | 0 |
+| blargg 2010 | 15 | 3 | 10 | 9 | 9 |
+| ADC/SBC | 6 | 6 | 6 | 6 | 6 |
+| multiply/divide | 7 | 0 | 5 | 5 | 5 |
+| absindx SA-1 | 2 | 0 | 1 | 1 | 1 |
+| higan collection, other (byuu's backdrop-graded ROMs among them) | 56 | 9 | 26 | 19 | 19 |
+| Cx4, undisbeliever, the 240p suite | 140 | 0 | 0 | 0 | 0 |
+| **All** | **295** | **81** | **117** | **108** | **107** |
+
+The record predicted both totals before the runs. §34's corpus gave 108 with the console's program and §35.4's gave
+107 with VenusRT's own, and both held, cell for cell, where nothing has changed since: pictures equal to Mesen's on
+230 and 229 rows, VRAM on 256 and 255. The two runs differ on nine rows, all of them SPC700-side:
+- `spc_smp` passes only with the image;
+- `spc_dsp6` fails in both, at different places;
+- six timing printers shift by a count (`test_speed`, the four `test_timer_speed` ROMs, lidnariq's `smpspeed`);
+- undisbeliever's `ipl-speed-test`, which times the boot program itself.
+
+Withholding the DSP image changes no row, because no corpus ROM has a NEC DSP. **The DSP replacement is therefore
+not graded by G1 at all.** Its grade is G5's, and §37's oracle.
+
+**The nine Mesen passes VenusRT fails with the tester's images**, and what the log says of each:
+
+| ROM | Where it stands | Logged |
+|---|---|---|
+| `spc_dsp6`, in order | the backdrop red. Run singly, 106 of 111 tests pass and 5 hang (§38.4) | §23.8, §35.5; no entry for the five |
+| `test_timer_stop2` | prints 00 against Mesen's 04 | D-26, open, the referee read |
+| `blobs/test_irqb` | case 5, WMDATA read once where twice is expected | D-24, open |
+| `snestest_082506/test_hdma`, `blobs/test_hdma` | the init's OPHCT two dots late | D-14, open for the timing |
+| `blobs/test_hdmasync`, `blobs/test_hdmatiming` | HDMA start | §20.5's named list; **no entry** |
+| `blobs/irq`, `blobs/nmi` | tests `$2D` and `$1E` (§17.4) | **never read; no entry** |
+
+**How G1 reads under the firmware policy (proposed).** G1 is to hold twice:
+1. *With the player's images*, as the plan wrote it: every Mesen pass, less rulings against Mesen.
+2. *With no images*, the same set less the ROMs that cannot pass without the original firmware's bytes or programs.
+
+The second list is fixed by what a ROM reads, not by what fails, and today it holds one ROM: **blargg's `spc_smp`**,
+whose "CPU/verify IPL ROM" test compares all 64 bytes at $FFC0-$FFFF (§35.3). Two other kinds were considered:
+- *ROMs sensitive to the boot program's timing.* `spc_dsp6`'s "Misc/brr addr wrap-around" and "Order/voice 0 noise"
+  pass singly only with the image (§38.4). They do not read the bytes. §35.5 argued that they expose a sensitivity of
+  VenusRT's, not a fault in the open program's protocol. They are therefore not exempt; they stay `spc_dsp6`'s
+  blockers on both runs.
+- *DSP commands not yet replaced.* No corpus ROM reaches a NEC DSP, so the list is empty. When the replacement's
+  commands land, a test ROM that issues a command the replacement leaves unexact would join this list for the
+  no-images run only, and the replacement's own oracle (§37) grades it instead.
+
+The timing printers (`test_speed` and the like) print without a verdict and are G3's, not G1's.
+
+### 41.4 G2, the single-step suites (measured 2026-10-04)
+
+Graded with cycle lists, as the plan requires, through `singlestep/cpu65816.rs` and `singlestep/spc700_cpu.rs`.
+
+- **65816, both modes:** 5,079,735 of 5,120,000 cases pass registers, memory and every cycle. The 40,265 that fail
+  are exactly those the test's `disputed` table names, file by file, and it asserts that each named case fails and
+  every other case of its file passes:
+  - D-1: 265 cases of `01`, `21`, `41`, `61`, `81`, `a1`, `c1` and `e1` in emulation mode, the (d,X) pointer at a
+    page's last byte, where gilyon's console-verified ROM settles the wrap against the suite's model;
+  - D-2: all 40,000 cases of `7c` and `fc`, which grade on VDA/VPA exchanged on the two pointer reads;
+  - D-3: within `fc.e`, the 43 cases at S=$0100.
+
+  MVN and MVP's 39,989 capped cases are graded on their 100 recorded cycles (§2.3).
+- **SPC700:** 256,000 of 256,000, with cycles. The I/O-page exception the plan anticipated was never needed.
+
+G2 is met with named exceptions. D-2's 40,000 cases differ in two pin values that the SNES's bus cannot observe
+(argued, D-2). They are named exceptions by the gate's own wording, not by a ruling against the suite.
+
+### 41.5 G3, the pictures (measured 2026-10-04)
+
+**The set.** The plan counted 172 standing picture ROMs over its own grading; the runner counted 176 at stage 0. Since
+§16.2, 25 of those grade themselves by the backdrop and are G1's. **The G3 set is therefore 151 ROMs**: Mesen gives no
+self-graded verdict, and Mesen's VRAM is equal between frames 1800 and 3600. 149 are visual and 2 print "Done".
+The two firmware runs agree on all 151 but the two blargg printers' counts.
+
+| Result | ROMs |
+|---|---|
+| VRAM and picture equal to Mesen's at frame 3600 | 118 |
+| VRAM equal, picture differs | 23 |
+| VRAM differs | 10 |
+
+**The 33 that differ, by cause** (each picture was drawn beside Mesen's and the difference mapped):
+
+| Cause | ROMs | Status |
+|---|---|---|
+| Plan §5.1's named losses: the INIDISP early-read glitch and writes during active display (with D-12 for OAM): undisbeliever's `hdma-2100-glitch-2ch-0a`, `-81`, `hdma-21ff-2100-glitch`, `inidisp_brightness_delay`, `inidisp_enable_display_mid_frame` (each in both builds), `inidisp_forgot_to_force_blank` (both builds) and `_2` | 13 | named; §9's Q10 keeps them unmodelled until a golden needs one, and none does (§41.6) |
+| D-6, counters printed: Sour's `timing_test` (2), `test_dmatiming/demo`, `reset-position-test`, `blip-autojoy-timing-test` | 5 | open entry; a console reading of `reset-position-test` settles it |
+| D-27, blargg's ungraded printers `test_speed` and `test_timer_speed3`, within a count of Mesen's | 2 | settled entry; the counts are not graded |
+| D-16, `ppubusact`'s mode 6 band, 86 half-pixels | 1 | open entry |
+| `cx4test`, a Cx4 cartridge | 1 | outside parity (plan §4.2, §9 Q8) |
+| **No entry:** `hdmaen_latch_test` and `_2` (each in both builds: Mesen shows red stripes HDMA writes, VenusRT none) | 4 | blocker |
+| **No entry:** `hdma_midframe/demo` (red backdrop against Mesen's black with HDMA lines; CGRAM 3 bytes), `hdma-double-buffered-parallax` (its HDMA columns one step apart), `test_hello` (the HDMA shear of "HELLO" a pixel apart on some lines), Motive's `HblankEmuTest` (the H-blank text Mesen overwrites) | 4 | blocker; HDMA or mid-line timing, as G1's two HDMA ROMs |
+| **No entry:** `test_noise` (one grey level a channel brighter over the screen), `hvdma` (one line, 36 pixels, HDMA to VRAM in H-blank), `wrmpyb-in-flight` (the multiplier's products read in flight: digits of 3 to 5 cycles differ) | 3 | blocker |
+
+### 41.6 G5, the goldens (measured 2026-10-04)
+
+**The games** were chosen before VenusRT was run on any of them:
+- *One per coprocessor:* Super Mario RPG (SA-1), Yoshi's Island (GSU-2), Super Mario Kart (DSP-1B), F1 ROC II (ST010)
+  and Metal Combat (OBC1).
+- *The tricky-to-emulate list:* the SNESdev wiki's "Tricky-to-emulate games", fetched 2026-10-04 into the corpus's
+  `docs/snesdev/`. "The list's first entries" was read as the first game of each of its rows in order, skipping those
+  not in the library. That gives:
+  - Captain America and the Avengers (open bus);
+  - ActRaiser (BRK/COP);
+  - Super Mario World (ORA [d]);
+  - Hook (VRAM writes during display);
+  - Breath of Fire (VRAM reads);
+  - Axelay (offset-per-tile);
+  - NHL '94 (mode 7 scroll latch).
+
+  Kick Off, Super Famista 5 and The Atlas are not in the library.
+- *The anchors* are three per game, each chosen from Mesen's pictures alone: contact sheets every 60 frames to 3600,
+  and for three games every 30 frames with a pad script. They are a logo or text page, an attract or title scene, and
+  a scene past a menu where one is reachable: Super Mario World's overworld map, ActRaiser's sky palace, Breath of
+  Fire's name entry.
+- *The window* is fixed at ±30 frames of Mesen's run, since the drift of §27.4 is up to ten frames.
+
+The test is `VenusRtGoldenTests.The_goldens_against_Mesen`. It is opt-in: `EMUSEN_VENUSRT_GOLDENS` names the library,
+or `library` for `AppSettings.RomDirectory`. It finds each game by MD5 and copies it to a scratch folder; the library
+is only read. It runs VenusRT to the anchors, own boot program, DSP image from the corpus or `home/Firmware` and a DSP
+game skipped without one, then Mesen over the window, and passes an anchor whose picture equals one of Mesen's frames
+there. What is committed is each ROM's MD5, file name, anchor frames, scene descriptions, the recorded outcome and an
+FNV-1a hash of VenusRT's picture. Without the probe, the test still checks every hash.
+
+| Game | Anchor 1 | Anchor 2 | Anchor 3 |
+|---|---|---|---|
+| Super Mario RPG | 300 equal | 1200 differs: drift | 2400 differs: drift |
+| Yoshi's Island | 600 equal (lag +1) | 1800 differs: the stork | 3000 equal (lag -10) |
+| Super Mario Kart | 600 equal (-11) | 2400 equal (-7) | 3300 equal (-11) |
+| F1 ROC II | 600 equal (-1) | 1500 equal (-1) | 3300 equal (-1) |
+| Metal Combat | 600 equal (-6) | 1500 equal (-5) | 3000 equal (-5) |
+| Captain America | 600 equal | 1500 equal | 2100 equal |
+| ActRaiser | 600 differs: D-7 | 900 equal | 1400 equal (-1) |
+| Super Mario World | 150 equal | 1200 equal | 2400 equal (the overworld map) |
+| Hook | 300 equal | 600 equal | 1500 equal (+11) |
+| Breath of Fire | 700 equal | 1800 equal | 2700 equal |
+| Axelay | 600 equal | 1500 differs: D-7 | 3000 differs: D-7 |
+| NHL '94 | 600 equal | 1500 equal | 2200 differs: the puck |
+
+- **D-7, three anchors.** ActRaiser at 600 and Axelay at 1500 and 3000 run with master brightness 10 or 11. Every
+  differing pixel is one level brighter in one or more channels in VenusRT and never darker. That is D-7's signature:
+  fullsnes's c×(N+1)/16 rounded down against Mesen's one lower. The entry is open, argued from the only document with a
+  formula.
+- **The drift, two anchors.** Super Mario RPG's attract scenes at 1200 and 2400 are equal in every pixel to Mesen's
+  frames 1240 and 2442, outside the window. Its attract mode runs 40 to 42 frames ahead of Mesen's. This is the
+  start-up drift of §27.4 and §29, where Super Mario RPG first parts at a port poll in frame 1. It is a timing
+  difference of the S-CPU's and SPC700's handshake (D-37, D-6), not a picture rule. The window was not widened after
+  the measurement; the two are recorded as differing, with the lag measured.
+- **No entry, two anchors.**
+  - *Yoshi's Island at 1800.* The stork alone differs, 1,426 pixels at the best lag of -10. Over ±100 frames no
+    frame does better, so it is not a lag. Candidates: the GSU's costs (D-35) desynchronising its animation from the
+    scroll, or a sprite rule.
+  - *NHL '94 at 2200.* The spinning puck in the credits differs by 11 pixels at lag -1, and no frame within ±100 is
+    equal.
+
+  Each needs a look before G5 can be met.
+- **The DSP replacement** was not used here: Super Mario Kart and F1 ROC II ran on the tester's images, all six
+  anchors equal. The replacement's commands are being built on another branch and are not yet graded by any golden.
+
+### 41.7 G4, the frontend, and G7, the debugger (measured 2026-10-04)
+
+**Plan §4, item by item**, on the adapter as Mistress runs it:
+
+| §4 item | State |
+|---|---|
+| 4.1 `ICore`, two pads of twelve buttons, `SkipRendering` state-neutral, halts with the processor that stopped (`ICoprocessorHalt`), `IStateFormat` (`VNRT`, version 18), `IFrameProfiler` | present. `CoreName` is `VenusRT`, not `SNES`; nothing keys on it but the state record (below) |
+| 4.1 `ICoprocessorLoad` (the SA-1's executed clocks), `ITraceFlushable` (Pharaoh's CPU trace) | not on the generic adapter: the first is the hardware-load view of §36.3's recorded loss, the second is stage 9's Pharaoh decision |
+| 4.1 sound at the player's rate | **not built**: the core gives 32 kHz and the audio device is opened at the core's rate, so sound plays, but the player's sample-rate setting does not reach VenusRT (plan §4.6, §5.3's resampler) |
+| 4.2 boards, coprocessors, firmware | present (§32, §34, §38); every firmware entry optional |
+| 4.3 battery saves | present: ten games both ways, `A_battery_save_crosses_between_venus_and_venusrt_both_ways`: LoROM, HiROM, DSP-1B, DSP-2, ST010, two SA-1, two GSU (Yoshi's Island, Stunt Race FX), OBC1 |
+| 4.4 cheats | present, from the SNES system pack (§32) |
+| 4.5 states and rewind | **the refusal does not name the engine.** A C# Venus state offered to VenusRT through `ICore` is refused with "VenusRT (Rust) refused the state: not this core's state.", the machine unchanged. Mistress then starts the game afresh with that line, and adds the record's "saved by …, SNES state version 3" only where a `.resume.json` exists. The plan asked for the engine that made it, which the magic `SNES` identifies. Rewind: present (`VenusRtEngineTests`) |
+| 4.6 settings | the Engine row present; the output-rate key not built (above) |
+| 4.7 the debugger | present for what v1 carries (G7); the console views are a recorded loss (§36.3): video, APU and coprocessor register providers with history, sprites, palettes, audio channels with their mutes (VenusRT claims no `MUTES`), hardware load, interrupt vectors, DMA channels and the DMA log, register flow, freezes and access counters |
+| 4.8 Mistress | the Engine row, resume, rewind and fast-forward, no firmware prompt, pacing from the exact frame rate, the fit audit 73 of 73 (the SNES engine row at 1280x800 and 1920x1200 among them). Pharaoh and Hotaru are stage 9's |
+
+**G7.** `VenusRtDebugTests` passes all 19 of §36.2's claims. `Every_table_armed_with_nothing_to_hit_gives_the_plain_run`
+ran over the nine bench games instead of §36.2's four. Eight passed, and Yoshi's Island failed one check: no halt on
+the GSU, because its GSU does not run between frames 120 and 180. The machine was not at fault (armed equal to plain
+for all 600 frames). The check now waits up to 600 frames for a chip that starts later, a test fix in its own commit.
+With it, all nine pass: armed equal to plain over 600 frames each, and halts on the DSP-1 and DSP-1B at $00000C, the
+SA-1 at $C08171 and the GSU at $01B301 (Star Fox) and $08BD16 (Yoshi's Island). The battery test's first game set
+included Star Fox, which has no battery; it was replaced by Stunt Race FX. That is a correction of the input, not of
+the test.
+
+### 41.8 G6, speed (measured 2026-10-04)
+
+A throwaway bench outside the repository, `venusrtbench` in the corpus folder, does what `venusbench` does for C#
+Venus through `CoreFactory` and `ICore`, but names the engine. It boots 1,200 frames tapping Start and A, then times
+3,000 frames with Right held, fetching the picture and draining the sound each frame. Each run was under
+`flock ~/.cache/emusen/probe/timing.lock` and `systemd-run --scope -p CPUQuota=33% -p CPUQuotaPeriodSec=5ms`, the
+plan's weak-laptop proxy. The load average was 12.3 for round 1 and 3.4 to 3.9 after.
+
+| Game | VenusRT round 1, mean (p99) | Round 2, mean (p99) | C# Venus, mean (p99) | VenusRT unquota'd, mean (p99) |
+|---|---|---|---|---|
+| Super Mario World | 9.94 (14.88) | 7.42 (15.68) | 7.37 (14.56) | 2.02 (2.58) |
+| Super Metroid | 9.21 (15.14) | 6.99 (13.83) | 7.44 (13.76) | 2.02 (2.62) |
+| Donkey Kong Country | 7.74 (14.33) | 6.52 (10.89) | 7.54 (14.46) | 1.88 (2.63) |
+| A Link to the Past | 7.94 (14.64) | 7.72 (14.37) | 7.72 (18.69) | 2.25 (2.48) |
+| Yoshi's Island (GSU-2) | 8.55 (13.75) | 9.10 (14.37) | 10.85 (15.65) | 2.54 (2.90) |
+| Star Fox (GSU) | 7.50 (13.76) | 8.11 (15.28) | 3.05 (8.14) | 2.19 (2.84) |
+| Super Mario RPG (SA-1) | 11.96 (**18.69**) | 12.38 (**19.26**) | 15.23 (20.08) | 3.33 (3.88) |
+| Pilotwings (DSP-1, image) | 8.90 (14.82) | 8.96 (14.84) | 9.45 (15.42) | 2.55 (3.41) |
+| Super Mario Kart (DSP-1B, image) | 9.75 (14.94) | 9.82 (14.84) | 3.68 (8.88) | 2.86 (3.18) |
+| Pilotwings, replacement | 7.17 (13.28) | | | |
+| Super Mario Kart, replacement | 8.45 (13.56) | | | |
+
+- **The budget**, a mean of at most 13.3 ms and a p99 of at most 16.6 ms: every mean is met, the largest 12.38 ms on
+  Super Mario RPG. Every p99 is met except Super Mario RPG's, 18.69 and 19.26 ms in the two rounds. C# Venus misses
+  both the mean and the p99 on that game, and A Link to the Past's p99. Star Fox and Super Mario Kart are 3 ms on C# Venus because
+  its script does not reach 3D play there (§5.5's note); VenusRT's state hashes say it reaches other scenes, so those
+  two rows do not compare engines.
+- **Unquota'd**, the desktop means are 1.9 to 3.3 ms against plan P1's 2.8 and P2's 3.8, with the picture fetched and
+  the sound drained through the adapter.
+- **The handheld half is owed.** `deck@10.1.1.205` did not answer from 10:37 to 11:55: ping at 100% loss, ARP
+  incomplete, port 22 unreachable twenty times, a minute apart. No session was opened and nothing was copied or
+  started there. The bench is published self-contained in the corpus folder's `venusrtbench/pub/`, ready for a battery
+  run.
+
+### 41.9 G8, the clean room (measured 2026-10-04)
+
+**The mechanical check.**
+- *Command.* `clonecheck.py` (§4) of `src/` (40 files) and of `examples/` (25), with the vocabularies of fullsnes,
+  anomie's six documents, the WDC datasheet, the DSP pages and the other Rust cores' `src/` folders.
+- *Reference sets:*
+  - Mesen's `Core/SNES`, at `b9fa69dd`;
+  - the DSP comparison set of `VenusRT_DspHle.md` §5.4, fetched into the corpus folder's `clonecheck/refs/` with its
+    provenance. It holds the HLE of bsnes 0.59 (dsp1–dsp4, st010, st011, as carried by beetle-bsnes); bsnes-plus's
+    necdsp; snes9x's `dsp*.cpp` and `seta*.cpp`; MAME 0.140's `snesdsp1`–`4` and `snesst10`; current MAME's `upd`
+    and `upd7725`; and the superfamicom wiki's ST010 code.
+- *What could not be fetched as the plan names it.* bsnes-plus never carried the HLE modules; snes9x's ST010 is
+  `seta010.cpp`; current MAME has no SNES DSP HLE. The substitutes are those listed.
+- *Results.*
+  - **Against Mesen**, one pair passes the threshold of 12 shared fingerprints: `apu/dsp.rs` with
+    `DspInterpolation.h`, 115 shared. All of it is inside the `GAUSS` array, whose 512 values were checked one by
+    one against fullsnes's Gauss table and are equal.
+  - **The two shared tables** are that one and `RATES`, anomie's `counter_rates`, as §22.5 recorded.
+  - **The largest pair under the threshold** is 7 fingerprints: `dsp.rs`'s register addresses, from fullsnes.
+  - **The 28 shared names** are the hardware's plain names (`forcedblank`, `hdmainit`, `rombuffer`, `mode7extbg`
+    and the like).
+  - **Against every DSP comparison set**, no pair reaches 12, the largest being 5. The only table hit is `dsp.rs`'s
+    Gaussian table again, on two arithmetic runs that the DSP sources also contain by coincidence. None of the DSP
+    replacement's files (`dsphle.rs`, `dspengine.rs`, `dsporacle.rs`) shares a table or a pair.
+  - **`examples/`** shares nothing with any set.
+- *Not a finding.* §4.2's calibration says a restructured port escapes this tool, so "nothing found" bounds
+  statement-order copying only.
+
+**`firmwarecheck.py` on the boot program**, the 64 bytes extracted mechanically from `apu/boot.rs`: 6 of 64 equal at
+the same offset (9.4%), the longest aligned run 2, the longest common run 4, twice. PASS, as §35.2.
+
+**The disputes log, D-1 to D-38, read end to end** by a reader who wrote none of it. 33 entries hold as reasoned. Five
+are weaker than they state, and none of the five calls for a code change before a dispute step:
+- **D-5.** It is to be "settled when the goldens of stage 6 run it [Test Drive II] against Mesen". The goldens are
+  this stage's, and Test Drive II is not among them. The check it promised never ran. It stays open, with its
+  settling step owed: one run of Test Drive II against Mesen past its banks $40-$7D and $C0-$FF reads.
+- **D-6, the SPC700's 150-clock lead.** It was adopted from `CPU.vhd`'s reset counter, `P65_RST_CNT`, as the
+  console's rule. A counter in the FPGA's reset release is as likely to be that implementation's own sequencing as the
+  console's. The referee's weight table rates the core's structure, not its reset glue. The lead should be recorded
+  as the referee's choice, argued, not as a rule the referee states. D-6's counters half is unaffected and correctly
+  open.
+- **D-11.** fullsnes's narrower reload rule was kept "from its being the narrower statement and the one built first".
+  Neither is evidence. anomie's timing document reports an observation of a console, the reload "on any 1->0"
+  transition, which is the only hardware report either way. The reasoning should either rest on a test ROM or say
+  that the built rule stands against the one console observation cited.
+- **D-19.** The conclusion is "settled for the rule as built" because the referee agrees with anomie's sentence. But
+  `Venus_Referee.md` §0 says the referee's PPU is written from anomie's and fullsnes's register documents, so its
+  agreement with anomie is correlated, the caveat D-1 itself makes for the 65C816. The entry is better recorded as
+  argued from one document and its correlated implementation, against Mesen's picture. The tricky-to-emulate list's
+  "Jurassic Park: broken graphics during gameplay" under hi-res sub-screen math is a game that could arbitrate.
+- **D-27.** The timer step is settled by blargg's graded ROMs and his `notes.txt`. The stretch of every SPC700 cycle
+  under TEST bits 6-7, and bits 4-5 not slowing the CPU, rest on the counts Mesen prints for `test_speed`, an
+  ungraded ROM, against fullsnes's text. That uses Mesen as the authority the order of recourse ranks last. The
+  rule should be marked argued from Mesen's output, pending a console reading of `test_speed`.
+
+P6's second half, that fewer than one entry in five needs Mesen's source, holds: no entry read Mesen's source.
+
+### 41.10 What blocks the default flip
+
+Effort is in the plan's steps of about three hours. A **dispute step** produces one entry and no code, and a writer's
+step implements it.
+
+| # | Gate | Blocker | Proposed fix | Effort |
+|---|---|---|---|---|
+| 1 | G1, G3 | HDMA timing: `test_hdmasync`, `test_hdmatiming`, both `test_hdma` (D-14's two dots), and on the G3 side `hdmaen_latch_test` and `_2` (4 ROMs), `hdma_midframe/demo`, `hdma-double-buffered-parallax`, `test_hello`, `HblankEmuTest` | One dispute step on HDMA's start, init and HDMAEN latch timing: the ROMs' own headers first (byuu's and undisbeliever's state console results), then the referee's DMA/HDMA machine (real support, `Venus_Referee.md` §0); then a writer's step implementing it, judged on all twelve ROMs at once | 2–3 |
+| 2 | G1 | `blobs/irq` and `blobs/nmi`, never read (§17.4) | Read each failing test's disassembly (`blobs/disassembly/`) and its expectation, open an entry each, then implement | 1–2 |
+| 3 | G1 | `test_irqb` case 5 (D-24) | The referee's 65C816 interrupt sequence in the logged step D-24 already names | 1 |
+| 4 | G1 | `test_timer_stop2` (D-26) | The SPC700 program it uploads, disassembled with VenusRT's own disassembler (§1.2 allows a test's code), to see what it toggles; then the referee's TEST gating again | 1 |
+| 5 | G1 | `spc_dsp6` in order: 5 tests hang singly with the image, 6 hang and 1 fails without | The S-DSP step §35.5 left: the five hangs singly first, then the in-order run to 18,000 frames | 2 |
+| 6 | G3 | `test_noise`, `hvdma`, `wrmpyb-in-flight` | `test_noise`: one level brighter at full brightness, so not D-7; colour math and the fixed colour first. `hvdma`: the one line, with its README's console description. `wrmpyb-in-flight`: the multiplier's intermediate products, a plan §2.2 thin area, from the ROM's own console notes. A dispute step for the three | 1–2 |
+| 7 | G4 | A C# Venus state's refusal does not name the engine | In the core's `last_error` for a foreign state with Venus's magic `SNES`: "a save state of Venus (C#), the C# SNES core; VenusRT cannot read it" (plan §4.5's sentence), with a WiseMan test that offers a real C# Venus state. Separately, Mistress's state record keeps `CoreName` for both engines (`SNES` against `VenusRT`) and should record the engine's display name | ≤1 |
+| 8 | G4 | No output-rate setting; VenusRT always gives 32 kHz | Either the plan's create-time and run-time key with a resampler in the core (§5.3, exact at 32 kHz), or a decision that the host's device-rate path is parity and §4.6's item is withdrawn | 1, or a decision |
+| 9 | G4 | The debugger's console views (§36.3) | Already a recorded loss on the generic target. The gate asks that the loss be written down, which §36.3 and this section do. Confirm it as accepted for the flip, or schedule the extension exports `EmuSen_CoreAPI.md` §15 Q10 anticipates | a decision |
+| 10 | G5 | Yoshi's Island's stork at 1800, NHL '94's puck at 2200 | A look at each: OAM and the sprite's source buffer in WRAM against Mesen's dumps at the matched frame, then an entry or a fix | 1 |
+| 11 | G5 | D-7, three anchors | A console capture of `RedSpace9BitHDMA` or any brightness-graded scene settles it. Without one, the gate's wording (dispute-logged) is met already, and the item is only a decision to accept D-7 as argued | a decision |
+| 12 | G5 | Super Mario RPG's 40-frame attract lead | The S-CPU-side drift of §29 (D-37's ports exact, Mesen's handshake one poll apart, D-6's counters). Accept as dispute-logged timing, or measure it against a console recording of the attract mode | a decision |
+| 13 | G6 | Super Mario RPG's p99 at 33% quota, 18.7–19.3 ms against 16.6 | Plan §9 Q3's first lever: the SA-1's catch-up bound (§5.4), made a setting before anything is loosened. Measure where the slow frames fall first (`ipsample.py`, not the safepoint-biased sampler) | 1–2 |
+| 14 | G6 | The handheld on battery | The published bench, copied to the handheld's scratch folder and run under `systemd-run --user`, once it is reachable | ≤1 |
+| 15 | G8 | D-5, D-6's lead, D-11, D-19, D-27 | One dispute-log amendment step: re-record each as argued where §41.9 says, struck through and followed by the new conclusion, as the log's rules require; run D-5's settling check on Test Drive II | 1 |
+
+About 14 to 19 steps in all, with four decisions. Blockers 1, 5 and 13 are the large ones; 1 alone bears on twelve of
+the twenty ROMs G1 and G3 leave open or unlogged.
+
+### 41.11 Negative results
+
+- The handheld could not be reached (§41.8).
+- The DSP replacement is graded by no gate of §7. No test ROM has a NEC DSP, and the goldens ran on the tester's
+  images, since the replacement's commands are still being built (§38.3). When they land, G5's two DSP games should
+  be rerun without images.
+- Three comparison sources named in `VenusRT_DspHle.md` §5.4 do not exist in the form named (§41.9).
+- The window of ±30 frames, fixed before measuring, is too narrow for Super Mario RPG's attract mode. It was not
+  widened after the fact.

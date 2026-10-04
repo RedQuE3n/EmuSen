@@ -11,28 +11,19 @@ pub const CORE_VERSION: u16 = 1;
 /// An image shorter than one 32 KiB bank after any copier header.
 pub const STATUS_IMAGE_TOO_SHORT: i32 = -9;
 
-/// The sound unit's 64-byte boot ROM, file 1, was not given; the console's firmware is the frontend's to supply.
-pub const STATUS_NO_IPL: i32 = -10;
-
 impl NativeCore for Machine {
     const CORE_VERSION: u16 = CORE_VERSION;
     const CAPABILITIES: u64 = 0;
     const ENGINE: &'static str = "VenusRT";
 
-    /// The battery save is file 0, clipped to the cartridge's RAM; file 1 is the SPC700's 64-byte boot ROM, required;
-    /// file 2 is a NEC DSP's firmware, 8,192 or 53,248 bytes, for a cartridge whose header names one, or its program
-    /// with file 3 its data (6,144 and 2,048, or 49,152 and 4,096).
+    /// The battery save is file 0, clipped to the cartridge's RAM; file 2 is a NEC DSP's firmware, 8,192 or 53,248
+    /// bytes, for a cartridge whose header names one, or its program with file 3 its data (6,144 and 2,048, or 49,152
+    /// and 4,096). There is no file 1: the SPC700's boot program is VenusRT's own (D-38).
     fn create(image: &[u8], settings: &Settings, files: &[File<'_>]) -> Result<Self, i32> {
         if settings.keys().next().is_some() {
             return Err(abi::status::UNKNOWN_SETTING);
         }
         let mut m = Machine::load_rom(image).map_err(|_| STATUS_IMAGE_TOO_SHORT)?;
-        let ipl = match files.iter().find(|f| f.which == 1) {
-            Some(f) => <[u8; 64]>::try_from(f.data).map_err(|_| abi::status::BAD_FILE)?,
-            None => return Err(STATUS_NO_IPL),
-        };
-        let pal = m.sys.timing.pal;
-        m.sys.apu = crate::apu::smp::Smp::new(Some(ipl), pal);
         // File 2 is the DSP's firmware whole, or its program with file 3 its data.
         let program = files.iter().find(|f| f.which == 2).map(|f| f.data);
         let data = files.iter().find(|f| f.which == 3).map(|f| f.data);
@@ -46,7 +37,7 @@ impl NativeCore for Machine {
             return Err(abi::status::BAD_FILE);
         }
         for file in files {
-            if file.which > 3 {
+            if file.which == 1 || file.which > 3 {
                 return Err(abi::status::BAD_FILE);
             }
             if file.which != 0 {
@@ -119,7 +110,7 @@ impl NativeCore for Machine {
                 None => self.sys.cart.sram.len() as i64,
             },
             7 => self.sys.apu.ram.len() as i64,
-            _ => return Err(abi::status::NO_SUCH_SPACE),
+            _ => return self.chip_space_size(space).ok_or(abi::status::NO_SUCH_SPACE),
         })
     }
 
@@ -141,7 +132,7 @@ impl NativeCore for Machine {
                     None => self.sys.cart.sram.get(a).copied().unwrap_or(0),
                 },
                 7 => self.sys.apu.ram.get(a).copied().unwrap_or(0),
-                _ => return Err(abi::status::NO_SUCH_SPACE),
+                _ => self.chip_space_read(space, a).ok_or(abi::status::NO_SUCH_SPACE)?,
             };
         }
         Ok(())
@@ -179,7 +170,10 @@ impl NativeCore for Machine {
                     self.sys.cart.sram.get_mut(a)
                 }
                 7 => self.sys.apu.ram.get_mut(a),
-                _ => return Err(abi::status::NO_SUCH_SPACE),
+                _ => {
+                    self.chip_space_write(space, a, b)?;
+                    continue;
+                }
             };
             if let Some(slot) = slot {
                 *slot = b;
@@ -198,7 +192,67 @@ impl NativeCore for Machine {
     }
 }
 
+/// The chips' spaces, present with their chip: the GSU's RAM and its own bus, the SA-1's I-RAM, BW-RAM and its own
+/// bus, a NEC DSP's data RAM (two bytes a word) and its program (three bytes an opcode, low byte first).
+pub const GSURAM: u32 = 8;
+pub const GSUBUS: u32 = 9;
+pub const SA1IRAM: u32 = 10;
+pub const BWRAM: u32 = 11;
+pub const SA1BUS: u32 = 12;
+pub const DSPRAM: u32 = 13;
+pub const DSPPRG: u32 = 14;
+
 impl Machine {
+    pub fn chip_space_size(&self, space: u32) -> Option<i64> {
+        let c = &self.sys.cart;
+        Some(match space {
+            GSURAM if c.gsu.is_some() => c.sram.len() as i64,
+            GSUBUS if c.gsu.is_some() => 0x80_0000,
+            SA1IRAM => c.sa1.as_ref()?.iram.len() as i64,
+            BWRAM if c.sa1.is_some() => c.sram.len() as i64,
+            SA1BUS if c.sa1.is_some() => 0x100_0000,
+            DSPRAM => 2 * c.dsp.as_ref()?.0.ram.len() as i64,
+            DSPPRG => 3 * c.dsp.as_ref()?.0.program.len() as i64,
+            _ => return None,
+        })
+    }
+
+    /// A byte of a chip's space, zero past its end; None for a space this cartridge does not have.
+    pub fn chip_space_read(&self, space: u32, a: usize) -> Option<u8> {
+        let size = self.chip_space_size(space)? as usize;
+        if a >= size {
+            return Some(0);
+        }
+        let c = &self.sys.cart;
+        Some(match space {
+            GSURAM | BWRAM => c.sram[a],
+            GSUBUS => crate::chips::gsu::Gsu::peek(a as u32, &c.rom, &c.sram),
+            SA1IRAM => c.sa1.as_ref()?.iram[a],
+            SA1BUS => c.sa1.as_ref()?.peek(a as u32, &c.rom, &c.sram),
+            DSPRAM => c.dsp.as_ref()?.0.ram[a >> 1].to_le_bytes()[a & 1],
+            _ => c.dsp.as_ref()?.0.program[a / 3].to_le_bytes()[a % 3],
+        })
+    }
+
+    /// A store into a chip's RAM; its bus and the DSP's program are read-only.
+    fn chip_space_write(&mut self, space: u32, a: usize, value: u8) -> Result<(), i32> {
+        let size = self.chip_space_size(space).ok_or(abi::status::NO_SUCH_SPACE)? as usize;
+        let c = &mut self.sys.cart;
+        match space {
+            GSUBUS | SA1BUS | DSPPRG => return Err(abi::status::READ_ONLY),
+            _ if a >= size => {}
+            GSURAM | BWRAM => c.sram[a] = value,
+            SA1IRAM => c.sa1.as_mut().expect("the space's size says so").iram[a] = value,
+            _ => {
+                let w = &mut c.dsp.as_mut().expect("the space's size says so").0.ram[a >> 1];
+                let mut bytes = w.to_le_bytes();
+                bytes[a & 1] = value;
+                *w = u16::from_le_bytes(bytes);
+            }
+        }
+        Ok(())
+    }
+
     /// An ST010 or ST011, whose on-chip RAM is the cartridge's battery RAM and stands as SRAM, space 6.
     fn st_ram(&mut self) -> Option<&mut crate::chips::necdsp::NecDsp> {
         self.sys.cart.dsp.as_mut().map(|(d, _)| d).filter(|d| d.st)
@@ -216,11 +270,9 @@ mod tests {
         let image = crate::machine::tests::rom(&[0x80, 0xFE]);
         assert_eq!(Machine::create(&image[..0x4000], &Settings::default(), &[]).err(), Some(STATUS_IMAGE_TOO_SHORT));
         assert_eq!(Machine::create(&image, &Settings::parse(b"SampleRate=48000").unwrap(), &[]).err(), Some(abi::status::UNKNOWN_SETTING));
-        assert_eq!(Machine::create(&image, &Settings::default(), &[]).err(), Some(STATUS_NO_IPL));
-        assert_eq!(Machine::create(&image, &Settings::default(), &[File { which: 1, data: &[1] }]).err(), Some(abi::status::BAD_FILE));
-        let ipl = crate::apu::smp::tests::idle_ipl();
-        assert_eq!(Machine::create(&image, &Settings::default(), &[File { which: 2, data: &[1] }, File { which: 1, data: &ipl }]).err(), Some(abi::status::BAD_FILE));
-        let mut m = Machine::create(&image, &Settings::default(), &[File { which: 0, data: &[1, 2] }, File { which: 1, data: &ipl }]).unwrap();
+        assert_eq!(Machine::create(&image, &Settings::default(), &[File { which: 1, data: &[0; 64] }]).err(), Some(abi::status::BAD_FILE));
+        assert_eq!(Machine::create(&image, &Settings::default(), &[File { which: 2, data: &[1] }]).err(), Some(abi::status::BAD_FILE));
+        let mut m = Machine::create(&image, &Settings::default(), &[File { which: 0, data: &[1, 2] }]).unwrap();
         assert_eq!(m.sys.apu.cpu.pc, 0xFFC0);
         assert_eq!(m.space_size(0), Ok(0x100_0000));
         assert_eq!(m.space_size(6), Ok(0));

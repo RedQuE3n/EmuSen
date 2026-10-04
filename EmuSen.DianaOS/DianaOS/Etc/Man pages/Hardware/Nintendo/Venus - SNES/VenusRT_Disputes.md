@@ -1050,3 +1050,113 @@ their data.
   instead of 8,729: the exact ports agree with Mesen's less, not more, and Mesen is the comparison, not the
   authority. Not modelled: fullsnes's OR of a simultaneous write and read.
 - Pinned by: the four traces of §29 and the APU oracles.
+
+### D-38. S-SMP: the 64 bytes at $FFC0-$FFFF are VenusRT's own boot program, written from the prose of the transfer protocol
+- Opened: 2026-10-03, by a decision, not a disagreement. *Decided 2026-10-03:* VenusRT neither requires nor uses a
+  firmware file for the SPC700's boot program. The console's 64 bytes are copyrighted and not redistributable, and a
+  player must be able to run every ordinary game with no firmware folder. Until this entry the boot ROM was file 1
+  of `create` (`spc700.rom`), required, and VenusRT refused to start without it (status -10). This entry is the
+  provenance of the program that replaces it; it records what was read to write it, what was not, and what was
+  chosen where the documents are silent.
+- Documents read, all from the pinned copies under the corpus's `docs/`:
+  - fullsnes (`fullsnes.txt`), lines 1981-2085, "SNES APU Memory and I/O Map": the map ("FFC0h..FFFFh 64-byte Boot
+    ROM or RAM (selectable via Port 00F1h)"), the four ports each way, the I/O registers' list and power-on values, and
+    "After Reset, the boot ROM changes [0000h..0001h]=Entrypoint, and [0002h..00EFh]=00h".
+  - fullsnes, lines 2572-2611, "SNES APU Main CPU Communication Port", up to and not including its subsection "Boot
+    ROM Disassembly" (lines 2612-2675, located by a heading search and not read): the uploader in pseudo-code as the
+    S-CPU runs it, and the caution that the last data byte's acknowledge "lasts only for a few clock cycles".
+  - fullsnes, lines 2220-2460, the SPC700's opcode tables, for the encodings and cycle counts only.
+  - anomie's register document (`anomie-196.txt`), lines 805-825, $2140-$2143; anomie's S-DSP document
+    (`anomie-191.txt`), lines 10-22, where the IPL ROM sits. A search of anomie's six documents found no description of
+    the boot protocol.
+  - gilyon's `spctest` sources, which §1.2 allows: `spctest.asm` lines 1-19 (its protocol notes) and `spc_common.inc`
+    lines 13-60, where the test's SPC700 program sets CONTROL bit 7 again and jumps to $FFC0, after which the S-CPU
+    repeats the protocol from its start. A return to the boot program at $FFC0 is therefore something software does.
+  - Not read: any listing, hex dump or disassembly of the console's 64 bytes, in any document; the console's image
+    itself, of which the corpus's test cache holds a copy; C# Venus's `Spc700.cs`, which embeds it; any emulator's
+    source.
+- What the protocol fixes, as the S-CPU observes it on $2140-$2143:
+  1. After reset, port 0 reads $AA and port 1 $BB. By then $0002-$00EF of the APU's RAM are zero.
+  2. The first command is accepted only when port 0 reads $CC. A command is the destination address in ports 2
+     (low) and 3 (high), a command byte in port 1, and the kick in port 0, written last.
+  3. The kick is acknowledged by echoing it on port 0. A non-zero command byte starts a block; a zero one jumps to
+     the address, which [0000h..0001h] then hold.
+  4. In a block, each byte is offered as data in port 1 and its index's low byte in port 0. The byte is stored at the
+     address plus the index, and the index is echoed on port 0.
+  5. A next kick must be non-zero and "bigger than last index+1"; the uploader in fullsnes sends
+     ((index+2) AND FFh) OR 1. It starts the next command.
+- What the documents leave open, and what was chosen:
+  - **The test for the next command.** The program waits for port 0 to differ from the value it last consumed (the
+    kick at a block's start, then each index). A changed value that is the expected index is data; any other
+    starts a command. Every kick the uploader of item 5 sends differs from the last index and from the expected one,
+    so it is accepted. A value "behind" the index, which fullsnes's wording implies the console ignores, is taken as
+    a command here. No document says what happens to it.
+  - **The last acknowledge** stays on port 0 until the S-CPU writes the next kick. fullsnes's caution says the
+    console's does not; an uploader that works on the console works with a longer acknowledge.
+  - **The registers on the jump** are not given by any document read. The program leaves A holding the kick, X zero,
+    Y the entry's high byte, PSW as its last compare and load left it, and SP $EF. SP is the one that software can
+    plausibly depend on, a driver that never sets it. $EF is where the zero page's clearing ends. That the console
+    leaves $EF is a value the writer has seen repeated in descriptions of the console, but it is not in any source
+    above, so it is recorded as a choice. A test ROM run on a console would settle it.
+  - **The timing**: when $BBAA appears after reset, and how long each byte's handshake takes, follow from this
+    program's own instructions and differ from the console's by an amount no document gives.
+  - **$0000-$0001** are left as they were until the first command writes the address into them.
+- The program, in prose (`src/apu/boot.rs` lists it instruction by instruction): clear $02-$EF upward through
+  `MOV (X)+,A`, then set SP from the clearing's end; write $AA and $BB as one word with `MOVW`; wait for $CC with
+  `CBNE`. Then the command: copy ports 2 and 3 to $00/$01 with `MOVW`, read port 0's kick and port 1's command,
+  echo the kick, and jump through `JMP [!$0000+X]` if the command is zero. Otherwise the block loop runs, with A
+  holding the last value consumed and Y the index: `MOV [$00]+Y,A`, the echo, and `INC $01` when Y wraps.
+- Similarity to the console's image: measured after writing by a separate script, which reads both images and prints
+  only two counts, the bytes equal at the same offset and the longest run of bytes common to both at any offsets.
+  Running that script on the cached image is the one use made of it. The counts are recorded below when measured. The
+  limit decided beforehand: over 16 of the 64 bytes equal at the same offset, or any common run longer than 6 bytes,
+  and the program is restructured and measured again.
+- Test ROM: none written. The protocol's oracles are the corpus's own, the SPC700 test ROMs and the games that
+  upload their drivers through it. The cost against the console's program is measured in VenusRT_Native.md §35.
+- Referee: not read. Mesen's source: none.
+- Conclusion: argued. The program meets items 1 to 5 and nothing beyond them is claimed. A program that reads
+  $FFC0-$FFFF with the ROM mapped sees VenusRT's bytes, not the console's, and the handshake's timing is this
+  program's.
+- Pinned by: the crate's tests of the boot program (an upload of two blocks and a jump, through the ports alone).
+- Implemented in: the commit after this entry's.
+- **Revised 2026-10-04, before the program was committed, by measurement.** The program described above was replaced
+  before any commit carried it. What changed, and the evidence:
+  - **$FFC0 holds $CD.** blargg's SPC test ROMs end each round by reading $FFC0 with the ROM mapped, comparing it with
+    $CD, and looping forever on any other value; they then jump to $FFC0. This was found in the tests' own uploaded
+    code, disassembled with VenusRT's SPC700 disassembler (§1.2 allows a test's code). With the first program all
+    three of blargg's ROMs stopped at their first round. The program therefore opens with `MOV X,#imm`, whose opcode is
+    $CD. blargg's `spc_smp` also has a test, "CPU/verify IPL ROM", that compares the whole 64 bytes; it fails, and
+    nothing short of the console's bytes can pass it. That is the accuracy cost of this entry made concrete.
+  - **The test for the next command is fullsnes's own rule.** The first program waited for port 0 to change and took
+    any changed value that was not the index as a command. Its two reads of port 0 raced: an index landing between
+    them was taken for a command, which the crate's 300-byte test caught. The program now reads port 0 once a pass
+    and acts on Y minus port 0: zero is data; a negative difference, port 0 lying 1 to 127 past the expected index,
+    is a command; anything else is a stale or behind value, and is ignored. That is "bigger than last index+1" read as
+    a difference modulo 256, and it is what the S-CPU code of blargg's ROMs relies on: their jump command's kick is
+    the last echo plus 2, with no `OR 1`. At a block's start port 0 still holds the kick, which the rule would take for
+    a command when it is under $80, so the program first waits for port 0 to leave the kick.
+  - **The handshake's speed.** spc_dsp6's uploader is bound by the SPC700's latency (Super Mario World's is bound by
+    the S-CPU: its 612.65 master clocks a byte did not move by a cycle between variants). Measured on spc_dsp6's
+    "Echo/esa changes" with the probe's S-CPU trace, as the median time of one pass of the uploader's loop: Mesen,
+    with the console's program, 510 master clocks a byte; the first program 810; echoing before the store, 666; the
+    single-read rule, 562; the program as committed, 602.
+  - **Two faster versions were discarded because they repeated the console's bytes.** `firmwarecheck.py`
+    (`EmuSen_Debugging_Tools_Reference_v5.md` §3.61) reported a 9-byte run at offset 0 for a downward zero-page clear,
+    and an 8-byte run for the fastest block loop (read port 1, echo, store, increment, branch). Both were measured
+    and discarded. ~~The clear stays upward,~~ (the clear is downward again in another form, below, measured at a longest run of 2 at offset 0) and the echo is `MOV !$00F4,Y`, one byte and one cycle more than the
+    direct-page form, so that the loop is deliberately not that sequence. This is the 40 clocks between 562 and 602.
+  - ~~**SP is $F0, not $EF.** The byte the absolute echo needs came from dropping the `DEC X` before `MOV SP,X`. No
+    document read gives the console's SP, so either value is a choice. The record above calls $EF a value seen in
+    descriptions; it is given up here for the byte, and the cost is a stack one byte higher for a driver that never
+    sets SP.~~ **Overturned the same day by a test ROM's source:** gilyon's `spctest` failed at test $01AE with SP
+    $F0. Its source (`spc_tests0.asm`, test01ae; `spc_common.inc`, `main`) never sets SP: it executes BRK and expects SP
+    to be $EC afterwards, the three bytes pushed below $EF, so it states that the boot program leaves SP at $EF. SP is
+    $EF again. The byte now comes from a downward clear, `MOV X,#$EF; MOV A,#$00; MOV SP,X`, then `MOV $00+X,A`,
+    `DEC X` and `BNE` over $EF down to $01, ten bytes as the upward clear was. It also clears $01, which the first
+    command overwrites before any program can read it.
+  - **The registers on the jump** are now: A the kick, X zero, Y the entry's high byte, SP $EF, PSW as the command
+    byte's load left it.
+- **Similarity of the program as committed** (`firmwarecheck.py`, run 2026-10-04 on the cached image, its one use):
+  6 of 64 bytes equal at the same offset (9.4%), longest aligned run 2 bytes (at offset 0, the `MOV X,#$EF`);
+  longest common run at any offsets 4 bytes, at replacement offset 21 against original offset 47, and one other run
+  of 4, at 53 against 34. PASS. The first program measured 7 of 64 and a longest run of 4.

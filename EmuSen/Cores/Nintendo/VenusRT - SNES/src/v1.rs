@@ -5,12 +5,15 @@
 use emusen_native::abi::NativeCore;
 use emusen_native::core::*;
 
-use crate::ffi::{STATUS_IMAGE_TOO_SHORT, STATUS_NO_IPL};
+use crate::ffi::STATUS_IMAGE_TOO_SHORT;
 use crate::machine::{DSP_RATE, Machine};
 use crate::state::STATE_VERSION;
 
 /// The space names, in id order; `CpuBus` and `WRAM` are the SNES system pack's, which its cheat codecs target.
 pub const SPACES: [&str; 8] = ["CpuBus", "IO", "WRAM", "VRAM", "CGRAM", "OAM", "SRAM", "APURAM"];
+
+/// The chips' spaces, ids 8 to 14, listed for a cartridge that has the chip (`ffi::GSURAM` and on).
+pub const CHIP_SPACES: [&str; 7] = ["GSURAM", "GSUBUS", "SA1IRAM", "BWRAM", "SA1BUS", "DSPRAM", "DSPPRG"];
 
 /// The pad's bits as `set_buttons` takes them: bit n is `PadButton` n.
 const BUTTONS: [(Control, &str); 12] = [
@@ -33,10 +36,6 @@ const BUTTONS: [(Control, &str); 12] = [
 const NTSC_FRAME: (u64, u64) = (236_250_000, 11 * 357_366);
 const PAL_FRAME: (u64, u64) = (21_281_370, 425_568);
 
-fn ipl() -> Firmware {
-    Firmware { which: 1, name: "spc700.rom".into(), label: "The sound unit's 64-byte boot ROM".into(), size: 64, required: true, parts: Vec::new() }
-}
-
 /// A NEC DSP cartridge's firmware as file 2, whole or as its program and data in files 2 and 3; `stem` and `size` as
 /// `Cartridge::nec_firmware` names them, or the open entry core info lists for any of them.
 fn dsp(named: Option<(&str, u64)>) -> Firmware {
@@ -48,6 +47,46 @@ fn dsp(named: Option<(&str, u64)>) -> Firmware {
 }
 
 impl Machine {
+    /// What follows a frame: the cheat pokes, then the battery RAM compared with the copy the host last saved.
+    fn frame_end(&mut self) {
+        for &[space, address, value, compare] in &self.pokes {
+            let now = match space {
+                0 => self.sys.read_value(address & 0xFF_FFFF, false),
+                _ => self.sys.wram.get(address as usize & 0x1_FFFF).copied(),
+            };
+            if compare != flags::NO_COMPARE && now != Some(compare as u8) {
+                continue;
+            }
+            match space {
+                0 => self.sys.poke(address & 0xFF_FFFF, value as u8),
+                _ => self.sys.wram[address as usize & 0x1_FFFF] = value as u8,
+            }
+        }
+        self.refresh_st_battery();
+        if self.sys.cart.header.battery() && !self.battery_changed && *self.battery_bytes() != *self.battery_copy {
+            self.battery_changed = true;
+            emit(event::BATTERY, 0, 0);
+        }
+    }
+
+    /// The debugger's processors, named as its commands' scope words name them: the S-CPU, the SPC700 and the
+    /// cartridge's own, if it has one.
+    fn processors(&self) -> Vec<Processor> {
+        use crate::debugger::{CPU_REGISTERS, Chip, DSP_REGISTERS, GSU_REGISTERS, SPC_REGISTERS};
+        let named = |r: &[(&str, u32)]| r.iter().map(|&(n, b)| (n.to_owned(), b)).collect::<Vec<_>>();
+        let mut list = vec![
+            Processor { id: 0, name: "CPU".into(), pc_bits: 24, registers: named(&CPU_REGISTERS) },
+            Processor { id: 1, name: "SPC".into(), pc_bits: 16, registers: named(&SPC_REGISTERS) },
+        ];
+        match self.chip() {
+            Some(Chip::Sa1) => list.push(Processor { id: 2, name: "SA1".into(), pc_bits: 24, registers: named(&CPU_REGISTERS) }),
+            Some(Chip::Gsu) => list.push(Processor { id: 2, name: "GSU".into(), pc_bits: 24, registers: named(&GSU_REGISTERS) }),
+            Some(Chip::Dsp) => list.push(Processor { id: 2, name: "DSP".into(), pc_bits: 16, registers: named(&DSP_REGISTERS) }),
+            None => {}
+        }
+        list
+    }
+
     /// An ST010 or ST011's battery-backed RAM, the cartridge's save (fullsnes: "680000h-6FFFFFh ST010/ST011 On-chip
     /// Battery-backed RAM"), read out byte by byte as the S-CPU sees it; empty for any other cartridge.
     fn refresh_st_battery(&mut self) {
@@ -67,7 +106,7 @@ impl Machine {
 }
 
 impl Core for Machine {
-    const CAPABILITIES: u64 = caps::RESET | caps::SNAPSHOT | caps::BATTERY_DIRTY | caps::ROM_PATCHES | caps::CHEAT_POKES;
+    const CAPABILITIES: u64 = caps::RESET | caps::SNAPSHOT | caps::BATTERY_DIRTY | caps::ROM_PATCHES | caps::CHEAT_POKES | caps::DEBUG | caps::DEBUG_STACK | caps::DEBUG_REGISTERS | caps::DEBUG_DISASSEMBLE;
 
     fn info() -> Info {
         Info {
@@ -77,7 +116,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The SNES in Rust, written from hardware documents and graded by test ROMs.".into()),
+            description: Some("The SNES in Rust, written from hardware documents and graded by test ROMs. Its SPC700 boot program is its own, so no firmware file is needed: a program reading $FFC0-$FFFF with the boot ROM mapped sees other bytes than a console's, and the boot handshake's timing can differ by some cycles.".into()),
             systems: vec![System {
                 id: "snes".into(),
                 name: "Super Nintendo Entertainment System".into(),
@@ -90,7 +129,7 @@ impl Core for Machine {
                     buttons: BUTTONS.iter().enumerate().map(|(bit, &(c, label))| Button { bit: bit as u32, control: Some(c), label: label.into() }).collect(),
                     axes: Vec::new(),
                 }],
-                firmware: vec![ipl(), dsp(None)],
+                firmware: vec![dsp(None)],
             }],
             deterministic: true,
             ..Info::default()
@@ -101,18 +140,17 @@ impl Core for Machine {
         // The headers' scores alone first: only an image with a NEC DSP's chipset among its candidates is loaded whole.
         let rom = if image.len() % 1024 == 512 { &image[512..] } else { image };
         if !crate::cart::candidates(rom).iter().any(|h| matches!(h.chipset, 0x03..=0x05 | 0xF6)) {
-            return vec![ipl()];
+            return Vec::new();
         }
         match crate::cart::Cartridge::new(image).and_then(|c| c.nec_firmware()) {
-            Some(named) => vec![ipl(), dsp(Some(named))],
-            None => vec![ipl()],
+            Some(named) => vec![dsp(Some(named))],
+            None => Vec::new(),
         }
     }
 
     fn status_text(code: i32) -> Option<String> {
         match code {
             STATUS_IMAGE_TOO_SHORT => Some("the image is shorter than one 32 KiB bank after any copier header".into()),
-            STATUS_NO_IPL => Some("the sound unit's 64-byte boot ROM, file 1, was not given".into()),
             _ => None,
         }
     }
@@ -140,10 +178,17 @@ impl Core for Machine {
             ports: vec![Port { port: 0, controller: Some("snes.pad".into()) }, Port { port: 1, controller: Some("snes.pad".into()) }],
             spaces: SPACES
                 .iter()
+                .chain(&CHIP_SPACES)
                 .enumerate()
-                .map(|(id, &name)| Space { read_only: name == "IO", cheats: matches!(name, "CpuBus" | "WRAM"), ..Space::new(id as u32, name) })
+                .filter(|&(id, _)| id < SPACES.len() || self.chip_space_size(id as u32).is_some())
+                .map(|(id, &name)| Space {
+                    read_only: matches!(name, "IO" | "GSUBUS" | "SA1BUS" | "DSPPRG"),
+                    cheats: matches!(name, "CpuBus" | "WRAM"),
+                    reports_stores: matches!(name, "CpuBus" | "WRAM" | "SRAM" | "APURAM"),
+                    ..Space::new(id as u32, name)
+                })
                 .collect(),
-            processors: Vec::new(),
+            processors: self.processors(),
             battery: vec![Battery { which: 0, suffix: ".srm".into() }],
             state: StateFormat { format: "VNRT".into(), version: STATE_VERSION as i64, loads_from: vec![STATE_VERSION as i64] },
             phases: Vec::new(),
@@ -157,27 +202,11 @@ impl Core for Machine {
         Ok(())
     }
 
-    /// The frame, then the cheat pokes, then the battery RAM compared with the copy the host last saved.
+    /// The frame, with nothing of the debugger's fitted, then what follows every frame.
     fn advance(&mut self, detail: &mut u64) -> Result<(), i32> {
+        self.disarm();
         NativeCore::advance(self, detail)?;
-        for &[space, address, value, compare] in &self.pokes {
-            let now = match space {
-                0 => self.sys.read_value(address & 0xFF_FFFF, false),
-                _ => self.sys.wram.get(address as usize & 0x1_FFFF).copied(),
-            };
-            if compare != flags::NO_COMPARE && now != Some(compare as u8) {
-                continue;
-            }
-            match space {
-                0 => self.sys.poke(address & 0xFF_FFFF, value as u8),
-                _ => self.sys.wram[address as usize & 0x1_FFFF] = value as u8,
-            }
-        }
-        self.refresh_st_battery();
-        if self.sys.cart.header.battery() && !self.battery_changed && *self.battery_bytes() != *self.battery_copy {
-            self.battery_changed = true;
-            emit(event::BATTERY, 0, 0);
-        }
+        self.frame_end();
         Ok(())
     }
 
@@ -265,6 +294,103 @@ impl Core for Machine {
         Ok(())
     }
 
+    fn debug_hooks(&mut self) -> Option<&mut Hooks> {
+        Some(&mut self.hooks)
+    }
+
+    /// Processor 0's breakpoints live in the hooks; the SPC700's and the cartridge processor's go to their probes.
+    fn debug_breakpoints(&mut self, processor: u32, pairs: &[i32]) -> Result<(), i32> {
+        match processor {
+            0 => self.hooks.set_breakpoints(pairs),
+            1 | 2 if processor == 1 || self.chip().is_some() => self.debug_breakpoints[processor as usize - 1] = pairs.chunks_exact(2).map(|p| (p[0], p[1])).collect(),
+            _ => return Err(status::NOT_SUPPORTED),
+        }
+        Ok(())
+    }
+
+    fn debug_run_frame(&mut self, flags: u32, _detail: &mut u64) -> Result<u32, i32> {
+        let why = self.run_frame_debug(flags);
+        if why == emusen_native::debug::stop::FRAME {
+            self.frame_end();
+        }
+        Ok(why)
+    }
+
+    fn debug_stopped(&self) -> u32 {
+        self.debug_stopped
+    }
+
+    fn debug_pc(&self, processor: u32) -> Option<u64> {
+        Machine::debug_pc(self, processor)
+    }
+
+    fn debug_registers(&self, processor: u32) -> Result<Vec<i64>, i32> {
+        Machine::debug_registers(self, processor).ok_or(status::NOT_SUPPORTED)
+    }
+
+    /// The instruction set is the space's where the space is a processor's own (APURAM the SPC700's, GSUBUS and
+    /// GSURAM the GSU's, SA1BUS, SA1IRAM and BWRAM the SA-1's, DSPPRG the DSP's), else `processor`'s.
+    fn debug_disassemble(&mut self, processor: u32, space: u32, address: u32, count: u32) -> Result<Vec<Instruction>, i32> {
+        use crate::debugger::Chip;
+        use crate::disasm::{gsu, spc700, upd77c25, w65816};
+        use crate::ffi::{BWRAM, DSPPRG, GSUBUS, GSURAM, SA1BUS, SA1IRAM};
+        #[derive(Clone, Copy, PartialEq)]
+        enum Isa {
+            Cpu,
+            Sa1,
+            Spc,
+            Gsu,
+            Dsp,
+        }
+        NativeCore::space_size(self, space)?;
+        let chip = self.chip();
+        let isa = match (space, processor, chip) {
+            (7, _, _) => Isa::Spc,
+            (GSURAM | GSUBUS, _, _) => Isa::Gsu,
+            (SA1BUS | SA1IRAM | BWRAM, _, _) => Isa::Sa1,
+            (DSPPRG, _, _) => Isa::Dsp,
+            (_, 1, _) => Isa::Spc,
+            (_, 2, Some(Chip::Sa1)) => Isa::Sa1,
+            (_, 2, Some(Chip::Gsu)) => Isa::Gsu,
+            (_, 2, Some(Chip::Dsp)) => Isa::Dsp,
+            (_, 0, _) => Isa::Cpu,
+            _ => return Err(status::NOT_SUPPORTED),
+        };
+        let cpu = match (isa, self.sys.cart.sa1.as_ref()) {
+            (Isa::Sa1, Some(s)) => s.cpu,
+            _ => self.cpu,
+        };
+        let mut widths = w65816::Widths { m: cpu.e || cpu.p & 0x20 != 0, x: cpu.e || cpu.p & 0x10 != 0, e: cpu.e };
+        let mut prefix = match self.sys.cart.gsu.as_ref() {
+            Some(g) if Machine::debug_pc(self, 2) == Some(address as u64) => gsu::Prefix { alt: g.alt, b: g.b },
+            _ => gsu::Prefix::default(),
+        };
+        let st = self.sys.cart.dsp.as_ref().is_some_and(|(d, _)| d.st);
+        let machine = std::cell::RefCell::new(self);
+        let read = |a: u32| {
+            let mut byte = [0u8];
+            let _ = NativeCore::space_read(&mut **machine.borrow_mut(), space, a, &mut byte);
+            byte[0]
+        };
+        let mut list = Vec::new();
+        let mut at = address;
+        for _ in 0..count.min(4096) {
+            let i = match isa {
+                Isa::Cpu | Isa::Sa1 => w65816::decode(&read, at, &mut widths, cpu.dbr),
+                Isa::Spc => spc700::decode(&read, at),
+                Isa::Gsu => gsu::decode(&read, at, &mut prefix),
+                Isa::Dsp => upd77c25::decode(&read, at, st),
+            };
+            let n = i.bytes.len() as u32;
+            at = match isa {
+                Isa::Spc | Isa::Dsp => i.address.wrapping_add(n),
+                _ => (at & 0xFF_0000) | (at.wrapping_add(n) & 0xFFFF),
+            };
+            list.push(i);
+        }
+        Ok(list)
+    }
+
     /// Pokes in CpuBus (space 0) and WRAM (space 2), the spaces machine info marks for cheats.
     fn set_cheat_pokes(&mut self, quads: &[u32]) -> Result<(), i32> {
         if quads.chunks_exact(4).any(|q| q[0] != 0 && q[0] != 2) {
@@ -276,7 +402,7 @@ impl Core for Machine {
     }
 }
 
-emusen_native::core_exports!(Machine; reset, rom_patches, cheat_pokes);
+emusen_native::core_exports!(Machine; reset, rom_patches, cheat_pokes, debug, debug_stack, debug_registers, debug_disassemble);
 
 #[cfg(test)]
 mod tests {
@@ -285,8 +411,7 @@ mod tests {
     fn machine() -> Machine {
         let mut image = crate::machine::tests::rom(&[0x80, 0xFE]);
         (image[0x7FD6], image[0x7FD8]) = (0x02, 0x03);
-        let ipl = crate::apu::smp::tests::idle_ipl();
-        let request = Create { image: &image, settings: Settings::default(), files: vec![File { which: 1, data: &ipl }], pixel_formats: 1, host_abi_version: sys::ABI_VERSION };
+        let request = Create { image: &image, settings: Settings::default(), files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION };
         <Machine as Core>::create(&request).unwrap()
     }
 
@@ -304,16 +429,17 @@ mod tests {
         <Machine as Core>::firmware_for(&image).iter().map(|f| format!("{} {} {}", f.which, f.name, f.size)).collect()
     }
 
-    // The NEC DSP named from the header and title by fullsnes's list of games; the boot ROM always.
+    // The NEC DSP named from the header and title by fullsnes's list of games; nothing for a game without one (D-38).
     #[test]
     fn the_firmware_is_named_from_the_header_and_title() {
-        assert_eq!(named(b"SUPER MARIO WORLD", 0x02), ["1 spc700.rom 64"]);
-        assert_eq!(named(b"PILOTWINGS", 0x03), ["1 spc700.rom 64", "2 dsp1.rom 8192"]);
-        assert_eq!(named(b"SUPER MARIO KART", 0x05)[1], "2 dsp1b.rom 8192");
-        assert_eq!(named(b"DUNGEON MASTER", 0x03)[1], "2 dsp2.rom 8192");
-        assert_eq!(named(b"TOP GEAR 3000", 0x03)[1], "2 dsp4.rom 8192");
-        assert_eq!(named(b"F1 ROC II", 0xF6)[1], "2 st010.rom 53248");
-        assert_eq!(named(b"MORITA SHOGI", 0xF6)[1], "2 st011.rom 53248");
+        assert!(named(b"SUPER MARIO WORLD", 0x02).is_empty());
+        assert_eq!(named(b"PILOTWINGS", 0x03), ["2 dsp1.rom 8192"]);
+        assert_eq!(named(b"SUPER MARIO KART", 0x05), ["2 dsp1b.rom 8192"]);
+        assert_eq!(named(b"DUNGEON MASTER", 0x03), ["2 dsp2.rom 8192"]);
+        assert_eq!(named(b"TOP GEAR 3000", 0x03), ["2 dsp4.rom 8192"]);
+        assert_eq!(named(b"F1 ROC II", 0xF6), ["2 st010.rom 53248"]);
+        assert_eq!(named(b"MORITA SHOGI", 0xF6), ["2 st011.rom 53248"]);
+        assert!(<Machine as Core>::info().systems[0].firmware.iter().all(|f| f.which >= 2));
     }
 
     // A DSP's firmware whole as file 2, or as its program in file 2 and its data in file 3; the data alone is refused.
@@ -321,13 +447,12 @@ mod tests {
     fn a_dsp_firmware_comes_whole_or_in_two_parts() {
         let mut image = crate::machine::tests::rom(&[0x80, 0xFE]);
         image[0x7FD6] = 0x03;
-        let ipl = crate::apu::smp::tests::idle_ipl();
         let (program, data) = (vec![0u8; 6_144], vec![0u8; 2_048]);
         let make = |files: Vec<File<'_>>| <Machine as Core>::create(&Create { image: &image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION });
         let whole = [program.as_slice(), data.as_slice()].concat();
-        assert!(make(vec![File { which: 1, data: &ipl }, File { which: 2, data: &whole }]).unwrap().sys.cart.dsp.is_some());
-        assert!(make(vec![File { which: 1, data: &ipl }, File { which: 2, data: &program }, File { which: 3, data: &data }]).unwrap().sys.cart.dsp.is_some());
-        assert_eq!(make(vec![File { which: 1, data: &ipl }, File { which: 3, data: &data }]).err(), Some(status::BAD_FILE));
+        assert!(make(vec![File { which: 2, data: &whole }]).unwrap().sys.cart.dsp.is_some());
+        assert!(make(vec![File { which: 2, data: &program }, File { which: 3, data: &data }]).unwrap().sys.cart.dsp.is_some());
+        assert_eq!(make(vec![File { which: 3, data: &data }]).err(), Some(status::BAD_FILE));
     }
 
     // RESET: the CPU at its vector again, the memories and the frame count kept.
@@ -389,10 +514,9 @@ mod tests {
     fn an_st01x_battery_is_its_on_chip_ram() {
         let mut image = crate::machine::tests::rom(&[0x80, 0xFE]);
         image[0x7FD6] = 0xF6;
-        let ipl = crate::apu::smp::tests::idle_ipl();
         let firmware = vec![0u8; 53_248];
         let saved: Vec<u8> = (0..4096).map(|i| (i * 5 + 1) as u8).collect();
-        let files = vec![File { which: 0, data: &saved }, File { which: 1, data: &ipl }, File { which: 2, data: &firmware }];
+        let files = vec![File { which: 0, data: &saved }, File { which: 2, data: &firmware }];
         let mut m = <Machine as Core>::create(&Create { image: &image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION }).unwrap();
         assert_eq!(Core::battery(&m, 0).unwrap(), (&saved[..], flags::BATTERY_TRACKED));
         assert_eq!(m.sys.read_value(0x68_0003, false), Some(saved[3]));
@@ -400,6 +524,23 @@ mod tests {
         Core::advance(&mut m, &mut 0).unwrap();
         let (bytes, f) = Core::battery(&m, 0).unwrap();
         assert_eq!((bytes[3], f), (0xEE, flags::BATTERY_TRACKED | flags::BATTERY_CHANGED));
+    }
+
+    // DEBUG_DISASSEMBLE: the space picks the instruction set where it is a processor's own, else the processor does.
+    #[test]
+    fn disassembly_goes_by_the_space_and_the_processor() {
+        let mut m = machine();
+        let text = |m: &mut Machine, processor: u32, space: u32, at: u32| {
+            Core::debug_disassemble(m, processor, space, at, 2).map(|l| l.iter().map(|i| format!("{:06X} {} {}", i.address, i.mnemonic, i.operands).trim_end().to_owned()).collect::<Vec<_>>())
+        };
+        assert_eq!(text(&mut m, 0, 0, 0x00_8000).unwrap(), ["008000 BRA $8000", "008002 NOP"]);
+        Core::space_write(&mut m, 7, 0x0200, &[0xE8, 0x12, 0x3F, 0x00, 0x03]).unwrap();
+        assert_eq!(text(&mut m, 0, 7, 0x0200).unwrap(), ["000200 MOV A,#$12", "000202 CALL !$0300"]);
+        Core::space_write(&mut m, 2, 0x0100, &[0xE8, 0x12, 0xEA]).unwrap();
+        assert_eq!(text(&mut m, 0, 2, 0x0100).unwrap(), ["000100 INX", "000101 ORA ($EA)"]);
+        assert_eq!(text(&mut m, 1, 2, 0x0100).unwrap()[0], "000100 MOV A,#$12");
+        assert_eq!(text(&mut m, 2, 2, 0x0100), Err(status::NOT_SUPPORTED));
+        assert_eq!(text(&mut m, 0, 99, 0), Err(status::NO_SUCH_SPACE));
     }
 
     // SNAPSHOT: the full state under kind 1.

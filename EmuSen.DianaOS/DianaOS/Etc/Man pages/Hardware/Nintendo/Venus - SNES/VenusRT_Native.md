@@ -2951,3 +2951,80 @@ a DSP-1 cartridge of `SyntheticRom` asks VenusRT for `spc700.rom` and `dsp1.rom`
 the pair in the firmware folder nothing is missing and the DSP is fitted (the state grows by its group); a pair of the
 wrong total size is not taken; the whole file gives the same machine. WiseMan's firmware, factory, adapter, discovery,
 engine and Mistress window tests: 306 of 306.
+
+## 35. VenusRT's own SPC700 boot program, and no firmware for an ordinary game (2026-10-04)
+
+*Decided 2026-10-03* (`EmuSen_Firmware.md` §0): VenusRT neither requires nor uses a firmware file for the SPC700's boot
+program. §21.2 had made the console's 64 bytes file 1 of `create`, required, with status -10 when absent. That is
+withdrawn here. The NEC DSP firmware (files 2 and 3) is unchanged.
+
+### 35.1 What was built
+
+- **The program.** `src/apu/boot.rs` holds 64 bytes written from fullsnes's prose of the transfer protocol, with their
+  provenance, the sections read and those deliberately not read, in `VenusRT_Disputes.md` D-38. The S-SMP maps them at
+  $FFC0-$FFFF while CONTROL bit 7 is set, and the SPC700 always runs: the `Option` that let it stand still without a
+  boot ROM is gone.
+- **The interface.** `create` takes no file 1 and refuses one as `BAD_FILE`, since the number no longer names
+  anything. Status -10 and its words are removed from the core, `status_text` and the shim. `info()` lists only the
+  NEC DSP's file, and `firmware_for` answers an empty list for a cartridge without a NEC DSP. The core info's
+  description states the accuracy cost below.
+- **No dependence on the console's image.** The examples' loader, the WiseMan SNES harness
+  (`VenusRtSnesEngine`), the adapter and Mistress tests and the kit runs no longer read `spc700.rom`, and the
+  synthetic stand-ins (`idle_ipl`, `IdleIpl`, `Machine::with_ipl`, `EMUSEN_VENUSRT_IPL`) are deleted. The D-37 port
+  test runs its program from RAM instead.
+- **Mistress asks for nothing for an ordinary game.** `VenusRtEngineTests.An_ordinary_game_on_venusrt_prompts_for_no_firmware`
+  chooses VenusRT with an empty firmware folder and runs Mistress's own prompt: an ordinary game changes nothing, and a
+  DSP-1 cartridge of `SyntheticRom` still asks for its chip. `The_adapter_takes_a_dsp_firmware_whole_or_as_its_split_pair`
+  now finds only `dsp1.rom` missing for that cartridge.
+- **The console's image as a reference only.** The copy at `~/.cache/emusen/probe/venusrt/firmware/spc700.rom` is kept
+  outside the repository, never committed, as the comparison `firmwarecheck.py` (`EmuSen_Debugging_Tools_Reference_v5.md`
+  §3.61) runs against. Nothing else reads it: not the core, its tests, the harness, the examples or the kit.
+
+### 35.2 The similarity (measured 2026-10-04)
+
+`firmwarecheck.py`, against the cached image: 6 of 64 bytes equal at the same offset (9.4%), the longest aligned run 2
+bytes; the longest common run at any offsets 4 bytes, twice. PASS against the thresholds decided beforehand (at most
+25%, no run over 6). Two faster versions failed the check, a 9-byte opening and an 8-byte block loop, and were
+discarded (D-38).
+
+### 35.3 The accuracy cost
+
+- **The bytes.** A program reading $FFC0-$FFFF with the ROM mapped sees VenusRT's bytes. Only $FFC0's $CD (blargg's
+  SPC tests compare it before returning to the boot program) and the reset vector are placed to match what software is
+  known to read. blargg's `spc_smp` has a test, "CPU/verify IPL ROM", that compares all 64 bytes; it fails, and
+  cannot pass without the console's bytes.
+- **The handshake's timing.** On spc_dsp6's uploader, which is bound by the SPC700's latency, one byte takes 602 master
+  clocks (the median pass of the S-CPU's loop) against 510 in Mesen with the console's program, about four SPC700
+  cycles; 40 clocks of it are the deliberately slower echo that keeps the loop from being the console's sequence.
+  Super Mario World's uploader is bound by the S-CPU and does not move with the boot program (612.65 clocks a byte
+  in every variant, against Mesen's 569.26, a difference outside it).
+- **The state on the jump.** RAM $0000-$0001 hold the entry point and $0002-$00EF are zero, as fullsnes states. SP is
+  $EF, which gilyon's `spctest` requires (D-38). A, X, Y and PSW are this program's, as no document gives the
+  console's.
+
+### 35.4 The oracles (measured 2026-10-04)
+
+| Check | Result |
+|---|---|
+| The corpus, VenusRT as the third engine, against §34's run | one verdict changes: `spc_smp`, Passed to Failed ("CPU/verify IPL ROM"), its picture no longer Mesen's. 107 of Mesen's 117 pass (108); pictures equal 229 of 295 (230); VRAM equal 255 (256). C# Venus's and Mesen's columns identical. Cells move without a verdict change on spc_dsp6 (still incomplete), the 2010 timing ROMs `test_speed`, `test_timer_speed`, `_speed2`, `_speed3`, `_speed_2` (printed counts by one), lidnariq's `smpspeed` and undisbeliever's `ipl-speed-test`, which times the boot program itself |
+| blargg's SPC ROMs | `spc_timer` and `spc_mem_access_times` pass; `spc_smp` fails as above |
+| gilyon `spctest`, both copies | pass, to test $0557. With SP $F0 they failed at $01AE, which settled SP (D-38) |
+| The 2010 ROMs | every verdict as before |
+| spc_dsp6, its 111 tests singly, by §30.2's runner (600 frames, two rounds without "Failed") | 104 pass, 1 fails, 6 hang (106 and 5 at §30.2): "Misc/brr addr wrap-around" passed and now fails, "Order/voice 0 noise" passed and now hangs |
+| The four bench games' first lit frame against Mesen | unchanged: Star Fox 210/200, Super Mario Kart 10/10, Super Mario RPG 40/40, Super Mario World 90/90 |
+| The state's hash every 60 frames to 600 | the commit before, given these 64 bytes as its file 1, gives the same hash as the new code at every sample for the four bench games: the code change is neutral and the 64 bytes are the whole difference. Against runs with the console's program the hashes differ from the first sample, the boot program's run leaving other SPC700 registers, cycle position and port values; not measured, since the console's image is not run |
+| The conformance kit, the eleven images of §31.2, no boot file | compliant on every one |
+| The adapter against the shim (`EMUSEN_VENUSRT_GAMES`, the four bench games) | 600 frames each, the picture, the samples and the state equal |
+| Tests | the crate's 91 (four new for the boot program), WiseMan's VenusRt, CoreAdapter, CoreDebug, CoreAbi, NativeHost, CoreDiscovery, Snes and Firmware filters, 199 of 199 |
+| The cost, `frame_cost` best of three over 1,200 frames, in turn under the timing lock | Super Mario World 2.11-2.12 against 2.14 ms a frame, Donkey Kong Country 2.08-2.09 against 2.10-2.11: the checks of an absent boot ROM are gone, about 1% |
+
+### 35.5 What is open
+
+**The two spc_dsp6 tests are a sensitivity of VenusRT's that this program exposes, not a fault in its protocol**,
+argued from these measurements. "Misc/brr addr wrap-around" never reads $FFC0-$FFFF outside the boot program; the
+APU RAM after its upload equals Mesen's but for the test's two delay counters; and it fails with every one of 34 S-CPU
+power-on offsets across a line and 13 jump delays (0 and 2 to 14 SPC700 cycles), in its first to seventh round
+according to the phase. A test that passes on a console cannot depend on that phase, since there the S-CPU's kick
+reaches the SPC700 at a random point of the S-DSP's period. Mesen passes it near frame 2,800; with the console's
+program VenusRT showed four rounds without failure in §30.2's 600 frames, and no longer run was recorded. "Order/voice
+0 noise" gives no verdict in Mesen by frame 6,000. Both are left for the S-DSP's next step.

@@ -69,6 +69,8 @@ pub struct NecDsp {
     /// Instructions run since power-on, the chip's clock.
     pub cycles: u64,
     pub ratio: (u64, u64),
+    /// The debugger's seam, fitted for an observed frame only; not in the state.
+    pub probe: Option<Box<crate::probe::Probe>>,
 }
 
 impl NecDsp {
@@ -115,6 +117,7 @@ impl NecDsp {
             si: 0,
             cycles: 0,
             ratio: if st { ST_RATIO } else { DSPN_RATIO },
+            probe: None,
         };
         d.reset();
         Some(d)
@@ -149,6 +152,12 @@ impl NecDsp {
     pub fn run_to(&mut self, clock: u64) {
         let target = (clock as u128 * self.ratio.0 as u128 / self.ratio.1 as u128) as u64;
         while self.cycles < target {
+            if let Some(p) = self.probe.as_mut() {
+                // The debugger's address is the opcode's byte offset in the program, three bytes each.
+                if p.before(self.pc as u32 * 3) {
+                    return;
+                }
+            }
             self.step();
             self.cycles += 1;
         }

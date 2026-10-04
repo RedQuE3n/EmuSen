@@ -2516,6 +2516,42 @@ between `[MESEN LOG]` and `[END MESEN LOG]`, through `MessageManager::GetLog`, t
 else changed and the ABI version stays 1; the sentinel `build-probe.sh` looks for is now `EMUSEN_PROBE_LOG`. What was
 read of Mesen for it was `MessageManager.h`'s declarations; the log's text is Mesen's output, read as any dump is.
 
+### 3.61 `firmwarecheck.py`: how much of an original image an open replacement repeats
+
+*Added 2026-10-03, for VenusRT's SPC700 boot program (`VenusRT_Disputes.md` D-38).* `EmuSen_Firmware.md` §0 makes
+every core carry an open replacement for its firmware, written from documents. A replacement written that way can
+still converge on the original's bytes: the fastest instruction sequence for a documented protocol is often the one
+the original's authors also chose, and a writer who has once seen a listing may reproduce it without intending to.
+The check has to be mechanical, because neither failure is visible to the writer, and it has to be runnable by a
+writer bound by a clean-room protocol, who may not look at the original.
+
+`EmuSen.WiseMan/Reference/analysis/firmwarecheck.py <replacement> <original> [--window START:END]` reads both images
+and prints only numbers and offsets:
+
+- **equal at the same offset**, the count and the share of the offsets both images cover, with the longest such run;
+- **the longest common run** at any offsets, with its offset in each image, found exactly by a suffix automaton of the
+  original;
+- **every maximal common run** of at least `--min-run` bytes (4 by default), offset-independent, longest first;
+- **a verdict** against thresholds given as arguments: PASS when at most `--max-equal` percent (25 by default) are
+  equal at the same offset and no common run is longer than `--max-run` bytes (6 by default). The exit code is the
+  verdict (0 PASS, 1 FAIL, 2 a usage or file error).
+
+`--window` restricts both images to the same offsets, for an original larger than the part replaced. No byte of either
+image appears in the output, which the unit test `tests/test_firmwarecheck.py` checks on synthetic images (no
+original is needed to test the tool): with an original whose bytes are all 200 or above, no number and no two-digit
+hexadecimal token in the report may be one of them.
+
+**Where the originals live.** Never in the repository. An original image used as the comparison is kept outside it,
+in the probe cache of the core concerned (`~/.cache/emusen/probe/venusrt/firmware/spc700.rom` for the first case),
+and is read by this tool only; the core, its tests, harness and examples never load it.
+
+**What the thresholds are not.** They are not a legal test and not a measure of authorship. 64 bytes of SPC700 code
+that implement one documented protocol share short runs by necessity: the reset vector, a `MOV A,$F5` before a
+store. A run of four or five is noise; the threshold of six catches the case that matters in practice, a writer's
+fastest loop turning out to be the original's, which happened twice while D-38 was written (a nine-byte opening and an
+eight-byte block loop, both measured and discarded). The record of each replacement states its counts, so the
+argument can be checked from outside.
+
 ---
 
 ## 8. A note on the 2026-08-06 commit, for whoever runs `git log` and wonders

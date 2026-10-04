@@ -1,8 +1,9 @@
-//! The S-SMP around the SPC700: 64 KiB of RAM, the boot ROM, the I/O page with its four ports both ways, the three
+//! The S-SMP around the SPC700: 64 KiB of RAM, VenusRT's own boot program (D-38), the I/O page with its four ports both ways, the three
 //! timers and the S-DSP, which takes one of its steps in each SPC700 cycle; and its clock, run behind the S-CPU's and
 //! caught up at a port access and at the frame's end (fullsnes, "SNES APU"; VenusRT_Plan.md §5.3). See
 //! VenusRT_Native.md §21 and §22.
 
+use super::boot::BOOT;
 use super::dsp::Dsp;
 use super::spc700::{self, Spc700};
 
@@ -34,8 +35,6 @@ pub struct Timer {
 pub struct Smp {
     pub cpu: Spc700,
     pub ram: Box<[u8]>,
-    /// The 64-byte boot ROM the frontend supplies; without it the SPC700 does not run.
-    pub ipl: Option<[u8; 64]>,
     pub test: u8,
     pub control: u8,
     pub dsp_address: u8,
@@ -51,6 +50,8 @@ pub struct Smp {
     pub to_cpu_q: Vec<(u64, u8, u8)>,
     /// The last `peek`, kept while the SPC700 and the input queue stand where they were.
     peeked: Option<(u64, Peeked)>,
+    /// The debugger's seam, fitted for an observed frame only; not in the state.
+    pub probe: Option<Box<crate::probe::Probe>>,
     /// AUXIO4 and AUXIO5, latches read back as written, not the RAM beneath (D-31).
     pub aux: [u8; 2],
     pub timers: [Timer; 3],
@@ -62,11 +63,10 @@ pub struct Smp {
 }
 
 impl Smp {
-    pub fn new(ipl: Option<[u8; 64]>, pal: bool) -> Smp {
+    pub fn new(pal: bool) -> Smp {
         let mut s = Smp {
             cpu: Spc700::default(),
             ram: vec![0; 0x10000].into(),
-            ipl,
             // fullsnes: TEST 0Ah and CONTROL B0h on power-on.
             test: 0x0A,
             control: 0xB0,
@@ -78,19 +78,18 @@ impl Smp {
             to_apu_q: Vec::new(),
             to_cpu_q: Vec::new(),
             peeked: None,
+            probe: None,
             aux: [0xFF; 2],
             timers: Default::default(),
             cycles: 0,
             prescale: [0; 2],
             ratio: if pal { PAL_RATIO } else { NTSC_RATIO },
         };
-        if let Some(rom) = s.ipl {
-            s.cpu.pc = u16::from_le_bytes([rom[62], rom[63]]);
-            // D-6: the reset sequence is the BRK's cycles with its writes held off; nothing it reads has an effect.
-            for _ in 0..RESET_CYCLES {
-                s.tick();
-                s.timer_step();
-            }
+        s.cpu.pc = u16::from_le_bytes([BOOT[62], BOOT[63]]);
+        // D-6: the reset sequence is the BRK's cycles with its writes held off; nothing it reads has an effect.
+        for _ in 0..RESET_CYCLES {
+            s.tick();
+            s.timer_step();
         }
         s
     }
@@ -108,15 +107,17 @@ impl Smp {
     /// Runs the SPC700 an instruction at a time while every cycle of the instruction starts before `clock`, so that
     /// no S-CPU write still to come can be one it should have read (D-37). It stays up to an instruction behind.
     pub fn run_to(&mut self, clock: u64) {
-        if self.ipl.is_none() {
-            return;
-        }
         let q = self.quarters(clock);
         loop {
             // The longest instruction, DIV, is 12 cycles.
             if 4 * (self.cycles + 12 * self.stretch()) > q {
                 let (len, _, _) = self.peek();
                 if 4 * (self.cycles + len - 1) >= q {
+                    break;
+                }
+            }
+            if let Some(p) = self.probe.as_mut() {
+                if p.before(self.cpu.pc as u32) {
                     break;
                 }
             }
@@ -160,12 +161,10 @@ impl Smp {
         let q = self.quarters(clock);
         Self::land(&mut self.to_cpu, &mut self.to_cpu_q, q);
         let mut v = self.to_cpu[port & 3];
-        if self.ipl.is_some() {
-            let (_, writes, n) = self.peek();
-            for &(at, p, w) in &writes[..n] {
-                if at <= q && p as usize == port & 3 {
-                    v = w;
-                }
+        let (_, writes, n) = self.peek();
+        for &(at, p, w) in &writes[..n] {
+            if at <= q && p as usize == port & 3 {
+                v = w;
             }
         }
         v
@@ -337,7 +336,7 @@ impl spc700::Bus for Peek<'_> {
             0x00F8 | 0x00F9 => s.aux[(address - 0xF8) as usize],
             0x00FD..=0x00FF => s.timers[(address - 0xFD) as usize].out,
             0x00F0..=0x00FF => 0,
-            0xFFC0..=0xFFFF if s.control & 0x80 != 0 => s.ipl.map_or(0, |r| r[(address - 0xFFC0) as usize]),
+            0xFFC0..=0xFFFF if s.control & 0x80 != 0 => BOOT[(address - 0xFFC0) as usize],
             _ => s.ram[address as usize],
         }
     }
@@ -360,7 +359,7 @@ impl spc700::Bus for Smp {
         self.tick();
         let v = match address {
             0x00F0..=0x00FF => self.io_read(address),
-            0xFFC0..=0xFFFF if self.control & 0x80 != 0 => self.ipl.map_or(0, |r| r[(address - 0xFFC0) as usize]),
+            0xFFC0..=0xFFFF if self.control & 0x80 != 0 => BOOT[(address - 0xFFC0) as usize],
             _ => self.ram[address as usize],
         };
         self.timer_step();
@@ -369,6 +368,9 @@ impl spc700::Bus for Smp {
 
     fn write(&mut self, address: u16, value: u8) {
         self.tick();
+        if let Some(p) = self.probe.as_mut() {
+            p.store(address as u32, value);
+        }
         if (0x00F0..=0x00FF).contains(&address) {
             self.io_write(address, value);
         }
@@ -389,20 +391,10 @@ impl spc700::Bus for Smp {
 pub(crate) mod tests {
     use super::*;
 
-    /// A stand-in boot ROM for tests: its reset jumps to a loop at $FFC0 (`2F FE`). Not the console's.
-    pub fn idle_ipl() -> [u8; 64] {
-        let mut r = [0u8; 64];
-        r[0] = 0x2F;
-        r[1] = 0xFE;
-        r[62] = 0xC0;
-        r[63] = 0xFF;
-        r
-    }
-
     // fullsnes: the ports cross over, CONTROL's bits 4 and 5 clear the input latches, and the boot ROM shadows RAM.
     #[test]
     fn the_ports_cross_over_and_control_clears_the_inputs() {
-        let mut s = Smp::new(Some(idle_ipl()), false);
+        let mut s = Smp::new(false);
         s.cpu_write(1, 0x55, 0);
         use spc700::Bus;
         assert_eq!(s.read(0xF5), 0x55);
@@ -411,19 +403,18 @@ pub(crate) mod tests {
         s.write(0xF1, 0x10 | 0x80);
         assert_eq!(s.read(0xF5), 0);
         s.write(0xFFC0, 0x12);
-        assert_eq!((s.read(0xFFC0), s.ram[0xFFC0]), (0x2F, 0x12));
+        assert_eq!((s.read(0xFFC0), s.ram[0xFFC0]), (BOOT[0], 0x12));
         s.write(0xF1, 0x00);
         assert_eq!(s.read(0xFFC0), 0x12);
     }
 
-    // D-37: a boot ROM copying port 0 to port 1 forever; the S-CPU's write reaches it only after the write's bus
-    // cycle, and the echo reaches the S-CPU only once the SPC700 has made it.
+    // D-37: a program in RAM copying port 0 to port 1 forever; the S-CPU's write reaches it only after the write's
+    // bus cycle, and the echo reaches the S-CPU only once the SPC700 has made it.
     #[test]
     fn the_ports_carry_each_write_at_its_own_time() {
-        let mut ipl = [0u8; 64];
-        ipl[..6].copy_from_slice(&[0xE4, 0xF4, 0xC4, 0xF5, 0x2F, 0xFA]);
-        (ipl[62], ipl[63]) = (0xC0, 0xFF);
-        let mut s = Smp::new(Some(ipl), false);
+        let mut s = Smp::new(false);
+        s.ram[0x200..0x206].copy_from_slice(&[0xE4, 0xF4, 0xC4, 0xF5, 0x2F, 0xFA]);
+        s.cpu.pc = 0x200;
         s.run_to(10_000);
         s.cpu_write(0, 0x55, 10_000);
         assert_eq!(s.cpu_read(1, 10_000), 0);
@@ -435,7 +426,7 @@ pub(crate) mod tests {
     // fullsnes: timer 2 counts at 64 kHz, every 16 SPC700 cycles, divided by T2DIV; TnOUT clears when read.
     #[test]
     fn a_timer_counts_its_source_ticks_by_its_divider() {
-        let mut s = Smp::new(Some(idle_ipl()), false);
+        let mut s = Smp::new(false);
         use spc700::Bus;
         s.write(0xFC, 3);
         s.write(0xF1, 0x84);
@@ -451,7 +442,7 @@ pub(crate) mod tests {
     // D-25: clearing a timer's CONTROL bit stops it and keeps TnOUT; setting the bit again starts it from zero.
     #[test]
     fn a_timer_restarts_on_its_enable_edge() {
-        let mut s = Smp::new(Some(idle_ipl()), false);
+        let mut s = Smp::new(false);
         use spc700::Bus;
         s.write(0xFC, 1);
         s.write(0xF1, 0x84);
@@ -473,15 +464,12 @@ pub(crate) mod tests {
         assert_eq!(s.timers[2].out, 1);
     }
 
-    // The boot ROM's reset vector starts the CPU, and run_to keeps the SPC700 at the master clock's share.
+    // The boot program's reset vector starts the CPU, and run_to keeps the SPC700 at the master clock's share.
     #[test]
     fn the_spc700_runs_to_the_master_clocks_share() {
-        let mut s = Smp::new(Some(idle_ipl()), false);
+        let mut s = Smp::new(false);
         assert_eq!(s.cpu.pc, 0xFFC0);
         s.run_to(21_477_273);
         assert!((1_023_990..=1_024_010).contains(&s.cycles), "{}", s.cycles);
-        let mut none = Smp::new(None, false);
-        none.run_to(21_477_273);
-        assert_eq!(none.cycles, 0);
     }
 }

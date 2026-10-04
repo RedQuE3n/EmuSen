@@ -15,7 +15,10 @@ fn cache() -> std::path::PathBuf {
 }
 
 fn host() -> Host {
-    Host { cap: 2_000_000, max_steps: 1100, ..Host::steady() }
+    // ORACLE_WRITE_OVER, a bit mask in hex: the transfers answered with a write over the chip's word.
+    let write_over = std::env::var("ORACLE_WRITE_OVER").ok().and_then(|v| u64::from_str_radix(&v, 16).ok()).unwrap_or(0);
+    let usf1_writes = std::env::var_os("ORACLE_USF1_WRITES").is_some();
+    Host { cap: 2_000_000, max_steps: 1100, write_over, usf1_writes, ..Host::steady() }
 }
 
 fn idle(stem: &str, offset: u32, h: &mut Host) -> Lle {

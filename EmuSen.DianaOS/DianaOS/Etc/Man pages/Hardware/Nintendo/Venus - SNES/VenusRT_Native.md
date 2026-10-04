@@ -4158,3 +4158,99 @@ to the image while its sine is approximate.
 - **Gyrate (14h)**, six inputs and three results, not characterised.
 - **An exact Inverse and Distance**: a wider declared search over seeds and iteration sequences, if the plan's rules
   allow it.
+
+## 45. The NEC DSP replacements, step 12: the DSP-4 characterised, and the decision put (2026-10-04)
+
+Step 12 of `VenusRT_DspHle.md` §8. No document describes the DSP-4's commands (plan §3.4). This step reads Top Gear
+3000's traffic (§37.6) and grades hypotheses against the image. It ends in a decision that is the tester's to take,
+not this record's.
+
+### 45.1 The protocol, measured
+
+- **The first input is written over the chip's offer.** After a command the DSP-4 writes a word first (§37.2), and
+  Top Gear 3000 writes its first input over it: the "bytes against the chip's direction" of §37.6, two per command
+  for the short commands. The chip then takes DR as that input.
+  - The oracle's driver gains `write_over`, which answers chosen transfers with a write, and `dsp_oracle` sets it with
+    `ORACLE_WRITE_OVER`.
+  - With it, the short commands' shapes become plain: 00h `i2o2`, 0Bh `i3o`, 11h `i4o`, 0Ah `i4o4`.
+- **Unhandshaken results.** 00h's first result is written without waiting for the S-CPU, 8 or 9 cycles after its last
+  input, as the DSP-2's 01h is (§42.1).
+- **The long commands are conversations.** 01h, 07h, 08h and 09h alternate short runs of inputs and results for as
+  long as the game supplies segments: 30 to 90 exchanges in Top Gear 3000. They are the road and its scenery projected
+  segment by segment, and their traffic is 78.8% of the game's DR transfers.
+
+### 45.2 What is characterised
+
+| Code | Share of commands | Share of DR transfers | Status |
+|---|---|---|---|
+| 00h | 82.3% | 16.7% | **a rule, exact on 100,000 of 100,000 seeded pairs**: (K·L·2 as a signed 32-bit word) >> 1, the µPD77C25's product (fullsnes) halved arithmetically, low word first; so (-32,768)² gives C0000000h |
+| 0Ah | 11.4% | 3.7% | four results from four inputs, linear in the second at least (a 10h there gives 30h); in the game its results are fixed pairs (FF40h, 00C0h) for any first input. Not resolved |
+| 0Bh | 1.3% | 0.3% | in the game, three results; with the oracle's inputs, one result of 0 and a latency of 16 to 19 that depends on the inputs. Not resolved |
+| 11h | 0.3% | 0.1% | one result, an angle in appearance (00E8h alone gives 4000h). Not resolved |
+| 01h, 07h, 08h, 09h | 2.8% | 78.8% | conversational; not characterised |
+| 03h, 05h, 06h | 2.0% | 0.4% | no transfers (03h, 05h) or sixteen results with no input (06h); not characterised |
+
+### 45.3 Against P9, and the decision
+
+**P9** asked for rules explaining at least 80% of Top Gear 3000's traced command volume after step 12's two steps.
+The answer depends on what is counted:
+
+- **By commands, P9 holds**: 00h alone is 82.3% of them, and it is exact.
+- **By DR transfers, it fails**: 16.7%. The four conversational commands, with 78.8%, are where the picture is made, and
+  none of them is characterised.
+
+**The options**, each argued:
+
+- **A, no-go.** The DSP-4 keeps `effect: none` and Top Gear 3000 runs only with the player's image. The cost is one game.
+- **B, a limited go.** Build the replacement's frame, with the first-input protocol, 00h exact, and the short
+  commands as far as one more characterisation step reaches. Then decide on the conversational commands against
+  their own measurement. The game would run, but its road would not be drawn until those commands are built. That is
+  `effect: accuracy`, with the cost naming the road.
+- **C, the full go of plan step 12a,** 4 to 6 steps. Whether 01h-09h are formula-like is unknown. If they use a sine
+  of their own, the DSP-1's and the ST010's histories (§40.7, §43.2) suggest they will be approximate at best.
+
+**Recommended: B**, because it costs one step, makes the game start without the image, and replaces a guess about the
+conversational commands with a measurement before more is spent. **The decision is the tester's**, and nothing past
+this record is built until it is taken.
+
+## 46. The NEC DSP replacements, step 13: the DSP-3's decoder question (2026-10-04)
+
+Plan §3.3 asks whether 38h, the Shannon-Fano decoder, depends on a table the game sends or on the chip's own data. If
+the game sends it, the decoder is a documented algorithm; if the chip holds it, R4 stops it. No DSP-3 game is in the
+library, so only the command oracle can answer.
+
+**What was measured.**
+
+- **38h is driven by USF1.** fullsnes says "USF1 bit in SR register = direction". The driver gains `usf1_writes`,
+  `ORACLE_USF1_WRITES` in `dsp_oracle`, which answers a rise with USF1 set by a write. With it the decoder runs as a
+  conversation: after the command, one word in and one out, then a run of inputs, then symbols out, interleaved with
+  further inputs, as variable-length codes would need.
+- **The opening run's length depends on the stream's content.** Over four seeded streams it was 52, 49, 47 and 90
+  words before the first symbol. Two streams that differed only after their hundredth word gave the same opening run
+  and the same first twenty symbols. Two streams that differed only in their first word did too, so the first word is
+  not part of it.
+
+**The answer, argued.** A decoder whose code table were fixed in its data ROM would have no reason to read a
+preamble whose length depends on its content. A preamble read until its own structure ends is how a transmitted code
+table looks. **This is consistent with the game sending the table**, and so with 38h being a documented algorithm. It
+is not proof. That would need the preamble's format characterised, and then the same coded bits shown to decode
+differently under two preambles of equal length. **The DSP-3 stays parked** (plan §10, Q3), with this measurement
+recorded for the step that resumes it.
+
+## 47. The NEC DSP replacements, step 14: the close-out, in part (2026-10-04)
+
+The plan's close (§8, step 14) assumes every step done. Steps 5 to 8 (§44.4) and the DSP-4's decision (§45.3) are not
+done, so this section closes what can be closed and lists the rest.
+
+- **The clone check.** `clonecheck.py` ran with `dsp2.rs`, `st010.rs` and `dsphle.rs` audited against Mesen, the only
+  reference tree on the desktop.
+  - Structure: 0 pairs sharing 12 or more fingerprints. Tables: no shared run of 8 or more literals. Names: 37 shared
+    identifiers, every one an ordinary word (`command`, `cycles`, `latency`, `mantissa`, `overflow`).
+  - Plan §5.4's DSP comparison set (bsnes/higan's and snes9x's DSP and ST010 modules, MAME's, and the superfamicom wiki's
+    ST010 code) is not on the desktop. That check is owed.
+- **firmwarecheck**, every generated table: the DSP-1's sine (§40.4) and the ST010's sine (§43.2), both forced-PASS
+  with residual 0, formula coverage 25.0% and 14.8%. The DSP-2 and the attitude matrices hold no table.
+- **The core's stated costs** are set from the measurements: the DSP-2 near exact (§42.4), the ST010 with its named
+  loss 05h (§43), and the DSP-1 as §39-§44 graded it.
+- **Owed:** `EmuSen_Games_Tested.md`'s VenusRT entries for the DSP games without their images, once the DSP-1 and the
+  ST010 run past their first partings. Plan §9's Q2 was already marked superseded at step 1.

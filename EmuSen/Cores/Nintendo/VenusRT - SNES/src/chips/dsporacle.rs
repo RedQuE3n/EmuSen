@@ -213,12 +213,18 @@ pub struct Host {
     pub filler: u16,
     /// One transfer, by its index, answered after this many cycles in place of the drawn answer.
     pub late_at: Option<(usize, u32)>,
+    /// Transfers, by index, answered with a write although the chip wrote: the DSP-4 takes its first input over the
+    /// word it offers after a command (VenusRT_Native.md §45).
+    pub write_over: u64,
+    /// The DSP-3's decoder: a rise with USF1 set is answered with a write, whatever the chip did (fullsnes, "USF1 bit
+    /// in SR register = direction").
+    pub usf1_writes: bool,
 }
 
 impl Host {
     /// A poll loop's response, fixed: 8 cycles to the first byte, 3 between a word's bytes.
     pub fn steady() -> Host {
-        Host { respond: (8, 8), gap: (3, 3), rng: Pcg::new(0), cap: 4_000_000, max_steps: 4096, filler: 0, late_at: None }
+        Host { respond: (8, 8), gap: (3, 3), rng: Pcg::new(0), cap: 4_000_000, max_steps: 4096, filler: 0, late_at: None, write_over: 0, usf1_writes: false }
     }
 
     /// A response drawn anew at each transfer, for the phase check.
@@ -430,7 +436,8 @@ pub fn transact<C: Chip>(chip: &mut C, host: &mut Host, command: u8, inputs: &[u
             return Transaction { command, steps, end: End::Capped };
         }
         let sr_access = chip.status();
-        let (dir, value, bytes, gap) = match edge.write {
+        let over = steps.len() < 64 && host.write_over >> steps.len() & 1 != 0 || host.usf1_writes && sr_rise & 0x40 != 0;
+        let (dir, value, bytes, gap) = match edge.write.filter(|_| !over) {
             None => {
                 let v = *next.next().unwrap_or(&host.filler);
                 let (b, g) = put(chip, host, v);

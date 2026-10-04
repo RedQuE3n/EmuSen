@@ -7484,3 +7484,31 @@ averaged 222 to 232 ms, Super Mario 64's 158 ms.
 
 **Not covered.** Whether gamescope presents on its grid or follows the draws was not under this build's control and
 changed within runs; what decides it is not known. The desktop has not run the timer hold in a real window.
+
+### 4.88 Quitting with Preferences open (2026-10-04)
+
+**The defect.** Preferences re-reads the library when it closes: it rescans artwork, reapplies online covers and
+scraping, and refreshes the library list, so a change made in it shows at once. Closing the main window while
+Preferences was open ran that refresh after the window had already closed its game records. On the desktop,
+Preferences is a window owned by the main window, and Avalonia closes an owned window after its owner's `Closing`
+(`Window.CloseCore` in Avalonia 12.1: the children's `Closing`, then the owner's, then the children closed, then the
+owner); `MainWindow`'s `Closing` handler calls `CloseRecords`, so the refresh's first query met a closed SQLite
+connection and threw `InvalidOperationException: ExecuteReader can only be called when the connection is open`
+while the program was shutting down. On the big screen, Preferences is a sheet, and until LunaP's `SheetLayer` closed
+its sheets with their host (LunaP `docs/LunaP.md` §90.7) the sheet was simply never closed, so the same fault could
+not happen there and the window was leaked instead.
+
+**Found by.** The investigation of the test host's memory growth (`EmuSen_Debugging_Tools_Reference_v5.md` §3.62).
+Once sheets closed with their host, three tests that close the main window under Preferences failed with the
+exception above (`ThemeSettingsSheetTests.Preferences_opens_the_theme_settings_sheet`,
+`ScrapeSignInTests.Log_In_and_Log_Out_are_reached_and_used_by_the_pad_on_the_sheet`,
+`ControllersTests.The_controller_settings_persist`). The desktop case was then shown to fail on the unchanged toolkit
+as well, so it is a defect a player could meet and not an artefact of the toolkit change.
+
+**The fix.** The refresh returns at once when the records are closed (`_recordsClosed`, the flag the cover and
+identity paths already check): a Preferences window closing because the program is closing has no library to refresh.
+
+**Test.** `MainWindowCloseTests.Closing_the_window_with_preferences_open_closes_preferences_cleanly`, on the desktop
+and on the big screen: it opens Preferences, closes the main window and asserts Preferences closed without a fault.
+Without the fix the desktop case throws the exception above; on the toolkit before §90.7, the big-screen case fails
+because Preferences is still open.

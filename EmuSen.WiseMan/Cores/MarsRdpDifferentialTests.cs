@@ -19,7 +19,18 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // Uploaded holds the pages the upload cache restored, which the reference reports only if drawing changed them.
-        private sealed record Drawn(byte[] Rdram, byte[] Hidden, byte[] TextureMemory, IReadOnlyDictionary<uint, byte[]> Uploaded);
+        // Rdram and Hidden keep only their pages that are not all zero; a whole copy of each per case was 12 MB, 18 GB over the cases - see EmuSen_Debugging_Tools_Reference_v5.md §3.62.
+        private sealed record Drawn(IReadOnlyDictionary<uint, byte[]> Rdram, IReadOnlyDictionary<uint, byte[]> Hidden, byte[] TextureMemory, IReadOnlyDictionary<uint, byte[]> Uploaded);
+
+        private static Dictionary<uint, byte[]> Touched(byte[] memory)
+        {
+            var pages = new Dictionary<uint, byte[]>();
+            for (uint page = 0; page < memory.Length; page += RdpReference.PageSize)
+            {
+                if (memory.AsSpan((int)page, RdpReference.PageSize).IndexOfAnyExcept((byte)0) >= 0) pages[page] = memory.AsSpan((int)page, RdpReference.PageSize).ToArray();
+            }
+            return pages;
+        }
 
         private sealed record Replay(IReadOnlyList<RdpReferenceSync> Reference, IReadOnlyList<Drawn> Mars, int AgreementExit, string AgreementLog,
             IReadOnlyDictionary<string, int> DisputeExits);
@@ -145,7 +156,7 @@ namespace EmuSen.WiseMan.Cores
                 Array.Clear(bus.RdramHidden);
 
                 foreach (ulong word in c.Commands) bus.Dp.Processor.Accept(word);
-                drawn.Add(new Drawn((byte[])bus.Rdram.Clone(), (byte[])bus.RdramHidden.Clone(), (byte[])bus.Dp.Processor.TextureMemory.Clone(), uploaded));
+                drawn.Add(new Drawn(Touched(bus.Rdram), Touched(bus.RdramHidden), (byte[])bus.Dp.Processor.TextureMemory.Clone(), uploaded));
             }
 
             return drawn;
@@ -182,29 +193,28 @@ namespace EmuSen.WiseMan.Cores
             if (count > 12) report.AppendLine($"  ...{count} differing bytes in all");
             return report.ToString();
 
-            void Compare(IReadOnlyDictionary<uint, byte[]> expectedPages, IReadOnlyDictionary<uint, byte[]> unchangedPages, byte[] actual, int scale, string label)
+            void Compare(IReadOnlyDictionary<uint, byte[]> expectedPages, IReadOnlyDictionary<uint, byte[]> unchangedPages, IReadOnlyDictionary<uint, byte[]> actualPages, int scale, string label)
             {
                 var pages = new SortedSet<uint>(expectedPages.Keys);
                 pages.UnionWith(unchangedPages.Keys);
-                for (uint page = 0; page < actual.Length; page += RdpReference.PageSize)
-                {
-                    if (actual.AsSpan((int)page, RdpReference.PageSize).IndexOfAnyExcept((byte)0) >= 0) pages.Add(page);
-                }
+                pages.UnionWith(actualPages.Keys);
+                var zero = new byte[RdpReference.PageSize];
 
                 foreach (uint page in pages)
                 {
                     byte[] expected = expectedPages.TryGetValue(page, out byte[]? p) ? p
-                        : unchangedPages.TryGetValue(page, out byte[]? u) ? u : new byte[RdpReference.PageSize];
+                        : unchangedPages.TryGetValue(page, out byte[]? u) ? u : zero;
+                    byte[] actual = actualPages.TryGetValue(page, out byte[]? a) ? a : zero;
 
                     for (int i = 0; i < RdpReference.PageSize; i++)
                     {
-                        if (expected[i] == actual[page + i]) continue;
+                        if (expected[i] == actual[i]) continue;
 
                         if (count++ < 12)
                         {
                             long pixel = ((long)(page + i) * scale - (c.Image & ~(uint)(bytes - 1))) / bytes;
                             long x = ((pixel % c.Width) + c.Width) % c.Width, y = (long)Math.Floor((double)pixel / c.Width);
-                            report.AppendLine($"  {label}{page + i:X6} pixel ({x}, {y}): Mars {actual[page + i]:X2}, reference {expected[i]:X2}");
+                            report.AppendLine($"  {label}{page + i:X6} pixel ({x}, {y}): Mars {actual[i]:X2}, reference {expected[i]:X2}");
                         }
                     }
                 }

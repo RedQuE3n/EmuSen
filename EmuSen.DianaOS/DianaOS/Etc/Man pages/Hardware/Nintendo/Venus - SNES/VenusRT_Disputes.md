@@ -833,6 +833,14 @@ their data.
   read and does not produce 04. The ROM itself remains the oracle for a later step.
 - Pinned by: `test_timer_stop2`.
 
+- **A hypothesis tried and rejected, 2026-10-04 (after stage 8), in a trial build not kept.** The 04 could come
+  from a gated clock: the second stage counting on the rising edge of the first stage's output ANDed with TEST's
+  enable, so that re-enabling while that output is high adds a tick. Taken as the first half of each first-stage
+  period, gated by bits 0 and 3 together, the model prints 03 for `test_timer_stop2` and makes `test_timer_stop`
+  print 0A and fail. Gating by bit 0 alone would leave `test_timer_stop` passing and still give 03. Choosing the other
+  half or another duty to reach 04 would fit one printed number with a free parameter, which is not evidence, and was
+  not done. The entry stays open on the same terms: a console ROM sweeping the toggle rate is what would separate the
+  readings.
 ### D-27. S-SMP: TEST bits 4 to 7 add waitstates to the SPC700's cycles
 - Opened: 2026-10-02, at stage 4 step 1, by blargg 2010 `test_timer_speed` and `test_timer_speed2`: they write TEST
   with bits 4 to 7 set and count timer ticks against a loop; VenusRT ignores those bits and prints 2731 for every

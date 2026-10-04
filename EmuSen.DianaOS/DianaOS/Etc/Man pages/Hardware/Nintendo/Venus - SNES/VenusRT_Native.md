@@ -4294,3 +4294,25 @@ No cost: the change moves where the clock starts, not what a frame does.
   records no console result. fullsnes and anomie leave the in-flight product unknown (plan §2.2's thin areas), and
   the referee's multiplier carries an emulator's rule (`Venus_Referee.md` §0, nearly no support). Only Mesen's output
   is there to compare with, so it is recorded as a difference with no oracle.
+
+### 41.17 Blockers 4, 5 and 10: what was found, none closed (2026-10-04)
+
+- **D-26, `test_timer_stop2`.** One mechanism was tried in a trial build and not kept: the second stage counting on
+  the rising edge of a gated first-stage clock. It prints 03 against the console's 04, and gating by bit 3 as well
+  breaks `test_timer_stop`. Reaching 04 would mean choosing a duty to fit one printed number, and that was not done.
+  Recorded in D-26.
+- **`spc_dsp6`.** Run in order with the tester's boot image and the changes of §41.14-§41.15, the ROM now passes
+  every test up to "Random/brr while playing", one of the checksum-only random tests, and fails there with checksum
+  `B87AF7F6`. At §38.4 it stopped at "Misc/brr addr wrap-around". The single-test copies that §23.1 built in scratch
+  were not kept, so the five tests that hang singly were not rerun. The remaining work is an S-DSP step of its own:
+  rebuild the splitter, then the random tests' checksums one at a time.
+- **Yoshi's Island's stork at 1800.** The stork's OAM is a copy of GSU RAM at $0AA0, which the GSU fills, and GSU RAM
+  differs from Mesen's at 126 bytes. VRAM and CGRAM are equal. Over Mesen's frames 1760-1840 the OAM nearest
+  VenusRT's is at frames 1799-1800, lag 0, while the background's nearest is at lag -10. The stork, which the GSU
+  drives, and the scroll, which the S-CPU drives, keep a different phase from each other than in Mesen. That is the GSU
+  phase drift of §27.4 and §28.1, not a sprite rule. It stays open with D-35.
+- **NHL '94's puck at 2200.** At the matched frame, CGRAM is equal and VRAM differs by 1,250 bytes, all in the puck's
+  tile data. OAM differs by 28 bytes, and WRAM by 2,340, the least at frame 2201. The game decompresses the puck's
+  animation through WRAM, and its program state there differs from Mesen's, so the uploaded frame of the animation
+  does too. BG mode is 1 there, so mode 7's open `$2134` products are not the cause. A program-state drift whose start
+  was not found.

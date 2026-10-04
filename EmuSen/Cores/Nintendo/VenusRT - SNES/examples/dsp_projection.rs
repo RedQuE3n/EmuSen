@@ -273,6 +273,8 @@ fn timings(stem: &str, command: u8, cases: u64) {
         let (host, inputs) = match command {
             0x02 => (Host::steady(), params.to_vec()),
             0x06 => (Host::steady(), vec![got[2].wrapping_add(w(&mut p, -500, 500)), got[3].wrapping_add(w(&mut p, -500, 500)), w(&mut p, 0, 200)]),
+            0x0E => (Host::steady(), vec![w(&mut p, -128, 128), w(&mut p, (got[1] as i16 as i64 + 2).clamp(-112, 112), 112)]),
+            0x14 => (Host::steady(), vec![p.word(), w(&mut p, -0x3555, 0x3555), p.word(), w(&mut p, -1024, 1024), w(&mut p, -1024, 1024), w(&mut p, -1024, 1024)]),
             _ => (Host { write_from: 9, filler: 0x8000, ..Host::steady() }, vec![w(&mut p, (got[1] as i16 as i64 + 2).clamp(-112, 112), 112)]),
         };
         let from = if command == 0x02 { &idle } else { &after };

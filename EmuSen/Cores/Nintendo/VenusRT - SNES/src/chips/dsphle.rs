@@ -490,6 +490,12 @@ impl DspHle {
                 let out = Projection::new(&self.proj).project([i[0], i[1], i[2]]);
                 self.outputs[..3].copy_from_slice(&out.map(|v| v as u16));
             }
+            0x0E | 0x1E | 0x2E | 0x3E => {
+                let out = Projection::new(&self.proj).target(i[0], i[1]);
+                self.outputs[..2].copy_from_slice(&out.map(|v| v as u16));
+            }
+            // Gyrate: approximate (VenusRT_Native.md §50), §50.3's member.
+            0x14 => self.outputs[..3].copy_from_slice(&gyrate(&i).map(|v| v as u16)),
             // Attitude: matrix n set to m/2 times the rotations about X by I4, Y by I3 and Z by I2, in that product (§44).
             0x01 | 0x11 | 0x21 => {
                 let n = (self.command >> 4) as usize;
@@ -674,14 +680,20 @@ impl Projection {
 
     /// num/den through the Inverse routine, half up, saturated; a zero denominator saturates by the numerator's sign.
     fn quotient(num: i128, den: i128) -> i64 {
+        Self::divide(num, den, true, (-0x8000, 0x7FFF))
+    }
+
+    /// num/den through the Inverse routine, rounded half up or floored, held within `range`.
+    fn divide(num: i128, den: i128, half: bool, range: (i64, i64)) -> i64 {
         let (mut d, mut extra) = (den, 0u32);
         while d > i64::MAX as i128 / 4 || d < i64::MIN as i128 / 4 {
             d >>= 1;
             extra += 1;
         }
-        let Some((r, shift)) = reciprocal(d as i64) else { return if num >= 0 { 0x7FFF } else { -0x8000 } };
+        let Some((r, shift)) = reciprocal(d as i64) else { return if num >= 0 { range.1 } else { range.0 } };
         let sh = shift + extra;
-        ((num * r as i128 + (1i128 << (sh - 1))) >> sh).clamp(-0x8000, 0x7FFF) as i64
+        let p = num * r as i128 + if half { 1i128 << (sh - 1) } else { 0 };
+        (p >> sh).clamp(range.0 as i128, range.1 as i128) as i64
     }
 
     /// Vof, Vva, Cx, Cy: the horizon's line and where the view's axis meets the ground; Vof 0, with no limit (§49.3).
@@ -702,6 +714,20 @@ impl Projection {
         [(k * self.ca) >> 15, (-kk * self.sa) >> 15, (k * self.sa) >> 15, (kk * self.ca) >> 15]
     }
 
+    /// Target (VenusRT_Native.md §50.3): (Cx, Cy) plus Raster's line-V matrix, at full width, applied to (H, V)/256,
+    /// with H along (cos a, -sin a) as the chip turns it.
+    fn target(&self, h: i64, v: i64) -> [i64; 2] {
+        let [_, _, cx, cy] = self.parameter();
+        let wide = (i64::MIN / 4, i64::MAX / 4);
+        let n = ((self.les * self.cz) >> 15) + ((v * self.sz) >> 15);
+        let k = Self::divide(256 * self.ez as i128, n as i128, true, wide) as i128;
+        let kk = Self::divide(k << 15, self.cz as i128, true, wide) as i128;
+        let (h, v, sa, ca) = (h as i128, v as i128, self.sa as i128, self.ca as i128);
+        let dx = (((h * k * ca) >> 15) - ((v * kk * sa) >> 15)) >> 8;
+        let dy = (((v * kk * ca) >> 15) - ((h * k * sa) >> 15)) >> 8;
+        [(cx as i128 + dx).clamp(-0x8000, 0x7FFF) as i64, (cy as i128 + dy).clamp(-0x8000, 0x7FFF) as i64]
+    }
+
     /// H, V and M for a point: its offset from the eye along the screen's right, down and forward axes.
     fn project(&self, p: [i64; 3]) -> [i64; 3] {
         let (sa, ca, sz, cz) = (self.sa, self.ca, self.sz, self.cz);
@@ -716,6 +742,21 @@ impl Projection {
         let les = self.les as i128;
         [Self::quotient(les * x, w), Self::quotient(les * y, w), Self::quotient((256 * les) << 15, w)]
     }
+}
+
+/// Gyrate (VenusRT_Native.md §50.1, §50.3): the angles (Az, Ax, Ay) turned by (U, F, L) about the body's axes, each
+/// increment saturated and added with wrapping; 1/cos Ax through the Inverse routine, floored.
+fn gyrate(i: &[i64; WORDS]) -> [i64; 3] {
+    let (az, ax, ay, u, f, l) = (i[0], i[1], i[2], i[3], i[4], i[5]);
+    let (sx, cx) = (sine(ax as u16), sine((ax as u16).wrapping_add(0x4000)));
+    let (sy, cy) = (sine(ay as u16), sine((ay as u16).wrapping_add(0x4000)));
+    let sat = |v: i64| v.clamp(-0x8000, 0x7FFF);
+    let daz = Projection::divide((u * cy - f * sy) as i128, cx as i128, false, (-0x8000, 0x7FFF));
+    let dax = sat((u * sy + f * cy) >> 15);
+    let tan = Projection::divide((sx as i128) << 15, cx as i128, false, (i64::MIN / 4, i64::MAX / 4));
+    let day = sat(l - ((((u * cy + f * sy) >> 15) as i128 * tan as i128) >> 15) as i64);
+    let wrap = |a: i64, d: i64| (a + d) as u16 as i16 as i64;
+    [wrap(az, daz), wrap(ax, dax), wrap(ay, day)]
 }
 
 /// The Inverse routine's reciprocal at any width (§44.2, VenusRT_Native.md §49.2): w normalised to a mantissa in
@@ -827,6 +868,9 @@ fn dsp1_timing(command: u8) -> &'static [(u16, u16)] {
         // The medians of Parameter's and Project's phases that vary, after a Parameter (VenusRT_Native.md §49.5).
         0x02 => &[(0, 2), (13, 2), (0, 2), (0, 2), (0, 2), (0, 2), (0, 2), (527, 485), (0, 2), (10, 2), (0, 2), (0, 3)],
         0x06 => &[(0, 2), (14, 2), (0, 2), (0, 362), (0, 2), (0, 2), (0, 3)],
+        // Target's and Gyrate's medians (VenusRT_Native.md §50.3).
+        0x0E | 0x1E | 0x2E | 0x3E => &[(0, 2), (13, 2), (0, 116), (0, 2), (0, 3)],
+        0x14 => &[(0, 2), (16, 2), (0, 2), (0, 2), (0, 2), (0, 2), (237, 3), (0, 2), (0, 2), (0, 3)],
         _ => &[],
     }
 }
@@ -850,7 +894,7 @@ fn dsp1_shape(command: u8) -> Option<(u8, u16, bool)> {
         0x14 => (6, 3, false),
         0x02 => (7, 4, false),
         0x06 => (3, 3, false),
-        0x0E => (2, 2, false),
+        0x0E | 0x1E | 0x2E | 0x3E => (2, 2, false),
         0x0A | 0x1A | 0x2A | 0x3A => (1, 4, true),
         0x01 | 0x11 | 0x21 => (4, 0, false),
         0x03 | 0x13 | 0x23 | 0x0D | 0x1D | 0x2D => (3, 3, false),

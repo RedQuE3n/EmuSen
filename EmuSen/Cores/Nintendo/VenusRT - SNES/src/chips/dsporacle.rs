@@ -894,6 +894,40 @@ mod tests {
         }
     }
 
+    // VenusRT_Native.md §50.3: Target after a Parameter, and Gyrate, against the image in §50.2's ranges; every transfer
+    // alike, and the results close (Gyrate's angles within 2, the long way round counted short) in §50.3's shares, less
+    // a margin.
+    #[test]
+    fn the_replacements_target_and_gyrate_stay_close_to_the_image() {
+        use super::super::dsphle::Program;
+        let close = |a: u16, b: u16| (a as i16 as i32 - b as i16 as i32).abs() <= 2.max((a as i16 as i32).abs() / 128);
+        let close_angle = |a: u16, b: u16| (a.wrapping_sub(b) as i16 as i32).abs() <= 2;
+        for (stem, program) in [("dsp1", Program::Dsp1), ("dsp1b", Program::Dsp1b)] {
+            let Some(mut lle) = chip(stem) else { return };
+            let mut hle = Hle::new(program);
+            power_on(&mut hle, &Host::steady()).unwrap();
+            let mut p = Pcg::new(0x50);
+            let mut good = [0u32; 2];
+            let cases = 1024;
+            for k in 0..cases {
+                let mut w = |lo: i32, hi: i32| (lo + p.within(0, (hi - lo) as u32) as i32) as u16;
+                let params = [w(-4096, 4096), w(-4096, 4096), w(0, 1000), w(0, 1024), w(64, 1024), w(0, 0xFFFF), w(0x0800, 0x3800)];
+                let got = transact(&mut lle, &mut Host::steady(), 0x02, &params).outputs();
+                transact(&mut hle, &mut Host::steady(), 0x02, &params);
+                let hv = [w(-128, 128), w((got[1] as i16 as i32 + 2).clamp(-112, 112), 112)];
+                let g = [w(0, 0xFFFF), w(-0x3555, 0x3555), w(0, 0xFFFF), w(-1024, 1024), w(-1024, 1024), w(-1024, 1024)];
+                for (c, command, inputs) in [(0usize, 0x0Eu8, &hv[..]), (1, 0x14, &g[..])] {
+                    let (x, y) = (transact(&mut lle, &mut Host::steady(), command, inputs), transact(&mut hle, &mut Host::steady(), command, inputs));
+                    assert!(!compare(&x, &y).shape, "{stem} {command:02X} case {k}");
+                    good[c] += x.outputs().iter().zip(y.outputs()).all(|(&a, b)| if c == 0 { close(a, b) } else { close_angle(a, b) }) as u32;
+                }
+            }
+            for (c, share) in [(0, 0.96), (1, 0.94)] {
+                assert!(good[c] as f64 >= share * cases as f64, "{stem}: command {c} close in {} of {cases}", good[c]);
+            }
+        }
+    }
+
     // VenusRT_Native.md §48.3: the DSP-4's replacement against the image, its first input written over the chip's
     // offer as Top Gear 3000 writes it; 00h whole, the commands without inputs whole on a fresh chip, the short ones
     // in transfers alone.

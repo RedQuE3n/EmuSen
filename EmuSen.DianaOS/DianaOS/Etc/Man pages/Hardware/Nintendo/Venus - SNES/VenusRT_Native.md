@@ -5208,3 +5208,34 @@ results wins, ties to the smaller largest difference. Target is graded over 2^16
 ranges, H in ±128 and V from the horizon's line plus 2 to +112) and the traced Target commands of Pilotwings, the only
 bench game that gives it (§37.6). Gyrate is graded over 2^16 seeded cases (any Az and Ay, Ax in ±75°, turns in ±1,024)
 and Pilotwings' traced Gyrates. Timing as §49.2: medians of the phases that vary.
+
+### 50.3 Chosen, built, and the grade (measured 2026-10-04)
+
+`dsp_target_gyrate dsp1b 65536` with Pilotwings' trace graded both families. One grader defect was found and corrected
+before the choice, not a model change: tan Ax had been held to a word, so past 45° it saturated at 1, and Gyrate's
+Ay' missed by hundreds. It is now carried at full width, as §50.2's "tan Ax as sin Ax times it" requires.
+
+| Command | Member chosen | Seeded results close | Traced results close |
+|---|---|---|---|
+| 0Eh Target | T1 at full width, T2 each triple product scaled once, T3 floor | 128,983 of 131,072 (98.4%) | 995 of 1,202 (82.8%); every miss past the limit |
+| 14h Gyrate | G1 the Inverse routine, G2 each sum scaled once, G3 the bracket divided, G4 floor | 193,975 of 196,608 (98.7%), largest 6 | 1,257 of 1,257, largest 1 |
+
+**Built** in `dsphle.rs`: Target as `Projection::target`, which applies Raster's line-V scale to (H, V) at full width
+and adds (Cx, Cy); Gyrate as `gyrate`. 1Eh, 2Eh and 3Eh take Target's transfers, as §37.5 measured them alike.
+**Timing**, the medians over 4,096 seeded cases (`DSP_PROJ_TIMING`): Target's last input at notice 116 (110-132),
+Raster's own line time; Gyrate's last input at work 237 (205-273) and notice 3.
+
+**The grade through the ports** (`DSP_TG_PORTS=1 dsp_target_gyrate`, 65,536 seeded cases, half under a jittered S-CPU;
+the DSP-1 and DSP-1B alike):
+
+| Command | All results close | All exact | Transfers or SR differ | Latency differs | Largest difference |
+|---|---|---|---|---|---|
+| 0Eh Target | 63,994 (97.6%) | 3,138 (4.8%) | 0 | 49,159 | saturates beside the horizon |
+| 14h Gyrate | 62,928 (96.0%) | 4,596 (7.0%) | 0 | 57,329 | 6 |
+
+Gyrate's misses are of 3 to 6, where Ax is past 60° and tan Ax magnifies the sine's error. The crate test
+`the_replacements_target_and_gyrate_stay_close_to_the_image` holds these shares on both images.
+
+**Step 7 is built.** Every command the bench games give the DSP-1 is now computed: exactly for 00h, 0Fh and 2Fh, and
+approximately for the rest on the named-loss sine. What remains is the limit branch (§49.3) and the DSP-1's own 28h
+bug (§44.1).

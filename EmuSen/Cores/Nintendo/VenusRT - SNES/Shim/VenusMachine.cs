@@ -10,14 +10,14 @@ namespace EmuSen.Cores.Nintendo.VenusRT
 
         public static bool Available => VenusNative.Available;
 
-        // File 0 is the battery save and file 2 a NEC DSP's firmware; the SPC700's boot program is the core's own (VenusRT_Disputes.md, D-38).
-        public VenusMachine(ReadOnlySpan<byte> image, byte[]? battery = null, byte[]? dspFirmware = null)
-            : base(VenusNative.Api, "VenusRT", "VenusRT", Own, OwnWords, image, "", Files(battery, dspFirmware))
+        // File 0 is the battery save, file 1 the player's SPC700 boot image in place of the core's own (VenusRT_Native.md §38.4), file 2 a NEC DSP's firmware.
+        public VenusMachine(ReadOnlySpan<byte> image, byte[]? battery = null, byte[]? dspFirmware = null, byte[]? boot = null)
+            : base(VenusNative.Api, "VenusRT", "VenusRT", Own, OwnWords, image, "", Files(battery, dspFirmware, boot))
         {
         }
 
-        private static (uint, byte[])[] Files(byte[]? battery, byte[]? dsp) =>
-            new[] { (0u, battery), (2u, dsp) }.Where(f => f.Item2 is not null).Select(f => (f.Item1, f.Item2!)).ToArray();
+        private static (uint, byte[])[] Files(byte[]? battery, byte[]? dsp, byte[]? boot) =>
+            new[] { (0u, battery), (1u, boot), (2u, dsp) }.Where(f => f.Item2 is not null).Select(f => (f.Item1, f.Item2!)).ToArray();
 
         private static Exception? Own(int status) => status switch
         {

@@ -112,7 +112,7 @@ namespace EmuSen.WiseMan.Mistress
 
             StateRecord record = States(window).ReadState(SaveLibrary.StatePathFor(rom, 1, _states))!;
             Assert.Equal("N64", record.Console);
-            Assert.Equal(Game(window).CoreName, record.Core);
+            Assert.Equal(EmuSen.Cores.CoreFactory.Running(Game(window).Core!), record.Core);
             Assert.Equal(((EmuSen.Cores.IStateFormat)Game(window).Core!).StateVersion, record.StateVersion);
             Assert.Equal(RomHash.Md5(rom), record.RomMd5);
             Assert.Equal(new FileInfo(rom).Length, record.RomBytes);

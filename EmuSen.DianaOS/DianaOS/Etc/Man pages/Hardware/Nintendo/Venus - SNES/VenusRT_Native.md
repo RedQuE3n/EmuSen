@@ -4156,3 +4156,24 @@ the twenty ROMs G1 and G3 leave open or unlogged.
 - Three comparison sources named in `VenusRT_DspHle.md` §5.4 do not exist in the form named (§41.9).
 - The window of ±30 frames, fixed before measuring, is too narrow for Super Mario RPG's attract mode. It was not
   widened after the fact.
+
+### 41.12 Blocker 7: a C# Venus state refused by name (2026-10-04)
+
+- **The core.** A state whose magic is C# Venus's `SNES` is still refused as foreign, with the machine unchanged. VenusRT
+  now gives the refusal its own words through the v1 outbox's detail. Mistress shows "VenusRT (Rust) refused the
+  state: it was saved by Venus (C#), the C# SNES engine, whose states VenusRT cannot read.", after its own "Could not
+  resume, started from the beginning:". Any other foreign magic keeps the shared words. The words are produced only on
+  the refused load, so the frame has no cost to measure.
+- **The record.** Mistress's state record now stores the engine's catalog name instead of `ICore.CoreName`, which was
+  `SNES` for C# Venus and `VenusRT` for VenusRT. Its version check applies only to a state the running engine wrote.
+  The rule and the one legacy case it leaves are `EmuSen_Galaxia.md` §5.3b.
+- **Tests.**
+  - `VenusRtCoreAbiTests.A_venus_state_is_refused_naming_the_engine_that_made_it` takes a real C# Venus state of a
+    `SyntheticRom` cartridge through `CoreEngine`: the message is as above, the machine unchanged, and another foreign
+    magic gives the shared words.
+  - `VenusRtEngineTests.A_states_record_names_its_engine_and_another_engines_version_is_not_compared` checks that
+    the record says Venus (C#), that a VenusRT record at version 18 is offered to Venus rather than called a newer
+    build's, and that the same engine's version 99 and a legacy record still are.
+  - `IdentityAndCollectionsTests` expects the engine's name.
+  - VenusRt, FileRecords, IdentityAndCollections, Resume and StateRecord filters: 137 passed, 1 skipped. The crate:
+    112 of 112.

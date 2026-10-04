@@ -124,11 +124,11 @@ namespace EmuSen.Mistress.Views
         // On the emulation thread, after the state it describes is written; the ROM's hash is whatever is known by then.
         private void WriteStateRecord(EmulatorSession session, string statePath, string romPath)
         {
-            if (session.Core is not IStateFormat format) return;
+            if (session.Core is not { } core || core is not IStateFormat format) return;
             _fileRecords.WriteState(statePath, new StateRecord
             {
                 Console = CoreCatalog.ConsoleForRom(romPath) ?? session.CoreName,
-                Core = session.CoreName,
+                Core = CoreFactory.Running(core),
                 StateVersion = format.StateVersion,
                 Build = BuildName,
                 SavedAt = DateTime.Now,
@@ -145,7 +145,10 @@ namespace EmuSen.Mistress.Views
             string? console = CoreCatalog.ConsoleForRom(romPath);
             if (console is not null && record.Console != console)
                 return $"That state was saved by the {record.Console} core, and {Path.GetFileName(romPath)} runs on the {console} core.";
-            if (session?.Core is IStateFormat format && record.StateVersion > format.StateVersion)
+            // Another engine's version numbers are not this one's - see EmuSen_Galaxia.md §5.3b.
+            bool otherEngine = console is not null && session?.Core is { } core && record.Core != CoreFactory.Running(core)
+                && CoreCatalog.EngineFor(console)?.Choices?.Contains(record.Core) == true;
+            if (!otherEngine && session?.Core is IStateFormat format && record.StateVersion > format.StateVersion)
                 return $"That state was saved by a newer build ({record.Build}, {record.Core} state version {record.StateVersion}); this one reads up to {format.StateVersion}.";
             return null;
         }

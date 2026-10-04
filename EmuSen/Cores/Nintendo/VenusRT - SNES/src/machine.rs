@@ -6,7 +6,7 @@ use emusen_native::SampleQueue;
 use crate::bus::System;
 use crate::cart::Cartridge;
 use crate::cpu::{Cpu, Interrupt};
-use crate::state::{STATE_MAGIC, STATE_VERSION, StateError, StateReader, StateResult, StateWriter};
+use crate::state::{STATE_MAGIC, STATE_VERSION, StateError, StateReader, StateResult, StateWriter, VENUS_MAGIC, VENUS_STATE_WORDS};
 
 pub const SCREEN_WIDTH: usize = 256;
 pub const SCREEN_HEIGHT: usize = 224;
@@ -622,7 +622,12 @@ impl Machine {
 impl emusen_native::ffi::StateMachine for Machine {
     type Error = StateError;
     fn load_state(&mut self, data: &[u8]) -> StateResult {
-        Machine::load_state(self, data)
+        let r = Machine::load_state(self, data);
+        // A state with C# Venus's magic is named as its engine's (VenusRT_Plan.md §4.5).
+        if r == Err(StateError::Foreign(VENUS_MAGIC)) {
+            emusen_native::core::detail(VENUS_STATE_WORDS);
+        }
+        r
     }
     fn state_size(&self) -> usize {
         Machine::state_size(self)
@@ -638,7 +643,6 @@ impl emusen_native::ffi::StateMachine for Machine {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::state::VENUS_MAGIC;
 
     /// A LoROM image whose reset runs `program` at $00:8000.
     pub fn rom(program: &[u8]) -> Vec<u8> {

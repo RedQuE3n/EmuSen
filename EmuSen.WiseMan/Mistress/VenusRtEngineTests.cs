@@ -121,6 +121,27 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        // A state's record names the engine that wrote it, and a state another SNES engine wrote is offered to the running one, not called a newer build's (EmuSen_Galaxia.md §5.3b).
+        [Fact]
+        public Task A_states_record_names_its_engine_and_another_engines_version_is_not_compared() => Session.Dispatch(() =>
+        {
+            if (!Found) return;
+            MainWindow window = Start();
+            EmulatorSession venus = Game(window);
+            string statePath = Path.Combine(_root, "venus.state");
+            File.WriteAllBytes(statePath, new byte[] { 1, 2, 3 });
+            typeof(MainWindow).GetMethod("WriteStateRecord", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { venus, statePath, _rom });
+            var records = (EmuSen.Mistress.Library.FileRecords)typeof(MainWindow).GetField("_fileRecords", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+            StateRecord written = records.ReadState(statePath)!;
+            Assert.Equal(CoreCatalog.VenusEngine, written.Core);
+            MethodInfo refusal = typeof(MainWindow).GetMethod("Refusal", BindingFlags.Static | BindingFlags.NonPublic)!;
+            StateRecord fromVenusRt = written with { Core = VenusRtCoreAbiTests.Engine, StateVersion = 18 };
+            Assert.Null(refusal.Invoke(null, new object?[] { fromVenusRt, _rom, venus }));
+            Assert.StartsWith("That state was saved by a newer build", (string)refusal.Invoke(null, new object?[] { written with { StateVersion = 99 }, _rom, venus })!);
+            Assert.StartsWith("That state was saved by a newer build", (string)refusal.Invoke(null, new object?[] { written with { Core = "SNES", StateVersion = 18 }, _rom, venus })!);
+            window.Close();
+        }, default);
+
         private MainWindow Start()
         {
             var window = new MainWindow();

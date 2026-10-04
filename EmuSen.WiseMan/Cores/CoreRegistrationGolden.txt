@@ -228,7 +228,7 @@ built.factory[SNES plain VenusRT (Rust)].codec-explicit = Game Genie | RomPatch 
 built.factory[SNES plain VenusRT (Rust)].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
 built.factory[SNES plain VenusRT (Rust)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
 built.factory[SNES plain VenusRT (Rust)].axes = []
-built.factory[SNES plain VenusRT (Rust)].state-version = 19
+built.factory[SNES plain VenusRT (Rust)].state-version = 20
 built.factory[SNES plain VenusRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[SNES plain VenusRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[SNES plain VenusRT (Rust)].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
@@ -293,7 +293,7 @@ built.factory[SNES battery VenusRT (Rust)].codec-explicit = Game Genie | RomPatc
 built.factory[SNES battery VenusRT (Rust)].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
 built.factory[SNES battery VenusRT (Rust)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
 built.factory[SNES battery VenusRT (Rust)].axes = []
-built.factory[SNES battery VenusRT (Rust)].state-version = 19
+built.factory[SNES battery VenusRT (Rust)].state-version = 20
 built.factory[SNES battery VenusRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[SNES battery VenusRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[SNES battery VenusRT (Rust)].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
@@ -2130,7 +2130,7 @@ off.factory[SNES plain VenusRT (Rust)].codec-explicit = Game Genie | RomPatch | 
 off.factory[SNES plain VenusRT (Rust)].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
 off.factory[SNES plain VenusRT (Rust)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
 off.factory[SNES plain VenusRT (Rust)].axes = []
-off.factory[SNES plain VenusRT (Rust)].state-version = 19
+off.factory[SNES plain VenusRT (Rust)].state-version = 20
 off.factory[SNES plain VenusRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[SNES plain VenusRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 off.factory[SNES plain VenusRT (Rust)].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
@@ -2195,7 +2195,7 @@ off.factory[SNES battery VenusRT (Rust)].codec-explicit = Game Genie | RomPatch 
 off.factory[SNES battery VenusRT (Rust)].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
 off.factory[SNES battery VenusRT (Rust)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
 off.factory[SNES battery VenusRT (Rust)].axes = []
-off.factory[SNES battery VenusRT (Rust)].state-version = 19
+off.factory[SNES battery VenusRT (Rust)].state-version = 20
 off.factory[SNES battery VenusRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[SNES battery VenusRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 off.factory[SNES battery VenusRT (Rust)].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b

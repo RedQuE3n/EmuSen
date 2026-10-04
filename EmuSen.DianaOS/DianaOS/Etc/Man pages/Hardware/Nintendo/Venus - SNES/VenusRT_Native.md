@@ -4353,3 +4353,18 @@ Measured only. Nothing was built, since optimisation is on hold.
 | G5 | **not met**: 29 of 36, the same outcomes. D-7 (3) and Super Mario RPG's 40-frame lead (2) are put to the tester; the stork (GSU drift, D-35) and the puck (program-state drift) are open (§41.17) | no outcome changed |
 | G6 | **not met**: the means within budget; Super Mario RPG's p99 18.2-18.9 ms with a lever proposed (§41.18); the handheld still unreachable at 10.1.1.205 through the day | measured only |
 | G2, G7, G8 | as §41.2 (G8's five amended entries done, §41.13) | §41.13 |
+
+### 41.20 The four decisions blockers 8, 9, 11 and 12 waited on (decided 2026-10-04)
+
+- **Blocker 8, the output rate.** The core's fixed 32 kHz counts as parity. The host's audio path already resamples to
+  the device's rate, so a resampler inside the core would change nothing a player hears. G4 no longer waits on it.
+- **Blocker 9, the debugger's console views.** The default may flip without them. The loss stays recorded (§36.3), and
+  the views return later as extension exports that any console's core can offer, not as a VenusRT-only surface.
+- **Blocker 11, D-7 on three anchors.** Accepted as logged. The reading follows the documents, and Mesen is the
+  comparison, not the authority. G5's three D-7 anchors count as dispute-logged.
+- **Blocker 12, Super Mario RPG's attract lead.** Accepted as logged drift (D-6, D-37). The scenes are equal, shifted by
+  under a second, and every documented timing rule is already built. G5's two drift anchors count as dispute-logged.
+
+With these, G4 is met apart from the recorded debugger loss. G5 is met apart from Yoshi's Island's stork (the GSU phase
+drift, D-35) and NHL '94's puck (a WRAM drift whose start is not found). G6 still waits on the handheld battery run and
+Super Mario RPG's p99.

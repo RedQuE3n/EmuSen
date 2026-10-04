@@ -3963,3 +3963,52 @@ frames. The DSP-2's cost in core info now says so, and names 1Eh, 0Dh's timing a
 **Against the plan's predictions.** **P8**, every DSP-2 command exact by the end of step 9, is **retired, false in
 part.** The values of every command are exact within the chip's buffers. 0Dh's timing is not, nor are the
 out-of-range counts. 1Eh is a named loss, as planned.
+
+## 43. The NEC DSP replacements, step 11: the ST010 (2026-10-04)
+
+Step 11 of `VenusRT_DspHle.md` §8: the ST010's mailbox, and the seven computing commands F1 ROC II gives it (02h-08h,
+§37.6), with the RAM compared whole and F1 ROC II run in lockstep. §43.1 was written and committed before the first
+comparison of a replacement with the image.
+
+**Provenance.** This step was written by someone who has not seen the superfamicom wiki's ST010 page (plan §1.4). Its
+sources are fullsnes ("ST010 Commands"), plan §3.5's table of parameter addresses (taken from that page's address
+tables by the plan's author, who recorded the exposure), and the oracle. No emulator's source, no listing and no byte
+of the dumps were read.
+
+### 43.1 The commands as characterised, and the families declared before the first comparison
+
+**The tools.** `dsp_oracle mail` runs mailbox commands with chosen RAM words. `mailbatch` runs one case a line.
+`dsp_trace` with `DSP_TRACE_MAIL` records each of a game's mailbox commands with its input words and the words it
+changed, to the probe cache. The hypotheses below came from single words set against a zero RAM and against seeded
+fills, and from F1 ROC II's own traffic. Words are 16-bit RAM addresses; plan §3.5's byte addresses are twice these.
+
+**The protocol, measured.**
+
+- **The mailbox.** The chip polls bit 15 of word 10h every 3 cycles; a command's busy bit clears a fixed number of
+  cycles after the first poll that sees it, so the latency varies by 0 to 2 with the S-CPU's phase. The poll resumes
+  after each command.
+- **The results.** Each command writes its results and some working words, and nothing else. Its time from the poll
+  is a constant per command, except for 02h and 04h.
+
+**The families.**
+
+| Code | Formula | Variants (bits of choice) |
+|---|---|---|
+| 06h | words 8-9 = the µPD96050's product K·L·2 of words 0 and 1 (fullsnes's multiplier), 32 bits | that or K·L (1 bit) |
+| 03h | words 8-9 = word 0 times word 2, and words A-B = word 1 times word 2, each as 06h | chosen with 06h (0 bits) |
+| 04h | |X| and |Y| of words 0 and 1, the larger stored in word 0 and the smaller in word 1, and word 8 = α·max + β·min: the alpha-max-plus-beta-min distance, α = 2cos(π/8)/(1 + cos(π/8)) and β = 2sin(π/8)/(1 + cos(π/8)) | α and β in 15 or 16 fractional bits, each floored or rounded; the sum floored or rounded; ties stored as swapped or not (4 bits) |
+| 08h | words 8, 9 = X·cos θ + Y·sin θ, Y·cos θ - X·sin θ of words 0, 1 and angle 2, with S[i] = A·sin(2πi/256) at θ's top 8 bits | A 32,767 or 32,768 saturated; floor or half up; computed per quadrant from the magnitude or directly; each product shifted on its own or the sum once (4 bits) |
+| 07h | four arrays of 176 words from word 78h, 128h, 1D8h, 288h: L(n)·cos θ, L(n)·sin θ, -L(n)·sin θ, L(n)·cos θ, with 08h's sine and product; words 0-2 = θ's top 8 bits, sin θ, cos θ. L(n) = round(K / (n + c)), the perspective scale of a raster line | the negation before or after the product (1 bit); K and c, found by a search over the image's 176 words at θ = 0, K = 7,885 and c = 8.8 (about 15 bits) |
+| 02h | a stable sort of word 12h's count of words from 20h into descending order, the words from 40h moved with them; word 0 the loop's count, left 0 after a sort and the count when it is 0, 1 or over 32 | keys unsigned or signed (1 bit); timing by comparisons and exchanges, measured |
+| 00h | word 10h cleared, nothing else (§37.5) | none |
+| 09h-0Fh, 10h-FFh | 01h-07h and 00h-0Fh (fullsnes, §37.5) | none |
+
+**07h's K and c are the one place this step takes numbers from the image's output.** They are two constants of a
+documented shape, a perspective divisor, fitted to one angle's 176 words, and the other 65,535 angles grade them. By
+plan §1.3's argument, about 15 bits are taken against 2,816 output bits per angle. This is recorded as a characterisation
+with fitted constants, and the record does not claim more.
+
+**Not characterised in this step.** 05h, the driver simulation, is 53.6% of F1 ROC II's commands. It reads at least
+seventeen words from 60h, among them a flags word whose bits choose its paths, and computes an angle as 01h does.
+Its paths were not resolved in the time this step had. 05h and 01h stay as the frame left them: they clear the
+mailbox and change nothing else, a named loss for now.

@@ -128,38 +128,32 @@ impl Chip for Lle {
 #[derive(Clone)]
 pub struct Hle {
     pub dsp: super::dsphle::DspHle,
-    rqm: bool,
 }
 
 impl Hle {
     pub fn new(program: super::dsphle::Program) -> Hle {
-        Hle { dsp: super::dsphle::DspHle::new(program), rqm: false }
+        Hle { dsp: super::dsphle::DspHle::new(program) }
     }
 }
 
 impl Chip for Hle {
     fn tick(&mut self) -> Option<Edge> {
         let clock = ((self.dsp.cycles + 1) as u128 * self.dsp.ratio.1 as u128).div_ceil(self.dsp.ratio.0 as u128) as u64;
-        let dr = self.dsp.dr;
+        let edges = self.dsp.edges;
         self.dsp.run_to(clock);
-        let rose = self.dsp.sr & 0x8000 != 0 && (!self.rqm || self.dsp.dr != dr);
-        self.rqm = self.dsp.sr & 0x8000 != 0;
-        if !rose {
+        if self.dsp.edges == edges {
             return None;
         }
-        let place = if self.dsp.idle() { Place::Idle } else if self.dsp.reading_command() { Place::Command } else { Place::Other };
-        Some(Edge { write: (self.dsp.offering() || place == Place::Idle).then_some(self.dsp.dr), place })
+        let place = [Place::Idle, Place::Command, Place::Other][self.dsp.edge_place as usize];
+        Some(Edge { write: self.dsp.edge_write, place })
     }
 
     fn read(&mut self, port: Port) -> u8 {
-        let v = self.dsp.host_read(port, true);
-        self.rqm = self.dsp.sr & 0x8000 != 0;
-        v
+        self.dsp.host_read(port, true)
     }
 
     fn write(&mut self, port: Port, value: u8) {
         self.dsp.host_write(port, value);
-        self.rqm = self.dsp.sr & 0x8000 != 0;
     }
 
     fn status(&self) -> u8 {
@@ -742,6 +736,43 @@ mod tests {
                     let e = x.outputs().iter().zip(y.outputs()).map(|(&a, b)| (a as i16 as i32 - b as i16 as i32).abs()).max().unwrap();
                     assert!(e <= bound, "{stem} {command:02X} case {k}: off by {e}");
                 }
+            }
+        }
+    }
+
+    // VenusRT_Native.md §42: the DSP-2's replacement against the image, values, transfers, SR and latency, under a
+    // steady S-CPU and a jittered one, each command after a colour; 0Dh's timing is an estimate, so only its values.
+    #[test]
+    fn the_dsp2_replacement_agrees_with_the_image() {
+        use super::super::dsphle::Program;
+        let Some(mut lle) = chip("dsp2") else { return };
+        let mut hle = Hle::new(Program::Dsp2);
+        power_on(&mut hle, &Host::steady()).unwrap();
+        let mut p = Pcg::new(0x42);
+        for command in [0x00u8, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0F, 0x2E, 0x3E, 0x15, 0xF9, 0x0D, 0x0E] {
+            if command == 0x0D {
+                // Its row buffer shares RAM other commands use, unmodelled (§42); the memory test, last, rewrites it all.
+                lle = chip("dsp2").unwrap();
+                hle = Hle::new(Program::Dsp2);
+                power_on(&mut hle, &Host::steady()).unwrap();
+            }
+            for k in 0..256u32 {
+                let mut set: Vec<u16> = (0..300).map(|_| p.word() & 0xFF).collect();
+                match command & 0x0F {
+                    0x02 | 0x06 => set[0] = 1 + set[0] % 255,
+                    0x05 => set[0] = 1 + set[0] % 80,
+                    0x0D => (set[0], set[1]) = (3 + set[0] % 206, 1 + set[1] % 208),
+                    _ => {}
+                }
+                let colour = [p.word() & 0xFF];
+                transact(&mut lle, &mut Host::steady(), 0x03, &colour);
+                transact(&mut hle, &mut Host::steady(), 0x03, &colour);
+                let mut host = if k % 2 == 0 { Host::steady() } else { Host::jittered(k as u64) };
+                let x = transact(&mut lle, &mut host.clone(), command, &set);
+                let y = transact(&mut hle, &mut host, command, &set);
+                let d = compare(&x, &y);
+                let d = if command == 0x0D { Difference { latency: false, status: false, ..d } } else { d };
+                assert!(!d.any(), "{command:02X} case {k}: {d:?}");
             }
         }
     }

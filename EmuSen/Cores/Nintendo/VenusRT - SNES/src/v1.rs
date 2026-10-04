@@ -73,7 +73,9 @@ fn replacement(stem: Option<&str>) -> Replacement {
         Some("dsp1") | Some("dsp1b") => Replacement::Accuracy {
             cost: "Without the image, VenusRT's open replacement for the DSP-1 runs: its ports and timing as the chip's, Multiply, Radius, Range, the memory test and the ROM version exact, Triangle, Rotate and Polar within a few units, and its other commands not computed yet, so 3D results are wrong (VenusRT_DspHle.md §5.5).".into(),
         },
-        Some("dsp2") => partial("DSP-2", "the no-op 0Fh"),
+        Some("dsp2") => Replacement::Accuracy {
+            cost: "Without the image, VenusRT's open replacement for the DSP-2 runs: every command Dungeon Master gives answers as the chip does, to the cycle, and the game runs as with the image; the data ROM transfer gives zeros, the scaling command's timing is estimated, and counts beyond the chip's buffers are not reproduced (VenusRT_Native.md §42).".into(),
+        },
         Some("st010") => partial("ST010", "00h"),
         Some("dsp3") => without("DSP-3"),
         Some("dsp4") => without("DSP-4"),

@@ -271,6 +271,11 @@ block-move instruction, "which ... like DMA, doesn't use handshaking", so the ch
 | 0Dh | Scale bitmap | resizes a bitmap row | Algorithm **characterised** (a stepped resample, argued) |
 | 0Fh | Process | does nothing; "dummy NOP command for re-synchronisation" | **Exact** |
 
+> *Amended 2026-10-04* (measured, `VenusRT_Native.md` §42). The commands, their lengths and their timing were
+> characterised and graded. Every value is exact within the chip's buffers, and 09h's "bug" is a rule. 00h, 02h, 04h,
+> 0Bh and 0Ch, which fullsnes does not name, are a row's bitplanes, several tiles, a one-byte overlay and two
+> divisions. 0Eh-3Eh are the test commands. 0Dh's timing is an estimate, and 1Eh is a named loss.
+
 ### 3.3 DSP-3 (SD Gundam GX)
 
 fullsnes, "DSP3 Commands": command parsing as on the DSP-1, DR 80h on completion, and these codes:
@@ -768,7 +773,9 @@ preferred.
   states identical to the LLE's.
 - **P7.** F1 ROC II issues at most three distinct ST010 commands in its first race. *Retired 2026-10-04, false*
   (`VenusRT_Native.md` §37.6): it issues seven, 02h-08h, in its attract mode.
-- **P8.** Every DSP-2 command is exact by the end of step 9.
+- **P8.** Every DSP-2 command is exact by the end of step 9. *Retired 2026-10-04, false in part* (`VenusRT_Native.md`
+  §42.3): every value is exact within the chip's buffers and Dungeon Master runs identically, but 0Dh's timing is an
+  estimate and counts past the buffers are not reproduced.
 - **P9.** The DSP-4 characterisation reaches a go: rules explaining at least 80% of Top Gear 3000's traced command
   volume after step 12's two steps. Low confidence.
 - **P10.** A replacement costs under 0.05 ms a frame on the desktop, against the LLE's 0.6–1.0.

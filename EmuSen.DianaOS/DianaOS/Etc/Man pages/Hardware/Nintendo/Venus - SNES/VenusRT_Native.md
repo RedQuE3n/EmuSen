@@ -3857,3 +3857,109 @@ That is 21 bits of choice over the chip, against the 2^20 seeded cases per code 
 not modelled:** 06h with a count of 0 and 0Dh with a of 2 or less or b of 0, where the program leaves its normal
 course (06h turns DR to 16-bit and sets SIC; 0Dh reads past any count or stalls). A member is chosen when it agrees on
 every graded case; a command none agrees on is a named loss under R4.
+
+### 42.2 Three families widened once, in writing (plan §5.2, rule 4)
+
+The first grade with `dsp_grade` rejected every declared member of three families. For each, the structure of the
+mismatches pointed to one further choice. That choice is recorded here as the widening. **This departs from the order
+plan §1.3 asks for:** the widened member was identified from the first grade's mismatches before this paragraph was
+written, and was then graded on fresh seeded cases. The bits of choice it adds are counted below.
+
+- **09h.** The two halves' shifts are each logical or arithmetic: 4 members, 2 bits, in place of the declared "halves
+  each shifted right once". The mismatches were bit 15 of the low half alone.
+- **0Ch.** The magnitudes are 31 or 32 bits for each operand separately: 4 members, 2 bits, in place of one choice for
+  both. The mismatches were divisors of ±2^31 and dividends of -2^31.
+- **0Dh.** The step a/(b + 1) takes 7 to 16 fractional bits: 10 members, under 4 bits. In the copy branch the first
+  ceil(a/2) bytes are copied whole, rather than the first a pixels: 1 bit. The mismatches were pixels at an exact
+  multiple of the step, and the pad nibble of an odd a.
+
+### 42.3 What was chosen and built, and the grade (measured 2026-10-04)
+
+**Chosen**, each agreeing on every graded case:
+
+| Code | Member |
+|---|---|
+| 00h, 01h, 02h | the left pixel in the high nibble, pixel x at bit 7 - x; 01h and 02h in fullsnes's tile layout |
+| 03h | the low nibble |
+| 04h, 05h | B over A |
+| 06h | the byte order reversed and each byte's nibbles swapped |
+| 07h, 08h | 32-bit |
+| 09h | (M_hi >> 1, logically) and (M_lo >> 1, arithmetically), as 16-bit halves |
+| 0Bh | quotient, then remainder |
+| 0Ch | truncating; the dividend's magnitude in 31 bits, the divisor's in 32 |
+| 0Dh | the step in 10 fractional bits; whole bytes copied |
+| 0Eh | 0000h |
+| 2Eh | 0100h |
+
+Counting the widened families whole, the chip's choices total about 26 bits. **None needs a table.** The replacement is
+`chips/dsp2.rs`. Its phases follow §42.1's protocol: each edge at the later of its work after the last edge and its
+notice after the S-CPU's completion, or at its work alone where the chip does not wait.
+
+**Found by the grade**, beyond §42.1, and modelled (protocol facts and latencies):
+
+- **The flags.** The commands 07h, 08h, 0Bh, 0Ch, 0Fh and the 0Eh class write SR 10 cycles after their command's
+  read, which clears USF1. 07h and 08h then set USF1 to the signed overflow of their result, 2 cycles after their
+  second result. 0Bh, 0Ch and 05h set USF0 while they compute, 3 cycles after the last input. 05h clears it 1 cycle
+  before its first result, and 0Bh and 0Ch 1 cycle after. A zero divisor sets USF1 instead and gives no result. 0Dh
+  sets USF1 while it computes. DRS, which the program cannot write, survives a change of DR's width.
+- **Two buffers in the chip's RAM that persist between commands.**
+  - 05h's compute takes, when n mod 16 is 1, one cycle more per opaque nibble over the whole last 16-byte chunk of
+    its overlay buffer. The bytes past n are left from earlier 05h commands, and each byte's count is the one made
+    against the colour of its own time.
+  - 0Dh's copy branch gives its row buffer whole, 104 bytes, and so returns pixels left there by earlier 0Dh commands.
+- **Smaller timing rules.** 05h reads B0 with a work of 7 when n exceeds 80. 01h's second result comes 5 cycles after
+  its first, which only an answer late enough to see the unhandshaken first result reveals. 0Ch's sign costs are 18
+  for a negative dividend and 10 for a negative divisor, 9 for a negated quotient, and one cycle more for each
+  negated value whose low word is 0.
+
+**The grade.** `dsp_grade` ran 2^20 seeded cases per code, every other one under a jittered S-CPU; 04h and 05h ran
+after a seeded colour; the counts were held to 1-255 for 02h and 06h, to 1-80 for 05h, and for 0Dh to a of 3-208 and b
+of 1-208:
+
+| Codes | Cases | Values, transfers, SR or latency differ |
+|---|---|---|
+| 00h, 01h, 02h, 03h, 04h, 05h, 06h, 07h, 08h, 09h, 0Ah, 0Bh, 0Ch, 0Eh, 0Fh, 2Eh, 3Eh | 1,048,576 each | **0** |
+| 0Dh | 262,144 | values 0; latency in 261,179 |
+| 1Eh, the data ROM transfer | 1,048,576 | values in all, by construction; transfers, SR and latency 0 |
+| the 180 mirrors in 10h-FFh of the codes without a count | 4,096 each | 0, but for 1Eh's four mirrors, by construction |
+
+The crate test `the_dsp2_replacement_agrees_with_the_image` repeats this over 256 cases per code on the image, each
+after a colour, under steady and jittered answers. `the_dsp2_formulas_answer_through_the_ports` checks fullsnes's tile
+layout and the arithmetic on the replacement with no image.
+
+**Named losses and inexactness**, in the core's stated cost:
+
+- **1Eh**, the data ROM transfer, answers zeros: a named loss, as the plan set out.
+- **0Dh's compute time** is a least-squares estimate. The error is under 11% when scaling down and under 6% when
+  scaling up, over 5,774 measured cases. No rule was found in its dependence on a and b.
+- **Outside the chip's buffers, not reproduced.**
+  - 05h with a count of 0 (which sets USF1) is modelled; above 80 its compute is off by a cycle and some results differ.
+  - 06h with a count of 0 leaves the program's normal course: DR turns 16-bit and SIC is set, from then on.
+  - 0Dh with a or b over 208 reads past its 104-byte buffer, and with a of 2 or less or b of 0 it does not end.
+  - Commands that share RAM with 05h's and 0Dh's buffers (06h, 0Bh, 0Ch and the memory test 0Eh) leave there values
+    the replacement does not track.
+
+### 42.4 Step 10: Dungeon Master in lockstep (measured 2026-10-04)
+
+`dsp_lockstep`, the whole-game runner of plan §4.3, is new: one ROM on two machines, the image on one and the
+replacement on the other, the same pad on both. Each frame it compares the picture, WRAM, VRAM, CGRAM, OAM, the APU's
+RAM, the master clock and the whole state with the chip's group left out. With `LOCKSTEP_AT` it finds the first
+instruction after which the two S-CPUs differ.
+
+| Run | Frames | Result |
+|---|---|---|
+| `dm.txt`, Start into the dungeon | 3,600 | **identical states throughout** |
+| `dm.txt` | 10,800 | **identical throughout**; 353,703 05h, 155,219 01h, 14,344 0Fh, 4,164 03h and 4,164 09h at the image's chip |
+| `dm_walk.txt`, the same, then 132 taps of the pad and buttons | 7,205 | **identical throughout** |
+
+**What the lockstep found that the command grade could not.** The first lockstep parted at frame 1,036. Dungeon
+Master polls SR during 05h's compute and waits for USF0 to clear. The command oracle samples SR only at each rise and
+at the S-CPU's access, so it never saw the busy flag. A second parting, one frame earlier, placed USF0's clear 1 cycle
+before 05h's first result. Both are now modelled, and the grade was rerun without change.
+
+**What this settles.** Dungeon Master runs on the replacement as on the image, to the cycle and the byte, over 10,800
+frames. The DSP-2's cost in core info now says so, and names 1Eh, 0Dh's timing and the out-of-range counts.
+
+**Against the plan's predictions.** **P8**, every DSP-2 command exact by the end of step 9, is **retired, false in
+part.** The values of every command are exact within the chip's buffers. 0Dh's timing is not, nor are the
+out-of-range counts. 1Eh is a named loss, as planned.

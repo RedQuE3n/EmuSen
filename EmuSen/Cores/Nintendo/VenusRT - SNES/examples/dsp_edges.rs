@@ -15,6 +15,14 @@ fn main() {
     let inputs: Vec<u8> = a[5..].iter().map(|v| u8::from_str_radix(v, 16).unwrap()).collect();
     let image = firmware(&stem).unwrap_or_else(|| std::process::exit(1));
     let mut chip = idle_chip(&stem, &image, &mut Host::steady(), 0).unwrap();
+    // EDGES_BEFORE, a command and its inputs in hex, runs first through the oracle's driver.
+    if let Ok(before) = std::env::var("EDGES_BEFORE") {
+        let w: Vec<u16> = before.split_whitespace().map(|v| u16::from_str_radix(v, 16).unwrap()).collect();
+        transact(&mut chip, &mut Host::steady(), w[0] as u8, &w[1..]);
+        for _ in 0..200 {
+            chip.tick();
+        }
+    }
     chip.dsp.transfers.as_mut().unwrap().clear();
     let start = chip.dsp.cycles;
     chip.write(Port::Dr, command);

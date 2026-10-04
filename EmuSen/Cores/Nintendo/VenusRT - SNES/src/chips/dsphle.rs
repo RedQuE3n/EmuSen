@@ -43,7 +43,7 @@ impl Program {
 
 /// The chip side's next edge, due at `DspHle::due`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Next {
+pub(super) enum Next {
     None,
     /// RQM up for the next write, in 16-bit mode (`wide`) or 8-bit.
     Request { wide: bool },
@@ -59,7 +59,7 @@ enum Next {
 
 /// Where the transaction stands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Stage {
+pub(super) enum Stage {
     /// Waiting for a command byte; `fresh` until the first.
     Idle,
     /// Taking inputs: `taken` of `want`, `dummy` for a command without inputs whose request still stands.
@@ -84,17 +84,23 @@ pub struct DspHle {
     /// The chip's clock, as the low-level path counts it.
     pub cycles: u64,
     pub ratio: (u64, u64),
-    command: u8,
-    stage: Stage,
-    next: Next,
-    due: u64,
+    pub(super) command: u8,
+    pub(super) stage: Stage,
+    pub(super) next: Next,
+    pub(super) due: u64,
     inputs: [u16; WORDS],
     outputs: [u16; WORDS],
     /// The DSP-2's idle word: 00h after power-on, FFh after a command (VenusRT_Native.md §37.2).
-    idle_word: u16,
+    pub(super) idle_word: u16,
     /// The transaction's phase, and the cycle RQM last rose, for the work and notice of VenusRT_Native.md §37.3.
     phase: u8,
-    rise: u64,
+    pub(super) rise: u64,
+    /// The DSP-2's command state (VenusRT_Native.md §42); default for the other programs.
+    pub(super) d2: super::dsp2::Dsp2,
+    /// Edges made, and the last one's place (0 idle, 1 command, 2 other) and written word, for the oracle; not in the state.
+    pub edges: u64,
+    pub edge_place: u8,
+    pub edge_write: Option<u16>,
 }
 
 /// Cycles from the S-CPU's completion to the chip's next edge, the DSP-1B's common notice (VenusRT_Native.md §37.3).
@@ -119,6 +125,10 @@ impl DspHle {
             idle_word: 0,
             phase: 0,
             rise: 0,
+            d2: Default::default(),
+            edges: 0,
+            edge_place: 2,
+            edge_write: None,
         };
         d.reset();
         d
@@ -135,7 +145,11 @@ impl DspHle {
         self.inputs = [0; WORDS];
         self.outputs = [0; WORDS];
         self.idle_word = if self.program == Program::Dsp2 { 0 } else { 0x80 };
-        if self.st() {
+        if self.program == Program::Dsp2 {
+            self.d2.reset();
+            self.stage = Stage::Idle;
+            self.schedule(Next::Idle, NOTICE);
+        } else if self.st() {
             self.stage = Stage::StStart;
             self.schedule(Next::Offer(0), 1);
         } else {
@@ -159,7 +173,7 @@ impl DspHle {
         matches!(self.stage, Stage::Giving { .. }) || self.stage == Stage::StStart
     }
 
-    fn schedule(&mut self, next: Next, after: u64) {
+    pub(super) fn schedule(&mut self, next: Next, after: u64) {
         self.next = next;
         self.due = self.cycles + after;
     }
@@ -178,15 +192,43 @@ impl DspHle {
         if target <= self.cycles {
             return;
         }
-        while self.next != Next::None && self.due <= target {
-            self.cycles = self.cycles.max(self.due);
-            self.edge();
+        loop {
+            let mode = self.d2.mode_at.filter(|&(at, _)| at <= target);
+            let edge = (self.next != Next::None && self.due <= target).then_some(self.due);
+            match (mode, edge) {
+                (Some((at, kind)), e) if e.is_none_or(|e| at <= e) => {
+                    self.cycles = self.cycles.max(at);
+                    self.d2.mode_at = None;
+                    self.d2_event(kind);
+                }
+                (_, Some(due)) => {
+                    self.cycles = self.cycles.max(due);
+                    self.edge();
+                }
+                _ => break,
+            }
         }
         self.cycles = target;
     }
 
     fn edge(&mut self) {
-        match std::mem::replace(&mut self.next, Next::None) {
+        if self.program == Program::Dsp2 {
+            let next = std::mem::replace(&mut self.next, Next::None);
+            self.d2_edge(next);
+            return;
+        }
+        let next = std::mem::replace(&mut self.next, Next::None);
+        let counted = matches!(next, Next::Request { .. } | Next::Offer(_) | Next::Idle);
+        self.edge_of(next);
+        if counted {
+            self.edges += 1;
+            self.edge_place = if self.idle() { 0 } else if self.reading_command() { 1 } else { 2 };
+            self.edge_write = (self.offering() || self.edge_place == 0).then_some(self.dr);
+        }
+    }
+
+    fn edge_of(&mut self, next: Next) {
+        match next {
             Next::None => {}
             Next::Request { wide } => {
                 self.rise = self.cycles;
@@ -260,20 +302,25 @@ impl DspHle {
 
     /// One byte through DR as the handshake counts it, true when it completed the transfer.
     fn byte_done(&mut self) -> bool {
+        let rqm = self.sr & sr::RQM != 0 || self.program != Program::Dsp2;
         if self.sr & sr::DRC != 0 {
             self.sr &= !sr::RQM;
-            true
+            rqm
         } else if self.sr & sr::DRS == 0 {
             self.sr |= sr::DRS;
             false
         } else {
             self.sr &= !(sr::DRS | sr::RQM);
-            true
+            rqm
         }
     }
 
     /// The S-CPU completed a transfer in either direction; fullsnes's chip is "oblivious" to which.
     fn completed(&mut self) {
+        if self.program == Program::Dsp2 {
+            self.d2_completed();
+            return;
+        }
         match self.stage {
             Stage::StStart => self.stage = Stage::StMailbox,
             Stage::StMailbox => {}
@@ -308,12 +355,6 @@ impl DspHle {
 
     fn command(&mut self, command: u8) {
         self.command = command;
-        if self.program == Program::Dsp2 {
-            // Only 0Fh, the documented no-op, is known; every byte returns to idle with DR FFh.
-            self.idle_word = 0xFF;
-            self.schedule(Next::Idle, 14);
-            return;
-        }
         let Some((inputs, _, _)) = dsp1_shape(command) else {
             // 40h-FFh are passed over: the next byte is taken as a command.
             self.schedule(Next::Request { wide: false }, NOTICE);
@@ -408,6 +449,9 @@ impl DspHle {
         for w in self.ram.iter() {
             o.extend(w.to_le_bytes());
         }
+        if self.program == Program::Dsp2 {
+            self.d2.pack(&mut o);
+        }
         o
     }
 
@@ -443,6 +487,9 @@ impl DspHle {
         let base = at + 25;
         for (i, r) in self.ram.iter_mut().enumerate() {
             *r = u16::from_le_bytes([d[base + i * 2], d[base + 1 + i * 2]]);
+        }
+        if self.program == Program::Dsp2 {
+            self.d2.unpack(&d[base + self.ram.len() * 2..]);
         }
     }
 }
@@ -637,7 +684,7 @@ mod tests {
     // VenusRT_DspHle.md §5.4: no array literal of more than 16 numbers in a replacement's source; tables are generated.
     #[test]
     fn no_replacement_source_holds_a_table_literal() {
-        for (name, source) in [("dsphle.rs", include_str!("dsphle.rs"))] {
+        for (name, source) in [("dsphle.rs", include_str!("dsphle.rs")), ("dsp2.rs", include_str!("dsp2.rs"))] {
             let mut depth = 0usize;
             let mut items = Vec::<String>::new();
             for ch in source.chars() {

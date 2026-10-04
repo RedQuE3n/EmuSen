@@ -5071,3 +5071,87 @@ With J1 and J2, Project has 32 members of its own, and the whole family 48·32 =
 chosen as one implementation. The member chosen is the one with the most close results over both sets together. If no
 member is close on nearly all of a game's traced Project results below the limit, the remainder is recorded as the
 sine's and this structure's joint error, with no further widening.
+
+### 49.5 Chosen, built, and the grade (measured 2026-10-04)
+
+**The choice.** `dsp_projection dsp1b 65536` with the seven traces graded all 1,536 members. By §49.2's rule, the most
+close results over both sets, the member is:
+
+| Choice | Member |
+|---|---|
+| S1, the eye's height (Parameter, Raster) | whole: Fz + Lfe·cos z, floored |
+| S2, the reciprocal | the Inverse routine's 15-bit mantissa |
+| S3, the last rounding | half up |
+| P1, the horizontal offset | the triple product Lfe·sin z·sin a scaled once |
+| R1, Raster's denominator | the sum of the two floored products: n = ⌊Les·cos z⌋ + ⌊v·sin z⌋ |
+| J1, J2 | the view's elements exact, each dot product's sum floored once |
+| J3, Project's eye | height whole, horizontal position with its fraction |
+| J4 | w not taken whole |
+
+**Measured against it.** The member ranked 69th by the rule, 1,954 close results behind in 2.1 million, takes the
+exact division floored, the elements floored, the eye with both fractions and w whole. It is exact far more often: in
+Super Mario Kart's traced Project 97% against 52%, and in the seeded Project 83% against 51%; and the seeded set alone
+on the DSP-1 ranks it first. It loses the count on Super Mario Kart's and Suzuka 8 Hours' Raster lines and Lock On's
+Project. The rule was declared, so the first member is built. The other's exact share says the chip's own sequence
+lies nearer to it, and §49.6 records it with §49.4's structure for a later decision.
+
+**Built** in `dsphle.rs`, as `Projection`, from Parameter's seven inputs, which the replacement keeps:
+
+- **Parameter** gives Vva, (Cx, Cy) and Vof = 0, by §49.2's formulas with the member above. It has no limit (§49.3).
+- **Raster** gives line Vs and then Vs + 1, Vs + 2 and so on for as long as the S-CPU reads.
+  - **The run ends when DR no longer holds a line's last result.** Writing another word over the fourth result ends it:
+    measured on the image with the driver's `write_over`, a write over the first, second or third result goes on, and
+    a write of the same value as the fourth is taken as a read. §38's frame ended on any write; that was wrong.
+  - Bench games write a terminator over the fourth result, so the rule only matters for writes elsewhere.
+- **Project** gives H, V and M.
+- **Timing**, from `DSP_PROJ_TIMING` over 4,096 seeded cases after a Parameter:
+  - Parameter: work 527 and notice 485 for its last input (ranges 508-555 and 464-515);
+  - Project: notice 362 for its last input (328-404);
+  - Raster: the first line's first result at work 128 and notice 116, each later line's at notice 115 (109-129), and
+    idle 6 cycles after the terminator.
+  - Each is the median. The declared feature, the reciprocal's normalisation shift, does not decide Project's time
+    alone: over 1,500 cases one shift count spans 40 cycles. The medians stay.
+- **State version 22.** The DSP-1 replacement's state gains Parameter's seven inputs. A DSP-1 or DSP-1B replacement's
+  state of version 21 is refused with `VERSION`; the DSP-2's, DSP-4's and ST010's still load, since their layout did not
+  change. The low-level path's states of 17-21 load as before. Test: `a_dsp1_replacement_state_before_version_22_is_refused`.
+- **No new table.** The commands use the sine of §40.4 and the Inverse routine's normalisation, so firmwarecheck's counts
+  are §40.4's.
+
+**The grade through the ports** (`DSP_PROJ_PORTS=1 dsp_projection`, 65,536 seeded cases, every other one under a
+jittered S-CPU; values, transfers, SR and latency compared; the DSP-1 and DSP-1B alike):
+
+| Command | All results close | All exact | Transfers or SR differ | Latency differs | Largest difference |
+|---|---|---|---|---|---|
+| 02h Parameter | 65,301 (99.6%) | 3,997 (6.1%) | 0 | 56,948 | 6 |
+| 0Ah Raster, two lines | 65,434 (99.8%) | 10,733 (16.4%) | 0 | 49,578 | 4,237 (a line beside the horizon) |
+| 06h Project | 64,587 (98.6%) | 9,151 (14.0%) | 0 | 60,501 | wraps at 16 bits |
+
+**The traced shares**, results close of results graded, from the chosen member's row:
+
+| Game | Parameter | Raster | Project |
+|---|---|---|---|
+| Super Mario Kart | 27,124 of 27,124 | 49,600 of 49,600 | 90,064 of 91,200 (98.8%) |
+| Suzuka 8 Hours | all | all | all |
+| Super Bases Loaded 2 | all | all | 40,891 of 40,893 |
+| Michael Andretti's Indy Car Challenge | all | all | 25,529 of 31,086 (82.1%) |
+| Ballz 3D | 978 of 5,588 (past the limit) | none given | all |
+| Pilotwings | 1,845 of 2,400 (past the limit) | 358,306 of 422,416 (84.8%) | 8,621 of 8,955 (96.3%) |
+| Lock On | 5,497 of 43,872 (past the limit) | 57,699 of 2,647,288 (2.2%) | 74,331 of 75,588 (98.3%) |
+
+Every Parameter result that is not close lies past the limit. The four games that never pass it are close in every
+Parameter and Raster result. Michael Andretti's Indy Car Challenge's Project misses are the eye's own rounding (§49.4):
+F itself is drawn at an enlargement of 1,024 against the image's 1,068.
+
+The crate test `the_replacements_projection_stays_close_to_the_image` holds the shares on both images, and
+`a_raster_run_ends_on_a_write` the run's end.
+
+### 49.6 What is open
+
+- **The limit branch** (§49.3): Lock On's and Ballz 3D's views and a third of Pilotwings' are past it. The cost in play is
+  measured in §51.
+- **Project's eye and the choice.** §49.4's characterisation found the eye at F - ⌊Lfe·f⌋ coordinate by coordinate,
+  with w floored, which is not in the family; §49.4 allowed no further widening. The 69th member (§49.5), which is in
+  it, is exact twice as often as the one the rule chose. Whether to choose by exact share instead, or to admit the
+  coordinate-wise eye, is a decision for the tester.
+- **Latency.** The medians leave most cases a few cycles off. Exact timing needs the reciprocal's sequence, which the
+  sine's loss already puts out of reach of exact values.

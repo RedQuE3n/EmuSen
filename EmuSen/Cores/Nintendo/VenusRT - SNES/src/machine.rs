@@ -525,8 +525,9 @@ impl Machine {
             if saved != dsp.tag() {
                 return Err(StateError::DspEngine { saved, running: dsp.tag() });
             }
-            // Before 21 the replacement kept no DSP-2, ST010 or attitude state (VenusRT_Native.md §44.2, §48.1).
-            if saved == 1 && version < 21 {
+            // Before 21 the replacement kept no DSP-2, ST010 or attitude state, and before 22 no DSP-1 projection
+            // (VenusRT_Native.md §44.2, §48.1, §49.5).
+            if saved == 1 && (version < 21 || version < 22 && dsp.dsp1_replacement()) {
                 return Err(StateError::Version(version));
             }
             let mut packed = dsp.pack();

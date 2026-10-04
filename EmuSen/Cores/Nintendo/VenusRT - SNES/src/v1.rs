@@ -246,7 +246,7 @@ impl Core for Machine {
                 .collect(),
             processors: self.processors(),
             battery: vec![Battery { which: 0, suffix: ".srm".into() }],
-            state: StateFormat { format: "VNRT".into(), version: STATE_VERSION as i64, loads_from: vec![17, 18, 19, 20, STATE_VERSION as i64] },
+            state: StateFormat { format: "VNRT".into(), version: STATE_VERSION as i64, loads_from: vec![17, 18, 19, 20, 21, STATE_VERSION as i64] },
             phases: Vec::new(),
             patches: Some((0, 0xFF_FFFF)),
             skip_rendering_state_neutral: true,
@@ -604,6 +604,18 @@ mod tests {
         Core::advance(&mut m, &mut 0).unwrap();
         let mut old = state(&m);
         old[4..8].copy_from_slice(&20i32.to_le_bytes());
+        let err = m.load_state(&old).unwrap_err();
+        assert_eq!(emusen_native::ffi::Status::status(&err), emusen_native::ffi::status::VERSION);
+    }
+
+    // VenusRT_Native.md §49.5: the DSP-1 replacement's state gained the projection at 22, so one of 21 is refused.
+    #[test]
+    fn a_dsp1_replacement_state_before_version_22_is_refused() {
+        let cart = dsp_cartridge(b"SUPER MARIO KART", 0x05);
+        let mut m = create(&cart, Vec::new()).unwrap();
+        Core::advance(&mut m, &mut 0).unwrap();
+        let mut old = state(&m);
+        old[4..8].copy_from_slice(&21i32.to_le_bytes());
         let err = m.load_state(&old).unwrap_err();
         assert_eq!(emusen_native::ffi::Status::status(&err), emusen_native::ffi::status::VERSION);
     }

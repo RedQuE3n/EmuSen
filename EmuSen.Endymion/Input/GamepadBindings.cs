@@ -29,9 +29,40 @@ namespace EmuSen.Endymion.Input
             return map;
         }
 
+        // Players 2 on, by their file key; a player missing here plays with player 1's map - see EmuSen_Input.md §8.4.
+        private readonly Dictionary<string, GamepadBindingMap> _byPlayer = new(StringComparer.OrdinalIgnoreCase);
+
+        private const string PlayerWord = " Player ";
+
+        // The file key of a player's map beside the console's own, so a build that predates players keeps it as an unknown console.
+        public static string PlayerKey(string console, int player) => $"{console}{PlayerWord}{player}";
+
+        public GamepadBindingMap For(string console, int player) =>
+            player > 1 && _byPlayer.TryGetValue(PlayerKey(console, player), out GamepadBindingMap? own) ? own : For(console);
+
+        public bool HasOwn(string console, int player) => player > 1 && _byPlayer.ContainsKey(PlayerKey(console, player));
+
+        // The player's own map, begun as a copy of player 1's the first time it is changed.
+        public GamepadBindingMap Own(string console, int player)
+        {
+            if (player <= 1) return For(console);
+            string key = PlayerKey(console, player);
+            if (!_byPlayer.TryGetValue(key, out GamepadBindingMap? own))
+            {
+                own = new GamepadBindingMap();
+                own.Replace(new Dictionary<PadButton, SDL.GamepadButton>(For(console).ButtonToPad));
+                _byPlayer[key] = own;
+            }
+            return own;
+        }
+
+        // Back to player 1's map.
+        public void Forget(string console, int player) => _byPlayer.Remove(PlayerKey(console, player));
+
         public void ResetToDefaults()
         {
             foreach (GamepadBindingMap map in _byConsole.Values) map.ResetToDefaults();
+            _byPlayer.Clear();
         }
 
         private static readonly ConfigFile<Dictionary<string, Dictionary<PadButton, SDL.GamepadButton>>> File =
@@ -49,6 +80,7 @@ namespace EmuSen.Endymion.Input
         {
             var payload = new Dictionary<string, Dictionary<PadButton, SDL.GamepadButton>>(StringComparer.OrdinalIgnoreCase);
             foreach (var kv in _byConsole) payload[kv.Key] = kv.Value.ButtonToPad;
+            foreach (var kv in _byPlayer) payload[kv.Key] = kv.Value.ButtonToPad;
             return File.Save(payload);
         }
 
@@ -76,11 +108,17 @@ namespace EmuSen.Endymion.Input
             foreach (var kv in loaded)
             {
                 if (kv.Value is not { Count: > 0 }) continue;
-                GamepadBindingMap map = bindings.For(kv.Key);
+                GamepadBindingMap map = IsPlayerKey(kv.Key) ? bindings._byPlayer[kv.Key] = new GamepadBindingMap() : bindings.For(kv.Key);
                 map.Replace(kv.Value);
                 map.AddDefaultsForNewButtons();
             }
             return bindings;
+        }
+
+        private static bool IsPlayerKey(string key)
+        {
+            int at = key.LastIndexOf(PlayerWord, StringComparison.Ordinal);
+            return at > 0 && int.TryParse(key.AsSpan(at + PlayerWord.Length), System.Globalization.NumberStyles.None, null, out int player) && player > 1;
         }
 
         // The values are pad buttons in the old shape and objects in the new one.

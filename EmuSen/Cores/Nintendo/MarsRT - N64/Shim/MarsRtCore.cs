@@ -33,6 +33,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private static readonly delegate* unmanaged<nint, long*, nuint, long> BlockCounters = (delegate* unmanaged<nint, long*, nuint, long>)MarsNative.Export("mars_blocks_counters");
         private static readonly delegate* unmanaged<nint, uint, uint, uint, void> PressExport = (delegate* unmanaged<nint, uint, uint, uint, void>)MarsNative.Export("mars_machine_press");
         private static readonly delegate* unmanaged<nint, uint, uint, int, void> SetStick = (delegate* unmanaged<nint, uint, uint, int, void>)MarsNative.Export("mars_machine_set_stick");
+        private static readonly delegate* unmanaged<nint, uint, uint, void> SetPresent = (delegate* unmanaged<nint, uint, uint, void>)MarsNative.Export("mars_machine_set_present");
         private static readonly delegate* unmanaged<nint, ulong> AudioBuffered = (delegate* unmanaged<nint, ulong>)MarsNative.Export("mars_machine_audio_buffered");
         private static readonly delegate* unmanaged<nint, short*, ulong, ulong> DrainAudio = (delegate* unmanaged<nint, short*, ulong, ulong>)MarsNative.Export("mars_machine_drain_audio");
         private static readonly delegate* unmanaged<nint, int> SampleRate = (delegate* unmanaged<nint, int>)MarsNative.Export("mars_machine_audio_sample_rate");
@@ -527,6 +528,14 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             _takenSerial = 0;
             _patchesFrom = null;
             SyncRomPatches();
+        }
+
+        public int ControllerPorts => MarsCore.Ports;
+
+        // A library built before the export answers for the first controller alone, as it always did.
+        public void SetControllerConnected(int port, bool connected)
+        {
+            if (_handle != 0 && port >= 0 && port < MarsCore.Ports && SetPresent != null) SetPresent(_handle, (uint)port, connected ? 1u : 0);
         }
 
         public void SetButton(int port, PadButton button, bool pressed)

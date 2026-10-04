@@ -135,9 +135,10 @@ namespace EmuSen.WiseMan.Mistress
             second.Down(2);
             Assert.Equal(2, Selected(window));
 
-            // The pad left is player 1's now, as the next pad opened was before there were two.
+            // The pad left stays player 2's, and player 1's seat waits for its pad (EmuSen_Input.md §8.2).
             second.Pad.Press(SDL.GamepadButton.South);
-            Assert.True(first.Gamepad.IsPressed(PadButton.B));
+            Assert.False(first.Gamepad.IsPressed(PadButton.B));
+            Assert.True(first.Gamepad.IsPressed(PadButton.B, 2));
             second.Pad.Release(SDL.GamepadButton.South);
             window.Close();
         }, default);
@@ -178,11 +179,11 @@ namespace EmuSen.WiseMan.Mistress
 
             PadDriver second = first.Plug("Second Pad");
             first.Tick();
-            Assert.Equal("Controller connected: Second Pad", Notice(window).Current);
+            Assert.Equal("Controller connected: Second Pad (Player 2)", Notice(window).Current);
 
             second.Unplug();
             first.Tick();
-            Assert.Equal("Controller disconnected: Second Pad", Notice(window).Current);
+            Assert.Equal("Controller disconnected: Second Pad (Player 2)", Notice(window).Current);
 
             Wait(TimeSpan.FromSeconds(4.5));
             Assert.Null(Notice(window).Current);
@@ -266,13 +267,13 @@ namespace EmuSen.WiseMan.Mistress
             first.B();
             Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
 
-            var held = (bool[])typeof(MainWindow).GetField("_gamepadHeld", Hidden)!.GetValue(window)!;
+            var ports = (EmuSen.Endymion.Input.PortRouter)typeof(MainWindow).GetField("_ports", Hidden)!.GetValue(window)!;
             MethodInfo poll = typeof(MainWindow).GetMethod("PollGamepad", Hidden)!;
             for (int i = 0; i < 3; i++) poll.Invoke(window, null);
             first.Pad.Press(SDL.GamepadButton.South);
             poll.Invoke(window, null);
-            Assert.True(held[(int)PadButton.B]);
-            Assert.False(held[(int)PadButton.A]);
+            Assert.True(ports.PadHeld(1, PadButton.B));
+            Assert.False(ports.PadHeld(1, PadButton.A));
             first.Pad.Release(SDL.GamepadButton.South);
             poll.Invoke(window, null);
 

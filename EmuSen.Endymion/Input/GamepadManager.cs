@@ -6,11 +6,19 @@ using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Endymion.Input
 {
-    // Polls every connected SDL3 gamepad; the first one opened is player 1's - see EmuSen_Input.md §4 and EmuSen_Settings_Reference.md §4.61.
+    // Polls every connected SDL3 gamepad and seats each as a player - see EmuSen_Input.md §4 and §8, and EmuSen_Settings_Reference.md §4.61.
     public class GamepadManager : IDisposable
     {
         // Swapped when a ROM for a different console loads - see EmuSen_Input.md §5.1.
         public GamepadBindingMap Bindings { get; set; }
+
+        // Players 2 on; null, or a null answer, gives them player 1's map - see EmuSen_Input.md §8.4.
+        public Func<int, GamepadBindingMap?>? PlayerBindings { get; set; }
+
+        public GamepadBindingMap BindingsFor(int player) => player > 1 && PlayerBindings?.Invoke(player) is { } map ? map : Bindings;
+
+        // Which pad is which player - see EmuSen_Input.md §8.
+        public PlayerSlots Players { get; } = new();
 
         private IPadDevices _devices;
         private readonly List<ConnectedPad> _pads = new();
@@ -37,7 +45,7 @@ namespace EmuSen.Endymion.Input
         // Raised at the end of each Poll, so a window that shows the pad reads it on the one poll there is - see EmuSen_Settings_Reference.md §4.81.
         public event Action? Polled;
 
-        // Every open pad, in the order they were opened; the first is player 1's and the first controller's.
+        // Every open pad, in the order they were opened; the first is the first controller, which need not be player 1's.
         public IReadOnlyList<ConnectedPad> Pads => _pads;
 
         public ConnectedPad? Primary => _pads.Count > 0 ? _pads[0] : null;
@@ -61,6 +69,7 @@ namespace EmuSen.Endymion.Input
         public void UseDevices(IPadDevices devices)
         {
             CloseAll();
+            Players.Clear();
             _started = false;
             _devices = devices;
             Start();
@@ -87,7 +96,9 @@ namespace EmuSen.Endymion.Input
                 if (handle == IntPtr.Zero) continue;
                 var pad = new ConnectedPad(_devices, id, handle);
                 _pads.Add(pad);
-                if (announce) PadChanged?.Invoke(new PadConnection(pad, Connected: true));
+                int player = Players.Seat(pad);
+                LightPlayers();
+                if (announce) PadChanged?.Invoke(new PadConnection(pad, Connected: true) { Player = player });
             }
         }
 
@@ -105,7 +116,7 @@ namespace EmuSen.Endymion.Input
                 if (_devices.IsAttached(pad.Handle)) continue;
                 _pads.RemoveAt(i--);
                 pad.Close();
-                PadChanged?.Invoke(new PadConnection(pad, Connected: false));
+                PadChanged?.Invoke(new PadConnection(pad, Connected: false) { Player = Players.PlayerOf(pad) });
             }
 
             TimeSpan now = _rescanClock.Elapsed;
@@ -117,6 +128,22 @@ namespace EmuSen.Endymion.Input
             _devices.Update();
             Polled?.Invoke();
         }
+
+        // The player chose a seat for the pad, 0 for none; the pads that light a number show the new ones.
+        public void Assign(ConnectedPad pad, int player)
+        {
+            Players.Move(pad, player);
+            LightPlayers();
+        }
+
+        private void LightPlayers()
+        {
+            foreach (ConnectedPad pad in _pads)
+                if (pad.IsOpen) _devices.SetPlayerIndex(pad.Handle, Players.PlayerOf(pad) - 1);
+        }
+
+        // The pad the game hears as the player; with the first controller alone, player 1's only - see EmuSen_Input.md §8.3.
+        public ConnectedPad? PlayerPad(int player) => FirstControllerOnly && player > 1 ? null : Players.PadFor(player);
 
         // Stick-as-d-pad and its threshold - see EmuSen_Settings_Reference.md §4.4.
         public bool AnalogStickAsDpad { get; set; } = true;
@@ -139,24 +166,29 @@ namespace EmuSen.Endymion.Input
         // Below this share of its travel an axis reads zero, so a pad at rest does not drift - see EmuSen_Input.md §7.3.
         public double AnalogDeadzone { get; set; } = 0.1;
 
-        public bool IsPressed(PadButton button)
-        {
-            if (!IsConnected) return false;
+        public bool IsPressed(PadButton button) => IsPressed(button, 1);
 
-            if (AnalogStickAsDpad && !LeftStickIsAnalog && StickDirectionPressed(button)) return true;
+        // Through the player's own bindings, on the player's own pad.
+        public bool IsPressed(PadButton button, int player)
+        {
+            if (PlayerPad(player) is not { } pad) return false;
+
+            if (AnalogStickAsDpad && !LeftStickIsAnalog && StickDirectionPressed(pad, button)) return true;
 
             // A trigger is an axis to SDL, so L2 and R2 are its press past half its travel.
-            if (button is PadButton.L2 or PadButton.R2 && Axis(button == PadButton.L2 ? PadAxis.LeftTrigger : PadAxis.RightTrigger) >= 0.5) return true;
+            if (button is PadButton.L2 or PadButton.R2 && Axis(button == PadButton.L2 ? PadAxis.LeftTrigger : PadAxis.RightTrigger, player) >= 0.5) return true;
 
-            if (!Bindings.ButtonToPad.TryGetValue(button, out SDL.GamepadButton sdlButton)) return false;
+            if (!BindingsFor(player).ButtonToPad.TryGetValue(button, out SDL.GamepadButton sdlButton)) return false;
 
-            return Primary!.IsRawPressed(sdlButton);
+            return pad.IsRawPressed(sdlButton);
         }
 
         // Sticks -1 to 1 with right and down positive, as SDL and the RetroPad have them, and triggers 0 to 1 - see EmuSen_Input.md §7.
-        public double Axis(PadAxis axis)
+        public double Axis(PadAxis axis) => Axis(axis, 1);
+
+        public double Axis(PadAxis axis, int player)
         {
-            if (!IsConnected) return 0;
+            if (PlayerPad(player) is not { } pad) return 0;
 
             SDL.GamepadAxis source = axis switch
             {
@@ -168,14 +200,13 @@ namespace EmuSen.Endymion.Input
                 _ => SDL.GamepadAxis.RightTrigger,
             };
 
-            double value = Primary!.RawAxis(source);
+            double value = pad.RawAxis(source);
             return Math.Abs(value) < AnalogDeadzone ? 0 : value;
         }
 
         // Axis range is -32768..32767; the deadzone is a fraction of it.
-        private bool StickDirectionPressed(PadButton button)
+        private bool StickDirectionPressed(ConnectedPad pad, PadButton button)
         {
-            ConnectedPad pad = Primary!;
             short threshold = (short)(Math.Clamp(StickDeadzone, 0.05, 0.95) * short.MaxValue);
 
             return button switch

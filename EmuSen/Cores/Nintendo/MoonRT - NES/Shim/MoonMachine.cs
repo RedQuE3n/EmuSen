@@ -26,7 +26,7 @@ namespace EmuSen.Cores.Nintendo.MoonRT
         {
         }
 
-        // The C# exception MoonCore.LoadRom or RunFrame would have thrown for this status - see Moon_Native.md §6.2, D4.
+        // The C# exception MoonCore.LoadRom or RunFrame would have thrown for this status, from the shim's table - see Moon_Native.md §6.2, D4.
         public static Exception Refusal(int status) => Own(status) ?? status switch
         {
             NativeInterface.FaultBase - 1 => new IndexOutOfRangeException("Index was outside the bounds of the array."),
@@ -34,25 +34,9 @@ namespace EmuSen.Cores.Nintendo.MoonRT
             _ => new InvalidOperationException($"MoonRT refused: {Describe(status)}."),
         };
 
-        private static Exception? Own(int status) => status switch
-        {
-            -9 => new InvalidDataException("Not an iNES image: missing the \"NES\\x1A\" magic."),
-            -10 => new NotSupportedException("The iNES mapper is not implemented - see Moon_Memory.md §4 for what is."),
-            -11 => new InvalidDataException("The header claims more PRG than the file holds."),
-            NativeInterface.FaultBase - 3 => new ArgumentOutOfRangeException("masterDelta", "A clock cannot run backwards."),
-            _ => null,
-        };
+        private static Exception? Own(int status) => MoonRtCore.Own(status);
 
-        private static string? OwnWords(long status) => status switch
-        {
-            -9 => "not an iNES image",
-            -10 => "a mapper no board implements",
-            -11 => "a header claiming more PRG than the file holds",
-            NativeInterface.FaultBase - 1 => "an index outside an array",
-            NativeInterface.FaultBase - 2 => "a division by zero",
-            NativeInterface.FaultBase - 3 => "a clock running backwards",
-            _ => null,
-        };
+        private static string? OwnWords(long status) => MoonRtCore.StatusWords(status);
 
         public static string Describe(long status) => OwnWords(status) ?? Shared(status, "Moon") ?? $"status {status}";
 

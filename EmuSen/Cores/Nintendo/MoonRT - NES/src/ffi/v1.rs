@@ -6,7 +6,7 @@ use emusen_native::core::{
     Video, caps, status,
 };
 
-use super::{BATTERY_SPACE, STATUS_NOT_INES, STATUS_PRG_TRUNCATED, STATUS_UNSUPPORTED_BOARD, build_rom_patches, fault_status};
+use super::{BATTERY_SPACE, STATUS_NOT_INES, STATUS_NULL, STATUS_PRG_TRUNCATED, STATUS_UNSUPPORTED_BOARD, build_rom_patches, fault_status, rom_patch};
 use crate::machine::{LoadError, Machine, OLDEST_READABLE_VERSION, STATE_VERSION};
 use crate::memory::cartridge::RomError;
 use crate::ppu::{FRAME_BYTES, SCREEN_HEIGHT, SCREEN_WIDTH, TOTAL_SCANLINES};
@@ -233,3 +233,13 @@ impl v1::Core for Machine {
 }
 
 emusen_native::core_exports!(Machine; reset, mutes, rom_patches, debug, debug_stack);
+
+/// `moonrt_rom_patch` for a machine of the core ABI v1: the byte a CPU read of `address` returns for `original` under
+/// the current patches, or -1 for none, the exhaustive patch test's view through the v1 loader (EmuSen_CoreAPI.md §26).
+///
+/// # Safety
+/// `machine` must be null or a live handle `emusen_core_create` returned.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn moonrt_core_rom_patch(machine: *const v1::sys::Machine, address: u32, original: u32) -> i32 {
+    unsafe { v1::exports::core_of::<Machine>(machine) }.map_or(STATUS_NULL, |m| rom_patch(m, address, original))
+}

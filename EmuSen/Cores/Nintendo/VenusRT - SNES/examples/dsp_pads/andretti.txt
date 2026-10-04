@@ -1,0 +1,2 @@
+# Michael Andretti's Indy Car Challenge: Start through the menus to a race.
+tapuntil start chip 50 - 5000 40

@@ -1,0 +1,2 @@
+# Lock On: Start through the title and the attract mode to the first mission.
+tapuntil start chip 50 - 4000 40

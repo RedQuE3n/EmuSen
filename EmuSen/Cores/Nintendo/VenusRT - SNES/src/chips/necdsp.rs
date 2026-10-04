@@ -42,6 +42,17 @@ pub enum Port {
     Ram(usize),
 }
 
+/// One DR transfer, by the chip (with PC after it) or the S-CPU, or an S-CPU store into an ST01x's RAM, for the
+/// oracle's log.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Transfer {
+    ChipRead { pc: u16 },
+    ChipWrite { value: u16, pc: u16 },
+    HostRead(u8),
+    HostWrite(u8),
+    HostRam(u16, u8),
+}
+
 #[derive(Clone, Debug)]
 pub struct NecDsp {
     /// The µPD96050 (ST010, ST011) rather than the µPD77C25.
@@ -71,6 +82,8 @@ pub struct NecDsp {
     pub ratio: (u64, u64),
     /// The debugger's seam, fitted for an observed frame only; not in the state.
     pub probe: Option<Box<crate::probe::Probe>>,
+    /// The transfers with the chip cycle of each, while the oracle fits a log (VenusRT_DspHle.md §4); not in the state.
+    pub transfers: Option<Vec<(u64, Transfer)>>,
 }
 
 impl NecDsp {
@@ -118,6 +131,7 @@ impl NecDsp {
             cycles: 0,
             ratio: if st { ST_RATIO } else { DSPN_RATIO },
             probe: None,
+            transfers: None,
         };
         d.reset();
         Some(d)
@@ -172,6 +186,9 @@ impl NecDsp {
                 if i & 1 == 0 { w as u8 } else { (w >> 8) as u8 }
             }
             Port::Dr => {
+                if side_effects {
+                    self.note(Transfer::HostRead((self.dr >> if self.sr & (sr::DRC | sr::DRS) == sr::DRS { 8 } else { 0 }) as u8));
+                }
                 if self.sr & sr::DRC != 0 {
                     if side_effects {
                         self.sr &= !sr::RQM;
@@ -196,11 +213,13 @@ impl NecDsp {
         match port {
             Port::Sr => {}
             Port::Ram(i) => {
+                self.note(Transfer::HostRam(i as u16, value));
                 let n = self.ram.len() - 1;
                 let w = &mut self.ram[(i >> 1) & n];
                 *w = if i & 1 == 0 { (*w & 0xFF00) | value as u16 } else { (*w & 0x00FF) | (value as u16) << 8 };
             }
             Port::Dr => {
+                self.note(Transfer::HostWrite(value));
                 if self.sr & sr::DRC != 0 {
                     self.dr = (self.dr & 0xFF00) | value as u16;
                     self.sr &= !sr::RQM;
@@ -212,6 +231,13 @@ impl NecDsp {
                     self.sr &= !(sr::DRS | sr::RQM);
                 }
             }
+        }
+    }
+
+    #[inline]
+    fn note(&mut self, t: Transfer) {
+        if let Some(log) = self.transfers.as_mut() {
+            log.push((self.cycles, t));
         }
     }
 
@@ -245,6 +271,7 @@ impl NecDsp {
             6 => self.data_rom[self.rp as usize & (self.data_rom.len() - 1)],
             7 => if self.fa.s1 { 0x7FFF } else { 0x8000 },
             8 => {
+                self.note(Transfer::ChipRead { pc: self.pc });
                 self.sr |= sr::RQM;
                 self.dr
             }
@@ -266,6 +293,7 @@ impl NecDsp {
             4 => self.dp = v & self.dp_mask(),
             5 => self.rp = v & self.rp_mask(),
             6 => {
+                self.note(Transfer::ChipWrite { value: v, pc: self.pc });
                 self.dr = v;
                 self.sr |= sr::RQM;
             }

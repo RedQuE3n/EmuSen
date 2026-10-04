@@ -1,0 +1,2 @@
+# Suzuka 8 Hours: Start through the title to a race.
+tapuntil start chip 50 - 4000 40

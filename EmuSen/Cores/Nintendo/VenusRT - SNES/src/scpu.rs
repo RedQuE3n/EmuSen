@@ -2,7 +2,7 @@
 //! fullsnes ("SNES DMA Transfers", "SNES Maths Multiply/Divide", "SNES Controllers I/O Ports") and anomie's timing
 //! document for their timing. See VenusRT_Native.md §13.
 
-use crate::bus::{HDMA_AT, HDMA_INIT_AT, REFRESH, REFRESH_AT, System, irq_line_point};
+use crate::bus::{HDMA_AT, HDMA_INIT_AT, POWER_ON_AT, REFRESH, REFRESH_AT, System, irq_line_point};
 /// The run's last step, which only ends it: 8 clocks, where anomie's documents give ~18 (D-40).
 const HDMA_OVERHEAD: u16 = 8;
 /// The clock a cycle's middle must reach for the cycle to see H-blank, as the console's HDMA tables fix it (D-40).
@@ -118,7 +118,8 @@ impl System {
     /// resumes at, counted from the pause's start (anomie's DMA timing).
     fn align_before(&mut self) -> u64 {
         let start = self.timing.clock;
-        let to8 = 8 - (start % 8) as u16;
+        // The DMA clock counts its 8-clock steps from the first frame's line 0, 132 clocks before the clock's zero (D-6).
+        let to8 = 8 - ((start + POWER_ON_AT as u64) % 8) as u16;
         self.advance_paused(to8);
         start
     }

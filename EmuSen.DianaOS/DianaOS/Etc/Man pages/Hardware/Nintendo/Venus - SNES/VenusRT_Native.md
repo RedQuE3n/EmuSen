@@ -4249,3 +4249,28 @@ window of frames), is in the corpus folder beside `venusrtbench`, outside the re
 - **The state** is version 20. The run's stage and its channels travel in it. Versions 17 to 19 still load, with no
   run pending.
 - **Left open**: `test_hdmatiming`'s test 2, one dot (D-40). `blobs/test_hdmatiming` therefore still fails.
+
+### 41.15 Blocker 2: `blobs/irq` and `blobs/nmi` were D-6, settled by their console logs (2026-10-04)
+
+The two ROMs were never read before this step. Each logs 1,024 records of NMI or IRQ timing from power-on into SRAM,
+and compares them with a log captured from a console, kept in its own image. `nmi.smc`'s source says so. The stage 2
+reading of their failures as tests `$1E` and `$2D` was their first SRAM byte. A scratch tool moved the power-on
+position through a whole line and graded each position against the console's log.
+- **Both logs match at the offsets 28 + 52k and 29 + 52k, and nowhere else.** At 0 they do not match (961 of
+  `nmi.smc`'s records differ).
+- **`test_hdmasync`'s console table keeps 28 + 52k**, which contains D-6's Mesen-measured 132.
+- **D-6's counters half is therefore settled** at 132 master clocks into line 0, the class from the console and the
+  member from Mesen (`VenusRT_Disputes.md` D-6, 2026-10-04). Built as the master clock's zero at line clock 132, with
+  the DMA clock's 8-clock steps counted from line 0 of the first frame, and the SPC700's 150-clock lead kept against
+  the CPU.
+
+| Check | Result |
+|---|---|
+| The corpus, the tester's images | **113 of Mesen's 117** (111). `blobs/irq` and `blobs/nmi` pass. No verdict worse. VRAM equal on 257 rows, pictures on 242 (238) |
+| Pictures closer to Mesen's | Sour's two timing tests (448 and 419 pixels from 589 and 610), `reset-position-test` (140 from 304), `test_dmatiming/demo` (now equal), the 2010 timer printers, lidnariq's `smpspeed`, `ipl-speed-test`, `test_noise` (22,606 from 29,567) |
+| Pictures further | `test_hello` (929 from 809), `enable-autojoy-late-test-2` (278 from 276) |
+| The goldens | the same outcomes at all 36 anchors. Three hashes are re-recorded: Super Mario RPG at 2400 and Yoshi's Island at 1800, still differing, and Hook at 1500, still equal at lag -20 (+11). Super Mario RPG's attract mode still leads Mesen's by 40 frames (equal at 1240 for 1200) |
+| Skip versus draw | the nine bench games, 600 frames, the same |
+| Tests | the crate's 113. In WiseMan, `The_call_stack_holds_the_jsr_in_front_of_a_breakpoint_in_the_routine` armed its breakpoint after a first plain frame and assumed that frame ended outside the routine. It is now armed from power-on. With that, the VenusRt, CoreAbi, Snes, CoreDebug and Conform filters pass, 119 of 119 |
+
+No cost: the change moves where the clock starts, not what a frame does.

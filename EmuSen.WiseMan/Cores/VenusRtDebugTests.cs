@@ -260,7 +260,7 @@ namespace EmuSen.WiseMan.Cores
             if (Load(CallLoopRom()) is not var (engine, t)) return;
             using (engine)
             {
-                engine.RunFrame();
+                // Armed from power-on, so the JSR is seen whichever instruction a frame ends at.
                 t.Breakpoints.AddBreakpoint(0x008012);
                 engine.RunFrame();
                 Assert.True(engine.IsHaltedAtBreakpoint);

@@ -25,9 +25,9 @@ namespace EmuSen.WiseMan.Cores
         public static readonly Golden[] Goldens =
         {
             new("Super Mario RPG - Legend of the Seven Stars (U) [!].smc", "d0b68d68d9efc0558242f5476d1c5b81", "SA-1", Array.Empty<SnesPress>(),
-                new[] { new Anchor(300, "the Square logo", "equal 2c3d80054787292a"), new Anchor(1200, "the garden at night, attract", "drift, equal 40 frames on (D-6, D-37) a20aa10c2349d4ae"), new Anchor(2400, "Mario on the map, attract", "drift, equal 42 frames on (D-6, D-37) a5fcdffe4cafff7e") }),
+                new[] { new Anchor(300, "the Square logo", "equal 2c3d80054787292a"), new Anchor(1200, "the garden at night, attract", "drift, equal 40 frames on (D-6, D-37) a20aa10c2349d4ae"), new Anchor(2400, "Mario on the map, attract", "drift, equal 42 frames on (D-6, D-37) d5587fffc010eab5") }),
             new("Super Mario World 2 - Yoshi's Island (U) (V1.1).smc", "2150266ad9ea89aed241e949966514ae", "GSU-2", Array.Empty<SnesPress>(),
-                new[] { new Anchor(600, "\"A long, long time ago\" under the Nintendo board", "equal 6128ce74a4d6b29b"), new Anchor(1800, "the stork over the night sky", "the stork alone, not logged f54ae4aef41532ce"), new Anchor(3000, "\"SCRREEEECH!!!\"", "equal f68d5ef7464cf859") }),
+                new[] { new Anchor(600, "\"A long, long time ago\" under the Nintendo board", "equal 6128ce74a4d6b29b"), new Anchor(1800, "the stork over the night sky", "the stork alone, not logged 2778905ad57c22a1"), new Anchor(3000, "\"SCRREEEECH!!!\"", "equal f68d5ef7464cf859") }),
             new("Super Mario Kart (U) [!].smc", "8b13d7d413545582099ab35298405417", "DSP-1B", Array.Empty<SnesPress>(),
                 new[] { new Anchor(600, "the title with karts passing", "equal eea24499eda2603c"), new Anchor(2400, "the attract race, start", "equal cbf0b94096358116"), new Anchor(3300, "the attract race, later", "equal f0c88e85d8bd8222") }),
             new("F1 ROC II - Race of Champions (U).smc", "cbf9f26076044edc913aabc22adbd690", "ST010", Array.Empty<SnesPress>(),
@@ -41,7 +41,7 @@ namespace EmuSen.WiseMan.Cores
             new("SMW.smc", "dbe1f3c8f3a0b2db52b7d59417891117", "tricky list, ORA [d]", new[] { P(600, PadButton.Start), P(700, PadButton.A), P(800, PadButton.A), P(1300, PadButton.A), P(1500, PadButton.A), P(1700, PadButton.A) },
                 new[] { new Anchor(150, "\"Nintendo Presents\"", "equal 7a654f58801248e8"), new Anchor(1200, "the welcome message at Yoshi's house", "equal 759afbb3411436bd"), new Anchor(2400, "the overworld map", "equal eb6cc5041c418bdb") }),
             new("Hook (U) (2648).smc", "291e0beb91390a96cd1effd619157275", "tricky list, VRAM writes during display", Array.Empty<SnesPress>(),
-                new[] { new Anchor(300, "the Sony Imagesoft logo", "equal 9d9e4fac812bc8ec"), new Anchor(600, "the copyright page", "equal 2eecc820a49d9233"), new Anchor(1500, "the intro's dialogue", "equal ce6979de75867d63") }),
+                new[] { new Anchor(300, "the Sony Imagesoft logo", "equal 9d9e4fac812bc8ec"), new Anchor(600, "the copyright page", "equal 2eecc820a49d9233"), new Anchor(1500, "the intro's dialogue", "equal 954e83e9840b7f4d") }),
             new("Breath of Fire (U) [!].smc", "cdef890e99a0fb62c4d449d867c4244a", "tricky list, VRAM reads", new[] { P(1900, PadButton.Start), P(2100, PadButton.Start), P(2300, PadButton.A), P(2500, PadButton.A) },
                 new[] { new Anchor(700, "the copyright page", "equal 4e1f799880fbdabd"), new Anchor(1800, "the title", "equal 2e13fe99b52a9989"), new Anchor(2700, "the name entry", "equal 571411f365f99535") }),
             new("Axelay (U).smc", "d6ddca61a7f31eed247c429b0e528f3c", "tricky list, offset-per-tile", Array.Empty<SnesPress>(),

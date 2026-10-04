@@ -686,7 +686,7 @@ pub(crate) mod tests {
         m.run_frame();
         m.run_frame();
         assert_eq!(m.total_frames(), 2);
-        assert!(m.sys.timing.clock >= 2 * 262 * 1364 - 4);
+        assert!(m.sys.timing.clock >= 2 * 262 * 1364 - 4 - crate::bus::POWER_ON_AT as u64);
     }
 
     // Version 4: the CPU, the clock, the bus and the S-CPU's devices; the listing is its record (plan §5.6).

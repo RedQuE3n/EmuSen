@@ -4,7 +4,7 @@
 and §13.2's items 1 and 2 built: the header, the `core` module with `core_exports!`, and the guard (§18, which also lists
 the points of §4–§6 that building them made precise); then items 3 and 4, the host adapter and discovery (§19); item 5, the SNES's system pack (§20); and item 6, the
 conformance kit's core suite (§21); and MoonRT's and MercuryRT's exports onto v1 beside their pre-stable ones (§22,
-§23). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
+§23). Since then, 2026-10-04: the registration-equivalence test, D1's oracle (§25). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
 three prototype checks recorded in §5.1 to §5.3. It supersedes parts of `EmuSen_NativeCores.md`, listed in §0.3 and
 marked in place there. Every claim about the code is cited to a file, read on `WiseMan` at `f69c94a4`. Claims marked
 **measured** were measured on 2026-10-01; claims marked **argued** are reasoning that a later step must prove, and
@@ -1345,7 +1345,7 @@ SNES). Until then:
 
 | Step | What | Oracle | Effort |
 |---|---|---|---|
-| **D1** | The move: the engine SPI, the native host, the services and the systems table into `DianaOS/Sys/`; the C# cores registered as managed engines; `CoreFactory` and `CoreCatalog` answered from the runtime | The registration-equivalence test `EmuSen_NativeCores.md` §7 step 1 named and never built: every answer `CoreCatalog` and `CoreFactory` give, for every console and engine, before and after. The whole suite | 2–3 days |
+| **D1** | The move: the engine SPI, the native host, the services and the systems table into `DianaOS/Sys/`; the C# cores registered as managed engines; `CoreFactory` and `CoreCatalog` answered from the runtime | The registration-equivalence test `EmuSen_NativeCores.md` §7 step 1 named: every answer `CoreCatalog` and `CoreFactory` give, for every console and engine, before and after; built 2026-10-04 ahead of the move (§25). The whole suite | 2–3 days |
 | **D2** | Sessions, the loop and the services in the runtime; Pharaoh moved onto them first, as the headless client; then the shell (its `LoadCore` gone), Hotaru, Mistress | Each client's own tests; Pharaoh's `framesum` and `audiosum` digests equal before and after on the bench games; Mistress's rewind and state tests | 1½–2 weeks |
 | **D3** | The frontend API's contract layer and binding; its baseline; the parity test of §8.6 | The parity test; the public-API baseline recorded | 3–4 days |
 | **D4** | The inspection surface: sessions in `ps` and `kill`, signals, `/proc`, `/dev`, `cores` | Shell tests per verb; a side-effect space refused | 2 days |
@@ -2297,6 +2297,77 @@ VenusRT's `firmware_for` builds a whole cartridge from the image to read its hea
 each call costs in proportion to the image, a 4 MiB copy for Donkey Kong Country. The ABI sets no cost on a
 library-level call, and the case still ran its checks a few hundred times; it is recorded for VenusRT's crate and was
 not changed here.
+
+---
+
+## 25. The registration-equivalence test, 2026-10-04: D1's oracle
+
+### 25.1 What it records
+
+D1 (§10.2) moves the engine SPI, the native host and the systems table into `DianaOS/Sys/` and answers `CoreFactory`
+and `CoreCatalog` from the runtime. Its oracle, named in `EmuSen_NativeCores.md` §7 step 1 and not built there, is now
+`EmuSen.WiseMan/Cores/CoreRegistrationEquivalenceTests.cs`, held to the committed golden
+`CoreRegistrationGolden.txt` beside it. It was written before any move and passes unchanged on `WiseMan` at
+`400f6087`; the move is to keep it passing without an edit.
+
+The recorder (`RegistrationRecorder` in the same file) asks every question a frontend asks of the registration and
+writes one `key = value` line per answer: 1,875 lines in the `built` world below and 1,223 in `off`:
+
+| Group | What is recorded |
+|---|---|
+| The catalogue | the registry's keys; the cores, their release order, the library's filter choices and shelves (with their ES-DE names); each console's extensions, cheat-database folders, maker and year, cover aspect, OpenVGDB systems, and the OpenVGDB hashing rule applied to each synthetic image (length and hash of the bytes hashed); every extension claimed, unclaimed and empty, through `IsRomExtension`, `ByExtension`, `ConsoleForRom` and `CoreFactory.IsSupported`; `ShelfFor` and `IsGameBoyColor` on six files; `ByAnyName`, `ByDisplayName`, `ShelfByName`; each console's buttons, axes, rebind controls, system ids and settings rows (label, kind, default, range, choices, hint and the note at the defaults); `ConsoleForSystem` |
+| The engine rows | for the four consoles and one unknown: the row (or none), its choices, default and hint; the engines discovery adds; `EngineChosen` with nothing stored and with a value stored; `IsRegisteredEngine` for every engine name; whether each registered library is available; each discovered core, its systems and whether it opens |
+| The factory | for every synthetic image of every console (plain, battery-backed, and the Game Boy Color and byte-swapped forms) and every engine name a frontend could store (none, each choice of the row, an unknown name, and another console's engine): the type `ForFirmwareProbe` builds and the firmware it asks for; the type `Load` builds, its engine notice, its debug target's type, its trace switch, both cheat codecs; the core's name, picture size, frame rate, sound rate, buttons, axes, state version, engine features and `ICoreSettings` rows with their values; and the files the load and one `SaveSram` leave under a fresh home, with older builds' save locations pre-filled so that a copy-in shows |
+| Configured engines | `ConfiguredEngine` with nothing stored and with each choice stored in `graphics.json` |
+| Cheat codecs | `CheatCodecsFor` every console and display name, none, empty and unknown; `DefaultCheatCodecs`; and each distinct codec's verdict on eighteen fixed codes (whether it claims the code, the address and value, the compare, the writes) |
+| Settings before a game | each engine of each row built by `Create` and its `ICoreSettings` rows |
+
+It is recorded in four worlds:
+
+- **`built`**: the libraries as the build placed them beside the assemblies.
+- **`off`**: a child `dotnet test` process started with `EMUSEN_MOON_NATIVE`, `EMUSEN_MERCURY_NATIVE`,
+  `EMUSEN_MARS_NATIVE` and `EMUSEN_VENUS_NATIVE` set to 0, since a library is loaded once per process and only a
+  fresh process records the fallbacks and their notices honestly (the method of `MercuryRtFallbackTests`).
+- **`nothing-discovered`**: discovery pointed at an empty directory.
+- **`refused-discovered`**: discovery pointed at a directory holding the build's sidecars beside files that are not
+  their libraries, so that opening each is refused before loading.
+
+### 25.2 What is held fixed, and what is named instead
+
+The ICore's type is recorded by its name without its namespace, and a codec by its name, kind, space and decodes,
+because D1 may move a type between assemblies without changing what a frontend sees. Paths are written relative to the
+test's temporary root and the assemblies' directory, and a platform's library file name as `<lib crate>`, so that one
+golden serves every platform. One value is the machine's: Mars's rasteriser threads default to one per three cores
+(`MarsCore.VideoSettings`), and the recorder writes that default as `<one per three cores>` where it equals the
+formula. The set of capability interfaces a core implements is deliberately not recorded: §13.1's ports gain the
+adapter's neutral interfaces (§19.1) while every answer a frontend reads through them stays the same, and those answers
+are what is recorded.
+
+**Recording.** With `EMUSEN_RECORD_REGISTRATION=1` the two tests write their sections into the source tree's golden
+instead of comparing; the diff is then reviewed as the record of what changed. A deliberate change to an engine's
+answers (a new setting, a firmware policy, a new engine) re-records the golden in the same commit. On a mismatch the
+assertion lists the lines gone and the lines new.
+
+### 25.3 What was measured
+
+**Determinism.** Three runs in a row, in compare mode, gave the golden byte for byte; the whole class takes about 4 s,
+the child process included.
+
+**Seeded faults.** One line of each section edited in the output copy of the golden: each test failed, naming exactly
+the edited line as gone and the true answer as new. One code mutation, the one D1 is most likely to make: `CoreFactory`'s
+generic branch with its `IsRegisteredEngine` guard removed, so that a registered engine discovery also lists is opened
+by the generic adapter. Both sections failed, 38 and 33 lines gone (MoonRT's and MercuryRT's probes, cores, debug
+targets and codecs turning into the adapter's). The source was restored and the test passed again.
+
+**What it surfaced.** On `400f6087`, VenusRT asks for its sound unit's boot ROM as `required` and refuses a game
+without it ("the sound unit's 64-byte boot ROM, file 1, was not given"). That contradicts the firmware policy decided
+on 2026-10-03 (`EmuSen_Firmware.md` §0), which VenusRT's own work is bringing it to; the golden records the present
+answers, and the change that brings VenusRT under the policy re-records its lines. Venus (C#) gives the synthetic
+LoROM, whose header byte for SRAM is the image's fill, 128 KiB of battery RAM; that is the image's doing, not a defect.
+
+**What it cannot see.** A difference in the frame-end order (`EmuSen_NativeCores.md` §8.2, R4), anything a frame
+produces, and an engine's debugger once halted. Each core's own frame-by-frame oracles and the adapter-against-shim
+tests hold those.
 
 ---
 

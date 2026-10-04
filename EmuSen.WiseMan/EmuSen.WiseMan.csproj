@@ -91,6 +91,12 @@
     <None Include="..\EmuSen.Galaxia\Library\Catalogue\*.sql"
           Link="Library\Catalogue\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <!-- Every answer the engine registration gives, which a later build must reproduce - see EmuSen_CoreAPI.md §25. -->
+  <ItemGroup>
+    <None Include="Cores\CoreRegistrationGolden.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- The SNES corpus's recorded verdicts, which the runner reproduces - see VenusRT_Native.md §3.5. -->
   <ItemGroup>
     <None Include="Cores\VenusRtBaseline.tsv" CopyToOutputDirectory="PreserveNewest" />

@@ -1143,15 +1143,20 @@ their data.
   - **Two faster versions were discarded because they repeated the console's bytes.** `firmwarecheck.py`
     (`EmuSen_Debugging_Tools_Reference_v5.md` §3.61) reported a 9-byte run at offset 0 for a downward zero-page clear,
     and an 8-byte run for the fastest block loop (read port 1, echo, store, increment, branch). Both were measured
-    and discarded. The clear stays upward, and the echo is `MOV !$00F4,Y`, one byte and one cycle more than the
+    and discarded. ~~The clear stays upward,~~ (the clear is downward again in another form, below, measured at a longest run of 2 at offset 0) and the echo is `MOV !$00F4,Y`, one byte and one cycle more than the
     direct-page form, so that the loop is deliberately not that sequence. This is the 40 clocks between 562 and 602.
-  - **SP is $F0, not $EF.** The byte the absolute echo needs came from dropping the `DEC X` before `MOV SP,X`. No
+  - ~~**SP is $F0, not $EF.** The byte the absolute echo needs came from dropping the `DEC X` before `MOV SP,X`. No
     document read gives the console's SP, so either value is a choice. The record above calls $EF a value seen in
     descriptions; it is given up here for the byte, and the cost is a stack one byte higher for a driver that never
-    sets SP.
-  - **The registers on the jump** are now: A the kick, X zero, Y the entry's high byte, SP $F0, PSW as the command
+    sets SP.~~ **Overturned the same day by a test ROM's source:** gilyon's `spctest` failed at test $01AE with SP
+    $F0. Its source (`spc_tests0.asm`, test01ae; `spc_common.inc`, `main`) never sets SP: it executes BRK and expects SP
+    to be $EC afterwards, the three bytes pushed below $EF, so it states that the boot program leaves SP at $EF. SP is
+    $EF again. The byte now comes from a downward clear, `MOV X,#$EF; MOV A,#$00; MOV SP,X`, then `MOV $00+X,A`,
+    `DEC X` and `BNE` over $EF down to $01, ten bytes as the upward clear was. It also clears $01, which the first
+    command overwrites before any program can read it.
+  - **The registers on the jump** are now: A the kick, X zero, Y the entry's high byte, SP $EF, PSW as the command
     byte's load left it.
 - **Similarity of the program as committed** (`firmwarecheck.py`, run 2026-10-04 on the cached image, its one use):
-  6 of 64 bytes equal at the same offset (9.4%), longest aligned run 2 bytes; longest common run at any offsets 4
-  bytes, at replacement offset 21 against original offset 47, and one other run of 4, at 53 against 34. PASS. The
-  first program measured 7 of 64 and a longest run of 4.
+  6 of 64 bytes equal at the same offset (9.4%), longest aligned run 2 bytes (at offset 0, the `MOV X,#$EF`);
+  longest common run at any offsets 4 bytes, at replacement offset 21 against original offset 47, and one other run
+  of 4, at 53 against 34. PASS. The first program measured 7 of 64 and a longest run of 4.

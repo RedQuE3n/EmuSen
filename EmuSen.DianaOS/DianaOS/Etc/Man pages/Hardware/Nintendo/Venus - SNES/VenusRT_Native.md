@@ -2951,3 +2951,185 @@ a DSP-1 cartridge of `SyntheticRom` asks VenusRT for `spc700.rom` and `dsp1.rom`
 the pair in the firmware folder nothing is missing and the DSP is fitted (the state grows by its group); a pair of the
 wrong total size is not taken; the whole file gives the same machine. WiseMan's firmware, factory, adapter, discovery,
 engine and Mistress window tests: 306 of 306.
+
+## 35. VenusRT's own SPC700 boot program, and no firmware for an ordinary game (2026-10-04)
+
+*Decided 2026-10-03* (`EmuSen_Firmware.md` §0): VenusRT neither requires nor uses a firmware file for the SPC700's boot
+program. §21.2 had made the console's 64 bytes file 1 of `create`, required, with status -10 when absent. That is
+withdrawn here. The NEC DSP firmware (files 2 and 3) is unchanged.
+
+### 35.1 What was built
+
+- **The program.** `src/apu/boot.rs` holds 64 bytes written from fullsnes's prose of the transfer protocol, with their
+  provenance, the sections read and those deliberately not read, in `VenusRT_Disputes.md` D-38. The S-SMP maps them at
+  $FFC0-$FFFF while CONTROL bit 7 is set, and the SPC700 always runs: the `Option` that let it stand still without a
+  boot ROM is gone.
+- **The interface.** `create` takes no file 1 and refuses one as `BAD_FILE`, since the number no longer names
+  anything. Status -10 and its words are removed from the core, `status_text` and the shim. `info()` lists only the
+  NEC DSP's file, and `firmware_for` answers an empty list for a cartridge without a NEC DSP. The core info's
+  description states the accuracy cost below.
+- **No dependence on the console's image.** The examples' loader, the WiseMan SNES harness
+  (`VenusRtSnesEngine`), the adapter and Mistress tests and the kit runs no longer read `spc700.rom`, and the
+  synthetic stand-ins (`idle_ipl`, `IdleIpl`, `Machine::with_ipl`, `EMUSEN_VENUSRT_IPL`) are deleted. The D-37 port
+  test runs its program from RAM instead.
+- **Mistress asks for nothing for an ordinary game.** `VenusRtEngineTests.An_ordinary_game_on_venusrt_prompts_for_no_firmware`
+  chooses VenusRT with an empty firmware folder and runs Mistress's own prompt: an ordinary game changes nothing, and a
+  DSP-1 cartridge of `SyntheticRom` still asks for its chip. `The_adapter_takes_a_dsp_firmware_whole_or_as_its_split_pair`
+  now finds only `dsp1.rom` missing for that cartridge.
+- **The console's image as a reference only.** The copy at `~/.cache/emusen/probe/venusrt/firmware/spc700.rom` is kept
+  outside the repository, never committed, as the comparison `firmwarecheck.py` (`EmuSen_Debugging_Tools_Reference_v5.md`
+  §3.61) runs against. Nothing else reads it: not the core, its tests, the harness, the examples or the kit.
+
+### 35.2 The similarity (measured 2026-10-04)
+
+`firmwarecheck.py`, against the cached image: 6 of 64 bytes equal at the same offset (9.4%), the longest aligned run 2
+bytes; the longest common run at any offsets 4 bytes, twice. PASS against the thresholds decided beforehand (at most
+25%, no run over 6). Two faster versions failed the check, a 9-byte opening and an 8-byte block loop, and were
+discarded (D-38).
+
+### 35.3 The accuracy cost
+
+- **The bytes.** A program reading $FFC0-$FFFF with the ROM mapped sees VenusRT's bytes. Only $FFC0's $CD (blargg's
+  SPC tests compare it before returning to the boot program) and the reset vector are placed to match what software is
+  known to read. blargg's `spc_smp` has a test, "CPU/verify IPL ROM", that compares all 64 bytes; it fails, and
+  cannot pass without the console's bytes.
+- **The handshake's timing.** On spc_dsp6's uploader, which is bound by the SPC700's latency, one byte takes 602 master
+  clocks (the median pass of the S-CPU's loop) against 510 in Mesen with the console's program, about four SPC700
+  cycles; 40 clocks of it are the deliberately slower echo that keeps the loop from being the console's sequence.
+  Super Mario World's uploader is bound by the S-CPU and does not move with the boot program (612.65 clocks a byte
+  in every variant, against Mesen's 569.26, a difference outside it).
+- **The state on the jump.** RAM $0000-$0001 hold the entry point and $0002-$00EF are zero, as fullsnes states. SP is
+  $EF, which gilyon's `spctest` requires (D-38). A, X, Y and PSW are this program's, as no document gives the
+  console's.
+
+### 35.4 The oracles (measured 2026-10-04)
+
+| Check | Result |
+|---|---|
+| The corpus, VenusRT as the third engine, against §34's run | one verdict changes: `spc_smp`, Passed to Failed ("CPU/verify IPL ROM"), its picture no longer Mesen's. 107 of Mesen's 117 pass (108); pictures equal 229 of 295 (230); VRAM equal 255 (256). C# Venus's and Mesen's columns identical. Cells move without a verdict change on spc_dsp6 (still incomplete), the 2010 timing ROMs `test_speed`, `test_timer_speed`, `_speed2`, `_speed3`, `_speed_2` (printed counts by one), lidnariq's `smpspeed` and undisbeliever's `ipl-speed-test`, which times the boot program itself |
+| blargg's SPC ROMs | `spc_timer` and `spc_mem_access_times` pass; `spc_smp` fails as above |
+| gilyon `spctest`, both copies | pass, to test $0557. With SP $F0 they failed at $01AE, which settled SP (D-38) |
+| The 2010 ROMs | every verdict as before |
+| spc_dsp6, its 111 tests singly, by §30.2's runner (600 frames, two rounds without "Failed") | 104 pass, 1 fails, 6 hang (106 and 5 at §30.2): "Misc/brr addr wrap-around" passed and now fails, "Order/voice 0 noise" passed and now hangs |
+| The four bench games' first lit frame against Mesen | unchanged: Star Fox 210/200, Super Mario Kart 10/10, Super Mario RPG 40/40, Super Mario World 90/90 |
+| The state's hash every 60 frames to 600 | the commit before, given these 64 bytes as its file 1, gives the same hash as the new code at every sample for the four bench games: the code change is neutral and the 64 bytes are the whole difference. Against runs with the console's program the hashes differ from the first sample, the boot program's run leaving other SPC700 registers, cycle position and port values; not measured, since the console's image is not run |
+| The conformance kit, the eleven images of §31.2, no boot file | compliant on every one |
+| The adapter against the shim (`EMUSEN_VENUSRT_GAMES`, the four bench games) | 600 frames each, the picture, the samples and the state equal |
+| Tests | the crate's 91 (four new for the boot program), WiseMan's VenusRt, CoreAdapter, CoreDebug, CoreAbi, NativeHost, CoreDiscovery, Snes and Firmware filters, 199 of 199 |
+| The cost, `frame_cost` best of three over 1,200 frames, in turn under the timing lock | Super Mario World 2.11-2.12 against 2.14 ms a frame, Donkey Kong Country 2.08-2.09 against 2.10-2.11: the checks of an absent boot ROM are gone, about 1% |
+
+### 35.5 What is open
+
+**The two spc_dsp6 tests are a sensitivity of VenusRT's that this program exposes, not a fault in its protocol**,
+argued from these measurements. "Misc/brr addr wrap-around" never reads $FFC0-$FFFF outside the boot program; the
+APU RAM after its upload equals Mesen's but for the test's two delay counters; and it fails with every one of 34 S-CPU
+power-on offsets across a line and 13 jump delays (0 and 2 to 14 SPC700 cycles), in its first to seventh round
+according to the phase. A test that passes on a console cannot depend on that phase, since there the S-CPU's kick
+reaches the SPC700 at a random point of the S-DSP's period. Mesen passes it near frame 2,800; with the console's
+program VenusRT showed four rounds without failure in §30.2's 600 frames, and no longer run was recorded. "Order/voice
+0 noise" gives no verdict in Mesen by frame 6,000. Both are left for the S-DSP's next step.
+
+## 36. Stage 7: the debugger (2026-10-04)
+
+`VenusRT_Plan.md` §4.7 asked for a debug target from Rust exports, since no C# core can read VenusRT's state. Revised by
+`EmuSen_CoreAPI.md` §13.2 to no per-core C# class, the target is the generic `CoreDebugTarget` over the v1 debug
+exports, for any core that claims `DEBUG`. The stage was built in four commits: the debugger's frame, the disassemblers,
+the C# bridge, and this step's completion and oracle.
+
+### 36.1 What was built
+
+- **The debugger's frame** (`src/debugger.rs`, `src/probe.rs`). An armed frame runs the machine's own loop with the
+  shared hooks (`emusen_native::debug::Hooks`) asked before each S-CPU instruction, its calls, returns, interrupts
+  and stores noted after it. The SPC700 and the cartridge's processor run inside catch-ups, so each carries a probe
+  while a debugger's frame runs: its breakpoints, the steps it took for coverage, its stores, and where it stopped.
+  After every S-CPU instruction the SPC700 and a NEC DSP are caught up (the SA-1 and the GSU already are) and their
+  probes are read. A stop leaves the frame open; `debug_run_frame` reports the processor and its pc. A plain frame
+  runs with no probe fitted, and `advance` disarms anything left. The skip-versus-draw and armed-versus-plain checks
+  hold it to that.
+- **Processors** 0 (the S-CPU), 1 (the SPC700) and 2 (the SA-1, the GSU or a NEC DSP), named as DianaOS's scope words
+  name them: `CPU`, `SPC`, `SA1`, `GSU`, `DSP`. Each has its registers as machine info lists them (the 65C816's A, X, Y,
+  S, D, PB, PC, DB, P, E for the S-CPU and the SA-1; the SPC700's A, X, Y, SP, PC, PSW; the GSU's sixteen and its
+  control registers; the µPD77C25's), its breakpoints, coverage and live pc. Processor 0 has the call stack and
+  stepping by depth.
+- **The chips' spaces**, appended where the cartridge has the chip: `GSURAM`, `GSUBUS`, `SA1IRAM`, `BWRAM`, `SA1BUS`,
+  `DSPRAM`, `DSPPRG`, with their ids kept.
+- **The disassemblers** (`src/disasm/`), behind `DEBUG_DISASSEMBLE`, each from its document: the 65C816 from WDC's
+  datasheet (Table 5-4's opcode matrix and Table 6-2's operand formats), the SPC700, the GSU (with ALT1, ALT2 and
+  WITH carried from byte to byte) and the µPD77C25/µPD96050 from fullsnes's tables. Each gives the static reference
+  a call, jump, read or write makes, which the target classifies. The instruction set follows the space where the
+  space is a processor's own (APURAM the SPC700's, and so on), else the processor asked. The SPC700's listing of
+  $FFC0-$FFFF reads the boot program while CONTROL maps it, as the SPC700 executes it, not the RAM beneath.
+- **The bridge** (`EmuSen/Cores/Native/CoreDebugBridge.cs`). It pushes every processor's breakpoints, the call stack,
+  the write watches, the data breakpoints and the coverage flags down as the core's tables. It runs an armed frame
+  through `debug_run_frame`, judging each stop with the registry of the processor that stopped (conditions, hit
+  counts, steps), and drains stores, calls, the profile and coverage back into the registries. `CoreEngine` halts in
+  front of a breakpoint on any processor (`IsHaltedAtBreakpoint`, `HaltedProcessor`, `ICoprocessorHalt`) and resumes
+  the open frame on the next `RunFrame`. A loaded state closes the frame.
+- **Completed in this step:**
+  - *A processor's code space from machine info.* `processors[]` gains an optional `code_space`, the space id its code is
+    listed from (`EmuSen_CoreAPI.md` §6.4). VenusRT names CpuBus, APURAM, SA1BUS, GSUBUS and DSPPRG, so `disasm spc`
+    lists APURAM as C# Venus's target does. Absent, the host keeps its rule by name, which MoonRT and MercuryRT use.
+  - *Stepping over and out.* Processor 0's registry is given the bridge's call stack, without which `step over` was
+    refused.
+  - *Every processor's registers refreshed* with `RefreshProviders`, so `regs spc` and `eval spc a` show live values.
+
+### 36.2 The oracle (measured 2026-10-04)
+
+**§4.7's claims as tests** (`EmuSen.WiseMan/Cores/VenusRtDebugTests.cs`), on cartridges of `SyntheticRom` with
+synthetic firmware for the DSP-1, through `CoreEngine`, `CoreDebugTarget` and DianaOS's own commands:
+
+| Claim | Test |
+|---|---|
+| Processors named as the scope words, the chip as the coprocessor | `cpu`, `spc` on a plain cartridge; `sa1`, `gsu`, `dsp` added by the chip; `CoprocessorBreakpoints` and `CoprocessorCoverage` the chip's |
+| Spaces | the console's eight, and the chip's two or three |
+| Code spaces | CpuBus, APURAM, SA1BUS, GSUBUS, DSPPRG |
+| Registers | named and live for the S-CPU and the SPC700; `regs spc` through the shell |
+| Breakpoints, by scope word | `bp spc add` reaches the SPC700's registry only, `bp add` the S-CPU's |
+| Halting | a breakpoint on the S-CPU halts in front of its instruction with the frame open, and resuming completes it; on the SPC700 it halts on processor 1; on the DSP-1 on processor 2 |
+| Stepping | four single steps through a JSR into its routine and back; step over runs the routine whole; three steps on the SPC700 alone |
+| Call stack | the JSR's frame in front of a breakpoint in the routine, and in `bt` |
+| Watches | a WRAM write watch records the store with its value and the storing instruction |
+| Coverage | kept per processor; the S-CPU's executed instructions and nothing else |
+| Expressions | `eval a` and `eval spc sp` read each processor's registers |
+| Disassembly | `disasm spc` equals `disasm APURAM`; a JSR classified as a Call to its target; the SPC700, GSU and µPD77C25 decoders on their spaces |
+| States | a state loaded while halted starts a whole frame |
+
+19 of 19 pass.
+
+**Every table armed, on four games** (`Every_table_armed_with_nothing_to_hit_gives_the_plain_run`, opt-in through
+`EMUSEN_VENUSRT_GAMES`). Two engines ran each game for 600 frames, the pad pressed in turn. One ran plain. The other
+had coverage armed on every processor, a breakpoint no processor reaches on each, the profiler, and write watches over
+CpuBus, WRAM, SRAM and APURAM. The picture and the samples were equal every frame and the states byte-identical at the
+end, for Super Mario World, Super Mario RPG (SA-1), Star Fox (GSU) and Super Mario Kart (DSP-1B), with 2.5 to 5.0
+million stores watched and 7.5 to 8.9 million instructions profiled. On a third engine, 120 frames in, a breakpoint over
+the cartridge processor's whole space halted on it: the SA-1 at $C08171, the GSU at $01B301, the DSP-1B at $00000C.
+Removing the breakpoint, the next frame completed.
+
+A first version checked the coprocessor halt on the armed engine after its 600 frames, and Star Fox did not halt on
+the GSU. The machine and the bridge were sound: the core alone halted at once, and so did the engine with every table
+armed. After 600 frames of buttons pressed in turn, the game stands in a scene where the GSU does not run. The check
+moved to its own engine, 120 frames in.
+
+**The conformance kit**, from the branch's release libraries, on the eleven images of §31.2: all fifteen cases pass on
+every one, C15 included (a `RING` stop continued, a breakpoint at processor 0's next instruction, eight steps under
+`EACH`); C14 finds 3 processors and 11 spaces on Super Mario RPG.
+
+**Tests**: the crate's 91; WiseMan's VenusRt, CoreAdapter, CoreDebug, CoreAbi, NativeHost, CoreDiscovery, MoonRt,
+MercuryRt, CoprocessorDebug, NecDspDebugTarget, SetRegVectors, Snes, Firmware, MoonDebug and MercuryDebug filters, 755
+of 755; `emusen-native` 50, the kit's own suites. Two MercuryRT crate tests fail (`a_state_that_is_not_mercurys_or_is_cut_short_changes_nothing`,
+`version_6_writes_the_cartridge_once_...`). They fail identically on the merged tree before this step, which touches
+MercuryRT only by the descriptor's new field, and are not this stage's.
+
+### 36.3 What §4.7 lists that v1 does not carry
+
+`EmuSen_CoreAPI.md` §6.14 bounds the generic debugger: memory, registers, disassembly, breakpoints, watches,
+stepping, the call stack, coverage and the profile. Console-shaped views wait for extension exports or a system pack
+(§15, Q10). On VenusRT, then:
+
+- **Not on the generic target:** the video, APU and coprocessor register providers with history, sprites, palettes,
+  audio channels, hardware load, interrupt vectors, DMA channels and the DMA log. A test holds the views empty.
+- **Not built:** register flow, freezes and access counters. Freezes undo each write as it lands, and access counters
+  count reads; v1 reports a frame's stores after it, and no reads.
+- **Kept from before:** cheats, the frame log and labels, all host-side.
+
+The plain frame is untouched by this step, so it has no cost to measure.

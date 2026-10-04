@@ -460,6 +460,13 @@ impl Machine {
         }
     }
 
+    /// `SetControllerConnected`: a port with a controller answers the joybus, one without does not.
+    pub fn set_present(&mut self, port: usize, present: bool) {
+        if let Some(c) = self.bus.si.controllers.get_mut(port) {
+            c.present = present;
+        }
+    }
+
     /// `SetAxis`'s stick: 0 is X and 1 is Y, already scaled and turned as C# turns them.
     pub fn set_stick(&mut self, port: usize, axis: u32, value: i8) {
         if let Some(c) = self.bus.si.controllers.get_mut(port) {

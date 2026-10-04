@@ -3621,9 +3621,13 @@ event is missed; a pad pulled out is let go at the next poll. Any pad then drive
 the pad menu (§4.29), every sheet (§4.45), the game options of §4.59 and the on-screen keyboard: a button is held when any
 pad holds it. Over a running game any pad's guide button, or Back and Start together, opens the pad menu.
 
-**The game hears player 1 only.** The first pad opened is player 1's, as the only pad was before; when it goes, the next
+~~**The game hears player 1 only.** The first pad opened is player 1's, as the only pad was before; when it goes, the next
 one opened takes its place, which is what the rescan did before with one pad. The game's bindings (`GamepadBindingMap`)
-are unchanged, and a second pad is not player 2: that is separate input work (`EmuSen_Input.md` §6).
+are unchanged, and a second pad is not player 2: that is separate input work (`EmuSen_Input.md` §6).~~
+**Superseded 2026-10-04 (`EmuSen_Input.md` §8):** each pad plays as its own player, up to the game's ports. Pads take
+players in the order they connect; a pad that goes keeps its number, nobody moves up, and it gets the number back when it
+returns; a new pad takes the lowest number with no pad connected. When player 1's pad goes, the game no longer moves
+the next pad into its place, which the single-pad rescan did; a spare pad plugged in then does take it.
 
 **Settings.** Preferences ▸ Controllers, stored in `appsettings.json`; each applies at once:
 
@@ -3631,10 +3635,12 @@ are unchanged, and a second pad is not player 2: that is separate input work (`E
 |---|---|---|---|
 | Controller Type | `ControllerType` | Automatic | The buttons the big picture help bar draws: Automatic follows the pad last pressed (its family by §4.52's rules), or Xbox, PlayStation, Nintendo or Generic always. Only the pictures change: not what a button does, and not the text hints, which name buttons by an Xbox pad's letters |
 | Button Swap | `SwapPadButtons` | off | A and B trade functions: Accept on East and Back on South, in the library, the themed view, the pad menu, every sheet and the on-screen keyboard. The help bar and the text hints name the swapped buttons. X and Y are not swapped, unlike ES-DE's setting (plan §24.5). The keyboard and every game are unaffected. *Since 2026-09-27 X and Y trade as well, as ES-DE's do (§4.79.5)* |
-| First Controller | `FirstControllerOnly` | off | Only the first pad opened steers the interface; ES-DE's remedy for a wireless pad that registers twice. The game is unaffected (it reads the first pad anyway) |
+| First Controller | `FirstControllerOnly` | off | Only the first pad opened steers the interface; ES-DE's remedy for a wireless pad that registers twice. ~~The game is unaffected (it reads the first pad anyway)~~ *Since 2026-10-04 the game hears player 1's pad alone with it on, which is what it heard before players, so the twin of a pad that registers twice does not press a second port (`EmuSen_Input.md` §8.3)* |
+| Players | seats in `GamepadManager.Players`; `KeyboardPlayer` | keyboard: Player 1 | *Added 2026-10-04.* A row per connected pad naming it, with the player it plays as (Player 1 to 8, or None); choosing a player another pad has trades the two. Any button held on a pad lights its row. A seat kept for a pad that has gone is a row with Forget. The Keyboard row is the player the keyboard plays as. The seats last until Mistress quits; only `KeyboardPlayer` is saved (`EmuSen_Input.md` §8.9) |
 | Notifications | `ControllerNotifications` | on | The notice below |
 
-**The notice.** "Controller connected: *name*" or "Controller disconnected: *name*", drawn with LunaP's `NoticeLayer`
+**The notice.** "Controller connected: *name*" or "Controller disconnected: *name*" (since 2026-10-04 followed by the
+player the pad took or keeps, "(Player 2)"), drawn with LunaP's `NoticeLayer`
 at the top centre over whatever is on screen (the library, the themed view, a sheet or a game), in a desktop or a
 big-screen session. It fades in over half a second, holds three and fades out over half a second, which is ES-DE 3.4.1's
 popup as recorded once (plan §24.4). The pads connected when Mistress starts are not announced.
@@ -3658,9 +3664,11 @@ and a theme's icons). They run on WiseMan's `PadDriver`, which plugs and pulls s
 **What it does not cover.**
 - No real device was used. SDL's events and their timing, Steam Input's virtual pads, a pad that registers twice and
   sleep and wake are for the handheld (plan §24.10).
-- A second pad as player 2 in a game.
+- ~~A second pad as player 2 in a game.~~ Built 2026-10-04: `EmuSen_Input.md` §8.
 - The notice's fade is linear; ES-DE's fits a gentle power curve (plan §24.4). Its words are Mistress's own.
-- The Controller Bindings window still names the first pad alone.
+- ~~The Controller Bindings window still names the first pad alone.~~ *Since 2026-10-04 a Player selector at the end of
+  its tab strip chooses whose pad bindings a console's tab shows and rebinds, and the drawing lights that player's pad
+  (`EmuSen_Input.md` §8.4, §8.9).*
 
 ### 4.62 Big picture: ES-DE's theme list, browsed and installed from the Themes tab (2026-09-26)
 
@@ -7476,3 +7484,31 @@ averaged 222 to 232 ms, Super Mario 64's 158 ms.
 
 **Not covered.** Whether gamescope presents on its grid or follows the draws was not under this build's control and
 changed within runs; what decides it is not known. The desktop has not run the timer hold in a real window.
+
+### 4.88 Quitting with Preferences open (2026-10-04)
+
+**The defect.** Preferences re-reads the library when it closes: it rescans artwork, reapplies online covers and
+scraping, and refreshes the library list, so a change made in it shows at once. Closing the main window while
+Preferences was open ran that refresh after the window had already closed its game records. On the desktop,
+Preferences is a window owned by the main window, and Avalonia closes an owned window after its owner's `Closing`
+(`Window.CloseCore` in Avalonia 12.1: the children's `Closing`, then the owner's, then the children closed, then the
+owner); `MainWindow`'s `Closing` handler calls `CloseRecords`, so the refresh's first query met a closed SQLite
+connection and threw `InvalidOperationException: ExecuteReader can only be called when the connection is open`
+while the program was shutting down. On the big screen, Preferences is a sheet, and until LunaP's `SheetLayer` closed
+its sheets with their host (LunaP `docs/LunaP.md` §90.7) the sheet was simply never closed, so the same fault could
+not happen there and the window was leaked instead.
+
+**Found by.** The investigation of the test host's memory growth (`EmuSen_Debugging_Tools_Reference_v5.md` §3.62).
+Once sheets closed with their host, three tests that close the main window under Preferences failed with the
+exception above (`ThemeSettingsSheetTests.Preferences_opens_the_theme_settings_sheet`,
+`ScrapeSignInTests.Log_In_and_Log_Out_are_reached_and_used_by_the_pad_on_the_sheet`,
+`ControllersTests.The_controller_settings_persist`). The desktop case was then shown to fail on the unchanged toolkit
+as well, so it is a defect a player could meet and not an artefact of the toolkit change.
+
+**The fix.** The refresh returns at once when the records are closed (`_recordsClosed`, the flag the cover and
+identity paths already check): a Preferences window closing because the program is closing has no library to refresh.
+
+**Test.** `MainWindowCloseTests.Closing_the_window_with_preferences_open_closes_preferences_cleanly`, on the desktop
+and on the big screen: it opens Preferences, closes the main window and asserts Preferences closed without a fault.
+Without the fix the desktop case throws the exception above; on the toolkit before §90.7, the big-screen case fails
+because Preferences is still open.

@@ -674,7 +674,7 @@ What depends on the game, read after create:
 | **`audio`** | `rate` at start; `channels`: the names `set_mutes`' bits stand for |
 | **`ports`** | which controller each port holds |
 | **`spaces`** | `{ id, name, size, flags }`; `flags` an array of the strings `read_only`, `side_effects`, `reports_stores`, `cheats` (open, as any enumerated string). `size` and `battery`'s `length` are written by the crate from `space_size` and `battery`, and `state.kinds` from `SNAPSHOT`, so they cannot disagree with the exports (C14). The names are the C# oracle's where there is one (`MoonMachine.cs:17`), so the cheats and the debugger key on them as now |
-| `processors` | `{ id, name, pc_bits, registers: [{ name, bits }] }`, main processor first; `IDebugTarget.DebugCpus` and `regs` from data |
+| `processors` | `{ id, name, pc_bits, registers: [{ name, bits }], code_space }`, main processor first; `IDebugTarget.DebugCpus` and `regs` from data. `code_space`, appended 2026-10-04 for VenusRT's SPC700 (`VenusRT_Native.md` §36), is the id of the space the processor's code is listed from; absent, the host takes the space named `<name>BUS`, else `<name>PRG`, else for processor 0 the first space |
 | `battery` | `{ which, suffix, length }`: `.srm`, the N64's pak; the path rule stays the runtime's (`SaveLibrary.SramPathFor`) |
 | **`state`** | `{ format, version, kinds, loads_from }`: the magic and version a frontend records beside a state (`IStateFormat`), the kinds, and the versions it reads |
 | `phases` | the names `phases` reports, in order |
@@ -2363,7 +2363,13 @@ targets and codecs turning into the adapter's). The source was restored and the 
 **What it surfaced.** On `400f6087`, VenusRT asks for its sound unit's boot ROM as `required` and refuses a game
 without it ("the sound unit's 64-byte boot ROM, file 1, was not given"). That contradicts the firmware policy decided
 on 2026-10-03 (`EmuSen_Firmware.md` §0), which VenusRT's own work is bringing it to; the golden records the present
-answers, and the change that brings VenusRT under the policy re-records its lines. Venus (C#) gives the synthetic
+answers, and the change that brings VenusRT under the policy re-records its lines. *Re-recorded 2026-10-04*, when `WiseMan`'s
+VenusRT with its own SPC700 boot program (`b82c8e4e`) was merged in: in both worlds the four VenusRT lines of the
+request and the refusal became the 28 lines of a game loaded on the adapter, and no other line moved. The new lines show
+one thing worth a later look: on both synthetic SNES images the adapter copies an older build's save into the SNES
+folder at load (`BatterySave`'s copy-in, since the adapter opens file 0 for every game), and VenusRT, which tracks
+battery changes, writes nothing at the first `SaveSram`; Venus (C#) writes the cartridge's 2 KiB. Neither is wrong by
+§6.11, and §26's ports open file 0 only for a cartridge with battery RAM, as their oracles do. Venus (C#) gives the synthetic
 LoROM, whose header byte for SRAM is the image's fill, 128 KiB of battery RAM; that is the image's doing, not a defect.
 
 **What it cannot see.** A difference in the frame-end order (`EmuSen_NativeCores.md` §8.2, R4), anything a frame

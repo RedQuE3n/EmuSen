@@ -6,7 +6,7 @@ using SDL3;
 
 namespace EmuSen.WiseMan.Input
 {
-    // Every pad opened, hot-plugged and let go; player 1 is the first opened - see EmuSen_Settings_Reference.md §4.61.
+    // Every pad opened, hot-plugged and let go; each seated as a player - see EmuSen_Settings_Reference.md §4.61 and EmuSen_Input.md §8.
     public class GamepadManagerPadsTests
     {
         private static (GamepadManager Manager, SimulatedPads Devices, List<PadConnection> Changes) Start(params SimulatedPad[] pads)
@@ -50,9 +50,9 @@ namespace EmuSen.WiseMan.Input
             Assert.False(changes[1].Pad.IsOpen);
         }
 
-        // Player 1 is the first pad opened: the game's buttons and axes are read from it alone, as before any second pad existed.
+        // Player 1 is the first pad opened and player 2 the second; when player 1's goes, player 2 stays player 2 - see EmuSen_Input.md §8.2.
         [Fact]
-        public void The_game_reads_the_first_pad_alone_and_the_next_one_once_the_first_goes()
+        public void The_game_reads_each_players_pad_and_none_moves_up_when_the_first_goes()
         {
             SimulatedPad first = new() { Name = "First" }, second = new() { Name = "Second" };
             (GamepadManager manager, SimulatedPads devices, _) = Start(first, second);
@@ -62,6 +62,7 @@ namespace EmuSen.WiseMan.Input
             Assert.False(manager.IsPressed(PadButton.B));
             Assert.Equal(0, manager.Axis(PadAxis.LeftX));
             Assert.False(manager.IsRawPressed(SDL.GamepadButton.South));
+            Assert.True(manager.IsPressed(PadButton.B, 2));
 
             first.Press(SDL.GamepadButton.South);
             Assert.True(manager.IsPressed(PadButton.B));
@@ -69,8 +70,9 @@ namespace EmuSen.WiseMan.Input
             devices.Disconnect(first);
             manager.Poll();
             Assert.Equal("Second", manager.ControllerName);
-            Assert.True(manager.IsPressed(PadButton.B));
-            Assert.Equal(1, manager.Axis(PadAxis.LeftX), 3);
+            Assert.False(manager.IsPressed(PadButton.B));
+            Assert.True(manager.IsPressed(PadButton.B, 2));
+            Assert.Equal(1, manager.Axis(PadAxis.LeftX, 2), 3);
         }
 
         [Fact]

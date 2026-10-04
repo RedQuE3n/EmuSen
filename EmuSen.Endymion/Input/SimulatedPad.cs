@@ -10,7 +10,18 @@ namespace EmuSen.Endymion.Input
         private readonly HashSet<SDL.GamepadButton> _held = new();
         private readonly Dictionary<SDL.GamepadAxis, short> _axes = new();
 
+        private static int _made;
+
         public string Name { get; set; } = "Simulated pad";
+
+        // SDL's GUID is the model's, so two pads of one name share one unless a test says otherwise.
+        public string? Guid { get; set; }
+
+        // One per pad, as a USB port's; a test changes it to plug the pad in somewhere else.
+        public string? Path { get; set; } = $"/dev/input/simulated{System.Threading.Interlocked.Increment(ref _made)}";
+
+        // The player number SDL was last asked to light on it, or -1.
+        public int PlayerIndex { get; set; } = -1;
 
         // What SDL would say the pad is, from which the interface picks its button drawings - see EmuSen_Settings_Reference.md §4.52.
         public SDL.GamepadType Type { get; set; } = SDL.GamepadType.Unknown;

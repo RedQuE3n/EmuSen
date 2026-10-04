@@ -198,6 +198,8 @@ pub struct System {
     pub cart_irq: bool,
     /// ROM patches as a Game Genie makes them, (address, value, compare or `u32::MAX`); the host's, not in the state.
     pub patches: Vec<(u32, u8, u32)>,
+    /// The S-CPU's and DMA's stores as (space, offset, value) while a debugger watches them; not in the state.
+    pub stores: Option<Vec<(u32, u32, u8)>>,
 }
 
 impl System {
@@ -253,10 +255,11 @@ impl System {
             ppu: Ppu::default(),
             ppu_line: 0,
             dev: Devices::default(),
-            apu: Smp::new(None, pal),
+            apu: Smp::new(pal),
             io_writes: 0,
             cart_irq: false,
             patches: Vec::new(),
+            stores: None,
         }
     }
 
@@ -483,7 +486,38 @@ impl System {
         }
     }
 
+    /// A store as the debugger's spaces name it: the bus address always, and the WRAM or cartridge RAM byte it lands in.
+    #[cold]
+    fn note_store(&mut self, address: u32, value: u8) {
+        let (bank, offset) = ((address >> 16) as u8, address as u16);
+        let wram = if bank & 0xFE == 0x7E {
+            Some(address & 0x1_FFFF)
+        } else if bank & 0x40 == 0 && offset < 0x2000 {
+            Some(offset as u32)
+        } else if bank & 0x40 == 0 && offset == 0x2180 {
+            Some(self.wram_address)
+        } else {
+            None
+        };
+        let sram = match self.cart.decode(address) {
+            Some(Slot::Sram(i)) => Some(i as u32),
+            _ => None,
+        };
+        if let Some(log) = self.stores.as_mut() {
+            log.push((0, address & 0xFF_FFFF, value));
+            if let Some(at) = wram {
+                log.push((2, at, value));
+            }
+            if let Some(at) = sram {
+                log.push((6, at, value));
+            }
+        }
+    }
+
     pub(crate) fn write_value(&mut self, address: u32, value: u8) {
+        if self.stores.is_some() {
+            self.note_store(address, value);
+        }
         let bank = (address >> 16) as u8;
         let offset = address as u16;
         if self.cart.obc1.is_some() && crate::chips::obc1::Obc1::snes_maps(address) {

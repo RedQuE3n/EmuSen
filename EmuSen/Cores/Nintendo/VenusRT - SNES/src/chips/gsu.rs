@@ -58,6 +58,10 @@ pub struct Gsu {
     pub ram_address: u16,
     /// Master clocks the GSU has run.
     pub clock: u64,
+    /// The address the byte in `pipe` was fetched from, for the debugger; not in the state.
+    pub pipe_at: u16,
+    /// The debugger's seam, fitted for an observed frame only; not in the state.
+    pub probe: Option<Box<crate::probe::Probe>>,
 }
 
 /// fullsnes, "GSU Interrupt Vectors": what the S-CPU reads from ROM while the GSU owns it, by the address's low bits.
@@ -99,6 +103,8 @@ impl Gsu {
             pcf_ready: 0,
             ram_address: 0,
             clock: 0,
+            pipe_at: 0,
+            probe: None,
         }
     }
 
@@ -121,6 +127,16 @@ impl Gsu {
             _ => return None,
         };
         Some(mirror(at, size))
+    }
+
+    /// The GSU's own view of an address, for the debugger: ROM in banks 00h-5Fh, Game Pak RAM in 70h-71h.
+    pub fn peek(address: u32, rom: &[u8], ram: &[u8]) -> u8 {
+        let bank = (address >> 16) as usize & 0x7F;
+        if bank >= 0x70 {
+            Self::ram_index(ram, ((bank & 1) << 16) | (address as usize & 0xFFFF)).map_or(0, |i| ram[i])
+        } else {
+            Self::rom_at(address & 0x7F_FFFF, rom.len()).map_or(0, |o| rom[o])
+        }
     }
 
     fn ram_index(ram: &[u8], at: usize) -> Option<usize> {
@@ -283,6 +299,7 @@ impl Gsu {
     fn start(&mut self, rom: &[u8], ram: &[u8]) {
         self.sfr |= sfr::GO;
         self.pipe = self.code(self.r[15], rom, ram).0;
+        self.pipe_at = self.r[15];
         self.jumped = false;
     }
 
@@ -444,6 +461,7 @@ impl Gsu {
         self.r[15] = self.r[15].wrapping_add(1);
         let (next, cost) = self.code(self.r[15], rom, ram);
         self.pipe = next;
+        self.pipe_at = self.r[15];
         (v, cost)
     }
 
@@ -453,6 +471,11 @@ impl Gsu {
             if !self.running() {
                 self.clock = target;
                 return;
+            }
+            if let Some(p) = self.probe.as_mut() {
+                if p.before((self.pbr as u32) << 16 | self.pipe_at as u32) {
+                    return;
+                }
             }
             let cycles = self.step(rom, ram);
             self.clock += cycles * self.cycle();
@@ -469,6 +492,7 @@ impl Gsu {
         }
         let (next, mut cost) = self.code(self.r[15], rom, ram);
         self.pipe = next;
+        self.pipe_at = self.r[15];
         if self.pc_valid != 0 && self.pixel_block() != self.pc_offset {
             cost += self.pixel_flush();
         }
@@ -919,6 +943,7 @@ impl Gsu {
         self.lines = u32::from_le_bytes(b[19..23].try_into().expect("four bytes"));
         self.clock = u64::from_le_bytes(b[23..31].try_into().expect("eight bytes"));
         self.cache.copy_from_slice(&b[31..31 + 512]);
+        self.pipe_at = self.r[15];
         self.rom_ready = u64::from_le_bytes(b[543..551].try_into().expect("eight bytes"));
         self.ram_ready = u64::from_le_bytes(b[551..559].try_into().expect("eight bytes"));
         self.pcf_ready = u64::from_le_bytes(b[559..567].try_into().expect("eight bytes"));

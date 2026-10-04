@@ -114,6 +114,8 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         // Pad 1 alone; another port is ignored, as MercuryCore.SetButton ignores it.
         protected override int PortFor(int port) => port == 0 ? 0 : -1;
 
+        public int ControllerPorts => 1;
+
         // MercuryCore.LoadState's two refusals with its messages.
         protected override void CheckState(byte[] state)
         {

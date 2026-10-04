@@ -35,6 +35,8 @@ pub struct Sa1 {
     holds: Vec<(u64, u64, u8)>,
     log: Vec<(u64, u64, u8)>,
     horizon: u64,
+    /// The debugger's seam, fitted for an observed frame only; not in the state.
+    pub probe: Option<Box<crate::probe::Probe>>,
     /// The SA-1's own data bus, which unmapped reads return (absindx's RAM-protection notes).
     pub mdr: u8,
     pub ccnt: u8,
@@ -98,6 +100,7 @@ impl Sa1 {
             holds: Vec::new(),
             log: Vec::new(),
             horizon: 0,
+            probe: None,
             mdr: 0,
             ccnt: 0x20,
             sie: 0,
@@ -223,6 +226,39 @@ impl Sa1 {
             matches!(offset, 0x2200..=0x23FF | 0x3000..=0x37FF | 0x6000..=0xFFFF)
         } else {
             matches!(bank, 0x40..=0x4F) || bank >= 0xC0
+        }
+    }
+
+    /// The SA-1's own view of an address, for the debugger: I-RAM, BW-RAM and its bitmap view, ROM and the vectors it
+    /// supplies; its I/O and unmapped addresses read as its data bus stands, and nothing is changed.
+    pub fn peek(&self, address: u32, rom: &[u8], bw: &[u8]) -> u8 {
+        let bank = (address >> 16) as u8;
+        let offset = address as u16;
+        let open = self.mdr;
+        if bank & 0x40 == 0 {
+            match offset {
+                0x0000..=0x07FF | 0x3000..=0x37FF => self.iram[(offset & 0x7FF) as usize],
+                0x6000..=0x7FFF if self.bmap & 0x80 != 0 => self.bitmap_read(bw, ((self.bmap & 0x7F) as usize) << 13 | (offset as usize - 0x6000)),
+                0x6000..=0x7FFF => Self::bw_index(bw, ((self.bmap & 0x1F) as usize) << 13 | (offset as usize - 0x6000)).map_or(open, |i| bw[i]),
+                0x8000..=0xFFFF => match (bank & 0x7F, offset) {
+                    (0x00, 0xFFEA) => self.cnv as u8,
+                    (0x00, 0xFFEB) => (self.cnv >> 8) as u8,
+                    (0x00, 0xFFEE) => self.civ as u8,
+                    (0x00, 0xFFEF) => (self.civ >> 8) as u8,
+                    (0x00, 0xFFFC) => self.crv as u8,
+                    (0x00, 0xFFFD) => (self.crv >> 8) as u8,
+                    _ => self.rom_offset(address, rom.len()).map_or(open, |o| rom[o]),
+                },
+                _ => open,
+            }
+        } else if bank <= 0x5F {
+            Self::bw_index(bw, address as usize & 0x3_FFFF).map_or(open, |i| bw[i])
+        } else if (0x60..=0x6F).contains(&bank) {
+            self.bitmap_read(bw, address as usize & 0xF_FFFF)
+        } else if bank >= 0xC0 {
+            self.rom_offset(address, rom.len()).map_or(open, |o| rom[o])
+        } else {
+            open
         }
     }
 
@@ -654,6 +690,11 @@ impl Sa1 {
                 self.clock = target;
                 self.timer_check();
                 return;
+            }
+            if let Some(p) = self.probe.as_mut() {
+                if p.before((self.cpu.pbr as u32) << 16 | self.cpu.pc as u32) {
+                    return;
+                }
             }
             let mut cpu = self.cpu;
             {

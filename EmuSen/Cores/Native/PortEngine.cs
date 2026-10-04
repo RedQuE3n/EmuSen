@@ -158,7 +158,8 @@ namespace EmuSen.Cores.Native
             _ => new InvalidOperationException($"{_engine} refused: {Words(status)}."),
         };
 
-        public NativeDebugBridge Debug => _bridge;
+        // The mirror's bridge, in place of the adapter's own, which feeds the engine's registries rather than the mirror's.
+        public new NativeDebugBridge Debug => _bridge;
 
         // The instruction the processor is about to run, live, as the registry compares it.
         public int Pc => _bridge.ProgramCounter();
@@ -203,6 +204,9 @@ namespace EmuSen.Cores.Native
             _halted = false;
             Loaded(path);
         }
+
+        // The mirror's registries stay wired to the mirror's bridge; the adapter's own bridge is never attached.
+        protected override void AttachDebugger(CoreMachine machine) { }
 
         protected override BatterySave BatteryFile(string path, string console, uint which, string suffix) => which == 0 ? _battery : BatterySave.None;
 

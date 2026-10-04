@@ -99,7 +99,9 @@ namespace EmuSen.Mistress.Views
             if (!change.Connected) _padActive.Remove(change.Pad.Id);
             // The library's hint names the pad's buttons or the keyboard's, so the first pad in and the last out redraw it.
             if (_gamepad.Pads.Count == (change.Connected ? 1 : 0) && LibraryView.IsVisible && !ThemedLibraryShown) ShowLibraryEntries();
-            if (_appSettings.ControllerNotifications) PadNotice.Show($"{(change.Connected ? "Controller connected" : "Controller disconnected")}: {change.Pad.Name}");
+            // The player it took or keeps reserved, so a player knows the number without opening Preferences (EmuSen_Input.md §8.2).
+            string player = change.Player > 0 ? $" (Player {change.Player})" : "";
+            if (_appSettings.ControllerNotifications) PadNotice.Show($"{(change.Connected ? "Controller connected" : "Controller disconnected")}: {change.Pad.Name}{player}");
         }
     }
 }

@@ -47,7 +47,11 @@ namespace EmuSen.Cores.Native
         public IRealtimeProvider<IReadOnlyList<DebugAudioChannelInfo>> AudioChannels { get; } = Empty<DebugAudioChannelInfo>();
         public IRealtimeProvider<IReadOnlyList<DebugLoadInfo>> HardwareLoad { get; } = Empty<DebugLoadInfo>();
 
-        public void RefreshProviders() => CpuRegisters.Refresh();
+        public void RefreshProviders()
+        {
+            CpuRegisters.Refresh();
+            foreach (var cpu in DebugCpus.Skip(1)) cpu.Registers?.Refresh();
+        }
 
         public (byte[] Rgba, int Width, int Height) RenderTileSheet() => (Array.Empty<byte>(), 0, 0);
         public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => (Array.Empty<byte>(), 0, 0);
@@ -72,11 +76,51 @@ namespace EmuSen.Cores.Native
         public BreakpointRegistry Breakpoints => _engine.Breakpoints;
         public CheatRegistry Cheats => _engine.Cheats;
 
-        public IReadOnlyList<DebugCpu> DebugCpus => Processors().Select((p, i) => new DebugCpu(p.Name.ToLowerInvariant(), p.Name, i == 0 ? _engine.Breakpoints : new BreakpointRegistry())
+        // With DEBUG the bridge's registries, processor 0's at the target's level and the cartridge's as the coprocessor's.
+        public CoverageRegistry? Coverage => Halts ? _engine.Debug.Coverage.FirstOrDefault() : null;
+        public CallStackRegistry? CallStack => Halts ? _engine.Debug.CallStack : null;
+        public BreakpointRegistry? CoprocessorBreakpoints => EmuSen.DianaOS.DianaOS.Var.DebugCpus.Coprocessor(DebugCpus)?.Breakpoints;
+        public CoverageRegistry? CoprocessorCoverage => EmuSen.DianaOS.DianaOS.Var.DebugCpus.Coprocessor(DebugCpus)?.Coverage;
+        public LabelRegistry? Labels { get; } = new();
+        public IExpressionContext? Expressions => DebugCpus.Count > 0 ? DebugCpuExpressionContext.For(this, DebugCpus[0]) : null;
+
+        private bool Halts => _engine.Library.Has(CoreInterface.CapDebug) && _engine.IsRomLoaded;
+
+        private IReadOnlyList<DebugCpu>? _cpus;
+        private CoreMachine? _cpusOf;
+
+        // One a processor machine info names, by its name lowercased; with DEBUG each halts, keeps coverage, and the first keeps the call stack.
+        public IReadOnlyList<DebugCpu> DebugCpus
         {
-            Registers = i == 0 ? CpuRegisters : RegistersOf(p),
-            CanHalt = false,
-        }).ToArray();
+            get
+            {
+                CoreMachine? machine = _engine.IsRomLoaded ? _engine.Machine : null;
+                if (_cpus is not null && ReferenceEquals(_cpusOf, machine)) return _cpus;
+                _cpusOf = machine;
+                var bridge = _engine.Debug;
+                _cpus = Processors().Select((p, i) => new DebugCpu(p.Name.ToLowerInvariant(), p.Name, Halts && i < bridge.Breakpoints.Count ? bridge.Breakpoints[i] : i == 0 ? _engine.Breakpoints : new BreakpointRegistry())
+                {
+                    Registers = i == 0 ? CpuRegisters : RegistersOf(p),
+                    CanHalt = Halts,
+                    Coverage = Halts && i < bridge.Coverage.Count ? bridge.Coverage[i] : null,
+                    CallStack = Halts && i == 0 ? bridge.CallStack : null,
+                    CodeSpace = CodeSpaceOf(p),
+                    ProgramCounter = Halts ? () => bridge.ProgramCounter(p.Id) : null,
+                }).ToArray();
+                return _cpus;
+            }
+        }
+
+        // The space a processor's code is listed from: the one machine info names, else by name, its bus ("<name>BUS"), its program ("<name>PRG"), or the first space.
+        private string? CodeSpaceOf(CoreProcessor p)
+        {
+            if (!_engine.IsRomLoaded) return null;
+            var spaces = _engine.Machine.Info.Spaces;
+            return (spaces.FirstOrDefault(s => p.CodeSpace is { } id && s.Id == id)
+                ?? spaces.FirstOrDefault(s => string.Equals(s.Name, p.Name + "BUS", StringComparison.OrdinalIgnoreCase))
+                ?? spaces.FirstOrDefault(s => string.Equals(s.Name, p.Name + "PRG", StringComparison.OrdinalIgnoreCase))
+                ?? (p.Id == 0 ? spaces.FirstOrDefault() : null))?.Name;
+        }
 
         // DEBUG_DISASSEMBLE's records for processor 0 over the space named; empty for a core without it.
         public IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count)

@@ -22,6 +22,13 @@ namespace EmuSen.Endymion.Input
         string? Name(IntPtr pad);
         SDL.GamepadType Type(IntPtr pad);
         SDL.GamepadButtonLabel Label(IntPtr pad, SDL.GamepadButton button);
+
+        // What a pad is and where it is plugged in, by which a pad back after a disconnect finds its player - see EmuSen_Input.md §8.
+        string Guid(IntPtr pad);
+        string? Path(IntPtr pad);
+
+        // Lights the player number on a pad that has one; most have none, and SDL ignores them.
+        void SetPlayerIndex(IntPtr pad, int index);
     }
 
     // The real devices, through SDL3.
@@ -58,5 +65,15 @@ namespace EmuSen.Endymion.Input
         public SDL.GamepadType Type(IntPtr pad) => SDL.GetGamepadType(pad);
 
         public SDL.GamepadButtonLabel Label(IntPtr pad, SDL.GamepadButton button) => SDL.GetGamepadButtonLabel(pad, button);
+
+        // SDL3-CS's GUIDToString faults, so the sixteen bytes are written out here in SDL's own order.
+        public string Guid(IntPtr pad) => GuidText(SDL.GetJoystickGUID(SDL.GetGamepadJoystick(pad)));
+
+        public static string GuidText(SDL.GUID guid) =>
+            Convert.ToHexString(System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(ref guid, 1))).ToLowerInvariant();
+
+        public string? Path(IntPtr pad) => SDL.GetGamepadPath(pad) is { Length: > 0 } path ? path : null;
+
+        public void SetPlayerIndex(IntPtr pad, int index) => SDL.SetGamepadPlayerIndex(pad, index);
     }
 }

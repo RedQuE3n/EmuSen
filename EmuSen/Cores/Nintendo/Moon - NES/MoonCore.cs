@@ -222,9 +222,14 @@ namespace EmuSen.Cores.Nintendo.Moon
 
         public short[] DequeueAudioSamples(int maxFrames) => Apu?.Drain(maxFrames) ?? Array.Empty<short>();
 
+        // The two ports on the console's front; the Four Score is not modelled - see EmuSen_Input.md §8.1.
+        public const int Ports = 2;
+
+        public int ControllerPorts => Ports;
+
         public void SetButton(int port, NesButton button, bool pressed)
         {
-            var controller = port == 0 ? Bus?.Controller1 : Bus?.Controller2;
+            var controller = port switch { 0 => Bus?.Controller1, 1 => Bus?.Controller2, _ => null };
             controller?.SetButton(button, pressed);
         }
 

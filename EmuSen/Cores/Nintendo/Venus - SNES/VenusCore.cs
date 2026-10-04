@@ -126,9 +126,14 @@ namespace EmuSen.Cores.Nintendo.Venus
 
         // Venus's own ports are 1-based, so the generic 0-based port shifts here.
         // A button past R has no SnesButton to cast to, so it is dropped before the cast rather than landing out of range.
+        // The two ports on the console's front; a multitap is not modelled - see EmuSen_Input.md §8.1.
+        public const int Ports = 2;
+
+        public int ControllerPorts => Ports;
+
         public void SetButton(int port, PadButton button, bool pressed)
         {
-            if (button > PadButton.R) return;
+            if (button > PadButton.R || port is < 0 or >= Ports) return;
             Bus?.Input.SetButton((Controllers.SnesButton)button, pressed, port + 1);
         }
 

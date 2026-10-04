@@ -19,7 +19,11 @@ For every emulator the project builds, present and future:
    (§5); the unofficial BIOS collections hosted online are unauthorised copies and are not a source.
 
 Each replacement states its accuracy cost in its core's documentation and in the core's info, as any performance
-setting does. The rule does not bind a foreign core (`EmuSen_CoreAPI.md` §6.2). The first cases are VenusRT's SPC700
+setting does. Each also states how much of the original it repeats, measured by
+`EmuSen.WiseMan/Reference/analysis/firmwarecheck.py <replacement> <original>`: the bytes equal at the same offset and
+the longest run common to both at any offsets, by default at most 25% and no run over 6 bytes
+(`EmuSen_Debugging_Tools_Reference_v5.md` §3.61). The tool prints numbers and offsets only. The original it compares
+against is kept outside the repository, in the core's probe cache, and nothing else reads it. The rule does not bind a foreign core (`EmuSen_CoreAPI.md` §6.2). The first cases are VenusRT's SPC700
 boot program and its NEC DSP chips (`VenusRT_Native.md`).
 
 ---

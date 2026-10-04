@@ -6,12 +6,15 @@
 
 pub mod apu;
 pub mod cpu;
+pub mod debugger;
+pub mod disasm;
 pub mod bus;
 pub mod cart;
 pub mod chips;
 pub mod ffi;
 pub mod machine;
 pub mod ppu;
+pub mod probe;
 pub mod scpu;
 pub mod state;
 pub mod v1;

@@ -60,10 +60,18 @@ pub struct Smp {
     /// The timers' first stages, one for timers 0 and 1 and one for timer 2, counting toward 384 and 48 (D-27).
     pub prescale: [u16; 2],
     pub ratio: (u64, u64),
+    /// The boot program mapped at $FFC0-$FFFF: VenusRT's own (D-38), or the player's 64-byte image, `boot_file`.
+    pub boot: [u8; 64],
+    pub boot_file: bool,
 }
 
 impl Smp {
     pub fn new(pal: bool) -> Smp {
+        Smp::with_boot(pal, None)
+    }
+
+    /// The S-SMP from power-on with the player's boot image in place of VenusRT's own, when one is given.
+    pub fn with_boot(pal: bool, image: Option<[u8; 64]>) -> Smp {
         let mut s = Smp {
             cpu: Spc700::default(),
             ram: vec![0; 0x10000].into(),
@@ -84,8 +92,10 @@ impl Smp {
             cycles: 0,
             prescale: [0; 2],
             ratio: if pal { PAL_RATIO } else { NTSC_RATIO },
+            boot: image.unwrap_or(BOOT),
+            boot_file: image.is_some(),
         };
-        s.cpu.pc = u16::from_le_bytes([BOOT[62], BOOT[63]]);
+        s.cpu.pc = u16::from_le_bytes([s.boot[62], s.boot[63]]);
         // D-6: the reset sequence is the BRK's cycles with its writes held off; nothing it reads has an effect.
         for _ in 0..RESET_CYCLES {
             s.tick();
@@ -336,7 +346,7 @@ impl spc700::Bus for Peek<'_> {
             0x00F8 | 0x00F9 => s.aux[(address - 0xF8) as usize],
             0x00FD..=0x00FF => s.timers[(address - 0xFD) as usize].out,
             0x00F0..=0x00FF => 0,
-            0xFFC0..=0xFFFF if s.control & 0x80 != 0 => BOOT[(address - 0xFFC0) as usize],
+            0xFFC0..=0xFFFF if s.control & 0x80 != 0 => s.boot[(address - 0xFFC0) as usize],
             _ => s.ram[address as usize],
         }
     }
@@ -359,7 +369,7 @@ impl spc700::Bus for Smp {
         self.tick();
         let v = match address {
             0x00F0..=0x00FF => self.io_read(address),
-            0xFFC0..=0xFFFF if self.control & 0x80 != 0 => BOOT[(address - 0xFFC0) as usize],
+            0xFFC0..=0xFFFF if self.control & 0x80 != 0 => self.boot[(address - 0xFFC0) as usize],
             _ => self.ram[address as usize],
         };
         self.timer_step();

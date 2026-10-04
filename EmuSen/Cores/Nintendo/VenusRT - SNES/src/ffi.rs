@@ -24,6 +24,10 @@ impl NativeCore for Machine {
             return Err(abi::status::UNKNOWN_SETTING);
         }
         let mut m = Machine::load_rom(image).map_err(|_| STATUS_IMAGE_TOO_SHORT)?;
+        // File 1 is the player's SPC700 boot image, used in place of VenusRT's own program (D-38).
+        if let Some(f) = files.iter().find(|f| f.which == 1) {
+            m.attach_boot(f.data.try_into().map_err(|_| abi::status::BAD_FILE)?);
+        }
         // File 2 is the DSP's firmware whole, or its program with file 3 its data.
         let program = files.iter().find(|f| f.which == 2).map(|f| f.data);
         let data = files.iter().find(|f| f.which == 3).map(|f| f.data);
@@ -42,7 +46,7 @@ impl NativeCore for Machine {
             None => {}
         }
         for file in files {
-            if file.which == 1 || file.which > 3 {
+            if file.which > 3 {
                 return Err(abi::status::BAD_FILE);
             }
             if file.which != 0 {
@@ -275,7 +279,8 @@ mod tests {
         let image = crate::machine::tests::rom(&[0x80, 0xFE]);
         assert_eq!(Machine::create(&image[..0x4000], &Settings::default(), &[]).err(), Some(STATUS_IMAGE_TOO_SHORT));
         assert_eq!(Machine::create(&image, &Settings::parse(b"SampleRate=48000").unwrap(), &[]).err(), Some(abi::status::UNKNOWN_SETTING));
-        assert_eq!(Machine::create(&image, &Settings::default(), &[File { which: 1, data: &[0; 64] }]).err(), Some(abi::status::BAD_FILE));
+        assert_eq!(Machine::create(&image, &Settings::default(), &[File { which: 1, data: &[0; 63] }]).err(), Some(abi::status::BAD_FILE));
+        assert!(Machine::create(&image, &Settings::default(), &[File { which: 1, data: &[0; 64] }]).unwrap().sys.apu.boot_file);
         assert_eq!(Machine::create(&image, &Settings::default(), &[File { which: 2, data: &[1] }]).err(), Some(abi::status::BAD_FILE));
         let mut m = Machine::create(&image, &Settings::default(), &[File { which: 0, data: &[1, 2] }]).unwrap();
         assert_eq!(m.sys.apu.cpu.pc, 0xFFC0);

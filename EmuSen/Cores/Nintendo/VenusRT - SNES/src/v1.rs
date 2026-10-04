@@ -48,6 +48,21 @@ fn dsp(named: Option<(&str, u64)>) -> Firmware {
     Firmware { which: 2, name, label, size, required: false, parts, replacement: Some(replacement(named.map(|(stem, _)| stem))) }
 }
 
+/// The SPC700's boot program as file 1, never required: without it VenusRT runs its own (D-38, VenusRT_Native.md §35).
+fn boot() -> Firmware {
+    Firmware {
+        which: 1,
+        name: "spc700.rom".into(),
+        label: "The SPC700's boot program (64 bytes)".into(),
+        size: 64,
+        required: false,
+        parts: vec![vec!["spc700.rom".into()]],
+        replacement: Some(Replacement::Accuracy {
+            cost: "Without the image, VenusRT's own boot program runs: a program reading $FFC0-$FFFF with the boot ROM mapped sees other bytes than a console's, and the upload handshake can take some cycles more (VenusRT_Native.md §35.3).".into(),
+        }),
+    }
+}
+
 /// What running without the image costs, chip by chip (VenusRT_DspHle.md §5.5), in words a player reads.
 fn replacement(stem: Option<&str>) -> Replacement {
     let partial = |chip: &str, exact: &str| Replacement::Accuracy {
@@ -120,17 +135,18 @@ impl Machine {
         }
     }
 
-    /// Which path the cartridge's NEC DSP runs on, for machine info; nothing for a cartridge without one.
+    /// Which path the SPC700's boot program and the cartridge's NEC DSP, if it has one, run on, for machine info.
     fn firmware_sources(&self) -> Vec<(u32, FirmwareSource)> {
+        let boot = (1, if self.sys.apu.boot_file { FirmwareSource::File } else { FirmwareSource::Replacement });
         if !self.sys.cart.wants_dsp() && self.sys.cart.dsp.is_none() {
-            return Vec::new();
+            return vec![boot];
         }
         let source = match self.sys.cart.dsp.as_ref().map(|(d, _)| d.tag()) {
             Some(0) => FirmwareSource::File,
             Some(_) => FirmwareSource::Replacement,
             None => FirmwareSource::Absent,
         };
-        vec![(2, source)]
+        vec![boot, (2, source)]
     }
 
     /// The battery file's bytes: the ST01x's RAM, or the cartridge's RAM.
@@ -150,7 +166,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The SNES in Rust, written from hardware documents and graded by test ROMs. Its SPC700 boot program is its own, so no firmware file is needed: a program reading $FFC0-$FFFF with the boot ROM mapped sees other bytes than a console's, and the boot handshake's timing can differ by some cycles.".into()),
+            description: Some("The SNES in Rust, written from hardware documents and graded by test ROMs. Its SPC700 boot program is its own, so no firmware file is needed, and the player's spc700.rom is used in its place when present. With its own program, a program reading $FFC0-$FFFF with the boot ROM mapped sees other bytes than a console's, and the boot handshake's timing can differ by some cycles.".into()),
             systems: vec![System {
                 id: "snes".into(),
                 name: "Super Nintendo Entertainment System".into(),
@@ -163,7 +179,7 @@ impl Core for Machine {
                     buttons: BUTTONS.iter().enumerate().map(|(bit, &(c, label))| Button { bit: bit as u32, control: Some(c), label: label.into() }).collect(),
                     axes: Vec::new(),
                 }],
-                firmware: vec![dsp(None)],
+                firmware: vec![boot(), dsp(None)],
             }],
             deterministic: true,
             ..Info::default()
@@ -174,11 +190,11 @@ impl Core for Machine {
         // The headers' scores alone first: only an image with a NEC DSP's chipset among its candidates is loaded whole.
         let rom = if image.len() % 1024 == 512 { &image[512..] } else { image };
         if !crate::cart::candidates(rom).iter().any(|h| matches!(h.chipset, 0x03..=0x05 | 0xF6)) {
-            return Vec::new();
+            return vec![boot()];
         }
         match crate::cart::Cartridge::new(image).and_then(|c| c.nec_firmware()) {
-            Some(named) => vec![dsp(Some(named))],
-            None => Vec::new(),
+            Some(named) => vec![boot(), dsp(Some(named))],
+            None => vec![boot()],
         }
     }
 
@@ -407,7 +423,7 @@ impl Core for Machine {
         let machine = std::cell::RefCell::new(self);
         let read = |a: u32| {
             if boot && (0xFFC0..=0xFFFF).contains(&a) {
-                return crate::apu::boot::BOOT[(a - 0xFFC0) as usize];
+                return machine.borrow().sys.apu.boot[(a - 0xFFC0) as usize];
             }
             let mut byte = [0u8];
             let _ = NativeCore::space_read(&mut **machine.borrow_mut(), space, a, &mut byte);
@@ -473,14 +489,14 @@ mod tests {
     // The NEC DSP named from the header and title by fullsnes's list of games; nothing for a game without one (D-38).
     #[test]
     fn the_firmware_is_named_from_the_header_and_title() {
-        assert!(named(b"SUPER MARIO WORLD", 0x02).is_empty());
-        assert_eq!(named(b"PILOTWINGS", 0x03), ["2 dsp1.rom 8192"]);
-        assert_eq!(named(b"SUPER MARIO KART", 0x05), ["2 dsp1b.rom 8192"]);
-        assert_eq!(named(b"DUNGEON MASTER", 0x03), ["2 dsp2.rom 8192"]);
-        assert_eq!(named(b"TOP GEAR 3000", 0x03), ["2 dsp4.rom 8192"]);
-        assert_eq!(named(b"F1 ROC II", 0xF6), ["2 st010.rom 53248"]);
-        assert_eq!(named(b"MORITA SHOGI", 0xF6), ["2 st011.rom 53248"]);
-        assert!(<Machine as Core>::info().systems[0].firmware.iter().all(|f| f.which >= 2));
+        assert_eq!(named(b"SUPER MARIO WORLD", 0x02), ["1 spc700.rom 64"]);
+        assert_eq!(named(b"PILOTWINGS", 0x03), ["1 spc700.rom 64", "2 dsp1.rom 8192"]);
+        assert_eq!(named(b"SUPER MARIO KART", 0x05)[1], "2 dsp1b.rom 8192");
+        assert_eq!(named(b"DUNGEON MASTER", 0x03)[1], "2 dsp2.rom 8192");
+        assert_eq!(named(b"TOP GEAR 3000", 0x03)[1], "2 dsp4.rom 8192");
+        assert_eq!(named(b"F1 ROC II", 0xF6)[1], "2 st010.rom 53248");
+        assert_eq!(named(b"MORITA SHOGI", 0xF6)[1], "2 st011.rom 53248");
+        assert!(<Machine as Core>::info().systems[0].firmware.iter().all(|f| f.which >= 1));
     }
 
     // A DSP's firmware whole as file 2, or as its program in file 2 and its data in file 3; the data alone is refused.
@@ -518,19 +534,40 @@ mod tests {
             let doc = emusen_native::core::desc::firmware_json(&list);
             assert_eq!(emusen_native::core::schema::validate(emusen_native::core::schema::FIRMWARE, &doc), Vec::<String>::new());
         }
-        assert!(matches!(<Machine as Core>::firmware_for(&dsp_cartridge(b"TOP GEAR 3000", 0x03))[0].replacement, Some(Replacement::None { .. })));
+        assert!(matches!(<Machine as Core>::firmware_for(&dsp_cartridge(b"TOP GEAR 3000", 0x03))[1].replacement, Some(Replacement::None { .. })));
         assert!(<Machine as Core>::info().systems[0].firmware.iter().all(|f| !f.required && f.replacement.is_some()));
         let kart = create(&dsp_cartridge(b"SUPER MARIO KART", 0x05), Vec::new()).unwrap();
         assert_eq!(kart.sys.cart.dsp.as_ref().map(|(d, _)| d.tag()), Some(1));
-        assert_eq!(Core::machine_info(&kart).firmware, vec![(2, FirmwareSource::Replacement)]);
+        assert_eq!(Core::machine_info(&kart).firmware, vec![(1, FirmwareSource::Replacement), (2, FirmwareSource::Replacement)]);
         assert!(!Core::machine_info(&kart).processors.iter().any(|p| p.name == "DSP"));
         let image = vec![0u8; 8192];
         let lle = create(&dsp_cartridge(b"SUPER MARIO KART", 0x05), vec![File { which: 2, data: &image }]).unwrap();
-        assert_eq!(Core::machine_info(&lle).firmware, vec![(2, FirmwareSource::File)]);
+        assert_eq!(Core::machine_info(&lle).firmware, vec![(1, FirmwareSource::Replacement), (2, FirmwareSource::File)]);
         let tg = create(&dsp_cartridge(b"TOP GEAR 3000", 0x03), Vec::new()).unwrap();
         assert!(tg.sys.cart.dsp.is_none());
-        assert_eq!(Core::machine_info(&tg).firmware, vec![(2, FirmwareSource::Absent)]);
-        assert!(Core::machine_info(&machine()).firmware.is_empty());
+        assert_eq!(Core::machine_info(&tg).firmware, vec![(1, FirmwareSource::Replacement), (2, FirmwareSource::Absent)]);
+        assert_eq!(Core::machine_info(&machine()).firmware, vec![(1, FirmwareSource::Replacement)]);
+    }
+
+    // EmuSen_Firmware.md §0: a 64-byte file 1 is the player's boot image, mapped at $FFC0-$FFFF in place of VenusRT's
+    // own program and kept across reset; a synthetic image here, which parks the SPC700 at its own vector.
+    #[test]
+    fn the_players_boot_image_replaces_the_open_program() {
+        let mut image = [0u8; 64];
+        image[0] = 0x2F;
+        image[1] = 0xFE;
+        (image[62], image[63]) = (0xC0, 0xFF);
+        let rom = crate::machine::tests::rom(&[0x80, 0xFE]);
+        let mut m = create(&rom, vec![File { which: 1, data: &image }]).unwrap();
+        assert_eq!(Core::machine_info(&m).firmware, vec![(1, FirmwareSource::File)]);
+        Core::advance(&mut m, &mut 0).unwrap();
+        assert_eq!(m.sys.apu.cpu.pc, 0xFFC0, "the image's loop at its vector");
+        let mut b = [0u8; 2];
+        NativeCore::space_read(&mut m, 0, 0x2140, &mut b).unwrap();
+        assert_ne!(b, [0xAA, 0xBB], "VenusRT's own program would have signalled ready");
+        Core::reset(&mut m).unwrap();
+        assert!(m.sys.apu.boot_file && m.sys.apu.boot == image);
+        assert!(!create(&rom, Vec::new()).unwrap().sys.apu.boot_file);
     }
 
     // A state names the engine that wrote it, and the other engine refuses it with its own status.

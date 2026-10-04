@@ -2965,7 +2965,8 @@ withdrawn here. The NEC DSP firmware (files 2 and 3) is unchanged.
   $FFC0-$FFFF while CONTROL bit 7 is set, and the SPC700 always runs: the `Option` that let it stand still without a
   boot ROM is gone.
 - **The interface.** `create` takes no file 1 and refuses one as `BAD_FILE`, since the number no longer names
-  anything. Status -10 and its words are removed from the core, `status_text` and the shim. `info()` lists only the
+  anything (*superseded 2026-10-04 by §38.4*: file 1 is again the player's optional image). Status -10 and its words
+  are removed from the core, `status_text` and the shim. `info()` lists only the
   NEC DSP's file, and `firmware_for` answers an empty list for a cartridge without a NEC DSP. The core info's
   description states the accuracy cost below.
 - **No dependence on the console's image.** The examples' loader, the WiseMan SNES harness
@@ -3425,11 +3426,11 @@ fullsnes fixes answer exactly. Steps 3 to 11 fill it in command by command again
 
 | Check | Result |
 |---|---|
-| The crate's tests, with the tester's images | 107 of 107, eight new. `the_replacements_rom_version_agrees_with_the_image`: the replacement's 2Fh gives the same values and transfers as the DSP-1's and DSP-1B's images, and 41h is passed over on both. Latency is not compared until step 3 |
+| The crate's tests, with the tester's images | 108 of 108, nine new with §38.4's. `the_replacements_rom_version_agrees_with_the_image`: the replacement's 2Fh gives the same values and transfers as the DSP-1's and DSP-1B's images, and 41h is passed over on both. Latency is not compared until step 3 |
 | emusen-native, the conformance kit's tests, the ABI check | 51, 9, and 382 facts agreeing with the header on four triples and the baseline |
-| The kit against VenusRT with no files: Super Mario Kart, Pilotwings, Dungeon Master, F1 ROC II, Top Gear 3000, 300 frames | compliant on all five; C4 notes "every firmware entry optional (1): created with no files". The first Super Mario Kart run failed C15: a debug-armed run's state differed from a plain one, because `run_to` made only one due edge per catch-up. It now makes every due edge |
+| The kit against VenusRT with no files: Super Mario Kart, Pilotwings, Dungeon Master, F1 ROC II, Top Gear 3000, 300 frames, and after §38.4 Super Mario Kart and Super Mario World, and Super Mario World with the tester's boot image as file 1 | compliant on every one; C4 notes "every firmware entry optional (1): created with no files". The first Super Mario Kart run failed C15: a debug-armed run's state differed from a plain one, because `run_to` made only one due edge per catch-up. It now makes every due edge |
 | The games without an image at frame 1,500, by eye | Super Mario Kart's title, Pilotwings' menu, F1 ROC II's race, Dungeon Master's opening text, all drawn. Their 3D results are zeros, so play is wrong where a game computes with its chip |
-| WiseMan | the VenusRt, CoreAdapter, Firmware, NecDsp, CoreAbi, CoreDiscovery, NativeHost, CoreDebug and Conform filters, 228 of 228. Among them are the new `A_dsp_cartridge_runs_on_the_replacement_with_no_firmware` (no request missing, the replacement's tag in the state, machine info's `replacement`, and the notice; a DSP-4 cartridge `absent`) and the revised `An_ordinary_game_on_venusrt_prompts_for_no_firmware`, in which neither game asks and the DSP-1 cartridge loads with the notice |
+| WiseMan, each run under an 8 GB cap | the Mistress suite, 1,641 passed and 51 skipped, before §38.4; after it, the VenusRt, CoreAdapter, Firmware, NecDsp, CoreAbi, CoreDiscovery, NativeHost, CoreDebug, Conform, MainWindowLibrary and WindowFitAudit filters, 319 of 319. Among them are the new `A_dsp_cartridge_runs_on_the_replacement_with_no_firmware` (no request missing, the replacement's tag in the state, machine info's `replacement`, and the notice; a DSP-4 cartridge `absent`), `A_players_boot_image_runs_in_place_of_the_open_program` and the revised `An_ordinary_game_on_venusrt_prompts_for_no_firmware`, in which neither game asks and the DSP-1 cartridge loads with the notice |
 
 ### 38.3 What is open
 
@@ -3440,3 +3441,37 @@ fullsnes fixes answer exactly. Steps 3 to 11 fill it in command by command again
 - **The DSP-2's lengths** are characterised at step 9. Until then Dungeon Master's walls are not drawn.
 - **Plan §7.3's firmware window**, which lists each entry with its replacement's effect, is not built. The status line
   is the notice.
+
+### 38.4 The player's SPC700 boot image, file 1 again
+
+*Decided 2026-10-04* (`EmuSen_Firmware.md` §0, point 2: the player's own image is used in place of the replacement when
+present). §35 withdrew file 1 outright. It returns the way the NEC DSPs' files do, and D-38's program is unchanged.
+
+- **The interface.**
+  - `firmware_for` lists `spc700.rom` for every image: 64 bytes, `required: false`, never prompted for, with
+    `replacement: { effect: accuracy }` and §35.3's cost in a player's words.
+  - Core info lists it too.
+  - `create` takes a 64-byte file 1 and refuses any other length with `BAD_FILE`.
+  - Machine info's `firmware` gives `{ which: 1, source: file }` or `replacement`.
+  - A frontend finds the file in its firmware folder like any other; Mistress's status line names the open program
+    when no file is there, and a DSP's line first when both apply.
+- **The core.** `Smp::with_boot` maps the image at $FFC0-$FFFF in place of `apu/boot.rs`'s program and starts from its
+  reset vector. The console's reset button keeps it, and the debugger's disassembly reads it while CONTROL maps it. The
+  examples take it from `EMUSEN_VENUSRT_BOOT`.
+- **The tests** use a synthetic 64-byte image, a loop at its own vector, for the path with a file. No image is
+  committed.
+
+**Measured 2026-10-04**, with the tester's own image from the probe cache as the input (the core reads it; its bytes
+were not inspected):
+
+| Check | VenusRT's own program | The tester's image |
+|---|---|---|
+| blargg `spc_smp`, the backdrop at frames 600, 1,800 and 3,600 | red from 1,800: Failed ("CPU/verify IPL ROM", §35.3) | blue at 3,600: **Passed** |
+| blargg `spc_timer`, `spc_mem_access_times` | Passed | Passed |
+| spc_dsp6's 111 tests singly, 600 frames, §30.2's grading | 104 pass, 1 fails, 6 hang | **106 pass, 5 hang**, §30.2's result before D-38 |
+| "Misc/brr addr wrap-around" | fails | passes |
+| "Order/voice 0 noise" | hangs | passes |
+
+With the console's program, VenusRT returns to its §30.2 results. **§35.5's argument stands with this evidence**:
+the two spc_dsp6 tests are a sensitivity of VenusRT's to the boot program's timing, not a fault in the open
+program's protocol. The open program remains the default, and these two tests and `spc_smp` are its named cost.

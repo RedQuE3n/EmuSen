@@ -133,7 +133,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Empty(EmuSen.Common.EmulatorSession.MissingFirmwareFor(rom, Engine));
             using var engine = new CoreEngine(found.Open()!);
             engine.LoadRom(rom);
-            Assert.Equal(new[] { new CoreFirmwareSource(2, "replacement") }, engine.Machine.Info.Firmware);
+            Assert.Equal(new[] { new CoreFirmwareSource(1, "replacement"), new CoreFirmwareSource(2, "replacement") }, engine.Machine.Info.Firmware);
             Assert.DoesNotContain(engine.Machine.Info.Processors, p => p.Name == "DSP");
             Assert.Contains("Coprocessor.DspHle", engine.Machine.Layout(0));
             Assert.StartsWith("VenusRT's open replacement for dsp1b.rom - Without the image", engine.FirmwareNotice);
@@ -141,8 +141,30 @@ namespace EmuSen.WiseMan.Cores
             File.WriteAllBytes(gear, SyntheticRom.BuildNecDsp("TOP GEAR 3000"));
             Assert.Empty(EmuSen.Common.EmulatorSession.MissingFirmwareFor(gear, Engine));
             engine.LoadRom(gear);
-            Assert.Equal(new[] { new CoreFirmwareSource(2, "absent") }, engine.Machine.Info.Firmware);
+            Assert.Equal(new[] { new CoreFirmwareSource(1, "replacement"), new CoreFirmwareSource(2, "absent") }, engine.Machine.Info.Firmware);
             Assert.EndsWith("dsp4.rom would supply the chip.", engine.FirmwareNotice);
+        }
+
+        // EmuSen_Firmware.md §0: a player's spc700.rom in the folder is passed as file 1 and runs in place of VenusRT's own boot program; a synthetic image, never a dump.
+        [Fact]
+        public void A_players_boot_image_runs_in_place_of_the_open_program()
+        {
+            if (Discovered is not { } found) return;
+            string rom = Path.Combine(_root, "plain.sfc");
+            File.WriteAllBytes(rom, SyntheticRom.BuildNecDsp("PLAIN", cartType: 0x00));
+            using var engine = new CoreEngine(found.Open()!);
+            var request = engine.GetFirmwareRequirements(rom).Single();
+            Assert.Equal(("spc700.rom", 64, false, "accuracy"), (request.FileName, request.Size, request.Required, request.ReplacementEffect));
+            engine.LoadRom(rom);
+            Assert.Equal(new[] { new CoreFirmwareSource(1, "replacement") }, engine.Machine.Info.Firmware);
+            Assert.StartsWith("VenusRT's open replacement for spc700.rom", engine.FirmwareNotice);
+            byte[] image = new byte[64];
+            (image[0], image[1], image[62], image[63]) = (0x2F, 0xFE, 0xC0, 0xFF);
+            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, "spc700.rom"), image);
+            engine.LoadRom(rom);
+            Assert.Equal(new[] { new CoreFirmwareSource(1, "file") }, engine.Machine.Info.Firmware);
+            Assert.Null(engine.FirmwareNotice);
+            Assert.Empty(EmuSen.Common.EmulatorSession.MissingFirmwareFor(rom, Engine));
         }
 
         // A DSP's firmware found whole or as its program and data pair, the pair passed as files 2 and 3, and nothing missing on VenusRT, which needs none; synthetic bytes, not a dump.

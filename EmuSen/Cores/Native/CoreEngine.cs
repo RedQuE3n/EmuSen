@@ -135,12 +135,12 @@ namespace EmuSen.Cores.Native
                 Parts = f.Parts, Required = f.Required, ReplacementEffect = f.Replacement?.Effect, ReplacementCost = f.Replacement?.Cost,
             };
 
-        // One line for the status bar when a file runs on a replacement short of exact, or is absent with none - see VenusRT_DspHle.md §7.3.
+        // One line for the status bar when a file runs on a replacement short of exact, or is absent with none, the last such file first - see VenusRT_DspHle.md §7.3.
         public string? FirmwareNotice { get; private set; }
 
         private string? NoticeFor(CoreMachine machine, IReadOnlyList<CoreFirmware> wanted)
         {
-            foreach (CoreFirmwareSource used in machine.Info.Firmware)
+            foreach (CoreFirmwareSource used in machine.Info.Firmware.Reverse())
             {
                 if (wanted.FirstOrDefault(f => f.Which == used.Which) is not { } f || f.Replacement is not { } r || r.Effect == "exact") continue;
                 if (used.Source == "replacement") return $"{Info.Name}'s open replacement for {f.Name} - {r.Cost}";

@@ -66,6 +66,11 @@ impl Machine {
         true
     }
 
+    /// The player's SPC700 boot image in place of VenusRT's own program, from power-on (`EmuSen_Firmware.md` §0).
+    pub fn attach_boot(&mut self, image: [u8; 64]) {
+        self.sys.apu = crate::apu::smp::Smp::with_boot(self.sys.timing.pal, Some(image));
+    }
+
     /// Fits VenusRT's open replacement for the program the cartridge names, where one exists (VenusRT_DspHle.md §7.1).
     pub fn attach_replacement(&mut self) -> bool {
         let Some(program) = self.sys.cart.nec_firmware().and_then(|(stem, _)| crate::chips::dsphle::Program::for_stem(stem)) else { return false };
@@ -134,7 +139,7 @@ impl Machine {
         if let (Some(a), Some(b)) = (&old.cart.sa1, m.sys.cart.sa1.as_mut()) {
             b.iram.copy_from_slice(&a.iram);
         }
-        m.sys.apu = crate::apu::smp::Smp::new(old.timing.pal);
+        m.sys.apu = crate::apu::smp::Smp::with_boot(old.timing.pal, old.apu.boot_file.then_some(old.apu.boot));
         m.sys.apu.ram.copy_from_slice(&old.apu.ram);
         m.sys.timing.frame = old.timing.frame;
         m.sys.patches = std::mem::take(&mut old.patches);

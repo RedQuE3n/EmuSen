@@ -3764,3 +3764,24 @@ is patched. If no member below reproduces the chip on every case, the sine stays
 
 That is 64 members, 6 bits. They are graded as §40.2's were, over every angle at radii 7FFFh, 4000h, 1, 8000h and
 FFFFh, and 2^18 seeded pairs.
+
+### 40.7 The second widening graded: the sine stays a named loss (measured 2026-10-04)
+
+`DSP_SINE_STEP=1 dsp_sine` graded §40.6's 64 members over 589,824 cases on each image, with the same result on both.
+**No member reproduced every case.**
+
+- The closest is K = 804 at p = 15, the order (f·|C| » 15)·K » 15, both shifts floored, and the sign of C applied
+  after. It agreed on 281,052 cases (47.7%) and came within 1 on 427,366 (72.5%).
+- Members differing only in K's representation tie, since 804, 1608 and 1609 give the same steps here.
+
+**Under §40.6's condition the sine remains a named loss, and no third widening follows.**
+
+- **What is established.** The DSP-1's sine table is the documented formula, as is its cosine table, and the chip
+  steps from S[i] using S[i + 64].
+- **What is not.** The arithmetic of that step lies outside both declared families. It may be a second-order term,
+  another constant, or a fixed-point sequence that no document describes.
+- **Triangle, Rotate and Polar stay approximate**, as §40.4 graded them. With the closest step member in place of the
+  derivative table, Triangle's exact share rose from 34.4% to 39.6% of 2^20 cases, with the same largest difference
+  of 12, and Rotate and Polar moved as little. The change was measured and not kept: it would alter the generated
+  tables and their check for no change of bound.
+- **The re-grade of condition 4 does not arise.**

@@ -1915,3 +1915,31 @@ engines, the mixer keeping what it held, as before; every state written is versi
   state hashes to the version 7 digest recorded on 2026-09-24. Sound and picture digests did not move.
 - The layout walk names the three new fields, and both engines' layouts agree.
 
+
+## 11. On the core ABI v1 alone, and two stale crate tests (2026-10-04)
+
+**The shim.** `MercuryRtCore` is a subclass of the generic v1 adapter and loads MercuryRT through the v1 exports
+(`EmuSen_CoreAPI.md` §26). It keeps C# Mercury's exceptions, its state pre-check messages, its battery folder rule
+(`BatterySave.GameBoyFolder`), the Model setting's reload before the first frame and the mirror debugger. The mixer's
+coefficients are still C#'s (§3.3): after every create the shim computes the division and `Math.Pow` and sends them
+through `mercuryrt_core_set_sample_rate`, the v1 handle's twin of `mercuryrt_set_sample_rate`. `mercuryrt_core_rom_patch`
+does the same for the exhaustive patch test. The pre-stable exports and `MercuryMachine` stay for the machine and
+state tests until the pre-stable set is deleted.
+
+**`MACHINE_INFO` on a state from the other console.** Since a state records its console (§9.3, `Mercury_Model.md` §5),
+loading one made on the other console rebuilds the machine as that console, and machine info's `system` changes. The
+v1 host was not told, and kept reading the old system: `MercuryRtCoreAbiTests` showed `gb` after a Game Boy Color state
+was loaded. `Machine`'s `load_state` now compares the console before and after and emits the event; the pre-stable
+path has no outbox and drops it. The shim's `CoreName` follows machine info.
+
+**Two crate tests, stale since state version 8.** `cargo test --release` in the crate failed two machine tests on
+`WiseMan` from `ce9dec07` (§10) on:
+
+- `a_state_that_is_not_mercurys_or_is_cut_short_changes_nothing` used version 8 as a version no build reads. Version 8
+  is now the current one, so the state loaded. The test now uses `STATE_VERSION + 1`.
+- `version_6_writes_the_cartridge_once_and_version_5s_three_copies_read_with_the_last_standing` builds a version-5
+  state from the current save. It kept the mixer's 24 bytes, which version 8 appends and a version-5 reader never reads,
+  so cutting the state's last byte cut only those, and the truncated state loaded where the test expected `TRUNCATED`.
+  The fixture now ends the version-5 state before the mixer.
+
+The reader was right in both cases; the fixtures described the format before version 8. All 28 crate tests pass.

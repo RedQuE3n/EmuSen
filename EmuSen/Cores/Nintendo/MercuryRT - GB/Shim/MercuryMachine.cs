@@ -42,14 +42,7 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
             _ => null,
         };
 
-        private static string? OwnWords(long status) => status switch
-        {
-            -9 => "an image shorter than the 336-byte header",
-            -10 => "a cartridge type no board implements",
-            -11 => "a model that is not Auto, Game Boy or Game Boy Color",
-            -20 => "an opcode no SM83 has",
-            _ => null,
-        };
+        private static string? OwnWords(long status) => MercuryRtCore.StatusWords(status);
 
         public static string Describe(long status) => OwnWords(status) ?? Shared(status, "Mercury") ?? $"status {status}";
 

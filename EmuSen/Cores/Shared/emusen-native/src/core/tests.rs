@@ -405,3 +405,16 @@ fn the_crates_constants_are_the_headers_own_numbers() {
     assert_eq!(CAPABILITY_NAMES.len(), 18);
     assert_eq!(super::EXPORTING & !(caps::SNAPSHOT | caps::FRAME_SERIAL | caps::ROW_REPEAT | caps::BATTERY_DIRTY), super::EXPORTING);
 }
+
+#[test]
+fn an_extension_reaches_the_core_behind_a_handle_and_null_is_none() {
+    let m = make("");
+    let mut detail = 0;
+    assert_eq!(unsafe { emusen_core_advance(m, &mut detail) }, 0);
+    let core = unsafe { super::exports::core_of::<TestCore>(m) }.expect("a live handle");
+    assert_eq!(core.frame_count(), unsafe { emusen_core_frame_count(m) });
+    assert!(unsafe { super::exports::core_of_mut::<TestCore>(m) }.is_some());
+    assert!(unsafe { super::exports::core_of::<TestCore>(null()) }.is_none());
+    assert!(unsafe { super::exports::core_of_mut::<TestCore>(null_mut()) }.is_none());
+    unsafe { emusen_core_free(m) };
+}

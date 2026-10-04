@@ -100,6 +100,33 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(model == "Auto" && cgb == 0 ? "gb" : "gbc", adapter.Machine.Info.System);
         }
 
+        // A state made on the other console changes machine info's system, and the core says so with MACHINE_INFO - see EmuSen_CoreAPI.md §26.
+        [Fact]
+        public void A_state_from_the_other_console_tells_the_host_its_machine_info_changed()
+        {
+            string rom = Rom("busy.gb", 0x00);
+            using var colour = new CoreEngine(Discovered.Open()!, new System.Collections.Generic.Dictionary<string, string> { ["Model"] = "Game Boy Color" });
+            using var mono = new CoreEngine(Discovered.Open()!);
+            colour.LoadRom(rom);
+            mono.LoadRom(rom);
+            for (int f = 0; f < 30; f++)
+            {
+                colour.RunFrame();
+                mono.RunFrame();
+            }
+            Assert.Equal(("gbc", "gb"), (colour.Machine.Info.System, mono.Machine.Info.System));
+            var state = new MemoryStream();
+            colour.SaveState(state);
+            mono.LoadState(new MemoryStream(state.ToArray()));
+            Assert.Equal("gbc", mono.Machine.Info.System);
+            state.SetLength(0);
+            using var other = new CoreEngine(Discovered.Open()!);
+            other.LoadRom(rom);
+            other.SaveState(state);
+            colour.LoadState(new MemoryStream(state.ToArray()));
+            Assert.Equal("gb", colour.Machine.Info.System);
+        }
+
         // A colour game's battery save is under GBC on the adapter as on the shim, the system's folder and not the shelf's.
         [Fact]
         public void A_colour_games_battery_save_goes_to_its_systems_folder()

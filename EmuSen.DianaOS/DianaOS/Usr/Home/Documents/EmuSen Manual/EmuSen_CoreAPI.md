@@ -4,7 +4,8 @@
 and §13.2's items 1 and 2 built: the header, the `core` module with `core_exports!`, and the guard (§18, which also lists
 the points of §4–§6 that building them made precise); then items 3 and 4, the host adapter and discovery (§19); item 5, the SNES's system pack (§20); and item 6, the
 conformance kit's core suite (§21); and MoonRT's and MercuryRT's exports onto v1 beside their pre-stable ones (§22,
-§23). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
+§23). Since then, 2026-10-04: the registration-equivalence test, D1's oracle (§25), and MoonRT's and MercuryRT's
+shims as subclasses of the adapter (§26). Previous revision: the first, 2026-10-01. A normative specification, not an implementation: nothing in it is built except
 three prototype checks recorded in §5.1 to §5.3. It supersedes parts of `EmuSen_NativeCores.md`, listed in §0.3 and
 marked in place there. Every claim about the code is cited to a file, read on `WiseMan` at `f69c94a4`. Claims marked
 **measured** were measured on 2026-10-01; claims marked **argued** are reasoning that a later step must prove, and
@@ -1339,7 +1340,7 @@ SNES). Until then:
 | `EmulatorSession` | `EmuSen/Common/` | the session | replace |
 | The native host (`NativeCoreLibrary`, `NativeInterface`, `NativeMachine`, `NativeRtCore`, `NativeDebugBridge`) | `EmuSen/Cores/Native/` | the v1 adapter and loader in `DianaOS/Sys/Native/`; the pre-stable classes retire (§13.5) | move and replace |
 | `LegacyNativeMachine` | `EmuSen/Cores/Native/` | deleted with MarsRT's step 5 | retire |
-| Per-console native shims (`MoonRtCore`, `MercuryRtCore`, `MarsRtCore`; VenusRT's `VenusNative`, `VenusMachine`) | each core's `Shim/` | none for VenusRT; thin oracle-compatibility subclasses of the adapter for the ports, until their C# cores retire | shrink |
+| Per-console native shims (`MoonRtCore`, `MercuryRtCore`, `MarsRtCore`; VenusRT's `VenusNative`, `VenusMachine`) | each core's `Shim/` | none for VenusRT; thin oracle-compatibility subclasses of the adapter for the ports, until their C# cores retire (MoonRT's and MercuryRT's done 2026-10-04, §26) | shrink |
 | `AudioSettings`, `GraphicsSettings` (static configuration) | `EmuSen` | values handed to the runtime from Galaxia's models | behind the API |
 | The library catalogue (`SqliteCatalogue`) | `EmuSen/Common/Catalogue/` | stays out of DianaOS | behind Galaxia's `ICatalogue` |
 | Frame loops and pacing | Mistress, Hotaru, Pharaoh | the runtime's loop; pacing behind the seam (§8.4) | replace |
@@ -1353,7 +1354,7 @@ SNES). Until then:
 
 | Step | What | Oracle | Effort |
 |---|---|---|---|
-| **D1** | The move: the engine SPI, the native host, the services and the systems table into `DianaOS/Sys/`; the C# cores registered as managed engines; `CoreFactory` and `CoreCatalog` answered from the runtime | The registration-equivalence test `EmuSen_NativeCores.md` §7 step 1 named and never built: every answer `CoreCatalog` and `CoreFactory` give, for every console and engine, before and after. The whole suite | 2–3 days |
+| **D1** | The move: the engine SPI, the native host, the services and the systems table into `DianaOS/Sys/`; the C# cores registered as managed engines; `CoreFactory` and `CoreCatalog` answered from the runtime | The registration-equivalence test `EmuSen_NativeCores.md` §7 step 1 named: every answer `CoreCatalog` and `CoreFactory` give, for every console and engine, before and after; built 2026-10-04 ahead of the move (§25). The whole suite | 2–3 days |
 | **D2** | Sessions, the loop and the services in the runtime; Pharaoh moved onto them first, as the headless client; then the shell (its `LoadCore` gone), Hotaru, Mistress | Each client's own tests; Pharaoh's `framesum` and `audiosum` digests equal before and after on the bench games; Mistress's rewind and state tests | 1½–2 weeks |
 | **D3** | The frontend API's contract layer and binding; its baseline; the parity test of §8.6 | The parity test; the public-API baseline recorded | 3–4 days |
 | **D4** | The inspection surface: sessions in `ps` and `kill`, signals, `/proc`, `/dev`, `cores` | Shell tests per verb; a side-effect space refused | 2 days |
@@ -2305,6 +2306,195 @@ VenusRT's `firmware_for` builds a whole cartridge from the image to read its hea
 each call costs in proportion to the image, a 4 MiB copy for Donkey Kong Country. The ABI sets no cost on a
 library-level call, and the case still ran its checks a few hundred times; it is recorded for VenusRT's crate and was
 not changed here.
+
+---
+
+## 25. The registration-equivalence test, 2026-10-04: D1's oracle
+
+### 25.1 What it records
+
+D1 (§10.2) moves the engine SPI, the native host and the systems table into `DianaOS/Sys/` and answers `CoreFactory`
+and `CoreCatalog` from the runtime. Its oracle, named in `EmuSen_NativeCores.md` §7 step 1 and not built there, is now
+`EmuSen.WiseMan/Cores/CoreRegistrationEquivalenceTests.cs`, held to the committed golden
+`CoreRegistrationGolden.txt` beside it. It was written before any move and passes unchanged on `WiseMan` at
+`400f6087`; the move is to keep it passing without an edit.
+
+The recorder (`RegistrationRecorder` in the same file) asks every question a frontend asks of the registration and
+writes one `key = value` line per answer: 1,875 lines in the `built` world below and 1,223 in `off`:
+
+| Group | What is recorded |
+|---|---|
+| The catalogue | the registry's keys; the cores, their release order, the library's filter choices and shelves (with their ES-DE names); each console's extensions, cheat-database folders, maker and year, cover aspect, OpenVGDB systems, and the OpenVGDB hashing rule applied to each synthetic image (length and hash of the bytes hashed); every extension claimed, unclaimed and empty, through `IsRomExtension`, `ByExtension`, `ConsoleForRom` and `CoreFactory.IsSupported`; `ShelfFor` and `IsGameBoyColor` on six files; `ByAnyName`, `ByDisplayName`, `ShelfByName`; each console's buttons, axes, rebind controls, system ids and settings rows (label, kind, default, range, choices, hint and the note at the defaults); `ConsoleForSystem` |
+| The engine rows | for the four consoles and one unknown: the row (or none), its choices, default and hint; the engines discovery adds; `EngineChosen` with nothing stored and with a value stored; `IsRegisteredEngine` for every engine name; whether each registered library is available; each discovered core, its systems and whether it opens |
+| The factory | for every synthetic image of every console (plain, battery-backed, and the Game Boy Color and byte-swapped forms) and every engine name a frontend could store (none, each choice of the row, an unknown name, and another console's engine): the type `ForFirmwareProbe` builds and the firmware it asks for; the type `Load` builds, its engine notice, its debug target's type, its trace switch, both cheat codecs; the core's name, picture size, frame rate, sound rate, buttons, axes, state version, engine features and `ICoreSettings` rows with their values; and the files the load and one `SaveSram` leave under a fresh home, with older builds' save locations pre-filled so that a copy-in shows |
+| Configured engines | `ConfiguredEngine` with nothing stored and with each choice stored in `graphics.json` |
+| Cheat codecs | `CheatCodecsFor` every console and display name, none, empty and unknown; `DefaultCheatCodecs`; and each distinct codec's verdict on eighteen fixed codes (whether it claims the code, the address and value, the compare, the writes) |
+| Settings before a game | each engine of each row built by `Create` and its `ICoreSettings` rows |
+
+It is recorded in four worlds:
+
+- **`built`**: the libraries as the build placed them beside the assemblies.
+- **`off`**: a child `dotnet test` process started with `EMUSEN_MOON_NATIVE`, `EMUSEN_MERCURY_NATIVE`,
+  `EMUSEN_MARS_NATIVE` and `EMUSEN_VENUS_NATIVE` set to 0, since a library is loaded once per process and only a
+  fresh process records the fallbacks and their notices honestly (the method of `MercuryRtFallbackTests`).
+- **`nothing-discovered`**: discovery pointed at an empty directory.
+- **`refused-discovered`**: discovery pointed at a directory holding the build's sidecars beside files that are not
+  their libraries, so that opening each is refused before loading.
+
+### 25.2 What is held fixed, and what is named instead
+
+The ICore's type is recorded by its name without its namespace, and a codec by its name, kind, space and decodes,
+because D1 may move a type between assemblies without changing what a frontend sees. Paths are written relative to the
+test's temporary root and the assemblies' directory, and a platform's library file name as `<lib crate>`, so that one
+golden serves every platform. One value is the machine's: Mars's rasteriser threads default to one per three cores
+(`MarsCore.VideoSettings`), and the recorder writes that default as `<one per three cores>` where it equals the
+formula. The set of capability interfaces a core implements is deliberately not recorded: §13.1's ports gain the
+adapter's neutral interfaces (§19.1) while every answer a frontend reads through them stays the same, and those answers
+are what is recorded.
+
+**Recording.** With `EMUSEN_RECORD_REGISTRATION=1` the two tests write their sections into the source tree's golden
+instead of comparing; the diff is then reviewed as the record of what changed. A deliberate change to an engine's
+answers (a new setting, a firmware policy, a new engine) re-records the golden in the same commit. On a mismatch the
+assertion lists the lines gone and the lines new.
+
+### 25.3 What was measured
+
+**Determinism.** Three runs in a row, in compare mode, gave the golden byte for byte; the whole class takes about 4 s,
+the child process included.
+
+**Seeded faults.** One line of each section edited in the output copy of the golden: each test failed, naming exactly
+the edited line as gone and the true answer as new. One code mutation, the one D1 is most likely to make: `CoreFactory`'s
+generic branch with its `IsRegisteredEngine` guard removed, so that a registered engine discovery also lists is opened
+by the generic adapter. Both sections failed, 38 and 33 lines gone (MoonRT's and MercuryRT's probes, cores, debug
+targets and codecs turning into the adapter's). The source was restored and the test passed again.
+
+**What it surfaced.** On `400f6087`, VenusRT asks for its sound unit's boot ROM as `required` and refuses a game
+without it ("the sound unit's 64-byte boot ROM, file 1, was not given"). That contradicts the firmware policy decided
+on 2026-10-03 (`EmuSen_Firmware.md` §0), which VenusRT's own work is bringing it to; the golden records the present
+answers, and the change that brings VenusRT under the policy re-records its lines. *Re-recorded 2026-10-04*, when `WiseMan`'s
+VenusRT with its own SPC700 boot program (`b82c8e4e`) was merged in: in both worlds the four VenusRT lines of the
+request and the refusal became the 28 lines of a game loaded on the adapter, and no other line moved. The new lines show
+one thing worth a later look: on both synthetic SNES images the adapter copies an older build's save into the SNES
+folder at load (`BatterySave`'s copy-in, since the adapter opens file 0 for every game), and VenusRT, which tracks
+battery changes, writes nothing at the first `SaveSram`; Venus (C#) writes the cartridge's 2 KiB. Neither is wrong by
+§6.11, and §26's ports open file 0 only for a cartridge with battery RAM, as their oracles do. Venus (C#) gives the synthetic
+LoROM, whose header byte for SRAM is the image's fill, 128 KiB of battery RAM; that is the image's doing, not a defect.
+
+**What it cannot see.** A difference in the frame-end order (`EmuSen_NativeCores.md` §8.2, R4), anything a frame
+produces, and an engine's debugger once halted. Each core's own frame-by-frame oracles and the adapter-against-shim
+tests hold those.
+
+## 26. MoonRT and MercuryRT through the v1 adapter, 2026-10-04: §13.1's row, the shims
+
+### 26.1 What was done
+
+§22 and §23 gave both libraries the v1 exports and left the shims loading the pre-stable ones. Each shim is now a
+subclass of the generic adapter and loads its library through the v1 exports alone.
+
+- **The adapter opened for subclassing.** `CoreEngine` is no longer sealed. A subclass may replace the registries
+  (`Watches`, `FrameLog`, `Breakpoints`), the identity a frontend reads (`CoreName`, the picture's size, the frame rate,
+  the state version), `SetButton`, `ReadSpace` and `WriteSpace`, `LoadRom` and `LoadState(Stream)`, `Cheats`, the
+  `ICoreSettings` members and the halt pair. Two protected hooks carry what cannot be a whole member: `BatteryFile`,
+  which opens battery file *n* of a game, and `AdvanceFrame`, which runs the machine to the frame's end and may halt
+  instead, skipping the frame-end work. `RefreshCheats` is protected and `FrameBuffers` public. A failed `advance`
+  now carries its detail word on `CoreRefusedException.Detail`, and `CoreLibrary.Export` resolves a core's own
+  extensions (§4.7). Nothing in the generic engine's own answers changed but one, below.
+- **The shared part of a port's shim** is `PortEngine` (`EmuSen/Cores/Native/PortEngine.cs`), with `PortLibrary` and
+  `PortMachine` beside it. It holds what `NativeRtCore` held for both consoles, re-based on the adapter: the oracle's
+  exception for a status (the console's band first, then the reproduced .NET faults), the state pre-checks before the
+  bytes reach the core, the battery file as the oracle opens it, the whole pad sent on each change, the spaces by the
+  C# names with a bus read refreshing the ROM patches first, the store a listening debugger is told of, the mirror's
+  registries and the halts through the mirror's bridge. `PortLibrary` loads the library at its fixed name beside the
+  assemblies, as the pre-stable loader did, so the switch variable and the engine notices keep their words ("turned
+  off by EMUSEN_MOON_NATIVE=0", "… not found beside the assemblies"), and refuses one lacking the capabilities or
+  extensions its shim calls.
+- **The mirror's bridge** (`NativeDebugBridge`) now calls the v1 debug exports. Its logic is unchanged: the same
+  tables, the first instruction checked unless resuming, the same drain order.
+- **`MoonRtCore` and `MercuryRtCore`** are `PortEngine` subclasses holding their consoles' data: the pad bits and port
+  rule, the space names and the reported store spaces, the C# header parse that gives C#'s exceptions, the state
+  pre-check messages, the status tables (moved here from `MoonMachine` and `MercuryMachine`, which now read them), the
+  identity a frontend reads, the mutes from the mirror's channels, and the mirror debugger. `MercuryRtCore` keeps the
+  Model setting's semantics (a change before the first frame loads the game again) over the schema's create-time key,
+  and sends C#'s mixer coefficients after every create (`Mercury_Native.md` §3.3).
+- **The libraries.** `emusen-native` gained `core::exports::core_of` and `core_of_mut`, the core behind a v1 handle, for
+  a core's own extensions. MoonRT exports `moonrt_core_rom_patch`, and MercuryRT `mercuryrt_core_rom_patch` and
+  `mercuryrt_core_set_sample_rate`: the pre-stable extensions of the same purpose, over a v1 handle, sharing their
+  bodies. The `_core_` infix mirrors `emusen_core_` against `emusen_native_`, and the names stay when the pre-stable
+  ones go. The pre-stable exports are untouched, and `MoonMachine` and `MercuryMachine` with their machine and state
+  tests still use them; they are deleted with VenusRT's (§13.5). `NativeRtCore` now has no subclass; it stays only for
+  `RomPatchTriples` until then.
+
+**What a frontend sees differently.** The shims now implement the adapter's neutral interfaces as well
+(`ISnapshotCore` writing the full state, `IFrameSerial` the frame count, `IRepeatedRows` a repeat of 1, and for MoonRT
+an empty `ICoreSettings`), and each answers through them what a frontend saw without them (§19.1). A refusal past the
+pre-checks keeps the oracle's exception type and takes the core's own words (`last_error`), as §13.4 has it. An engine
+whose library is not in use refuses at construction rather than at `LoadRom`, with the same exception type and words;
+`CoreFactory` asks `Available` first, so a frontend never meets it.
+
+### 26.2 Two defects found on the way
+
+**MercuryRT did not raise `MACHINE_INFO` when a state from the other console changed its system.** §6.19 makes the
+event the core's own. A machine running a Game Boy game as a Game Boy, loaded with a state made on the Game Boy Color,
+becomes a Game Boy Color, and its machine info's `system` changes from `gb` to `gbc`; the host was not told, and read
+`gb`. *Demonstrated* by `MercuryRtCoreAbiTests.A_state_from_the_other_console_tells_the_host_its_machine_info_changed`
+against the unchanged library ("Expected gbc, Actual gb"). The machine's `load_state` now compares the console before
+and after and emits the event; through the pre-stable path, which has no outbox, the emission is dropped. Both
+directions pass. `MercuryRtCore` reads its `CoreName` (`GB` or `GBC`) from machine info in consequence, where the
+pre-stable shim asked an extension.
+
+**A registry handed to the adapter applied only from the next frame.** `CoreFactory.Bundle` hands a frontend's
+registry to the engine; the adapter kept applying the previous one through `ApplyCheats` until a frame refreshed it,
+where every C# core and the pre-stable shims apply the new one at once. *Demonstrated* by
+`CoreAdapterTests.A_registry_handed_over_applies_before_the_next_frame` with the fix removed ("Expected 85, Actual 0").
+For a core without `CHEAT_POKES` the hand-over now takes effect immediately; a core with it is unchanged, since its
+pokes are split from the registry at the next refresh in any case.
+
+### 26.3 The oracle, §13.1's row, measured 2026-10-04
+
+| Oracle | Result |
+|---|---|
+| The state, machine and engine tests | the 984 WiseMan tests of the MoonRT, MercuryRT, Mercury, native-host, battery, cheat, debugger, engine-row, factory, adapter, discovery, ABI and registration areas pass unchanged, with the new defect test 985; no test file changed but the two that gained a case |
+| The adapter against the shim | `MoonRtCoreAbiTests` and `MercuryRtCoreAbiTests` pass: the generic adapter and the shim, now both on the v1 exports, give the same picture and sound every frame and the same state |
+| The bench's state hashes | one per game in all eighty runs of each bench, before and after, the same values (`0ED799A150F20023` for Super Mario Bros. and so on, as `moonbench` and `mercbench` print them) |
+| The kit | C1–C15 pass on MoonRT's four games and MercuryRT's four, 600 frames each |
+| §25's registration-equivalence test | unchanged, both worlds |
+| The crates | `emusen-native` 51 tests, MoonRT's 6 and MercuryRT's 28 pass; `export_check.py` passes on both libraries (46 and 45 `emusen_core_` symbols) |
+
+MercuryRT's crate tests had two failures on `WiseMan` before this step, both stale fixtures from state version 8
+(`Mercury_Native.md` §11); they were corrected first, in a commit of their own.
+
+### 26.4 The timing
+
+Measured 2026-10-04 with `moonbench` and `mercbench`, built against `f1b23338` ("before": the pre-stable shims) and
+against this step ("after"), both by cargo's release profile from the crates' directories. Ten rounds under the bench
+lock, the two builds alternated within each game and the order swapped each round. **The load:** the one-minute
+average was 2.76–6.90 across the runs, from other work on the machine; this is not a quiet machine.
+
+| Game | Before, median p50 ms | After | Change |
+|---|---|---|---|
+| Super Mario Bros. | 1.109 | 1.098 | −0.99% |
+| The Legend of Zelda | 0.919 | 0.923 | +0.38% |
+| Super Mario Bros. 3 | 1.337 | 1.348 | +0.82% |
+| Mike Tyson's Punch-Out!! | 1.236 | 1.261 | +1.98% |
+| Tetris | 0.4455 | 0.4503 | +1.07% |
+| Kirby's Dream Land | 0.4966 | 0.5026 | +1.20% |
+| The Legend of Zelda: Link's Awakening | 0.4126 | 0.4143 | +0.41% |
+| Pokémon Yellow | 0.5526 | 0.5516 | −0.18% |
+
+The geometric mean is +0.58%, inside P1's band. Punch-Out!! is outside it by about a point, as it was by 0.31 in
+§22.2's loaded measurement, and Tetris and Kirby's Dream Land by about a fifth of one. The first five rounds alone gave
++1.12% and the second five +0.56%, which is the size of the noise at this load. The adapter does a little more per
+frame than the pre-stable shim did (an event drain, a `frame_info` before each picture copy, the picture copied by
+rows), each a call or a copy of a few microseconds at most against frames of 0.4–1.4 ms. P1 holds for the geometric
+mean; a quiet run remains owed for the per-game figures, as it does for §22.2's.
+
+### 26.5 Not done here
+
+- **One bridge.** VenusRT's branch builds its own v1 debug bridge for the adapter (processors beyond the first, the
+  engine's own registries). The mirror's bridge here differs from it in whose registries it feeds, not in what it
+  sends; when both are on `WiseMan` they can become one class with the registries as parameters.
+- **The pre-stable set's deletion** (§13.5), with `NativeRtCore`, `MoonMachine` and `MercuryMachine` and the moving of
+  their machine and state tests onto the v1 handle, waits for VenusRT to drop its own.
 
 ---
 

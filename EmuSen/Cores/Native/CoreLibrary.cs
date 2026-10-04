@@ -26,6 +26,8 @@ namespace EmuSen.Cores.Native
         public string SettingsText { get; private set; } = "[]";
         public IReadOnlyList<CoreSettingDescriptor> Settings { get; private set; } = Array.Empty<CoreSettingDescriptor>();
 
+        private nint _handle;
+
         private CoreLibrary(string path) => Path = path;
 
         // The library at path, loaded and checked the first time it is asked for; the same object, and the same verdict, every time after.
@@ -68,6 +70,7 @@ namespace EmuSen.Cores.Native
         {
             if (!File.Exists(Path)) { Refuse("not found"); return; }
             if (!NativeLibrary.TryLoad(Path, out nint handle)) { Refuse("could not be loaded"); return; }
+            _handle = handle;
             var api = new CoreInterface(handle);
             Api = api;
             if (api.AbiVersion == null) { Refuse("has no emusen_core_abi_version; it is not on the core ABI"); return; }
@@ -140,6 +143,9 @@ namespace EmuSen.Cores.Native
                 return Utf8(bytes) is { } text ? CoreDescriptorReader.FirmwareList(text) : Array.Empty<CoreFirmware>();
             }
         }
+
+        // One of the core's own extension exports by name, zero when the library is not in use or lacks it - see EmuSen_CoreAPI.md §4.7.
+        public nint Export(string name) => Available && NativeLibrary.TryGetExport(_handle, name, out nint export) ? export : 0;
 
         // The records the library logged outside any machine, as lines.
         public IReadOnlyList<string> DrainLog() => Available ? CoreMachine.DrainLog(Api, 0) : Array.Empty<string>();

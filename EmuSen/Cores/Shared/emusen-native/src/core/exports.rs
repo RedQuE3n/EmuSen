@@ -201,6 +201,25 @@ unsafe fn write_error(out: *mut u8, len: usize, text: &str) {
     }
 }
 
+// ---- A core's own extensions ---------------------------------------------------------------------------------
+
+/// The core behind a machine handle `create` returned, for a core's own extension exports (§4.7 of
+/// EmuSen_CoreAPI.md); `None` for null. No route is set, so the extension raises no events and writes no last error.
+///
+/// # Safety
+/// `machine` must be null or a live handle this library's `create` returned for a machine of type `T`.
+pub unsafe fn core_of<'a, T: Core>(machine: *const Machine) -> Option<&'a T> {
+    unsafe { shared::<T>(machine) }.map(|inst| &inst.core)
+}
+
+/// [`core_of`], mutable.
+///
+/// # Safety
+/// As [`core_of`], and no other reference to the machine may be live.
+pub unsafe fn core_of_mut<'a, T: Core>(machine: *mut Machine) -> Option<&'a mut T> {
+    unsafe { mutable::<T>(machine) }.map(|inst| &mut inst.core)
+}
+
 // ---- Library-level -------------------------------------------------------------------------------------------
 
 pub unsafe fn abi_version<T: Core>() -> u32 {

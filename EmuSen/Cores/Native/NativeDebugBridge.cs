@@ -4,14 +4,15 @@ using EmuSen.DianaOS.DianaOS.Var;
 
 namespace EmuSen.Cores.Native
 {
-    // The debugger over the common interface's debug exports: the registries pushed down as tables, a frame that stops with its reasons, and the logs drained - see EmuSen_NativeCores.md §4.4.
+    // A port's mirror debugger over the v1 debug exports: the mirror's registries pushed down as tables, a frame that stops with its reasons, and the logs drained - see EmuSen_NativeCores.md §4.4, EmuSen_CoreAPI.md §26.
     public sealed unsafe class NativeDebugBridge : INativeDebugBridge
     {
         // emusen-native's debug::flag, debug::run and debug::kind.
         public const uint FlagCalls = 1, FlagWrites = 2, FlagInterrupts = 4, FlagEach = 8, FlagProfiling = 16, FlagCoverage = 8;
         public const uint RunUnchecked = 1, RunContinue = 2;
 
-        private readonly Func<NativeMachine?> _machine;
+        private readonly Func<CoreMachine?> _machine;
+        private readonly Func<int, ulong, Exception> _failure;
         private readonly BreakpointRegistry _breakpoints;
         private readonly WatchRegistry _watches;
         private readonly CallStackRegistry _callStack;
@@ -24,11 +25,13 @@ namespace EmuSen.Cores.Native
         private long[] _profile = new long[2 * 256];
         private bool _targetListens;
 
-        // <coverage> is each processor's registry, and <coverageBytes> its bitmap's length; <spaceName> and <reportedSpace> map the core's store spaces to the C# names and back.
-        public NativeDebugBridge(Func<NativeMachine?> machine, BreakpointRegistry breakpoints, WatchRegistry watches, CallStackRegistry callStack,
-            IReadOnlyList<CoverageRegistry> coverage, IReadOnlyList<int> coverageBytes, Func<uint, string?> spaceName, Func<string, uint?> reportedSpace)
+        // <coverage> is each processor's registry, and <coverageBytes> its bitmap's length; <spaceName> and <reportedSpace> map the core's store spaces to the C# names and back; <failure> is the oracle's exception for a frame's status.
+        public NativeDebugBridge(Func<CoreMachine?> machine, BreakpointRegistry breakpoints, WatchRegistry watches, CallStackRegistry callStack,
+            IReadOnlyList<CoverageRegistry> coverage, IReadOnlyList<int> coverageBytes, Func<uint, string?> spaceName, Func<string, uint?> reportedSpace,
+            Func<int, ulong, Exception> failure)
         {
             _machine = machine;
+            _failure = failure;
             _breakpoints = breakpoints;
             _watches = watches;
             _callStack = callStack;
@@ -58,23 +61,24 @@ namespace EmuSen.Cores.Native
             }
         }
 
-        private NativeMachine Live => _machine() ?? throw new InvalidOperationException("No ROM is loaded.");
+        private CoreMachine Live => _machine() ?? throw new InvalidOperationException("No ROM is loaded.");
 
         // The C# loop with the steps between the registry's questions run in Rust; the first instruction is checked there unless resuming (§9 Q7).
         public bool RunFrame(bool resuming, out int haltedAt)
         {
-            NativeMachine machine = Live;
-            NativeInterface api = machine.Api;
+            CoreMachine machine = Live;
+            CoreInterface api = machine.Library.Api;
             EventFrame = machine.TotalFrames;
             uint flags = resuming ? RunUnchecked : 0;
             while (true)
             {
                 PushTables(machine);
+                uint processor;
                 ulong pc, detail;
-                int reasons = api.DebugRunFrame(machine.Handle, flags, &pc, &detail);
+                int reasons = api.DebugRunFrame(machine.Handle, flags, &processor, &pc, &detail);
                 flags = RunUnchecked | RunContinue;
                 Drain(machine);
-                if (reasons < 0) throw machine.FrameFailure(reasons, detail);
+                if (reasons < 0) throw _failure(reasons, detail);
                 if (reasons == 0)
                 {
                     haltedAt = 0;
@@ -91,15 +95,15 @@ namespace EmuSen.Cores.Native
         // A host store the C# core's bus would report, with the tables pushed first and the logs drained after.
         public void Observed(Action write)
         {
-            NativeMachine machine = Live;
+            CoreMachine machine = Live;
             PushTables(machine);
             write();
             Drain(machine);
         }
 
-        public void PushTables(NativeMachine machine)
+        public void PushTables(CoreMachine machine)
         {
-            NativeInterface api = machine.Api;
+            CoreInterface api = machine.Library.Api;
             nint handle = machine.Handle;
             uint flags = FlagCalls | FlagInterrupts;
             if (Listening) flags |= FlagWrites;
@@ -128,7 +132,7 @@ namespace EmuSen.Cores.Native
                 breakpoints.Add(bp.EndAddress);
             }
             int[] pairsOut = breakpoints.ToArray();
-            fixed (int* data = pairsOut) api.DebugSetBreakpoints(handle, data, (nuint)(pairsOut.Length / 2));
+            fixed (int* data = pairsOut) api.DebugSetBreakpoints(handle, 0, data, (nuint)(pairsOut.Length / 2));
 
             var watches = new List<uint>();
             foreach (var w in _watches.GetWatches())
@@ -152,9 +156,9 @@ namespace EmuSen.Cores.Native
         }
 
         // The logs into the registries in the order the C# observers are called: stores, then calls and returns, then the counts.
-        public void Drain(NativeMachine machine)
+        public void Drain(CoreMachine machine)
         {
-            NativeInterface api = machine.Api;
+            CoreInterface api = machine.Library.Api;
             nint handle = machine.Handle;
             long writes = api.DebugWrites(handle, null, 0);
             if (writes > 0)
@@ -211,9 +215,9 @@ namespace EmuSen.Cores.Native
         // The depth the core holds and its returns with nothing open.
         public (long Depth, long UnmatchedReturns) Counters()
         {
-            NativeMachine machine = Live;
+            CoreMachine machine = Live;
             long* values = stackalloc long[2];
-            machine.Api.DebugCounters(machine.Handle, values, 2);
+            machine.Library.Api.DebugCounters(machine.Handle, values, 2);
             return (values[0], values[1]);
         }
 
@@ -222,7 +226,7 @@ namespace EmuSen.Cores.Native
         {
             if (_machine() is not { } machine) return 0;
             ulong pc;
-            return machine.Api.DebugPc(machine.Handle, processor, &pc) == 0 ? (int)pc : 0;
+            return machine.Library.Api.DebugPc(machine.Handle, processor, &pc) == 0 ? (int)pc : 0;
         }
 
         private static void Grow<T>(ref T[] buffer, int needed)

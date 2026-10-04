@@ -83,8 +83,8 @@ namespace EmuSen.Cores
             return null;
         }
 
-        // The catalog's name for the core that is running, for a notice that must not name the default when the reference is what started.
-        private static string Running(ICore core) => core switch
+        // The catalog's name for the engine that is running: a notice's, and the one a save state's record keeps.
+        public static string Running(ICore core) => core switch
         {
             MarsRtCore => CoreCatalog.MarsRtEngine,
             MarsCore => CoreCatalog.MarsEngine,

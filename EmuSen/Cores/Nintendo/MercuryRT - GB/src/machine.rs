@@ -324,8 +324,14 @@ fn wrap(address: i32, size: usize) -> usize {
 
 impl emusen_native::ffi::StateMachine for Machine {
     type Error = StateError;
+    /// A state made on the other console changes machine info's system, which the v1 host is told (EmuSen_CoreAPI.md §6.19, §26).
     fn load_state(&mut self, data: &[u8]) -> StateResult {
-        Machine::load_state(self, data)
+        let console = self.cgb_hardware();
+        let r = Machine::load_state(self, data);
+        if self.cgb_hardware() != console {
+            emusen_native::core::emit(emusen_native::core::event::MACHINE_INFO, 0, 0);
+        }
+        r
     }
     fn state_size(&self) -> usize {
         Machine::state_size(self)
@@ -376,7 +382,7 @@ mod tests {
         line.split(' ').next().unwrap().parse().unwrap()
     }
 
-    /// A version-5 state as C# wrote it, from this machine's version-6 one: the path after each RAM, two more copies, each with its own fill.
+    /// A version-5 state as C# wrote it, from this machine's current one: the path after each RAM, two more copies, each with its own fill, and no mixer.
     fn version_5(m: &Machine, path: &str, fills: [u8; 3]) -> Vec<u8> {
         let (v6, layout) = (save(m), m.layout());
         let copy = |fill: u8, class: bool| {
@@ -395,7 +401,7 @@ mod tests {
         v5.extend(copy(fills[1], true));
         v5.extend(&v6[mapper_at..bus_at]);
         v5.extend(copy(fills[2], true));
-        v5.extend(&v6[bus_at..]);
+        v5.extend(&v6[bus_at..offset_of(&layout, "Bus.Apu._cycleFraction")]);
         v5
     }
 
@@ -460,7 +466,7 @@ mod tests {
         let mut wrong = state.clone();
         wrong[4] = 4;
         assert_eq!(m.load_state(&wrong).map_err(|e| e.status()), Err(-4));
-        wrong[4] = 8;
+        wrong[4] = (STATE_VERSION + 1) as u8;
         assert_eq!(m.load_state(&wrong).map_err(|e| e.status()), Err(-4));
         assert_eq!(m, before);
     }

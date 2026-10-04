@@ -244,7 +244,7 @@ impl Core for Machine {
                 .collect(),
             processors: self.processors(),
             battery: vec![Battery { which: 0, suffix: ".srm".into() }],
-            state: StateFormat { format: "VNRT".into(), version: STATE_VERSION as i64, loads_from: vec![17, 18, 19, STATE_VERSION as i64] },
+            state: StateFormat { format: "VNRT".into(), version: STATE_VERSION as i64, loads_from: vec![17, 18, 19, 20, STATE_VERSION as i64] },
             phases: Vec::new(),
             patches: Some((0, 0xFF_FFFF)),
             skip_rendering_state_neutral: true,
@@ -588,6 +588,19 @@ mod tests {
         assert_eq!(lle.battery_bytes(), hle.battery_bytes());
         let again = create(&cart, vec![File { which: 0, data: lle.battery_bytes() }]).unwrap();
         assert_eq!(again.battery_bytes(), &file[..]);
+    }
+
+    // VenusRT_Native.md §48.1: version 20 is stage 8's; a replacement's state from before 21 is refused with VERSION,
+    // since its layout cannot be told from that version alone.
+    #[test]
+    fn a_replacement_state_before_version_21_is_refused() {
+        let cart = dsp_cartridge(b"DUNGEON MASTER", 0x03);
+        let mut m = create(&cart, Vec::new()).unwrap();
+        Core::advance(&mut m, &mut 0).unwrap();
+        let mut old = state(&m);
+        old[4..8].copy_from_slice(&20i32.to_le_bytes());
+        let err = m.load_state(&old).unwrap_err();
+        assert_eq!(emusen_native::ffi::Status::status(&err), emusen_native::ffi::status::VERSION);
     }
 
     // A state names the engine that wrote it, and the other engine refuses it with its own status.

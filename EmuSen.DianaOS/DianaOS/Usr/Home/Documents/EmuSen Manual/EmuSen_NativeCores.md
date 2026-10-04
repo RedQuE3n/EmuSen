@@ -1050,6 +1050,9 @@ them loosely.
 | **5a** | **MarsRT's PGO profile retrained** | `pgo/train.sh` (about 55 minutes, `Mars_Native.md` §6.17.8); the build's verdict `matched`; no function without data under `-pgo-warn-missing-function` on the CI flavour (§6.17.7) | an hour and a half |
 | **5b** | **MarsRT timed** | Interleaved builds before and after, the order swapped each round, on Super Mario 64, Ocarina of Time, the Dam and DK64's title, as §6.17.6 timed them (P3) | 2 hours |
 
+*Step 1's registration-equivalence test was not built with step 1. It was built on 2026-10-04, ahead of the move to
+DianaOS that it now guards (`EmuSen_CoreAPI.md` §25).*
+
 **Why this order.** MoonRT first, because it has no engine row yet, so nothing a player runs can change, and because
 its bespoke shim exists to be timed against. MercuryRT second, because its measured sensitivity to layout and hashers
 (`Mercury_Native.md` §8.5.5) is the sharpest test of the claim that nothing hot moves. MarsRT last, because it is the

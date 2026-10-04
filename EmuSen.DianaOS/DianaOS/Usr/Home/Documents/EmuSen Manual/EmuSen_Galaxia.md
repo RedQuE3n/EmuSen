@@ -188,6 +188,22 @@ The sidecars users already have are **imported on first sight and never removed*
 
 The sidecar argument of §5.3 survives the move in one respect and not in another. It survives in that a state with no record still loads exactly as before and no core ever reads one. It does not survive in that a record no longer travels with its state: a states folder moved or copied elsewhere arrives without records, and fails towards "no record" rather than towards a wrong one.
 
+### 5.3b The record names the engine, not the core (2026-10-04)
+
+Until 2026-10-04 the record's `Core` held `ICore.CoreName`, which names the console's core family rather than the
+implementation: C# Venus wrote `SNES`, and VenusRT on the generic adapter `VenusRT`. With two engines selectable for
+one console, that told a reader neither which engine had written a state nor what its version number counts. Mistress
+now writes the engine's catalog name, `CoreFactory.Running` (`Venus (C#)`, `VenusRT (Rust)`, `MarsRT (Rust)` and so
+on), the same name the engine notice uses.
+
+The version check that refuses "a newer build's" state compares a number with the running engine's own, so it applies
+only when the record's engine is the running one. Where the record names another engine of the same console, Mistress
+offers the state to the core, which either reads it (MoonRT, MercuryRT and MarsRT read their C# cores' formats) or
+refuses it in its own words. VenusRT's words for a C# Venus state name Venus (C#) (`VenusRT_Native.md` §41.12). The
+record's provenance line is added either way. A record written before this change holds a core name that is no
+engine's, and is judged as before. That is the one case still judged by the old rule, and it errs as before: a
+pre-change VenusRT record read by C# Venus is called a newer build's.
+
 ### 5.4 A ROM's identity (2026-09-21)
 
 `RomHash.Md5` is the MD5 of every byte of the file, header included. That is a choice with a stated cost. The No-Intro and screenscraper conventions hash some consoles without their copier header, and OpenEmu hashes the whole file at import and the headerless file at lookup, which the library plan's §2 calls a trap. Here the hash has one job, to recognise the same file after a rename, and for that job the whole file is the right thing to hash: two files differing only in a header are different files to the core that loads them. A lookup against an external database would need the headerless hash as well, and would add it rather than replace this one.

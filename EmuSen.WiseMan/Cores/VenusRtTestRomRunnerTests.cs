@@ -187,6 +187,24 @@ namespace EmuSen.WiseMan.Cores
             finally { File.Delete(rom); }
         }
 
+        // A boot image handed to the runner is the one the SPC700 starts from: the open program writes $AA and $BB through $F4 and $F5 to the RAM beneath, a synthetic loop at its own vector does not.
+        [Fact]
+        public void The_runner_starts_VenusRT_from_a_boot_image_when_given_one()
+        {
+            string rom = Path.Combine(Path.GetTempPath(), $"venusrt-boot-{Environment.ProcessId}.sfc");
+            File.WriteAllBytes(rom, SyntheticRom.Build());
+            try
+            {
+                byte[] loop = new byte[64];
+                (loop[0], loop[1], loop[62], loop[63]) = (0x2F, 0xFE, 0xC0, 0xFF);
+                byte[] own = new VenusRtSnesEngine(dspFirmware: false, boot: null).Run(rom, new[] { 10 }).Snapshots[0].Spaces["apuram"];
+                byte[] given = new VenusRtSnesEngine(dspFirmware: false, boot: loop).Run(rom, new[] { 10 }).Snapshots[0].Spaces["apuram"];
+                Assert.Equal((0xAA, 0xBB), (own[0xF4], own[0xF5]));
+                Assert.NotEqual((0xAA, 0xBB), (given[0xF4], given[0xF5]));
+            }
+            finally { File.Delete(rom); }
+        }
+
         // Mesen's picture rows against a 224-line engine's: the offset that makes steady pictures agree is the one the differential uses.
         [Fact]
         public void The_picture_offset_is_the_one_steady_pictures_agree_at()

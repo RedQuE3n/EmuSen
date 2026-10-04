@@ -10,6 +10,9 @@ namespace EmuSen.Cores.Native
     public sealed class CoreRefusedException(int status, string message) : InvalidOperationException(message)
     {
         public int Status { get; } = status;
+
+        // The detail word a failed advance or debug frame returned beside its status, zero for any other call.
+        public ulong Detail { get; init; }
     }
 
     // One machine of a v1 library: its handle and one method per export, every refusal thrown with the core's words - see EmuSen_CoreAPI.md §19.
@@ -112,7 +115,7 @@ namespace EmuSen.Cores.Native
         {
             ulong detail;
             int status = _api.Advance(Handle, &detail);
-            if (status != 0) throw new CoreRefusedException(status, $"{Name} stopped: {Words(status)} (detail {detail:X}).");
+            if (status != 0) throw new CoreRefusedException(status, $"{Name} stopped: {Words(status)} (detail {detail:X}).") { Detail = detail };
         }
 
         public void Present() => Ok(_api.Present(Handle), "present the picture");

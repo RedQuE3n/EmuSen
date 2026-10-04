@@ -1932,3 +1932,15 @@ one state hash, whether armed or not and on either engine.
 - **The DianaOS console against a MoonRT target, and Mistress's debugger window.** They are covered only through the
   interface here.
 - **MercuryRT and MarsRT onto the shared hooks**, at `EmuSen_NativeCores.md` §7's steps 4 and 5 (§12.4 there).
+
+### 8.5 On the core ABI v1 alone (2026-10-04)
+
+`MoonRtCore` is a subclass of the generic v1 adapter and loads MoonRT through the v1 exports (`EmuSen_CoreAPI.md` §26).
+It keeps C# Moon's exceptions (the status table moved into the shim, which `MoonMachine` now reads), its state
+pre-check messages, its battery rule (none opened for a cartridge without battery RAM), the port rule (ports 0 and 1 the two pads,
+any other ignored), the held pads across a load, and the mirror debugger with its halts, through the same
+bridge now calling the v1 debug exports. `moonrt_core_rom_patch` is the v1 handle's twin of `moonrt_rom_patch`, for
+the exhaustive patch test. The pre-stable exports and `MoonMachine` stay for the machine and state tests until the
+pre-stable set is deleted. The oracle and the timing are `EmuSen_CoreAPI.md` §26.3–§26.4: every MoonRT test unchanged,
+the bench's four state hashes unchanged, the kit's fifteen cases on the four games, and the plain frame −0.99% to
++1.98% across the four games on a loaded machine.

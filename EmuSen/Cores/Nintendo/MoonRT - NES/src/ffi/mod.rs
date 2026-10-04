@@ -207,6 +207,11 @@ pub unsafe extern "C" fn moonrt_step(handle: *mut Machine) -> i32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn moonrt_rom_patch(handle: *const Machine, address: u32, original: u32) -> i32 {
     let Some(m) = (unsafe { handle.as_ref() }) else { return STATUS_NULL };
+    rom_patch(m, address, original)
+}
+
+/// The patch table's answer for one read, which both interfaces' extensions give.
+fn rom_patch(m: &Machine, address: u32, original: u32) -> i32 {
     let (Ok(address), Ok(original)) = (u16::try_from(address), u8::try_from(original)) else { return -1 };
     match &*m.bus.rom_patches {
         Some(map) => match map.get(&address) {

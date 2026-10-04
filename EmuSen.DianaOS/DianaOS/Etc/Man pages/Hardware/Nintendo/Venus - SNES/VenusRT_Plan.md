@@ -555,7 +555,8 @@ Each stage is a run of supervised steps of a few hours, with a check-in after ea
 *Stage 0 was run on 2026-09-30, with the crate skeleton, the probe's pacing fix and the clone check brought forward
 into it; `VenusRT_Native.md` §1 is its record. Stage 1 took two steps, not four, the same day (§10 and §11 there), and stage 2 three, not five (§12 to §14). Stage 7 closed on 2026-10-04 in four steps
 (§36): on the generic debug target, which `EmuSen_CoreAPI.md` §13.2 put in place of a `VenusRtDebugTarget`; §4.7's
-console views stay outside v1 there.*
+console views stay outside v1 there. Stage 8 was run on 2026-10-04 in one step (§41 there): one gate met, two met with named
+exceptions, five not met, so the default does not flip; its §41.10 lists what blocks it.*
 
 About 44 steps, or 130–160 hours (P3). Stage 6 can run after stage 4, before the coprocessors, so that the player gets
 the engine for ordinary cartridges early; games with a chip then fall back to Venus with a notice until stage 5 lands.

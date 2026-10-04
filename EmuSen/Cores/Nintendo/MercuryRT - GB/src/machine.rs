@@ -376,7 +376,7 @@ mod tests {
         line.split(' ').next().unwrap().parse().unwrap()
     }
 
-    /// A version-5 state as C# wrote it, from this machine's version-6 one: the path after each RAM, two more copies, each with its own fill.
+    /// A version-5 state as C# wrote it, from this machine's current one: the path after each RAM, two more copies, each with its own fill, and no mixer.
     fn version_5(m: &Machine, path: &str, fills: [u8; 3]) -> Vec<u8> {
         let (v6, layout) = (save(m), m.layout());
         let copy = |fill: u8, class: bool| {
@@ -395,7 +395,7 @@ mod tests {
         v5.extend(copy(fills[1], true));
         v5.extend(&v6[mapper_at..bus_at]);
         v5.extend(copy(fills[2], true));
-        v5.extend(&v6[bus_at..]);
+        v5.extend(&v6[bus_at..offset_of(&layout, "Bus.Apu._cycleFraction")]);
         v5
     }
 
@@ -460,7 +460,7 @@ mod tests {
         let mut wrong = state.clone();
         wrong[4] = 4;
         assert_eq!(m.load_state(&wrong).map_err(|e| e.status()), Err(-4));
-        wrong[4] = 8;
+        wrong[4] = (STATE_VERSION + 1) as u8;
         assert_eq!(m.load_state(&wrong).map_err(|e| e.status()), Err(-4));
         assert_eq!(m, before);
     }

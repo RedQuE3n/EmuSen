@@ -3475,3 +3475,32 @@ were not inspected):
 With the console's program, VenusRT returns to its §30.2 results. **§35.5's argument stands with this evidence**:
 the two spc_dsp6 tests are a sensitivity of VenusRT's to the boot program's timing, not a fault in the open
 program's protocol. The open program remains the default, and these two tests and `spc_smp` are its named cost.
+
+## 39. The NEC DSP replacements, step 3: the DSP-1's arithmetic (2026-10-04)
+
+Step 3 of `VenusRT_DspHle.md` §8 covers the DSP-1's Multiply (00h, 20h), Radius (08h), Range (18h, 38h), the ROM
+version (2Fh) and the memory test (0Fh), with the latency model for each. Rules R1-R4 of the plan's §1.3 govern it.
+§39.1 was written and committed before the first comparison with the image.
+
+### 39.1 The families, declared before the first comparison
+
+The documents give each command's formula. The SNESdev wiki gives the equations and "rounded to <= 15 bits" for
+Multiply, and its data types: T, 15 bits after the point; L2 and H2, the halves of a 32-bit value counted in units of
+2^-1. fullsnes gives the µPD77C25's multiplier, K·L·2 as a 32-bit product. What no document fixes is left as a family
+of variants, and the oracle chooses one member. A command's chosen member must agree on every case graded, or the
+command is a named loss under R4.
+
+| Command | Formula | Variants (count, bits of choice) |
+|---|---|---|
+| 00h, 20h Multiply | P = K·I, both signed 16-bit; M = R(P / 2^15) | R: floor, half up (floor of x + 1/2), half to even, toward zero; overflow of M: wrap to 16 bits, or saturate to 7FFFh and 8000h (8, 3 bits; each code chooses on its own) |
+| 08h Radius | V = 2^s·(x² + y² + z²) in 32 bits; L = V mod 2^16, H = V div 2^16 | s: -1 (floor), 0, 1; 32-bit overflow: wrap, or saturate to 7FFFFFFFh (6, under 3 bits) |
+| 18h, 38h Range | V = 2^s·(x² + y² + z² - r²) in 32 bits; D = R(V / 2^16) | s: -1, 0, 1; overflow: wrap, saturate; R: floor, half up (12, under 4 bits; each code on its own) |
+| 0Fh memory test | a constant on a working chip (plan §3.1, argued) | 0000h, 0001h, 00FFh, FFFFh (4, 2 bits); its effect on the chip's RAM is not modelled (§37.4) |
+| 2Fh ROM version | 0100h (DSP-1), 0101h (DSP-1B), fullsnes | none |
+
+Over the step that is at most 19 bits of choice, against the 2^32 Multiply cases and the 2^20 seeded cases of each
+other command graded. **Timing** follows plan §6.3 as §37.3 corrected it. Each phase takes the work and notice that
+`dsporacle::timing` measures over the seeded cases. A constant is the model; a phase that varies would need a rule
+naming one feature of the inputs, and none is declared, so a varying phase in this step would be recorded as
+inexact. A phase whose work the fastest answer hides takes work 0, which gives the same latency for any answer at or
+above `FASTEST`.

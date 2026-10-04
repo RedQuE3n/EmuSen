@@ -479,6 +479,11 @@ A derived table is generated, never written out. The rules:
    A table that no stated formula reproduces is R4's stop. A table that a formula reproduces except at a few entries is
    also a stop: patching those entries would copy them.
 
+> *Amended 2026-10-04* (decided; `VenusRT_Native.md` §40.6). Rule 4 gains one exception. Where firmwarecheck's
+> `--forced` run proves a table formula-exact, one extra widening is allowed, limited to the arithmetic between the
+> table's entries, declared in writing first and at most 64 members, with no new table and no patched entry. The
+> DSP-1's sine took it, and no member was exact (§40.7).
+
 ### 5.3 Measuring that no table repeats the firmware beyond what a formula forces
 
 `firmwarecheck.py` (on branch `venusrt`; `EmuSen_Debugging_Tools_Reference_v5.md` §3.61) compares a replacement image

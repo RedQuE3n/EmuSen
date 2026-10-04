@@ -2705,6 +2705,58 @@ isolation attribute goes), and a window a test leaves open is closed by the hook
 toolkit's two. No resident-size ceiling was added: the curve above moves by 0.3 GB with what the parallel classes
 happen to be doing, which would make any useful ceiling either loose or flaky.
 
+
+### 3.63 `WindowFitScrapeAuditTests`: an intermittent failure not reproduced, and what was ruled out
+
+*Measured 2026-10-04.* The scrape window's fit audit was reported failing once in each of two full-suite runs and
+passing alone; the same was seen once on the VenusRT branch (`VenusRT_Native.md`, its fit-audit row). No run kept the
+failure's text, so which of the six cases failed, and whether with a fault list or a timeout, is not known. The search
+for a cause is recorded here, so that the next occurrence is read against it.
+
+**What the test depends on.** The class is in the serialized "Process globals" collection, which xUnit runs after
+every parallel collection, and in the suite's order it is the first class of that phase to open a `MainWindow`. Each
+case drives a run over the fake ScreenScraper, paced by `FakeScrapeClock`, to one of three states, then audits the
+sheet. Its only wall-clock budgets are the 20-second limits of `WaitFor` and `ReleaseUntil`; everything the status
+window draws is a function of the run and the fake clock, and the window redraws only on its 250 ms timer, which the
+`Pump` calls before the audit always reach.
+
+**Runs, before `fd1c56f0`'s test-memory changes and after.**
+
+| Where | Runs | Cases of the class | Failed |
+|---|---|---|---|
+| The full suite, before (one run) and after (two runs, at one-minute loads up to 25 from other work) | 3 | 18 | 0 |
+| The user-interface namespaces, before (with a 72-case repeat of the class) and after (twice) | 3 | 90 | 0 |
+| The 123-test subset that held 58 `MainWindow`s before the fix (§3.62), before | 4 | 24 | 0 |
+| The window tests that leaked windows before the fix, then the scraping tests, then the class, before | 3 | 18 | 0 |
+| The class alone, under a CPU quota of 50, 25 and 12 per cent, after | 6 | 36 | 0 |
+| A 72-case repeat of the class, under no quota and a quota of 25 per cent, after | 2 | 144 | 0 |
+
+**What was ruled out, each by a run or by reading.**
+
+- *Starvation alone.* At a 12 per cent quota a case took about 6 s against about 1 s, well inside the 20-second
+  budgets. Starving the process slows the run; it does not make it fail.
+- *A status sheet outliving its window.* A probe drove a run part way, let the case close its `MainWindow` with the
+  sheet up, then pumped the dispatcher for 1.5 s in the next dispatch. On the build before the fix, when LunaP did not
+  yet close a sheet with its host, the sheet's timer was stopped and it redrew nothing more (refreshes 3 before and 3
+  after); its `Closed` handler stops it.
+- *A previous case's scrape reaching the next case.* Each window keeps its own `HttpClient` and the scraper its own
+  clock, `Scraper.Dispose` waits up to five seconds for its workers, and a result posted after the window closed is
+  dropped by `ScrapeArrived`'s `_scrapeClosed` guard.
+- *Text that grows with time.* The elapsed and remaining times are the fake clock's.
+
+**What remains, argued and not demonstrated.** A failure that needs the full suite's state at the start of the
+serialized phase. Before `fd1c56f0` that state included every retained window and an Avalonia application per
+dispatch (§3.62), and work left on the process-wide dispatcher runs inside whichever test pumps it next, as
+`EmuSen_BigPicture.md` §15.14 found for a different window. After it, windows a test leaves open are closed after the
+test and one application serves the assembly. If the failure was of that kind it should not recur; if it recurs, the
+case's name and its message (the fault list the audit writes before asserting, or the timeout's counts) decide between
+this and anything not considered here, and `--logger trx` keeps both.
+
+Two other tests failed in the same full runs and passed alone, both timing tests on a loaded machine:
+`MarsThreadedRdpTests`' pause-and-snapshot cases (30-second budget, both runs after the merge, at loads of 21 to 25)
+and `ScraperTests.Never_more_requests_at_once_than_maxthreads` (a 10-second wait for a result, once, before it). Neither
+was investigated here.
+
 ---
 
 ## 8. A note on the 2026-08-06 commit, for whoever runs `git log` and wonders

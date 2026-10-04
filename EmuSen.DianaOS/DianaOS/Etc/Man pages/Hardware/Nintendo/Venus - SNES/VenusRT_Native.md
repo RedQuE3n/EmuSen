@@ -5155,3 +5155,56 @@ The crate test `the_replacements_projection_stays_close_to_the_image` holds the 
   coordinate-wise eye, is a decision for the tester.
 - **Latency.** The medians leave most cases a few cycles off. Exact timing needs the reciprocal's sequence, which the
   sine's loss already puts out of reach of exact values.
+
+## 50. The NEC DSP replacements, step 7 continued: the DSP-1's Target and Gyrate (2026-10-04)
+
+§50.1 and §50.2 were written and committed before the first comparison of any member.
+
+### 50.1 What was characterised, from the oracle
+
+Measured 2026-10-04 with `dsp_oracle chains` on the DSP-1B, as errors of a stated formula against the image.
+
+- **Target (0Eh)** gives the ground point under a screen position (H, V), as SnesLab says.
+  - At Aas = 0 it is §49.1's geometry: the ray from the eye through (H, V) on the screen, met with the ground.
+  - **Its H axis turns the other way from Project's.** Moving H moves the ground point along (cos a, -sin a), where
+    Project's right is (cos a, sin a): at a = 90° the two are opposite, and at 45° Target's H runs along the view.
+    Measured at a = 0, 45°, 90°, 135° and 270°.
+  - **Target is Raster's matrix applied to (H, V).** With Raster's line-V results An, Bn, Cn, Dn from the same Parameter,
+    the image's (X, Y) is (Cx + (H·An + V·Bn)/256, Cy + (V·Dn - H·Cn)/256) within 2 in 594 of 600 seeded cases. The
+    six others are where the line's values saturate. The geometry agrees: the ground's offset from C for line V is
+    -V·Ez/(cos z·n), which is -V·K/256 in §49.2's terms, and its lateral scale is k/256.
+- **Gyrate (14h)** takes three angles and three turns and gives three angles. With the inputs (Az, Ax, Ay, U, F, L):
+  - Az' = Az + (U·cos Ay - F·sin Ay)/cos Ax;
+  - Ax' = Ax + U·sin Ay + F·cos Ay;
+  - Ay' = Ay + L - (U·cos Ay + F·sin Ay)·tan Ax.
+  - Over 600 seeded cases each result is within 2 of this, its median error -0.5 to -1, except near Ax = ±90°, where
+    1/cos Ax saturates. The sign of F in Ay' is not the one that Az' has. These are the Euler-angle rates for turns
+    about the body's axes, as fullsnes's name, "3D Angle Rotation", suggests.
+
+### 50.2 The families, declared before the first comparison
+
+Products and the sine as §49.2. Target uses Parameter's state and §49.5's member for Cx, Cy and Raster's k and K.
+
+**Target (0Eh)**: X = Cx + (H·k·cos a - V·K·sin a)/256, Y = Cy + (V·K·cos a - H·k·sin a)/256, with k and K Raster's for
+line V.
+
+- **T1, k and K**: saturated to 16 bits as Raster gives them, or carried at full width (2).
+- **T2, the products**: through Raster's floored An-Dn, then times H or V; or each triple product scaled once (2).
+- **T3, the division by 256**: floor, or half up (2).
+
+That is 8 members, 3 bits.
+
+**Gyrate (14h)**: §50.1's three equations, each increment saturated to 16 bits and added to its angle with wrapping.
+
+- **G1, 1/cos Ax and tan Ax**: through the Inverse routine on cos Ax, tan Ax as sin Ax times it; or exact division (2).
+- **G2, each sum**: its terms floored and summed, or the sum scaled once (2).
+- **G3, Az's quotient**: the bracket formed and then divided, or each term divided (2).
+- **G4, a quotient's rounding**: floor, or half up (2).
+
+That is 16 members, 4 bits.
+
+**The grade**, as §49.2's: a result is close within 2 or 1/128 of the image's value; the member with the most close
+results wins, ties to the smaller largest difference. Target is graded over 2^16 seeded cases (§49.2's Parameter
+ranges, H in ±128 and V from the horizon's line plus 2 to +112) and the traced Target commands of Pilotwings, the only
+bench game that gives it (§37.6). Gyrate is graded over 2^16 seeded cases (any Az and Ay, Ax in ±75°, turns in ±1,024)
+and Pilotwings' traced Gyrates. Timing as §49.2: medians of the phases that vary.

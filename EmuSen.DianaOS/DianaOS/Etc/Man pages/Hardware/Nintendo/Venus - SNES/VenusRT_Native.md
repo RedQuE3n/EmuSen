@@ -4075,3 +4075,86 @@ one.
 7,200 frames, is in the probe cache. The first rule found there holds in every case: words 68h and 69h are words 60h
 less 63h and 61h less 65h. A further characterisation step of its paths would let F1 ROC II run past frame 1,019. With
 the sine a named loss, 05h could be exact only where its paths do not use the sine.
+
+## 44. The NEC DSP replacements, steps 5 to 8: the DSP-1's remaining commands, begun (2026-10-04)
+
+Steps 5 to 8 of `VenusRT_DspHle.md` §8. The sine is a named loss (§40.7), so every command built on it can only be
+approximate. This section therefore records closest members and their measured error, not exact choices. The
+commands that do not use the sine, Inverse and Distance, were searched for an exact member and none was found in the
+time given. This step is not finished: §44.4 lists what remains.
+
+### 44.1 What was characterised, from the oracle
+
+- **Attitude (n1h), Objective (nDh), Subjective (n3h), Scalar (nBh).**
+  - Each Attitude sets matrix n to (m/2)·Rx(I4)·Ry(I3)·Rz(I2).
+  - Objective gives the matrix times (X, Y, Z), Subjective its transpose times (F, L, U), and Scalar the first row
+    times the vector.
+  - The order and the axes were found by unit vectors through Objective after Attitudes with random angles: the
+    best of the 96 orders, axis assignments, signs and transpositions agreed to 4.5·10^-4 of full scale, and the next
+    to 1.04.
+  - As with Polar (§40.4), the angles are not SnesLab's "about Z, X, Y": the second rotates about Y and the third
+    about X.
+  - With m = 7FFFh and no rotation, the diagonal is 3FFEh, consistent with three floored products by cos 0 and a
+    halving.
+- **Inverse (10h).**
+  - a is normalised to a mantissa in [4000h, 8000h) or [-8000h, -4000h) with s shifts, and the exponent is 1 + s - b.
+  - The exponent agreed on all 65,536 values of a at b = 0. The mantissa lies within 2 of 2^29 over the normalised
+    a, floored: equal in 48.7%, one away in 49.6%, two away in 1.6%. That is the signature of a Newton iteration's
+    truncations.
+  - The best of 96 simple Newton members (seed, iterations, product rounding) agreed in 14,701 of 16,384 positive
+    mantissas (89.7%).
+  - **The time is a rule of one feature, exact on all 65,536 values**: 36 + 2s cycles for a positive a and 40 + 2s for
+    a negative one, plus 2 (positive) or 1 (negative) when the normalised value is a power of two; 14 for a = 0.
+- **Distance (28h).**
+  - On the DSP-1B the root is the floor of √(x² + y² + z²) or up to 4 below it, for sums under 2^30. Above that, the
+    sum's overflow takes another course that was not resolved.
+  - The time steps by 4 cycles per two bits of the sum's length, in two runs for the sum's low and high words.
+  - The DSP-1's fullsnes bug multiplies the root by a factor between 0.97 and 0.99 that alternates with the parity of
+    the sum's bit length. It was measured over 30,000 cases and not modelled.
+- **Parameter (02h), first findings.**
+  - Vva = -Les·cot(Azs), with Azs the angle from straight down. It agreed at every angle tried below a limit near
+    79.8°, where Vva holds and Vof becomes Les·(cot θ_limit - cot Azs).
+  - (Cx, Cy) is F moved along the view's forward direction (-sin Aas, -cos Aas) by Fz·tan(Azs).
+  - Raster, Project and Target were not characterised.
+
+### 44.2 What was built and the grade (measured 2026-10-04)
+
+`dsphle.rs` gains the three matrices in its state, so the state version is 20. A replacement state of version 19 is
+refused with `VERSION`, while the low-level path's states of 17-19 still load. Steps 9 to 11 also changed the
+DSP-2's and the ST010's replacement states without raising the version; that defect is corrected here.
+
+| Code | Built as | Grade (2^17 to 10^5 seeded cases, both images where alike) |
+|---|---|---|
+| 10h Inverse | normalised; 2^29 over the mantissa, floored; the exponent and the time by §44.1's rules | exponent and latency exact in every case; mantissa within 2, exact in 48.8% |
+| 28h Distance | the floored root; the time by §44.1's steps | DSP-1B within 4 for sums under 2^30; the DSP-1's bug and sums of 2^30 and over not modelled |
+| n1h Attitude | (m/2)·Rx·Ry·Rz in floating point from the replacement's sine, floored to Q15 | through the commands below |
+| nDh, n3h, nBh | each product floored, summed | within 18 of the image in every case; within 3 in 92% (Objective, Subjective) and 96% (Scalar) |
+
+The crate test `the_replacements_approximate_commands_stay_within_their_bounds` holds these bounds on both images.
+
+### 44.3 The seven DSP-1 titles in lockstep
+
+`dsp_lockstep`, 3,600 frames each, with §37.6's pad scripts:
+
+| Game | Identical until | Pictures equal |
+|---|---|---|
+| Super Mario Kart | frame 96 | 258 of 3,600 |
+| Ballz 3D | 762 | 1,007 |
+| Pilotwings | 1,799 | 1,802 |
+| Lock On | 1,523 | 1,525 |
+| Suzuka 8 Hours | 1,474 | 1,491 |
+| Super Bases Loaded 2 | 3,029 | 3,030 |
+| Michael Andretti's Indy Car Challenge | 3,310 | 3,310 of 3,593 |
+
+Each parts one frame after its first command that computes (§37.6). That is the expected outcome while the sine is a
+named loss and the projection commands are unbuilt: **P6 is retired, false**, since no DSP-1 title can be identical
+to the image while its sine is approximate.
+
+### 44.4 What remains of steps 5 to 8
+
+- **Parameter, Raster, Project, Target.** These are the most-used commands: Project alone is 56% of Super Mario Kart's
+  traffic. §44.1's first findings fix the camera's frame. Raster's mode 7 matrix, Project's screen position and
+  enlargement, Target's ground point and the limit-angle branch remain to be characterised.
+- **Gyrate (14h)**, six inputs and three results, not characterised.
+- **An exact Inverse and Distance**: a wider declared search over seeds and iteration sequences, if the plan's rules
+  allow it.

@@ -244,7 +244,7 @@ impl Core for Machine {
                 .collect(),
             processors: self.processors(),
             battery: vec![Battery { which: 0, suffix: ".srm".into() }],
-            state: StateFormat { format: "VNRT".into(), version: STATE_VERSION as i64, loads_from: vec![17, 18, STATE_VERSION as i64] },
+            state: StateFormat { format: "VNRT".into(), version: STATE_VERSION as i64, loads_from: vec![17, 18, 19, STATE_VERSION as i64] },
             phases: Vec::new(),
             patches: Some((0, 0xFF_FFFF)),
             skip_rendering_state_neutral: true,

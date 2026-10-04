@@ -516,8 +516,8 @@ impl Machine {
             if saved != dsp.tag() {
                 return Err(StateError::DspEngine { saved, running: dsp.tag() });
             }
-            // Version 18's replacement kept no phase timing (VenusRT_Native.md §39.3).
-            if saved == 1 && version < 19 {
+            // Version 18's replacement kept no phase timing (VenusRT_Native.md §39.3), and 19's no DSP-2, ST010 or attitude state (§42-§44).
+            if saved == 1 && version < 20 {
                 return Err(StateError::Version(version));
             }
             let mut packed = dsp.pack();

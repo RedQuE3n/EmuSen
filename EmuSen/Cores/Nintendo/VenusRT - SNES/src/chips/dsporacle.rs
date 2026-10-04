@@ -810,6 +810,44 @@ mod tests {
         }
     }
 
+    // VenusRT_Native.md §44: Inverse within 2 with its timing exact; the DSP-1B's Distance within 4 below 2^30; the
+    // attitude family within 24 after an Attitude, against both images.
+    #[test]
+    fn the_replacements_approximate_commands_stay_within_their_bounds() {
+        use super::super::dsphle::Program;
+        for (stem, program) in [("dsp1", Program::Dsp1), ("dsp1b", Program::Dsp1b)] {
+            let Some(mut lle) = chip(stem) else { return };
+            let mut hle = Hle::new(program);
+            power_on(&mut hle, &Host::steady()).unwrap();
+            let mut p = Pcg::new(0x44);
+            for (command, bound) in [(0x10u8, 2), (0x28, 4), (0x0D, 24), (0x13, 24), (0x2B, 24)] {
+                // The DSP-1's own 28h, fullsnes's bug, is not modelled.
+                if command == 0x28 && program == Program::Dsp1 {
+                    continue;
+                }
+                for k in 0..1024u32 {
+                    let mut set: Vec<u16> = (0..8).map(|_| p.word()).collect();
+                    if command == 0x28 {
+                        set.iter_mut().for_each(|w| *w = (*w as i16 >> 2) as u16);
+                    }
+                    if command != 0x10 && command != 0x28 {
+                        let attitude = [p.word() >> 1, p.word(), p.word(), p.word()];
+                        let a = 0x01 | (command & 0x30);
+                        transact(&mut lle, &mut Host::steady(), a, &attitude);
+                        transact(&mut hle, &mut Host::steady(), a, &attitude);
+                    }
+                    let (x, y) = (transact(&mut lle, &mut Host::steady(), command, &set), transact(&mut hle, &mut Host::steady(), command, &set));
+                    assert!(!compare(&x, &y).shape, "{stem} {command:02X} case {k}");
+                    let e = x.outputs().iter().zip(y.outputs()).map(|(&a, b)| (a as i16 as i32 - b as i16 as i32).abs()).max().unwrap();
+                    assert!(e <= bound, "{stem} {command:02X} case {k}: off by {e}");
+                    if command == 0x10 {
+                        assert!(!compare(&x, &y).latency && x.outputs()[1] == y.outputs()[1], "{stem} 10 case {k}");
+                    }
+                }
+            }
+        }
+    }
+
     // The latency model on its own: a phase's rise is the later of its work after the last rise and its notice after
     // the S-CPU's answer.
     #[test]

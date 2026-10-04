@@ -18,7 +18,7 @@ struct Tally {
     first: Vec<Vec<u16>>,
 }
 
-fn grade(stem: &str, image: &[u8], command: u8, sets: impl Iterator<Item = Vec<u16>>, seed: u64, before: Option<u8>) -> Tally {
+fn grade(stem: &str, image: &[u8], command: u8, sets: impl Iterator<Item = Vec<u16>>, seed: u64, before: Option<(u8, usize)>) -> Tally {
     let nonzero = std::env::var_os("DSP_GRADE_NONZERO").is_some();
     // DSP_GRADE_FIRST=lo-hi[,lo-hi...] holds the first input words in those ranges.
     let first: Vec<(u16, u16)> = std::env::var("DSP_GRADE_FIRST").map(|v| {
@@ -46,10 +46,10 @@ fn grade(stem: &str, image: &[u8], command: u8, sets: impl Iterator<Item = Vec<u
         for (k, &(lo, hi)) in first.iter().enumerate() {
             set[k] = lo + set[k] % (hi - lo + 1);
         }
-        if let Some(before) = before {
-            let set = [set.last().copied().unwrap_or(0)];
-            transact(&mut lle, &mut Host::steady(), before, &set);
-            transact(&mut hle, &mut Host::steady(), before, &set);
+        if let Some((before, k)) = before {
+            let set = &set[set.len() - k..];
+            transact(&mut lle, &mut Host::steady(), before, set);
+            transact(&mut hle, &mut Host::steady(), before, set);
         }
         let (x, y) = if jitter {
             (transact(&mut lle, &mut hs, command, &set), transact(&mut hle, &mut ha, command, &set))
@@ -90,8 +90,12 @@ fn main() {
     let image = firmware(&stem).unwrap_or_else(|| std::process::exit(1));
     let n = transact(&mut idle_chip(&stem, &image, &mut Host::steady(), 0).unwrap(), &mut Host::steady(), command, &[0; 8]).inputs().max(1);
     // A variable-length command takes as many words as DSP_GRADE_WORDS gives; DSP_GRADE_BEFORE runs a command first.
-    let n = n.max(std::env::var("DSP_GRADE_WORDS").ok().and_then(|v| v.parse().ok()).unwrap_or(if stem == "dsp2" { 300 } else { 0 }));
-    let before = std::env::var("DSP_GRADE_BEFORE").ok().map(|c| u8::from_str_radix(&c, 16).unwrap());
+    let n = n.max(std::env::var("DSP_GRADE_WORDS").ok().and_then(|v| v.parse().ok()).unwrap_or(if stem == "dsp2" { 300 } else { 8 }));
+    // DSP_GRADE_BEFORE=cc[:k] runs command cc first with the case's last k words (1 by default).
+    let before = std::env::var("DSP_GRADE_BEFORE").ok().map(|c| {
+        let (c, k) = c.split_once(':').unwrap_or((&c, "1"));
+        (u8::from_str_radix(c, 16).unwrap(), k.parse::<usize>().unwrap())
+    });
     let start = std::time::Instant::now();
     let handles: Vec<_> = (0..threads)
         .map(|th| {

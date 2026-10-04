@@ -99,6 +99,10 @@ pub struct DspHle {
     pub(super) d2: super::dsp2::Dsp2,
     /// The ST010's mailbox poll (VenusRT_Native.md §43).
     pub(super) mail: super::st010::Mail,
+    /// The DSP-1's three attitude matrices, m/2 times the rotation in Q15 (VenusRT_Native.md §44).
+    pub(super) att: [[i16; 9]; 3],
+    /// A phase's work and notice that depend on the inputs, by phase, set when the inputs are complete.
+    pub(super) varying: Option<(u8, u16, u16)>,
     /// Edges made, and the last one's place (0 idle, 1 command, 2 other) and written word, for the oracle; not in the state.
     pub edges: u64,
     pub edge_place: u8,
@@ -129,6 +133,8 @@ impl DspHle {
             rise: 0,
             d2: Default::default(),
             mail: Default::default(),
+            att: [[0; 9]; 3],
+            varying: None,
             edges: 0,
             edge_place: 2,
             edge_write: None,
@@ -183,7 +189,10 @@ impl DspHle {
 
     /// The transaction's next edge, at the later of its phase's work after the last rise and its notice after now.
     fn next_phase(&mut self, next: Next) {
-        let (work, notice) = dsp1_timing(self.command).get(self.phase as usize).copied().unwrap_or((0, NOTICE as u16));
+        let (work, notice) = match self.varying {
+            Some((phase, w, n)) if phase == self.phase => (w, n),
+            _ => dsp1_timing(self.command).get(self.phase as usize).copied().unwrap_or((0, NOTICE as u16)),
+        };
         self.next = next;
         self.due = (self.rise + work as u64).max(self.cycles + notice as u64);
         self.phase = self.phase.saturating_add(1);
@@ -374,6 +383,7 @@ impl DspHle {
     fn compute(&mut self) {
         let (_, total, run) = dsp1_shape(self.command).unwrap_or((0, 0, false));
         let i = self.inputs.map(|w| w as i16 as i64);
+        self.varying = None;
         let squares = i[0] * i[0] + i[1] * i[1] + i[2] * i[2];
         self.outputs = [0; WORDS];
         match self.command {
@@ -414,6 +424,41 @@ impl DspHle {
                 let (x, z) = (w(x * c2 - z * s2), w(x * s2 + z * c2));
                 let (y, z) = (w(y * c3 + z * s3), w(z * c3 - y * s3));
                 self.outputs[..3].copy_from_slice(&[x as u16, y as u16, z as u16]);
+            }
+            // Approximate (§44): the exponent and timing exact, the mantissa within two of the chip's.
+            0x10 | 0x30 => {
+                let (mantissa, exponent, shifts, edge) = inverse(self.inputs[0] as i16, self.inputs[1] as i16);
+                self.outputs[..2].copy_from_slice(&[mantissa as u16, exponent as u16]);
+                let notice = match self.inputs[0] as i16 {
+                    0 => 14,
+                    a if a > 0 => 36 + 2 * shifts + 2 * edge as u16,
+                    _ => 40 + 2 * shifts + edge as u16,
+                };
+                self.varying = Some((2, 0, notice));
+            }
+            // Approximate (§44): the root floored, within four of the DSP-1B's; the DSP-1's bug is not modelled.
+            0x28 => {
+                let v = (squares as u64) & 0xFFFF_FFFF;
+                self.outputs[0] = (v.isqrt() as u16).min(0x7FFF);
+                let k = 64 - v.leading_zeros() as u16;
+                let notice = if k >= 16 { 122 - 4 * (k / 2) } else if k >= 4 { 83 - 4 * (k / 2) } else { 79 };
+                self.varying = Some((3, 0, notice - (self.program == Program::Dsp1) as u16));
+            }
+            // Attitude: matrix n set to m/2 times the rotations about X by I4, Y by I3 and Z by I2, in that product (§44).
+            0x01 | 0x11 | 0x21 => {
+                let n = (self.command >> 4) as usize;
+                self.att[n] = attitude(self.inputs[0] as i16, self.inputs[1], self.inputs[2], self.inputs[3]);
+            }
+            // Objective, Subjective and Scalar: the matrix, its transpose and its first row, times the vector.
+            c @ (0x0D | 0x1D | 0x2D | 0x03 | 0x13 | 0x23 | 0x0B | 0x1B | 0x2B) => {
+                let m = self.att[(c >> 4) as usize];
+                let v = [i[0], i[1], i[2]];
+                let row = |r: usize, t: bool| (0..3).map(|j| (2 * m[if t { j * 3 + r } else { r * 3 + j }] as i64 * v[j]) >> 16).sum::<i64>() as u16;
+                match c & 0x0F {
+                    0x0D => self.outputs[..3].copy_from_slice(&[row(0, false), row(1, false), row(2, false)]),
+                    0x03 => self.outputs[..3].copy_from_slice(&[row(0, true), row(1, true), row(2, true)]),
+                    _ => self.outputs[0] = row(0, false),
+                }
             }
             _ => {}
         }
@@ -460,6 +505,15 @@ impl DspHle {
         if self.st() {
             o.extend(self.mail.poll.to_le_bytes());
         }
+        if matches!(self.program, Program::Dsp1 | Program::Dsp1b) {
+            for w in self.att.iter().flatten() {
+                o.extend(w.to_le_bytes());
+            }
+            let (p, w, n) = self.varying.unwrap_or((0xFF, 0, 0));
+            o.push(p);
+            o.extend(w.to_le_bytes());
+            o.extend(n.to_le_bytes());
+        }
         o
     }
 
@@ -503,7 +557,51 @@ impl DspHle {
             let at = base + self.ram.len() * 2;
             self.mail.poll = u64::from_le_bytes(d[at..at + 8].try_into().expect("eight bytes"));
         }
+        if matches!(self.program, Program::Dsp1 | Program::Dsp1b) {
+            let at = base;
+            for (k, w) in self.att.iter_mut().flatten().enumerate() {
+                *w = i16::from_le_bytes([d[at + 2 * k], d[at + 2 * k + 1]]);
+            }
+            let at = at + 54;
+            let (w, n) = (u16::from_le_bytes([d[at + 1], d[at + 2]]), u16::from_le_bytes([d[at + 3], d[at + 4]]));
+            self.varying = (d[at] != 0xFF).then_some((d[at], w, n));
+        }
     }
+}
+
+/// Inverse (10h): a·2^b normalised, a's mantissa in [4000h, 8000h) or [-8000h, -4000h), and 2^29 over it floored, as
+/// the mantissa and exponent of the reciprocal; also the shifts and whether the normalised value was a power of two.
+fn inverse(a: i16, b: i16) -> (i16, i16, u16, bool) {
+    if a == 0 {
+        return (0x7FFF, 0x2F, 0, false);
+    }
+    let (mut m, mut s) = (a as i32, 0u16);
+    let r = if m > 0 {
+        while m < 0x4000 {
+            m <<= 1;
+            s += 1;
+        }
+        ((1i32 << 29) / m).min(0x7FFF)
+    } else {
+        while m >= -0x4000 {
+            m *= 2;
+            s += 1;
+        }
+        -((1i32 << 29) / -m)
+    };
+    (r as i16, (1 + s as i32 - b as i32) as i16, s, m == 0x4000 || m == -0x8000)
+}
+
+/// Attitude's matrix: m/2 times Rx(I4)·Ry(I3)·Rz(I2), Q15, with the replacement's sine (§44).
+fn attitude(m: i16, z: u16, y: u16, x: u16) -> [i16; 9] {
+    let sc = |a: u16| (sine(a) as f64 / 32768.0, sine(a.wrapping_add(0x4000)) as f64 / 32768.0);
+    let ((sz, cz), (sy, cy), (sx, cx)) = (sc(z), sc(y), sc(x));
+    let rz = [cz, -sz, 0.0, sz, cz, 0.0, 0.0, 0.0, 1.0];
+    let ry = [cy, 0.0, sy, 0.0, 1.0, 0.0, -sy, 0.0, cy];
+    let rx = [1.0, 0.0, 0.0, 0.0, cx, -sx, 0.0, sx, cx];
+    let mul = |a: [f64; 9], b: [f64; 9]| std::array::from_fn(|k| (0..3).map(|t| a[k / 3 * 3 + t] * b[t * 3 + k % 3]).sum::<f64>());
+    let r: [f64; 9] = mul(mul(rx, ry), rz);
+    r.map(|v| (v * m as f64 / 2.0).floor().clamp(-32768.0, 32767.0) as i16)
 }
 
 /// The sine and derivative tables of VenusRT_Native.md §40.3, generated once from the formula, 256 words each.
@@ -563,6 +661,12 @@ fn dsp1_timing(command: u8) -> &'static [(u16, u16)] {
         0x0C => &[(0, 2), (14, 2), (0, 2), (31, 4), (0, 2), (0, 3)],
         0x1C => &[(0, 2), (15, 2), (0, 2), (0, 2), (0, 2), (0, 2), (93, 33), (0, 2), (0, 2), (0, 3)],
         0x2F => &[(0, 2), (16, 2), (0, 3)],
+        // Measured constants (§37.3); Attitude's last phase, which varies, takes its medians (§44).
+        0x01 | 0x11 | 0x21 => &[(0, 2), (15, 2), (0, 2), (0, 2), (125, 95)],
+        0x03 | 0x13 | 0x23 | 0x0D | 0x1D | 0x2D => &[(0, 2), (15, 2), (0, 2), (0, 5), (0, 2), (0, 2), (0, 3)],
+        0x0B | 0x1B | 0x2B => &[(0, 2), (17, 2), (0, 2), (0, 5), (0, 3)],
+        0x10 | 0x30 => &[(0, 2), (15, 2), (0, 40), (0, 2), (0, 3)],
+        0x28 => &[(0, 2), (17, 2), (0, 2), (0, 66), (0, 3)],
         _ => &[],
     }
 }
@@ -738,6 +842,16 @@ mod tests {
             }
             _ => eprintln!("python3 or dsp1_tables.py unavailable, not run"),
         }
+    }
+
+    #[test]
+    fn the_dsp1_state_round_trips_with_its_matrices() {
+        let mut d = DspHle::new(Program::Dsp1b);
+        d.att[2][4] = -1234;
+        d.varying = Some((3, 0, 66));
+        let mut back = DspHle::new(Program::Dsp1b);
+        back.unpack(&d.pack());
+        assert_eq!(back.pack(), d.pack());
     }
 
     #[test]

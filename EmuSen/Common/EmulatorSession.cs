@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using EmuSen.Common.Firmware;
 using EmuSen.Cores;
 using EmuSen.DianaOS.DianaOS.Lib;
@@ -41,9 +42,9 @@ namespace EmuSen.Common
         public ICheatCodeCodec? CheatExplicitCodec { get; private set; }
         public ICpuTraceSwitch? CpuTraceSwitch { get; private set; }
 
-        // Firmware <romPath> needs on <engine>, a CoreCatalog.EngineFor name or null for the reference, that isn't in the library yet - see EmuSen_Firmware.md §3.
+        // Required firmware <romPath> needs on <engine>, a CoreCatalog.EngineFor name or null for the reference, not in the library yet - see EmuSen_Firmware.md §3.
         public static IReadOnlyList<FirmwareRequest> MissingFirmwareFor(string romPath, string? engine = null) =>
-            FirmwareLibrary.MissingFrom(CoreFactory.ForFirmwareProbe(romPath, engine).GetFirmwareRequirements(romPath));
+            FirmwareLibrary.MissingFrom(CoreFactory.ForFirmwareProbe(romPath, engine).GetFirmwareRequirements(romPath).Where(r => r.Required));
 
         // Set by the frontend before LoadRom so the debug target shares its registry.
         public CheatRegistry? Cheats { get; set; }
@@ -53,6 +54,9 @@ namespace EmuSen.Common
 
         // Why the engine asked for is not the one running, or null - see CoreFactory.EngineNotice.
         public string? EngineNotice { get; private set; }
+
+        // The core's word that this game runs on a firmware replacement or without a chip - see ICore.FirmwareNotice.
+        public string? FirmwareNotice => _core?.FirmwareNotice;
 
         public void LoadRom(string path)
         {

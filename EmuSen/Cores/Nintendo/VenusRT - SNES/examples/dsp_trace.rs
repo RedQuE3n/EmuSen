@@ -139,7 +139,7 @@ impl Run {
     }
 
     fn drain(&mut self, frame: u64) {
-        let Some((dsp, _)) = self.m.sys.cart.dsp.as_mut() else { return };
+        let Some(dsp) = self.m.sys.cart.dsp.as_mut().and_then(|(d, _)| d.lle_mut()) else { return };
         let log = std::mem::take(dsp.transfers.as_mut().unwrap());
         for (at, t) in log {
             self.rec.feed(frame, at, t);
@@ -147,7 +147,7 @@ impl Run {
     }
 
     fn mailbox(&mut self, frame: u64) {
-        let Some((dsp, _)) = self.m.sys.cart.dsp.as_mut() else { return };
+        let Some(dsp) = self.m.sys.cart.dsp.as_mut().and_then(|(d, _)| d.lle_mut()) else { return };
         let busy = dsp.ram[0x10] & 0x8000 != 0;
         match (&self.rec.mail, busy) {
             (None, true) => self.rec.mail = Some(((dsp.ram[0x10] & 0xFF) as u8, dsp.cycles, dsp.ram.to_vec())),
@@ -239,7 +239,7 @@ fn main() {
     let (stem, _) = m.sys.cart.nec_firmware().expect("a NEC DSP cartridge");
     let fw = venusrt::chips::dsporacle::firmware(stem).unwrap_or_else(|| std::process::exit(1));
     assert!(m.attach_dsp(&fw));
-    m.sys.cart.dsp.as_mut().unwrap().0.transfers = Some(Vec::new());
+    m.sys.cart.dsp.as_mut().and_then(|(d, _)| d.lle_mut()).expect("the image's chip").transfers = Some(Vec::new());
     let mut run = Run { m, rec: Recorder::default(), st010: stem == "st010", stem };
     if let Some(path) = a.get(3) {
         script(&mut run, &std::fs::read_to_string(path).expect("the script"), frames);

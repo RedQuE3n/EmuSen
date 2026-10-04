@@ -3358,3 +3358,85 @@ follows its menus exactly and is the one likely to need rewriting if the game's 
 - **§3.1**: 20h and 38h are not the alike forms the table presumes; Gyrate takes six inputs and gives three; Raster is a
   run, ended by the S-CPU's writes.
 - **§4.3**: of the four games said not to reach their chips without input, two do; three others need input.
+
+## 38. The NEC DSP replacements, step 2: the replacement's frame (2026-10-04)
+
+Step 2 of `VenusRT_DspHle.md` §8. A DSP game now runs with no firmware folder: on VenusRT's open replacement for the
+DSP-1, DSP-1B, DSP-2 and ST010, or without its chip for the DSP-3, DSP-4 and ST011. The player's image, when present,
+stays the exact path. The replacement is a frame. Its ports behave as the chip's, and of its commands only those
+fullsnes fixes answer exactly. Steps 3 to 11 fill it in command by command against §37's oracle.
+
+### 38.1 What was built
+
+- **The slot.** `chips/dspengine.rs` holds `DspEngine`, either `Lle(NecDsp)` or `Hle(DspHle)`, behind the low-level
+  path's port interface (`host_read`, `host_write`, `run_to`, `reset`, `pack`). The bus code is unchanged.
+  - Under the replacement there is no µPD77C25 program, so the debugger lists neither processor 2 nor the `DSPPRG`
+    space.
+  - `DSPRAM` stays for the ST010, whose RAM is real on both engines and is the battery file as before.
+- **The replacement.** `chips/dsphle.rs` is a state machine over the ports with one scheduled chip edge. Its DR and SR
+  handshake is the low-level path's, byte for byte, including the "oblivious" chip (a read or a write completes a
+  transfer alike). It follows §37.2:
+  - **DSP-1 and DSP-1B.** At idle the chip writes 80h in 8-bit mode. The command's read raises RQM, and DRC turns to
+    16-bit 3 cycles later. A command without inputs takes one transfer before its result. 40h-FFh are passed over, and
+    a raster run repeats its line until the S-CPU writes over a result.
+  - **DSP-2.** 8-bit throughout, with the idle word 00h after power-on and FFh after a command.
+  - **ST010.** A word written to DR at power-on, and the mailbox served only after that word is read.
+- **What it computes.**
+  - Exactly: the DSP-1's 2Fh (0100h, and 0101h on the DSP-1B), the DSP-2's 0Fh, a no-op, and the ST010's 00h, which
+    clears the mailbox and nothing else.
+  - Every other DSP-1 command takes its documented transfers and gives zeros. The counts come from fullsnes's codes,
+    SnesLab's parameter lists and SNESdev's two words for Radius. Gyrate's six inputs and three results are
+    characterised (§37.5): a count, the one choice R2 leaves open there, since SnesLab's list of three inputs and one
+    result would desynchronise every game that uses it.
+  - A DSP-2 command other than 0Fh returns to idle, since nothing documents its lengths. An ST010 command clears its
+    busy bit 16 cycles after it is set.
+  - **Timing** is one notice of 2 cycles for every phase. The work of §37.3 is not yet modelled.
+- **No table** is written in the source. A crate test fails on an array literal of more than 16 numbers in
+  `dsphle.rs`: this is plan §5.4's guard.
+- **Selection at create** (`ffi.rs`, shared by both export sets): a file 2 fits the low-level path. Without one, a
+  cartridge whose chip has a replacement gets it, and the DSP-3, DSP-4 and ST011 run without their chip as before.
+- **The state** is version 18. A DSP cartridge's `Coprocessor` group gains `DspEngine`, 0 for the low-level path and 1
+  for the replacement, then `NecDsp` or `DspHle`. A version 17 state still loads, as the low-level path's. A state
+  written under the other engine is refused, the machine unchanged, with status -11 and its words.
+- **The descriptors**:
+  - **emusen-native.** `Firmware` gains `replacement: Option<Replacement>`, which is `Exact`, `Accuracy { cost }` or
+    `None { cost }`. `MachineInfo` gains `firmware: Vec<(which, FirmwareSource)>`, where the source is `File`,
+    `Replacement` or `Absent`.
+  - **Schemas and baseline.** The firmware, info and machine-info schemas carry the new fields, and the ABI baseline
+    gains their nine lines at 1.0, since no minor has been released (`EmuSen_CoreAPI.md` §4.1). §6.2 and §6.4 there
+    record them.
+  - **VenusRT's answers.** Every firmware entry is `required: false`. The DSP-1, DSP-2 and ST010 entries carry
+    `accuracy` with a cost naming what is exact; the DSP-3, DSP-4 and ST011 entries carry `none`. Machine info lists
+    the path the cartridge runs on.
+- **The C# side**:
+  - `CoreFirmware.Replacement`, `CoreReplacement`, `CoreFirmwareSource` and `CoreMachineInfo.Firmware`.
+  - `FirmwareRequest` carries `Required` as a field, true unless a core says otherwise, with the replacement's effect
+    and cost.
+  - `EmulatorSession.MissingFirmwareFor` returns required requests only, so Mistress's picker never opens for VenusRT.
+    C# Venus's NEC DSP requests stay required.
+  - `CoreEngine.FirmwareNotice`, read through `ICore` and the session, gives Mistress one status line when the game
+    runs on a replacement short of exact or without its chip.
+- **The conformance kit.** C4 checks each entry's `replacement.effect` word, and its cost unless the effect is `exact`.
+  It also creates an image whose entries are all optional with no files.
+- **The oracle.** `dsporacle::Hle` implements `Chip` over the replacement, so steps 3 onward grade it through the same
+  driver as the image.
+
+### 38.2 Measured 2026-10-04
+
+| Check | Result |
+|---|---|
+| The crate's tests, with the tester's images | 107 of 107, eight new. `the_replacements_rom_version_agrees_with_the_image`: the replacement's 2Fh gives the same values and transfers as the DSP-1's and DSP-1B's images, and 41h is passed over on both. Latency is not compared until step 3 |
+| emusen-native, the conformance kit's tests, the ABI check | 51, 9, and 382 facts agreeing with the header on four triples and the baseline |
+| The kit against VenusRT with no files: Super Mario Kart, Pilotwings, Dungeon Master, F1 ROC II, Top Gear 3000, 300 frames | compliant on all five; C4 notes "every firmware entry optional (1): created with no files". The first Super Mario Kart run failed C15: a debug-armed run's state differed from a plain one, because `run_to` made only one due edge per catch-up. It now makes every due edge |
+| The games without an image at frame 1,500, by eye | Super Mario Kart's title, Pilotwings' menu, F1 ROC II's race, Dungeon Master's opening text, all drawn. Their 3D results are zeros, so play is wrong where a game computes with its chip |
+| WiseMan | the VenusRt, CoreAdapter, Firmware, NecDsp, CoreAbi, CoreDiscovery, NativeHost, CoreDebug and Conform filters, 228 of 228. Among them are the new `A_dsp_cartridge_runs_on_the_replacement_with_no_firmware` (no request missing, the replacement's tag in the state, machine info's `replacement`, and the notice; a DSP-4 cartridge `absent`) and the revised `An_ordinary_game_on_venusrt_prompts_for_no_firmware`, in which neither game asks and the DSP-1 cartridge loads with the notice |
+
+### 38.3 What is open
+
+- **The commands.** Steps 3 to 11 build the commands into the frame and grade each against the image. Until then the
+  DSP-1, DSP-2 and ST010 games run with wrong results, which their costs state.
+- **The timing.** Step 3 takes on the work and notice of §37.3. Until then every phase answers 2 cycles after the
+  S-CPU, so a game's polling loops run fewer times than on the chip.
+- **The DSP-2's lengths** are characterised at step 9. Until then Dungeon Master's walls are not drawn.
+- **Plan §7.3's firmware window**, which lists each entry with its replacement's effect, is not built. The status line
+  is the notice.

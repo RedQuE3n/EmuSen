@@ -138,6 +138,7 @@ impl v1::Core for Machine {
             phases: Vec::new(),
             patches: Some((0, 0x7FFF)),
             skip_rendering_state_neutral: false,
+            firmware: Vec::new(),
         }
     }
 

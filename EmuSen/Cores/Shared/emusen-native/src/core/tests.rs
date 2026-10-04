@@ -95,6 +95,23 @@ fn every_descriptor_validates_against_its_committed_schema() {
     unsafe { emusen_core_free(m) };
 }
 
+// §6.2's replacement object and §6.4's firmware sources, written and validated.
+#[test]
+fn a_replacement_and_a_firmware_source_are_written_as_the_schemas_say() {
+    use super::desc::{Firmware, FirmwareSource, MachineInfo, Replacement};
+    let f = Firmware { which: 2, name: "a.rom".into(), label: "A".into(), size: 8, replacement: Some(Replacement::Accuracy { cost: "slower".into() }), ..Firmware::default() };
+    let none = Firmware { replacement: Some(Replacement::None { cost: "runs without the chip".into() }), ..f.clone() };
+    let doc = super::desc::firmware_json(&[f, none, Firmware { which: 3, name: "b.rom".into(), ..Firmware::default() }]);
+    assert_eq!(schema::validate(schema::FIRMWARE, &doc), Vec::<String>::new());
+    assert!(doc.contains(r#""replacement":{"effect":"accuracy","cost":"slower"}"#), "{doc}");
+    assert!(doc.contains(r#""effect":"none""#) && doc.matches("replacement").count() == 2, "{doc}");
+    let m = MachineInfo { firmware: vec![(2, FirmwareSource::Replacement), (3, FirmwareSource::File)], ..MachineInfo::default() };
+    let measured = super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0 };
+    let mi = super::desc::machine_info_json(&m, &measured);
+    assert!(mi.contains(r#""firmware":[{"which":2,"source":"replacement"},{"which":3,"source":"file"}]"#), "{mi}");
+    assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
+}
+
 #[test]
 fn a_schema_violation_is_reported_by_path() {
     assert_eq!(schema::validate(schema::FIRMWARE, r#"[{"which":0,"name":"a","label":"b","size":1}]"#), vec!["$[0]: required is required", "$[0].which: 0 is below 1"]);

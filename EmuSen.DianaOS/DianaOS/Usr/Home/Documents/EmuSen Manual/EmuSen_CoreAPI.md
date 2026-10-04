@@ -588,6 +588,13 @@ int64_t emusen_core_last_error(const emusen_machine *machine, uint8_t *out, size
   an open replacement inside the core, so every game runs with no firmware folder, and an image the tester or player
   supplies is used, when present, as the exact path. A frontend never prompts for firmware. `EmuSen_Firmware.md` §0 is
   the policy; a foreign core may still declare `required: true`, and its games then wait for the file.
+
+  *Added 2026-10-04, in v1.0's baseline* (`VenusRT_DspHle.md` §7.2, `VenusRT_Native.md` §38): an entry may carry
+  `replacement: { effect, cost }`, saying what the core runs without the file. `effect` takes the settings schema's
+  words (§6.13): `exact`, `accuracy` with a required `cost` in plain words, or `none` when the game runs without the
+  chip, its `cost` saying so. An entry without it reads as no replacement. The host prompts only for a `required`
+  entry, and shows one status line when a game runs on a replacement short of `exact` or without its chip. Kit case C4
+  checks the words and creates an image whose entries are all optional with no files.
 - **`free` — In.** It may be called from any thread, provided no other call on that machine is in flight; that is what
   the host's finaliser already does (§1.2, item 9). Every thread the core started for the machine has stopped when it
   returns.
@@ -680,11 +687,12 @@ What depends on the game, read after create:
 | `patches` | `{ low, high }`: the address range `ResolveRomPatches` is kept to |
 | `skip_rendering_state_neutral` | true when skipping rendering leaves the state as a rendered frame would; run-ahead needs it (§6.22), and VenusRT designs for it (`VenusRT_Plan.md` §4.1) |
 | `achievements` | reserved; §6.22 |
+| `firmware` | `{ which, source }` for each firmware file the game names: `file`, `replacement` or `absent`, the path this machine runs on. Added 2026-10-04 with §6.2's `replacement` (`VenusRT_Native.md` §38); absent, a host assumes nothing |
 
 Every field a host requires has a stated default when absent, so an older core is read by a newer host (§4.6). The
 defaults, as the host adapter applies them (§19): `frame_rate` 60/1; every `video` size 0 and `aspect` 0/0, so that the
-first `frame_info` decides; `audio.rate` the `audio_rate` export's answer; `ports`, `spaces`, `processors`, `battery`
-and `phases` empty; `state.kinds` `[0]`, its `format` empty and `version` 0; no `patches`, so no ROM patches are sent;
+first `frame_info` decides; `audio.rate` the `audio_rate` export's answer; `ports`, `spaces`, `processors`, `battery`,
+`phases` and `firmware` empty; `state.kinds` `[0]`, its `format` empty and `version` 0; no `patches`, so no ROM patches are sent;
 `skip_rendering_state_neutral` false.
 
 ### 6.5 A frame
@@ -2057,7 +2065,7 @@ as the library wrote them, for the build step §7.1 asks for.
 | C1 | major 1; every required export resolves; where `nm` exists, no `emusen_core_` symbol outside version 1's exports |
 | C2 | info validates against `info.schema.json`; its `abi` is the export's; its capability names are the claimed bits; each optional export present exactly when its bit is claimed |
 | C3 | the schema validates; keys unique; each default in its own domain; an `accuracy` default its `accurate` value, an `enhancement` default its `hardware` value; every trade-off with a cost |
-| C4 | an empty, a garbage and a half-length image each refused with a negative status that `status_text` names and an error text, or, unless `--self-delimiting` is given, accepted and run for up to 300 frames on a thread of its own within 60 seconds (a frame refused with a status is a clean stop); each image's outcome in the report as `refused`, `accepted and ran`, `accepted and stopped` or `hung`; a machine with no settings equal to one with every default stated, frames, sound and state, over up to 300 frames |
+| C4 | an empty, a garbage and a half-length image each refused with a negative status that `status_text` names and an error text, or, unless `--self-delimiting` is given, accepted and run for up to 300 frames on a thread of its own within 60 seconds (a frame refused with a status is a clean stop); each image's outcome in the report as `refused`, `accepted and ran`, `accepted and stopped` or `hung`; a machine with no settings equal to one with every default stated, frames, sound and state, over up to 300 frames; each firmware entry's `replacement.effect` one of `exact`, `accuracy`, `none`, with a `cost` unless `exact`, and an image whose entries are all `required: false` created with no files |
 | C5 | each claimed capability answers on a running machine without `NOT_SUPPORTED`; an unclaimed snapshot and state kind 77 refused; an unlisted space refused; reserved option bits ignored; port 99 ignored or `NO_SUCH_PORT`; an unknown pixel-format bit accepted with RGBA8888 produced |
 | C6 | over N frames: `frame_info`'s length is `frame_copy`'s, the format the one offered, the size within its stride; a size change preceded by `GEOMETRY`; each change of the drained rate met by an `AUDIO_RATE` of that rate in its frame or the next |
 | C7 | the state's size constant until a `STATE_SIZE`; save, load, save byte-identical; a truncated, a foreign and an empty state refused with the machine unchanged; machine B loaded with A's state continuing as A; a claimed snapshot loading and restoring the state it was taken from |

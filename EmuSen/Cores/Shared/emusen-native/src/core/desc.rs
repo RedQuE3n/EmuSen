@@ -132,6 +132,25 @@ pub struct Firmware {
     pub size: u64,
     pub required: bool,
     pub parts: Vec<Vec<String>>,
+    /// What the core runs in the file's place when it is absent; `None` reads as no replacement (§6.2).
+    pub replacement: Option<Replacement>,
+}
+
+/// An open replacement for a firmware file, and what running on it costs, in the settings schema's words (§6.13).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Replacement {
+    Exact,
+    Accuracy { cost: String },
+    /// No replacement: the game runs without the chip, `cost` saying so.
+    None { cost: String },
+}
+
+/// Which firmware path a machine runs for file `which` (§6.4).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FirmwareSource {
+    File,
+    Replacement,
+    Absent,
 }
 
 /// Machine info (§6.4). Space sizes, battery lengths and state kinds are filled by the crate from the exports.
@@ -150,6 +169,8 @@ pub struct MachineInfo {
     pub phases: Vec<String>,
     pub patches: Option<(u32, u32)>,
     pub skip_rendering_state_neutral: bool,
+    /// Each firmware file the game names and the path it runs on.
+    pub firmware: Vec<(u32, FirmwareSource)>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -331,7 +352,17 @@ fn write_firmware(j: &mut Json, f: &Firmware) {
         }
         j.end_array();
     }
-    j.end_array().end_object();
+    j.end_array();
+    if let Some(r) = &f.replacement {
+        j.key("replacement").begin_object();
+        match r {
+            Replacement::Exact => j.field_str("effect", "exact"),
+            Replacement::Accuracy { cost } => j.field_str("effect", "accuracy").field_str("cost", cost),
+            Replacement::None { cost } => j.field_str("effect", "none").field_str("cost", cost),
+        };
+        j.end_object();
+    }
+    j.end_object();
 }
 
 /// Core info as JSON.
@@ -482,6 +513,18 @@ pub fn machine_info_json(m: &MachineInfo, measured: &Measured<'_>) -> String {
         j.key("patches").begin_object().field_uint("low", low as u64).field_uint("high", high as u64).end_object();
     }
     j.field_bool("skip_rendering_state_neutral", m.skip_rendering_state_neutral);
+    if !m.firmware.is_empty() {
+        j.key("firmware").begin_array();
+        for &(which, source) in &m.firmware {
+            let source = match source {
+                FirmwareSource::File => "file",
+                FirmwareSource::Replacement => "replacement",
+                FirmwareSource::Absent => "absent",
+            };
+            j.begin_object().field_uint("which", which as u64).field_str("source", source).end_object();
+        }
+        j.end_array();
+    }
     j.end_object();
     j.finish()
 }

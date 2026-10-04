@@ -124,6 +124,53 @@ impl Chip for Lle {
     }
 }
 
+/// The replacement, graded through the same ports; its places are its own stages.
+#[derive(Clone)]
+pub struct Hle {
+    pub dsp: super::dsphle::DspHle,
+    rqm: bool,
+}
+
+impl Hle {
+    pub fn new(program: super::dsphle::Program) -> Hle {
+        Hle { dsp: super::dsphle::DspHle::new(program), rqm: false }
+    }
+}
+
+impl Chip for Hle {
+    fn tick(&mut self) -> Option<Edge> {
+        let clock = ((self.dsp.cycles + 1) as u128 * self.dsp.ratio.1 as u128).div_ceil(self.dsp.ratio.0 as u128) as u64;
+        let dr = self.dsp.dr;
+        self.dsp.run_to(clock);
+        let rose = self.dsp.sr & 0x8000 != 0 && (!self.rqm || self.dsp.dr != dr);
+        self.rqm = self.dsp.sr & 0x8000 != 0;
+        if !rose {
+            return None;
+        }
+        let place = if self.dsp.idle() { Place::Idle } else if self.dsp.reading_command() { Place::Command } else { Place::Other };
+        Some(Edge { write: (self.dsp.offering() || place == Place::Idle).then_some(self.dsp.dr), place })
+    }
+
+    fn read(&mut self, port: Port) -> u8 {
+        let v = self.dsp.host_read(port, true);
+        self.rqm = self.dsp.sr & 0x8000 != 0;
+        v
+    }
+
+    fn write(&mut self, port: Port, value: u8) {
+        self.dsp.host_write(port, value);
+        self.rqm = self.dsp.sr & 0x8000 != 0;
+    }
+
+    fn status(&self) -> u8 {
+        (self.dsp.sr >> 8) as u8
+    }
+
+    fn ram(&self) -> &[u16] {
+        &self.dsp.ram
+    }
+}
+
 /// PCG-XSH-RR 64/32 (O'Neill 2014), the oracle's seeded inputs.
 #[derive(Clone, Debug)]
 pub struct Pcg(u64);
@@ -586,6 +633,22 @@ mod tests {
         assert_eq!(t.steps[1].bytes, 2);
         let again = transact(&mut idle.clone(), &mut Host::jittered(7), 0x2A, &[0xBEEF]);
         assert_eq!(again.without_timing(), t.without_timing());
+    }
+
+    // The replacement's frame against the low-level path: the ROM version's values and transfers are fullsnes's and
+    // agree; the timing is not yet modelled (step 3).
+    #[test]
+    fn the_replacements_rom_version_agrees_with_the_image() {
+        for (stem, program) in [("dsp1", super::super::dsphle::Program::Dsp1), ("dsp1b", super::super::dsphle::Program::Dsp1b)] {
+            let Some(lle) = chip(stem) else { return };
+            let mut hle = Hle::new(program);
+            power_on(&mut hle, &Host::steady()).expect("the replacement reaches idle");
+            let (x, y) = (transact(&mut lle.clone(), &mut Host::steady(), 0x2F, &[]), transact(&mut hle.clone(), &mut Host::steady(), 0x2F, &[]));
+            let d = compare(&x, &y);
+            assert!(!d.shape && !d.values, "{stem}: {d:?}\n{x:?}\n{y:?}");
+            let (x, y) = (transact(&mut lle.clone(), &mut Host::steady(), 0x41, &[0x2F]), transact(&mut hle.clone(), &mut Host::steady(), 0x41, &[0x2F]));
+            assert!(x.end == End::Ignored && y.end == End::Ignored, "{stem}");
+        }
     }
 
     // The latency model on its own: a phase's rise is the later of its work after the last rise and its notice after

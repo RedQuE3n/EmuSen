@@ -130,7 +130,24 @@ namespace EmuSen.Cores.Native
             Library.FirmwareFor(File.ReadAllBytes(romPath)).Select(Request).ToArray();
 
         private FirmwareRequest Request(CoreFirmware f) =>
-            new(Info.Name, f.Label, f.Name, (int)f.Size, f.Required ? "required" : "optional") { Parts = f.Parts };
+            new(Info.Name, f.Label, f.Name, (int)f.Size, f.Required ? "required" : "optional")
+            {
+                Parts = f.Parts, Required = f.Required, ReplacementEffect = f.Replacement?.Effect, ReplacementCost = f.Replacement?.Cost,
+            };
+
+        // One line for the status bar when a file runs on a replacement short of exact, or is absent with none - see VenusRT_DspHle.md §7.3.
+        public string? FirmwareNotice { get; private set; }
+
+        private string? NoticeFor(CoreMachine machine, IReadOnlyList<CoreFirmware> wanted)
+        {
+            foreach (CoreFirmwareSource used in machine.Info.Firmware)
+            {
+                if (wanted.FirstOrDefault(f => f.Which == used.Which) is not { } f || f.Replacement is not { } r || r.Effect == "exact") continue;
+                if (used.Source == "replacement") return $"{Info.Name}'s open replacement for {f.Name} - {r.Cost}";
+                if (used.Source == "absent") return $"{r.Cost} {f.Name} would supply the chip.";
+            }
+            return null;
+        }
 
         // The image, its firmware from the library and its battery files by the runtime's path rule; a second create when machine info names battery files the first could not know.
         public void LoadRom(string path)
@@ -159,6 +176,7 @@ namespace EmuSen.Cores.Native
 
             _machine?.Dispose();
             _machine = machine;
+            FirmwareNotice = NoticeFor(machine, Library.FirmwareFor(image));
             IsHaltedAtBreakpoint = false;
             Debug.Attach(machine);
             _battery.Clear();

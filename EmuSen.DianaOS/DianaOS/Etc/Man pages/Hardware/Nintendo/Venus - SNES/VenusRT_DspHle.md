@@ -19,6 +19,11 @@ The page keeps three things apart, as `VenusRT_Plan.md` does:
 - **Argued** means reasoning from the documents or from VenusRT's record, with no measurement behind it here.
 - **Predicted** means a claim numbered P1–P12 (§11), so that a later step can retire it.
 
+**Amendments.** The text below is the plan as written. Where a step's measurements correct it, an amendment follows
+the passage it corrects, marked *Amended* with its date and the record it rests on; the original text stays. Step 1's
+corrections (`VenusRT_Native.md` §37) are in §2.1, §3.1, §3.5, §4.3, §6.2 and §11; step 2's record is
+`VenusRT_Native.md` §38.
+
 ---
 
 ## 0. Summary
@@ -162,6 +167,12 @@ So that the protocol can be audited from its first day:
 
 These are port behaviours the replacement must reproduce, and the oracle's abuse cases (§4.1) test each.
 
+> *Amended 2026-10-04* (measured, `VenusRT_Native.md` §37.2). A command's read raises RQM as the request for its first
+> input, so a command without inputs still takes one transfer in either direction before its first result. DRC changes
+> to 16-bit 3 cycles after that rise. On the DSP-1 and DSP-1B, 40h-FFh are passed over and the next byte is taken as a
+> command, which is how games resynchronise. The DSP-4 is 16-bit throughout, its idle word FFFFh written again after
+> an S-CPU read at idle.
+
 ### 2.2 The shape of a replacement (argued; a plan, not code)
 
 - **One slot, two engines.** The cartridge's `dsp` becomes an engine behind the LLE's existing `Port` interface
@@ -230,6 +241,11 @@ SNESdev for equations and the cycle split; "n" in a code is the attitude matrix 
 | 0Fh | Memory test | → a status word | a self-test of the data RAM | — | Output value **characterised** (a single constant on a working chip, argued) |
 | 1Fh | Transfer data ROM | → 1,024 words | the data ROM's contents | — | **Not replaceable**: the output is the firmware's data. Named loss: the replacement answers with zeros |
 | 2Fh | ROM version | → 0100h (DSP-1/1A) or 0101h (DSP-1B) | | — | **Exact** from fullsnes |
+
+> *Amended 2026-10-04* (measured, `VenusRT_Native.md` §37.5, §37.6). 20h is not the same as 00h, nor 38h as 18h. Gyrate
+> takes six inputs and gives three. Raster is a run of lines that the S-CPU ends by writing over results. The DSP-1 and
+> DSP-1B differ, for a game, only in 28h. The bench games use 00h, 01h/11h, 02h, 03h/13h, 04h, 06h, 0Ah, 0Ch, 0Dh,
+> 0Eh, 10h, 14h, 1Ch and 28h, and none uses Radius, Range, Scalar, 20h or 1Fh.
 
 **Where the documents stop.** What is documented is the interface and, for the general and vector commands, the
 mathematics. What is not is every fixed-point detail that decides the last bit: the sine table's resolution, the
@@ -311,6 +327,11 @@ offsets.
 | 07h | Raster data calculation | 0000h theta | 00F0h, 0250h, 03B0h, 0510h: four arrays of 176 words | Name; four arrays from one angle, presumably per-line mode 7 values. How the values depend on the line, and whether that dependence is a formula, is the R4 question |
 | 08h | 2D coordinate rotation | 0000h X0, 0002h Y0, 0004h theta | 0010h X1, 0012h Y1 | Name; a rotation, the sine family as the DSP-1's |
 | 09h–0Fh, 10h–FFh | mirrors of 01h–07h and of 00h–0Fh (fullsnes) | | | Exact as mirrors; the oracle checks them |
+
+> *Amended 2026-10-04* (measured, `VenusRT_Native.md` §37.2, §37.5). **The ST010 serves its mailbox only after the
+> S-CPU has read the word it writes to DR at power-on**; without that read no command completes. fullsnes's
+> "RAM[0010h]" for 00h is the chip's word 0010h, the mailbox, which every command clears on completion: 00h changes
+> nothing else. The busy flag is polled every 3 cycles. F1 ROC II uses all seven computing commands, 02h-08h.
 
 The battery file is the chip's RAM, read and written as now (`VenusRT_Native.md` §33.1). The replacement must write
 exactly the RAM the program writes, work areas included, or a save written under one engine differs from one written
@@ -396,6 +417,10 @@ Hours (DSP-1), Dungeon Master (DSP-2), Top Gear 3000 (DSP-4) and F1 ROC II (ST01
 that Dungeon Master, Lock On, Super Bases Loaded 2 and F1 ROC II do not reach their chips without input, so each gets a
 pad script in the runner's `tapuntil`/`pressuntil` form that reaches chip use, written once and kept with the other
 scripts. Runs pass `--nobattery`, since a battery file makes runs non-reproducible.
+
+> *Amended 2026-10-04* (measured, `VenusRT_Native.md` §37.6). Super Bases Loaded 2 and F1 ROC II reach their chips
+> without input. Dungeon Master, Lock On, Michael Andretti's Indy Car Challenge, Suzuka 8 Hours and Top Gear 3000 need
+> it, and their scripts are in the crate's `examples/dsp_pads/`.
 
 **The goal** for a chip whose commands and latencies are all exact is identical states for 3,600 frames on every bench
 game it has (P6). Anything less is recorded as the first frame of parting and its cause.
@@ -537,6 +562,14 @@ For a command with inputs 1..n and results 1..m, the replacement keeps one numbe
 These are the SNESdev wiki's columns, so where that table exists it is the model's first prediction (P3). Between
 phases SR shows the DRC, DRS and USF bits the LLE shows; the oracle records them per phase and the replacement replays
 them. On the ST010 the same model applies to bit 7 of RAM byte 0021h: it clears `t` cycles after the write that set it.
+
+> *Amended 2026-10-04* (measured, `VenusRT_Native.md` §37.3). **This model does not hold.** The latency from the
+> S-CPU's completion depends on when the S-CPU answered, because the chip goes on computing while RQM is high. Each
+> phase takes two numbers: its *work*, cycles from the previous rise, and its *notice*, cycles from the S-CPU's
+> completion, and RQM rises at the later of the two. Measured from two runs per case, the model predicted every
+> modelled run of a jittered S-CPU exactly (1,008 of 1,008 on the DSP-1B, none mispredicted on any chip). Some
+> transfers of the DSP-2, DSP-3, DSP-4 and ST011 are not handshaken, so their values depend on the S-CPU's answer
+> time. A replacement reproduces both. The ST010's busy bit clears at the first 3-cycle poll after the command's work.
 
 ### 6.3 Measuring it against the LLE
 
@@ -721,12 +754,15 @@ preferred.
   by none; no formula matches all but a few entries.
 - **P3.** Every DSP-1 command's measured latency, phase by phase, is a constant or a function of one input feature, and
   for at least six of the eight commands the SNESdev wiki splits, the measured phases equal its columns within 2 cycles.
+  *Retired 2026-10-04, false in its second half* (`VenusRT_Native.md` §37.7): only Multiply, Radius and Range are
+  within 2 cycles in every phase; the first half is open.
 - **P4.** Exhaustive Multiply, 2^32 pairs, runs through the LLE in under 30 minutes on eight threads of the desktop.
 - **P5.** No bench game issues a data-ROM transfer (DSP-1 1Fh, DSP-4 13h) after boot, so the named loss costs nothing in
   play.
 - **P6.** With every command it uses exact, Super Mario Kart and Pilotwings run 3,600 frames on the replacement with
   states identical to the LLE's.
-- **P7.** F1 ROC II issues at most three distinct ST010 commands in its first race.
+- **P7.** F1 ROC II issues at most three distinct ST010 commands in its first race. *Retired 2026-10-04, false*
+  (`VenusRT_Native.md` §37.6): it issues seven, 02h-08h, in its attract mode.
 - **P8.** Every DSP-2 command is exact by the end of step 9.
 - **P9.** The DSP-4 characterisation reaches a go: rules explaining at least 80% of Top Gear 3000's traced command
   volume after step 12's two steps. Low confidence.

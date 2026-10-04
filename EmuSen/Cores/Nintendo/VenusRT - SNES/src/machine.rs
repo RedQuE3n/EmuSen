@@ -62,6 +62,15 @@ impl Machine {
     pub fn attach_dsp(&mut self, firmware: &[u8]) -> bool {
         let Some(dsp) = crate::chips::necdsp::NecDsp::from_firmware(firmware) else { return false };
         let map = self.sys.cart.dsp_map(dsp.st);
+        self.sys.cart.dsp = Some((crate::chips::dspengine::DspEngine::Lle(dsp), map));
+        true
+    }
+
+    /// Fits VenusRT's open replacement for the program the cartridge names, where one exists (VenusRT_DspHle.md §7.1).
+    pub fn attach_replacement(&mut self) -> bool {
+        let Some(program) = self.sys.cart.nec_firmware().and_then(|(stem, _)| crate::chips::dsphle::Program::for_stem(stem)) else { return false };
+        let dsp = crate::chips::dspengine::DspEngine::replacement(program);
+        let map = self.sys.cart.dsp_map(dsp.st());
         self.sys.cart.dsp = Some((dsp, map));
         true
     }
@@ -332,7 +341,10 @@ impl Machine {
             w.u16s("Prescale", &a.prescale);
         });
         if let Some((dsp, _)) = &self.sys.cart.dsp {
-            w.group("Coprocessor", |w| w.bytes("NecDsp", &dsp.pack()));
+            w.group("Coprocessor", |w| {
+                w.u8("DspEngine", dsp.tag());
+                w.bytes(if dsp.tag() == 0 { "NecDsp" } else { "DspHle" }, &dsp.pack());
+            });
         }
         if let Some(sa1) = &self.sys.cart.sa1 {
             w.group("Coprocessor", |w| {
@@ -401,7 +413,7 @@ impl Machine {
             return Err(StateError::Foreign(magic));
         }
         let version = r.i32()?;
-        if version != STATE_VERSION {
+        if version != STATE_VERSION && version != 17 {
             return Err(StateError::Version(version));
         }
         r.set_version(version);
@@ -494,6 +506,11 @@ impl Machine {
         r.u16s(&mut a.prescale)?;
         a.prescale = [a.prescale[0] % 384, a.prescale[1] % 48];
         if let Some((dsp, _)) = self.sys.cart.dsp.as_mut() {
+            // Version 17 had no tag, and only the low-level path.
+            let saved = if version == 17 { 0 } else { r.u8()? };
+            if saved != dsp.tag() {
+                return Err(StateError::DspEngine { saved, running: dsp.tag() });
+            }
             let mut packed = dsp.pack();
             r.bytes(&mut packed)?;
             dsp.unpack(&packed);

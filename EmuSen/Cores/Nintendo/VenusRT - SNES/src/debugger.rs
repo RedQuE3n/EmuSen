@@ -1,7 +1,7 @@
 //! The debugger's frame: the machine's loop with the shared hooks asked before each S-CPU step, calls and stores
 //! noted after it, and the SPC700 and the cartridge's processor caught up after every S-CPU instruction so that
 //! their probes see each step. A frame that meets a table stops with its reasons and stays open. Nothing here runs
-//! in a plain frame. See VenusRT_Native.md §35.
+//! in a plain frame. See VenusRT_Native.md §36.
 
 use emusen_native::debug::{kind, run, stop};
 

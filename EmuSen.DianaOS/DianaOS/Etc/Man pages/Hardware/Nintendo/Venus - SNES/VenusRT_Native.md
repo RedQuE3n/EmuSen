@@ -4943,3 +4943,104 @@ The DSP-4 learns no command place from the program counter, so the old count mis
 Short of them, 11h's and 0Ah's results would keep the run identical a few frames further, to frame 3,183, but would
 not draw a race. Building the road commands is plan step 12a, estimated at 4 to 6 steps, with no measurement yet of
 whether they are formula-like.
+
+## 49. The NEC DSP replacements, step 7 begun: the DSP-1's Parameter, Raster and Project (2026-10-04)
+
+Step 7 of `VenusRT_DspHle.md` §8, first part. No document read for this work gives an equation for any projection
+command: SnesLab names their parameters, fullsnes their codes, and the SNESdev wiki stops at Polar (plan §3.1). The
+commands are therefore characterised from the oracle under plan §1.3, then each is stated as a formula with a declared
+family, as §44 did for the attitude commands. §49.1 and §49.2 were written and committed before the first comparison
+of any member. The sine is a named loss (§40.7), so no member can be exact and every grade below is a closeness grade.
+
+### 49.1 What was characterised, from the oracle
+
+Measured 2026-10-04 with `dsp_oracle ask` and `dsp_oracle chains` (a new mode: one chain of transactions a line, each
+from the same idle chip) on the DSP-1B, as real-valued errors of a stated geometry against the image's outputs. A
+handful of cases are cited where a rule rests on them (R1).
+
+- **The frame.** The eye E sits Lfe behind the point F along the view's forward vector f, and the screen Les in front
+  of the eye. With a = Aas and z = Azs (z the angle from straight down):
+  - f = (sin a·sin z, -cos a·sin z, -cos z); the screen's right r = (cos a, sin a, 0); the screen's down
+    u = (-sin a·cos z, cos a·cos z, -sin z). §44.1's (-sin a, -cos a) had the horizontal sign of x wrong: at a = 45° the
+    centre point lies at +x.
+  - E = F - Lfe·f, so the eye's height is Fz + Lfe·cos z. Raster's scale is proportional to Fz + Lfe·cos z within 1 over
+    every Fz, Lfe, Les and z tried.
+- **Parameter (02h).** Vva = -Les·cot z, the horizon's raster line. (Cx, Cy) is where f meets the ground: E's
+  horizontal position moved along (sin a, -cos a) by the eye's height times tan z. Vof is 0 below a limit angle. Over 800
+  seeded cases with Azs from 11° to 79° the errors of this geometry are within 3.4 (Vva) and 6 (Cx, Cy).
+- **The limit branch.** Above a limit near 79.9°, the same for every Les, Fz and Lfe tried, Vva holds its value at the
+  limit, Vof grows as Les·tan(z - limit), and (Cx, Cy) moves on another course. §44.1's Les·(cot θ - cot z) fails at
+  z = 112.5°. No document gives the limit (§49.3).
+- **Raster (0Ah).** The run gives line Vs first, then Vs + 1, and so on; the values are a function of the line alone,
+  whichever line the run starts from. For a line v with the denominator n = Les·cos z + v·sin z and the scale
+  k = 256·(eye height)/n:
+  - An = k·cos a, Cn = k·sin a, Bn = -k·sin a / cos z, Dn = k·cos a / cos z. Dn/An is 1/cos z on every line.
+  - **The denominator is an integer.** Near the horizon An falls as 1, 1/2, 1/3 ... of its first value, and the same
+    value repeats every 23 lines at 73°, where sin z is 0.957: the signature of n taken whole. The value at n = 1 is not
+    256 times the eye height but one below, and the run's values near n = 1 to 7 follow a 15-bit reciprocal's mantissa
+    as Inverse's (§44.1) does.
+  - Where n is 0 the line saturates, and on the sky's side (n < 0) the values are negative.
+- **Project (06h).** With d = (X, Y, Z) - E: H = Les·(d·r)/(d·f), V = Les·(d·u)/(d·f), and M = 256·Les/(d·f), the
+  enlargement in 8.8. Over 800 seeded cases the errors are within 1.4 of this geometry where nothing overflows; past
+  16 bits the results saturate.
+- **Raster, Project and Target use Parameter's state**, and only that: §37.4's sequences found Raster and Target
+  disturbed by the memory test alone.
+
+### 49.2 The families, declared before the first comparison
+
+Every product of two words is the µPD77C25's, floored at 2^-15, as Multiply's member (§39.3). The sine and cosine are
+the replacement's (§40.4). Results saturate to 16 bits. The **reciprocal** of a word w is one of S2's two forms below;
+the replacement's own Inverse routine (§44.2) normalises w to a mantissa in [4000h, 8000h) with s shifts and takes
+2^29 over it, floored, so that 1/w = mantissa·2^(1 + s - 15 - 15).
+
+**Shared choices**, one member for all three commands:
+
+- **S1, the eye's height** Ez = Fz + Lfe·cos z: taken whole (floored), or carried with 15 fraction bits (2).
+- **S2, the reciprocal**: the replacement's Inverse routine, or an exact division at full width (2).
+- **S3, a quotient's last rounding**: floor, or half up (2).
+
+**Parameter (02h)**:
+
+- Vva = -(Les·cos z)/sin z; Eh = (Fx, Fy) - Lfe·sin z·(sin a, -cos a); (Cx, Cy) = Eh + Ez·(sin z/cos z)·(sin a, -cos a);
+  Vof = 0.
+- **P1, the horizontal offset**: Lfe·sin z floored, then times sin a and cos a, floored; or the triple product scaled
+  once (2).
+
+**Raster (nAh)**:
+
+- k = 256·Ez/n, saturated; An = k·cos a, Cn = k·sin a; K = k/cos z, saturated; Bn = -K·sin a, Dn = K·cos a.
+- **R1, the denominator n**: the sum of the two floored products Les·cos z and v·sin z; the floor of their exact sum;
+  or unquantised, carried with 15 fraction bits (3).
+
+**Project (06h)**:
+
+- d = (X, Y, Z) - E; x = d·r, y = d·u, w = d·f; H = Les·x/w, V = Les·y/w, M = 256·Les/w.
+- **J1, the view's elements** (sin a·sin z and the rest): floored Q15 products, or exact (2).
+- **J2, each dot product**: its terms floored and summed, or the exact sum floored once (2).
+
+That is 2·2·2·2·3·2·2 = 192 members, under 8 bits, chosen as one implementation.
+
+**The grade.** A result is *close* when it is within 2 of the image's, or within 1/128 of the image's value where that
+is larger: the sine's own error at full scale is 10 in 32,768, and Raster's values near the horizon reach 32,767. The
+member chosen is the one with the most close cases over the three commands together, ties broken by the smaller
+largest difference. Two sets:
+
+- **Seeded**: 2^16 cases from `Pcg`, Fx and Fy in ±4,096, Fz in 0-1,000, Lfe in 0-1,024, Les in 64-1,024, any Aas, Azs in
+  0800h-3800h (11° to 79°, below the limit); a point within 500 of (Cx, Cy) at a height of 0-200 for Project; a line
+  between the horizon and +112 for Raster.
+- **Traced**: every Parameter, Raster and Project the seven DSP-1 titles give in §37.6's 7,200 frames, their inputs
+  replayed on both engines in order (plan §4.2's trace oracle). Inputs only are taken from the traces.
+
+**Timing.** Parameter's, Project's and a raster line's phases that vary take their medians, as Triangle's did
+(§40.4). A rule of one feature may replace a median: the declared feature is the reciprocal's normalisation shift, as
+Inverse's time follows it (§44.1).
+
+### 49.3 The limit branch, a named loss
+
+No document gives the limit angle, nor the way Vof and (Cx, Cy) behave past it. It could be read from the image to
+within one step, but that is a constant taken from the chip, which R1 forbids (§48.2 withdrew ST010 07h's for the same
+reason). **The replacement therefore has no limit**: past 79.9° it keeps the geometry of §49.1, with Vof 0 and the
+horizon where Les·cot z puts it. That is a named loss, measured in the grade and in the games. The traces say what it
+costs: Lock On's and Ballz 3D's every Parameter is past the limit, and 190 of Pilotwings' 600; Super Mario Kart's,
+Suzuka 8 Hours', Michael Andretti's Indy Car Challenge's and Super Bases Loaded 2's never are. Whether to admit the
+one threshold, as §40.6 admitted a second widening, is the tester's decision, put in §49 after the games are measured.

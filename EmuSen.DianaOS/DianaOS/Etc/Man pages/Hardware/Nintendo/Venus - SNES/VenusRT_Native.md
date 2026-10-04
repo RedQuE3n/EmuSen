@@ -4274,3 +4274,23 @@ position through a whole line and graded each position against the console's log
 | Tests | the crate's 113. In WiseMan, `The_call_stack_holds_the_jsr_in_front_of_a_breakpoint_in_the_routine` armed its breakpoint after a first plain frame and assumed that frame ended outside the routine. It is now armed from power-on. With that, the VenusRt, CoreAbi, Snes, CoreDebug and Conform filters pass, 119 of 119 |
 
 No cost: the change moves where the clock starts, not what a frame does.
+
+### 41.16 Blockers 3 and 6: D-24 read against the referee, and three pictures with no console oracle (2026-10-04)
+
+- **D-24, `test_irqb` case 5.** The referee step D-24 named was logged and read. It does not settle the entry.
+  SNES_MiSTer strobes the S-CPU's reads only in cycles with VDA or VPA set, and CLC's second cycle and the interrupt's
+  first microcode cycle are internal. So the referee reads $2180 once before the handler, as VenusRT does, where the
+  ROM's console expectation is twice. The next rung, Mesen's source, is outside what this work may read. One
+  hypothesis would be tested by a console ROM and is consistent with the other four cases: the 5A22 strobes /RD on
+  internal cycles. It is recorded there and not built. G1 keeps `test_irqb` as an open entry.
+- **`test_noise`** alternates INIDISP's brightness between 5 and 15 with two stores in a branch loop, so its picture
+  is where each write lands in the line, to the dot. D-6's power-on position took it from 29,567 pixels differing to
+  22,606. What is left is the brightness write's latency within a span, plan §5.1's INIDISP loss, which
+  `inidisp_brightness_delay` already names. It joins that named loss.
+- **`hvdma`** differs on two lines, 1 and 107, where its eight-channel burst of forced blank, VRAM data and unblank
+  meets the start of a line. The ROM's console photograph shows the tile change but cannot resolve a line. Recorded
+  as a difference with no oracle at its resolution.
+- **`wrmpyb-in-flight`** prints what RDMPY holds when WRMPYB is written again 2 to 9 cycles into a product. Its source
+  records no console result. fullsnes and anomie leave the in-flight product unknown (plan §2.2's thin areas), and
+  the referee's multiplier carries an emulator's rule (`Venus_Referee.md` §0, nearly no support). Only Mesen's output
+  is there to compare with, so it is recorded as a difference with no oracle.

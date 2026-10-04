@@ -1,7 +1,8 @@
 //! Grades VenusRT_Native.md §40.1's sine family against the image's Triangle (04h): `dsp_sine <chip> [seeded]`
 //! runs every angle at five radii and the seeded pairs, and prints the members that reproduce every case, or the
 //! closest. Counts only; no value from the image is printed. DSP_SINE_BITS lists only members of that table size;
-//! DSP_SINE_HISTOGRAM=<member> prints that member's differences by size and radius.
+//! DSP_SINE_HISTOGRAM=<member> prints that member's differences by size and radius; DSP_SINE_STEP grades §40.6's
+//! 64 step members instead.
 use venusrt::chips::dsporacle::*;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -109,12 +110,56 @@ fn product(m: &Member, r: u16, s: i64) -> u16 {
     (if m.product_half_up { (p + (1 << 14)) >> 15 } else { p >> 15 }) as u16
 }
 
+/// §40.6's step members: K and its shift, the term order, each shift's rounding, the sign handling; by index 0..64.
+fn step_sine(m: usize, s: &[i32], a: u16) -> i64 {
+    let (kp, order, r1, r2, magnitude) = (m & 3, m >> 2 & 1, m >> 3 & 1, m >> 4 & 1, m >> 5 & 1);
+    let (k, p) = [(804i64, 15u32), (804, 15), (1608, 16), (1609, 16)][kp];
+    let sh = |v: i64, n: u32, up: usize| if up == 1 { (v + (1 << (n - 1))) >> n } else { v >> n };
+    let i = (a >> 8) as usize;
+    let f = ((a & 0xFF) as i64) << 7;
+    let c = s[(i + 64) % 256] as i64;
+    let (mag, neg) = if magnitude == 1 { (c.abs(), c < 0) } else { (c, false) };
+    let step = if order == 0 { sh(sh(f * mag, 15, r1) * k, p, r2) } else { sh(f * sh(mag * k, p, r1), 15, r2) };
+    (s[i] as i64 + if neg { -step } else { step }).clamp(-0x8000, 0x7FFF)
+}
+
+fn step_family(chip: &mut Lle, seeded: u64) {
+    let base = Member { bits: 8, full_amplitude: true, half_up: false, quarter: true, lookup: 0, product_half_up: false, taylor: None };
+    let s = base.table();
+    let mut hits = [0u64; 64];
+    let mut worst = [0i64; 64];
+    let mut near = [0u64; 64];
+    let mut p = Pcg::new(0x40_6);
+    let cases: Vec<(u16, u16)> = (0..5 * 65536u64).map(|k| (k as u16, [0x7FFFu16, 0x4000, 1, 0x8000, 0xFFFF][(k >> 16) as usize])).chain((0..seeded).map(|_| (p.word(), p.word()))).collect();
+    let total = cases.len() as u64;
+    for (angle, r) in cases {
+        let got = transact(chip, &mut Host::steady(), 0x04, &[angle, r]).outputs();
+        for m in 0..64 {
+            let want = [product(&base, r, step_sine(m, &s, angle)), product(&base, r, step_sine(m, &s, angle.wrapping_add(0x4000)))];
+            hits[m] += (got == want) as u64;
+            let e = got.iter().zip(want).map(|(&g, w)| (g as i16 as i64 - w as i16 as i64).abs()).max().unwrap_or(0);
+            worst[m] = worst[m].max(e);
+            near[m] += (e <= 1) as u64;
+        }
+    }
+    let mut order: Vec<usize> = (0..64).collect();
+    order.sort_by(|&x, &y| hits[y].cmp(&hits[x]));
+    println!("04h, §40.6's 64 step members over {total} cases");
+    for &m in order.iter().take(6) {
+        println!("  member {m:2} (K/p {}, order {}, rounding {} {}, magnitude {}): {} of {total}, within 1 {}, largest difference {}{}", m & 3, m >> 2 & 1, m >> 3 & 1, m >> 4 & 1, m >> 5 & 1, hits[m], near[m], worst[m], if hits[m] == total { "  all" } else { "" });
+    }
+}
+
 fn main() {
     let a: Vec<String> = std::env::args().collect();
     let stem = &a[1];
     let seeded: u64 = a.get(2).and_then(|c| c.parse().ok()).unwrap_or(1 << 20);
     let image = firmware(stem).unwrap_or_else(|| std::process::exit(1));
     let mut chip = idle_chip(stem, &image, &mut Host::steady(), 0).unwrap();
+    if std::env::var("DSP_SINE_STEP").is_ok() {
+        step_family(&mut chip, seeded);
+        return;
+    }
     let all = members();
     let tables: Vec<Vec<i32>> = all.iter().map(Member::table).collect();
     let mut hits = vec![0u64; all.len()];

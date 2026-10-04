@@ -3735,3 +3735,53 @@ declared family reproduces the sine. That is the prediction's "or by none", thou
   unknown. Once the sine is exact, their remaining variants can be graded exactly.
 - **Latency.** The medians leave a third to two thirds of these commands' cases a few cycles off. A rule naming one
   input feature (§6.3), with the exact sine, would come next.
+
+### 40.6 Amendment: a second widening for the sine's step, declared before it is graded
+
+*Decided 2026-10-04.* **The rule change.** Plan §5.2 allows one widening per family. One extra widening is allowed
+where firmwarecheck proves the table itself formula-exact, and only for the arithmetic left between its entries. §40.4
+gives that proof for the DSP-1. The generated sine table appears in both programs' data, all of it formula-forced. It
+appears twice: as the first half-turn, and from a quarter-turn on, which is the cosine at the same 128 points. So the
+derivative the step needs is already one of the table's own entries, S[i + 64]. No new table is admitted and no entry
+is patched. If no member below reproduces the chip on every case, the sine stays a named loss, with no third widening.
+
+**Fixed, from §40.3's closest member and the firmwarecheck proof:**
+
+- S[i] = floor(2^15·sin(2πi/256)), quarter-mirrored and saturated;
+- i is θ's top 8 bits, and f = (θ mod 256)·2^7 is the rest as a 15-bit fraction;
+- sin θ = S[i] + step, held to 16 bits, and cos θ = sin(θ + 2^14);
+- Triangle's product r·s is floored.
+
+**The step, step ≈ f·S[i + 64]·(2π/256), and its open arithmetic:**
+
+- **The constant K**, 2π/256 in fixed point: floor(2^15·2π/256) = 804, or floor and half up of 2^16·2π/256 = 1608
+  and 1609, with the shift p = 15 or 16 to match. That is 3 values, counted as 4 (2 bits).
+- **The term order** (1 bit): (f·C » 15)·K » p, or f·(C·K » p) » 15, with C = S[i + 64].
+- **The first shift's rounding** (1 bit): floor, or half up.
+- **The second shift's rounding** (1 bit): floor, or half up.
+- **The sign handling** (1 bit): signed arithmetic throughout, or the magnitude of C carried and its sign applied
+  after.
+
+That is 64 members, 6 bits. They are graded as §40.2's were, over every angle at radii 7FFFh, 4000h, 1, 8000h and
+FFFFh, and 2^18 seeded pairs.
+
+### 40.7 The second widening graded: the sine stays a named loss (measured 2026-10-04)
+
+`DSP_SINE_STEP=1 dsp_sine` graded §40.6's 64 members over 589,824 cases on each image, with the same result on both.
+**No member reproduced every case.**
+
+- The closest is K = 804 at p = 15, the order (f·|C| » 15)·K » 15, both shifts floored, and the sign of C applied
+  after. It agreed on 281,052 cases (47.7%) and came within 1 on 427,366 (72.5%).
+- Members differing only in K's representation tie, since 804, 1608 and 1609 give the same steps here.
+
+**Under §40.6's condition the sine remains a named loss, and no third widening follows.**
+
+- **What is established.** The DSP-1's sine table is the documented formula, as is its cosine table, and the chip
+  steps from S[i] using S[i + 64].
+- **What is not.** The arithmetic of that step lies outside both declared families. It may be a second-order term,
+  another constant, or a fixed-point sequence that no document describes.
+- **Triangle, Rotate and Polar stay approximate**, as §40.4 graded them. With the closest step member in place of the
+  derivative table, Triangle's exact share rose from 34.4% to 39.6% of 2^20 cases, with the same largest difference
+  of 12, and Rotate and Polar moved as little. The change was measured and not kept: it would alter the generated
+  tables and their check for no change of bound.
+- **The re-grade of condition 4 does not arise.**

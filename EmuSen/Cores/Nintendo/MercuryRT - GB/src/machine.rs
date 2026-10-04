@@ -324,8 +324,14 @@ fn wrap(address: i32, size: usize) -> usize {
 
 impl emusen_native::ffi::StateMachine for Machine {
     type Error = StateError;
+    /// A state made on the other console changes machine info's system, which the v1 host is told (EmuSen_CoreAPI.md §6.19, §26).
     fn load_state(&mut self, data: &[u8]) -> StateResult {
-        Machine::load_state(self, data)
+        let console = self.cgb_hardware();
+        let r = Machine::load_state(self, data);
+        if self.cgb_hardware() != console {
+            emusen_native::core::emit(emusen_native::core::event::MACHINE_INFO, 0, 0);
+        }
+        r
     }
     fn state_size(&self) -> usize {
         Machine::state_size(self)

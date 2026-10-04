@@ -75,13 +75,13 @@ impl Machine {
         use crate::debugger::{CPU_REGISTERS, Chip, DSP_REGISTERS, GSU_REGISTERS, SPC_REGISTERS};
         let named = |r: &[(&str, u32)]| r.iter().map(|&(n, b)| (n.to_owned(), b)).collect::<Vec<_>>();
         let mut list = vec![
-            Processor { id: 0, name: "CPU".into(), pc_bits: 24, registers: named(&CPU_REGISTERS) },
-            Processor { id: 1, name: "SPC".into(), pc_bits: 16, registers: named(&SPC_REGISTERS) },
+            Processor { id: 0, name: "CPU".into(), pc_bits: 24, registers: named(&CPU_REGISTERS), code_space: Some(0) },
+            Processor { id: 1, name: "SPC".into(), pc_bits: 16, registers: named(&SPC_REGISTERS), code_space: Some(7) },
         ];
         match self.chip() {
-            Some(Chip::Sa1) => list.push(Processor { id: 2, name: "SA1".into(), pc_bits: 24, registers: named(&CPU_REGISTERS) }),
-            Some(Chip::Gsu) => list.push(Processor { id: 2, name: "GSU".into(), pc_bits: 24, registers: named(&GSU_REGISTERS) }),
-            Some(Chip::Dsp) => list.push(Processor { id: 2, name: "DSP".into(), pc_bits: 16, registers: named(&DSP_REGISTERS) }),
+            Some(Chip::Sa1) => list.push(Processor { id: 2, name: "SA1".into(), pc_bits: 24, registers: named(&CPU_REGISTERS), code_space: Some(crate::ffi::SA1BUS) }),
+            Some(Chip::Gsu) => list.push(Processor { id: 2, name: "GSU".into(), pc_bits: 24, registers: named(&GSU_REGISTERS), code_space: Some(crate::ffi::GSUBUS) }),
+            Some(Chip::Dsp) => list.push(Processor { id: 2, name: "DSP".into(), pc_bits: 16, registers: named(&DSP_REGISTERS), code_space: Some(crate::ffi::DSPPRG) }),
             None => {}
         }
         list
@@ -366,8 +366,13 @@ impl Core for Machine {
             _ => gsu::Prefix::default(),
         };
         let st = self.sys.cart.dsp.as_ref().is_some_and(|(d, _)| d.st);
+        // The SPC700's code at $FFC0-$FFFF is the boot program while CONTROL maps it, whatever the RAM beneath holds.
+        let boot = space == 7 && isa == Isa::Spc && self.sys.apu.control & 0x80 != 0;
         let machine = std::cell::RefCell::new(self);
         let read = |a: u32| {
+            if boot && (0xFFC0..=0xFFFF).contains(&a) {
+                return crate::apu::boot::BOOT[(a - 0xFFC0) as usize];
+            }
             let mut byte = [0u8];
             let _ = NativeCore::space_read(&mut **machine.borrow_mut(), space, a, &mut byte);
             byte[0]
@@ -536,6 +541,7 @@ mod tests {
         assert_eq!(text(&mut m, 0, 0, 0x00_8000).unwrap(), ["008000 BRA $8000", "008002 NOP"]);
         Core::space_write(&mut m, 7, 0x0200, &[0xE8, 0x12, 0x3F, 0x00, 0x03]).unwrap();
         assert_eq!(text(&mut m, 0, 7, 0x0200).unwrap(), ["000200 MOV A,#$12", "000202 CALL !$0300"]);
+        assert_eq!(text(&mut m, 1, 7, 0xFFC0).unwrap()[0], "00FFC0 MOV X,#$EF");
         Core::space_write(&mut m, 2, 0x0100, &[0xE8, 0x12, 0xEA]).unwrap();
         assert_eq!(text(&mut m, 0, 2, 0x0100).unwrap(), ["000100 INX", "000101 ORA ($EA)"]);
         assert_eq!(text(&mut m, 1, 2, 0x0100).unwrap()[0], "000100 MOV A,#$12");

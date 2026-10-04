@@ -1,6 +1,6 @@
 //! A processor's debugger seam, fitted only while a debugger's frame runs: its breakpoints, the addresses it stepped
 //! through for coverage, its stores, and where it stopped. The S-CPU is observed by the machine's own loop; the
-//! SPC700 and the cartridge's processor run inside catch-ups and carry one of these. See VenusRT_Native.md §35.
+//! SPC700 and the cartridge's processor run inside catch-ups and carry one of these. See VenusRT_Native.md §36.
 
 #[derive(Clone, Debug, Default)]
 pub struct Probe {

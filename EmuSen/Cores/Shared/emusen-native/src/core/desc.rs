@@ -201,6 +201,8 @@ pub struct Processor {
     pub pc_bits: u32,
     /// `(name, bits)` in `debug_registers`' order.
     pub registers: Vec<(String, u32)>,
+    /// The space its code is listed from, by id; absent, the host chooses by name (EmuSen_CoreAPI.md §6.4).
+    pub code_space: Option<u32>,
 }
 
 #[derive(Clone, Debug)]
@@ -449,6 +451,9 @@ pub fn machine_info_json(m: &MachineInfo, measured: &Measured<'_>) -> String {
     j.key("processors").begin_array();
     for p in &m.processors {
         j.begin_object().field_uint("id", p.id as u64).field_str("name", &p.name).field_uint("pc_bits", p.pc_bits as u64);
+        if let Some(space) = p.code_space {
+            j.field_uint("code_space", space as u64);
+        }
         j.key("registers").begin_array();
         for (name, bits) in &p.registers {
             j.begin_object().field_str("name", name).field_uint("bits", *bits as u64).end_object();

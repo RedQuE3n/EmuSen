@@ -493,7 +493,8 @@ namespace EmuSen.Mistress.Views
             WatchPreferences(window);
             if (tab is not null) window.ShowTab(tab);
             window.StatusBarChanged += ApplyStatusBar;
-            window.Closed += (_, _) => { ScanArtwork(); ApplyOnlineCovers(); ApplyScraping(); if (LibraryView.IsVisible) RefreshLibrary(); };
+            // Not when it closes because this window is closing, after the records it reads have gone - see EmuSen_Settings_Reference.md §4.88.
+            window.Closed += (_, _) => { if (_recordsClosed) return; ScanArtwork(); ApplyOnlineCovers(); ApplyScraping(); if (LibraryView.IsVisible) RefreshLibrary(); };
             _ = SheetLayer.Show(window, this);
         }
 

@@ -3643,8 +3643,9 @@ the derivative from a second table, with a floor's bias. **The widened family**,
 - Tables direct, or quarter-wave mirrored.
 - The product r·s: floor or half up.
 
-That is 3·2^7 = 384 members, under 9 bits, with cos θ = sin(θ + 2^14). No further widening follows. If no member
-agrees on every case, the DSP-1's sine is a named loss under R4, and Triangle, Rotate and Polar become approximate.
+That is 3·2^6 = 192 members, under 8 bits (this paragraph first said 384, a count of seven binary choices where there
+are six), with cos θ = sin(θ + 2^14). No further widening follows. If no member agrees on every case, the DSP-1's sine
+is a named loss under R4, and Triangle, Rotate and Polar become approximate.
 
 ### 40.3 The sine closed, Rotate chosen, and Polar widened once, in writing
 
@@ -3674,3 +3675,63 @@ SNESdev's own labels conflict: "Angle In: XYZ (I1, I2, I3)" against an equation 
 
 That is 72 members, about 6 bits. If none agrees within 64 on nearly every small-coordinate case, Polar is approximate
 by SNESdev's literal reading.
+
+### 40.4 Polar chosen, what was built, and the grade (measured 2026-10-04)
+
+**Polar's widened family.** One member of the 72 agreed with the image within 64 on all 16,384 small-coordinate
+cases, its largest difference 4, which is the sine's own error. At full range it agreed on 16,381 of 16,384, the rest
+at 16-bit overflow. The member is the row vector times SNESdev's matrices **about Z by I1, then Y by I2, then X by I3**,
+each as written. SNESdev's equation names the matrices about Y by I3, X by I2 and Z by I1, and its labels say "XYZ".
+The order and the angles of both are wrong for this chip.
+
+**Built** in `dsphle.rs`:
+
+- **The sine.** It is §40.3's closest member, held to 16 bits. That last step was added after the first grade showed
+  the step carrying -32768 past the limit at 270°: three cases off by 65,531 out of 2^20.
+- **Triangle.** r·sin and r·cos, floored.
+- **Rotate.** x·cos + y·sin and y·cos - x·sin, the sum scaled once.
+- **Polar** by the member above.
+- **Timing.** Each command's varying phases take their medians over 4,096 seeded cases: Triangle 32/4, Rotate 31/4,
+  Polar 93/33 (§37.3 gives the ranges).
+- **The tables** are generated at first use. `quarter_sine` sums the Taylor series in plain f64 arithmetic, so every
+  platform builds the same words. The crate test `the_tables_equal_the_independent_generator` runs `dsp1_tables.py`
+  and finds the 1,024 bytes identical. The table-literal guard passes.
+
+**The grade** (`dsp_grade`, 2^20 seeded cases each, steady and jittered; the DSP-1 and DSP-1B alike):
+
+| Code | Values differ | Largest difference in a result | Cases off by 16 or more | Latency differs |
+|---|---|---|---|---|
+| 04h Triangle | 687,963 (65.6%) | 12 | 0 | 461,392 |
+| 0Ch Rotate | 944,712 | wraps at overflow | 99 | 491,948 |
+| 1Ch Polar | 1,040,444 | wraps at overflow | 4,932 | 664,629 |
+
+Of Rotate's cases, 99.4% are within 12, and of Polar's 99.5% within 15. The crate test
+`the_replacements_rotations_stay_within_their_bounds` holds Triangle and Rotate to 12, and Polar to 8 on small
+coordinates, against both images.
+
+**firmwarecheck** (`dsp_oracle tables`, then `dsp1_tables.py` for the formula image, byte-identical to it), against
+each image's data half:
+
+| Run | DSP-1B | DSP-1 |
+|---|---|---|
+| plain | 3 of 1,024 equal at the same offset (0.3%); two common runs of 256 bytes, the sine table's first 128 words at original offset 556 and its words 64-191 at 812; FAIL by the plain thresholds | the same at 560 and 816 |
+| `--forced` | 2 formula runs; formula coverage 512 of 2,048 bytes (25.0%); residual 0; PASS | the same |
+
+**What the counts say.** The plain FAIL is the expected outcome of success that plan §5.3 describes. The two 256-byte
+runs are the generated sine table found in the program's data, entry for entry, and every byte of them is
+formula-forced. The derivative table appears nowhere. **The DSP-1's sine table is therefore this formula, and the
+step between its entries is what §40.3 did not find.** That locates the remaining difference in the step's arithmetic,
+not the table. It is a finding for a later step's decision, not a further widening here.
+
+**P11 holds for this table**: the residual is zero, and the coverage, 25%, is under 40%. **P2**: no member of either
+declared family reproduces the sine. That is the prediction's "or by none", though the table itself is a formula's.
+
+### 40.5 What is open
+
+- **The sine's step.** §40.3 closed the family as declared. The table being the formula's, a second widening limited
+  to the step's arithmetic (its scale, its rounding, the derivative's source) is the natural next measurement. It
+  needs a decision first, since §5.2 allows one widening per family.
+- **Rotate's and Polar's overflow.** The few cases at 16-bit overflow differ because the chip's arithmetic there is
+  unknown. Once the sine is exact, their remaining variants can be graded exactly.
+- **Latency.** The medians leave a third to two thirds of these commands' cases a few cycles off. A rule naming one
+  input feature (§6.3), with the exact sine, would come next.

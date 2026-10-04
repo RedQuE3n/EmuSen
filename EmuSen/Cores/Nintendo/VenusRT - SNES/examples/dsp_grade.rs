@@ -12,6 +12,9 @@ struct Tally {
     values: u64,
     latency: u64,
     status: u64,
+    /// The largest difference of a result word, as signed 16-bit values, and how many cases had each size up to 16.
+    worst: i64,
+    sizes: [u64; 17],
     first: Vec<Vec<u16>>,
 }
 
@@ -20,7 +23,7 @@ fn grade(stem: &str, image: &[u8], command: u8, sets: impl Iterator<Item = Vec<u
     let mut lle = idle_chip(stem, image, &mut Host::steady(), 0).unwrap();
     let mut hle = Hle::new(program);
     power_on(&mut hle, &Host::steady()).unwrap();
-    let mut t = Tally { cases: 0, shape: 0, values: 0, latency: 0, status: 0, first: Vec::new() };
+    let mut t = Tally { cases: 0, shape: 0, values: 0, latency: 0, status: 0, worst: 0, sizes: [0; 17], first: Vec::new() };
     let (mut hs, mut ha) = (Host::steady(), Host::steady());
     for (k, set) in sets.enumerate() {
         let jitter = k % 2 == 1;
@@ -39,6 +42,9 @@ fn grade(stem: &str, image: &[u8], command: u8, sets: impl Iterator<Item = Vec<u
         t.values += d.values as u64;
         t.latency += d.latency as u64;
         t.status += d.status as u64;
+        let e = x.outputs().iter().zip(y.outputs()).map(|(&a, b)| (a as i16 as i64 - b as i16 as i64).abs()).max().unwrap_or(0);
+        t.worst = t.worst.max(e);
+        t.sizes[e.min(16) as usize] += 1;
         if d.any() && t.first.len() < 10 {
             t.first.push(set.clone());
         }
@@ -77,7 +83,7 @@ fn main() {
             })
         })
         .collect();
-    let mut sum = Tally { cases: 0, shape: 0, values: 0, latency: 0, status: 0, first: Vec::new() };
+    let mut sum = Tally { cases: 0, shape: 0, values: 0, latency: 0, status: 0, worst: 0, sizes: [0; 17], first: Vec::new() };
     for h in handles {
         let t = h.join().unwrap();
         sum.cases += t.cases;
@@ -85,6 +91,10 @@ fn main() {
         sum.values += t.values;
         sum.latency += t.latency;
         sum.status += t.status;
+        sum.worst = sum.worst.max(t.worst);
+        for k in 0..17 {
+            sum.sizes[k] += t.sizes[k];
+        }
         sum.first.extend(t.first.into_iter().take(10 - sum.first.len().min(10)));
     }
     let line = format!(
@@ -97,7 +107,7 @@ fn main() {
         sum.latency,
         sum.status
     );
-    let mut report = format!("{line}\n");
+    let mut report = format!("{line}\n  largest result difference {}; cases by its size 0..15 and 16+: {:?}\n", sum.worst, sum.sizes);
     for s in &sum.first {
         let _ = writeln!(report, "  inputs {s:04X?}");
     }

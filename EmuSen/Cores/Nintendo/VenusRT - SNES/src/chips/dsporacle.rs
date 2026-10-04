@@ -678,6 +678,33 @@ mod tests {
         }
     }
 
+    // VenusRT_Native.md §40.4: the approximate Triangle, Rotate and Polar stay within the bounds recorded, against both
+    // images, on angles across the turn and coordinates under 2^11.
+    #[test]
+    fn the_replacements_rotations_stay_within_their_bounds() {
+        use super::super::dsphle::Program;
+        for (stem, program) in [("dsp1", Program::Dsp1), ("dsp1b", Program::Dsp1b)] {
+            let Some(mut lle) = chip(stem) else { return };
+            let mut hle = Hle::new(program);
+            power_on(&mut hle, &Host::steady()).unwrap();
+            let mut p = Pcg::new(0x40);
+            for (command, bound) in [(0x04u8, 12), (0x0C, 12), (0x1C, 8)] {
+                for k in 0..2048u32 {
+                    let angle = (k * 37) as u16;
+                    let small = |p: &mut Pcg| (p.word() as i16 >> 5) as u16;
+                    let set = match command {
+                        0x04 => vec![angle, [0x7FFF, 0x4000, 1, 0x1234][k as usize % 4]],
+                        0x0C => vec![angle, small(&mut p), small(&mut p)],
+                        _ => vec![angle, p.word(), p.word(), small(&mut p), small(&mut p), small(&mut p)],
+                    };
+                    let (x, y) = (transact(&mut lle, &mut Host::steady(), command, &set), transact(&mut hle, &mut Host::steady(), command, &set));
+                    let e = x.outputs().iter().zip(y.outputs()).map(|(&a, b)| (a as i16 as i32 - b as i16 as i32).abs()).max().unwrap();
+                    assert!(e <= bound, "{stem} {command:02X} case {k}: off by {e}");
+                }
+            }
+        }
+    }
+
     // The latency model on its own: a phase's rise is the later of its work after the last rise and its notice after
     // the S-CPU's answer.
     #[test]

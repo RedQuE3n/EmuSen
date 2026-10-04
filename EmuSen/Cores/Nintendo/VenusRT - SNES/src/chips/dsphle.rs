@@ -346,6 +346,29 @@ impl DspHle {
                 self.outputs[0] = ((v >> 16) + (self.command == 0x38) as i32) as u16;
             }
             0x2F => self.outputs[0] = if self.program == Program::Dsp1 { 0x0100 } else { 0x0101 },
+            // Approximate (VenusRT_Native.md §40.3): §40.2's closest member, not the chip's sine.
+            0x04 => {
+                let (s, c) = (sine(self.inputs[0]), sine(self.inputs[0].wrapping_add(0x4000)));
+                self.outputs[0] = ((i[1] * s) >> 15) as u16;
+                self.outputs[1] = ((i[1] * c) >> 15) as u16;
+            }
+            // SNESdev's matrix with the row vector on the left (§40.3), the exact sum scaled once, wrapping.
+            0x0C => {
+                let (s, c) = (sine(self.inputs[0]), sine(self.inputs[0].wrapping_add(0x4000)));
+                self.outputs[0] = ((i[1] * c + i[2] * s) >> 15) as u16;
+                self.outputs[1] = ((i[2] * c - i[1] * s) >> 15) as u16;
+            }
+            // The row vector times SNESdev's matrices about Z by I1, Y by I2 and X by I3, in that order (§40.4).
+            0x1C => {
+                let sc = |k: usize| (sine(self.inputs[k]), sine(self.inputs[k].wrapping_add(0x4000)));
+                let ((s1, c1), (s2, c2), (s3, c3)) = (sc(0), sc(1), sc(2));
+                let w = |v: i64| (v >> 15) as i16 as i64;
+                let (x, y, z) = (i[3], i[4], i[5]);
+                let (x, y) = (w(x * c1 + y * s1), w(y * c1 - x * s1));
+                let (x, z) = (w(x * c2 - z * s2), w(x * s2 + z * c2));
+                let (y, z) = (w(y * c3 + z * s3), w(z * c3 - y * s3));
+                self.outputs[..3].copy_from_slice(&[x as u16, y as u16, z as u16]);
+            }
             _ => {}
         }
         if total == 0 {
@@ -424,6 +447,50 @@ impl DspHle {
     }
 }
 
+/// The sine and derivative tables of VenusRT_Native.md §40.3, generated once from the formula, 256 words each.
+fn tables() -> &'static [i32; 512] {
+    static TABLES: std::sync::OnceLock<[i32; 512]> = std::sync::OnceLock::new();
+    TABLES.get_or_init(|| {
+        let mut t = [0; 512];
+        for (k, (scale, phase)) in [(1.0, 0), (2.0 * std::f64::consts::PI / 256.0, 64)].into_iter().enumerate() {
+            for i0 in 0..256 {
+                let i = (i0 + phase) % 256;
+                let half = i % 128;
+                let q = if half > 64 { 128 - half } else { half };
+                let m = (32768.0 * scale * quarter_sine(q)).floor() as i32;
+                t[k * 256 + i0] = if i >= 128 { -m } else { m }.clamp(-0x8000, 0x7FFF);
+            }
+        }
+        t
+    })
+}
+
+/// sin(2π·q/256) for q in 0..=64 by its Taylor series in f64 arithmetic alone, so every platform generates the same
+/// table; the series converges far past a 16-bit table's precision there.
+fn quarter_sine(q: usize) -> f64 {
+    let x = 2.0 * std::f64::consts::PI * q as f64 / 256.0;
+    let (mut term, mut sum) = (x, 0.0);
+    for n in 0..14 {
+        sum += term;
+        term *= -x * x / ((2 * n + 2) as f64 * (2 * n + 3) as f64);
+    }
+    sum
+}
+
+/// The replacement's sine of angle `a`, 2^16 a turn: the table at its top 8 bits and a first-order step by the
+/// derivative table over the rest, half up (VenusRT_Native.md §40.2's closest member), held to 16 bits.
+pub fn sine(a: u16) -> i64 {
+    let t = tables();
+    let i = (a >> 8) as usize;
+    let f = ((a & 0xFF) as i64) << 7;
+    (t[i] as i64 + ((f * t[256 + i] as i64 + (1 << 14)) >> 15)).clamp(-0x8000, 0x7FFF)
+}
+
+/// The tables as 16-bit little-endian words, sine then derivative, for firmwarecheck and the independent generator.
+pub fn tables_image() -> Vec<u8> {
+    tables().iter().flat_map(|&w| (w as i16).to_le_bytes()).collect()
+}
+
 /// Each phase's work and notice in chip cycles, as `dsporacle::timing` measured them (VenusRT_Native.md §39.3); a
 /// phase not listed takes notice 2.
 fn dsp1_timing(command: u8) -> &'static [(u16, u16)] {
@@ -432,6 +499,10 @@ fn dsp1_timing(command: u8) -> &'static [(u16, u16)] {
         0x08 => &[(0, 2), (16, 2), (0, 2), (0, 6), (0, 2), (0, 3)],
         0x18 | 0x38 => &[(0, 2), (14, 2), (0, 2), (0, 2), (0, 6), (0, 3)],
         0x0F => &[(0, 2), (4121, 3337), (0, 3)],
+        // The medians of phases that vary with the inputs (VenusRT_Native.md §40.3).
+        0x04 => &[(0, 2), (14, 2), (32, 4), (0, 2), (0, 3)],
+        0x0C => &[(0, 2), (14, 2), (0, 2), (31, 4), (0, 2), (0, 3)],
+        0x1C => &[(0, 2), (15, 2), (0, 2), (0, 2), (0, 2), (0, 2), (93, 33), (0, 2), (0, 2), (0, 3)],
         0x2F => &[(0, 2), (16, 2), (0, 3)],
         _ => &[],
     }
@@ -590,6 +661,23 @@ mod tests {
                     _ => {}
                 }
             }
+        }
+    }
+
+    // VenusRT_DspHle.md §5.2, rule 3: the tables equal an independent generator's, written from the record's formula.
+    #[test]
+    fn the_tables_equal_the_independent_generator() {
+        let script = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../EmuSen.WiseMan/Reference/analysis/dsp1_tables.py");
+        let out = std::env::temp_dir().join(format!("venusrt-dsp1-tables-{}.bin", std::process::id()));
+        match std::process::Command::new("python3").arg(script).arg(&out).output() {
+            Ok(o) if o.status.success() => {
+                let theirs = std::fs::read(&out).unwrap();
+                let _ = std::fs::remove_file(&out);
+                assert_eq!(theirs.len(), 1024);
+                let differ = theirs.iter().zip(tables_image()).filter(|(a, b)| **a != *b).count();
+                assert_eq!(differ, 0, "{differ} bytes differ from dsp1_tables.py");
+            }
+            _ => eprintln!("python3 or dsp1_tables.py unavailable, not run"),
         }
     }
 

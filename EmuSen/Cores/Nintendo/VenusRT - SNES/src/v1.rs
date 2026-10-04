@@ -65,9 +65,6 @@ fn boot() -> Firmware {
 
 /// What running without the image costs, chip by chip (VenusRT_DspHle.md §5.5), in words a player reads.
 fn replacement(stem: Option<&str>) -> Replacement {
-    let partial = |chip: &str, exact: &str| Replacement::Accuracy {
-        cost: format!("Without the image, VenusRT's open replacement for the {chip} runs: its ports and timing as the chip's, but of its commands only {exact} answer exactly yet, so the game's results are wrong (VenusRT_DspHle.md §5.5)."),
-    };
     let without = |chip: &str| Replacement::None { cost: format!("VenusRT has no replacement for the {chip} yet: without the image the game runs without its chip.") };
     match stem {
         Some("dsp1") | Some("dsp1b") => Replacement::Accuracy {
@@ -76,7 +73,9 @@ fn replacement(stem: Option<&str>) -> Replacement {
         Some("dsp2") => Replacement::Accuracy {
             cost: "Without the image, VenusRT's open replacement for the DSP-2 runs: every command Dungeon Master gives answers as the chip does, to the cycle, and the game runs as with the image; the data ROM transfer gives zeros, the scaling command's timing is estimated, and counts beyond the chip's buffers are not reproduced (VenusRT_Native.md §42).".into(),
         },
-        Some("st010") => partial("ST010", "00h"),
+        Some("st010") => Replacement::Accuracy {
+            cost: "Without the image, VenusRT's open replacement for the ST010 runs: its mailbox to the cycle, the sort, scale, distance and multiply commands exact, the rotation and raster commands within one unit, and the driver simulation not computed yet, so the opponents' cars do not move as with the image; the battery file is the same on both (VenusRT_Native.md §43).".into(),
+        },
         Some("dsp3") => without("DSP-3"),
         Some("dsp4") => without("DSP-4"),
         Some(_) => without("ST011"),

@@ -34,6 +34,12 @@ namespace EmuSen.Cores
         // Sticks run -1 to 1, right and down positive, and triggers 0 to 1; an axis the console lacks is ignored.
         void SetAxis(int port, PadAxis axis, double value) { }
 
+        // How many controllers the console reads at once; a frontend sends nothing past them - see EmuSen_Input.md §8.1.
+        int ControllerPorts => 1;
+
+        // A controller plugged into a port or pulled out, for a console whose games can tell; the first starts plugged in - see EmuSen_Input.md §8.6.
+        void SetControllerConnected(int port, bool connected) { }
+
         void LoadRom(string path);
 
         // Answered without loading, so a caller can resolve it first - see EmuSen_Firmware.md §1.

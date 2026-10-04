@@ -138,5 +138,30 @@ namespace EmuSen.WiseMan.HeadlessDebug
 
             Assert.Equal(new long[] { 1, 2, 3 }, seen);
         }
+
+        // tap names controller 1, tap2 controller 2 as before, and tap3 to tap8 the rest - see EmuSen_Input.md §8.7.
+        [Theory]
+        [InlineData("tap", 1)]
+        [InlineData("tap2", 2)]
+        [InlineData("tap4", 4)]
+        [InlineData("tap8", 8)]
+        [InlineData("tap9", null)]
+        [InlineData("tap0", null)]
+        [InlineData("tapx", null)]
+        [InlineData("hold", null)]
+        public void A_tap_verb_names_its_controller(string verb, int? controller) =>
+            Assert.Equal(controller, CommandsScriptRunner.TapController(verb));
+
+        // A held button on controller 2 reaches the SNES's second pad and not its first.
+        [Fact]
+        public void Hold_on_controller_2_reaches_the_second_pad()
+        {
+            var (core, log) = NewCoreAndLog();
+            var runner = new FrameRunner(core, frameCap: 100, log.Add);
+            runner.Hold(PadButton.Start, 2);
+            core.Bus!.Input.LatchAutoJoypad();
+            Assert.Equal(0x10, core.Bus.Input.ReadJoy2High());
+            Assert.Equal(0, core.Bus.Input.ReadJoy1High());
+        }
     }
 }

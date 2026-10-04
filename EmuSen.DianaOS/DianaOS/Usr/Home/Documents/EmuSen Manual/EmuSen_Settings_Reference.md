@@ -3621,9 +3621,13 @@ event is missed; a pad pulled out is let go at the next poll. Any pad then drive
 the pad menu (§4.29), every sheet (§4.45), the game options of §4.59 and the on-screen keyboard: a button is held when any
 pad holds it. Over a running game any pad's guide button, or Back and Start together, opens the pad menu.
 
-**The game hears player 1 only.** The first pad opened is player 1's, as the only pad was before; when it goes, the next
+~~**The game hears player 1 only.** The first pad opened is player 1's, as the only pad was before; when it goes, the next
 one opened takes its place, which is what the rescan did before with one pad. The game's bindings (`GamepadBindingMap`)
-are unchanged, and a second pad is not player 2: that is separate input work (`EmuSen_Input.md` §6).
+are unchanged, and a second pad is not player 2: that is separate input work (`EmuSen_Input.md` §6).~~
+**Superseded 2026-10-04 (`EmuSen_Input.md` §8):** each pad plays as its own player, up to the game's ports. Pads take
+players in the order they connect; a pad that goes keeps its number, nobody moves up, and it gets the number back when it
+returns; a new pad takes the lowest number with no pad connected. When player 1's pad goes, the game no longer moves
+the next pad into its place, which the single-pad rescan did; a spare pad plugged in then does take it.
 
 **Settings.** Preferences ▸ Controllers, stored in `appsettings.json`; each applies at once:
 
@@ -3631,10 +3635,12 @@ are unchanged, and a second pad is not player 2: that is separate input work (`E
 |---|---|---|---|
 | Controller Type | `ControllerType` | Automatic | The buttons the big picture help bar draws: Automatic follows the pad last pressed (its family by §4.52's rules), or Xbox, PlayStation, Nintendo or Generic always. Only the pictures change: not what a button does, and not the text hints, which name buttons by an Xbox pad's letters |
 | Button Swap | `SwapPadButtons` | off | A and B trade functions: Accept on East and Back on South, in the library, the themed view, the pad menu, every sheet and the on-screen keyboard. The help bar and the text hints name the swapped buttons. X and Y are not swapped, unlike ES-DE's setting (plan §24.5). The keyboard and every game are unaffected. *Since 2026-09-27 X and Y trade as well, as ES-DE's do (§4.79.5)* |
-| First Controller | `FirstControllerOnly` | off | Only the first pad opened steers the interface; ES-DE's remedy for a wireless pad that registers twice. The game is unaffected (it reads the first pad anyway) |
+| First Controller | `FirstControllerOnly` | off | Only the first pad opened steers the interface; ES-DE's remedy for a wireless pad that registers twice. ~~The game is unaffected (it reads the first pad anyway)~~ *Since 2026-10-04 the game hears player 1's pad alone with it on, which is what it heard before players, so the twin of a pad that registers twice does not press a second port (`EmuSen_Input.md` §8.3)* |
+| Players | seats in `GamepadManager.Players`; `KeyboardPlayer` | keyboard: Player 1 | *Added 2026-10-04.* A row per connected pad naming it, with the player it plays as (Player 1 to 8, or None); choosing a player another pad has trades the two. Any button held on a pad lights its row. A seat kept for a pad that has gone is a row with Forget. The Keyboard row is the player the keyboard plays as. The seats last until Mistress quits; only `KeyboardPlayer` is saved (`EmuSen_Input.md` §8.9) |
 | Notifications | `ControllerNotifications` | on | The notice below |
 
-**The notice.** "Controller connected: *name*" or "Controller disconnected: *name*", drawn with LunaP's `NoticeLayer`
+**The notice.** "Controller connected: *name*" or "Controller disconnected: *name*" (since 2026-10-04 followed by the
+player the pad took or keeps, "(Player 2)"), drawn with LunaP's `NoticeLayer`
 at the top centre over whatever is on screen (the library, the themed view, a sheet or a game), in a desktop or a
 big-screen session. It fades in over half a second, holds three and fades out over half a second, which is ES-DE 3.4.1's
 popup as recorded once (plan §24.4). The pads connected when Mistress starts are not announced.
@@ -3658,9 +3664,11 @@ and a theme's icons). They run on WiseMan's `PadDriver`, which plugs and pulls s
 **What it does not cover.**
 - No real device was used. SDL's events and their timing, Steam Input's virtual pads, a pad that registers twice and
   sleep and wake are for the handheld (plan §24.10).
-- A second pad as player 2 in a game.
+- ~~A second pad as player 2 in a game.~~ Built 2026-10-04: `EmuSen_Input.md` §8.
 - The notice's fade is linear; ES-DE's fits a gentle power curve (plan §24.4). Its words are Mistress's own.
-- The Controller Bindings window still names the first pad alone.
+- ~~The Controller Bindings window still names the first pad alone.~~ *Since 2026-10-04 a Player selector at the end of
+  its tab strip chooses whose pad bindings a console's tab shows and rebinds, and the drawing lights that player's pad
+  (`EmuSen_Input.md` §8.4, §8.9).*
 
 ### 4.62 Big picture: ES-DE's theme list, browsed and installed from the Themes tab (2026-09-26)
 

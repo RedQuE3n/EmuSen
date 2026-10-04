@@ -68,13 +68,12 @@ namespace EmuSen.Pharaoh
                     emit($"> {cmdLine}");
                     runner.RunFrames(long.Parse(parts[1]));
                 }
-                else if ((verb == "tap" || verb == "tap2") && parts.Length >= 2)
+                else if (TapController(verb) is int tapped && parts.Length >= 2)
                 {
                     emit($"> {cmdLine}");
-                    int controller = verb == "tap2" ? 2 : 1;
                     var button = Enum.Parse<PadButton>(parts[1], ignoreCase: true);
                     long duration = parts.Length >= 3 ? long.Parse(parts[2]) : 4;
-                    runner.Tap(button, controller, duration);
+                    runner.Tap(button, tapped, duration);
                 }
                 else if ((verb == "hold" || verb == "release") && parts.Length >= 2)
                 {
@@ -428,6 +427,10 @@ namespace EmuSen.Pharaoh
         }
 
         // Detaches the per-frame hook first - Stop() blocks while ffmpeg encodes.
+        // tap is controller 1's and tapN controller N's, tap2 as it always was - see EmuSen_Input.md §8.7.
+        public static int? TapController(string verb) =>
+            verb == "tap" ? 1 : verb.StartsWith("tap", StringComparison.Ordinal) && int.TryParse(verb.AsSpan(3), System.Globalization.NumberStyles.None, null, out int n) && n is >= 1 and <= 8 ? n : null;
+
         private string StopRecording()
         {
             runner.AfterFrame = null;

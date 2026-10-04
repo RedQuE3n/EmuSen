@@ -15,9 +15,15 @@ namespace EmuSen.Endymion.Input
             _devices = devices;
             Id = id;
             Handle = handle;
+            Guid = devices.Guid(handle);
+            Path = devices.Path(handle);
         }
 
         public uint Id { get; }
+
+        // Read once at opening, so a pad that has gone is still known by them - see EmuSen_Input.md §8.
+        public string Guid { get; }
+        public string? Path { get; }
 
         internal IntPtr Handle { get; private set; }
 
@@ -52,5 +58,9 @@ namespace EmuSen.Endymion.Input
     }
 
     // A pad plugged in or pulled out, as GamepadManager.Poll found it.
-    public readonly record struct PadConnection(ConnectedPad Pad, bool Connected);
+    public readonly record struct PadConnection(ConnectedPad Pad, bool Connected)
+    {
+        // The player the pad took or keeps reserved, 1-based; 0 for a pad seated nowhere.
+        public int Player { get; init; }
+    }
 }

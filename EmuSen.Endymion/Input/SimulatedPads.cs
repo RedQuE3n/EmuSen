@@ -88,5 +88,14 @@ namespace EmuSen.Endymion.Input
         public SDL.GamepadType Type(IntPtr pad) => Pad(pad)?.Type ?? SDL.GamepadType.Unknown;
 
         public SDL.GamepadButtonLabel Label(IntPtr pad, SDL.GamepadButton button) => SDL.GamepadButtonLabel.Unknown;
+
+        public string Guid(IntPtr pad) => Pad(pad) is { } p ? p.Guid ?? Convert.ToHexString(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(p.Name))).ToLowerInvariant() : "";
+
+        public string? Path(IntPtr pad) => Pad(pad)?.Path;
+
+        public void SetPlayerIndex(IntPtr pad, int index)
+        {
+            if (Pad(pad) is { } p) p.PlayerIndex = index;
+        }
     }
 }

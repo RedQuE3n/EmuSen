@@ -287,6 +287,18 @@ namespace EmuSen.Cores.Nintendo.Mars
         }
 
         // A binding for a button the pad lacks is dropped rather than moved onto another one - see Mars_Core.md §5.
+        // The four ports on the console's front - see EmuSen_Input.md §8.1.
+        public const int Ports = 4;
+
+        public int ControllerPorts => Ports;
+
+        // The joybus answers for a present controller only, as for one plugged in - see EmuSen_Input.md §8.6.
+        public void SetControllerConnected(int port, bool connected)
+        {
+            Controller[]? ports = Bus?.Si.Controllers;
+            if (ports is not null && port >= 0 && port < ports.Length) ports[port].Present = connected;
+        }
+
         public void SetButton(int port, PadButton button, bool pressed)
         {
             Controller[]? ports = Bus?.Si.Controllers;

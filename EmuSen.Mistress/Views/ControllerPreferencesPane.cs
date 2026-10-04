@@ -7,8 +7,8 @@ using EmuSen.LunaP.Controls;
 
 namespace EmuSen.Mistress.Views
 {
-    // Preferences' Controllers tab: ES-DE's input device settings for the interface, none of which reaches a game - see EmuSen_Settings_Reference.md §4.61.
-    public sealed class ControllerPreferencesPane
+    // Preferences' Controllers tab: which pad is which player, then ES-DE's input device settings for the interface - see EmuSen_Settings_Reference.md §4.61 and EmuSen_Input.md §8.9.
+    public sealed class ControllerPreferencesPane : IDisposable
     {
         public static readonly (string Value, string Text)[] Types =
         {
@@ -23,9 +23,14 @@ namespace EmuSen.Mistress.Views
         private readonly LunaSwitch _notices = new() { Name = "ControllerNotificationsSwitch", Label = "Show a notice" };
         private readonly Dropdown _keyboard = new() { Name = "OnScreenKeyboardDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
 
-        public ControllerPreferencesPane(AppSettings settings)
+        private readonly PlayerPreferencesRows _players;
+
+        public PlayerPreferencesRows Players => _players;
+
+        public ControllerPreferencesPane(AppSettings settings, Endymion.Input.GamepadManager? pads = null, Func<int>? ports = null)
         {
             _settings = settings;
+            _players = new PlayerPreferencesRows(settings, pads, ports);
             string[] texts = Types.Select(t => t.Text).ToArray();
             _type.Fill(texts, Types.FirstOrDefault(t => t.Value == settings.ControllerType).Text ?? texts[0]);
             _type.Chose += chosen =>
@@ -53,8 +58,11 @@ namespace EmuSen.Mistress.Views
             toggle.IsCheckedChanged += (_, _) => { apply(toggle.IsChecked == true); _settings.Save(); };
         }
 
+        public void Dispose() => _players.Dispose();
+
         public Control[] Rows() =>
         [
+            _players.Rows,
             new FieldRow
             {
                 Label = "Controller Type",
@@ -70,7 +78,7 @@ namespace EmuSen.Mistress.Views
             new FieldRow
             {
                 Label = "First Controller",
-                Hint = "Only the first controller connected steers the library and the menus, as when a wireless pad registers twice. Games are not affected.",
+                Hint = "Only the first controller connected steers the library and the menus, and games hear player 1's controller alone, as when a wireless pad registers twice.",
                 Content = _firstOnly,
             },
             new FieldRow

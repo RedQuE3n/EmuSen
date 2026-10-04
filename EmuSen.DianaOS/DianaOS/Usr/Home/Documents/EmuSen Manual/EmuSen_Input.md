@@ -150,13 +150,17 @@ Consequences worth knowing:
 
 ## 6. What this does not cover yet
 
-- **Multitap, and ports beyond two.** `SetButton`'s `port` is an `int` rather than a two-valued enum specifically so this can grow, but no core models more than two controllers and no frontend offers to configure one.
+- ~~**Multitap, and ports beyond two.** `SetButton`'s `port` is an `int` rather than a two-valued enum specifically so this can grow, but no core models more than two controllers and no frontend offers to configure one.~~
+  **Ports beyond two closed 2026-10-04 by §8**: the N64's four ports are played, every core says how many it has
+  (§8.1), and Preferences configures which pad is which player. The multitap and the Four Score remain open (§8.10).
 - ~~**Analog axes.** `GamepadManager` converts a stick to a d-pad (`AnalogStickAsDpad`, with a deadzone) and there is no analog value anywhere in the contract. A console with a genuinely analog stick needs a real addition here, not a fudge through `PadButton`.~~ **Closed 2026-09-18 by §7**, which made that real addition — `PadAxis` and `ICore.SetAxis` — and kept the stick out of `PadButton`, as this bullet asked.
-- **A second pad as player 2.** Since 2026-09-26 `GamepadManager` opens every connected pad and the interface reads
+- ~~**A second pad as player 2.** Since 2026-09-26 `GamepadManager` opens every connected pad and the interface reads
   them all (`EmuSen_Settings_Reference.md` §4.61), but a game reads only the first opened, player 1's, as it read the
   only pad before. Routing a second pad to port 1 is the work `EmuSen_BigPicture.md` §21.5's Q22 (b) left here: it
   reaches every game, and needs a rule for which pad is which player when pads come and go, which the frontend's
-  "first opened" rule does not have to settle. `MirrorPlayer1ToPlayer2` (§5.1) is unrelated and unchanged.
+  "first opened" rule does not have to settle. `MirrorPlayer1ToPlayer2` (§5.1) is unrelated and unchanged.~~
+  **Closed 2026-10-04 by §8.** The rule asked for is §8.2, its edge cases §8.3, and the route to a port §8.5. The
+  mirror is unchanged in meaning; with a real player 2 it is or'd with player 2's pad rather than replacing it (§8.5).
 - **Non-pad peripherals.** Light guns, mice, the SNES multitap's own protocol. All are console-specific hardware that would attach to the core, not to this interface.
 - **Per-core default bindings.** Defaults are one table shared by every core. An NES ROM gets the SNES-shaped defaults for the eight buttons it has, which happens to be right (Z/X = B/A), and is luck rather than design.
 
@@ -257,3 +261,266 @@ changing the file format, and it is recorded rather than engineered away.
   push an axis. Tests reach `SetAxis` directly.
 - **Rebinding a gamepad axis.** Sticks and triggers come from their fixed sources; only buttons are rebindable on a pad.
 - **Pressure-sensitive buttons**, rumble, and a second analog pair beyond what SDL calls a gamepad.
+
+---
+
+## 8. Local multiplayer: a pad for each player
+
+*Added 2026-10-04. Until this section a game heard one pad, player 1's, however many were connected (§6, and
+`EmuSen_Settings_Reference.md` §4.61). Here a second, third and fourth pad play as players 2, 3 and 4, up to as many
+controller ports as the running core has.*
+
+The design separates three questions that the single-pad code never had to tell apart: **how many ports the game
+has** (a fact about the core, §8.1), **which pad is which player** (a rule about devices that come and go, §8.2 and
+§8.3), and **how a player's input reaches a port** (routing, §8.5). Each is answered once, below the frontends, so that
+Mistress and Hotaru cannot disagree.
+
+### 8.1 Ports per core
+
+`ICore` gains `int ControllerPorts => 1`, defaulted like the rest of the input contract, and every core in the build
+answers it. `EmuSen.Cores.ControllerPorts.Of(core)` is what a frontend asks; `ControllerPorts.ForConsole(console)` gives
+the count with no game loaded, for the bindings window.
+
+| Console | Engine | Ports | Source of the count | Players 2-4 reach the game |
+|---|---|---|---|---|
+| NES | Moon (C#) | 2 | `MoonCore.Ports` | player 2 |
+| NES | MoonRT (Rust) | 2 | `MoonCore.Ports`, the shim | player 2 |
+| SNES | Venus (C#) | 2 | `VenusCore.Ports` | player 2 |
+| SNES | VenusRT (Rust, ABI v1) | 2 | machine info's `ports` (`EmuSen_CoreAPI.md` §6.4) | player 2 |
+| Game Boy | Mercury (C#), MercuryRT (Rust) | 1 | the console | none, by the hardware |
+| N64 | Mars (C#), MarsRT (Rust) | 4 | `MarsCore.Ports` | players 2, 3 and 4 |
+
+**A v1 engine is read from its descriptors, not from a table.** `CoreEngine` lives with the ABI host and does not
+override the member; `ControllerPorts.Of` reads the highest port that machine info names a controller for, and, where
+machine info names none, the ports its system's controllers list (`EmuSen_CoreAPI.md` §6.3). VenusRT's info names
+ports 0 and 1, both `snes.pad`. A one-line `ControllerPorts` on `CoreEngine` itself would make the special case
+unnecessary, and is left to the ABI host's owners.
+
+**Three engines folded every port past the last onto the last.** The contract always said `port` is 0-based and an
+`int` so that it could grow (§2, §6), but no frontend had sent anything past 1, and three cores relied on that:
+
+- Moon chose `Controller1` for port 0 and `Controller2` for *any other* port;
+- MoonRT's shim mapped port 0 to 0 and every other port to 1, mirroring Moon;
+- Venus passed `port + 1` to its `Input`, which treats 1 as pad 1 and *any other* number as pad 2.
+
+So a third player's presses would have landed on player 2's controller. This was predicted from reading the three
+`SetButton`s, then demonstrated before it was changed: `ControllerPortTests.The_nes_second_pad_reads_port_1_alone`
+(both engines) and `The_snes_second_pad_reads_port_1_alone` failed with the presses of ports 2 and 3 visible in the
+game's own reads of `$4017` and `$421A`, and pass since each core drops a port it does not have. Mercury, MercuryRT,
+Mars and MarsRT already dropped such ports. The ABI host's `NativeRtCore.PortFor` has the same clamp as its default;
+both shims that derive from it override it, so nothing reaches it, but the default is worth changing where that file is
+maintained. The router (§8.5) never sends past `ControllerPorts` either, so the fix is defence in depth rather than the
+only guard.
+
+### 8.2 Which pad is which player: the rule
+
+Stated as a player would be told it:
+
+1. **Pads take players 1, 2, 3, 4 in the order they connect.** The pads present when Mistress starts are seated in the
+   order SDL lists them.
+2. **A pad that is unplugged keeps its number.** Nobody moves up into it, and the other players keep theirs. A notice
+   says "Controller disconnected: *name* (Player 2)", and the game is not paused.
+3. **A pad that comes back gets its number back.** It is recognised by SDL's GUID for the device (vendor, product,
+   version and bus, sixteen bytes) and by its device path.
+4. **A new pad takes the lowest number that has no pad connected** — counting a number kept for a pad that is gone.
+5. **The keyboard is player 1's** until the player gives it to another player (§8.3).
+6. **Preferences ▸ Controllers shows which pad is which player and changes it** (§8.9); choosing a number that another
+   pad holds trades the two.
+
+`PlayerSlots` (Endymion) is the whole rule; `GamepadManager` seats a pad as it opens it and keeps the seat when it
+closes it. A seat holds the closed `ConnectedPad`, whose GUID and path were read when it was opened, so a reservation
+needs no copy of the device's identity.
+
+**Matching, in order:** a seat reserved for a pad with the same GUID *and* path; else one reserved for the same GUID;
+else the lowest seat without a connected pad. A path is the more specific of the two and is tried first; a GUID alone
+still finds a pad that comes back through another USB port, which changes its path.
+
+**Rule 4 is a choice between two readings of "reserved", and it was decided against the stricter one.** A strict
+reservation — a new pad never takes a seat held for another — keeps a returning pad's number even when a stranger
+connected meanwhile, but it fails the commoner case badly: a single player whose pad's battery dies and who picks up a
+different pad would find that pad seated as player 2, which a one-player game does not hear, and would have to open
+Preferences mid-game to play at all. The same failure follows a pad moved from Bluetooth to a cable, since the bus is
+part of SDL's GUID. Under rule 4 the spare pad is player 1. What the strict rule would have protected — a returning pad
+whose seat a newcomer took — is the rarer event, and its cost is a number one higher, which Preferences repairs. So the
+reservation protects against renumbering, and against nobody's pad but the player's own.
+
+RetroArch's documentation describes its default as assigning a newly connected device to the first user without one,
+with an optional per-port reservation; ES-DE's user guide assigns no players at all (its "Input device settings" govern
+only which pad steers the interface, §4.61). The rule here is RetroArch's default plus the keeping of a disconnected
+pad's number.
+
+**What is remembered, and for how long.** The seats last until Mistress quits; nothing is written about a pad, as §4.61
+of the settings reference already decided. Remembering seats between sessions would belong in Mistress's SQLite
+database (`EmuSen_Stack.md` §4) and is not done.
+
+**Each pad is told its number** through `SDL_SetGamepadPlayerIndex`, which lights the player LED of a pad that has one
+(a DualShock 4's light bar, a Switch Pro's lamps) and is ignored by the rest.
+
+### 8.3 Edge cases, decided
+
+- **Two identical pads.** They share a GUID; their device paths differ, and that is what tells them apart when both go
+  and come back in either order (`PlayerSlotsTests.Two_identical_pads_are_told_apart_by_where_they_are_plugged_in`).
+  Where SDL reports no path — its virtual joysticks have none, measured in `SdlVirtualPadsTests` — the lowest seat
+  reserved for the model is taken, so two identical pathless pads that both drop may come back swapped. In Preferences
+  two identical pads carry a number after the name, and pressing a button on one lights its row.
+- **A pad that registers twice** (a Bluetooth pad seen both directly and through Steam Input's virtual pad): the twin
+  is seated as the next player and every press would reach two ports. The remedy is the existing *First Controller*
+  switch (`FirstControllerOnly`), which now quiets the game's other players as well: with it on the game hears player
+  1's pad alone, which is exactly what it heard before this section, and the interface the first pad alone, as before.
+  Detecting a twin automatically (same name within the same moment) was considered and rejected as a guess that would
+  also catch two genuinely identical pads.
+- **More pads than ports.** A pad past the console's ports is still seated (an SNES's third pad is player 3) and still
+  steers the interface, but the game never hears it; Preferences says so on its row. Changing to a four-port game
+  makes it heard without re-seating.
+- **More pads than seats.** There are eight seats (`PlayerSlots.MaxPlayers`), room for the four-port N64 and the
+  multitaps a later core might model. A ninth pad is no player and still steers the interface.
+- **The keyboard.** `AppSettings.KeyboardPlayer`, default 1, is the player the keyboard plays as, beside that player's
+  pad (their presses are or'd, as the keyboard and the one pad always were). One keyboard map per console is kept, not
+  one per player; two players on one keyboard is not offered (§8.10). Hotaru has no setting and keeps the keyboard on
+  player 1.
+- **A pad unplugged mid-game.** Its buttons are let go on its port at the next poll, since a closed pad reads nothing
+  held; the port stays plugged in while the seat is kept (§8.6). Nothing pauses: no existing setting asks for a pause
+  on a disconnect, and ES-DE and RetroArch pause on none by default either.
+
+### 8.4 Bindings per player
+
+Every player has a pad map per console, and **a player whose map was never changed plays with player 1's**, so a
+change to player 1's reaches every such player. Changing a player's map gives it its own, begun as a copy of player 1's
+(`GamepadBindings.Own`), which is then independent; *Use Player 1's* drops it again.
+
+**The file gains keys and renames none.** `gamepadbindings.json` keeps its console-keyed maps as player 1's, and a
+player's own map is written beside them under `"SNES Player 2"`. A build from before players reads that key as a
+console it does not know, keeps the map, and writes it back unchanged (`PlayerBindingsTests.A_players_key_is_kept_by_a_reader_that_knows_only_consoles`);
+a file from before players has no such key, so every player plays with the console's map, which is what §7.4's rule
+for files predating a change asks: absence means "as before". The flat file of §5.1 is inherited the same way.
+
+The keyboard file is unchanged, for the reason in §8.3.
+
+### 8.5 The route from a pad to a port
+
+`PortRouter` (Endymion, beside `GamepadManager`, so it names no core: it calls the frontend's `SetButton`, `SetAxis`
+and `SetControllerConnected`) replaces the two copies of the per-poll code that Mistress and Hotaru had. On each poll it
+reads the pad of every player the game has a port for, through that player's bindings, and then for each port:
+
+- a button goes to the core when it changes, as before; a port hears its player's pad, the keyboard if it is that
+  player's, and on the second port player 1 as well while `MirrorPlayer1ToPlayer2` is on (§5.1 there; or'd with player
+  2's own pad rather than replacing it);
+- every axis goes on every poll, as §7.3 requires; with the mirror, the stick pushed furthest of the two;
+- nothing is sent to a port the game does not have.
+
+A key change re-sends from the pads as the last poll read them, as the frontends did, so a menu over the game that
+keeps the pads from the game (§4.29 of the settings reference) still keeps them when a key is pressed. A new game resets
+what was sent, since its core starts with nothing held.
+
+### 8.6 A port with a controller in it
+
+**The N64 tells an empty port from a full one, and its games look.** The joybus answers a status or state command only
+for a controller that is present (`Mars_Serial.md` §3.1); both Mars engines started with port 0 present and ports 1-3
+empty, and nothing could change that. Pressing buttons on port 2 would have reached a controller the game believes is
+not there. `ICore.SetControllerConnected(port, connected)` is the addition, defaulted to nothing for the consoles whose
+games cannot tell; Mars sets `Present`, and MarsRT gains `mars_machine_set_present`, an additive export the shim
+tolerates the absence of.
+
+**A port past the first holds a controller while its player has a pad seated — connected or kept — or the keyboard.**
+Kept, so that a wireless pad dropping for a second does not pull the controller out from under the game; a game that
+reacts to a removed controller sees one only when the seat is given up. Port 0 is never unplugged, so a one-player
+session's machine is exactly as it was: the probe baselines of `Mars_Gpu.md` and the like, which run one player, are
+unaffected by construction. The router sends the flags on every poll rather than on change, because a state loaded
+carries the `Present` it was saved with (`Present` is part of `Controller`'s state in both engines).
+
+### 8.7 Scripts and the shell
+
+`FrameRunner.Hold` and `Release`, and the `--commands` `hold`/`release` verbs, already took a controller number. `tap`
+and `tap2` gain `tap3` to `tap8` (`CommandsScriptRunner.TapController`). **The DianaOS shell has no input command**:
+input reaches a core from a frontend's pads and keys or from Pharaoh's script verbs, and no shell command presses a
+button, so there is nothing there to give a port. A `press` command would be the place, and would take the controller
+as these verbs do.
+
+### 8.8 Tests, and what was predicted
+
+No physical pad is needed. Two harnesses stand in: `SimulatedPads`, the device layer's fake, now with a GUID (an MD5 of
+the name unless set, so pads of one name share one, as one model does) and a path per pad; and **SDL's own virtual
+joysticks** beneath the real `SdlPadDevices`, filtered to the ones the test attached, so that SDL's GUIDs and paths are
+the measured ones.
+
+| Test | What it shows |
+|---|---|
+| `PlayerSlotsTests` (12) | the seating rule, reservations, identical pads with and without paths, trading and *None*, the ninth pad, the first controller alone, per-player bindings, the player LED, a new device set |
+| `PortRouterTests` (9) | each player's pad to its port, nothing past the last, unplugging mid-game, the keyboard's player, the mirror, axes per port, the plugged-in flags, a reset |
+| `PlayerBindingsTests` (10) | player 1's map until changed, own maps, the file's added keys in both directions, files from before players, reset |
+| `ControllerPortTests` (8) | every engine's count; port 1 reaching the NES's `$4017` and the SNES's `$421A` on both engines of each, ports 2-3 reaching nothing; the N64's four ports in Mars and, by state against Mars, in MarsRT |
+| `SdlVirtualPadsTests` (1) | three SDL virtual pads seated 1-3, the identical pair sharing a GUID, player 2's press on port 1, a pad detached and a same-model pad attached taking its seat |
+| `MultiplayerTests` (4) | through Mistress's own poll: a second pad on the SNES's second port, its hot-unplug and replug and notices, no pause; player 1's pad going and a spare taking seat 1; the keyboard as player 2; four pads on the N64's four ports in a big-screen session, and a fifth heard by none |
+| `FrameRunnerTests` (+2) | the `tapN` verbs; `hold` on controller 2 reaching the SNES's second pad |
+| `PlayerPreferencesTests` (4) | the rows' names and players, trading, None, the keyboard's player saved; a press lighting its row alone; a kept seat and Forget; the big-screen rows changed and lit by pad alone, and fitting |
+| `PlayerBindingsWindowTests` (3) | each console's player count; a rebind for player 2 making its own map and leaving player 1's, the drawing lighting player 2's pad, Use Player 1's; the selector reached by pad |
+| `WindowFitAuditTests` (+4, and the bindings window's existing 4 cases on every tab) | Preferences ▸ Controllers with four pads, two of one 80-character name and a kept seat, on the desktop and in a big screen, at 1280 by 800 and 1920 by 1200 |
+
+**Predictions recorded with the tests, before they were run**, and how they fared:
+
+- *Ports 2 and 3 land on controller 2 in Moon, MoonRT and Venus, and nowhere in the others* — confirmed (§8.1).
+- *With no multitap the SNES's `$421C` reads 0* — **retired**: Venus returns `$42`, the open bus's last byte (the high
+  byte of the address itself), with or without presses. The test now compares the register before and after rather
+  than against zero; what a real console returns there is a separate question for the PPU's open-bus record, not this
+  work.
+- *A pad attached through SDL's virtual-joystick API is seen through the added event within one poll* — confirmed.
+- *Two virtual pads of one vendor and product share a GUID and have no path* — confirmed (`ff00…` style GUIDs differ
+  only by the product word).
+
+Recorded before the first run of the fit audit of §8.9:
+
+- *P1, P2: in a big-screen menu row the 80-character name is trimmed, and the audit reports it cut* — half right. It is
+  trimmed (the picture shows it), but the audit does not report a menu row's trimmed label, which the menu draws with
+  its own ellipsis. The consequence the audit missed is §8.9's numbering.
+- *P3: on the desktop nothing is cut* — **retired**: the window was 1,080 pixels tall at 1280 by 800 (§8.9). The audit's
+  readability floor and its rule against an unfaded scrolling edge are the big screen's (Q186) and are not applied to a
+  desktop window, which keeps the desktop's text sizes and a scroll bar.
+- *P4: the bindings window's player row fits* — **retired** (§8.9: the drawing's labels fell under the floor).
+
+### 8.9 Where the player sees it
+
+**Preferences ▸ Controllers** begins with the players (`PlayerPreferencesRows`): a *Keyboard* row choosing the
+keyboard's player, then a row per connected pad — its name, and a choice of Player 1 to 8 or None — then a row per seat
+kept for a pad that has gone ("Player 2: *name*, disconnected") with **Forget**. Choosing a player another pad has
+trades the two (§8.2, rule 6). A row's hint says when its player is not heard: *None*, a player past the game's ports
+("This game has 2 controller ports, so it does not hear player 3"), or First Controller being on. Rows come and go as
+pads are plugged in and pulled out with the sheet open; the others keep their controls, so a focused choice stays
+focused.
+
+**Press a button to identify.** Any button held on a pad, or a trigger past half its travel, lights that pad's choice in
+the theme's accent — a border on the desktop, the value's colour in a big-screen menu row — for as long as it is held,
+as RetroArch's and ES-DE's documentation describe their "press a button" device lists. Two pads of one name are
+numbered *in front* ("1 · 8BitDo …", "2 · 8BitDo …"): the first build numbered them at the end, and the fit audit's
+picture at 1280 by 800 showed both long names trimmed before the number, so identical pads read identically in a menu
+row. The light was the only way to tell them apart there, which is not enough for a player who cannot see the rows and
+the pads at once.
+
+**In a big-screen session** the same rows are ES-DE's menu rows, through `BigMenuForm` (§4.72.8 of the settings
+reference): each pad is an option row that Left and Right step through the players, the kept seat an action row, so
+the panel is used with a pad alone (`PlayerPreferencesTests.In_big_picture_the_pad_alone_changes_a_pads_player`).
+
+**The Controller Bindings window** gains a *Player* selector at the right end of its tab strip, shown for a console with
+more than one port and listing that console's players; **Use Player 1's** gives the player shown player 1's map again.
+A line under the drawing says whose buttons are shown and whether they are the player's own, the keyboard column says
+whose keyboard it is when that is not obvious ("Keyboard (Player 1)"), and the drawing and the tester light the
+selected player's pad. The selector was first placed in a row above the drawing; the window fit audit then failed every
+console tab with more than one port, at both sizes, because the drawing lost the row's height and its labels fell to
+11.47 design pixels of capitals, under the 11.64 floor. The tab strip's right end was empty, and costs the drawing
+nothing. With the pad, Up past the drawing's top row is the selector and Up again is the tab shown; Left and Right on
+the selector step the players. `PadSettingsWindowTests`' audit of every control by pad found the selector reachable on
+the SNES tab alone before that route was given, since Up from the other drawings' top rows reached the tab strip first.
+
+**The desktop Preferences window** is now at most 720 pixels tall. It sized itself to its tallest tab, and with three
+pads and a kept seat the Controllers tab made it 1,080 pixels, past a 1280 by 800 screen; its panes scroll.
+
+### 8.10 What this does not cover
+
+- **The SNES multitap and the NES Four Score.** Both are console hardware: a multitap answers on the second data line
+  with its own protocol (`$421C`-`$421F` and the `$4201` I/O bit on the SNES; a signature byte after the 16th read on
+  the NES). They belong in the cores, as §6 already said of the multitap, and would raise those consoles'
+  `ControllerPorts` to 5 and 4. The seating and routing here already go to eight players, so adding either needs no
+  change above the core.
+- **Two players on one keyboard.** One keyboard map per console, given to one player. Per-player keyboard maps need
+  conflict checking across players and a second set of defaults that no hotkey holds.
+- **Seats remembered between sessions** (§8.2).
+- **Hotaru's keyboard on another player**: Hotaru has no settings to move it.

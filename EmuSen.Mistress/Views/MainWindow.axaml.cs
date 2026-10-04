@@ -154,7 +154,7 @@ namespace EmuSen.Mistress.Views
 
         // Tracked separately and OR'd: either device works at any time.
         private readonly bool[] _keyboardHeld = new bool[Enum.GetValues<PadControl>().Length];
-        private readonly bool[] _gamepadHeld = new bool[Enum.GetValues<PadButton>().Length];
+        private PortRouter _ports = null!;
 
         public MainWindow()
         {
@@ -180,6 +180,10 @@ namespace EmuSen.Mistress.Views
             // SDL's device scan takes ~150 ms, so it waits for the window's first frame - see EmuSen_Settings_Reference.md §4.42.
             _gamepad = new GamepadManager(_gamepadBindings.For(_activeConsole), start: false);
             _gamepad.PadChanged += OnPadChanged;
+            _ports = new PortRouter(_gamepad, (p, b, held) => _session?.SetButton(p, b, held), (p, a, v) => _session?.SetAxis(p, a, v), (p, on) => _session?.SetControllerConnected(p, on))
+            {
+                KeyboardHeld = control => _keyboardHeld[(int)control],
+            };
             Opened += (_, _) => RequestAnimationFrame(_ => Dispatcher.UIThread.Post(_gamepad.Start, DispatcherPriority.Background));
             // `--play <rom>` starts a game straight away, which the cadence measurement of §4.87.1 launches with.
             Opened += (_, _) => { if (PlayArgument(Environment.GetCommandLineArgs()) is { } rom) Dispatcher.UIThread.Post(() => LoadRom(rom, Path.GetFileNameWithoutExtension(rom)), DispatcherPriority.Background); };
@@ -265,8 +269,7 @@ namespace EmuSen.Mistress.Views
             if (!LibraryView.IsVisible && !Sheets.IsPresenting && _keyBindings.For(_activeConsole).TryGetControl(key, out PadControl control))
             {
                 _keyboardHeld[(int)control] = pressed;
-                if (PadControls.IsButton(control, out PadButton button)) ApplyButtonState(button);
-                ApplyAxes();
+                ApplyKeys();
                 // Or the menu bar, the only focusable control here, also gets the key - see EmuSen_Settings_Reference.md §4.24.
                 e.Handled = true;
                 return;
@@ -309,30 +312,20 @@ namespace EmuSen.Mistress.Views
             e.Handled = true;
         }
 
-        // Through ICore, not the bus - which console's pad this reaches is the core's business.
-        private void ApplyButtonState(PadButton button)
+        // Through ICore, not the bus; each player's pad to its own port and the keyboard to its player's - see EmuSen_Input.md §8.5.
+        private void ApplyKeys()
         {
             if (_session is not { IsRomLoaded: true }) return;
-            bool held = _keyboardHeld[(int)PadControls.From(button)] || _gamepadHeld[(int)button];
-            _session.SetButton(0, button, held);
-            if (_appSettings.MirrorPlayer1ToPlayer2) _session.SetButton(1, button, held);
+            RoutePlayers();
+            _ports.KeysChanged();
         }
 
-        // Every axis the console reads, from the pad's own axes and the keys standing in for them - see EmuSen_Input.md §7.3.
-        private void ApplyAxes()
+        private void RoutePlayers()
         {
-            if (_session is not { IsRomLoaded: true }) return;
-
-            foreach (PadAxis axis in _session.SupportedAxes)
-            {
-                double value = PadControls.Resolve(axis, _gamepad.Axis(axis), Held);
-                _session.SetAxis(0, axis, value);
-                if (_appSettings.MirrorPlayer1ToPlayer2) _session.SetAxis(1, axis, value);
-            }
+            _ports.KeyboardPlayer = Math.Clamp(_appSettings.KeyboardPlayer, 1, PlayerSlots.MaxPlayers);
+            _ports.MirrorPlayer1ToPlayer2 = _appSettings.MirrorPlayer1ToPlayer2;
+            _gamepad.FirstControllerOnly = _appSettings.FirstControllerOnly;
         }
-
-        private bool Held(PadControl control) =>
-            _keyboardHeld[(int)control] || (PadControls.IsButton(control, out PadButton button) && _gamepadHeld[(int)button]);
 
         private void PollGamepad()
         {
@@ -340,19 +333,11 @@ namespace EmuSen.Mistress.Views
 
             // A menu over the game, or the button that closed one, is not the game's - see §4.29.
             if (PadBelongsToTheInterface()) return;
+            if (_session is not { IsRomLoaded: true }) return;
 
-            foreach (PadButton button in Enum.GetValues<PadButton>())
-            {
-                bool held = _gamepad.IsPressed(button);
-                if (held != _gamepadHeld[(int)button])
-                {
-                    _gamepadHeld[(int)button] = held;
-                    ApplyButtonState(button);
-                }
-            }
-
-            // A stick moves without crossing any threshold, so its axes are sent every poll rather than on change.
-            ApplyAxes();
+            // Buttons go when they change; a stick moves without crossing any threshold, so the axes go every poll.
+            RoutePlayers();
+            _ports.PollPads();
         }
 
         private async Task OpenRomAsync()
@@ -504,7 +489,7 @@ namespace EmuSen.Mistress.Views
         private void ShowPreferencesAt(string? tab)
         {
             // Non-modal, so re-scan on close rather than leaving a stale library behind it.
-            var window = new PreferencesWindow(_appSettings, this, _bigScreen ? HelpFamily : null) { OpenThemeSettings = ShowThemeSettings, Graphics = _graphics };
+            var window = new PreferencesWindow(_appSettings, this, _bigScreen ? HelpFamily : null, _gamepad, () => _session?.ControllerPorts ?? 0) { OpenThemeSettings = ShowThemeSettings, Graphics = _graphics };
             WatchPreferences(window);
             if (tab is not null) window.ShowTab(tab);
             window.StatusBarChanged += ApplyStatusBar;
@@ -957,7 +942,10 @@ namespace EmuSen.Mistress.Views
                     return;
                 }
                 _gamepad.Bindings = _gamepadBindings.For(_activeConsole);
+                string bindingsConsole = _activeConsole;
+                _gamepad.PlayerBindings = player => _gamepadBindings.For(bindingsConsole, player);
                 _gamepad.LeftStickIsAnalog = _session.SupportedAxes.Contains(PadAxis.LeftX);
+                _ports.Reset(_session.ControllerPorts, _session.SupportedAxes);
 
                 _rewind.Clear(); // a discontinuous jump - see §1.4
                 _rewind.IntervalFrames = RewindIntervalFor(_session.FrameRateHz);

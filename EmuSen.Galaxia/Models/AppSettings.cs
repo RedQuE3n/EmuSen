@@ -39,6 +39,9 @@ namespace EmuSen.Galaxia.Models
         // hardware players and other emulators use, not an input redesign.
         public bool MirrorPlayer1ToPlayer2 { get; set; } = false;
 
+        // The player the keyboard plays as, 1-based - see EmuSen_Input.md §8.3.
+        public int KeyboardPlayer { get; set; } = 1;
+
         // Stick-as-d-pad and its deadzone - see EmuSen_Settings_Reference.md §4.4.
         public bool AnalogStickAsDpad { get; set; } = true;
         public double StickDeadzone { get; set; } = 0.5;

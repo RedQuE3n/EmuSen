@@ -475,6 +475,17 @@ pub unsafe extern "C" fn mars_machine_press(core: *mut Core, port: u32, mask: u3
     }
 }
 
+/// A controller plugged into the port, or pulled out.
+///
+/// # Safety
+/// `core` must be live or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mars_machine_set_present(core: *mut Core, port: u32, present: u32) {
+    if let Some(c) = unsafe { core.as_mut() } {
+        c.machine.set_present(port as usize, present != 0);
+    }
+}
+
 /// The stick's reach on one axis, 0 X and 1 Y.
 ///
 /// # Safety

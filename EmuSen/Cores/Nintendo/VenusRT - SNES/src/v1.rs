@@ -78,7 +78,7 @@ fn replacement(stem: Option<&str>) -> Replacement {
         },
         Some("dsp3") => without("DSP-3"),
         Some("dsp4") => Replacement::Accuracy {
-            cost: "Without the image, VenusRT's open replacement for the DSP-4 runs its protocol and multiply command, but not the road and scenery commands, so Top Gear 3000 starts and its menus work while the race's road is not drawn as with the image (VenusRT_Native.md §48.3).".into(),
+            cost: "Without the image, VenusRT's open replacement for the DSP-4 runs its protocol and multiply command, but not the road and scenery commands, so Top Gear 3000 runs its menus as with the image but its race screen stays black (VenusRT_Native.md §48.3).".into(),
         },
         Some(_) => without("ST011"),
         None => Replacement::Accuracy {

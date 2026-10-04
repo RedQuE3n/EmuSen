@@ -6,6 +6,7 @@ Every core carries an open replacement for its firmware, written from documents,
 replacement's record cites.
 
     firmwarecheck.py <replacement> <original> [--window START:END] [--max-equal PERCENT] [--max-run N] [--min-run N] [--limit N]
+                     [--forced FORMULA]
 
 What it reports, over the window (both images, offsets START to END, END exclusive; the whole of each by default):
 
@@ -17,6 +18,14 @@ What it reports, over the window (both images, offsets START to END, END exclusi
   first, at most --limit of them listed (default 50) with the count of all.
 - **The verdict**: PASS when the share equal at the same offset is at most --max-equal (default 25) and no common
   run is longer than --max-run (default 6); FAIL otherwise.
+
+With --forced FORMULA, for a replacement made of derived tables (VenusRT_DspHle.md §5.3): FORMULA is the same tables
+written by an independent generator from the formulas alone. The tool finds every common run between FORMULA and the
+original, and calls an original byte forced where such a run covers it. It reports the **residual**: the parts of
+the replacement's common runs with the original that no formula run covers. It also reports the **formula
+coverage**, the share of the original's bytes that some formula run reproduces. The verdict is then PASS when no
+residual run is longer than --max-run. The equal-share test does not apply, since a correct table must equal the
+original's where the original's is that formula.
 
 The exit code is the verdict: 0 PASS, 1 FAIL, 2 a usage or file error. Nothing of either image's bytes is printed,
 only counts and offsets, so a writer under a clean-room protocol can run it against an image they may not read.
@@ -131,12 +140,17 @@ def main(argv=None, out=sys.stdout):
     p.add_argument("--max-run", type=int, default=6, metavar="N")
     p.add_argument("--min-run", type=int, default=4, metavar="N")
     p.add_argument("--limit", type=int, default=50, metavar="N")
+    p.add_argument("--forced", metavar="FORMULA")
     args = p.parse_args(argv)
     try:
         with open(args.replacement, "rb") as f:
             ours_whole = f.read()
         with open(args.original, "rb") as f:
             theirs_whole = f.read()
+        formula_whole = None
+        if args.forced:
+            with open(args.forced, "rb") as f:
+                formula_whole = f.read()
     except OSError as e:
         print(f"firmwarecheck: {e}", file=sys.stderr)
         return 2
@@ -156,6 +170,33 @@ def main(argv=None, out=sys.stdout):
         print(f"  {n} bytes: replacement offset {start + i}, original offset {start + j}", file=out)
     if len(runs) > args.limit:
         print(f"  ... {len(runs) - args.limit} more", file=out)
+    if formula_whole is not None:
+        formula = window(formula_whole, start, end)
+        forced_runs, forced_complete = common_runs(formula, theirs, args.min_run)
+        covered = bytearray(len(theirs))
+        for n, _, j in forced_runs:
+            covered[j:j + n] = b"\x01" * n
+        residual = []
+        for n, i, j in runs:
+            k = 0
+            while k < n:
+                if covered[j + k]:
+                    k += 1
+                    continue
+                m = k
+                while m < n and not covered[j + m]:
+                    m += 1
+                residual.append((m - k, i + k, j + k))
+                k = m
+        residual.sort(key=lambda r: (-r[0], r[1], r[2]))
+        coverage = 100.0 * sum(covered) / len(theirs) if theirs else 0.0
+        print(f"formula runs of {args.min_run}+ bytes with the original: {len(forced_runs)}{'' if forced_complete else ' or more'}; formula coverage {sum(covered)} of {len(theirs)} bytes ({coverage:.1f}%)", file=out)
+        print(f"residual runs not covered by a formula run: {len(residual)}; longest {residual[0][0] if residual else 0}", file=out)
+        for n, i, j in residual[:args.limit]:
+            print(f"  {n} bytes: replacement offset {start + i}, original offset {start + j}", file=out)
+        passed = (not residual or residual[0][0] <= args.max_run) and complete and forced_complete
+        print(f"verdict: {'PASS' if passed else 'FAIL'} (forced: no residual run over {args.max_run})", file=out)
+        return 0 if passed else 1
     passed = share <= args.max_equal and longest <= args.max_run
     print(f"verdict: {'PASS' if passed else 'FAIL'} (at most {args.max_equal:g}% equal at the same offset, no run over {args.max_run})", file=out)
     return 0 if passed else 1

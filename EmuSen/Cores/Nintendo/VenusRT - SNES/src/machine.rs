@@ -418,7 +418,7 @@ impl Machine {
             return Err(StateError::Foreign(magic));
         }
         let version = r.i32()?;
-        if version != STATE_VERSION && version != 17 {
+        if !(17..=STATE_VERSION).contains(&version) {
             return Err(StateError::Version(version));
         }
         r.set_version(version);
@@ -515,6 +515,10 @@ impl Machine {
             let saved = if version == 17 { 0 } else { r.u8()? };
             if saved != dsp.tag() {
                 return Err(StateError::DspEngine { saved, running: dsp.tag() });
+            }
+            // Version 18's replacement kept no phase timing (VenusRT_Native.md §39.3).
+            if saved == 1 && version < 19 {
+                return Err(StateError::Version(version));
             }
             let mut packed = dsp.pack();
             r.bytes(&mut packed)?;

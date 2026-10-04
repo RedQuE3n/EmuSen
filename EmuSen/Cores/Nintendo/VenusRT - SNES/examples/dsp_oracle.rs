@@ -1,5 +1,6 @@
 //! The NEC DSP command oracle over the low-level path (VenusRT_Native.md §37): `dsp_oracle sweep <chip> [sets]`,
-//! `dsp_oracle versus <chip> <chip> [cases]`, `dsp_oracle latency <chip> [cases]`. Images from EMUSEN_VENUSRT_FIRMWARE;
+//! `dsp_oracle versus <chip> <chip> [cases]`, `dsp_oracle latency <chip> [cases]`, `dsp_oracle tables` (the
+//! replacement's generated tables, for firmwarecheck.py). Images from EMUSEN_VENUSRT_FIRMWARE;
 //! full reports to ~/.cache/emusen/probe/venusrt/dsp-hle/, counts and cycles only on stdout.
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -372,6 +373,11 @@ fn main() {
         Some("sweep") => sweep_dr(&a[2], num(3, 4)),
         Some("versus") => versus(&a[2], &a[3], num(4, 256)),
         Some("pair") => pair(&a[2], &a[3], u8::from_str_radix(&a[4], 16).unwrap(), u8::from_str_radix(&a[5], 16).unwrap(), num(6, 4096)),
+        Some("tables") => {
+            let path = cache().join("dsp1.tables.bin");
+            std::fs::write(&path, venusrt::chips::dsphle::tables_image()).unwrap();
+            println!("{} bytes to {}", venusrt::chips::dsphle::tables_image().len(), path.display());
+        }
         Some("rate") => rate(&a[2], u8::from_str_radix(&a[3], 16).unwrap(), num(4, 1 << 20)),
         Some("latency") => latency(&a[2], num(3, 256)),
         _ => eprintln!("dsp_oracle sweep <chip> [sets] | versus <chip> <chip> [cases] | latency <chip> [cases]"),

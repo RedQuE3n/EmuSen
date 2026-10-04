@@ -3475,3 +3475,263 @@ were not inspected):
 With the console's program, VenusRT returns to its §30.2 results. **§35.5's argument stands with this evidence**:
 the two spc_dsp6 tests are a sensitivity of VenusRT's to the boot program's timing, not a fault in the open
 program's protocol. The open program remains the default, and these two tests and `spc_smp` are its named cost.
+
+## 39. The NEC DSP replacements, step 3: the DSP-1's arithmetic (2026-10-04)
+
+Step 3 of `VenusRT_DspHle.md` §8 covers the DSP-1's Multiply (00h, 20h), Radius (08h), Range (18h, 38h), the ROM
+version (2Fh) and the memory test (0Fh), with the latency model for each. Rules R1-R4 of the plan's §1.3 govern it.
+§39.1 was written and committed before the first comparison with the image.
+
+### 39.1 The families, declared before the first comparison
+
+The documents give each command's formula. The SNESdev wiki gives the equations and "rounded to <= 15 bits" for
+Multiply, and its data types: T, 15 bits after the point; L2 and H2, the halves of a 32-bit value counted in units of
+2^-1. fullsnes gives the µPD77C25's multiplier, K·L·2 as a 32-bit product. What no document fixes is left as a family
+of variants, and the oracle chooses one member. A command's chosen member must agree on every case graded, or the
+command is a named loss under R4.
+
+| Command | Formula | Variants (count, bits of choice) |
+|---|---|---|
+| 00h, 20h Multiply | P = K·I, both signed 16-bit; M = R(P / 2^15) | R: floor, half up (floor of x + 1/2), half to even, toward zero; overflow of M: wrap to 16 bits, or saturate to 7FFFh and 8000h (8, 3 bits; each code chooses on its own) |
+| 08h Radius | V = 2^s·(x² + y² + z²) in 32 bits; L = V mod 2^16, H = V div 2^16 | s: -1 (floor), 0, 1; 32-bit overflow: wrap, or saturate to 7FFFFFFFh (6, under 3 bits) |
+| 18h, 38h Range | V = 2^s·(x² + y² + z² - r²) in 32 bits; D = R(V / 2^16) | s: -1, 0, 1; overflow: wrap, saturate; R: floor, half up (12, under 4 bits; each code on its own) |
+| 0Fh memory test | a constant on a working chip (plan §3.1, argued) | 0000h, 0001h, 00FFh, FFFFh (4, 2 bits); its effect on the chip's RAM is not modelled (§37.4) |
+| 2Fh ROM version | 0100h (DSP-1), 0101h (DSP-1B), fullsnes | none |
+
+Over the step that is at most 19 bits of choice, against the 2^32 Multiply cases and the 2^20 seeded cases of each
+other command graded. **Timing** follows plan §6.3 as §37.3 corrected it. Each phase takes the work and notice that
+`dsporacle::timing` measures over the seeded cases. A constant is the model; a phase that varies would need a rule
+naming one feature of the inputs, and none is declared, so a varying phase in this step would be recorded as
+inexact. A phase whose work the fastest answer hides takes work 0, which gives the same latency for any answer at or
+above `FASTEST`.
+
+### 39.2 Two families widened once, in writing (plan §5.2, rule 4)
+
+The first grading, over 265,865 cases per code, had these results:
+
+- **One member agreed on every case** for 00h (Floor, wrap), 08h (s = 1, wrap), 18h (s = 1, wrap, Floor) and 0Fh
+  (0000h).
+- **No member agreed for 20h or 38h.** The counts of how each differed from the nearest member, over 20,000 seeded
+  cases, show the structure:
+  - 20h is Multiply's floor or one more, and one more exactly when the floor is even.
+  - 38h is Range's s = 1 floor plus one on every case counted.
+
+Each family is widened once, by members that state those structures as rules, before they are graded:
+
+- **20h**: Floor | 1 (the low bit set), or Floor + 1; wrap or saturate. That is 4 members, 2 bits.
+- **38h**: s = 1, then Floor + 1, or the ceiling; wrap or saturate. That is 4 members, 2 bits.
+
+Neither is a table: each is one operation more than the documented formula. If neither member agrees on every case,
+the code is a named loss.
+
+### 39.3 What was chosen and built, and the grade (measured 2026-10-04)
+
+**Chosen**, each agreeing on every case `dsp_family` graded (265,865 per code on the DSP-1, and 1,052,297 on the
+DSP-1B):
+
+| Code | Member | In words |
+|---|---|---|
+| 00h | Floor, wrap | the high word of the multiplier's K·I·2, SNESdev's "rounded to <= 15 bits" being the floor |
+| 20h | Floor \| 1, wrap | 00h with its lowest bit set |
+| 08h | s = 1, wrap | x² + y² + z² in halves, as SNESdev's L2 and H2 say, in 32 bits |
+| 18h | s = 1, wrap, Floor | the high word of (x² + y² + z² - r²) in halves |
+| 38h | s = 1, wrap, Floor + 1 | 18h plus one |
+| 0Fh | 0000h | the memory test passes |
+
+None needs a table. Counting the widened families whole, the choices total 3 (00h) + 3 + 2 (20h) + 3 (08h) + 4 (18h)
++ 4 + 2 (38h) + 2 (0Fh) = 23 bits. The DSP-1 and DSP-1B choose alike, as §37.4's
+map predicted for every code but 28h.
+
+**Timing.** Each command's phases took one work and one notice over the seeded cases (§37.3's table). `dsphle.rs`
+keeps them per code and phase, 16 pairs in all, and schedules each edge at the later of the last rise plus the work
+and the S-CPU's completion plus the notice. A phase it does not list takes notice 2. The replacement's state carries
+the phase and the last rise, so the state version is 19. A version 18 state of the low-level path still loads; one of
+the replacement is refused with `VERSION`.
+
+**The grade.** `dsp_grade` compares the image and the replacement through the ports on every case: values,
+transfers, SR at every rise and access, and each latency. Every other case runs under a jittered S-CPU, as §37.3
+measured it:
+
+| Code | Cases | DSP-1B: differ | DSP-1: differ |
+|---|---|---|---|
+| 00h | every pair, 4,294,967,296 | 0 | 0 (1,190 s) |
+| 20h, 08h, 18h, 38h, 0Fh, 2Fh | 1,048,576 seeded each | 0 | 0 |
+
+The control: on 04h and 28h, which are not built, every case differs in values and latency, so the grader sees a
+difference. The crate test `the_replacements_arithmetic_agrees_with_the_image` repeats the comparison over 4,752
+edge and seeded cases per code on both images, steady and jittered. `the_documented_formulas_answer_through_the_ports`
+checks SNESdev's equations on the replacement with no image.
+
+**The cost.** The exhaustive pass took 1,081 s on the DSP-1B and 1,190 s on the DSP-1, eight threads each at a load of
+2 to 12, running both engines and the comparison. **P4 holds**: the image alone is about five times faster than this
+pass (§37.3), so well under 30 minutes.
+
+**What this settles.** For the codes of this step, the replacement is the chip at its ports: no case of 2^32 for 00h,
+nor of 2^20 for the others, differs in any value, transfer, SR bit or cycle. The DSP-1's cost in core info now names
+these five codes and 2Fh as exact.
+
+## 40. The NEC DSP replacements, step 4: the DSP-1's sine, Triangle, Rotate and Polar (2026-10-04)
+
+Step 4 of `VenusRT_DspHle.md` §8. §40.1 was written and committed before the first comparison with the image.
+
+### 40.1 The families, declared before the first comparison
+
+**The sine.** The SNESdev wiki sets the units: an angle A is a full turn in 2^16 steps, and a T value carries 15 bits
+after the point. Triangle's equations are S = r·sin θ and C = r·cos θ, and cos θ = sin(θ + 2^14). No document gives the
+sine's resolution, rounding or interpolation. A member of the family is a table generated by a formula, never written
+out (plan §5.2):
+
+- **N**, the entries over a whole turn: 64, 128, 256, 512, 1024, 2048, 4096 or 65536 (3 bits).
+- **Amplitude**: 2^15 saturated to 7FFFh, or 2^15 - 1 (1 bit).
+- **Quantisation** of each entry: floor, or half up (1 bit).
+- **Symmetry**: every entry from the formula directly, or a quarter wave whose magnitude is mirrored and negated, so
+  that the rounding is symmetric about zero (1 bit).
+- **Lookup**: the angle's top log2(N) bits, or the nearest entry (1 bit).
+- **Interpolation**: none, or linear between neighbours, the step floored (1 bit).
+- **The product** r·s scaled by 2^-15: floor, as the µPD77C25's multiplier gives it, or half up (1 bit).
+
+That is 9 bits of choice: one more than P2's 8, which counted the symmetry inside quantisation. Triangle is graded over
+every angle at radii 7FFFh, 4000h, 1, 8000h and FFFFh, and over 2^20 seeded pairs.
+
+**Rotate (0Ch)**: x2 = x·cos θ - y·sin θ and y2 = x·sin θ + y·cos θ, counter-clockwise (SnesLab), with Triangle's chosen
+sine. Its variants:
+
+- the sense: counter-clockwise, or the transpose that the SNESdev matrix read as a row vector gives (1 bit);
+- the rounding: each product scaled by the chosen product rule then summed, or the exact sum scaled once (1 bit);
+- the overflow: wrap to 16 bits, or saturate (1 bit).
+
+That is 3 bits.
+
+**Polar (1Ch)**: the point (I4, I5, I6) times SNESdev's three matrices for the angles about Y (I3), X (I2) and Z (I1),
+in that written order, with the chosen sine. Its variants:
+
+- the order: as written, or reversed (1 bit);
+- each matrix as written, or transposed (1 bit);
+- the rounding: after each rotation, or once at the end in 32 bits (1 bit);
+- the overflow: wrap, or saturate (1 bit).
+
+That is 4 bits.
+
+**Under R4**, a sine that no member reproduces on every angle is a stop: the DSP-1's sine is then the program's data,
+and Triangle, Rotate and Polar are named losses. So is a member that agrees on all but a few entries. **Tables and
+firmwarecheck**: the chosen table is generated in `dsphle.rs`, and an independent Python generator,
+`EmuSen.WiseMan/Reference/analysis/dsp1_tables.py`, writes the same table from this record's formula. A crate test
+asserts the two are equal word for word, and `firmwarecheck.py` is run plain and `--forced` against the data ROM.
+
+### 40.2 The sine family rejected, and widened once, in writing (plan §5.2, rule 4)
+
+`dsp_sine dsp1b 262144` graded the 352 members of §40.1 over every angle at five radii and 262,144 seeded pairs,
+589,824 cases. **No member reproduced every case**: the best agreed on 221,228 (37.5%). The structure of the
+disagreement was then measured. The error of the image's S against the rounded value of r·sin θ was taken at r =
+7FFFh, as a histogram over every angle and as three runs of 96 consecutive angles. That is evidence of the kind §1.3's
+black-box characterisation allows: errors, not values.
+
+- The error lies between -10 and +10 and is symmetric about zero over the whole turn.
+- It resets at every multiple of 256 angle steps (the run from 12000 jumps from +7 to -1 at 12032 = 2F00h).
+- Within a segment it grows, by about δ² sin θ₀ / 2 near 66°, where δ is the offset in the segment.
+- Near 0° it is a constant -2 to -3.
+
+That is the signature of a first-order Taylor step from a table at 256 points: sin(θ₀ + δ) ≈ sin θ₀ + δ·cos θ₀,
+the derivative from a second table, with a floor's bias. **The widened family**, declared before it is graded:
+
+- S[i] = Q(A·sin(2πi/N)) and D[i] = Q'(A·(2π/N)·cos(2πi/N)), two tables generated by formula, with
+  sin θ = S[i] + P(f·D[i] / 2^15). Here i is θ's top log2(N) bits and f the rest, scaled to 15 bits.
+- N: 128, 256 or 512.
+- A: 2^15 saturated to 7FFFh, or 2^15 - 1.
+- Q and Q': floor or half up, each.
+- P: floor or half up.
+- Tables direct, or quarter-wave mirrored.
+- The product r·s: floor or half up.
+
+That is 3·2^6 = 192 members, under 8 bits (this paragraph first said 384, a count of seven binary choices where there
+are six), with cos θ = sin(θ + 2^14). No further widening follows. If no member agrees on every case, the DSP-1's sine
+is a named loss under R4, and Triangle, Rotate and Polar become approximate.
+
+### 40.3 The sine closed, Rotate chosen, and Polar widened once, in writing
+
+**The sine is a named loss under R4, as §40.2 declared.** The 192 widened members graded over the same 589,824 cases.
+The closest agreed on 250,863 (42.5%) and differed by up to ±10 at full radius: N = 256, amplitude 2^15 saturated,
+both tables floored and quarter-mirrored, the step half up, the product floored. It resets at the right segments but
+not to the chip's values. The DSP-1's sine is therefore not reproduced from documents. Its error pattern, a table at
+256 points with a first-order step, is recorded as a structure, and no further member is tried. Triangle, Rotate and
+Polar become **approximate**. The replacement uses that closest member, generated in `dsphle.rs` from its formula, and
+the tables are checked word for word against `dsp1_tables.py`.
+
+**Rotate's variants (§40.1) were graded with that sine.** The criterion is the share of cases within Triangle's
+bound, a difference of 12, since exact agreement is impossible with an inexact sine. Over 65,536 seeded cases, one
+member agreed in 65,496 (99.94%): the SNESdev matrix read literally with the row vector on the left, so
+x2 = x·cos + y·sin and y2 = -x·sin + y·cos; the exact sum scaled once; wrap. The 40 left differ where the sum sits at
+16-bit overflow. The counter-clockwise sense of SnesLab's prose agreed in 13 to 14 cases. So SnesLab's word describes
+the angle's other sign, or the S-CPU's view of the screen.
+
+**Polar's 16 members all failed**, and they fail with structure, not noise. With coordinates under 2^11, so that no
+member overflows, the best agreed within 12 on 341 of 16,384 cases, and errors ran into the thousands. The order or
+the assignment of the angles is wrong, not the arithmetic. **Polar's family is widened once**, with the reason that
+SNESdev's own labels conflict: "Angle In: XYZ (I1, I2, I3)" against an equation that puts I1 in the matrix about Z.
+
+- **The widened family**: every order of the three axis rotations (6), every assignment of I1, I2 and I3 to the axes
+  (6), and each matrix as written or transposed (2).
+- **Fixed by Rotate's choice**: the row vector on the left, the exact sum scaled once, wrap.
+
+That is 72 members, about 6 bits. If none agrees within 64 on nearly every small-coordinate case, Polar is approximate
+by SNESdev's literal reading.
+
+### 40.4 Polar chosen, what was built, and the grade (measured 2026-10-04)
+
+**Polar's widened family.** One member of the 72 agreed with the image within 64 on all 16,384 small-coordinate
+cases, its largest difference 4, which is the sine's own error. At full range it agreed on 16,381 of 16,384, the rest
+at 16-bit overflow. The member is the row vector times SNESdev's matrices **about Z by I1, then Y by I2, then X by I3**,
+each as written. SNESdev's equation names the matrices about Y by I3, X by I2 and Z by I1, and its labels say "XYZ".
+The order and the angles of both are wrong for this chip.
+
+**Built** in `dsphle.rs`:
+
+- **The sine.** It is §40.3's closest member, held to 16 bits. That last step was added after the first grade showed
+  the step carrying -32768 past the limit at 270°: three cases off by 65,531 out of 2^20.
+- **Triangle.** r·sin and r·cos, floored.
+- **Rotate.** x·cos + y·sin and y·cos - x·sin, the sum scaled once.
+- **Polar** by the member above.
+- **Timing.** Each command's varying phases take their medians over 4,096 seeded cases: Triangle 32/4, Rotate 31/4,
+  Polar 93/33 (§37.3 gives the ranges).
+- **The tables** are generated at first use. `quarter_sine` sums the Taylor series in plain f64 arithmetic, so every
+  platform builds the same words. The crate test `the_tables_equal_the_independent_generator` runs `dsp1_tables.py`
+  and finds the 1,024 bytes identical. The table-literal guard passes.
+
+**The grade** (`dsp_grade`, 2^20 seeded cases each, steady and jittered; the DSP-1 and DSP-1B alike):
+
+| Code | Values differ | Largest difference in a result | Cases off by 16 or more | Latency differs |
+|---|---|---|---|---|
+| 04h Triangle | 687,963 (65.6%) | 12 | 0 | 461,392 |
+| 0Ch Rotate | 944,712 | wraps at overflow | 99 | 491,948 |
+| 1Ch Polar | 1,040,444 | wraps at overflow | 4,932 | 664,629 |
+
+Of Rotate's cases, 99.4% are within 12, and of Polar's 99.5% within 15. The crate test
+`the_replacements_rotations_stay_within_their_bounds` holds Triangle and Rotate to 12, and Polar to 8 on small
+coordinates, against both images.
+
+**firmwarecheck** (`dsp_oracle tables`, then `dsp1_tables.py` for the formula image, byte-identical to it), against
+each image's data half:
+
+| Run | DSP-1B | DSP-1 |
+|---|---|---|
+| plain | 3 of 1,024 equal at the same offset (0.3%); two common runs of 256 bytes, the sine table's first 128 words at original offset 556 and its words 64-191 at 812; FAIL by the plain thresholds | the same at 560 and 816 |
+| `--forced` | 2 formula runs; formula coverage 512 of 2,048 bytes (25.0%); residual 0; PASS | the same |
+
+**What the counts say.** The plain FAIL is the expected outcome of success that plan §5.3 describes. The two 256-byte
+runs are the generated sine table found in the program's data, entry for entry, and every byte of them is
+formula-forced. The derivative table appears nowhere. **The DSP-1's sine table is therefore this formula, and the
+step between its entries is what §40.3 did not find.** That locates the remaining difference in the step's arithmetic,
+not the table. It is a finding for a later step's decision, not a further widening here.
+
+**P11 holds for this table**: the residual is zero, and the coverage, 25%, is under 40%. **P2**: no member of either
+declared family reproduces the sine. That is the prediction's "or by none", though the table itself is a formula's.
+
+### 40.5 What is open
+
+- **The sine's step.** §40.3 closed the family as declared. The table being the formula's, a second widening limited
+  to the step's arithmetic (its scale, its rounding, the derivative's source) is the natural next measurement. It
+  needs a decision first, since §5.2 allows one widening per family.
+- **Rotate's and Polar's overflow.** The few cases at 16-bit overflow differ because the chip's arithmetic there is
+  unknown. Once the sine is exact, their remaining variants can be graded exactly.
+- **Latency.** The medians leave a third to two thirds of these commands' cases a few cycles off. A rule naming one
+  input feature (§6.3), with the exact sine, would come next.

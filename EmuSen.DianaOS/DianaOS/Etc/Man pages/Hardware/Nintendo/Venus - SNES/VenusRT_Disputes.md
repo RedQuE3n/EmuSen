@@ -1119,3 +1119,39 @@ their data.
   program's.
 - Pinned by: the crate's tests of the boot program (an upload of two blocks and a jump, through the ports alone).
 - Implemented in: the commit after this entry's.
+- **Revised 2026-10-04, before the program was committed, by measurement.** The program described above was replaced
+  before any commit carried it. What changed, and the evidence:
+  - **$FFC0 holds $CD.** blargg's SPC test ROMs end each round by reading $FFC0 with the ROM mapped, comparing it with
+    $CD, and looping forever on any other value; they then jump to $FFC0. This was found in the tests' own uploaded
+    code, disassembled with VenusRT's SPC700 disassembler (§1.2 allows a test's code). With the first program all
+    three of blargg's ROMs stopped at their first round. The program therefore opens with `MOV X,#imm`, whose opcode is
+    $CD. blargg's `spc_smp` also has a test, "CPU/verify IPL ROM", that compares the whole 64 bytes; it fails, and
+    nothing short of the console's bytes can pass it. That is the accuracy cost of this entry made concrete.
+  - **The test for the next command is fullsnes's own rule.** The first program waited for port 0 to change and took
+    any changed value that was not the index as a command. Its two reads of port 0 raced: an index landing between
+    them was taken for a command, which the crate's 300-byte test caught. The program now reads port 0 once a pass
+    and acts on Y minus port 0: zero is data; a negative difference, port 0 lying 1 to 127 past the expected index,
+    is a command; anything else is a stale or behind value, and is ignored. That is "bigger than last index+1" read as
+    a difference modulo 256, and it is what the S-CPU code of blargg's ROMs relies on: their jump command's kick is
+    the last echo plus 2, with no `OR 1`. At a block's start port 0 still holds the kick, which the rule would take for
+    a command when it is under $80, so the program first waits for port 0 to leave the kick.
+  - **The handshake's speed.** spc_dsp6's uploader is bound by the SPC700's latency (Super Mario World's is bound by
+    the S-CPU: its 612.65 master clocks a byte did not move by a cycle between variants). Measured on spc_dsp6's
+    "Echo/esa changes" with the probe's S-CPU trace, as the median time of one pass of the uploader's loop: Mesen,
+    with the console's program, 510 master clocks a byte; the first program 810; echoing before the store, 666; the
+    single-read rule, 562; the program as committed, 602.
+  - **Two faster versions were discarded because they repeated the console's bytes.** `firmwarecheck.py`
+    (`EmuSen_Debugging_Tools_Reference_v5.md` §3.61) reported a 9-byte run at offset 0 for a downward zero-page clear,
+    and an 8-byte run for the fastest block loop (read port 1, echo, store, increment, branch). Both were measured
+    and discarded. The clear stays upward, and the echo is `MOV !$00F4,Y`, one byte and one cycle more than the
+    direct-page form, so that the loop is deliberately not that sequence. This is the 40 clocks between 562 and 602.
+  - **SP is $F0, not $EF.** The byte the absolute echo needs came from dropping the `DEC X` before `MOV SP,X`. No
+    document read gives the console's SP, so either value is a choice. The record above calls $EF a value seen in
+    descriptions; it is given up here for the byte, and the cost is a stack one byte higher for a driver that never
+    sets SP.
+  - **The registers on the jump** are now: A the kick, X zero, Y the entry's high byte, SP $F0, PSW as the command
+    byte's load left it.
+- **Similarity of the program as committed** (`firmwarecheck.py`, run 2026-10-04 on the cached image, its one use):
+  6 of 64 bytes equal at the same offset (9.4%), longest aligned run 2 bytes; longest common run at any offsets 4
+  bytes, at replacement offset 21 against original offset 47, and one other run of 4, at 53 against 34. PASS. The
+  first program measured 7 of 64 and a longest run of 4.

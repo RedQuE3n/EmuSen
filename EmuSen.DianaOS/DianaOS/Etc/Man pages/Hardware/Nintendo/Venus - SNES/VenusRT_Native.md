@@ -3785,3 +3785,75 @@ FFFFh, and 2^18 seeded pairs.
   of 12, and Rotate and Polar moved as little. The change was measured and not kept: it would alter the generated
   tables and their check for no change of bound.
 - **The re-grade of condition 4 does not arise.**
+
+## 42. The NEC DSP replacements, steps 9 and 10: the DSP-2 (2026-10-04)
+
+Steps 9 and 10 of `VenusRT_DspHle.md` §8, taken before the DSP-1's steps 5 to 8 so that a game runs exact soonest
+(*decided 2026-10-04*). Step 9 covers every DSP-2 command with its transfer timing, the unhandshaken transfers of 01h
+and 0Fh among them (§37.3); step 10 runs Dungeon Master in lockstep against the image. §42.1 was written and committed
+before the first comparison of a replacement with the image.
+
+### 42.1 The commands as characterised, and the families declared before the first comparison
+
+**What the documents give.** fullsnes names nine commands and states that 10h-FFh mirror 00h-0Fh; nothing documents a
+parameter, a length or a byte order. Everything below beyond the names is black-box characterisation under plan §1.3.
+It was formed with two tools added for this step: `dsp_edges`, which prints the chip's DR edges against an S-CPU that
+answers late or ignores RQM, and `dsp_oracle ask`, `phases` and `batch`, which run single transactions and print their
+transfers, results and per-phase timing. Each hypothesis came from the structure of a handful of cases: single bits set
+in an input, a run of distinct nibbles, a pair of signed values. No result file of the image enters the repository.
+
+**Exposure, recorded.** One `ask` of 1Eh printed the first eighteen words of the DSP-2's data ROM to the terminal before
+the byte was recognised as the data ROM transfer. Nothing of them is used; 1Eh is a named loss below. The value 2Eh
+returns was also seen before its family was declared.
+
+**The protocol, measured** (protocol facts and latencies, which plan §1.3 admits into the model):
+
+- **Transfers.** 8-bit throughout, but for the four test commands 0Eh, 1Eh, 2Eh and 3Eh, which turn DR to 16-bit 11
+  cycles after the command's read whatever the S-CPU does. 3Eh turns it back at 16 cycles and goes idle at 19; the
+  other three turn it back 3 cycles before their idle edge.
+- **Reads.** Each input is read by an edge that raises RQM, except, for most commands, the last, which is taken without
+  one when the S-CPU completes it. 01h reads all 32 inputs by edges.
+- **Waits.** Every phase waits for the S-CPU except three. 01h writes its first result 15 cycles after reading its
+  last input. 0Fh goes idle 14 cycles after its command's read. 3Eh goes idle at 19. 05h with a count of 0 goes idle
+  8 cycles after reading it. An S-CPU that answers later than these finds the chip already past them, which is the
+  dependence on answer time of §37.3.
+- **Counts.** 02h converts m tiles, m = n for n from 1 to 3 and 4 otherwise. 05h takes n = min(n, 80) byte pairs; 06h
+  takes n bytes; 0Dh takes ceil(a/2) bytes and gives ceil(b/2).
+- **The word left in DR at idle**, which the S-CPU sees only by reading at idle, is per command: 0000h at power-on and
+  after 00h, 02h, 03h and 0Dh; 0003h after 01h; FFFFh after 06h and 0Eh; 00FFh after 0Fh, 2Eh and 3Eh; 0400h after 1Eh;
+  after 04h and 05h the last result; after 07h and 08h the first two results as a word, the first high; after 09h the
+  third and fourth so; after 0Bh and 0Ch the fifth and sixth so, or 0000h on a zero divisor.
+- **Flags.** 05h with a count of 0 sets USF1, and 0Fh clears it.
+- **Timing.** Each phase's work and notice, as `dsporacle::handshakes` measures them, are constants per command and
+  position, with these rules: 04h's result comes 15 cycles after its input plus one per nibble of the overlay that is
+  not the transparent colour; 05h's compute takes 10n + 9 plus one per such nibble, and when n mod 16 is 1, a further
+  160 plus the last byte's count again; 0Bh's division takes 739 + 2·popcount(q) + 4·(q mod 2), and 0Ch's 735 +
+  2·popcount(|q|) + 4·(|q| mod 2), plus a constant per sign class, plus one where a negated quotient or remainder is 0.
+  0Dh's compute depends on a and b alone, by no rule found; it takes a fitted estimate and is recorded as inexact.
+
+**The families.** Each is the formula in words and the choices it leaves open:
+
+| Code | Formula | Variants (bits of choice) |
+|---|---|---|
+| 00h | one row of 8 pixels, 4 bytes of two 4-bit pixels each, to its four bitplanes, plane 0 first | the left pixel in the high or the low nibble; pixel p at bit 7 - p or bit p (2 bits) |
+| 01h | an 8 by 8 tile of 32 such bytes to the SNES's 4-bit tile, fullsnes's planar layout: planes 0 and 1 row by row, then planes 2 and 3 | as 00h; and that layout or four planes per row in turn (3 bits) |
+| 02h | m tiles as 01h, one after another | as 01h, chosen with it (0 further bits) |
+| 03h | the transparent colour, the input's low nibble | the low nibble, or the whole byte compared with each nibble (1 bit) |
+| 05h | n bytes A, then n bytes B; each nibble of B unless it equals the colour, then A's | B over A, or A over B (1 bit) |
+| 04h | 05h for one byte, with the same colour | as 05h, chosen with it (0 bits) |
+| 06h | n bytes reversed as a row of pixels: the byte order reversed and each byte's nibbles swapped | that, or the byte order alone (1 bit) |
+| 07h, 08h | A + B and A - B of two 32-bit values, each sent low byte first | 32-bit, or two independent 16-bit halves (1 bit each) |
+| 09h | M = K·L·2, the µPD77C25's product of two signed words (fullsnes); fullsnes calls the command bugged | M's halves each shifted right once, M shifted right as 32 bits logically or arithmetically, or K·L (2 bits) |
+| 0Bh | an unsigned 32-bit division: quotient, then remainder | that order or the other (1 bit) |
+| 0Ch | a signed 32-bit division | truncating or flooring; magnitudes of 32 or of 31 bits (2 bits) |
+| 0Dh | a pixels scaled to b: for b < a, output pixel j is input pixel floor(j·a/(b + 1)); otherwise the first a pixels and zeros | the step a/(b + 1) in 8, 12 or 16 fractional bits or exact (2 bits) |
+| 0Eh | the memory test's word on a working chip | 0000h, 0001h, 00FFh, FFFFh (2 bits) |
+| 1Eh | the data ROM transfer: **not replaceable**, a named loss answered with zeros | none |
+| 2Eh | the ROM version | 0100h, 0200h, 0201h, 0000h (2 bits) |
+| 0Fh, 3Eh | do nothing (fullsnes's "dummy NOP") | none |
+| 0Ah | 09h | none |
+
+That is 21 bits of choice over the chip, against the 2^20 seeded cases per code that will grade it. **Named exceptions,
+not modelled:** 06h with a count of 0 and 0Dh with a of 2 or less or b of 0, where the program leaves its normal
+course (06h turns DR to 16-bit and sets SIC; 0Dh reads past any count or stalls). A member is chosen when it agrees on
+every graded case; a command none agrees on is a named loss under R4.

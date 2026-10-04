@@ -217,12 +217,14 @@ pub struct Host {
     pub max_steps: usize,
     /// The word written when the chip asks for more inputs than the case gave.
     pub filler: u16,
+    /// One transfer, by its index, answered after this many cycles in place of the drawn answer.
+    pub late_at: Option<(usize, u32)>,
 }
 
 impl Host {
     /// A poll loop's response, fixed: 8 cycles to the first byte, 3 between a word's bytes.
     pub fn steady() -> Host {
-        Host { respond: (8, 8), gap: (3, 3), rng: Pcg::new(0), cap: 4_000_000, max_steps: 4096, filler: 0 }
+        Host { respond: (8, 8), gap: (3, 3), rng: Pcg::new(0), cap: 4_000_000, max_steps: 4096, filler: 0, late_at: None }
     }
 
     /// A response drawn anew at each transfer, for the phase check.
@@ -418,7 +420,10 @@ pub fn transact<C: Chip>(chip: &mut C, host: &mut Host, command: u8, inputs: &[u
         let Some((latency, edge, sr_rise)) = wait_rise(chip, host.cap) else {
             return Transaction { command, steps, end: End::Stalled };
         };
-        let respond = host.draw(host.respond);
+        let respond = match host.late_at {
+            Some((k, d)) if k == steps.len() => d,
+            _ => host.draw(host.respond),
+        };
         let (late, late_edges) = run(chip, respond);
         let edge = late.unwrap_or(edge);
         if edge.place == Place::Idle {
@@ -474,6 +479,42 @@ pub fn timing<C: Chip + Clone>(idle: &C, host: &Host, command: u8, inputs: &[u16
             .map(|((l, notice), a)| Phase { work: if l > notice { l + a } else { 0 }, notice })
             .collect(),
     )
+}
+
+/// One phase's timing with whether the chip waits for the S-CPU at all: a phase that does not wait makes its edge
+/// `work` cycles after the previous one whatever the S-CPU has done (VenusRT_Native.md §37.3, §42).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Handshake {
+    pub work: u32,
+    pub notice: u32,
+    pub waits: bool,
+}
+
+/// Each phase's work, notice and wait: a run answering at `FASTEST`, then one per phase whose answer to that phase
+/// comes `late` cycles after its rise. An edge before that answer marks a phase that does not wait, its work the
+/// fast run's latency plus answer; None when the fast run does not end at idle or its transfers move under the
+/// late answers in a way the three numbers do not describe.
+pub fn handshakes<C: Chip + Clone>(idle: &C, host: &Host, command: u8, inputs: &[u16], late: u32) -> Option<Vec<Handshake>> {
+    let quick = Host { respond: (FASTEST.0, FASTEST.0), gap: (FASTEST.1, FASTEST.1), late_at: None, ..host.clone() };
+    let fast = transact(&mut idle.clone(), &mut quick.clone(), command, inputs);
+    if !matches!(fast.end, End::Idle { .. } | End::Ignored) || fast.steps.iter().any(|s| s.late_edges > 0) {
+        return None;
+    }
+    let lat = fast.latencies();
+    let answers: Vec<u32> = std::iter::once(0).chain(fast.steps.iter().map(|s| s.answer)).collect();
+    let mut out = vec![Handshake { work: 0, notice: lat[0], waits: true }];
+    for k in 0..fast.steps.len() {
+        let slow = transact(&mut idle.clone(), &mut Host { late_at: Some((k, late)), ..quick.clone() }, command, inputs);
+        let (l, a) = (*lat.get(k + 1)?, answers[k + 1]);
+        let early_end = slow.steps.len() == k && matches!(slow.end, End::Idle { .. } | End::Ignored);
+        if early_end || slow.steps.get(k)?.late_edges > 0 {
+            out.push(Handshake { work: l + a, notice: 0, waits: false });
+        } else {
+            let notice = *slow.latencies().get(k + 1)?;
+            out.push(Handshake { work: if l > notice { l + a } else { 0 }, notice, waits: true });
+        }
+    }
+    Some(out)
 }
 
 /// The latencies the model gives for a run whose S-CPU answered each rise after the cycles in `answers`.

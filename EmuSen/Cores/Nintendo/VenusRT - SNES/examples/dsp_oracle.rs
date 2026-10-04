@@ -1,5 +1,5 @@
 //! The NEC DSP command oracle over the low-level path (VenusRT_Native.md §37): `dsp_oracle sweep <chip> [sets]`,
-//! `dsp_oracle versus <chip> <chip> [cases]`, `dsp_oracle latency <chip> [cases]`, `dsp_oracle tables` (the
+//! `dsp_oracle versus <chip> <chip> [cases]`, `dsp_oracle ask <chip> <command> <inputs...> [/ <command> ...]` (transactions in turn), `dsp_oracle latency <chip> [cases]`, `dsp_oracle tables` (the
 //! replacement's generated tables, for firmwarecheck.py). Images from EMUSEN_VENUSRT_FIRMWARE;
 //! full reports to ~/.cache/emusen/probe/venusrt/dsp-hle/, counts and cycles only on stdout.
 use std::collections::BTreeMap;
@@ -380,6 +380,43 @@ fn main() {
         }
         Some("rate") => rate(&a[2], u8::from_str_radix(&a[3], 16).unwrap(), num(4, 1 << 20)),
         Some("latency") => latency(&a[2], num(3, 256)),
+        Some("phases") => {
+            let set: Vec<u16> = a[4..].iter().map(|v| u16::from_str_radix(v, 16).unwrap()).collect();
+            let chip = idle(&a[2], 0, &mut host());
+            let t = transact(&mut chip.clone(), &mut host(), u8::from_str_radix(&a[3], 16).unwrap(), &set);
+            match handshakes(&chip, &host(), u8::from_str_radix(&a[3], 16).unwrap(), &set, 30_000) {
+                None => println!("{}: not described", shape_runs(&t.shape())),
+                Some(h) => {
+                    let cells: Vec<String> = h.iter().map(|p| if p.waits { format!("{}/{}", p.work, p.notice) } else { format!("{}!", p.work) }).collect();
+                    println!("{}: {}", shape_runs(&t.shape()), compress(&cells));
+                }
+            }
+        }
+        Some("batch") => {
+            // One case a line on stdin, its input words in hex; per line its outputs, end and phases.
+            use std::io::BufRead;
+            let chip = idle(&a[2], 0, &mut host());
+            let command = u8::from_str_radix(&a[3], 16).unwrap();
+            for line in std::io::stdin().lock().lines() {
+                let set: Vec<u16> = line.unwrap().split_whitespace().map(|v| u16::from_str_radix(v, 16).unwrap()).collect();
+                let t = transact(&mut chip.clone(), &mut host(), command, &set);
+                let h = handshakes(&chip, &host(), command, &set, 30_000).map(|h| {
+                    let cells: Vec<String> = h.iter().map(|p| if p.waits { format!("{}/{}", p.work, p.notice) } else { format!("{}!", p.work) }).collect();
+                    compress(&cells)
+                });
+                let end = match t.end { End::Idle { value, .. } => format!("{value:04X}"), e => format!("{e:?}") };
+                println!("{} | {} | {end} | {}", shape_runs(&t.shape()), t.outputs().iter().map(|v| format!("{v:02X}")).collect::<Vec<_>>().join(" "), h.unwrap_or_default());
+            }
+        }
+        Some("ask") => {
+            let mut chip = idle(&a[2], 0, &mut host());
+            for part in a[3..].split(|w| w == "/") {
+                let set: Vec<u16> = part[1..].iter().map(|v| u16::from_str_radix(v, 16).unwrap()).collect();
+                let t = transact(&mut chip, &mut host(), u8::from_str_radix(&part[0], 16).unwrap(), &set);
+                let sr: Vec<String> = t.steps.iter().map(|s| format!("{:02X}/{:02X}", s.sr_rise, s.sr_access)).collect();
+                println!("{} out {:04X?} lat {:?} end {:?} sr {}", shape_runs(&t.shape()), t.outputs(), t.latencies(), t.end, compress(&sr));
+            }
+        }
         _ => eprintln!("dsp_oracle sweep <chip> [sets] | versus <chip> <chip> [cases] | latency <chip> [cases]"),
     }
 }

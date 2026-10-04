@@ -4316,3 +4316,40 @@ No cost: the change moves where the clock starts, not what a frame does.
   animation through WRAM, and its program state there differs from Mesen's, so the uploaded frame of the animation
   does too. BG mode is 1 there, so mode 7's open `$2134` products are not the cause. A program-state drift whose start
   was not found.
+
+### 41.18 Blocker 13: Super Mario RPG's p99 at 33% quota, measured, and the lever proposed (2026-10-04)
+
+Measured only. Nothing was built, since optimisation is on hold.
+
+- **The slow frames are one scene.** Through the bench's script (`frametimes`, a scratch tool), timed frames 1,800 to
+  2,100 are the heaviest on the desktop: p50 3.32 ms a frame, p90 and p99 3.82 and 3.88, max 4.02, the slow 1% all in
+  that window. They are a scene, not scattered spikes.
+- **Under the quota the scene costs more than the mean's factor.** At 33%, the mean is 12.4-12.7 ms, 3.8 times the
+  desktop's, and the p99 18.2-18.9 ms, 4.7 times the desktop's p99. A finer quota period (1 ms against 5 ms) takes
+  the p99 from 18.6-18.9 to 18.2. So the quota's own granularity adds about half a millisecond, and the rest is the
+  scene's work, slowed more than proportionally under the quota (argued: the process loses its caches when throttled).
+- **Where the scene's time goes**, from a ptrace sampler of instruction pointers over 6 s inside the scene (5,656
+  samples, symbols from the binary):
+  - the PPU 42%: compositing 19%, spans 8.5%, encoding 7.6%, backgrounds 3.4%, the rest smaller;
+  - the SA-1 37%: its bus reads 11%, `Sa1::run_to`'s catch-up loop itself 10%, the 65C816 core on its bus 14%, the
+    D-36 holds 0.8%;
+  - the S-CPU and the APU about 15% together.
+- **The lever proposed.** The plan's §9 Q3 gives the first lever for exactly this case: the SA-1's catch-up bound,
+  made a setting before anything else is loosened. Today the SA-1 is caught up after every S-CPU instruction, and
+  the catch-up's own loop is a tenth of the scene. A bound of several S-CPU instructions, kept exact wherever the
+  S-CPU touches the SA-1's registers or shared memory, would remove most of that tenth. The p99 needs about 12% to
+  reach 16.6 ms. The second lever, the SA-1 bus's address decode as a per-bank table (11%), changes no behaviour and
+  could be built without a setting. Either needs a go: the first changes contention timing within the bound (D-36),
+  and both are optimisation. **Predicted** (P8 of this record), before any measurement: the bound alone takes
+  Super Mario RPG's 33%-quota p99 under 16.6 ms, and the decode table alone does not.
+
+### 41.19 The gates after the blockers (measured 2026-10-04)
+
+| Gate | Now | Changed by |
+|---|---|---|
+| G1 | **not met**: 113 of Mesen's 117 with the tester's images, 112 without (`spc_smp`, the one ROM excepted by §41.3's proposal); every C# Venus pass passes. Left: `spc_dsp6` (§41.17), `test_timer_stop2` (D-26), `blobs/test_hdmatiming` (D-40's test 2, one dot), `test_irqb` (D-24) | D-39, D-40, D-6 |
+| G3 | **not met**: 125 of the 151 standing ROMs equal (118). Of the 26 left: plan §5.1's losses 14 (with `test_noise`), counter printers 4, D-27's printers 2, D-16 1, the Cx4 1, no console oracle 2 (`hvdma`, `wrmpyb-in-flight`), unlogged 2 (`test_hello`, `HblankEmuTest`) | D-39, D-40, D-6 |
+| G4 | **not met only by decisions**: the refusal names Venus (C#) (§41.12). The output-rate setting and the debugger's console views are put to the tester | §41.12 |
+| G5 | **not met**: 29 of 36, the same outcomes. D-7 (3) and Super Mario RPG's 40-frame lead (2) are put to the tester; the stork (GSU drift, D-35) and the puck (program-state drift) are open (§41.17) | no outcome changed |
+| G6 | **not met**: the means within budget; Super Mario RPG's p99 18.2-18.9 ms with a lever proposed (§41.18); the handheld still unreachable at 10.1.1.205 through the day | measured only |
+| G2, G7, G8 | as §41.2 (G8's five amended entries done, §41.13) | §41.13 |

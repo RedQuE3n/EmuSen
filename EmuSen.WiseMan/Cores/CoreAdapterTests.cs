@@ -187,6 +187,19 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal((byte)0x77, plain.ReadSpace("RAM", 5));
         }
 
+        // A registry handed over, as CoreFactory.Bundle hands a frontend's, applies at once, before any frame - see EmuSen_CoreAPI.md §26.
+        [Fact]
+        public void A_registry_handed_over_applies_before_the_next_frame()
+        {
+            using var plain = new CoreEngine(Plain);
+            plain.LoadRom(Rom(Image(), "handed.tst"));
+            var handed = new CheatRegistry();
+            handed.AddRamPoke("RAM", 5, 0x55, "set");
+            ((ICheatRegistryHost)plain).Cheats = handed;
+            plain.ApplyCheats();
+            Assert.Equal((byte)0x55, plain.ReadSpace("RAM", 5));
+        }
+
         [Fact]
         public void A_battery_file_is_written_when_the_core_says_it_changed_and_read_at_the_next_load()
         {

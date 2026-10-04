@@ -9,8 +9,8 @@ using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Cores.Native
 {
-    // The one engine class over any core ABI v1 library: every optional interface of the engine SPI, answered neutrally where the core lacks the capability - see EmuSen_CoreAPI.md §13.2, §19.
-    public sealed class CoreEngine : ICore, ICheatRegistryHost, IStateFormat, IFrameBufferPool, IFrameProfiler, IEngineFeatures, ISnapshotCore, IFrameSerial,
+    // The one engine class over any core ABI v1 library: every optional interface of the engine SPI, answered neutrally where the core lacks the capability; a port's shim subclasses it - see EmuSen_CoreAPI.md §13.2, §19, §26.
+    public class CoreEngine : ICore, ICheatRegistryHost, IStateFormat, IFrameBufferPool, IFrameProfiler, IEngineFeatures, ISnapshotCore, IFrameSerial,
         IRepeatedRows, ICoreSettings, IDisposable
     {
         private CoreMachine? _machine;
@@ -37,9 +37,9 @@ namespace EmuSen.Cores.Native
         public string RomPath { get; private set; } = "";
         public string Console { get; private set; } = "";
 
-        public WatchRegistry Watches { get; } = new();
-        public FrameLogRegistry FrameLog { get; } = new();
-        public BreakpointRegistry Breakpoints { get; } = new();
+        public virtual WatchRegistry Watches { get; } = new();
+        public virtual FrameLogRegistry FrameLog { get; } = new();
+        public virtual BreakpointRegistry Breakpoints { get; } = new();
 
         // The settings a frontend stored for this engine, by key; a key the schema lacks is dropped, as §6.13 asks of a host.
         public CoreEngine(CoreLibrary library, IReadOnlyDictionary<string, string>? settings = null)
@@ -52,16 +52,16 @@ namespace EmuSen.Cores.Native
                     if (library.Settings.FirstOrDefault(s => s.Key == key) is { } known && Accepts(known, value)) _values[key] = value;
         }
 
-        public string CoreName => Info.Name;
+        public virtual string CoreName => Info.Name;
 
         public bool IsRomLoaded => _machine != null;
         public long TotalFrames => _machine?.TotalFrames ?? 0;
-        public double FrameRateHz => _machine?.Info.FrameRateHz ?? 60.0;
+        public virtual double FrameRateHz => _machine?.Info.FrameRateHz ?? 60.0;
         public int AudioSampleRate => _machine is null ? 44100 : _audioRate;
 
         // The picture's size as the last frame reported it, its rows repeated unless the frontend repeats them.
-        public int ScreenWidth => _shape.Width;
-        public int ScreenHeight => _shape.Height * (RepeatRows ? Math.Max(1, _shape.RowRepeat) : 1);
+        public virtual int ScreenWidth => _shape.Width;
+        public virtual int ScreenHeight => _shape.Height * (RepeatRows ? Math.Max(1, _shape.RowRepeat) : 1);
 
         public EngineFeatures Features => EngineFeatures.All;
 
@@ -85,7 +85,7 @@ namespace EmuSen.Cores.Native
         public IReadOnlyList<PadAxis> SupportedAxes =>
             Library.Has(CoreInterface.CapAxes) ? ControllerFor(0)?.Axes.Where(a => a.Control.HasValue).Select(a => a.Control!.Value).Distinct().ToArray() ?? Array.Empty<PadAxis>() : Array.Empty<PadAxis>();
 
-        public void SetButton(int port, PadButton button, bool pressed)
+        public virtual void SetButton(int port, PadButton button, bool pressed)
         {
             if (port < 0 || port >= _buttons.Length || ControllerFor(port) is not { } pad) return;
             foreach (var b in pad.Buttons)
@@ -114,8 +114,8 @@ namespace EmuSen.Cores.Native
             }
         }
 
-        public bool IsHaltedAtBreakpoint => false;
-        public int HaltedAddress => 0;
+        public virtual bool IsHaltedAtBreakpoint => false;
+        public virtual int HaltedAddress => 0;
 
         // What the image needs, answered from its bytes without a machine; Purpose says whether the game runs without it.
         public IReadOnlyList<FirmwareRequest> GetFirmwareRequirements(string romPath) =>
@@ -125,7 +125,7 @@ namespace EmuSen.Cores.Native
             new(Info.Name, f.Label, f.Name, (int)f.Size, f.Required ? "required" : "optional") { Parts = f.Parts };
 
         // The image, its firmware from the library and its battery files by the runtime's path rule; a second create when machine info names battery files the first could not know.
-        public void LoadRom(string path)
+        public virtual void LoadRom(string path)
         {
             byte[] image = File.ReadAllBytes(path);
             string extension = System.IO.Path.GetExtension(path).ToLowerInvariant();
@@ -139,9 +139,9 @@ namespace EmuSen.Cores.Native
                 else if (FirmwareLibrary.TryLoadParts(Request(f)) is { } parts) firmware.AddRange(parts.Select((p, n) => (f.Which + (uint)n, p)));
             }
 
-            var saves = new List<(uint Which, BatterySave Save)> { (0, BatterySave.Open(path, console)) };
+            var saves = new List<(uint Which, BatterySave Save)> { (0, BatteryFile(path, console, 0, EmuSen.Galaxia.Library.SaveLibrary.SramExtension)) };
             CoreMachine machine = Create(image, firmware, saves);
-            var wanted = machine.Info.Battery.Select(b => (b.Which, Save: BatterySave.Open(path, console, extension: b.Suffix))).ToList();
+            var wanted = machine.Info.Battery.Select(b => (b.Which, Save: BatteryFile(path, console, b.Which, b.Suffix))).ToList();
             bool differs = wanted.Count != saves.Count || wanted.Zip(saves).Any(p => p.First.Which != p.Second.Which || p.First.Save.Path != p.Second.Save.Path);
             if (differs && wanted.Any(w => w.Save.Read() is not null))
             {
@@ -168,6 +168,9 @@ namespace EmuSen.Cores.Native
             _frame = new byte[Math.Max(0, (int)_shape.Bytes)];
         }
 
+        // Battery file <which> of a game, by the runtime's path rule; a port's shim opens it as its oracle does.
+        protected virtual BatterySave BatteryFile(string path, string console, uint which, string suffix) => BatterySave.Open(path, console, extension: suffix);
+
         private CoreMachine Create(byte[] image, List<(uint, byte[])> firmware, List<(uint Which, BatterySave Save)> saves)
         {
             var files = new List<(uint, byte[])>(firmware);
@@ -187,12 +190,24 @@ namespace EmuSen.Cores.Native
             RefreshCheats(m);
             SyncAudioLimit(m);
             long start = Stopwatch.GetTimestamp();
-            m.Advance();
+            if (!AdvanceFrame(m))
+            {
+                _lastFrameMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+                Drain();
+                return;
+            }
             EndFrame(m);
             if (!_skipRendering && Library.Has(CoreInterface.CapPresent)) m.Present();
             _lastFrameMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
             Drain();
             if (TotalFrames % 60 == 0) KeepLog(m.DrainLog());
+        }
+
+        // The machine to the frame's end; false is a halt with the frame left open, which skips the frame-end work.
+        protected virtual bool AdvanceFrame(CoreMachine m)
+        {
+            m.Advance();
+            return true;
         }
 
         private void EndFrame(CoreMachine m)
@@ -245,6 +260,8 @@ namespace EmuSen.Cores.Native
 
         public void ReturnFrameBuffer(byte[] buffer) => _lending.Return(buffer);
 
+        public FrameBufferLending FrameBuffers => _lending;
+
         public long FrameSerial => _machine?.FrameInfo.Serial ?? 0;
 
         public bool RepeatRows { get; set; } = true;
@@ -277,7 +294,7 @@ namespace EmuSen.Cores.Native
             }
         }
 
-        public int StateVersion => (int)(_machine?.Info.StateVersion ?? 0);
+        public virtual int StateVersion => (int)(_machine?.Info.StateVersion ?? 0);
 
         public void SaveState(string path)
         {
@@ -305,7 +322,7 @@ namespace EmuSen.Cores.Native
             stream.Write(_stateBuffer);
         }
 
-        public void LoadState(Stream stream)
+        public virtual void LoadState(Stream stream)
         {
             CoreMachine m = _machine ?? throw new InvalidOperationException("LoadState() called before LoadRom().");
             using var copy = new MemoryStream();
@@ -329,18 +346,20 @@ namespace EmuSen.Cores.Native
             }
         }
 
-        public CheatRegistry Cheats
+        // A registry handed over applies at once, as the next frame's refresh would apply it.
+        public virtual CheatRegistry Cheats
         {
             get => _cheats;
             set
             {
                 _cheats = value;
                 _cheatVersion = -1;
+                if (!Library.Has(CoreInterface.CapCheatPokes)) _hostCheats = value;
             }
         }
 
         // ROM patches within machine info's range; pokes the core gates itself as quads, the rest applied here through space_write - see EmuSen_CoreAPI.md §6.12.
-        private void RefreshCheats(CoreMachine m)
+        protected void RefreshCheats(CoreMachine m)
         {
             int version = _cheats.Version;
             if (version == _cheatVersion) return;
@@ -372,7 +391,7 @@ namespace EmuSen.Cores.Native
 
         private uint? SpaceOf(string name) => _machine?.Info.Spaces.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))?.Id;
 
-        public byte ReadSpace(string spaceName, int address)
+        public virtual byte ReadSpace(string spaceName, int address)
         {
             if (_machine is null || SpaceOf(spaceName) is not uint space) return 0;
             Span<byte> one = stackalloc byte[1];
@@ -380,7 +399,7 @@ namespace EmuSen.Cores.Native
             return one[0];
         }
 
-        public void WriteSpace(string spaceName, int address, byte value)
+        public virtual void WriteSpace(string spaceName, int address, byte value)
         {
             if (_machine is null || SpaceOf(spaceName) is not uint space) return;
             _machine.WriteSpace(space, address, stackalloc byte[] { value });
@@ -394,15 +413,15 @@ namespace EmuSen.Cores.Native
         }
 
         // The schema's switch, count and choice settings that are not hidden, with the core's note for the value in use.
-        public IReadOnlyList<CoreSetting> Settings =>
+        public virtual IReadOnlyList<CoreSetting> Settings =>
             Library.Settings.Where(s => !s.Hidden).Select(s => s.AsCoreSetting() is { } row ? row with { Note = _ => _notes.GetValueOrDefault(s.Key) } : null).OfType<CoreSetting>().ToArray();
 
         public IReadOnlyList<CoreSettingDescriptor> SettingDescriptors => Library.Settings;
 
-        public string Get(string key) => _values.TryGetValue(key, out var v) ? v : "";
+        public virtual string Get(string key) => _values.TryGetValue(key, out var v) ? v : "";
 
         // A run-time key reaches the machine between frames; a create-time one is kept for the next load. A value outside its domain is refused.
-        public void Set(string key, string value)
+        public virtual void Set(string key, string value)
         {
             var s = Library.Settings.FirstOrDefault(x => x.Key == key) ?? throw new ArgumentException($"{Info.Name} has no setting {key}.");
             if (!Accepts(s, value)) throw new ArgumentException($"{key}={value} is outside what {Info.Name} takes.");

@@ -3504,3 +3504,22 @@ other command graded. **Timing** follows plan §6.3 as §37.3 corrected it. Each
 naming one feature of the inputs, and none is declared, so a varying phase in this step would be recorded as
 inexact. A phase whose work the fastest answer hides takes work 0, which gives the same latency for any answer at or
 above `FASTEST`.
+
+### 39.2 Two families widened once, in writing (plan §5.2, rule 4)
+
+The first grading, over 265,865 cases per code, had these results:
+
+- **One member agreed on every case** for 00h (Floor, wrap), 08h (s = 1, wrap), 18h (s = 1, wrap, Floor) and 0Fh
+  (0000h).
+- **No member agreed for 20h or 38h.** The counts of how each differed from the nearest member, over 20,000 seeded
+  cases, show the structure:
+  - 20h is Multiply's floor or one more, and one more exactly when the floor is even.
+  - 38h is Range's s = 1 floor plus one on every case counted.
+
+Each family is widened once, by members that state those structures as rules, before they are graded:
+
+- **20h**: Floor | 1 (the low bit set), or Floor + 1; wrap or saturate. That is 4 members, 2 bits.
+- **38h**: s = 1, then Floor + 1, or the ceiling; wrap or saturate. That is 4 members, 2 bits.
+
+Neither is a table: each is one operation more than the documented formula. If neither member agrees on every case,
+the code is a named loss.

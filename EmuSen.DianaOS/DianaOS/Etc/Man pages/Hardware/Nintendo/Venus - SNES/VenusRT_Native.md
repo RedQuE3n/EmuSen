@@ -4368,3 +4368,578 @@ Measured only. Nothing was built, since optimisation is on hold.
 With these, G4 is met apart from the recorded debugger loss. G5 is met apart from Yoshi's Island's stork (the GSU phase
 drift, D-35) and NHL '94's puck (a WRAM drift whose start is not found). G6 still waits on the handheld battery run and
 Super Mario RPG's p99.
+
+## 42. The NEC DSP replacements, steps 9 and 10: the DSP-2 (2026-10-04)
+
+Steps 9 and 10 of `VenusRT_DspHle.md` §8, taken before the DSP-1's steps 5 to 8 so that a game runs exact soonest
+(*decided 2026-10-04*). Step 9 covers every DSP-2 command with its transfer timing, the unhandshaken transfers of 01h
+and 0Fh among them (§37.3); step 10 runs Dungeon Master in lockstep against the image. §42.1 was written and committed
+before the first comparison of a replacement with the image.
+
+### 42.1 The commands as characterised, and the families declared before the first comparison
+
+**What the documents give.** fullsnes names nine commands and states that 10h-FFh mirror 00h-0Fh; nothing documents a
+parameter, a length or a byte order. Everything below beyond the names is black-box characterisation under plan §1.3.
+It was formed with two tools added for this step: `dsp_edges`, which prints the chip's DR edges against an S-CPU that
+answers late or ignores RQM, and `dsp_oracle ask`, `phases` and `batch`, which run single transactions and print their
+transfers, results and per-phase timing. Each hypothesis came from the structure of a handful of cases: single bits set
+in an input, a run of distinct nibbles, a pair of signed values. No result file of the image enters the repository.
+
+**Exposure, recorded.** One `ask` of 1Eh printed the first eighteen words of the DSP-2's data ROM to the terminal before
+the byte was recognised as the data ROM transfer. Nothing of them is used; 1Eh is a named loss below. The value 2Eh
+returns was also seen before its family was declared.
+
+**The protocol, measured** (protocol facts and latencies, which plan §1.3 admits into the model):
+
+- **Transfers.** 8-bit throughout, but for the four test commands 0Eh, 1Eh, 2Eh and 3Eh, which turn DR to 16-bit 11
+  cycles after the command's read whatever the S-CPU does. 3Eh turns it back at 16 cycles and goes idle at 19; the
+  other three turn it back 3 cycles before their idle edge.
+- **Reads.** Each input is read by an edge that raises RQM, except, for most commands, the last, which is taken without
+  one when the S-CPU completes it. 01h reads all 32 inputs by edges.
+- **Waits.** Every phase waits for the S-CPU except three. 01h writes its first result 15 cycles after reading its
+  last input. 0Fh goes idle 14 cycles after its command's read. 3Eh goes idle at 19. 05h with a count of 0 goes idle
+  8 cycles after reading it. An S-CPU that answers later than these finds the chip already past them, which is the
+  dependence on answer time of §37.3.
+- **Counts.** 02h converts m tiles, m = n for n from 1 to 3 and 4 otherwise. 05h takes n = min(n, 80) byte pairs; 06h
+  takes n bytes; 0Dh takes ceil(a/2) bytes and gives ceil(b/2).
+- **The word left in DR at idle**, which the S-CPU sees only by reading at idle, is per command: 0000h at power-on and
+  after 00h, 02h, 03h and 0Dh; 0003h after 01h; FFFFh after 06h and 0Eh; 00FFh after 0Fh, 2Eh and 3Eh; 0400h after 1Eh;
+  after 04h and 05h the last result; after 07h and 08h the first two results as a word, the first high; after 09h the
+  third and fourth so; after 0Bh and 0Ch the fifth and sixth so, or 0000h on a zero divisor.
+- **Flags.** 05h with a count of 0 sets USF1, and 0Fh clears it.
+- **Timing.** Each phase's work and notice, as `dsporacle::handshakes` measures them, are constants per command and
+  position, with these rules: 04h's result comes 15 cycles after its input plus one per nibble of the overlay that is
+  not the transparent colour; 05h's compute takes 10n + 9 plus one per such nibble, and when n mod 16 is 1, a further
+  160 plus the last byte's count again; 0Bh's division takes 739 + 2·popcount(q) + 4·(q mod 2), and 0Ch's 735 +
+  2·popcount(|q|) + 4·(|q| mod 2), plus a constant per sign class, plus one where a negated quotient or remainder is 0.
+  0Dh's compute depends on a and b alone, by no rule found; it takes a fitted estimate and is recorded as inexact.
+
+**The families.** Each is the formula in words and the choices it leaves open:
+
+| Code | Formula | Variants (bits of choice) |
+|---|---|---|
+| 00h | one row of 8 pixels, 4 bytes of two 4-bit pixels each, to its four bitplanes, plane 0 first | the left pixel in the high or the low nibble; pixel p at bit 7 - p or bit p (2 bits) |
+| 01h | an 8 by 8 tile of 32 such bytes to the SNES's 4-bit tile, fullsnes's planar layout: planes 0 and 1 row by row, then planes 2 and 3 | as 00h; and that layout or four planes per row in turn (3 bits) |
+| 02h | m tiles as 01h, one after another | as 01h, chosen with it (0 further bits) |
+| 03h | the transparent colour, the input's low nibble | the low nibble, or the whole byte compared with each nibble (1 bit) |
+| 05h | n bytes A, then n bytes B; each nibble of B unless it equals the colour, then A's | B over A, or A over B (1 bit) |
+| 04h | 05h for one byte, with the same colour | as 05h, chosen with it (0 bits) |
+| 06h | n bytes reversed as a row of pixels: the byte order reversed and each byte's nibbles swapped | that, or the byte order alone (1 bit) |
+| 07h, 08h | A + B and A - B of two 32-bit values, each sent low byte first | 32-bit, or two independent 16-bit halves (1 bit each) |
+| 09h | M = K·L·2, the µPD77C25's product of two signed words (fullsnes); fullsnes calls the command bugged | M's halves each shifted right once, M shifted right as 32 bits logically or arithmetically, or K·L (2 bits) |
+| 0Bh | an unsigned 32-bit division: quotient, then remainder | that order or the other (1 bit) |
+| 0Ch | a signed 32-bit division | truncating or flooring; magnitudes of 32 or of 31 bits (2 bits) |
+| 0Dh | a pixels scaled to b: for b < a, output pixel j is input pixel floor(j·a/(b + 1)); otherwise the first a pixels and zeros | the step a/(b + 1) in 8, 12 or 16 fractional bits or exact (2 bits) |
+| 0Eh | the memory test's word on a working chip | 0000h, 0001h, 00FFh, FFFFh (2 bits) |
+| 1Eh | the data ROM transfer: **not replaceable**, a named loss answered with zeros | none |
+| 2Eh | the ROM version | 0100h, 0200h, 0201h, 0000h (2 bits) |
+| 0Fh, 3Eh | do nothing (fullsnes's "dummy NOP") | none |
+| 0Ah | 09h | none |
+
+That is 21 bits of choice over the chip, against the 2^20 seeded cases per code that will grade it. **Named exceptions,
+not modelled:** 06h with a count of 0 and 0Dh with a of 2 or less or b of 0, where the program leaves its normal
+course (06h turns DR to 16-bit and sets SIC; 0Dh reads past any count or stalls). A member is chosen when it agrees on
+every graded case; a command none agrees on is a named loss under R4.
+
+### 42.2 Three families widened once, in writing (plan §5.2, rule 4)
+
+The first grade with `dsp_grade` rejected every declared member of three families. For each, the structure of the
+mismatches pointed to one further choice. That choice is recorded here as the widening. **This departs from the order
+plan §1.3 asks for:** the widened member was identified from the first grade's mismatches before this paragraph was
+written, and was then graded on fresh seeded cases. The bits of choice it adds are counted below.
+
+- **09h.** The two halves' shifts are each logical or arithmetic: 4 members, 2 bits, in place of the declared "halves
+  each shifted right once". The mismatches were bit 15 of the low half alone.
+- **0Ch.** The magnitudes are 31 or 32 bits for each operand separately: 4 members, 2 bits, in place of one choice for
+  both. The mismatches were divisors of ±2^31 and dividends of -2^31.
+- **0Dh.** The step a/(b + 1) takes 7 to 16 fractional bits: 10 members, under 4 bits. In the copy branch the first
+  ceil(a/2) bytes are copied whole, rather than the first a pixels: 1 bit. The mismatches were pixels at an exact
+  multiple of the step, and the pad nibble of an odd a.
+
+### 42.3 What was chosen and built, and the grade (measured 2026-10-04)
+
+**Chosen**, each agreeing on every graded case:
+
+| Code | Member |
+|---|---|
+| 00h, 01h, 02h | the left pixel in the high nibble, pixel x at bit 7 - x; 01h and 02h in fullsnes's tile layout |
+| 03h | the low nibble |
+| 04h, 05h | B over A |
+| 06h | the byte order reversed and each byte's nibbles swapped |
+| 07h, 08h | 32-bit |
+| 09h | (M_hi >> 1, logically) and (M_lo >> 1, arithmetically), as 16-bit halves |
+| 0Bh | quotient, then remainder |
+| 0Ch | truncating; the dividend's magnitude in 31 bits, the divisor's in 32 |
+| 0Dh | the step in 10 fractional bits; whole bytes copied |
+| 0Eh | 0000h |
+| 2Eh | 0100h |
+
+Counting the widened families whole, the chip's choices total about 26 bits. **None needs a table.** The replacement is
+`chips/dsp2.rs`. Its phases follow §42.1's protocol: each edge at the later of its work after the last edge and its
+notice after the S-CPU's completion, or at its work alone where the chip does not wait.
+
+**Found by the grade**, beyond §42.1, and modelled (protocol facts and latencies):
+
+- **The flags.** The commands 07h, 08h, 0Bh, 0Ch, 0Fh and the 0Eh class write SR 10 cycles after their command's
+  read, which clears USF1. 07h and 08h then set USF1 to the signed overflow of their result, 2 cycles after their
+  second result. 0Bh, 0Ch and 05h set USF0 while they compute, 3 cycles after the last input. 05h clears it 1 cycle
+  before its first result, and 0Bh and 0Ch 1 cycle after. A zero divisor sets USF1 instead and gives no result. 0Dh
+  sets USF1 while it computes. DRS, which the program cannot write, survives a change of DR's width.
+- **Two buffers in the chip's RAM that persist between commands.**
+  - 05h's compute takes, when n mod 16 is 1, one cycle more per opaque nibble over the whole last 16-byte chunk of
+    its overlay buffer. The bytes past n are left from earlier 05h commands, and each byte's count is the one made
+    against the colour of its own time.
+  - 0Dh's copy branch gives its row buffer whole, 104 bytes, and so returns pixels left there by earlier 0Dh commands.
+- **Smaller timing rules.** 05h reads B0 with a work of 7 when n exceeds 80. 01h's second result comes 5 cycles after
+  its first, which only an answer late enough to see the unhandshaken first result reveals. 0Ch's sign costs are 18
+  for a negative dividend and 10 for a negative divisor, 9 for a negated quotient, and one cycle more for each
+  negated value whose low word is 0.
+
+**The grade.** `dsp_grade` ran 2^20 seeded cases per code, every other one under a jittered S-CPU; 04h and 05h ran
+after a seeded colour; the counts were held to 1-255 for 02h and 06h, to 1-80 for 05h, and for 0Dh to a of 3-208 and b
+of 1-208:
+
+| Codes | Cases | Values, transfers, SR or latency differ |
+|---|---|---|
+| 00h, 01h, 02h, 03h, 04h, 05h, 06h, 07h, 08h, 09h, 0Ah, 0Bh, 0Ch, 0Eh, 0Fh, 2Eh, 3Eh | 1,048,576 each | **0** |
+| 0Dh | 262,144 | values 0; latency in 261,179 |
+| 1Eh, the data ROM transfer | 1,048,576 | values in all, by construction; transfers, SR and latency 0 |
+| the 180 mirrors in 10h-FFh of the codes without a count | 4,096 each | 0, but for 1Eh's four mirrors, by construction |
+
+The crate test `the_dsp2_replacement_agrees_with_the_image` repeats this over 256 cases per code on the image, each
+after a colour, under steady and jittered answers. `the_dsp2_formulas_answer_through_the_ports` checks fullsnes's tile
+layout and the arithmetic on the replacement with no image.
+
+**Named losses and inexactness**, in the core's stated cost:
+
+- **1Eh**, the data ROM transfer, answers zeros: a named loss, as the plan set out.
+- **0Dh's compute time** is a least-squares estimate. The error is under 11% when scaling down and under 6% when
+  scaling up, over 5,774 measured cases. No rule was found in its dependence on a and b.
+- **Outside the chip's buffers, not reproduced.**
+  - 05h with a count of 0 (which sets USF1) is modelled; above 80 its compute is off by a cycle and some results differ.
+  - 06h with a count of 0 leaves the program's normal course: DR turns 16-bit and SIC is set, from then on.
+  - 0Dh with a or b over 208 reads past its 104-byte buffer, and with a of 2 or less or b of 0 it does not end.
+  - Commands that share RAM with 05h's and 0Dh's buffers (06h, 0Bh, 0Ch and the memory test 0Eh) leave there values
+    the replacement does not track.
+
+### 42.4 Step 10: Dungeon Master in lockstep (measured 2026-10-04)
+
+`dsp_lockstep`, the whole-game runner of plan §4.3, is new: one ROM on two machines, the image on one and the
+replacement on the other, the same pad on both. Each frame it compares the picture, WRAM, VRAM, CGRAM, OAM, the APU's
+RAM, the master clock and the whole state with the chip's group left out. With `LOCKSTEP_AT` it finds the first
+instruction after which the two S-CPUs differ.
+
+| Run | Frames | Result |
+|---|---|---|
+| `dm.txt`, Start into the dungeon | 3,600 | **identical states throughout** |
+| `dm.txt` | 10,800 | **identical throughout**; 353,703 05h, 155,219 01h, 14,344 0Fh, 4,164 03h and 4,164 09h at the image's chip |
+| `dm_walk.txt`, the same, then 132 taps of the pad and buttons | 7,205 | **identical throughout** |
+
+**What the lockstep found that the command grade could not.** The first lockstep parted at frame 1,036. Dungeon
+Master polls SR during 05h's compute and waits for USF0 to clear. The command oracle samples SR only at each rise and
+at the S-CPU's access, so it never saw the busy flag. A second parting, one frame earlier, placed USF0's clear 1 cycle
+before 05h's first result. Both are now modelled, and the grade was rerun without change.
+
+**What this settles.** Dungeon Master runs on the replacement as on the image, to the cycle and the byte, over 10,800
+frames. The DSP-2's cost in core info now says so, and names 1Eh, 0Dh's timing and the out-of-range counts.
+
+**Against the plan's predictions.** **P8**, every DSP-2 command exact by the end of step 9, is **retired, false in
+part.** The values of every command are exact within the chip's buffers. 0Dh's timing is not, nor are the
+out-of-range counts. 1Eh is a named loss, as planned.
+
+## 43. The NEC DSP replacements, step 11: the ST010 (2026-10-04)
+
+Step 11 of `VenusRT_DspHle.md` §8: the ST010's mailbox, and the seven computing commands F1 ROC II gives it (02h-08h,
+§37.6), with the RAM compared whole and F1 ROC II run in lockstep. §43.1 was written and committed before the first
+comparison of a replacement with the image.
+
+**Provenance.** This step was written by someone who has not seen the superfamicom wiki's ST010 page (plan §1.4). Its
+sources are fullsnes ("ST010 Commands"), plan §3.5's table of parameter addresses (taken from that page's address
+tables by the plan's author, who recorded the exposure), and the oracle. No emulator's source, no listing and no byte
+of the dumps were read.
+
+### 43.1 The commands as characterised, and the families declared before the first comparison
+
+**The tools.** `dsp_oracle mail` runs mailbox commands with chosen RAM words. `mailbatch` runs one case a line.
+`dsp_trace` with `DSP_TRACE_MAIL` records each of a game's mailbox commands with its input words and the words it
+changed, to the probe cache. The hypotheses below came from single words set against a zero RAM and against seeded
+fills, and from F1 ROC II's own traffic. Words are 16-bit RAM addresses; plan §3.5's byte addresses are twice these.
+
+**The protocol, measured.**
+
+- **The mailbox.** The chip polls bit 15 of word 10h every 3 cycles; a command's busy bit clears a fixed number of
+  cycles after the first poll that sees it, so the latency varies by 0 to 2 with the S-CPU's phase. The poll resumes
+  after each command.
+- **The results.** Each command writes its results and some working words, and nothing else. Its time from the poll
+  is a constant per command, except for 02h and 04h.
+
+**The families.**
+
+| Code | Formula | Variants (bits of choice) |
+|---|---|---|
+| 06h | words 8-9 = the µPD96050's product K·L·2 of words 0 and 1 (fullsnes's multiplier), 32 bits | that or K·L (1 bit) |
+| 03h | words 8-9 = word 0 times word 2, and words A-B = word 1 times word 2, each as 06h | chosen with 06h (0 bits) |
+| 04h | |X| and |Y| of words 0 and 1, the larger stored in word 0 and the smaller in word 1, and word 8 = α·max + β·min: the alpha-max-plus-beta-min distance, α = 2cos(π/8)/(1 + cos(π/8)) and β = 2sin(π/8)/(1 + cos(π/8)) | α and β in 15 or 16 fractional bits, each floored or rounded; the sum floored or rounded; ties stored as swapped or not (4 bits) |
+| 08h | words 8, 9 = X·cos θ + Y·sin θ, Y·cos θ - X·sin θ of words 0, 1 and angle 2, with S[i] = A·sin(2πi/256) at θ's top 8 bits | A 32,767 or 32,768 saturated; floor or half up; computed per quadrant from the magnitude or directly; each product shifted on its own or the sum once (4 bits) |
+| 07h | four arrays of 176 words from word 78h, 128h, 1D8h, 288h: L(n)·cos θ, L(n)·sin θ, -L(n)·sin θ, L(n)·cos θ, with 08h's sine and product; words 0-2 = θ's top 8 bits, sin θ, cos θ. L(n) = round(K / (n + c)), the perspective scale of a raster line | the negation before or after the product (1 bit); K and c, found by a search over the image's 176 words at θ = 0, K = 7,885 and c = 8.8 (about 15 bits) |
+| 02h | a stable sort of word 12h's count of words from 20h into descending order, the words from 40h moved with them; word 0 the loop's count, left 0 after a sort and the count when it is 0, 1 or over 32 | keys unsigned or signed (1 bit); timing by comparisons and exchanges, measured |
+| 00h | word 10h cleared, nothing else (§37.5) | none |
+| 09h-0Fh, 10h-FFh | 01h-07h and 00h-0Fh (fullsnes, §37.5) | none |
+
+**07h's K and c are the one place this step takes numbers from the image's output.** They are two constants of a
+documented shape, a perspective divisor, fitted to one angle's 176 words, and the other 65,535 angles grade them. By
+plan §1.3's argument, about 15 bits are taken against 2,816 output bits per angle. This is recorded as a characterisation
+with fitted constants, and the record does not claim more.
+
+> *Amended 2026-10-04* (§48.2). Fitting K and c to the image's output takes values from the chip into the code, which
+> plan §1.3's R1 forbids however few bits they carry. The fit is withdrawn, and 07h takes a documented constant in
+> their place.
+
+**Not characterised in this step.** 05h, the driver simulation, is 53.6% of F1 ROC II's commands. It reads at least
+seventeen words from 60h, among them a flags word whose bits choose its paths, and computes an angle as 01h does.
+Its paths were not resolved in the time this step had. 05h and 01h stay as the frame left them: they clear the
+mailbox and change nothing else, a named loss for now.
+
+### 43.2 One family widened once, a count corrected, and the sine a named loss (measured 2026-10-04)
+
+`dsp_stgrade` is new. It grades a command through the mailbox on both engines from a seeded phase of 0 to 8 cycles,
+comparing the cycles to the busy bit's clearing and the whole RAM. With `mailbatch` and `DSP_TRACE_MAIL` it graded the
+families of §43.1.
+
+- **04h.** No member agreed on every case: the best agreed on 42%, and a closer look found the alpha-max-plus-beta-min
+  form right but α's constant half a unit off. **The family is widened once**: each constant floored, rounded or
+  raised (1 bit more). As with §42.2, the member was found in the same pass that rejected the declared ones.
+  - **Chosen**: |X| and |Y| as unsigned 16-bit magnitudes, so that -32,768 stays 8000h, swapped when |X| <= |Y|;
+    D = (2·α·max + 2·β·min + 8000h) >> 16 with the magnitudes signed in the products.
+  - α = ceil(2^15 · 2cos(π/8)/(1 + cos(π/8))) = 31,472, and β = round(2^15 · 2sin(π/8)/(1 + cos(π/8))) = 13,036.
+  - It agreed on 20,000 of 20,000 cases.
+- **02h's count**, a protocol fact, is 2 to 15, not 2 to 32. A count of 16 or more sorts nothing and leaves the
+  count in word 0. The sort is a bubble sort of fixed passes, unsigned and stable. Its time is 41 + 10n + 6n(n - 1) +
+  15 per exchange, which agreed on 800 of 800 traced cases.
+- **08h's and 07h's sine is a named loss under R4.**
+  - The family's 32 members agreed with the image on at most 18,200 of 20,000 08h cases (91%). The closest is
+    round(32,767·sin) by quadrant, each product shifted on its own, the negation after.
+  - firmwarecheck against the ST010's data half finds that member's table in the program's data in runs of up to 120
+    words, broken at single entries. That is the formula correct except at a few entries, which plan §5.2 makes a stop.
+  - No entry is patched, and the closest member is kept.
+  - 07h's L(n) and its products agree wherever the sine does.
+
+**firmwarecheck** (`dsp_oracle tables`, then `st010_tables.py` for the formula image, byte-identical to it), against the
+data half:
+
+| Run | Result |
+|---|---|
+| plain | 3 of 512 bytes equal at the same offset; common runs up to 240 bytes; FAIL by the plain thresholds, the expected outcome of a formula found in the data |
+| `--forced` | 12 formula runs; coverage 608 of 4,096 bytes (14.8%); residual 0; **PASS** |
+
+**The mailbox's phase.** The poll's base is set 2 cycles after the start word's read and 2 cycles after each
+command's busy bit clears, from which polls fall every 3 cycles. Each command's time runs from the first poll at or
+after the S-CPU's write. With those two constants every graded command's latency agreed, from every phase.
+
+**The grade** (`dsp_stgrade`, seeded phases and inputs; 02h's count held to 0-20):
+
+| Codes | Cases | Latency differs | RAM differs |
+|---|---|---|---|
+| 00h, 02h, 03h, 04h, 06h, and the mirrors 0Ah, 0Bh, 0Eh, 1Ch, F4h, FAh | 4,000 each | **0** | **0** |
+| 08h | 4,000 | 0 | 50 (1.25%), by one in a result word |
+| 07h | 4,000 | 0 | 126 (3.2%), by one, in the words that carry the sine |
+| 07h, after §48.2 | 4,000 | 0 | 4,000, by up to 640 in the four arrays; words 0-2 by one |
+
+The crate tests `the_st010_replacement_agrees_with_the_image` (256 cases per code on the image, from seeded phases) and
+`the_st010_formulas_answer_through_the_mailbox` (fullsnes's multiplier and the sort, with no image) hold this.
+`the_st010_sine_equals_the_independent_generator` holds the table to `st010_tables.py`, and
+`the_st010_battery_file_reads_alike_on_either_engine` holds the battery file across engines: a file one engine
+writes is, byte for byte, the RAM the other engine starts from.
+
+### 43.3 F1 ROC II in lockstep (measured 2026-10-04)
+
+`dsp_lockstep` now compares the ST01x's RAM as well. F1 ROC II, 3,600 frames from power-on with no input:
+**identical to frame 1,019**, through its boot, its titles and every 06h, 03h, 04h, 02h and 08h before the first
+05h. The first parting is the S-CPU's read of 05h's first result at frame 1,019 (word 62h, 0034h against 0000h).
+Pictures were equal in 1,765 of 3,596 frames. 05h is a named loss for now (§43.1), so this parting is the expected
+one.
+
+**What is open.** 05h, the driver simulation, carries 53.6% of the game's commands. Its traffic, 98,150 cases in
+7,200 frames, is in the probe cache. The first rule found there holds in every case: words 68h and 69h are words 60h
+less 63h and 61h less 65h. A further characterisation step of its paths would let F1 ROC II run past frame 1,019. With
+the sine a named loss, 05h could be exact only where its paths do not use the sine.
+
+## 44. The NEC DSP replacements, steps 5 to 8: the DSP-1's remaining commands, begun (2026-10-04)
+
+Steps 5 to 8 of `VenusRT_DspHle.md` §8. The sine is a named loss (§40.7), so every command built on it can only be
+approximate. This section therefore records closest members and their measured error, not exact choices. The
+commands that do not use the sine, Inverse and Distance, were searched for an exact member and none was found in the
+time given. This step is not finished: §44.4 lists what remains.
+
+### 44.1 What was characterised, from the oracle
+
+- **Attitude (n1h), Objective (nDh), Subjective (n3h), Scalar (nBh).**
+  - Each Attitude sets matrix n to (m/2)·Rx(I4)·Ry(I3)·Rz(I2).
+  - Objective gives the matrix times (X, Y, Z), Subjective its transpose times (F, L, U), and Scalar the first row
+    times the vector.
+  - The order and the axes were found by unit vectors through Objective after Attitudes with random angles: the
+    best of the 96 orders, axis assignments, signs and transpositions agreed to 4.5·10^-4 of full scale, and the next
+    to 1.04.
+  - As with Polar (§40.4), the angles are not SnesLab's "about Z, X, Y": the second rotates about Y and the third
+    about X.
+  - With m = 7FFFh and no rotation, the diagonal is 3FFEh, consistent with three floored products by cos 0 and a
+    halving.
+- **Inverse (10h).**
+  - a is normalised to a mantissa in [4000h, 8000h) or [-8000h, -4000h) with s shifts, and the exponent is 1 + s - b.
+  - The exponent agreed on all 65,536 values of a at b = 0. The mantissa lies within 2 of 2^29 over the normalised
+    a, floored: equal in 48.7%, one away in 49.6%, two away in 1.6%. That is the signature of a Newton iteration's
+    truncations.
+  - The best of 96 simple Newton members (seed, iterations, product rounding) agreed in 14,701 of 16,384 positive
+    mantissas (89.7%).
+  - **The time is a rule of one feature, exact on all 65,536 values**: 36 + 2s cycles for a positive a and 40 + 2s for
+    a negative one, plus 2 (positive) or 1 (negative) when the normalised value is a power of two; 14 for a = 0.
+- **Distance (28h).**
+  - On the DSP-1B the root is the floor of √(x² + y² + z²) or up to 4 below it, for sums under 2^30. Above that, the
+    sum's overflow takes another course that was not resolved.
+  - The time steps by 4 cycles per two bits of the sum's length, in two runs for the sum's low and high words.
+  - The DSP-1's fullsnes bug multiplies the root by a factor between 0.97 and 0.99 that alternates with the parity of
+    the sum's bit length. It was measured over 30,000 cases and not modelled.
+- **Parameter (02h), first findings.**
+  - Vva = -Les·cot(Azs), with Azs the angle from straight down. It agreed at every angle tried below a limit near
+    79.8°, where Vva holds and Vof becomes Les·(cot θ_limit - cot Azs).
+  - (Cx, Cy) is F moved along the view's forward direction (-sin Aas, -cos Aas) by Fz·tan(Azs).
+  - Raster, Project and Target were not characterised.
+
+### 44.2 What was built and the grade (measured 2026-10-04)
+
+`dsphle.rs` gains the three matrices in its state, so the state version is 20. A replacement state of version 19 is
+refused with `VERSION`, while the low-level path's states of 17-19 still load. *Amended 2026-10-04* (§48.1): the version is 21. Steps 9 to 11 also changed the
+DSP-2's and the ST010's replacement states without raising the version; that defect is corrected here.
+
+| Code | Built as | Grade (2^17 to 10^5 seeded cases, both images where alike) |
+|---|---|---|
+| 10h Inverse | normalised; 2^29 over the mantissa, floored; the exponent and the time by §44.1's rules | exponent and latency exact in every case; mantissa within 2, exact in 48.8% |
+| 28h Distance | the floored root; the time by §44.1's steps | DSP-1B within 4 for sums under 2^30; the DSP-1's bug and sums of 2^30 and over not modelled |
+| n1h Attitude | (m/2)·Rx·Ry·Rz in floating point from the replacement's sine, floored to Q15 | through the commands below |
+| nDh, n3h, nBh | each product floored, summed | within 18 of the image in every case; within 3 in 92% (Objective, Subjective) and 96% (Scalar) |
+
+The crate test `the_replacements_approximate_commands_stay_within_their_bounds` holds these bounds on both images.
+
+### 44.3 The seven DSP-1 titles in lockstep
+
+`dsp_lockstep`, 3,600 frames each, with §37.6's pad scripts:
+
+| Game | Identical until | Pictures equal |
+|---|---|---|
+| Super Mario Kart | frame 96 | 258 of 3,600 |
+| Ballz 3D | 762 | 1,007 |
+| Pilotwings | 1,799 | 1,802 |
+| Lock On | 1,523 | 1,525 |
+| Suzuka 8 Hours | 1,474 | 1,491 |
+| Super Bases Loaded 2 | 3,029 | 3,030 |
+| Michael Andretti's Indy Car Challenge | 3,310 | 3,310 of 3,593 |
+
+Each parts one frame after its first command that computes (§37.6). That is the expected outcome while the sine is a
+named loss and the projection commands are unbuilt: **P6 is retired, false**, since no DSP-1 title can be identical
+to the image while its sine is approximate.
+
+### 44.4 What remains of steps 5 to 8
+
+- **Parameter, Raster, Project, Target.** These are the most-used commands: Project alone is 56% of Super Mario Kart's
+  traffic. §44.1's first findings fix the camera's frame. Raster's mode 7 matrix, Project's screen position and
+  enlargement, Target's ground point and the limit-angle branch remain to be characterised.
+- **Gyrate (14h)**, six inputs and three results, not characterised.
+- **An exact Inverse and Distance**: a wider declared search over seeds and iteration sequences, if the plan's rules
+  allow it.
+
+## 45. The NEC DSP replacements, step 12: the DSP-4 characterised, and the decision put (2026-10-04)
+
+Step 12 of `VenusRT_DspHle.md` §8. No document describes the DSP-4's commands (plan §3.4). This step reads Top Gear
+3000's traffic (§37.6) and grades hypotheses against the image. It ends in a decision that is the tester's to take,
+not this record's.
+
+### 45.1 The protocol, measured
+
+- **The first input is written over the chip's offer.** After a command the DSP-4 writes a word first (§37.2), and
+  Top Gear 3000 writes its first input over it: the "bytes against the chip's direction" of §37.6, two per command
+  for the short commands. The chip then takes DR as that input.
+  - The oracle's driver gains `write_over`, which answers chosen transfers with a write, and `dsp_oracle` sets it with
+    `ORACLE_WRITE_OVER`.
+  - With it, the short commands' shapes become plain: 00h `i2o2`, 0Bh `i3o`, 11h `i4o`, 0Ah `i4o4`.
+- **Unhandshaken results.** 00h's first result is written without waiting for the S-CPU, 8 or 9 cycles after its last
+  input, as the DSP-2's 01h is (§42.1).
+- **The long commands are conversations.** 01h, 07h, 08h and 09h alternate short runs of inputs and results for as
+  long as the game supplies segments: 30 to 90 exchanges in Top Gear 3000. They are the road and its scenery projected
+  segment by segment, and their traffic is 78.8% of the game's DR transfers.
+
+### 45.2 What is characterised
+
+| Code | Share of commands | Share of DR transfers | Status |
+|---|---|---|---|
+| 00h | 82.3% | 16.7% | **a rule, exact on 100,000 of 100,000 seeded pairs**: (K·L·2 as a signed 32-bit word) >> 1, the µPD77C25's product (fullsnes) halved arithmetically, low word first; so (-32,768)² gives C0000000h |
+| 0Ah | 11.4% | 3.7% | four results from four inputs, linear in the second at least (a 10h there gives 30h); in the game its results are fixed pairs (FF40h, 00C0h) for any first input. Not resolved |
+| 0Bh | 1.3% | 0.3% | in the game, three results; with the oracle's inputs, one result of 0 and a latency of 16 to 19 that depends on the inputs. Not resolved |
+| 11h | 0.3% | 0.1% | one result, an angle in appearance (00E8h alone gives 4000h). Not resolved |
+| 01h, 07h, 08h, 09h | 2.8% | 78.8% | conversational; not characterised |
+| 03h, 05h, 06h | 2.0% | 0.4% | no transfers (03h, 05h) or sixteen results with no input (06h); not characterised |
+
+### 45.3 Against P9, and the decision
+
+**P9** asked for rules explaining at least 80% of Top Gear 3000's traced command volume after step 12's two steps.
+The answer depends on what is counted:
+
+- **By commands, P9 holds**: 00h alone is 82.3% of them, and it is exact.
+- **By DR transfers, it fails**: 16.7%. The four conversational commands, with 78.8%, are where the picture is made, and
+  none of them is characterised.
+
+**The options**, each argued:
+
+- **A, no-go.** The DSP-4 keeps `effect: none` and Top Gear 3000 runs only with the player's image. The cost is one game.
+- **B, a limited go.** Build the replacement's frame, with the first-input protocol, 00h exact, and the short
+  commands as far as one more characterisation step reaches. Then decide on the conversational commands against
+  their own measurement. The game would run, but its road would not be drawn until those commands are built. That is
+  `effect: accuracy`, with the cost naming the road.
+- **C, the full go of plan step 12a,** 4 to 6 steps. Whether 01h-09h are formula-like is unknown. If they use a sine
+  of their own, the DSP-1's and the ST010's histories (§40.7, §43.2) suggest they will be approximate at best.
+
+**Recommended: B**, because it costs one step, makes the game start without the image, and replaces a guess about the
+conversational commands with a measurement before more is spent. **The decision is the tester's**, and nothing past
+this record is built until it is taken.
+
+## 46. The NEC DSP replacements, step 13: the DSP-3's decoder question (2026-10-04)
+
+Plan §3.3 asks whether 38h, the Shannon-Fano decoder, depends on a table the game sends or on the chip's own data. If
+the game sends it, the decoder is a documented algorithm; if the chip holds it, R4 stops it. No DSP-3 game is in the
+library, so only the command oracle can answer.
+
+**What was measured.**
+
+- **38h is driven by USF1.** fullsnes says "USF1 bit in SR register = direction". The driver gains `usf1_writes`,
+  `ORACLE_USF1_WRITES` in `dsp_oracle`, which answers a rise with USF1 set by a write. With it the decoder runs as a
+  conversation: after the command, one word in and one out, then a run of inputs, then symbols out, interleaved with
+  further inputs, as variable-length codes would need.
+- **The opening run's length depends on the stream's content.** Over four seeded streams it was 52, 49, 47 and 90
+  words before the first symbol. Two streams that differed only after their hundredth word gave the same opening run
+  and the same first twenty symbols. So did two streams that shared words 1 to 59 and differed in their first word
+  and after their sixtieth: the first word is not part of the preamble.
+
+**The answer, argued.** A decoder whose code table were fixed in its data ROM would have no reason to read a
+preamble whose length depends on its content. A preamble read until its own structure ends is how a transmitted code
+table looks. **This is consistent with the game sending the table**, and so with 38h being a documented algorithm. It
+is not proof. That would need the preamble's format characterised, and then the same coded bits shown to decode
+differently under two preambles of equal length. **The DSP-3 stays parked** (plan §10, Q3), with this measurement
+recorded for the step that resumes it.
+
+## 47. The NEC DSP replacements, step 14: the close-out, in part (2026-10-04)
+
+The plan's close (§8, step 14) assumes every step done. Steps 5 to 8 (§44.4) and the DSP-4's decision (§45.3) are not
+done, so this section closes what can be closed and lists the rest.
+
+- **The clone check.** `clonecheck.py` ran with `dsp2.rs`, `st010.rs` and `dsphle.rs` audited against Mesen, the only
+  reference tree on the desktop.
+  - Structure: 0 pairs sharing 12 or more fingerprints. Tables: no shared run of 8 or more literals. Names: 37 shared
+    identifiers, every one an ordinary word (`command`, `cycles`, `latency`, `mantissa`, `overflow`).
+  - Plan §5.4's DSP comparison set (bsnes/higan's and snes9x's DSP and ST010 modules, MAME's, and the superfamicom wiki's
+    ST010 code) is not on the desktop. That check is owed.
+- **firmwarecheck**, every generated table: the DSP-1's sine (§40.4) and the ST010's sine (§43.2), both forced-PASS
+  with residual 0, formula coverage 25.0% and 14.8%. The DSP-2 and the attitude matrices hold no table.
+- **The core's stated costs** are set from the measurements: the DSP-2 near exact (§42.4), the ST010 with its named
+  loss 05h (§43), and the DSP-1 as §39-§44 graded it.
+- **Owed:** `EmuSen_Games_Tested.md`'s VenusRT entries for the DSP games without their images, once the DSP-1 and the
+  ST010 run past their first partings. Plan §9's Q2 was already marked superseded at step 1.
+
+## 48. The NEC DSP replacements: the merge with stage 8, ST010 07h's constants, and the DSP-4's limited step (2026-10-04)
+
+### 48.1 The state version, after the merge with stage 8
+
+Stage 8's HDMA work (§41) took state version 20 for two bytes of each line's HDMA run, and §44.2 had taken 20 for the
+replacements' layout on this branch. The two meet here as **version 21**.
+
+- **Version 20 means stage 8's.** The DSP branch's own 20 was never merged, so no state of it exists outside this
+  branch's tests. It is withdrawn rather than supported.
+- **Version 21 states** have both stage 8's HDMA bytes and this branch's replacement layout.
+- **Loading.** States of versions 17 to 20 still load on the low-level path, and on cartridges without a NEC DSP.
+- **The replacement.** Its state from before 21 is refused with `VERSION`, whichever branch's meaning its 20 has.
+  Its layout before 21 is not the present one either way, and the version alone cannot tell the two apart.
+- **Tests.** `a_replacement_state_before_version_21_is_refused` holds this. The registration golden was re-recorded,
+  and its diff is the four state-version lines alone.
+- **After the merge** Dungeon Master is still identical to the image for 3,600 frames. F1 ROC II still parts at
+  its first 05h, at frame 1,020 now, since stage 8 moved the 65C816's start by 132 master clocks.
+
+### 48.2 ST010 07h: the fitted constants withdrawn
+
+§43.1 fitted 07h's perspective constants, K = 7,885 and c = 8.8, to the image's 176 words at one angle. However few
+bits that takes, it is a value seen from the chip entering the code, and R1 makes it a grade only. No document gives
+07h's scale: fullsnes names the command "Raster Data Calculation" and nothing more, and plan §3.5's addresses give the
+arrays' places, not their contents. No declared formula was found either. A perspective divisor needs a camera height
+and a distance to the screen, and every value tried for them would be a second fit.
+
+**What replaces it.** Every line takes mode 7's unit scale, 100h, 1.0 in the 8.8 matrix format fullsnes documents for
+the PPU, so that the four arrays are the rotation by θ at unit scale on every line. The sine and the products are
+those of §43.2.
+
+**The larger error, measured** (`dsp_stgrade 07`, 4,000 seeded cases):
+
+- the busy bit's latency and words 0-2 as before, the latter within one;
+- the four arrays differ in every case, by up to 640, against the image's scale of 896 on the first line and 43 on
+  the last.
+
+The crate test now bounds the arrays at 640. In play, F1 ROC II's road would lose its perspective wherever the game
+draws from 07h's arrays. That cannot be seen yet: the game parts at its first 05h, before 07h's arrays reach a
+picture. 07h is now an approximation with a documented constant, and its perspective is a named loss until a source
+for it is found.
+
+### 48.3 The DSP-4, the limited step (measured 2026-10-04)
+
+*Decided 2026-10-04*: §45.3's option B. One step builds the DSP-4's protocol, 00h, and the short commands, so that
+Top Gear 3000 starts without the image. The road commands then go back for a decision with the measurement below.
+
+**Built** in `chips/dsp4.rs`, with `Program::Dsp4`. A Top Gear 3000 cartridge now runs on the replacement with no
+file, and core info's cost says what it lacks.
+
+- **The protocol.** 16-bit throughout, the idle word FFFFh, and 20h-FFh mirroring 10h-1Fh (fullsnes). At idle, DR's
+  low byte is taken as the next command, a read included, so an S-CPU read at idle runs the mirror of 1Fh, which does
+  nothing and writes FFFFh again: the idle polling of §37.2. After a command with inputs the chip offers 0000h, and
+  the S-CPU's first input written over it is taken by the next read. 03h, 05h, 0Eh and 15h-1Fh do nothing in their
+  measured times.
+- **00h**, §45.2's rule: both inputs read by edges, and the low word first.
+  - The first result is written 7 cycles after the second input's read whatever the S-CPU has done, 8 when its
+    bit 15 is set. That is a timing rule of one feature, exact on 100,000 cases.
+  - The second result is handshaken.
+- **The short commands' transfers and timing**: 0Ah four inputs and four results, its first unhandshaken at 23; 0Bh
+  and 0Ch three and one; 11h four and one, unhandshaken at 6. Their results are not characterised and are 0000h.
+- **02h, 06h, 12h, 13h and 14h**: their transfers and timing. 14h gives 0400h (fullsnes), 12h, the memory test, gives
+  0000h, 13h's data ROM a named loss in zeros, and 02h and 06h zeros.
+- **The road commands 01h, 07h, 08h and 09h**, with 04h, 0Dh, 0Fh and 10h, are not built. Each goes idle 13 cycles
+  after its command.
+
+**The grade** (`dsp_grade` with `DSP_GRADE_WRITE_OVER=1`, 20,000 seeded cases a code, half jittered):
+
+| Code | Result |
+|---|---|
+| 00h | **exact** in values, transfers, SR and latency |
+| 03h, 05h, 06h (fresh chip), 0Eh, 12h, 14h, 15h, 1Fh and mirrors | exact |
+| 0Ah | transfers exact; values not characterised; latency in 371 (1.9%) |
+| 0Bh, 0Ch | transfers exact; latency off by one in 75%, by a rule of the inputs not found |
+| 11h | transfers and latency exact; values not characterised |
+| 02h, 13h | values 0000h against the chip's |
+
+The crate test `the_dsp4_replacement_agrees_with_the_image` holds these. In WiseMan,
+`A_dsp_cartridge_runs_on_the_replacement_with_no_firmware` now takes SD Gundam GX as the cartridge without a
+replacement.
+
+**Top Gear 3000 in lockstep** (`dsp_lockstep`, 7,200 frames, `tg3000.txt` with shots).
+
+- **Identical to the image until frame 3,178**, through the boot, the title, the Championship and player menus, the
+  track choice and the shop. This is the first parting.
+- **The parting** comes at 11h, the first command whose result is not characterised. The first road command follows
+  at 3,183.
+- **The race.** From then on the picture is black on the replacement. Its S-CPU runs, 534 distinct addresses in a
+  frame against the image's 2,321, but it draws nothing: neither road, scenery, cars nor the status bar. With the
+  image the same frames show the grid, the countdown and the race.
+- **Pictures equal**: 3,232 of 7,199 frames.
+
+`dsp_lockstep` now counts commands as the S-CPU's first write after the chip's idle edge, which every DR chip makes.
+The DSP-4 learns no command place from the program counter, so the old count missed its commands, and a script's
+`tapuntil ... chip` tapped Start through the race.
+
+**For the decision.** The menus run as with the image. The race needs the road commands. 01h, 07h, 08h and 09h are
+78.8% of the game's DR transfers, they are exchanges whose lengths depend on the data, and none is characterised.
+Short of them, 11h's and 0Ah's results would keep the run identical a few frames further, to frame 3,183, but would
+not draw a race. Building the road commands is plan step 12a, estimated at 4 to 6 steps, with no measurement yet of
+whether they are formula-like.

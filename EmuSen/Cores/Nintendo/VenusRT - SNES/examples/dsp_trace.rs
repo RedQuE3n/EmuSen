@@ -39,6 +39,8 @@ struct Recorder {
     /// ST010: a mailbox command waiting for the chip to clear its busy bit, from the cycle it was set.
     mail: Option<(u8, u64, Vec<u16>)>,
     mail_done: Vec<(u64, u8, u64, usize)>,
+    /// With DSP_TRACE_MAIL set, each mailbox command's input words and the words it changed, for the cache.
+    mail_log: Option<String>,
 }
 
 impl Recorder {
@@ -153,6 +155,11 @@ impl Run {
             (None, true) => self.rec.mail = Some(((dsp.ram[0x10] & 0xFF) as u8, dsp.cycles, dsp.ram.to_vec())),
             (Some((c, at, before)), false) => {
                 let changed = before.iter().zip(dsp.ram.iter()).enumerate().filter(|(i, (a, b))| a != b && *i != 0x10).count();
+                if let Some(log) = self.rec.mail_log.as_mut() {
+                    let ins: Vec<String> = (0..0x10).chain(0x12..0x13).chain(0x20..0x28).chain(0x60..0x71).map(|w| format!("{w:X}={:04X}", before[w])).collect();
+                    let outs: Vec<String> = (0..dsp.ram.len()).filter(|&w| w != 0x10 && before[w] != dsp.ram[w]).take(40).map(|w| format!("{w:X}={:04X}", dsp.ram[w])).collect();
+                    let _ = writeln!(log, "{frame} {c:02X} {} | {} | {}", dsp.cycles - at, ins.join(" "), outs.join(" "));
+                }
                 self.rec.mail_done.push((frame, *c, dsp.cycles - at, changed));
                 self.rec.mail = None;
             }
@@ -241,6 +248,9 @@ fn main() {
     assert!(m.attach_dsp(&fw));
     m.sys.cart.dsp.as_mut().and_then(|(d, _)| d.lle_mut()).expect("the image's chip").transfers = Some(Vec::new());
     let mut run = Run { m, rec: Recorder::default(), st010: stem == "st010", stem };
+    if std::env::var_os("DSP_TRACE_MAIL").is_some() {
+        run.rec.mail_log = Some(String::new());
+    }
     if let Some(path) = a.get(3) {
         script(&mut run, &std::fs::read_to_string(path).expect("the script"), frames);
     }
@@ -309,5 +319,8 @@ fn main() {
     let dir = std::path::PathBuf::from(std::env::var_os("HOME").unwrap()).join(".cache/emusen/probe/venusrt/dsp-hle");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join(format!("trace-{name}.txt")), out).unwrap();
+    if let Some(log) = &run.rec.mail_log {
+        std::fs::write(dir.join(format!("mail-{name}.txt")), log).unwrap();
+    }
     print!("{summary}");
 }

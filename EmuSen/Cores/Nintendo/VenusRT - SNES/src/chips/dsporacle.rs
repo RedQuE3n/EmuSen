@@ -128,38 +128,32 @@ impl Chip for Lle {
 #[derive(Clone)]
 pub struct Hle {
     pub dsp: super::dsphle::DspHle,
-    rqm: bool,
 }
 
 impl Hle {
     pub fn new(program: super::dsphle::Program) -> Hle {
-        Hle { dsp: super::dsphle::DspHle::new(program), rqm: false }
+        Hle { dsp: super::dsphle::DspHle::new(program) }
     }
 }
 
 impl Chip for Hle {
     fn tick(&mut self) -> Option<Edge> {
         let clock = ((self.dsp.cycles + 1) as u128 * self.dsp.ratio.1 as u128).div_ceil(self.dsp.ratio.0 as u128) as u64;
-        let dr = self.dsp.dr;
+        let edges = self.dsp.edges;
         self.dsp.run_to(clock);
-        let rose = self.dsp.sr & 0x8000 != 0 && (!self.rqm || self.dsp.dr != dr);
-        self.rqm = self.dsp.sr & 0x8000 != 0;
-        if !rose {
+        if self.dsp.edges == edges {
             return None;
         }
-        let place = if self.dsp.idle() { Place::Idle } else if self.dsp.reading_command() { Place::Command } else { Place::Other };
-        Some(Edge { write: (self.dsp.offering() || place == Place::Idle).then_some(self.dsp.dr), place })
+        let place = [Place::Idle, Place::Command, Place::Other][self.dsp.edge_place as usize];
+        Some(Edge { write: self.dsp.edge_write, place })
     }
 
     fn read(&mut self, port: Port) -> u8 {
-        let v = self.dsp.host_read(port, true);
-        self.rqm = self.dsp.sr & 0x8000 != 0;
-        v
+        self.dsp.host_read(port, true)
     }
 
     fn write(&mut self, port: Port, value: u8) {
         self.dsp.host_write(port, value);
-        self.rqm = self.dsp.sr & 0x8000 != 0;
     }
 
     fn status(&self) -> u8 {
@@ -217,12 +211,20 @@ pub struct Host {
     pub max_steps: usize,
     /// The word written when the chip asks for more inputs than the case gave.
     pub filler: u16,
+    /// One transfer, by its index, answered after this many cycles in place of the drawn answer.
+    pub late_at: Option<(usize, u32)>,
+    /// Transfers, by index, answered with a write although the chip wrote: the DSP-4 takes its first input over the
+    /// word it offers after a command (VenusRT_Native.md §45).
+    pub write_over: u64,
+    /// The DSP-3's decoder: a rise with USF1 set is answered with a write, whatever the chip did (fullsnes, "USF1 bit
+    /// in SR register = direction").
+    pub usf1_writes: bool,
 }
 
 impl Host {
     /// A poll loop's response, fixed: 8 cycles to the first byte, 3 between a word's bytes.
     pub fn steady() -> Host {
-        Host { respond: (8, 8), gap: (3, 3), rng: Pcg::new(0), cap: 4_000_000, max_steps: 4096, filler: 0 }
+        Host { respond: (8, 8), gap: (3, 3), rng: Pcg::new(0), cap: 4_000_000, max_steps: 4096, filler: 0, late_at: None, write_over: 0, usf1_writes: false }
     }
 
     /// A response drawn anew at each transfer, for the phase check.
@@ -418,7 +420,10 @@ pub fn transact<C: Chip>(chip: &mut C, host: &mut Host, command: u8, inputs: &[u
         let Some((latency, edge, sr_rise)) = wait_rise(chip, host.cap) else {
             return Transaction { command, steps, end: End::Stalled };
         };
-        let respond = host.draw(host.respond);
+        let respond = match host.late_at {
+            Some((k, d)) if k == steps.len() => d,
+            _ => host.draw(host.respond),
+        };
         let (late, late_edges) = run(chip, respond);
         let edge = late.unwrap_or(edge);
         if edge.place == Place::Idle {
@@ -431,7 +436,8 @@ pub fn transact<C: Chip>(chip: &mut C, host: &mut Host, command: u8, inputs: &[u
             return Transaction { command, steps, end: End::Capped };
         }
         let sr_access = chip.status();
-        let (dir, value, bytes, gap) = match edge.write {
+        let over = steps.len() < 64 && host.write_over >> steps.len() & 1 != 0 || host.usf1_writes && sr_rise & 0x40 != 0;
+        let (dir, value, bytes, gap) = match edge.write.filter(|_| !over) {
             None => {
                 let v = *next.next().unwrap_or(&host.filler);
                 let (b, g) = put(chip, host, v);
@@ -474,6 +480,42 @@ pub fn timing<C: Chip + Clone>(idle: &C, host: &Host, command: u8, inputs: &[u16
             .map(|((l, notice), a)| Phase { work: if l > notice { l + a } else { 0 }, notice })
             .collect(),
     )
+}
+
+/// One phase's timing with whether the chip waits for the S-CPU at all: a phase that does not wait makes its edge
+/// `work` cycles after the previous one whatever the S-CPU has done (VenusRT_Native.md §37.3, §42).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Handshake {
+    pub work: u32,
+    pub notice: u32,
+    pub waits: bool,
+}
+
+/// Each phase's work, notice and wait: a run answering at `FASTEST`, then one per phase whose answer to that phase
+/// comes `late` cycles after its rise. An edge before that answer marks a phase that does not wait, its work the
+/// fast run's latency plus answer; None when the fast run does not end at idle or its transfers move under the
+/// late answers in a way the three numbers do not describe.
+pub fn handshakes<C: Chip + Clone>(idle: &C, host: &Host, command: u8, inputs: &[u16], late: u32) -> Option<Vec<Handshake>> {
+    let quick = Host { respond: (FASTEST.0, FASTEST.0), gap: (FASTEST.1, FASTEST.1), late_at: None, ..host.clone() };
+    let fast = transact(&mut idle.clone(), &mut quick.clone(), command, inputs);
+    if !matches!(fast.end, End::Idle { .. } | End::Ignored) || fast.steps.iter().any(|s| s.late_edges > 0) {
+        return None;
+    }
+    let lat = fast.latencies();
+    let answers: Vec<u32> = std::iter::once(0).chain(fast.steps.iter().map(|s| s.answer)).collect();
+    let mut out = vec![Handshake { work: 0, notice: lat[0], waits: true }];
+    for k in 0..fast.steps.len() {
+        let slow = transact(&mut idle.clone(), &mut Host { late_at: Some((k, late)), ..quick.clone() }, command, inputs);
+        let (l, a) = (*lat.get(k + 1)?, answers[k + 1]);
+        let early_end = slow.steps.len() == k && matches!(slow.end, End::Idle { .. } | End::Ignored);
+        if early_end || slow.steps.get(k)?.late_edges > 0 {
+            out.push(Handshake { work: l + a, notice: 0, waits: false });
+        } else {
+            let notice = *slow.latencies().get(k + 1)?;
+            out.push(Handshake { work: if l > notice { l + a } else { 0 }, notice, waits: true });
+        }
+    }
+    Some(out)
 }
 
 /// The latencies the model gives for a run whose S-CPU answered each rise after the cycles in `answers`.
@@ -701,6 +743,139 @@ mod tests {
                     let e = x.outputs().iter().zip(y.outputs()).map(|(&a, b)| (a as i16 as i32 - b as i16 as i32).abs()).max().unwrap();
                     assert!(e <= bound, "{stem} {command:02X} case {k}: off by {e}");
                 }
+            }
+        }
+    }
+
+    // VenusRT_Native.md §42: the DSP-2's replacement against the image, values, transfers, SR and latency, under a
+    // steady S-CPU and a jittered one, each command after a colour; 0Dh's timing is an estimate, so only its values.
+    #[test]
+    fn the_dsp2_replacement_agrees_with_the_image() {
+        use super::super::dsphle::Program;
+        let Some(mut lle) = chip("dsp2") else { return };
+        let mut hle = Hle::new(Program::Dsp2);
+        power_on(&mut hle, &Host::steady()).unwrap();
+        let mut p = Pcg::new(0x42);
+        for command in [0x00u8, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0F, 0x2E, 0x3E, 0x15, 0xF9, 0x0D, 0x0E] {
+            if command == 0x0D {
+                // Its row buffer shares RAM other commands use, unmodelled (§42); the memory test, last, rewrites it all.
+                lle = chip("dsp2").unwrap();
+                hle = Hle::new(Program::Dsp2);
+                power_on(&mut hle, &Host::steady()).unwrap();
+            }
+            for k in 0..256u32 {
+                let mut set: Vec<u16> = (0..300).map(|_| p.word() & 0xFF).collect();
+                match command & 0x0F {
+                    0x02 | 0x06 => set[0] = 1 + set[0] % 255,
+                    0x05 => set[0] = 1 + set[0] % 80,
+                    0x0D => (set[0], set[1]) = (3 + set[0] % 206, 1 + set[1] % 208),
+                    _ => {}
+                }
+                let colour = [p.word() & 0xFF];
+                transact(&mut lle, &mut Host::steady(), 0x03, &colour);
+                transact(&mut hle, &mut Host::steady(), 0x03, &colour);
+                let mut host = if k % 2 == 0 { Host::steady() } else { Host::jittered(k as u64) };
+                let x = transact(&mut lle, &mut host.clone(), command, &set);
+                let y = transact(&mut hle, &mut host, command, &set);
+                let d = compare(&x, &y);
+                let d = if command == 0x0D { Difference { latency: false, status: false, ..d } } else { d };
+                assert!(!d.any(), "{command:02X} case {k}: {d:?}");
+            }
+        }
+    }
+
+    // VenusRT_Native.md §43: the ST010's replacement against the image through the mailbox, the whole RAM and the
+    // cycles to the busy bit's clearing, from a seeded phase; 07h and 08h, whose sine is a named loss, within one, and
+    // 07h's arrays, whose perspective is not modelled (§48.2), within 640.
+    #[test]
+    fn the_st010_replacement_agrees_with_the_image() {
+        use super::super::dsphle::Program;
+        let Some(mut lle) = chip("st010") else { return };
+        let mut hle = Hle::new(Program::St010);
+        st_ready(&mut hle, &mut Host::steady()).unwrap();
+        let mut p = Pcg::new(0x5710);
+        for command in [0x00u8, 0x02, 0x03, 0x04, 0x06, 0x0A, 0x1E, 0xF4, 0x07, 0x08] {
+            for _ in 0..256 {
+                let mut set: Vec<(usize, u16)> = (0..3).map(|w| (w, if p.next() % 2 == 0 { p.word() } else { p.word() & 0xFF })).collect();
+                set.push((0x12, (p.next() % 18) as u16));
+                set.extend((0..16).map(|k| (0x20 + k, p.word() & 0x0F)));
+                set.extend((0..16).map(|k| (0x40 + k, p.word())));
+                for _ in 0..p.next() % 9 {
+                    lle.tick();
+                    hle.tick();
+                }
+                let (x, y) = (mailbox(&mut lle, &mut Host::steady(), command, &set), mailbox(&mut hle, &mut Host::steady(), command, &set));
+                assert_eq!(x.latency, y.latency, "{command:02X} {set:04X?}");
+                for w in 0..x.ram.len() {
+                    let e = (x.ram[w] as i16 as i32 - y.ram[w] as i16 as i32).abs();
+                    let arrays = command == 0x07 && (0x78..0x338).contains(&w);
+                    assert!(e == 0 || matches!(command, 0x07 | 0x08) && e <= 1 || arrays && e <= 640, "{command:02X} word {w:03X} {set:04X?}");
+                }
+                // The approximate commands' results are not carried into the next case.
+                for w in 0..x.ram.len() {
+                    hle.dsp.ram[w] = x.ram[w];
+                }
+            }
+        }
+    }
+
+    // VenusRT_Native.md §44: Inverse within 2 with its timing exact; the DSP-1B's Distance within 4 below 2^30; the
+    // attitude family within 24 after an Attitude, against both images.
+    #[test]
+    fn the_replacements_approximate_commands_stay_within_their_bounds() {
+        use super::super::dsphle::Program;
+        for (stem, program) in [("dsp1", Program::Dsp1), ("dsp1b", Program::Dsp1b)] {
+            let Some(mut lle) = chip(stem) else { return };
+            let mut hle = Hle::new(program);
+            power_on(&mut hle, &Host::steady()).unwrap();
+            let mut p = Pcg::new(0x44);
+            for (command, bound) in [(0x10u8, 2), (0x28, 4), (0x0D, 24), (0x13, 24), (0x2B, 24)] {
+                // The DSP-1's own 28h, fullsnes's bug, is not modelled.
+                if command == 0x28 && program == Program::Dsp1 {
+                    continue;
+                }
+                for k in 0..1024u32 {
+                    let mut set: Vec<u16> = (0..8).map(|_| p.word()).collect();
+                    if command == 0x28 {
+                        set.iter_mut().for_each(|w| *w = (*w as i16 >> 2) as u16);
+                    }
+                    if command != 0x10 && command != 0x28 {
+                        let attitude = [p.word() >> 1, p.word(), p.word(), p.word()];
+                        let a = 0x01 | (command & 0x30);
+                        transact(&mut lle, &mut Host::steady(), a, &attitude);
+                        transact(&mut hle, &mut Host::steady(), a, &attitude);
+                    }
+                    let (x, y) = (transact(&mut lle, &mut Host::steady(), command, &set), transact(&mut hle, &mut Host::steady(), command, &set));
+                    assert!(!compare(&x, &y).shape, "{stem} {command:02X} case {k}");
+                    let e = x.outputs().iter().zip(y.outputs()).map(|(&a, b)| (a as i16 as i32 - b as i16 as i32).abs()).max().unwrap();
+                    assert!(e <= bound, "{stem} {command:02X} case {k}: off by {e}");
+                    if command == 0x10 {
+                        assert!(!compare(&x, &y).latency && x.outputs()[1] == y.outputs()[1], "{stem} 10 case {k}");
+                    }
+                }
+            }
+        }
+    }
+
+    // VenusRT_Native.md §48.3: the DSP-4's replacement against the image, its first input written over the chip's
+    // offer as Top Gear 3000 writes it; 00h whole, the commands without inputs whole on a fresh chip, the short ones
+    // in transfers alone.
+    #[test]
+    fn the_dsp4_replacement_agrees_with_the_image() {
+        use super::super::dsphle::Program;
+        let Some(mut lle) = chip("dsp4") else { return };
+        let mut hle = Hle::new(Program::Dsp4);
+        power_on(&mut hle, &Host::steady()).unwrap();
+        let mut p = Pcg::new(0x44);
+        for command in [0x00u8, 0x34, 0xE5, 0x03, 0x05, 0x06, 0x0E, 0x12, 0x14, 0x15, 0x1F, 0x0A, 0x0B, 0x11] {
+            for k in 0..256u32 {
+                let set: Vec<u16> = (0..8).map(|_| p.word()).collect();
+                let host = if k % 2 == 0 { Host::steady() } else { Host::jittered(k as u64) };
+                let mut host = Host { write_over: 1, ..host };
+                let (x, y) = (transact(&mut lle, &mut host.clone(), command, &set), transact(&mut hle, &mut host, command, &set));
+                let d = compare(&x, &y);
+                let whole = !matches!(command, 0x0A | 0x0B | 0x11);
+                assert!(!d.shape && (!whole || !d.any()), "{command:02X} case {k}: {d:?}");
             }
         }
     }

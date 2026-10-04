@@ -1,0 +1,267 @@
+# Dungeon Master: into the dungeon as dm.txt, then walking and turning with the pad.
+tapuntil start chip 50 - 4000 40
+frames 120
+tap up 8
+frames 40
+tap up 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap right 8
+frames 40
+tap right 8
+frames 40
+tap up 8
+frames 40
+tap down 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap a 8
+frames 40
+tap b 8
+frames 40
+tap up 8
+frames 40
+tap right 8
+frames 40
+tap up 8
+frames 40
+tap up 8
+frames 40
+tap left 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap x 8
+frames 40
+tap y 8
+frames 40
+tap up 8
+frames 40
+tap up 8
+frames 40
+tap up 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap right 8
+frames 40
+tap right 8
+frames 40
+tap up 8
+frames 40
+tap down 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap a 8
+frames 40
+tap b 8
+frames 40
+tap up 8
+frames 40
+tap right 8
+frames 40
+tap up 8
+frames 40
+tap up 8
+frames 40
+tap left 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap x 8
+frames 40
+tap y 8
+frames 40
+tap up 8
+frames 40
+tap up 8
+frames 40
+tap up 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap right 8
+frames 40
+tap right 8
+frames 40
+tap up 8
+frames 40
+tap down 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap a 8
+frames 40
+tap b 8
+frames 40
+tap up 8
+frames 40
+tap right 8
+frames 40
+tap up 8
+frames 40
+tap up 8
+frames 40
+tap left 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap x 8
+frames 40
+tap y 8
+frames 40
+tap up 8
+frames 40
+tap up 8
+frames 40
+tap up 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap right 8
+frames 40
+tap right 8
+frames 40
+tap up 8
+frames 40
+tap down 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap a 8
+frames 40
+tap b 8
+frames 40
+tap up 8
+frames 40
+tap right 8
+frames 40
+tap up 8
+frames 40
+tap up 8
+frames 40
+tap left 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap x 8
+frames 40
+tap y 8
+frames 40
+tap up 8
+frames 40
+tap up 8
+frames 40
+tap up 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap right 8
+frames 40
+tap right 8
+frames 40
+tap up 8
+frames 40
+tap down 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap a 8
+frames 40
+tap b 8
+frames 40
+tap up 8
+frames 40
+tap right 8
+frames 40
+tap up 8
+frames 40
+tap up 8
+frames 40
+tap left 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap x 8
+frames 40
+tap y 8
+frames 40
+tap up 8
+frames 40
+tap up 8
+frames 40
+tap up 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap right 8
+frames 40
+tap right 8
+frames 40
+tap up 8
+frames 40
+tap down 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap a 8
+frames 40
+tap b 8
+frames 40
+tap up 8
+frames 40
+tap right 8
+frames 40
+tap up 8
+frames 40
+tap up 8
+frames 40
+tap left 8
+frames 40
+tap left 8
+frames 40
+tap up 8
+frames 40
+tap x 8
+frames 40
+tap y 8
+frames 40
+tap up 8
+frames 40

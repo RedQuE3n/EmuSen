@@ -1,10 +1,11 @@
 //! The NEC DSP command oracle over the low-level path (VenusRT_Native.md §37): `dsp_oracle sweep <chip> [sets]`,
-//! `dsp_oracle versus <chip> <chip> [cases]`, `dsp_oracle latency <chip> [cases]`, `dsp_oracle tables` (the
+//! `dsp_oracle versus <chip> <chip> [cases]`, `dsp_oracle ask <chip> <command> <inputs...> [/ <command> ...]` (transactions in turn), `dsp_oracle latency <chip> [cases]`, `dsp_oracle tables` (the
 //! replacement's generated tables, for firmwarecheck.py). Images from EMUSEN_VENUSRT_FIRMWARE;
 //! full reports to ~/.cache/emusen/probe/venusrt/dsp-hle/, counts and cycles only on stdout.
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use venusrt::chips::dsporacle::*;
+use venusrt::chips::necdsp::Port;
 
 fn cache() -> std::path::PathBuf {
     let home = std::env::var_os("HOME").expect("HOME");
@@ -14,7 +15,10 @@ fn cache() -> std::path::PathBuf {
 }
 
 fn host() -> Host {
-    Host { cap: 2_000_000, max_steps: 1100, ..Host::steady() }
+    // ORACLE_WRITE_OVER, a bit mask in hex: the transfers answered with a write over the chip's word.
+    let write_over = std::env::var("ORACLE_WRITE_OVER").ok().and_then(|v| u64::from_str_radix(&v, 16).ok()).unwrap_or(0);
+    let usf1_writes = std::env::var_os("ORACLE_USF1_WRITES").is_some();
+    Host { cap: 2_000_000, max_steps: 1100, write_over, usf1_writes, ..Host::steady() }
 }
 
 fn idle(stem: &str, offset: u32, h: &mut Host) -> Lle {
@@ -376,10 +380,96 @@ fn main() {
         Some("tables") => {
             let path = cache().join("dsp1.tables.bin");
             std::fs::write(&path, venusrt::chips::dsphle::tables_image()).unwrap();
+            std::fs::write(cache().join("st010.tables.bin"), venusrt::chips::st010::sine_image()).unwrap();
             println!("{} bytes to {}", venusrt::chips::dsphle::tables_image().len(), path.display());
         }
         Some("rate") => rate(&a[2], u8::from_str_radix(&a[3], 16).unwrap(), num(4, 1 << 20)),
         Some("latency") => latency(&a[2], num(3, 256)),
+        Some("phases") => {
+            let set: Vec<u16> = a[4..].iter().map(|v| u16::from_str_radix(v, 16).unwrap()).collect();
+            let chip = idle(&a[2], 0, &mut host());
+            let t = transact(&mut chip.clone(), &mut host(), u8::from_str_radix(&a[3], 16).unwrap(), &set);
+            match handshakes(&chip, &host(), u8::from_str_radix(&a[3], 16).unwrap(), &set, 30_000) {
+                None => println!("{}: not described", shape_runs(&t.shape())),
+                Some(h) => {
+                    let cells: Vec<String> = h.iter().map(|p| if p.waits { format!("{}/{}", p.work, p.notice) } else { format!("{}!", p.work) }).collect();
+                    println!("{}: {}", shape_runs(&t.shape()), compress(&cells));
+                }
+            }
+        }
+        Some("batch") => {
+            // One case a line on stdin, its input words in hex; per line its outputs, end and phases.
+            use std::io::BufRead;
+            let chip = idle(&a[2], 0, &mut host());
+            let command = u8::from_str_radix(&a[3], 16).unwrap();
+            for line in std::io::stdin().lock().lines() {
+                let set: Vec<u16> = line.unwrap().split_whitespace().map(|v| u16::from_str_radix(v, 16).unwrap()).collect();
+                let t = transact(&mut chip.clone(), &mut host(), command, &set);
+                let h = handshakes(&chip, &host(), command, &set, 30_000).map(|h| {
+                    let cells: Vec<String> = h.iter().map(|p| if p.waits { format!("{}/{}", p.work, p.notice) } else { format!("{}!", p.work) }).collect();
+                    compress(&cells)
+                });
+                let end = match t.end { End::Idle { value, .. } => format!("{value:04X}"), e => format!("{e:?}") };
+                println!("{} | {} | {end} | {}", shape_runs(&t.shape()), t.outputs().iter().map(|v| format!("{v:02X}")).collect::<Vec<_>>().join(" "), h.unwrap_or_default());
+            }
+        }
+        Some("mailbatch") => {
+            // One ST010 case a line on stdin, `word=value` pairs in hex, each from the same idle chip; per line the cycles
+            // and every word that changed.
+            use std::io::BufRead;
+            let chip = idle("st010", 0, &mut host());
+            let command = u8::from_str_radix(&a[2], 16).unwrap();
+            for line in std::io::stdin().lock().lines() {
+                let set: Vec<(usize, u16)> = line.unwrap().split_whitespace().map(|kv| {
+                    let (k, v) = kv.split_once('=').unwrap();
+                    (usize::from_str_radix(k, 16).unwrap(), u16::from_str_radix(v, 16).unwrap())
+                }).collect();
+                let mut before = chip.dsp.ram.to_vec();
+                for &(w, v) in &set {
+                    before[w] = v;
+                }
+                let m = mailbox(&mut chip.clone(), &mut host(), command, &set);
+                let changed: Vec<String> = (0..m.ram.len()).filter(|&w| w != 0x10 && m.ram[w] != before[w]).map(|w| format!("{w:03X}={:04X}", m.ram[w])).collect();
+                println!("{} | {}", m.latency.map_or(-1, |l| l as i64), changed.join(" "));
+            }
+        }
+        Some("mail") => {
+            // An ST010 command through its mailbox, with RAM words set as word=value (hex); prints the cycles and every
+            // word that changed. MAIL_FILL=seed fills the other words first.
+            let mut chip = idle("st010", 0, &mut host());
+            let mut fill: Vec<(usize, u16)> = match std::env::var("MAIL_FILL").ok().and_then(|v| v.parse().ok()) {
+                Some(seed) => {
+                    let mut p = Pcg::new(seed);
+                    (0..0x800).map(|w| (w, p.word())).filter(|&(w, _)| w != 0x10).collect()
+                }
+                None => Vec::new(),
+            };
+            for part in a[2..].split(|w| w == "/") {
+                let command = u8::from_str_radix(&part[0], 16).unwrap();
+                let set: Vec<(usize, u16)> = part[1..].iter().map(|kv| {
+                    let (k, v) = kv.split_once('=').unwrap();
+                    (usize::from_str_radix(k, 16).unwrap(), u16::from_str_radix(v, 16).unwrap())
+                }).collect();
+                fill.extend(set);
+                for _ in 0..std::env::var("MAIL_DELAY").ok().and_then(|v| v.parse().ok()).unwrap_or(0u32) {
+                    chip.tick();
+                }
+                let before = { let mut c = chip.clone(); for &(w, v) in &fill { c.write(Port::Ram(w * 2), v as u8); c.write(Port::Ram(w * 2 + 1), (v >> 8) as u8); } c.dsp.ram.to_vec() };
+                let m = mailbox(&mut chip, &mut host(), command, &fill);
+                fill.clear();
+                let changed: Vec<String> = (0..m.ram.len()).filter(|&w| w != 0x10 && m.ram[w] != before[w]).map(|w| format!("{w:03X}={:04X}", m.ram[w])).collect();
+                println!("{command:02X}: {:?} cycles; {} words changed: {}", m.latency, changed.len(), changed.join(" "));
+            }
+        }
+        Some("ask") => {
+            let mut chip = idle(&a[2], 0, &mut host());
+            for part in a[3..].split(|w| w == "/") {
+                let set: Vec<u16> = part[1..].iter().map(|v| u16::from_str_radix(v, 16).unwrap()).collect();
+                let t = transact(&mut chip, &mut host(), u8::from_str_radix(&part[0], 16).unwrap(), &set);
+                let sr: Vec<String> = t.steps.iter().map(|s| format!("{:02X}/{:02X}", s.sr_rise, s.sr_access)).collect();
+                println!("{} out {:04X?} lat {:?} end {:?} sr {}", shape_runs(&t.shape()), t.outputs(), t.latencies(), t.end, compress(&sr));
+            }
+        }
         _ => eprintln!("dsp_oracle sweep <chip> [sets] | versus <chip> <chip> [cases] | latency <chip> [cases]"),
     }
 }

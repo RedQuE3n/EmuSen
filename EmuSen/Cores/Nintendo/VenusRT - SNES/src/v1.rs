@@ -65,21 +65,24 @@ fn boot() -> Firmware {
 
 /// What running without the image costs, chip by chip (VenusRT_DspHle.md §5.5), in words a player reads.
 fn replacement(stem: Option<&str>) -> Replacement {
-    let partial = |chip: &str, exact: &str| Replacement::Accuracy {
-        cost: format!("Without the image, VenusRT's open replacement for the {chip} runs: its ports and timing as the chip's, but of its commands only {exact} answer exactly yet, so the game's results are wrong (VenusRT_DspHle.md §5.5)."),
-    };
     let without = |chip: &str| Replacement::None { cost: format!("VenusRT has no replacement for the {chip} yet: without the image the game runs without its chip.") };
     match stem {
         Some("dsp1") | Some("dsp1b") => Replacement::Accuracy {
             cost: "Without the image, VenusRT's open replacement for the DSP-1 runs: its ports and timing as the chip's, Multiply, Radius, Range, the memory test and the ROM version exact, Triangle, Rotate and Polar within a few units, and its other commands not computed yet, so 3D results are wrong (VenusRT_DspHle.md §5.5).".into(),
         },
-        Some("dsp2") => partial("DSP-2", "the no-op 0Fh"),
-        Some("st010") => partial("ST010", "00h"),
+        Some("dsp2") => Replacement::Accuracy {
+            cost: "Without the image, VenusRT's open replacement for the DSP-2 runs: every command Dungeon Master gives answers as the chip does, to the cycle, and the game runs as with the image; the data ROM transfer gives zeros, the scaling command's timing is estimated, and counts beyond the chip's buffers are not reproduced (VenusRT_Native.md §42).".into(),
+        },
+        Some("st010") => Replacement::Accuracy {
+            cost: "Without the image, VenusRT's open replacement for the ST010 runs: its mailbox to the cycle, the sort, scale, distance and multiply commands exact, the rotation command within one unit, the raster command without its perspective, and the driver simulation not computed yet, so the opponents' cars do not move as with the image; the battery file is the same on both (VenusRT_Native.md §43).".into(),
+        },
         Some("dsp3") => without("DSP-3"),
-        Some("dsp4") => without("DSP-4"),
+        Some("dsp4") => Replacement::Accuracy {
+            cost: "Without the image, VenusRT's open replacement for the DSP-4 runs its protocol and multiply command, but not the road and scenery commands, so Top Gear 3000 runs its menus as with the image but its race screen stays black (VenusRT_Native.md §48.3).".into(),
+        },
         Some(_) => without("ST011"),
         None => Replacement::Accuracy {
-            cost: "Without the image, VenusRT runs its open replacement for the DSP-1, DSP-2 or ST010, whose commands are not all computed yet, and a DSP-3, DSP-4 or ST011 game runs without its chip (VenusRT_DspHle.md §5.5).".into(),
+            cost: "Without the image, VenusRT runs its open replacement for the DSP-1, DSP-2, DSP-4 or ST010, whose commands are not all computed yet, and a DSP-3 or ST011 game runs without its chip (VenusRT_DspHle.md §5.5).".into(),
         },
     }
 }
@@ -243,7 +246,7 @@ impl Core for Machine {
                 .collect(),
             processors: self.processors(),
             battery: vec![Battery { which: 0, suffix: ".srm".into() }],
-            state: StateFormat { format: "VNRT".into(), version: STATE_VERSION as i64, loads_from: vec![17, 18, 19, STATE_VERSION as i64] },
+            state: StateFormat { format: "VNRT".into(), version: STATE_VERSION as i64, loads_from: vec![17, 18, 19, 20, STATE_VERSION as i64] },
             phases: Vec::new(),
             patches: Some((0, 0xFF_FFFF)),
             skip_rendering_state_neutral: true,
@@ -536,7 +539,7 @@ mod tests {
             let doc = emusen_native::core::desc::firmware_json(&list);
             assert_eq!(emusen_native::core::schema::validate(emusen_native::core::schema::FIRMWARE, &doc), Vec::<String>::new());
         }
-        assert!(matches!(<Machine as Core>::firmware_for(&dsp_cartridge(b"TOP GEAR 3000", 0x03))[1].replacement, Some(Replacement::None { .. })));
+        assert!(matches!(<Machine as Core>::firmware_for(&dsp_cartridge(b"TOP GEAR 3000", 0x03))[1].replacement, Some(Replacement::Accuracy { .. })));
         assert!(<Machine as Core>::info().systems[0].firmware.iter().all(|f| !f.required && f.replacement.is_some()));
         let kart = create(&dsp_cartridge(b"SUPER MARIO KART", 0x05), Vec::new()).unwrap();
         assert_eq!(kart.sys.cart.dsp.as_ref().map(|(d, _)| d.tag()), Some(1));
@@ -546,8 +549,11 @@ mod tests {
         let lle = create(&dsp_cartridge(b"SUPER MARIO KART", 0x05), vec![File { which: 2, data: &image }]).unwrap();
         assert_eq!(Core::machine_info(&lle).firmware, vec![(1, FirmwareSource::Replacement), (2, FirmwareSource::File)]);
         let tg = create(&dsp_cartridge(b"TOP GEAR 3000", 0x03), Vec::new()).unwrap();
-        assert!(tg.sys.cart.dsp.is_none());
-        assert_eq!(Core::machine_info(&tg).firmware, vec![(1, FirmwareSource::Replacement), (2, FirmwareSource::Absent)]);
+        assert_eq!(tg.sys.cart.dsp.as_ref().map(|(d, _)| d.tag()), Some(1));
+        assert_eq!(Core::machine_info(&tg).firmware, vec![(1, FirmwareSource::Replacement), (2, FirmwareSource::Replacement)]);
+        let gundam = create(&dsp_cartridge(b"SD GUNDAM GX", 0x03), Vec::new()).unwrap();
+        assert!(gundam.sys.cart.dsp.is_none());
+        assert_eq!(Core::machine_info(&gundam).firmware, vec![(1, FirmwareSource::Replacement), (2, FirmwareSource::Absent)]);
         assert_eq!(Core::machine_info(&machine()).firmware, vec![(1, FirmwareSource::Replacement)]);
     }
 
@@ -570,6 +576,36 @@ mod tests {
         Core::reset(&mut m).unwrap();
         assert!(m.sys.apu.boot_file && m.sys.apu.boot == image);
         assert!(!create(&rom, Vec::new()).unwrap().sys.apu.boot_file);
+    }
+
+    // VenusRT_Native.md §43: the ST010's battery file is its RAM on either engine, so a file one engine wrote is the
+    // RAM the other runs from; the image's engine runs only with an image (EMUSEN_VENUSRT_FIRMWARE).
+    #[test]
+    fn the_st010_battery_file_reads_alike_on_either_engine() {
+        let cart = dsp_cartridge(b"F1 ROC II", 0xF6);
+        let file: Vec<u8> = (0..4096u32).map(|i| (i.wrapping_mul(2654435761) >> 13) as u8).collect();
+        let hle = create(&cart, vec![File { which: 0, data: &file }]).unwrap();
+        assert_eq!(hle.sys.cart.dsp.as_ref().map(|(d, _)| d.tag()), Some(1));
+        assert_eq!(hle.battery_bytes(), &file[..]);
+        let Some(image) = crate::chips::dsporacle::firmware("st010") else { return };
+        let lle = create(&cart, vec![File { which: 0, data: hle.battery_bytes() }, File { which: 2, data: &image }]).unwrap();
+        assert_eq!(lle.sys.cart.dsp.as_ref().map(|(d, _)| d.tag()), Some(0));
+        assert_eq!(lle.battery_bytes(), hle.battery_bytes());
+        let again = create(&cart, vec![File { which: 0, data: lle.battery_bytes() }]).unwrap();
+        assert_eq!(again.battery_bytes(), &file[..]);
+    }
+
+    // VenusRT_Native.md §48.1: version 20 is stage 8's; a replacement's state from before 21 is refused with VERSION,
+    // since its layout cannot be told from that version alone.
+    #[test]
+    fn a_replacement_state_before_version_21_is_refused() {
+        let cart = dsp_cartridge(b"DUNGEON MASTER", 0x03);
+        let mut m = create(&cart, Vec::new()).unwrap();
+        Core::advance(&mut m, &mut 0).unwrap();
+        let mut old = state(&m);
+        old[4..8].copy_from_slice(&20i32.to_le_bytes());
+        let err = m.load_state(&old).unwrap_err();
+        assert_eq!(emusen_native::ffi::Status::status(&err), emusen_native::ffi::status::VERSION);
     }
 
     // A state names the engine that wrote it, and the other engine refuses it with its own status.

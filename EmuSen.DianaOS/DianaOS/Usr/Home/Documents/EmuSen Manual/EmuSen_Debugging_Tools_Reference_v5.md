@@ -86,6 +86,21 @@ To actually see any of this output, turn `MasterLoggingEnabled` on first (it's o
 
 **`FlushIntervalMs` is damage control for ungraceful exits, not the durability guarantee.** Every category is flushed on a fixed timer — often enough that a hard kill, a native segfault, or a `Ctrl+C` skipping .NET's unwind loses at most a fraction of a second, rare enough to be nowhere near `AutoFlush`'s per-line cost. It exists because a real session lost a whole run's output: without a timer, only categories high-volume enough to fill their own internal buffer ever reached disk at all. `Dispose`'s drain-then-flush remains the real guarantee for a graceful shutdown, and the consumer thread is **background** so a caller that skips `Dispose` can never be the reason the process will not exit.
 
+**A fourth finding, 2026-10-04: `Dispose` closed the queue under a worker it had stopped waiting for.** `Dispose`
+waits five seconds for the worker to drain and then, drained or not, disposed the `BlockingCollection`. A worker that
+had not finished in those five seconds was still in its loop, and its next `IsCompleted` threw
+`ObjectDisposedException` on a background thread, which ends the process. The window is narrow on an idle machine and
+wide on a starved one: the WiseMan test host, run at `nice 19` beside sixteen busy loops (§3.62), died of exactly
+this exception after 722 tests, with the worker's stack in the crash dump at `ConsumeQueue`, line 101. Mistress
+disposes the writer every time a game loads after another (`StartLogging` calls `StopLogging`), so a player on a slow
+or busy machine could meet it on loading a second game with verbose logging behind. **The rule now:** whichever of
+the two finishes last closes the files and the queue. The worker, leaving its loop, marks itself done; `Dispose`,
+giving up, marks that it gave up; an interlocked exchange decides who saw the other's mark and closes everything, so
+it happens exactly once. A worker left draining therefore finishes and closes its files, rather than dying with them
+unflushed. `CategorizedLogWriterTests` holds the worker's first console write until after `Dispose` has given up and
+then lets it go; before the change the test host crashes with the same exception, after it the general log holds both
+lines. It takes the full five seconds, since the wait is not a parameter.
+
 ## 3. The reusable debug toolchain
 
 This is the newer, generalized layer — built specifically so it isn't SNES-only, and so the same code can eventually back a GUI debug window, not just console printouts. **Standing policy going forward: if something built for one investigation seems logical and reusable, it goes in here rather than staying a one-off `DebugSettings` flag.**

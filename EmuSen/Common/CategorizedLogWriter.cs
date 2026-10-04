@@ -33,6 +33,10 @@ namespace EmuSen.Common
         private readonly BlockingCollection<LogEntry> _queue = new(QueueCapacity);
         private readonly Thread _worker;
 
+        // Who closes the files and the queue: the worker when Dispose gave up waiting for it, else Dispose - see §2.1.
+        private const int Running = 0, WorkerDone = 1, DisposeGaveUp = 2;
+        private int _ending;
+
         // Every tag is a distinct literal, so first match wins and order does not matter.
         private static readonly (string Prefix, string Category)[] Routes =
         {
@@ -112,6 +116,15 @@ namespace EmuSen.Common
                     sinceLastFlush.Restart();
                 }
             }
+
+            if (Interlocked.Exchange(ref _ending, WorkerDone) == DisposeGaveUp) CloseAll();
+        }
+
+        private void CloseAll()
+        {
+            foreach (var file in _files.Values) file.Dispose();
+            _general.Dispose();
+            _queue.Dispose();
         }
 
         private void FlushAllFiles()
@@ -164,17 +177,12 @@ namespace EmuSen.Common
                 _queue.CompleteAdding();
                 bool drained = _worker.Join(TimeSpan.FromSeconds(5));
 
-                if (drained)
-                {
-                    foreach (var file in _files.Values) file.Dispose();
-                    _general.Dispose();
-                }
+                if (drained || Interlocked.Exchange(ref _ending, DisposeGaveUp) == WorkerDone) CloseAll();
                 else
                 {
-                    // Straight to the console: the worker that would drain the queue is what failed.
-                    _console.WriteLine("[LOG] Warning: background log writer did not finish draining within 5s; some log output may be incomplete.");
+                    // Straight to the console; the worker, still draining, closes everything when it ends.
+                    _console.WriteLine("[LOG] Warning: background log writer did not finish draining within 5s; it closes the files when it does.");
                 }
-                _queue.Dispose();
             }
             base.Dispose(disposing);
         }

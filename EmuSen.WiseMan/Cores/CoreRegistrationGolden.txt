@@ -218,6 +218,7 @@ built.factory[SNES plain Venus (C#)].file = Home/Saves/SNES/Game.srm 131072 5c76
 built.factory[SNES plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[SNES plain VenusRT (Rust)].supported = True
 built.factory[SNES plain VenusRT (Rust)].probe = CoreEngine
+built.factory[SNES plain VenusRT (Rust)].firmware = VenusRT | The SPC700's boot program (64 bytes) | spc700.rom | 64 | optional | [] | [[spc700.rom]]
 built.factory[SNES plain VenusRT (Rust)].core = CoreEngine
 built.factory[SNES plain VenusRT (Rust)].notice = <null>
 built.factory[SNES plain VenusRT (Rust)].debug-target = CoreDebugTarget
@@ -227,7 +228,7 @@ built.factory[SNES plain VenusRT (Rust)].codec-explicit = Game Genie | RomPatch 
 built.factory[SNES plain VenusRT (Rust)].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
 built.factory[SNES plain VenusRT (Rust)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
 built.factory[SNES plain VenusRT (Rust)].axes = []
-built.factory[SNES plain VenusRT (Rust)].state-version = 17
+built.factory[SNES plain VenusRT (Rust)].state-version = 19
 built.factory[SNES plain VenusRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[SNES plain VenusRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[SNES plain VenusRT (Rust)].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
@@ -282,6 +283,7 @@ built.factory[SNES battery Venus (C#)].file = Home/Saves/SNES/Game.srm 2048 d54d
 built.factory[SNES battery Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 built.factory[SNES battery VenusRT (Rust)].supported = True
 built.factory[SNES battery VenusRT (Rust)].probe = CoreEngine
+built.factory[SNES battery VenusRT (Rust)].firmware = VenusRT | The SPC700's boot program (64 bytes) | spc700.rom | 64 | optional | [] | [[spc700.rom]]
 built.factory[SNES battery VenusRT (Rust)].core = CoreEngine
 built.factory[SNES battery VenusRT (Rust)].notice = <null>
 built.factory[SNES battery VenusRT (Rust)].debug-target = CoreDebugTarget
@@ -291,7 +293,7 @@ built.factory[SNES battery VenusRT (Rust)].codec-explicit = Game Genie | RomPatc
 built.factory[SNES battery VenusRT (Rust)].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
 built.factory[SNES battery VenusRT (Rust)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
 built.factory[SNES battery VenusRT (Rust)].axes = []
-built.factory[SNES battery VenusRT (Rust)].state-version = 17
+built.factory[SNES battery VenusRT (Rust)].state-version = 19
 built.factory[SNES battery VenusRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 built.factory[SNES battery VenusRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 built.factory[SNES battery VenusRT (Rust)].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
@@ -2118,6 +2120,7 @@ off.factory[SNES plain Venus (C#)].file = Home/Saves/SNES/Game.srm 131072 5c76bf
 off.factory[SNES plain Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[SNES plain VenusRT (Rust)].supported = True
 off.factory[SNES plain VenusRT (Rust)].probe = CoreEngine
+off.factory[SNES plain VenusRT (Rust)].firmware = VenusRT | The SPC700's boot program (64 bytes) | spc700.rom | 64 | optional | [] | [[spc700.rom]]
 off.factory[SNES plain VenusRT (Rust)].core = CoreEngine
 off.factory[SNES plain VenusRT (Rust)].notice = <null>
 off.factory[SNES plain VenusRT (Rust)].debug-target = CoreDebugTarget
@@ -2127,7 +2130,7 @@ off.factory[SNES plain VenusRT (Rust)].codec-explicit = Game Genie | RomPatch | 
 off.factory[SNES plain VenusRT (Rust)].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
 off.factory[SNES plain VenusRT (Rust)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
 off.factory[SNES plain VenusRT (Rust)].axes = []
-off.factory[SNES plain VenusRT (Rust)].state-version = 17
+off.factory[SNES plain VenusRT (Rust)].state-version = 19
 off.factory[SNES plain VenusRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[SNES plain VenusRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 off.factory[SNES plain VenusRT (Rust)].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b
@@ -2182,6 +2185,7 @@ off.factory[SNES battery Venus (C#)].file = Home/Saves/SNES/Game.srm 2048 d54dc5
 off.factory[SNES battery Venus (C#)].file = Roms/Game.srm 64 cc7321cce5e4409b
 off.factory[SNES battery VenusRT (Rust)].supported = True
 off.factory[SNES battery VenusRT (Rust)].probe = CoreEngine
+off.factory[SNES battery VenusRT (Rust)].firmware = VenusRT | The SPC700's boot program (64 bytes) | spc700.rom | 64 | optional | [] | [[spc700.rom]]
 off.factory[SNES battery VenusRT (Rust)].core = CoreEngine
 off.factory[SNES battery VenusRT (Rust)].notice = <null>
 off.factory[SNES battery VenusRT (Rust)].debug-target = CoreDebugTarget
@@ -2191,7 +2195,7 @@ off.factory[SNES battery VenusRT (Rust)].codec-explicit = Game Genie | RomPatch 
 off.factory[SNES battery VenusRT (Rust)].identity = VenusRT 256x224 60.098813897440515 Hz 32000 loaded=True frames=0
 off.factory[SNES battery VenusRT (Rust)].buttons = [B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R]
 off.factory[SNES battery VenusRT (Rust)].axes = []
-off.factory[SNES battery VenusRT (Rust)].state-version = 17
+off.factory[SNES battery VenusRT (Rust)].state-version = 19
 off.factory[SNES battery VenusRT (Rust)].features = EngineFeatures { RewindCapture = True, RewindWithheld =  }
 off.factory[SNES battery VenusRT (Rust)].file = Home/Saves/Game.srm 64 cc7321cce5e4409b
 off.factory[SNES battery VenusRT (Rust)].file = Home/Saves/SNES/Game.srm 64 cc7321cce5e4409b

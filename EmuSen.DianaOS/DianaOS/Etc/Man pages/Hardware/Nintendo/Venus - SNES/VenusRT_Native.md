@@ -3645,3 +3645,32 @@ the derivative from a second table, with a floor's bias. **The widened family**,
 
 That is 3·2^7 = 384 members, under 9 bits, with cos θ = sin(θ + 2^14). No further widening follows. If no member
 agrees on every case, the DSP-1's sine is a named loss under R4, and Triangle, Rotate and Polar become approximate.
+
+### 40.3 The sine closed, Rotate chosen, and Polar widened once, in writing
+
+**The sine is a named loss under R4, as §40.2 declared.** The 192 widened members graded over the same 589,824 cases.
+The closest agreed on 250,863 (42.5%) and differed by up to ±10 at full radius: N = 256, amplitude 2^15 saturated,
+both tables floored and quarter-mirrored, the step half up, the product floored. It resets at the right segments but
+not to the chip's values. The DSP-1's sine is therefore not reproduced from documents. Its error pattern, a table at
+256 points with a first-order step, is recorded as a structure, and no further member is tried. Triangle, Rotate and
+Polar become **approximate**. The replacement uses that closest member, generated in `dsphle.rs` from its formula, and
+the tables are checked word for word against `dsp1_tables.py`.
+
+**Rotate's variants (§40.1) were graded with that sine.** The criterion is the share of cases within Triangle's
+bound, a difference of 12, since exact agreement is impossible with an inexact sine. Over 65,536 seeded cases, one
+member agreed in 65,496 (99.94%): the SNESdev matrix read literally with the row vector on the left, so
+x2 = x·cos + y·sin and y2 = -x·sin + y·cos; the exact sum scaled once; wrap. The 40 left differ where the sum sits at
+16-bit overflow. The counter-clockwise sense of SnesLab's prose agreed in 13 to 14 cases. So SnesLab's word describes
+the angle's other sign, or the S-CPU's view of the screen.
+
+**Polar's 16 members all failed**, and they fail with structure, not noise. With coordinates under 2^11, so that no
+member overflows, the best agreed within 12 on 341 of 16,384 cases, and errors ran into the thousands. The order or
+the assignment of the angles is wrong, not the arithmetic. **Polar's family is widened once**, with the reason that
+SNESdev's own labels conflict: "Angle In: XYZ (I1, I2, I3)" against an equation that puts I1 in the matrix about Z.
+
+- **The widened family**: every order of the three axis rotations (6), every assignment of I1, I2 and I3 to the axes
+  (6), and each matrix as written or transposed (2).
+- **Fixed by Rotate's choice**: the row vector on the left, the exact sum scaled once, wrap.
+
+That is 72 members, about 6 bits. If none agrees within 64 on nearly every small-coordinate case, Polar is approximate
+by SNESdev's literal reading.

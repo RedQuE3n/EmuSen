@@ -4227,8 +4227,8 @@ library, so only the command oracle can answer.
   further inputs, as variable-length codes would need.
 - **The opening run's length depends on the stream's content.** Over four seeded streams it was 52, 49, 47 and 90
   words before the first symbol. Two streams that differed only after their hundredth word gave the same opening run
-  and the same first twenty symbols. Two streams that differed only in their first word did too, so the first word is
-  not part of it.
+  and the same first twenty symbols. So did two streams that shared words 1 to 59 and differed in their first word
+  and after their sixtieth: the first word is not part of the preamble.
 
 **The answer, argued.** A decoder whose code table were fixed in its data ROM would have no reason to read a
 preamble whose length depends on its content. A preamble read until its own structure ends is how a transmitted code

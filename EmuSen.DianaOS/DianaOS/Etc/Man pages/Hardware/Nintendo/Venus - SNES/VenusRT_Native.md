@@ -5044,3 +5044,30 @@ horizon where Les·cot z puts it. That is a named loss, measured in the grade an
 costs: Lock On's and Ballz 3D's every Parameter is past the limit, and 190 of Pilotwings' 600; Super Mario Kart's,
 Suzuka 8 Hours', Michael Andretti's Indy Car Challenge's and Super Bases Loaded 2's never are. Whether to admit the
 one threshold, as §40.6 admitted a second widening, is the tester's decision, put in §49 after the games are measured.
+
+### 49.4 Project's family widened once, in writing (plan §5.2, rule 4)
+
+The first grading (`dsp_projection`, 2^16 seeded cases and the seven traces) left Parameter and Raster close
+wherever the limit branch is not reached. Two corrections to the grader came first, neither a model change: a traced
+Raster run's last line is where the game writes its terminator over the results, so it is not graded; and Pilotwings'
+Parameter failures are all past the limit (§49.3).
+
+**Project was not.** Its best member was close in 98% of Super Mario Kart's results but 67% of Michael Andretti's
+Indy Car Challenge's, whose eye sits 24 units behind F at a height near 10. The errors have structure:
+
+- The image's M is 256·Les over a whole number. In that game's cases (Les = 96) it is 24,576/w for w = 23, 11, 8, 4,
+  2 and -1, so w = d·f is taken whole before the reciprocal. No member of §49.2 does that while carrying the eye's
+  height with its fraction.
+- F itself projects to V = 0 on the image, and to V = -4 with the eye's height taken whole (9.98 floored to 9). The
+  image's H for F is 0 or ±3 as Aas changes by 40 steps, which a whole horizontal eye position gives.
+
+The family for Project is widened once, by two choices, before they are graded:
+
+- **J3, Project's eye**, independently of S1 and P1: its height whole or with 15 fraction bits, and its horizontal
+  position whole (P1's) or with 15 fraction bits, from F - Lfe·f with f's elements as J1 gives them (4).
+- **J4, w**: taken whole (floored) before the reciprocal, or not (2).
+
+With J1 and J2, Project has 32 members of its own, and the whole family 48·32 = 1,536 members, about 10.6 bits, still
+chosen as one implementation. The member chosen is the one with the most close results over both sets together. If no
+member is close on nearly all of a game's traced Project results below the limit, the remainder is recorded as the
+sine's and this structure's joint error, with no further widening.

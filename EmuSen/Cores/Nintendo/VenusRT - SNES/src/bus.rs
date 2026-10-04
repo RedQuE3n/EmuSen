@@ -60,8 +60,12 @@ pub fn irq_line_point(htime: u16) -> u16 {
 }
 
 pub const JOYPAD_AT: u16 = 298;
+/// Where in line 0 the 65C816's first cycle begins, the master clock's zero: 132 clocks in (D-6).
+pub const POWER_ON_AT: u16 = 132;
 pub const HDMA_INIT_AT: u16 = 24;
 pub const HDMA_AT: u16 = 278 * 4;
+/// The first cycle start that can see H-blank for the line's HDMA, three clocks before its middle (D-40).
+pub const HDMA_SEEN_FROM: u16 = 1097;
 
 impl Timing {
     /// 1364 master clocks, but 1360 for line 240 of field 1 at 60 Hz without interlace.
@@ -147,7 +151,7 @@ impl Timing {
             next = next.min(HDMA_INIT_AT);
         }
         if self.line < VBLANK_LINE && !self.hdma_line_done {
-            next = next.min(HDMA_AT);
+            next = next.min(HDMA_SEEN_FROM);
         }
         if self.line == VBLANK_LINE && JOYPAD_AT > self.line_clock {
             next = next.min(JOYPAD_AT);
@@ -245,7 +249,7 @@ impl System {
             wram_address: 0,
             mdr: 0,
             fast_rom: false,
-            timing: Timing { pal, ..Timing::default() },
+            timing: Timing { pal, line_clock: POWER_ON_AT, ..Timing::default() },
             io: {
                 // WRIO is all ones at power-on, which is what lets $2137 latch the counters (fullsnes).
                 let mut io = vec![0u8; 0x400];

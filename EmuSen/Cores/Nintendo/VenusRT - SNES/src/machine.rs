@@ -6,7 +6,7 @@ use emusen_native::SampleQueue;
 use crate::bus::System;
 use crate::cart::Cartridge;
 use crate::cpu::{Cpu, Interrupt};
-use crate::state::{STATE_MAGIC, STATE_VERSION, StateError, StateReader, StateResult, StateWriter};
+use crate::state::{STATE_MAGIC, STATE_VERSION, StateError, StateReader, StateResult, StateWriter, VENUS_MAGIC, VENUS_STATE_WORDS};
 
 pub const SCREEN_WIDTH: usize = 256;
 pub const SCREEN_HEIGHT: usize = 224;
@@ -310,6 +310,8 @@ impl Machine {
             for (n, v) in [("DmaPending", d.dma_pending), ("DmaWait", d.dma_wait), ("HdmaActive", d.hdma_active), ("HdmaTransfer", d.hdma_transfer)] {
                 w.u8(n, v);
             }
+            w.u8("HdmaStage", d.hdma_stage);
+            w.u8("HdmaSel", d.hdma_sel);
             w.u16s("Joy", &d.joy);
             w.u64("JoyBusyUntil", d.joy_busy_until);
             w.bool("Strobe", d.strobe);
@@ -472,6 +474,13 @@ impl Machine {
         d.dma_wait = r.u8()?;
         d.hdma_active = r.u8()?;
         d.hdma_transfer = r.u8()?;
+        // Version 20 keeps a line's HDMA run between the cycle that saw H-blank and the run (D-40).
+        if version >= 20 {
+            d.hdma_stage = r.u8()?.min(2);
+            d.hdma_sel = r.u8()?;
+        } else {
+            (d.hdma_stage, d.hdma_sel) = (0, 0);
+        }
         r.u16s(&mut d.joy)?;
         d.joy_busy_until = r.u64()?;
         d.strobe = r.bool()?;
@@ -622,7 +631,12 @@ impl Machine {
 impl emusen_native::ffi::StateMachine for Machine {
     type Error = StateError;
     fn load_state(&mut self, data: &[u8]) -> StateResult {
-        Machine::load_state(self, data)
+        let r = Machine::load_state(self, data);
+        // A state with C# Venus's magic is named as its engine's (VenusRT_Plan.md §4.5).
+        if r == Err(StateError::Foreign(VENUS_MAGIC)) {
+            emusen_native::core::detail(VENUS_STATE_WORDS);
+        }
+        r
     }
     fn state_size(&self) -> usize {
         Machine::state_size(self)
@@ -638,7 +652,6 @@ impl emusen_native::ffi::StateMachine for Machine {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::state::VENUS_MAGIC;
 
     /// A LoROM image whose reset runs `program` at $00:8000.
     pub fn rom(program: &[u8]) -> Vec<u8> {
@@ -673,7 +686,7 @@ pub(crate) mod tests {
         m.run_frame();
         m.run_frame();
         assert_eq!(m.total_frames(), 2);
-        assert!(m.sys.timing.clock >= 2 * 262 * 1364 - 4);
+        assert!(m.sys.timing.clock >= 2 * 262 * 1364 - 4 - crate::bus::POWER_ON_AT as u64);
     }
 
     // Version 4: the CPU, the clock, the bus and the S-CPU's devices; the listing is its record (plan §5.6).
@@ -684,8 +697,8 @@ pub(crate) mod tests {
         assert!(layout.starts_with("0 4 u32 Magic\n4 4 i32 Version\n8 2 u16 Cpu.A\n"), "{layout}");
         assert!(layout.contains(" u64 Timing.Clock\n") && layout.contains(" u8[1024] Bus.Io\n") && layout.contains(" u16[32768] Vram\n"), "{layout}");
         assert!(layout.contains(" u8[64] Ppu.Regs\n") && layout.contains(" u16[256] Cgram\n"), "{layout}");
-        assert_eq!(layout.lines().count(), 115, "{layout}");
-        assert_eq!(m.state_size(), 265_369);
+        assert_eq!(layout.lines().count(), 117, "{layout}");
+        assert_eq!(m.state_size(), 265_371);
         assert_eq!(&save(&m)[..4], b"VNRT");
     }
 

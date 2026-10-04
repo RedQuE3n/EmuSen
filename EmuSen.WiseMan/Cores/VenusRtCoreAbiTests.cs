@@ -167,6 +167,34 @@ namespace EmuSen.WiseMan.Cores
             Assert.Empty(EmuSen.Common.EmulatorSession.MissingFirmwareFor(rom, Engine));
         }
 
+        // VenusRT_Plan.md §4.5: a state C# Venus wrote is refused in words naming Venus (C#), and the machine is unchanged.
+        [Fact]
+        public void A_venus_state_is_refused_naming_the_engine_that_made_it()
+        {
+            if (Discovered is not { } found) return;
+            string rom = Path.Combine(_root, "plain.sfc");
+            File.WriteAllBytes(rom, SyntheticRom.Build());
+            ICore venus = CoreFactory.Create(rom);
+            venus.LoadRom(rom);
+            for (int i = 0; i < 30; i++) venus.RunFrame();
+            using var state = new MemoryStream();
+            venus.SaveState(state);
+            (venus as IDisposable)?.Dispose();
+            using var engine = new CoreEngine(found.Open()!);
+            engine.LoadRom(rom);
+            for (int i = 0; i < 30; i++) engine.RunFrame();
+            using var before = new MemoryStream();
+            engine.SaveState(before);
+            var refused = Assert.Throws<InvalidDataException>(() => engine.LoadState(new MemoryStream(state.ToArray())));
+            Assert.Equal("VenusRT (Rust) refused the state: it was saved by Venus (C#), the C# SNES engine, whose states VenusRT cannot read.", refused.Message);
+            using var after = new MemoryStream();
+            engine.SaveState(after);
+            Assert.Equal(before.ToArray(), after.ToArray());
+            byte[] other = before.ToArray();
+            other[0] ^= 1;
+            Assert.Equal("VenusRT (Rust) refused the state: not this core's state.", Assert.Throws<InvalidDataException>(() => engine.LoadState(new MemoryStream(other))).Message);
+        }
+
         // A DSP's firmware found whole or as its program and data pair, the pair passed as files 2 and 3, and nothing missing on VenusRT, which needs none; synthetic bytes, not a dump.
         [Fact]
         public void The_adapter_takes_a_dsp_firmware_whole_or_as_its_split_pair()

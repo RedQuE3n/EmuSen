@@ -172,6 +172,19 @@ their data.
 - Referee: not read. Mesen's source: none.
 - Conclusion: open. The S-DD1 is outside parity (`VenusRT_Plan.md` §4.2). Test Drive II is settled when the goldens of
   stage 6 run it against Mesen.
+- **Read again 2026-10-04 (stage 8's read of the log, `VenusRT_Native.md` §41.9), and the check this entry owed run.**
+  The conclusion above deferred Test Drive II to "the goldens of stage 6", which never included it. Run instead on
+  both of the library's dumps (MD5 `c15db5c5…` and `74b7f01d…`, header map mode $32, 1 MiB), VenusRT through `ICore`
+  and Mesen through the probe, with one pad script for both: Start at frames 1200 to 2600 every 200 frames, and Up
+  held from 3000. That takes the game through its menus, the car and course choices, and into a race. *Measured:* at
+  frames 600, 1350, 1550, 1950, 3000 and 3800, VenusRT's picture equals Mesen's at the same frame in every pixel,
+  on both dumps.
+- Conclusion for Test Drive II: settled, measured as far as these scenes go. Decoding map mode $32 as LoROM is
+  indistinguishable from Mesen's ExLoROM there, as the argument above expected for an image under 2 MiB. The run
+  proves no more than that: whether the game ever reads banks $40-$7D or $C0-$FF is not observed, because v1 reports
+  no reads. A later scene that parts from Mesen reopens it. Street Fighter Alpha 2 (S-DD1) stays open, outside parity.
+- Pinned by: nothing in the repository (the ROM is not); the measurement is reproduced by the corpus folder's
+  `anchorshot/cmp.py` with the script above.
 
 ### D-6. Power-on: where in line 0 the CPU's first instruction begins
 - Opened: 2026-09-30, at stage 2 step 3, by the probe's CPU trace of four games against VenusRT's own, instruction by
@@ -291,6 +304,41 @@ their data.
   runs eight cycles of reset first, so its first fetch falls about 18 master clocks after the 65C816's reset begins
   (150 clocks before it, plus 8 cycles of 20.97). The counters' half is unchanged: the 65C816 still begins at clock
   0 of line 0.
+- **Read again 2026-10-04 (stage 8, `VenusRT_Native.md` §41.9).** The "Judged 2026-10-03" paragraph above takes the
+  SPC700's 150-master-clock lead from `CPU.vhd`'s reset counter as the console's rule. That over-reads the referee.
+  `Venus_Referee.md` §0 weighs the RTL subsystem by subsystem for the logic each was written from, the 65C816 core,
+  the SPC700, the PPU, and says nothing of the board's reset sequencing. A counter that releases the soft 65C816 150
+  clocks after the reset line is as likely to be the FPGA's own arrangement (clock enables settling, a core held
+  until the others run) as a transcription of the console. ~~the 65C816 starts 150 master clocks after the SPC700,
+  where VenusRT starts both at clock 0~~ *Restated:* the referee's implementation releases the 65C816 150 master
+  clocks after the SPC700; VenusRT adopts that number as an argued choice with the referee as its only source, not as
+  a rule the referee establishes for the console. The implementation is unchanged. What would settle it is a console
+  measurement of the SPC700's first port write against the S-CPU's first instruction, for instance the time to $BBAA
+  as an S-CPU loop counts it from reset.
+- **Settled for the counters' half 2026-10-04, by two test ROMs with console logs.** byuu's NMI and IRQ timing
+  ROMs (`nmi_irq/nmi.smc`, the same image as `blobs/nmi.smc`, with its source `nmi.asm`; and `blobs/irq.smc`,
+  "IRQ TIMING TEST ROM") log, from power-on, 1,024 records each. Every NMI or IRQ's latched H and V counters, and
+  where the main loop's poll of `$4210` ended, go into SRAM, which the ROM compares with a log "captured from real
+  hardware" at `$018000` of its own image. This entry missed that the two ROMs grade the power-on position. Their
+  first records depend on where in line 0 the CPU began, and the drift of each frame against the instruction stream
+  carries that through all 1,024. The stage 2 reading "stop at test `$1E`" and "`$2D`" was the first SRAM byte read as
+  a test number. *Measured* with the power-on position moved 0 to 1,363 clocks into line 0, the master clock with it:
+  - at 0, as built, 961 of `nmi.smc`'s 1,024 records differ from the console's log;
+  - all 1,024 of both ROMs equal the console's logs at exactly the offsets 28 + 52k and 29 + 52k (52 clocks being
+    the poll loop's period), and at no other;
+  - `test_hdmasync`'s console table, the HDMA latches of D-40, is kept at 28 + 52k and lost at 29 + 52k;
+  - the intersection is 28 + 52k, which contains 132 (k = 2) and excludes 0.
+
+  The three measurements against Mesen, Sour's `timing_test`, `reset-position-test` and Star Fox's ten-frame trace,
+  had given 132. The console's logs alone fix the position to one of 26 values a line apart by 52 clocks, and Mesen's
+  number picks one of them. No document or console log read separates 132 from 80 or 184.
+- ~~Conclusion: unchanged, and still argued: the reset sequence begins at H=0, V=0.~~ Conclusion, 2026-10-04: the
+  65C816's first cycle begins 132 master clocks into line 0. This is measured to the class 28 + 52k by the two
+  console logs and `test_hdmasync`'s, and to 132 within it by Mesen's three agreeing outputs. The DMA clock's 8-clock
+  steps keep their place against the line: they are counted from line 0's start of the first frame. The SPC700 still
+  leads the 65C816 by the referee's 150 clocks. A console reading of `reset-position-test` (`$0035` for this
+  position) would confirm the member.
+- Pinned by: `nmi_irq/nmi.smc` and `blobs/irq.smc` in the corpus, both passing, and `test_hdmasync`.
 
 ### D-7. PPU: master brightness N scales a colour component c to c×(N+1)/16, rounded down
 - Opened: 2026-09-30, at stage 3 step 1, by PeterLemon's `RedSpace9BitHDMA` at frame 300. The ROM writes a backdrop
@@ -418,6 +466,14 @@ their data.
   one built first. Open: a ROM that ends forced blank mid-frame after writing OAM, and shows the first sprite's
   priority, would settle it.
 - Pinned by: `oam_and_cgram_latch_their_low_bytes_and_the_counters_latch_on_2137` (the line-225 reload).
+- **Read again 2026-10-04 (stage 8, `VenusRT_Native.md` §41.9).** ~~argued only from its being the narrower statement
+  and the one built first~~. Neither is evidence for a rule, and the two documents are not equal in kind: anomie's
+  timing document ("OAM RESET") reports an observation of a console, attributed to byuu, that "the reset occurs on any
+  1->0 transition of $2100 bit 7", while fullsnes's line-225 restriction cites no test. *Restated:* the built rule is
+  fullsnes's, kept against the only reported console observation, which favours anomie's wider rule. That is a
+  choice awaiting a test ROM, not an argued conclusion. The entry stays open. The ROM that would settle it (end
+  forced blank mid-frame after an OAM address write, and show which sprite has priority) is cheap to write, and the
+  rule should move to anomie's if no such ROM is run before a game needs it.
 
 ### D-12. OAM: a write during active display lands where the internal address points
 - Opened: 2026-10-01, at stage 3 step 2, by the step's scope. fullsnes, "OAMADDL/OAMADDH": "During rendering, the
@@ -598,6 +654,15 @@ their data.
   The variant of the measurement above is not adopted. The left edge is open between "unmathed" (built) and the
   referee's "mathed with black under the last enables"; it moves one column of four ROMs and is left as built.
 - Pinned by: `the_sub_half_pixel_takes_colour_0_and_the_math_of_the_main_pixel_before` in `ppu.rs`.
+- **Read again 2026-10-04 (stage 8, `VenusRT_Native.md` §41.9).** "Settled for the rule as built" counts the referee's
+  agreement as a second source. `Venus_Referee.md` §0 says the referee's PPU was written from anomie's and fullsnes's
+  register documents, so its agreement with anomie's sentence read literally is correlated with the document. D-1
+  makes the same caveat for the 65C816 core and the datasheet. ~~Conclusion: settled for the rule as built.~~
+  *Restated:* the rule as built is anomie's sentence read literally, with an implementation written from the same
+  documents agreeing. Against it stands Mesen's picture, an implementation of unknown provenance. That is argued, not
+  settled. The built rule is kept and the four ROMs' differences stay recorded as Mesen's. A game that uses hi-res
+  sub-screen math would arbitrate: the tricky-to-emulate list names Jurassic Park's gameplay under exactly this cause,
+  and a capture of it from a console is the evidence to look for.
 
 ### D-20. IRQ: a point past its line's end is not carried over the short line's end or a frame's
 - Opened: 2026-10-01, at stage 3 step 5, by `nmi_irq/demo_irq` (and `blobs/demo_irqtest`) failing at test 6's first
@@ -696,6 +761,31 @@ their data.
   real support in `Venus_Referee.md` §0, in a dispute step of its own at a CPU-side stage.
 - Pinned by: `test_irqb`, case 5.
 
+- **Referee, logged 2026-10-04 before reading**, the step this entry named. Case 5 runs CLC from $217F, so CLC's
+  second cycle and the interrupt's first two cycles all address $2180. Which of those cycles the console turns into
+  a B-bus read of WMDATA is what decides the count. To be read for that only:
+  - in SNES_MiSTer `rtl/CPU.vhd`, the lines that make the S-CPU's A-bus and B-bus read strobes
+    (`INT_CPURD_N`, `PARD_N`) from the 65C816's VDA, VPA and R/W, and when in a cycle they are asserted;
+  - in `rtl/65C816/MCode.vhd`, the rows for an implied instruction's second cycle (CLC, $18) and for the interrupt
+    sequence's first two cycles, for their VDA and VPA alone.
+
+  Nothing of the core's ALU, registers or addressing beyond those rows is to be read.
+- Read 2026-10-04 as logged: `CPU.vhd` lines 368-382 and 425-484 (the access speed and the read and write strobes)
+  and the grep lines naming VDA and VPA, and `MCode.vhd` rows 22-29 (BRK, whose microcode the interrupt sequence
+  shares) and 238-241 (CLC), their last field, the VDA and VPA pair, alone. What they say:
+  - The referee asserts the S-CPU's read strobe, on the A-bus and on the B-bus alike, only in a cycle with VDA or VPA
+    set. An internal cycle (both clear) reads nothing and runs at the fast speed.
+  - CLC's second cycle is internal. So is the first microcode cycle after an opcode fetch that becomes the
+    interrupt's.
+  - Case 5 therefore reads $2180 once in the referee, at the opcode fetch the interrupt replaces. That is VenusRT's
+    count, and one fewer than the ROM's console expectation.
+- Conclusion, 2026-10-04: still open, now with the referee read and in disagreement with the ROM. `test_irqb`'s
+  expectation of two reads is a console's, and the referee does not reproduce it. Its strobe logic may simplify the
+  5A22's, or the second read may come from a mechanism outside the rows read. The next source in the order of
+  recourse is Mesen's, which this step does not open. One hypothesis would be tested cheaply by a ROM run on a console:
+  that the 5A22 strobes /RD on internal cycles, so that CLC's second cycle reads $2180 too. It is consistent with
+  cases 1 to 4, whose internal cycle would address $2138, not $2137, and so would not latch the counters again. It
+  is recorded as untested and not built.
 ### D-25. S-SMP: a timer is reset when its CONTROL bit goes from 0 to 1, and a cleared bit only stops it
 - Opened: 2026-10-02, at stage 4 step 1, by blargg's `spc_smp`: every test passes up to "Timers/random timer0
   enable", which fails (code 02), with the timers built as fullsnes reads literally.
@@ -743,6 +833,14 @@ their data.
   read and does not produce 04. The ROM itself remains the oracle for a later step.
 - Pinned by: `test_timer_stop2`.
 
+- **A hypothesis tried and rejected, 2026-10-04 (after stage 8), in a trial build not kept.** The 04 could come
+  from a gated clock: the second stage counting on the rising edge of the first stage's output ANDed with TEST's
+  enable, so that re-enabling while that output is high adds a tick. Taken as the first half of each first-stage
+  period, gated by bits 0 and 3 together, the model prints 03 for `test_timer_stop2` and makes `test_timer_stop`
+  print 0A and fail. Gating by bit 0 alone would leave `test_timer_stop` passing and still give 03. Choosing the other
+  half or another duty to reach 04 would fit one printed number with a free parameter, which is not evidence, and was
+  not done. The entry stays open on the same terms: a console ROM sweeping the toggle rate is what would separate the
+  readings.
 ### D-27. S-SMP: TEST bits 4 to 7 add waitstates to the SPC700's cycles
 - Opened: 2026-10-02, at stage 4 step 1, by blargg 2010 `test_timer_speed` and `test_timer_speed2`: they write TEST
   with bits 4 to 7 set and count timer ticks against a loop; VenusRT ignores those bits and prints 2731 for every
@@ -769,6 +867,17 @@ their data.
   `test_timer_stop` and gilyon's `spctest` still pass. fullsnes's per-opcode table of internal cycles' timings is
   not built, since nothing here distinguishes it. A setting the software "should never change" (fullsnes).
 - Pinned by: `test_timer_speed`, `test_timer_speed2`, `test_speed`.
+- **Read again 2026-10-04 (stage 8, `VenusRT_Native.md` §41.9).** The conclusion's timer step rests on the graded ROMs
+  (`test_timer_speed`, `test_timer_speed2`) and blargg's own `notes.txt`. Those are measured, and settled. Its two
+  other rules rest on something weaker: that bits 4-5 do not slow the SPC700, and that bits 6-7 stretch every SPC700
+  cycle rather than I/O and ROM cycles alone. Both are argued from the counts Mesen prints for `test_speed`, a ROM that
+  prints without a verdict, against fullsnes's text. That makes Mesen the authority, which the order of recourse ranks
+  last. ~~settled by measurement, 2026-10-02, and **not** as fullsnes reads~~ for those two rules. *Restated:* the
+  timer step is settled, measured on graded ROMs. The stretch of every cycle under bits 6-7, and bits 4-5 leaving the
+  SPC700's speed alone, are argued from Mesen's output, pending a console reading of `test_speed`'s twelve counts or
+  the referee's SPC700 wait logic read in a dispute step. The implementation is unchanged. fullsnes calls TEST a
+  setting software "should never change", which bounds what the open rules can cost a game; that no game writes the
+  bits was not measured.
 
 ### D-28. S-DSP: the Gaussian interpolation's rounding, where fullsnes and anomie give different formulas
 - Opened: 2026-10-02, at stage 4 step 2, before the S-DSP's code, by reading the two sources side by side.
@@ -1160,3 +1269,95 @@ their data.
   6 of 64 bytes equal at the same offset (9.4%), longest aligned run 2 bytes (at offset 0, the `MOV X,#$EF`);
   longest common run at any offsets 4 bytes, at replacement offset 21 against original offset 47, and one other run
   of 4, at 53 against 34. PASS. The first program measured 7 of 64 and a longest run of 4.
+
+### D-39. HDMA: a line's decrement of NTRLx takes the whole byte, so $00 becomes 127 lines with repeat and $80 127 lines without
+- Opened: 2026-10-04, after stage 8, by the HDMA ROMs §41.5 left without an entry. Two cases:
+  - `hdma_midframe/demo` (byuu) enables HDMA at line 32 with NTRL0 written $00. VenusRT showed no transfer for 127
+    lines, its backdrop red, where Mesen's is black with a few coloured lines.
+  - `hdmaen_latch_test` and `_2` (undisbeliever) write NTRL $00 before each mid-line enable. VenusRT showed no red line
+    in either.
+- Documents read:
+  - anomie's register document (`anomie-196.txt`), `$43xA`: "One oddity: the register is decremented before being
+    checked for r status or c==0. Thus, setting a value of $80 is really '128 lines with no repeat' rather than '0
+    lines with repeat'. Similarly, a value of $00 will be '128 lines with repeat' when it doesn't mean 'terminate the
+    channel'".
+  - The same document's HDMA procedure, steps 3 to 5: decrement `$43xA`, set DoTransfer to Repeat, reload when the
+    line counter is zero.
+  - fullsnes, "Starting HDMA midframe" (both cases), and the `$43xA` description. These agree with anomie and do not
+    name the borrow.
+  - VenusRT decremented the seven count bits alone and kept bit 7. That is the reading anomie's "oddity" rules out.
+- Test ROM: the ROMs above; their results are recorded where this entry is implemented.
+- Referee: not read. Mesen's source: none.
+- Conclusion: the line's step decrements the whole of NTRLx. The decremented byte's bit 7 is the next line's
+  DoTransfer, and its bits 0-6 being zero load the next entry. So $00 runs 127 further lines with repeat, and a table
+  entry of $80 transfers once and waits 127 lines without repeat. Argued from anomie's register document, which states
+  both cases.
+- Pinned by: `hdma_midframe/demo` and `hdma-double-buffered-parallax` in the corpus, their pictures equal to Mesen's.
+
+### D-40. HDMA: where a line's run starts against the CPU's cycle and the DMA clock, what it costs, and when it samples HDMAEN
+- Opened: 2026-10-04, after stage 8, by four ROMs that fail with D-39 built:
+  - `test_hdmasync` (byuu, 2008-08-01) runs HDMA under each of the 256 channel masks and latches the H counter after
+    a fixed loop, twice each, then compares the 1,022 values with a table recorded from a console
+    (`test_hdmasync_data.bin`). VenusRT's latches are 1 to 3 dots later on all but four entries (2 dots on 255 of 511
+    pairs). Moving VenusRT's start from dot 278 to clock 1100 changed nothing, so the difference is in the run's cost
+    or its alignment, not its start alone.
+  - `test_hdmatiming` and both `test_hdma`, whose init latches OPHCT two dots late (D-14).
+  - `hdmaen_latch_test`, whose mid-line HDMAEN writes enable the line's run in VenusRT for HTIME 220 to 228, and in
+    Mesen for 220 to 224 only.
+- Documents read: anomie's timing document, "HDMA": the run "begins at dot 278 of the scanline (or just after, the
+  current CPU cycle is completed before pausing)", "~18 master cycles overhead", "8 master cycles overhead" per
+  channel, 16 for an indirect address, 8 a byte; "Presumably, the exact timing for the HDMA pause is the same as that
+  for DMA." fullsnes, "SNES Timing H/V Events": H=278 "perform HDMA transfers". Neither gives the alignment, the
+  overhead's exact length, or when HDMAEN is read.
+- Test ROM: `test_hdmasync`'s header, a console's result: "hdma begins at H=1100+DMA_counter, eg
+  H=1100+(cycle_counter&7)", the same on CPU revisions 1 and 2. `test_hdma_timing.asm`'s header gives the init's
+  revision-dependent offsets. These are results, not a mechanism that reproduces the 1,022 latches.
+- Referee: `Venus_Referee.md` §0 rates the S-CPU's DMA and HDMA machines real support. To be read for this rule only,
+  in SNES_MiSTer `rtl/CPU.vhd`:
+  - the HDMA and DMA state machines' states and their transitions in master clocks;
+  - the condition that starts a line's run (the H counter value) and how it waits for the CPU's cycle;
+  - the alignment to any DMA clock;
+  - the per-run and per-channel overhead states;
+  - where HDMAEN is read for the run and for the init.
+
+  Nothing of the 65C816 core, the NMI/IRQ logic or the multiply unit is to be read.
+- Read 2026-10-04 as logged: `CPU.vhd` lines 244-345 (the CPU's and the DMA's clock counters and the edges they
+  give), 857-1160 (the DMA and HDMA register writes and the two state machines), and the grep lines naming HBLANK,
+  EN and the clock enables. The run's start depends on where the PPU raises HBLANK, which `CPU.vhd` takes as an
+  input, so a second reading is logged before it is made: in `rtl/PPU.vhd`, the lines that set `IN_HBL` and the H
+  counter values at which they do, and `SNES.vhd`'s wiring of HBLANK from the PPU to the CPU. Nothing else of the PPU.
+- What the referee does, in prose:
+  - **Clocks.** A DMA clock counter runs freely in 8-clock steps from reset. The CPU's own counter marks each
+    cycle's middle and end.
+  - **The start.** A line's run is armed at the end of the CPU cycle whose middle sees H-blank rise, provided a
+    channel is enabled and not terminated at that moment. A write to HDMAEN in that same cycle counts only from the
+    next. The run itself begins at the end of the following cycle, with the channels enabled then.
+  - **The pause.** The CPU stops there. The machine waits for the DMA counter's 8-clock boundary, then takes one
+    8-clock step per transferred byte, channel 0 first, all transfers before any counter. Then it takes one step per
+    active channel for its counter, which fetches the next entry in that step, two steps more for an indirect
+    pointer. Then one step that only ends the run.
+  - **The resume.** The CPU resumes at its own next cycle boundary.
+  - **The counter.** The whole byte is decremented, as D-39 found, and the init sets DoTransfer for every enabled
+    channel, a mid-frame start with none set taking the counter step alone.
+  - No PPU line was read beyond the two named: the referee raises H-blank at dot 273.
+- Conclusion: the referee's sequence, measured on the console tables of the ROMs, three rules in all.
+  - **The cost.** The ending step is 8 clocks, where VenusRT charged anomie's "~18" before the channels, and the
+    transfers of every channel come before the counters. Measured on `test_hdmasync`: with these two alone, all 1,022
+    latches equal the console's table, and the ROM passes. In `test_hdmatiming`'s eight compared rows, the
+    channel 7 latch of test 8 then equals the console's 0x129. It had been 0x137, the per-channel interleave.
+  - **The start.** Two cycles after the cycle that saw H-blank, with HDMAEN sampled at that cycle. The sampling
+    point was swept, the console's two tables staying exact at each point (`VenusRT_Native.md` §41.14). The tables
+    allow a cycle's middle at 1,098 to 1,100 for the referee's two-cycle structure, and 1,100 is the point
+    `test_hdmasync`'s header states ("hdma begins at H=1100"). With it, both `hdmaen_latch_test` ROMs equal Mesen's
+    picture in every pixel, where the HDMAEN sample at the run's own start (VenusRT's old rule) did not. The PPU's
+    dot 273 is 1,092: the eight clocks between are taken as the referee's pipeline from the PPU's H-blank to the
+    CPU's sampling, a reading not checked line by line.
+  - **The init.** The same ending step: both `test_hdma` ROMs now pass. D-14's two dots were this 10-clock
+    overhead.
+  - **Left open.**
+    - `test_hdmatiming`'s test 2: its second latch is 0x34 against the console's 0x35, one dot. No sampling point and
+      no resume rule tried moved it without breaking another row.
+    - General DMA's own start, alignment and overhead are as before. Inside a general DMA the line's run keeps the
+      old trigger at dot 278.
+- Pinned by: `test_hdmasync`, both `test_hdma`, the two `hdmaen_latch_test` pictures in the corpus, and
+  `a_line_run_comes_two_cycles_after_hblank_and_decrements_the_whole_counter` in `scpu.rs`.

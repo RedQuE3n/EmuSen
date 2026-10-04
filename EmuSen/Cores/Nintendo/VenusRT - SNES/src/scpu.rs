@@ -2,7 +2,11 @@
 //! fullsnes ("SNES DMA Transfers", "SNES Maths Multiply/Divide", "SNES Controllers I/O Ports") and anomie's timing
 //! document for their timing. See VenusRT_Native.md §13.
 
-use crate::bus::{HDMA_AT, HDMA_INIT_AT, REFRESH, REFRESH_AT, System, irq_line_point};
+use crate::bus::{HDMA_AT, HDMA_INIT_AT, POWER_ON_AT, REFRESH, REFRESH_AT, System, irq_line_point};
+/// The run's last step, which only ends it: 8 clocks, where anomie's documents give ~18 (D-40).
+const HDMA_OVERHEAD: u16 = 8;
+/// The clock a cycle's middle must reach for the cycle to see H-blank, as the console's HDMA tables fix it (D-40).
+const HBLANK_AT: u16 = 1100;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(u8)]
@@ -36,6 +40,9 @@ pub struct Devices {
     pub dma_wait: u8,
     pub hdma_active: u8,
     pub hdma_transfer: u8,
+    /// The line's run: 1 when a cycle saw H-blank with a channel enabled, 2 a cycle later with the channels it runs (D-40).
+    pub hdma_stage: u8,
+    pub hdma_sel: u8,
     /// $4218-$421F, the auto-read's busy end, the manual strobe and the two ports' shift registers.
     pub joy: [u16; 4],
     pub joy_busy_until: u64,
@@ -111,7 +118,8 @@ impl System {
     /// resumes at, counted from the pause's start (anomie's DMA timing).
     fn align_before(&mut self) -> u64 {
         let start = self.timing.clock;
-        let to8 = 8 - (start % 8) as u16;
+        // The DMA clock counts its 8-clock steps from the first frame's line 0, 132 clocks before the clock's zero (D-6).
+        let to8 = 8 - ((start + POWER_ON_AT as u64) % 8) as u16;
         self.advance_paused(to8);
         start
     }
@@ -182,6 +190,37 @@ impl System {
         self.align_after(start, resume);
     }
 
+    /// A CPU cycle's start: the init when due, and the line's run two cycles after the cycle whose middle saw H-blank
+    /// with a channel enabled, with the channels enabled at the cycle between (D-40).
+    fn hdma_at_cycle(&mut self, clocks: u16) {
+        let t = &self.timing;
+        if t.line == 0 && !t.hdma_init_done && t.line_clock >= HDMA_INIT_AT {
+            self.hdma_init(clocks);
+        }
+        if self.timing.line >= 225 || self.timing.hdma_line_done {
+            return;
+        }
+        match self.dev.hdma_stage {
+            0 if self.timing.line_clock + 3 >= HBLANK_AT => {
+                if self.dev.hdma_active & self.io[0x20C] != 0 {
+                    self.dev.hdma_stage = 1;
+                } else {
+                    self.timing.hdma_line_done = true;
+                }
+            }
+            1 => {
+                self.dev.hdma_stage = 2;
+                self.dev.hdma_sel = self.io[0x20C];
+            }
+            2 => {
+                self.dev.hdma_stage = 0;
+                let sel = self.dev.hdma_sel;
+                self.hdma_line_of(clocks, sel);
+            }
+            _ => {}
+        }
+    }
+
     fn hdma_if_due(&mut self, resume: u16) {
         let t = &self.timing;
         if t.line == 0 && !t.hdma_init_done && t.line_clock >= HDMA_INIT_AT {
@@ -239,7 +278,7 @@ impl System {
         // The init takes its channels from a general DMA in progress or pending (D-17).
         self.dev.dma_pending &= !enabled;
         let start = self.align_before();
-        self.advance_paused(18);
+        self.advance_paused(HDMA_OVERHEAD);
         for channel in 0..8 {
             if enabled & (1 << channel) == 0 {
                 continue;
@@ -252,22 +291,27 @@ impl System {
         self.align_after(start, resume);
     }
 
-    /// H=278 of a visible line: each active channel's unit when its entry says so, then its counter (anomie: ~18
-    /// clocks a line, 8 a channel, 16 for a new indirect pointer, 8 a byte).
+    /// H=278 of a visible line: every transferring channel's unit, channel 0 first, then every active channel's counter,
+    /// each step 8 clocks and a byte landing at its step's end (D-40, the referee's two phases).
     fn hdma_line(&mut self, resume: u16) {
+        let sel = self.io[0x20C];
+        self.hdma_line_of(resume, sel);
+    }
+
+    fn hdma_line_of(&mut self, resume: u16, sel: u8) {
         self.timing.hdma_line_done = true;
-        let active = self.dev.hdma_active & self.io[0x20C];
+        self.dev.hdma_stage = 0;
+        let active = self.dev.hdma_active & sel;
         if active == 0 {
             return;
         }
         let start = self.align_before();
-        self.advance_paused(18);
+        self.advance_paused(HDMA_OVERHEAD);
         for channel in 0..8 {
             if active & (1 << channel) == 0 {
                 continue;
             }
             self.dev.dma_pending &= !(1 << channel);
-            self.advance_paused(8);
             if self.dev.hdma_transfer & (1 << channel) != 0 {
                 let params = self.reg(channel, 0);
                 let b = self.reg(channel, 1);
@@ -282,15 +326,21 @@ impl System {
                         self.set_reg16(channel, 8, at.wrapping_add(1));
                         ((self.reg(channel, 4) as u32) << 16) | at as u32
                     };
-                    self.move_byte(a, b.wrapping_add(offset), params & 0x80 == 0);
                     self.advance_paused(8);
+                    self.move_byte(a, b.wrapping_add(offset), params & 0x80 == 0);
                 }
             }
-            let ntrl = self.reg(channel, 0xA);
-            let left = (ntrl & 0x7F).wrapping_sub(1) & 0x7F;
-            self.set_reg(channel, 0xA, (ntrl & 0x80) | left);
+        }
+        for channel in 0..8 {
+            if active & (1 << channel) == 0 {
+                continue;
+            }
+            self.advance_paused(8);
+            // The whole byte is decremented, so $00 becomes 127 lines with repeat and $80 127 without (D-39).
+            let ntrl = self.reg(channel, 0xA).wrapping_sub(1);
+            self.set_reg(channel, 0xA, ntrl);
             if ntrl & 0x80 != 0 { self.dev.hdma_transfer |= 1 << channel } else { self.dev.hdma_transfer &= !(1 << channel) }
-            if left == 0 {
+            if ntrl & 0x7F == 0 {
                 let cost = self.hdma_load(channel);
                 self.advance_paused(cost);
             }
@@ -300,7 +350,7 @@ impl System {
 
     /// Before a CPU cycle of `clocks`: HDMA, the refresh, and a DMA whose pause has come.
     pub(crate) fn before_cycle(&mut self, clocks: u16) {
-        self.hdma_if_due(clocks);
+        self.hdma_at_cycle(clocks);
         if self.dev.dma_pending != 0 && self.dev.dma_wait > 0 {
             self.dev.dma_wait -= 1;
             if self.dev.dma_wait == 0 {
@@ -557,6 +607,27 @@ mod tests {
         s.idle(0, 0);
         s.idle(0, 0);
         assert_eq!((&s.wram[0x200..0x204], s.wram_address, s.io[0x305]), (&[0u8; 4][..], 0x200, 0));
+    }
+
+    // D-39 and D-40: a channel enabled mid-frame runs two cycles after the cycle that saw H-blank, its $00 becoming $FF.
+    #[test]
+    fn a_line_run_comes_two_cycles_after_hblank_and_decrements_the_whole_counter() {
+        let mut s = system();
+        for (r, v) in [(0x4300u32, 0x00u8), (0x4301, 0x21), (0x4304, 0x7E), (0x4308, 0x00), (0x4309, 0x01), (0x430A, 0x00)] {
+            s.write(r, v, pin::VDA);
+        }
+        while s.timing.line != 10 {
+            s.idle(0, 0);
+        }
+        s.write(0x420C, 1, pin::VDA);
+        let mut starts = Vec::new();
+        while s.io[0x30A] == 0 {
+            starts.push(s.timing.line_clock);
+            s.idle(0, 0);
+        }
+        let seen = starts.iter().position(|&c| c + 3 >= HBLANK_AT).unwrap();
+        assert_eq!(starts.len(), seen + 3, "{starts:?}");
+        assert_eq!((s.io[0x30A], s.dev.hdma_transfer & 1, s.io[0x308]), (0xFF, 1, 0x00));
     }
 
     #[test]

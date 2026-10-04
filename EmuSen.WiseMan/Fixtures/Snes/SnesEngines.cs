@@ -101,9 +101,25 @@ namespace EmuSen.WiseMan.Fixtures.Snes
         }
     }
 
-    // VenusRT through the common interface, before it has an ICore shim (stage 6).
+    // VenusRT through the common interface, with the DSP image found and the core's own boot program unless told otherwise - see VenusRT_Native.md §41.1.
     public sealed class VenusRtSnesEngine : ISnesEngine
     {
+        public const string NoFirmwareVariable = "EMUSEN_VENUSRT_NO_FIRMWARE", BootVariable = "EMUSEN_VENUSRT_BOOT";
+
+        private readonly bool _dspFirmware;
+        private readonly byte[]? _boot;
+
+        public VenusRtSnesEngine() : this(Environment.GetEnvironmentVariable(NoFirmwareVariable) != "1",
+            Environment.GetEnvironmentVariable(BootVariable) is { Length: > 0 } boot ? File.ReadAllBytes(boot) : null)
+        {
+        }
+
+        public VenusRtSnesEngine(bool dspFirmware, byte[]? boot)
+        {
+            _dspFirmware = dspFirmware;
+            _boot = boot;
+        }
+
         public string Name => "VenusRT";
 
         // The NEC DSP firmware VenusRT's own firmware_for names for the ROM as file 2, if any.
@@ -126,7 +142,7 @@ namespace EmuSen.WiseMan.Fixtures.Snes
 
         public SnesRun Run(string rom, IReadOnlyList<int> frames, IReadOnlyList<SnesPress>? presses = null, bool audio = false)
         {
-            using var m = new VenusMachine(File.ReadAllBytes(rom), dspFirmware: DspFirmware(rom));
+            using var m = new VenusMachine(File.ReadAllBytes(rom), dspFirmware: _dspFirmware ? DspFirmware(rom) : null, boot: _boot);
             var shots = new List<SnesSnapshot>();
             var sound = new List<short>();
             foreach (int target in frames.Order())

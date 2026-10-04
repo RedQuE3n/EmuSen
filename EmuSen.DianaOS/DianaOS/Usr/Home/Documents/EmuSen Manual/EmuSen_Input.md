@@ -452,6 +452,9 @@ the measured ones.
 | `SdlVirtualPadsTests` (1) | three SDL virtual pads seated 1-3, the identical pair sharing a GUID, player 2's press on port 1, a pad detached and a same-model pad attached taking its seat |
 | `MultiplayerTests` (4) | through Mistress's own poll: a second pad on the SNES's second port, its hot-unplug and replug and notices, no pause; player 1's pad going and a spare taking seat 1; the keyboard as player 2; four pads on the N64's four ports in a big-screen session, and a fifth heard by none |
 | `FrameRunnerTests` (+2) | the `tapN` verbs; `hold` on controller 2 reaching the SNES's second pad |
+| `PlayerPreferencesTests` (4) | the rows' names and players, trading, None, the keyboard's player saved; a press lighting its row alone; a kept seat and Forget; the big-screen rows changed and lit by pad alone, and fitting |
+| `PlayerBindingsWindowTests` (3) | each console's player count; a rebind for player 2 making its own map and leaving player 1's, the drawing lighting player 2's pad, Use Player 1's; the selector reached by pad |
+| `WindowFitAuditTests` (+4, and the bindings window's existing 4 cases on every tab) | Preferences ▸ Controllers with four pads, two of one 80-character name and a kept seat, on the desktop and in a big screen, at 1280 by 800 and 1920 by 1200 |
 
 **Predictions recorded with the tests, before they were run**, and how they fared:
 
@@ -463,6 +466,52 @@ the measured ones.
 - *A pad attached through SDL's virtual-joystick API is seen through the added event within one poll* — confirmed.
 - *Two virtual pads of one vendor and product share a GUID and have no path* — confirmed (`ff00…` style GUIDs differ
   only by the product word).
+
+Recorded before the first run of the fit audit of §8.9:
+
+- *P1, P2: in a big-screen menu row the 80-character name is trimmed, and the audit reports it cut* — half right. It is
+  trimmed (the picture shows it), but the audit does not report a menu row's trimmed label, which the menu draws with
+  its own ellipsis. The consequence the audit missed is §8.9's numbering.
+- *P3: on the desktop nothing is cut* — **retired**: the window was 1,080 pixels tall at 1280 by 800 (§8.9). The audit's
+  readability floor and its rule against an unfaded scrolling edge are the big screen's (Q186) and are not applied to a
+  desktop window, which keeps the desktop's text sizes and a scroll bar.
+- *P4: the bindings window's player row fits* — **retired** (§8.9: the drawing's labels fell under the floor).
+
+### 8.9 Where the player sees it
+
+**Preferences ▸ Controllers** begins with the players (`PlayerPreferencesRows`): a *Keyboard* row choosing the
+keyboard's player, then a row per connected pad — its name, and a choice of Player 1 to 8 or None — then a row per seat
+kept for a pad that has gone ("Player 2: *name*, disconnected") with **Forget**. Choosing a player another pad has
+trades the two (§8.2, rule 6). A row's hint says when its player is not heard: *None*, a player past the game's ports
+("This game has 2 controller ports, so it does not hear player 3"), or First Controller being on. Rows come and go as
+pads are plugged in and pulled out with the sheet open; the others keep their controls, so a focused choice stays
+focused.
+
+**Press a button to identify.** Any button held on a pad, or a trigger past half its travel, lights that pad's choice in
+the theme's accent — a border on the desktop, the value's colour in a big-screen menu row — for as long as it is held,
+as RetroArch's and ES-DE's documentation describe their "press a button" device lists. Two pads of one name are
+numbered *in front* ("1 · 8BitDo …", "2 · 8BitDo …"): the first build numbered them at the end, and the fit audit's
+picture at 1280 by 800 showed both long names trimmed before the number, so identical pads read identically in a menu
+row. The light was the only way to tell them apart there, which is not enough for a player who cannot see the rows and
+the pads at once.
+
+**In a big-screen session** the same rows are ES-DE's menu rows, through `BigMenuForm` (§4.72.8 of the settings
+reference): each pad is an option row that Left and Right step through the players, the kept seat an action row, so
+the panel is used with a pad alone (`PlayerPreferencesTests.In_big_picture_the_pad_alone_changes_a_pads_player`).
+
+**The Controller Bindings window** gains a *Player* selector at the right end of its tab strip, shown for a console with
+more than one port and listing that console's players; **Use Player 1's** gives the player shown player 1's map again.
+A line under the drawing says whose buttons are shown and whether they are the player's own, the keyboard column says
+whose keyboard it is when that is not obvious ("Keyboard (Player 1)"), and the drawing and the tester light the
+selected player's pad. The selector was first placed in a row above the drawing; the window fit audit then failed every
+console tab with more than one port, at both sizes, because the drawing lost the row's height and its labels fell to
+11.47 design pixels of capitals, under the 11.64 floor. The tab strip's right end was empty, and costs the drawing
+nothing. With the pad, Up past the drawing's top row is the selector and Up again is the tab shown; Left and Right on
+the selector step the players. `PadSettingsWindowTests`' audit of every control by pad found the selector reachable on
+the SNES tab alone before that route was given, since Up from the other drawings' top rows reached the tab strip first.
+
+**The desktop Preferences window** is now at most 720 pixels tall. It sized itself to its tallest tab, and with three
+pads and a kept seat the Controllers tab made it 1,080 pixels, past a 1280 by 800 screen; its panes scroll.
 
 ### 8.10 What this does not cover
 

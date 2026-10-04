@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using EmuSen.LunaP.Fluent;
+using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Theme;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -78,6 +79,23 @@ namespace EmuSen.Mistress.Views
         private readonly Dictionary<HotkeyAction, TextBlock> _hotkeyLabels = new();
         private readonly Dictionary<HotkeyAction, Button> _rebindHotkeyButtons = new();
 
+        // The player whose pad bindings each console's tab shows; 1 until chosen - see EmuSen_Input.md §8.4.
+        private readonly Dictionary<string, int> _playerByConsole = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, (TextBlock Words, TextBlock KeyboardHeader)> _playerRows = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dropdown _playerChoice = new() { Name = "PlayerSelector", Width = 130 };
+        private readonly Button _usePlayer1;
+
+        public int PlayerOf(string console) => _playerByConsole.GetValueOrDefault(console, 1);
+
+        private GamepadBindingMap PadMap(string console) => _gamepadBindings.For(console, PlayerOf(console));
+
+        // A change to a player past the first gives it a map of its own, begun from player 1's.
+        private GamepadBindingMap OwnPadMap(string console) => _gamepadBindings.Own(console, PlayerOf(console));
+
+        // The selected player's pad, or with none seated player 1's the first connected, as before players.
+        private ConnectedPad? TesterPad(string console) =>
+            _gamepad?.Players.PadFor(PlayerOf(console)) ?? (PlayerOf(console) == 1 ? _gamepad?.Primary : null);
+
         // One tab per console this build has, oldest first - see EmuSen_Input.md §5.1.
         private readonly IReadOnlyList<CoreDescriptor> _consoles;
 
@@ -92,6 +110,7 @@ namespace EmuSen.Mistress.Views
             AppSettings appSettings, HotkeyBindingMap hotkeyBindings, string? selectedConsole = null)
         {
             InitializeComponent();
+            _usePlayer1 = Ui.Button("Use Player 1's", UsePlayer1).HelpText("Give the player shown player 1's gamepad buttons again");
             _consoles = CoreCatalog.ConsolesInReleaseOrder;
             _keyBindings = keyBindings;
             _gamepadBindings = gamepadBindings;
@@ -102,6 +121,7 @@ namespace EmuSen.Mistress.Views
             BuildHotkeyRows();
             BuildConsoleTabs();
             SelectConsoleTab(selectedConsole);
+            SetUpPlayerBar();
             RefreshConflicts();
             RefreshDiagramLabels();
 
@@ -149,7 +169,8 @@ namespace EmuSen.Mistress.Views
             foreach (CoreDescriptor console in _consoles)
             {
                 var page = new ScrollViewer();
-                page.Content = WithDiagram(console.Console, page, BuildConsolePanel(console));
+                Control list = BuildConsolePanel(console);
+                page.Content = WithDiagram(console.Console, page, list);
                 Tabs.Add(console.Console, page);
             }
         }
@@ -167,10 +188,19 @@ namespace EmuSen.Mistress.Views
             panel.Children.Add(Ui.Hint($"What the emulated {console.Console} controller reads. These bindings are this console's alone.")
                 .Margin(0, 0, 0, 6));
 
+            TextBlock keyboardHeader = ColumnHeader(KeyboardHeader(console.Console));
+            if (EmuSen.Cores.ControllerPorts.ForConsole(console.Console) > 1)
+            {
+                var words = new TextBlock { Name = $"PlayerWords{console.Console}", TextWrapping = TextWrapping.Wrap, Margin = new Avalonia.Thickness(0, 0, 0, 6) };
+                _playerRows[console.Console] = (words, keyboardHeader);
+                panel.Children.Add(words);
+                UpdatePlayerRow(console.Console);
+            }
+
             // Named so a layout test can find them; these are built in code, so there is no XAML name scope.
             panel.Children.Add(Ui.Cols(ButtonRowColumns,
                     ColumnHeader("Button"),
-                    ColumnHeader("Keyboard"),
+                    keyboardHeader,
                     ColumnHeader("Gamepad").AtColumn(4))
                 .Name("ButtonHeaderRow").Margin(0, 0, 0, 2));
 
@@ -182,6 +212,57 @@ namespace EmuSen.Mistress.Views
             panel.Children.Add(rows);
 
             return panel;
+        }
+
+        // One selector beside the tabs for the console shown, so the drawing keeps its height - see EmuSen_Input.md §8.4.
+        private void SetUpPlayerBar()
+        {
+            _usePlayer1.Name = "UsePlayer1Button";
+            Avalonia.Automation.AutomationProperties.SetName(_playerChoice, "Player");
+            PlayerBar.Children.Add(Ui.Text("Player").Center());
+            PlayerBar.Children.Add(_playerChoice);
+            PlayerBar.Children.Add(_usePlayer1);
+            _playerChoice.Chose += chosen =>
+            {
+                if (ShownConsole is not { } console || chosen is not string text || !int.TryParse(text.AsSpan("Player ".Length), out int player)) return;
+                CancelCapture();
+                _playerByConsole[console] = player;
+                RefreshPadLabels();
+            };
+            Tabs.SelectionChanged += (_, _) => ShowPlayerBar();
+            ShowPlayerBar();
+        }
+
+        private void ShowPlayerBar()
+        {
+            string? console = ShownConsole;
+            int ports = EmuSen.Cores.ControllerPorts.ForConsole(console);
+            PlayerBar.IsVisible = console is not null && ports > 1;
+            if (!PlayerBar.IsVisible) return;
+            _playerChoice.Fill(Enumerable.Range(1, ports).Select(PlayerPreferencesRows.Player).ToArray(), PlayerPreferencesRows.Player(Math.Min(PlayerOf(console!), ports)));
+            _usePlayer1.IsEnabled = _gamepadBindings.HasOwn(console!, PlayerOf(console!));
+        }
+
+        private void UsePlayer1()
+        {
+            if (ShownConsole is not { } console) return;
+            _gamepadBindings.Forget(console, PlayerOf(console));
+            _gamepadBindings.Save();
+            RefreshPadLabels();
+        }
+
+        private string KeyboardHeader(string console) =>
+            _appSettings.KeyboardPlayer > 1 || PlayerOf(console) != 1 ? $"Keyboard (Player {Math.Max(1, _appSettings.KeyboardPlayer)})" : "Keyboard";
+
+        private void UpdatePlayerRow(string console)
+        {
+            if (!_playerRows.TryGetValue(console, out var row)) return;
+            int player = PlayerOf(console);
+            bool own = _gamepadBindings.HasOwn(console, player);
+            row.Words.Text = player == 1 ? "Showing player 1's gamepad buttons; every other player has these until given its own (Player, above the drawing)."
+                : own ? $"Showing player {player}'s own gamepad buttons." : $"Showing player {player}, who has player 1's gamepad buttons until one is changed here.";
+            row.KeyboardHeader.Text = KeyboardHeader(console);
+            if (console == ShownConsole) _usePlayer1.IsEnabled = own;
         }
 
         private Control BuildButtonRow(string console, PadControl button)
@@ -216,7 +297,7 @@ namespace EmuSen.Mistress.Views
 
             Button clearPad = Ui.Button("Clear Pad", () =>
             {
-                _gamepadBindings.For(console).Unbind(padButton);
+                OwnPadMap(console).Unbind(padButton);
                 _gamepadBindings.Save();
                 RefreshPadLabels();
             }).Margin(4, 0, 0, 0).HelpText($"Clear the gamepad button for {console} {FullName(button)}");
@@ -289,7 +370,7 @@ namespace EmuSen.Mistress.Views
         private string CurrentPadLabel(string console, PadControl control)
         {
             if (!PadControls.IsButton(control, out PadButton button)) return control <= PadControl.LeftStickRight ? "Left stick" : "Right stick";
-            string? bound = _gamepadBindings.For(console).ButtonToPad.TryGetValue(button, out SDL.GamepadButton p) ? PadName(p) : null;
+            string? bound = PadMap(console).ButtonToPad.TryGetValue(button, out SDL.GamepadButton p) ? PadName(p) : null;
             string? trigger = TriggerFor(button);
             return bound is null ? trigger ?? Unbound : trigger is null ? bound : $"{bound} or {trigger}";
         }
@@ -530,7 +611,7 @@ namespace EmuSen.Mistress.Views
             if (pressed is null && TriggerFor(button) is not null
                 && _gamepad.RawAxis(button == PadButton.L2 ? SDL.GamepadAxis.LeftTrigger : SDL.GamepadAxis.RightTrigger) >= 0.5)
             {
-                _gamepadBindings.For(console).Unbind(button);
+                OwnPadMap(console).Unbind(button);
                 _gamepadBindings.Save();
                 _listeningForPad = null;
                 if (_listeningForKey == target) ClearKeyListening();
@@ -543,7 +624,7 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
-            _gamepadBindings.For(console).Rebind(button, padButton);
+            OwnPadMap(console).Rebind(button, padButton);
             _gamepadBindings.Save();
 
             _listeningForPad = null;
@@ -560,6 +641,7 @@ namespace EmuSen.Mistress.Views
                 kv.Value.Text = CurrentPadLabel(console, button);
                 _rebindPadButtons[kv.Key].Content = RebindPadText;
             }
+            foreach (string console in _playerRows.Keys) UpdatePlayerRow(console);
             RefreshDiagramLabels();
         }
 

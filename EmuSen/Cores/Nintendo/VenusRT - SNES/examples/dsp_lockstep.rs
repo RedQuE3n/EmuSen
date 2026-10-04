@@ -5,7 +5,8 @@
 //! ~/.cache/emusen/probe/venusrt/dsp-hle/lockstep-<rom>.txt.
 //!
 //! LOCKSTEP_AS=<stem> runs both machines as that program instead of the cartridge's.
-//! LOCKSTEP_OTHER=<stem> puts another image in the replacement's place, so two programs can be run against each other.
+//! LOCKSTEP_OTHER=<stem> puts another image in the replacement's place, so two programs can be run against each other;
+//! LOCKSTEP_OTHER_CLOCK=<per mille> runs its clock faster or slower, so that only its timing differs.
 //!
 //! The script takes dsp_trace's verbs (`frames`, `tap`, `hold`, `release`, `tapuntil BTN wram ADDR HEX [cap] [every]`,
 //! `tapuntil BTN chip N - [cap] [every]`), decided on the image's machine and given to both.
@@ -285,7 +286,14 @@ fn main() {
     assert!(lle.attach_dsp(&fw));
     // LOCKSTEP_OTHER=<stem> runs a second image in the replacement's place, the DSP-1 against the DSP-1B for one.
     match std::env::var("LOCKSTEP_OTHER") {
-        Ok(other) => assert!(hle.attach_dsp(&venusrt::chips::dsporacle::firmware(&other).expect("the other image"))),
+        Ok(other) => {
+            assert!(hle.attach_dsp(&venusrt::chips::dsporacle::firmware(&other).expect("the other image")));
+            // LOCKSTEP_OTHER_CLOCK=<per mille> runs the other image's clock that much faster: its timing alone moved.
+            if let Some(pm) = std::env::var("LOCKSTEP_OTHER_CLOCK").ok().and_then(|v| v.parse::<u64>().ok()) {
+                let d = hle.sys.cart.dsp.as_mut().and_then(|(d, _)| d.lle_mut()).unwrap();
+                d.ratio.0 = d.ratio.0 * pm / 1000;
+            }
+        }
         Err(_) => assert!(hle.attach_replacement_as(venusrt::chips::dsphle::Program::for_stem(stem).expect("a program with a replacement")), "no replacement for {stem}"),
     }
     lle.sys.cart.dsp.as_mut().and_then(|(d, _)| d.lle_mut()).unwrap().transfers = Some(Vec::new());

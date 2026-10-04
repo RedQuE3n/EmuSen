@@ -5254,7 +5254,8 @@ the question here is the one the sine's loss leaves: whether the games play acce
   - `LOCKSTEP_SHOTS=f1,f2,...` saves the image's picture, the replacement's and their differing pixels side by side as a
     PNG in the probe cache's `shots/` folder, never in the repository;
   - `LOCKSTEP_OTHER=<stem>` runs a second image in the replacement's place, and `LOCKSTEP_AS=<stem>` runs both machines as
-    another program of the same slot (`Machine::attach_replacement_as`).
+    another program of the same slot (`Machine::attach_replacement_as`); `LOCKSTEP_OTHER_CLOCK=<per mille>` runs that
+    second image's clock faster or slower, so that only its timing differs.
 - **`dsp_replay <chip> <trace>`**, plan §4.2's trace oracle for the whole DSP-1: every transaction of a game's trace
   replayed on the replacement in order and compared with the image's recorded results, per command.
 - **`examples/dsp_pads/smk_race.txt`**: Super Mario Kart through its menus into a 50cc Mushroom Cup race as Mario, then
@@ -5307,8 +5308,13 @@ The pictures named are in `~/.cache/emusen/probe/venusrt/dsp-hle/shots/`.
     replacement's at 126 near the runway. This is not the DSP-1's Distance bug: with both machines run as the DSP-1B
     (`LOCKSTEP_AS=dsp1b`, `pilotwings-as-dsp1b/`) the demo diverges alike, while the DSP-1B's image against the
     DSP-1's stays within 3 feet for 53 seconds (`pilotwings-dsp1-vs-dsp1b/`). The demo replays its pad frame by frame,
-    so the flight model integrates every small difference. The commands it uses are close to the image's in every
-    traced transaction, and the replacement's latencies are medians. Which of the two carries the divergence was not isolated.
+    so the flight model integrates every small difference. **The divergence is the values', not the timing's:** with
+    the image's own clock run 2% faster and 2% slower against itself (`LOCKSTEP_OTHER=dsp1 LOCKSTEP_OTHER_CLOCK=1020`
+    and `980`), so that only the chip's timing moves, every picture is equal for 5,010 frames and the states meet
+    again by frame 2,342. The flight model's commands (Attitude, Subjective, Objective, Gyrate, Rotate) are close to
+    the image's in every traced transaction but exact in 57-99%, and their differences of 1 or 2 accumulate. A flight
+    the player flies is therefore not the image's flight to the foot, though it looks and handles alike; a recorded
+    demo does not replay.
 - **Lock On: not acceptable as it stands.** Its view is always level, Azs 90°, past the limit. With no limit, Raster's
   K = k/cos z saturates there, and the ground under the aircraft is drawn as streaks (`lockon-f2000.png`). The chip's
   limit exists, in effect, to keep cos z away from zero.
@@ -5320,8 +5326,11 @@ The pictures named are in `~/.cache/emusen/probe/venusrt/dsp-hle/shots/`.
 - **P6** stays retired (§44.3).
 - **The limit branch is the one defect a player sees** in the DSP-1's replacement: Pilotwings' level flight, Lock On
   throughout. Fixing it needs one constant, the limit angle, which no document read gives, and the branch's behaviour
-  past it, which §49.1 began to characterise: Vva held at the limit's, Vof = Les·tan(z - limit), and (Cx, Cy), Raster,
-  Project and Target there still to be measured. Taking the constant from the image is what R1 forbids (§48.2).
+  past it, which §49.1 began to characterise: Vva held at the limit's and Vof = Les·tan(z - limit). Measured since
+  (`dsp_oracle chains`, Les 256, z from 81.6° to 91.4°): past the limit Raster keeps the limit's horizon and
+  denominator on every line, while its scale follows the eye's height at the true z (An at line 0 falls with
+  Fz + Lfe·cos z, 1,115 to 1,002); the game scrolls the picture by Vof. (Cx, Cy), Project and Target there are still to
+  be measured. Taking the constant from the image is what R1 forbids (§48.2).
   **The decision is the tester's:** admit the limit angle as one measured constant under a written amendment, as §40.6
   admitted the sine's second widening; or leave the branch a named loss, with Lock On and Pilotwings' level flight
   needing the player's image.

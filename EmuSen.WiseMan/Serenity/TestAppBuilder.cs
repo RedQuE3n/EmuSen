@@ -4,6 +4,8 @@ using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Styling;
 
 [assembly: AvaloniaTestApplication(typeof(EmuSen.WiseMan.Serenity.TestAppBuilder))]
+// One application for the whole run: Avalonia 12's default builds one per dispatch and never frees its fonts - see EmuSen_Debugging_Tools_Reference_v5.md §3.62.
+[assembly: AvaloniaTestIsolation(AvaloniaTestIsolationLevel.PerAssembly)]
 
 namespace EmuSen.WiseMan.Serenity
 {

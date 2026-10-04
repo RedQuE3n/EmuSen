@@ -2567,6 +2567,144 @@ fastest loop turning out to be the original's, which happened twice while D-38 w
 eight-byte block loop, both measured and discarded). The record of each replacement states its counts, so the
 argument can be checked from outside.
 
+### 3.62 What the test host kept: four roots, two crashes under load, and the harness that now lets go
+
+*Measured 2026-10-04.* At 04:06 that day a WiseMan test host running the user-interface filter
+(`FullyQualifiedName~EmuSen.WiseMan.Mistress|…Hotaru|…Serenity|…LunaP`, 1,892 tests) reached 16.4 GB resident and
+took the desktop, 30 GB with no swap headroom, into a global out-of-memory. It was running beside a full-suite host,
+builds and cargo tests, at a one-minute load of about 23. The same filter alone, on an idle machine, passes and grows
+the whole way, sampled every ten seconds by a script that records the host's `VmRSS` beside the count of finished
+tests:
+
+| Tests finished | 162 | 621 | 1,255 | 1,524 | 1,663 | 1,809 |
+|---|---|---|---|---|---|---|
+| RSS, before | 0.4 GB | 1.1 GB | 1.9 GB | 2.4 GB | 3.3 GB | 3.8 GB |
+
+**Predictions, written before anything was measured.** (a) A static subscription or a running timer in `MainWindow`
+holds every closed window, and with it a core and its buffers: the window has a 16 ms pad timer, a frame timer and a
+`GamepadManager`, and is constructed by most of the classes where the curve is steepest. (b) The 16 GB under load,
+against 3.8 GB alone, is a queue between the emulation thread and the dispatcher that grows without bound when the
+dispatcher is starved. The first was half right, in the wrong assembly; the second was wrong, and the load found a
+crash instead.
+
+**Method.** Two instruments, neither of them in the repository. A full heap dump of the running
+host, `dotnet-dump collect -p <pid> --type Full`, taken at a fixed point of the filter, then `dumpheap -live -stat`
+for what is alive and `gcroot <address>` on every instance of a type that should not be (a closed `MainWindow`, a
+settings window, a core) for why. `gcroot` prints one path per root; the paths were bucketed by their first hops, so a
+root is named by how many instances it holds, not by one example. `dotnet-gcdump`'s report, a GC heap size after a
+forced collection, served as the live-heap curve. A caution about `gcroot`'s labels: it names a static by the first
+static field it finds in the same handle table slot, so `Avalonia.Styling.ThemeVariant.<Variant>k__BackingField`
+labelled what `dumpclass` showed to be `LunaTheme.StylesChanged`, and `HintFamilyProperty` labelled
+`SheetLayer.Presenters`. Read the type on the next line, not the label.
+
+A first probe retired the broad form of (a): `WindowRetentionTests` opens a `MainWindow`, runs a game, closes it and
+asserts after forced collections that a `WeakReference` to it is dead. It passed, in a game and in the themed
+library. Whatever held the windows was in a path that test did not take.
+
+**Root one: LunaP's sheet registry (57 of 58 windows).** A dump 55 s into a 127-test subset (`WindowFitAuditTests`,
+`WheelCarouselTests`, `AccessibilityTests`, `WindowFitScrapeAuditTests`) held 58 `MainWindow`s, 35 `VenusCore`s and
+619 MB of objects, live and dead. 57 of the windows had one root: `SheetLayer`'s static `Presenters` dictionary, keyed by a
+presented window, through the sheet's chrome and up the visual tree to the host. The tests close the main window with
+a sheet still up; nothing closed the sheet, so the registry kept it and the host. The fix is the toolkit's (LunaP
+`docs/LunaP.md` §90.7): a sheet closes with its host, as Avalonia closes an owned window with its owner. A weak
+registry was tried first and was not enough, because Avalonia itself holds a window never closed. With it, the same
+dump point held one `MainWindow` (the running test's) and 143 MB live. The change made a product defect visible, Preferences
+refreshing the library from closed records when the window closes under it, desktop and big screen alike
+(`EmuSen_Settings_Reference.md` §4.88).
+
+**Root two: windows the tests never closed (74 tests).** The next dump, at test 1,794, still held 17 `MainWindow`s, 28
+`InputSettingsWindow`s, 15 `GraphicsSettingsWindow`s and 10 Hotaru `DianaOSShellWindow`s, all through
+`LunaTheme.StylesChanged`, which every `ToolWindow` joins when it is built and leaves when it closes. They were shown
+and never closed. `Fixtures/WindowsLeftOpen.cs` is an assembly-level `BeforeAfterTestAttribute`: a class handler on
+`Window.WindowOpenedEvent` records each window opened in a test's execution context (`HeadlessUnitTestSession.Dispatch`
+carries the caller's), and after the test any still open are closed on the session's thread. Setting
+`EMUSEN_LEFT_WINDOWS` to a file lists them, one test per line. The first such run named 74 tests in ten classes:
+`InputSettingsWindowTests` 21, `GraphicsSettingsWindowLayoutTests` 14, `DianaOSShellWindowTests` 10,
+`PadNavigationTests` 9, `MainWindowLibraryTests` 8, `InputSettingsWindowLayoutTests` 4, `RomBrowserWindowTests` 3,
+`InputSettingsWindowRenderTests` 3, `CheatDatabaseWindowTests` 1, `MainWindowEmulationMenuTests` 1. Attribution is
+by execution context, and a window opened by another test's timer while this test pumps the dispatcher would be
+charged here; for that reason the hook closes and records rather than failing a test. The hook holds what it records by weak
+reference, so it keeps nothing alive itself; an earlier version held them strongly and made `WindowRetentionTests`
+fail, which is how that was noticed.
+
+**Root three: an Avalonia application per dispatch (1,683 typefaces, 196 MB pinned).** With both fixed, the managed
+heap still grew, and `GC.GetGCMemoryInfo().PinnedObjectsCount`, read after a forced collection at the end of every
+test, rose from 72 at the 200th test to 12,398 at the 1,800th. The dump showed 11,774 pinned handles, all to
+`byte[]` (196 MB), each an OpenType table (`GPOS` with `kern`, `mark`, `mkmk`; `DFLT`, `cyrl`, `grek`, `latn`) copied for HarfBuzz, and 1,683 live
+`GlyphTypeface`s: 1,193 of them Noto Sans, 172 Barlow Condensed. Each was rooted by HarfBuzzSharp's table-callback
+delegate, whose GC handle the native face frees only when the face is destroyed, so a typeface its font manager drops
+is never collected. A probe that drew one `TextBlock` per `Session.Dispatch` pinned 7 more objects per dispatch; the
+same drawing repeated inside one dispatch pinned none. Avalonia.Headless 12.1's default isolation is
+`AvaloniaTestIsolation.PerTest`: every `Dispatch` runs `EnsureIsolatedApplication`, a new `AvaloniaLocator` scope and a
+new `Application`, font manager, compositor and `MediaContext`, and the old ones' faces stay. `TestAppBuilder`'s own
+comment described "the one shared headless app instance", so one per assembly was always the intent; it is now
+declared, `[assembly: AvaloniaTestIsolation(AvaloniaTestIsolationLevel.PerAssembly)]`. The pin count is then flat (8
+after ten dispatches, 8 before), and the filter passes as it did, 1,849 of 1,900 with 51 skipped.
+
+Both of the last two are the harness's alone: Mistress has one `Application` and closes its windows. The first is the
+toolkit's and a player could meet it only as the window closing; the defect it uncovered (§4.88) was the player's.
+
+**What remains.** LunaP's `ImageFile` cache holds 1,295 entries by the end, one per distinct picture path, and every
+themed test writes its theme to a new temporary folder. It is unbounded by design and recorded as a hazard in LunaP
+§98.2; its decoded bitmaps are native memory and small here. Not changed. The resident size after the fixes still
+rises from 0.4 to about 1.2 GB while the live heap does not (below): the garbage collector keeps what it committed at
+a peak, and Skia, SDL and the Vulkan tests hold native memory a managed dump does not see.
+
+**The load experiment.** The filter was run with the host at `nice -n 19` in one systemd scope beside sixteen busy
+loops at nice 0 (`CPUWeight=20`, `MemoryMax=8G`, a time limit), load average 24 to 28, sampled as above.
+Three runs, 40 to 45 minutes each.
+
+- *The code before these changes*: 722 tests in 803 s, resident 1.16 GB at 720 tests and 1.58 GB at the last sample,
+  against 1.1 to 1.5 GB at the same counts idle. Then the host crashed: `ObjectDisposedException` on the log writer's
+  worker thread, which `--blame-crash`'s dump put at `CategorizedLogWriter.ConsumeQueue`. That is a product defect
+  and is fixed (§2.1's fourth finding).
+- *These changes without that fix*: 446 tests, then a `SIGSEGV` in native `SkPath::addPath`, on a managed thread whose
+  frames `dotnet-dump` could not read from the system's core file. Seen once; not seen in the next run, which had
+  `--blame-crash` attached to catch it. Open.
+- *These changes with it*: 1,554 tests when the time limit stopped it, no crash, resident 0.5 to 1.47 GB, against 0.4
+  to 1.48 GB idle. Three tests that measure elapsed time failed, as tests of time do on a starved host
+  (`ThemedLibraryHostTests.A_large_library_is_scanned_for_media_once_and_not_on_every_showing`,
+  `ScrapeStatusWindowTests.The_summary_stays_after_the_end_until_closed_and_reopens_from_the_status_line`,
+  `ResumeWhereYouLeftOffTests.A_game_restarted_ignores_the_state_it_left`).
+
+Resident size per test finished followed the idle curve in all three, so prediction (b) is retired: starving the host
+grew no queue, in the test host or in the frame, audio and log paths it drives. The frame hand-off is newest-wins
+(`Latest<T>`), the frame-rate line posts once a second, and the log queue is bounded at 100,000 entries and blocks
+its producer. The 16.4 GB of 04:06 was not reproduced. One measured candidate for a host of that size is not in this
+filter at all (root four, below), and it is a full-suite host's.
+
+**Root four: one class of the full suite holds 18 GB.** The full suite under the 8 GB cap failed 1,476 tests, every
+case of `Cores.MarsRdpDifferentialTests`, with `OutOfMemoryException` in `Array.Clone`. Its replay kept, for each case,
+a whole copy of Mars's RDRAM (8 MB with the Expansion Pak), its hidden bits (4 MB) and texture memory: 1,476 × 12 MB,
+about 18 GB, alive at once until the class ends. The comparison reads only pages that either side touched, so the
+replay now keeps only the pages that are not all zero. The class alone then peaks at 351 MB resident, sampled every
+second, and passes all 1,476; under the cap it had died above 3.5 GB, the runtime's heap limit being 6 GB. The
+comparison still bites: keeping no pages fails 1,399 of the cases. This class runs only where the reference
+instruments are built (`Mars_RdpDifferential.md` §3), as they are on this desktop, and a full-suite host reaches it, so
+a full-suite run uncapped would have needed some 18 GB beside everything else it held. Whether that host is the one
+the kernel killed at 04:06 cannot now be shown. The full suite after it: 9,196 passed, 53 skipped, none failed, peak
+5.9 GB resident under the cap.
+
+**Before and after, the same filter alone, idle machine.**
+
+| Tests finished | ~200 | ~600 | ~1,250 | ~1,525 | ~1,660 | ~1,800 |
+|---|---|---|---|---|---|---|
+| RSS, before | 0.4 GB | 1.1 GB | 1.9 GB | 2.4 GB | 3.3 GB | 3.8 GB |
+| RSS, after | 0.4 GB | 0.6 GB | 0.85 GB | 1.0 GB | 1.2 GB | 1.1 GB |
+
+The after curve still rises, by 0.7 GB, and is not flat; the live heap is. `dotnet-gcdump` reports, at 540, 778,
+1,199, 1,382, 1,530, 1,585, 1,631 and 1,806 tests, 196, 118, 134, 140, 192, 147, 137 and 216 MB of GC heap after its
+forced collection: no trend, only what the classes running at that moment hold. With the first root alone fixed, the dump at
+test 1,794 held 735 MB live. The resident
+peaks near 1,524 and 1,678 tests fall in the two stretches where the before curve was steepest, and fall back after.
+
+**Guards.** `WindowRetentionTests`: a closed `MainWindow`, and in a game its core, are collected after a game, after a game closed
+under the Graphics Settings sheet and under the Controller Bindings sheet, and after the themed library; the sheet
+cases fail on the toolkit before §90.7. `HeadlessSessionTests`: two dispatches see the same `Application` (fails if the
+isolation attribute goes), and a window a test leaves open is closed by the hook. LunaP's `SheetLayerTests` carries the
+toolkit's two. No resident-size ceiling was added: the curve above moves by 0.3 GB with what the parallel classes
+happen to be doing, which would make any useful ceiling either loose or flaky.
+
 ---
 
 ## 8. A note on the 2026-08-06 commit, for whoever runs `git log` and wonders

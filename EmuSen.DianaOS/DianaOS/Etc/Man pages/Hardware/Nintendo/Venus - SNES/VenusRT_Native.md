@@ -3028,3 +3028,108 @@ according to the phase. A test that passes on a console cannot depend on that ph
 reaches the SPC700 at a random point of the S-DSP's period. Mesen passes it near frame 2,800; with the console's
 program VenusRT showed four rounds without failure in §30.2's 600 frames, and no longer run was recorded. "Order/voice
 0 noise" gives no verdict in Mesen by frame 6,000. Both are left for the S-DSP's next step.
+
+## 36. Stage 7: the debugger (2026-10-04)
+
+`VenusRT_Plan.md` §4.7 asked for a debug target from Rust exports, since no C# core can read VenusRT's state. Revised by
+`EmuSen_CoreAPI.md` §13.2 to no per-core C# class, the target is the generic `CoreDebugTarget` over the v1 debug
+exports, for any core that claims `DEBUG`. The stage was built in four commits: the debugger's frame, the disassemblers,
+the C# bridge, and this step's completion and oracle.
+
+### 36.1 What was built
+
+- **The debugger's frame** (`src/debugger.rs`, `src/probe.rs`). An armed frame runs the machine's own loop with the
+  shared hooks (`emusen_native::debug::Hooks`) asked before each S-CPU instruction, its calls, returns, interrupts
+  and stores noted after it. The SPC700 and the cartridge's processor run inside catch-ups, so each carries a probe
+  while a debugger's frame runs: its breakpoints, the steps it took for coverage, its stores, and where it stopped.
+  After every S-CPU instruction the SPC700 and a NEC DSP are caught up (the SA-1 and the GSU already are) and their
+  probes are read. A stop leaves the frame open; `debug_run_frame` reports the processor and its pc. A plain frame
+  runs with no probe fitted, and `advance` disarms anything left. The skip-versus-draw and armed-versus-plain checks
+  hold it to that.
+- **Processors** 0 (the S-CPU), 1 (the SPC700) and 2 (the SA-1, the GSU or a NEC DSP), named as DianaOS's scope words
+  name them: `CPU`, `SPC`, `SA1`, `GSU`, `DSP`. Each has its registers as machine info lists them (the 65C816's A, X, Y,
+  S, D, PB, PC, DB, P, E for the S-CPU and the SA-1; the SPC700's A, X, Y, SP, PC, PSW; the GSU's sixteen and its
+  control registers; the µPD77C25's), its breakpoints, coverage and live pc. Processor 0 has the call stack and
+  stepping by depth.
+- **The chips' spaces**, appended where the cartridge has the chip: `GSURAM`, `GSUBUS`, `SA1IRAM`, `BWRAM`, `SA1BUS`,
+  `DSPRAM`, `DSPPRG`, with their ids kept.
+- **The disassemblers** (`src/disasm/`), behind `DEBUG_DISASSEMBLE`, each from its document: the 65C816 from WDC's
+  datasheet (Table 5-4's opcode matrix and Table 6-2's operand formats), the SPC700, the GSU (with ALT1, ALT2 and
+  WITH carried from byte to byte) and the µPD77C25/µPD96050 from fullsnes's tables. Each gives the static reference
+  a call, jump, read or write makes, which the target classifies. The instruction set follows the space where the
+  space is a processor's own (APURAM the SPC700's, and so on), else the processor asked. The SPC700's listing of
+  $FFC0-$FFFF reads the boot program while CONTROL maps it, as the SPC700 executes it, not the RAM beneath.
+- **The bridge** (`EmuSen/Cores/Native/CoreDebugBridge.cs`). It pushes every processor's breakpoints, the call stack,
+  the write watches, the data breakpoints and the coverage flags down as the core's tables. It runs an armed frame
+  through `debug_run_frame`, judging each stop with the registry of the processor that stopped (conditions, hit
+  counts, steps), and drains stores, calls, the profile and coverage back into the registries. `CoreEngine` halts in
+  front of a breakpoint on any processor (`IsHaltedAtBreakpoint`, `HaltedProcessor`, `ICoprocessorHalt`) and resumes
+  the open frame on the next `RunFrame`. A loaded state closes the frame.
+- **Completed in this step:**
+  - *A processor's code space from machine info.* `processors[]` gains an optional `code_space`, the space id its code is
+    listed from (`EmuSen_CoreAPI.md` §6.4). VenusRT names CpuBus, APURAM, SA1BUS, GSUBUS and DSPPRG, so `disasm spc`
+    lists APURAM as C# Venus's target does. Absent, the host keeps its rule by name, which MoonRT and MercuryRT use.
+  - *Stepping over and out.* Processor 0's registry is given the bridge's call stack, without which `step over` was
+    refused.
+  - *Every processor's registers refreshed* with `RefreshProviders`, so `regs spc` and `eval spc a` show live values.
+
+### 36.2 The oracle (measured 2026-10-04)
+
+**§4.7's claims as tests** (`EmuSen.WiseMan/Cores/VenusRtDebugTests.cs`), on cartridges of `SyntheticRom` with
+synthetic firmware for the DSP-1, through `CoreEngine`, `CoreDebugTarget` and DianaOS's own commands:
+
+| Claim | Test |
+|---|---|
+| Processors named as the scope words, the chip as the coprocessor | `cpu`, `spc` on a plain cartridge; `sa1`, `gsu`, `dsp` added by the chip; `CoprocessorBreakpoints` and `CoprocessorCoverage` the chip's |
+| Spaces | the console's eight, and the chip's two or three |
+| Code spaces | CpuBus, APURAM, SA1BUS, GSUBUS, DSPPRG |
+| Registers | named and live for the S-CPU and the SPC700; `regs spc` through the shell |
+| Breakpoints, by scope word | `bp spc add` reaches the SPC700's registry only, `bp add` the S-CPU's |
+| Halting | a breakpoint on the S-CPU halts in front of its instruction with the frame open, and resuming completes it; on the SPC700 it halts on processor 1; on the DSP-1 on processor 2 |
+| Stepping | four single steps through a JSR into its routine and back; step over runs the routine whole; three steps on the SPC700 alone |
+| Call stack | the JSR's frame in front of a breakpoint in the routine, and in `bt` |
+| Watches | a WRAM write watch records the store with its value and the storing instruction |
+| Coverage | kept per processor; the S-CPU's executed instructions and nothing else |
+| Expressions | `eval a` and `eval spc sp` read each processor's registers |
+| Disassembly | `disasm spc` equals `disasm APURAM`; a JSR classified as a Call to its target; the SPC700, GSU and µPD77C25 decoders on their spaces |
+| States | a state loaded while halted starts a whole frame |
+
+19 of 19 pass.
+
+**Every table armed, on four games** (`Every_table_armed_with_nothing_to_hit_gives_the_plain_run`, opt-in through
+`EMUSEN_VENUSRT_GAMES`). Two engines ran each game for 600 frames, the pad pressed in turn. One ran plain. The other
+had coverage armed on every processor, a breakpoint no processor reaches on each, the profiler, and write watches over
+CpuBus, WRAM, SRAM and APURAM. The picture and the samples were equal every frame and the states byte-identical at the
+end, for Super Mario World, Super Mario RPG (SA-1), Star Fox (GSU) and Super Mario Kart (DSP-1B), with 2.5 to 5.0
+million stores watched and 7.5 to 8.9 million instructions profiled. On a third engine, 120 frames in, a breakpoint over
+the cartridge processor's whole space halted on it: the SA-1 at $C08171, the GSU at $01B301, the DSP-1B at $00000C.
+Removing the breakpoint, the next frame completed.
+
+A first version checked the coprocessor halt on the armed engine after its 600 frames, and Star Fox did not halt on
+the GSU. The machine and the bridge were sound: the core alone halted at once, and so did the engine with every table
+armed. After 600 frames of buttons pressed in turn, the game stands in a scene where the GSU does not run. The check
+moved to its own engine, 120 frames in.
+
+**The conformance kit**, from the branch's release libraries, on the eleven images of §31.2: all fifteen cases pass on
+every one, C15 included (a `RING` stop continued, a breakpoint at processor 0's next instruction, eight steps under
+`EACH`); C14 finds 3 processors and 11 spaces on Super Mario RPG.
+
+**Tests**: the crate's 91; WiseMan's VenusRt, CoreAdapter, CoreDebug, CoreAbi, NativeHost, CoreDiscovery, MoonRt,
+MercuryRt, CoprocessorDebug, NecDspDebugTarget, SetRegVectors, Snes, Firmware, MoonDebug and MercuryDebug filters, 755
+of 755; `emusen-native` 50, the kit's own suites. Two MercuryRT crate tests fail (`a_state_that_is_not_mercurys_or_is_cut_short_changes_nothing`,
+`version_6_writes_the_cartridge_once_...`). They fail identically on the merged tree before this step, which touches
+MercuryRT only by the descriptor's new field, and are not this stage's.
+
+### 36.3 What §4.7 lists that v1 does not carry
+
+`EmuSen_CoreAPI.md` §6.14 bounds the generic debugger: memory, registers, disassembly, breakpoints, watches,
+stepping, the call stack, coverage and the profile. Console-shaped views wait for extension exports or a system pack
+(§15, Q10). On VenusRT, then:
+
+- **Not on the generic target:** the video, APU and coprocessor register providers with history, sprites, palettes,
+  audio channels, hardware load, interrupt vectors, DMA channels and the DMA log. A test holds the views empty.
+- **Not built:** register flow, freezes and access counters. Freezes undo each write as it lands, and access counters
+  count reads; v1 reports a frame's stores after it, and no reads.
+- **Kept from before:** cheats, the frame log and labels, all host-side.
+
+The plain frame is untouched by this step, so it has no cost to measure.

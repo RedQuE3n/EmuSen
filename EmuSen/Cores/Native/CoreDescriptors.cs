@@ -35,7 +35,7 @@ namespace EmuSen.Cores.Native
         public bool ReportsStores => Flags.Contains("reports_stores");
     }
 
-    public sealed record CoreProcessor(uint Id, string Name, int PcBits, IReadOnlyList<(string Name, int Bits)> Registers);
+    public sealed record CoreProcessor(uint Id, string Name, int PcBits, IReadOnlyList<(string Name, int Bits)> Registers, uint? CodeSpace = null);
 
     public sealed record CoreBatteryFile(uint Which, string Suffix, long Length);
 
@@ -136,7 +136,8 @@ namespace EmuSen.Cores.Native
                 Arr(r, "ports").Select(p => new CorePort((uint)Long(p, "port"), OptStr(p, "controller"))).ToArray(),
                 Arr(r, "spaces").Select(s => new CoreSpace((uint)Long(s, "id"), Str(s, "name"), Long(s, "size"), Strs(s, "flags"))).ToArray(),
                 Arr(r, "processors").Select(p => new CoreProcessor((uint)Long(p, "id"), Str(p, "name"), (int)Long(p, "pc_bits"),
-                    Arr(p, "registers").Select(g => (Str(g, "name"), (int)Long(g, "bits"))).ToArray())).ToArray(),
+                    Arr(p, "registers").Select(g => (Str(g, "name"), (int)Long(g, "bits"))).ToArray(),
+                    p.TryGetProperty("code_space", out var code) && code.ValueKind == JsonValueKind.Number ? (uint)code.GetInt64() : null)).ToArray(),
                 Arr(r, "battery").Select(b => new CoreBatteryFile((uint)Long(b, "which"), Str(b, "suffix", ".srm"), Long(b, "length"))).ToArray(),
                 Str(state, "format"), Long(state, "version"), kinds.Length == 0 ? new uint[] { 0 } : kinds,
                 Strs(r, "phases"),

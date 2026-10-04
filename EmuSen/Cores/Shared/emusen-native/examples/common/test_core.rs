@@ -264,7 +264,7 @@ impl Core for TestCore {
             audio: Audio { rate: self.rate, channels: vec!["Tone".into()] },
             ports: vec![Port { port: 0, controller: Some("test.pad".into()) }, Port { port: 1, controller: None }],
             spaces: vec![Space { cheats: true, ..Space::new(0, "RAM") }, Space { read_only: true, ..Space::new(1, "ROM") }],
-            processors: vec![Processor { id: 0, name: "Counter".into(), pc_bits: 8, registers: vec![("F".into(), 64)] }],
+            processors: vec![Processor { id: 0, name: "Counter".into(), pc_bits: 8, registers: vec![("F".into(), 64)], code_space: None }],
             battery: vec![Battery { which: 0, suffix: ".srm".into() }],
             state: StateFormat { format: "TST1".into(), version: 1, loads_from: vec![1] },
             phases: vec!["count".into()],

@@ -673,7 +673,7 @@ What depends on the game, read after create:
 | **`audio`** | `rate` at start; `channels`: the names `set_mutes`' bits stand for |
 | **`ports`** | which controller each port holds |
 | **`spaces`** | `{ id, name, size, flags }`; `flags` an array of the strings `read_only`, `side_effects`, `reports_stores`, `cheats` (open, as any enumerated string). `size` and `battery`'s `length` are written by the crate from `space_size` and `battery`, and `state.kinds` from `SNAPSHOT`, so they cannot disagree with the exports (C14). The names are the C# oracle's where there is one (`MoonMachine.cs:17`), so the cheats and the debugger key on them as now |
-| `processors` | `{ id, name, pc_bits, registers: [{ name, bits }] }`, main processor first; `IDebugTarget.DebugCpus` and `regs` from data |
+| `processors` | `{ id, name, pc_bits, registers: [{ name, bits }], code_space }`, main processor first; `IDebugTarget.DebugCpus` and `regs` from data. `code_space`, appended 2026-10-04 for VenusRT's SPC700 (`VenusRT_Native.md` §36), is the id of the space the processor's code is listed from; absent, the host takes the space named `<name>BUS`, else `<name>PRG`, else for processor 0 the first space |
 | `battery` | `{ which, suffix, length }`: `.srm`, the N64's pak; the path rule stays the runtime's (`SaveLibrary.SramPathFor`) |
 | **`state`** | `{ format, version, kinds, loads_from }`: the magic and version a frontend records beside a state (`IStateFormat`), the kinds, and the versions it reads |
 | `phases` | the names `phases` reports, in order |

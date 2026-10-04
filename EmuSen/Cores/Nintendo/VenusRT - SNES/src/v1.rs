@@ -70,7 +70,9 @@ fn replacement(stem: Option<&str>) -> Replacement {
     };
     let without = |chip: &str| Replacement::None { cost: format!("VenusRT has no replacement for the {chip} yet: without the image the game runs without its chip.") };
     match stem {
-        Some("dsp1") | Some("dsp1b") => partial("DSP-1", "the ROM version"),
+        Some("dsp1") | Some("dsp1b") => Replacement::Accuracy {
+            cost: "Without the image, VenusRT's open replacement for the DSP-1 runs: its ports and timing as the chip's, Multiply, Radius, Range, the memory test and the ROM version exact, Triangle, Rotate and Polar within a few units, and its other commands not computed yet, so 3D results are wrong (VenusRT_DspHle.md §5.5).".into(),
+        },
         Some("dsp2") => partial("DSP-2", "the no-op 0Fh"),
         Some("st010") => partial("ST010", "00h"),
         Some("dsp3") => without("DSP-3"),
@@ -241,7 +243,7 @@ impl Core for Machine {
                 .collect(),
             processors: self.processors(),
             battery: vec![Battery { which: 0, suffix: ".srm".into() }],
-            state: StateFormat { format: "VNRT".into(), version: STATE_VERSION as i64, loads_from: vec![17, STATE_VERSION as i64] },
+            state: StateFormat { format: "VNRT".into(), version: STATE_VERSION as i64, loads_from: vec![17, 18, STATE_VERSION as i64] },
             phases: Vec::new(),
             patches: Some((0, 0xFF_FFFF)),
             skip_rendering_state_neutral: true,

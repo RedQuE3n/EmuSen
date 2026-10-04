@@ -2567,6 +2567,23 @@ fastest loop turning out to be the original's, which happened twice while D-38 w
 eight-byte block loop, both measured and discarded). The record of each replacement states its counts, so the
 argument can be checked from outside.
 
+**`--forced FORMULA`, for derived tables** (*added 2026-10-04*, `VenusRT_DspHle.md` §5.3, first used in
+`VenusRT_Native.md` §40.4). For a replacement made of tables generated from formulas, a long common run is the
+expected outcome of success: a correct sine table must equal the original's wherever the original's is that formula.
+So the plain thresholds are the wrong test.
+
+- **The input.** FORMULA is the same tables written by an independent generator from the formulas alone, such as
+  `dsp1_tables.py`.
+- **What it computes.** The tool finds every common run between FORMULA and the original, and calls the original's
+  bytes under them forced.
+- **What it reports.** The **formula coverage**: the share of the original that some formula run reproduces. The
+  **residual**: the parts of the replacement's common runs with the original that no formula run covers.
+- **The verdict** is PASS when no residual run is longer than `--max-run`.
+
+The unit test builds a synthetic original holding a sine table among noise. A replacement holding the same table
+passes with residual zero; one holding the table plus a copied run of ten noise bytes fails, the run reported at its
+offsets.
+
 ### 3.62 What the test host kept: four roots, two crashes under load, and the harness that now lets go
 
 *Measured 2026-10-04.* At 04:06 that day a WiseMan test host running the user-interface filter

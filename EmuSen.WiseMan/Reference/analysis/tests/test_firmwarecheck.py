@@ -88,5 +88,44 @@ class FirmwareCheckTests(unittest.TestCase):
         self.assertEqual(firmwarecheck.longest_common(ours, ORIGINAL)[0], best)
 
 
+class ForcedRunTests(unittest.TestCase):
+    """--forced: a synthetic sine table among noise, as VenusRT_DspHle.md §5.3 specifies the tool's own test."""
+
+    TABLE = bytes(b for i in range(64) for b in int(round(32767 * __import__("math").sin(i * 3.14159265 / 128))).to_bytes(2, "little"))
+    NOISE = _original() * 2
+
+    def run_forced(self, ours, formula, theirs):
+        with tempfile.TemporaryDirectory() as d:
+            paths = [os.path.join(d, n) for n in ("ours.bin", "formula.bin", "theirs.bin")]
+            for path, data in zip(paths, (ours, formula, theirs)):
+                with open(path, "wb") as f:
+                    f.write(data)
+            out = io.StringIO()
+            code = firmwarecheck.main([paths[0], paths[2], "--forced", paths[1]], out)
+            return code, out.getvalue()
+
+    def test_a_table_the_formula_forces_passes_with_no_residual(self):
+        original = self.NOISE[:40] + self.TABLE + self.NOISE[40:]
+        code, text = self.run_forced(self.TABLE, self.TABLE, original)
+        self.assertEqual(code, 0, text)
+        self.assertIn("residual runs not covered by a formula run: 0", text)
+        self.assertIn(f"formula coverage {len(self.TABLE)} of {len(original)} bytes", text)
+
+    def test_a_copied_noise_run_beside_the_table_fails(self):
+        original = self.NOISE[:40] + self.TABLE + self.NOISE[40:]
+        ours = self.TABLE + self.NOISE[10:20]
+        code, text = self.run_forced(ours, self.TABLE, original)
+        self.assertEqual(code, 1, text)
+        self.assertIn(f"  10 bytes: replacement offset {len(self.TABLE)}, original offset 10", text)
+
+    def test_a_plain_run_over_the_table_alone_would_fail(self):
+        original = self.NOISE[:40] + self.TABLE + self.NOISE[40:]
+        with tempfile.TemporaryDirectory() as d:
+            a, b = os.path.join(d, "ours.bin"), os.path.join(d, "theirs.bin")
+            open(a, "wb").write(self.TABLE)
+            open(b, "wb").write(original)
+            self.assertEqual(firmwarecheck.main([a, b], io.StringIO()), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

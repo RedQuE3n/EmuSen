@@ -66,14 +66,6 @@ impl Machine {
         true
     }
 
-    /// As `load_rom`, with the sound unit's 64-byte boot ROM, without which the SPC700 does not run.
-    pub fn with_ipl(image: &[u8], ipl: [u8; 64]) -> Result<Machine, ImageTooShort> {
-        let mut m = Machine::load_rom(image)?;
-        let pal = m.sys.timing.pal;
-        m.sys.apu = crate::apu::smp::Smp::new(Some(ipl), pal);
-        Ok(m)
-    }
-
     /// What a candidate header's reset handler does in its first `instructions`: its writes to the I/O registers,
     /// and whether it ran into BRK, COP, STP or an opcode fetched from nothing (VenusRT_Disputes.md, D-4).
     pub fn reset_evidence(rom: &[u8], header: crate::cart::Header, instructions: u32) -> (u32, bool) {
@@ -133,7 +125,7 @@ impl Machine {
         if let (Some(a), Some(b)) = (&old.cart.sa1, m.sys.cart.sa1.as_mut()) {
             b.iram.copy_from_slice(&a.iram);
         }
-        m.sys.apu = crate::apu::smp::Smp::new(old.apu.ipl, old.timing.pal);
+        m.sys.apu = crate::apu::smp::Smp::new(old.timing.pal);
         m.sys.apu.ram.copy_from_slice(&old.apu.ram);
         m.sys.timing.frame = old.timing.frame;
         m.sys.patches = std::mem::take(&mut old.patches);

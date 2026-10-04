@@ -40,7 +40,6 @@ namespace EmuSen.WiseMan.Mistress
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             Directory.CreateDirectory(DataStore.Firmware);
-            File.WriteAllBytes(Path.Combine(DataStore.Firmware, "spc700.rom"), VenusRtTestRomRunnerTests.IdleIpl());
             _rom = Path.Combine(roms, "Adapter.sfc");
             File.WriteAllBytes(_rom, VenusRtCoreAbiTests.PadToBackdropRom());
             new AppSettings { RomDirectory = roms, ResumeOnLaunch = AppSettings.ResumeNever, StateDirectory = Path.Combine(_root, "States") }.Save();
@@ -93,6 +92,29 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal("venusrt", core.Info.Id);
             Assert.Null(game.EngineNotice);
             WaitFor(() => game.TotalFrames > 60 && Rewind(window).Depth > 0);
+            window.Close();
+        }, default);
+
+        // An empty firmware folder and VenusRT chosen: an ordinary game asks for nothing, and a DSP-1 cartridge still asks for its chip (VenusRT_Disputes.md, D-38).
+        [Fact]
+        public Task An_ordinary_game_on_venusrt_prompts_for_no_firmware() => Session.Dispatch(async () =>
+        {
+            if (!Found) return;
+            GraphicsConfig config = GraphicsConfig.Load();
+            config.SetValue("SNES", CoreCatalog.EngineKey, VenusRtCoreAbiTests.Engine);
+            config.Save();
+            Assert.Empty(Directory.GetFiles(DataStore.Firmware));
+            string dsp = Path.Combine(_root, "Roms", "Pilot.sfc");
+            File.WriteAllBytes(dsp, SyntheticRom.BuildNecDsp("PILOTWINGS"));
+            var window = new MainWindow();
+            window.Show();
+            TextBlock status = window.FindControl<TextBlock>("StatusText")!;
+            MethodInfo prompt = typeof(MainWindow).GetMethod("PromptForMissingFirmwareAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            string? before = status.Text;
+            await (Task)prompt.Invoke(window, new object[] { _rom })!;
+            Assert.Equal(before, status.Text);
+            await (Task)prompt.Invoke(window, new object[] { dsp })!;
+            Assert.Contains("firmware selected", status.Text);
             window.Close();
         }, default);
 

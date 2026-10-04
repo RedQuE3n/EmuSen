@@ -11,28 +11,19 @@ pub const CORE_VERSION: u16 = 1;
 /// An image shorter than one 32 KiB bank after any copier header.
 pub const STATUS_IMAGE_TOO_SHORT: i32 = -9;
 
-/// The sound unit's 64-byte boot ROM, file 1, was not given; the console's firmware is the frontend's to supply.
-pub const STATUS_NO_IPL: i32 = -10;
-
 impl NativeCore for Machine {
     const CORE_VERSION: u16 = CORE_VERSION;
     const CAPABILITIES: u64 = 0;
     const ENGINE: &'static str = "VenusRT";
 
-    /// The battery save is file 0, clipped to the cartridge's RAM; file 1 is the SPC700's 64-byte boot ROM, required;
-    /// file 2 is a NEC DSP's firmware, 8,192 or 53,248 bytes, for a cartridge whose header names one, or its program
-    /// with file 3 its data (6,144 and 2,048, or 49,152 and 4,096).
+    /// The battery save is file 0, clipped to the cartridge's RAM; file 2 is a NEC DSP's firmware, 8,192 or 53,248
+    /// bytes, for a cartridge whose header names one, or its program with file 3 its data (6,144 and 2,048, or 49,152
+    /// and 4,096). There is no file 1: the SPC700's boot program is VenusRT's own (D-38).
     fn create(image: &[u8], settings: &Settings, files: &[File<'_>]) -> Result<Self, i32> {
         if settings.keys().next().is_some() {
             return Err(abi::status::UNKNOWN_SETTING);
         }
         let mut m = Machine::load_rom(image).map_err(|_| STATUS_IMAGE_TOO_SHORT)?;
-        let ipl = match files.iter().find(|f| f.which == 1) {
-            Some(f) => <[u8; 64]>::try_from(f.data).map_err(|_| abi::status::BAD_FILE)?,
-            None => return Err(STATUS_NO_IPL),
-        };
-        let pal = m.sys.timing.pal;
-        m.sys.apu = crate::apu::smp::Smp::new(Some(ipl), pal);
         // File 2 is the DSP's firmware whole, or its program with file 3 its data.
         let program = files.iter().find(|f| f.which == 2).map(|f| f.data);
         let data = files.iter().find(|f| f.which == 3).map(|f| f.data);
@@ -46,7 +37,7 @@ impl NativeCore for Machine {
             return Err(abi::status::BAD_FILE);
         }
         for file in files {
-            if file.which > 3 {
+            if file.which == 1 || file.which > 3 {
                 return Err(abi::status::BAD_FILE);
             }
             if file.which != 0 {
@@ -279,11 +270,9 @@ mod tests {
         let image = crate::machine::tests::rom(&[0x80, 0xFE]);
         assert_eq!(Machine::create(&image[..0x4000], &Settings::default(), &[]).err(), Some(STATUS_IMAGE_TOO_SHORT));
         assert_eq!(Machine::create(&image, &Settings::parse(b"SampleRate=48000").unwrap(), &[]).err(), Some(abi::status::UNKNOWN_SETTING));
-        assert_eq!(Machine::create(&image, &Settings::default(), &[]).err(), Some(STATUS_NO_IPL));
-        assert_eq!(Machine::create(&image, &Settings::default(), &[File { which: 1, data: &[1] }]).err(), Some(abi::status::BAD_FILE));
-        let ipl = crate::apu::smp::tests::idle_ipl();
-        assert_eq!(Machine::create(&image, &Settings::default(), &[File { which: 2, data: &[1] }, File { which: 1, data: &ipl }]).err(), Some(abi::status::BAD_FILE));
-        let mut m = Machine::create(&image, &Settings::default(), &[File { which: 0, data: &[1, 2] }, File { which: 1, data: &ipl }]).unwrap();
+        assert_eq!(Machine::create(&image, &Settings::default(), &[File { which: 1, data: &[0; 64] }]).err(), Some(abi::status::BAD_FILE));
+        assert_eq!(Machine::create(&image, &Settings::default(), &[File { which: 2, data: &[1] }]).err(), Some(abi::status::BAD_FILE));
+        let mut m = Machine::create(&image, &Settings::default(), &[File { which: 0, data: &[1, 2] }]).unwrap();
         assert_eq!(m.sys.apu.cpu.pc, 0xFFC0);
         assert_eq!(m.space_size(0), Ok(0x100_0000));
         assert_eq!(m.space_size(6), Ok(0));

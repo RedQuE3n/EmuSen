@@ -49,10 +49,9 @@ namespace EmuSen.WiseMan.Cores
 
         private static DiscoveredCore? Discovered => CoreDiscovery.Found.SingleOrDefault(c => c.Info.Id == "venusrt");
 
-        // The firmware a run needs in the test's firmware folder: the stand-in or the real boot ROM, and the DSP images whole from the corpus's split pairs.
-        private void InstallFirmware(byte[] ipl)
+        // The firmware a run needs in the test's firmware folder: the DSP images whole from the corpus's split pairs; nothing for the SPC700 (D-38).
+        private static void InstallFirmware()
         {
-            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, "spc700.rom"), ipl);
             if (SnesTestRomCorpus.Root is not { } root || !Directory.Exists(Path.Combine(root, "firmware"))) return;
             foreach (string program in Directory.GetFiles(Path.Combine(root, "firmware"), "*.program.rom"))
             {
@@ -130,9 +129,8 @@ namespace EmuSen.WiseMan.Cores
             if (Discovered is not { } found) return;
             string rom = Path.Combine(_root, "pilot.sfc");
             File.WriteAllBytes(rom, SyntheticRom.BuildNecDsp("PILOTWINGS"));
-            Assert.Equal(new[] { "spc700.rom", "dsp1.rom" }, EmuSen.Common.EmulatorSession.MissingFirmwareFor(rom, Engine).Select(r => r.FileName));
+            Assert.Equal(new[] { "dsp1.rom" }, EmuSen.Common.EmulatorSession.MissingFirmwareFor(rom, Engine).Select(r => r.FileName));
             Assert.DoesNotContain(EmuSen.Common.EmulatorSession.MissingFirmwareFor(rom), r => r.FileName == "spc700.rom");
-            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, "spc700.rom"), VenusRtTestRomRunnerTests.IdleIpl());
             byte[] program = Enumerable.Range(0, 6144).Select(i => (byte)(i * 3)).ToArray(), data = Enumerable.Range(0, 2048).Select(i => (byte)(i * 5)).ToArray();
             string whole = Path.Combine(FirmwareLibrary.Directory, "dsp1.rom");
             int StateSize()
@@ -168,13 +166,11 @@ namespace EmuSen.WiseMan.Cores
         public void The_v1_adapter_runs_venusrt_exactly_as_the_shim()
         {
             if (Discovered is not { } found) return;
-            byte[] ipl = VenusRtTestRomRunnerTests.IdleIpl();
-            InstallFirmware(ipl);
             string rom = Path.Combine(_root, "adapter.sfc");
             File.WriteAllBytes(rom, PadToBackdropRom());
             using var adapter = new CoreEngine(found.Open()!);
             adapter.LoadRom(rom);
-            using var shim = new VenusMachine(File.ReadAllBytes(rom), ipl);
+            using var shim = new VenusMachine(File.ReadAllBytes(rom));
             Assert.True(Compare(adapter, shim, 240) > 0);
             adapter.Cheats.AddRamPoke("WRAM", 0x20, 0x5A, "poke");
             adapter.RunFrame();
@@ -211,15 +207,15 @@ namespace EmuSen.WiseMan.Cores
         public void Commercial_games_run_on_the_adapter_as_on_the_shim()
         {
             string? dir = Environment.GetEnvironmentVariable("EMUSEN_VENUSRT_GAMES");
-            if (dir is null || Discovered is not { } found || VenusRtSnesEngine.Ipl() is not { } ipl) return;
-            InstallFirmware(ipl);
+            if (dir is null || Discovered is not { } found) return;
+            InstallFirmware();
             foreach (string source in Directory.GetFiles(dir).Order(StringComparer.Ordinal))
             {
                 string rom = Path.Combine(_root, Path.GetFileName(source));
                 File.Copy(source, rom, overwrite: true);
                 using var adapter = new CoreEngine(found.Open()!);
                 adapter.LoadRom(rom);
-                using var shim = new VenusMachine(File.ReadAllBytes(rom), ipl, dspFirmware: VenusRtSnesEngine.DspFirmware(rom));
+                using var shim = new VenusMachine(File.ReadAllBytes(rom), dspFirmware: VenusRtSnesEngine.DspFirmware(rom));
                 int lit = Compare(adapter, shim, 600);
                 Assert.True(lit > 0, $"{Path.GetFileName(rom)} shows nothing in 600 frames");
                 _output.WriteLine($"{Path.GetFileName(rom)}: 600 frames equal, {lit} with a picture");
@@ -231,8 +227,8 @@ namespace EmuSen.WiseMan.Cores
         public void A_battery_save_crosses_between_venus_and_venusrt_both_ways()
         {
             string? dir = Environment.GetEnvironmentVariable(BatteryGamesVariable);
-            if (dir is null || Discovered is null || VenusRtSnesEngine.Ipl() is not { } ipl) return;
-            InstallFirmware(ipl);
+            if (dir is null || Discovered is null) return;
+            InstallFirmware();
             CoreOptions.BatteryRamDisabled = false;
             foreach (string source in Directory.GetFiles(dir).Order(StringComparer.Ordinal))
             {

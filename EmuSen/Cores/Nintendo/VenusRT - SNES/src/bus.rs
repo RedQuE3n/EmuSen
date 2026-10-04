@@ -255,7 +255,7 @@ impl System {
             ppu: Ppu::default(),
             ppu_line: 0,
             dev: Devices::default(),
-            apu: Smp::new(None, pal),
+            apu: Smp::new(pal),
             io_writes: 0,
             cart_irq: false,
             patches: Vec::new(),

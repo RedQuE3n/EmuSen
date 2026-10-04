@@ -5,7 +5,7 @@
 use emusen_native::abi::NativeCore;
 use emusen_native::core::*;
 
-use crate::ffi::{STATUS_IMAGE_TOO_SHORT, STATUS_NO_IPL};
+use crate::ffi::STATUS_IMAGE_TOO_SHORT;
 use crate::machine::{DSP_RATE, Machine};
 use crate::state::STATE_VERSION;
 
@@ -35,10 +35,6 @@ const BUTTONS: [(Control, &str); 12] = [
 /// line every other frame), PAL 21,281,370 Hz over 425,568 (312 lines).
 const NTSC_FRAME: (u64, u64) = (236_250_000, 11 * 357_366);
 const PAL_FRAME: (u64, u64) = (21_281_370, 425_568);
-
-fn ipl() -> Firmware {
-    Firmware { which: 1, name: "spc700.rom".into(), label: "The sound unit's 64-byte boot ROM".into(), size: 64, required: true, parts: Vec::new() }
-}
 
 /// A NEC DSP cartridge's firmware as file 2, whole or as its program and data in files 2 and 3; `stem` and `size` as
 /// `Cartridge::nec_firmware` names them, or the open entry core info lists for any of them.
@@ -120,7 +116,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The SNES in Rust, written from hardware documents and graded by test ROMs.".into()),
+            description: Some("The SNES in Rust, written from hardware documents and graded by test ROMs. Its SPC700 boot program is its own, so no firmware file is needed: a program reading $FFC0-$FFFF with the boot ROM mapped sees other bytes than a console's, and the boot handshake's timing can differ by some cycles.".into()),
             systems: vec![System {
                 id: "snes".into(),
                 name: "Super Nintendo Entertainment System".into(),
@@ -133,7 +129,7 @@ impl Core for Machine {
                     buttons: BUTTONS.iter().enumerate().map(|(bit, &(c, label))| Button { bit: bit as u32, control: Some(c), label: label.into() }).collect(),
                     axes: Vec::new(),
                 }],
-                firmware: vec![ipl(), dsp(None)],
+                firmware: vec![dsp(None)],
             }],
             deterministic: true,
             ..Info::default()
@@ -144,18 +140,17 @@ impl Core for Machine {
         // The headers' scores alone first: only an image with a NEC DSP's chipset among its candidates is loaded whole.
         let rom = if image.len() % 1024 == 512 { &image[512..] } else { image };
         if !crate::cart::candidates(rom).iter().any(|h| matches!(h.chipset, 0x03..=0x05 | 0xF6)) {
-            return vec![ipl()];
+            return Vec::new();
         }
         match crate::cart::Cartridge::new(image).and_then(|c| c.nec_firmware()) {
-            Some(named) => vec![ipl(), dsp(Some(named))],
-            None => vec![ipl()],
+            Some(named) => vec![dsp(Some(named))],
+            None => Vec::new(),
         }
     }
 
     fn status_text(code: i32) -> Option<String> {
         match code {
             STATUS_IMAGE_TOO_SHORT => Some("the image is shorter than one 32 KiB bank after any copier header".into()),
-            STATUS_NO_IPL => Some("the sound unit's 64-byte boot ROM, file 1, was not given".into()),
             _ => None,
         }
     }
@@ -416,8 +411,7 @@ mod tests {
     fn machine() -> Machine {
         let mut image = crate::machine::tests::rom(&[0x80, 0xFE]);
         (image[0x7FD6], image[0x7FD8]) = (0x02, 0x03);
-        let ipl = crate::apu::smp::tests::idle_ipl();
-        let request = Create { image: &image, settings: Settings::default(), files: vec![File { which: 1, data: &ipl }], pixel_formats: 1, host_abi_version: sys::ABI_VERSION };
+        let request = Create { image: &image, settings: Settings::default(), files: Vec::new(), pixel_formats: 1, host_abi_version: sys::ABI_VERSION };
         <Machine as Core>::create(&request).unwrap()
     }
 
@@ -435,16 +429,17 @@ mod tests {
         <Machine as Core>::firmware_for(&image).iter().map(|f| format!("{} {} {}", f.which, f.name, f.size)).collect()
     }
 
-    // The NEC DSP named from the header and title by fullsnes's list of games; the boot ROM always.
+    // The NEC DSP named from the header and title by fullsnes's list of games; nothing for a game without one (D-38).
     #[test]
     fn the_firmware_is_named_from_the_header_and_title() {
-        assert_eq!(named(b"SUPER MARIO WORLD", 0x02), ["1 spc700.rom 64"]);
-        assert_eq!(named(b"PILOTWINGS", 0x03), ["1 spc700.rom 64", "2 dsp1.rom 8192"]);
-        assert_eq!(named(b"SUPER MARIO KART", 0x05)[1], "2 dsp1b.rom 8192");
-        assert_eq!(named(b"DUNGEON MASTER", 0x03)[1], "2 dsp2.rom 8192");
-        assert_eq!(named(b"TOP GEAR 3000", 0x03)[1], "2 dsp4.rom 8192");
-        assert_eq!(named(b"F1 ROC II", 0xF6)[1], "2 st010.rom 53248");
-        assert_eq!(named(b"MORITA SHOGI", 0xF6)[1], "2 st011.rom 53248");
+        assert!(named(b"SUPER MARIO WORLD", 0x02).is_empty());
+        assert_eq!(named(b"PILOTWINGS", 0x03), ["2 dsp1.rom 8192"]);
+        assert_eq!(named(b"SUPER MARIO KART", 0x05), ["2 dsp1b.rom 8192"]);
+        assert_eq!(named(b"DUNGEON MASTER", 0x03), ["2 dsp2.rom 8192"]);
+        assert_eq!(named(b"TOP GEAR 3000", 0x03), ["2 dsp4.rom 8192"]);
+        assert_eq!(named(b"F1 ROC II", 0xF6), ["2 st010.rom 53248"]);
+        assert_eq!(named(b"MORITA SHOGI", 0xF6), ["2 st011.rom 53248"]);
+        assert!(<Machine as Core>::info().systems[0].firmware.iter().all(|f| f.which >= 2));
     }
 
     // A DSP's firmware whole as file 2, or as its program in file 2 and its data in file 3; the data alone is refused.
@@ -452,13 +447,12 @@ mod tests {
     fn a_dsp_firmware_comes_whole_or_in_two_parts() {
         let mut image = crate::machine::tests::rom(&[0x80, 0xFE]);
         image[0x7FD6] = 0x03;
-        let ipl = crate::apu::smp::tests::idle_ipl();
         let (program, data) = (vec![0u8; 6_144], vec![0u8; 2_048]);
         let make = |files: Vec<File<'_>>| <Machine as Core>::create(&Create { image: &image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION });
         let whole = [program.as_slice(), data.as_slice()].concat();
-        assert!(make(vec![File { which: 1, data: &ipl }, File { which: 2, data: &whole }]).unwrap().sys.cart.dsp.is_some());
-        assert!(make(vec![File { which: 1, data: &ipl }, File { which: 2, data: &program }, File { which: 3, data: &data }]).unwrap().sys.cart.dsp.is_some());
-        assert_eq!(make(vec![File { which: 1, data: &ipl }, File { which: 3, data: &data }]).err(), Some(status::BAD_FILE));
+        assert!(make(vec![File { which: 2, data: &whole }]).unwrap().sys.cart.dsp.is_some());
+        assert!(make(vec![File { which: 2, data: &program }, File { which: 3, data: &data }]).unwrap().sys.cart.dsp.is_some());
+        assert_eq!(make(vec![File { which: 3, data: &data }]).err(), Some(status::BAD_FILE));
     }
 
     // RESET: the CPU at its vector again, the memories and the frame count kept.
@@ -520,10 +514,9 @@ mod tests {
     fn an_st01x_battery_is_its_on_chip_ram() {
         let mut image = crate::machine::tests::rom(&[0x80, 0xFE]);
         image[0x7FD6] = 0xF6;
-        let ipl = crate::apu::smp::tests::idle_ipl();
         let firmware = vec![0u8; 53_248];
         let saved: Vec<u8> = (0..4096).map(|i| (i * 5 + 1) as u8).collect();
-        let files = vec![File { which: 0, data: &saved }, File { which: 1, data: &ipl }, File { which: 2, data: &firmware }];
+        let files = vec![File { which: 0, data: &saved }, File { which: 2, data: &firmware }];
         let mut m = <Machine as Core>::create(&Create { image: &image, settings: Settings::default(), files, pixel_formats: 1, host_abi_version: sys::ABI_VERSION }).unwrap();
         assert_eq!(Core::battery(&m, 0).unwrap(), (&saved[..], flags::BATTERY_TRACKED));
         assert_eq!(m.sys.read_value(0x68_0003, false), Some(saved[3]));

@@ -10,26 +10,24 @@ namespace EmuSen.Cores.Nintendo.VenusRT
 
         public static bool Available => VenusNative.Available;
 
-        // File 0 is the battery save, file 1 the sound unit's 64-byte boot ROM, which the core requires, and file 2 a NEC DSP's firmware.
-        public VenusMachine(ReadOnlySpan<byte> image, byte[]? ipl, byte[]? battery = null, byte[]? dspFirmware = null)
-            : base(VenusNative.Api, "VenusRT", "VenusRT", Own, OwnWords, image, "", Files(ipl, battery, dspFirmware))
+        // File 0 is the battery save and file 2 a NEC DSP's firmware; the SPC700's boot program is the core's own (VenusRT_Disputes.md, D-38).
+        public VenusMachine(ReadOnlySpan<byte> image, byte[]? battery = null, byte[]? dspFirmware = null)
+            : base(VenusNative.Api, "VenusRT", "VenusRT", Own, OwnWords, image, "", Files(battery, dspFirmware))
         {
         }
 
-        private static (uint, byte[])[] Files(byte[]? ipl, byte[]? battery, byte[]? dsp) =>
-            new[] { (0u, battery), (1u, ipl), (2u, dsp) }.Where(f => f.Item2 is not null).Select(f => (f.Item1, f.Item2!)).ToArray();
+        private static (uint, byte[])[] Files(byte[]? battery, byte[]? dsp) =>
+            new[] { (0u, battery), (2u, dsp) }.Where(f => f.Item2 is not null).Select(f => (f.Item1, f.Item2!)).ToArray();
 
         private static Exception? Own(int status) => status switch
         {
             -9 => new InvalidDataException("Not an SNES image: shorter than one 32 KiB bank."),
-            -10 => new FileNotFoundException("The SNES sound unit's 64-byte boot ROM (spc700.rom) was not supplied."),
             _ => null,
         };
 
         private static string? OwnWords(long status) => status switch
         {
             -9 => "an image shorter than one 32 KiB bank",
-            -10 => "no 64-byte SPC700 boot ROM",
             _ => null,
         };
 

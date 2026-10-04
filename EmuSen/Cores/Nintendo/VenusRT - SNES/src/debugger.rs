@@ -235,11 +235,11 @@ mod tests {
     use super::*;
     use emusen_native::debug::{flag, Range};
 
-    /// LoROM: JSR $8010 in a loop; the routine stores $5A at $7E0020 and returns. The boot ROM loops at $FFC0.
+    /// LoROM: JSR $8010 in a loop; the routine stores $5A at $7E0020 and returns. The SPC700 waits in its boot program.
     fn machine() -> Machine {
         let mut image = crate::machine::tests::rom(&[0x20, 0x10, 0x80, 0x80, 0xFB]);
         image[0x10..0x16].copy_from_slice(&[0xA9, 0x5A, 0x8D, 0x20, 0x00, 0x60]);
-        let mut m = Machine::with_ipl(&image, crate::apu::smp::tests::idle_ipl()).unwrap();
+        let mut m = Machine::load_rom(&image).unwrap();
         m.run_frame();
         m
     }
@@ -285,13 +285,14 @@ mod tests {
         assert!(bits[0x8010 >> 3] & 1 != 0 && bits[0x8000 >> 3] & 1 != 0 && bits[0x9000 >> 3] == 0);
     }
 
-    // The SPC700's breakpoint stops the frame on processor 1 in front of its instruction, and its resume passes it.
+    // The SPC700's breakpoint, on the boot program's wait for $CC, stops the frame on processor 1 in front of its
+    // instruction, and its resume passes it.
     #[test]
     fn the_spc700_stops_at_its_breakpoint() {
         let mut m = machine();
-        m.debug_breakpoints[0] = vec![(0xFFC0, 0xFFC0)];
+        m.debug_breakpoints[0] = vec![(0xFFD2, 0xFFD2)];
         assert_eq!(m.run_frame_debug(0), stop::BREAKPOINT);
-        assert_eq!((m.debug_stopped, m.debug_pc(1)), (1, Some(0xFFC0)));
+        assert_eq!((m.debug_stopped, m.debug_pc(1)), (1, Some(0xFFD2)));
         let cycles = m.sys.apu.cycles;
         assert_eq!(m.run_frame_debug(run::UNCHECKED | run::CONTINUE), stop::BREAKPOINT);
         assert!(m.sys.apu.cycles > cycles && m.debug_stopped == 1);

@@ -114,7 +114,7 @@ impl v1::Core for Machine {
                 .enumerate()
                 .map(|(id, &name)| Space { cheats: id == 0, side_effects: id == 7, reports_stores: matches!(id, 0 | 2 | 7), ..Space::new(id as u32, name) })
                 .collect(),
-            processors: vec![Processor { id: 0, name: "CPU".into(), pc_bits: 16, registers: Vec::new() }],
+            processors: vec![Processor { id: 0, name: "CPU".into(), pc_bits: 16, registers: Vec::new(), code_space: None }],
             battery: if battery { vec![Battery { which: 0, suffix: ".srm".into() }] } else { Vec::new() },
             state: StateFormat { format: "MOON".into(), version: STATE_VERSION as i64, loads_from: (OLDEST_READABLE_VERSION..=STATE_VERSION).map(i64::from).collect() },
             phases: Vec::new(),

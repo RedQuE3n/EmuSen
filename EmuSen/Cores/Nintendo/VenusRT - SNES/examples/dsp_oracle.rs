@@ -1,4 +1,4 @@
-//! The NEC DSP command oracle over the low-level path (VenusRT_Native.md §36): `dsp_oracle sweep <chip> [sets]`,
+//! The NEC DSP command oracle over the low-level path (VenusRT_Native.md §37): `dsp_oracle sweep <chip> [sets]`,
 //! `dsp_oracle versus <chip> <chip> [cases]`, `dsp_oracle latency <chip> [cases]`. Images from EMUSEN_VENUSRT_FIRMWARE;
 //! full reports to ~/.cache/emusen/probe/venusrt/dsp-hle/, counts and cycles only on stdout.
 use std::collections::BTreeMap;

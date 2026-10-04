@@ -1,4 +1,4 @@
-//! The port driver and command oracle for the NEC DSPs (VenusRT_DspHle.md §4, VenusRT_Native.md §36): a chip spoken
+//! The port driver and command oracle for the NEC DSPs (VenusRT_DspHle.md §4, VenusRT_Native.md §37): a chip spoken
 //! to only through DR, SR, the ST01x's RAM and its clock, as the S-CPU speaks to it, with every transfer's value, SR
 //! and latency recorded. Expected values are never stored: they come from running the low-level path at test time.
 
@@ -155,7 +155,7 @@ impl Pcg {
 }
 
 /// The quickest answer the driver models, in chip cycles to the first byte and between a word's bytes: about one
-/// S-CPU bus cycle each (VenusRT_Native.md §36).
+/// S-CPU bus cycle each (VenusRT_Native.md §37).
 pub const FASTEST: (u32, u32) = (4, 3);
 
 /// How the S-CPU side behaves: chip cycles from RQM rising to its first byte, between a word's two bytes, and the

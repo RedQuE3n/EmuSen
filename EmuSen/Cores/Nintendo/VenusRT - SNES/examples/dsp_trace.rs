@@ -1,4 +1,4 @@
-//! The NEC DSP trace recorder (VenusRT_DspHle.md §4.2, VenusRT_Native.md §36): every command a game gives its chip,
+//! The NEC DSP trace recorder (VenusRT_DspHle.md §4.2, VenusRT_Native.md §37): every command a game gives its chip,
 //! with the frame, inputs, results and each transfer's latency, and the game's command histogram.
 //! `dsp_trace <rom> <frames> [script]`; the image from EMUSEN_VENUSRT_FIRMWARE by the name the cartridge needs; the
 //! trace to ~/.cache/emusen/probe/venusrt/dsp-hle/trace-<rom>.txt, counts on stdout. No battery file is read.

@@ -553,7 +553,9 @@ Each stage is a run of supervised steps of a few hours, with a check-in after ea
 | 9 | Retirement: the default flipped; after the waiting period, Venus removed or moved; Pharaoh's and Hotaru's Venus uses given equivalents or retired | §7 | 1 |
 
 *Stage 0 was run on 2026-09-30, with the crate skeleton, the probe's pacing fix and the clone check brought forward
-into it; `VenusRT_Native.md` §1 is its record. Stage 1 took two steps, not four, the same day (§10 and §11 there), and stage 2 three, not five (§12 to §14).*
+into it; `VenusRT_Native.md` §1 is its record. Stage 1 took two steps, not four, the same day (§10 and §11 there), and stage 2 three, not five (§12 to §14). Stage 7 closed on 2026-10-04 in four steps
+(§36): on the generic debug target, which `EmuSen_CoreAPI.md` §13.2 put in place of a `VenusRtDebugTarget`; §4.7's
+console views stay outside v1 there.*
 
 About 44 steps, or 130–160 hours (P3). Stage 6 can run after stage 4, before the coprocessors, so that the player gets
 the engine for ordinary cartridges early; games with a chip then fall back to Venus with a notice until stage 5 lands.
@@ -631,7 +633,7 @@ Each question as it was put, and its decision. Every recommendation this page ma
    through `FirmwareLibrary` (`EmuSen_Firmware.md` §5 is why nothing ships). There is no high-level emulation of the
    DSPs, and VenusRT reads the same files, combined or split (§4.2). *Superseded 2026-10-04* by `EmuSen_Firmware.md`
    §0: VenusRT carries open replacements for the NEC DSP programs, planned in `VenusRT_DspHle.md`, whose first step is
-   recorded in `VenusRT_Native.md` §36; the player's own image stays the exact path when present.
+   recorded in `VenusRT_Native.md` §37; the player's own image stays the exact path when present.
 3. **Q3, how much accuracy is traded for speed on the handheld and the weak laptop?** Decided: none by default, and
    no second "fast" core. If §5.5's budget is missed, the first lever is the SA-1 slice bound (§5.4), which changes only
    contention timing, and it becomes a setting before anything in the PPU or CPU is loosened.

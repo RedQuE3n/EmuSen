@@ -1,6 +1,6 @@
 //! The disassemblers of the four instruction sets a cartridge can run, each written from its document: the 65C816
 //! from WDC's datasheet (the S-CPU and the SA-1), the SPC700, the GSU and the µPD77C25 from fullsnes. They decode
-//! bytes read through a closure and know nothing of the machine. See VenusRT_Native.md §35.
+//! bytes read through a closure and know nothing of the machine. See VenusRT_Native.md §36.
 
 pub mod gsu;
 pub mod spc700;

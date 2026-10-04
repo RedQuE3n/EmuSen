@@ -40,6 +40,7 @@ namespace EmuSen.Cores.Native
             Coverage = Enumerable.Range(0, count).Select(n => n < Coverage.Count ? Coverage[n] : new CoverageRegistry()).ToArray();
             _coverageBits = Enumerable.Range(0, count).Select(n => new byte[(int)Math.Min(1L << 21, (1L << Math.Clamp(n < processors.Count ? processors[n].PcBits : 24, 1, 24)) / 8)]).ToArray();
             CallStack.FrameNumberProvider = () => EventFrame;
+            if (Supported) _engine.Breakpoints.CallStack = CallStack;
         }
 
         // Anything that can halt, record or report takes the observed frame.

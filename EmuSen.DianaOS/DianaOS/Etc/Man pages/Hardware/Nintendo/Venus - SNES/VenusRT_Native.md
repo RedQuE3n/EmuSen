@@ -5336,3 +5336,22 @@ The pictures named are in `~/.cache/emusen/probe/venusrt/dsp-hle/shots/`.
   needing the player's image.
 - **Project's member** (§49.6): choose by exact share, or admit the coordinate-wise eye. Either would bring Michael
   Andretti's Indy Car Challenge's car to the image's size.
+
+## 52. The NEC DSP replacements: the limit angle admitted and Project chosen by exact share (2026-10-04)
+
+### 52.1 The two decisions, and the amendments they make
+
+*Decided 2026-10-04*, on §51.4's questions.
+
+- **The limit angle is admitted.** R1 (plan §1.3) gains one exception: the DSP-1's limit angle on Azs, measured from
+  the image as a latency is, with the method and the precision recorded (§52.3). It is the only constant admitted.
+  The branch past it, Vof = Les·tan(z - limit), (Cx, Cy), Raster, Project and Target there, follows the ordinary rules:
+  formulas characterised from the oracle, families declared before they are graded. The plan's §1.3 carries the
+  amendment.
+- **Project is chosen by exact share.** §49.2's rule chose by close results, and §49.5 found the member ranked 69th by
+  it exact twice as often. The family is now ranked by exact results over both sets together. Since the family's
+  shared choices S1-S3 make it one implementation, the choice is of the whole member, and it changes Parameter's and
+  Raster's arithmetic too; §52.2 grades all three. Target's family, graded on §49.5's member, is graded again on the new
+  one.
+- **The coordinate-wise eye** of §49.4 (E = F - ⌊Lfe·f⌋ coordinate by coordinate, w floored) is not added: §49.4's one
+  widening is used. It stays an open lead.

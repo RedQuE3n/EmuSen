@@ -4883,3 +4883,63 @@ The crate test now bounds the arrays at 640. In play, F1 ROC II's road would los
 draws from 07h's arrays. That cannot be seen yet: the game parts at its first 05h, before 07h's arrays reach a
 picture. 07h is now an approximation with a documented constant, and its perspective is a named loss until a source
 for it is found.
+
+### 48.3 The DSP-4, the limited step (measured 2026-10-04)
+
+*Decided 2026-10-04*: §45.3's option B. One step builds the DSP-4's protocol, 00h, and the short commands, so that
+Top Gear 3000 starts without the image. The road commands then go back for a decision with the measurement below.
+
+**Built** in `chips/dsp4.rs`, with `Program::Dsp4`. A Top Gear 3000 cartridge now runs on the replacement with no
+file, and core info's cost says what it lacks.
+
+- **The protocol.** 16-bit throughout, the idle word FFFFh, and 20h-FFh mirroring 10h-1Fh (fullsnes). At idle, DR's
+  low byte is taken as the next command, a read included, so an S-CPU read at idle runs the mirror of 1Fh, which does
+  nothing and writes FFFFh again: the idle polling of §37.2. After a command with inputs the chip offers 0000h, and
+  the S-CPU's first input written over it is taken by the next read. 03h, 05h, 0Eh and 15h-1Fh do nothing in their
+  measured times.
+- **00h**, §45.2's rule: both inputs read by edges, and the low word first.
+  - The first result is written 7 cycles after the second input's read whatever the S-CPU has done, 8 when its
+    bit 15 is set. That is a timing rule of one feature, exact on 100,000 cases.
+  - The second result is handshaken.
+- **The short commands' transfers and timing**: 0Ah four inputs and four results, its first unhandshaken at 23; 0Bh
+  and 0Ch three and one; 11h four and one, unhandshaken at 6. Their results are not characterised and are 0000h.
+- **02h, 06h, 12h, 13h and 14h**: their transfers and timing. 14h gives 0400h (fullsnes), 12h, the memory test, gives
+  0000h, 13h's data ROM a named loss in zeros, and 02h and 06h zeros.
+- **The road commands 01h, 07h, 08h and 09h**, with 04h, 0Dh, 0Fh and 10h, are not built. Each goes idle 13 cycles
+  after its command.
+
+**The grade** (`dsp_grade` with `DSP_GRADE_WRITE_OVER=1`, 20,000 seeded cases a code, half jittered):
+
+| Code | Result |
+|---|---|
+| 00h | **exact** in values, transfers, SR and latency |
+| 03h, 05h, 06h (fresh chip), 0Eh, 12h, 14h, 15h, 1Fh and mirrors | exact |
+| 0Ah | transfers exact; values not characterised; latency in 371 (1.9%) |
+| 0Bh, 0Ch | transfers exact; latency off by one in 75%, by a rule of the inputs not found |
+| 11h | transfers and latency exact; values not characterised |
+| 02h, 13h | values 0000h against the chip's |
+
+The crate test `the_dsp4_replacement_agrees_with_the_image` holds these. In WiseMan,
+`A_dsp_cartridge_runs_on_the_replacement_with_no_firmware` now takes SD Gundam GX as the cartridge without a
+replacement.
+
+**Top Gear 3000 in lockstep** (`dsp_lockstep`, 7,200 frames, `tg3000.txt` with shots).
+
+- **Identical to the image until frame 3,178**, through the boot, the title, the Championship and player menus, the
+  track choice and the shop. This is the first parting.
+- **The parting** comes at 11h, the first command whose result is not characterised. The first road command follows
+  at 3,183.
+- **The race.** From then on the picture is black on the replacement. Its S-CPU runs, 534 distinct addresses in a
+  frame against the image's 2,321, but it draws nothing: neither road, scenery, cars nor the status bar. With the
+  image the same frames show the grid, the countdown and the race.
+- **Pictures equal**: 3,232 of 7,199 frames.
+
+`dsp_lockstep` now counts commands as the S-CPU's first write after the chip's idle edge, which every DR chip makes.
+The DSP-4 learns no command place from the program counter, so the old count missed its commands, and a script's
+`tapuntil ... chip` tapped Start through the race.
+
+**For the decision.** The menus run as with the image. The race needs the road commands. 01h, 07h, 08h and 09h are
+78.8% of the game's DR transfers, they are exchanges whose lengths depend on the data, and none is characterised.
+Short of them, 11h's and 0Ah's results would keep the run identical a few frames further, to frame 3,183, but would
+not draw a race. Building the road commands is plan step 12a, estimated at 4 to 6 steps, with no measurement yet of
+whether they are formula-like.

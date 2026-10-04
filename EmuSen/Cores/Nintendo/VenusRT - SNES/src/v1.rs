@@ -77,10 +77,12 @@ fn replacement(stem: Option<&str>) -> Replacement {
             cost: "Without the image, VenusRT's open replacement for the ST010 runs: its mailbox to the cycle, the sort, scale, distance and multiply commands exact, the rotation command within one unit, the raster command without its perspective, and the driver simulation not computed yet, so the opponents' cars do not move as with the image; the battery file is the same on both (VenusRT_Native.md §43).".into(),
         },
         Some("dsp3") => without("DSP-3"),
-        Some("dsp4") => without("DSP-4"),
+        Some("dsp4") => Replacement::Accuracy {
+            cost: "Without the image, VenusRT's open replacement for the DSP-4 runs its protocol and multiply command, but not the road and scenery commands, so Top Gear 3000 starts and its menus work while the race's road is not drawn as with the image (VenusRT_Native.md §48.3).".into(),
+        },
         Some(_) => without("ST011"),
         None => Replacement::Accuracy {
-            cost: "Without the image, VenusRT runs its open replacement for the DSP-1, DSP-2 or ST010, whose commands are not all computed yet, and a DSP-3, DSP-4 or ST011 game runs without its chip (VenusRT_DspHle.md §5.5).".into(),
+            cost: "Without the image, VenusRT runs its open replacement for the DSP-1, DSP-2, DSP-4 or ST010, whose commands are not all computed yet, and a DSP-3 or ST011 game runs without its chip (VenusRT_DspHle.md §5.5).".into(),
         },
     }
 }
@@ -537,7 +539,7 @@ mod tests {
             let doc = emusen_native::core::desc::firmware_json(&list);
             assert_eq!(emusen_native::core::schema::validate(emusen_native::core::schema::FIRMWARE, &doc), Vec::<String>::new());
         }
-        assert!(matches!(<Machine as Core>::firmware_for(&dsp_cartridge(b"TOP GEAR 3000", 0x03))[1].replacement, Some(Replacement::None { .. })));
+        assert!(matches!(<Machine as Core>::firmware_for(&dsp_cartridge(b"TOP GEAR 3000", 0x03))[1].replacement, Some(Replacement::Accuracy { .. })));
         assert!(<Machine as Core>::info().systems[0].firmware.iter().all(|f| !f.required && f.replacement.is_some()));
         let kart = create(&dsp_cartridge(b"SUPER MARIO KART", 0x05), Vec::new()).unwrap();
         assert_eq!(kart.sys.cart.dsp.as_ref().map(|(d, _)| d.tag()), Some(1));
@@ -547,8 +549,11 @@ mod tests {
         let lle = create(&dsp_cartridge(b"SUPER MARIO KART", 0x05), vec![File { which: 2, data: &image }]).unwrap();
         assert_eq!(Core::machine_info(&lle).firmware, vec![(1, FirmwareSource::Replacement), (2, FirmwareSource::File)]);
         let tg = create(&dsp_cartridge(b"TOP GEAR 3000", 0x03), Vec::new()).unwrap();
-        assert!(tg.sys.cart.dsp.is_none());
-        assert_eq!(Core::machine_info(&tg).firmware, vec![(1, FirmwareSource::Replacement), (2, FirmwareSource::Absent)]);
+        assert_eq!(tg.sys.cart.dsp.as_ref().map(|(d, _)| d.tag()), Some(1));
+        assert_eq!(Core::machine_info(&tg).firmware, vec![(1, FirmwareSource::Replacement), (2, FirmwareSource::Replacement)]);
+        let gundam = create(&dsp_cartridge(b"SD GUNDAM GX", 0x03), Vec::new()).unwrap();
+        assert!(gundam.sys.cart.dsp.is_none());
+        assert_eq!(Core::machine_info(&gundam).firmware, vec![(1, FirmwareSource::Replacement), (2, FirmwareSource::Absent)]);
         assert_eq!(Core::machine_info(&machine()).firmware, vec![(1, FirmwareSource::Replacement)]);
     }
 

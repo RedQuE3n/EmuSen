@@ -44,6 +44,8 @@ struct Pair {
     first: Option<(u64, String)>,
     equal_pictures: u64,
     met_again: Option<u64>,
+    at_idle: bool,
+    dsp4: bool,
 }
 
 impl Pair {
@@ -108,27 +110,27 @@ impl Pair {
         }
     }
 
+    /// Counts each command as the S-CPU's first write after the chip's idle edge, which every DR chip makes.
     fn count(&mut self) {
         let Some(dsp) = self.lle.sys.cart.dsp.as_mut().and_then(|(d, _)| d.lle_mut()) else { return };
         let log = std::mem::take(dsp.transfers.as_mut().unwrap());
-        let mut wrote = None;
         for (_, t) in log {
             match t {
-                Transfer::HostWrite(v) => {
+                Transfer::HostWrite(c) => {
                     self.places.host_wrote();
-                    wrote = Some(v);
-                }
-                Transfer::ChipRead { pc } => {
-                    if self.places.edge(true, pc) == Place::Command {
-                        let c = wrote.unwrap_or(0);
+                    if std::mem::take(&mut self.at_idle) {
                         self.commands[c as usize] += 1;
-                        if c < 0x40 && c & 0x0F != 0x0F && c & 0x0F != 0x0E {
+                        let test = if self.dsp4 { matches!(c, 0x13 | 0x14) } else { c & 0x0F == 0x0F || c & 0x0F == 0x0E };
+                        if c < 0x40 && !test {
                             self.working += 1;
                         }
                     }
                 }
+                Transfer::ChipRead { pc } => {
+                    self.at_idle = self.places.edge(true, pc) == Place::Idle;
+                }
                 Transfer::ChipWrite { pc, .. } => {
-                    self.places.edge(false, pc);
+                    self.at_idle = self.places.edge(false, pc) == Place::Idle;
                 }
                 _ => {}
             }
@@ -153,6 +155,8 @@ fn script(p: &mut Pair, text: &str, frames: u64) {
                 let pic = p.hle.sys.ppu.picture();
                 let (fw, fh) = (p.hle.sys.ppu.frame_width, p.hle.sys.ppu.frame_height);
                 std::fs::write(w[1], [&(fw as u32).to_le_bytes()[..], &(fh as u32).to_le_bytes()[..], pic].concat()).unwrap();
+                let pic = p.lle.sys.ppu.picture();
+                std::fs::write(format!("{}.image", w[1]), [&(fw as u32).to_le_bytes()[..], &(fh as u32).to_le_bytes()[..], pic].concat()).unwrap();
             }
             "tapuntil" => {
                 let (b, cap, every) = (button(w[1]), num(5, 3600), num(6, 20).max(5));
@@ -192,7 +196,7 @@ fn main() {
     assert!(lle.attach_dsp(&fw));
     assert!(hle.attach_replacement(), "no replacement for {stem}");
     lle.sys.cart.dsp.as_mut().and_then(|(d, _)| d.lle_mut()).unwrap().transfers = Some(Vec::new());
-    let mut p = Pair { lle, hle, places: Places::default(), working: 0, commands: [0; 256], frames: 0, first: None, equal_pictures: 0, met_again: None };
+    let mut p = Pair { lle, hle, places: Places::default(), working: 0, commands: [0; 256], frames: 0, first: None, equal_pictures: 0, met_again: None, at_idle: false, dsp4: stem == "dsp4" };
     if let Some(path) = a.get(3) {
         script(&mut p, &std::fs::read_to_string(path).expect("the script"), frames);
     }
@@ -212,6 +216,16 @@ fn main() {
             (Some(_), None) => "states not equal again".to_string(),
         }
     );
+    // Where each S-CPU spends one more frame: a game held in a wait loop shows few distinct addresses.
+    for (name, m) in [("image", &mut p.lle), ("replacement", &mut p.hle)] {
+        let mut pcs = std::collections::BTreeSet::new();
+        let f = m.sys.timing.frame;
+        while m.sys.timing.frame == f {
+            m.step();
+            pcs.insert(((m.cpu.pbr as u32) << 16) | m.cpu.pc as u32);
+        }
+        let _ = writeln!(out, "  {name}'s S-CPU in its last frame: {} distinct addresses, from {:06X}", pcs.len(), pcs.first().copied().unwrap_or(0));
+    }
     let used: Vec<String> = (0..256).filter(|&c| p.commands[c] > 0).map(|c| format!("{c:02X} x{}", p.commands[c])).collect();
     let _ = writeln!(out, "  commands at the image's chip: {}", used.join(", "));
     let dir = std::path::PathBuf::from(std::env::var_os("HOME").unwrap()).join(".cache/emusen/probe/venusrt/dsp-hle");

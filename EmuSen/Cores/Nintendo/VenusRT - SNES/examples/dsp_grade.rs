@@ -32,11 +32,14 @@ fn grade(stem: &str, image: &[u8], command: u8, sets: impl Iterator<Item = Vec<u
     let mut hle = Hle::new(program);
     power_on(&mut hle, &Host::steady()).unwrap();
     let mut t = Tally { cases: 0, shape: 0, values: 0, latency: 0, status: 0, worst: 0, sizes: [0; 17], first: Vec::new() };
-    let (mut hs, mut ha) = (Host::steady(), Host::steady());
+    // DSP_GRADE_WRITE_OVER, a bit mask in hex: the transfers answered with a write over the chip's word (the DSP-4).
+    let write_over = std::env::var("DSP_GRADE_WRITE_OVER").ok().and_then(|v| u64::from_str_radix(&v, 16).ok()).unwrap_or(0);
+    let steady = || Host { write_over, ..Host::steady() };
+    let (mut hs, mut ha) = (steady(), steady());
     for (k, set) in sets.enumerate() {
         let jitter = k % 2 == 1;
         if jitter && k % 512 == 1 {
-            hs = Host::jittered(seed + k as u64);
+            hs = Host { write_over, ..Host::jittered(seed + k as u64) };
             ha = hs.clone();
         }
         let mut set = set;
@@ -54,7 +57,7 @@ fn grade(stem: &str, image: &[u8], command: u8, sets: impl Iterator<Item = Vec<u
         let (x, y) = if jitter {
             (transact(&mut lle, &mut hs, command, &set), transact(&mut hle, &mut ha, command, &set))
         } else {
-            (transact(&mut lle, &mut Host::steady(), command, &set), transact(&mut hle, &mut Host::steady(), command, &set))
+            (transact(&mut lle, &mut steady(), command, &set), transact(&mut hle, &mut steady(), command, &set))
         };
         let d = compare(&x, &y);
         t.cases += 1;

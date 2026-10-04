@@ -16,6 +16,7 @@ pub enum Program {
     Dsp1,
     Dsp1b,
     Dsp2,
+    Dsp4,
     St010,
 }
 
@@ -26,6 +27,7 @@ impl Program {
             "dsp1" => Some(Program::Dsp1),
             "dsp1b" => Some(Program::Dsp1b),
             "dsp2" => Some(Program::Dsp2),
+            "dsp4" => Some(Program::Dsp4),
             "st010" => Some(Program::St010),
             _ => None,
         }
@@ -37,6 +39,7 @@ impl Program {
             Program::Dsp1b => 2,
             Program::Dsp2 => 3,
             Program::St010 => 4,
+            Program::Dsp4 => 5,
         }
     }
 }
@@ -99,6 +102,8 @@ pub struct DspHle {
     pub(super) d2: super::dsp2::Dsp2,
     /// The ST010's mailbox poll (VenusRT_Native.md §43).
     pub(super) mail: super::st010::Mail,
+    /// The DSP-4's command state (VenusRT_Native.md §48.3).
+    pub(super) d4: super::dsp4::Dsp4,
     /// The DSP-1's three attitude matrices, m/2 times the rotation in Q15 (VenusRT_Native.md §44).
     pub(super) att: [[i16; 9]; 3],
     /// A phase's work and notice that depend on the inputs, by phase, set when the inputs are complete.
@@ -133,6 +138,7 @@ impl DspHle {
             rise: 0,
             d2: Default::default(),
             mail: Default::default(),
+            d4: Default::default(),
             att: [[0; 9]; 3],
             varying: None,
             edges: 0,
@@ -156,6 +162,10 @@ impl DspHle {
         self.idle_word = if self.program == Program::Dsp2 { 0 } else { 0x80 };
         if self.program == Program::Dsp2 {
             self.d2.reset();
+            self.stage = Stage::Idle;
+            self.schedule(Next::Idle, NOTICE);
+        } else if self.program == Program::Dsp4 {
+            self.d4 = Default::default();
             self.stage = Stage::Idle;
             self.schedule(Next::Idle, NOTICE);
         } else if self.st() {
@@ -227,6 +237,11 @@ impl DspHle {
         if self.program == Program::Dsp2 {
             let next = std::mem::replace(&mut self.next, Next::None);
             self.d2_edge(next);
+            return;
+        }
+        if self.program == Program::Dsp4 {
+            let next = std::mem::replace(&mut self.next, Next::None);
+            self.d4_edge(next);
             return;
         }
         let next = std::mem::replace(&mut self.next, Next::None);
@@ -313,7 +328,7 @@ impl DspHle {
 
     /// One byte through DR as the handshake counts it, true when it completed the transfer.
     fn byte_done(&mut self) -> bool {
-        let rqm = self.sr & sr::RQM != 0 || self.program != Program::Dsp2;
+        let rqm = self.sr & sr::RQM != 0 || !matches!(self.program, Program::Dsp2 | Program::Dsp4);
         if self.sr & sr::DRC != 0 {
             self.sr &= !sr::RQM;
             rqm
@@ -330,6 +345,10 @@ impl DspHle {
     fn completed(&mut self) {
         if self.program == Program::Dsp2 {
             self.d2_completed();
+            return;
+        }
+        if self.program == Program::Dsp4 {
+            self.d4_completed();
             return;
         }
         match self.stage {
@@ -502,6 +521,9 @@ impl DspHle {
         if self.program == Program::Dsp2 {
             self.d2.pack(&mut o);
         }
+        if self.program == Program::Dsp4 {
+            self.d4.pack(&mut o);
+        }
         if self.st() {
             o.extend(self.mail.poll.to_le_bytes());
         }
@@ -552,6 +574,9 @@ impl DspHle {
         }
         if self.program == Program::Dsp2 {
             self.d2.unpack(&d[base + self.ram.len() * 2..]);
+        }
+        if self.program == Program::Dsp4 {
+            self.d4.unpack(&d[base + self.ram.len() * 2..]);
         }
         if self.st() {
             let at = base + self.ram.len() * 2;
@@ -800,7 +825,7 @@ mod tests {
     // VenusRT_DspHle.md §5.4: no array literal of more than 16 numbers in a replacement's source; tables are generated.
     #[test]
     fn no_replacement_source_holds_a_table_literal() {
-        for (name, source) in [("dsphle.rs", include_str!("dsphle.rs")), ("dsp2.rs", include_str!("dsp2.rs")), ("st010.rs", include_str!("st010.rs"))] {
+        for (name, source) in [("dsphle.rs", include_str!("dsphle.rs")), ("dsp2.rs", include_str!("dsp2.rs")), ("st010.rs", include_str!("st010.rs")), ("dsp4.rs", include_str!("dsp4.rs"))] {
             let mut depth = 0usize;
             let mut items = Vec::<String>::new();
             for ch in source.chars() {

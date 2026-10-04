@@ -26,6 +26,9 @@ fn main() {
     chip.dsp.transfers.as_mut().unwrap().clear();
     let start = chip.dsp.cycles;
     chip.write(Port::Dr, command);
+    if chip.status() & 0x14 == 0x10 {
+        chip.write(Port::Dr, 0);
+    }
     let mut next = inputs.iter();
     let mut reads = 0;
     let mut since_rise: Option<u64> = None;

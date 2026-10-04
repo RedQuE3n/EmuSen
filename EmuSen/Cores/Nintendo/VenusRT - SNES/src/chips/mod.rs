@@ -1,6 +1,7 @@
 //! The cartridges' coprocessors (VenusRT_Plan.md §6, stage 5). See VenusRT_Native.md §24.
 
 mod dsp2;
+mod dsp4;
 pub mod dspengine;
 pub mod dsphle;
 pub mod dsporacle;

@@ -141,8 +141,13 @@ namespace EmuSen.WiseMan.Cores
             File.WriteAllBytes(gear, SyntheticRom.BuildNecDsp("TOP GEAR 3000"));
             Assert.Empty(EmuSen.Common.EmulatorSession.MissingFirmwareFor(gear, Engine));
             engine.LoadRom(gear);
+            Assert.Equal(new[] { new CoreFirmwareSource(1, "replacement"), new CoreFirmwareSource(2, "replacement") }, engine.Machine.Info.Firmware);
+            string gundam = Path.Combine(_root, "gundam.sfc");
+            File.WriteAllBytes(gundam, SyntheticRom.BuildNecDsp("SD GUNDAM GX"));
+            Assert.Empty(EmuSen.Common.EmulatorSession.MissingFirmwareFor(gundam, Engine));
+            engine.LoadRom(gundam);
             Assert.Equal(new[] { new CoreFirmwareSource(1, "replacement"), new CoreFirmwareSource(2, "absent") }, engine.Machine.Info.Firmware);
-            Assert.EndsWith("dsp4.rom would supply the chip.", engine.FirmwareNotice);
+            Assert.EndsWith("dsp3.rom would supply the chip.", engine.FirmwareNotice);
         }
 
         // EmuSen_Firmware.md §0: a player's spc700.rom in the folder is passed as file 1 and runs in place of VenusRT's own boot program; a synthetic image, never a dump.

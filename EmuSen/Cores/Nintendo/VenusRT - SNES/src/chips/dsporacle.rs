@@ -857,6 +857,29 @@ mod tests {
         }
     }
 
+    // VenusRT_Native.md §48.3: the DSP-4's replacement against the image, its first input written over the chip's
+    // offer as Top Gear 3000 writes it; 00h whole, the commands without inputs whole on a fresh chip, the short ones
+    // in transfers alone.
+    #[test]
+    fn the_dsp4_replacement_agrees_with_the_image() {
+        use super::super::dsphle::Program;
+        let Some(mut lle) = chip("dsp4") else { return };
+        let mut hle = Hle::new(Program::Dsp4);
+        power_on(&mut hle, &Host::steady()).unwrap();
+        let mut p = Pcg::new(0x44);
+        for command in [0x00u8, 0x34, 0xE5, 0x03, 0x05, 0x06, 0x0E, 0x12, 0x14, 0x15, 0x1F, 0x0A, 0x0B, 0x11] {
+            for k in 0..256u32 {
+                let set: Vec<u16> = (0..8).map(|_| p.word()).collect();
+                let host = if k % 2 == 0 { Host::steady() } else { Host::jittered(k as u64) };
+                let mut host = Host { write_over: 1, ..host };
+                let (x, y) = (transact(&mut lle, &mut host.clone(), command, &set), transact(&mut hle, &mut host, command, &set));
+                let d = compare(&x, &y);
+                let whole = !matches!(command, 0x0A | 0x0B | 0x11);
+                assert!(!d.shape && (!whole || !d.any()), "{command:02X} case {k}: {d:?}");
+            }
+        }
+    }
+
     // The latency model on its own: a phase's rise is the later of its work after the last rise and its notice after
     // the S-CPU's answer.
     #[test]

@@ -4591,6 +4591,10 @@ documented shape, a perspective divisor, fitted to one angle's 176 words, and th
 plan §1.3's argument, about 15 bits are taken against 2,816 output bits per angle. This is recorded as a characterisation
 with fitted constants, and the record does not claim more.
 
+> *Amended 2026-10-04* (§48.2). Fitting K and c to the image's output takes values from the chip into the code, which
+> plan §1.3's R1 forbids however few bits they carry. The fit is withdrawn, and 07h takes a documented constant in
+> their place.
+
 **Not characterised in this step.** 05h, the driver simulation, is 53.6% of F1 ROC II's commands. It reads at least
 seventeen words from 60h, among them a flags word whose bits choose its paths, and computes an angle as 01h does.
 Its paths were not resolved in the time this step had. 05h and 01h stay as the frame left them: they clear the
@@ -4639,6 +4643,7 @@ after the S-CPU's write. With those two constants every graded command's latency
 | 00h, 02h, 03h, 04h, 06h, and the mirrors 0Ah, 0Bh, 0Eh, 1Ch, F4h, FAh | 4,000 each | **0** | **0** |
 | 08h | 4,000 | 0 | 50 (1.25%), by one in a result word |
 | 07h | 4,000 | 0 | 126 (3.2%), by one, in the words that carry the sine |
+| 07h, after §48.2 | 4,000 | 0 | 4,000, by up to 640 in the four arrays; words 0-2 by one |
 
 The crate tests `the_st010_replacement_agrees_with_the_image` (256 cases per code on the image, from seeded phases) and
 `the_st010_formulas_answer_through_the_mailbox` (fullsnes's multiplier and the sort, with no image) hold this.
@@ -4855,3 +4860,26 @@ replacements' layout on this branch. The two meet here as **version 21**.
   and its diff is the four state-version lines alone.
 - **After the merge** Dungeon Master is still identical to the image for 3,600 frames. F1 ROC II still parts at
   its first 05h, at frame 1,020 now, since stage 8 moved the 65C816's start by 132 master clocks.
+
+### 48.2 ST010 07h: the fitted constants withdrawn
+
+§43.1 fitted 07h's perspective constants, K = 7,885 and c = 8.8, to the image's 176 words at one angle. However few
+bits that takes, it is a value seen from the chip entering the code, and R1 makes it a grade only. No document gives
+07h's scale: fullsnes names the command "Raster Data Calculation" and nothing more, and plan §3.5's addresses give the
+arrays' places, not their contents. No declared formula was found either. A perspective divisor needs a camera height
+and a distance to the screen, and every value tried for them would be a second fit.
+
+**What replaces it.** Every line takes mode 7's unit scale, 100h, 1.0 in the 8.8 matrix format fullsnes documents for
+the PPU, so that the four arrays are the rotation by θ at unit scale on every line. The sine and the products are
+those of §43.2.
+
+**The larger error, measured** (`dsp_stgrade 07`, 4,000 seeded cases):
+
+- the busy bit's latency and words 0-2 as before, the latter within one;
+- the four arrays differ in every case, by up to 640, against the image's scale of 896 on the first line and 43 on
+  the last.
+
+The crate test now bounds the arrays at 640. In play, F1 ROC II's road would lose its perspective wherever the game
+draws from 07h's arrays. That cannot be seen yet: the game parts at its first 05h, before 07h's arrays reach a
+picture. 07h is now an approximation with a documented constant, and its perspective is a named loss until a source
+for it is found.

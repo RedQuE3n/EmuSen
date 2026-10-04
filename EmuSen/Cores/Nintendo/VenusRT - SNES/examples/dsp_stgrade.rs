@@ -39,7 +39,7 @@ fn main() {
                 let mut hle = Hle::new(Program::St010);
                 st_ready(&mut hle, &mut Host::steady()).unwrap();
                 let mut p = Pcg::new(0x5701_0000 + th + 0x100 * command as u64);
-                let (mut latency, mut ram, mut first) = (0u64, 0u64, Vec::new());
+                let (mut latency, mut ram, mut first, mut worst) = (0u64, 0u64, Vec::new(), 0i32);
                 for _ in 0..cases / threads {
                     let set = inputs(command, &mut p);
                     for _ in 0..p.next() % 9 {
@@ -50,6 +50,7 @@ fn main() {
                     latency += (x.latency != y.latency) as u64;
                     let differ: Vec<usize> = (0..x.ram.len()).filter(|&w| x.ram[w] != y.ram[w]).collect();
                     ram += !differ.is_empty() as u64;
+                    worst = differ.iter().map(|&w| (x.ram[w] as i16 as i32 - y.ram[w] as i16 as i32).abs()).fold(worst, i32::max);
                     if (x.latency != y.latency || !differ.is_empty()) && first.len() < 6 {
                         first.push(format!("inputs {:04X?} latency {:?}/{:?} words {}", set.iter().take(6).collect::<Vec<_>>(), x.latency, y.latency,
                             differ.iter().take(6).map(|&w| format!("{w:03X}:{:04X}/{:04X}", x.ram[w], y.ram[w])).collect::<Vec<_>>().join(" ")));
@@ -58,19 +59,20 @@ fn main() {
                         break;
                     }
                 }
-                (latency, ram, first)
+                (latency, ram, first, worst)
             })
         })
         .collect();
-    let (mut latency, mut ram, mut first) = (0, 0, Vec::new());
+    let (mut latency, mut ram, mut first, mut worst) = (0, 0, Vec::new(), 0);
     for h in handles {
-        let (l, r, f) = h.join().unwrap();
+        let (l, r, f, w) = h.join().unwrap();
+        worst = worst.max(w);
         latency += l;
         ram += r;
         first.extend(f);
     }
     let _ = Port::Dr;
-    println!("st010 {command:02X}: {cases} cases; latency differs {latency}, RAM differs {ram}");
+    println!("st010 {command:02X}: {cases} cases; latency differs {latency}, RAM differs {ram}, largest word difference {worst}");
     for f in first.iter().take(8) {
         println!("  {f}");
     }

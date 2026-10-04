@@ -146,8 +146,8 @@ impl DspHle {
                 let (s, c) = (sine(i), sine(i + 64));
                 (r[0], r[1], r[2]) = (i as u16, s as u16, c as u16);
                 for n in 0..176usize {
-                    // The perspective scale of line n, round(7,885 / (n + 8.8)) (§43.1).
-                    let l = ((2 * 78_850 + 10 * n + 88) / (2 * (10 * n + 88))) as i32;
+                    // Mode 7's unit scale, 1.0 in its 8.8 matrix format (fullsnes); the chip's perspective is not modelled (§48.2).
+                    let l = 0x100;
                     r[0x78 + n] = high(l, c) as u16;
                     r[0x128 + n] = high(l, s) as u16;
                     r[0x1D8 + n] = high(l, -s) as u16;

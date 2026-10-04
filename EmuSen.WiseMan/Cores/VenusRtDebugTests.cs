@@ -468,13 +468,13 @@ namespace EmuSen.WiseMan.Cores
                 string chip = "";
                 if (target.DebugCpus.Count > 2)
                 {
-                    // On an engine of its own, 120 frames in with no input, where each chip game's processor is running.
+                    // On an engine of its own, 120 frames in with no input, then up to 600 more for a chip that starts later (Yoshi's Island's GSU).
                     using var halting = new CoreEngine(found.Open()!);
                     halting.LoadRom(rom);
                     for (int n = 0; n < 120; n++) halting.RunFrame();
                     var cop = halting.CreateDebugTarget().DebugCpus[2];
                     int id = cop.Breakpoints.AddBreakpoint(0, int.MaxValue, null);
-                    for (int n = 0; n < 60 && !halting.IsHaltedAtBreakpoint; n++) halting.RunFrame();
+                    for (int n = 0; n < 600 && !halting.IsHaltedAtBreakpoint; n++) halting.RunFrame();
                     Assert.True(halting.IsHaltedOnCoprocessor, $"{Path.GetFileName(rom)} did not halt on {cop.Name}: halted {halting.IsHaltedAtBreakpoint} on {halting.HaltedProcessorName}");
                     Assert.Equal(halting.HaltedAddress, cop.ProgramCounter!());
                     chip = $", halted on {cop.Name} at {halting.HaltedAddress:X6}";

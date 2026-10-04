@@ -163,6 +163,8 @@ namespace EmuSen.Cores.Nintendo.Mercury
             for (int i = 0; i < Audio.Apu.ChannelCount; i++) Bus.Apu.SetChannelMuted(i, old.Apu.IsChannelMuted(i));
         }
 
+        public int ControllerPorts => 1;
+
         public void SetButton(int port, PadButton button, bool pressed)
         {
             if (port != 0) return;

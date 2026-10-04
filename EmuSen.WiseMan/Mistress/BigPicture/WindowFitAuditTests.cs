@@ -494,6 +494,48 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Empty(Audit(s.Window, name, _out));
         }, default);
 
+        // Preferences ▸ Controllers in a game with four pads, two of one long name, and a seat kept: the players' rows on the desktop and as the big-screen menu - see EmuSen_Input.md §8.9.
+        [Theory]
+        [MemberData(nameof(StatusCases))]
+        public Task The_players_rows_in_preferences_are_whole_at_both_sizes(bool bigScreen, int width, int height) => Session.Dispatch(() =>
+        {
+            string name = $"PreferencesPlayers-{(bigScreen ? "BigScreen" : "Desktop")}-{width}x{height}";
+            (MainWindow window, PadDriver pad) = InGame(width, height, bigScreen: bigScreen);
+            try
+            {
+                const string LongPad = "8BitDo Ultimate 2.4G Wireless Controller for Xbox, Hall Effect Special Edition";
+                pad.Plug(LongPad);
+                pad.Plug(LongPad);
+                PadDriver gone = pad.Plug("Nintendo Switch Pro Controller (Bluetooth)");
+                pad.Tick();
+                gone.Unplug();
+                pad.Tick();
+                Call(window, "ShowPreferencesAt", PreferencesWindow.ControllersTab);
+                Settle(window);
+                // A desktop session shows Preferences as a window of its own, which must fit the screen as a sheet fits the window.
+                Window top = Sheets(window).Current ?? window.OwnedWindows.OfType<PreferencesWindow>().Last();
+                Assert.IsType<PreferencesWindow>(top);
+                Control root = Sheets(window).SheetOf(top) ?? top;
+                if (!bigScreen)
+                {
+                    Settle(top);
+                    Assert.True(top.Bounds.Height <= height && top.Bounds.Width <= width, $"{name}: the window is {top.Bounds.Size}");
+                }
+                Assert.Contains(root.GetVisualDescendants().OfType<Control>(), c => c.Name == "KeptPlayerRow4" || MenuRows.GetLabel(c) is { } l && l.StartsWith("Player 4:", StringComparison.Ordinal));
+                // A desktop window keeps the desktop's text sizes and scrolls its pane behind a scroll bar; the big screen's rules for both, Q186's fade among them, are the menu's.
+                List<string> faults = bigScreen ? FitAudit.Check(root, WindowAllowances.For(top))
+                    : FitAudit.Check(root, WindowAllowances.For(top), smallest: 0).Where(f => !f.StartsWith("cut at a scrolling edge", StringComparison.Ordinal)).ToList();
+                foreach (string f in faults) _out.WriteLine($"{name}: {f}");
+                if (bigScreen) SavePicture(window, name);
+                Assert.Empty(faults);
+            }
+            finally
+            {
+                Stop(window);
+                window.Close();
+            }
+        }, default);
+
         // A game's title as long as a No-Intro name gets, for the cases that show one (Q190).
         internal const string LongTitle = "A Game With A Very Long Name Indeed, Special Edition - The Director's Cut (USA, Europe) (Rev 1) (Beta)";
 

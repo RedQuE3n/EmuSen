@@ -156,6 +156,13 @@ namespace EmuSen.Mistress.Views
             var diagram = new ControllerDiagram { Layout = ControllerDiagrams.LayoutFor(console), Name = "Diagram" };
             Avalonia.Automation.AutomationProperties.SetName(diagram, $"{console} controller");
             diagram.RegionInvoked += (_, e) => ChooseRegion(console, e.Region);
+            // Up past the drawing's top row is the player selector, which stands outside the tab's page.
+            diagram.KeyDown += (_, e) =>
+            {
+                if (e.Handled || e.Key != Key.Up || e.KeyModifiers != KeyModifiers.None || !PlayerBar.IsVisible) return;
+                _playerChoice.Focus(NavigationMethod.Directional);
+                e.Handled = true;
+            };
             _diagrams[console] = diagram;
 
             var status = new TextBlock { Name = "DiagramStatus", TextWrapping = Avalonia.Media.TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
@@ -209,7 +216,7 @@ namespace EmuSen.Mistress.Views
                 status.Text = wanted is { } control
                     ? $"Binding {RegionName(console, control)}: press a {(_listeningForPad is not null ? "key or a pad button" : "key")}. Escape cancels{(_listeningForPad is not null ? $"; the pad gives up after {PadCaptureTimeout.TotalSeconds:0} seconds" : "")}."
                     : _testing ? "Testing: press anything on the pad or the keyboard."
-                    : _gamepad is { IsConnected: true } ? $"Lights up what {_gamepad.ControllerName} and the keyboard press. The game hears the first pad."
+                    : TesterPad(console) is { } shown ? $"Lights up what {shown.Name} and the keyboard press, as player {PlayerOf(console)}."
                     : "Lights up what the keyboard presses; plug in a pad to see it here too.";
             }
         }
@@ -303,15 +310,15 @@ namespace EmuSen.Mistress.Views
         private bool KeyHeld(string console, PadControl control) =>
             _keyBindings.For(console).ButtonToKey.TryGetValue(control, out Key key) && _heldKeys.Contains(key);
 
-        private double RawAxis(PadAxis axis) => _gamepad is { IsConnected: true } pad ? pad.Axis(axis) : 0;
+        private double RawAxis(string console, PadAxis axis) => _gamepad is { IsConnected: true } pad ? pad.Axis(axis, PlayerOf(console)) : 0;
 
         // One axis as the game would read it: the pad's stick, pushed all the way by a held key.
-        private double StickValue(string console, PadAxis axis) => PadControls.Resolve(axis, RawAxis(axis), c => KeyHeld(console, c));
+        private double StickValue(string console, PadAxis axis) => PadControls.Resolve(axis, RawAxis(console, axis), c => KeyHeld(console, c));
 
         private bool Held(string console, PadControl control)
         {
             if (KeyHeld(console, control)) return true;
-            if (_gamepad is not { IsConnected: true } gamepad || gamepad.Primary is not { } pad) return false;
+            if (_gamepad is not { IsConnected: true } gamepad || TesterPad(console) is not { } pad) return false;
 
             if (!PadControls.IsButton(control, out PadButton button))
             {
@@ -323,7 +330,7 @@ namespace EmuSen.Mistress.Views
                     _ => PadAxis.RightX,
                 };
                 bool negative = control is PadControl.LeftStickUp or PadControl.LeftStickLeft or PadControl.RightStickUp or PadControl.RightStickLeft;
-                double value = RawAxis(axis);
+                double value = RawAxis(console, axis);
                 return negative ? value <= -ControllerDiagrams.DirectionThreshold : value >= ControllerDiagrams.DirectionThreshold;
             }
 
@@ -337,7 +344,7 @@ namespace EmuSen.Mistress.Views
             }
 
             if (button is PadButton.L2 or PadButton.R2 && pad.RawAxis(button == PadButton.L2 ? SDL.GamepadAxis.LeftTrigger : SDL.GamepadAxis.RightTrigger) >= 0.5) return true;
-            return _gamepadBindings.For(console).ButtonToPad.TryGetValue(button, out SDL.GamepadButton bound) && pad.IsRawPressed(bound);
+            return PadMap(console).ButtonToPad.TryGetValue(button, out SDL.GamepadButton bound) && pad.IsRawPressed(bound);
         }
 
         // Keys the tester reads: every key held lights its binding, and while testing no key does anything else but Escape, which stops.
@@ -389,10 +396,20 @@ namespace EmuSen.Mistress.Views
             }
 
             object? focused = TopLevel.GetTopLevel(_body)?.FocusManager?.GetFocusedElement();
+            // The selector is a stop between the drawing and the tab strip: Up goes on to the tab shown.
+            if (button == UiButton.Up && ReferenceEquals(focused, _playerChoice) && Tabs.ContainerFromIndex(Tabs.SelectedIndex) is TabItem shown)
+            {
+                shown.Focus(NavigationMethod.Directional);
+                return true;
+            }
             if (_diagrams.FirstOrDefault(d => d.Value.RegionOf(focused) is not null) is not { Value: { } diagram, Key: { } console }) return false;
             switch (button)
             {
-                case UiButton.Up: return diagram.MoveSelection(NavigationDirection.Up);
+                case UiButton.Up:
+                    if (diagram.MoveSelection(NavigationDirection.Up)) return true;
+                    if (!PlayerBar.IsVisible) return false;
+                    _playerChoice.Focus(NavigationMethod.Directional);
+                    return true;
                 case UiButton.Down: return diagram.MoveSelection(NavigationDirection.Down);
                 case UiButton.Left: return diagram.MoveSelection(NavigationDirection.Left);
                 case UiButton.Right: return diagram.MoveSelection(NavigationDirection.Right);

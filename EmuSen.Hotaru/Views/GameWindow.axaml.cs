@@ -78,7 +78,7 @@ namespace EmuSen.Hotaru.Views
 
         // Tracked separately and OR'd: either device works at any time.
         private readonly bool[] _keyboardHeld = new bool[Enum.GetValues<PadControl>().Length];
-        private readonly bool[] _gamepadHeld = new bool[Enum.GetValues<PadButton>().Length];
+        private readonly PortRouter _ports;
         private bool _mirrorPlayer1ToPlayer2;
 
         private readonly DebugTools.BoundedTrace _bgScrollTrace = new();
@@ -145,7 +145,14 @@ namespace EmuSen.Hotaru.Views
             _gamepad = new GamepadManager(_gamepadBindings.For(core.CoreName))
             {
                 LeftStickIsAnalog = core.SupportedAxes.Contains(PadAxis.LeftX),
+                PlayerBindings = player => _gamepadBindings.For(_core.CoreName, player),
             };
+            // The keyboard is player 1's here; Hotaru has no setting to move it - see EmuSen_Input.md §8.5.
+            _ports = new PortRouter(_gamepad, (p, b, held) => _core.SetButton(p, b, held), (p, a, v) => _core.SetAxis(p, a, v), (p, on) => _core.SetControllerConnected(p, on))
+            {
+                KeyboardHeld = c => _keyboardHeld[(int)c],
+            };
+            _ports.Reset(EmuSen.Cores.ControllerPorts.Of(core), core.SupportedAxes);
             _gamepadTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.0 / 60.0) };
             _gamepadTimer.Tick += (_, _) => PollGamepad();
             _gamepadTimer.Start();
@@ -243,8 +250,7 @@ namespace EmuSen.Hotaru.Views
             if (HotaruKeyMap.TryGetControl(e.Key, out PadControl control))
             {
                 _keyboardHeld[(int)control] = true;
-                if (PadControls.IsButton(control, out PadButton button)) ApplyButtonState(button);
-                ApplyAxes();
+                ApplyKeys();
                 return;
             }
 
@@ -277,8 +283,7 @@ namespace EmuSen.Hotaru.Views
             if (HotaruKeyMap.TryGetControl(e.Key, out PadControl control))
             {
                 _keyboardHeld[(int)control] = false;
-                if (PadControls.IsButton(control, out PadButton button)) ApplyButtonState(button);
-                ApplyAxes();
+                ApplyKeys();
                 return;
             }
 
@@ -291,43 +296,18 @@ namespace EmuSen.Hotaru.Views
             }
         }
 
-        // Through ICore, not the bus - which console's pad this reaches is the core's business.
-        private void ApplyButtonState(PadButton button)
+        // Through ICore, not the bus; each player's pad to its own port, the keyboard to player 1's - see EmuSen_Input.md §8.5.
+        private void ApplyKeys()
         {
-            bool held = _keyboardHeld[(int)PadControls.From(button)] || _gamepadHeld[(int)button];
-            _core.SetButton(0, button, held);
-            if (_mirrorPlayer1ToPlayer2) _core.SetButton(1, button, held);
+            _ports.MirrorPlayer1ToPlayer2 = _mirrorPlayer1ToPlayer2;
+            _ports.KeysChanged();
         }
-
-        // Every axis the console reads, from the pad's own axes and the keys standing in for them - see EmuSen_Input.md §7.3.
-        private void ApplyAxes()
-        {
-            foreach (PadAxis axis in _core.SupportedAxes)
-            {
-                double value = PadControls.Resolve(axis, _gamepad.Axis(axis), Held);
-                _core.SetAxis(0, axis, value);
-                if (_mirrorPlayer1ToPlayer2) _core.SetAxis(1, axis, value);
-            }
-        }
-
-        private bool Held(PadControl control) =>
-            _keyboardHeld[(int)control] || (PadControls.IsButton(control, out PadButton button) && _gamepadHeld[(int)button]);
 
         private void PollGamepad()
         {
             _gamepad.Poll();
-            foreach (PadButton button in Enum.GetValues<PadButton>())
-            {
-                bool held = _gamepad.IsPressed(button);
-                if (held != _gamepadHeld[(int)button])
-                {
-                    _gamepadHeld[(int)button] = held;
-                    ApplyButtonState(button);
-                }
-            }
-
-            // A stick moves without crossing any threshold, so its axes are sent every poll rather than on change.
-            ApplyAxes();
+            _ports.MirrorPlayer1ToPlayer2 = _mirrorPlayer1ToPlayer2;
+            _ports.PollPads();
         }
 
         // Reuses FramePresenter's static NextEffect, not FramePresenter itself - see EmuSen_Serenity.md §4.
@@ -390,6 +370,10 @@ namespace EmuSen.Hotaru.Views
             // The new console's pad, not the outgoing one's - see EmuSen_Input.md §5.1.
             _gamepad.Bindings = _gamepadBindings.For(_core.CoreName);
             _gamepad.LeftStickIsAnalog = _core.SupportedAxes.Contains(PadAxis.LeftX);
+            // On the thread that polls, which a swap on the emulation thread would otherwise race.
+            int ports = EmuSen.Cores.ControllerPorts.Of(_core);
+            IReadOnlyList<PadAxis> axes = _core.SupportedAxes;
+            Dispatcher.UIThread.Post(() => _ports.Reset(ports, axes));
             _rewind.Clear(); // a discontinuous jump - see §1.4
             _audioPlayer.RateControl.Reset();
             RebuildDebugTargetAndCommands();

@@ -4228,6 +4228,9 @@ The reasoning, in the order of the table:
   **Recommendation: (a) in Pass 2; (b) as its own piece of input work,** recorded in `EmuSen_Input.md`, because cores
   model two ports and a Player 2 mirror already exists (§5.1 and §6 there), and port assignment reaches every game, not
   big picture alone.
+  *(b) built 2026-10-04 as `EmuSen_Input.md` §8:* a pad for each player up to the running core's ports (four on the
+  N64), the seating rule and its edge cases (§8.2, §8.3), and Preferences ▸ Controllers' players, which a big-screen
+  session shows as menu rows the pad alone changes (§8.9).
 - **Q23, folders.** The test library's NES games are all in 16 region and category folders and the GB games in 28 letter folders
   (§21.1). Options:
   (a) show folders, as ES-DE does;
@@ -5105,7 +5108,8 @@ added for Pass 1 to retire, because the headless harness cannot see what Steam d
 
 **Scope.** As §21.3 wrote it, with two readings made explicit. A second pad does **not** become player 2 in a game: that
 is Q22 (b), recorded as separate input work in `EmuSen_Input.md` §6. The game reads the first pad opened, as it read the
-only pad before; `GamepadBindingMap` is untouched. And the swap trades A and B alone. ES-DE's switch is "Swap the A/B
+only pad before; `GamepadBindingMap` is untouched. *(Since 2026-10-04 each pad plays as its own player, `EmuSen_Input.md`
+§8; this paragraph describes pass 2 as it was built.)* And the swap trades A and B alone. ES-DE's switch is "Swap the A/B
 and X/Y buttons" (UG "Input device settings"), and the first build followed it; but on 2026-09-26 it was decided that
 in the themed gamelist North toggles the favourite and search moves into the options menu (§22's branch builds it), and
 the swap was then restricted, by instruction, to accept and back, so that it composes with whatever North and West come
@@ -5354,7 +5358,7 @@ For Pass 1's hardware session, on the Legion Go S (build from this branch):
 
 - **No real device.** SDL's own added and removed events, and how soon it delivers them, were not exercised; the tests
   stand at `IPadDevices`, beneath which `SdlPadDevices` is a list of one-line SDL calls with no test. Everything in §24.10.
-- **Player 2 in games** (Q22 (b)): not built; `EmuSen_Input.md` §6.
+- ~~**Player 2 in games** (Q22 (b)): not built; `EmuSen_Input.md` §6.~~ Built 2026-10-04: `EmuSen_Input.md` §8.
 - **The notice has no pad glyph** beside its words (§21.3 thought one might be wanted); LunaP's `NoticeLayer` holds text only.
 - **The fade's shape** is linear where ES-DE's fits a power of about 1.35–1.4 (§24.4).
 - **ES-DE's connection popup** was not recorded, nor its words; the pass did not run ES-DE.

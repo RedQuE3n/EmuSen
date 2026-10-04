@@ -33,6 +33,8 @@
             </Grid>
         </Border>
 
+        <!-- The player selector stands in the tab strip's empty right end, so the drawing keeps its height - see EmuSen_Input.md §8.4. -->
+        <Grid>
         <lunac:Tabs x:Name="Tabs">
 
             <TabItem Header="General">
@@ -97,6 +99,8 @@
             <!-- Console tabs are appended here by BuildConsoleTabs, so a new core needs no XAML. -->
 
         </lunac:Tabs>
+        <StackPanel x:Name="PlayerBar" Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right" VerticalAlignment="Top" />
+        </Grid>
 
     </DockPanel>
 

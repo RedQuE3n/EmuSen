@@ -30,6 +30,13 @@ namespace EmuSen.Common
 
         public void SetAxis(int port, PadAxis axis, double value) => _core?.SetAxis(port, axis, value);
 
+        public void SetControllerConnected(int port, bool connected) => _core?.SetControllerConnected(port, connected);
+
+        // 0 with nothing loaded - see EmuSen_Input.md §8.1.
+        public int ControllerPorts => ControllerPortsOf(_core);
+
+        private static int ControllerPortsOf(ICore? core) => core is { IsRomLoaded: true } ? EmuSen.Cores.ControllerPorts.Of(core) : 0;
+
         public IReadOnlyList<PadAxis> SupportedAxes => _core?.SupportedAxes ?? Array.Empty<PadAxis>();
 
         public IReadOnlyList<PadButton> SupportedButtons =>

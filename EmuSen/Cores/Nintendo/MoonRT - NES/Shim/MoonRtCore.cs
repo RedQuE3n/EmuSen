@@ -106,7 +106,9 @@ namespace EmuSen.Cores.Nintendo.MoonRT
         };
 
         // Port 0 is pad 1 and every other port pad 2, as MoonCore.SetButton has it.
-        protected override int PortFor(int port) => port == 0 ? 0 : 1;
+        protected override int PortFor(int port) => port is 0 or 1 ? port : -1;
+
+        public int ControllerPorts => MoonCore.Ports;
 
         // MoonCore.LoadState's two refusals with its messages.
         protected override void CheckState(byte[] state)

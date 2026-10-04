@@ -79,7 +79,7 @@ namespace EmuSen.Mistress.Views
         // Parameterless constructor exists only for tooling - real code always uses the one below.
         public PreferencesWindow() : this(new AppSettings()) { }
 
-        public PreferencesWindow(AppSettings settings, IScrapeHost? scraping = null, PadFamily? menu = null)
+        public PreferencesWindow(AppSettings settings, IScrapeHost? scraping = null, PadFamily? menu = null, Endymion.Input.GamepadManager? pads = null, Func<int>? ports = null)
         {
             _settings = settings;
             var scrape = new ScrapePreferencesPane(settings, scraping);
@@ -90,6 +90,8 @@ namespace EmuSen.Mistress.Views
 
             // Sized to its content rather than a fixed height: a fixed one put the Close button below the edge. See EmuSen_LunaP.md §11.1.
             SizeToContent = SizeToContent.Height;
+            // No taller than a 1280 by 800 screen leaves, since a tab with every player's controller outgrew it; the panes scroll.
+            MaxHeight = 720;
 
             var tabs = _tabs;
             tabs.Add("Library", Pane(
@@ -216,7 +218,9 @@ namespace EmuSen.Mistress.Views
                     Hint = "Games hidden with Hide from Library or the metadata editor's Hidden field. Their files are never touched; turn this on to list them again and unhide them in the editor.",
                     Content = _showHiddenGames,
                 }));
-            tabs.Add(ControllersTab, Pane(new ControllerPreferencesPane(settings).Rows()));
+            var controllers = new ControllerPreferencesPane(settings, pads, ports);
+            Closed += (_, _) => controllers.Dispose();
+            tabs.Add(ControllersTab, Pane(controllers.Rows()));
             tabs.Add("System Files", Pane(SystemFiles()));
 
             // A dock and scrolling panes, so a sheet shorter than the window still shows Close - see EmuSen_Settings_Reference.md §4.45.3.

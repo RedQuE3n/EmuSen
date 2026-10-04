@@ -651,6 +651,33 @@ mod tests {
         }
     }
 
+    // VenusRT_Native.md §39: the replacement's arithmetic commands against both images, values, transfers, SR and
+    // latency, under a steady S-CPU and a jittered one, over the edge values and seeded inputs.
+    #[test]
+    fn the_replacements_arithmetic_agrees_with_the_image() {
+        use super::super::dsphle::Program;
+        let edges: Vec<u16> = (0..16).flat_map(|b| [1u16 << b, (1u16 << b).wrapping_sub(1), (1u16 << b).wrapping_neg()]).chain([0, 0x7FFF, 0x8000, 0xFFFF]).collect();
+        for (stem, program) in [("dsp1", Program::Dsp1), ("dsp1b", Program::Dsp1b)] {
+            let Some(mut lle) = chip(stem) else { return };
+            let mut hle = Hle::new(program);
+            power_on(&mut hle, &Host::steady()).unwrap();
+            for command in [0x00, 0x20, 0x08, 0x18, 0x38, 0x0F, 0x2F] {
+                let mut p = Pcg::new(0x39 + command as u64);
+                for k in 0..edges.len() * edges.len() + 2048 {
+                    let set: Vec<u16> = if k < edges.len() * edges.len() {
+                        vec![edges[k % edges.len()], edges[k / edges.len()], edges[(k * 7) % edges.len()], edges[(k * 13) % edges.len()]]
+                    } else {
+                        (0..4).map(|_| p.word()).collect()
+                    };
+                    let mut host = if k % 2 == 0 { Host::steady() } else { Host::jittered(k as u64) };
+                    let x = transact(&mut lle, &mut host.clone(), command, &set);
+                    let y = transact(&mut hle, &mut host, command, &set);
+                    assert!(!compare(&x, &y).any(), "{stem} {command:02X} case {k}: {:?}", compare(&x, &y));
+                }
+            }
+        }
+    }
+
     // The latency model on its own: a phase's rise is the later of its work after the last rise and its notice after
     // the S-CPU's answer.
     #[test]

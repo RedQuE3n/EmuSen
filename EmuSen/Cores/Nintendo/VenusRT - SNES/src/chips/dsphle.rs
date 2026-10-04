@@ -92,6 +92,9 @@ pub struct DspHle {
     outputs: [u16; WORDS],
     /// The DSP-2's idle word: 00h after power-on, FFh after a command (VenusRT_Native.md §37.2).
     idle_word: u16,
+    /// The transaction's phase, and the cycle RQM last rose, for the work and notice of VenusRT_Native.md §37.3.
+    phase: u8,
+    rise: u64,
 }
 
 /// Cycles from the S-CPU's completion to the chip's next edge, the DSP-1B's common notice (VenusRT_Native.md §37.3).
@@ -114,6 +117,8 @@ impl DspHle {
             inputs: [0; WORDS],
             outputs: [0; WORDS],
             idle_word: 0,
+            phase: 0,
+            rise: 0,
         };
         d.reset();
         d
@@ -159,6 +164,14 @@ impl DspHle {
         self.due = self.cycles + after;
     }
 
+    /// The transaction's next edge, at the later of its phase's work after the last rise and its notice after now.
+    fn next_phase(&mut self, next: Next) {
+        let (work, notice) = dsp1_timing(self.command).get(self.phase as usize).copied().unwrap_or((0, NOTICE as u16));
+        self.next = next;
+        self.due = (self.rise + work as u64).max(self.cycles + notice as u64);
+        self.phase = self.phase.saturating_add(1);
+    }
+
     /// Catches the chip up to the master clock `clock`, making its due edge on the way.
     pub fn run_to(&mut self, clock: u64) {
         let target = (clock as u128 * self.ratio.0 as u128 / self.ratio.1 as u128) as u64;
@@ -176,6 +189,7 @@ impl DspHle {
         match std::mem::replace(&mut self.next, Next::None) {
             Next::None => {}
             Next::Request { wide } => {
+                self.rise = self.cycles;
                 let narrow = self.sr & sr::DRC != 0;
                 self.sr = (self.sr & !sr::DRC) | if wide && !narrow { 0 } else { sr::DRC } | sr::RQM;
                 if wide && narrow {
@@ -184,10 +198,12 @@ impl DspHle {
             }
             Next::Widen => self.sr &= !sr::DRC,
             Next::Offer(v) => {
+                self.rise = self.cycles;
                 self.dr = v;
                 self.sr = (self.sr & !sr::DRC) | if self.program == Program::Dsp2 { sr::DRC } else { 0 } | sr::RQM;
             }
             Next::Idle => {
+                self.rise = self.cycles;
                 self.stage = Stage::Idle;
                 self.dr = self.idle_word;
                 self.sr = (self.sr & !sr::DRS) | sr::DRC | sr::RQM;
@@ -269,7 +285,7 @@ impl DspHle {
                 let taken = taken + 1;
                 if taken < want {
                     self.stage = Stage::Taking { want, taken };
-                    self.schedule(Next::Request { wide: true }, NOTICE);
+                    self.next_phase(Next::Request { wide: true });
                 } else {
                     self.compute();
                 }
@@ -279,12 +295,12 @@ impl DspHle {
                 if given < total {
                     self.stage = Stage::Giving { total, given, run, overwritten };
                     let v = self.outputs.get(given as usize).copied().unwrap_or(0);
-                    self.schedule(Next::Offer(v), NOTICE);
+                    self.next_phase(Next::Offer(v));
                 } else if run && !overwritten {
                     self.stage = Stage::Giving { total, given: 0, run, overwritten: false };
-                    self.schedule(Next::Offer(self.outputs[0]), NOTICE);
+                    self.next_phase(Next::Offer(self.outputs[0]));
                 } else {
-                    self.schedule(Next::Idle, NOTICE);
+                    self.next_phase(Next::Idle);
                 }
             }
         }
@@ -304,21 +320,39 @@ impl DspHle {
             return;
         };
         self.stage = Stage::Taking { want: inputs.max(1), taken: 0 };
-        self.schedule(Next::Request { wide: true }, NOTICE);
+        self.phase = 0;
+        self.next_phase(Next::Request { wide: true });
     }
 
-    /// The command's results; the frame answers only what fullsnes fixes.
+    /// The command's results, by the formulas and the members VenusRT_Native.md §39 chose; zeros where none is built.
     fn compute(&mut self) {
         let (_, total, run) = dsp1_shape(self.command).unwrap_or((0, 0, false));
+        let i = self.inputs.map(|w| w as i16 as i64);
+        let squares = i[0] * i[0] + i[1] * i[1] + i[2] * i[2];
         self.outputs = [0; WORDS];
-        if self.command == 0x2F {
-            self.outputs[0] = if self.program == Program::Dsp1 { 0x0100 } else { 0x0101 };
+        match self.command {
+            // SNESdev's K·I scaled by 2^-15, the multiplier's own floor; 20h with its low bit set.
+            0x00 => self.outputs[0] = ((i[0] * i[1]) >> 15) as u16,
+            0x20 => self.outputs[0] = ((i[0] * i[1]) >> 15) as u16 | 1,
+            // x² + y² + z² in units of 2^-1 (SNESdev's L2 and H2), wrapping in 32 bits.
+            0x08 => {
+                let v = (squares << 1) as u32;
+                self.outputs[0] = v as u16;
+                self.outputs[1] = (v >> 16) as u16;
+            }
+            // x² + y² + z² - r² in units of 2^-1, its high word; 38h one more.
+            0x18 | 0x38 => {
+                let v = ((squares - i[3] * i[3]) << 1) as i32;
+                self.outputs[0] = ((v >> 16) + (self.command == 0x38) as i32) as u16;
+            }
+            0x2F => self.outputs[0] = if self.program == Program::Dsp1 { 0x0100 } else { 0x0101 },
+            _ => {}
         }
         if total == 0 {
-            self.schedule(Next::Idle, NOTICE);
+            self.next_phase(Next::Idle);
         } else {
             self.stage = Stage::Giving { total, given: 0, run, overwritten: false };
-            self.schedule(Next::Offer(self.outputs[0]), NOTICE);
+            self.next_phase(Next::Offer(self.outputs[0]));
         }
     }
 
@@ -346,6 +380,8 @@ impl DspHle {
         }
         o.extend(self.cycles.to_le_bytes());
         o.extend(self.due.to_le_bytes());
+        o.extend(self.rise.to_le_bytes());
+        o.push(self.phase);
         for w in self.ram.iter() {
             o.extend(w.to_le_bytes());
         }
@@ -379,9 +415,25 @@ impl DspHle {
         let at = 4 + 2 * (8 + 2 * WORDS);
         self.cycles = u64::from_le_bytes(d[at..at + 8].try_into().expect("eight bytes"));
         self.due = u64::from_le_bytes(d[at + 8..at + 16].try_into().expect("eight bytes"));
+        self.rise = u64::from_le_bytes(d[at + 16..at + 24].try_into().expect("eight bytes"));
+        self.phase = d[at + 24];
+        let base = at + 25;
         for (i, r) in self.ram.iter_mut().enumerate() {
-            *r = u16::from_le_bytes([d[at + 16 + i * 2], d[at + 17 + i * 2]]);
+            *r = u16::from_le_bytes([d[base + i * 2], d[base + 1 + i * 2]]);
         }
+    }
+}
+
+/// Each phase's work and notice in chip cycles, as `dsporacle::timing` measured them (VenusRT_Native.md §39.3); a
+/// phase not listed takes notice 2.
+fn dsp1_timing(command: u8) -> &'static [(u16, u16)] {
+    match command {
+        0x00 | 0x20 => &[(0, 2), (14, 2), (0, 4), (0, 3)],
+        0x08 => &[(0, 2), (16, 2), (0, 2), (0, 6), (0, 2), (0, 3)],
+        0x18 | 0x38 => &[(0, 2), (14, 2), (0, 2), (0, 2), (0, 6), (0, 3)],
+        0x0F => &[(0, 2), (4121, 3337), (0, 3)],
+        0x2F => &[(0, 2), (16, 2), (0, 3)],
+        _ => &[],
     }
 }
 
@@ -448,6 +500,29 @@ mod tests {
             tick(&mut d, 10);
             assert_eq!((d.host_read(Port::Sr, false), d.dr), (0x84, 0x80));
         }
+    }
+
+    // SNESdev's formulas through the ports: 4000h·4000h·2^-15 is 2000h; 3² + 4² is 25, sent as 50 halves.
+    #[test]
+    fn the_documented_formulas_answer_through_the_ports() {
+        let mut d = DspHle::new(Program::Dsp1b);
+        let mut ask = |command: u16, inputs: &[u16], outputs: usize| -> Vec<u16> {
+            tick(&mut d, 10);
+            put(&mut d, command);
+            for &w in inputs {
+                tick(&mut d, 20);
+                put(&mut d, w);
+            }
+            (0..outputs)
+                .map(|_| {
+                    tick(&mut d, 20);
+                    d.host_read(Port::Dr, true) as u16 | (d.host_read(Port::Dr, true) as u16) << 8
+                })
+                .collect()
+        };
+        assert_eq!(ask(0x00, &[0x4000, 0x4000], 1), [0x2000]);
+        assert_eq!(ask(0x08, &[3, 4, 0], 2), [50, 0]);
+        assert_eq!(ask(0x18, &[3, 4, 0, 5], 1), [0]);
     }
 
     // fullsnes's mailbox: the command at byte 0020h, bit 7 of 0021h set, and cleared on completion; the start word read first.

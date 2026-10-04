@@ -3524,6 +3524,52 @@ Each family is widened once, by members that state those structures as rules, be
 Neither is a table: each is one operation more than the documented formula. If neither member agrees on every case,
 the code is a named loss.
 
+### 39.3 What was chosen and built, and the grade (measured 2026-10-04)
+
+**Chosen**, each agreeing on every case `dsp_family` graded (265,865 per code on the DSP-1, and 1,052,297 on the
+DSP-1B):
+
+| Code | Member | In words |
+|---|---|---|
+| 00h | Floor, wrap | the high word of the multiplier's K·I·2, SNESdev's "rounded to <= 15 bits" being the floor |
+| 20h | Floor \| 1, wrap | 00h with its lowest bit set |
+| 08h | s = 1, wrap | x² + y² + z² in halves, as SNESdev's L2 and H2 say, in 32 bits |
+| 18h | s = 1, wrap, Floor | the high word of (x² + y² + z² - r²) in halves |
+| 38h | s = 1, wrap, Floor + 1 | 18h plus one |
+| 0Fh | 0000h | the memory test passes |
+
+None needs a table. Counting the widened families whole, the choices total 3 (00h) + 3 + 2 (20h) + 3 (08h) + 4 (18h)
++ 4 + 2 (38h) + 2 (0Fh) = 23 bits. The DSP-1 and DSP-1B choose alike, as §37.4's
+map predicted for every code but 28h.
+
+**Timing.** Each command's phases took one work and one notice over the seeded cases (§37.3's table). `dsphle.rs`
+keeps them per code and phase, 16 pairs in all, and schedules each edge at the later of the last rise plus the work
+and the S-CPU's completion plus the notice. A phase it does not list takes notice 2. The replacement's state carries
+the phase and the last rise, so the state version is 19. A version 18 state of the low-level path still loads; one of
+the replacement is refused with `VERSION`.
+
+**The grade.** `dsp_grade` compares the image and the replacement through the ports on every case: values,
+transfers, SR at every rise and access, and each latency. Every other case runs under a jittered S-CPU, as §37.3
+measured it:
+
+| Code | Cases | DSP-1B: differ | DSP-1: differ |
+|---|---|---|---|
+| 00h | every pair, 4,294,967,296 | 0 | 0 (1,190 s) |
+| 20h, 08h, 18h, 38h, 0Fh, 2Fh | 1,048,576 seeded each | 0 | 0 |
+
+The control: on 04h and 28h, which are not built, every case differs in values and latency, so the grader sees a
+difference. The crate test `the_replacements_arithmetic_agrees_with_the_image` repeats the comparison over 4,752
+edge and seeded cases per code on both images, steady and jittered. `the_documented_formulas_answer_through_the_ports`
+checks SNESdev's equations on the replacement with no image.
+
+**The cost.** The exhaustive pass took 1,081 s on the DSP-1B and 1,190 s on the DSP-1, eight threads each at a load of
+2 to 12, running both engines and the comparison. **P4 holds**: the image alone is about five times faster than this
+pass (§37.3), so well under 30 minutes.
+
+**What this settles.** For the codes of this step, the replacement is the chip at its ports: no case of 2^32 for 00h,
+nor of 2^20 for the others, differs in any value, transfer, SR bit or cycle. The DSP-1's cost in core info now names
+these five codes and 2Fh as exact.
+
 ## 40. The NEC DSP replacements, step 4: the DSP-1's sine, Triangle, Rotate and Polar (2026-10-04)
 
 Step 4 of `VenusRT_DspHle.md` §8. §40.1 was written and committed before the first comparison with the image.

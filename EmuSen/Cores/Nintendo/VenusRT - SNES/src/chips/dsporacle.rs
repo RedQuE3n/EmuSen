@@ -777,6 +777,39 @@ mod tests {
         }
     }
 
+    // VenusRT_Native.md §43: the ST010's replacement against the image through the mailbox, the whole RAM and the
+    // cycles to the busy bit's clearing, from a seeded phase; 07h and 08h, whose sine is a named loss, within one.
+    #[test]
+    fn the_st010_replacement_agrees_with_the_image() {
+        use super::super::dsphle::Program;
+        let Some(mut lle) = chip("st010") else { return };
+        let mut hle = Hle::new(Program::St010);
+        st_ready(&mut hle, &mut Host::steady()).unwrap();
+        let mut p = Pcg::new(0x5710);
+        for command in [0x00u8, 0x02, 0x03, 0x04, 0x06, 0x0A, 0x1E, 0xF4, 0x07, 0x08] {
+            for _ in 0..256 {
+                let mut set: Vec<(usize, u16)> = (0..3).map(|w| (w, if p.next() % 2 == 0 { p.word() } else { p.word() & 0xFF })).collect();
+                set.push((0x12, (p.next() % 18) as u16));
+                set.extend((0..16).map(|k| (0x20 + k, p.word() & 0x0F)));
+                set.extend((0..16).map(|k| (0x40 + k, p.word())));
+                for _ in 0..p.next() % 9 {
+                    lle.tick();
+                    hle.tick();
+                }
+                let (x, y) = (mailbox(&mut lle, &mut Host::steady(), command, &set), mailbox(&mut hle, &mut Host::steady(), command, &set));
+                assert_eq!(x.latency, y.latency, "{command:02X} {set:04X?}");
+                for w in 0..x.ram.len() {
+                    let e = (x.ram[w] as i16 as i32 - y.ram[w] as i16 as i32).abs();
+                    assert!(e == 0 || matches!(command, 0x07 | 0x08) && e <= 1, "{command:02X} word {w:03X} {set:04X?}");
+                }
+                // The approximate commands' results are not carried into the next case.
+                for w in 0..x.ram.len() {
+                    hle.dsp.ram[w] = x.ram[w];
+                }
+            }
+        }
+    }
+
     // The latency model on its own: a phase's rise is the later of its work after the last rise and its notice after
     // the S-CPU's answer.
     #[test]

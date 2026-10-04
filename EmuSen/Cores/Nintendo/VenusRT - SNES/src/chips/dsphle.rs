@@ -97,6 +97,8 @@ pub struct DspHle {
     pub(super) rise: u64,
     /// The DSP-2's command state (VenusRT_Native.md §42); default for the other programs.
     pub(super) d2: super::dsp2::Dsp2,
+    /// The ST010's mailbox poll (VenusRT_Native.md §43).
+    pub(super) mail: super::st010::Mail,
     /// Edges made, and the last one's place (0 idle, 1 command, 2 other) and written word, for the oracle; not in the state.
     pub edges: u64,
     pub edge_place: u8,
@@ -126,6 +128,7 @@ impl DspHle {
             phase: 0,
             rise: 0,
             d2: Default::default(),
+            mail: Default::default(),
             edges: 0,
             edge_place: 2,
             edge_write: None,
@@ -250,7 +253,7 @@ impl DspHle {
                 self.dr = self.idle_word;
                 self.sr = (self.sr & !sr::DRS) | sr::DRC | sr::RQM;
             }
-            Next::Done => self.ram[0x10] = 0,
+            Next::Done => self.st_done(),
         }
     }
 
@@ -282,9 +285,8 @@ impl DspHle {
                 }
                 let w = &mut self.ram[(i >> 1) & (self.ram.len() - 1)];
                 *w = if i & 1 == 0 { (*w & 0xFF00) | value as u16 } else { (*w & 0x00FF) | (value as u16) << 8 };
-                if i & 0xFFF == 0x21 && value & 0x80 != 0 && self.stage == Stage::StMailbox {
-                    self.command = self.ram[0x10] as u8;
-                    self.schedule(Next::Done, 16);
+                if i & 0xFFF == 0x21 && value & 0x80 != 0 && self.stage == Stage::StMailbox && self.next != Next::Done {
+                    self.st_command();
                 }
             }
             Port::Dr => {
@@ -322,7 +324,10 @@ impl DspHle {
             return;
         }
         match self.stage {
-            Stage::StStart => self.stage = Stage::StMailbox,
+            Stage::StStart => {
+                self.stage = Stage::StMailbox;
+                self.st_begin();
+            }
             Stage::StMailbox => {}
             Stage::Idle => self.command(self.dr as u8),
             Stage::Taking { want, taken } => {
@@ -452,6 +457,9 @@ impl DspHle {
         if self.program == Program::Dsp2 {
             self.d2.pack(&mut o);
         }
+        if self.st() {
+            o.extend(self.mail.poll.to_le_bytes());
+        }
         o
     }
 
@@ -491,6 +499,10 @@ impl DspHle {
         if self.program == Program::Dsp2 {
             self.d2.unpack(&d[base + self.ram.len() * 2..]);
         }
+        if self.st() {
+            let at = base + self.ram.len() * 2;
+            self.mail.poll = u64::from_le_bytes(d[at..at + 8].try_into().expect("eight bytes"));
+        }
     }
 }
 
@@ -514,7 +526,7 @@ fn tables() -> &'static [i32; 512] {
 
 /// sin(2π·q/256) for q in 0..=64 by its Taylor series in f64 arithmetic alone, so every platform generates the same
 /// table; the series converges far past a 16-bit table's precision there.
-fn quarter_sine(q: usize) -> f64 {
+pub(super) fn quarter_sine(q: usize) -> f64 {
     let x = 2.0 * std::f64::consts::PI * q as f64 / 256.0;
     let (mut term, mut sum) = (x, 0.0);
     for n in 0..14 {
@@ -684,7 +696,7 @@ mod tests {
     // VenusRT_DspHle.md §5.4: no array literal of more than 16 numbers in a replacement's source; tables are generated.
     #[test]
     fn no_replacement_source_holds_a_table_literal() {
-        for (name, source) in [("dsphle.rs", include_str!("dsphle.rs")), ("dsp2.rs", include_str!("dsp2.rs"))] {
+        for (name, source) in [("dsphle.rs", include_str!("dsphle.rs")), ("dsp2.rs", include_str!("dsp2.rs")), ("st010.rs", include_str!("st010.rs"))] {
             let mut depth = 0usize;
             let mut items = Vec::<String>::new();
             for ch in source.chars() {

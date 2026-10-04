@@ -4012,3 +4012,66 @@ with fitted constants, and the record does not claim more.
 seventeen words from 60h, among them a flags word whose bits choose its paths, and computes an angle as 01h does.
 Its paths were not resolved in the time this step had. 05h and 01h stay as the frame left them: they clear the
 mailbox and change nothing else, a named loss for now.
+
+### 43.2 One family widened once, a count corrected, and the sine a named loss (measured 2026-10-04)
+
+`dsp_stgrade` is new. It grades a command through the mailbox on both engines from a seeded phase of 0 to 8 cycles,
+comparing the cycles to the busy bit's clearing and the whole RAM. With `mailbatch` and `DSP_TRACE_MAIL` it graded the
+families of §43.1.
+
+- **04h.** No member agreed on every case: the best agreed on 42%, and a closer look found the alpha-max-plus-beta-min
+  form right but α's constant half a unit off. **The family is widened once**: each constant floored, rounded or
+  raised (1 bit more). As with §42.2, the member was found in the same pass that rejected the declared ones.
+  - **Chosen**: |X| and |Y| as unsigned 16-bit magnitudes, so that -32,768 stays 8000h, swapped when |X| <= |Y|;
+    D = (2·α·max + 2·β·min + 8000h) >> 16 with the magnitudes signed in the products.
+  - α = ceil(2^15 · 2cos(π/8)/(1 + cos(π/8))) = 31,472, and β = round(2^15 · 2sin(π/8)/(1 + cos(π/8))) = 13,036.
+  - It agreed on 20,000 of 20,000 cases.
+- **02h's count**, a protocol fact, is 2 to 15, not 2 to 32. A count of 16 or more sorts nothing and leaves the
+  count in word 0. The sort is a bubble sort of fixed passes, unsigned and stable. Its time is 41 + 10n + 6n(n - 1) +
+  15 per exchange, which agreed on 800 of 800 traced cases.
+- **08h's and 07h's sine is a named loss under R4.**
+  - The family's 32 members agreed with the image on at most 18,200 of 20,000 08h cases (91%). The closest is
+    round(32,767·sin) by quadrant, each product shifted on its own, the negation after.
+  - firmwarecheck against the ST010's data half finds that member's table in the program's data in runs of up to 120
+    words, broken at single entries. That is the formula correct except at a few entries, which plan §5.2 makes a stop.
+  - No entry is patched, and the closest member is kept.
+  - 07h's L(n) and its products agree wherever the sine does.
+
+**firmwarecheck** (`dsp_oracle tables`, then `st010_tables.py` for the formula image, byte-identical to it), against the
+data half:
+
+| Run | Result |
+|---|---|
+| plain | 3 of 512 bytes equal at the same offset; common runs up to 240 bytes; FAIL by the plain thresholds, the expected outcome of a formula found in the data |
+| `--forced` | 12 formula runs; coverage 608 of 4,096 bytes (14.8%); residual 0; **PASS** |
+
+**The mailbox's phase.** The poll's base is set 2 cycles after the start word's read and 2 cycles after each
+command's busy bit clears, from which polls fall every 3 cycles. Each command's time runs from the first poll at or
+after the S-CPU's write. With those two constants every graded command's latency agreed, from every phase.
+
+**The grade** (`dsp_stgrade`, seeded phases and inputs; 02h's count held to 0-20):
+
+| Codes | Cases | Latency differs | RAM differs |
+|---|---|---|---|
+| 00h, 02h, 03h, 04h, 06h, and the mirrors 0Ah, 0Bh, 0Eh, 1Ch, F4h, FAh | 4,000 each | **0** | **0** |
+| 08h | 4,000 | 0 | 50 (1.25%), by one in a result word |
+| 07h | 4,000 | 0 | 126 (3.2%), by one, in the words that carry the sine |
+
+The crate tests `the_st010_replacement_agrees_with_the_image` (256 cases per code on the image, from seeded phases) and
+`the_st010_formulas_answer_through_the_mailbox` (fullsnes's multiplier and the sort, with no image) hold this.
+`the_st010_sine_equals_the_independent_generator` holds the table to `st010_tables.py`, and
+`the_st010_battery_file_reads_alike_on_either_engine` holds the battery file across engines: a file one engine
+writes is, byte for byte, the RAM the other engine starts from.
+
+### 43.3 F1 ROC II in lockstep (measured 2026-10-04)
+
+`dsp_lockstep` now compares the ST01x's RAM as well. F1 ROC II, 3,600 frames from power-on with no input:
+**identical to frame 1,019**, through its boot, its titles and every 06h, 03h, 04h, 02h and 08h before the first
+05h. The first parting is the S-CPU's read of 05h's first result at frame 1,019 (word 62h, 0034h against 0000h).
+Pictures were equal in 1,765 of 3,596 frames. 05h is a named loss for now (§43.1), so this parting is the expected
+one.
+
+**What is open.** 05h, the driver simulation, carries 53.6% of the game's commands. Its traffic, 98,150 cases in
+7,200 frames, is in the probe cache. The first rule found there holds in every case: words 68h and 69h are words 60h
+less 63h and 61h less 65h. A further characterisation step of its paths would let F1 ROC II run past frame 1,019. With
+the sine a named loss, 05h could be exact only where its paths do not use the sine.

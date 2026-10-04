@@ -574,6 +574,23 @@ mod tests {
         assert!(!create(&rom, Vec::new()).unwrap().sys.apu.boot_file);
     }
 
+    // VenusRT_Native.md §43: the ST010's battery file is its RAM on either engine, so a file one engine wrote is the
+    // RAM the other runs from; the image's engine runs only with an image (EMUSEN_VENUSRT_FIRMWARE).
+    #[test]
+    fn the_st010_battery_file_reads_alike_on_either_engine() {
+        let cart = dsp_cartridge(b"F1 ROC II", 0xF6);
+        let file: Vec<u8> = (0..4096u32).map(|i| (i.wrapping_mul(2654435761) >> 13) as u8).collect();
+        let hle = create(&cart, vec![File { which: 0, data: &file }]).unwrap();
+        assert_eq!(hle.sys.cart.dsp.as_ref().map(|(d, _)| d.tag()), Some(1));
+        assert_eq!(hle.battery_bytes(), &file[..]);
+        let Some(image) = crate::chips::dsporacle::firmware("st010") else { return };
+        let lle = create(&cart, vec![File { which: 0, data: hle.battery_bytes() }, File { which: 2, data: &image }]).unwrap();
+        assert_eq!(lle.sys.cart.dsp.as_ref().map(|(d, _)| d.tag()), Some(0));
+        assert_eq!(lle.battery_bytes(), hle.battery_bytes());
+        let again = create(&cart, vec![File { which: 0, data: lle.battery_bytes() }]).unwrap();
+        assert_eq!(again.battery_bytes(), &file[..]);
+    }
+
     // A state names the engine that wrote it, and the other engine refuses it with its own status.
     #[test]
     fn a_state_is_refused_by_the_other_dsp_engine() {

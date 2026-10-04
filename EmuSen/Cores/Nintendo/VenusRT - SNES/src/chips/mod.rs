@@ -8,3 +8,4 @@ pub mod gsu;
 pub mod necdsp;
 pub mod obc1;
 pub mod sa1;
+pub mod st010;

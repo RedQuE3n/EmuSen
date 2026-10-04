@@ -96,6 +96,7 @@ impl Pair {
             ("OAM", a.sys.ppu.oam == b.sys.ppu.oam),
             ("ARAM", a.sys.apu.ram == b.sys.apu.ram),
             ("clock", a.sys.timing.clock == b.sys.timing.clock),
+            ("DSPRAM", a.sys.cart.dsp.as_ref().is_none_or(|(d, _)| !d.st()) || a.sys.cart.dsp.as_ref().map(|(d, _)| d.ram()) == b.sys.cart.dsp.as_ref().map(|(d, _)| d.ram())),
         ];
         let differ: Vec<&str> = spaces.iter().filter(|s| !s.1).map(|s| s.0).collect();
         let state = differ.is_empty() && state_without_chip(a) == state_without_chip(b);

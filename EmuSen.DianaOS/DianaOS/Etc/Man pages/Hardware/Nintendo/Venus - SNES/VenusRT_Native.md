@@ -5239,3 +5239,91 @@ Gyrate's misses are of 3 to 6, where Ax is past 60° and tan Ax magnifies the si
 **Step 7 is built.** Every command the bench games give the DSP-1 is now computed: exactly for 00h, 0Fh and 2Fh, and
 approximately for the rest on the named-loss sine. What remains is the limit branch (§49.3) and the DSP-1's own 28h
 bug (§44.1).
+
+## 51. The NEC DSP replacements, step 8: the seven DSP-1 titles in lockstep (2026-10-04)
+
+Step 8 of `VenusRT_DspHle.md` §8, with every command the games give now computed (§49, §50). P6 was retired at §44.3;
+the question here is the one the sine's loss leaves: whether the games play acceptably, and what their pictures cost.
+
+### 51.1 What was added to measure it
+
+- **`dsp_lockstep`** reports the visual error as well as the first parting:
+  - per frame, the share of pixels that differ;
+  - for sprites alike in tile and attributes on both machines, in frames whose pictures differ, the larger of their x
+    and y distances, which is where Project placed them;
+  - `LOCKSTEP_SHOTS=f1,f2,...` saves the image's picture, the replacement's and their differing pixels side by side as a
+    PNG in the probe cache's `shots/` folder, never in the repository;
+  - `LOCKSTEP_OTHER=<stem>` runs a second image in the replacement's place, and `LOCKSTEP_AS=<stem>` runs both machines as
+    another program of the same slot (`Machine::attach_replacement_as`).
+- **`dsp_replay <chip> <trace>`**, plan §4.2's trace oracle for the whole DSP-1: every transaction of a game's trace
+  replayed on the replacement in order and compared with the image's recorded results, per command.
+- **`examples/dsp_pads/smk_race.txt`**: Super Mario Kart through its menus into a 50cc Mushroom Cup race as Mario, then
+  accelerating and steering.
+
+### 51.2 The seven titles (measured 2026-10-04)
+
+`dsp_lockstep <rom> 7200` with §37.6's pad scripts. "Placed within 1" is the share of sprites alike on both machines
+whose positions differ by at most one pixel. The pixel share counts any difference, so a mode 7 floor sampled one
+texel over counts whole, though it looks the same.
+
+| Game | Identical until | Pictures equal (§44.3, of 3,600) | Pixels differing, median and 95th percentile | Sprites placed within 1 (within 4) |
+|---|---|---|---|---|
+| Super Mario Kart | 96 | 3,893 of 7,200 (258) | 0.00%, 21.2% | 98.1% (99.1%) of 56,445 |
+| Super Mario Kart, `smk_race.txt`, 3,014 frames | 96 | 1,289 | 8.65%, 28.1% | 99.2% (99.8%) of 41,034 |
+| Michael Andretti's Indy Car Challenge | 3,310 | 3,310 of 7,193 (3,310) | 7.66%, 7.83% | 80.9% (99.96%) of 126,880 |
+| Suzuka 8 Hours | 1,474 | 1,499 of 7,195 (1,491) | 5.59%, 7.47% | 100.0% of 58,728 |
+| Super Bases Loaded 2 | 3,029 | 3,054 of 7,198 (3,030) | 56.3%, 98.7% | 93.8% (95.9%) of 136,414 |
+| Ballz 3D | 762 | 2,528 of 7,200 (1,007) | 0.46%, 77.4% | 69.7% (77.5%) of 43,565 |
+| Pilotwings | 1,799 | 1,802 of 7,200 (1,802) | 69.3%, 100% | 90.4% (92.8%) of 76,232 |
+| Lock On | 1,523 | 1,525 of 7,198 (1,525) | 37.3%, 99.9% | 98.0% (98.5%) of 638,697 |
+
+Each still parts in the frame after its first command that computes, as the sine's loss requires. **The trace oracle**
+(`dsp_replay`) agrees with the ports' grades: in Super Mario Kart's trace every Parameter, Raster, Triangle and
+Distance transaction is close, and 29,935 of 30,400 Projects; in Pilotwings', every Attitude, Subjective, Objective,
+Rotate and Gyrate transaction is close, while Parameter, Raster and Target miss where the limit is passed and Distance
+in 198 of 419, the DSP-1's own bug (§44.1).
+
+### 51.3 Playable or not, game by game
+
+The pictures named are in `~/.cache/emusen/probe/venusrt/dsp-hle/shots/`.
+
+- **Super Mario Kart: playable.** In the attract race (`smk-f2400.png`) and in a race driven by `smk_race.txt`
+  (`smk-race/`), the track, the karts on it, Lakitu, the map below and the race's course are as on the image. Sprites
+  sit within a pixel of the image's in 98-99% of cases and within four in 99.1-99.8%. The race keeps its course: at
+  every frame shown the karts stand where they stand on the image's map. What differs is the floor's texture sampling
+  and the odd sprite a pixel off, which no player would see.
+- **Suzuka 8 Hours, Michael Andretti's Indy Car Challenge, Super Bases Loaded 2: playable.** Their roads and field are
+  drawn as on the image (`suzuka-f3000.png`, `andretti-f6500.png`, `sbl2-f3500.png`). Andretti's own car sits 4%
+  larger and a few pixels off where Project's eye rounding (§49.4) matters, at the eye's height of 10.
+- **Ballz 3D: plays, and its attract fight diverges.** The arena floor is the image's. The fighters are built of their
+  balls correctly, but the fight takes another course after a few seconds (`ballz-f5000.png`), since Subjective's and
+  Project's small differences feed the game's own animation.
+- **Pilotwings: not acceptable as it stands.**
+  - Below the limit angle the views are the image's (`pilotwings-f2000.png`, `-f2400.png`).
+  - In level flight, past the limit, the ground is drawn in the wrong place. At frame 2,120 (`pilotwings-f2120.png`)
+    the image shows the island below the glider and the replacement shows sea; 190 of the game's 600 traced Parameters
+    are past the limit (§49.3).
+  - The demo flights diverge from about frame 2,400: at frame 3,500 the image's glider is at 529 feet and climbing, the
+    replacement's at 126 near the runway. This is not the DSP-1's Distance bug: with both machines run as the DSP-1B
+    (`LOCKSTEP_AS=dsp1b`, `pilotwings-as-dsp1b/`) the demo diverges alike, while the DSP-1B's image against the
+    DSP-1's stays within 3 feet for 53 seconds (`pilotwings-dsp1-vs-dsp1b/`). The demo replays its pad frame by frame,
+    so the flight model integrates every small difference. The commands it uses are close to the image's in every
+    traced transaction, and the replacement's latencies are medians. Which of the two carries the divergence was not isolated.
+- **Lock On: not acceptable as it stands.** Its view is always level, Azs 90°, past the limit. With no limit, Raster's
+  K = k/cos z saturates there, and the ground under the aircraft is drawn as streaks (`lockon-f2000.png`). The chip's
+  limit exists, in effect, to keep cos z away from zero.
+
+### 51.4 Against the plan, and what is put for decision
+
+- **P1**, at least eleven of the DSP-1B's seventeen command families bit-exact: retired, false. Seven codes are exact
+  (00h, 20h, 08h, 18h, 38h, 0Fh and 2Fh), and every command built on the sine is approximate, as §40.7 made certain.
+- **P6** stays retired (§44.3).
+- **The limit branch is the one defect a player sees** in the DSP-1's replacement: Pilotwings' level flight, Lock On
+  throughout. Fixing it needs one constant, the limit angle, which no document read gives, and the branch's behaviour
+  past it, which §49.1 began to characterise: Vva held at the limit's, Vof = Les·tan(z - limit), and (Cx, Cy), Raster,
+  Project and Target there still to be measured. Taking the constant from the image is what R1 forbids (§48.2).
+  **The decision is the tester's:** admit the limit angle as one measured constant under a written amendment, as §40.6
+  admitted the sine's second widening; or leave the branch a named loss, with Lock On and Pilotwings' level flight
+  needing the player's image.
+- **Project's member** (§49.6): choose by exact share, or admit the coordinate-wise eye. Either would bring Michael
+  Andretti's Indy Car Challenge's car to the image's size.

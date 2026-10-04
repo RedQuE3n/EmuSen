@@ -4,6 +4,9 @@
 //! master clock and the whole state with the chip's group left out; the report goes to stdout and to
 //! ~/.cache/emusen/probe/venusrt/dsp-hle/lockstep-<rom>.txt.
 //!
+//! LOCKSTEP_AS=<stem> runs both machines as that program instead of the cartridge's.
+//! LOCKSTEP_OTHER=<stem> puts another image in the replacement's place, so two programs can be run against each other.
+//!
 //! The script takes dsp_trace's verbs (`frames`, `tap`, `hold`, `release`, `tapuntil BTN wram ADDR HEX [cap] [every]`,
 //! `tapuntil BTN chip N - [cap] [every]`), decided on the image's machine and given to both.
 //!
@@ -276,9 +279,15 @@ fn main() {
     let mut lle = Machine::load_rom(&image).expect("an image");
     let mut hle = lle.clone();
     let (stem, _) = lle.sys.cart.nec_firmware().expect("a NEC DSP cartridge");
+    // LOCKSTEP_AS=<stem> runs both engines as another program of the same slot, the DSP-1B's in Pilotwings for one.
+    let stem: &str = &std::env::var("LOCKSTEP_AS").unwrap_or(stem.to_string());
     let fw = venusrt::chips::dsporacle::firmware(stem).unwrap_or_else(|| std::process::exit(1));
     assert!(lle.attach_dsp(&fw));
-    assert!(hle.attach_replacement(), "no replacement for {stem}");
+    // LOCKSTEP_OTHER=<stem> runs a second image in the replacement's place, the DSP-1 against the DSP-1B for one.
+    match std::env::var("LOCKSTEP_OTHER") {
+        Ok(other) => assert!(hle.attach_dsp(&venusrt::chips::dsporacle::firmware(&other).expect("the other image"))),
+        Err(_) => assert!(hle.attach_replacement_as(venusrt::chips::dsphle::Program::for_stem(stem).expect("a program with a replacement")), "no replacement for {stem}"),
+    }
     lle.sys.cart.dsp.as_mut().and_then(|(d, _)| d.lle_mut()).unwrap().transfers = Some(Vec::new());
     let name = std::path::Path::new(&a[1]).file_stem().unwrap().to_string_lossy().to_string();
     let shots = std::env::var("LOCKSTEP_SHOTS").map(|v| v.split(',').filter_map(|f| f.trim().parse().ok()).collect()).unwrap_or_default();

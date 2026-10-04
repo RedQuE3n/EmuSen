@@ -74,6 +74,14 @@ impl Machine {
     /// Fits VenusRT's open replacement for the program the cartridge names, where one exists (VenusRT_DspHle.md §7.1).
     pub fn attach_replacement(&mut self) -> bool {
         let Some(program) = self.sys.cart.nec_firmware().and_then(|(stem, _)| crate::chips::dsphle::Program::for_stem(stem)) else { return false };
+        self.attach_replacement_as(program)
+    }
+
+    /// The replacement for `program` in the cartridge's DSP slot, whichever chip the cartridge names; for the oracle.
+    pub fn attach_replacement_as(&mut self, program: crate::chips::dsphle::Program) -> bool {
+        if self.sys.cart.nec_firmware().is_none() {
+            return false;
+        }
         let dsp = crate::chips::dspengine::DspEngine::replacement(program);
         let map = self.sys.cart.dsp_map(dsp.st());
         self.sys.cart.dsp = Some((dsp, map));

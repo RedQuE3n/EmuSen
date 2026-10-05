@@ -119,19 +119,28 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
         }
     }
 
-    // A libretro core run as a black box through the reference probe; each dump set is cached by ROM, frames, presses, core and probe build - see Nephrite_Plan.md §3.4.
+    // A run the probe skipped because it needs firmware nobody supplied (its exit 4) - see Nephrite_Native.md §8.
+    public sealed class FirmwareSkippedException(string message) : InvalidOperationException(message);
+
+    // A libretro core run as a black box through the reference probe; each dump set is cached by ROM, frames, presses, options, core and probe build - see Nephrite_Plan.md §3.4.
     public sealed class LibretroProbeEngine : ITestRomEngine
     {
         public const string ProbeVariable = "EMUSEN_LIBRETRO_PROBE";
 
         private readonly string _core;
         private readonly string _cache;
+        private readonly IReadOnlyList<KeyValuePair<string, string>> _options;
+        private readonly string? _system;
+        private readonly string? _systemDir;
 
-        public LibretroProbeEngine(string name, string corePath, string cacheRoot)
+        public LibretroProbeEngine(string name, string corePath, string cacheRoot, IReadOnlyDictionary<string, string>? options = null, string? system = null, string? systemDir = null)
         {
             Name = name;
             _core = corePath;
             _cache = cacheRoot;
+            _options = options?.OrderBy(o => o.Key, StringComparer.Ordinal).ToArray() ?? Array.Empty<KeyValuePair<string, string>>();
+            _system = system;
+            _systemDir = systemDir;
         }
 
         public string Name { get; }
@@ -150,6 +159,7 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
             string key = Convert.ToHexStringLower(MD5.HashData(System.Text.Encoding.UTF8.GetBytes(string.Join("|",
                 Convert.ToHexStringLower(MD5.HashData(File.ReadAllBytes(rom))), string.Join(",", frames.Order()),
                 string.Join(",", presses?.Select(p => $"{p.Frame}:{p.Button}:{p.Frames}") ?? Array.Empty<string>()), audio,
+                string.Join(",", _options.Select(o => $"{o.Key}={o.Value}")), _system ?? "", _systemDir ?? "",
                 core.Length, core.LastWriteTimeUtc.Ticks, probe.Length, probe.LastWriteTimeUtc.Ticks))));
             string dir = Path.Combine(_cache, Name, key);
             int first = frames.Min(), last = frames.Max();
@@ -171,10 +181,26 @@ namespace EmuSen.WiseMan.Fixtures.RomRunner
                     psi.ArgumentList.Add("--wav");
                     psi.ArgumentList.Add(Path.Combine(dir, "audio.wav"));
                 }
+                foreach (var o in _options)
+                {
+                    psi.ArgumentList.Add("--option");
+                    psi.ArgumentList.Add($"{o.Key}={o.Value}");
+                }
+                if (_system is { Length: > 0 })
+                {
+                    psi.ArgumentList.Add("--system");
+                    psi.ArgumentList.Add(_system);
+                }
+                if (_systemDir is { Length: > 0 })
+                {
+                    psi.ArgumentList.Add("--sysdir");
+                    psi.ArgumentList.Add(_systemDir);
+                }
                 using var process = Process.Start(psi)!;
                 string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
                 process.WaitForExit();
                 File.WriteAllText(Path.Combine(dir, "probe.log"), output);
+                if (process.ExitCode == 4) throw new FirmwareSkippedException(output.Split('\n').FirstOrDefault(l => l.StartsWith("[SKIP]")) ?? output);
                 if (process.ExitCode != 0) throw new InvalidOperationException($"the probe exited {process.ExitCode} on {rom}: {output}");
                 File.WriteAllText(Path.Combine(dir, "done"), "");
             }

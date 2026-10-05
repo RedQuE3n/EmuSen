@@ -169,6 +169,52 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(roms.Count, ran + refused);
         }
 
+        private static string ReferenceCore(string name) =>
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache", "emusen", "probe", "libretro", "cores", $"{name}_libretro.so");
+
+        // A Sega CD run on a core that needs a BIOS is reported skipped, with no --sysdir and with an empty one; nothing is ever fetched for it.
+        [Fact]
+        public void The_reference_probe_skips_a_sega_cd_run_without_the_players_firmware()
+        {
+            string disc = Write("disc.iso", SyntheticMdRom.Disc());
+            string empty = Path.Combine(_root, "empty-sysdir");
+            Directory.CreateDirectory(empty);
+            var none = new LibretroProbeEngine("genesis_plus_gx", ReferenceCore("genesis_plus_gx"), Path.Combine(_root, "runs"), system: "segacd");
+            var emptyDir = new LibretroProbeEngine("genesis_plus_gx", ReferenceCore("genesis_plus_gx"), Path.Combine(_root, "runs"), system: "segacd", systemDir: empty);
+            if (!none.Available)
+            {
+                _output.WriteLine("no probe or Genesis Plus GX core here: not run");
+                return;
+            }
+            var a = Assert.Throws<FirmwareSkippedException>(() => none.Run(disc, new[] { 10 }));
+            var b = Assert.Throws<FirmwareSkippedException>(() => emptyDir.Run(disc, new[] { 10 }));
+            Assert.Contains("no --sysdir", a.Message);
+            Assert.Contains("holds none", b.Message);
+            Assert.Empty(Directory.EnumerateFileSystemEntries(empty));
+            _output.WriteLine(a.Message);
+        }
+
+        // A pinned option reaches the core and changes the run; an unpinned one is the default the core declares, which the probe states.
+        [Fact]
+        public void The_reference_probe_pins_a_core_option()
+        {
+            string rom = Write("cart.md", SyntheticMdRom.Cartridge());
+            var runs = Path.Combine(_root, "runs");
+            var plain = new LibretroProbeEngine("clownmdemu", ReferenceCore("clownmdemu"), runs);
+            var pinned = new LibretroProbeEngine("clownmdemu", ReferenceCore("clownmdemu"), runs, new Dictionary<string, string> { ["clownmdemu_overseas_region"] = "japan" });
+            if (!plain.Available)
+            {
+                _output.WriteLine("no probe or ClownMDEmu core here: not run");
+                return;
+            }
+            plain.Run(rom, new[] { 5 });
+            pinned.Run(rom, new[] { 5 });
+            string[] logs = Directory.EnumerateFiles(Path.Combine(runs, "clownmdemu"), "probe.log", SearchOption.AllDirectories).Select(File.ReadAllText).ToArray();
+            Assert.Equal(2, logs.Length);
+            Assert.Contains(logs, l => l.Contains("option clownmdemu_overseas_region=elsewhere (default)"));
+            Assert.Contains(logs, l => l.Contains("option clownmdemu_overseas_region=japan (pinned)"));
+        }
+
         // The reference engines answer through the same runner: Genesis Plus GX and PicoDrive on the corpus's first cartridge.
         [Fact]
         public void The_reference_engines_run_a_cartridge_through_the_probe()

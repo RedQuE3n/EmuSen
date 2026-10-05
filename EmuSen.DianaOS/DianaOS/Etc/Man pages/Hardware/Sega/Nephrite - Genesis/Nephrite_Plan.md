@@ -179,7 +179,8 @@ because PicoDrive declares its 32X maps late, and a flag for non-standard memory
 made robust (load libm globally, print the loader's error, a `--system` override since `.bin` is ambiguous); the cores
 fetched from the buildbot where Fedora has no package, their hashes in the manifest; and a picture gate up to a colour
 map (built in WiseMan at stage 0, §3.3). The Sega CD has no BIOS-free reference but ClownMDEmu's incomplete one; a
-`--sysdir` lets a developer point at their own dump, which the firmware policy keeps optional.
+`--sysdir` lets a developer point at their own dump, which the firmware policy keeps optional. *Built 2026-10-05, at stage 2: `Nephrite_Native.md`
+§8.*
 
 ### 1.7 What was read to write this page
 
@@ -574,7 +575,8 @@ reset, trace, the disassembler and the state, checked the decoder against TomHar
 processor at 0.147 ms a frame of 68000 work (§5 there). Its dispute step, the same day, refereed the two
 suites' disagreements with fx68k and Nuked-MD (§6 there). Stage 2's first step, on 2026-10-05, built the Z80's
 instruction set, its interrupts, the disassembler, the state and the CP/M shim: every case of SingleStepTests' Z80
-suite, ZEXDOC and ZEXALL pass (`Beryl_Z80.md` §4-§6). The probe's work of §1.6 remains.*
+suite, ZEXDOC and ZEXALL pass (`Beryl_Z80.md` §4-§6). Its second step, the same day, did the probe's work of §1.6
+(`Nephrite_Native.md` §8), which ends stage 2.*
 
 About 65 steps, or 190–230 hours (P3). The order is the order of dependence; stage 6 makes the Genesis available to
 players before either attachment is started, and the Sega CD (8–10) and the 32X (11–12) are independent of each other

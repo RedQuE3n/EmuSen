@@ -40,6 +40,12 @@ pub fn usage_lines() -> Vec<&'static str> {
     let mut lines = Vec::new();
     #[cfg(feature = "libretro")]
     lines.push("  --core PATH      libretro backend only: the *_libretro.so/.dylib to drive");
+    #[cfg(feature = "libretro")]
+    lines.push("  --option K=V     libretro only: pin a core option; the rest take the defaults the core declares");
+    #[cfg(feature = "libretro")]
+    lines.push("  --list-options   libretro only: print the core's options and their values, then stop");
+    #[cfg(feature = "libretro")]
+    lines.push("  --memory-id N=ID libretro only: dump memory id ID as space N (an id the ABI does not name)");
     lines
 }
 

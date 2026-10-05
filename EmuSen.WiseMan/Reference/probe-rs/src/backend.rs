@@ -158,6 +158,18 @@ pub struct ProbeOptions {
     // Kept beside the dumps, so a probe run never touches a real emulator profile
     // and its .srm never silently changes what the ROM boots into.
     pub home_folder: String,
+    // --option KEY=VALUE, in order: settings pinned rather than left to a default
+    // that differs between emulators (region, model, sound chip, pad).
+    pub core_options: Vec<(String, String)>,
+    // --list-options: print what the core declares, with every allowed value.
+    pub list_options: bool,
+    // --system: the machine, where the ROM's extension cannot say (.bin, .cue).
+    pub system: String,
+    // --sysdir: a folder a person filled with their own firmware dumps. Never
+    // filled by the probe, never downloaded into; absent means none.
+    pub system_dir: String,
+    // --memory-id NAME=ID: a space under a memory id the ABI does not name.
+    pub memory_ids: Vec<(String, u32)>,
 }
 
 impl Default for ProbeOptions {
@@ -166,6 +178,11 @@ impl Default for ProbeOptions {
             ram_state: "zeros".to_string(),
             wav_path: String::new(),
             home_folder: String::new(),
+            core_options: Vec::new(),
+            list_options: false,
+            system: String::new(),
+            system_dir: String::new(),
+            memory_ids: Vec::new(),
         }
     }
 }
@@ -219,6 +236,11 @@ pub trait ProbeBackend {
     }
 
     fn load(&mut self, rom_path: &str, options: &ProbeOptions) -> bool;
+    // Why a load that failed was a skip rather than an error: the run needs
+    // firmware nobody supplied. The probe then reports it and exits 4.
+    fn skipped(&self) -> Option<String> {
+        None
+    }
     fn shutdown(&mut self) {}
 
     // Advances to at least `frame`, then stops on a frame boundary. Every other

@@ -50,7 +50,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #   RDP       whether the display processor's reference instruments can be built
 case "$(uname -s)" in
 Linux)
-    HOST=linux;   DEPS=distro;   CORE_EXT=so;    EXE=;     MESEN=yes; RDP=yes; BUILDBOT_DIR= ;;
+    HOST=linux;   DEPS=distro;   CORE_EXT=so;    EXE=;     MESEN=yes; RDP=yes; BUILDBOT_DIR="linux/$(uname -m)" ;;
 Darwin)
     HOST=macos;   DEPS=upstream; CORE_EXT=dylib; EXE=;     MESEN=yes; RDP=no;  BUILDBOT_DIR="apple/osx/$(uname -m)" ;;
 MINGW*|MSYS*|CYGWIN*)
@@ -132,6 +132,39 @@ deps_libretro_core() {
         unzip -oq "$WORK/deps/${stem}_libretro.$CORE_EXT.zip" -d "$WORK/deps"
         ;;
     esac
+}
+
+sha256() {
+    if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
+}
+
+# A reference core from the buildbot, used only if its hash is the one libretro-cores.sha256 pins for this host.
+# Only the core's binary is unpacked; a nightly that has moved on is refused and nothing of it kept.
+deps_buildbot_core() {
+    local core="$1" dir="$WORK/cores" want so tmp got
+    want=$(awk -v h="$BUILDBOT_DIR" -v c="$core" '$1 == h && $2 == c { print $3 }' "$HERE/libretro-cores.sha256")
+    [ -n "$want" ] || { echo "no hash pinned for $core on $BUILDBOT_DIR in libretro-cores.sha256" >&2; exit 1; }
+    so="$dir/${core}_libretro.$CORE_EXT"
+    if [ -f "$so" ] && [ "$(sha256 "$so")" = "$want" ]; then
+        echo "core: $so (pinned, already here)"
+        return 0
+    fi
+    need curl unzip
+    mkdir -p "$dir"
+    tmp=$(mktemp -d "$dir/.fetch-XXXXXX")
+    echo "== fetching ${core}_libretro.$CORE_EXT from the libretro buildbot ($BUILDBOT_DIR)"
+    curl -fsSL -o "$tmp/core.zip" "$BUILDBOT/$BUILDBOT_DIR/latest/${core}_libretro.$CORE_EXT.zip"
+    unzip -oq "$tmp/core.zip" "${core}_libretro.$CORE_EXT" -d "$tmp"
+    got=$(sha256 "$tmp/${core}_libretro.$CORE_EXT")
+    if [ "$got" != "$want" ]; then
+        rm -rf "$tmp"
+        echo "the buildbot's $core is now $got, not the pinned $want: refused, nothing kept." >&2
+        echo "Re-pinning is a deliberate edit of libretro-cores.sha256, after checking the new core." >&2
+        exit 1
+    fi
+    mv "$tmp/${core}_libretro.$CORE_EXT" "$so"
+    rm -rf "$tmp"
+    echo "core: $so (pinned)"
 }
 
 # Puts an SDL2 toolchain in front of Mesen's makefile, which reads sdl2-config.
@@ -287,9 +320,15 @@ rdp)
     ;;
 libretro-core)
     # Fetches a core into the libretro backend's work dir and says where it
-    # landed. Nothing is installed system-wide.
-    [ -n "$CHECKOUT" ] || { echo "usage: build-probe.sh libretro-core <package>" >&2; exit 1; }
+    # landed. Nothing is installed system-wide. A name in libretro-cores.sha256
+    # (genesis_plus_gx, picodrive, ...) comes from the buildbot, pinned by hash;
+    # a libretro-<package> name from the distribution.
+    [ -n "$CHECKOUT" ] || { echo "usage: build-probe.sh libretro-core <package or pinned core>" >&2; exit 1; }
     WORK="${3:-${XDG_CACHE_HOME:-$HOME/.cache}/emusen/probe/libretro}"
+    if awk -v c="$CHECKOUT" '$2 == c { found = 1 } END { exit !found }' "$HERE/libretro-cores.sha256"; then
+        deps_buildbot_core "$CHECKOUT"
+        exit 0
+    fi
     deps_libretro_core "$CHECKOUT"
     # Not find -printf: that is GNU-only and this script runs on three hosts.
     find "$WORK/deps" -name "*_libretro.$CORE_EXT" | sed 's/^/core: /' | sort

@@ -441,6 +441,29 @@ mod tests {
         assert!(!failed_primary, "a SingleStepTests case fails");
     }
 
+    /// SingleStepTests' cases the processor misses, each written to the `.jsonl` file `EMUSEN_BERYL_MISSES` names with
+    /// the processor's own result, for the referee (Beryl_M68k.md §6); a measurement, failing nothing.
+    #[test]
+    fn the_primary_misses_listed() {
+        let Some(out) = std::env::var_os("EMUSEN_BERYL_MISSES") else { return };
+        let Some(files) = corpus(SUITES[0]) else { return };
+        let mut lines = String::new();
+        for path in &files {
+            let file = path.file_name().unwrap().to_string_lossy().into_owned();
+            for (index, case) in read_cases(path).into_iter().enumerate() {
+                if grade(&case, 4, &mut processor).passed() {
+                    continue;
+                }
+                let initial = case.get("initial").unwrap();
+                let mut bus = FlatBus { ram: ram(initial).into_iter().collect(), log: Vec::new() };
+                let mut cpu = M68000 { regs: registers(initial, 4), ..M68000::new() };
+                let _ = cpu.step(&mut bus);
+                lines.push_str(&listing_line(&file, index, &case, "miss", &cpu.regs, &merged(bus.log)));
+            }
+        }
+        std::fs::write(out, lines).expect("the listing");
+    }
+
     /// A development aid: `EMUSEN_BERYL_EXPLAIN=<suite folder>/<file>[:<skip>]` prints the first failing cases of a
     /// file after `skip`, with both transaction lists and the registers.
     #[test]
@@ -472,18 +495,42 @@ mod tests {
         }
     }
 
+    /// One disputed case as a JSON line: where it is, its class, and the registers and transactions the processor gave.
+    fn listing_line(file: &str, index: usize, case: &Value, class: &str, r: &Registers, tx: &[Transaction]) -> String {
+        let name = case.get("name").and_then(Value::as_str).unwrap_or("?").replace('"', "'");
+        let (usp, ssp) = if r.supervisor() { (r.other_sp, r.a[7]) } else { (r.a[7], r.other_sp) };
+        let mut regs: Vec<String> = (0..8).map(|i| format!("\"d{i}\":{}", r.d[i])).collect();
+        regs.extend((0..7).map(|i| format!("\"a{i}\":{}", r.a[i])));
+        regs.push(format!("\"usp\":{usp},\"ssp\":{ssp},\"sr\":{},\"pc\":{}", r.sr, r.pc));
+        let tx: Vec<String> = tx
+            .iter()
+            .map(|t| match *t {
+                Transaction::Idle(n) => format!("[\"n\",{n}]"),
+                Transaction::Cycle { kind, function, address, word, value } => {
+                    let k: String = kind.iter().filter(|&&b| b != 0).map(|&b| b as char).collect();
+                    format!("[\"{k}\",{function},{address},{},{value}]", if word { "\"w\"" } else { "\"b\"" })
+                }
+            })
+            .collect();
+        format!("{{\"file\":\"{file}\",\"index\":{index},\"name\":\"{name}\",\"class\":\"{class}\",\"final\":{{{}}},\"transactions\":[{}]}}\n", regs.join(","), tx.join(","))
+    }
+
     /// TomHarte's suite against SingleStepTests', where they disagree: each failing case of the second suite put in
-    /// the first of the classes Beryl_M68k.md §3.3 names, printed with counts; a measurement, failing nothing.
+    /// the first of the classes Beryl_M68k.md §3.3 names, printed with counts; a measurement, failing nothing. When the
+    /// variable names a `.jsonl` file, each case is also written there with the processor's own result, for the
+    /// referee's comparison (§6).
     #[test]
     fn the_second_suite_disagreements() {
         if std::env::var_os("EMUSEN_BERYL_DISAGREEMENTS").is_none() {
             return;
         }
         let Some(files) = corpus(SUITES[1]) else { return };
+        let listing = std::env::var("EMUSEN_BERYL_DISAGREEMENTS").ok().filter(|p| p.ends_with(".jsonl"));
+        let mut lines = String::new();
         let mut classes: BTreeMap<String, usize> = BTreeMap::new();
         for path in &files {
             let file = path.file_name().unwrap().to_string_lossy().into_owned();
-            for case in read_cases(path) {
+            for (index, case) in read_cases(path).into_iter().enumerate() {
                 if grade(&case, 0, &mut processor).passed() {
                     continue;
                 }
@@ -506,11 +553,17 @@ mod tests {
                 } else {
                     format!("other: {file}")
                 };
+                if listing.is_some() {
+                    lines.push_str(&listing_line(&file, index, &case, &class, &cpu.regs, &got));
+                }
                 *classes.entry(class).or_default() += 1;
             }
         }
         for (c, n) in &classes {
             eprintln!("{n:8} {c}");
+        }
+        if let Some(p) = listing {
+            std::fs::write(&p, lines).expect("the listing");
         }
     }
 }

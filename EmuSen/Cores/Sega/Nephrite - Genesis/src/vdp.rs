@@ -16,6 +16,8 @@ pub struct Timing {
     /// The external access slots of an active line, and of a blank one, as master clocks into the line, ascending.
     pub active: Vec<u16>,
     pub blank: Vec<u16>,
+    /// The first blank line's: the active pattern until H $14E or $10E, the blank one after (measured, D-6).
+    pub first_blank: Vec<u16>,
     /// Where the vertical interrupt and the blanking flag's change fall.
     pub vint: u64,
     pub vblank: u64,
@@ -86,10 +88,13 @@ fn build(h40: bool) -> Timing {
     active.sort_unstable();
     blank.sort_unstable();
     let at = |v: u16| sc_mc[2 * values.iter().position(|&x| x == v).unwrap()] as u64;
+    let edge = if h40 { at(0x14E) } else { at(0x10E) } as u16;
+    let first_blank = active.iter().filter(|&&m| m < edge).chain(blank.iter().filter(|&&m| m >= edge)).copied().collect();
     Timing {
         h: hm,
         active,
         blank,
+        first_blank,
         vint: at(0x001),
         // MacDonald's m5hvc.txt: the blanking flag changes at H $A8 (40-cell) and $87 (32-cell), of the 8-bit counter.
         vblank: if h40 { at(0x150) } else { at(0x10E) },
@@ -175,9 +180,22 @@ pub struct Vdp {
     pub sprite_collision: bool,
     pub dot_overflow_line: bool,
     pub vscroll_latch: u16,
+    /// The interlace mode latched at vertical blanking (0, 1, or 3 for double resolution), and the odd field.
+    pub interlace: u8,
+    pub odd: bool,
+    /// The next line's sprite pixels as parsed on this one (colour, priority in bit 7), the CRAM dots of the line
+    /// being shown (pixel and colour), and the line the slots are in and where it began.
+    pub sprite_buffer: Vec<u8>,
+    pub cram_dots: Vec<(u16, u16)>,
+    /// The dots that fell on the last pixels of the line before: line, pixel and colour.
+    pub late_dots: Vec<(u16, u16, u16)>,
+    pub cur_line: u32,
+    pub cur_line_start: u64,
     /// VSRAM and the line's horizontal scroll as the line began, which its fetches read (Nephrite_Native.md §14.1).
     pub line_vsram: Vec<u8>,
     pub line_hscroll: (u16, u16),
+    /// Registers 17 and 18 as the line began: a write later in it moves the next line's window (measured, D-5).
+    pub line_window: [u8; 2],
 }
 
 /// The VDP's registers and latches, for the state; the memories are spaces of their own.
@@ -202,6 +220,8 @@ pub struct VdpRegs {
     pub fetch_at: u64,
     pub sprite_flags: [bool; 3],
     pub vscroll_latch: u16,
+    pub interlace: u8,
+    pub odd: bool,
 }
 
 const CRAM_BITS: u16 = 0x0EEE;
@@ -229,6 +249,8 @@ impl Vdp {
             fetch_at: self.fetch_at,
             sprite_flags: [self.sprite_overflow, self.sprite_collision, self.dot_overflow_line],
             vscroll_latch: self.vscroll_latch,
+            interlace: self.interlace,
+            odd: self.odd,
         }
     }
 
@@ -252,6 +274,7 @@ impl Vdp {
         self.fetch_at = s.fetch_at;
         [self.sprite_overflow, self.sprite_collision, self.dot_overflow_line] = s.sprite_flags;
         self.vscroll_latch = s.vscroll_latch;
+        (self.interlace, self.odd) = (s.interlace, s.odd);
     }
 
     pub fn new(pal: bool) -> Vdp {
@@ -282,13 +305,22 @@ impl Vdp {
             sprite_collision: false,
             dot_overflow_line: false,
             vscroll_latch: 0,
+            interlace: 0,
+            odd: false,
+            sprite_buffer: vec![0; 320],
+            cram_dots: Vec::new(),
+            late_dots: Vec::new(),
+            cur_line: 0,
+            cur_line_start: 0,
             line_vsram: vec![0; 80],
             line_hscroll: (0, 0),
+            line_window: [0, 0],
         }
     }
 
+    /// Register 15, or 1 in mode 4, which keeps the Master System's step whatever register 15 holds (D-7).
     fn increment(&self) -> u16 {
-        self.regs[15] as u16
+        if self.regs[1] & 4 == 0 { 1 } else { self.regs[15] as u16 }
     }
 
     pub fn h40(&self) -> bool {
@@ -304,11 +336,39 @@ impl Vdp {
     }
 
     /// Lines in a frame, the active lines, and the line of the vertical interrupt (240 in PAL's V30).
+    /// Interlace alternates fields of 262 and 263 lines (NTSC) or 313 and 312 (PAL), the odd field the longer, and
+    /// NTSC's V30 lets the V counter run its 512 lines (measured on Nuked-MD's board, Nephrite_Disputes.md D-4).
     pub fn lines(&self) -> u32 {
-        if self.pal { 313 } else { 262 }
+        if !self.pal && self.regs[1] & 0x0C == 0x0C {
+            return 512;
+        }
+        match (self.pal, self.interlace != 0) {
+            (false, false) => 262,
+            (false, true) => 262 + self.odd as u32,
+            (true, false) => 313,
+            (true, true) => 312 + self.odd as u32,
+        }
     }
+
+    /// At the start of vertical blanking the interlace setting is latched and, interlaced, the field changes.
+    pub fn field_start(&mut self) {
+        self.interlace = match (self.regs[12] >> 1) & 3 {
+            1 => 1,
+            3 => 3,
+            _ => 0,
+        };
+        self.odd = self.interlace != 0 && !self.odd;
+    }
+    /// Mode 4 shows 192 lines and raises its frame interrupt at line $C0 (MacDonald's `vdpint.txt`), the TMS9918's
+    /// modes (register 0's bit 2 clear too) 224 as the board shows at power-on; V30 shows 240 on either board (D-4).
     pub fn vint_line(&self) -> u32 {
-        if self.pal && self.regs[1] & 8 != 0 { 240 } else { 224 }
+        if self.regs[1] & 4 == 0 && self.regs[0] & 4 != 0 {
+            192
+        } else if self.regs[1] & 8 != 0 {
+            240
+        } else {
+            224
+        }
     }
 
     /// Whether `line`'s slots follow the active pattern: the display on and the line drawn, or the last line of the
@@ -320,7 +380,13 @@ impl Vdp {
     /// The external slots of `line`, as master clocks into it.
     pub fn slots(&self, line: u32) -> &'static [u16] {
         let t = self.timing();
-        if self.active_line(line) { &t.active } else { &t.blank }
+        if self.active_line(line) {
+            &t.active
+        } else if self.display() && line == self.vint_line() {
+            &t.first_blank
+        } else {
+            &t.blank
+        }
     }
 
     pub fn fifo_empty(&self) -> bool {
@@ -486,8 +552,10 @@ impl Vdp {
             1 => {
                 let (hi, lo) = ((e.data >> 8) as u8, e.data as u8);
                 let (x, y) = if a & 1 == 0 { (hi, lo) } else { (lo, hi) };
-                self.vram_write(a & 0xFFFE, x);
-                self.vram_write((a & 0xFFFE) | 1, y);
+                // Mode 4 writes the word where its 16 KiB puts the address (D-7).
+                let w = if self.regs[1] & 4 == 0 { crate::render::vram4_address(a & 0x3FFE) & 0xFFFE } else { a & 0xFFFE };
+                self.vram_write(w, x);
+                self.vram_write(w | 1, y);
             }
             3 => self.write_cram(a, e.data),
             5 => self.write_vsram(a, e.data),
@@ -496,9 +564,28 @@ impl Vdp {
     }
 
     fn write_cram(&mut self, a: usize, v: u16) {
+        // Mode 4 addresses an entry a byte, and keeps bits 0-2, 3-5 and 9-11 of the word as red, green and blue (D-7).
+        let (a, v) = if self.regs[1] & 4 == 0 { ((a & 0x1F) << 1, v & 0xE00 | (v >> 3 & 7) << 5 | (v & 7) << 1) } else { (a, v) };
         let v = v & CRAM_BITS;
+        self.cram_dot(v);
         self.cram[a & 0x7E] = (v >> 8) as u8;
         self.cram[(a & 0x7E) | 1] = v as u8;
+    }
+
+    /// A CRAM write while a line is shown leaves a dot of its colour where the beam is, the pixel at H minus $18
+    /// (measured on the board, Nephrite_Disputes.md D-6); one after the V counter's step falls on the last pixels of
+    /// the line before, drawn already, which the next line event patches.
+    fn cram_dot(&mut self, v: u16) {
+        if !self.display() || self.regs[1] & 4 == 0 {
+            return;
+        }
+        let h = self.timing().h(self.time.saturating_sub(self.cur_line_start));
+        let (left, start, width) = if self.h40() { (0x018, 0x14A, 320) } else { (0x018, 0x10A, 256) };
+        if (left..start).contains(&h) && self.cur_line < self.vint_line() {
+            self.cram_dots.push((h - left, v));
+        } else if h >= start && h - left < width && (1..=self.vint_line()).contains(&self.cur_line) {
+            self.late_dots.push((self.cur_line as u16 - 1, h - left, v));
+        }
     }
 
     fn write_vsram(&mut self, a: usize, v: u16) {
@@ -612,10 +699,17 @@ impl Vdp {
         let sprites = (self.sprite_overflow as u16) << 6 | (self.sprite_collision as u16) << 5;
         self.sprite_overflow = false;
         self.sprite_collision = false;
+        let pending = self.vint_pending;
+        if self.regs[1] & 4 == 0 {
+            // In mode 4 a status read, not the acknowledge, clears the interrupts (MacDonald's `vdpint.txt`).
+            self.vint_pending = false;
+            self.hint_pending = false;
+        }
         sprites
             | (self.fifo_empty() as u16) << 9
             | (self.fifo_full() as u16) << 8
-            | (self.vint_pending as u16) << 7
+            | (pending as u16) << 7
+            | ((self.interlace != 0 && self.odd) as u16) << 4
             | (vblank as u16) << 3
             | (t.hblank(offset) as u16) << 2
             | (dma as u16) << 1
@@ -625,12 +719,31 @@ impl Vdp {
     /// The V counter's 9-bit value on `line`: NTSC's jump from $EA to $1E5 (MacDonald §5), PAL's from $102 to $1CA in
     /// V28 and from $10A to $1D2 in V30 (argued from the line count).
     pub fn v_counter(&self, line: u32) -> u16 {
-        let (last, to) = match (self.pal, self.regs[1] & 8 != 0) {
-            (false, _) => (0xEA, 0x1E5),
+        let (mut last, mut to) = match (self.pal, self.regs[1] & 8 != 0) {
+            (false, false) => (0xEA, 0x1E5),
+            (false, true) => (0x1FF, 0x1FF),
             (true, false) => (0x102, 0x1CA),
             (true, true) => (0x10A, 0x1D2),
         };
+        if self.interlace != 0 && last != 0x1FF {
+            // Interlaced, the longer field jumps one line lower, and PAL's counter jumps a line earlier (the board).
+            if self.pal {
+                last -= 1;
+            }
+            to -= self.odd as u32;
+        }
         if line <= last { line as u16 } else { (to + (line - last - 1)) as u16 }
+    }
+
+    /// The V counter as the HV port gives it: its low byte, or with bit 0 replaced by bit 8 in interlace mode 1 and
+    /// the counter doubled with bit 8 below it in mode 2 (the board).
+    pub fn v_read(&self, line: u32) -> u16 {
+        let v = self.v_counter(line);
+        match self.interlace {
+            1 => (v & 0xFE) | (v >> 8 & 1),
+            3 => ((v << 1) & 0xFE) | (v >> 7 & 1),
+            _ => v & 0xFF,
+        }
     }
 
     /// The HV counter: the V counter's low byte and the H counter's top eight bits.
@@ -638,7 +751,7 @@ impl Vdp {
         if let Some(l) = self.hv_latch.filter(|_| self.regs[0] & 2 != 0) {
             return l;
         }
-        (self.v_counter(line) & 0xFF) << 8 | (self.timing().h(offset) >> 1)
+        self.v_read(line) << 8 | (self.timing().h(offset) >> 1)
     }
 
     /// Register 0's bit 1 set: the HV counter held at its present value until the bit is cleared (VDPFIFOTesting's
@@ -788,5 +901,31 @@ mod tests {
         }
         let t = timing(true);
         assert!(t.hblank(0) == false && t.hblank(t.vint));
+    }
+
+    /// The V counter's jumps and line counts as the board showed them (Nephrite_Disputes.md D-4).
+    #[test]
+    fn the_v_counter_jumps_where_the_board_does() {
+        let jumps = |pal: bool, r1: u8, interlace: u8, odd: bool| {
+            let mut v = Vdp::new(pal);
+            v.regs[1] = r1;
+            (v.interlace, v.odd) = (interlace, odd);
+            let seq: Vec<u16> = (0..v.lines()).map(|l| v.v_counter(l)).collect();
+            let jump = seq.windows(2).find(|p| p[1] != (p[0] + 1) & 0x1FF).map(|p| (p[0], p[1]));
+            (v.lines(), jump)
+        };
+        assert_eq!(jumps(false, 0x44, 0, false), (262, Some((0xEA, 0x1E5))));
+        assert_eq!(jumps(false, 0x4C, 0, false), (512, None));
+        assert_eq!(jumps(true, 0x44, 0, false), (313, Some((0x102, 0x1CA))));
+        assert_eq!(jumps(true, 0x4C, 0, false), (313, Some((0x10A, 0x1D2))));
+        assert_eq!(jumps(false, 0x44, 3, true), (263, Some((0xEA, 0x1E4))));
+        assert_eq!(jumps(false, 0x44, 3, false), (262, Some((0xEA, 0x1E5))));
+        assert_eq!(jumps(true, 0x44, 1, true), (313, Some((0x101, 0x1C9))));
+        assert_eq!(jumps(true, 0x44, 1, false), (312, Some((0x101, 0x1CA))));
+        let mut v = Vdp::new(false);
+        v.interlace = 1;
+        assert_eq!((v.v_read(0x23), v.v_read(0xEB)), (0x22, 0xE5));
+        v.interlace = 3;
+        assert_eq!((v.v_read(0x43), v.v_read(0xEB)), (0x86, 0xCB));
     }
 }

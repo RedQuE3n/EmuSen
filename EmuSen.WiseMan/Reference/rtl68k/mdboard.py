@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Programs for Nuked-MD's board run as a black box (tb_md), and what their bus activity says: the Z80's window
-onto the 68000's bus, and BUSREQ's latency. Nephrite_Native.md §10 is the method.
+"""Programs for Nuked-MD's board run as a black box (tb_md), and what their bus activity and video pins say: the
+Z80's window onto the 68000's bus, BUSREQ's latency, the V counter, mode 4's ports and the VDP's pictures.
+Nephrite_Native.md §10 and §15.3 are the method.
 
   mdboard.py window [cycles]   Z80 loops reading banked cartridge ROM, or its own RAM; the 68000 counts in its RAM
   mdboard.py busreq [cycles]   the 68000 requests the bus, polls until granted, releases, marking each in RAM
+  mdboard.py vcounter|interlace [cycles]   the HV counter's changes in V28 and V30, or in interlace modes 1 and 2
+  mdboard.py mode4-ports [cycles]   mode 4's writes, read back through mode 5
+  mdboard.py picture <name> [frames] [dir]   one of PICTURES' programs, its ROM and the board's frames as PNGs in dir
+
+Times are in MCLK2 cycles, two to a master clock; the bench prints cartridge reads (c) and 68000 RAM writes (w).
 
 Times are in MCLK2 cycles, two to a master clock; the bench prints cartridge reads (c) and 68000 RAM writes (w).
 """
@@ -168,10 +174,339 @@ def rom_loop(cycles):
         print(f"{name}: {len(g)} rounds, {mean:.2f} MCLK2 = {mean / M68K:.3f} clocks a round (24 by the manual); "
               f"rounds in clocks {sorted((k / M68K, n) for k, n in collections.Counter(g).items())}")
 
+def hv(cycles, v30=False, h40=True, lsm=0):
+    """The HV counter read in a loop and stored to RAM: each change of the V counter, with the H counter beside it.
+    TB_PAL in the environment makes the board PAL."""
+    loop = w(0x33FC, 0x810C if v30 else 0x8104, 0x00C0, 0x0004,   # move.w #$8104/$810C,$C00004: mode 5, V28/V30
+             0x33FC, (0x8C81 if h40 else 0x8C00) | lsm << 1, 0x00C0, 0x0004,   # register 12: H40/H32, interlace
+             0x41F9, 0x00FF, 0x1000,                              # lea $FF1000,a0
+             0x30B9, 0x00C0, 0x0008,                              # move.w $C00008,(a0)
+             0x60F8)                                              # bra.s the move
+    ev = run(rom(bytes([0x18, 0xFE]), loop), cycles)
+    samples = [(t, d) for k, t, a, d in ev if k == "w" and a == MARK and t > start(ev)]
+    seq, last = [], None
+    for t, d in samples:
+        v = d >> 8
+        if v != last:
+            seq.append((t, v, d & 0xFF))
+            last = v
+    return seq
+
+def vcounter(cycles):
+    import os
+    for v30 in (False, True):
+        seq = hv(cycles, v30)
+        vs = [v for _, v, _ in seq]
+        jumps = [(vs[i], vs[i + 1]) for i in range(len(vs) - 1) if vs[i + 1] != (vs[i] + 1) & 0xFF]
+        lines = [b[0] - a[0] for a, b in zip(seq, seq[1:])]
+        print(f"{'PAL' if os.environ.get('TB_PAL') else 'NTSC'} {'V30' if v30 else 'V28'}: {len(seq)} changes; jumps {jumps}; "
+              f"MCLK2 between changes {sorted(set(lines))[:6]}")
+
+def interlace(cycles):
+    """Interlace modes 1 and 2: the V counter's values over two fields, the line count of each field, and the odd flag."""
+    for lsm in (1, 3):
+        seq = hv(cycles, False, True, lsm)
+        vs = [v for _, v, _ in seq]
+        jumps = [(i, vs[i], vs[i + 1]) for i in range(len(vs) - 1) if vs[i + 1] != (vs[i] + 1) & 0xFF and vs[i + 1] != (vs[i] + 2) & 0xFF]
+        starts = [i + 1 for i, a, b in jumps if b < a and b < 8]
+        fields = [b - a for a, b in zip(starts, starts[1:])]
+        print(f"interlace mode {'2' if lsm == 3 else '1'}: jumps {[(a, b) for _, a, b in jumps][:8]}; changes a field {fields}; "
+              f"first values of a field {vs[starts[0]:starts[0] + 6] if starts else []}")
+
+# The picture bench: a program that sets registers and loads VRAM, CRAM and VSRAM through the data port, then runs a
+# tail (by default a branch to itself); TB_PICTURE captures the video pins and frames() cuts them into pictures.
+def vram(a): return (0x4000 | (a & 0x3FFF)) << 16 | a >> 14
+def cram(a): return (0xC000 | (a & 0x3FFF)) << 16 | a >> 14
+def vsram(a): return (0x4000 | (a & 0x3FFF)) << 16 | 0x10 | a >> 14
+
+def program(regs, blocks, tail=w(0x60FE)):
+    r = bytearray(b"\xff" * 0x8000)
+    r[0:8] = w(0x00FF, 0xFE00, 0x0000, 0x0200)
+    r[0x100:0x110] = b"SEGA MEGA DRIVE "
+    code = bytearray(w(0x46FC, 0x2700, 0x43F9, 0x00C0, 0x0004, 0x41F9, 0x00C0, 0x0000))  # sr; lea ctrl,a1; lea data,a0
+    for v in regs:
+        code += w(0x32BC, v)                                    # move.w #reg,(a1)
+    data, at = bytearray(), 0x2000
+    for cmd, words in blocks:
+        op = 0x200 + len(code)
+        code += w(0x22BC, cmd >> 16, cmd & 0xFFFF)              # move.l #cmd,(a1)
+        code += w(0x45FA, (at + len(data) - (op + 8)) & 0xFFFF)  # lea data(pc),a2
+        code += w(0x303C, len(words) - 1, 0x309A, 0x51C8, 0xFFFC)  # move.w #n-1,d0; move.w (a2)+,(a0); dbra d0
+        data += w(*words)
+    code += tail
+    r[0x200:0x200 + len(code)] = code
+    r[at:at + len(data)] = data
+    return bytes(r)
+
+def frames(path):
+    """The capture's frames: each run of lines with both display enables, sampled mid-pixel on the pixel clock."""
+    d = open(path, "rb").read()
+    f = d[0::4]
+    lines, start = [], None
+    for i, fl in enumerate(f):
+        on = fl & 3 == 3
+        if on and start is None: start = i
+        if not on and start is not None: lines.append((start, i, f[start] >> 4 & 1)); start = None
+    out, g = [], []
+    for ln in lines:
+        if g and ln[0] - g[-1][0] > 6840 * 4: out.append(g); g = []
+        g.append(ln)
+    if g: out.append(g)
+    pics = []
+    for g in out:
+        s0 = g[0][0]
+        rises = [j for j in range(s0 + 1, s0 + 400) if f[j] & 32 and not f[j - 1] & 32]
+        cpp = round((rises[-1] - rises[0]) / (len(rises) - 1))
+        width = (g[0][1] - g[0][0]) // cpp
+        rows = [bytes(b for x in range(width) for b in d[4 * (s + x * cpp + cpp // 2) + 1:4 * (s + x * cpp + cpp // 2) + 4]) for s, _, _ in g]
+        pics.append((width, rows, g[0][2]))
+    return pics
+
+def picture(name, nframes=4, outdir=None):
+    from PIL import Image
+    image = PICTURES[name]()
+    outdir = outdir or os.path.join(WORK, "pictures")
+    os.makedirs(outdir, exist_ok=True)
+    open(os.path.join(outdir, name + ".bin"), "wb").write(image)
+    path = os.path.join(WORK, "program.bin")
+    open(path, "wb").write(image)
+    cycles = 2 * (1070460 if name in PAL_PICTURES else 896040) * (nframes + 1)
+    pic = os.path.join(outdir, name + ".pic")
+    subprocess.run([os.path.join(WORK, "tb_md"), path, str(cycles)], stdout=subprocess.DEVNULL, cwd=WORK, check=True,
+                   env=dict(os.environ, LD_LIBRARY_PATH=LIB, TB_PICTURE=f"{pic}:0:{cycles}", **({"TB_PAL": "1"} if name in PAL_PICTURES else {})))
+    for k, (width, rows, field) in enumerate(frames(pic)):
+        if len(rows) < 100: continue
+        im = Image.frombytes("RGB", (width, len(rows)), b"".join(rows))
+        im.save(os.path.join(outdir, f"{name}_{k}.png"))
+        print(f"{name} frame {k}: {width}x{len(rows)}, field pin {field}")
+    os.remove(pic)
+
+def mode4_ports(cycles=0):
+    """Mode 4's data port as a Master System program uses it: bytes written after one-word commands, a marker at each
+    address bit, one even and one odd address alone, two words, and CRAM's 32 bytes; then mode 5 reads all of VRAM
+    and CRAM back into one RAM word, which the bench prints in order."""
+    code = bytearray(w(0x46FC, 0x2700, 0x43F9, 0x00C0, 0x0004, 0x41F9, 0x00C0, 0x0000, 0x47F9, 0x00FF, 0x1000))
+    for v in (0x8004, 0x8100, 0x8F01):
+        code += w(0x32BC, v)
+    marks = [(1 << b, 0xC0 + b) for b in range(14)] + [(0x0030, 0x51), (0x0043, 0x52)]
+    for a, v in marks:
+        code += w(0x32BC, 0x4000 | a, 0x10BC, v)                                # cmd; move.b #v,(a0)
+    for a, v in ((0x3000, 0x1234), (0x3011, 0x5678)):
+        code += w(0x32BC, 0x4000 | a, 0x30BC, v)                                # cmd; move.w #v,(a0)
+    code += w(0x32BC, 0x8F02, 0x32BC, 0x4100)                                   # register 15 at 2; address $100
+    for v in (0x61, 0x62, 0x63, 0x64):
+        code += w(0x10BC, v)                                                    # four bytes, no command between
+    code += w(0x32BC, 0x8F01)
+    code += w(0x32BC, 0xC000, 0x7000, 0x1080, 0x5240, 0x0C40, 0x0020, 0x66F6)  # CRAM: bytes 0 to 31, each its index
+    code += w(0x32BC, 0x8104, 0x32BC, 0x8F02, 0x22BC, 0x0000, 0x0000)          # mode 5; VRAM read from 0
+    code += w(0x303C, 0x7FFF, 0x3690, 0x51C8, 0xFFFC)                          # 32768 words: move.w (a0),(a3)
+    code += w(0x22BC, 0x0000, 0x0020, 0x303C, 0x003F, 0x3690, 0x51C8, 0xFFFC)  # CRAM read: 64 words
+    code += w(0x36BC, 0x5A5A, 0x60FE)                                          # the end marker
+    r = bytearray(b"\xff" * 0x1000)
+    r[0:8] = w(0x00FF, 0xFE00, 0x0000, 0x0200)
+    r[0x100:0x110] = b"SEGA MEGA DRIVE "
+    r[0x200:0x200 + len(code)] = code
+    ev = run(bytes(r), cycles or 16000000)
+    words = [d for k, t, a, d in ev if k == "w" and a == MARK]
+    if words and words[-1] == 0x5A5A: words = words[:-1]
+    print(f"{len(words)} words read back")
+    vr, cr = words[:32768], words[32768:]
+    b = bytearray()
+    for x in vr: b += x.to_bytes(2, "big")
+    where = {}
+    for i, v in enumerate(b):
+        if v: where.setdefault(v, []).append(i)
+    print("mode 4 VRAM address -> mode 5 byte addresses:")
+    for a, v in marks + [(0x3000, 0x12), (0x3000, 0x34), (0x3011, 0x56), (0x3011, 0x78), (0x100, 0x61), (0x101, 0x62), (0x102, 0x63), (0x103, 0x64)]:
+        print(f"  {a:#06x} (value {v:#04x}) -> {[hex(x) for x in where.get(v, [])][:8]}")
+    print("CRAM words:", [hex(x) for x in cr])
+    open(os.path.join(WORK, "mode4-vram.bin"), "wb").write(bytes(b))
+
+PICTURES = {}
+
+# Mode 5's registers for the pictures: H40, plane A at $C000, B at $E000, the sprites at $F000, the scroll at $FC00.
+MODE5 = [0x8004, 0x8144, 0x8230, 0x8407, 0x8578, 0x8700, 0x8C81, 0x8D3F, 0x8F02, 0x9001]
+def colours(n):
+    """n CRAM words whose components step differently, so that every bit of each is seen in some colour."""
+    return [(k & 7) << 1 | (k >> 3 & 7) << 5 | ((k * 5) >> 2 & 7) << 9 for k in range(n)]
+def solid_tiles():
+    """Tiles 0 to 15, each one colour index."""
+    return [(i | i << 4) * 0x101 for i in range(16) for _ in range(16)]
+
+def palette(lsb):
+    """Every colour of the four palettes in a band of tiles, with register 0's bit 2 set (full colour) or clear."""
+    names = [((r % 4) << 13) | (c % 16) for r in range(32) for c in range(64)]
+    return program([0x8000 | (4 if lsb == 0 else 0)] + MODE5[1:], [(cram(0), colours(64)), (vram(0), solid_tiles()), (vram(0xC000), names)])
+PICTURES["palette64"] = lambda: palette(0)
+PICTURES["palette8"] = lambda: palette(1)
+
+def cram_dots():
+    """The display all backdrop, and the 68000 writing CRAM entry 2, which nothing shows, as fast as it can."""
+    tail = w(0x22BC, cram(4) >> 16, cram(4) & 0xFFFF,   # move.l #cram(4),(a1)
+             0x3081, 0x5241, 0x60FA)                    # move.w d1,(a0); addq.w #1,d1; bra.s the move
+    return program(MODE5[:-2] + [0x8F00, 0x9001], [(cram(0), [0x0222, 0, 0, 0])], tail)
+PICTURES["cram-dots"] = cram_dots
+
+def mode4():
+    """Mode 4 set up from mode 5: patterns, a name table, sprites and CRAM written as words, then registers 0 and 1
+    switched to mode 4 with the display on, register 2 at $3800, the sprites at $3F00 and a horizontal scroll of 5."""
+    def planar(fn):
+        out = []
+        for y in range(8):
+            px = [fn(x, y) for x in range(8)]
+            out += [sum(((px[x] >> b) & 1) << (7 - x) for x in range(8)) for b in range(4)]
+        return out
+    tiles = [0] * 32
+    for n in range(1, 5):
+        tiles += planar(lambda x, y, n=n: (x + 2 * y + n) & 15)
+    tiles += planar(lambda x, y: 15 if x in (0, 7) or y in (0, 7) else (9 if x == y else 0))
+    names = []
+    for r in range(28):
+        for c in range(32):
+            e = 1 + (r + c) % 4 | (0x200 if r & 1 else 0) | (0x800 if r % 4 == 3 else 0) | (0x400 if r % 8 == 5 else 0)
+            names += [e & 0xFF, e >> 8]
+    sat = [0] * 256
+    for i in range(4):
+        sat[i] = 50 + 3 * i
+        sat[0x80 + 2 * i], sat[0x81 + 2 * i] = 60 + 20 * i, 5
+    sat[4] = 0xD0
+    as_words = lambda b: [b[i] << 8 | b[i + 1] for i in range(0, len(b), 2)]
+    tail = w(0x32BC, 0x8004, 0x32BC, 0x8140, 0x32BC, 0x82FF, 0x32BC, 0x85FF, 0x32BC, 0x86FB, 0x32BC, 0x8705,
+             0x32BC, 0x8805, 0x32BC, 0x8900, 0x60FE)
+    return program([0x8004, 0x8104, 0x8F02], [(cram(0), colours(32)), (vram(0), as_words(tiles)),
+                                              (vram(0x3800), as_words(names)), (vram(0x3F00), as_words(sat))], tail)
+PICTURES["mode4"] = mode4
+
+def cram_dots_h32():
+    tail = w(0x22BC, cram(4) >> 16, cram(4) & 0xFFFF, 0x3081, 0x5241, 0x60FA)
+    regs = [r for r in MODE5 if r >> 8 not in (0x8C, 0x8F, 0x90)] + [0x8C00, 0x8F00, 0x9000]
+    return program(regs, [(cram(0), [0x0222, 0, 0, 0])], tail)
+PICTURES["cram-dots-h32"] = cram_dots_h32
+
+def mode4_bytes():
+    """Mode 4 from the first write, as a Master System program has it: one-word commands, and VRAM and CRAM
+    written a byte at a time; CRAM in the Master System's format, --BBGGRR."""
+    def planar(fn):
+        out = []
+        for y in range(8):
+            px = [fn(x, y) for x in range(8)]
+            out += [sum(((px[x] >> b) & 1) << (7 - x) for x in range(8)) for b in range(4)]
+        return out
+    tiles = [0] * 32
+    for n in range(1, 5):
+        tiles += planar(lambda x, y, n=n: (x + 2 * y + n) & 15)
+    tiles += planar(lambda x, y: 15 if x in (0, 7) or y in (0, 7) else (9 if x == y else 0))
+    names = []
+    for r in range(28):
+        for c in range(32):
+            e = 1 + (r + c) % 4 | (0x200 if r & 1 else 0) | (0x800 if r % 4 == 3 else 0) | (0x400 if r % 8 == 5 else 0)
+            names += [e & 0xFF, e >> 8]
+    sat = [0] * 256
+    for i in range(4):
+        sat[i] = 50 + 3 * i
+        sat[0x80 + 2 * i], sat[0x81 + 2 * i] = 60 + 20 * i, 5
+    sat[4] = 0xD0
+    pal = [(k * 13) & 63 for k in range(32)]
+    r = bytearray(b"\xff" * 0x8000)
+    r[0:8] = w(0x00FF, 0xFE00, 0x0000, 0x0200)
+    r[0x100:0x110] = b"SEGA MEGA DRIVE "
+    code = bytearray(w(0x46FC, 0x2700, 0x43F9, 0x00C0, 0x0004, 0x41F9, 0x00C0, 0x0000))
+    for v in (0x8004, 0x8100, 0x82FF, 0x85FF, 0x86FB, 0x8700, 0x8805, 0x8900, 0x8F01):
+        code += w(0x32BC, v)
+    data, at = bytearray(), 0x2000
+    for cmd, block in ((0xC000, pal), (0x4000, tiles), (0x7800, names), (0x7F00, sat)):
+        op = 0x200 + len(code)
+        code += w(0x32BC, cmd)                                    # move.w #cmd,(a1): one word
+        code += w(0x45FA, (at + len(data) - (op + 6)) & 0xFFFF)   # lea data(pc),a2
+        code += w(0x303C, len(block) - 1, 0x109A, 0x51C8, 0xFFFC)  # move.w #n-1,d0; move.b (a2)+,(a0); dbra d0
+        data += bytes(block)
+    code += w(0x32BC, 0x8140, 0x60FE)                              # the display on; bra.s itself
+    r[0x200:0x200 + len(code)] = code
+    r[at:at + len(data)] = data
+    return bytes(r)
+PICTURES["mode4-bytes"] = mode4_bytes
+
+def mode4_colours(first):
+    """Mode 4 from the first write: VRAM in words (a byte pair, the even address's byte low), a command for each, then
+    CRAM's 32 entries a byte at a time, the Master System colours first to first + 31; tiles 0 to 15 each
+    one colour, rows 0 to 11 in the first palette and 12 to 23 in the second."""
+    tiles = []
+    for c in range(16):
+        for y in range(8):
+            tiles += [0xFF if c >> b & 1 else 0 for b in range(4)]
+    names = []
+    for r in range(28):
+        for col in range(32):
+            e = (col // 2) % 16 | (0x800 if r >= 12 else 0)
+            names += [e & 0xFF, e >> 8]
+    pair = lambda b: [b[i + 1] << 8 | b[i] for i in range(0, len(b), 2)]
+    r = bytearray(b"\xff" * 0x8000)
+    r[0:8] = w(0x00FF, 0xFE00, 0x0000, 0x0200)
+    r[0x100:0x110] = b"SEGA MEGA DRIVE "
+    code = bytearray(w(0x46FC, 0x2700, 0x43F9, 0x00C0, 0x0004, 0x41F9, 0x00C0, 0x0000))
+    for v in (0x8004, 0x8100, 0x82FF, 0x85FF, 0x86FB, 0x8700, 0x8800, 0x8900, 0x8F02):
+        code += w(0x32BC, v)
+    data, at = bytearray(), 0x2000
+    for cmd, words in ((0x4000, pair(tiles)), (0x7800, pair(names))):
+        op = 0x200 + len(code)
+        # lea data(pc),a2; move.w #cmd,d3; move.w #n-1,d0; then a command a word: move.w d3,(a1); move.w (a2)+,(a0);
+        # addq.w #2,d3; dbra d0
+        code += w(0x45FA, (at + len(data) - (op + 2)) & 0xFFFF, 0x363C, cmd, 0x303C, len(words) - 1,
+                  0x3283, 0x309A, 0x5443, 0x51C8, 0xFFF8)
+        data += w(*words)
+    code += w(0x32BC, 0x8F01)
+    op = 0x200 + len(code)
+    code += w(0x32BC, 0xC000, 0x45FA, (at + len(data) - (op + 6)) & 0xFFFF, 0x303C, 31, 0x109A, 0x51C8, 0xFFFC)
+    data += bytes(range(first, first + 32))
+    code += w(0x32BC, 0x8140, 0x60FE)
+    r[0x200:0x200 + len(code)] = code
+    r[at:at + len(data)] = data
+    return bytes(r)
+PICTURES["mode4-colours-0"] = lambda: mode4_colours(0)
+PICTURES["mode4-colours-32"] = lambda: mode4_colours(32)
+
+def interlace(lsm):
+    """Double resolution or normal interlace: tiles whose rows are each a different colour, so that a field's rows show."""
+    rows16 = [((y % 15) + 1) * 0x1111 for y in range(16) for _ in range(2)]
+    names = [(c + r) % 4 for r in range(32) for c in range(64)]
+    tiles = rows16 * 4
+    return program([0x8004, 0x8144, 0x8230, 0x8407, 0x8578, 0x8700, 0x8C81 | lsm << 1, 0x8D3F, 0x8F02, 0x9001],
+                   [(cram(0), colours(16)), (vram(0), tiles), (vram(0xC000), names)])
+PICTURES["interlace2"] = lambda: interlace(3)
+PICTURES["interlace1"] = lambda: interlace(1)
+
+def field_colour():
+    """Double resolution, every pixel colour 1, which the 68000 sets in vertical blanking from the status register's
+    odd-field bit: red for an odd field, green for an even one, so that each field's rows show the bit it read."""
+    tail = w(0x3011, 0x0240, 0x0010, 0xB240, 0x67F6, 0x3200, 0x22BC, 0xC002, 0x0000, 0x4A40, 0x6706,
+             0x30BC, 0x000E, 0x60E4, 0x30BC, 0x00E0, 0x60DE)
+    return program([0x8004, 0x8144, 0x8230, 0x8407, 0x8578, 0x8700, 0x8C87, 0x8D3F, 0x8F02, 0x9001],
+                   [(vram(0), [0x1111] * 32)], tail)
+PICTURES["field-colour"] = field_colour
+
+def pal_v30():
+    """PAL's 30 rows: each row of cells one colour, its index the row's plus one; the header says Europe."""
+    names = [(r % 15) + 1 for r in range(32) for c in range(64)]
+    r = bytearray(program([0x8004, 0x814C] + MODE5[2:], [(cram(0), colours(16)), (vram(0), solid_tiles()), (vram(0xC000), names)]))
+    r[0x1F0:0x1F3] = b"E  "
+    return bytes(r)
+PICTURES["pal-v30"] = pal_v30
+
+def ntsc_v30():
+    """The same rows with V30 on an NTSC board, which the documents call misbehaving."""
+    names = [(r % 15) + 1 for r in range(32) for c in range(64)]
+    return program([0x8004, 0x814C] + MODE5[2:], [(cram(0), colours(16)), (vram(0), solid_tiles()), (vram(0xC000), names)])
+PICTURES["ntsc-v30"] = ntsc_v30
+PAL_PICTURES = {"pal-v30"}
+
 if __name__ == "__main__":
-    what, cycles = sys.argv[1], int(sys.argv[2]) if len(sys.argv) > 2 else 400000
+    what = sys.argv[1]
+    if what == "picture":
+        picture(sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else 4, sys.argv[4] if len(sys.argv) > 4 else None)
+        sys.exit()
+    cycles = int(sys.argv[2]) if len(sys.argv) > 2 else 400000
     if what == "busreq-tight":
         busreq_tight(cycles, 0x8000)
         busreq_tight(cycles, 0x1000)
     else:
-        {"window": window, "window-write": lambda c: window(c, 0x32), "busreq": busreq, "rom-loop": rom_loop}[what](cycles)
+        {"window": window, "window-write": lambda c: window(c, 0x32), "busreq": busreq, "rom-loop": rom_loop, "vcounter": vcounter, "interlace": interlace, "mode4-ports": mode4_ports}[what](cycles)

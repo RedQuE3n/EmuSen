@@ -583,7 +583,10 @@ the scheduler and the interrupts; the BCD verifier, the opcode sizes and the ill
 chosen by setting, the external interrupt and the references' anchors over the game corpus (§10 there); its third
 measured the Z80's window on Nuked-MD's board, stripped copier headers, traced Sonic 2's lead to the 68000's timing
 over its boot checksum, opening the main RAM's refresh (D-2), and wired the EEPROM boards of Eke's document (§11
-there).*
+there). Stage 3 was closed the same day (§12 there): its oracle met but for the memory test's first `$A11100` row,
+which goes to stage 4 with D-2, seven EEPROM boards no document wires and Barver Battle Saga's protection device.
+Stage 4's first step, the same day, put the VDP's ports, FIFO and DMA on the slot schedule with the HV counter and
+the interrupts placed from Nemesis's tables: VDPFIFOTesting passes 121 of its 122 tests (`Nephrite_Native.md` §13).*
 
 About 65 steps, or 190–230 hours (P3). The order is the order of dependence; stage 6 makes the Genesis available to
 players before either attachment is started, and the Sega CD (8–10) and the 32X (11–12) are independent of each other

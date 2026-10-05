@@ -2,11 +2,12 @@
 //! machine, on the core ABI v1. Written from hardware documents under Nephrite_Plan.md §1's clean-room protocol; the
 //! build record is Nephrite_Native.md.
 //!
-//! Stage 3: the Genesis's buses, cartridges, I/O, the scheduler and the interrupts, with the CPUs from the Beryl
-//! crates; the picture is stage 4's.
+//! Stage 4, step 1: the Genesis's buses, cartridges, I/O, the scheduler and the interrupts, with the CPUs from the
+//! Beryl crates, and the VDP's ports, FIFO and DMA on the slot schedule; the picture is to come.
 
 pub mod cart;
 pub mod eeprom;
+pub mod fifo_records;
 pub mod genesis;
 pub mod io;
 pub mod machine;

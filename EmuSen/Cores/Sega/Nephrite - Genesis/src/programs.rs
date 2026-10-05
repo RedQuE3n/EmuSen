@@ -1,7 +1,8 @@
 //! The console test programs of Nephrite_Plan.md §3.1 on the Genesis, each verdict read where its source says the
 //! program leaves it, before there is a picture: the BCD verifier's failure counts, the opcode-size test's verdict
-//! tiles, the illegal-instruction test's background colour. The programs are found through `EMUSEN_NEPHRITE_ROMS`
-//! (`~/.cache/emusen/probe/nephrite/roms`); without it they pass unrun. Nephrite_Native.md §9 is the record.
+//! tiles, the illegal-instruction test's background colour, and VDPFIFOTesting's records. The programs are found
+//! through `EMUSEN_NEPHRITE_ROMS` (`~/.cache/emusen/probe/nephrite/roms`); without it they pass unrun.
+//! Nephrite_Native.md §9 and §13 are the record.
 
 use crate::machine::Machine;
 use crate::media::Media;
@@ -71,4 +72,19 @@ fn every_illegal_opcode_takes_its_exception() {
     let frames = run_until(&mut m, 3000, |m| matches!(colour(m), 0x00E0 | 0x000E)).expect("the test finished");
     eprintln!("illegal instructions: colour ${:04X} at frame {frames}", colour(&m));
     assert_eq!(colour(&m), 0x00E0);
+}
+
+/// Nemesis's VDPFIFOTesting, its 122 records read where the program leaves them once A has run it to its last page:
+/// all pass but one of FIFO Wait States' samples (Nephrite_Native.md §13.3).
+#[test]
+fn vdpfifotesting_passes_all_but_one() {
+    let Some(mut m) = program("exodus-techdocs/vdp_port_access/VDPFIFOTesting.bin") else { return };
+    while m.frames < 3000 {
+        m.pads[0] = crate::fifo_records::press(m.frames);
+        m.advance();
+    }
+    let rs = crate::fifo_records::records(&m.genesis.hw.wram);
+    let failed: Vec<&str> = rs.iter().filter(|r| !r.passed()).map(|r| r.name.as_str()).collect();
+    eprintln!("VDPFIFOTesting: {} of {} pass; failing {failed:?}", rs.len() - failed.len(), rs.len());
+    assert_eq!((rs.len(), failed), (122, vec!["FIFO Wait States"]));
 }

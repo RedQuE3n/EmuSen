@@ -541,6 +541,7 @@ impl Machine {
         a.cycles = r.u64()?;
         r.u16s(&mut a.prescale)?;
         a.prescale = [a.prescale[0] % 384, a.prescale[1] % 48];
+        a.gate_test = a.test;
         if let Some((dsp, _)) = self.sys.cart.dsp.as_mut() {
             // Version 17 had no tag, and only the low-level path.
             let saved = if version == 17 { 0 } else { r.u8()? };

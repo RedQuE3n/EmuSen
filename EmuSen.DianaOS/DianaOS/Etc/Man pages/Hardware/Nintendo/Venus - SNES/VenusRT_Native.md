@@ -6771,3 +6771,15 @@ Mesen's. The 26 that differ are now all named:
 
 **What remains before the flip:** the two decisions of §63.4 and G6's handheld run on battery. Nothing else in G1-G8
 is open.
+
+### 63.6 The decisions of §63.4 (decided 2026-10-05)
+
+- **NHL '94's puck (D-44).** Accepted as logged drift. The game's idle-loop generator counts spare CPU time, so the
+  puck depends on the power-on position on a console as it does here, and no emulation rule is implicated.
+- **Yoshi's Island's stork (D-35).** Accepted as logged GSU drift. The picture is the same at every power-on
+  position; the remaining two frames rest on GSU timing for which only Mesen exists to compare against.
+- **The open boot program's upload.** It is to be made faster, so that a game's sound upload with the replacement
+  ends as near the console boot image's time as the protocol allows. That is a change to the project's own program and
+  copies nothing; §63.2's seven frames are its measure.
+
+With these, G5 is met with named exceptions. **What remains before the flip** is G6's handheld run on battery.

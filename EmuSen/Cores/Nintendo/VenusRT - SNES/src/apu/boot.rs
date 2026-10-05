@@ -14,27 +14,27 @@ pub const BOOT: [u8; 64] = [
     0x8D, 0xBB,       // 0C MOV Y,#$BB
     0xDA, 0xF4,       // 0E MOVW $F4,YA       ready: $BBAA
     0xE8, 0xCC,       // 10 MOV A,#$CC
-    0x2E, 0xF4, 0xFD, // 12 CBNE $F4,$12      the first kick
-    0xBA, 0xF6,       // 15 MOVW YA,$F6       command: the address
-    0xDA, 0x00,       // 17 MOVW $00,YA
-    0xE4, 0xF4,       // 19 MOV A,$F4         the kick
-    0xF8, 0xF5,       // 1B MOV X,$F5         the command byte
-    0xC4, 0xF4,       // 1D MOV $F4,A         echo the kick
-    0xD0, 0x03,       // 1F BNE $24
-    0x1F, 0x00, 0x00, // 21 JMP [!$0000+X]    command zero: jump
-    0x8D, 0x00,       // 24 MOV Y,#$00
-    0x64, 0xF4,       // 26 CMP A,$F4         the kick still in port 0: wait
-    0xF0, 0xFC,       // 28 BEQ $26
-    0x7E, 0xF4,       // 2A CMP Y,$F4         one read: Y - port
-    0x30, 0xE7,       // 2C BMI $15           port 1-127 past the index: the next command
-    0xD0, 0xFA,       // 2E BNE $2A           behind it: wait
+    0x2E, 0xF4, 0xFD, // 12 CBNE $F4,$12      the first kick, N set by $CC
+    0x10, 0x15,       // 15 BPL $2C           a miss: port behind the index, wait; past it, the next command
+    0xBA, 0xF6,       // 17 MOVW YA,$F6       command: the address
+    0xDA, 0x00,       // 19 MOVW $00,YA
+    0xE4, 0xF4,       // 1B MOV A,$F4         the kick
+    0xF8, 0xF5,       // 1D MOV X,$F5         the command byte
+    0xC4, 0xF4,       // 1F MOV $F4,A         echo the kick
+    0xD0, 0x03,       // 21 BNE $26
+    0x1F, 0x00, 0x00, // 23 JMP [!$0000+X]    command zero: jump
+    0x8D, 0x00,       // 26 MOV Y,#$00
+    0x64, 0xF4,       // 28 CMP A,$F4         the kick still in port 0: wait
+    0xF0, 0xFC,       // 2A BEQ $28
+    0x7E, 0xF4,       // 2C CMP Y,$F4         one read: Y - port
+    0xD0, 0xE5,       // 2E BNE $15           not the index: the miss
     0xE4, 0xF5,       // 30 MOV A,$F5         the index: data
     0xCC, 0xF4, 0x00, // 32 MOV !$00F4,Y      echo, then store
     0xD7, 0x00,       // 35 MOV [$00]+Y,A
     0xFC,             // 37 INC Y
-    0xD0, 0xF0,       // 38 BNE $2A
+    0xD0, 0xF2,       // 38 BNE $2C
     0xAB, 0x01,       // 3A INC $01
-    0x2F, 0xEC,       // 3C BRA $2A
+    0x2F, 0xEE,       // 3C BRA $2C
     0xC0, 0xFF,       // 3E reset vector
 ];
 
@@ -47,7 +47,7 @@ mod tests {
     #[test]
     fn the_branches_land_where_the_listing_says() {
         let rel = |at: usize| (at as i32 + 2 + BOOT[at + 1] as i8 as i32) as usize;
-        assert_eq!([rel(0x08), rel(0x1F), rel(0x28), rel(0x2C), rel(0x2E), rel(0x38), rel(0x3C)], [0x05, 0x24, 0x26, 0x15, 0x2A, 0x2A, 0x2A]);
+        assert_eq!([rel(0x08), rel(0x15), rel(0x21), rel(0x2A), rel(0x2E), rel(0x38), rel(0x3C)], [0x05, 0x2C, 0x26, 0x28, 0x15, 0x2C, 0x2C]);
         assert_eq!(3 + 0x12 + BOOT[0x14] as i8 as i32, 0x12);
         assert_eq!(u16::from_le_bytes([BOOT[62], BOOT[63]]), 0xFFC0);
     }

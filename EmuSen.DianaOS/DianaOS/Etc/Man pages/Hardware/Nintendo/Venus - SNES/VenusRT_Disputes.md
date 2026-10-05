@@ -1389,6 +1389,18 @@ their data.
   longest common run at any offsets 4 bytes, at replacement offset 21 against original offset 47, and one other run
   of 4, at 53 against 34. PASS. The first program measured 7 of 64 and a longest run of 4.
 
+- **Revised 2026-10-05, by measurement (`VenusRT_Native.md` §64).** The block loop's command test leaves the hot path:
+  `CMP Y,$F4`, then `BNE` to a miss. The miss is a `BPL` back to the poll placed in front of the command code, so a
+  command (Y minus port 0 negative) falls into it. That takes 26 cycles a byte where it took 28, and 11 cycles in the
+  wait loop where it took 9. The rule for the next command, the echo `MOV !$00F4,Y`, the registers on the jump and SP
+  $EF are unchanged. A 25-cycle loop exists in two forms:
+  - the direct-page echo before the store, which is D-38's 8-byte run and stays forbidden;
+  - the direct-page echo after the store, which was measured and rejected because it delays the acknowledge, costing
+    Super Mario RPG's uploader 3.3 frames.
+
+  Similarity of the program as revised (`firmwarecheck.py`): 5 of 64 bytes equal at the same offset (7.8%), longest
+  aligned run 2, longest common run 4. PASS.
+
 ### D-39. HDMA: a line's decrement of NTRLx takes the whole byte, so $00 becomes 127 lines with repeat and $80 127 lines without
 - Opened: 2026-10-04, after stage 8, by the HDMA ROMs §41.5 left without an entry. Two cases:
   - `hdma_midframe/demo` (byuu) enables HDMA at line 32 with NTRL0 written $00. VenusRT showed no transfer for 127

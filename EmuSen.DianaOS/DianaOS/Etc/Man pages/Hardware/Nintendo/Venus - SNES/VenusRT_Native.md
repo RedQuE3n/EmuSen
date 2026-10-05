@@ -6783,3 +6783,109 @@ is open.
   copies nothing; §63.2's seven frames are its measure.
 
 With these, G5 is met with named exceptions. **What remains before the flip** is G6's handheld run on battery.
+
+## 64. The open boot program's upload made faster (D-38, 2026-10-05)
+
+§63.6 decided that a game's upload through VenusRT's own boot program should end as near the console image's time as
+the protocol allows. §63.2's seven frames on Yoshi's Island are the measure. The work is from the transfer protocol
+(fullsnes, D-38) and from black-box timing of the tester's image. The timing is the frames the SPC700 spends with its
+program counter in $FFC0-$FFFF and the boot ROM mapped, read from outside. The image's bytes were not read or
+disassembled.
+
+### 64.1 Where the time goes (measured 2026-10-05, before any change)
+
+| Game | Bytes the open program stores | In the boot program, open program | In the boot program, the image | Difference |
+|---|---|---|---|---|
+| Yoshi's Island | 45,196 | 77.76 frames | 69.83 | 7.93 |
+| A Link to the Past | 54,031 | 89.05 | 80.86 | 8.19 |
+| Super Mario World | 11,974 | 21.73 | 19.61 | 2.12 |
+| Super Mario RPG | 5,668 | 10.06 | 9.06 | 1.00 |
+| Donkey Kong Country | 40 | 4.64 | 4.63 | 0.01 |
+
+The open program's poll of port 0 (its `CMP Y,$F4`) runs once per byte stored: 45,225 polls for 45,196 bytes on
+Yoshi's Island. The next index is therefore already waiting each time the SPC700 looks, and the upload is bound by the
+program's own block loop: 28 SPC700 cycles a byte. The image takes about 3 cycles a byte fewer on every game
+uploading enough to show it (Yoshi's Island 63 master clocks a byte).
+
+### 64.2 The change, and the prediction (written before measuring)
+
+- **The command test leaves the hot path.** The loop was `CMP Y,$F4`, `BMI` to the command, `BNE` to wait, then the
+  byte. It becomes `CMP Y,$F4` and `BNE` to a miss, then the byte. The miss is a `BPL` back to the poll placed in front
+  of the command code, so a command falls into it. The rule is unchanged: Y minus port 0, zero is data, negative is
+  a command, positive waits. That saves 2 cycles a byte and costs 2 in the wait loop (9 to 11). The program stays at
+  64 bytes; the command code moves two bytes down to make room for the miss.
+- **The echo stays `MOV !$00F4,Y`**, one cycle slower than the direct-page form. D-38 measured the direct-page form in
+  this loop as an 8-byte run of the console's bytes, and the similarity rule forbids it. That cycle is the rule's
+  price, so the loop goes from 28 cycles to 26, not 25.
+- **Prediction P64.1:** with the loop still the bound, each game's time in the boot program falls by bytes × 2 cycles
+  × 20.97 master clocks:
+  - Yoshi's Island to 72.5 frames, 2.6 behind the image;
+  - A Link to the Past to 82.7, 1.9 behind;
+  - Super Mario World to 20.3, 0.7 behind;
+  - Super Mario RPG to 9.4, 0.3 behind.
+
+  Should the S-CPU's side become the bound at 26 cycles, the gain is smaller, and P64.1 fails on that game.
+
+### 64.3 Measured (2026-10-05)
+
+Frames with the SPC700 in the boot program, from power-on, under the old program, the new one and the tester's image
+(the image only timed, never read):
+
+| Game | Old | New | Image | New minus image |
+|---|---|---|---|---|
+| Yoshi's Island | 77.76 | **72.46** | 69.83 | 2.63 |
+| A Link to the Past | 89.05 | 83.86 | 80.86 | 3.00 |
+| Super Mario Kart | 94.41 | 88.04 | 84.88 | 3.16 |
+| Super Metroid | 268.48 | 261.68 | 258.34 | 3.34 |
+| Metal Combat | 56.42 | 52.84 | 51.05 | 1.79 |
+| Axelay | 99.87 | 99.87 | 97.87 | 2.00 |
+| Pilotwings | 40.88 | 37.88 | 36.88 | 1.00 |
+| Star Fox | 53.55 | 52.32 | 51.71 | 0.61 |
+| F1 ROC II | 17.27 | 16.51 | 16.13 | 0.38 |
+| Super Mario RPG | 10.06 | **9.39** | 9.06 | 0.33 |
+| Hook | 27.40 | 27.40 | 27.22 | 0.18 |
+| Breath of Fire | 195.27 | 194.97 | 194.81 | 0.16 |
+| NHL '94 | 15.07 | 14.97 | 14.91 | 0.06 |
+| Captain America | 39.11 | 39.06 | 39.04 | 0.02 |
+| Donkey Kong Country | 4.64 | 4.63 | 4.63 | 0.00 |
+| Super Mario World | 21.73 | **18.46** | 19.61 | -1.15 |
+| ActRaiser | 24.86 | 22.57 | 23.86 | -1.29 |
+
+- **P64.1:**
+  - Holds for Yoshi's Island (72.46 against 72.5) and Super Mario RPG (9.39 against 9.4).
+  - Fails for A Link to the Past, which gained 5.2 frames where 6.3 were predicted: part of its upload is not bound
+    by the loop.
+  - Fails for Super Mario World the other way. It gained 3.27 where 1.4 were predicted, and now finishes 1.15 frames
+    before the image, as ActRaiser does. Both uploaders are sensitive to where in the loop the echo falls, and this
+    loop's echo comes earlier relative to the S-CPU's polling there than the image's does; that is argued from the
+    two variants below, not measured on the image's side.
+- **What is left is the similarity rule's cycle.** For the loop-bound games the remainder is one cycle a byte to
+  within a tenth of a frame:
+  - Yoshi's Island: 45,196 × 20.97 clocks = 2.65 frames, against 2.63;
+  - A Link to the Past: 3.17, against 3.00.
+- **Two other loops were measured and not kept** (as 64-byte images given as file 1):
+
+  | Variant | Cycles a byte | Yoshi's Island | A Link to the Past | Super Mario World | Super Mario RPG |
+  |---|---|---|---|---|---|
+  | Store, then `MOV !$00F4,Y` | 26 | 72.46 | 82.72 | 18.46 | 13.04 |
+  | Store, then `MOV $F4,Y` | 25 | 69.81 | 79.54 | 17.76 | 12.71 |
+
+  - The second reaches the image's time on Yoshi's Island, Super Mario Kart (84.85) and Super Metroid (258.34), and
+    its bytes avoid D-38's 8-byte run.
+  - But echoing after the store delays the acknowledge by 6 cycles, and Super Mario RPG's uploader, bound by that
+    latency, loses 3.3 to 3.7 frames.
+  - The kept loop is the better compromise over all 17 games: no game is more than 3.4 frames behind the image or 1.3
+    ahead, against 8.2 behind before.
+- **The similarity** (`firmwarecheck.py`, counts only): 5 of 64 bytes equal at the same offset (7.8%), longest
+  aligned run 2, longest common run 4 (three such runs). PASS, as before (6 of 64, 4).
+
+### 64.4 Checks (measured 2026-10-05)
+
+| Check | Result |
+|---|---|
+| The corpus runner without firmware (C# Venus beside it, without Mesen) | 116 of Mesen's 117, the one missing `spc_smp`, as before; no verdict changes. Only the 2010 timer printers' printed lines move |
+| The conformance kit, the eleven images of §31.2, no boot file | compliant on every one |
+| The crate | 141 of 141; the boot program's branch test follows the new listing, and the upload tests (two blocks and a jump, 300 bytes, a value behind the index) pass unchanged |
+| WiseMan, the VenusRt, CoreAbi, Snes, CoreDebug and Conform filters, the goldens against Mesen included | 121 of 121, after eleven anchors' hashes were re-recorded. Every anchor keeps its outcome. Yoshi's Island's lags move from +1, -10 and -10 to -4, -5 and -5, Metal Combat's from -6, -5 and -5 to -2, -1 and 0, and Super Mario RPG's attract lead from 40 to 41 frames at 1200 (42 at 2400 as before) |
+| Cost | none to measure: the program runs only until a game's driver starts |
+

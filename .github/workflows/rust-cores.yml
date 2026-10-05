@@ -10,7 +10,7 @@ on:
       - 'EmuSen/Cores/Nintendo/MoonRT - NES/**'
       - 'EmuSen/Cores/Nintendo/VenusRT - SNES/**'
       - 'EmuSen/Cores/Sega/Nephrite - Genesis/**'
-      - 'EmuSen/Cores/Sega/Beryl - Shared CPUs/**'
+      - 'EmuSen/Cores/Sega/Beryl-HW/**'
       - 'EmuSen/Cores/Shared/**'
       - 'EmuSen/Cores/RustCores.props'
       - 'EmuSen/Cores/RustCoresPublish.targets'
@@ -34,7 +34,7 @@ on:
       - 'EmuSen/Cores/Nintendo/MoonRT - NES/**'
       - 'EmuSen/Cores/Nintendo/VenusRT - SNES/**'
       - 'EmuSen/Cores/Sega/Nephrite - Genesis/**'
-      - 'EmuSen/Cores/Sega/Beryl - Shared CPUs/**'
+      - 'EmuSen/Cores/Sega/Beryl-HW/**'
       - 'EmuSen/Cores/Shared/**'
       - 'EmuSen/Cores/RustCores.props'
       - 'EmuSen/Cores/RustCoresPublish.targets'
@@ -52,7 +52,7 @@ on:
       - '.github/workflows/rust-cores.yml'
 
 jobs:
-  # The crates every core builds with (EmuSen/Cores/Shared/) and Beryl's CPUs, tested on their own; no library of theirs ships.
+  # The crates every core builds with (EmuSen/Cores/Shared/) and Beryl's (the Sega cores' shared CPUs and chips), tested on their own; no library of theirs ships.
   shared:
     name: Shared crates ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -67,7 +67,7 @@ jobs:
       - name: Test
         shell: bash
         run: |
-          for crate in EmuSen/Cores/Shared/*/ "EmuSen/Cores/Sega/Beryl - Shared CPUs"/*/; do
+          for crate in EmuSen/Cores/Shared/*/ "EmuSen/Cores/Sega/Beryl-HW"/*/; do
             case "$crate" in *emusen-core-abi-check/) continue ;; esac
             (cd "$crate" && cargo test --release)
           done

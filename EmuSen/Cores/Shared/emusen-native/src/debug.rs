@@ -387,7 +387,7 @@ pub fn drain_coverage(hooks: &mut Hooks, processor: usize, out: &mut [u8], recor
 }
 
 /// What a CPU tells its core's debugger, at no cost when unobserved: a step generic over `O: Observer` is compiled
-/// once with `Unobserved` and once with `Hooks`. The Beryl CPU crates call it (Beryl - Shared CPUs/README.md).
+/// once with `Unobserved` and once with `Hooks`. The Beryl CPU crates call it (Beryl-HW/README.md).
 pub trait Observer {
     /// Before the instruction at `pc` on `processor`: the stop reasons, zero to run it.
     #[inline(always)]

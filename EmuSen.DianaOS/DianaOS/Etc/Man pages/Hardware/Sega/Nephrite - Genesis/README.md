@@ -11,4 +11,4 @@ crate `nephrite`). Written from hardware documents under a clean-room protocol, 
 - [`Nephrite_Native.md`](Nephrite_Native.md) — the build record, from stage 0.
 - `Nephrite_Disputes.md` — the disputes log, created with its first entry.
 
-The CPUs are documented with their crates in [`../Beryl - Shared CPUs/`](../Beryl%20-%20Shared%20CPUs/).
+The CPUs and the PSG are documented with their crates in [`../Beryl-HW/`](../Beryl-HW/) (Beryl Hardware).

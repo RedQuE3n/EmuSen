@@ -4,7 +4,8 @@
 //!
 //! Stage 4, step 4: the Genesis's buses, cartridges, I/O, the scheduler and the interrupts, with the CPUs from the
 //! Beryl crates, the VDP's ports, FIFO and DMA on the slot schedule, and its picture in modes 5 and 4, interlaced and
-//! in PAL, mode 5's lines drawn in spans up to each write; the sound is to come.
+//! in PAL, mode 5's lines drawn in spans up to each write. Stage 5, step 1: the PSG (Beryl's SN76489) and the
+//! YM2612's ports, timers, busy flag and DAC, mixed and resampled to 48 kHz; the FM operators are to come.
 
 pub mod cart;
 pub mod eeprom;
@@ -13,13 +14,17 @@ pub mod genesis;
 pub mod io;
 pub mod machine;
 pub mod render;
+pub mod sound;
+#[cfg(test)]
+mod sounds;
 pub mod media;
 #[cfg(test)]
 mod board_rows;
 #[cfg(test)]
-mod pictures;
+pub(crate) mod pictures;
 #[cfg(test)]
 mod programs;
 pub mod state;
 pub mod v1;
 pub mod vdp;
+pub mod ym2612;

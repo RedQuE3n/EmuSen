@@ -399,3 +399,35 @@ CPUs' disputes in their own record pages.
 - Pinned by: `vdp.rs`'s `the_blanking_flag_changes_two_pixels_after_the_v_counter`; the odd flag's time by nothing
   yet.
 - Implemented in: the commit "Nephrite, stage 4: D-11 settled".
+
+### D-13. OPEN. The YM2612's status at ports 1-3: the discrete chip of model 1 gives its timer flags without the busy flag there, the model 2 ASIC gives the busy flag at every port
+- Opened: 2026-10-05, at stage 5 step 1, by the documents' disagreement over what a read of the YM2612's ports 1-3
+  returns.
+- Documents read: SpritesMind topic 386 ("New Documentation: An authoritative reference on the YM2612"), as prose:
+  Nemesis's status-register section (the normal status register "returned from the YM2612 under all circumstances,
+  regardless of the address the YM2612 is being read from"); Stef's later report that the busy bit "can be read only
+  on port 0"; Eke's tests on a VA4 model 1 with a discrete YM2612 and a VA0 model 2 with the 315-5660 ASIC ("BUSY flag
+  can only be read from port 0 (A0=A1=0) on discrete YM2612 while it can be read from any port on ASIC-integrated
+  version"; set only by data writes; 32 internal clocks, 192 of the 68000's, alike on both), with Hellfire's slower
+  music on model 2 as its consequence. Sauraen's reading of the die (the busy flag a timer started by a data write) in
+  the same thread.
+- Test program: none yet. `sounds.rs`'s busy-flag program reads ports 0 and 2 on Nephrite.
+- Referee: none yet. The board's OPN2 has an input named `ym2612_status_enable`, which suggests the bench can be run
+  as either chip; a dispute step would run a busy-flag program reading every port, the board as a black box.
+- Conclusion: open; argued from Eke's tests, the most specific: on the discrete chip ports 1-3 give the timer flags
+  with the busy bit clear, on the ASIC every port gives the whole status. Nemesis's statement predates them and is
+  read as being about the timer flags.
+- Pinned by: `ym2612.rs`'s `the_busy_flag_follows_a_data_write_for_192_of_the_68000s_clocks_and_reads_at_port_0_on_the_discrete_chip`
+  and `sounds.rs`'s `a_program_sees_the_busy_flag_for_192_clocks_at_port_0_only`.
+- Implemented in: the commit "Nephrite, stage 5 step 1".
+
+### D-14. OPEN. The 68000's accesses to the YM2612 through the Z80's area: how long each takes
+- Opened: 2026-10-05, at stage 5 step 1, by `mdboard.py sound dac-square`: a 68000 loop writing the DAC through
+  `$A04000` runs at 543.6 Hz on Nephrite and ClownMDEmu and at 535 Hz on BlastEm and PicoDrive, about 110 more of the
+  68000's clocks for each half period's two writes.
+- Documents read: none gives a wait for the 68000's accesses to `$A00000`-`$A0FFFF` beyond the bus request itself.
+- Test program: `dac-square` (above).
+- Referee: none yet; the board's pins time a 68000 access to that area directly, as D-1 timed the Z80's window.
+- Conclusion: open. Nephrite gives the access the 68000's four clocks, as for any other address.
+- Pinned by: nothing yet.
+- Implemented in: not yet.

@@ -206,8 +206,9 @@ coincidence.
 
 **Sega — Dark Kingdom** (`Cores/Sega/`) — Master System **Endou**, Game Gear
 **Jadeite**, Genesis / Mega Drive with the Sega CD and the 32X **Nephrite**, Saturn
-**Zoisite**, Dreamcast **Kunzite**; **Beryl**, who commands the Shitennou, is the
-shared CPU library the Sega cores are built on (the 68000, the Z80 and the SH-2).
+**Zoisite**, Dreamcast **Kunzite**; **Beryl**, who commands the Shitennou, is
+Beryl Hardware, the shared library the Sega cores are built on (the 68000, the Z80, the SH-2 and every other chip
+more than one of them uses).
 
 **Sony — Black Moon Clan** (`Cores/Sony/`) — PlayStation **Diamond**, PlayStation 2
 **Sapphire**, PlayStation 3 **Rubeus**, PSP **Esmeraude**, PS Vita **Wiseman**.

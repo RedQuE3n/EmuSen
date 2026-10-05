@@ -9,6 +9,7 @@ Nephrite_Native.md §10 and §15.3 are the method.
   mdboard.py mode4-ports [cycles]   mode 4's writes, read back through mode 5
   mdboard.py picture <name> [frames] [dir]   one of PICTURES' programs, its ROM and the board's frames as PNGs in dir
   mdboard.py vram128 [cycles]   the 128 KiB mode's writes, read back with it clear
+  mdboard.py sound <name> <out.bin>   one of SOUNDS' programs, written out for a reference or the bench
 
 Times are in MCLK2 cycles, two to a master clock; the bench prints cartridge reads (c) and 68000 RAM writes (w).
 
@@ -708,10 +709,37 @@ def ntsc_v30():
     names = [(r % 15) + 1 for r in range(32) for c in range(64)]
     return program([0x8004, 0x814C] + MODE5[2:], [(cram(0), colours(16)), (vram(0), solid_tiles()), (vram(0xC000), names)])
 PICTURES["ntsc-v30"] = ntsc_v30
+
+# ---- sound programs: the board's audio pins or a reference's output measure them (Nephrite_Native.md §18).
+
+def z80_bus():
+    """RESET released and the Z80's bus requested and granted, so that the 68000 reaches the YM2612 at $A04000."""
+    return w(0x33FC, 0x0100, 0x00A1, 0x1200, 0x33FC, 0x0100, 0x00A1, 0x1100,
+             0x0839, 0x0000, 0x00A1, 0x1100, 0x66F6)                       # btst #0,$A11100; bne.s the btst
+
+def dac_square(half=700):
+    """Channel 6's DAC from $FF to $00 and back, `half` dbra rounds (ten clocks each) at each level: a square of
+    the DAC's whole swing."""
+    code = z80_bus() + w(0x45F9, 0x00A0, 0x4000, 0x14BC, 0x002B, 0x157C, 0x0080, 0x0001)   # lea; $2B = $80
+    loop = w(0x14BC, 0x002A, 0x157C, 0x00FF, 0x0001, 0x303C, half, 0x51C8, 0xFFFE,
+             0x14BC, 0x002A, 0x157C, 0x0000, 0x0001, 0x303C, half, 0x51C8, 0xFFFE)
+    loop += w(0x6000, (-(len(loop) + 2)) & 0xFFFF)                                             # bra.w loop
+    return program([0x8004, 0x8104, 0x8F02], [], code + loop)
+
+def psg_tone():
+    """PSG tone 0 at half-period $0FE (440 Hz on NTSC) at full volume, written through $C00011."""
+    return program([0x8004, 0x8104, 0x8F02], [], w(0x47F9, 0x00C0, 0x0011, 0x16BC, 0x008E, 0x16BC, 0x000F,
+                                                   0x16BC, 0x0090, 0x60FE))
+
+SOUNDS = {"dac-square": dac_square, "psg-tone": psg_tone}
+
 PAL_PICTURES = {"pal-v30"}
 
 if __name__ == "__main__":
     what = sys.argv[1]
+    if what == "sound":
+        open(sys.argv[3], "wb").write(SOUNDS[sys.argv[2]]())
+        sys.exit()
     if what == "picture":
         picture(sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else 4, sys.argv[4] if len(sys.argv) > 4 else None)
         sys.exit()

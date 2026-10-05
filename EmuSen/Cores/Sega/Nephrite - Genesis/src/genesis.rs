@@ -8,6 +8,7 @@ use emusen_native::{StateReader, StateWriter, Truncated};
 
 use crate::cart::Cart;
 use crate::io::Io;
+use crate::sound::Sound;
 use crate::vdp::{LINE, Vdp};
 
 /// Master clocks a 68000 clock, and a Z80 T-state.
@@ -81,6 +82,8 @@ pub struct Hw {
     pub prefetch: u16,
     /// Whether this frame's picture is drawn at all (the sprite pass runs either way); the VDP holds the picture.
     pub draw: bool,
+    /// The YM2612 and the PSG, and their mix.
+    pub sound: Sound,
 }
 
 pub struct Genesis {
@@ -114,6 +117,7 @@ impl Genesis {
             stall: 0,
             prefetch: 0,
             draw: true,
+            sound: if model.pal { Sound::new(53_203_425, 1, true) } else { Sound::new(4_725_000_000, 88, true) },
         };
         let mut g = Genesis { cpu: M68000::new(), z80: Z80::new(), hw };
         g.cpu.reset(&mut MainBus(&mut g.hw));
@@ -277,7 +281,7 @@ impl Hw {
             0x00_0000..=0x3F_FFFF if self.cart.answers(a) => self.cart.read8(a),
             0xA0_0000..=0xA0_FFFF => {
                 if self.has_z80_bus() {
-                    self.z80_space_read(a as u16 & 0x7FFF)
+                    self.z80_space_read(a as u16 & 0x7FFF, self.clock)
                 } else {
                     self.open8(a)
                 }
@@ -315,7 +319,7 @@ impl Hw {
             0x00_0000..=0x3F_FFFF => self.cart.write8(a, v),
             0xA0_0000..=0xA0_FFFF => {
                 if self.has_z80_bus() {
-                    self.z80_space_write(a as u16 & 0x7FFF, v);
+                    self.z80_space_write(a as u16 & 0x7FFF, v, self.clock);
                 }
             }
             0xA1_0000..=0xA1_001F => self.io.write(a, v, self.clock),
@@ -323,7 +327,7 @@ impl Hw {
             0xA1_1200 => self.set_z80_reset(v & 1 == 0),
             0xA1_30F0..=0xA1_30FF => self.cart.register(a, v),
             0xA1_4000..=0xA1_4003 => self.tmss_write(a, v),
-            0xC0_0000..=0xDF_FFFF => self.vdp_write(a, (v as u16) << 8 | v as u16),
+            0xC0_0000..=0xDF_FFFF => self.vdp_write(a, (v as u16) << 8 | v as u16, self.clock),
             0xE0_0000..=0xFF_FFFF => self.wram[a as usize & 0xFFFF] = v,
             _ => {}
         }
@@ -334,7 +338,7 @@ impl Hw {
         match a {
             0xA0_0000..=0xA0_FFFF => self.write8(a, (v >> 8) as u8),
             0xA1_1100 | 0xA1_1200 => self.write8(a, (v >> 8) as u8),
-            0xC0_0000..=0xDF_FFFF => self.vdp_write(a, v),
+            0xC0_0000..=0xDF_FFFF => self.vdp_write(a, v, self.clock),
             0xE0_0000..=0xFF_FFFF => {
                 self.wram[a as usize & 0xFFFF] = (v >> 8) as u8;
                 self.wram[(a as usize & 0xFFFF) | 1] = v as u8;
@@ -397,8 +401,14 @@ impl Hw {
         if a & 1 == 0 { (w >> 8) as u8 } else { w as u8 }
     }
 
-    fn vdp_write(&mut self, a: u32, v: u16) {
+    /// A write to the VDP's ports at master clock `t`, the clock of the processor making it; the PSG at `$10`-`$17`
+    /// takes the low byte.
+    fn vdp_write(&mut self, a: u32, v: u16, t: u64) {
         if !Self::vdp_valid(a) || self.vdp_locked() {
+            return;
+        }
+        if (0x10..=0x17).contains(&(a & 0x1F)) {
+            self.sound.psg_write(v as u8, t);
             return;
         }
         self.run_vdp(self.clock);
@@ -432,11 +442,12 @@ impl Hw {
 
     // ---- the Z80's space, as both processors reach it
 
-    /// $0000-$7FFF of the Z80's space: its RAM, the YM2612 (not busy until stage 5), the bank register, the VDP.
-    fn z80_space_read(&mut self, a: u16) -> u8 {
+    /// $0000-$7FFF of the Z80's space at master clock `t`, the clock of the processor reaching it: its RAM, the
+    /// YM2612's four ports, the bank register, the VDP.
+    fn z80_space_read(&mut self, a: u16, t: u64) -> u8 {
         match a {
             0x0000..=0x3FFF => self.zram[a as usize & 0x1FFF],
-            0x4000..=0x5FFF => 0,
+            0x4000..=0x5FFF => self.sound.ym_read(a & 3, t),
             0x7F00..=0x7F1F => {
                 let w = self.vdp_read16(0xC0_0000 | (a as u32 & 0x1E));
                 if a & 1 == 0 { (w >> 8) as u8 } else { w as u8 }
@@ -445,11 +456,12 @@ impl Hw {
         }
     }
 
-    fn z80_space_write(&mut self, a: u16, v: u8) {
+    fn z80_space_write(&mut self, a: u16, v: u8, t: u64) {
         match a {
             0x0000..=0x3FFF => self.zram[a as usize & 0x1FFF] = v,
+            0x4000..=0x5FFF => self.sound.ym_write(a & 3, v, t),
             0x6000..=0x60FF => self.z80_bank = (self.z80_bank >> 1) | ((v as u16 & 1) << 8),
-            0x7F00..=0x7F1F => self.vdp_write(0xC0_0000 | (a as u32 & 0x1E), (v as u16) << 8 | v as u16),
+            0x7F00..=0x7F1F => self.vdp_write(0xC0_0000 | (a as u32 & 0x1F), (v as u16) << 8 | v as u16, t),
             _ => {}
         }
     }
@@ -522,7 +534,8 @@ impl Z80Bus<'_> {
 
     fn read_any(&mut self, a: u16) -> u8 {
         if a < 0x8000 {
-            return self.0.z80_space_read(a);
+            let t = self.0.z80_clock;
+            return self.0.z80_space_read(a, t);
         }
         self.0.z80_clock += WINDOW_Z80_WAIT;
         self.0.stall += WINDOW_68K_STALL;
@@ -532,7 +545,8 @@ impl Z80Bus<'_> {
 
     fn write_any(&mut self, a: u16, v: u8) {
         if a < 0x8000 {
-            return self.0.z80_space_write(a, v);
+            let t = self.0.z80_clock;
+            return self.0.z80_space_write(a, v, t);
         }
         self.0.z80_clock += WINDOW_Z80_WAIT;
         self.0.stall += WINDOW_68K_STALL;
@@ -644,6 +658,7 @@ pub struct Saved {
     line_window: [u8; 2],
     open_line: OpenLine,
     write_path: ([u64; 4], std::collections::VecDeque<(u64, crate::vdp::Entry)>),
+    sound: Sound,
     sprite_buffer: Vec<u8>,
     io: crate::io::IoRegs,
     sram_reg: u8,
@@ -715,6 +730,7 @@ impl Genesis {
         w.u16("OpenBus", h.prefetch);
         w.bools("Lines", &[h.z80_busreq, h.z80_reset, h.tmss_unlocked, h.locked_up]);
         w.bytes("Tmss", &h.tmss);
+        w.group("Sound", |w| h.sound.write_state(w));
     }
 
     pub fn read_state(&self, r: &mut StateReader) -> Result<Saved, Truncated> {
@@ -798,7 +814,10 @@ impl Genesis {
         r.bools(&mut lines)?;
         let mut tmss = [0u8; 4];
         r.bytes(&mut tmss)?;
+        let mut sound = self.hw.sound.clone();
+        sound.read_state(r)?;
         Ok(Saved {
+            sound,
             cpu,
             z80,
             vdp: v,
@@ -833,6 +852,7 @@ impl Genesis {
         self.z80 = s.z80;
         let h = &mut self.hw;
         h.vdp.set_regs_state(s.vdp);
+        h.sound = s.sound;
         h.vdp.sat_cache = s.sat_cache;
         (h.vdp.line_vsram, h.vdp.line_hscroll) = s.line_scroll;
         h.vdp.line_window = s.line_window;

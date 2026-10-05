@@ -8,7 +8,7 @@ use crate::machine::Machine;
 use crate::media::System;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"NPHR");
-pub const STATE_VERSION: i32 = 7;
+pub const STATE_VERSION: i32 = 8;
 /// A state of this core made for another of its systems: a Genesis state offered to a 32X machine.
 pub const STATUS_OTHER_SYSTEM: i32 = -10;
 
@@ -153,7 +153,14 @@ mod tests {
                 "141485 3 u8[3] IoCtrl\n141488 3 u8[3] IoTx\n141491 3 u8[3] IoSctrl\n141494 2 bool[2] PadTh\n",
                 "141496 2 u8[2] PadFalls\n141498 16 u64[2] PadLastFall\n141514 1 u8 SramRegister\n",
                 "141515 1 bool Mapper\n141516 8 u8[8] MapperPages\n141524 56 u64[7] Clocks\n141580 4 u32 Line\n",
-                "141584 2 u16 Z80Bank\n141586 2 u16 OpenBus\n141588 4 bool[4] Lines\n141592 4 u8[4] Tmss\n"
+                "141584 2 u16 Z80Bank\n141586 2 u16 OpenBus\n141588 4 bool[4] Lines\n141592 4 u8[4] Tmss\n",
+                "141596 256 u8[256] Sound.Part0\n141852 256 u8[256] Sound.Part1\n",
+                "142108 5 u8[5] Sound.AddressPartFlags\n142113 4 u16[2] Sound.Counters\n",
+                "142117 16 u64[2] Sound.Times\n142133 8 i32[2] Sound.Out\n142141 6 u16[3] Sound.Tone\n",
+                "142147 4 u8[4] Sound.Volume\n142151 3 u8[3] Sound.NoiseLatchStereo\n142154 8 u16[4] Sound.Counter\n",
+                "142162 4 bool[4] Sound.Bit\n142166 2 u16 Sound.Shift\n142168 16 u64[2] Sound.PsgTimeAndTime\n",
+                "142184 8 i32[2] Sound.Level\n142192 24 u64[3] Sound.Sum\n142216 1024 u64[128] Sound.Pending\n",
+                "143240 8 i32[2] Sound.Level\n143248 24 u64[3] Sound.Sum\n143272 1024 u64[128] Sound.Pending\n"
             )
         );
     }

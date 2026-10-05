@@ -366,10 +366,9 @@ impl Cpu {
                 self.io_pc(bus);
                 if opcode == 0xCB { self.waiting = true } else { self.stopped = true }
             }
-            // WDM: two bytes, the second not read.
+            // WDM: two bytes, the second fetched and dropped (D-41).
             0x42 => {
-                self.io_pc(bus);
-                self.pc = self.pc.wrapping_add(1);
+                self.fetch(bus);
             }
             _ => self.unimplemented = true,
         }
@@ -460,5 +459,18 @@ mod tests {
         assert_eq!(bus.cycles.iter().map(|c| c.0).collect::<String>(), "riih");
         cpu.interrupt(&mut bus, Interrupt::Irq);
         assert_eq!(cpu.pc, 0x1234);
+    }
+
+    // D-41: WDM's second cycle is a program fetch of the byte after the opcode, not an internal cycle.
+    #[test]
+    fn wdm_fetches_its_second_byte() {
+        let mut cpu = Cpu { pc: 0x8000, pbr: 0x80, ..Cpu::default() };
+        let mut bus = Log::default();
+        bus.memory.insert(0x80_8000, 0x42);
+        bus.memory.insert(0x80_8001, 0x5A);
+        cpu.step(&mut bus);
+        assert_eq!(bus.cycles.iter().map(|c| (c.0, c.1, c.2)).collect::<Vec<_>>(), vec![('r', 0x80_8000, 0x42), ('r', 0x80_8001, 0x5A)]);
+        assert_eq!(bus.cycles[1].3 & (pin::VDA | pin::VPA), pin::VPA);
+        assert_eq!(cpu.pc, 0x8002);
     }
 }

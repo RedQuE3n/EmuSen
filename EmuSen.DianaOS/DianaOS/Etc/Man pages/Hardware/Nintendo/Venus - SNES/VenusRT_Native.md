@@ -6566,3 +6566,48 @@ passes. Left:
 
 D-26's structure is argued and its band measured. A console ROM sweeping the toggle's phase across the first stage's
 period would measure the level directly.
+
+## 61. Blocker 1's remainder: `blobs/test_hdmatiming`'s test 2 was WDM, not HDMA (D-41, 2026-10-05)
+
+§41.14 left one row of `test_hdmatiming` open, test 2's second latch: $34 against the console's $35. D-40 recorded
+that no sampling point and no resume rule fixed it. The cause is outside HDMA.
+
+### 61.1 What was found
+
+- **The CPU's position, measured.** The first latch is equal ($006). The code between the two latches is the same as
+  test 1's, whose row is equal. A trial that delayed the CPU's resume after test 2's HDMA run by 2 or 3 clocks gave
+  the console's row, and 4 or more moved the first latch. VenusRT's CPU therefore stands 1 to 3 clocks early within
+  a dot after that run.
+- **Why, from the ROM's source.** Test 2 differs from test 1 by three `WDM #$00` in front of its NOPs, with the comment
+  "CPU sync cycle = 8" against test 1's "= 6". In VenusRT a WDM cost a NOP's 14 clocks, an opcode fetch and an
+  internal cycle, so the three moved nothing. VenusRT's cycles around H-blank on line 0 were the same in both tests.
+  `seek_frame` returns at line 0, clock 0 in both, as its header promises.
+- **Measured: WDM's second cycle as a program fetch.** Then it costs 8 clocks in this slow ROM, and all eight graded
+  rows equal the console's. The HDMA rules of D-39 and D-40 are unchanged.
+- **The referee** (logged in D-41) drives VPA in WDM's second cycle, the pair its immediate-operand rows drive. The
+  datasheet has no Table 5-7 row for WDM, so this is the implementer's choice, not a transcription. It agrees with
+  fullsnes's "WDM #nn" and with anomie's rule that internal cycles take 6. SingleStepTests records the cycle as
+  internal. The reading built is the fetch, against the suite.
+
+### 61.2 Checks (measured 2026-10-05)
+
+| Check | Result |
+|---|---|
+| `blobs/test_hdmatiming` (the same image as `test_hdma/` and `test_mdrhdma/`) | passes, the eight graded rows equal to the console's, with and without the tester's boot image. The four ungraded rows (HDMA during DMA) are as before, 1 to 2 dots from the ROM's table |
+| State hashes every 60 frames to 3,600, the 304 corpus images and 17 games | changed: `test_hdmatiming`, gilyon's `cputest-basic` and `-full`, PeterLemon's `CPUMSC`, `test_mul`, `test_hello`, the two `snes_mul_div_timing` printers. None of the games |
+| The corpus runner with VenusRT (C# Venus beside it, without Mesen, graded against the baseline's Mesen verdicts) | **116 of Mesen's 117** with the tester's images, 115 without; every C# Venus pass passes. gilyon's two builds and `CPUMSC` still pass |
+| Pictures | `test_mul`'s picture and VRAM unchanged; `test_hello`'s VRAM equal to Mesen's, and its picture 809 pixels from Mesen's against 929 before |
+| The 65816 suite | 5,059,735 of 5,120,000: the 60,265 failures exactly D-1's 265, D-2's 40,000 (D-3 within them) and D-41's 20,000 |
+| The crate | 139 of 139, `wdm_fetches_its_second_byte` among them, shown failing on the old rule |
+| WiseMan, the VenusRt, CoreAbi, Snes, CoreDebug and Conform filters, the goldens against Mesen included | 121 of 121 |
+
+No cost was measured: none of the 17 games' states changes, so none executes WDM in its first 3,600 frames.
+
+### 61.3 The gates after it
+
+- **G1: 116 of Mesen's 117** with the tester's images and 115 without. The two missing without images are `spc_smp`,
+  which §41.3's proposal excepts, and `spc_dsp6`. Left: `spc_dsp6` alone (§41.17).
+- **G2: met with named exceptions**, now four entries' worth: D-1, D-2 and D-3 as before, and D-41's 20,000 WDM
+  cases. D-41's exceptions differ from D-2's in kind. D-2's pins cannot be observed on the SNES's bus. WDM's second
+  cycle can: its timing is what `test_hdmatiming`'s console table measures.
+- **G3:** `test_hello` is closer to Mesen's picture, still one of §41.19's two unlogged rows.

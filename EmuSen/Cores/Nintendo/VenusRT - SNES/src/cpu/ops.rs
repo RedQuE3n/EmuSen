@@ -245,7 +245,8 @@ impl Cpu {
 
     /// 19a: two cycles, the second internal.
     fn implied<B: Bus>(&mut self, bus: &mut B) {
-        self.io_pc(bus);
+        let a = self.pc_address();
+        bus.implied_cycle(a, self.state_pins());
     }
 
     fn index_step<B: Bus>(&mut self, bus: &mut B, y: bool, up: bool) {

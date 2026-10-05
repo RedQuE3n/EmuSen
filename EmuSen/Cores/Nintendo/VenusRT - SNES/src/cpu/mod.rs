@@ -36,6 +36,11 @@ pub trait Bus {
     fn read(&mut self, address: u32, pins: u8) -> u8;
     fn write(&mut self, address: u32, value: u8, pins: u8);
     fn idle(&mut self, address: u32, pins: u8);
+    /// The internal second cycle of a one-byte implied instruction, at PBR,PC+1; the S-CPU's bus answers it as a B-bus
+    /// read whose byte is dropped (VenusRT_Disputes.md D-24).
+    fn implied_cycle(&mut self, address: u32, pins: u8) {
+        self.idle(address, pins);
+    }
     /// A cycle in which WAI or STP holds the processor; the bus decides its length.
     fn halted(&mut self);
 }

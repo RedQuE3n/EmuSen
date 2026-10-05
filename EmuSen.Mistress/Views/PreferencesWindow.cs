@@ -229,6 +229,7 @@ namespace EmuSen.Mistress.Views
             // Read again when the window comes back to the front, as after a file is dropped in the folder; a big-screen sheet reads it when it opens.
             _firmware = new FirmwarePane(menu is not null);
             var firmwarePane = (ScrollViewer)Pane(_firmware.Rows());
+            FirmwarePane.MarkReadOnly(firmwarePane);
             _firmwareRows = (Panel)firmwarePane.Content!;
             tabs.Add(FirmwareTab, firmwarePane);
             if (menu is null) Activated += (_, _) => RefreshFirmware();

@@ -24,6 +24,9 @@ namespace EmuSen.Mistress.Views
         // The page's rows from the cores' declarations and the folder as they are now.
         public Control[] Rows() => Rows(FirmwareOverview.Build());
 
+        // The page as a big-screen menu takes no choice, so its hints name only moving and going back.
+        public static void MarkReadOnly(Control page) => page.SetValue(BigMenuForm.ReadOnlyPageProperty, true);
+
         private Control[] Rows(IReadOnlyList<FirmwareSystem> systems)
         {
             _shown = Signature(systems);
@@ -33,7 +36,7 @@ namespace EmuSen.Mistress.Views
                 if (!_menu) rows.Add(new SectionHeader { Text = system.Name });
                 if (system.Items.Count == 0) rows.Add(_menu ? MenuRow(system.Name, "None needed", FirmwareOverview.NoFirmware) : new HintText { Text = FirmwareOverview.NoFirmware });
                 foreach (FirmwareItem item in system.Items)
-                    rows.Add(_menu ? MenuRow(item.Title, item.InUseShort, $"{item.InUse}. {item.Change}{(item.Note is { } note ? " " + note : "")}") : DesktopRow(item));
+                    rows.Add(_menu ? MenuRow(MenuLabel(item), item.FileName, $"{item.InUse}. {item.Change}{(item.Note is { } note ? " " + note : "")}", verbatim: true) : DesktopRow(item));
             }
             return rows.ToArray();
         }
@@ -57,7 +60,7 @@ namespace EmuSen.Mistress.Views
             string folder = FirmwareOverview.Folder;
             if (_menu)
             {
-                Control where = MenuRow(FolderRowLabel, Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)), folder);
+                Control where = MenuRow(FolderRowLabel, Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)), folder, verbatim: true);
                 where.SetValue(BigMenuForm.VerbatimHintProperty, true);
                 return [MenuRow(FolderLabel, "Optional", FirmwareOverview.Optional), where];
             }
@@ -85,7 +88,15 @@ namespace EmuSen.Mistress.Views
             return row;
         }
 
-        // A fact as a menu row a pad lands on: the big-screen form makes the button its row, the words its value and the hint its footer.
-        private static Control MenuRow(string label, string value, string footer) => new FieldRow { Label = label, Hint = footer, Content = new Button { Content = value } };
+        // A file's menu row: what it is and which version runs, cased by the look, beside its file name, which keeps its own case.
+        public static string MenuLabel(FirmwareItem item) => $"{item.Label}: {item.InUseShort}";
+
+        // A fact as a menu row a pad lands on: the big-screen form makes the button its row, the words its value and the hint its footer; a verbatim value is a name read letter for letter.
+        private static Control MenuRow(string label, string value, string footer, bool verbatim = false)
+        {
+            var button = new Button { Content = value };
+            if (verbatim) MenuRows.SetValueLetterCase(button, EmuSen.LunaP.Media.LetterCase.None);
+            return new FieldRow { Label = label, Hint = footer, Content = button };
+        }
     }
 }

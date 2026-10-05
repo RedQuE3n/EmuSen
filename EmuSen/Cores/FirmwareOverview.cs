@@ -46,7 +46,7 @@ namespace EmuSen.Cores
     public static class FirmwareOverview
     {
         public const string NoFirmware = "Needs no firmware files.";
-        public const string Optional = "Every file here is optional, and EmuSen never downloads firmware. A file of your own, put in the folder below, is used in place of EmuSen's open version the next time a game starts.";
+        public const string Optional = "Every file here is optional, and EmuSen never downloads firmware. A file of your own in the firmware folder is used in place of EmuSen's open version the next time a game starts.";
 
         public static string Folder => FirmwareLibrary.Directory;
 

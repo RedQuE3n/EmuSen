@@ -7834,8 +7834,10 @@ One row for each firmware file a system's engine can use:
   only, since its footer holds two lines.
 - **A system with no firmware** is listed with "Needs no firmware files.", so a player sees that it was not forgotten.
 - **The folder** is the first thing on the page: its path, the words "Every file here is optional, and EmuSen never
-  downloads firmware. A file of your own, put in the folder below, is used in place of EmuSen's open version the next
-  time a game starts.", and on the desktop an **Open Folder** button.
+  downloads firmware. A file of your own in the firmware folder is used in place of EmuSen's open version the next
+  time a game starts.", and on the desktop an **Open Folder** button. *Amended 2026-10-05: the words said "put in the
+  folder below", which was wrong on the big screen, where the folder's row is above the footer. They now name the
+  folder and point nowhere.*
   - The button makes the folder if it is not there and hands its path to the platform's opener (`xdg-open` on Linux,
     the shell elsewhere). It opens nothing else.
   - The page has no other button, no link, no picker and no download.
@@ -7874,13 +7876,24 @@ and cost, where it had one entry for all seven, and every cost opens on a senten
 - **Read only.** No row changes or opens anything, and there is no Open Folder: a Game Mode session has no file
   manager to open. The folder's path is a row's footer, so a player can find it later from a desktop.
 - **Every fact is a row a pad lands on.** A line nobody can land on scrolls out of reach in a list this long, so
-  each row is one of the menu's action rows: the name on the left, "Open version", "Your own file", "None yet" or
-  "None needed" on the right, and the sentence in the footer while the row has the focus.
+  each row is one of the menu's action rows, with the sentence in the footer while the row has the focus. A file's
+  row reads "SNES sound chip start-up: Open version" on the left, in the look's case, and `spc700.rom` on the right.
+  A system with none reads its name and "None needed".
+- **A file name keeps its case.** ES-DE's look draws a row's label in capitals, and a label cannot be cased in parts.
+  A player who copies "SPC700.ROM" on Linux names the file wrong, so the file name is the row's value, drawn in its
+  own case (`MenuRows.ValueLetterCase` set to none), and which version runs moved into the label. *Amended
+  2026-10-05: the first build put the file name in the label, in capitals.* The folder row's value, the folder's name,
+  keeps its case the same way.
+- **Only the hints that act.** The sheet's hint bar shows B Back and the d-pad's Choose. A changes nothing and the
+  sides change nothing on this page, so Select and Change are not shown. `BigMenuForm.ReadOnlyPage`, set on a page's
+  content, gives that page the shorter hints while it is shown; every other page and sheet keeps the four it had.
+  *Added 2026-10-05.*
 - **A path keeps its case.** ES-DE's look draws a menu's words in capitals, footer included, and a Linux path in
   capitals is a different path. `BigMenuForm.VerbatimHint`, set on a field, makes the footer keep its case while that
   field's row has the focus. Only the folder's row sets it.
-- **The longest footers** are the words about the player's own files (181 characters) and the ST010's with a file of
-  the wrong size (175). Both fit the footer's two lines at both sizes; the audit below holds every row's.
+- **The longest footers** are the words about the player's own files (176 characters) and the ST010's with a file of
+  the wrong size (175). Both fit the footer's two lines at both sizes; the audit below holds every row's. "Put in the
+  firmware folder", 182 characters, was one too many for the two lines at both sizes.
 
 #### 4.89.6 Tests (measured 2026-10-05)
 
@@ -7888,8 +7901,8 @@ and cost, where it had one entry for all seven, and every cost opens on a senten
 |---|---|
 | `FirmwareOverviewTests` (6) | the SNES rows equal VenusRT's info entry for entry, label, name, size, effect and cost; the four systems in order; the words with no file, a file one byte short, the file, and the file removed; a split program and data pair counted as the file; `none` and a missing replacement; with Venus (C#) chosen, or VenusRT's library gone, the reference core's own requests; Nephrite left out with development cores listed |
 | `FirmwarePageTests` (3) | the desktop tab's headers, rows, tooltips and folder against the overview; Open Folder hands the opener exactly the folder, makes it, writes nothing into it, and is the page's only button; the rows follow the folder on a refresh and on reopening |
-| `WindowFitAuditTests.The_firmware_page_in_preferences_is_whole_at_both_sizes` (4) | reached through the pad menu's Settings ▸ Firmware, on the desktop and the big screen at 1280 × 800 and 1920 × 1200, with one file in use and one of the wrong size: nothing cut or overlapping; on the big screen with the focus on each of the thirteen rows in turn, no footer cut, the folder's footer in its own case, every row and Back reached by the d-pad, and B back to Preferences and then out |
-| `EsdeSettingsMenusTests.The_firmware_page_under_a_theme_is_a_menu_of_rows_the_pad_reads` (2) | under an ES-DE theme: the menu centred and drawn inside its panel as the other tabs are, the rows' labels and values, each row's footer whole, A on a row changing and opening nothing |
+| `WindowFitAuditTests.The_firmware_page_in_preferences_is_whole_at_both_sizes` (4) | reached through the pad menu's Settings ▸ Firmware, on the desktop and the big screen at 1280 × 800 and 1920 × 1200, with one file in use and one of the wrong size: nothing cut or overlapping; on the big screen with the focus on each of the thirteen rows in turn, no footer cut, the folder's footer in its own case, each file name a value in its own case, the hints Back and Choose alone and the four again on Preferences, every row and Back reached by the d-pad, and B back to Preferences and then out |
+| `EsdeSettingsMenusTests.The_firmware_page_under_a_theme_is_a_menu_of_rows_the_pad_reads` (2) | under an ES-DE theme: the menu centred and drawn inside its panel as the other tabs are, the rows' labels and values, the file names and the folder's name in their own case, the two hints, each row's footer whole, A on a row changing and opening nothing |
 | VenusRT's crate, `core_info_lists_every_image_a_game_can_name_with_a_summary_first` | every image a cartridge can name is in core info with the label, size, parts and replacement the game's own answer gives, and each cost opens on a sentence under 100 characters with no engine name or address in it |
 
 Pictures from the headless renderer (`EMUSEN_WINDOW_FIT_PNG=firmware-page`) are written to

@@ -62,7 +62,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     // Every row with the focus on it, since the footer's words are the focused row's.
                     Assert.Equal(PreferencesWindow.FirmwareTab, preferences.Form!.Menu.Title);
                     List<Button> rows = root.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "BigMenuRows").Children.OfType<Button>().ToList();
-                    Assert.Equal(new[] { FirmwarePane.FolderLabel, FirmwarePane.FolderRowLabel }.Concat(FirmwareOverview.Build().SelectMany(s => s.Items.Count == 0 ? [s.Name] : s.Items.Select(i => i.Title))), rows.Select(r => MenuRows.GetLabel(r)));
+                    Assert.Equal(new[] { FirmwarePane.FolderLabel, FirmwarePane.FolderRowLabel }.Concat(FirmwareOverview.Build().SelectMany(s => s.Items.Count == 0 ? [s.Name] : s.Items.Select(FirmwarePane.MenuLabel))), rows.Select(r => MenuRows.GetLabel(r)));
+                    // A file's name and the folder's are drawn in their own case, since a player types them as they read; the look's case is for words.
+                    Assert.All(rows.Where(r => items.Any(i => MenuRows.GetValue(r) == i.FileName)).Append(rows[1]), r => Assert.Equal(EmuSen.LunaP.Media.LetterCase.None, MenuRows.GetValueLetterCase(r)));
+                    Assert.Equal(items.Count, rows.Count(r => items.Any(i => MenuRows.GetValue(r) == i.FileName)));
+                    Assert.Equal(["Back", "Choose"], preferences.Form.Menu.Hints!.Select(h => h.Label));
                     Assert.DoesNotContain(root.GetVisualDescendants().OfType<Button>(), b => (b.Content as string) == FirmwarePane.OpenFolder);
                     for (int i = 0; i < rows.Count; i++)
                     {
@@ -73,7 +77,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                         else Assert.Null(preferences.Form.Menu.FooterLetterCase);
                         if (preferences.Form.Menu.IsFooterCut) faults.Add($"row {i} ({MenuRows.GetLabel(rows[i])}): the footer is cut: {preferences.Form.Menu.Footer}");
                         foreach (string f in FitAudit.Check(root, WindowAllowances.For(top))) faults.Add($"row {i} ({MenuRows.GetLabel(rows[i])}): {f}");
-                        if (i is 0 or 1 || i == rows.Count - 1 || items.Any(it => it.WrongSize && it.Title == MenuRows.GetLabel(rows[i]))) SavePicture(window, $"{name}-Row{i:D2}");
+                        if (i is 0 or 1 || i == rows.Count - 1 || items.Any(it => it.WrongSize && FirmwarePane.MenuLabel(it) == MenuRows.GetLabel(rows[i]))) SavePicture(window, $"{name}-Row{i:D2}");
                         pad.Down();
                     }
                     // Every row and Back is reached by the d-pad, and B goes back to the tabs, then closes the sheet.
@@ -81,6 +85,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Assert.All(PadAudit.Operable(root), e => Assert.Contains(e, reached));
                     pad.B();
                     Assert.Equal("Preferences", preferences.Form.Menu.Title);
+                    Assert.Equal(["Select", "Back", "Change", "Choose"], preferences.Form.Menu.Hints!.Select(h => h.Label));
                     pad.B();
                     Settle(window);
                     Assert.False(Sheets(window).IsPresenting);

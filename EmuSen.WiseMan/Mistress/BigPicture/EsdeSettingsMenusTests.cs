@@ -174,9 +174,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             WindowFitAuditTests.SavePicture(s.Window, $"PreferencesFirmware-Themed-{width}x{height}");
             Control[] rows = Rows(s);
             var systems = EmuSen.Cores.FirmwareOverview.Build();
-            Assert.Equal(new[] { FirmwarePane.FolderLabel, FirmwarePane.FolderRowLabel }.Concat(systems.SelectMany(y => y.Items.Count == 0 ? [y.Name] : y.Items.Select(i => i.Title))), rows.Select(LabelOf));
+            Assert.Equal(new[] { FirmwarePane.FolderLabel, FirmwarePane.FolderRowLabel }.Concat(systems.SelectMany(y => y.Items.Count == 0 ? [y.Name] : y.Items.Select(FirmwarePane.MenuLabel))), rows.Select(LabelOf));
             Assert.All(rows, r => Assert.Equal(MenuRowKind.Action, MenuRows.GetKind(r)));
-            Assert.Equal(new[] { "Optional" }.Concat(systems.SelectMany(y => y.Items.Count == 0 ? ["None needed"] : y.Items.Select(i => i.InUseShort))), rows.Where((_, i) => i != 1).Select(r => RowOf(r).Value));
+            Assert.Equal(new[] { "Optional", "Firmware" }.Concat(systems.SelectMany(y => y.Items.Count == 0 ? ["None needed"] : y.Items.Select(i => i.FileName))), rows.Select(r => RowOf(r).Value));
+            // The file names are drawn as they are spelt, under a look that draws everything else in capitals.
+            Assert.All(rows.Where(r => r == rows[1] || (RowOf(r).Value?.EndsWith(".rom", StringComparison.Ordinal) ?? false)), r => Assert.Equal(EmuSen.LunaP.Media.LetterCase.None, RowOf(r).ValueLetterCase));
+            Assert.Equal(["Back", "Choose"], sheet.Form.Menu.Hints!.Select(h => h.Label));
             foreach (Control row in rows)
             {
                 Assert.Same(row, TopLevel.GetTopLevel(s.Window)!.FocusManager!.GetFocusedElement());

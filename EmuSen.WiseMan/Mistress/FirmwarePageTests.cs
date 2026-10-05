@@ -79,6 +79,8 @@ namespace EmuSen.WiseMan.Mistress
             FieldRow folder = RowOf(window, FirmwarePane.FolderLabel);
             Assert.Equal(FirmwareOverview.Optional, folder.Hint);
             Assert.Contains("never downloads", folder.Hint);
+            Assert.DoesNotContain("below", folder.Hint);
+            Assert.DoesNotContain("above", folder.Hint);
             Assert.Equal(FirmwareLibrary.Directory, window.GetVisualDescendants().OfType<MonoText>().Single(t => t.Name == "FirmwareFolderText").Text);
             window.Close();
         }, default);

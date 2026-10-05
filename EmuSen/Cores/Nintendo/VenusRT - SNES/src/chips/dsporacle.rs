@@ -928,6 +928,43 @@ mod tests {
         }
     }
 
+    // VenusRT_Native.md §52.6: past the limit angle, Parameter, Raster, Project and Target against the image in §52.4's
+    // ranges; every transfer alike, and the cases whose results are all close in §52.6's shares, less a margin.
+    #[test]
+    fn the_replacements_branch_past_the_limit_stays_close_to_the_image() {
+        use super::super::dsphle::Program;
+        let close = |a: u16, b: u16| (a as i16 as i32 - b as i16 as i32).abs() <= 2.max((a as i16 as i32).abs() / 128);
+        for (stem, program) in [("dsp1", Program::Dsp1), ("dsp1b", Program::Dsp1b)] {
+            let Some(mut lle) = chip(stem) else { return };
+            let mut hle = Hle::new(program);
+            power_on(&mut hle, &Host::steady()).unwrap();
+            let mut p = Pcg::new(0x52);
+            let mut good = [0u32; 4];
+            let cases = 1024;
+            for k in 0..cases {
+                let mut w = |lo: i32, hi: i32| (lo + p.within(0, (hi - lo).max(0) as u32) as i32) as u16;
+                let params = [w(-4096, 4096), w(-4096, 4096), w(0, 1000), w(0, 1024), w(64, 1024), w(0, 0xFFFF), w(0x38CE, 0x4800)];
+                let mut run = |c: usize, command: u8, inputs: &[u16], host: Host| -> Vec<u16> {
+                    let (x, y) = (transact(&mut lle, &mut host.clone(), command, inputs), transact(&mut hle, &mut host.clone(), command, inputs));
+                    assert!(!compare(&x, &y).shape, "{stem} {command:02X} case {k}");
+                    good[c] += x.outputs().iter().zip(y.outputs()).all(|(&a, b)| close(a, b)) as u32;
+                    x.outputs()
+                };
+                let got = run(0, 0x02, &params, Host::steady());
+                let lo = (got[1] as i16 as i32 + 2).clamp(-112, 112);
+                let point = [got[2].wrapping_add(w(-500, 500)), got[3].wrapping_add(w(-500, 500)), w(0, 200)];
+                run(2, 0x06, &point, Host::steady());
+                let line = w(lo, 112);
+                run(1, 0x0A, &[line], Host { write_from: 9, filler: 0x8000, ..Host::steady() });
+                let hv = [w(-128, 128), w(lo, 112)];
+                run(3, 0x0E, &hv, Host::steady());
+            }
+            for (c, share) in [(0, 0.55), (1, 0.42), (2, 0.95), (3, 0.55)] {
+                assert!(good[c] as f64 >= share * cases as f64, "{stem}: command {c} close in {} of {cases}", good[c]);
+            }
+        }
+    }
+
     // VenusRT_Native.md §48.3: the DSP-4's replacement against the image, its first input written over the chip's
     // offer as Top Gear 3000 writes it; 00h whole, the commands without inputs whole on a fresh chip, the short ones
     // in transfers alone.

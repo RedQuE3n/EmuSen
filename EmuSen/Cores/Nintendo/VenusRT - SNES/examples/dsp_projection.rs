@@ -267,7 +267,9 @@ fn timings(stem: &str, command: u8, cases: u64) {
     let mut phases: Vec<(Vec<u32>, Vec<u32>)> = Vec::new();
     for _ in 0..cases {
         let w = |p: &mut Pcg, lo: i64, hi: i64| (lo + p.within(0, (hi - lo) as u32) as i64) as u16;
-        let params = [w(&mut p, -4096, 4096), w(&mut p, -4096, 4096), w(&mut p, 0, 1000), w(&mut p, 0, 1024), w(&mut p, 64, 1024), p.word(), w(&mut p, 0x0800, 0x3800)];
+        // DSP_PROJ_AZS=lo-hi in hex moves Azs's range, past the limit for one (VenusRT_Native.md §52.5).
+        let (lo, hi) = std::env::var("DSP_PROJ_AZS").ok().and_then(|v| v.split_once('-').map(|(a, b)| (i64::from_str_radix(a, 16).unwrap(), i64::from_str_radix(b, 16).unwrap()))).unwrap_or((0x0800, 0x3800));
+        let params = [w(&mut p, -4096, 4096), w(&mut p, -4096, 4096), w(&mut p, 0, 1000), w(&mut p, 0, 1024), w(&mut p, 64, 1024), p.word(), w(&mut p, lo, hi)];
         let mut after = idle.clone();
         let got = transact(&mut after, &mut Host::steady(), 0x02, &params).outputs();
         let (host, inputs) = match command {

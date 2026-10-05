@@ -205,10 +205,12 @@ impl DspHle {
         let (work, notice) = match self.varying {
             Some((phase, w, n)) if phase == self.phase => (w, n),
             // A raster run: the first line, each later line, and the run's end (VenusRT_Native.md §49.5).
-            _ if self.command & 0xCF == 0x0A => match (next, self.stage) {
-                (Next::Offer(_), Stage::Giving { given: 0, .. }) if self.phase == 1 => (128, 116),
-                (Next::Offer(_), Stage::Giving { given: 0, .. }) => (0, 115),
-                (Next::Idle, _) => (0, 6),
+            _ if self.command & 0xCF == 0x0A => match (next, self.stage, Projection::new(&self.proj).past) {
+                (Next::Offer(_), Stage::Giving { given: 0, .. }, false) if self.phase == 1 => (128, 116),
+                (Next::Offer(_), Stage::Giving { given: 0, .. }, false) => (0, 115),
+                (Next::Offer(_), Stage::Giving { given: 0, .. }, true) if self.phase == 1 => (130, 118),
+                (Next::Offer(_), Stage::Giving { given: 0, .. }, true) => (0, 117),
+                (Next::Idle, _, _) => (0, 6),
                 _ => (0, NOTICE as u16),
             },
             _ => dsp1_timing(self.command).get(self.phase as usize).copied().unwrap_or((0, NOTICE as u16)),
@@ -479,20 +481,30 @@ impl DspHle {
             // Parameter, Raster and Project: approximate (VenusRT_Native.md §49), §49.5's member; no limit branch (§49.3).
             0x02 => {
                 self.proj.copy_from_slice(&self.inputs[..7]);
-                let out = Projection::new(&self.proj).parameter();
-                self.outputs[..4].copy_from_slice(&out.map(|v| v as u16));
+                let p = Projection::new(&self.proj);
+                self.outputs[..4].copy_from_slice(&p.parameter().map(|v| v as u16));
+                // Past the limit the commands take longer: the medians of VenusRT_Native.md §52.5.
+                if p.past {
+                    self.varying = Some((7, 541, 499));
+                }
             }
             0x0A | 0x1A | 0x2A | 0x3A => {
                 let line = Projection::new(&self.proj).raster(i[0]);
                 self.outputs[..4].copy_from_slice(&line.map(|v| v as u16));
             }
             0x06 => {
-                let out = Projection::new(&self.proj).project([i[0], i[1], i[2]]);
-                self.outputs[..3].copy_from_slice(&out.map(|v| v as u16));
+                let p = Projection::new(&self.proj);
+                self.outputs[..3].copy_from_slice(&p.project([i[0], i[1], i[2]]).map(|v| v as u16));
+                if p.past {
+                    self.varying = Some((3, 0, 354));
+                }
             }
             0x0E | 0x1E | 0x2E | 0x3E => {
-                let out = Projection::new(&self.proj).target(i[0], i[1]);
-                self.outputs[..2].copy_from_slice(&out.map(|v| v as u16));
+                let p = Projection::new(&self.proj);
+                self.outputs[..2].copy_from_slice(&p.target(i[0], i[1]).map(|v| v as u16));
+                if p.past {
+                    self.varying = Some((2, 0, 118));
+                }
             }
             // Gyrate: approximate (VenusRT_Native.md §50), §50.3's member.
             0x14 => self.outputs[..3].copy_from_slice(&gyrate(&i).map(|v| v as u16)),
@@ -668,14 +680,38 @@ struct Projection {
     cz: i64,
     /// Fz + Lfe·cos z, floored.
     ez: i64,
+    /// Past the limit (VenusRT_Native.md §52.5): the view's angle is the limit's, the screen stands at Les/cos Δ.
+    past: bool,
+    sv: i64,
+    cv: i64,
+    cd: i64,
+    /// Les_v·cos z_v in Q15: Les·cos z below the limit.
+    lv: i64,
+    vof: i64,
 }
+
+/// The DSP-1's limit angle on Azs (VenusRT_Native.md §52.3): measured from the image to within one step, the one
+/// constant VenusRT_DspHle.md §1.3's amendment admits.
+const LIMIT: u16 = 0x38CE;
 
 impl Projection {
     fn new(p: &[u16; 7]) -> Projection {
         let w = |k: usize| p[k] as i16 as i64;
         let (a, z) = (p[5], p[6]);
         let (sa, ca, sz, cz) = (sine(a), sine(a.wrapping_add(0x4000)), sine(z), sine(z.wrapping_add(0x4000)));
-        Projection { f: [w(0), w(1), w(2)], lfe: w(3), les: w(4), sa, ca, sz, cz, ez: w(2) + ((w(3) * cz) >> 15) }
+        let past = (LIMIT..0x8000).contains(&z) || (0x8000..=LIMIT.wrapping_neg()).contains(&z);
+        let zv = if !past { z } else if z < 0x8000 { LIMIT } else { LIMIT.wrapping_neg() };
+        let d = z.wrapping_sub(zv);
+        let (sv, cv, sd, cd) = (sine(zv), sine(zv.wrapping_add(0x4000)), sine(d), sine(d.wrapping_add(0x4000)));
+        let les = w(4);
+        let (lv, vof) = if past {
+            let num = les as i128 * sd as i128;
+            let vof = Self::floor_div(2 * num + cd as i128, 2 * cd as i128, (-0x8000, 0x7FFF));
+            (Self::floor_div(((les * cv) as i128) << 15, cd as i128, (i64::MIN / 4, i64::MAX / 4)), vof)
+        } else {
+            (les * cz, 0)
+        };
+        Projection { f: [w(0), w(1), w(2)], lfe: w(3), les, sa, ca, sz, cz, ez: w(2) + ((w(3) * cz) >> 15), past, sv, cv, cd, lv, vof }
     }
 
     /// num/den exactly, floored and saturated; a zero denominator saturates by the numerator's sign.
@@ -705,21 +741,23 @@ impl Projection {
         (p >> sh).clamp(range.0 as i128, range.1 as i128) as i64
     }
 
-    /// Vof, Vva, Cx, Cy: the horizon's line and where the view's axis meets the ground; Vof 0, with no limit (§49.3).
+    /// Vof, Vva, Cx, Cy: the horizon's line and where the view's axis meets the ground from the eye; past the limit
+    /// the view's angle is the limit's and Vof = Les·tan Δ (§52.5).
     fn parameter(&self) -> [i64; 4] {
-        let (sa, ca, sz, cz) = (self.sa, self.ca, self.sz, self.cz);
+        let (sa, ca, sz) = (self.sa, self.ca, self.sz);
         let ex = self.f[0] - ((self.lfe * sz * sa) >> 30);
         let ey = self.f[1] + ((self.lfe * sz * ca) >> 30);
-        let t = Self::quotient(self.ez as i128 * sz as i128, cz as i128);
-        let vva = Self::quotient(-(self.les * cz) as i128, sz as i128);
-        [0, vva, (ex + ((t * sa) >> 15)).clamp(-0x8000, 0x7FFF), (ey - ((t * ca) >> 15)).clamp(-0x8000, 0x7FFF)]
+        let t = Self::quotient(self.ez as i128 * self.sv as i128, self.cv as i128);
+        let vva = Self::quotient(-(self.lv as i128), self.sv as i128);
+        [self.vof, vva, (ex + ((t * sa) >> 15)).clamp(-0x8000, 0x7FFF), (ey - ((t * ca) >> 15)).clamp(-0x8000, 0x7FFF)]
     }
 
-    /// The mode 7 matrix for line v: the scale 256·Ez over the whole denominator Les·cos z + v·sin z, and over cos z.
+    /// The mode 7 matrix for line v: the scale 256·Ez over the whole denominator Les·cos z + v·sin z, and over cos z;
+    /// past the limit, on the limit's view and screen, and K times cos Δ.
     fn raster(&self, v: i64) -> [i64; 4] {
-        let n = ((self.les * self.cz) >> 15) + ((v * self.sz) >> 15);
+        let n = (self.lv >> 15) + ((v * self.sv) >> 15);
         let k = Self::quotient(256 * self.ez as i128, n as i128);
-        let kk = Self::quotient((k as i128) << 15, self.cz as i128);
+        let kk = if self.past { Self::quotient(k as i128 * self.cd as i128, self.cv as i128) } else { Self::quotient((k as i128) << 15, self.cv as i128) };
         [(k * self.ca) >> 15, (-kk * self.sa) >> 15, (k * self.sa) >> 15, (kk * self.ca) >> 15]
     }
 
@@ -728,9 +766,9 @@ impl Projection {
     fn target(&self, h: i64, v: i64) -> [i64; 2] {
         let [_, _, cx, cy] = self.parameter();
         let wide = (i64::MIN / 4, i64::MAX / 4);
-        let n = ((self.les * self.cz) >> 15) + ((v * self.sz) >> 15);
+        let n = (self.lv >> 15) + ((v * self.sv) >> 15);
         let k = Self::floor_div(256 * self.ez as i128, n as i128, wide) as i128;
-        let kk = Self::floor_div(k << 15, self.cz as i128, wide) as i128;
+        let kk = Self::floor_div(k << 15, self.cv as i128, wide) as i128;
         let (h, v, sa, ca) = (h as i128, v as i128, self.sa as i128, self.ca as i128);
         let dx = (((h * k * ca) >> 15) - ((v * kk * sa) >> 15)) >> 8;
         let dy = (((v * kk * ca) >> 15) - ((h * k * sa) >> 15)) >> 8;

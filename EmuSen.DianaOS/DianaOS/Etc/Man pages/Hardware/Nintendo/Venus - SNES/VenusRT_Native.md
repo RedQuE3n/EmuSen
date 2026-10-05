@@ -5472,3 +5472,77 @@ image's Vva past the limit lies nearer zero than the floored formula elsewhere t
 - **B5, Vva's rounding past the limit**: floor, as §52.2's member rounds quotients; or toward zero (2).
 
 That is 32 members, 5 bits, beside the constant. The rank is §52.4's. No further widening follows.
+
+### 52.6 The branch chosen, built, and the grade (measured 2026-10-04)
+
+**The choice.** `dsp_limit dsp1b 65536` with the traces of Lock On, Ballz 3D and Pilotwings ranked the 32 members by exact
+results. The first keeps **B5 at floor**: Vof half up, the screen at Les/cos Δ, K times cos Δ, Project with no branch,
+Vva floored. It has 1,781,381 exact results. The member with Vva toward zero has 1,766,964, though it has more close
+results (3,649,852 against 3,649,824). It gains in Lock On's Parameter (30,652 exact against 19,684) and Ballz 3D's
+(5,082 against 3,685), and loses more in the seeded set's (44,436 against 71,187). By the declared rank the floored
+member is built.
+
+**Built** in `dsphle.rs`. `Projection` takes the branch when lim ≤ Azs < 8000h or 8000h ≤ Azs ≤ C732h:
+
+- the view is placed at the limit, or its negative, and the eye at Azs;
+- Vof = Les·tan Δ, half up;
+- Vva and Raster's denominator use the screen at Les/cos Δ;
+- Raster's K is k·cos Δ/cos z_v;
+- Target uses the virtual camera;
+- Project does not change.
+
+Below the limit every result is as §52.2's. **Timing** past the limit, the medians of 4,096 seeded cases
+(`DSP_PROJ_AZS=38CE-4800 DSP_PROJ_TIMING`): Parameter's last input at work 541 and notice 499 (506-581, 464-539),
+Project's at notice 354, Target's at 118, and a raster line's first result at 130/118 and later ones at 117. No table
+was added; the constant is `LIMIT`. The state did not change, so its version stays 22.
+
+**Through the ports** (`DSP_LIMIT_PORTS=1 dsp_limit`, 65,536 seeded cases with Azs from 38CEh to 4800h, half jittered;
+the DSP-1 and DSP-1B alike):
+
+| Command | All results close | All exact | Transfers or SR differ |
+|---|---|---|---|
+| 02h Parameter | 40,714 (62.1%) | 169 | 0 |
+| 0Ah Raster, two lines | 32,362 (49.4%) | 304 | 0 |
+| 06h Project | 64,468 (98.4%) | 47,574 (72.6%) | 0 |
+| 0Eh Target | 40,505 (61.8%) | 611 | 0 |
+
+Without the limit (§49.3), none of these but Project came near the image. The misses left are of 1 to 2%: Bn and Dn
+about 1.4% large, and (Cx, Cy) 5 to 20 off at distances of thousands. Below the limit the ports' grades are unchanged
+to the case. **On the traces**:
+
+| Game | Parameter | Raster |
+|---|---|---|
+| Lock On | 43,752 of 43,872 close | 2,560,736 of 2,647,288 lines (96.7%, from 2.2%) |
+| Ballz 3D | 5,588 of 5,588 | none given |
+| Pilotwings, past the limit | 567 of 756 | 104,914 of 133,056 lines |
+
+Pilotwings' Target past the limit is close in 195 of 378. The crate test
+`the_replacements_branch_past_the_limit_stays_close_to_the_image` holds the ports' shares on both images.
+
+**In lockstep** (7,200 frames, the pictures in `~/.cache/emusen/probe/venusrt/dsp-hle/shots/`; those before the limit
+was built in `shots/before-limit/`):
+
+- **Pilotwings' level flight is fixed.** At frames 2,080, 2,120 and 2,160 the replacement draws the island under the
+  glider as the image does (`pilotwings-f2120.png`, against `before-limit/pilotwings-f2120.png`, which showed sea). The
+  demo still diverges later, as §51.3 found, from the flight model's values.
+- **Lock On draws no ground** (`lockon-f1600.png`, `lockon-f2000.png`): the floored Vva, -47 against the image's -46,
+  fails the game's horizon test. With Vva toward zero the ground is drawn and matches the image's closely
+  (`exp/lockon-trunc.png`). Pictures equal: 1,532 of 7,198. The median of differing pixels is 58.6%, from 37.3% when
+  the ground was drawn as streaks.
+- **Super Mario Kart, Suzuka 8 Hours and Michael Andretti's Indy Car Challenge** never pass the limit and are unchanged
+  from §52.2.
+- **Ballz 3D** is unchanged: it passes the limit, but nothing it draws comes from Parameter's results.
+- **Super Bases Loaded 2's** camera never passes the limit on the image. Its attract sequence took another course on
+  the replacement: pictures equal 3,031, from 3,191, and sprites within 1 pixel 94.8%, from 95.4%.
+
+### 52.7 What is put for decision
+
+**B5, Vva's rounding past the limit.** The declared rank, exact results over both sets, chose floor by 14,417 exact
+results in 1.78 million. That choice leaves Lock On without its ground, which the other member draws. The tester may:
+
+- keep the rank, and Lock On needs the player's image;
+- or choose B5 toward zero for Lock On's sake. That is a re-ranking within the declared family and adds nothing from
+  the image.
+
+The difference is one line in `Projection::parameter`. The image's Vva past the limit is not quite either member's,
+which the seeded set's exact counts show (71,187 and 44,436 of 262,144).

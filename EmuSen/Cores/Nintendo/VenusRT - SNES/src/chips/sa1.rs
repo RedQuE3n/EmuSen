@@ -37,6 +37,10 @@ pub struct Sa1 {
     horizon: u64,
     /// The debugger's seam, fitted for an observed frame only; not in the state.
     pub probe: Option<Box<crate::probe::Probe>>,
+    /// Each bank's ROM window for the SA-1's reads, (first offset, last offset, base), and the ROM length it was built
+    /// for, `usize::MAX` when the MMC has changed since; derived from the MMC, so not in the state.
+    rom_banks: Box<[(u16, u16, u32); 256]>,
+    rom_banks_for: usize,
     /// The SA-1's own data bus, which unmapped reads return (absindx's RAM-protection notes).
     pub mdr: u8,
     pub ccnt: u8,
@@ -101,6 +105,8 @@ impl Sa1 {
             log: Vec::new(),
             horizon: 0,
             probe: None,
+            rom_banks: Box::new([(1, 0, 0); 256]),
+            rom_banks_for: usize::MAX,
             mdr: 0,
             ccnt: 0x20,
             sie: 0,
@@ -177,6 +183,27 @@ impl Sa1 {
             return None;
         };
         Some(mirror(at, size))
+    }
+
+    /// The per-bank table of `rom_offset` for the SA-1's ROM reads, where a bank's window is linear in the ROM; the
+    /// vectors the SA-1 supplies in bank 00 and 80 stay outside it (VenusRT_Native.md §58).
+    fn build_rom_banks(&mut self, size: usize) {
+        self.rom_banks_for = size;
+        for bank in 0..256u32 {
+            let (lo, hi) = match bank {
+                0x00 | 0x80 => (0x8000, 0xFFE9),
+                _ if bank & 0x40 == 0 => (0x8000, 0xFFFF),
+                0xC0..=0xFF => (0x0000, 0xFFFF),
+                _ => (1, 0),
+            };
+            let window = |a: u16| self.rom_offset(bank << 16 | a as u32, size);
+            self.rom_banks[bank as usize] = match (window(lo), window(hi)) {
+                (Some(first), Some(last)) if size % 0x1_0000 == 0 && lo <= hi && last.wrapping_sub(first) == (hi - lo) as usize => {
+                    (lo, hi, (first as u32).wrapping_sub(lo as u32))
+                }
+                _ => (1, 0, 0),
+            };
+        }
     }
 
     fn bw_size_mask(bw: &[u8]) -> Option<usize> {
@@ -493,7 +520,10 @@ impl Sa1 {
             0x2213 => self.hcmp = (self.hcmp & 0xFF) | ((v as u16 & 1) << 8),
             0x2214 => self.vcmp = (self.vcmp & 0x100) | v as u16,
             0x2215 => self.vcmp = (self.vcmp & 0xFF) | ((v as u16 & 1) << 8),
-            0x2220..=0x2223 => self.mmc[(reg - 0x2220) as usize] = v,
+            0x2220..=0x2223 => {
+                self.mmc[(reg - 0x2220) as usize] = v;
+                self.rom_banks_for = usize::MAX;
+            }
             0x2224 => self.bmaps = v,
             0x2225 => self.bmap = v,
             0x2226 => self.sbwe = v,
@@ -685,18 +715,22 @@ impl Sa1 {
     }
 
     fn run_until(&mut self, target: u64, rom: &[u8], bw: &mut [u8]) {
+        if self.rom_banks_for != rom.len() {
+            self.build_rom_banks(rom.len());
+        }
+        // The CPU is taken out once for the whole run, the bus reaching every other field (VenusRT_Native.md §58).
+        let mut cpu = self.cpu;
         while self.clock < target {
             if self.ccnt & 0x60 != 0 {
                 self.clock = target;
                 self.timer_check();
-                return;
+                break;
             }
             if let Some(p) = self.probe.as_mut() {
-                if p.before((self.cpu.pbr as u32) << 16 | self.cpu.pc as u32) {
-                    return;
+                if p.before((cpu.pbr as u32) << 16 | cpu.pc as u32) {
+                    break;
                 }
             }
-            let mut cpu = self.cpu;
             {
                 let mut bus = Sa1Bus { s: self, rom, bw };
                 if bus.s.reset_pending {
@@ -715,9 +749,9 @@ impl Sa1 {
                     cpu.step(&mut bus);
                 }
             }
-            self.cpu = cpu;
             self.timer_check();
         }
+        self.cpu = cpu;
     }
 
     /// The state beyond the I-RAM, which travels beside it.
@@ -774,6 +808,7 @@ impl Sa1 {
         let q = |i: usize| u64::from_le_bytes(g[i..i + 8].try_into().expect("eight bytes"));
         self.log = (0..(g[0] as usize).min(LOG)).map(|k| (q(1 + k * 17), q(9 + k * 17), g[17 + k * 17])).collect();
         self.holds.clear();
+        self.rom_banks_for = usize::MAX;
     }
 }
 
@@ -909,7 +944,16 @@ impl Sa1Bus<'_> {
 }
 
 impl Bus for Sa1Bus<'_> {
+    #[inline]
     fn read(&mut self, address: u32, _pins: u8) -> u8 {
+        let (lo, hi, base) = self.s.rom_banks[(address >> 16) as usize & 0xFF];
+        let offset = address as u16;
+        if (lo..=hi).contains(&offset) {
+            let v = self.rom[base.wrapping_add(offset as u32) as usize];
+            self.s.mdr = v;
+            self.s.access(ROM, FAST);
+            return v;
+        }
         let (v, cost) = self.load(address);
         self.s.mdr = v;
         self.s.access(Sa1::sa1_kind(address), cost);
@@ -973,6 +1017,26 @@ mod tests {
         assert_eq!(s.rom_offset(0x01_8000, size), Some(0x30_8000));
         s.mmc[2] = 0x01;
         assert_eq!(s.rom_offset(0xE0_1234, size), Some(0x10_1234));
+    }
+
+    // The per-bank ROM table gives what `rom_offset` gives wherever it claims a window, for any MMC setting and size.
+    #[test]
+    fn the_rom_bank_table_agrees_with_the_mmc_decode() {
+        let mut s = Sa1::new(false);
+        for size in [0x10_0000usize, 0x30_0000, 0x40_0000, 0x50_0000, 0x18_8000] {
+            for mmc in [[0, 1, 2, 3], [0x83, 0x80, 5, 0x81], [7, 6, 0x85, 2]] {
+                s.mmc = mmc;
+                s.build_rom_banks(size);
+                for bank in 0..256u32 {
+                    let (lo, hi, base) = s.rom_banks[bank as usize];
+                    for offset in (lo as u32..=hi as u32).step_by(0x3FF).chain([lo as u32, hi as u32]).filter(|_| lo <= hi) {
+                        let at = bank << 16 | offset;
+                        assert_eq!(Some(base.wrapping_add(offset) as usize), s.rom_offset(at, size), "{size:X} {mmc:?} {at:06X}");
+                    }
+                    assert!(lo > hi || size % 0x1_0000 == 0);
+                }
+            }
+        }
     }
 
     // fullsnes, "Arithmetic Maths": a signed product, a signed quotient and an unsigned remainder, and the running sum.

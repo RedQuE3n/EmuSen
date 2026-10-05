@@ -102,3 +102,24 @@ CPUs' disputes in their own record pages.
   refresh yet.
 - Pinned by: nothing yet.
 - Implemented in: not yet.
+
+### D-3. Shadow/highlight: palette 3's colour 14 brightens and colour 15 darkens, and an operator pixel gives no priority
+- Opened: 2026-10-05, at stage 4 step 2, by two documents in disagreement. MacDonald's "Sega Genesis VDP
+  documentation" §16 has colour `$3E` drawing the pixel under it at half intensity and `$3F` at double; plutiedev's
+  "Shadow/highlight" has palette 3's colour 14 brighter and colour 15 darker, layers' priority deciding the shadow
+  with "transparent pixels in sprites" excluded, colour 14 of any palette never darker, and brighter and darker
+  together giving a normal pixel.
+- Documents read: those two; TmEE's measured levels (SpritesMind topic 2188: shadow and highlight add no levels).
+- Test program: the shadow/highlight programs of Genesis Plus GX's published `md_test` collection (`SHLTEST.BIN`,
+  `SHLTEST2.BIN`, `stetest.bin`, `STETEST2.bin`), test programs whose pictures were compared, not read as code.
+- Referee: Genesis Plus GX run as a black box through the probe, the picture at frame 300 compared up to a one-to-one
+  colour map. With plutiedev's rule `SHLTEST`, `SHLTEST2` and `stetest` match exactly. `STETEST2` first differed in its
+  third row, which Nephrite drew highlighted and the reference at normal intensity, until an operator pixel stopped
+  counting as a high-priority sprite pixel (it is transparent); then its picture matches but for pixels whose
+  intensities the measured ladder maps to one level (shadow's step 4 and normal's step 2, for instance), which a
+  one-to-one map cannot follow. MacDonald's assignment would swap the operators' rows; neither reference nor test
+  agrees with it.
+- Conclusion: **argued from plutiedev and the references' pictures**: as plutiedev states, with an operator pixel
+  transparent for priority. No console photograph of these programs is in the corpus.
+- Pinned by: nothing yet in the crate (the comparison needs the reference); `Nephrite_Native.md` §14.3 records it.
+- Implemented in: the commit "Nephrite, stage 4 step 2".

@@ -31,7 +31,7 @@ pub const ROM_ID: u32 = 8;
 pub const MCD_MEMORIES: [(u32, &str, usize); 4] = [(17, "PRGRAM", 0x8_0000), (18, "WORDRAM", 0x4_0000), (19, "PCMRAM", 0x1_0000), (20, "BRAM", 0x2000)];
 pub const S32X_MEMORIES: [(u32, &str, usize); 3] = [(34, "SDRAM", 0x4_0000), (35, "FRAMEBUFFER", 0x4_0000), (36, "PALETTE", 512)];
 
-/// The picture before the video processor exists: H40, 28 rows of tiles.
+/// The picture's size before the first frame: H40, 28 rows of tiles; each frame then has the VDP's width and height.
 pub const WIDTH: u32 = 320;
 pub const HEIGHT: u32 = 224;
 
@@ -139,7 +139,15 @@ impl Machine {
                 pad.buttons = self.pads[i];
                 pad.six = self.six_button[i];
             }
+            self.genesis.hw.draw = !self.skip;
             self.genesis.run_frame();
+            if !self.skip {
+                let f = &self.genesis.hw.frame;
+                self.picture.clear();
+                for y in 0..f.height {
+                    self.picture.extend_from_slice(&f.rgba[y * crate::render::MAX_W * 4..][..f.width * 4]);
+                }
+            }
         }
         self.frames += 1;
     }

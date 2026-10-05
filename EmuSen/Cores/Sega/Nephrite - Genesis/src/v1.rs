@@ -179,7 +179,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sega Genesis / Mega Drive in Rust, with the Sega CD and the 32X as its attachments, written from hardware documents and graded by test ROMs. At this stage it runs the Genesis's two processors, buses, cartridges and pads; the picture and the sound are still to come.".into()),
+            description: Some("The Sega Genesis / Mega Drive in Rust, with the Sega CD and the 32X as its attachments, written from hardware documents and graded by test ROMs. At this stage it runs the Genesis's two processors, buses, cartridges, pads and picture; the sound is still to come.".into()),
             systems: vec![
                 system("md", "Sega Genesis / Mega Drive", &MD_EXTENSIONS, vec![tmss()]),
                 system("mcd", "Sega CD / Mega-CD", &MCD_EXTENSIONS, vec![tmss(), cd_bios('U'), cd_bios('E'), cd_bios('J')]),
@@ -278,7 +278,8 @@ impl Core for Machine {
     }
 
     fn frame_info(&self) -> FrameInfo {
-        FrameInfo::rgba(WIDTH as i32, HEIGHT as i32)
+        let f = &self.genesis.hw.frame;
+        if self.picture.len() == f.width * f.height * 4 { FrameInfo::rgba(f.width as i32, f.height as i32) } else { FrameInfo::rgba(WIDTH as i32, HEIGHT as i32) }
     }
 
     fn frame(&self) -> &[u8] {

@@ -166,6 +166,18 @@ pub struct Vdp {
     /// The master clock the slots have been run to, and the earliest a transfer's next bus read may come.
     pub time: u64,
     pub fetch_at: u64,
+    /// The first four bytes of each sprite's entry, as the VDP caches them from writes into the table (Nemesis,
+    /// SpritesMind topic 1291: the cache follows writes, not the register).
+    pub sat_cache: Vec<u8>,
+    /// The sprite flags of the status register, whether the last line drawn ended in a dot overflow, and the last
+    /// vertical scroll value the renderer read.
+    pub sprite_overflow: bool,
+    pub sprite_collision: bool,
+    pub dot_overflow_line: bool,
+    pub vscroll_latch: u16,
+    /// VSRAM and the line's horizontal scroll as the line began, which its fetches read (Nephrite_Native.md §14.1).
+    pub line_vsram: Vec<u8>,
+    pub line_hscroll: (u16, u16),
 }
 
 /// The VDP's registers and latches, for the state; the memories are spaces of their own.
@@ -188,6 +200,8 @@ pub struct VdpRegs {
     pub dma: Dma,
     pub time: u64,
     pub fetch_at: u64,
+    pub sprite_flags: [bool; 3],
+    pub vscroll_latch: u16,
 }
 
 const CRAM_BITS: u16 = 0x0EEE;
@@ -213,6 +227,8 @@ impl Vdp {
             dma: self.dma,
             time: self.time,
             fetch_at: self.fetch_at,
+            sprite_flags: [self.sprite_overflow, self.sprite_collision, self.dot_overflow_line],
+            vscroll_latch: self.vscroll_latch,
         }
     }
 
@@ -234,6 +250,8 @@ impl Vdp {
         self.dma = s.dma;
         self.time = s.time;
         self.fetch_at = s.fetch_at;
+        [self.sprite_overflow, self.sprite_collision, self.dot_overflow_line] = s.sprite_flags;
+        self.vscroll_latch = s.vscroll_latch;
     }
 
     pub fn new(pal: bool) -> Vdp {
@@ -259,6 +277,13 @@ impl Vdp {
             hv_latch: None,
             time: 0,
             fetch_at: 0,
+            sat_cache: vec![0; 320],
+            sprite_overflow: false,
+            sprite_collision: false,
+            dot_overflow_line: false,
+            vscroll_latch: 0,
+            line_vsram: vec![0; 80],
+            line_hscroll: (0, 0),
         }
     }
 
@@ -379,7 +404,7 @@ impl Vdp {
                 let a = self.address as usize;
                 let next = self.next_entry();
                 match self.code & 0xF {
-                    1 => self.vram[a ^ 1] = (data >> 8) as u8,
+                    1 => self.vram_write(a ^ 1, (data >> 8) as u8),
                     3 => self.write_cram(a, next),
                     5 => self.write_vsram(a, next),
                     _ => {}
@@ -394,7 +419,7 @@ impl Vdp {
                 self.dma = Dma::Copy { source, left, byte: Some(self.vram[source as usize ^ 1]) };
             }
             Dma::Copy { source, left, byte: Some(b) } => {
-                self.vram[self.address as usize ^ 1] = b;
+                self.vram_write(self.address as usize ^ 1, b);
                 self.address = self.address.wrapping_add(self.increment());
                 let s = source.wrapping_add(1);
                 self.regs[21] = s as u8;
@@ -426,14 +451,43 @@ impl Vdp {
         }
     }
 
+    /// A byte into VRAM, the sprite cache taking it when it falls in the first half of a sprite's entry.
+    pub fn vram_write(&mut self, a: usize, v: u8) {
+        let a = a & 0xFFFF;
+        self.vram[a] = v;
+        let base = ((self.regs[5] & if self.h40() { 0x7E } else { 0x7F }) as usize) << 9;
+        let off = a.wrapping_sub(base);
+        if off < 640 && off & 4 == 0 {
+            self.sat_cache[(off >> 3) * 4 + (off & 3)] = v;
+        }
+    }
+
+    pub fn vsram_word(&self, i: usize) -> u16 {
+        Self::word(&self.vsram, 2 * i)
+    }
+
+    pub fn cram_word(cram: &[u8], i: usize) -> u16 {
+        Self::word(cram, 2 * i)
+    }
+
+    /// Rebuilds the sprite cache from VRAM, for a state that predates it or a space written from outside.
+    pub fn refresh_sat_cache(&mut self) {
+        let base = ((self.regs[5] & if self.h40() { 0x7E } else { 0x7F }) as usize) << 9;
+        for i in 0..80 {
+            for k in 0..4 {
+                self.sat_cache[i * 4 + k] = self.vram[(base + i * 8 + k) & 0xFFFF];
+            }
+        }
+    }
+
     fn write_entry(&mut self, e: Entry) {
         let a = e.address as usize;
         match e.code {
             1 => {
                 let (hi, lo) = ((e.data >> 8) as u8, e.data as u8);
                 let (x, y) = if a & 1 == 0 { (hi, lo) } else { (lo, hi) };
-                self.vram[a & 0xFFFE] = x;
-                self.vram[(a & 0xFFFE) | 1] = y;
+                self.vram_write(a & 0xFFFE, x);
+                self.vram_write((a & 0xFFFE) | 1, y);
             }
             3 => self.write_cram(a, e.data),
             5 => self.write_vsram(a, e.data),
@@ -460,8 +514,8 @@ impl Vdp {
     }
 
     /// The read the buffer waits for, made at a slot: VRAM's word, the 8-bit VRAM target's byte, or CRAM's and
-    /// VSRAM's bits with the rest from the FIFO's next entry. VSRAM past its 40 words reads the first (argued: the
-    /// test shows the scroll value the VDP last fetched, which stands in for it until the renderer fetches).
+    /// VSRAM's bits with the rest from the FIFO's next entry. VSRAM past its 40 words reads the scroll value the renderer
+    /// last fetched, as VDPFIFOTesting's fills to VSRAM show.
     fn fetch_read(&mut self) {
         let a = self.address as usize;
         let next = self.next_entry();
@@ -470,7 +524,7 @@ impl Vdp {
             0xC => (next & 0xFF00) | self.vram[a ^ 1] as u16,
             8 => (next & !CRAM_BITS) | (Self::word(&self.cram, a & 0x7E) & CRAM_BITS),
             4 => {
-                let v = Self::word(&self.vsram, if a & 0x7E < 80 { a & 0x7E } else { 0 });
+                let v = if a & 0x7E < 80 { Self::word(&self.vsram, a & 0x7E) } else { self.vscroll_latch };
                 (next & !VSRAM_BITS) | (v & VSRAM_BITS)
             }
             _ => self.read_buf,
@@ -555,7 +609,11 @@ impl Vdp {
         let vl = self.vint_line();
         let vblank = !self.display() || ((line > vl || (line == vl && offset >= t.vblank)) && !(line == self.lines() - 1 && offset >= t.vblank));
         let dma = self.dma != Dma::None;
-        (self.fifo_empty() as u16) << 9
+        let sprites = (self.sprite_overflow as u16) << 6 | (self.sprite_collision as u16) << 5;
+        self.sprite_overflow = false;
+        self.sprite_collision = false;
+        sprites
+            | (self.fifo_empty() as u16) << 9
             | (self.fifo_full() as u16) << 8
             | (self.vint_pending as u16) << 7
             | (vblank as u16) << 3

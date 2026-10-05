@@ -80,7 +80,7 @@ namespace EmuSen.WiseMan.Cores
                 var last = run.At(60)!;
                 Assert.Equal(spaces.Order(), last.Spaces.Keys.Order());
                 Assert.Equal((65536, 128, 80), (last.Spaces["wram"].Length, last.Spaces["cram"].Length, last.Spaces["vsram"].Length));
-                Assert.Equal((320, 224), (last.Picture!.Width, last.Picture.Height));
+                Assert.Equal(name.EndsWith(".md") ? (256, 224) : (320, 224), (last.Picture!.Width, last.Picture.Height));
                 Assert.All(last.Picture.Rgb, b => Assert.Equal(0, b));
                 Assert.Equal(48000, run.AudioRate);
                 Assert.True(TestRomDifferential.Steady(run, 1, 60));
@@ -100,7 +100,7 @@ namespace EmuSen.WiseMan.Cores
             var core = Assert.IsType<CoreEngine>(bundle.Core);
             Assert.Equal(("nephrite", "md", "pal"), (core.Info.Id, core.Machine.Info.System, core.Machine.Info.Region));
             core.RunFrame();
-            Assert.Equal((320, 224), (core.ScreenWidth, core.ScreenHeight));
+            Assert.Equal((256, 224), (core.ScreenWidth, core.ScreenHeight));
             Assert.InRange(core.FrameRateHz, 49.70, 49.71);
             Assert.Null(bundle.CheatAutoDetectCodec);
             Assert.Null(bundle.Notice);
@@ -171,7 +171,7 @@ namespace EmuSen.WiseMan.Cores
 
         public const string GamesVariable = "EMUSEN_NEPHRITE_GAMES";
 
-        // The 68000's RAM against Genesis Plus GX's at frames 120 and 600 over every game in a folder, a measurement written to EMUSEN_NEPHRITE_REPORT - see Nephrite_Native.md §10.
+        // The 68000's RAM and the picture against Genesis Plus GX's at frames 120 and 600 over every game in a folder, written to EMUSEN_NEPHRITE_REPORT - see Nephrite_Native.md §10, §14.
         [Fact]
         public void The_ram_against_genesis_plus_gx_at_anchors_over_the_games()
         {
@@ -184,7 +184,7 @@ namespace EmuSen.WiseMan.Cores
             }
             var nephrite = new CoreAbiTestRomEngine(LibraryPath);
             var frames = new[] { 120, 600 };
-            var lines = new List<string> { "game\tequal_f120\tequal_f600" };
+            var lines = new List<string> { "game\tequal_f120\tequal_f600\toffmap_f120\toffmap_f600" };
             var games = Directory.EnumerateFiles(folder).Where(p => Path.GetExtension(p).ToLowerInvariant() is ".bin" or ".md" or ".gen" or ".smd").Order().ToList();
             foreach (string game in games)
             {
@@ -192,7 +192,8 @@ namespace EmuSen.WiseMan.Cores
                 try
                 {
                     var diffs = TestRomDifferential.Compare(nephrite.Run(game, frames), gpgx.Run(game, frames), new Dictionary<string, string> { ["wram"] = "ram" });
-                    row = string.Join("\t", frames.Select(f => diffs.FirstOrDefault(d => d.Frame == f) is { } d && d.SpaceBytes.TryGetValue("wram", out int n) ? (65536 - n).ToString() : "-"));
+                    row = string.Join("\t", frames.Select(f => diffs.FirstOrDefault(d => d.Frame == f) is { } d && d.SpaceBytes.TryGetValue("wram", out int n) ? (65536 - n).ToString() : "-"))
+                        + "\t" + string.Join("\t", frames.Select(f => diffs.FirstOrDefault(d => d.Frame == f) is { PixelsCompared: > 0 } d ? d.PixelsOffMap.ToString() : "-"));
                 }
                 catch (Exception e) when (e is CoreRefusedException or InvalidOperationException)
                 {

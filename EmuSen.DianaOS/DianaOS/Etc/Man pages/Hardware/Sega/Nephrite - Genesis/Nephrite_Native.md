@@ -750,3 +750,103 @@ consoles; the rules below are the ones its tests demonstrate, each traced to the
 - **PAL's V counter**, on the board or by those ROMs.
 - **FIFO Wait States' tenth part** (§13.3).
 - **The planes, the window, scrolling and sprites** (the next step), which also give VSRAM's latch its source.
+
+## 14. Stage 4, step 2: planes, the window, sprites, priority and shadow/highlight; the picture (2026-10-05)
+
+### 14.1 What it built
+
+`render.rs` draws mode 5 a line at a time into the frame the v1 video path hands out, 256 or 320 pixels wide by the
+active lines (224, or 240 in PAL's V30), from MacDonald's §12-§17 and the findings below.
+
+- **When a line is drawn.** At the end of its line, after the line's writes have landed, which is a scanline
+  renderer's loss: a change made while the line is being fetched takes effect for the whole line. The exception is the
+  scroll: VSRAM and the line's horizontal scroll entries are taken as the line begins, since the fetches read them
+  before a line interrupt's handler can write them. OutRun shows it: its line interrupt writes VSRAM every line, and
+  with the values taken at the line's end its sky showed the road's pattern; taken at the start, its title is drawn as
+  the reference draws it (read by eye; the frames compared are a few apart). The slot-stamped renderer of the plan's §5.2
+  is a later step.
+- **A frame ends where its last line does.** A transfer from the 68000's bus holds the 68000 from the write that
+  starts it, and the hold now yields at the frame's end and goes on before the next instruction, where before a long
+  transfer could carry the frame's end into the middle of the next frame. Phantasy Star IV found it: its intro's
+  transfer spanned the frame's end, so the picture of a run that loaded a state differed from the run that did not
+  (the kit's C7 and C8). The resumption is also at the transfer's last bus read, not the next slot, which is what
+  FIFO Wait States' tenth part needed (§14.3). A line narrower than the frame leaves black, not an older frame, and
+  the open-bus word the 68000 last fetched is now in the state.
+- **Planes A and B**: the name tables and size of register 16 (the prohibited setting read as 32 cells, the pair held
+  to 4,096 cells, and a width of `10` showing the first row on every line, MacDonald §17); horizontal scrolling full,
+  per cell or per line from the table of register 13 (mode `01` as MacDonald's pseudocode has it, the first eight
+  lines'); vertical scrolling full or per 2-cell column from VSRAM, the column the one the VDP fetched the pixel in
+  given the fine horizontal scroll, the partial column at the left reading column 0 (argued).
+- **The window** replaces plane A in its vertical range (whole lines) or else its horizontal range, unscrolled, 32 or
+  64 cells wide. MacDonald's window bug (the column after a left window fetched from the next column when the scroll's
+  low bits are set) is not modelled.
+- **Sprites**: the link list from entry 0, read from a cache of each entry's first four bytes that follows writes into
+  the table and not register 5 (Nemesis, topic 1291; Castlevania: Bloodlines relies on it); at most 64 or 80 entries
+  a frame, a link beyond them ending the list, 16 or 20 sprites and 256 or 320 dots a line, a dot overflow cutting a
+  sprite partway; masking per Nemesis's measurements (topic 541): a sprite at X 0 stops the pixels of every later
+  sprite on its line once a sprite not at X 0 has preceded it on the line, or when the line before ended in a dot
+  overflow; a mask counts its dots and the parsing goes on behind it. The overflow and collision flags of the status
+  register are set by this pass and cleared by a status read; the pass runs on every line even when a frame is not
+  drawn, since its flags and the dot overflow it carries to the next line are the VDP's state.
+- **Priority**: high sprites, high A (or window), high B, low sprites, low A, low B, the backdrop (register 7); the
+  first sprite pixel that is opaque wins among sprites, and a second opaque pixel under it sets the collision flag.
+  Register 0's bit 5 blanks the left eight pixels to the backdrop.
+- **Shadow/highlight** (register 12, bit 3), as plutiedev states it (D-3): a pixel is shadowed unless plane A, plane
+  B or an opaque sprite pixel there has priority; palette 3's colour 14 on top brightens what lies under it and colour
+  15 darkens it, both drawing that pixel instead, an operator counting as transparent for priority; brighter and
+  darker give normal, and a sprite's colour 14 is never shadowed.
+- **Colour**: TmEE's measured output levels (topic 2188), one 15-step ladder per channel: shadow takes steps 0-7,
+  normal the even steps, highlight steps 7-14 (0, 29, 52, 70, 87, 101, 116, 130, 144, 158, 172, 187, 206, 228, 255).
+  Register 0's bit 2, the eight-colour palette mode, is not modelled.
+- **VSRAM past its 40 words** now reads the vertical scroll the renderer last fetched: plane B's at the end of a drawn
+  line, or plane B's first entry on a line not drawn, which keeps VDPFIFOTesting at 121 of 122.
+- **The frame's size** follows the VDP's width and height, which the v1 frame information reports; before a game sets
+  register 12 the VDP is in H32, so a synthetic cartridge's first frame is 256 pixels wide. The state gains the sprite
+  cache, the sprite flags and the latch (version 4).
+- **Tools**: `examples/dump.rs` writes the picture as RGBA beside the memories and takes `NEPHRITE_PRESS` for the pad;
+  `examples/regs.rs` prints the VDP's registers, scroll values and the processors' program counters at a frame.
+
+### 14.2 Not yet
+
+Interlace and its double resolution, mode 4, the CRAM dots, mid-line changes below the line (the slot-stamped
+renderer), the display enable taking effect at the pixel, the sprite list parsed on the line before it is shown, and
+the eight-colour palette mode: the steps after this one.
+
+### 14.3 Measured (2026-10-05)
+
+- **Nemesis's sprite masking and overflow test**, both widths (C switches them; the program reads its "Start" with TH
+  an input, which a pad answers with C): all nine verdicts green, as on his console's photographs of H32 and H40.
+  Pinned by `programs.rs`'s `the_sprite_masking_test_passes_in_both_widths`.
+- **The 240p suite** (1.32) against Genesis Plus GX, the same presses given to both (the reference's A is its
+  RetroPad's Y), the picture compared up to a one-to-one colour map: the main menu and the ten screens of "Color &
+  Black Levels" (PLUGE's help, the colour bars, EBU, SMPTE, referenced bars, colour bleed, grey ramp, white and RGB,
+  100 IRE, sharpness) match exactly but for PLUGE's help, whose prompt names Start where the reference's six-button
+  pad has it name Z; the four "Geometry" entries' display-mode dialogs match.
+- **The shadow/highlight programs** of Genesis Plus GX's `md_test` (D-3): `SHLTEST`, `SHLTEST2` and `stetest` match
+  exactly; `STETEST2` matches but for pixels the measured ladder puts on one level.
+- **The corpus at anchors**, the picture now beside the RAM (`NephriteTests`' report has the pixels off the colour
+  map at frames 120 and 600), 944 games: at frame 120, 717 pictures match Genesis Plus GX's exactly up to the map and
+  862 are within 1,000 pixels; at frame 600, 626 and 728, the 90th percentile 8,129 pixels of 71,680. The RAM is as
+  step 1 left it (frame 600 median 65,506 equal bytes, 18 below 60,000); the transfer's hold of §14.1 moved 177
+  games by a few bytes either way at frame 600 (84 up, 93 down).
+- **The games that fell in step 1**: X-Men 2 runs about three frames ahead of the reference through its intro (its
+  RAM at the reference's frame 140 matches Nephrite's 137 in 65,506 bytes) and from frame 150 its state, a buffer
+  being filled and its falling snow, no longer matches at any offset; Pete Sampras Tennis 96 matches to frame 520 and
+  then shows another player's card in its attract sequence. Both pictures are drawn as their RAM says; neither is the
+  renderer's. Where the two machines part is the 68000's and the sound processor's timing, D-2's class, not yet
+  traced to an instruction.
+- **Pictures examined among the largest differences**: International Rugby matches exactly when shifted six pixels
+  each way (its intro slides everything, sprites included, and the two machines are at different points of it);
+  16 Tiles Mahjong, Ecco, Raiden Trad and Desert Strike differ by animation phase; Super Kick Off and Rampart stay
+  black in Nephrite while their RAM parts from the reference's early (Super Kick Off at frame 150, where its sound
+  routine stores a request the reference does not make), so not the renderer; OutRun is drawn with its lower part
+  black in its lower part: its sky showed the road's pattern until the scroll latch of §14.1, and its title is right
+  after it, but at frame 600 Nephrite has already turned the display off below line 73 for the next screen, which the
+  reference reaches a few frames later.
+- **The cost**: 600 frames of Sonic the Hedgehog in 0.63 s on the desktop, Sonic 2 0.58, Thunder Force IV 0.64,
+  Streets of Rage 2 0.52: 0.87-1.07 ms a frame with the picture (0.4 without), against the plan's 1.5 ms.
+- **VDPFIFOTesting: 122 of 122**, the tenth part of FIFO Wait States now among them (§14.1: the 68000 resumes at a
+  transfer's last read, when the FIFO is still full). Pinned by `vdpfifotesting_passes_every_test`.
+- **The crate's tests**: 37 pass, the state's layout re-pinned (version 4: the sprite cache, the sprite flags, the
+  VSRAM latch, the line's scroll values and the open-bus word). The conformance kit, `--frames 600`, passes C1-C15 on
+  the 240p suite, Sonic the Hedgehog, Phantasy Star IV, OutRun, Castlevania: Bloodlines and the sprite masking test.

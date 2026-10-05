@@ -833,7 +833,7 @@ their data.
 - Conclusion: the rule above; measured on the four ROMs.
 - Pinned by: `spc_smp`'s "random timer0 enable", and a unit test in `apu/smp.rs`.
 
-### D-26. S-SMP: what blargg's `test_timer_stop2` stops, which the documents' TEST bits do not explain
+### D-26. S-SMP: ~~what blargg's `test_timer_stop2` stops, which the documents' TEST bits do not explain~~ TEST's timer enable gates each first stage's level, high over the second half of its period, and a second stage counts the gated level's falling edges
 - Opened: 2026-10-02, at stage 4 step 1, by blargg 2010 `test_timer_stop2`: VenusRT prints 00 and fails, Mesen
   prints 04 and passes. `test_timer_stop` passes on both. Neither has a source.
 - Documents read: fullsnes, "00F0h - TEST": bit 0 "Timer-Enable (0=Normal, 1=Timers don't work)", bit 3
@@ -891,6 +891,54 @@ their data.
   To be read for that only, in SNES_MiSTer `rtl/SMP.vhd`: the lines of the timers' first-stage counters and the
   signals they drive, the lines that increment each timer's second stage and the condition on them, and the lines
   that compute the timers' enable from TEST. Nothing of the SPC700 core, the DSP, the ports or the boot ROM.
+- Read 2026-10-05 as logged: `SMP.vhd` lines 210-216 and 262-276 (the process head and TEST's write), 316-355 (both
+  first stages and the three second stages), and the grep lines naming TIMER, TEST, TM_ and DIV (48, 56-63, 217-253,
+  272-301, 507-516). What they say, in prose:
+  - The first stage is an accumulator stepped once per SPC700 cycle; its output is a single-cycle event when it
+    reaches the period's end, not a level over part of the period.
+  - A second stage counts on that event when CONTROL's bit, TEST bit 3 and not TEST bit 0 all hold at that moment.
+    Nothing counts on a change of TEST.
+  - So in the referee, toggling TEST can only drop a tick, never add one. Run on this ROM's trace it makes one stage
+    step at most and prints 00, as VenusRT does. **The referee does not reproduce the console's 04.** Its timers are
+    written as clock enables, a simplification of whatever the S-SMP's silicon does with a gated clock. On this point
+    its agreement is not evidence either way.
+- **Measured 2026-10-05, a model with one structural choice and one parameter, bounded by the two ROMs.** The
+  structure: the first stage's output is a level, high over the last part of its period and falling where the tick is
+  now; TEST's enable (bit 3 set and bit 0 clear) gates that level; the second stage counts on each falling edge of the
+  gated level. With TEST constant this is today's tick, unchanged. Stopping the timers while the level is high makes
+  an edge, and so a count. The parameter is the level's length. It was swept in a trial build, as the first stage's
+  threshold out of its 384 (and an eighth of it for timer 2's 48), on both ROMs:
+
+  | Threshold (high from here to 384) | `test_timer_stop2` (console 04) | `test_timer_stop` (console 00) |
+  |---|---|---|
+  | 8 to 64 | 07 | 0A |
+  | 96 | 06 | 0A |
+  | 128 to 168 | 05 | 0A |
+  | 176 | 04 | 0A |
+  | **184 to 216** | **04** | **00** |
+  | 224 to 256 | 03 | 00 |
+  | 288 to 376 | 02 to 00 | 00 |
+
+  The two console results together hold the level's length to between 168 and 200 of 384, 44% to 52% of the period.
+  Half the period, the first stage's top half as a binary divider's last stage would give, lies inside the band. The
+  model was formed from VenusRT's trace of `test_timer_stop2` before the trial was built. Eight edges were counted by
+  hand from the 14 stops at 8-cycle spacing against a level of 64 cycles; the trial then printed 04.
+- **What this does not show.** The structure is argued: a gated clock is the plainest mechanism that adds counts on a
+  toggle, and no document or referee states it. The rising-edge variant of 2026-10-04 is the same structure counted
+  on the other edge, and it could not keep `test_timer_stop` at 00. With the falling edge, half the period is a
+  member chosen before measurement, and two console results bound the band it sits in, so it is not fitted to one
+  printed number as the 2026-10-04 paragraph warned against. A console ROM sweeping the toggle's phase across the
+  period would measure the level's length directly; none is to hand. Whether CONTROL's per-timer bit gates the same
+  level is untested: no ROM here toggles CONTROL against a high level. CONTROL is left as D-25 has it, an enable read
+  at the edge.
+- Conclusion, 2026-10-05: each first stage drives a level that is high over the second half of its period and falls
+  at the tick. TEST's enable (bit 3 set, bit 0 clear) gates the level, and a second stage whose CONTROL bit is set
+  counts on each falling edge of the gated level. Measured on `test_timer_stop2` and `test_timer_stop`, which bound
+  the level to 44-52% of the period. The structure and the half-period member are argued.
+- Pinned by: `test_timer_stop2`, `test_timer_stop`, and `stopping_the_timers_while_the_first_stage_is_high_counts_once`
+  in `apu/smp.rs`.
+- Implemented in: the commit after this entry's, "VenusRT's S-SMP timers: TEST gates the first stage's level, and the
+  second stage counts its falling edges (D-26)".
 ### D-27. S-SMP: TEST bits 4 to 7 add waitstates to the SPC700's cycles
 - Opened: 2026-10-02, at stage 4 step 1, by blargg 2010 `test_timer_speed` and `test_timer_speed2`: they write TEST
   with bits 4 to 7 set and count timer ticks against a loop; VenusRT ignores those bits and prints 2731 for every

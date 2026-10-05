@@ -700,10 +700,10 @@ impl Dsp {
         let b = &self.fir[side];
         let mut sum = 0i32;
         for k in 0..7 {
-            sum += (b[(self.fir_pos as usize + 1 + k) & 7] as i32 * self.t_ffc[k] as i32) >> 6;
+            sum += ((b[(self.fir_pos as usize + 1 + k) & 7] as i32 * self.t_ffc[k] as i32) >> 6) as i16 as i32;
         }
         sum = sum as i16 as i32;
-        sum = clamp16(sum + ((b[self.fir_pos as usize] as i32 * self.t_ffc[7] as i32) >> 6));
+        sum = clamp16(sum + (((b[self.fir_pos as usize] as i32 * self.t_ffc[7] as i32) >> 6) as i16 as i32));
         sum & !1
     }
 
@@ -862,5 +862,14 @@ mod tests {
         assert!(out.iter().any(|&s| s != 0), "silent");
         assert_eq!(d.read(reg::ENDX as u8) & 1, 1);
         assert_eq!(d.read(0x08), 0x7F);
+    }
+
+    // D-43: with every coefficient -128, eight taps of -16384 each give 8000h, which wraps; their sum clamps at -32768.
+    #[test]
+    fn a_fir_tap_at_minus_128_wraps_in_16_bits() {
+        let mut d = Dsp::default();
+        d.fir = [[-16384; 8], [-16383; 8]];
+        d.t_ffc = [-128; 8];
+        assert_eq!((d.fir(0), d.fir(1)), (-32768, 32766));
     }
 }

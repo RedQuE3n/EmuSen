@@ -82,7 +82,7 @@ impl Smp {
             test: 0x0A,
             control: 0xB0,
             dsp_address: 0,
-            dsp: Dsp { step: 1, ..Dsp::default() },
+            dsp: Dsp { step: 1, every_other: true, ..Dsp::default() },
             out: Vec::new(),
             to_apu: [0; 4],
             to_cpu: [0; 4],
@@ -499,6 +499,25 @@ pub(crate) mod tests {
         }
         s.write(0xF1, 0x84);
         assert_eq!(s.timers[2].out, 1);
+    }
+
+    // D-42: at power-on the KON poll, cycle 30 of every other sample, falls 62 and 126 cycles after each T0/T1 tick.
+    #[test]
+    fn the_kon_poll_falls_62_and_126_cycles_after_the_timers_tick() {
+        let mut s = Smp::new(false);
+        use spc700::Bus;
+        let (mut tick, mut seen) = (None, std::collections::BTreeSet::new());
+        for _ in 0..4096 {
+            let (before, step) = (s.prescale[0], s.dsp.step);
+            s.idle();
+            if s.prescale[0] < before {
+                tick = Some(s.cycles);
+            }
+            if let (30, true, Some(t)) = (step, s.dsp.every_other, tick) {
+                seen.insert((s.cycles - t) % 128);
+            }
+        }
+        assert_eq!(seen.into_iter().collect::<Vec<_>>(), vec![62, 126]);
     }
 
     // D-26: TEST bit 0 set while timer 2's first stage is high counts once; set while it is low, or held, counts nothing.

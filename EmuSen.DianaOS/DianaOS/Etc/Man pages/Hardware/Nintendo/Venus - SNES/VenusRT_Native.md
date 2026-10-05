@@ -6611,3 +6611,81 @@ No cost was measured: none of the 17 games' states changes, so none executes WDM
   cases. D-41's exceptions differ from D-2's in kind. D-2's pins cannot be observed on the SNES's bus. WDM's second
   cycle can: its timing is what `test_hdmatiming`'s console table measures.
 - **G3:** `test_hello` is closer to Mesen's picture, still one of §41.19's two unlogged rows.
+
+## 62. Blocker 5: `spc_dsp6`, singly and in order (D-42, D-43, 2026-10-05)
+
+§41.17 left `spc_dsp6` failing in order at "Random/brr while playing", with five tests hanging singly. The single-test
+copies of §23.1 were found in scratch, so the splitter was not rebuilt. Each copy was graded as §23.1 grades it,
+after 600 frames and again after 4,000 for those still running.
+
+### 62.1 The singles, before
+
+| | VenusRT's program | The tester's image | Mesen |
+|---|---|---|---|
+| 600 frames | 105 pass, 6 running | 106 pass, 5 running | 3 of the 6 also still running: "Echo/edl lengths", "Random/echo data", "Random/echo fir" |
+| 4,000 frames | "Random/brr while playing", "Random/echo data" and "Random/envelope" fail with a checksum; "Order/voice 0 noise" hangs | the same three fail | all pass |
+
+Two of §41.17's "hangs" were only slow, as in Mesen. What was left was three checksum failures and one hang.
+
+### 62.2 How the checksums were located
+
+The random tests print nothing but a checksum, so each was disassembled with VenusRT's own disassembler and copied in
+scratch with its own SPC700 program patched. Each copy runs a shorter test and always prints its checksum, so that
+VenusRT and Mesen could be compared at any length. This is a test ROM's own code, changed and run on both engines as
+black boxes.
+
+- **"Random/envelope"**, cut to one round of K iterations:
+  - Equal checksums for every K up to 99, and the whole APU RAM equal at K = 99.
+  - At K = 100, the round's first KON, the echo buffer shows VenusRT keying voice 0 on one sample later than Mesen.
+  - VenusRT's KON poll fell 30 and 94 cycles after the timers' T0 and T1 tick. anomie's S-DSP document gives two
+    possible phases and calls 62 and 126 the more frequent at power-on. VenusRT's poll was at the other one.
+  - Built as D-42.
+- **"Random/echo data"**, cut to n rounds:
+  - The first round is equal and the second is not.
+  - The difference was traced to the 4-byte echo loop that EDL 0 leaves between the rounds. There, with every FIR
+    coefficient at -128, Mesen's right sample holds at $8000 and VenusRT's cannot, because VenusRT summed the taps'
+    products in 32 bits.
+  - The products wrapped to 16 bits, the arithmetic both documents describe, give the console's checksum. Built as
+    D-43.
+
+### 62.3 The singles and the in-order run, after (measured 2026-10-05)
+
+| | VenusRT's program | The tester's image |
+|---|---|---|
+| Singly, by frame 4,000 | **111 of 111 pass** | **110 pass**; "Order/voice 0 noise" hangs |
+| In order, at frame 18,000 | "PASSED TESTS" | "PASSED TESTS" |
+| The corpus runner's verdict (backdrop) | **Passed** | **Passed** |
+
+**"Order/voice 0 noise" singly depends on the program's phase.** Swept over 35 S-CPU power-on positions (0 to 1,360
+clocks in steps of 40), it passed at 31 (image) and 25 (VenusRT's program) before D-42, and at 4 and 10 after. The
+counts are complementary, so the test does not fix its own phase against the KON poll. The other order of D-30's
+noise step fails it, and "noise rate flg.1F", at every position. A third trial, the KON poll after voice 0's step in
+cycle 30, failed 39 and hung 9 of the 111 singles, and was rejected. The single test is recorded as open. The whole ROM
+passes it in order, and that is what G1 grades.
+
+### 62.4 Checks (measured 2026-10-05)
+
+| Check | Result |
+|---|---|
+| Pictures, every frame to 3,600, the 304 corpus images and 17 games | only `spc_dsp6` changes |
+| State hashes | change everywhere, as the phase is part of the DSP's state from power-on; the pictures above are the comparison |
+| The corpus runner (C# Venus beside it, without Mesen, graded against the baseline's Mesen verdicts) | **117 of Mesen's 117** with the tester's images, **116** without, the one missing `spc_smp`; `spc_dsp6` is the one verdict that changed in either run; every C# Venus pass passes |
+| The crate | 141 of 141, the two new tests (`the_kon_poll_falls_62_and_126_cycles_after_the_timers_tick`, `a_fir_tap_at_minus_128_wraps_in_16_bits`) shown failing on the previous rules |
+| WiseMan, the VenusRt, CoreAbi, Snes, CoreDebug and Conform filters, the goldens against Mesen included | 121 of 121 |
+| `frame_cost`, best of three over 1,200 frames, before and after interleaved three times under the timing lock (load 1.1-2.1) | Super Mario World 1.554-1.567 against 1.556-1.567 ms, Super Mario RPG 2.113-2.119 against 2.104-2.110, Yoshi's Island 1.398-1.404 against 1.397-1.409, Donkey Kong Country 1.537-1.545 against 1.525-1.539: no cost |
+
+### 62.5 The gates after blocker 5
+
+- **G1 is met** under §41.3's reading for the firmware policy:
+  - with the tester's images, VenusRT passes all 117 of Mesen's self-grading passes and every C# Venus pass;
+  - without images it passes 116, and the one missing is `spc_smp`, the ROM that list names because it reads the
+    console's boot ROM.
+
+  No exception rests on a ruling against Mesen.
+- **Still open, outside G1:** "Order/voice 0 noise" run singly with the tester's image (§62.3). The single copies are a
+  diagnostic, not a gate ROM.
+- **G2, G3, G4, G6, G7, G8:** as after §61. G2's named exceptions are unchanged (D-42 and D-43 touch the S-DSP, which the
+  single-step suites do not reach).
+- **G5:** the goldens keep their 36 outcomes and hashes. Yoshi's Island's stork and NHL '94's puck are the remaining
+  blocker, §41.10's 10.
+

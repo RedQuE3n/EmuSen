@@ -1057,6 +1057,9 @@ their data.
 - Conclusion: both rules as just stated; measured 2026-10-02 on the seven tests, with none of the tests that passed
   before failing because of them.
 - Pinned by: the seven tests named above.
+- **Checked again 2026-10-05, under D-42's KON poll parity.** With the noise moved after voice 0's step instead, both
+  noise tests fail singly at every one of 35 S-CPU power-on positions across a line (0 to 1,360 clocks in steps of
+  40), with and without the tester's boot image. The order above stands.
 
 ### D-31. S-SMP: AUXIO4 and AUXIO5 ($F8, $F9) are latches of their own, not the RAM beneath them
 - Opened: 2026-10-02, after stage 4's close, by `spc_dsp6`'s "Misc/$F0-$FF are not ram", the test the in-order run
@@ -1519,3 +1522,72 @@ their data.
 - Pinned by: `test_hdmatiming`; `the_cpu_through_the_whole_suite`'s D-41 files; `wdm_fetches_its_second_byte` in
   `cpu/control.rs`.
 - Implemented in: the commit after this entry's, "VenusRT's WDM fetches its second byte (D-41)".
+
+### D-42. S-DSP: at power-on, the KON and KOFF poll falls 62 and 126 SPC700 cycles after the timers' T0 and T1 tick
+- Opened: 2026-10-05, by `spc_dsp6`'s "Random/envelope" and "Random/brr while playing", run singly with the tester's
+  boot image and without: each prints a checksum where Mesen prints none and passes, by frame 4,000.
+- How it was located. "Random/envelope" was disassembled with VenusRT's own disassembler. Each iteration of its
+  loop writes voice 0's ADSR1, ADSR2 and GAIN, and KON with probability 7 in 256, from a 32-bit LFSR, then folds ENVX
+  into a CRC. Four rounds run, each until an echo write overwrites $8800. A copy of the ROM, built in scratch, runs
+  one round of exactly K iterations and always prints its checksum. Run on both engines:
+  - Every K up to 99 gives equal checksums, and at K = 99 the whole APU RAM is equal at frame 300.
+  - At K = 100 they differ. Iteration 100 is the round's first KON. In the echo buffer, which takes voice 0's
+    output, VenusRT's key-on silence covers samples 499-503 and Mesen's 498-502. VenusRT keys the voice on one
+    sample later.
+  - VenusRT had written that KON at DSP cycle 22 of a sample whose next cycle 30 was not a poll.
+- Documents read: anomie's S-DSP document, the sample loop ("** These two steps (KON and KOFF related) are performed
+  every other sample") and the paragraph after it: "Unless the SPC700 TEST register is frobbed, it is always the
+  case that the KON/KOFF poll happens either 30 & 94 or 62 & 126 cycles after the SPC700 timer T0 and T1 tick. On
+  power on, 62 & 126 seems to be chosen more frequently but 30 & 94 can still be chosen sometimes. On reset, either
+  can be chosen." The same loop puts the T0 and T1 tick at cycle 0 every four samples, which VenusRT already does
+  (measured: every tick in cycle 0, T2's in cycles 0 and 16).
+- Measured: VenusRT's poll fell 30 and 94 cycles after each T0/T1 tick, the less frequent power-on choice. With the
+  DSP's every-other-sample phase started the other way, it falls 62 and 126 cycles after, and:
+  - "Random/envelope" and "Random/brr while playing" pass singly, with and without the boot image.
+  - The K = 100 copy prints Mesen's checksum.
+  - The other 105 tests that passed singly with the boot image still pass.
+  - "Order/voice 0 noise" changes (below).
+- **"Order/voice 0 noise" singly depends on the program's phase, under either choice.** Swept over 35 S-CPU
+  power-on positions, it passed at 31 (boot image) and 25 (VenusRT's program) before, and at 4 and 10 after:
+  complementary counts, as a test that does not fix its own parity against the poll would give. Mesen passes it at
+  its one position. Run in order, the whole ROM passes it under the new choice. It is recorded as open, with no rule
+  inferred from a single position.
+- Referee: not read. Mesen's source: none.
+- Conclusion, 2026-10-05: at power-on and at the console's reset, the KON and KOFF poll falls 62 and 126 cycles after
+  the timers' T0 and T1 tick. That is anomie's more frequent power-on choice, and it is the one these two console
+  checksums require. The reset's random choice is not modelled. Measured on the two tests; the choice between
+  anomie's two observed states is the documents', and the console's checksums pick the member.
+- Pinned by: "Random/envelope" and "Random/brr while playing" singly and the whole of `spc_dsp6` in order;
+  `the_kon_poll_falls_62_and_126_cycles_after_the_timers_tick` in `apu/smp.rs`.
+- Implemented in: the commit after this entry's, "VenusRT's S-DSP: the KON poll's power-on phase, and the FIR's taps in
+  16 bits (D-42, D-43)".
+
+### D-43. S-DSP: each FIR tap's product, S×FFC>>6, is a 16-bit value and wraps
+- Opened: 2026-10-05, by `spc_dsp6`'s "Random/echo data", run singly: a checksum where Mesen passes.
+- How it was located. The test fills $8800-$FFFF with random words and sets every FFCx and EFB to $80 (-128). It then
+  runs the echo once over a 30 KB buffer (EDL $0F, then 0), four rounds in all. A scratch copy running only the
+  first n rounds, always printing its checksum, gives equal checksums for one round and different ones for two. APU
+  RAM after two rounds differs only in the right channel's first eight echo samples, by 2 to 37,000. Their FIR
+  history comes from the 4-byte echo loop that EDL 0 leaves at $8800-$8803 between the rounds. In that loop, from
+  frame 115 of round 1, VenusRT's right sample stays at $8002 (-32766) and Mesen's at $8000 (-32768); the left
+  sample is $8002 in both.
+- Argued from the arithmetic: with every coefficient -128 and the history all -16384 (the sample $8000 shifted), each
+  tap's product is 2,097,152 >> 6 = 32,768. Summed in 32 bits per tap, then wrapped as anomie's (int16) of seven, it
+  is -32,768, and the clamped eighth gives 0, so $8000 cannot repeat. With each tap's product wrapped to 16 bits
+  first (-32,768), the seven wrap to -32,768, the eighth clamps the sum at -32,768, and EFB's product
+  (-32,768 × -128 >> 7, wrapped) feeds back -32,768: $8000 is a fixed point, as the console's checksum needs.
+- Documents read: anomie's S-DSP document, FFCx ("The internal calculations, however, are done in 16 bits with the
+  final output of the FIR being a 16-bit value", and its formula); fullsnes, FIRx ("Value -128 should not be used for
+  any of the FIRx registers (to avoid multiply overflows)") and the echo notes ("Setting FIRx, EFB, or EVOLx to -128
+  does probably cause multiply overflows?"). Both describe 16-bit products. Neither says what an overflowing one
+  gives.
+- Test ROM, measured 2026-10-05: with each tap's product wrapped to 16 bits, all four rounds' checksums equal
+  Mesen's, and "Random/echo data" passes singly with and without the boot image. Every other single test keeps its
+  result.
+- Referee: not read. Mesen's source: none.
+- Conclusion, 2026-10-05: as the title. Measured on the one test that drives the products past 16 bits; EFB's and
+  EVOL's products already wrapped in VenusRT.
+- Pinned by: "Random/echo data" singly and `spc_dsp6` in order; `a_fir_tap_at_minus_128_wraps_in_16_bits` in
+  `apu/dsp.rs`.
+- Implemented in: the commit after this entry's (D-42's).
+

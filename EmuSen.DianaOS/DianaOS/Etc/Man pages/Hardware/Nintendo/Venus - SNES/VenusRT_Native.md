@@ -6689,3 +6689,85 @@ passes it in order, and that is what G1 grades.
 - **G5:** the goldens keep their 36 outcomes and hashes. Yoshi's Island's stork and NHL '94's puck are the remaining
   blocker, §41.10's 10.
 
+
+## 63. Blocker 10, G5's two unnamed anchors, G3's four unnamed pictures, and the gates for the default flip (2026-10-05)
+
+### 63.1 NHL '94 at 2200: an idle-loop RNG (D-44)
+
+The method was black-box comparison: both engines' WRAM after every frame, Mesen's through the probe every 5 frames
+and every frame around the parting, and both CPU traces to frame 1,513.
+- **To frame 1510, WRAM agrees to within about 50 bytes**, at a lag of one frame.
+- **From frame 182 the game steps an RNG at $0793-$0795 about 420 times a frame**, in its wait for the next frame. Its
+  value counts the CPU's spare cycles. Mesen's value at frame 185 lies on VenusRT's sequence (reached at VenusRT's
+  184): the same generator, a different number of steps along.
+- The traces agree instruction for instruction apart from where wait loops end, where IRQs land and which instruction
+  the 40-clock DRAM refresh falls in.
+- **From 1512 the credits' state parts**, and the puck's tile data never again equals Mesen's.
+- **The puck at 2200 depends on VenusRT's own power-on position**: two different pictures across ten positions,
+  neither Mesen's.
+
+No emulation rule is implicated. The anchor is put for decision (§63.4).
+
+### 63.2 Yoshi's Island at 1800: the boot program's upload, and one lag frame (D-35)
+
+- **Seven of the nine frames of lag come from VenusRT's own boot program.** WRAM equals Mesen's to within about 20
+  bytes at a lag of 7 from frame 100 and 9 from 300 with D-38's program, and at 0, then 2, with the tester's image.
+  D-38's program uploads this game's sound data more slowly than the console's program. The protocol is the same,
+  so this is a measured cost of the open program, not a rule.
+- **The other two are a main-loop lag frame.** The stork scene's scroll counter ($39) steps every frame from 1226 to
+  1353 in Mesen. In VenusRT it misses one frame at 1340 (image) and catches up.
+- GSU RAM's object table and OAM buffer differ from 1225 at every lag. The picture at 1800 is the same at ten power-on
+  positions, so this one is deterministic.
+- **Argued:** a frame whose GSU work overruns on VenusRT and not on Mesen, inside D-35's unmodelled overlaps. No
+  console measure of the GSU's timing exists, and the costs built are the referee's.
+
+### 63.3 G3's four unnamed pictures (D-45 to D-48)
+
+The corpus runner was run again with Mesen and VenusRT on the tester's images. Its baseline assertion passed, so C#
+Venus's and Mesen's cells are unchanged. The G3 set is still 151 ROMs, **125** of them with VRAM and picture equal to
+Mesen's. The 26 that differ are now all named:
+
+| Cause | ROMs |
+|---|---|
+| Plan §5.1's INIDISP losses, `test_noise` (§41.16) and now `test_hello` (D-45: every brightness edge 2 dots early) | 15 |
+| Counter printers under D-6 (Sour's two `timing_test`s, `reset-position-test`, `blip-autojoy-timing-test`) | 4 |
+| D-27's ungraded printers (`test_speed`, `test_timer_speed3`) | 2 |
+| D-16, `ppubusact` | 1 |
+| The Cx4, outside parity | 1 |
+| D-46, `HblankEmuTest`: VenusRT shows what the ROM's author describes for the console | 1 |
+| D-47, `hvdma`: no oracle at the resolution of the difference | 1 |
+| D-48, `wrmpyb-in-flight`: no oracle | 1 |
+
+### 63.4 Put to the tester
+
+1. **NHL '94's anchor at 2200** (D-44). Options:
+   - (a) accept it as dispute-logged drift, as blocker 12 accepted Super Mario RPG's attract lead;
+   - (b) replace it with an anchor on a scene that does not read the RNG. The tricky-list entry, the mode 7 intro at
+     1500, is already equal.
+
+   Recommended: (a). The scene is a function of the power-on position, which the console does not fix either.
+2. **Yoshi's Island's stork at 1800** (D-35). Options:
+   - (a) accept it as dispute-logged GSU drift;
+   - (b) take on D-35's unmodelled GSU overlaps (opcode fetch beside the instruction, port interleaving, STOP's wait),
+     with Mesen as the only comparison and no console measure.
+
+   Recommended: (a), with (b) left to a GSU step after the flip.
+3. **The open boot program's upload speed** (§63.2), measured here for the first time. It delays Yoshi's Island's intro
+   by about 7 frames against the console's program. No gate counts it, since every golden falls within its window.
+   It is recorded as a cost of the open program beside `spc_smp` (§41.3).
+
+### 63.5 The gates for the default flip
+
+| Gate | State | What it rests on |
+|---|---|---|
+| G1, test ROMs | **met** | 117 of Mesen's 117 self-grading passes with the tester's images and 116 without, the one missing `spc_smp`, which §41.3's reading of the firmware policy excepts; every C# Venus pass (§62.5) |
+| G2, single-step | **met with named exceptions** | 65816 5,059,735 of 5,120,000, the failures exactly D-1, D-2, D-3 and D-41's; SPC700 256,000 of 256,000 (§61.3) |
+| G3, pictures | **met with named exceptions** | 125 of 151 equal to Mesen's; the 26 others named (§63.3) |
+| G4, frontend | **met**, with the debugger's console views a recorded loss accepted by the tester (§41.20) | §41.7, §41.12 |
+| G5, goldens | **met if both items of §63.4 are accepted**: 29 of 36 equal; D-7 (3) and Super Mario RPG's drift (2) accepted (§41.20); the stork and the puck put for decision | §41.6, §63.1-§63.2 |
+| G6, speed | **not met**: the desktop budget at 33% quota is met on every bench game (§58.6); the handheld battery run is owed | §41.8, §58 |
+| G7, debugger | **met** | §41.7 |
+| G8, clean room | **met with named exceptions** | §41.9 and §41.13. Since then D-24, D-26, D-35 and D-41 to D-48 were written under the same protocol: no emulator source was read, the RTL reads are logged in their entries, and Mesen was run only as a black box. The mechanical clone check was not rerun; the code changes since are a few lines each, in rules stated in the log |
+
+**What remains before the flip:** the two decisions of §63.4 and G6's handheld run on battery. Nothing else in G1-G8
+is open.

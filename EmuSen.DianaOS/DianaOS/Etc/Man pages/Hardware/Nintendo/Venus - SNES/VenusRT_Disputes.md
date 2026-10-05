@@ -1174,6 +1174,24 @@ their data.
   stores between a flush's accesses, the ROM port's priority between a buffer load and a cache fill, back-to-back R14
   writes, and STOP's wait for the ports.
 - Pinned by: Star Fox's $15BB, Vortex's $198C, and the GSU test ROMs staying passed.
+- **Yoshi's Island's stork at frame 1800, measured 2026-10-05 (G5).** WRAM, GSU RAM and OAM were compared with Mesen's
+  dumps frame by frame, each VenusRT frame matched to Mesen's nearest within a window:
+  - **VenusRT's own boot program accounts for 7 frames of a 9-frame lag.** With it, WRAM equals Mesen's to within
+    about 20 bytes at a lag of 7 frames from frame 100, and 9 from 300 on. With the tester's boot image, the lag is
+    0 to frame 300 and 2 after it. D-38's program, then, uploads this game's sound data more slowly than the
+    console's program; no rule follows from it, since D-38 fixes the protocol, not its speed.
+  - **The rest is one lag frame of the game's main loop.** The stork scene's scroll counter, WRAM $39, steps by 2
+    every frame from 1226 to 1353 in Mesen. In VenusRT (image) it steps the same from 1227, except once, at frame
+    1340, where it steps by 4: the main loop missed a frame and caught up. From 1225 on, GSU RAM differs from Mesen's
+    at every lag in $0094, the object table from $02C2 and the OAM buffer at $0AA0 (100-150 bytes). WRAM stays
+    within about 20 bytes at the scene's own lag.
+  - **The picture at 1800 does not depend on the power-on position.** Ten S-CPU positions from 0 to 800 clocks give
+    one picture, 1,374 pixels from Mesen's nearest frame (1790) with VenusRT's program, and 1,565 from 1797 with the
+    image.
+  - Argued, not measured: a frame whose GSU work overruns the frame on VenusRT and not on Mesen. That is the shape of
+    a GSU cost difference, and of this entry's unmodelled overlaps above.
+  - **No console oracle times the GSU.** Mesen is the only comparison, and this entry's built costs are the referee's.
+    G5's stork anchor is therefore put to the tester as dispute-logged GSU drift (`VenusRT_Native.md` §63).
 
 
 ### D-36. SA-1: who waits, and for how long, when the S-CPU and the SA-1 reach the cartridge's ROM, BW-RAM or I-RAM together
@@ -1590,4 +1608,97 @@ their data.
 - Pinned by: "Random/echo data" singly and `spc_dsp6` in order; `a_fir_tap_at_minus_128_wraps_in_16_bits` in
   `apu/dsp.rs`.
 - Implemented in: the commit after this entry's (D-42's).
+
+### D-44. NHL '94: the credits' puck at frame 2200 follows a random-number generator that the game steps in its idle loop
+- Opened: 2026-10-04, by G5's anchor at 2200 (`VenusRT_Native.md` §41.6): the spinning puck in the credits, a
+  sprite of about 5 by 3 pixels, differs from Mesen's by 10-11 pixels, and no Mesen frame within ±100 is equal.
+- Measured 2026-10-05, black box, from both engines' WRAM after each frame and their CPU traces:
+  - **WRAM agrees with Mesen's to within about 50 bytes to frame 1510**, at a lag of one frame (VenusRT a frame
+    early). The constant differences are a few counters and an RNG at $0793-$0795.
+  - **The RNG is stepped in the idle loop.** From frame 182 the game advances it about 420 times a frame, at
+    $80:8663 and $80:8671, in the loop that waits for the next frame. Its value at any frame therefore counts the
+    CPU's spare cycles since frame 182. Mesen's value at frame 185 occurs in VenusRT's sequence of states, reached
+    at VenusRT's frame 184. The generator is the same; the two engines stand a different number of steps along it.
+  - **From frame 1512 the credits' state parts**, in the direct page at $6B-$7B and the buffer from $7F:007C. Over
+    frames 1550-2200 about 2,000-3,000 WRAM bytes differ at every lag. The puck's tile data in VRAM never equals
+    Mesen's at frame 2200 in any VenusRT frame from 1 to 2,400.
+  - The traces agree instruction for instruction, apart from where wait loops end, where IRQs land and which
+    instruction the DRAM refresh falls in. Those 40-clock differences come in symmetric pairs.
+  - The game's start-of-play timer, $00BD = $0083 + $2D0, is set from the frame counter by the code at $9F:F5FF. It
+    is $3B with VenusRT's boot program and $3C with the tester's image and in Mesen. The image does not change the
+    1512 parting or the puck.
+  - **VenusRT's own picture of the puck at 2200 depends on the power-on position.** Ten S-CPU positions from 0 to 800
+    clocks give two different puck pictures, five each, and neither is Mesen's.
+- Documents read: none bear on it; the RNG and the scene are the game's.
+- Referee: not read. Mesen's source: none.
+- Conclusion, 2026-10-05: no emulation rule is implicated. What the anchor shows is a function of the CPU's spare
+  cycles per frame since frame 182, and so of the power-on position, which the console does not fix (D-6). Mesen
+  reaches one value of it and VenusRT, depending on where it powers on, two others. The anchor is put to the tester as
+  dispute-logged drift of the same class as Super Mario RPG's attract lead (`VenusRT_Native.md` §41.20, blocker
+  12); an anchor on a deterministic scene would replace it. Argued from the measurements above.
+- Pinned by: G5's recorded hash for the anchor.
+
+### D-45. PPU: a mid-line INIDISP brightness write takes effect two dots later than VenusRT applies it (`test_hello`)
+- Opened: 2026-10-04, by G3 (`VenusRT_Native.md` §41.5): byuu's `test_hello` draws "HELLO" in sheared letters by
+  writing INIDISP's brightness at timed points in each line (`stx $00` and `sty $00` with D at $2100). VenusRT's
+  picture is 809 pixels from Mesen's at frame 3,600; VRAM is equal.
+- Measured 2026-10-05: on every line that differs (59), each brightness edge in VenusRT's picture lies exactly 2 pixels
+  left of Mesen's (42 lines with two edges, 17 with four), and no line differs in any other way. VenusRT applies a
+  brightness write at the span the write lands in; Mesen shows it two dots later.
+- Documents read: none states the latency. This is the INIDISP write-during-display behaviour that plan §5.1 names as
+  a loss (with `inidisp_brightness_delay`, whose subject is the same delay), kept unmodelled by plan §9's Q10 until a
+  golden needs it; none of G5's 36 anchors does.
+- Referee: not read. Mesen's source: none.
+- Conclusion, 2026-10-05: `test_hello` joins plan §5.1's named INIDISP loss, as `test_noise` did (§41.16). Measured as
+  a 2-dot latency; not built.
+- Pinned by: the corpus runner's picture column for `test_hello`.
+
+### D-46. PPU: forced blank set during H-blank leaves the next line without sprites (Motive's `HblankEmuTest`)
+- Opened: 2026-10-04, by G3: VenusRT draws "Incorrect Behaviour -Emulator" with no sprites; Mesen draws parts of a
+  sprite word over it on alternate lines (622 pixels, 41 lines). VRAM is equal.
+- Documents read: the ROM's own description, posted by its author with it (the corpus's `Motive-test-ROMs/README.md`):
+  the test checks "what happens to sprites as you force blank during h-blank. It should not load them, causing them to
+  disappear", with the caveat that "there are many quirks surrounding this and that test doesn't really show those".
+  anomie's "SPRITES" puts each line's sprite evaluation and tile loads in the line before it. anomie's register
+  document, INIDISP, adds that when forced blank ends mid-line "the internal rendering buffers will not have been
+  updated during force blank" and that "OBJ will be glitched for the entire scanline", a current theory, not a
+  measurement.
+- VenusRT: a line's sprites are chosen and their tiles loaded only when the PPU is not in forced blank at that point,
+  so a forced blank held across the H-blank leaves the next line with none. That is the behaviour the ROM's author
+  describes for the console. Mesen loads some of them.
+- Referee: not read. Mesen's source: none.
+- Conclusion, 2026-10-05: no change. VenusRT's picture is the one the ROM's author describes for the console; argued
+  from that description, the only console account, with the author's own caveat. Mesen is recorded as differing.
+- Pinned by: the corpus runner's picture column for `HblankEmuTest`.
+
+### D-47. DMA and PPU: an HDMA burst of forced blank, VRAM data and unblank that meets a line's start (93143's `hvdma`)
+- Opened: 2026-10-04, by G3, after D-40: VenusRT's VRAM differs from Mesen's in 16 bytes at frame 3,600 and its
+  picture in 252 pixels, on lines 1 and 107, where the eight-channel burst meets the start of a line.
+- Documents read: the ROM's README (the author's forum post) and its console photograph, `expected-output.jpg`. The
+  photograph shows the tile change halfway down the screen and cannot resolve a single line. The post adds that on
+  the author's console "the sprite layer on the line following the data burst ... shows white flickering segments",
+  which neither engine models and which would change those lines anyway.
+- Referee: D-40's reading of the HDMA machine applies; no further reading.
+- Mesen's source: none.
+- Conclusion, 2026-10-05: no oracle at the resolution of the difference. The 16 bytes are the burst's first or last
+  bytes landing in VRAM inside or outside the forced blank, by a few clocks of D-40's run timing, which the console
+  tables of `test_hdmasync` and `test_hdmatiming` settle elsewhere. Recorded as a difference without an oracle; no
+  change.
+- Pinned by: the corpus runner's VRAM and picture columns for `hvdma`.
+
+### D-48. Multiplier: what RDMPY holds when WRMPYB is written again 2 to 9 cycles into a product (undisbeliever's `wrmpyb-in-flight`)
+- Opened: 2026-10-04, by G3: the printed table differs from Mesen's in digits for 3 to 5 cycles between the writes
+  (VRAM 25 bytes, 602 pixels).
+- Documents read: fullsnes and anomie describe the multiplier's 8-cycle product and leave a rewrite in flight unstated
+  (plan §2.2's thin areas). The ROM's source states the test and records no console result; its repository has none.
+- VenusRT: the step rule is jonasquinn's `muldiv_tests` notes (a product adds the shifter to RDMPY when RDDIV's low bit
+  is set, one step a cycle). A second WRMPYB write clears RDMPY and stores the operand without restarting a product in
+  flight. That last part has no source and is argued as the plainest reading of a running shifter.
+- Referee: `Venus_Referee.md` §0 rates the referee's multiply unit as following emulators' rules (nearly no support);
+  not read.
+- Mesen's source: none.
+- Conclusion, 2026-10-05: no oracle; recorded as a difference with Mesen. A console run of the ROM would settle it.
+  Of the games, only NHL '94 was measured: over 2,200 frames it writes WRMPYB and WRDIVB about 17,000 times and never
+  during a product, nor reads a result during one (`VenusRT_Native.md` §63).
+- Pinned by: the corpus runner's VRAM and picture columns for `wrmpyb-in-flight`.
 

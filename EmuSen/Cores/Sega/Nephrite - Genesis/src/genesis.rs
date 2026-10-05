@@ -78,6 +78,9 @@ pub struct Hw {
     stall: u64,
     /// The last word the 68000 read in program space: the next instruction, which an unmapped read returns.
     pub prefetch: u16,
+    /// The picture being drawn, and whether this frame's is drawn at all (the sprite pass runs either way).
+    pub frame: crate::render::Frame,
+    pub draw: bool,
 }
 
 pub struct Genesis {
@@ -110,6 +113,8 @@ impl Genesis {
             locked_up: false,
             stall: 0,
             prefetch: 0,
+            frame: crate::render::Frame::new(),
+            draw: true,
         };
         let mut g = Genesis { cpu: M68000::new(), z80: Z80::new(), hw };
         g.cpu.reset(&mut MainBus(&mut g.hw));
@@ -119,7 +124,10 @@ impl Genesis {
     /// One frame: the 68000 instruction by instruction, the VDP's line events and the Z80 caught up after each.
     pub fn run_frame(&mut self) {
         loop {
-            if self.hw.locked_up || self.cpu.halted {
+            if self.hw.vdp.bus_dma() {
+                // A transfer's hold that a frame's end interrupted.
+                self.hw.dma_hold();
+            } else if self.hw.locked_up || self.cpu.halted {
                 self.hw.clock += 4 * M68K;
             } else {
                 let _: Step = self.cpu.step(&mut MainBus(&mut self.hw));
@@ -171,6 +179,12 @@ impl Hw {
                 self.vdp.vint_pending = true;
                 self.z80_int = (t, t + Z80_INT);
             } else {
+                if (self.line as usize) < self.vdp.height() {
+                    let (line, draw) = (self.line as usize, self.draw);
+                    self.vdp.render_line(line, draw, &mut self.frame);
+                } else {
+                    self.vdp.blank_line();
+                }
                 self.line_begun = next_line;
                 self.line += 1;
                 if self.line == self.vdp.lines() {
@@ -178,6 +192,8 @@ impl Hw {
                     self.frame_done = true;
                 }
                 self.vdp.line_start(self.line);
+                let line = self.line as usize;
+                self.vdp.latch_line(line);
                 if self.line == self.vdp.vint_line() {
                     self.vint_at = Some(self.line_begun + self.vdp.timing().vint);
                 }
@@ -201,6 +217,14 @@ impl Hw {
             self.clock = self.clock.max(next);
             self.run_vdp(self.clock);
         }
+    }
+
+    /// One step of the 68000's hold during a transfer: the clock to the transfer's next bus read or slot.
+    fn dma_hold(&mut self) {
+        self.run_vdp(self.clock);
+        let slot = self.next_slot(self.vdp.time).unwrap_or(self.line_begun + LINE);
+        let next = if self.vdp.dma_fetch().is_some() { slot.min(self.vdp.fetch_at.max(self.vdp.time + 1)) } else { slot };
+        self.clock = self.clock.max(next);
     }
 
     /// A word a transfer reads from the 68000's bus; the VDP's own addresses give nothing.
@@ -392,8 +416,11 @@ impl Hw {
                     let (line, dot) = (self.line, self.dot());
                     self.vdp.latch_hv(line, dot);
                 }
-                if self.vdp.bus_dma() {
-                    self.vdp_wait(|v| !v.bus_dma());
+                // The 68000 is held from the write that started a transfer, but the hold yields at the frame's end
+                // and goes on between instructions, so that a frame ends where its last line does.
+                while self.vdp.bus_dma() && !self.frame_done {
+                    self.dma_hold();
+                    self.run_vdp(self.clock);
                 }
             }
             _ => {}
@@ -577,6 +604,8 @@ pub struct Saved {
     cpu: M68000,
     z80: Z80,
     vdp: crate::vdp::VdpRegs,
+    sat_cache: Vec<u8>,
+    line_scroll: (Vec<u8>, (u16, u16)),
     io: crate::io::IoRegs,
     sram_reg: u8,
     banks: Option<[u8; 8]>,
@@ -587,6 +616,7 @@ pub struct Saved {
     line_begun: u64,
     vint_at: Option<u64>,
     z80_bank: u16,
+    prefetch: u16,
     z80_busreq: bool,
     z80_reset: bool,
     tmss_unlocked: bool,
@@ -614,6 +644,11 @@ impl Genesis {
         w.u16("VdpReadBuffer", v.read_buf);
         w.u64s("VdpDma", &dma_words(v.dma));
         w.u64s("VdpTimes", &[v.time, v.fetch_at]);
+        w.bytes("SpriteCache", &h.vdp.sat_cache);
+        w.bools("SpriteFlags", &v.sprite_flags);
+        w.u16("VscrollLatch", v.vscroll_latch);
+        w.bytes("LineVsram", &h.vdp.line_vsram);
+        w.u16s("LineHscroll", &[h.vdp.line_hscroll.0, h.vdp.line_hscroll.1]);
         let io = h.io.regs_state();
         w.bytes("IoData", &io.data);
         w.bytes("IoCtrl", &io.ctrl);
@@ -628,6 +663,7 @@ impl Genesis {
         w.u64s("Clocks", &[h.clock, h.z80_clock, h.z80_int.0, h.z80_int.1, h.line_begun, h.vint_at.unwrap_or(u64::MAX), h.stall]);
         w.u32("Line", h.line);
         w.u16("Z80Bank", h.z80_bank);
+        w.u16("OpenBus", h.prefetch);
         w.bools("Lines", &[h.z80_busreq, h.z80_reset, h.tmss_unlocked, h.locked_up]);
         w.bytes("Tmss", &h.tmss);
     }
@@ -663,6 +699,14 @@ impl Genesis {
         let mut times = [0u64; 2];
         r.u64s(&mut times)?;
         [v.time, v.fetch_at] = times;
+        let mut cache = vec![0u8; 320];
+        r.bytes(&mut cache)?;
+        r.bools(&mut v.sprite_flags)?;
+        v.vscroll_latch = r.u16()?;
+        let mut line_vsram = vec![0u8; 80];
+        r.bytes(&mut line_vsram)?;
+        let mut hs = [0u16; 2];
+        r.u16s(&mut hs)?;
         let mut io = crate::io::IoRegs::default();
         r.bytes(&mut io.data)?;
         r.bytes(&mut io.ctrl)?;
@@ -679,6 +723,7 @@ impl Genesis {
         r.u64s(&mut c)?;
         let line = r.u32()?;
         let z80_bank = r.u16()?;
+        let prefetch = r.u16()?;
         let mut lines = [false; 4];
         r.bools(&mut lines)?;
         let mut tmss = [0u8; 4];
@@ -687,6 +732,8 @@ impl Genesis {
             cpu,
             z80,
             vdp: v,
+            sat_cache: cache,
+            line_scroll: (line_vsram, (hs[0], hs[1])),
             io,
             sram_reg,
             banks: mapper.then_some(pages),
@@ -698,6 +745,7 @@ impl Genesis {
             stall: c[6],
             line,
             z80_bank,
+            prefetch,
             z80_busreq: lines[0],
             z80_reset: lines[1],
             tmss_unlocked: lines[2],
@@ -711,12 +759,15 @@ impl Genesis {
         self.z80 = s.z80;
         let h = &mut self.hw;
         h.vdp.set_regs_state(s.vdp);
+        h.vdp.sat_cache = s.sat_cache;
+        (h.vdp.line_vsram, h.vdp.line_hscroll) = s.line_scroll;
         h.io.set_regs_state(s.io);
         h.cart.sram_reg = s.sram_reg;
         if h.cart.banks.is_some() {
             h.cart.banks = s.banks;
         }
         (h.clock, h.z80_clock, h.z80_int, h.line, h.line_begun, h.vint_at) = (s.clock, s.z80_clock, s.z80_int, s.line, s.line_begun, s.vint_at);
+        h.prefetch = s.prefetch;
         (h.z80_bank, h.z80_busreq, h.z80_reset, h.tmss_unlocked, h.tmss, h.locked_up, h.stall) =
             (s.z80_bank, s.z80_busreq, s.z80_reset, s.tmss_unlocked, s.tmss, s.locked_up, s.stall);
     }

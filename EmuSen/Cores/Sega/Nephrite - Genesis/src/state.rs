@@ -8,7 +8,7 @@ use crate::machine::Machine;
 use crate::media::System;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"NPHR");
-pub const STATE_VERSION: i32 = 3;
+pub const STATE_VERSION: i32 = 4;
 /// A state of this core made for another of its systems: a Genesis state offered to a 32X machine.
 pub const STATUS_OTHER_SYSTEM: i32 = -10;
 
@@ -131,20 +131,26 @@ mod tests {
         assert_eq!(
             machine("SEGA GENESIS").layout(),
             concat!(
-                "0 4 u32 Magic\n4 4 i32 Version\n8 1 u8 System\n9 8 i64 Frames\n17 65536 u8[65536] WRAM\n65553 8192 u8[8192] Z80RAM\n",
-                "73745 65536 u8[65536] VRAM\n139281 128 u8[128] CRAM\n139409 80 u8[80] VSRAM\n139489 32 u32[8] M68000.D\n",
-                "139521 32 u32[8] M68000.A\n139553 4 u32 M68000.OtherSp\n139557 2 u16 M68000.Sr\n139559 4 u32 M68000.Pc\n",
-                "139563 4 u16[2] M68000.Prefetch\n139567 1 bool M68000.Stopped\n139568 1 bool M68000.Halted\n139569 1 u8 M68000.LastLevel\n",
-                "139570 1 bool M68000.TracePending\n139571 4 u32 M68000.TraceResume\n139575 8 u16[4] Z80.Main\n139583 8 u16[4] Z80.Alternate\n",
-                "139591 4 u16[2] Z80.Index\n139595 2 u16 Z80.Sp\n139597 2 u16 Z80.Pc\n139599 1 u8 Z80.I\n139600 1 u8 Z80.R\n139601 2 u16 Z80.Wz\n",
-                "139603 1 u8 Z80.Q\n139604 1 bool Z80.P\n139605 1 bool Z80.Iff1\n139606 1 bool Z80.Iff2\n139607 1 u8 Z80.Im\n",
-                "139608 1 bool Z80.EiPending\n139609 1 bool Z80.Halted\n139610 24 u8[24] VdpRegisters\n139634 5 bool[5] VdpLatches\n",
-                "139639 4 u32 HvLatch\n139643 1 u8 VdpCode\n139644 2 u16 VdpAddress\n139646 1 u8 VdpLineCounter\n139647 24 u16[12] VdpFifo\n",
-                "139671 2 u8[2] VdpFifoPointers\n139673 2 u16 VdpReadBuffer\n139675 32 u64[4] VdpDma\n139707 16 u64[2] VdpTimes\n",
-                "139723 3 u8[3] IoData\n139726 3 u8[3] IoCtrl\n139729 3 u8[3] IoTx\n139732 3 u8[3] IoSctrl\n139735 2 bool[2] PadTh\n",
-                "139737 2 u8[2] PadFalls\n139739 16 u64[2] PadLastFall\n139755 1 u8 SramRegister\n139756 1 bool Mapper\n",
-                "139757 8 u8[8] MapperPages\n139765 56 u64[7] Clocks\n139821 4 u32 Line\n139825 2 u16 Z80Bank\n139827 4 bool[4] Lines\n",
-                "139831 4 u8[4] Tmss\n"
+                "0 4 u32 Magic\n4 4 i32 Version\n8 1 u8 System\n9 8 i64 Frames\n17 65536 u8[65536] WRAM\n",
+                "65553 8192 u8[8192] Z80RAM\n73745 65536 u8[65536] VRAM\n139281 128 u8[128] CRAM\n",
+                "139409 80 u8[80] VSRAM\n139489 32 u32[8] M68000.D\n139521 32 u32[8] M68000.A\n",
+                "139553 4 u32 M68000.OtherSp\n139557 2 u16 M68000.Sr\n139559 4 u32 M68000.Pc\n",
+                "139563 4 u16[2] M68000.Prefetch\n139567 1 bool M68000.Stopped\n139568 1 bool M68000.Halted\n",
+                "139569 1 u8 M68000.LastLevel\n139570 1 bool M68000.TracePending\n139571 4 u32 M68000.TraceResume\n",
+                "139575 8 u16[4] Z80.Main\n139583 8 u16[4] Z80.Alternate\n139591 4 u16[2] Z80.Index\n",
+                "139595 2 u16 Z80.Sp\n139597 2 u16 Z80.Pc\n139599 1 u8 Z80.I\n139600 1 u8 Z80.R\n",
+                "139601 2 u16 Z80.Wz\n139603 1 u8 Z80.Q\n139604 1 bool Z80.P\n139605 1 bool Z80.Iff1\n",
+                "139606 1 bool Z80.Iff2\n139607 1 u8 Z80.Im\n139608 1 bool Z80.EiPending\n139609 1 bool Z80.Halted\n",
+                "139610 24 u8[24] VdpRegisters\n139634 5 bool[5] VdpLatches\n139639 4 u32 HvLatch\n",
+                "139643 1 u8 VdpCode\n139644 2 u16 VdpAddress\n139646 1 u8 VdpLineCounter\n",
+                "139647 24 u16[12] VdpFifo\n139671 2 u8[2] VdpFifoPointers\n139673 2 u16 VdpReadBuffer\n",
+                "139675 32 u64[4] VdpDma\n139707 16 u64[2] VdpTimes\n139723 320 u8[320] SpriteCache\n",
+                "140043 3 bool[3] SpriteFlags\n140046 2 u16 VscrollLatch\n140048 80 u8[80] LineVsram\n",
+                "140128 4 u16[2] LineHscroll\n140132 3 u8[3] IoData\n140135 3 u8[3] IoCtrl\n140138 3 u8[3] IoTx\n",
+                "140141 3 u8[3] IoSctrl\n140144 2 bool[2] PadTh\n140146 2 u8[2] PadFalls\n",
+                "140148 16 u64[2] PadLastFall\n140164 1 u8 SramRegister\n140165 1 bool Mapper\n",
+                "140166 8 u8[8] MapperPages\n140174 56 u64[7] Clocks\n140230 4 u32 Line\n140234 2 u16 Z80Bank\n",
+                "140236 2 u16 OpenBus\n140238 4 bool[4] Lines\n140242 4 u8[4] Tmss\n"
             )
         );
     }

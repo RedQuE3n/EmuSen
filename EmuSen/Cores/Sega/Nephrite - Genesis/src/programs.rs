@@ -75,9 +75,9 @@ fn every_illegal_opcode_takes_its_exception() {
 }
 
 /// Nemesis's VDPFIFOTesting, its 122 records read where the program leaves them once A has run it to its last page:
-/// all pass but one of FIFO Wait States' samples (Nephrite_Native.md §13.3).
+/// all pass (Nephrite_Native.md §13.3, §14.3).
 #[test]
-fn vdpfifotesting_passes_all_but_one() {
+fn vdpfifotesting_passes_every_test() {
     let Some(mut m) = program("exodus-techdocs/vdp_port_access/VDPFIFOTesting.bin") else { return };
     while m.frames < 3000 {
         m.pads[0] = crate::fifo_records::press(m.frames);
@@ -86,5 +86,34 @@ fn vdpfifotesting_passes_all_but_one() {
     let rs = crate::fifo_records::records(&m.genesis.hw.wram);
     let failed: Vec<&str> = rs.iter().filter(|r| !r.passed()).map(|r| r.name.as_str()).collect();
     eprintln!("VDPFIFOTesting: {} of {} pass; failing {failed:?}", rs.len() - failed.len(), rs.len());
-    assert_eq!((rs.len(), failed), (122, vec!["FIFO Wait States"]));
+    assert_eq!((rs.len(), failed), (122, Vec::<&str>::new()));
+}
+
+/// Nemesis's sprite masking and overflow test in both widths, C switching from H32 to H40 (its "Start" is read with
+/// TH an input, which the pad answers with C): every one of its nine verdicts green, as on his console's photographs
+/// (Nephrite_Native.md §14.3).
+#[test]
+fn the_sprite_masking_test_passes_in_both_widths() {
+    let Some(mut m) = program("exodus-techdocs/sprite_masking/SpriteMaskingTestRom.bin") else { return };
+    let verdicts = |m: &Machine| {
+        let mut colours = std::collections::BTreeMap::new();
+        for p in m.picture.chunks(4) {
+            *colours.entry((p[0], p[1], p[2])).or_insert(0) += 1;
+        }
+        colours
+    };
+    while m.frames < 120 {
+        m.advance();
+    }
+    let h32 = verdicts(&m);
+    while m.frames < 300 {
+        m.pads[0] = if (150..156).contains(&m.frames) { 1 << 5 } else { 0 };
+        m.advance();
+    }
+    let h40 = verdicts(&m);
+    eprintln!("sprite masking: H32 {h32:?}; H40 {h40:?}");
+    for (c, w) in [(h32, 256), (h40, 320)] {
+        assert_eq!(c.keys().copied().collect::<Vec<_>>(), vec![(0, 0, 144), (0, 255, 0), (255, 255, 255)], "only the screen's blue, white and the verdicts' green");
+        assert_eq!((c[&(0, 255, 0)], c.values().sum::<usize>()), (1574, w * 224));
+    }
 }

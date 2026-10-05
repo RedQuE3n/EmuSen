@@ -5454,3 +5454,21 @@ That is 16 members, 4 bits, beside the one constant. They are ranked as §52.1 r
 sets, ties to the most close. The sets: 2^16 seeded cases in §49.2's ranges with Azs from 38CEh to 4800h (101°), and the
 traced Parameter, Raster, Project and Target commands of Lock On, Ballz 3D and Pilotwings past the limit. Past 4800h,
 and past B800h on the negative side, the same formulas run ungraded, a named loss.
+
+### 52.5 The branch's family widened once, in writing (plan §5.2, rule 4)
+
+`dsp_limit dsp1b 65536` with the three traces graded §52.4's 16 members. By exact results the first is: Vof half up,
+the screen at Les/cos Δ, K times cos Δ, and Project with no branch. Built that way, Pilotwings' frame 2,120 draws the
+island under the glider as the image does. **Lock On draws no ground at all**: sea-blue from the horizon down.
+
+The cause was found by one measured difference. Lock On's Parameter (Les = 256, Azs = 4000h) gives Vva = -46 on the
+image and -47 on the member, -46.4 floored. Built for this measurement alone with Vva rounded toward zero, and not kept,
+Lock On draws its ground at frame 1,600 as the image does. The game's own horizon test turns on Vva's last unit. The
+image's Vva past the limit lies nearer zero than the floored formula elsewhere too: -5,938 against -5,940 at Les =
+7FFFh and 90° (§52.3).
+
+**The family is widened once**, by one choice, before it is graded:
+
+- **B5, Vva's rounding past the limit**: floor, as §52.2's member rounds quotients; or toward zero (2).
+
+That is 32 members, 5 bits, beside the constant. The rank is §52.4's. No further widening follows.

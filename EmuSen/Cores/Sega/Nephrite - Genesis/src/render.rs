@@ -193,8 +193,6 @@ impl Vdp {
             }
             *px = cached.1[plx & 7];
         }
-        let last = vs;
-        self.vscroll_latch = last as u16;
     }
 
     /// The window's columns on `line`, if any: the whole line in its vertical range, else its horizontal range.
@@ -520,6 +518,14 @@ impl Vdp {
         let Some(line) = self.open else { return };
         let width = self.width();
         self.advance(width);
+        if self.display() {
+            // The scroll VSRAM past its 40 words returns, taken whether or not the frame is drawn (the kit's C8).
+            self.swap_latch();
+            let fine = (self.line_hscroll.0 & 15) as usize;
+            let column = if width - 1 < fine { 0 } else { (width - 1 - fine) / 16 };
+            self.vscroll_latch = self.vscroll(column, false);
+            self.swap_latch();
+        }
         if self.draw {
             for r in 0..self.rows() {
                 let y = if self.doubled() { 2 * line + r } else { line };

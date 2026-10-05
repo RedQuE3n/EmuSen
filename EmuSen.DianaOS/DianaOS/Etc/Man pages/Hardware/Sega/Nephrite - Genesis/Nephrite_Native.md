@@ -1046,3 +1046,96 @@ ROMs are not: the HV ROM, run on the board in place of the pad-port receiver, sh
 the board and not in Nephrite, and the status-register ROMs are not yet run. With D-11 open, stage 4 stays open for
 one more step: the bench's cartridge serving the VDP's reads, the transfer's start and busy flag (D-11), the port's
 read time and the status-register ROMs.
+
+## 17. Stage 4, the dispute step, and stage 4 closed (2026-10-05)
+
+### 17.1 What it settled
+
+- **The bench's cartridge answers the VDP.** During a transfer from the cartridge the board raises `cart_dma` and
+  `vdp_dma` with `cart_cs` high; `tb_md.cpp` now serves the cartridge's range then too, which the first step's
+  transfers from the cartridge, `PAL512` and VDPFIFOTesting's own, lacked (D-11).
+- **D-11, settled by one rule.** A word that reaches an empty FIFO, with nothing waiting to be written, is written at
+  the first slot at least 176 master clocks on (`vdp::WRITE_START`), and a word behind others follows them; a
+  transfer from the 68000's bus reads first 88 master clocks after its command (`genesis::DMA_START`) and then every
+  20, the 68000 released at its last read; the busy flag is set only while the transfer reads. Each FIFO entry keeps
+  the time from which it may be written; an entry the FIFO has given up at its slot waits in a short queue until
+  then. `Hw::transfer_start_delay`, which
+  step 4's tests set to 270 to hold the renderer to the board, is gone: the board's pictures and VDPFIFOTesting are
+  met by the same settings. The words of a transfer made with the display off do not wait the start, as
+  MD1536 on the board to its frame 300 shows.
+- **D-12, the status register.** Vertical blanking sets at H `$14C` (H40) and `$10C` (H32), two pixels after the V
+  counter's step, not at `m5hvc.txt`'s `$150` and `$10E`; the odd flag changes with the frame interrupt, at H `$001`
+  of line 224, not as the line begins; horizontal blanking and F were already where the board has them. A port read
+  takes four 68000 clocks on the board with no wait of its own.
+- **The vertical scroll latched at the line's end** is taken whether or not the frame is drawn: the kit's C8 (a state
+  must not depend on whether frames were drawn) failed on VDPFIFOTesting at step 4, the latch having been set only
+  while a plane was drawn.
+- **The state**, version 7, keeps each FIFO entry's ready time and the words waiting to be written.
+- **The bench's programs**: `dma-start-rom-*` (the transfer sweep from the cartridge), `write-landing-*` (single
+  writes, in both widths, the display on and off), `status-hv-h40`, `-h32`, `status-boot` and `fifo-wait-states`, the
+  last four with their samples in the pictures' RAM logs.
+
+### 17.2 Measured (2026-10-05)
+
+- **The board's sweeps**: the transfer's first write, from RAM and from the cartridge, lands where the board's does
+  at all twelve points; single writes with the display on at all sixteen, in H40 and H32; with the display off at five
+  of eight in H40 and four of eight in H32, the rest 2 to 4 pixels from the board's (D-11).
+- **The board's transfer pictures**, with the shipped settings: `cram-dma`, `cram-dma-one` and `vsram-dma` on every
+  row, `pattern-dma` on 220 of 224.
+- **`PAL512`** on the board in PAL, now that the cartridge answers: Nephrite's frames 3 to 5 are the board's on every
+  pixel, up to a one-to-one map of colours. **`512PAL`**: 9,676 to 9,748 pixels from the board's (10,544 at step 4;
+  the display's reads in the 128 KiB mode, D-10). **MD1536**: the board's at frames 3 to 6, and, run on the board to
+  its frame 300, Nephrite's frame 300 on every pixel; with the write path's start applied to its display-off
+  transfers, 259 pixels of CRAM dots differ.
+- **The logic-analyser ROMs** (D-12): Nemesis's status-register ROMs in H40 and H32 and in interlace, and his HV
+  ROMs, on the board with their samples from its RAM log: every flag's edge as the board's within one sample, after
+  the vertical blanking and odd flag changes.
+- **The memory test**, its screen now read at frame 600: all thirteen rows show the values it prints as the
+  hardware's, the first `$A11100` row among them (`4F00 4F00` beside `(4F00 4F00)`). Stage 3's reading of that row,
+  taken from RAM before the picture existed, is superseded.
+- **Against Genesis Plus GX at frame 300**: as at step 4, but for `PAL512` (7,954 pixels: the reference draws
+  mid-line CRAM a line at a time, and Nephrite now has the board's picture), `512PAL` (75,508) and `960PAL` (60,376).
+- **The crate's tests**: 51 pass, among them `writes_land_where_the_board_lands_them` and
+  `md1536_shows_the_boards_picture`; VDPFIFOTesting 122 of 122.
+- **The conformance kit**, `--frames 600`: C1-C15 pass on the 240p suite, Sonic the Hedgehog and its sequel,
+  Phantasy Star IV, OutRun, Castlevania: Bloodlines, 777 Casino, `512PAL`, `wtest_i2`, VDPFIFOTesting, both of
+  TiTAN's Overdrive demos, MD1536 and the board programs `cram-dma`, `pattern-dma`, `vsram-dma`,
+  `reg-backdrop`, `cram-dots`, `mode4-bytes`, `write-landing-14`, `dma-start-6` and `fifo-wait-states`.
+- **The corpus at anchors** (944 games, against Genesis Plus GX): pictures matching up to the colour map, 715 at
+  frame 120 and 626 at frame 600 (716 and 626 at step 4); 14 pictures changed, all in games whose picture depends on
+  when a write lands (Tyrants' Sega logo one step of its colour cycle apart; Batman Returns, Crystal's Pony Tale and
+  X-perts by a few thousand pixels), which the reference does not time; the RAM's median equal bytes 65,522.5 and
+  65,504.5 of 65,536 (65,522 and 65,506). WiseMan's Nephrite, runner, discovery and registration tests pass (31).
+- **The cost**, best of five runs of 600 frames beside step 4's build (`cd939fc1`) in the same minute: Sonic the
+  Hedgehog 0.62 s against 0.62, Thunder Force IV 0.73 against 0.71.
+
+### 17.3 Stage 4 closed
+
+**The oracle** (the plan's §6, row 4), as met:
+
+- **VDPFIFOTesting** passes 122 of 122 on the shipped settings, which also meet the board's sweeps and pictures.
+- **The logic-analyser ROMs**: run on Nuked-MD's board, its RAM log standing in for the pad-port receiver, and
+  graded flag by flag against Nephrite's samples (D-12). The board is the console here, as it has been for every
+  measurement since stage 3; the ROMs were not run on a console.
+- **The pictures against the references** up to a colour map: 626 of the corpus's 944 at frame 600 against Genesis
+  Plus GX, the test programs against it and against the board (§14.3, §15.4, §16.3, §17.2), where the board is the
+  one to meet when the two differ.
+- **The sprite-masking photographs**: Nemesis's test passes in both widths as on his console (§14.3).
+- **The skip-versus-draw state test**, the kit's C8: passes on every image of §17.2.
+
+**Carried forward:**
+
+- **D-2, the main RAM's refresh**: the 68000's RAM writes on the board take 98 bench clocks in 24 of 278 where the
+  rest take 56, and the cartridge loses two clocks every 128; Nephrite takes no refresh. As far as examined, it is
+  why the 68000 runs a slot or a few ahead of the board in the CRAM dots program and in `512PAL` with the 128 KiB bit
+  cleared; stage 5's sound timing may need it.
+- **Mode 4's left column** under a fine scroll, which the board shows as garbage (D-7), and mode 4's H40 mode; mode 4
+  and the TMS9918 modes are drawn a line at a time.
+- **The display's reads in the 128 KiB mode** (D-10): Nephrite reads VRAM as in 64 KiB mode; `512PAL`'s remaining
+  9,700 pixels are this.
+- **Single writes with the display off** land 2 to 4 pixels from the board's at half the sweep's points, and why a
+  transfer with the display off skips the write path's start is not known (D-11).
+- **VRAM's fetch lead** (4 to 16 pixels) and **the display bit's return** (0.56 of the board's distribution), measured
+  in part (§16.2).
+- From stage 3, unchanged: the seven EEPROM boards no document wires, Barver Battle Saga's protection device and the
+  Z80 window's alignment (§12).

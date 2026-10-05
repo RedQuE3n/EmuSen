@@ -486,11 +486,11 @@ def cram_dma_one():
                     (vram(0xC000), [1] * 2048)], step=0)
 PICTURES["cram-dma-one"] = cram_dma_one
 
-def dma_start(nops):
-    """When a transfer's first word lands: 64 words into CRAM entry 1 from the line interrupt after line 150, its
-    registers set first and then `nops` NOPs before the command, so that the command's time steps by 28 master
+def dma_start(nops, ram=0xFF0000):
+    """When a transfer's first word lands: 64 words from `ram` into CRAM entry 1 from the line interrupt after line 150,
+    its registers set first and then `nops` NOPs before the command, so that the command's time steps by 28 master
     clocks; the first change along line 150 is the first write (Nephrite_Disputes.md D-11)."""
-    words, ram = 64, 0xFF0000
+    words = 64
     regs = [0x8014, 0x8174, 0x8230, 0x8407, 0x8578, 0x8700, 0x8A96, 0x8C81, 0x8D3F, 0x8F02, 0x9001]
     values = [(j * 0x2B5 + (j >> 3) * 0x13 + 0x222) & 0xEEE for j in range(words)]
     r = bytearray(dma_into(0xC002_0000, 150, words, values, regs, [(cram(0), colours(16)), (vram(0x20), [0x1111] * 16),
@@ -503,6 +503,74 @@ def dma_start(nops):
     return bytes(r)
 for _n in (0, 2, 4, 6, 8, 10):
     PICTURES[f"dma-start-{_n}"] = lambda n=_n: dma_start(n)
+    PICTURES[f"dma-start-rom-{_n}"] = lambda n=_n: dma_start(n, 0x4000)   # the same from the cartridge's copy
+
+def write_landing(nops, count=1, display=True, h40=True):
+    """When a word written through the data port lands: the line interrupt after line 150 sets CRAM's address to entry
+    1 (register 15 at 0), waits `nops` NOPs and writes `count` words, a new colour each time; every pixel shows
+    entry 1 (or, the display off, the backdrop), so the changes along the line are the writes (D-11)."""
+    regs = [0x8014, 0x8174 if display else 0x8134, 0x8230, 0x8407, 0x8578, 0x8700, 0x8A96, 0x8C81 if h40 else 0x8C00, 0x8D3F, 0x8F02, 0x9001]
+    r = bytearray(program(regs, [(cram(0), colours(16)), (vram(0x20), [0x1111] * 16), (vram(0xC000), [1] * 2048)],
+                          w(0x46FC, 0x2000, 0x60FE)))
+    # With the display off every pixel is the backdrop, entry 0, and every slot is the 68000's.
+    entry = cram(2) if display else cram(0)
+    hint = w(0x32BC, 0x8F00, 0x22BC, entry >> 16, entry & 0xFFFF, *([0x4E71] * nops))
+    hint += w(0x0645, 0x0246)                                              # addi.w #$246,d5: a new colour a frame
+    for k in range(count):
+        hint += w(0x3085, 0x5445)                                          # move.w d5,(a0); addq.w #2,d5
+    hint += w(0x4E73)
+    r[0x1000:0x1000 + len(hint)] = hint
+    r[0x1100:0x1102] = w(0x4E73)
+    r[0x70:0x74] = (0x1000).to_bytes(4, "big")
+    r[0x78:0x7C] = (0x1100).to_bytes(4, "big")
+    return bytes(r)
+for _n in range(10, 26, 2):
+    PICTURES[f"write-landing-{_n}"] = lambda n=_n: write_landing(n)
+    PICTURES[f"write-landing-off-{_n}"] = lambda n=_n: write_landing(n, display=False)
+    PICTURES[f"write-landing-h32-{_n}"] = lambda n=_n: write_landing(n, h40=False)
+    PICTURES[f"write-landing-off-h32-{_n}"] = lambda n=_n: write_landing(n, display=False, h40=False)
+
+def status_hv(h40):
+    """The status register and the HV counter read as one long and stored to one RAM long in a loop, a NOP every other
+    round so that the reads drift across the line; the picture's RAM log is the samples (Nephrite_Disputes.md D-12)."""
+    tail = w(0x41F9, 0x00C0, 0x0006, 0x47F9, 0x00FF, 0x1000, 0x2690, 0x2690, 0x4E71, 0x60F8)
+    return program([0x8004, 0x8144, 0x8230, 0x8407, 0x8578, 0x8700, 0x8C81 if h40 else 0x8C00, 0x8D3F, 0x8F02, 0x9001], [], tail)
+PICTURES["status-hv-h40"] = lambda: status_hv(True)
+PICTURES["status-hv-h32"] = lambda: status_hv(False)
+
+def status_boot():
+    """The status register at power-on, again, after mode 4 with the display off, after mode 5, and again, about four
+    frames apart, to RAM from $FF1000 (D-12)."""
+    delay = lambda: w(0x203C, 0x0002, 0x0000, 0x5380, 0x66FC)          # move.l #$20000,d0; subq.l #1,d0; bne
+    code = w(0x46FC, 0x2700, 0x43F9, 0x00C0, 0x0004, 0x47F9, 0x00FF, 0x1000)
+    code += delay() + w(0x36D1) + delay() + w(0x36D1)                   # move.w (a1),(a3)+
+    code += w(0x32BC, 0x8004) + delay() + w(0x36D1)
+    code += w(0x32BC, 0x8104) + delay() + w(0x36D1)
+    code += delay() + w(0x36D1) + w(0x60FE)
+    r = bytearray(b"\xff" * 0x1000)
+    r[0:8] = w(0x00FF, 0xFE00, 0x0000, 0x0200)
+    r[0x100:0x110] = b"SEGA MEGA DRIVE "
+    r[0x200:0x200 + len(code)] = code
+    return bytes(r)
+PICTURES["status-boot"] = status_boot
+
+def fifo_wait_states():
+    """VDPFIFOTesting's tenth FIFO Wait States part as its source gives it, 64 times at phases a loop apart: three
+    words queued to VRAM, DMA enabled, the status read, a three-word transfer from the cartridge started, then sixteen
+    status reads, each stored to RAM from $FF1000 (D-11)."""
+    C4, C0 = (0x00C0, 0x0004), (0x00C0, 0x0000)
+    loop = w(0x3E06, 0x51CF, 0xFFFE,                                  # move.w d6,d7; dbra d7,itself: the phase
+             0x33FC, 0x8144, *C4, 0x23FC, 0x4000, 0x0002, *C4,        # DMA off; VRAM write at $8000
+             *([0x33FC, 0xFFFF, *C0] * 3), 0x33FC, 0x8154, *C4,       # three words queued; DMA on
+             0x3A39, *C4, 0x36C5,                                     # move.w status,d5; move.w d5,(a3)+
+             0x33FC, 0x9303, *C4, 0x33FC, 0x9500, *C4,
+             0x28BC, 0x4000, 0x0082, 0x23D4, *C4)                     # move.l #cmd,(a4); move.l (a4),$C00004
+    loop += w(*([0x36F9, *C4] * 16))
+    loop += w(0x51CE, (-(len(loop) + 2)) & 0xFFFF)                    # dbra d6,the loop
+    tail = w(0x47F9, 0x00FF, 0x1000, 0x49F9, 0x00FF, 0x0000, 0x3C3C, 63,
+             0x33FC, 0x9400, *C4, 0x33FC, 0x9600, *C4) + loop + w(0x60FE)
+    return program([0x8004, 0x8144, 0x8230, 0x8407, 0x8578, 0x8700, 0x8C81, 0x8D3F, 0x8F02, 0x9001], [], tail)
+PICTURES["fifo-wait-states"] = fifo_wait_states
 
 def register_loop(first, second, regs, blocks):
     """The 68000 reading the HV counter and writing a register in a loop, alternately `first` and `second`, each read

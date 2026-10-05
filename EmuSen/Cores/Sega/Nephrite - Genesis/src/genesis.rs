@@ -21,9 +21,10 @@ pub const Z80_INT: u64 = LINE;
 pub const WINDOW_Z80_WAIT: u64 = 41;
 pub const WINDOW_68K_STALL: u64 = 66;
 
-/// Master clocks between a transfer's reads of the 68000's bus: one bus cycle (argued; the transfer fills the FIFO
-/// between slots, as VDPFIFOTesting's wait states show).
-pub const DMA_FETCH: u64 = 4 * M68K;
+/// Master clocks between a transfer's reads of the 68000's bus, and from its command to its first read (the board's
+/// pins and its transfer sweeps, with VDPFIFOTesting's wait states; Nephrite_Disputes.md D-11).
+pub const DMA_FETCH: u64 = 20;
+pub const DMA_START: u64 = 88;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Event {
@@ -80,9 +81,6 @@ pub struct Hw {
     pub prefetch: u16,
     /// Whether this frame's picture is drawn at all (the sprite pass runs either way); the VDP holds the picture.
     pub draw: bool,
-    /// Master clocks from a bus transfer's command to its first read: 0, which VDPFIFOTesting's wait states need,
-    /// until Nephrite_Disputes.md D-11 is settled; 270 is what the board shows for transfers from the 68000's RAM.
-    pub transfer_start_delay: u64,
 }
 
 pub struct Genesis {
@@ -116,7 +114,6 @@ impl Genesis {
             stall: 0,
             prefetch: 0,
             draw: true,
-            transfer_start_delay: 0,
         };
         let mut g = Genesis { cpu: M68000::new(), z80: Z80::new(), hw };
         g.cpu.reset(&mut MainBus(&mut g.hw));
@@ -178,6 +175,8 @@ impl Hw {
             } else if kind == Event::Slot {
                 self.vdp.slot();
             } else if kind == Event::Vint {
+                // The field changes with the frame interrupt, at H $001 (the board's odd flag, D-12).
+                self.vdp.field_start();
                 self.vint_at = None;
                 self.vdp.vint_pending = true;
                 self.z80_int = (t, t + Z80_INT);
@@ -195,7 +194,6 @@ impl Hw {
                 let line = self.line as usize;
                 self.vdp.latch_line(line);
                 if self.line == self.vdp.vint_line() {
-                    self.vdp.field_start();
                     self.vint_at = Some(self.line_begun + self.vdp.timing().vint);
                 }
             }
@@ -415,7 +413,7 @@ impl Hw {
                 self.vdp.control(v);
                 self.vdp.fetch_at = self.clock;
                 if !was && self.vdp.bus_dma() {
-                    self.vdp.fetch_at += self.transfer_start_delay;
+                    self.vdp.fetch_at += DMA_START;
                 }
                 if latch == 0 && self.vdp.regs[0] & 2 != 0 {
                     let (line, dot) = (self.line, self.dot());
@@ -604,6 +602,29 @@ fn dma_from(d: [u64; 4]) -> crate::vdp::Dma {
     }
 }
 
+/// The words that have left the FIFO and not yet reached memory, at most 16: their count, then each one's time and
+/// itself (code, the half-written flag, address and data).
+const LANDING_WORDS: usize = 1 + 2 * 16;
+
+fn landing_words(q: &std::collections::VecDeque<(u64, crate::vdp::Entry)>) -> [u64; LANDING_WORDS] {
+    let mut w = [0u64; LANDING_WORDS];
+    w[0] = q.len().min(16) as u64;
+    for (i, (ready, e)) in q.iter().take(16).enumerate() {
+        w[1 + 2 * i] = *ready;
+        w[2 + 2 * i] = e.code as u64 | (e.half as u64) << 8 | (e.address as u64) << 16 | (e.data as u64) << 32;
+    }
+    w
+}
+
+fn landing_from(w: &[u64; LANDING_WORDS]) -> std::collections::VecDeque<(u64, crate::vdp::Entry)> {
+    (0..(w[0] as usize).min(16))
+        .map(|i| {
+            let p = w[2 + 2 * i];
+            (w[1 + 2 * i], crate::vdp::Entry { code: p as u8, half: p >> 8 & 1 != 0, address: (p >> 16) as u16, data: (p >> 32) as u16 })
+        })
+        .collect()
+}
+
 /// The line being drawn when a state was taken: its number plus one (0 for none) and how far it was drawn, its sprite
 /// pixels and its latched scroll and window values. Its pixels are not kept, being the picture's and not the machine's
 /// (a state must not depend on whether frames were drawn); a loaded state draws them again from itself.
@@ -622,6 +643,7 @@ pub struct Saved {
     line_scroll: (Vec<u8>, (u16, u16)),
     line_window: [u8; 2],
     open_line: OpenLine,
+    write_path: ([u64; 4], std::collections::VecDeque<(u64, crate::vdp::Entry)>),
     sprite_buffer: Vec<u8>,
     io: crate::io::IoRegs,
     sram_reg: u8,
@@ -658,6 +680,8 @@ impl Genesis {
         let fifo: Vec<u16> = v.fifo.iter().flat_map(|e| [e.code as u16 | (e.half as u16) << 8, e.address, e.data]).collect();
         w.u16s("VdpFifo", &fifo);
         w.bytes("VdpFifoPointers", &[v.fifo_count, v.fifo_next]);
+        w.u64s("VdpFifoReady", &h.vdp.fifo_at);
+        w.u64s("VdpLanding", &landing_words(&h.vdp.landing));
         w.u16("VdpReadBuffer", v.read_buf);
         w.u64s("VdpDma", &dma_words(v.dma));
         w.u64s("VdpTimes", &[v.time, v.fetch_at]);
@@ -717,6 +741,10 @@ impl Genesis {
         let mut p = [0u8; 2];
         r.bytes(&mut p)?;
         [v.fifo_count, v.fifo_next] = [p[0].min(4), p[1] & 3];
+        let mut fifo_at = [0u64; 4];
+        r.u64s(&mut fifo_at)?;
+        let mut landing = [0u64; LANDING_WORDS];
+        r.u64s(&mut landing)?;
         v.read_buf = r.u16()?;
         let mut d = [0u64; 4];
         r.u64s(&mut d)?;
@@ -778,6 +806,7 @@ impl Genesis {
             line_scroll: (line_vsram, (hs[0], hs[1])),
             line_window,
             open_line: OpenLine { open, sprites, latch: (span_vsram, (span_scroll[0], span_scroll[1]), span_window) },
+            write_path: (fifo_at, landing_from(&landing)),
             sprite_buffer,
             io,
             sram_reg,
@@ -807,6 +836,7 @@ impl Genesis {
         h.vdp.sat_cache = s.sat_cache;
         (h.vdp.line_vsram, h.vdp.line_hscroll) = s.line_scroll;
         h.vdp.line_window = s.line_window;
+        (h.vdp.fifo_at, h.vdp.landing) = s.write_path;
         let o = s.open_line;
         (h.vdp.open, h.vdp.span_x) = ((o.open[0] != 0).then(|| o.open[0] as usize - 1), o.open[1] as usize);
         (h.vdp.span_sprites, h.vdp.span_latch) = (o.sprites, o.latch);

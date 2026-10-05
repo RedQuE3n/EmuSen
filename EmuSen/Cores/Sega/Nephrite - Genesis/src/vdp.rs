@@ -13,9 +13,13 @@ pub fn vram128_address(a: usize) -> usize {
 }
 
 /// Pixels before a 2-cell column is shown that the VDP reads its vertical scroll (bracketed on the board between 20 and
-/// 34), and its name table and patterns (between 4 and 16, weakly); Nephrite_Disputes.md D-9.
+/// 34), and its name table and patterns (between 20 and 32, weakly); Nephrite_Disputes.md D-9.
 pub const VSCROLL_LEAD: i64 = 27;
-pub const PATTERN_LEAD: u64 = 8;
+pub const PATTERN_LEAD: u64 = 24;
+
+/// Master clocks before a word that arrives with nothing queued can be written: the write path's start, measured on
+/// the board in both widths, the display on and off (Nephrite_Disputes.md D-11).
+pub const WRITE_START: u64 = 176;
 
 /// Master clocks a line.
 pub const LINE: u64 = 3420;
@@ -110,8 +114,8 @@ fn build(h40: bool) -> Timing {
         blank,
         first_blank,
         vint: at(0x001),
-        // MacDonald's m5hvc.txt: the blanking flag changes at H $A8 (40-cell) and $87 (32-cell), of the 8-bit counter.
-        vblank: if h40 { at(0x150) } else { at(0x10E) },
+        // Two pixels after the V counter's step, as the board shows (D-12), not m5hvc.txt's $A8 and $87.
+        vblank: if h40 { at(0x14C) } else { at(0x10C) },
         hblank_set: if h40 { 0x166 } else { 0x126 },
         hblank_clear: if h40 { 0x00B } else { 0x00A },
     }
@@ -171,6 +175,10 @@ pub struct Vdp {
     fifo: [Entry; 4],
     fifo_count: u8,
     fifo_next: u8,
+    /// The time from which a slot may write each FIFO entry to memory, and the words that have left the FIFO and not
+    /// yet reached memory, with theirs (Nephrite_Disputes.md D-11).
+    pub fifo_at: [u64; 4],
+    pub landing: std::collections::VecDeque<(u64, Entry)>,
     /// The read buffer and whether it holds the word the next data port read returns.
     read_buf: u16,
     read_ready: bool,
@@ -314,6 +322,8 @@ impl Vdp {
             cram: vec![0; 128],
             vsram: vec![0; 80],
             fifo: [Entry::default(); 4],
+            fifo_at: [0; 4],
+            landing: std::collections::VecDeque::new(),
             fifo_count: 0,
             fifo_next: 0,
             read_buf: 0,
@@ -384,7 +394,7 @@ impl Vdp {
         }
     }
 
-    /// At the start of vertical blanking the interlace setting is latched and, interlaced, the field changes.
+    /// With the frame interrupt the interlace setting is latched and, interlaced, the field changes.
     pub fn field_start(&mut self) {
         self.interlace = match (self.regs[12] >> 1) & 3 {
             1 => 1,
@@ -433,7 +443,7 @@ impl Vdp {
 
     /// Whether a slot has anything to do: the FIFO to drain, a DMA to run, or a read to fetch.
     pub fn busy(&self) -> bool {
-        self.fifo_count > 0 || !matches!(self.dma, Dma::None | Dma::FillWait) || (self.reads() && !self.read_ready)
+        self.fifo_count > 0 || !self.landing.is_empty() || !matches!(self.dma, Dma::None | Dma::FillWait) || (self.reads() && !self.read_ready)
     }
 
     fn reads(&self) -> bool {
@@ -469,6 +479,9 @@ impl Vdp {
     fn push(&mut self, data: u16) {
         let i = self.fifo_next as usize;
         self.fifo[i] = Entry { code: self.code & 0xF, address: self.address, data, half: false };
+        // A word arriving with nothing queued waits the write path's start, unless a transfer brings it with the display off (D-11).
+        let cold = self.fifo_count == 0 && self.landing.is_empty() && !(self.bus_dma() && !self.display());
+        self.fifo_at[i] = self.time + if cold { WRITE_START } else { 0 };
         self.fifo_next = (self.fifo_next + 1) & 3;
         self.fifo_count += 1;
         self.address = self.address.wrapping_add(self.increment());
@@ -479,6 +492,16 @@ impl Vdp {
         self.fifo[self.fifo_next as usize].data
     }
 
+    /// The oldest word that has left the FIFO written to memory, if its time has come: one a slot.
+    fn land(&mut self) {
+        if let Some(&(ready, e)) = self.landing.front()
+            && ready <= self.time
+        {
+            self.landing.pop_front();
+            self.write_entry(e);
+        }
+    }
+
     /// One external access slot: the FIFO's oldest entry (a VRAM word takes two), else a step of a fill or a copy,
     /// else the read the read buffer waits for.
     pub fn slot(&mut self) {
@@ -487,9 +510,10 @@ impl Vdp {
             let e = self.fifo[i];
             if e.code == 1 && !e.half {
                 self.fifo[i].half = true;
+                self.land();
                 return;
             }
-            self.write_entry(e);
+            self.landing.push_back((self.fifo_at[i], e));
             self.fifo_count -= 1;
             // A word written during a fill becomes its data (VDPFIFOTesting's data port writes during a fill).
             match self.dma {
@@ -497,6 +521,11 @@ impl Vdp {
                 Dma::Fill { started: true, left, .. } => self.dma = Dma::Fill { data: e.data, left, started: true },
                 _ => {}
             }
+            self.land();
+            return;
+        }
+        if !self.landing.is_empty() {
+            self.land();
             return;
         }
         match self.dma {
@@ -872,6 +901,7 @@ mod tests {
 
     fn drain(v: &mut Vdp) {
         for _ in 0..64 {
+            v.time += 16;
             v.slot();
         }
     }
@@ -959,6 +989,21 @@ mod tests {
         }
         let t = timing(true);
         assert!(t.hblank(0) == false && t.hblank(t.vint));
+    }
+
+    /// The blanking flag rises two pixels after the V counter's step into line 224 and falls two after the step into
+    /// the last line, in both widths (the board's status samples, Nephrite_Disputes.md D-12).
+    #[test]
+    fn the_blanking_flag_changes_two_pixels_after_the_v_counter() {
+        for (h40, r12, edge) in [(true, 0x81, 0x14C), (false, 0x00, 0x10C)] {
+            let mut v = Vdp::new(false);
+            (v.regs[1], v.regs[12]) = (0x44, r12);
+            let t = timing(h40);
+            let at = (0..LINE).find(|&m| t.h(m) == edge).unwrap();
+            for (line, before, after) in [(224, false, true), (261, true, false)] {
+                assert_eq!((v.status(line, at - 1) & 8 != 0, v.status(line, at) & 8 != 0), (before, after), "line {line}, H40 {h40}");
+            }
+        }
     }
 
     /// The V counter's jumps and line counts as the board showed them (Nephrite_Disputes.md D-4).

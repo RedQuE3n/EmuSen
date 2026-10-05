@@ -8,7 +8,7 @@ use crate::machine::Machine;
 use crate::media::System;
 
 pub const STATE_MAGIC: u32 = u32::from_le_bytes(*b"NPHR");
-pub const STATE_VERSION: i32 = 6;
+pub const STATE_VERSION: i32 = 7;
 /// A state of this core made for another of its systems: a Genesis state offered to a 32X machine.
 pub const STATUS_OTHER_SYSTEM: i32 = -10;
 
@@ -143,17 +143,17 @@ mod tests {
                 "139606 1 bool Z80.Iff2\n139607 1 u8 Z80.Im\n139608 1 bool Z80.EiPending\n139609 1 bool Z80.Halted\n",
                 "139610 24 u8[24] VdpRegisters\n139634 5 bool[5] VdpLatches\n139639 4 u32 HvLatch\n",
                 "139643 1 u8 VdpCode\n139644 2 u16 VdpAddress\n139646 1 u8 VdpLineCounter\n",
-                "139647 24 u16[12] VdpFifo\n139671 2 u8[2] VdpFifoPointers\n139673 2 u16 VdpReadBuffer\n",
-                "139675 32 u64[4] VdpDma\n139707 16 u64[2] VdpTimes\n139723 320 u8[320] SpriteCache\n",
-                "140043 3 bool[3] SpriteFlags\n140046 2 u16 VscrollLatch\n140048 2 u8[2] Field\n",
-                "140050 320 u8[320] SpriteLineBuffer\n140370 80 u8[80] LineVsram\n140450 4 u16[2] LineHscroll\n",
-                "140454 2 u8[2] LineWindow\n140456 4 u16[2] OpenLine\n140460 640 u8[640] OpenLineSprites\n",
-                "141100 80 u8[80] OpenLineVsram\n141180 4 u16[2] OpenLineScroll\n141184 2 u8[2] OpenLineWindow\n",
-                "141186 3 u8[3] IoData\n141189 3 u8[3] IoCtrl\n141192 3 u8[3] IoTx\n141195 3 u8[3] IoSctrl\n",
-                "141198 2 bool[2] PadTh\n141200 2 u8[2] PadFalls\n141202 16 u64[2] PadLastFall\n",
-                "141218 1 u8 SramRegister\n141219 1 bool Mapper\n141220 8 u8[8] MapperPages\n",
-                "141228 56 u64[7] Clocks\n141284 4 u32 Line\n141288 2 u16 Z80Bank\n141290 2 u16 OpenBus\n",
-                "141292 4 bool[4] Lines\n141296 4 u8[4] Tmss\n"
+                "139647 24 u16[12] VdpFifo\n139671 2 u8[2] VdpFifoPointers\n139673 32 u64[4] VdpFifoReady\n",
+                "139705 264 u64[33] VdpLanding\n139969 2 u16 VdpReadBuffer\n139971 32 u64[4] VdpDma\n",
+                "140003 16 u64[2] VdpTimes\n140019 320 u8[320] SpriteCache\n140339 3 bool[3] SpriteFlags\n",
+                "140342 2 u16 VscrollLatch\n140344 2 u8[2] Field\n140346 320 u8[320] SpriteLineBuffer\n",
+                "140666 80 u8[80] LineVsram\n140746 4 u16[2] LineHscroll\n140750 2 u8[2] LineWindow\n",
+                "140752 4 u16[2] OpenLine\n140756 640 u8[640] OpenLineSprites\n141396 80 u8[80] OpenLineVsram\n",
+                "141476 4 u16[2] OpenLineScroll\n141480 2 u8[2] OpenLineWindow\n141482 3 u8[3] IoData\n",
+                "141485 3 u8[3] IoCtrl\n141488 3 u8[3] IoTx\n141491 3 u8[3] IoSctrl\n141494 2 bool[2] PadTh\n",
+                "141496 2 u8[2] PadFalls\n141498 16 u64[2] PadLastFall\n141514 1 u8 SramRegister\n",
+                "141515 1 bool Mapper\n141516 8 u8[8] MapperPages\n141524 56 u64[7] Clocks\n141580 4 u32 Line\n",
+                "141584 2 u16 Z80Bank\n141586 2 u16 OpenBus\n141588 4 bool[4] Lines\n141592 4 u8[4] Tmss\n"
             )
         );
     }

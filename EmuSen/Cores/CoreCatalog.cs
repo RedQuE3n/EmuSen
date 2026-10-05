@@ -273,6 +273,8 @@ namespace EmuSen.Cores
             ["N64"] = MarsEngine,
         };
 
+        public static string? ReferenceEngine(string console) => ReferenceEngineByConsole.GetValueOrDefault(console);
+
         // The v1 engines discovery found for a console, by the names their info gives them - see EmuSen_CoreAPI.md §19.
         public static IReadOnlyList<string> DiscoveredEngines(string console) =>
             SystemIdsFor(console).SelectMany(Native.CoreDiscovery.ForSystem).Select(c => c.EngineName).Distinct().ToArray();

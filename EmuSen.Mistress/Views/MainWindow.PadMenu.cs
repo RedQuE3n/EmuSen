@@ -113,6 +113,7 @@ namespace EmuSen.Mistress.Views
             Opens("Graphics", ShowGraphicsSettings),
             Opens("Shaders", ShowShaderSettings),
             Opens("Cheats", ShowActiveCheats),
+            Opens(PreferencesWindow.FirmwareTab, () => ShowPreferencesAt(PreferencesWindow.FirmwareTab)),
             Opens("Preferences", ShowPreferences),
         ];
 

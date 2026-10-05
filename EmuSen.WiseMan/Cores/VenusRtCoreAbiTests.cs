@@ -140,7 +140,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.DoesNotContain(engine.Machine.Info.Processors, p => p.Name == "DSP");
             Assert.Contains("Coprocessor.DspHle", engine.Machine.Layout(0));
             Assert.Null(engine.FirmwareNotice);
-            Assert.StartsWith("Without the image", engine.GetFirmwareRequirements(rom).Single(r => r.FileName == "dsp1b.rom").ReplacementCost);
+            Assert.Contains(". Without the image, VenusRT's open replacement for the DSP-1 runs", engine.GetFirmwareRequirements(rom).Single(r => r.FileName == "dsp1b.rom").ReplacementCost);
             string gear = Path.Combine(_root, "gear.sfc");
             File.WriteAllBytes(gear, SyntheticRom.BuildNecDsp("TOP GEAR 3000"));
             Assert.Empty(EmuSen.Common.EmulatorSession.MissingFirmwareFor(gear, Engine));
@@ -167,7 +167,7 @@ namespace EmuSen.WiseMan.Cores
             engine.LoadRom(rom);
             Assert.Equal(new[] { new CoreFirmwareSource(1, "replacement") }, engine.Machine.Info.Firmware);
             Assert.Null(engine.FirmwareNotice);
-            Assert.StartsWith("Without the image, VenusRT's own boot program runs", request.ReplacementCost);
+            Assert.StartsWith("Games may start a fraction of a second later. Without the image, VenusRT's own boot program runs", request.ReplacementCost);
             byte[] image = new byte[64];
             (image[0], image[1], image[62], image[63]) = (0x2F, 0xFE, 0xC0, 0xFF);
             File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, "spc700.rom"), image);

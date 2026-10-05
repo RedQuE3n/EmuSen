@@ -19,8 +19,14 @@ namespace EmuSen.Mistress.Views
     // A desktop settings sheet drawn as ES-DE's menus in a big-screen session: its controls, moved out of their field rows into menu rows, pages as submenus - see EmuSen_Settings_Reference.md §4.72.8.
     public sealed class BigMenuForm
     {
-        // One screen of the form: its title, and what its rows are made from each time it is shown.
-        private sealed record Page(string Title, Func<IReadOnlyList<Control>> Rows);
+        // Set on a field whose hint is read letter for letter, such as a folder's path: its footer keeps its case whatever case the look draws words in.
+        public static readonly AttachedProperty<bool> VerbatimHintProperty = AvaloniaProperty.RegisterAttached<FieldRow, bool>("VerbatimHint", typeof(BigMenuForm));
+
+        // Set on a page whose rows take no choice: its hints are only moving and going back, since A and the sides do nothing there.
+        public static readonly AttachedProperty<bool> ReadOnlyPageProperty = AvaloniaProperty.RegisterAttached<Control, bool>("ReadOnlyPage", typeof(BigMenuForm));
+
+        // One screen of the form: its title, what its rows are made from each time it is shown, and whether it takes no choice.
+        private sealed record Page(string Title, Func<IReadOnlyList<Control>> Rows, bool ReadOnly = false);
 
         private readonly ToolWindow _window;
         private readonly string _title;
@@ -33,11 +39,13 @@ namespace EmuSen.Mistress.Views
         private readonly Stack<Page> _stack = new();
         private readonly Dictionary<Control, List<Control>> _converted = new();
         private readonly Dictionary<Control, string> _hints = new();
+        private readonly HashSet<Control> _verbatim = new();
         private readonly Dictionary<Control, List<Control>> _extras = new();
         private List<Control> _pending = new();
         private readonly Dictionary<int, Button> _pageRows = new();
         private readonly HashSet<Panel> _watched = new();
         private readonly Button _back;
+        private readonly IReadOnlyList<HintEntry> _choiceHints = Hints(), _readOnlyHints = Hints(readOnly: true);
         private bool _rebuildQueued;
 
         // The window's pages, the first shown inline above the others' submenu rows when firstInline, as ES-DE's UI settings put the theme's options above its submenus.
@@ -59,7 +67,7 @@ namespace EmuSen.Mistress.Views
                 FooterMaxLines = 2,
                 FooterSize = 22,
                 HintFamily = family,
-                Hints = Hints(),
+                Hints = _choiceHints,
                 Child = new ScrollViewer { Content = _rows, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden },
                 Buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Children = { _back } },
             };
@@ -100,13 +108,19 @@ namespace EmuSen.Mistress.Views
 
         public string? HintOf(Control row) => _hints.GetValueOrDefault(row);
 
-        private static IReadOnlyList<HintEntry> Hints() =>
-        [
-            new("Select") { Button = PadHints.Glyph(PadGlyphButton.South) },
-            new("Back") { Button = PadHints.Glyph(PadGlyphButton.East) },
-            new("Change") { Button = PadGlyphButton.DPadLeftRight },
-            new("Choose") { Button = PadGlyphButton.DPadUpDown },
-        ];
+        private static IReadOnlyList<HintEntry> Hints(bool readOnly = false) => readOnly
+            ?
+            [
+                new("Back") { Button = PadHints.Glyph(PadGlyphButton.East) },
+                new("Choose") { Button = PadGlyphButton.DPadUpDown },
+            ]
+            :
+            [
+                new("Select") { Button = PadHints.Glyph(PadGlyphButton.South) },
+                new("Back") { Button = PadHints.Glyph(PadGlyphButton.East) },
+                new("Change") { Button = PadGlyphButton.DPadLeftRight },
+                new("Choose") { Button = PadGlyphButton.DPadUpDown },
+            ];
 
         // B and Back: a submenu goes back to the screen it came from, the first screen closes the sheet.
         public bool Back()
@@ -124,7 +138,7 @@ namespace EmuSen.Mistress.Views
         private void Root()
         {
             _stack.Clear();
-            _stack.Push(new Page(_title, RootRows));
+            _stack.Push(new Page(_title, RootRows, _pages.Count == 1 && _pages[0].Content.GetValue(ReadOnlyPageProperty)));
             Show(focusFirst: false);
         }
 
@@ -160,12 +174,12 @@ namespace EmuSen.Mistress.Views
                 Show(focusFirst: true);
                 return;
             }
-            Push(_pages[index].Header, () => PageRows(_pages[index].Content));
+            Push(_pages[index].Header, () => PageRows(_pages[index].Content), _pages[index].Content.GetValue(ReadOnlyPageProperty));
         }
 
-        private void Push(string title, Func<IReadOnlyList<Control>> rows)
+        private void Push(string title, Func<IReadOnlyList<Control>> rows, bool readOnly = false)
         {
-            _stack.Push(new Page(title, rows));
+            _stack.Push(new Page(title, rows, readOnly));
             Show(focusFirst: true);
         }
 
@@ -173,6 +187,7 @@ namespace EmuSen.Mistress.Views
         {
             Page page = _stack.Peek();
             Menu.Title = page.Title;
+            Menu.Hints = page.ReadOnly ? _readOnlyHints : _choiceHints;
             foreach (Control row in _rows.Children.ToList())
             {
                 _rows.Children.Remove(row);
@@ -202,7 +217,12 @@ namespace EmuSen.Mistress.Views
         private void ShowHint(Control? source)
         {
             for (Control? c = source; c is not null && !ReferenceEquals(c, _rows); c = c.Parent as Control)
-                if (_hints.TryGetValue(c, out string? hint)) { Menu.Footer = hint.Length > 0 ? hint : null; return; }
+                if (_hints.TryGetValue(c, out string? hint))
+                {
+                    Menu.FooterLetterCase = _verbatim.Contains(c) ? EmuSen.LunaP.Media.LetterCase.None : null;
+                    Menu.Footer = hint.Length > 0 ? hint : null;
+                    return;
+                }
             Menu.Footer = null;
         }
 
@@ -280,7 +300,11 @@ namespace EmuSen.Mistress.Views
                 {
                     Control? content = field.Content as Control;
                     field.Content = null;
-                    foreach (Control row in Content(content, field.Label ?? "", field.Hint ?? "")) yield return row;
+                    foreach (Control row in Content(content, field.Label ?? "", field.Hint ?? ""))
+                    {
+                        if (field.GetValue(VerbatimHintProperty)) _verbatim.Add(row);
+                        yield return row;
+                    }
                     yield break;
                 }
                 case EmptyState empty:

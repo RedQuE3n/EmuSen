@@ -596,6 +596,14 @@ int64_t emusen_core_last_error(const emusen_machine *machine, uint8_t *out, size
   chip, its `cost` saying so. An entry without it reads as no replacement. The host prompts only for a `required`
   entry, and shows one status line when a game runs on a replacement short of `exact` or without its chip. Kit case C4
   checks the words and creates an image whose entries are all optional with no files.
+
+  *Amended 2026-10-05.* A host no longer shows a status line for a running replacement, only for a chip that runs
+  with none (`VenusRT_Native.md` §66). The cost is shown on the firmware page (`EmuSen_Settings_Reference.md` §4.89),
+  which takes **the cost's first sentence**, up to the first full stop followed by a space, as the summary a player
+  reads, and shows the whole text on request. A core therefore opens each cost on one short sentence in a player's
+  words ("Games may start a fraction of a second later."), with no engine name or address in it, and puts the detail
+  after it. A cost of one sentence is shown whole. The page shows an entry's `label` followed by its `name` in
+  brackets, so a label is the thing's name in plain words, without its size or file name.
 - **`free` — In.** It may be called from any thread, provided no other call on that machine is in flight; that is what
   the host's finaliser already does (§1.2, item 9). Every thread the core started for the machine has stopped when it
   returns.
@@ -648,7 +656,7 @@ Each **system** entry:
 | **`extensions`** | `[".sfc", ".smc"]` |
 | `regions` | `["ntsc", "pal"]` |
 | `controllers` | the devices a port can hold, below |
-| `firmware` | every firmware file the system can use, for the firmware window, even before a game |
+| `firmware` | every firmware file the system can use, for the firmware window, even before a game. One entry for each image a game can name, with that image's own label, size, parts and replacement, as `firmware_for` gives them; entries for images that are alternatives in one file slot share its `which` (amended 2026-10-05, `VenusRT_Native.md` §67) |
 
 A **controller** names its controls in the canonical vocabulary, so that the bindings screen is built from data and
 the physical bindings stay the frontend's:

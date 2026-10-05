@@ -49,16 +49,32 @@ fn sa1_bound(value: &str) -> Option<u32> {
 const NTSC_FRAME: (u64, u64) = (236_250_000, 11 * 357_366);
 const PAL_FRAME: (u64, u64) = (21_281_370, 425_568);
 
+/// The NEC DSP images a cartridge can ask for, as `Cartridge::nec_firmware` names them, with the chip's name.
+const NEC_CHIPS: [(&str, u64, &str); 7] = [
+    ("dsp1", 8_192, "DSP-1"),
+    ("dsp1b", 8_192, "DSP-1B"),
+    ("dsp2", 8_192, "DSP-2"),
+    ("dsp3", 8_192, "DSP-3"),
+    ("dsp4", 8_192, "DSP-4"),
+    ("st010", 53_248, "ST010"),
+    ("st011", 53_248, "ST011"),
+];
+
 /// A NEC DSP cartridge's firmware as file 2, whole or as its program and data in files 2 and 3; `stem` and `size` as
-/// `Cartridge::nec_firmware` names them, or the open entry core info lists for any of them. Never required: without
-/// it VenusRT runs its replacement, or the game without its chip (VenusRT_DspHle.md §7.2).
-fn dsp(named: Option<(&str, u64)>) -> Firmware {
-    let (name, size, parts) = match named {
-        Some((stem, size)) => (format!("{stem}.rom"), size, vec![vec![format!("{stem}.rom")], vec![format!("{stem}.program.rom"), format!("{stem}.data.rom")]]),
-        None => ("dsp.rom".to_owned(), 0, Vec::new()),
-    };
-    let label = "The cartridge's NEC DSP program and data: DSP-1 to DSP-4 (8,192 bytes) or ST010/ST011 (53,248)".into();
-    Firmware { which: 2, name, label, size, required: false, parts, replacement: Some(replacement(named.map(|(stem, _)| stem))) }
+/// `Cartridge::nec_firmware` names them. Never required: without it VenusRT runs its replacement, or the game without
+/// its chip (VenusRT_DspHle.md §7.2). The label is the row's name on the firmware page (EmuSen_Settings_Reference.md
+/// §4.89).
+fn dsp(stem: &str, size: u64) -> Firmware {
+    let chip = NEC_CHIPS.iter().find(|c| c.0 == stem).map_or(stem, |c| c.2);
+    Firmware {
+        which: 2,
+        name: format!("{stem}.rom"),
+        label: format!("{chip} cartridge chip"),
+        size,
+        required: false,
+        parts: vec![vec![format!("{stem}.rom")], vec![format!("{stem}.program.rom"), format!("{stem}.data.rom")]],
+        replacement: Some(replacement(stem)),
+    }
 }
 
 /// The SPC700's boot program as file 1, never required: without it VenusRT runs its own (D-38, VenusRT_Native.md §35).
@@ -66,37 +82,38 @@ fn boot() -> Firmware {
     Firmware {
         which: 1,
         name: "spc700.rom".into(),
-        label: "The SPC700's boot program (64 bytes)".into(),
+        label: "SNES sound chip start-up".into(),
         size: 64,
         required: false,
         parts: vec![vec!["spc700.rom".into()]],
         replacement: Some(Replacement::Accuracy {
-            cost: "Without the image, VenusRT's own boot program runs: a program reading $FFC0-$FFFF with the boot ROM mapped sees other bytes than a console's, and the upload handshake can take some cycles more (VenusRT_Native.md §35.3).".into(),
+            cost: "Games may start a fraction of a second later. Without the image, VenusRT's own boot program runs: a program reading $FFC0-$FFFF with the boot ROM mapped sees other bytes than a console's, and the upload handshake can take some cycles more (VenusRT_Native.md §35.3, §64).".into(),
         }),
     }
 }
 
-/// What running without the image costs, chip by chip (VenusRT_DspHle.md §5.5), in words a player reads.
-fn replacement(stem: Option<&str>) -> Replacement {
+/// What running without the image costs, chip by chip (VenusRT_DspHle.md §5.5). The first sentence is the summary the
+/// firmware page shows alone, in a player's words; the rest is the detail.
+fn replacement(stem: &str) -> Replacement {
     let without = |chip: &str| Replacement::None { cost: format!("VenusRT has no replacement for the {chip} yet: without the image the game runs without its chip.") };
     match stem {
-        Some("dsp1") | Some("dsp1b") => Replacement::Accuracy {
-            cost: "Without the image, VenusRT's open replacement for the DSP-1 runs: its ports as the chip's, Multiply, Radius, Range, the memory test and the ROM version exact, and every other command a game gives within a few units, so Super Mario Kart and the racing and baseball games play as with the image; a view tilted past about 80 degrees takes the chip's own branch, so Pilotwings' level flight draws its ground as with the image, but Lock On draws no ground (VenusRT_Native.md §52).".into(),
+        "dsp1" | "dsp1b" => {
+            let first = if stem == "dsp1" { "Pilotwings plays close to how it does with your own file." } else { "Games play close to how they do with your own file, but Lock On draws no ground." };
+            Replacement::Accuracy {
+                cost: format!("{first} Without the image, VenusRT's open replacement for the DSP-1 runs: its ports as the chip's, Multiply, Radius, Range, the memory test and the ROM version exact, and every other command a game gives within a few units, so Super Mario Kart and the racing and baseball games play as with the image; a view tilted past about 80 degrees takes the chip's own branch, so Pilotwings' level flight draws its ground as with the image, but Lock On draws no ground (VenusRT_Native.md §52)."),
+            }
+        }
+        "dsp2" => Replacement::Accuracy {
+            cost: "Dungeon Master plays as it does with your own file. Without the image, VenusRT's open replacement for the DSP-2 runs: every command Dungeon Master gives answers as the chip does, to the cycle, and the game runs as with the image; the data ROM transfer gives zeros, the scaling command's timing is estimated, and counts beyond the chip's buffers are not reproduced (VenusRT_Native.md §42).".into(),
         },
-        Some("dsp2") => Replacement::Accuracy {
-            cost: "Without the image, VenusRT's open replacement for the DSP-2 runs: every command Dungeon Master gives answers as the chip does, to the cycle, and the game runs as with the image; the data ROM transfer gives zeros, the scaling command's timing is estimated, and counts beyond the chip's buffers are not reproduced (VenusRT_Native.md §42).".into(),
+        "st010" => Replacement::Accuracy {
+            cost: "F1 ROC II plays as it does with your own file, with the other cars a little off their lines. Without the image, VenusRT's open replacement for the ST010 runs: its mailbox to the cycle, the sort, scale, distance and multiply commands exact, the angle command and the driver simulation exact but where a bearing falls on two entries of the chip's angle table, and the rotation and raster commands within one unit where the chip's sine table departs from its formula, so F1 ROC II's road is drawn as with the image and its opponents keep the image's lines within a few units; the battery file is the same on both (VenusRT_Native.md §43, §54, §57).".into(),
         },
-        Some("st010") => Replacement::Accuracy {
-            cost: "Without the image, VenusRT's open replacement for the ST010 runs: its mailbox to the cycle, the sort, scale, distance and multiply commands exact, the angle command and the driver simulation exact but where a bearing falls on two entries of the chip's angle table, and the rotation and raster commands within one unit where the chip's sine table departs from its formula, so F1 ROC II's road is drawn as with the image and its opponents keep the image's lines within a few units; the battery file is the same on both (VenusRT_Native.md §43, §54, §57).".into(),
+        "dsp3" => without("DSP-3"),
+        "dsp4" => Replacement::Accuracy {
+            cost: "Top Gear 3000's menus work, but its races stay black. Without the image, VenusRT's open replacement for the DSP-4 runs its protocol and multiply command, but not the road and scenery commands, so Top Gear 3000 runs its menus as with the image but its race screen stays black (VenusRT_Native.md §48.3).".into(),
         },
-        Some("dsp3") => without("DSP-3"),
-        Some("dsp4") => Replacement::Accuracy {
-            cost: "Without the image, VenusRT's open replacement for the DSP-4 runs its protocol and multiply command, but not the road and scenery commands, so Top Gear 3000 runs its menus as with the image but its race screen stays black (VenusRT_Native.md §48.3).".into(),
-        },
-        Some(_) => without("ST011"),
-        None => Replacement::Accuracy {
-            cost: "Without the image, VenusRT runs its open replacement for the DSP-1, DSP-2, DSP-4 or ST010, whose commands are not all computed yet, and a DSP-3 or ST011 game runs without its chip (VenusRT_DspHle.md §5.5).".into(),
-        },
+        _ => without("ST011"),
     }
 }
 
@@ -197,7 +214,7 @@ impl Core for Machine {
                     buttons: BUTTONS.iter().enumerate().map(|(bit, &(c, label))| Button { bit: bit as u32, control: Some(c), label: label.into() }).collect(),
                     axes: Vec::new(),
                 }],
-                firmware: vec![boot(), dsp(None)],
+                firmware: std::iter::once(boot()).chain(NEC_CHIPS.iter().map(|&(stem, size, _)| dsp(stem, size))).collect(),
             }],
             deterministic: true,
             ..Info::default()
@@ -238,7 +255,7 @@ impl Core for Machine {
             return vec![boot()];
         }
         match crate::cart::Cartridge::new(image).and_then(|c| c.nec_firmware()) {
-            Some(named) => vec![boot(), dsp(Some(named))],
+            Some((stem, size)) => vec![boot(), dsp(stem, size)],
             None => vec![boot()],
         }
     }
@@ -543,6 +560,35 @@ mod tests {
         assert_eq!(named(b"F1 ROC II", 0xF6)[1], "2 st010.rom 53248");
         assert_eq!(named(b"MORITA SHOGI", 0xF6)[1], "2 st011.rom 53248");
         assert!(<Machine as Core>::info().systems[0].firmware.iter().all(|f| f.which >= 1));
+    }
+
+    // Core info lists the boot program and each NEC chip a cartridge can name, as the firmware page shows them
+    // (EmuSen_Settings_Reference.md §4.89): a row a game's own answer repeats, and a cost that opens on one sentence.
+    #[test]
+    fn core_info_lists_every_image_a_game_can_name_with_a_summary_first() {
+        let listed = <Machine as Core>::info().systems[0].firmware.clone();
+        let names: Vec<&str> = listed.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, ["spc700.rom", "dsp1.rom", "dsp1b.rom", "dsp2.rom", "dsp3.rom", "dsp4.rom", "st010.rom", "st011.rom"]);
+        for (title, chipset) in [(&b"PILOTWINGS"[..], 0x03), (b"SUPER MARIO KART", 0x05), (b"DUNGEON MASTER", 0x03), (b"SD GUNDAM GX", 0x03), (b"TOP GEAR 3000", 0x03), (b"F1 ROC II", 0xF6), (b"MORITA SHOGI", 0xF6)] {
+            let mut image = crate::machine::tests::rom(&[]);
+            image[0x7FC0..0x7FD5].fill(b' ');
+            image[0x7FC0..0x7FC0 + title.len()].copy_from_slice(title);
+            image[0x7FD6] = chipset;
+            for asked in <Machine as Core>::firmware_for(&image) {
+                let row = listed.iter().find(|f| f.name == asked.name).expect("a game's image is in core info");
+                assert_eq!((&row.label, row.size, &row.parts, &row.replacement), (&asked.label, asked.size, &asked.parts, &asked.replacement));
+            }
+        }
+        for f in &listed {
+            match f.replacement.as_ref().unwrap() {
+                Replacement::Accuracy { cost } => {
+                    let first = cost.split(". ").next().unwrap();
+                    assert!(first.len() < 100 && !first.contains("VenusRT") && !first.contains('$') && cost.len() > first.len() + 2, "{}: {first}", f.name);
+                }
+                Replacement::None { cost } => assert!(cost.contains("no replacement"), "{}", f.name),
+                Replacement::Exact => {}
+            }
+        }
     }
 
     // The SA-1 catch-up setting: exact by default, refused outside its choices, and under a bound the SA-1 left behind

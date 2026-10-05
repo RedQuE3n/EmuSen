@@ -52,7 +52,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         internal static readonly string[] GameSettings = ["Cheats", "Players & Controllers", "Controller Bindings", "Graphics", "Shaders"];
-        internal static readonly string[] Settings = ["Players & Controllers", "Controller Bindings", "Graphics", "Shaders", "Cheats", "Preferences"];
+        internal static readonly string[] Settings = ["Players & Controllers", "Controller Bindings", "Graphics", "Shaders", "Cheats", "Firmware", "Preferences"];
 
         // One synthetic game, started from the library: as Game Mode starts it with a big screen, else on the desktop.
         private (MainWindow Window, PadDriver Pad) Playing(bool bigScreen, int width = 1280, int height = 800)

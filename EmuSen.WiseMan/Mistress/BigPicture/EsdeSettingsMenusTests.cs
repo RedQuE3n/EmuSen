@@ -142,7 +142,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Settle();
             var sheet = Assert.IsType<PreferencesWindow>(Sheets(s).Current);
             AssertEsdeMenu(s, sheet.Form!.Menu, "Preferences");
-            Assert.Equal(["Library", "Scraping", "Gameplay", "Appearance", "Controllers", "System Files"], Rows(s).Select(LabelOf));
+            Assert.Equal(["Library", "Scraping", "Gameplay", "Appearance", "Controllers", "Firmware"], Rows(s).Select(LabelOf));
 
             Reach(s, "BigMenuPage2");
             s.Pad.A();
@@ -156,6 +156,44 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.Right();
             Assert.Equal(75, s.Settings.BigPictureInterface.NavigationVolume);
             Assert.Equal("75", RowOf(Named<Slider>(s, "NavigationVolumeSlider")).Value);
+            ThemedSwitchesTests.PutAway(s);
+            Assert.False(Sheets(s).IsPresenting);
+        }, default);
+
+        // Firmware under a theme is ES-DE's menu like the other tabs, reached from the pad menu's Settings: rows a pad lands on, each said in the footer, and nothing that opens anything - see EmuSen_Settings_Reference.md §4.89.
+        [Theory]
+        [MemberData(nameof(Sizes))]
+        public Task The_firmware_page_under_a_theme_is_a_menu_of_rows_the_pad_reads(int width, int height) => Session.Dispatch(() =>
+        {
+            using var s = new ThemedSession(width, height);
+            ThemedLibraryFlowTests.Choose(s, PreferencesWindow.FirmwareTab);
+            s.Settle();
+            var sheet = Assert.IsType<PreferencesWindow>(Sheets(s).Current);
+            AssertEsdeMenu(s, sheet.Form!.Menu, PreferencesWindow.FirmwareTab);
+            int opened = EmuSen.WiseMan.Mistress.NoSteam.Launcher.Opened.Count;
+            WindowFitAuditTests.SavePicture(s.Window, $"PreferencesFirmware-Themed-{width}x{height}");
+            Control[] rows = Rows(s);
+            var systems = EmuSen.Cores.FirmwareOverview.Build();
+            Assert.Equal(new[] { FirmwarePane.FolderLabel, FirmwarePane.FolderRowLabel }.Concat(systems.SelectMany(y => y.Items.Count == 0 ? [y.Name] : y.Items.Select(FirmwarePane.MenuLabel))), rows.Select(LabelOf));
+            Assert.All(rows, r => Assert.Equal(MenuRowKind.Action, MenuRows.GetKind(r)));
+            Assert.Equal(new[] { "Optional", "Firmware" }.Concat(systems.SelectMany(y => y.Items.Count == 0 ? ["None needed"] : y.Items.Select(i => i.FileName))), rows.Select(r => RowOf(r).Value));
+            // The file names are drawn as they are spelt, under a look that draws everything else in capitals.
+            Assert.All(rows.Where(r => r == rows[1] || (RowOf(r).Value?.EndsWith(".rom", StringComparison.Ordinal) ?? false)), r => Assert.Equal(EmuSen.LunaP.Media.LetterCase.None, RowOf(r).ValueLetterCase));
+            Assert.Equal(["Back", "Choose"], sheet.Form.Menu.Hints!.Select(h => h.Label));
+            foreach (Control row in rows)
+            {
+                Assert.Same(row, TopLevel.GetTopLevel(s.Window)!.FocusManager!.GetFocusedElement());
+                Assert.False(string.IsNullOrEmpty(sheet.Form.Menu.Footer));
+                Assert.False(sheet.Form.Menu.IsFooterCut, sheet.Form.Menu.Footer);
+                Assert.Empty(FitAudit.Check(Sheet(s), WindowAllowances.For(sheet)));
+                // A on a row changes nothing and opens nothing.
+                s.Pad.A();
+                Assert.Same(sheet, Sheets(s).Current);
+                Assert.Equal(PreferencesWindow.FirmwareTab, sheet.Form.Menu.Title);
+                s.Pad.Down();
+                s.Settle();
+            }
+            Assert.Equal(opened, EmuSen.WiseMan.Mistress.NoSteam.Launcher.Opened.Count);
             ThemedSwitchesTests.PutAway(s);
             Assert.False(Sheets(s).IsPresenting);
         }, default);

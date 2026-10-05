@@ -657,6 +657,17 @@ impl Bus for System {
         self.math_tick();
     }
 
+    /// An internal cycle that still strobes a B-bus register's read, the byte dropped and the MDR kept (D-24).
+    #[inline]
+    fn implied_cycle(&mut self, address: u32, _pins: u8) {
+        self.clock_cycle(6);
+        self.hold_cycle(address, 6);
+        if address & 0x40_FF00 == 0x2100 {
+            let _ = self.read_value(address, true);
+        }
+        self.math_tick();
+    }
+
     fn halted(&mut self) {
         self.clock_cycle(6);
         self.math_tick();
@@ -726,5 +737,24 @@ mod tests {
         assert_eq!((s.wram[0x1000], s.mdr), (0, 0xA5));
         s.write(0x70_0010, 0x42, pin::VDA);
         assert_eq!(s.read(0xF0_0010, pin::VDA), 0x42);
+    }
+
+    // D-24: CLC's second cycle at $2180 advances the WRAM port, in 6 clocks, leaving the MDR; ROM and the interrupt's cycle read nothing.
+    #[test]
+    fn an_implied_instructions_internal_cycle_reads_a_b_bus_register() {
+        let mut s = system(0x20);
+        s.write(0x00_2181, 0x10, pin::VDA);
+        s.wram[0x10] = 0x99;
+        s.mdr = 0x3C;
+        let clock = s.timing.clock;
+        s.implied_cycle(0x80_2180, 0);
+        assert_eq!((s.wram_address, s.mdr, s.timing.clock - clock), (0x11, 0x3C, 6));
+        s.idle(0x00_2180, 0);
+        s.implied_cycle(0x40_2180, 0);
+        s.implied_cycle(0x00_8180, 0);
+        assert_eq!(s.wram_address, 0x11);
+        let mut cpu = crate::cpu::Cpu { pc: 0x2180, p: 0x34, e: true, s: 0x1FF, ..Default::default() };
+        cpu.execute(&mut s, 0x18);
+        assert_eq!(s.wram_address, 0x12);
     }
 }

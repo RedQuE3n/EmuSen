@@ -741,7 +741,7 @@ their data.
 - Implemented 2026-10-02. **Measured:** all 1,000 DIV cases pass with their cycles, and with them the whole suite,
   256,000 of 256,000. Settled, measured: the referee's divider and the suite's recorded results agree on every case.
 
-### D-24. 65816: how many times an interrupt taken while executing from WMDATA ($2180) reads it
+### D-24. 65816: ~~how many times an interrupt taken while executing from WMDATA ($2180) reads it~~ the internal second cycle of a one-byte implied instruction strobes a B-bus read at PBR,PC+1; the interrupt's internal cycle strobes none
 - Opened: 2026-10-02, at stage 4 step 1, by KungFuFurby's `test_irqb` once the sound CPU answers its ports: its
   first four cases agree with the ROM's expectations, and the fifth (`jmp $217F`, a CLC read from the APU port and
   the next fetch from $2180) leaves the IRQ handler's record one byte early: the ROM expects WMDATA's address to have
@@ -783,9 +783,41 @@ their data.
   expectation of two reads is a console's, and the referee does not reproduce it. Its strobe logic may simplify the
   5A22's, or the second read may come from a mechanism outside the rows read. The next source in the order of
   recourse is Mesen's, which this step does not open. One hypothesis would be tested cheaply by a ROM run on a console:
-  that the 5A22 strobes /RD on internal cycles, so that CLC's second cycle reads $2180 too. It is consistent with
-  cases 1 to 4, whose internal cycle would address $2138, not $2137, and so would not latch the counters again. It
+  that the 5A22 strobes /RD on internal cycles, so that CLC's second cycle reads $2180 too. ~~It is consistent with
+  cases 1 to 4, whose internal cycle would address $2138, not $2137, and so would not latch the counters again.~~ It
   is recorded as untested and not built.
+- **Corrected 2026-10-05.** The struck sentence is wrong for the interrupt's own internal cycle: Table 5-7, row 22a,
+  addresses it at PBR,PC, the opcode just dropped, which in case 1 is $2137. The reading "every internal cycle
+  strobes /RD" therefore makes case 1 latch twice, and that is the reading the 2026-10-02 measurement rejected (H 9
+  against the console's 7). Only a rule that separates the two kinds of internal cycle fits all five cases.
+- **Settled 2026-10-05, by elimination on the ROM's five console expectations.** No source was read beyond those
+  above; Mesen was run as a black box only, which plan §1.2 allows a writer.
+  - *Where the second read is, measured.* Mesen's CPU trace through the probe (`--cputrace 30`) and VenusRT's
+    (`cpu_trace`) are the same from power-on to the handler of case 5, instruction by instruction, with every
+    instruction's master clocks equal: `jmp $217F`, CLC at $217F in 12 clocks (an opcode fetch on the B bus and one
+    internal cycle), the interrupt at $2180, and the handler. The record the handler writes holds the same latched
+    counters in both, H $06, $7A and $CF. Only its place differs: Mesen's begins at $7F0032 and VenusRT's at $7F0031.
+    The second WMDATA read therefore costs no time that VenusRT does not already count. It is made in one of the two
+    internal cycles that already address $2180: CLC's second cycle (row 19a, PBR,PC+1) or the interrupt's second
+    (row 22a, PBR,PC).
+  - *Which one.* Case 1 excludes the interrupt's (the correction above). CLC's is left.
+  - *How far the rule reaches, measured in two trial builds not kept:* T1, the second cycle of row 19a's 25 opcodes
+    and of XBA (19b) strobing the read; and T2, every internal cycle but the interrupt's. Both pass all five cases.
+    Over the corpus's 304 images and 17 games, each image's state hashed every 60 frames to frame 3,600 with no input,
+    T1 changes `test_irqb` alone. T2 changes `test_irqb`, VitorVilela7's `speed_test_v51` from frame 60, and Super
+    Mario RPG at frame 3,600, where a read of the SA-1's addresses also catches the SA-1 up. `speed_test_v51`'s VRAM at
+    frame 3,600 is 42 bytes from Mesen's under both, so neither ROM separates T1 from T2 by an oracle.
+- Conclusion, 2026-10-05: in the internal second cycle of a one-byte implied instruction (row 19a, and XBA's second
+  cycle in row 19b), the S-CPU strobes a read of PBR,PC+1 on the B bus when that address is a B-bus register
+  ($2100-$21FF in banks $00-$3F and $80-$BF). The byte read is dropped and the MDR is left as it was, as anomie's open
+  bus document says of internal cycles. The interrupt's internal cycle strobes nothing. Measured, by elimination, on
+  `test_irqb`'s five cases. **Built as the narrowest rule the evidence requires; the rest is open:** whether other
+  internal cycles strobe too (T2's reading), whether the A bus and the S-CPU's own registers at $4000-$43FF see the
+  strobe, and XBA's third cycle. A console ROM executing implied instructions and other internal cycles in front of
+  $2180 would settle each.
+- Pinned by: `test_irqb`, case 5; `an_implied_instructions_internal_cycle_reads_a_b_bus_register` in `bus.rs`.
+- Implemented in: the commit after this entry's, "VenusRT's implied instructions strobe the B-bus read in their
+  internal cycle (D-24)".
 ### D-25. S-SMP: a timer is reset when its CONTROL bit goes from 0 to 1, and a cleared bit only stops it
 - Opened: 2026-10-02, at stage 4 step 1, by blargg's `spc_smp`: every test passes up to "Timers/random timer0
   enable", which fails (code 02), with the timers built as fullsnes reads literally.

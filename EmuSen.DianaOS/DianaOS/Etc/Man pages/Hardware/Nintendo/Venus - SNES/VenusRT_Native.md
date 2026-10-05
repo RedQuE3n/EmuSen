@@ -6489,3 +6489,80 @@ frames 1,800 and 3,600, and those hashes are unchanged on every image but `test_
 - `spc_dsp6` (§41.17);
 - `test_timer_stop2` (D-26);
 - `blobs/test_hdmatiming` (D-40's test 2, one dot).
+
+## 60. Blocker 4: `test_timer_stop2`, D-26 settled as argued with a measured band (2026-10-05)
+
+§41.10's blocker 4 asked for two steps: the SPC700 program the ROM uploads, disassembled with VenusRT's own
+disassembler, and then the referee's TEST gating. Both were done (`VenusRT_Disputes.md` D-26, 2026-10-05).
+
+### 60.1 What the program does
+
+The ROM's program was read with `disasm/spc700.rs`, each instruction decoded from APU RAM in the frame it first ran.
+`test_timer_stop` was read the same way for comparison.
+
+| | `test_timer_stop2` (console 04) | `test_timer_stop` (console 00) |
+|---|---|---|
+| Timer | 0, T0DIV 2, CONTROL $87 | 0, T0DIV 1, CONTROL $81 |
+| Synchronised | T0OUT read until non-zero, just after a first-stage tick | the same |
+| Stopped by | TEST $0B (bit 0 set) | TEST $02 (bit 3 clear) |
+| Pattern | $0B and $0A in turns of 4 cycles, 14 of each, over 115 cycles | ten loops of 128 cycles, about 72 stopped and 56 running |
+
+A cycle trace of VenusRT, from a scratch tool stepping the SPC700 alone from the sync, puts the 14 stops at cycles 236
+to 340. One first-stage tick falls in the window, and VenusRT counted one stage step and printed 00. To print 04, the
+second stage has to step eight or nine times in 115 cycles. A rule that only stops and starts the count gives at most
+one, whatever its phase.
+
+### 60.2 The referee
+
+`SMP.vhd` was read as logged in the entry. Its second stages count on the first stage's single-cycle event, with
+TEST's enable sampled at that moment, so stopping and starting the timers can drop a tick and never add one. It prints
+00 here. The referee's timers are written as clock enables. On this rule its agreement is not evidence either way, and
+here it disagrees with the console.
+
+### 60.3 The model, and how far the two ROMs bound it
+
+**Argued:** a gated clock. Each first stage drives a level that falls at its tick. TEST's enable gates that level, and a
+second stage counts the gated level's falling edges. With TEST held constant this is exactly today's tick. Stopping the
+timers while the level is high makes an edge, and so a count.
+
+**Predicted before the trial was built:** with the level high over the period's second half (64 cycles at TEST's
+default), 8 of the 14 stops fall while it is high, which gives 8 or 9 steps, so T0OUT is 4.
+
+**Measured:** the trial printed 04. Its one parameter, the level's length, was then swept on both ROMs:
+
+- `test_timer_stop2` is 04 for thresholds 176 to 216 of the first stage's 384;
+- `test_timer_stop` is 00 from 184 upward.
+
+Together the two hold the level to 168-200 of 384, 44% to 52% of the period. Half the period lies inside. The 2026-10-04
+trial counted the rising edge of the same gated level, and no length keeps `test_timer_stop` at 00 with that edge.
+CONTROL's per-timer bit is left as D-25 has it, an enable read at the edge, since no ROM here toggles it against a high
+level.
+
+### 60.4 What was built, and the checks (measured 2026-10-05)
+
+Built as stated, with the level high from 192 of 384 for timers 0 and 1 and from 24 of 48 for timer 2. A cycle in which
+TEST is unchanged keeps the previous rule, a wrap with the gate open. A cycle in which TEST changed compares the
+levels under the old and new values. TEST as the last cycle saw it equals TEST at every instruction boundary, so the
+state format is unchanged.
+
+| Check | Result |
+|---|---|
+| `test_timer_stop2`, `test_timer_stop` | 04 and 00, both passing, with VenusRT's boot program and with the tester's image |
+| The corpus with and without the image, and the 17 games, state hashes every 60 frames to 3,600 | only `test_timer_stop2` differs from §59's build |
+| The crate | 138 of 138, among them `stopping_the_timers_while_the_first_stage_is_high_counts_once`, shown failing on the previous rule |
+| WiseMan, the VenusRt, CoreAbi, Snes, CoreDebug and Conform filters, the goldens against Mesen included | 121 of 121 |
+| `frame_cost`, best of three over 1,200 frames, the two builds interleaved three times or more under the timing lock (load 2-7) | Super Mario RPG 2.090-2.107 against 2.105-2.132 ms, Yoshi's Island 1.383-1.395 against 1.396-1.400, Super Mario World 1.534-1.547 against 1.553-1.563. About 1% |
+
+The cost is the comparison of TEST in each SPC700 cycle. Two other formulations measured the same, one keeping the
+gated levels as booleans and one with the changed-TEST path inline instead of cold. Optimisation is on hold, so it
+stands as measured.
+
+### 60.5 G1 after blocker 4
+
+**115 of Mesen's 117** with the tester's images, and 114 without (§59.4's 114 and 113). Every C# Venus pass still
+passes. Left:
+- `spc_dsp6` (§41.17);
+- `blobs/test_hdmatiming` (D-40's test 2, one dot).
+
+D-26's structure is argued and its band measured. A console ROM sweeping the toggle's phase across the first stage's
+period would measure the level directly.

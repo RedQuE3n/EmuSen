@@ -576,7 +576,9 @@ processor at 0.147 ms a frame of 68000 work (§5 there). Its dispute step, the s
 suites' disagreements with fx68k and Nuked-MD (§6 there). Stage 2's first step, on 2026-10-05, built the Z80's
 instruction set, its interrupts, the disassembler, the state and the CP/M shim: every case of SingleStepTests' Z80
 suite, ZEXDOC and ZEXALL pass (`Beryl_Z80.md` §4-§6). Its second step, the same day, did the probe's work of §1.6
-(`Nephrite_Native.md` §8), which ends stage 2.*
+(`Nephrite_Native.md` §8), which ends stage 2. Stage 3's first step, the same day, built the buses, the cartridge, I/O,
+the scheduler and the interrupts; the BCD verifier, the opcode sizes and the illegal-instruction test pass
+(`Nephrite_Native.md` §9).*
 
 About 65 steps, or 190–230 hours (P3). The order is the order of dependence; stage 6 makes the Genesis available to
 players before either attachment is started, and the Sega CD (8–10) and the 32X (11–12) are independent of each other

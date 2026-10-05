@@ -122,7 +122,7 @@ impl Core for Machine {
             version: env!("CARGO_PKG_VERSION").into(),
             license: "GPL-3.0-or-later".into(),
             authors: vec!["EmuSen".into()],
-            description: Some("The Sega Genesis / Mega Drive in Rust, with the Sega CD and the 32X as its attachments, written from hardware documents and graded by test ROMs. At this stage it recognises an image and shows a blank picture; nothing is emulated yet.".into()),
+            description: Some("The Sega Genesis / Mega Drive in Rust, with the Sega CD and the 32X as its attachments, written from hardware documents and graded by test ROMs. At this stage it runs the Genesis's two processors, buses, cartridges and pads; the picture and the sound are still to come.".into()),
             systems: vec![
                 system("md", "Sega Genesis / Mega Drive", &MD_EXTENSIONS, vec![tmss()]),
                 system("mcd", "Sega CD / Mega-CD", &MCD_EXTENSIONS, vec![tmss(), cd_bios('U'), cd_bios('E'), cd_bios('J')]),
@@ -162,7 +162,7 @@ impl Core for Machine {
         let mut m = Machine::new(request.image, Media::read(request.image));
         m.firmware = request.files.iter().filter(|f| f.which != 0).map(|f| f.which).collect();
         if let (Some(id), Some(file)) = (m.battery_id(), request.files.iter().find(|f| f.which == 0)) {
-            let bytes = &mut m.memory_mut(id).expect("the battery's memory").bytes;
+            let bytes = m.bytes_mut(id).expect("the battery's memory");
             let n = bytes.len().min(file.data.len());
             bytes[..n].copy_from_slice(&file.data[..n]);
         }
@@ -179,11 +179,7 @@ impl Core for Machine {
             video: Video { base_width: WIDTH, base_height: HEIGHT, max_width: 320, max_height: 480, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
             audio: Audio { rate: AUDIO_RATE, channels: Vec::new() },
             ports: vec![Port { port: 0, controller: Some("md.pad3".into()) }, Port { port: 1, controller: Some("md.pad3".into()) }],
-            spaces: self
-                .memories
-                .iter()
-                .map(|m| Space { read_only: m.read_only, cheats: m.name == "WRAM", ..Space::new(m.id, m.name) })
-                .collect(),
+            spaces: self.spaces().iter().map(|m| Space { read_only: m.read_only, cheats: m.name == "WRAM", ..Space::new(m.id, m.name) }).collect(),
             processors: Vec::new(),
             battery: self.battery_id().map(|_| Battery { which: 0, suffix: if self.media.system == System::Mcd { ".brm" } else { ".srm" }.into() }).into_iter().collect(),
             state: StateFormat { format: "NPHR".into(), version: STATE_VERSION as i64, loads_from: vec![STATE_VERSION as i64] },
@@ -240,24 +236,24 @@ impl Core for Machine {
     }
 
     fn space_size(&self, space: u32) -> Result<i64, i32> {
-        self.memory(space).map(|m| m.bytes.len() as i64).ok_or(status::NO_SUCH_SPACE)
+        self.bytes(space).map(|m| m.len() as i64).ok_or(status::NO_SUCH_SPACE)
     }
 
     fn space_read(&mut self, space: u32, address: u32, out: &mut [u8]) -> Result<(), i32> {
-        let m = self.memory(space).ok_or(status::NO_SUCH_SPACE)?;
+        let m = self.bytes(space).ok_or(status::NO_SUCH_SPACE)?;
         for (i, b) in out.iter_mut().enumerate() {
-            *b = m.bytes.get(address as usize + i).copied().unwrap_or(0);
+            *b = m.get(address as usize + i).copied().unwrap_or(0);
         }
         Ok(())
     }
 
     fn space_write(&mut self, space: u32, address: u32, data: &[u8]) -> Result<(), i32> {
-        let m = self.memory_mut(space).ok_or(status::NO_SUCH_SPACE)?;
-        if m.read_only {
+        if self.spaces().iter().any(|s| s.id == space && s.read_only) {
             return Err(status::READ_ONLY);
         }
+        let m = self.bytes_mut(space).ok_or(status::NO_SUCH_SPACE)?;
         for (i, &b) in data.iter().enumerate() {
-            if let Some(d) = m.bytes.get_mut(address as usize + i) {
+            if let Some(d) = m.get_mut(address as usize + i) {
                 *d = b;
             }
         }
@@ -266,7 +262,7 @@ impl Core for Machine {
 
     fn battery(&self, which: u32) -> Result<(&[u8], u32), i32> {
         match (which, self.battery_id()) {
-            (0, Some(id)) => Ok((&self.memory(id).expect("the battery's memory").bytes, 0)),
+            (0, Some(id)) => Ok((self.bytes(id).expect("the battery's memory"), 0)),
             (0, None) => Ok((&[], 0)),
             _ => Err(status::BAD_FILE),
         }

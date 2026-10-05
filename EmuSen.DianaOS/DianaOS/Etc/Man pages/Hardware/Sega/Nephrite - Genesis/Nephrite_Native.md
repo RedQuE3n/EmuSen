@@ -287,3 +287,97 @@ sets because its key includes the probe's build.
 Pinned by `probe-rs`'s unit tests (the option answer's order of precedence, the legacy variable's default, the map
 spaces' names, the firmware folder, the system from the extension) and by `NephriteTests`'
 `The_reference_probe_skips_a_sega_cd_run_without_the_players_firmware` and `The_reference_probe_pins_a_core_option`.
+
+## 9. Stage 3, step 1: the Genesis's buses, the cartridge, I/O, the scheduler and the interrupts (2026-10-05)
+
+### 9.1 What it built
+
+- **`src/genesis.rs`**: the 68000 and the Z80 on one master clock (the 68000 at ÷7, the Z80 at ÷15) with the VDP's
+  lines of 3,420 master clocks, 262 a frame in NTSC and 313 in PAL. The 68000 runs instruction by instruction; after
+  each, the VDP's line events up to the present are taken and the Z80 is run up to the same time. The 68000's map is
+  MacDonald's "Sega Genesis hardware notes" §1: the cartridge to `$3FFFFF`, the Z80's space at `$A00000` while the
+  68000 holds its bus, I/O at `$A10000`, BUSREQ at `$A11100`, RESET at `$A11200`, the cartridge's registers at
+  `$A130F0`, TMSS at `$A14000`, the VDP in its mirrors (bits as MacDonald's `110n n000 nnnn nnnn 000m mmmm`), and RAM
+  mirrored from `$E00000`. The Z80's map is §2.1 there: its RAM mirrored to `$3FFF`, the YM2612 (reading not busy
+  until stage 5), the bank register shifting a bit in from the top at each write, the VDP at `$7F00`, and the window at
+  `$8000` onto the 68000's space. Releasing RESET starts the Z80 from its reset state.
+- **`src/cart.rs`**: ROM with mirrors (an address masked to the ROM's size rounded up to a power of two, `$FF` past
+  its end); save RAM on its declared lanes and range, mapped always when it lies above the ROM's end and through bit 0
+  of `$A130F1` otherwise, bit 1 protecting it (plutiedev's "Saving progress with SRAM" and "Going beyond 4MB"); the
+  Sega mapper's eight 512 KiB banks for "SEGA SSF" or an image above 4 MiB, bank 0 fixed.
+- **`src/io.rs`**: the version register, the three ports' data, control and serial registers as MacDonald lists them
+  at power-on, and the pads: TH's multiplexing, and the six-button pad's count of TH's falls with its timeout.
+- **`src/vdp.rs`**, the VDP's interface without its timing: the ports and registers, VRAM, CRAM and VSRAM written at
+  once, the three DMAs done at once, the status register with the FIFO always empty, the HV counter, the line counter
+  and the two interrupts as MacDonald's "Sega Genesis VDP documentation" §4 gives them. Stage 4 replaces all of it.
+- **The state, version 2**: the memories, then both CPUs' blocks, the VDP's registers and latches, the ports and the
+  pads' counts, the cartridge's registers, the clocks and the lines, read whole before any of it is applied.
+
+### 9.2 Readings
+
+Each is a rule in hardware terms that the documents leave open or that a test showed; *argued* unless measured.
+
+- **The open bus is the last word the 68000 read in program space**, which by an operand's read is the next
+  instruction (its prefetch). An unmapped read returns that word's high byte with the low byte zero, for bytes and
+  words alike, as MacDonald's notes say and as the expected values his memory test prints beside its results show.
+  Genesis Plus GX and BlastEm return the whole word to a word read; the document is followed. That was seen by running
+  them as black boxes through the reference probe on `memtest_68k.bin` to frame 600: in both, the test's record at
+  `$FF0000`, its word read of `$400000`-`$7FFFFF`, holds `$4E71` in the 68000's RAM (Nephrite holds `$4E00`), and their
+  pictures show `4E71` in that row. The VDP's unused
+  addresses return the whole word, its status register's top six bits are taken from it, and `$A11100` reads it with
+  bit 0 (or 8) the bus's state. **Measured** with the memory test (`memtest_68k.bin`, no source): twelve of its
+  thirteen rows match the values printed as expected. The thirteenth is open (§9.4).
+- **Lock-ups are not modelled** but for TMSS: a write or read MacDonald says locks the machine is ignored, or reads the
+  open bus.
+- **The Z80's window reaches the 68000's RAM**, reads included. MacDonald's console returned `$FF` to a read, and he
+  reports Steve Snake saying it works; the references' RAM at anchors is the test (§9.3).
+- **The window's waits are provisional**: three T-states for the Z80 and three 68000 clocks for the 68000 per access
+  (the plan's P5; §2.3 lists the Z80's waits as thin). BUSREQ is granted at the 68000's next instruction boundary.
+- **The interrupts.** The vertical interrupt is raised at line 224 (240 in PAL's V30) 128 master clocks in, MacDonald's
+  "roughly at H counter cycle 08h"; the line counter is decremented at the start of every line to 224 and reloaded
+  from register 10 when it expires and on the lines after. The Z80's INT is raised with it and held for one line, a
+  pulse the Z80 misses with interrupts disabled. The 68000 is autovectored and an acknowledge clears the level's
+  pending flag. The external interrupt (level 2) is not built.
+- **The model**: the version register says overseas unless the header names Japan alone, PAL when it names Europe
+  alone, no expansion unit, and version 0, a console without TMSS. A model with TMSS (version 1 on) locks the VDP
+  until "SEGA" is written at `$A14000`, a VDP access before that hanging the machine as the hardware does; it needs no
+  boot ROM, and the player's own image stays optional (`EmuSen_Firmware.md` §0). Only the default is reachable until
+  the model becomes a setting at stage 6.
+- **The six-button pad** forgets its count 8,192 68000 clocks after TH's last fall, MacDonald's "about 8192 (probably
+  less)". The pad's kind is the three-button one until the frontend can choose it.
+
+### 9.3 Measured (2026-10-05)
+
+- **The crate's tests**: 23 pass, among them the cartridge's mirrors, lanes, register and mapper; the ports at
+  power-on, both pads; the VDP's ports, fill and line counter; and the layout of state version 2.
+- **The console test programs** (`src/programs.rs`, through `EMUSEN_NEPHRITE_ROMS`), each verdict read where its source
+  says the program leaves it: **the BCD verifier, no failure** in any of its six counts (finished at frame 538); **the
+  opcode sizes, both CRCs match** (frame 683); **the illegal-instruction test, green** (frame 10).
+- **The 68000's RAM against Genesis Plus GX** (bytes of 65,536 equal; the references expose RAM with each word's bytes
+  swapped, which the comparison undoes):
+
+| Game | Frame 120 | Frame 600 |
+|---|---|---|
+| Super Street Fighter II (the mapper) | 65,536 | 65,536 |
+| Streets of Rage 2 | 65,536 | 65,470 |
+| Sonic the Hedgehog 2 | 65,534 | 65,470 |
+| Columns | 65,472 | 65,498 |
+| Castlevania: Bloodlines | 65,421 | 65,488 |
+| Phantasy Star IV (save RAM over ROM) | 65,487 | 65,477 |
+| Sonic the Hedgehog | 65,523 | 65,150 |
+| Thunder Force IV | 65,177 | 65,178 |
+
+  The differences are expected where the VDP's and the sound chips' timing feed a game (stages 4 and 5).
+- **The cost**: 600 frames of a game in 0.11–0.20 s on the desktop, under 0.35 ms a frame with both CPUs, against
+  the plan's 1.5 ms for the Genesis (`examples/dump.rs` times it).
+- **The conformance kit**, `--frames 600`, on the 240p suite, Sonic the Hedgehog and Phantasy Star IV: C1–C15 pass on
+  all three. WiseMan's Nephrite tests, registration and discovery: 19 pass.
+
+### 9.4 What the next steps owe
+
+- The memory test's first `$A11100` row: the hardware's values are "busy" and then "granted", Nephrite's "busy"
+  twice; the BUSREQ and RESET sequence the test makes is not known without its source, so it waits for the test's
+  own screen at stage 4 or a dispute step.
+- Serial EEPROM boards (by serial, MacDonald's §4.1 and his `eeprom.txt`), Sonic & Knuckles lock-on (a second image),
+  the window's waits measured, BUSREQ's latency, the external interrupt, the six-button pad chosen by the frontend, and
+  the references at anchors through WiseMan's runner over the game corpus.

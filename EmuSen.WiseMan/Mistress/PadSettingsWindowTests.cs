@@ -70,6 +70,8 @@ namespace EmuSen.WiseMan.Mistress
         private static void TallerBar(MainWindow window, double by)
         {
             var bar = window.GetControl<Border>("StatusBar");
+            // From a one-line status, so the heights are the ones §4.83.7 names whatever notice the engine adds (VenusRT_Native.md §65).
+            window.GetControl<TextBlock>("StatusText").Text = "Running: Game";
             window.UpdateLayout();
             bar.MinHeight = bar.Bounds.Height + by;
             window.UpdateLayout();

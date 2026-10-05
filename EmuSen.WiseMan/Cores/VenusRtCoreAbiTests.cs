@@ -84,14 +84,17 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void The_snes_row_offers_venusrt_through_discovery_with_venus_the_default()
+        public void The_snes_row_offers_venusrt_through_discovery_as_the_default_with_venus_a_choice()
         {
             if (Discovered is null) return;
             Assert.False(CoreCatalog.IsRegisteredEngine(Engine));
             var row = CoreCatalog.EngineFor("SNES")!;
-            Assert.Equal(new[] { CoreCatalog.VenusEngine, Engine }, row.Choices);
-            Assert.Equal(CoreCatalog.VenusEngine, row.Default);
+            Assert.Equal(new[] { Engine, CoreCatalog.VenusEngine }, row.Choices);
+            Assert.Equal(Engine, row.Default);
+            Assert.Equal(Engine, CoreCatalog.EngineChosen("SNES", null));
+            Assert.Equal(CoreCatalog.VenusEngine, CoreCatalog.EngineChosen("SNES", CoreCatalog.VenusEngine));
             Assert.IsType<VenusCore>(CoreFactory.Create("game.sfc"));
+            Assert.IsType<VenusCore>(CoreFactory.Create("game.sfc", engine: CoreCatalog.VenusEngine));
             using var engine = Assert.IsType<CoreEngine>(CoreFactory.Create("game.sfc", engine: Engine));
             Assert.Equal("venusrt", engine.Info.Id);
             Assert.Null(CoreFactory.EngineNotice("game.sfc", Engine, engine));
@@ -112,7 +115,7 @@ namespace EmuSen.WiseMan.Cores
             File.WriteAllBytes(library, File.ReadAllBytes(found.Sidecar.LibraryPath).Concat(new byte[] { 0 }).ToArray());
             File.Copy(CoreSidecar.PathFor(found.Sidecar.LibraryPath), CoreSidecar.PathFor(library));
             CoreDiscovery.UseDirectories(new[] { dir });
-            Assert.Equal(new[] { CoreCatalog.VenusEngine, Engine }, CoreCatalog.EngineFor("SNES")!.Choices);
+            Assert.Equal(new[] { Engine, CoreCatalog.VenusEngine }, CoreCatalog.EngineFor("SNES")!.Choices);
             ICore swapped = CoreFactory.Create("game.sfc", engine: Engine);
             Assert.IsType<VenusCore>(swapped);
             string notice = CoreFactory.EngineNotice("game.sfc", Engine, swapped)!;

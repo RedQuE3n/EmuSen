@@ -91,7 +91,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(CoreCatalog.MarsEngine, CoreCatalog.EngineChosen("N64", CoreCatalog.MarsEngine));
             Assert.Equal(CoreCatalog.MercuryEngine, CoreCatalog.EngineChosen("GB", null));
             Assert.Equal(CoreCatalog.EngineFor("SNES")?.Default, CoreCatalog.EngineChosen("SNES", null));
-            Assert.True(CoreCatalog.EngineFor("SNES") is null or { Default: CoreCatalog.VenusEngine });
+            Assert.True(CoreCatalog.EngineFor("SNES") is null or { Default: CoreCatalog.VenusRtEngine, Choices: [CoreCatalog.VenusRtEngine, CoreCatalog.VenusEngine, ..] });
+            Assert.Equal(CoreCatalog.VenusEngine, CoreCatalog.EngineChosen("SNES", CoreCatalog.VenusEngine));
             CoreSetting nes = CoreCatalog.EngineFor("NES")!;
             Assert.Equal(CoreCatalog.MoonEngine, nes.Default);
             Assert.Equal(new[] { CoreCatalog.MoonEngine, CoreCatalog.MoonRtEngine }, nes.Choices);

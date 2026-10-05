@@ -25,6 +25,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
         // PPU $0000-$1FFF, the pattern tables.
         byte ReadChr(ushort address);
 
+        // The same byte without a fetch's side effects, for the sprite 0 detector - see Moon_PPU.md §3.4.
+        byte PeekChr(ushort address) => ReadChr(address);
+
         void WriteChr(ushort address, byte data);
 
         Mirroring Mirroring { get; }

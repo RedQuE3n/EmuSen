@@ -142,7 +142,6 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
 
                 int spriteEntry = 0;
                 bool spriteInFront = false;
-                bool spriteIsZero = false;
 
                 if (ShowSprites && (x >= 8 || ShowSpritesLeft))
                 {
@@ -153,21 +152,14 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
                         int column = x - spriteX;
                         if (column < 0 || column >= 8) continue;
 
-                        int color = SpritePixel(index, line, column, height);
+                        int color = SpritePixel(index, line, column, height, peek: false);
                         if (color == 0) continue;
 
                         byte attributes = Oam[(index * 4) + 2];
                         spriteEntry = 0x10 + ((attributes & 0x03) * 4) + color;
                         spriteInFront = (attributes & 0x20) == 0;
-                        spriteIsZero = index == 0;
                         break;
                     }
-                }
-
-                // The rightmost pixel never reports a hit, and both layers must be on.
-                if (spriteIsZero && bgOpaque && x != ScreenWidth - 1 && ShowBackground)
-                {
-                    Sprite0Hit = true;
                 }
 
                 int entry = spriteEntry != 0 && (spriteInFront || !bgOpaque)
@@ -189,7 +181,33 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
             }
         }
 
-        private int SpritePixel(int index, int line, int column, int height)
+        // Pixel x is output on dot x + 1, and sprite 0 hits on that dot, not when the line is composed - see Moon_PPU.md §3.4.
+        private void DetectSprite0Hit()
+        {
+            int x = Cycle - 1;
+            if (x == ScreenWidth - 1 || !ShowBackground || !ShowSprites) return;
+            if (x < 8 && (!ShowBackgroundLeft || !ShowSpritesLeft)) return;
+
+            int height = SpritesAre8x16 ? 16 : 8;
+            int row = Scanline - Oam[0] - 1;
+            int column = x - Oam[3];
+            if (row < 0 || row >= height || column < 0 || column >= 8) return;
+            if (SpritePixel(0, Scanline, column, height, peek: true) == 0) return;
+
+            int position = x + FineX;
+            int tile = position >> 3;
+            int sinceLoad = tile == 0 ? Cycle + 12 : tile == 1 ? Cycle + 4 : Cycle - ((tile * 8) - 7);
+            if (PpuClock - sinceLoad <= RenderingSince) return;
+
+            ushort v = RenderV;
+            for (int i = 0; i < tile; i++) IncrementCoarseX(ref v);
+            int patternAddress = BackgroundPatternBase + (ReadCiram((ushort)(0x2000 | (v & 0x0FFF))) * 16) + ((RenderV >> 12) & 0x07);
+            int bit = 7 - (position & 7);
+            int color = ((_cart.Mapper.PeekChr((ushort)patternAddress) >> bit) & 0x01) | (((_cart.Mapper.PeekChr((ushort)(patternAddress + 8)) >> bit) & 0x01) << 1);
+            if (color != 0) Sprite0Hit = true;
+        }
+
+        private int SpritePixel(int index, int line, int column, int height, bool peek)
         {
             byte tile = Oam[(index * 4) + 1];
             byte attributes = Oam[(index * 4) + 2];
@@ -216,8 +234,8 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
                 patternAddress = SpritePatternBase + (tile * 16) + row;
             }
 
-            byte low = _cart.Mapper.ReadChr((ushort)patternAddress);
-            byte high = _cart.Mapper.ReadChr((ushort)(patternAddress + 8));
+            byte low = peek ? _cart.Mapper.PeekChr((ushort)patternAddress) : _cart.Mapper.ReadChr((ushort)patternAddress);
+            byte high = peek ? _cart.Mapper.PeekChr((ushort)(patternAddress + 8)) : _cart.Mapper.ReadChr((ushort)(patternAddress + 8));
 
             int bit = 7 - column;
             return ((low >> bit) & 0x01) | (((high >> bit) & 0x01) << 1);

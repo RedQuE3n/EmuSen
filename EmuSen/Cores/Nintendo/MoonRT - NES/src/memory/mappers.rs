@@ -907,6 +907,15 @@ impl Mapper {
         }
     }
 
+    /// `PeekChr`: the byte `read_chr` would return, without moving MMC2's latch - see Moon_PPU.md §3.4.
+    #[inline]
+    pub fn peek_chr(&self, cart: &Cartridge, address: u16) -> u8 {
+        match self {
+            Mapper::Nrom | Mapper::UxRom(_) | Mapper::AxRom(_) | Mapper::Camerica(_) => crate::at(&cart.chr, (address & 0x1FFF) as i32),
+            _ => cart.chr_mod(self.chr_offset(address)),
+        }
+    }
+
     /// `WriteChr`: a CHR ROM board swallows the write.
     pub fn write_chr(&mut self, cart: &mut Cartridge, address: u16, data: u8) {
         match self {

@@ -192,20 +192,23 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(csharp.GetType(), rust.GetType());
         }
 
-        // Version 3 has neither the DMA tail nor the mixer, version 4 no mixer; both engines load each alike, the mixer kept as it was, and write it back as version 5.
+        // Version 3 has neither the DMA tail nor the mixer, version 4 no mixer, version 5 no RenderingSince; both engines load each alike and write it back as version 6.
         [Theory]
         [InlineData(0, 3)]
         [InlineData(4, 3)]
         [InlineData(0, 4)]
         [InlineData(4, 4)]
+        [InlineData(0, 5)]
+        [InlineData(4, 5)]
         public void An_older_state_loads_in_both_engines_alike(int mapper, int version)
         {
             Assert.True(MoonMachine.Available, MoonNative.Report);
             byte[] rom = Rom(mapper, 8, (0, Busy));
             MoonCore core = Load(rom);
             for (int i = 0; i < 30; i++) core.RunFrame();
-            byte[] v5 = Save(core);
-            byte[] old = v5.AsSpan(0, v5.Length - MixerBytes - (version == 3 ? DmaTailBytes : 0)).ToArray();
+            byte[] v6 = Save(core);
+            int cut = RenderingSinceBytes + (version <= 4 ? MixerBytes : 0) + (version == 3 ? DmaTailBytes : 0);
+            byte[] old = v6.AsSpan(0, v6.Length - cut).ToArray();
             old[4] = (byte)version;
 
             MoonCore csharp = Load(rom);
@@ -213,15 +216,15 @@ namespace EmuSen.WiseMan.Cores
             using var machine = new MoonMachine(rom);
             machine.Load(old);
             byte[] expected = Save(csharp);
-            Assert.Equal(5, BitConverter.ToInt32(expected, 4));
+            Assert.Equal(6, BitConverter.ToInt32(expected, 4));
             AssertSameBytes(expected, machine.Save());
             for (int i = 0; i < 10; i++) csharp.RunFrame();
             for (int i = 0; i < 10; i++) machine.RunFrame();
             AssertSameBytes(Save(csharp), machine.Save());
         }
 
-        // Version 4's tail after the walks, and version 5's mixer after it: three doubles and an int, then five filter doubles.
-        public const int DmaTailBytes = 8, MixerBytes = 8 + 4 + 8 + 5 * 8;
+        // Version 4's tail after the walks, version 5's mixer after it (three doubles and an int, then five filter doubles), then version 6's RenderingSince.
+        public const int DmaTailBytes = 8, MixerBytes = 8 + 4 + 8 + 5 * 8, RenderingSinceBytes = 8;
 
         // A machine loaded with another's state at frame 300 sounds exactly as the first from then on, in both engines - see Moon_Native.md §3.13.
         [Theory]
@@ -351,7 +354,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(want.Length, got.Length);
         }
 
-        // The C# serializer's own walk as "offset length type path" lines, MoonCore.SaveState's header, version 4's tail and version 5's mixer written by hand.
+        // The C# serializer's own walk as "offset length type path" lines, MoonCore.SaveState's header, version 4's tail, version 5's mixer and version 6's RenderingSince written by hand.
         public static string Layout(MoonCore core, byte[] state)
         {
             var layout = new LayoutWalk();
@@ -377,6 +380,7 @@ namespace EmuSen.WiseMan.Cores
             layout.Line("Apu._sampleCount", "i32", 4);
             layout.Line("Apu._cycleFraction", "f64", 8);
             foreach (string filter in new[] { "_hp90", "_hp90Prev", "_hp440", "_hp440Prev", "_lp14k" }) layout.Line("Apu." + filter, "f64", 8);
+            layout.Line("Ppu.RenderingSince", "i64", 8);
             Assert.Equal(state.Length, layout.Offset);
             return layout.Text;
         }

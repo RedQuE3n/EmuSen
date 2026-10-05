@@ -15,8 +15,8 @@ pub const MASTER_CLOCKS_PER_SCANLINE: i64 = 341 * 4;
 
 /// "MOON" little-endian, then the format version - see Moon_Core.md §5.
 pub const STATE_MAGIC: u32 = 0x4E4F_4F4D;
-pub const STATE_VERSION: i32 = 5;
-/// Version 4 adds the DMA's tail, version 5 the mixer after it; versions 3 and 4 still load (Moon_Native.md §3.9, §3.13).
+pub const STATE_VERSION: i32 = 6;
+/// Version 4 adds the DMA's tail, version 5 the mixer, version 6 the PPU's RenderingSince; 3 to 5 still load (Moon_Native.md §3.14).
 pub const OLDEST_READABLE_VERSION: i32 = 3;
 
 /// Why a load or a frame could not complete as C# would have.
@@ -304,6 +304,7 @@ impl Machine {
         w.f64("Apu._hp440", mix.hp440);
         w.f64("Apu._hp440Prev", mix.hp440_prev);
         w.f64("Apu._lp14k", mix.lp14k);
+        w.i64("Ppu.RenderingSince", *self.bus.ppu.rendering_since);
     }
 
     fn read_state(&mut self, r: &mut StateReader) -> StateResult {
@@ -344,6 +345,8 @@ impl Machine {
             mix.hp440_prev = r.f64()?;
             mix.lp14k = r.f64()?;
         }
+        // Before version 6 rendering counts as switched on long ago.
+        *self.bus.ppu.rendering_since = if version >= 6 { r.i64()? } else { i64::MIN };
         self.bus.forget_last_read();
         *self.bus.internal_bus = self.bus.open_bus;
         *self.bus.apu.frame_irq_readable = self.bus.apu.frame_irq_pending;

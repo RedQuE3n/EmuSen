@@ -75,6 +75,12 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory.Mappers
             return value;
         }
 
+        public byte PeekChr(ushort address)
+        {
+            int bank = address < ChrPageSize ? _leftBank[_leftLatch] : _rightBank[_rightLatch];
+            return _cart.Chr[((bank * ChrPageSize) + (address & (ChrPageSize - 1))) % _cart.Chr.Length];
+        }
+
         // The left window watches two exact addresses; the right one watches two eight-byte runs.
         private void UpdateLatch(ushort address)
         {

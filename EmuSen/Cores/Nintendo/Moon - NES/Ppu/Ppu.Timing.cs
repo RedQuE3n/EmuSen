@@ -72,6 +72,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
         private void RunVisibleDot()
         {
             FetchForDot();
+            if (Cycle <= 256 && (uint)(Cycle - 1 - Oam[3]) < 8 && !Sprite0Hit) DetectSprite0Hit();
 
             if (Cycle == 256)
             {

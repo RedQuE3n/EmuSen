@@ -50,6 +50,8 @@ pub struct Ppu {
     pub sprite_indices: Skip<[i32; SPRITES_PER_LINE]>,
     pub sprite_count: Skip<i32>,
     pub skip_last_dot: Skip<bool>,
+    /// `RenderingSince`, the dot rendering was last switched on; written in the state's tail (Moon_PPU.md §3.4).
+    pub rendering_since: Skip<i64>,
 }
 
 impl Default for Ppu {
@@ -83,6 +85,7 @@ impl Default for Ppu {
             sprite_indices: Skip([0; SPRITES_PER_LINE]),
             sprite_count: Skip(0),
             skip_last_dot: Skip(false),
+            rendering_since: Skip(i64::MIN),
         }
     }
 }
@@ -169,6 +172,7 @@ impl Ppu {
         self.ppu_clock = 0;
         self.frame_complete = false;
         self.bus_address = 0;
+        *self.rendering_since = i64::MIN;
         self.ciram.fill(0);
         self.palette_ram.fill(0);
         self.oam.fill(0);
@@ -263,7 +267,12 @@ impl Ppu {
                 self.control = value;
                 self.t = (self.t & 0xF3FF) | (((value & 0x03) as u16) << 10);
             }
-            1 => self.mask = value,
+            1 => {
+                if !self.rendering_enabled() && (value & 0x18) != 0 {
+                    *self.rendering_since = self.ppu_clock;
+                }
+                self.mask = value;
+            }
             3 => self.oam_address = value,
             4 => {
                 self.oam[self.oam_address as usize] = value;

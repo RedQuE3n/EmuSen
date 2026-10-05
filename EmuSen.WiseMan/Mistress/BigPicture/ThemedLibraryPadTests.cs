@@ -285,8 +285,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.Start();
             Assert.True(s.Window.GetControl<Control>("PadMenuPanel").IsVisible);
             Assert.True(s.Shown);
-            string[] lines = s.Window.GetControl<ListBox>("PadMenuList").ItemsSource!.Cast<object>().Select(o => o.ToString()!).ToArray();
-            Assert.Contains("Preferences", lines);
+            Assert.Equal([MainWindow.LibraryMenu, MainWindow.SettingsMenu, MainWindow.EmuSenMenu], PadMenu.Lines(s.Window).TakeLast(3));
+            Assert.Contains("Preferences", PadMenu.AllLines(s.Window));
             // The directions steer the menu while it is up, not the view behind it.
             s.Pad.Right();
             Assert.Equal("nes", s.System);

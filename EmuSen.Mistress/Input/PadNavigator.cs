@@ -88,5 +88,18 @@ namespace EmuSen.Mistress.Input
         public Func<string>? Label { get; init; }
         public Func<string?>? Value { get; init; }
         public bool Opens { get; init; }
+
+        // A submenu's rows, built each time it is entered: A enters it and B comes back (§4.69.8).
+        public Func<List<PadMenuEntry>>? Submenu { get; init; }
+
+        // A yes-or-no asked before Accept runs, No first, and the sentence under the question.
+        public string? Question { get; init; }
+        public string? QuestionDetail { get; init; }
+
+        // A divider above this row, between its section and the one before.
+        public bool StartsSection { get; init; }
+
+        // While this row is on, the state slot's picture and saved time show beside the menu.
+        public bool ShowsSlot { get; init; }
     }
 }

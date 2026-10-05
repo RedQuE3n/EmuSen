@@ -52,7 +52,8 @@ namespace EmuSen.Mistress.Views
             SetUpBigMenus();
             ApplyBigScreen(WantsBigScreen());
 
-            PadMenuList.Label = entry => entry.Text();
+            PadMenuList.Label = entry => entry.Submenu is null ? entry.Text() : entry.Text() + "  ›";
+            SetUpPadMenuPointer();
             _padTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
             _padTimer.Tick += (_, _) => PadTick();
             _padTimer.Start();
@@ -215,127 +216,6 @@ namespace EmuSen.Mistress.Views
             string back = _session is { IsRomLoaded: true } ? $"B  Back to {_currentDisplayName}      " : "";
             string moves = GridShown ? "L1 R1  Console      L2 R2  Top, End" : "L1 R1  Page      L2 R2  Top, End      Left Right  Console";
             return PadHints.Face($"A  Play      {back}Y  Search      Select  Favourite      {moves}      Start  Menu");
-        }
-
-        private void OpenPadMenu()
-        {
-            bool inGame = GameOnScreen;
-            _padMenuEntries.Clear();
-
-            if (inGame)
-            {
-                _padMenuEntries.Add(new PadMenuEntry(() => "Resume", () => { }));
-                _padMenuEntries.Add(new PadMenuEntry(() => $"Save State  (slot {_stateSlot})", SaveState) { Label = () => "Save State", Value = () => $"Slot {_stateSlot}" });
-                _padMenuEntries.Add(new PadMenuEntry(() => $"Load State  (slot {_stateSlot})", LoadState) { Label = () => "Load State", Value = () => $"Slot {_stateSlot}" });
-                _padMenuEntries.Add(new PadMenuEntry(() => $"State Slot      <  {_stateSlot}  >", () => StepStateSlot(1), StepStateSlot, closes: false) { Label = () => "State Slot", Value = () => $"{_stateSlot}" });
-                _padMenuEntries.Add(new PadMenuEntry(RewindMenuText, RewindFromPadMenu, closes: false) { Label = () => "Rewind", Value = RewindUnavailable });
-                _padMenuEntries.Add(new PadMenuEntry(() => $"Speed      <  {DescribeSpeed(_baseSpeedPercent)}  >", () => StepSpeed(1), StepSpeed, closes: false) { Label = () => "Speed", Value = () => DescribeSpeed(_baseSpeedPercent) });
-                _padMenuEntries.Add(new PadMenuEntry(() => "Reset", ResetEmulation));
-            }
-            else if (_session is { IsRomLoaded: true })
-            {
-                _padMenuEntries.Add(new PadMenuEntry(() => $"Back to {_currentDisplayName}", ToggleLibrary));
-            }
-
-            _padMenuEntries.Add(new PadMenuEntry(() => "Cheats", ShowActiveCheats) { Opens = true });
-            _padMenuEntries.Add(new PadMenuEntry(() => "Graphics Settings", ShowGraphicsSettings) { Opens = true });
-            _padMenuEntries.Add(new PadMenuEntry(() => "Shaders", ShowShaderSettings) { Opens = true });
-            _padMenuEntries.Add(new PadMenuEntry(() => "Controller Bindings", ShowControllerBindings) { Opens = true });
-            _padMenuEntries.Add(new PadMenuEntry(() => "Preferences", ShowPreferences) { Opens = true });
-            // The sidebar library's game options; the themed gamelist has them on Select - see EmuSen_Settings_Reference.md §4.63.
-            if (!inGame && !ThemedLibraryShown && SelectedLibraryEntry is EmuSen.Mistress.Library.RomEntry chosen)
-                _padMenuEntries.Add(new PadMenuEntry(() => "Game Options...", () => ShowLibraryGameOptions(chosen)) { Opens = true });
-            // Scraping only ever starts here or in Preferences, by the player - see EmuSen_Settings_Reference.md §4.60.
-            if (!inGame && GameToScrape is string game && !ScrapeRunning)
-                _padMenuEntries.Add(new PadMenuEntry(() => "Scrape This Game...", () => _ = ConfirmAndScrapeAsync(Scraping.ScrapeScope.ThisGame(game))) { Opens = true });
-            if (!inGame) _padMenuEntries.Add(new PadMenuEntry(() => ScrapeRunning ? $"Scraping ({_scrapeRun!.Done} of {_scrapeRun.Total})..." : "Scrape Games...", () => { if (ScrapeRunning) ShowScrapeStatus(); else ShowPreferencesAt(PreferencesWindow.ScrapingTab); }) { Opens = true });
-            if (_bigScreen && !inGame) _padMenuEntries.Add(new PadMenuEntry(() => "Theme Settings", ShowThemeSettings) { Opens = true });
-            if (!inGame) AddCollectionMenuEntries(_padMenuEntries);
-            if (!_bigScreen) _padMenuEntries.Add(new PadMenuEntry(() => IsFullScreen ? "Leave Full Screen" : "Full Screen", ToggleFullScreen));
-            if (!_bigScreenForced) _padMenuEntries.Add(new PadMenuEntry(() => _bigScreen ? "Exit Big Picture" : "Big Picture", () => SetBigPicture(!_bigScreen)));
-
-            if (inGame)
-            {
-                _padMenuEntries.Add(new PadMenuEntry(() => "Game Library", ToggleLibrary));
-                _padMenuEntries.Add(new PadMenuEntry(() => "Close Game", ShowLibrary));
-            }
-
-            _padMenuEntries.Add(new PadMenuEntry(() => "Exit EmuSen", Close));
-
-            // Before the menu shows, so no frame runs under it - the library's own rule (§4.18).
-            _padMenuPaused = inGame && _pauseSignal.IsSet;
-            if (_padMenuPaused) PauseEmulation();
-
-            PadMenuTitle.Text = inGame ? _currentDisplayName ?? "Game" : "EmuSen";
-            PadMenuHint.Text = PadHints.Face("A  Choose      B  Close      Left Right  Change");
-            if (_bigScreen) ShowBigPadMenu(inGame ? RunningGameTitle() : "Main Menu", _padMenuEntries.Any(e => e.Adjust is not null));
-            PadMenuList.Refresh(_padMenuEntries);
-            PadMenuList.Select(_padMenuEntries[0]);
-            PadMenuPanel.IsVisible = true;
-            _padMenuOpen = true;
-            UpdateMenuBackdrop();
-        }
-
-        private void ClosePadMenu()
-        {
-            if (!_padMenuOpen) return;
-
-            PadMenuPanel.IsVisible = false;
-            _padMenuOpen = false;
-            _padQuiet = true;
-            UpdateMenuBackdrop();
-
-            // Only what this menu paused, and only if the game is still the screen: an entry may have closed or left it.
-            if (_padMenuPaused && GameOnScreen) ResumeEmulation();
-            _padMenuPaused = false;
-        }
-
-        private void PadMenuCommand(UiButton button)
-        {
-            int count = _padMenuEntries.Count;
-            int at = Math.Max(PadMenuList.SelectedIndex, 0);
-
-            switch (button)
-            {
-                case UiButton.Up: PadMenuList.SelectedIndex = (at + count - 1) % count; break;
-                case UiButton.Down: PadMenuList.SelectedIndex = (at + 1) % count; break;
-
-                case UiButton.Left:
-                case UiButton.Right:
-                    if (_padMenuEntries[at].Adjust is { } adjust)
-                    {
-                        adjust(button == UiButton.Right ? 1 : -1);
-                        RefreshPadMenuText(at);
-                    }
-                    break;
-
-                case UiButton.Accept:
-                    PadMenuEntry entry = _padMenuEntries[at];
-                    if (entry.Closes) ClosePadMenu();
-                    entry.Accept();
-                    if (!entry.Closes) RefreshPadMenuText(at);
-                    break;
-
-                case UiButton.Back:
-                case UiButton.Menu:
-                    ClosePadMenu();
-                    break;
-            }
-        }
-
-        private void RefreshPadMenuText(int keep)
-        {
-            PadMenuList.Refresh(_padMenuEntries);
-            PadMenuList.SelectedIndex = keep;
-        }
-
-        private void StepStateSlot(int by) => SelectStateSlot((_stateSlot - 1 + by + StateSlots) % StateSlots + 1);
-
-        private void StepSpeed(int by)
-        {
-            int[] speeds = { _speed.SlowMotionPercent, EmuSen.Common.SpeedController.NormalPercent, _speed.TurboPercent };
-            int at = Math.Max(0, Array.IndexOf(speeds, _baseSpeedPercent));
-            SetBaseSpeed(speeds[Math.Clamp(at + by, 0, speeds.Length - 1)]);
         }
     }
 }

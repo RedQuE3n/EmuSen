@@ -30,9 +30,13 @@ namespace EmuSen.Mistress.Views
             SetUpSheetLook();
             SizeChanged += (_, e) => ScaleBigMenus(e.NewSize.Height);
             ScaleBigMenus(Bounds.Height > 0 ? Bounds.Height : Height);
+            PadMenuBig.TitleMinScale = 0.66;
+            PadMenuBig.TitleMaxLines = 2;
             PadMenuList.ContainerPrepared += (_, e) =>
             {
-                if (_bigScreen && e.Index >= 0 && e.Index < _padMenuEntries.Count) DescribeRow(e.Container, _padMenuEntries[e.Index]);
+                if (e.Index < 0 || e.Index >= _padMenuEntries.Count) return;
+                if (_bigScreen) DescribeRow(e.Container, _padMenuEntries[e.Index]);
+                MarkSection(e.Container, e.Index);
             };
         }
 
@@ -70,7 +74,7 @@ namespace EmuSen.Mistress.Views
             {
                 PadMenuBig.Child = null;
                 MenuRows.Remove(PadMenuList);
-                PadMenuList.MaxHeight = 520;
+                PadMenuList.ClearValue(MaxHeightProperty);
                 PadMenuList.Background = Brushes.Transparent;
                 PadMenuDock.Children.Add(PadMenuList);
                 PadMenuPanel.Background = new SolidColorBrush(Color.FromArgb(0xD0, 0, 0, 0));
@@ -85,25 +89,17 @@ namespace EmuSen.Mistress.Views
         {
             MenuRows.SetLabel(row, entry.Label?.Invoke() ?? entry.Text());
             MenuRows.SetValue(row, entry.Value?.Invoke());
-            MenuRows.SetKind(row, entry.Adjust is not null ? MenuRowKind.Option : entry.Opens ? MenuRowKind.Submenu : MenuRowKind.Action);
+            MenuRows.SetKind(row, entry.Adjust is not null ? MenuRowKind.Option : entry.Opens || entry.Submenu is not null ? MenuRowKind.Submenu : MenuRowKind.Action);
         }
 
-        private void ShowBigPadMenu(string title, bool adjustable)
-        {
-            PadMenuBig.Title = title;
-            PadMenuBig.Footer = BigMenuFooter;
-            PadMenuBig.HintFamily = HelpFamily;
-            PadMenuBig.Hints = PadMenuHints(adjustable);
-        }
-
-        // ES-DE's help for its main menu, in Mistress's words: Start and B close it, A chooses, the pad moves and, where a row has a value, changes it.
-        private static IReadOnlyList<HintEntry> PadMenuHints(bool adjustable)
+        // ES-DE's help for its main menu, in Mistress's words: Start closes it, B closes it or goes back a page, A chooses, the pad moves and, where a row has a value, changes it.
+        private static IReadOnlyList<HintEntry> PadMenuHints(bool adjustable, bool nested = false, bool question = false)
         {
             var hints = new List<HintEntry>
             {
                 new("Close Menu") { Button = PadGlyphButton.Start },
                 new("Select") { Button = AcceptGlyph },
-                new("Close Menu") { Button = BackGlyph },
+                new(question ? "No" : nested ? "Back" : "Close Menu") { Button = BackGlyph },
             };
             if (adjustable) hints.Add(new HintEntry("Change") { Button = PadGlyphButton.DPadLeftRight });
             hints.Add(new HintEntry("Choose") { Button = PadGlyphButton.DPadUpDown });

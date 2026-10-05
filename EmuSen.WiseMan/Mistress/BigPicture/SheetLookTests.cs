@@ -97,11 +97,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private static void Choose(MainWindow window, PadDriver pad, string entry)
         {
             pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
-            string[] lines = window.GetControl<ListBox>("PadMenuList").ItemsSource!.Cast<object>().Select(o => o.ToString()!).ToArray();
-            int at = Array.FindIndex(lines, l => l.StartsWith(entry, StringComparison.Ordinal));
-            Assert.True(at >= 0, $"No '{entry}' in the pad menu: {string.Join(", ", lines)}");
-            pad.Down(at);
-            pad.A();
+            PadMenu.Choose(window, pad, entry);
         }
 
         private static RenderedFrame Settled(Window w)

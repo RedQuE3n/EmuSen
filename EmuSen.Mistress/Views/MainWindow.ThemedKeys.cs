@@ -39,7 +39,7 @@ namespace EmuSen.Mistress.Views
             if (!pressed) return _themedKeys.Remove(button);
             if ((modifiers & KeyModifiers.Alt) != 0) return false;
             if (TextEntryOpen) return false;
-            if (!BigMenuOnScreen && (!ThemedLibraryShown || !LibraryView.IsVisible || OtherWindow() is not null)) return false;
+            if (!BigMenuOnScreen && !_padMenuOpen && (!ThemedLibraryShown || !LibraryView.IsVisible || OtherWindow() is not null)) return false;
             _themedKeys.Add(button);
             _keyboardSteering = true;
             PadTick();

@@ -230,10 +230,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             MainWindow window = Open(bigScreen: true);
             var pad = new PadDriver(window);
             pad.Start();
-            List<EmuSen.Mistress.Input.PadMenuEntry> entries = PadMenu(window);
-            int at = entries.FindIndex(e => e.Text() == "Scrape Games...");
-            pad.Down(at);
-            pad.A();
+            EmuSen.WiseMan.Fixtures.PadMenu.Choose(window, pad, "Scrape Games...", exact: true);
             var prefs = Assert.IsType<PreferencesWindow>(Sheets(window).Current);
             Control sheet = RootOf(prefs);
             window.UpdateLayout();

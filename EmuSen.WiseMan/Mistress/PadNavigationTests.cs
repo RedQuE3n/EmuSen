@@ -131,7 +131,7 @@ namespace EmuSen.WiseMan.Mistress
             foreach (UiButton button in buttons) command.Invoke(window, new object[] { button });
         }
 
-        private static string[] MenuLines(MainWindow w) => Menu(w).ItemsSource!.Cast<object>().Select(o => o.ToString()!).ToArray();
+        private static string[] MenuLines(MainWindow w) => PadMenu.Lines(w);
 
         [Fact]
         public Task The_library_moves_by_one_by_ten_and_to_either_end() => Session.Dispatch(() =>
@@ -213,7 +213,7 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         [Fact]
-        public Task The_menu_wraps_and_left_and_right_change_the_state_slot_without_closing_it() => Session.Dispatch(() =>
+        public Task The_menu_wraps_and_left_and_right_change_the_slot_on_the_save_and_load_rows_without_closing_it() => Session.Dispatch(() =>
         {
             MainWindow window = LibraryOf(1);
             Library(window).SelectedIndex = 0;
@@ -225,17 +225,22 @@ namespace EmuSen.WiseMan.Mistress
             Pad(window, UiButton.Down);
             Assert.Equal(0, Menu(window).SelectedIndex);
 
-            int slotLine = Array.FindIndex(MenuLines(window), line => line.StartsWith("State Slot"));
-            Menu(window).SelectedIndex = slotLine;
+            Assert.DoesNotContain(MenuLines(window), line => line.StartsWith("State Slot", StringComparison.Ordinal));
+            int save = Array.FindIndex(MenuLines(window), line => line.StartsWith("Save State", StringComparison.Ordinal));
+            int load = Array.FindIndex(MenuLines(window), line => line.StartsWith("Load State", StringComparison.Ordinal));
+            Menu(window).SelectedIndex = save;
             Pad(window, UiButton.Right);
 
             Assert.True(MenuPanel(window).IsVisible);
-            Assert.Equal(slotLine, Menu(window).SelectedIndex);
-            Assert.Contains("<  2  >", MenuLines(window)[slotLine]);
-            Assert.Contains("slot 2", MenuLines(window)[1]);
+            Assert.Equal(save, Menu(window).SelectedIndex);
+            Assert.Contains("<  Slot 2 (Empty)  >", MenuLines(window)[save]);
+            Assert.Contains("<  Slot 2 (Empty)  >", MenuLines(window)[load]);
 
+            Menu(window).SelectedIndex = load;
             Pad(window, UiButton.Left, UiButton.Left);
-            Assert.Contains("<  8  >", MenuLines(window)[slotLine]);
+            Assert.True(MenuPanel(window).IsVisible);
+            Assert.Contains("<  Slot 8 (Empty)  >", MenuLines(window)[save]);
+            Assert.Contains("<  Slot 8 (Empty)  >", MenuLines(window)[load]);
 
             Invoke(window, "StopEmulationThread");
         }, default);
@@ -248,7 +253,7 @@ namespace EmuSen.WiseMan.Mistress
             Pad(window, UiButton.Menu);
             Assert.True(MenuPanel(window).IsVisible);
             Assert.DoesNotContain("Resume", MenuLines(window));
-            Assert.Contains("Graphics Settings", MenuLines(window));
+            Assert.Contains("Graphics", PadMenu.AllLines(window));
             Assert.True(BelongsToTheInterface(window));
 
             Pad(window, UiButton.Menu);

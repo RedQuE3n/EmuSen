@@ -82,7 +82,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(menu.IsVisible);
             Assert.False(s.Window.GetControl<Control>("PadMenuDesk").IsVisible);
             Assert.Equal("Main Menu", menu.Title);
-            Assert.Equal("EmuSen 0.9.0", menu.Footer);
+            // The version moved to the EmuSen submenu's footer, which gives the first page a row's height (§4.69.8).
+            Assert.Null(menu.Footer);
             Rect panel = InWindow(menu, menu.PanelBounds, s.Window);
             AssertCentred(panel, s.Window.GetControl<Control>("ScreenContent").Bounds.Size);
 

@@ -334,7 +334,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         // P45: the themed session's pad menu reaches every sheet, and every control on each is reached by the pad at 1280 by 800.
         [Theory]
         [InlineData("Cheats")]
-        [InlineData("Graphics Settings")]
+        [InlineData("Graphics")]
         [InlineData("Shaders")]
         [InlineData("Controller Bindings")]
         [InlineData("Preferences")]
